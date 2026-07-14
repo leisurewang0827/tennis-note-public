@@ -1,16 +1,24 @@
 {
-  "notice": "Public-safe legal/support export package for Tennis Note.",
+  "notice": "Public-safe service, commerce, legal, and support export package for Tennis Note.",
   "source_repository": "app-automation-vault",
   "recommended_target_repository": "leisurewang0827/tennis-note-public",
+  "recommended_service_url": "https://leisurewang0827.github.io/tennis-note-public/",
+  "recommended_commerce_url": "https://leisurewang0827.github.io/tennis-note-public/commerce.html",
   "recommended_privacy_url": "https://leisurewang0827.github.io/tennis-note-public/privacy.html",
   "recommended_support_url": "https://leisurewang0827.github.io/tennis-note-public/support.html",
   "recommended_account_deletion_url": "https://leisurewang0827.github.io/tennis-note-public/delete-account.html",
-  "generated_at": "2026-07-14T10:47:48.047676+00:00",
+  "generated_at": "2026-07-14T13:06:59.502204+00:00",
   "files": [
     {
-      "source": "generated",
+      "source": "90-Dashboard/tennis-note-legal/index.html",
       "export_path": "90-Dashboard/tennis-note-public-export/index.html",
       "target_path": "index.html",
+      "public_safe": true
+    },
+    {
+      "source": "90-Dashboard/tennis-note-legal/commerce.html",
+      "export_path": "90-Dashboard/tennis-note-public-export/commerce.html",
+      "target_path": "commerce.html",
       "public_safe": true
     },
     {
@@ -29,6 +37,12 @@
       "source": "90-Dashboard/tennis-note-legal/delete-account.html",
       "export_path": "90-Dashboard/tennis-note-public-export/delete-account.html",
       "target_path": "delete-account.html",
+      "public_safe": true
+    },
+    {
+      "source": "90-Dashboard/tennis-note-legal/assets/member-app-login.png",
+      "export_path": "90-Dashboard/tennis-note-public-export/assets/member-app-login.png",
+      "target_path": "assets/member-app-login.png",
       "public_safe": true
     }
   ]
