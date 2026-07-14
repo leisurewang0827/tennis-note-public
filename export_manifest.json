@@ -1,0 +1,28 @@
+{
+  "notice": "Public-safe legal/support export package for Tennis Note.",
+  "source_repository": "app-automation-vault",
+  "recommended_target_repository": "leisurewang0827/tennis-note-public",
+  "recommended_privacy_url": "https://leisurewang0827.github.io/tennis-note-public/privacy.html",
+  "recommended_support_url": "https://leisurewang0827.github.io/tennis-note-public/support.html",
+  "generated_at": "2026-07-14T03:12:45.326450+00:00",
+  "files": [
+    {
+      "source": "generated",
+      "export_path": "90-Dashboard/tennis-note-public-export/index.html",
+      "target_path": "index.html",
+      "public_safe": true
+    },
+    {
+      "source": "90-Dashboard/tennis-note-legal/privacy.html",
+      "export_path": "90-Dashboard/tennis-note-public-export/privacy.html",
+      "target_path": "privacy.html",
+      "public_safe": true
+    },
+    {
+      "source": "90-Dashboard/tennis-note-legal/support.html",
+      "export_path": "90-Dashboard/tennis-note-public-export/support.html",
+      "target_path": "support.html",
+      "public_safe": true
+    }
+  ]
+}
