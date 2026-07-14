@@ -4,7 +4,8 @@
   "recommended_target_repository": "leisurewang0827/tennis-note-public",
   "recommended_privacy_url": "https://leisurewang0827.github.io/tennis-note-public/privacy.html",
   "recommended_support_url": "https://leisurewang0827.github.io/tennis-note-public/support.html",
-  "generated_at": "2026-07-14T03:12:45.326450+00:00",
+  "recommended_account_deletion_url": "https://leisurewang0827.github.io/tennis-note-public/delete-account.html",
+  "generated_at": "2026-07-14T10:47:48.047676+00:00",
   "files": [
     {
       "source": "generated",
@@ -22,6 +23,12 @@
       "source": "90-Dashboard/tennis-note-legal/support.html",
       "export_path": "90-Dashboard/tennis-note-public-export/support.html",
       "target_path": "support.html",
+      "public_safe": true
+    },
+    {
+      "source": "90-Dashboard/tennis-note-legal/delete-account.html",
+      "export_path": "90-Dashboard/tennis-note-public-export/delete-account.html",
+      "target_path": "delete-account.html",
       "public_safe": true
     }
   ]
