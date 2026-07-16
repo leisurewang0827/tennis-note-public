@@ -18,10 +18,12 @@
       .muted { color: var(--muted); font-size: 14px; }
       .action { display: inline-grid; place-items: center; min-height: 46px; border-radius: 8px; padding: 0 16px; background: var(--green); color: #fff; text-decoration: none; }
       .notice { border-radius: 8px; padding: 14px; background: #e8f5ef; }
+      .app-back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: 16px; padding: 0 16px; border: 1px solid #9fcfc3; border-radius: 10px; background: #fff; color: var(--green); text-decoration: none; }
     </style>
   </head>
   <body>
     <main>
+      <a class="app-back" href="./index.html">← 서비스 홈</a>
       <article>
         <p class="muted">Tennis Note · 테니스클럽하우스</p>
         <h1>계정 및 데이터 삭제 안내</h1>
@@ -38,14 +40,14 @@
 
         <section>
           <h2>웹에서 요청</h2>
-          <p>공식 카카오채널에 <strong>계정 삭제 요청</strong>, 가입 이름, 로그인 수단(네이버 또는 카카오)을 남겨 주세요. 본인 확인 후 처리합니다.</p>
+          <p>공식 카카오채널에 <strong>계정 삭제 요청</strong>, 가입 이름, 로그인 수단(네이버, 카카오, Apple 또는 이메일)을 남겨 주세요. 본인 확인 후 처리합니다.</p>
           <p><a class="action" href="https://pf.kakao.com/_UQPpb/chat" target="_blank" rel="noreferrer">공식 카카오채널에서 요청</a></p>
         </section>
 
         <section>
           <h2>삭제되는 데이터</h2>
           <ul>
-            <li>회원 프로필과 소셜 로그인 연결 정보</li>
+            <li>회원 프로필과 로그인 연결 정보</li>
             <li>레슨 일정, 수업 변경 요청, 운동일지와 업로드 자료</li>
             <li>코치 피드백, 커리큘럼 진행 정보, 기기 푸시 토큰</li>
           </ul>

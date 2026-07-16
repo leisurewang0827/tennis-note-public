@@ -38,6 +38,7 @@
       .contact { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
       .contact div { border-top: 2px solid var(--green); padding-top: 10px; }
       .contact span { display: block; color: var(--muted); font-size: 13px; }
+      .app-back { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid #9fcfc3; border-radius: 10px; background: var(--white); color: var(--green); text-decoration: none; }
       footer { padding: 28px 0 40px; color: var(--muted); font-size: 13px; }
       @media (max-width: 640px) {
         .header-inner { align-items: flex-start; flex-direction: column; padding: 14px 0; }
@@ -51,6 +52,7 @@
   <body>
     <header>
       <div class="shell header-inner">
+        <a class="app-back" href="./index.html">← 서비스 홈</a>
         <a class="brand" href="./index.html">Tennis Note</a>
         <nav aria-label="정책 메뉴"><a href="./index.html">서비스</a><a href="./privacy.html">개인정보</a><a href="./support.html">고객지원</a></nav>
       </div>
@@ -86,6 +88,7 @@
             <ul>
               <li>카드 결제는 Tennis Note의 결제 화면에서 진행합니다.</li>
               <li>계좌이체는 안내받은 계좌로 입금한 뒤 관리자가 입금과 상품을 확인해 회원권을 반영합니다.</li>
+              <li>운동노트는 회원권 없이 이용할 수 있습니다. 첫 수강 회원권 구매 시 수강 가입서를 제출한 뒤 결제로 이어집니다.</li>
               <li>결제 승인 후 회원권이 계정에 표시되면 앱 시간표와 수업 기록 기능을 이용할 수 있습니다.</li>
               <li>결제 오류 또는 중복 결제가 확인되면 고객지원으로 즉시 접수해 주세요.</li>
             </ul>
@@ -103,14 +106,13 @@
 
           <section>
             <h2>4. 취소와 중도 해지</h2>
-            <p>소비자 사유로 회원권을 해지할 때는 실제 결제한 총 이용료와 실제 이용 횟수를 기준으로 아래와 같이 계산합니다.</p>
-            <div class="formula">
-              <p><strong>이용 시작 전</strong><br />환급액 = 실제 결제금액 - 위약금</p>
-              <p><strong>이용 시작 후 횟수형 회원권</strong><br />환급액 = 실제 결제금액 - (실제 결제금액 × 이용 횟수 ÷ 계약 횟수) - 위약금</p>
-              <p><strong>위약금</strong><br />실제 결제한 총 이용료의 10%</p>
+            <p>소비자 사유로 회원권을 해지할 때는 실제 결제금액과 할인 적용 전 회원권 원가, 실제 이용 횟수를 기준으로 계산합니다.</p>
+            <div class="formula" data-policy="refund-undiscounted-session-formula-v1">
+              <p><strong>이용 시작 전</strong><br />환급액 = 실제 결제금액 - (할인 적용 전 회원권 원가 × 위약금율) - 첫 수업 월 예약금(해당하는 경우)</p>
+              <p><strong>이용 시작 후 횟수형 회원권</strong><br />환급액 = 실제 결제금액 - (할인 적용 전 회원권 원가 × 이용 횟수 ÷ 계약 횟수) - (할인 적용 전 회원권 원가 × 위약금율) - 첫 수업 월 예약금(해당하는 경우)</p>
+              <p><strong>위약금과 예약금</strong><br />위약금율은 최대 10%이며, 첫 수업이 속한 달에는 예약금 30,000원을 추가 공제할 수 있습니다.</p>
             </div>
             <ul>
-              <li>사업자 사유로 계약을 해지하는 경우 소비자분쟁해결기준에 따라 잔여 이용료와 위약금을 처리합니다.</li>
               <li>환급 신청은 카카오채널 또는 고객지원 전화로 접수하며, 관리자가 결제와 이용 내역을 확인한 뒤 원 결제수단 기준으로 처리합니다.</li>
               <li>관계 법령 또는 공정거래위원회 소비자분쟁해결기준이 이 안내보다 소비자에게 유리하면 해당 기준을 우선 적용합니다.</li>
             </ul>
