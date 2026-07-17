@@ -7,7 +7,7 @@
   --green: #157a5b;
   --blue: #2456a6;
   --yellow: #fee500;
-  --naver: #03c75a;
+  --naver: #03a94d;
   --amber: #b54708;
   --soft-green: #e7f6ef;
   --soft-blue: #edf4ff;
@@ -173,8 +173,26 @@ button {
 }
 
 .provider.naver {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background: var(--naver);
   color: white;
+  min-height: 48px;
+  overflow: hidden;
+  padding: 0 20px;
+}
+
+.provider.naver img {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.provider.naver span {
+  font-size: 15px;
+  line-height: 1;
 }
 
 .provider.apple {
@@ -3829,7 +3847,7 @@ body.identity-setup-required {
 }
 
 .payment-method-option[data-select-payment-method="naverpay"].is-selected {
-  border-color: #03c75a;
+  border-color: #03a94d;
   color: #00883e;
   background: #f2fff7;
 }

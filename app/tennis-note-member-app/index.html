@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Tennis Note" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <title>테니스노트 현실 MVP</title>
+    <title>테니스노트</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
@@ -18,7 +18,7 @@
       <img src="./assets/brand/launch-splash.png" alt="" />
       <span>Tennis Note 불러오는 중</span>
     </section>
-    <main class="app-shell" aria-label="테니스노트 현실 MVP">
+    <main class="app-shell" aria-label="테니스노트">
       <section id="loginScreen" class="login-screen">
         <div class="brand">
           <p>Tennis Note</p>
@@ -27,7 +27,10 @@
 
         <div class="login-card">
           <h2>간편 로그인</h2>
-          <button class="provider naver" type="button" data-login-provider="네이버">네이버로 시작</button>
+          <button class="provider naver" type="button" data-login-provider="네이버" aria-label="네이버 로그인">
+            <img src="./assets/brand/naver-login-green-icon-h48.png" alt="" aria-hidden="true" />
+            <span>네이버로 시작</span>
+          </button>
           <button class="provider kakao" type="button" data-login-provider="카카오">카카오로 시작</button>
           <button class="provider apple is-preparing" type="button" data-login-provider="Apple" data-ready-label="Apple로 시작" disabled>Apple 로그인 확인 중</button>
           <details class="email-login-panel">
