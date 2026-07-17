@@ -45,14 +45,17 @@ jobs:
           import os
           from pathlib import Path
 
+          def clean(name):
+              return os.environ.get(name, "").strip().lstrip("\ufeff")
+
           required = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"]
-          missing = [name for name in required if not os.environ.get(name)]
+          missing = [name for name in required if not clean(name)]
           if missing:
               raise SystemExit("Missing required GitHub Actions secrets: " + ", ".join(missing))
 
           app_config = {
-              "supabaseUrl": os.environ["SUPABASE_URL"],
-              "supabasePublishableKey": os.environ["SUPABASE_PUBLISHABLE_KEY"],
+              "supabaseUrl": clean("SUPABASE_URL"),
+              "supabasePublishableKey": clean("SUPABASE_PUBLISHABLE_KEY"),
               "authProviderOverrides": {
                   "kakao": "custom:kakao",
                   "naver": "custom:naver",
@@ -60,14 +63,14 @@ jobs:
           }
           payment_config = {
               "provider": "portone",
-              "storeId": os.environ.get("PORTONE_STORE_ID", ""),
-              "channelKey": os.environ.get("PORTONE_CHANNEL_KEY", ""),
-              "naverPayCategoryType": os.environ.get("PORTONE_NAVERPAY_CATEGORY_TYPE", ""),
-              "naverPayCategoryId": os.environ.get("PORTONE_NAVERPAY_CATEGORY_ID", ""),
+              "storeId": clean("PORTONE_STORE_ID"),
+              "channelKey": clean("PORTONE_CHANNEL_KEY"),
+              "naverPayCategoryType": clean("PORTONE_NAVERPAY_CATEGORY_TYPE"),
+              "naverPayCategoryId": clean("PORTONE_NAVERPAY_CATEGORY_ID"),
               "channels": {
-                  "card": os.environ.get("PORTONE_CHANNEL_KEY", ""),
-                  "naverpay": os.environ.get("PORTONE_NAVERPAY_CHANNEL_KEY", ""),
-                  "kakaopay": os.environ.get("PORTONE_KAKAOPAY_CHANNEL_KEY", ""),
+                  "card": clean("PORTONE_CHANNEL_KEY"),
+                  "naverpay": clean("PORTONE_NAVERPAY_CHANNEL_KEY"),
+                  "kakaopay": clean("PORTONE_KAKAOPAY_CHANNEL_KEY"),
               },
           }
           target = Path("_site/app/shared/config.local.js")
