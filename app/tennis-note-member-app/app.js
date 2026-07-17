@@ -8,6 +8,7 @@ const state = {
     name: "",
     nickname: "",
     phone: "",
+    email: "",
     profileCompletedAt: "",
     privacyConsentVersion: "",
     privacyConsentedAt: "",
@@ -2331,6 +2332,7 @@ function renderProfile() {
   if ($("#profileRealNameInput")) $("#profileRealNameInput").value = realName === "가입 확인 중" ? "" : realName;
   if ($("#profileNicknameInput")) $("#profileNicknameInput").value = state.profile.nickname || "";
   if ($("#profilePhoneInput")) $("#profilePhoneInput").value = formatIdentityPhone(state.profile.phone || "");
+  if ($("#profileEmailInput")) $("#profileEmailInput").value = state.profile.email || state.member?.email || "";
   if ($("#profileHand")) $("#profileHand").value = state.profile.hand || "오른손";
   if ($("#profileBackhand")) $("#profileBackhand").value = state.profile.backhand || "투핸드 백핸드";
   if ($("#profileStartedAt")) $("#profileStartedAt").value = state.profile.startedAt || "";
@@ -6377,6 +6379,7 @@ async function applySupabaseMemberSession(showNotice = false) {
       provider: session.provider || "Supabase",
       name: displayName,
       nickname: profile?.nickname || "",
+      email: user?.email || session?.user?.email || "",
       profileId: profile?.id || "",
       authUserId: user?.id || "",
       role: profile?.role || "member",
@@ -6392,6 +6395,7 @@ async function applySupabaseMemberSession(showNotice = false) {
     state.profile.name = profile?.name || "가입 확인 중";
     state.profile.nickname = profile?.nickname || "";
     state.profile.phone = profile?.phone || "";
+    state.profile.email = user?.email || session?.user?.email || "";
     state.profile.profileCompletedAt = profile?.profile_completed_at || "";
     state.profile.privacyConsentVersion = profile?.privacy_consent_version || "";
     state.profile.privacyConsentedAt = profile?.privacy_consented_at || "";
