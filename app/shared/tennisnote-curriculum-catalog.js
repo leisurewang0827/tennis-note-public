@@ -1,0 +1,360 @@
+(() => {
+  const pageUrl = (pageId) => `https://app.notion.com/p/${pageId}`;
+  const levelForStage = (stage, total) => {
+    if (stage <= Math.max(1, Math.floor(total * 0.25))) return "입문";
+    if (stage >= Math.max(2, Math.ceil(total * 0.75))) return "중급";
+    return "초급";
+  };
+  const makeTrack = ({ id, title, category, summary, pageId, lessons }) => {
+    const total = lessons.length;
+    return {
+      id,
+      title,
+      category,
+      summary,
+      notionUrl: pageUrl(pageId),
+      lessons: lessons.map(([code, lessonTitle, lessonPageId], index) => {
+        const stage = index + 1;
+        return {
+          id: code,
+          title: lessonTitle,
+          category,
+          trackId: id,
+          trackTitle: title,
+          stage,
+          stageLabel: `${stage}단계`,
+          level: levelForStage(stage, total),
+          focus: lessonTitle,
+          guide: `${title}의 ${lessonTitle} 단계입니다.`,
+          checklist: `${lessonTitle} 동작과 다음 공 준비 상태를 확인합니다.`,
+          mission: `개인 연습에서 ${lessonTitle} 핵심 동작을 짧게 반복합니다.`,
+          memberSummary: `${title} ${stage}/${total}`,
+          notionUrl: pageUrl(lessonPageId),
+        };
+      }),
+    };
+  };
+
+  const sources = {
+    memberGuide: pageUrl("94544cb6f3d546e991db21dbab5fb163"),
+    detailedGuide: pageUrl("312b107df48080e282cbe84b95cff64b"),
+    skillGuide: pageUrl("305b107df48080f8a59eeea32b946354"),
+    roadmap: pageUrl("317b107df480803baf48c4b5e18b2573"),
+    goalFinder: pageUrl("317b107df4808092b42af4c399022c0c"),
+    memberMedia: pageUrl("38ab107df480814792b0f5732794f468"),
+  };
+
+  const tracks = [
+    makeTrack({
+      id: "FH-R",
+      title: "포핸드 리듬",
+      category: "포핸드",
+      summary: "타점과 스윙 템포를 안정시키고 빠른 공까지 연결합니다.",
+      pageId: "317b107df480804a8b29f34b16a2412e",
+      lessons: [
+        ["FH-R1", "컨택 기준 타이밍 형성", "317b107df4808105b610c46ff78d11d8"],
+        ["FH-R2", "백스윙-포워드 연결 리듬", "317b107df480815086dfc4a277d76f0c"],
+        ["FH-R3", "연속 랠리 템포 안정", "317b107df48081e99037c51bf644f3a0"],
+        ["FH-R4", "전진 타점 리듬 적용", "317b107df4808199b993d3443111f9f2"],
+        ["FH-R5", "속도 변화 대응 리듬", "317b107df48081b4b110ffd75572ddf7"],
+        ["FH-R6", "라이징 타이밍 적용", "317b107df480813bb3f8f348d46a5430"],
+        ["FH-R7", "빠른 템포 압박 대응", "317b107df4808169911ed971d6a25b48"],
+        ["FH-R8", "실전 리듬 유지", "317b107df48081a28a8bea43806700eb"],
+      ],
+    }),
+    makeTrack({
+      id: "FH-T",
+      title: "포핸드 탄도",
+      category: "포핸드",
+      summary: "회전과 탄도를 조절해 깊이와 구질을 선택합니다.",
+      pageId: "317b107df48080acbed9c2ab4e8288b5",
+      lessons: [
+        ["FH-T1", "기본 톱스핀 생성", "317b107df480810d9cb0fcfd7f786cca"],
+        ["FH-T2", "회전량 안정화", "317b107df48081e2b40bffff3a216031"],
+        ["FH-T3", "탄도 고정 훈련", "317b107df48081acbab1ec33df198b40"],
+        ["FH-T4", "높은 탄도 압박", "317b107df480819ea546dc1b02d005e7"],
+        ["FH-T5", "낮은 드라이브 구현", "317b107df48081078258f66d5bd1eb23"],
+        ["FH-T6", "깊이 조절 1m 압박", "317b107df48081fc978ce0af9d0026b4"],
+        ["FH-T7", "RPM 증가 적용", "317b107df4808108a610d3fcc0662ac5"],
+        ["FH-T8", "상황별 구질 선택", "317b107df480811fbb85d4e33c0dfd75"],
+      ],
+    }),
+    makeTrack({
+      id: "FH-S",
+      title: "포핸드 스탠스",
+      category: "포핸드",
+      summary: "상황에 맞는 스탠스와 회전축, 이동 후 균형을 익힙니다.",
+      pageId: "317b107df48080108042fc3885b7e9f4",
+      lessons: [
+        ["FH-S1", "뉴트럴 스탠스 정렬", "317b107df48081c79f89dbc2c96dc2d5"],
+        ["FH-S2", "체중 이동 정확화", "317b107df48081598ccde65fd7faf4dd"],
+        ["FH-S3", "회전축 안정", "317b107df480813ead6fca664562bc43"],
+        ["FH-S4", "세미오픈 전환", "317b107df4808137bf3df3f51a54a6a4"],
+        ["FH-S5", "오픈 스탠스 파워 생성", "317b107df480819996a2d0becffbc431"],
+        ["FH-S6", "이동 후 타격 안정", "317b107df48081d4ac4ac4cb2c75985c"],
+        ["FH-S7", "러닝 포핸드 밸런스", "317b107df48081d2a760e924781763a3"],
+        ["FH-S8", "수비 후 균형 복원", "317b107df4808184b8cfc2e2a4f92fd7"],
+      ],
+    }),
+    makeTrack({
+      id: "FH-C",
+      title: "포핸드 코스",
+      category: "포핸드",
+      summary: "크로스부터 다운더라인, 앵글까지 방향을 운용합니다.",
+      pageId: "317b107df48080ef98bdd38cf22fc92b",
+      lessons: [
+        ["FH-C1", "크로스 방향 안정", "317b107df48081a58113f061874d1371"],
+        ["FH-C2", "크로스 깊이 고정", "317b107df48081239fe3fb7c9c664540"],
+        ["FH-C3", "다운더라인 전환", "317b107df48081ffa7fec11803125491"],
+        ["FH-C4", "인사이드아웃 구현", "317b107df48081a19b61f09a87559f04"],
+        ["FH-C5", "각도 생성", "317b107df48081f98ec1e6a182be06dc"],
+        ["FH-C6", "앵글샷 전개", "317b107df480817e8423f60169328ba6"],
+        ["FH-C7", "방향 전환 속도", "317b107df4808129b81bcc5f925ba834"],
+        ["FH-C8", "실전 코스 운용", "317b107df48081a8a1dcd8917ea9c274"],
+      ],
+    }),
+    makeTrack({
+      id: "BH-R",
+      title: "백핸드 리듬",
+      category: "백핸드",
+      summary: "전진 타점과 속도 변화 속에서도 백핸드 리듬을 유지합니다.",
+      pageId: "317b107df480808989b8c5588935e05f",
+      lessons: [
+        ["BH-R1", "전진 타점 적용", "317b107df480816db26ecb7a988e8a95"],
+        ["BH-R2", "속도 변화 대응", "317b107df48081f79922ca9819915a86"],
+        ["BH-R3", "라이징 백핸드", "317b107df48081c996d4ffe0595fa04f"],
+        ["BH-R4", "압박 상황 리듬 유지", "317b107df48081a1a65de617a2e87d26"],
+      ],
+    }),
+    makeTrack({
+      id: "BH-T",
+      title: "백핸드 탄도",
+      category: "백핸드",
+      summary: "톱스핀과 드라이브, 깊이와 각도를 상황에 맞게 조절합니다.",
+      pageId: "317b107df4808037bbe2ea5d2bf0ea09",
+      lessons: [
+        ["BH-T1", "기본 톱스핀", "317b107df480818c8916c404ef3594c9"],
+        ["BH-T2", "낮은 드라이브", "317b107df4808178a3f7eac4924fa3c4"],
+        ["BH-T3", "깊이 압박", "317b107df480811fbc5af44d6211e881"],
+        ["BH-T4", "각도 생성", "317b107df48081a592daee6f4d0be3df"],
+        ["BH-T5", "하이볼 대응", "317b107df480811d8095ccb59e779d81"],
+      ],
+    }),
+    makeTrack({
+      id: "BH-S",
+      title: "백핸드 스탠스",
+      category: "백핸드",
+      summary: "클로즈와 오픈 스탠스를 익혀 이동 중 균형을 잡습니다.",
+      pageId: "317b107df48080508f91d6dea62db1e7",
+      lessons: [
+        ["BH-S1", "체중 이동 안정", "317b107df4808156bc53d973e19078e5"],
+        ["BH-S2", "클로즈 스탠스 정렬", "317b107df48081348c90ee8add526de9"],
+        ["BH-S3", "오픈 백핸드 적용", "317b107df48081d4aec2d2075e0f87ea"],
+        ["BH-S4", "러닝 백핸드 대응", "317b107df480810cba82f54e86b56657"],
+      ],
+    }),
+    makeTrack({
+      id: "BH-SL",
+      title: "백핸드 슬라이스",
+      category: "백핸드",
+      summary: "면각과 탄도를 조절해 수비와 공격 연결에 활용합니다.",
+      pageId: "317b107df48080928d86ed2b3d8506ba",
+      lessons: [
+        ["BH-SL1", "슬라이스 기본 면각", "317b107df480819eab1cf640b40e3387"],
+        ["BH-SL2", "깊이 확보 슬라이스", "317b107df4808157b7adfeb70d772307"],
+        ["BH-SL3", "낮은 탄도 유지", "317b107df48081988e54fcba1456d1e8"],
+        ["BH-SL4", "수비 전환 슬라이스", "317b107df480814688f6dc601d9162f8"],
+        ["BH-SL5", "공격 연결 슬라이스", "317b107df48081f1b84cc6680287910c"],
+      ],
+    }),
+    makeTrack({
+      id: "BH-C",
+      title: "백핸드 코스",
+      category: "백핸드",
+      summary: "크로스와 다운더라인, 앵글 방향 전환을 익힙니다.",
+      pageId: "317b107df48080afad1fcff64ec0f764",
+      lessons: [
+        ["BH-C1", "크로스 안정", "317b107df48081a6bb48f65610cdc19f"],
+        ["BH-C2", "다운더라인 전환", "317b107df480814a82a8eeed4d2142da"],
+        ["BH-C3", "인사이드 백핸드", "317b107df48081e1a7beebf6ac23b0db"],
+        ["BH-C4", "앵글샷 구현", "317b107df48081fa9258fd6b414b6ee0"],
+      ],
+    }),
+    makeTrack({
+      id: "NV-B",
+      title: "기본 발리",
+      category: "네트플레이",
+      summary: "짧은 스윙과 안정된 라켓면으로 기본 발리를 만듭니다.",
+      pageId: "317b107df48080b3a731d449f1690f97",
+      lessons: [
+        ["NV-B1", "포핸드 발리 면 고정", "317b107df48081539938d3700eeb709a"],
+        ["NV-B2", "백핸드 발리 안정", "317b107df48081b3b5dbe4374c2a47dc"],
+        ["NV-B3", "짧은 스윙 컨트롤", "317b107df4808143a19ade8d30122603"],
+        ["NV-B4", "반응 속도 강화", "317b107df48081cbbfddc4bf97ebbc9a"],
+      ],
+    }),
+    makeTrack({
+      id: "NV-H",
+      title: "상황별 발리",
+      category: "네트플레이",
+      summary: "높고 낮은 공, 하프발리와 수비 발리를 구분합니다.",
+      pageId: "317b107df48080ce9dfed6c3a4a511fc",
+      lessons: [
+        ["NV-H1", "하이발리", "317b107df48081f59ec7c8cf20a597bb"],
+        ["NV-H2", "로우발리", "317b107df480812fa4d1c0e0829b7c56"],
+        ["NV-H3", "하프발리", "317b107df48081fdab13f0b504b5e15d"],
+        ["NV-H4", "수비 발리 대응", "317b107df48081e896dcedb846600b7c"],
+      ],
+    }),
+    makeTrack({
+      id: "NV-A",
+      title: "어프로치와 전진",
+      category: "네트플레이",
+      summary: "어프로치 뒤 첫 발리와 세컨드 발리까지 연결합니다.",
+      pageId: "317b107df480803d8b83f40638a0e10b",
+      lessons: [
+        ["NV-A1", "어프로치 샷", "317b107df48081138926ca05b988fb23"],
+        ["NV-A2", "전진 풋워크", "317b107df480813dbc67d80ee9d24a43"],
+        ["NV-A3", "첫 발리 안정", "317b107df48081959b99c3cf91fb4f23"],
+        ["NV-A4", "세컨드 발리 연결", "317b107df4808165af37f0386723937c"],
+      ],
+    }),
+    makeTrack({
+      id: "NV-F",
+      title: "네트 마무리",
+      category: "네트플레이",
+      summary: "각도와 드롭 발리로 열린 코트를 마무리합니다.",
+      pageId: "317b107df4808028bb01c938be034ea4",
+      lessons: [
+        ["NV-F1", "각도 발리", "317b107df480812793f8cdf49de982ee"],
+        ["NV-F2", "드롭 발리", "317b107df48081408349fd68fa66ee71"],
+        ["NV-F3", "오픈코트 마무리", "317b107df48081a5ad53f7c69baafcff"],
+        ["NV-F4", "네트 2구 종료 전략", "317b107df4808125af93e03807761bf5"],
+      ],
+    }),
+    makeTrack({
+      id: "TC-D",
+      title: "수비 복구",
+      category: "전술전환",
+      summary: "수비에서 시간을 확보하고 중립 랠리로 복귀합니다.",
+      pageId: "317b107df48080a9a077e8adef71e030",
+      lessons: [
+        ["TC-D1", "깊이 확보 복구", "317b107df48081d9a5ffd66dcc7dc666"],
+        ["TC-D2", "높은 탄도 시간 확보", "317b107df480817589d2f0a95f7fc689"],
+        ["TC-D3", "이동 후 재배치", "317b107df480819d83c4d8e0aa428a77"],
+        ["TC-D4", "수비 안정 후 랠리 복귀", "317b107df48081a28b38ebb530078054"],
+      ],
+    }),
+    makeTrack({
+      id: "TC-A",
+      title: "공격 전환",
+      category: "전술전환",
+      summary: "짧은 공을 판단해 전진 타점과 속도 압박으로 바꿉니다.",
+      pageId: "317b107df48080aab3b9ca696dd655e6",
+      lessons: [
+        ["TC-A1", "짧은 볼 판단", "317b107df48081609bbdd1d3577910e3"],
+        ["TC-A2", "전진 타점 공격", "317b107df480817a954ddb7a92042d2f"],
+        ["TC-A3", "인사이드 전환", "317b107df4808136aaa5c8f3b7a47a07"],
+        ["TC-A4", "속도 상승 압박", "317b107df4808169aafcfd19ce8f82db"],
+      ],
+    }),
+    makeTrack({
+      id: "TC-F",
+      title: "포인트 마무리",
+      category: "전술전환",
+      summary: "깊이와 각도로 코트를 열고 네트 접근까지 연결합니다.",
+      pageId: "317b107df4808004987ff50c165f8409",
+      lessons: [
+        ["TC-F1", "깊이 + 각도 압박", "317b107df48081cdbface7b95cf4fe03"],
+        ["TC-F2", "코트 오픈 만들기", "317b107df48081e5b4a0e2c486a4833d"],
+        ["TC-F3", "네트 접근 연결", "317b107df48081cc8658de576f80f342"],
+        ["TC-F4", "2구 내 마무리", "317b107df480810e83d8d43de497ba8c"],
+      ],
+    }),
+    makeTrack({
+      id: "TC-R",
+      title: "실전 리듬 복구",
+      category: "전술전환",
+      summary: "실수와 수비 뒤에도 준비 속도와 포인트 흐름을 회복합니다.",
+      pageId: "317b107df480803b9956c005fc23299b",
+      lessons: [
+        ["TC-R1", "실수 후 리듬 복구", "317b107df480813fb952fdf3fca6206b"],
+        ["TC-R2", "준비 속도 유지", "317b107df480817fad55f3219ccfb64b"],
+        ["TC-R3", "수비 후 재전환", "317b107df48081b88978ee8c3e7ea7a3"],
+        ["TC-R4", "연속 포인트 유지", "317b107df48081beb72ad9580fb43ab2"],
+      ],
+    }),
+  ];
+
+  const fundamentals = [
+    {
+      id: "ST-01",
+      title: "풋워크 입문",
+      category: "기초",
+      trackId: "FOUNDATION",
+      trackTitle: "기초 움직임",
+      stage: 1,
+      stageLabel: "기초",
+      level: "입문",
+      focus: "스플릿 스텝과 첫 발, 타구 후 회복 위치",
+      guide: "모든 스트로크 전에 필요한 기본 움직임을 확인합니다.",
+      checklist: "준비 자세, 첫 발 반응, 타구 후 제자리 회복을 확인합니다.",
+      mission: "공 없이 스플릿 스텝과 첫 발을 10회 반복합니다.",
+      memberSummary: "기초 움직임",
+      notionUrl: pageUrl("38ab107df4808195bff1e85caaf95dd7"),
+    },
+    {
+      id: "SV-01",
+      title: "서브 입문",
+      category: "서브",
+      trackId: "FOUNDATION",
+      trackTitle: "서브 기본",
+      stage: 1,
+      stageLabel: "기초",
+      level: "입문",
+      focus: "토스 위치와 기본 리듬, 임팩트 후 균형",
+      guide: "실내 천장 제한으로 앱에서는 참고하고, 실제 훈련은 야외 수업에서 진행합니다.",
+      checklist: "토스 위치와 임팩트 후 균형을 확인합니다.",
+      mission: "라켓 없이 토스 위치를 10회 확인합니다.",
+      memberSummary: "서브 기본 · 야외 권장",
+      notionUrl: pageUrl("38ab107df480817188a2e3f84eeb12cf"),
+      environmentNote: "실내 천장 제한 · 야외 또는 별도 공간에서 진행",
+    },
+  ];
+
+  const levels = [
+    { id: "level-1", title: "Level 01", period: "1-3개월", summary: "준비 자세와 기본 타점, 짧은 랠리" },
+    { id: "level-2", title: "Level 02", period: "4-6개월", summary: "이동과 안정적인 랠리, 코스 선택" },
+    { id: "level-3", title: "Level 03", period: "6개월 이상", summary: "경기 흐름과 전술 전환, 포인트 운영" },
+  ];
+  const steps = [...fundamentals, ...tracks.flatMap((track) => track.lessons)];
+  const aliases = {
+    "FH-01": "FH-R1",
+    "FT-02": "ST-01",
+    "BH-01": "BH-R1",
+    "FH-C01": "FH-C1",
+    "FH-T03": "FH-T3",
+    "BH-02": "BH-R2",
+    "NV-01": "NV-B1",
+    "NV-02": "NV-B2",
+    "NV-03": "NV-A3",
+    "RT-01": "BH-R1",
+    "SV-R1": "SV-01",
+    "GM-01": "TC-D1",
+    "TC-01": "TC-A1",
+    "DB-01": "TC-F1",
+  };
+
+  window.TennisNoteCurriculumCatalog = Object.freeze({
+    version: "notion-catalog-2026-07-15",
+    syncedAt: "2026-07-15",
+    sources,
+    levels,
+    tracks,
+    fundamentals,
+    steps,
+    aliases,
+    canonicalTrackCount: tracks.length,
+    canonicalLessonCount: tracks.reduce((sum, track) => sum + track.lessons.length, 0),
+  });
+})();

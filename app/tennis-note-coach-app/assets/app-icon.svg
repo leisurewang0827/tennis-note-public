@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Tennis Note Coach">
+  <rect width="512" height="512" rx="112" fill="#1d4ed8"/>
+  <circle cx="376" cy="136" r="64" fill="#f8d24a"/>
+  <path d="M105 158h181v58h-60v168h-61V216h-60z" fill="#ffffff"/>
+  <path d="M306 235h48l68 149h-64l-12-30h-41l-12 30h-61zm20 65-10 26h20z" fill="#ffffff"/>
+  <path d="M94 411c75-47 174-59 314-29" fill="none" stroke="#dbeafe" stroke-width="22" stroke-linecap="round"/>
+</svg>

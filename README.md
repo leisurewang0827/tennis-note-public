@@ -9,6 +9,7 @@ Recommended public repository:
 Recommended GitHub Pages URLs after publishing:
 
 - `https://leisurewang0827.github.io/tennis-note-public/`
+- `https://leisurewang0827.github.io/tennis-note-public/app/`
 - `https://leisurewang0827.github.io/tennis-note-public/commerce.html`
 - `https://leisurewang0827.github.io/tennis-note-public/privacy.html`
 - `https://leisurewang0827.github.io/tennis-note-public/support.html`
@@ -24,4 +25,9 @@ Files:
 - `support.html`
 - `delete-account.html`
 - `assets/member-app-login.png`
+- `app/` (member app, role-gated coach mode, and public legal pages)
 - `export_manifest.json`
+
+The browser client configuration is generated only inside the GitHub Pages
+deployment artifact from GitHub Actions secrets. It is not committed to this
+repository. Server-only keys and private member data must never be added here.

@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Tennis Note" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>테니스노트 현실 MVP</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
+    <link rel="stylesheet" href="./styles.css?v=member-live-feedback-1" />
+  </head>
+  <body>
+    <section id="brandSplash" class="brand-splash" role="status" aria-label="Tennis Note 불러오는 중">
+      <img src="./assets/brand/launch-splash.png" alt="" />
+      <span>Tennis Note 불러오는 중</span>
+    </section>
+    <main class="app-shell" aria-label="테니스노트 현실 MVP">
+      <section id="loginScreen" class="login-screen">
+        <div class="brand">
+          <p>Tennis Note</p>
+          <h1>나의 테니스 기록</h1>
+        </div>
+
+        <div class="login-card">
+          <h2>간편 로그인</h2>
+          <button class="provider naver" type="button" data-login-provider="네이버">네이버로 시작</button>
+          <button class="provider kakao" type="button" data-login-provider="카카오">카카오로 시작</button>
+          <button class="provider apple is-preparing" type="button" data-login-provider="Apple" data-ready-label="Apple로 시작" disabled>Apple 로그인 확인 중</button>
+          <details class="email-login-panel">
+            <summary>이메일로 로그인</summary>
+            <form id="memberEmailLoginForm" class="email-login-form">
+              <label>
+                이메일
+                <input id="memberLoginEmail" type="email" autocomplete="username" required />
+              </label>
+              <label>
+                비밀번호
+                <input id="memberLoginPassword" type="password" autocomplete="current-password" required />
+              </label>
+              <button class="small-button" type="submit">로그인</button>
+              <p id="memberEmailLoginStatus" class="login-form-status" role="status"></p>
+            </form>
+          </details>
+          <button class="small-button install-button" type="button" data-install-pwa hidden>앱 설치</button>
+          <div class="legal-links" aria-label="정책 안내">
+            <a href="../tennis-note-legal/privacy.html">개인정보 처리방침</a>
+            <a href="../tennis-note-legal/support.html">고객지원</a>
+          </div>
+        </div>
+      </section>
+
+            <section id="noticeDialog" class="notice-dialog" hidden aria-label="공지사항 팝업">
+        <div class="notice-backdrop"></div>
+        <article class="notice-card">
+          <p class="eyebrow">공지사항</p>
+          <h2 id="noticeTitle">7월 운영 안내</h2>
+          <p id="noticeBody">우천 또는 코치 일정 변경 시 앱 공지와 카카오채널로 안내드립니다.</p>
+          <small id="noticeMeta" class="notice-meta">회원/코치 공통 · 일반</small>
+          <div class="notice-actions">
+            <button class="small-button" type="button" id="noticeHideToday">오늘 하루 보지 않기</button>
+            <button class="primary-button" type="button" id="noticeClose">확인</button>
+          </div>
+        </article>
+      </section>
+
+      <section id="appScreen" class="app-screen" hidden>
+        <section id="pendingApprovalGate" class="pending-approval-gate" hidden aria-label="승인 대기 안내">
+          <article class="pending-approval-card">
+            <p class="eyebrow">계정 이용 확인</p>
+            <h2>고객지원 확인이 필요합니다.</h2>
+            <p id="pendingApprovalMessage">
+              이용이 중지되었거나 탈퇴 처리를 확인 중인 계정입니다. 고객지원으로 문의해 주세요.
+            </p>
+            <div class="pending-approval-steps" aria-label="다음 순서">
+              <span>1. 문의 접수</span>
+              <span>2. 계정 확인</span>
+              <span>3. 이용 재개 안내</span>
+            </div>
+            <div class="pending-approval-actions">
+              <a class="channel-button" href="https://pf.kakao.com/_UQPpb/chat" target="_blank" rel="noreferrer">문의하기</a>
+              <button class="small-button" type="button" id="pendingLogoutButton">다른 계정으로 로그인</button>
+            </div>
+          </article>
+        </section>
+
+        <nav class="tabbar" aria-label="하단 주요 기능">
+          <button class="tab is-active" type="button" data-view="homeView">홈</button>
+          <button class="tab" type="button" data-view="scheduleView">시간표</button>
+          <button class="tab" type="button" data-view="lessonLogView">운동일지</button>
+          <button class="tab" type="button" data-view="shopView">회원권</button>
+          <button class="tab" type="button" data-view="profileView">내 정보</button>
+        </nav>
+
+        <section id="homeView" class="view home-view is-active" aria-label="오늘의 테니스">
+          <div class="section-title home-title">
+            <h2>오늘</h2>
+          </div>
+          <section class="summary-grid" aria-label="오늘의 수업 요약">
+            <article class="summary-card primary">
+              <span>다음 수업</span>
+              <strong id="nextLessonDate">가까운 수업</strong>
+              <small id="followingLessonDate">다음 수업</small>
+              <button class="small-button" type="button" data-summary-action="schedule">시간표</button>
+            </article>
+            <article class="summary-card">
+              <span>이용권</span>
+              <strong id="remainingCount">8회</strong>
+              <small id="ticketStatus">10회권</small>
+              <button class="small-button" type="button" data-summary-action="shop">회원권</button>
+            </article>
+            <article class="summary-card">
+              <span>피드백</span>
+              <strong id="pendingNoteCount">없음</strong>
+              <small id="lessonRecordNote"></small>
+              <button class="small-button" type="button" data-summary-action="comments">피드백</button>
+            </article>
+          </section>
+          <button class="home-change-button" type="button" data-summary-action="change">
+            <strong>수업 변경</strong>
+            <span aria-hidden="true">›</span>
+          </button>
+        </section>
+
+        <section id="scheduleView" class="view" aria-label="전체 시간표">
+          <div class="section-title">
+            <h2>전체 시간표</h2>
+            <span>색상으로 내 수업과 변경 가능 시간을 바로 확인합니다.</span>
+            <button class="small-button title-action" type="button" id="openChangeHistory">요청 내역</button>
+          </div>
+          <div class="schedule-legend" aria-label="시간표 색상 안내">
+            <span class="legend-chip mine">내 기존시간</span>
+            <span class="legend-chip available">수업변경 신청가능</span>
+            <span class="legend-chip approval">24시간 이내 승인필요</span>
+          </div>
+          <div id="memberWeekSwitcher" class="week-switcher" aria-label="회원 시간표 주차 선택"></div>
+          <div id="scheduleGrid" class="schedule-grid"></div>
+        </section>
+
+        <section id="lessonLogView" class="view" aria-label="운동일지">
+          <div class="section-title section-title-with-action">
+            <div>
+              <h2>운동일지</h2>
+              <span>달력에서 기록한 날을 누르면 작성 내용을 확인합니다.</span>
+            </div>
+            <button class="small-button section-shortcut" type="button" data-view="curriculumView">커리큘럼</button>
+          </div>
+
+          <section class="journal-calendar-card" aria-label="운동일지 달력">
+            <div class="journal-calendar-head">
+              <div>
+                <h3>운동 달력</h3>
+                <span>운동한 날과 기록 여부를 수첩처럼 확인합니다.</span>
+              </div>
+              <div class="journal-calendar-controls" aria-label="운동일지 월 이동">
+                <button class="small-button" type="button" id="journalPrevMonth">이전달</button>
+                <strong id="journalMonthLabel">2026년 7월</strong>
+                <button class="small-button" type="button" id="journalNextMonth">다음달</button>
+              </div>
+            </div>
+            <details class="journal-tools-disclosure">
+              <summary>기록 검색·날짜 이동</summary>
+              <div class="journal-calendar-tools">
+                <label>
+                  <span>기록 검색</span>
+                  <input id="journalSearch" type="search" placeholder="예: 포핸드, 코멘트, 백핸드" />
+                </label>
+                <label>
+                  <span>날짜 바로가기</span>
+                  <input id="journalJumpDate" type="date" />
+                </label>
+              </div>
+            </details>
+            <div id="journalCalendar" class="journal-calendar"></div>
+            <div id="journalSelectedDayPanel" class="journal-selected-panel"></div>
+          </section>
+
+          <div class="journal-primary-actions">
+            <div>
+              <strong>오늘의 기록</strong>
+              <span>선택한 날짜에 레슨 또는 개인운동을 간단히 남겨보세요.</span>
+            </div>
+            <button class="primary-button" type="button" id="openJournalComposer">기록하기</button>
+          </div>
+
+          <section id="journalComposerSheet" class="app-bottom-sheet" aria-labelledby="journalComposerTitle" hidden>
+            <button class="sheet-backdrop" type="button" aria-label="운동일지 작성 닫기" data-close-journal-composer></button>
+            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="journalComposerTitle">
+              <div class="sheet-handle" aria-hidden="true"></div>
+              <div class="sheet-head">
+                <div>
+                  <p class="eyebrow">운동일지 작성</p>
+                  <h3 id="journalComposerTitle">기록하기</h3>
+                  <span id="journalComposerDateLabel"></span>
+                </div>
+                <button class="small-button" type="button" data-close-journal-composer>닫기</button>
+              </div>
+              <div class="sheet-scroll">
+          <div class="form-card journal-composer-form">
+            <label>
+              <span>기록 구분</span>
+              <select id="journalMode">
+                <option value="lesson">레슨</option>
+                <option value="practice">개인운동</option>
+              </select>
+            </label>
+            <label>
+              <span>운동 날짜</span>
+              <input id="journalDate" type="date" />
+            </label>
+            <div id="lessonJournalFields" class="journal-fields">
+            <label>
+              <span>기록할 수업</span>
+              <select id="logLesson"></select>
+            </label>
+            <label>
+              <span>오늘 수업 내용</span>
+              <textarea id="todayLessonContent" rows="4">포핸드 연결과 짧은 공 전진 스텝을 연습했습니다.</textarea>
+            </label>
+            <label>
+              <span>자기 운동 일지</span>
+              <textarea id="selfWorkoutMemo" rows="4">타점이 늦어질 때 손목이 흔들렸고, 준비 동작을 더 빨리 해야겠습니다.</textarea>
+            </label>
+            <label>
+              <span>사진/동영상 첨부</span>
+              <input id="lessonMedia" type="file" accept="image/*,video/*" multiple />
+            </label>
+            </div>
+            <div id="practiceJournalFields" class="journal-fields" hidden>
+            <label>
+              <span>운동 구분</span>
+              <select id="practiceType">
+                <option value="개인연습">개인연습(볼머신등 스윙연습)</option>
+                <option value="랠리 및 게임">랠리 및 게임</option>
+                <option value="기타">기타</option>
+              </select>
+            </label>
+            <label>
+              <span>오늘 운동 기록</span>
+              <textarea id="practiceMemo" rows="4">서브 토스 위치와 포핸드 전진 스텝을 30분 연습했습니다.</textarea>
+            </label>
+            <label>
+              <span>다음에 연습할 것</span>
+              <textarea id="practiceNext" rows="3">짧은 공 접근 후 마무리 스윙을 반복합니다.</textarea>
+            </label>
+            <label>
+              <span>사진/동영상 첨부</span>
+              <input id="practiceMedia" type="file" accept="image/*,video/*" multiple />
+            </label>
+            <label class="check-row">
+              <input id="requestCoachFeedback" type="checkbox" checked />
+              <span>코치에게 영상/사진 코멘트 요청</span>
+            </label>
+            <label>
+              <span>코치에게 묻고 싶은 점</span>
+              <textarea id="feedbackQuestion" rows="3">포핸드 전진 스텝에서 타점이 늦는지 봐주세요.</textarea>
+            </label>
+            </div>
+            <button class="primary-button" type="button" id="saveJournal">운동일지 저장</button>
+          </div>
+              </div>
+            </article>
+          </section>
+
+          <div id="curriculumMiniGuide" class="journal-curriculum-preview"></div>
+
+          <div class="split-panel">
+            <section>
+            <h3>최근 수업 피드백</h3>
+              <div id="lessonLogs" class="history-list"></div>
+              <div id="lessonLogsPager" class="list-pager"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="curriculumView" class="view" aria-label="전체 커리큘럼">
+          <div class="section-title">
+            <h2>커리큘럼</h2>
+            <span>노션 원본을 바탕으로 내 현재 단계와 전체 흐름을 가볍게 확인합니다.</span>
+          </div>
+
+          <div id="curriculumGuide" class="curriculum-card curriculum-main-card"></div>
+          <div id="curriculumFullList" class="curriculum-full-list"></div>
+        </section>
+
+        <section id="shopView" class="view" aria-label="회원권 구매 및 결제">
+          <div class="section-title">
+            <h2>회원권 구매</h2>
+            <span>실결제는 결제사 승인 후 서버 검증까지 끝나야 회원권이 충전됩니다.</span>
+          </div>
+
+          <div id="currentTicketPanel" class="membership-overview current-ticket-panel"></div>
+
+          <details id="membershipHistoryDetails" class="membership-details">
+            <summary>이용 내역과 최근 수업 기록</summary>
+            <div id="ticketHistory" class="history-list"></div>
+            <div id="ticketHistoryPager" class="list-pager"></div>
+          </details>
+
+          <details id="membershipPurchaseDetails" class="membership-details">
+            <summary>연장·구매·결제 상태 보기</summary>
+            <div class="membership-details-body">
+          <div id="paymentGatewayStatus" class="payment-gateway-status"></div>
+          <div id="groupAccountPanel" class="group-account-panel"></div>
+          <div id="memberPaymentAlerts"></div>
+          <div id="registrationFlow" class="flow-guide"></div>
+          <div class="product-grid" id="productGrid"></div>
+
+          <section class="form-card">
+            <h3>만기/충전 대기 이용권</h3>
+            <p class="form-help">결제 후에는 관리자 검증이 끝나야 이용권이 충전됩니다.</p>
+            <div id="paymentRequests" class="history-list"></div>
+            <div id="paymentRequestsPager" class="list-pager"></div>
+          </section>
+            </div>
+          </details>
+        </section>
+
+        <section id="profileView" class="view" aria-label="내 정보">
+          <div class="section-title">
+            <h2>내 정보</h2>
+            <span>프로필 사진과 기본 정보를 관리합니다.</span>
+          </div>
+
+          <section class="profile-card" aria-label="프로필 사진">
+            <div id="profileAvatar" class="profile-avatar large">김</div>
+            <div class="profile-info">
+              <strong id="profileName">김서준 회원</strong>
+              <small id="profileRealName">실명 김서준</small>
+              <span id="profileProvider">간편 로그인 유지중</span>
+              <div class="profile-actions">
+                <button class="small-button" type="button" id="openProfileEditorButton">프로필 수정</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="profile-settings-card profile-summary-menu" aria-label="내 계정 요약">
+            <div class="settings-heading">
+              <span>내 계정</span>
+              <strong>자주 쓰는 정보만 먼저 확인하세요</strong>
+            </div>
+            <button class="settings-row" type="button" id="openProfileEditorMenuButton">
+              <span class="settings-row-icon" aria-hidden="true">P</span>
+              <span class="settings-row-copy">
+                <strong>프로필 정보</strong>
+                <small>사진, 닉네임, 테니스 스타일 수정</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row" type="button" id="openNtrpEditorButton">
+              <span class="settings-row-icon" aria-hidden="true">N</span>
+              <span class="settings-row-copy">
+                <strong>NTRP 레벨</strong>
+                <small id="profileNtrpSummary">자가 측정과 코치 측정을 확인하세요</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+          </section>
+
+          <section class="profile-settings-card" aria-label="앱 및 계정 설정">
+            <div class="settings-heading">
+              <span>앱 및 계정</span>
+              <strong>필요한 기능을 한곳에서 관리하세요</strong>
+            </div>
+            <button class="settings-row coach-settings-row" type="button" id="coachModeButton" hidden>
+              <span class="settings-row-icon" aria-hidden="true">C</span>
+              <span class="settings-row-copy">
+                <strong>코치 모드로 전환</strong>
+                <small>승인된 코치 계정에서만 사용할 수 있습니다</small>
+              </span>
+              <span class="settings-row-status">승인됨</span>
+            </button>
+            <button class="settings-row" type="button" id="openKakaoInquiryButton">
+              <span class="settings-row-icon kakao-icon" aria-hidden="true">K</span>
+              <span class="settings-row-copy">
+                <strong>카카오 문의</strong>
+                <small>운영시간과 문의 방법 확인</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row install-settings-row" type="button" data-install-pwa hidden>
+              <span class="settings-row-icon" aria-hidden="true">↓</span>
+              <span class="settings-row-copy">
+                <strong>앱 설치</strong>
+                <small>홈 화면에서 테니스노트를 바로 실행</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row danger-settings-row" type="button" id="profileLogoutButton">
+              <span class="settings-row-icon" aria-hidden="true">↪</span>
+              <span class="settings-row-copy">
+                <strong>로그아웃</strong>
+                <small>현재 계정에서 안전하게 로그아웃</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+          </section>
+
+          <section class="push-settings-card" aria-label="앱 알림 설정">
+            <div>
+              <span>앱 알림</span>
+              <strong id="pushNotificationStatus">앱 알림 확인 중</strong>
+              <small id="pushNotificationDetail">수업 일정과 회원권 만료를 알려드립니다.</small>
+            </div>
+            <button class="small-button" type="button" id="pushNotificationButton">알림 허용</button>
+          </section>
+
+          <section class="account-settings-card" aria-label="계정 및 데이터 관리">
+            <div>
+              <span>계정 및 데이터</span>
+              <strong id="accountDeletionStatus">회원 탈퇴 요청 없음</strong>
+              <small id="accountDeletionDetail">탈퇴하면 정산·환불·법정 보관 자료를 제외한 계정과 이용 데이터를 삭제합니다.</small>
+            </div>
+            <button class="small-button danger-button" type="button" id="openAccountDeletionButton">탈퇴·삭제 요청</button>
+          </section>
+
+          <section id="profileEditorSheet" class="app-bottom-sheet" aria-labelledby="profileEditorTitle" hidden>
+            <button class="sheet-backdrop" type="button" aria-label="내 정보 수정 닫기" data-close-profile-editor></button>
+            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="profileEditorTitle">
+              <div class="sheet-handle" aria-hidden="true"></div>
+              <div class="sheet-head">
+                <div>
+                  <p class="eyebrow">내 계정</p>
+                  <h3 id="profileEditorTitle">프로필과 테니스 정보</h3>
+                  <span>필요한 항목만 수정하고 저장하세요.</span>
+                </div>
+                <button class="small-button" type="button" data-close-profile-editor>닫기</button>
+              </div>
+              <div class="sheet-scroll">
+          <section class="form-card profile-editor-form">
+            <div class="profile-editor-photo-actions">
+              <label class="upload-button" for="profilePhotoInput">사진 등록</label>
+              <input id="profilePhotoInput" type="file" accept="image/*" hidden />
+              <button class="small-button" type="button" id="removeProfilePhoto">사진 삭제</button>
+            </div>
+            <h3>계정 기본 정보</h3>
+            <div class="profile-form-grid identity-profile-grid">
+              <label>
+                <span>실명</span>
+                <input id="profileRealNameInput" type="text" maxlength="40" autocomplete="name" />
+              </label>
+              <label>
+                <span>닉네임</span>
+                <input id="profileNicknameInput" type="text" minlength="2" maxlength="20" autocomplete="nickname" />
+              </label>
+              <label>
+                <span>휴대전화</span>
+                <input id="profilePhoneInput" type="tel" inputmode="numeric" maxlength="13" autocomplete="tel" />
+              </label>
+              <div class="nickname-check-panel">
+                <button class="small-button" type="button" id="profileNicknameCheckButton">닉네임 중복 확인</button>
+                <small id="profileNicknameStatus">2~20자로 입력하세요.</small>
+              </div>
+            </div>
+            <p class="policy-note">실명은 수업·결제·회원 관리에, 닉네임은 내 화면에 사용됩니다.</p>
+            <h3>내 테니스 스타일</h3>
+            <div class="profile-form-grid">
+              <label>
+                <span>주 사용 손</span>
+                <select id="profileHand">
+                  <option value="오른손">오른손</option>
+                  <option value="왼손">왼손</option>
+                </select>
+              </label>
+              <label>
+                <span>백핸드</span>
+                <select id="profileBackhand">
+                  <option value="투핸드 백핸드">투핸드 백핸드</option>
+                  <option value="원핸드 백핸드">원핸드 백핸드</option>
+                  <option value="아직 미정">아직 미정</option>
+                </select>
+              </label>
+              <label>
+                <span>테니스 시작일</span>
+                <input id="profileStartedAt" type="date" />
+              </label>
+              <label>
+                <span>현재 목표</span>
+                <input id="profileGoal" type="text" placeholder="예: 랠리 10개 연결, 게임 입문" />
+              </label>
+              <label>
+                <span>내가 측정한 NTRP</span>
+                <select id="profileSelfNtrp">
+                  <option value="1.5">1.5 · 시작/입문</option>
+                  <option value="2.0">2.0 · 기본기 연습 필요</option>
+                  <option value="2.5">2.5 · 느린 랠리 가능</option>
+                  <option value="3.0">3.0 · 중간 속도 랠리 가능</option>
+                  <option value="3.5">3.5 · 방향 조절 시작</option>
+                  <option value="4.0">4.0 · 안정적 경기 가능</option>
+                </select>
+              </label>
+              <label>
+                <span>코치 측정 NTRP</span>
+                <input id="profileCoachNtrp" type="text" readonly />
+              </label>
+            </div>
+            <label>
+              <span>내 스타일 메모</span>
+              <textarea id="profileStyleMemo" rows="3" placeholder="예: 포핸드는 자신 있는데 백핸드가 불안해요."></textarea>
+            </label>
+            <section class="ntrp-survey" aria-label="NTRP 자가 측정 설문">
+              <div class="section-title compact-title">
+                <h3>NTRP 자가 측정 설문</h3>
+                <span>내가 만든 포스터와 공식 기준을 보면서 현재 레벨을 체크합니다.</span>
+              </div>
+              <div id="ntrpReferenceCards" class="ntrp-reference-grid"></div>
+              <div id="ntrpSurveyQuestions" class="ntrp-survey-list"></div>
+              <button class="small-button" type="button" id="calculateNtrp">설문으로 내 NTRP 계산</button>
+            </section>
+            <div id="ntrpPanel" class="ntrp-panel"></div>
+            <button class="primary-button" type="button" id="saveProfileInfo">내 정보 저장</button>
+            <button class="small-button" type="button" id="requestNtrpCheck">코치에게 NTRP 측정 요청</button>
+          </section>
+              </div>
+            </article>
+          </section>
+        </section>
+
+        <footer class="app-legal-links" aria-label="앱 정책 안내">
+          <a href="../tennis-note-legal/privacy.html">개인정보 처리방침</a>
+          <a href="../tennis-note-legal/support.html">고객지원</a>
+          <a href="../tennis-note-legal/delete-account.html">계정 삭제 안내</a>
+        </footer>
+      </section>
+    </main>
+
+    <section id="kakaoInquiryModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-kakao-inquiry-modal></div>
+      <article class="change-modal-card support-modal-card" role="dialog" aria-modal="true" aria-labelledby="kakaoInquiryTitle">
+        <p class="eyebrow">고객 지원</p>
+        <h2 id="kakaoInquiryTitle">카카오로 문의하기</h2>
+        <p>수업 변경, 회원권, 결제 관련 내용을 남겨주시면 운영시간에 순서대로 답변드립니다.</p>
+        <div class="support-hours">
+          <strong>문의 전 확인</strong>
+          <span>회원 이름과 문의 내용을 함께 적어주세요.</span>
+        </div>
+        <div class="modal-actions">
+          <a class="channel-button" id="kakaoChannelLink" href="https://pf.kakao.com/_UQPpb/chat" target="_blank" rel="noreferrer">카카오 채널 열기</a>
+          <button class="small-button" type="button" data-close-kakao-inquiry-modal>닫기</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="identitySetupModal" class="change-request-modal identity-setup-modal" hidden>
+      <div class="modal-backdrop"></div>
+      <article class="change-modal-card identity-setup-card" role="dialog" aria-modal="true" aria-labelledby="identitySetupTitle">
+        <p class="eyebrow">가입 정보 확인</p>
+        <h2 id="identitySetupTitle">내 프로필을 완성해 주세요</h2>
+        <p>간편 로그인 이름과 별도로 실제 수업에 사용할 정보를 확인합니다.</p>
+        <form id="identitySetupForm" class="identity-setup-form">
+          <label>
+            <span>실명</span>
+            <input id="identityRealName" type="text" maxlength="40" autocomplete="name" required />
+          </label>
+          <label>
+            <span>닉네임</span>
+            <input id="identityNickname" type="text" minlength="2" maxlength="20" autocomplete="nickname" required />
+          </label>
+          <div class="nickname-check-row">
+            <button class="small-button" type="button" id="identityNicknameCheckButton">중복 확인</button>
+            <small id="identityNicknameStatus">닉네임은 모든 회원 사이에서 중복될 수 없습니다.</small>
+          </div>
+          <label>
+            <span>휴대전화</span>
+            <input id="identityPhone" type="tel" inputmode="numeric" maxlength="13" autocomplete="tel" placeholder="010-0000-0000" required />
+          </label>
+          <label class="consent-row">
+            <input id="identityPrivacyConsent" type="checkbox" required />
+            <span><a href="../tennis-note-legal/privacy.html" target="_blank" rel="noreferrer">개인정보 처리방침</a>을 확인하고 동의합니다.</span>
+          </label>
+          <p id="identitySetupMessage" class="policy-note" aria-live="polite"></p>
+          <div class="modal-actions">
+            <button class="primary-button" type="submit">가입 완료</button>
+            <button class="small-button" type="button" id="identitySetupLogoutButton">다른 계정으로 로그인</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section id="memberEnrollmentModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-member-enrollment></div>
+      <article class="change-modal-card member-enrollment-modal-card" role="dialog" aria-modal="true" aria-labelledby="memberEnrollmentTitle">
+        <div class="section-title compact-title">
+          <div>
+            <p class="eyebrow">첫 회원권 구매</p>
+            <h2 id="memberEnrollmentTitle">수강 가입서</h2>
+          </div>
+          <span>운동노트만 이용할 때는 작성하지 않아도 됩니다.</span>
+        </div>
+        <div id="memberEnrollmentProduct" class="member-enrollment-product"></div>
+        <form id="memberEnrollmentForm" class="member-enrollment-form">
+          <div class="member-enrollment-grid">
+            <label>
+              <span>이름 <b>필수</b></span>
+              <input id="enrollmentName" type="text" maxlength="50" autocomplete="name" required />
+            </label>
+            <label>
+              <span>연락처 <b>필수</b></span>
+              <input id="enrollmentPhone" type="tel" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="010-1234-5678" required />
+            </label>
+            <label>
+              <span>출생연도 <b>필수</b></span>
+              <input id="enrollmentBirthYear" type="number" min="1900" max="2100" inputmode="numeric" placeholder="1990" required />
+            </label>
+            <label>
+              <span>거주 동네 <small>선택</small></span>
+              <input id="enrollmentNeighborhood" type="text" maxlength="50" placeholder="예: 화양동" />
+            </label>
+            <label>
+              <span>성별 <small>선택</small></span>
+              <select id="enrollmentGender">
+                <option value="">선택 안 함</option>
+                <option value="female">여성</option>
+                <option value="male">남성</option>
+                <option value="other">기타</option>
+                <option value="prefer_not">응답하지 않음</option>
+              </select>
+            </label>
+            <label>
+              <span>테니스 경험 <b>필수</b></span>
+              <select id="enrollmentExperience" required>
+                <option value="first">처음 시작</option>
+                <option value="beginner" selected>입문·초급</option>
+                <option value="intermediate">중급</option>
+                <option value="advanced">상급</option>
+              </select>
+            </label>
+          </div>
+          <fieldset id="enrollmentPartnerFields" class="member-enrollment-partner" hidden>
+            <legend>2대1 동반 회원</legend>
+            <p>파트너가 앱을 설치하지 않아도 대표 회원이 결제와 시간표를 함께 관리할 수 있습니다.</p>
+            <div class="member-enrollment-grid">
+              <label><span>파트너 이름 <b>필수</b></span><input id="enrollmentPartnerName" type="text" maxlength="50" /></label>
+              <label><span>파트너 연락처 <b>필수</b></span><input id="enrollmentPartnerPhone" type="tel" maxlength="20" inputmode="tel" /></label>
+              <label><span>파트너 출생연도 <small>선택</small></span><input id="enrollmentPartnerBirthYear" type="number" min="1900" max="2100" inputmode="numeric" /></label>
+              <label><span>파트너 거주 동네 <small>선택</small></span><input id="enrollmentPartnerNeighborhood" type="text" maxlength="50" /></label>
+              <label>
+                <span>파트너 성별 <small>선택</small></span>
+                <select id="enrollmentPartnerGender">
+                  <option value="">선택 안 함</option>
+                  <option value="female">여성</option>
+                  <option value="male">남성</option>
+                  <option value="other">기타</option>
+                  <option value="prefer_not">응답하지 않음</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+          <div class="member-enrollment-consents">
+            <label><input id="enrollmentPrivacyConsent" type="checkbox" required /><span><a href="../tennis-note-legal/privacy.html">개인정보 처리방침</a>과 수강 운영을 위한 정보 수집에 동의합니다. <b>필수</b></span></label>
+            <label><input id="enrollmentTermsConsent" type="checkbox" required /><span><a href="../tennis-note-legal/commerce.html">회원권·결제·환불 안내</a>를 확인했습니다. <b>필수</b></span></label>
+          </div>
+          <p id="memberEnrollmentMessage" class="policy-note" role="status"></p>
+          <div class="modal-actions">
+            <button class="primary-button" type="submit">가입서 제출 후 결제</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section id="changeRequestModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-change-modal></div>
+      <article class="change-modal-card" role="dialog" aria-modal="true" aria-label="수업 변경 요청">
+        <div class="section-title compact-title">
+          <h2>수업 변경 요청</h2>
+          <span id="changeModalSummary">기존 수업과 희망 시간을 확인합니다.</span>
+        </div>
+        <div class="form-card schedule-request-card">
+          <label>
+            <span>변경할 기존 수업</span>
+            <select id="absenceLesson"></select>
+          </label>
+          <label>
+            <span>희망 변경 시간</span>
+            <select id="makeupSlot"></select>
+          </label>
+          <div id="availableSlotList" class="slot-list" aria-label="변경 가능한 시간"></div>
+          <p id="changePolicyNote" class="policy-note">24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요</p>
+          <label>
+            <span>변경 이유</span>
+            <textarea id="changeReason" rows="3" minlength="2" maxlength="200" required placeholder="예: 회사 일정, 가족 일정, 컨디션 문제 등"></textarea>
+          </label>
+          <div class="modal-actions">
+            <button class="primary-button" type="button" id="requestMakeup">수업 변경 요청</button>
+            <button class="small-button" type="button" data-close-change-modal>닫기</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section id="changeHistoryModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-history-modal></div>
+      <article class="change-modal-card" role="dialog" aria-modal="true" aria-label="수업 변경 요청 내역">
+        <div class="section-title compact-title">
+          <h2>수업 변경 요청 내역</h2>
+          <span>신청한 변경 요청과 처리 상태를 확인합니다.</span>
+        </div>
+        <div id="makeupRequests" class="request-list"></div>
+        <button class="small-button" type="button" data-close-history-modal>닫기</button>
+      </article>
+    </section>
+
+    <section id="holdingRequestModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-holding-modal></div>
+      <article class="change-modal-card holding-modal-card" role="dialog" aria-modal="true" aria-label="회원권 홀딩 신청">
+        <div class="section-title compact-title">
+          <h2>회원권 홀딩 신청</h2>
+          <span id="holdingPolicySummary">개인 사유와 부상 기준을 확인합니다.</span>
+        </div>
+        <form id="holdingRequestForm" class="form-card holding-request-form">
+          <label>
+            <span>홀딩 사유</span>
+            <select id="holdingRequestType">
+              <option value="personal">개인 사유</option>
+              <option value="injury">부상·입원</option>
+            </select>
+          </label>
+          <div class="holding-date-grid">
+            <label><span>시작일</span><input id="holdingStartDate" type="date" required /></label>
+            <label><span>종료일</span><input id="holdingEndDate" type="date" required /></label>
+          </div>
+          <label>
+            <span>간단한 사유</span>
+            <textarea id="holdingReason" rows="3" maxlength="200" placeholder="진단명 등 상세한 건강정보는 적지 않아도 됩니다."></textarea>
+          </label>
+          <div id="holdingEvidenceFields" class="holding-evidence-fields" hidden>
+            <label class="holding-file-field">
+              <span>진단서 또는 진료확인서</span>
+              <input id="holdingEvidenceFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" />
+              <small>PDF·JPG·PNG·WEBP, 최대 5MB. 주민번호와 주소는 가리고 올려주세요.</small>
+            </label>
+            <label class="holding-consent-row">
+              <input id="holdingSensitiveConsent" type="checkbox" />
+              <span>부상 확인과 홀딩 심사를 위한 건강정보 처리 및 심사 후 원본 삭제에 동의합니다.</span>
+            </label>
+          </div>
+          <p id="holdingRequestMessage" class="policy-note"></p>
+          <div class="modal-actions">
+            <button class="primary-button" type="submit">홀딩 신청</button>
+            <button class="small-button" type="button" data-close-holding-modal>닫기</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section id="accountDeletionModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-account-deletion-modal></div>
+      <article class="change-modal-card account-deletion-modal-card" role="dialog" aria-modal="true" aria-label="회원 탈퇴 및 데이터 삭제 요청">
+        <div class="section-title compact-title">
+          <h2>회원 탈퇴·데이터 삭제</h2>
+          <span>관리자가 결제, 환불, 잔여 수업을 확인한 뒤 처리합니다.</span>
+        </div>
+        <form id="accountDeletionForm" class="form-card account-deletion-form">
+          <p class="policy-note">처리 완료 후 계정과 레슨·운동 기록은 삭제됩니다. 전자상거래법 등 법령상 보관해야 하는 결제·환불 기록은 정해진 기간 동안 분리 보관될 수 있습니다.</p>
+          <label>
+            <span>요청 사유 <small>(선택)</small></span>
+            <textarea id="accountDeletionReason" rows="3" maxlength="200" placeholder="서비스 개선을 위해 간단한 사유를 남길 수 있습니다."></textarea>
+          </label>
+          <label class="account-deletion-confirm-row">
+            <input id="accountDeletionConfirm" type="checkbox" />
+            <span>탈퇴 처리 시 앱 이용과 로그인한 기기의 알림이 중단되는 것을 확인했습니다.</span>
+          </label>
+          <p id="accountDeletionMessage" class="policy-note"></p>
+          <div class="modal-actions">
+            <button class="primary-button danger-button" type="submit">삭제 요청 접수</button>
+            <button class="small-button" type="button" data-close-account-deletion-modal>닫기</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section id="journalDetailModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-journal-modal></div>
+      <article class="change-modal-card" role="dialog" aria-modal="true" aria-label="운동일지 상세">
+        <div id="journalDetailContent"></div>
+        <button class="small-button" type="button" data-close-journal-modal>닫기</button>
+      </article>
+    </section>
+
+    <section id="ntrpReferenceModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-ntrp-modal></div>
+      <article class="change-modal-card ntrp-modal-card" role="dialog" aria-modal="true" aria-label="NTRP 참고 자료">
+        <div id="ntrpReferenceContent"></div>
+        <button class="small-button" type="button" data-close-ntrp-modal>닫기</button>
+      </article>
+    </section>
+
+    <script src="../shared/config.local.js?v=local"></script>
+    <script src="../shared/tennisnote-data-client.js?v=identity-profile-1"></script>
+    <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
+    <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
+    <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
+    <script src="./app.js?v=member-live-feedback-1"></script>
+  </body>
+</html>
