@@ -2,6 +2,7 @@
   const storageKey = "tennis-note-supabase-config";
   const authStorageKey = "tennis-note-supabase-session";
   const authPersistenceKey = "tennis-note-auth-persistence";
+  const nativeUrlFingerprintKey = "tennis-note-native-url-fingerprint";
   const placeholderMarkers = ["your_", "_here", "publishable_key"];
 
   function parseStoredConfig() {
@@ -250,30 +251,84 @@
     return `com.tennisclubhouse.tennisnote://oauth/${target}`;
   }
 
+  function nativeUrlFingerprint(url) {
+    let hash = 2166136261;
+    for (let index = 0; index < url.length; index += 1) {
+      hash ^= url.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `${(hash >>> 0).toString(36)}:${url.length}`;
+  }
+
+  function recentlyHandledNativeUrl(url) {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(nativeUrlFingerprintKey) || "null");
+      return saved?.fingerprint === nativeUrlFingerprint(url) && Date.now() - Number(saved?.handledAt || 0) < 60_000;
+    } catch (error) {
+      try {
+        window.sessionStorage.removeItem(nativeUrlFingerprintKey);
+      } catch (storageError) {
+        // Treat unavailable session storage as having no previous callback.
+      }
+      return false;
+    }
+  }
+
+  function rememberNativeUrl(url) {
+    try {
+      window.sessionStorage.setItem(nativeUrlFingerprintKey, JSON.stringify({
+        fingerprint: nativeUrlFingerprint(url),
+        handledAt: Date.now(),
+      }));
+    } catch (error) {
+      // URL handling still works when session storage is unavailable.
+    }
+  }
+
+  function forgetNativeUrl() {
+    try {
+      window.sessionStorage.removeItem(nativeUrlFingerprintKey);
+    } catch (error) {
+      // There is no stored marker to clear when session storage is unavailable.
+    }
+  }
+
   function handleNativeOAuthUrl(url) {
     if (!url || !url.startsWith("com.tennisclubhouse.tennisnote://oauth/")) return false;
-    const parsed = new URL(url);
-    const session = saveOAuthSession(parsed.hash);
-    if (!session) return false;
-    window.location.reload();
-    return true;
+    try {
+      const parsed = new URL(url);
+      const session = saveOAuthSession(parsed.hash);
+      if (!session) return false;
+      window.location.reload();
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 
   function handleNativePaymentUrl(url) {
     if (!url || !url.startsWith("com.tennisclubhouse.tennisnote://")) return false;
-    const parsed = new URL(url);
-    const paymentId = parsed.searchParams.get("paymentId") || "";
-    if (!/^[A-Za-z0-9_-]{1,200}$/.test(paymentId)) return false;
-    const target = new URL(window.location.href);
-    ["paymentId", "code", "message", "pgCode", "pgMessage"].forEach((key) => {
-      if (parsed.searchParams.has(key)) target.searchParams.set(key, parsed.searchParams.get(key) || "");
-    });
-    window.location.assign(target.toString());
-    return true;
+    try {
+      const parsed = new URL(url);
+      const paymentId = parsed.searchParams.get("paymentId") || "";
+      if (!/^[A-Za-z0-9_-]{1,200}$/.test(paymentId)) return false;
+      const target = new URL(window.location.href);
+      ["paymentId", "code", "message", "pgCode", "pgMessage"].forEach((key) => {
+        if (parsed.searchParams.has(key)) target.searchParams.set(key, parsed.searchParams.get(key) || "");
+      });
+      window.location.assign(target.toString());
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 
   function handleNativeAppUrl(url) {
-    return handleNativeOAuthUrl(url) || handleNativePaymentUrl(url);
+    if (!url || recentlyHandledNativeUrl(url)) return Boolean(url);
+    rememberNativeUrl(url);
+    const handled = handleNativeOAuthUrl(url) || handleNativePaymentUrl(url);
+    if (!handled) forgetNativeUrl();
+    return handled;
   }
 
   function installNativeOAuthListener() {
@@ -566,7 +621,7 @@
     const session = getSession();
     const user = await getAuthUser();
     if (!user?.id) return { user, profile: null };
-    const profileSelect = "id,name,nickname,phone,role,member_kind,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,ntrp_survey,ntrp_requested_at,profile_completed_at,privacy_consent_version,privacy_consented_at,status";
+    const profileSelect = "id,name,nickname,phone,birth_year,neighborhood,gender,role,member_kind,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,ntrp_survey,ntrp_requested_at,profile_completed_at,privacy_consent_version,privacy_consented_at,status";
     let rows = await selectRows("tn_users", {
       select: profileSelect,
       filters: { auth_user_id: user.id },
