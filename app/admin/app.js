@@ -52,6 +52,41 @@ const state = {
   makeupEntitlements: [],
 };
 
+// Keep the last confirmed server schedule locally. A failed or unexpectedly empty
+// refresh must never make an already loaded timetable look deleted.
+const scheduleSafetySnapshotKey = "tennis-note-admin-schedule-safety-v1";
+
+function persistentScheduleLessons(source = lessons) {
+  return (Array.isArray(source) ? source : []).filter((lesson) => (
+    lesson?.serverLessonId || lesson?.serverOneDayBookingId
+  ));
+}
+
+function saveScheduleSafetySnapshot(source = lessons, reason = "refresh") {
+  const savedLessons = persistentScheduleLessons(source);
+  if (!savedLessons.length) return;
+  try {
+    localStorage.setItem(scheduleSafetySnapshotKey, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      reason,
+      lessons: savedLessons,
+    }));
+  } catch {
+    // Storage is a secondary safety net. The Supabase schedule remains canonical.
+  }
+}
+
+function shouldProtectLoadedSchedule(serverLessons, nextLessons) {
+  const current = persistentScheduleLessons();
+  const next = persistentScheduleLessons(nextLessons);
+  if (!state.liveScheduleLoaded || !current.length) return false;
+
+  // A normal action can replace a few future rows, but it must not erase the full
+  // timetable just because a request returned an empty or incomplete lesson list.
+  if (!Array.isArray(serverLessons) || !serverLessons.length) return true;
+  return next.length === 0;
+}
+
 const policyGuideTemplates = [
   {
     id: "makeup",
@@ -7205,6 +7240,10 @@ async function submitMemberManagementForm(event) {
   const managementPayload = ["create", "assign", "profile", "correct"].includes(action)
     ? memberManagementDatabasePayload(form, isCreate ? null : member, ticket, reason)
     : null;
+  if (managementPayload && action === "profile") {
+    // Profile, note, and partner edits must never recalculate or replace a fixed schedule.
+    managementPayload.preserveExistingSchedule = true;
+  }
   const statusAction = form.elements.memberStatusAction?.value || "keep";
 
   if (form.elements.lessonType) {
@@ -12429,7 +12468,7 @@ async function syncAdminLiveData() {
     });
     const mappedTicketById = new Map(mappedTickets.map((ticket) => [ticket.id, ticket]));
     const slotCounts = new Map();
-    const mappedLessons = (serverLessons || [])
+    let mappedLessons = (serverLessons || [])
       .filter((lesson) => lesson.status !== "cancelled")
       .map((lesson) => {
         const participantIds = participantIdsByLesson.get(lesson.id) || [];
@@ -12678,6 +12717,12 @@ async function syncAdminLiveData() {
       tone: "good",
     });
 
+    const keepLoadedSchedule = shouldProtectLoadedSchedule(serverLessons, mappedLessons);
+    if (keepLoadedSchedule) {
+      mappedLessons = lessons.map((lesson) => ({ ...lesson }));
+      billingLogs.unshift("시간표 보호: 비어 있거나 불완전한 서버 응답으로 기존 시간표를 덮어쓰지 않았습니다.");
+    }
+
     Object.assign(adminLiveDataState, {
       lessons: mappedLessons,
       users: serverUsers || [],
@@ -12697,13 +12742,17 @@ async function syncAdminLiveData() {
       groupTicketLinks: serverGroupTicketLinks || [],
       memberDatabaseRecords: serverMemberDatabaseRecords || [],
     });
+    saveScheduleSafetySnapshot(lessons, keepLoadedSchedule ? "protected-refresh" : "before-server-refresh");
     replaceArray(lessons, mappedLessons);
+    saveScheduleSafetySnapshot(lessons, keepLoadedSchedule ? "protected-refresh" : "server-refresh");
     refreshMembershipProductDraftsFromServer(serverProducts || []);
     if (!wasLoaded) state.activeAdminWeekIndex = 0;
     Object.assign(state, {
       liveScheduleLoaded: true,
       liveScheduleLoading: false,
-      liveScheduleMessage: `실서버 시간표 ${mappedLessons.length}건 동기화`,
+      liveScheduleMessage: keepLoadedSchedule
+        ? `시간표 보호 모드: 기존 ${mappedLessons.length}건 유지`
+        : `실서버 시간표 ${mappedLessons.length}건 동기화`,
     });
     await loadLiveSchedulePolicyFromServer();
     await loadRefundPolicySettingsFromServer();
