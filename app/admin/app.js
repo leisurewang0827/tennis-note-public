@@ -395,7 +395,7 @@ function adminTimeVisibleForDay(day, time) {
   const slotStart = timeToMinutes(time);
   const slotEnd = slotStart + scheduleBlockMinutes;
   const hasLesson = lessons.some((lesson) => {
-    if (lesson.day !== day || lesson.status === "cancelled") return false;
+    if (lesson.day !== day || lesson.status === "cancelled" || !lessonMatchesActiveScheduleWeek(lesson, day)) return false;
     const lessonStart = timeToMinutes(lesson.time);
     return slotStart < lessonStart + (Number(lesson.durationMinutes) || 20) && slotEnd > lessonStart;
   });
@@ -408,10 +408,8 @@ function adminTimeVisibleForDay(day, time) {
 function syncAdminScheduleWeek() {
   const week = activeAdminWeek();
   if (state.liveScheduleLoaded) {
-    replaceArray(lessons, adminLiveDataState.lessons.filter((lesson) => (
-      !lesson.lessonDate
-      || (lesson.lessonDate >= week.startDate && lesson.lessonDate <= week.endDate)
-    )));
+    // Live lessons stay as one canonical collection. Rendering applies the week filter.
+    // Replacing this array with only one week made other live lessons appear deleted.
     return;
   }
   for (let index = lessons.length - 1; index >= 0; index -= 1) {
@@ -420,6 +418,14 @@ function syncAdminScheduleWeek() {
   (week.lessons || []).forEach((lesson) => {
     lessons.push({ ...lesson });
   });
+}
+
+function goToAdminScheduleToday() {
+  state.activeAdminWeekIndex = 0;
+  state.selectedScheduleDay = currentScheduleDay();
+  syncAdminScheduleWeek();
+  renderSchedule();
+  saveSnapshot();
 }
 
 function changeAdminWeek(delta) {
@@ -4337,11 +4343,11 @@ function minutesToTime(totalMinutes) {
 }
 
 function findLesson(day, time) {
-  return lessons.find((item) => item.day === day && item.time === time);
+  return lessons.find((item) => item.day === day && item.time === time && lessonMatchesActiveScheduleWeek(item, day));
 }
 
 function findLessons(day, time) {
-  return lessons.filter((item) => item.day === day && item.time === time);
+  return lessons.filter((item) => item.day === day && item.time === time && lessonMatchesActiveScheduleWeek(item, day));
 }
 
 function isBookedLesson(lesson) {
@@ -4500,7 +4506,7 @@ function getScheduleTimeOptions() {
 function findLessonStartingInBlock(day, blockStart, blockEnd) {
   return lessons.find((lesson) => {
     const starts = timeToMinutes(lesson.time);
-    return lesson.day === day && starts > blockStart && starts < blockEnd;
+    return lesson.day === day && lessonMatchesActiveScheduleWeek(lesson, day) && starts > blockStart && starts < blockEnd;
   });
 }
 
@@ -4513,25 +4519,25 @@ function getScheduleCoachLanes(day = "") {
   if (!day) return lanes;
   return lanes.filter((coach) => (
     normalizeCoachWorkBlocks(coach).some((block) => block.days.includes(day)) ||
-    lessons.some((lesson) => lesson.day === day && lesson.coachId === coach.id && isBookedLesson(lesson))
+    lessons.some((lesson) => lesson.day === day && lesson.coachId === coach.id && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson))
   ));
 }
 
 function findStartingLessonForCoach(day, time, coachId) {
-  return lessons.find((lesson) => lesson.day === day && lesson.time === time && lesson.coachId === coachId && isBookedLesson(lesson));
+  return lessons.find((lesson) => lesson.day === day && lesson.time === time && lesson.coachId === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson));
 }
 
 function findLessonStartingInBlockForCoach(day, blockStart, blockEnd, coachId) {
   return lessons.find((lesson) => {
     const starts = timeToMinutes(lesson.time);
-    return lesson.day === day && lesson.coachId === coachId && starts > blockStart && starts < blockEnd;
+    return lesson.day === day && lesson.coachId === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && starts > blockStart && starts < blockEnd;
   });
 }
 
 function findOccupyingLessonForCoach(day, time, coachId) {
   const current = timeToMinutes(time);
   return lessons.find((lesson) => {
-    if (lesson.day !== day || lesson.time === time || lesson.coachId !== coachId || !isBookedLesson(lesson)) return false;
+    if (lesson.day !== day || lesson.time === time || lesson.coachId !== coachId || !lessonMatchesActiveScheduleWeek(lesson, day) || !isBookedLesson(lesson)) return false;
     const starts = timeToMinutes(lesson.time);
     const ends = starts + lesson.durationMinutes;
     return current > starts && current < ends;
@@ -4541,7 +4547,7 @@ function findOccupyingLessonForCoach(day, time, coachId) {
 function findOccupyingLesson(day, time) {
   const current = timeToMinutes(time);
   return lessons.find((lesson) => {
-    if (lesson.day !== day || lesson.time === time) return false;
+    if (lesson.day !== day || lesson.time === time || !lessonMatchesActiveScheduleWeek(lesson, day)) return false;
     const starts = timeToMinutes(lesson.time);
     const ends = starts + lesson.durationMinutes;
     return current > starts && current < ends;
@@ -4658,7 +4664,13 @@ function setView(view, options = {}) {
     showToast("현재 계정에서 사용할 수 없는 메뉴입니다.");
   }
   if (!options.skipLock && !requestAdminUnlock(view)) return;
+  const enteringSchedule = view === "schedule" && state.view !== "schedule";
   state.view = view;
+  if (enteringSchedule) {
+    state.scheduleView = "week";
+    state.activeAdminWeekIndex = 0;
+    state.selectedScheduleDay = currentScheduleDay();
+  }
   $$(".nav-item").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
   $$(".view").forEach((section) => section.classList.remove("is-active"));
   $(`#${view}View`).classList.add("is-active");
@@ -4671,8 +4683,16 @@ function setView(view, options = {}) {
     settings: "운영 설정",
   };
   $("#viewTitle").textContent = titles[view];
+  if (enteringSchedule) renderSchedule();
   if (view === "billing" && !serverPaymentSyncState.loading) {
     loadServerPaymentsIntoBilling();
+  }
+  if (enteringSchedule && state.liveScheduleLoaded && !state.liveScheduleLoading) {
+    refreshAdminLiveSchedule({ render: false })
+      .then((synced) => {
+        if (synced && state.view === "schedule") renderSchedule();
+      })
+      .catch(() => false);
   }
 }
 
@@ -8169,6 +8189,12 @@ function scheduleLessonMatches(lesson) {
   return matchesSearch([lesson.member, getCoachName(lesson.coachId), getCourtLabel(lesson.courtId), lesson.day, lesson.type]);
 }
 
+function lessonMatchesActiveScheduleWeek(lesson, day = lesson?.day) {
+  if (!state.liveScheduleLoaded) return true;
+  const targetDate = adminWeekDateForDay(day);
+  return !targetDate || !lesson?.lessonDate || lesson.lessonDate === targetDate;
+}
+
 function getLessonMembersLabel(lesson) {
   if (isReleasedRegularMakeupSlot(lesson)) return "정규자리";
   return lesson.member;
@@ -8215,7 +8241,7 @@ function scheduleTimeHasFilteredLesson(time) {
   if (state.scheduleFilter === "all") return true;
   return scheduleDays.some((day) =>
     lessons.some((lesson) => {
-      if (!scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson)) return false;
+      if (!scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson) || !lessonMatchesActiveScheduleWeek(lesson, day)) return false;
       const start = timeToMinutes(lesson.time);
       const end = start + lesson.durationMinutes;
       const slot = timeToMinutes(time);
@@ -8673,7 +8699,7 @@ function renderScheduleCell(day, time) {
 }
 
 function lessonOverlapsScheduleSlot(lesson, day, time) {
-  if (lesson.day !== day || lesson.status === "cancelled") return false;
+  if (lesson.day !== day || lesson.status === "cancelled" || !lessonMatchesActiveScheduleWeek(lesson, day)) return false;
   const slotStart = timeToMinutes(time);
   const slotEnd = slotStart + scheduleBlockMinutes;
   const lessonStart = timeToMinutes(lesson.time);
@@ -8769,7 +8795,7 @@ function renderCoachDaySchedule(day) {
     return `<div class="coach-day-time ${minor ? "is-minor" : ""}" style="grid-row:${row};grid-column:1;">${time}</div>${visibleCoaches.map((coach, coachIndex) => renderCoachDayBaseCell(day, time, coach, row, coachIndex + 2)).join("")}`;
   }).join("");
   const lessonCards = visibleCoaches.map((coach, coachIndex) => lessons
-    .filter((lesson) => lesson.day === day && lesson.coachId === coach.id && lesson.status !== "cancelled")
+    .filter((lesson) => lesson.day === day && lesson.coachId === coach.id && lesson.status !== "cancelled" && lessonMatchesActiveScheduleWeek(lesson, day))
     .map((lesson) => renderCoachDayLessonCard(lesson, visibleTimes, coachIndex + 2))
     .join("")).join("");
   target.innerHTML = headers + baseCells + lessonCards;
@@ -8785,6 +8811,7 @@ function renderSchedule() {
       <button class="ghost-button" type="button" data-change-admin-week="-1" ${state.activeAdminWeekIndex <= adminScheduleMinWeekOffset ? "disabled" : ""}>이전 주</button>
       <div class="schedule-period-summary">
         <div class="schedule-month-controls">
+          <button class="ghost-button" type="button" data-go-admin-today>오늘</button>
           <button class="ghost-button" type="button" data-change-admin-month="-1">이전 달</button>
           <input class="schedule-month-input" type="month" value="${adminScheduleMonthValue(activeWeek)}" data-admin-month aria-label="이동할 달">
           <button class="ghost-button" type="button" data-change-admin-month="1">다음 달</button>
@@ -12413,6 +12440,7 @@ async function syncAdminLiveData() {
       groupTicketLinks: serverGroupTicketLinks || [],
       memberDatabaseRecords: serverMemberDatabaseRecords || [],
     });
+    replaceArray(lessons, mappedLessons);
     refreshMembershipProductDraftsFromServer(serverProducts || []);
     if (!wasLoaded) state.activeAdminWeekIndex = 0;
     Object.assign(state, {
@@ -15240,6 +15268,10 @@ function bindEvents() {
     openEditLessonModal(lessonButton.dataset.editLessonId);
   });
   $("#adminWeekSwitcher")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-go-admin-today]")) {
+      goToAdminScheduleToday();
+      return;
+    }
     const monthButton = event.target.closest("[data-change-admin-month]");
     if (monthButton) {
       changeAdminMonth(Number(monthButton.dataset.changeAdminMonth));
