@@ -1409,7 +1409,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "member-athletic-ui-1" });
+  const params = new URLSearchParams({ v: "member-copy-light-1" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1596,15 +1596,15 @@ function renderSummary() {
   const pendingFeedback = state.feedbackRequests.filter((item) => item.status !== "코치 답변 완료").length;
   const pendingRecordTotal = pendingLessonLogs + pendingFeedback;
   $("#todayLessonCount").textContent = `${ownLessons.length}개`;
-  if ($("#todayLessonSummaryNote")) $("#todayLessonSummaryNote").textContent = `정규 ${regularCount} · 보강 ${makeupLessonCount} · 클릭해 처리`;
+  if ($("#todayLessonSummaryNote")) $("#todayLessonSummaryNote").textContent = ownLessons.length ? `정규 ${regularCount} · 보강 ${makeupLessonCount}` : "오늘 수업 없음";
   $("#makeupPendingCount").textContent = `${makeupPendingCount}건`;
-  if ($("#makeupSummaryNote")) $("#makeupSummaryNote").textContent = makeupPendingCount ? "승인 또는 회원 시간선택 대기" : "대기 중인 요청 없음";
+  if ($("#makeupSummaryNote")) $("#makeupSummaryNote").textContent = makeupPendingCount ? `처리 대기 ${makeupPendingCount}건` : "대기 없음";
   $("#logPendingCount").textContent = `${pendingRecordTotal}건`;
-  if ($("#recordSummaryNote")) $("#recordSummaryNote").textContent = `코멘트 ${pendingLessonLogs}건 · 운동노트 ${pendingFeedback}건`;
+  if ($("#recordSummaryNote")) $("#recordSummaryNote").textContent = pendingRecordTotal ? `완료 처리 ${pendingRecordTotal}건` : "처리 없음";
   if ($("#recordRequiredNote")) {
     $("#recordRequiredNote").textContent = pendingRecordTotal
-      ? `미처리 ${pendingRecordTotal}건이 있습니다. 코치 코멘트와 다음 커리큘럼을 등록해야 회원권 횟수가 차감됩니다.`
-      : "오늘 미처리 기록은 없습니다. 수업을 누르면 바로 완료 처리할 수 있습니다.";
+      ? `미처리 ${pendingRecordTotal}건 · 코멘트 등록 후 횟수가 차감됩니다.`
+      : "오늘 처리할 기록이 없습니다.";
   }
 }
 
@@ -1743,7 +1743,7 @@ function renderTodayTaskTabs({ lessonCount, makeupCount, recordCount }) {
   const tabs = [
     { id: "lessons", label: "오늘 수업", count: lessonCount },
     { id: "makeup", label: "보강/변경 승인", count: makeupCount },
-    { id: "records", label: "기록/차감 확인", count: recordCount },
+    { id: "records", label: "수업 완료", count: recordCount },
   ];
   return `
     <div class="today-task-tabs" role="tablist" aria-label="오늘 처리 일정 구분">
@@ -1865,10 +1865,7 @@ function renderTodayLessons() {
     ${
       activeTab === "lessons"
         ? `<section class="today-task-section" aria-label="오늘 레슨 스케줄 확인">
-            <div class="today-task-title">
-              <strong>오늘 레슨 스케줄 확인</strong>
-              <small>${currentCoachName()} 레슨 ${ownLessons.length}개</small>
-            </div>
+            <div class="today-task-title"><strong>오늘 수업</strong></div>
             <div class="today-vertical-board" aria-label="오늘 내 수업 세로 시간표">
               ${lessonTimes.length
                 ? visibleLessonTimes
@@ -1883,9 +1880,9 @@ function renderTodayLessons() {
                                 (lesson) => `
                                   <button class="board-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${coachColorClass(lesson.coach)} ${lesson.remaining <= 2 ? "needs-renewal" : ""}" style="${coachLessonColorStyle(lesson, schedulePolicy)}" type="button" data-edit-lesson-id="${lesson.id}">
                                     <strong>${lesson.member}</strong>
-                                    <span>${lesson.type} · ${lesson.ticket}</span>
+                                    <span>${lesson.type}</span>
                                     <small>잔여 ${lesson.remaining}회 · ${lesson.status}</small>
-                                    <b>${lesson.remaining <= 2 ? "재등록 안내 + " : ""}${lesson.task}</b>
+                                    ${lesson.remaining <= 2 ? "<b>재등록 안내</b>" : ""}
                                   </button>`,
                               )
                               .join("") || "<p class='empty-text'>이 시간에 확정된 레슨은 없습니다.</p>"}
@@ -1902,10 +1899,7 @@ function renderTodayLessons() {
     ${
       activeTab === "makeup"
         ? `<section class="today-task-section" aria-label="보강신청 확인">
-            <div class="today-task-title">
-              <strong>보강신청 확인</strong>
-              <small>승인·시간선택 대기 ${ownMakeupTasks.length}건</small>
-            </div>
+            <div class="today-task-title"><strong>보강·변경 요청</strong></div>
             <div class="makeup-alert-list">
               ${ownMakeupTasks.length
                 ? visibleMakeups
@@ -1914,12 +1908,12 @@ function renderTodayLessons() {
                         ? `<article class="makeup-alert-card makeup-awaiting-slot">
                             <b>${request.member}</b>
                             <span>${request.original} 불참 처리</span>
-                            <small>${request.reason} · 회원이 시간표에서 보강을 선택하기 전입니다.</small>
+                            <small>회원 시간 선택 대기</small>
                           </article>`
                         : `<button class="makeup-alert-card" type="button" data-open-makeup-detail="${request.id}">
                             <b>${request.member}</b>
                             <span>${request.original} → ${request.requested}</span>
-                            <small>${getMakeupLinkedLog(request.member) ? "연결 기록 확인 가능" : "승인 후 완료 처리 가능"}</small>
+                            <small>승인 대기</small>
                           </button>`,
                     )
                     .join("")
