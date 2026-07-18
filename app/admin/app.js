@@ -32,6 +32,7 @@ const state = {
   selectedMemberId: 1,
   activeMode: "admin",
   editingLessonId: null,
+  editingOneDayBookingId: null,
   releasedAbsenceEntitlementId: "",
   lessonSourceTouched: false,
   activeAdminWeekIndex: 0,
@@ -4263,6 +4264,7 @@ function lessonRoundRange(lesson, ticket) {
 }
 
 function getLessonRoundLabel(lesson) {
+  if (lesson?.oneDayBooking) return "원데이";
   if (isReleasedRegularMakeupSlot(lesson)) return "";
   if (!isBookedLesson(lesson)) return "";
   const ticket = getTicketByLesson(lesson);
@@ -4281,6 +4283,11 @@ function isReleasedRegularMakeupSlot(lesson) {
 }
 
 function getLessonStatusLabel(lesson) {
+  if (lesson?.oneDayBooking) {
+    if (lesson.serverStatus === "completed") return "원데이 완료";
+    if (lesson.serverStatus === "checked_in") return "방문";
+    return "원데이 예약";
+  }
   if (isReleasedRegularMakeupSlot(lesson)) return "정규자리 · 보강 가능";
   if (lesson.serverStatus === "completed" || lesson.status === "completed") return "완료";
   if (lesson.serverStatus === "no_show" || lesson.status === "no_show") return "당일 취소";
@@ -4301,6 +4308,7 @@ function getLessonStateClass(lesson) {
 }
 
 function lessonVisualKind(lesson) {
+  if (lesson?.oneDayBooking) return "coupon";
   if (isReleasedRegularMakeupSlot(lesson)) return "makeup";
   if (isMakeupLesson(lesson)) return "makeup";
   if (lesson.lessonSource === "coupon") return "coupon";
@@ -8214,6 +8222,9 @@ function getLessonMembersMarkup(lesson) {
 }
 
 function lessonActionAttrs(lesson) {
+  if (lesson?.oneDayBooking) {
+    return `data-edit-one-day-booking-id="${lesson.serverOneDayBookingId || lesson.id}"`;
+  }
   if (isReleasedRegularMakeupSlot(lesson)) {
     return [
       'data-open-released-makeup-slot="true"',
@@ -8349,11 +8360,14 @@ function renderCoachLaneAddCard(day, time, coach, label = "수업 추가", detai
   }
 
   return `
-    <button class="coach-lane-card empty ${getCoachToneClass(coach.id)}" type="button" data-coach-lane="${coach.id}" ${lessonAddAttrs(day, time, 20, coach.id)}>
-      <strong>${getCoachName(coach.id)}</strong>
-      <span>${label}</span>
-      <small>${detail || time}</small>
-    </button>`;
+    <div class="coach-lane-add-actions" data-coach-lane="${coach.id}">
+      <button class="coach-lane-card empty ${getCoachToneClass(coach.id)}" type="button" ${lessonAddAttrs(day, time, 20, coach.id)}>
+        <strong>${getCoachName(coach.id)}</strong>
+        <span>${label}</span>
+        <small>${detail || time}</small>
+      </button>
+      <button class="coach-lane-one-day" type="button" data-add-one-day-day="${day}" data-add-one-day-time="${time}" data-add-one-day-coach="${coach.id}">원데이</button>
+    </div>`;
 }
 
 function renderCoachLaneClosedCard(coach, label = "근무외", detail = "") {
@@ -9304,7 +9318,7 @@ function getLessonTypeFromForm() {
 }
 
 function normalizeLessonSource(value) {
-  return ["regular", "makeup", "coupon", "coach_change", "admin"].includes(value) ? value : "regular";
+  return ["regular", "makeup", "coupon", "coach_change", "admin", "one_day"].includes(value) ? value : "regular";
 }
 
 function lessonSourceLabel(value) {
@@ -9312,6 +9326,7 @@ function lessonSourceLabel(value) {
     regular: "정규수업",
     makeup: "보강",
     coupon: "쿠폰수업",
+    one_day: "원데이",
     coach_change: "코치변경",
     admin: "과거수업 보정",
   }[normalizeLessonSource(value)];
@@ -10102,6 +10117,169 @@ function closeLessonModal() {
   state.releasedAbsenceEntitlementId = "";
   state.pinnedLessonTicketId = "";
   setLessonFormMessage("");
+}
+
+function oneDayBookingForId(bookingId) {
+  return lessons.find((lesson) => lesson.oneDayBooking && String(lesson.serverOneDayBookingId) === String(bookingId)) || null;
+}
+
+function oneDayBookingFormValues() {
+  return {
+    bookingId: state.editingOneDayBookingId || null,
+    guestName: $("#oneDayGuestName")?.value.trim() || "",
+    guestPhone: $("#oneDayGuestPhone")?.value.trim() || "",
+    coachId: $("#oneDayCoach")?.value || "",
+    bookingDate: $("#oneDayDate")?.value || "",
+    time: $("#oneDayTime")?.value || "",
+    durationMinutes: Number($("#oneDayDuration")?.value || 20),
+    status: $("#oneDayStatus")?.value || "reserved",
+    note: $("#oneDayNote")?.value.trim() || "",
+  };
+}
+
+function setOneDayBookingMessage(message = "", tone = "") {
+  const target = $("#oneDayBookingMessage");
+  if (!target) return;
+  target.textContent = message;
+  target.className = `form-message ${tone}`;
+}
+
+function oneDayDateForDefaults(defaults = {}) {
+  if (defaults.bookingDate) return defaults.bookingDate;
+  if (defaults.day) return adminWeekDateForDay(defaults.day);
+  const selectedDay = state.selectedScheduleDay || currentScheduleDay();
+  return adminWeekDateForDay(selectedDay) || adminLocalDateKey(new Date());
+}
+
+function renderOneDayBookingPreview() {
+  const values = oneDayBookingFormValues();
+  const target = $("#oneDayBookingPreview");
+  const coach = coaches.find((item) => item.id === values.coachId);
+  if (!target) return;
+  if (!values.bookingDate || !values.time || !values.coachId) {
+    target.innerHTML = "<strong>원데이 예약 시간 선택</strong><span>이름, 코치, 날짜와 시간을 입력해 주세요.</span>";
+    setOneDayBookingMessage("");
+    return;
+  }
+  const candidateStart = timeToMinutes(values.time);
+  const candidateEnd = candidateStart + values.durationMinutes;
+  const conflict = lessons.find((lesson) => {
+    if (String(lesson.serverOneDayBookingId || "") === String(values.bookingId || "")) return false;
+    if (lesson.lessonDate !== values.bookingDate || lesson.coachId !== values.coachId) return false;
+    if (["cancelled", "archived"].includes(lesson.serverStatus || "")) return false;
+    const lessonStart = timeToMinutes(lesson.time);
+    const lessonEnd = lessonStart + Number(lesson.durationMinutes || 20);
+    return candidateStart < lessonEnd && candidateEnd > lessonStart;
+  });
+  target.innerHTML = `
+    <strong>${escapeHtml(values.bookingDate)} ${escapeHtml(values.time)}~${escapeHtml(minutesToTime(candidateEnd))}</strong>
+    <span>${escapeHtml(values.guestName || "원데이 방문자")} · ${escapeHtml(getCoachName(values.coachId))} · ${values.durationMinutes}분</span>
+  `;
+  if (conflict) {
+    setOneDayBookingMessage(`${conflict.member} 예약과 시간이 겹칩니다. 다른 시간을 선택해 주세요.`, "danger");
+  } else if (!isCoachAvailableForSlot(values.coachId, scheduleDays[new Date(`${values.bookingDate}T00:00:00`).getDay() === 0 ? 6 : new Date(`${values.bookingDate}T00:00:00`).getDay() - 1], values.time, values.durationMinutes)) {
+    setOneDayBookingMessage(`${coach?.name || "선택한 코치"}의 근무 시간 또는 브레이크를 확인해 주세요.`, "danger");
+  } else {
+    setOneDayBookingMessage("회원가입 전 원데이 예약으로 저장됩니다. 가입 후 자동 연결됩니다.", "good");
+  }
+}
+
+function openOneDayBookingModal(defaults = {}) {
+  const editingBooking = defaults.bookingId ? oneDayBookingForId(defaults.bookingId) : null;
+  state.editingOneDayBookingId = editingBooking?.serverOneDayBookingId || null;
+  fillSelect(
+    $("#oneDayCoach"),
+    coaches
+      .filter((coach) => coach.status === "active" && coach.serverRoleId)
+      .map((coach) => ({ value: coach.id, label: `${coach.name} · ${coach.role}` })),
+  );
+  fillSelect($("#oneDayTime"), getScheduleTimeOptions().map((time) => ({ value: time, label: time })));
+  $("#oneDayGuestName").value = editingBooking?.member || defaults.guestName || "";
+  $("#oneDayGuestPhone").value = editingBooking?.guestPhone || "";
+  $("#oneDayDate").value = editingBooking?.lessonDate || oneDayDateForDefaults(defaults);
+  $("#oneDayTime").value = editingBooking?.time || defaults.time || getScheduleTimeOptions()[0] || "";
+  $("#oneDayDuration").value = String(editingBooking?.durationMinutes || defaults.durationMinutes || 20);
+  $("#oneDayStatus").value = editingBooking?.serverStatus || "reserved";
+  $("#oneDayNote").value = editingBooking?.oneDayNote || "";
+  if (editingBooking?.coachId || defaults.coachId) $("#oneDayCoach").value = editingBooking?.coachId || defaults.coachId;
+  $("#oneDayBookingModalTitle").textContent = editingBooking ? "원데이 예약 수정" : "원데이 예약";
+  $("#saveOneDayBookingButton").textContent = editingBooking ? "원데이 예약 저장" : "원데이 예약 저장";
+  $("#deleteOneDayBookingButton").hidden = !editingBooking;
+  $("#oneDayBookingModal").hidden = false;
+  renderOneDayBookingPreview();
+  $("#oneDayGuestName").focus();
+}
+
+function closeOneDayBookingModal() {
+  $("#oneDayBookingModal").hidden = true;
+  state.editingOneDayBookingId = null;
+  setOneDayBookingMessage("");
+}
+
+async function saveOneDayBooking(event) {
+  event.preventDefault();
+  const values = oneDayBookingFormValues();
+  const coach = coaches.find((item) => item.id === values.coachId);
+  if (!values.guestName || !values.bookingDate || !values.time || !coach?.serverRoleId || !coach.branchId) {
+    setOneDayBookingMessage("이름, 코치, 날짜와 시간을 확인해 주세요.", "danger");
+    return;
+  }
+  const previewMessage = $("#oneDayBookingMessage")?.textContent || "";
+  if (previewMessage.includes("겹칩니다") || previewMessage.includes("근무 시간")) return;
+  const button = $("#saveOneDayBookingButton");
+  button.disabled = true;
+  setOneDayBookingMessage("원데이 예약을 서버에 저장하고 있습니다.");
+  try {
+    await window.TennisNoteDataClient.rpc("tn_admin_save_one_day_booking", {
+      target_booking_id: values.bookingId,
+      target_branch_id: coach.branchId,
+      target_coach_role_id: coach.serverRoleId,
+      target_booking_date: values.bookingDate,
+      target_start_time: values.time,
+      target_duration_minutes: values.durationMinutes,
+      target_guest_name: values.guestName,
+      target_guest_phone: values.guestPhone || null,
+      target_note: values.note || null,
+      target_status: values.status,
+    });
+    await syncAdminLiveData();
+    closeOneDayBookingModal();
+    setView("schedule");
+    showToast("원데이 예약 저장 완료 · 가입 후 자동 연결 준비");
+  } catch (error) {
+    const raw = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
+    const message = raw.includes("one_day_lesson_time_conflict") || raw.includes("one_day_booking_time_conflict")
+      ? "같은 코치의 수업 또는 원데이 예약과 시간이 겹칩니다."
+      : raw.includes("approved_branch_coach_required")
+        ? "승인된 담당 코치를 선택해 주세요."
+        : raw.includes("one_day_guest_name_required")
+          ? "이름을 두 글자 이상 입력해 주세요."
+          : raw.includes("PGRST202") || raw.includes("tn_admin_save_one_day_booking")
+            ? "원데이 예약 DB 기능을 먼저 적용해 주세요."
+            : "원데이 예약 저장에 실패했습니다. 입력값을 다시 확인해 주세요.";
+    setOneDayBookingMessage(message, "danger");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function deleteOneDayBooking() {
+  const booking = oneDayBookingForId(state.editingOneDayBookingId);
+  if (!booking || !window.confirm(`${booking.member} 원데이 예약을 삭제할까요?`)) return;
+  const button = $("#deleteOneDayBookingButton");
+  button.disabled = true;
+  try {
+    await window.TennisNoteDataClient.rpc("tn_admin_archive_one_day_booking", {
+      target_booking_id: booking.serverOneDayBookingId,
+    });
+    await syncAdminLiveData();
+    closeOneDayBookingModal();
+    showToast("원데이 예약 삭제 완료");
+  } catch (error) {
+    setOneDayBookingMessage("원데이 예약 삭제에 실패했습니다.", "danger");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function releasedAbsenceEntitlement() {
@@ -11995,7 +12173,7 @@ async function syncAdminLiveData() {
     liveScheduleMessage: "실서버 회원·코치·시간표를 불러오는 중",
   });
   try {
-    const [serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords] = await Promise.all([
+    const [serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords] = await Promise.all([
       client.selectRows("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", limit: 500 }),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
@@ -12009,6 +12187,7 @@ async function syncAdminLiveData() {
       client.selectRows("tn_lesson_participants", { select: "lesson_id,user_id,ticket_id", limit: 1000 }),
       client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source", limit: 1000 })
         .catch(() => client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source", limit: 1000 })),
+      fullAdminAccess ? client.selectRows("tn_one_day_bookings", { select: "id,branch_id,coach_role_id,booking_date,start_time,duration_minutes,guest_name,guest_phone,note,status,linked_user_id,created_at", limit: 1000 }).catch(() => []) : Promise.resolve([]),
       client.selectRows("tn_member_enrollments", { select: "id,user_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,submitted_at,approved_at", limit: 500 }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", { select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,created_at", limit: 500 }).catch(() => []),
       client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => []),
@@ -12287,6 +12466,39 @@ async function syncAdminLiveData() {
         };
       })
       .sort((left, right) => left.lessonDate.localeCompare(right.lessonDate) || timeToMinutes(left.time) - timeToMinutes(right.time));
+
+    const mappedOneDayBookings = (serverOneDayBookings || [])
+      .filter((booking) => !["cancelled", "archived"].includes(booking.status))
+      .map((booking) => {
+        const slotKey = `${booking.booking_date}-${String(booking.start_time || "").slice(0, 5)}`;
+        const slotCount = (slotCounts.get(slotKey) || 0) + 1;
+        slotCounts.set(slotKey, slotCount);
+        const date = new Date(`${booking.booking_date}T00:00:00`);
+        const dayIndex = date.getDay();
+        return {
+          id: `one-day-${booking.id}`,
+          serverOneDayBookingId: booking.id,
+          serverStatus: booking.status,
+          oneDayBooking: true,
+          branchId: booking.branch_id,
+          ticketId: "",
+          day: scheduleDays[dayIndex === 0 ? 6 : dayIndex - 1],
+          lessonDate: booking.booking_date,
+          time: String(booking.start_time || "").slice(0, 5),
+          courtId: `court-${Math.min(slotCount, fixedCourtCount)}`,
+          coachId: coachIdByRole.get(booking.coach_role_id) || "",
+          member: booking.guest_name || "원데이 방문자",
+          guestPhone: booking.guest_phone || "",
+          oneDayNote: booking.note || "",
+          type: "원데이",
+          durationMinutes: Number(booking.duration_minutes) || 20,
+          status: liveLessonStatus(booking.status),
+          makeup: false,
+          lessonSource: "one_day",
+        };
+      });
+    mappedLessons.push(...mappedOneDayBookings);
+    mappedLessons.sort((left, right) => left.lessonDate.localeCompare(right.lessonDate) || timeToMinutes(left.time) - timeToMinutes(right.time));
 
     const serverLessonById = new Map((serverLessons || []).map((lesson) => [lesson.id, lesson]));
     const mappedMakeupEntitlements = (serverMakeupEntitlements || []).map((entitlement) => {
@@ -15284,6 +15496,16 @@ function bindEvents() {
     }
   });
   document.addEventListener("click", (event) => {
+    const oneDaySlotButton = event.target.closest("[data-add-one-day-day]");
+    if (oneDaySlotButton) {
+      event.stopPropagation();
+      openOneDayBookingModal({
+        day: oneDaySlotButton.dataset.addOneDayDay,
+        time: oneDaySlotButton.dataset.addOneDayTime,
+        coachId: oneDaySlotButton.dataset.addOneDayCoach,
+      });
+      return;
+    }
     const releasedSlotButton = event.target.closest("[data-open-released-makeup-slot]");
     if (releasedSlotButton) {
       event.stopPropagation();
@@ -15308,6 +15530,11 @@ function bindEvents() {
     });
   });
   document.addEventListener("click", (event) => {
+    const oneDayBookingButton = event.target.closest("[data-edit-one-day-booking-id]");
+    if (oneDayBookingButton) {
+      openOneDayBookingModal({ bookingId: oneDayBookingButton.dataset.editOneDayBookingId });
+      return;
+    }
     const lessonButton = event.target.closest("[data-edit-lesson-id]");
     if (!lessonButton) return;
     openEditLessonModal(lessonButton.dataset.editLessonId);
@@ -15400,6 +15627,7 @@ function bindEvents() {
     saveSnapshot();
   });
   $("#openLessonModal").addEventListener("click", openLessonModal);
+  $("#openOneDayBookingModal")?.addEventListener("click", () => openOneDayBookingModal());
   $("#saveScheduleList").addEventListener("click", async () => {
     if (state.liveScheduleLoaded) {
       await saveLiveSchedulePolicy();
@@ -15412,6 +15640,10 @@ function bindEvents() {
   $("#saveLiveSchedulePolicyButton")?.addEventListener("click", saveLiveSchedulePolicy);
   $("#closeLessonModal").addEventListener("click", closeLessonModal);
   $("#cancelLessonModal").addEventListener("click", closeLessonModal);
+  $("#closeOneDayBookingModal")?.addEventListener("click", closeOneDayBookingModal);
+  $("#cancelOneDayBookingModal")?.addEventListener("click", closeOneDayBookingModal);
+  $("#oneDayBookingForm")?.addEventListener("submit", saveOneDayBooking);
+  $("#deleteOneDayBookingButton")?.addEventListener("click", deleteOneDayBooking);
   $("#lessonForm").addEventListener("submit", addLessonFromForm);
   $("#deleteLessonButton").addEventListener("click", deleteEditingLesson);
   $("#markLessonAbsentButton")?.addEventListener("click", markEditingLessonAbsentForMakeup);
@@ -15581,6 +15813,13 @@ function bindEvents() {
   $("#lessonModal").addEventListener("click", (event) => {
     if (event.target.id === "lessonModal") closeLessonModal();
   });
+  $("#oneDayBookingModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "oneDayBookingModal") closeOneDayBookingModal();
+  });
+  ["#oneDayGuestName", "#oneDayGuestPhone", "#oneDayCoach", "#oneDayDate", "#oneDayTime", "#oneDayDuration", "#oneDayStatus", "#oneDayNote"].forEach((selector) => {
+    $(selector)?.addEventListener("input", renderOneDayBookingPreview);
+    $(selector)?.addEventListener("change", renderOneDayBookingPreview);
+  });
   $("#coachStaffModal")?.addEventListener("click", (event) => {
     if (event.target.id === "coachStaffModal") closeCoachStaffModal();
   });
@@ -15589,6 +15828,7 @@ function bindEvents() {
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#lessonModal").hidden) closeLessonModal();
+    if (event.key === "Escape" && !$("#oneDayBookingModal")?.hidden) closeOneDayBookingModal();
     if (event.key === "Escape" && !$("#coachStaffModal")?.hidden) closeCoachStaffModal();
     if (event.key === "Escape" && !$("#refundModal").hidden) closeRefundModal();
     if (event.key === "Escape" && !$("#adminLockModal").hidden) closeAdminLockModal();
