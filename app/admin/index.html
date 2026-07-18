@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=member-database-2" />
+    <link rel="stylesheet" href="./styles.css?v=admin-athletic-ui-1" />
   </head>
   <body>
     <section id="operationsLoginGate" class="operations-login-gate" aria-labelledby="operationsLoginTitle">
@@ -29,6 +29,7 @@
         </div>
         <button id="operationsLogoutButton" class="operations-logout-button" type="button" data-admin-auth-action="logout" hidden>다른 계정으로 로그인</button>
         <small class="operations-access-note">코치는 회원·시간표·수업기록만 이용할 수 있습니다.</small>
+        <small class="release-version" data-tennisnote-release="detail"></small>
       </div>
     </section>
     <section id="adminBrandSplash" class="brand-splash" role="status" aria-label="Tennis Note 관리자 불러오는 중">
@@ -42,6 +43,7 @@
           <div>
             <strong>테니스노트</strong>
             <span>테니스클럽하우스 운영</span>
+            <small class="release-version" data-tennisnote-release="detail"></small>
           </div>
         </div>
 
@@ -64,7 +66,7 @@
           <div class="topbar-actions">
             <nav class="app-preview-links" aria-label="앱 미리보기">
               <span>앱 미리보기</span>
-              <a href="../tennis-note-member-app/index.html?v=member-reversible-ops-1" target="_blank" rel="noopener">통합앱</a>
+              <a href="../tennis-note-member-app/index.html?v=member-copy-light-1" target="_blank" rel="noopener">통합앱</a>
             </nav>
             <div class="global-search-shell">
               <label class="search-box">
@@ -104,7 +106,7 @@
             <article class="panel today-command-panel">
               <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">Today Operations</p>
+                  <p class="eyebrow">오늘 운영</p>
                   <h2>오늘 처리할 일</h2>
                 </div>
                 <button class="ghost-button" type="button" data-jump="billing">결제/정산 보기</button>
@@ -130,7 +132,7 @@
               <div id="coachWorkCards" class="coach-work-grid"></div>
             </article>
           </section>
-          <div class="dashboard-grid">
+          <div class="dashboard-grid dashboard-grid-single">
             <section class="panel">
               <div class="panel-heading">
                 <h2>오늘 레슨</h2>
@@ -139,13 +141,6 @@
               <div id="todayLessons" class="lesson-stack"></div>
             </section>
 
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>우선 처리</h2>
-                <button class="ghost-button" type="button" data-jump="schedule">시간표에서 처리</button>
-              </div>
-              <ul id="priorityList" class="priority-list"></ul>
-            </section>
           </div>
 
           <div class="dashboard-grid lower-grid">
@@ -171,9 +166,9 @@
             <div class="segmented-control" role="group" aria-label="회원 상태">
               <button class="segment is-active" type="button" data-member-filter="active">수강중</button>
               <button class="segment" type="button" data-member-filter="expiring">만료임박</button>
+              <button class="segment" type="button" data-member-filter="expired">만료회원</button>
               <button class="segment" type="button" data-member-filter="pending">가입대기</button>
               <button class="segment" type="button" data-member-filter="journal">운동노트</button>
-              <button class="segment" type="button" data-member-filter="expired">만료회원</button>
               <button class="segment" type="button" data-member-filter="inactive" data-admin-only-member-filter>삭제회원</button>
             </div>
             <div class="toolbar-actions">
@@ -199,9 +194,8 @@
                   <span>회원권</span>
                   <select id="memberTicketFilter">
                     <option value="all">전체 회원권</option>
-                    <option value="regular">정기권</option>
-                    <option value="pass">쿠폰제</option>
-                    <option value="group">2대1/그룹</option>
+                    <option value="regular">정규권</option>
+                    <option value="coupon">쿠폰제</option>
                     <option value="none">회원권 없음</option>
                   </select>
                 </label>
@@ -210,11 +204,13 @@
               <table>
                 <thead>
                   <tr>
-                    <th>회원</th>
+                    <th>이름</th>
                     <th>담당 코치</th>
-                    <th>레슨·시간</th>
-                    <th>총 / 소진 / 잔여</th>
+                    <th>회원권</th>
+                    <th>레슨시간</th>
+                    <th>총·소진·잔여</th>
                     <th>상태</th>
+                    <th>비고</th>
                   </tr>
                 </thead>
                 <tbody id="memberRows"></tbody>
@@ -342,7 +338,6 @@
           </section>
           <div class="billing-settings-actions" aria-label="결제 설정">
             <button id="openProductSettingsButton" class="ghost-button" type="button">상품·할인 설정</button>
-            <button id="openSettlementSettingsButton" class="ghost-button" type="button">코치 정산 설정</button>
           </div>
           <div id="paymentAdminGateStatus" class="payment-admin-gate-status"></div>
           <section class="panel payment-queue-panel" aria-label="결제 처리 단계">
@@ -367,10 +362,7 @@
             <section class="panel table-panel">
               <div class="panel-heading">
                 <h2>결제/정산 목록</h2>
-                <div class="panel-heading-actions">
-                  <button class="ghost-button" type="button" id="syncServerPaymentsButton">서버 결제 불러오기</button>
-                  <button class="primary-button" type="button" id="createBillingButton">결제요청 등록</button>
-                </div>
+                <button class="ghost-button" type="button" id="syncServerPaymentsButton">서버 결제 새로고침</button>
               </div>
               <div id="serverPaymentSyncStatus" class="payment-sync-status"></div>
               <table>
@@ -410,8 +402,7 @@
             </section>
             <section class="panel table-panel">
               <div class="panel-heading">
-                <h2>이용권 충전 대기</h2>
-                <button class="ghost-button" type="button" id="rechargeAllButton">부족 회원 충전</button>
+                <h2>연장 확인 필요</h2>
               </div>
               <table>
                 <thead>
@@ -616,7 +607,7 @@
             <section class="panel member-management-policy-panel settings-tab-panel" data-settings-panel="security">
               <div class="panel-heading compact-heading">
                 <div>
-                  <p class="eyebrow">Member Access</p>
+                  <p class="eyebrow">회원 접근</p>
                   <h2>회원관리 권한</h2>
                 </div>
                 <span class="source-pill">관리자 설정</span>
@@ -628,7 +619,7 @@
             <section class="panel service-readiness-panel settings-tab-panel" data-settings-panel="live">
               <div class="panel-heading compact-heading">
                 <div>
-                  <p class="eyebrow">Live Setup</p>
+                  <p class="eyebrow">실사용 상태</p>
                   <h2>실사용 연결 상태</h2>
                 </div>
                 <span class="source-pill">1단계 기준</span>
@@ -640,7 +631,7 @@
             <section class="panel payment-setup-panel settings-tab-panel" data-settings-panel="live">
               <div class="panel-heading compact-heading">
                 <div>
-                  <p class="eyebrow">Payment</p>
+                  <p class="eyebrow">결제</p>
                   <h2>실결제 연결 설정</h2>
                 </div>
                 <button class="ghost-button" type="button" data-jump="billing">결제/정산</button>
@@ -652,7 +643,7 @@
             <section class="panel supabase-live-panel settings-tab-panel" data-settings-panel="live">
               <div class="panel-heading compact-heading">
                 <div>
-                  <p class="eyebrow">Supabase</p>
+                  <p class="eyebrow">서버 DB</p>
                   <h2>실제 DB 읽기 상태</h2>
                 </div>
                 <button id="refreshSupabaseStatus" class="ghost-button" type="button">새로고침</button>
@@ -664,7 +655,7 @@
             <section class="panel auth-provider-panel settings-tab-panel" data-settings-panel="live">
               <div class="panel-heading compact-heading">
                 <div>
-                  <p class="eyebrow">Auth</p>
+                  <p class="eyebrow">로그인</p>
                   <h2>로그인 제공자 상태</h2>
                 </div>
                 <button id="refreshAuthStatus" class="ghost-button" type="button">새로고침</button>
@@ -687,7 +678,7 @@
             <section class="panel access-policy-panel settings-tab-panel" data-settings-panel="coach">
               <div class="panel-heading compact-heading">
                 <div>
-                  <p class="eyebrow">Access</p>
+                  <p class="eyebrow">권한</p>
                   <h2>권한 기준</h2>
                 </div>
                 <span class="source-pill">실사용 전 필수</span>
@@ -703,8 +694,8 @@
             <section class="panel product-settings-panel settings-tab-panel" data-settings-panel="membership">
               <div class="panel-heading compact-heading">
                 <h2>회원권 상품</h2>
+                <button id="addMembershipProductButton" class="primary-button" type="button">새 회원권</button>
               </div>
-              <p class="setting-help">쿠폰제는 고정 시간이 없는 횟수형 회원권입니다. 상품마다 카드가격, 계좌이체가격, 정산기준금액, 사용기간, 유예기간, 할인 가능 여부를 관리합니다.</p>
               <div id="productSettingCards" class="product-setting-list"></div>
             </section>
 
@@ -852,7 +843,7 @@
             <section class="panel lesson-rule-panel settings-tab-panel" data-settings-panel="operation">
               <div class="panel-heading compact-heading">
                 <div>
-                  <p class="eyebrow">LESSON POLICY</p>
+                  <p class="eyebrow">수업 운영</p>
                   <h2>수업 정책</h2>
                 </div>
                 <button id="addLessonPolicyButton" class="primary-button" type="button">새 정책</button>
@@ -869,34 +860,10 @@
 
             <section class="panel coach-settings-panel settings-tab-panel" data-settings-panel="coach">
               <div class="panel-heading compact-heading">
-                <h2>코치 관리</h2>
-              </div>
-              <p class="setting-help">관리자가 코치 이름과 휴대전화를 먼저 등록합니다. 휴대전화가 확인된 계정만 자동 연결되며, 이름만으로는 연결하지 않습니다.</p>
-              <div class="coach-candidate-panel">
-                <div>
-                  <strong>새 코치 사전 등록</strong>
-                  <span>기본 정산은 현금가 기준 50%이며 등록 후 수정할 수 있습니다.</span>
-                </div>
-                <label>
-                  <span>코치 이름</span>
-                  <input id="coachPreregisterName" type="text" autocomplete="name" placeholder="예: 김서준" />
-                </label>
-                <label>
-                  <span>휴대전화</span>
-                  <input id="coachPreregisterPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000" />
-                </label>
-                <button id="coachPreregisterButton" class="primary-button" type="button">코치 등록</button>
+                <h2>코치·직원</h2>
+                <button id="addCoachStaffButton" class="primary-button" type="button">코치 추가</button>
               </div>
               <div id="coachRows" class="coach-list"></div>
-            </section>
-
-            <section class="panel coach-settlement-settings-panel settings-tab-panel" data-settings-panel="coach">
-              <div class="panel-heading compact-heading">
-                <h2>코치 정산 비율</h2>
-                <span class="source-pill">코치별 설정</span>
-              </div>
-              <p class="setting-help">코치를 등록하거나 권한을 부여하면 정산 설정 창이 바로 열립니다. 코치별 비율, 시급, 카드 결제 기준은 아래 카드에서도 다시 수정할 수 있습니다.</p>
-              <div id="coachSettlementSettings" class="settlement-setting-grid"></div>
             </section>
 
             <section class="panel settings-tab-panel" data-settings-panel="live">
@@ -917,7 +884,7 @@
       <section class="modal-panel policy-version-editor-modal" role="dialog" aria-modal="true" aria-labelledby="policyVersionEditorTitle">
         <div class="modal-heading">
           <div>
-            <p class="eyebrow">Membership Policy</p>
+            <p class="eyebrow">회원권 정책</p>
             <h2 id="policyVersionEditorTitle">정책 수정</h2>
           </div>
           <button id="closePolicyVersionEditor" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
@@ -945,8 +912,6 @@
           <div id="scheduleSettingsModalContent" data-admin-tool-panel="schedule"></div>
           <div id="noticeSettingsModalContent" data-admin-tool-panel="notice"></div>
           <div id="productSettingsModalContent" data-admin-tool-panel="products"></div>
-          <div id="settlementSettingsModalContent" data-admin-tool-panel="settlement"></div>
-          <div id="systemSettingsModalContent" data-admin-tool-panel="system"></div>
         </div>
       </section>
     </div>
@@ -955,7 +920,7 @@
       <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="lessonModalTitle">
         <div class="modal-heading">
           <div>
-            <p class="eyebrow">Schedule</p>
+            <p class="eyebrow">수업</p>
             <h2 id="lessonModalTitle">수업 추가</h2>
           </div>
           <button id="closeLessonModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
@@ -1070,20 +1035,32 @@
       </section>
     </div>
 
-    <div id="settlementModal" class="modal-backdrop" hidden>
-      <section class="modal-panel settlement-modal-panel" role="dialog" aria-modal="true" aria-labelledby="settlementModalTitle">
+    <div id="coachStaffModal" class="modal-backdrop coach-staff-modal" hidden>
+      <section class="modal-panel coach-staff-modal-panel" role="dialog" aria-modal="true" aria-labelledby="coachStaffModalTitle">
         <div class="modal-heading">
           <div>
-            <p class="eyebrow">Settlement</p>
-            <h2 id="settlementModalTitle">코치 정산 설정</h2>
+            <p class="eyebrow">코치·직원</p>
+            <h2 id="coachStaffModalTitle">코치·직원 편집</h2>
           </div>
-          <button id="closeSettlementModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+          <details id="coachStaffMoreMenu" class="coach-staff-more-menu">
+            <summary aria-label="추가 작업">···</summary>
+            <div id="coachStaffMoreActions" class="coach-staff-more-actions"></div>
+          </details>
+          <button id="closeCoachStaffModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
         </div>
-        <div id="settlementModalContent" class="settlement-modal-content"></div>
-        <div class="modal-actions">
-          <button class="ghost-button" type="button" id="cancelSettlementModal">취소</button>
-          <button class="primary-button" type="button" id="saveSettlementModal">저장</button>
+        <div class="coach-staff-tabs" role="tablist" aria-label="코치 편집 항목">
+          <button class="is-active" type="button" role="tab" data-coach-staff-tab="basic">기본·권한</button>
+          <button type="button" role="tab" data-coach-staff-tab="work">근무시간</button>
+          <button type="button" role="tab" data-coach-staff-tab="settlement">정산</button>
         </div>
+        <form id="coachStaffForm" class="coach-staff-form">
+          <div id="coachStaffModalContent" class="coach-staff-modal-content"></div>
+          <div id="coachStaffMessage" class="form-message" role="status"></div>
+          <div class="modal-actions coach-staff-modal-actions">
+            <button class="ghost-button" type="button" id="cancelCoachStaffModal">취소</button>
+            <button class="primary-button" type="submit" id="saveCoachStaffButton">저장</button>
+          </div>
+        </form>
       </section>
     </div>
 
@@ -1091,7 +1068,7 @@
       <section class="modal-panel refund-modal-panel" role="dialog" aria-modal="true" aria-labelledby="refundModalTitle">
         <div class="modal-heading">
           <div>
-            <p class="eyebrow">Payment Refund</p>
+            <p class="eyebrow">환불</p>
             <h2 id="refundModalTitle">환불 계산 및 확정</h2>
           </div>
           <button id="closeRefundModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
@@ -1132,7 +1109,7 @@
       <section class="modal-panel admin-lock-modal-panel" role="dialog" aria-modal="true" aria-labelledby="adminLockModalTitle">
         <div class="modal-heading">
           <div>
-            <p class="eyebrow">Admin Lock</p>
+            <p class="eyebrow">관리자 보안</p>
             <h2 id="adminLockModalTitle">관리자 PIN 확인</h2>
           </div>
           <button id="closeAdminLockModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
@@ -1156,7 +1133,7 @@
       <section class="modal-panel member-management-modal-panel" role="dialog" aria-modal="true" aria-labelledby="memberManagementModalTitle">
         <div class="modal-heading">
           <div>
-            <p class="eyebrow">Member Management</p>
+            <p class="eyebrow">회원 관리</p>
             <h2 id="memberManagementModalTitle">회원·회원권 관리</h2>
           </div>
           <button class="ghost-button icon-close-button" type="button" data-close-member-management aria-label="닫기">×</button>
@@ -1169,6 +1146,7 @@
     <script src="../shared/config.local.js?v=local"></script>
     <script src="../shared/tennisnote-data-client.js?v=member-demographics-1"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="./app.js?v=member-database-2"></script>
+    <script src="../shared/tennisnote-release.js?v=release-6"></script>
+    <script src="./app.js?v=admin-partner-schedule-1"></script>
   </body>
 </html>

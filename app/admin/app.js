@@ -111,8 +111,8 @@ const lessonPolicies = lessonPolicyDefaults.map((policy, index) => normalizeLess
 
 const fixedCourtCount = 4;
 const coachSlotWidth = 64;
-const addSlotWidth = 58;
 const timeColumnWidth = 64;
+const mobileCoachSlotWidth = 92;
 const dashboardPageSize = 5;
 const memberListPageSize = 10;
 
@@ -1120,7 +1120,7 @@ function operationsViewAllowed(view) {
 function applyOperationsRolePermissions() {
   const role = operationsRole();
   document.body.dataset.operationsRole = role || "signed-out";
-  if (role === "coach" && state.memberFilter === "inactive") state.memberFilter = "all";
+  if (role === "coach" && state.memberFilter === "inactive") state.memberFilter = "active";
   $$(".nav-item[data-view]").forEach((button) => {
     button.hidden = role === "coach" && !coachOperationsViews.has(button.dataset.view);
   });
@@ -1385,6 +1385,15 @@ const memberManagementModalState = {
   linkCandidates: [],
   linkCandidatesLoading: false,
   linkCandidatesLoadedFor: "",
+};
+const coachStaffEditorState = {
+  coachId: "",
+  mode: "edit",
+  tab: "basic",
+  draft: null,
+  workBlocks: [],
+  breakBlocks: [],
+  message: "",
 };
 const adminPinHashVersion = "tn-admin-lock-v1";
 const legacyDefaultAdminPin = "0000";
@@ -1759,7 +1768,7 @@ function normalizeDemoData() {
   if (state.view === "reports") state.view = "dashboard";
   if (state.view === "import" || state.view === "data") state.view = "members";
   if (!["operation", "membership", "security"].includes(state.settingsTab)) state.settingsTab = "operation";
-  if (!["active", "expiring", "pending", "journal", "expired", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
+  if (!["active", "expiring", "expired", "pending", "journal", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
   if (!coaches.some((coach) => coach.id === "coach-park")) {
     coaches.push({ id: "coach-park", name: "박창준 코치", role: "주말 레슨", status: "active", account: "박창준", coachMode: "approved", availability: "weekend", photoUrl: "" });
   }
@@ -1975,6 +1984,7 @@ function liveSchedulePolicyPayload() {
       availableStart: coach.availableStart || "",
       availableEnd: coach.availableEnd || "",
       workBlocks: (coach.status || "active") === "active" ? normalizeCoachWorkBlocks(coach) : [],
+      breakBlocks: (coach.status || "active") === "active" ? normalizeCoachBreakBlocks(coach) : [],
     })),
   };
 }
@@ -2298,7 +2308,8 @@ function normalizeMembershipProduct(product = {}, fallback = {}) {
   const cashAmount = numericValue(merged.cashAmount, numericValue(fallback.cashAmount, settlementBase || amount));
   const validityDays = numericValue(merged.validityDays, numericValue(fallback.validityDays, merged.mode === "fixed" ? 30 : 60));
   const graceDays = numericValue(merged.graceDays, numericValue(fallback.graceDays, merged.mode === "fixed" ? 14 : 7));
-  const productKind = merged.productKind || (merged.mode === "group" ? "group" : merged.mode === "coupon" || merged.mode === "pass" ? "pass" : "regular");
+  const rawProductKind = merged.productKind || (merged.mode === "coupon" || merged.mode === "pass" ? "coupon" : "regular");
+  const productKind = ["coupon", "pass"].includes(rawProductKind) ? "coupon" : "regular";
   return {
     ...merged,
     id: merged.id || `product-${Date.now()}`,
@@ -2322,7 +2333,7 @@ function normalizeMembershipProduct(product = {}, fallback = {}) {
     coachDiscountAllowed: merged.coachDiscountAllowed ?? fallback.coachDiscountAllowed ?? false,
     coach: merged.coach || fallback.coach || "선택 코치 전용",
     flow: merged.flow || fallback.flow || "시간 선택 → 회원권 선택 → 결제",
-    mode: merged.mode === "coupon" ? "pass" : merged.mode || fallback.mode || "fixed",
+    mode: productKind === "coupon" ? "pass" : "fixed",
     discount: merged.discount || fallback.discount || "관리자 설정 기준 적용",
     badge: merged.badge || fallback.badge || "회원권",
     status: merged.status || fallback.status || "sale",
@@ -2355,6 +2366,61 @@ function refreshMembershipProductDrafts(source = []) {
   replaceArray(membershipProductDrafts, [...normalizedDefaults, ...extraProducts]);
 }
 
+function membershipProductDraftFromServer(product = {}) {
+  const productKind = product.product_kind === "coupon" || product.is_coupon ? "coupon" : "regular";
+  const scheduleScope = ["weekday", "weekend", "mixed"].includes(product.schedule_scope) ? product.schedule_scope : "weekday";
+  const groupSize = Number(product.group_size) || 1;
+  const lessonMinutes = Number(product.lesson_minutes) || 20;
+  const tickets = Number(product.total_sessions) || 1;
+  const cashAmount = Number(product.cash_price) || Number(product.base_price) || 0;
+  const cardAmount = Number(product.card_price) || cashAmount;
+  const savedStatus = product.policy_settings?.adminSaleStatus;
+  const status = ["sale", "consult", "hidden"].includes(savedStatus)
+    ? savedStatus
+    : product.is_active === false ? "hidden" : "sale";
+  return normalizeMembershipProduct({
+    id: product.product_code || `server-${product.id}`,
+    serverProductId: product.id,
+    serverProductCode: product.product_code || "",
+    group: `${scheduleScope === "mixed" ? "혼합" : scheduleScope === "weekend" ? "주말" : "평일"} ${productKind === "coupon" ? "쿠폰제" : "정규권"}`,
+    title: product.name || "회원권",
+    name: product.name || "회원권",
+    format: `${groupSize === 2 ? "2대1" : "1대1"} · ${lessonMinutes}분`,
+    sessions: product.policy_settings?.countLabel || `${tickets}회`,
+    tickets,
+    amount: cashAmount,
+    listAmount: cardAmount,
+    cardAmount,
+    cashAmount,
+    settlementBase: Number(product.settlement_base_price) || cashAmount,
+    validityDays: Number(product.validity_days) || 1,
+    graceDays: Number(product.grace_days) || 0,
+    lessonMinutes,
+    groupSize,
+    frequencyPerWeek: Number(product.frequency_per_week) || 0,
+    scheduleScope,
+    termWeeks: Number(product.term_weeks) || 0,
+    productKind,
+    isCoupon: Boolean(product.is_coupon),
+    discountEnabled: product.discount_enabled !== false,
+    coachDiscountAllowed: product.coach_discount_allowed === true,
+    sortOrder: Number(product.display_order) || 0,
+    mode: productKind === "coupon" ? "pass" : groupSize === 2 ? "group" : "fixed",
+    status,
+    rule: "실서버 회원권 상품과 회원 등록 화면에 함께 반영됩니다.",
+  });
+}
+
+function refreshMembershipProductDraftsFromServer(source = []) {
+  const products = (Array.isArray(source) ? source : [])
+    .filter((product) => !String(product.product_code || "").startsWith("admin-ticket-"))
+    .filter((product) => !String(product.product_code || "").startsWith("deleted-product-history-"))
+    .map(membershipProductDraftFromServer)
+    .sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0)
+      || String(left.title || "").localeCompare(String(right.title || ""), "ko"));
+  if (products.length) replaceArray(membershipProductDrafts, products);
+}
+
 function membershipProductsForMemberApp() {
   return membershipProductDrafts.map((product) => {
     const normalized = normalizeMembershipProduct(product, membershipProductDefaults.find((item) => item.id === product.id));
@@ -2374,6 +2440,9 @@ function membershipProductsForMemberApp() {
       graceDays: normalized.graceDays,
       lessonMinutes: normalized.lessonMinutes,
       groupSize: normalized.groupSize,
+      frequencyPerWeek: normalized.frequencyPerWeek,
+      scheduleScope: normalized.scheduleScope,
+      termWeeks: normalized.termWeeks,
       productKind: normalized.productKind,
       discountEnabled: normalized.discountEnabled,
       coachDiscountAllowed: normalized.coachDiscountAllowed,
@@ -2385,6 +2454,7 @@ function membershipProductsForMemberApp() {
       status: normalized.status,
       rule: normalized.rule,
       sessions: normalized.sessions,
+      sortOrder: normalized.sortOrder,
     };
   });
 }
@@ -2617,28 +2687,15 @@ function couponProductFamilyKey(product = {}) {
 }
 
 function couponProductSaleIssue(product = {}) {
-  if (product.productKind !== "pass" && product.mode !== "pass" && product.mode !== "coupon") return "";
+  if (product.productKind !== "coupon" && product.mode !== "pass" && product.mode !== "coupon") return "";
   const sessions = Number(product.tickets);
-  const validityWeeksBySessions = window.TennisNoteProductCatalog?.policy?.coupon?.validityWeeksBySessions || { 5: 8, 10: 18, 15: 28, 20: 38 };
-  if (![5, 10, 15, 20].includes(sessions)) return "쿠폰은 5·10·15·20회로만 판매할 수 있습니다.";
-  if (Number(product.validityDays) !== Number(validityWeeksBySessions[sessions]) * 7) return "쿠폰 사용기간은 확정된 8·18·28·38주 기준으로 설정합니다.";
+  if (!Number.isInteger(sessions) || sessions <= 0) return "쿠폰 충전 횟수를 1회 이상 입력해 주세요.";
+  if (Number(product.validityDays) <= 0) return "쿠폰 사용기간을 1일 이상 입력해 주세요.";
   if (Number(product.cardAmount) <= 0 || Number(product.cashAmount) <= 0) return "카드·계좌이체 가격을 모두 입력해야 판매할 수 있습니다.";
-  if (sessions === 5) return "";
-  const previousSessions = { 10: 5, 15: 10, 20: 15 }[sessions];
-  const previousPack = membershipProductDrafts.find((item) =>
-    item.id !== product.id
-      && Number(item.tickets) === previousSessions
-      && couponProductFamilyKey(item) === couponProductFamilyKey(product)
-      && (item.productKind === "pass" || item.mode === "pass" || item.mode === "coupon"));
-  if (!previousPack || Number(previousPack.cardAmount) <= 0 || Number(previousPack.cashAmount) <= 0) {
-    return `같은 수업의 ${previousSessions}회권 가격을 먼저 입력해야 합니다.`;
-  }
-  const cardDiscounted = Number(product.cardAmount) * previousSessions < Number(previousPack.cardAmount) * sessions;
-  const cashDiscounted = Number(product.cashAmount) * previousSessions < Number(previousPack.cashAmount) * sessions;
-  return cardDiscounted && cashDiscounted ? "" : `${sessions}회권은 카드·계좌이체 모두 ${previousSessions}회권보다 회당가가 낮아야 합니다.`;
+  return "";
 }
 
-function updateMembershipProductSetting(productId) {
+async function updateMembershipProductSetting(productId) {
   const card = document.querySelector(`[data-product-card="${productId}"]`);
   const product = membershipProductDrafts.find((item) => item.id === productId);
   if (!card || !product) return;
@@ -2648,37 +2705,213 @@ function updateMembershipProductSetting(productId) {
     title: readField("title") || product.title,
     name: readField("title") || product.name,
     sessions: readField("sessions") || product.sessions,
-    amount: numericValue(readField("amount"), product.amount),
-    listAmount: numericValue(readField("listAmount"), product.listAmount),
     settlementBase: numericValue(readField("settlementBase"), product.settlementBase),
     tickets: numericValue(readField("tickets"), product.tickets),
     cardAmount: numericValue(readField("cardAmount"), product.cardAmount),
     cashAmount: numericValue(readField("cashAmount"), product.cashAmount),
     validityDays: numericValue(readField("validityDays"), product.validityDays),
     graceDays: numericValue(readField("graceDays"), product.graceDays),
+    lessonMinutes: numericValue(readField("lessonMinutes"), product.lessonMinutes),
+    groupSize: numericValue(readField("groupSize"), product.groupSize),
+    frequencyPerWeek: numericValue(readField("frequencyPerWeek"), product.frequencyPerWeek),
+    scheduleScope: readField("scheduleScope") || product.scheduleScope,
     productKind: readField("productKind") || product.productKind,
     discountEnabled: readField("discountEnabled") === "yes",
     coachDiscountAllowed: readField("coachDiscountAllowed") === "yes",
     status: readField("status") || product.status,
   }, membershipProductDefaults.find((item) => item.id === product.id));
-  if (nextProduct.productKind === "pass" || nextProduct.mode === "pass" || nextProduct.mode === "coupon") {
-    const validityWeeksBySessions = window.TennisNoteProductCatalog?.policy?.coupon?.validityWeeksBySessions || { 5: 8, 10: 18, 15: 28, 20: 38 };
-    nextProduct.validityDays = Number(validityWeeksBySessions[Number(nextProduct.tickets)] || 0) * 7;
+  if (![20, 30, 40].includes(Number(nextProduct.lessonMinutes))) {
+    showToast("수업 시간은 20분, 30분 또는 40분으로 설정해 주세요.");
+    return;
   }
   const saleIssue = couponProductSaleIssue(nextProduct);
   if (saleIssue && nextProduct.status === "sale") nextProduct.status = "hidden";
-  Object.assign(product, nextProduct);
-  saveSnapshot();
-  renderServiceReadiness();
-  if (saleIssue) {
-    showToast(`${saleIssue} 판매 상태는 숨김으로 저장했습니다.`);
+  const client = window.TennisNoteDataClient;
+  const serverProduct = serverMembershipProductForDraft(product);
+  const saveButton = card.querySelector("[data-save-product-setting]");
+  if (!client?.updateRows || !operationsAccessReady() || operationsRole() !== "admin") {
+    showToast("관리자 로그인 후 회원권 상품을 저장해 주세요.");
     return;
   }
-  showToast("회원권 상품 설정 저장 완료");
+  if (!serverProduct?.id) {
+    showToast("실서버 상품을 찾지 못했습니다. 새로고침 후 다시 저장해 주세요.");
+    return;
+  }
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = "저장 중";
+  }
+  try {
+    const serverKind = nextProduct.productKind === "coupon" ? "coupon" : "regular";
+    const updatedRows = await client.updateRows("tn_membership_products", { id: serverProduct.id }, {
+      name: nextProduct.title,
+      total_sessions: Math.max(1, Number(nextProduct.tickets) || 1),
+      base_price: Math.max(0, Number(nextProduct.cashAmount) || 0),
+      card_price: Math.max(0, Number(nextProduct.cardAmount) || 0),
+      cash_price: Math.max(0, Number(nextProduct.cashAmount) || 0),
+      settlement_base_price: Math.max(0, Number(nextProduct.settlementBase) || 0),
+      validity_days: Math.max(1, Number(nextProduct.validityDays) || 1),
+      grace_days: Math.max(0, Number(nextProduct.graceDays) || 0),
+      lesson_minutes: Math.max(10, Number(nextProduct.lessonMinutes) || 20),
+      group_size: Math.max(1, Math.min(2, Number(nextProduct.groupSize) || 1)),
+      frequency_per_week: Math.max(0, Number(nextProduct.frequencyPerWeek) || 0),
+      schedule_scope: ["weekday", "weekend", "mixed"].includes(nextProduct.scheduleScope) ? nextProduct.scheduleScope : "weekday",
+      product_kind: serverKind,
+      is_coupon: serverKind === "coupon",
+      discount_enabled: nextProduct.discountEnabled === true,
+      coach_discount_allowed: nextProduct.coachDiscountAllowed === true,
+      display_order: Math.max(0, Number(nextProduct.sortOrder) || 0),
+      is_active: nextProduct.status !== "hidden",
+      policy_settings: {
+        ...(serverProduct.policy_settings || {}),
+        adminSaleStatus: nextProduct.status,
+        countLabel: nextProduct.sessions,
+      },
+      updated_at: new Date().toISOString(),
+    });
+    if (!Array.isArray(updatedRows) || updatedRows.length !== 1) throw new Error("membership_product_write_not_confirmed");
+    const synced = await syncAdminLiveData();
+    if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    const saved = (adminLiveDataState.products || []).find((item) => item.id === serverProduct.id);
+    if (!saved
+      || saved.name !== nextProduct.title
+      || Number(saved.total_sessions) !== Number(nextProduct.tickets)
+      || Number(saved.lesson_minutes) !== Number(nextProduct.lessonMinutes)
+      || Number(saved.group_size) !== Number(nextProduct.groupSize)
+      || saved.schedule_scope !== nextProduct.scheduleScope
+      || saved.product_kind !== serverKind
+      || Number(saved.card_price) !== Number(nextProduct.cardAmount)
+      || Number(saved.cash_price) !== Number(nextProduct.cashAmount)
+      || Number(saved.settlement_base_price) !== Number(nextProduct.settlementBase)) {
+      throw new Error("membership_product_write_not_confirmed");
+    }
+    saveSnapshot();
+    renderServiceReadiness();
+    showToast(saleIssue ? `${saleIssue} 판매 상태는 숨김으로 저장했습니다.` : "회원권 상품이 회원 등록 화면까지 반영됐습니다.");
+  } catch (error) {
+    const raw = `${error?.message || ""}`;
+    showToast(raw.includes("admin_live_refresh_failed_after_write")
+      ? "상품은 저장됐지만 다시 불러오지 못했습니다. 새로고침해 주세요."
+      : "회원권 상품 저장에 실패했습니다. 서버 연결과 관리자 권한을 확인해 주세요.");
+  } finally {
+    if (saveButton?.isConnected) {
+      saveButton.disabled = false;
+      saveButton.textContent = "저장";
+    }
+  }
+}
+
+async function createMembershipProductSetting() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.insertRows || !operationsAccessReady() || operationsRole() !== "admin") {
+    showToast("관리자 로그인 후 새 회원권을 만들 수 있습니다.");
+    return;
+  }
+  const branchId = (adminLiveDataState.products || []).find((item) => item.branch_id)?.branch_id
+    || (adminLiveDataState.coachRoles || []).find((item) => item.branch_id)?.branch_id
+    || null;
+  if (!branchId) {
+    showToast("지점 정보를 찾지 못했습니다. 서버 데이터를 새로고침해 주세요.");
+    return;
+  }
+  const button = $("#addMembershipProductButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "만드는 중";
+  }
+  try {
+    const productCode = `custom-${Date.now()}`;
+    const rows = await client.insertRows("tn_membership_products", {
+      branch_id: branchId,
+      product_code: productCode,
+      name: "새 회원권",
+      lesson_minutes: 20,
+      frequency_per_week: 1,
+      total_sessions: 4,
+      group_size: 1,
+      product_kind: "regular",
+      is_coupon: false,
+      is_active: false,
+      schedule_scope: "weekday",
+      term_weeks: 0,
+      validity_days: 35,
+      grace_days: 7,
+      base_price: 0,
+      card_price: 0,
+      cash_price: 0,
+      settlement_base_price: 0,
+      discount_enabled: true,
+      coach_discount_allowed: false,
+      display_order: Math.max(0, ...membershipProductDrafts.map((item) => Number(item.sortOrder) || 0)) + 10,
+      policy_settings: { adminSaleStatus: "hidden", countLabel: "4회" },
+    });
+    if (!Array.isArray(rows) || rows.length !== 1) throw new Error("membership_product_create_not_confirmed");
+    const synced = await syncAdminLiveData();
+    if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    const created = membershipProductDrafts.find((item) => item.serverProductCode === productCode || item.id === productCode);
+    renderServiceReadiness();
+    const card = created ? document.querySelector(`[data-product-card="${CSS.escape(created.id)}"]`) : null;
+    if (card) {
+      card.open = true;
+      card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      card.querySelector('[data-product-field="title"]')?.focus();
+    }
+    showToast("새 회원권을 만들었습니다. 내용을 입력한 뒤 판매 상태를 변경해 주세요.");
+  } catch {
+    showToast("새 회원권 생성에 실패했습니다. 관리자 권한과 서버 연결을 확인해 주세요.");
+  } finally {
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.textContent = "새 회원권";
+    }
+  }
+}
+
+async function moveMembershipProductSetting(productId, direction) {
+  if (operationsRole() !== "admin") {
+    showToast("관리자만 회원권 순서를 변경할 수 있습니다.");
+    return;
+  }
+  const currentIndex = membershipProductDrafts.findIndex((item) => item.id === productId);
+  const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= membershipProductDrafts.length) return;
+  const nextOrder = [...membershipProductDrafts];
+  [nextOrder[currentIndex], nextOrder[nextIndex]] = [nextOrder[nextIndex], nextOrder[currentIndex]];
+  const serverProducts = nextOrder.map((item) => serverMembershipProductForDraft(item));
+  if (serverProducts.some((item) => !item?.id)) {
+    showToast("상품 정보를 다시 불러온 뒤 순서를 변경해 주세요.");
+    return;
+  }
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !operationsAccessReady()) {
+    showToast("서버 연결 후 순서를 변경해 주세요.");
+    return;
+  }
+  try {
+    await client.rpc("tn_admin_reorder_membership_products", {
+      target_branch_id: serverProducts[0].branch_id,
+      target_product_ids: serverProducts.map((item) => item.id),
+    });
+    const synced = await syncAdminLiveData();
+    if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    const savedOrder = (adminLiveDataState.products || [])
+      .filter((item) => serverProducts.some((serverProduct) => serverProduct.id === item.id))
+      .sort((left, right) => Number(left.display_order || 0) - Number(right.display_order || 0))
+      .map((item) => item.id);
+    if (savedOrder.join("|") !== serverProducts.map((item) => item.id).join("|")) {
+      throw new Error("membership_product_reorder_not_confirmed");
+    }
+    renderServiceReadiness();
+    showToast("회원권 순서를 변경했습니다.");
+  } catch {
+    showToast("회원권 순서 변경에 실패했습니다. 서버 권한을 확인해 주세요.");
+  }
 }
 
 function serverMembershipProductForDraft(product = {}) {
   const serverProducts = adminLiveDataState.products || [];
+  const idMatch = serverProducts.find((item) => item.id === product.serverProductId);
+  if (idMatch) return idMatch;
   const codeMatch = serverProducts.find((item) => item.product_code && item.product_code === product.id);
   if (codeMatch) return codeMatch;
   const nameMatches = serverProducts.filter((item) => item.name === (product.title || product.name));
@@ -2762,6 +2995,7 @@ async function loadLiveSchedulePolicyFromServer() {
       ));
       if (!coach) return;
       if (Array.isArray(serverCoach.workBlocks)) coach.workBlocks = serverCoach.workBlocks;
+      if (Array.isArray(serverCoach.breakBlocks)) coach.breakBlocks = serverCoach.breakBlocks;
       if (Array.isArray(serverCoach.availableDays)) coach.availableDays = serverCoach.availableDays;
       if (serverCoach.availableStart) coach.availableStart = serverCoach.availableStart;
       if (serverCoach.availableEnd) coach.availableEnd = serverCoach.availableEnd;
@@ -2782,6 +3016,28 @@ function postgresDayOfWeek(day) {
   return { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 }[day];
 }
 
+function dayLabelForPostgres(day) {
+  return { 0: "일", 1: "월", 2: "화", 3: "수", 4: "목", 5: "금", 6: "토" }[Number(day)] || "";
+}
+
+function coachBlocksFromAvailability(rows = [], type = "available") {
+  const grouped = new Map();
+  rows.filter((item) => item.availability_type === type).forEach((item) => {
+    const start = String(item.start_time || "").slice(0, 5);
+    const end = String(item.end_time || "").slice(0, 5);
+    const label = item.note || (type === "blocked" ? "브레이크" : "근무");
+    const key = `${start}|${end}|${label}`;
+    const group = grouped.get(key) || { id: item.id, days: [], start, end, label };
+    const day = dayLabelForPostgres(item.day_of_week);
+    if (day && !group.days.includes(day)) group.days.push(day);
+    grouped.set(key, group);
+  });
+  return [...grouped.values()].map((block) => ({
+    ...block,
+    days: scheduleDays.filter((day) => block.days.includes(day)),
+  }));
+}
+
 async function saveLiveSchedulePolicy() {
   const client = window.TennisNoteDataClient;
   const button = $("#saveLiveSchedulePolicyButton");
@@ -2797,12 +3053,22 @@ async function saveLiveSchedulePolicy() {
   const branchId = serverCoaches.find((coach) => coach.branchId)?.branchId || null;
   const targetCoaches = serverCoaches.map((coach) => ({
     coachRoleId: coach.serverRoleId,
-    workBlocks: ((coach.status || "active") === "active" ? normalizeCoachWorkBlocks(coach) : []).map((block) => ({
-      days: block.days.map(postgresDayOfWeek).filter((day) => Number.isInteger(day)),
-      startTime: block.start,
-      endTime: block.end,
-      label: block.label || "근무",
-    })),
+    workBlocks: (coach.status || "active") === "active" ? [
+      ...normalizeCoachWorkBlocks(coach).map((block) => ({
+        days: block.days.map(postgresDayOfWeek).filter((day) => Number.isInteger(day)),
+        startTime: block.start,
+        endTime: block.end,
+        label: block.label || "근무",
+        availabilityType: "available",
+      })),
+      ...normalizeCoachBreakBlocks(coach).map((block) => ({
+        days: block.days.map(postgresDayOfWeek).filter((day) => Number.isInteger(day)),
+        startTime: block.start,
+        endTime: block.end,
+        label: block.label || "브레이크",
+        availabilityType: "blocked",
+      })),
+    ] : [],
   }));
   const targetBreakRules = (scheduleSettings.breakRules || []).map((rule) => ({
     days: (rule.days || []).map(postgresDayOfWeek).filter((day) => Number.isInteger(day)),
@@ -3731,6 +3997,33 @@ function normalizeCoachWorkBlocks(coach) {
   return coach.workBlocks;
 }
 
+function normalizeCoachBreakBlocks(coach) {
+  if (!coach) return [];
+  if (!Array.isArray(coach.breakBlocks)) coach.breakBlocks = [];
+  coach.breakBlocks = coach.breakBlocks
+    .map((block, index) => ({
+      id: block.id || `${coach.id}-break-${index}-${Date.now()}`,
+      days: Array.isArray(block.days) && block.days.length ? block.days : scheduleDays,
+      start: block.start || scheduleSettings.openStart,
+      end: block.end || scheduleSettings.openEnd,
+      label: block.label || "브레이크",
+    }))
+    .filter((block) => timeToMinutes(block.start) < timeToMinutes(block.end));
+  return coach.breakBlocks;
+}
+
+function getCoachBreakOverlapping(coachId, day, time, durationMinutes = 20) {
+  const coach = coaches.find((item) => item.id === coachId);
+  if (!coach) return null;
+  const start = timeToMinutes(time);
+  const end = start + Number(durationMinutes || 20);
+  return normalizeCoachBreakBlocks(coach).find((block) => (
+    block.days.includes(day)
+    && start < timeToMinutes(block.end)
+    && end > timeToMinutes(block.start)
+  )) || null;
+}
+
 function getCoachAvailabilityDefaults(coach) {
   const availability = coach?.availability || "full";
   if (availability === "weekday-am") return { days: scheduleDays.slice(0, 5), start: "06:40", end: "13:00" };
@@ -3868,7 +4161,8 @@ function isCoachAvailableForSlot(coachId, day, time, durationMinutes = 20) {
   const blocks = normalizeCoachWorkBlocks(coach);
   const start = timeToMinutes(time);
   const end = start + durationMinutes;
-  return blocks.some((block) => block.days.includes(day) && start >= timeToMinutes(block.start) && end <= timeToMinutes(block.end));
+  return !getCoachBreakOverlapping(coachId, day, time, durationMinutes)
+    && blocks.some((block) => block.days.includes(day) && start >= timeToMinutes(block.start) && end <= timeToMinutes(block.end));
 }
 
 function getCoachTimeOptions(coachId, day, durationMinutes = 20) {
@@ -4006,7 +4300,7 @@ function lessonVisualKind(lesson) {
   if (lesson.lessonSource === "coupon") return "coupon";
   const ticket = getTicketByLesson(lesson);
   const productKind = ticket ? membershipProductForTicket(ticket).productKind : "regular";
-  return productKind === "pass" ? "coupon" : "regular";
+  return ["pass", "coupon"].includes(productKind) ? "coupon" : "regular";
 }
 
 function lessonColorStyle(lesson) {
@@ -4291,8 +4585,6 @@ const adminToolConfig = {
   schedule: { title: "시간표 설정", lockView: "settings" },
   notice: { title: "공지·알림 관리", lockView: "settings" },
   products: { title: "회원권·할인 설정", lockView: "billing" },
-  settlement: { title: "코치 정산 설정", lockView: "billing" },
-  system: { title: "시스템 연결 설정", lockView: "settings" },
 };
 
 function moveAdminToolPanel(selector, targetId) {
@@ -4317,9 +4609,8 @@ function organizeAdminTools() {
   moveAdminToolPanel("#settingsView .notification-settings-panel", "noticeSettingsModalContent");
   moveAdminToolPanel("#settingsView .product-settings-panel", "productSettingsModalContent");
   moveAdminToolPanel("#settingsView .discount-policy-panel", "productSettingsModalContent");
-  moveAdminToolPanel("#settingsView .coach-settlement-settings-panel", "settlementSettingsModalContent");
-  moveAdminToolPanel("#settingsView .service-readiness-panel", "systemSettingsModalContent");
-  moveAdminToolPanel("#settingsView .payment-setup-panel", "systemSettingsModalContent");
+  $("#settingsView .service-readiness-panel")?.remove();
+  $("#settingsView .payment-setup-panel")?.remove();
 
   $("#dataToolsModalContent .import-step-grid")?.remove();
   $("#dataView")?.remove();
@@ -4630,27 +4921,6 @@ function renderDashboard() {
   const pendingPaymentCount = billings.filter((item) => !["paid", "cancelled", "refunded"].includes(item.status)).length;
   const unassignedRegularCount = unassignedRegularTickets().length;
   const couponNoBookingCount = couponTicketsWithoutUpcomingLesson().length;
-  const priorities = adminDemoMode
-    ? [
-        "24시간 이내 보강 요청 1건은 코치 승인 필요",
-        "잔여 1회 회원 1명은 재결제 필요",
-        "기록/차감 미처리 수업 1건",
-        "프로필 사진은 회원이 앱 내 정보에서 직접 등록",
-      ]
-    : [
-        unassignedRegularCount ? { text: `긴급 · 정규시간 미배정 ${unassignedRegularCount}건`, tone: "danger" } : null,
-        couponNoBookingCount ? `쿠폰 다음 일정 미예약 ${couponNoBookingCount}건` : "",
-        pendingMakeupCount ? `승인이 필요한 수업 변경 ${pendingMakeupCount}건` : "",
-        lowTicketCount ? `잔여 2회 이하 회원권 ${lowTicketCount}건` : "",
-        pendingRecordCount ? `기록/차감 확인 필요 ${pendingRecordCount}건` : "",
-        pendingPaymentCount ? `결제 확인 필요 ${pendingPaymentCount}건` : "",
-      ].filter(Boolean);
-  if (!priorities.length) priorities.push("현재 긴급 처리 항목이 없습니다.");
-  $("#priorityList").innerHTML = priorities.map((item) => {
-    const entry = typeof item === "string" ? { text: item, tone: "" } : item;
-    return `<li class="${entry.tone === "danger" ? "is-danger" : ""}">${escapeHtml(entry.text)}</li>`;
-  }).join("");
-
   const reportTarget = $("#dashboardReportSummary");
   if (reportTarget) {
     const recordGroups = adminRecordGroups();
@@ -4735,13 +5005,23 @@ function getAdminTasks() {
   const lowTickets = tickets.filter((ticket) => ticket.remaining <= 2);
   const paymentChecks = billings.filter((item) => item.status === "check" || item.status === "unverified");
   const draftBillings = billings.filter((item) => item.status === "draft");
+  const paymentDataErrors = billings.filter((item) => item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item));
   const urgentMakeups = makeupRequests
     .filter((item) => item.status === "coach_required" || item.status === "requested")
     .concat(shared.makeupRequests.filter((item) => item.status === "승인 대기"));
   const unassignedTickets = unassignedRegularTickets();
   const couponNoBookingTickets = couponTicketsWithoutUpcomingLesson();
 
-  return [
+  const tasks = [
+    ...paymentDataErrors.map((item) => ({
+      type: "결제오류",
+      title: `${item.member} 회원권 연결 누락`,
+      detail: `${item.item} · ${money.format(item.amount)}원 · 서버 결제 확인 필요`,
+      tone: "danger",
+      action: "결제 확인",
+      view: "billing",
+      dueAt: item.verifiedAt || item.paidAt || item.requestedAt || "",
+    })),
     ...unassignedTickets.map((ticket) => ({
       type: "긴급",
       title: `${ticketParticipantNames(ticket).join(" & ") || ticket.member} 정규시간 미배정`,
@@ -4768,6 +5048,7 @@ function getAdminTasks() {
       tone: item.status === "coach_required" ? "danger" : "warn",
       action: "시간표 확인",
       view: "schedule",
+      dueAt: item.requested || item.makeup || "",
     })),
     ...pendingLessonLogs.map((log) => ({
       type: "수업기록",
@@ -4800,6 +5081,7 @@ function getAdminTasks() {
       tone: "warn",
       action: "결제 확인",
       view: "billing",
+      dueAt: item.requestedAt || "",
     })),
     ...draftBillings.map((item) => ({
       type: "결제요청",
@@ -4808,8 +5090,28 @@ function getAdminTasks() {
       tone: "neutral",
       action: "결제 요청",
       view: "billing",
+      dueAt: item.requestedAt || "",
     })),
   ];
+  const priorityByType = {
+    결제오류: 0,
+    긴급: 1,
+    보강: 2,
+    결제확인: 3,
+    횟수: 4,
+    "쿠폰 일정": 4,
+    수업기록: 5,
+    운동노트: 6,
+    결제요청: 7,
+  };
+  return tasks
+    .map((task, index) => ({ ...task, originalIndex: index }))
+    .sort((left, right) => {
+      const priorityDifference = (priorityByType[left.type] ?? 99) - (priorityByType[right.type] ?? 99);
+      if (priorityDifference) return priorityDifference;
+      const deadlineDifference = String(left.dueAt || "9999-12-31").localeCompare(String(right.dueAt || "9999-12-31"));
+      return deadlineDifference || left.originalIndex - right.originalIndex;
+    });
 }
 
 function normalizeDashboardPage(total, page, pageSize = dashboardPageSize) {
@@ -4938,9 +5240,13 @@ function renderModePanel() {
 
 function memberListStatus(member) {
   if (member.serverStatus === "inactive" || member.serverStatus === "archived" || member.status === "inactive") return "inactive";
-  if (member.memberKind === "journal_only" || member.status === "journal") return "journal";
-  if (member.memberKind === "lesson_pending" || member.status === "pending") return "pending";
-  return member.status === "expired" ? "expired" : "active";
+  // A legacy profile may still say journal_only after a ticket is issued.
+  // The live ticket-derived status is the source of truth for member lists.
+  if (member.status === "active") return "active";
+  if (member.status === "expired") return "expired";
+  if (member.status === "pending" || member.memberKind === "lesson_pending") return "pending";
+  if (member.status === "journal" || member.memberKind === "journal_only") return "journal";
+  return "active";
 }
 
 function memberStatusLabel(member) {
@@ -5073,6 +5379,24 @@ function memberDatabaseRecord(member = null, ticket = null) {
     || null;
 }
 
+function memberUnlinkedVerifiedPayment(member = null) {
+  const userIds = member?.serverUserIds?.length
+    ? member.serverUserIds
+    : member?.serverUserId
+      ? [member.serverUserId]
+      : [];
+  if (!userIds.length) return null;
+  return (adminLiveDataState.payments || [])
+    .filter((payment) => (
+      userIds.includes(payment.user_id)
+      && payment.status === "verified"
+      && !payment.ticket_id
+      && payment.provider !== "google_sheet_history"
+    ))
+    .sort((left, right) => String(right.verified_at || right.paid_at || right.created_at || "")
+      .localeCompare(String(left.verified_at || left.paid_at || left.created_at || "")))[0] || null;
+}
+
 function memberManagementLessonTypeLabel(value = "") {
   return value === "one_on_two" ? "1:2" : value === "one_on_one" ? "1:1" : "미입력";
 }
@@ -5081,7 +5405,8 @@ function memberManagementLessonMethodLabel(record = null, ticket = null) {
   const scope = record?.lesson_schedule_scope || ticket?.scheduleScope || "";
   const frequency = Number(record?.lesson_frequency_per_week || ticket?.weeklyCount || 0);
   if (!scope || !frequency) return "미입력";
-  return `${scope === "weekend" ? "주말" : "평일"} 주${frequency}회`;
+  const scopeLabel = scope === "mixed" ? "혼합" : scope === "weekend" ? "주말" : "평일";
+  return `${scopeLabel} 주${frequency}회`;
 }
 
 function memberManagementLessonDaysLabel(record = null, ticket = null) {
@@ -5102,6 +5427,7 @@ function memberSearchValues(member) {
   const memberTickets = ticketsForMember(member);
   const ticket = memberTickets[0] || null;
   const record = memberDatabaseRecord(member, ticket);
+  const unlinkedPayment = memberUnlinkedVerifiedPayment(member);
   return [
     member.name,
     member.phone,
@@ -5119,6 +5445,8 @@ function memberSearchValues(member) {
     paymentMethodLabel(record?.payment_method),
     record?.payment_amount,
     record?.admin_note,
+    unlinkedPayment?.amount,
+    unlinkedPayment?.method,
     ...memberPartnerNames(member),
     ...memberTickets.flatMap((ticket) => [ticket.member, ticket.product]),
   ];
@@ -5548,7 +5876,7 @@ async function setCoachApproval(coachId, nextStatus, button) {
   }, button, disabling ? "코치 승인을 해제했습니다." : "코치 승인을 다시 완료했습니다.");
   if (result && !disabling) {
     const refreshedCoach = coaches.find((item) => item.serverRoleId === coach.serverRoleId);
-    if (refreshedCoach) openSettlementModalByIndex(ensureCoachSettlementRule(refreshedCoach));
+    if (refreshedCoach) openCoachStaffModal(refreshedCoach.id);
   }
 }
 
@@ -5910,8 +6238,8 @@ function filteredMembers() {
   const matchingMembers = members.filter((member) => {
     const listStatus = memberListStatus(member);
     const statusMatch = state.memberFilter === "expiring"
-      ? listStatus === "active" && memberRemainingCount(member) <= 2
-      : listStatus === state.memberFilter;
+        ? listStatus === "active" && memberRemainingCount(member) <= 2
+        : listStatus === state.memberFilter;
     const coachMatch = state.memberCoachFilter === "all" || member.coach === state.memberCoachFilter;
     const ticketMatch = state.memberTicketFilter === "all" || memberTicketKind(member) === state.memberTicketFilter;
     const searchValues = memberSearchValues(member);
@@ -6007,6 +6335,7 @@ function renderMemberManagementControls(member) {
   if (!member?.serverUserId || !operationsAccessReady()) return "";
   const status = memberListStatus(member);
   const managedTickets = memberManagementTickets(member);
+  const unlinkedPayment = memberUnlinkedVerifiedPayment(member);
 
   const ticketRows = managedTickets.map((ticket) => {
     const actions = [];
@@ -6054,16 +6383,21 @@ function renderMemberManagementControls(member) {
       <div class="member-ticket-management-list">
         ${ticketRows || '<p class="member-more-empty">등록된 회원권이 없습니다.</p>'}
       </div>
+      ${operationsRole() === "admin" && !managedTickets.some((ticket) => ["active", "paused", "pending_payment"].includes(ticket.status))
+        ? `<button class="primary-button member-ticket-assign-button" type="button" data-open-member-management="assign">${unlinkedPayment ? "결제 연결·회원권 발급" : "판매중 회원권 등록"}</button>`
+        : ""}
     </div>`;
 }
 
 function memberManagementActionLabel(action) {
   return ({
     create: "회원 수동 추가",
+    assign: "회원권 등록",
     profile: "회원 정보·앱 연결",
     correct: "회원권 숫자·기간 수정",
     expire: "회원권 만료 처리",
     force_delete: "회원권 강제 삭제",
+    permanent_delete: "회원 영구 삭제",
     reenroll: "다시 수강 등록",
     deactivate: "회원 삭제 처리",
     restore: "회원 복원",
@@ -6100,14 +6434,23 @@ function memberManagementCoachRoles(sourceTicket = null) {
 }
 
 function memberManagementScheduleScopeLabel(scope) {
-  return scope === "weekend" ? "주말권 (토·일)" : "평일권 (월~금)";
+  if (scope === "mixed") return "혼합 (월~일)";
+  return scope === "weekend" ? "주말 (토·일)" : "평일 (월~금)";
+}
+
+function memberManagementProductScheduleScope(product) {
+  const name = String(product?.name || "");
+  if (name.includes("주말")) return "weekend";
+  if (name.includes("평일")) return "weekday";
+  return ["weekday", "weekend", "mixed"].includes(product?.schedule_scope) ? product.schedule_scope : "weekday";
 }
 
 function memberManagementLessonDaysMarkup(selectedDays = [], scheduleScope = "weekday") {
   const selected = new Set((selectedDays || []).map(Number));
   return Object.entries(memberManagementDayLabels).map(([day, label]) => {
     const dayNumber = Number(day);
-    const scopeAllowed = scheduleScope === "weekend" ? [0, 6].includes(dayNumber) : dayNumber >= 1 && dayNumber <= 5;
+    const scopeAllowed = scheduleScope === "mixed"
+      || (scheduleScope === "weekend" ? [0, 6].includes(dayNumber) : dayNumber >= 1 && dayNumber <= 5);
     return `<label class="member-lesson-day-option ${scopeAllowed ? "" : "is-disabled"}">
       <input name="lessonDays" type="checkbox" value="${dayNumber}" ${selected.has(dayNumber) ? "checked" : ""} ${scopeAllowed ? "" : "disabled"} />
       <span>${label}</span>
@@ -6127,29 +6470,37 @@ function memberManagementDatabaseFields({
   coachRoles,
   coachRoleId,
   partnerOptions,
+  existingPayment = null,
   isCreate = false,
+  isAssign = false,
   includeTicketStatus = false,
 }) {
-  const scheduleScope = record?.lesson_schedule_scope || ticket?.scheduleScope || product?.schedule_scope || "weekday";
-  const weeklyFrequency = Number(record?.lesson_frequency_per_week || ticket?.weeklyCount || product?.frequency_per_week || 1);
-  const lessonType = record?.lesson_type || ticket?.lessonTypeCode || (Number(product?.group_size || 1) === 2 ? "one_on_two" : "one_on_one");
-  const lessonDays = Array.isArray(record?.lesson_days) ? record.lesson_days : ticket?.lessonDays || [];
-  const hasTicket = Boolean(ticket?.serverTicketId || isCreate);
-  const totalSessions = record?.total_sessions ?? ticket?.total ?? (isCreate ? Number(product?.total_sessions || 1) : null);
-  const usedSessions = record?.used_sessions ?? ticket?.used ?? (isCreate ? 0 : null);
-  const remainingSessions = record?.remaining_sessions ?? ticket?.remaining ?? (isCreate ? Number(product?.total_sessions || 1) : null);
-  const startsOn = record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased || (isCreate ? adminLocalDateKey(new Date()) : "");
+  const productScheduleScope = memberManagementProductScheduleScope(product);
+  const scheduleScope = (isAssign ? productScheduleScope : record?.lesson_schedule_scope || ticket?.scheduleScope) || productScheduleScope;
+  const weeklyFrequency = Number((isAssign ? product?.frequency_per_week : record?.lesson_frequency_per_week || ticket?.weeklyCount) || product?.frequency_per_week || 1);
+  const lessonType = (isAssign ? "" : record?.lesson_type || ticket?.lessonTypeCode) || (Number(product?.group_size || 1) === 2 ? "one_on_two" : "one_on_one");
+  const lessonDays = isAssign ? [] : Array.isArray(record?.lesson_days) ? record.lesson_days : ticket?.lessonDays || [];
+  const hasTicket = Boolean(ticket?.serverTicketId || isCreate || isAssign);
+  const totalSessions = isAssign ? Number(product?.total_sessions || 1) : record?.total_sessions ?? ticket?.total ?? (isCreate ? Number(product?.total_sessions || 1) : null);
+  const usedSessions = isAssign ? 0 : record?.used_sessions ?? ticket?.used ?? (isCreate ? 0 : null);
+  const remainingSessions = isAssign ? Number(product?.total_sessions || 1) : record?.remaining_sessions ?? ticket?.remaining ?? (isCreate ? Number(product?.total_sessions || 1) : null);
+  const startsOn = isAssign ? adminLocalDateKey(new Date()) : record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased || (isCreate ? adminLocalDateKey(new Date()) : "");
   const validityDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
-  const expiresOn = ticket?.expires || (isCreate ? addMemberManagementDays(startsOn, validityDays - 1) : "");
-  const paymentDate = record?.payment_recorded_on || "";
-  const paymentMethod = record?.payment_method || "";
-  const paymentAmount = record?.payment_amount ?? (isCreate ? 0 : "");
+  const expiresOn = ticket?.expires || (isCreate || isAssign ? addMemberManagementDays(startsOn, validityDays - 1) : "");
+  const existingPaymentDate = String(existingPayment?.paid_at || existingPayment?.verified_at || existingPayment?.created_at || "").slice(0, 10);
+  const paymentDate = isAssign ? existingPaymentDate : record?.payment_recorded_on || "";
+  const paymentMethod = isAssign ? existingPayment?.method || "" : record?.payment_method || "";
+  const paymentAmount = isAssign
+    ? Number(existingPayment?.final_amount ?? existingPayment?.amount ?? product?.cash_price ?? product?.card_price ?? 0)
+    : record?.payment_amount ?? (isCreate ? 0 : "");
   const note = record ? record.admin_note || "" : member?.note || "";
   const partnerUserId = ticket && member ? memberTicketPartnerUserId(ticket, member) : "";
   const recordStatus = record?.record_status || (ticket?.status === "expired" ? "historical" : hasTicket ? "active" : "pending");
   const ticketStatus = ["active", "paused", "pending_payment", "expired"].includes(ticket?.status) ? ticket.status : "active";
   return `
     <input name="recordStatus" type="hidden" value="${escapeHtml(recordStatus)}" />
+    ${isAssign && existingPayment ? `<input name="existingPaymentId" type="hidden" value="${escapeHtml(existingPayment.id)}" />
+      <div class="member-management-warning"><strong>기존 결제 기록 연결</strong><span>${escapeHtml(paymentMethodLabel(existingPayment.method))} · ${money.format(Number(existingPayment.final_amount ?? existingPayment.amount ?? 0))}원 · 회원권 발급 후 같은 결제 기록에 연결됩니다.</span></div>` : ""}
     <div class="member-management-form-grid member-database-fields">
       <label class="form-field"><span>레슨강사</span><select name="coachRoleId" required>
         ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === coachRoleId ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
@@ -6157,6 +6508,7 @@ function memberManagementDatabaseFields({
       <label class="form-field"><span>레슨방식</span><select name="scheduleScope" required>
         <option value="weekday" ${scheduleScope === "weekday" ? "selected" : ""}>평일</option>
         <option value="weekend" ${scheduleScope === "weekend" ? "selected" : ""}>주말</option>
+        <option value="mixed" ${scheduleScope === "mixed" ? "selected" : ""}>혼합</option>
       </select></label>
       <label class="form-field"><span>주당 횟수</span><select name="weeklyFrequency" required>
         ${[1, 2, 3].map((frequency) => `<option value="${frequency}" ${frequency === weeklyFrequency ? "selected" : ""} ${scheduleScope === "weekend" && frequency === 3 ? "disabled" : ""}>주 ${frequency}회</option>`).join("")}
@@ -6170,7 +6522,7 @@ function memberManagementDatabaseFields({
       ${hasTicket ? `<label class="form-field"><span>회원권 만료일</span><input name="expiresOn" type="date" value="${escapeHtml(expiresOn)}" required /></label>` : ""}
       <label class="form-field"><span>총 회차</span><input name="totalSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(totalSessions))}" ${hasTicket ? "required" : ""} /></label>
       <label class="form-field"><span>소진 회차</span><input name="usedSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(usedSessions))}" ${hasTicket ? "required" : ""} /></label>
-      <label class="form-field"><span>잔여 회차</span><input name="remainingSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(remainingSessions))}" ${hasTicket ? "required" : ""} /></label>
+      <label class="form-field"><span>잔여 회차</span><input name="remainingSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(remainingSessions))}" readonly aria-readonly="true" ${hasTicket ? "required" : ""} /><small>총 회차 - 소진 회차로 자동 계산</small></label>
       ${includeTicketStatus && ticket ? `<label class="form-field"><span>회원권 상태</span><select name="ticketStatus" required>
         <option value="active" ${ticketStatus === "active" ? "selected" : ""}>사용 중</option>
         <option value="paused" ${ticketStatus === "paused" ? "selected" : ""}>일시정지</option>
@@ -6238,10 +6590,12 @@ function memberManualProfileFields(member = {}) {
 function automaticMemberManagementReason(action) {
   return {
     create: "관리자 수동 회원 등록",
+    assign: "관리자 기존 회원 회원권 등록",
     profile: "관리자 회원 정보 수정",
     correct: "관리자 회원권 수동 조정",
     expire: "관리자 회원권 만료 처리",
     force_delete: "관리자 잘못된 회원권 강제 삭제",
+    permanent_delete: "관리자 삭제회원 영구 삭제",
     reenroll: "관리자 회원 재등록",
     deactivate: "관리자 회원 운영 삭제",
     restore: "관리자 회원 복원",
@@ -6297,16 +6651,18 @@ function renderMemberManagementModal() {
   }
 
   const record = memberDatabaseRecord(isCreate ? null : member, ticket);
-  const products = action === "reenroll"
+  const products = ["assign", "reenroll"].includes(action)
     ? memberManagementProducts(ticket)
     : isCreate
       ? memberManagementProducts()
       : [];
+  const unlinkedPayment = memberUnlinkedVerifiedPayment(member);
   const product = products.find((item) => item.id === ticket?.productId)
+    || products.find((item) => item.id === unlinkedPayment?.product_id)
     || (adminLiveDataState.products || []).find((item) => item.id === ticket?.productId)
     || products[0]
     || null;
-  const coachRoles = ["profile", "correct", "reenroll"].includes(action)
+  const coachRoles = ["profile", "correct", "assign", "reenroll"].includes(action)
     ? memberManagementCoachRoles(ticket || { branchId: record?.branch_id })
     : isCreate
       ? memberManagementCoachRoles({ branchId: product?.branch_id })
@@ -6314,7 +6670,7 @@ function renderMemberManagementModal() {
   const currentCoachRoleId = record?.coach_role_id || ticket?.coachRoleId || "";
   const coachRoleId = coachRoles.some((role) => role.id === currentCoachRoleId) ? currentCoachRoleId : coachRoles[0]?.id || "";
   const scheduleScope = record?.lesson_schedule_scope || ticket?.scheduleScope || product?.schedule_scope || "weekday";
-  const partnerOptions = ["profile", "correct"].includes(action) || isCreate ? manualMemberPartnerOptions() : [];
+  const partnerOptions = ["profile", "correct", "assign"].includes(action) || isCreate ? manualMemberPartnerOptions() : [];
   const groupProduct = (record?.lesson_type || ticket?.lessonTypeCode) === "one_on_two" || Number(product?.group_size || 1) === 2;
   const today = adminLocalDateKey(new Date());
   const validityDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
@@ -6324,7 +6680,7 @@ function renderMemberManagementModal() {
   const defaultStartsOn = action === "reenroll" ? today : memberManagementDate(record?.lesson_start_on || ticket?.purchased);
   const defaultExpiresOn = action === "reenroll" ? addMemberManagementDays(today, validityDays - 1) : memberManagementDate(ticket?.expires);
   const ticketStatus = ["active", "paused", "pending_payment", "expired"].includes(ticket?.status) ? ticket.status : "expired";
-  const destructive = ["expire", "force_delete", "deactivate"].includes(action);
+  const destructive = ["expire", "force_delete", "deactivate", "permanent_delete"].includes(action);
   let actionFields = "";
 
   if (action === "profile") {
@@ -6369,11 +6725,20 @@ function renderMemberManagementModal() {
       <div class="member-management-form-grid">
         ${memberManualProfileFields()}
         <label class="form-field span-2"><span>회원권</span><select name="productId" required>
-          ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")} · ${memberManagementScheduleScopeLabel(item.schedule_scope)}</option>`).join("")}
+          ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")} · ${memberManagementScheduleScopeLabel(memberManagementProductScheduleScope(item))}</option>`).join("")}
         </select></label>
       </div>
       ${memberManagementDatabaseFields({ member, ticket: null, record: null, product, coachRoles, coachRoleId, partnerOptions, isCreate: true })}
       <p class="member-management-rule">저장하면 실서버 회원과 회원권이 함께 생성되어 기존 회원과 동일하게 수정·만료·시간표 등록을 할 수 있습니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
+  } else if (action === "assign") {
+    actionFields = products.length && coachRoles.length ? `
+      <div class="member-management-form-grid">
+        <label class="form-field span-2"><span>판매중 회원권</span><select name="productId" required>
+          ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")} · ${memberManagementScheduleScopeLabel(memberManagementProductScheduleScope(item))}</option>`).join("")}
+        </select></label>
+      </div>
+      ${memberManagementDatabaseFields({ member, ticket: null, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: unlinkedPayment, isAssign: true })}
+      <p class="member-management-rule">판매 중인 상품을 선택하면 기간과 회차가 자동 입력됩니다. 저장 후 시간표에서 정규 수업을 등록합니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "correct") {
     actionFields = operationsRole() === "admin" ? `
       ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, includeTicketStatus: true })}
@@ -6381,12 +6746,13 @@ function renderMemberManagementModal() {
       <div class="member-management-form-grid">
         <label class="form-field"><span>총횟수</span><input name="totalSessions" type="number" min="1" step="1" value="${defaultTotal}" required /></label>
         <label class="form-field"><span>소진횟수</span><input name="usedSessions" type="number" min="0" step="1" value="${defaultUsed}" required /></label>
-        <label class="form-field"><span>잔여횟수</span><input name="remainingSessions" type="number" min="0" step="1" value="${defaultRemaining}" required /></label>
+        <label class="form-field"><span>잔여횟수</span><input name="remainingSessions" type="number" min="0" step="1" value="${defaultRemaining}" readonly aria-readonly="true" required /><small>자동 계산</small></label>
         <label class="form-field"><span>시작일</span><input name="startsOn" type="date" value="${defaultStartsOn}" required /></label>
         <label class="form-field"><span>만료일</span><input name="expiresOn" type="date" value="${defaultExpiresOn}" required /></label>
         <label class="form-field"><span>이용 구분</span><select name="scheduleScope" required>
           <option value="weekday" ${scheduleScope === "weekday" ? "selected" : ""}>평일권 (월~금)</option>
           <option value="weekend" ${scheduleScope === "weekend" ? "selected" : ""}>주말권 (토·일)</option>
+          <option value="mixed" ${scheduleScope === "mixed" ? "selected" : ""}>혼합권 (월~일)</option>
         </select></label>
         <label class="form-field"><span>회원권 상태</span><select name="ticketStatus" ${operationsRole() === "admin" ? "" : "disabled"} required>
           <option value="active" ${ticketStatus === "active" ? "selected" : ""}>사용 중</option>
@@ -6407,7 +6773,7 @@ function renderMemberManagementModal() {
         </select></label>
         <label class="form-field"><span>총횟수</span><input name="totalSessions" type="number" min="1" step="1" value="${defaultTotal}" required /></label>
         <label class="form-field"><span>소진횟수</span><input name="usedSessions" type="number" min="0" step="1" value="0" required /></label>
-        <label class="form-field"><span>잔여횟수</span><input name="remainingSessions" type="number" min="1" step="1" value="${defaultRemaining}" required /></label>
+        <label class="form-field"><span>잔여횟수</span><input name="remainingSessions" type="number" min="0" step="1" value="${defaultRemaining}" readonly aria-readonly="true" required /><small>자동 계산</small></label>
         <label class="form-field"><span>시작일</span><input name="startsOn" type="date" value="${defaultStartsOn}" required /></label>
         <label class="form-field"><span>만료일</span><input name="expiresOn" type="date" value="${defaultExpiresOn}" required /></label>
         <label class="form-field"><span>등록 금액</span><input name="purchasedPrice" type="number" min="0" step="1000" value="${Number(product?.cash_price || product?.card_price || ticket?.amount || 0)}" required /></label>
@@ -6419,6 +6785,8 @@ function renderMemberManagementModal() {
     actionFields = `<div class="member-management-warning danger"><strong>회원권과 연결 수업을 강제 삭제합니다.</strong><span>완료 수업의 차감 횟수는 복원한 뒤 수업·회원권 행을 제거합니다. 결제·환불 증빙과 감사 기록은 분리 보존합니다.</span></div>`;
   } else if (action === "deactivate") {
     actionFields = `<div class="member-management-warning danger"><strong>운영 목록에서 삭제합니다.</strong><span>결제·수업·감사 기록은 보존되며 삭제회원 탭에서 다시 복원할 수 있습니다.</span></div>`;
+  } else if (action === "permanent_delete") {
+    actionFields = `<div class="member-management-warning danger"><strong>삭제회원 목록에서 완전히 제거합니다.</strong><span>개인정보와 앱 연결은 삭제하고 결제·환불·감사 증빙은 익명 상태로 보존합니다. 이 작업은 되돌릴 수 없습니다.</span></div>`;
   } else if (action === "restore") {
     actionFields = `<div class="member-management-warning"><strong>회원 계정을 운영 목록으로 복원합니다.</strong><span>과거 회원권은 자동으로 되살리지 않으며, 복원 후 다시 수강 등록할 수 있습니다.</span></div>`;
   }
@@ -6434,7 +6802,7 @@ function renderMemberManagementModal() {
       <div id="memberManagementMessage" class="form-message danger" role="status">${escapeHtml(memberManagementModalState.message || "")}</div>
       <div class="modal-actions">
         <button class="ghost-button" type="button" data-close-member-management>취소</button>
-        <button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${(action === "reenroll" || isCreate) && (!products.length || !coachRoles.length) ? "disabled" : ""}>${memberManagementActionLabel(action)} 확정</button>
+        <button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${(["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length) ? "disabled" : ""}>${memberManagementActionLabel(action)} 확정</button>
       </div>
     </form>`;
 }
@@ -6456,6 +6824,7 @@ function openMemberManagementModal(member, action, ticketId = "") {
   });
   renderMemberManagementModal();
   $("#memberManagementModal")?.removeAttribute("hidden");
+  syncMemberManagementBalance($("#memberManagementForm"));
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
   if (action === "profile" && !member.authLinked) loadMemberLinkCandidates(member);
@@ -6478,6 +6847,7 @@ function openManualMemberModal() {
   });
   renderMemberManagementModal();
   $("#memberManagementModal")?.removeAttribute("hidden");
+  syncMemberManagementBalance($("#memberManagementForm"));
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
   setTimeout(() => $("#memberManagementForm input[name='memberName']")?.focus(), 0);
@@ -6508,12 +6878,19 @@ function applyMemberManagementProductDefaults(form) {
   form.elements.usedSessions.value = 0;
   form.elements.remainingSessions.value = total;
   form.elements.expiresOn.value = addMemberManagementDays(start, validityDays - 1);
-  if (form.elements.paymentAmount) form.elements.paymentAmount.value = 0;
-  if (form.elements.scheduleScope) form.elements.scheduleScope.value = product.schedule_scope || "weekday";
+  if (form.elements.paymentAmount) form.elements.paymentAmount.value = Number(product.cash_price || product.card_price || 0);
+  if (form.elements.scheduleScope) form.elements.scheduleScope.value = memberManagementProductScheduleScope(product);
   if (form.elements.weeklyFrequency) form.elements.weeklyFrequency.value = Number(product.frequency_per_week) || 1;
   if (form.elements.lessonType) form.elements.lessonType.value = Number(product.group_size || 1) === 2 ? "one_on_two" : "one_on_one";
   syncMemberManagementScopeFields(form);
   syncManualMemberPartnerField(form);
+}
+
+function syncMemberManagementBalance(form) {
+  if (!form?.elements?.totalSessions || !form.elements.usedSessions || !form.elements.remainingSessions) return;
+  const total = Math.max(0, Number(form.elements.totalSessions.value) || 0);
+  const used = Math.max(0, Number(form.elements.usedSessions.value) || 0);
+  form.elements.remainingSessions.value = Math.max(0, total - used);
 }
 
 function syncManualMemberPartnerField(form) {
@@ -6531,6 +6908,12 @@ function syncManualMemberPartnerField(form) {
   filterManualMemberPartnerOptions(form);
 }
 
+function maskMemberPhone(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length < 7) return "연락처 확인 필요";
+  return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
+}
+
 function filterManualMemberPartnerOptions(form) {
   if (!form?.elements?.partnerUserId) return;
   const select = form.elements.partnerUserId;
@@ -6542,7 +6925,7 @@ function filterManualMemberPartnerOptions(form) {
   ));
   select.innerHTML = [
     `<option value="">${keyword && !options.length ? "검색 결과 없음" : "파트너 선택"}</option>`,
-    ...options.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}${user.phone ? ` · ${escapeHtml(maskPhone(user.phone))}` : ""}</option>`),
+    ...options.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}${user.phone ? ` · ${escapeHtml(maskMemberPhone(user.phone))}` : ""}</option>`),
   ].join("");
   if (options.some((user) => String(user.id) === String(currentValue))) select.value = currentValue;
 }
@@ -6558,7 +6941,7 @@ function syncMemberManagementScopeFields(form) {
   }
   form.querySelectorAll('input[name="lessonDays"]').forEach((input) => {
     const day = Number(input.value);
-    const allowed = scope === "weekend" ? [0, 6].includes(day) : day >= 1 && day <= 5;
+    const allowed = scope === "mixed" || (scope === "weekend" ? [0, 6].includes(day) : day >= 1 && day <= 5);
     input.disabled = !allowed;
     if (!allowed) input.checked = false;
     input.closest(".member-lesson-day-option")?.classList.toggle("is-disabled", !allowed);
@@ -6591,6 +6974,13 @@ function memberManagementNullableNumber(input) {
 
 function memberManagementErrorText(error) {
   const raw = `${error?.payload?.code || ""} ${error?.message || ""}`;
+  if (raw.includes("admin_live_refresh_failed_after_write")) return "서버 저장은 요청됐지만 결과를 다시 확인하지 못했습니다. 새로고침 후 상태를 확인해 주세요.";
+  if (raw.includes("member_management_write_not_confirmed")) return "서버에서 변경 결과를 확인하지 못했습니다. 새로고침 후 다시 확인해 주세요.";
+  if (raw.includes("payment_product_mismatch")) return "기존 결제에 연결된 회원권과 선택한 회원권이 다릅니다. 결제 회원권을 선택해 주세요.";
+  if (raw.includes("payment_already_linked")) return "이 결제는 이미 다른 회원권에 연결되어 있습니다.";
+  if (raw.includes("payment_member_mismatch")) return "기존 결제 회원과 발급 대상 회원이 맞지 않습니다.";
+  if (raw.includes("payment_not_verified")) return "확인 완료된 결제만 회원권에 연결할 수 있습니다.";
+  if (raw.includes("existing_payment_link_failed")) return "회원권은 발급됐지만 기존 결제 연결을 확인하지 못했습니다. 새로고침 후 결제/정산에서 확인해 주세요.";
   if (raw.includes("member_ticket_management_forbidden") || raw.includes("admin_role_required")) return "현재 계정에는 이 작업 권한이 없습니다.";
   if (raw.includes("force_delete_reason_required")) return "강제 삭제 사유를 5자 이상 입력해 주세요.";
   if (raw.includes("management_reason_required")) return "변경 사유를 두 글자 이상 입력해 주세요.";
@@ -6602,7 +6992,7 @@ function memberManagementErrorText(error) {
   if (raw.includes("group_partner_required")) return "2대1 회원권은 파트너를 선택해야 합니다.";
   if (raw.includes("member_phone_already_exists")) return "같은 휴대전화 번호의 회원이 이미 있습니다. 기존 회원을 검색해 주세요.";
   if (raw.includes("member_name_required")) return "회원 이름을 두 글자 이상 입력해 주세요.";
-  if (raw.includes("invalid_schedule_scope")) return "평일권 또는 주말권을 선택해 주세요.";
+  if (raw.includes("invalid_schedule_scope")) return "평일, 주말 또는 혼합을 선택해 주세요.";
   if (raw.includes("invalid_ticket_status")) return "회원권 상태를 다시 선택해 주세요.";
   if (raw.includes("active_ticket_requires_remaining_sessions")) return "사용 중 또는 일시정지 상태는 잔여 횟수가 1회 이상이어야 합니다.";
   if (raw.includes("active_ticket_date_expired")) return "이미 지난 만료일로는 회원권을 사용 중 상태로 바꿀 수 없습니다.";
@@ -6629,9 +7019,88 @@ function memberManagementErrorText(error) {
   if (raw.includes("terminal_ticket_locked")) return "환불 또는 강제삭제가 끝난 회원권은 수정할 수 없습니다.";
   if (raw.includes("invalid_member_database_status")) return "회원 상태를 다시 확인해 주세요.";
   if (raw.includes("active_product_required")) return "사용 가능한 회원권 상품을 선택해 주세요.";
+  if (raw.includes("member_active_ticket_exists")) return "이미 사용 중이거나 결제 대기 중인 회원권이 있습니다.";
   if (raw.includes("ticket_price_invalid")) return "결제금액은 0원 이상으로 입력해 주세요.";
   if (raw.includes("separate_group_structure_requires_team_edit")) return "1:2 팀의 종류·파트너 변경은 팀 설정에서 함께 처리해 주세요.";
   return "처리에 실패했습니다. 입력값과 서버 적용 상태를 확인해 주세요.";
+}
+
+function normalizedMemberPhone(value = "") {
+  return String(value || "").replace(/[^0-9]/g, "");
+}
+
+function normalizedRpcResult(result) {
+  return Array.isArray(result) ? result[0] || {} : result || {};
+}
+
+function memberManagementWriteVerification(action, payload, result, statusAction = "keep") {
+  const normalizedResult = normalizedRpcResult(result);
+  const userId = normalizedResult.userId || payload?.userId || "";
+  const ticketId = normalizedResult.ticketId || payload?.ticketId || "";
+  const serverUser = (adminLiveDataState.users || []).find((user) => user.id === userId);
+  const serverTicket = (adminLiveDataState.tickets || []).find((ticket) => ticket.serverTicketId === ticketId);
+
+  if (action === "create") {
+    return serverUser && serverTicket && serverTicket.productId === payload?.productId ? "" : "member_management_write_not_confirmed:create";
+  }
+  if (action === "assign") {
+    return serverUser && serverTicket && serverTicket.productId === payload?.productId ? "" : "member_management_write_not_confirmed:assign";
+  }
+  if (action === "profile") {
+    if (!serverUser) return "member_management_write_not_confirmed:profile_user";
+    if (serverUser.name !== payload?.name
+      || String(serverUser.nickname || "") !== String(payload?.nickname || "")
+      || normalizedMemberPhone(serverUser.phone) !== normalizedMemberPhone(payload?.phone)) {
+      return "member_management_write_not_confirmed:profile_fields";
+    }
+    if (statusAction === "deactivate" && serverUser.status !== "inactive") return "member_management_write_not_confirmed:deactivate";
+    if (statusAction === "restore" && serverUser.status !== "active") return "member_management_write_not_confirmed:restore";
+    if (payload?.lessonType === "one_on_two") {
+      const requiredParticipantIds = [payload?.userId, payload?.partnerUserId].filter(Boolean);
+      const futureLessons = lessons.filter((lesson) => (
+        lesson.ticketId === ticketId
+        && ["scheduled", "pending_change"].includes(lesson.serverStatus)
+        && lesson.lessonDate >= adminLocalDateKey(new Date())
+      ));
+      if (!serverTicket || requiredParticipantIds.some((id) => !serverTicket.participantUserIds?.includes(id))) {
+        return "member_management_write_not_confirmed:partner";
+      }
+      if (futureLessons.some((lesson) => requiredParticipantIds.some((id) => !lesson.serverParticipantUserIds?.includes(id)))) {
+        return "member_management_write_not_confirmed:partner_schedule";
+      }
+    }
+    return "";
+  }
+  if (action === "correct") {
+    const ticketValuesSaved = serverTicket
+      && Number(serverTicket.total) === Number(payload?.totalSessions)
+      && Number(serverTicket.used) === Number(payload?.usedSessions)
+      && Number(serverTicket.remaining) === Number(payload?.remainingSessions)
+      && serverTicket.status === payload?.ticketStatus;
+    if (!ticketValuesSaved) return "member_management_write_not_confirmed:ticket";
+    if (payload?.lessonType === "one_on_two") {
+      const requiredParticipantIds = [payload?.userId, payload?.partnerUserId].filter(Boolean);
+      const futureLessons = lessons.filter((lesson) => (
+        lesson.ticketId === ticketId
+        && ["scheduled", "pending_change"].includes(lesson.serverStatus)
+        && lesson.lessonDate >= adminLocalDateKey(new Date())
+      ));
+      if (requiredParticipantIds.some((id) => !serverTicket.participantUserIds?.includes(id))) {
+        return "member_management_write_not_confirmed:partner";
+      }
+      if (futureLessons.some((lesson) => requiredParticipantIds.some((id) => !lesson.serverParticipantUserIds?.includes(id)))) {
+        return "member_management_write_not_confirmed:partner_schedule";
+      }
+    }
+    return "";
+  }
+  if (action === "expire") return serverTicket?.status === "expired" ? "" : "member_management_write_not_confirmed:expire";
+  if (action === "force_delete") return serverTicket ? "member_management_write_not_confirmed:force_delete" : "";
+  if (action === "permanent_delete") return !serverUser || serverUser.permanently_deleted_at ? "" : "member_management_write_not_confirmed:permanent_delete";
+  if (action === "reenroll") return serverTicket && ["active", "paused"].includes(serverTicket.status) ? "" : "member_management_write_not_confirmed:reenroll";
+  if (action === "deactivate") return serverUser?.status === "inactive" ? "" : "member_management_write_not_confirmed:deactivate";
+  if (action === "restore") return serverUser?.status === "active" ? "" : "member_management_write_not_confirmed:restore";
+  return "";
 }
 
 function memberManagementDatabasePayload(form, member, ticket, reason) {
@@ -6677,6 +7146,7 @@ function memberManagementDatabasePayload(form, member, ticket, reason) {
     paymentDate: hasControl("paymentDate") ? form.elements.paymentDate.value || null : record?.payment_recorded_on || null,
     paymentMethod: hasControl("paymentMethod") ? form.elements.paymentMethod.value || null : record?.payment_method || null,
     paymentAmount: hasControl("paymentAmount") ? memberManagementNullableNumber(form.elements.paymentAmount) : record?.payment_amount ?? null,
+    existingPaymentId: hasControl("existingPaymentId") ? form.elements.existingPaymentId.value || null : null,
     note: hasControl("note") ? form.elements.note.value.trim() || null : record?.admin_note || null,
     partnerUserId: hasControl("partnerUserId")
       ? form.elements.partnerUserId.disabled ? null : form.elements.partnerUserId.value || null
@@ -6689,7 +7159,7 @@ function memberManagementDatabasePayload(form, member, ticket, reason) {
 
 async function submitMemberManagementForm(event) {
   event.preventDefault();
-  const form = event.currentTarget;
+  const form = event.target;
   const member = members.find((item) => item.id === memberManagementModalState.memberId);
   const action = memberManagementModalState.action;
   const isCreate = action === "create";
@@ -6702,18 +7172,29 @@ async function submitMemberManagementForm(event) {
     return;
   }
 
+  syncMemberManagementBalance(form);
   const reason = automaticMemberManagementReason(action);
+  const managementPayload = ["create", "assign", "profile", "correct"].includes(action)
+    ? memberManagementDatabasePayload(form, isCreate ? null : member, ticket, reason)
+    : null;
+  const statusAction = form.elements.memberStatusAction?.value || "keep";
 
   if (form.elements.lessonType) {
     const total = memberManagementNullableNumber(form.elements.totalSessions);
     const used = memberManagementNullableNumber(form.elements.usedSessions);
     const remaining = memberManagementNullableNumber(form.elements.remainingSessions);
-    if ([total, used, remaining].every((value) => value !== null) && used + remaining !== total) {
-      if (message) message.textContent = "총 회차는 소진 회차와 잔여 회차의 합이어야 합니다.";
+    if (total !== null && used !== null && used > total) {
+      if (message) message.textContent = "소진 회차는 총 회차보다 클 수 없습니다.";
       return;
     }
-    const activeRecord = isCreate || form.elements.recordStatus?.value === "active";
-    if (activeRecord && memberManagementSelectedDays(form).length === 0) {
+    if ([total, used, remaining].every((value) => value !== null) && used + remaining !== total) {
+      if (message) message.textContent = "잔여 회차 자동 계산값을 확인해 주세요.";
+      return;
+    }
+    const activeRecord = isCreate || action === "assign" || form.elements.recordStatus?.value === "active";
+    const selectedProduct = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+    const couponProduct = selectedProduct?.is_coupon === true || selectedProduct?.product_kind === "coupon";
+    if (activeRecord && !couponProduct && memberManagementSelectedDays(form).length === 0) {
       if (message) message.textContent = "레슨 요일을 한 개 이상 선택해 주세요.";
       return;
     }
@@ -6738,13 +7219,29 @@ async function submitMemberManagementForm(event) {
     let result = null;
     if (isCreate) {
       result = await client.rpc("tn_admin_create_member_database_record", {
-        target_record: memberManagementDatabasePayload(form, null, null, reason),
+        target_record: managementPayload,
       });
+      state.memberFilter = "active";
+    } else if (action === "assign") {
+      const existingPaymentId = managementPayload?.existingPaymentId || "";
+      const assignmentPayload = existingPaymentId
+        ? { ...managementPayload, paymentAmount: 0, paymentDate: null, paymentMethod: null }
+        : managementPayload;
+      result = await client.rpc("tn_admin_assign_member_database_ticket", {
+        target_record: assignmentPayload,
+      });
+      if (existingPaymentId) {
+        const linkedPayment = await client.rpc("tn_admin_link_existing_payment_to_ticket", {
+          target_payment_id: existingPaymentId,
+          target_ticket_id: result?.ticketId || result?.ticket_id,
+        });
+        if (!linkedPayment?.ok) throw new Error(linkedPayment?.code || "existing_payment_link_failed");
+      }
       state.memberFilter = "active";
     } else if (action === "profile") {
       if (memberDatabaseRecord(member, ticket) || ticket) {
-        result = await client.rpc("tn_admin_update_member_database_record", {
-          target_record: memberManagementDatabasePayload(form, member, ticket, reason),
+        result = await client.rpc("tn_admin_update_member_database_record_preserving_schedule", {
+          target_record: managementPayload,
         });
       } else {
         const birthYearValue = String(form.elements.memberBirthYear?.value || "").trim();
@@ -6775,7 +7272,6 @@ async function submitMemberManagementForm(event) {
           target_reason: reason,
         });
       }
-      const statusAction = form.elements.memberStatusAction?.value || "keep";
       if (["deactivate", "restore"].includes(statusAction)) {
         await client.rpc("tn_set_member_operational_status", {
           target_user_id: member.serverUserId,
@@ -6786,8 +7282,8 @@ async function submitMemberManagementForm(event) {
       }
     } else if (action === "correct") {
       result = operationsRole() === "admin"
-        ? await client.rpc("tn_admin_update_member_database_record", {
-          target_record: memberManagementDatabasePayload(form, member, ticket, reason),
+        ? await client.rpc("tn_admin_update_member_database_record_preserving_schedule", {
+          target_record: managementPayload,
         })
         : await client.rpc("tn_update_member_ticket_lifecycle", {
           target_ticket_id: ticket.serverTicketId,
@@ -6812,6 +7308,12 @@ async function submitMemberManagementForm(event) {
         target_reason: reason,
       });
       state.memberFilter = "expired";
+    } else if (action === "permanent_delete") {
+      result = await client.rpc("tn_admin_permanently_delete_inactive_member", {
+        target_user_id: member.serverUserId,
+      });
+      state.memberFilter = "inactive";
+      state.selectedMemberId = null;
     } else if (action === "reenroll") {
       result = await client.rpc("tn_reenroll_member_database_ticket", {
         target_source_ticket_id: ticket.serverTicketId,
@@ -6835,10 +7337,14 @@ async function submitMemberManagementForm(event) {
       state.memberFilter = action === "deactivate" ? "inactive" : "expired";
     }
 
+    const synced = await syncAdminLiveData();
+    if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    const verificationError = memberManagementWriteVerification(action, managementPayload, result, statusAction);
+    if (verificationError) throw new Error(verificationError);
     closeMemberManagementModal();
-    await syncAdminLiveData();
-    if (isCreate && result?.userId) {
-      state.selectedMemberId = members.find((item) => item.serverUserId === result.userId)?.id || null;
+    const normalizedResult = normalizedRpcResult(result);
+    if ((isCreate || action === "assign") && normalizedResult.userId) {
+      state.selectedMemberId = members.find((item) => item.serverUserId === normalizedResult.userId)?.id || null;
     } else if (member?.serverUserId) {
       const refreshedMember = members.find((item) => memberServerUserIds(item).includes(member.serverUserId));
       if (refreshedMember) {
@@ -7174,34 +7680,66 @@ function memberLessonPlanLabel(member, ticket) {
   ].filter(Boolean).join(" · ");
 }
 
+function memberTicketDisplayLabel(member, ticket = memberCurrentTicket(member)) {
+  if (!ticket) return "미등록";
+  return getTicketDisplayProduct(ticket) || ticket.product || "회원권";
+}
+
+function memberLessonRows(member) {
+  const memberName = String(member?.name || "").trim();
+  const serverUserIds = memberServerUserIds(member);
+  return lessons.filter((lesson) => {
+    if (lesson.status === "cancelled") return false;
+    const participantUserIds = Array.isArray(lesson.serverParticipantUserIds)
+      ? lesson.serverParticipantUserIds.filter(Boolean)
+      : [];
+    if (serverUserIds.length && participantUserIds.length) {
+      return participantUserIds.some((userId) => serverUserIds.includes(userId));
+    }
+    return splitMemberNames(lesson.member).includes(memberName);
+  });
+}
+
 function memberScheduleSummary(member) {
   const ticket = memberCurrentTicket(member);
-  const record = memberDatabaseRecord(member, ticket);
-  if (record?.lesson_days?.length || ticket?.lessonDays?.length) {
-    return memberManagementLessonDaysLabel(record, ticket);
+  if (!ticket) return "미배정";
+  const product = membershipProductForTicket(ticket);
+  const memberLessons = memberLessonRows(member);
+  const today = adminLocalDateKey(new Date());
+  const upcoming = memberLessons
+    .filter((lesson) => !lesson.lessonDate || lesson.lessonDate >= today)
+    .sort((left, right) => `${left.lessonDate || "9999-12-31"}T${left.time || "23:59"}`.localeCompare(`${right.lessonDate || "9999-12-31"}T${right.time || "23:59"}`));
+  if (["pass", "coupon"].includes(product.productKind) || ["pass", "coupon"].includes(ticket.productKind)) {
+    const nextLesson = upcoming[0];
+    if (!nextLesson) return "쿠폰 · 다음 일정 없음";
+    const dateLabel = nextLesson.lessonDate ? memberDetailDateLabel(nextLesson.lessonDate) : nextLesson.day;
+    return `쿠폰 · 다음 ${dateLabel} ${nextLesson.time}`;
   }
-  const memberName = String(member.name || "").trim();
-  const serverUserIds = Array.isArray(member.serverUserIds)
-    ? member.serverUserIds.filter(Boolean)
-    : [member.serverUserId].filter(Boolean);
-  const scheduleLabels = [...new Set(lessons
-    .filter((lesson) => {
-      const participantUserIds = Array.isArray(lesson.serverParticipantUserIds) ? lesson.serverParticipantUserIds.filter(Boolean) : [];
-      if (serverUserIds.length && participantUserIds.length) {
-        return !lesson.makeup && lesson.status !== "cancelled" && participantUserIds.some((userId) => serverUserIds.includes(userId));
-      }
-      const lessonMembers = String(lesson.member || "").split("&").map((name) => name.trim());
-      return !lesson.makeup && lesson.status !== "cancelled" && lessonMembers.includes(memberName);
-    })
-    .map((lesson) => `${lesson.day} ${lesson.time}`))];
+  const regularLessons = memberLessons.filter((lesson) => !lesson.makeup && lesson.lessonSource !== "makeup");
+  const scheduleLabels = [...new Set(regularLessons.map((lesson) => `${lesson.day} ${lesson.time}`))];
   if (scheduleLabels.length) return scheduleLabels.slice(0, 3).join(" · ");
+  const record = memberDatabaseRecord(member, ticket);
+  if (record?.lesson_days?.length || ticket?.lessonDays?.length) return memberManagementLessonDaysLabel(record, ticket);
   if (member.regularTime && member.regularTime !== "시간표에서 확인") return member.regularTime;
   return "미배정";
 }
 
+function memberRemarkLabel(member) {
+  const ticket = memberCurrentTicket(member);
+  const record = memberDatabaseRecord(member, ticket);
+  const payment = latestMemberPayment(member);
+  const parts = [];
+  const note = String(record?.admin_note || member.note || "").trim();
+  if (note && !["실서버 회원권 연결", "회원권 등록 또는 연장 확인 필요", "운동노트만 이용 중", "가입서 제출 완료 · 결제 확인 필요"].includes(note)) {
+    parts.push(note);
+  }
+  if (Number(payment?.discountAmount || 0) > 0) parts.push(`할인 ${money.format(Number(payment.discountAmount))}원`);
+  return parts.join(" · ") || "-";
+}
+
 function latestMemberPayment(member) {
   const record = memberDatabaseRecord(member, memberCurrentTicket(member));
-  if (record) {
+  if (record && (record.payment_recorded_on || record.payment_method || Number(record.payment_amount) > 0)) {
     return {
       memberDatabaseRecord: true,
       paidAt: record.payment_recorded_on || "",
@@ -7502,15 +8040,14 @@ function renderMembers() {
             </button>
           </td>
           <td>${escapeHtml(member.coach || "미배정")}</td>
-          <td>
-            <strong class="member-table-primary">${escapeHtml(memberLessonPlanLabel(member, ticket))}</strong>
-            <small class="member-table-secondary">${escapeHtml(memberScheduleSummary(member))}</small>
-          </td>
+          <td><strong class="member-table-primary">${escapeHtml(memberTicketDisplayLabel(member, ticket))}</strong></td>
+          <td>${escapeHtml(memberScheduleSummary(member))}</td>
           <td>${ticket ? ticketUsageLabel(ticket) : "-"}</td>
           <td>${memberStatusBadge(member)}</td>
+          <td class="member-table-note">${escapeHtml(memberRemarkLabel(member))}</td>
         </tr>`;
     })
-    .join("") : `<tr><td colspan="5" class="empty-text">${filterCopy.empty}</td></tr>`;
+    .join("") : `<tr><td colspan="7" class="empty-text">${filterCopy.empty}</td></tr>`;
 
   const detailPanel = $("#memberDetail");
   const detailLayout = detailPanel?.closest(".member-directory-layout");
@@ -7549,10 +8086,12 @@ function renderMembers() {
       : recentPayment
         ? `${paymentMethodLabel(recentPayment.method)} · ${money.format(recentPayment.finalAmount || recentPayment.amount || 0)}원`
         : "결제 이력 없음";
-    const lessonStart = selectedRecord?.lesson_start_on || selectedTicket?.actualLessonStart || selectedTicket?.purchased || "";
-    const totalSessions = selectedRecord?.total_sessions ?? selectedTicket?.total;
-    const usedSessions = selectedRecord?.used_sessions ?? selectedTicket?.used;
-    const remainingSessions = selectedRecord?.remaining_sessions ?? selectedTicket?.remaining;
+    const lessonStart = selectedTicket
+      ? selectedRecord?.lesson_start_on || selectedTicket.actualLessonStart || selectedTicket.purchased || ""
+      : "";
+    const totalSessions = selectedTicket ? selectedRecord?.total_sessions ?? selectedTicket.total : null;
+    const usedSessions = selectedTicket ? selectedRecord?.used_sessions ?? selectedTicket.used : null;
+    const remainingSessions = selectedTicket ? selectedRecord?.remaining_sessions ?? selectedTicket.remaining : null;
     detailPanel.innerHTML = `
       <div class="detail-header member-db-header">
         <div class="profile-line large">
@@ -7567,6 +8106,9 @@ function renderMembers() {
           ${operationsRole() === "admin" ? `<button class="small-button" type="button" data-open-member-management="profile" data-member-management-ticket="${escapeHtml(selectedTicket?.serverTicketId || "")}">수정</button>` : ""}
           ${operationsRole() === "admin" && selectedStatus !== "inactive" && selected.authRole !== "admin"
             ? '<button class="ghost-button danger-button" type="button" data-open-member-management="deactivate">회원 삭제</button>'
+            : ""}
+          ${operationsRole() === "admin" && selectedStatus === "inactive" && selected.authRole !== "admin"
+            ? '<button class="ghost-button danger-button" type="button" data-open-member-management="permanent_delete">영구 삭제</button>'
             : ""}
           <button class="icon-button" type="button" data-close-member-detail aria-label="회원 상세 닫기" title="닫기">×</button>
         </div>
@@ -7596,9 +8138,9 @@ function renderMembers() {
           <div class="wide"><dt>회원권</dt><dd>${escapeHtml(ticketName)}</dd></div>
           <div><dt>레슨 시작일</dt><dd>${escapeHtml(memberDetailDateLabel(lessonStart))}</dd></div>
           <div><dt>만료일</dt><dd>${selectedTicket ? escapeHtml(memberDetailDateLabel(selectedTicket.expires)) : "없음"}</dd></div>
-          <div><dt>총 회차</dt><dd>${escapeHtml(memberManagementRecordNumber(totalSessions))}</dd></div>
-          <div><dt>소진 회차</dt><dd>${escapeHtml(memberManagementRecordNumber(usedSessions))}</dd></div>
-          <div><dt>잔여 회차</dt><dd class="member-remaining-value">${escapeHtml(memberManagementRecordNumber(remainingSessions))}</dd></div>
+          <div><dt>총 회차</dt><dd>${selectedTicket ? escapeHtml(memberManagementRecordNumber(totalSessions)) : "-"}</dd></div>
+          <div><dt>소진 회차</dt><dd>${selectedTicket ? escapeHtml(memberManagementRecordNumber(usedSessions)) : "-"}</dd></div>
+          <div><dt>잔여 회차</dt><dd class="member-remaining-value">${selectedTicket ? escapeHtml(memberManagementRecordNumber(remainingSessions)) : "-"}</dd></div>
         </dl>
         ${renderMemberCoachAssignment(selectedTicket)}
         ${renderMemberTicketLessonSetup(selected, selectedTicket)}
@@ -7755,7 +8297,7 @@ function renderCoachLaneLessonCard(lesson, label = "") {
 }
 
 function renderCoachLaneAddCard(day, time, coach, label = "수업 추가", detail = "") {
-  const blockedBreak = getBreakRuleOverlapping(day, time, 20);
+  const blockedBreak = getCoachBreakOverlapping(coach.id, day, time, 20) || getBreakRuleOverlapping(day, time, 20);
   if (blockedBreak) {
     return `
       <div class="coach-lane-card unavailable" data-coach-lane="${coach.id}">
@@ -7850,17 +8392,9 @@ function renderCoachLane(day, time, coach) {
 }
 
 function renderUniformCoachScheduleCell(day, time) {
-  const breakRule = getBreakRuleForSlot(day, time);
-  if (breakRule) {
-    return `
-      <div class="sheet-cell schedule-break-cell" title="${day} ${time}">
-        <strong>브레이크</strong>
-        <small>${breakRule.start}~${breakRule.end}</small>
-      </div>`;
-  }
-
   const lanes = getScheduleCoachLanes(day);
   if (!lanes.length) {
+    const breakRule = getBreakRuleForSlot(day, time);
     return `
       <div class="sheet-cell schedule-break-cell" title="${day} ${time}">
         <strong>${breakRule?.label || "브레이크"}</strong>
@@ -7868,21 +8402,23 @@ function renderUniformCoachScheduleCell(day, time) {
       </div>`;
   }
   const laneCount = Math.max(lanes.length, 1);
-  const openCoachId = getAvailableCoachId(day, time);
-  const addLine = canAddLessonAt(day, time, 20, openCoachId)
-    ? `<button class="schedule-stack-add" type="button" ${lessonAddAttrs(day, time, 20, openCoachId)}>+ 수업 추가</button>`
-    : `<div class="schedule-stack-full">신청불가</div>`;
-  const blockEnd = timeToMinutes(time) + scheduleBlockMinutes;
   const laneSlots = lanes
     .map((coach) => {
       const startingLesson = findStartingLessonForCoach(day, time, coach.id);
       const occupyingLesson = findOccupyingLessonForCoach(day, time, coach.id);
       if (startingLesson) return renderUniformScheduleLine("start", startingLesson);
       if (occupyingLesson) return `<div class="schedule-stack-placeholder is-occupied" data-coach-lane="${coach.id}" aria-hidden="true"></div>`;
-      if (!isCoachAvailableForSlot(coach.id, day, time, scheduleBlockMinutes)) {
-        return renderCoachLaneClosedCard(coach, "근무외", time);
+      const blockedBreak = getCoachBreakOverlapping(coach.id, day, time, 20) || getBreakRuleOverlapping(day, time, 20);
+      if (blockedBreak) {
+        return `<div class="schedule-coach-slot is-closed is-break" data-coach-lane="${coach.id}" aria-label="${escapeHtml(coach.name)} ${escapeHtml(blockedBreak.label || "브레이크")}"></div>`;
       }
-      return `<div class="schedule-stack-placeholder" data-coach-lane="${coach.id}" aria-hidden="true"></div>`;
+      if (!isCoachAvailableForSlot(coach.id, day, time, 20)) {
+        return `<div class="schedule-coach-slot is-closed" data-coach-lane="${coach.id}" aria-label="${escapeHtml(coach.name)} 근무 외"></div>`;
+      }
+      if (canAddLessonAt(day, time, 20, coach.id)) {
+        return `<button class="schedule-stack-add" type="button" data-coach-lane="${coach.id}" ${lessonAddAttrs(day, time, 20, coach.id)}>+ 수업 추가</button>`;
+      }
+      return `<div class="schedule-coach-slot is-full" data-coach-lane="${coach.id}" aria-label="${escapeHtml(coach.name)} 신청 불가"></div>`;
     })
     .join("");
 
@@ -7891,13 +8427,13 @@ function renderUniformCoachScheduleCell(day, time) {
       <div class="schedule-stack-lines" style="--visible-lane-count: ${laneCount}">
         ${laneSlots}
       </div>
-      ${addLine}
     </div>`;
 }
 
 function renderUniformScheduleLine(kind, lesson, timeLabel = "") {
   const lessonSlotsForCard = Math.max(1, Math.ceil(lesson.durationMinutes / scheduleBlockMinutes));
-  const lessonCardHeight = lessonSlotsForCard * 68 + Math.max(0, lessonSlotsForCard - 1) * 3;
+  const scheduleRowHeight = isAdminMobileSchedule() && state.scheduleView !== "coach" ? 60 : 68;
+  const lessonCardHeight = lessonSlotsForCard * scheduleRowHeight + Math.max(0, lessonSlotsForCard - 1) * 3 - 8;
   const isCardDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
   const roundLabel = getLessonRoundLabel(lesson) || "회차 확인";
   const detailLabel = isReleasedRegularMakeupSlot(lesson)
@@ -8286,11 +8822,15 @@ function renderSchedule() {
   const dayWidths = displayDays.map((day) => {
     if (mobileDayView) return 0;
     const dayLaneCount = Math.max(1, dayCoachMap.get(day)?.length || 0);
-    return dayLaneCount * coachSlotWidth + Math.max(0, dayLaneCount - 1) * 3 + addSlotWidth + 11;
+    return dayLaneCount * coachSlotWidth + Math.max(0, dayLaneCount - 1) * 3 + 11;
   });
+  const mobileCoachCount = Math.max(1, dayCoachMap.get(selectedDay)?.length || 0);
+  const mobileCoachOverflow = mobileDayView && mobileCoachCount >= 4;
+  const mobileDayWidth = mobileCoachCount * mobileCoachSlotWidth + Math.max(0, mobileCoachCount - 1) * 3 + 8;
   $("#scheduleGrid").classList.toggle("is-mobile-day", mobileDayView);
+  $("#scheduleGrid").classList.toggle("has-coach-overflow", mobileCoachOverflow);
   $("#scheduleGrid").style.gridTemplateColumns = mobileDayView
-    ? "52px minmax(0, 1fr)"
+    ? `52px ${mobileCoachOverflow ? `${mobileDayWidth}px` : "minmax(0, 1fr)"}`
     : `${timeColumnWidth}px ${dayWidths.map((width) => `${width}px`).join(" ")}`;
 
   const header = ["<div class=\"sheet-head time-head\">시간</div>"]
@@ -8303,7 +8843,6 @@ function renderSchedule() {
           <div class="admin-coach-head-row">
             ${displayCoaches.map((coach) => `<span>${escapeHtml(coach.name.replace(/\s*코치$/, ""))}</span>`).join("")}
           </div>
-          <span class="admin-add-head" aria-hidden="true"></span>
         </div>`;
     }))
     .join("");
@@ -8402,11 +8941,13 @@ function getTicketDisplayProduct(ticket) {
 }
 
 function getTicketScheduleScope(ticket) {
-  return ticket?.scheduleScope === "weekend" ? "weekend" : "weekday";
+  return ["weekday", "weekend", "mixed"].includes(ticket?.scheduleScope) ? ticket.scheduleScope : "weekday";
 }
 
 function getTicketScheduleDays(ticket) {
-  return getTicketScheduleScope(ticket) === "weekend" ? scheduleDays.slice(5) : scheduleDays.slice(0, 5);
+  const scope = getTicketScheduleScope(ticket);
+  if (scope === "mixed") return [...scheduleDays];
+  return scope === "weekend" ? scheduleDays.slice(5) : scheduleDays.slice(0, 5);
 }
 
 function ticketAllowsScheduleDay(ticket, day) {
@@ -9319,6 +9860,9 @@ function openLessonModal(defaults = {}) {
     $("#lessonDay"),
     scheduleDays.map((day) => ({ value: day, label: `${day}요일` })),
   );
+  if (!editingLesson && !defaults.day && [...$("#lessonDay").options].some((option) => option.value === currentScheduleDay())) {
+    $("#lessonDay").value = currentScheduleDay();
+  }
   fillSelect(
     $("#lessonTime"),
     getScheduleTimeOptions().map((time) => ({ value: time, label: time })),
@@ -9371,6 +9915,15 @@ function openLessonModal(defaults = {}) {
   }
   refreshLessonTimeOptions($("#lessonTime").value);
   if (!editingLesson && !hasPinnedScheduleSlot) autoAssignOpenLessonSlot();
+  if (!editingLesson && !hasPinnedScheduleSlot && isPastLessonCorrectionMode(getLessonFormCandidate())) {
+    const currentDayIndex = Math.max(0, scheduleDays.indexOf($("#lessonDay").value));
+    for (const nextDay of scheduleDays.slice(currentDayIndex + 1)) {
+      $("#lessonDay").value = nextDay;
+      refreshLessonTimeOptions("");
+      autoAssignOpenLessonSlot();
+      if (!isPastLessonCorrectionMode(getLessonFormCandidate())) break;
+    }
+  }
   refreshLessonDurationOptions();
   refreshLessonTimeOptions(hasPinnedScheduleSlot ? defaults.time : $("#lessonTime").value);
   if (hasPinnedScheduleSlot) {
@@ -9667,6 +10220,27 @@ async function saveLiveAdminLessonSet(candidates = []) {
   return client.rpc("tn_admin_save_lesson_set", payload);
 }
 
+function liveLessonWriteVerification(ticket, candidates = []) {
+  const ticketId = ticket?.serverTicketId || "";
+  const requiredParticipantIds = ticket?.participantUserIds || [];
+  const expectedLessons = candidates.map((candidate) => ({
+    lessonDate: adminWeekDateForDay(candidate.day),
+    time: candidate.time,
+    durationMinutes: Number(candidate.durationMinutes),
+    lessonSource: liveLessonSource(candidate),
+  }));
+  const missing = expectedLessons.find((expected) => !lessons.some((lesson) => (
+    lesson.ticketId === ticketId
+    && lesson.lessonDate === expected.lessonDate
+    && lesson.time === expected.time
+    && Number(lesson.durationMinutes) === expected.durationMinutes
+    && lesson.lessonSource === expected.lessonSource
+    && ["scheduled", "pending_change"].includes(lesson.serverStatus)
+    && requiredParticipantIds.every((id) => lesson.serverParticipantUserIds?.includes(id))
+  )));
+  return missing ? "live_lesson_write_not_confirmed" : "";
+}
+
 function existingFutureRegularLessons(ticketId, targetSchedules = []) {
   const replaceFromDate = targetSchedules.map((item) => item.lessonDate).filter(Boolean).sort()[0] || "";
   if (!replaceFromDate) return [];
@@ -9847,10 +10421,13 @@ async function addLessonFromForm(event) {
         }
         await saveLiveAdminLessonSet(candidates);
       }
+      const synced = await syncAdminLiveData();
+      if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+      const writeVerificationError = liveLessonWriteVerification(ticket, candidates);
+      if (writeVerificationError) throw new Error(writeVerificationError);
       billingLogs.unshift(`${candidate.member} ${selectedSchedules.map((item) => `${item.day} ${item.time}`).join(", ")} 실서버 수업 저장`);
       closeLessonModal();
       setView("schedule");
-      await syncAdminLiveData();
       showToast(manualOverride
         ? "관리자 강제 처리 완료 · 감사 기록 저장"
         : selectedEntitlement ? "보강 예약 완료" : wasEditing ? "수업 수정 완료" : "수업 추가 완료");
@@ -9882,6 +10459,8 @@ async function addLessonFromForm(event) {
         admin_manual_override_reason_required: "강제 처리 사유를 5자 이상 입력해 주세요.",
         admin_manual_exact_duplicate: "같은 회원권·날짜·시간의 수업이 이미 있습니다. 기존 수업을 수정해 주세요.",
         admin_manual_ticket_required: "연결할 회원권을 찾지 못했습니다.",
+        admin_live_refresh_failed_after_write: "저장 후 서버 시간표를 다시 불러오지 못했습니다. 중복 저장하지 말고 새로고침 후 확인해 주세요.",
+        live_lesson_write_not_confirmed: "서버 저장 결과를 시간표에서 다시 확인하지 못했습니다. 중복 저장하지 말고 새로고침 후 확인해 주세요.",
       };
       const message = Object.entries(messages).find(([code]) => errorText.includes(code))?.[1]
         || error?.message
@@ -10029,128 +10608,6 @@ function settlementAmountFor(item) {
   return Math.round(perLessonBase * completedLessons * (Number(rule.ratio) || 0));
 }
 
-function readSettlementRuleFields(card, fieldName, fallbackRule = {}) {
-  const readField = (field) => card.querySelector(`[${fieldName}="${field}"]`)?.value || "";
-  const method = readField("method") || fallbackRule.method || "ratio";
-  const ratioFallback = Math.round((Number(fallbackRule.ratio) || 0) * 100);
-  return {
-    method,
-    ratio: Math.max(0, Math.min(100, numericValue(readField("ratio"), ratioFallback))) / 100,
-    hourly: Math.max(0, numericValue(readField("hourly"), fallbackRule.hourly || 0)),
-    cardBase: readField("cardBase") || fallbackRule.cardBase || "cash",
-    substitute: readField("substitute") || fallbackRule.substitute || "actualCoach",
-    effectiveFrom: readField("effectiveFrom") || fallbackRule.effectiveFrom || new Date().toISOString().slice(0, 10),
-  };
-}
-
-async function saveCoachSettlementRuleOnServer(rule) {
-  if (!state.liveScheduleLoaded) return null;
-  const client = window.TennisNoteDataClient;
-  const coach = coaches.find((item) => item.serverRoleId === rule.serverRoleId || item.name === rule.coach);
-  if (!adminApprovalReady() || !client?.rpc || !coach?.serverRoleId) {
-    throw new Error("관리자 로그인과 실제 코치 연결을 확인해주세요.");
-  }
-  return client.rpc("tn_admin_set_coach_settlement_term", {
-    target_coach_role_id: coach.serverRoleId,
-    target_settlement_type: rule.method,
-    target_coach_rate: rule.method === "ratio" ? rule.ratio : null,
-    target_hourly_rate: rule.method === "hourly" ? rule.hourly : null,
-    target_settlement_basis: rule.cardBase === "paid" ? "actual_paid_inc_vat" : "cash_ex_vat",
-    target_effective_from: rule.effectiveFrom,
-    target_substitute_policy: rule.substitute,
-  });
-}
-
-async function updateCoachSettlementRule(index) {
-  const rule = coachSettlementRules[Number(index)];
-  const card = document.querySelector(`[data-settlement-card="${index}"]`);
-  if (!rule || !card) return;
-  const draft = { ...rule, ...readSettlementRuleFields(card, "data-settlement-field", rule) };
-  try {
-    await saveCoachSettlementRuleOnServer(draft);
-    Object.assign(rule, draft);
-    renderCoachSettlementPreview();
-    saveSnapshot();
-    showToast(`${rule.coach} 정산 기준 저장 완료`);
-  } catch (error) {
-    showToast(`정산 기준 저장 실패: ${error?.message || "server_error"}`);
-  }
-}
-
-function openSettlementModalByIndex(index) {
-  const rule = coachSettlementRules[Number(index)];
-  const modal = $("#settlementModal");
-  const content = $("#settlementModalContent");
-  if (!rule || !modal || !content) return;
-  const methodLabel = rule.method === "hourly" ? `시급 ${money.format(rule.hourly || 0)}원` : `비율 ${Math.round((Number(rule.ratio) || 0) * 100)}%`;
-  content.innerHTML = `
-    <div class="settlement-modal-summary">
-      <strong>${rule.coach}</strong>
-      <span>${methodLabel} · 카드 기준 ${rule.cardBase === "cash" ? "현금가/부가세 제외" : "실결제액"}</span>
-    </div>
-    <div class="settlement-edit-grid settlement-modal-form" data-settlement-modal-card="${index}">
-      <label>
-        <small>정산 방식</small>
-        <select data-settlement-modal-field="method">
-          <option value="ratio" ${rule.method === "ratio" ? "selected" : ""}>비율</option>
-          <option value="hourly" ${rule.method === "hourly" ? "selected" : ""}>시급</option>
-        </select>
-      </label>
-      <label>
-        <small>비율(%)</small>
-        <input type="number" min="0" max="100" step="1" data-settlement-modal-field="ratio" value="${Math.round((Number(rule.ratio) || 0) * 100)}" />
-      </label>
-      <label>
-        <small>시급</small>
-        <input type="number" min="0" step="1000" data-settlement-modal-field="hourly" value="${Number(rule.hourly) || 0}" />
-      </label>
-      <label>
-        <small>카드 기준</small>
-        <select data-settlement-modal-field="cardBase">
-          <option value="cash" ${rule.cardBase === "cash" ? "selected" : ""}>현금가</option>
-          <option value="paid" ${rule.cardBase === "paid" ? "selected" : ""}>실결제액</option>
-        </select>
-      </label>
-      <label>
-        <small>대타 정산</small>
-        <select data-settlement-modal-field="substitute">
-          <option value="actualCoach" ${rule.substitute === "actualCoach" ? "selected" : ""}>실제 진행 코치</option>
-          <option value="originalCoach" ${rule.substitute === "originalCoach" ? "selected" : ""}>담당 코치</option>
-          <option value="manual" ${rule.substitute === "manual" ? "selected" : ""}>관리자 수동</option>
-        </select>
-      </label>
-      <label>
-        <small>적용일</small>
-        <input type="date" data-settlement-modal-field="effectiveFrom" value="${rule.effectiveFrom || new Date().toISOString().slice(0, 10)}" />
-      </label>
-    </div>`;
-  modal.hidden = false;
-}
-
-function closeSettlementModal() {
-  const modal = $("#settlementModal");
-  if (modal) modal.hidden = true;
-}
-
-async function saveSettlementModalRule() {
-  const card = document.querySelector("[data-settlement-modal-card]");
-  const index = Number(card?.dataset.settlementModalCard);
-  const rule = coachSettlementRules[index];
-  if (!card || !rule) return;
-  const draft = { ...rule, ...readSettlementRuleFields(card, "data-settlement-modal-field", rule) };
-  try {
-    await saveCoachSettlementRuleOnServer(draft);
-    Object.assign(rule, draft);
-    closeSettlementModal();
-    renderCoachSettlementPreview();
-    renderBilling();
-    saveSnapshot();
-    showToast(`${rule.coach} 정산 기준 저장 완료`);
-  } catch (error) {
-    showToast(`정산 기준 저장 실패: ${error?.message || "server_error"}`);
-  }
-}
-
 function renderCoachSettlementPreview() {
   const previewRows = $("#coachSettlementPreviewRows");
   if (previewRows) {
@@ -10192,61 +10649,6 @@ function renderCoachSettlementPreview() {
       .join("") || '<tr><td colspan="6" class="empty-text">실제 결제 내역이 없습니다.</td></tr>';
   }
 
-  const settings = $("#coachSettlementSettings");
-  if (settings) {
-    const ruleCards = coachSettlementRules
-      .map((rule, index) => {
-        const methodLabel = rule.method === "hourly" ? `시급 ${money.format(rule.hourly)}원` : `비율 정산 ${Math.round(rule.ratio * 10)}:${10 - Math.round(rule.ratio * 10)}`;
-        return `
-          <article class="settlement-rule-card settlement-edit-card" data-settlement-card="${index}">
-            <div>
-              <strong>${rule.coach}</strong>
-              <span>${methodLabel}</span>
-              <small>카드 결제 정산 기준: ${rule.cardBase === "cash" ? "현금가/부가세 제외" : "카드 실결제액"}</small>
-            </div>
-            <div class="settlement-edit-grid">
-              <label>
-                <small>정산 방식</small>
-                <select data-settlement-field="method">
-                  <option value="ratio" ${rule.method === "ratio" ? "selected" : ""}>비율</option>
-                  <option value="hourly" ${rule.method === "hourly" ? "selected" : ""}>시급</option>
-                </select>
-              </label>
-              <label>
-                <small>비율(%)</small>
-                <input type="number" min="0" max="100" step="1" data-settlement-field="ratio" value="${Math.round((Number(rule.ratio) || 0) * 100)}" />
-              </label>
-              <label>
-                <small>시급</small>
-                <input type="number" min="0" step="1000" data-settlement-field="hourly" value="${Number(rule.hourly) || 0}" />
-              </label>
-              <label>
-                <small>카드 기준</small>
-                <select data-settlement-field="cardBase">
-                  <option value="cash" ${rule.cardBase === "cash" ? "selected" : ""}>현금가</option>
-                  <option value="paid" ${rule.cardBase === "paid" ? "selected" : ""}>실결제액</option>
-                </select>
-              </label>
-              <label>
-                <small>대타 정산</small>
-                <select data-settlement-field="substitute">
-                  <option value="actualCoach" ${rule.substitute === "actualCoach" ? "selected" : ""}>실제 진행 코치</option>
-                  <option value="originalCoach" ${rule.substitute === "originalCoach" ? "selected" : ""}>담당 코치</option>
-                  <option value="manual" ${rule.substitute === "manual" ? "selected" : ""}>관리자 수동</option>
-                </select>
-              </label>
-              <label>
-                <small>적용일</small>
-                <input type="date" data-settlement-field="effectiveFrom" value="${rule.effectiveFrom || new Date().toISOString().slice(0, 10)}" />
-              </label>
-              <button class="small-button" type="button" data-save-settlement-rule="${index}">저장</button>
-              <button class="ghost-button" type="button" data-open-settlement-rule="${index}">설정창</button>
-            </div>
-          </article>`;
-      })
-      .join("");
-    settings.innerHTML = ruleCards;
-  }
 }
 
 function paymentMethodLabel(method = "") {
@@ -10369,7 +10771,7 @@ function renderBilling() {
     )
     .join("") : '<tr><td colspan="6" class="empty-text">선택한 상태의 결제 내역이 없습니다.</td></tr>';
 
-  $("#rechargeRows").innerHTML = rechargeTargets
+  $("#rechargeRows").innerHTML = rechargeTargets.length ? rechargeTargets
     .map(
       (ticket, index) => `
         <tr>
@@ -10377,10 +10779,10 @@ function renderBilling() {
           <td>${ticket.product}</td>
           <td><strong>${ticket.remaining}회</strong></td>
           <td>${ticket.remaining === 0 ? "즉시 충전 필요" : "다음 수업 전 안내"}</td>
-          <td><button class="small-button" type="button" data-recharge-ticket="${tickets.indexOf(ticket)}">+4회</button></td>
+          <td><button class="small-button" type="button" data-renew-ticket="${escapeHtml(ticket.serverTicketId || "")}" data-renew-member="${escapeHtml(ticket.member)}">연장 등록</button></td>
         </tr>`,
     )
-    .join("");
+    .join("") : '<tr><td colspan="5" class="empty-text">연장 확인이 필요한 회원권이 없습니다.</td></tr>';
 
   $("#billingLog").innerHTML = billingLogs
     .map((item) => `<li>${item}</li>`)
@@ -10388,12 +10790,13 @@ function renderBilling() {
 }
 
 function paymentActionFor(item, index) {
-  if (item.status === "check") return `<button class="small-button" type="button" data-confirm-payment="${index}">결제 확인</button><button class="small-button danger-action" type="button" data-cancel-payment="${index}">대기취소</button>`;
+  if (item.status === "check") return item.providerPaymentId
+    ? `<button class="small-button" type="button" data-review-payment="${index}">서버 확인</button>${paymentCancelButtonFor(index, "대기취소")}`
+    : '<button class="small-button" type="button" disabled>서버 결제번호 없음</button>';
   if (item.status === "unverified") return `<button class="small-button" type="button" data-review-payment="${index}">서버 연결 확인</button><button class="small-button danger-action" type="button" data-cancel-payment="${index}">대기취소</button>`;
   if (item.status === "failed") return `<button class="small-button" type="button" data-failed-payment="${index}">실패 확인</button><button class="small-button danger-action" type="button" data-cancel-payment="${index}">대기취소</button>`;
-  if (item.status === "draft") return `<button class="small-button" type="button" data-request-payment="${index}">요청 처리</button>`;
+  if (item.status === "draft") return '<button class="small-button" type="button" disabled>회원 결제 대기</button>';
   if (item.status === "server_ready") return `<button class="small-button" type="button" data-server-ready-payment="${index}">결제 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
-  if (item.status === "check") return `<button class="small-button" type="button" data-confirm-payment="${index}">결제 확인</button>`;
   if (item.status === "unverified") return `<button class="small-button" type="button" data-review-payment="${index}">서버 연결 확인</button>`;
   if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}">완료됨</button>${paymentRefundButtonFor(item, index)}`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;
@@ -10404,10 +10807,21 @@ function paymentActionFor(item, index) {
   return "";
 }
 
+function isHistoricalImportedPayment(item = {}) {
+  const providerPaymentId = String(item.providerPaymentId || "").toLowerCase();
+  const method = String(item.method || "").toLowerCase();
+  return providerPaymentId.startsWith("sheet_")
+    || providerPaymentId.startsWith("legacy_")
+    || providerPaymentId.startsWith("import_")
+    || method.includes("legacy")
+    || method.includes("기존 기록");
+}
+
 function chargeStatusForPayment(item = {}) {
   if (item.status === "refund_processing") return { label: "환불 처리중", tone: "warn", detail: "PortOne 취소와 내부 회원권 반영이 진행 중입니다." };
   if (item.status === "refund_reconcile") return { label: "동기화 필요", tone: "danger", detail: "PG 취소 결과와 내부 결제·회원권 상태를 다시 맞춰야 합니다." };
   if (item.status === "paid" && item.ticketId) return { label: "회원권 충전완료", tone: "good", detail: "결제검증 후 연결 회원권이 활성화됩니다." };
+  if (item.status === "paid" && isHistoricalImportedPayment(item)) return { label: "이관 결제 기록", tone: "neutral", detail: "기존 장부에서 보존한 결제 증빙이며 현재 회원권 자동 연결 대상이 아닙니다." };
   if (item.status === "paid") return { label: "회원권 연결 확인", tone: "warn", detail: "결제는 확인됐지만 연결된 회원권 ID가 없습니다." };
   if (item.status === "server_ready") return { label: "결제 전 대기", tone: "neutral", detail: "회원이 Toss 결제를 완료하면 서버검증 후 자동 충전됩니다." };
   if (item.status === "unverified") return { label: "서버검증 대기", tone: "warn", detail: "결제창 완료 후 서버 검증이 필요합니다." };
@@ -11461,7 +11875,7 @@ function liveTicketLessonKind(product = {}) {
 }
 
 function liveTicketScheduleScope(product = {}, ticket = {}, lessons = []) {
-  const configuredScope = product.schedule_scope === "weekend" ? "weekend" : "weekday";
+  const configuredScope = ["weekday", "weekend", "mixed"].includes(product.schedule_scope) ? product.schedule_scope : "weekday";
   const productCode = String(product.product_code || "");
   if (productCode.startsWith("admin-ticket-")) return configuredScope;
 
@@ -11506,13 +11920,15 @@ async function syncAdminLiveData() {
     liveScheduleMessage: "실서버 회원·코치·시간표를 불러오는 중",
   });
   try {
-    const [serverUsers, serverCoachRoles, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords] = await Promise.all([
-      client.selectRows("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at", limit: 500 }),
-      client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 }),
+    const [serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords] = await Promise.all([
+      client.selectRows("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", limit: 500 }),
+      client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from", limit: 100 })
+        .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
+      client.selectRows("tn_coach_availability", { select: "id,coach_role_id,day_of_week,start_time,end_time,availability_type,note", limit: 1000 }).catch(() => []),
       fullAdminAccess ? client.selectRows("tn_user_auth_links", { select: "id,user_id,provider,last_sign_in_at,is_primary", limit: 500 }).catch(() => []) : Promise.resolve([]),
       fullAdminAccess ? client.selectRows("tn_auth_provider_switches", { select: "id,user_id,from_provider,to_provider,status,expires_at,created_at,completed_at", order: "created_at.desc", limit: 500 }).catch(() => []) : Promise.resolve([]),
       fullAdminAccess ? client.selectRows("tn_coach_settlement_terms", { select: "id,coach_role_id,settlement_type,coach_rate,hourly_rate,settlement_basis,substitute_policy,effective_from,effective_to,status", order: "effective_from.desc", limit: 500 }).catch(() => []) : Promise.resolve([]),
-      client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price", limit: 300 }),
+      client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,policy_settings,display_order", limit: 300 }),
       client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price", limit: 500 }),
       client.selectRows("tn_ticket_participants", { select: "ticket_id,user_id,participant_order", limit: 500 }),
       client.selectRows("tn_lesson_participants", { select: "lesson_id,user_id,ticket_id", limit: 1000 }),
@@ -11551,12 +11967,22 @@ async function syncAdminLiveData() {
       const authLinks = authLinksByUserId.get(role.user_id) || [];
       coach.accountLinked = Boolean(coachUser.auth_user_id || authLinks.length);
       coach.account = coach.accountLinked ? (coachUser.name || role.display_name || "가입 완료") : "회원가입 전";
+      coach.phone = coachUser.phone || "";
       coach.photoUrl = coachUser.profile_photo_url || coach.photoUrl || "";
       coach.serverUserId = role.user_id;
+      coach.role = role.job_title || coach.role || "레슨";
+      coach.bio = role.bio || "";
+      coach.employmentStatus = role.employment_status || (role.status === "disabled" ? "ended" : "active");
+      coach.employmentStartedOn = role.employment_started_on || "";
+      coach.employmentEndedOn = role.employment_ended_on || "";
+      coach.archivedAt = role.archived_at || "";
       coach.authProviders = authProvidersFromLinks(authLinks);
       coach.authSwitch = (serverAuthSwitches || []).find((item) => item.user_id === role.user_id && item.status === "pending") || null;
       coach.lastSignInAt = authLinks.map((link) => link.last_sign_in_at).filter(Boolean).sort().at(-1) || "";
       coach.approvalStatus = role.status || "pending";
+      const availabilityRows = (serverCoachAvailability || []).filter((item) => item.coach_role_id === role.id);
+      coach.workBlocks = coachBlocksFromAvailability(availabilityRows, "available");
+      coach.breakBlocks = coachBlocksFromAvailability(availabilityRows, "blocked");
       coachIdByRole.set(role.id, coach.id);
     });
     const liveCoachIds = new Set(coachIdByRole.values());
@@ -11625,7 +12051,11 @@ async function syncAdminLiveData() {
         statusLabel: memberTicketStatusLabel(ticket),
       })));
 
-    const relevantUserIds = new Set(mappedTickets.flatMap((ticket) => ticket.participantUserIds));
+    const relevantUserIds = new Set([
+      ...mappedTickets.flatMap((ticket) => ticket.participantUserIds),
+      ...(serverMemberDatabaseRecords || []).map((record) => record.user_id),
+      ...(serverPayments || []).map((payment) => payment.user_id),
+    ].filter(Boolean));
     const enrollmentByUserId = new Map();
     (serverEnrollments || [])
       .sort((left, right) => new Date(right.submitted_at || 0) - new Date(left.submitted_at || 0))
@@ -11634,6 +12064,7 @@ async function syncAdminLiveData() {
       });
     const memberUserGroups = (serverUsers || [])
       .filter((user) => !user.merged_into_user_id)
+      .filter((user) => !user.permanently_deleted_at)
       .filter((user) => relevantUserIds.has(user.id) || ["member", "admin"].includes(user.role))
       .map((user) => ({
         name: user.name || "이름 확인 필요",
@@ -11646,6 +12077,14 @@ async function syncAdminLiveData() {
       const memberTickets = mappedTickets.filter((ticket) => ticket.participantUserIds.some((id) => userIds.includes(id)));
       const activeTicket = memberTickets.find((ticket) => ["active", "paused"].includes(ticket.status) && ticket.remaining > 0) || null;
       const pendingTicket = memberTickets.find((ticket) => ticket.status === "pending_payment") || null;
+      const memberPayments = (serverPayments || []).filter((payment) => userIds.includes(payment.user_id));
+      const unlinkedVerifiedPayments = memberPayments.filter((payment) => (
+        payment.status === "verified" && !payment.ticket_id
+      ));
+      const actionableUnlinkedPayment = unlinkedVerifiedPayments
+        .filter((payment) => payment.provider !== "google_sheet_history")
+        .sort((left, right) => String(right.verified_at || right.paid_at || right.created_at || "")
+          .localeCompare(String(left.verified_at || left.paid_at || left.created_at || "")))[0] || null;
       const displayTicket = activeTicket || pendingTicket || memberTickets
         .slice()
         .sort((left, right) => String(right.expires || "").localeCompare(String(left.expires || "")))[0] || null;
@@ -11667,6 +12106,8 @@ async function syncAdminLiveData() {
         : activeTicket
           ? "active"
           : pendingTicket
+            ? "pending"
+          : actionableUnlinkedPayment
             ? "pending"
           : memberRecord?.record_status === "pending"
             ? "pending"
@@ -11690,7 +12131,15 @@ async function syncAdminLiveData() {
         remaining: memberRecord?.remaining_sessions ?? activeTicket?.remaining ?? 0,
         lessonType: memberRecord ? memberManagementLessonTypeLabel(memberRecord.lesson_type) : displayTicket?.product || "회원권 없음",
         source: memberRecord?.source_name || (enrollment ? "앱 수강 가입서" : "Supabase 실데이터"),
-        note: memberRecord?.admin_note || (status === "active" ? "실서버 회원권 연결" : status === "journal" ? "운동노트만 이용 중" : status === "pending" ? "가입서 제출 완료 · 결제 확인 필요" : "회원권 등록 또는 연장 확인 필요"),
+        note: memberRecord?.admin_note || (actionableUnlinkedPayment
+          ? "결제 완료 · 회원권 발급 필요"
+          : status === "active"
+            ? "실서버 회원권 연결"
+            : status === "journal"
+              ? "운동노트만 이용 중"
+              : status === "pending"
+                ? "가입서 제출 완료 · 결제 확인 필요"
+                : "회원권 등록 또는 연장 확인 필요"),
         photoUrl: preferredUser.profile_photo_url || existing?.photoUrl || "",
         authRole: preferredUser.role || "member",
         authLinked,
@@ -11713,6 +12162,7 @@ async function syncAdminLiveData() {
         playStyleMemo: preferredUser.play_style_memo || "",
         enrollment,
         memberRecord,
+        unlinkedVerifiedPayment: actionableUnlinkedPayment,
       };
     });
     replaceArray(members, mappedMembers);
@@ -11960,6 +12410,7 @@ async function syncAdminLiveData() {
       groupTicketLinks: serverGroupTicketLinks || [],
       memberDatabaseRecords: serverMemberDatabaseRecords || [],
     });
+    refreshMembershipProductDraftsFromServer(serverProducts || []);
     if (!wasLoaded) state.activeAdminWeekIndex = 0;
     Object.assign(state, {
       liveScheduleLoaded: true,
@@ -12769,10 +13220,413 @@ function coachAccountDetail(coach) {
   return providers.length ? `${providers.join(", ")} 로그인 연결` : "로그인 계정 연결 완료";
 }
 
+function coachSettlementRule(coach) {
+  const rule = coachSettlementRules.find((item) => (
+    item.serverRoleId === coach?.serverRoleId || item.coach === coach?.name
+  ));
+  return rule || defaultCoachSettlementRule(coach);
+}
+
+function coachSettlementSummary(coach) {
+  const rule = coachSettlementRule(coach);
+  if (rule.method === "hourly") return `시급 ${money.format(Number(rule.hourly) || 0)}원`;
+  return `비율 ${Math.round((Number(rule.ratio) || 0) * 100)}%`;
+}
+
+function coachEmploymentLabel(coach) {
+  if (coach.employmentStatus === "archived") return "보관";
+  if (coach.employmentStatus === "ended") return "근무 종료";
+  return "근무 중";
+}
+
+function coachStaffDraftFrom(coach) {
+  const source = coach || {};
+  const settlement = coachSettlementRule(source);
+  return {
+    coachId: source.id || "",
+    coachRoleId: source.serverRoleId || "",
+    branchId: source.branchId || coaches.find((item) => item.branchId)?.branchId || "",
+    name: source.name || "",
+    phone: source.phone || "",
+    jobTitle: source.role || "레슨",
+    bio: source.bio || "",
+    color: source.color || "#157a5b",
+    approvalStatus: source.approvalStatus || (source.coachMode === "approved" ? "approved" : "pending"),
+    employmentStatus: source.employmentStatus || "active",
+    employmentStartedOn: source.employmentStartedOn || new Date().toISOString().slice(0, 10),
+    employmentEndedOn: source.employmentEndedOn || "",
+    accountLinked: Boolean(source.accountLinked),
+    accountDetail: coachAccountDetail(source),
+    workBlocks: coach ? normalizeCoachWorkBlocks(source).map((block) => ({ ...block, days: [...block.days] })) : [],
+    breakBlocks: coach ? normalizeCoachBreakBlocks(source).map((block) => ({ ...block, days: [...block.days] })) : [],
+    settlement: {
+      method: settlement.method || "ratio",
+      ratio: Math.round((Number(settlement.ratio) || 0) * 100),
+      hourly: Number(settlement.hourly) || 0,
+      basis: settlement.cardBase === "paid" ? "actual_paid_inc_vat" : "cash_ex_vat",
+      substitute: settlement.substitute || "actualCoach",
+      effectiveFrom: settlement.effectiveFrom || new Date().toISOString().slice(0, 10),
+    },
+  };
+}
+
+function readCoachStaffPanel() {
+  const draft = coachStaffEditorState.draft;
+  if (!draft) return;
+  if (coachStaffEditorState.tab === "basic") {
+    draft.name = $("#coachStaffName")?.value.trim() || "";
+    draft.phone = $("#coachStaffPhone")?.value.trim() || "";
+    draft.jobTitle = $("#coachStaffJobTitle")?.value.trim() || "레슨";
+    draft.bio = $("#coachStaffBio")?.value.trim() || "";
+    draft.color = $("#coachStaffColor")?.value || "#157a5b";
+    draft.approvalStatus = $("#coachStaffApprovalStatus")?.value || "pending";
+    draft.employmentStartedOn = $("#coachStaffEmploymentStartedOn")?.value || "";
+  }
+  if (coachStaffEditorState.tab === "settlement") {
+    draft.settlement.method = $("#coachStaffSettlementMethod")?.value || "ratio";
+    draft.settlement.ratio = numericValue($("#coachStaffSettlementRatio")?.value, draft.settlement.ratio);
+    draft.settlement.hourly = numericValue($("#coachStaffSettlementHourly")?.value, draft.settlement.hourly);
+    draft.settlement.basis = $("#coachStaffSettlementBasis")?.value || "cash_ex_vat";
+    draft.settlement.substitute = $("#coachStaffSettlementSubstitute")?.value || "actualCoach";
+    draft.settlement.effectiveFrom = $("#coachStaffSettlementEffectiveFrom")?.value || new Date().toISOString().slice(0, 10);
+  }
+}
+
+function coachBlockListMarkup(blocks, type) {
+  const title = type === "break" ? "브레이크" : "근무";
+  return blocks.length
+    ? blocks.map((block) => `
+      <div class="coach-staff-block-row">
+        <div>
+          <strong>${escapeHtml(block.days.join("·"))} ${escapeHtml(block.start)}~${escapeHtml(block.end)}</strong>
+          <span>${escapeHtml(block.label || title)}</span>
+        </div>
+        <button class="icon-button" type="button" aria-label="${title} 삭제" title="${title} 삭제" data-remove-coach-staff-block="${escapeHtml(block.id)}" data-coach-staff-block-type="${type}">×</button>
+      </div>`).join("")
+    : `<p class="empty-text">등록된 ${title} 시간이 없습니다.</p>`;
+}
+
+function coachStaffDayInputs(type) {
+  return scheduleDays.map((day) => `
+    <label><input type="checkbox" value="${day}" data-coach-staff-${type}-day />${day}</label>`).join("");
+}
+
+function renderCoachStaffBasicTab(draft) {
+  return `
+    <div class="coach-staff-form-grid">
+      <label class="form-field"><span>이름</span><input id="coachStaffName" value="${escapeHtml(draft.name)}" maxlength="40" required /></label>
+      <label class="form-field"><span>휴대전화</span><input id="coachStaffPhone" value="${escapeHtml(draft.phone)}" inputmode="tel" placeholder="010-0000-0000" ${coachStaffEditorState.mode === "create" ? "required" : ""} /></label>
+      <label class="form-field"><span>직책</span><input id="coachStaffJobTitle" value="${escapeHtml(draft.jobTitle)}" maxlength="40" /></label>
+      <label class="form-field"><span>코치 승인</span>
+        <select id="coachStaffApprovalStatus">
+          <option value="pending" ${draft.approvalStatus === "pending" ? "selected" : ""}>승인 대기</option>
+          <option value="approved" ${draft.approvalStatus === "approved" ? "selected" : ""}>승인</option>
+          <option value="disabled" ${draft.approvalStatus === "disabled" ? "selected" : ""}>사용 중지</option>
+        </select>
+      </label>
+      <label class="form-field"><span>근무 시작일</span><input id="coachStaffEmploymentStartedOn" type="date" value="${escapeHtml(draft.employmentStartedOn)}" /></label>
+      <label class="form-field"><span>표시 색상</span><input id="coachStaffColor" type="color" value="${escapeHtml(draft.color)}" /></label>
+      <label class="form-field coach-staff-wide"><span>소개</span><textarea id="coachStaffBio" rows="3" maxlength="500">${escapeHtml(draft.bio)}</textarea></label>
+    </div>
+    <div class="coach-staff-account-summary">
+      <strong>${draft.accountLinked ? "계정 연결 완료" : "계정 연결 전"}</strong>
+      <span>${escapeHtml(draft.accountDetail)}</span>
+    </div>`;
+}
+
+function renderCoachStaffWorkTab(draft) {
+  return `
+    <section class="coach-staff-block-section">
+      <h3>근무시간</h3>
+      <div class="coach-staff-block-list">${coachBlockListMarkup(draft.workBlocks, "work")}</div>
+      <div class="coach-staff-block-add">
+        <div class="coach-day-grid compact">${coachStaffDayInputs("work")}</div>
+        <label><span>시작</span><input id="coachStaffWorkStart" type="time" step="600" value="06:40" /></label>
+        <label><span>종료</span><input id="coachStaffWorkEnd" type="time" step="600" value="07:00" /></label>
+        <label><span>표시명</span><input id="coachStaffWorkLabel" value="근무" maxlength="30" /></label>
+        <button class="small-button" type="button" data-add-coach-staff-block="work">근무 추가</button>
+      </div>
+    </section>
+    <section class="coach-staff-block-section is-break">
+      <h3>브레이크</h3>
+      <div class="coach-staff-block-list">${coachBlockListMarkup(draft.breakBlocks, "break")}</div>
+      <div class="coach-staff-block-add">
+        <div class="coach-day-grid compact">${coachStaffDayInputs("break")}</div>
+        <label><span>시작</span><input id="coachStaffBreakStart" type="time" step="600" value="13:00" /></label>
+        <label><span>종료</span><input id="coachStaffBreakEnd" type="time" step="600" value="13:20" /></label>
+        <label><span>표시명</span><input id="coachStaffBreakLabel" value="브레이크" maxlength="30" /></label>
+        <button class="small-button" type="button" data-add-coach-staff-block="break">브레이크 추가</button>
+      </div>
+    </section>`;
+}
+
+function renderCoachStaffSettlementTab(draft) {
+  const settlement = draft.settlement;
+  const ratio = settlement.method === "ratio";
+  return `
+    <div class="coach-staff-form-grid">
+      <label class="form-field"><span>정산 방식</span>
+        <select id="coachStaffSettlementMethod">
+          <option value="ratio" ${ratio ? "selected" : ""}>비율</option>
+          <option value="hourly" ${!ratio ? "selected" : ""}>시급</option>
+        </select>
+      </label>
+      <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>코치 비율(%)</span><input id="coachStaffSettlementRatio" type="number" min="0" max="100" step="1" value="${settlement.ratio}" /></label>
+      <label class="form-field ${ratio ? "is-hidden" : ""}" data-settlement-mode-field="hourly"><span>시급</span><input id="coachStaffSettlementHourly" type="number" min="0" step="1000" value="${settlement.hourly}" /></label>
+      <label class="form-field"><span>정산 기준</span>
+        <select id="coachStaffSettlementBasis">
+          <option value="cash_ex_vat" ${settlement.basis === "cash_ex_vat" ? "selected" : ""}>현금가·부가세 제외</option>
+          <option value="actual_paid_inc_vat" ${settlement.basis === "actual_paid_inc_vat" ? "selected" : ""}>실제 결제금액</option>
+        </select>
+      </label>
+      <label class="form-field"><span>대타 기준</span>
+        <select id="coachStaffSettlementSubstitute">
+          <option value="actualCoach" ${settlement.substitute === "actualCoach" ? "selected" : ""}>실제 진행 코치</option>
+          <option value="originalCoach" ${settlement.substitute === "originalCoach" ? "selected" : ""}>담당 코치</option>
+          <option value="manual" ${settlement.substitute === "manual" ? "selected" : ""}>관리자 확인</option>
+        </select>
+      </label>
+      <label class="form-field"><span>적용일</span><input id="coachStaffSettlementEffectiveFrom" type="date" value="${escapeHtml(settlement.effectiveFrom)}" required /></label>
+    </div>
+    <p class="coach-staff-inline-note">적용일 이전에 확정된 정산은 바뀌지 않습니다.</p>`;
+}
+
+function syncCoachStaffSettlementFieldVisibility(method) {
+  $$('[data-settlement-mode-field="ratio"]').forEach((element) => {
+    element.classList.toggle("is-hidden", method !== "ratio");
+  });
+  $$('[data-settlement-mode-field="hourly"]').forEach((element) => {
+    element.classList.toggle("is-hidden", method !== "hourly");
+  });
+}
+
+function renderCoachStaffModal() {
+  const modal = $("#coachStaffModal");
+  const content = $("#coachStaffModalContent");
+  const draft = coachStaffEditorState.draft;
+  if (!modal || !content || !draft) return;
+  if (coachStaffEditorState.tab === "settlement" && operationsRole() !== "admin") coachStaffEditorState.tab = "basic";
+  $$("[data-coach-staff-tab]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.coachStaffTab === coachStaffEditorState.tab);
+    button.hidden = button.dataset.coachStaffTab === "settlement" && operationsRole() !== "admin";
+  });
+  $("#coachStaffModalTitle").textContent = coachStaffEditorState.mode === "create" ? "코치·직원 추가" : draft.name;
+  content.innerHTML = coachStaffEditorState.tab === "work"
+    ? renderCoachStaffWorkTab(draft)
+    : coachStaffEditorState.tab === "settlement"
+      ? renderCoachStaffSettlementTab(draft)
+      : renderCoachStaffBasicTab(draft);
+  const actions = $("#coachStaffMoreActions");
+  if (actions) {
+    const existing = Boolean(draft.coachRoleId);
+    actions.innerHTML = existing ? `
+      <button type="button" data-coach-staff-state="${draft.approvalStatus === "approved" ? "disabled" : "approved"}">${draft.approvalStatus === "approved" ? "코치 승인 해제" : "코치 승인"}</button>
+      <button type="button" data-coach-staff-state="${draft.employmentStatus === "active" ? "ended" : "restored"}">${draft.employmentStatus === "active" ? "근무 종료" : "근무 복원"}</button>
+      ${draft.employmentStatus === "archived" ? "" : '<button type="button" data-coach-staff-state="archived">보관</button>'}
+    ` : "";
+    $("#coachStaffMoreMenu").hidden = !existing || operationsRole() !== "admin";
+  }
+  $("#coachStaffMessage").textContent = coachStaffEditorState.message || "";
+  modal.hidden = false;
+}
+
+function openCoachStaffModal(coachId = "") {
+  if (operationsRole() !== "admin") {
+    showToast("관리자만 코치·직원 정보를 수정할 수 있습니다.");
+    return;
+  }
+  const coach = coaches.find((item) => item.id === coachId) || null;
+  coachStaffEditorState.coachId = coach?.id || "";
+  coachStaffEditorState.mode = coach ? "edit" : "create";
+  coachStaffEditorState.tab = "basic";
+  coachStaffEditorState.draft = coachStaffDraftFrom(coach);
+  coachStaffEditorState.message = "";
+  renderCoachStaffModal();
+}
+
+function closeCoachStaffModal() {
+  const modal = $("#coachStaffModal");
+  if (modal) modal.hidden = true;
+  coachStaffEditorState.draft = null;
+  coachStaffEditorState.message = "";
+}
+
+function addCoachStaffBlock(type) {
+  const draft = coachStaffEditorState.draft;
+  if (!draft) return;
+  const title = type === "break" ? "Break" : "Work";
+  const days = $$(`[data-coach-staff-${type}-day]:checked`).map((input) => input.value);
+  const start = $(`#coachStaff${title}Start`)?.value || "";
+  const end = $(`#coachStaff${title}End`)?.value || "";
+  const label = $(`#coachStaff${title}Label`)?.value.trim() || (type === "break" ? "브레이크" : "근무");
+  if (!days.length || !start || !end || timeToMinutes(start) >= timeToMinutes(end)) {
+    coachStaffEditorState.message = "요일과 시작·종료 시간을 확인해주세요.";
+    renderCoachStaffModal();
+    return;
+  }
+  const target = type === "break" ? draft.breakBlocks : draft.workBlocks;
+  target.push({ id: `${type}-${Date.now()}`, days, start, end, label });
+  coachStaffEditorState.message = "";
+  renderCoachStaffModal();
+}
+
+function removeCoachStaffBlock(type, blockId) {
+  const draft = coachStaffEditorState.draft;
+  if (!draft) return;
+  if (type === "break") draft.breakBlocks = draft.breakBlocks.filter((block) => block.id !== blockId);
+  else draft.workBlocks = draft.workBlocks.filter((block) => block.id !== blockId);
+  renderCoachStaffModal();
+}
+
+function coachStaffPayload(draft) {
+  const availabilityBlocks = [
+    ...draft.workBlocks.map((block) => ({
+      days: block.days.map(postgresDayOfWeek).filter(Number.isInteger),
+      startTime: block.start,
+      endTime: block.end,
+      label: block.label || "근무",
+      availabilityType: "available",
+    })),
+    ...draft.breakBlocks.map((block) => ({
+      days: block.days.map(postgresDayOfWeek).filter(Number.isInteger),
+      startTime: block.start,
+      endTime: block.end,
+      label: block.label || "브레이크",
+      availabilityType: "blocked",
+    })),
+  ];
+  return {
+    coachRoleId: draft.coachRoleId || null,
+    branchId: draft.branchId || null,
+    name: draft.name,
+    phone: draft.phone,
+    jobTitle: draft.jobTitle,
+    bio: draft.bio,
+    color: draft.color,
+    approvalStatus: draft.approvalStatus,
+    employmentStatus: draft.employmentStatus,
+    employmentStartedOn: draft.employmentStartedOn || null,
+    employmentEndedOn: draft.employmentEndedOn || null,
+    availabilityBlocks,
+    settlement: {
+      method: draft.settlement.method,
+      ratio: draft.settlement.method === "ratio" ? draft.settlement.ratio / 100 : null,
+      hourly: draft.settlement.method === "hourly" ? draft.settlement.hourly : null,
+      basis: draft.settlement.basis,
+      substitute: draft.settlement.substitute,
+      effectiveFrom: draft.settlement.effectiveFrom,
+    },
+  };
+}
+
+function coachBlockSignature(blocks = []) {
+  return blocks
+    .flatMap((block) => (block.days || []).map((day) => `${day}|${block.start}|${block.end}|${block.label || ""}`))
+    .sort()
+    .join(";");
+}
+
+function coachStaffServerMatches(saved, draft) {
+  if (!saved || saved.name !== draft.name || saved.approvalStatus !== draft.approvalStatus) return false;
+  if (normalizedMemberPhone(saved.phone) !== normalizedMemberPhone(draft.phone)) return false;
+  if ((saved.role || "레슨") !== (draft.jobTitle || "레슨")) return false;
+  if ((saved.bio || "") !== (draft.bio || "")) return false;
+  if ((saved.employmentStatus || "active") !== (draft.employmentStatus || "active")) return false;
+  if (coachBlockSignature(normalizeCoachWorkBlocks(saved)) !== coachBlockSignature(draft.workBlocks)) return false;
+  if (coachBlockSignature(normalizeCoachBreakBlocks(saved)) !== coachBlockSignature(draft.breakBlocks)) return false;
+  const settlement = coachSettlementRule(saved);
+  if (settlement.method !== draft.settlement.method) return false;
+  if ((settlement.effectiveFrom || "") !== (draft.settlement.effectiveFrom || "")) return false;
+  if (draft.settlement.method === "ratio" && Math.round((Number(settlement.ratio) || 0) * 100) !== Number(draft.settlement.ratio)) return false;
+  if (draft.settlement.method === "hourly" && Number(settlement.hourly) !== Number(draft.settlement.hourly)) return false;
+  return true;
+}
+
+async function saveCoachStaff() {
+  readCoachStaffPanel();
+  const draft = coachStaffEditorState.draft;
+  const client = window.TennisNoteDataClient;
+  if (!draft || !adminApprovalReady() || !client?.rpc) {
+    coachStaffEditorState.message = "관리자 로그인과 서버 연결을 확인해주세요.";
+    renderCoachStaffModal();
+    return;
+  }
+  if (!draft.name || (coachStaffEditorState.mode === "create" && !draft.phone)) {
+    coachStaffEditorState.message = "이름과 휴대전화를 입력해주세요.";
+    renderCoachStaffModal();
+    return;
+  }
+  if (draft.settlement.method === "ratio" && (draft.settlement.ratio < 0 || draft.settlement.ratio > 100)) {
+    coachStaffEditorState.message = "정산 비율은 0~100 사이로 입력해주세요.";
+    renderCoachStaffModal();
+    return;
+  }
+  if (draft.settlement.method === "hourly" && draft.settlement.hourly <= 0) {
+    coachStaffEditorState.message = "시급을 입력해주세요.";
+    renderCoachStaffModal();
+    return;
+  }
+  const button = $("#saveCoachStaffButton");
+  if (button) { button.disabled = true; button.textContent = "저장 중"; }
+  try {
+    const result = await client.rpc("tn_admin_save_coach_staff", { target_record: coachStaffPayload(draft) });
+    const coachRoleId = result?.coachRoleId || result?.coach_role_id || draft.coachRoleId;
+    await syncAdminLiveData();
+    const saved = coaches.find((coach) => coach.serverRoleId === coachRoleId)
+      || coaches.find((coach) => coach.name === draft.name);
+    if (!coachStaffServerMatches(saved, draft)) {
+      throw new Error("coach_staff_server_verification_failed");
+    }
+    closeCoachStaffModal();
+    renderCoaches();
+    renderSchedule();
+    showToast("코치·직원 정보가 서버에 저장되었습니다.");
+  } catch (error) {
+    const raw = `${error?.payload?.message || ""} ${error?.message || ""}`;
+    coachStaffEditorState.message = raw.includes("tn_admin_save_coach_staff") || raw.includes("PGRST202")
+      ? "코치·직원 통합 DB 기능을 먼저 적용해주세요."
+      : raw.includes("server_verification")
+        ? "저장은 요청됐지만 서버 재확인에 실패했습니다. 새로고침 후 확인해주세요."
+        : `저장 실패: ${error?.payload?.code || error?.message || "server_error"}`;
+    renderCoachStaffModal();
+  } finally {
+    const current = $("#saveCoachStaffButton");
+    if (current) { current.disabled = false; current.textContent = "저장"; }
+  }
+}
+
+async function setCoachStaffState(targetState) {
+  const draft = coachStaffEditorState.draft;
+  const client = window.TennisNoteDataClient;
+  if (!draft?.coachRoleId || !client?.rpc || operationsRole() !== "admin") return;
+  const labels = { approved: "코치 승인", disabled: "승인 해제", ended: "근무 종료", archived: "보관", restored: "근무 복원" };
+  if (!window.confirm(`${draft.name} 코치를 ${labels[targetState] || targetState} 처리할까요?`)) return;
+  try {
+    await client.rpc("tn_admin_set_coach_staff_state", {
+      target_coach_role_id: draft.coachRoleId,
+      target_state: targetState,
+      target_effective_on: new Date().toISOString().slice(0, 10),
+    });
+    await syncAdminLiveData();
+    const saved = coaches.find((coach) => coach.serverRoleId === draft.coachRoleId);
+    const expectedApproval = ["approved", "restored"].includes(targetState) ? "approved" : "disabled";
+    if (!saved || saved.approvalStatus !== expectedApproval) throw new Error("coach_staff_state_verification_failed");
+    closeCoachStaffModal();
+    renderCoaches();
+    renderSchedule();
+    showToast(`${labels[targetState] || "상태 변경"} 완료`);
+  } catch (error) {
+    coachStaffEditorState.message = `상태 변경 실패: ${error?.payload?.code || error?.message || "server_error"}`;
+    renderCoachStaffModal();
+  }
+}
+
 function renderCoaches() {
   const signedUpCount = coaches.filter((coach) => coach.accountLinked).length;
   const approvedCount = coaches.filter((coach) => ["approved", "active"].includes(coach.approvalStatus || coach.coachMode)).length;
-  $("#coachRows").innerHTML = `
+  const target = $("#coachRows");
+  if (!target) return;
+  target.innerHTML = `
     <div class="coach-status-summary">
       <strong>코치 ${coaches.length}명</strong>
       <span>회원가입 ${signedUpCount}명</span>
@@ -12780,56 +13634,22 @@ function renderCoaches() {
     </div>` + coaches
     .map(
       (coach) => {
-        const blocks = normalizeCoachWorkBlocks(coach);
-        const approved = ["approved", "active"].includes(coach.approvalStatus || coach.coachMode);
-        const canManage = operationsRole() === "admin" && Boolean(coach.serverRoleId);
+        const breakCount = normalizeCoachBreakBlocks(coach).length;
         return `
         <article class="coach-row" data-coach-row="${coach.id}">
-          <div class="coach-card-header">
-            <div class="coach-identity">
-              ${avatarMarkup(coach, "large")}
-              <div>
-                <strong>${escapeHtml(coach.name)}</strong>
-                <span>${escapeHtml(coach.role || "레슨")}</span>
-              </div>
-            </div>
-            <div class="coach-auth-cell">
-              <div class="coach-auth-badges">
-                ${badge(coachSignupTone(coach), coachSignupLabel(coach))}
-                ${badge(coachApprovalTone(coach), coachApprovalLabel(coach))}
-              </div>
-              <small>${escapeHtml(coachAccountDetail(coach))}</small>
-              <div class="coach-permission-actions">
-                <button class="${approved ? "danger-button subtle" : "small-button"}" type="button" data-set-coach-status="${coach.id}" data-coach-status="${approved ? "disabled" : "approved"}" ${canManage ? "" : "disabled"}>${approved ? "코치 승인 해제" : "코치 승인"}</button>
-              </div>
-            </div>
+          <div class="coach-identity">
+            ${avatarMarkup(coach, "large")}
+            <div><strong>${escapeHtml(coach.name)}</strong><span>${escapeHtml(coach.role || "레슨")} · ${coachEmploymentLabel(coach)}</span></div>
           </div>
-          ${renderAuthProviderManagement(coach, true)}
-          <div class="coach-work-block-editor">
-            <span>근무시간</span>
-            <div class="coach-work-block-list">
-              ${blocks
-                .map(
-                  (block) => `
-                    <div class="coach-work-block-row">
-                      <strong>${block.days.join("")}</strong>
-                      <span><b>${timeToMinutes(block.start) < 720 ? "오전" : "오후"}</b> ${block.start}~${block.end}</span>
-                      <button class="small-button" type="button" data-remove-coach-block="${coach.id}" data-block-id="${block.id}">삭제</button>
-                    </div>`,
-                )
-                .join("")}
+          <div class="coach-list-summary">
+            <div class="coach-auth-badges">
+              ${badge(coachSignupTone(coach), coachSignupLabel(coach))}
+              ${badge(coachApprovalTone(coach), coachApprovalLabel(coach))}
             </div>
-            <div class="coach-block-add-grid" aria-label="${coach.name} 근무 블록 추가">
-              <div class="coach-day-grid compact">
-                ${scheduleDays.map((day) => `<label><input type="checkbox" value="${day}" data-coach-block-day="${coach.id}" />${day}</label>`).join("")}
-              </div>
-              <div class="coach-time-range">
-                <label><span>시작</span><input type="time" step="600" value="06:40" data-coach-block-start="${coach.id}" /></label>
-                <label><span>종료</span><input type="time" step="600" value="07:00" data-coach-block-end="${coach.id}" /></label>
-                <button class="small-button" type="button" data-add-coach-block="${coach.id}">근무 추가</button>
-              </div>
-            </div>
+            <span>${escapeHtml(getCoachAvailabilitySummary(coach.id))}${breakCount ? ` · 브레이크 ${breakCount}개` : ""}</span>
+            <span>${operationsRole() === "admin" ? coachSettlementSummary(coach) : "정산 정보 비공개"}</span>
           </div>
+          <button class="icon-button coach-row-edit" type="button" aria-label="${escapeHtml(coach.name)} 편집" title="편집" data-edit-coach-staff="${coach.id}">···</button>
         </article>`;
       },
     )
@@ -12862,59 +13682,6 @@ function renderScheduleSettings() {
       )
       .join("")
     : `<p class="empty-text">등록된 브레이크타임이 없습니다.</p>`;
-}
-
-async function preregisterCoach() {
-  const nameInput = $("#coachPreregisterName");
-  const phoneInput = $("#coachPreregisterPhone");
-  const button = $("#coachPreregisterButton");
-  const name = nameInput?.value.trim() || "";
-  const phone = phoneInput?.value.replace(/[^0-9]/g, "") || "";
-  if (name.length < 2) {
-    showToast("코치 이름을 입력해주세요.");
-    nameInput?.focus();
-    return;
-  }
-  if (!/^01[016789][0-9]{7,8}$/.test(phone)) {
-    showToast("휴대전화 번호를 확인해주세요.");
-    phoneInput?.focus();
-    return;
-  }
-  if (!adminApprovalReady() || !window.TennisNoteDataClient?.invokeFunction) {
-    showToast("관리자 로그인 후 코치를 등록할 수 있습니다.");
-    return;
-  }
-
-  if (button) button.disabled = true;
-  try {
-    const result = await window.TennisNoteDataClient.invokeFunction("tennisnote-admin-users", {
-      body: {
-        action: "preregister_coach",
-        name,
-        phone,
-        displayName: name.includes("코치") ? name : `${name} 코치`,
-        settlementType: "ratio",
-        settlementRate: 0.5,
-        settlementBasis: "cash_ex_vat",
-        effectiveFrom: new Date().toISOString().slice(0, 10),
-      },
-    });
-    if (!result?.coachRole?.id) throw new Error("coach_role_not_created");
-    if (nameInput) nameInput.value = "";
-    if (phoneInput) phoneInput.value = "";
-    await syncAdminLiveData();
-    showToast("코치 사전 등록 완료");
-  } catch (error) {
-    const code = error?.payload?.code || error?.message || "server_error";
-    const message = code === "duplicate_phone_review_required"
-      ? "같은 번호의 회원이 여러 명이라 관리자 확인이 필요합니다."
-      : code === "valid_coach_phone_required"
-        ? "휴대전화 번호를 확인해주세요."
-        : `코치 등록 실패: ${code}`;
-    showToast(message);
-  } finally {
-    if (button) button.disabled = false;
-  }
 }
 
 function renderPolicyGuide() {
@@ -13639,7 +14406,6 @@ function renderAdminSecurity() {
         </label>
         <div class="data-action-row">
           <button class="ghost-button" type="button" id="adminLockNowButton">지금 다시 잠그기</button>
-          <button class="ghost-button" type="button" id="openSystemSettingsButton">시스템 연결</button>
         </div>
       </article>
       <article class="admin-security-card">
@@ -13761,19 +14527,15 @@ function renderServiceReadiness() {
               <input type="text" data-product-field="sessions" value="${escapeHtml(normalized.sessions)}" />
             </label>
             <label>
-              <small>판매가</small>
-              <input type="number" min="0" step="1000" data-product-field="amount" value="${normalized.amount}" />
-            </label>
-            <label>
               <small>카드가격</small>
               <input type="number" min="0" step="1000" data-product-field="cardAmount" value="${normalized.cardAmount}" />
             </label>
             <label>
-              <small>계좌이체가격</small>
+              <small>현금가격</small>
               <input type="number" min="0" step="1000" data-product-field="cashAmount" value="${normalized.cashAmount}" />
             </label>
             <label>
-              <small>정산 기준</small>
+              <small>정산가격</small>
               <input type="number" min="0" step="1000" data-product-field="settlementBase" value="${normalized.settlementBase}" />
             </label>
             <label>
@@ -13789,11 +14551,35 @@ function renderServiceReadiness() {
               <input type="number" min="0" step="1" data-product-field="tickets" value="${normalized.tickets}" />
             </label>
             <label>
+              <small>레슨 방식</small>
+              <select data-product-field="scheduleScope">
+                <option value="weekday" ${normalized.scheduleScope === "weekday" ? "selected" : ""}>평일</option>
+                <option value="weekend" ${normalized.scheduleScope === "weekend" ? "selected" : ""}>주말</option>
+                <option value="mixed" ${normalized.scheduleScope === "mixed" ? "selected" : ""}>혼합</option>
+              </select>
+            </label>
+            <label>
+              <small>수업 시간</small>
+              <select data-product-field="lessonMinutes">
+                ${[20, 30, 40].map((minute) => `<option value="${minute}" ${Number(normalized.lessonMinutes) === minute ? "selected" : ""}>${minute}분</option>`).join("")}
+              </select>
+            </label>
+            <label>
+              <small>종류</small>
+              <select data-product-field="groupSize">
+                <option value="1" ${Number(normalized.groupSize) === 1 ? "selected" : ""}>개인 1:1</option>
+                <option value="2" ${Number(normalized.groupSize) === 2 ? "selected" : ""}>그룹 2:1</option>
+              </select>
+            </label>
+            <label>
+              <small>주 횟수</small>
+              <input type="number" min="0" max="7" step="1" data-product-field="frequencyPerWeek" value="${normalized.frequencyPerWeek}" />
+            </label>
+            <label>
               <small>권종</small>
               <select data-product-field="productKind">
-                <option value="regular" ${normalized.productKind === "regular" ? "selected" : ""}>정기권</option>
-                <option value="pass" ${normalized.productKind === "pass" ? "selected" : ""}>쿠폰제</option>
-                <option value="group" ${normalized.productKind === "group" ? "selected" : ""}>2대1/그룹</option>
+                <option value="regular" ${normalized.productKind === "regular" ? "selected" : ""}>정규권</option>
+                <option value="coupon" ${normalized.productKind === "coupon" ? "selected" : ""}>쿠폰제</option>
               </select>
             </label>
             <label>
@@ -13820,6 +14606,8 @@ function renderServiceReadiness() {
           <p>${escapeHtml(normalized.rule)}</p>
           <small>회원앱 표시: 카드 ${money.format(normalized.cardAmount)}원 · 현금 ${money.format(normalized.cashAmount)}원 · ${normalized.tickets}회 · ${normalized.validityDays}일 + 유예 ${normalized.graceDays}일</small>
           <div class="product-setting-actions">
+            <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="위로 이동" title="위로 이동">↑</button>
+            <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="아래로 이동" title="아래로 이동">↓</button>
             <button class="small-button" type="button" data-save-product-setting="${normalized.id}">저장</button>
             <button class="ghost-button danger-button" type="button" data-force-delete-product-setting="${normalized.id}">강제 삭제</button>
           </div>
@@ -14200,10 +14988,52 @@ function bindEvents() {
       openScheduleSettingsButton: "schedule",
       openNoticeSettingsButton: "notice",
       openProductSettingsButton: "products",
-      openSettlementSettingsButton: "settlement",
-      openSystemSettingsButton: "system",
     };
     if (toolsByButton[buttonId]) openAdminToolsModal(toolsByButton[buttonId]);
+  });
+  document.addEventListener("click", async (event) => {
+    if (event.target.closest("#addCoachStaffButton")) {
+      openCoachStaffModal();
+      return;
+    }
+    const editButton = event.target.closest("[data-edit-coach-staff]");
+    if (editButton) {
+      openCoachStaffModal(editButton.dataset.editCoachStaff);
+      return;
+    }
+    const tabButton = event.target.closest("[data-coach-staff-tab]");
+    if (tabButton) {
+      readCoachStaffPanel();
+      coachStaffEditorState.tab = tabButton.dataset.coachStaffTab;
+      coachStaffEditorState.message = "";
+      renderCoachStaffModal();
+      return;
+    }
+    const addBlockButton = event.target.closest("[data-add-coach-staff-block]");
+    if (addBlockButton) {
+      addCoachStaffBlock(addBlockButton.dataset.addCoachStaffBlock);
+      return;
+    }
+    const removeBlockButton = event.target.closest("[data-remove-coach-staff-block]");
+    if (removeBlockButton) {
+      removeCoachStaffBlock(removeBlockButton.dataset.coachStaffBlockType, removeBlockButton.dataset.removeCoachStaffBlock);
+      return;
+    }
+    const stateButton = event.target.closest("[data-coach-staff-state]");
+    if (stateButton) {
+      await setCoachStaffState(stateButton.dataset.coachStaffState);
+      return;
+    }
+    if (event.target.closest("#closeCoachStaffModal, #cancelCoachStaffModal")) closeCoachStaffModal();
+  });
+  document.addEventListener("change", (event) => {
+    if (event.target.id !== "coachStaffSettlementMethod" || !coachStaffEditorState.draft) return;
+    coachStaffEditorState.draft.settlement.method = event.target.value;
+    syncCoachStaffSettlementFieldVisibility(event.target.value);
+  });
+  $("#coachStaffForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await saveCoachStaff();
   });
   document.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-jump]");
@@ -14639,23 +15469,21 @@ function bindEvents() {
   $("#lessonModal").addEventListener("click", (event) => {
     if (event.target.id === "lessonModal") closeLessonModal();
   });
-  $("#settlementModal").addEventListener("click", (event) => {
-    if (event.target.id === "settlementModal") closeSettlementModal();
+  $("#coachStaffModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "coachStaffModal") closeCoachStaffModal();
   });
   $("#memberManagementModal")?.addEventListener("click", (event) => {
     if (event.target.id === "memberManagementModal") closeMemberManagementModal();
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#lessonModal").hidden) closeLessonModal();
-    if (event.key === "Escape" && !$("#settlementModal").hidden) closeSettlementModal();
+    if (event.key === "Escape" && !$("#coachStaffModal")?.hidden) closeCoachStaffModal();
     if (event.key === "Escape" && !$("#refundModal").hidden) closeRefundModal();
     if (event.key === "Escape" && !$("#adminLockModal").hidden) closeAdminLockModal();
     if (event.key === "Escape" && !$("#adminToolsModal").hidden) closeAdminToolsModal();
     if (event.key === "Escape" && !$("#memberManagementModal")?.hidden) closeMemberManagementModal();
     if (event.key === "Escape" && !$("#policyVersionEditorModal")?.hidden) closePolicyVersionEditor();
   });
-
-  $("#coachPreregisterButton")?.addEventListener("click", preregisterCoach);
 
   $$(".segment[data-member-filter]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -14734,6 +15562,10 @@ function bindEvents() {
   });
 
   document.addEventListener("input", (event) => {
+    if (event.target.matches("#memberManagementForm input[name='totalSessions'], #memberManagementForm input[name='usedSessions']")) {
+      syncMemberManagementBalance(event.target.form);
+      return;
+    }
     if (event.target.matches("[data-ticket-partner-search]")) {
       filterMemberTicketPartnerOptions(event.target.closest("[data-ticket-lesson-setup]"));
       return;
@@ -14926,16 +15758,6 @@ function bindEvents() {
       showToast("기록/차감 확인 완료");
     }
 
-    const requestPaymentButton = event.target.closest("[data-request-payment]");
-    if (requestPaymentButton) {
-      const item = billings[Number(requestPaymentButton.dataset.requestPayment)];
-      item.status = "check";
-      item.statusLabel = "결제확인대기";
-      billingLogs.unshift(`${item.member} 결제 요청 발송 대기: ${item.item}`);
-      renderAll();
-      showToast("결제 요청 처리 완료");
-    }
-
     const syncServerPaymentsButton = event.target.closest("#syncServerPaymentsButton");
     if (syncServerPaymentsButton) {
       await loadServerPaymentsIntoBilling();
@@ -14947,16 +15769,6 @@ function bindEvents() {
       const item = billings[Number(serverReadyPaymentButton.dataset.serverReadyPayment)];
       await verifyBillingPaymentItem(item);
       return;
-    }
-
-    const confirmPaymentButton = event.target.closest("[data-confirm-payment]");
-    if (confirmPaymentButton) {
-      const item = billings[Number(confirmPaymentButton.dataset.confirmPayment)];
-      item.status = "paid";
-      item.statusLabel = "결제완료";
-      billingLogs.unshift(`${item.member} 결제 확인 완료: ${money.format(item.amount)}원`);
-      renderAll();
-      showToast("결제 확인 완료");
     }
 
     const reviewPaymentButton = event.target.closest("[data-review-payment]");
@@ -14995,39 +15807,38 @@ function bindEvents() {
       showToast("결제 실패 항목을 확인했습니다");
     }
 
-    const rechargeButton = event.target.closest("[data-recharge-ticket]");
-    if (rechargeButton) {
-      const ticket = tickets[Number(rechargeButton.dataset.rechargeTicket)];
-      const product = membershipProductForTicket(ticket);
-      const rechargeCount = product.tickets || 4;
-      ticket.total += rechargeCount;
-      ticket.remaining += rechargeCount;
-      syncMemberRemainingFromTicket(ticket.member);
-      billingLogs.unshift(`${ticket.member} 이용권 ${rechargeCount}회 충전: ${product.title}`);
-      renderAll();
-      showToast("이용권 충전 완료");
-    }
-
-    const createBillingButton = event.target.closest("#createBillingButton");
-    if (createBillingButton) {
-      const target = tickets.find((ticket) => ticket.remaining <= 1) || tickets[0];
-      const product = membershipProductForTicket(target);
-      billings.unshift({
-        member: target.member,
-        item: `${product.title} 연장`,
-        amount: product.amount,
-        method: "결제요청",
-        status: "draft",
-        statusLabel: "작성중",
-      });
-      billingLogs.unshift(`${target.member} ${product.title} 결제요청 초안 생성 · ${money.format(product.amount)}원`);
-      renderAll();
-      showToast("결제요청 생성 완료");
+    const renewTicketButton = event.target.closest("[data-renew-ticket]");
+    if (renewTicketButton) {
+      const ticketId = renewTicketButton.dataset.renewTicket || "";
+      const memberName = renewTicketButton.dataset.renewMember || "";
+      const ticket = [...tickets, ...expiredTickets].find((item) => String(item.serverTicketId || "") === ticketId);
+      const participantIds = new Set(ticketParticipantUserIds(ticket).map(String));
+      const member = members.find((item) => item.name === memberName || memberServerUserIds(item).some((id) => participantIds.has(String(id))));
+      if (!member || !ticketId) {
+        showToast("회원권 정보를 다시 불러와 주세요.");
+        return;
+      }
+      openMemberManagementModal(member, "reenroll", ticketId);
+      return;
     }
 
     const saveProductSettingButton = event.target.closest("[data-save-product-setting]");
     if (saveProductSettingButton) {
-      updateMembershipProductSetting(saveProductSettingButton.dataset.saveProductSetting);
+      await updateMembershipProductSetting(saveProductSettingButton.dataset.saveProductSetting);
+      return;
+    }
+
+    if (event.target.closest("#addMembershipProductButton")) {
+      await createMembershipProductSetting();
+      return;
+    }
+
+    const moveProductButton = event.target.closest("[data-move-product-setting]");
+    if (moveProductButton) {
+      await moveMembershipProductSetting(
+        moveProductButton.dataset.moveProductSetting,
+        moveProductButton.dataset.moveDirection,
+      );
       return;
     }
 
@@ -15105,26 +15916,6 @@ function bindEvents() {
       await resetRefundPolicySettings();
     }
 
-    const saveSettlementRuleButton = event.target.closest("[data-save-settlement-rule]");
-    if (saveSettlementRuleButton) {
-      await updateCoachSettlementRule(saveSettlementRuleButton.dataset.saveSettlementRule);
-    }
-
-    const openSettlementRuleButton = event.target.closest("[data-open-settlement-rule]");
-    if (openSettlementRuleButton) {
-      openSettlementModalByIndex(openSettlementRuleButton.dataset.openSettlementRule);
-    }
-
-    const saveSettlementModalButton = event.target.closest("#saveSettlementModal");
-    if (saveSettlementModalButton) {
-      await saveSettlementModalRule();
-    }
-
-    const closeSettlementModalButton = event.target.closest("#closeSettlementModal, #cancelSettlementModal");
-    if (closeSettlementModalButton) {
-      closeSettlementModal();
-    }
-
     const savePaymentConfigButton = event.target.closest("#savePaymentConfigButton");
     if (savePaymentConfigButton) {
       savePaymentGatewayConfig();
@@ -15199,22 +15990,6 @@ function bindEvents() {
       showToast("회원/코치 앱에서 공지를 다시 볼 수 있게 초기화했습니다");
     }
 
-    const rechargeAllButton = event.target.closest("#rechargeAllButton");
-    if (rechargeAllButton) {
-      tickets
-        .filter((ticket) => ticket.remaining <= 1)
-        .forEach((ticket) => {
-          const product = membershipProductForTicket(ticket);
-          const rechargeCount = product.tickets || 4;
-          ticket.total += rechargeCount;
-          ticket.remaining += rechargeCount;
-          syncMemberRemainingFromTicket(ticket.member);
-          billingLogs.unshift(`${ticket.member} 부족 이용권 일괄 ${rechargeCount}회 충전 · ${product.title}`);
-        });
-      renderAll();
-      showToast("부족 회원 충전 완료");
-    }
-
     const modeActionButton = event.target.closest("[data-mode-action]");
     if (modeActionButton) {
       handleModeAction(modeActionButton.dataset.modeAction);
@@ -15261,37 +16036,6 @@ function bindEvents() {
       showToast("브레이크타임 삭제 완료");
     }
 
-    const addCoachBlockButton = event.target.closest("[data-add-coach-block]");
-    if (addCoachBlockButton) {
-      const coach = coaches.find((item) => item.id === addCoachBlockButton.dataset.addCoachBlock);
-      if (coach) {
-        const selectedDays = $$(`[data-coach-block-day="${coach.id}"]:checked`).map((input) => input.value);
-        const start = $(`[data-coach-block-start="${coach.id}"]`)?.value;
-        const end = $(`[data-coach-block-end="${coach.id}"]`)?.value;
-        if (!selectedDays.length || !start || !end || timeToMinutes(start) >= timeToMinutes(end)) {
-          showToast("근무 추가 요일과 시간을 확인해주세요");
-          return;
-        }
-        normalizeCoachWorkBlocks(coach);
-        coach.workBlocks.push({ id: `${coach.id}-block-${Date.now()}`, days: selectedDays, start, end, label: "추가 근무" });
-        renderAll();
-        saveSnapshot();
-        await saveLiveSchedulePolicy();
-      }
-      return;
-    }
-
-    const removeCoachBlockButton = event.target.closest("[data-remove-coach-block]");
-    if (removeCoachBlockButton) {
-      const coach = coaches.find((item) => item.id === removeCoachBlockButton.dataset.removeCoachBlock);
-      if (coach) {
-        coach.workBlocks = normalizeCoachWorkBlocks(coach).filter((block) => block.id !== removeCoachBlockButton.dataset.blockId);
-        renderAll();
-        saveSnapshot();
-        await saveLiveSchedulePolicy();
-      }
-      return;
-    }
   });
 
   const refreshSupabaseStatus = $("#refreshSupabaseStatus");

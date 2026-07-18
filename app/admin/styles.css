@@ -256,6 +256,14 @@ small {
   font-size: 13px;
 }
 
+.brand .release-version {
+  display: block;
+  margin-top: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -812,6 +820,10 @@ h2 {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
   gap: 18px;
+}
+
+.dashboard-grid.dashboard-grid-single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .lower-grid {
@@ -1686,7 +1698,7 @@ tr.is-selected td {
 }
 
 #membersView .table-panel table {
-  min-width: 560px;
+  min-width: 980px;
 }
 
 #membersView .table-panel {
@@ -2862,8 +2874,8 @@ tr.is-selected td {
   height: 68px;
   min-height: 68px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 58px;
-  gap: 3px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
   padding: 4px;
   align-content: stretch;
   align-items: stretch;
@@ -2891,6 +2903,50 @@ tr.is-selected td {
 
 .schedule-stack-placeholder.is-occupied {
   pointer-events: none;
+}
+
+.member-table-note {
+  max-width: 220px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.member-ticket-assign-button {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.schedule-coach-slot {
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.schedule-coach-slot.is-closed {
+  border-color: #efc4bd;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      #fff7f5,
+      #fff7f5 7px,
+      #fbecea 7px,
+      #fbecea 14px
+    );
+  box-shadow: inset 3px 0 0 #d9877d;
+}
+
+.schedule-coach-slot.is-break {
+  border-color: #e9b3aa;
+  box-shadow: inset 3px 0 0 #c24132;
+}
+
+.schedule-coach-slot.is-full {
+  border-color: var(--line);
+  background: #f4f7fb;
 }
 
 .schedule-stack-line {
@@ -7336,6 +7392,311 @@ button .schedule-member-lines > span {
   grid-column: 1 / -1;
 }
 
+/* Unified coach and staff management */
+.coach-row {
+  grid-template-columns: minmax(190px, 0.8fr) minmax(280px, 1.5fr) 36px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.coach-list-summary {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(170px, 1.2fr) minmax(120px, 0.8fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.coach-list-summary > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coach-row-edit {
+  justify-self: end;
+}
+
+.coach-staff-modal {
+  z-index: 1600;
+}
+
+.coach-staff-modal-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(92vh, 860px);
+  padding: 0;
+  overflow: hidden;
+}
+
+.coach-staff-modal-panel > .modal-heading {
+  flex: 0 0 auto;
+  padding: 18px 20px 12px;
+}
+
+.coach-staff-more-menu {
+  position: relative;
+  margin-left: auto;
+}
+
+.coach-staff-more-menu summary {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--soft-blue);
+  color: var(--blue);
+  cursor: pointer;
+  font-weight: 950;
+  list-style: none;
+}
+
+.coach-staff-more-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.coach-staff-more-actions {
+  position: absolute;
+  z-index: 4;
+  top: 42px;
+  right: 0;
+  display: grid;
+  width: 150px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  box-shadow: var(--shadow);
+}
+
+.coach-staff-more-actions button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font-weight: 850;
+}
+
+.coach-staff-more-actions button:hover {
+  background: var(--soft-blue);
+}
+
+.coach-staff-tabs {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  flex: 0 0 auto;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line);
+  background: white;
+}
+
+.coach-staff-tabs button {
+  min-height: 44px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.coach-staff-tabs button.is-active {
+  border-bottom-color: var(--green);
+  color: var(--green);
+}
+
+.coach-staff-form {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.coach-staff-modal-content {
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 18px 20px;
+  overflow-y: auto;
+}
+
+.coach-staff-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.coach-staff-wide {
+  grid-column: 1 / -1;
+}
+
+.coach-staff-form-grid input,
+.coach-staff-form-grid select,
+.coach-staff-form-grid textarea,
+.coach-staff-block-add input {
+  width: 100%;
+}
+
+.coach-staff-account-summary,
+.coach-staff-inline-note {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.coach-staff-account-summary span,
+.coach-staff-inline-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.coach-staff-block-section {
+  display: grid;
+  gap: 10px;
+}
+
+.coach-staff-block-section + .coach-staff-block-section {
+  margin-top: 22px;
+}
+
+.coach-staff-block-list {
+  display: grid;
+  gap: 6px;
+}
+
+.coach-staff-block-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: white;
+}
+
+.coach-staff-block-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.coach-staff-block-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.coach-staff-block-section.is-break .coach-staff-block-row {
+  border-color: #efb4aa;
+  background: #fff8f6;
+}
+
+.coach-staff-block-add {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(90px, 0.7fr)) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.coach-staff-block-add > label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.coach-staff-block-add > label span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.coach-staff-modal-actions {
+  position: sticky;
+  z-index: 3;
+  bottom: 0;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  background: white;
+}
+
+[data-settlement-mode-field].is-hidden {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .coach-row {
+    grid-template-columns: minmax(0, 1fr) 36px;
+    gap: 8px;
+  }
+
+  .coach-list-summary {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .coach-list-summary .coach-auth-badges {
+    flex-wrap: wrap;
+  }
+
+  .coach-row-edit {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .coach-staff-modal-panel {
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .coach-staff-modal-panel > .modal-heading,
+  .coach-staff-modal-content,
+  .coach-staff-modal-actions {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .coach-staff-tabs {
+    padding: 0 14px;
+  }
+
+  .coach-staff-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coach-staff-wide {
+    grid-column: auto;
+  }
+
+  .coach-staff-block-add {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .coach-staff-block-add .coach-day-grid,
+  .coach-staff-block-add button {
+    grid-column: 1 / -1;
+  }
+}
+
 .member-approval-card,
 .admin-pending-card {
   display: grid;
@@ -7740,7 +8101,7 @@ button .schedule-member-lines > span {
 
 .admin-day-head {
   box-sizing: border-box;
-  grid-template-columns: minmax(0, 1fr) 58px;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 20px minmax(0, 1fr);
   place-items: stretch;
   gap: 3px;
@@ -7761,7 +8122,7 @@ button .schedule-member-lines > span {
 
 .admin-coach-head-row {
   display: grid;
-  grid-column: 1;
+  grid-column: 1 / -1;
   grid-row: 2;
   grid-template-columns: repeat(var(--admin-coach-count, 1), minmax(64px, 1fr));
   gap: 3px;
@@ -7781,13 +8142,6 @@ button .schedule-member-lines > span {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.admin-add-head {
-  grid-column: 2;
-  grid-row: 2;
-  border-top: 1px solid #d9e2ea;
-  border-left: 1px solid #d9e2ea;
 }
 
 .schedule-stack-cell,
@@ -7901,14 +8255,23 @@ button .schedule-member-lines > span {
     grid-auto-rows: 60px;
   }
 
+  .schedule-sheet.is-mobile-day.has-coach-overflow {
+    width: max-content;
+  }
+
   .schedule-sheet.is-mobile-day .schedule-stack-cell {
-    grid-template-columns: minmax(0, 1fr) 40px;
+    grid-template-columns: minmax(0, 1fr);
     min-width: 0;
     padding: 3px;
   }
 
   .schedule-sheet.is-mobile-day .admin-day-head {
-    grid-template-columns: minmax(0, 1fr) 40px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-sheet.is-mobile-day .time-head,
+  .schedule-sheet.is-mobile-day .sheet-time {
+    left: 0;
   }
 
   .schedule-sheet.is-mobile-day .sheet-head,
@@ -8204,5 +8567,147 @@ button .schedule-member-lines > span {
 
   .policy-managed-section-chips {
     justify-content: flex-start;
+  }
+}
+
+/* Tennis Note athletic visual system: presentation only, no admin operations changes. */
+:root {
+  --ink: #12231f;
+  --muted: #64746d;
+  --line: #d8e2dd;
+  --paper: #ffffff;
+  --wash: #f2f6f4;
+  --panel: #fbfdfc;
+  --green: #087255;
+  --blue: #1d6fa5;
+  --amber: #a76011;
+  --red: #b23b3b;
+  --soft-green: #e7f5ee;
+  --soft-blue: #edf6fb;
+  --soft-amber: #fff5e6;
+  --soft-red: #fff0f0;
+  --shadow: 0 8px 20px rgba(18, 35, 31, 0.07);
+}
+
+body {
+  background: var(--wash);
+  font-family: "Pretendard Variable", Pretendard, Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.sidebar {
+  border-right: 0;
+  background: #063f34;
+}
+
+.sidebar .brand strong {
+  color: #ffffff;
+}
+
+.sidebar .brand span,
+.sidebar .brand .release-version {
+  color: #c5ded4;
+}
+
+.sidebar .brand-mark {
+  color: transparent;
+  background: #ffffff url("../tennis-note-member-app/assets/brand/app-icon-192.png") center / cover no-repeat;
+}
+
+.sidebar .nav-item {
+  color: #c5ded4;
+}
+
+.sidebar .nav-item:hover,
+.sidebar .nav-item.is-active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 3px 0 0 #9ce1c7;
+}
+
+.sidebar .source-box {
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #d9eee5;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar .source-box strong,
+.sidebar .source-box span {
+  color: inherit;
+}
+
+.workspace {
+  padding: 30px;
+}
+
+.topbar {
+  margin-bottom: 20px;
+}
+
+.metric-card,
+.panel,
+.policy-strip > div,
+.billing-action-card {
+  border-color: #dbe6e0;
+  box-shadow: 0 6px 16px rgba(18, 35, 31, 0.05);
+}
+
+.metric-card {
+  min-height: 112px;
+  border-top: 3px solid #087255;
+}
+
+.metric-card.warning {
+  border-top-color: #d4872a;
+}
+
+.metric-card.accent {
+  border-top-color: #1d6fa5;
+}
+
+.metric-card.calm {
+  border-top-color: #75a997;
+}
+
+.search-box,
+.app-preview-links {
+  border-color: #dbe6e0;
+  box-shadow: 0 4px 12px rgba(18, 35, 31, 0.035);
+}
+
+.primary-button {
+  background: #087255;
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .sidebar .brand {
+    padding-bottom: 2px;
+  }
+
+  .sidebar .nav-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .sidebar .nav-item {
+    min-height: 42px;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .sidebar .source-box {
+    display: none;
+  }
+
+  .workspace {
+    padding: 16px;
   }
 }
