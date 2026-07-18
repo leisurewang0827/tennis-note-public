@@ -6128,7 +6128,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "coach-copy-light-1" });
+  const params = new URLSearchParams({ v: "coach-regular-absence-1" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

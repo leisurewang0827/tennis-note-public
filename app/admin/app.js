@@ -7214,8 +7214,10 @@ async function submitMemberManagementForm(event) {
     const activeRecord = isCreate || action === "assign" || form.elements.recordStatus?.value === "active";
     const selectedProduct = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
     const couponProduct = selectedProduct?.is_coupon === true || selectedProduct?.product_kind === "coupon";
-    if (activeRecord && !couponProduct && memberManagementSelectedDays(form).length === 0) {
-      if (message) message.textContent = "레슨 요일을 한 개 이상 선택해 주세요.";
+    const requiredLessonDays = Math.max(1, Number(form.elements.weeklyFrequency?.value) || 1);
+    const selectedLessonDays = memberManagementSelectedDays(form);
+    if (activeRecord && !couponProduct && selectedLessonDays.length !== requiredLessonDays) {
+      if (message) message.textContent = `주 ${requiredLessonDays}회 회원권은 레슨 요일을 ${requiredLessonDays}개 직접 선택해 주세요.`;
       return;
     }
     if (form.elements.lessonType.value === "one_on_two" && !form.elements.partnerUserId?.value) {
@@ -8910,7 +8912,20 @@ function getTicketWeeklyCount(ticket) {
   return match ? Number(match[1]) : 1;
 }
 
-function getSelectedLessonSchedules() {
+function isRegularScheduleSetup(ticket) {
+  return Boolean(
+    ticket
+    && !state.editingLessonId
+    && normalizeLessonSource($("#lessonSource")?.value) === "regular"
+    && !isPastLessonCorrectionMode(getLessonFormCandidate())
+  );
+}
+
+function requiredRegularScheduleCount(ticket) {
+  return isRegularScheduleSetup(ticket) ? Math.max(1, Math.min(3, getTicketWeeklyCount(ticket))) : 1;
+}
+
+function getLessonScheduleSlots() {
   const primaryDay = $("#lessonDay").value;
   const primaryTime = $("#lessonTime").value;
   if (isPastLessonCorrectionMode({
@@ -8925,10 +8940,37 @@ function getSelectedLessonSchedules() {
     .map((daySelect) => {
       const row = daySelect.closest(".lesson-repeat-slot");
       const timeSelect = row?.querySelector("[data-lesson-slot-time]");
-      return { day: daySelect.value, time: timeSelect?.value || primaryTime };
-    })
-    .filter((item) => item.day !== primaryDay);
+      return { day: daySelect.value, time: timeSelect?.value || "" };
+    });
   return [{ day: primaryDay, time: primaryTime }].concat(extraSchedules);
+}
+
+function getRegularScheduleValidation(ticket) {
+  const requiredCount = requiredRegularScheduleCount(ticket);
+  const slots = getLessonScheduleSlots().slice(0, requiredCount);
+  const incompleteSlots = slots.filter((slot) => !slot.day || !slot.time);
+  const selectedDays = slots.filter((slot) => slot.day).map((slot) => slot.day);
+  const duplicateDay = selectedDays.find((day, index) => selectedDays.indexOf(day) !== index) || "";
+  const missingSlotNumbers = slots
+    .map((slot, index) => (!slot.day || !slot.time ? index + 1 : null))
+    .filter(Boolean);
+  return {
+    requiredCount,
+    slots,
+    isRequired: requiredCount > 1,
+    incompleteSlots,
+    duplicateDay,
+    valid: incompleteSlots.length === 0 && !duplicateDay && slots.length === requiredCount,
+    message: incompleteSlots.length
+      ? `주 ${requiredCount}회 회원권입니다. 요일/시간 ${missingSlotNumbers.join(", ")}을(를) 모두 직접 선택해 주세요.`
+      : duplicateDay
+        ? `주 ${requiredCount}회 정규 수업은 서로 다른 요일로 선택해 주세요.`
+        : "",
+  };
+}
+
+function getSelectedLessonSchedules() {
+  return getLessonScheduleSlots().filter((item) => item.day && item.time);
 }
 
 function getSelectedLessonDays() {
@@ -9023,6 +9065,7 @@ function getLessonDurationFromSelectedTicket() {
 }
 
 function getTimeOptionsForLessonSlot(day) {
+  if (!day) return [{ value: "", label: "시간 선택" }];
   const coachId = $("#lessonCoach").value;
   const durationMinutes = getLessonDurationFromSelectedTicket();
   const sourceTimes = adminManualOverrideEnabled()
@@ -9033,14 +9076,12 @@ function getTimeOptionsForLessonSlot(day) {
 }
 
 function refreshLessonExtraTimeOptions() {
-  const coachId = $("#lessonCoach").value;
-  const durationMinutes = getLessonDurationFromSelectedTicket();
   $$("[data-lesson-slot-time]").forEach((select) => {
-    const day = select.closest(".lesson-repeat-slot")?.querySelector("[data-lesson-slot-day]")?.value || $("#lessonDay").value;
-    const fallbackOptions = getTimeOptionsForLessonSlot(day);
-    const currentValue = select.value || $("#lessonTime").value;
-    fillSelect(select, fallbackOptions);
-    select.value = fallbackOptions.some((option) => option.value === currentValue) ? currentValue : fallbackOptions[0].value;
+    const day = select.closest(".lesson-repeat-slot")?.querySelector("[data-lesson-slot-day]")?.value || "";
+    const options = getTimeOptionsForLessonSlot(day);
+    const currentValue = select.value;
+    fillSelect(select, options);
+    select.value = options.some((option) => option.value === currentValue) ? currentValue : "";
   });
 }
 
@@ -9061,20 +9102,15 @@ function refreshLessonTimeOptions(keepValue = "") {
 
 function refreshLessonDayOptions() {
   const ticket = scheduleTicketById($("#lessonTicket").value);
-  const regularScheduleMode = Boolean(
-    ticket
-    && !state.editingLessonId
-    && normalizeLessonSource($("#lessonSource")?.value) === "regular"
-    && !isPastLessonCorrectionMode(getLessonFormCandidate())
-  );
-  const scheduleCount = regularScheduleMode ? Math.max(1, Math.min(3, getTicketWeeklyCount(ticket))) : 1;
+  const regularScheduleMode = isRegularScheduleSetup(ticket);
+  const scheduleCount = requiredRegularScheduleCount(ticket);
   const availableDays = adminManualOverrideEnabled() ? scheduleDays : ticket ? getTicketScheduleDays(ticket) : scheduleDays;
   const target = $("#lessonRepeatSlots");
   const previousSlots = $$("[data-lesson-slot-day]").map((daySelect) => {
     const row = daySelect.closest(".lesson-repeat-slot");
     return {
       day: daySelect.value,
-      time: row?.querySelector("[data-lesson-slot-time]")?.value || $("#lessonTime").value,
+      time: row?.querySelector("[data-lesson-slot-time]")?.value || "",
     };
   });
   target.innerHTML = "";
@@ -9086,8 +9122,7 @@ function refreshLessonDayOptions() {
   for (let index = 2; index <= 3; index += 1) {
     const isActive = index <= scheduleCount;
     const previous = previousSlots[index - 2] || {};
-    const fallbackDay = availableDays.find((day) => day !== primaryDay && !previousSlots.slice(0, index - 2).some((slot) => slot.day === day)) || availableDays[0] || "";
-    const selectedDay = previous.day && availableDays.includes(previous.day) && previous.day !== primaryDay ? previous.day : fallbackDay;
+    const selectedDay = previous.day && availableDays.includes(previous.day) ? previous.day : "";
     const row = document.createElement("label");
     row.className = "form-field lesson-repeat-slot";
     row.innerHTML = `
@@ -9099,7 +9134,7 @@ function refreshLessonDayOptions() {
     `;
     const daySelect = row.querySelector("[data-lesson-slot-day]");
     const timeSelect = row.querySelector("[data-lesson-slot-time]");
-    fillSelect(daySelect, availableDays.map((day) => ({ value: day, label: `${day}요일` })));
+    fillSelect(daySelect, [{ value: "", label: "요일 선택" }, ...availableDays.map((day) => ({ value: day, label: `${day}요일` }))]);
     daySelect.value = selectedDay;
     fillSelect(timeSelect, getTimeOptionsForLessonSlot(selectedDay));
     if ([...timeSelect.options].some((option) => option.value === previous.time)) timeSelect.value = previous.time;
@@ -9109,6 +9144,7 @@ function refreshLessonDayOptions() {
     target.appendChild(row);
     daySelect.addEventListener("change", () => {
       fillSelect(timeSelect, getTimeOptionsForLessonSlot(daySelect.value));
+      timeSelect.value = "";
       renderLessonPreview();
     });
     timeSelect.addEventListener("change", renderLessonPreview);
@@ -9812,6 +9848,7 @@ function renderLessonPreview() {
     syncAdminManualOverrideUi(overrideWarnings);
     return;
   }
+  const regularScheduleValidation = getRegularScheduleValidation(ticket);
   const selectedSchedules = getSelectedLessonSchedules();
   const scheduleScopeMismatch = ticket && selectedSchedules.some((schedule) => !ticketAllowsScheduleDay(ticket, schedule.day));
   const conflict = getInternalScheduleConflict(selectedSchedules, candidate.durationMinutes) || selectedSchedules
@@ -9830,7 +9867,7 @@ function renderLessonPreview() {
     <strong>${scheduleLabel || `${candidate.day} ${candidate.time}~${minutesToTime(end)}`}</strong>
     <span>${lessonSourceLabel(candidate.lessonSource)} · ${getLessonMembersLabel(candidate)} · ${getCoachName(candidate.coachId)} · ${getLessonRoundLabel(candidate)} · ${lessonTypeLabel(candidate)}</span>
   `;
-  const normalBlocked = Boolean(!ticket || sourceTicketMismatch || scheduleScopeMismatch || conflict);
+  const normalBlocked = Boolean(!ticket || sourceTicketMismatch || !regularScheduleValidation.valid || scheduleScopeMismatch || conflict);
   const overrideBlocked = Boolean(!ticket || exactDuplicate || internalDuplicate || overrideReasonMissing);
   setLessonFormMessage(
     manualOverride
@@ -9843,6 +9880,8 @@ function renderLessonPreview() {
             : `정책 충돌 ${uniqueOverrideWarnings.length}건을 우회해 저장하고 감사 기록을 남깁니다.`
       : !ticket || sourceTicketMismatch
       ? "선택한 수업 종류에 맞는 회원권이 없습니다. 회원권 또는 수업 종류를 확인해 주세요."
+      : !regularScheduleValidation.valid
+        ? regularScheduleValidation.message
       : scheduleScopeMismatch
         ? `${memberManagementScheduleScopeLabel(getTicketScheduleScope(ticket))}에서 이용할 수 없는 요일입니다.`
       : conflict
@@ -10397,6 +10436,12 @@ async function addLessonFromForm(event) {
     }
   }
 
+  const regularScheduleValidation = getRegularScheduleValidation(ticket);
+  if (!manualOverride && !regularScheduleValidation.valid) {
+    setLessonFormMessage(regularScheduleValidation.message, "danger");
+    setLessonSubmitEnabled(false);
+    return;
+  }
   const selectedSchedules = state.editingLessonId ? [{ day: candidate.day, time: candidate.time }] : getSelectedLessonSchedules();
   const scheduleScopeMismatch = selectedSchedules.find((schedule) => !ticketAllowsScheduleDay(ticket, schedule.day));
   if (!manualOverride && scheduleScopeMismatch) {

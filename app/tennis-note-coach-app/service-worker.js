@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-coach-mode-v49";
+const CACHE_NAME = "tennis-note-coach-mode-v50";
 const APP_SHELL = [
   "./",
   "./index.html",
