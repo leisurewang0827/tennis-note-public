@@ -10538,16 +10538,15 @@ function existingFutureRegularLessons(ticketId, targetSchedules = []) {
   ));
 }
 
-function confirmRegularScheduleReplacement(ticket, candidates = []) {
-  if (ticket?.productKind !== "regular" || liveLessonSource(candidates[0]) !== "regular") return true;
+function regularScheduleProtectionMessage(ticket, candidates = []) {
+  if (ticket?.productKind !== "regular" || liveLessonSource(candidates[0]) !== "regular") return "";
   const targetSchedules = candidates.map((candidate) => ({
     lessonDate: adminWeekDateForDay(candidate.day),
     startTime: candidate.time,
   }));
   const existing = existingFutureRegularLessons(ticket.serverTicketId, targetSchedules);
-  if (!existing.length) return true;
-  const newPattern = candidates.map((candidate) => `${candidate.day} ${candidate.time}`).join(", ");
-  return window.confirm(`이 회원의 정규시간을 ${newPattern}(으)로 변경할까요?\n\n선택한 주부터 기존 미래 정규수업 ${existing.length}건은 새 시간표로 교체됩니다. 완료된 지난 수업과 차감 횟수는 바뀌지 않습니다.`);
+  if (!existing.length) return "";
+  return "기존 정규 시간표가 보호되어 새 등록은 진행하지 않았습니다. 기존 수업 카드를 눌러 해당 수업만 수정해 주세요.";
 }
 
 async function addLessonFromForm(event) {
@@ -10706,9 +10705,12 @@ async function addLessonFromForm(event) {
       else if (selectedEntitlement) await saveLiveMakeupEntitlement(candidates[0], selectedEntitlement);
       else if (wasEditing) await saveLiveAdminLesson(candidates[0]);
       else {
-        if (!manualOverride && !confirmRegularScheduleReplacement(ticket, candidates)) {
+        const scheduleProtectionMessage = !manualOverride
+          ? regularScheduleProtectionMessage(ticket, candidates)
+          : "";
+        if (scheduleProtectionMessage) {
           setLessonSubmitEnabled(true);
-          setLessonFormMessage("정규시간 변경을 취소했습니다.");
+          setLessonFormMessage(scheduleProtectionMessage, "danger");
           return;
         }
         await saveLiveAdminLessonSet(candidates);
@@ -10747,6 +10749,7 @@ async function addLessonFromForm(event) {
         lesson_duration_ticket_mismatch: "회원권의 수업시간과 선택한 수업시간이 맞지 않습니다.",
         regular_schedule_pending_change_exists: "처리 중인 수업 변경 요청이 있어 정규시간을 교체할 수 없습니다. 요청을 먼저 처리해 주세요.",
         regular_schedule_count_mismatch: `이 회원권은 주 ${ticket.weeklyCount}회이므로 요일/시간 ${ticket.weeklyCount}개를 모두 선택해 주세요.`,
+        regular_schedule_exists_edit_existing: "기존 정규 시간표가 보호되어 새 등록은 진행하지 않았습니다. 기존 수업 카드를 눌러 해당 수업만 수정해 주세요.",
         regular_schedule_time_invalid: "회원권 기간 안의 아직 시작하지 않은 시간만 정규시간으로 저장할 수 있습니다.",
         admin_manual_override_reason_required: "강제 처리 사유를 5자 이상 입력해 주세요.",
         admin_manual_exact_duplicate: "같은 회원권·날짜·시간의 수업이 이미 있습니다. 기존 수업을 수정해 주세요.",
