@@ -5097,3 +5097,159 @@ body.notice-open {
     grid-template-columns: 1fr;
   }
 }
+
+/* Tennis Note athletic visual system: presentation only, no member flow changes. */
+:root {
+  --ink: #12231f;
+  --muted: #66766f;
+  --line: #d8e2dd;
+  --paper: #ffffff;
+  --wash: #f3f7f4;
+  --green: #087255;
+  --blue: #1d6fa5;
+  --amber: #a76011;
+  --soft-green: #e7f5ee;
+  --soft-blue: #edf6fb;
+  --soft-amber: #fff5e6;
+}
+
+body {
+  background: #eaf0ed;
+  font-family: "Pretendard Variable", Pretendard, Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.app-shell {
+  background: var(--wash);
+}
+
+.member-topbar {
+  position: relative;
+  min-height: 68px;
+  margin-bottom: 12px;
+  border: 1px solid #dbe6e0;
+  border-radius: 8px;
+  padding: 11px 14px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 5px 14px rgba(18, 35, 31, 0.05);
+}
+
+.member-topbar::after {
+  position: absolute;
+  right: 10px;
+  bottom: -18px;
+  width: 84px;
+  height: 84px;
+  content: "";
+  opacity: 0.09;
+  background: url("./assets/brand/app-icon-192.png") center / contain no-repeat;
+  pointer-events: none;
+}
+
+.member-heading {
+  position: relative;
+  z-index: 1;
+}
+
+.summary-grid article,
+.today-card,
+.form-card,
+.request-card,
+.history-card {
+  border-color: #dbe6e0;
+  box-shadow: 0 5px 14px rgba(18, 35, 31, 0.045);
+}
+
+.summary-grid .summary-card.primary {
+  position: relative;
+  overflow: hidden;
+  border-color: #a8d9c7;
+  background: var(--soft-green);
+}
+
+.summary-grid .summary-card.primary::after {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  width: 62px;
+  height: 62px;
+  content: "";
+  opacity: 0.14;
+  background: url("./assets/brand/app-icon-192.png") center / contain no-repeat;
+  pointer-events: none;
+}
+
+.summary-grid .summary-card.primary > * {
+  position: relative;
+  z-index: 1;
+}
+
+.summary-grid strong {
+  color: #075b45;
+}
+
+.home-change-button {
+  border-color: #0c7658;
+  border-radius: 8px;
+  background: #087255;
+  box-shadow: 0 7px 16px rgba(8, 114, 85, 0.2);
+}
+
+.home-change-button strong,
+.home-change-button span {
+  color: #ffffff;
+}
+
+.tabbar {
+  gap: 6px;
+}
+
+.tab {
+  border: 1px solid #dbe6e0;
+  background: #ffffff;
+}
+
+.tab.is-active {
+  border-color: #087255;
+  background: #087255;
+}
+
+@media (max-width: 720px) {
+  .app-screen {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .member-topbar {
+    min-height: 64px;
+    margin-bottom: 10px;
+  }
+
+  .tabbar {
+    position: fixed;
+    z-index: 50;
+    left: 50%;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: min(calc(100% - 20px), 560px);
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    transform: translateX(-50%);
+    gap: 3px;
+    margin: 0;
+    border: 1px solid #dbe6e0;
+    border-radius: 8px;
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 10px 24px rgba(18, 35, 31, 0.16);
+  }
+
+  .tabbar .tab {
+    min-width: 0;
+    min-height: 48px;
+    padding: 4px 2px;
+    border-color: transparent;
+    font-size: 10px;
+    line-height: 1.15;
+    white-space: normal;
+    word-break: keep-all;
+  }
+}

@@ -3650,3 +3650,88 @@ button .schedule-member-lines > span {
   white-space: nowrap;
   line-height: 1.05;
 }
+
+/* Tennis Note athletic visual system: presentation only, no coach workflow changes. */
+:root {
+  --ink: #12231f;
+  --muted: #66766f;
+  --line: #d8e2dd;
+  --paper: #ffffff;
+  --wash: #f3f7f4;
+  --green: #087255;
+  --blue: #1d6fa5;
+  --soft-green: #e7f5ee;
+  --soft-blue: #edf6fb;
+  --soft-red: #fff0ee;
+}
+
+body {
+  background: #eaf0ed;
+  font-family: "Pretendard Variable", Pretendard, Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.coach-shell {
+  background: var(--wash);
+}
+
+.coach-context-bar {
+  position: relative;
+  overflow: hidden;
+  border-color: #a8d9c7;
+  background: var(--soft-green);
+  box-shadow: 0 5px 14px rgba(18, 35, 31, 0.05);
+}
+
+.coach-context-bar::after {
+  position: absolute;
+  right: 52px;
+  bottom: -20px;
+  width: 88px;
+  height: 88px;
+  content: "";
+  opacity: 0.1;
+  background: url("../tennis-note-member-app/assets/brand/app-icon-192.png") center / contain no-repeat;
+  pointer-events: none;
+}
+
+.coach-context-bar .coach-heading,
+.coach-context-bar .top-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.summary-grid article,
+.form-card,
+.work-card,
+.member-row,
+.curriculum-card {
+  border-color: #dbe6e0;
+  box-shadow: 0 5px 14px rgba(18, 35, 31, 0.045);
+}
+
+.summary-grid article:first-child {
+  border-color: #a8d9c7;
+  background: var(--soft-green);
+}
+
+.summary-grid strong {
+  color: #075b45;
+}
+
+.tab {
+  border: 1px solid #dbe6e0;
+}
+
+.tab.is-active,
+.schedule-filter.is-active,
+.today-task-tab.is-active {
+  border-color: #087255;
+  background: #087255;
+}
+
+@media (max-width: 1024px) {
+  .tabbar {
+    border-radius: 8px;
+    border-color: #dbe6e0;
+  }
+}
