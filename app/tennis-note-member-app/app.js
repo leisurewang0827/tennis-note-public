@@ -1457,7 +1457,15 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => undefined);
+    let controllerChanged = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (controllerChanged) return;
+      controllerChanged = true;
+      window.location.reload();
+    });
+    navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" })
+      .then((registration) => registration.update().catch(() => undefined))
+      .catch(() => undefined);
   });
 }
 
@@ -6747,7 +6755,12 @@ async function applySupabaseMemberSession(showNotice = false) {
   const session = await client.ensureSession?.() || client.getSession?.();
   if (!session?.access_token) return false;
   try {
-    const { user, profile, coachRole } = await client.selectCurrentProfile();
+    let current = await client.selectCurrentProfile();
+    if (!current?.profile) {
+      await client.bootstrapCurrentProfile?.({ providerHint: session.provider || "" });
+      current = await client.selectCurrentProfile();
+    }
+    const { user, profile, coachRole } = current;
     activateLiveMemberProfile(profile?.id);
     const displayName = profile?.name || state.profile?.name || "가입 확인 중";
     state.member = {

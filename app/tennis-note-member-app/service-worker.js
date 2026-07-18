@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-member-pwa-v56";
+const CACHE_NAME = "tennis-note-member-pwa-v57";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -39,8 +39,11 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
+  const alwaysFresh = ["document", "script", "style", "manifest", "worker"].includes(event.request.destination)
+    || url.pathname.endsWith("/config.local.js");
+
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, alwaysFresh ? { cache: "no-store" } : undefined)
       .then((response) => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
