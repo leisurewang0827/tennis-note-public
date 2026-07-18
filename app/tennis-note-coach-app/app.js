@@ -71,6 +71,21 @@
 const noticeSessionSeenIds = new Set();
 let noticePreviousFocus = null;
 
+const brandSplashStartedAt = performance.now();
+const brandSplashMinimumDuration = 600;
+
+function hideCoachBrandSplash() {
+  const splash = document.querySelector("#coachBrandSplash");
+  if (!splash) return;
+  const delay = Math.max(0, brandSplashMinimumDuration - (performance.now() - brandSplashStartedAt));
+  window.setTimeout(() => {
+    splash.classList.add("is-hidden");
+    window.setTimeout(() => {
+      splash.hidden = true;
+    }, 220);
+  }, delay);
+}
+
 const legacyCurriculumSteps = [
   {
     id: "FH-01",
@@ -1355,8 +1370,17 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
+  let controllerChanged = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (controllerChanged) return;
+    controllerChanged = true;
+    window.location.reload();
+  });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => undefined);
+    navigator.serviceWorker
+      .register("./service-worker.js", { updateViaCache: "none" })
+      .then((registration) => registration.update().catch(() => undefined))
+      .catch(() => undefined);
   });
 }
 
@@ -1556,9 +1580,11 @@ async function logoutCoach() {
 }
 
 function setView(viewId) {
+  if (!viewId || !$("#" + viewId)) return;
   $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === viewId));
   $$(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.view === viewId));
   document.body.dataset.activeView = viewId;
+  jumpToTop();
 }
 
 function renderSummary() {
@@ -4189,4 +4215,4 @@ async function initCoachApp() {
   }
 }
 
-initCoachApp();
+initCoachApp().finally(hideCoachBrandSplash).catch(() => undefined);
