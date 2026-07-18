@@ -900,6 +900,7 @@ async function syncMemberNotificationsFromServer(profile = null) {
       .filter((row) => row.channel === "app")
       .map((row) => normalizeLiveNotification(row))
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const previousKey = state.lastLiveNotificationKey;
     state.liveNotifications = notifications;
     const latest = notifications[0];
     const latestKey = latest ? `${latest.id}:${latest.status}` : "";
@@ -907,7 +908,10 @@ async function syncMemberNotificationsFromServer(profile = null) {
       state.lastLiveNotificationKey = latestKey;
       state.ticketHistory.unshift({ text: `${latest.title} · ${latest.body}`, tone: latest.tone });
     }
-    return true;
+    return {
+      ok: true,
+      newNotification: previousKey && latest && latestKey !== previousKey ? latest : null,
+    };
   } catch {
     return false;
   }
@@ -7451,6 +7455,48 @@ function renderAll() {
   saveSnapshot();
 }
 
+let memberLiveScheduleRefreshTimer = 0;
+let memberLiveScheduleRefreshInFlight = false;
+
+async function refreshMemberLiveSchedule(options = {}) {
+  const client = window.TennisNoteDataClient;
+  if (
+    memberLiveScheduleRefreshInFlight
+    || document.hidden
+    || state.dataMode !== "live"
+    || !state.member?.profileId
+    || !client?.readiness?.().ready
+    || !client?.getSession?.()?.access_token
+  ) return false;
+
+  memberLiveScheduleRefreshInFlight = true;
+  try {
+    await syncMemberTicketsFromServer();
+    const [lessonsSynced, requestsSynced, notificationResult] = await Promise.all([
+      syncMemberLessonsFromServer(),
+      syncMemberChangeRequestsFromServer(),
+      syncMemberNotificationsFromServer(),
+    ]);
+    if (options.render !== false) renderAll();
+    if (notificationResult?.newNotification) {
+      showToast(`${notificationResult.newNotification.title} · 시간표에서 확인해 주세요.`);
+    }
+    return Boolean(lessonsSynced || requestsSynced || notificationResult?.ok);
+  } finally {
+    memberLiveScheduleRefreshInFlight = false;
+  }
+}
+
+function installMemberLiveScheduleRefresh() {
+  if (memberLiveScheduleRefreshTimer) return;
+  const refresh = () => refreshMemberLiveSchedule().catch(() => false);
+  window.addEventListener("focus", refresh);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh();
+  });
+  memberLiveScheduleRefreshTimer = window.setInterval(refresh, 15_000);
+}
+
 async function initApp() {
   registerPwaServiceWorker();
   registerPwaInstallPrompt();
@@ -7458,6 +7504,7 @@ async function initApp() {
   restoreSnapshot();
   await syncLiveSchedulePolicy();
   bindEvents();
+  installMemberLiveScheduleRefresh();
   renderAll();
   await syncAppleLoginAvailability();
   const openedFromSupabase = await applySupabaseMemberSession(true);

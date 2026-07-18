@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=admin-partner-schedule-1" />
+    <link rel="stylesheet" href="./styles.css?v=admin-regular-absence-1" />
   </head>
   <body>
     <section id="operationsLoginGate" class="operations-login-gate" aria-labelledby="operationsLoginTitle">
@@ -1005,14 +1005,14 @@
 
           <section id="lessonAbsencePanel" class="lesson-absence-panel" hidden>
             <div>
-              <strong>회원 불참 처리</strong>
-              <span>원래 시간은 즉시 비워지고 회원에게 보강 시간 선택 안내가 전달됩니다.</span>
+              <strong>정규수업 불참 처리</strong>
+              <span>횟수는 차감하지 않고, 원래 시간은 보강 전용으로 열립니다.</span>
             </div>
             <label class="form-field">
               <span>불참 사유</span>
               <input id="lessonAbsenceReason" type="text" minlength="2" maxlength="200" placeholder="예: 회원 사전 연락" />
             </label>
-            <button id="markLessonAbsentButton" class="warning-button" type="button">불참 처리·보강 열기</button>
+            <button id="markLessonAbsentButton" class="warning-button" type="button">불참 처리·보강 전용으로 열기</button>
           </section>
 
           <section id="lessonAbsenceRestorePanel" class="lesson-absence-panel is-restore" hidden>
@@ -1146,7 +1146,7 @@
     <script src="../shared/config.local.js?v=local"></script>
     <script src="../shared/tennisnote-data-client.js?v=member-demographics-1"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=release-6"></script>
-    <script src="./app.js?v=admin-partner-schedule-1"></script>
+    <script src="../shared/tennisnote-release.js?v=release-7"></script>
+    <script src="./app.js?v=admin-regular-absence-1"></script>
   </body>
 </html>

@@ -9944,6 +9944,7 @@ function openLessonModal(defaults = {}) {
     absencePanel.hidden = !(
       editingLesson?.serverLessonId
       && editingLesson.serverStatus === "scheduled"
+      && normalizeLessonSource(editingLesson.lessonSource) === "regular"
       && operationsRole() === "admin"
     );
   }
@@ -9982,8 +9983,8 @@ function openAdminMakeupBooking(entitlement) {
 async function markEditingLessonAbsentForMakeup() {
   const lesson = lessons.find((item) => item.id === state.editingLessonId);
   const reason = $("#lessonAbsenceReason")?.value.trim() || "";
-  if (!lesson?.serverLessonId || lesson.serverStatus !== "scheduled") {
-    setLessonFormMessage("예정 상태의 실서버 수업만 불참 처리할 수 있습니다.", "danger");
+  if (!lesson?.serverLessonId || lesson.serverStatus !== "scheduled" || normalizeLessonSource(lesson.lessonSource) !== "regular") {
+    setLessonFormMessage("예정 상태의 정규수업만 불참 처리할 수 있습니다.", "danger");
     return;
   }
   if (reason.length < 2) {
@@ -9991,7 +9992,7 @@ async function markEditingLessonAbsentForMakeup() {
     $("#lessonAbsenceReason")?.focus();
     return;
   }
-  if (!window.confirm(`${lesson.member} ${lesson.day} ${lesson.time} 수업을 불참 처리할까요?\n\n원래 시간은 즉시 비워지고 회원에게 보강 시간 선택 안내가 전달됩니다.`)) return;
+  if (!window.confirm(`${lesson.member} ${lesson.day} ${lesson.time} 정규수업을 불참 처리할까요?\n\n횟수는 지금 차감되지 않습니다. 원래 시간은 보강 전용으로 열리고 회원에게 보강 시간 선택 안내가 전달됩니다.`)) return;
   const button = $("#markLessonAbsentButton");
   if (button) {
     button.disabled = true;
@@ -10014,8 +10015,10 @@ async function markEditingLessonAbsentForMakeup() {
       ? "불참 사유를 2자 이상 입력해 주세요."
       : code.includes("absence_lesson_already_started")
         ? "이미 시작한 수업은 사전 불참으로 처리할 수 없습니다."
-        : code.includes("absence_lesson_not_scheduled")
-          ? "예정 상태가 아닌 수업입니다. 시간표를 새로고침해 주세요."
+      : code.includes("absence_lesson_not_scheduled")
+        ? "예정 상태가 아닌 수업입니다. 시간표를 새로고침해 주세요."
+        : code.includes("absence_regular_lesson_required")
+          ? "정규수업만 불참 처리할 수 있습니다."
           : code.includes("absence_coach_or_admin_required")
             ? "관리자 또는 담당 코치만 불참 처리할 수 있습니다."
             : "불참 처리에 실패했습니다. 수업 상태를 다시 확인해 주세요.";
@@ -14962,6 +14965,38 @@ function renderAll() {
   saveSnapshot();
 }
 
+let adminLiveScheduleRefreshTimer = 0;
+let adminLiveScheduleRefreshInFlight = false;
+
+async function refreshAdminLiveSchedule(options = {}) {
+  if (
+    adminLiveScheduleRefreshInFlight
+    || document.hidden
+    || state.view !== "schedule"
+    || !operationsAccessReady()
+    || !$("#lessonModal")?.hidden
+  ) return false;
+
+  adminLiveScheduleRefreshInFlight = true;
+  try {
+    const synced = await syncAdminLiveData();
+    if (synced && options.render !== false) renderSchedule();
+    return synced;
+  } finally {
+    adminLiveScheduleRefreshInFlight = false;
+  }
+}
+
+function installAdminLiveScheduleRefresh() {
+  if (adminLiveScheduleRefreshTimer) return;
+  const refresh = () => refreshAdminLiveSchedule().catch(() => false);
+  window.addEventListener("focus", refresh);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh();
+  });
+  adminLiveScheduleRefreshTimer = window.setInterval(refresh, 20_000);
+}
+
 function bindEvents() {
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   document.addEventListener("click", (event) => {
@@ -16061,6 +16096,7 @@ window.TennisNoteDataClient?.consumeOAuthRedirect?.();
 renderOperationsLoginGate();
 organizeAdminTools();
 bindEvents();
+installAdminLiveScheduleRefresh();
 renderAll();
 let adminScheduleResizeTimer = 0;
 window.addEventListener("resize", () => {

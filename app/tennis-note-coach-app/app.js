@@ -1708,6 +1708,10 @@ function canRescheduleLesson(lesson) {
   return !["완료", "취소", "당일 취소", "변경 요청"].includes(lesson.status);
 }
 
+function canMarkRegularLessonAbsent(lesson) {
+  return canRescheduleLesson(lesson) && String(lesson.lessonSource || lesson.lesson_source || "regular") === "regular";
+}
+
 function lessonPermissionText(lesson) {
   if (canRescheduleLesson(lesson)) return "내 수업이라 일정 수정과 완료 처리가 가능합니다.";
   if (canProcessLesson(lesson)) return "대타 수업은 완료 처리할 수 있고 일정 수정은 원 담당 코치만 가능합니다.";
@@ -2011,17 +2015,17 @@ function renderScheduleEditPanel() {
           </label>
         </div>
       </div>
-      ${canReschedule && lesson.serverLessonId
+      ${canMarkRegularLessonAbsent(lesson) && lesson.serverLessonId
         ? `<div class="lesson-edit-mini lesson-absence-mini wide">
-            <strong>회원 불참 처리</strong>
-            <p class="permission-note">원래 시간은 즉시 비워지고 회원에게 보강 시간 선택 안내가 전달됩니다.</p>
+            <strong>정규수업 불참 처리</strong>
+            <p class="permission-note">횟수는 차감하지 않고 원래 시간을 보강 전용으로 엽니다. 회원에게 보강 안내가 전달됩니다.</p>
             <div class="lesson-edit-grid">
               <label class="wide">
                 <span>불참 사유</span>
                 <input id="coachAbsenceReason" type="text" minlength="2" maxlength="200" placeholder="예: 회원 사전 연락" />
               </label>
             </div>
-            <button class="reject-button" type="button" data-mark-lesson-absent="${lesson.id}">불참 처리·보강 열기</button>
+            <button class="reject-button" type="button" data-mark-lesson-absent="${lesson.id}">불참 처리·보강 전용으로 열기</button>
           </div>`
         : ""}
       <div class="actions wide">
@@ -3079,14 +3083,14 @@ async function saveLessonEdit(id) {
 async function markCoachLessonAbsent(id) {
   const lesson = ensureCoachLessonRecord(id);
   const reason = $("#coachAbsenceReason")?.value.trim() || "";
-  if (!lesson?.serverLessonId || !canRescheduleLesson(lesson)) return;
+  if (!lesson?.serverLessonId || !canMarkRegularLessonAbsent(lesson)) return;
   if (reason.length < 2) {
     lesson.validationMessage = "불참 사유를 2자 이상 입력해 주세요.";
     renderLessonEditModal();
     $("#coachAbsenceReason")?.focus();
     return;
   }
-  if (!window.confirm(`${lesson.member} ${lesson.day} ${lesson.time} 수업을 불참 처리할까요?\n\n원래 시간은 즉시 비워지고 회원에게 보강 선택 안내가 전달됩니다.`)) return;
+  if (!window.confirm(`${lesson.member} ${lesson.day} ${lesson.time} 정규수업을 불참 처리할까요?\n\n횟수는 지금 차감되지 않습니다. 원래 시간은 보강 전용으로 열리고 회원에게 보강 안내가 전달됩니다.`)) return;
   const client = window.TennisNoteDataClient;
   if (!client?.rpc || !client.getSession?.()?.access_token) {
     lesson.validationMessage = "서버 로그인 상태를 확인한 뒤 다시 처리해 주세요.";
@@ -3110,6 +3114,8 @@ async function markCoachLessonAbsent(id) {
       ? "이미 시작한 수업은 사전 불참으로 처리할 수 없습니다."
       : code.includes("absence_lesson_not_scheduled")
         ? "예정 상태가 아닌 수업입니다. 새로고침 후 다시 확인해 주세요."
+        : code.includes("absence_regular_lesson_required")
+          ? "정규수업만 불참 처리할 수 있습니다."
         : code.includes("absence_coach_or_admin_required")
           ? "본인이 담당하는 수업만 불참 처리할 수 있습니다."
           : "불참 처리에 실패했습니다. 수업 상태를 다시 확인해 주세요.";
@@ -4195,12 +4201,46 @@ function renderAll() {
   saveSnapshot();
 }
 
+let coachLiveScheduleRefreshTimer = 0;
+let coachLiveScheduleRefreshInFlight = false;
+
+async function refreshCoachLiveSchedule(options = {}) {
+  const client = window.TennisNoteDataClient;
+  if (
+    coachLiveScheduleRefreshInFlight
+    || document.hidden
+    || state.dataMode !== "live"
+    || !state.coach
+    || !client?.getSession?.()?.access_token
+  ) return false;
+
+  coachLiveScheduleRefreshInFlight = true;
+  try {
+    const synced = await syncCoachLessonsFromServer();
+    if (synced && options.render !== false) renderAll();
+    return synced;
+  } finally {
+    coachLiveScheduleRefreshInFlight = false;
+  }
+}
+
+function installCoachLiveScheduleRefresh() {
+  if (coachLiveScheduleRefreshTimer) return;
+  const refresh = () => refreshCoachLiveSchedule().catch(() => false);
+  window.addEventListener("focus", refresh);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh();
+  });
+  coachLiveScheduleRefreshTimer = window.setInterval(refresh, 15_000);
+}
+
 async function initCoachApp() {
   registerPwaServiceWorker();
   purgeLegacyDemoStorage();
   restoreSnapshot();
   await syncLiveSchedulePolicy();
   bindEvents();
+  installCoachLiveScheduleRefresh();
   renderAll();
 
   const openedFromSupabase = await applySupabaseCoachSession(false);

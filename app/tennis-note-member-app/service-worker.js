@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-member-pwa-v59";
+const CACHE_NAME = "tennis-note-member-pwa-v60";
 const APP_SHELL = [
   "./",
   "./index.html",
