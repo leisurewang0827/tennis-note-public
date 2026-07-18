@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=admin-member-management-1" />
+    <link rel="stylesheet" href="./styles.css?v=member-database-2" />
   </head>
   <body>
     <section id="operationsLoginGate" class="operations-login-gate" aria-labelledby="operationsLoginTitle">
@@ -64,7 +64,7 @@
           <div class="topbar-actions">
             <nav class="app-preview-links" aria-label="앱 미리보기">
               <span>앱 미리보기</span>
-              <a href="../tennis-note-member-app/index.html?v=member-demographics-1" target="_blank" rel="noopener">통합앱</a>
+              <a href="../tennis-note-member-app/index.html?v=member-reversible-ops-1" target="_blank" rel="noopener">통합앱</a>
             </nav>
             <div class="global-search-shell">
               <label class="search-box">
@@ -110,14 +110,16 @@
                 <button class="ghost-button" type="button" data-jump="billing">결제/정산 보기</button>
               </div>
               <div id="adminTaskList" class="ops-list"></div>
+              <div id="adminTaskPager" class="dashboard-pager" aria-label="오늘 처리할 일 페이지" hidden></div>
             </article>
 
             <article class="panel">
               <div class="panel-heading">
-                <h2>회원 상태</h2>
+                <h2>회원 현황</h2>
                 <button class="ghost-button" type="button" data-jump="members">회원 보기</button>
               </div>
               <div id="memberStatusCards" class="member-status-grid"></div>
+              <div id="memberStatusPager" class="dashboard-pager" aria-label="회원 현황 페이지" hidden></div>
             </article>
 
             <article class="panel">
@@ -167,8 +169,7 @@
         <section id="membersView" class="view" aria-label="회원관리">
           <div class="toolbar">
             <div class="segmented-control" role="group" aria-label="회원 상태">
-              <button class="segment is-active" type="button" data-member-filter="all">전체</button>
-              <button class="segment" type="button" data-member-filter="active">수강중</button>
+              <button class="segment is-active" type="button" data-member-filter="active">수강중</button>
               <button class="segment" type="button" data-member-filter="expiring">만료임박</button>
               <button class="segment" type="button" data-member-filter="pending">가입대기</button>
               <button class="segment" type="button" data-member-filter="journal">운동노트</button>
@@ -182,7 +183,7 @@
               <button id="addMemberButton" class="primary-button" type="button">회원 추가</button>
             </div>
           </div>
-          <div id="adminPendingUsersPanel" class="admin-pending-users-panel"></div>
+          <div id="adminPendingUsersPanel" class="admin-pending-users-panel" data-member-scope="pending" data-member-admin-only hidden></div>
           <div class="two-column member-directory-layout">
             <section class="panel table-panel">
               <div class="member-list-toolbar" aria-label="회원 목록 필터">
@@ -212,25 +213,17 @@
                     <th>회원</th>
                     <th>담당 코치</th>
                     <th>레슨·시간</th>
-                    <th>사용/총</th>
+                    <th>총 / 소진 / 잔여</th>
                     <th>상태</th>
                   </tr>
                 </thead>
                 <tbody id="memberRows"></tbody>
               </table>
+              <div id="memberListPager" class="dashboard-pager member-list-pager" aria-label="회원 목록 페이지" hidden></div>
             </section>
             <aside id="memberDetail" class="panel detail-panel" hidden></aside>
           </div>
-          <details class="panel admin-secondary-panel group-account-admin-panel" aria-label="2대1 공동관리">
-            <summary class="admin-secondary-summary">
-              <span class="admin-secondary-title"><small>2:1 Shared</small><strong>2대1 팀 연결 관리</strong></span>
-              <span class="source-pill">필요할 때 열기</span>
-            </summary>
-            <p class="setting-help">한 명만 앱을 사용해도 두 사람의 수업을 함께 관리합니다. 두 명 모두 가입한 팀은 결제자를 번갈아 지정하거나 각자 결제할 수 있습니다.</p>
-            <div id="groupAccountLinkControls" class="coach-candidate-panel"></div>
-            <div id="groupAccountAdminList" class="group-account-admin-list"></div>
-          </details>
-          <details class="panel admin-secondary-panel holding-admin-panel" aria-label="홀딩 요청 관리">
+          <details class="panel admin-secondary-panel holding-admin-panel" data-member-scope="active" data-member-admin-only aria-label="홀딩 요청 관리">
             <summary class="admin-secondary-summary">
               <span class="admin-secondary-title"><small>Holding</small><strong>홀딩 요청</strong></span>
               <span class="source-pill">관리자 확인</span>
@@ -238,7 +231,7 @@
             <p class="setting-help">개인 사유는 기간만 확인하고, 부상 증빙은 관리자만 열람합니다.</p>
             <div id="holdingRequestAdminList" class="holding-admin-list"></div>
           </details>
-          <details class="panel admin-secondary-panel account-deletion-admin-panel" aria-label="회원 탈퇴 요청 관리">
+          <details class="panel admin-secondary-panel account-deletion-admin-panel" data-member-scope="inactive" data-member-admin-only aria-label="회원 탈퇴 요청 관리" hidden>
             <summary class="admin-secondary-summary">
               <span class="admin-secondary-title"><small>Account</small><strong>회원 탈퇴·데이터 삭제 요청</strong></span>
               <span class="source-pill">관리자 처리</span>
@@ -356,13 +349,12 @@
             <div class="panel-heading">
               <h2>결제 처리 단계</h2>
               <div class="segmented-control billing-status-tabs" role="group" aria-label="결제 상태">
-                <button class="segment is-active" type="button" data-billing-filter="action">처리 필요</button>
-                <button class="segment" type="button" data-billing-filter="verifying">검증중</button>
-                <button class="segment" type="button" data-billing-filter="done">완료</button>
-                <button class="segment" type="button" data-billing-filter="refund">취소·환불</button>
+                <button class="segment is-active" type="button" data-billing-filter="action">처리 필요 <span data-billing-count="action">0</span></button>
+                <button class="segment" type="button" data-billing-filter="verifying">검증중 <span data-billing-count="verifying">0</span></button>
+                <button class="segment" type="button" data-billing-filter="done">완료 <span data-billing-count="done">0</span></button>
+                <button class="segment" type="button" data-billing-filter="refund">취소·환불 <span data-billing-count="refund">0</span></button>
               </div>
             </div>
-            <div id="paymentQueueCards" class="payment-queue-grid"></div>
           </section>
           <section class="panel payment-charge-panel" aria-label="회원권 충전 추적">
             <div class="panel-heading">
@@ -859,15 +851,20 @@
 
             <section class="panel lesson-rule-panel settings-tab-panel" data-settings-panel="operation">
               <div class="panel-heading compact-heading">
-                <h2>수업 변경·차감 기준</h2>
-                <span class="source-pill">현재 적용</span>
+                <div>
+                  <p class="eyebrow">LESSON POLICY</p>
+                  <h2>수업 정책</h2>
+                </div>
+                <button id="addLessonPolicyButton" class="primary-button" type="button">새 정책</button>
               </div>
-              <div class="policy-summary-list">
-                <div><strong>24시간 전</strong><span>회원이 가능한 시간으로 바로 변경</span></div>
-                <div><strong>24시간 이내</strong><span>코치 승인 필요 · 당일 취소는 차감</span></div>
-                <div><strong>수업 완료</strong><span>코치 코멘트와 다음 커리큘럼 등록 후 차감</span></div>
-                <div><strong>수업 단위</strong><span>20분·30분, 40분·60분은 연속 회차 사용</span></div>
+              <div class="lesson-policy-toolbar">
+                <label>
+                  <span class="sr-only">수업 정책 검색</span>
+                  <input id="lessonPolicySearch" type="search" placeholder="정책명·내용 검색" autocomplete="off" />
+                </label>
+                <span id="lessonPolicyCount" class="source-pill">0개</span>
               </div>
+              <div id="lessonPolicyList" class="lesson-policy-list"></div>
             </section>
 
             <section class="panel coach-settings-panel settings-tab-panel" data-settings-panel="coach">
@@ -916,6 +913,23 @@
       </section>
     </main>
 
+    <div id="policyVersionEditorModal" class="modal-backdrop" hidden>
+      <section class="modal-panel policy-version-editor-modal" role="dialog" aria-modal="true" aria-labelledby="policyVersionEditorTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">Membership Policy</p>
+            <h2 id="policyVersionEditorTitle">정책 수정</h2>
+          </div>
+          <button id="closePolicyVersionEditor" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <div id="policyVersionEditorContent" class="policy-version-editor-content"></div>
+        <div class="modal-actions">
+          <button id="cancelPolicyVersionEditor" class="ghost-button" type="button">취소</button>
+          <button id="savePolicyVersionEditor" class="primary-button" type="button">정책 저장</button>
+        </div>
+      </section>
+    </div>
+
     <div id="adminToolsModal" class="modal-backdrop" hidden>
       <section class="modal-panel admin-tools-modal-panel" role="dialog" aria-modal="true" aria-labelledby="adminToolsModalTitle">
         <div class="modal-heading">
@@ -956,14 +970,20 @@
               <option value="그룹">그룹</option>
             </select>
             <select id="lessonDuration"></select>
-            <select id="lessonTicket" required></select>
           </div>
-          <label class="form-field">
-            <span>회원</span>
-            <small id="lessonCurrentMembers" class="lesson-current-members" hidden></small>
-            <input id="lessonMemberSearch" type="search" placeholder="회원 검색" autocomplete="off" />
-            <select id="lessonMember" required></select>
-          </label>
+          <section class="lesson-member-ticket-panel">
+            <label class="form-field">
+              <span>회원 검색</span>
+              <small id="lessonCurrentMembers" class="lesson-current-members" hidden></small>
+              <input id="lessonMemberSearch" type="search" placeholder="회원 이름 입력" autocomplete="off" />
+              <select id="lessonMember" required></select>
+            </label>
+            <label id="lessonTicketField" class="form-field">
+              <span>사용 회원권</span>
+              <select id="lessonTicket" required></select>
+              <small id="lessonTicketHint" class="lesson-ticket-hint">회원을 검색하면 사용 가능한 회원권이 자동으로 표시됩니다.</small>
+            </label>
+          </section>
           <div id="lessonExpiredTickets" class="lesson-expired-tickets" aria-live="polite"></div>
           <label class="form-field">
             <span>코치</span>
@@ -976,7 +996,7 @@
               <option value="makeup">보강</option>
               <option value="coupon">쿠폰수업</option>
               <option value="coach_change" hidden>코치변경</option>
-              <option value="admin" hidden>관리자 입력</option>
+              <option value="admin" hidden>과거수업 보정</option>
             </select>
           </label>
           <label id="lessonMakeupEntitlementField" class="form-field" hidden>
@@ -984,6 +1004,19 @@
             <select id="lessonMakeupEntitlement"></select>
             <small>불참 처리된 회원의 보강 대기를 선택하면 예약과 동시에 처리 완료됩니다.</small>
           </label>
+          <section id="lessonAdminOverridePanel" class="lesson-admin-override-panel" hidden>
+            <label class="lesson-admin-override-toggle">
+              <input id="lessonAdminOverride" type="checkbox" />
+              <span>
+                <strong>관리자 강제 수동 처리</strong>
+                <small>초기 데이터 정리 중 정책 충돌이 있어도 이 수업만 예외로 저장합니다.</small>
+              </span>
+            </label>
+            <div id="lessonAdminOverrideDetails" class="lesson-admin-override-details" hidden>
+              <p><strong>주의:</strong> 회원·코치 앱의 제한은 그대로 유지되며, 우회 항목과 처리 시각은 자동으로 감사 기록에 남습니다.</p>
+              <ul id="lessonAdminOverrideWarnings"></ul>
+            </div>
+          </section>
           <label class="form-field lesson-primary-time-field">
             <span>요일/시간 1</span>
             <div class="lesson-inline-selects">
@@ -992,6 +1025,18 @@
             </div>
           </label>
           <div id="lessonRepeatSlots" class="lesson-repeat-slots"></div>
+
+          <section id="lessonPastCorrectionPanel" class="lesson-past-correction-panel" hidden>
+            <div class="lesson-past-correction-heading">
+              <strong>과거 수업 보정</strong>
+              <span>실제로 진행했지만 프로그램에 넣지 못한 수업을 관리자 기록으로 남깁니다. 저장 즉시 완료 처리되고 회원권 횟수가 차감됩니다.</span>
+            </div>
+            <label class="form-field lesson-past-comment-field">
+              <span>수업 코멘트</span>
+              <textarea id="lessonPastCoachComment" rows="3" minlength="10" maxlength="1000" placeholder="실제 진행한 수업 내용과 다음 연습 포인트를 10자 이상 입력하세요."></textarea>
+            </label>
+            <small>잘못 반영한 경우 ‘관리자 강제 삭제’로 횟수를 복원한 뒤 다시 등록할 수 있습니다.</small>
+          </section>
 
           <section id="lessonAbsencePanel" class="lesson-absence-panel" hidden>
             <div>
@@ -1003,6 +1048,14 @@
               <input id="lessonAbsenceReason" type="text" minlength="2" maxlength="200" placeholder="예: 회원 사전 연락" />
             </label>
             <button id="markLessonAbsentButton" class="warning-button" type="button">불참 처리·보강 열기</button>
+          </section>
+
+          <section id="lessonAbsenceRestorePanel" class="lesson-absence-panel is-restore" hidden>
+            <div>
+              <strong>정규수업 참석으로 복원</strong>
+              <span id="lessonAbsenceRestoreSummary">불참 처리를 취소하고 원래 정규시간을 다시 확정합니다.</span>
+            </div>
+            <button id="restoreAbsentLessonButton" class="primary-button" type="button">원래 정규수업 복원</button>
           </section>
 
           <div id="lessonPreview" class="lesson-preview" aria-live="polite"></div>
@@ -1116,6 +1169,6 @@
     <script src="../shared/config.local.js?v=local"></script>
     <script src="../shared/tennisnote-data-client.js?v=member-demographics-1"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="./app.js?v=admin-member-management-1"></script>
+    <script src="./app.js?v=member-database-2"></script>
   </body>
 </html>
