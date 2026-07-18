@@ -7,18 +7,18 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Tennis Note" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <title>테니스노트</title>
+    <title>테니스노트 현실 MVP</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=member-live-feedback-1" />
+    <link rel="stylesheet" href="./styles.css?v=member-notice-layer-1" />
   </head>
   <body>
     <section id="brandSplash" class="brand-splash" role="status" aria-label="Tennis Note 불러오는 중">
       <img src="./assets/brand/launch-splash.png" alt="" />
       <span>Tennis Note 불러오는 중</span>
     </section>
-    <main class="app-shell" aria-label="테니스노트">
+    <main class="app-shell" aria-label="테니스노트 현실 MVP">
       <section id="loginScreen" class="login-screen">
         <div class="brand">
           <p>Tennis Note</p>
@@ -27,12 +27,24 @@
 
         <div class="login-card">
           <h2>간편 로그인</h2>
-          <button class="provider naver" type="button" data-login-provider="네이버" aria-label="네이버 로그인">
-            <img src="./assets/brand/naver-login-green-icon-h48.png" alt="" aria-hidden="true" />
-            <span>네이버로 시작</span>
-          </button>
+          <button class="provider naver" type="button" data-login-provider="네이버">네이버로 시작</button>
           <button class="provider kakao" type="button" data-login-provider="카카오">카카오로 시작</button>
-          <button class="provider apple is-preparing" type="button" data-login-provider="Apple" data-ready-label="Apple로 시작" disabled>Apple 로그인 확인 중</button>
+          <button
+            class="provider apple is-preparing"
+            type="button"
+            data-login-provider="Apple"
+            data-ready-label="Apple로 계속"
+            aria-label="Apple 로그인 설정 중"
+            disabled
+          >
+            <img
+              class="apple-signin-logo"
+              src="https://appleid.cdn-apple.com/appleid/button/logo?color=black&amp;size=44&amp;scale=3&amp;border_radius=8"
+              alt=""
+              aria-hidden="true"
+            />
+            <span data-apple-login-label>Apple 로그인 설정 중</span>
+          </button>
           <details class="email-login-panel">
             <summary>이메일로 로그인</summary>
             <form id="memberEmailLoginForm" class="email-login-form">
@@ -52,18 +64,23 @@
           <div class="legal-links" aria-label="정책 안내">
             <a href="../tennis-note-legal/privacy.html">개인정보 처리방침</a>
             <a href="../tennis-note-legal/support.html">고객지원</a>
+            <span class="release-version" data-tennisnote-release="detail"></span>
           </div>
         </div>
       </section>
 
-            <section id="noticeDialog" class="notice-dialog" hidden aria-label="공지사항 팝업">
-        <div class="notice-backdrop"></div>
+            <section id="noticeDialog" class="notice-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="noticeTitle" aria-describedby="noticeBody">
+        <div class="notice-backdrop" aria-hidden="true"></div>
         <article class="notice-card">
-          <p class="eyebrow">공지사항</p>
-          <h2 id="noticeTitle">7월 운영 안내</h2>
-          <p id="noticeBody">우천 또는 코치 일정 변경 시 앱 공지와 카카오채널로 안내드립니다.</p>
-          <small id="noticeMeta" class="notice-meta">회원/코치 공통 · 일반</small>
+          <div class="notice-scroll-region">
+            <p id="noticeEyebrow" class="eyebrow">공지사항</p>
+            <h2 id="noticeTitle">7월 운영 안내</h2>
+            <img id="noticeImage" class="notice-image" alt="" hidden />
+            <p id="noticeBody">우천 또는 코치 일정 변경 시 앱 공지와 카카오채널로 안내드립니다.</p>
+            <small id="noticeMeta" class="notice-meta">회원/코치 공통 · 일반</small>
+          </div>
           <div class="notice-actions">
+            <a id="noticeAction" class="small-button notice-action" href="#" target="_blank" rel="noreferrer" hidden>자세히 보기</a>
             <button class="small-button" type="button" id="noticeHideToday">오늘 하루 보지 않기</button>
             <button class="primary-button" type="button" id="noticeClose">확인</button>
           </div>
@@ -89,6 +106,19 @@
             </div>
           </article>
         </section>
+
+        <header class="topbar member-topbar">
+          <div class="member-heading">
+            <span id="topProfileAvatar" class="profile-avatar small is-empty" aria-label="기본 프로필 이미지">
+              <span class="profile-avatar-placeholder" aria-hidden="true"></span>
+            </span>
+            <div class="member-heading-copy">
+              <p id="memberLoginLabel">Tennis Note</p>
+              <h1 id="memberName">회원</h1>
+              <small class="release-version" data-tennisnote-release></small>
+            </div>
+          </div>
+        </header>
 
         <nav class="tabbar" aria-label="하단 주요 기능">
           <button class="tab is-active" type="button" data-view="homeView">홈</button>
@@ -123,7 +153,7 @@
             </article>
           </section>
           <button class="home-change-button" type="button" data-summary-action="change">
-            <strong>수업 변경</strong>
+            <strong id="homeChangeLabel">수업 변경</strong>
             <span aria-hidden="true">›</span>
           </button>
         </section>
@@ -139,6 +169,13 @@
             <span class="legend-chip available">수업변경 신청가능</span>
             <span class="legend-chip approval">24시간 이내 승인필요</span>
           </div>
+          <section id="makeupDueBanner" class="makeup-due-banner" hidden>
+            <div>
+              <strong id="makeupDueTitle">보강 시간을 선택해 주세요</strong>
+              <span id="makeupDueDetail"></span>
+            </div>
+            <button class="primary-button" type="button" data-summary-action="makeup">보강 시간 선택</button>
+          </section>
           <div id="memberWeekSwitcher" class="week-switcher" aria-label="회원 시간표 주차 선택"></div>
           <div id="scheduleGrid" class="schedule-grid"></div>
         </section>
@@ -453,16 +490,12 @@
                 <span>휴대전화</span>
                 <input id="profilePhoneInput" type="tel" inputmode="numeric" maxlength="13" autocomplete="tel" />
               </label>
-              <label>
-                <span>로그인 이메일</span>
-                <input id="profileEmailInput" type="email" autocomplete="email" readonly />
-              </label>
               <div class="nickname-check-panel">
                 <button class="small-button" type="button" id="profileNicknameCheckButton">닉네임 중복 확인</button>
                 <small id="profileNicknameStatus">2~20자로 입력하세요.</small>
               </div>
             </div>
-            <p class="policy-note">실명은 수업·결제·회원 관리에, 이메일은 계정 확인과 중요 안내에, 닉네임은 내 화면에 사용됩니다.</p>
+            <p class="policy-note">실명은 수업·결제·회원 관리에, 닉네임은 내 화면에 사용됩니다.</p>
             <h3>내 테니스 스타일</h3>
             <div class="profile-form-grid">
               <label>
@@ -530,6 +563,7 @@
           <a href="../tennis-note-legal/privacy.html">개인정보 처리방침</a>
           <a href="../tennis-note-legal/support.html">고객지원</a>
           <a href="../tennis-note-legal/delete-account.html">계정 삭제 안내</a>
+          <span class="release-version" data-tennisnote-release="detail"></span>
         </footer>
       </section>
     </main>
@@ -672,7 +706,7 @@
       <div class="modal-backdrop" data-close-change-modal></div>
       <article class="change-modal-card" role="dialog" aria-modal="true" aria-label="수업 변경 요청">
         <div class="section-title compact-title">
-          <h2>수업 변경 요청</h2>
+          <h2 id="changeModalTitle">수업 변경 요청</h2>
           <span id="changeModalSummary">기존 수업과 희망 시간을 확인합니다.</span>
         </div>
         <div class="form-card schedule-request-card">
@@ -686,7 +720,7 @@
           </label>
           <div id="availableSlotList" class="slot-list" aria-label="변경 가능한 시간"></div>
           <p id="changePolicyNote" class="policy-note">24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요</p>
-          <label>
+          <label id="changeReasonField">
             <span>변경 이유</span>
             <textarea id="changeReason" rows="3" minlength="2" maxlength="200" required placeholder="예: 회사 일정, 가족 일정, 컨디션 문제 등"></textarea>
           </label>
@@ -795,11 +829,12 @@
       </article>
     </section>
 
-    <script src="../shared/config.local.js?v=web-beta-config-2"></script>
-    <script src="../shared/tennisnote-data-client.js?v=identity-profile-1"></script>
+    <script src="../shared/config.local.js?v=local"></script>
+    <script src="../shared/tennisnote-data-client.js?v=member-demographics-1"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="./app.js?v=naver-email-review-1"></script>
+    <script src="../shared/tennisnote-release.js?v=release-2"></script>
+    <script src="./app.js?v=member-notice-layer-1"></script>
   </body>
 </html>

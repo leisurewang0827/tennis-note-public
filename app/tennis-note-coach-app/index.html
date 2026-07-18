@@ -7,7 +7,7 @@
     <title>테니스노트 코치 모드</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=coach-live-sync-1" />
+    <link rel="stylesheet" href="./styles.css?v=coach-notice-layer-1" />
   </head>
   <body>
     <main class="coach-shell" aria-label="테니스노트 코치 모드">
@@ -25,18 +25,23 @@
           <div class="legal-links" aria-label="정책 안내">
             <a href="../tennis-note-legal/privacy.html" target="_blank" rel="noreferrer">개인정보 처리방침</a>
             <a href="../tennis-note-legal/support.html" target="_blank" rel="noreferrer">고객지원</a>
+            <span class="release-version" data-tennisnote-release="detail"></span>
           </div>
         </div>
       </section>
 
-      <section id="noticeDialog" class="notice-dialog" hidden aria-label="공지사항 팝업">
-        <div class="notice-backdrop"></div>
+      <section id="noticeDialog" class="notice-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="noticeTitle" aria-describedby="noticeBody">
+        <div class="notice-backdrop" aria-hidden="true"></div>
         <article class="notice-card">
-          <p class="eyebrow">공지사항</p>
-          <h2 id="noticeTitle">코치 공지</h2>
-          <p id="noticeBody">관리자 대시보드에서 등록한 공지가 이곳에 표시됩니다.</p>
-          <small id="noticeMeta" class="notice-meta">코치용 · 일반</small>
+          <div class="notice-scroll-region">
+            <p class="eyebrow">공지사항</p>
+            <h2 id="noticeTitle">코치 공지</h2>
+            <img id="noticeImage" class="notice-image" alt="" hidden />
+            <p id="noticeBody">관리자 대시보드에서 등록한 공지가 이곳에 표시됩니다.</p>
+            <small id="noticeMeta" class="notice-meta">코치용 · 일반</small>
+          </div>
           <div class="notice-actions">
+            <a id="noticeAction" class="small-button notice-action" href="#" target="_blank" rel="noreferrer" hidden>자세히 보기</a>
             <button class="small-button" type="button" id="noticeHideToday">오늘 하루 보지 않기</button>
             <button class="approve-button" type="button" id="noticeClose">확인</button>
           </div>
@@ -45,9 +50,15 @@
 
       <section id="coachAppScreen" class="app-screen" hidden>
         <header class="topbar">
-          <div>
-            <p id="coachLoginLabel">Tennis Note Coach</p>
-            <h1 id="coachName">노 코치</h1>
+          <div class="coach-heading">
+            <span id="coachTopAvatar" class="person-avatar small is-empty" aria-label="기본 코치 프로필 이미지">
+              <span class="person-avatar-placeholder" aria-hidden="true"></span>
+            </span>
+            <div>
+              <p id="coachLoginLabel">Tennis Note Coach</p>
+              <h1 id="coachName">노 코치</h1>
+              <small class="release-version" data-tennisnote-release></small>
+            </div>
           </div>
           <div class="top-actions">
             <button class="small-button" type="button" id="refreshButton">새로고침</button>
@@ -201,6 +212,7 @@
         <footer class="app-legal-links" aria-label="앱 정책 안내">
           <a href="../tennis-note-legal/privacy.html" target="_blank" rel="noreferrer">개인정보 처리방침</a>
           <a href="../tennis-note-legal/support.html" target="_blank" rel="noreferrer">고객지원</a>
+          <span class="release-version" data-tennisnote-release="detail"></span>
         </footer>
       </section>
     </main>
@@ -218,9 +230,10 @@
       </div>
     </section>
 
-    <script src="../shared/config.local.js?v=web-beta-config-2"></script>
-    <script src="../shared/tennisnote-data-client.js?v=role-capability-1"></script>
+    <script src="../shared/config.local.js?v=local"></script>
+    <script src="../shared/tennisnote-data-client.js?v=member-demographics-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="./app.js?v=coach-live-sync-1"></script>
+    <script src="../shared/tennisnote-release.js?v=release-2"></script>
+    <script src="./app.js?v=coach-notice-layer-1"></script>
   </body>
 </html>

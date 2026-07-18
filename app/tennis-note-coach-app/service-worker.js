@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-coach-mode-v28";
+const CACHE_NAME = "tennis-note-coach-mode-v42";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,6 +7,7 @@ const APP_SHELL = [
   "./assets/app-icon.svg",
   "../shared/tennisnote-data-client.js",
   "../shared/tennisnote-curriculum-catalog.js",
+  "../shared/tennisnote-release.js",
 ];
 
 self.addEventListener("install", (event) => {

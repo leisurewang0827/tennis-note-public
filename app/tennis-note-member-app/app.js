@@ -8,7 +8,6 @@ const state = {
     name: "",
     nickname: "",
     phone: "",
-    email: "",
     profileCompletedAt: "",
     privacyConsentVersion: "",
     privacyConsentedAt: "",
@@ -50,6 +49,8 @@ const state = {
   liveTickets: [],
   liveLessons: [],
   liveLessonsLoaded: false,
+  liveMakeupEntitlements: [],
+  liveReleasedMakeupSlots: [],
   groupAccount: null,
   holdingPolicySettings: {
     personalMaxDays: 7,
@@ -75,11 +76,14 @@ const state = {
   expiredTickets: [],
   noticeHiddenDate: "",
   noticeHiddenId: "",
+  noticeHiddenIds: [],
   ticketHistory: [],
 };
 
 const brandSplashStartedAt = performance.now();
 const brandSplashMinimumDuration = 1800;
+const noticeSessionSeenIds = new Set();
+let noticePreviousFocus = null;
 
 function hideBrandSplash() {
   const splash = document.querySelector("#brandSplash");
@@ -138,6 +142,9 @@ const memberScheduleWeeks = [
     ],
   },
 ];
+
+const memberScheduleMinWeekOffset = -104;
+const memberScheduleMaxWeekOffset = 156;
 
 function localDateKey(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
@@ -755,10 +762,11 @@ function loadSharedData() {
       makeupRequests: shared.makeupRequests || [],
       holdingRequests: shared.holdingRequests || [],
       notices: shared.notices || [],
+      noticeSource: shared.noticeSource || "",
     };
   } catch {
     localStorage.removeItem(sharedStorageKey);
-    return { lessonLogs: [], feedbackRequests: [], ntrpRequests: [], paymentRequests: [], makeupRequests: [], holdingRequests: [], notices: [] };
+    return { lessonLogs: [], feedbackRequests: [], ntrpRequests: [], paymentRequests: [], makeupRequests: [], holdingRequests: [], notices: [], noticeSource: "" };
   }
 }
 
@@ -778,22 +786,28 @@ function normalizeAppNotice(notice = {}) {
     startDate: notice.startDate || "",
     endDate: notice.endDate || "",
     showOncePerDay: notice.showOncePerDay !== false,
+    displayOrder: Math.max(0, Number(notice.displayOrder ?? notice.display_order) || 10),
+    imageUrl: String(notice.imageUrl || notice.image_url || "").trim(),
+    imageAlt: String(notice.imageAlt || notice.image_alt || "").trim(),
+    actionLabel: String(notice.actionLabel || notice.action_label || "").trim(),
+    actionUrl: String(notice.actionUrl || notice.action_url || "").trim(),
     updatedAt: notice.updatedAt || "",
   };
 }
 
-function activeNoticeForApp(audience = "member") {
+function activeNoticesForApp(audience = "member") {
   const today = localDateKey();
   const shared = loadSharedData();
-  const source = shared.notices?.length ? shared.notices : notices;
+  const source = shared.noticeSource === "server" ? shared.notices : (shared.notices?.length ? shared.notices : notices);
   return source
     .map((notice) => normalizeAppNotice(notice))
-    .find((notice) => (
+    .filter((notice) => (
       notice.status === "active"
       && ["all", audience].includes(notice.audience)
       && (!notice.startDate || notice.startDate <= today)
       && (!notice.endDate || notice.endDate >= today)
-    ));
+    ))
+    .sort((a, b) => a.displayOrder - b.displayOrder || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 }
 
 function noticeMetaText(notice = {}) {
@@ -813,6 +827,11 @@ function noticeRowToAppNotice(row = {}) {
     startDate: row.starts_on || "",
     endDate: row.ends_on || "",
     showOncePerDay: row.show_once_per_day !== false,
+    displayOrder: row.display_order,
+    imageUrl: row.image_url || "",
+    imageAlt: row.image_alt || "",
+    actionLabel: row.action_label || "",
+    actionUrl: row.action_url || "",
     updatedAt: row.updated_at || row.created_at || "",
   });
 }
@@ -822,22 +841,21 @@ async function syncLiveNotices() {
   if (!client?.readiness?.().ready || !client.selectRows) return false;
   try {
     const rows = await client.selectRows("tn_notice_popups", {
-      select: "id,title,body,audience,priority,status,starts_on,ends_on,show_once_per_day,created_at,updated_at",
-      limit: 20,
+      select: "id,title,body,audience,priority,status,starts_on,ends_on,show_once_per_day,display_order,image_url,image_alt,action_label,action_url,created_at,updated_at",
+      limit: 100,
     });
     const notices = (rows || [])
       .map((row) => noticeRowToAppNotice(row))
-      .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+      .sort((a, b) => a.displayOrder - b.displayOrder || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
     const shared = loadSharedData();
     if (!notices.length) {
       shared.notices = [];
+      shared.noticeSource = "server";
       saveSharedData(shared);
       return true;
     }
-    shared.notices = [
-      ...notices,
-      ...(shared.notices || []).filter((notice) => !notices.some((item) => item.id === notice.id)),
-    ].slice(0, 10);
+    shared.notices = notices.slice(0, 100);
+    shared.noticeSource = "server";
     saveSharedData(shared);
     return true;
   } catch (error) {
@@ -848,6 +866,8 @@ async function syncLiveNotices() {
 function normalizeLiveNotification(row = {}) {
   const templateKey = String(row.template_key || "");
   const isRefund = ["payment_cancelled", "payment_request_cancelled", "payment_refunded"].includes(templateKey);
+  const isMakeupRequired = templateKey === "lesson_absence_makeup_required";
+  const isMakeupBooked = templateKey === "makeup_booking_completed";
   const title = row.title || (templateKey === "payment_refunded" ? "환불 완료" : isRefund ? "결제취소 완료" : "앱 알림");
   const body = row.body || (templateKey === "payment_request_cancelled"
     ? "결제 대기건이 취소되었습니다. 실제 결제가 완료된 건은 아닙니다."
@@ -862,7 +882,7 @@ function normalizeLiveNotification(row = {}) {
     status: row.status || "sent",
     createdAt: row.sent_at || row.created_at || row.scheduled_at || "",
     payload: row.payload && typeof row.payload === "object" ? row.payload : {},
-    tone: isRefund ? "alert" : "wait",
+    tone: isRefund || isMakeupRequired ? "alert" : isMakeupBooked ? "done" : "wait",
   };
 }
 
@@ -1620,9 +1640,12 @@ async function bindNativePushListeners(plugin) {
   });
   await plugin.addListener("pushNotificationReceived", async () => {
     await syncMemberNotificationsFromServer().catch(() => false);
+    showNoticeIfNeeded();
   });
-  await plugin.addListener("pushNotificationActionPerformed", async () => {
-    setView("scheduleView");
+  await plugin.addListener("pushNotificationActionPerformed", async (action) => {
+    const route = String(action?.notification?.data?.route || "").trim().toLowerCase();
+    const viewId = route === "membership" ? "shopView" : route === "schedule" ? "scheduleView" : "homeView";
+    setView(viewId);
     jumpToTop();
     await syncMemberNotificationsFromServer().catch(() => false);
   });
@@ -1721,6 +1744,7 @@ function defaultMemberCoachPolicy() {
     openStart: "06:40",
     openEnd: "22:00",
     breakRules: [{ id: "weekday-midday", days: weekdays, start: "13:00", end: "17:00", label: "수업 없음" }],
+    lessonColors: { regular: "#2f6fc4", makeup: "#17805d", coupon: "#b7791f" },
     coaches: [
       {
         id: "coach-no",
@@ -1810,6 +1834,7 @@ function loadAdminSchedulePolicy() {
       openStart: storedPolicyVersion < 2 ? fallback.openStart : scheduleSettings.openStart || fallback.openStart,
       openEnd: storedPolicyVersion < 2 ? fallback.openEnd : scheduleSettings.openEnd || fallback.openEnd,
       breakRules: storedPolicyVersion < 2 ? fallback.breakRules : Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : fallback.breakRules,
+      lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
       coaches: coaches
         .filter((coach) => (coach.status || "active") === "active")
         .map(normalizeMemberCoach),
@@ -1886,6 +1911,7 @@ function normalizeAdminLessonForMember(lesson, snapshot) {
     status: isAvailable ? "available" : isPending && isMine ? "requested" : isMine ? "scheduled" : "occupied",
     policy: isPending ? "coach" : "auto",
     durationMinutes: Number(lesson.durationMinutes) || 20,
+    lessonSource: lesson.lessonSource || (lesson.makeup ? "makeup" : "regular"),
     source: "admin",
   };
 }
@@ -2053,6 +2079,48 @@ function activeTicketScheduleScope() {
   return title.includes("주말") ? "weekend" : "weekday";
 }
 
+function sourceLessonScheduleScope(sourceLesson = {}) {
+  const ticketId = sourceLesson.member_ticket_id || sourceLesson.ticketId || "";
+  const ticket = (state.liveTickets || []).find((item) => item.id === ticketId);
+  return ticket?.scheduleScope || activeTicketScheduleScope();
+}
+
+function memberOpenMakeupEntitlements() {
+  return (state.liveMakeupEntitlements || []).filter((item) => item.status === "open");
+}
+
+function memberMakeupDueLessons() {
+  const memberName = currentMemberName();
+  return memberOpenMakeupEntitlements().map((item) => ({
+    id: `makeup-due-${item.id}`,
+    makeupEntitlementId: item.id,
+    serverLessonId: item.sourceLessonId,
+    member_ticket_id: item.ticketId,
+    coach_role_id: item.coachRoleId,
+    coachRoleId: item.coachRoleId,
+    lessonDate: item.lessonDate,
+    day: item.day,
+    time: item.time,
+    coach: item.coach,
+    member: memberName,
+    type: "보강 필요",
+    status: "makeup_due",
+    lessonSource: "makeup",
+    durationMinutes: item.durationMinutes,
+    reason: item.reason,
+    isOwnLesson: true,
+  }));
+}
+
+function memberReleasedMakeupSlot(lessonDate, time, coachRoleId, durationMinutes) {
+  return (state.liveReleasedMakeupSlots || []).find((slot) => (
+    slot.lessonDate === lessonDate
+    && slot.time === time
+    && slot.coachRoleId === coachRoleId
+    && Number(slot.durationMinutes) === Number(durationMinutes)
+  ));
+}
+
 function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson = null) {
   const result = [];
   const sourceLesson = selectedLesson
@@ -2061,8 +2129,9 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
   if (!sourceLesson) return result;
   const sourceCoach = memberLessonCoach(sourceLesson, policy);
   const durationMinutes = lessonDuration(sourceLesson);
-  const scheduleScope = activeTicketScheduleScope();
-  const requestPolicy = memberChangePolicyForLesson(sourceLesson);
+  const scheduleScope = sourceLessonScheduleScope(sourceLesson);
+  const isMakeupDue = Boolean(sourceLesson.makeupEntitlementId);
+  const requestPolicy = isMakeupDue ? "auto" : memberChangePolicyForLesson(sourceLesson);
   days.forEach((day) => {
     const isWeekend = ["토", "일"].includes(day);
     if ((scheduleScope === "weekday" && isWeekend) || (scheduleScope === "weekend" && !isWeekend)) return;
@@ -2078,7 +2147,8 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
           if (memberLessonCoach(lesson, policy).id !== coach.id) return false;
           return Math.abs(minutesFromTime(lesson.time) - minutesFromTime(time)) <= 40;
         });
-        if (!hasNearbyAnchor) return;
+        const releasedSlot = memberReleasedMakeupSlot(lessonDate, time, coach.id, durationMinutes);
+        if (!hasNearbyAnchor && !releasedSlot) return;
         const existing = scheduleLessons.some((lesson) => lesson.day === day && lesson.time === time && memberLessonCoach(lesson, policy).id === coach.id);
         if (existing) return;
         result.push({
@@ -2089,11 +2159,13 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
           coachRoleId: sourceLesson.coach_role_id || sourceLesson.coachRoleId || "",
           lessonDate,
           member: "",
-          type: "수업 변경 신청가능",
+          type: isMakeupDue ? "보강 신청가능" : "수업 변경 신청가능",
           status: "available",
           policy: requestPolicy,
           generated: true,
           durationMinutes,
+          makeupEntitlementId: sourceLesson.makeupEntitlementId || "",
+          releasedSlotId: releasedSlot?.id || "",
         });
       });
     });
@@ -2105,7 +2177,10 @@ function memberScheduleOptions() {
   const policy = loadAdminSchedulePolicy();
   const scheduleLessons = memberScheduleLessons();
   const selectedId = $("#absenceLesson")?.value;
-  const selectedLesson = scheduleLessons.find((lesson) => lesson.id === selectedId)
+  const sourceLessons = memberMakeupDueLessons().concat(
+    scheduleLessons.filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled"),
+  );
+  const selectedLesson = sourceLessons.find((lesson) => lesson.id === selectedId)
     || scheduleLessons.find((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
   const generated = generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson);
   return scheduleLessons.concat(generated);
@@ -2132,15 +2207,34 @@ function memberLessons() {
 }
 
 function currentScheduledLessonsForChange() {
-  const fromSchedule = memberScheduleOptions().filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
-  if (fromSchedule.length || state.liveLessonsLoaded || state.dataMode === "live") return fromSchedule;
+  const dueLessons = memberMakeupDueLessons();
+  const fromSchedule = memberScheduleLessons().filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
+  if (dueLessons.length || fromSchedule.length || state.liveLessonsLoaded || state.dataMode === "live") return dueLessons.concat(fromSchedule);
   return lessons.filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
 }
 
 function activeMemberWeek() {
-  const index = Math.min(Math.max(Number(state.activeMemberWeekIndex) || 0, 0), memberScheduleWeeks.length - 1);
-  state.activeMemberWeekIndex = index;
-  return memberScheduleWeeks[index];
+  const offset = Math.min(
+    Math.max(Number(state.activeMemberWeekIndex) || 0, memberScheduleMinWeekOffset),
+    memberScheduleMaxWeekOffset,
+  );
+  state.activeMemberWeekIndex = offset;
+  const today = new Date();
+  const mondayOffset = today.getDay() === 0 ? -6 : 1 - today.getDay();
+  const currentMonday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + mondayOffset);
+  const start = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate() + offset * 7);
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+  const monthStart = new Date(start.getFullYear(), start.getMonth(), 1);
+  const monthStartOffset = monthStart.getDay() === 0 ? 6 : monthStart.getDay() - 1;
+  const weekOfMonth = Math.floor((monthStartOffset + start.getDate() - 1) / 7) + 1;
+  return {
+    ...(offset >= 0 ? memberScheduleWeeks[offset] || {} : {}),
+    label: `${start.getMonth() + 1}월 ${weekOfMonth}주차`,
+    range: `${start.getMonth() + 1}/${start.getDate()}~${end.getMonth() + 1}/${end.getDate()}`,
+    note: offset === 0 ? "이번 주 정규 수업과 변경 가능 시간" : "선택한 주의 수업과 변경 가능 시간",
+    startDate: localDateKey(start),
+    endDate: localDateKey(end),
+  };
 }
 
 function memberScheduleLessons() {
@@ -2155,6 +2249,7 @@ function memberScheduleLessons() {
     return adminLessons.map((adminLesson) => lessons.find((stored) => stored.id === adminLesson.id) || adminLesson);
   }
   const weekLessons = activeMemberWeek().lessons || [];
+  if (!weekLessons.length && state.activeMemberWeekIndex !== 0) return [];
   const storedWeekIds = new Set(weekLessons.map((lesson) => lesson.id));
   const mergedWeekLessons = weekLessons.map((lesson) => lessons.find((stored) => stored.id === lesson.id) || lesson);
   return lessons.filter((lesson) => !storedWeekIds.has(lesson.id)).concat(mergedWeekLessons);
@@ -2163,7 +2258,8 @@ function memberScheduleLessons() {
 function ensureMemberScheduleLesson(lessonId) {
   let lesson = lessons.find((item) => item.id === lessonId);
   if (lesson) return lesson;
-  const weekLesson = memberScheduleOptions().find((item) => item.id === lessonId);
+  const weekLesson = memberMakeupDueLessons().find((item) => item.id === lessonId)
+    || memberScheduleOptions().find((item) => item.id === lessonId);
   if (!weekLesson) return null;
   lesson = { ...weekLesson };
   lessons.push(lesson);
@@ -2248,6 +2344,30 @@ function lessonDuration(lesson) {
   return matched ? Number(matched[1]) : 20;
 }
 
+function memberLessonVisualKind(lesson = {}) {
+  const source = String(lesson.lessonSource || lesson.lesson_source || "").toLowerCase();
+  if (source === "makeup" || String(lesson.type || "").includes("보강")) return "makeup";
+  if (source === "coupon" || String(lesson.type || "").includes("쿠폰")) return "coupon";
+  return "regular";
+}
+
+function memberLessonColorStyle(lesson, policy) {
+  const kind = memberLessonVisualKind(lesson);
+  const fallback = { regular: "#2f6fc4", makeup: "#17805d", coupon: "#b7791f" };
+  const saved = policy?.lessonColors?.[kind] || "";
+  const color = /^#[0-9a-f]{6}$/i.test(saved) ? saved : fallback[kind];
+  return `--lesson-color:${color}`;
+}
+
+function memberLessonTitle(lesson, isMine) {
+  if (!isMine) return "수업중";
+  if (lesson.status === "requested") return "변경요청";
+  const kind = memberLessonVisualKind(lesson);
+  if (kind === "makeup") return "보강";
+  if (kind === "coupon") return "쿠폰";
+  return "내 수업";
+}
+
 function isLessonActiveAt(lesson, time) {
   const start = minutesFromTime(lesson.time);
   const current = minutesFromTime(time);
@@ -2268,21 +2388,32 @@ function syncNtrpResultFromCoach() {
   state.profile.ntrpSurvey = request.surveyAnswers || state.profile.ntrpSurvey || {};
 }
 
-function profileInitial() {
-  return (state.profile?.nickname || state.profile?.name || state.member?.name || "회원").trim().slice(0, 1);
-}
-
-function avatarMarkup(size = "small") {
-  if (state.profile?.photoDataUrl) {
-    return `<img src="${state.profile.photoDataUrl}" alt="프로필 사진" />`;
-  }
-  return profileInitial();
-}
-
 function renderProfileAvatar(target, size = "small") {
   if (!target) return;
   target.className = `profile-avatar ${size}`;
-  target.innerHTML = avatarMarkup(size);
+  target.replaceChildren();
+  const renderEmptyAvatar = () => {
+    target.classList.remove("has-photo");
+    target.classList.add("is-empty");
+    target.setAttribute("aria-label", "기본 프로필 이미지");
+    const placeholder = document.createElement("span");
+    placeholder.className = "profile-avatar-placeholder";
+    placeholder.setAttribute("aria-hidden", "true");
+    target.replaceChildren(placeholder);
+  };
+  const photoUrl = String(state.profile?.photoDataUrl || "").trim();
+  if (!photoUrl) {
+    renderEmptyAvatar();
+    return;
+  }
+  const image = document.createElement("img");
+  image.src = photoUrl;
+  image.alt = `${state.profile?.name || state.member?.name || "회원"} 프로필 사진`;
+  image.addEventListener("error", renderEmptyAvatar, { once: true });
+  target.classList.add("has-photo");
+  target.classList.remove("is-empty");
+  target.setAttribute("aria-label", image.alt);
+  target.append(image);
 }
 
 function renderProfile() {
@@ -2317,6 +2448,7 @@ function renderProfile() {
   if ($("#homeMemberGreeting")) $("#homeMemberGreeting").textContent = `${memberName}님, 오늘 수업을 확인하세요`;
   if ($("#homeAccountDetail")) $("#homeAccountDetail").textContent = "내 정보에서 프로필과 계정을 관리합니다.";
   if ($("#memberName")) $("#memberName").textContent = memberName;
+  if ($("#memberLoginLabel")) $("#memberLoginLabel").textContent = state.member?.provider ? `${state.member.provider} 로그인 유지` : "Tennis Note";
   if ($("#profileName")) $("#profileName").textContent = memberName;
   if ($("#profileRealName")) $("#profileRealName").textContent = `실명 ${realName}`;
   if ($("#profileProvider")) {
@@ -2332,7 +2464,6 @@ function renderProfile() {
   if ($("#profileRealNameInput")) $("#profileRealNameInput").value = realName === "가입 확인 중" ? "" : realName;
   if ($("#profileNicknameInput")) $("#profileNicknameInput").value = state.profile.nickname || "";
   if ($("#profilePhoneInput")) $("#profilePhoneInput").value = formatIdentityPhone(state.profile.phone || "");
-  if ($("#profileEmailInput")) $("#profileEmailInput").value = state.profile.email || state.member?.email || "";
   if ($("#profileHand")) $("#profileHand").value = state.profile.hand || "오른손";
   if ($("#profileBackhand")) $("#profileBackhand").value = state.profile.backhand || "투핸드 백핸드";
   if ($("#profileStartedAt")) $("#profileStartedAt").value = state.profile.startedAt || "";
@@ -2612,11 +2743,12 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
   const availableCount = dayLessons.filter((lesson) => lesson.status === "available"
     && minutesFromTime(lesson.time) >= segmentStart
     && minutesFromTime(lesson.time) < segmentEnd).length;
+  const hasMakeupSlots = dayLessons.some((lesson) => lesson.status === "available" && lesson.type === "보강 신청가능");
   return `
     <section class="member-mobile-segment">
       <div class="member-mobile-segment-title">
         <strong>${segment.start}~${segment.end}</strong>
-        <span>${coaches.map((coach) => memberCoachShortName(coach.name)).join(" · ")} · 변경 가능 ${availableCount}개</span>
+        <span>${coaches.map((coach) => memberCoachShortName(coach.name)).join(" · ")} · ${hasMakeupSlots ? "보강 가능" : "변경 가능"} ${availableCount}개</span>
       </div>
       <div class="member-mobile-lane-board" style="--coach-count:${coaches.length}; --slot-count:${times.length};">
         <div class="member-mobile-lane-head time">시간</div>
@@ -2629,15 +2761,16 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
               ${times.map((time, index) => {
                 const available = coachLessons.find((lesson) => lesson.status === "available" && lesson.time === time);
                 const working = isMemberCoachWorking(coach, day, time, 10);
-                return `<button class="member-mobile-slot ${available ? "available" : working ? "busy" : "off"}" type="button" ${available ? `data-lesson="${available.id}"` : "disabled"} style="grid-row:${index + 1};" aria-label="${day}요일 ${time} ${escapeHtml(memberCoachShortName(coach.name))} ${available ? "수업 변경 가능" : "신청 불가"}">${available ? "+" : ""}</button>`;
+                const availableLabel = available?.type === "보강 신청가능" ? "보강 가능" : "수업 변경 가능";
+                return `<button class="member-mobile-slot ${available ? "available" : working ? "busy" : "off"}" type="button" ${available ? `data-lesson="${available.id}"` : "disabled"} style="grid-row:${index + 1};" aria-label="${day}요일 ${time} ${escapeHtml(memberCoachShortName(coach.name))} ${available ? availableLabel : "신청 불가"}">${available ? (available.type === "보강 신청가능" ? "보강" : "+") : ""}</button>`;
               }).join("")}
               ${coachLessons.filter((lesson) => lesson.status !== "available" && minutesFromTime(lesson.time) >= segmentStart && minutesFromTime(lesson.time) < segmentEnd).map((lesson) => {
                 const startIndex = times.indexOf(lesson.time);
                 if (startIndex < 0) return "";
                 const span = Math.max(1, Math.ceil(lessonDuration(lesson) / 10));
                 const isMine = isCurrentMemberName(lesson.member);
-                const title = isMine ? (lesson.status === "requested" ? "변경요청" : "내 수업") : "수업중";
-                return `<button class="member-mobile-lesson ${isMine ? `mine ${lesson.status}` : "occupied"} ${memberCoachColorClass(lesson.coach)}" type="button" ${isMine ? `data-lesson="${lesson.id}"` : "disabled"} style="grid-row:${startIndex + 1} / span ${span};"><strong>${title}</strong><span>${lessonDuration(lesson)}분</span></button>`;
+                const title = memberLessonTitle(lesson, isMine);
+                return `<button class="member-mobile-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${isMine ? `mine ${lesson.status}` : "occupied"} ${memberCoachColorClass(lesson.coach)}" type="button" ${isMine ? `data-lesson="${lesson.id}"` : "disabled"} style="${memberLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${title}</strong><span>${lessonDuration(lesson)}분</span></button>`;
               }).join("")}
             </div>`;
         }).join("")}
@@ -2662,12 +2795,17 @@ function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
 function renderDynamicMemberSchedule() {
   const activeWeek = activeMemberWeek();
   $("#memberWeekSwitcher").innerHTML = `
-    <button class="ghost-button" type="button" data-change-member-week="-1" ${state.activeMemberWeekIndex === 0 ? "disabled" : ""}>이전 주</button>
-    <div>
+    <button class="ghost-button" type="button" data-change-member-week="-1" ${state.activeMemberWeekIndex <= memberScheduleMinWeekOffset ? "disabled" : ""}>이전 주</button>
+    <div class="schedule-period-summary">
+      <div class="schedule-month-controls">
+        <button class="ghost-button" type="button" data-change-member-month="-1">이전 달</button>
+        <input class="schedule-month-input" type="month" value="${memberScheduleMonthValue(activeWeek)}" data-member-month aria-label="이동할 달">
+        <button class="ghost-button" type="button" data-change-member-month="1">다음 달</button>
+      </div>
       <strong>${activeWeek.label}</strong>
       <span>${activeWeek.range} · 관리자 근무시간 기준</span>
     </div>
-    <button class="ghost-button" type="button" data-change-member-week="1" ${state.activeMemberWeekIndex === memberScheduleWeeks.length - 1 ? "disabled" : ""}>다음 주</button>
+    <button class="ghost-button" type="button" data-change-member-week="1" ${state.activeMemberWeekIndex >= memberScheduleMaxWeekOffset ? "disabled" : ""}>다음 주</button>
   `;
 
   const policy = loadAdminSchedulePolicy();
@@ -2758,10 +2896,10 @@ function renderDynamicMemberSchedule() {
                       class="member-slot-bg available ${lesson.policy === "coach" ? "needs-approval" : "auto-change"}"
                       type="button"
                       data-lesson="${lesson.id}"
-                      aria-label="${day}요일 ${lesson.time} ${memberCoachShortName(lessonCoach.name)} 수업 변경 신청 가능"
+                      aria-label="${day}요일 ${lesson.time} ${memberCoachShortName(lessonCoach.name)} ${lesson.type === "보강 신청가능" ? "보강 신청 가능" : "수업 변경 신청 가능"}"
                       style="grid-row:${startIndex + 1}; grid-column:${coachIndex + 1};"
                     >
-                      <span>변경 가능</span>
+                      <span>${lesson.type === "보강 신청가능" ? "보강 가능" : "변경 가능"}</span>
                     </button>`;
                 })
                 .join("")}
@@ -2774,15 +2912,15 @@ function renderDynamicMemberSchedule() {
                   const coachIndex = displayCoaches.findIndex((coach) => coach.id === lessonCoach.id);
                   if (coachIndex < 0) return "";
                   const isMine = isCurrentMemberName(lesson.member);
-                  const title = isMine ? (lesson.status === "requested" ? "변경요청" : "내 수업") : "수업중";
+                  const title = memberLessonTitle(lesson, isMine);
                   const lessonClass = isMine ? `mine ${lesson.status}` : "occupied";
                   const lessonAction = isMine ? `data-lesson="${lesson.id}"` : "disabled";
                   return `
                     <button
-                      class="member-duration-lesson ${lessonClass} ${memberCoachColorClass(lesson.coach)}"
+                      class="member-duration-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${lessonClass} ${memberCoachColorClass(lesson.coach)}"
                       type="button"
                       ${lessonAction}
-                      style="grid-row:${startIndex + 1} / span ${span}; grid-column:${coachIndex + 1};"
+                      style="${memberLessonColorStyle(lesson, policy)}; grid-row:${startIndex + 1} / span ${span}; grid-column:${coachIndex + 1};"
                     >
                       <strong>${title}</strong>
                       <span>${memberCoachShortName(lesson.coach)}</span>
@@ -2903,25 +3041,31 @@ function renderSchedule() {
 function renderSelects() {
   const previousAbsence = $("#absenceLesson")?.value;
   const previousMakeup = $("#makeupSlot")?.value;
-  const regularOptions = currentScheduledLessonsForChange()
-    .map((lesson) => `<option value="${lesson.id}">${lesson.day} ${lesson.time} · ${lesson.coach}</option>`)
+  const sourceLessons = currentScheduledLessonsForChange();
+  const regularOptions = sourceLessons
+    .map((lesson) => `<option value="${lesson.id}">${lesson.status === "makeup_due" ? "보강 필요 · " : ""}${lesson.day} ${lesson.time} · ${lesson.coach}</option>`)
     .join("");
   const logOptions = memberLessons()
     .map((lesson) => `<option value="${lesson.id}">${lesson.day} ${lesson.time} · ${lesson.coach} · ${lesson.type}</option>`)
     .join("");
-  const availableOptions = memberAvailableSlotsForSelectedLesson()
-    .map((lesson) => `<option value="${lesson.id}">${lesson.day} ${lesson.time} · ${lesson.coach}</option>`)
-    .join("");
 
   $("#absenceLesson").innerHTML = regularOptions || "<option>변경 가능한 기존 수업 없음</option>";
   $("#logLesson").innerHTML = logOptions || "<option>기록할 수업 없음</option>";
-  $("#makeupSlot").innerHTML = availableOptions || "<option>가능한 변경 시간 없음</option>";
   if (previousAbsence && [...$("#absenceLesson").options].some((option) => option.value === previousAbsence)) {
     $("#absenceLesson").value = previousAbsence;
   }
+  const availableOptions = memberAvailableSlotsForSelectedLesson()
+    .map((lesson) => `<option value="${lesson.id}">${lesson.day} ${lesson.time} · ${lesson.coach}</option>`)
+    .join("");
+  $("#makeupSlot").innerHTML = availableOptions || "<option>가능한 변경 시간 없음</option>";
   if (previousMakeup && [...$("#makeupSlot").options].some((option) => option.value === previousMakeup)) {
     $("#makeupSlot").value = previousMakeup;
   }
+  const selectedSource = sourceLessons.find((lesson) => lesson.id === $("#absenceLesson")?.value);
+  const isMakeupDue = selectedSource?.status === "makeup_due";
+  if ($("#changeModalTitle")) $("#changeModalTitle").textContent = isMakeupDue ? "보강 시간 선택" : "수업 변경 요청";
+  if ($("#changeReasonField")) $("#changeReasonField").hidden = isMakeupDue;
+  if ($("#requestMakeup")) $("#requestMakeup").textContent = isMakeupDue ? "보강 예약 확정" : "수업 변경 요청";
 }
 
 function renderJournalMode() {
@@ -2938,7 +3082,13 @@ function renderAvailableSlots() {
   const selectedId = $("#makeupSlot")?.value;
   const availableLessons = memberAvailableSlotsForSelectedLesson();
   const selected = memberScheduleOptions().find((lesson) => lesson.id === selectedId);
-  if ($("#changePolicyNote")) $("#changePolicyNote").textContent = selected ? policyDetail(selected.policy) : "24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요";
+  const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === $("#absenceLesson")?.value);
+  const isMakeupDue = source?.status === "makeup_due";
+  if ($("#changePolicyNote")) {
+    $("#changePolicyNote").textContent = isMakeupDue
+      ? "불참 처리된 수업의 보강입니다. 시간을 선택하면 즉시 예약됩니다."
+      : selected ? policyDetail(selected.policy) : "24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요";
+  }
   renderChangeModalSummary();
   if (!target) return;
   target.innerHTML =
@@ -2948,7 +3098,7 @@ function renderAvailableSlots() {
           <button class="slot-card ${lesson.id === selectedId ? "is-selected" : ""} ${lesson.policy === "coach" ? "needs-approval" : "auto-change"}" type="button" data-select-slot="${lesson.id}">
             <strong>${lesson.day} ${lesson.time}</strong>
             <span>${lesson.coach}</span>
-            <small>${lesson.id === selectedId ? "선택됨" : policyLabel(lesson.policy)}</small>
+            <small>${lesson.id === selectedId ? "선택됨" : isMakeupDue ? "즉시 예약" : policyLabel(lesson.policy)}</small>
           </button>`,
       )
       .join("") || "<p class='empty-text'>현재 정책 안에서 변경 가능한 시간이 없습니다.</p>";
@@ -2960,10 +3110,24 @@ function renderChangeModalSummary() {
   const absence = memberScheduleOptions().find((lesson) => lesson.id === $("#absenceLesson")?.value);
   const makeup = memberScheduleOptions().find((lesson) => lesson.id === $("#makeupSlot")?.value);
   if (!absence || !makeup) {
-    target.textContent = "기존 수업과 희망 시간을 확인합니다.";
+    target.textContent = absence?.status === "makeup_due" ? "예약할 보강 시간을 선택해 주세요." : "기존 수업과 희망 시간을 확인합니다.";
     return;
   }
-  target.textContent = `${absence.day} ${absence.time} 수업을 ${makeup.day} ${makeup.time} 수업으로 변경합니다.`;
+  target.textContent = absence.status === "makeup_due"
+    ? `${absence.day} ${absence.time} 불참 수업의 보강을 ${makeup.day} ${makeup.time}에 예약합니다.`
+    : `${absence.day} ${absence.time} 수업을 ${makeup.day} ${makeup.time} 수업으로 변경합니다.`;
+}
+
+function renderMakeupDueBanner() {
+  const banner = $("#makeupDueBanner");
+  const dueLessons = memberMakeupDueLessons();
+  if ($("#homeChangeLabel")) $("#homeChangeLabel").textContent = dueLessons.length ? `보강 시간 선택 (${dueLessons.length})` : "수업 변경";
+  if (!banner) return;
+  banner.hidden = dueLessons.length === 0;
+  if (!dueLessons.length) return;
+  const nearest = [...dueLessons].sort((left, right) => `${left.lessonDate}${left.time}`.localeCompare(`${right.lessonDate}${right.time}`))[0];
+  if ($("#makeupDueTitle")) $("#makeupDueTitle").textContent = dueLessons.length > 1 ? `보강할 수업 ${dueLessons.length}건` : "보강 시간을 선택해 주세요";
+  if ($("#makeupDueDetail")) $("#makeupDueDetail").textContent = `${nearest.lessonDate} ${nearest.day} ${nearest.time} 불참 · ${nearest.reason}`;
 }
 
 function renderRequests() {
@@ -3225,7 +3389,7 @@ function renderTickets() {
       <article class="ticket-card primary">
         <span>${escapeHtml(ticketTitle)}</span>
         <strong>${remaining}회 남음</strong>
-        <small>${used}/${total || "-"}회 사용</small>
+        <small>총 ${total || 0} / 소진 ${used} / 잔여 ${remaining}</small>
       </article>
       <article class="ticket-card">
         <span>회원권 상태</span>
@@ -3418,7 +3582,7 @@ function renderCurrentTicketPanel() {
       <div class="membership-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${totalSessions || 1}" aria-valuenow="${usedSessions}" aria-label="이용권 사용 진행률">
         <span style="width: ${progress}%"></span>
       </div>
-      <small class="membership-period">${escapeHtml(ticketPeriod)} · ${usedSessions}/${totalSessions || 0}회 사용</small>
+      <small class="membership-period">${escapeHtml(ticketPeriod)} · 총 ${totalSessions} / 소진 ${usedSessions} / 잔여 ${remainingSessions}</small>
     </article>
     <div class="membership-action-row">
       <button class="primary-button" type="button" data-open-membership-products>${isPendingTicket ? "결제 상태 확인" : "연장하기"}</button>
@@ -3794,9 +3958,9 @@ function openMemberEnrollmentModal(productId, message = "") {
   }
   setEnrollmentInputValue("#enrollmentName", enrollment.applicant_name || state.member?.name || state.profile.name || "");
   setEnrollmentInputValue("#enrollmentPhone", enrollment.phone || state.profile.phone || "");
-  setEnrollmentInputValue("#enrollmentBirthYear", enrollment.birth_year || "");
-  setEnrollmentInputValue("#enrollmentNeighborhood", enrollment.neighborhood || "");
-  setEnrollmentInputValue("#enrollmentGender", enrollment.gender || "");
+  setEnrollmentInputValue("#enrollmentBirthYear", enrollment.birth_year || state.member?.birthYear || "");
+  setEnrollmentInputValue("#enrollmentNeighborhood", enrollment.neighborhood || state.member?.neighborhood || "");
+  setEnrollmentInputValue("#enrollmentGender", enrollment.gender || state.member?.gender || "");
   setEnrollmentInputValue("#enrollmentExperience", enrollment.experience_level || "beginner");
   setEnrollmentInputValue("#enrollmentPartnerName", enrollment.partner_name || "");
   setEnrollmentInputValue("#enrollmentPartnerPhone", enrollment.partner_phone || "");
@@ -4004,7 +4168,7 @@ function renderProducts() {
             <div>
               <strong>${pass.title}</strong>
               <span>${pass.period}</span>
-              <small>${pass.coach || "상담 후 배정"} · ${pass.used}/${pass.total}회 사용 · ${pass.paid}</small>
+              <small>${pass.coach || "상담 후 배정"} · 총 ${pass.total} / 소진 ${pass.used} / 잔여 ${Math.max(0, Number(pass.total || 0) - Number(pass.used || 0))} · ${pass.paid}</small>
             </div>
             <b>${pass.status}</b>
             ${pass.note ? `<small>${pass.note}</small>` : ""}
@@ -4218,7 +4382,7 @@ async function syncMemberLessonsFromServer(profile = null) {
       limit: 100,
     });
     const ownLessonIds = new Set((participants || []).map((item) => item.lesson_id));
-    const [rows, coachRoles] = await Promise.all([
+    const [rows, coachRoles, makeupEntitlementRows, releasedMakeupSlots] = await Promise.all([
       client.selectRows("tn_lessons", {
         select: "id,member_ticket_id,coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source",
         limit: 200,
@@ -4228,13 +4392,52 @@ async function syncMemberLessonsFromServer(profile = null) {
         filters: { status: "approved" },
         limit: 50,
       }).catch(() => []),
+      client.selectRows("tn_makeup_entitlements", {
+        select: "id,source_lesson_id,ticket_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at",
+        limit: 100,
+      }).catch(() => []),
+      client.rpc
+        ? client.rpc("tn_member_released_makeup_slots", {}).catch(() => [])
+        : Promise.resolve([]),
     ]);
     const coachNames = new Map((coachRoles || []).map((coach) => [coach.id, coach.display_name]));
+    const lessonsById = new Map((rows || []).map((lesson) => [lesson.id, lesson]));
     const memberName = currentMemberName();
+    state.liveMakeupEntitlements = (makeupEntitlementRows || [])
+      .filter((entitlement) => ownLessonIds.has(entitlement.source_lesson_id))
+      .map((entitlement) => {
+        const sourceLesson = lessonsById.get(entitlement.source_lesson_id) || {};
+        const lessonDate = sourceLesson.lesson_date || "";
+        const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
+        return {
+          id: entitlement.id,
+          sourceLessonId: entitlement.source_lesson_id,
+          ticketId: entitlement.ticket_id,
+          coachRoleId: entitlement.coach_role_id,
+          coach: coachNames.get(entitlement.coach_role_id) || "담당 코치",
+          lessonDate,
+          day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
+          time: String(sourceLesson.start_time || "").slice(0, 5),
+          durationMinutes: Number(entitlement.duration_minutes) || Number(sourceLesson.duration_minutes) || 20,
+          status: entitlement.status,
+          reason: entitlement.reason || "회원 불참",
+          markedAt: entitlement.marked_at || "",
+          bookedLessonId: entitlement.booked_lesson_id || "",
+          bookedAt: entitlement.booked_at || "",
+        };
+      });
+    state.liveReleasedMakeupSlots = (releasedMakeupSlots || []).map((slot) => ({
+      id: slot.slot_id,
+      coachRoleId: slot.coach_role_id,
+      lessonDate: slot.lesson_date,
+      time: String(slot.start_time || "").slice(0, 5),
+      durationMinutes: Number(slot.duration_minutes) || 20,
+    }));
     state.liveLessons = (rows || [])
       .filter((lesson) => lesson.status !== "cancelled")
       .map((lesson) => {
         const isOwnLesson = ownLessonIds.has(lesson.id);
+        const ticket = (state.liveTickets || []).find((item) => item.id === lesson.member_ticket_id) || {};
         const lessonSource = lesson.lesson_source === "makeup"
           ? "보강"
           : lesson.lesson_source === "coupon"
@@ -4255,7 +4458,12 @@ async function syncMemberLessonsFromServer(profile = null) {
           coach: coachNames.get(lesson.coach_role_id) || "담당 코치",
           member: isOwnLesson ? memberName : "",
           type: `${lessonSource} ${lesson.duration_minutes}분`,
+          lessonSource: lesson.lesson_source || "regular",
           durationMinutes: Number(lesson.duration_minutes) || 20,
+          ticketTotalSessions: Number(ticket.total) || 0,
+          ticketUsedSessions: Number(ticket.used) || 0,
+          ticketRemainingSessions: Number(ticket.remaining) || 0,
+          ticketLessonMinutes: Number(ticket.lessonMinutes) || Number(lesson.duration_minutes) || 20,
           status: visibleStatus,
           isOwnLesson,
         };
@@ -4264,6 +4472,8 @@ async function syncMemberLessonsFromServer(profile = null) {
     return true;
   } catch {
     state.liveLessons = [];
+    state.liveMakeupEntitlements = [];
+    state.liveReleasedMakeupSlots = [];
     state.liveLessonsLoaded = state.dataMode === "live";
     return false;
   }
@@ -4598,25 +4808,110 @@ function renderPaymentGatewayStatus() {
     </section>`;
 }
 
+function setNoticeDialogOpen(open) {
+  const dialog = $("#noticeDialog");
+  if (!dialog) return;
+  if (open) {
+    if (dialog.hidden) {
+      noticePreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+    dialog.hidden = false;
+    document.body.classList.add("notice-open");
+    window.requestAnimationFrame(() => {
+      if (!dialog.hidden) $("#noticeClose")?.focus({ preventScroll: true });
+    });
+    return;
+  }
+  dialog.hidden = true;
+  document.body.classList.remove("notice-open");
+  if (noticePreviousFocus?.isConnected) noticePreviousFocus.focus({ preventScroll: true });
+  noticePreviousFocus = null;
+}
+
 function showNoticeIfNeeded() {
   const today = localDateKey();
-  const notice = activeNoticeForApp("member");
-  if (!notice) return;
-  if (notice.showOncePerDay && state.noticeHiddenDate === today && state.noticeHiddenId === notice.id) return;
+  const activeNotices = [...activeNoticesForApp("member"), ...couponBookingPopupNotices()];
+  const hiddenToday = new Set(state.noticeHiddenDate === today
+    ? [...(Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : []), state.noticeHiddenId].filter(Boolean)
+    : []);
+  const notice = activeNotices.find((item) => !noticeSessionSeenIds.has(item.id) && !(item.showOncePerDay && hiddenToday.has(item.id)));
+  if (!notice) {
+    setNoticeDialogOpen(false);
+    return;
+  }
+  const noticeIndex = activeNotices.findIndex((item) => item.id === notice.id);
+  $("#noticeEyebrow").textContent = notice.source === "coupon-booking" ? "회원권 알림" : "공지사항";
   $("#noticeTitle").textContent = notice.title;
   $("#noticeBody").textContent = notice.body;
-  $("#noticeMeta").textContent = noticeMetaText(notice);
+  $("#noticeMeta").textContent = `${noticeMetaText(notice)} · ${noticeIndex + 1}/${activeNotices.length}`;
+  const noticeImage = $("#noticeImage");
+  noticeImage.hidden = !notice.imageUrl;
+  noticeImage.src = notice.imageUrl || "";
+  noticeImage.alt = notice.imageAlt || notice.title;
+  const noticeAction = $("#noticeAction");
+  const safeActionUrl = /^https?:\/\//i.test(notice.actionUrl) ? notice.actionUrl : "";
+  const actionRoute = notice.actionRoute === "schedule" ? "schedule" : "";
+  const hasAction = Boolean(safeActionUrl || actionRoute);
+  noticeAction.hidden = !hasAction;
+  noticeAction.href = safeActionUrl || "#";
+  noticeAction.dataset.route = actionRoute;
+  noticeAction.target = safeActionUrl ? "_blank" : "_self";
+  noticeAction.textContent = notice.actionLabel || "자세히 보기";
   $("#noticeDialog").dataset.noticeId = notice.id;
-  $("#noticeDialog").hidden = false;
+  setNoticeDialogOpen(true);
+}
+
+function isActiveCouponLiveTicket(ticket, today = localDateKey()) {
+  if (!ticket || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
+  if (ticket.startsOn && ticket.startsOn > today) return false;
+  if (ticket.expiresOn && ticket.expiresOn < today) return false;
+  return String(ticket.productKind || "").toLowerCase() === "coupon" || String(ticket.title || "").includes("쿠폰");
+}
+
+function liveTicketHasUpcomingLesson(ticket, today = localDateKey()) {
+  return (state.liveLessons || []).some((lesson) => {
+    if (String(lesson.member_ticket_id || lesson.ticketId || "") !== String(ticket.id || "")) return false;
+    if (!lesson.lessonDate || lesson.lessonDate < today) return false;
+    const status = lesson.serverStatus || lesson.status || "scheduled";
+    return !["cancelled", "completed", "confirmed", "no_show"].includes(status);
+  });
+}
+
+function couponBookingPopupNotices() {
+  if (state.dataMode !== "live" || !state.liveLessonsLoaded) return [];
+  return (state.liveTickets || [])
+    .filter((ticket) => isActiveCouponLiveTicket(ticket) && !liveTicketHasUpcomingLesson(ticket))
+    .map((ticket) => ({
+      id: `coupon-next-booking-${ticket.id}`,
+      title: "다음 수업을 예약해 주세요",
+      body: `${ticket.title || "쿠폰제 회원권"}이 ${Number(ticket.remaining) || 0}회 남아 있습니다. 시간표에서 다음 수업을 선택해 주세요.`,
+      audience: "member",
+      priority: "important",
+      status: "active",
+      showOncePerDay: true,
+      source: "coupon-booking",
+      actionLabel: "시간표 보기",
+      actionRoute: "schedule",
+      startDate: "",
+      endDate: "",
+      imageUrl: "",
+      imageAlt: "",
+    }));
 }
 
 function closeNotice(hideToday = false) {
+  const noticeId = $("#noticeDialog")?.dataset.noticeId || "";
+  if (noticeId) noticeSessionSeenIds.add(noticeId);
   if (hideToday) {
-    state.noticeHiddenDate = localDateKey();
-    state.noticeHiddenId = $("#noticeDialog")?.dataset.noticeId || "";
+    const today = localDateKey();
+    const previousIds = state.noticeHiddenDate === today && Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : [];
+    state.noticeHiddenDate = today;
+    state.noticeHiddenId = noticeId;
+    state.noticeHiddenIds = [...new Set([...previousIds, noticeId].filter(Boolean))];
   }
-  $("#noticeDialog").hidden = true;
+  setNoticeDialogOpen(false);
   saveSnapshot();
+  window.setTimeout(showNoticeIfNeeded, 0);
 }
 
 function savePracticeLog() {
@@ -4750,6 +5045,17 @@ function liveTicketProductTitle(row = {}) {
   return fallbackTitle;
 }
 
+function liveTicketScheduleScope(row = {}, product = {}) {
+  const configuredScope = row.schedule_scope || product.schedule_scope || "";
+  const productCode = String(row.product_code || product.product_code || "");
+  if (productCode.startsWith("admin-ticket-")) return configuredScope;
+
+  const productName = String(row.product_name || product.name || "");
+  if (productName.includes("주말")) return "weekend";
+  if (productName.includes("평일")) return "weekday";
+  return configuredScope;
+}
+
 function normalizeLiveTicket(row = {}) {
   const product = Array.isArray(row.tn_membership_products)
     ? row.tn_membership_products[0]
@@ -4766,11 +5072,12 @@ function normalizeLiveTicket(row = {}) {
     id: row.id || "",
     branchId: row.branch_id || "",
     coachRoleId: row.coach_role_id || "",
+    groupAccountId: row.shared_group_account_id || row.group_account_id || "",
     productId: row.product_id || product.id || "",
     productKind: row.product_kind || product.product_kind || "",
     lessonMinutes: Number(row.lesson_minutes || product.lesson_minutes || 20),
     groupSize: Number(row.group_size || product.group_size || 1),
-    scheduleScope: row.schedule_scope || product.schedule_scope || "",
+    scheduleScope: liveTicketScheduleScope(row, product),
     maxSessionsPerDay: Number(row.max_sessions_per_day || product.max_sessions_per_day || 0),
     maxSessionsPerWeek: Number(row.max_sessions_per_week || product.max_sessions_per_week || 0),
     maxBookingDaysPerWeek: Number(row.max_booking_days_per_week || product.max_booking_days_per_week || 0),
@@ -4796,6 +5103,7 @@ function normalizeLiveTicket(row = {}) {
     refundReason: payment.refund_reason || "",
     refundBreakdown: payment.refund_breakdown && typeof payment.refund_breakdown === "object" ? payment.refund_breakdown : {},
     refundedAt: payment.refunded_at || "",
+    sharedGroupTicket: Boolean(row.shared_group_ticket),
   };
 }
 
@@ -4813,6 +5121,9 @@ function currentLiveTicket() {
   return [...usableTickets].sort((a, b) => {
     const priority = liveTicketPriority(a) - liveTicketPriority(b);
     if (priority) return priority;
+    const sharedGroupPriority = Number(Boolean(b.sharedGroupTicket && Number(b.groupSize) === 2))
+      - Number(Boolean(a.sharedGroupTicket && Number(a.groupSize) === 2));
+    if (sharedGroupPriority) return sharedGroupPriority;
     return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
   })[0] || null;
 }
@@ -4824,7 +5135,7 @@ async function attachLiveTicketProducts(client, rows = []) {
   await Promise.all(productIds.map(async (productId) => {
     try {
       const productRows = await client.selectRows("tn_membership_products", {
-        select: "id,name,lesson_minutes,product_kind,total_sessions,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes",
+        select: "id,product_code,name,lesson_minutes,product_kind,total_sessions,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes",
         filters: { id: productId },
         limit: 1,
       });
@@ -4878,9 +5189,10 @@ async function syncMemberGroupAccountFromServer(profile = null) {
     const ownRows = await client.selectRows("tn_group_account_members", {
       select: "id,group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay",
       filters: { user_id: profileId },
-      limit: 1,
+      limit: 20,
     });
-    const ownMembership = ownRows?.[0];
+    const activeGroupAccountId = currentLiveTicket()?.groupAccountId || "";
+    const ownMembership = (ownRows || []).find((row) => row.group_account_id === activeGroupAccountId) || ownRows?.[0];
     if (!ownMembership?.group_account_id) {
       state.groupAccount = null;
       return true;
@@ -5070,7 +5382,7 @@ async function syncMemberTicketsFromServer(profile = null) {
     let rows;
     try {
       rows = await client.selectRows("tn_member_tickets", {
-        select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at,tn_membership_products(name,lesson_minutes,product_kind,total_sessions,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes)",
+        select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes)",
         filters: { user_id: profileId },
         limit: 20,
       });
@@ -5083,17 +5395,25 @@ async function syncMemberTicketsFromServer(profile = null) {
     }
 
     const sharedLinks = await client.selectRows("tn_group_ticket_links", {
-      select: "ticket_id,status",
+      select: "group_account_id,ticket_id,status",
       filters: { user_id: profileId },
       limit: 20,
     }).catch(() => []);
+    const activeSharedLinks = (sharedLinks || [])
+      .filter((link) => !["expired", "refunded"].includes(String(link.status || "").toLowerCase()));
+    const sharedTicketIds = new Set(activeSharedLinks
+      .map((link) => link.ticket_id)
+      .filter(Boolean));
+    const sharedAccountIdByTicketId = new Map(activeSharedLinks
+      .filter((link) => link.ticket_id && link.group_account_id)
+      .map((link) => [link.ticket_id, link.group_account_id]));
     const ownedTicketIds = new Set((rows || []).map((row) => row.id));
-    const sharedTicketRows = await Promise.all((sharedLinks || [])
+    const sharedTicketRows = await Promise.all(activeSharedLinks
       .filter((link) => link.ticket_id && !ownedTicketIds.has(link.ticket_id))
       .map(async (link) => {
         try {
           return await client.selectRows("tn_member_tickets", {
-            select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at,tn_membership_products(name,lesson_minutes,product_kind,total_sessions,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes)",
+            select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes)",
             filters: { id: link.ticket_id },
             limit: 1,
           });
@@ -5105,7 +5425,11 @@ async function syncMemberTicketsFromServer(profile = null) {
           }).catch(() => []);
         }
       }));
-    rows = [...(rows || []), ...sharedTicketRows.flat()];
+    rows = [...(rows || []), ...sharedTicketRows.flat()].map((row) => ({
+      ...row,
+      shared_group_ticket: sharedTicketIds.has(row.id),
+      shared_group_account_id: sharedAccountIdByTicketId.get(row.id) || "",
+    }));
 
     rows = await attachLiveTicketProducts(client, rows || []);
     rows = await attachLiveTicketPayments(client, rows || []);
@@ -5126,13 +5450,13 @@ async function syncMemberTicketsFromServer(profile = null) {
     if (ticket.status === "active" && state.member) state.member.memberKind = "lesson_member";
     state.ticketSyncStatus = {
       tone: ticket.tone,
-      text: `${ticket.statusLabel} · 잔여 ${ticket.remaining}/${ticket.total || "-"}회`,
+      text: `${ticket.statusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
     };
     const syncKey = `${ticket.id}:${ticket.status}:${ticket.remaining}:${ticket.total}`;
     if (syncKey !== state.lastLiveTicketKey) {
       state.lastLiveTicketKey = syncKey;
       state.ticketHistory.unshift({
-        text: `${ticket.title} · ${ticket.statusLabel} · 잔여 ${ticket.remaining}/${ticket.total || "-"}회`,
+        text: `${ticket.title} · ${ticket.statusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
         tone: ticket.tone,
       });
     }
@@ -5792,7 +6116,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "coach-live-sync-1" });
+  const params = new URLSearchParams({ v: "coach-notice-layer-1" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -5851,8 +6175,11 @@ function handleSummaryAction(action) {
     jumpToTop();
     return;
   }
-  if (action === "change") {
+  if (action === "change" || action === "makeup") {
     setView("scheduleView");
+    renderSelects();
+    const firstDue = memberMakeupDueLessons()[0];
+    if (firstDue && $("#absenceLesson")) $("#absenceLesson").value = firstDue.id;
     renderSelects();
     renderAvailableSlots();
     openChangeRequestModal();
@@ -5899,10 +6226,58 @@ function selectAvailableSlot(lessonId) {
 }
 
 function changeMemberWeek(delta) {
-  state.activeMemberWeekIndex = Math.min(Math.max((Number(state.activeMemberWeekIndex) || 0) + delta, 0), memberScheduleWeeks.length - 1);
+  state.activeMemberWeekIndex = Math.min(
+    Math.max((Number(state.activeMemberWeekIndex) || 0) + delta, memberScheduleMinWeekOffset),
+    memberScheduleMaxWeekOffset,
+  );
   renderSchedule();
   renderSelects();
   renderAvailableSlots();
+}
+
+function memberWeekOffsetForDate(value) {
+  const date = value instanceof Date ? value : new Date(`${value}T12:00:00`);
+  const targetDayOffset = date.getDay() === 0 ? -6 : 1 - date.getDay();
+  const targetMonday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + targetDayOffset);
+  const today = new Date();
+  const currentDayOffset = today.getDay() === 0 ? -6 : 1 - today.getDay();
+  const currentMonday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + currentDayOffset);
+  return Math.round((targetMonday - currentMonday) / 604800000);
+}
+
+function changeMemberMonth(delta) {
+  const currentStart = new Date(`${activeMemberWeek().startDate}T12:00:00`);
+  const targetMonthStart = new Date(currentStart.getFullYear(), currentStart.getMonth() + delta, 1);
+  const targetLastDay = new Date(targetMonthStart.getFullYear(), targetMonthStart.getMonth() + 1, 0).getDate();
+  const target = new Date(targetMonthStart.getFullYear(), targetMonthStart.getMonth(), Math.min(currentStart.getDate(), targetLastDay));
+  state.activeMemberWeekIndex = Math.min(
+    Math.max(memberWeekOffsetForDate(target), memberScheduleMinWeekOffset),
+    memberScheduleMaxWeekOffset,
+  );
+  renderSchedule();
+  renderSelects();
+  renderAvailableSlots();
+  saveSnapshot();
+}
+
+function selectMemberMonth(value) {
+  if (!/^\d{4}-\d{2}$/.test(value || "")) return;
+  const [year, month] = value.split("-").map(Number);
+  const currentStart = new Date(`${activeMemberWeek().startDate}T12:00:00`);
+  const targetLastDay = new Date(year, month, 0).getDate();
+  const target = new Date(year, month - 1, Math.min(currentStart.getDate(), targetLastDay));
+  state.activeMemberWeekIndex = Math.min(
+    Math.max(memberWeekOffsetForDate(target), memberScheduleMinWeekOffset),
+    memberScheduleMaxWeekOffset,
+  );
+  renderSchedule();
+  renderSelects();
+  renderAvailableSlots();
+  saveSnapshot();
+}
+
+function memberScheduleMonthValue(week = activeMemberWeek()) {
+  return String(week.startDate || "").slice(0, 7);
 }
 
 function changeMemberScheduleTimeRange(range) {
@@ -6204,6 +6579,7 @@ async function saveProfileInfo() {
   state.profile.selfNtrp = $("#profileSelfNtrp")?.value || state.profile.selfNtrp;
   state.profile.ntrpSurvey = collectNtrpSurvey().answers;
   const serverResult = await updateMemberProfileOnServer({
+    profile_photo_url: state.profile.photoDataUrl || null,
     dominant_hand: state.profile.hand || null,
     backhand_style: state.profile.backhand || null,
     tennis_started_on: state.profile.startedAt || null,
@@ -6298,7 +6674,6 @@ function exportNtrpRequest(survey) {
 
 function activateLiveMemberProfile(profileId) {
   const nextProfileId = String(profileId || "");
-  if (state.dataMode === "live" && state.liveProfileId === nextProfileId) return;
 
   state.dataMode = "live";
   state.liveProfileId = nextProfileId;
@@ -6379,12 +6754,14 @@ async function applySupabaseMemberSession(showNotice = false) {
       provider: session.provider || "Supabase",
       name: displayName,
       nickname: profile?.nickname || "",
-      email: user?.email || session?.user?.email || "",
       profileId: profile?.id || "",
       authUserId: user?.id || "",
       role: profile?.role || "member",
       memberKind: profile?.member_kind || "journal_only",
       status: profile?.status || "active",
+      birthYear: profile?.birth_year || "",
+      neighborhood: profile?.neighborhood || "",
+      gender: profile?.gender || "",
       coachApproved: coachRole?.status === "approved",
     };
     state.coachModeAllowed = state.member.coachApproved;
@@ -6395,7 +6772,6 @@ async function applySupabaseMemberSession(showNotice = false) {
     state.profile.name = profile?.name || "가입 확인 중";
     state.profile.nickname = profile?.nickname || "";
     state.profile.phone = profile?.phone || "";
-    state.profile.email = user?.email || session?.user?.email || "";
     state.profile.profileCompletedAt = profile?.profile_completed_at || "";
     state.profile.privacyConsentVersion = profile?.privacy_consent_version || "";
     state.profile.privacyConsentedAt = profile?.privacy_consented_at || "";
@@ -6462,9 +6838,12 @@ async function syncAppleLoginAvailability() {
     }
   }
   buttons.forEach((button) => {
+    const label = button.querySelector("[data-apple-login-label]");
     button.disabled = !ready;
     button.classList.toggle("is-preparing", !ready);
-    button.textContent = ready ? button.dataset.readyLabel : "Apple 로그인 설정 중";
+    const buttonLabel = ready ? button.dataset.readyLabel : "Apple 로그인 설정 중";
+    if (label) label.textContent = buttonLabel;
+    button.setAttribute("aria-label", buttonLabel);
   });
 }
 
@@ -6508,6 +6887,9 @@ async function logout() {
   state.memberEnrollment = null;
   state.pendingPurchaseProductId = "";
   state.liveTickets = [];
+  state.liveLessons = [];
+  state.liveMakeupEntitlements = [];
+  state.liveReleasedMakeupSlots = [];
   state.ticketSyncStatus = { tone: "wait", text: "로그인 후 실제 회원권을 확인합니다" };
   state.lastLiveTicketKey = "";
   sessionStorage.removeItem(appModePreferenceKey);
@@ -6532,14 +6914,15 @@ async function requestMakeup() {
   const originalDay = absence.day;
   const originalTime = absence.time;
   const originalCoach = absence.coach;
-  const reason = $("#changeReason")?.value.trim() || "";
-  if (reason.length < 2) {
+  const isMakeupEntitlement = Boolean(absence.makeupEntitlementId);
+  const reason = isMakeupEntitlement ? "불참 처리 후 보강 예약" : $("#changeReason")?.value.trim() || "";
+  if (!isMakeupEntitlement && reason.length < 2) {
     showToast("변경 이유를 2자 이상 입력해주세요.");
     $("#changeReason")?.focus();
     return;
   }
   const client = window.TennisNoteDataClient;
-  const liveRequest = Boolean(state.member?.profileId && absence.serverLessonId && client?.rpc);
+  const liveRequest = Boolean(state.member?.profileId && (absence.serverLessonId || absence.makeupEntitlementId) && client?.rpc);
   if (state.dataMode === "live" && !liveRequest) {
     showToast("실제 수업 연결을 다시 확인한 뒤 요청해주세요.");
     return;
@@ -6549,28 +6932,39 @@ async function requestMakeup() {
     const button = $("#requestMakeup");
     if (button) {
       button.disabled = true;
-      button.textContent = "요청 중";
+      button.textContent = isMakeupEntitlement ? "예약 중" : "요청 중";
     }
     try {
       const targetDate = makeup.lessonDate || memberScheduleDateForDay(makeup.day);
       if (!targetDate) throw new Error("target_lesson_date_required");
-      const result = await client.rpc("tn_submit_lesson_change_request", {
-        target_lesson_id: absence.serverLessonId,
-        target_lesson_date: targetDate,
-        target_start_time: makeup.time,
-        target_reason: reason,
-      });
+      const result = isMakeupEntitlement
+        ? await client.rpc("tn_book_makeup_entitlement", {
+            target_entitlement_id: absence.makeupEntitlementId,
+            target_lesson_date: targetDate,
+            target_start_time: makeup.time,
+            target_reason: reason,
+          })
+        : await client.rpc("tn_submit_lesson_change_request", {
+            target_lesson_id: absence.serverLessonId,
+            target_lesson_date: targetDate,
+            target_start_time: makeup.time,
+            target_reason: reason,
+          });
       await syncMemberLessonsFromServer();
-      await syncMemberChangeRequestsFromServer();
+      if (!isMakeupEntitlement) await syncMemberChangeRequestsFromServer();
       state.ticketHistory.unshift({
-        text: `${originalDay} ${originalTime} → ${makeup.day} ${makeup.time} ${result?.status === "auto_approved" ? "자동 변경 완료" : "코치 승인 요청"}`,
-        tone: result?.status === "auto_approved" ? "done" : "wait",
+        text: isMakeupEntitlement
+          ? `${originalDay} ${originalTime} 불참 수업 → ${makeup.day} ${makeup.time} 보강 예약 완료`
+          : `${originalDay} ${originalTime} → ${makeup.day} ${makeup.time} ${result?.status === "auto_approved" ? "자동 변경 완료" : "코치 승인 요청"}`,
+        tone: isMakeupEntitlement || result?.status === "auto_approved" ? "done" : "wait",
       });
       if ($("#changeReason")) $("#changeReason").value = "";
       closeChangeRequestModal();
       renderAll();
       saveSnapshot();
-      showToast(result?.status === "auto_approved" ? "수업 시간이 변경되었습니다." : "코치에게 변경 요청을 보냈습니다.");
+      showToast(isMakeupEntitlement
+        ? "보강 예약이 완료되었습니다."
+        : result?.status === "auto_approved" ? "수업 시간이 변경되었습니다." : "코치에게 변경 요청을 보냈습니다.");
     } catch (error) {
       let code = error?.payload?.message || error?.payload?.code || error?.message || "server_error";
       if (typeof code === "string" && code.trim().startsWith("{")) {
@@ -6595,12 +6989,17 @@ async function requestMakeup() {
         weekly_session_limit: "이번 주 이용 가능 횟수를 초과합니다.",
         weekly_booking_day_limit: "이번 주 예약 가능 일수를 초과합니다.",
         target_date_outside_ticket: "회원권 사용기간 밖의 날짜입니다.",
+        makeup_entitlement_not_found: "보강 대상 수업을 찾을 수 없습니다. 새로고침 후 다시 확인해 주세요.",
+        makeup_entitlement_not_open: "이미 예약되었거나 종료된 보강입니다.",
+        makeup_source_lesson_invalid: "원래 수업 상태가 변경되었습니다. 새로고침 후 다시 확인해 주세요.",
+        makeup_booking_forbidden: "이 보강을 예약할 권한이 없습니다.",
+        active_ticket_required: "사용 가능한 회원권 횟수를 확인해 주세요.",
       };
-      showToast(messages[code] || `수업 변경 요청 실패: ${code}`);
+      showToast(messages[code] || `${isMakeupEntitlement ? "보강 예약" : "수업 변경 요청"} 실패: ${code}`);
     } finally {
       if (button) {
         button.disabled = false;
-        button.textContent = "수업 변경 요청";
+        button.textContent = isMakeupEntitlement ? "보강 예약 확정" : "수업 변경 요청";
       }
     }
     return;
@@ -6818,6 +7217,17 @@ function bindEvents() {
   $("#confirmLatestLesson")?.addEventListener("click", confirmLatestLesson);
   $("#noticeClose").addEventListener("click", () => closeNotice(false));
   $("#noticeHideToday").addEventListener("click", () => closeNotice(true));
+  $("#noticeAction")?.addEventListener("click", (event) => {
+    const route = event.currentTarget?.dataset?.route || "";
+    if (route === "schedule") {
+      event.preventDefault();
+      closeNotice(false);
+      setView("scheduleView");
+      jumpToTop();
+      return;
+    }
+    closeNotice(false);
+  });
   $("#scheduleGrid").addEventListener("click", (event) => {
     const button = event.target.closest("[data-lesson]");
     if (button) handleScheduleClick(button.dataset.lesson);
@@ -6834,8 +7244,16 @@ function bindEvents() {
     true,
   );
   $("#memberWeekSwitcher")?.addEventListener("click", (event) => {
+    const monthButton = event.target.closest("[data-change-member-month]");
+    if (monthButton) {
+      changeMemberMonth(Number(monthButton.dataset.changeMemberMonth));
+      return;
+    }
     const button = event.target.closest("[data-change-member-week]");
     if (button) changeMemberWeek(Number(button.dataset.changeMemberWeek));
+  });
+  $("#memberWeekSwitcher")?.addEventListener("change", (event) => {
+    if (event.target.matches("[data-member-month]")) selectMemberMonth(event.target.value);
   });
   $("#scheduleGrid")?.addEventListener("click", (event) => {
     const dayButton = event.target.closest("[data-member-schedule-day]");
@@ -6874,6 +7292,11 @@ function bindEvents() {
     if (event.target.closest("[data-close-ntrp-modal]")) closeNtrpReference();
   });
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !$("#noticeDialog")?.hidden) {
+      event.preventDefault();
+      closeNotice(false);
+      return;
+    }
     if (event.key === "Escape" && activeAppSheetId) {
       event.preventDefault();
       closeVisibleAppSheet();
@@ -7001,6 +7424,7 @@ function renderAll() {
   renderTodayActions();
   renderSchedule();
   renderSelects();
+  renderMakeupDueBanner();
   renderJournalMode();
   renderAvailableSlots();
   renderRequests();

@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-member-pwa-v41";
+const CACHE_NAME = "tennis-note-member-pwa-v56";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -13,6 +13,7 @@ const APP_SHELL = [
   "../shared/tennisnote-product-catalog.js",
   "../shared/tennisnote-curriculum-catalog.js",
   "../shared/tennisnote-native-push.js",
+  "../shared/tennisnote-release.js",
 ];
 
 self.addEventListener("install", (event) => {
