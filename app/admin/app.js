@@ -4709,11 +4709,7 @@ function setView(view, options = {}) {
   if (!options.skipLock && !requestAdminUnlock(view)) return;
   const enteringSchedule = view === "schedule" && state.view !== "schedule";
   state.view = view;
-  if (enteringSchedule) {
-    state.scheduleView = "week";
-    state.activeAdminWeekIndex = 0;
-    state.selectedScheduleDay = currentScheduleDay();
-  }
+  if (view === "schedule" && (enteringSchedule || !scheduleSessionInitialized)) resetScheduleEntryState();
   $$(".nav-item").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
   $$(".view").forEach((section) => section.classList.remove("is-active"));
   $(`#${view}View`).classList.add("is-active");
@@ -8878,11 +8874,13 @@ function renderSchedule() {
     `;
   }
   state.scheduleView = state.scheduleView === "coach" ? "coach" : "week";
+  state.scheduleFilter = state.scheduleFilter === "pending" ? "pending" : "all";
   const coachDayView = state.scheduleView === "coach";
   const mobileDayView = !coachDayView && isAdminMobileSchedule();
   const selectedDay = selectedAdminScheduleDay();
   const displayDays = mobileDayView ? [selectedDay] : scheduleDays;
   $$('[data-schedule-view]').forEach((button) => button.classList.toggle("is-active", button.dataset.scheduleView === state.scheduleView));
+  $$(".segment[data-schedule-filter]").forEach((button) => button.classList.toggle("is-active", button.dataset.scheduleFilter === state.scheduleFilter));
   if ($("#adminScheduleDayPicker")) {
     $("#adminScheduleDayPicker").classList.toggle("is-visible", coachDayView || mobileDayView);
     $("#adminScheduleDayPicker").innerHTML = scheduleDays.map((day) => `
@@ -15304,6 +15302,18 @@ function renderAll() {
 
 let adminLiveScheduleRefreshTimer = 0;
 let adminLiveScheduleRefreshInFlight = false;
+let scheduleSessionInitialized = false;
+
+function resetScheduleEntryState() {
+  // The saved browser snapshot may contain a coach-only or pending-only view.
+  // A first visit must always start from the full weekly timetable instead.
+  state.scheduleView = "week";
+  state.scheduleFilter = "all";
+  state.scheduleCoachFilter = "all";
+  state.activeAdminWeekIndex = 0;
+  state.selectedScheduleDay = currentScheduleDay();
+  scheduleSessionInitialized = true;
+}
 
 async function refreshAdminLiveSchedule(options = {}) {
   if (
@@ -15801,9 +15811,10 @@ function bindEvents() {
   });
   ["#lessonDay", "#lessonDuration"].forEach((selector) => {
     $(selector).addEventListener("change", () => {
-      refreshLessonTicketOptions();
+      // Day and duration only change slot availability. Rebuilding ticket options
+      // here silently selected a different ticket after an unavailable-slot warning.
+      // Ticket identity is changed only by member, coach, ticket, or source actions.
       refreshLessonTimeOptions($("#lessonTime").value);
-      refreshLessonDayOptions();
       renderLessonPreview();
     });
   });
@@ -16461,6 +16472,7 @@ function bindEvents() {
 
 restoreSnapshot();
 prepareAdminLiveMode();
+resetScheduleEntryState();
 window.TennisNoteDataClient?.consumeOAuthRedirect?.();
 renderOperationsLoginGate();
 organizeAdminTools();
