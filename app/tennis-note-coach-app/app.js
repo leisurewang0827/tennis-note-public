@@ -390,7 +390,7 @@ async function syncCoachLessonsFromServer() {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !client.getSession?.()?.access_token) return false;
   try {
-    const [lessonRows, participantRows, userRows, coachRows, ticketRows, productRows, recordRows, changeRequestRows, makeupEntitlementRows] = await Promise.all([
+    const [lessonRows, participantRows, userRows, coachRows, ticketRows, productRows, recordRows, changeRequestRows, makeupEntitlementRows, oneDayBookingRows] = await Promise.all([
       client.selectRows("tn_lessons", {
         select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,day_of_week,start_time,duration_minutes,status,lesson_source",
         limit: 300,
@@ -412,6 +412,9 @@ async function syncCoachLessonsFromServer() {
         select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at",
         limit: 300,
       }).catch(() => []),
+      client.rpc
+        ? client.rpc("tn_visible_one_day_bookings", {}).catch(() => [])
+        : Promise.resolve([]),
     ]);
     const usersById = new Map((userRows || []).map((user) => [user.id, user.name]));
     const coachesById = new Map((coachRows || []).map((coach) => [coach.id, coach]));
@@ -424,7 +427,7 @@ async function syncCoachLessonsFromServer() {
     });
     const completedLessonIds = new Set((recordRows || []).map((record) => record.lesson_id));
 
-    state.liveLessons = (lessonRows || [])
+    const mappedLessons = (lessonRows || [])
       .filter((lesson) => lesson.status !== "cancelled")
       .map((lesson) => {
         const participantIds = participantIdsByLesson.get(lesson.id) || [];
@@ -464,6 +467,42 @@ async function syncCoachLessonsFromServer() {
           task: lesson.status === "pending_change" ? "변경 요청 확인" : "수업 후 코멘트/다음 커리큘럼",
         };
       });
+    const oneDayLessons = (oneDayBookingRows || [])
+      .filter((booking) => ["reserved", "checked_in", "completed"].includes(booking.status))
+      .map((booking) => {
+        const dayIndex = new Date(`${booking.booking_date}T00:00:00`).getDay();
+        const coach = coachesById.get(booking.coach_role_id) || {};
+        const bookingStatus = booking.status === "completed"
+          ? "원데이 완료"
+          : booking.status === "checked_in"
+            ? "방문"
+            : "원데이 예약";
+        return {
+          id: `one-day-${booking.id}`,
+          serverOneDayBookingId: booking.id,
+          oneDayBooking: true,
+          lessonDate: booking.booking_date,
+          day: scheduleDays[dayIndex === 0 ? 6 : dayIndex - 1],
+          time: String(booking.start_time || "").slice(0, 5),
+          coach: coach.display_name || "담당 코치",
+          coachRoleId: booking.coach_role_id,
+          member: booking.guest_name || "원데이",
+          memberUserIds: [],
+          type: `원데이 ${booking.duration_minutes}분`,
+          lessonSource: "one_day",
+          durationMinutes: Number(booking.duration_minutes) || 20,
+          ticketLessonMinutes: Number(booking.duration_minutes) || 20,
+          ticketId: "",
+          totalSessions: 0,
+          usedSessions: 0,
+          ticket: "원데이",
+          status: bookingStatus,
+          serverStatus: booking.status,
+          remaining: 0,
+          task: "원데이 예약",
+        };
+      });
+    state.liveLessons = [...mappedLessons, ...oneDayLessons];
 
     const lessonRowsById = new Map((lessonRows || []).map((lesson) => [lesson.id, lesson]));
     state.makeupEntitlements = (makeupEntitlementRows || []).map((entitlement) => {
@@ -514,14 +553,14 @@ async function syncCoachLessonsFromServer() {
           time: entitlement.originalTime,
           coach: entitlement.coach,
           coachRoleId: entitlement.coachRoleId,
-          member: entitlement.member,
+          member: "수업 신청 가능",
           entitlementId: entitlement.id,
           sourceLessonId: entitlement.sourceLessonId,
-          type: `보강 가능 ${entitlement.durationMinutes}분`,
+          type: `수업 신청 가능 ${entitlement.durationMinutes}분`,
           lessonSource: "makeup",
           durationMinutes: entitlement.durationMinutes,
-          status: "보강 가능",
-          task: "보강만 등록",
+          status: "available",
+          task: "수업 신청 가능",
         };
       });
 
@@ -1128,7 +1167,7 @@ function defaultCoachSchedulePolicy() {
     openStart: "06:40",
     openEnd: "22:00",
     breakRules: [{ id: "weekday-midday", days: weekdays, start: "13:00", end: "17:00", label: "수업 없음" }],
-    lessonColors: { regular: "#2f6fc4", makeup: "#17805d", coupon: "#b7791f" },
+    lessonColors: { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" },
     coaches: [
       {
         id: "coach-no",
@@ -1225,6 +1264,7 @@ function loadCoachSchedulePolicy() {
       openEnd: storedPolicyVersion < 2 ? fallback.openEnd : scheduleSettings.openEnd || fallback.openEnd,
       breakRules: storedPolicyVersion < 2 ? fallback.breakRules : Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : fallback.breakRules,
       lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
+      lessonColorRules: Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : [],
       coaches: coaches
         .filter((coach) => (coach.status || "active") === "active" && coach.name !== "무인")
         .map(normalizeCoachPolicyItem),
@@ -1409,7 +1449,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "member-regular-absence-1" });
+  const params = new URLSearchParams({ v: "member-one-day-availability-1" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1653,7 +1693,11 @@ function ownTodayLessons() {
   const currentLessons = state.liveLessonsLoaded || state.dataMode === "live"
     ? weekLessons().filter((lesson) => lesson.lessonDate === localDateKey())
     : weekLessons();
-  return currentLessons.filter((lesson) => canonicalCoachName(lesson.coach) === currentCoachName());
+  return currentLessons.filter((lesson) => (
+    canonicalCoachName(lesson.coach) === currentCoachName()
+    && !lesson.releasedMakeupSlot
+    && lesson.status !== "available"
+  ));
 }
 
 function isMakeupLesson(lesson) {
@@ -1795,12 +1839,19 @@ function lessonDuration(lesson) {
 
 function coachLessonVisualKind(lesson = {}) {
   const source = String(lesson.lessonSource || lesson.lesson_source || "").toLowerCase();
+  if (lesson.releasedMakeupSlot || lesson.status === "available") return "released";
+  if (["no_show", "cancelled_late"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase())) return "noShow";
   if (source === "makeup" || String(lesson.type || "").includes("보강")) return "makeup";
+  if (source === "one_day") return "coupon";
   if (source === "coupon" || String(lesson.type || "").includes("쿠폰")) return "coupon";
+  if (lessonDuration(lesson) === 30) return "regular30";
   return "regular";
 }
 
 function coachScheduleLessonActionAttrs(lesson = {}) {
+  if (lesson.oneDayBooking) {
+    return `disabled aria-label="${lesson.member || "원데이"} 원데이 예약"`;
+  }
   if (lesson.releasedMakeupSlot) {
     return `data-restore-absence-id="${lesson.entitlementId || ""}" aria-label="${lesson.member || "회원"} 정규수업 복원"`;
   }
@@ -1809,8 +1860,10 @@ function coachScheduleLessonActionAttrs(lesson = {}) {
 
 function coachLessonColorStyle(lesson, policy) {
   const kind = coachLessonVisualKind(lesson);
-  const fallback = { regular: "#2f6fc4", makeup: "#17805d", coupon: "#b7791f" };
-  const saved = policy?.lessonColors?.[kind] || "";
+  if (kind === "released") return "--lesson-color:#111827";
+  const fallback = { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" };
+  const custom = (policy?.lessonColorRules || []).find((rule) => rule.match && `${lesson.type || ""} ${lesson.lessonSource || ""}`.includes(rule.match));
+  const saved = custom?.color || policy?.lessonColors?.[kind] || "";
   const color = /^#[0-9a-f]{6}$/i.test(saved) ? saved : fallback[kind];
   return `--lesson-color:${color}`;
 }
@@ -2268,7 +2321,7 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
                 if (startIndex < 0) return "";
                 const span = Math.max(1, Math.ceil(lessonDuration(lesson) / scheduleBlockMinutes));
                 const memberLabel = formatScheduleMemberName(lesson.member || "회원");
-                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(lesson.coach)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${memberLabel}</strong><span>${lesson.releasedMakeupSlot ? "보강 가능" : `${lessonDuration(lesson)}분`}</span></button>`;
+                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(lesson.coach)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${memberLabel}</strong><span>${lesson.releasedMakeupSlot ? "신청 가능" : `${lessonDuration(lesson)}분`}</span></button>`;
               }).join("")}
             </div>`;
         }).join("")}

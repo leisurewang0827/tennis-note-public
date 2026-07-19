@@ -265,7 +265,8 @@ const scheduleSettings = {
   openStart: "06:40",
   openEnd: "22:00",
   breakRules: [{ id: "weekday-midday", days: ["월", "화", "수", "목", "금"], start: "13:00", end: "17:00", label: "수업 없음" }],
-  lessonColors: { regular: "#2f6fc4", makeup: "#17805d", coupon: "#b7791f" },
+  lessonColors: { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" },
+  lessonColorRules: [],
   coachWorkPolicyVersion: 2,
 };
 
@@ -1169,7 +1170,7 @@ function applyOperationsRolePermissions() {
   $$('[data-admin-only-member-filter]').forEach((button) => {
     button.hidden = role === "coach";
   });
-  ["openDataToolsButton", "openCoachManagementButton", "exportMembersButton", "addMemberButton", "adminPendingUsersPanel"].forEach((id) => {
+  ["openDataToolsButton", "exportMembersButton", "addMemberButton", "adminPendingUsersPanel"].forEach((id) => {
     const element = $(`#${id}`);
     if (element) element.hidden = role === "coach";
   });
@@ -1220,6 +1221,7 @@ const adminLiveDataState = {
   participantRows: [],
   makeupEntitlements: [],
   memberDatabaseRecords: [],
+  memberMembershipRecords: [],
 };
 
 const modeSummaries = {
@@ -1405,6 +1407,7 @@ const storageKey = "tennis-note-admin-demo-v1";
 const sharedStorageKey = "tennis-note-shared-demo-v1";
 const paymentConfigKey = "tennis-note-payment-config";
 const liveSchedulePolicyKey = "app_schedule_policy";
+const adminSecuritySettingsKey = "admin_security_v1";
 const holdingPolicyKey = "holding_policy";
 const notificationPolicyKey = "notification_policy_v1";
 const lessonPolicySettingsKey = "lesson_policy_rules_v1";
@@ -1447,10 +1450,13 @@ const defaultAdminLockSettings = {
   enabled: true,
   pinHash: "",
   legacyPin: "",
+  pinConfigured: false,
   timeoutMinutes: 10,
   lockedViews: ["billing", "data", "settings"],
 };
 const adminLockSettings = { ...defaultAdminLockSettings, lockedViews: [...defaultAdminLockSettings.lockedViews] };
+let adminSecurityDraft = null;
+let adminSecuritySaveState = { status: "idle", savedAt: "" };
 const adminLockSession = {
   unlockedUntil: 0,
   pendingView: "",
@@ -1622,6 +1628,7 @@ function normalizeAdminLockSettings(source = {}) {
     enabled: typeof source.enabled === "boolean" ? source.enabled : defaultAdminLockSettings.enabled,
     pinHash: usesLegacyDemoPin ? "" : pinHash,
     legacyPin: usesLegacyDemoPin ? "" : legacyPin,
+    pinConfigured: usesLegacyDemoPin ? false : source.pinConfigured === true || Boolean(pinHash || legacyPin),
     timeoutMinutes: Math.min(Math.max(timeoutMinutes, 1), 120),
     lockedViews: [...new Set(lockedViews)],
   };
@@ -1631,6 +1638,7 @@ function serializableAdminLockSettings() {
   const payload = {
     enabled: adminLockSettings.enabled,
     pinHash: adminLockSettings.pinHash,
+    pinConfigured: adminLockSettings.pinConfigured,
     timeoutMinutes: adminLockSettings.timeoutMinutes,
     lockedViews: [...adminLockSettings.lockedViews],
   };
@@ -1638,10 +1646,92 @@ function serializableAdminLockSettings() {
   return payload;
 }
 
+function adminSecurityConfigPayload(source = adminLockSettings) {
+  return {
+    enabled: Boolean(source.enabled),
+    timeoutMinutes: Math.min(Math.max(numericValue(source.timeoutMinutes, 10), 1), 120),
+    lockedViews: [...new Set(Array.isArray(source.lockedViews) ? source.lockedViews : [])],
+  };
+}
+
+function currentAdminSecurityDraft() {
+  if (!adminSecurityDraft) adminSecurityDraft = { ...adminSecurityConfigPayload(), lockedViews: [...adminLockSettings.lockedViews] };
+  return adminSecurityDraft;
+}
+
+function resetAdminSecurityDraft() {
+  adminSecurityDraft = { ...adminSecurityConfigPayload(), lockedViews: [...adminLockSettings.lockedViews] };
+  adminSecuritySaveState.status = "idle";
+}
+
+function adminSecurityIsDirty() {
+  const draft = currentAdminSecurityDraft();
+  const saved = adminSecurityConfigPayload();
+  return draft.enabled !== saved.enabled
+    || draft.timeoutMinutes !== saved.timeoutMinutes
+    || draft.lockedViews.length !== saved.lockedViews.length
+    || draft.lockedViews.some((view) => !saved.lockedViews.includes(view));
+}
+
+async function loadAdminSecuritySettingsFromServer() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !adminApprovalReady()) return false;
+  try {
+    const value = await client.rpc("tn_admin_security_settings");
+    if (!value || typeof value !== "object") return false;
+    const normalized = normalizeAdminLockSettings(value);
+    Object.assign(adminLockSettings, adminSecurityConfigPayload(normalized), { pinConfigured: normalized.pinConfigured });
+    adminLockSettings.pinHash = "";
+    adminLockSettings.legacyPin = "";
+    resetAdminSecurityDraft();
+    adminSecuritySaveState = { status: "saved", savedAt: value.updatedAt || "" };
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function saveAdminSecuritySettings() {
+  const client = window.TennisNoteDataClient;
+  const button = $("#saveAdminSecurityButton");
+  if (!adminApprovalReady() || !client?.rpc) {
+    adminSecuritySaveState.status = "blocked";
+    renderAdminSecurity();
+    showToast("관리자 로그인 후 보안 설정을 저장할 수 있습니다.");
+    return false;
+  }
+  const draft = currentAdminSecurityDraft();
+  const value = { ...adminSecurityConfigPayload(draft), updatedAt: new Date().toISOString() };
+  if (button) button.disabled = true;
+  adminSecuritySaveState.status = "saving";
+  renderAdminSecurity();
+  try {
+    await client.rpc("tn_admin_save_security_settings", {
+      target_enabled: value.enabled,
+      target_timeout_minutes: value.timeoutMinutes,
+      target_locked_views: value.lockedViews,
+    });
+    Object.assign(adminLockSettings, value);
+    resetAdminSecurityDraft();
+    adminSecuritySaveState = { status: "saved", savedAt: new Date().toISOString() };
+    saveSnapshot();
+    renderAll();
+    showToast("보안 설정을 서버에 저장했습니다.");
+    return true;
+  } catch {
+    adminSecuritySaveState.status = "blocked";
+    renderAdminSecurity();
+    showToast("보안 설정 저장에 실패했습니다. 연결과 관리자 권한을 확인해 주세요.");
+    return false;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function adminPinNeedsSetup() {
   const pinHash = `${adminLockSettings.pinHash || ""}`.trim();
   const legacyPin = `${adminLockSettings.legacyPin || ""}`.trim();
-  return (!pinHash && !legacyPin) || legacyPin === legacyDefaultAdminPin || legacyDefaultAdminPinHashes.has(pinHash);
+  return (!pinHash && !legacyPin && !adminLockSettings.pinConfigured) || legacyPin === legacyDefaultAdminPin || legacyDefaultAdminPinHashes.has(pinHash);
 }
 
 async function verifyAdminPin(value) {
@@ -1652,6 +1742,15 @@ async function verifyAdminPin(value) {
     return hash === adminLockSettings.pinHash || fallbackAdminPinHash(pin) === adminLockSettings.pinHash;
   }
   const legacyPin = `${adminLockSettings.legacyPin || ""}`.trim();
+  if (adminLockSettings.pinConfigured && !legacyPin) {
+    const client = window.TennisNoteDataClient;
+    if (!client?.rpc || !adminApprovalReady()) return false;
+    try {
+      return Boolean(await client.rpc("tn_admin_verify_security_pin", { target_pin: pin }));
+    } catch {
+      return false;
+    }
+  }
   const ok = pin === legacyPin;
   if (ok) {
     adminLockSettings.pinHash = await createAdminPinHash(pin);
@@ -1764,10 +1863,6 @@ async function changeAdminPin() {
   const nextPin = $("#adminNewPin")?.value.trim() || "";
   const confirmPin = $("#adminConfirmPin")?.value.trim() || "";
   const initialSetup = adminPinNeedsSetup();
-  if (!initialSetup && !(await verifyAdminPin(currentPin))) {
-    showToast("현재 PIN을 확인해 주세요");
-    return;
-  }
   if (!/^\d{6,8}$/.test(nextPin)) {
     showToast("새 PIN은 숫자 6~8자리로 설정해 주세요");
     return;
@@ -1776,8 +1871,29 @@ async function changeAdminPin() {
     showToast("새 PIN 확인이 맞지 않습니다");
     return;
   }
-  adminLockSettings.pinHash = await createAdminPinHash(nextPin);
-  adminLockSettings.legacyPin = "";
+  const client = window.TennisNoteDataClient;
+  if (adminApprovalReady() && client?.rpc) {
+    try {
+      await client.rpc("tn_admin_set_security_pin", {
+        target_current_pin: initialSetup ? "" : currentPin,
+        target_new_pin: nextPin,
+      });
+      adminLockSettings.pinConfigured = true;
+      adminLockSettings.pinHash = "";
+      adminLockSettings.legacyPin = "";
+    } catch {
+      showToast(initialSetup ? "PIN 설정에 실패했습니다" : "현재 PIN을 확인해 주세요");
+      return;
+    }
+  } else {
+    if (!initialSetup && !(await verifyAdminPin(currentPin))) {
+      showToast("현재 PIN을 확인해 주세요");
+      return;
+    }
+    adminLockSettings.pinHash = await createAdminPinHash(nextPin);
+    adminLockSettings.legacyPin = "";
+    adminLockSettings.pinConfigured = false;
+  }
   saveSnapshot();
   lockAdminNow();
   $("#adminSecurityPanel")?.querySelectorAll("input[type='password']").forEach((input) => {
@@ -1809,7 +1925,7 @@ function normalizeDemoData() {
   if (state.view === "makeup") state.view = "schedule";
   if (state.view === "reports") state.view = "dashboard";
   if (state.view === "import" || state.view === "data") state.view = "members";
-  if (!["operation", "membership", "security"].includes(state.settingsTab)) state.settingsTab = "operation";
+  if (!["operation", "membership", "notifications", "coach", "security"].includes(state.settingsTab)) state.settingsTab = "operation";
   if (!["active", "expiring", "expired", "pending", "journal", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
   if (!coaches.some((coach) => coach.id === "coach-park")) {
     coaches.push({ id: "coach-park", name: "박창준 코치", role: "주말 레슨", status: "active", account: "박창준", coachMode: "approved", availability: "weekend", photoUrl: "" });
@@ -1963,6 +2079,7 @@ function restoreSnapshot() {
       scheduleSettings.openEnd = snapshot.scheduleSettings.openEnd || scheduleSettings.openEnd;
       replaceArray(scheduleSettings.breakRules, snapshot.scheduleSettings.breakRules);
       scheduleSettings.lessonColors = { ...scheduleSettings.lessonColors, ...(snapshot.scheduleSettings.lessonColors || {}) };
+      scheduleSettings.lessonColorRules = Array.isArray(snapshot.scheduleSettings.lessonColorRules) ? snapshot.scheduleSettings.lessonColorRules : [];
     }
     Object.assign(adminLockSettings, normalizeAdminLockSettings(snapshot.adminLockSettings));
     const storedPolicyVersion = Number(snapshot.scheduleSettings?.coachWorkPolicyVersion) || 0;
@@ -1977,7 +2094,8 @@ function restoreSnapshot() {
 }
 
 function saveSnapshot() {
-  localStorage.setItem(storageKey, JSON.stringify({
+  if (state.snapshotStorageUnavailable) return false;
+  const snapshot = {
     state,
     coaches,
     members,
@@ -2002,7 +2120,17 @@ function saveSnapshot() {
     membershipProducts: membershipProductsForMemberApp(),
     scheduleSettings,
     adminLockSettings: serializableAdminLockSettings(),
-  }));
+  };
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(snapshot));
+    return true;
+  } catch (error) {
+    // The local snapshot is a convenience cache only. A full browser storage
+    // must never disable the live Supabase schedule connection or save locally.
+    state.snapshotStorageUnavailable = true;
+    console.warn("Admin snapshot was not saved", error?.name || "storage_error");
+    return false;
+  }
 }
 
 function liveSchedulePolicyPayload() {
@@ -2014,6 +2142,7 @@ function liveSchedulePolicyPayload() {
       openEnd: scheduleSettings.openEnd,
       breakRules: Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : [],
       lessonColors: scheduleSettings.lessonColors,
+      lessonColorRules: scheduleSettings.lessonColorRules,
       coachWorkPolicyVersion: scheduleSettings.coachWorkPolicyVersion || 2,
     },
     coaches: coaches.map((coach) => ({
@@ -3028,6 +3157,7 @@ async function loadLiveSchedulePolicyFromServer() {
     if (serverSettings.openEnd) scheduleSettings.openEnd = serverSettings.openEnd;
     if (Array.isArray(serverSettings.breakRules)) replaceArray(scheduleSettings.breakRules, serverSettings.breakRules);
     scheduleSettings.lessonColors = { ...scheduleSettings.lessonColors, ...(serverSettings.lessonColors || {}) };
+    scheduleSettings.lessonColorRules = Array.isArray(serverSettings.lessonColorRules) ? serverSettings.lessonColorRules : scheduleSettings.lessonColorRules;
     scheduleSettings.coachWorkPolicyVersion = Number(serverSettings.coachWorkPolicyVersion) || 2;
     (Array.isArray(value.coaches) ? value.coaches : []).forEach((serverCoach) => {
       const coach = coaches.find((item) => (
@@ -4343,10 +4473,14 @@ function getLessonStateClass(lesson) {
 }
 
 function lessonVisualKind(lesson) {
+  if (["no_show", "cancelled_late"].includes(String(lesson?.serverStatus || lesson?.status || "").toLowerCase())) return "noShow";
   if (lesson?.oneDayBooking) return "coupon";
-  if (isReleasedRegularMakeupSlot(lesson)) return "makeup";
+  if (isReleasedRegularMakeupSlot(lesson)) return "released";
   if (isMakeupLesson(lesson)) return "makeup";
   if (lesson.lessonSource === "coupon") return "coupon";
+  const customRule = (scheduleSettings.lessonColorRules || []).find((rule) => rule.match && `${lesson.type || ""} ${lesson.lessonSource || ""}`.includes(rule.match));
+  if (customRule) return customRule.id;
+  if (Number(lesson.durationMinutes) === 30) return "regular30";
   const ticket = getTicketByLesson(lesson);
   const productKind = ticket ? membershipProductForTicket(ticket).productKind : "regular";
   return ["pass", "coupon"].includes(productKind) ? "coupon" : "regular";
@@ -4354,8 +4488,10 @@ function lessonVisualKind(lesson) {
 
 function lessonColorStyle(lesson) {
   const kind = lessonVisualKind(lesson);
-  const fallback = { regular: "#2f6fc4", makeup: "#17805d", coupon: "#b7791f" };
-  const saved = scheduleSettings.lessonColors?.[kind] || "";
+  if (kind === "released") return "--lesson-color:#111827";
+  const fallback = { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" };
+  const customColor = (scheduleSettings.lessonColorRules || []).find((rule) => rule.id === kind)?.color;
+  const saved = customColor || scheduleSettings.lessonColors?.[kind] || "";
   const color = /^#[0-9a-f]{6}$/i.test(saved) ? saved : fallback[kind];
   return `--lesson-color:${color}`;
 }
@@ -4630,7 +4766,7 @@ function badge(status, label) {
 
 const adminToolConfig = {
   data: { title: "엑셀 가져오기·내보내기", lockView: "data" },
-  coach: { title: "코치·직원 관리", lockView: "members" },
+  coach: { title: "코치·직원 관리", lockView: "settings" },
   schedule: { title: "시간표 설정", lockView: "settings" },
   notice: { title: "공지·알림 관리", lockView: "settings" },
   products: { title: "회원권·할인 설정", lockView: "billing" },
@@ -4652,12 +4788,6 @@ function organizeAdminTools() {
 
   moveAdminToolPanel("#dataView .data-import-panel", "dataToolsModalContent");
   moveAdminToolPanel("#dataView .data-export-panel", "dataToolsModalContent");
-  moveAdminToolPanel("#settingsView .coach-settings-panel", "coachManagementModalContent");
-  moveAdminToolPanel("#settingsView .schedule-settings-panel", "scheduleSettingsModalContent");
-  moveAdminToolPanel("#settingsView .notice-popup-settings-panel", "noticeSettingsModalContent");
-  moveAdminToolPanel("#settingsView .notification-settings-panel", "noticeSettingsModalContent");
-  moveAdminToolPanel("#settingsView .product-settings-panel", "productSettingsModalContent");
-  moveAdminToolPanel("#settingsView .discount-policy-panel", "productSettingsModalContent");
   $("#settingsView .service-readiness-panel")?.remove();
   $("#settingsView .payment-setup-panel")?.remove();
 
@@ -4667,7 +4797,7 @@ function organizeAdminTools() {
   [".access-policy-panel", ".coach-role-flow-panel", ".policy-guide-panel"].forEach((selector) => {
     $(`#settingsView ${selector}`)?.remove();
   });
-  $$('#settingsView [data-settings-panel="live"], #settingsView [data-settings-panel="coach"]').forEach((panel) => panel.remove());
+  $$('#settingsView [data-settings-panel="live"]').forEach((panel) => panel.remove());
 
   [".policy-version-panel", ".holding-policy-panel", ".refund-policy-panel"].forEach((selector) => {
     const panel = $(`#settingsView ${selector}`);
@@ -4733,6 +4863,14 @@ function setView(view, options = {}) {
       })
       .catch(() => false);
   }
+}
+
+function openSettingsWorkspace(tab) {
+  if (!requestAdminUnlock("settings", () => openSettingsWorkspace(tab))) return;
+  state.settingsTab = tab;
+  setView("settings", { skipLock: true });
+  renderSettingsTabs();
+  $("#settingsView")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function getSearchText() {
@@ -5429,13 +5567,18 @@ function memberManagementDayLabel(day) {
 }
 
 function memberDatabaseRecord(member = null, ticket = null) {
-  if (member?.memberRecord) return member.memberRecord;
   const records = adminLiveDataState.memberDatabaseRecords || [];
+  const membershipRecords = adminLiveDataState.memberMembershipRecords || [];
+  const ticketId = ticket?.serverTicketId || ticket?.id || "";
+  if (ticketId) {
+    return membershipRecords.find((record) => record.ticket_id === ticketId)
+      || records.find((record) => record.current_ticket_id === ticketId)
+      || null;
+  }
+  if (member?.memberRecord) return member.memberRecord;
   const userRecord = records.find((record) => record.user_id === member?.serverUserId);
   if (userRecord) return userRecord;
-  return ticket?.memberRecord
-    || records.find((record) => ticket?.serverTicketId && record.current_ticket_id === ticket.serverTicketId)
-    || null;
+  return null;
 }
 
 function memberUnlinkedVerifiedPayment(member = null) {
@@ -8795,10 +8938,10 @@ function renderCoachDayLessonCard(lesson, visibleTimes, column) {
     return value >= start && value < end;
   }).length);
   const memberLabel = isReleasedRegularMakeupSlot(lesson)
-    ? "정규자리"
+    ? "수업 신청 가능"
     : lesson.status === "available" ? "보강 가능" : getLessonMembersLabel(lesson);
   const statusLabel = isReleasedRegularMakeupSlot(lesson)
-    ? `보강만 등록 · ${lesson.durationMinutes}분`
+    ? `${lesson.durationMinutes}분`
     : lesson.status === "available" ? `${lesson.durationMinutes}분 신청 가능` : `${getLessonStatusLabel(lesson)} · ${lesson.durationMinutes}분`;
   return `
     <button class="coach-day-lesson ${lesson.status} ${getLessonStateClass(lesson)} ${getCoachToneClass(lesson.coachId)}" style="grid-row:${startIndex + 2} / span ${rowSpan};grid-column:${column};" type="button" ${lessonActionAttrs(lesson)}>
@@ -9475,6 +9618,10 @@ function syncLessonSourceOptions() {
   const allowed = new Set(adminManualOverrideEnabled()
     ? ["regular", "makeup", "coupon", "coach_change"]
     : allowedLessonSourcesForTicket(ticket));
+  // Walk-in lessons do not require a member ticket, so keep this choice available.
+  allowed.add("one_day");
+  // Keep coupon lessons visible for manual registration; submission still verifies a coupon ticket.
+  allowed.add("coupon");
   if (pastCorrection) allowed.add("admin");
   if (editingLesson?.lessonSource === "coach_change") allowed.add("coach_change");
   [...select.options].forEach((option) => {
@@ -10495,13 +10642,19 @@ async function saveLiveAdminLessonSet(candidates = []) {
     target_lesson_source: liveLessonSource(primary),
     target_participant_user_ids: participantUserIds,
   };
+  let result;
   if (adminManualOverrideEnabled()) {
-    return client.rpc("tn_admin_force_save_lesson_set", {
+    result = await client.rpc("tn_admin_force_save_lesson_set", {
       ...payload,
       target_override_reason: adminManualOverrideReason(),
     });
+  } else {
+    result = await client.rpc("tn_admin_save_lesson_set", payload);
   }
-  return client.rpc("tn_admin_save_lesson_set", payload);
+  if (!result?.ok || Number(result.scheduleCount || 0) < candidates.length) {
+    throw new Error("live_lesson_write_not_confirmed");
+  }
+  return result;
 }
 
 function liveLessonWriteVerification(ticket, candidates = []) {
@@ -10761,6 +10914,12 @@ async function addLessonFromForm(event) {
       setLessonFormMessage(message, "danger");
       setLessonSubmitEnabled(true);
     }
+    return;
+  }
+
+  if (!adminDemoMode) {
+    setLessonFormMessage("실서버 시간표 연결을 확인하기 전에는 수업을 저장할 수 없습니다. 새로고침 후 다시 시도해 주세요.", "danger");
+    setLessonSubmitEnabled(true);
     return;
   }
 
@@ -12213,7 +12372,7 @@ async function syncAdminLiveData() {
     liveScheduleMessage: "실서버 회원·코치·시간표를 불러오는 중",
   });
   try {
-    const [serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords] = await Promise.all([
+    const [serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords] = await Promise.all([
       client.selectRows("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", limit: 500 }),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
@@ -12240,6 +12399,10 @@ async function syncAdminLiveData() {
         select: "id,user_id,current_ticket_id,branch_id,coach_role_id,record_status,lesson_schedule_scope,lesson_frequency_per_week,lesson_type,lesson_days,lesson_start_on,total_sessions,used_sessions,remaining_sessions,payment_recorded_on,payment_method,payment_amount,admin_note,source_name,source_sheet_id,source_tab_name,source_row_number,last_updated_via",
         limit: 1000,
       }).catch(() => []) : Promise.resolve([]),
+      fullAdminAccess ? client.selectRows("tn_member_membership_records", {
+        select: "id,user_id,ticket_id,branch_id,coach_role_id,record_status,lesson_schedule_scope,lesson_frequency_per_week,lesson_type,lesson_minutes,lesson_days,lesson_start_on,total_sessions,used_sessions,remaining_sessions,payment_recorded_on,payment_method,payment_amount,admin_note,source_name,source_sheet_id,source_tab_name,source_row_number,last_updated_via",
+        limit: 2000,
+      }).catch(() => []) : Promise.resolve([]),
     ]);
 
     const usersById = new Map((serverUsers || []).map((user) => [user.id, user]));
@@ -12254,6 +12417,9 @@ async function syncAdminLiveData() {
     const memberRecordByTicketId = new Map((serverMemberDatabaseRecords || [])
       .filter((record) => record.current_ticket_id)
       .map((record) => [record.current_ticket_id, record]));
+    const membershipRecordByTicketId = new Map((serverMemberMembershipRecords || [])
+      .filter((record) => record.ticket_id)
+      .map((record) => [record.ticket_id, record]));
     const coachIdByRole = new Map();
     (serverCoachRoles || []).forEach((role, index) => {
       const coach = mergeServerCoachRole(role, index);
@@ -12301,7 +12467,9 @@ async function syncAdminLiveData() {
 
     const mappedTickets = (serverTickets || []).map((ticket) => {
       const product = productsById.get(ticket.product_id) || {};
-      const memberRecord = memberRecordByUserId.get(ticket.user_id) || memberRecordByTicketId.get(ticket.id) || null;
+      const memberRecord = membershipRecordByTicketId.get(ticket.id)
+        || memberRecordByTicketId.get(ticket.id)
+        || null;
       const participantUserIds = liveTicketParticipantIds(ticket, ticketParticipants || []);
       const memberNames = participantUserIds.map((id) => usersById.get(id)?.name).filter(Boolean);
       return {
@@ -12599,8 +12767,8 @@ async function syncAdminLiveData() {
           time: entitlement.originalTime,
           courtId: `court-${Math.min(slotCount, fixedCourtCount)}`,
           coachId: entitlement.coachId,
-          member: "정규자리",
-          type: "보강 가능",
+          member: "수업 신청 가능",
+          type: "수업 신청 가능",
           durationMinutes: entitlement.durationMinutes,
           status: "available",
           makeup: true,
@@ -12742,6 +12910,7 @@ async function syncAdminLiveData() {
       groupMembers: serverGroupMembers || [],
       groupTicketLinks: serverGroupTicketLinks || [],
       memberDatabaseRecords: serverMemberDatabaseRecords || [],
+      memberMembershipRecords: serverMemberMembershipRecords || [],
     });
     saveScheduleSafetySnapshot(lessons, keepLoadedSchedule ? "protected-refresh" : "before-server-refresh");
     replaceArray(lessons, mappedLessons);
@@ -12761,6 +12930,7 @@ async function syncAdminLiveData() {
     await loadPolicyVersionsFromServer();
     await loadLessonPoliciesFromServer();
     await loadMemberManagementPolicyFromServer();
+    await loadAdminSecuritySettingsFromServer();
     syncAdminScheduleWeek();
     if (!mappedMembers.some((member) => member.id === state.selectedMemberId)) {
       state.selectedMemberId = null;
@@ -13994,13 +14164,25 @@ function renderCoaches() {
     .join("");
 }
 
+function renderCustomLessonColorRules() {
+  const target = $("#customLessonColorRules");
+  if (!target) return;
+  target.innerHTML = (scheduleSettings.lessonColorRules || []).map((rule) => `
+    <label class="custom-lesson-color-rule">
+      <input type="text" value="${escapeHtml(rule.label || "추가 표시")}" data-custom-lesson-label="${rule.id}" aria-label="표시 이름" />
+      <input type="text" value="${escapeHtml(rule.match || "")}" data-custom-lesson-match="${rule.id}" placeholder="수업 종류 문구" aria-label="적용 문구" />
+      <input type="color" value="${rule.color || "#64748b"}" data-custom-lesson-color="${rule.id}" aria-label="표시 색상" />
+      <button class="small-button danger" type="button" data-delete-lesson-color-rule="${rule.id}">삭제</button>
+    </label>`).join("");
+}
+
 function renderScheduleSettings() {
   const openStartInput = $("#openStartInput");
   const openEndInput = $("#openEndInput");
   if (!openStartInput || !openEndInput) return;
   openStartInput.value = scheduleSettings.openStart;
   openEndInput.value = scheduleSettings.openEnd;
-  ["regular", "makeup", "coupon"].forEach((kind) => {
+  ["regular", "regular30", "makeup", "coupon", "noShow"].forEach((kind) => {
     const input = $(`[data-lesson-color="${kind}"]`);
     if (input) input.value = scheduleSettings.lessonColors[kind];
   });
@@ -14694,7 +14876,7 @@ function renderPaymentSetup() {
 }
 
 function renderSettingsTabs() {
-  const active = ["operation", "membership", "security"].includes(state.settingsTab) ? state.settingsTab : "operation";
+  const active = ["operation", "membership", "notifications", "coach", "security"].includes(state.settingsTab) ? state.settingsTab : "operation";
   state.settingsTab = active;
   $("#settingsView .settings-grid")?.setAttribute("data-active-tab", active);
   $$("[data-settings-tab]").forEach((button) => {
@@ -14719,27 +14901,28 @@ function renderAdminSecurity() {
 
   const target = $("#adminSecurityPanel");
   if (!target) return;
-  const lockedLabels = adminLockSettings.lockedViews.map(adminLockViewName);
+  const draft = currentAdminSecurityDraft();
+  const lockedLabels = draft.lockedViews.map(adminLockViewName);
   const pinSetupRequired = adminPinNeedsSetup();
   target.innerHTML = `
-    <div class="admin-security-summary ${adminLockSettings.enabled ? "is-on" : "is-off"}">
+    <div class="admin-security-summary ${draft.enabled ? "is-on" : "is-off"}">
       <div>
         <h2>관리자 보안</h2>
-        <span>${adminLockSettings.enabled ? `잠금 사용 중 · ${lockedLabels.length ? lockedLabels.join(", ") : "잠금 대상 없음"}` : "잠금 사용 안 함"}</span>
+        <span>${adminSecurityIsDirty() ? "저장 전 변경사항 있음" : draft.enabled ? `잠금 사용 중 · ${lockedLabels.length ? lockedLabels.join(", ") : "잠금 대상 없음"}` : "잠금 사용 안 함"}</span>
       </div>
-      ${badge(adminLockSettings.enabled ? "warn" : "neutral", adminLockSettings.enabled ? adminUnlockRemainingText() : "꺼짐")}
+      ${badge(adminSecuritySaveState.status === "blocked" ? "danger" : draft.enabled ? "warn" : "neutral", adminSecuritySaveState.status === "saving" ? "저장 중" : adminSecuritySaveState.status === "blocked" ? "저장 실패" : adminSecurityIsDirty() ? "저장 필요" : draft.enabled ? adminUnlockRemainingText() : "꺼짐")}
     </div>
     <section class="admin-security-grid">
       <article class="admin-security-card">
         <strong>잠금 사용</strong>
         <label class="toggle-row">
-          <input id="adminLockEnabled" type="checkbox" ${adminLockSettings.enabled ? "checked" : ""} />
+          <input id="adminLockEnabled" type="checkbox" ${draft.enabled ? "checked" : ""} />
           <span>공용 PC에서 중요한 메뉴는 관리자 PIN 입력 후 접근</span>
         </label>
         <label class="field-row">
           <span>잠금 해제 유지시간</span>
           <select id="adminLockTimeout">
-            ${[3, 5, 10, 15, 30, 60].map((minute) => `<option value="${minute}" ${adminLockSettings.timeoutMinutes === minute ? "selected" : ""}>${minute}분</option>`).join("")}
+            ${[3, 5, 10, 15, 30, 60].map((minute) => `<option value="${minute}" ${draft.timeoutMinutes === minute ? "selected" : ""}>${minute}분</option>`).join("")}
           </select>
         </label>
         <div class="data-action-row">
@@ -14753,10 +14936,9 @@ function renderAdminSecurity() {
             .map(
               (item) => `
                 <label class="admin-lock-target">
-                  <input type="checkbox" value="${item.id}" data-admin-lock-view ${adminLockSettings.lockedViews.includes(item.id) ? "checked" : ""} />
+                  <input type="checkbox" value="${item.id}" data-admin-lock-view ${draft.lockedViews.includes(item.id) ? "checked" : ""} />
                   <span>
                     <b>${item.label}</b>
-                    <small>${item.detail}</small>
                   </span>
                 </label>`,
             )
@@ -14784,6 +14966,13 @@ function renderAdminSecurity() {
           <button class="primary-button" type="button" id="changeAdminPinButton">PIN 변경</button>
         </div>
       </article>
+      <footer class="admin-security-actions">
+        <span>${adminSecuritySaveState.status === "saved" && adminSecuritySaveState.savedAt ? `서버 저장 완료 · ${new Date(adminSecuritySaveState.savedAt).toLocaleString("ko-KR")}` : "잠금 대상과 유지시간은 저장해야 적용됩니다."}</span>
+        <div>
+          <button class="ghost-button" type="button" id="resetAdminSecurityButton" ${adminSecurityIsDirty() && adminSecuritySaveState.status !== "saving" ? "" : "disabled"}>변경 취소</button>
+          <button class="primary-button" type="button" id="saveAdminSecurityButton" ${adminSecurityIsDirty() && adminSecuritySaveState.status !== "saving" ? "" : "disabled"}>보안 설정 저장</button>
+        </div>
+      </footer>
     </section>`;
   if (pinSetupRequired) {
     target.querySelector("#adminCurrentPin")?.closest("label")?.setAttribute("hidden", "");
@@ -15341,6 +15530,7 @@ function installAdminLiveScheduleRefresh() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refresh();
   });
+  renderCustomLessonColorRules();
   adminLiveScheduleRefreshTimer = window.setInterval(refresh, 20_000);
 }
 
@@ -15364,14 +15554,13 @@ function bindEvents() {
   });
   document.addEventListener("click", (event) => {
     const buttonId = event.target.closest("button")?.id || "";
-    const toolsByButton = {
-      openDataToolsButton: "data",
-      openCoachManagementButton: "coach",
-      openScheduleSettingsButton: "schedule",
-      openNoticeSettingsButton: "notice",
-      openProductSettingsButton: "products",
+    const settingsTabsByButton = {
+      openScheduleSettingsButton: "operation",
+      openNoticeSettingsButton: "notifications",
+      openProductSettingsButton: "membership",
     };
-    if (toolsByButton[buttonId]) openAdminToolsModal(toolsByButton[buttonId]);
+    if (buttonId === "openDataToolsButton") openAdminToolsModal("data");
+    if (settingsTabsByButton[buttonId]) openSettingsWorkspace(settingsTabsByButton[buttonId]);
   });
   document.addEventListener("click", async (event) => {
     if (event.target.closest("#addCoachStaffButton")) {
@@ -15528,22 +15717,21 @@ function bindEvents() {
   });
   document.addEventListener("change", (event) => {
     if (event.target.id === "adminLockEnabled") {
-      adminLockSettings.enabled = event.target.checked;
-      if (!adminLockSettings.enabled) lockAdminNow();
-      renderAll();
-      showToast(adminLockSettings.enabled ? "관리자 잠금 사용" : "관리자 잠금 해제");
+      currentAdminSecurityDraft().enabled = event.target.checked;
+      adminSecuritySaveState.status = "idle";
+      renderAdminSecurity();
       return;
     }
     if (event.target.id === "adminLockTimeout") {
-      adminLockSettings.timeoutMinutes = numericValue(event.target.value, 10);
-      renderAll();
-      showToast("잠금 유지시간 변경 완료");
+      currentAdminSecurityDraft().timeoutMinutes = numericValue(event.target.value, 10);
+      adminSecuritySaveState.status = "idle";
+      renderAdminSecurity();
       return;
     }
     if (event.target.matches("[data-admin-lock-view]")) {
-      adminLockSettings.lockedViews = $$("[data-admin-lock-view]:checked").map((input) => input.value);
-      renderAll();
-      showToast("잠금 대상 메뉴 변경 완료");
+      currentAdminSecurityDraft().lockedViews = $$("[data-admin-lock-view]:checked").map((input) => input.value);
+      adminSecuritySaveState.status = "idle";
+      renderAdminSecurity();
     }
   });
   document.addEventListener("click", (event) => {
@@ -15551,6 +15739,16 @@ function bindEvents() {
       lockAdminNow();
       renderAll();
       showToast("관리자 메뉴를 다시 잠갔습니다");
+      return;
+    }
+    if (event.target.id === "saveAdminSecurityButton") {
+      saveAdminSecuritySettings();
+      return;
+    }
+    if (event.target.id === "resetAdminSecurityButton") {
+      resetAdminSecurityDraft();
+      renderAdminSecurity();
+      showToast("저장 전 보안 설정 변경을 취소했습니다");
       return;
     }
     if (event.target.id === "changeAdminPinButton") {
@@ -15689,7 +15887,6 @@ function bindEvents() {
     saveSnapshot();
   });
   $("#openLessonModal").addEventListener("click", openLessonModal);
-  $("#openOneDayBookingModal")?.addEventListener("click", () => openOneDayBookingModal());
   $("#saveScheduleList").addEventListener("click", async () => {
     if (state.liveScheduleLoaded) {
       await saveLiveSchedulePolicy();
@@ -15818,6 +16015,32 @@ function bindEvents() {
       renderLessonPreview();
     });
   });
+  $("#addLessonColorRuleButton")?.addEventListener("click", () => {
+    const index = scheduleSettings.lessonColorRules.length + 1;
+    scheduleSettings.lessonColorRules.push({ id: `custom-${Date.now()}`, label: `추가 표시 ${index}`, match: `추가 표시 ${index}`, color: "#64748b" });
+    renderCustomLessonColorRules();
+    saveSnapshot();
+  });
+  $("#customLessonColorRules")?.addEventListener("change", async (event) => {
+    const id = event.target.dataset.customLessonLabel || event.target.dataset.customLessonMatch || event.target.dataset.customLessonColor;
+    const rule = scheduleSettings.lessonColorRules.find((item) => item.id === id);
+    if (!rule) return;
+    if (event.target.dataset.customLessonLabel) rule.label = event.target.value.trim() || rule.label;
+    if (event.target.dataset.customLessonMatch) rule.match = event.target.value.trim();
+    if (event.target.dataset.customLessonColor) rule.color = event.target.value;
+    renderSchedule();
+    saveSnapshot();
+    await syncLiveSchedulePolicyToServer();
+    showToast("추가 표시 종류 저장 완료");
+  });
+  $("#customLessonColorRules")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-delete-lesson-color-rule]");
+    if (!button) return;
+    scheduleSettings.lessonColorRules = scheduleSettings.lessonColorRules.filter((rule) => rule.id !== button.dataset.deleteLessonColorRule);
+    renderCustomLessonColorRules();
+    saveSnapshot();
+    await syncLiveSchedulePolicyToServer();
+  });
   $("#lessonTime").addEventListener("change", () => {
     refreshLessonExtraTimeOptions();
     renderLessonPreview();
@@ -15838,6 +16061,16 @@ function bindEvents() {
     renderLessonPreview();
   });
   $("#lessonSource").addEventListener("change", () => {
+    if ($("#lessonSource").value === "one_day") {
+      const defaults = {
+        day: $("#lessonDay")?.value || "",
+        time: $("#lessonTime")?.value || "",
+        coachId: $("#lessonCoach")?.value || "",
+      };
+      closeLessonModal();
+      openOneDayBookingModal(defaults);
+      return;
+    }
     state.lessonSourceTouched = true;
     alignTicketToLessonSource();
     syncLessonSourceOptions();

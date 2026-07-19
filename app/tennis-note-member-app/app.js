@@ -1756,7 +1756,7 @@ function defaultMemberCoachPolicy() {
     openStart: "06:40",
     openEnd: "22:00",
     breakRules: [{ id: "weekday-midday", days: weekdays, start: "13:00", end: "17:00", label: "수업 없음" }],
-    lessonColors: { regular: "#2f6fc4", makeup: "#17805d", coupon: "#b7791f" },
+    lessonColors: { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" },
     coaches: [
       {
         id: "coach-no",
@@ -1847,6 +1847,7 @@ function loadAdminSchedulePolicy() {
       openEnd: storedPolicyVersion < 2 ? fallback.openEnd : scheduleSettings.openEnd || fallback.openEnd,
       breakRules: storedPolicyVersion < 2 ? fallback.breakRules : Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : fallback.breakRules,
       lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
+      lessonColorRules: Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : [],
       coaches: coaches
         .filter((coach) => (coach.status || "active") === "active")
         .map(normalizeMemberCoach),
@@ -2358,21 +2359,24 @@ function lessonDuration(lesson) {
 
 function memberLessonVisualKind(lesson = {}) {
   const source = String(lesson.lessonSource || lesson.lesson_source || "").toLowerCase();
+  if (["no_show", "cancelled_late"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase())) return "noShow";
   if (source === "makeup" || String(lesson.type || "").includes("보강")) return "makeup";
   if (source === "coupon" || String(lesson.type || "").includes("쿠폰")) return "coupon";
+  if (lessonDuration(lesson) === 30) return "regular30";
   return "regular";
 }
 
 function memberLessonColorStyle(lesson, policy) {
   const kind = memberLessonVisualKind(lesson);
-  const fallback = { regular: "#2f6fc4", makeup: "#17805d", coupon: "#b7791f" };
-  const saved = policy?.lessonColors?.[kind] || "";
+  const fallback = { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" };
+  const custom = (policy?.lessonColorRules || []).find((rule) => rule.match && `${lesson.type || ""} ${lesson.lessonSource || ""}`.includes(rule.match));
+  const saved = custom?.color || policy?.lessonColors?.[kind] || "";
   const color = /^#[0-9a-f]{6}$/i.test(saved) ? saved : fallback[kind];
   return `--lesson-color:${color}`;
 }
 
 function memberLessonTitle(lesson, isMine) {
-  if (!isMine) return "수업중";
+  if (!isMine) return lesson?.oneDayBooking ? "원데이 예약" : "수업중";
   if (lesson.status === "requested") return "변경요청";
   const kind = memberLessonVisualKind(lesson);
   if (kind === "makeup") return "보강";
@@ -3029,7 +3033,7 @@ function renderSchedule() {
                   const span = Math.max(1, Math.ceil(lessonDuration(lesson) / 10));
                   const coachIndex = Math.max(0, scheduleCoaches.indexOf(lesson.coach));
                   const isMine = isCurrentMemberName(lesson.member);
-                  const title = isMine ? (lesson.status === "requested" ? "변경" : "내수업") : "수업중";
+                  const title = isMine ? (lesson.status === "requested" ? "변경" : "내수업") : lesson.oneDayBooking ? "원데이 예약" : "수업중";
                   const lessonClass = isMine ? `mine ${lesson.status}` : "occupied";
                   const lessonAction = isMine ? `data-lesson="${lesson.id}"` : "disabled";
                   return `
@@ -4394,7 +4398,7 @@ async function syncMemberLessonsFromServer(profile = null) {
       limit: 100,
     });
     const ownLessonIds = new Set((participants || []).map((item) => item.lesson_id));
-    const [rows, coachRoles, makeupEntitlementRows, releasedMakeupSlots] = await Promise.all([
+    const [rows, coachRoles, makeupEntitlementRows, releasedMakeupSlots, oneDaySlots] = await Promise.all([
       client.selectRows("tn_lessons", {
         select: "id,member_ticket_id,coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source",
         limit: 200,
@@ -4410,6 +4414,9 @@ async function syncMemberLessonsFromServer(profile = null) {
       }).catch(() => []),
       client.rpc
         ? client.rpc("tn_member_released_makeup_slots", {}).catch(() => [])
+        : Promise.resolve([]),
+      client.rpc
+        ? client.rpc("tn_member_one_day_schedule_slots", {}).catch(() => [])
         : Promise.resolve([]),
     ]);
     const coachNames = new Map((coachRoles || []).map((coach) => [coach.id, coach.display_name]));
@@ -4445,7 +4452,7 @@ async function syncMemberLessonsFromServer(profile = null) {
       time: String(slot.start_time || "").slice(0, 5),
       durationMinutes: Number(slot.duration_minutes) || 20,
     }));
-    state.liveLessons = (rows || [])
+    const mappedLessons = (rows || [])
       .filter((lesson) => lesson.status !== "cancelled")
       .map((lesson) => {
         const isOwnLesson = ownLessonIds.has(lesson.id);
@@ -4480,6 +4487,27 @@ async function syncMemberLessonsFromServer(profile = null) {
           isOwnLesson,
         };
       });
+    const oneDayOccupancy = (oneDaySlots || []).map((slot) => {
+      const lessonDate = slot.booking_date || "";
+      const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
+      return {
+        id: `one-day-${slot.id}`,
+        oneDayBooking: true,
+        serverOneDayBookingId: slot.id,
+        lessonDate,
+        day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
+        time: String(slot.start_time || "").slice(0, 5),
+        coach: coachNames.get(slot.coach_role_id) || "담당 코치",
+        coach_role_id: slot.coach_role_id,
+        member: "",
+        type: "원데이 예약",
+        lessonSource: "one_day",
+        durationMinutes: Number(slot.duration_minutes) || 20,
+        status: "occupied",
+        isOwnLesson: false,
+      };
+    });
+    state.liveLessons = [...mappedLessons, ...oneDayOccupancy];
     state.liveLessonsLoaded = true;
     return true;
   } catch {
@@ -6128,7 +6156,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "coach-regular-absence-1" });
+  const params = new URLSearchParams({ v: "coach-one-day-schedule-1" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

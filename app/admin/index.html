@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=admin-non-destructive-schedule-1" />
+    <link rel="stylesheet" href="./styles.css?v=admin-settings-workspace-1" />
   </head>
   <body>
     <section id="operationsLoginGate" class="operations-login-gate" aria-labelledby="operationsLoginTitle">
@@ -66,7 +66,7 @@
           <div class="topbar-actions">
             <nav class="app-preview-links" aria-label="앱 미리보기">
               <span>앱 미리보기</span>
-              <a href="../tennis-note-member-app/index.html?v=member-regular-absence-1" target="_blank" rel="noopener">통합앱</a>
+              <a href="../tennis-note-member-app/index.html?v=member-one-day-availability-1" target="_blank" rel="noopener">통합앱</a>
             </nav>
             <div class="global-search-shell">
               <label class="search-box">
@@ -173,7 +173,6 @@
             </div>
             <div class="toolbar-actions">
               <button id="openDataToolsButton" class="ghost-button" type="button">엑셀 관리</button>
-              <button id="openCoachManagementButton" class="ghost-button" type="button">코치/직원</button>
               <button id="exportMembersButton" class="ghost-button" type="button">회원 목록 저장</button>
               <button id="addMemberButton" class="primary-button" type="button">회원 추가</button>
             </div>
@@ -252,7 +251,6 @@
             <div class="toolbar-actions">
               <button id="openScheduleSettingsButton" class="ghost-button" type="button">시간표 설정</button>
               <button id="saveScheduleList" class="ghost-button" type="button">목록 저장</button>
-              <button id="openOneDayBookingModal" class="ghost-button" type="button">원데이 예약</button>
               <button id="openLessonModal" class="primary-button" type="button">수업 추가</button>
             </div>
           </div>
@@ -598,9 +596,11 @@
 
         <section id="settingsView" class="view" aria-label="운영 설정">
           <div class="settings-tabs" role="tablist" aria-label="운영 설정 구분">
-            <button class="settings-tab is-active" type="button" role="tab" data-settings-tab="operation">수업 정책</button>
-            <button class="settings-tab" type="button" role="tab" data-settings-tab="membership">회원권 정책</button>
-            <button class="settings-tab" type="button" role="tab" data-settings-tab="security">관리자 보안</button>
+            <button class="settings-tab is-active" type="button" role="tab" data-settings-tab="operation">운영시간</button>
+            <button class="settings-tab" type="button" role="tab" data-settings-tab="membership">회원권·정책</button>
+            <button class="settings-tab" type="button" role="tab" data-settings-tab="notifications">공지·알림</button>
+            <button class="settings-tab" type="button" role="tab" data-settings-tab="coach">코치·직원</button>
+            <button class="settings-tab" type="button" role="tab" data-settings-tab="security">보안</button>
           </div>
           <div class="settings-grid">
             <section id="adminSecurityPanel" class="panel admin-security-panel settings-tab-panel" data-settings-panel="security"></section>
@@ -758,11 +758,15 @@
                   <input id="openEndInput" type="time" step="600" />
                 </label>
               </div>
-              <div class="lesson-color-settings" aria-label="수업 종류별 시간표 색상">
-                <label><span>정규수업</span><input type="color" value="#2f6fc4" data-lesson-color="regular" /></label>
+              <div id="lessonColorSettings" class="lesson-color-settings" aria-label="수업 종류별 시간표 색상">
+                <label><span>정규 20분</span><input type="color" value="#2f6fc4" data-lesson-color="regular" /></label>
+                <label><span>정규 30분</span><input type="color" value="#6b5fc7" data-lesson-color="regular30" /></label>
                 <label><span>보강</span><input type="color" value="#17805d" data-lesson-color="makeup" /></label>
                 <label><span>쿠폰</span><input type="color" value="#b7791f" data-lesson-color="coupon" /></label>
+                <label><span>노쇼·당일취소</span><input type="color" value="#c2413b" data-lesson-color="noShow" /></label>
               </div>
+              <div id="customLessonColorRules" class="lesson-color-settings" aria-label="추가 시간표 표시 종류"></div>
+              <button id="addLessonColorRuleButton" class="ghost-button" type="button">표시 종류 추가</button>
               <div class="break-day-grid" aria-label="브레이크 적용 요일">
                 <label><input type="checkbox" value="월" data-break-day />월</label>
                 <label><input type="checkbox" value="화" data-break-day />화</label>
@@ -789,7 +793,7 @@
               <div id="breakRuleList" class="break-rule-list"></div>
             </section>
 
-            <section class="panel notice-popup-settings-panel settings-tab-panel" data-settings-panel="operation">
+            <section class="panel notice-popup-settings-panel settings-tab-panel" data-settings-panel="notifications">
               <div class="panel-heading compact-heading">
                 <h2>공지 팝업</h2>
                 <span class="source-pill">회원/코치 앱 공통</span>
@@ -798,7 +802,7 @@
               <div id="noticePopupSettings" class="notice-popup-settings"></div>
             </section>
 
-            <section class="panel notification-settings-panel settings-tab-panel" data-settings-panel="operation">
+            <section class="panel notification-settings-panel settings-tab-panel" data-settings-panel="notifications">
               <div class="panel-heading compact-heading">
                 <h2>자동 알림</h2>
                 <span class="source-pill">수업·회원권</span>
@@ -937,6 +941,17 @@
             </select>
             <select id="lessonDuration"></select>
           </div>
+          <label class="form-field">
+            <span>등록 구분</span>
+            <select id="lessonSource" required>
+              <option value="regular">정규수업</option>
+              <option value="makeup">보강</option>
+              <option value="coupon">쿠폰수업</option>
+              <option value="one_day">원데이</option>
+              <option value="coach_change" hidden>코치변경</option>
+              <option value="admin" hidden>과거수업 보정</option>
+            </select>
+          </label>
           <section class="lesson-member-ticket-panel">
             <label class="form-field">
               <span>회원 검색</span>
@@ -954,16 +969,6 @@
           <label class="form-field">
             <span>코치</span>
             <select id="lessonCoach" required></select>
-          </label>
-          <label class="form-field">
-            <span>수업 종류</span>
-            <select id="lessonSource" required>
-              <option value="regular">정규수업</option>
-              <option value="makeup">보강</option>
-              <option value="coupon">쿠폰수업</option>
-              <option value="coach_change" hidden>코치변경</option>
-              <option value="admin" hidden>과거수업 보정</option>
-            </select>
           </label>
           <label id="lessonMakeupEntitlementField" class="form-field" hidden>
             <span>보강 대기 연결</span>
@@ -1218,6 +1223,6 @@
     <script src="../shared/tennisnote-data-client.js?v=member-demographics-1"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
     <script src="../shared/tennisnote-release.js?v=release-14"></script>
-    <script src="./app.js?v=admin-schedule-entry-1"></script>
+    <script src="./app.js?v=admin-settings-workspace-1"></script>
   </body>
 </html>

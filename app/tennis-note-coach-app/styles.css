@@ -1609,8 +1609,10 @@ a {
   box-shadow: inset 3px 0 0 #7c3aed;
 }
 
-.coach-duration-lesson.lesson-source:is(.lesson-kind-regular, .lesson-kind-makeup, .lesson-kind-coupon),
-.coach-mobile-lesson.lesson-source:is(.lesson-kind-regular, .lesson-kind-makeup, .lesson-kind-coupon) {
+.coach-duration-lesson.lesson-source:is(.lesson-kind-regular, .lesson-kind-regular30, .lesson-kind-makeup, .lesson-kind-coupon, .lesson-kind-noShow),
+.coach-mobile-lesson.lesson-source:is(.lesson-kind-regular, .lesson-kind-regular30, .lesson-kind-makeup, .lesson-kind-coupon, .lesson-kind-noShow),
+.coach-duration-lesson.lesson-source[class*="lesson-kind-custom-"],
+.coach-mobile-lesson.lesson-source[class*="lesson-kind-custom-"] {
   border-color: color-mix(in srgb, var(--lesson-color, #2f6fc4) 38%, #d9e2ea);
   background: color-mix(in srgb, var(--lesson-color, #2f6fc4) 13%, #ffffff);
   box-shadow: inset 3px 0 0 var(--lesson-color, #2f6fc4);
@@ -1618,10 +1620,10 @@ a {
 
 .coach-duration-lesson.released-makeup-slot,
 .coach-mobile-lesson.released-makeup-slot {
-  color: var(--ink) !important;
-  border: 2px dashed #17805d !important;
-  background: #eef9f4 !important;
-  box-shadow: inset 4px 0 0 #17805d !important;
+  color: #111827 !important;
+  border: 1px dashed #64748b !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
   cursor: default;
 }
 

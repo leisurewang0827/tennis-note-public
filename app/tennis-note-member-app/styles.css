@@ -1092,8 +1092,10 @@ button {
   font-weight: 800;
 }
 
-.member-duration-lesson.lesson-source:is(.lesson-kind-regular, .lesson-kind-makeup, .lesson-kind-coupon),
-.member-mobile-lesson.lesson-source:is(.lesson-kind-regular, .lesson-kind-makeup, .lesson-kind-coupon) {
+.member-duration-lesson.lesson-source:is(.lesson-kind-regular, .lesson-kind-regular30, .lesson-kind-makeup, .lesson-kind-coupon, .lesson-kind-noShow),
+.member-mobile-lesson.lesson-source:is(.lesson-kind-regular, .lesson-kind-regular30, .lesson-kind-makeup, .lesson-kind-coupon, .lesson-kind-noShow),
+.member-duration-lesson.lesson-source[class*="lesson-kind-custom-"],
+.member-mobile-lesson.lesson-source[class*="lesson-kind-custom-"] {
   border-color: color-mix(in srgb, var(--lesson-color, #2f6fc4) 38%, #d9e2ea);
   background: color-mix(in srgb, var(--lesson-color, #2f6fc4) 13%, #ffffff);
   box-shadow: inset 3px 0 0 var(--lesson-color, #2f6fc4);

@@ -2,7 +2,7 @@
   "name": "Tennis Note",
   "short_name": "Tennis Note",
   "description": "Unified Tennis Note app for members and approved coaches.",
-  "start_url": "./index.html?v=member-regular-absence-1",
+  "start_url": "./index.html?v=member-one-day-availability-1",
   "scope": "../",
   "display": "standalone",
   "orientation": "portrait",

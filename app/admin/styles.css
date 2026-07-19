@@ -831,12 +831,18 @@ h2 {
 }
 
 .settings-grid {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1120px;
+  margin: 16px auto 0;
+}
+
+.settings-grid > .panel {
+  min-width: 0;
 }
 
 .settings-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   margin-top: 18px;
   padding: 6px;
@@ -2825,11 +2831,11 @@ tr.is-selected td {
 .coach-lane-card.status-released-makeup,
 .multi-lesson.status-released-makeup,
 .split-segment.status-released-makeup {
-  --lesson-color: #17805d;
-  color: var(--ink) !important;
-  border: 2px dashed #17805d !important;
-  background: #eef9f4 !important;
-  box-shadow: inset 4px 0 0 #17805d !important;
+  --lesson-color: #111827;
+  color: #111827 !important;
+  border: 1px dashed #64748b !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
 }
 
 .status-released-makeup strong,
@@ -7432,6 +7438,19 @@ button .schedule-member-lines > span {
   grid-column: 1 / -1;
 }
 
+.custom-lesson-color-rule {
+  display: grid !important;
+  grid-template-columns: minmax(110px, 1fr) minmax(130px, 1.4fr) 42px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 720px) {
+  .custom-lesson-color-rule {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 /* Unified coach and staff management */
 .coach-row {
   grid-template-columns: minmax(190px, 0.8fr) minmax(280px, 1.5fr) 36px;
@@ -7541,6 +7560,28 @@ button .schedule-member-lines > span {
   padding: 0 20px;
   border-bottom: 1px solid var(--line);
   background: white;
+}
+
+.admin-security-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-security-actions > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-security-actions > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .coach-staff-tabs button {
@@ -8346,7 +8387,7 @@ button .schedule-member-lines > span {
 
 /* Membership policy workspace */
 .settings-grid[data-active-tab="membership"] {
-  grid-template-columns: minmax(300px, 0.82fr) minmax(460px, 1.18fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
 
@@ -8607,6 +8648,30 @@ button .schedule-member-lines > span {
 
   .policy-managed-section-chips {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-tabs {
+    display: flex;
+    overflow-x: auto;
+    padding: 5px;
+    scrollbar-width: thin;
+  }
+
+  .settings-tab {
+    flex: 0 0 116px;
+    min-height: 40px;
+  }
+
+  .admin-security-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-security-actions > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
