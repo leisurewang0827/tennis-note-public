@@ -81,7 +81,9 @@ const state = {
 };
 
 const brandSplashStartedAt = performance.now();
-const brandSplashMinimumDuration = 1800;
+// The splash should confirm that the app opened, not hold the member on a
+// blank screen while optional network requests finish.
+const brandSplashMinimumDuration = 350;
 const noticeSessionSeenIds = new Set();
 let noticePreviousFocus = null;
 
@@ -6135,8 +6137,8 @@ function setView(viewId) {
   if (!viewId || !$(`#${viewId}`)) return;
   $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === viewId));
   $$(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.view === viewId));
+  renderActiveMemberView(viewId);
   jumpToTop();
-  if (viewId === "scheduleView") renderSchedule();
 }
 
 function jumpToTop() {
@@ -7517,6 +7519,38 @@ function renderAll() {
   saveSnapshot();
 }
 
+function activeMemberViewId() {
+  return $(".view.is-active")?.id || "homeView";
+}
+
+// Keep the first paint and background refresh focused on the screen the member
+// can actually see. The remaining screens are rendered when their menu opens.
+function renderActiveMemberView(viewId = activeMemberViewId()) {
+  renderProfile();
+  renderPendingApprovalGate();
+
+  if (viewId === "homeView") {
+    renderTodayActions();
+    renderMakeupDueBanner();
+  } else if (viewId === "scheduleView") {
+    renderSchedule();
+    renderAvailableSlots();
+    renderRequests();
+  } else if (viewId === "lessonLogView") {
+    renderJournalMode();
+    renderLessonLogs();
+    renderPracticeLogs();
+    renderJournalCalendar();
+  } else if (viewId === "curriculumView") {
+    renderCurriculum();
+  } else if (viewId === "shopView") {
+    renderTickets();
+    renderProducts();
+  }
+
+  saveSnapshot();
+}
+
 let memberLiveScheduleRefreshTimer = 0;
 let memberLiveScheduleRefreshInFlight = false;
 
@@ -7539,7 +7573,7 @@ async function refreshMemberLiveSchedule(options = {}) {
       syncMemberChangeRequestsFromServer(),
       syncMemberNotificationsFromServer(),
     ]);
-    if (options.render !== false) renderAll();
+    if (options.render !== false) renderActiveMemberView();
     if (notificationResult?.newNotification) {
       showToast(`${notificationResult.newNotification.title} · 시간표에서 확인해 주세요.`);
     }
@@ -7556,7 +7590,7 @@ function installMemberLiveScheduleRefresh() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refresh();
   });
-  memberLiveScheduleRefreshTimer = window.setInterval(refresh, 15_000);
+  memberLiveScheduleRefreshTimer = window.setInterval(refresh, 60_000);
 }
 
 async function initApp() {
@@ -7564,11 +7598,14 @@ async function initApp() {
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
   restoreSnapshot();
-  await syncLiveSchedulePolicy();
   bindEvents();
   installMemberLiveScheduleRefresh();
-  renderAll();
-  await syncAppleLoginAvailability();
+  renderActiveMemberView();
+  hideBrandSplash();
+
+  // These improve data freshness but must not delay opening the member screen.
+  void syncLiveSchedulePolicy().then(() => renderActiveMemberView()).catch(() => {});
+  void syncAppleLoginAvailability();
   const openedFromSupabase = await applySupabaseMemberSession(true);
   if (coachModeNavigationStarted) return;
   await handlePaymentRedirectResult();
@@ -7589,4 +7626,4 @@ async function initApp() {
   }
 }
 
-initApp().finally(hideBrandSplash);
+void initApp();
