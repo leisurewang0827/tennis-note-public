@@ -248,10 +248,25 @@
   }
 
   function consumeOAuthRedirect() {
+    const callbackUrl = new URL(window.location.href);
+    // Supabase returns OAuth failures in the query string.  Leaving a stale
+    // failure in the address makes a later retry look like it failed too, and
+    // causes admin redirects that use the current URL to carry it forward.
+    if (callbackUrl.searchParams.has("error")) {
+      ["error", "error_code", "error_description"].forEach((key) => callbackUrl.searchParams.delete(key));
+      window.history.replaceState({}, document.title, `${callbackUrl.pathname}${callbackUrl.search}${callbackUrl.hash}`);
+      return getSession();
+    }
     if (!window.location.hash || !window.location.hash.includes("access_token=")) return getSession();
     const session = saveOAuthSession(window.location.hash);
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
     return session;
+  }
+
+  function cleanOAuthRedirectUrl(value) {
+    const url = new URL(value || window.location.href, window.location.origin);
+    ["error", "error_code", "error_description"].forEach((key) => url.searchParams.delete(key));
+    return `${url.origin}${url.pathname}${url.search}`;
   }
 
   function saveOAuthSession(hash) {
@@ -511,9 +526,10 @@
     }
     const key = providerKey(provider);
     const slug = providerSlug(provider);
-    const redirectTo = options.redirectTo || (isNativeApp()
+    const requestedRedirect = options.redirectTo || (isNativeApp()
       ? nativeOAuthRedirect()
       : `${window.location.origin}${window.location.pathname}${window.location.search}`);
+    const redirectTo = isNativeApp() ? requestedRedirect : cleanOAuthRedirectUrl(requestedRedirect);
     saveProvider(provider || slug);
     const query = new URLSearchParams({
       provider: slug,
