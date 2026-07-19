@@ -3507,6 +3507,15 @@ textarea {
   text-underline-offset: 2px;
 }
 
+.identity-setup-form .consent-row span {
+  display: grid;
+  gap: 2px;
+}
+
+.identity-setup-form .consent-row small {
+  font-size: 12px;
+}
+
 body.identity-setup-required {
   overflow: hidden;
 }

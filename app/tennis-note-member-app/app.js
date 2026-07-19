@@ -6500,6 +6500,7 @@ function identityErrorMessage(error) {
   if (code.includes("gender_invalid")) return "성별을 선택해 주세요.";
   if (code.includes("privacy_consent")) return "개인정보 처리방침 동의가 필요합니다.";
   if (code.includes("login_required")) return "로그인 상태를 다시 확인해 주세요.";
+  if (code.includes("identity_profile_update_not_confirmed")) return "저장 확인이 지연되고 있습니다. 잠시 뒤 앱을 다시 열어 확인해 주세요.";
   return "정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
@@ -6571,9 +6572,18 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
       target_privacy_version: identityPrivacyVersion,
     }));
     const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
-    if (!result?.ok || !result?.profile) throw new Error("identity_profile_update_not_confirmed");
-    applySavedIdentity(result.profile);
-    return result;
+    if (!result?.ok) throw new Error(result?.reason || result?.error || "identity_profile_update_not_confirmed");
+
+    // Older server responses can confirm success without returning the profile.
+    // Read it back once so a successful save never leaves the member stuck here.
+    let savedProfile = result.profile;
+    if (!savedProfile && client.selectCurrentProfile) {
+      const current = await retryTransientNetwork(() => client.selectCurrentProfile());
+      savedProfile = current?.profile || current || null;
+    }
+    if (!savedProfile) throw new Error("identity_profile_update_not_confirmed");
+    applySavedIdentity(savedProfile);
+    return { ...result, profile: savedProfile };
   }
 
   const profile = {
