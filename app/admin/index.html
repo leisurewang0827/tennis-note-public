@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=admin-member-auth-1" />
+    <link rel="stylesheet" href="./styles.css?v=admin-shared-records-1" />
   </head>
   <body>
     <section id="operationsLoginGate" class="operations-login-gate" aria-labelledby="operationsLoginTitle">
@@ -434,9 +434,9 @@
               <small>코치 코멘트와 다음 커리큘럼 필요</small>
             </article>
             <article class="billing-action-card">
-              <span>피드백 요청</span>
+              <span>회원 피드</span>
               <strong id="recordFeedbackCount">0건</strong>
-              <small>사진/영상 운동일지 코멘트 대기</small>
+              <small>운동일지와 사진·영상 확인</small>
             </article>
             <article class="billing-action-card">
               <span>차감 완료</span>
@@ -454,12 +454,12 @@
             <div class="panel-heading">
               <div>
                 <h2>기록/차감 확인</h2>
-                <span class="source-pill">회원 운동일지 · 코치 완료 처리 · 차감 상태</span>
+                <span class="source-pill">회원 피드 · 코치 코멘트 · 다음 커리큘럼 · 횟수 차감</span>
               </div>
             </div>
             <div class="segmented-control compact-segments" role="group" aria-label="기록 상태">
               <button class="segment is-active" type="button" data-record-filter="pending">미처리</button>
-              <button class="segment" type="button" data-record-filter="feedback">피드백 요청</button>
+              <button class="segment" type="button" data-record-filter="feedback">회원 피드</button>
               <button class="segment" type="button" data-record-filter="done">차감 완료</button>
               <button class="segment" type="button" data-record-filter="issue">오류/수정</button>
             </div>
@@ -1219,11 +1219,41 @@
       </section>
     </div>
 
+    <div id="lessonRecordModal" class="modal-backdrop" hidden>
+      <section class="modal-panel lesson-record-modal-panel" role="dialog" aria-modal="true" aria-labelledby="lessonRecordModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">수업 완료</p>
+            <h2 id="lessonRecordModalTitle">기록·차감 처리</h2>
+          </div>
+          <button class="ghost-button icon-close-button" type="button" data-close-lesson-record aria-label="닫기">×</button>
+        </div>
+        <form id="lessonRecordForm" class="lesson-record-form">
+          <div id="lessonRecordContext" class="lesson-record-context"></div>
+          <label>
+            <span>코치 코멘트</span>
+            <textarea id="lessonRecordComment" rows="4" minlength="10" required placeholder="이번 수업에서 확인한 내용과 다음 연습 포인트를 10자 이상 작성해 주세요."></textarea>
+          </label>
+          <label>
+            <span>다음 커리큘럼</span>
+            <select id="lessonRecordCurriculum" required></select>
+          </label>
+          <a id="lessonRecordCurriculumLink" class="lesson-record-curriculum-link" href="#" target="_blank" rel="noopener" hidden>커리큘럼 원본 보기</a>
+          <div id="lessonRecordMessage" class="form-message" role="status"></div>
+          <div class="modal-actions lesson-record-modal-actions">
+            <button class="ghost-button" type="button" data-close-lesson-record>취소</button>
+            <button id="saveLessonRecordButton" class="primary-button" type="submit">저장하고 횟수 차감</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
     <script src="../shared/tennisnote-data-client.js?v=member-demographics-1"></script>
+    <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=release-16"></script>
-    <script src="./app.js?v=admin-member-auth-1"></script>
+    <script src="../shared/tennisnote-release.js?v=release-17"></script>
+    <script src="./app.js?v=admin-shared-records-1"></script>
   </body>
 </html>

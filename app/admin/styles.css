@@ -6516,6 +6516,54 @@ button .schedule-member-lines > span {
   box-shadow: var(--shadow);
 }
 
+.lesson-record-modal-panel {
+  width: min(680px, 100%);
+}
+
+.lesson-record-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.lesson-record-form > label {
+  display: grid;
+  gap: 6px;
+}
+
+.lesson-record-form > label > span {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.lesson-record-context {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #c9ded6;
+  border-radius: 6px;
+  background: #f4faf7;
+}
+
+.lesson-record-context span,
+.lesson-record-context p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.lesson-record-context .ghost-button {
+  justify-self: start;
+}
+
+.lesson-record-curriculum-link {
+  justify-self: start;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .modal-heading,
 .modal-actions {
   display: flex;
@@ -8027,6 +8075,15 @@ button .schedule-member-lines > span {
   .modal-panel {
     max-height: calc(100vh - 20px);
     padding: 16px;
+  }
+
+  .lesson-record-modal-actions {
+    position: sticky;
+    bottom: -16px;
+    margin: 0 -16px -16px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--line);
+    background: var(--paper);
   }
 }
 

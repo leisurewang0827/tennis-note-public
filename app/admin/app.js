@@ -1220,8 +1220,17 @@ const adminLiveDataState = {
   products: [],
   participantRows: [],
   makeupEntitlements: [],
+  curriculumRefs: [],
+  journalEntries: [],
+  mediaFiles: [],
   memberDatabaseRecords: [],
   memberMembershipRecords: [],
+};
+
+const lessonRecordEditorState = {
+  lessonId: "",
+  journalId: "",
+  saving: false,
 };
 
 const modeSummaries = {
@@ -11751,8 +11760,74 @@ function legacyNoteRecord(note) {
     detail: note.reflection,
     subDetail: note.next,
     statusLabel: done ? "차감 확인됨" : "코치 확인 필요",
-    actionLabel: done ? "완료" : "코치앱 처리 필요",
+    actionLabel: done ? "완료" : "처리하기",
+    lessonId: note.serverLessonId || "",
+    actionable: !done && Boolean(note.serverLessonId),
   };
+}
+
+function pendingLessonRecord(lesson) {
+  return {
+    id: `pending-lesson-${lesson.serverLessonId}`,
+    group: "pending",
+    source: "수업 완료 대기",
+    member: lesson.member || "회원 확인 필요",
+    title: `${lesson.lessonDate || "수업일"} ${lesson.time || ""} · ${getCoachName(lesson.coachId)}`.trim(),
+    detail: `${lesson.type || "수업"} ${lesson.durationMinutes || 20}분 · ${lesson.ticketProduct || "회원권 확인 필요"}`,
+    subDetail: `현재 잔여 ${Number(lesson.ticketRemaining) || 0}회`,
+    statusLabel: "기록 대기",
+    actionLabel: "처리하기",
+    lessonId: lesson.serverLessonId,
+    actionable: true,
+  };
+}
+
+function journalBodySummary(body = "") {
+  const text = String(body || "").trim();
+  if (!text) return "작성 내용 없음";
+  try {
+    const parsed = JSON.parse(text);
+    return parsed.content || parsed.selfMemo || parsed.memo || text;
+  } catch {
+    return text;
+  }
+}
+
+function memberJournalRecord(entry) {
+  const member = (adminLiveDataState.users || []).find((user) => user.id === entry.user_id);
+  const mediaCount = (adminLiveDataState.mediaFiles || []).filter((media) => media.journal_entry_id === entry.id).length;
+  const linkedRecord = (adminLiveDataState.lessonRecords || []).find((record) => record.lesson_id === entry.lesson_id);
+  const entryLabel = entry.entry_type === "lesson" ? "레슨" : "개인운동";
+  return {
+    id: `journal-${entry.id}`,
+    group: "feedback",
+    source: "회원 피드",
+    member: member?.name || "회원 확인 필요",
+    title: `${entry.entry_date || "날짜 미정"} ${entryLabel}`,
+    detail: journalBodySummary(entry.body),
+    subDetail: `${mediaCount ? `사진·영상 ${mediaCount}개` : "첨부 없음"}${linkedRecord ? " · 코치 기록 완료" : ""}`,
+    statusLabel: linkedRecord ? "피드 확인됨" : "새 피드",
+    actionLabel: mediaCount ? "첨부 보기" : "확인",
+    journalId: entry.id,
+    mediaCount,
+  };
+}
+
+function pendingLessonRecords() {
+  const completedLessonIds = new Set((adminLiveDataState.lessonRecords || []).map((record) => record.lesson_id));
+  const today = adminLocalDateKey(new Date());
+  const ownRoleIds = currentOperationsCoachRoleIds();
+  return lessons
+    .filter((lesson) => (
+      lesson.serverLessonId
+      && !lesson.oneDayBooking
+      && lesson.serverStatus === "scheduled"
+      && lesson.lessonDate <= today
+      && !completedLessonIds.has(lesson.serverLessonId)
+      && (operationsRole() === "admin" || ownRoleIds.has(lesson.coachRoleId))
+    ))
+    .sort((left, right) => `${left.lessonDate} ${left.time}`.localeCompare(`${right.lessonDate} ${right.time}`))
+    .map(pendingLessonRecord);
 }
 
 function lessonLogRecord(log) {
@@ -11789,9 +11864,11 @@ function feedbackRecord(request) {
 function adminRecordGroups() {
   const shared = operationalSharedData();
   const records = [
+    ...pendingLessonRecords(),
     ...lessonNotes.map(legacyNoteRecord),
     ...shared.lessonLogs.map(lessonLogRecord),
     ...shared.feedbackRequests.map(feedbackRecord),
+    ...(adminLiveDataState.journalEntries || []).map(memberJournalRecord),
   ];
   return {
     pending: records.filter((record) => record.group === "pending"),
@@ -11826,11 +11903,179 @@ function renderNotes() {
           </div>
           <aside>
             ${recordStatusBadge(record)}
-            <b>${escapeHtml(record.actionLabel)}</b>
+            ${record.actionable ? `<button class="small-button" type="button" data-open-lesson-record="${escapeHtml(record.lessonId)}">${escapeHtml(record.actionLabel)}</button>` : record.mediaCount ? `<button class="ghost-button" type="button" data-open-journal-media="${escapeHtml(record.journalId)}">${escapeHtml(record.actionLabel)}</button>` : `<b>${escapeHtml(record.actionLabel)}</b>`}
           </aside>
         </article>`,
     )
     .join("") || "<p class='empty-text'>해당 상태의 기록이 없습니다.</p>";
+}
+
+function closeLessonRecordModal() {
+  const modal = $("#lessonRecordModal");
+  if (modal) modal.hidden = true;
+  Object.assign(lessonRecordEditorState, { lessonId: "", journalId: "", saving: false });
+  $("#lessonRecordForm")?.reset();
+  if ($("#lessonRecordMessage")) $("#lessonRecordMessage").textContent = "";
+}
+
+function updateLessonRecordCurriculumLink() {
+  const selectedId = $("#lessonRecordCurriculum")?.value || "";
+  const curriculum = adminCurriculumChoices().find((item) => item.value === selectedId);
+  const link = $("#lessonRecordCurriculumLink");
+  if (!link) return;
+  link.hidden = !curriculum?.notionUrl;
+  link.href = curriculum?.notionUrl || "#";
+}
+
+function adminCurriculumChoices() {
+  const refs = (adminLiveDataState.curriculumRefs || []).filter((item) => item.status === "active");
+  const catalogSteps = window.TennisNoteCurriculumCatalog?.steps || [];
+  const choices = catalogSteps.map((step) => {
+    const ref = refs.find((item) => item.skill_label === step.id || item.title === step.title);
+    return {
+      value: ref?.id || `catalog:${step.id}`,
+      label: `${step.trackTitle || step.category || step.level || "커리큘럼"} · ${step.title}`,
+      notionUrl: step.notionUrl || ref?.notion_url || "",
+      step,
+    };
+  });
+  refs.forEach((ref) => {
+    if (choices.some((item) => item.value === ref.id || item.step?.id === ref.skill_label)) return;
+    choices.push({
+      value: ref.id,
+      label: `${ref.level_label || "커리큘럼"} · ${ref.title}`,
+      notionUrl: ref.notion_url || "",
+      step: null,
+    });
+  });
+  return choices;
+}
+
+async function ensureAdminCurriculumRef(choiceValue) {
+  if (!String(choiceValue).startsWith("catalog:")) return choiceValue;
+  const code = String(choiceValue).slice("catalog:".length);
+  const step = (window.TennisNoteCurriculumCatalog?.steps || []).find((item) => item.id === code);
+  if (!step) throw new Error("curriculum_choice_not_found");
+  return window.TennisNoteDataClient.rpc("tn_ensure_curriculum_ref", {
+    target_code: step.id,
+    target_level: `${step.trackTitle || step.category || "커리큘럼"} · ${step.stageLabel || step.level || "단계"}`,
+    target_title: step.title,
+    target_notion_url: step.notionUrl || "",
+  });
+}
+
+function openLessonRecordModal(lessonId) {
+  const lesson = lessons.find((item) => item.serverLessonId === lessonId);
+  if (!lesson || lesson.serverStatus !== "scheduled") {
+    showToast("처리할 수업을 새로고침 후 다시 선택해 주세요.");
+    return;
+  }
+  const ownRoleIds = currentOperationsCoachRoleIds();
+  if (operationsRole() === "coach" && !ownRoleIds.has(lesson.coachRoleId)) {
+    showToast("본인 담당 수업만 처리할 수 있습니다.");
+    return;
+  }
+  const journal = (adminLiveDataState.journalEntries || [])
+    .filter((entry) => entry.lesson_id === lessonId)
+    .sort((left, right) => String(right.updated_at || right.created_at || "").localeCompare(String(left.updated_at || left.created_at || "")))[0] || null;
+  const mediaCount = journal
+    ? (adminLiveDataState.mediaFiles || []).filter((media) => media.journal_entry_id === journal.id).length
+    : 0;
+  Object.assign(lessonRecordEditorState, { lessonId, journalId: journal?.id || "", saving: false });
+  $("#lessonRecordContext").innerHTML = `
+    <strong>${escapeHtml(lesson.member)} · ${escapeHtml(lesson.lessonDate)} ${escapeHtml(lesson.time)}</strong>
+    <span>${escapeHtml(getCoachName(lesson.coachId))} · ${escapeHtml(lesson.type)} ${Number(lesson.durationMinutes) || 20}분 · 잔여 ${Number(lesson.ticketRemaining) || 0}회</span>
+    <p>${journal ? escapeHtml(journalBodySummary(journal.body)) : "회원 운동일지 미작성 · 코치 기록만으로 완료할 수 있습니다."}</p>
+    ${mediaCount ? `<button class="ghost-button" type="button" data-open-journal-media="${escapeHtml(journal.id)}">사진·영상 ${mediaCount}개 보기</button>` : ""}`;
+  const select = $("#lessonRecordCurriculum");
+  const choices = adminCurriculumChoices();
+  select.innerHTML = `<option value="">다음 커리큘럼 선택</option>${choices.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("")}`;
+  $("#lessonRecordComment").value = "";
+  $("#lessonRecordMessage").textContent = choices.length ? "" : "연결된 커리큘럼이 없습니다.";
+  $("#lessonRecordModal").hidden = false;
+  updateLessonRecordCurriculumLink();
+  $("#lessonRecordComment").focus();
+}
+
+function lessonRecordErrorMessage(error) {
+  let code = error?.payload?.message || error?.payload?.code || error?.message || "server_error";
+  if (typeof code === "string" && code.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(code);
+      code = parsed.message || parsed.code || code;
+    } catch {
+      // Keep the server message when it is not valid JSON.
+    }
+  }
+  return ({
+    lesson_complete_comment_too_short: "코치 코멘트는 10자 이상 작성해 주세요.",
+    lesson_complete_comment_too_generic: "짧은 칭찬이나 확인 문구 대신 이번 수업 내용을 작성해 주세요.",
+    lesson_complete_comment_recent_duplicate: "최근 수업과 같은 코멘트입니다. 이번 수업 내용을 새로 작성해 주세요.",
+    lesson_complete_forbidden: "이 수업을 처리할 권한이 없습니다.",
+    lesson_complete_status_invalid: "이미 완료·취소된 수업입니다. 새로고침 후 확인해 주세요.",
+    lesson_complete_ticket_unavailable: "사용 가능한 회원권 횟수가 없습니다.",
+  })[code] || "서버 저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.";
+}
+
+async function saveLessonRecord(event) {
+  event.preventDefault();
+  if (lessonRecordEditorState.saving) return;
+  const comment = $("#lessonRecordComment").value.trim();
+  const curriculumId = $("#lessonRecordCurriculum").value;
+  const message = $("#lessonRecordMessage");
+  if (comment.length < 10 || !curriculumId) {
+    message.textContent = comment.length < 10 ? "코치 코멘트를 10자 이상 작성해 주세요." : "다음 커리큘럼을 선택해 주세요.";
+    return;
+  }
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !operationsAccessReady()) {
+    message.textContent = "대표 관리자 계정 로그인 상태를 확인해 주세요.";
+    return;
+  }
+  lessonRecordEditorState.saving = true;
+  const button = $("#saveLessonRecordButton");
+  button.disabled = true;
+  button.textContent = "서버 저장 중";
+  message.textContent = "";
+  try {
+    const curriculumRefId = await ensureAdminCurriculumRef(curriculumId);
+    const result = await client.rpc("tn_complete_lesson_and_deduct", {
+      target_lesson_id: lessonRecordEditorState.lessonId,
+      target_coach_comment: comment,
+      target_next_curriculum_ref_id: curriculumRefId,
+      target_member_journal_id: lessonRecordEditorState.journalId || null,
+    });
+    closeLessonRecordModal();
+    state.recordFilter = "done";
+    await syncAdminLiveData();
+    setView("notes", { skipLock: true });
+    showToast(result?.idempotent ? "이미 처리된 수업을 확인했습니다." : "수업 기록 저장과 횟수 차감이 완료됐습니다.");
+  } catch (error) {
+    message.textContent = lessonRecordErrorMessage(error);
+  } finally {
+    lessonRecordEditorState.saving = false;
+    button.disabled = false;
+    button.textContent = "저장하고 횟수 차감";
+  }
+}
+
+async function openJournalMedia(journalId) {
+  const files = (adminLiveDataState.mediaFiles || []).filter((media) => media.journal_entry_id === journalId);
+  if (!files.length) {
+    showToast("첨부된 사진이나 영상이 없습니다.");
+    return;
+  }
+  const preview = window.open("", "_blank");
+  try {
+    const blob = await window.TennisNoteDataClient.downloadObject("tennisnote-journal-media", files[0].storage_path);
+    const url = URL.createObjectURL(blob);
+    if (preview) preview.location.href = url;
+    else window.open(url, "_blank");
+    if (files.length > 1) showToast(`첫 첨부를 열었습니다. 전체 ${files.length}개입니다.`);
+  } catch {
+    preview?.close();
+    showToast("첨부파일을 불러오지 못했습니다.");
+  }
 }
 
 function renderRackettime() {
@@ -12392,7 +12637,7 @@ async function syncAdminLiveData() {
     liveScheduleMessage: "실서버 회원·코치·시간표를 불러오는 중",
   });
   try {
-    const [serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords] = await Promise.all([
+    const [serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords] = await Promise.all([
       client.selectRows("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", limit: 500 }),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
@@ -12411,6 +12656,9 @@ async function syncAdminLiveData() {
       client.selectRows("tn_lesson_change_requests", { select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,created_at", limit: 500 }).catch(() => []),
       client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => []),
       client.selectRows("tn_lesson_records", { select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at", limit: 500 }).catch(() => []),
+      client.selectRows("tn_curriculum_refs", { select: "id,level_label,skill_label,title,notion_url,status", filters: { status: "active" }, order: "level_label.asc", limit: 500 }).catch(() => []),
+      client.selectRows("tn_journal_entries", { select: "id,user_id,lesson_id,entry_date,entry_type,practice_type,body,created_at,updated_at", order: "entry_date.desc", limit: 500 }).catch(() => []),
+      client.selectRows("tn_media_files", { select: "id,owner_user_id,journal_entry_id,storage_path,media_type,created_at", order: "created_at.desc", limit: 1000 }).catch(() => []),
       fullAdminAccess ? client.selectRows("tn_payments", { select: "id,user_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at", limit: 500 }).catch(() => []) : Promise.resolve([]),
       client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => []),
       client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => []),
@@ -12704,6 +12952,7 @@ async function syncAdminLiveData() {
           serverParticipantUserIds: participantIds,
           branchId: lesson.branch_id,
           ticketId: lesson.member_ticket_id,
+          coachRoleId: lesson.coach_role_id,
           day: scheduleDays[new Date(`${lesson.lesson_date}T00:00:00`).getDay() === 0 ? 6 : new Date(`${lesson.lesson_date}T00:00:00`).getDay() - 1],
           lessonDate: lesson.lesson_date,
           time: String(lesson.start_time || "").slice(0, 5),
@@ -12712,6 +12961,8 @@ async function syncAdminLiveData() {
           member: memberNames.join("&") || ticket?.member || "회원 확인 필요",
           type: sourceLabel,
           durationMinutes: Number(lesson.duration_minutes) || 20,
+          ticketRemaining: Number(ticket?.remaining) || 0,
+          ticketProduct: ticket?.product || "회원권 확인 필요",
           status: liveLessonStatus(lesson.status),
           makeup: lesson.lesson_source === "makeup",
           lessonSource: lesson.lesson_source || "regular",
@@ -12869,10 +13120,14 @@ async function syncAdminLiveData() {
       return {
         id: record.id,
         serverRecordId: record.id,
+        serverLessonId: record.lesson_id,
+        coachRoleId: record.coach_role_id,
         member: memberNames.join("&") || ticket?.member || "회원 확인 필요",
         lesson: `${lesson.lesson_date || "수업일"} ${String(lesson.start_time || "").slice(0, 5)} ${getCoachName(coachIdByRole.get(record.coach_role_id) || "")}`,
         reflection: record.coach_comment || "코치 코멘트 없음",
         next: record.next_curriculum_ref_id ? "다음 커리큘럼 등록됨" : "다음 커리큘럼 미등록",
+        nextCurriculumRefId: record.next_curriculum_ref_id || "",
+        completedAt: record.completed_at || "",
         status: "confirmed",
         statusLabel: "확인완료",
         deductedSessions: Number(record.deducted_sessions) || 0,
@@ -12949,6 +13204,9 @@ async function syncAdminLiveData() {
       changeRequests: serverChangeRequests || [],
       makeupEntitlements: mappedMakeupEntitlements,
       lessonRecords: serverLessonRecords || [],
+      curriculumRefs: serverCurriculumRefs || [],
+      journalEntries: serverJournalEntries || [],
+      mediaFiles: serverMediaFiles || [],
       payments: serverPayments || [],
       groupAccounts: serverGroupAccounts || [],
       groupMembers: serverGroupMembers || [],
@@ -16741,6 +16999,23 @@ function bindEvents() {
       return;
     }
 
+    const lessonRecordButton = event.target.closest("[data-open-lesson-record]");
+    if (lessonRecordButton) {
+      openLessonRecordModal(lessonRecordButton.dataset.openLessonRecord);
+      return;
+    }
+
+    const journalMediaButton = event.target.closest("[data-open-journal-media]");
+    if (journalMediaButton) {
+      openJournalMedia(journalMediaButton.dataset.openJournalMedia);
+      return;
+    }
+
+    if (event.target.closest("[data-close-lesson-record]")) {
+      closeLessonRecordModal();
+      return;
+    }
+
     const schedulePresetButton = event.target.closest("[data-schedule-preset]");
     if (schedulePresetButton) {
       const message = applySchedulePreset(schedulePresetButton.dataset.schedulePreset);
@@ -16757,6 +17032,9 @@ function bindEvents() {
     }
 
   });
+
+  $("#lessonRecordForm")?.addEventListener("submit", saveLessonRecord);
+  $("#lessonRecordCurriculum")?.addEventListener("change", updateLessonRecordCurriculumLink);
 
   const refreshSupabaseStatus = $("#refreshSupabaseStatus");
   if (refreshSupabaseStatus) {
