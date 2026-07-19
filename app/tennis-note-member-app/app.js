@@ -6201,7 +6201,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.29" });
+  const params = new URLSearchParams({ v: "1.0.30" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7710,7 +7710,13 @@ async function initApp() {
   const hasStoredSession = Boolean(client?.getSession?.()?.access_token);
   const isModeTransition = Boolean(sessionStorage.getItem("tennis-note-member-mode-transition"));
   sessionStorage.removeItem("tennis-note-member-mode-transition");
-  setMemberSessionRestoring(hasStoredSession || isModeTransition || window.location.hash.includes("access_token="));
+  const canOpenRestoredMember = Boolean(isModeTransition && hasStoredSession && state.member);
+  if (canOpenRestoredMember) {
+    openAppFromSession(false);
+    setMemberSessionRestoring(false);
+  } else {
+    setMemberSessionRestoring(hasStoredSession || isModeTransition || window.location.hash.includes("access_token="));
+  }
   hideBrandSplash();
 
   // These improve data freshness but must not delay opening the member screen.
