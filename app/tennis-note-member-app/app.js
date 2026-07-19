@@ -5595,6 +5595,15 @@ async function verifyServerPayment(paymentId) {
   });
 }
 
+async function reconcileRejectedServerPayment(paymentId) {
+  if (!paymentId) return;
+  try {
+    await verifyServerPayment(paymentId);
+  } catch {
+    // Terminal provider states are persisted before the server returns a verification error.
+  }
+}
+
 function clearPaymentRedirectParams() {
   const url = new URL(window.location.href);
   ["paymentId", "code", "message", "pgCode", "pgMessage"].forEach((key) => url.searchParams.delete(key));
@@ -5609,6 +5618,8 @@ async function handlePaymentRedirectResult() {
   const message = params.get("message") || params.get("pgMessage") || "";
   clearPaymentRedirectParams();
   if (errorCode) {
+    await reconcileRejectedServerPayment(paymentId);
+    await syncMemberTicketsFromServer();
     state.pendingPaymentCheckStatus = { tone: "alert", text: message || "결제가 완료되지 않았습니다." };
     state.ticketHistory.unshift({ text: message || `결제 미완료 · ${errorCode}`, tone: "alert" });
     renderAll();
@@ -5708,6 +5719,8 @@ async function resumePendingTicketPayment(ticketId = "") {
     }));
 
     if (response?.code) {
+      await reconcileRejectedServerPayment(response?.paymentId || paymentId);
+      await syncMemberTicketsFromServer();
       state.pendingPaymentCheckStatus = { tone: "alert", text: response.message || "결제가 완료되지 않았습니다." };
       state.ticketHistory.unshift({ text: `${ticket.title} 결제창 종료 · 결제 미완료`, tone: "alert" });
     } else {
@@ -5809,6 +5822,8 @@ async function startProductPayment(productId, options = {}) {
     }));
 
     if (response?.code) {
+      await reconcileRejectedServerPayment(response?.paymentId || paymentId);
+      await syncMemberTicketsFromServer();
       createPaymentRecord(product, {
         paymentId,
         method: `${method.label} 결제 실패`,
@@ -6201,7 +6216,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.31" });
+  const params = new URLSearchParams({ v: "1.0.32" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
