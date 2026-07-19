@@ -7231,6 +7231,14 @@ function normalizedMemberPhone(value = "") {
   return String(value || "").replace(/[^0-9]/g, "");
 }
 
+function normalizedCoachLinkName(value = "") {
+  return String(value || "")
+    .trim()
+    .replace(/(?:코치|coach)\s*$/iu, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
 function normalizedRpcResult(result) {
   return Array.isArray(result) ? result[0] || {} : result || {};
 }
@@ -12428,6 +12436,20 @@ async function syncAdminLiveData() {
       coach.accountLinked = Boolean(coachUser.auth_user_id || authLinks.length);
       coach.account = coach.accountLinked ? (coachUser.name || role.display_name || "가입 완료") : "회원가입 전";
       coach.phone = coachUser.phone || "";
+      const coachPhone = normalizedMemberPhone(coach.phone);
+      const coachName = normalizedCoachLinkName(coachUser.name || role.display_name);
+      const loginCandidates = !coach.accountLinked && coachPhone && coachName
+        ? (serverUsers || []).filter((candidate) => {
+          if (candidate.id === role.user_id || candidate.status !== "active" || candidate.merged_into_user_id) return false;
+          const candidateLinks = authLinksByUserId.get(candidate.id) || [];
+          return candidate.role === "member"
+            && Boolean(candidate.auth_user_id || candidateLinks.length)
+            && normalizedMemberPhone(candidate.phone) === coachPhone
+            && normalizedCoachLinkName(candidate.name) === coachName;
+        })
+        : [];
+      coach.loginCandidateUserId = loginCandidates.length === 1 ? loginCandidates[0].id : "";
+      coach.loginCandidateCount = loginCandidates.length;
       coach.photoUrl = coachUser.profile_photo_url || coach.photoUrl || "";
       coach.serverUserId = role.user_id;
       coach.role = role.job_title || coach.role || "레슨";
@@ -14153,6 +14175,8 @@ function renderCoaches() {
             <div class="coach-auth-badges">
               ${badge(coachSignupTone(coach), coachSignupLabel(coach))}
               ${badge(coachApprovalTone(coach), coachApprovalLabel(coach))}
+              ${operationsRole() === "admin" && coach.loginCandidateUserId ? `<button class="small-button" type="button" data-reconcile-coach-login="${escapeHtml(coach.id)}">가입 계정 연결</button>` : ""}
+              ${operationsRole() === "admin" && !coach.accountLinked && coach.loginCandidateCount > 1 ? badge("warn", "연결 후보 확인 필요") : ""}
             </div>
             <span>${escapeHtml(getCoachAvailabilitySummary(coach.id))}${breakCount ? ` · 브레이크 ${breakCount}개` : ""}</span>
             <span>${operationsRole() === "admin" ? coachSettlementSummary(coach) : "정산 정보 비공개"}</span>
@@ -14162,6 +14186,27 @@ function renderCoaches() {
       },
     )
     .join("");
+}
+
+async function reconcileCoachLogin(coachId) {
+  const coach = coaches.find((item) => item.id === coachId);
+  const client = window.TennisNoteDataClient;
+  if (!coach?.serverRoleId || !coach.loginCandidateUserId || !client?.rpc || operationsRole() !== "admin") return;
+  if (!window.confirm(`${coach.name} 코치의 가입 계정을 연결할까요?`)) return;
+  try {
+    await client.rpc("tn_admin_reconcile_coach_login", {
+      target_coach_role_id: coach.serverRoleId,
+      source_signup_user_id: coach.loginCandidateUserId,
+      target_reason: "관리자 코치 가입 계정 연결",
+    });
+    await syncAdminLiveData();
+    const saved = coaches.find((item) => item.serverRoleId === coach.serverRoleId);
+    if (!saved?.accountLinked) throw new Error("coach_login_reconciliation_verification_failed");
+    renderCoaches();
+    showToast(`${coach.name} 코치 계정 연결 완료`);
+  } catch (error) {
+    showToast(`코치 계정 연결 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+  }
 }
 
 function renderCustomLessonColorRules() {
@@ -15563,6 +15608,11 @@ function bindEvents() {
     if (settingsTabsByButton[buttonId]) openSettingsWorkspace(settingsTabsByButton[buttonId]);
   });
   document.addEventListener("click", async (event) => {
+    const reconcileButton = event.target.closest("[data-reconcile-coach-login]");
+    if (reconcileButton) {
+      await reconcileCoachLogin(reconcileButton.dataset.reconcileCoachLogin);
+      return;
+    }
     if (event.target.closest("#addCoachStaffButton")) {
       openCoachStaffModal();
       return;
