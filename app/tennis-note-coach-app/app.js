@@ -1449,7 +1449,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.32" });
+  const params = new URLSearchParams({ v: "1.0.33" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1681,10 +1681,6 @@ function renderCoachModeList() {
   }
 }
 
-function requestTime(request) {
-  return request.requested.match(/\d{1,2}:\d{2}/)?.[0] || "미정";
-}
-
 function requestCoach(request) {
   if (request.coach) return request.coach;
   const exactMember = state.members.find((member) => member.name === request.member);
@@ -1875,16 +1871,6 @@ function coachLessonColorStyle(lesson, policy) {
   const saved = custom?.color || policy?.lessonColors?.[kind] || "";
   const color = /^#[0-9a-f]{6}$/i.test(saved) ? saved : fallback[kind];
   return `--lesson-color:${color}`;
-}
-
-function isLessonActiveAt(lesson, time) {
-  const start = minutesFromTime(lesson.time);
-  const current = minutesFromTime(time);
-  return lesson.day && current >= start && current < start + lessonDuration(lesson);
-}
-
-function isLessonStartAt(lesson, time) {
-  return lesson.time === time;
 }
 
 function currentCoachProfile() {
@@ -2516,10 +2502,6 @@ function formatScheduleMemberName(name) {
 
 function memberFilter() {
   return state.memberFilter === "expired" ? "expired" : "active";
-}
-
-function memberItemsForFilter() {
-  return memberFilter() === "expired" ? state.expiredMembers : state.members;
 }
 
 function memberQuery() {
@@ -3709,39 +3691,6 @@ function renderCurriculums() {
     </section>`;
 }
 
-
-function renderFeedbackRequests() {
-  importPracticeFeedbackRequests();
-  if (!$("#feedbackRequests")) return;
-  $("#feedbackRequests").innerHTML =
-    state.feedbackRequests
-      .map((request) => {
-        const done = request.status === "코치 답변 완료";
-        const media = (request.mediaNames || []).map((name) => `<b class="media-chip">${name}</b>`).join("");
-        return `
-          <article class="work-card log-card">
-            <div class="log-main">
-              <strong>${request.member} · ${request.type} · ${request.date}</strong>
-              <span>${request.memo}</span>
-              <small>질문: ${request.question || "코치 피드백 요청"}</small>
-              ${media ? `<div class="media-list">${media}</div>` : ""}
-              ${done ? `<p class="coach-comment-view">답변: ${request.coachFeedback}</p>` : ""}
-            </div>
-            <div class="coach-confirm-panel">
-              <label>
-                <span>운동노트 코멘트</span>
-                <textarea data-feedback-comment="${request.id}" rows="3" ${done ? "disabled" : ""}>${request.coachFeedback || ""}</textarea>
-              </label>
-              ${request.validationMessage ? `<p class="validation-text">${request.validationMessage}</p>` : ""}
-              <div class="actions">
-                <b>${request.status}</b>
-                <button class="approve-button" type="button" data-confirm-feedback="${request.id}" ${done ? "disabled" : ""}>피드백 보내기</button>
-              </div>
-            </div>
-          </article>`;
-      })
-      .join("") || "<p class='empty-text'>확인할 운동노트 피드백 요청이 없습니다.</p>";
-}
 
 function activeViewField(selector) {
   return document.querySelector(`.view.is-active ${selector}`) || document.querySelector(selector);

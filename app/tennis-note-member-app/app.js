@@ -2417,16 +2417,6 @@ function memberLessonTitle(lesson, isMine) {
   return "내 수업";
 }
 
-function isLessonActiveAt(lesson, time) {
-  const start = minutesFromTime(lesson.time);
-  const current = minutesFromTime(time);
-  return current >= start && current < start + lessonDuration(lesson);
-}
-
-function isLessonStartAt(lesson, time) {
-  return lesson.time === time;
-}
-
 function syncNtrpResultFromCoach() {
   const shared = loadSharedData();
   const request = shared.ntrpRequests.find((item) => isCurrentMemberName(item.member));
@@ -6216,7 +6206,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.32" });
+  const params = new URLSearchParams({ v: "1.0.33" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
