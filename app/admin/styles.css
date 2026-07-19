@@ -2121,6 +2121,27 @@ tr.is-selected td {
   white-space: nowrap;
 }
 
+.member-auth-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.member-auth-status.is-linked {
+  color: #08633f;
+  background: #e6f6ee;
+}
+
+.member-auth-status.is-unlinked {
+  color: #68758a;
+  background: #eef2f7;
+}
+
 .detail-list {
   display: grid;
   gap: 12px;

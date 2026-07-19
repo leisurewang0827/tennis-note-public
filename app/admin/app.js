@@ -5888,6 +5888,17 @@ function memberAuthConnection(member = {}) {
   };
 }
 
+function memberAuthStatusMarkup(member = {}) {
+  const connection = memberAuthConnection(member);
+  const label = connection.linked
+    ? (connection.providers.map(authProviderLabel).filter(Boolean).join(" · ") || "연결됨")
+    : "미연결";
+  const detail = connection.linked
+    ? `${connection.detail}${member.authLastSignInAt ? ` · 최근 로그인 ${notificationDateTimeLabel(member.authLastSignInAt)}` : ""}`
+    : "회원이 앱에서 로그인하면 자동으로 연결 상태가 표시됩니다.";
+  return `<span class="member-auth-status ${connection.linked ? "is-linked" : "is-unlinked"}" title="${escapeHtml(detail)}">${escapeHtml(label)}</span>`;
+}
+
 function renderMemberAuthLinkCard(member) {
   const role = defaultAuthRoleForMember(member);
   const connection = memberAuthConnection(member);
@@ -8255,6 +8266,7 @@ function renderMembers() {
               <span>${escapeHtml(member.name)}</span>
             </button>
           </td>
+          <td>${memberAuthStatusMarkup(member)}</td>
           <td>${escapeHtml(member.coach || "미배정")}</td>
           <td><strong class="member-table-primary">${escapeHtml(memberTicketDisplayLabel(member, ticket))}</strong></td>
           <td>${escapeHtml(memberScheduleSummary(member))}</td>
@@ -8263,7 +8275,7 @@ function renderMembers() {
           <td class="member-table-note">${escapeHtml(memberRemarkLabel(member))}</td>
         </tr>`;
     })
-    .join("") : `<tr><td colspan="7" class="empty-text">${filterCopy.empty}</td></tr>`;
+    .join("") : `<tr><td colspan="8" class="empty-text">${filterCopy.empty}</td></tr>`;
 
   const detailPanel = $("#memberDetail");
   const detailLayout = detailPanel?.closest(".member-directory-layout");
@@ -12429,7 +12441,17 @@ async function syncAdminLiveData() {
       .filter((record) => record.ticket_id)
       .map((record) => [record.ticket_id, record]));
     const coachIdByRole = new Map();
-    (serverCoachRoles || []).forEach((role, index) => {
+    const orderedCoachRoles = [...(serverCoachRoles || [])].sort((left, right) => {
+      const score = (role) => {
+        const user = usersById.get(role.user_id) || {};
+        const links = authLinksByUserId.get(role.user_id) || [];
+        return Number(role.employment_status === "active") * 4
+          + Number(role.status === "approved") * 2
+          + Number(Boolean(user.auth_user_id || links.length));
+      };
+      return score(left) - score(right);
+    });
+    orderedCoachRoles.forEach((role, index) => {
       const coach = mergeServerCoachRole(role, index);
       const coachUser = usersById.get(role.user_id) || {};
       const authLinks = authLinksByUserId.get(role.user_id) || [];
