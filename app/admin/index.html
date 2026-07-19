@@ -683,11 +683,16 @@
                 <strong>다음 설정 위치</strong>
                 <ul>
                   <li>Supabase Authentication > Providers에서 Kakao, Naver를 켭니다.</li>
-                  <li>Redirect URL에는 통합앱의 회원 화면 주소를 등록합니다.</li>
-                  <li>첫 로그인 후 Authentication > Users의 UUID를 <code>tn_users.auth_user_id</code>에 연결합니다.</li>
+                  <li>Supabase Redirect URLs에 아래 공개 회원·코치·관리자 주소를 모두 등록합니다.</li>
+                  <li>네이버 개발자센터에는 <strong>서비스 URL</strong>과 Supabase <strong>Callback URL</strong>을 각각 등록합니다.</li>
+                  <li>첫 로그인 후 Authentication > Users의 UUID를 <code>tn_users.auth_user_id</code> 또는 <code>tn_user_auth_links</code>에 연결합니다.</li>
                 </ul>
                 <div class="redirect-url-list">
-                  <code>http://127.0.0.1:8773/90-Dashboard/tennis-note-member-app/index.html</code>
+                  <code>https://leisurewang0827.github.io/tennis-note-public/app/tennis-note-member-app/index.html</code>
+                  <code>https://leisurewang0827.github.io/tennis-note-public/app/tennis-note-coach-app/index.html</code>
+                  <code>https://leisurewang0827.github.io/tennis-note-public/app/admin/index.html</code>
+                  <code>네이버 서비스 URL: https://leisurewang0827.github.io/tennis-note-public/app/admin/</code>
+                  <code>네이버 Callback URL: https://ldwexbvnixpvjbmlwnwi.supabase.co/auth/v1/callback</code>
                 </div>
               </div>
             </section>
