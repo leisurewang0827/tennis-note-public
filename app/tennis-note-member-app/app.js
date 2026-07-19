@@ -83,7 +83,7 @@ const state = {
 const brandSplashStartedAt = performance.now();
 // The splash should confirm that the app opened, not hold the member on a
 // blank screen while optional network requests finish.
-const brandSplashMinimumDuration = 350;
+const brandSplashMinimumDuration = 150;
 const noticeSessionSeenIds = new Set();
 let noticePreviousFocus = null;
 
