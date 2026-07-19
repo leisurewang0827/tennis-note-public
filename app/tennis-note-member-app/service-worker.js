@@ -1,4 +1,5 @@
-const CACHE_NAME = "tennis-note-member-pwa-v68";
+const CACHE_NAME = "tennis-note-member-pwa-v69";
+const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -28,7 +29,11 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
+      Promise.all(
+        keys
+          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+          .map((key) => caches.delete(key)),
+      ),
     ),
   );
   self.clients.claim();
@@ -50,7 +55,7 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(async () => {
-        const cached = await caches.match(event.request);
+        const cached = await caches.open(CACHE_NAME).then((cache) => cache.match(event.request));
         if (cached) return cached;
         if (event.request.mode === "navigate") return caches.match("./index.html");
         return Response.error();

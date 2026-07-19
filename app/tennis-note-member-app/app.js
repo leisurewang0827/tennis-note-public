@@ -2477,9 +2477,15 @@ function renderProfile() {
     const coachNtrp = state.profile.coachNtrp || "측정 전";
     $("#profileNtrpSummary").textContent = `자가 NTRP ${selfNtrp} · 코치 ${coachNtrp}`;
   }
-  if ($("#profileRealNameInput")) $("#profileRealNameInput").value = realName === "가입 확인 중" ? "" : realName;
-  if ($("#profileNicknameInput")) $("#profileNicknameInput").value = state.profile.nickname || "";
-  if ($("#profilePhoneInput")) $("#profilePhoneInput").value = formatIdentityPhone(state.profile.phone || "");
+  // A live schedule refresh runs while the profile sheet is open. Do not replace
+  // what the member is typing with the last server value during that refresh.
+  const setProfileFieldValue = (selector, value) => {
+    const field = $(selector);
+    if (field && document.activeElement !== field) field.value = value;
+  };
+  setProfileFieldValue("#profileRealNameInput", realName === "가입 확인 중" ? "" : realName);
+  setProfileFieldValue("#profileNicknameInput", state.profile.nickname || "");
+  setProfileFieldValue("#profilePhoneInput", formatIdentityPhone(state.profile.phone || ""));
   if ($("#profileHand")) $("#profileHand").value = state.profile.hand || "오른손";
   if ($("#profileBackhand")) $("#profileBackhand").value = state.profile.backhand || "투핸드 백핸드";
   if ($("#profileStartedAt")) $("#profileStartedAt").value = state.profile.startedAt || "";
