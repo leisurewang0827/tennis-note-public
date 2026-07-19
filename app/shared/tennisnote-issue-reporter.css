@@ -1,0 +1,24 @@
+.tn-report-modal[hidden] { display: none !important; }
+.tn-report-modal { position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; padding: 16px; }
+.tn-report-backdrop { position: absolute; inset: 0; border: 0; background: rgba(15, 23, 42, .56); }
+.tn-report-card { position: relative; width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow: auto; display: grid; gap: 14px; padding: 20px; border-radius: 8px; background: #fff; box-shadow: 0 24px 70px rgba(15, 23, 42, .24); }
+.tn-report-card header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.tn-report-card header h2 { margin: 2px 0 0; font-size: 22px; }
+.tn-report-card header small { color: #087f5b; font-weight: 900; }
+.tn-report-card header button { width: 40px; height: 40px; border: 0; border-radius: 6px; font-size: 24px; background: #eef4ff; }
+.tn-report-card label { display: grid; gap: 6px; font-weight: 850; }
+.tn-report-card input, .tn-report-card select, .tn-report-card textarea { box-sizing: border-box; width: 100%; padding: 11px 12px; border: 1px solid #cad5e3; border-radius: 6px; font: inherit; }
+.tn-report-submit { min-height: 46px; border: 0; border-radius: 6px; background: #087f5b; color: #fff; font-weight: 900; }
+.tn-report-message { min-height: 20px; margin: 0; color: #b42318; font-size: 13px; font-weight: 800; }
+.tn-report-list { display: grid; gap: 10px; }
+.tn-report-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; padding: 14px; border: 1px solid #d8e0ea; border-left: 5px solid #2f6db2; border-radius: 8px; background: #fff; }
+.tn-report-row.urgent { border-color: #efb4ad; border-left-color: #c9362b; background: #fff7f6; }
+.tn-report-row.high { border-left-color: #d97706; }
+.tn-report-row > div:first-child { display: grid; gap: 4px; min-width: 0; }
+.tn-report-row span, .tn-report-row small { color: #627087; font-size: 12px; font-weight: 800; }
+.tn-report-row strong { font-size: 15px; }
+.tn-report-row p { margin: 0; font-size: 13px; }
+.tn-report-controls { display: grid; grid-template-columns: repeat(2, minmax(92px, 1fr)); gap: 8px; align-content: center; }
+.tn-report-controls button { border: 0; border-radius: 6px; background: #087f5b; color: #fff; font-weight: 900; }
+.tn-report-controls b { grid-column: 1 / -1; font-size: 12px; text-align: right; }
+@media (max-width: 720px) { .tn-report-card { padding: 16px; } .tn-report-row { grid-template-columns: 1fr; } .tn-report-controls b { text-align: left; } }
