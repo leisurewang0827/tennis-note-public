@@ -7590,7 +7590,7 @@ function installMemberLiveScheduleRefresh() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refresh();
   });
-  memberLiveScheduleRefreshTimer = window.setInterval(refresh, 60_000);
+  memberLiveScheduleRefreshTimer = window.setInterval(refresh, 30_000);
 }
 
 async function initApp() {
