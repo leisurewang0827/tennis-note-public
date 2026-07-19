@@ -4908,6 +4908,12 @@ function setNoticeDialogOpen(open) {
 }
 
 function showNoticeIfNeeded() {
+  // A required profile setup sheet must be the only blocking layer on first
+  // entry. Defer general notices until the member has completed that form.
+  if (!identityProfileComplete()) {
+    setNoticeDialogOpen(false);
+    return;
+  }
   const today = localDateKey();
   const activeNotices = [...activeNoticesForApp("member"), ...couponBookingPopupNotices()];
   const hiddenToday = new Set(state.noticeHiddenDate === today

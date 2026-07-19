@@ -1574,7 +1574,11 @@ function activateLiveCoachProfile(profileId) {
 async function applySupabaseCoachSession(showFromLogin = false) {
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready) return false;
-  const session = client.consumeOAuthRedirect?.() || client.getSession?.();
+  client.consumeOAuthRedirect?.();
+  // The member app restores a persisted login before reading its role. Do the
+  // same here so an approved coach is not sent back to the member app while
+  // the browser is still restoring the session after navigation.
+  const session = await client.ensureSession?.() || client.getSession?.();
   if (!session?.access_token) return false;
   try {
     const { user, profile, coachRole } = await client.selectCurrentProfile();
