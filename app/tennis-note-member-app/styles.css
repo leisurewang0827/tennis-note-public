@@ -1179,6 +1179,37 @@ button {
   }
 }
 
+/* Small-phone ergonomics: retain clear tap targets without wasting the first screen. */
+@media (max-width: 420px) {
+  .app-screen {
+    padding: max(10px, env(safe-area-inset-top)) 10px calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .tabbar {
+    gap: 3px;
+  }
+
+  .tab {
+    min-height: 42px;
+    padding: 7px 2px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .summary-grid article {
+    min-height: 104px;
+    padding: 11px;
+  }
+
+  .home-view .summary-grid .summary-card.primary {
+    min-height: 108px;
+  }
+
+  .section-title h2 {
+    font-size: 22px;
+  }
+}
+
 .grid-head,
 .grid-time,
 .cell {
@@ -3272,6 +3303,31 @@ textarea {
     min-height: 38px;
     padding: 0 13px;
     white-space: nowrap;
+  }
+}
+
+@media (max-width: 420px) {
+  .app-screen {
+    padding: max(10px, env(safe-area-inset-top)) 10px calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .tabbar .tab {
+    min-height: 44px;
+    padding: 4px 1px;
+    font-size: 10px;
+  }
+
+  .summary-grid article {
+    min-height: 104px;
+    padding: 11px;
+  }
+
+  .home-view .summary-grid .summary-card.primary {
+    min-height: 108px;
+  }
+
+  .section-title h2 {
+    font-size: 22px;
   }
 }
 
