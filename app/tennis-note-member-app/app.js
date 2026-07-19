@@ -7710,14 +7710,17 @@ async function initApp() {
   const hasStoredSession = Boolean(client?.getSession?.()?.access_token);
   const isModeTransition = Boolean(sessionStorage.getItem("tennis-note-member-mode-transition"));
   sessionStorage.removeItem("tennis-note-member-mode-transition");
+  const isRestoringSession = hasStoredSession || isModeTransition || window.location.hash.includes("access_token=");
   const canOpenRestoredMember = Boolean(isModeTransition && hasStoredSession && state.member);
   if (canOpenRestoredMember) {
     openAppFromSession(false);
     setMemberSessionRestoring(false);
   } else {
-    setMemberSessionRestoring(hasStoredSession || isModeTransition || window.location.hash.includes("access_token="));
+    setMemberSessionRestoring(isRestoringSession);
   }
-  hideBrandSplash();
+  // Keep the branded splash visible while a remembered session is confirmed.
+  // This prevents a short flash of the login screen on a normal app reopen.
+  if (!isRestoringSession || canOpenRestoredMember) hideBrandSplash();
 
   // These improve data freshness but must not delay opening the member screen.
   void syncLiveSchedulePolicy().then(() => renderActiveMemberView()).catch(() => {});
@@ -7730,6 +7733,7 @@ async function initApp() {
     if (status && isTransientNetworkError(error)) status.textContent = identityErrorMessage(error);
   }
   setMemberSessionRestoring(false);
+  if (isRestoringSession && !canOpenRestoredMember) hideBrandSplash();
   if (coachModeNavigationStarted) return;
   await handlePaymentRedirectResult();
   if (!openedFromSupabase && state.member) {
