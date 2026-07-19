@@ -6489,6 +6489,9 @@ function setNicknameStatus(targetId, message, tone = "") {
 
 function identityErrorMessage(error) {
   const code = String(error?.message || error || "").toLowerCase();
+  if (code.includes("failed to fetch") || code.includes("networkerror") || code.includes("load failed") || code.includes("temporarily_unavailable")) {
+    return "인터넷 연결이 불안정합니다. 입력 내용은 유지되니 잠시 후 다시 저장해 주세요.";
+  }
   if (code.includes("nickname_already_taken")) return "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해 주세요.";
   if (code.includes("nickname_invalid") || code.includes("nickname_length_invalid")) return "닉네임은 공백을 제외하고 2~20자로 입력해 주세요.";
   if (code.includes("real_name_invalid")) return "실명을 확인해 주세요.";
@@ -6558,7 +6561,7 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
 
   const client = window.TennisNoteDataClient;
   if (hasLiveMemberSession() && client?.rpc) {
-    const rawResult = await client.rpc("tn_update_my_identity_profile_v2", {
+    const rawResult = await retryTransientNetwork(() => client.rpc("tn_update_my_identity_profile_v2", {
       target_real_name: normalizedRealName,
       target_nickname: normalizedNickname,
       target_phone: normalizedPhone,
@@ -6566,7 +6569,7 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
       target_neighborhood: normalizedNeighborhood,
       target_gender: normalizedGender,
       target_privacy_version: identityPrivacyVersion,
-    });
+    }));
     const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
     if (!result?.ok || !result?.profile) throw new Error("identity_profile_update_not_confirmed");
     applySavedIdentity(result.profile);
@@ -6927,21 +6930,28 @@ async function applySupabaseMemberSession(showNotice = false) {
     if (profile?.play_style_memo) state.profile.styleMemo = profile.play_style_memo;
     if (profile?.ntrp_survey && typeof profile.ntrp_survey === "object") state.profile.ntrpSurvey = profile.ntrp_survey;
     state.profile.ntrpCheckRequested = Boolean(profile?.ntrp_requested_at && !profile?.coach_ntrp);
-    await syncLiveMembershipProductsFromServer();
-    await syncMemberEnrollmentFromServer(profile);
-    await syncMemberTicketsFromServer(profile);
-    await syncMemberLessonsFromServer(profile);
-    await syncMemberChangeRequestsFromServer(profile);
-    await syncMemberJournalEntriesFromServer(profile);
-    await syncMemberHoldingPolicyFromServer();
-    await syncMemberHoldingRequestsFromServer(profile);
-    await syncMemberAccountDeletionRequestFromServer(profile);
-    await syncMemberGroupAccountFromServer(profile);
-    await syncMemberNotificationsFromServer(profile);
-    await syncNativePushRegistration(profile, false);
-    openAppFromSession(showNotice);
+    openAppFromSession(false);
     renderAll();
     syncIdentitySetupModal(user);
+    saveSnapshot();
+    setMemberSessionRestoring(false);
+
+    await Promise.allSettled([
+      syncLiveMembershipProductsFromServer(),
+      syncMemberEnrollmentFromServer(profile),
+      syncMemberTicketsFromServer(profile),
+      syncMemberLessonsFromServer(profile),
+      syncMemberChangeRequestsFromServer(profile),
+      syncMemberJournalEntriesFromServer(profile),
+      syncMemberHoldingPolicyFromServer(),
+      syncMemberHoldingRequestsFromServer(profile),
+      syncMemberAccountDeletionRequestFromServer(profile),
+      syncMemberGroupAccountFromServer(profile),
+      syncMemberNotificationsFromServer(profile),
+      syncNativePushRegistration(profile, false),
+    ]);
+    renderAll();
+    if (showNotice && !isApprovalPending()) showNoticeAfterLiveSync();
     saveSnapshot();
     return true;
   } catch (error) {
@@ -7579,6 +7589,35 @@ function renderAll() {
   saveSnapshot();
 }
 
+function setMemberSessionRestoring(restoring) {
+  const indicator = $("#memberSessionRestoring");
+  document.body.classList.toggle("member-session-restoring", restoring);
+  if (indicator) indicator.hidden = !restoring;
+}
+
+function isTransientNetworkError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return error instanceof TypeError
+    || message.includes("failed to fetch")
+    || message.includes("networkerror")
+    || message.includes("load failed")
+    || message.includes("temporarily_unavailable");
+}
+
+async function retryTransientNetwork(operation, attempts = 3) {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientNetworkError(error) || attempt === attempts - 1) throw error;
+      await new Promise((resolve) => window.setTimeout(resolve, 600 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 function activeMemberViewId() {
   return $(".view.is-active")?.id || "homeView";
 }
@@ -7661,16 +7700,27 @@ async function initApp() {
   bindEvents();
   installMemberLiveScheduleRefresh();
   renderActiveMemberView();
+  const client = window.TennisNoteDataClient;
+  const hasStoredSession = Boolean(client?.getSession?.()?.access_token);
+  const isModeTransition = Boolean(sessionStorage.getItem("tennis-note-member-mode-transition"));
+  sessionStorage.removeItem("tennis-note-member-mode-transition");
+  setMemberSessionRestoring(hasStoredSession || isModeTransition || window.location.hash.includes("access_token="));
   hideBrandSplash();
 
   // These improve data freshness but must not delay opening the member screen.
   void syncLiveSchedulePolicy().then(() => renderActiveMemberView()).catch(() => {});
   void syncAppleLoginAvailability();
-  const openedFromSupabase = await applySupabaseMemberSession(true);
+  let openedFromSupabase = false;
+  try {
+    openedFromSupabase = await applySupabaseMemberSession(true);
+  } catch (error) {
+    const status = $("#memberEmailLoginStatus");
+    if (status && isTransientNetworkError(error)) status.textContent = identityErrorMessage(error);
+  }
+  setMemberSessionRestoring(false);
   if (coachModeNavigationStarted) return;
   await handlePaymentRedirectResult();
   if (!openedFromSupabase && state.member) {
-    const client = window.TennisNoteDataClient;
     const needsRealSession = client?.readiness?.().ready;
     const hasRealSession = Boolean(client?.getSession?.()?.access_token);
     if (needsRealSession && !hasRealSession) {
@@ -7678,11 +7728,15 @@ async function initApp() {
       state.coachModeAllowed = false;
       updateCoachModeAccess();
       saveSnapshot();
+      $("#loginScreen").hidden = false;
       return;
     }
     markTicketSyncLoginNeeded();
     openAppFromSession(true);
     renderAll();
+  } else if (!openedFromSupabase) {
+    $("#appScreen").hidden = true;
+    $("#loginScreen").hidden = false;
   }
 }
 

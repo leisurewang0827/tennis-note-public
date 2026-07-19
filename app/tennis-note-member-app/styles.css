@@ -152,6 +152,27 @@ button {
   padding: 20px;
 }
 
+.session-restoring {
+  min-height: 210px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  text-align: center;
+}
+.session-restoring[hidden] { display: none !important; }
+.session-restoring small { color: var(--muted); }
+.session-restoring-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #d8e7e2;
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: session-restoring-spin 0.8s linear infinite;
+}
+.member-session-restoring .login-card > :not(.session-restoring) { display: none !important; }
+@keyframes session-restoring-spin { to { transform: rotate(360deg); } }
+
 .login-card h2 {
   margin: 0 0 4px;
 }

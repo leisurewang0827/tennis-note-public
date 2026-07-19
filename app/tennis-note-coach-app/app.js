@@ -1613,6 +1613,7 @@ async function applySupabaseCoachSession(showFromLogin = false) {
 
 function openUserMode() {
   sessionStorage.setItem(appModePreferenceKey, "member");
+  sessionStorage.setItem("tennis-note-member-mode-transition", String(Date.now()));
   sessionStorage.removeItem("tennis-note-coach-mode-entry");
   saveSnapshot();
   window.location.href = memberModeUrl(true);

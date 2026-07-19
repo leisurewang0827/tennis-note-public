@@ -196,21 +196,46 @@
     return Boolean(expiresAt && Date.now() >= expiresAt - 60_000);
   }
 
+  function wait(milliseconds) {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  }
+
+  function transientNetworkError(error) {
+    const message = String(error?.message || error || "").toLowerCase();
+    return error instanceof TypeError
+      || message.includes("failed to fetch")
+      || message.includes("networkerror")
+      || message.includes("load failed");
+  }
+
   async function refreshSession() {
     const session = getSession();
     if (!session?.refresh_token || !readiness().ready) return null;
     const config = loadConfig();
-    const response = await fetch(authUrl("token?grant_type=refresh_token"), {
-      method: "POST",
-      headers: {
-        apikey: config.supabasePublishableKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ refresh_token: session.refresh_token }),
-    });
+    let response = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        response = await fetch(authUrl("token?grant_type=refresh_token"), {
+          method: "POST",
+          headers: {
+            apikey: config.supabasePublishableKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ refresh_token: session.refresh_token }),
+        });
+        if (response.ok || response.status < 500) break;
+      } catch (error) {
+        if (!transientNetworkError(error) || attempt === 1) throw error;
+      }
+      await wait(500 * (attempt + 1));
+    }
+    if (!response) throw new Error("session_refresh_temporarily_unavailable");
     if (!response.ok) {
-      removeStoredSession();
-      return null;
+      if (response.status === 400 || response.status === 401) {
+        removeStoredSession();
+        return null;
+      }
+      throw new Error("session_refresh_temporarily_unavailable");
     }
     const payload = await response.json();
     return saveSession({ ...payload, provider: session.provider });

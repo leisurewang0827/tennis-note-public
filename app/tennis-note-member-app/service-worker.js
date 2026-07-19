@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-member-pwa-v74";
+const CACHE_NAME = "tennis-note-member-pwa-v75";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
