@@ -1185,6 +1185,20 @@ h2 {
   border-left-color: var(--red);
 }
 
+.record-audit-card.urgent {
+  border-color: #efb4ad;
+  border-left-color: var(--red);
+  background: #fff7f6;
+}
+
+.record-urgent-reason {
+  display: block;
+  color: #b42318;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .record-audit-card > div {
   display: grid;
   gap: 4px;

@@ -5315,8 +5315,8 @@ function getAdminTasks() {
     .sort((left, right) => {
       const priorityDifference = (priorityByType[left.type] ?? 99) - (priorityByType[right.type] ?? 99);
       if (priorityDifference) return priorityDifference;
-      const deadlineDifference = String(left.dueAt || "9999-12-31").localeCompare(String(right.dueAt || "9999-12-31"));
-      return deadlineDifference || left.originalIndex - right.originalIndex;
+      const latestDifference = recordTimestamp(right.dueAt) - recordTimestamp(left.dueAt);
+      return latestDifference || left.originalIndex - right.originalIndex;
     });
 }
 
@@ -11740,6 +11740,7 @@ async function cancelBillingPaymentItem(item) {
 }
 
 function recordStatusBadge(record) {
+  if (record.priority === "urgent") return badge("danger", "긴급");
   const statusTone = {
     pending: "pending",
     feedback: "requested",
@@ -11766,7 +11767,29 @@ function legacyNoteRecord(note) {
   };
 }
 
+function recordTimestamp(value) {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function lessonEndTimestamp(lesson) {
+  if (!lesson?.lessonDate || !lesson?.time) return 0;
+  const start = new Date(`${lesson.lessonDate}T${lesson.time}:00`);
+  if (Number.isNaN(start.getTime())) return 0;
+  return start.getTime() + (Number(lesson.durationMinutes) || 20) * 60 * 1000;
+}
+
+function sortAdminRecords(records = []) {
+  const priorityScore = { urgent: 3, high: 2, normal: 1 };
+  return [...records].sort((left, right) => {
+    const priorityDifference = (priorityScore[right.priority] || 0) - (priorityScore[left.priority] || 0);
+    if (priorityDifference) return priorityDifference;
+    return recordTimestamp(right.sortAt) - recordTimestamp(left.sortAt);
+  });
+}
+
 function pendingLessonRecord(lesson) {
+  const endedAt = lessonEndTimestamp(lesson);
   return {
     id: `pending-lesson-${lesson.serverLessonId}`,
     group: "pending",
@@ -11779,6 +11802,9 @@ function pendingLessonRecord(lesson) {
     actionLabel: "처리하기",
     lessonId: lesson.serverLessonId,
     actionable: true,
+    priority: "urgent",
+    urgentReason: "수업 기록 미처리로 횟수 차감이 대기 중입니다.",
+    sortAt: endedAt ? new Date(endedAt).toISOString() : `${lesson.lessonDate || ""}T${lesson.time || "00:00"}:00`,
   };
 }
 
@@ -11810,23 +11836,25 @@ function memberJournalRecord(entry) {
     actionLabel: mediaCount ? "첨부 보기" : "확인",
     journalId: entry.id,
     mediaCount,
+    priority: "normal",
+    sortAt: entry.updated_at || entry.created_at || `${entry.entry_date || ""}T00:00:00`,
   };
 }
 
 function pendingLessonRecords() {
   const completedLessonIds = new Set((adminLiveDataState.lessonRecords || []).map((record) => record.lesson_id));
-  const today = adminLocalDateKey(new Date());
+  const now = Date.now();
   const ownRoleIds = currentOperationsCoachRoleIds();
   return lessons
     .filter((lesson) => (
       lesson.serverLessonId
       && !lesson.oneDayBooking
       && lesson.serverStatus === "scheduled"
-      && lesson.lessonDate <= today
+      && lessonEndTimestamp(lesson) > 0
+      && lessonEndTimestamp(lesson) <= now
       && !completedLessonIds.has(lesson.serverLessonId)
       && (operationsRole() === "admin" || ownRoleIds.has(lesson.coachRoleId))
     ))
-    .sort((left, right) => `${left.lessonDate} ${left.time}`.localeCompare(`${right.lessonDate} ${right.time}`))
     .map(pendingLessonRecord);
 }
 
@@ -11843,6 +11871,9 @@ function lessonLogRecord(log) {
     subDetail: log.coachComment ? `코치 코멘트: ${log.coachComment}` : "코치 코멘트 미등록",
     statusLabel: hasIssue ? "기록 보완 필요" : done ? "차감 완료" : "차감 대기",
     actionLabel: hasIssue ? "관리자 확인" : done ? "완료" : "코치앱 처리",
+    priority: hasIssue || !done ? "urgent" : "normal",
+    urgentReason: hasIssue ? "코멘트 또는 다음 커리큘럼 누락을 확인해야 합니다." : !done ? "기록 완료 전이라 횟수 차감이 대기 중입니다." : "",
+    sortAt: log.completedAt || log.submittedAt || log.updatedAt || log.date || "",
   };
 }
 
@@ -11858,12 +11889,55 @@ function feedbackRecord(request) {
     subDetail: request.coachFeedback ? `답변: ${request.coachFeedback}` : "코치 답변 대기",
     statusLabel: done ? "답변 완료" : "피드백 대기",
     actionLabel: done ? "완료" : "코치앱 답변",
+    priority: done ? "normal" : "high",
+    sortAt: request.updatedAt || request.createdAt || request.date || "",
   };
+}
+
+function urgentOperationsRecords() {
+  const paymentRecords = billings
+    .filter((item) => item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item))
+    .map((item) => ({
+      id: `urgent-payment-${item.serverPaymentId || item.providerPaymentId || item.member}`,
+      group: "pending",
+      source: "결제 오류",
+      member: item.member || "회원 확인 필요",
+      title: `${item.item || "회원권 결제"} 연결 누락`,
+      detail: `${money.format(Number(item.amount) || 0)}원 결제 후 회원권이 발급되지 않았습니다.`,
+      subDetail: "결제 확인 후 회원권 연결이 필요합니다.",
+      statusLabel: "긴급",
+      actionLabel: "결제 확인",
+      actionView: "billing",
+      priority: "urgent",
+      urgentReason: "결제 완료와 회원권 데이터가 일치하지 않습니다.",
+      sortAt: item.verifiedAt || item.paidAt || item.requestedAt || "",
+    }));
+  const makeupRecords = makeupRequests
+    .filter((item) => ["coach_required", "requested", "pending"].includes(item.status))
+    .map((item) => ({
+      id: `urgent-makeup-${item.id}`,
+      group: "pending",
+      source: "긴급 보강·변경",
+      member: item.member || "회원 확인 필요",
+      title: `${item.original || item.absence || "기존 수업"} 변경 요청`,
+      detail: `${item.requested || item.makeup || "변경 시간 확인 필요"} · ${item.reason || "사유 미입력"}`,
+      subDetail: item.policy || item.statusLabel || "승인 여부 확인 필요",
+      statusLabel: "긴급",
+      actionLabel: "시간표 확인",
+      actionView: "schedule",
+      priority: "urgent",
+      urgentReason: item.policy === "24시간 이내" || item.status === "coach_required"
+        ? "24시간 이내 수업에 영향을 주는 승인 요청입니다."
+        : "접수된 보강·변경 요청을 확인해야 합니다.",
+      sortAt: item.createdAt || item.requestedAt || item.requested || "",
+    }));
+  return paymentRecords.concat(makeupRecords);
 }
 
 function adminRecordGroups() {
   const shared = operationalSharedData();
   const records = [
+    ...urgentOperationsRecords(),
     ...pendingLessonRecords(),
     ...lessonNotes.map(legacyNoteRecord),
     ...shared.lessonLogs.map(lessonLogRecord),
@@ -11871,10 +11945,10 @@ function adminRecordGroups() {
     ...(adminLiveDataState.journalEntries || []).map(memberJournalRecord),
   ];
   return {
-    pending: records.filter((record) => record.group === "pending"),
-    feedback: records.filter((record) => record.group === "feedback"),
-    done: records.filter((record) => record.group === "done"),
-    issue: records.filter((record) => record.group === "issue"),
+    pending: sortAdminRecords(records.filter((record) => record.group === "pending")),
+    feedback: sortAdminRecords(records.filter((record) => record.group === "feedback")),
+    done: sortAdminRecords(records.filter((record) => record.group === "done")),
+    issue: sortAdminRecords(records.filter((record) => record.group === "issue")),
   };
 }
 
@@ -11894,16 +11968,17 @@ function renderNotes() {
   target.innerHTML = groups[activeFilter]
     .map(
       (record) => `
-        <article class="record-audit-card ${record.group}">
+        <article class="record-audit-card ${record.group} ${record.priority === "urgent" ? "urgent" : ""}">
           <div>
             <span>${escapeHtml(record.source)}</span>
             <strong>${escapeHtml(record.member)} · ${escapeHtml(record.title)}</strong>
+            ${record.urgentReason ? `<em class="record-urgent-reason">${escapeHtml(record.urgentReason)}</em>` : ""}
             <p>${escapeHtml(record.detail)}</p>
             <small>${escapeHtml(record.subDetail)}</small>
           </div>
           <aside>
             ${recordStatusBadge(record)}
-            ${record.actionable ? `<button class="small-button" type="button" data-open-lesson-record="${escapeHtml(record.lessonId)}">${escapeHtml(record.actionLabel)}</button>` : record.mediaCount ? `<button class="ghost-button" type="button" data-open-journal-media="${escapeHtml(record.journalId)}">${escapeHtml(record.actionLabel)}</button>` : `<b>${escapeHtml(record.actionLabel)}</b>`}
+            ${record.actionable ? `<button class="small-button" type="button" data-open-lesson-record="${escapeHtml(record.lessonId)}">${escapeHtml(record.actionLabel)}</button>` : record.actionView ? `<button class="small-button" type="button" data-record-action-view="${escapeHtml(record.actionView)}">${escapeHtml(record.actionLabel)}</button>` : record.mediaCount ? `<button class="ghost-button" type="button" data-open-journal-media="${escapeHtml(record.journalId)}">${escapeHtml(record.actionLabel)}</button>` : `<b>${escapeHtml(record.actionLabel)}</b>`}
           </aside>
         </article>`,
     )
@@ -13108,6 +13183,7 @@ async function syncAdminLiveData() {
         reason: request.reason || "",
         status: request.status,
         statusLabel,
+        createdAt: request.created_at || request.updated_at || "",
       };
     });
     replaceArray(makeupRequests, mappedEntitlementRequests.concat(mappedChangeRequests));
@@ -17002,6 +17078,12 @@ function bindEvents() {
     const lessonRecordButton = event.target.closest("[data-open-lesson-record]");
     if (lessonRecordButton) {
       openLessonRecordModal(lessonRecordButton.dataset.openLessonRecord);
+      return;
+    }
+
+    const recordActionButton = event.target.closest("[data-record-action-view]");
+    if (recordActionButton) {
+      setView(recordActionButton.dataset.recordActionView);
       return;
     }
 
