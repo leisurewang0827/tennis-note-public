@@ -1449,7 +1449,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.30" });
+  const params = new URLSearchParams({ v: "1.0.31" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -4314,11 +4314,16 @@ async function initCoachApp() {
   bindEvents();
   installCoachLiveScheduleRefresh();
   renderAll();
+  const client = window.TennisNoteDataClient;
+  const hasStoredSession = Boolean(client?.getSession?.()?.access_token);
+  if (hasStoredSession && state.coach) openCoachApp(false);
+  hideCoachBrandSplash();
   void syncLiveSchedulePolicy().then(() => renderAll()).catch(() => {});
 
   const openedFromSupabase = await applySupabaseCoachSession(false);
   if (!openedFromSupabase || !state.coach) {
-    returnToMemberEntry(true);
+    const sessionStillAvailable = Boolean(client?.getSession?.()?.access_token);
+    if (!sessionStillAvailable || !state.coach) returnToMemberEntry(true);
   }
 }
 
