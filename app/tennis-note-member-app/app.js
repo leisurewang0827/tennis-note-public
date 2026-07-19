@@ -597,6 +597,16 @@ const appModePreferenceKey = "tennis-note-app-mode";
 const legacyDemoStorageKeys = ["tennis-note-member-demo-v1", "tennis-note-coach-demo-v1", "tennis-note-shared-demo-v1"];
 let coachModeNavigationStarted = false;
 
+function safeLocalStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    if (error?.name !== "QuotaExceededError") console.warn("임시 저장 실패", error);
+    return false;
+  }
+}
+
 function purgeLegacyDemoStorage() {
   legacyDemoStorageKeys.forEach((key) => localStorage.removeItem(key));
 }
@@ -771,7 +781,7 @@ function loadSharedData() {
 }
 
 function saveSharedData(shared) {
-  localStorage.setItem(sharedStorageKey, JSON.stringify(shared));
+  safeLocalStorageSet(sharedStorageKey, JSON.stringify(shared));
 }
 
 function normalizeAppNotice(notice = {}) {
@@ -1413,7 +1423,25 @@ function ensureScheduleBaseline() {
 }
 
 function saveSnapshot() {
-  localStorage.setItem(storageKey, JSON.stringify({ state, lessons }));
+  const serialized = JSON.stringify({ state, lessons }, (key, value) => {
+    if (key === "photoDataUrl" && typeof value === "string" && value.startsWith("data:")) return "";
+    if (key === "url" && typeof value === "string" && (value.startsWith("blob:") || value.startsWith("data:"))) return "";
+    return value;
+  });
+  if (safeLocalStorageSet(storageKey, serialized)) return;
+  localStorage.removeItem(storageKey);
+  const compact = {
+    state: {
+      dataMode: state.dataMode,
+      member: state.member,
+      profile: { ...state.profile, photoDataUrl: "" },
+      coachModeAllowed: state.coachModeAllowed,
+      selectedPaymentMethod: state.selectedPaymentMethod,
+      pendingPurchaseProductId: state.pendingPurchaseProductId,
+    },
+    lessons: [],
+  };
+  safeLocalStorageSet(storageKey, JSON.stringify(compact));
 }
 
 function $(selector) {
@@ -1489,7 +1517,7 @@ function currentPushDeviceId() {
   let deviceId = localStorage.getItem(pushDeviceStorageKey) || "";
   if (!deviceId) {
     deviceId = globalThis.crypto?.randomUUID?.() || `device-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    localStorage.setItem(pushDeviceStorageKey, deviceId);
+    safeLocalStorageSet(pushDeviceStorageKey, deviceId);
   }
   return deviceId;
 }
@@ -1873,7 +1901,7 @@ function writeLiveSchedulePolicySnapshot(value = {}) {
   const scheduleSettings = value.scheduleSettings || {};
   const coaches = Array.isArray(value.coaches) ? value.coaches : [];
   if (!scheduleSettings.openStart && !scheduleSettings.openEnd && !coaches.length) return false;
-  localStorage.setItem(adminStorageKey, JSON.stringify({
+  safeLocalStorageSet(adminStorageKey, JSON.stringify({
     ...existing,
     scheduleSettings: {
       ...(existing.scheduleSettings || {}),
