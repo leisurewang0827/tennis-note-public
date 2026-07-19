@@ -5358,3 +5358,107 @@ body {
     word-break: keep-all;
   }
 }
+.member-schedule-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 4px;
+  border: 1px solid #d8e1e8;
+  background: #f4f7f8;
+}
+
+.member-schedule-mode-button {
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  color: #52616b;
+  font-weight: 700;
+}
+
+.member-schedule-mode-button.is-active {
+  background: #13795b;
+  color: #fff;
+}
+
+.member-own-schedule {
+  border: 1px solid #d8e1e8;
+  background: #fff;
+  padding: 14px;
+}
+
+.member-own-schedule-head,
+.member-own-lesson {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.member-own-schedule-head {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.member-own-lesson-list {
+  display: grid;
+  gap: 8px;
+}
+
+.member-own-lesson {
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid #d8e1e8;
+  background: #f9fbfb;
+  text-align: left;
+}
+
+.member-own-lesson-date {
+  flex: 0 0 82px;
+  color: #13795b;
+  font-weight: 800;
+}
+
+.member-own-lesson-detail {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.member-own-lesson-detail small {
+  color: #667780;
+}
+
+.member-own-lesson-action {
+  color: #2f5fae;
+  font-weight: 700;
+}
+
+.change-step-heading {
+  margin: 4px 0 0;
+  font-weight: 800;
+}
+
+.visually-hidden-select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+}
+
+@media (max-width: 520px) {
+  .member-own-schedule {
+    padding: 10px;
+  }
+
+  .member-own-lesson {
+    gap: 8px;
+  }
+
+  .member-own-lesson-date {
+    flex-basis: 72px;
+  }
+}

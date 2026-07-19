@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.33" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.34" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-1" />
   </head>
   <body>
@@ -164,15 +164,14 @@
           </button>
         </section>
 
-        <section id="scheduleView" class="view" aria-label="전체 시간표">
+        <section id="scheduleView" class="view" aria-label="레슨 일정">
           <div class="section-title">
-            <h2>전체 시간표</h2>
+            <h2>레슨 일정</h2>
             <button class="small-button title-action" type="button" id="openChangeHistory">요청 내역</button>
           </div>
-          <div class="schedule-legend" aria-label="시간표 색상 안내">
-            <span class="legend-chip mine">내 기존시간</span>
-            <span class="legend-chip available">변경 가능</span>
-            <span class="legend-chip approval">승인 필요</span>
+          <div class="member-schedule-mode" aria-label="시간표 보기 방식">
+            <button class="member-schedule-mode-button is-active" type="button" data-member-schedule-mode="mine">내 일정</button>
+            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="availability">변경 가능한 시간</button>
           </div>
           <section id="makeupDueBanner" class="makeup-due-banner" hidden>
             <div>
@@ -736,18 +735,16 @@
         </div>
         <div class="form-card schedule-request-card">
           <label>
-            <span>변경할 기존 수업</span>
+            <span>1. 변경할 수업</span>
             <select id="absenceLesson"></select>
           </label>
-          <label>
-            <span>희망 변경 시간</span>
-            <select id="makeupSlot"></select>
-          </label>
+          <div class="change-step-heading">2. 새 시간 선택</div>
+          <select id="makeupSlot" class="visually-hidden-select" aria-label="선택한 변경 시간"></select>
           <div id="availableSlotList" class="slot-list" aria-label="변경 가능한 시간"></div>
           <p id="changePolicyNote" class="policy-note">24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요</p>
           <label id="changeReasonField">
-            <span>변경 이유</span>
-            <textarea id="changeReason" rows="3" minlength="2" maxlength="200" required placeholder="예: 회사 일정, 가족 일정, 컨디션 문제 등"></textarea>
+            <span>3. 이유</span>
+            <textarea id="changeReason" rows="2" minlength="2" maxlength="100" required placeholder="간단히 입력해 주세요"></textarea>
           </label>
           <div class="modal-actions">
             <button class="primary-button" type="button" id="requestMakeup">수업 변경 요청</button>
@@ -855,12 +852,12 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.33"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.34"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.33"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.34"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-1"></script>
-    <script src="./app.js?v=1.0.33"></script>
+    <script src="./app.js?v=1.0.34"></script>
   </body>
 </html>

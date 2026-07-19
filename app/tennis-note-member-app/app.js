@@ -34,6 +34,7 @@ const state = {
   activeMemberWeekIndex: 0,
   selectedScheduleDay: "",
   scheduleTimeRange: "lesson",
+  memberScheduleMode: "mine",
   activeJournalMonth: "2026-07",
   selectedJournalDate: "2026-07-03",
   journalSearchQuery: "",
@@ -2837,6 +2838,35 @@ function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
     </div>`;
 }
 
+function currentWeekMemberLessons() {
+  const week = activeMemberWeek();
+  return memberScheduleLessons()
+    .filter((lesson) => isCurrentMemberName(lesson.member) && ["scheduled", "requested", "makeup_due"].includes(lesson.status))
+    .filter((lesson) => !lesson.lessonDate || (lesson.lessonDate >= week.startDate && lesson.lessonDate <= week.endDate))
+    .sort((a, b) => `${a.lessonDate || ""} ${a.time || ""}`.localeCompare(`${b.lessonDate || ""} ${b.time || ""}`));
+}
+
+function renderMemberOwnSchedule() {
+  const ownLessons = currentWeekMemberLessons();
+  return `
+    <section class="member-own-schedule" aria-label="이번 주 내 일정">
+      <div class="member-own-schedule-head">
+        <strong>이번 주 내 수업</strong>
+        ${ownLessons.length ? `<button class="small-button" type="button" data-open-member-change>시간 변경</button>` : ""}
+      </div>
+      <div class="member-own-lesson-list">
+        ${ownLessons.length
+          ? ownLessons.map((lesson) => `
+              <button class="member-own-lesson" type="button" data-lesson="${lesson.id}">
+                <span class="member-own-lesson-date">${escapeHtml(lesson.day)} ${escapeHtml(lesson.time)}</span>
+                <span class="member-own-lesson-detail"><strong>${escapeHtml(memberCoachShortName(lesson.coach))}</strong><small>${escapeHtml(lesson.type || "레슨")}</small></span>
+                <span class="member-own-lesson-action">변경</span>
+              </button>`).join("")
+          : `<p class="member-mobile-empty">이번 주에 등록된 수업이 없습니다.</p>`}
+      </div>
+    </section>`;
+}
+
 function renderDynamicMemberSchedule() {
   const activeWeek = activeMemberWeek();
   $("#memberWeekSwitcher").innerHTML = `
@@ -2864,6 +2894,12 @@ function renderDynamicMemberSchedule() {
       return `${laneCount * memberScheduleCoachLaneWidth + Math.max(0, laneCount - 1) * 3}px`;
     })
     .join(" ");
+  const scheduleMode = state.memberScheduleMode || "mine";
+  $$("[data-member-schedule-mode]").forEach((button) => button.classList.toggle("is-active", button.dataset.memberScheduleMode === scheduleMode));
+  if (scheduleMode === "mine") {
+    $("#scheduleGrid").innerHTML = renderMemberOwnSchedule();
+    return;
+  }
   $("#scheduleGrid").innerHTML = `
     <div class="member-schedule-range-row" aria-label="시간 범위 필터">
       ${scheduleTimeRangeOptions()
@@ -6206,7 +6242,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.33" });
+  const params = new URLSearchParams({ v: "1.0.34" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -6379,8 +6415,16 @@ function changeMemberScheduleTimeRange(range) {
 }
 
 function openChangeRequestModal() {
+  renderSelects();
+  renderAvailableSlots();
   renderChangeModalSummary();
   $("#changeRequestModal").hidden = false;
+}
+
+function changeMemberScheduleMode(mode) {
+  state.memberScheduleMode = mode === "availability" ? "availability" : "mine";
+  renderSchedule();
+  saveSnapshot();
 }
 
 function closeChangeRequestModal() {
@@ -7427,6 +7471,15 @@ function bindEvents() {
     }
     const button = event.target.closest("[data-member-schedule-time-range]");
     if (button) changeMemberScheduleTimeRange(button.dataset.memberScheduleTimeRange);
+  });
+  $$('[data-member-schedule-mode]').forEach((button) => {
+    button.addEventListener("click", () => changeMemberScheduleMode(button.dataset.memberScheduleMode));
+  });
+  $("#scheduleGrid")?.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-open-member-change]")) return;
+    const firstLesson = currentScheduledLessonsForChange()[0];
+    if (firstLesson && $("#absenceLesson")) $("#absenceLesson").value = firstLesson.id;
+    openChangeRequestModal();
   });
   $("#availableSlotList")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-select-slot]");

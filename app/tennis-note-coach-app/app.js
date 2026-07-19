@@ -1449,7 +1449,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.33" });
+  const params = new URLSearchParams({ v: "1.0.34" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1939,8 +1939,6 @@ function renderTodayLessons() {
                                   <button class="board-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${coachColorClass(lesson.coach)} ${lesson.remaining <= 2 ? "needs-renewal" : ""}" style="${coachLessonColorStyle(lesson, schedulePolicy)}" type="button" data-edit-lesson-id="${lesson.id}">
                                     <strong>${lesson.member}</strong>
                                     <span>${lesson.type}</span>
-                                    <small>잔여 ${lesson.remaining}회 · ${lesson.status}</small>
-                                    ${lesson.remaining <= 2 ? "<b>재등록 안내</b>" : ""}
                                   </button>`,
                               )
                               .join("") || "<p class='empty-text'>이 시간에 확정된 레슨은 없습니다.</p>"}
