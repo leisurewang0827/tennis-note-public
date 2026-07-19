@@ -8,6 +8,9 @@ const state = {
     name: "",
     nickname: "",
     phone: "",
+    birthYear: "",
+    neighborhood: "",
+    gender: "",
     profileCompletedAt: "",
     privacyConsentVersion: "",
     privacyConsentedAt: "",
@@ -107,7 +110,7 @@ const memberScheduleCoachLaneWidth = 64;
 const journalMediaBucket = "tennisnote-journal-media";
 const serverJournalSchema = "tennisnote-mobile-journal-v1";
 const memberEnrollmentFormVersion = "2026-07-15-v1";
-const identityPrivacyVersion = "2026-07-17-v1";
+const identityPrivacyVersion = "2026-07-19-v2";
 const memberEnrollmentLegacyDefaults = {
   lessonGoal: "미수집",
   preferredSchedule: "시간표에서 선택",
@@ -6455,11 +6458,16 @@ function identityProfileComplete() {
   const name = normalizeIdentityText(state.profile?.name || "");
   const nickname = normalizeIdentityText(state.profile?.nickname || "");
   const phone = normalizeIdentityPhone(state.profile?.phone || "");
+  const birthYear = Number(state.profile?.birthYear) || 0;
+  const gender = String(state.profile?.gender || "");
   return Boolean(
     name
       && name !== "가입 확인 중"
       && nickname.length >= 2
       && phone.length >= 10
+      && birthYear >= 1900
+      && birthYear <= new Date().getFullYear()
+      && ["female", "male", "other", "prefer_not"].includes(gender)
       && state.profile?.profileCompletedAt
       && state.profile?.privacyConsentVersion === identityPrivacyVersion,
   );
@@ -6479,6 +6487,8 @@ function identityErrorMessage(error) {
   if (code.includes("nickname_invalid") || code.includes("nickname_length_invalid")) return "닉네임은 공백을 제외하고 2~20자로 입력해 주세요.";
   if (code.includes("real_name_invalid")) return "실명을 확인해 주세요.";
   if (code.includes("phone_invalid")) return "휴대전화 번호를 010부터 정확히 입력해 주세요.";
+  if (code.includes("birth_year_invalid")) return "출생연도를 확인해 주세요.";
+  if (code.includes("gender_invalid")) return "성별을 선택해 주세요.";
   if (code.includes("privacy_consent")) return "개인정보 처리방침 동의가 필요합니다.";
   if (code.includes("login_required")) return "로그인 상태를 다시 확인해 주세요.";
   return "정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
@@ -6515,6 +6525,9 @@ function applySavedIdentity(profile = {}) {
   state.profile.name = normalizeIdentityText(profile.name || state.profile.name);
   state.profile.nickname = normalizeIdentityText(profile.nickname || state.profile.nickname);
   state.profile.phone = normalizeIdentityPhone(profile.phone || state.profile.phone);
+  state.profile.birthYear = profile.birth_year || state.profile.birthYear || "";
+  state.profile.neighborhood = normalizeIdentityText(profile.neighborhood || state.profile.neighborhood || "");
+  state.profile.gender = profile.gender || state.profile.gender || "";
   state.profile.profileCompletedAt = profile.profile_completed_at || state.profile.profileCompletedAt || new Date().toISOString();
   state.profile.privacyConsentVersion = profile.privacy_consent_version || state.profile.privacyConsentVersion || identityPrivacyVersion;
   state.profile.privacyConsentedAt = profile.privacy_consented_at || state.profile.privacyConsentedAt || new Date().toISOString();
@@ -6524,38 +6537,49 @@ function applySavedIdentity(profile = {}) {
   }
 }
 
-async function persistIdentityProfile({ realName, nickname, phone }) {
+async function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender }) {
   const normalizedRealName = normalizeIdentityText(realName);
   const normalizedNickname = normalizeIdentityText(nickname);
   const normalizedPhone = normalizeIdentityPhone(phone);
+  const normalizedBirthYear = Number(birthYear) || 0;
+  const normalizedNeighborhood = normalizeIdentityText(neighborhood);
+  const normalizedGender = String(gender || "");
   if (!normalizedRealName || normalizedRealName.length > 40) throw new Error("real_name_invalid");
   if (normalizedNickname.length < 2 || normalizedNickname.length > 20) throw new Error("nickname_invalid");
   if (!/^01[0-9]{8,9}$/u.test(normalizedPhone)) throw new Error("phone_invalid");
+  if (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear()) throw new Error("birth_year_invalid");
+  if (!["female", "male", "other", "prefer_not"].includes(normalizedGender)) throw new Error("gender_invalid");
 
   const client = window.TennisNoteDataClient;
   if (hasLiveMemberSession() && client?.rpc) {
-    const rawResult = await client.rpc("tn_update_my_identity_profile", {
+    const rawResult = await client.rpc("tn_update_my_identity_profile_v2", {
       target_real_name: normalizedRealName,
       target_nickname: normalizedNickname,
       target_phone: normalizedPhone,
+      target_birth_year: normalizedBirthYear,
+      target_neighborhood: normalizedNeighborhood,
+      target_gender: normalizedGender,
       target_privacy_version: identityPrivacyVersion,
     });
     const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
     if (!result?.ok || !result?.profile) throw new Error("identity_profile_update_not_confirmed");
     applySavedIdentity(result.profile);
-    return result.profile;
+    return result;
   }
 
   const profile = {
     name: normalizedRealName,
     nickname: normalizedNickname,
     phone: normalizedPhone,
+    birth_year: normalizedBirthYear,
+    neighborhood: normalizedNeighborhood,
+    gender: normalizedGender,
     profile_completed_at: new Date().toISOString(),
     privacy_consent_version: identityPrivacyVersion,
     privacy_consented_at: new Date().toISOString(),
   };
   applySavedIdentity(profile);
-  return profile;
+  return { ok: true, profile, linkStatus: "offline_preview" };
 }
 
 function populateIdentitySetup(user = null) {
@@ -6564,6 +6588,9 @@ function populateIdentitySetup(user = null) {
   if ($("#identityRealName")) $("#identityRealName").value = realName;
   if ($("#identityNickname")) $("#identityNickname").value = suggestedNickname;
   if ($("#identityPhone")) $("#identityPhone").value = formatIdentityPhone(state.profile.phone || "");
+  if ($("#identityBirthYear")) $("#identityBirthYear").value = state.profile.birthYear || state.member?.birthYear || "";
+  if ($("#identityNeighborhood")) $("#identityNeighborhood").value = state.profile.neighborhood || state.member?.neighborhood || "";
+  if ($("#identityGender")) $("#identityGender").value = state.profile.gender || state.member?.gender || "";
   if ($("#identityPrivacyConsent")) {
     $("#identityPrivacyConsent").checked = state.profile.privacyConsentVersion === identityPrivacyVersion;
   }
@@ -6598,15 +6625,22 @@ async function submitIdentitySetup(event) {
   button.disabled = true;
   if (message) message.textContent = "가입 정보를 안전하게 저장하고 있습니다.";
   try {
-    await persistIdentityProfile({
+    const result = await persistIdentityProfile({
       realName: $("#identityRealName")?.value,
       nickname: $("#identityNickname")?.value,
       phone: $("#identityPhone")?.value,
+      birthYear: $("#identityBirthYear")?.value,
+      neighborhood: $("#identityNeighborhood")?.value,
+      gender: $("#identityGender")?.value,
     });
     $("#identitySetupModal").hidden = true;
     document.body.classList.remove("identity-setup-required");
     renderAll();
     saveSnapshot();
+    if (result?.linkStatus === "admin_review_required") {
+      showToast("가입 완료. 기존 회원 정보는 관리자 확인 후 연결됩니다.");
+      return;
+    }
     showToast("가입 정보가 저장되었습니다.");
   } catch (error) {
     const errorMessage = identityErrorMessage(error);
@@ -6639,6 +6673,9 @@ async function saveProfileInfo() {
       realName: $("#profileRealNameInput")?.value,
       nickname: $("#profileNicknameInput")?.value,
       phone: $("#profilePhoneInput")?.value,
+      birthYear: state.profile.birthYear || state.member?.birthYear,
+      neighborhood: state.profile.neighborhood || state.member?.neighborhood,
+      gender: state.profile.gender || state.member?.gender,
     });
     setNicknameStatus("profileNicknameStatus", "실명과 닉네임을 확인했습니다.", "available");
   } catch (error) {
@@ -6853,6 +6890,9 @@ async function applySupabaseMemberSession(showNotice = false) {
     state.profile.name = profile?.name || "가입 확인 중";
     state.profile.nickname = profile?.nickname || "";
     state.profile.phone = profile?.phone || "";
+    state.profile.birthYear = profile?.birth_year || "";
+    state.profile.neighborhood = profile?.neighborhood || "";
+    state.profile.gender = profile?.gender || "";
     state.profile.profileCompletedAt = profile?.profile_completed_at || "";
     state.profile.privacyConsentVersion = profile?.privacy_consent_version || "";
     state.profile.privacyConsentedAt = profile?.privacy_consented_at || "";

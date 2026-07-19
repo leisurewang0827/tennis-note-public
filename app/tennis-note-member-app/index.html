@@ -608,6 +608,26 @@
             <span>휴대전화</span>
             <input id="identityPhone" type="tel" inputmode="numeric" maxlength="13" autocomplete="tel" placeholder="010-0000-0000" required />
           </label>
+          <div class="identity-demographics-grid">
+            <label>
+              <span>출생연도</span>
+              <input id="identityBirthYear" type="number" min="1900" max="2100" inputmode="numeric" autocomplete="bday-year" placeholder="예: 1990" required />
+            </label>
+            <label>
+              <span>성별</span>
+              <select id="identityGender" required>
+                <option value="">선택</option>
+                <option value="female">여성</option>
+                <option value="male">남성</option>
+                <option value="other">기타</option>
+                <option value="prefer_not">응답하지 않음</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            <span>거주 동네 <small>선택</small></span>
+            <input id="identityNeighborhood" type="text" maxlength="50" autocomplete="address-level3" placeholder="예: 화양동" />
+          </label>
           <label class="consent-row">
             <input id="identityPrivacyConsent" type="checkbox" required />
             <span><a href="../tennis-note-legal/privacy.html" target="_blank" rel="noreferrer">개인정보 처리방침</a>을 확인하고 동의합니다.</span>
