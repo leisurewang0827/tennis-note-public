@@ -179,12 +179,12 @@
         <section id="membersView" class="view" aria-label="회원관리">
           <div class="toolbar">
             <div class="segmented-control" role="group" aria-label="회원 상태">
-              <button class="segment is-active" type="button" data-member-filter="active">수강중</button>
-              <button class="segment" type="button" data-member-filter="expiring">만료임박</button>
-              <button class="segment" type="button" data-member-filter="expired">만료회원</button>
-              <button class="segment" type="button" data-member-filter="pending">가입대기</button>
-              <button class="segment" type="button" data-member-filter="journal">운동노트</button>
-              <button class="segment" type="button" data-member-filter="inactive" data-admin-only-member-filter>삭제회원</button>
+              <button class="segment is-active" type="button" data-member-filter="active"><span>수강중</span><strong data-member-filter-count="active">0</strong></button>
+              <button class="segment" type="button" data-member-filter="expiring"><span>만료임박</span><strong data-member-filter-count="expiring">0</strong></button>
+              <button class="segment" type="button" data-member-filter="expired"><span>만료회원</span><strong data-member-filter-count="expired">0</strong></button>
+              <button class="segment" type="button" data-member-filter="pending"><span>가입대기</span><strong data-member-filter-count="pending">0</strong></button>
+              <button class="segment" type="button" data-member-filter="journal"><span>운동노트</span><strong data-member-filter-count="journal">0</strong></button>
+              <button class="segment" type="button" data-member-filter="inactive" data-admin-only-member-filter><span>삭제회원</span><strong data-member-filter-count="inactive">0</strong></button>
             </div>
             <div class="toolbar-actions">
               <button id="openDataToolsButton" class="ghost-button" type="button">엑셀 관리</button>

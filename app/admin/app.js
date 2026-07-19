@@ -6486,6 +6486,22 @@ const memberFilterCopy = {
   inactive: { summary: "명 삭제", empty: "삭제 처리된 회원이 없습니다." },
 };
 
+function memberStatusCounts() {
+  return members.reduce((counts, member) => {
+    const status = memberListStatus(member);
+    if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
+    if (status === "active" && memberRemainingCount(member) <= 2) counts.expiring += 1;
+    return counts;
+  }, { active: 0, expiring: 0, expired: 0, pending: 0, journal: 0, inactive: 0 });
+}
+
+function renderMemberStatusCounts() {
+  const counts = memberStatusCounts();
+  $$('[data-member-filter-count]').forEach((badge) => {
+    badge.textContent = `${counts[badge.dataset.memberFilterCount] || 0}명`;
+  });
+}
+
 function renderMemberFilterSections() {
   const filter = state.memberFilter || "active";
   const role = operationsRole();
@@ -8254,6 +8270,7 @@ function renderMembers() {
   const filtered = filteredMembers();
   const filterCopy = memberFilterCopy[state.memberFilter] || memberFilterCopy.active;
   if ($("#memberFilterSummary")) $("#memberFilterSummary").textContent = `${filtered.length}${filterCopy.summary}`;
+  renderMemberStatusCounts();
   renderMemberFilterSections();
 
   const selectedIndex = filtered.findIndex((member) => member.id === state.selectedMemberId);

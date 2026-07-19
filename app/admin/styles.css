@@ -1391,9 +1391,29 @@ h2 {
 }
 
 #membersView > .toolbar .segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-width: 0;
   padding: 0 8px;
   font-size: 12px;
+}
+
+#membersView > .toolbar .segment [data-member-filter-count] {
+  min-width: 30px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface-muted, #eef3f8);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+#membersView > .toolbar .segment.is-active [data-member-filter-count] {
+  color: var(--blue);
+  background: white;
 }
 
 .segmented-control {
