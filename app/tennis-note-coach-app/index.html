@@ -1,5 +1,5 @@
 ﻿<!doctype html>
-<html lang="ko">
+<html lang="ko" data-tennisnote-surface="coach">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,6 +8,7 @@
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
     <link rel="stylesheet" href="./styles.css?v=coach-one-day-schedule-1" />
+    <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-1" />
   </head>
   <body>
     <section id="coachBrandSplash" class="brand-splash" role="status" aria-label="테니스노트 코치 모드 불러오는 중">
@@ -210,6 +211,7 @@
                 <b aria-hidden="true">←</b>
                 <span>회원 모드로 전환</span>
               </button>
+              <button class="small-button" type="button" data-open-product-report>불편·오류 접수</button>
               <button class="small-button danger-button" type="button" id="coachLogoutButton">로그아웃</button>
             </div>
           </section>
@@ -239,7 +241,8 @@
     <script src="../shared/config.local.js?v=local"></script>
     <script src="../shared/tennisnote-data-client.js?v=member-demographics-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=release-14"></script>
+    <script src="../shared/tennisnote-release.js?v=release-19"></script>
+    <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-1"></script>
     <script src="./app.js?v=coach-one-day-schedule-1"></script>
   </body>
 </html>

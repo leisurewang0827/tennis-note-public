@@ -1142,7 +1142,7 @@ const adminImportAuthState = {
   message: "관리자 로그인 상태 확인 전입니다.",
 };
 
-const coachOperationsViews = new Set(["members", "schedule", "notes"]);
+const coachOperationsViews = new Set(["members", "schedule", "notes", "issues"]);
 const operationsRememberStorageKey = "tennis-note-operations-remember-login";
 
 function operationsRole() {
@@ -4858,6 +4858,7 @@ function setView(view, options = {}) {
     schedule: "레슨시간표",
     billing: "결제/정산",
     notes: "기록/차감 확인",
+    issues: "개선·오류 접수",
     settings: "운영 설정",
   };
   $("#viewTitle").textContent = titles[view];

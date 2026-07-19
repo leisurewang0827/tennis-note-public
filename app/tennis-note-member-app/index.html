@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-tennisnote-surface="member">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -12,6 +12,7 @@
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
     <link rel="stylesheet" href="./styles.css?v=member-one-day-availability-1" />
+    <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-1" />
   </head>
   <body>
     <section id="brandSplash" class="brand-splash" role="status" aria-label="Tennis Note 불러오는 중">
@@ -409,6 +410,14 @@
               <span class="settings-row-copy">
                 <strong>카카오 문의</strong>
                 <small>운영시간과 문의 방법 확인</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
+            <button class="settings-row" type="button" data-open-product-report>
+              <span class="settings-row-icon" aria-hidden="true">!</span>
+              <span class="settings-row-copy">
+                <strong>불편·오류 접수</strong>
+                <small>사용 중 불편하거나 이상한 점을 알려주세요</small>
               </span>
               <span class="settings-row-arrow" aria-hidden="true">›</span>
             </button>
@@ -825,7 +834,8 @@
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=release-14"></script>
+    <script src="../shared/tennisnote-release.js?v=release-19"></script>
+    <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-1"></script>
     <script src="./app.js?v=member-one-day-availability-1"></script>
   </body>
 </html>

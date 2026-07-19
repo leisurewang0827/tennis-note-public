@@ -1,12 +1,13 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-tennisnote-surface="admin">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=admin-priority-records-1" />
+    <link rel="stylesheet" href="./styles.css?v=admin-issue-reports-1" />
+    <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-1" />
   </head>
   <body>
     <section id="operationsLoginGate" class="operations-login-gate" aria-labelledby="operationsLoginTitle">
@@ -53,6 +54,7 @@
           <button class="nav-item" type="button" data-view="schedule">레슨시간표</button>
           <button class="nav-item" type="button" data-view="billing">결제/정산</button>
           <button class="nav-item" type="button" data-view="notes">기록/차감 확인</button>
+          <button class="nav-item" type="button" data-view="issues">개선·오류 접수</button>
           <button class="nav-item" type="button" data-view="settings">운영 설정</button>
         </nav>
       </aside>
@@ -159,6 +161,19 @@
               <div id="dashboardReportSummary" class="dashboard-report-summary"></div>
             </section>
           </div>
+        </section>
+
+        <section id="issuesView" class="view" aria-label="개선·오류 접수">
+          <section class="panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">서비스 개선</p><h2>개선·오류 접수</h2></div>
+              <div class="toolbar-actions">
+                <button class="ghost-button" type="button" data-product-report-refresh>새로고침</button>
+                <button class="primary-button" type="button" data-open-product-report>직접 접수</button>
+              </div>
+            </div>
+            <div class="tn-report-list" data-product-report-list><p>접수 내역을 불러오려면 새로고침을 눌러주세요.</p></div>
+          </section>
         </section>
 
         <section id="membersView" class="view" aria-label="회원관리">
@@ -1253,7 +1268,8 @@
     <script src="../shared/tennisnote-data-client.js?v=member-demographics-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=release-18"></script>
-    <script src="./app.js?v=admin-priority-records-1"></script>
+    <script src="../shared/tennisnote-release.js?v=release-19"></script>
+    <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-1"></script>
+    <script src="./app.js?v=admin-issue-reports-1"></script>
   </body>
 </html>
