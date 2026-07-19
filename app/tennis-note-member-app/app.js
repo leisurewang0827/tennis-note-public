@@ -2519,13 +2519,13 @@ function renderProfile() {
   setProfileFieldValue("#profileRealNameInput", realName === "가입 확인 중" ? "" : realName);
   setProfileFieldValue("#profileNicknameInput", state.profile.nickname || "");
   setProfileFieldValue("#profilePhoneInput", formatIdentityPhone(state.profile.phone || ""));
-  if ($("#profileHand")) $("#profileHand").value = state.profile.hand || "오른손";
-  if ($("#profileBackhand")) $("#profileBackhand").value = state.profile.backhand || "투핸드 백핸드";
-  if ($("#profileStartedAt")) $("#profileStartedAt").value = state.profile.startedAt || "";
-  if ($("#profileGoal")) $("#profileGoal").value = state.profile.goal || "";
-  if ($("#profileStyleMemo")) $("#profileStyleMemo").value = state.profile.styleMemo || "";
-  if ($("#profileSelfNtrp")) $("#profileSelfNtrp").value = state.profile.selfNtrp || "2.5";
-  if ($("#profileCoachNtrp")) $("#profileCoachNtrp").value = state.profile.coachNtrp || "측정 전";
+  setProfileFieldValue("#profileHand", state.profile.hand || "오른손");
+  setProfileFieldValue("#profileBackhand", state.profile.backhand || "투핸드 백핸드");
+  setProfileFieldValue("#profileStartedAt", state.profile.startedAt || "");
+  setProfileFieldValue("#profileGoal", state.profile.goal || "");
+  setProfileFieldValue("#profileStyleMemo", state.profile.styleMemo || "");
+  setProfileFieldValue("#profileSelfNtrp", state.profile.selfNtrp || "2.5");
+  setProfileFieldValue("#profileCoachNtrp", state.profile.coachNtrp || "측정 전");
   if ($("#ntrpPanel")) {
     $("#ntrpPanel").innerHTML = `
       <article>
@@ -6668,11 +6668,25 @@ async function updateMemberProfileOnServer(values = {}) {
 }
 
 async function saveProfileInfo() {
+  // Capture the complete draft before the identity request. A background refresh
+  // must not be able to replace goal or memo text while that request is pending.
+  const draft = {
+    realName: $("#profileRealNameInput")?.value,
+    nickname: $("#profileNicknameInput")?.value,
+    phone: $("#profilePhoneInput")?.value,
+    hand: $("#profileHand")?.value || state.profile.hand,
+    backhand: $("#profileBackhand")?.value || state.profile.backhand,
+    startedAt: $("#profileStartedAt")?.value || "",
+    goal: $("#profileGoal")?.value.trim() || "",
+    styleMemo: $("#profileStyleMemo")?.value.trim() || "",
+    selfNtrp: $("#profileSelfNtrp")?.value || state.profile.selfNtrp,
+    ntrpSurvey: collectNtrpSurvey().answers,
+  };
   try {
     await persistIdentityProfile({
-      realName: $("#profileRealNameInput")?.value,
-      nickname: $("#profileNicknameInput")?.value,
-      phone: $("#profilePhoneInput")?.value,
+      realName: draft.realName,
+      nickname: draft.nickname,
+      phone: draft.phone,
       birthYear: state.profile.birthYear || state.member?.birthYear,
       neighborhood: state.profile.neighborhood || state.member?.neighborhood,
       gender: state.profile.gender || state.member?.gender,
@@ -6684,13 +6698,13 @@ async function saveProfileInfo() {
     showToast(errorMessage);
     return;
   }
-  state.profile.hand = $("#profileHand")?.value || state.profile.hand;
-  state.profile.backhand = $("#profileBackhand")?.value || state.profile.backhand;
-  state.profile.startedAt = $("#profileStartedAt")?.value || "";
-  state.profile.goal = $("#profileGoal")?.value.trim() || "";
-  state.profile.styleMemo = $("#profileStyleMemo")?.value.trim() || "";
-  state.profile.selfNtrp = $("#profileSelfNtrp")?.value || state.profile.selfNtrp;
-  state.profile.ntrpSurvey = collectNtrpSurvey().answers;
+  state.profile.hand = draft.hand;
+  state.profile.backhand = draft.backhand;
+  state.profile.startedAt = draft.startedAt;
+  state.profile.goal = draft.goal;
+  state.profile.styleMemo = draft.styleMemo;
+  state.profile.selfNtrp = draft.selfNtrp;
+  state.profile.ntrpSurvey = draft.ntrpSurvey;
   const serverResult = await updateMemberProfileOnServer({
     profile_photo_url: state.profile.photoDataUrl || null,
     dominant_hand: state.profile.hand || null,

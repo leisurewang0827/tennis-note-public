@@ -1893,11 +1893,17 @@ function renderCoachProfile() {
   renderPersonAvatar($("#coachTopAvatar"), profilePerson, "small");
   if ($("#coachProfileName")) $("#coachProfileName").textContent = name;
   if ($("#coachProfileSummary")) $("#coachProfileSummary").textContent = profile.specialty;
-  if ($("#coachIntro")) $("#coachIntro").value = profile.intro || "";
-  if ($("#coachSpecialty")) $("#coachSpecialty").value = profile.specialty || "";
-  if ($("#coachLessonStyle")) $("#coachLessonStyle").value = profile.lessonStyle || "";
-  if ($("#coachAvailableMemo")) $("#coachAvailableMemo").value = profile.availableMemo || "";
-  if ($("#coachMemberMessage")) $("#coachMemberMessage").value = profile.memberMessage || "";
+  // Schedule data refreshes in the background. Keep a coach's in-progress
+  // introduction draft intact instead of repainting it with the last saved value.
+  const setCoachProfileFieldValue = (selector, value) => {
+    const field = $(selector);
+    if (field && document.activeElement !== field) field.value = value;
+  };
+  setCoachProfileFieldValue("#coachIntro", profile.intro || "");
+  setCoachProfileFieldValue("#coachSpecialty", profile.specialty || "");
+  setCoachProfileFieldValue("#coachLessonStyle", profile.lessonStyle || "");
+  setCoachProfileFieldValue("#coachAvailableMemo", profile.availableMemo || "");
+  setCoachProfileFieldValue("#coachMemberMessage", profile.memberMessage || "");
 }
 
 function renderTodayLessons() {
@@ -2874,16 +2880,21 @@ function selectCoachMode(name) {
 function saveCoachProfile() {
   const name = currentCoachName();
   const existing = state.coachProfiles[name] || {};
-  state.coachProfiles[name] = {
-    ...existing,
+  // Read the whole form before any UI refresh can run.
+  const draft = {
     intro: $("#coachIntro")?.value.trim() || "",
     specialty: $("#coachSpecialty")?.value.trim() || "",
     lessonStyle: $("#coachLessonStyle")?.value.trim() || "",
     availableMemo: $("#coachAvailableMemo")?.value.trim() || "",
     memberMessage: $("#coachMemberMessage")?.value.trim() || "",
   };
+  state.coachProfiles[name] = {
+    ...existing,
+    ...draft,
+  };
   renderCoachProfile();
   saveSnapshot();
+  showToast("내 정보가 저장되었습니다.");
 }
 
 function updateCoachPhoto(file) {
