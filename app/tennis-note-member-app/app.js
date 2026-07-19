@@ -6201,7 +6201,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "coach-one-day-schedule-1" });
+  const params = new URLSearchParams({ v: "1.0.29" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -6883,11 +6883,7 @@ async function applySupabaseMemberSession(showNotice = false) {
   const session = await client.ensureSession?.() || client.getSession?.();
   if (!session?.access_token) return false;
   try {
-    let current = await client.selectCurrentProfile();
-    if (!current?.profile) {
-      await client.bootstrapCurrentProfile?.({ providerHint: session.provider || "" });
-      current = await client.selectCurrentProfile();
-    }
+    const current = await client.selectCurrentProfile();
     const { user, profile, coachRole } = current;
     activateLiveMemberProfile(profile?.id);
     const displayName = profile?.name || state.profile?.name || "가입 확인 중";

@@ -4,6 +4,8 @@
   const authPersistenceKey = "tennis-note-auth-persistence";
   const nativeUrlFingerprintKey = "tennis-note-native-url-fingerprint";
   const placeholderMarkers = ["your_", "_here", "publishable_key"];
+  let sessionRefreshPromise = null;
+  let currentProfilePromise = null;
 
   function parseStoredConfig() {
     try {
@@ -208,7 +210,7 @@
       || message.includes("load failed");
   }
 
-  async function refreshSession() {
+  async function performRefreshSession() {
     const session = getSession();
     if (!session?.refresh_token || !readiness().ready) return null;
     const config = loadConfig();
@@ -239,6 +241,15 @@
     }
     const payload = await response.json();
     return saveSession({ ...payload, provider: session.provider });
+  }
+
+  function refreshSession() {
+    if (!sessionRefreshPromise) {
+      sessionRefreshPromise = performRefreshSession().finally(() => {
+        sessionRefreshPromise = null;
+      });
+    }
+    return sessionRefreshPromise;
   }
 
   async function ensureSession() {
@@ -658,7 +669,7 @@
     return true;
   }
 
-  async function selectCurrentProfile() {
+  async function performSelectCurrentProfile() {
     const session = getSession();
     const user = await getAuthUser();
     if (!user?.id) return { user, profile: null };
@@ -713,6 +724,15 @@
     }
 
     return { user, profile, coachRole };
+  }
+
+  function selectCurrentProfile() {
+    if (!currentProfilePromise) {
+      currentProfilePromise = performSelectCurrentProfile().finally(() => {
+        currentProfilePromise = null;
+      });
+    }
+    return currentProfilePromise;
   }
 
   async function signOut() {

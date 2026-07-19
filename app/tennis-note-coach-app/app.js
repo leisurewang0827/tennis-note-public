@@ -72,7 +72,7 @@ const noticeSessionSeenIds = new Set();
 let noticePreviousFocus = null;
 
 const brandSplashStartedAt = performance.now();
-const brandSplashMinimumDuration = 600;
+const brandSplashMinimumDuration = 150;
 
 function hideCoachBrandSplash() {
   const splash = document.querySelector("#coachBrandSplash");
@@ -1449,7 +1449,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "member-one-day-availability-1" });
+  const params = new URLSearchParams({ v: "1.0.29" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1600,10 +1600,14 @@ async function applySupabaseCoachSession(showFromLogin = false) {
       role: profile?.role || "coach",
     };
     state.selectedCoachName = displayName;
-    await syncCoachLessonsFromServer();
-    await syncCoachJournalEntriesFromServer();
     renderAll();
     openCoachApp(showFromLogin);
+    saveSnapshot();
+    await Promise.allSettled([
+      syncCoachLessonsFromServer(),
+      syncCoachJournalEntriesFromServer(),
+    ]);
+    renderAll();
     saveSnapshot();
     return true;
   } catch (error) {
@@ -4307,10 +4311,10 @@ async function initCoachApp() {
   registerPwaServiceWorker();
   purgeLegacyDemoStorage();
   restoreSnapshot();
-  await syncLiveSchedulePolicy();
   bindEvents();
   installCoachLiveScheduleRefresh();
   renderAll();
+  void syncLiveSchedulePolicy().then(() => renderAll()).catch(() => {});
 
   const openedFromSupabase = await applySupabaseCoachSession(false);
   if (!openedFromSupabase || !state.coach) {

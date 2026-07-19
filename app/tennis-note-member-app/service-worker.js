@@ -1,20 +1,20 @@
-const CACHE_NAME = "tennis-note-member-pwa-v75";
+const CACHE_NAME = "tennis-note-member-pwa-v76";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
+  "./styles.css?v=1.0.29",
+  "./app.js?v=1.0.29",
   "./manifest.webmanifest",
   "./assets/brand/app-icon-180.png",
   "./assets/brand/app-icon-192.png",
   "./assets/brand/app-icon-512.png",
   "./assets/brand/launch-splash.png",
-  "../shared/tennisnote-data-client.js",
+  "../shared/tennisnote-data-client.js?v=1.0.29",
   "../shared/tennisnote-product-catalog.js",
   "../shared/tennisnote-curriculum-catalog.js",
   "../shared/tennisnote-native-push.js",
-  "../shared/tennisnote-release.js",
+  "../shared/tennisnote-release.js?v=1.0.29",
   "../shared/tennisnote-issue-reporter.js",
   "../shared/tennisnote-issue-reporter.css",
 ];
@@ -46,11 +46,28 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  const alwaysFresh = ["document", "script", "style", "manifest", "worker"].includes(event.request.destination)
-    || url.pathname.endsWith("/config.local.js");
+  const networkFirst = event.request.destination === "document" || url.pathname.endsWith("/config.local.js");
+  const cacheFirst = ["script", "style", "manifest", "worker"].includes(event.request.destination);
+
+  if (cacheFirst) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(event.request);
+      const update = fetch(event.request, { cache: "no-store" }).then((response) => {
+        if (response.ok) cache.put(event.request, response.clone());
+        return response;
+      });
+      if (cached) {
+        event.waitUntil(update.catch(() => undefined));
+        return cached;
+      }
+      return update;
+    })());
+    return;
+  }
 
   event.respondWith(
-    fetch(event.request, alwaysFresh ? { cache: "no-store" } : undefined)
+    fetch(event.request, networkFirst ? { cache: "no-store" } : undefined)
       .then((response) => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
