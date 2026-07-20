@@ -1024,9 +1024,9 @@ button {
 .member-duration-lesson {
   z-index: 3;
   display: grid;
-  grid-template-rows: minmax(0, auto) minmax(0, auto);
-  align-content: center;
-  gap: 2px;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  align-content: stretch;
+  gap: 1px;
   box-sizing: border-box;
   width: 100%;
   height: 100%;
@@ -1035,7 +1035,7 @@ button {
   min-height: 0;
   border: 1px solid #34a77a;
   border-radius: 6px;
-  padding: 5px 4px 5px 7px;
+  padding: 4px 4px 4px 7px;
   background: #e7f8f0;
   box-shadow: inset 4px 0 0 var(--green);
   text-align: left;
@@ -1181,6 +1181,17 @@ button {
   gap: 6px;
   align-items: center;
   justify-content: center;
+}
+
+.member-duration-lesson .schedule-card-note,
+.member-mobile-lesson .schedule-card-note {
+  color: #9a3412;
+  font-weight: 900;
+}
+
+.member-duration-lesson .schedule-card-note.is-empty,
+.member-mobile-lesson .schedule-card-note.is-empty {
+  visibility: hidden;
 }
 
 .grid-head,
@@ -3750,8 +3761,9 @@ body.identity-setup-required {
   .member-mobile-lesson {
     z-index: 3;
     display: grid;
-    align-content: center;
-    gap: 2px;
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+    align-content: stretch;
+    gap: 1px;
     overflow: hidden;
     border: 1px solid #c8d2df;
     padding: 4px 5px 4px 8px;
@@ -3761,7 +3773,8 @@ body.identity-setup-required {
   }
 
   .member-mobile-lesson strong,
-  .member-mobile-lesson span {
+  .member-mobile-lesson span,
+  .member-mobile-lesson small {
     overflow: hidden;
     min-width: 0;
     text-overflow: ellipsis;
@@ -5408,6 +5421,12 @@ body {
 @media (max-width: 520px) {
   .member-own-schedule {
     padding: 10px;
+  }
+
+  .member-mobile-lesson small {
+    color: #9a3412;
+    font-size: 9px;
+    font-weight: 900;
   }
 
   .member-own-lesson {

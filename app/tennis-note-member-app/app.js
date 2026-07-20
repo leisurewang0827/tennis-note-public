@@ -1496,7 +1496,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.46";
+    const refreshKey = "tennis-note-sw-refresh-1.0.47";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1504,7 +1504,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.46", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.47", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -2516,6 +2516,27 @@ function memberLessonTitle(lesson, isMine) {
   return "내 수업";
 }
 
+function memberScheduleCardName(lesson, isMine) {
+  return isMine ? (currentMemberName() || "회원") : memberLessonTitle(lesson, false);
+}
+
+function memberScheduleRoundLabel(lesson, isMine) {
+  if (!isMine) return "";
+  const total = Math.max(0, Number(lesson.ticketTotalSessions) || 0);
+  const used = Math.max(0, Number(lesson.ticketUsedSessions) || 0);
+  const completed = ["completed", "no_show"].includes(String(lesson.serverStatus || "").toLowerCase());
+  const round = total ? Math.min(total, completed ? Math.max(1, used) : used + 1) : 0;
+  return `${round}/${total}회차`;
+}
+
+function memberScheduleExceptionLabel(lesson = {}) {
+  const context = `${lesson.lessonSource || ""} ${lesson.type || ""} ${lesson.changeNote || ""}`;
+  if ((lesson.originalCoachRoleId && lesson.coach_role_id && lesson.originalCoachRoleId !== lesson.coach_role_id) || /대타/.test(context)) return "대타";
+  if (/코치\s*변경/.test(context)) return "코치 변경";
+  if (/시간\s*변경|변경\s*완료/.test(context)) return "시간 변경";
+  return "";
+}
+
 function syncNtrpResultFromCoach() {
   const shared = loadSharedData();
   const request = shared.ntrpRequests.find((item) => isCurrentMemberName(item.member));
@@ -2923,8 +2944,8 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
                 if (startIndex < 0) return "";
                 const span = Math.max(1, Math.ceil(lessonDuration(lesson) / 10));
                 const isMine = isCurrentMemberName(lesson.member);
-                const title = memberLessonTitle(lesson, isMine);
-                return `<button class="member-mobile-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${isMine ? `mine ${lesson.status}` : "occupied"} ${memberCoachColorClass(lesson.coach)}" type="button" ${isMine ? `data-lesson="${lesson.id}"` : "disabled"} style="${memberLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${title}</strong><span>${lessonDuration(lesson)}분</span></button>`;
+                const note = memberScheduleExceptionLabel(lesson);
+                return `<button class="member-mobile-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${isMine ? `mine ${lesson.status}` : "occupied"} ${memberCoachColorClass(lesson.coach)}" type="button" ${isMine ? `data-lesson="${lesson.id}"` : "disabled"} style="${memberLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${escapeHtml(memberScheduleCardName(lesson, isMine))}</strong><span>${escapeHtml(memberScheduleRoundLabel(lesson, isMine) || "-")}</span><span>${escapeHtml(memberCoachShortName(lesson.coach))}</span><small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small></button>`;
               }).join("")}
             </div>`;
         }).join("")}
@@ -3100,9 +3121,9 @@ function renderDynamicMemberSchedule() {
                   const coachIndex = displayCoaches.findIndex((coach) => coach.id === lessonCoach.id);
                   if (coachIndex < 0) return "";
                   const isMine = isCurrentMemberName(lesson.member);
-                  const title = memberLessonTitle(lesson, isMine);
                   const lessonClass = isMine ? `mine ${lesson.status}` : "occupied";
                   const lessonAction = isMine ? `data-lesson="${lesson.id}"` : "disabled";
+                  const note = memberScheduleExceptionLabel(lesson);
                   return `
                     <button
                       class="member-duration-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${lessonClass} ${memberCoachColorClass(lesson.coach)}"
@@ -3110,8 +3131,10 @@ function renderDynamicMemberSchedule() {
                       ${lessonAction}
                       style="${memberLessonColorStyle(lesson, policy)}; grid-row:${startIndex + 1} / span ${span}; grid-column:${coachIndex + 1};"
                     >
-                      <strong>${title}</strong>
-                      <span>${memberCoachShortName(lesson.coach)}</span>
+                      <strong>${escapeHtml(memberScheduleCardName(lesson, isMine))}</strong>
+                      <span>${escapeHtml(memberScheduleRoundLabel(lesson, isMine) || "-")}</span>
+                      <span>${escapeHtml(memberCoachShortName(lesson.coach))}</span>
+                      <small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small>
                     </button>`;
                 })
                 .join("")}
@@ -4695,6 +4718,7 @@ async function syncMemberLessonsFromServer(profile = null) {
           day: days[new Date(`${lesson.lesson_date}T00:00:00`).getDay() === 0 ? 6 : new Date(`${lesson.lesson_date}T00:00:00`).getDay() - 1],
           time: String(lesson.start_time || "").slice(0, 5),
           coach: coachNames.get(lesson.coach_role_id) || "담당 코치",
+          originalCoachRoleId: lesson.original_coach_role_id || "",
           member: isOwnLesson ? memberName : "",
           type: `${lessonSource} ${lesson.duration_minutes}분`,
           lessonSource: lesson.lesson_source || "regular",
@@ -6468,7 +6492,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.46" });
+  const params = new URLSearchParams({ v: "1.0.47" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

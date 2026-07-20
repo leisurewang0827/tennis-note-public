@@ -274,6 +274,7 @@ const scheduleSettings = {
   openStart: "06:40",
   openEnd: "22:00",
   breakRules: [{ id: "weekday-midday", days: ["월", "화", "수", "목", "금"], start: "13:00", end: "17:00", label: "수업 없음" }],
+  breakFavorites: [],
   lessonColors: { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" },
   lessonColorRules: [],
   coachWorkPolicyVersion: 2,
@@ -2101,6 +2102,7 @@ function restoreSnapshot() {
       scheduleSettings.openStart = snapshot.scheduleSettings.openStart || scheduleSettings.openStart;
       scheduleSettings.openEnd = snapshot.scheduleSettings.openEnd || scheduleSettings.openEnd;
       replaceArray(scheduleSettings.breakRules, snapshot.scheduleSettings.breakRules);
+      replaceArray(scheduleSettings.breakFavorites, snapshot.scheduleSettings.breakFavorites || []);
       scheduleSettings.lessonColors = { ...scheduleSettings.lessonColors, ...(snapshot.scheduleSettings.lessonColors || {}) };
       scheduleSettings.lessonColorRules = Array.isArray(snapshot.scheduleSettings.lessonColorRules) ? snapshot.scheduleSettings.lessonColorRules : [];
     }
@@ -2164,6 +2166,7 @@ function liveSchedulePolicyPayload() {
       openStart: scheduleSettings.openStart,
       openEnd: scheduleSettings.openEnd,
       breakRules: Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : [],
+      breakFavorites: Array.isArray(scheduleSettings.breakFavorites) ? scheduleSettings.breakFavorites : [],
       lessonColors: scheduleSettings.lessonColors,
       lessonColorRules: scheduleSettings.lessonColorRules,
       coachWorkPolicyVersion: scheduleSettings.coachWorkPolicyVersion || 2,
@@ -3179,6 +3182,7 @@ async function loadLiveSchedulePolicyFromServer() {
     if (serverSettings.openStart) scheduleSettings.openStart = serverSettings.openStart;
     if (serverSettings.openEnd) scheduleSettings.openEnd = serverSettings.openEnd;
     if (Array.isArray(serverSettings.breakRules)) replaceArray(scheduleSettings.breakRules, serverSettings.breakRules);
+    if (Array.isArray(serverSettings.breakFavorites)) replaceArray(scheduleSettings.breakFavorites, serverSettings.breakFavorites);
     scheduleSettings.lessonColors = { ...scheduleSettings.lessonColors, ...(serverSettings.lessonColors || {}) };
     scheduleSettings.lessonColorRules = Array.isArray(serverSettings.lessonColorRules) ? serverSettings.lessonColorRules : scheduleSettings.lessonColorRules;
     scheduleSettings.coachWorkPolicyVersion = Number(serverSettings.coachWorkPolicyVersion) || 2;
@@ -4478,6 +4482,18 @@ function getLessonRoundLabel(lesson) {
   const range = lessonRoundRange(lesson, ticket);
   const round = range.first === range.last ? `${range.first}` : `${range.first}~${range.last}`;
   return `${round}/${ticket.total}회차`;
+}
+
+function scheduleCoachDisplayName(name = "") {
+  return String(name || "미배정").replace(/\s*코치\s*$/, "").trim() || "미배정";
+}
+
+function scheduleLessonExceptionLabel(lesson = {}) {
+  const context = `${lesson.type || ""} ${lesson.lessonSource || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
+  if ((lesson.originalCoachRoleId && lesson.coachRoleId && lesson.originalCoachRoleId !== lesson.coachRoleId) || /대타/.test(context)) return "대타";
+  if (/코치\s*변경/.test(context)) return "코치 변경";
+  if (/시간\s*변경|변경\s*완료/.test(context)) return "시간 변경";
+  return "";
 }
 
 function isMakeupLesson(lesson) {
@@ -9441,8 +9457,10 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
       const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
       return `
         <button class="admin-duration-lesson lesson-kind-${lessonVisualKind(lesson)} ${lesson.status} ${getLessonStateClass(lesson)} ${isDimmed ? "is-dimmed" : ""}" type="button" data-schedule-lesson-id="${escapeHtml(String(lesson.id || ""))}" ${lessonActionAttrs(lesson)} style="${lessonColorStyle(lesson)};grid-row:${startIndex + 3} / span ${span};grid-column:${laneIndex + 2};">
-          <strong>${getLessonMembersMarkup(lesson)}</strong>
-          <span class="schedule-lesson-meta">${escapeHtml(getLessonRoundLabel(lesson) || "회차 확인")} · ${escapeHtml(getCoachName(lesson.coachId))}</span>
+          <strong class="schedule-lesson-name">${getLessonMembersMarkup(lesson)}</strong>
+          <span class="schedule-lesson-round">${escapeHtml(getLessonRoundLabel(lesson) || "회차 확인")}</span>
+          <span class="schedule-lesson-coach">${escapeHtml(scheduleCoachDisplayName(getCoachName(lesson.coachId)))}</span>
+          <span class="schedule-lesson-note ${scheduleLessonExceptionLabel(lesson) ? "" : "is-empty"}">${escapeHtml(scheduleLessonExceptionLabel(lesson) || "-")}</span>
         </button>`;
     }).join("")).join("");
 
@@ -13576,6 +13594,7 @@ async function syncAdminLiveData() {
           branchId: lesson.branch_id,
           ticketId: lesson.member_ticket_id,
           coachRoleId: lesson.coach_role_id,
+          originalCoachRoleId: lesson.original_coach_role_id || "",
           day: scheduleDays[new Date(`${lesson.lesson_date}T00:00:00`).getDay() === 0 ? 6 : new Date(`${lesson.lesson_date}T00:00:00`).getDay() - 1],
           lessonDate: lesson.lesson_date,
           time: String(lesson.start_time || "").slice(0, 5),
@@ -15141,6 +15160,7 @@ function renderScheduleSettings() {
   renderPolicyVersionSettings();
   renderLessonPolicySettings();
   renderPolicyGuide();
+  if (!Array.isArray(scheduleSettings.breakFavorites)) scheduleSettings.breakFavorites = [];
   const activeBreakCoaches = memberManagementCoachRoles();
   const editingBreakRule = scheduleSettings.breakRules.find((rule) => rule.id === state.editingBreakRuleId);
   const editingCoachRoleIds = editingBreakRule ? breakRuleCoachRoleIds(editingBreakRule) : [];
@@ -15150,6 +15170,19 @@ function renderScheduleSettings() {
       ? activeBreakCoaches.map((role) => `<label><input type="checkbox" value="${escapeHtml(role.id)}" data-break-coach ${!editingBreakRule || !editingCoachRoleIds.length || editingCoachRoleIds.includes(role.id) ? "checked" : ""} /><span>${escapeHtml(String(role.display_name || "코치").replace(/\s*코치$/, ""))}</span></label>`).join("")
       : '<span class="empty-text">재직 중인 승인 코치가 없습니다.</span>';
   }
+  const favoriteTarget = $("#breakFavoritePresets");
+  if (favoriteTarget) {
+    favoriteTarget.innerHTML = scheduleSettings.breakFavorites.length
+      ? scheduleSettings.breakFavorites.map((favorite) => `
+        <span class="break-favorite-chip">
+          <button type="button" data-load-break-favorite="${escapeHtml(favorite.id)}" title="편집칸에 불러오기">
+            <strong>${escapeHtml(favorite.label || "브레이크")}</strong>
+            <small>${escapeHtml(favorite.start)}~${escapeHtml(favorite.end)}</small>
+          </button>
+          <button class="break-favorite-remove" type="button" data-remove-break-favorite="${escapeHtml(favorite.id)}" title="즐겨찾기 해제" aria-label="${escapeHtml(favorite.label || "브레이크")} 즐겨찾기 해제">★</button>
+        </span>`).join("")
+      : '<span class="empty-text">브레이크 옆 별표를 누르면 여기에 표시됩니다.</span>';
+  }
   $("#breakRuleList").innerHTML = scheduleSettings.breakRules.length
     ? scheduleSettings.breakRules
       .map(
@@ -15157,6 +15190,7 @@ function renderScheduleSettings() {
         <div class="break-rule-row">
           <strong>${rule.label || "브레이크"}</strong>
           <span>${rule.days.join(", ")} · ${rule.start}~${rule.end} · ${escapeHtml(breakRuleCoachNames(rule))}</span>
+          <button class="break-favorite-toggle ${scheduleSettings.breakFavorites.some((favorite) => favorite.sourceRuleId === rule.id) ? "is-active" : ""}" type="button" data-toggle-break-favorite="${rule.id}" title="즐겨찾기 ${scheduleSettings.breakFavorites.some((favorite) => favorite.sourceRuleId === rule.id) ? "해제" : "추가"}" aria-label="${escapeHtml(rule.label || "브레이크")} 즐겨찾기">★</button>
           <button class="small-button" type="button" data-edit-break-rule="${rule.id}">수정</button>
           <button class="small-button" type="button" data-remove-break-rule="${rule.id}">삭제</button>
         </div>`,
@@ -15177,6 +15211,42 @@ function editBreakRule(ruleId) {
   if (!scheduleSettings.breakRules.some((rule) => rule.id === ruleId)) return;
   state.editingBreakRuleId = ruleId;
   renderScheduleSettings();
+  $("#breakStartInput")?.focus();
+}
+
+function favoriteBreakFromRule(rule) {
+  return {
+    id: `favorite-${rule.id}`,
+    sourceRuleId: rule.id,
+    days: [...(rule.days || [])],
+    start: rule.start,
+    end: rule.end,
+    label: rule.label || "브레이크",
+    coachRoleIds: [...breakRuleCoachRoleIds(rule)],
+  };
+}
+
+function toggleBreakFavorite(ruleId) {
+  const favoriteIndex = scheduleSettings.breakFavorites.findIndex((favorite) => favorite.sourceRuleId === ruleId);
+  if (favoriteIndex >= 0) {
+    scheduleSettings.breakFavorites.splice(favoriteIndex, 1);
+    return;
+  }
+  const rule = scheduleSettings.breakRules.find((item) => item.id === ruleId);
+  if (rule) scheduleSettings.breakFavorites.push(favoriteBreakFromRule(rule));
+}
+
+function loadBreakFavorite(favoriteId) {
+  const favorite = scheduleSettings.breakFavorites.find((item) => item.id === favoriteId);
+  if (!favorite) return;
+  state.editingBreakRuleId = "";
+  $$('[data-break-day]').forEach((input) => { input.checked = favorite.days.includes(input.value); });
+  const coachRoleIds = Array.isArray(favorite.coachRoleIds) ? favorite.coachRoleIds : [];
+  $$('[data-break-coach]').forEach((input) => { input.checked = !coachRoleIds.length || coachRoleIds.includes(input.value); });
+  if ($("#breakStartInput")) $("#breakStartInput").value = favorite.start;
+  if ($("#breakEndInput")) $("#breakEndInput").value = favorite.end;
+  if ($("#breakLabelInput")) $("#breakLabelInput").value = favorite.label || "브레이크";
+  if ($("#applyBreakRuleButton")) $("#applyBreakRuleButton").textContent = "브레이크 추가";
   $("#breakStartInput")?.focus();
 }
 
@@ -16998,7 +17068,10 @@ function bindEvents() {
       const sameCoaches = JSON.stringify(breakRuleCoachRoleIds(rule).sort()) === JSON.stringify([...coachRoleIds].sort());
       return !(sameTime && overlapDay && sameCoaches);
     });
-    scheduleSettings.breakRules.push({ id: editingRuleId || `break-${Date.now()}`, days: selectedDays, start, end, label, coachRoleIds });
+    const savedRule = { id: editingRuleId || `break-${Date.now()}`, days: selectedDays, start, end, label, coachRoleIds };
+    scheduleSettings.breakRules.push(savedRule);
+    const favoriteIndex = scheduleSettings.breakFavorites.findIndex((favorite) => favorite.sourceRuleId === savedRule.id);
+    if (favoriteIndex >= 0) scheduleSettings.breakFavorites[favoriteIndex] = favoriteBreakFromRule(savedRule);
     state.editingBreakRuleId = "";
     renderAll();
     saveSnapshot();
@@ -17777,6 +17850,30 @@ function bindEvents() {
     const editBreakRuleButton = event.target.closest("[data-edit-break-rule]");
     if (editBreakRuleButton) {
       editBreakRule(editBreakRuleButton.dataset.editBreakRule);
+      return;
+    }
+
+    const toggleBreakFavoriteButton = event.target.closest("[data-toggle-break-favorite]");
+    if (toggleBreakFavoriteButton) {
+      toggleBreakFavorite(toggleBreakFavoriteButton.dataset.toggleBreakFavorite);
+      renderScheduleSettings();
+      saveSnapshot();
+      await saveLiveSchedulePolicy();
+      return;
+    }
+
+    const loadBreakFavoriteButton = event.target.closest("[data-load-break-favorite]");
+    if (loadBreakFavoriteButton) {
+      loadBreakFavorite(loadBreakFavoriteButton.dataset.loadBreakFavorite);
+      return;
+    }
+
+    const removeBreakFavoriteButton = event.target.closest("[data-remove-break-favorite]");
+    if (removeBreakFavoriteButton) {
+      scheduleSettings.breakFavorites = scheduleSettings.breakFavorites.filter((favorite) => favorite.id !== removeBreakFavoriteButton.dataset.removeBreakFavorite);
+      renderScheduleSettings();
+      saveSnapshot();
+      await saveLiveSchedulePolicy();
       return;
     }
 

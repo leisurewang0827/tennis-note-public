@@ -453,6 +453,7 @@ async function syncCoachLessonsFromServer() {
           time: String(lesson.start_time || "").slice(0, 5),
           coach: coach.display_name || "담당 코치",
           coachRoleId: lesson.coach_role_id,
+          originalCoachRoleId: lesson.original_coach_role_id || "",
           member: memberNames.join("&") || "회원",
           memberUserIds: participantIds,
           type: `${lessonKind} ${lesson.duration_minutes}분`,
@@ -1413,7 +1414,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.46";
+  const refreshKey = "tennis-note-sw-refresh-1.0.47";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1423,7 +1424,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.46", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.47", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1475,7 +1476,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.46" });
+  const params = new URLSearchParams({ v: "1.0.47" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1979,6 +1980,22 @@ function lessonDuration(lesson) {
   return matched ? Number(matched[1]) : 20;
 }
 
+function coachScheduleRoundLabel(lesson = {}) {
+  const ticketTotal = Number(lesson.totalSessions) || Number(String(lesson.ticket || "").match(/(\d+)\s*회/)?.[1]) || 0;
+  const used = Math.max(0, Number(lesson.usedSessions) || Math.max(0, ticketTotal - (Number(lesson.remaining) || 0)));
+  const completed = ["completed", "no_show"].includes(String(lesson.serverStatus || "").toLowerCase());
+  const round = ticketTotal ? Math.min(ticketTotal, completed ? Math.max(1, used) : used + 1) : 0;
+  return `${round}/${ticketTotal}회차`;
+}
+
+function coachScheduleExceptionLabel(lesson = {}) {
+  const context = `${lesson.lessonSource || ""} ${lesson.type || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
+  if ((lesson.originalCoachRoleId && lesson.coachRoleId && lesson.originalCoachRoleId !== lesson.coachRoleId) || /대타/.test(context)) return "대타";
+  if (/코치\s*변경/.test(context)) return "코치 변경";
+  if (/시간\s*변경|변경\s*완료/.test(context)) return "시간 변경";
+  return "";
+}
+
 function coachLessonVisualKind(lesson = {}) {
   const source = String(lesson.lessonSource || lesson.lesson_source || "").toLowerCase();
   if (lesson.releasedMakeupSlot || lesson.status === "available") return "released";
@@ -2452,7 +2469,8 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
                 if (startIndex < 0) return "";
                 const span = Math.max(1, Math.ceil(lessonDuration(lesson) / scheduleBlockMinutes));
                 const memberLabel = formatScheduleMemberName(lesson.member || "회원");
-                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(lesson.coach)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${memberLabel}</strong><span>${lesson.releasedMakeupSlot ? "신청 가능" : `${lessonDuration(lesson)}분`}</span></button>`;
+                const note = coachScheduleExceptionLabel(lesson);
+                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(lesson.coach)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${memberLabel}</strong><span>${escapeHtml(lesson.releasedMakeupSlot ? "신청 가능" : coachScheduleRoundLabel(lesson))}</span><span>${escapeHtml(shortCoachName(lesson.coach))}</span><small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small></button>`;
               }).join("")}
             </div>`;
         }).join("")}
@@ -2580,6 +2598,7 @@ function renderFullSchedule() {
                   const isLongLesson = span >= 3;
                   const memberNames = formatScheduleMemberName(lesson.member);
                   const coachLabel = shortCoachName(lesson.coach);
+                  const note = coachScheduleExceptionLabel(lesson);
                   return `
                     <button
                       class="coach-duration-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(lesson.coach)} ${isLongLesson ? "is-long" : ""}"
@@ -2588,7 +2607,9 @@ function renderFullSchedule() {
                       style="${coachLessonColorStyle(lesson, policy)}; grid-row:${startIndex + 1} / span ${span}; grid-column:${laneIndex + 1};"
                     >
                       <strong>${memberNames}</strong>
-                      <span>${coachLabel}</span>
+                      <span>${escapeHtml(coachScheduleRoundLabel(lesson))}</span>
+                      <span>${escapeHtml(coachLabel)}</span>
+                      <small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small>
                     </button>`;
                 })
               .join("")}

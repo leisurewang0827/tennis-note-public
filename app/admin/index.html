@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.46" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.47" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -783,10 +783,12 @@
                 <summary>현재 적용 시간 보기</summary>
                 <div class="schedule-policy-summary" id="schedulePolicyPreview"></div>
               </details>
-              <div class="schedule-preset-row" aria-label="시간표 빠른 설정">
-                <button class="small-button" type="button" data-schedule-preset="weekday-split">기본 운영시간</button>
-                <button class="small-button" type="button" data-schedule-preset="evening-buffer">20시 브레이크</button>
-                <button class="ghost-button" type="button" data-schedule-preset="clear-breaks">브레이크 초기화</button>
+              <div class="break-favorite-panel" aria-label="즐겨찾는 브레이크">
+                <div class="break-favorite-heading">
+                  <strong>즐겨찾는 브레이크</strong>
+                  <button class="ghost-button" type="button" data-schedule-preset="clear-breaks">전체 브레이크 해제</button>
+                </div>
+                <div id="breakFavoritePresets" class="schedule-preset-row"></div>
               </div>
               <div class="time-setting-grid">
                 <label class="field-row">
@@ -1302,11 +1304,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.46"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.47"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.46"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.47"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.46"></script>
+    <script src="./app.js?v=1.0.47"></script>
   </body>
 </html>

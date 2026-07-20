@@ -4368,6 +4368,65 @@ tr.is-selected td {
   gap: 8px;
 }
 
+.break-favorite-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.break-favorite-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.break-favorite-chip {
+  display: inline-grid;
+  grid-template-columns: minmax(0, auto) 32px;
+  overflow: hidden;
+  border: 1px solid #bfd7cf;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.break-favorite-chip > button {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.break-favorite-chip > button:first-child {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.break-favorite-chip small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.break-favorite-chip .break-favorite-remove,
+.break-favorite-toggle {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  color: #94a3b8;
+  font-size: 17px;
+}
+
+.break-favorite-chip .break-favorite-remove,
+.break-favorite-toggle.is-active {
+  color: #d99200;
+}
+
 .time-setting-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(140px, 1fr));
@@ -4670,7 +4729,7 @@ tr.is-selected td {
 
 .break-rule-row {
   display: grid;
-  grid-template-columns: minmax(90px, 0.45fr) minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(90px, 0.45fr) minmax(0, 1fr) 34px auto auto;
   gap: 8px;
   align-items: center;
   min-height: 42px;
@@ -8742,11 +8801,12 @@ button .schedule-member-lines > span {
 .admin-duration-lesson {
   z-index: 8;
   display: grid;
-  align-content: center;
-  gap: 5px;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  align-content: stretch;
+  gap: 1px;
   width: 100%;
   height: 100%;
-  padding: 7px 6px;
+  padding: 4px 6px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--lesson-color, var(--blue)) 32%, #d9e2ea);
   border-radius: 6px;
@@ -8762,7 +8822,7 @@ button .schedule-member-lines > span {
   overflow: hidden;
   color: inherit;
   font-size: 11px;
-  line-height: 1.2;
+  line-height: 1.05;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8771,6 +8831,36 @@ button .schedule-member-lines > span {
   color: var(--muted);
   font-size: 10px;
   font-weight: 800;
+}
+
+.admin-duration-lesson .schedule-lesson-name,
+.admin-duration-lesson .schedule-lesson-round,
+.admin-duration-lesson .schedule-lesson-coach,
+.admin-duration-lesson .schedule-lesson-note {
+  display: block;
+  align-self: center;
+  width: 100%;
+}
+
+.admin-duration-lesson .schedule-lesson-name {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.admin-duration-lesson .schedule-lesson-round,
+.admin-duration-lesson .schedule-lesson-coach {
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.admin-duration-lesson .schedule-lesson-note {
+  color: #9a3412;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.admin-duration-lesson .schedule-lesson-note.is-empty {
+  visibility: hidden;
 }
 
 .admin-duration-lesson .schedule-member-lines {
