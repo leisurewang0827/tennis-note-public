@@ -6811,6 +6811,7 @@ function memberManagementActionLabel(action) {
     create: "회원 수동 추가",
     assign: "회원권 등록",
     profile: "회원 정보·앱 연결",
+    link_existing: "기존 수강 DB 연결",
     correct: "회원권 숫자·기간 수정",
     expire: "회원권 만료 처리",
     force_delete: "회원권 강제 삭제",
@@ -7034,6 +7035,7 @@ function automaticMemberManagementReason(action) {
     create: "관리자 수동 회원 등록",
     assign: "관리자 기존 회원 회원권 등록",
     profile: "관리자 회원 정보 수정",
+    link_existing: "관리자 운동노트·기존 수강 DB 연결",
     correct: "관리자 회원권 수동 조정",
     expire: "관리자 회원권 만료 처리",
     force_delete: "관리자 잘못된 회원권 강제 삭제",
@@ -7054,6 +7056,50 @@ function memberLinkCandidateLabel(candidate = {}) {
   const last4 = candidate.phoneLast4 ? ` · 전화 끝 ${candidate.phoneLast4}` : "";
   const recommended = candidate.recommended ? " · 추천" : "";
   return `${candidate.name || "가입자"} · ${providers}${last4}${matches ? ` · ${matches} 일치` : ""}${recommended}`;
+}
+
+function normalizedMemberLinkSearch(value = "") {
+  return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function memberMembershipLinkTargets(sourceMember, query = "") {
+  if (!sourceMember?.serverUserId || !sourceMember.authLinked) return [];
+  const keyword = normalizedMemberLinkSearch(query);
+  const keywordDigits = normalizedMemberPhone(query);
+  const sourceName = normalizedMemberLinkSearch(sourceMember.name);
+  const sourcePhone = normalizedMemberPhone(sourceMember.phone);
+  const candidates = members.filter((candidate) => {
+    if (!candidate?.serverUserId || candidate.serverUserId === sourceMember.serverUserId || candidate.authLinked) return false;
+    const status = memberListStatus(candidate);
+    if (["journal", "inactive"].includes(status)) return false;
+    const hasMembershipRecord = memberManagementTickets(candidate).length > 0
+      || !["journal_only", "lesson_pending"].includes(candidate.memberKind);
+    if (!hasMembershipRecord) return false;
+    if (!keyword) return true;
+    const fields = [candidate.name, candidate.nickname].map(normalizedMemberLinkSearch);
+    const phone = normalizedMemberPhone(candidate.phone);
+    return fields.some((value) => value.includes(keyword))
+      || (keywordDigits.length >= 4 && phone.includes(keywordDigits));
+  }).map((candidate) => {
+    const candidateName = normalizedMemberLinkSearch(candidate.name);
+    const candidatePhone = normalizedMemberPhone(candidate.phone);
+    const score = (sourcePhone.length >= 9 && sourcePhone === candidatePhone ? 100 : 0)
+      + (sourceName && sourceName === candidateName ? 50 : 0)
+      + (sourceMember.birthYear && sourceMember.birthYear === candidate.birthYear ? 20 : 0);
+    return { ...candidate, score };
+  }).sort((left, right) => right.score - left.score || String(left.name || "").localeCompare(String(right.name || ""), "ko"));
+  const strongMatches = candidates.filter((candidate) => candidate.score >= 100);
+  return candidates.map((candidate) => ({
+    ...candidate,
+    recommended: candidate.score >= 100 && strongMatches.length === 1,
+  }));
+}
+
+function memberMembershipTargetLabel(candidate = {}) {
+  const phoneLast4 = normalizedMemberPhone(candidate.phone).slice(-4);
+  const ticket = memberCurrentTicket(candidate) || memberManagementTickets(candidate)[0] || null;
+  const ticketLabel = ticket ? getTicketDisplayProduct(ticket) || ticket.product || "회원권" : "기존 회원 DB";
+  return `${candidate.name || "회원"}${phoneLast4 ? ` · ${phoneLast4}` : ""} · ${ticketLabel}${candidate.recommended ? " · 추천" : ""}`;
 }
 
 async function loadMemberLinkCandidates(member, query = memberManagementModalState.linkQuery || "") {
@@ -7127,7 +7173,26 @@ function renderMemberManagementModal() {
   const destructive = ["expire", "force_delete", "deactivate", "permanent_delete"].includes(action);
   let actionFields = "";
 
-  if (action === "profile") {
+  if (action === "link_existing") {
+    const connection = memberAuthConnection(member);
+    const linkQuery = memberManagementModalState.linkQuery || "";
+    const candidates = memberMembershipLinkTargets(member, linkQuery);
+    const recommended = candidates.find((candidate) => candidate.recommended)?.serverUserId || "";
+    actionFields = `
+      <div class="member-link-control member-existing-link-control">
+        <div class="member-link-status is-linked"><strong>${escapeHtml(member.name)} 앱 계정</strong><span>${escapeHtml(connection.summary)} · 운동일지와 가입정보를 함께 연결합니다.</span></div>
+        <label class="form-field"><span>기존 수강회원 검색</span><div class="member-link-search-row">
+          <input name="existingMemberLinkQuery" type="search" value="${escapeHtml(linkQuery)}" placeholder="이름·닉네임·전화번호 뒤 4자리" autocomplete="off" />
+          <button class="secondary-button" type="button" data-search-existing-member-link>검색</button>
+        </div></label>
+        ${candidates.length ? `<label class="form-field"><span>연결할 기존 수강 DB</span><select name="targetMembershipUserId" required>
+          <option value="">선택하세요</option>
+          ${candidates.map((candidate) => `<option value="${escapeHtml(candidate.serverUserId)}" ${candidate.serverUserId === recommended ? "selected" : ""}>${escapeHtml(memberMembershipTargetLabel(candidate))}</option>`).join("")}
+        </select><small>연결 후 기존 회원권·시간표는 유지되고 이 앱 계정과 운동일지가 합쳐집니다.</small></label>`
+          : `<div class="member-link-status"><strong>${linkQuery ? "검색 결과 없음" : "기존 수강회원을 검색해 주세요"}</strong><span>수강 DB의 이름·닉네임·전화번호 뒤 4자리로 찾을 수 있습니다.</span></div>`}
+      </div>
+      <p class="member-management-rule">연결 후 운동노트 회원은 중복 목록에서 정리되고 기존 수강회원 계정으로 앱을 이용합니다.</p>`;
+  } else if (action === "profile") {
     const connection = memberAuthConnection(member);
     const candidates = memberManagementModalState.linkCandidates || [];
     const recommended = candidates.find((candidate) => candidate.recommended)?.userId || "";
@@ -7285,7 +7350,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
     linkCandidates: [],
     linkCandidatesLoading: false,
     linkCandidatesLoadedFor: "",
-    linkQuery: "",
+    linkQuery: action === "link_existing" ? refreshedMember.name || "" : "",
   });
   renderMemberManagementModal();
   $("#memberManagementModal")?.removeAttribute("hidden");
@@ -7506,6 +7571,7 @@ function memberManagementErrorText(error) {
   if (raw.includes("ticket_not_found") || raw.includes("product_not_found")) return "회원권 정보가 변경됐습니다. 새로고침 후 다시 선택해 주세요.";
   if (raw.includes("refunded_ticket_locked")) return "환불 완료 회원권은 수정할 수 없습니다.";
   if (raw.includes("target_member_already_linked")) return "이미 다른 앱 계정이 연결된 회원입니다.";
+  if (raw.includes("membership_link_target_required")) return "연결할 기존 수강회원을 선택해 주세요.";
   if (raw.includes("member_login_link_not_confirmed")) return "앱 계정 연결 결과를 확인하지 못했습니다. 새로고침 후 회원의 계정 연결 상태를 확인해 주세요.";
   if (raw.includes("source_signup_not_linked") || raw.includes("signup_profile_not_found")) return "가입 계정이 변경됐습니다. 새로고침 후 다시 선택해 주세요.";
   if (raw.includes("source_signup_has_operational_data")) return "선택한 가입 계정에 별도 회원권이나 수업이 있어 자동 병합할 수 없습니다. 관리자 검토가 필요합니다.";
@@ -7567,6 +7633,9 @@ function memberManagementWriteVerification(action, payload, result, statusAction
   }
   if (action === "assign") {
     return serverUser && serverTicket && serverTicket.productId === payload?.productId ? "" : "member_management_write_not_confirmed:assign";
+  }
+  if (action === "link_existing") {
+    return serverUser?.auth_user_id ? "" : "member_management_write_not_confirmed:link_existing";
   }
   if (action === "profile") {
     if (!serverUser) return "member_management_write_not_confirmed:profile_user";
@@ -7758,6 +7827,7 @@ async function submitMemberManagementForm(event) {
   try {
     let result = null;
     let linkedSourceSignupUserId = "";
+    let linkedTargetMemberUserId = "";
     if (isCreate) {
       const createsNewPartner = managementPayload.lessonType === "one_on_two" && managementPayload.partnerMode === "new";
       result = await client.rpc(createsNewPartner ? "tn_admin_create_group_member_database_record" : "tn_admin_create_member_database_record", {
@@ -7780,6 +7850,14 @@ async function submitMemberManagementForm(event) {
         if (!linkedPayment?.ok) throw new Error(linkedPayment?.code || "existing_payment_link_failed");
       }
       state.memberFilter = "active";
+    } else if (action === "link_existing") {
+      linkedTargetMemberUserId = form.elements.targetMembershipUserId?.value || "";
+      if (!linkedTargetMemberUserId) throw new Error("membership_link_target_required");
+      result = await client.rpc("tn_admin_merge_member_login", {
+        target_member_user_id: linkedTargetMemberUserId,
+        source_signup_user_id: member.serverUserId,
+        target_reason: reason,
+      });
     } else if (action === "profile") {
       if (memberDatabaseRecord(member, ticket) || ticket) {
         result = await client.rpc("tn_admin_update_member_database_record_preserving_schedule", {
@@ -7886,11 +7964,19 @@ async function submitMemberManagementForm(event) {
       const linkedMember = members.find((item) => memberServerUserIds(item).includes(member.serverUserId));
       if (!linkedMember?.authLinked) throw new Error("member_login_link_not_confirmed");
     }
+    if (linkedTargetMemberUserId) {
+      const linkedMember = members.find((item) => memberServerUserIds(item).includes(linkedTargetMemberUserId));
+      if (!linkedMember?.authLinked) throw new Error("member_login_link_not_confirmed");
+    }
     const verificationError = memberManagementWriteVerification(action, managementPayload, result, statusAction);
     if (verificationError) throw new Error(verificationError);
     closeMemberManagementModal();
     const normalizedResult = normalizedRpcResult(result);
-    if ((isCreate || action === "assign") && normalizedResult.userId) {
+    if (action === "link_existing" && linkedTargetMemberUserId) {
+      const linkedMember = members.find((item) => memberServerUserIds(item).includes(linkedTargetMemberUserId));
+      state.selectedMemberId = linkedMember?.id || null;
+      state.memberFilter = linkedMember ? memberListStatus(linkedMember) : "active";
+    } else if ((isCreate || action === "assign") && normalizedResult.userId) {
       state.selectedMemberId = members.find((item) => item.serverUserId === normalizedResult.userId)?.id || null;
     } else if (member?.serverUserId) {
       const refreshedMember = members.find((item) => memberServerUserIds(item).includes(member.serverUserId));
@@ -8659,6 +8745,9 @@ function renderMembers() {
         <div class="member-detail-header-actions">
           ${memberStatusBadge(selected)}
           ${operationsRole() === "admin" ? `<button class="small-button" type="button" data-open-member-management="profile" data-member-management-ticket="${escapeHtml(selectedTicket?.serverTicketId || "")}">수정</button>` : ""}
+          ${operationsRole() === "admin" && selectedStatus === "journal" && selected.authLinked
+            ? '<button class="primary-button" type="button" data-open-member-management="link_existing">수강 DB 연결</button>'
+            : ""}
           ${operationsRole() === "admin" && selectedStatus !== "inactive" && selected.authRole !== "admin"
             ? '<button class="ghost-button danger-button" type="button" data-open-member-management="deactivate">회원 삭제</button>'
             : ""}
@@ -17366,10 +17455,23 @@ function bindEvents() {
       const query = $("#memberManagementForm")?.elements.memberLinkQuery?.value || "";
       loadMemberLinkCandidates(member, query);
     }
+    if (event.target.closest("[data-search-existing-member-link]")) {
+      event.preventDefault();
+      const query = $("#memberManagementForm")?.elements.existingMemberLinkQuery?.value || "";
+      memberManagementModalState.linkQuery = String(query).trim();
+      renderMemberManagementModal();
+      setTimeout(() => $("#memberManagementForm")?.elements.existingMemberLinkQuery?.focus(), 0);
+    }
   });
   $("#memberManagementModal")?.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" || event.target?.name !== "memberLinkQuery") return;
+    if (event.key !== "Enter" || !["memberLinkQuery", "existingMemberLinkQuery"].includes(event.target?.name)) return;
     event.preventDefault();
+    if (event.target.name === "existingMemberLinkQuery") {
+      memberManagementModalState.linkQuery = String(event.target.value || "").trim();
+      renderMemberManagementModal();
+      setTimeout(() => $("#memberManagementForm")?.elements.existingMemberLinkQuery?.focus(), 0);
+      return;
+    }
     const member = members.find((item) => item.id === memberManagementModalState.memberId);
     loadMemberLinkCandidates(member, event.target.value);
   });

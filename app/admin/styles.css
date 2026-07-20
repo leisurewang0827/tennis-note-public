@@ -8516,6 +8516,10 @@ button .schedule-member-lines > span {
   background: #f5fbf9;
 }
 
+.member-existing-link-control {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .member-link-search-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
