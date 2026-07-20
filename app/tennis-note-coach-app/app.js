@@ -1413,7 +1413,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.45";
+  const refreshKey = "tennis-note-sw-refresh-1.0.46";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1423,7 +1423,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.45", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.46", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1475,7 +1475,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.45" });
+  const params = new URLSearchParams({ v: "1.0.46" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1730,8 +1730,8 @@ function renderSummary() {
   const regularCount = ownLessons.filter((lesson) => !isMakeupLesson(lesson)).length;
   const makeupLessonCount = ownLessons.filter(isMakeupLesson).length;
   const makeupPendingCount = ownPendingMakeupRequests().length + ownOpenMakeupEntitlements().length;
-  const pendingLessonLogs = state.lessonLogs.filter((item) => item.status !== "확인 완료").length;
-  const pendingFeedback = state.feedbackRequests.filter((item) => item.status !== "코치 답변 완료").length;
+  const pendingLessonLogs = ownPendingLessonLogs().length;
+  const pendingFeedback = ownPendingFeedbackRequests().length;
   const pendingRecordTotal = pendingLessonLogs + pendingFeedback;
   $("#todayLessonCount").textContent = `${ownLessons.length}개`;
   if ($("#todayLessonSummaryNote")) $("#todayLessonSummaryNote").textContent = ownLessons.length ? `정규 ${regularCount} · 보강 ${makeupLessonCount}` : "오늘 수업 없음";
@@ -1777,7 +1777,8 @@ function requestCoach(request) {
   if (exactMember?.coach) return exactMember.coach;
   const groupedMember = state.members.find((member) => member.name.includes(request.member));
   if (groupedMember?.coach) return groupedMember.coach;
-  return request.requested.includes("강") ? "강 코치" : request.requested.includes("황") ? "황 코치" : "노 코치";
+  const requested = String(request.requested || "");
+  return requested.includes("강") ? "강 코치" : requested.includes("황") ? "황 코치" : "노 코치";
 }
 
 function currentCoachName() {
@@ -1837,8 +1838,7 @@ function recentLogForLesson(lesson) {
 
 function canProcessLesson(lesson) {
   if (!lesson) return false;
-  if (canonicalCoachName(lesson.coach) === currentCoachName()) return true;
-  return `${lesson.task || ""} ${lesson.status || ""}`.includes("대타");
+  return canonicalCoachName(lesson.coach) === currentCoachName();
 }
 
 function canRescheduleLesson(lesson) {
@@ -1851,14 +1851,61 @@ function canMarkRegularLessonAbsent(lesson) {
   return canRescheduleLesson(lesson) && String(lesson.lessonSource || lesson.lesson_source || "regular") === "regular";
 }
 
+function recordMemberNames(value = "") {
+  return String(value)
+    .split("&")
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+function lessonForRecord(record = {}) {
+  if (record.serverLessonId) {
+    const serverLesson = state.liveLessons.find((lesson) => lesson.serverLessonId === record.serverLessonId);
+    if (serverLesson) return serverLesson;
+  }
+  const names = recordMemberNames(record.member);
+  return weekLessons().find((lesson) => {
+    const lessonNames = recordMemberNames(lesson.member);
+    if (!names.some((name) => lessonNames.includes(name))) return false;
+    const lessonLabel = String(record.lesson || "");
+    return (!lesson.day || lessonLabel.includes(lesson.day)) && (!lesson.time || lessonLabel.includes(lesson.time));
+  }) || null;
+}
+
+function memberForRecord(record = {}) {
+  const names = recordMemberNames(record.member);
+  return state.members.find((member) => names.includes(member.name))
+    || state.members.find((member) => names.some((name) => member.name.includes(name) || name.includes(member.name)))
+    || null;
+}
+
+function recordBelongsToCurrentCoach(record = {}) {
+  const lesson = lessonForRecord(record);
+  if (lesson) return canProcessLesson(lesson);
+  const member = memberForRecord(record);
+  return Boolean(member?.coach && canonicalCoachName(member.coach) === currentCoachName());
+}
+
+function feedbackBelongsToCurrentCoach(request = {}) {
+  return canonicalCoachName(requestCoach(request)) === currentCoachName();
+}
+
+function ownPendingLessonLogs() {
+  return state.lessonLogs.filter((log) => log.status !== "확인 완료" && recordBelongsToCurrentCoach(log));
+}
+
+function ownPendingFeedbackRequests() {
+  return state.feedbackRequests.filter((request) => request.status !== "코치 답변 완료" && feedbackBelongsToCurrentCoach(request));
+}
+
 function lessonPermissionText(lesson) {
   if (canRescheduleLesson(lesson)) return "내 수업이라 일정 수정과 완료 처리가 가능합니다.";
-  if (canProcessLesson(lesson)) return "대타 수업은 완료 처리할 수 있고 일정 수정은 원 담당 코치만 가능합니다.";
-  return "다른 코치 수업은 같은 지점 공유용으로 확인만 가능합니다. 대타 지정 시 완료 처리할 수 있습니다.";
+  if (canProcessLesson(lesson)) return "내 수업 완료 처리와 피드백 작성이 가능합니다.";
+  return "다른 코치 수업은 같은 지점 공유용으로 확인만 가능합니다.";
 }
 
 function pendingRecordTotal() {
-  return state.lessonLogs.filter((item) => item.status !== "확인 완료").length + state.feedbackRequests.filter((item) => item.status !== "코치 답변 완료").length;
+  return ownPendingLessonLogs().length + ownPendingFeedbackRequests().length;
 }
 
 function todayTaskTab() {
@@ -1947,6 +1994,9 @@ function coachScheduleLessonActionAttrs(lesson = {}) {
   if (lesson.oneDayBooking) {
     return `disabled aria-label="${lesson.member || "원데이"} 원데이 예약"`;
   }
+  if (!canProcessLesson(lesson) && !canRescheduleLesson(lesson)) {
+    return `disabled aria-label="${lesson.member || "회원"} 다른 코치 수업 읽기 전용"`;
+  }
   if (lesson.releasedMakeupSlot) {
     return `data-restore-absence-id="${lesson.entitlementId || ""}" aria-label="${lesson.member || "회원"} 정규수업 복원"`;
   }
@@ -1995,9 +2045,7 @@ function renderTodayLessons() {
     ...ownMakeups.map((request) => ({ ...request, taskKind: "approval" })),
     ...ownAbsenceMakeups.map((item) => ({ ...item, taskKind: "absence", requested: "회원 시간 선택 대기" })),
   ];
-  const pendingRecordCount =
-    state.lessonLogs.filter((item) => item.status === "확인 대기").length +
-    state.feedbackRequests.filter((item) => item.status !== "코치 답변 완료").length;
+  const pendingRecordCount = ownPendingLessonLogs().length + ownPendingFeedbackRequests().length;
   const lessonTimes = [...new Set(ownLessons.map((lesson) => lesson.time))].sort((a, b) => a.localeCompare(b));
   const activeTab = todayTaskTab();
   const visibleLessonTimes = todayTaskVisibleItems(lessonTimes, "lessons");
@@ -3480,8 +3528,8 @@ function journalMediaMarkup(log = {}) {
 function recordProcessingMarkup() {
   importMemberLessonLogs();
   importPracticeFeedbackRequests();
-  const pendingLogs = state.lessonLogs.filter((log) => log.status !== "확인 완료");
-  const pendingFeedback = state.feedbackRequests.filter((request) => request.status !== "코치 답변 완료");
+  const pendingLogs = ownPendingLessonLogs();
+  const pendingFeedback = ownPendingFeedbackRequests();
   const showAllRecords = isTodayTaskExpanded("records");
   const visibleLogs = showAllRecords ? pendingLogs : pendingLogs.slice(0, 3);
   const visibleFeedback = showAllRecords ? pendingFeedback : pendingFeedback.slice(0, Math.max(0, 3 - visibleLogs.length));
@@ -3571,8 +3619,8 @@ function renderMemberRecordPanel() {
   if (!target) return;
   importMemberLessonLogs();
   importPracticeFeedbackRequests();
-  const pendingLogs = state.lessonLogs.filter((log) => log.status !== "확인 완료").slice(0, 6);
-  const pendingFeedback = state.feedbackRequests.filter((request) => request.status !== "코치 답변 완료").slice(0, 4);
+  const pendingLogs = ownPendingLessonLogs().slice(0, 6);
+  const pendingFeedback = ownPendingFeedbackRequests().slice(0, 4);
   if (!pendingLogs.length && !pendingFeedback.length) {
     target.hidden = true;
     target.innerHTML = "";
@@ -3838,11 +3886,14 @@ function coachCommentValidationMessage(log) {
   })) {
     return "반복되는 짧은 칭찬/확인 문구만으로는 횟수 차감이 불가합니다.";
   }
-  const recentComments = state.lessonLogs
-    .filter((item) => item.id !== log.id && item.coachComment)
-    .slice(0, 5)
-    .map((item) => normalizeCoachComment(item.coachComment));
-  if (recentComments.includes(normalized)) return "최근 코멘트와 같은 내용은 다시 사용할 수 없습니다.";
+  const currentMemberNames = recordMemberNames(log.member);
+  const sameMemberDuplicateCount = state.lessonLogs.filter((item) => {
+    if (item.id === log.id || !item.coachComment) return false;
+    const itemMemberNames = recordMemberNames(item.member);
+    if (!currentMemberNames.some((name) => itemMemberNames.includes(name))) return false;
+    return normalizeCoachComment(item.coachComment) === normalized;
+  }).length;
+  if (sameMemberDuplicateCount >= 2) return "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.";
   return "";
 }
 
@@ -3968,7 +4019,8 @@ async function confirmLog(id, options = {}) {
       const serverMessages = {
         lesson_complete_comment_too_short: "코치 코멘트는 직접 10자 이상 작성해야 합니다.",
         lesson_complete_comment_too_generic: "짧은 칭찬이나 확인 문구만으로는 횟수 차감이 불가합니다.",
-        lesson_complete_comment_recent_duplicate: "최근 수업과 같은 코멘트입니다. 이번 수업 내용을 직접 작성해 주세요.",
+        lesson_complete_comment_recent_duplicate: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
+        lesson_complete_comment_member_duplicate_limit: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
       };
       log.status = "확인 대기";
       log.validationMessage = serverMessages[code] || "서버 횟수 차감에 실패했습니다. 같은 기록에서 다시 시도해 주세요.";

@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.45" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.46" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -180,7 +180,7 @@
           </div>
           <div class="member-schedule-mode" aria-label="시간표 보기 방식">
             <button class="member-schedule-mode-button is-active" type="button" data-member-schedule-mode="mine">내 일정</button>
-            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="availability">변경 가능한 시간</button>
+            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="availability">예약·변경 가능 시간</button>
           </div>
           <section id="makeupDueBanner" class="makeup-due-banner" hidden>
             <div>
@@ -759,7 +759,7 @@
           </label>
           <div class="change-step-heading">2. 새 시간 선택</div>
           <select id="makeupSlot" class="visually-hidden-select" aria-label="선택한 변경 시간"></select>
-          <div id="availableSlotList" class="slot-list" aria-label="변경 가능한 시간"></div>
+          <div id="availableSlotList" class="slot-list" aria-label="예약 또는 변경 가능한 시간"></div>
           <p id="changePolicyNote" class="policy-note">24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요</p>
           <label id="changeReasonField">
             <span>3. 이유</span>
@@ -871,12 +871,12 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.45"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.46"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.45"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.46"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.45"></script>
+    <script src="./app.js?v=1.0.46"></script>
   </body>
 </html>
