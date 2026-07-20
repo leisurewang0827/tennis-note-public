@@ -121,19 +121,21 @@
     const automationStatus = row.automation_status || legacyAutomation?.[1]?.toLowerCase() || "idle";
     const automationMessage = row.automation_message || legacyAutomation?.[2] || "";
     const automationLabel = {
-      idle: "자동 수정 가능 여부 확인 전",
-      queued: "자동 수정 대기",
-      running: "자동 수정 중",
-      review_required: "관리자 검토 필요",
+      idle: "수정 검토 요청 전",
+      queued: "수정 검토 대기",
+      running: "수정 작업 중",
+      review_required: "Codex 검토 대기",
       pr_ready: "수정안 검토 가능",
-      failed: "자동 수정 실패",
-      merged: "자동 수정 반영",
-    }[automationStatus] || "자동 수정 상태 확인 필요";
+      failed: "수정 작업 확인 필요",
+      merged: "수정 반영",
+    }[automationStatus] || "수정 상태 확인 필요";
     const automationAction = ["queued", "running"].includes(automationStatus)
-      ? `<button type="button" disabled>자동 수정 진행 중</button>`
+      ? `<button type="button" disabled>수정 검토 대기</button>`
       : row.automation_url
         ? `<a class="tn-report-link" href="${escapeHtml(row.automation_url)}" target="_blank" rel="noopener">수정안 확인</a>`
-        : `<button type="button" data-request-autofix>자동 수정 요청</button>`;
+        : automationStatus === "review_required"
+          ? `<button type="button" disabled>검토 요청됨</button>`
+          : `<button type="button" data-request-autofix>수정 검토 요청</button>`;
     return `<article class="tn-report-row ${escapeHtml(row.priority)}" data-report-id="${escapeHtml(row.id)}">
       <div><span>${escapeHtml(row.error_code)} · ${escapeHtml(row.surface)} · ${escapeHtml(labels[row.report_kind])}</span><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.description || row.error_message)}</p><small>${new Date(row.last_seen_at).toLocaleString("ko-KR")} · ${row.occurrence_count}회 발생 · v${escapeHtml(row.app_version)}</small><em class="tn-report-automation">${escapeHtml(automationLabel)}${automationMessage ? ` · ${escapeHtml(automationMessage)}` : ""}</em></div>
       <div class="tn-report-controls"><select data-report-priority><option value="urgent" ${row.priority === "urgent" ? "selected" : ""}>긴급</option><option value="high" ${row.priority === "high" ? "selected" : ""}>높음</option><option value="normal" ${row.priority === "normal" ? "selected" : ""}>일반</option></select><select data-report-status><option value="new" ${row.status === "new" ? "selected" : ""}>신규</option><option value="reviewing" ${row.status === "reviewing" ? "selected" : ""}>확인중</option><option value="planned" ${row.status === "planned" ? "selected" : ""}>개선예정</option><option value="resolved" ${row.status === "resolved" ? "selected" : ""}>완료</option><option value="closed" ${row.status === "closed" ? "selected" : ""}>종료</option></select><button type="button" data-save-report>상태 저장</button>${automationAction}<b>${priorityLabel} · ${statusLabel}</b></div>
@@ -162,17 +164,17 @@
       if (autoFixButton) {
         const reportRow = autoFixButton.closest("[data-report-id]");
         autoFixButton.disabled = true;
-        autoFixButton.textContent = "위험도 확인 중";
+        autoFixButton.textContent = "검토 요청 중";
         try {
           const response = await client.invokeFunction("tennisnote-product-report-autofix", {
             body: { reportId: reportRow.dataset.reportId },
           });
-          alert(response?.message || "자동 수정 요청을 처리했습니다.");
+          alert(response?.message || "수정 검토 요청을 접수했습니다.");
           await loadAdminReports();
         } catch (error) {
           alert(safeMessage(error.message || error));
           autoFixButton.disabled = false;
-          autoFixButton.textContent = "자동 수정 요청";
+          autoFixButton.textContent = "수정 검토 요청";
         }
         return;
       }
