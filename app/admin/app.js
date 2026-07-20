@@ -1477,6 +1477,7 @@ const defaultAdminLockSettings = {
   pinConfigured: false,
   timeoutMinutes: 10,
   lockedViews: ["billing", "data", "settings"],
+  pastAbsenceRequirePinEveryTime: true,
 };
 const adminLockSettings = { ...defaultAdminLockSettings, lockedViews: [...defaultAdminLockSettings.lockedViews] };
 let adminSecurityDraft = null;
@@ -1484,6 +1485,9 @@ let adminSecuritySaveState = { status: "idle", savedAt: "" };
 const adminLockSession = {
   unlockedUntil: 0,
   pendingView: "",
+  pendingAction: "",
+  pendingLabel: "",
+  oneTimeGrant: "",
   error: "",
   afterUnlock: null,
 };
@@ -1655,6 +1659,7 @@ function normalizeAdminLockSettings(source = {}) {
     pinConfigured: usesLegacyDemoPin ? false : source.pinConfigured === true || Boolean(pinHash || legacyPin),
     timeoutMinutes: Math.min(Math.max(timeoutMinutes, 1), 120),
     lockedViews: [...new Set(lockedViews)],
+    pastAbsenceRequirePinEveryTime: source.pastAbsenceRequirePinEveryTime !== false,
   };
 }
 
@@ -1665,6 +1670,7 @@ function serializableAdminLockSettings() {
     pinConfigured: adminLockSettings.pinConfigured,
     timeoutMinutes: adminLockSettings.timeoutMinutes,
     lockedViews: [...adminLockSettings.lockedViews],
+    pastAbsenceRequirePinEveryTime: adminLockSettings.pastAbsenceRequirePinEveryTime,
   };
   if (!payload.pinHash && adminLockSettings.legacyPin) payload.pin = adminLockSettings.legacyPin;
   return payload;
@@ -1675,6 +1681,7 @@ function adminSecurityConfigPayload(source = adminLockSettings) {
     enabled: Boolean(source.enabled),
     timeoutMinutes: Math.min(Math.max(numericValue(source.timeoutMinutes, 10), 1), 120),
     lockedViews: [...new Set(Array.isArray(source.lockedViews) ? source.lockedViews : [])],
+    pastAbsenceRequirePinEveryTime: source.pastAbsenceRequirePinEveryTime !== false,
   };
 }
 
@@ -1693,6 +1700,7 @@ function adminSecurityIsDirty() {
   const saved = adminSecurityConfigPayload();
   return draft.enabled !== saved.enabled
     || draft.timeoutMinutes !== saved.timeoutMinutes
+    || draft.pastAbsenceRequirePinEveryTime !== saved.pastAbsenceRequirePinEveryTime
     || draft.lockedViews.length !== saved.lockedViews.length
     || draft.lockedViews.some((view) => !saved.lockedViews.includes(view));
 }
@@ -1730,10 +1738,11 @@ async function saveAdminSecuritySettings() {
   adminSecuritySaveState.status = "saving";
   renderAdminSecurity();
   try {
-    await client.rpc("tn_admin_save_security_settings", {
+    await client.rpc("tn_admin_save_security_settings_v2", {
       target_enabled: value.enabled,
       target_timeout_minutes: value.timeoutMinutes,
       target_locked_views: value.lockedViews,
+      target_past_absence_require_pin_every_time: value.pastAbsenceRequirePinEveryTime,
     });
     Object.assign(adminLockSettings, value);
     resetAdminSecurityDraft();
@@ -1810,9 +1819,36 @@ function adminUnlockRemainingText() {
 function lockAdminNow() {
   adminLockSession.unlockedUntil = 0;
   adminLockSession.pendingView = "";
+  adminLockSession.pendingAction = "";
+  adminLockSession.pendingLabel = "";
+  adminLockSession.oneTimeGrant = "";
   adminLockSession.error = "";
   adminLockSession.afterUnlock = null;
   if (isAdminViewLocked(state.view)) setView("dashboard", { skipLock: true });
+}
+
+function consumeAdminActionGrant(action) {
+  if (!action || adminLockSession.oneTimeGrant !== action) return false;
+  adminLockSession.oneTimeGrant = "";
+  return true;
+}
+
+function requestAdminActionUnlock(action, label, afterUnlock) {
+  if (!isAdminLockActive() || !adminLockSettings.pastAbsenceRequirePinEveryTime) return true;
+  if (adminPinNeedsSetup()) {
+    state.settingsTab = "security";
+    showToast("보안/잠금에서 관리자 PIN을 먼저 설정해 주세요");
+    return false;
+  }
+  adminLockSession.pendingView = "";
+  adminLockSession.pendingAction = action;
+  adminLockSession.pendingLabel = label;
+  adminLockSession.error = "";
+  adminLockSession.afterUnlock = typeof afterUnlock === "function" ? afterUnlock : null;
+  renderAdminLockModal();
+  $("#adminLockModal")?.removeAttribute("hidden");
+  setTimeout(() => $("#adminPinInput")?.focus(), 0);
+  return false;
 }
 
 function requestAdminUnlock(view, afterUnlock = null) {
@@ -1827,6 +1863,8 @@ function requestAdminUnlock(view, afterUnlock = null) {
   }
   if (!isAdminViewLocked(view) || isAdminUnlocked()) return true;
   adminLockSession.pendingView = view;
+  adminLockSession.pendingAction = "";
+  adminLockSession.pendingLabel = "";
   adminLockSession.error = "";
   adminLockSession.afterUnlock = typeof afterUnlock === "function" ? afterUnlock : null;
   renderAdminLockModal();
@@ -1840,7 +1878,9 @@ function renderAdminLockModal() {
   const error = $("#adminPinError");
   const input = $("#adminPinInput");
   if (message) {
-    message.textContent = `${adminLockViewName(adminLockSession.pendingView)} 화면은 관리자 PIN 확인 후 열 수 있습니다.`;
+    message.textContent = adminLockSession.pendingAction
+      ? `${adminLockSession.pendingLabel || "민감 작업"}은 실행할 때마다 관리자 PIN 확인이 필요합니다.`
+      : `${adminLockViewName(adminLockSession.pendingView)} 화면은 관리자 PIN 확인 후 열 수 있습니다.`;
   }
   if (error) error.textContent = adminLockSession.error || "";
   if (input && !adminLockSession.error) input.value = "";
@@ -1849,6 +1889,8 @@ function renderAdminLockModal() {
 function closeAdminLockModal() {
   $("#adminLockModal")?.setAttribute("hidden", "");
   adminLockSession.pendingView = "";
+  adminLockSession.pendingAction = "";
+  adminLockSession.pendingLabel = "";
   adminLockSession.error = "";
   adminLockSession.afterUnlock = null;
   const form = $("#adminLockForm");
@@ -1872,12 +1914,20 @@ async function confirmAdminUnlock() {
     setTimeout(() => $("#adminPinInput")?.focus(), 0);
     return;
   }
-  adminLockSession.unlockedUntil = Date.now() + adminLockSettings.timeoutMinutes * 60000;
+  const oneTimeAction = adminLockSession.pendingAction;
+  if (oneTimeAction) {
+    adminLockSession.oneTimeGrant = oneTimeAction;
+    setTimeout(() => {
+      if (adminLockSession.oneTimeGrant === oneTimeAction) adminLockSession.oneTimeGrant = "";
+    }, 5000);
+  } else {
+    adminLockSession.unlockedUntil = Date.now() + adminLockSettings.timeoutMinutes * 60000;
+  }
   const targetView = adminLockSession.pendingView;
   const callback = adminLockSession.afterUnlock;
   closeAdminLockModal();
   renderAdminSecurity();
-  showToast(`관리자 잠금 해제 · ${adminLockSettings.timeoutMinutes}분 유지`);
+  showToast(oneTimeAction ? "관리자 확인 완료" : `관리자 잠금 해제 · ${adminLockSettings.timeoutMinutes}분 유지`);
   if (callback) callback();
   else if (targetView) setView(targetView, { skipLock: true });
 }
@@ -11396,6 +11446,11 @@ async function addLessonFromForm(event) {
         setLessonFormMessage("보정 사유를 5자 이상 입력해 주세요.", "danger");
         return;
       }
+      if (!consumeAdminActionGrant("past_absence_correction")
+        && !requestAdminActionUnlock("past_absence_correction", "지난 수업 사전 불참 보정", () => $("#lessonForm")?.requestSubmit())) {
+        if (adminPinNeedsSetup()) setLessonFormMessage("운영 설정의 보안/잠금에서 관리자 PIN을 먼저 설정해 주세요.", "danger");
+        return;
+      }
       setLessonSubmitEnabled(false);
       setLessonFormMessage("사전 불참으로 보정하고 횟수와 보강 상태를 확인하고 있습니다.");
       try {
@@ -16178,6 +16233,10 @@ function renderAdminSecurity() {
             ${[3, 5, 10, 15, 30, 60].map((minute) => `<option value="${minute}" ${draft.timeoutMinutes === minute ? "selected" : ""}>${minute}분</option>`).join("")}
           </select>
         </label>
+        <label class="toggle-row">
+          <input id="adminPastAbsenceLockEveryTime" type="checkbox" ${draft.pastAbsenceRequirePinEveryTime ? "checked" : ""} />
+          <span>지난 수업 사전 불참 보정 시 매번 PIN 확인</span>
+        </label>
         <div class="data-action-row">
           <button class="ghost-button" type="button" id="adminLockNowButton">지금 다시 잠그기</button>
         </div>
@@ -17002,6 +17061,12 @@ function bindEvents() {
     }
     if (event.target.id === "adminLockTimeout") {
       currentAdminSecurityDraft().timeoutMinutes = numericValue(event.target.value, 10);
+      adminSecuritySaveState.status = "idle";
+      renderAdminSecurity();
+      return;
+    }
+    if (event.target.id === "adminPastAbsenceLockEveryTime") {
+      currentAdminSecurityDraft().pastAbsenceRequirePinEveryTime = event.target.checked;
       adminSecuritySaveState.status = "idle";
       renderAdminSecurity();
       return;

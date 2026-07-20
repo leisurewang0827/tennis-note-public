@@ -7055,6 +7055,10 @@ button .schedule-member-lines > span {
   width: min(460px, 100%);
 }
 
+#adminLockModal {
+  z-index: 1800;
+}
+
 .member-management-modal-panel {
   width: min(720px, 100%);
 }
