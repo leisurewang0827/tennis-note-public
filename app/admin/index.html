@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=admin-issue-reports-1" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.35" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-1" />
   </head>
   <body>
@@ -68,7 +68,7 @@
           <div class="topbar-actions">
             <nav class="app-preview-links" aria-label="앱 미리보기">
               <span>앱 미리보기</span>
-              <a href="../tennis-note-member-app/index.html?v=member-one-day-availability-1" target="_blank" rel="noopener">통합앱</a>
+              <a href="../tennis-note-member-app/index.html?v=1.0.35" target="_blank" rel="noopener">통합앱</a>
             </nav>
             <div class="global-search-shell">
               <label class="search-box">
@@ -213,7 +213,10 @@
                     <option value="none">회원권 없음</option>
                   </select>
                 </label>
-                <strong id="memberFilterSummary" class="member-filter-summary"></strong>
+                <div class="member-filter-result">
+                  <strong id="memberFilterSummary" class="member-filter-summary"></strong>
+                  <button id="resetMemberFilters" class="ghost-button member-filter-reset" type="button" hidden>검색 초기화</button>
+                </div>
               </div>
               <table>
                 <thead>
@@ -480,7 +483,16 @@
             </div>
             <div class="record-filter-bar" aria-label="기록 상세 필터">
               <label><span>담당 코치</span><select id="recordCoachFilter"><option value="all">전체 코치</option></select></label>
-              <label><span>미처리 분류</span><select id="recordPendingTypeFilter"><option value="all">전체 미처리</option><option value="lesson">수업 기록</option><option value="payment">결제 연결</option><option value="makeup">보강·변경</option><option value="feedback">회원 피드</option></select></label>
+              <label>
+                <span>미처리 분류</span>
+                <select id="recordPendingTypeFilter">
+                  <option value="all">전체 미처리</option>
+                  <option value="lesson">수업 기록</option>
+                  <option value="payment">결제 연결</option>
+                  <option value="makeup">보강·변경</option>
+                  <option value="feedback">회원 피드</option>
+                </select>
+              </label>
             </div>
             <div id="recordAuditRows" class="record-audit-list"></div>
           </section>
@@ -687,16 +699,11 @@
                 <strong>다음 설정 위치</strong>
                 <ul>
                   <li>Supabase Authentication > Providers에서 Kakao, Naver를 켭니다.</li>
-                  <li>Supabase Redirect URLs에 아래 공개 회원·코치·관리자 주소를 모두 등록합니다.</li>
-                  <li>네이버 개발자센터에는 <strong>서비스 URL</strong>과 Supabase <strong>Callback URL</strong>을 각각 등록합니다.</li>
-                  <li>첫 로그인 후 Authentication > Users의 UUID를 <code>tn_users.auth_user_id</code> 또는 <code>tn_user_auth_links</code>에 연결합니다.</li>
+                  <li>Redirect URL에는 통합앱의 회원 화면 주소를 등록합니다.</li>
+                  <li>첫 로그인 후 Authentication > Users의 UUID를 <code>tn_users.auth_user_id</code>에 연결합니다.</li>
                 </ul>
                 <div class="redirect-url-list">
-                  <code>https://leisurewang0827.github.io/tennis-note-public/app/tennis-note-member-app/index.html</code>
-                  <code>https://leisurewang0827.github.io/tennis-note-public/app/tennis-note-coach-app/index.html</code>
-                  <code>https://leisurewang0827.github.io/tennis-note-public/app/admin/index.html</code>
-                  <code>네이버 서비스 URL: https://leisurewang0827.github.io/tennis-note-public/app/admin/</code>
-                  <code>네이버 Callback URL: https://ldwexbvnixpvjbmlwnwi.supabase.co/auth/v1/callback</code>
+                  <code>http://127.0.0.1:8773/90-Dashboard/tennis-note-member-app/index.html</code>
                 </div>
               </div>
             </section>
@@ -1274,11 +1281,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=member-demographics-1"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.35"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=release-19"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.35"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-1"></script>
-    <script src="./app.js?v=admin-fast-session-restore-1"></script>
+    <script src="./app.js?v=1.0.35"></script>
   </body>
 </html>

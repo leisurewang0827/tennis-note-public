@@ -840,33 +840,6 @@ a {
   }
 }
 
-/* Keep the five operational tabs readable on smaller phones. */
-@media (max-width: 420px) {
-  .app-screen {
-    padding: max(10px, env(safe-area-inset-top)) 10px calc(16px + env(safe-area-inset-bottom));
-  }
-
-  .tabbar {
-    gap: 3px;
-  }
-
-  .tab {
-    min-height: 42px;
-    padding: 7px 2px;
-    font-size: 12px;
-    white-space: nowrap;
-  }
-
-  .summary-grid article {
-    min-height: 96px;
-    padding: 11px;
-  }
-
-  .section-title h2 {
-    font-size: 22px;
-  }
-}
-
 .coach-week-days {
   display: grid;
   grid-template-columns: repeat(6, minmax(82px, 1fr));
@@ -3762,26 +3735,5 @@ body {
   .tabbar {
     border-radius: 8px;
     border-color: #dbe6e0;
-  }
-}
-
-@media (max-width: 420px) {
-  .app-screen {
-    padding: max(10px, env(safe-area-inset-top)) 10px calc(84px + env(safe-area-inset-bottom));
-  }
-
-  .tabbar .tab {
-    min-height: 44px;
-    padding: 4px 1px;
-    font-size: 10px;
-  }
-
-  .summary-grid article {
-    min-height: 96px;
-    padding: 11px;
-  }
-
-  .section-title h2 {
-    font-size: 22px;
   }
 }

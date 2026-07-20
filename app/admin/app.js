@@ -2055,6 +2055,7 @@ function restoreSnapshot() {
     if (snapshot.state) {
       const { courtCount, ...restoredState } = snapshot.state;
       Object.assign(state, restoredState);
+      state.memberSearch = "";
       state.liveScheduleLoaded = false;
       state.liveScheduleLoading = false;
       state.liveScheduleMessage = "실서버 시간표 재확인 중";
@@ -6367,6 +6368,8 @@ async function loadServerHoldingRequests() {
 
 function accountDeletionStatusLabel(status) {
   if (status === "reviewing") return "검토중";
+  if (status === "processing") return "삭제 처리중";
+  if (status === "failed") return "재시도 필요";
   if (status === "completed") return "처리완료";
   if (status === "cancelled") return "취소";
   return "접수";
@@ -6377,26 +6380,71 @@ function accountDeletionDateTime(value) {
   return Number.isNaN(date.getTime()) ? "접수 시각 미확인" : date.toLocaleString("ko-KR");
 }
 
+const ACCOUNT_DELETION_STALE_MS = 16 * 60 * 1000;
+const accountDeletionExecutionInFlight = new Set();
+let accountDeletionRetryTimer = 0;
+
+function accountDeletionProcessingIsStale(request, now = Date.now()) {
+  if (request?.status !== "processing") return false;
+  const startedAt = Date.parse(request.executionStartedAt || "");
+  return Number.isFinite(startedAt) && startedAt + ACCOUNT_DELETION_STALE_MS <= now;
+}
+
+function scheduleAccountDeletionRetryRefresh(requests) {
+  if (accountDeletionRetryTimer) window.clearTimeout(accountDeletionRetryTimer);
+  accountDeletionRetryTimer = 0;
+  const now = Date.now();
+  const nextRetryAt = (requests || [])
+    .filter((request) => request.status === "processing")
+    .map((request) => Date.parse(request.executionStartedAt || "") + ACCOUNT_DELETION_STALE_MS)
+    .filter((value) => Number.isFinite(value) && value > now)
+    .sort((left, right) => left - right)[0];
+  if (!nextRetryAt) return;
+  accountDeletionRetryTimer = window.setTimeout(() => {
+    accountDeletionRetryTimer = 0;
+    loadServerAccountDeletionRequests();
+  }, Math.max(250, nextRetryAt - now + 250));
+}
+
+function accountDeletionActionButton(request) {
+  if (accountDeletionExecutionInFlight.has(request.id)) {
+    return `<button class="small-button" type="button" disabled aria-busy="true">삭제 처리 중</button>`;
+  }
+  if (request.status === "pending") {
+    return `<button class="small-button" type="button" data-review-account-deletion="reviewing" data-account-deletion-id="${escapeHtml(request.id)}">검토 시작</button>`;
+  }
+  if (request.status === "reviewing") {
+    return `<button class="small-button danger-button" type="button" data-review-account-deletion="completed" data-account-deletion-id="${escapeHtml(request.id)}">계정 삭제 실행</button>`;
+  }
+  if (request.status === "failed" || accountDeletionProcessingIsStale(request)) {
+    return `<button class="small-button danger-button" type="button" data-review-account-deletion="completed" data-account-deletion-id="${escapeHtml(request.id)}">삭제 다시 시도</button>`;
+  }
+  if (request.status === "processing") {
+    return `<button class="small-button" type="button" disabled>삭제 처리 중</button>`;
+  }
+  return "";
+}
+
 function renderAccountDeletionAdminList() {
   const target = $("#accountDeletionAdminList");
   if (!target) return;
   const requests = state.accountDeletionRequests || [];
+  scheduleAccountDeletionRetryRefresh(requests);
   const panel = target.closest("details");
-  if (panel && requests.some((request) => request.status === "pending" || request.status === "reviewing")) panel.open = true;
+  if (panel && requests.some((request) => ["pending", "reviewing", "processing", "failed"].includes(request.status))) panel.open = true;
   target.innerHTML = requests.length
     ? requests.map((request) => `
       <article class="holding-admin-row ${escapeHtml(request.status || "pending")}">
         <div class="holding-admin-main">
           <strong>${escapeHtml(request.member || "회원")}</strong>
           <span>${escapeHtml(accountDeletionStatusLabel(request.status))} · ${escapeHtml(accountDeletionDateTime(request.requestedAt || request.createdAt))}</span>
-          <small>${escapeHtml(request.reason || "사유 미입력")} ${request.retainedDataSummary ? `· 보관: ${escapeHtml(request.retainedDataSummary)}` : ""}</small>
+          <small>${escapeHtml(request.reason || "사유 미입력")} ${request.retainedDataSummary ? `· 보관: ${escapeHtml(request.retainedDataSummary)}` : ""}${request.status === "failed" ? " · 서버 삭제 작업 재시도 필요" : ""}</small>
         </div>
         <div class="holding-admin-status">
-          ${badge(request.status === "completed" ? "ready" : request.status === "cancelled" ? "danger" : "pending", accountDeletionStatusLabel(request.status))}
+          ${badge(request.status === "completed" ? "ready" : ["cancelled", "failed"].includes(request.status) ? "danger" : "pending", accountDeletionStatusLabel(request.status))}
         </div>
         <div class="holding-admin-actions">
-          ${request.status === "pending" ? `<button class="small-button" type="button" data-review-account-deletion="reviewing" data-account-deletion-id="${escapeHtml(request.id)}">검토 시작</button>` : ""}
-          ${request.status === "reviewing" ? `<button class="small-button danger-button" type="button" data-review-account-deletion="completed" data-account-deletion-id="${escapeHtml(request.id)}">삭제 처리 완료</button>` : ""}
+          ${accountDeletionActionButton(request)}
         </div>
       </article>`).join("")
     : `<p class="empty-text">접수된 회원 탈퇴 요청이 없습니다.</p>`;
@@ -6407,7 +6455,7 @@ async function loadServerAccountDeletionRequests() {
   if (!client?.readiness?.().ready || !client.selectRows || !client.getSession?.()?.access_token) return false;
   try {
     const rows = await client.selectRows("tn_account_deletion_requests", {
-      select: "id,user_id,status,reason_summary,admin_note,retained_data_summary,requested_at,reviewed_at,completed_at,cancelled_at,created_at",
+      select: "*",
       limit: 100,
     });
     const userIds = [...new Set((rows || []).map((row) => row.user_id).filter(Boolean))];
@@ -6425,8 +6473,13 @@ async function loadServerAccountDeletionRequests() {
         reason: row.reason_summary || "",
         adminNote: row.admin_note || "",
         retainedDataSummary: row.retained_data_summary || "",
+        executionAttempts: Number(row.execution_attempts || 0),
+        lastErrorCode: row.last_error_code || "",
+        appleRevokeStatus: row.apple_revoke_status || "not_applicable",
+        authDeleteStatus: row.auth_delete_status || "pending",
         requestedAt: row.requested_at || "",
         reviewedAt: row.reviewed_at || "",
+        executionStartedAt: row.execution_started_at || "",
         completedAt: row.completed_at || "",
         createdAt: row.created_at || "",
       }))
@@ -6443,19 +6496,68 @@ async function loadServerAccountDeletionRequests() {
 async function reviewAccountDeletionRequest(requestId, status) {
   const request = (state.accountDeletionRequests || []).find((item) => item.id === requestId);
   const client = window.TennisNoteDataClient;
-  if (!request || !client?.rpc) return;
-  if (status === "completed" && !window.confirm("정산·환불·잔여 수업과 법정 보관 대상을 확인하고 삭제 처리를 완료할까요?")) return;
+  if (!request || !client?.rpc || !client?.invokeFunction) return;
+  if (accountDeletionExecutionInFlight.has(requestId)) return;
+  if (
+    status === "completed"
+    && request.status !== "reviewing"
+    && request.status !== "failed"
+    && !accountDeletionProcessingIsStale(request)
+  ) {
+    showToast("현재 삭제 작업이 끝나거나 16분 재시도 시간이 지난 뒤 다시 시도해 주세요");
+    return;
+  }
+  if (status === "completed" && !window.confirm("이 작업은 회원의 로그인 계정과 개인 이용 데이터를 실제로 삭제하며 되돌릴 수 없습니다. 정산·환불·잔여 수업을 확인한 뒤 실행할까요?")) return;
+  accountDeletionExecutionInFlight.add(requestId);
+  if (status === "completed") {
+    request.status = "processing";
+    request.executionStartedAt = new Date().toISOString();
+  }
+  renderAccountDeletionAdminList();
   try {
+    if (status === "completed") {
+      await client.invokeFunction("tennisnote-account-deletion", {
+        body: { action: "complete", requestId },
+      });
+      showToast("회원 계정과 개인 이용 데이터 삭제 완료");
+      return;
+    }
     await client.rpc("tn_review_account_deletion", {
       target_request_id: requestId,
       target_status: status,
-      target_admin_note: status === "completed" ? "관리자 삭제 처리 완료" : "관리자 검토 시작",
-      target_retained_data_summary: status === "completed" ? "결제·환불 등 법정 보관 대상만 분리 보관" : "",
+      target_admin_note: "관리자 검토 시작",
+      target_retained_data_summary: "",
     });
+    showToast("회원 탈퇴 요청 검토 시작");
+  } catch (error) {
+    const code = String(error?.payload?.code || error?.message || "").toLowerCase();
+    if (code.includes("execution_in_progress") || code.includes("lease_mismatch")) {
+      showToast("다른 관리자 화면에서 삭제를 처리 중입니다. 잠시 후 상태를 다시 확인해 주세요");
+      return;
+    }
+    if (code.includes("storage_cleanup")) {
+      showToast("사진·동영상 원본 삭제를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요");
+      return;
+    }
+    if (code.includes("coach_makeup")) {
+      showToast("코치에게 배정된 미처리 보강권을 다른 코치로 옮긴 뒤 다시 시도해 주세요");
+      return;
+    }
+    if (code.includes("active_ticket")) showToast("잔여 수업이 있는 회원권을 먼저 환불·종료해 주세요");
+    else if (code.includes("future_lesson")) showToast("예정된 수업을 먼저 취소하거나 정리해 주세요");
+    else if (code.includes("refund_review")) showToast("진행 중인 환불 처리를 먼저 완료해 주세요");
+    else if (code.includes("payment_review")) showToast("확인 중인 결제를 먼저 정리해 주세요");
+    else if (code.includes("transfer_review")) showToast("진행 중인 회원권 양도 요청을 먼저 정리해 주세요");
+    else if (code.includes("coach_schedule")) showToast("코치의 예정 수업을 다른 코치에게 재배정한 뒤 삭제해 주세요");
+    else if (code.includes("admin_role")) showToast("관리자 계정은 권한을 인계하고 일반 회원으로 변경한 뒤 삭제해 주세요");
+    else if (code.includes("merged_profile")) showToast("이미 기존 회원에게 병합된 가입 프로필은 별도로 삭제하지 않습니다");
+    else if (code.includes("apple_reauthentication")) showToast("회원이 Apple로 다시 로그인한 뒤 삭제 처리를 재시도해 주세요");
+    else if (code.includes("self_admin")) showToast("현재 로그인한 관리자 계정은 직접 삭제할 수 없습니다");
+    else if (code.includes("apple_revoke_config")) showToast("Apple 연결 해제 서버 설정을 확인한 뒤 다시 시도해 주세요");
+    else showToast("삭제 처리를 완료하지 못했습니다 · 상태를 보존했으므로 다시 시도할 수 있습니다");
+  } finally {
+    accountDeletionExecutionInFlight.delete(requestId);
     await loadServerAccountDeletionRequests();
-    showToast(status === "completed" ? "회원 탈퇴 및 데이터 삭제 처리 완료" : "회원 탈퇴 요청 검토 시작");
-  } catch {
-    showToast("탈퇴 요청 처리 실패 · 관리자 권한과 DB 적용을 확인해 주세요");
   }
 }
 
@@ -8285,6 +8387,12 @@ function renderMembers() {
   const filtered = filteredMembers();
   const filterCopy = memberFilterCopy[state.memberFilter] || memberFilterCopy.active;
   if ($("#memberFilterSummary")) $("#memberFilterSummary").textContent = `${filtered.length}${filterCopy.summary}`;
+  const hasMemberListFilter = Boolean(
+    String(state.memberSearch || "").trim()
+    || state.memberCoachFilter !== "all"
+    || state.memberTicketFilter !== "all"
+  );
+  if ($("#resetMemberFilters")) $("#resetMemberFilters").hidden = !hasMemberListFilter;
   renderMemberStatusCounts();
   renderMemberFilterSections();
 
@@ -11796,7 +11904,11 @@ function recordCoachId(source = {}) {
 
 function withRecordCoach(record, source = record) {
   const coachId = recordCoachId(source);
-  return { ...record, coachId, coachName: coachId ? getCoachName(coachId) : "미배정" };
+  return {
+    ...record,
+    coachId,
+    coachName: coachId ? getCoachName(coachId) : "미배정",
+  };
 }
 
 function pendingRecordType(record = {}) {
@@ -12001,7 +12113,10 @@ function adminRecordGroups() {
     ...shared.feedbackRequests.map(feedbackRecord),
     ...(adminLiveDataState.journalEntries || []).map(memberJournalRecord),
   ];
-  const normalizedRecords = records.map((record) => withRecordCoach({ ...record, pendingType: pendingRecordType(record) }));
+  const normalizedRecords = records.map((record) => withRecordCoach({
+    ...record,
+    pendingType: pendingRecordType(record),
+  }));
   return {
     pending: sortAdminRecords(normalizedRecords.filter((record) => record.group === "pending")),
     feedback: sortAdminRecords(normalizedRecords.filter((record) => record.group === "feedback")),
@@ -12016,9 +12131,13 @@ function renderRecordFilters(records = []) {
     const availableCoachIds = new Set(records.map((record) => record.coachId).filter(Boolean));
     coachSelect.innerHTML = [
       '<option value="all">전체 코치</option>',
-      ...coaches.filter((coach) => availableCoachIds.has(coach.id)).map((coach) => `<option value="${escapeHtml(coach.id)}">${escapeHtml(coach.name)}</option>`),
+      ...coaches
+        .filter((coach) => availableCoachIds.has(coach.id))
+        .map((coach) => `<option value="${escapeHtml(coach.id)}">${escapeHtml(coach.name)}</option>`),
     ].join("");
-    if (state.recordCoachFilter !== "all" && !availableCoachIds.has(state.recordCoachFilter)) state.recordCoachFilter = "all";
+    if (state.recordCoachFilter !== "all" && !availableCoachIds.has(state.recordCoachFilter)) {
+      state.recordCoachFilter = "all";
+    }
     coachSelect.value = state.recordCoachFilter;
   }
   const pendingTypeSelect = $("#recordPendingTypeFilter");
@@ -12034,9 +12153,9 @@ function renderNotes() {
   const groups = adminRecordGroups();
   const activeFilter = ["pending", "feedback", "done", "issue"].includes(state.recordFilter) ? state.recordFilter : "pending";
   state.recordFilter = activeFilter;
-
   if (!["all", "lesson", "payment", "makeup", "feedback"].includes(state.recordPendingType)) state.recordPendingType = "all";
   if (!state.recordCoachFilter) state.recordCoachFilter = "all";
+
   renderRecordFilters(Object.values(groups).flat());
   const visibleGroups = Object.fromEntries(Object.entries(groups).map(([key, records]) => [
     key,
@@ -12050,7 +12169,9 @@ function renderNotes() {
   $$("[data-record-filter]").forEach((button) => button.classList.toggle("is-active", button.dataset.recordFilter === activeFilter));
 
   const visibleRecords = visibleGroups[activeFilter].filter((record) => (
-    activeFilter !== "pending" || state.recordPendingType === "all" || record.pendingType === state.recordPendingType
+    activeFilter !== "pending"
+    || state.recordPendingType === "all"
+    || record.pendingType === state.recordPendingType
   ));
   target.innerHTML = visibleRecords
     .map(
@@ -16386,6 +16507,15 @@ function bindEvents() {
     state.memberListPage = 0;
     state.selectedMemberId = null;
     renderMembers();
+  });
+  $("#resetMemberFilters")?.addEventListener("click", () => {
+    state.memberSearch = "";
+    state.memberCoachFilter = "all";
+    state.memberTicketFilter = "all";
+    state.memberListPage = 0;
+    state.selectedMemberId = null;
+    renderMembers();
+    saveSnapshot();
   });
   $("#memberCoachFilter")?.addEventListener("change", (event) => {
     state.memberCoachFilter = event.target.value;

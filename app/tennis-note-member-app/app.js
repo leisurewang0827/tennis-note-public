@@ -1511,6 +1511,10 @@ const pushDeviceStorageKey = "tennis-note-push-device-id";
 let pushListenersReady = false;
 let pushProfileId = "";
 
+function accountDeletionBlocksNotifications(status) {
+  return ["pending", "reviewing", "processing", "failed", "completed"].includes(status || "");
+}
+
 function nativePushPlugin() {
   return window.TennisNoteNativePush || window.Capacitor?.Plugins?.PushNotifications || null;
 }
@@ -1541,7 +1545,7 @@ function renderPushNotificationSettings() {
   const button = $("#pushNotificationButton");
   if (!card || !status || !detail || !button) return;
 
-  if (["pending", "reviewing", "completed"].includes(state.accountDeletionRequest?.status || "")) {
+  if (accountDeletionBlocksNotifications(state.accountDeletionRequest?.status)) {
     card.classList.remove("is-enabled", "is-denied");
     status.textContent = "탈퇴 요청으로 알림 중지";
     detail.textContent = "계정 삭제 요청을 처리하는 동안 새 기기 알림을 등록하지 않습니다.";
@@ -1569,9 +1573,9 @@ function renderAccountDeletionSettings() {
 
   const request = state.accountDeletionRequest;
   const requestStatus = request?.status || "";
-  card.classList.toggle("is-pending", ["pending", "reviewing"].includes(requestStatus));
+  card.classList.toggle("is-pending", ["pending", "reviewing", "processing", "failed"].includes(requestStatus));
   card.classList.toggle("is-completed", requestStatus === "completed");
-  button.disabled = requestStatus === "reviewing" || requestStatus === "completed";
+  button.disabled = ["reviewing", "processing", "failed", "completed"].includes(requestStatus);
 
   if (requestStatus === "pending") {
     status.textContent = "탈퇴 요청 접수됨";
@@ -1583,6 +1587,24 @@ function renderAccountDeletionSettings() {
     status.textContent = "관리자 검토 중";
     detail.textContent = "결제·환불·잔여 수업과 법정 보관 대상을 확인하고 있습니다.";
     button.textContent = "처리 중";
+    return;
+  }
+  if (requestStatus === "processing") {
+    status.textContent = "계정 삭제 처리 중";
+    detail.textContent = "로그인 연결과 개인 이용 데이터를 안전하게 삭제하고 있습니다.";
+    button.textContent = "처리 중";
+    return;
+  }
+  if (requestStatus === "failed") {
+    if (String(request?.last_error_code || "").includes("apple_reauthentication")) {
+      status.textContent = "Apple 로그인 갱신 필요";
+      detail.textContent = "로그아웃한 뒤 Apple로 다시 로그인하고 고객지원에 삭제 처리를 다시 요청해 주세요.";
+      button.textContent = "재로그인 필요";
+      return;
+    }
+    status.textContent = "삭제 처리 재확인 중";
+    detail.textContent = "일부 서버 처리를 다시 확인하고 있습니다. 고객지원에서 안전하게 재시도합니다.";
+    button.textContent = "재확인 중";
     return;
   }
   if (requestStatus === "completed") {
@@ -1630,7 +1652,6 @@ async function submitAccountDeletionRequest(event) {
     await client.rpc("tn_request_account_deletion", {
       target_reason: $("#accountDeletionReason")?.value?.trim() || "",
     });
-    await disableNativePushForLogout();
     await syncMemberAccountDeletionRequestFromServer();
     closeAccountDeletionModal();
     renderAccountDeletionSettings();
@@ -1650,6 +1671,7 @@ async function cancelAccountDeletionRequest() {
   try {
     await client.rpc("tn_cancel_account_deletion", { target_request_id: request.id });
     await syncMemberAccountDeletionRequestFromServer();
+    await syncNativePushRegistration(null, false).catch(() => false);
     renderAccountDeletionSettings();
     renderPushNotificationSettings();
     saveSnapshot();
@@ -1659,12 +1681,13 @@ async function cancelAccountDeletionRequest() {
   }
 }
 
-async function registerPushToken(tokenValue) {
+async function registerPushToken(tokenValue, platform = nativeAppPlatform()) {
   const client = window.TennisNoteDataClient;
-  if (["pending", "reviewing", "completed"].includes(state.accountDeletionRequest?.status || "")) return false;
+  if (accountDeletionBlocksNotifications(state.accountDeletionRequest?.status)) return false;
+  if (!["android", "ios"].includes(platform)) return false;
   if (!tokenValue || !pushProfileId || !client?.rpc || !client.getSession?.()?.access_token) return false;
   await client.rpc("tn_register_push_device", {
-    target_platform: "android",
+    target_platform: platform,
     target_device_id: currentPushDeviceId(),
     target_push_token: tokenValue,
   });
@@ -1676,13 +1699,13 @@ async function bindNativePushListeners(plugin) {
   if (pushListenersReady) return;
   await plugin.addListener("registration", async (token) => {
     try {
-      await registerPushToken(token?.value || "");
+      await registerPushToken(token?.value || "", nativeAppPlatform());
     } catch {
       setPushNotificationState("granted", "알림 연결 확인 필요", "앱 로그인과 서버 설정을 확인한 뒤 다시 연결해 주세요.");
     }
   });
   await plugin.addListener("registrationError", () => {
-    setPushNotificationState("unknown", "알림 등록 실패", "Firebase 앱 설정을 확인한 뒤 다시 시도해 주세요.");
+    setPushNotificationState("unknown", "알림 등록 실패", "휴대폰 알림 설정과 네트워크를 확인한 뒤 다시 시도해 주세요.");
   });
   await plugin.addListener("pushNotificationReceived", async () => {
     await syncMemberNotificationsFromServer().catch(() => false);
@@ -1704,25 +1727,20 @@ async function syncNativePushRegistration(profile = null, requestPermission = fa
   const profileId = profile?.id || state.member?.profileId || "";
   pushProfileId = profileId;
 
-  if (["pending", "reviewing", "completed"].includes(state.accountDeletionRequest?.status || "")) {
-    const client = window.TennisNoteDataClient;
-    if (client?.getSession?.()?.access_token && client?.rpc) {
-      await client.rpc("tn_disable_push_device", { target_device_id: currentPushDeviceId() }).catch(() => null);
-    }
-    // The backend device record is disabled above. Avoid the native
-    // unregister call here as well because it can terminate an Android app
-    // whose Firebase runtime has not been initialized yet.
+  if (accountDeletionBlocksNotifications(state.accountDeletionRequest?.status)) {
+    // The deletion-request RPC already disabled every currently enabled
+    // device. Do not touch updated_at here because cancellation uses that
+    // request-time marker to restore only devices disabled by the request.
     pushProfileId = "";
     setPushNotificationState("disabled", "탈퇴 요청으로 알림 중지", "계정 삭제 요청을 처리하는 동안 새 기기 알림을 등록하지 않습니다.");
     return false;
   }
 
-  if (platform !== "android" || !plugin) {
-    const isIos = platform === "ios";
+  if (!["android", "ios"].includes(platform) || !plugin) {
     setPushNotificationState(
       "unavailable",
-      isIos ? "iPhone 알림 준비 중" : "설치 앱에서 사용 가능",
-      isIos ? "TestFlight 단계에서 Apple 알림 인증을 연결합니다." : "Play 스토어용 앱에서 수업·회원권 알림을 켤 수 있습니다.",
+      "설치 앱에서 사용 가능",
+      "휴대폰에 설치한 Tennis Note 앱에서 수업·회원권 알림을 켤 수 있습니다.",
     );
     return false;
   }
@@ -1732,14 +1750,16 @@ async function syncNativePushRegistration(profile = null, requestPermission = fa
   }
 
   await bindNativePushListeners(plugin);
-  await plugin.createChannel({
-    id: "lesson-reminders",
-    name: "수업·회원권 알림",
-    description: "수업 일정과 회원권 만료 알림",
-    importance: 5,
-    visibility: 1,
-    vibration: true,
-  }).catch(() => undefined);
+  if (platform === "android") {
+    await plugin.createChannel({
+      id: "lesson-reminders",
+      name: "수업·회원권 알림",
+      description: "수업 일정과 회원권 만료 알림",
+      importance: 5,
+      visibility: 1,
+      vibration: true,
+    }).catch(() => undefined);
+  }
 
   let permission = await plugin.checkPermissions();
   if (requestPermission && ["prompt", "prompt-with-rationale"].includes(permission.receive)) {
@@ -2510,13 +2530,13 @@ function renderProfile() {
   setProfileFieldValue("#profileRealNameInput", realName === "가입 확인 중" ? "" : realName);
   setProfileFieldValue("#profileNicknameInput", state.profile.nickname || "");
   setProfileFieldValue("#profilePhoneInput", formatIdentityPhone(state.profile.phone || ""));
-  setProfileFieldValue("#profileHand", state.profile.hand || "오른손");
-  setProfileFieldValue("#profileBackhand", state.profile.backhand || "투핸드 백핸드");
-  setProfileFieldValue("#profileStartedAt", state.profile.startedAt || "");
-  setProfileFieldValue("#profileGoal", state.profile.goal || "");
-  setProfileFieldValue("#profileStyleMemo", state.profile.styleMemo || "");
-  setProfileFieldValue("#profileSelfNtrp", state.profile.selfNtrp || "2.5");
-  setProfileFieldValue("#profileCoachNtrp", state.profile.coachNtrp || "측정 전");
+  if ($("#profileHand")) $("#profileHand").value = state.profile.hand || "오른손";
+  if ($("#profileBackhand")) $("#profileBackhand").value = state.profile.backhand || "투핸드 백핸드";
+  if ($("#profileStartedAt")) $("#profileStartedAt").value = state.profile.startedAt || "";
+  if ($("#profileGoal")) $("#profileGoal").value = state.profile.goal || "";
+  if ($("#profileStyleMemo")) $("#profileStyleMemo").value = state.profile.styleMemo || "";
+  if ($("#profileSelfNtrp")) $("#profileSelfNtrp").value = state.profile.selfNtrp || "2.5";
+  if ($("#profileCoachNtrp")) $("#profileCoachNtrp").value = state.profile.coachNtrp || "측정 전";
   if ($("#ntrpPanel")) {
     $("#ntrpPanel").innerHTML = `
       <article>
@@ -4934,12 +4954,6 @@ function setNoticeDialogOpen(open) {
 }
 
 function showNoticeIfNeeded() {
-  // A required profile setup sheet must be the only blocking layer on first
-  // entry. Defer general notices until the member has completed that form.
-  if (!identityProfileComplete()) {
-    setNoticeDialogOpen(false);
-    return;
-  }
   const today = localDateKey();
   const activeNotices = [...activeNoticesForApp("member"), ...couponBookingPopupNotices()];
   const hiddenToday = new Set(state.noticeHiddenDate === today
@@ -5406,7 +5420,7 @@ async function syncMemberAccountDeletionRequestFromServer(profile = null) {
   if (!client?.readiness?.().ready || !client.selectRows || !profileId) return false;
   try {
     const rows = await client.selectRows("tn_account_deletion_requests", {
-      select: "id,user_id,status,reason_summary,admin_note,retained_data_summary,requested_at,reviewed_at,completed_at,cancelled_at,created_at",
+      select: "*",
       filters: { user_id: profileId },
       limit: 20,
     });
@@ -6242,7 +6256,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.34" });
+  const params = new URLSearchParams({ v: "1.0.35" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -6549,7 +6563,6 @@ function identityErrorMessage(error) {
   if (code.includes("gender_invalid")) return "성별을 선택해 주세요.";
   if (code.includes("privacy_consent")) return "개인정보 처리방침 동의가 필요합니다.";
   if (code.includes("login_required")) return "로그인 상태를 다시 확인해 주세요.";
-  if (code.includes("identity_profile_update_not_confirmed")) return "저장 확인이 지연되고 있습니다. 잠시 뒤 앱을 다시 열어 확인해 주세요.";
   return "정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
@@ -6621,18 +6634,9 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
       target_privacy_version: identityPrivacyVersion,
     }));
     const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
-    if (!result?.ok) throw new Error(result?.reason || result?.error || "identity_profile_update_not_confirmed");
-
-    // Older server responses can confirm success without returning the profile.
-    // Read it back once so a successful save never leaves the member stuck here.
-    let savedProfile = result.profile;
-    if (!savedProfile && client.selectCurrentProfile) {
-      const current = await retryTransientNetwork(() => client.selectCurrentProfile());
-      savedProfile = current?.profile || current || null;
-    }
-    if (!savedProfile) throw new Error("identity_profile_update_not_confirmed");
-    applySavedIdentity(savedProfile);
-    return { ...result, profile: savedProfile };
+    if (!result?.ok || !result?.profile) throw new Error("identity_profile_update_not_confirmed");
+    applySavedIdentity(result.profile);
+    return result;
   }
 
   const profile = {
@@ -6736,25 +6740,11 @@ async function updateMemberProfileOnServer(values = {}) {
 }
 
 async function saveProfileInfo() {
-  // Capture the complete draft before the identity request. A background refresh
-  // must not be able to replace goal or memo text while that request is pending.
-  const draft = {
-    realName: $("#profileRealNameInput")?.value,
-    nickname: $("#profileNicknameInput")?.value,
-    phone: $("#profilePhoneInput")?.value,
-    hand: $("#profileHand")?.value || state.profile.hand,
-    backhand: $("#profileBackhand")?.value || state.profile.backhand,
-    startedAt: $("#profileStartedAt")?.value || "",
-    goal: $("#profileGoal")?.value.trim() || "",
-    styleMemo: $("#profileStyleMemo")?.value.trim() || "",
-    selfNtrp: $("#profileSelfNtrp")?.value || state.profile.selfNtrp,
-    ntrpSurvey: collectNtrpSurvey().answers,
-  };
   try {
     await persistIdentityProfile({
-      realName: draft.realName,
-      nickname: draft.nickname,
-      phone: draft.phone,
+      realName: $("#profileRealNameInput")?.value,
+      nickname: $("#profileNicknameInput")?.value,
+      phone: $("#profilePhoneInput")?.value,
       birthYear: state.profile.birthYear || state.member?.birthYear,
       neighborhood: state.profile.neighborhood || state.member?.neighborhood,
       gender: state.profile.gender || state.member?.gender,
@@ -6766,13 +6756,13 @@ async function saveProfileInfo() {
     showToast(errorMessage);
     return;
   }
-  state.profile.hand = draft.hand;
-  state.profile.backhand = draft.backhand;
-  state.profile.startedAt = draft.startedAt;
-  state.profile.goal = draft.goal;
-  state.profile.styleMemo = draft.styleMemo;
-  state.profile.selfNtrp = draft.selfNtrp;
-  state.profile.ntrpSurvey = draft.ntrpSurvey;
+  state.profile.hand = $("#profileHand")?.value || state.profile.hand;
+  state.profile.backhand = $("#profileBackhand")?.value || state.profile.backhand;
+  state.profile.startedAt = $("#profileStartedAt")?.value || "";
+  state.profile.goal = $("#profileGoal")?.value.trim() || "";
+  state.profile.styleMemo = $("#profileStyleMemo")?.value.trim() || "";
+  state.profile.selfNtrp = $("#profileSelfNtrp")?.value || state.profile.selfNtrp;
+  state.profile.ntrpSurvey = collectNtrpSurvey().answers;
   const serverResult = await updateMemberProfileOnServer({
     profile_photo_url: state.profile.photoDataUrl || null,
     dominant_hand: state.profile.hand || null,
@@ -7753,7 +7743,7 @@ function installMemberLiveScheduleRefresh() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refresh();
   });
-  memberLiveScheduleRefreshTimer = window.setInterval(refresh, 30_000);
+  memberLiveScheduleRefreshTimer = window.setInterval(refresh, 60_000);
 }
 
 async function initApp() {
@@ -7768,13 +7758,12 @@ async function initApp() {
   const hasStoredSession = Boolean(client?.getSession?.()?.access_token);
   const isModeTransition = Boolean(sessionStorage.getItem("tennis-note-member-mode-transition"));
   sessionStorage.removeItem("tennis-note-member-mode-transition");
-  const isRestoringSession = hasStoredSession || isModeTransition || window.location.hash.includes("access_token=");
   const canOpenRestoredMember = Boolean(hasStoredSession && state.member);
   if (canOpenRestoredMember) {
     openAppFromSession(false);
     setMemberSessionRestoring(false);
   } else {
-    setMemberSessionRestoring(isRestoringSession);
+    setMemberSessionRestoring(hasStoredSession || isModeTransition || window.location.hash.includes("access_token="));
   }
   hideBrandSplash();
 

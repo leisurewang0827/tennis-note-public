@@ -6,6 +6,7 @@
   const placeholderMarkers = ["your_", "_here", "publishable_key"];
   let sessionRefreshPromise = null;
   let currentProfilePromise = null;
+  let pendingOAuthCredentialCapture = Promise.resolve(null);
 
   function parseStoredConfig() {
     try {
@@ -259,25 +260,10 @@
   }
 
   function consumeOAuthRedirect() {
-    const callbackUrl = new URL(window.location.href);
-    // Supabase returns OAuth failures in the query string.  Leaving a stale
-    // failure in the address makes a later retry look like it failed too, and
-    // causes admin redirects that use the current URL to carry it forward.
-    if (callbackUrl.searchParams.has("error")) {
-      ["error", "error_code", "error_description"].forEach((key) => callbackUrl.searchParams.delete(key));
-      window.history.replaceState({}, document.title, `${callbackUrl.pathname}${callbackUrl.search}${callbackUrl.hash}`);
-      return getSession();
-    }
     if (!window.location.hash || !window.location.hash.includes("access_token=")) return getSession();
     const session = saveOAuthSession(window.location.hash);
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
     return session;
-  }
-
-  function cleanOAuthRedirectUrl(value) {
-    const url = new URL(value || window.location.href, window.location.origin);
-    ["error", "error_code", "error_description"].forEach((key) => url.searchParams.delete(key));
-    return `${url.origin}${url.pathname}${url.search}`;
   }
 
   function saveOAuthSession(hash) {
@@ -289,7 +275,29 @@
       token_type: params.get("token_type"),
       expires_in: params.get("expires_in"),
     });
+    scheduleOAuthProviderCredentialCapture(params, session);
     return session;
+  }
+
+  function scheduleOAuthProviderCredentialCapture(params, session) {
+    const providerToken = params?.get?.("provider_token") || "";
+    const providerRefreshToken = params?.get?.("provider_refresh_token") || "";
+    if (providerKey(session?.provider) !== "apple" || (!providerToken && !providerRefreshToken)) {
+      pendingOAuthCredentialCapture = Promise.resolve(null);
+      return pendingOAuthCredentialCapture;
+    }
+    pendingOAuthCredentialCapture = invokeFunction("tennisnote-account-deletion", {
+      body: {
+        action: "capture_apple_token",
+        providerToken,
+        providerRefreshToken,
+      },
+    }).catch(() => null);
+    return pendingOAuthCredentialCapture;
+  }
+
+  function flushOAuthProviderCredentialCapture() {
+    return pendingOAuthCredentialCapture;
   }
 
   function isNativeApp() {
@@ -344,12 +352,13 @@
     }
   }
 
-  function handleNativeOAuthUrl(url) {
+  async function handleNativeOAuthUrl(url) {
     if (!url || !url.startsWith("com.tennisclubhouse.tennisnote://oauth/")) return false;
     try {
       const parsed = new URL(url);
       const session = saveOAuthSession(parsed.hash);
       if (!session) return false;
+      await flushOAuthProviderCredentialCapture();
       window.location.reload();
       return true;
     } catch (error) {
@@ -374,10 +383,10 @@
     }
   }
 
-  function handleNativeAppUrl(url) {
+  async function handleNativeAppUrl(url) {
     if (!url || recentlyHandledNativeUrl(url)) return Boolean(url);
     rememberNativeUrl(url);
-    const handled = handleNativeOAuthUrl(url) || handleNativePaymentUrl(url);
+    const handled = await handleNativeOAuthUrl(url) || handleNativePaymentUrl(url);
     if (!handled) forgetNativeUrl();
     return handled;
   }
@@ -385,7 +394,7 @@
   function installNativeOAuthListener() {
     const appPlugin = window.Capacitor?.Plugins?.App;
     if (!isNativeApp() || !appPlugin?.addListener) return;
-    appPlugin.addListener("appUrlOpen", ({ url }) => handleNativeAppUrl(url));
+    appPlugin.addListener("appUrlOpen", ({ url }) => void handleNativeAppUrl(url));
     appPlugin.getLaunchUrl?.().then((result) => handleNativeAppUrl(result?.url)).catch(() => {});
   }
 
@@ -537,10 +546,9 @@
     }
     const key = providerKey(provider);
     const slug = providerSlug(provider);
-    const requestedRedirect = options.redirectTo || (isNativeApp()
+    const redirectTo = options.redirectTo || (isNativeApp()
       ? nativeOAuthRedirect()
       : `${window.location.origin}${window.location.pathname}${window.location.search}`);
-    const redirectTo = isNativeApp() ? requestedRedirect : cleanOAuthRedirectUrl(requestedRedirect);
     saveProvider(provider || slug);
     const query = new URLSearchParams({
       provider: slug,
@@ -670,6 +678,7 @@
   }
 
   async function performSelectCurrentProfile() {
+    await flushOAuthProviderCredentialCapture();
     const session = getSession();
     const user = await getAuthUser();
     if (!user?.id) return { user, profile: null };
@@ -769,6 +778,7 @@
     refreshSession,
     ensureSession,
     consumeOAuthRedirect,
+    flushOAuthProviderCredentialCapture,
     signInWithOAuth,
     signInWithPassword,
     providerSlug,

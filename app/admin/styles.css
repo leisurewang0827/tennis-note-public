@@ -1157,10 +1157,28 @@ h2 {
   margin-top: 14px;
 }
 
-.record-filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
-.record-filter-bar label { display: grid; gap: 5px; min-width: 180px; }
-.record-filter-bar label span { color: var(--muted); font-size: 12px; font-weight: 700; }
-.record-filter-bar select { min-height: 40px; }
+.record-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.record-filter-bar label {
+  display: grid;
+  gap: 5px;
+  min-width: 180px;
+}
+
+.record-filter-bar label span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.record-filter-bar select {
+  min-height: 40px;
+}
 
 .record-audit-card {
   display: grid;
@@ -1419,6 +1437,20 @@ h2 {
 #membersView > .toolbar .segment.is-active [data-member-filter-count] {
   color: var(--blue);
   background: white;
+}
+
+.member-filter-result {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 118px;
+}
+
+.member-filter-reset {
+  height: 30px;
+  padding: 0 9px;
+  font-size: 11px;
 }
 
 .segmented-control {

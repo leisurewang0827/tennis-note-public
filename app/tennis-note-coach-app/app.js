@@ -1449,7 +1449,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.34" });
+  const params = new URLSearchParams({ v: "1.0.35" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1575,9 +1575,6 @@ async function applySupabaseCoachSession(showFromLogin = false) {
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready) return false;
   client.consumeOAuthRedirect?.();
-  // The member app restores a persisted login before reading its role. Do the
-  // same here so an approved coach is not sent back to the member app while
-  // the browser is still restoring the session after navigation.
   const session = await client.ensureSession?.() || client.getSession?.();
   if (!session?.access_token) return false;
   try {
@@ -1888,17 +1885,11 @@ function renderCoachProfile() {
   renderPersonAvatar($("#coachTopAvatar"), profilePerson, "small");
   if ($("#coachProfileName")) $("#coachProfileName").textContent = name;
   if ($("#coachProfileSummary")) $("#coachProfileSummary").textContent = profile.specialty;
-  // Schedule data refreshes in the background. Keep a coach's in-progress
-  // introduction draft intact instead of repainting it with the last saved value.
-  const setCoachProfileFieldValue = (selector, value) => {
-    const field = $(selector);
-    if (field && document.activeElement !== field) field.value = value;
-  };
-  setCoachProfileFieldValue("#coachIntro", profile.intro || "");
-  setCoachProfileFieldValue("#coachSpecialty", profile.specialty || "");
-  setCoachProfileFieldValue("#coachLessonStyle", profile.lessonStyle || "");
-  setCoachProfileFieldValue("#coachAvailableMemo", profile.availableMemo || "");
-  setCoachProfileFieldValue("#coachMemberMessage", profile.memberMessage || "");
+  if ($("#coachIntro")) $("#coachIntro").value = profile.intro || "";
+  if ($("#coachSpecialty")) $("#coachSpecialty").value = profile.specialty || "";
+  if ($("#coachLessonStyle")) $("#coachLessonStyle").value = profile.lessonStyle || "";
+  if ($("#coachAvailableMemo")) $("#coachAvailableMemo").value = profile.availableMemo || "";
+  if ($("#coachMemberMessage")) $("#coachMemberMessage").value = profile.memberMessage || "";
 }
 
 function renderTodayLessons() {
@@ -2869,21 +2860,16 @@ function selectCoachMode(name) {
 function saveCoachProfile() {
   const name = currentCoachName();
   const existing = state.coachProfiles[name] || {};
-  // Read the whole form before any UI refresh can run.
-  const draft = {
+  state.coachProfiles[name] = {
+    ...existing,
     intro: $("#coachIntro")?.value.trim() || "",
     specialty: $("#coachSpecialty")?.value.trim() || "",
     lessonStyle: $("#coachLessonStyle")?.value.trim() || "",
     availableMemo: $("#coachAvailableMemo")?.value.trim() || "",
     memberMessage: $("#coachMemberMessage")?.value.trim() || "",
   };
-  state.coachProfiles[name] = {
-    ...existing,
-    ...draft,
-  };
   renderCoachProfile();
   saveSnapshot();
-  showToast("내 정보가 저장되었습니다.");
 }
 
 function updateCoachPhoto(file) {

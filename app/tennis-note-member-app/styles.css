@@ -160,6 +160,7 @@ button {
   gap: 10px;
   text-align: center;
 }
+
 .session-restoring[hidden] { display: none !important; }
 .session-restoring small { color: var(--muted); }
 .session-restoring-spinner {
@@ -1197,37 +1198,6 @@ button {
 @media (max-width: 720px) {
   .week-switcher .schedule-month-controls {
     grid-template-columns: auto minmax(0, 1fr) auto;
-  }
-}
-
-/* Small-phone ergonomics: retain clear tap targets without wasting the first screen. */
-@media (max-width: 420px) {
-  .app-screen {
-    padding: max(10px, env(safe-area-inset-top)) 10px calc(16px + env(safe-area-inset-bottom));
-  }
-
-  .tabbar {
-    gap: 3px;
-  }
-
-  .tab {
-    min-height: 42px;
-    padding: 7px 2px;
-    font-size: 12px;
-    white-space: nowrap;
-  }
-
-  .summary-grid article {
-    min-height: 104px;
-    padding: 11px;
-  }
-
-  .home-view .summary-grid .summary-card.primary {
-    min-height: 108px;
-  }
-
-  .section-title h2 {
-    font-size: 22px;
   }
 }
 
@@ -3327,31 +3297,6 @@ textarea {
   }
 }
 
-@media (max-width: 420px) {
-  .app-screen {
-    padding: max(10px, env(safe-area-inset-top)) 10px calc(88px + env(safe-area-inset-bottom));
-  }
-
-  .tabbar .tab {
-    min-height: 44px;
-    padding: 4px 1px;
-    font-size: 10px;
-  }
-
-  .summary-grid article {
-    min-height: 104px;
-    padding: 11px;
-  }
-
-  .home-view .summary-grid .summary-card.primary {
-    min-height: 108px;
-  }
-
-  .section-title h2 {
-    font-size: 22px;
-  }
-}
-
 .eyebrow {
   margin: 0 0 6px;
   color: var(--green);
@@ -3505,15 +3450,6 @@ textarea {
   color: var(--blue);
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-
-.identity-setup-form .consent-row span {
-  display: grid;
-  gap: 2px;
-}
-
-.identity-setup-form .consent-row small {
-  font-size: 12px;
 }
 
 body.identity-setup-required {

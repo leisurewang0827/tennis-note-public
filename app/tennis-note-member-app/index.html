@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.34" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.35" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-1" />
   </head>
   <body>
@@ -33,7 +33,7 @@
             <small>로그인 상태를 확인하고 있습니다.</small>
           </div>
           <h2>간편 로그인</h2>
-          <button class="provider naver" type="button" data-login-provider="네이버" hidden>네이버로 시작</button>
+          <button class="provider naver" type="button" data-login-provider="네이버">네이버로 시작</button>
           <button class="provider kakao" type="button" data-login-provider="카카오">카카오로 시작</button>
           <button
             class="provider apple is-preparing"
@@ -334,13 +334,13 @@
           <div id="currentTicketPanel" class="membership-overview current-ticket-panel"></div>
 
           <details id="membershipHistoryDetails" class="membership-details">
-            <summary>이용 내역</summary>
+            <summary>이용 내역과 최근 수업 기록</summary>
             <div id="ticketHistory" class="history-list"></div>
             <div id="ticketHistoryPager" class="list-pager"></div>
           </details>
 
           <details id="membershipPurchaseDetails" class="membership-details">
-            <summary>연장·구매</summary>
+            <summary>연장·구매·결제 상태 보기</summary>
             <div class="membership-details-body">
           <div id="paymentGatewayStatus" class="payment-gateway-status"></div>
           <div id="groupAccountPanel" class="group-account-panel"></div>
@@ -350,7 +350,7 @@
 
           <section class="form-card">
             <h3>만기/충전 대기 이용권</h3>
-            <p class="form-help">결제 확인 후 충전됩니다.</p>
+            <p class="form-help">결제 후에는 관리자 검증이 끝나야 이용권이 충전됩니다.</p>
             <div id="paymentRequests" class="history-list"></div>
             <div id="paymentRequestsPager" class="list-pager"></div>
           </section>
@@ -383,7 +383,7 @@
               <span class="settings-row-icon" aria-hidden="true">P</span>
               <span class="settings-row-copy">
                 <strong>프로필 정보</strong>
-                <small>닉네임·테니스 스타일</small>
+                <small>사진, 닉네임, 테니스 스타일 수정</small>
               </span>
               <span class="settings-row-arrow" aria-hidden="true">›</span>
             </button>
@@ -391,7 +391,7 @@
               <span class="settings-row-icon" aria-hidden="true">N</span>
               <span class="settings-row-copy">
                 <strong>NTRP 레벨</strong>
-                <small id="profileNtrpSummary">자가·코치 결과</small>
+                <small id="profileNtrpSummary">자가 측정과 코치 측정을 확인하세요</small>
               </span>
               <span class="settings-row-arrow" aria-hidden="true">›</span>
             </button>
@@ -405,7 +405,7 @@
               <span class="settings-row-icon" aria-hidden="true">C</span>
               <span class="settings-row-copy">
                 <strong>코치 모드로 전환</strong>
-                <small>승인된 코치만 사용</small>
+                <small>승인된 코치 계정에서만 사용할 수 있습니다</small>
               </span>
               <span class="settings-row-status">승인됨</span>
             </button>
@@ -413,7 +413,7 @@
               <span class="settings-row-icon kakao-icon" aria-hidden="true">K</span>
               <span class="settings-row-copy">
                 <strong>카카오 문의</strong>
-                <small>문의하기</small>
+                <small>운영시간과 문의 방법 확인</small>
               </span>
               <span class="settings-row-arrow" aria-hidden="true">›</span>
             </button>
@@ -421,7 +421,7 @@
               <span class="settings-row-icon" aria-hidden="true">!</span>
               <span class="settings-row-copy">
                 <strong>불편·오류 접수</strong>
-                <small>오류 보내기</small>
+                <small>사용 중 불편하거나 이상한 점을 알려주세요</small>
               </span>
               <span class="settings-row-arrow" aria-hidden="true">›</span>
             </button>
@@ -429,7 +429,7 @@
               <span class="settings-row-icon" aria-hidden="true">↓</span>
               <span class="settings-row-copy">
                 <strong>앱 설치</strong>
-                <small>홈 화면에 추가</small>
+                <small>홈 화면에서 테니스노트를 바로 실행</small>
               </span>
               <span class="settings-row-arrow" aria-hidden="true">›</span>
             </button>
@@ -437,7 +437,7 @@
               <span class="settings-row-icon" aria-hidden="true">↪</span>
               <span class="settings-row-copy">
                 <strong>로그아웃</strong>
-                <small>현재 계정 종료</small>
+                <small>현재 계정에서 안전하게 로그아웃</small>
               </span>
               <span class="settings-row-arrow" aria-hidden="true">›</span>
             </button>
@@ -592,9 +592,9 @@
     <section id="identitySetupModal" class="change-request-modal identity-setup-modal" hidden>
       <div class="modal-backdrop"></div>
       <article class="change-modal-card identity-setup-card" role="dialog" aria-modal="true" aria-labelledby="identitySetupTitle">
-        <p class="eyebrow">기본 정보 확인</p>
-        <h2 id="identitySetupTitle">수업 예약 정보를 확인해 주세요</h2>
-        <p>수업 운영과 회원 확인에 필요한 정보만 받습니다.</p>
+        <p class="eyebrow">가입 정보 확인</p>
+        <h2 id="identitySetupTitle">내 프로필을 완성해 주세요</h2>
+        <p>간편 로그인 이름과 별도로 실제 수업에 사용할 정보를 확인합니다.</p>
         <form id="identitySetupForm" class="identity-setup-form">
           <label>
             <span>실명</span>
@@ -634,11 +634,11 @@
           </label>
           <label class="consent-row">
             <input id="identityPrivacyConsent" type="checkbox" required />
-            <span><a href="../tennis-note-legal/privacy.html" target="_blank" rel="noreferrer">개인정보 처리방침</a> 동의 <b>필수</b><small>수업 운영과 회원 확인에만 사용합니다.</small></span>
+            <span><a href="../tennis-note-legal/privacy.html" target="_blank" rel="noreferrer">개인정보 처리방침</a>을 확인하고 동의합니다.</span>
           </label>
           <p id="identitySetupMessage" class="policy-note" aria-live="polite"></p>
           <div class="modal-actions">
-            <button class="primary-button" type="submit">기본 정보 저장</button>
+            <button class="primary-button" type="submit">가입 완료</button>
             <button class="small-button" type="button" id="identitySetupLogoutButton">다른 계정으로 로그인</button>
           </div>
         </form>
@@ -817,7 +817,7 @@
           <span>관리자가 결제, 환불, 잔여 수업을 확인한 뒤 처리합니다.</span>
         </div>
         <form id="accountDeletionForm" class="form-card account-deletion-form">
-          <p class="policy-note">처리 완료 후 계정과 레슨·운동 기록은 삭제됩니다. 전자상거래법 등 법령상 보관해야 하는 결제·환불 기록은 정해진 기간 동안 분리 보관될 수 있습니다.</p>
+          <p class="policy-note">처리 완료 후 계정 연결 정보와 개인 레슨·운동 기록은 삭제됩니다. 공동 레슨 결과는 회원 식별 표현을 제거한 뒤 다른 참여자의 이력으로 남을 수 있고, 법령상 보관해야 하는 결제·환불 기록은 정해진 기간 동안 분리 보관될 수 있습니다.</p>
           <label>
             <span>요청 사유 <small>(선택)</small></span>
             <textarea id="accountDeletionReason" rows="3" maxlength="200" placeholder="서비스 개선을 위해 간단한 사유를 남길 수 있습니다."></textarea>
@@ -852,12 +852,12 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.34"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.35"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.34"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.35"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-1"></script>
-    <script src="./app.js?v=1.0.34"></script>
+    <script src="./app.js?v=1.0.35"></script>
   </body>
 </html>
