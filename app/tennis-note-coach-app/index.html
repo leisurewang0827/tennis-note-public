@@ -7,7 +7,7 @@
     <title>테니스노트 코치 모드</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.35" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.39" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -55,18 +55,17 @@
 
       <section id="coachAppScreen" class="app-screen" hidden>
         <header class="topbar coach-context-bar">
-          <div class="coach-heading">
-            <span id="coachTopAvatar" class="person-avatar small is-empty" aria-label="기본 코치 프로필 이미지">
-              <span class="person-avatar-placeholder" aria-hidden="true"></span>
-            </span>
+          <div class="compact-app-heading">
+            <span class="compact-app-mark" aria-hidden="true">TN</span>
             <div>
-              <p id="coachLoginLabel">Tennis Note Coach</p>
-              <h1 id="coachName">노 코치</h1>
-              <small class="release-version" data-tennisnote-release></small>
+              <p>Tennis Note Coach</p>
+              <h1 id="coachScreenTitle">오늘</h1>
             </div>
           </div>
-          <div class="top-actions">
-            <button class="small-button" type="button" id="refreshButton">새로고침</button>
+          <div class="topbar-session-data" hidden aria-hidden="true">
+            <span id="coachTopAvatar" class="person-avatar small is-empty"></span>
+            <span id="coachLoginLabel">Tennis Note Coach</span>
+            <span id="coachName">노 코치</span>
           </div>
         </header>
 
@@ -125,6 +124,22 @@
             <span>회원 검색</span>
             <input id="memberSearchInput" type="search" placeholder="이름, 코치, 회원권, 시간, NTRP" autocomplete="off" />
           </label>
+          <div class="member-quick-filters" aria-label="회원 빠른 필터">
+            <label>
+              <span>담당 코치</span>
+              <select id="memberCoachFilter">
+                <option value="all">전체 코치</option>
+              </select>
+            </label>
+            <label>
+              <span>수업 형태</span>
+              <select id="memberTicketFilter">
+                <option value="all">전체 형태</option>
+                <option value="individual">1대1</option>
+                <option value="group">2대1</option>
+              </select>
+            </label>
+          </div>
           <div id="memberFilterSummary" class="member-filter-summary"></div>
           <details class="ntrp-coach-guide">
             <summary>
@@ -211,6 +226,8 @@
                 <b aria-hidden="true">←</b>
                 <span>회원 모드로 전환</span>
               </button>
+              <button class="small-button" type="button" id="refreshButton">앱 새로고침</button>
+              <span class="release-version" data-tennisnote-release="detail"></span>
               <button class="small-button" type="button" data-open-product-report>불편·오류 접수</button>
               <button class="small-button danger-button" type="button" id="coachLogoutButton">로그아웃</button>
             </div>
@@ -239,10 +256,10 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.35"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.39"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.35"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.39"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.35"></script>
+    <script src="./app.js?v=1.0.39"></script>
   </body>
 </html>

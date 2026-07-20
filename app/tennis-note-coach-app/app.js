@@ -9,6 +9,8 @@
   writingLessonId: null,
   memberFilter: "active",
   memberQuery: "",
+  memberCoachFilter: "all",
+  memberTicketFilter: "all",
   memberPage: 0,
   revealedMemberContactKey: "",
   viewingMemberDetailId: "",
@@ -1440,7 +1442,7 @@ function openCoachApp(showFromLogin = false) {
   $("#coachAppScreen").hidden = false;
   document.body.dataset.screen = "coach-app";
   jumpToTop();
-  if (showFromLogin) setView("todayView");
+  setView(showFromLogin ? "todayView" : document.body.dataset.activeView || "todayView", { replaceHistory: true });
   window.setTimeout(showNoticeAfterLiveSync, 0);
 }
 
@@ -1449,7 +1451,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.35" });
+  const params = new URLSearchParams({ v: "1.0.39" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1625,12 +1627,78 @@ async function logoutCoach() {
   returnToMemberEntry(false, false);
 }
 
-function setView(viewId) {
+let activeCoachModalId = "";
+let coachModalReturnFocus = null;
+
+function coachFocusableElements(container) {
+  if (!container) return [];
+  return [...container.querySelectorAll(
+    'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter((element) => !element.hidden && element.getClientRects().length > 0);
+}
+
+function refreshCoachModalState() {
+  const modalOpen = Boolean(activeCoachModalId);
+  document.body.classList.toggle("modal-open", modalOpen);
+  const tabbar = $(".tabbar");
+  if (tabbar) {
+    if (modalOpen) tabbar.setAttribute("aria-hidden", "true");
+    else tabbar.removeAttribute("aria-hidden");
+  }
+}
+
+function openCoachModal(modalId) {
+  const modal = $(`#${modalId}`);
+  if (!modal) return;
+  if (activeCoachModalId && activeCoachModalId !== modalId) closeCoachModal(activeCoachModalId, true);
+  coachModalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  modal.hidden = false;
+  activeCoachModalId = modalId;
+  refreshCoachModalState();
+  const historyState = typeof history.state === "object" && history.state ? history.state : {};
+  if (historyState.tennisNoteModal !== modalId) {
+    history.pushState({ ...historyState, tennisNoteMode: "coach", tennisNoteModal: modalId }, "", window.location.href);
+  }
+  window.setTimeout(() => coachFocusableElements(modal)[0]?.focus({ preventScroll: true }), 40);
+}
+
+function closeCoachModal(modalId, fromHistory = false) {
+  const modal = $(`#${modalId}`);
+  if (!modal) return;
+  modal.hidden = true;
+  if (activeCoachModalId === modalId) activeCoachModalId = "";
+  refreshCoachModalState();
+  if (!fromHistory && history.state?.tennisNoteModal === modalId) {
+    history.back();
+    return;
+  }
+  coachModalReturnFocus?.focus?.({ preventScroll: true });
+  coachModalReturnFocus = null;
+}
+
+function setView(viewId, options = {}) {
   if (!viewId || !$("#" + viewId)) return;
   $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === viewId));
   $$(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.view === viewId));
+  const screenTitles = {
+    todayView: "오늘",
+    fullScheduleView: "레슨표",
+    membersView: "회원",
+    curriculumView: "커리큘럼",
+    coachProfileView: "내 정보",
+  };
+  if ($("#coachScreenTitle")) $("#coachScreenTitle").textContent = screenTitles[viewId] || "코치 모드";
   document.body.dataset.activeView = viewId;
   jumpToTop();
+  const historyState = typeof history.state === "object" && history.state ? history.state : {};
+  const nextState = { ...historyState, tennisNoteMode: "coach", tennisNoteView: viewId };
+  delete nextState.tennisNoteModal;
+  if (options.pushHistory && historyState.tennisNoteView !== viewId) history.pushState(nextState, "", window.location.href);
+  else if (!historyState.tennisNoteView || options.replaceHistory) history.replaceState(nextState, "", window.location.href);
+}
+
+function navigateCoachView(viewId) {
+  setView(viewId, { pushHistory: true });
 }
 
 function renderSummary() {
@@ -1652,6 +1720,7 @@ function renderSummary() {
       ? `미처리 ${pendingRecordTotal}건 · 코멘트 등록 후 횟수가 차감됩니다.`
       : "오늘 처리할 기록이 없습니다.";
   }
+  if ($("#openLessonRecordWriter")) $("#openLessonRecordWriter").hidden = ownLessons.length === 0;
 }
 
 function renderCoachModeList() {
@@ -2659,15 +2728,32 @@ function renderMembers() {
   const filter = memberFilter();
   const query = memberQuery();
   const allItems = displayMemberItemsForFilter();
-  const items = query ? allItems.filter((member) => memberSearchValues(member).includes(query)) : allItems;
+  const coachFilter = state.memberCoachFilter || "all";
+  const ticketFilter = state.memberTicketFilter || "all";
+  const filteredByControls = allItems.filter((member) => {
+    const coachMatches = coachFilter === "all" || canonicalCoachName(member.coach) === coachFilter;
+    const ticketMatches = ticketFilter === "all" || (ticketFilter === "group" ? isGroupTicket(member) : !isGroupTicket(member));
+    return coachMatches && ticketMatches;
+  });
+  const items = query ? filteredByControls.filter((member) => memberSearchValues(member).includes(query)) : filteredByControls;
   const page = normalizeMemberPage(items.length);
   const visible = items.slice(page * memberPageSize, page * memberPageSize + memberPageSize);
   if ($("#memberSearchInput") && $("#memberSearchInput").value !== state.memberQuery) $("#memberSearchInput").value = state.memberQuery || "";
+  const coachSelect = $("#memberCoachFilter");
+  if (coachSelect) {
+    const coachNames = [...new Set(allItems.map((member) => canonicalCoachName(member.coach)).filter(Boolean))];
+    coachSelect.innerHTML = `<option value="all">전체 코치</option>${coachNames
+      .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
+      .join("")}`;
+    coachSelect.value = coachNames.includes(coachFilter) ? coachFilter : "all";
+    if (coachSelect.value !== coachFilter) state.memberCoachFilter = "all";
+  }
+  if ($("#memberTicketFilter")) $("#memberTicketFilter").value = ticketFilter;
   $$(".member-filter").forEach((button) => button.classList.toggle("is-active", button.dataset.memberFilter === filter));
   if ($("#memberFilterSummary")) {
     $("#memberFilterSummary").textContent =
       filter === "active"
-        ? `현재 수강생 ${items.length}/${allItems.length}명 · 2대1 회원은 회원별로 표시 · ${page + 1}페이지`
+        ? `현재 수강생 ${items.length}/${allItems.length}명 · ${page + 1}페이지`
         : `만료회원 ${items.length}/${allItems.length}명 · ${page + 1}페이지`;
   }
   const rows = visible
@@ -2769,7 +2855,7 @@ function renderMemberDetailModal(member) {
       <p>${member.note || "운영 메모가 없습니다."}</p>
     </section>
   `;
-  modal.hidden = false;
+  openCoachModal("memberDetailModal");
 }
 
 function openMemberDetail(memberId, groupName = "") {
@@ -2781,8 +2867,7 @@ function openMemberDetail(memberId, groupName = "") {
 }
 
 function closeMemberDetailModal() {
-  const modal = $("#memberDetailModal");
-  if (modal) modal.hidden = true;
+  closeCoachModal("memberDetailModal");
 }
 
 function renderMakeups() {
@@ -2983,7 +3068,7 @@ function openLessonEditor(id) {
   state.writingLessonId = null;
   state.viewingCurriculumId = null;
   renderLessonEditModal();
-  $("#lessonEditModal").hidden = false;
+  openCoachModal("lessonEditModal");
 }
 
 function closeLessonEditor() {
@@ -2993,7 +3078,7 @@ function closeLessonEditor() {
   state.editingMakeupId = null;
   state.writingLessonId = null;
   state.viewingCurriculumId = null;
-  $("#lessonEditModal").hidden = true;
+  closeCoachModal("lessonEditModal");
 }
 
 function renderLessonEditModal() {
@@ -3020,7 +3105,7 @@ function openMakeupApprovalModal(id) {
   state.viewingCurriculumId = null;
   state.editingMakeupId = id || ownPendingMakeupRequests()[0]?.id || pendingMakeupRequests()[0]?.id || "__none__";
   renderLessonEditModal();
-  $("#lessonEditModal").hidden = false;
+  openCoachModal("lessonEditModal");
 }
 
 function openLessonRecordWriter(id) {
@@ -3030,7 +3115,7 @@ function openLessonRecordWriter(id) {
   state.viewingCurriculumId = null;
   state.writingLessonId = id || firstLesson?.id || "__none__";
   renderLessonEditModal();
-  $("#lessonEditModal").hidden = false;
+  openCoachModal("lessonEditModal");
 }
 
 async function saveLessonEdit(id) {
@@ -3547,7 +3632,7 @@ function openCurriculumDetail(id) {
   state.editingMakeupId = null;
   state.writingLessonId = null;
   renderLessonEditModal();
-  $("#lessonEditModal").hidden = false;
+  openCoachModal("lessonEditModal");
 }
 
 function toggleCurriculumFavorite(id) {
@@ -3581,7 +3666,7 @@ function renderCurriculumDetailPanel() {
         <strong>${step.mission || "개인 연습에서 같은 루틴을 짧게 반복합니다."}</strong>
       </article>
       <div class="actions wide">
-        <a class="small-button" href="${curriculumNotionUrl(step)}" target="_blank" rel="noreferrer">노션 자세히 보기</a>
+        <a class="small-button" href="${curriculumNotionUrl(step)}" target="_blank" rel="noreferrer">상세 자료 보기</a>
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>
     </section>`;
@@ -3623,7 +3708,7 @@ function curriculumLibraryMarkup() {
                     ${step.environmentNote ? `<p class="curriculum-environment-note">${escapeHtml(step.environmentNote)}</p>` : `<p>${escapeHtml(step.checklist || step.guide)}</p>`}
                     <div class="actions">
                       <button class="small-button" type="button" data-open-curriculum-detail="${step.id}">상세 보기</button>
-                      <a class="small-button" href="${curriculumNotionUrl(step)}" target="_blank" rel="noreferrer">노션</a>
+                      <a class="small-button" href="${curriculumNotionUrl(step)}" target="_blank" rel="noreferrer">자료</a>
                     </div>
                   </article>`,
               )
@@ -3645,12 +3730,12 @@ function renderCurriculums() {
   target.innerHTML = `
     <section class="curriculum-source-panel">
       <div>
-        <strong>노션 커리큘럼 원본</strong>
-        <span>이 화면은 확인 전용입니다. 회원별 다음 커리큘럼 등록은 오늘 처리 일정의 코멘트 탭에서만 진행합니다.</span>
+        <strong>전체 커리큘럼 자료</strong>
+        <span>수업 단계를 확인하고, 회원별 다음 단계는 오늘 처리 일정에서 지정합니다.</span>
       </div>
       <div class="actions">
         <a class="small-button" href="${notionCurriculumGuideUrl}" target="_blank" rel="noreferrer">회원용 안내</a>
-        <a class="small-button" href="${notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">상세 원본</a>
+        <a class="small-button" href="${notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">전체 자료</a>
       </div>
     </section>
     <section class="curriculum-toolbar" aria-label="커리큘럼 검색과 필터">
@@ -3669,7 +3754,7 @@ function renderCurriculums() {
     <section class="curriculum-library-panel">
       <div class="record-section-title">
         <strong>커리큘럼 빠른 보기</strong>
-        <small>코치가 다음 수업에 넣을 단계를 노션 원본과 함께 확인합니다. 등록은 코멘트 탭에서만 합니다.</small>
+        <small>다음 수업에 사용할 단계를 빠르게 확인합니다.</small>
       </div>
       <div class="curriculum-track-groups">${curriculumLibraryMarkup()}</div>
     </section>`;
@@ -3908,7 +3993,7 @@ function handleSummaryAction(action) {
 
 function bindEvents() {
   $('#coachLogoutButton').addEventListener('click', logoutCoach);
-  $$(".tab").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  $$(".tab").forEach((button) => button.addEventListener("click", () => navigateCoachView(button.dataset.view)));
   $("#refreshButton").addEventListener("click", renderAll);
   $("#userModeButton")?.addEventListener("click", openUserMode);
   $("#userModeLoginButton")?.addEventListener("click", openUserMode);
@@ -4174,6 +4259,28 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", (event) => {
+    if (activeCoachModalId && event.key === "Tab") {
+      const focusable = coachFocusableElements($(`#${activeCoachModalId}`));
+      if (!focusable.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+      return;
+    }
+    if (event.key === "Escape" && activeCoachModalId) {
+      event.preventDefault();
+      closeCoachModal(activeCoachModalId);
+      return;
+    }
     if (event.key === "Escape" && !$("#noticeDialog")?.hidden) {
       event.preventDefault();
       closeNotice(false);
@@ -4183,6 +4290,29 @@ function bindEvents() {
     if (!summaryCard || !["Enter", " "].includes(event.key)) return;
     event.preventDefault();
     handleSummaryAction(summaryCard.dataset.summaryAction);
+  });
+
+  document.addEventListener("change", (event) => {
+    if (event.target.matches("#memberCoachFilter")) {
+      state.memberCoachFilter = event.target.value;
+      state.memberPage = 0;
+      renderMembers();
+      saveSnapshot();
+    }
+    if (event.target.matches("#memberTicketFilter")) {
+      state.memberTicketFilter = event.target.value;
+      state.memberPage = 0;
+      renderMembers();
+      saveSnapshot();
+    }
+  });
+  window.addEventListener("popstate", (event) => {
+    if (activeCoachModalId) {
+      closeCoachModal(activeCoachModalId, true);
+      return;
+    }
+    const targetView = event.state?.tennisNoteView;
+    if (targetView && $(`#${targetView}`)) setView(targetView);
   });
 }
 function renderAll() {

@@ -3737,3 +3737,209 @@ body {
     border-color: #dbe6e0;
   }
 }
+
+/* Compact mobile app chrome: account details live in My Info. */
+.compact-app-heading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.compact-app-heading p,
+.compact-app-heading h1 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.compact-app-heading p {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.compact-app-heading h1 {
+  margin-top: 2px;
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.compact-app-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #087255;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.topbar-session-data[hidden],
+#openLessonRecordWriter[hidden] {
+  display: none !important;
+}
+
+.member-quick-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.member-quick-filters label {
+  min-width: 0;
+}
+
+.coach-account-actions .release-version {
+  align-self: center;
+}
+
+@media (max-width: 720px) {
+  .coach-context-bar {
+    min-height: 58px;
+    padding: 9px 11px;
+  }
+
+  .coach-context-bar::after {
+    width: 66px;
+    height: 66px;
+  }
+
+  .section-title {
+    margin-bottom: 10px;
+  }
+
+  .section-title h2 {
+    font-size: 20px;
+  }
+
+  .coach-week-controls,
+  .week-switcher {
+    gap: 6px;
+  }
+
+  .coach-week-controls .schedule-month-controls,
+  .week-switcher .schedule-month-controls {
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 4px;
+  }
+
+  .member-quick-filters {
+    gap: 6px;
+  }
+
+  .member-grid {
+    overflow: visible;
+  }
+
+  .member-row,
+  .member-row.expired {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+    padding: 10px;
+  }
+
+  .member-row-head {
+    display: none;
+  }
+
+  .member-row.active > :nth-child(n + 5),
+  .member-row.expired > :nth-child(n + 4) {
+    display: none;
+  }
+
+  .member-row .member-name {
+    grid-column: 1 / -1;
+  }
+
+  .member-row .member-ticket {
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .member-row .member-ticket small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ntrp-coach-guide summary span {
+    display: none;
+  }
+
+  .curriculum-source-panel span,
+  .curriculum-library-panel .record-section-title small {
+    display: none;
+  }
+
+  .curriculum-toolbar {
+    gap: 6px;
+  }
+}
+
+/* Keep mobile navigation stable while dialogs own the foreground. */
+body.modal-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.lesson-edit-modal {
+  z-index: 180;
+  isolation: isolate;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --tn-bottom-nav-height: 66px;
+  }
+
+  .app-screen {
+    padding-bottom: calc(var(--tn-bottom-nav-height) + max(18px, env(safe-area-inset-bottom)));
+  }
+
+  .tabbar {
+    right: max(10px, env(safe-area-inset-right));
+    left: max(10px, env(safe-area-inset-left));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    z-index: 80;
+    width: auto;
+    transform: translateZ(0);
+    isolation: isolate;
+    background: #ffffff;
+    backdrop-filter: none;
+    -webkit-transform: translateZ(0);
+  }
+
+  .tabbar .tab,
+  .tabbar .tab.is-active {
+    position: relative;
+    z-index: 1;
+    opacity: 1;
+    visibility: visible;
+    backface-visibility: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .lesson-edit-modal {
+    z-index: 180;
+    align-items: end;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+    border-radius: 16px 16px 8px 8px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}

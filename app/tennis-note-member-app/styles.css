@@ -4415,43 +4415,6 @@ input[type="file"] {
   text-decoration: none;
 }
 
-.business-operator-info {
-  flex-basis: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 2px 8px;
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.55;
-}
-
-.business-operator-info strong,
-.business-operator-info span,
-.business-operator-info .terms-notice-link {
-  white-space: nowrap;
-}
-
-.business-operator-info strong {
-  color: var(--ink);
-}
-
-.business-operator-info .terms-notice-link {
-  flex-basis: 100%;
-  color: var(--blue);
-  font-weight: 850;
-  text-decoration: underline;
-}
-
-.business-operator-info a {
-  display: inline;
-  min-height: 0;
-  color: inherit;
-  font-weight: 800;
-}
-
 .support-modal-card h2,
 .support-modal-card p {
   margin: 0;
@@ -5433,5 +5396,217 @@ body {
 
   .member-own-lesson-date {
     flex-basis: 72px;
+  }
+}
+
+/* Mobile navigation and dialogs share one stacking contract. */
+body.modal-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.change-request-modal {
+  z-index: 180;
+  isolation: isolate;
+  overscroll-behavior: contain;
+}
+
+.change-request-empty-state {
+  border: 1px solid #b9d7ce;
+  border-radius: 8px;
+  padding: 14px;
+  color: #425466;
+  background: #f3faf7;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.change-request-empty-state[hidden] {
+  display: none !important;
+}
+
+.change-request-modal.is-unavailable .schedule-request-card > label,
+.change-request-modal.is-unavailable .change-step-heading,
+.change-request-modal.is-unavailable .slot-list,
+.change-request-modal.is-unavailable .policy-note {
+  opacity: 0.62;
+}
+
+.change-request-modal button:disabled,
+.change-request-modal textarea:disabled,
+.change-request-modal select:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+@media (max-width: 720px) {
+  :root {
+    --tn-bottom-nav-height: 66px;
+  }
+
+  .app-screen {
+    padding-bottom: calc(var(--tn-bottom-nav-height) + max(18px, env(safe-area-inset-bottom)));
+  }
+
+  .tabbar {
+    right: max(10px, env(safe-area-inset-right));
+    left: max(10px, env(safe-area-inset-left));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    z-index: 80;
+    width: auto;
+    transform: translateZ(0);
+    isolation: isolate;
+    background: #ffffff;
+    backdrop-filter: none;
+    -webkit-transform: translateZ(0);
+  }
+
+  .tabbar .tab,
+  .tabbar .tab.is-active {
+    position: relative;
+    z-index: 1;
+    opacity: 1;
+    visibility: visible;
+    backface-visibility: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .change-request-modal {
+    z-index: 180;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .change-modal-card {
+    max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .change-modal-card .modal-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: 0 -4px -4px;
+    padding: 10px 4px max(4px, env(safe-area-inset-bottom));
+    background: #ffffff;
+  }
+}
+
+/* Compact mobile app chrome: identity and release details live in My Info. */
+.compact-app-heading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.compact-app-heading p,
+.compact-app-heading h1 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.compact-app-heading p {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.compact-app-heading h1 {
+  margin-top: 2px;
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.compact-app-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #087255;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.topbar-session-data[hidden],
+.home-change-button[hidden] {
+  display: none !important;
+}
+
+.onboarding-card {
+  border-color: #a8d9c7;
+  background: #f3faf7;
+}
+
+@media (max-width: 720px) {
+  .member-topbar {
+    min-height: 58px;
+    padding: 9px 11px;
+  }
+
+  .member-topbar::after {
+    width: 66px;
+    height: 66px;
+  }
+
+  .section-title {
+    margin-bottom: 10px;
+  }
+
+  .section-title h2 {
+    font-size: 20px;
+  }
+
+  .summary-grid,
+  .today-action-list,
+  .card-list {
+    gap: 8px;
+  }
+
+  .product-group-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .product-card {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .product-meta-pills {
+    gap: 4px;
+  }
+
+  .product-meta-pills span {
+    padding: 4px 6px;
+  }
+
+  .product-price-panel {
+    padding: 8px;
+  }
+
+  .journal-calendar-card {
+    padding: 12px;
+  }
+
+  .journal-calendar-controls {
+    gap: 4px;
+  }
+
+  .journal-calendar-controls .small-button {
+    min-height: 38px;
+    padding-inline: 8px;
+  }
+
+  .app-legal-links {
+    margin-top: 8px;
+    padding-bottom: 4px;
   }
 }

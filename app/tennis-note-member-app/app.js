@@ -2657,6 +2657,7 @@ function renderTodayActions() {
   const lessonLabel = nextLesson
     ? `${nextLesson.day} ${nextLesson.time} · ${nextLesson.coach}`
     : "예정된 수업 없음";
+  const canChangeLesson = currentScheduledLessonsForChange().length > 0 || memberMakeupDueLessons().length > 0;
   target.innerHTML = `
     <article class="today-card primary">
       <div>
@@ -2667,14 +2668,21 @@ function renderTodayActions() {
       </div>
       <button class="primary-button" type="button" data-home-action="curriculum">커리큘럼 보기</button>
     </article>
-    <article class="today-card">
+    ${canChangeLesson ? `<article class="today-card">
       <div>
         <span>수업 변경</span>
         <strong>${makeupCount ? `${makeupCount}건 대기` : "신청 가능"}</strong>
         <small>기존 수업을 가능한 시간으로 옮겨 요청합니다.</small>
       </div>
       <button class="small-button" type="button" data-home-action="makeup">시간표 보기</button>
-    </article>
+    </article>` : `<article class="today-card onboarding-card">
+      <div>
+        <span>시작하기</span>
+        <strong>회원권 구매 또는 상담</strong>
+        <small>회원권을 선택하거나 카카오채널로 수업을 문의해 주세요.</small>
+      </div>
+      <button class="primary-button" type="button" data-home-action="shop">회원권 보기</button>
+    </article>`}
     <article class="today-card ${pendingLogCount ? "wait" : ""}">
       <div>
         <span>피드백</span>
@@ -3203,6 +3211,34 @@ function renderAvailableSlots() {
           </button>`,
       )
       .join("") || "<p class='empty-text'>현재 정책 안에서 변경 가능한 시간이 없습니다.</p>";
+  updateChangeRequestAvailability(availableLessons);
+}
+
+function updateChangeRequestAvailability(availableLessons = memberAvailableSlotsForSelectedLesson()) {
+  const sourceLessons = currentScheduledLessonsForChange();
+  const hasSourceLesson = sourceLessons.length > 0;
+  const hasAvailableSlot = availableLessons.length > 0;
+  const canSubmit = hasSourceLesson && hasAvailableSlot;
+  const emptyState = $("#changeRequestEmptyState");
+  const reason = $("#changeReason");
+  const requestButton = $("#requestMakeup");
+  const sourceSelect = $("#absenceLesson");
+  const slotSelect = $("#makeupSlot");
+
+  if (sourceSelect) sourceSelect.disabled = !hasSourceLesson;
+  if (slotSelect) slotSelect.disabled = !hasAvailableSlot;
+  if (reason) reason.disabled = !canSubmit;
+  if (requestButton) {
+    requestButton.disabled = !canSubmit;
+    requestButton.setAttribute("aria-disabled", String(!canSubmit));
+  }
+  if (emptyState) {
+    emptyState.hidden = canSubmit;
+    emptyState.textContent = !hasSourceLesson
+      ? "변경할 수업이 없습니다. 이용권을 구매했거나 수업이 등록되어 있다면 고객지원으로 문의해 주세요."
+      : "현재 변경 가능한 시간이 없습니다. 다른 주를 확인하거나 고객지원으로 문의해 주세요.";
+  }
+  $("#changeRequestModal")?.classList.toggle("is-unavailable", !canSubmit);
 }
 
 function renderChangeModalSummary() {
@@ -3222,6 +3258,9 @@ function renderChangeModalSummary() {
 function renderMakeupDueBanner() {
   const banner = $("#makeupDueBanner");
   const dueLessons = memberMakeupDueLessons();
+  const canChangeLesson = dueLessons.length > 0 || currentScheduledLessonsForChange().length > 0;
+  const homeChangeButton = $(".home-change-button");
+  if (homeChangeButton) homeChangeButton.hidden = !canChangeLesson;
   if ($("#homeChangeLabel")) $("#homeChangeLabel").textContent = dueLessons.length ? `보강 시간 선택 (${dueLessons.length})` : "수업 변경";
   if (!banner) return;
   banner.hidden = dueLessons.length === 0;
@@ -3686,7 +3725,7 @@ function renderCurrentTicketPanel() {
       <small class="membership-period">${escapeHtml(ticketPeriod)} · 총 ${totalSessions} / 소진 ${usedSessions} / 잔여 ${remainingSessions}</small>
     </article>
     <div class="membership-action-row">
-      <button class="primary-button" type="button" data-open-membership-products>${isPendingTicket ? "결제 상태 확인" : "연장하기"}</button>
+      <button class="primary-button" type="button" data-open-membership-products>${isPendingTicket ? "결제 상태 확인" : ticket ? "연장하기" : "회원권 구매"}</button>
       <button class="small-button" type="button" data-open-membership-history>이용 내역</button>
     </div>
     ${pendingPaymentActions}
@@ -6063,6 +6102,8 @@ function changeJournalMonth(delta) {
 }
 
 let activeAppSheetId = "";
+let activeAppModalId = "";
+let appModalReturnFocus = null;
 
 function refreshAppSheetState() {
   document.body.classList.toggle("sheet-open", Boolean(activeAppSheetId));
@@ -6092,6 +6133,60 @@ function closeAppSheet(sheetId, fromHistory = false) {
 
 function closeVisibleAppSheet(fromHistory = false) {
   if (activeAppSheetId) closeAppSheet(activeAppSheetId, fromHistory);
+}
+
+function focusableElements(container) {
+  if (!container) return [];
+  return [...container.querySelectorAll(
+    'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter((element) => !element.hidden && element.getClientRects().length > 0);
+}
+
+function refreshAppModalState() {
+  const modalOpen = Boolean(activeAppModalId);
+  document.body.classList.toggle("modal-open", modalOpen);
+  const tabbar = $(".tabbar");
+  if (tabbar) {
+    if (modalOpen) tabbar.setAttribute("aria-hidden", "true");
+    else tabbar.removeAttribute("aria-hidden");
+  }
+}
+
+function openAppModal(modalId, focusSelector = "") {
+  const target = $(`#${modalId}`);
+  if (!target) return;
+  if (activeAppModalId && activeAppModalId !== modalId) closeAppModal(activeAppModalId, true);
+  appModalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  target.hidden = false;
+  activeAppModalId = modalId;
+  refreshAppModalState();
+  const historyState = typeof history.state === "object" && history.state ? history.state : {};
+  if (historyState.tennisNoteModal !== modalId) {
+    history.pushState({ ...historyState, tennisNoteModal: modalId }, "", window.location.href);
+  }
+  window.setTimeout(() => {
+    const preferred = focusSelector ? target.querySelector(focusSelector) : null;
+    const focusTarget = preferred && !preferred.disabled ? preferred : focusableElements(target)[0];
+    focusTarget?.focus({ preventScroll: true });
+  }, 40);
+}
+
+function closeAppModal(modalId, fromHistory = false) {
+  const target = $(`#${modalId}`);
+  if (!target) return;
+  target.hidden = true;
+  if (activeAppModalId === modalId) activeAppModalId = "";
+  refreshAppModalState();
+  if (!fromHistory && history.state?.tennisNoteModal === modalId) {
+    history.back();
+    return;
+  }
+  appModalReturnFocus?.focus?.({ preventScroll: true });
+  appModalReturnFocus = null;
+}
+
+function closeVisibleAppModal(fromHistory = false) {
+  if (activeAppModalId) closeAppModal(activeAppModalId, fromHistory);
 }
 
 function journalDateLabel(dateValue) {
@@ -6197,12 +6292,31 @@ function closeJournalDetail() {
   $("#journalDetailModal").hidden = true;
 }
 
-function setView(viewId) {
+function setView(viewId, options = {}) {
   if (!viewId || !$(`#${viewId}`)) return;
   $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === viewId));
   $$(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.view === viewId));
+  const screenTitles = {
+    homeView: "오늘",
+    scheduleView: "시간표",
+    lessonLogView: "운동일지",
+    curriculumView: "커리큘럼",
+    shopView: "회원권",
+    profileView: "내 정보",
+  };
+  if ($("#memberScreenTitle")) $("#memberScreenTitle").textContent = screenTitles[viewId] || "Tennis Note";
   renderActiveMemberView(viewId);
   jumpToTop();
+  const historyState = typeof history.state === "object" && history.state ? history.state : {};
+  const nextState = { ...historyState, tennisNoteMode: "member", tennisNoteView: viewId };
+  delete nextState.tennisNoteModal;
+  delete nextState.tennisNoteSheet;
+  if (options.pushHistory && historyState.tennisNoteView !== viewId) history.pushState(nextState, "", window.location.href);
+  else if (!historyState.tennisNoteView || options.replaceHistory) history.replaceState(nextState, "", window.location.href);
+}
+
+function navigateMemberView(viewId) {
+  setView(viewId, { pushHistory: true });
 }
 
 function jumpToTop() {
@@ -6256,7 +6370,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.35" });
+  const params = new URLSearchParams({ v: "1.0.39" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -6290,7 +6404,7 @@ function handleHomeAction(action) {
   };
   const viewId = viewMap[action];
   if (!viewId) return;
-  setView(viewId);
+  navigateMemberView(viewId);
   if (action === "makeup") {
     renderSchedule();
     requestAnimationFrame(() => $("#scheduleView")?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -6306,17 +6420,17 @@ function handleHomeAction(action) {
 
 function handleSummaryAction(action) {
   if (action === "schedule") {
-    setView("scheduleView");
+    navigateMemberView("scheduleView");
     jumpToTop();
     return;
   }
   if (action === "shop") {
-    setView("shopView");
+    navigateMemberView("shopView");
     jumpToTop();
     return;
   }
   if (action === "change" || action === "makeup") {
-    setView("scheduleView");
+    navigateMemberView("scheduleView");
     renderSelects();
     const firstDue = memberMakeupDueLessons()[0];
     if (firstDue && $("#absenceLesson")) $("#absenceLesson").value = firstDue.id;
@@ -6432,7 +6546,7 @@ function openChangeRequestModal() {
   renderSelects();
   renderAvailableSlots();
   renderChangeModalSummary();
-  $("#changeRequestModal").hidden = false;
+  openAppModal("changeRequestModal", "#absenceLesson");
 }
 
 function changeMemberScheduleMode(mode) {
@@ -6442,7 +6556,7 @@ function changeMemberScheduleMode(mode) {
 }
 
 function closeChangeRequestModal() {
-  $("#changeRequestModal").hidden = true;
+  closeAppModal("changeRequestModal");
 }
 
 function openChangeHistoryModal() {
@@ -6921,6 +7035,7 @@ function openAppFromSession(showNotice = false) {
   renderPendingApprovalGate();
   updateCoachModeAccess();
   applyRequestedMemberView();
+  setView(activeMemberViewId(), { replaceHistory: true });
   jumpToTop();
   if (showNotice && !isApprovalPending()) showNoticeAfterLiveSync();
 }
@@ -7103,6 +7218,10 @@ async function logout() {
 }
 
 async function requestMakeup() {
+  if ($("#requestMakeup")?.disabled) {
+    showToast("현재 변경할 수 있는 수업 시간이 없습니다.");
+    return;
+  }
   const absence = ensureMemberScheduleLesson($("#absenceLesson").value);
   const makeup = ensureMemberScheduleLesson($("#makeupSlot").value);
   if (!absence || !makeup) return;
@@ -7334,8 +7453,8 @@ function bindEvents() {
   $("#kakaoInquiryModal")?.addEventListener("click", (event) => {
     if (event.target.closest("[data-close-kakao-inquiry-modal]")) closeKakaoInquiryModal();
   });
-  $$(".tab").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
-  $("#homeAccountSummary")?.addEventListener("click", () => setView("profileView"));
+  $("#homeAccountSummary")?.addEventListener("click", () => navigateMemberView("profileView"));
+  $("#memberRefreshButton")?.addEventListener("click", () => window.location.reload());
   $$("[data-summary-action]").forEach((button) => {
     button.addEventListener("click", () => handleSummaryAction(button.dataset.summaryAction));
   });
@@ -7497,6 +7616,29 @@ function bindEvents() {
     if (event.target.closest("[data-close-ntrp-modal]")) closeNtrpReference();
   });
   document.addEventListener("keydown", (event) => {
+    if (activeAppModalId && event.key === "Tab") {
+      const modal = $(`#${activeAppModalId}`);
+      const focusable = focusableElements(modal);
+      if (!focusable.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+      return;
+    }
+    if (event.key === "Escape" && activeAppModalId) {
+      event.preventDefault();
+      closeVisibleAppModal();
+      return;
+    }
     if (event.key === "Escape" && !$("#noticeDialog")?.hidden) {
       event.preventDefault();
       closeNotice(false);
@@ -7510,11 +7652,22 @@ function bindEvents() {
     if (event.key === "Escape" && !$("#kakaoInquiryModal")?.hidden) closeKakaoInquiryModal();
     if (event.key === "Escape" && !$("#memberEnrollmentModal")?.hidden) closeMemberEnrollmentModal();
   });
-  window.addEventListener("popstate", () => closeVisibleAppSheet(true));
+  window.addEventListener("popstate", (event) => {
+    if (activeAppModalId) {
+      closeVisibleAppModal(true);
+      return;
+    }
+    if (activeAppSheetId) {
+      closeVisibleAppSheet(true);
+      return;
+    }
+    const targetView = event.state?.tennisNoteView;
+    if (targetView && $(`#${targetView}`)) setView(targetView, { replaceHistory: false });
+  });
   document.addEventListener("click", (event) => {
     const viewButton = event.target.closest("[data-view]");
     if (viewButton) {
-      setView(viewButton.dataset.view);
+      navigateMemberView(viewButton.dataset.view);
       return;
     }
     const groupModeButton = event.target.closest("[data-member-group-mode]");
