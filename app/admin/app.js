@@ -28,6 +28,8 @@ const state = {
   scheduleView: "week",
   scheduleCoachFilter: "all",
   scheduleMemberSearch: "",
+  scheduleSearchLastAutoJump: "",
+  editingBreakRuleId: "",
   billingFilter: "action",
   discountView: "policies",
   discountSearch: "",
@@ -3292,6 +3294,10 @@ async function saveLiveSchedulePolicy() {
       target_break_rules: targetBreakRules,
     });
     const snapshotStatus = await syncLiveSchedulePolicyToServer();
+    if (snapshotStatus === "server") await loadLiveSchedulePolicyFromServer();
+    renderSchedule();
+    renderScheduleSettings();
+    saveSnapshot();
     billingLogs.unshift(`근무·브레이크 서버 저장: 근무 ${result?.availabilityCount || 0}개 · 브레이크 ${result?.breakCount || 0}개`);
     if (snapshotStatus === "server") {
       showToast("근무시간과 브레이크 저장 완료");
@@ -8716,16 +8722,45 @@ function renderScheduleMemberSearch() {
   const currentWeekMatches = matches.filter((lesson) => lessonMatchesActiveScheduleWeek(lesson, lesson.day));
   const resultLessons = (currentWeekMatches.length ? currentWeekMatches : matches).slice(0, 6);
   result.innerHTML = matches.length
-    ? `<span>${currentWeekMatches.length ? `현재 주 ${currentWeekMatches.length}건` : `다른 주 ${matches.length}건`}</span>${resultLessons.map((lesson) => `<button type="button" data-jump-schedule-date="${escapeHtml(lesson.lessonDate || "")}" data-jump-schedule-day="${escapeHtml(lesson.day || "")}">${escapeHtml(lesson.lessonDate || lesson.day)} · ${escapeHtml(lesson.time)} · ${escapeHtml(getCoachName(lesson.coachId))}</button>`).join("")}`
+    ? `<span>${currentWeekMatches.length ? `현재 주 ${currentWeekMatches.length}건` : `다른 주 ${matches.length}건`}</span>${resultLessons.map((lesson) => `<button type="button" data-jump-schedule-date="${escapeHtml(lesson.lessonDate || "")}" data-jump-schedule-day="${escapeHtml(lesson.day || "")}" data-jump-schedule-lesson="${escapeHtml(String(lesson.id || ""))}">${escapeHtml(lesson.lessonDate || lesson.day)} · ${escapeHtml(lesson.time)} · ${escapeHtml(getCoachName(lesson.coachId))}</button>`).join("")}`
     : "<span>일치하는 수업이 없습니다.</span>";
 }
 
-function jumpToScheduleSearchResult(date, day) {
+function focusScheduleLessonCard(lessonId) {
+  if (!lessonId) return;
+  window.requestAnimationFrame(() => {
+    const card = [...document.querySelectorAll("[data-schedule-lesson-id]")]
+      .find((item) => String(item.dataset.scheduleLessonId) === String(lessonId));
+    if (!card) return;
+    card.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    card.classList.add("is-search-target");
+    window.setTimeout(() => card.classList.remove("is-search-target"), 2200);
+  });
+}
+
+function jumpToScheduleSearchResult(date, day, lessonId = "") {
   if (date) state.activeAdminWeekIndex = Math.min(Math.max(adminWeekOffsetForDate(date), adminScheduleMinWeekOffset), adminScheduleMaxWeekOffset);
   if (day) state.selectedScheduleDay = day;
   state.scheduleView = "week";
   renderSchedule();
   saveSnapshot();
+  focusScheduleLessonCard(lessonId);
+}
+
+function autoJumpToExactScheduleMember() {
+  const keyword = normalizedScheduleMemberSearch(state.scheduleMemberSearch);
+  if (!keyword || keyword === state.scheduleSearchLastAutoJump) return;
+  const exactMatches = scheduleMemberSearchMatches().filter((lesson) => (
+    splitMemberNames(getLessonMembersLabel(lesson))
+      .some((name) => normalizedScheduleMemberSearch(name) === keyword)
+  ));
+  if (!exactMatches.length) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const target = exactMatches.find((lesson) => lessonMatchesActiveScheduleWeek(lesson, lesson.day))
+    || exactMatches.find((lesson) => !lesson.lessonDate || lesson.lessonDate >= today)
+    || exactMatches[exactMatches.length - 1];
+  state.scheduleSearchLastAutoJump = keyword;
+  jumpToScheduleSearchResult(target.lessonDate, target.day, target.id);
 }
 
 function lessonMatchesActiveScheduleWeek(lesson, day = lesson?.day) {
@@ -9405,9 +9440,9 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
       const span = Math.max(1, Math.ceil((Number(lesson.durationMinutes) || 20) / 10));
       const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
       return `
-        <button class="admin-duration-lesson lesson-kind-${lessonVisualKind(lesson)} ${lesson.status} ${getLessonStateClass(lesson)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)} style="${lessonColorStyle(lesson)};grid-row:${startIndex + 3} / span ${span};grid-column:${laneIndex + 2};">
+        <button class="admin-duration-lesson lesson-kind-${lessonVisualKind(lesson)} ${lesson.status} ${getLessonStateClass(lesson)} ${isDimmed ? "is-dimmed" : ""}" type="button" data-schedule-lesson-id="${escapeHtml(String(lesson.id || ""))}" ${lessonActionAttrs(lesson)} style="${lessonColorStyle(lesson)};grid-row:${startIndex + 3} / span ${span};grid-column:${laneIndex + 2};">
           <strong>${getLessonMembersMarkup(lesson)}</strong>
-          <span>${getCoachName(lesson.coachId)}</span>
+          <span class="schedule-lesson-meta">${escapeHtml(getLessonRoundLabel(lesson) || "회차 확인")} · ${escapeHtml(getCoachName(lesson.coachId))}</span>
         </button>`;
     }).join("")).join("");
 
@@ -9428,9 +9463,9 @@ function renderSchedule() {
       <div class="schedule-period-summary">
         <div class="schedule-month-controls">
           <button class="ghost-button" type="button" data-go-admin-today>오늘</button>
-          <button class="ghost-button" type="button" data-change-admin-month="-1">이전 달</button>
+          <button class="ghost-button schedule-month-arrow" type="button" data-change-admin-month="-1" aria-label="이전 달" title="이전 달">‹</button>
           <input class="schedule-month-input" type="month" value="${adminScheduleMonthValue(activeWeek)}" data-admin-month aria-label="이동할 달">
-          <button class="ghost-button" type="button" data-change-admin-month="1">다음 달</button>
+          <button class="ghost-button schedule-month-arrow" type="button" data-change-admin-month="1" aria-label="다음 달" title="다음 달">›</button>
         </div>
         <strong>${activeWeek.label}</strong>
         <span>${activeWeek.range} · ${state.liveScheduleLoaded ? "실시간 모든 코치 시간표" : "모든 코치 시간표"}</span>
@@ -15107,10 +15142,12 @@ function renderScheduleSettings() {
   renderLessonPolicySettings();
   renderPolicyGuide();
   const activeBreakCoaches = memberManagementCoachRoles();
+  const editingBreakRule = scheduleSettings.breakRules.find((rule) => rule.id === state.editingBreakRuleId);
+  const editingCoachRoleIds = editingBreakRule ? breakRuleCoachRoleIds(editingBreakRule) : [];
   const breakCoachOptions = $("#breakCoachOptions");
   if (breakCoachOptions) {
     breakCoachOptions.innerHTML = activeBreakCoaches.length
-      ? activeBreakCoaches.map((role) => `<label><input type="checkbox" value="${escapeHtml(role.id)}" data-break-coach checked /><span>${escapeHtml(String(role.display_name || "코치").replace(/\s*코치$/, ""))}</span></label>`).join("")
+      ? activeBreakCoaches.map((role) => `<label><input type="checkbox" value="${escapeHtml(role.id)}" data-break-coach ${!editingBreakRule || !editingCoachRoleIds.length || editingCoachRoleIds.includes(role.id) ? "checked" : ""} /><span>${escapeHtml(String(role.display_name || "코치").replace(/\s*코치$/, ""))}</span></label>`).join("")
       : '<span class="empty-text">재직 중인 승인 코치가 없습니다.</span>';
   }
   $("#breakRuleList").innerHTML = scheduleSettings.breakRules.length
@@ -15120,11 +15157,36 @@ function renderScheduleSettings() {
         <div class="break-rule-row">
           <strong>${rule.label || "브레이크"}</strong>
           <span>${rule.days.join(", ")} · ${rule.start}~${rule.end} · ${escapeHtml(breakRuleCoachNames(rule))}</span>
+          <button class="small-button" type="button" data-edit-break-rule="${rule.id}">수정</button>
           <button class="small-button" type="button" data-remove-break-rule="${rule.id}">삭제</button>
         </div>`,
       )
       .join("")
     : `<p class="empty-text">등록된 브레이크타임이 없습니다.</p>`;
+  if (editingBreakRule) {
+    $$('[data-break-day]').forEach((input) => { input.checked = editingBreakRule.days.includes(input.value); });
+    if ($("#breakStartInput")) $("#breakStartInput").value = editingBreakRule.start;
+    if ($("#breakEndInput")) $("#breakEndInput").value = editingBreakRule.end;
+    if ($("#breakLabelInput")) $("#breakLabelInput").value = editingBreakRule.label || "브레이크";
+  }
+  const applyButton = $("#applyBreakRuleButton");
+  if (applyButton) applyButton.textContent = editingBreakRule ? "브레이크 수정 적용" : "브레이크 추가";
+}
+
+function editBreakRule(ruleId) {
+  if (!scheduleSettings.breakRules.some((rule) => rule.id === ruleId)) return;
+  state.editingBreakRuleId = ruleId;
+  renderScheduleSettings();
+  $("#breakStartInput")?.focus();
+}
+
+function clearBreakRuleEditor() {
+  state.editingBreakRuleId = "";
+  $$('[data-break-day]').forEach((input) => { input.checked = false; });
+  $$('[data-break-coach]').forEach((input) => { input.checked = true; });
+  if ($("#breakLabelInput")) $("#breakLabelInput").value = "브레이크";
+  const applyButton = $("#applyBreakRuleButton");
+  if (applyButton) applyButton.textContent = "브레이크 추가";
 }
 
 function renderPolicyGuide() {
@@ -16764,17 +16826,26 @@ function bindEvents() {
     if (event.target.matches("[data-admin-month]")) selectAdminMonth(event.target.value);
   });
   $("#adminScheduleMemberSearch")?.addEventListener("input", (event) => {
+    if (state.scheduleMemberSearch !== event.target.value) state.scheduleSearchLastAutoJump = "";
     state.scheduleMemberSearch = event.target.value;
     renderSchedule();
+    autoJumpToExactScheduleMember();
+  });
+  $("#adminScheduleMemberSearch")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const target = scheduleMemberSearchMatches()[0];
+    if (target) jumpToScheduleSearchResult(target.lessonDate, target.day, target.id);
   });
   $("#clearAdminScheduleMemberSearch")?.addEventListener("click", () => {
     state.scheduleMemberSearch = "";
+    state.scheduleSearchLastAutoJump = "";
     renderSchedule();
     $("#adminScheduleMemberSearch")?.focus();
   });
   $("#adminScheduleMemberSearchResult")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-jump-schedule-date]");
-    if (button) jumpToScheduleSearchResult(button.dataset.jumpScheduleDate, button.dataset.jumpScheduleDay);
+    if (button) jumpToScheduleSearchResult(button.dataset.jumpScheduleDate, button.dataset.jumpScheduleDay, button.dataset.jumpScheduleLesson);
   });
   $("#adminScheduleDayPicker")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-select-admin-day]");
@@ -16907,7 +16978,7 @@ function bindEvents() {
     $(selector)?.addEventListener("change", renderDataTools);
   });
   $("#writeCommunityButton")?.addEventListener("click", writeCommunityPost);
-  $("#applyBreakRuleButton").addEventListener("click", () => {
+  $("#applyBreakRuleButton").addEventListener("click", async () => {
     const selectedDays = $$("[data-break-day]:checked").map((input) => input.value);
     const availableCoachRoleIds = memberManagementCoachRoles().map((role) => role.id);
     const selectedCoachRoleIds = $$("[data-break-coach]:checked").map((input) => input.value);
@@ -16919,15 +16990,19 @@ function bindEvents() {
       return;
     }
     const coachRoleIds = selectedCoachRoleIds.length === availableCoachRoleIds.length ? [] : selectedCoachRoleIds;
+    const editingRuleId = state.editingBreakRuleId;
     scheduleSettings.breakRules = scheduleSettings.breakRules.filter((rule) => {
+      if (editingRuleId && rule.id === editingRuleId) return false;
       const sameTime = rule.start === start && rule.end === end;
       const overlapDay = rule.days.some((day) => selectedDays.includes(day));
       const sameCoaches = JSON.stringify(breakRuleCoachRoleIds(rule).sort()) === JSON.stringify([...coachRoleIds].sort());
       return !(sameTime && overlapDay && sameCoaches);
     });
-    scheduleSettings.breakRules.push({ id: `break-${Date.now()}`, days: selectedDays, start, end, label, coachRoleIds });
+    scheduleSettings.breakRules.push({ id: editingRuleId || `break-${Date.now()}`, days: selectedDays, start, end, label, coachRoleIds });
+    state.editingBreakRuleId = "";
     renderAll();
-    showToast("브레이크타임 등록 완료");
+    saveSnapshot();
+    await saveLiveSchedulePolicy();
   });
   ["#openStartInput", "#openEndInput"].forEach((selector) => {
     $(selector).addEventListener("change", () => {
@@ -17693,15 +17768,25 @@ function bindEvents() {
     if (schedulePresetButton) {
       const message = applySchedulePreset(schedulePresetButton.dataset.schedulePreset);
       renderAll();
+      saveSnapshot();
+      await saveLiveSchedulePolicy();
       showToast(message);
+      return;
+    }
+
+    const editBreakRuleButton = event.target.closest("[data-edit-break-rule]");
+    if (editBreakRuleButton) {
+      editBreakRule(editBreakRuleButton.dataset.editBreakRule);
       return;
     }
 
     const removeBreakRuleButton = event.target.closest("[data-remove-break-rule]");
     if (removeBreakRuleButton) {
       scheduleSettings.breakRules = scheduleSettings.breakRules.filter((rule) => rule.id !== removeBreakRuleButton.dataset.removeBreakRule);
+      if (state.editingBreakRuleId === removeBreakRuleButton.dataset.removeBreakRule) clearBreakRuleEditor();
       renderAll();
-      showToast("브레이크타임 삭제 완료");
+      saveSnapshot();
+      await saveLiveSchedulePolicy();
     }
 
   });

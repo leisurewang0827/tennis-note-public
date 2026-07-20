@@ -2333,10 +2333,18 @@ tr.is-selected td {
 
 .week-switcher .schedule-month-controls {
   display: grid;
-  grid-template-columns: auto minmax(132px, 180px) auto;
+  grid-template-columns: auto 36px minmax(132px, 180px) 36px;
   gap: 6px;
   align-items: center;
   justify-content: center;
+}
+
+.week-switcher .schedule-month-arrow {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .schedule-month-input {
@@ -2353,7 +2361,8 @@ tr.is-selected td {
 
 @media (max-width: 720px) {
   .week-switcher .schedule-month-controls {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto 36px minmax(118px, 1fr) 36px;
+    overflow-x: auto;
   }
 }
 
@@ -4661,7 +4670,7 @@ tr.is-selected td {
 
 .break-rule-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(90px, 0.45fr) minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   min-height: 42px;
@@ -8734,10 +8743,10 @@ button .schedule-member-lines > span {
   z-index: 8;
   display: grid;
   align-content: center;
-  gap: 3px;
+  gap: 5px;
   width: 100%;
   height: 100%;
-  padding: 6px;
+  padding: 7px 6px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--lesson-color, var(--blue)) 32%, #d9e2ea);
   border-radius: 6px;
@@ -8752,21 +8761,37 @@ button .schedule-member-lines > span {
   min-width: 0;
   overflow: hidden;
   color: inherit;
-  font-size: 10px;
-  line-height: 1.15;
+  font-size: 11px;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .admin-duration-lesson span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
 }
 
 .admin-duration-lesson .schedule-member-lines {
   display: grid;
+  gap: 1px;
   white-space: normal;
+}
+
+.admin-duration-lesson .schedule-member-lines > span,
+.admin-duration-lesson .schedule-lesson-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-duration-lesson.is-search-target {
+  z-index: 40;
+  outline: 3px solid #f59e0b;
+  outline-offset: 2px;
+  box-shadow: inset 4px 0 0 var(--lesson-color, var(--blue)), 0 0 0 5px rgba(245, 158, 11, 0.22);
 }
 
 @media (max-width: 720px) {
