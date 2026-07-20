@@ -1,11 +1,13 @@
 const adminQuery = new URLSearchParams(window.location.search);
 const adminDemoMode = adminQuery.get("demoAdmin") === "1";
 const adminBrandSplashStartedAt = performance.now();
-const adminBrandSplashMinimumDuration = 1800;
+const adminBrandSplashMinimumDuration = 250;
+let adminBrandSplashHideScheduled = false;
 
 function hideAdminBrandSplash() {
   const splash = document.querySelector("#adminBrandSplash");
-  if (!splash) return;
+  if (!splash || splash.hidden || adminBrandSplashHideScheduled) return;
+  adminBrandSplashHideScheduled = true;
   const elapsed = performance.now() - adminBrandSplashStartedAt;
   const delay = Math.max(0, adminBrandSplashMinimumDuration - elapsed);
   window.setTimeout(() => {
@@ -1183,7 +1185,11 @@ function renderOperationsLoginGate() {
   const shell = $("#adminAppShell");
   if (!gate || !shell) return;
   const ready = operationsAccessReady();
-  gate.hidden = ready;
+  const restoringSession = Boolean(
+    adminImportAuthState.loading
+    && window.TennisNoteDataClient?.getSession?.()?.access_token,
+  );
+  gate.hidden = ready || restoringSession;
   shell.hidden = !ready;
   const message = $("#operationsLoginMessage");
   const logout = $("#operationsLogoutButton");
@@ -13441,6 +13447,7 @@ async function refreshAdminImportAuthState() {
     loaded: true,
     message: "로그인 권한 확인 중입니다.",
   });
+  renderOperationsLoginGate();
   renderDataTools();
 
   try {
@@ -13461,6 +13468,7 @@ async function refreshAdminImportAuthState() {
             : "로그인은 되었지만 운영 권한 연결이 필요합니다.",
     });
     renderOperationsLoginGate();
+    hideAdminBrandSplash();
     if (["admin", "coach"].includes(role)) {
       if (role === "coach" && !operationsViewAllowed(state.view)) state.view = "schedule";
       await syncAdminLiveData();
@@ -17240,6 +17248,10 @@ restoreSnapshot();
 prepareAdminLiveMode();
 resetScheduleEntryState();
 window.TennisNoteDataClient?.consumeOAuthRedirect?.();
+if (window.TennisNoteDataClient?.getSession?.()?.access_token) {
+  adminImportAuthState.loading = true;
+  adminImportAuthState.message = "로그인 상태를 확인하고 있습니다.";
+}
 renderOperationsLoginGate();
 organizeAdminTools();
 bindEvents();
@@ -17261,5 +17273,6 @@ Promise.all([loadServerHoldingPolicy(), loadRefundPolicySettingsFromServer()])
   .then(loadPolicyVersionsFromServer)
   .then(loadLessonPoliciesFromServer);
 loadAuthProviderStatus();
-refreshAdminImportAuthState().then(refreshAdminPendingUsers);
-hideAdminBrandSplash();
+refreshAdminImportAuthState()
+  .then(refreshAdminPendingUsers)
+  .finally(hideAdminBrandSplash);
