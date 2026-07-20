@@ -1496,13 +1496,37 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
+    const refreshKey = "tennis-note-sw-refresh-1.0.41";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
+      if (sessionStorage.getItem(refreshKey) === "done") return;
+      sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" })
-      .then((registration) => registration.update().catch(() => undefined))
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.41", { updateViaCache: "none" })
+      .then((registration) => {
+        const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+        registration.addEventListener("updatefound", () => {
+          const worker = registration.installing;
+          worker?.addEventListener("statechange", () => {
+            if (worker.state === "installed" && navigator.serviceWorker.controller) activateWaitingWorker();
+          });
+        });
+        activateWaitingWorker();
+        let lastUpdateAt = 0;
+        const update = () => {
+          const now = Date.now();
+          if (now - lastUpdateAt < 30_000) return;
+          lastUpdateAt = now;
+          registration.update().catch(() => undefined);
+        };
+        update();
+        window.addEventListener("focus", update);
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") update();
+        });
+      })
       .catch(() => undefined);
   });
 }
@@ -5964,6 +5988,8 @@ function renderJournalCalendar() {
     map.get(entry.dateValue).push(entry);
     return map;
   }, new Map());
+  const calendarDisclosure = $("#journalCalendarDisclosure");
+  if (calendarDisclosure && !calendarDisclosure.dataset.userToggled) calendarDisclosure.open = entriesByDate.size > 0;
   const weekdays = ["월", "화", "수", "목", "금", "토", "일"].map((day) => `<b>${day}</b>`).join("");
   const emptyMarkup = Array.from({ length: firstWeekday }, () => `<span class="calendar-empty"></span>`).join("");
   const daysMarkup = Array.from({ length: dayCount }, (_, index) => {
@@ -6370,7 +6396,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.39" });
+  const params = new URLSearchParams({ v: "1.0.41" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7467,6 +7493,9 @@ function bindEvents() {
   });
   $("#journalPrevMonth")?.addEventListener("click", () => changeJournalMonth(-1));
   $("#journalNextMonth")?.addEventListener("click", () => changeJournalMonth(1));
+  $("#journalCalendarDisclosure")?.addEventListener("toggle", (event) => {
+    if (event.isTrusted) event.currentTarget.dataset.userToggled = "true";
+  });
   $("#journalSearch")?.addEventListener("input", (event) => {
     state.journalSearchQuery = event.target.value;
     renderJournalCalendar();

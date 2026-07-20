@@ -9167,6 +9167,70 @@ function renderCoachDaySchedule(day) {
   target.innerHTML = headers + baseCells + lessonCards;
 }
 
+function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
+  const target = $("#scheduleGrid");
+  const lanes = [];
+  const dayRanges = [];
+  displayDays.forEach((day) => {
+    const coaches = dayCoachMap.get(day) || [];
+    const displayCoaches = coaches.length ? coaches : [{ id: `closed-${day}`, name: "운영없음", workBlocks: [] }];
+    const startColumn = lanes.length + 2;
+    displayCoaches.forEach((coach) => lanes.push({ day, coach }));
+    dayRanges.push({ day, coaches: displayCoaches, startColumn, span: displayCoaches.length });
+  });
+
+  const laneTracks = lanes.map(() => "minmax(88px, 1fr)").join(" ");
+  target.classList.add("admin-duration-schedule");
+  target.classList.remove("is-mobile-day", "has-coach-overflow");
+  target.style.gridTemplateColumns = `58px ${laneTracks}`;
+  target.style.gridTemplateRows = `30px 34px repeat(${Math.max(visibleTimes.length, 1)}, 44px)`;
+
+  const dateHeaders = dayRanges.map(({ day, startColumn, span }) => `
+    <div class="admin-duration-date" style="grid-row:1;grid-column:${startColumn} / span ${span};">
+      ${day} · ${adminScheduleDateLabel(day)}
+    </div>`).join("");
+  const coachHeaders = lanes.map(({ coach }, index) => `
+    <div class="admin-duration-coach ${coach.id?.startsWith("closed-") ? "is-closed" : getCoachToneClass(coach.id)}" style="grid-row:2;grid-column:${index + 2};">
+      ${escapeHtml(String(coach.name || "운영없음").replace(/\s*코치$/, ""))}
+    </div>`).join("");
+  const timeCells = visibleTimes.map((time, index) => `
+    <div class="admin-duration-time" style="grid-row:${index + 3};grid-column:1;">${time}</div>`).join("");
+
+  const slotCells = visibleTimes.map((time, timeIndex) => lanes.map(({ day, coach }, laneIndex) => {
+    const row = timeIndex + 3;
+    const column = laneIndex + 2;
+    if (coach.id?.startsWith("closed-")) {
+      return `<div class="admin-duration-slot is-closed" style="grid-row:${row};grid-column:${column};"></div>`;
+    }
+    const occupyingLesson = lessons.find((lesson) => lesson.coachId === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
+    const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10) || getBreakRuleOverlapping(day, time, 10);
+    const working = !breakRule && isCoachAvailableForSlot(coach.id, day, time, 10);
+    const stateClass = occupyingLesson ? "is-occupied" : breakRule ? "is-break" : working ? "is-open" : "is-closed";
+    const addButton = !occupyingLesson && working && canAddLessonAt(day, time, 20, coach.id)
+      ? `<button class="admin-duration-add" type="button" ${lessonAddAttrs(day, time, 20, coach.id)}>+ 수업 추가</button>`
+      : "";
+    return `<div class="admin-duration-slot ${stateClass}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
+  }).join("")).join("");
+
+  const lessonCards = lanes.map(({ day, coach }, laneIndex) => lessons
+    .filter((lesson) => lesson.day === day && lesson.coachId === coach.id && lesson.status !== "cancelled" && lessonMatchesActiveScheduleWeek(lesson, day))
+    .map((lesson) => {
+      const startIndex = visibleTimes.indexOf(lesson.time);
+      if (startIndex < 0) return "";
+      const span = Math.max(1, Math.ceil((Number(lesson.durationMinutes) || 20) / 10));
+      const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
+      return `
+        <button class="admin-duration-lesson lesson-kind-${lessonVisualKind(lesson)} ${lesson.status} ${getLessonStateClass(lesson)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)} style="${lessonColorStyle(lesson)};grid-row:${startIndex + 3} / span ${span};grid-column:${laneIndex + 2};">
+          <strong>${getLessonMembersMarkup(lesson)}</strong>
+          <span>${getCoachName(lesson.coachId)}</span>
+        </button>`;
+    }).join("")).join("");
+
+  target.innerHTML = `
+    <div class="admin-duration-corner" style="grid-row:1 / span 2;grid-column:1;">시간</div>
+    ${dateHeaders}${coachHeaders}${timeCells}${slotCells}${lessonCards}`;
+}
+
 function renderSchedule() {
   syncAdminScheduleWeek();
   const activeWeek = activeAdminWeek();
@@ -9214,6 +9278,8 @@ function renderSchedule() {
     .filter(scheduleTimeHasFilteredLesson)
     .filter((time) => !mobileDayView || adminTimeVisibleForDay(selectedDay, time));
   const dayCoachMap = new Map(displayDays.map((day) => [day, getScheduleCoachLanes(day)]));
+  renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap);
+  return;
   const dayWidths = displayDays.map((day) => {
     if (mobileDayView) return 0;
     const dayLaneCount = Math.max(1, dayCoachMap.get(day)?.length || 0);

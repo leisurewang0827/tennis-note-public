@@ -5610,3 +5610,108 @@ body.modal-open {
     padding-bottom: 4px;
   }
 }
+
+/* Mobile-first disclosure hierarchy: the primary action stays above optional detail. */
+.journal-calendar-disclosure {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+}
+
+.journal-calendar-disclosure > summary,
+.membership-help-disclosure > summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.journal-calendar-disclosure > summary::-webkit-details-marker,
+.membership-help-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.journal-calendar-disclosure > summary::after,
+.membership-help-disclosure > summary::after {
+  content: "+";
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.journal-calendar-disclosure[open] > summary::after,
+.membership-help-disclosure[open] > summary::after {
+  content: "−";
+}
+
+.journal-calendar-disclosure > summary span {
+  margin-left: auto;
+  color: var(--green);
+}
+
+.journal-calendar-body,
+.membership-help-body {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.journal-selected-panel {
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.journal-selected-panel:empty {
+  display: none;
+}
+
+.journal-day {
+  position: relative;
+}
+
+.journal-day.has-record::after {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  content: "";
+}
+
+.membership-help-disclosure {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.membership-help-disclosure > summary {
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.membership-help-body > :first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 560px) {
+  .journal-calendar-disclosure > summary,
+  .membership-help-disclosure > summary {
+    min-height: 44px;
+  }
+
+  .journal-selected-panel {
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}

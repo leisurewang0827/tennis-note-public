@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.39" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.41" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -194,16 +194,12 @@
             <button class="small-button section-shortcut" type="button" data-view="curriculumView">커리큘럼</button>
           </div>
 
-          <section class="journal-calendar-card" aria-label="운동일지 달력">
-            <div class="journal-calendar-head">
-              <div>
-                <h3>운동 달력</h3>
-              </div>
-              <div class="journal-calendar-controls" aria-label="운동일지 월 이동">
-                <button class="small-button" type="button" id="journalPrevMonth">이전달</button>
-                <strong id="journalMonthLabel">2026년 7월</strong>
-                <button class="small-button" type="button" id="journalNextMonth">다음달</button>
-              </div>
+          <details id="journalCalendarDisclosure" class="journal-calendar-card journal-calendar-disclosure" aria-label="운동일지 달력">
+            <summary><strong>운동 달력</strong><span id="journalMonthLabel">2026년 7월</span></summary>
+            <div class="journal-calendar-body">
+            <div class="journal-calendar-controls" aria-label="운동일지 월 이동">
+              <button class="small-button" type="button" id="journalPrevMonth">이전달</button>
+              <button class="small-button" type="button" id="journalNextMonth">다음달</button>
             </div>
             <details class="journal-tools-disclosure">
               <summary>기록 검색·날짜 이동</summary>
@@ -219,15 +215,9 @@
               </div>
             </details>
             <div id="journalCalendar" class="journal-calendar"></div>
-            <div id="journalSelectedDayPanel" class="journal-selected-panel"></div>
-          </section>
-
-          <div class="journal-primary-actions">
-            <div>
-              <strong>오늘의 기록</strong>
             </div>
-            <button class="primary-button" type="button" id="openJournalComposer">기록하기</button>
-          </div>
+          </details>
+          <div id="journalSelectedDayPanel" class="journal-selected-panel"></div>
 
           <section id="journalComposerSheet" class="app-bottom-sheet" aria-labelledby="journalComposerTitle" hidden>
             <button class="sheet-backdrop" type="button" aria-label="운동일지 작성 닫기" data-close-journal-composer></button>
@@ -341,14 +331,19 @@
             <div id="ticketHistoryPager" class="list-pager"></div>
           </details>
 
-          <details id="membershipPurchaseDetails" class="membership-details">
-            <summary>연장·구매·결제 상태 보기</summary>
+          <details id="membershipPurchaseDetails" class="membership-details" open>
+            <summary>상품 선택·결제</summary>
             <div class="membership-details-body">
-          <div id="paymentGatewayStatus" class="payment-gateway-status"></div>
-          <div id="groupAccountPanel" class="group-account-panel"></div>
-          <div id="memberPaymentAlerts"></div>
-          <div id="registrationFlow" class="flow-guide"></div>
-          <div class="product-grid" id="productGrid"></div>
+              <div class="product-grid" id="productGrid"></div>
+              <details class="membership-help-disclosure">
+                <summary>결제·가입 안내</summary>
+                <div class="membership-help-body">
+                  <div id="paymentGatewayStatus" class="payment-gateway-status"></div>
+                  <div id="groupAccountPanel" class="group-account-panel"></div>
+                  <div id="memberPaymentAlerts"></div>
+                  <div id="registrationFlow" class="flow-guide"></div>
+                </div>
+              </details>
 
           <section class="form-card">
             <h3>만기/충전 대기 이용권</h3>
@@ -577,7 +572,6 @@
           <a href="../tennis-note-legal/privacy.html">개인정보 처리방침</a>
           <a href="../tennis-note-legal/support.html">고객지원</a>
           <a href="../tennis-note-legal/delete-account.html">계정 삭제 안내</a>
-          <span class="release-version" data-tennisnote-release="detail"></span>
         </footer>
       </section>
     </main>
@@ -863,12 +857,12 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.39"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.41"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.39"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.41"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.39"></script>
+    <script src="./app.js?v=1.0.41"></script>
   </body>
 </html>

@@ -1,20 +1,20 @@
-const CACHE_NAME = "tennis-note-member-pwa-v86";
+const CACHE_NAME = "tennis-note-member-pwa-v88";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.39",
-  "./app.js?v=1.0.39",
+  "./styles.css?v=1.0.41",
+  "./app.js?v=1.0.41",
   "./manifest.webmanifest",
   "./assets/brand/app-icon-180.png",
   "./assets/brand/app-icon-192.png",
   "./assets/brand/app-icon-512.png",
   "./assets/brand/launch-splash.png",
-  "../shared/tennisnote-data-client.js?v=1.0.39",
+  "../shared/tennisnote-data-client.js?v=1.0.41",
   "../shared/tennisnote-product-catalog.js",
   "../shared/tennisnote-curriculum-catalog.js",
   "../shared/tennisnote-native-push.js",
-  "../shared/tennisnote-release.js?v=1.0.39",
+  "../shared/tennisnote-release.js?v=1.0.41",
   "../shared/tennisnote-issue-reporter.js",
   "../shared/tennisnote-issue-reporter.css",
 ];
@@ -25,7 +25,10 @@ self.addEventListener("install", (event) => {
       Promise.all(APP_SHELL.map((path) => cache.add(path).catch(() => undefined))),
     ),
   );
-  self.skipWaiting();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -46,31 +49,17 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  const networkFirst = event.request.destination === "document" || url.pathname.endsWith("/config.local.js");
-  const cacheFirst = ["script", "style", "manifest", "worker"].includes(event.request.destination);
-
-  if (cacheFirst) {
-    event.respondWith((async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(event.request);
-      const update = fetch(event.request, { cache: "no-store" }).then((response) => {
-        if (response.ok) cache.put(event.request, response.clone());
-        return response;
-      });
-      if (cached) {
-        event.waitUntil(update.catch(() => undefined));
-        return cached;
-      }
-      return update;
-    })());
-    return;
-  }
+  const networkFirst = event.request.mode === "navigate"
+    || ["document", "script", "style", "manifest", "worker"].includes(event.request.destination)
+    || url.pathname.endsWith("/config.local.js");
 
   event.respondWith(
     fetch(event.request, networkFirst ? { cache: "no-store" } : undefined)
       .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        if (response.ok) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)));
+        }
         return response;
       })
       .catch(async () => {

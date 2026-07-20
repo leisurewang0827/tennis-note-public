@@ -3051,13 +3051,12 @@ select:disabled {
 
 #fullScheduleBoard {
   display: block;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
 }
 
 .coach-duration-schedule {
-  min-width: 0;
+  width: 100%;
+  min-width: max-content;
   overflow: visible;
 }
 
@@ -3409,10 +3408,39 @@ select {
 }
 
 .coach-desktop-schedule {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  max-height: min(72vh, 760px);
   min-width: 0;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
+  overflow: auto;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+.coach-desktop-schedule .coach-duration-head {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.coach-desktop-schedule .coach-duration-head.time-head {
+  top: 0;
+  left: 0;
+  z-index: 45;
+}
+
+.coach-desktop-schedule .coach-time-rail {
+  left: 0;
+  z-index: 24;
+}
+
+.coach-desktop-schedule .coach-duration-lesson,
+.coach-desktop-schedule .coach-slot-bg {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 @media (max-width: 720px) {
@@ -3735,6 +3763,106 @@ body {
   .tabbar {
     border-radius: 8px;
     border-color: #dbe6e0;
+  }
+}
+
+/* Keep optional reference material compact around the coach's primary workflow. */
+.ntrp-coach-guide:not([open]) {
+  display: block;
+  padding: 0 10px;
+}
+
+.ntrp-coach-guide:not([open]) summary {
+  min-height: 40px;
+}
+
+.curriculum-browse-disclosure {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.curriculum-browse-disclosure > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  color: var(--blue);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  list-style: none;
+}
+
+.curriculum-browse-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.curriculum-browse-disclosure > summary::after {
+  color: var(--muted);
+  content: "+";
+  font-size: 18px;
+}
+
+.curriculum-browse-disclosure[open] > summary::after {
+  content: "−";
+}
+
+.curriculum-browse-body {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.curriculum-reference-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.coach-week-controls .schedule-period-summary,
+.coach-week-controls .schedule-period-summary span,
+.week-switcher .schedule-period-summary,
+.week-switcher .schedule-period-summary span {
+  min-width: 0;
+}
+
+.coach-week-controls .schedule-period-summary span,
+.week-switcher .schedule-period-summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .coach-week-calendar,
+  .week-switcher {
+    padding: 8px;
+  }
+
+  .coach-week-controls,
+  .week-switcher {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .coach-week-controls strong,
+  .week-switcher strong {
+    font-size: 16px;
+  }
+
+  .curriculum-source-panel {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px;
+  }
+
+  .curriculum-source-panel .primary-button {
+    min-height: 40px;
+    padding-inline: 10px;
   }
 }
 

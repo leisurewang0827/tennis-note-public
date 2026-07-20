@@ -1696,7 +1696,18 @@ h2 {
 }
 
 .schedule-panel {
-  overflow-x: auto;
+  min-width: 0;
+  overflow: visible;
+}
+
+.admin-schedule-scroll {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  max-height: min(72vh, 760px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -8321,12 +8332,192 @@ button .schedule-member-lines > span {
 }
 
 .schedule-sheet {
-  width: max-content;
-  min-width: 0;
+  width: 100%;
+  min-width: max-content;
   gap: 3px;
   padding: 6px;
   border: 1px solid var(--line);
   box-shadow: none;
+}
+
+.admin-duration-schedule {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  grid-auto-flow: row;
+  align-items: stretch;
+  width: 100%;
+  min-width: max-content;
+}
+
+.admin-duration-corner,
+.admin-duration-date,
+.admin-duration-coach,
+.admin-duration-time,
+.admin-duration-slot,
+.admin-duration-add,
+.admin-duration-lesson {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-duration-corner,
+.admin-duration-date,
+.admin-duration-coach {
+  position: sticky;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #d9e2ea;
+  background: #fff;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-duration-corner {
+  top: 0;
+  left: 0;
+  z-index: 45;
+  color: var(--green);
+  background: var(--soft-green);
+  box-shadow: 5px 0 10px rgba(24, 34, 48, 0.1);
+}
+
+.admin-duration-date {
+  top: 0;
+  color: var(--blue);
+  background: var(--soft-blue);
+}
+
+.admin-duration-coach {
+  top: 33px;
+  z-index: 32;
+  border-top: 3px solid var(--coach-accent, var(--blue));
+  background: var(--coach-bg, #fff);
+}
+
+.admin-duration-coach.is-closed {
+  color: var(--muted);
+  border-top-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.admin-duration-time {
+  position: sticky;
+  left: 0;
+  z-index: 24;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #d9e2ea;
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 5px 0 10px rgba(24, 34, 48, 0.1);
+}
+
+.admin-duration-slot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: stretch;
+  overflow: hidden;
+  border: 1px solid #d9e2ea;
+  background: #fbfcfe;
+}
+
+.admin-duration-slot.is-closed,
+.admin-duration-slot.is-break {
+  border-color: #efc4bd;
+  background: repeating-linear-gradient(135deg, #fff7f5, #fff7f5 7px, #fbecea 7px, #fbecea 14px);
+}
+
+.admin-duration-slot.is-break {
+  box-shadow: inset 3px 0 0 #c24132;
+}
+
+.admin-duration-slot.is-occupied {
+  pointer-events: none;
+  background: #f8fafc;
+}
+
+.admin-duration-add {
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  padding: 2px;
+  overflow: hidden;
+  border: 1px dashed rgba(21, 122, 91, 0.28);
+  color: var(--green);
+  background: #fbfffd;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+.admin-duration-add:hover {
+  border-color: #9bd8c2;
+  background: var(--soft-green);
+}
+
+.admin-duration-lesson {
+  z-index: 8;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+  padding: 6px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--lesson-color, var(--blue)) 32%, #d9e2ea);
+  border-radius: 6px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--lesson-color, var(--blue)) 13%, #fff);
+  box-shadow: inset 4px 0 0 var(--lesson-color, var(--blue));
+  text-align: left;
+}
+
+.admin-duration-lesson strong,
+.admin-duration-lesson span {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 10px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-duration-lesson span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.admin-duration-lesson .schedule-member-lines {
+  display: grid;
+  white-space: normal;
+}
+
+@media (max-width: 720px) {
+  .admin-schedule-scroll {
+    max-height: calc(100dvh - 230px);
+  }
+
+  .admin-duration-schedule {
+    width: max-content;
+  }
 }
 
 .admin-day-head {

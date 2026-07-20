@@ -1413,15 +1413,39 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
+  const refreshKey = "tennis-note-sw-refresh-1.0.41";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
+    if (sessionStorage.getItem(refreshKey) === "done") return;
+    sessionStorage.setItem(refreshKey, "done");
     window.location.reload();
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js", { updateViaCache: "none" })
-      .then((registration) => registration.update().catch(() => undefined))
+      .register("./service-worker.js?v=1.0.41", { updateViaCache: "none" })
+      .then((registration) => {
+        const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+        registration.addEventListener("updatefound", () => {
+          const worker = registration.installing;
+          worker?.addEventListener("statechange", () => {
+            if (worker.state === "installed" && navigator.serviceWorker.controller) activateWaitingWorker();
+          });
+        });
+        activateWaitingWorker();
+        let lastUpdateAt = 0;
+        const update = () => {
+          const now = Date.now();
+          if (now - lastUpdateAt < 30_000) return;
+          lastUpdateAt = now;
+          registration.update().catch(() => undefined);
+        };
+        update();
+        window.addEventListener("focus", update);
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") update();
+        });
+      })
       .catch(() => undefined);
   });
 }
@@ -1451,7 +1475,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.39" });
+  const params = new URLSearchParams({ v: "1.0.41" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2415,7 +2439,8 @@ function renderFullSchedule() {
   const dayColumnTracks = scheduleDays
     .map((day) => {
       const laneCount = Math.max(1, dayCoachMap.get(day)?.length || 0);
-      return `${laneCount * coachScheduleLaneWidth + Math.max(0, laneCount - 1) * 3}px`;
+      const minimumWidth = laneCount * coachScheduleLaneWidth + Math.max(0, laneCount - 1) * 3;
+      return `minmax(${minimumWidth}px, 1fr)`;
     })
     .join(" ");
   $("#fullScheduleBoard").innerHTML = `
@@ -3730,14 +3755,16 @@ function renderCurriculums() {
   target.innerHTML = `
     <section class="curriculum-source-panel">
       <div>
-        <strong>전체 커리큘럼 자료</strong>
-        <span>수업 단계를 확인하고, 회원별 다음 단계는 오늘 처리 일정에서 지정합니다.</span>
+        <strong>회원 다음 커리큘럼</strong>
+        <span>오늘 수업 기록에서 회원별 다음 단계를 지정합니다.</span>
       </div>
       <div class="actions">
-        <a class="small-button" href="${notionCurriculumGuideUrl}" target="_blank" rel="noreferrer">회원용 안내</a>
-        <a class="small-button" href="${notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">전체 자료</a>
+        <button class="primary-button" type="button" data-summary-action="records">회원 선택·지정</button>
       </div>
     </section>
+    <details class="curriculum-browse-disclosure">
+      <summary>커리큘럼 검색·빠른 보기</summary>
+      <div class="curriculum-browse-body">
     <section class="curriculum-toolbar" aria-label="커리큘럼 검색과 필터">
       <input id="curriculumSearchInput" type="search" value="${state.curriculumQuery || ""}" placeholder="기술, 단계, 코드 검색" />
       <div class="curriculum-filter-row">
@@ -3757,7 +3784,13 @@ function renderCurriculums() {
         <small>다음 수업에 사용할 단계를 빠르게 확인합니다.</small>
       </div>
       <div class="curriculum-track-groups">${curriculumLibraryMarkup()}</div>
-    </section>`;
+    </section>
+      <div class="curriculum-reference-actions">
+        <a class="small-button" href="${notionCurriculumGuideUrl}" target="_blank" rel="noreferrer">회원용 안내</a>
+        <a class="small-button" href="${notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">전체 자료</a>
+      </div>
+      </div>
+    </details>`;
 }
 
 
