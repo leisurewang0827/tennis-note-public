@@ -4417,11 +4417,32 @@ input[type="file"] {
 
 .business-operator-info {
   flex-basis: 100%;
-  margin: 2px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 8px;
+  margin: 4px 0 0;
   color: var(--muted);
   font-size: 11px;
   font-weight: 650;
   line-height: 1.55;
+}
+
+.business-operator-info strong,
+.business-operator-info span,
+.business-operator-info .terms-notice-link {
+  white-space: nowrap;
+}
+
+.business-operator-info strong {
+  color: var(--ink);
+}
+
+.business-operator-info .terms-notice-link {
+  flex-basis: 100%;
+  color: var(--blue);
+  font-weight: 850;
+  text-decoration: underline;
 }
 
 .business-operator-info a {
