@@ -1190,7 +1190,9 @@ button {
 }
 
 .member-duration-lesson .schedule-card-note.is-empty,
-.member-mobile-lesson .schedule-card-note.is-empty {
+.member-mobile-lesson .schedule-card-note.is-empty,
+.member-duration-lesson .schedule-card-round.is-empty,
+.member-mobile-lesson .schedule-card-round.is-empty {
   visibility: hidden;
 }
 

@@ -1496,7 +1496,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.47";
+    const refreshKey = "tennis-note-sw-refresh-1.0.48";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1504,7 +1504,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.47", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.48", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -2945,7 +2945,8 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
                 const span = Math.max(1, Math.ceil(lessonDuration(lesson) / 10));
                 const isMine = isCurrentMemberName(lesson.member);
                 const note = memberScheduleExceptionLabel(lesson);
-                return `<button class="member-mobile-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${isMine ? `mine ${lesson.status}` : "occupied"} ${memberCoachColorClass(lesson.coach)}" type="button" ${isMine ? `data-lesson="${lesson.id}"` : "disabled"} style="${memberLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${escapeHtml(memberScheduleCardName(lesson, isMine))}</strong><span>${escapeHtml(memberScheduleRoundLabel(lesson, isMine) || "-")}</span><span>${escapeHtml(memberCoachShortName(lesson.coach))}</span><small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small></button>`;
+                const roundLabel = memberScheduleRoundLabel(lesson, isMine);
+                return `<button class="member-mobile-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${isMine ? `mine ${lesson.status}` : "occupied"} ${memberCoachColorClass(lesson.coach)}" type="button" ${isMine ? `data-lesson="${lesson.id}"` : "disabled"} style="${memberLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${escapeHtml(memberScheduleCardName(lesson, isMine))}</strong><span class="schedule-card-round ${roundLabel ? "" : "is-empty"}">${escapeHtml(roundLabel || "-")}</span><span>${escapeHtml(memberCoachShortName(lesson.coach))}</span><small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small></button>`;
               }).join("")}
             </div>`;
         }).join("")}
@@ -3124,6 +3125,7 @@ function renderDynamicMemberSchedule() {
                   const lessonClass = isMine ? `mine ${lesson.status}` : "occupied";
                   const lessonAction = isMine ? `data-lesson="${lesson.id}"` : "disabled";
                   const note = memberScheduleExceptionLabel(lesson);
+                  const roundLabel = memberScheduleRoundLabel(lesson, isMine);
                   return `
                     <button
                       class="member-duration-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${lessonClass} ${memberCoachColorClass(lesson.coach)}"
@@ -3132,7 +3134,7 @@ function renderDynamicMemberSchedule() {
                       style="${memberLessonColorStyle(lesson, policy)}; grid-row:${startIndex + 1} / span ${span}; grid-column:${coachIndex + 1};"
                     >
                       <strong>${escapeHtml(memberScheduleCardName(lesson, isMine))}</strong>
-                      <span>${escapeHtml(memberScheduleRoundLabel(lesson, isMine) || "-")}</span>
+                      <span class="schedule-card-round ${roundLabel ? "" : "is-empty"}">${escapeHtml(roundLabel || "-")}</span>
                       <span>${escapeHtml(memberCoachShortName(lesson.coach))}</span>
                       <small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small>
                     </button>`;
@@ -6492,7 +6494,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.47" });
+  const params = new URLSearchParams({ v: "1.0.48" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
