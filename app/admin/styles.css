@@ -7125,6 +7125,97 @@ button .schedule-member-lines > span {
   gap: 8px;
 }
 
+.member-partner-search-results {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+}
+
+.member-partner-search-results[hidden] {
+  display: none;
+}
+
+.member-partner-result-button {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #f5f8fb;
+  color: var(--ink);
+  text-align: left;
+}
+
+.member-partner-result-button span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.member-partner-result-button.is-selected {
+  border-color: var(--green);
+  background: var(--soft-green);
+}
+
+.member-partner-no-result {
+  margin: 0;
+  padding: 9px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lesson-edit-scope {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #b7d4ca;
+  border-radius: 8px;
+  background: #f5fbf8;
+}
+
+.lesson-edit-scope[hidden] {
+  display: none;
+}
+
+.lesson-edit-scope-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.lesson-edit-scope-options label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+  font-weight: 800;
+}
+
+.lesson-edit-scope-options input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--green);
+}
+
+.schedule-round-label {
+  color: var(--green) !important;
+  font-size: 9px !important;
+  font-weight: 900 !important;
+}
+
 .member-partner-existing-fields input,
 .member-partner-existing-fields select {
   min-width: 0;
@@ -8381,6 +8472,7 @@ button .schedule-member-lines > span {
   .member-partner-mode,
   .member-partner-new-fields,
   .member-partner-existing-fields,
+  .lesson-edit-scope-options,
   .lesson-participant-list {
     grid-template-columns: 1fr;
   }

@@ -6954,8 +6954,9 @@ function memberManagementDatabaseFields({
           <label class="form-field">${memberManagementFieldLabel("파트너 출생연도")}<input name="partnerBirthYear" type="number" min="1900" max="2100" step="1" /></label>
           <label class="form-field">${memberManagementFieldLabel("파트너 성별")}<select name="partnerGender"><option value="">미입력</option><option value="female">여성</option><option value="male">남성</option><option value="other">기타</option><option value="prefer_not">응답 안 함</option></select></label>
         </div>` : ""}
-        <div class="member-partner-existing-fields" data-manual-existing-partner ${isCreate ? "hidden" : ""}>
+        <div class="member-partner-existing-fields" data-manual-existing-partner data-current-member-user-id="${escapeHtml(member?.serverUserId || "")}" ${isCreate ? "hidden" : ""}>
           <input name="partnerSearch" type="search" autocomplete="off" placeholder="이름 또는 전화번호 검색" data-manual-member-partner-search />
+          <div class="member-partner-search-results" data-manual-member-partner-results aria-live="polite"></div>
           <select name="partnerUserId" ${lessonType === "one_on_two" && !isCreate ? "required" : "disabled"}>
             <option value="">파트너 선택</option>
             ${partnerOptions.filter((user) => user.id !== member?.serverUserId).map((user) => `<option value="${escapeHtml(user.id)}" ${user.id === partnerUserId ? "selected" : ""}>${escapeHtml(user.name || "회원")}</option>`).join("")}
@@ -7225,14 +7226,26 @@ function renderMemberManagementModal() {
     </form>`;
 }
 
-function openMemberManagementModal(member, action, ticketId = "") {
-  const ticket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === ticketId) || null;
-  if (!member?.serverUserId || !memberManagementActionAllowed(action, ticket)) {
+async function openMemberManagementModal(member, action, ticketId = "") {
+  const targetUserId = member?.serverUserId || "";
+  const initialTicket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === ticketId) || null;
+  if (!targetUserId || !memberManagementActionAllowed(action, initialTicket)) {
     showToast("이 작업을 처리할 권한이 없습니다.");
     return;
   }
+  const refreshed = await syncAdminLiveData();
+  if (!refreshed) {
+    showToast("최신 회원 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    return;
+  }
+  const refreshedMember = members.find((item) => memberServerUserIds(item).includes(targetUserId));
+  const refreshedTicket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === ticketId) || null;
+  if (!refreshedMember || !memberManagementActionAllowed(action, refreshedTicket)) {
+    showToast("회원 또는 회원권 상태가 변경됐습니다. 회원 목록에서 다시 확인해 주세요.");
+    return;
+  }
   Object.assign(memberManagementModalState, {
-    memberId: member.id,
+    memberId: refreshedMember.id,
     action,
     ticketId,
     message: "",
@@ -7245,7 +7258,7 @@ function openMemberManagementModal(member, action, ticketId = "") {
   syncMemberManagementBalance($("#memberManagementForm"));
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
-  if (action === "profile" && !member.authLinked) loadMemberLinkCandidates(member);
+  if (action === "profile" && !refreshedMember.authLinked) loadMemberLinkCandidates(refreshedMember);
   setTimeout(() => $("#memberManagementForm input, #memberManagementForm select")?.focus(), 0);
 }
 
@@ -7355,7 +7368,8 @@ function filterManualMemberPartnerOptions(form) {
   const select = form.elements.partnerUserId;
   const currentValue = select.value;
   const keyword = String(form.elements.partnerSearch?.value || "").trim().toLowerCase();
-  const options = manualMemberPartnerOptions().filter((user) => (
+  const currentMemberUserId = form.querySelector("[data-manual-existing-partner]")?.dataset.currentMemberUserId || "";
+  const options = manualMemberPartnerOptions().filter((user) => user.id !== currentMemberUserId && (
     !keyword
     || [user.name, user.nickname, user.phone].some((value) => String(value || "").toLowerCase().includes(keyword))
   ));
@@ -7364,6 +7378,16 @@ function filterManualMemberPartnerOptions(form) {
     ...options.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}${user.phone ? ` · ${escapeHtml(maskMemberPhone(user.phone))}` : ""}</option>`),
   ].join("");
   if (options.some((user) => String(user.id) === String(currentValue))) select.value = currentValue;
+  const results = form.querySelector("[data-manual-member-partner-results]");
+  if (results) {
+    const visible = keyword ? options.slice(0, 8) : [];
+    results.innerHTML = keyword
+      ? visible.length
+        ? visible.map((user) => `<button type="button" class="member-partner-result-button ${String(user.id) === String(select.value) ? "is-selected" : ""}" data-select-manual-member-partner="${escapeHtml(user.id)}"><strong>${escapeHtml(user.name || "회원")}</strong><span>${escapeHtml(maskMemberPhone(user.phone))}</span></button>`).join("")
+        : '<p class="member-partner-no-result">검색 결과가 없습니다.</p>'
+      : "";
+    results.hidden = !keyword;
+  }
 }
 
 function syncMemberManagementScopeFields(form) {
@@ -8832,11 +8856,13 @@ function renderContinuationSegment(label, detail, addSlot) {
 
 function renderCoachLaneLessonCard(lesson, label = "") {
   const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
+  const roundLabel = getLessonRoundLabel(lesson);
   return `
     <button class="coach-lane-card lesson ${lesson.status} ${getLessonStateClass(lesson)} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
       <strong>${getLessonMembersMarkup(lesson)}</strong>
+      ${roundLabel ? `<span class="schedule-round-label">${escapeHtml(roundLabel)}</span>` : ""}
       <span>${label || getCoachName(lesson.coachId)}</span>
-      <small>${getLessonStatusLabel(lesson)} · ${getLessonRoundLabel(lesson)} · ${lesson.durationMinutes}분</small>
+      <small>${getLessonStatusLabel(lesson)} · ${lesson.durationMinutes}분</small>
     </button>`;
 }
 
@@ -8985,11 +9011,12 @@ function renderUniformScheduleLine(kind, lesson, timeLabel = "") {
   const roundLabel = getLessonRoundLabel(lesson) || "회차 확인";
   const detailLabel = isReleasedRegularMakeupSlot(lesson)
     ? `보강만 등록 · ${lesson.durationMinutes}분`
-    : `${getLessonStatusLabel(lesson)} · ${roundLabel}`;
+    : getLessonStatusLabel(lesson);
   return `
     <button class="schedule-stack-line ${kind} lesson-kind-${lessonVisualKind(lesson)} ${lesson.status} ${getLessonStateClass(lesson)} ${isCardDimmed ? "is-dimmed" : ""}" style="--lesson-height:${lessonCardHeight}px;${lessonColorStyle(lesson)}" type="button" ${lessonActionAttrs(lesson)}>
       ${timeLabel ? `<span class="stack-time">${timeLabel}</span>` : ""}
       <strong>${getLessonMembersMarkup(lesson)}</strong>
+      ${!isReleasedRegularMakeupSlot(lesson) ? `<span class="schedule-round-label">${escapeHtml(roundLabel)}</span>` : ""}
       <span class="stack-coach">${getCoachName(lesson.coachId)}</span>
       <small>${detailLabel}</small>
     </button>`;
@@ -9271,9 +9298,11 @@ function renderCoachDayLessonCard(lesson, visibleTimes, column) {
   const statusLabel = isReleasedRegularMakeupSlot(lesson)
     ? `${lesson.durationMinutes}분`
     : lesson.status === "available" ? `${lesson.durationMinutes}분 신청 가능` : `${getLessonStatusLabel(lesson)} · ${lesson.durationMinutes}분`;
+  const roundLabel = getLessonRoundLabel(lesson);
   return `
     <button class="coach-day-lesson ${lesson.status} ${getLessonStateClass(lesson)} ${getCoachToneClass(lesson.coachId)}" style="grid-row:${startIndex + 2} / span ${rowSpan};grid-column:${column};" type="button" ${lessonActionAttrs(lesson)}>
       <strong>${scheduleMemberLinesMarkup(memberLabel)}</strong>
+      ${roundLabel ? `<span class="schedule-round-label">${escapeHtml(roundLabel)}</span>` : ""}
       <span>${escapeHtml(statusLabel)}</span>
       <small>${lesson.time}~${minutesToTime(end)}</small>
     </button>`;
@@ -10611,6 +10640,15 @@ function openLessonModal(defaults = {}) {
   renderLessonExpiredTickets();
   $("#lessonModalTitle").textContent = editingLesson ? "수업 수정" : "수업 추가";
   $("#saveLessonButton").textContent = editingLesson ? "수정 저장" : "시간표에 추가";
+  const editScopePanel = $("#lessonEditScopePanel");
+  if (editScopePanel) {
+    const canEditSeries = Boolean(editingLesson?.serverLessonId
+      && editingLesson.serverStatus === "scheduled"
+      && normalizeLessonSource(editingLesson.lessonSource) === "regular");
+    editScopePanel.hidden = !canEditSeries;
+    const singleScope = editScopePanel.querySelector('input[name="lessonEditScope"][value="single"]');
+    if (singleScope) singleScope.checked = true;
+  }
   syncAdminForceDeleteLessonButton();
   const absencePanel = $("#lessonAbsencePanel");
   if (absencePanel) {
@@ -10973,6 +11011,29 @@ async function saveLiveAdminLesson(candidate, entitlement = null) {
   return client.rpc("tn_admin_save_lesson", payload);
 }
 
+function selectedLessonEditScope() {
+  return document.querySelector('input[name="lessonEditScope"]:checked')?.value === "series" ? "series" : "single";
+}
+
+async function saveLiveAdminRegularLessonSeries(candidate) {
+  const client = window.TennisNoteDataClient;
+  const ticket = scheduleTicketById(candidate.ticketId);
+  const coach = coaches.find((item) => item.id === candidate.coachId);
+  const editingLesson = state.editingLessonId ? lessons.find((lesson) => lesson.id === state.editingLessonId) : null;
+  const lessonDate = adminWeekDateForDay(candidate.day);
+  if (!client?.rpc || !adminApprovalReady()) throw new Error("관리자 로그인 확인이 필요합니다.");
+  if (!editingLesson?.serverLessonId || !ticket?.serverTicketId || !coach?.serverRoleId || !lessonDate) {
+    throw new Error("수정할 정규수업과 회원권·코치 연결을 확인해 주세요.");
+  }
+  return client.rpc("tn_admin_reschedule_regular_lesson_series", {
+    target_lesson_id: editingLesson.serverLessonId,
+    target_lesson_date: lessonDate,
+    target_start_time: candidate.time,
+    target_coach_role_id: coach.serverRoleId,
+    target_duration_minutes: candidate.durationMinutes,
+  });
+}
+
 async function saveLivePastLessonCorrection(candidate, entitlement = null) {
   const client = window.TennisNoteDataClient;
   const ticket = scheduleTicketById(candidate.ticketId);
@@ -11264,6 +11325,7 @@ async function addLessonFromForm(event) {
       if (selectedEntitlement && candidates.length !== 1) throw new Error("보강 대기 한 건은 한 시간만 예약할 수 있습니다.");
       if (selectedEntitlement && manualOverride) await saveLiveAdminLesson(candidates[0], selectedEntitlement);
       else if (selectedEntitlement) await saveLiveMakeupEntitlement(candidates[0], selectedEntitlement);
+      else if (wasEditing && selectedLessonEditScope() === "series") await saveLiveAdminRegularLessonSeries(candidates[0]);
       else if (wasEditing) await saveLiveAdminLesson(candidates[0]);
       else {
         const scheduleProtectionMessage = !manualOverride
@@ -11312,6 +11374,9 @@ async function addLessonFromForm(event) {
         regular_schedule_count_mismatch: `이 회원권은 주 ${ticket.weeklyCount}회이므로 요일/시간 ${ticket.weeklyCount}개를 모두 선택해 주세요.`,
         regular_schedule_exists_edit_existing: "기존 정규 시간표가 보호되어 새 등록은 진행하지 않았습니다. 기존 수업 카드를 눌러 해당 수업만 수정해 주세요.",
         regular_schedule_time_invalid: "회원권 기간 안의 아직 시작하지 않은 시간만 정규시간으로 저장할 수 있습니다.",
+        regular_series_lesson_required: "예정된 정규수업만 전체 일정으로 수정할 수 있습니다.",
+        regular_series_conflict: "변경할 전체 일정 중 다른 수업과 겹치는 시간이 있습니다.",
+        regular_series_outside_ticket: "변경하면 회원권 기간을 벗어나는 수업이 생깁니다. 선택일만 수정하거나 회원권 기간을 먼저 확인해 주세요.",
         admin_manual_override_reason_required: "강제 처리 사유를 5자 이상 입력해 주세요.",
         admin_manual_exact_duplicate: "같은 회원권·날짜·시간의 수업이 이미 있습니다. 기존 수업을 수정해 주세요.",
         admin_manual_ticket_required: "연결할 회원권을 찾지 못했습니다.",
@@ -17151,6 +17216,15 @@ function bindEvents() {
   });
 
   document.addEventListener("click", async (event) => {
+    const manualPartnerButton = event.target.closest("[data-select-manual-member-partner]");
+    if (manualPartnerButton) {
+      const form = manualPartnerButton.closest("form");
+      if (form?.elements?.partnerUserId) {
+        form.elements.partnerUserId.value = manualPartnerButton.dataset.selectManualMemberPartner;
+        filterManualMemberPartnerOptions(form);
+      }
+      return;
+    }
     const memberButton = event.target.closest("[data-select-member]");
     if (memberButton) {
       state.selectedMemberId = Number(memberButton.dataset.selectMember);
@@ -17168,14 +17242,14 @@ function bindEvents() {
       const ticketId = ticketManageButton.dataset.manageMemberTicket || "";
       const action = document.querySelector(`[data-member-ticket-action="${CSS.escape(ticketId)}"]`)?.value || "correct";
       const member = members.find((item) => item.id === state.selectedMemberId);
-      openMemberManagementModal(member, action, ticketId);
+      await openMemberManagementModal(member, action, ticketId);
       return;
     }
 
     const memberManagementButton = event.target.closest("[data-open-member-management]");
     if (memberManagementButton) {
       const member = members.find((item) => item.id === state.selectedMemberId);
-      openMemberManagementModal(
+      await openMemberManagementModal(
         member,
         memberManagementButton.dataset.openMemberManagement,
         memberManagementButton.dataset.memberManagementTicket || "",
@@ -17377,6 +17451,11 @@ function bindEvents() {
     if (renewTicketButton) {
       const ticketId = renewTicketButton.dataset.renewTicket || "";
       const memberName = renewTicketButton.dataset.renewMember || "";
+      const refreshed = await syncAdminLiveData();
+      if (!refreshed) {
+        showToast("최신 회원 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
       const ticket = [...tickets, ...expiredTickets].find((item) => String(item.serverTicketId || "") === ticketId);
       const participantIds = new Set(ticketParticipantUserIds(ticket).map(String));
       const member = members.find((item) => item.name === memberName || memberServerUserIds(item).some((id) => participantIds.has(String(id))));
@@ -17384,7 +17463,7 @@ function bindEvents() {
         showToast("회원권 정보를 다시 불러와 주세요.");
         return;
       }
-      openMemberManagementModal(member, "reenroll", ticketId);
+      await openMemberManagementModal(member, "reenroll", ticketId);
       return;
     }
 

@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.42" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.43" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1041,6 +1041,15 @@
           </label>
           <div id="lessonRepeatSlots" class="lesson-repeat-slots"></div>
 
+          <section id="lessonEditScopePanel" class="lesson-edit-scope" hidden>
+            <strong>변경 범위</strong>
+            <div class="lesson-edit-scope-options" role="radiogroup" aria-label="정규수업 변경 범위">
+              <label><input type="radio" name="lessonEditScope" value="single" checked /> 선택한 날짜만</label>
+              <label><input type="radio" name="lessonEditScope" value="series" /> 이 날짜부터 정규일정 전체</label>
+            </div>
+            <small>완료된 지난 수업은 바꾸지 않습니다.</small>
+          </section>
+
           <section id="lessonPastCorrectionPanel" class="lesson-past-correction-panel" hidden>
             <div class="lesson-past-correction-heading">
               <strong>과거 수업 보정</strong>
@@ -1293,11 +1302,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.42"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.43"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.42"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.43"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.42"></script>
+    <script src="./app.js?v=1.0.43"></script>
   </body>
 </html>
