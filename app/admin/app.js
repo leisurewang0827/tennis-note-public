@@ -36,6 +36,8 @@ const state = {
   editingLessonId: null,
   editingOneDayBookingId: null,
   releasedAbsenceEntitlementId: "",
+  pinnedLessonDay: "",
+  pinnedLessonTime: "",
   lessonSourceTouched: false,
   activeAdminWeekIndex: 0,
   adminTaskPage: 0,
@@ -9450,13 +9452,19 @@ function refreshLessonExtraTimeOptions() {
 }
 
 function refreshLessonTimeOptions(keepValue = "") {
-  const currentValue = keepValue || $("#lessonTime").value;
-  const durationMinutes = getLessonDurationFromSelectedTicket();
   const day = $("#lessonDay").value;
+  const pinnedTime = !state.editingLessonId
+    && state.pinnedLessonDay === day
+    && state.pinnedLessonTime
+    ? state.pinnedLessonTime
+    : "";
+  const currentValue = pinnedTime || keepValue || $("#lessonTime").value;
+  const durationMinutes = getLessonDurationFromSelectedTicket();
   const pastCorrection = isPastLessonCorrectionMode({ day, time: currentValue, durationMinutes });
   const sourceTimes = pastCorrection || adminManualOverrideEnabled()
     ? getScheduleTimeOptions()
     : getCoachTimeOptions($("#lessonCoach").value, day, durationMinutes);
+  if (pinnedTime && !sourceTimes.includes(pinnedTime)) sourceTimes.unshift(pinnedTime);
   const timeOptions = sourceTimes.map((time) => ({ value: time, label: time }));
   const fallbackOptions = timeOptions.length ? timeOptions : [{ value: "", label: "가능 시간 없음" }];
   fillSelect($("#lessonTime"), fallbackOptions);
@@ -9469,6 +9477,10 @@ function refreshLessonDayOptions() {
   const regularScheduleMode = isRegularScheduleSetup(ticket);
   const scheduleCount = requiredRegularScheduleCount(ticket);
   const availableDays = adminManualOverrideEnabled() ? scheduleDays : ticket ? getTicketScheduleDays(ticket) : scheduleDays;
+  const pinnedDay = !state.editingLessonId ? state.pinnedLessonDay : "";
+  const selectableDays = pinnedDay && !availableDays.includes(pinnedDay)
+    ? [pinnedDay, ...availableDays]
+    : availableDays;
   const target = $("#lessonRepeatSlots");
   const previousSlots = $$("[data-lesson-slot-day]").map((daySelect) => {
     const row = daySelect.closest(".lesson-repeat-slot");
@@ -9480,8 +9492,9 @@ function refreshLessonDayOptions() {
   target.innerHTML = "";
   target.hidden = !regularScheduleMode;
   const previousPrimaryDay = $("#lessonDay").value;
-  fillSelect($("#lessonDay"), availableDays.map((day) => ({ value: day, label: `${day}요일` })));
-  $("#lessonDay").value = availableDays.includes(previousPrimaryDay) ? previousPrimaryDay : availableDays[0] || "";
+  fillSelect($("#lessonDay"), selectableDays.map((day) => ({ value: day, label: `${day}요일` })));
+  const primaryDayToKeep = pinnedDay || previousPrimaryDay;
+  $("#lessonDay").value = selectableDays.includes(primaryDayToKeep) ? primaryDayToKeep : selectableDays[0] || "";
   const primaryDay = $("#lessonDay").value;
   for (let index = 2; index <= 3; index += 1) {
     const isActive = index <= scheduleCount;
@@ -10265,6 +10278,8 @@ function renderLessonPreview() {
 function openLessonModal(defaults = {}) {
   state.editingLessonId = defaults.editingLessonId || null;
   state.releasedAbsenceEntitlementId = state.editingLessonId ? "" : defaults.entitlementId || "";
+  state.pinnedLessonDay = state.editingLessonId ? "" : defaults.day || "";
+  state.pinnedLessonTime = state.editingLessonId ? "" : defaults.time || "";
   const restoreEntitlement = state.makeupEntitlements.find((item) => item.id === state.releasedAbsenceEntitlementId) || null;
   state.pinnedLessonTicketId = state.editingLessonId ? "" : defaults.ticketId || restoreEntitlement?.ticketId || "";
   state.lessonSourceTouched = false;
@@ -10470,6 +10485,8 @@ function closeLessonModal() {
   state.editingLessonId = null;
   state.releasedAbsenceEntitlementId = "";
   state.pinnedLessonTicketId = "";
+  state.pinnedLessonDay = "";
+  state.pinnedLessonTime = "";
   setLessonFormMessage("");
 }
 
@@ -16653,6 +16670,10 @@ function bindEvents() {
   });
   ["#lessonDay", "#lessonDuration"].forEach((selector) => {
     $(selector).addEventListener("change", () => {
+      if (selector === "#lessonDay") {
+        state.pinnedLessonDay = "";
+        state.pinnedLessonTime = "";
+      }
       // Day and duration only change slot availability. Rebuilding ticket options
       // here silently selected a different ticket after an unavailable-slot warning.
       // Ticket identity is changed only by member, coach, ticket, or source actions.
@@ -16687,6 +16708,7 @@ function bindEvents() {
     await syncLiveSchedulePolicyToServer();
   });
   $("#lessonTime").addEventListener("change", () => {
+    state.pinnedLessonTime = "";
     refreshLessonExtraTimeOptions();
     renderLessonPreview();
   });
