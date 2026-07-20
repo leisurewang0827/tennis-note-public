@@ -6459,10 +6459,7 @@ function memberTicketKind(member) {
 function filteredMembers() {
   const localSearch = String(state.memberSearch || "").trim().toLowerCase();
   const matchingMembers = members.filter((member) => {
-    const listStatus = memberListStatus(member);
-    const statusMatch = state.memberFilter === "expiring"
-        ? listStatus === "active" && memberRemainingCount(member) <= 2
-        : listStatus === state.memberFilter;
+    const statusMatch = memberMatchesStatusFilter(member, state.memberFilter);
     const coachMatch = state.memberCoachFilter === "all" || member.coach === state.memberCoachFilter;
     const ticketMatch = state.memberTicketFilter === "all" || memberTicketKind(member) === state.memberTicketFilter;
     const searchValues = memberSearchValues(member);
@@ -6475,6 +6472,16 @@ function filteredMembers() {
       && matchesSearch([...searchValues, memberStatusLabel(member)]);
   });
   return matchingMembers;
+}
+
+function memberIsExpiring(member) {
+  return memberListStatus(member) === "active" && memberRemainingCount(member) <= 2;
+}
+
+function memberMatchesStatusFilter(member, filter) {
+  return filter === "expiring"
+    ? memberIsExpiring(member)
+    : memberListStatus(member) === filter;
 }
 
 const memberFilterCopy = {
@@ -6490,7 +6497,7 @@ function memberStatusCounts() {
   return members.reduce((counts, member) => {
     const status = memberListStatus(member);
     if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
-    if (status === "active" && memberRemainingCount(member) <= 2) counts.expiring += 1;
+    if (memberIsExpiring(member)) counts.expiring += 1;
     return counts;
   }, { active: 0, expiring: 0, expired: 0, pending: 0, journal: 0, inactive: 0 });
 }
@@ -15911,6 +15918,7 @@ function renderAll() {
 let adminLiveScheduleRefreshTimer = 0;
 let adminLiveScheduleRefreshInFlight = false;
 let scheduleSessionInitialized = false;
+const adminLiveRefreshViews = new Set(["dashboard", "members", "schedule", "billing"]);
 
 function resetScheduleEntryState() {
   // The saved browser snapshot may contain a coach-only or pending-only view.
@@ -15927,15 +15935,21 @@ async function refreshAdminLiveSchedule(options = {}) {
   if (
     adminLiveScheduleRefreshInFlight
     || document.hidden
-    || state.view !== "schedule"
+    || !adminLiveRefreshViews.has(state.view)
     || !operationsAccessReady()
     || !$("#lessonModal")?.hidden
+    || !$("#memberManagementModal")?.hidden
   ) return false;
 
   adminLiveScheduleRefreshInFlight = true;
   try {
     const synced = await syncAdminLiveData();
-    if (synced && options.render !== false) renderSchedule();
+    if (synced && options.render !== false) {
+      if (state.view === "members") renderMembers();
+      else if (state.view === "schedule") renderSchedule();
+      else if (state.view === "billing") renderBilling();
+      else renderDashboard();
+    }
     return synced;
   } finally {
     adminLiveScheduleRefreshInFlight = false;
