@@ -53,6 +53,9 @@ const state = {
   recordFilter: "pending",
   recordCoachFilter: "all",
   recordPendingType: "all",
+  selectedMemberIds: [],
+  selectedMembershipProductIds: [],
+  selectedSubstituteLessonIds: [],
   communityChannel: "홈",
   accountDeletionRequests: [],
   liveScheduleLoaded: false,
@@ -1239,6 +1242,7 @@ const adminLiveDataState = {
   mediaFiles: [],
   memberDatabaseRecords: [],
   memberMembershipRecords: [],
+  substituteAssignments: [],
 };
 
 const lessonRecordEditorState = {
@@ -3200,6 +3204,63 @@ async function forceDeleteMembershipProductSetting(productId) {
     showToast(raw.includes("tn_admin_force_delete_membership_product") || raw.includes("PGRST202")
         ? "회원권 강제 삭제 DB 패치를 먼저 적용해 주세요."
         : "회원권 상품 강제 삭제에 실패했습니다.");
+  }
+}
+
+function selectedProductIdSet() {
+  return new Set((state.selectedMembershipProductIds || []).map(String));
+}
+
+function renderProductBulkToolbar() {
+  const validIds = new Set(membershipProductDrafts.map((product) => String(product.id)));
+  state.selectedMembershipProductIds = [...selectedProductIdSet()].filter((id) => validIds.has(id));
+  const toolbar = $("#productBulkToolbar");
+  if (toolbar) toolbar.hidden = operationsRole() !== "admin" || !state.selectedMembershipProductIds.length;
+  if ($("#productBulkCount")) $("#productBulkCount").textContent = String(state.selectedMembershipProductIds.length);
+}
+
+async function runProductBulkAction() {
+  const selected = membershipProductDrafts.filter((product) => selectedProductIdSet().has(String(product.id)));
+  const action = $("#productBulkAction")?.value || "";
+  if (!selected.length || !action) {
+    showToast("회원권 상품과 일괄 작업을 선택해 주세요.");
+    return;
+  }
+  const label = $("#productBulkAction")?.selectedOptions?.[0]?.textContent || "일괄 작업";
+  if (!window.confirm(`${selected.length}개 상품을 '${label}' 처리할까요?`)) return;
+  const button = $("#runProductBulkAction");
+  if (button) button.disabled = true;
+  try {
+    const client = window.TennisNoteDataClient;
+    if (!client || operationsRole() !== "admin") throw new Error("admin_required");
+    if (action === "delete") {
+      for (const product of selected) {
+        const serverProduct = serverMembershipProductForDraft(product);
+        if (!serverProduct?.id) continue;
+        await client.rpc("tn_admin_force_delete_membership_product", {
+          target_product_id: serverProduct.id,
+          target_reason: "관리자 회원권 상품 일괄 강제 삭제",
+        });
+      }
+    } else {
+      for (const product of selected) {
+        const serverProduct = serverMembershipProductForDraft(product);
+        if (!serverProduct?.id) continue;
+        await client.updateRows("tn_membership_products", { id: serverProduct.id }, {
+          is_active: action !== "hidden",
+          policy_settings: { ...(serverProduct.policy_settings || {}), adminSaleStatus: action },
+          updated_at: new Date().toISOString(),
+        });
+      }
+    }
+    await syncAdminLiveData();
+    state.selectedMembershipProductIds = [];
+    renderServiceReadiness();
+    showToast(`${selected.length}개 상품 일괄 처리 완료`);
+  } catch (error) {
+    showToast("회원권 상품 일괄 처리에 실패했습니다. 참조 중인 상품과 관리자 권한을 확인해 주세요.");
+  } finally {
+    if (button?.isConnected) button.disabled = false;
   }
 }
 
@@ -8130,6 +8191,10 @@ function notificationTemplateLabel(templateKey = "") {
     ticket_expired: "만료일",
     payment_cancelled: "결제취소",
     payment_refunded: "환불",
+    lesson_substitute_assigned: "대타 코치 지정",
+    substitute_lesson_assigned: "대타 수업 배정",
+    substitute_lesson_transferred: "대타 처리 일정",
+    lesson_substitute_cancelled: "원 담당 코치 복원",
   })[templateKey] || "앱 알림";
 }
 
@@ -8686,6 +8751,66 @@ async function saveMemberTicketLessonSetup(button) {
   }
 }
 
+function selectedMemberIdSet() {
+  return new Set((state.selectedMemberIds || []).map(Number));
+}
+
+function renderMemberBulkToolbar(visibleMembers = []) {
+  const selected = selectedMemberIdSet();
+  const validIds = new Set(members.map((member) => Number(member.id)));
+  state.selectedMemberIds = [...selected].filter((id) => validIds.has(id));
+  const toolbar = $("#memberBulkToolbar");
+  if (toolbar) toolbar.hidden = operationsRole() !== "admin" || !state.selectedMemberIds.length;
+  if ($("#memberBulkCount")) $("#memberBulkCount").textContent = String(state.selectedMemberIds.length);
+  const selectAll = $("#selectVisibleMembers");
+  if (selectAll) {
+    const visibleIds = visibleMembers.map((member) => Number(member.id));
+    const selectedCount = visibleIds.filter((id) => selected.has(id)).length;
+    selectAll.checked = Boolean(visibleIds.length && selectedCount === visibleIds.length);
+    selectAll.indeterminate = selectedCount > 0 && selectedCount < visibleIds.length;
+    selectAll.disabled = operationsRole() !== "admin" || !visibleIds.length;
+  }
+  const coachSelect = $("#memberBulkCoach");
+  if (coachSelect) {
+    const activeCoaches = coaches.filter((coach) => coach.status === "active" && coach.serverRoleId);
+    coachSelect.innerHTML = activeCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name)}</option>`).join("");
+    coachSelect.hidden = $("#memberBulkAction")?.value !== "assign_coach";
+  }
+}
+
+async function runMemberBulkAction() {
+  const selectedMembers = members.filter((member) => selectedMemberIdSet().has(Number(member.id)) && memberServerUserIds(member).length);
+  const selectedUserIds = [...new Set(selectedMembers.flatMap(memberServerUserIds))];
+  const action = $("#memberBulkAction")?.value || "";
+  if (!selectedMembers.length || !action) {
+    showToast("회원과 일괄 작업을 선택해 주세요.");
+    return;
+  }
+  const actionLabel = $("#memberBulkAction")?.selectedOptions?.[0]?.textContent || "일괄 작업";
+  if (!window.confirm(`${selectedMembers.length}명에게 '${actionLabel}' 작업을 적용할까요?`)) return;
+  const button = $("#runMemberBulkAction");
+  if (button) button.disabled = true;
+  try {
+    const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_member_action", {
+      target_user_ids: selectedUserIds,
+      target_action: action,
+      target_coach_role_id: action === "assign_coach" ? ($("#memberBulkCoach")?.value || null) : null,
+      target_reason: `관리자 회원 목록 · ${actionLabel}`,
+    });
+    await syncAdminLiveData();
+    state.selectedMemberIds = [];
+    renderMembers();
+    showToast(`${Number(result?.processedCount ?? result?.processed_count ?? selectedMembers.length)}명 일괄 처리 완료`);
+  } catch (error) {
+    const message = `${error?.message || ""}`;
+    showToast(message.includes("tn_admin_bulk_member_action") || message.includes("PGRST202")
+      ? "회원 일괄 처리 DB 패치를 먼저 적용해 주세요."
+      : "회원 일괄 처리에 실패했습니다. 권한과 회원 상태를 확인해 주세요.");
+  } finally {
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
 function renderMembers() {
   const coachFilter = $("#memberCoachFilter");
   if (coachFilter) {
@@ -8717,12 +8842,14 @@ function renderMembers() {
     (state.memberListPage + 1) * memberListPageSize,
   );
   renderDashboardPager("#memberListPager", filtered.length, state.memberListPage, "member-directory", memberListPageSize);
+  renderMemberBulkToolbar(visibleMembers);
 
   $("#memberRows").innerHTML = visibleMembers.length ? visibleMembers
     .map((member) => {
       const ticket = memberCurrentTicket(member);
       return `
         <tr class="${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}">
+          <td class="row-select-cell"><input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedMemberIdSet().has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} /></td>
           <td>
             <button class="member-link-button" type="button" data-select-member="${member.id}">
               ${avatarMarkup(member, "small")}
@@ -8738,7 +8865,7 @@ function renderMembers() {
           <td class="member-table-note">${escapeHtml(memberRemarkLabel(member))}</td>
         </tr>`;
     })
-    .join("") : `<tr><td colspan="8" class="empty-text">${filterCopy.empty}</td></tr>`;
+    .join("") : `<tr><td colspan="9" class="empty-text">${filterCopy.empty}</td></tr>`;
 
   const detailPanel = $("#memberDetail");
   const detailLayout = detailPanel?.closest(".member-directory-layout");
@@ -10999,6 +11126,144 @@ function closeLessonModal() {
   setLessonFormMessage("");
 }
 
+function coachNameForRoleId(roleId = "") {
+  return coaches.find((coach) => coach.serverRoleId === roleId || coach.id === roleId)?.name || "코치";
+}
+
+function substituteLessonsForDate(date = "") {
+  return lessons
+    .filter((lesson) => lesson.serverLessonId && !lesson.oneDayBooking)
+    .filter((lesson) => lesson.lessonDate === date)
+    .filter((lesson) => ["scheduled", "pending_change"].includes(lesson.serverStatus || "scheduled"))
+    .sort((left, right) => timeToMinutes(left.time) - timeToMinutes(right.time));
+}
+
+function renderSubstituteLessonList() {
+  const target = $("#substituteLessonList");
+  if (!target) return;
+  const date = $("#substituteDate")?.value || "";
+  const available = substituteLessonsForDate(date);
+  const availableIds = new Set(available.map((lesson) => String(lesson.serverLessonId)));
+  state.selectedSubstituteLessonIds = (state.selectedSubstituteLessonIds || [])
+    .map(String)
+    .filter((id) => availableIds.has(id));
+  const selected = new Set(state.selectedSubstituteLessonIds);
+  target.innerHTML = available.length ? `
+    <div class="substitute-list-heading">
+      <label><input id="selectAllSubstituteLessons" type="checkbox" ${selected.size === available.length ? "checked" : ""} /> 이날 수업 전체 선택</label>
+      <span>${available.length}건</span>
+    </div>
+    ${available.map((lesson) => {
+      const originalRoleId = lesson.originalCoachRoleId || lesson.coachRoleId;
+      const isSubstitute = Boolean(lesson.originalCoachRoleId && lesson.originalCoachRoleId !== lesson.coachRoleId);
+      return `
+        <label class="substitute-lesson-row">
+          <input type="checkbox" data-select-substitute-lesson="${escapeHtml(lesson.serverLessonId)}" ${selected.has(String(lesson.serverLessonId)) ? "checked" : ""} />
+          <span><strong>${escapeHtml(lesson.time)} · ${escapeHtml(lesson.member)}</strong><small>원 담당 ${escapeHtml(coachNameForRoleId(originalRoleId))}${isSubstitute ? ` · 현재 ${escapeHtml(coachNameForRoleId(lesson.coachRoleId))}` : ""}</small></span>
+          ${isSubstitute ? '<b class="status-badge pending">대타 지정</b>' : ""}
+        </label>`;
+    }).join("")}` : '<p class="empty-text">이 날짜에 대타 지정 가능한 수업이 없습니다.</p>';
+  const all = $("#selectAllSubstituteLessons");
+  if (all) all.indeterminate = selected.size > 0 && selected.size < available.length;
+  const historyTarget = $("#substituteHistory");
+  if (historyTarget) {
+    const history = (adminLiveDataState.substituteAssignments || []).slice(0, 20);
+    historyTarget.innerHTML = history.length ? history.map((assignment) => {
+      const lesson = lessons.find((item) => String(item.serverLessonId) === String(assignment.lesson_id));
+      const settlement = assignment.settlement_mode === "hourly"
+        ? `시급 ${money.format(Number(assignment.hourly_amount) || 0)}원`
+        : "실제 코치 기준";
+      return `<div class="substitute-history-row"><strong>${escapeHtml(lesson ? `${lesson.lessonDate} ${lesson.time} · ${lesson.member}` : "지난 수업")}</strong><span>${escapeHtml(coachNameForRoleId(assignment.original_coach_role_id))} → ${escapeHtml(coachNameForRoleId(assignment.substitute_coach_role_id))} · ${escapeHtml(settlement)} · ${escapeHtml(assignment.status || "assigned")}</span></div>`;
+    }).join("") : '<p class="empty-text">대타 이력이 없습니다.</p>';
+  }
+}
+
+function syncSubstituteSettlementFields() {
+  const hourly = $("#substituteSettlementMode")?.value === "hourly";
+  if ($("#substituteHourlyField")) $("#substituteHourlyField").hidden = !hourly;
+  if ($("#substituteHourlyAmount")) $("#substituteHourlyAmount").required = hourly;
+}
+
+function openSubstituteModal(defaultLesson = null) {
+  if (operationsRole() !== "admin") {
+    showToast("관리자만 대타 코치를 지정할 수 있습니다.");
+    return;
+  }
+  const date = defaultLesson?.lessonDate || adminLocalDateKey(new Date());
+  $("#substituteDate").value = date;
+  state.selectedSubstituteLessonIds = defaultLesson?.serverLessonId ? [String(defaultLesson.serverLessonId)] : [];
+  const activeCoaches = coaches.filter((coach) => coach.status === "active" && coach.serverRoleId);
+  $("#substituteCoach").innerHTML = `<option value="">코치 선택</option>${activeCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name)}</option>`).join("")}`;
+  $("#substituteSettlementMode").value = "actual_coach";
+  $("#substituteHourlyAmount").value = "";
+  $("#substituteReason").value = "";
+  $("#substituteFormMessage").textContent = "";
+  syncSubstituteSettlementFields();
+  renderSubstituteLessonList();
+  $("#substituteModal").hidden = false;
+}
+
+function closeSubstituteModal() {
+  if ($("#substituteModal")) $("#substituteModal").hidden = true;
+  state.selectedSubstituteLessonIds = [];
+}
+
+async function submitSubstituteAssignments(event) {
+  event.preventDefault();
+  const lessonIds = [...new Set((state.selectedSubstituteLessonIds || []).map(String))];
+  const coachRoleId = $("#substituteCoach")?.value || "";
+  const settlementMode = $("#substituteSettlementMode")?.value || "actual_coach";
+  const hourlyAmount = settlementMode === "hourly" ? Number($("#substituteHourlyAmount")?.value || 0) : null;
+  const message = $("#substituteFormMessage");
+  if (!lessonIds.length || !coachRoleId || (settlementMode === "hourly" && hourlyAmount <= 0)) {
+    if (message) message.textContent = "수업, 실제 코치, 정산 방식을 확인해 주세요.";
+    return;
+  }
+  const button = $("#saveSubstituteAssignments");
+  if (button) button.disabled = true;
+  try {
+    const result = await window.TennisNoteDataClient.rpc("tn_admin_assign_lesson_substitutes", {
+      target_lesson_ids: lessonIds,
+      target_substitute_coach_role_id: coachRoleId,
+      target_settlement_mode: settlementMode,
+      target_hourly_amount: hourlyAmount,
+      target_reason: $("#substituteReason")?.value.trim() || null,
+    });
+    await syncAdminLiveData();
+    closeSubstituteModal();
+    renderAll();
+    showToast(`${Number(result?.assignedCount ?? result?.assigned_count ?? lessonIds.length)}개 수업 대타 지정 완료`);
+  } catch (error) {
+    const raw = `${error?.message || ""}`;
+    if (message) message.textContent = raw.includes("PGRST202") || raw.includes("tn_admin_assign_lesson_substitutes")
+      ? "대타 운영 DB 패치를 먼저 적용해 주세요."
+      : "대타 지정에 실패했습니다. 수업 상태와 코치 지점을 확인해 주세요.";
+  } finally {
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
+async function cancelSubstituteAssignments() {
+  const lessonIds = [...new Set((state.selectedSubstituteLessonIds || []).map(String))];
+  if (!lessonIds.length) {
+    $("#substituteFormMessage").textContent = "취소할 대타 수업을 선택해 주세요.";
+    return;
+  }
+  if (!window.confirm(`${lessonIds.length}개 수업의 대타 지정을 취소하고 원 담당 코치로 복원할까요?`)) return;
+  try {
+    const result = await window.TennisNoteDataClient.rpc("tn_admin_cancel_lesson_substitutes", {
+      target_lesson_ids: lessonIds,
+      target_reason: $("#substituteReason")?.value.trim() || "관리자 대타 지정 취소",
+    });
+    await syncAdminLiveData();
+    closeSubstituteModal();
+    renderAll();
+    showToast(`${Number(result?.restoredCount ?? result?.restored_count ?? 0)}개 수업 원 담당 코치 복원 완료`);
+  } catch {
+    $("#substituteFormMessage").textContent = "대타 취소에 실패했습니다. 지정 상태를 새로고침해 확인해 주세요.";
+  }
+}
+
 function oneDayBookingForId(bookingId) {
   return lessons.find((lesson) => lesson.oneDayBooking && String(lesson.serverOneDayBookingId) === String(bookingId)) || null;
 }
@@ -11804,6 +12069,7 @@ function settlementRuleFor(coachName) {
 }
 
 function settlementCoachNameFor(item) {
+  if (item.forceActualCoach && item.actualCoach) return item.actualCoach;
   if (!item.actualCoach || item.actualCoach === item.coach) return item.coach;
   const actualRule = settlementRuleFor(item.actualCoach);
   if (actualRule.substitute === "originalCoach") return item.coach;
@@ -11811,6 +12077,7 @@ function settlementCoachNameFor(item) {
 }
 
 function settlementAmountFor(item) {
+  if (Number.isFinite(Number(item.fixedSettlementAmount))) return Math.max(0, Math.round(Number(item.fixedSettlementAmount)));
   const settlementCoach = settlementCoachNameFor(item);
   const rule = settlementRuleFor(settlementCoach);
   const completedLessons = Math.max(0, Number(item.lessonCount) || 0);
@@ -11827,34 +12094,76 @@ function settlementAmountFor(item) {
   return Math.round(perLessonBase * completedLessons * (Number(rule.ratio) || 0));
 }
 
+function settlementRowsForBilling(billing) {
+  const ticket = tickets.find((item) => item.serverTicketId === billing.ticketId || item.id === billing.ticketId) || {};
+  const ticketId = ticket.serverTicketId || ticket.id;
+  const base = {
+    member: billing.member,
+    coach: getCoachName(ticket.coachId || ""),
+    paidAmount: Number(billing.finalAmount || billing.amount) || 0,
+    settlementBase: Number(billing.settlementBaseAmount || billing.finalAmount || billing.amount) || 0,
+    paymentMethod: String(billing.method || "").toLowerCase().includes("card") ? "카드" : "현금",
+    discount: Number(billing.discountAmount) > 0 ? `할인 ${money.format(billing.discountAmount)}원` : "할인 없음",
+    totalLessons: Number(ticket.total) || 0,
+    minutes: Number(ticket.durationMinutes) || 20,
+  };
+  const completedLessons = (adminLiveDataState.lessons || []).filter((lesson) => (
+    String(lesson.ticketId || "") === String(ticketId || "")
+    && lesson.serverStatus === "completed"
+  ));
+  if (!completedLessons.length) return [{ ...base, actualCoach: base.coach, lessonCount: Number(ticket.used) || 0 }];
+
+  const assignments = adminLiveDataState.substituteAssignments || [];
+  const grouped = new Map();
+  completedLessons.forEach((lesson) => {
+    const assignment = assignments.find((item) => (
+      String(item.lesson_id) === String(lesson.serverLessonId)
+      && ["assigned", "completed"].includes(item.status)
+    ));
+    const actualCoach = assignment
+      ? coachNameForRoleId(assignment.substitute_coach_role_id)
+      : getCoachName(lesson.coachId || ticket.coachId || "");
+    const mode = assignment?.settlement_mode || "actual_coach";
+    const key = `${actualCoach}|${mode}|${assignment?.hourly_amount || 0}`;
+    const row = grouped.get(key) || {
+      ...base,
+      actualCoach,
+      forceActualCoach: Boolean(assignment),
+      lessonCount: 0,
+      fixedSettlementAmount: mode === "hourly" ? 0 : undefined,
+      substituteHourlyRate: mode === "hourly" ? Number(assignment?.hourly_amount || 0) : 0,
+    };
+    row.lessonCount += 1;
+    if (mode === "hourly") {
+      row.fixedSettlementAmount += Math.round((Number(lesson.durationMinutes || base.minutes) / 60) * Number(assignment.hourly_amount || 0));
+    }
+    grouped.set(key, row);
+  });
+  const missingCompleted = Math.max(0, (Number(ticket.used) || 0) - completedLessons.length);
+  if (missingCompleted) {
+    const key = `${base.coach}|actual_coach|0`;
+    const row = grouped.get(key) || { ...base, actualCoach: base.coach, lessonCount: 0 };
+    row.lessonCount += missingCompleted;
+    grouped.set(key, row);
+  }
+  return [...grouped.values()];
+}
+
 function renderCoachSettlementPreview() {
   const previewRows = $("#coachSettlementPreviewRows");
   if (previewRows) {
     const liveSettlementRows = billings
       .filter((billing) => billing.status === "paid")
-      .map((billing) => {
-        const ticket = tickets.find((item) => item.serverTicketId === billing.ticketId || item.id === billing.ticketId) || {};
-        const coachName = getCoachName(ticket.coachId || "");
-        return {
-          member: billing.member,
-          coach: coachName,
-          actualCoach: coachName,
-          paidAmount: Number(billing.finalAmount || billing.amount) || 0,
-          settlementBase: Number(billing.settlementBaseAmount || billing.finalAmount || billing.amount) || 0,
-          paymentMethod: String(billing.method || "").toLowerCase().includes("card") ? "카드" : "현금",
-          discount: Number(billing.discountAmount) > 0 ? `할인 ${money.format(billing.discountAmount)}원` : "할인 없음",
-          lessonCount: Number(ticket.used) || 0,
-          totalLessons: Number(ticket.total) || 0,
-          minutes: Number(ticket.durationMinutes) || 20,
-        };
-      });
+      .flatMap(settlementRowsForBilling);
     const previewItems = adminDemoMode ? coachSettlementPreview : liveSettlementRows;
     previewRows.innerHTML = previewItems
       .map((item) => {
         const settlementCoach = settlementCoachNameFor(item);
         const rule = settlementRuleFor(settlementCoach);
         const transferred = item.coach !== item.actualCoach;
-        const ruleLabel = rule.method === "hourly" ? `시급 ${money.format(rule.hourly)}원` : `${Math.round(rule.ratio * 10)}:${10 - Math.round(rule.ratio * 10)}`;
+        const ruleLabel = item.substituteHourlyRate
+          ? `대타 시급 ${money.format(item.substituteHourlyRate)}원`
+          : rule.method === "hourly" ? `시급 ${money.format(rule.hourly)}원` : `${Math.round(rule.ratio * 10)}:${10 - Math.round(rule.ratio * 10)}`;
         return `
           <tr>
             <td><strong>${item.member}</strong><br><small>${item.lessonCount}/${item.totalLessons || item.lessonCount}회 완료</small></td>
@@ -13517,7 +13826,7 @@ async function syncAdminLiveData() {
     liveScheduleMessage: "실서버 회원·코치·시간표를 불러오는 중",
   });
   try {
-    const [serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords] = await Promise.all([
+    const [serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
       client.selectRows("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", limit: 500 }),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
@@ -13551,6 +13860,11 @@ async function syncAdminLiveData() {
         select: "id,user_id,ticket_id,branch_id,coach_role_id,record_status,lesson_schedule_scope,lesson_frequency_per_week,lesson_type,lesson_minutes,lesson_days,lesson_start_on,total_sessions,used_sessions,remaining_sessions,payment_recorded_on,payment_method,payment_amount,admin_note,source_name,source_sheet_id,source_tab_name,source_row_number,last_updated_via",
         limit: 2000,
       }).catch(() => []) : Promise.resolve([]),
+      client.selectRows("tn_lesson_substitute_assignments", {
+        select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
+        order: "assigned_at.desc",
+        limit: 1000,
+      }).catch(() => []),
     ]);
 
     const usersById = new Map((serverUsers || []).map((user) => [user.id, user]));
@@ -13808,6 +14122,9 @@ async function syncAdminLiveData() {
       participantIdsByLesson.set(participant.lesson_id, ids);
     });
     const mappedTicketById = new Map(mappedTickets.map((ticket) => [ticket.id, ticket]));
+    const activeSubstituteByLessonId = new Map((serverSubstituteAssignments || [])
+      .filter((assignment) => assignment.status === "assigned")
+      .map((assignment) => [assignment.lesson_id, assignment]));
     const slotCounts = new Map();
     let mappedLessons = (serverLessons || [])
       .filter((lesson) => lesson.status !== "cancelled")
@@ -13834,6 +14151,7 @@ async function syncAdminLiveData() {
           ticketId: lesson.member_ticket_id,
           coachRoleId: lesson.coach_role_id,
           originalCoachRoleId: lesson.original_coach_role_id || "",
+          substituteAssignment: activeSubstituteByLessonId.get(lesson.id) || null,
           day: scheduleDays[new Date(`${lesson.lesson_date}T00:00:00`).getDay() === 0 ? 6 : new Date(`${lesson.lesson_date}T00:00:00`).getDay() - 1],
           lessonDate: lesson.lesson_date,
           time: String(lesson.start_time || "").slice(0, 5),
@@ -14095,6 +14413,7 @@ async function syncAdminLiveData() {
       groupTicketLinks: serverGroupTicketLinks || [],
       memberDatabaseRecords: serverMemberDatabaseRecords || [],
       memberMembershipRecords: serverMemberMembershipRecords || [],
+      substituteAssignments: serverSubstituteAssignments || [],
     });
     saveScheduleSafetySnapshot(lessons, keepLoadedSchedule ? "protected-refresh" : "before-server-refresh");
     replaceArray(lessons, mappedLessons);
@@ -16340,6 +16659,7 @@ function renderServiceReadiness() {
 
   const productCards = $("#productSettingCards");
   if (productCards) {
+    renderProductBulkToolbar();
     productCards.innerHTML = membershipProductDrafts
       .map(
         (product) => {
@@ -16347,6 +16667,7 @@ function renderServiceReadiness() {
           return `
         <details class="product-setting-card product-setting-form" data-product-card="${normalized.id}">
           <summary class="product-setting-header">
+            <input class="product-select-checkbox" type="checkbox" data-select-product-row="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 선택" ${selectedProductIdSet().has(String(normalized.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />
             <div>
               <strong>${escapeHtml(normalized.title)}</strong>
               <small>${escapeHtml(normalized.group)} · ${normalized.tickets}회 · ${normalized.validityDays}일</small>
@@ -17548,6 +17869,7 @@ function bindEvents() {
     if (event.key === "Escape" && !$("#adminLockModal").hidden) closeAdminLockModal();
     if (event.key === "Escape" && !$("#adminToolsModal").hidden) closeAdminToolsModal();
     if (event.key === "Escape" && !$("#memberManagementModal")?.hidden) closeMemberManagementModal();
+    if (event.key === "Escape" && !$("#substituteModal")?.hidden) closeSubstituteModal();
     if (event.key === "Escape" && !$("#policyVersionEditorModal")?.hidden) closePolicyVersionEditor();
   });
 
@@ -17608,6 +17930,58 @@ function bindEvents() {
   });
 
   document.addEventListener("change", (event) => {
+    if (event.target.matches("[data-select-member-row]")) {
+      const id = Number(event.target.dataset.selectMemberRow);
+      const selected = selectedMemberIdSet();
+      if (event.target.checked) selected.add(id); else selected.delete(id);
+      state.selectedMemberIds = [...selected];
+      renderMemberBulkToolbar(filteredMembers().slice(state.memberListPage * memberListPageSize, (state.memberListPage + 1) * memberListPageSize));
+      return;
+    }
+    if (event.target.matches("#selectVisibleMembers")) {
+      const selected = selectedMemberIdSet();
+      const visible = filteredMembers().slice(state.memberListPage * memberListPageSize, (state.memberListPage + 1) * memberListPageSize);
+      visible.forEach((member) => event.target.checked ? selected.add(Number(member.id)) : selected.delete(Number(member.id)));
+      state.selectedMemberIds = [...selected];
+      renderMembers();
+      return;
+    }
+    if (event.target.matches("#memberBulkAction")) {
+      if ($("#memberBulkCoach")) $("#memberBulkCoach").hidden = event.target.value !== "assign_coach";
+      return;
+    }
+    if (event.target.matches("[data-select-product-row]")) {
+      const selected = selectedProductIdSet();
+      const id = String(event.target.dataset.selectProductRow);
+      if (event.target.checked) selected.add(id); else selected.delete(id);
+      state.selectedMembershipProductIds = [...selected];
+      renderProductBulkToolbar();
+      return;
+    }
+    if (event.target.matches("#substituteDate")) {
+      state.selectedSubstituteLessonIds = [];
+      renderSubstituteLessonList();
+      return;
+    }
+    if (event.target.matches("#substituteSettlementMode")) {
+      syncSubstituteSettlementFields();
+      return;
+    }
+    if (event.target.matches("[data-select-substitute-lesson]")) {
+      const selected = new Set((state.selectedSubstituteLessonIds || []).map(String));
+      const id = String(event.target.dataset.selectSubstituteLesson);
+      if (event.target.checked) selected.add(id); else selected.delete(id);
+      state.selectedSubstituteLessonIds = [...selected];
+      renderSubstituteLessonList();
+      return;
+    }
+    if (event.target.matches("#selectAllSubstituteLessons")) {
+      state.selectedSubstituteLessonIds = event.target.checked
+        ? substituteLessonsForDate($("#substituteDate")?.value || "").map((lesson) => String(lesson.serverLessonId))
+        : [];
+      renderSubstituteLessonList();
+      return;
+    }
     if (event.target.matches("#noticeImageInput")) {
       selectNoticeImage(event.target.files?.[0]);
       return;
@@ -17652,9 +18026,47 @@ function bindEvents() {
 
   document.addEventListener("submit", async (event) => {
     if (event.target.id === "memberManagementForm") await submitMemberManagementForm(event);
+    if (event.target.id === "substituteForm") await submitSubstituteAssignments(event);
   });
 
   document.addEventListener("click", async (event) => {
+    if (event.target.matches("[data-select-product-row]")) event.stopPropagation();
+    if (event.target.closest("#openSubstituteModal")) {
+      openSubstituteModal();
+      return;
+    }
+    if (event.target.closest("#closeSubstituteModal, #cancelSubstituteModal")) {
+      closeSubstituteModal();
+      return;
+    }
+    if (event.target.closest("#cancelSubstituteAssignments")) {
+      await cancelSubstituteAssignments();
+      return;
+    }
+    if (event.target.closest("#runMemberBulkAction")) {
+      await runMemberBulkAction();
+      return;
+    }
+    if (event.target.closest("#clearMemberBulkSelection")) {
+      state.selectedMemberIds = [];
+      renderMembers();
+      return;
+    }
+    if (event.target.closest("#runProductBulkAction")) {
+      await runProductBulkAction();
+      return;
+    }
+    if (event.target.closest("#selectAllProducts")) {
+      const allIds = membershipProductDrafts.map((product) => String(product.id));
+      state.selectedMembershipProductIds = state.selectedMembershipProductIds.length === allIds.length ? [] : allIds;
+      renderServiceReadiness();
+      return;
+    }
+    if (event.target.closest("#clearProductBulkSelection")) {
+      state.selectedMembershipProductIds = [];
+      renderServiceReadiness();
+      return;
+    }
     const manualPartnerButton = event.target.closest("[data-select-manual-member-partner]");
     if (manualPartnerButton) {
       const form = manualPartnerButton.closest("form");

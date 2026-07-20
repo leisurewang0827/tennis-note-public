@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.51" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.52" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -218,9 +218,23 @@
                   <button id="resetMemberFilters" class="ghost-button member-filter-reset" type="button" hidden>검색 초기화</button>
                 </div>
               </div>
+              <div id="memberBulkToolbar" class="bulk-action-toolbar" hidden>
+                <strong><span id="memberBulkCount">0</span>명 선택</strong>
+                <select id="memberBulkAction" aria-label="회원 일괄 작업">
+                  <option value="">작업 선택</option>
+                  <option value="assign_coach">담당 코치 변경</option>
+                  <option value="expire_tickets">회원권 만료 처리</option>
+                  <option value="deactivate">삭제회원으로 이동</option>
+                  <option value="restore">회원 복원</option>
+                </select>
+                <select id="memberBulkCoach" aria-label="변경할 담당 코치" hidden></select>
+                <button id="runMemberBulkAction" class="small-button" type="button">적용</button>
+                <button id="clearMemberBulkSelection" class="ghost-button" type="button">선택 해제</button>
+              </div>
               <table>
                 <thead>
                   <tr>
+                    <th class="row-select-cell"><input id="selectVisibleMembers" type="checkbox" aria-label="현재 목록 전체 선택" /></th>
                     <th>이름</th>
                     <th>앱 연결</th>
                     <th>담당 코치</th>
@@ -270,6 +284,7 @@
             <div class="toolbar-actions">
               <button id="openScheduleSettingsButton" class="ghost-button" type="button">시간표 설정</button>
               <button id="saveScheduleList" class="ghost-button" type="button">목록 저장</button>
+              <button id="openSubstituteModal" class="ghost-button" type="button">대타 지정</button>
               <button id="openLessonModal" class="primary-button" type="button">수업 추가</button>
             </div>
           </div>
@@ -737,6 +752,19 @@
                 <h2>회원권 상품</h2>
                 <button id="addMembershipProductButton" class="primary-button" type="button">새 회원권</button>
               </div>
+              <div id="productBulkToolbar" class="bulk-action-toolbar" hidden>
+                <strong><span id="productBulkCount">0</span>개 선택</strong>
+                <button id="selectAllProducts" class="ghost-button" type="button">전체 선택</button>
+                <select id="productBulkAction" aria-label="회원권 상품 일괄 작업">
+                  <option value="">작업 선택</option>
+                  <option value="sale">판매중</option>
+                  <option value="hidden">숨김</option>
+                  <option value="consult">상담</option>
+                  <option value="delete">강제 삭제</option>
+                </select>
+                <button id="runProductBulkAction" class="small-button" type="button">적용</button>
+                <button id="clearProductBulkSelection" class="ghost-button" type="button">선택 해제</button>
+              </div>
               <div id="productSettingCards" class="product-setting-list"></div>
             </section>
 
@@ -1100,6 +1128,54 @@
       </section>
     </div>
 
+    <div id="substituteModal" class="modal-backdrop" hidden>
+      <section class="modal-panel substitute-modal-panel" role="dialog" aria-modal="true" aria-labelledby="substituteModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">수업 운영</p>
+            <h2 id="substituteModalTitle">대타 코치 지정</h2>
+          </div>
+          <button id="closeSubstituteModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <form id="substituteForm" class="lesson-form">
+          <label class="form-field">
+            <span>수업 날짜</span>
+            <input id="substituteDate" type="date" required />
+          </label>
+          <div id="substituteLessonList" class="substitute-lesson-list" aria-live="polite"></div>
+          <details class="substitute-history-panel">
+            <summary>최근 지정·변경·취소 이력</summary>
+            <div id="substituteHistory"></div>
+          </details>
+          <label class="form-field">
+            <span>실제 수업 코치</span>
+            <select id="substituteCoach" required></select>
+          </label>
+          <label class="form-field">
+            <span>정산 방식</span>
+            <select id="substituteSettlementMode" required>
+              <option value="actual_coach">실제 수업 코치 기준</option>
+              <option value="hourly">대타 시급</option>
+            </select>
+          </label>
+          <label id="substituteHourlyField" class="form-field" hidden>
+            <span>대타 시급</span>
+            <input id="substituteHourlyAmount" type="number" min="1" step="1000" inputmode="numeric" />
+          </label>
+          <label class="form-field">
+            <span>메모</span>
+            <input id="substituteReason" type="text" maxlength="200" placeholder="예: 병가로 당일 대타" />
+          </label>
+          <div id="substituteFormMessage" class="form-message" role="status"></div>
+          <div class="modal-actions">
+            <button id="cancelSubstituteAssignments" class="danger-button" type="button">대타 취소</button>
+            <button id="cancelSubstituteModal" class="ghost-button" type="button">닫기</button>
+            <button id="saveSubstituteAssignments" class="primary-button" type="submit">선택 수업 지정</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div id="coachStaffModal" class="modal-backdrop coach-staff-modal" hidden>
       <section class="modal-panel coach-staff-modal-panel" role="dialog" aria-modal="true" aria-labelledby="coachStaffModalTitle">
         <div class="modal-heading">
@@ -1308,11 +1384,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.51"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.52"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.51"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.52"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.51"></script>
+    <script src="./app.js?v=1.0.52"></script>
   </body>
 </html>

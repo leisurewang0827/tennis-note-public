@@ -3053,6 +3053,31 @@ select:disabled {
   overflow: visible;
 }
 
+.substitute-transfer-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.substitute-transfer-list article {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #eed9a8;
+  background: #fff9e8;
+}
+
+.substitute-transfer-list span {
+  color: #72520a;
+}
+
+@media (max-width: 640px) {
+  .substitute-transfer-list article {
+    flex-direction: column;
+  }
+}
+
 .coach-duration-lesson .schedule-card-note,
 .coach-mobile-lesson .schedule-card-note {
   color: #9a3412;

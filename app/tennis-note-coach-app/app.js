@@ -437,6 +437,8 @@ async function syncCoachLessonsFromServer() {
         const ticket = ticketsById.get(lesson.member_ticket_id) || {};
         const product = productsById.get(ticket.product_id) || {};
         const coach = coachesById.get(lesson.coach_role_id) || {};
+        const originalCoach = coachesById.get(lesson.original_coach_role_id) || {};
+        const isSubstitute = Boolean(lesson.original_coach_role_id && lesson.original_coach_role_id !== lesson.coach_role_id);
         const lessonKind = lesson.lesson_source === "makeup"
           ? "보강"
           : lesson.lesson_source === "coupon"
@@ -454,6 +456,8 @@ async function syncCoachLessonsFromServer() {
           coach: coach.display_name || "담당 코치",
           coachRoleId: lesson.coach_role_id,
           originalCoachRoleId: lesson.original_coach_role_id || "",
+          originalCoach: originalCoach.display_name || "",
+          isSubstitute,
           member: memberNames.join("&") || "회원",
           memberUserIds: participantIds,
           type: `${lessonKind} ${lesson.duration_minutes}분`,
@@ -1414,7 +1418,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.51";
+  const refreshKey = "tennis-note-sw-refresh-1.0.52";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1424,7 +1428,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.51", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.52", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1476,7 +1480,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.51" });
+  const params = new URLSearchParams({ v: "1.0.52" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1842,6 +1846,18 @@ function canProcessLesson(lesson) {
   return canonicalCoachName(lesson.coach) === currentCoachName();
 }
 
+function transferredTodayLessons() {
+  const currentLessons = state.liveLessonsLoaded || state.dataMode === "live"
+    ? weekLessons().filter((lesson) => lesson.lessonDate === localDateKey())
+    : weekLessons();
+  return currentLessons.filter((lesson) => (
+    lesson.isSubstitute
+    && canonicalCoachName(lesson.originalCoach) === currentCoachName()
+    && canonicalCoachName(lesson.coach) !== currentCoachName()
+    && !lesson.releasedMakeupSlot
+  ));
+}
+
 function canRescheduleLesson(lesson) {
   if (!lesson || canonicalCoachName(lesson.coach) !== currentCoachName()) return false;
   if (lesson.serverStatus) return lesson.serverStatus === "scheduled";
@@ -2056,6 +2072,7 @@ function renderTodayLessons() {
   const schedulePolicy = loadCoachSchedulePolicy();
   const pendingMakeups = state.makeupRequests.filter((request) => request.status === "승인 대기");
   const ownLessons = ownTodayLessons();
+  const transferredLessons = transferredTodayLessons();
   const ownMakeups = pendingMakeups.filter((request) => canonicalCoachName(requestCoach(request)) === currentCoachName());
   const ownAbsenceMakeups = ownOpenMakeupEntitlements();
   const ownMakeupTasks = [
@@ -2087,7 +2104,7 @@ function renderTodayLessons() {
                                 (lesson) => `
                                   <button class="board-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${coachColorClass(lesson.coach)} ${lesson.remaining <= 2 ? "needs-renewal" : ""}" style="${coachLessonColorStyle(lesson, schedulePolicy)}" type="button" data-edit-lesson-id="${lesson.id}">
                                     <strong>${lesson.member}</strong>
-                                    <span>${lesson.type}</span>
+                                    <span>${lesson.type}${lesson.isSubstitute ? ` · 대타 · 원 담당 ${lesson.originalCoach || "확인"}` : ""}</span>
                                   </button>`,
                               )
                               .join("") || "<p class='empty-text'>이 시간에 확정된 레슨은 없습니다.</p>"}
@@ -2097,6 +2114,14 @@ function renderTodayLessons() {
                     .join("")
                 : "<p class='empty-text'>오늘 등록된 레슨이 없습니다.</p>"}
             </div>
+            ${transferredLessons.length ? `
+              <div class="substitute-transfer-list" aria-label="대타 코치 처리 일정">
+                ${transferredLessons.map((lesson) => `
+                  <article>
+                    <strong>${lesson.time} · ${lesson.member}</strong>
+                    <span>대타선생님 ${lesson.coach} 처리 일정</span>
+                  </article>`).join("")}
+              </div>` : ""}
             ${todayTaskToggleButton(lessonTimes, "lessons")}
           </section>`
         : ""
