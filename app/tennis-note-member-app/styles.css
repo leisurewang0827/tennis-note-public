@@ -4415,6 +4415,22 @@ input[type="file"] {
   text-decoration: none;
 }
 
+.business-operator-info {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+.business-operator-info a {
+  display: inline;
+  min-height: 0;
+  color: inherit;
+  font-weight: 800;
+}
+
 .support-modal-card h2,
 .support-modal-card p {
   margin: 0;
