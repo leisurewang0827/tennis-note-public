@@ -1496,7 +1496,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.48";
+    const refreshKey = "tennis-note-sw-refresh-1.0.49";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1504,7 +1504,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.48", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.49", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -3002,10 +3002,6 @@ function renderDynamicMemberSchedule() {
   $("#memberWeekSwitcher").innerHTML = `
     <button class="ghost-button" type="button" data-change-member-week="-1" ${state.activeMemberWeekIndex <= memberScheduleMinWeekOffset ? "disabled" : ""}>이전 주</button>
     <div class="schedule-period-summary">
-      <div class="schedule-month-controls">
-        <button class="ghost-button" type="button" data-change-member-month="-1">이전 달</button>
-        <button class="ghost-button" type="button" data-change-member-month="1">다음 달</button>
-      </div>
       <strong>${activeWeek.label}</strong>
       <span>${activeWeek.range} · 관리자 근무시간 기준</span>
     </div>
@@ -6494,7 +6490,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.48" });
+  const params = new URLSearchParams({ v: "1.0.49" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7704,16 +7700,8 @@ function bindEvents() {
     true,
   );
   $("#memberWeekSwitcher")?.addEventListener("click", (event) => {
-    const monthButton = event.target.closest("[data-change-member-month]");
-    if (monthButton) {
-      changeMemberMonth(Number(monthButton.dataset.changeMemberMonth));
-      return;
-    }
     const button = event.target.closest("[data-change-member-week]");
     if (button) changeMemberWeek(Number(button.dataset.changeMemberWeek));
-  });
-  $("#memberWeekSwitcher")?.addEventListener("change", (event) => {
-    if (event.target.matches("[data-member-month]")) selectMemberMonth(event.target.value);
   });
   $("#scheduleGrid")?.addEventListener("click", (event) => {
     const dayButton = event.target.closest("[data-member-schedule-day]");

@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.48" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.49" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1057,7 +1057,11 @@
               <strong>과거 수업 보정</strong>
               <span>실제로 진행했지만 프로그램에 넣지 못한 수업을 관리자 기록으로 남깁니다. 저장 즉시 완료 처리되고 회원권 횟수가 차감됩니다.</span>
             </div>
-            <label class="form-field lesson-past-comment-field">
+            <div class="lesson-past-correction-mode" role="radiogroup" aria-label="과거 수업 보정 방식">
+              <label><input type="radio" name="lessonPastCorrectionMode" value="complete" checked /> 수업 완료 · 횟수 차감</label>
+              <label><input type="radio" name="lessonPastCorrectionMode" value="absence" /> 사전 불참 · 차감 없음</label>
+            </div>
+            <label id="lessonPastCommentField" class="form-field lesson-past-comment-field">
               <span>수업 코멘트</span>
               <textarea id="lessonPastCoachComment" rows="3" minlength="10" maxlength="1000" placeholder="실제 진행한 수업 내용과 다음 연습 포인트를 10자 이상 입력하세요."></textarea>
             </label>
@@ -1304,11 +1308,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.48"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.49"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.48"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.49"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.48"></script>
+    <script src="./app.js?v=1.0.49"></script>
   </body>
 </html>

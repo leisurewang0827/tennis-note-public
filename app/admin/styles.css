@@ -4573,6 +4573,31 @@ tr.is-selected td {
   align-content: start;
 }
 
+.lesson-past-correction-mode {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.lesson-past-correction-mode label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.lesson-past-correction-mode input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+}
+
 .lesson-past-correction-heading span,
 .lesson-past-correction-panel > small {
   color: var(--muted);
@@ -8478,6 +8503,32 @@ button .schedule-member-lines > span {
     padding: 12px 16px;
     border-top: 1px solid var(--line);
     background: var(--paper);
+  }
+}
+
+.member-link-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #cfe0dc;
+  border-radius: 8px;
+  background: #f5fbf9;
+}
+
+.member-link-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.member-link-search-row input {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .member-link-control {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -1453,6 +1453,7 @@ const memberManagementModalState = {
   linkCandidates: [],
   linkCandidatesLoading: false,
   linkCandidatesLoadedFor: "",
+  linkQuery: "",
 };
 const coachStaffEditorState = {
   coachId: "",
@@ -7055,14 +7056,16 @@ function memberLinkCandidateLabel(candidate = {}) {
   return `${candidate.name || "가입자"} · ${providers}${last4}${matches ? ` · ${matches} 일치` : ""}${recommended}`;
 }
 
-async function loadMemberLinkCandidates(member) {
+async function loadMemberLinkCandidates(member, query = memberManagementModalState.linkQuery || "") {
   if (!member?.serverUserId || operationsRole() !== "admin" || member.authLinked) return;
+  memberManagementModalState.linkQuery = String(query || "").trim();
   memberManagementModalState.linkCandidatesLoading = true;
   memberManagementModalState.linkCandidatesLoadedFor = member.serverUserId;
   renderMemberManagementModal();
   try {
     const result = await window.TennisNoteDataClient.rpc("tn_admin_member_link_candidates", {
       target_user_id: member.serverUserId,
+      target_query: memberManagementModalState.linkQuery || null,
     });
     if (memberManagementModalState.memberId !== member.id || memberManagementModalState.action !== "profile") return;
     memberManagementModalState.linkCandidates = Array.isArray(result?.candidates) ? result.candidates : [];
@@ -7128,16 +7131,24 @@ function renderMemberManagementModal() {
     const connection = memberAuthConnection(member);
     const candidates = memberManagementModalState.linkCandidates || [];
     const recommended = candidates.find((candidate) => candidate.recommended)?.userId || "";
+    const linkQuery = memberManagementModalState.linkQuery || "";
+    const candidateControl = memberManagementModalState.linkCandidatesLoading
+      ? '<div class="member-link-status"><strong>앱 가입 계정 찾는 중</strong><span>잠시만 기다려 주세요.</span></div>'
+      : candidates.length
+        ? `<label class="form-field"><span>연결할 앱 가입 계정</span><select name="sourceSignupUserId">
+            <option value="">선택하세요</option>
+            ${candidates.map((candidate) => `<option value="${escapeHtml(candidate.userId)}" ${candidate.userId === recommended ? "selected" : ""}>${escapeHtml(memberLinkCandidateLabel(candidate))}</option>`).join("")}
+          </select><small>연결하면 기존 회원권과 시간표는 유지되고 앱 로그인만 합쳐집니다.</small></label>`
+        : `<div class="member-link-status"><strong>${linkQuery ? "검색 결과 없음" : "자동 일치 계정 없음"}</strong><span>${linkQuery ? "이름·닉네임·전화번호 뒤 4자리를 다시 확인해 주세요." : "아래 검색으로 앱 가입 계정을 직접 찾을 수 있습니다."}</span></div>`;
     const linkControl = connection.linked
       ? `<div class="member-link-status is-linked"><strong>앱 계정 연결됨</strong><span>${escapeHtml(connection.summary)}</span></div>`
-      : memberManagementModalState.linkCandidatesLoading
-        ? '<div class="member-link-status"><strong>가입 계정 찾는 중</strong><span>전화번호와 실명 기준으로 확인하고 있습니다.</span></div>'
-        : candidates.length
-          ? `<label class="form-field span-2"><span>연결할 앱 가입 계정</span><select name="sourceSignupUserId">
-              <option value="">이번에는 연결하지 않음</option>
-              ${candidates.map((candidate) => `<option value="${escapeHtml(candidate.userId)}" ${candidate.userId === recommended ? "selected" : ""}>${escapeHtml(memberLinkCandidateLabel(candidate))}</option>`).join("")}
-            </select><small>선택하면 기존 회원권·시간표는 유지하고 로그인 계정과 운동노트만 이 회원에게 연결합니다.</small></label>`
-          : '<div class="member-link-status"><strong>일치하는 가입 계정 없음</strong><span>회원이 앱에서 가입한 뒤 다시 열면 후보가 표시됩니다.</span></div>';
+      : `<div class="member-link-control span-2">
+          <label class="form-field"><span>앱 가입 계정 수동 연결</span><div class="member-link-search-row">
+            <input name="memberLinkQuery" type="search" value="${escapeHtml(linkQuery)}" placeholder="이름·닉네임·전화번호 뒤 4자리" autocomplete="off" />
+            <button class="secondary-button" type="button" data-search-member-link>검색</button>
+          </div></label>
+          ${candidateControl}
+        </div>`;
     const status = memberListStatus(member);
     const statusOptions = status === "inactive"
       ? '<option value="keep">삭제 상태 유지</option><option value="restore">회원 복원</option>'
@@ -7274,6 +7285,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
     linkCandidates: [],
     linkCandidatesLoading: false,
     linkCandidatesLoadedFor: "",
+    linkQuery: "",
   });
   renderMemberManagementModal();
   $("#memberManagementModal")?.removeAttribute("hidden");
@@ -7302,6 +7314,7 @@ async function openManualMemberModal() {
     linkCandidates: [],
     linkCandidatesLoading: false,
     linkCandidatesLoadedFor: "",
+    linkQuery: "",
   });
   renderMemberManagementModal();
   $("#memberManagementModal")?.removeAttribute("hidden");
@@ -7321,6 +7334,7 @@ function closeMemberManagementModal() {
     linkCandidates: [],
     linkCandidatesLoading: false,
     linkCandidatesLoadedFor: "",
+    linkQuery: "",
   });
   const target = $("#memberManagementModalContent");
   if (target) target.innerHTML = "";
@@ -7492,6 +7506,7 @@ function memberManagementErrorText(error) {
   if (raw.includes("ticket_not_found") || raw.includes("product_not_found")) return "회원권 정보가 변경됐습니다. 새로고침 후 다시 선택해 주세요.";
   if (raw.includes("refunded_ticket_locked")) return "환불 완료 회원권은 수정할 수 없습니다.";
   if (raw.includes("target_member_already_linked")) return "이미 다른 앱 계정이 연결된 회원입니다.";
+  if (raw.includes("member_login_link_not_confirmed")) return "앱 계정 연결 결과를 확인하지 못했습니다. 새로고침 후 회원의 계정 연결 상태를 확인해 주세요.";
   if (raw.includes("source_signup_not_linked") || raw.includes("signup_profile_not_found")) return "가입 계정이 변경됐습니다. 새로고침 후 다시 선택해 주세요.";
   if (raw.includes("source_signup_has_operational_data")) return "선택한 가입 계정에 별도 회원권이나 수업이 있어 자동 병합할 수 없습니다. 관리자 검토가 필요합니다.";
   if (raw.includes("nickname_already_taken") || raw.includes("uq_tn_users_normalized_nickname")) return "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해 주세요.";
@@ -7742,6 +7757,7 @@ async function submitMemberManagementForm(event) {
 
   try {
     let result = null;
+    let linkedSourceSignupUserId = "";
     if (isCreate) {
       const createsNewPartner = managementPayload.lessonType === "one_on_two" && managementPayload.partnerMode === "new";
       result = await client.rpc(createsNewPartner ? "tn_admin_create_group_member_database_record" : "tn_admin_create_member_database_record", {
@@ -7792,6 +7808,7 @@ async function submitMemberManagementForm(event) {
       }
       const sourceSignupUserId = form.elements.sourceSignupUserId?.value || "";
       if (sourceSignupUserId) {
+        linkedSourceSignupUserId = sourceSignupUserId;
         result = await client.rpc("tn_admin_merge_member_login", {
           target_member_user_id: member.serverUserId,
           source_signup_user_id: sourceSignupUserId,
@@ -7865,6 +7882,10 @@ async function submitMemberManagementForm(event) {
 
     const synced = await syncAdminLiveData();
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    if (linkedSourceSignupUserId) {
+      const linkedMember = members.find((item) => memberServerUserIds(item).includes(member.serverUserId));
+      if (!linkedMember?.authLinked) throw new Error("member_login_link_not_confirmed");
+    }
     const verificationError = memberManagementWriteVerification(action, managementPayload, result, statusAction);
     if (verificationError) throw new Error(verificationError);
     closeMemberManagementModal();
@@ -10424,6 +10445,12 @@ function confirmAdminManualOverride(candidate, warnings = []) {
   );
 }
 
+function pastLessonCorrectionMode() {
+  return document.querySelector('input[name="lessonPastCorrectionMode"]:checked')?.value === "absence"
+    ? "absence"
+    : "complete";
+}
+
 function syncPastLessonCorrectionUi(candidate = getLessonFormCandidate()) {
   const panel = $("#lessonPastCorrectionPanel");
   const repeatSlots = $("#lessonRepeatSlots");
@@ -10431,8 +10458,14 @@ function syncPastLessonCorrectionUi(candidate = getLessonFormCandidate()) {
   const adminOption = sourceSelect?.querySelector('option[value="admin"]');
   const editingLesson = getCurrentEditingLesson();
   const pastCorrection = isPastLessonCorrectionMode(candidate);
+  const correctionMode = pastLessonCorrectionMode();
+  const absenceMode = pastCorrection && correctionMode === "absence";
+  const commentField = $("#lessonPastCommentField");
+  const commentInput = $("#lessonPastCoachComment");
 
   if (panel) panel.hidden = !pastCorrection;
+  if (commentField) commentField.hidden = absenceMode;
+  if (commentInput) commentInput.required = pastCorrection && !absenceMode;
   if (repeatSlots) repeatSlots.hidden = pastCorrection;
   if (adminOption) adminOption.hidden = !pastCorrection;
   syncLessonSourceOptions();
@@ -10448,8 +10481,8 @@ function syncPastLessonCorrectionUi(candidate = getLessonFormCandidate()) {
   }
 
   if (pastCorrection) {
-    $("#lessonModalTitle").textContent = editingLesson ? "지난 수업 완료 처리" : "과거 수업 보정";
-    $("#saveLessonButton").textContent = "완료 반영·횟수 차감";
+    $("#lessonModalTitle").textContent = absenceMode ? "지난 수업 사전 불참 보정" : editingLesson ? "지난 수업 완료 처리" : "과거 수업 보정";
+    $("#saveLessonButton").textContent = absenceMode ? "불참 보정·차감 안 함" : "완료 반영·횟수 차감";
   } else if ($("#lessonModalTitle") && $("#saveLessonButton")) {
     $("#lessonModalTitle").textContent = editingLesson ? "수업 수정" : "수업 추가";
     $("#saveLessonButton").textContent = editingLesson ? "수정 저장" : "시간표에 추가";
@@ -10481,6 +10514,27 @@ function renderLessonPreview() {
   if (pastCorrection) {
     const correctionReason = adminPastCorrectionReason();
     const coachComment = $("#lessonPastCoachComment")?.value.trim() || "";
+    const absenceMode = pastLessonCorrectionMode() === "absence";
+    if (absenceMode) {
+      const editingLesson = getCurrentEditingLesson();
+      const regularLesson = editingLesson && normalizeLessonSource(editingLesson.lessonSource) === "regular";
+      const blocked = !editingLesson?.serverLessonId || !regularLesson || correctionReason.length < 5;
+      const message = !editingLesson?.serverLessonId
+        ? "시간표에 등록된 지난 정규수업을 선택한 경우에만 사전 불참으로 보정할 수 있습니다."
+        : !regularLesson
+          ? "정규수업만 사전 불참으로 보정할 수 있습니다."
+          : correctionReason.length < 5
+            ? "보정 사유를 5자 이상 입력해 주세요."
+            : "횟수를 차감하지 않고 보강 신청이 가능한 상태로 바꿉니다.";
+      $("#lessonPreview").innerHTML = `
+        <strong>${candidate.day} ${candidate.time}~${minutesToTime(end)} · 사전 불참 보정</strong>
+        <span>${getLessonMembersLabel(candidate)} · ${getCoachName(candidate.coachId)} · 횟수 차감 없음</span>
+      `;
+      setLessonFormMessage(message, blocked ? "danger" : "good");
+      setLessonSubmitEnabled(!blocked);
+      syncAdminManualOverrideUi([]);
+      return;
+    }
     const selectedEntitlement = selectedAdminMakeupEntitlement();
     const sourceRequiresEntitlement = candidate.lessonSource === "makeup" && !state.editingLessonId;
     const sourceInvalid = !state.editingLessonId && candidate.lessonSource === "regular";
@@ -10625,6 +10679,8 @@ function openLessonModal(defaults = {}) {
   $("#lessonRepeatSlots").innerHTML = "";
   $("#lessonRepeatSlots").hidden = false;
   if ($("#lessonAdminOverride")) $("#lessonAdminOverride").checked = false;
+  const defaultCorrectionMode = document.querySelector('input[name="lessonPastCorrectionMode"][value="complete"]');
+  if (defaultCorrectionMode) defaultCorrectionMode.checked = true;
   $("#lessonPastCoachComment").value = "";
   $("#lessonType").value = "개인";
   $("#lessonSource").value = "regular";
@@ -11240,6 +11296,45 @@ async function addLessonFromForm(event) {
   if (pastCorrection) {
     const correctionReason = adminPastCorrectionReason();
     const coachComment = $("#lessonPastCoachComment")?.value.trim() || "";
+    const absenceMode = pastLessonCorrectionMode() === "absence";
+    if (absenceMode) {
+      const editingLesson = getCurrentEditingLesson();
+      if (!editingLesson?.serverLessonId || normalizeLessonSource(editingLesson.lessonSource) !== "regular") {
+        setLessonFormMessage("시간표에 등록된 지난 정규수업을 선택해 주세요.", "danger");
+        return;
+      }
+      if (correctionReason.length < 5) {
+        setLessonFormMessage("보정 사유를 5자 이상 입력해 주세요.", "danger");
+        return;
+      }
+      setLessonSubmitEnabled(false);
+      setLessonFormMessage("사전 불참으로 보정하고 횟수와 보강 상태를 확인하고 있습니다.");
+      try {
+        const result = await saveLivePastLessonAbsenceCorrection();
+        const restoredSessions = Number(result?.restoredSessions) || 0;
+        closeLessonModal();
+        await syncAdminLiveData();
+        setView("schedule");
+        showToast(restoredSessions > 0
+          ? `사전 불참 보정 완료 · ${restoredSessions}회 복원 · 보강 신청 가능`
+          : "사전 불참 보정 완료 · 횟수 차감 없음 · 보강 신청 가능");
+      } catch (error) {
+        const errorText = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
+        const messages = {
+          past_absence_admin_required: "관리자 계정으로만 지난 수업을 보정할 수 있습니다.",
+          past_absence_reason_too_short: "보정 사유를 5자 이상 입력해 주세요.",
+          past_absence_lesson_not_found: "보정할 지난 수업을 찾지 못했습니다. 시간표를 새로고침해 주세요.",
+          past_absence_regular_lesson_required: "정규수업만 사전 불참으로 보정할 수 있습니다.",
+          past_absence_lesson_not_started: "아직 시작하지 않은 수업은 일반 불참 처리 기능을 사용해 주세요.",
+          past_absence_makeup_already_booked: "이미 이 수업의 보강이 예약되어 있습니다. 보강 예약을 먼저 확인해 주세요.",
+          past_absence_status_invalid: "현재 수업 상태는 사전 불참으로 보정할 수 없습니다.",
+        };
+        const matched = Object.entries(messages).find(([code]) => errorText.includes(code))?.[1];
+        setLessonFormMessage(matched || "사전 불참 보정에 실패했습니다. 새로고침 후 다시 시도해 주세요.", "danger");
+        setLessonSubmitEnabled(true);
+      }
+      return;
+    }
     const sourceRequiresEntitlement = candidate.lessonSource === "makeup" && !state.editingLessonId;
     const sourceInvalid = !state.editingLessonId && candidate.lessonSource === "regular";
     const conflict = getPastLessonCorrectionConflict(candidate);
@@ -15207,6 +15302,20 @@ function renderScheduleSettings() {
   if (applyButton) applyButton.textContent = editingBreakRule ? "브레이크 수정 적용" : "브레이크 추가";
 }
 
+async function saveLivePastLessonAbsenceCorrection() {
+  const client = window.TennisNoteDataClient;
+  const editingLesson = getCurrentEditingLesson();
+  const correctionReason = adminPastCorrectionReason();
+  if (!client?.rpc || operationsRole() !== "admin" || !adminApprovalReady()) {
+    throw new Error("관리자 로그인이 필요합니다.");
+  }
+  if (!editingLesson?.serverLessonId) throw new Error("past_absence_lesson_not_found");
+  return client.rpc("tn_admin_mark_past_lesson_absent", {
+    target_lesson_id: editingLesson.serverLessonId,
+    target_reason: correctionReason,
+  });
+}
+
 function editBreakRule(ruleId) {
   if (!scheduleSettings.breakRules.some((rule) => rule.id === ruleId)) return;
   state.editingBreakRuleId = ruleId;
@@ -17216,6 +17325,9 @@ function bindEvents() {
   ["#lessonPastCoachComment"].forEach((selector) => {
     $(selector)?.addEventListener("input", renderLessonPreview);
   });
+  $$('input[name="lessonPastCorrectionMode"]').forEach((input) => {
+    input.addEventListener("change", renderLessonPreview);
+  });
   $("#lessonAdminOverride")?.addEventListener("change", () => {
     const currentMember = $("#lessonMember")?.value || "";
     refreshLessonMemberOptions(currentMember, getCurrentEditingLesson());
@@ -17248,6 +17360,18 @@ function bindEvents() {
   });
   $("#memberManagementModal")?.addEventListener("click", (event) => {
     if (event.target.id === "memberManagementModal") closeMemberManagementModal();
+    if (event.target.closest("[data-search-member-link]")) {
+      event.preventDefault();
+      const member = members.find((item) => item.id === memberManagementModalState.memberId);
+      const query = $("#memberManagementForm")?.elements.memberLinkQuery?.value || "";
+      loadMemberLinkCandidates(member, query);
+    }
+  });
+  $("#memberManagementModal")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.target?.name !== "memberLinkQuery") return;
+    event.preventDefault();
+    const member = members.find((item) => item.id === memberManagementModalState.memberId);
+    loadMemberLinkCandidates(member, event.target.value);
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("#lessonModal").hidden) closeLessonModal();
