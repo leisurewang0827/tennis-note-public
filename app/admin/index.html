@@ -478,6 +478,10 @@
               <button class="segment" type="button" data-record-filter="done">차감 완료</button>
               <button class="segment" type="button" data-record-filter="issue">오류/수정</button>
             </div>
+            <div class="record-filter-bar" aria-label="기록 상세 필터">
+              <label><span>담당 코치</span><select id="recordCoachFilter"><option value="all">전체 코치</option></select></label>
+              <label><span>미처리 분류</span><select id="recordPendingTypeFilter"><option value="all">전체 미처리</option><option value="lesson">수업 기록</option><option value="payment">결제 연결</option><option value="makeup">보강·변경</option><option value="feedback">회원 피드</option></select></label>
+            </div>
             <div id="recordAuditRows" class="record-audit-list"></div>
           </section>
         </section>
@@ -1275,6 +1279,6 @@
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
     <script src="../shared/tennisnote-release.js?v=release-19"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-1"></script>
-    <script src="./app.js?v=admin-member-live-counts-1"></script>
+    <script src="./app.js?v=admin-record-coach-filters-1"></script>
   </body>
 </html>

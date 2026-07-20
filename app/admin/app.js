@@ -44,6 +44,8 @@ const state = {
   selectedScheduleDay: "",
   settingsTab: "operation",
   recordFilter: "pending",
+  recordCoachFilter: "all",
+  recordPendingType: "all",
   communityChannel: "홈",
   accountDeletionRequests: [],
   liveScheduleLoaded: false,
@@ -11775,6 +11777,30 @@ function recordStatusBadge(record) {
   return badge(statusTone[record.group] || "neutral", record.statusLabel);
 }
 
+function recordCoachId(source = {}) {
+  if (source.coachId) return source.coachId;
+  const memberNames = String(source.member || "").split("&").map((name) => name.trim()).filter(Boolean);
+  if (!memberNames.length) return "";
+  const memberTicket = [...tickets, ...expiredTickets].find((ticket) => (
+    String(ticket.member || "").split("&").some((name) => memberNames.includes(name.trim()))
+  ));
+  if (memberTicket?.coachId) return memberTicket.coachId;
+  return members.find((member) => memberNames.includes(member.name))?.coachId || "";
+}
+
+function withRecordCoach(record, source = record) {
+  const coachId = recordCoachId(source);
+  return { ...record, coachId, coachName: coachId ? getCoachName(coachId) : "미배정" };
+}
+
+function pendingRecordType(record = {}) {
+  if (record.pendingType) return record.pendingType;
+  if (record.actionView === "billing" || record.source === "결제 오류") return "payment";
+  if (record.actionView === "schedule" || String(record.source || "").includes("보강")) return "makeup";
+  if (String(record.source || "").includes("피드")) return "feedback";
+  return "lesson";
+}
+
 function legacyNoteRecord(note) {
   const done = note.status === "confirmed";
   return {
@@ -11969,12 +11995,31 @@ function adminRecordGroups() {
     ...shared.feedbackRequests.map(feedbackRecord),
     ...(adminLiveDataState.journalEntries || []).map(memberJournalRecord),
   ];
+  const normalizedRecords = records.map((record) => withRecordCoach({ ...record, pendingType: pendingRecordType(record) }));
   return {
-    pending: sortAdminRecords(records.filter((record) => record.group === "pending")),
-    feedback: sortAdminRecords(records.filter((record) => record.group === "feedback")),
-    done: sortAdminRecords(records.filter((record) => record.group === "done")),
-    issue: sortAdminRecords(records.filter((record) => record.group === "issue")),
+    pending: sortAdminRecords(normalizedRecords.filter((record) => record.group === "pending")),
+    feedback: sortAdminRecords(normalizedRecords.filter((record) => record.group === "feedback")),
+    done: sortAdminRecords(normalizedRecords.filter((record) => record.group === "done")),
+    issue: sortAdminRecords(normalizedRecords.filter((record) => record.group === "issue")),
   };
+}
+
+function renderRecordFilters(records = []) {
+  const coachSelect = $("#recordCoachFilter");
+  if (coachSelect) {
+    const availableCoachIds = new Set(records.map((record) => record.coachId).filter(Boolean));
+    coachSelect.innerHTML = [
+      '<option value="all">전체 코치</option>',
+      ...coaches.filter((coach) => availableCoachIds.has(coach.id)).map((coach) => `<option value="${escapeHtml(coach.id)}">${escapeHtml(coach.name)}</option>`),
+    ].join("");
+    if (state.recordCoachFilter !== "all" && !availableCoachIds.has(state.recordCoachFilter)) state.recordCoachFilter = "all";
+    coachSelect.value = state.recordCoachFilter;
+  }
+  const pendingTypeSelect = $("#recordPendingTypeFilter");
+  if (pendingTypeSelect) {
+    pendingTypeSelect.hidden = state.recordFilter !== "pending";
+    pendingTypeSelect.value = state.recordPendingType;
+  }
 }
 
 function renderNotes() {
@@ -11984,18 +12029,29 @@ function renderNotes() {
   const activeFilter = ["pending", "feedback", "done", "issue"].includes(state.recordFilter) ? state.recordFilter : "pending";
   state.recordFilter = activeFilter;
 
-  $("#recordPendingCount").textContent = `${groups.pending.length}건`;
-  $("#recordFeedbackCount").textContent = `${groups.feedback.length}건`;
-  $("#recordDoneCount").textContent = `${groups.done.length}건`;
-  $("#recordIssueCount").textContent = `${groups.issue.length}건`;
+  if (!["all", "lesson", "payment", "makeup", "feedback"].includes(state.recordPendingType)) state.recordPendingType = "all";
+  if (!state.recordCoachFilter) state.recordCoachFilter = "all";
+  renderRecordFilters(Object.values(groups).flat());
+  const visibleGroups = Object.fromEntries(Object.entries(groups).map(([key, records]) => [
+    key,
+    state.recordCoachFilter === "all" ? records : records.filter((record) => record.coachId === state.recordCoachFilter),
+  ]));
+
+  $("#recordPendingCount").textContent = `${visibleGroups.pending.length}건`;
+  $("#recordFeedbackCount").textContent = `${visibleGroups.feedback.length}건`;
+  $("#recordDoneCount").textContent = `${visibleGroups.done.length}건`;
+  $("#recordIssueCount").textContent = `${visibleGroups.issue.length}건`;
   $$("[data-record-filter]").forEach((button) => button.classList.toggle("is-active", button.dataset.recordFilter === activeFilter));
 
-  target.innerHTML = groups[activeFilter]
+  const visibleRecords = visibleGroups[activeFilter].filter((record) => (
+    activeFilter !== "pending" || state.recordPendingType === "all" || record.pendingType === state.recordPendingType
+  ));
+  target.innerHTML = visibleRecords
     .map(
       (record) => `
         <article class="record-audit-card ${record.group} ${record.priority === "urgent" ? "urgent" : ""}">
           <div>
-            <span>${escapeHtml(record.source)}</span>
+            <span>${escapeHtml(record.source)} · ${escapeHtml(record.coachName || "미배정")}</span>
             <strong>${escapeHtml(record.member)} · ${escapeHtml(record.title)}</strong>
             ${record.urgentReason ? `<em class="record-urgent-reason">${escapeHtml(record.urgentReason)}</em>` : ""}
             <p>${escapeHtml(record.detail)}</p>
@@ -15918,7 +15974,7 @@ function renderAll() {
 let adminLiveScheduleRefreshTimer = 0;
 let adminLiveScheduleRefreshInFlight = false;
 let scheduleSessionInitialized = false;
-const adminLiveRefreshViews = new Set(["dashboard", "members", "schedule", "billing"]);
+const adminLiveRefreshViews = new Set(["dashboard", "members", "schedule", "billing", "notes"]);
 
 function resetScheduleEntryState() {
   // The saved browser snapshot may contain a coach-only or pending-only view.
@@ -15948,6 +16004,7 @@ async function refreshAdminLiveSchedule(options = {}) {
       if (state.view === "members") renderMembers();
       else if (state.view === "schedule") renderSchedule();
       else if (state.view === "billing") renderBilling();
+      else if (state.view === "notes") renderNotes();
       else renderDashboard();
     }
     return synced;
@@ -16039,6 +16096,18 @@ function bindEvents() {
     if (event.target.id !== "coachStaffSettlementMethod" || !coachStaffEditorState.draft) return;
     coachStaffEditorState.draft.settlement.method = event.target.value;
     syncCoachStaffSettlementFieldVisibility(event.target.value);
+  });
+  document.addEventListener("change", (event) => {
+    if (event.target.id === "recordCoachFilter") {
+      state.recordCoachFilter = event.target.value || "all";
+      renderNotes();
+      saveSnapshot();
+    }
+    if (event.target.id === "recordPendingTypeFilter") {
+      state.recordPendingType = event.target.value || "all";
+      renderNotes();
+      saveSnapshot();
+    }
   });
   $("#coachStaffForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
