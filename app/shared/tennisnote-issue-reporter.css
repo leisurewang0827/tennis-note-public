@@ -18,7 +18,9 @@
 .tn-report-row span, .tn-report-row small { color: #627087; font-size: 12px; font-weight: 800; }
 .tn-report-row strong { font-size: 15px; }
 .tn-report-row p { margin: 0; font-size: 13px; }
+.tn-report-automation { margin-top: 5px; color: #087f5b; font-size: 12px; font-style: normal; font-weight: 900; }
 .tn-report-controls { display: grid; grid-template-columns: repeat(2, minmax(92px, 1fr)); gap: 8px; align-content: center; }
-.tn-report-controls button { border: 0; border-radius: 6px; background: #087f5b; color: #fff; font-weight: 900; }
+.tn-report-controls button, .tn-report-link { min-height: 38px; display: grid; place-items: center; border: 0; border-radius: 6px; background: #087f5b; color: #fff; font-weight: 900; text-decoration: none; }
+.tn-report-controls button:disabled { background: #94a3b8; }
 .tn-report-controls b { grid-column: 1 / -1; font-size: 12px; text-align: right; }
 @media (max-width: 720px) { .tn-report-card { padding: 16px; } .tn-report-row { grid-template-columns: 1fr; } .tn-report-controls b { text-align: left; } }
