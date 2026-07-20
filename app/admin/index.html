@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.36" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.42" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -296,6 +296,12 @@
               <span id="adminWeekNote">기본 수업은 20분/30분, 40분/60분은 회원권 연속 사용으로 표시</span>
             </div>
             <div id="adminWeekSwitcher" class="week-switcher admin-week-switcher" aria-label="관리자 시간표 주차 선택"></div>
+            <div class="schedule-member-search" role="search">
+              <label for="adminScheduleMemberSearch">회원 시간 찾기</label>
+              <input id="adminScheduleMemberSearch" type="search" autocomplete="off" placeholder="이름 입력" />
+              <button id="clearAdminScheduleMemberSearch" class="ghost-button" type="button" hidden>검색 지우기</button>
+              <div id="adminScheduleMemberSearchResult" aria-live="polite"></div>
+            </div>
             <div id="adminScheduleDayPicker" class="schedule-day-picker" aria-label="관리자 시간표 날짜 선택"></div>
             <div id="adminScheduleCoachPicker" class="schedule-coach-picker" aria-label="코치별 시간표 필터"></div>
             <div class="schedule-closed-band"><strong>평일 13:00~17:00</strong><span>수업 없음 · 긴 빈 시간은 시간표에서 접어 표시합니다.</span></div>
@@ -801,6 +807,10 @@
               </div>
               <div id="customLessonColorRules" class="lesson-color-settings" aria-label="추가 시간표 표시 종류"></div>
               <button id="addLessonColorRuleButton" class="ghost-button" type="button">표시 종류 추가</button>
+              <div class="break-coach-setting">
+                <strong>브레이크 적용 코치</strong>
+                <div id="breakCoachOptions" class="break-coach-options" aria-label="브레이크 적용 코치"></div>
+              </div>
               <div class="break-day-grid" aria-label="브레이크 적용 요일">
                 <label><input type="checkbox" value="월" data-break-day />월</label>
                 <label><input type="checkbox" value="화" data-break-day />화</label>
@@ -1283,11 +1293,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.35"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.42"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.35"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.42"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.36"></script>
+    <script src="./app.js?v=1.0.42"></script>
   </body>
 </html>

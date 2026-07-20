@@ -4405,6 +4405,21 @@ tr.is-selected td {
   gap: 6px;
 }
 
+.break-coach-setting {
+  display: grid;
+  gap: 7px;
+}
+
+.break-coach-setting > strong {
+  font-size: 12px;
+}
+
+.break-coach-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+}
+
 .lesson-primary-time-field {
   grid-column: span 2;
 }
@@ -5982,6 +5997,50 @@ tr.is-selected td {
   display: none;
 }
 
+.schedule-member-search {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 320px) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+}
+
+.schedule-member-search > label {
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.schedule-member-search input {
+  min-width: 0;
+  width: 100%;
+}
+
+#adminScheduleMemberSearchResult {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+#adminScheduleMemberSearchResult > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+#adminScheduleMemberSearchResult > button {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid #b9d4ef;
+  border-radius: 6px;
+  color: #245a94;
+  background: #eef6ff;
+  font-size: 11px;
+  font-weight: 850;
+}
+
 .coach-filter-button {
   min-height: 36px;
   padding: 0 12px;
@@ -6976,6 +7035,100 @@ button .schedule-member-lines > span {
 
 .member-management-form .form-field.is-disabled select {
   cursor: not-allowed;
+}
+
+.member-field-label {
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.member-field-label em {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.member-field-label .is-required {
+  color: #9f2d24;
+  background: #fff0ed;
+}
+
+.member-field-label .is-optional {
+  color: #667085;
+  background: #eef2f6;
+}
+
+.member-field-label .is-conditional {
+  color: #76520d;
+  background: #fff4d6;
+}
+
+.member-partner-editor {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #b7d4ca;
+  border-radius: 8px;
+  background: #f5fbf8;
+}
+
+.member-partner-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.member-partner-mode label,
+.break-coach-options label {
+  min-width: 0;
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.member-partner-mode input,
+.break-coach-options input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--green);
+}
+
+.member-partner-new-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.member-partner-new-fields[hidden],
+.member-partner-existing-fields[hidden] {
+  display: none;
+}
+
+.member-partner-existing-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 8px;
+}
+
+.member-partner-existing-fields input,
+.member-partner-existing-fields select {
+  min-width: 0;
+  width: 100%;
 }
 
 .member-pair-editor {
@@ -8225,8 +8378,22 @@ button .schedule-member-lines > span {
   }
 
   .member-pair-editor,
+  .member-partner-mode,
+  .member-partner-new-fields,
+  .member-partner-existing-fields,
   .lesson-participant-list {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .schedule-member-search {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .schedule-member-search > label,
+  #adminScheduleMemberSearchResult {
+    grid-column: 1 / -1;
   }
 }
 

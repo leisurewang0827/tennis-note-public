@@ -27,6 +27,7 @@ const state = {
   scheduleFilter: "all",
   scheduleView: "week",
   scheduleCoachFilter: "all",
+  scheduleMemberSearch: "",
   billingFilter: "action",
   discountView: "policies",
   discountSearch: "",
@@ -3243,9 +3244,17 @@ async function saveLiveSchedulePolicy() {
     return;
   }
   const branchId = serverCoaches.find((coach) => coach.branchId)?.branchId || null;
-  const targetCoaches = serverCoaches.map((coach) => ({
-    coachRoleId: coach.serverRoleId,
-    workBlocks: (coach.status || "active") === "active" ? [
+  const targetCoaches = serverCoaches.map((coach) => {
+    const targetedBreaks = (scheduleSettings.breakRules || [])
+      .filter((rule) => breakRuleCoachRoleIds(rule).includes(coach.serverRoleId))
+      .map((rule) => ({
+        days: (rule.days || []).map(postgresDayOfWeek).filter((day) => Number.isInteger(day)),
+        startTime: rule.start,
+        endTime: rule.end,
+        label: rule.label || "브레이크",
+        availabilityType: "blocked",
+      }));
+    const blocks = (coach.status || "active") === "active" ? [
       ...normalizeCoachWorkBlocks(coach).map((block) => ({
         days: block.days.map(postgresDayOfWeek).filter((day) => Number.isInteger(day)),
         startTime: block.start,
@@ -3260,9 +3269,12 @@ async function saveLiveSchedulePolicy() {
         label: block.label || "브레이크",
         availabilityType: "blocked",
       })),
-    ] : [],
-  }));
-  const targetBreakRules = (scheduleSettings.breakRules || []).map((rule) => ({
+      ...targetedBreaks,
+    ] : [];
+    const uniqueBlocks = [...new Map(blocks.map((block) => [`${block.availabilityType}|${block.days.join(",")}|${block.startTime}|${block.endTime}|${block.label}`, block])).values()];
+    return { coachRoleId: coach.serverRoleId, workBlocks: uniqueBlocks };
+  });
+  const targetBreakRules = (scheduleSettings.breakRules || []).filter((rule) => !breakRuleCoachRoleIds(rule).length).map((rule) => ({
     days: (rule.days || []).map(postgresDayOfWeek).filter((day) => Number.isInteger(day)),
     startTime: rule.start,
     endTime: rule.end,
@@ -4258,7 +4270,10 @@ function getCoachAvailabilitySummary(coachId) {
 function scheduleBreakSummaryForDay(day) {
   const rules = scheduleSettings.breakRules.filter((rule) => rule.days?.includes(day));
   if (!rules.length) return "브레이크 없음";
-  return rules.map((rule) => `${rule.label || "브레이크"} ${rule.start}~${rule.end}`).join(" / ");
+  return rules.map((rule) => {
+    const coachNames = breakRuleCoachNames(rule);
+    return `${rule.label || "브레이크"} ${rule.start}~${rule.end}${coachNames ? ` · ${coachNames}` : ""}`;
+  }).join(" / ");
 }
 
 function scheduleCoachSummaryForDay(day) {
@@ -4568,7 +4583,8 @@ function intervalsOverlap(a, b) {
 function getLessonConflict(candidate) {
   if (!candidate.day || !candidate.time) return { lesson: null, message: "선택 가능한 수업 시간이 없습니다." };
   const candidateInterval = lessonInterval(candidate);
-  const breakRule = getBreakRuleOverlapping(candidate.day, candidate.time, candidate.durationMinutes);
+  const breakRule = getCoachBreakOverlapping(candidate.coachId, candidate.day, candidate.time, candidate.durationMinutes)
+    || getBreakRuleOverlapping(candidate.day, candidate.time, candidate.durationMinutes, candidate.coachId);
   if (breakRule) {
     return { lesson: null, message: `${candidate.day} ${breakRule.start}~${breakRule.end} ${breakRule.label || "브레이크타임"}과 겹칩니다.` };
   }
@@ -4635,13 +4651,14 @@ function getAvailableCourtId(day, time, durationMinutes = 20) {
 }
 
 function getAvailableCoachesForSlot(day, time, durationMinutes = 20) {
-  if (isBreakOverlapping(day, time, durationMinutes)) return [];
   const usedCoachIds = new Set(getOverlappingBookedLessons(day, time, durationMinutes)
     .filter((lesson) => !isReleasedRegularMakeupSlot(lesson))
     .map((lesson) => lesson.coachId));
   return coaches.filter((coach) => (
     coach.status === "active" &&
     !usedCoachIds.has(coach.id) &&
+    !getCoachBreakOverlapping(coach.id, day, time, durationMinutes) &&
+    !getBreakRuleOverlapping(day, time, durationMinutes, coach.id) &&
     isCoachAvailableForSlot(coach.id, day, time, durationMinutes)
   ));
 }
@@ -4660,37 +4677,56 @@ function hasCourtCapacity(day, time, durationMinutes = 20) {
 }
 
 function canAddLessonAt(day, time, durationMinutes = 20, preferredCoachId = "") {
-  if (isBreakOverlapping(day, time, durationMinutes)) return false;
   if (!hasCourtCapacity(day, time, durationMinutes)) return false;
   if (preferredCoachId) return getAvailableCoachesForSlot(day, time, durationMinutes).some((coach) => coach.id === preferredCoachId);
   return getAvailableCoachesForSlot(day, time, durationMinutes).length > 0;
 }
 
-function getBreakRuleForSlot(day, time) {
+function breakRuleCoachRoleIds(rule = {}) {
+  return Array.isArray(rule.coachRoleIds) ? rule.coachRoleIds.filter(Boolean) : [];
+}
+
+function breakRuleAppliesToCoach(rule, coachId = "") {
+  const targetRoleIds = breakRuleCoachRoleIds(rule);
+  if (!targetRoleIds.length || !coachId) return true;
+  const coach = coaches.find((item) => item.id === coachId || item.serverRoleId === coachId);
+  return targetRoleIds.includes(coach?.serverRoleId || coachId);
+}
+
+function breakRuleCoachNames(rule = {}) {
+  const targetRoleIds = breakRuleCoachRoleIds(rule);
+  if (!targetRoleIds.length) return "전체 코치";
+  return targetRoleIds.map((roleId) => {
+    const coach = coaches.find((item) => item.serverRoleId === roleId || item.id === roleId);
+    return String(coach?.name || "코치").replace(/\s*코치$/, "");
+  }).join(", ");
+}
+
+function getBreakRuleForSlot(day, time, coachId = "") {
   const current = timeToMinutes(time);
   return scheduleSettings.breakRules.find((rule) => {
-    if (!rule.days?.includes(day)) return false;
+    if (!rule.days?.includes(day) || !breakRuleAppliesToCoach(rule, coachId)) return false;
     return current >= timeToMinutes(rule.start) && current < timeToMinutes(rule.end);
   });
 }
 
-function getBreakRuleOverlapping(day, time, durationMinutes = 20) {
+function getBreakRuleOverlapping(day, time, durationMinutes = 20, coachId = "") {
   const start = timeToMinutes(time);
   const end = start + durationMinutes;
   return scheduleSettings.breakRules.find((rule) => {
-    if (!rule.days?.includes(day)) return false;
+    if (!rule.days?.includes(day) || !breakRuleAppliesToCoach(rule, coachId)) return false;
     const ruleStart = timeToMinutes(rule.start);
     const ruleEnd = timeToMinutes(rule.end);
     return start < ruleEnd && ruleStart < end;
   });
 }
 
-function isBreakSlot(day, time) {
-  return Boolean(getBreakRuleForSlot(day, time));
+function isBreakSlot(day, time, coachId = "") {
+  return Boolean(getBreakRuleForSlot(day, time, coachId));
 }
 
-function isBreakOverlapping(day, time, durationMinutes = 20) {
-  return Boolean(getBreakRuleOverlapping(day, time, durationMinutes));
+function isBreakOverlapping(day, time, durationMinutes = 20, coachId = "") {
+  return Boolean(getBreakRuleOverlapping(day, time, durationMinutes, coachId));
 }
 
 function lessonAddAttrs(day, time, durationMinutes = 20, preferredCoachId = "") {
@@ -6786,6 +6822,8 @@ function memberManagementCoachRoles(sourceTicket = null) {
   const ownRoleIds = currentOperationsCoachRoleIds();
   return (adminLiveDataState.coachRoles || [])
     .filter((role) => role.status === "approved"
+      && !["ended", "archived"].includes(role.employment_status)
+      && !role.archived_at
       && (!sourceTicket?.branchId || role.branch_id === sourceTicket.branchId)
       && (operationsRole() === "admin" || ownRoleIds.has(role.id)))
     .sort((left, right) => String(left.display_name || "").localeCompare(String(right.display_name || ""), "ko"));
@@ -6818,6 +6856,12 @@ function memberManagementLessonDaysMarkup(selectedDays = [], scheduleScope = "we
 
 function memberManagementValue(value) {
   return value === null || value === undefined ? "" : String(value);
+}
+
+function memberManagementFieldLabel(label, required = false, conditional = "") {
+  const badge = required ? "필수" : conditional || "선택";
+  const tone = required ? "is-required" : conditional ? "is-conditional" : "is-optional";
+  return `<span class="member-field-label">${escapeHtml(label)}<em class="${tone}">${escapeHtml(badge)}</em></span>`;
 }
 
 function memberManagementDatabaseFields({
@@ -6860,35 +6904,35 @@ function memberManagementDatabaseFields({
     ${isAssign && existingPayment ? `<input name="existingPaymentId" type="hidden" value="${escapeHtml(existingPayment.id)}" />
       <div class="member-management-warning"><strong>기존 결제 기록 연결</strong><span>${escapeHtml(paymentMethodLabel(existingPayment.method))} · ${money.format(Number(existingPayment.final_amount ?? existingPayment.amount ?? 0))}원 · 회원권 발급 후 같은 결제 기록에 연결됩니다.</span></div>` : ""}
     <div class="member-management-form-grid member-database-fields">
-      <label class="form-field"><span>레슨강사</span><select name="coachRoleId" required>
+      <label class="form-field">${memberManagementFieldLabel("레슨강사", true)}<select name="coachRoleId" required>
         ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === coachRoleId ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
       </select></label>
-      <label class="form-field"><span>레슨방식</span><select name="scheduleScope" required>
+      <label class="form-field">${memberManagementFieldLabel("레슨방식", true)}<select name="scheduleScope" required>
         <option value="weekday" ${scheduleScope === "weekday" ? "selected" : ""}>평일</option>
         <option value="weekend" ${scheduleScope === "weekend" ? "selected" : ""}>주말</option>
         <option value="mixed" ${scheduleScope === "mixed" ? "selected" : ""}>혼합</option>
       </select></label>
-      <label class="form-field"><span>주당 횟수</span><select name="weeklyFrequency" required>
+      <label class="form-field">${memberManagementFieldLabel("주당 횟수", true)}<select name="weeklyFrequency" required>
         ${[1, 2, 3].map((frequency) => `<option value="${frequency}" ${frequency === weeklyFrequency ? "selected" : ""} ${scheduleScope === "weekend" && frequency === 3 ? "disabled" : ""}>주 ${frequency}회</option>`).join("")}
       </select></label>
-      <label class="form-field"><span>레슨종류</span><select name="lessonType" required>
+      <label class="form-field">${memberManagementFieldLabel("레슨종류", true)}<select name="lessonType" required>
         <option value="one_on_one" ${lessonType === "one_on_one" ? "selected" : ""}>1:1</option>
         <option value="one_on_two" ${lessonType === "one_on_two" ? "selected" : ""}>1:2</option>
       </select></label>
-      <label class="form-field span-2 member-lesson-days-field"><span>레슨요일</span><span class="member-lesson-day-options" data-member-lesson-days>${memberManagementLessonDaysMarkup(lessonDays, scheduleScope)}</span></label>
-      <label class="form-field"><span>레슨시작일</span><input name="startsOn" type="date" value="${escapeHtml(startsOn)}" ${hasTicket ? "required" : ""} /></label>
-      ${hasTicket ? `<label class="form-field"><span>회원권 만료일</span><input name="expiresOn" type="date" value="${escapeHtml(expiresOn)}" required /></label>` : ""}
-      <label class="form-field"><span>총 회차</span><input name="totalSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(totalSessions))}" ${hasTicket ? "required" : ""} /></label>
-      <label class="form-field"><span>소진 회차</span><input name="usedSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(usedSessions))}" ${hasTicket ? "required" : ""} /></label>
-      <label class="form-field"><span>잔여 회차</span><input name="remainingSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(remainingSessions))}" readonly aria-readonly="true" ${hasTicket ? "required" : ""} /><small>총 회차 - 소진 회차로 자동 계산</small></label>
+      <label class="form-field span-2 member-lesson-days-field">${memberManagementFieldLabel("레슨요일", product?.product_kind === "coupon" || product?.is_coupon ? false : true, product?.product_kind === "coupon" || product?.is_coupon ? "쿠폰 선택" : "")}<span class="member-lesson-day-options" data-member-lesson-days>${memberManagementLessonDaysMarkup(lessonDays, scheduleScope)}</span></label>
+      <label class="form-field">${memberManagementFieldLabel("레슨시작일", hasTicket)}<input name="startsOn" type="date" value="${escapeHtml(startsOn)}" ${hasTicket ? "required" : ""} /></label>
+      ${hasTicket ? `<label class="form-field">${memberManagementFieldLabel("회원권 만료일", true)}<input name="expiresOn" type="date" value="${escapeHtml(expiresOn)}" required /></label>` : ""}
+      <label class="form-field">${memberManagementFieldLabel("총 회차", hasTicket)}<input name="totalSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(totalSessions))}" ${hasTicket ? "required" : ""} /></label>
+      <label class="form-field">${memberManagementFieldLabel("소진 회차", hasTicket)}<input name="usedSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(usedSessions))}" ${hasTicket ? "required" : ""} /></label>
+      <label class="form-field">${memberManagementFieldLabel("잔여 회차", hasTicket)}<input name="remainingSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(remainingSessions))}" readonly aria-readonly="true" ${hasTicket ? "required" : ""} /><small>총 회차 - 소진 회차로 자동 계산</small></label>
       ${includeTicketStatus && ticket ? `<label class="form-field"><span>회원권 상태</span><select name="ticketStatus" required>
         <option value="active" ${ticketStatus === "active" ? "selected" : ""}>사용 중</option>
         <option value="paused" ${ticketStatus === "paused" ? "selected" : ""}>일시정지</option>
         ${ticketStatus === "pending_payment" ? '<option value="pending_payment" selected>결제 대기 유지</option>' : ""}
         <option value="expired" ${ticketStatus === "expired" ? "selected" : ""}>만료</option>
       </select></label>` : ""}
-      <label class="form-field"><span>결제일자</span><input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" /></label>
-      <label class="form-field"><span>결제수단</span><select name="paymentMethod">
+      <label class="form-field">${memberManagementFieldLabel("결제일자")}<input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" /></label>
+      <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod">
         <option value="" ${paymentMethod ? "" : "selected"}>미입력</option>
         <option value="card" ${paymentMethod === "card" ? "selected" : ""}>카드</option>
         <option value="bank" ${["bank", "bank_transfer", "transfer"].includes(paymentMethod) ? "selected" : ""}>계좌이체</option>
@@ -6896,12 +6940,28 @@ function memberManagementDatabaseFields({
         <option value="manual" ${paymentMethod === "manual" ? "selected" : ""}>관리자 입력</option>
         ${paymentMethod && !["card", "bank", "bank_transfer", "transfer", "cash", "manual"].includes(paymentMethod) ? `<option value="${escapeHtml(paymentMethod)}" selected>${escapeHtml(paymentMethodLabel(paymentMethod))}</option>` : ""}
       </select></label>
-      <label class="form-field"><span>결제금액</span><input name="paymentAmount" type="number" min="0" step="1000" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
-      <label class="form-field span-2"><span>비고</span><textarea name="note" rows="3" maxlength="500">${escapeHtml(note)}</textarea></label>
-      <label class="form-field span-2 ${lessonType === "one_on_two" ? "" : "is-disabled"}" data-manual-member-partner-field><span>1:2 파트너</span><select name="partnerUserId" ${lessonType === "one_on_two" ? "required" : "disabled"}>
-        <option value="">파트너 선택</option>
-        ${partnerOptions.filter((user) => user.id !== member?.serverUserId).map((user) => `<option value="${escapeHtml(user.id)}" ${user.id === partnerUserId ? "selected" : ""}>${escapeHtml(user.name || "회원")}</option>`).join("")}
-      </select></label>
+      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1000" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
+      <label class="form-field span-2">${memberManagementFieldLabel("비고")}<textarea name="note" rows="3" maxlength="500">${escapeHtml(note)}</textarea></label>
+      <div class="form-field span-2 member-partner-editor ${lessonType === "one_on_two" ? "" : "is-disabled"}" data-manual-member-partner-field>
+        ${memberManagementFieldLabel("1:2 파트너", lessonType === "one_on_two")}
+        ${isCreate ? `<div class="member-partner-mode" role="radiogroup" aria-label="파트너 등록 방법">
+          <label><input name="partnerMode" type="radio" value="new" checked />새 파트너 같이 등록</label>
+          <label><input name="partnerMode" type="radio" value="existing" />기존 회원 연결</label>
+        </div>
+        <div class="member-partner-new-fields" data-manual-new-partner>
+          <label class="form-field">${memberManagementFieldLabel("파트너 실명", true)}<input name="partnerName" type="text" minlength="2" maxlength="40" autocomplete="off" /></label>
+          <label class="form-field">${memberManagementFieldLabel("파트너 휴대전화")}<input name="partnerPhone" type="tel" inputmode="tel" maxlength="20" placeholder="010-0000-0000" /></label>
+          <label class="form-field">${memberManagementFieldLabel("파트너 출생연도")}<input name="partnerBirthYear" type="number" min="1900" max="2100" step="1" /></label>
+          <label class="form-field">${memberManagementFieldLabel("파트너 성별")}<select name="partnerGender"><option value="">미입력</option><option value="female">여성</option><option value="male">남성</option><option value="other">기타</option><option value="prefer_not">응답 안 함</option></select></label>
+        </div>` : ""}
+        <div class="member-partner-existing-fields" data-manual-existing-partner ${isCreate ? "hidden" : ""}>
+          <input name="partnerSearch" type="search" autocomplete="off" placeholder="이름 또는 전화번호 검색" data-manual-member-partner-search />
+          <select name="partnerUserId" ${lessonType === "one_on_two" && !isCreate ? "required" : "disabled"}>
+            <option value="">파트너 선택</option>
+            ${partnerOptions.filter((user) => user.id !== member?.serverUserId).map((user) => `<option value="${escapeHtml(user.id)}" ${user.id === partnerUserId ? "selected" : ""}>${escapeHtml(user.name || "회원")}</option>`).join("")}
+          </select>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -6915,34 +6975,34 @@ function memberManualProfileFields(member = {}) {
   const dominantHand = member.dominantHand || "";
   const backhandStyle = member.backhandStyle || "";
   return `
-    <label class="form-field span-2"><span>실명</span><input name="memberName" type="text" minlength="2" maxlength="40" value="${escapeHtml(member.name || "")}" autocomplete="name" required /></label>
-    <label class="form-field"><span>닉네임</span><input name="memberNickname" type="text" minlength="2" maxlength="16" value="${escapeHtml(member.nickname || "")}" placeholder="선택 입력" /></label>
-    <label class="form-field"><span>휴대전화</span><input name="memberPhone" type="tel" inputmode="tel" maxlength="20" value="${escapeHtml(member.phone || "")}" placeholder="010-0000-0000" /></label>
-    <label class="form-field"><span>출생연도</span><input name="memberBirthYear" type="number" min="1900" max="2100" step="1" value="${escapeHtml(String(member.birthYear || ""))}" placeholder="예: 1990" /></label>
-    <label class="form-field"><span>거주동</span><input name="memberNeighborhood" type="text" maxlength="40" value="${escapeHtml(member.neighborhood || "")}" placeholder="예: 군자동" /></label>
-    <label class="form-field"><span>성별</span><select name="memberGender">
+    <label class="form-field span-2">${memberManagementFieldLabel("실명", true)}<input name="memberName" type="text" minlength="2" maxlength="40" value="${escapeHtml(member.name || "")}" autocomplete="name" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("닉네임")}<input name="memberNickname" type="text" minlength="2" maxlength="16" value="${escapeHtml(member.nickname || "")}" placeholder="선택 입력" /></label>
+    <label class="form-field">${memberManagementFieldLabel("휴대전화")}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" value="${escapeHtml(member.phone || "")}" placeholder="010-0000-0000" /></label>
+    <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" value="${escapeHtml(String(member.birthYear || ""))}" placeholder="예: 1990" /></label>
+    <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" value="${escapeHtml(member.neighborhood || "")}" placeholder="예: 군자동" /></label>
+    <label class="form-field">${memberManagementFieldLabel("성별")}<select name="memberGender">
       <option value="" ${member.gender ? "" : "selected"}>미입력</option>
       <option value="female" ${member.gender === "female" ? "selected" : ""}>여성</option>
       <option value="male" ${member.gender === "male" ? "selected" : ""}>남성</option>
       <option value="other" ${member.gender === "other" ? "selected" : ""}>기타</option>
       <option value="prefer_not" ${member.gender === "prefer_not" ? "selected" : ""}>응답 안 함</option>
     </select></label>
-    <label class="form-field"><span>주사용 손</span><select name="memberDominantHand">
+    <label class="form-field">${memberManagementFieldLabel("주사용 손")}<select name="memberDominantHand">
       <option value="" ${dominantHand ? "" : "selected"}>미입력</option>
       <option value="right" ${dominantHand === "right" ? "selected" : ""}>오른손</option>
       <option value="left" ${dominantHand === "left" ? "selected" : ""}>왼손</option>
       <option value="ambidextrous" ${dominantHand === "ambidextrous" ? "selected" : ""}>양손</option>
     </select></label>
-    <label class="form-field"><span>백핸드</span><select name="memberBackhandStyle">
+    <label class="form-field">${memberManagementFieldLabel("백핸드")}<select name="memberBackhandStyle">
       <option value="" ${backhandStyle ? "" : "selected"}>미입력</option>
       <option value="two_handed" ${backhandStyle === "two_handed" ? "selected" : ""}>투핸드</option>
       <option value="one_handed" ${backhandStyle === "one_handed" ? "selected" : ""}>원핸드</option>
     </select></label>
-    <label class="form-field"><span>테니스 시작일</span><input name="memberTennisStartedOn" type="date" value="${escapeHtml(member.tennisStartedOn || "")}" /></label>
-    <label class="form-field"><span>자가 NTRP</span><input name="memberSelfNtrp" type="number" min="1" max="7" step="0.5" value="${escapeHtml(String(member.selfNtrp || ""))}" /></label>
-    <label class="form-field"><span>코치 측정 NTRP</span><input name="memberCoachNtrp" type="number" min="1" max="7" step="0.5" value="${escapeHtml(String(member.coachNtrp || ""))}" /></label>
-    <label class="form-field span-2"><span>테니스 목표</span><textarea name="memberTennisGoal" rows="2" maxlength="1000" placeholder="선택 입력">${escapeHtml(member.tennisGoal || "")}</textarea></label>
-    <label class="form-field span-2"><span>플레이 스타일·관리 메모</span><textarea name="memberPlayStyleMemo" rows="2" maxlength="2000" placeholder="선택 입력">${escapeHtml(member.playStyleMemo || "")}</textarea></label>`;
+    <label class="form-field">${memberManagementFieldLabel("테니스 시작일")}<input name="memberTennisStartedOn" type="date" value="${escapeHtml(member.tennisStartedOn || "")}" /></label>
+    <label class="form-field">${memberManagementFieldLabel("자가 NTRP")}<input name="memberSelfNtrp" type="number" min="1" max="7" step="0.5" value="${escapeHtml(String(member.selfNtrp || ""))}" /></label>
+    <label class="form-field">${memberManagementFieldLabel("코치 측정 NTRP")}<input name="memberCoachNtrp" type="number" min="1" max="7" step="0.5" value="${escapeHtml(String(member.coachNtrp || ""))}" /></label>
+    <label class="form-field span-2">${memberManagementFieldLabel("테니스 목표")}<textarea name="memberTennisGoal" rows="2" maxlength="1000" placeholder="선택 입력">${escapeHtml(member.tennisGoal || "")}</textarea></label>
+    <label class="form-field span-2">${memberManagementFieldLabel("플레이 스타일·관리 메모")}<textarea name="memberPlayStyleMemo" rows="2" maxlength="2000" placeholder="선택 입력">${escapeHtml(member.playStyleMemo || "")}</textarea></label>`;
 }
 
 function automaticMemberManagementReason(action) {
@@ -7082,7 +7142,7 @@ function renderMemberManagementModal() {
     actionFields = products.length && coachRoles.length ? `
       <div class="member-management-form-grid">
         ${memberManualProfileFields()}
-        <label class="form-field span-2"><span>회원권</span><select name="productId" required>
+        <label class="form-field span-2">${memberManagementFieldLabel("회원권", true)}<select name="productId" required>
           ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")} · ${memberManagementScheduleScopeLabel(memberManagementProductScheduleScope(item))}</option>`).join("")}
         </select></label>
       </div>
@@ -7091,7 +7151,7 @@ function renderMemberManagementModal() {
   } else if (action === "assign") {
     actionFields = products.length && coachRoles.length ? `
       <div class="member-management-form-grid">
-        <label class="form-field span-2"><span>판매중 회원권</span><select name="productId" required>
+        <label class="form-field span-2">${memberManagementFieldLabel("판매중 회원권", true)}<select name="productId" required>
           ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")} · ${memberManagementScheduleScopeLabel(memberManagementProductScheduleScope(item))}</option>`).join("")}
         </select></label>
       </div>
@@ -7189,9 +7249,14 @@ function openMemberManagementModal(member, action, ticketId = "") {
   setTimeout(() => $("#memberManagementForm input, #memberManagementForm select")?.focus(), 0);
 }
 
-function openManualMemberModal() {
+async function openManualMemberModal() {
   if (operationsRole() !== "admin" || !operationsAccessReady()) {
     showToast("관리자 계정으로 로그인해야 회원을 추가할 수 있습니다.");
+    return;
+  }
+  const refreshed = await syncAdminLiveData();
+  if (!refreshed) {
+    showToast("최신 회원권과 코치 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
     return;
   }
   Object.assign(memberManagementModalState, {
@@ -7258,10 +7323,23 @@ function syncManualMemberPartnerField(form) {
     ? form.elements.lessonType.value === "one_on_two"
     : Number(product?.group_size || 1) === 2;
   const field = form.querySelector("[data-manual-member-partner-field]");
-  form.elements.partnerUserId.disabled = !groupProduct;
-  form.elements.partnerUserId.required = groupProduct;
-  if (form.elements.partnerSearch) form.elements.partnerSearch.disabled = !groupProduct;
-  if (!groupProduct) form.elements.partnerUserId.value = "";
+  const partnerMode = form.elements.partnerMode?.value || "existing";
+  const createNewPartner = groupProduct && partnerMode === "new" && Boolean(form.elements.partnerName);
+  const newFields = form.querySelector("[data-manual-new-partner]");
+  const existingFields = form.querySelector("[data-manual-existing-partner]");
+  if (newFields) newFields.hidden = !createNewPartner;
+  if (existingFields) existingFields.hidden = !groupProduct || createNewPartner;
+  form.elements.partnerUserId.disabled = !groupProduct || createNewPartner;
+  form.elements.partnerUserId.required = groupProduct && !createNewPartner;
+  if (form.elements.partnerSearch) form.elements.partnerSearch.disabled = !groupProduct || createNewPartner;
+  if (form.elements.partnerName) {
+    form.elements.partnerName.disabled = !createNewPartner;
+    form.elements.partnerName.required = createNewPartner;
+  }
+  ["partnerPhone", "partnerBirthYear", "partnerGender"].forEach((name) => {
+    if (form.elements[name]) form.elements[name].disabled = !createNewPartner;
+  });
+  if (!groupProduct || createNewPartner) form.elements.partnerUserId.value = "";
   field?.classList.toggle("is-disabled", !groupProduct);
   filterManualMemberPartnerOptions(form);
 }
@@ -7310,9 +7388,10 @@ function syncMemberManagementProductForMethod(form) {
   if (!form?.elements?.productId || !form.elements.scheduleScope || !form.elements.weeklyFrequency || !form.elements.lessonType) return;
   const groupSize = form.elements.lessonType.value === "one_on_two" ? 2 : 1;
   const currentProduct = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId.value);
+  if (currentProduct?.product_kind === "coupon" || currentProduct?.is_coupon === true) return;
   const matchingProduct = memberManagementProducts().find((item) => (
     (!currentProduct?.branch_id || item.branch_id === currentProduct.branch_id)
-    && item.schedule_scope === form.elements.scheduleScope.value
+    && memberManagementProductScheduleScope(item) === form.elements.scheduleScope.value
     && Number(item.frequency_per_week || 1) === Number(form.elements.weeklyFrequency.value)
     && Number(item.group_size || 1) === groupSize
   ));
@@ -7348,6 +7427,11 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_inactive_restore_first")) return "삭제회원은 먼저 회원 복원을 해 주세요.";
   if (raw.includes("group_ticket_requires_two_participants")) return "2대1 회원권의 파트너 연결을 먼저 확인해 주세요.";
   if (raw.includes("group_partner_required")) return "2대1 회원권은 파트너를 선택해야 합니다.";
+  if (raw.includes("group_partner_name_required")) return "같이 등록할 파트너 실명을 두 글자 이상 입력해 주세요.";
+  if (raw.includes("group_partner_phone_invalid")) return "파트너 휴대전화 번호를 확인해 주세요.";
+  if (raw.includes("group_partner_phone_already_exists")) return "같은 휴대전화 번호의 회원이 이미 있습니다. 기존 회원 연결을 사용해 주세요.";
+  if (raw.includes("group_partner_birth_year_invalid")) return "파트너 출생연도를 확인해 주세요.";
+  if (raw.includes("group_partner_gender_invalid")) return "파트너 성별 값을 다시 선택해 주세요.";
   if (raw.includes("member_phone_already_exists")) return "같은 휴대전화 번호의 회원이 이미 있습니다. 기존 회원을 검색해 주세요.";
   if (raw.includes("member_name_required")) return "회원 이름을 두 글자 이상 입력해 주세요.";
   if (raw.includes("invalid_schedule_scope")) return "평일, 주말 또는 혼합을 선택해 주세요.";
@@ -7407,7 +7491,18 @@ function memberManagementWriteVerification(action, payload, result, statusAction
   const serverTicket = (adminLiveDataState.tickets || []).find((ticket) => ticket.serverTicketId === ticketId);
 
   if (action === "create") {
-    return serverUser && serverTicket && serverTicket.productId === payload?.productId ? "" : "member_management_write_not_confirmed:create";
+    if (!serverUser || !serverTicket || serverTicket.productId !== payload?.productId) {
+      return "member_management_write_not_confirmed:create";
+    }
+    if (payload?.lessonType === "one_on_two") {
+      const partnerUserId = normalizedResult.partnerUserId || payload?.partnerUserId || "";
+      const partnerUser = (adminLiveDataState.users || []).find((user) => user.id === partnerUserId);
+      const participantIds = serverTicket.participantUserIds || [];
+      if (!partnerUser || !partnerUserId || !participantIds.includes(userId) || !participantIds.includes(partnerUserId)) {
+        return "member_management_write_not_confirmed:create_partner";
+      }
+    }
+    return "";
   }
   if (action === "assign") {
     return serverUser && serverTicket && serverTicket.productId === payload?.productId ? "" : "member_management_write_not_confirmed:assign";
@@ -7517,6 +7612,11 @@ function memberManagementDatabasePayload(form, member, ticket, reason) {
     partnerUserId: hasControl("partnerUserId")
       ? form.elements.partnerUserId.disabled ? null : form.elements.partnerUserId.value || null
       : memberTicketPartnerUserId(ticket, member) || null,
+    partnerMode: hasControl("partnerMode") ? form.elements.partnerMode.value : null,
+    partnerName: hasControl("partnerName") ? form.elements.partnerName.value.trim() : null,
+    partnerPhone: hasControl("partnerPhone") ? form.elements.partnerPhone.value.trim() : null,
+    partnerBirthYear: hasControl("partnerBirthYear") ? memberManagementNullableNumber(form.elements.partnerBirthYear) : null,
+    partnerGender: hasControl("partnerGender") ? form.elements.partnerGender.value || null : null,
     ticketStatus: ticketStatus || null,
     recordStatus,
     reason,
@@ -7570,9 +7670,16 @@ async function submitMemberManagementForm(event) {
       if (message) message.textContent = `주 ${requiredLessonDays}회 회원권은 레슨 요일을 ${requiredLessonDays}개 직접 선택해 주세요.`;
       return;
     }
-    if (form.elements.lessonType.value === "one_on_two" && !form.elements.partnerUserId?.value) {
-      if (message) message.textContent = "1:2 레슨 파트너를 선택해 주세요.";
-      return;
+    if (form.elements.lessonType.value === "one_on_two") {
+      const newPartner = isCreate && form.elements.partnerMode?.value === "new";
+      if (newPartner && String(form.elements.partnerName?.value || "").trim().length < 2) {
+        if (message) message.textContent = "같이 등록할 파트너 실명을 두 글자 이상 입력해 주세요.";
+        return;
+      }
+      if (!newPartner && !form.elements.partnerUserId?.value) {
+        if (message) message.textContent = "기존 회원 중 연결할 1:2 파트너를 선택해 주세요.";
+        return;
+      }
     }
     const paymentAmount = memberManagementNullableNumber(form.elements.paymentAmount) || 0;
     if (paymentAmount > 0 && (!form.elements.paymentDate?.value || !form.elements.paymentMethod?.value)) {
@@ -7590,7 +7697,8 @@ async function submitMemberManagementForm(event) {
   try {
     let result = null;
     if (isCreate) {
-      result = await client.rpc("tn_admin_create_member_database_record", {
+      const createsNewPartner = managementPayload.lessonType === "one_on_two" && managementPayload.partnerMode === "new";
+      result = await client.rpc(createsNewPartner ? "tn_admin_create_group_member_database_record" : "tn_admin_create_member_database_record", {
         target_record: managementPayload,
       });
       state.memberFilter = "active";
@@ -8546,7 +8654,54 @@ function renderMembers() {
 }
 
 function scheduleLessonMatches(lesson) {
-  return matchesSearch([lesson.member, getCoachName(lesson.coachId), getCourtLabel(lesson.courtId), lesson.day, lesson.type]);
+  return matchesSearch([lesson.member, getCoachName(lesson.coachId), getCourtLabel(lesson.courtId), lesson.day, lesson.type])
+    && scheduleLessonMatchesMemberSearch(lesson);
+}
+
+function normalizedScheduleMemberSearch(value = "") {
+  return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function scheduleLessonMatchesMemberSearch(lesson) {
+  const keyword = normalizedScheduleMemberSearch(state.scheduleMemberSearch);
+  if (!keyword) return true;
+  return normalizedScheduleMemberSearch(getLessonMembersLabel(lesson)).includes(keyword);
+}
+
+function scheduleMemberSearchMatches() {
+  const keyword = normalizedScheduleMemberSearch(state.scheduleMemberSearch);
+  if (!keyword) return [];
+  return lessons
+    .filter((lesson) => lesson.status !== "cancelled" && scheduleLessonMatchesMemberSearch(lesson))
+    .sort((left, right) => `${left.lessonDate || "9999-12-31"} ${left.time || ""}`.localeCompare(`${right.lessonDate || "9999-12-31"} ${right.time || ""}`));
+}
+
+function renderScheduleMemberSearch() {
+  const input = $("#adminScheduleMemberSearch");
+  const clearButton = $("#clearAdminScheduleMemberSearch");
+  const result = $("#adminScheduleMemberSearchResult");
+  if (!input || !result) return;
+  if (input.value !== state.scheduleMemberSearch) input.value = state.scheduleMemberSearch || "";
+  const keyword = normalizedScheduleMemberSearch(state.scheduleMemberSearch);
+  if (clearButton) clearButton.hidden = !keyword;
+  if (!keyword) {
+    result.innerHTML = "";
+    return;
+  }
+  const matches = scheduleMemberSearchMatches();
+  const currentWeekMatches = matches.filter((lesson) => lessonMatchesActiveScheduleWeek(lesson, lesson.day));
+  const resultLessons = (currentWeekMatches.length ? currentWeekMatches : matches).slice(0, 6);
+  result.innerHTML = matches.length
+    ? `<span>${currentWeekMatches.length ? `현재 주 ${currentWeekMatches.length}건` : `다른 주 ${matches.length}건`}</span>${resultLessons.map((lesson) => `<button type="button" data-jump-schedule-date="${escapeHtml(lesson.lessonDate || "")}" data-jump-schedule-day="${escapeHtml(lesson.day || "")}">${escapeHtml(lesson.lessonDate || lesson.day)} · ${escapeHtml(lesson.time)} · ${escapeHtml(getCoachName(lesson.coachId))}</button>`).join("")}`
+    : "<span>일치하는 수업이 없습니다.</span>";
+}
+
+function jumpToScheduleSearchResult(date, day) {
+  if (date) state.activeAdminWeekIndex = Math.min(Math.max(adminWeekOffsetForDate(date), adminScheduleMinWeekOffset), adminScheduleMaxWeekOffset);
+  if (day) state.selectedScheduleDay = day;
+  state.scheduleView = "week";
+  renderSchedule();
+  saveSnapshot();
 }
 
 function lessonMatchesActiveScheduleWeek(lesson, day = lesson?.day) {
@@ -8686,7 +8841,7 @@ function renderCoachLaneLessonCard(lesson, label = "") {
 }
 
 function renderCoachLaneAddCard(day, time, coach, label = "수업 추가", detail = "") {
-  const blockedBreak = getCoachBreakOverlapping(coach.id, day, time, 20) || getBreakRuleOverlapping(day, time, 20);
+  const blockedBreak = getCoachBreakOverlapping(coach.id, day, time, 20) || getBreakRuleOverlapping(day, time, 20, coach.id);
   if (blockedBreak) {
     return `
       <div class="coach-lane-card unavailable" data-coach-lane="${coach.id}">
@@ -8800,7 +8955,7 @@ function renderUniformCoachScheduleCell(day, time) {
       const occupyingLesson = findOccupyingLessonForCoach(day, time, coach.id);
       if (startingLesson) return renderUniformScheduleLine("start", startingLesson);
       if (occupyingLesson) return `<div class="schedule-stack-placeholder is-occupied" data-coach-lane="${coach.id}" aria-hidden="true"></div>`;
-      const blockedBreak = getCoachBreakOverlapping(coach.id, day, time, 20) || getBreakRuleOverlapping(day, time, 20);
+      const blockedBreak = getCoachBreakOverlapping(coach.id, day, time, 20) || getBreakRuleOverlapping(day, time, 20, coach.id);
       if (blockedBreak) {
         return `<div class="schedule-coach-slot is-closed is-break" data-coach-lane="${coach.id}" aria-label="${escapeHtml(coach.name)} ${escapeHtml(blockedBreak.label || "브레이크")}"></div>`;
       }
@@ -8843,7 +8998,7 @@ function renderUniformScheduleLine(kind, lesson, timeLabel = "") {
 function renderFixedCoachScheduleCell(day, time) {
   return renderUniformCoachScheduleCell(day, time);
 
-  const breakRule = getBreakRuleForSlot(day, time);
+  const breakRule = getCoachBreakOverlapping(coach.id, day, time, scheduleBlockMinutes) || getBreakRuleForSlot(day, time, coach.id);
   if (breakRule) {
     return `
       <div class="sheet-cell schedule-break-cell" title="${day} ${time}">
@@ -9088,7 +9243,8 @@ function coachScheduleVisibleTimes(day, visibleCoaches) {
 }
 
 function renderCoachDayBaseCell(day, time, coach, row, column) {
-  const breakRule = getBreakRuleForSlot(day, time);
+  const breakRule = getCoachBreakOverlapping(coach.id, day, time, scheduleBlockMinutes)
+    || getBreakRuleForSlot(day, time, coach.id);
   const occupyingLesson = lessons.find((lesson) => lesson.coachId === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
   const working = isCoachAvailableForSlot(coach.id, day, time, scheduleBlockMinutes);
   const className = breakRule ? "is-break" : working ? "is-open" : "is-closed";
@@ -9203,7 +9359,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
       return `<div class="admin-duration-slot is-closed" style="grid-row:${row};grid-column:${column};"></div>`;
     }
     const occupyingLesson = lessons.find((lesson) => lesson.coachId === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
-    const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10) || getBreakRuleOverlapping(day, time, 10);
+    const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10) || getBreakRuleOverlapping(day, time, 10, coach.id);
     const working = !breakRule && isCoachAvailableForSlot(coach.id, day, time, 10);
     const stateClass = occupyingLesson ? "is-occupied" : breakRule ? "is-break" : working ? "is-open" : "is-closed";
     const addButton = !occupyingLesson && working && canAddLessonAt(day, time, 20, coach.id)
@@ -9236,6 +9392,7 @@ function renderSchedule() {
   const activeWeek = activeAdminWeek();
   if ($("#adminWeekTitle")) $("#adminWeekTitle").textContent = `${activeWeek.label} 레슨관리표`;
   if ($("#adminWeekNote")) $("#adminWeekNote").textContent = `${activeWeek.range} · ${state.liveScheduleLoaded ? state.liveScheduleMessage : activeWeek.note}`;
+  renderScheduleMemberSearch();
   if ($("#adminWeekSwitcher")) {
     $("#adminWeekSwitcher").innerHTML = `
       <button class="ghost-button" type="button" data-change-admin-week="-1" ${state.activeAdminWeekIndex <= adminScheduleMinWeekOffset ? "disabled" : ""}>이전 주</button>
@@ -14884,13 +15041,20 @@ function renderScheduleSettings() {
   renderPolicyVersionSettings();
   renderLessonPolicySettings();
   renderPolicyGuide();
+  const activeBreakCoaches = memberManagementCoachRoles();
+  const breakCoachOptions = $("#breakCoachOptions");
+  if (breakCoachOptions) {
+    breakCoachOptions.innerHTML = activeBreakCoaches.length
+      ? activeBreakCoaches.map((role) => `<label><input type="checkbox" value="${escapeHtml(role.id)}" data-break-coach checked /><span>${escapeHtml(String(role.display_name || "코치").replace(/\s*코치$/, ""))}</span></label>`).join("")
+      : '<span class="empty-text">재직 중인 승인 코치가 없습니다.</span>';
+  }
   $("#breakRuleList").innerHTML = scheduleSettings.breakRules.length
     ? scheduleSettings.breakRules
       .map(
         (rule) => `
         <div class="break-rule-row">
           <strong>${rule.label || "브레이크"}</strong>
-          <span>${rule.days.join(", ")} · ${rule.start}~${rule.end}</span>
+          <span>${rule.days.join(", ")} · ${rule.start}~${rule.end} · ${escapeHtml(breakRuleCoachNames(rule))}</span>
           <button class="small-button" type="button" data-remove-break-rule="${rule.id}">삭제</button>
         </div>`,
       )
@@ -16534,6 +16698,19 @@ function bindEvents() {
   $("#adminWeekSwitcher")?.addEventListener("change", (event) => {
     if (event.target.matches("[data-admin-month]")) selectAdminMonth(event.target.value);
   });
+  $("#adminScheduleMemberSearch")?.addEventListener("input", (event) => {
+    state.scheduleMemberSearch = event.target.value;
+    renderSchedule();
+  });
+  $("#clearAdminScheduleMemberSearch")?.addEventListener("click", () => {
+    state.scheduleMemberSearch = "";
+    renderSchedule();
+    $("#adminScheduleMemberSearch")?.focus();
+  });
+  $("#adminScheduleMemberSearchResult")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-jump-schedule-date]");
+    if (button) jumpToScheduleSearchResult(button.dataset.jumpScheduleDate, button.dataset.jumpScheduleDay);
+  });
   $("#adminScheduleDayPicker")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-select-admin-day]");
     if (!button) return;
@@ -16667,19 +16844,23 @@ function bindEvents() {
   $("#writeCommunityButton")?.addEventListener("click", writeCommunityPost);
   $("#applyBreakRuleButton").addEventListener("click", () => {
     const selectedDays = $$("[data-break-day]:checked").map((input) => input.value);
+    const availableCoachRoleIds = memberManagementCoachRoles().map((role) => role.id);
+    const selectedCoachRoleIds = $$("[data-break-coach]:checked").map((input) => input.value);
     const start = $("#breakStartInput").value;
     const end = $("#breakEndInput").value;
     const label = $("#breakLabelInput")?.value.trim() || "브레이크";
-    if (!selectedDays.length || !start || !end || timeToMinutes(start) >= timeToMinutes(end)) {
-      showToast("요일과 시간을 확인해주세요");
+    if (!selectedDays.length || !selectedCoachRoleIds.length || !start || !end || timeToMinutes(start) >= timeToMinutes(end)) {
+      showToast("적용 코치, 요일, 시간을 확인해주세요");
       return;
     }
+    const coachRoleIds = selectedCoachRoleIds.length === availableCoachRoleIds.length ? [] : selectedCoachRoleIds;
     scheduleSettings.breakRules = scheduleSettings.breakRules.filter((rule) => {
       const sameTime = rule.start === start && rule.end === end;
       const overlapDay = rule.days.some((day) => selectedDays.includes(day));
-      return !(sameTime && overlapDay);
+      const sameCoaches = JSON.stringify(breakRuleCoachRoleIds(rule).sort()) === JSON.stringify([...coachRoleIds].sort());
+      return !(sameTime && overlapDay && sameCoaches);
     });
-    scheduleSettings.breakRules.push({ id: `break-${Date.now()}`, days: selectedDays, start, end, label });
+    scheduleSettings.breakRules.push({ id: `break-${Date.now()}`, days: selectedDays, start, end, label, coachRoleIds });
     renderAll();
     showToast("브레이크타임 등록 완료");
   });
@@ -16939,6 +17120,10 @@ function bindEvents() {
       syncMemberManagementScopeFields(event.target.form);
       syncManualMemberPartnerField(event.target.form);
       syncMemberManagementProductForMethod(event.target.form);
+      return;
+    }
+    if (event.target.matches("#memberManagementForm input[name='partnerMode']")) {
+      syncManualMemberPartnerField(event.target.form);
     }
   });
 
