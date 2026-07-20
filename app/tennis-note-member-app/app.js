@@ -1496,7 +1496,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.44";
+    const refreshKey = "tennis-note-sw-refresh-1.0.45";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1504,7 +1504,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.44", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.45", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -2926,7 +2926,6 @@ function renderDynamicMemberSchedule() {
     <div class="schedule-period-summary">
       <div class="schedule-month-controls">
         <button class="ghost-button" type="button" data-change-member-month="-1">이전 달</button>
-        <input class="schedule-month-input" type="month" value="${memberScheduleMonthValue(activeWeek)}" data-member-month aria-label="이동할 달">
         <button class="ghost-button" type="button" data-change-member-month="1">다음 달</button>
       </div>
       <strong>${activeWeek.label}</strong>
@@ -6396,7 +6395,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.44" });
+  const params = new URLSearchParams({ v: "1.0.45" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
