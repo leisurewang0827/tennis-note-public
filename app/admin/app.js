@@ -11055,6 +11055,10 @@ function openLessonModal(defaults = {}) {
     const singleScope = editScopePanel.querySelector('input[name="lessonEditScope"][value="single"]');
     if (singleScope) singleScope.checked = true;
   }
+  const substituteButton = $("#openLessonSubstituteButton");
+  if (substituteButton) {
+    substituteButton.hidden = !(editingLesson?.serverLessonId && operationsRole() === "admin");
+  }
   syncAdminForceDeleteLessonButton();
   const absencePanel = $("#lessonAbsencePanel");
   if (absencePanel) {
@@ -18068,6 +18072,13 @@ function bindEvents() {
 
   document.addEventListener("click", async (event) => {
     if (event.target.matches("[data-select-product-row]")) event.stopPropagation();
+    if (event.target.closest("#openLessonSubstituteButton")) {
+      const lesson = lessons.find((item) => item.id === state.editingLessonId);
+      if (!lesson?.serverLessonId) return;
+      closeLessonModal();
+      openSubstituteModal(lesson);
+      return;
+    }
     if (event.target.closest("#openSubstituteModal")) {
       openSubstituteModal();
       return;
