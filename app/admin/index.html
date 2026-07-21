@@ -21,9 +21,14 @@
         </div>
         <p id="operationsLoginMessage" class="operations-login-message">관리자 또는 코치 계정으로 로그인해 주세요.</p>
         <label class="operations-remember-row">
-          <input id="operationsRememberLogin" type="checkbox" />
+          <input id="operationsRememberLogin" type="checkbox" checked />
           <span><strong>로그인 상태 유지</strong><small>개인 PC에서만 사용해 주세요.</small></span>
         </label>
+        <form id="operationsPasswordLoginForm" class="operations-password-login-form">
+          <label><span>관리자 이메일</span><input id="operationsLoginEmail" type="email" autocomplete="username" required /></label>
+          <label><span>비밀번호</span><input id="operationsLoginPassword" type="password" autocomplete="current-password" required /></label>
+          <button class="primary-button" type="submit">이메일로 로그인</button>
+        </form>
         <div class="operations-login-actions">
           <button class="provider-login-button kakao" type="button" data-admin-login-provider="카카오">카카오로 로그인</button>
           <button class="provider-login-button naver" type="button" data-admin-login-provider="네이버">네이버로 로그인</button>

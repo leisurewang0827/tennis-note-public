@@ -14572,6 +14572,38 @@ function startAdminImportLogin(provider) {
   client.signInWithOAuth(provider, { redirectTo: window.location.href });
 }
 
+async function signInAdminWithPassword(event) {
+  event?.preventDefault();
+  const client = window.TennisNoteDataClient;
+  const email = String($("#operationsLoginEmail")?.value || "").trim();
+  const password = String($("#operationsLoginPassword")?.value || "");
+  if (!client?.signInWithPassword || !client.readiness?.().ready) {
+    blockServerPreview("관리자 로그인 연결을 먼저 확인해 주세요.");
+    return;
+  }
+  if (!email || !password) {
+    blockServerPreview("관리자 이메일과 비밀번호를 입력해 주세요.");
+    return;
+  }
+  const remember = $("#operationsRememberLogin")?.checked !== false;
+  localStorage.setItem(operationsRememberStorageKey, remember ? "true" : "false");
+  client.setSessionPersistence?.(remember);
+  const button = $("#operationsPasswordLoginForm button[type=submit]");
+  if (button) button.disabled = true;
+  Object.assign(adminImportAuthState, { loading: true, message: "관리자 계정을 확인하고 있습니다." });
+  renderOperationsLoginGate();
+  try {
+    await client.signInWithPassword(email, password);
+    if ($("#operationsLoginPassword")) $("#operationsLoginPassword").value = "";
+    await refreshAdminImportAuthState();
+  } catch (error) {
+    Object.assign(adminImportAuthState, { loading: false, user: null, profile: null, message: "관리자 이메일 또는 비밀번호를 확인해 주세요." });
+    renderOperationsLoginGate();
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function signOutAdminImport() {
   const client = window.TennisNoteDataClient;
   if (client?.signOut) await client.signOut();
@@ -17613,6 +17645,7 @@ function bindEvents() {
     saveSnapshot();
   });
   $("#openLessonModal").addEventListener("click", openLessonModal);
+  $("#operationsPasswordLoginForm")?.addEventListener("submit", signInAdminWithPassword);
   $("#saveScheduleList").addEventListener("click", async () => {
     if (state.liveScheduleLoaded) {
       await saveLiveSchedulePolicy();
