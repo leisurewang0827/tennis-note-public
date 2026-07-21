@@ -281,6 +281,7 @@ const scheduleSettings = {
   lessonColors: { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" },
   lessonColorRules: [],
   coachWorkPolicyVersion: 2,
+  memberScheduleRequestOnly: true,
 };
 
 function makeTimeRange(startTime, endTime, stepMinutes = scheduleBlockMinutes) {
@@ -2160,6 +2161,7 @@ function restoreSnapshot() {
       replaceArray(scheduleSettings.breakFavorites, snapshot.scheduleSettings.breakFavorites || []);
       scheduleSettings.lessonColors = { ...scheduleSettings.lessonColors, ...(snapshot.scheduleSettings.lessonColors || {}) };
       scheduleSettings.lessonColorRules = Array.isArray(snapshot.scheduleSettings.lessonColorRules) ? snapshot.scheduleSettings.lessonColorRules : [];
+      scheduleSettings.memberScheduleRequestOnly = snapshot.scheduleSettings.memberScheduleRequestOnly !== false;
     }
     Object.assign(adminLockSettings, normalizeAdminLockSettings(snapshot.adminLockSettings));
     const storedPolicyVersion = Number(snapshot.scheduleSettings?.coachWorkPolicyVersion) || 0;
@@ -2225,6 +2227,7 @@ function liveSchedulePolicyPayload() {
       lessonColors: scheduleSettings.lessonColors,
       lessonColorRules: scheduleSettings.lessonColorRules,
       coachWorkPolicyVersion: scheduleSettings.coachWorkPolicyVersion || 2,
+      memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
     },
     coaches: coaches.map((coach) => ({
       id: coach.id,
@@ -2554,10 +2557,13 @@ function normalizeMembershipProduct(product = {}, fallback = {}) {
   const title = String(merged.title || merged.name || "회원권").replaceAll("횟수권", "쿠폰제");
   const amount = numericValue(merged.amount, numericValue(fallback.amount));
   const listAmount = numericValue(merged.listAmount, numericValue(fallback.listAmount));
-  const settlementBase = numericValue(merged.settlementBase, amount);
+  const settlementBase = numericValue(
+    merged.settlementBase,
+    numericValue(merged.cashAmount, amount),
+  );
   const tickets = numericValue(merged.tickets, numericValue(fallback.tickets));
-  const cardAmount = numericValue(merged.cardAmount, numericValue(fallback.cardAmount, listAmount || amount));
   const cashAmount = numericValue(merged.cashAmount, numericValue(fallback.cashAmount, settlementBase || amount));
+  const cardAmount = numericValue(merged.cardAmount, numericValue(fallback.cardAmount, cashAmount));
   const validityDays = numericValue(merged.validityDays, numericValue(fallback.validityDays, merged.mode === "fixed" ? 30 : 60));
   const graceDays = numericValue(merged.graceDays, numericValue(fallback.graceDays, merged.mode === "fixed" ? 14 : 7));
   const rawProductKind = merged.productKind || (merged.mode === "coupon" || merged.mode === "pass" ? "coupon" : "regular");
@@ -2943,7 +2949,7 @@ function couponProductSaleIssue(product = {}) {
   const sessions = Number(product.tickets);
   if (!Number.isInteger(sessions) || sessions <= 0) return "쿠폰 충전 횟수를 1회 이상 입력해 주세요.";
   if (Number(product.validityDays) <= 0) return "쿠폰 사용기간을 1일 이상 입력해 주세요.";
-  if (Number(product.cardAmount) <= 0 || Number(product.cashAmount) <= 0) return "카드·계좌이체 가격을 모두 입력해야 판매할 수 있습니다.";
+  if (Number(product.cashAmount) <= 0) return "현금가격을 입력해 주세요.";
   return "";
 }
 
@@ -2957,7 +2963,7 @@ async function updateMembershipProductSetting(productId) {
     title: readField("title") || product.title,
     name: readField("title") || product.name,
     sessions: readField("sessions") || product.sessions,
-    settlementBase: numericValue(readField("settlementBase"), product.settlementBase),
+    settlementBase: undefined,
     tickets: numericValue(readField("tickets"), product.tickets),
     cardAmount: numericValue(readField("cardAmount"), product.cardAmount),
     cashAmount: numericValue(readField("cashAmount"), product.cashAmount),
@@ -2972,6 +2978,24 @@ async function updateMembershipProductSetting(productId) {
     coachDiscountAllowed: readField("coachDiscountAllowed") === "yes",
     status: readField("status") || product.status,
   }, membershipProductDefaults.find((item) => item.id === product.id));
+
+  const settlementBase = numericValue(nextProduct.settlementBase, nextProduct.cashAmount);
+
+  const requiredFields = [
+    { key: "title", label: "상품명", value: nextProduct.title },
+    { key: "sessions", label: "횟수 표기", value: String(nextProduct.sessions || "").trim() },
+    { key: "cashAmount", label: "현금가격", value: Number(nextProduct.cashAmount) },
+    { key: "cardAmount", label: "카드가격", value: Number(nextProduct.cardAmount) },
+    { key: "validityDays", label: "사용기간", value: Number(nextProduct.validityDays) },
+    { key: "tickets", label: "충전 횟수", value: Number(nextProduct.tickets) },
+    { key: "frequencyPerWeek", label: "주 횟수", value: Number(nextProduct.frequencyPerWeek) },
+  ];
+  const missingRequired = requiredFields.filter((field) => Number(field.value) <= 0 || String(field.value).trim() === "");
+  if (missingRequired.length > 0) {
+    const firstMissing = requiredFields.find((field) => Number(field.value) <= 0 || String(field.value).trim() === "");
+    if (firstMissing) showToast(`${firstMissing.label}를 확인해 주세요.`);
+    return;
+  }
   if (![20, 30, 40].includes(Number(nextProduct.lessonMinutes))) {
     showToast("수업 시간은 20분, 30분 또는 40분으로 설정해 주세요.");
     return;
@@ -2999,9 +3023,9 @@ async function updateMembershipProductSetting(productId) {
       name: nextProduct.title,
       total_sessions: Math.max(1, Number(nextProduct.tickets) || 1),
       base_price: Math.max(0, Number(nextProduct.cashAmount) || 0),
-      card_price: Math.max(0, Number(nextProduct.cardAmount) || 0),
+      card_price: Math.max(0, Number(nextProduct.cardAmount) || Number(nextProduct.cashAmount) || 0),
       cash_price: Math.max(0, Number(nextProduct.cashAmount) || 0),
-      settlement_base_price: Math.max(0, Number(nextProduct.settlementBase) || 0),
+      settlement_base_price: Math.max(0, settlementBase || 0),
       validity_days: Math.max(1, Number(nextProduct.validityDays) || 1),
       grace_days: Math.max(0, Number(nextProduct.graceDays) || 0),
       lesson_minutes: Math.max(10, Number(nextProduct.lessonMinutes) || 20),
@@ -3034,7 +3058,7 @@ async function updateMembershipProductSetting(productId) {
       || saved.product_kind !== serverKind
       || Number(saved.card_price) !== Number(nextProduct.cardAmount)
       || Number(saved.cash_price) !== Number(nextProduct.cashAmount)
-      || Number(saved.settlement_base_price) !== Number(nextProduct.settlementBase)) {
+      || Number(saved.settlement_base_price) !== Number(settlementBase)) {
       throw new Error("membership_product_write_not_confirmed");
     }
     saveSnapshot();
@@ -3298,6 +3322,7 @@ async function loadLiveSchedulePolicyFromServer() {
     scheduleSettings.lessonColors = { ...scheduleSettings.lessonColors, ...(serverSettings.lessonColors || {}) };
     scheduleSettings.lessonColorRules = Array.isArray(serverSettings.lessonColorRules) ? serverSettings.lessonColorRules : scheduleSettings.lessonColorRules;
     scheduleSettings.coachWorkPolicyVersion = Number(serverSettings.coachWorkPolicyVersion) || 2;
+    scheduleSettings.memberScheduleRequestOnly = serverSettings.memberScheduleRequestOnly !== false;
     (Array.isArray(value.coaches) ? value.coaches : []).forEach((serverCoach) => {
       const coach = coaches.find((item) => (
         (serverCoach.serverRoleId && item.serverRoleId === serverCoach.serverRoleId)
@@ -6999,6 +7024,12 @@ function memberManagementFieldLabel(label, required = false, conditional = "") {
   return `<span class="member-field-label">${escapeHtml(label)}<em class="${tone}">${escapeHtml(badge)}</em></span>`;
 }
 
+function productSettingFieldLabel(label, required = false, conditional = "") {
+  const badge = required ? "필수" : conditional || "선택";
+  const tone = required ? "is-required" : conditional ? "is-conditional" : "is-optional";
+  return `<span class="member-field-label">${escapeHtml(label)}<em class="${tone}">${escapeHtml(badge)}</em></span>`;
+}
+
 function memberManagementDatabaseFields({
   member,
   ticket,
@@ -9764,7 +9795,7 @@ function renderSchedule() {
   renderScheduleMemberSearch();
   if ($("#adminWeekSwitcher")) {
     $("#adminWeekSwitcher").innerHTML = `
-      <button class="ghost-button" type="button" data-change-admin-week="-1" ${state.activeAdminWeekIndex <= adminScheduleMinWeekOffset ? "disabled" : ""}>이전 주</button>
+      <button class="ghost-button" type="button" data-change-admin-week="-1" ${state.activeAdminWeekIndex <= adminScheduleMinWeekOffset ? "disabled" : ""} aria-label="이전 주" title="이전 주">‹</button>
       <div class="schedule-period-summary">
         <div class="schedule-month-controls">
           <button class="ghost-button" type="button" data-go-admin-today>오늘</button>
@@ -9775,7 +9806,7 @@ function renderSchedule() {
         <strong>${activeWeek.label}</strong>
         <span>${activeWeek.range} · ${state.liveScheduleLoaded ? "실시간 모든 코치 시간표" : "모든 코치 시간표"}</span>
       </div>
-      <button class="ghost-button" type="button" data-change-admin-week="1" ${state.activeAdminWeekIndex >= adminScheduleMaxWeekOffset ? "disabled" : ""}>다음 주</button>
+      <button class="ghost-button" type="button" data-change-admin-week="1" ${state.activeAdminWeekIndex >= adminScheduleMaxWeekOffset ? "disabled" : ""} aria-label="다음 주" title="다음 주">›</button>
     `;
   }
   state.scheduleView = state.scheduleView === "coach" ? "coach" : "week";
@@ -14952,8 +14983,8 @@ function exportRowsByDataset(includePrivate = false) {
     products: {
       label: "상품가격",
       rows: [
-        ["상품명", "구분", "수업형식", "횟수", "카드가격", "현금가격", "정산기준", "사용기간", "유예기간", "할인가능"],
-        ...membershipProductDrafts.map((product) => [product.title, product.group, product.format, product.tickets, product.cardAmount, product.cashAmount, product.settlementBase, product.validityDays, product.graceDays, product.discountEnabled ? "가능" : "불가"]),
+        ["상품명", "구분", "수업형식", "횟수", "현금가격", "카드가격", "사용기간", "유예기간", "할인가능"],
+        ...membershipProductDrafts.map((product) => [product.title, product.group, product.format, product.tickets, product.cashAmount, product.cardAmount, product.validityDays, product.graceDays, product.discountEnabled ? "가능" : "불가"]),
       ],
     },
     coaches: {
@@ -15710,6 +15741,8 @@ function renderScheduleSettings() {
   if (!openStartInput || !openEndInput) return;
   openStartInput.value = scheduleSettings.openStart;
   openEndInput.value = scheduleSettings.openEnd;
+  const requestOnlyInput = $("#memberScheduleRequestOnly");
+  if (requestOnlyInput) requestOnlyInput.checked = scheduleSettings.memberScheduleRequestOnly !== false;
   ["regular", "regular30", "makeup", "coupon", "noShow"].forEach((kind) => {
     const input = $(`[data-lesson-color="${kind}"]`);
     if (input) input.value = scheduleSettings.lessonColors[kind];
@@ -16673,45 +16706,41 @@ function renderServiceReadiness() {
               <small>${escapeHtml(normalized.group)} · ${normalized.tickets}회 · ${normalized.validityDays}일</small>
             </div>
             <div class="product-setting-summary-meta">
-              <b>${money.format(normalized.cardAmount)}원</b>
+              <b>현금 ${money.format(normalized.cashAmount)}원 / 카드 ${money.format(normalized.cardAmount)}원</b>
               <span>${membershipProductStatusOptions.find((option) => option.id === normalized.status)?.label || "판매중"}</span>
             </div>
           </summary>
           <div class="product-setting-fields">
             <label>
-              <small>상품명</small>
+              <small>${productSettingFieldLabel("상품명", true)}</small>
               <input type="text" data-product-field="title" value="${escapeHtml(normalized.title)}" />
             </label>
             <label>
-              <small>횟수 표기</small>
+              <small>${productSettingFieldLabel("횟수 표기", true)}</small>
               <input type="text" data-product-field="sessions" value="${escapeHtml(normalized.sessions)}" />
             </label>
             <label>
-              <small>카드가격</small>
-              <input type="number" min="0" step="1000" data-product-field="cardAmount" value="${normalized.cardAmount}" />
-            </label>
-            <label>
-              <small>현금가격</small>
+              <small>${productSettingFieldLabel("현금가격", true)}</small>
               <input type="number" min="0" step="1000" data-product-field="cashAmount" value="${normalized.cashAmount}" />
             </label>
             <label>
-              <small>정산가격</small>
-              <input type="number" min="0" step="1000" data-product-field="settlementBase" value="${normalized.settlementBase}" />
+              <small>${productSettingFieldLabel("카드가격", true)}</small>
+              <input type="number" min="0" step="1000" data-product-field="cardAmount" value="${normalized.cardAmount}" />
             </label>
             <label>
-              <small>사용기간(일)</small>
+              <small>${productSettingFieldLabel("사용기간(일)", true)}</small>
               <input type="number" min="1" step="1" data-product-field="validityDays" value="${normalized.validityDays}" />
             </label>
             <label>
-              <small>유예기간(일)</small>
+              <small>${productSettingFieldLabel("유예기간(일)", false, "선택")}</small>
               <input type="number" min="0" step="1" data-product-field="graceDays" value="${normalized.graceDays}" />
             </label>
             <label>
-              <small>충전 횟수</small>
+              <small>${productSettingFieldLabel("충전 횟수", true)}</small>
               <input type="number" min="0" step="1" data-product-field="tickets" value="${normalized.tickets}" />
             </label>
             <label>
-              <small>레슨 방식</small>
+              <small>${productSettingFieldLabel("레슨 방식", true)}</small>
               <select data-product-field="scheduleScope">
                 <option value="weekday" ${normalized.scheduleScope === "weekday" ? "selected" : ""}>평일</option>
                 <option value="weekend" ${normalized.scheduleScope === "weekend" ? "selected" : ""}>주말</option>
@@ -16719,52 +16748,50 @@ function renderServiceReadiness() {
               </select>
             </label>
             <label>
-              <small>수업 시간</small>
+              <small>${productSettingFieldLabel("수업 시간", true)}</small>
               <select data-product-field="lessonMinutes">
                 ${[20, 30, 40].map((minute) => `<option value="${minute}" ${Number(normalized.lessonMinutes) === minute ? "selected" : ""}>${minute}분</option>`).join("")}
               </select>
             </label>
             <label>
-              <small>종류</small>
+              <small>${productSettingFieldLabel("종류", true)}</small>
               <select data-product-field="groupSize">
                 <option value="1" ${Number(normalized.groupSize) === 1 ? "selected" : ""}>개인 1:1</option>
                 <option value="2" ${Number(normalized.groupSize) === 2 ? "selected" : ""}>그룹 2:1</option>
               </select>
             </label>
             <label>
-              <small>주 횟수</small>
+              <small>${productSettingFieldLabel("주 횟수", true)}</small>
               <input type="number" min="0" max="7" step="1" data-product-field="frequencyPerWeek" value="${normalized.frequencyPerWeek}" />
             </label>
             <label>
-              <small>권종</small>
+              <small>${productSettingFieldLabel("권종", true)}</small>
               <select data-product-field="productKind">
                 <option value="regular" ${normalized.productKind === "regular" ? "selected" : ""}>정규권</option>
                 <option value="coupon" ${normalized.productKind === "coupon" ? "selected" : ""}>쿠폰제</option>
               </select>
             </label>
             <label>
-              <small>할인 가능</small>
+              <small>${productSettingFieldLabel("할인 가능", false, "선택")}</small>
               <select data-product-field="discountEnabled">
                 <option value="yes" ${normalized.discountEnabled ? "selected" : ""}>가능</option>
                 <option value="no" ${!normalized.discountEnabled ? "selected" : ""}>불가</option>
               </select>
             </label>
             <label>
-              <small>코치 할인권</small>
+              <small>${productSettingFieldLabel("코치 할인권", false, "선택")}</small>
               <select data-product-field="coachDiscountAllowed">
                 <option value="yes" ${normalized.coachDiscountAllowed ? "selected" : ""}>사용 가능</option>
                 <option value="no" ${!normalized.coachDiscountAllowed ? "selected" : ""}>관리자만</option>
               </select>
             </label>
             <label>
-              <small>판매 상태</small>
+              <small>${productSettingFieldLabel("판매 상태", true)}</small>
               <select data-product-field="status">
                 ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
               </select>
             </label>
           </div>
-          <p>${escapeHtml(normalized.rule)}</p>
-          <small>회원앱 표시: 카드 ${money.format(normalized.cardAmount)}원 · 현금 ${money.format(normalized.cashAmount)}원 · ${normalized.tickets}회 · ${normalized.validityDays}일 + 유예 ${normalized.graceDays}일</small>
           <div class="product-setting-actions">
             <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="위로 이동" title="위로 이동">↑</button>
             <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="아래로 이동" title="아래로 이동">↓</button>
@@ -17669,6 +17696,16 @@ function bindEvents() {
       showToast("운영시간 반영 완료");
     });
   });
+  const memberScheduleRequestOnlyInput = $("#memberScheduleRequestOnly");
+  if (memberScheduleRequestOnlyInput) {
+    memberScheduleRequestOnlyInput.addEventListener("change", async () => {
+      scheduleSettings.memberScheduleRequestOnly = memberScheduleRequestOnlyInput.checked;
+      renderScheduleSettings();
+      saveSnapshot();
+      await syncLiveSchedulePolicyToServer();
+      showToast("회원앱 시간표 표시 저장 완료");
+    });
+  }
   $$('[data-lesson-color]').forEach((input) => {
     input.addEventListener("change", async () => {
       scheduleSettings.lessonColors[input.dataset.lessonColor] = input.value;

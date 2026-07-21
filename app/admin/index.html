@@ -6,7 +6,7 @@
     <title>테니스노트 관리자</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.52" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.53" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -828,6 +828,10 @@
                   <input id="openEndInput" type="time" step="600" />
                 </label>
               </div>
+              <label class="toggle-row">
+                <input id="memberScheduleRequestOnly" type="checkbox" />
+                <span>회원앱은 보강·수업변경 신청 가능 시간만 표시</span>
+              </label>
               <div id="lessonColorSettings" class="lesson-color-settings" aria-label="수업 종류별 시간표 색상">
                 <label><span>정규 20분</span><input type="color" value="#2f6fc4" data-lesson-color="regular" /></label>
                 <label><span>정규 30분</span><input type="color" value="#6b5fc7" data-lesson-color="regular30" /></label>
@@ -1384,11 +1388,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.52"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.53"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.52"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.53"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.52"></script>
+    <script src="./app.js?v=1.0.53"></script>
   </body>
 </html>

@@ -1010,6 +1010,13 @@ button {
   box-shadow: inset 3px 0 0 #b7791f;
 }
 
+.member-duration-schedule.member-request-only .member-slot-bg:not(.available) {
+  color: transparent;
+  border-color: #edf2f7;
+  background: #fff;
+  box-shadow: none;
+}
+
 .member-slot-bg span,
 .member-slot-bg small {
   display: block;
@@ -3758,6 +3765,12 @@ body.identity-setup-required {
   .member-mobile-slot.off {
     border-color: #efc4bd;
     background: #fff2ef;
+  }
+
+  .member-mobile-schedule.member-request-only .member-mobile-slot:not(.available) {
+    color: transparent;
+    border-color: #edf2f7;
+    background: #fff;
   }
 
   .member-mobile-lesson {

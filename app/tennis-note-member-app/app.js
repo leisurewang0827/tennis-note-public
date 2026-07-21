@@ -1496,7 +1496,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.52";
+    const refreshKey = "tennis-note-sw-refresh-1.0.53";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1504,7 +1504,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.52", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.53", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1835,6 +1835,7 @@ function defaultMemberCoachPolicy() {
     openEnd: "22:00",
     breakRules: [{ id: "weekday-midday", days: weekdays, start: "13:00", end: "17:00", label: "수업 없음" }],
     lessonColors: { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" },
+    memberScheduleRequestOnly: true,
     coaches: [
       {
         id: "coach-no",
@@ -1926,6 +1927,7 @@ function loadAdminSchedulePolicy() {
       breakRules: storedPolicyVersion < 2 ? fallback.breakRules : Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : fallback.breakRules,
       lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
       lessonColorRules: Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : [],
+      memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
       coaches: coaches
         .filter((coach) => (coach.status || "active") === "active")
         .map(normalizeMemberCoach),
@@ -1958,6 +1960,7 @@ function writeLiveSchedulePolicySnapshot(value = {}) {
       ...scheduleSettings,
       breakRules: Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : existing.scheduleSettings?.breakRules || [],
       coachWorkPolicyVersion: scheduleSettings.coachWorkPolicyVersion || 2,
+      memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
     },
     coaches: coaches.length ? coaches : existing.coaches || [],
   }));
@@ -2328,6 +2331,16 @@ function memberScheduleOptions() {
     || sourceLessons[0];
   const generated = generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson);
   return scheduleLessons.concat(generated);
+}
+
+function memberScheduleRequestOnly(policy = loadAdminSchedulePolicy()) {
+  return policy.memberScheduleRequestOnly !== false;
+}
+
+function memberScheduleVisibleLesson(lesson, policy = loadAdminSchedulePolicy()) {
+  if (lesson.status === "available") return true;
+  if (!memberScheduleRequestOnly(policy)) return true;
+  return isCurrentMemberName(lesson.member);
 }
 
 function memberAvailableSlotsForSelectedLesson() {
@@ -2939,7 +2952,7 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
                 const slotLabel = available?.type === "보강 신청가능" ? "보강" : available?.type === "쿠폰 예약 가능" ? "예약" : "+";
                 return `<button class="member-mobile-slot ${available ? "available" : working ? "busy" : "off"}" type="button" ${available ? `data-lesson="${available.id}"` : "disabled"} style="grid-row:${index + 1};" aria-label="${day}요일 ${time} ${escapeHtml(memberCoachShortName(coach.name))} ${available ? availableLabel : "신청 불가"}">${available ? slotLabel : ""}</button>`;
               }).join("")}
-              ${coachLessons.filter((lesson) => lesson.status !== "available" && minutesFromTime(lesson.time) >= segmentStart && minutesFromTime(lesson.time) < segmentEnd).map((lesson) => {
+              ${coachLessons.filter((lesson) => lesson.status !== "available" && memberScheduleVisibleLesson(lesson, policy) && minutesFromTime(lesson.time) >= segmentStart && minutesFromTime(lesson.time) < segmentEnd).map((lesson) => {
                 const startIndex = times.indexOf(lesson.time);
                 if (startIndex < 0) return "";
                 const span = Math.max(1, Math.ceil(lessonDuration(lesson) / 10));
@@ -2957,8 +2970,9 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
 function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
   const selectedDay = selectedMemberScheduleDay();
   const segments = memberMobileScheduleSegments(selectedDay, policy, baseLessons);
+  const requestOnly = memberScheduleRequestOnly(policy);
   return `
-    <div class="member-mobile-schedule">
+    <div class="member-mobile-schedule ${requestOnly ? "member-request-only" : ""}">
       <div class="member-mobile-day-strip" aria-label="날짜 선택">
         ${days.map((day) => `<button class="member-mobile-day ${day === selectedDay ? "is-active" : ""}" type="button" data-member-schedule-day="${day}"><strong>${day}</strong><span>${memberScheduleDateLabel(day)}</span></button>`).join("")}
       </div>
@@ -3009,6 +3023,7 @@ function renderDynamicMemberSchedule() {
   `;
 
   const policy = loadAdminSchedulePolicy();
+  const requestOnly = memberScheduleRequestOnly(policy);
   const scheduleTimeList = memberScheduleTimes(policy);
   const baseLessons = memberScheduleLessons();
   const scheduleLessons = memberScheduleOptions();
@@ -3038,7 +3053,7 @@ function renderDynamicMemberSchedule() {
     </div>
     ${renderMemberMobileSchedule(policy, baseLessons, scheduleLessons)}
     <div class="member-desktop-schedule">
-    <div class="member-duration-schedule" role="table" aria-label="회원 전체 시간표" style="--day-count:${days.length}; --slot-count:${scheduleTimeList.length}; grid-template-columns:64px ${dayColumnTracks};">
+    <div class="member-duration-schedule ${requestOnly ? "member-request-only" : ""}" role="table" aria-label="회원 전체 시간표" style="--day-count:${days.length}; --slot-count:${scheduleTimeList.length}; grid-template-columns:64px ${dayColumnTracks};">
       <div class="member-duration-head time-head">시간</div>
       ${days
         .map((day) => {
@@ -3061,7 +3076,7 @@ function renderDynamicMemberSchedule() {
           const dayCoaches = dayCoachMap.get(day) || [];
           const displayCoaches = dayCoaches.length ? dayCoaches : [{ id: `closed-${day}`, name: "운영없음", workBlocks: [] }];
           const dayLessons = scheduleLessons.filter((lesson) => lesson.day === day);
-          const visibleLessons = dayLessons.filter((lesson) => lesson.status !== "available");
+          const visibleLessons = dayLessons.filter((lesson) => lesson.status !== "available" && memberScheduleVisibleLesson(lesson, policy));
           const availableLessons = dayLessons.filter((lesson) => lesson.status === "available");
           return `
             <div class="member-day-column" style="--slot-count:${scheduleTimeList.length}; --coach-count:${displayCoaches.length};">
@@ -3072,7 +3087,7 @@ function renderDynamicMemberSchedule() {
                       const breakRule = memberBreakRuleForSlot(policy, day, time);
                       const isWorking = !breakRule && isMemberCoachWorking(coach, day, time, 10);
                       const stateClass = breakRule ? "blocked" : isWorking ? "base" : "off";
-                      const label = timeIndex % 3 === 0
+                      const label = requestOnly ? "" : timeIndex % 3 === 0
                         ? breakRule ? (breakRule.label || "브레이크") : isWorking ? "수업 신청불가" : "근무외"
                         : "";
                       const fullLabel = breakRule ? (breakRule.label || "브레이크") : isWorking ? "수업 신청불가" : "근무외";
@@ -6490,7 +6505,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.52" });
+  const params = new URLSearchParams({ v: "1.0.53" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8054,7 +8069,10 @@ async function initApp() {
   hideBrandSplash();
 
   // These improve data freshness but must not delay opening the member screen.
-  void syncLiveSchedulePolicy().then(() => renderActiveMemberView()).catch(() => {});
+  void (async () => {
+    await syncLiveSchedulePolicy();
+    renderActiveMemberView();
+  })().catch(() => {});
   void syncAppleLoginAvailability();
   let openedFromSupabase = false;
   try {
