@@ -5799,3 +5799,16 @@ body.modal-open {
 .payment-method-selector-title span {
   display: none;
 }
+.profile-version-footer {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 0 calc(94px + env(safe-area-inset-bottom));
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.profile-version-footer .release-version {
+  font-size: inherit;
+}
