@@ -1213,6 +1213,8 @@ function renderOperationsLoginGate() {
         : adminImportAuthState.message || "관리자 또는 코치 계정으로 로그인해 주세요.";
   }
   if (logout) logout.hidden = !adminImportAuthState.user;
+  const shellLogout = $("#adminShellLogoutButton");
+  if (shellLogout) shellLogout.hidden = !adminImportAuthState.user;
   const remember = $("#operationsRememberLogin");
   if (remember && !remember.dataset.ready) {
     remember.checked = localStorage.getItem(operationsRememberStorageKey) === "true";
