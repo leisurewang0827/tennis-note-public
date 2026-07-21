@@ -8950,6 +8950,15 @@ button .schedule-member-lines > span {
   white-space: nowrap;
 }
 
+/* Keep each weekday visually separated even when a day expands to multiple coach lanes. */
+.admin-duration-day-start {
+  border-left: 3px solid #8aa39d !important;
+}
+
+.admin-duration-date.admin-duration-day-start {
+  border-left-width: 3px !important;
+}
+
 .admin-duration-corner {
   top: 0;
   left: 0;

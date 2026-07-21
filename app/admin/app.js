@@ -9743,11 +9743,12 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
   target.style.gridTemplateRows = `30px 34px repeat(${Math.max(visibleTimes.length, 1)}, 44px)`;
 
   const dateHeaders = dayRanges.map(({ day, startColumn, span }) => `
-    <div class="admin-duration-date" style="grid-row:1;grid-column:${startColumn} / span ${span};">
+    <div class="admin-duration-date admin-duration-day-start" style="grid-row:1;grid-column:${startColumn} / span ${span};">
       ${day} · ${adminScheduleDateLabel(day)}
     </div>`).join("");
+  const dayStartLaneIndexes = new Set(dayRanges.map(({ startColumn }) => startColumn - 2));
   const coachHeaders = lanes.map(({ coach }, index) => `
-    <div class="admin-duration-coach ${coach.id?.startsWith("closed-") ? "is-closed" : getCoachToneClass(coach.id)}" style="grid-row:2;grid-column:${index + 2};">
+    <div class="admin-duration-coach ${dayStartLaneIndexes.has(index) ? "admin-duration-day-start" : ""} ${coach.id?.startsWith("closed-") ? "is-closed" : getCoachToneClass(coach.id)}" style="grid-row:2;grid-column:${index + 2};">
       ${escapeHtml(String(coach.name || "운영없음").replace(/\s*코치$/, ""))}
     </div>`).join("");
   const timeCells = visibleTimes.map((time, index) => `
@@ -9757,7 +9758,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     const row = timeIndex + 3;
     const column = laneIndex + 2;
     if (coach.id?.startsWith("closed-")) {
-      return `<div class="admin-duration-slot is-closed" style="grid-row:${row};grid-column:${column};"></div>`;
+      return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} is-closed" style="grid-row:${row};grid-column:${column};"></div>`;
     }
     const occupyingLesson = lessons.find((lesson) => lesson.coachId === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
     const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10) || getBreakRuleOverlapping(day, time, 10, coach.id);
@@ -9766,7 +9767,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     const addButton = !occupyingLesson && working && canAddLessonAt(day, time, 20, coach.id)
       ? `<button class="admin-duration-add" type="button" ${lessonAddAttrs(day, time, 20, coach.id)}>+ 수업 추가</button>`
       : "";
-    return `<div class="admin-duration-slot ${stateClass}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
+    return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${stateClass}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
   }).join("")).join("");
 
   const lessonCards = lanes.map(({ day, coach }, laneIndex) => lessons
@@ -9777,7 +9778,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
       const span = Math.max(1, Math.ceil((Number(lesson.durationMinutes) || 20) / 10));
       const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
       return `
-        <button class="admin-duration-lesson lesson-kind-${lessonVisualKind(lesson)} ${lesson.status} ${getLessonStateClass(lesson)} ${isDimmed ? "is-dimmed" : ""}" type="button" data-schedule-lesson-id="${escapeHtml(String(lesson.id || ""))}" ${lessonActionAttrs(lesson)} style="${lessonColorStyle(lesson)};grid-row:${startIndex + 3} / span ${span};grid-column:${laneIndex + 2};">
+        <button class="admin-duration-lesson ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} lesson-kind-${lessonVisualKind(lesson)} ${lesson.status} ${getLessonStateClass(lesson)} ${isDimmed ? "is-dimmed" : ""}" type="button" data-schedule-lesson-id="${escapeHtml(String(lesson.id || ""))}" ${lessonActionAttrs(lesson)} style="${lessonColorStyle(lesson)};grid-row:${startIndex + 3} / span ${span};grid-column:${laneIndex + 2};">
           <strong class="schedule-lesson-name">${getLessonMembersMarkup(lesson)}</strong>
           <span class="schedule-lesson-round">${escapeHtml(getLessonRoundLabel(lesson) || "회차 확인")}</span>
           <span class="schedule-lesson-coach">${escapeHtml(scheduleCoachDisplayName(getCoachName(lesson.coachId)))}</span>
