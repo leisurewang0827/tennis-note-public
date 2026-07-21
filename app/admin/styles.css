@@ -9781,3 +9781,16 @@ body {
     padding: 16px;
   }
 }
+.admin-surface-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #b9d9cf;
+  border-radius: 6px;
+  color: var(--green);
+  background: var(--soft-green);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
