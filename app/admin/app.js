@@ -14632,6 +14632,26 @@ async function sendAdminPasswordReset() {
   }
 }
 
+async function createAdminEmailAccount() {
+  const email = String($("#operationsLoginEmail")?.value || "").trim();
+  const password = String($("#operationsLoginPassword")?.value || "");
+  if (!email || !password) {
+    blockServerPreview("이메일과 새 비밀번호를 입력해 주세요.");
+    return;
+  }
+  const button = $("#createAdminEmailAccountButton");
+  if (button) button.disabled = true;
+  try {
+    await window.TennisNoteDataClient.signUpWithPassword(email, password);
+    if ($("#operationsLoginPassword")) $("#operationsLoginPassword").value = "";
+    blockServerPreview("가입 요청을 완료했습니다. Gmail 인증 후 기존 관리자에게 권한 승인을 받아 주세요.");
+  } catch (error) {
+    blockServerPreview("계정 생성에 실패했습니다. 이미 가입된 이메일인지와 비밀번호 조건을 확인해 주세요.");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function signOutAdminImport() {
   const client = window.TennisNoteDataClient;
   if (client?.signOut) await client.signOut();
@@ -17675,6 +17695,7 @@ function bindEvents() {
   $("#openLessonModal").addEventListener("click", openLessonModal);
   $("#operationsPasswordLoginForm")?.addEventListener("submit", signInAdminWithPassword);
   $("#sendAdminPasswordResetButton")?.addEventListener("click", sendAdminPasswordReset);
+  $("#createAdminEmailAccountButton")?.addEventListener("click", createAdminEmailAccount);
   $("#saveScheduleList").addEventListener("click", async () => {
     if (state.liveScheduleLoaded) {
       await saveLiveSchedulePolicy();

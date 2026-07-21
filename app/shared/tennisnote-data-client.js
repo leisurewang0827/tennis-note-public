@@ -584,6 +584,21 @@
     return saveSession({ ...payload, provider: "\uc774\uba54\uc77c" });
   }
 
+  async function signUpWithPassword(email, password) {
+    if (!readiness().ready) throw new Error("Supabase publishable config is missing. Email signup is unavailable.");
+    const normalizedEmail = `${email || ""}`.trim().toLowerCase();
+    if (!normalizedEmail || !password) throw new Error("email_credentials_required");
+    const config = loadConfig();
+    const response = await fetch(authUrl("signup"), {
+      method: "POST",
+      headers: { apikey: config.supabasePublishableKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail, password }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.msg || payload?.message || "email_signup_failed");
+    return payload;
+  }
+
   async function sendPasswordResetEmail(email, redirectTo = window.location.href) {
     if (!readiness().ready) throw new Error("Supabase publishable config is missing. Password reset is unavailable.");
     const normalizedEmail = `${email || ""}`.trim().toLowerCase();
@@ -796,6 +811,7 @@
     signInWithOAuth,
     signInWithPassword,
     sendPasswordResetEmail,
+    signUpWithPassword,
     providerSlug,
     getAuthUser,
     getAuthSettings,
