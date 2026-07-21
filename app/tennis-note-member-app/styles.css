@@ -5777,3 +5777,25 @@ body.modal-open {
     padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 }
+/* Compact member UX: keep the primary curriculum action visible without a long link row. */
+.curriculum-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.curriculum-hero-actions a:not(:first-child) {
+  display: none;
+}
+
+.curriculum-hero-actions a:first-child::after {
+  content: " · 전체 원본";
+}
+
+.payment-method-option:disabled {
+  display: none;
+}
+
+.payment-method-selector-title span {
+  display: none;
+}
