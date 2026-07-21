@@ -1012,8 +1012,8 @@ button {
 
 .member-duration-schedule.member-request-only .member-slot-bg:not(.available) {
   color: transparent;
-  border-color: #edf2f7;
-  background: #fff;
+  border-color: transparent;
+  background: transparent;
   box-shadow: none;
 }
 
@@ -1152,6 +1152,14 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f8fafc;
+}
+
+.week-switcher .schedule-week-arrow {
+  width: 48px;
+  min-width: 48px;
+  padding-inline: 0;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .week-switcher div {
@@ -3769,8 +3777,8 @@ body.identity-setup-required {
 
   .member-mobile-schedule.member-request-only .member-mobile-slot:not(.available) {
     color: transparent;
-    border-color: #edf2f7;
-    background: #fff;
+    border-color: transparent;
+    background: transparent;
   }
 
   .member-mobile-lesson {

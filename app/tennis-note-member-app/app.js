@@ -1496,7 +1496,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.53";
+    const refreshKey = "tennis-note-sw-refresh-1.0.55";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1504,7 +1504,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.53", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.55", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -2072,7 +2072,7 @@ function isMemberCoachWorking(coach, day, time, durationMinutes = 10) {
 }
 
 function memberScheduleTimes(policy = loadAdminSchedulePolicy()) {
-  const range = state.scheduleTimeRange || "lesson";
+  const range = "lesson";
   const allStart = policy.openStart;
   const allEnd = policy.openEnd;
   if (range === "morning") return makeMemberTimeRange(allStart, "12:00");
@@ -2886,7 +2886,7 @@ function memberOperatingWindows(day, policy) {
 
 function memberMobileScheduleSegments(day, policy, baseLessons) {
   const windows = memberOperatingWindows(day, policy);
-  const range = state.scheduleTimeRange || "lesson";
+  const range = "lesson";
   if (range === "morning") return windows.filter((window) => window.startMinutes < minutesFromTime("17:00"));
   if (range === "evening") return windows.filter((window) => window.endMinutes > minutesFromTime("17:00"));
   if (range === "all") return windows;
@@ -3014,12 +3014,12 @@ function renderMemberOwnSchedule() {
 function renderDynamicMemberSchedule() {
   const activeWeek = activeMemberWeek();
   $("#memberWeekSwitcher").innerHTML = `
-    <button class="ghost-button" type="button" data-change-member-week="-1" ${state.activeMemberWeekIndex <= memberScheduleMinWeekOffset ? "disabled" : ""}>이전 주</button>
+    <button class="ghost-button schedule-week-arrow" type="button" data-change-member-week="-1" ${state.activeMemberWeekIndex <= memberScheduleMinWeekOffset ? "disabled" : ""} aria-label="이전 주" title="이전 주">&lt;</button>
     <div class="schedule-period-summary">
       <strong>${activeWeek.label}</strong>
       <span>${activeWeek.range} · 관리자 근무시간 기준</span>
     </div>
-    <button class="ghost-button" type="button" data-change-member-week="1" ${state.activeMemberWeekIndex >= memberScheduleMaxWeekOffset ? "disabled" : ""}>다음 주</button>
+    <button class="ghost-button schedule-week-arrow" type="button" data-change-member-week="1" ${state.activeMemberWeekIndex >= memberScheduleMaxWeekOffset ? "disabled" : ""} aria-label="다음 주" title="다음 주">&gt;</button>
   `;
 
   const policy = loadAdminSchedulePolicy();
@@ -3041,16 +3041,6 @@ function renderDynamicMemberSchedule() {
     return;
   }
   $("#scheduleGrid").innerHTML = `
-    <div class="member-schedule-range-row" aria-label="시간 범위 필터">
-      ${scheduleTimeRangeOptions()
-        .map(
-          (option) => `
-            <button class="member-schedule-filter ${((state.scheduleTimeRange || "lesson") === option.id) ? "is-active" : ""}" type="button" data-member-schedule-time-range="${option.id}">
-              ${option.label}
-            </button>`,
-        )
-        .join("")}
-    </div>
     ${renderMemberMobileSchedule(policy, baseLessons, scheduleLessons)}
     <div class="member-desktop-schedule">
     <div class="member-duration-schedule ${requestOnly ? "member-request-only" : ""}" role="table" aria-label="회원 전체 시간표" style="--day-count:${days.length}; --slot-count:${scheduleTimeList.length}; grid-template-columns:64px ${dayColumnTracks};">
@@ -6505,7 +6495,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.53" });
+  const params = new URLSearchParams({ v: "1.0.55" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

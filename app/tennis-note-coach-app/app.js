@@ -1336,7 +1336,7 @@ function isPolicyCoachWorking(coach, day, time, durationMinutes = scheduleBlockM
 }
 
 function coachScheduleTimes(policy = loadCoachSchedulePolicy()) {
-  const range = state.scheduleTimeRange || "lesson";
+  const range = "lesson";
   const allStart = policy.openStart;
   const allEnd = policy.openEnd;
   if (range === "morning") return makeCoachTimeRange(allStart, "12:00");
@@ -1418,7 +1418,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.53";
+  const refreshKey = "tennis-note-sw-refresh-1.0.55";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1428,7 +1428,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.53", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.55", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1480,7 +1480,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.53" });
+  const params = new URLSearchParams({ v: "1.0.55" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2436,7 +2436,7 @@ function coachOperatingWindows(day, policy) {
 
 function coachMobileScheduleSegments(day, policy, scheduleLessons) {
   const windows = coachOperatingWindows(day, policy);
-  const range = state.scheduleTimeRange || "lesson";
+  const range = "lesson";
   if (range === "morning") return windows.filter((window) => window.startMinutes < minutesFromTime("17:00"));
   if (range === "evening") return windows.filter((window) => window.endMinutes > minutesFromTime("17:00"));
   if (range === "all") return windows;
@@ -2537,17 +2537,12 @@ function renderFullSchedule() {
   $("#fullScheduleBoard").innerHTML = `
     <div class="coach-week-calendar">
       <div class="coach-week-controls">
-        <button class="small-button" type="button" data-change-week="-1" ${weekIndex <= coachScheduleMinWeekOffset ? "disabled" : ""}>이전 주</button>
+        <button class="small-button schedule-week-arrow" type="button" data-change-week="-1" ${weekIndex <= coachScheduleMinWeekOffset ? "disabled" : ""} aria-label="이전 주" title="이전 주">&lt;</button>
         <div class="schedule-period-summary">
-          <div class="schedule-month-controls">
-            <button class="small-button" type="button" data-change-coach-month="-1">이전 달</button>
-            <input class="schedule-month-input" type="month" value="${coachScheduleMonthValue(week)}" data-coach-month aria-label="이동할 달">
-            <button class="small-button" type="button" data-change-coach-month="1">다음 달</button>
-          </div>
           <strong>${week.label}</strong>
           <span>${week.range} · ${fullScheduleFilterLabel(scheduleFilter)} · 관리자 근무시간 기준</span>
         </div>
-        <button class="small-button" type="button" data-change-week="1" ${weekIndex >= coachScheduleMaxWeekOffset ? "disabled" : ""}>다음 주</button>
+        <button class="small-button schedule-week-arrow" type="button" data-change-week="1" ${weekIndex >= coachScheduleMaxWeekOffset ? "disabled" : ""} aria-label="다음 주" title="다음 주">&gt;</button>
       </div>
       <div class="schedule-filter-row" aria-label="전체 레슨표 필터">
         ${fullScheduleFilterOptions()
@@ -2555,16 +2550,6 @@ function renderFullSchedule() {
             (filter) => `
               <button class="schedule-filter ${scheduleFilter === filter.id ? "is-active" : ""}" type="button" data-schedule-filter="${filter.id}">
                 ${filter.label}
-              </button>`,
-          )
-          .join("")}
-      </div>
-      <div class="schedule-filter-row compact" aria-label="시간 범위 필터">
-        ${scheduleTimeRangeOptions()
-          .map(
-            (option) => `
-              <button class="schedule-filter ${((state.scheduleTimeRange || "lesson") === option.id) ? "is-active" : ""}" type="button" data-schedule-time-range="${option.id}">
-                ${option.label}
               </button>`,
           )
           .join("")}

@@ -781,9 +781,18 @@ a {
 .coach-week-controls,
 .week-switcher {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
   gap: 10px;
   align-items: center;
+}
+
+.coach-week-controls .schedule-week-arrow,
+.week-switcher .schedule-week-arrow {
+  width: 48px;
+  min-width: 48px;
+  padding-inline: 0;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .coach-week-controls div,
@@ -1510,17 +1519,18 @@ a {
 
 .coach-slot-bg {
   border-radius: 5px;
-  background: #fbfcfe;
+  background: transparent;
+  box-shadow: none;
 }
 
 .coach-slot-bg.available {
-  background: #fbfcfe;
+  background: transparent;
 }
 
 .coach-slot-bg.off {
-  color: #b94b3e;
-  border-color: #f0c8c2;
-  background: #fff2ef;
+  color: transparent;
+  border-color: transparent;
+  background: transparent;
 }
 
 .coach-slot-bg.blocked {
@@ -3623,13 +3633,13 @@ select {
 
   .coach-mobile-slot {
     z-index: 1;
-    border: 1px solid #d9e2ea;
-    background: #fbfcfe;
+    border: 1px solid transparent;
+    background: transparent;
   }
 
   .coach-mobile-slot.off {
-    border-color: #efc4bd;
-    background: #fff2ef;
+    border-color: transparent;
+    background: transparent;
   }
 
   .coach-mobile-lesson {
