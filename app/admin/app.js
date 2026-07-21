@@ -14614,6 +14614,24 @@ async function signInAdminWithPassword(event) {
   }
 }
 
+async function sendAdminPasswordReset() {
+  const email = String($("#operationsLoginEmail")?.value || "").trim();
+  if (!email) {
+    blockServerPreview("먼저 관리자 이메일을 입력해 주세요.");
+    return;
+  }
+  const button = $("#sendAdminPasswordResetButton");
+  if (button) button.disabled = true;
+  try {
+    await window.TennisNoteDataClient.sendPasswordResetEmail(email, window.location.href);
+    blockServerPreview("비밀번호 재설정 메일을 보냈습니다. 메일의 링크에서 직접 비밀번호를 설정해 주세요.");
+  } catch (error) {
+    blockServerPreview("비밀번호 재설정 메일을 보내지 못했습니다. 이메일 주소와 메일 설정을 확인해 주세요.");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function signOutAdminImport() {
   const client = window.TennisNoteDataClient;
   if (client?.signOut) await client.signOut();
@@ -17656,6 +17674,7 @@ function bindEvents() {
   });
   $("#openLessonModal").addEventListener("click", openLessonModal);
   $("#operationsPasswordLoginForm")?.addEventListener("submit", signInAdminWithPassword);
+  $("#sendAdminPasswordResetButton")?.addEventListener("click", sendAdminPasswordReset);
   $("#saveScheduleList").addEventListener("click", async () => {
     if (state.liveScheduleLoaded) {
       await saveLiveSchedulePolicy();

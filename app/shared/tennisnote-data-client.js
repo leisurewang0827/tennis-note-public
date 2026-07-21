@@ -584,6 +584,20 @@
     return saveSession({ ...payload, provider: "\uc774\uba54\uc77c" });
   }
 
+  async function sendPasswordResetEmail(email, redirectTo = window.location.href) {
+    if (!readiness().ready) throw new Error("Supabase publishable config is missing. Password reset is unavailable.");
+    const normalizedEmail = `${email || ""}`.trim().toLowerCase();
+    if (!normalizedEmail) throw new Error("email_required");
+    const config = loadConfig();
+    const response = await fetch(authUrl("recover"), {
+      method: "POST",
+      headers: { apikey: config.supabasePublishableKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail, redirect_to: redirectTo }),
+    });
+    if (!response.ok) throw new Error("password_reset_failed");
+    return true;
+  }
+
   async function getAuthUser() {
     const session = await ensureSession();
     if (!session?.access_token) return null;
@@ -781,6 +795,7 @@
     flushOAuthProviderCredentialCapture,
     signInWithOAuth,
     signInWithPassword,
+    sendPasswordResetEmail,
     providerSlug,
     getAuthUser,
     getAuthSettings,
