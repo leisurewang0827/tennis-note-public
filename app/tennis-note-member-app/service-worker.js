@@ -1,20 +1,20 @@
-const CACHE_NAME = "tennis-note-member-pwa-v101";
+const CACHE_NAME = "tennis-note-member-pwa-v102";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.55",
-  "./app.js?v=1.0.55",
+  "./styles.css?v=1.0.56",
+  "./app.js?v=1.0.56",
   "./manifest.webmanifest",
   "./assets/brand/app-icon-180.png",
   "./assets/brand/app-icon-192.png",
   "./assets/brand/app-icon-512.png",
   "./assets/brand/launch-splash.png",
-  "../shared/tennisnote-data-client.js?v=1.0.55",
+  "../shared/tennisnote-data-client.js?v=1.0.56",
   "../shared/tennisnote-product-catalog.js",
   "../shared/tennisnote-curriculum-catalog.js",
   "../shared/tennisnote-native-push.js",
-  "../shared/tennisnote-release.js?v=1.0.55",
+  "../shared/tennisnote-release.js?v=1.0.56",
   "../shared/tennisnote-issue-reporter.js",
   "../shared/tennisnote-issue-reporter.css",
 ];

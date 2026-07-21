@@ -1336,7 +1336,7 @@ function isPolicyCoachWorking(coach, day, time, durationMinutes = scheduleBlockM
 }
 
 function coachScheduleTimes(policy = loadCoachSchedulePolicy()) {
-  const range = "lesson";
+  const range = "all";
   const allStart = policy.openStart;
   const allEnd = policy.openEnd;
   if (range === "morning") return makeCoachTimeRange(allStart, "12:00");
@@ -1418,7 +1418,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.55";
+  const refreshKey = "tennis-note-sw-refresh-1.0.56";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1428,7 +1428,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.55", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.56", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1480,7 +1480,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.55" });
+  const params = new URLSearchParams({ v: "1.0.56" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2436,7 +2436,7 @@ function coachOperatingWindows(day, policy) {
 
 function coachMobileScheduleSegments(day, policy, scheduleLessons) {
   const windows = coachOperatingWindows(day, policy);
-  const range = "lesson";
+  const range = "all";
   if (range === "morning") return windows.filter((window) => window.startMinutes < minutesFromTime("17:00"));
   if (range === "evening") return windows.filter((window) => window.endMinutes > minutesFromTime("17:00"));
   if (range === "all") return windows;
