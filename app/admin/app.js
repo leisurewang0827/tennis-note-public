@@ -14623,7 +14623,8 @@ async function sendAdminPasswordReset() {
   const button = $("#sendAdminPasswordResetButton");
   if (button) button.disabled = true;
   try {
-    await window.TennisNoteDataClient.sendPasswordResetEmail(email, window.location.href);
+    const adminResetRedirect = `${window.location.origin}${window.location.pathname}`;
+    await window.TennisNoteDataClient.sendPasswordResetEmail(email, adminResetRedirect);
     blockServerPreview("비밀번호 재설정 메일을 보냈습니다. 메일의 링크에서 직접 비밀번호를 설정해 주세요.");
   } catch (error) {
     blockServerPreview("비밀번호 재설정 메일을 보내지 못했습니다. 이메일 주소와 메일 설정을 확인해 주세요.");
