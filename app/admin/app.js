@@ -42,6 +42,7 @@ const state = {
   pinnedLessonDay: "",
   pinnedLessonTime: "",
   lessonSourceTouched: false,
+  lessonWriteInFlight: false,
   activeAdminWeekIndex: 0,
   adminTaskPage: 0,
   memberStatusPage: 0,
@@ -11721,6 +11722,10 @@ function regularScheduleProtectionMessage(ticket, candidates = []) {
 
 async function addLessonFromForm(event) {
   event.preventDefault();
+  if (state.lessonWriteInFlight) {
+    setLessonFormMessage("이전 저장을 확인하는 중입니다. 잠시만 기다려 주세요.", "neutral");
+    return;
+  }
   refreshLessonTicketOptions();
   let candidate = getLessonFormCandidate();
   const pastCorrection = syncPastLessonCorrectionUi(candidate);
@@ -11911,6 +11916,7 @@ async function addLessonFromForm(event) {
 
   if (state.liveScheduleLoaded) {
     const wasEditing = Boolean(state.editingLessonId);
+    state.lessonWriteInFlight = true;
     setLessonSubmitEnabled(false);
     setLessonFormMessage("실서버 시간표에 저장 중입니다.");
     try {
@@ -11980,6 +11986,8 @@ async function addLessonFromForm(event) {
         || "실서버 수업 저장에 실패했습니다.";
       setLessonFormMessage(message, "danger");
       setLessonSubmitEnabled(true);
+    } finally {
+      state.lessonWriteInFlight = false;
     }
     return;
   }
