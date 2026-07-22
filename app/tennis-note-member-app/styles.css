@@ -5812,3 +5812,17 @@ body.modal-open {
 .profile-version-footer .release-version {
   font-size: inherit;
 }
+
+.profile-contact-footer {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.profile-contact-footer a {
+  color: var(--green);
+  font-weight: 800;
+}
