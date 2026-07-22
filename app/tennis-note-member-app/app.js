@@ -1504,7 +1504,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.56", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.58", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {

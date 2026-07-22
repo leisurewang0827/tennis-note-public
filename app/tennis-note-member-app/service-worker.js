@@ -1,10 +1,10 @@
-const CACHE_NAME = "tennis-note-member-pwa-v102";
+const CACHE_NAME = "tennis-note-member-pwa-v103";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.56",
-  "./app.js?v=1.0.56",
+  "./styles.css?v=1.0.58",
+  "./app.js?v=1.0.58",
   "./manifest.webmanifest",
   "./assets/brand/app-icon-180.png",
   "./assets/brand/app-icon-192.png",
