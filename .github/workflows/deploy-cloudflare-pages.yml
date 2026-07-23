@@ -1,0 +1,56 @@
+name: Deploy Tennis Note short URLs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      TENNISNOTE_SUPABASE_URL: ${{ secrets.TENNISNOTE_SUPABASE_URL }}
+      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
+      TENNISNOTE_PORTONE_STORE_ID: ${{ secrets.TENNISNOTE_PORTONE_STORE_ID }}
+      TENNISNOTE_PORTONE_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_CHANNEL_KEY }}
+      TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY }}
+      TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE }}
+      TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID }}
+      TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build isolated member and admin sites
+        run: |
+          python scripts/build_cloudflare_pages.py --target member --output dist/member
+          python scripts/build_cloudflare_pages.py --target admin --output dist/admin
+
+      - name: Deploy member PWA
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/member --project-name=tennisnote-app --branch=main
+
+      - name: Deploy administrator web
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/admin --project-name=tennisnote-admin --branch=main
+
+      - name: Explain skipped short URL deployment
+        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        run: echo "Cloudflare credentials are not configured yet. Existing GitHub Pages deployment remains active."

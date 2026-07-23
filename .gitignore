@@ -1,2 +1,4 @@
 app/shared/config.local.js
 _site/
+dist/
+__pycache__/

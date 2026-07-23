@@ -15,6 +15,16 @@ Recommended GitHub Pages URLs after publishing:
 - `https://leisurewang0827.github.io/tennis-note-public/support.html`
 - `https://leisurewang0827.github.io/tennis-note-public/delete-account.html`
 
+Short service URLs:
+
+- Member PWA: `https://tennisnote-app.pages.dev/`
+- Administrator web: `https://tennisnote-admin.pages.dev/`
+
+GitHub Pages remains the compatibility deployment for existing store, OAuth,
+and policy links. The Cloudflare Pages workflow builds isolated member and
+administrator artifacts so their service-worker and browser caches cannot
+control each other.
+
 Do not place private member data, payment records, API credentials, login credentials, or server-only keys here.
 
 Files:
