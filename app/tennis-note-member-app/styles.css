@@ -4455,17 +4455,12 @@ input[type="file"] {
   text-align: center;
 }
 
-.business-operator-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 2px 12px;
+.business-operator-details {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
   width: 100%;
-}
-
-.business-operator-contact {
-  margin-top: 2px;
+  text-align: center;
 }
 
 .business-operator-info strong {
@@ -4484,16 +4479,6 @@ input[type="file"] {
   color: var(--blue);
   font-weight: 850;
   text-decoration: underline;
-}
-
-@media (max-width: 520px) {
-  .business-operator-row {
-    gap: 2px 8px;
-  }
-
-  .business-operator-contact {
-    flex-direction: column;
-  }
 }
 
 .support-modal-card h2,
