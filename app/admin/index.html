@@ -7,7 +7,7 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.70" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.71" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -339,6 +339,7 @@
             <div id="adminScheduleCoachPicker" class="schedule-coach-picker" aria-label="코치별 시간표 필터"></div>
             <div id="scheduleBulkToolbar" class="schedule-bulk-toolbar" hidden>
               <strong><span id="scheduleBulkCount">0</span>개 선택</strong>
+              <div id="scheduleBulkPreview" class="schedule-bulk-preview" aria-live="polite"></div>
               <div class="schedule-bulk-actions">
                 <button class="ghost-button" type="button" data-shift-schedule-lessons="-10">10분 앞</button>
                 <button class="ghost-button" type="button" data-shift-schedule-lessons="10">10분 뒤</button>
@@ -1442,11 +1443,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.70"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.71"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.70"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.71"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.70"></script>
+    <script src="./app.js?v=1.0.71"></script>
   </body>
 </html>

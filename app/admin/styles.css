@@ -9495,6 +9495,22 @@ button .schedule-member-lines > span {
   box-shadow: 0 8px 20px rgba(24, 34, 48, 0.12);
 }
 
+.schedule-bulk-preview {
+  min-width: 0;
+  flex: 1 1 240px;
+  overflow: hidden;
+  color: #315a4b;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-bulk-preview.is-empty {
+  color: #6b7d78;
+  font-weight: 600;
+}
+
 .schedule-bulk-toolbar[hidden],
 .schedule-open-slot-toolbar[hidden] {
   display: none;
@@ -9613,6 +9629,11 @@ button .schedule-member-lines > span {
   .schedule-bulk-actions {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .schedule-bulk-preview {
+    flex-basis: auto;
+    white-space: normal;
   }
 
   .schedule-bulk-actions .ghost-button {

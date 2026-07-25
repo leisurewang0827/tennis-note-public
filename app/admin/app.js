@@ -9298,6 +9298,28 @@ function selectedScheduleLessons() {
   ));
 }
 
+function scheduleBulkPreviewText(selected = []) {
+  if (!selected.length) return "수업을 선택하면 상태와 처리 가능 여부를 먼저 확인합니다.";
+  const statusCounts = selected.reduce((map, lesson) => {
+    const label = getLessonStatusLabel(lesson);
+    map.set(label, (map.get(label) || 0) + 1);
+    return map;
+  }, new Map());
+  const sourceCounts = selected.reduce((map, lesson) => {
+    const sourceLabel = lessonTypeLabel(lesson).replace(/\s*수업\s*$/, "") || "수업";
+    map.set(sourceLabel, (map.get(sourceLabel) || 0) + 1);
+    return map;
+  }, new Map());
+  const coaches = [...new Set(selected.map((lesson) => scheduleCoachDisplayName(getCoachName(lesson.coachId))))];
+  const dates = [...new Set(selected.map((lesson) => lesson.lessonDate).filter(Boolean))];
+  const minutes = selected.reduce((sum, lesson) => sum + (Number(lesson.durationMinutes) || 20), 0);
+  const statusSummary = [...statusCounts].map(([label, count]) => `${label} ${count}`).join(" · ");
+  const sourceSummary = [...sourceCounts].map(([label, count]) => `${label} ${count}`).join(" · ");
+  const coachSummary = coaches.length > 1 ? `${coaches[0]} 외 ${coaches.length - 1}명` : (coaches[0] || "코치 미배정");
+  const substituteReady = dates.length === 1 ? "대타 가능" : "대타는 같은 날짜만";
+  return `${statusSummary} / ${sourceSummary} / ${coachSummary} / ${minutes}분 / ${substituteReady}`;
+}
+
 function clearScheduleBulkSelection(closeMode = false) {
   state.selectedScheduleLessonIds = [];
   state.scheduleBulkOperationKey = "";
@@ -9634,6 +9656,11 @@ function renderScheduleBulkToolbar() {
     .filter((id) => validIds.has(id));
   if (toolbar) toolbar.hidden = !state.scheduleBulkMode;
   if ($("#scheduleBulkCount")) $("#scheduleBulkCount").textContent = String(selected.length);
+  const preview = $("#scheduleBulkPreview");
+  if (preview) {
+    preview.textContent = scheduleBulkPreviewText(selected);
+    preview.classList.toggle("is-empty", selected.length === 0);
+  }
   if (toggle) {
     toggle.setAttribute("aria-pressed", String(state.scheduleBulkMode));
     toggle.textContent = state.scheduleBulkMode ? "다중 수정 중" : "다중 수정";
