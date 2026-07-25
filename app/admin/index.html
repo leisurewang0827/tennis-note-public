@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ko" data-tennisnote-surface="admin">
   <head>
     <meta charset="utf-8" />
@@ -7,7 +7,7 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.68" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.69" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -342,9 +342,15 @@
                 <button class="ghost-button" type="button" data-shift-schedule-lessons="-10">10분 앞</button>
                 <button class="ghost-button" type="button" data-shift-schedule-lessons="10">10분 뒤</button>
                 <button id="bulkScheduleSubstitute" class="ghost-button" type="button">대타 지정</button>
+                <button id="copyScheduleLesson" class="ghost-button" type="button">수업 복사</button>
                 <button id="clearScheduleBulkSelection" class="ghost-button" type="button">선택 해제</button>
                 <button id="closeScheduleBulkMode" class="ghost-button" type="button">끝내기</button>
               </div>
+            </div>
+            <div id="schedulePasteToolbar" class="schedule-paste-toolbar" hidden>
+              <strong id="schedulePasteSummary">복사한 수업</strong>
+              <span>같은 코치의 빈 칸을 선택하면 내용을 채워서 엽니다.</span>
+              <button id="clearScheduleLessonClipboard" class="ghost-button" type="button">복사 종료</button>
             </div>
             <div class="schedule-closed-band"><strong>평일 13:00~17:00</strong><span>수업 없음 · 긴 빈 시간은 시간표에서 접어 표시합니다.</span></div>
             <div class="admin-schedule-scroll" data-schedule-scroll>
@@ -1425,11 +1431,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.68"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.69"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.68"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.69"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.68"></script>
+    <script src="./app.js?v=1.0.69"></script>
   </body>
 </html>

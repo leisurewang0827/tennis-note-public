@@ -9315,6 +9315,42 @@ button .schedule-member-lines > span {
   display: none;
 }
 
+.schedule-paste-toolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 54;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #8bc5d8;
+  border-radius: 6px;
+  color: #0c4a6e;
+  background: #f0f9ff;
+  box-shadow: 0 8px 20px rgba(24, 34, 48, 0.1);
+}
+
+.schedule-paste-toolbar[hidden] {
+  display: none;
+}
+
+.schedule-paste-toolbar span {
+  min-width: 0;
+  overflow: hidden;
+  color: #45606d;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-duration-add.is-paste-ready {
+  border-style: solid;
+  border-color: #38a3c7;
+  color: #075985;
+  background: #eefaff;
+}
+
 .schedule-bulk-actions {
   display: flex;
   align-items: center;
@@ -9368,6 +9404,14 @@ button .schedule-member-lines > span {
     min-width: 0;
     padding-inline: 6px;
     white-space: nowrap;
+  }
+
+  .schedule-paste-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .schedule-paste-toolbar span {
+    display: none;
   }
 }
 

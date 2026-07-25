@@ -67,6 +67,10 @@ const state = {
   scheduleBulkMode: false,
   selectedScheduleLessonIds: [],
   scheduleBulkOperationKey: "",
+  scheduleBulkAnchorLessonId: "",
+  scheduleBulkDrag: null,
+  scheduleBulkSuppressClick: false,
+  scheduleLessonClipboard: null,
   communityChannel: "홈",
   accountDeletionRequests: [],
   liveScheduleLoaded: false,
@@ -9270,18 +9274,165 @@ function toggleScheduleBulkMode(force) {
   renderSchedule();
 }
 
-function toggleScheduleLessonSelection(lessonId) {
+function visibleScheduleLessonSelectionIds() {
+  return [...document.querySelectorAll("[data-select-schedule-lesson]")]
+    .map((button) => String(button.dataset.selectScheduleLesson || ""))
+    .filter(Boolean);
+}
+
+function setScheduleLessonSelection(lessonId, selectedValue) {
   const lesson = lessons.find((item) => String(item.serverLessonId) === String(lessonId));
   if (!scheduleBulkEligible(lesson)) {
     showToast("예정된 실제 수업만 다중 수정할 수 있습니다.");
+    return false;
+  }
+  const selected = selectedScheduleLessonIdSet();
+  if (selectedValue) selected.add(String(lessonId));
+  else selected.delete(String(lessonId));
+  state.selectedScheduleLessonIds = [...selected];
+  state.scheduleBulkOperationKey = "";
+  const button = document.querySelector(`[data-select-schedule-lesson="${CSS.escape(String(lessonId))}"]`);
+  button?.setAttribute("aria-pressed", String(selectedValue));
+  return true;
+}
+
+function selectScheduleLessonRange(lessonId) {
+  const orderedIds = visibleScheduleLessonSelectionIds();
+  const startIndex = orderedIds.indexOf(String(state.scheduleBulkAnchorLessonId || ""));
+  const endIndex = orderedIds.indexOf(String(lessonId || ""));
+  if (startIndex < 0 || endIndex < 0) return false;
+  const [from, to] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+  orderedIds.slice(from, to + 1).forEach((id) => setScheduleLessonSelection(id, true));
+  state.scheduleBulkOperationKey = "";
+  return true;
+}
+
+function toggleScheduleLessonSelection(lessonId, range = false) {
+  if (range && selectScheduleLessonRange(lessonId)) {
+    renderSchedule();
     return;
   }
   const selected = selectedScheduleLessonIdSet();
-  if (selected.has(String(lessonId))) selected.delete(String(lessonId));
-  else selected.add(String(lessonId));
-  state.selectedScheduleLessonIds = [...selected];
+  const nextSelected = !selected.has(String(lessonId));
+  if (!setScheduleLessonSelection(lessonId, nextSelected)) return;
+  state.scheduleBulkAnchorLessonId = String(lessonId);
+  renderSchedule();
+}
+
+function beginScheduleBulkDrag(event, button) {
+  if (!state.scheduleBulkMode || event.pointerType === "touch" || event.button !== 0) return;
+  const lessonId = String(button.dataset.selectScheduleLesson || "");
+  if (!lessonId) return;
+  event.preventDefault();
+  if (event.shiftKey && selectScheduleLessonRange(lessonId)) {
+    state.scheduleBulkSuppressClick = true;
+    renderSchedule();
+    window.setTimeout(() => {
+      state.scheduleBulkSuppressClick = false;
+    }, 0);
+    return;
+  }
+  const selecting = !selectedScheduleLessonIdSet().has(lessonId);
+  state.scheduleBulkDrag = { selecting, touched: new Set([lessonId]) };
+  state.scheduleBulkAnchorLessonId = lessonId;
+  setScheduleLessonSelection(lessonId, selecting);
+  renderScheduleBulkToolbar();
+}
+
+function continueScheduleBulkDrag(event, button) {
+  const drag = state.scheduleBulkDrag;
+  if (!drag || event.pointerType === "touch" || !(event.buttons & 1)) return;
+  const lessonId = String(button.dataset.selectScheduleLesson || "");
+  if (!lessonId || drag.touched.has(lessonId)) return;
+  drag.touched.add(lessonId);
+  setScheduleLessonSelection(lessonId, drag.selecting);
+  renderScheduleBulkToolbar();
+}
+
+function endScheduleBulkDrag() {
+  if (!state.scheduleBulkDrag) return;
+  state.scheduleBulkDrag = null;
+  state.scheduleBulkSuppressClick = true;
+  renderSchedule();
+  window.setTimeout(() => {
+    state.scheduleBulkSuppressClick = false;
+  }, 0);
+}
+
+function scheduleClipboardTicket() {
+  return scheduleTicketById(state.scheduleLessonClipboard?.ticketId);
+}
+
+function scheduleClipboardCanPaste(day, time, coachId) {
+  const clipboard = state.scheduleLessonClipboard;
+  const ticket = scheduleClipboardTicket();
+  if (!clipboard || !ticket || ticket.remaining <= 0) return false;
+  if (String(ticket.coachId || clipboard.coachId) !== String(coachId || "")) return false;
+  return canAddLessonAt(day, time, clipboard.durationMinutes, coachId);
+}
+
+function renderSchedulePasteToolbar() {
+  const toolbar = $("#schedulePasteToolbar");
+  if (!toolbar) return;
+  const clipboard = state.scheduleLessonClipboard;
+  toolbar.hidden = !clipboard;
+  if (!clipboard) return;
+  const ticket = scheduleClipboardTicket();
+  const coachName = scheduleCoachDisplayName(getCoachName(ticket?.coachId || clipboard.coachId));
+  $("#schedulePasteSummary").textContent = `${clipboard.memberLabel} · ${clipboard.durationMinutes}분 · ${coachName}`;
+}
+
+function copySelectedScheduleLesson() {
+  const selected = selectedScheduleLessons();
+  if (selected.length !== 1) {
+    showToast("복사할 수업 한 개만 선택해 주세요.");
+    return;
+  }
+  const lesson = selected[0];
+  const ticket = getTicketByLesson(lesson);
+  if (!ticket || Number(ticket.remaining) <= 0) {
+    showToast("사용 가능한 회원권이 연결된 수업만 복사할 수 있습니다.");
+    return;
+  }
+  state.scheduleLessonClipboard = {
+    lessonId: lesson.serverLessonId,
+    memberName: getEditingLessonMemberName(lesson) || getLessonParticipantNames(lesson)[0] || splitMemberNames(lesson.member)[0] || "",
+    memberLabel: getLessonMembersLabel(lesson),
+    ticketId: ticket.id,
+    coachId: ticket.coachId || lesson.coachId,
+    durationMinutes: Number(lesson.durationMinutes) || getTicketDurationMinutes(ticket),
+    lessonType: lesson.type || getTicketLessonKind(ticket),
+    lessonSource: normalizeLessonSource(lesson.lessonSource || liveLessonSource(lesson)),
+  };
+  state.scheduleBulkMode = false;
+  state.selectedScheduleLessonIds = [];
+  state.scheduleBulkAnchorLessonId = "";
   state.scheduleBulkOperationKey = "";
   renderSchedule();
+  showToast("수업을 복사했습니다. 같은 코치의 빈 시간을 선택해 확인 후 저장하세요.");
+}
+
+function clearScheduleLessonClipboard() {
+  state.scheduleLessonClipboard = null;
+  renderSchedule();
+  showToast("수업 복사를 종료했습니다.");
+}
+
+function scheduleClipboardDefaults(button) {
+  const clipboard = state.scheduleLessonClipboard;
+  if (!clipboard || !scheduleClipboardCanPaste(
+    button.dataset.addLessonDay,
+    button.dataset.addLessonTime,
+    button.dataset.addLessonCoach,
+  )) return {};
+  return {
+    memberName: clipboard.memberName,
+    ticketId: clipboard.ticketId,
+    durationMinutes: clipboard.durationMinutes,
+    lessonType: clipboard.lessonType,
+    lessonSource: clipboard.lessonSource,
+    pastedLesson: true,
+  };
 }
 
 function renderScheduleBulkToolbar() {
@@ -9304,6 +9455,8 @@ function renderScheduleBulkToolbar() {
     .forEach((button) => {
       button.disabled = selected.length === 0;
     });
+  if ($("#copyScheduleLesson")) $("#copyScheduleLesson").disabled = selected.length !== 1;
+  renderSchedulePasteToolbar();
 }
 
 function scheduleBulkErrorMessage(error) {
@@ -10010,8 +10163,9 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10) || getBreakRuleOverlapping(day, time, 10, coach.id);
     const working = !breakRule && isCoachAvailableForSlot(coach.id, day, time, 10);
     const stateClass = occupyingLesson ? "is-occupied" : breakRule ? "is-break" : working ? "is-open" : "is-closed";
+    const pasteReady = !occupyingLesson && working && scheduleClipboardCanPaste(day, time, coach.id);
     const addButton = !occupyingLesson && working && canAddLessonAt(day, time, 20, coach.id)
-      ? `<button class="admin-duration-add" type="button" data-quick-lesson-entry="true" ${lessonAddAttrs(day, time, 20, coach.id)}>+ 수업 추가</button>`
+      ? `<button class="admin-duration-add ${pasteReady ? "is-paste-ready" : ""}" type="button" data-quick-lesson-entry="true" ${pasteReady ? 'data-paste-schedule-lesson="true"' : ""} ${lessonAddAttrs(day, time, 20, coach.id)}>${pasteReady ? "붙여넣기" : "+ 수업 추가"}</button>`
       : "";
     return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${stateClass}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
   }).join("")).join("");
@@ -10526,6 +10680,18 @@ function refreshLessonMemberOptions(keepValue = "", editingLesson = null) {
     || (currentMatchesSearch && options.some((member) => member.name === currentValue) ? currentValue : "")
     || options[0].name;
   $("#lessonMember").value = selectedName;
+}
+
+function ensureLessonMemberOption(memberName, label = "") {
+  const select = $("#lessonMember");
+  const value = String(memberName || "").trim();
+  if (!select || !value || [...select.options].some((option) => option.value === value)) return false;
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label || `${value} · 회원권 확인`;
+  select.prepend(option);
+  select.value = value;
+  return true;
 }
 
 function getExpiredTicketsForMember(memberName) {
@@ -11258,6 +11424,15 @@ function openLessonModal(defaults = {}) {
   refreshLessonMemberOptions(initialMemberName, editingLesson);
   if (initialMemberName && [...$("#lessonMember").options].some((option) => option.value === initialMemberName)) {
     $("#lessonMember").value = initialMemberName;
+  } else if (initialMemberName && !editingLesson) {
+    const matchingTicket = ticketsForMember(initialMemberName).find((ticket) => String(ticket.id) === String(state.pinnedLessonTicketId))
+      || ticketsForMember(initialMemberName)[0];
+    ensureLessonMemberOption(
+      initialMemberName,
+      matchingTicket
+        ? `${ticketParticipantNames(matchingTicket).join(" & ") || initialMemberName} · ${getTicketDisplayProduct(matchingTicket)} · ${ticketUsageLabel(matchingTicket)}`
+        : `${initialMemberName} · 회원권 확인`,
+    );
   }
   fillSelect(
     $("#lessonCoach"),
@@ -11303,6 +11478,8 @@ function openLessonModal(defaults = {}) {
   if (defaults.time) $("#lessonTime").value = defaults.time;
   if (defaults.courtId) $("#lessonCourt").value = defaults.courtId;
   if (defaults.coachId) $("#lessonCoach").value = defaults.coachId;
+  if (!editingLesson && defaults.lessonType) $("#lessonType").value = defaults.lessonType;
+  if (!editingLesson && defaults.durationMinutes) $("#lessonDuration").value = String(defaults.durationMinutes);
   if (!editingLesson && !defaults.coachId) alignCoachToSelectedMemberTicket();
   refreshLessonTicketOptions();
   if (!editingLesson && defaults.ticketId && [...$("#lessonTicket").options].some((option) => String(option.value) === String(defaults.ticketId))) {
@@ -11340,6 +11517,9 @@ function openLessonModal(defaults = {}) {
     }
   }
   refreshLessonDurationOptions();
+  if (!editingLesson && defaults.durationMinutes && [...$("#lessonDuration").options].some((option) => option.value === String(defaults.durationMinutes))) {
+    $("#lessonDuration").value = String(defaults.durationMinutes);
+  }
   refreshLessonTimeOptions(hasPinnedScheduleSlot ? defaults.time : $("#lessonTime").value);
   if (hasPinnedScheduleSlot) {
     $("#lessonCoach").value = defaults.coachId;
@@ -17994,11 +18174,32 @@ function bindEvents() {
       courtId: slotButton.dataset.addLessonCourt,
       coachId: slotButton.dataset.addLessonCoach,
       quickEntry: slotButton.dataset.quickLessonEntry === "true",
+      ...scheduleClipboardDefaults(slotButton),
     });
   });
   document.addEventListener("keydown", (event) => {
+    const lessonButton = event.target.closest("[data-edit-lesson-id], [data-select-schedule-lesson]");
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && lessonButton) {
+      event.preventDefault();
+      const lessonId = lessonButton.dataset.selectScheduleLesson;
+      if (lessonId) {
+        state.selectedScheduleLessonIds = [String(lessonId)];
+      } else {
+        const localId = lessonButton.dataset.editLessonId;
+        const lesson = lessons.find((item) => String(item.id) === String(localId));
+        state.selectedScheduleLessonIds = lesson?.serverLessonId ? [String(lesson.serverLessonId)] : [];
+      }
+      copySelectedScheduleLesson();
+      return;
+    }
     const slotButton = event.target.closest('.admin-duration-add[data-quick-lesson-entry="true"]');
     if (!slotButton) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
+      event.preventDefault();
+      if (slotButton.dataset.pasteScheduleLesson === "true") slotButton.click();
+      else showToast("복사한 수업의 담당 코치가 근무하는 빈 시간을 선택해 주세요.");
+      return;
+    }
     if (event.key === "Enter") {
       event.preventDefault();
       slotButton.click();
@@ -18008,11 +18209,22 @@ function bindEvents() {
       || !moveScheduleAddButtonFocus(slotButton, event.key)) return;
     event.preventDefault();
   });
+  document.addEventListener("pointerdown", (event) => {
+    const button = event.target.closest("[data-select-schedule-lesson]");
+    if (button) beginScheduleBulkDrag(event, button);
+  });
+  document.addEventListener("pointerover", (event) => {
+    const button = event.target.closest("[data-select-schedule-lesson]");
+    if (button) continueScheduleBulkDrag(event, button);
+  });
+  document.addEventListener("pointerup", endScheduleBulkDrag);
+  document.addEventListener("pointercancel", endScheduleBulkDrag);
   document.addEventListener("click", (event) => {
     const bulkLessonButton = event.target.closest("[data-select-schedule-lesson]");
     if (bulkLessonButton) {
       event.stopPropagation();
-      toggleScheduleLessonSelection(bulkLessonButton.dataset.selectScheduleLesson);
+      if (state.scheduleBulkSuppressClick) return;
+      toggleScheduleLessonSelection(bulkLessonButton.dataset.selectScheduleLesson, event.shiftKey);
       return;
     }
     const oneDayBookingButton = event.target.closest("[data-edit-one-day-booking-id]");
@@ -18627,6 +18839,14 @@ function bindEvents() {
     }
     if (event.target.closest("#bulkScheduleSubstitute")) {
       openSelectedScheduleSubstitute();
+      return;
+    }
+    if (event.target.closest("#copyScheduleLesson")) {
+      copySelectedScheduleLesson();
+      return;
+    }
+    if (event.target.closest("#clearScheduleLessonClipboard")) {
+      clearScheduleLessonClipboard();
       return;
     }
     if (event.target.closest("#clearScheduleBulkSelection")) {
