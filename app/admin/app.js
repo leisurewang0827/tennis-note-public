@@ -1,5 +1,6 @@
 const adminQuery = new URLSearchParams(window.location.search);
 const adminDemoMode = adminQuery.get("demoAdmin") === "1";
+const adminLocalPreviewMode = adminDemoMode && ["127.0.0.1", "localhost"].includes(window.location.hostname);
 const adminBrandSplashStartedAt = performance.now();
 const adminBrandSplashMinimumDuration = 250;
 let adminBrandSplashHideScheduled = false;
@@ -44,6 +45,8 @@ const state = {
   lessonSourceTouched: false,
   lessonWriteInFlight: false,
   lessonOperationKey: "",
+  quickLessonEntry: false,
+  quickLessonDetailsExpanded: false,
   substituteOperationKey: "",
   activeAdminWeekIndex: 0,
   adminTaskPage: 0,
@@ -1163,10 +1166,12 @@ const coachOperationsViews = new Set(["members", "schedule", "notes", "issues"])
 const operationsRememberStorageKey = "tennis-note-operations-remember-login";
 
 function operationsRole() {
+  if (adminLocalPreviewMode) return "admin";
   return String(adminImportAuthState.profile?.role || "");
 }
 
 function operationsAccessReady() {
+  if (adminLocalPreviewMode) return true;
   return Boolean(
     window.TennisNoteDataClient?.getSession?.()?.access_token
     && ["admin", "coach"].includes(operationsRole()),
@@ -9767,7 +9772,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     const working = !breakRule && isCoachAvailableForSlot(coach.id, day, time, 10);
     const stateClass = occupyingLesson ? "is-occupied" : breakRule ? "is-break" : working ? "is-open" : "is-closed";
     const addButton = !occupyingLesson && working && canAddLessonAt(day, time, 20, coach.id)
-      ? `<button class="admin-duration-add" type="button" ${lessonAddAttrs(day, time, 20, coach.id)}>+ 수업 추가</button>`
+      ? `<button class="admin-duration-add" type="button" data-quick-lesson-entry="true" ${lessonAddAttrs(day, time, 20, coach.id)}>+ 수업 추가</button>`
       : "";
     return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${stateClass}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
   }).join("")).join("");
@@ -10796,6 +10801,7 @@ function syncPastLessonCorrectionUi(candidate = getLessonFormCandidate()) {
 function renderLessonPreview() {
   if (!$("#lessonPreview")) return;
   let candidate = getLessonFormCandidate();
+  syncQuickLessonEntryUi(candidate);
   const pastCorrection = syncPastLessonCorrectionUi(candidate);
   candidate = getLessonFormCandidate();
   syncAdminForceDeleteLessonButton(candidate);
@@ -10937,8 +10943,39 @@ function renderLessonPreview() {
   syncAdminManualOverrideUi(uniqueOverrideWarnings);
 }
 
+function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
+  const modal = $("#lessonModal");
+  const summary = $("#lessonQuickSummary");
+  if (!modal || !summary) return;
+  const ticket = getSelectedTicket();
+  const source = normalizeLessonSource($("#lessonSource")?.value);
+  const requiredCount = source === "regular" ? Math.max(1, Math.min(3, getTicketWeeklyCount(ticket))) : 1;
+  if (state.quickLessonEntry && requiredCount > 1) state.quickLessonDetailsExpanded = true;
+  const expanded = state.quickLessonEntry && state.quickLessonDetailsExpanded;
+  modal.classList.toggle("is-quick-entry", state.quickLessonEntry);
+  modal.classList.toggle("is-quick-expanded", expanded);
+  summary.hidden = !state.quickLessonEntry;
+  const scheduleLabel = candidate?.day && candidate?.time
+    ? `${candidate.day}요일 ${adminScheduleDateLabel(candidate.day)} · ${candidate.time} · ${scheduleCoachDisplayName(getCoachName(candidate.coachId))}`
+    : "요일과 시간을 선택해 주세요.";
+  if ($("#lessonQuickSchedule")) $("#lessonQuickSchedule").textContent = scheduleLabel;
+  if ($("#lessonQuickGuide")) {
+    $("#lessonQuickGuide").textContent = requiredCount > 1
+      ? `주 ${requiredCount}회 회원권은 나머지 요일과 시간을 모두 선택해야 합니다.`
+      : "회원 검색 후 회원권을 확인하고 바로 저장할 수 있습니다.";
+  }
+  const toggle = $("#toggleLessonQuickDetails");
+  if (toggle) {
+    toggle.hidden = requiredCount > 1;
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.textContent = expanded ? "간단히 보기" : "상세 설정";
+  }
+}
+
 function openLessonModal(defaults = {}) {
   state.editingLessonId = defaults.editingLessonId || null;
+  state.quickLessonEntry = Boolean(!state.editingLessonId && defaults.quickEntry);
+  state.quickLessonDetailsExpanded = false;
   state.lessonOperationKey = createAdminOperationKey(
     state.editingLessonId ? "lesson-edit" : "lesson-create",
   );
@@ -11087,7 +11124,7 @@ function openLessonModal(defaults = {}) {
   renderLessonAbsenceRestorePanel();
   $("#lessonModal").hidden = false;
   renderLessonPreview();
-  $("#lessonMember").focus();
+  (state.quickLessonEntry ? $("#lessonMemberSearch") : $("#lessonMember"))?.focus();
 }
 
 function openAdminMakeupBooking(entitlement) {
@@ -11162,7 +11199,10 @@ async function markEditingLessonAbsentForMakeup() {
 
 function closeLessonModal() {
   $("#lessonModal").hidden = true;
+  $("#lessonModal").classList.remove("is-quick-entry", "is-quick-expanded");
   state.editingLessonId = null;
+  state.quickLessonEntry = false;
+  state.quickLessonDetailsExpanded = false;
   state.lessonOperationKey = "";
   state.releasedAbsenceEntitlementId = "";
   state.pinnedLessonTicketId = "";
@@ -13977,6 +14017,7 @@ function adminWeekDateForDay(day) {
 }
 
 async function syncAdminLiveData() {
+  if (adminLocalPreviewMode) return false;
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !operationsAccessReady()) return false;
   const fullAdminAccess = operationsRole() === "admin";
@@ -17681,6 +17722,7 @@ function bindEvents() {
       time: slotButton.dataset.addLessonTime,
       courtId: slotButton.dataset.addLessonCourt,
       coachId: slotButton.dataset.addLessonCoach,
+      quickEntry: slotButton.dataset.quickLessonEntry === "true",
     });
   });
   document.addEventListener("click", (event) => {
@@ -17933,6 +17975,13 @@ function bindEvents() {
     refreshLessonMakeupEntitlementOptions();
     renderLessonPreview();
   });
+  $("#lessonMemberSearch").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !state.quickLessonEntry) return;
+    event.preventDefault();
+    const selectedMember = $("#lessonMember");
+    if (!selectedMember?.value) return;
+    selectedMember.focus();
+  });
   $("#lessonMember").addEventListener("change", () => {
     state.pinnedLessonTicketId = "";
     state.lessonSourceTouched = false;
@@ -18034,6 +18083,10 @@ function bindEvents() {
     syncLessonTypeFromForm();
     refreshLessonMakeupEntitlementOptions();
     renderLessonPreview();
+  });
+  $("#toggleLessonQuickDetails")?.addEventListener("click", () => {
+    state.quickLessonDetailsExpanded = !state.quickLessonDetailsExpanded;
+    syncQuickLessonEntryUi();
   });
   $("#lessonMakeupEntitlement")?.addEventListener("change", () => {
     applySelectedAdminMakeupEntitlement();

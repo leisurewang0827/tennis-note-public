@@ -7003,6 +7003,62 @@ button .schedule-member-lines > span {
   margin-top: 18px;
 }
 
+.lesson-quick-summary {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #9bcdbb;
+  border-radius: 6px;
+  background: var(--soft-green);
+}
+
+.lesson-quick-summary[hidden] {
+  display: none;
+}
+
+.lesson-quick-summary > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.lesson-quick-summary span,
+.lesson-quick-summary small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.lesson-quick-summary strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#lessonModal.is-quick-entry:not(.is-quick-expanded) .lesson-detail-field,
+#lessonModal.is-quick-entry:not(.is-quick-expanded) #lessonAdminOverridePanel {
+  display: none !important;
+}
+
+#lessonModal.is-quick-entry .lesson-form {
+  grid-template-columns: minmax(150px, 0.55fr) minmax(0, 1.45fr);
+}
+
+#lessonModal.is-quick-entry .lesson-member-ticket-panel,
+#lessonModal.is-quick-entry #lessonMakeupEntitlementField,
+#lessonModal.is-quick-entry #lessonPreview,
+#lessonModal.is-quick-entry #lessonFormMessage,
+#lessonModal.is-quick-entry .modal-actions {
+  grid-column: 1 / -1;
+}
+
+#lessonModal.is-quick-entry .modal-panel {
+  width: min(720px, calc(100vw - 24px));
+}
+
 .lesson-member-ticket-panel {
   grid-column: span 2;
   display: grid;
@@ -9047,6 +9103,27 @@ button .schedule-member-lines > span {
 .admin-duration-add:hover {
   border-color: #9bd8c2;
   background: var(--soft-green);
+}
+
+.admin-duration-add:focus-visible {
+  z-index: 9;
+  outline: 3px solid rgba(21, 122, 91, 0.22);
+  outline-offset: -3px;
+}
+
+@media (max-width: 700px) {
+  #lessonModal.is-quick-entry .lesson-form {
+    grid-template-columns: 1fr;
+  }
+
+  .lesson-quick-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lesson-quick-summary .ghost-button {
+    width: 100%;
+  }
 }
 
 .admin-duration-lesson {
