@@ -1496,7 +1496,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.61";
+    const refreshKey = "tennis-note-sw-refresh-1.0.62";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1504,7 +1504,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.61", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.62", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -6495,7 +6495,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.61" });
+  const params = new URLSearchParams({ v: "1.0.62" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7258,29 +7258,6 @@ async function login(provider) {
     }
   }
   if (status) status.textContent = "실사용 로그인 연결 설정을 확인해 주세요.";
-}
-
-async function syncAppleLoginAvailability() {
-  const buttons = $$('[data-login-provider="Apple"]');
-  if (!buttons.length) return;
-  let ready = false;
-  const client = window.TennisNoteDataClient;
-  if (client?.readiness?.().ready) {
-    try {
-      const settings = await client.getAuthSettings();
-      ready = Boolean(settings?.external?.apple);
-    } catch {
-      ready = false;
-    }
-  }
-  buttons.forEach((button) => {
-    const label = button.querySelector("[data-apple-login-label]");
-    button.disabled = !ready;
-    button.classList.toggle("is-preparing", !ready);
-    const buttonLabel = ready ? button.dataset.readyLabel : "Apple 로그인 설정 중";
-    if (label) label.textContent = buttonLabel;
-    button.setAttribute("aria-label", buttonLabel);
-  });
 }
 
 function emailLoginErrorMessage(error) {
@@ -8063,7 +8040,6 @@ async function initApp() {
     await syncLiveSchedulePolicy();
     renderActiveMemberView();
   })().catch(() => {});
-  void syncAppleLoginAvailability();
   let openedFromSupabase = false;
   try {
     openedFromSupabase = await applySupabaseMemberSession(true);
