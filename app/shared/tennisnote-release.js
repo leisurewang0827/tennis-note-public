@@ -1,11 +1,11 @@
 (function () {
   const release = Object.freeze({
-    version: "1.0.66",
-    releaseId: "2026.07.25.07",
+    version: "1.0.67",
+    releaseId: "2026.07.25.08",
     nativeShell: {
-      version: "1.0.66",
-      androidBuild: 11,
-      iosBuild: 16,
+      version: "1.0.67",
+      androidBuild: 12,
+      iosBuild: 17,
     },
   });
 

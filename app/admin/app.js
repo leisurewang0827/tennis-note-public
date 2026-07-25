@@ -4967,6 +4967,19 @@ function getScheduleTimeOptions() {
   return getVisibleScheduleTimes();
 }
 
+function lessonScheduleCoachId(lesson = {}) {
+  return lesson.originalCoachId || lesson.coachId || "";
+}
+
+function lessonScheduleCoachLabel(lesson = {}) {
+  const scheduleCoachId = lessonScheduleCoachId(lesson);
+  const actualCoachId = lesson.coachId || "";
+  if (scheduleCoachId && actualCoachId && scheduleCoachId !== actualCoachId) {
+    return `대타 ${scheduleCoachDisplayName(getCoachName(actualCoachId))}`;
+  }
+  return scheduleCoachDisplayName(getCoachName(scheduleCoachId));
+}
+
 function findLessonStartingInBlock(day, blockStart, blockEnd) {
   return lessons.find((lesson) => {
     const starts = timeToMinutes(lesson.time);
@@ -4983,25 +4996,25 @@ function getScheduleCoachLanes(day = "") {
   if (!day) return lanes;
   return lanes.filter((coach) => (
     normalizeCoachWorkBlocks(coach).some((block) => block.days.includes(day)) ||
-    lessons.some((lesson) => lesson.day === day && lesson.coachId === coach.id && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson))
+    lessons.some((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson))
   ));
 }
 
 function findStartingLessonForCoach(day, time, coachId) {
-  return lessons.find((lesson) => lesson.day === day && lesson.time === time && lesson.coachId === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson));
+  return lessons.find((lesson) => lesson.day === day && lesson.time === time && lessonScheduleCoachId(lesson) === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson));
 }
 
 function findLessonStartingInBlockForCoach(day, blockStart, blockEnd, coachId) {
   return lessons.find((lesson) => {
     const starts = timeToMinutes(lesson.time);
-    return lesson.day === day && lesson.coachId === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && starts > blockStart && starts < blockEnd;
+    return lesson.day === day && lessonScheduleCoachId(lesson) === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && starts > blockStart && starts < blockEnd;
   });
 }
 
 function findOccupyingLessonForCoach(day, time, coachId) {
   const current = timeToMinutes(time);
   return lessons.find((lesson) => {
-    if (lesson.day !== day || lesson.time === time || lesson.coachId !== coachId || !lessonMatchesActiveScheduleWeek(lesson, day) || !isBookedLesson(lesson)) return false;
+    if (lesson.day !== day || lesson.time === time || lessonScheduleCoachId(lesson) !== coachId || !lessonMatchesActiveScheduleWeek(lesson, day) || !isBookedLesson(lesson)) return false;
     const starts = timeToMinutes(lesson.time);
     const ends = starts + lesson.durationMinutes;
     return current > starts && current < ends;
@@ -9873,7 +9886,7 @@ function coachScheduleVisibleTimes(day, visibleCoaches) {
 function renderCoachDayBaseCell(day, time, coach, row, column) {
   const breakRule = getCoachBreakOverlapping(coach.id, day, time, scheduleBlockMinutes)
     || getBreakRuleForSlot(day, time, coach.id);
-  const occupyingLesson = lessons.find((lesson) => lesson.coachId === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
+  const occupyingLesson = lessons.find((lesson) => lessonScheduleCoachId(lesson) === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
   const working = isCoachAvailableForSlot(coach.id, day, time, scheduleBlockMinutes);
   const className = breakRule ? "is-break" : working ? "is-open" : "is-closed";
   const label = breakRule ? (breakRule.label || "브레이크") : working ? "수업 추가" : "근무외";
@@ -9900,11 +9913,12 @@ function renderCoachDayLessonCard(lesson, visibleTimes, column) {
     ? `${lesson.durationMinutes}분`
     : lesson.status === "available" ? `${lesson.durationMinutes}분 신청 가능` : `${getLessonStatusLabel(lesson)} · ${lesson.durationMinutes}분`;
   const roundLabel = getLessonRoundLabel(lesson);
+  const coachLabel = lessonScheduleCoachLabel(lesson);
   return `
     <button class="coach-day-lesson ${lesson.status} ${getLessonStateClass(lesson)} ${getCoachToneClass(lesson.coachId)}" style="grid-row:${startIndex + 2} / span ${rowSpan};grid-column:${column};" type="button" ${lessonActionAttrs(lesson)}>
       <strong>${scheduleMemberLinesMarkup(memberLabel)}</strong>
       ${roundLabel ? `<span class="schedule-round-label">${escapeHtml(roundLabel)}</span>` : ""}
-      <span>${escapeHtml(statusLabel)}</span>
+      <span>${escapeHtml(`${statusLabel}${coachLabel ? ` · ${coachLabel}` : ""}`)}</span>
       <small>${lesson.time}~${minutesToTime(end)}</small>
     </button>`;
 }
@@ -9947,7 +9961,7 @@ function renderCoachDaySchedule(day) {
     return `<div class="coach-day-time ${minor ? "is-minor" : ""}" style="grid-row:${row};grid-column:1;">${time}</div>${visibleCoaches.map((coach, coachIndex) => renderCoachDayBaseCell(day, time, coach, row, coachIndex + 2)).join("")}`;
   }).join("");
   const lessonCards = visibleCoaches.map((coach, coachIndex) => lessons
-    .filter((lesson) => lesson.day === day && lesson.coachId === coach.id && lesson.status !== "cancelled" && lessonMatchesActiveScheduleWeek(lesson, day))
+    .filter((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && lesson.status !== "cancelled" && lessonMatchesActiveScheduleWeek(lesson, day))
     .map((lesson) => renderCoachDayLessonCard(lesson, visibleTimes, coachIndex + 2))
     .join("")).join("");
   target.innerHTML = headers + baseCells + lessonCards;
@@ -9989,7 +10003,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     if (coach.id?.startsWith("closed-")) {
       return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} is-closed" style="grid-row:${row};grid-column:${column};"></div>`;
     }
-    const occupyingLesson = lessons.find((lesson) => lesson.coachId === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
+    const occupyingLesson = lessons.find((lesson) => lessonScheduleCoachId(lesson) === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
     const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10) || getBreakRuleOverlapping(day, time, 10, coach.id);
     const working = !breakRule && isCoachAvailableForSlot(coach.id, day, time, 10);
     const stateClass = occupyingLesson ? "is-occupied" : breakRule ? "is-break" : working ? "is-open" : "is-closed";
@@ -10000,7 +10014,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
   }).join("")).join("");
 
   const lessonCards = lanes.map(({ day, coach }, laneIndex) => lessons
-    .filter((lesson) => lesson.day === day && lesson.coachId === coach.id && lesson.status !== "cancelled" && lessonMatchesActiveScheduleWeek(lesson, day))
+    .filter((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && lesson.status !== "cancelled" && lessonMatchesActiveScheduleWeek(lesson, day))
     .map((lesson) => {
       const startIndex = visibleTimes.indexOf(lesson.time);
       if (startIndex < 0) return "";
@@ -10010,7 +10024,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
         <button class="admin-duration-lesson ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} lesson-kind-${lessonVisualKind(lesson)} ${lesson.status} ${getLessonStateClass(lesson)} ${isDimmed ? "is-dimmed" : ""}" type="button" data-schedule-lesson-id="${escapeHtml(String(lesson.id || ""))}" ${lessonActionAttrs(lesson)} style="${lessonColorStyle(lesson)};grid-row:${startIndex + 3} / span ${span};grid-column:${laneIndex + 2};">
           <strong class="schedule-lesson-name">${getLessonMembersMarkup(lesson)}</strong>
           <span class="schedule-lesson-round">${escapeHtml(getLessonRoundLabel(lesson) || "회차 확인")}</span>
-          <span class="schedule-lesson-coach">${escapeHtml(scheduleCoachDisplayName(getCoachName(lesson.coachId)))}</span>
+          <span class="schedule-lesson-coach">${escapeHtml(lessonScheduleCoachLabel(lesson))}</span>
           <span class="schedule-lesson-note ${scheduleLessonExceptionLabel(lesson) ? "" : "is-empty"}">${escapeHtml(scheduleLessonExceptionLabel(lesson) || "-")}</span>
         </button>`;
     }).join("")).join("");
@@ -14607,6 +14621,7 @@ async function syncAdminLiveData() {
           time: String(lesson.start_time || "").slice(0, 5),
           courtId: `court-${Math.min(slotCount, fixedCourtCount)}`,
           coachId: coachIdByRole.get(lesson.coach_role_id) || "",
+          originalCoachId: coachIdByRole.get(lesson.original_coach_role_id) || "",
           member: memberNames.join("&") || ticket?.member || "회원 확인 필요",
           type: sourceLabel,
           durationMinutes: Number(lesson.duration_minutes) || 20,
