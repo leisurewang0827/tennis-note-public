@@ -9210,6 +9210,7 @@ button .schedule-member-lines > span {
 }
 
 .admin-duration-lesson {
+  position: relative;
   z-index: 8;
   display: grid;
   grid-template-rows: repeat(4, minmax(0, 1fr));
@@ -9293,6 +9294,81 @@ button .schedule-member-lines > span {
   outline: 3px solid #f59e0b;
   outline-offset: 2px;
   box-shadow: inset 4px 0 0 var(--lesson-color, var(--blue)), 0 0 0 5px rgba(245, 158, 11, 0.22);
+}
+
+.schedule-bulk-toolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #9bd8c2;
+  border-radius: 6px;
+  background: #f2fbf7;
+  box-shadow: 0 8px 20px rgba(24, 34, 48, 0.12);
+}
+
+.schedule-bulk-toolbar[hidden] {
+  display: none;
+}
+
+.schedule-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#scheduleView.is-bulk-edit .admin-duration-add {
+  pointer-events: none;
+  opacity: 0.28;
+}
+
+.admin-duration-lesson[data-select-schedule-lesson] {
+  cursor: pointer;
+}
+
+.admin-duration-lesson[data-select-schedule-lesson][aria-pressed="true"] {
+  z-index: 42;
+  outline: 3px solid #047857;
+  outline-offset: -3px;
+  box-shadow: inset 4px 0 0 var(--lesson-color, var(--blue)), 0 0 0 3px rgba(4, 120, 87, 0.18);
+}
+
+.admin-duration-lesson[data-select-schedule-lesson][aria-pressed="true"]::after {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #047857;
+  content: "✓";
+  font-size: 11px;
+  font-weight: 900;
+}
+
+@media (max-width: 760px) {
+  .schedule-bulk-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .schedule-bulk-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .schedule-bulk-actions .ghost-button {
+    min-width: 0;
+    padding-inline: 6px;
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 720px) {

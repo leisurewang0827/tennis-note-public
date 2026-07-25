@@ -64,6 +64,9 @@ const state = {
   selectedMemberIds: [],
   selectedMembershipProductIds: [],
   selectedSubstituteLessonIds: [],
+  scheduleBulkMode: false,
+  selectedScheduleLessonIds: [],
+  scheduleBulkOperationKey: "",
   communityChannel: "홈",
   accountDeletionRequests: [],
   liveScheduleLoaded: false,
@@ -9200,7 +9203,169 @@ function lessonActionAttrs(lesson) {
       `data-released-slot-entitlement="${lesson.entitlementId || ""}"`,
     ].join(" ");
   }
+  if (state.scheduleBulkMode && scheduleBulkEligible(lesson)) {
+    const selected = selectedScheduleLessonIdSet().has(String(lesson.serverLessonId));
+    return `data-select-schedule-lesson="${lesson.serverLessonId}" aria-pressed="${selected}"`;
+  }
   return `data-edit-lesson-id="${lesson.id}"`;
+}
+
+function selectedScheduleLessonIdSet() {
+  return new Set((state.selectedScheduleLessonIds || []).map(String));
+}
+
+function scheduleBulkEligible(lesson) {
+  const status = String(lesson?.serverStatus || lesson?.status || "");
+  return Boolean(
+    lesson?.serverLessonId
+    && !lesson?.oneDayBooking
+    && !isReleasedRegularMakeupSlot(lesson)
+    && status === "scheduled"
+    && lesson?.lessonDate
+    && lesson.lessonDate >= adminLocalDateKey(new Date())
+  );
+}
+
+function selectedScheduleLessons() {
+  const selected = selectedScheduleLessonIdSet();
+  return lessons.filter((lesson) => (
+    selected.has(String(lesson.serverLessonId || ""))
+    && scheduleBulkEligible(lesson)
+  ));
+}
+
+function clearScheduleBulkSelection(closeMode = false) {
+  state.selectedScheduleLessonIds = [];
+  state.scheduleBulkOperationKey = "";
+  if (closeMode) state.scheduleBulkMode = false;
+  renderSchedule();
+}
+
+function toggleScheduleBulkMode(force) {
+  if (operationsRole() !== "admin") {
+    showToast("관리자만 여러 수업을 한 번에 수정할 수 있습니다.");
+    return;
+  }
+  state.scheduleBulkMode = typeof force === "boolean" ? force : !state.scheduleBulkMode;
+  if (!state.scheduleBulkMode) {
+    state.selectedScheduleLessonIds = [];
+    state.scheduleBulkOperationKey = "";
+  }
+  renderSchedule();
+}
+
+function toggleScheduleLessonSelection(lessonId) {
+  const lesson = lessons.find((item) => String(item.serverLessonId) === String(lessonId));
+  if (!scheduleBulkEligible(lesson)) {
+    showToast("예정된 실제 수업만 다중 수정할 수 있습니다.");
+    return;
+  }
+  const selected = selectedScheduleLessonIdSet();
+  if (selected.has(String(lessonId))) selected.delete(String(lessonId));
+  else selected.add(String(lessonId));
+  state.selectedScheduleLessonIds = [...selected];
+  state.scheduleBulkOperationKey = "";
+  renderSchedule();
+}
+
+function renderScheduleBulkToolbar() {
+  const toolbar = $("#scheduleBulkToolbar");
+  const toggle = $("#toggleScheduleBulkMode");
+  const scheduleView = $("#scheduleView");
+  const selected = selectedScheduleLessons();
+  const validIds = new Set(selected.map((lesson) => String(lesson.serverLessonId)));
+  state.selectedScheduleLessonIds = (state.selectedScheduleLessonIds || [])
+    .map(String)
+    .filter((id) => validIds.has(id));
+  if (toolbar) toolbar.hidden = !state.scheduleBulkMode;
+  if ($("#scheduleBulkCount")) $("#scheduleBulkCount").textContent = String(selected.length);
+  if (toggle) {
+    toggle.setAttribute("aria-pressed", String(state.scheduleBulkMode));
+    toggle.textContent = state.scheduleBulkMode ? "다중 수정 중" : "다중 수정";
+  }
+  scheduleView?.classList.toggle("is-bulk-edit", state.scheduleBulkMode);
+  $$("[data-shift-schedule-lessons], #bulkScheduleSubstitute, #clearScheduleBulkSelection")
+    .forEach((button) => {
+      button.disabled = selected.length === 0;
+    });
+}
+
+function scheduleBulkErrorMessage(error) {
+  const raw = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
+  const messages = {
+    lesson_concurrent_update: "다른 화면에서 수업이 먼저 변경되었습니다. 최신 시간표를 불러왔으니 다시 선택해 주세요.",
+    lesson_expected_revision_required: "수업의 최신 상태를 확인할 수 없습니다. 시간표를 새로고침해 주세요.",
+    bulk_shift_conflict: "이동할 시간에 다른 수업이 있어 전체 변경을 취소했습니다.",
+    bulk_shift_coach_not_working: "코치 근무시간 밖인 수업이 있어 전체 변경을 취소했습니다.",
+    bulk_shift_blocked: "브레이크 또는 수업 불가 시간이 포함되어 전체 변경을 취소했습니다.",
+    bulk_shift_outside_day: "날짜를 넘어가는 이동은 할 수 없습니다.",
+    bulk_shift_lesson_required: "이동할 수업을 다시 선택해 주세요.",
+    bulk_shift_invalid_delta: "시간 이동은 10분 단위로만 가능합니다.",
+    bulk_shift_lesson_closed: "예정 상태가 아닌 수업이 포함되어 전체 변경을 취소했습니다.",
+    operation_key_reused_with_different_payload: "선택 내용이 바뀌었습니다. 다시 선택한 뒤 실행해 주세요.",
+  };
+  return Object.entries(messages).find(([code]) => raw.includes(code))?.[1]
+    || "수업 시간을 변경하지 못했습니다. 시간표를 새로고침한 뒤 다시 시도해 주세요.";
+}
+
+async function submitScheduleBulkShift(minuteDelta) {
+  const selected = selectedScheduleLessons();
+  if (!selected.length) return;
+  if (!window.TennisNoteDataClient?.rpc || !adminApprovalReady()) {
+    showToast("관리자 로그인과 서버 연결을 확인해 주세요.");
+    return;
+  }
+  if (!window.confirm(`${selected.length}개 수업을 ${Math.abs(minuteDelta)}분 ${minuteDelta < 0 ? "앞으로" : "뒤로"} 이동할까요?`)) return;
+  const expectedRevisions = Object.fromEntries(selected.map((lesson) => [
+    String(lesson.serverLessonId),
+    lesson.serverRevision ?? null,
+  ]));
+  if (!state.scheduleBulkOperationKey) {
+    state.scheduleBulkOperationKey = createAdminOperationKey("lesson-bulk-shift");
+  }
+  $$("[data-shift-schedule-lessons]").forEach((button) => {
+    button.disabled = true;
+  });
+  try {
+    const result = await window.TennisNoteDataClient.rpc("tn_admin_shift_lessons_guarded", {
+      target_lesson_ids: selected.map((lesson) => lesson.serverLessonId),
+      target_minute_delta: minuteDelta,
+      target_expected_revisions: expectedRevisions,
+      target_operation_key: state.scheduleBulkOperationKey,
+    });
+    await syncAdminLiveData();
+    state.selectedScheduleLessonIds = [];
+    state.scheduleBulkOperationKey = "";
+    state.scheduleBulkMode = false;
+    renderAll();
+    showToast(`${Number(result?.shiftedCount ?? result?.shifted_count ?? selected.length)}개 수업 시간을 변경했습니다.`);
+  } catch (error) {
+    const raw = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
+    if (raw.includes("lesson_concurrent_update")) {
+      await syncAdminLiveData();
+      state.selectedScheduleLessonIds = [];
+      state.scheduleBulkOperationKey = "";
+      renderAll();
+    }
+    showToast(isMissingRpcError(error, "tn_admin_shift_lessons_guarded")
+      ? "운영 DB에 다중 시간 변경 기능을 먼저 적용해야 합니다."
+      : scheduleBulkErrorMessage(error));
+  } finally {
+    renderScheduleBulkToolbar();
+  }
+}
+
+function openSelectedScheduleSubstitute() {
+  const selected = selectedScheduleLessons();
+  if (!selected.length) return;
+  const dates = new Set(selected.map((lesson) => lesson.lessonDate));
+  if (dates.size !== 1) {
+    showToast("대타 지정은 같은 날짜의 수업끼리 선택해 주세요.");
+    return;
+  }
+  openSubstituteModal(selected[0]);
+  state.selectedSubstituteLessonIds = selected.map((lesson) => String(lesson.serverLessonId));
+  renderSubstituteLessonList();
 }
 
 function isPendingScheduleLesson(lesson) {
@@ -9857,6 +10022,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
 
 function renderSchedule() {
   syncAdminScheduleWeek();
+  renderScheduleBulkToolbar();
   const activeWeek = activeAdminWeek();
   if ($("#adminWeekTitle")) $("#adminWeekTitle").textContent = `${activeWeek.label} 레슨관리표`;
   if ($("#adminWeekNote")) $("#adminWeekNote").textContent = `${activeWeek.range} · ${state.liveScheduleLoaded ? state.liveScheduleMessage : activeWeek.note}`;
@@ -9897,6 +10063,7 @@ function renderSchedule() {
   $("#coachScheduleGrid").hidden = !coachDayView;
   if (coachDayView) {
     renderCoachDaySchedule(selectedDay);
+    renderScheduleBulkToolbar();
     return;
   }
   const visibleTimes = getVisibleScheduleTimes()
@@ -9904,6 +10071,7 @@ function renderSchedule() {
     .filter((time) => !mobileDayView || adminTimeVisibleForDay(selectedDay, time));
   const dayCoachMap = new Map(displayDays.map((day) => [day, getScheduleCoachLanes(day)]));
   renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap);
+  renderScheduleBulkToolbar();
   return;
   const dayWidths = displayDays.map((day) => {
     if (mobileDayView) return 0;
@@ -11410,6 +11578,11 @@ async function submitSubstituteAssignments(event) {
     );
     await syncAdminLiveData();
     closeSubstituteModal();
+    if (state.scheduleBulkMode) {
+      state.selectedScheduleLessonIds = [];
+      state.scheduleBulkOperationKey = "";
+      state.scheduleBulkMode = false;
+    }
     renderAll();
     showToast(`${Number(result?.assignedCount ?? result?.assigned_count ?? lessonIds.length)}개 수업 대타 지정 완료`);
   } catch (error) {
@@ -17811,6 +17984,12 @@ function bindEvents() {
     event.preventDefault();
   });
   document.addEventListener("click", (event) => {
+    const bulkLessonButton = event.target.closest("[data-select-schedule-lesson]");
+    if (bulkLessonButton) {
+      event.stopPropagation();
+      toggleScheduleLessonSelection(bulkLessonButton.dataset.selectScheduleLesson);
+      return;
+    }
     const oneDayBookingButton = event.target.closest("[data-edit-one-day-booking-id]");
     if (oneDayBookingButton) {
       openOneDayBookingModal({ bookingId: oneDayBookingButton.dataset.editOneDayBookingId });
@@ -18412,6 +18591,27 @@ function bindEvents() {
 
   document.addEventListener("click", async (event) => {
     if (event.target.matches("[data-select-product-row]")) event.stopPropagation();
+    if (event.target.closest("#toggleScheduleBulkMode")) {
+      toggleScheduleBulkMode();
+      return;
+    }
+    const shiftButton = event.target.closest("[data-shift-schedule-lessons]");
+    if (shiftButton) {
+      await submitScheduleBulkShift(Number(shiftButton.dataset.shiftScheduleLessons));
+      return;
+    }
+    if (event.target.closest("#bulkScheduleSubstitute")) {
+      openSelectedScheduleSubstitute();
+      return;
+    }
+    if (event.target.closest("#clearScheduleBulkSelection")) {
+      clearScheduleBulkSelection();
+      return;
+    }
+    if (event.target.closest("#closeScheduleBulkMode")) {
+      clearScheduleBulkSelection(true);
+      return;
+    }
     if (event.target.closest("#openLessonSubstituteButton")) {
       const lesson = lessons.find((item) => item.id === state.editingLessonId);
       if (!lesson?.serverLessonId) return;

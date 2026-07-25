@@ -7,7 +7,7 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.65" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.66" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -301,6 +301,7 @@
               <button id="openScheduleSettingsButton" class="ghost-button" type="button">시간표 설정</button>
               <button id="saveScheduleList" class="ghost-button" type="button">목록 저장</button>
               <button id="openSubstituteModal" class="ghost-button" type="button">대타 지정</button>
+              <button id="toggleScheduleBulkMode" class="ghost-button" type="button" aria-pressed="false">다중 수정</button>
               <button id="openLessonModal" class="primary-button" type="button">수업 추가</button>
             </div>
           </div>
@@ -335,6 +336,16 @@
             </div>
             <div id="adminScheduleDayPicker" class="schedule-day-picker" aria-label="관리자 시간표 날짜 선택"></div>
             <div id="adminScheduleCoachPicker" class="schedule-coach-picker" aria-label="코치별 시간표 필터"></div>
+            <div id="scheduleBulkToolbar" class="schedule-bulk-toolbar" hidden>
+              <strong><span id="scheduleBulkCount">0</span>개 선택</strong>
+              <div class="schedule-bulk-actions">
+                <button class="ghost-button" type="button" data-shift-schedule-lessons="-10">10분 앞</button>
+                <button class="ghost-button" type="button" data-shift-schedule-lessons="10">10분 뒤</button>
+                <button id="bulkScheduleSubstitute" class="ghost-button" type="button">대타 지정</button>
+                <button id="clearScheduleBulkSelection" class="ghost-button" type="button">선택 해제</button>
+                <button id="closeScheduleBulkMode" class="ghost-button" type="button">끝내기</button>
+              </div>
+            </div>
             <div class="schedule-closed-band"><strong>평일 13:00~17:00</strong><span>수업 없음 · 긴 빈 시간은 시간표에서 접어 표시합니다.</span></div>
             <div class="admin-schedule-scroll" data-schedule-scroll>
               <div id="scheduleGrid" class="schedule-sheet"></div>
@@ -1414,11 +1425,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.65"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.66"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.65"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.66"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.65"></script>
+    <script src="./app.js?v=1.0.66"></script>
   </body>
 </html>
