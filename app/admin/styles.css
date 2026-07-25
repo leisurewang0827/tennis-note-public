@@ -7076,6 +7076,7 @@ button .schedule-member-lines > span {
 #lessonModal.is-quick-entry .lesson-member-ticket-panel,
 #lessonModal.is-quick-entry #lessonMakeupEntitlementField,
 #lessonModal.is-quick-entry #lessonPreview,
+#lessonModal.is-quick-entry #lessonSaveResultPanel,
 #lessonModal.is-quick-entry #lessonFormMessage,
 #lessonModal.is-quick-entry .modal-actions {
   grid-column: 1 / -1;
@@ -7103,6 +7104,7 @@ button .schedule-member-lines > span {
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonAbsencePanel,
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonAbsenceRestorePanel,
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonPreview,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonSaveResultPanel,
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #openLessonSubstituteButton,
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #deleteLessonButton {
   display: none !important;
@@ -7110,6 +7112,7 @@ button .schedule-member-lines > span {
 
 #lessonModal.is-quick-edit #lessonQuickSummary,
 #lessonModal.is-quick-edit #lessonEditScopePanel,
+#lessonModal.is-quick-edit #lessonSaveResultPanel,
 #lessonModal.is-quick-edit #lessonFormMessage,
 #lessonModal.is-quick-edit .modal-actions {
   grid-column: 1 / -1;
@@ -7216,6 +7219,7 @@ button .schedule-member-lines > span {
 }
 
 .lesson-preview,
+.lesson-save-result-panel,
 .form-message,
 .modal-actions {
   grid-column: 1 / -1;
@@ -7234,6 +7238,185 @@ button .schedule-member-lines > span {
 .lesson-preview span {
   color: var(--muted);
   line-height: 1.45;
+}
+
+.lesson-save-result-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #cde2dc;
+  border-radius: 8px;
+  background: #f7fffb;
+}
+
+.lesson-save-result-panel[hidden] {
+  display: none;
+}
+
+.lesson-save-result-panel.is-saving {
+  border-color: #c8d9ec;
+  background: #f5faff;
+}
+
+.lesson-save-result-panel.is-danger {
+  border-color: #f0c1ba;
+  background: #fff7f5;
+}
+
+.lesson-save-result-panel.is-good {
+  border-color: #b7dccf;
+  background: #f2fff8;
+}
+
+.lesson-save-result-panel strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.lesson-save-result-panel p {
+  margin: 0;
+  color: #4b665d;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.lesson-save-result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+}
+
+.lesson-save-result-item {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(21, 103, 82, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.lesson-save-result-item span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.lesson-save-result-item b {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-save-result-missing {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-save-result-missing li {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-save-result-recovery {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: #395850;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.lesson-repeat-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.lesson-repeat-preview > strong {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.lesson-repeat-preview > strong em {
+  color: #4b665d;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.lesson-repeat-preview-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.lesson-repeat-preview-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #cde2dc;
+  border-radius: 8px;
+  background: #f6fffb;
+}
+
+.lesson-repeat-preview-item > span {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.lesson-repeat-preview-item b,
+.lesson-repeat-preview-item small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-repeat-preview-item small {
+  color: #35584f;
+  font-weight: 800;
+}
+
+.lesson-repeat-preview-item.has-issue {
+  border-color: #f0c1ba;
+  background: #fff7f5;
+}
+
+.lesson-repeat-preview-item.has-issue > span {
+  background: var(--red);
+}
+
+.lesson-repeat-preview-item.has-issue small {
+  color: var(--red);
 }
 
 .form-message {
@@ -9296,7 +9479,8 @@ button .schedule-member-lines > span {
   box-shadow: inset 4px 0 0 var(--lesson-color, var(--blue)), 0 0 0 5px rgba(245, 158, 11, 0.22);
 }
 
-.schedule-bulk-toolbar {
+.schedule-bulk-toolbar,
+.schedule-open-slot-toolbar {
   position: sticky;
   top: 8px;
   z-index: 55;
@@ -9311,8 +9495,25 @@ button .schedule-member-lines > span {
   box-shadow: 0 8px 20px rgba(24, 34, 48, 0.12);
 }
 
-.schedule-bulk-toolbar[hidden] {
+.schedule-bulk-toolbar[hidden],
+.schedule-open-slot-toolbar[hidden] {
   display: none;
+}
+
+.schedule-open-slot-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  border-color: #a7d8ff;
+  background: #f3f9ff;
+}
+
+.schedule-open-slot-toolbar span {
+  min-width: 0;
+  overflow: hidden;
+  color: #46616f;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .schedule-paste-toolbar {
@@ -9362,6 +9563,19 @@ button .schedule-member-lines > span {
   opacity: 0.28;
 }
 
+#scheduleView.is-open-slot-edit .admin-duration-add {
+  border-style: solid;
+  color: #0f766e;
+  background: #ffffff;
+}
+
+#scheduleView.is-open-slot-edit .admin-duration-add.is-slot-selected {
+  border-color: #047857;
+  color: #ffffff;
+  background: #047857;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+
 .admin-duration-lesson[data-select-schedule-lesson] {
   cursor: pointer;
 }
@@ -9390,7 +9604,8 @@ button .schedule-member-lines > span {
 }
 
 @media (max-width: 760px) {
-  .schedule-bulk-toolbar {
+  .schedule-bulk-toolbar,
+  .schedule-open-slot-toolbar {
     align-items: stretch;
     flex-direction: column;
   }
@@ -9406,11 +9621,13 @@ button .schedule-member-lines > span {
     white-space: nowrap;
   }
 
-  .schedule-paste-toolbar {
+  .schedule-paste-toolbar,
+  .schedule-open-slot-toolbar {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .schedule-paste-toolbar span {
+  .schedule-paste-toolbar span,
+  .schedule-open-slot-toolbar span {
     display: none;
   }
 }

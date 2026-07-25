@@ -1,29 +1,42 @@
-﻿const CACHE_NAME = "tennis-note-member-pwa-v114";
+const CACHE_NAME = "tennis-note-member-pwa-v115";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.69",
-  "./app.js?v=1.0.69",
+  "./styles.css?v=1.0.70",
+  "./app.js?v=1.0.70",
   "./manifest.webmanifest",
   "./assets/brand/app-icon-180.png",
   "./assets/brand/app-icon-192.png",
   "./assets/brand/app-icon-512.png",
   "./assets/brand/launch-splash.png",
-  "../shared/tennisnote-data-client.js?v=1.0.69",
+  "../shared/tennisnote-data-client.js?v=1.0.70",
   "../shared/tennisnote-product-catalog.js",
   "../shared/tennisnote-curriculum-catalog.js",
   "../shared/tennisnote-native-push.js",
-  "../shared/tennisnote-release.js?v=1.0.69",
+  "../shared/tennisnote-release.js?v=1.0.70",
   "../shared/tennisnote-issue-reporter.js",
   "../shared/tennisnote-issue-reporter.css",
 ];
 
+function deleteOldCaches() {
+  return caches.keys().then((keys) =>
+    Promise.all(
+      keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+        .map((key) => caches.delete(key)),
+    ),
+  );
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      Promise.all(APP_SHELL.map((path) => cache.add(path).catch(() => undefined))),
-    ),
+    Promise.all([
+      deleteOldCaches(),
+      caches.open(CACHE_NAME).then((cache) =>
+        Promise.all(APP_SHELL.map((path) => cache.add(path).catch(() => undefined))),
+      ),
+    ]),
   );
 });
 
@@ -32,15 +45,7 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
-          .map((key) => caches.delete(key)),
-      ),
-    ),
-  );
+  event.waitUntil(deleteOldCaches());
   self.clients.claim();
 });
 

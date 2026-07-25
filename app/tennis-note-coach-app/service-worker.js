@@ -1,23 +1,36 @@
-﻿const CACHE_NAME = "tennis-note-coach-mode-v98";
+const CACHE_NAME = "tennis-note-coach-mode-v99";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.69",
-  "./app.js?v=1.0.69",
+  "./styles.css?v=1.0.70",
+  "./app.js?v=1.0.70",
   "./assets/app-icon.svg",
-  "../shared/tennisnote-data-client.js?v=1.0.69",
+  "../shared/tennisnote-data-client.js?v=1.0.70",
   "../shared/tennisnote-curriculum-catalog.js",
-  "../shared/tennisnote-release.js?v=1.0.69",
+  "../shared/tennisnote-release.js?v=1.0.70",
   "../shared/tennisnote-issue-reporter.js",
   "../shared/tennisnote-issue-reporter.css",
 ];
 
+function deleteOldCaches() {
+  return caches.keys().then((keys) =>
+    Promise.all(
+      keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+        .map((key) => caches.delete(key)),
+    ),
+  );
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      Promise.all(APP_SHELL.map((path) => cache.add(path).catch(() => undefined))),
-    ),
+    Promise.all([
+      deleteOldCaches(),
+      caches.open(CACHE_NAME).then((cache) =>
+        Promise.all(APP_SHELL.map((path) => cache.add(path).catch(() => undefined))),
+      ),
+    ]),
   );
 });
 
@@ -26,15 +39,7 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
-          .map((key) => caches.delete(key)),
-      ),
-    ),
-  );
+  event.waitUntil(deleteOldCaches());
   self.clients.claim();
 });
 

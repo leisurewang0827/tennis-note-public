@@ -42,6 +42,7 @@ const state = {
   releasedAbsenceEntitlementId: "",
   pinnedLessonDay: "",
   pinnedLessonTime: "",
+  pinnedLessonRepeatSlots: [],
   lessonSourceTouched: false,
   lessonWriteInFlight: false,
   lessonOperationKey: "",
@@ -65,9 +66,12 @@ const state = {
   selectedMembershipProductIds: [],
   selectedSubstituteLessonIds: [],
   scheduleBulkMode: false,
+  scheduleOpenSlotMode: false,
   selectedScheduleLessonIds: [],
+  selectedScheduleOpenSlots: [],
   scheduleBulkOperationKey: "",
   scheduleBulkAnchorLessonId: "",
+  scheduleOpenSlotAnchorKey: "",
   scheduleBulkDrag: null,
   scheduleBulkSuppressClick: false,
   scheduleLessonClipboard: null,
@@ -461,7 +465,7 @@ function adminTimeVisibleForDay(day, time) {
   const slotStart = timeToMinutes(time);
   const slotEnd = slotStart + scheduleBlockMinutes;
   const hasLesson = lessons.some((lesson) => {
-    if (lesson.day !== day || lesson.status === "cancelled" || !lessonMatchesActiveScheduleWeek(lesson, day)) return false;
+    if (lesson.day !== day || isLessonCancelled(lesson) || !lessonMatchesActiveScheduleWeek(lesson, day)) return false;
     const lessonStart = timeToMinutes(lesson.time);
     return slotStart < lessonStart + (Number(lesson.durationMinutes) || 20) && slotEnd > lessonStart;
   });
@@ -4606,7 +4610,7 @@ function isDeductedLesson(lesson) {
 function lessonRoundRange(lesson, ticket) {
   const ticketLessons = lessons
     .filter((item) => {
-      if (!isBookedLesson(item) || ["cancelled", "available"].includes(item?.serverStatus || item?.status)) return false;
+      if (!isBookedLesson(item) || isLessonCancelled(item) || isLessonAvailable(item)) return false;
       return getTicketByLesson(item)?.id === ticket.id;
     })
     .sort((left, right) => lessonRoundSortKey(left).localeCompare(lessonRoundSortKey(right)));
@@ -4647,8 +4651,45 @@ function scheduleCoachDisplayName(name = "") {
   return String(name || "미배정").replace(/\s*코치\s*$/, "").trim() || "미배정";
 }
 
+function lessonSourceValue(lesson = {}) {
+  return normalizeLessonSource(lesson.lessonSource || lesson.lesson_source || "");
+}
+
+function lessonRawStatusValue(lesson = {}) {
+  return String(lesson.serverStatus || lesson.server_status || lesson.status || "").toLowerCase();
+}
+
+function lessonStatusValue(lesson = {}) {
+  const status = lessonRawStatusValue(lesson);
+  if (status === "pending") return "pending_change";
+  if (status === "confirmed") return "scheduled";
+  return status || "scheduled";
+}
+
+function lessonCssStatusClass(lesson = {}) {
+  const status = lessonStatusValue(lesson);
+  if (status === "pending_change") return "pending";
+  return status;
+}
+
+function isLessonPendingChange(lesson = {}) {
+  return lessonStatusValue(lesson) === "pending_change";
+}
+
+function isLessonCancelled(lesson = {}) {
+  return lessonStatusValue(lesson) === "cancelled";
+}
+
+function isLessonAvailable(lesson = {}) {
+  return lessonStatusValue(lesson) === "available";
+}
+
+function isLessonEditableScheduled(lesson = {}) {
+  return ["scheduled", "pending_change"].includes(lessonStatusValue(lesson));
+}
+
 function scheduleLessonExceptionLabel(lesson = {}) {
-  const context = `${lesson.type || ""} ${lesson.lessonSource || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
+  const context = `${lesson.type || ""} ${lessonSourceValue(lesson)} ${lesson.changeNote || ""} ${lesson.task || ""}`;
   if ((lesson.originalCoachRoleId && lesson.coachRoleId && lesson.originalCoachRoleId !== lesson.coachRoleId) || /대타/.test(context)) return "대타";
   if (/코치\s*변경/.test(context)) return "코치 변경";
   if (/시간\s*변경|변경\s*완료/.test(context)) return "시간 변경";
@@ -4656,7 +4697,7 @@ function scheduleLessonExceptionLabel(lesson = {}) {
 }
 
 function isMakeupLesson(lesson) {
-  return lesson.lessonSource === "makeup" || lesson.type?.includes("보강") || lesson.type?.includes("대리") || lesson.makeup === true;
+  return lessonSourceValue(lesson) === "makeup" || lesson.type?.includes("보강") || lesson.type?.includes("대리") || lesson.makeup === true;
 }
 
 function isReleasedRegularMakeupSlot(lesson) {
@@ -4664,37 +4705,42 @@ function isReleasedRegularMakeupSlot(lesson) {
 }
 
 function getLessonStatusLabel(lesson) {
+  const rawStatus = lessonRawStatusValue(lesson);
+  const status = lessonStatusValue(lesson);
   if (lesson?.oneDayBooking) {
-    if (lesson.serverStatus === "completed") return "원데이 완료";
-    if (lesson.serverStatus === "checked_in") return "방문";
+    if (status === "completed") return "원데이 완료";
+    if (rawStatus === "checked_in") return "방문";
     return "원데이 예약";
   }
   if (isReleasedRegularMakeupSlot(lesson)) return "정규자리 · 보강 가능";
-  if (lesson.serverStatus === "completed" || lesson.status === "completed") return "완료";
-  if (lesson.serverStatus === "no_show" || lesson.status === "no_show") return "당일 취소";
-  if (lesson.status === "available") return "보강 가능";
-  if (isMakeupLesson(lesson) && lesson.status === "pending") return "보강접수중";
+  if (status === "completed") return "완료";
+  if (status === "no_show") return "당일 취소";
+  if (status === "cancelled") return "취소";
+  if (status === "available") return "보강 가능";
+  if (isMakeupLesson(lesson) && isLessonPendingChange(lesson)) return "보강접수중";
   if (isMakeupLesson(lesson)) return "보강";
-  if (lesson.status === "pending") return "승인 필요";
-  if (lesson.status === "confirmed") return "확정";
+  if (isLessonPendingChange(lesson)) return "승인 필요";
+  if (rawStatus === "confirmed") return "확정";
   return "예정";
 }
 
 function getLessonStateClass(lesson) {
   if (isReleasedRegularMakeupSlot(lesson)) return "status-released-makeup";
-  if (isMakeupLesson(lesson) && lesson.status === "pending") return "status-makeup-pending";
+  if (isMakeupLesson(lesson) && isLessonPendingChange(lesson)) return "status-makeup-pending";
   if (isMakeupLesson(lesson)) return "status-makeup";
-  if (lesson.status === "pending") return "status-pending";
+  if (isLessonPendingChange(lesson)) return "status-pending";
   return "";
 }
 
 function lessonVisualKind(lesson) {
-  if (["no_show", "cancelled_late"].includes(String(lesson?.serverStatus || lesson?.status || "").toLowerCase())) return "noShow";
+  const source = lessonSourceValue(lesson);
+  const status = lessonStatusValue(lesson);
+  if (["no_show", "cancelled_late"].includes(status)) return "noShow";
   if (lesson?.oneDayBooking) return "coupon";
   if (isReleasedRegularMakeupSlot(lesson)) return "released";
   if (isMakeupLesson(lesson)) return "makeup";
-  if (lesson.lessonSource === "coupon") return "coupon";
-  const customRule = (scheduleSettings.lessonColorRules || []).find((rule) => rule.match && `${lesson.type || ""} ${lesson.lessonSource || ""}`.includes(rule.match));
+  if (source === "coupon" || source === "one_day") return "coupon";
+  const customRule = (scheduleSettings.lessonColorRules || []).find((rule) => rule.match && `${lesson.type || ""} ${source}`.includes(rule.match));
   if (customRule) return customRule.id;
   if (Number(lesson.durationMinutes) === 30) return "regular30";
   const ticket = getTicketByLesson(lesson);
@@ -4714,7 +4760,7 @@ function lessonColorStyle(lesson) {
 
 function durationTone(lesson) {
   if (isReleasedRegularMakeupSlot(lesson)) return "available";
-  if (lesson.status === "available") return "available";
+  if (lessonStatusValue(lesson) === "available") return "available";
   if (isMakeupLesson(lesson)) return "makeup";
   if (lesson.durationMinutes === 40 || lesson.durationMinutes === 60) return "stacked";
   if (lesson.durationMinutes >= 30) return "half";
@@ -4746,7 +4792,7 @@ function findLessons(day, time) {
 }
 
 function isBookedLesson(lesson) {
-  return lesson.status !== "available" || isReleasedRegularMakeupSlot(lesson);
+  return !isLessonAvailable(lesson) || isReleasedRegularMakeupSlot(lesson);
 }
 
 function lessonInterval(lesson) {
@@ -4782,8 +4828,8 @@ function getLessonConflict(candidate) {
       && !(
         replacementTicket
         && String(lesson.ticketId || "") === String(replacementTicket.id)
-        && normalizeLessonSource(lesson.lessonSource) === "regular"
-        && lesson.serverStatus === "scheduled"
+        && lessonSourceValue(lesson) === "regular"
+        && lessonStatusValue(lesson) === "scheduled"
       )
     ));
   const releasedRegularSlot = allOverlappingBooked.find((lesson) => (
@@ -5325,9 +5371,8 @@ function ticketHasFutureRegularLesson(ticket, today = adminLocalDateKey(new Date
   return lessons.some((lesson) => {
     if (String(lesson.ticketId || "") !== String(ticket.id || "")) return false;
     if (!lesson.lessonDate || lesson.lessonDate < today) return false;
-    const status = lesson.serverStatus || lesson.status || "scheduled";
-    if (["available", "cancelled", "completed", "no_show"].includes(status)) return false;
-    return normalizeLessonSource(lesson.lessonSource) === "regular";
+    if (["available", "cancelled", "completed", "no_show"].includes(lessonStatusValue(lesson))) return false;
+    return lessonSourceValue(lesson) === "regular";
   });
 }
 
@@ -5380,8 +5425,7 @@ function ticketHasUpcomingLesson(ticket, today = adminLocalDateKey(new Date())) 
   return lessons.some((lesson) => {
     if (String(lesson.ticketId || "") !== String(ticket.id || "")) return false;
     if (!lesson.lessonDate || lesson.lessonDate < today) return false;
-    const status = lesson.serverStatus || lesson.status || "scheduled";
-    return !["available", "cancelled", "completed", "no_show", "confirmed"].includes(status);
+    return !["available", "cancelled", "completed", "no_show"].includes(lessonStatusValue(lesson));
   });
 }
 
@@ -9274,6 +9318,77 @@ function toggleScheduleBulkMode(force) {
   renderSchedule();
 }
 
+function scheduleOpenSlotKey(slot = {}) {
+  return [slot.day || "", slot.time || "", slot.coachId || ""].join("|");
+}
+
+function parseScheduleOpenSlotKey(key = "") {
+  const [day = "", time = "", coachId = ""] = String(key).split("|");
+  return { day, time, coachId };
+}
+
+function selectedScheduleOpenSlotKeys() {
+  return new Set((state.selectedScheduleOpenSlots || []).map(scheduleOpenSlotKey));
+}
+
+function visibleScheduleOpenSlotKeys() {
+  return [...document.querySelectorAll("[data-select-schedule-slot]")]
+    .map((button) => String(button.dataset.selectScheduleSlot || ""))
+    .filter(Boolean);
+}
+
+function toggleScheduleOpenSlotMode(force) {
+  if (operationsRole() !== "admin") {
+    showToast("관리자만 빈칸을 여러 개 선택할 수 있습니다.");
+    return;
+  }
+  state.scheduleOpenSlotMode = typeof force === "boolean" ? force : !state.scheduleOpenSlotMode;
+  if (state.scheduleOpenSlotMode) {
+    state.scheduleBulkMode = false;
+    state.selectedScheduleLessonIds = [];
+  } else {
+    state.selectedScheduleOpenSlots = [];
+    state.scheduleOpenSlotAnchorKey = "";
+  }
+  renderSchedule();
+}
+
+function setScheduleOpenSlotSelection(key, selectedValue) {
+  const slot = parseScheduleOpenSlotKey(key);
+  if (!slot.day || !slot.time || !slot.coachId) return false;
+  if (!canAddLessonAt(slot.day, slot.time, 20, slot.coachId)) {
+    showToast("수업을 추가할 수 있는 빈 시간만 선택할 수 있습니다.");
+    return false;
+  }
+  const selected = selectedScheduleOpenSlotKeys();
+  if (selectedValue) selected.add(key);
+  else selected.delete(key);
+  state.selectedScheduleOpenSlots = [...selected].map(parseScheduleOpenSlotKey);
+  return true;
+}
+
+function selectScheduleOpenSlotRange(key) {
+  const orderedKeys = visibleScheduleOpenSlotKeys();
+  const startIndex = orderedKeys.indexOf(String(state.scheduleOpenSlotAnchorKey || ""));
+  const endIndex = orderedKeys.indexOf(String(key || ""));
+  if (startIndex < 0 || endIndex < 0) return false;
+  const [from, to] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+  orderedKeys.slice(from, to + 1).forEach((item) => setScheduleOpenSlotSelection(item, true));
+  return true;
+}
+
+function toggleScheduleOpenSlotSelection(key, range = false) {
+  if (range && selectScheduleOpenSlotRange(key)) {
+    renderSchedule();
+    return;
+  }
+  const selected = selectedScheduleOpenSlotKeys();
+  const nextSelected = !selected.has(String(key));
+  if (!setScheduleOpenSlotSelection(key, nextSelected)) return;
+  state.scheduleOpenSlotAnchorKey = String(key);
+  renderSchedule();
+}
+
 function visibleScheduleLessonSelectionIds() {
   return [...document.querySelectorAll("[data-select-schedule-lesson]")]
     .map((button) => String(button.dataset.selectScheduleLesson || ""))
@@ -9382,6 +9497,75 @@ function renderSchedulePasteToolbar() {
   $("#schedulePasteSummary").textContent = `${clipboard.memberLabel} · ${clipboard.durationMinutes}분 · ${coachName}`;
 }
 
+function sortedSelectedScheduleOpenSlots() {
+  return (state.selectedScheduleOpenSlots || [])
+    .slice()
+    .sort((left, right) => {
+      const dayDelta = scheduleDays.indexOf(left.day) - scheduleDays.indexOf(right.day);
+      if (dayDelta) return dayDelta;
+      return timeToMinutes(left.time) - timeToMinutes(right.time);
+    });
+}
+
+function renderScheduleOpenSlotToolbar() {
+  const toolbar = $("#scheduleOpenSlotToolbar");
+  const toggle = $("#toggleScheduleOpenSlotMode");
+  const scheduleView = $("#scheduleView");
+  const visibleKeys = new Set(visibleScheduleOpenSlotKeys());
+  state.selectedScheduleOpenSlots = (state.selectedScheduleOpenSlots || [])
+    .filter((slot) => visibleKeys.has(scheduleOpenSlotKey(slot)));
+  const selected = sortedSelectedScheduleOpenSlots();
+  if (toolbar) toolbar.hidden = !state.scheduleOpenSlotMode;
+  if ($("#scheduleOpenSlotCount")) $("#scheduleOpenSlotCount").textContent = String(selected.length);
+  const createButton = $("#createLessonFromOpenSlots");
+  if (createButton) {
+    createButton.disabled = selected.length === 0;
+    createButton.textContent = state.scheduleLessonClipboard ? "선택칸에 붙여넣기" : "선택칸 수업 추가";
+  }
+  if (toggle) {
+    toggle.setAttribute("aria-pressed", String(state.scheduleOpenSlotMode));
+    toggle.textContent = state.scheduleOpenSlotMode ? "빈칸 선택 중" : "빈칸 선택";
+  }
+  scheduleView?.classList.toggle("is-open-slot-edit", state.scheduleOpenSlotMode);
+}
+
+function openLessonModalFromSelectedOpenSlots() {
+  const slots = sortedSelectedScheduleOpenSlots();
+  if (!slots.length) return;
+  if (slots.length > 3) {
+    showToast("정규 반복 수업은 한 번에 최대 3칸까지 선택할 수 있습니다.");
+    return;
+  }
+  const coachIds = new Set(slots.map((slot) => slot.coachId));
+  if (coachIds.size > 1) {
+    showToast("같은 코치의 빈칸만 한 번에 등록할 수 있습니다.");
+    return;
+  }
+  const first = slots[0];
+  const clipboard = state.scheduleLessonClipboard;
+  const clipboardDefaults = clipboard
+    ? scheduleClipboardDefaultsForSlot(first.day, first.time, first.coachId)
+    : {};
+  if (clipboard) {
+    const blockedSlot = slots.find((slot) => !scheduleClipboardCanPaste(slot.day, slot.time, slot.coachId));
+    if (blockedSlot) {
+      showToast(`${blockedSlot.day} ${blockedSlot.time}에는 복사한 수업을 붙여넣을 수 없습니다.`);
+      return;
+    }
+  }
+  state.scheduleOpenSlotMode = false;
+  state.selectedScheduleOpenSlots = [];
+  state.scheduleOpenSlotAnchorKey = "";
+  openLessonModal({
+    day: first.day,
+    time: first.time,
+    coachId: first.coachId,
+    quickEntry: true,
+    repeatSlots: slots,
+    ...clipboardDefaults,
+  });
+}
+
 function copySelectedScheduleLesson() {
   const selected = selectedScheduleLessons();
   if (selected.length !== 1) {
@@ -9419,12 +9603,16 @@ function clearScheduleLessonClipboard() {
 }
 
 function scheduleClipboardDefaults(button) {
-  const clipboard = state.scheduleLessonClipboard;
-  if (!clipboard || !scheduleClipboardCanPaste(
+  return scheduleClipboardDefaultsForSlot(
     button.dataset.addLessonDay,
     button.dataset.addLessonTime,
     button.dataset.addLessonCoach,
-  )) return {};
+  );
+}
+
+function scheduleClipboardDefaultsForSlot(day, time, coachId) {
+  const clipboard = state.scheduleLessonClipboard;
+  if (!clipboard || !scheduleClipboardCanPaste(day, time, coachId)) return {};
   return {
     memberName: clipboard.memberName,
     ticketId: clipboard.ticketId,
@@ -9457,6 +9645,7 @@ function renderScheduleBulkToolbar() {
     });
   if ($("#copyScheduleLesson")) $("#copyScheduleLesson").disabled = selected.length !== 1;
   renderSchedulePasteToolbar();
+  renderScheduleOpenSlotToolbar();
 }
 
 function scheduleBulkErrorMessage(error) {
@@ -9538,13 +9727,13 @@ function openSelectedScheduleSubstitute() {
 }
 
 function isPendingScheduleLesson(lesson) {
-  return lesson.status === "pending";
+  return isLessonPendingChange(lesson);
 }
 
 function scheduleFilterMatches(lesson) {
   return (
     state.scheduleFilter === "all" ||
-    (state.scheduleFilter === "available" && lesson.status === "available") ||
+    (state.scheduleFilter === "available" && isLessonAvailable(lesson)) ||
     (state.scheduleFilter === "pending" && isPendingScheduleLesson(lesson))
   );
 }
@@ -9566,7 +9755,7 @@ function renderScheduleLessonCell(lesson, day, time, extraClass = "") {
   const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
   const canAdd = hasCourtCapacity(day, time);
   return `
-    <div class="sheet-cell lesson-slot ${lesson.status} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${extraClass} ${isDimmed ? "is-dimmed" : ""}" title="${day} ${time}">
+    <div class="sheet-cell lesson-slot ${lessonCssStatusClass(lesson)} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${extraClass} ${isDimmed ? "is-dimmed" : ""}" title="${day} ${time}">
       <button class="slot-lesson-main ${getCoachToneClass(lesson.coachId)} ${getLessonStateClass(lesson)}" type="button" ${lessonActionAttrs(lesson)}>
         <strong>${getLessonMembersMarkup(lesson)}</strong>
         <span>${getCoachName(lesson.coachId)}</span>
@@ -9585,7 +9774,7 @@ function renderMultiScheduleCell(day, time, startingLessons) {
         .map((lesson) => {
           const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
           return `
-            <button class="multi-lesson ${lesson.status} ${getLessonStateClass(lesson)} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
+            <button class="multi-lesson ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
               <strong>${getLessonMembersMarkup(lesson)}</strong>
               <span>${getCoachName(lesson.coachId)}</span>
               <small>${getLessonRoundLabel(lesson)} · ${lesson.durationMinutes}분</small>
@@ -9608,7 +9797,7 @@ function renderSplitSegment(kind, lesson, label, extraClass = "", addSlot = null
 
   const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
   return `
-    <button class="split-segment ${kind} ${lesson.status} ${getLessonStateClass(lesson)} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${extraClass} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
+    <button class="split-segment ${kind} ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${extraClass} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
       <strong>${label}</strong>
       <span>${getLessonMembersMarkup(lesson)}</span>
       <small>${getCoachName(lesson.coachId)} · ${getLessonRoundLabel(lesson)} · ${lessonTypeLabel(lesson)}</small>
@@ -9628,7 +9817,7 @@ function renderCoachLaneLessonCard(lesson, label = "") {
   const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
   const roundLabel = getLessonRoundLabel(lesson);
   return `
-    <button class="coach-lane-card lesson ${lesson.status} ${getLessonStateClass(lesson)} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
+    <button class="coach-lane-card lesson ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
       <strong>${getLessonMembersMarkup(lesson)}</strong>
       ${roundLabel ? `<span class="schedule-round-label">${escapeHtml(roundLabel)}</span>` : ""}
       <span>${label || getCoachName(lesson.coachId)}</span>
@@ -9783,7 +9972,7 @@ function renderUniformScheduleLine(kind, lesson, timeLabel = "") {
     ? `보강만 등록 · ${lesson.durationMinutes}분`
     : getLessonStatusLabel(lesson);
   return `
-    <button class="schedule-stack-line ${kind} lesson-kind-${lessonVisualKind(lesson)} ${lesson.status} ${getLessonStateClass(lesson)} ${isCardDimmed ? "is-dimmed" : ""}" style="--lesson-height:${lessonCardHeight}px;${lessonColorStyle(lesson)}" type="button" ${lessonActionAttrs(lesson)}>
+    <button class="schedule-stack-line ${kind} lesson-kind-${lessonVisualKind(lesson)} ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} ${isCardDimmed ? "is-dimmed" : ""}" style="--lesson-height:${lessonCardHeight}px;${lessonColorStyle(lesson)}" type="button" ${lessonActionAttrs(lesson)}>
       ${timeLabel ? `<span class="stack-time">${timeLabel}</span>` : ""}
       <strong>${getLessonMembersMarkup(lesson)}</strong>
       ${!isReleasedRegularMakeupSlot(lesson) ? `<span class="schedule-round-label">${escapeHtml(roundLabel)}</span>` : ""}
@@ -9886,7 +10075,7 @@ function renderScheduleStackLine(kind, lesson, timeLabel) {
   const isCardDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
   const roundLabel = getLessonRoundLabel(lesson) || "회차 확인";
   return `
-    <button class="schedule-stack-line ${kind} ${lesson.status} ${getLessonStateClass(lesson)} ${getCoachToneClass(lesson.coachId)} ${isCardDimmed ? "is-dimmed" : ""}" style="--lesson-height: ${lessonCardHeight}px" type="button" ${lessonActionAttrs(lesson)}>
+    <button class="schedule-stack-line ${kind} ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} ${getCoachToneClass(lesson.coachId)} ${isCardDimmed ? "is-dimmed" : ""}" style="--lesson-height: ${lessonCardHeight}px" type="button" ${lessonActionAttrs(lesson)}>
       <strong>${getLessonMembersMarkup(lesson)}</strong>
       <span class="stack-coach">${getCoachName(lesson.coachId)}</span>
       <small>${getLessonStatusLabel(lesson)} · ${roundLabel}</small>
@@ -9895,7 +10084,7 @@ function renderScheduleStackLine(kind, lesson, timeLabel) {
   const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
   const kindLabel = kind === "spill" ? "걸침" : `${lesson.durationMinutes}분`;
   return `
-    <button class="schedule-stack-line ${kind} ${lesson.status} ${getLessonStateClass(lesson)} ${getCoachToneClass(lesson.coachId)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
+    <button class="schedule-stack-line ${kind} ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} ${getCoachToneClass(lesson.coachId)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
       <span class="stack-time">${timeLabel}</span>
       <strong>${getLessonMembersMarkup(lesson)}</strong>
       <span class="stack-coach">${getCoachName(lesson.coachId)}</span>
@@ -9942,7 +10131,7 @@ function renderOverlapScheduleCell(day, time, occupyingLesson, startingLessons) 
           .map((lesson) => {
             const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
             return `
-              <button class="multi-lesson ${lesson.status} ${getLessonStateClass(lesson)} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
+              <button class="multi-lesson ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} duration-${durationTone(lesson)} ${getCoachToneClass(lesson.coachId)} ${isDimmed ? "is-dimmed" : ""}" type="button" ${lessonActionAttrs(lesson)}>
                 <strong>${getLessonMembersMarkup(lesson)}</strong>
                 <span>${getCoachName(lesson.coachId)}</span>
                 <small>${getLessonRoundLabel(lesson)} · ${lesson.durationMinutes}분</small>
@@ -10017,7 +10206,7 @@ function renderScheduleCell(day, time) {
 }
 
 function lessonOverlapsScheduleSlot(lesson, day, time) {
-  if (lesson.day !== day || lesson.status === "cancelled" || !lessonMatchesActiveScheduleWeek(lesson, day)) return false;
+  if (lesson.day !== day || isLessonCancelled(lesson) || !lessonMatchesActiveScheduleWeek(lesson, day)) return false;
   const slotStart = timeToMinutes(time);
   const slotEnd = slotStart + scheduleBlockMinutes;
   const lessonStart = timeToMinutes(lesson.time);
@@ -10064,14 +10253,14 @@ function renderCoachDayLessonCard(lesson, visibleTimes, column) {
   }).length);
   const memberLabel = isReleasedRegularMakeupSlot(lesson)
     ? "수업 신청 가능"
-    : lesson.status === "available" ? "보강 가능" : getLessonMembersLabel(lesson);
+    : isLessonAvailable(lesson) ? "보강 가능" : getLessonMembersLabel(lesson);
   const statusLabel = isReleasedRegularMakeupSlot(lesson)
     ? `${lesson.durationMinutes}분`
-    : lesson.status === "available" ? `${lesson.durationMinutes}분 신청 가능` : `${getLessonStatusLabel(lesson)} · ${lesson.durationMinutes}분`;
+    : isLessonAvailable(lesson) ? `${lesson.durationMinutes}분 신청 가능` : `${getLessonStatusLabel(lesson)} · ${lesson.durationMinutes}분`;
   const roundLabel = getLessonRoundLabel(lesson);
   const coachLabel = lessonScheduleCoachLabel(lesson);
   return `
-    <button class="coach-day-lesson ${lesson.status} ${getLessonStateClass(lesson)} ${getCoachToneClass(lesson.coachId)}" style="grid-row:${startIndex + 2} / span ${rowSpan};grid-column:${column};" type="button" ${lessonActionAttrs(lesson)}>
+    <button class="coach-day-lesson ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} ${getCoachToneClass(lesson.coachId)}" style="grid-row:${startIndex + 2} / span ${rowSpan};grid-column:${column};" type="button" ${lessonActionAttrs(lesson)}>
       <strong>${scheduleMemberLinesMarkup(memberLabel)}</strong>
       ${roundLabel ? `<span class="schedule-round-label">${escapeHtml(roundLabel)}</span>` : ""}
       <span>${escapeHtml(`${statusLabel}${coachLabel ? ` · ${coachLabel}` : ""}`)}</span>
@@ -10117,7 +10306,7 @@ function renderCoachDaySchedule(day) {
     return `<div class="coach-day-time ${minor ? "is-minor" : ""}" style="grid-row:${row};grid-column:1;">${time}</div>${visibleCoaches.map((coach, coachIndex) => renderCoachDayBaseCell(day, time, coach, row, coachIndex + 2)).join("")}`;
   }).join("");
   const lessonCards = visibleCoaches.map((coach, coachIndex) => lessons
-    .filter((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && lesson.status !== "cancelled" && lessonMatchesActiveScheduleWeek(lesson, day))
+    .filter((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && !isLessonCancelled(lesson) && lessonMatchesActiveScheduleWeek(lesson, day))
     .map((lesson) => renderCoachDayLessonCard(lesson, visibleTimes, coachIndex + 2))
     .join("")).join("");
   target.innerHTML = headers + baseCells + lessonCards;
@@ -10163,22 +10352,24 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10) || getBreakRuleOverlapping(day, time, 10, coach.id);
     const working = !breakRule && isCoachAvailableForSlot(coach.id, day, time, 10);
     const stateClass = occupyingLesson ? "is-occupied" : breakRule ? "is-break" : working ? "is-open" : "is-closed";
+    const openSlotKey = scheduleOpenSlotKey({ day, time, coachId: coach.id });
+    const openSlotSelected = selectedScheduleOpenSlotKeys().has(openSlotKey);
     const pasteReady = !occupyingLesson && working && scheduleClipboardCanPaste(day, time, coach.id);
     const addButton = !occupyingLesson && working && canAddLessonAt(day, time, 20, coach.id)
-      ? `<button class="admin-duration-add ${pasteReady ? "is-paste-ready" : ""}" type="button" data-quick-lesson-entry="true" ${pasteReady ? 'data-paste-schedule-lesson="true"' : ""} ${lessonAddAttrs(day, time, 20, coach.id)}>${pasteReady ? "붙여넣기" : "+ 수업 추가"}</button>`
+      ? `<button class="admin-duration-add ${pasteReady ? "is-paste-ready" : ""} ${openSlotSelected ? "is-slot-selected" : ""}" type="button" data-quick-lesson-entry="true" ${state.scheduleOpenSlotMode ? `data-select-schedule-slot="${escapeHtml(openSlotKey)}" aria-pressed="${openSlotSelected ? "true" : "false"}"` : ""} ${pasteReady ? 'data-paste-schedule-lesson="true"' : ""} ${lessonAddAttrs(day, time, 20, coach.id)}>${state.scheduleOpenSlotMode ? (openSlotSelected ? "선택됨" : "선택") : pasteReady ? "붙여넣기" : "+ 수업 추가"}</button>`
       : "";
     return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${stateClass}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
   }).join("")).join("");
 
   const lessonCards = lanes.map(({ day, coach }, laneIndex) => lessons
-    .filter((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && lesson.status !== "cancelled" && lessonMatchesActiveScheduleWeek(lesson, day))
+    .filter((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && !isLessonCancelled(lesson) && lessonMatchesActiveScheduleWeek(lesson, day))
     .map((lesson) => {
       const startIndex = visibleTimes.indexOf(lesson.time);
       if (startIndex < 0) return "";
       const span = Math.max(1, Math.ceil((Number(lesson.durationMinutes) || 20) / 10));
       const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
       return `
-        <button class="admin-duration-lesson ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} lesson-kind-${lessonVisualKind(lesson)} ${lesson.status} ${getLessonStateClass(lesson)} ${isDimmed ? "is-dimmed" : ""}" type="button" data-schedule-lesson-id="${escapeHtml(String(lesson.id || ""))}" ${lessonActionAttrs(lesson)} style="${lessonColorStyle(lesson)};grid-row:${startIndex + 3} / span ${span};grid-column:${laneIndex + 2};">
+        <button class="admin-duration-lesson ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} lesson-kind-${lessonVisualKind(lesson)} ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} ${isDimmed ? "is-dimmed" : ""}" type="button" data-schedule-lesson-id="${escapeHtml(String(lesson.id || ""))}" ${lessonActionAttrs(lesson)} style="${lessonColorStyle(lesson)};grid-row:${startIndex + 3} / span ${span};grid-column:${laneIndex + 2};">
           <strong class="schedule-lesson-name">${getLessonMembersMarkup(lesson)}</strong>
           <span class="schedule-lesson-round">${escapeHtml(getLessonRoundLabel(lesson) || "회차 확인")}</span>
           <span class="schedule-lesson-coach">${escapeHtml(lessonScheduleCoachLabel(lesson))}</span>
@@ -10365,6 +10556,63 @@ function getRegularScheduleValidation(ticket) {
   };
 }
 
+function regularScheduleSlotIssue(slot, index, ticket, candidate, validation) {
+  if (!slot?.day || !slot?.time) return "요일/시간 선택 필요";
+  if (validation.duplicateDay && validation.duplicateDay === slot.day) return "요일 중복";
+  if (ticket && !ticketAllowsScheduleDay(ticket, slot.day)) return "이 회원권에서 선택할 수 없는 요일";
+  const internalConflict = getInternalScheduleConflict(validation.slots, candidate.durationMinutes);
+  if (internalConflict && internalConflict.day === slot.day) return internalConflict.message;
+  const exactDuplicate = getAdminManualExactDuplicate(getLessonFormCandidate({ day: slot.day, time: slot.time }));
+  if (exactDuplicate) return "이미 같은 회원권·날짜·시간의 수업이 있습니다";
+  const conflict = getLessonConflict(getLessonFormCandidate({ day: slot.day, time: slot.time }));
+  if (conflict) return conflict.message;
+  return "";
+}
+
+function regularScheduleIssueRows(ticket, candidate, validation) {
+  const requiredCount = validation.requiredCount || 1;
+  const slots = Array.from({ length: requiredCount }, (_, index) => validation.slots[index] || { day: "", time: "" });
+  return slots.map((slot, index) => {
+    const issue = regularScheduleSlotIssue(slot, index, ticket, candidate, validation);
+    return {
+      index: index + 1,
+      slot,
+      issue,
+      label: slot.day && slot.time
+        ? `${slot.day} ${slot.time}~${minutesToTime(timeToMinutes(slot.time) + candidate.durationMinutes)}`
+        : "미선택",
+    };
+  });
+}
+
+function regularScheduleSaveCheckMessage(ticket, candidate, validation) {
+  const issueRows = regularScheduleIssueRows(ticket, candidate, validation).filter((row) => row.issue);
+  if (!issueRows.length) return "";
+  return issueRows
+    .slice(0, 3)
+    .map((row) => `${row.index}번 ${row.label}: ${row.issue}`)
+    .join(" / ");
+}
+
+function renderRegularSchedulePreview(ticket, candidate, validation) {
+  const requiredCount = validation.requiredCount || 1;
+  if (requiredCount <= 1) return "";
+  const issueRows = regularScheduleIssueRows(ticket, candidate, validation);
+  const readyCount = issueRows.filter((row) => !row.issue).length;
+  return `
+    <div class="lesson-repeat-preview" aria-label="반복 정규수업 미리보기">
+      <strong>정규시간 ${requiredCount}개 확인 <em>서버 저장 예정 ${readyCount}/${requiredCount}</em></strong>
+      <div class="lesson-repeat-preview-list">
+        ${issueRows.map((row) => `
+          <div class="lesson-repeat-preview-item ${row.issue ? "has-issue" : "is-ready"}">
+            <span>${row.index}</span>
+            <b>${escapeHtml(row.label)}</b>
+            <small>${escapeHtml(row.issue || "등록 가능")}</small>
+          </div>`).join("")}
+      </div>
+    </div>`;
+}
+
 function getSelectedLessonSchedules() {
   return getLessonScheduleSlots().filter((item) => item.day && item.time);
 }
@@ -10519,6 +10767,7 @@ function refreshLessonDayOptions() {
       time: row?.querySelector("[data-lesson-slot-time]")?.value || "",
     };
   });
+  const repeatDefaults = Array.isArray(state.pinnedLessonRepeatSlots) ? state.pinnedLessonRepeatSlots : [];
   target.innerHTML = "";
   target.hidden = !regularScheduleMode;
   const previousPrimaryDay = $("#lessonDay").value;
@@ -10528,7 +10777,7 @@ function refreshLessonDayOptions() {
   const primaryDay = $("#lessonDay").value;
   for (let index = 2; index <= 3; index += 1) {
     const isActive = index <= scheduleCount;
-    const previous = previousSlots[index - 2] || {};
+    const previous = previousSlots[index - 2] || repeatDefaults[index - 1] || {};
     const selectedDay = previous.day && availableDays.includes(previous.day) ? previous.day : "";
     const row = document.createElement("label");
     row.className = "form-field lesson-repeat-slot";
@@ -10556,6 +10805,24 @@ function refreshLessonDayOptions() {
     });
     timeSelect.addEventListener("change", renderLessonPreview);
   }
+}
+
+function applyLessonRepeatSlotDefaults(slots = []) {
+  if (!Array.isArray(slots) || slots.length <= 1) return;
+  slots.slice(1, 3).forEach((slot, index) => {
+    const row = $$(".lesson-repeat-slot")[index];
+    if (!row || row.classList.contains("is-disabled")) return;
+    const daySelect = row.querySelector("[data-lesson-slot-day]");
+    const timeSelect = row.querySelector("[data-lesson-slot-time]");
+    if (!daySelect || !timeSelect) return;
+    if ([...daySelect.options].some((option) => option.value === slot.day)) {
+      daySelect.value = slot.day;
+    }
+    fillSelect(timeSelect, getTimeOptionsForLessonSlot(daySelect.value));
+    if ([...timeSelect.options].some((option) => option.value === slot.time)) {
+      timeSelect.value = slot.time;
+    }
+  });
 }
 
 function refreshLessonDurationOptions() {
@@ -11049,6 +11316,60 @@ function setLessonFormMessage(message, tone = "") {
   target.className = `form-message ${tone}`;
 }
 
+function clearLessonSaveResultPanel() {
+  const target = $("#lessonSaveResultPanel");
+  if (!target) return;
+  target.hidden = true;
+  target.className = "lesson-save-result-panel";
+  target.innerHTML = "";
+}
+
+function showLessonSaveResultPanel({
+  status = "saving",
+  title = "서버 저장 확인",
+  message = "",
+  expectedCount = 0,
+  confirmedCount = 0,
+  missingRows = [],
+  recoverySteps = [],
+} = {}) {
+  const target = $("#lessonSaveResultPanel");
+  if (!target) return;
+  const safeMissingRows = Array.isArray(missingRows) ? missingRows : [];
+  const safeRecoverySteps = Array.isArray(recoverySteps) ? recoverySteps.filter(Boolean) : [];
+  const statusClass = status === "danger" ? "is-danger" : status === "good" ? "is-good" : "is-saving";
+  const missingMarkup = safeMissingRows.length
+    ? `<ul class="lesson-save-result-missing">${safeMissingRows.slice(0, 5).map((item) => `<li>${escapeHtml(`${item.day || item.lessonDate || ""} ${item.time || ""}`.trim())}</li>`).join("")}</ul>`
+    : "";
+  const recoveryMarkup = safeRecoverySteps.length
+    ? `<ol class="lesson-save-result-recovery">${safeRecoverySteps.slice(0, 4).map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>`
+    : "";
+  target.hidden = false;
+  target.className = `lesson-save-result-panel ${statusClass}`;
+  target.innerHTML = `
+    <strong>${escapeHtml(title)}</strong>
+    ${message ? `<p>${escapeHtml(message)}</p>` : ""}
+    <div class="lesson-save-result-grid">
+      <span class="lesson-save-result-item"><span>저장 요청</span><b>${expectedCount || 0}건</b></span>
+      <span class="lesson-save-result-item"><span>시간표 확인</span><b>${confirmedCount || 0}건</b></span>
+      <span class="lesson-save-result-item"><span>미확인</span><b>${safeMissingRows.length}건</b></span>
+    </div>
+    ${missingMarkup}
+    ${recoveryMarkup}
+  `;
+}
+
+function lessonSaveRecoverySteps(isWriteConfirmFailure = false) {
+  if (!isWriteConfirmFailure) {
+    return ["입력값을 확인한 뒤 같은 창에서 다시 저장해 주세요."];
+  }
+  return [
+    "같은 내용을 바로 다시 저장하지 말고 시간표를 새로고침해 주세요.",
+    "해당 요일·시간 칸에 수업이 보이면 추가 저장하지 마세요.",
+    "칸이 비어 있으면 최근 안전 스냅샷과 서버 삭제 스냅샷에서 복구 여부를 확인하세요.",
+  ];
+}
+
 function setLessonSubmitEnabled(enabled) {
   const button = $("#saveLessonButton");
   if (button) button.disabled = !enabled;
@@ -11066,7 +11387,7 @@ function adminLessonEndTimestamp(candidate = {}) {
 function isPastLessonCorrectionMode(candidate = {}) {
   if (!state.liveScheduleLoaded || operationsRole() !== "admin") return false;
   const editingLesson = getCurrentEditingLesson();
-  if (editingLesson && editingLesson.serverStatus !== "scheduled") return false;
+  if (editingLesson && lessonStatusValue(editingLesson) !== "scheduled") return false;
   const endTimestamp = adminLessonEndTimestamp(candidate);
   return Number.isFinite(endTimestamp) && endTimestamp <= Date.now();
 }
@@ -11078,7 +11399,7 @@ function getPastLessonCorrectionConflict(candidate) {
     && String(lesson.ticketId || "") === String(candidate.ticketId || "")
     && (!lessonDate || !lesson.lessonDate || lesson.lessonDate === lessonDate)
     && lesson.time === candidate.time
-    && ["scheduled", "pending_change", "completed"].includes(lesson.serverStatus || lesson.status)
+    && ["scheduled", "pending_change", "completed"].includes(lessonStatusValue(lesson))
   ));
   if (duplicate) {
     return { lesson: duplicate, message: "같은 회원권·날짜·시간의 수업 기록이 이미 있습니다." };
@@ -11099,7 +11420,7 @@ function getPastLessonCorrectionConflict(candidate) {
       lesson.id !== candidate.id
       && !isReleasedRegularMakeupSlot(lesson)
       && lesson.coachId === candidate.coachId
-      && ["scheduled", "pending_change", "completed"].includes(lesson.serverStatus || lesson.status)
+      && ["scheduled", "pending_change", "completed"].includes(lessonStatusValue(lesson))
     ));
   if (coachConflict) {
     return { lesson: coachConflict, message: `${getCoachName(candidate.coachId)}의 기존 수업과 시간이 겹칩니다.` };
@@ -11114,7 +11435,7 @@ function getAdminManualExactDuplicate(candidate) {
     && String(lesson.ticketId || "") === String(candidate.ticketId || "")
     && (!lessonDate || !lesson.lessonDate || lesson.lessonDate === lessonDate)
     && lesson.time === candidate.time
-    && ["scheduled", "pending_change", "completed", "no_show"].includes(lesson.serverStatus || lesson.status)
+    && ["scheduled", "pending_change", "completed", "no_show"].includes(lessonStatusValue(lesson))
   )) || null;
 }
 
@@ -11325,14 +11646,17 @@ function renderLessonPreview() {
   const uniqueOverrideWarnings = [...new Set(overrideWarnings)];
   const overrideReasonMissing = false;
   const internalDuplicate = getInternalScheduleConflict(selectedSchedules, candidate.durationMinutes);
+  const scheduleIssueMessage = regularScheduleSaveCheckMessage(ticket, candidate, regularScheduleValidation);
   const scheduleLabel = selectedSchedules
     .map((schedule) => `${schedule.day} ${schedule.time}~${minutesToTime(timeToMinutes(schedule.time) + candidate.durationMinutes)}`)
     .join(", ");
+  const repeatPreview = renderRegularSchedulePreview(ticket, candidate, regularScheduleValidation);
   $("#lessonPreview").innerHTML = `
     <strong>${scheduleLabel || `${candidate.day} ${candidate.time}~${minutesToTime(end)}`}</strong>
     <span>${lessonSourceLabel(candidate.lessonSource)} · ${getLessonMembersLabel(candidate)} · ${getCoachName(candidate.coachId)} · ${getLessonRoundLabel(candidate)} · ${lessonTypeLabel(candidate)}</span>
+    ${repeatPreview}
   `;
-  const normalBlocked = Boolean(!ticket || sourceTicketMismatch || !regularScheduleValidation.valid || scheduleScopeMismatch || conflict);
+  const normalBlocked = Boolean(!ticket || sourceTicketMismatch || !regularScheduleValidation.valid || scheduleIssueMessage || scheduleScopeMismatch || conflict);
   const overrideBlocked = Boolean(!ticket || exactDuplicate || internalDuplicate || overrideReasonMissing);
   setLessonFormMessage(
     manualOverride
@@ -11347,6 +11671,8 @@ function renderLessonPreview() {
       ? "선택한 수업 종류에 맞는 회원권이 없습니다. 회원권 또는 수업 종류를 확인해 주세요."
       : !regularScheduleValidation.valid
         ? regularScheduleValidation.message
+      : scheduleIssueMessage
+        ? scheduleIssueMessage
       : scheduleScopeMismatch
         ? `${memberManagementScheduleScopeLabel(getTicketScheduleScope(ticket))}에서 이용할 수 없는 요일입니다.`
       : conflict
@@ -11409,9 +11735,11 @@ function openLessonModal(defaults = {}) {
   state.releasedAbsenceEntitlementId = state.editingLessonId ? "" : defaults.entitlementId || "";
   state.pinnedLessonDay = state.editingLessonId ? "" : defaults.day || "";
   state.pinnedLessonTime = state.editingLessonId ? "" : defaults.time || "";
+  state.pinnedLessonRepeatSlots = !state.editingLessonId && Array.isArray(defaults.repeatSlots) ? defaults.repeatSlots : [];
   const restoreEntitlement = state.makeupEntitlements.find((item) => item.id === state.releasedAbsenceEntitlementId) || null;
   state.pinnedLessonTicketId = state.editingLessonId ? "" : defaults.ticketId || restoreEntitlement?.ticketId || "";
   state.lessonSourceTouched = false;
+  clearLessonSaveResultPanel();
   const hasPinnedScheduleSlot = Boolean(!state.editingLessonId && defaults.day && defaults.time && defaults.coachId);
   const editingLesson = state.editingLessonId ? lessons.find((lesson) => lesson.id === state.editingLessonId) : null;
   const editingMemberName = getEditingLessonMemberName(editingLesson);
@@ -11528,6 +11856,9 @@ function openLessonModal(defaults = {}) {
     refreshLessonTimeOptions(defaults.time);
   }
   refreshLessonDayOptions();
+  if (!editingLesson && Array.isArray(defaults.repeatSlots) && defaults.repeatSlots.length > 1) {
+    applyLessonRepeatSlotDefaults(defaults.repeatSlots);
+  }
   syncLessonTypeFromForm();
   renderCurrentLessonMembers(editingLesson);
   renderLessonExpiredTickets();
@@ -11591,7 +11922,7 @@ function openAdminMakeupBooking(entitlement) {
 async function markEditingLessonAbsentForMakeup() {
   const lesson = lessons.find((item) => item.id === state.editingLessonId);
   const reason = $("#lessonAbsenceReason")?.value.trim() || "";
-  if (!lesson?.serverLessonId || lesson.serverStatus !== "scheduled" || normalizeLessonSource(lesson.lessonSource) !== "regular") {
+  if (!lesson?.serverLessonId || lessonStatusValue(lesson) !== "scheduled" || lessonSourceValue(lesson) !== "regular") {
     setLessonFormMessage("예정 상태의 정규수업만 불참 처리할 수 있습니다.", "danger");
     return;
   }
@@ -11652,7 +11983,9 @@ function closeLessonModal() {
   state.pinnedLessonTicketId = "";
   state.pinnedLessonDay = "";
   state.pinnedLessonTime = "";
+  state.pinnedLessonRepeatSlots = [];
   setLessonFormMessage("");
+  clearLessonSaveResultPanel();
   if (quickReturnSlot) window.requestAnimationFrame(() => focusQuickLessonReturnSlot(quickReturnSlot));
 }
 
@@ -12266,31 +12599,60 @@ async function saveLiveAdminLessonSet(candidates = []) {
       payload,
     );
   }
-  if (!result?.ok || Number(result.scheduleCount || 0) < candidates.length) {
-    throw new Error("live_lesson_write_not_confirmed");
+  const savedCount = Number(result?.scheduleCount || 0);
+  if (!result?.ok || savedCount < candidates.length) {
+    throw new Error(`live_lesson_write_not_confirmed: 저장 요청 ${savedCount}/${candidates.length}건 확인`);
   }
   return result;
 }
 
-function liveLessonWriteVerification(ticket, candidates = []) {
-  const ticketId = ticket?.serverTicketId || "";
-  const requiredParticipantIds = ticket?.participantUserIds || [];
-  const expectedLessons = candidates.map((candidate) => ({
+function expectedLiveLessonRows(ticket, candidates = []) {
+  return candidates.map((candidate) => ({
     lessonDate: adminWeekDateForDay(candidate.day),
+    day: candidate.day,
     time: candidate.time,
     durationMinutes: Number(candidate.durationMinutes),
     lessonSource: liveLessonSource(candidate),
+    ticketId: ticket?.serverTicketId || "",
   }));
-  const missing = expectedLessons.find((expected) => !lessons.some((lesson) => (
-    lesson.ticketId === ticketId
+}
+
+function liveLessonExistsAfterWrite(expected, requiredParticipantIds = []) {
+  return lessons.some((lesson) => (
+    lesson.ticketId === expected.ticketId
     && lesson.lessonDate === expected.lessonDate
     && lesson.time === expected.time
     && Number(lesson.durationMinutes) === expected.durationMinutes
     && lesson.lessonSource === expected.lessonSource
     && ["scheduled", "pending_change"].includes(lesson.serverStatus)
     && requiredParticipantIds.every((id) => lesson.serverParticipantUserIds?.includes(id))
-  )));
-  return missing ? "live_lesson_write_not_confirmed" : "";
+  ));
+}
+
+function liveLessonWriteVerificationDetails(ticket, candidates = []) {
+  const ticketId = ticket?.serverTicketId || "";
+  const requiredParticipantIds = ticket?.participantUserIds || [];
+  const expectedLessons = expectedLiveLessonRows(ticket, candidates)
+    .map((item) => ({ ...item, ticketId }));
+  const missing = expectedLessons.filter((expected) => !liveLessonExistsAfterWrite(expected, requiredParticipantIds));
+  return { expectedLessons, missing };
+}
+
+function liveLessonWriteVerification(ticket, candidates = []) {
+  const details = liveLessonWriteVerificationDetails(ticket, candidates);
+  if (!details.missing.length) return "";
+  const missingLabel = details.missing
+    .slice(0, 3)
+    .map((item) => `${item.day || item.lessonDate} ${item.time}`)
+    .join(", ");
+  return `live_lesson_write_not_confirmed: ${missingLabel} 시간표 반영 확인 실패`;
+}
+
+function liveLessonWriteFailureMessage(errorText = "") {
+  if (!String(errorText).includes("live_lesson_write_not_confirmed")) return "";
+  const detail = String(errorText).split("live_lesson_write_not_confirmed:")[1]?.trim();
+  const suffix = detail ? ` (${detail})` : "";
+  return `서버 저장 결과를 시간표에서 다시 확인하지 못했습니다${suffix}. 중복 저장하지 말고 새로고침 후 해당 칸을 확인해 주세요.`;
 }
 
 function existingFutureRegularLessons(ticketId, targetSchedules = []) {
@@ -12476,6 +12838,12 @@ async function addLessonFromForm(event) {
     return;
   }
   const selectedSchedules = state.editingLessonId ? [{ day: candidate.day, time: candidate.time }] : getSelectedLessonSchedules();
+  const scheduleIssueMessage = regularScheduleSaveCheckMessage(ticket, candidate, regularScheduleValidation);
+  if (!manualOverride && scheduleIssueMessage) {
+    setLessonFormMessage(scheduleIssueMessage, "danger");
+    setLessonSubmitEnabled(false);
+    return;
+  }
   const scheduleScopeMismatch = selectedSchedules.find((schedule) => !ticketAllowsScheduleDay(ticket, schedule.day));
   if (!manualOverride && scheduleScopeMismatch) {
     setLessonFormMessage(`${memberManagementScheduleScopeLabel(getTicketScheduleScope(ticket))}은 ${scheduleScopeMismatch.day}요일에 등록할 수 없습니다.`, "danger");
@@ -12516,7 +12884,16 @@ async function addLessonFromForm(event) {
     const wasEditing = Boolean(state.editingLessonId);
     state.lessonWriteInFlight = true;
     setLessonSubmitEnabled(false);
+    saveScheduleSafetySnapshot(lessons, "before-lesson-write");
     setLessonFormMessage("실서버 시간표에 저장 중입니다.");
+    showLessonSaveResultPanel({
+      status: "saving",
+      title: "서버 저장 중",
+      message: "저장 후 시간표 재조회까지 확인합니다.",
+      expectedCount: candidates.length,
+      confirmedCount: 0,
+      missingRows: [],
+    });
     try {
       if (selectedEntitlement && candidates.length !== 1) throw new Error("보강 대기 한 건은 한 시간만 예약할 수 있습니다.");
       if (selectedEntitlement && manualOverride) await saveLiveAdminLesson(candidates[0], selectedEntitlement);
@@ -12530,14 +12907,24 @@ async function addLessonFromForm(event) {
         if (scheduleProtectionMessage) {
           setLessonSubmitEnabled(true);
           setLessonFormMessage(scheduleProtectionMessage, "danger");
+          clearLessonSaveResultPanel();
           return;
         }
         await saveLiveAdminLessonSet(candidates);
       }
       const synced = await syncAdminLiveData();
       if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+      const verificationDetails = liveLessonWriteVerificationDetails(ticket, candidates);
       const writeVerificationError = liveLessonWriteVerification(ticket, candidates);
       if (writeVerificationError) throw new Error(writeVerificationError);
+      showLessonSaveResultPanel({
+        status: "good",
+        title: "서버 저장 확인 완료",
+        message: "저장 요청과 시간표 반영을 모두 확인했습니다.",
+        expectedCount: candidates.length,
+        confirmedCount: verificationDetails.expectedLessons.length,
+        missingRows: [],
+      });
       billingLogs.unshift(`${candidate.member} ${selectedSchedules.map((item) => `${item.day} ${item.time}`).join(", ")} 실서버 수업 저장`);
       closeLessonModal();
       setView("schedule");
@@ -12585,10 +12972,23 @@ async function addLessonFromForm(event) {
         admin_live_refresh_failed_after_write: "저장 후 서버 시간표를 다시 불러오지 못했습니다. 중복 저장하지 말고 새로고침 후 확인해 주세요.",
         live_lesson_write_not_confirmed: "서버 저장 결과를 시간표에서 다시 확인하지 못했습니다. 중복 저장하지 말고 새로고침 후 확인해 주세요.",
       };
-      const message = Object.entries(messages).find(([code]) => errorText.includes(code))?.[1]
+      const message = liveLessonWriteFailureMessage(errorText)
+        || Object.entries(messages).find(([code]) => errorText.includes(code))?.[1]
         || error?.message
         || "실서버 수업 저장에 실패했습니다.";
       setLessonFormMessage(message, "danger");
+      const verificationDetails = liveLessonWriteVerificationDetails(ticket, candidates);
+      const isWriteConfirmFailure = errorText.includes("live_lesson_write_not_confirmed")
+        || errorText.includes("admin_live_refresh_failed_after_write");
+      showLessonSaveResultPanel({
+        status: "danger",
+        title: isWriteConfirmFailure ? "서버 반영 확인 필요" : "저장 실패",
+        message,
+        expectedCount: candidates.length,
+        confirmedCount: Math.max(0, verificationDetails.expectedLessons.length - verificationDetails.missing.length),
+        missingRows: verificationDetails.missing,
+        recoverySteps: lessonSaveRecoverySteps(isWriteConfirmFailure),
+      });
       setLessonSubmitEnabled(true);
     } finally {
       state.lessonWriteInFlight = false;
@@ -18168,6 +18568,10 @@ function bindEvents() {
     const slotButton = event.target.closest("[data-add-lesson-day]");
     if (!slotButton) return;
     event.stopPropagation();
+    if (slotButton.dataset.selectScheduleSlot) {
+      toggleScheduleOpenSlotSelection(slotButton.dataset.selectScheduleSlot, event.shiftKey);
+      return;
+    }
     openLessonModal({
       day: slotButton.dataset.addLessonDay,
       time: slotButton.dataset.addLessonTime,
@@ -18830,6 +19234,24 @@ function bindEvents() {
     if (event.target.matches("[data-select-product-row]")) event.stopPropagation();
     if (event.target.closest("#toggleScheduleBulkMode")) {
       toggleScheduleBulkMode();
+      return;
+    }
+    if (event.target.closest("#toggleScheduleOpenSlotMode")) {
+      toggleScheduleOpenSlotMode();
+      return;
+    }
+    if (event.target.closest("#createLessonFromOpenSlots")) {
+      openLessonModalFromSelectedOpenSlots();
+      return;
+    }
+    if (event.target.closest("#clearScheduleOpenSlotSelection")) {
+      state.selectedScheduleOpenSlots = [];
+      state.scheduleOpenSlotAnchorKey = "";
+      renderSchedule();
+      return;
+    }
+    if (event.target.closest("#closeScheduleOpenSlotMode")) {
+      toggleScheduleOpenSlotMode(false);
       return;
     }
     const shiftButton = event.target.closest("[data-shift-schedule-lessons]");
