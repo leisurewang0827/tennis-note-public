@@ -43,6 +43,8 @@ const state = {
   pinnedLessonTime: "",
   lessonSourceTouched: false,
   lessonWriteInFlight: false,
+  lessonOperationKey: "",
+  substituteOperationKey: "",
   activeAdminWeekIndex: 0,
   adminTaskPage: 0,
   memberStatusPage: 0,
@@ -10937,6 +10939,9 @@ function renderLessonPreview() {
 
 function openLessonModal(defaults = {}) {
   state.editingLessonId = defaults.editingLessonId || null;
+  state.lessonOperationKey = createAdminOperationKey(
+    state.editingLessonId ? "lesson-edit" : "lesson-create",
+  );
   state.releasedAbsenceEntitlementId = state.editingLessonId ? "" : defaults.entitlementId || "";
   state.pinnedLessonDay = state.editingLessonId ? "" : defaults.day || "";
   state.pinnedLessonTime = state.editingLessonId ? "" : defaults.time || "";
@@ -11158,6 +11163,7 @@ async function markEditingLessonAbsentForMakeup() {
 function closeLessonModal() {
   $("#lessonModal").hidden = true;
   state.editingLessonId = null;
+  state.lessonOperationKey = "";
   state.releasedAbsenceEntitlementId = "";
   state.pinnedLessonTicketId = "";
   state.pinnedLessonDay = "";
@@ -11211,7 +11217,9 @@ function renderSubstituteLessonList() {
       const lesson = lessons.find((item) => String(item.serverLessonId) === String(assignment.lesson_id));
       const settlement = assignment.settlement_mode === "hourly"
         ? `시급 ${money.format(Number(assignment.hourly_amount) || 0)}원`
-        : "실제 코치 기준";
+        : assignment.settlement_mode === "none"
+          ? "정산 없음"
+          : "실제 코치 기준";
       return `<div class="substitute-history-row"><strong>${escapeHtml(lesson ? `${lesson.lessonDate} ${lesson.time} · ${lesson.member}` : "지난 수업")}</strong><span>${escapeHtml(coachNameForRoleId(assignment.original_coach_role_id))} → ${escapeHtml(coachNameForRoleId(assignment.substitute_coach_role_id))} · ${escapeHtml(settlement)} · ${escapeHtml(assignment.status || "assigned")}</span></div>`;
     }).join("") : '<p class="empty-text">대타 이력이 없습니다.</p>';
   }
@@ -11229,6 +11237,7 @@ function openSubstituteModal(defaultLesson = null) {
     return;
   }
   const date = defaultLesson?.lessonDate || adminLocalDateKey(new Date());
+  state.substituteOperationKey = createAdminOperationKey("substitute-assign");
   $("#substituteDate").value = date;
   state.selectedSubstituteLessonIds = defaultLesson?.serverLessonId ? [String(defaultLesson.serverLessonId)] : [];
   const activeCoaches = coaches.filter((coach) => coach.status === "active" && coach.serverRoleId);
@@ -11245,6 +11254,7 @@ function openSubstituteModal(defaultLesson = null) {
 function closeSubstituteModal() {
   if ($("#substituteModal")) $("#substituteModal").hidden = true;
   state.selectedSubstituteLessonIds = [];
+  state.substituteOperationKey = "";
 }
 
 async function submitSubstituteAssignments(event) {
@@ -11261,22 +11271,54 @@ async function submitSubstituteAssignments(event) {
   const button = $("#saveSubstituteAssignments");
   if (button) button.disabled = true;
   try {
-    const result = await window.TennisNoteDataClient.rpc("tn_admin_assign_lesson_substitutes", {
+    const payload = {
       target_lesson_ids: lessonIds,
       target_substitute_coach_role_id: coachRoleId,
       target_settlement_mode: settlementMode,
       target_hourly_amount: hourlyAmount,
       target_reason: $("#substituteReason")?.value.trim() || null,
-    });
+    };
+    const expectedRevisions = Object.fromEntries(lessonIds.map((lessonId) => {
+      const lesson = lessons.find((item) => String(item.serverLessonId) === String(lessonId));
+      return [lessonId, lesson?.serverRevision ?? null];
+    }));
+    if (!state.substituteOperationKey) {
+      state.substituteOperationKey = createAdminOperationKey("substitute-assign");
+    }
+    const result = await guardedRpcWithFallback(
+      "tn_admin_assign_lesson_substitutes_guarded",
+      {
+        ...payload,
+        target_expected_revisions: expectedRevisions,
+        target_operation_key: state.substituteOperationKey,
+      },
+      "tn_admin_assign_lesson_substitutes",
+      payload,
+    );
     await syncAdminLiveData();
     closeSubstituteModal();
     renderAll();
     showToast(`${Number(result?.assignedCount ?? result?.assigned_count ?? lessonIds.length)}개 수업 대타 지정 완료`);
   } catch (error) {
-    const raw = `${error?.message || ""}`;
-    if (message) message.textContent = raw.includes("PGRST202") || raw.includes("tn_admin_assign_lesson_substitutes")
-      ? "대타 운영 DB 패치를 먼저 적용해 주세요."
-      : "대타 지정에 실패했습니다. 수업 상태와 코치 지점을 확인해 주세요.";
+    const raw = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
+    if (raw.includes("lesson_concurrent_update")) {
+      await syncAdminLiveData();
+    }
+    const messages = {
+      lesson_concurrent_update: "다른 화면에서 수업이 먼저 변경되었습니다. 최신 시간표를 불러왔으니 다시 선택해 주세요.",
+      lesson_expected_revision_required: "수업의 최신 상태를 확인할 수 없습니다. 시간표를 새로고침해 주세요.",
+      substitute_admin_required: "관리자 계정에서만 대타를 지정할 수 있습니다.",
+      substitute_lesson_not_found: "선택한 수업을 찾지 못했습니다. 시간표를 새로고침해 주세요.",
+      substitute_coach_not_available: "선택한 코치가 해당 지점에서 수업 가능한 상태가 아닙니다.",
+      substitute_same_coach: "원 담당 코치와 다른 코치를 선택해 주세요.",
+      substitute_lesson_closed: "완료되거나 취소된 수업은 대타로 변경할 수 없습니다.",
+      substitute_settlement_mode_invalid: "대타 정산 방식을 다시 선택해 주세요.",
+      operation_key_reused_with_different_payload: "선택 내용이 변경되었습니다. 창을 닫았다가 다시 열어 주세요.",
+    };
+    const matched = Object.entries(messages).find(([code]) => raw.includes(code))?.[1];
+    if (message) message.textContent = isMissingRpcError(error, "tn_admin_assign_lesson_substitutes_guarded")
+      ? "대타 운영 DB 보호 기능을 확인해 주세요."
+      : matched || "대타 지정에 실패했습니다. 수업 상태와 코치 지점을 확인해 주세요.";
   } finally {
     if (button?.isConnected) button.disabled = false;
   }
@@ -11529,6 +11571,30 @@ function liveLessonSource(candidate = {}) {
   return normalizeLessonSource($("#lessonSource")?.value);
 }
 
+function createAdminOperationKey(prefix = "operation") {
+  const randomPart = window.crypto?.randomUUID?.()
+    || `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  return `${prefix}:${randomPart}`.replace(/[^A-Za-z0-9:_-]/g, "-");
+}
+
+function isMissingRpcError(error, functionName) {
+  const raw = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
+  return raw.includes("PGRST202")
+    || (
+      raw.includes("Could not find the function")
+      && raw.includes(functionName)
+    );
+}
+
+async function guardedRpcWithFallback(guardedName, guardedPayload, fallbackName, fallbackPayload) {
+  try {
+    return await window.TennisNoteDataClient.rpc(guardedName, guardedPayload);
+  } catch (error) {
+    if (!isMissingRpcError(error, guardedName)) throw error;
+    return window.TennisNoteDataClient.rpc(fallbackName, fallbackPayload);
+  }
+}
+
 async function saveLiveAdminLesson(candidate, entitlement = null) {
   const client = window.TennisNoteDataClient;
   const ticket = scheduleTicketById(candidate.ticketId);
@@ -11560,7 +11626,19 @@ async function saveLiveAdminLesson(candidate, entitlement = null) {
       target_makeup_entitlement_id: entitlement?.id || null,
     });
   }
-  return client.rpc("tn_admin_save_lesson", payload);
+  if (!state.lessonOperationKey) {
+    state.lessonOperationKey = createAdminOperationKey("lesson-save");
+  }
+  return guardedRpcWithFallback(
+    "tn_admin_save_lesson_guarded",
+    {
+      ...payload,
+      target_expected_revision: editingLesson?.serverRevision ?? null,
+      target_operation_key: state.lessonOperationKey,
+    },
+    "tn_admin_save_lesson",
+    payload,
+  );
 }
 
 function selectedLessonEditScope() {
@@ -11577,13 +11655,26 @@ async function saveLiveAdminRegularLessonSeries(candidate) {
   if (!editingLesson?.serverLessonId || !ticket?.serverTicketId || !coach?.serverRoleId || !lessonDate) {
     throw new Error("수정할 정규수업과 회원권·코치 연결을 확인해 주세요.");
   }
-  return client.rpc("tn_admin_reschedule_regular_lesson_series", {
+  const payload = {
     target_lesson_id: editingLesson.serverLessonId,
     target_lesson_date: lessonDate,
     target_start_time: candidate.time,
     target_coach_role_id: coach.serverRoleId,
     target_duration_minutes: candidate.durationMinutes,
-  });
+  };
+  if (!state.lessonOperationKey) {
+    state.lessonOperationKey = createAdminOperationKey("lesson-series");
+  }
+  return guardedRpcWithFallback(
+    "tn_admin_reschedule_regular_lesson_series_guarded",
+    {
+      ...payload,
+      target_expected_revision: editingLesson.serverRevision ?? null,
+      target_operation_key: state.lessonOperationKey,
+    },
+    "tn_admin_reschedule_regular_lesson_series",
+    payload,
+  );
 }
 
 async function saveLivePastLessonCorrection(candidate, entitlement = null) {
@@ -11672,7 +11763,18 @@ async function saveLiveAdminLessonSet(candidates = []) {
       target_override_reason: adminManualOverrideReason(),
     });
   } else {
-    result = await client.rpc("tn_admin_save_lesson_set", payload);
+    if (!state.lessonOperationKey) {
+      state.lessonOperationKey = createAdminOperationKey("lesson-set");
+    }
+    result = await guardedRpcWithFallback(
+      "tn_admin_save_lesson_set_guarded",
+      {
+        ...payload,
+        target_operation_key: state.lessonOperationKey,
+      },
+      "tn_admin_save_lesson_set",
+      payload,
+    );
   }
   if (!result?.ok || Number(result.scheduleCount || 0) < candidates.length) {
     throw new Error("live_lesson_write_not_confirmed");
@@ -11836,6 +11938,9 @@ async function addLessonFromForm(event) {
         : `과거 수업 반영 완료 · ${deductedSessions}회 차감${Number.isFinite(remainingSessions) ? ` · 잔여 ${remainingSessions}회` : ""}`);
     } catch (error) {
       const errorText = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
+      if (errorText.includes("lesson_concurrent_update")) {
+        await syncAdminLiveData();
+      }
       const messages = {
         past_lesson_admin_required: "관리자 계정으로만 과거 수업을 보정할 수 있습니다.",
         past_lesson_not_finished: "아직 끝나지 않은 수업은 과거 완료로 처리할 수 없습니다.",
@@ -11951,6 +12056,9 @@ async function addLessonFromForm(event) {
         : selectedEntitlement ? "보강 예약 완료" : wasEditing ? "수업 수정 완료" : "수업 추가 완료");
     } catch (error) {
       const errorText = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
+      if (errorText.includes("lesson_concurrent_update")) {
+        await syncAdminLiveData();
+      }
       const messages = {
         released_regular_slot_makeup_only: "불참으로 비워진 정규자리에는 보강수업만 등록할 수 있습니다.",
         makeup_entitlement_not_found: "연결할 보강 대기를 찾지 못했습니다. 시간표를 새로고침해 주세요.",
@@ -11978,6 +12086,9 @@ async function addLessonFromForm(event) {
         regular_series_lesson_required: "예정된 정규수업만 전체 일정으로 수정할 수 있습니다.",
         regular_series_conflict: "변경할 전체 일정 중 다른 수업과 겹치는 시간이 있습니다.",
         regular_series_outside_ticket: "변경하면 회원권 기간을 벗어나는 수업이 생깁니다. 선택일만 수정하거나 회원권 기간을 먼저 확인해 주세요.",
+        lesson_concurrent_update: "다른 화면에서 이 수업이 먼저 수정되었습니다. 최신 시간표를 불러왔으니 다시 확인해 주세요.",
+        lesson_expected_revision_required: "수업의 최신 상태를 확인할 수 없습니다. 시간표를 새로고침한 뒤 다시 수정해 주세요.",
+        operation_key_reused_with_different_payload: "저장 내용이 변경되었습니다. 창을 닫았다가 다시 열어 저장해 주세요.",
         admin_manual_override_reason_required: "강제 처리 사유를 5자 이상 입력해 주세요.",
         admin_manual_exact_duplicate: "같은 회원권·날짜·시간의 수업이 이미 있습니다. 기존 수업을 수정해 주세요.",
         admin_manual_ticket_required: "연결할 회원권을 찾지 못했습니다.",
@@ -12176,8 +12287,9 @@ function settlementRowsForBilling(billing) {
       actualCoach,
       forceActualCoach: Boolean(assignment),
       lessonCount: 0,
-      fixedSettlementAmount: mode === "hourly" ? 0 : undefined,
+      fixedSettlementAmount: ["hourly", "none"].includes(mode) ? 0 : undefined,
       substituteHourlyRate: mode === "hourly" ? Number(assignment?.hourly_amount || 0) : 0,
+      substituteSettlementMode: mode,
     };
     row.lessonCount += 1;
     if (mode === "hourly") {
@@ -12207,7 +12319,9 @@ function renderCoachSettlementPreview() {
         const settlementCoach = settlementCoachNameFor(item);
         const rule = settlementRuleFor(settlementCoach);
         const transferred = item.coach !== item.actualCoach;
-        const ruleLabel = item.substituteHourlyRate
+        const ruleLabel = item.substituteSettlementMode === "none"
+          ? "정산 없음"
+          : item.substituteHourlyRate
           ? `대타 시급 ${money.format(item.substituteHourlyRate)}원`
           : rule.method === "hourly" ? `시급 ${money.format(rule.hourly)}원` : `${Math.round(rule.ratio * 10)}:${10 - Math.round(rule.ratio * 10)}`;
         return `
@@ -13884,8 +13998,9 @@ async function syncAdminLiveData() {
       client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price", limit: 500 }),
       client.selectRows("tn_ticket_participants", { select: "ticket_id,user_id,participant_order", limit: 500 }),
       client.selectRows("tn_lesson_participants", { select: "lesson_id,user_id,ticket_id", limit: 1000 }),
-      client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source", limit: 1000 })
-        .catch(() => client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source", limit: 1000 })),
+      client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,revision,updated_at", limit: 1000 })
+        .catch(() => client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,updated_at", limit: 1000 })
+          .catch(() => client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source,updated_at", limit: 1000 }))),
       fullAdminAccess ? client.selectRows("tn_one_day_bookings", { select: "id,branch_id,coach_role_id,booking_date,start_time,duration_minutes,guest_name,guest_phone,note,status,linked_user_id,created_at", limit: 1000 }).catch(() => []) : Promise.resolve([]),
       client.selectRows("tn_member_enrollments", { select: "id,user_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,submitted_at,approved_at", limit: 500 }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", { select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,created_at", limit: 500 }).catch(() => []),
@@ -14192,6 +14307,8 @@ async function syncAdminLiveData() {
           id: lesson.id,
           serverLessonId: lesson.id,
           serverStatus: lesson.status,
+          serverRevision: Number(lesson.revision) || null,
+          serverUpdatedAt: lesson.updated_at || "",
           serverParticipantUserIds: participantIds,
           branchId: lesson.branch_id,
           ticketId: lesson.member_ticket_id,
