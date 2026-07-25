@@ -14561,6 +14561,47 @@ function downloadImportTemplate() {
   showToast("엑셀 양식 다운로드 완료");
 }
 
+function adminWeeklyScheduleExportRows() {
+  const week = activeAdminWeek();
+  const rows = [
+    ["주차", "기간", "날짜", "요일", "시간", "종료", "회원명", "회차", "수업구분", "상태", "담당코치", "실수업코치", "수업분", "메모"],
+  ];
+  const weekLessons = lessons
+    .filter((lesson) => lesson.day && lesson.time && !isLessonCancelled(lesson) && lessonMatchesActiveScheduleWeek(lesson, lesson.day))
+    .sort((left, right) => {
+      const dayDiff = scheduleDays.indexOf(left.day) - scheduleDays.indexOf(right.day);
+      if (dayDiff) return dayDiff;
+      const timeDiff = timeToMinutes(left.time) - timeToMinutes(right.time);
+      if (timeDiff) return timeDiff;
+      return String(lessonScheduleCoachLabel(left)).localeCompare(String(lessonScheduleCoachLabel(right)), "ko");
+    });
+  weekLessons.forEach((lesson) => {
+    const start = timeToMinutes(lesson.time);
+    const duration = Number(lesson.durationMinutes) || 20;
+    const scheduleCoachId = lessonScheduleCoachId(lesson);
+    rows.push([
+      week.label || "",
+      week.range || "",
+      lesson.lessonDate || adminWeekDateForDay(lesson.day),
+      lesson.day,
+      lesson.time,
+      minutesToTime(start + duration),
+      getLessonMembersLabel(lesson),
+      getLessonRoundLabel(lesson) || "",
+      lesson.oneDayBooking ? "원데이" : isMakeupLesson(lesson) ? "보강" : lesson.type || "정규",
+      getLessonStatusLabel(lesson),
+      scheduleCoachDisplayName(getCoachName(scheduleCoachId)),
+      scheduleCoachDisplayName(getCoachName(lesson.coachId || scheduleCoachId)),
+      duration,
+      scheduleLessonExceptionLabel(lesson) || lesson.changeNote || "",
+    ]);
+  });
+  if (rows.length === 1) {
+    rows.push([week.label || "", week.range || "", "", "", "", "", "현재 주차에 내보낼 수업이 없습니다.", "", "", "", "", "", "", ""]);
+  }
+  return rows;
+}
+
 function parseDelimitedRows(text, delimiter = ",") {
   const rows = [];
   let row = [];
@@ -16129,6 +16170,10 @@ function exportRowsByDataset(includePrivate = false) {
         ["요일", "시간", "회원명", "담당코치", "수업분", "상태", "보강여부"],
         ...lessons.map((lesson) => [lesson.day, lesson.time, lesson.member, getCoachName(lesson.coachId), lesson.durationMinutes, getLessonStatusLabel(lesson), lesson.makeup ? "보강" : "정규"]),
       ],
+    },
+    weeklySchedule: {
+      label: "현재 주간 레슨표",
+      rows: adminWeeklyScheduleExportRows(),
     },
     payments: {
       label: "결제정산",
