@@ -10863,6 +10863,23 @@ function refreshLessonDurationOptions() {
   $("#lessonDuration").value = options.some((item) => item.value === previousDuration)
     ? previousDuration
     : String(durationMinutes);
+  renderLessonDurationQuickButtons();
+}
+
+function renderLessonDurationQuickButtons() {
+  const panel = $("#lessonDurationQuickPanel");
+  const target = $("#lessonDurationQuickButtons");
+  const select = $("#lessonDuration");
+  if (!panel || !target || !select) return;
+  const allowed = new Set([...select.options].map((option) => option.value));
+  const current = String(select.value || "20");
+  panel.hidden = false;
+  target.innerHTML = [20, 30, 40, 60].map((minutes) => {
+    const value = String(minutes);
+    const disabled = !allowed.has(value);
+    const title = disabled ? "회원권 기준과 다릅니다. 관리자 강제 수동 처리를 켜면 선택할 수 있습니다." : `${minutes}분으로 변경`;
+    return `<button class="duration-chip ${current === value ? "is-active" : ""}" type="button" data-lesson-duration-quick="${value}" ${disabled ? "disabled" : ""} title="${escapeHtml(title)}">${minutes}분</button>`;
+  }).join("");
 }
 
 function getEligibleTickets(memberName, coachId) {
@@ -18946,8 +18963,17 @@ function bindEvents() {
       // here silently selected a different ticket after an unavailable-slot warning.
       // Ticket identity is changed only by member, coach, ticket, or source actions.
       refreshLessonTimeOptions($("#lessonTime").value);
+      renderLessonDurationQuickButtons();
       renderLessonPreview();
     });
+  });
+  $("#lessonDurationQuickButtons")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-lesson-duration-quick]");
+    if (!button || button.disabled) return;
+    $("#lessonDuration").value = button.dataset.lessonDurationQuick;
+    refreshLessonTimeOptions($("#lessonTime").value);
+    renderLessonDurationQuickButtons();
+    renderLessonPreview();
   });
   $("#addLessonColorRuleButton")?.addEventListener("click", () => {
     const index = scheduleSettings.lessonColorRules.length + 1;

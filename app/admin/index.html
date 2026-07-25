@@ -7,7 +7,7 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.71" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.72" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1071,6 +1071,10 @@
             </div>
             <button id="toggleLessonQuickDetails" class="ghost-button" type="button" aria-expanded="false">상세 설정</button>
           </section>
+          <section id="lessonDurationQuickPanel" class="lesson-duration-quick-panel" hidden>
+            <span>수업 시간</span>
+            <div id="lessonDurationQuickButtons" class="lesson-duration-quick-buttons"></div>
+          </section>
           <label class="form-field lesson-source-field">
             <span>등록 구분</span>
             <select id="lessonSource" required>
@@ -1443,11 +1447,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.71"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.72"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.71"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.72"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.71"></script>
+    <script src="./app.js?v=1.0.72"></script>
   </body>
 </html>
