@@ -3,10 +3,15 @@
   const authStorageKey = "tennis-note-supabase-session";
   const authPersistenceKey = "tennis-note-auth-persistence";
   const nativeUrlFingerprintKey = "tennis-note-native-url-fingerprint";
+  const offlineDatabaseName = "tennis-note-offline-cache";
+  const offlineDatabaseVersion = 1;
+  const offlineResponseStore = "responses";
+  const offlineCacheMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
   const placeholderMarkers = ["your_", "_here", "publishable_key"];
   let sessionRefreshPromise = null;
   let currentProfilePromise = null;
   let pendingOAuthCredentialCapture = Promise.resolve(null);
+  let offlineDatabasePromise = null;
 
   function parseStoredConfig() {
     try {
@@ -102,6 +107,126 @@
       }
     }
     return null;
+  }
+
+  function sessionSubject(session = getSession()) {
+    const directId = session?.user?.id || "";
+    if (directId) return directId;
+    const token = `${session?.access_token || ""}`;
+    const payloadPart = token.split(".")[1] || "";
+    if (!payloadPart) return "";
+    try {
+      const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+      return JSON.parse(window.atob(padded))?.sub || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function isOnline() {
+    return navigator.onLine !== false;
+  }
+
+  function offlineError(code = "offline_online_required") {
+    const error = new Error(code);
+    error.code = code;
+    error.offline = true;
+    return error;
+  }
+
+  function isOfflineError(error) {
+    return Boolean(error?.offline)
+      || ["offline_online_required", "offline_cache_miss"].includes(error?.code || error?.message);
+  }
+
+  function openOfflineDatabase() {
+    if (!("indexedDB" in window)) return Promise.resolve(null);
+    if (!offlineDatabasePromise) {
+      offlineDatabasePromise = new Promise((resolve) => {
+        let request;
+        try {
+          request = window.indexedDB.open(offlineDatabaseName, offlineDatabaseVersion);
+        } catch (error) {
+          resolve(null);
+          return;
+        }
+        request.onupgradeneeded = () => {
+          const database = request.result;
+          if (!database.objectStoreNames.contains(offlineResponseStore)) {
+            const store = database.createObjectStore(offlineResponseStore, { keyPath: "key" });
+            store.createIndex("identity", "identity", { unique: false });
+            store.createIndex("savedAt", "savedAt", { unique: false });
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => resolve(null);
+        request.onblocked = () => resolve(null);
+      });
+    }
+    return offlineDatabasePromise;
+  }
+
+  function offlineResponseKey(path, session = getSession()) {
+    const identity = sessionSubject(session);
+    return identity ? `${identity}:${path}` : "";
+  }
+
+  async function readOfflineResponse(path, session = getSession()) {
+    const key = offlineResponseKey(path, session);
+    const database = key ? await openOfflineDatabase() : null;
+    if (!database) return null;
+    return new Promise((resolve) => {
+      const transaction = database.transaction(offlineResponseStore, "readonly");
+      const request = transaction.objectStore(offlineResponseStore).get(key);
+      request.onsuccess = () => {
+        const record = request.result;
+        if (!record || Date.now() - Number(record.savedAt || 0) > offlineCacheMaxAgeMs) {
+          resolve(null);
+          return;
+        }
+        resolve(record.payload);
+      };
+      request.onerror = () => resolve(null);
+    });
+  }
+
+  async function writeOfflineResponse(path, payload, session = getSession()) {
+    const identity = sessionSubject(session);
+    const key = offlineResponseKey(path, session);
+    const database = key ? await openOfflineDatabase() : null;
+    if (!database) return false;
+    return new Promise((resolve) => {
+      const transaction = database.transaction(offlineResponseStore, "readwrite");
+      transaction.objectStore(offlineResponseStore).put({
+        key,
+        identity,
+        savedAt: Date.now(),
+        payload,
+      });
+      transaction.oncomplete = () => resolve(true);
+      transaction.onerror = () => resolve(false);
+      transaction.onabort = () => resolve(false);
+    });
+  }
+
+  async function clearOfflineResponses(identity = sessionSubject()) {
+    const database = identity ? await openOfflineDatabase() : null;
+    if (!database) return false;
+    return new Promise((resolve) => {
+      const transaction = database.transaction(offlineResponseStore, "readwrite");
+      const index = transaction.objectStore(offlineResponseStore).index("identity");
+      const request = index.openKeyCursor(window.IDBKeyRange.only(identity));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        transaction.objectStore(offlineResponseStore).delete(cursor.primaryKey);
+        cursor.continue();
+      };
+      transaction.oncomplete = () => resolve(true);
+      transaction.onerror = () => resolve(false);
+      transaction.onabort = () => resolve(false);
+    });
   }
 
   function sessionPersistence() {
@@ -256,6 +381,7 @@
   async function ensureSession() {
     const session = getSession();
     if (!session?.access_token || !sessionNeedsRefresh(session)) return session;
+    if (!isOnline()) return session;
     return refreshSession();
   }
 
@@ -414,16 +540,33 @@
       throw new Error("Supabase publishable config is missing. Demo data is still active.");
     }
 
+    const method = `${options.method || "GET"}`.toUpperCase();
+    if (!isOnline() && method !== "GET") throw offlineError();
     const session = await ensureSession();
-    const response = await fetch(apiUrl(path), {
-      method: options.method || "GET",
-      headers: {
-        ...authHeaders({}, session),
-        Prefer: options.prefer || "return=representation",
-        ...(options.headers || {}),
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined,
-    });
+    if (!isOnline() && method === "GET") {
+      const cached = await readOfflineResponse(path, session);
+      if (cached !== null) return cached;
+      throw offlineError("offline_cache_miss");
+    }
+    let response;
+    try {
+      response = await fetch(apiUrl(path), {
+        method,
+        headers: {
+          ...authHeaders({}, session),
+          Prefer: options.prefer || "return=representation",
+          ...(options.headers || {}),
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+      });
+    } catch (error) {
+      if (method === "GET" && transientNetworkError(error)) {
+        const cached = await readOfflineResponse(path, session);
+        if (cached !== null) return cached;
+        throw offlineError("offline_cache_miss");
+      }
+      throw error;
+    }
 
     if (!response.ok) {
       const message = await response.text();
@@ -431,7 +574,9 @@
     }
 
     if (response.status === 204) return null;
-    return response.json();
+    const payload = await response.json();
+    if (method === "GET") void writeOfflineResponse(path, payload, session);
+    return payload;
   }
 
   async function invokeFunction(functionName, options = {}) {
@@ -439,6 +584,7 @@
       throw new Error("Supabase publishable config is missing. Demo data is still active.");
     }
 
+    if (!isOnline()) throw offlineError();
     const session = await ensureSession();
     const response = await fetch(functionUrl(functionName), {
       method: options.method || "POST",
@@ -616,10 +762,21 @@
   async function getAuthUser() {
     const session = await ensureSession();
     if (!session?.access_token) return null;
-    const response = await fetch(authUrl("user"), {
-      method: "GET",
-      headers: authHeaders({}, session),
-    });
+    if (!isOnline()) {
+      const id = sessionSubject(session);
+      return id ? { id } : null;
+    }
+    let response;
+    try {
+      response = await fetch(authUrl("user"), {
+        method: "GET",
+        headers: authHeaders({}, session),
+      });
+    } catch (error) {
+      if (!transientNetworkError(error)) throw error;
+      const id = sessionSubject(session);
+      return id ? { id } : null;
+    }
     if (!response.ok) return null;
     return response.json();
   }
@@ -670,6 +827,7 @@
   }
 
   async function uploadObject(bucketName, objectPath, file) {
+    if (!isOnline()) throw offlineError();
     const session = await ensureSession();
     if (!readiness().ready || !session?.access_token) throw new Error("Login is required for private upload.");
     const response = await fetch(storageObjectUrl(bucketName, objectPath), {
@@ -685,6 +843,7 @@
   }
 
   async function downloadObject(bucketName, objectPath) {
+    if (!isOnline()) throw offlineError();
     const session = await ensureSession();
     if (!readiness().ready || !session?.access_token) throw new Error("Login is required for private download.");
     const response = await fetch(storageObjectUrl(bucketName, objectPath), {
@@ -696,6 +855,7 @@
   }
 
   async function deleteObject(bucketName, objectPath) {
+    if (!isOnline()) throw offlineError();
     const session = await ensureSession();
     if (!readiness().ready || !session?.access_token) throw new Error("Login is required for private deletion.");
     const response = await fetch(storageObjectUrl(bucketName, objectPath), {
@@ -775,6 +935,7 @@
 
   async function signOut() {
     const session = getSession();
+    const identity = sessionSubject(session);
     if (session?.access_token && readiness().ready) {
       try {
         await fetch(authUrl("logout"), {
@@ -793,6 +954,7 @@
         // Keep clearing the other storage area.
       }
     });
+    if (identity) await clearOfflineResponses(identity);
   }
 
   window.TennisNoteDataClient = {
@@ -818,6 +980,9 @@
     bootstrapCurrentProfile,
     selectCurrentProfile,
     signOut,
+    isOnline,
+    isOfflineError,
+    clearOfflineResponses,
     countRows,
     selectRows,
     insertRows,

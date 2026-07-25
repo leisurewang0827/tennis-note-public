@@ -72,6 +72,7 @@ const state = {
 
 const noticeSessionSeenIds = new Set();
 let noticePreviousFocus = null;
+let coachOfflineFlushPromise = null;
 
 const brandSplashStartedAt = performance.now();
 const brandSplashMinimumDuration = 150;
@@ -1418,7 +1419,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.62";
+  const refreshKey = "tennis-note-sw-refresh-1.0.63";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1428,7 +1429,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.62", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.63", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1480,7 +1481,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.62" });
+  const params = new URLSearchParams({ v: "1.0.63" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -4027,6 +4028,13 @@ async function confirmLog(id, options = {}) {
       renderAll();
       return;
     }
+    if (client.isOnline?.() === false) {
+      log.status = "동기화 대기";
+      log.validationMessage = "인터넷 연결 후 자동 처리됩니다. 서버 확인 전에는 횟수가 차감되지 않습니다.";
+      saveSnapshot();
+      renderAll();
+      return;
+    }
     log.status = "서버 처리 중";
     renderAll();
     try {
@@ -4038,6 +4046,13 @@ async function confirmLog(id, options = {}) {
         target_member_journal_id: log.serverJournalId || null,
       });
     } catch (error) {
+      if (client.isOfflineError?.(error)) {
+        log.status = "동기화 대기";
+        log.validationMessage = "인터넷 연결 후 자동 처리됩니다. 서버 확인 전에는 횟수가 차감되지 않습니다.";
+        saveSnapshot();
+        renderAll();
+        return;
+      }
       let code = error?.payload?.message || error?.payload?.code || error?.message || "server_error";
       if (typeof code === "string" && code.trim().startsWith("{")) {
         try {
@@ -4090,7 +4105,37 @@ async function confirmLog(id, options = {}) {
     lesson.serverStatus = "completed";
     lesson.task = "기록/차감 완료";
   }
+  saveSnapshot();
   renderAll();
+}
+
+function flushCoachOfflineLessonDrafts() {
+  if (coachOfflineFlushPromise || window.TennisNoteDataClient?.isOnline?.() === false) {
+    return coachOfflineFlushPromise || Promise.resolve(false);
+  }
+  const pending = state.lessonLogs.filter((log) => log.status === "동기화 대기" && log.serverLessonId);
+  if (!pending.length) return Promise.resolve(true);
+  coachOfflineFlushPromise = (async () => {
+    for (const log of pending) {
+      await confirmLog(log.id, { skipDraft: true, fromOfflineQueue: true });
+    }
+    saveSnapshot();
+    return !state.lessonLogs.some((log) => log.status === "동기화 대기" && log.serverLessonId);
+  })().finally(() => {
+    coachOfflineFlushPromise = null;
+  });
+  return coachOfflineFlushPromise;
+}
+
+function installCoachConnectivitySync() {
+  window.addEventListener("online", () => {
+    showToast("인터넷 연결 복구 · 저장 대기 기록을 확인합니다.");
+    void flushCoachOfflineLessonDrafts();
+    void refreshCoachLiveSchedule().catch(() => false);
+  });
+  window.addEventListener("offline", () => {
+    showToast("오프라인 · 최근 자료는 조회할 수 있고 수업기록은 임시 저장됩니다.");
+  });
 }
 
 function handleSummaryAction(action) {
@@ -4491,6 +4536,7 @@ async function initCoachApp() {
   purgeLegacyDemoStorage();
   restoreSnapshot();
   bindEvents();
+  installCoachConnectivitySync();
   installCoachLiveScheduleRefresh();
   renderAll();
   const client = window.TennisNoteDataClient;
@@ -4507,6 +4553,7 @@ async function initCoachApp() {
     const sessionStillAvailable = Boolean(client?.getSession?.()?.access_token);
     if (!sessionStillAvailable || !state.coach) returnToMemberEntry(true);
   }
+  if (window.TennisNoteDataClient?.isOnline?.() !== false) void flushCoachOfflineLessonDrafts();
 }
 
 initCoachApp().finally(hideCoachBrandSplash).catch(() => undefined);
