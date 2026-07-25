@@ -4573,7 +4573,10 @@ function lessonTypeLabel(lesson) {
 
 function getTicketByLesson(lesson) {
   if (!lesson) return null;
-  if (lesson.ticketId) return tickets.find((item) => item.id === lesson.ticketId);
+  if (lesson.ticketId) {
+    return [...tickets, ...expiredTickets]
+      .find((item) => String(item.id) === String(lesson.ticketId));
+  }
   return tickets.find((item) => item.member === lesson.member && item.coachId === lesson.coachId && item.product?.includes(lesson.type)) ||
     tickets.find((item) => item.member === lesson.member && item.coachId === lesson.coachId);
 }
@@ -10415,17 +10418,24 @@ function refreshLessonDurationOptions() {
 }
 
 function getEligibleTickets(memberName, coachId) {
-  const editingTicketId = getTicketByLesson(getCurrentEditingLesson())?.id || "";
+  const editingTicket = getTicketByLesson(getCurrentEditingLesson());
+  const editingTicketId = editingTicket?.id || "";
   const sourceTickets = adminManualOverrideEnabled()
     ? [...tickets, ...expiredTickets].filter((ticket, index, source) => (
       source.findIndex((item) => String(item.id) === String(ticket.id)) === index
       && ticketParticipantNames(ticket).includes(memberName)
     ))
     : ticketsForMember(memberName);
-  return sourceTickets.filter((ticket) => adminManualOverrideEnabled() || (
+  const eligibleTickets = sourceTickets.filter((ticket) => adminManualOverrideEnabled() || (
     ticket.coachId === coachId
     && (ticket.remaining > 0 || ticket.id === editingTicketId)
   ));
+  // Existing lessons are already bound to a server ticket. Keep that identity
+  // while editing instead of rediscovering it from display names or coach lanes.
+  if (editingTicket && !eligibleTickets.some((ticket) => String(ticket.id) === String(editingTicket.id))) {
+    eligibleTickets.unshift(editingTicket);
+  }
+  return eligibleTickets;
 }
 
 function findFirstMemberWithCoachTicket(coachId) {
