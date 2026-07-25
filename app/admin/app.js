@@ -46,6 +46,7 @@ const state = {
   lessonWriteInFlight: false,
   lessonOperationKey: "",
   quickLessonEntry: false,
+  quickLessonEdit: false,
   quickLessonDetailsExpanded: false,
   quickLessonReturnSlot: null,
   substituteOperationKey: "",
@@ -11003,34 +11004,43 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   const modal = $("#lessonModal");
   const summary = $("#lessonQuickSummary");
   if (!modal || !summary) return;
+  const quickMode = state.quickLessonEntry || state.quickLessonEdit;
   const ticket = getSelectedTicket();
   const source = normalizeLessonSource($("#lessonSource")?.value);
   const requiredCount = source === "regular" ? Math.max(1, Math.min(3, getTicketWeeklyCount(ticket))) : 1;
   if (state.quickLessonEntry && requiredCount > 1) state.quickLessonDetailsExpanded = true;
-  const expanded = state.quickLessonEntry && state.quickLessonDetailsExpanded;
+  const expanded = quickMode && state.quickLessonDetailsExpanded;
   modal.classList.toggle("is-quick-entry", state.quickLessonEntry);
+  modal.classList.toggle("is-quick-edit", state.quickLessonEdit);
   modal.classList.toggle("is-quick-expanded", expanded);
-  summary.hidden = !state.quickLessonEntry;
-  const scheduleLabel = candidate?.day && candidate?.time
-    ? `${candidate.day}요일 ${adminScheduleDateLabel(candidate.day)} · ${candidate.time} · ${scheduleCoachDisplayName(getCoachName(candidate.coachId))}`
-    : "요일과 시간을 선택해 주세요.";
+  summary.hidden = !quickMode;
+  const editingLesson = state.quickLessonEdit ? getCurrentEditingLesson() : null;
+  if ($("#lessonQuickLabel")) $("#lessonQuickLabel").textContent = state.quickLessonEdit ? "수정 대상" : "선택 시간";
+  const scheduleLabel = state.quickLessonEdit && editingLesson
+    ? `${getLessonMembersLabel(editingLesson)} · ${editingLesson.day}요일 ${adminScheduleDateLabel(editingLesson.day)} · ${editingLesson.time}`
+    : candidate?.day && candidate?.time
+      ? `${candidate.day}요일 ${adminScheduleDateLabel(candidate.day)} · ${candidate.time} · ${scheduleCoachDisplayName(getCoachName(candidate.coachId))}`
+      : "요일과 시간을 선택해 주세요.";
   if ($("#lessonQuickSchedule")) $("#lessonQuickSchedule").textContent = scheduleLabel;
   if ($("#lessonQuickGuide")) {
-    $("#lessonQuickGuide").textContent = requiredCount > 1
-      ? `주 ${requiredCount}회 회원권은 나머지 요일과 시간을 모두 선택해야 합니다.`
-      : "회원 검색 후 회원권을 확인하고 바로 저장할 수 있습니다.";
+    $("#lessonQuickGuide").textContent = state.quickLessonEdit
+      ? "코치·요일·시간을 바꾸고 적용 범위를 선택해 저장하세요."
+      : requiredCount > 1
+        ? `주 ${requiredCount}회 회원권은 나머지 요일과 시간을 모두 선택해야 합니다.`
+        : "회원 검색 후 회원권을 확인하고 바로 저장할 수 있습니다.";
   }
   const toggle = $("#toggleLessonQuickDetails");
   if (toggle) {
-    toggle.hidden = requiredCount > 1;
+    toggle.hidden = state.quickLessonEntry && requiredCount > 1;
     toggle.setAttribute("aria-expanded", String(expanded));
-    toggle.textContent = expanded ? "간단히 보기" : "상세 설정";
+    toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "전체 기능" : "상세 설정";
   }
 }
 
 function openLessonModal(defaults = {}) {
   state.editingLessonId = defaults.editingLessonId || null;
   state.quickLessonEntry = Boolean(!state.editingLessonId && defaults.quickEntry);
+  state.quickLessonEdit = Boolean(state.editingLessonId && defaults.quickEdit);
   state.quickLessonDetailsExpanded = false;
   state.quickLessonReturnSlot = state.quickLessonEntry
     ? { day: defaults.day || "", time: defaults.time || "", coachId: defaults.coachId || "" }
@@ -11183,7 +11193,7 @@ function openLessonModal(defaults = {}) {
   renderLessonAbsenceRestorePanel();
   $("#lessonModal").hidden = false;
   renderLessonPreview();
-  (state.quickLessonEntry ? $("#lessonMemberSearch") : $("#lessonMember"))?.focus();
+  (state.quickLessonEntry ? $("#lessonMemberSearch") : state.quickLessonEdit ? $("#lessonTime") : $("#lessonMember"))?.focus();
 }
 
 function openAdminMakeupBooking(entitlement) {
@@ -11259,9 +11269,10 @@ async function markEditingLessonAbsentForMakeup() {
 function closeLessonModal() {
   const quickReturnSlot = state.quickLessonReturnSlot;
   $("#lessonModal").hidden = true;
-  $("#lessonModal").classList.remove("is-quick-entry", "is-quick-expanded");
+  $("#lessonModal").classList.remove("is-quick-entry", "is-quick-edit", "is-quick-expanded");
   state.editingLessonId = null;
   state.quickLessonEntry = false;
+  state.quickLessonEdit = false;
   state.quickLessonDetailsExpanded = false;
   state.quickLessonReturnSlot = null;
   state.lessonOperationKey = "";
@@ -12232,7 +12243,7 @@ function openEditLessonModal(lessonId) {
   const parsedId = Number.isNaN(Number(lessonId)) ? lessonId : Number(lessonId);
   const lesson = lessons.find((item) => item.id === parsedId);
   if (!lesson) return;
-  openLessonModal({ editingLessonId: parsedId });
+  openLessonModal({ editingLessonId: parsedId, quickEdit: true });
 }
 
 async function deleteEditingLesson() {

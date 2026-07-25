@@ -7,7 +7,7 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.64" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.65" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1037,13 +1037,13 @@
           </div>
           <section id="lessonQuickSummary" class="lesson-quick-summary" hidden>
             <div>
-              <span>선택 시간</span>
+              <span id="lessonQuickLabel">선택 시간</span>
               <strong id="lessonQuickSchedule">요일과 시간을 선택해 주세요.</strong>
               <small id="lessonQuickGuide">회원 검색 후 회원권을 확인하고 바로 저장할 수 있습니다.</small>
             </div>
             <button id="toggleLessonQuickDetails" class="ghost-button" type="button" aria-expanded="false">상세 설정</button>
           </section>
-          <label class="form-field">
+          <label class="form-field lesson-source-field">
             <span>등록 구분</span>
             <select id="lessonSource" required>
               <option value="regular">정규수업</option>
@@ -1414,11 +1414,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.64"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.65"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.64"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.65"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.64"></script>
+    <script src="./app.js?v=1.0.65"></script>
   </body>
 </html>

@@ -7085,6 +7085,36 @@ button .schedule-member-lines > span {
   width: min(720px, calc(100vw - 24px));
 }
 
+#lessonModal.is-quick-edit .modal-panel {
+  width: min(720px, calc(100vw - 24px));
+}
+
+#lessonModal.is-quick-edit .lesson-form {
+  grid-template-columns: minmax(150px, 0.7fr) minmax(0, 1.3fr);
+}
+
+#lessonModal.is-quick-edit:not(.is-quick-expanded) .lesson-source-field,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) .lesson-member-ticket-panel,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonExpiredTickets,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonMakeupEntitlementField,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonAdminOverridePanel,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonRepeatSlots,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonPastCorrectionPanel,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonAbsencePanel,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonAbsenceRestorePanel,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonPreview,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #openLessonSubstituteButton,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #deleteLessonButton {
+  display: none !important;
+}
+
+#lessonModal.is-quick-edit #lessonQuickSummary,
+#lessonModal.is-quick-edit #lessonEditScopePanel,
+#lessonModal.is-quick-edit #lessonFormMessage,
+#lessonModal.is-quick-edit .modal-actions {
+  grid-column: 1 / -1;
+}
+
 .lesson-member-ticket-panel {
   grid-column: span 2;
   display: grid;
@@ -9138,8 +9168,9 @@ button .schedule-member-lines > span {
 }
 
 @media (max-width: 700px) {
-  #lessonModal.is-quick-entry .lesson-form {
-    grid-template-columns: 1fr;
+  #lessonModal.is-quick-entry .lesson-form,
+  #lessonModal.is-quick-edit .lesson-form {
+    grid-template-columns: 1fr !important;
   }
 
   .lesson-quick-summary {
@@ -9149,6 +9180,32 @@ button .schedule-member-lines > span {
 
   .lesson-quick-summary .ghost-button {
     width: 100%;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+  }
+
+  .nav-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace {
+    padding: 18px;
+  }
+
+  .topbar,
+  .topbar-actions,
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
@@ -9896,4 +9953,22 @@ body {
   font-size: 11px;
   font-weight: 900;
   white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  #lessonModal.modal-backdrop.is-quick-entry #lessonForm.lesson-form,
+  #lessonModal.modal-backdrop.is-quick-edit #lessonForm.lesson-form {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #lessonModal.is-quick-entry #lessonForm > *,
+  #lessonModal.is-quick-edit #lessonForm > * {
+    grid-column: 1 !important;
+  }
+
+  #lessonModal.is-quick-entry #lessonQuickSummary,
+  #lessonModal.is-quick-edit #lessonQuickSummary {
+    width: 100%;
+    min-width: 0;
+  }
 }
