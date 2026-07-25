@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.63" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.64" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -124,6 +124,10 @@
             <span id="memberName">회원</span>
           </div>
         </header>
+
+        <div id="memberConnectivityStatus" class="connectivity-status" role="status" aria-live="polite" hidden>
+          <span id="memberConnectivityMessage"></span>
+        </div>
 
         <nav class="tabbar" aria-label="하단 주요 기능">
           <button class="tab is-active" type="button" data-view="homeView">홈</button>
@@ -431,7 +435,7 @@
               <span class="settings-row-icon" aria-hidden="true">R</span>
               <span class="settings-row-copy">
                 <strong>앱 새로고침</strong>
-                <small class="release-version" data-tennisnote-release="detail"></small>
+                <small>최신 화면과 데이터를 다시 불러옵니다.</small>
               </span>
               <span class="settings-row-arrow" aria-hidden="true">›</span>
             </button>
@@ -877,12 +881,12 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.63"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.64"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.63"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.64"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.63"></script>
+    <script src="./app.js?v=1.0.64"></script>
   </body>
 </html>

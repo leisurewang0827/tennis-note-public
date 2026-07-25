@@ -18988,6 +18988,43 @@ function bindEvents() {
   }
 }
 
+let adminConnectivityHideTimer = 0;
+
+function renderAdminConnectivityStatus(reconnected = false) {
+  const status = $("#adminConnectivityStatus");
+  const message = $("#adminConnectivityMessage");
+  if (!status || !message) return;
+  window.clearTimeout(adminConnectivityHideTimer);
+  const online = window.TennisNoteDataClient?.isOnline?.() !== false;
+  if (!online) {
+    status.hidden = false;
+    status.dataset.tone = "offline";
+    message.textContent = "오프라인 · 최근 자료 조회만 가능하며 운영 변경은 연결 후 처리할 수 있습니다.";
+    return;
+  }
+  if (!reconnected) {
+    status.hidden = true;
+    status.dataset.tone = "";
+    message.textContent = "";
+    return;
+  }
+  status.hidden = false;
+  status.dataset.tone = "online";
+  message.textContent = "인터넷 연결 복구 · 운영 자료를 다시 확인합니다.";
+  adminConnectivityHideTimer = window.setTimeout(() => {
+    status.hidden = true;
+  }, 2500);
+}
+
+function installAdminConnectivityStatus() {
+  renderAdminConnectivityStatus(false);
+  window.addEventListener("offline", () => renderAdminConnectivityStatus(false));
+  window.addEventListener("online", () => {
+    renderAdminConnectivityStatus(true);
+    void loadSupabaseLiveStatus();
+  });
+}
+
 restoreSnapshot();
 prepareAdminLiveMode();
 resetScheduleEntryState();
@@ -18999,6 +19036,7 @@ if (window.TennisNoteDataClient?.getSession?.()?.access_token) {
 renderOperationsLoginGate();
 organizeAdminTools();
 bindEvents();
+installAdminConnectivityStatus();
 installAdminLiveScheduleRefresh();
 renderAll();
 let adminScheduleResizeTimer = 0;

@@ -437,6 +437,32 @@ small {
   align-items: center;
 }
 
+.connectivity-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid #f0b35a;
+  border-radius: 6px;
+  background: #fff8e8;
+  color: #70420b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.connectivity-status[data-tone="online"] {
+  border-color: #8acfb5;
+  background: #edf9f4;
+  color: #126146;
+}
+
+.connectivity-status[hidden] {
+  display: none;
+}
+
 .app-preview-links {
   display: inline-flex;
   align-items: center;
@@ -2394,7 +2420,7 @@ tr.is-selected td {
 
 .schedule-month-input {
   width: 100%;
-  min-height: 36px;
+  min-height: 40px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;

@@ -7,7 +7,7 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.63" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.64" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -91,6 +91,10 @@
             </div>
           </div>
         </header>
+
+        <div id="adminConnectivityStatus" class="connectivity-status" role="status" aria-live="polite" hidden>
+          <span id="adminConnectivityMessage"></span>
+        </div>
 
         <section id="dashboardView" class="view is-active" aria-label="운영 대시보드">
           <div class="metric-grid">
@@ -1410,11 +1414,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.63"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.64"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.63"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.64"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.63"></script>
+    <script src="./app.js?v=1.0.64"></script>
   </body>
 </html>

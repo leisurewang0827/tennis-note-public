@@ -5808,3 +5808,28 @@ body.modal-open {
   color: var(--green);
   font-weight: 800;
 }
+.connectivity-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  margin: 0 16px 10px;
+  padding: 8px 12px;
+  border: 1px solid #f0b35a;
+  border-radius: 6px;
+  background: #fff8e8;
+  color: #70420b;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.connectivity-status[data-tone="online"] {
+  border-color: #8acfb5;
+  background: #edf9f4;
+  color: #126146;
+}
+
+.connectivity-status[hidden] {
+  display: none;
+}

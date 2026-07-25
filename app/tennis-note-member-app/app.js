@@ -1496,7 +1496,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.63";
+    const refreshKey = "tennis-note-sw-refresh-1.0.64";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1504,7 +1504,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.63", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.64", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -6495,7 +6495,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.63" });
+  const params = new URLSearchParams({ v: "1.0.64" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7974,6 +7974,33 @@ function renderActiveMemberView(viewId = activeMemberViewId()) {
 
 let memberLiveScheduleRefreshTimer = 0;
 let memberLiveScheduleRefreshInFlight = false;
+let memberConnectivityHideTimer = 0;
+
+function renderMemberConnectivityStatus(reconnected = false) {
+  const status = $("#memberConnectivityStatus");
+  const message = $("#memberConnectivityMessage");
+  if (!status || !message) return;
+  window.clearTimeout(memberConnectivityHideTimer);
+  const online = window.TennisNoteDataClient?.isOnline?.() !== false;
+  if (!online) {
+    status.hidden = false;
+    status.dataset.tone = "offline";
+    message.textContent = "오프라인 · 최근 저장된 자료를 보고 있습니다.";
+    return;
+  }
+  if (!reconnected) {
+    status.hidden = true;
+    status.dataset.tone = "";
+    message.textContent = "";
+    return;
+  }
+  status.hidden = false;
+  status.dataset.tone = "online";
+  message.textContent = "인터넷 연결 복구 · 최신 자료를 확인했습니다.";
+  memberConnectivityHideTimer = window.setTimeout(() => {
+    status.hidden = true;
+  }, 2500);
+}
 
 async function refreshMemberLiveSchedule(options = {}) {
   const client = window.TennisNoteDataClient;
@@ -8014,12 +8041,23 @@ function installMemberLiveScheduleRefresh() {
   memberLiveScheduleRefreshTimer = window.setInterval(refresh, 60_000);
 }
 
+function installMemberConnectivityStatus() {
+  renderMemberConnectivityStatus(false);
+  window.addEventListener("offline", () => renderMemberConnectivityStatus(false));
+  window.addEventListener("online", () => {
+    void refreshMemberLiveSchedule({ render: true }).finally(() => {
+      renderMemberConnectivityStatus(true);
+    });
+  });
+}
+
 async function initApp() {
   registerPwaServiceWorker();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
   restoreSnapshot();
   bindEvents();
+  installMemberConnectivityStatus();
   installMemberLiveScheduleRefresh();
   renderActiveMemberView();
   const client = window.TennisNoteDataClient;

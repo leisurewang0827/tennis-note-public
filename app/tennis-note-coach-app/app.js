@@ -73,6 +73,8 @@ const state = {
 const noticeSessionSeenIds = new Set();
 let noticePreviousFocus = null;
 let coachOfflineFlushPromise = null;
+let coachSyncUiState = "idle";
+let coachSyncStatusTimer = 0;
 
 const brandSplashStartedAt = performance.now();
 const brandSplashMinimumDuration = 150;
@@ -1419,7 +1421,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.63";
+  const refreshKey = "tennis-note-sw-refresh-1.0.64";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1429,7 +1431,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.63", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.64", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1481,7 +1483,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.63" });
+  const params = new URLSearchParams({ v: "1.0.64" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1739,12 +1741,19 @@ function renderSummary() {
   const pendingLessonLogs = ownPendingLessonLogs().length;
   const pendingFeedback = ownPendingFeedbackRequests().length;
   const pendingRecordTotal = pendingLessonLogs + pendingFeedback;
+  const pendingSyncCount = coachPendingSyncLogs().length;
   $("#todayLessonCount").textContent = `${ownLessons.length}개`;
   if ($("#todayLessonSummaryNote")) $("#todayLessonSummaryNote").textContent = ownLessons.length ? `정규 ${regularCount} · 보강 ${makeupLessonCount}` : "오늘 수업 없음";
   $("#makeupPendingCount").textContent = `${makeupPendingCount}건`;
   if ($("#makeupSummaryNote")) $("#makeupSummaryNote").textContent = makeupPendingCount ? `처리 대기 ${makeupPendingCount}건` : "대기 없음";
   $("#logPendingCount").textContent = `${pendingRecordTotal}건`;
-  if ($("#recordSummaryNote")) $("#recordSummaryNote").textContent = pendingRecordTotal ? `완료 처리 ${pendingRecordTotal}건` : "처리 없음";
+  if ($("#recordSummaryNote")) {
+    $("#recordSummaryNote").textContent = pendingSyncCount
+      ? `동기화 대기 ${pendingSyncCount}건`
+      : pendingRecordTotal
+        ? `완료 처리 ${pendingRecordTotal}건`
+        : "처리 없음";
+  }
   if ($("#recordRequiredNote")) {
     $("#recordRequiredNote").textContent = pendingRecordTotal
       ? `미처리 ${pendingRecordTotal}건 · 코멘트 등록 후 횟수가 차감됩니다.`
@@ -3594,7 +3603,9 @@ function recordProcessingMarkup() {
               ${log.validationMessage ? `<p class="validation-text">${log.validationMessage}</p>` : ""}
               <div class="actions">
                 <b>${log.status}</b>
-                <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed ? "disabled" : ""}>다음 커리큘럼 등록 + 확인/차감</button>
+                <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" ? "disabled" : ""}>
+                  ${["동기화 대기", "동기화 실패"].includes(log.status) ? "다시 동기화" : "다음 커리큘럼 등록 + 확인/차감"}
+                </button>
               </div>
             </div>
           </article>`;
@@ -4068,8 +4079,12 @@ async function confirmLog(id, options = {}) {
         lesson_complete_comment_recent_duplicate: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
         lesson_complete_comment_member_duplicate_limit: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
       };
-      log.status = "확인 대기";
-      log.validationMessage = serverMessages[code] || "서버 횟수 차감에 실패했습니다. 같은 기록에서 다시 시도해 주세요.";
+      log.status = options.fromOfflineQueue ? "동기화 실패" : "확인 대기";
+      log.validationMessage = serverMessages[code]
+        || (options.fromOfflineQueue
+          ? "자동 동기화에 실패했습니다. 연결 상태를 확인한 뒤 다시 동기화해 주세요."
+          : "서버 횟수 차감에 실패했습니다. 같은 기록에서 다시 시도해 주세요.");
+      saveSnapshot();
       renderAll();
       return;
     }
@@ -4109,20 +4124,80 @@ async function confirmLog(id, options = {}) {
   renderAll();
 }
 
+function coachPendingSyncLogs() {
+  return state.lessonLogs.filter((log) => ["동기화 대기", "동기화 실패"].includes(log.status) && log.serverLessonId);
+}
+
+function renderCoachConnectivityStatus() {
+  const status = $("#coachConnectivityStatus");
+  const message = $("#coachConnectivityMessage");
+  const retry = $("#coachSyncRetryButton");
+  if (!status || !message || !retry) return;
+  window.clearTimeout(coachSyncStatusTimer);
+  const online = window.TennisNoteDataClient?.isOnline?.() !== false;
+  const pendingCount = coachPendingSyncLogs().length;
+  retry.hidden = true;
+  retry.disabled = coachSyncUiState === "syncing";
+  if (!online) {
+    status.hidden = false;
+    status.dataset.tone = "offline";
+    message.textContent = pendingCount
+      ? `오프라인 · 기록 ${pendingCount}건을 연결 후 처리합니다.`
+      : "오프라인 · 최근 자료 조회와 수업기록 임시 저장만 가능합니다.";
+    return;
+  }
+  if (coachSyncUiState === "syncing") {
+    status.hidden = false;
+    status.dataset.tone = "online";
+    message.textContent = `수업기록 ${pendingCount}건을 동기화하는 중입니다.`;
+    return;
+  }
+  if (pendingCount) {
+    status.hidden = false;
+    status.dataset.tone = coachSyncUiState === "failed" ? "error" : "online";
+    message.textContent = coachSyncUiState === "failed"
+      ? `동기화 실패 ${pendingCount}건 · 서버 확인 전에는 차감되지 않았습니다.`
+      : `동기화 대기 ${pendingCount}건 · 서버 확인 전에는 차감되지 않습니다.`;
+    retry.hidden = false;
+    return;
+  }
+  if (coachSyncUiState === "restored") {
+    status.hidden = false;
+    status.dataset.tone = "online";
+    message.textContent = "동기화 완료 · 기록과 횟수 차감을 확인했습니다.";
+    coachSyncStatusTimer = window.setTimeout(() => {
+      coachSyncUiState = "idle";
+      renderCoachConnectivityStatus();
+    }, 2500);
+    return;
+  }
+  status.hidden = true;
+  status.dataset.tone = "";
+  message.textContent = "";
+}
+
 function flushCoachOfflineLessonDrafts() {
   if (coachOfflineFlushPromise || window.TennisNoteDataClient?.isOnline?.() === false) {
     return coachOfflineFlushPromise || Promise.resolve(false);
   }
-  const pending = state.lessonLogs.filter((log) => log.status === "동기화 대기" && log.serverLessonId);
-  if (!pending.length) return Promise.resolve(true);
+  const pending = coachPendingSyncLogs();
+  if (!pending.length) {
+    renderCoachConnectivityStatus();
+    return Promise.resolve(true);
+  }
+  coachSyncUiState = "syncing";
+  renderCoachConnectivityStatus();
   coachOfflineFlushPromise = (async () => {
     for (const log of pending) {
       await confirmLog(log.id, { skipDraft: true, fromOfflineQueue: true });
     }
     saveSnapshot();
-    return !state.lessonLogs.some((log) => log.status === "동기화 대기" && log.serverLessonId);
+    const complete = coachPendingSyncLogs().length === 0;
+    coachSyncUiState = complete ? "restored" : "failed";
+    return complete;
   })().finally(() => {
     coachOfflineFlushPromise = null;
+    renderAll();
   });
   return coachOfflineFlushPromise;
 }
@@ -4130,10 +4205,13 @@ function flushCoachOfflineLessonDrafts() {
 function installCoachConnectivitySync() {
   window.addEventListener("online", () => {
     showToast("인터넷 연결 복구 · 저장 대기 기록을 확인합니다.");
+    renderCoachConnectivityStatus();
     void flushCoachOfflineLessonDrafts();
     void refreshCoachLiveSchedule().catch(() => false);
   });
   window.addEventListener("offline", () => {
+    coachSyncUiState = "idle";
+    renderCoachConnectivityStatus();
     showToast("오프라인 · 최근 자료는 조회할 수 있고 수업기록은 임시 저장됩니다.");
   });
 }
@@ -4163,6 +4241,13 @@ function bindEvents() {
   $("#noticeAction")?.addEventListener("click", () => closeNotice(false));
   $("#saveCoachProfile")?.addEventListener("click", saveCoachProfile);
   $("#openLessonRecordWriter")?.addEventListener("click", () => openLessonRecordWriter());
+  $("#coachSyncRetryButton")?.addEventListener("click", () => {
+    if (window.TennisNoteDataClient?.isOnline?.() === false) {
+      renderCoachConnectivityStatus();
+      return;
+    }
+    void flushCoachOfflineLessonDrafts();
+  });
   document.addEventListener("change", (event) => {
     const scheduleMonth = event.target.closest("[data-coach-month]");
     if (scheduleMonth) {
@@ -4413,7 +4498,12 @@ function bindEvents() {
     if (curriculumSelect) updateLogDraft(curriculumSelect.dataset.nextCurriculum);
 
     const confirmButton = event.target.closest("[data-confirm-log]");
-    if (confirmButton) confirmLog(confirmButton.dataset.confirmLog);
+    if (confirmButton) {
+      const logId = confirmButton.dataset.confirmLog;
+      const log = state.lessonLogs.find((item) => item.id === logId);
+      const fromOfflineQueue = ["동기화 대기", "동기화 실패"].includes(log?.status);
+      confirmLog(logId, { fromOfflineQueue });
+    }
 
     const feedbackButton = event.target.closest("[data-confirm-feedback]");
     if (feedbackButton) confirmFeedback(feedbackButton.dataset.confirmFeedback);
@@ -4495,6 +4585,7 @@ function renderAll() {
   renderMakeups();
   renderLogs();
   renderCurriculums();
+  renderCoachConnectivityStatus();
   saveSnapshot();
 }
 

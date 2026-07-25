@@ -1,14 +1,14 @@
-const CACHE_NAME = "tennis-note-coach-mode-v92";
+const CACHE_NAME = "tennis-note-coach-mode-v93";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.63",
-  "./app.js?v=1.0.63",
+  "./styles.css?v=1.0.64",
+  "./app.js?v=1.0.64",
   "./assets/app-icon.svg",
-  "../shared/tennisnote-data-client.js?v=1.0.63",
+  "../shared/tennisnote-data-client.js?v=1.0.64",
   "../shared/tennisnote-curriculum-catalog.js",
-  "../shared/tennisnote-release.js?v=1.0.63",
+  "../shared/tennisnote-release.js?v=1.0.64",
   "../shared/tennisnote-issue-reporter.js",
   "../shared/tennisnote-issue-reporter.css",
 ];
