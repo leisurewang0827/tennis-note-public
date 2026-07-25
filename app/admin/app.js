@@ -47,6 +47,7 @@ const state = {
   lessonOperationKey: "",
   quickLessonEntry: false,
   quickLessonDetailsExpanded: false,
+  quickLessonReturnSlot: null,
   substituteOperationKey: "",
   activeAdminWeekIndex: 0,
   adminTaskPage: 0,
@@ -4900,7 +4901,62 @@ function isBreakOverlapping(day, time, durationMinutes = 20, coachId = "") {
 
 function lessonAddAttrs(day, time, durationMinutes = 20, preferredCoachId = "") {
   const coachId = getAvailableCoachId(day, time, durationMinutes, preferredCoachId);
-  return `data-add-lesson-day="${day}" data-add-lesson-time="${time}" data-add-lesson-court="${getAvailableCourtId(day, time, durationMinutes)}" data-add-lesson-coach="${coachId}"`;
+  const coachLabel = scheduleCoachDisplayName(getCoachName(coachId)) || "코치 미정";
+  const ariaLabel = escapeHtml(`${day}요일 ${time} ${coachLabel} 수업 추가`);
+  return `data-add-lesson-day="${day}" data-add-lesson-time="${time}" data-add-lesson-court="${getAvailableCourtId(day, time, durationMinutes)}" data-add-lesson-coach="${coachId}" aria-label="${ariaLabel}"`;
+}
+
+function scheduleAddButtonGridPosition(button) {
+  const slot = button?.closest?.(".admin-duration-slot");
+  if (!slot) return null;
+  const row = Number.parseInt(slot.style.gridRow, 10);
+  const column = Number.parseInt(slot.style.gridColumn, 10);
+  return Number.isFinite(row) && Number.isFinite(column) ? { row, column } : null;
+}
+
+function moveScheduleAddButtonFocus(button, key) {
+  const current = scheduleAddButtonGridPosition(button);
+  if (!current) return false;
+  const candidates = [...document.querySelectorAll('.admin-duration-add[data-quick-lesson-entry="true"]')]
+    .filter((candidate) => candidate !== button && !candidate.disabled && candidate.offsetParent !== null)
+    .map((candidate) => ({ button: candidate, position: scheduleAddButtonGridPosition(candidate) }))
+    .filter((candidate) => candidate.position);
+  const vertical = key === "ArrowUp" || key === "ArrowDown";
+  const direction = key === "ArrowUp" || key === "ArrowLeft" ? -1 : 1;
+  const aligned = candidates.filter(({ position }) => (
+    vertical
+      ? position.column === current.column && Math.sign(position.row - current.row) === direction
+      : position.row === current.row && Math.sign(position.column - current.column) === direction
+  ));
+  aligned.sort((left, right) => {
+    const leftDistance = vertical
+      ? Math.abs(left.position.row - current.row)
+      : Math.abs(left.position.column - current.column);
+    const rightDistance = vertical
+      ? Math.abs(right.position.row - current.row)
+      : Math.abs(right.position.column - current.column);
+    return leftDistance - rightDistance;
+  });
+  if (!aligned.length) return false;
+  aligned[0].button.focus({ preventScroll: true });
+  aligned[0].button.scrollIntoView({ block: "nearest", inline: "nearest" });
+  return true;
+}
+
+function focusQuickLessonReturnSlot(slot = null) {
+  if (!slot) return;
+  const buttons = [...document.querySelectorAll('.admin-duration-add[data-quick-lesson-entry="true"]')]
+    .filter((button) => !button.disabled && button.offsetParent !== null);
+  const sameLane = buttons
+    .filter((button) => button.dataset.addLessonDay === slot.day
+      && button.dataset.addLessonCoach === slot.coachId)
+    .sort((left, right) => timeToMinutes(left.dataset.addLessonTime) - timeToMinutes(right.dataset.addLessonTime));
+  const target = sameLane.find((button) => button.dataset.addLessonTime === slot.time)
+    || sameLane.find((button) => timeToMinutes(button.dataset.addLessonTime) > timeToMinutes(slot.time))
+    || sameLane[0];
+  if (!target) return;
+  target.focus({ preventScroll: true });
+  target.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 function getScheduleTimeOptions() {
@@ -10976,6 +11032,9 @@ function openLessonModal(defaults = {}) {
   state.editingLessonId = defaults.editingLessonId || null;
   state.quickLessonEntry = Boolean(!state.editingLessonId && defaults.quickEntry);
   state.quickLessonDetailsExpanded = false;
+  state.quickLessonReturnSlot = state.quickLessonEntry
+    ? { day: defaults.day || "", time: defaults.time || "", coachId: defaults.coachId || "" }
+    : null;
   state.lessonOperationKey = createAdminOperationKey(
     state.editingLessonId ? "lesson-edit" : "lesson-create",
   );
@@ -11198,17 +11257,20 @@ async function markEditingLessonAbsentForMakeup() {
 }
 
 function closeLessonModal() {
+  const quickReturnSlot = state.quickLessonReturnSlot;
   $("#lessonModal").hidden = true;
   $("#lessonModal").classList.remove("is-quick-entry", "is-quick-expanded");
   state.editingLessonId = null;
   state.quickLessonEntry = false;
   state.quickLessonDetailsExpanded = false;
+  state.quickLessonReturnSlot = null;
   state.lessonOperationKey = "";
   state.releasedAbsenceEntitlementId = "";
   state.pinnedLessonTicketId = "";
   state.pinnedLessonDay = "";
   state.pinnedLessonTime = "";
   setLessonFormMessage("");
+  if (quickReturnSlot) window.requestAnimationFrame(() => focusQuickLessonReturnSlot(quickReturnSlot));
 }
 
 function coachNameForRoleId(roleId = "") {
@@ -17724,6 +17786,18 @@ function bindEvents() {
       coachId: slotButton.dataset.addLessonCoach,
       quickEntry: slotButton.dataset.quickLessonEntry === "true",
     });
+  });
+  document.addEventListener("keydown", (event) => {
+    const slotButton = event.target.closest('.admin-duration-add[data-quick-lesson-entry="true"]');
+    if (!slotButton) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      slotButton.click();
+      return;
+    }
+    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
+      || !moveScheduleAddButtonFocus(slotButton, event.key)) return;
+    event.preventDefault();
   });
   document.addEventListener("click", (event) => {
     const oneDayBookingButton = event.target.closest("[data-edit-one-day-booking-id]");
