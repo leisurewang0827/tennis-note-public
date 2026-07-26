@@ -1487,6 +1487,7 @@ const paymentConfigKey = "tennis-note-payment-config";
 const liveSchedulePolicyKey = "app_schedule_policy";
 const operationProfiles = [];
 let activeOperationProfileId = "";
+const activeOperationProfileIdsByBranch = {};
 const adminSecuritySettingsKey = "admin_security_v1";
 const holdingPolicyKey = "holding_policy";
 const notificationPolicyKey = "notification_policy_v1";
@@ -2224,6 +2225,7 @@ function restoreSnapshot() {
         : [],
     );
     activeOperationProfileId = snapshot.activeOperationProfileId || "";
+    replaceOperationProfileBranchMap(snapshot.activeOperationProfileIdsByBranch);
     ensureOperationProfiles();
     Object.assign(adminLockSettings, normalizeAdminLockSettings(snapshot.adminLockSettings));
     const storedPolicyVersion = Number(snapshot.scheduleSettings?.coachWorkPolicyVersion) || 0;
@@ -2265,6 +2267,7 @@ function saveSnapshot() {
     scheduleSettings,
     operationProfiles,
     activeOperationProfileId,
+    activeOperationProfileIdsByBranch,
     adminLockSettings: serializableAdminLockSettings(),
   };
   try {
@@ -2386,6 +2389,39 @@ function createOperationProfile(name = "기본 운영", source = null) {
   }, operationProfiles.length);
 }
 
+function replaceOperationProfileBranchMap(value = {}) {
+  Object.keys(activeOperationProfileIdsByBranch).forEach((branchId) => {
+    delete activeOperationProfileIdsByBranch[branchId];
+  });
+  if (!value || typeof value !== "object" || Array.isArray(value)) return;
+  Object.entries(value).forEach(([branchId, profileId]) => {
+    const normalizedBranchId = String(branchId || "");
+    const normalizedProfileId = String(profileId || "");
+    if (normalizedBranchId && normalizedProfileId) {
+      activeOperationProfileIdsByBranch[normalizedBranchId] = normalizedProfileId;
+    }
+  });
+}
+
+function markOperationProfileActiveForBranch(profile) {
+  const branchId = String(profile?.branchId || "");
+  if (!branchId || !profile?.id) return;
+  activeOperationProfileIdsByBranch[branchId] = String(profile.id);
+}
+
+function removeOperationProfileFromBranchMap(profileId, branchId = "") {
+  const normalizedProfileId = String(profileId || "");
+  const normalizedBranchId = String(branchId || "");
+  Object.entries(activeOperationProfileIdsByBranch).forEach(([mappedBranchId, mappedProfileId]) => {
+    if (
+      String(mappedProfileId) === normalizedProfileId
+      && (!normalizedBranchId || mappedBranchId === normalizedBranchId)
+    ) {
+      delete activeOperationProfileIdsByBranch[mappedBranchId];
+    }
+  });
+}
+
 function ensureOperationProfiles() {
   if (!operationProfiles.length) {
     operationProfiles.push(createOperationProfile("기본 운영"));
@@ -2401,6 +2437,22 @@ function ensureOperationProfiles() {
       profile.branchName = fallbackBranch.name;
     });
   }
+  Object.entries(activeOperationProfileIdsByBranch).forEach(([branchId, profileId]) => {
+    const profile = operationProfiles.find((item) => (
+      String(item.id) === String(profileId)
+      && String(item.branchId || "") === String(branchId)
+    ));
+    if (!profile) delete activeOperationProfileIdsByBranch[branchId];
+  });
+  const globalActiveProfile = operationProfiles.find((profile) => profile.id === activeOperationProfileId);
+  [...new Set(operationProfiles.map((profile) => String(profile.branchId || "")).filter(Boolean))]
+    .forEach((branchId) => {
+      if (activeOperationProfileIdsByBranch[branchId]) return;
+      const fallbackProfile = String(globalActiveProfile?.branchId || "") === branchId
+        ? globalActiveProfile
+        : operationProfiles.find((profile) => String(profile.branchId || "") === branchId);
+      if (fallbackProfile) activeOperationProfileIdsByBranch[branchId] = fallbackProfile.id;
+    });
 }
 
 function activeOperationProfile() {
@@ -2584,6 +2636,7 @@ function operationProfileWorkspaceBackup() {
   return {
     profiles: cloneOperationProfileValue(operationProfiles),
     activeId: activeOperationProfileId,
+    activeIdsByBranch: cloneOperationProfileValue(activeOperationProfileIdsByBranch),
     scheduleSettings: currentOperationScheduleSettings(),
     coaches: currentOperationCoachPolicies(),
   };
@@ -2592,6 +2645,7 @@ function operationProfileWorkspaceBackup() {
 function restoreOperationProfileWorkspace(backup) {
   replaceArray(operationProfiles, backup.profiles);
   activeOperationProfileId = backup.activeId;
+  replaceOperationProfileBranchMap(backup.activeIdsByBranch);
   applyOperationProfile({
     id: backup.activeId,
     name: "복원",
@@ -2620,9 +2674,10 @@ function liveSchedulePolicyPayload() {
   ensureOperationProfiles();
   updateActiveOperationProfileFromCurrent();
   return {
-    version: 4,
+    version: 5,
     updatedAt: new Date().toISOString(),
     activeOperationProfileId,
+    activeOperationProfileIdsByBranch: cloneOperationProfileValue(activeOperationProfileIdsByBranch),
     operationProfiles: cloneOperationProfileValue(operationProfiles),
     scheduleSettings: {
       openStart: scheduleSettings.openStart,
@@ -3777,6 +3832,7 @@ async function loadLiveSchedulePolicyFromServer() {
         : [],
     );
     activeOperationProfileId = value.activeOperationProfileId || "";
+    replaceOperationProfileBranchMap(value.activeOperationProfileIdsByBranch);
     ensureOperationProfiles();
     updateActiveOperationProfileFromCurrent();
     localStorage.setItem(storageKey, JSON.stringify({
@@ -3785,6 +3841,7 @@ async function loadLiveSchedulePolicyFromServer() {
       scheduleSettings,
       operationProfiles,
       activeOperationProfileId,
+      activeOperationProfileIdsByBranch,
     }));
     return true;
   } catch {
@@ -18248,6 +18305,7 @@ async function activateOperationProfile(profileId) {
   if (!target || target.id === activeOperationProfileId) return true;
   const backup = operationProfileWorkspaceBackup();
   activeOperationProfileId = target.id;
+  markOperationProfileActiveForBranch(target);
   applyOperationProfile(target);
   resetOperationBranchViewState();
   return persistOperationProfileWorkspace(backup, `${target.name} 프로필을 적용했습니다.`);
@@ -20358,10 +20416,13 @@ function bindEvents() {
     const nextBranchId = String(event.target.value || "");
     if (nextBranchId === String(profile.branchId || "")) return;
     const backup = operationProfileWorkspaceBackup();
+    const previousBranchId = String(profile.branchId || "");
     const nextBranch = operationBranchOptions().find((branch) => branch.id === nextBranchId);
+    removeOperationProfileFromBranchMap(profile.id, previousBranchId);
     profile.branchId = nextBranchId;
     profile.branchName = nextBranch?.name || "";
     profile.updatedAt = new Date().toISOString();
+    markOperationProfileActiveForBranch(profile);
     resetOperationBranchViewState();
     await persistOperationProfileWorkspace(
       backup,
@@ -20375,6 +20436,7 @@ function bindEvents() {
     const profile = createOperationProfile(uniqueOperationProfileName(requestedName), activeOperationProfile());
     operationProfiles.push(profile);
     activeOperationProfileId = profile.id;
+    markOperationProfileActiveForBranch(profile);
     applyOperationProfile(profile);
     await persistOperationProfileWorkspace(backup, `${profile.name} 프로필을 만들었습니다.`);
   });
@@ -20386,6 +20448,7 @@ function bindEvents() {
     const profile = createOperationProfile(uniqueOperationProfileName(requestedName), source);
     operationProfiles.push(profile);
     activeOperationProfileId = profile.id;
+    markOperationProfileActiveForBranch(profile);
     applyOperationProfile(profile);
     await persistOperationProfileWorkspace(backup, `${profile.name} 프로필을 복제했습니다.`);
   });
@@ -20409,8 +20472,13 @@ function bindEvents() {
     const backup = operationProfileWorkspaceBackup();
     const index = operationProfiles.findIndex((item) => item.id === profile.id);
     operationProfiles.splice(index, 1);
-    activeOperationProfileId = operationProfiles[Math.max(0, index - 1)]?.id || operationProfiles[0].id;
-    applyOperationProfile(activeOperationProfile());
+    removeOperationProfileFromBranchMap(profile.id, profile.branchId);
+    const replacement = operationProfiles.find((item) => (
+      String(item.branchId || "") === String(profile.branchId || "")
+    )) || operationProfiles[Math.max(0, index - 1)] || operationProfiles[0];
+    activeOperationProfileId = replacement.id;
+    markOperationProfileActiveForBranch(replacement);
+    applyOperationProfile(replacement);
     await persistOperationProfileWorkspace(backup, `${profile.name} 프로필을 삭제했습니다.`);
   });
   $$('[data-lesson-color]').forEach((input) => {

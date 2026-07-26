@@ -1637,7 +1637,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.112";
+    const refreshKey = "tennis-note-sw-refresh-1.0.113";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1645,7 +1645,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.112", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.113", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -2093,10 +2093,16 @@ function resolveLiveSchedulePolicyForBranch(value = {}, branchId = "") {
   const normalizedBranchId = String(branchId || "");
   const profiles = Array.isArray(value.operationProfiles) ? value.operationProfiles : [];
   const activeProfile = profiles.find((item) => String(item?.id || "") === String(value.activeOperationProfileId || ""));
+  const branchActiveProfileId = String(value.activeOperationProfileIdsByBranch?.[normalizedBranchId] || "");
+  const branchActiveProfile = profiles.find((item) => (
+    String(item?.id || "") === branchActiveProfileId
+    && String(item?.branchId || item?.branch_id || "") === normalizedBranchId
+  ));
   const profile = normalizedBranchId
-    ? (String(activeProfile?.branchId || activeProfile?.branch_id || "") === normalizedBranchId
+    ? (branchActiveProfile
+      || (String(activeProfile?.branchId || activeProfile?.branch_id || "") === normalizedBranchId
       ? activeProfile
-      : profiles.find((item) => String(item?.branchId || item?.branch_id || "") === normalizedBranchId))
+      : profiles.find((item) => String(item?.branchId || item?.branch_id || "") === normalizedBranchId)))
     : activeProfile;
   if (!profile) {
     return {
@@ -7033,7 +7039,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.112" });
+  const params = new URLSearchParams({ v: "1.0.113" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
