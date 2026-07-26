@@ -9743,9 +9743,40 @@ button .schedule-member-lines > span {
   font-size: 12px;
 }
 
+.schedule-sheet-paste-bulk {
+  display: grid;
+  grid-template-columns: auto minmax(110px, 1fr) minmax(110px, 1fr) minmax(100px, 0.7fr) auto auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #b9d9cc;
+  border-radius: 6px;
+  background: #eef8f4;
+}
+
+.schedule-sheet-paste-bulk > span {
+  color: #285347;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.schedule-sheet-paste-bulk select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  box-sizing: border-box;
+  border: 1px solid #b9d9cc;
+  border-radius: 6px;
+  padding: 4px 7px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .schedule-sheet-paste-row {
   display: grid;
-  grid-template-columns: 32px 64px 98px minmax(92px, 0.9fr) minmax(120px, 1.2fr) 88px 72px minmax(110px, 1fr) 42px;
+  grid-template-columns: 24px 32px 64px 98px minmax(92px, 0.9fr) minmax(120px, 1.2fr) 88px 72px minmax(110px, 1fr) 42px;
   min-width: 0;
   align-items: center;
   gap: 6px;
@@ -9754,6 +9785,13 @@ button .schedule-member-lines > span {
   border-radius: 6px;
   padding: 8px;
   background: #fff;
+}
+
+.schedule-sheet-paste-check {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #00865f;
 }
 
 .schedule-sheet-paste-number {
@@ -9858,6 +9896,43 @@ button .schedule-member-lines > span {
   font-weight: 900;
 }
 
+@media (min-width: 761px) and (max-width: 900px) {
+  .schedule-sheet-paste-bulk {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .schedule-sheet-paste-bulk > span {
+    grid-column: 1 / -1;
+  }
+
+  .schedule-sheet-paste-bulk .primary-button,
+  .schedule-sheet-paste-bulk .ghost-button {
+    min-width: 0;
+  }
+
+  .schedule-sheet-paste-row {
+    grid-template-columns: 24px 32px repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .schedule-sheet-paste-row [data-schedule-sheet-field="lessonSource"] {
+    grid-column: 3;
+  }
+
+  .schedule-sheet-paste-row [data-schedule-sheet-field="durationMinutes"] {
+    grid-column: 4;
+  }
+
+  .schedule-sheet-paste-row small {
+    grid-column: 5;
+  }
+
+  .schedule-sheet-paste-remove {
+    grid-column: 6;
+    justify-self: end;
+  }
+}
+
 @media (max-width: 760px) {
   .schedule-bulk-toolbar,
   .schedule-open-slot-toolbar {
@@ -9902,7 +9977,7 @@ button .schedule-member-lines > span {
   .schedule-sheet-paste-head,
   .schedule-sheet-paste-actions,
   .schedule-sheet-paste-row {
-    grid-template-columns: 28px 1fr 1fr;
+    grid-template-columns: 24px 28px 1fr 1fr;
     align-items: stretch;
   }
 
@@ -9915,17 +9990,31 @@ button .schedule-member-lines > span {
     grid-template-columns: 1fr;
   }
 
+  .schedule-sheet-paste-bulk {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .schedule-sheet-paste-bulk > span {
+    grid-column: 1 / -1;
+  }
+
+  .schedule-sheet-paste-bulk .primary-button,
+  .schedule-sheet-paste-bulk .ghost-button {
+    width: 100%;
+    min-width: 0;
+  }
+
   .schedule-sheet-paste-row input[data-schedule-sheet-field="memberName"],
   .schedule-sheet-paste-row small {
-    grid-column: 2 / -1;
+    grid-column: 3 / -1;
   }
 
   .schedule-sheet-paste-row small {
-    grid-column: 2 / 3;
+    grid-column: 3 / 4;
   }
 
   .schedule-sheet-paste-remove {
-    grid-column: 3;
+    grid-column: 4;
     justify-self: end;
   }
 

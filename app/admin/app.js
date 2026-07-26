@@ -78,6 +78,7 @@ const state = {
   scheduleSheetPasteOpen: false,
   scheduleSheetPasteRows: [],
   scheduleSheetPasteFilter: "all",
+  selectedScheduleSheetPasteRowNumbers: [],
   communityChannel: "홈",
   accountDeletionRequests: [],
   liveScheduleLoaded: false,
@@ -9833,16 +9834,19 @@ function scheduleSheetCoachField(row, index) {
   </select>`;
 }
 
-function scheduleSheetSourceField(row, index) {
-  const options = [
+function scheduleSheetSourceOptions() {
+  return [
     { value: "regular", label: "정규" },
     { value: "makeup", label: "보강" },
     { value: "coupon", label: "쿠폰" },
     { value: "one_day", label: "원데이" },
     { value: "coach_change", label: "대타" },
   ];
+}
+
+function scheduleSheetSourceField(row, index) {
   return `<select data-schedule-sheet-field="lessonSource" data-row-index="${index}" aria-label="수업종류">
-    ${scheduleSheetSelectOptions(options, row.lessonSource)}
+    ${scheduleSheetSelectOptions(scheduleSheetSourceOptions(), row.lessonSource)}
   </select>`;
 }
 
@@ -9872,6 +9876,59 @@ function scheduleSheetPasteFilterButtons(rows = []) {
   `;
 }
 
+function scheduleSheetPasteRowSelectionKey(row, index) {
+  return String(row?.rowNumber || index + 1);
+}
+
+function scheduleSheetPasteSelectedRowSet() {
+  return new Set((state.selectedScheduleSheetPasteRowNumbers || []).map(String));
+}
+
+function scheduleSheetPasteVisibleRows(rows = state.scheduleSheetPasteRows || []) {
+  return rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => (
+      state.scheduleSheetPasteFilter === "ready"
+        ? !row.issues.length
+        : state.scheduleSheetPasteFilter === "issue"
+          ? row.issues.length
+          : true
+    ));
+}
+
+function pruneScheduleSheetPasteSelection(rows = state.scheduleSheetPasteRows || []) {
+  const available = new Set(rows.map((row, index) => scheduleSheetPasteRowSelectionKey(row, index)));
+  state.selectedScheduleSheetPasteRowNumbers = (state.selectedScheduleSheetPasteRowNumbers || [])
+    .map(String)
+    .filter((rowNumber) => available.has(rowNumber));
+}
+
+function scheduleSheetPasteBulkControls(rows = state.scheduleSheetPasteRows || [], visibleRows = scheduleSheetPasteVisibleRows(rows)) {
+  const selectedCount = scheduleSheetPasteSelectedRowSet().size;
+  const coachOptions = scheduleSheetCoachOptions()
+    .map((coach) => ({ value: coach.id, label: scheduleCoachDisplayName(coach.name) }));
+  return `
+    <div class="schedule-sheet-paste-bulk" aria-label="선택 행 일괄 적용">
+      <span><strong>${selectedCount}</strong>행 선택</span>
+      <select id="scheduleSheetBulkCoach" aria-label="선택 행 코치">
+        <option value="">코치 유지</option>
+        ${scheduleSheetSelectOptions(coachOptions)}
+      </select>
+      <select id="scheduleSheetBulkSource" aria-label="선택 행 수업종류">
+        <option value="">수업종류 유지</option>
+        ${scheduleSheetSelectOptions(scheduleSheetSourceOptions())}
+      </select>
+      <select id="scheduleSheetBulkDuration" aria-label="선택 행 수업시간">
+        <option value="">수업시간 유지</option>
+        ${scheduleSheetSelectOptions([20, 30, 40, 60].map((minutes) => ({ value: minutes, label: `${minutes}분` })))}
+      </select>
+      <button class="primary-button" type="button" data-apply-schedule-sheet-bulk ${selectedCount ? "" : "disabled"}>선택 행 적용</button>
+      <button class="ghost-button" type="button" data-select-visible-schedule-sheet-rows ${visibleRows.length ? "" : "disabled"}>현재 목록 선택</button>
+      <button class="ghost-button" type="button" data-clear-schedule-sheet-selection ${selectedCount ? "" : "disabled"}>선택 해제</button>
+    </div>
+  `;
+}
+
 function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || []) {
   const panel = $("#scheduleSheetPastePanel");
   const preview = $("#scheduleSheetPastePreview");
@@ -9879,21 +9936,17 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
   if (!preview) return;
   const saveButton = $("#saveScheduleSheetPaste");
   if (!rows.length) {
+    state.selectedScheduleSheetPasteRowNumbers = [];
     if (saveButton) saveButton.disabled = true;
     preview.innerHTML = `<p class="empty-state">엑셀이나 구글시트에서 복사한 줄을 붙여넣고 미리보기를 눌러주세요.</p>`;
     return;
   }
+  pruneScheduleSheetPasteSelection(rows);
   const readyCount = rows.filter((row) => !row.issues.length).length;
   const issueCount = rows.length - readyCount;
   if (saveButton) saveButton.disabled = !readyCount || !adminApprovalReady();
-  const indexedRows = rows.map((row, index) => ({ row, index }));
-  const visibleRows = indexedRows.filter(({ row }) => (
-    state.scheduleSheetPasteFilter === "ready"
-      ? !row.issues.length
-      : state.scheduleSheetPasteFilter === "issue"
-        ? row.issues.length
-        : true
-  ));
+  const visibleRows = scheduleSheetPasteVisibleRows(rows);
+  const selectedRows = scheduleSheetPasteSelectedRowSet();
   preview.innerHTML = `
     <div class="schedule-sheet-paste-summary">
       <strong>${rows.length}줄 미리보기</strong>
@@ -9901,8 +9954,10 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
       <button class="ghost-button" type="button" data-clear-schedule-sheet-issues ${issueCount ? "" : "disabled"}>확인 필요 줄 삭제</button>
     </div>
     ${scheduleSheetPasteFilterButtons(rows)}
+    ${scheduleSheetPasteBulkControls(rows, visibleRows)}
     ${visibleRows.length ? visibleRows.map(({ row, index }) => `
       <div class="schedule-sheet-paste-row ${row.issues.length ? "needs-check" : "is-ready"}">
+        <input class="schedule-sheet-paste-check" type="checkbox" data-select-schedule-sheet-row="${scheduleSheetPasteRowSelectionKey(row, index)}" aria-label="${row.rowNumber || index + 1}번 줄 선택" ${selectedRows.has(scheduleSheetPasteRowSelectionKey(row, index)) ? "checked" : ""} />
         <span class="schedule-sheet-paste-number">${row.rowNumber || index + 1}</span>
         ${scheduleSheetDayField(row, index)}
         <input data-schedule-sheet-field="time" data-row-index="${index}" type="time" value="${escapeHtml(row.time || "")}" aria-label="시간" />
@@ -9915,6 +9970,65 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
       </div>
     `).join("") : `<p class="empty-state">현재 필터에 표시할 줄이 없습니다.</p>`}
   `;
+}
+
+function toggleScheduleSheetPasteRowSelection(rowNumber, checked) {
+  const selected = scheduleSheetPasteSelectedRowSet();
+  const key = String(rowNumber || "");
+  if (!key) return;
+  if (checked) selected.add(key);
+  else selected.delete(key);
+  state.selectedScheduleSheetPasteRowNumbers = [...selected];
+  renderScheduleSheetPastePreview();
+}
+
+function selectVisibleScheduleSheetPasteRows() {
+  const selected = scheduleSheetPasteSelectedRowSet();
+  scheduleSheetPasteVisibleRows().forEach(({ row, index }) => {
+    selected.add(scheduleSheetPasteRowSelectionKey(row, index));
+  });
+  state.selectedScheduleSheetPasteRowNumbers = [...selected];
+  renderScheduleSheetPastePreview();
+}
+
+function clearScheduleSheetPasteSelection() {
+  state.selectedScheduleSheetPasteRowNumbers = [];
+  renderScheduleSheetPastePreview();
+}
+
+function applyScheduleSheetPasteBulkUpdate() {
+  const selected = scheduleSheetPasteSelectedRowSet();
+  if (!selected.size) {
+    showToast("먼저 적용할 줄을 선택해 주세요.");
+    return;
+  }
+  const coachId = $("#scheduleSheetBulkCoach")?.value || "";
+  const lessonSource = $("#scheduleSheetBulkSource")?.value || "";
+  const durationMinutes = Number($("#scheduleSheetBulkDuration")?.value || 0);
+  if (!coachId && !lessonSource && !durationMinutes) {
+    showToast("바꿀 코치, 수업종류 또는 수업시간을 선택해 주세요.");
+    return;
+  }
+  const coach = coachId
+    ? scheduleSheetCoachOptions().find((item) => String(item.id) === String(coachId))
+    : null;
+  const rows = (state.scheduleSheetPasteRows || []).map((row, index) => {
+    if (!selected.has(scheduleSheetPasteRowSelectionKey(row, index))) return row;
+    const next = { ...row };
+    if (coachId) {
+      next.coachId = coach?.id || "";
+      next.coachName = coach?.name || "";
+    }
+    if (lessonSource) {
+      next.lessonSource = normalizeLessonSource(lessonSource);
+      next.lessonSourceLabel = lessonSourceLabel(next.lessonSource);
+    }
+    if (durationMinutes) next.durationMinutes = durationMinutes;
+    return next;
+  });
+  state.scheduleSheetPasteRows = validateScheduleSheetRows(rows);
+  renderScheduleSheetPastePreview();
+  showToast(`선택한 ${selected.size}줄을 다시 검증했습니다.`);
 }
 
 function updateScheduleSheetPasteRow(index, field, value) {
@@ -9944,6 +10058,7 @@ function removeScheduleSheetPasteRow(index) {
   const rowIndex = Number(index);
   if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= (state.scheduleSheetPasteRows || []).length) return;
   state.scheduleSheetPasteRows = validateScheduleSheetRows(state.scheduleSheetPasteRows.filter((_, currentIndex) => currentIndex !== rowIndex));
+  pruneScheduleSheetPasteSelection();
   renderScheduleSheetPastePreview();
 }
 
@@ -9952,7 +10067,8 @@ function clearScheduleSheetPasteIssueRows() {
   const readyRows = rows.filter((row) => !row.issues.length);
   if (readyRows.length === rows.length) return;
   state.scheduleSheetPasteRows = validateScheduleSheetRows(readyRows);
-  state.scheduleSheetPasteFilter = readyRows.length ? "all" : "all";
+  state.scheduleSheetPasteFilter = "all";
+  pruneScheduleSheetPasteSelection();
   renderScheduleSheetPastePreview();
 }
 
@@ -9970,11 +10086,13 @@ function closeScheduleSheetPastePanel() {
 function previewScheduleSheetPaste() {
   const rows = parseScheduleSheetPaste($("#scheduleSheetPasteInput")?.value || "");
   state.scheduleSheetPasteRows = rows;
+  state.selectedScheduleSheetPasteRowNumbers = [];
   renderScheduleSheetPastePreview(rows);
 }
 
 function clearScheduleSheetPaste() {
   state.scheduleSheetPasteRows = [];
+  state.selectedScheduleSheetPasteRowNumbers = [];
   if ($("#scheduleSheetPasteInput")) $("#scheduleSheetPasteInput").value = "";
   renderScheduleSheetPastePreview([]);
 }
@@ -10020,6 +10138,7 @@ async function submitScheduleSheetPaste() {
     const synced = await syncAdminLiveData();
     if (!synced) throw new Error("admin_live_refresh_failed_after_sheet_paste");
     state.scheduleSheetPasteRows = [];
+    state.selectedScheduleSheetPasteRowNumbers = [];
     if ($("#scheduleSheetPasteInput")) $("#scheduleSheetPasteInput").value = "";
     renderScheduleSheetPastePreview([]);
     renderAll();
@@ -18936,6 +19055,10 @@ function bindEvents() {
     syncCoachStaffSettlementFieldVisibility(event.target.value);
   });
   document.addEventListener("change", (event) => {
+    if (event.target.matches("[data-select-schedule-sheet-row]")) {
+      toggleScheduleSheetPasteRowSelection(event.target.dataset.selectScheduleSheetRow, event.target.checked);
+      return;
+    }
     if (event.target.matches("[data-schedule-sheet-field]")) {
       updateScheduleSheetPasteRow(event.target.dataset.rowIndex, event.target.dataset.scheduleSheetField, event.target.value);
       return;
@@ -19879,6 +20002,18 @@ function bindEvents() {
     if (sheetPasteFilterButton) {
       state.scheduleSheetPasteFilter = sheetPasteFilterButton.dataset.scheduleSheetFilter || "all";
       renderScheduleSheetPastePreview();
+      return;
+    }
+    if (event.target.closest("[data-select-visible-schedule-sheet-rows]")) {
+      selectVisibleScheduleSheetPasteRows();
+      return;
+    }
+    if (event.target.closest("[data-clear-schedule-sheet-selection]")) {
+      clearScheduleSheetPasteSelection();
+      return;
+    }
+    if (event.target.closest("[data-apply-schedule-sheet-bulk]")) {
+      applyScheduleSheetPasteBulkUpdate();
       return;
     }
     const removeSheetPasteRowButton = event.target.closest("[data-remove-schedule-sheet-row]");
