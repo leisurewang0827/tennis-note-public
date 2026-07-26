@@ -404,20 +404,20 @@ async function syncCoachLessonsFromServer() {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !client.getSession?.()?.access_token) return false;
   try {
-    const [lessonRows, participantRows, userRows, coachRows, ticketRows, productRows, recordRows, changeRequestRows, makeupEntitlementRows, oneDayBookingRows] = await Promise.all([
+    const [scheduleRows, participantRows, userRows, coachRows, ticketRows, productRows, recordRows, changeRequestRows, makeupEntitlementRows, oneDayBookingRows] = await Promise.all([
       client.selectRows("tn_lessons", {
         select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,day_of_week,start_time,duration_minutes,status,lesson_source",
-        limit: 300,
+        limit: 1000,
       }),
       client.selectRows("tn_lesson_participants", {
         select: "lesson_id,user_id,ticket_id",
-        limit: 500,
+        limit: 2000,
       }),
-      client.selectRows("tn_users", { select: "id,name,phone,birth_year,neighborhood,gender,role,member_kind,status,profile_photo_url,self_ntrp,coach_ntrp,ntrp_requested_at,ntrp_survey,tennis_goal,play_style_memo", limit: 300 }),
+      client.selectRows("tn_users", { select: "id,name,phone,birth_year,neighborhood,gender,role,member_kind,status,profile_photo_url,self_ntrp,coach_ntrp,ntrp_requested_at,ntrp_survey,tennis_goal,play_style_memo", limit: 1000 }),
       client.selectRows("tn_coach_roles", { select: "id,display_name,color,status", limit: 100 }),
-      client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,created_at", limit: 300 }),
+      client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,created_at", limit: 1000 }),
       client.selectRows("tn_membership_products", { select: "id,name,group_size,lesson_minutes", limit: 200 }),
-      client.selectRows("tn_lesson_records", { select: "lesson_id", limit: 300 }).catch(() => []),
+      client.selectRows("tn_lesson_records", { select: "lesson_id", limit: 1000 }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", {
         select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,decided_at,created_at",
         limit: 300,
@@ -430,6 +430,26 @@ async function syncCoachLessonsFromServer() {
         ? client.rpc("tn_visible_one_day_bookings", {}).catch(() => [])
         : Promise.resolve([]),
     ]);
+    const currentProfile = client.selectCurrentProfile
+      ? await client.selectCurrentProfile().catch(() => null)
+      : null;
+    const currentCoachRoleId = currentProfile?.coachRole?.id || "";
+    const currentCoachRows = currentCoachRoleId
+      ? (await Promise.all([
+        client.selectRows("tn_lessons", {
+          select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,day_of_week,start_time,duration_minutes,status,lesson_source",
+          filters: { coach_role_id: currentCoachRoleId },
+          limit: 1000,
+        }).catch(() => []),
+        client.selectRows("tn_lessons", {
+          select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,day_of_week,start_time,duration_minutes,status,lesson_source",
+          filters: { original_coach_role_id: currentCoachRoleId },
+          limit: 1000,
+        }).catch(() => []),
+      ])).flat()
+      : [];
+    const lessonRows = [...(scheduleRows || []), ...currentCoachRows]
+      .filter((lesson, index, items) => items.findIndex((candidate) => candidate.id === lesson.id) === index);
     const usersById = new Map((userRows || []).map((user) => [user.id, user.name]));
     const coachesById = new Map((coachRows || []).map((coach) => [coach.id, coach]));
     const ticketsById = new Map((ticketRows || []).map((ticket) => [ticket.id, ticket]));
@@ -1512,7 +1532,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.115";
+  const refreshKey = "tennis-note-sw-refresh-1.0.116";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1522,7 +1542,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.115", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.116", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1574,7 +1594,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.115" });
+  const params = new URLSearchParams({ v: "1.0.116" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
