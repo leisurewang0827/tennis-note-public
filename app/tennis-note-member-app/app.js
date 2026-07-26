@@ -1505,7 +1505,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.90";
+    const refreshKey = "tennis-note-sw-refresh-1.0.91";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1513,7 +1513,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.90", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.91", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -6158,6 +6158,86 @@ function renderJournalCalendar() {
   renderSelectedJournalDayPanel();
 }
 
+const journalActivityStatuses = [
+  { key: "scheduled", label: () => memberStatusLabel("lesson", "scheduled", "예정") },
+  { key: "completed", label: () => memberStatusLabel("lesson", "completed", "완료") },
+  { key: "absent", label: () => memberStatusLabel("lesson", "absent", "불참") },
+  { key: "no_show", label: () => memberStatusLabel("lesson", "no_show", "노쇼") },
+  { key: "makeup_booked", label: () => memberStatusLabel("lesson", "makeup_booked", "보강 예약") },
+];
+
+function journalActivityLessonStatus(lesson) {
+  const source = String(lesson.lessonSource || lesson.lesson_source || "").toLowerCase();
+  const status = String(lesson.serverStatus || lesson.status || "scheduled").toLowerCase();
+  if (source === "makeup" || String(lesson.type || "").includes("보강")) return "makeup_booked";
+  if (status === "no_show") return "no_show";
+  if (["completed", "confirmed"].includes(status)) return "completed";
+  if (["scheduled", "pending_change", "requested"].includes(status)) return "scheduled";
+  return "";
+}
+
+function journalActivityItems() {
+  const monthValue = state.activeJournalMonth || (state.selectedJournalDate || localDateKey()).slice(0, 7);
+  const sourceLessons = state.liveLessonsLoaded ? state.liveLessons : memberScheduleLessons();
+  const seenLessons = new Set();
+  const lessonItems = sourceLessons
+    .filter((lesson) => lesson.isOwnLesson !== false && (lesson.isOwnLesson || isCurrentMemberName(lesson.member)))
+    .map((lesson) => {
+      const id = String(lesson.serverLessonId || lesson.id || "");
+      const dateValue = lesson.lessonDate || memberScheduleDateForDay(lesson.day);
+      const status = journalActivityLessonStatus(lesson);
+      return { id, dateValue, status };
+    })
+    .filter((item) => {
+      if (!item.id || seenLessons.has(item.id) || !item.status || !item.dateValue?.startsWith(monthValue)) return false;
+      seenLessons.add(item.id);
+      return true;
+    });
+
+  const absenceItems = (state.liveMakeupEntitlements || [])
+    .filter((entitlement) => entitlement.lessonDate?.startsWith(monthValue))
+    .map((entitlement) => ({
+      id: `absence-${entitlement.id}`,
+      dateValue: entitlement.lessonDate,
+      status: "absent",
+    }));
+
+  return [...lessonItems, ...absenceItems];
+}
+
+function renderJournalActivitySummary() {
+  const target = $("#journalActivitySummary");
+  if (!target) return;
+  const items = journalActivityItems();
+  target.innerHTML = journalActivityStatuses.map((definition) => {
+    const matches = items.filter((item) => item.status === definition.key);
+    return `
+      <button class="journal-activity-chip" type="button" data-journal-activity-status="${definition.key}" ${matches.length ? "" : "disabled"}>
+        <span>${definition.label()}</span>
+        <strong>${matches.length}</strong>
+      </button>`;
+  }).join("");
+}
+
+function focusJournalActivity(status) {
+  const today = localDateKey();
+  const matches = journalActivityItems()
+    .filter((item) => item.status === status)
+    .sort((left, right) => {
+      const leftFuture = left.dateValue >= today ? 0 : 1;
+      const rightFuture = right.dateValue >= today ? 0 : 1;
+      return leftFuture - rightFuture || left.dateValue.localeCompare(right.dateValue);
+    });
+  if (!matches.length) return;
+  const calendarDisclosure = $("#journalCalendarDisclosure");
+  if (calendarDisclosure) {
+    calendarDisclosure.open = true;
+    calendarDisclosure.dataset.userToggled = "true";
+  }
+  selectJournalDate(matches[0].dateValue);
+  $("#journalSelectedDayPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function journalEntries() {
   const lessonEntries = state.lessonLogs.map((log) => {
     const dateValue = log.journalDate || new Date(log.submittedAt || Date.now()).toISOString().slice(0, 10);
@@ -6542,7 +6622,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.90" });
+  const params = new URLSearchParams({ v: "1.0.91" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7654,6 +7734,10 @@ function bindEvents() {
     const button = event.target.closest("[data-select-journal-date]");
     if (button) selectJournalDate(button.dataset.selectJournalDate);
   });
+  $("#journalActivitySummary")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-journal-activity-status]");
+    if (button && !button.disabled) focusJournalActivity(button.dataset.journalActivityStatus);
+  });
   $("#journalSelectedDayPanel")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-journal-write-date]");
     if (button) prepareJournalWriteDate(button.dataset.journalWriteDate);
@@ -7960,6 +8044,7 @@ function renderAll() {
     renderTickets();
   renderPracticeLogs();
   renderJournalCalendar();
+  renderJournalActivitySummary();
   renderProducts();
   renderPendingApprovalGate();
   saveSnapshot();
@@ -8016,6 +8101,7 @@ function renderActiveMemberView(viewId = activeMemberViewId()) {
     renderLessonLogs();
     renderPracticeLogs();
     renderJournalCalendar();
+    renderJournalActivitySummary();
   } else if (viewId === "curriculumView") {
     renderCurriculum();
   } else if (viewId === "shopView") {

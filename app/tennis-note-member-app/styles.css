@@ -5824,6 +5824,57 @@ body.modal-open {
   text-align: center;
 }
 
+.journal-activity-summary {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(72px, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 12px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.journal-activity-summary::-webkit-scrollbar {
+  display: none;
+}
+
+.journal-activity-chip {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+  min-height: 58px;
+  padding: 9px 10px;
+  border: 1px solid #d7e2de;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #263b36;
+  text-align: left;
+}
+
+.journal-activity-chip span {
+  overflow: hidden;
+  max-width: 100%;
+  color: #667b75;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journal-activity-chip strong {
+  align-self: end;
+  color: #0f766e;
+  font-size: 1.1rem;
+}
+
+.journal-activity-chip:disabled {
+  cursor: default;
+  background: #f7f9f8;
+  opacity: 0.62;
+}
+
 .connectivity-status[data-tone="online"] {
   border-color: #8acfb5;
   background: #edf9f4;
