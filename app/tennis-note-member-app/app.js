@@ -37,6 +37,7 @@ const state = {
   memberScheduleMode: "mine",
   activeJournalMonth: "2026-07",
   selectedJournalDate: "2026-07-03",
+  selectedLessonDetailId: "",
   journalSearchQuery: "",
   curriculumQuery: "",
   curriculumFilter: "all",
@@ -1165,6 +1166,7 @@ function restoreSnapshot() {
     if (!Array.isArray(state.liveTickets)) state.liveTickets = [];
     if (!state.memberEnrollment || typeof state.memberEnrollment !== "object") state.memberEnrollment = null;
     state.pendingPurchaseProductId = String(state.pendingPurchaseProductId || "");
+    state.selectedLessonDetailId = String(state.selectedLessonDetailId || "");
     if (!["card", "naverpay", "kakaopay"].includes(state.selectedPaymentMethod)) state.selectedPaymentMethod = "card";
     if (!state.pushNotifications || typeof state.pushNotifications !== "object") {
       state.pushNotifications = {
@@ -1507,7 +1509,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.92";
+    const refreshKey = "tennis-note-sw-refresh-1.0.93";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1515,7 +1517,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.92", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.93", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -6731,7 +6733,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.92" });
+  const params = new URLSearchParams({ v: "1.0.93" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -6816,14 +6818,140 @@ function handleSummaryAction(action) {
   }
 }
 
+function lessonDetailDateTimeLabel(lesson = {}) {
+  if (lesson.lessonDate) {
+    const date = new Date(`${lesson.lessonDate}T12:00:00`);
+    if (!Number.isNaN(date.getTime())) {
+      const dateLabel = date.toLocaleDateString("ko-KR", {
+        month: "long",
+        day: "numeric",
+        weekday: "short",
+      });
+      return `${dateLabel} · ${lesson.time || "시간 확인"}`;
+    }
+  }
+  return `${lesson.day ? `${lesson.day}요일` : "날짜 확인"} · ${lesson.time || "시간 확인"}`;
+}
+
+function lessonDetailStatusInfo(lesson = {}) {
+  const status = String(lesson.serverStatus || lesson.status || "scheduled").toLowerCase();
+  const kind = memberLessonVisualKind(lesson);
+  if (status === "requested" || status === "pending_change") {
+    return {
+      label: memberStatusLabel("lesson", "pending_change", "변경 요청 중"),
+      message: "요청을 확인하고 있습니다. 처리 결과는 알림으로 알려드립니다.",
+      primaryAction: "",
+    };
+  }
+  if (status === "makeup_due" || status === "absent" || lesson.makeupEntitlementId) {
+    return {
+      label: memberStatusLabel("lesson", "makeup_available", "보강 가능"),
+      message: "운영 규칙에 맞는 보강 가능 시간을 선택할 수 있습니다.",
+      primaryAction: "makeup",
+    };
+  }
+  if (status === "completed") {
+    return {
+      label: memberStatusLabel("lesson", "completed", "완료"),
+      message: "수업 내용을 운동기록에 남겨 보세요.",
+      primaryAction: "",
+    };
+  }
+  if (status === "no_show") {
+    return {
+      label: memberStatusLabel("lesson", "no_show", "노쇼"),
+      message: "당일 불참으로 처리된 수업입니다.",
+      primaryAction: "",
+    };
+  }
+  if (status === "cancelled") {
+    return {
+      label: memberStatusLabel("lesson", "cancelled", "취소"),
+      message: "취소된 수업입니다.",
+      primaryAction: "",
+    };
+  }
+  return {
+    label: kind === "makeup"
+      ? memberStatusLabel("lesson", "makeup_booked", "보강 예약")
+      : memberStatusLabel("lesson", "scheduled", "예정"),
+    message: "수업 변경 가능 시간은 센터 운영 규칙에 따라 표시됩니다.",
+    primaryAction: "change",
+  };
+}
+
+function selectedLessonDetail() {
+  return memberScheduleOptions().find((lesson) => lesson.id === state.selectedLessonDetailId)
+    || memberMakeupDueLessons().find((lesson) => lesson.id === state.selectedLessonDetailId)
+    || (state.liveLessons || []).find((lesson) => lesson.id === state.selectedLessonDetailId)
+    || null;
+}
+
+function renderLessonDetailSheet(lesson) {
+  if (!lesson) return;
+  const info = lessonDetailStatusInfo(lesson);
+  const roundLabel = memberScheduleRoundLabel(lesson, true);
+  const duration = Number(lesson.durationMinutes) || lessonDuration(lesson);
+  const primaryButton = $("#lessonDetailPrimaryAction");
+  const journalButton = $("#lessonDetailJournalAction");
+  const isPastOrToday = Boolean(lesson.lessonDate && lesson.lessonDate <= localDateKey());
+  const canWriteJournal = isPastOrToday || ["completed", "no_show"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase());
+
+  $("#lessonDetailStatus").textContent = info.label;
+  $("#lessonDetailDateTime").textContent = lessonDetailDateTimeLabel(lesson);
+  $("#lessonDetailCoach").textContent = memberCoachShortName(lesson.coach || "담당 코치");
+  $("#lessonDetailType").textContent = `${lesson.type || memberLessonTitle(lesson, true)} · ${duration}분`;
+  $("#lessonDetailRound").textContent = roundLabel || "회차 확인";
+  $("#lessonDetailMessage").textContent = info.message;
+
+  primaryButton.hidden = !info.primaryAction;
+  primaryButton.dataset.lessonDetailAction = info.primaryAction;
+  primaryButton.textContent = info.primaryAction === "makeup" ? "보강 시간 선택" : "수업 변경 요청";
+  journalButton.hidden = !canWriteJournal;
+  journalButton.dataset.lessonDetailAction = "journal";
+}
+
+function openLessonDetailSheet(lessonId) {
+  const lesson = memberScheduleOptions().find((item) => item.id === lessonId)
+    || memberMakeupDueLessons().find((item) => item.id === lessonId)
+    || (state.liveLessons || []).find((item) => item.id === lessonId);
+  if (!lesson || (!lesson.isOwnLesson && !isCurrentMemberName(lesson.member))) return;
+  state.selectedLessonDetailId = lesson.id;
+  renderLessonDetailSheet(lesson);
+  openAppSheet("lessonDetailSheet");
+}
+
+function closeLessonDetailForAction() {
+  closeAppSheet("lessonDetailSheet", true);
+  if (history.state?.tennisNoteSheet === "lessonDetailSheet") {
+    const nextState = { ...history.state };
+    delete nextState.tennisNoteSheet;
+    history.replaceState(nextState, "", window.location.href);
+  }
+}
+
+function handleLessonDetailAction(action) {
+  const lesson = selectedLessonDetail();
+  if (!lesson) return;
+  closeLessonDetailForAction();
+  if (action === "journal") {
+    openJournalComposer(lesson.lessonDate || localDateKey());
+    return;
+  }
+  if (action === "change" || action === "makeup") {
+    renderSelects();
+    if ($("#absenceLesson")) $("#absenceLesson").value = lesson.id;
+    renderSelects();
+    renderAvailableSlots();
+    openChangeRequestModal();
+  }
+}
+
 function handleScheduleClick(lessonId) {
   const lesson = memberScheduleOptions().find((item) => item.id === lessonId);
   if (!lesson) return;
-  if (isCurrentMemberName(lesson.member) && lesson.status === "scheduled") {
-    $("#absenceLesson").value = lesson.id;
-    setView("scheduleView");
-    renderAvailableSlots();
-    openChangeRequestModal();
+  if (lesson.isOwnLesson || isCurrentMemberName(lesson.member)) {
+    openLessonDetailSheet(lesson.id);
     return;
   }
   if (lesson.status === "available") {
@@ -7830,6 +7958,14 @@ function bindEvents() {
   $("#saveJournal").addEventListener("click", saveJournal);
   $("#journalMode").addEventListener("change", renderJournalMode);
   $("#openJournalComposer")?.addEventListener("click", () => openJournalComposer());
+  $("#lessonDetailSheet")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-lesson-detail]")) {
+      closeAppSheet("lessonDetailSheet");
+      return;
+    }
+    const actionButton = event.target.closest("[data-lesson-detail-action]");
+    if (actionButton) handleLessonDetailAction(actionButton.dataset.lessonDetailAction);
+  });
   $("#journalComposerSheet")?.addEventListener("click", (event) => {
     if (event.target.closest("[data-close-journal-composer]")) closeAppSheet("journalComposerSheet");
   });

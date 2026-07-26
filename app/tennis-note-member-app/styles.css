@@ -5035,6 +5035,80 @@ body.notice-open {
   padding: 14px 14px calc(20px + env(safe-area-inset-bottom));
 }
 
+.lesson-detail-sheet-card {
+  grid-template-rows: auto auto auto;
+  width: min(100%, 520px);
+  height: auto;
+  max-height: min(78dvh, 620px);
+}
+
+.lesson-detail-sheet-scroll {
+  display: grid;
+  gap: 14px;
+  max-height: calc(78dvh - 96px);
+}
+
+.lesson-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--line);
+}
+
+.lesson-detail-facts > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 13px 14px;
+  background: white;
+}
+
+.lesson-detail-facts dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lesson-detail-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.lesson-detail-message {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #eef8f3;
+  color: #365a4d;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.lesson-detail-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.lesson-detail-actions > button {
+  width: 100%;
+  min-height: 48px;
+}
+
+@media (max-width: 480px) {
+  .lesson-detail-facts {
+    grid-template-columns: 1fr;
+  }
+}
+
 .journal-composer-form,
 .profile-editor-form {
   margin: 0;

@@ -1,25 +1,25 @@
-const CACHE_NAME = "tennis-note-member-pwa-v138";
+const CACHE_NAME = "tennis-note-member-pwa-v139";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.92",
-  "./app.js?v=1.0.92",
+  "./styles.css?v=1.0.93",
+  "./app.js?v=1.0.93",
   "./manifest.webmanifest",
   "./assets/brand/app-icon-180.png",
   "./assets/brand/app-icon-192.png",
   "./assets/brand/app-icon-512.png",
   "./assets/brand/launch-splash.png",
-  "../shared/tennisnote-data-client.js?v=1.0.92",
+  "../shared/tennisnote-data-client.js?v=1.0.93",
   "../shared/tennisnote-product-catalog.js",
   "../shared/tennisnote-curriculum-catalog.js",
   "../shared/tennisnote-native-push.js",
-  "../shared/tennisnote-release.js?v=1.0.92",
+  "../shared/tennisnote-release.js?v=1.0.93",
   "../shared/tennisnote-issue-reporter.js",
   "../shared/tennisnote-issue-reporter.css",
-  "../shared/tennisnote-ui-language.js?v=1.0.92",
-  "../shared/tennisnote-input-guard.js?v=1.0.92",
-  "../shared/tennisnote-ui-foundation.css?v=1.0.92",
+  "../shared/tennisnote-ui-language.js?v=1.0.93",
+  "../shared/tennisnote-input-guard.js?v=1.0.93",
+  "../shared/tennisnote-ui-foundation.css?v=1.0.93",
 ];
 
 function deleteOldCaches() {

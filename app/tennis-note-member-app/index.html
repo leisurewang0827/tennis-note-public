@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.92" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.92" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.93" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.93" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -765,6 +765,46 @@
       </article>
     </section>
 
+    <section id="lessonDetailSheet" class="app-bottom-sheet lesson-detail-sheet" aria-labelledby="lessonDetailTitle" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="수업 상세 닫기" data-close-lesson-detail></button>
+      <article class="sheet-card lesson-detail-sheet-card" role="dialog" aria-modal="true" aria-labelledby="lessonDetailTitle">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-head">
+          <div>
+            <p class="eyebrow">내 수업</p>
+            <h3 id="lessonDetailTitle">수업 상세</h3>
+            <span id="lessonDetailStatus">예정</span>
+          </div>
+          <button class="small-button" type="button" data-close-lesson-detail>닫기</button>
+        </div>
+        <div class="sheet-scroll lesson-detail-sheet-scroll">
+          <dl class="lesson-detail-facts">
+            <div>
+              <dt>일정</dt>
+              <dd id="lessonDetailDateTime">-</dd>
+            </div>
+            <div>
+              <dt>담당 코치</dt>
+              <dd id="lessonDetailCoach">-</dd>
+            </div>
+            <div>
+              <dt>수업</dt>
+              <dd id="lessonDetailType">-</dd>
+            </div>
+            <div>
+              <dt>회차</dt>
+              <dd id="lessonDetailRound">-</dd>
+            </div>
+          </dl>
+          <p id="lessonDetailMessage" class="lesson-detail-message"></p>
+          <div class="lesson-detail-actions">
+            <button id="lessonDetailPrimaryAction" class="primary-button" type="button" hidden></button>
+            <button id="lessonDetailJournalAction" class="small-button" type="button" hidden>운동기록 작성</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
     <section id="changeRequestModal" class="change-request-modal" data-tn-input-guard="member-change-request" data-tn-restore-draft="true" hidden>
       <div class="modal-backdrop" data-close-change-modal></div>
       <article class="change-modal-card" role="dialog" aria-modal="true" aria-label="수업 변경 요청">
@@ -892,14 +932,14 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.92"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.93"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.92"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.92"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.92"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.93"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.93"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.93"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.92"></script>
+    <script src="./app.js?v=1.0.93"></script>
   </body>
 </html>
