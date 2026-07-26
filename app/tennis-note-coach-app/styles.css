@@ -1163,6 +1163,133 @@ a {
   gap: 8px;
 }
 
+.lesson-completion-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-completion-steps li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.lesson-completion-steps b {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--muted);
+  background: #e8edf1;
+}
+
+.lesson-completion-steps .is-complete b {
+  color: white;
+  background: var(--green);
+}
+
+.lesson-completion-steps span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-completion-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  border-block: 1px solid var(--line);
+  padding: 10px 0;
+}
+
+.lesson-completion-summary span,
+.lesson-completion-summary small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.lesson-completion-summary strong {
+  color: var(--green);
+  font-size: 13px;
+}
+
+.lesson-required-field > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lesson-required-field > span small {
+  color: var(--green);
+  font-size: 11px;
+}
+
+.lesson-comment-count {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.lesson-comment-count.is-ready {
+  color: var(--green);
+}
+
+.lesson-secondary-panel {
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+
+.lesson-secondary-panel summary {
+  min-height: 40px;
+  padding: 10px 2px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lesson-secondary-panel[open] summary {
+  margin-bottom: 8px;
+}
+
+.lesson-reference-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.lesson-secondary-panel .lesson-edit-mini + .lesson-edit-mini {
+  margin-top: 8px;
+}
+
+.lesson-completion-actions {
+  position: sticky;
+  bottom: -12px;
+  z-index: 4;
+  border-top: 1px solid var(--line);
+  padding: 10px 0 12px;
+  background: var(--paper);
+}
+
+.lesson-completion-actions .approve-button {
+  flex: 1 1 220px;
+}
+
 .lesson-edit-mini {
   display: grid;
   gap: 9px;
@@ -2553,6 +2680,60 @@ body.notice-open {
   font-weight: 800;
 }
 
+.lesson-completion-card {
+  grid-template-columns: minmax(160px, 0.75fr) minmax(260px, 1.25fr);
+  gap: 14px;
+}
+
+.lesson-completion-card-head {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lesson-completion-card-head b {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: var(--green);
+  background: var(--soft-green);
+  font-size: 11px;
+}
+
+.lesson-log-reference {
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+
+.lesson-log-reference summary {
+  padding: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lesson-log-reference[open] {
+  display: grid;
+  gap: 6px;
+}
+
+.coach-confirm-panel label > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.coach-confirm-panel label > span small {
+  color: var(--green);
+  font-size: 11px;
+}
+
+.coach-confirm-panel .approve-button {
+  width: 100%;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -2824,10 +3005,25 @@ body.notice-open {
   }
 
   .lesson-flow-grid,
+  .lesson-reference-grid,
   .lesson-edit-grid,
   .member-detail-grid,
   .member-detail-section div {
     grid-template-columns: 1fr;
+  }
+
+  .lesson-completion-steps li {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .lesson-completion-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .lesson-completion-summary small {
+    grid-column: 1 / -1;
   }
 
   .lesson-modal-head {
@@ -2917,6 +3113,10 @@ select:disabled {
 @media (max-width: 720px) {
   .coach-confirm-panel {
     min-width: 0;
+  }
+
+  .lesson-completion-card {
+    grid-template-columns: 1fr;
   }
 }
 

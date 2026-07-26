@@ -7,8 +7,8 @@
     <title>테니스노트 코치 모드</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.95" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.95" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.96" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.96" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -87,9 +87,9 @@
             <small id="makeupSummaryNote">보강 탭으로 이동</small>
           </article>
           <article role="button" tabindex="0" data-summary-action="records">
-            <span>기록/차감 확인</span>
+            <span>수업 완료</span>
             <strong id="logPendingCount">0건</strong>
-            <small id="recordSummaryNote">코멘트/커리큘럼/횟수 차감</small>
+            <small id="recordSummaryNote">코멘트·커리큘럼 등록</small>
           </article>
         </section>
 
@@ -104,9 +104,8 @@
         <section id="todayView" class="view is-active" aria-label="오늘 처리 일정">
           <div class="section-title">
             <h2>오늘 처리 일정</h2>
-            <button class="small-button title-action" type="button" id="openLessonRecordWriter">수업 완료 처리</button>
           </div>
-          <p id="recordRequiredNote" class="record-required-note">수업을 완료 처리하면 횟수가 차감됩니다.</p>
+          <p id="recordRequiredNote" class="record-required-note">완료할 수업을 선택해 코멘트와 다음 커리큘럼을 등록하세요.</p>
           <div id="todayLessons" class="card-list"></div>
           <div id="todayRecordPanel" class="inline-record-panel" aria-label="기록/차감 확인"></div>
         </section>
@@ -261,12 +260,12 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.95"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.96"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.95"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.95"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.95"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.96"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.96"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.96"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.95"></script>
+    <script src="./app.js?v=1.0.96"></script>
   </body>
 </html>

@@ -1438,7 +1438,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.95";
+  const refreshKey = "tennis-note-sw-refresh-1.0.96";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1448,7 +1448,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.95", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.96", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1500,7 +1500,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.95" });
+  const params = new URLSearchParams({ v: "1.0.96" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1773,10 +1773,9 @@ function renderSummary() {
   }
   if ($("#recordRequiredNote")) {
     $("#recordRequiredNote").textContent = pendingRecordTotal
-      ? `미처리 ${pendingRecordTotal}건 · 코멘트 등록 후 횟수가 차감됩니다.`
+      ? `미처리 ${pendingRecordTotal}건 · 완료할 수업을 선택해 처리하세요.`
       : "오늘 처리할 기록이 없습니다.";
   }
-  if ($("#openLessonRecordWriter")) $("#openLessonRecordWriter").hidden = ownLessons.length === 0;
 }
 
 function renderCoachModeList() {
@@ -2229,73 +2228,85 @@ function renderScheduleEditPanel() {
         </div>
         <b class="${canProcess ? "can-process" : "read-only"}">${canProcess ? "처리 가능" : "보기 전용"}</b>
       </div>
-      <p class="permission-note wide">${lessonPermissionText(lesson)}</p>
-      <div class="lesson-flow-grid wide">
-        <article class="modal-info-card">
-          <span>수업 정보</span>
-          <strong>${lesson.ticket}</strong>
-          <small>잔여 ${lesson.remaining}회 · 상태 ${lesson.status}</small>
-        </article>
-        <article class="modal-info-card">
-          <span>회원 요약</span>
-          <strong>${member ? `${member.ticket} · 자가 ${ntrpNumber(member.selfNtrp)}` : "회원정보 연결 전"}</strong>
-          <small>${member ? `코치 NTRP ${ntrpNumber(member.coachNtrp)} · 최근 ${member.lastLesson}` : "회원관리에서 연결하면 요약이 보입니다."}</small>
-        </article>
-        <article class="modal-info-card">
-          <span>최근 기록</span>
-          <strong>${recentLog ? recentLog.lesson : "기록 없음"}</strong>
-          <small>${recentLog?.coachComment || recentLog?.content || "이번 수업 완료 후 첫 기록을 남깁니다."}</small>
-        </article>
+      <ol class="lesson-completion-steps wide" aria-label="수업 완료 순서">
+        <li class="is-complete"><b>1</b><span>수업 확인</span></li>
+        <li><b>2</b><span>코멘트</span></li>
+        <li><b>3</b><span>커리큘럼</span></li>
+        <li><b>4</b><span>완료·차감</span></li>
+      </ol>
+      <div class="lesson-completion-summary wide">
+        <span>${lesson.ticket}</span>
+        <strong>잔여 ${lesson.remaining}회</strong>
+        <small>${lesson.status}</small>
       </div>
-      <label class="wide">
-        <span>오늘 레슨 내용</span>
-        <textarea data-modal-lesson-content="${lesson.id}" rows="3" ${canProcess ? "" : "disabled"}>${defaultContent}</textarea>
+      <label class="wide lesson-required-field">
+        <span>코치 코멘트 <small>필수 · 10자 이상</small></span>
+        <textarea data-modal-coach-comment="${lesson.id}" rows="4" placeholder="오늘 잘된 점과 다음 수업에서 보완할 점을 적어주세요." ${canProcess ? "" : "disabled"}>${defaultComment}</textarea>
+        <small class="lesson-comment-count" data-modal-comment-count="${lesson.id}">0/10자</small>
       </label>
-      <label class="wide">
-        <span>코치 코멘트</span>
-        <textarea data-modal-coach-comment="${lesson.id}" rows="3" ${canProcess ? "" : "disabled"}>${defaultComment}</textarea>
-      </label>
-      <label class="wide">
-        <span>다음 커리큘럼</span>
+      <label class="wide lesson-required-field">
+        <span>다음 커리큘럼 <small>필수</small></span>
         <select data-modal-next-curriculum="${lesson.id}" ${canProcess ? "" : "disabled"}>${curriculumOptions(defaultCurriculumId)}</select>
       </label>
       ${lesson.validationMessage ? `<p class="validation-text wide">${lesson.validationMessage}</p>` : ""}
-      <div class="lesson-edit-mini wide">
-        <strong>일정 수정</strong>
-        <p class="permission-note">본인 담당 수업만 근무시간과 이용권 정책 안에서 변경할 수 있습니다. 회원에게 변경 알림이 발송됩니다.</p>
-        <div class="lesson-edit-grid">
-          <label>
-            <span>요일</span>
-            <select id="editLessonDay" ${canReschedule ? "" : "disabled"}>${dayOptions}</select>
-          </label>
-          <label>
-            <span>시간</span>
-            <select id="editLessonTime" ${canReschedule ? "" : "disabled"}>${timeOptions}</select>
-          </label>
-          <label class="wide">
-            <span>변경 사유</span>
-            <input id="editLessonReason" type="text" maxlength="200" value="${escapeHtml(scheduleEditDraft.reason || "")}" placeholder="회원에게 안내할 변경 사유" ${canReschedule ? "" : "disabled"} />
-          </label>
+      <details class="lesson-secondary-panel wide">
+        <summary>수업 참고</summary>
+        <div class="lesson-reference-grid">
+          <article class="modal-info-card">
+            <span>회원 정보</span>
+            <strong>${member ? `${member.ticket} · 자가 ${ntrpNumber(member.selfNtrp)}` : "회원정보 연결 전"}</strong>
+            <small>${member ? `코치 NTRP ${ntrpNumber(member.coachNtrp)} · 최근 ${member.lastLesson}` : "회원관리에서 연결하면 요약이 보입니다."}</small>
+          </article>
+          <article class="modal-info-card">
+            <span>최근 기록</span>
+            <strong>${recentLog ? recentLog.lesson : "기록 없음"}</strong>
+            <small>${recentLog?.coachComment || recentLog?.content || "이번 수업 완료 후 첫 기록을 남깁니다."}</small>
+          </article>
         </div>
-      </div>
-      ${canMarkRegularLessonAbsent(lesson) && lesson.serverLessonId
-        ? `<div class="lesson-edit-mini lesson-absence-mini wide">
-            <strong>정규수업 불참 처리</strong>
-            <p class="permission-note">횟수는 차감하지 않고 원래 시간을 보강 전용으로 엽니다. 회원에게 보강 안내가 전달됩니다.</p>
-            <div class="lesson-edit-grid">
-              <label class="wide">
-                <span>불참 사유</span>
-                <input id="coachAbsenceReason" type="text" minlength="2" maxlength="200" placeholder="예: 회원 사전 연락" />
-              </label>
+        <label>
+          <span>오늘 레슨 내용 <small>선택</small></span>
+          <textarea data-modal-lesson-content="${lesson.id}" rows="3" ${canProcess ? "" : "disabled"}>${defaultContent}</textarea>
+        </label>
+      </details>
+      ${canReschedule
+        ? `<details class="lesson-secondary-panel wide">
+            <summary>일정 변경·불참</summary>
+            <div class="lesson-edit-mini">
+              <div class="lesson-edit-grid">
+                <label>
+                  <span>요일</span>
+                  <select id="editLessonDay">${dayOptions}</select>
+                </label>
+                <label>
+                  <span>시간</span>
+                  <select id="editLessonTime">${timeOptions}</select>
+                </label>
+                <label class="wide">
+                  <span>변경 사유</span>
+                  <input id="editLessonReason" type="text" maxlength="200" value="${escapeHtml(scheduleEditDraft.reason || "")}" placeholder="회원에게 안내할 변경 사유" />
+                </label>
+              </div>
+              <button class="small-button" type="button" data-save-schedule-edit="${lesson.id}">일정 변경 저장</button>
             </div>
-            <button class="reject-button" type="button" data-mark-lesson-absent="${lesson.id}">불참 처리·보강 전용으로 열기</button>
-          </div>`
+            ${canMarkRegularLessonAbsent(lesson) && lesson.serverLessonId
+              ? `<div class="lesson-edit-mini lesson-absence-mini">
+                  <strong>정규수업 불참</strong>
+                  <div class="lesson-edit-grid">
+                    <label class="wide">
+                      <span>불참 사유</span>
+                      <input id="coachAbsenceReason" type="text" minlength="2" maxlength="200" placeholder="예: 회원 사전 연락" />
+                    </label>
+                  </div>
+                  <button class="reject-button" type="button" data-mark-lesson-absent="${lesson.id}">불참 처리</button>
+                </div>`
+              : ""}
+          </details>`
         : ""}
-      <div class="actions wide">
-        <button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" ${canProcess ? "" : "disabled"}>코멘트 등록 + 완료/차감</button>
-        <button class="small-button" type="button" data-save-schedule-edit="${lesson.id}" ${canReschedule ? "" : "disabled"}>일정 수정 저장</button>
-        <button class="reject-button" type="button" data-cancel-schedule-edit>닫기</button>
+      <div class="actions lesson-completion-actions wide">
+        <button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>수업 완료·횟수 차감</button>
+        <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>
+      ${canProcess ? "" : `<p class="permission-note wide">${lessonPermissionText(lesson)}</p>`}
     </section>`;
 }
 
@@ -3253,6 +3264,21 @@ function renderLessonEditModal() {
     return;
   }
   target.innerHTML = renderScheduleEditPanel();
+  if (state.editingLessonId) updateLessonCompletionUi(state.editingLessonId);
+}
+
+function updateLessonCompletionUi(id) {
+  const lesson = ensureCoachLessonRecord(id);
+  const comment = activeViewField(`[data-modal-coach-comment="${id}"]`)?.value.trim() || "";
+  const curriculum = activeViewField(`[data-modal-next-curriculum="${id}"]`)?.value || "";
+  const count = activeViewField(`[data-modal-comment-count="${id}"]`);
+  const submit = activeViewField(`[data-complete-lesson-from-modal="${id}"]`);
+  const ready = Boolean(lesson && canProcessLesson(lesson) && comment.length >= 10 && curriculum);
+  if (count) {
+    count.textContent = `${comment.length}/10자`;
+    count.classList.toggle("is-ready", comment.length >= 10);
+  }
+  if (submit) submit.disabled = !ready;
 }
 
 function openMakeupApprovalModal(id) {
@@ -3627,30 +3653,36 @@ function recordProcessingMarkup() {
         const nextStep = selectedCurriculum(log.nextCurriculumId || log.curriculumId);
         const confirmed = log.status === "확인 완료";
         return `
-          <article class="work-card log-card ${state.focusedLogId === log.id ? "is-focused" : ""}" data-log-card="${log.id}">
+          <article class="work-card log-card lesson-completion-card ${state.focusedLogId === log.id ? "is-focused" : ""}" data-log-card="${log.id}">
             <div class="log-main">
-              <strong>${log.member} · ${log.lesson}</strong>
-              <span>${log.content}</span>
-              <small>${log.selfMemo}</small>
-              ${journalMediaMarkup(log)}
-              <small>같은 지점 코치 열람 가능 · 대타 수업이면 실제 진행 코치가 확인/차감합니다.</small>
-              <em>회원에게 안내될 다음 수업: ${nextStep.id} · ${nextStep.title}</em>
+              <div class="lesson-completion-card-head">
+                <strong>${log.member}</strong>
+                <b>${coachStatusLabel("coachRecord", log.serverDeducted || log.ticketDeducted ? "deducted" : log.status, log.status)}</b>
+              </div>
+              <span>${log.lesson}</span>
               ${confirmed ? `<p class="coach-comment-view">코치 코멘트: ${log.coachComment}</p>` : ""}
+              <details class="lesson-log-reference">
+                <summary>수업 참고</summary>
+                <span>${log.content}</span>
+                <small>${log.selfMemo}</small>
+                ${journalMediaMarkup(log)}
+              </details>
             </div>
             <div class="coach-confirm-panel">
               <label>
-                <span>코치 코멘트</span>
+                <span>코치 코멘트 <small>필수 · 10자 이상</small></span>
                 <textarea data-coach-comment="${log.id}" rows="3" ${confirmed ? "disabled" : ""}>${log.coachComment || ""}</textarea>
+                <small class="lesson-comment-count ${String(log.coachComment || "").trim().length >= 10 ? "is-ready" : ""}" data-log-comment-count="${log.id}">${String(log.coachComment || "").trim().length}/10자</small>
               </label>
               <label>
                 <span>다음 커리큘럼</span>
                 <select data-next-curriculum="${log.id}" ${confirmed ? "disabled" : ""}>${curriculumOptions(log.nextCurriculumId || log.curriculumId)}</select>
               </label>
+              <em>다음 수업: ${nextStep.id} · ${nextStep.title}</em>
               ${log.validationMessage ? `<p class="validation-text">${log.validationMessage}</p>` : ""}
               <div class="actions">
-                <b>${coachStatusLabel("coachRecord", log.serverDeducted || log.ticketDeducted ? "deducted" : log.status, log.status)}</b>
-                <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" ? "disabled" : ""}>
-                  ${["동기화 대기", "동기화 실패"].includes(log.status) ? "다시 동기화" : "다음 커리큘럼 등록 + 확인/차감"}
+                <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" || String(log.coachComment || "").trim().length < 10 ? "disabled" : ""}>
+                  ${["동기화 대기", "동기화 실패"].includes(log.status) ? "다시 동기화" : "수업 완료·횟수 차감"}
                 </button>
               </div>
             </div>
@@ -3697,8 +3729,8 @@ function recordProcessingMarkup() {
   return `
     <section class="record-section">
       <div class="record-section-title">
-        <strong>기록/차감 확인</strong>
-        <small>레슨 확인, 코치 코멘트, 다음 커리큘럼을 등록해야 회원권 횟수가 차감됩니다.</small>
+        <strong>수업 완료</strong>
+        <small>코멘트와 다음 커리큘럼을 등록하면 횟수가 차감됩니다.</small>
       </div>
       ${lessonMarkup}
     </section>
@@ -4066,7 +4098,20 @@ function updateLogDraft(id) {
   log.coachComment = commentInput?.value.trim() || "";
   log.nextCurriculumId = curriculumSelect?.value || log.nextCurriculumId || log.curriculumId;
   log.validationMessage = "";
+  updateLogCompletionUi(log);
   return log;
+}
+
+function updateLogCompletionUi(log) {
+  if (!log) return;
+  const count = activeViewField(`[data-log-comment-count="${log.id}"]`);
+  const submit = activeViewField(`[data-confirm-log="${log.id}"]`);
+  const length = String(log.coachComment || "").trim().length;
+  if (count) {
+    count.textContent = `${length}/10자`;
+    count.classList.toggle("is-ready", length >= 10);
+  }
+  if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || length < 10 || !log.nextCurriculumId;
 }
 
 async function confirmLog(id, options = {}) {
@@ -4297,7 +4342,6 @@ function bindEvents() {
   $("#noticeHideToday")?.addEventListener("click", () => closeNotice(true));
   $("#noticeAction")?.addEventListener("click", () => closeNotice(false));
   $("#saveCoachProfile")?.addEventListener("click", saveCoachProfile);
-  $("#openLessonRecordWriter")?.addEventListener("click", () => openLessonRecordWriter());
   $("#coachSyncRetryButton")?.addEventListener("click", () => {
     if (window.TennisNoteDataClient?.isOnline?.() === false) {
       renderCoachConnectivityStatus();
@@ -4322,6 +4366,9 @@ function bindEvents() {
     const curriculumSelect = event.target.closest("[data-next-curriculum]");
     if (curriculumSelect) updateLogDraft(curriculumSelect.dataset.nextCurriculum);
 
+    const modalCurriculum = event.target.closest("[data-modal-next-curriculum]");
+    if (modalCurriculum) updateLessonCompletionUi(modalCurriculum.dataset.modalNextCurriculum);
+
     if (event.target.closest("#recordLessonSelect")) {
       state.writingLessonId = event.target.value;
     }
@@ -4331,6 +4378,9 @@ function bindEvents() {
   });
 
   document.addEventListener("input", (event) => {
+    const modalComment = event.target.closest("[data-modal-coach-comment]");
+    if (modalComment) updateLessonCompletionUi(modalComment.dataset.modalCoachComment);
+
     const commentInput = event.target.closest("[data-coach-comment]");
     if (commentInput) updateLogDraft(commentInput.dataset.coachComment);
 
