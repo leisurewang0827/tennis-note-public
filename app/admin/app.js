@@ -13358,8 +13358,27 @@ function renderPaymentAdminGateStatus() {
     </article>`;
 }
 
+const staleReadyPaymentMs = 60 * 60 * 1000;
+
+function paymentCreatedAtMs(item = {}) {
+  const candidates = [item.createdAt, item.created_at, item.requestedAt, item.paidAt, item.verifiedAt];
+  for (const value of candidates) {
+    if (!value) continue;
+    const timestamp = Date.parse(String(value));
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return 0;
+}
+
+function isStaleReadyPayment(item = {}) {
+  if (item.status !== "server_ready") return false;
+  const createdAt = paymentCreatedAtMs(item);
+  return Boolean(createdAt && Date.now() - createdAt > staleReadyPaymentMs);
+}
+
 function billingFilterGroup(item = {}) {
   if (["cancelled", "refunded", "refund_processing", "refund_reconcile"].includes(item.status)) return "refund";
+  if (isStaleReadyPayment(item)) return "action";
   if (["server_ready", "unverified"].includes(item.status)) return "verifying";
   if (item.status === "paid") return "done";
   return "action";
