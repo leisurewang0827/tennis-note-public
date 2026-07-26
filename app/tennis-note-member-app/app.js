@@ -5102,10 +5102,10 @@ async function syncMemberLessonsFromServer(profile = null) {
       limit: 100,
     });
     const ownLessonIds = new Set((participants || []).map((item) => item.lesson_id));
-    const [rows, coachRoles, makeupEntitlementRows, releasedMakeupSlots, oneDaySlots] = await Promise.all([
+    const [scheduleRows, coachRoles, makeupEntitlementRows, releasedMakeupSlots, oneDaySlots] = await Promise.all([
       client.selectRows("tn_lessons", {
         select: "id,member_ticket_id,coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source",
-        limit: 200,
+        limit: 1000,
       }),
       client.selectRows("tn_coach_roles", {
         select: "id,display_name,color,status",
@@ -5123,6 +5123,18 @@ async function syncMemberLessonsFromServer(profile = null) {
         ? client.rpc("tn_member_one_day_schedule_slots", {}).catch(() => [])
         : Promise.resolve([]),
     ]);
+    const loadedLessonIds = new Set((scheduleRows || []).map((lesson) => lesson.id));
+    const missingOwnLessonIds = [...ownLessonIds].filter((lessonId) => !loadedLessonIds.has(lessonId));
+    const missingOwnLessonRows = missingOwnLessonIds.length
+      ? await Promise.all(missingOwnLessonIds.map((lessonId) =>
+        client.selectRows("tn_lessons", {
+          select: "id,member_ticket_id,coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source",
+          filters: { id: lessonId },
+          limit: 1,
+        }).catch(() => [])))
+      : [];
+    const rows = [...(scheduleRows || []), ...missingOwnLessonRows.flat()]
+      .filter((lesson, index, items) => items.findIndex((candidate) => candidate.id === lesson.id) === index);
     const coachNames = new Map((coachRoles || []).map((coach) => [coach.id, coach.display_name]));
     const lessonsById = new Map((rows || []).map((lesson) => [lesson.id, lesson]));
     const memberName = currentMemberName();
