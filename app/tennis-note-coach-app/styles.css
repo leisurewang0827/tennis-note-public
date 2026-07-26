@@ -3890,6 +3890,18 @@ select {
     background: #f8fafc;
   }
 
+  .coach-mobile-slot.available {
+    display: grid;
+    place-items: center;
+    color: #9aa8b8;
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .coach-mobile-slot.available span {
+    opacity: 0.55;
+  }
+
   .coach-mobile-lesson {
     z-index: 3;
     display: grid;

@@ -3757,6 +3757,9 @@ body.identity-setup-required {
     display: grid;
     gap: 6px;
     min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .member-mobile-segment-title {
@@ -3785,10 +3788,12 @@ body.identity-setup-required {
 
   .member-mobile-lane-board {
     display: grid;
-    grid-template-columns: 52px repeat(var(--coach-count, 2), minmax(0, 1fr));
+    grid-template-columns: 52px repeat(var(--coach-count, 2), minmax(88px, 1fr));
     grid-template-rows: 42px auto;
-    gap: 3px;
-    min-width: 0;
+    column-gap: 3px;
+    row-gap: 3px;
+    width: 100%;
+    min-width: calc(64px + var(--coach-count, 2) * 88px);
     border: 1px solid var(--line);
     border-radius: 8px;
     padding: 5px;
@@ -3821,7 +3826,7 @@ body.identity-setup-required {
   .member-mobile-coach-lane {
     display: grid;
     grid-template-rows: repeat(var(--slot-count, 30), 38px);
-    gap: 3px;
+    gap: 0;
     min-width: 0;
   }
 
@@ -3830,15 +3835,26 @@ body.identity-setup-required {
     place-items: center;
     min-width: 0;
     border: 1px solid #d9e2ea;
-    border-radius: 5px;
+    border-bottom-width: 0;
+    border-radius: 0;
     color: var(--green);
     background: var(--soft-green);
     font-size: 10px;
     font-weight: 900;
   }
 
+  .member-mobile-time-rail span:first-child {
+    border-radius: 5px 5px 0 0;
+  }
+
+  .member-mobile-time-rail span:last-child {
+    border-bottom-width: 1px;
+    border-radius: 0 0 5px 5px;
+  }
+
   .member-mobile-coach-lane {
     position: relative;
+    isolation: isolate;
   }
 
   .member-mobile-slot,
@@ -3854,15 +3870,26 @@ body.identity-setup-required {
   .member-mobile-slot {
     z-index: 1;
     border: 1px solid #d9e2ea;
+    border-bottom-width: 0;
+    border-radius: 0;
     color: transparent;
     background: #fbfcfe;
+  }
+
+  .member-mobile-slot:first-child {
+    border-radius: 5px 5px 0 0;
+  }
+
+  .member-mobile-slot:nth-last-of-type(1) {
+    border-bottom-width: 1px;
+    border-radius: 0 0 5px 5px;
   }
 
   .member-mobile-slot.available {
     color: #2557a7;
     border-color: #bfd2f5;
     background: #f1f6ff;
-    font-size: 15px;
+    font-size: 9px;
     font-weight: 900;
   }
 
@@ -3880,11 +3907,13 @@ body.identity-setup-required {
   .member-mobile-lesson {
     z-index: 3;
     display: grid;
+    width: auto;
     grid-template-rows: repeat(4, minmax(0, 1fr));
     align-content: stretch;
     gap: 1px;
     overflow: hidden;
     border: 1px solid #c8d2df;
+    margin: 1px;
     padding: 4px 5px 4px 8px;
     background: #eef1f5;
     box-shadow: inset 3px 0 0 #98a2b3;

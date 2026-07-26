@@ -1469,7 +1469,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.105";
+  const refreshKey = "tennis-note-sw-refresh-1.0.106";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1479,7 +1479,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.105", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.106", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1531,7 +1531,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.105" });
+  const params = new URLSearchParams({ v: "1.0.106" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2584,7 +2584,7 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
             <div class="coach-mobile-coach-lane">
               ${times.map((time, index) => {
                 const working = isPolicyCoachWorking(coach, day, time, scheduleBlockMinutes);
-                return `<div class="coach-mobile-slot ${working ? "available" : "off"}" style="grid-row:${index + 1};"></div>`;
+                return `<div class="coach-mobile-slot ${working ? "available" : "off"}" style="grid-row:${index + 1};" aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${working ? "빈 시간" : "근무 외"}">${working ? '<span aria-hidden="true">+</span>' : ""}</div>`;
               }).join("")}
               ${coachLessons.filter((lesson) => minutesFromTime(lesson.time) >= segment.startMinutes && minutesFromTime(lesson.time) < segment.endMinutes).map((lesson) => {
                 const startIndex = times.indexOf(lesson.time);

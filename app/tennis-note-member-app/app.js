@@ -36,7 +36,7 @@ const state = {
   scheduleTimeRange: "lesson",
   memberScheduleMode: "availability",
   memberScheduleModeTouched: false,
-  memberScheduleFullView: false,
+  memberScheduleFullView: true,
   activeJournalMonth: "2026-07",
   selectedJournalDate: "2026-07-03",
   selectedLessonDetailId: "",
@@ -1637,7 +1637,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.105";
+    const refreshKey = "tennis-note-sw-refresh-1.0.106";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1645,7 +1645,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.105", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.106", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -3296,7 +3296,7 @@ function renderMemberOwnSchedule() {
     </section>`;
 }
 
-function renderMemberAvailabilityOverview(scheduleLessons) {
+function renderMemberAvailabilityOverview(scheduleLessons, compact = false) {
   if (memberHasPendingPaymentOnly()) {
     return `
       <section class="member-availability-overview">
@@ -3324,7 +3324,6 @@ function renderMemberAvailabilityOverview(scheduleLessons) {
         })}
         <div class="member-availability-actions">
           <button class="small-button" type="button" data-member-schedule-mode="mine">내 일정 보기</button>
-          <button class="small-button" type="button" data-toggle-full-member-schedule>전체 시간표 보기</button>
         </div>
       </section>`;
   }
@@ -3334,12 +3333,13 @@ function renderMemberAvailabilityOverview(scheduleLessons) {
     return result;
   }, {});
   return `
-    <section class="member-availability-overview">
+    <section class="member-availability-overview ${compact ? "is-compact" : ""}">
       <div class="member-availability-heading">
         <div><strong>신청 가능한 시간</strong><span>${available.length}개</span></div>
-        <button class="small-button" type="button" data-toggle-full-member-schedule>${state.memberScheduleFullView ? "전체 시간표 닫기" : "전체 시간표 보기"}</button>
       </div>
-      <div class="member-availability-days">
+      <details class="member-availability-details">
+        <summary>시간 목록 보기</summary>
+        <div class="member-availability-days">
         ${days.filter((day) => grouped[day]?.length).map((day) => `
           <section class="member-availability-day">
             <strong>${day}요일 <small>${memberScheduleDateLabel(day)}</small></strong>
@@ -3352,7 +3352,8 @@ function renderMemberAvailabilityOverview(scheduleLessons) {
                 </button>`).join("")}
             </div>
           </section>`).join("")}
-      </div>
+        </div>
+      </details>
     </section>`;
 }
 
@@ -3408,8 +3409,8 @@ function renderDynamicMemberSchedule() {
     $("#scheduleGrid").innerHTML = renderMemberFlexibleBooking();
     return;
   }
-  const availabilityOverview = renderMemberAvailabilityOverview(scheduleLessons);
-  if (!state.memberScheduleFullView) {
+  const availabilityOverview = renderMemberAvailabilityOverview(scheduleLessons, true);
+  if (memberHasPendingPaymentOnly()) {
     $("#scheduleGrid").innerHTML = availabilityOverview;
     return;
   }
@@ -6995,7 +6996,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.105" });
+  const params = new URLSearchParams({ v: "1.0.106" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7328,7 +7329,7 @@ function startCouponBooking(ticketId) {
 function changeMemberScheduleMode(mode) {
   state.memberScheduleMode = ["availability", "flex"].includes(mode) ? mode : "mine";
   state.memberScheduleModeTouched = true;
-  state.memberScheduleFullView = false;
+  state.memberScheduleFullView = state.memberScheduleMode === "availability";
   renderSchedule();
   saveSnapshot();
 }
