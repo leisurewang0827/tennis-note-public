@@ -2301,6 +2301,7 @@ function currentOperationCoachPolicies() {
   return coaches.map((coach) => ({
     id: coach.id,
     serverRoleId: coach.serverRoleId || "",
+    branchId: coach.branchId || "",
     name: coach.name,
     color: coach.color || "",
     availableDays: cloneOperationProfileValue(Array.isArray(coach.availableDays) ? coach.availableDays : []),
@@ -2426,6 +2427,122 @@ function activeOperationBranchName() {
     || "전체 지점";
 }
 
+function operationBranchAllowsLegacyRows() {
+  return operationBranchOptions().filter((branch) => branch.status === "active").length <= 1;
+}
+
+function matchesActiveOperationBranch(branchId = "") {
+  const activeBranchId = activeOperationBranchId();
+  if (!activeBranchId) return true;
+  const normalizedBranchId = String(branchId || "");
+  return normalizedBranchId
+    ? normalizedBranchId === activeBranchId
+    : operationBranchAllowsLegacyRows();
+}
+
+function operationBranchTickets(source = tickets) {
+  return source.filter((ticket) => matchesActiveOperationBranch(ticket.branchId));
+}
+
+function operationBranchLessons(source = lessons) {
+  return source.filter((lesson) => matchesActiveOperationBranch(lesson.branchId));
+}
+
+function operationBranchCoaches(source = coaches) {
+  return source.filter((coach) => matchesActiveOperationBranch(coach.branchId));
+}
+
+function memberOperationBranchIds(member = {}) {
+  const userIds = new Set(memberServerUserIds(member));
+  const relatedTicketBranches = [...tickets, ...expiredTickets]
+    .filter((ticket) => (
+      ticketBelongsToMember(ticket, member)
+      || ticketParticipantUserIds(ticket).some((userId) => userIds.has(userId))
+    ))
+    .map((ticket) => ticket.branchId);
+  return [...new Set([
+    ...(Array.isArray(member.branchIds) ? member.branchIds : []),
+    member.branchId,
+    member.memberRecord?.branch_id,
+    ...relatedTicketBranches,
+  ].filter(Boolean).map(String))];
+}
+
+function operationBranchMembers(source = members) {
+  const activeBranchId = activeOperationBranchId();
+  if (!activeBranchId) return source;
+  return source.filter((member) => {
+    const branchIds = memberOperationBranchIds(member);
+    return branchIds.length
+      ? branchIds.includes(activeBranchId)
+      : operationBranchAllowsLegacyRows();
+  });
+}
+
+function operationBranchMakeupRequests(source = makeupRequests) {
+  return source.filter((request) => {
+    if (request.branchId) return matchesActiveOperationBranch(request.branchId);
+    const lesson = lessons.find((item) => String(item.serverLessonId || item.id) === String(request.lessonId || request.sourceLessonId || ""));
+    return lesson ? matchesActiveOperationBranch(lesson.branchId) : operationBranchAllowsLegacyRows();
+  });
+}
+
+function operationBranchBillings(source = billings) {
+  return source.filter((billing) => {
+    const ticket = [...tickets, ...expiredTickets].find((item) => (
+      String(item.serverTicketId || item.id) === String(billing.ticketId || "")
+    ));
+    if (ticket) return matchesActiveOperationBranch(ticket.branchId);
+    const product = (adminLiveDataState.products || []).find((item) => (
+      String(item.id) === String(billing.productId || "")
+    ));
+    if (product?.branch_id) return matchesActiveOperationBranch(product.branch_id);
+    const member = members.find((item) => (
+      (billing.serverUserId && memberServerUserIds(item).includes(billing.serverUserId))
+      || item.name === billing.member
+    ));
+    return member ? operationBranchMembers([member]).length > 0 : operationBranchAllowsLegacyRows();
+  });
+}
+
+function operationBranchRecords(source = []) {
+  return source.filter((record) => {
+    if (record.branchId) return matchesActiveOperationBranch(record.branchId);
+    const lessonId = record.serverLessonId || record.lessonId;
+    const lesson = lessonId
+      ? lessons.find((item) => String(item.serverLessonId || item.id) === String(lessonId))
+      : null;
+    if (lesson) return matchesActiveOperationBranch(lesson.branchId);
+    const memberNames = splitMemberNames(record.member || "");
+    if (memberNames.length) {
+      return operationBranchMembers(members.filter((member) => memberNames.includes(member.name))).length > 0;
+    }
+    return operationBranchAllowsLegacyRows();
+  });
+}
+
+function renderActiveOperationBranchContext() {
+  const target = $("#activeOperationBranchContext");
+  if (!target) return;
+  const branchId = activeOperationBranchId();
+  target.hidden = !branchId;
+  target.textContent = branchId ? activeOperationBranchName() : "";
+  target.title = branchId ? `${activeOperationProfile()?.name || "운영 프로필"} · ${activeOperationBranchName()}` : "";
+}
+
+function resetOperationBranchViewState() {
+  state.selectedMemberId = null;
+  state.selectedMemberIds = [];
+  state.selectedScheduleLessonIds = [];
+  state.selectedScheduleOpenSlots = [];
+  state.selectedMembershipProductIds = [];
+  state.memberCoachFilter = "all";
+  state.scheduleCoachFilter = "all";
+  state.memberListPage = 0;
+  state.memberStatusPage = 0;
+  state.adminTaskPage = 0;
+}
+
 function membershipProductsForActiveOperationProfile() {
   const branchId = activeOperationBranchId();
   if (!branchId) return membershipProductDrafts;
@@ -2444,10 +2561,12 @@ function applyOperationProfile(profile) {
   scheduleSettings.memberScheduleRequestOnly = normalized.scheduleSettings.memberScheduleRequestOnly !== false;
   scheduleSettings.adminTuningMode = normalized.scheduleSettings.adminTuningMode === true;
   coaches.forEach((coach) => {
+    if (normalized.branchId && coach.branchId && String(coach.branchId) !== String(normalized.branchId)) return;
     const policy = normalized.coaches.find((item) => (
-      (item.serverRoleId && item.serverRoleId === coach.serverRoleId)
+      (!item.branchId || !coach.branchId || String(item.branchId) === String(coach.branchId))
+      && ((item.serverRoleId && item.serverRoleId === coach.serverRoleId)
       || item.id === coach.id
-      || item.name === coach.name
+      || item.name === coach.name)
     ));
     if (!policy) return;
     coach.color = policy.color || coach.color;
@@ -5066,11 +5185,11 @@ function minutesToTime(totalMinutes) {
 }
 
 function findLesson(day, time) {
-  return lessons.find((item) => item.day === day && item.time === time && lessonMatchesActiveScheduleWeek(item, day));
+  return operationBranchLessons().find((item) => item.day === day && item.time === time && lessonMatchesActiveScheduleWeek(item, day));
 }
 
 function findLessons(day, time) {
-  return lessons.filter((item) => item.day === day && item.time === time && lessonMatchesActiveScheduleWeek(item, day));
+  return operationBranchLessons().filter((item) => item.day === day && item.time === time && lessonMatchesActiveScheduleWeek(item, day));
 }
 
 function isBookedLesson(lesson) {
@@ -5144,7 +5263,7 @@ function getOverlappingBookedLessons(day, time, durationMinutes = 20) {
     end: timeToMinutes(time) + durationMinutes,
   };
   const targetDate = state.liveScheduleLoaded ? adminWeekDateForDay(day) : "";
-  return lessons.filter((lesson) => (
+  return operationBranchLessons().filter((lesson) => (
     lesson.day === day
     && (!targetDate || !lesson.lessonDate || lesson.lessonDate === targetDate)
     && isBookedLesson(lesson)
@@ -5163,7 +5282,7 @@ function getAvailableCoachesForSlot(day, time, durationMinutes = 20) {
   const usedCoachIds = new Set(getOverlappingBookedLessons(day, time, durationMinutes)
     .filter((lesson) => !isReleasedRegularMakeupSlot(lesson))
     .map((lesson) => lesson.coachId));
-  return coaches.filter((coach) => (
+  return operationBranchCoaches().filter((coach) => (
     coach.status === "active" &&
     !usedCoachIds.has(coach.id) &&
     !getCoachBreakOverlapping(coach.id, day, time, durationMinutes) &&
@@ -5176,7 +5295,7 @@ function getAvailableCoachId(day, time, durationMinutes = 20, preferredCoachId =
   const availableCoaches = getAvailableCoachesForSlot(day, time, durationMinutes);
   if (preferredCoachId && availableCoaches.some((coach) => coach.id === preferredCoachId)) return preferredCoachId;
   return availableCoaches[0]?.id
-    || coaches.find((coach) => coach.status === "active")?.id
+    || operationBranchCoaches().find((coach) => coach.status === "active")?.id
     || "coach-no";
 }
 
@@ -5316,7 +5435,7 @@ function lessonScheduleCoachLabel(lesson = {}) {
 }
 
 function findLessonStartingInBlock(day, blockStart, blockEnd) {
-  return lessons.find((lesson) => {
+  return operationBranchLessons().find((lesson) => {
     const starts = timeToMinutes(lesson.time);
     return lesson.day === day && lessonMatchesActiveScheduleWeek(lesson, day) && starts > blockStart && starts < blockEnd;
   });
@@ -5324,23 +5443,23 @@ function findLessonStartingInBlock(day, blockStart, blockEnd) {
 
 function getScheduleCoachLanes(day = "") {
   const preferredOrder = ["coach-no", "coach-kang", "coach-hwang", "coach-park", "coach-machine"];
-  const activeCoaches = coaches.filter((coach) => coach.status === "active");
+  const activeCoaches = operationBranchCoaches().filter((coach) => coach.status === "active");
   const orderedCoaches = preferredOrder.map((coachId) => activeCoaches.find((coach) => coach.id === coachId)).filter(Boolean);
   const extraCoaches = activeCoaches.filter((coach) => !preferredOrder.includes(coach.id));
   const lanes = orderedCoaches.concat(extraCoaches);
   if (!day) return lanes;
   return lanes.filter((coach) => (
     normalizeCoachWorkBlocks(coach).some((block) => block.days.includes(day)) ||
-    lessons.some((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson))
+    operationBranchLessons().some((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson))
   ));
 }
 
 function findStartingLessonForCoach(day, time, coachId) {
-  return lessons.find((lesson) => lesson.day === day && lesson.time === time && lessonScheduleCoachId(lesson) === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson));
+  return operationBranchLessons().find((lesson) => lesson.day === day && lesson.time === time && lessonScheduleCoachId(lesson) === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson));
 }
 
 function findLessonStartingInBlockForCoach(day, blockStart, blockEnd, coachId) {
-  return lessons.find((lesson) => {
+  return operationBranchLessons().find((lesson) => {
     const starts = timeToMinutes(lesson.time);
     return lesson.day === day && lessonScheduleCoachId(lesson) === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && starts > blockStart && starts < blockEnd;
   });
@@ -5348,7 +5467,7 @@ function findLessonStartingInBlockForCoach(day, blockStart, blockEnd, coachId) {
 
 function findOccupyingLessonForCoach(day, time, coachId) {
   const current = timeToMinutes(time);
-  return lessons.find((lesson) => {
+  return operationBranchLessons().find((lesson) => {
     if (lesson.day !== day || lesson.time === time || lessonScheduleCoachId(lesson) !== coachId || !lessonMatchesActiveScheduleWeek(lesson, day) || !isBookedLesson(lesson)) return false;
     const starts = timeToMinutes(lesson.time);
     const ends = starts + lesson.durationMinutes;
@@ -5358,7 +5477,7 @@ function findOccupyingLessonForCoach(day, time, coachId) {
 
 function findOccupyingLesson(day, time) {
   const current = timeToMinutes(time);
-  return lessons.find((lesson) => {
+  return operationBranchLessons().find((lesson) => {
     if (lesson.day !== day || lesson.time === time || !lessonMatchesActiveScheduleWeek(lesson, day)) return false;
     const starts = timeToMinutes(lesson.time);
     const ends = starts + lesson.durationMinutes;
@@ -5518,6 +5637,12 @@ function matchesSearch(values) {
 }
 
 function globalSearchItems() {
+  const branchMembers = operationBranchMembers();
+  const branchCoaches = operationBranchCoaches();
+  const branchLessons = operationBranchLessons();
+  const branchMakeups = operationBranchMakeupRequests();
+  const branchBillings = operationBranchBillings();
+  const branchTickets = operationBranchTickets();
   const navigationItems = [
     { kind: "메뉴", title: "대시보드", detail: "오늘 수업과 운영 처리 현황", view: "dashboard" },
     { kind: "메뉴", title: "회원관리", detail: "수강중·승인대기·만료 회원", view: "members" },
@@ -5526,39 +5651,39 @@ function globalSearchItems() {
     { kind: "메뉴", title: "기록/차감 확인", detail: "수업 코멘트·커리큘럼·횟수 처리", view: "notes" },
     { kind: "메뉴", title: "운영 설정", detail: "수업 정책·회원권 규정·관리자 보안", view: "settings" },
   ];
-  const memberItems = members.map((member) => ({
+  const memberItems = branchMembers.map((member) => ({
     kind: "회원",
     title: member.name,
     detail: `${memberStatusLabel(member)} · ${member.coach} · ${member.regularTime} · ${member.lessonType}`,
     view: "members",
     memberId: member.id,
   }));
-  const coachItems = coaches.map((coach) => ({
+  const coachItems = branchCoaches.map((coach) => ({
     kind: "코치",
     title: coach.name,
     detail: `${coach.role} · ${coachModeLabel(coach)} · ${coach.status === "active" ? "운영중" : "사용중지"}`,
     view: "members",
   }));
-  const lessonItems = lessons.map((lesson) => ({
+  const lessonItems = branchLessons.map((lesson) => ({
     kind: "수업",
     title: `${lesson.day}요일 ${lesson.time} · ${lesson.member}`,
     detail: `${getCoachName(lesson.coachId)} · ${lessonTypeLabel(lesson)} · ${getLessonStatusLabel(lesson)}`,
     view: "schedule",
   }));
-  const makeupItems = makeupRequests.map((request) => ({
+  const makeupItems = branchMakeups.map((request) => ({
     kind: "변경요청",
     title: request.member,
     detail: `${request.original} → ${request.requested} · ${request.statusLabel}`,
     view: "schedule",
   }));
-  const billingItems = billings.map((billing) => ({
+  const billingItems = branchBillings.map((billing) => ({
     kind: "결제",
     title: billing.member,
     detail: `${billing.item} · ${billing.method} · ${billing.status}`,
     view: "billing",
   }));
-  const ticketItems = tickets.map((ticket) => {
-    const member = members.find((item) => item.name === ticket.member);
+  const ticketItems = branchTickets.map((ticket) => {
+    const member = branchMembers.find((item) => item.name === ticket.member);
     return {
       kind: "회원권",
       title: ticket.member,
@@ -5616,19 +5741,19 @@ function clearGlobalSearch() {
 }
 
 function adminTodayLessonRows() {
-  if (adminDemoMode) return lessons;
+  if (adminDemoMode) return operationBranchLessons();
   const today = adminLocalDateKey(new Date());
-  return lessons.filter((lesson) => lesson.lessonDate === today);
+  return operationBranchLessons().filter((lesson) => lesson.lessonDate === today);
 }
 
 function renderMetrics() {
   const recordGroups = adminRecordGroups();
   const todayLessonCount = adminTodayLessonRows().length;
-  const pendingScheduleCount = lessons.filter((lesson) => isPendingScheduleLesson(lesson)).length;
+  const pendingScheduleCount = operationBranchLessons().filter((lesson) => isPendingScheduleLesson(lesson)).length;
   $("#metricLessons").textContent = todayLessonCount;
-  $("#metricMakeups").textContent = makeupRequests.filter((item) => ["pending", "requested", "coach_required"].includes(item.status)).length;
+  $("#metricMakeups").textContent = operationBranchMakeupRequests().filter((item) => ["pending", "requested", "coach_required"].includes(item.status)).length;
   $("#metricNotes").textContent = recordGroups.pending.length + recordGroups.feedback.length + recordGroups.issue.length;
-  $("#metricBilling").textContent = billings.filter((item) => item.status !== "paid").length;
+  $("#metricBilling").textContent = operationBranchBillings().filter((item) => item.status !== "paid").length;
   if ($("#scheduleMetricToday")) $("#scheduleMetricToday").textContent = `${todayLessonCount}회`;
   if ($("#scheduleMetricPending")) $("#scheduleMetricPending").textContent = `${pendingScheduleCount}건`;
 }
@@ -5663,7 +5788,7 @@ function ticketNeedsRegularSchedule(ticket, today = adminLocalDateKey(new Date()
 }
 
 function unassignedRegularTickets() {
-  const regularTickets = tickets.filter((ticket) => isRegularScheduleTicket(ticket));
+  const regularTickets = operationBranchTickets().filter((ticket) => isRegularScheduleTicket(ticket));
   const candidates = regularTickets
     .filter((ticket) => !ticketHasFutureRegularLesson(ticket))
     .sort((left, right) => ticketParticipantNames(right).length - ticketParticipantNames(left).length);
@@ -5712,7 +5837,7 @@ function ticketHasUpcomingLesson(ticket, today = adminLocalDateKey(new Date())) 
 }
 
 function couponTicketsWithoutUpcomingLesson() {
-  const candidates = tickets
+  const candidates = operationBranchTickets()
     .filter((ticket) => isActiveCouponTicket(ticket) && !ticketHasUpcomingLesson(ticket))
     .sort((left, right) => String(left.expires || "9999-12-31").localeCompare(String(right.expires || "9999-12-31")));
   const seen = new Set();
@@ -5728,6 +5853,12 @@ function couponTicketsWithoutUpcomingLesson() {
 }
 
 function renderDashboard() {
+  const branchMembers = operationBranchMembers();
+  const branchCoaches = operationBranchCoaches();
+  const branchLessons = operationBranchLessons();
+  const branchMakeups = operationBranchMakeupRequests();
+  const branchTickets = operationBranchTickets();
+  const branchBillings = operationBranchBillings();
   $("#todayLessons").innerHTML = adminTodayLessonRows()
     .slice(0, 5)
     .map(
@@ -5744,20 +5875,20 @@ function renderDashboard() {
     )
     .join("");
 
-  const pendingMakeupCount = makeupRequests.filter((item) => ["pending", "requested", "coach_required"].includes(item.status)).length;
-  const lowTicketCount = tickets.filter((ticket) => ticket.remaining <= 2).length;
+  const pendingMakeupCount = branchMakeups.filter((item) => ["pending", "requested", "coach_required"].includes(item.status)).length;
+  const lowTicketCount = branchTickets.filter((ticket) => ticket.remaining <= 2).length;
   const pendingRecordCount = adminRecordGroups().pending.length + adminRecordGroups().issue.length;
-  const pendingPaymentCount = billings.filter((item) => !["paid", "cancelled", "refunded"].includes(item.status)).length;
+  const pendingPaymentCount = branchBillings.filter((item) => !["paid", "cancelled", "refunded"].includes(item.status)).length;
   const unassignedRegularCount = unassignedRegularTickets().length;
   const couponNoBookingCount = couponTicketsWithoutUpcomingLesson().length;
   const reportTarget = $("#dashboardReportSummary");
   if (reportTarget) {
     const recordGroups = adminRecordGroups();
     const liveReportMetrics = [
-      { label: "활성 회원", value: `${members.filter((member) => member.status === "active").length}명`, detail: "실서버 회원권 기준", tone: "" },
-      { label: "현재 주 수업", value: `${lessons.length}개`, detail: "실서버 레슨표 기준", tone: "calm" },
+      { label: "활성 회원", value: `${branchMembers.filter((member) => member.status === "active").length}명`, detail: "실서버 회원권 기준", tone: "" },
+      { label: "현재 주 수업", value: `${branchLessons.length}개`, detail: "실서버 레슨표 기준", tone: "calm" },
       { label: "완료 기록", value: `${recordGroups.done.length}건`, detail: `확인 필요 ${recordGroups.pending.length + recordGroups.issue.length}건`, tone: "warning" },
-      { label: "활성 코치", value: `${coaches.filter((coach) => coach.status === "active").length}명`, detail: "승인된 코치 권한 기준", tone: "accent" },
+      { label: "활성 코치", value: `${branchCoaches.filter((coach) => coach.status === "active").length}명`, detail: "승인된 코치 권한 기준", tone: "accent" },
     ];
     reportTarget.innerHTML = (adminDemoMode ? reportMetrics.slice(0, 4) : liveReportMetrics)
       .map(
@@ -5831,11 +5962,13 @@ function getAdminTasks() {
   const shared = operationalSharedData();
   const pendingLessonLogs = shared.lessonLogs.filter((log) => log.status !== "confirmed");
   const pendingFeedbacks = shared.feedbackRequests.filter((item) => item.status !== "코치 답변 완료");
-  const lowTickets = tickets.filter((ticket) => ticket.remaining <= 2);
-  const paymentChecks = billings.filter((item) => item.status === "check" || item.status === "unverified");
-  const draftBillings = billings.filter((item) => item.status === "draft");
-  const paymentDataErrors = billings.filter((item) => item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item));
-  const urgentMakeups = makeupRequests
+  const branchTickets = operationBranchTickets();
+  const branchBillings = operationBranchBillings();
+  const lowTickets = branchTickets.filter((ticket) => ticket.remaining <= 2);
+  const paymentChecks = branchBillings.filter((item) => item.status === "check" || item.status === "unverified");
+  const draftBillings = branchBillings.filter((item) => item.status === "draft");
+  const paymentDataErrors = branchBillings.filter((item) => item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item));
+  const urgentMakeups = operationBranchMakeupRequests()
     .filter((item) => item.status === "coach_required" || item.status === "requested")
     .concat(shared.makeupRequests.filter((item) => item.status === "승인 대기"));
   const unassignedTickets = unassignedRegularTickets();
@@ -5966,6 +6099,8 @@ function renderAdminOperations() {
   if (!taskList) return;
 
   const allTasks = getAdminTasks();
+  const branchMembers = operationBranchMembers();
+  const branchCoaches = operationBranchCoaches();
   state.adminTaskPage = normalizeDashboardPage(allTasks.length, state.adminTaskPage);
   const tasks = allTasks.slice(state.adminTaskPage * dashboardPageSize, (state.adminTaskPage + 1) * dashboardPageSize);
   taskList.innerHTML = tasks.length
@@ -5991,8 +6126,8 @@ function renderAdminOperations() {
 
   renderDashboardPager("#adminTaskPager", allTasks.length, state.adminTaskPage, "tasks");
 
-  state.memberStatusPage = normalizeDashboardPage(members.length, state.memberStatusPage);
-  const visibleMembers = members.slice(state.memberStatusPage * dashboardPageSize, (state.memberStatusPage + 1) * dashboardPageSize);
+  state.memberStatusPage = normalizeDashboardPage(branchMembers.length, state.memberStatusPage);
+  const visibleMembers = branchMembers.slice(state.memberStatusPage * dashboardPageSize, (state.memberStatusPage + 1) * dashboardPageSize);
   $("#memberStatusCards").innerHTML = visibleMembers
     .map((member) => {
       const remaining = memberRemainingCount(member);
@@ -6017,12 +6152,12 @@ function renderAdminOperations() {
       action: { label: "회원 관리", jump: "members", primary: false },
       compact: true,
     });
-  renderDashboardPager("#memberStatusPager", members.length, state.memberStatusPage, "members");
+  renderDashboardPager("#memberStatusPager", branchMembers.length, state.memberStatusPage, "members");
 
   const shared = operationalSharedData();
   const pendingNotes = lessonNotes.filter((note) => note.status === "pending").length + shared.lessonLogs.filter((log) => log.status !== "confirmed").length;
   const feedbacks = shared.feedbackRequests.filter((item) => item.status !== "코치 답변 완료").length;
-  const coachLoads = coaches
+  const coachLoads = branchCoaches
     .filter((coach) => coach.status === "active")
     .map((coach) => {
       const lessonsForCoach = adminTodayLessonRows().filter((lesson) => getCoachName(lesson.coachId) === coach.name && lesson.status !== "available").length;
@@ -6183,7 +6318,7 @@ function ticketPriorityForMember(ticket, memberReference) {
 }
 
 function ticketsForMember(memberReference) {
-  return tickets
+  return operationBranchTickets()
     .filter((ticket) => ticketBelongsToMember(ticket, memberReference))
     .sort((left, right) => ticketPriorityForMember(right, memberReference) - ticketPriorityForMember(left, memberReference));
 }
@@ -7191,7 +7326,7 @@ function memberTicketKind(member) {
 
 function filteredMembers() {
   const localSearch = String(state.memberSearch || "").trim().toLowerCase();
-  const matchingMembers = members.filter((member) => {
+  const matchingMembers = operationBranchMembers().filter((member) => {
     const statusMatch = memberMatchesStatusFilter(member, state.memberFilter);
     const coachMatch = state.memberCoachFilter === "all" || member.coach === state.memberCoachFilter;
     const ticketMatch = state.memberTicketFilter === "all" || memberTicketKind(member) === state.memberTicketFilter;
@@ -7227,7 +7362,7 @@ const memberFilterCopy = {
 };
 
 function memberStatusCounts() {
-  return members.reduce((counts, member) => {
+  return operationBranchMembers().reduce((counts, member) => {
     const status = memberListStatus(member);
     if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
     if (memberIsExpiring(member)) counts.expiring += 1;
@@ -7416,20 +7551,22 @@ function addMemberManagementDays(value, days) {
 
 function memberManagementProducts(sourceTicket = null) {
   const sourceGroupSize = Number(sourceTicket?.groupSize) || 1;
+  const branchId = sourceTicket?.branchId || activeOperationBranchId();
   return (adminLiveDataState.products || [])
     .filter((product) => product.is_active !== false
-      && (!sourceTicket?.branchId || product.branch_id === sourceTicket.branchId)
+      && (!branchId || product.branch_id === branchId)
       && (!sourceTicket || Number(product.group_size || 1) === sourceGroupSize))
     .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "ko"));
 }
 
 function memberManagementCoachRoles(sourceTicket = null) {
   const ownRoleIds = currentOperationsCoachRoleIds();
+  const branchId = sourceTicket?.branchId || activeOperationBranchId();
   return (adminLiveDataState.coachRoles || [])
     .filter((role) => role.status === "approved"
       && !["ended", "archived"].includes(role.employment_status)
       && !role.archived_at
-      && (!sourceTicket?.branchId || role.branch_id === sourceTicket.branchId)
+      && (!branchId || role.branch_id === branchId)
       && (operationsRole() === "admin" || ownRoleIds.has(role.id)))
     .sort((left, right) => String(left.display_name || "").localeCompare(String(right.display_name || ""), "ko"));
 }
@@ -8913,7 +9050,7 @@ function memberTicketDisplayLabel(member, ticket = memberCurrentTicket(member)) 
 function memberLessonRows(member) {
   const memberName = String(member?.name || "").trim();
   const serverUserIds = memberServerUserIds(member);
-  return lessons.filter((lesson) => {
+  return operationBranchLessons().filter((lesson) => {
     if (lesson.status === "cancelled") return false;
     const participantUserIds = Array.isArray(lesson.serverParticipantUserIds)
       ? lesson.serverParticipantUserIds.filter(Boolean)
@@ -9249,7 +9386,7 @@ function renderMemberBulkToolbar(visibleMembers = []) {
   }
   const coachSelect = $("#memberBulkCoach");
   if (coachSelect) {
-    const activeCoaches = coaches.filter((coach) => coach.status === "active" && coach.serverRoleId);
+    const activeCoaches = operationBranchCoaches().filter((coach) => coach.status === "active" && coach.serverRoleId);
     coachSelect.innerHTML = activeCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name)}</option>`).join("");
     coachSelect.hidden = $("#memberBulkAction")?.value !== "assign_coach";
   }
@@ -9289,9 +9426,10 @@ async function runMemberBulkAction() {
 }
 
 function renderMembers() {
+  const branchMembers = operationBranchMembers();
   const coachFilter = $("#memberCoachFilter");
   if (coachFilter) {
-    const coachNames = [...new Set(members.map((member) => member.coach).filter(Boolean))];
+    const coachNames = [...new Set(branchMembers.map((member) => member.coach).filter(Boolean))];
     coachFilter.innerHTML = `<option value="all">전체 코치</option>${coachNames.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}`;
     coachFilter.value = coachNames.includes(state.memberCoachFilter) ? state.memberCoachFilter : "all";
     state.memberCoachFilter = coachFilter.value;
@@ -9481,7 +9619,7 @@ function scheduleLessonMatchesMemberSearch(lesson) {
 function scheduleMemberSearchMatches() {
   const keyword = normalizedScheduleMemberSearch(state.scheduleMemberSearch);
   if (!keyword) return [];
-  return lessons
+  return operationBranchLessons()
     .filter((lesson) => lesson.status !== "cancelled" && scheduleLessonMatchesMemberSearch(lesson))
     .sort((left, right) => `${left.lessonDate || "9999-12-31"} ${left.time || ""}`.localeCompare(`${right.lessonDate || "9999-12-31"} ${right.time || ""}`));
 }
@@ -10608,7 +10746,7 @@ function scheduleFilterMatches(lesson) {
 function scheduleTimeHasFilteredLesson(time) {
   if (state.scheduleFilter === "all") return true;
   return scheduleDays.some((day) =>
-    lessons.some((lesson) => {
+    operationBranchLessons().some((lesson) => {
       if (!scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson) || !lessonMatchesActiveScheduleWeek(lesson, day)) return false;
       const start = timeToMinutes(lesson.time);
       const end = start + lesson.durationMinutes;
@@ -11172,7 +11310,7 @@ function renderCoachDaySchedule(day) {
     const minor = timeToMinutes(time) % 20 !== 0;
     return `<div class="coach-day-time ${minor ? "is-minor" : ""}" style="grid-row:${row};grid-column:1;">${time}</div>${visibleCoaches.map((coach, coachIndex) => renderCoachDayBaseCell(day, time, coach, row, coachIndex + 2)).join("")}`;
   }).join("");
-  const lessonCards = visibleCoaches.map((coach, coachIndex) => lessons
+  const lessonCards = visibleCoaches.map((coach, coachIndex) => operationBranchLessons()
     .filter((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && !isLessonCancelled(lesson) && lessonMatchesActiveScheduleWeek(lesson, day))
     .map((lesson) => renderCoachDayLessonCard(lesson, visibleTimes, coachIndex + 2))
     .join("")).join("");
@@ -11190,7 +11328,7 @@ function getAdminDurationSlotState(day, time, coach) {
       pasteReady: false,
     };
   }
-  const occupyingLesson = lessons.find((lesson) => lessonScheduleCoachId(lesson) === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
+  const occupyingLesson = operationBranchLessons().find((lesson) => lessonScheduleCoachId(lesson) === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
   const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10) || getBreakRuleOverlapping(day, time, 10, coach.id);
   const working = !breakRule && isCoachAvailableForSlot(coach.id, day, time, 10);
   const canAdd = !occupyingLesson && working && canAddLessonAt(day, time, 20, coach.id);
@@ -11251,7 +11389,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
   }).join("")).join("");
 
-  const lessonCards = lanes.map(({ day, coach }, laneIndex) => lessons
+  const lessonCards = lanes.map(({ day, coach }, laneIndex) => operationBranchLessons()
     .filter((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && !isLessonCancelled(lesson) && lessonMatchesActiveScheduleWeek(lesson, day))
     .map((lesson) => {
       const startIndex = visibleTimes.indexOf(lesson.time);
@@ -11579,7 +11717,8 @@ function getLessonTicketOptionLabel(ticket) {
 }
 
 function scheduleTicketById(ticketId) {
-  return [...tickets, ...expiredTickets].find((item) => String(item.id) === String(ticketId || "")) || null;
+  return [...operationBranchTickets(), ...operationBranchTickets(expiredTickets)]
+    .find((item) => String(item.id) === String(ticketId || "")) || null;
 }
 
 function adminManualOverrideAvailable() {
@@ -11771,7 +11910,7 @@ function getEligibleTickets(memberName, coachId) {
   const editingTicket = getTicketByLesson(getCurrentEditingLesson());
   const editingTicketId = editingTicket?.id || "";
   const sourceTickets = adminManualOverrideEnabled()
-    ? [...tickets, ...expiredTickets].filter((ticket, index, source) => (
+    ? [...operationBranchTickets(), ...operationBranchTickets(expiredTickets)].filter((ticket, index, source) => (
       source.findIndex((item) => String(item.id) === String(ticket.id)) === index
       && ticketParticipantNames(ticket).includes(memberName)
     ))
@@ -11789,10 +11928,11 @@ function getEligibleTickets(memberName, coachId) {
 }
 
 function findFirstMemberWithCoachTicket(coachId) {
-  const ticket = tickets.find((item) => item.coachId === coachId && item.remaining > 0);
+  const ticket = operationBranchTickets().find((item) => item.coachId === coachId && item.remaining > 0);
   if (!ticket) return "";
-  const owner = members.find((member) => memberServerUserIds(member).includes(ticket.serverUserId));
-  return owner?.name || members.find((member) => ticketBelongsToMember(ticket, member))?.name || ticketParticipantNames(ticket)[0] || "";
+  const branchMembers = operationBranchMembers();
+  const owner = branchMembers.find((member) => memberServerUserIds(member).includes(ticket.serverUserId));
+  return owner?.name || branchMembers.find((member) => ticketBelongsToMember(ticket, member))?.name || ticketParticipantNames(ticket)[0] || "";
 }
 
 function findFirstTicketForMember(memberName) {
@@ -13048,7 +13188,7 @@ function openSubstituteModal(defaultLesson = null) {
   state.substituteOperationKey = createAdminOperationKey("substitute-assign");
   $("#substituteDate").value = date;
   state.selectedSubstituteLessonIds = defaultLesson?.serverLessonId ? [String(defaultLesson.serverLessonId)] : [];
-  const activeCoaches = coaches.filter((coach) => coach.status === "active" && coach.serverRoleId);
+  const activeCoaches = operationBranchCoaches().filter((coach) => coach.status === "active" && coach.serverRoleId);
   $("#substituteCoach").innerHTML = `<option value="">코치 선택</option>${activeCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name)}</option>`).join("")}`;
   $("#substituteSettlementMode").value = "actual_coach";
   $("#substituteHourlyAmount").value = "";
@@ -14146,7 +14286,7 @@ async function deleteEditingLesson() {
 function renderMakeups() {
   const target = $("#makeupRows");
   if (!target) return;
-  target.innerHTML = makeupRequests
+  target.innerHTML = operationBranchMakeupRequests()
     .map(
       (item) => `
         <tr>
@@ -14168,8 +14308,9 @@ function renderMakeups() {
 function renderTickets() {
   const target = $("#ticketRows");
   if (!target) return;
-  target.innerHTML = expiredTickets.length
-    ? expiredTickets
+  const branchExpiredTickets = operationBranchTickets(expiredTickets);
+  target.innerHTML = branchExpiredTickets.length
+    ? branchExpiredTickets
     .map(
       (ticket) => `
         <tr>
@@ -14399,10 +14540,11 @@ function billingFilterGroup(item = {}) {
 function renderBilling() {
   syncSharedPaymentRequests();
   state.billingFilter = ["action", "verifying", "done", "refund"].includes(state.billingFilter) ? state.billingFilter : "action";
-  const pendingRequests = billings.filter((item) => item.status === "draft");
-  const pendingChecks = billings.filter((item) => item.status === "check" || item.status === "unverified");
-  const staleReadyPayments = billings.filter(isStaleReadyPayment);
-  const rechargeTargets = tickets.filter((ticket) => ticket.remaining <= 1);
+  const branchBillings = operationBranchBillings();
+  const pendingRequests = branchBillings.filter((item) => item.status === "draft");
+  const pendingChecks = branchBillings.filter((item) => item.status === "check" || item.status === "unverified");
+  const staleReadyPayments = branchBillings.filter(isStaleReadyPayment);
+  const rechargeTargets = operationBranchTickets().filter((ticket) => ticket.remaining <= 1);
 
   $("#billingRequestCount").textContent = `${pendingRequests.length}건`;
   $("#billingCheckCount").textContent = `${pendingChecks.length + staleReadyPayments.length}\uAC74`;
@@ -14410,7 +14552,7 @@ function renderBilling() {
   renderPaymentAdminGateStatus();
   renderPaymentChargeAudit();
   $$('[data-billing-count]').forEach((count) => {
-    count.textContent = String(billings.filter((item) => billingFilterGroup(item) === count.dataset.billingCount).length);
+    count.textContent = String(branchBillings.filter((item) => billingFilterGroup(item) === count.dataset.billingCount).length);
   });
   $$('[data-billing-filter]').forEach((button) => button.classList.toggle("is-active", button.dataset.billingFilter === state.billingFilter));
 
@@ -14423,7 +14565,7 @@ function renderBilling() {
       </div>`;
   }
 
-  const visibleBillings = billings.filter((item) => billingFilterGroup(item) === state.billingFilter);
+  const visibleBillings = branchBillings.filter((item) => billingFilterGroup(item) === state.billingFilter);
   $("#billingRows").innerHTML = visibleBillings.length ? visibleBillings
     .map(
       (item) => {
@@ -15163,7 +15305,7 @@ function adminRecordGroups() {
     ...shared.feedbackRequests.map(feedbackRecord),
     ...(adminLiveDataState.journalEntries || []).map(memberJournalRecord),
   ];
-  const normalizedRecords = records.map((record) => withRecordCoach({
+  const normalizedRecords = operationBranchRecords(records).map((record) => withRecordCoach({
     ...record,
     pendingType: pendingRecordType(record),
   }));
@@ -16261,6 +16403,8 @@ async function syncAdminLiveData() {
       const preferredUser = userGroup.find((user) => user.role === "admin") || userGroup[0];
       const memberRecord = memberRecordByUserId.get(preferredUser.id) || null;
       const enrollment = userIds.map((userId) => enrollmentByUserId.get(userId)).find(Boolean) || null;
+      const enrollmentBranchId = productsById.get(enrollment?.requested_product_id)?.branch_id || "";
+      const paymentBranchId = productsById.get(actionableUnlinkedPayment?.product_id)?.branch_id || "";
       const existing = currentMembers.find((member) => (
         member.serverUserId === preferredUser.id
         || (member.serverUserIds?.length === 1 && member.serverUserIds[0] === preferredUser.id)
@@ -16286,9 +16430,9 @@ async function syncAdminLiveData() {
             : currentMemberKind === "journal_only"
               ? "journal"
               : "expired";
-      return {
-        id: existing?.id || nextMemberId++,
-        name,
+	      return {
+	        id: existing?.id || nextMemberId++,
+	        name,
         nickname: preferredUser.nickname || "",
         status,
         memberKind: currentMemberKind,
@@ -16319,6 +16463,13 @@ async function syncAdminLiveData() {
         authLastSignInAt: authLinks.map((link) => link.last_sign_in_at).filter(Boolean).sort().at(-1) || "",
         serverUserId: preferredUser.id,
         serverUserIds: userIds,
+        branchId: memberRecord?.branch_id || displayTicket?.branchId || enrollmentBranchId || paymentBranchId || "",
+        branchIds: [...new Set([
+          memberRecord?.branch_id,
+          ...memberTickets.map((ticket) => ticket.branchId),
+          enrollmentBranchId,
+          paymentBranchId,
+        ].filter(Boolean).map(String))],
         phone: preferredUser.phone || enrollment?.phone || "",
         birthYear: preferredUser.birth_year || enrollment?.birth_year || "",
         neighborhood: preferredUser.neighborhood || enrollment?.neighborhood || "",
@@ -16501,6 +16652,8 @@ async function syncAdminLiveData() {
     const mappedEntitlementRequests = mappedMakeupEntitlements.map((item) => ({
       id: `entitlement-${item.id}`,
       entitlementId: item.id,
+      sourceLessonId: item.sourceLessonId,
+      branchId: item.branchId,
       makeupType: "entitlement",
       member: item.member,
       original: `${item.originalLabel} ${getCoachName(item.coachId)}`.trim(),
@@ -16525,6 +16678,7 @@ async function syncAdminLiveData() {
         id: request.id,
         serverRequestId: request.id,
         lessonId: request.lesson_id,
+        branchId: lesson.branch_id || "",
         member: usersById.get(request.requester_user_id)?.name || "회원 확인 필요",
         original: `${lesson.lesson_date || "기존일"} ${String(lesson.start_time || "").slice(0, 5)} ${getCoachName(coachId)}`,
         requested: `${request.requested_lesson_date || "변경일"} ${String(request.requested_start_time || "").slice(0, 5)}`,
@@ -17938,16 +18092,17 @@ async function setCoachStaffState(targetState) {
 }
 
 function renderCoaches() {
-  const signedUpCount = coaches.filter((coach) => coach.accountLinked).length;
-  const approvedCount = coaches.filter((coach) => ["approved", "active"].includes(coach.approvalStatus || coach.coachMode)).length;
+  const branchCoaches = operationBranchCoaches();
+  const signedUpCount = branchCoaches.filter((coach) => coach.accountLinked).length;
+  const approvedCount = branchCoaches.filter((coach) => ["approved", "active"].includes(coach.approvalStatus || coach.coachMode)).length;
   const target = $("#coachRows");
   if (!target) return;
   target.innerHTML = `
     <div class="coach-status-summary">
-      <strong>코치 ${coaches.length}명</strong>
+      <strong>코치 ${branchCoaches.length}명</strong>
       <span>회원가입 ${signedUpCount}명</span>
       <span>승인 완료 ${approvedCount}명</span>
-    </div>` + coaches
+    </div>` + branchCoaches
     .map(
       (coach) => {
         const breakCount = normalizeCoachBreakBlocks(coach).length;
@@ -18055,6 +18210,7 @@ async function activateOperationProfile(profileId) {
   const backup = operationProfileWorkspaceBackup();
   activeOperationProfileId = target.id;
   applyOperationProfile(target);
+  resetOperationBranchViewState();
   return persistOperationProfileWorkspace(backup, `${target.name} 프로필을 적용했습니다.`);
 }
 
@@ -19452,6 +19608,7 @@ function renderAuthProviderStatus() {
 }
 
 function renderAll() {
+  renderActiveOperationBranchContext();
   renderMetrics();
   renderCourtControls();
   renderDashboard();
@@ -20166,7 +20323,7 @@ function bindEvents() {
     profile.branchId = nextBranchId;
     profile.branchName = nextBranch?.name || "";
     profile.updatedAt = new Date().toISOString();
-    state.selectedMembershipProductIds = [];
+    resetOperationBranchViewState();
     await persistOperationProfileWorkspace(
       backup,
       nextBranchId ? `${profile.name}을(를) ${profile.branchName}에 연결했습니다.` : `${profile.name}의 지점 연결을 해제했습니다.`,

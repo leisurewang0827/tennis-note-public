@@ -10875,6 +10875,23 @@ body {
   white-space: nowrap;
 }
 
+.operation-branch-context {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  max-width: 180px;
+  padding: 0 10px;
+  overflow: hidden;
+  border: 1px solid #d4ded9;
+  border-radius: 6px;
+  color: #33443e;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .schedule-edit-guide {
   display: block;
   margin: 8px 0 10px;
@@ -11078,6 +11095,13 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
 
   .admin-surface-label {
     display: none;
+  }
+
+  .operation-branch-context {
+    min-height: 30px;
+    max-width: 132px;
+    padding: 0 8px;
+    font-size: 10px;
   }
 
   .admin-pending-compact,
