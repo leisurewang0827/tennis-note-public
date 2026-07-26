@@ -77,6 +77,7 @@ const state = {
   scheduleLessonClipboard: null,
   scheduleSheetPasteOpen: false,
   scheduleSheetPasteRows: [],
+  scheduleSheetPasteFilter: "all",
   communityChannel: "홈",
   accountDeletionRequests: [],
   liveScheduleLoaded: false,
@@ -9851,6 +9852,26 @@ function scheduleSheetDurationField(row, index) {
   </select>`;
 }
 
+function scheduleSheetPasteFilterButtons(rows = []) {
+  const allCount = rows.length;
+  const readyCount = rows.filter((row) => !row.issues.length).length;
+  const issueCount = allCount - readyCount;
+  const filters = [
+    { key: "all", label: "전체", count: allCount },
+    { key: "issue", label: "확인 필요", count: issueCount },
+    { key: "ready", label: "등록 가능", count: readyCount },
+  ];
+  return `
+    <div class="schedule-sheet-paste-filters" role="group" aria-label="붙여넣기 미리보기 필터">
+      ${filters.map((filter) => `
+        <button class="segment ${state.scheduleSheetPasteFilter === filter.key ? "is-active" : ""}" type="button" data-schedule-sheet-filter="${filter.key}">
+          <span>${filter.label}</span><strong>${filter.count}</strong>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
 function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || []) {
   const panel = $("#scheduleSheetPastePanel");
   const preview = $("#scheduleSheetPastePreview");
@@ -9864,12 +9885,21 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
   const issueCount = rows.length - readyCount;
   const saveButton = $("#saveScheduleSheetPaste");
   if (saveButton) saveButton.disabled = !readyCount || !adminApprovalReady();
+  const indexedRows = rows.map((row, index) => ({ row, index }));
+  const visibleRows = indexedRows.filter(({ row }) => (
+    state.scheduleSheetPasteFilter === "ready"
+      ? !row.issues.length
+      : state.scheduleSheetPasteFilter === "issue"
+        ? row.issues.length
+        : true
+  ));
   preview.innerHTML = `
     <div class="schedule-sheet-paste-summary">
       <strong>${rows.length}줄 미리보기</strong>
       <span>등록 가능 ${readyCount}줄 · 확인 필요 ${issueCount}줄</span>
     </div>
-    ${rows.map((row, index) => `
+    ${scheduleSheetPasteFilterButtons(rows)}
+    ${visibleRows.length ? visibleRows.map(({ row, index }) => `
       <div class="schedule-sheet-paste-row ${row.issues.length ? "needs-check" : "is-ready"}">
         <span class="schedule-sheet-paste-number">${row.rowNumber || index + 1}</span>
         ${scheduleSheetDayField(row, index)}
@@ -9880,7 +9910,7 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
         ${scheduleSheetDurationField(row, index)}
         <small>${row.issues.length ? escapeHtml(row.issues.join(", ")) : "확인 완료"}</small>
       </div>
-    `).join("")}
+    `).join("") : `<p class="empty-state">현재 필터에 표시할 줄이 없습니다.</p>`}
   `;
 }
 
@@ -19824,6 +19854,12 @@ function bindEvents() {
     }
     if (event.target.closest("#previewScheduleSheetPaste")) {
       previewScheduleSheetPaste();
+      return;
+    }
+    const sheetPasteFilterButton = event.target.closest("[data-schedule-sheet-filter]");
+    if (sheetPasteFilterButton) {
+      state.scheduleSheetPasteFilter = sheetPasteFilterButton.dataset.scheduleSheetFilter || "all";
+      renderScheduleSheetPastePreview();
       return;
     }
     if (event.target.closest("#saveScheduleSheetPaste")) {

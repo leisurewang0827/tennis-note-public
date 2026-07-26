@@ -9725,6 +9725,24 @@ button .schedule-member-lines > span {
   margin-top: 8px;
 }
 
+.schedule-sheet-paste-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.schedule-sheet-paste-filters .segment {
+  min-width: 0;
+  justify-content: center;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.schedule-sheet-paste-filters .segment strong {
+  margin-left: 4px;
+  font-size: 12px;
+}
+
 .schedule-sheet-paste-row {
   display: grid;
   grid-template-columns: 32px 64px 98px minmax(92px, 0.9fr) minmax(120px, 1.2fr) 88px 72px minmax(110px, 1fr);
@@ -9884,6 +9902,10 @@ button .schedule-member-lines > span {
   .schedule-sheet-paste-actions .primary-button,
   .schedule-sheet-paste-actions .ghost-button {
     width: 100%;
+  }
+
+  .schedule-sheet-paste-filters {
+    grid-template-columns: 1fr;
   }
 
   .schedule-sheet-paste-row input[data-schedule-sheet-field="memberName"],
