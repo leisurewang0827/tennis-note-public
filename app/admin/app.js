@@ -12239,8 +12239,8 @@ function renderLessonPreview() {
           ? "불참 처리에서 생성된 보강 대기를 선택해 주세요. 보강 대기가 없으면 과거수업 보정을 선택하세요."
           : ticketDateMismatch
             ? "회원권 시작일과 만료일 안의 날짜만 보정할 수 있습니다."
-            : coachComment.length < 10
-                ? "실제 수업 코멘트를 10자 이상 입력해 주세요."
+            : coachComment.length < 5
+                ? "실제 수업 코멘트를 5자 이상 입력해 주세요."
                 : conflict
                   ? conflict.message
                   : "저장 즉시 완료 처리되고 회원권 횟수가 차감됩니다.";
@@ -12250,19 +12250,19 @@ function renderLessonPreview() {
       || sourceInvalid
       || (sourceRequiresEntitlement && !selectedEntitlement)
       || ticketDateMismatch
-      || coachComment.length < 10
+      || coachComment.length < 5
       || conflict
     );
     const blocked = manualOverride
-      ? Boolean(!ticket || exactDuplicate || coachComment.length < 10 || overrideReasonMissing)
+      ? Boolean(!ticket || exactDuplicate || coachComment.length < 5 || overrideReasonMissing)
       : normalBlocked;
     const message = manualOverride
       ? exactDuplicate
         ? "같은 회원권·날짜·시간의 수업이 이미 있어 이중 차감을 막았습니다. 기존 수업을 수정해 주세요."
         : overrideReasonMissing
           ? "강제 처리 사유를 5자 이상 입력해 주세요."
-          : coachComment.length < 10
-            ? "실제 수업 코멘트를 10자 이상 입력해 주세요."
+          : coachComment.length < 5
+            ? "실제 수업 코멘트를 5자 이상 입력해 주세요."
             : `정책 충돌 ${overrideWarnings.length}건을 우회해 완료 처리하고 감사 기록을 남깁니다.`
       : normalMessage;
     $("#lessonPreview").innerHTML = `
@@ -13395,8 +13395,8 @@ async function addLessonFromForm(event) {
     const sourceInvalid = !state.editingLessonId && candidate.lessonSource === "regular";
     const conflict = getPastLessonCorrectionConflict(candidate);
     const exactDuplicate = getAdminManualExactDuplicate(candidate);
-    if (coachComment.length < 10) {
-      setLessonFormMessage("실제 수업 코멘트를 10자 이상 입력해 주세요.", "danger");
+    if (coachComment.length < 5) {
+      setLessonFormMessage("실제 수업 코멘트를 5자 이상 입력해 주세요.", "danger");
       return;
     }
     if (manualOverride) {
@@ -13448,7 +13448,7 @@ async function addLessonFromForm(event) {
         past_lesson_admin_required: "관리자 계정으로만 과거 수업을 보정할 수 있습니다.",
         past_lesson_not_finished: "아직 끝나지 않은 수업은 과거 완료로 처리할 수 없습니다.",
         past_lesson_reason_too_short: "보정 사유를 5자 이상 입력해 주세요.",
-        lesson_complete_comment_too_short: "수업 코멘트를 구체적으로 10자 이상 입력해 주세요.",
+        lesson_complete_comment_too_short: "수업 코멘트를 구체적으로 5자 이상 입력해 주세요.",
         lesson_complete_comment_too_generic: "수업 코멘트에 실제 진행 내용과 다음 연습 포인트를 적어 주세요.",
         lesson_complete_comment_recent_duplicate: "최근 코멘트와 같은 내용입니다. 이번 수업 내용을 구체적으로 적어 주세요.",
         past_lesson_duplicate: "같은 회원권·날짜·시간의 수업 기록이 이미 있습니다.",
@@ -14929,7 +14929,7 @@ function lessonRecordErrorMessage(error) {
     }
   }
   return ({
-    lesson_complete_comment_too_short: "코치 코멘트는 10자 이상 작성해 주세요.",
+    lesson_complete_comment_too_short: "코치 코멘트는 5자 이상 작성해 주세요.",
     lesson_complete_comment_too_generic: "짧은 칭찬이나 확인 문구 대신 이번 수업 내용을 작성해 주세요.",
     lesson_complete_comment_recent_duplicate: "최근 수업과 같은 코멘트입니다. 이번 수업 내용을 새로 작성해 주세요.",
     lesson_complete_forbidden: "이 수업을 처리할 권한이 없습니다.",
@@ -14944,8 +14944,8 @@ async function saveLessonRecord(event) {
   const comment = $("#lessonRecordComment").value.trim();
   const curriculumId = $("#lessonRecordCurriculum").value;
   const message = $("#lessonRecordMessage");
-  if (comment.length < 10 || !curriculumId) {
-    message.textContent = comment.length < 10 ? "코치 코멘트를 10자 이상 작성해 주세요." : "다음 커리큘럼을 선택해 주세요.";
+  if (comment.length < 5 || !curriculumId) {
+    message.textContent = comment.length < 5 ? "코치 코멘트를 5자 이상 작성해 주세요." : "다음 커리큘럼을 선택해 주세요.";
     return;
   }
   const client = window.TennisNoteDataClient;

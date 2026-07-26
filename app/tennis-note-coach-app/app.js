@@ -1438,7 +1438,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.96";
+  const refreshKey = "tennis-note-sw-refresh-1.0.97";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1448,7 +1448,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.96", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.97", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1500,7 +1500,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.96" });
+  const params = new URLSearchParams({ v: "1.0.97" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2240,9 +2240,9 @@ function renderScheduleEditPanel() {
         <small>${lesson.status}</small>
       </div>
       <label class="wide lesson-required-field">
-        <span>코치 코멘트 <small>필수 · 10자 이상</small></span>
+        <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
         <textarea data-modal-coach-comment="${lesson.id}" rows="4" placeholder="오늘 잘된 점과 다음 수업에서 보완할 점을 적어주세요." ${canProcess ? "" : "disabled"}>${defaultComment}</textarea>
-        <small class="lesson-comment-count" data-modal-comment-count="${lesson.id}">0/10자</small>
+        <small class="lesson-comment-count" data-modal-comment-count="${lesson.id}">0/5자</small>
       </label>
       <label class="wide lesson-required-field">
         <span>다음 커리큘럼 <small>필수</small></span>
@@ -3273,10 +3273,10 @@ function updateLessonCompletionUi(id) {
   const curriculum = activeViewField(`[data-modal-next-curriculum="${id}"]`)?.value || "";
   const count = activeViewField(`[data-modal-comment-count="${id}"]`);
   const submit = activeViewField(`[data-complete-lesson-from-modal="${id}"]`);
-  const ready = Boolean(lesson && canProcessLesson(lesson) && comment.length >= 10 && curriculum);
+  const ready = Boolean(lesson && canProcessLesson(lesson) && comment.length >= 5 && curriculum);
   if (count) {
-    count.textContent = `${comment.length}/10자`;
-    count.classList.toggle("is-ready", comment.length >= 10);
+    count.textContent = `${comment.length}/5자`;
+    count.classList.toggle("is-ready", comment.length >= 5);
   }
   if (submit) submit.disabled = !ready;
 }
@@ -3670,9 +3670,9 @@ function recordProcessingMarkup() {
             </div>
             <div class="coach-confirm-panel">
               <label>
-                <span>코치 코멘트 <small>필수 · 10자 이상</small></span>
+                <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
                 <textarea data-coach-comment="${log.id}" rows="3" ${confirmed ? "disabled" : ""}>${log.coachComment || ""}</textarea>
-                <small class="lesson-comment-count ${String(log.coachComment || "").trim().length >= 10 ? "is-ready" : ""}" data-log-comment-count="${log.id}">${String(log.coachComment || "").trim().length}/10자</small>
+                <small class="lesson-comment-count ${String(log.coachComment || "").trim().length >= 5 ? "is-ready" : ""}" data-log-comment-count="${log.id}">${String(log.coachComment || "").trim().length}/5자</small>
               </label>
               <label>
                 <span>다음 커리큘럼</span>
@@ -3681,7 +3681,7 @@ function recordProcessingMarkup() {
               <em>다음 수업: ${nextStep.id} · ${nextStep.title}</em>
               ${log.validationMessage ? `<p class="validation-text">${log.validationMessage}</p>` : ""}
               <div class="actions">
-                <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" || String(log.coachComment || "").trim().length < 10 ? "disabled" : ""}>
+                <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" || String(log.coachComment || "").trim().length < 5 ? "disabled" : ""}>
                   ${["동기화 대기", "동기화 실패"].includes(log.status) ? "다시 동기화" : "수업 완료·횟수 차감"}
                 </button>
               </div>
@@ -4009,7 +4009,7 @@ function coachCommentValidationMessage(log) {
   const comment = log.coachComment || "";
   const normalized = normalizeCoachComment(comment);
   const weakPhrases = ["수고했습니다", "잘했습니다", "좋아요", "확인완료", "다음에이어", "다음시간에이어", "고생했습니다", "괜찮습니다"];
-  if (normalized.length < 10) return "코치 코멘트는 직접 10자 이상 작성해야 합니다.";
+  if (normalized.length < 5) return "코치 코멘트는 직접 5자 이상 작성해야 합니다.";
   if (weakPhrases.some((phrase) => {
     const normalizedPhrase = normalizeCoachComment(phrase);
     return normalized.includes(normalizedPhrase) && normalized.length <= normalizedPhrase.length + 4;
@@ -4108,10 +4108,10 @@ function updateLogCompletionUi(log) {
   const submit = activeViewField(`[data-confirm-log="${log.id}"]`);
   const length = String(log.coachComment || "").trim().length;
   if (count) {
-    count.textContent = `${length}/10자`;
-    count.classList.toggle("is-ready", length >= 10);
+    count.textContent = `${length}/5자`;
+    count.classList.toggle("is-ready", length >= 5);
   }
-  if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || length < 10 || !log.nextCurriculumId;
+  if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || length < 5 || !log.nextCurriculumId;
 }
 
 async function confirmLog(id, options = {}) {
@@ -4175,7 +4175,7 @@ async function confirmLog(id, options = {}) {
         }
       }
       const serverMessages = {
-        lesson_complete_comment_too_short: "코치 코멘트는 직접 10자 이상 작성해야 합니다.",
+        lesson_complete_comment_too_short: "코치 코멘트는 직접 5자 이상 작성해야 합니다.",
         lesson_complete_comment_too_generic: "짧은 칭찬이나 확인 문구만으로는 횟수 차감이 불가합니다.",
         lesson_complete_comment_recent_duplicate: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
         lesson_complete_comment_member_duplicate_limit: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
