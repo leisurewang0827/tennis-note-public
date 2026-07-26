@@ -10695,6 +10695,13 @@ function renderRegularSchedulePreview(ticket, candidate, validation) {
     </div>`;
 }
 
+function syncLessonRepeatPreviewPanel(markup = "") {
+  const panel = $("#lessonRepeatPreviewPanel");
+  if (!panel) return;
+  panel.hidden = !markup;
+  panel.innerHTML = markup || "";
+}
+
 function getSelectedLessonSchedules() {
   return getLessonScheduleSlots().filter((item) => item.day && item.time);
 }
@@ -11635,6 +11642,7 @@ function syncPastLessonCorrectionUi(candidate = getLessonFormCandidate()) {
 
 function renderLessonPreview() {
   if (!$("#lessonPreview")) return;
+  syncLessonRepeatPreviewPanel("");
   let candidate = getLessonFormCandidate();
   syncQuickLessonEntryUi(candidate);
   const pastCorrection = syncPastLessonCorrectionUi(candidate);
@@ -11750,10 +11758,10 @@ function renderLessonPreview() {
     .map((schedule) => `${schedule.day} ${schedule.time}~${minutesToTime(timeToMinutes(schedule.time) + candidate.durationMinutes)}`)
     .join(", ");
   const repeatPreview = renderRegularSchedulePreview(ticket, candidate, regularScheduleValidation);
+  syncLessonRepeatPreviewPanel(repeatPreview);
   $("#lessonPreview").innerHTML = `
     <strong>${scheduleLabel || `${candidate.day} ${candidate.time}~${minutesToTime(end)}`}</strong>
     <span>${lessonSourceLabel(candidate.lessonSource)} · ${getLessonMembersLabel(candidate)} · ${getCoachName(candidate.coachId)} · ${getLessonRoundLabel(candidate)} · ${lessonTypeLabel(candidate)}</span>
-    ${repeatPreview}
   `;
   const normalBlocked = Boolean(!ticket || sourceTicketMismatch || !regularScheduleValidation.valid || scheduleIssueMessage || scheduleScopeMismatch || conflict);
   const overrideBlocked = Boolean(!ticket || exactDuplicate || internalDuplicate || overrideReasonMissing);

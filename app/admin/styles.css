@@ -4576,6 +4576,14 @@ tr.is-selected td {
   gap: 10px;
 }
 
+.lesson-repeat-preview-panel {
+  grid-column: 1 / -1;
+}
+
+.lesson-repeat-preview-panel[hidden] {
+  display: none;
+}
+
 .lesson-repeat-slot {
   margin: 0;
 }
@@ -7127,6 +7135,7 @@ button .schedule-member-lines > span {
 
 #lessonModal.is-quick-entry .lesson-member-ticket-panel,
 #lessonModal.is-quick-entry #lessonMakeupEntitlementField,
+#lessonModal.is-quick-entry #lessonRepeatPreviewPanel,
 #lessonModal.is-quick-entry #lessonPreview,
 #lessonModal.is-quick-entry #lessonSaveResultPanel,
 #lessonModal.is-quick-entry #lessonFormMessage,
@@ -7152,6 +7161,7 @@ button .schedule-member-lines > span {
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonMakeupEntitlementField,
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonAdminOverridePanel,
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonRepeatSlots,
+#lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonRepeatPreviewPanel,
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonPastCorrectionPanel,
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonAbsencePanel,
 #lessonModal.is-quick-edit:not(.is-quick-expanded) #lessonAbsenceRestorePanel,
