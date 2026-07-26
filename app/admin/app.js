@@ -314,6 +314,7 @@ const scheduleSettings = {
   lessonColorRules: [],
   coachWorkPolicyVersion: 2,
   memberScheduleRequestOnly: true,
+  adminTuningMode: false,
 };
 
 function makeTimeRange(startTime, endTime, stepMinutes = scheduleBlockMinutes) {
@@ -2211,6 +2212,7 @@ function restoreSnapshot() {
       scheduleSettings.lessonColors = { ...scheduleSettings.lessonColors, ...(snapshot.scheduleSettings.lessonColors || {}) };
       scheduleSettings.lessonColorRules = Array.isArray(snapshot.scheduleSettings.lessonColorRules) ? snapshot.scheduleSettings.lessonColorRules : [];
       scheduleSettings.memberScheduleRequestOnly = snapshot.scheduleSettings.memberScheduleRequestOnly !== false;
+      scheduleSettings.adminTuningMode = snapshot.scheduleSettings.adminTuningMode === true;
     }
     Object.assign(adminLockSettings, normalizeAdminLockSettings(snapshot.adminLockSettings));
     const storedPolicyVersion = Number(snapshot.scheduleSettings?.coachWorkPolicyVersion) || 0;
@@ -2277,6 +2279,7 @@ function liveSchedulePolicyPayload() {
       lessonColorRules: scheduleSettings.lessonColorRules,
       coachWorkPolicyVersion: scheduleSettings.coachWorkPolicyVersion || 2,
       memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
+      adminTuningMode: scheduleSettings.adminTuningMode === true,
     },
     coaches: coaches.map((coach) => ({
       id: coach.id,
@@ -3372,6 +3375,7 @@ async function loadLiveSchedulePolicyFromServer() {
     scheduleSettings.lessonColorRules = Array.isArray(serverSettings.lessonColorRules) ? serverSettings.lessonColorRules : scheduleSettings.lessonColorRules;
     scheduleSettings.coachWorkPolicyVersion = Number(serverSettings.coachWorkPolicyVersion) || 2;
     scheduleSettings.memberScheduleRequestOnly = serverSettings.memberScheduleRequestOnly !== false;
+    scheduleSettings.adminTuningMode = serverSettings.adminTuningMode === true;
     (Array.isArray(value.coaches) ? value.coaches : []).forEach((serverCoach) => {
       const coach = coaches.find((item) => (
         (serverCoach.serverRoleId && item.serverRoleId === serverCoach.serverRoleId)
@@ -12513,7 +12517,9 @@ function openLessonModal(defaults = {}) {
   );
   $("#lessonRepeatSlots").innerHTML = "";
   $("#lessonRepeatSlots").hidden = false;
-  if ($("#lessonAdminOverride")) $("#lessonAdminOverride").checked = completedCorrection;
+  if ($("#lessonAdminOverride")) {
+    $("#lessonAdminOverride").checked = completedCorrection || scheduleSettings.adminTuningMode === true;
+  }
   const defaultCorrectionMode = document.querySelector('input[name="lessonPastCorrectionMode"][value="complete"]');
   if (defaultCorrectionMode) defaultCorrectionMode.checked = true;
   $("#lessonPastCoachComment").value = "";
@@ -17757,6 +17763,8 @@ function renderScheduleSettings() {
   openEndInput.value = scheduleSettings.openEnd;
   const requestOnlyInput = $("#memberScheduleRequestOnly");
   if (requestOnlyInput) requestOnlyInput.checked = scheduleSettings.memberScheduleRequestOnly !== false;
+  const tuningModeInput = $("#adminScheduleTuningMode");
+  if (tuningModeInput) tuningModeInput.checked = scheduleSettings.adminTuningMode === true;
   ["regular", "regular30", "makeup", "coupon", "noShow"].forEach((kind) => {
     const input = $(`[data-lesson-color="${kind}"]`);
     if (input) input.value = scheduleSettings.lessonColors[kind];
@@ -19802,6 +19810,24 @@ function bindEvents() {
       saveSnapshot();
       await syncLiveSchedulePolicyToServer();
       showToast("회원앱 시간표 표시 저장 완료");
+    });
+  }
+  const adminScheduleTuningModeInput = $("#adminScheduleTuningMode");
+  if (adminScheduleTuningModeInput) {
+    adminScheduleTuningModeInput.addEventListener("change", async () => {
+      const previousValue = scheduleSettings.adminTuningMode === true;
+      scheduleSettings.adminTuningMode = adminScheduleTuningModeInput.checked;
+      saveSnapshot();
+      const synced = await syncLiveSchedulePolicyToServer();
+      if (synced !== "server") {
+        scheduleSettings.adminTuningMode = previousValue;
+        adminScheduleTuningModeInput.checked = previousValue;
+        saveSnapshot();
+        showToast("서버 저장에 실패해 이전 설정으로 되돌렸습니다.");
+        return;
+      }
+      renderScheduleSettings();
+      showToast(scheduleSettings.adminTuningMode ? "관리자 튜닝 모드 사용" : "관리자 튜닝 모드 해제");
     });
   }
   $$('[data-lesson-color]').forEach((input) => {
