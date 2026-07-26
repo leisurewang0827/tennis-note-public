@@ -4898,7 +4898,7 @@ tr.is-selected td {
 
 .operation-profile-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
   gap: 10px;
   align-items: center;
 }
@@ -4909,7 +4909,7 @@ tr.is-selected td {
 }
 
 .operation-profile-select select {
-  width: min(100%, 280px);
+  width: 100%;
   min-width: 0;
   font-weight: 800;
 }
@@ -4921,6 +4921,14 @@ tr.is-selected td {
 
 #operationProfileStatus {
   margin: -6px 0 0;
+}
+
+.product-setting-empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  text-align: center;
 }
 
 .readiness-grid,

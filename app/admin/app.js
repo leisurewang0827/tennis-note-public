@@ -1277,6 +1277,7 @@ const adminPendingUsersState = {
 };
 
 const adminLiveDataState = {
+  branches: [],
   lessons: [],
   users: [],
   coachRoles: [],
@@ -2310,11 +2311,46 @@ function currentOperationCoachPolicies() {
   }));
 }
 
+function operationBranchOptions() {
+  const liveBranches = (adminLiveDataState.branches || [])
+    .filter((branch) => branch?.id)
+    .map((branch) => ({
+      id: String(branch.id),
+      name: String(branch.name || "지점"),
+      status: branch.status || "active",
+    }));
+  if (liveBranches.length) {
+    return liveBranches.sort((left, right) => (
+      Number(left.status !== "active") - Number(right.status !== "active")
+      || left.name.localeCompare(right.name, "ko")
+    ));
+  }
+  const inferredIds = [...new Set([
+    ...(adminLiveDataState.products || []).map((product) => product.branch_id),
+    ...(adminLiveDataState.coachRoles || []).map((role) => role.branch_id),
+  ].filter(Boolean).map(String))];
+  return inferredIds.map((id, index) => ({
+    id,
+    name: inferredIds.length === 1 ? "현재 지점" : `지점 ${index + 1}`,
+    status: "active",
+  }));
+}
+
+function defaultOperationBranch() {
+  const activeBranches = operationBranchOptions().filter((branch) => branch.status === "active");
+  return activeBranches.length === 1 ? activeBranches[0] : null;
+}
+
 function normalizeOperationProfile(profile = {}, index = 0) {
   const fallbackId = `operation-profile-${index + 1}`;
+  const fallbackBranch = defaultOperationBranch();
+  const branchId = String(profile.branchId || profile.branch_id || fallbackBranch?.id || "");
+  const branch = operationBranchOptions().find((item) => item.id === branchId);
   return {
     id: String(profile.id || fallbackId),
     name: String(profile.name || `운영 프로필 ${index + 1}`).trim() || `운영 프로필 ${index + 1}`,
+    branchId,
+    branchName: String(profile.branchName || profile.branch_name || branch?.name || fallbackBranch?.name || ""),
     scheduleSettings: {
       ...currentOperationScheduleSettings(),
       ...(profile.scheduleSettings || {}),
@@ -2341,6 +2377,8 @@ function createOperationProfile(name = "기본 운영", source = null) {
   return normalizeOperationProfile({
     id: `operation-profile-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name,
+    branchId: base.branchId || "",
+    branchName: base.branchName || "",
     scheduleSettings: cloneOperationProfileValue(base.scheduleSettings),
     coaches: cloneOperationProfileValue(base.coaches),
     updatedAt: new Date().toISOString(),
@@ -2353,6 +2391,14 @@ function ensureOperationProfiles() {
   }
   if (!operationProfiles.some((profile) => profile.id === activeOperationProfileId)) {
     activeOperationProfileId = operationProfiles[0].id;
+  }
+  const fallbackBranch = defaultOperationBranch();
+  if (fallbackBranch) {
+    operationProfiles.forEach((profile) => {
+      if (profile.branchId) return;
+      profile.branchId = fallbackBranch.id;
+      profile.branchName = fallbackBranch.name;
+    });
   }
 }
 
@@ -2367,6 +2413,23 @@ function updateActiveOperationProfileFromCurrent() {
   profile.coaches = currentOperationCoachPolicies();
   profile.updatedAt = new Date().toISOString();
   return profile;
+}
+
+function activeOperationBranchId() {
+  return String(activeOperationProfile()?.branchId || "");
+}
+
+function activeOperationBranchName() {
+  const profile = activeOperationProfile();
+  return operationBranchOptions().find((branch) => branch.id === profile.branchId)?.name
+    || profile.branchName
+    || "전체 지점";
+}
+
+function membershipProductsForActiveOperationProfile() {
+  const branchId = activeOperationBranchId();
+  if (!branchId) return membershipProductDrafts;
+  return membershipProductDrafts.filter((product) => !product.branchId || String(product.branchId) === branchId);
 }
 
 function applyOperationProfile(profile) {
@@ -2438,7 +2501,7 @@ function liveSchedulePolicyPayload() {
   ensureOperationProfiles();
   updateActiveOperationProfileFromCurrent();
   return {
-    version: 3,
+    version: 4,
     updatedAt: new Date().toISOString(),
     activeOperationProfileId,
     operationProfiles: cloneOperationProfileValue(operationProfiles),
@@ -2864,6 +2927,8 @@ function membershipProductDraftFromServer(product = {}) {
     id: product.product_code || `server-${product.id}`,
     serverProductId: product.id,
     serverProductCode: product.product_code || "",
+    branchId: product.branch_id || "",
+    branchName: operationBranchOptions().find((branch) => branch.id === String(product.branch_id || ""))?.name || "",
     group: `${scheduleScope === "mixed" ? "혼합" : scheduleScope === "weekend" ? "주말" : "평일"} ${productKind === "coupon" ? "쿠폰제" : "정규권"}`,
     title: product.name || "회원권",
     name: product.name || "회원권",
@@ -3307,9 +3372,7 @@ async function createMembershipProductSetting() {
     showToast("관리자 로그인 후 새 회원권을 만들 수 있습니다.");
     return;
   }
-  const branchId = (adminLiveDataState.products || []).find((item) => item.branch_id)?.branch_id
-    || (adminLiveDataState.coachRoles || []).find((item) => item.branch_id)?.branch_id
-    || null;
+  const branchId = activeOperationBranchId() || defaultOperationBranch()?.id || null;
   if (!branchId) {
     showToast("지점 정보를 찾지 못했습니다. 서버 데이터를 새로고침해 주세요.");
     return;
@@ -3342,7 +3405,7 @@ async function createMembershipProductSetting() {
       settlement_base_price: 0,
       discount_enabled: true,
       coach_discount_allowed: false,
-      display_order: Math.max(0, ...membershipProductDrafts.map((item) => Number(item.sortOrder) || 0)) + 10,
+      display_order: Math.max(0, ...membershipProductsForActiveOperationProfile().map((item) => Number(item.sortOrder) || 0)) + 10,
       policy_settings: { adminSaleStatus: "hidden", countLabel: "4회" },
     });
     if (!Array.isArray(rows) || rows.length !== 1) throw new Error("membership_product_create_not_confirmed");
@@ -3372,10 +3435,11 @@ async function moveMembershipProductSetting(productId, direction) {
     showToast("관리자만 회원권 순서를 변경할 수 있습니다.");
     return;
   }
-  const currentIndex = membershipProductDrafts.findIndex((item) => item.id === productId);
+  const visibleProducts = membershipProductsForActiveOperationProfile();
+  const currentIndex = visibleProducts.findIndex((item) => item.id === productId);
   const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= membershipProductDrafts.length) return;
-  const nextOrder = [...membershipProductDrafts];
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= visibleProducts.length) return;
+  const nextOrder = [...visibleProducts];
   [nextOrder[currentIndex], nextOrder[nextIndex]] = [nextOrder[nextIndex], nextOrder[currentIndex]];
   const serverProducts = nextOrder.map((item) => serverMembershipProductForDraft(item));
   if (serverProducts.some((item) => !item?.id)) {
@@ -3414,7 +3478,10 @@ function serverMembershipProductForDraft(product = {}) {
   if (idMatch) return idMatch;
   const codeMatch = serverProducts.find((item) => item.product_code && item.product_code === product.id);
   if (codeMatch) return codeMatch;
-  const nameMatches = serverProducts.filter((item) => item.name === (product.title || product.name));
+  const nameMatches = serverProducts.filter((item) => (
+    item.name === (product.title || product.name)
+    && (!product.branchId || String(item.branch_id || "") === String(product.branchId))
+  ));
   return nameMatches.length === 1 ? nameMatches[0] : null;
 }
 
@@ -3460,7 +3527,7 @@ function selectedProductIdSet() {
 }
 
 function renderProductBulkToolbar() {
-  const validIds = new Set(membershipProductDrafts.map((product) => String(product.id)));
+  const validIds = new Set(membershipProductsForActiveOperationProfile().map((product) => String(product.id)));
   state.selectedMembershipProductIds = [...selectedProductIdSet()].filter((id) => validIds.has(id));
   const toolbar = $("#productBulkToolbar");
   if (toolbar) toolbar.hidden = operationsRole() !== "admin" || !state.selectedMembershipProductIds.length;
@@ -3468,7 +3535,7 @@ function renderProductBulkToolbar() {
 }
 
 async function runProductBulkAction() {
-  const selected = membershipProductDrafts.filter((product) => selectedProductIdSet().has(String(product.id)));
+  const selected = membershipProductsForActiveOperationProfile().filter((product) => selectedProductIdSet().has(String(product.id)));
   const action = $("#productBulkAction")?.value || "";
   if (!selected.length || !action) {
     showToast("회원권 상품과 일괄 작업을 선택해 주세요.");
@@ -15979,7 +16046,8 @@ async function syncAdminLiveData() {
     liveScheduleMessage: "실서버 회원·코치·시간표를 불러오는 중",
   });
   try {
-    const [serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
+    const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
+      client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       client.selectRows("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", limit: 500 }),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
@@ -16549,6 +16617,7 @@ async function syncAdminLiveData() {
     }
 
     Object.assign(adminLiveDataState, {
+      branches: serverBranches || [],
       lessons: mappedLessons,
       users: serverUsers || [],
       coachRoles: serverCoachRoles || [],
@@ -17960,9 +18029,21 @@ function renderOperationProfileControls() {
     .join("");
   select.value = activeOperationProfileId;
   const current = activeOperationProfile();
+  const branchSelect = $("#operationProfileBranchSelect");
+  const branchOptions = operationBranchOptions();
+  if (branchSelect) {
+    branchSelect.innerHTML = [
+      '<option value="">지점 미지정</option>',
+      ...branchOptions.map((branch) => (
+        `<option value="${escapeHtml(branch.id)}">${escapeHtml(branch.name)}${branch.status === "active" ? "" : " · 사용 중지"}</option>`
+      )),
+    ].join("");
+    branchSelect.value = current.branchId || "";
+    branchSelect.disabled = operationsRole() !== "admin" || !branchOptions.length;
+  }
   const status = $("#operationProfileStatus");
   if (status) {
-    status.textContent = `${current.name} · 운영시간·브레이크·코치 근무시간 적용 중`;
+    status.textContent = `${current.name} · ${activeOperationBranchName()} · 운영시간·브레이크·코치 근무시간 적용 중`;
   }
   const deleteButton = $("#deleteOperationProfileButton");
   if (deleteButton) deleteButton.disabled = operationProfiles.length <= 1;
@@ -18938,7 +19019,17 @@ function renderServiceReadiness() {
   const productCards = $("#productSettingCards");
   if (productCards) {
     renderProductBulkToolbar();
-    productCards.innerHTML = membershipProductDrafts
+    const visibleProducts = membershipProductsForActiveOperationProfile();
+    const branchStatus = $("#membershipProductBranchStatus");
+    if (branchStatus) {
+      branchStatus.textContent = `${activeOperationBranchName()} 상품 ${visibleProducts.length}개`;
+    }
+    const addProductButton = $("#addMembershipProductButton");
+    if (addProductButton) {
+      addProductButton.disabled = operationsRole() !== "admin" || !activeOperationBranchId();
+      addProductButton.title = activeOperationBranchId() ? `${activeOperationBranchName()}에 회원권 추가` : "운영 프로필에서 지점을 먼저 선택해 주세요.";
+    }
+    productCards.innerHTML = visibleProducts.length ? visibleProducts
       .map(
         (product) => {
           const normalized = normalizeMembershipProduct(product, membershipProductDefaults.find((item) => item.id === product.id));
@@ -19046,7 +19137,7 @@ function renderServiceReadiness() {
         </details>`;
         },
       )
-      .join("");
+      .join("") : '<p class="empty-text product-setting-empty">이 지점에 등록된 회원권 상품이 없습니다. 새 회원권을 눌러 추가해 주세요.</p>';
   }
 
   const discountCards = $("#discountPolicyCards");
@@ -20066,6 +20157,21 @@ function bindEvents() {
       await activateOperationProfile(nextProfile.id);
     });
   }
+  $("#operationProfileBranchSelect")?.addEventListener("change", async (event) => {
+    const profile = activeOperationProfile();
+    const nextBranchId = String(event.target.value || "");
+    if (nextBranchId === String(profile.branchId || "")) return;
+    const backup = operationProfileWorkspaceBackup();
+    const nextBranch = operationBranchOptions().find((branch) => branch.id === nextBranchId);
+    profile.branchId = nextBranchId;
+    profile.branchName = nextBranch?.name || "";
+    profile.updatedAt = new Date().toISOString();
+    state.selectedMembershipProductIds = [];
+    await persistOperationProfileWorkspace(
+      backup,
+      nextBranchId ? `${profile.name}을(를) ${profile.branchName}에 연결했습니다.` : `${profile.name}의 지점 연결을 해제했습니다.`,
+    );
+  });
   $("#addOperationProfileButton")?.addEventListener("click", async () => {
     const requestedName = window.prompt("새 운영 프로필 이름", "새 매장 운영");
     if (requestedName === null) return;
@@ -20620,7 +20726,7 @@ function bindEvents() {
       return;
     }
     if (event.target.closest("#selectAllProducts")) {
-      const allIds = membershipProductDrafts.map((product) => String(product.id));
+      const allIds = membershipProductsForActiveOperationProfile().map((product) => String(product.id));
       state.selectedMembershipProductIds = state.selectedMembershipProductIds.length === allIds.length ? [] : allIds;
       renderServiceReadiness();
       return;
