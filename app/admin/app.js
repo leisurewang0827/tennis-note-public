@@ -18773,6 +18773,11 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     const lessonButton = event.target.closest("[data-edit-lesson-id], [data-select-schedule-lesson]");
     const typingTarget = event.target.closest("input, textarea, select, [contenteditable='true']");
+    if (!typingTarget && state.scheduleOpenSlotMode && state.selectedScheduleOpenSlots?.length && event.key === "Enter") {
+      event.preventDefault();
+      openLessonModalFromSelectedOpenSlots();
+      return;
+    }
     if (!typingTarget && state.scheduleBulkMode && state.selectedScheduleLessonIds?.length && event.altKey && !event.ctrlKey && !event.metaKey) {
       const minuteDelta = event.key === "ArrowUp" ? -10 : event.key === "ArrowDown" ? 10 : 0;
       if (minuteDelta) {
