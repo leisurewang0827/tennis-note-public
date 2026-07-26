@@ -3861,6 +3861,7 @@ select {
   .coach-mobile-slot,
   .coach-mobile-lesson {
     box-sizing: border-box;
+    grid-column: 1;
     width: 100%;
     min-width: 0;
     min-height: 0;
@@ -3892,6 +3893,7 @@ select {
   .coach-mobile-lesson {
     z-index: 3;
     display: grid;
+    width: auto;
     grid-template-rows: repeat(4, minmax(0, 1fr));
     align-content: stretch;
     gap: 1px;
