@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.99" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.99" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.100" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.100" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -256,15 +256,15 @@
               <table>
                 <thead>
                   <tr>
-                    <th class="row-select-cell"><input id="selectVisibleMembers" type="checkbox" aria-label="현재 목록 전체 선택" /></th>
-                    <th>이름</th>
-                    <th>앱 연결</th>
-                    <th>담당 코치</th>
-                    <th>회원권</th>
-                    <th>레슨시간</th>
-                    <th>총·소진·잔여</th>
-                    <th>상태</th>
-                    <th>비고</th>
+                    <th class="row-select-cell member-select-column"><input id="selectVisibleMembers" type="checkbox" aria-label="현재 목록 전체 선택" /></th>
+                    <th class="member-name-column">이름</th>
+                    <th class="member-auth-column">앱 연결</th>
+                    <th class="member-coach-column">담당 코치</th>
+                    <th class="member-ticket-column">회원권</th>
+                    <th class="member-schedule-column">레슨시간</th>
+                    <th class="member-usage-column">총·소진·잔여</th>
+                    <th class="member-status-column">상태</th>
+                    <th class="member-note-column">비고</th>
                   </tr>
                 </thead>
                 <tbody id="memberRows"></tbody>
@@ -1497,14 +1497,14 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.99"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.100"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.99"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.99"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.99"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.99"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.100"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.100"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.100"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.100"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.99"></script>
+    <script src="./app.js?v=1.0.100"></script>
   </body>
 </html>

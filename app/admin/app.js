@@ -1213,8 +1213,20 @@ function applyOperationsRolePermissions() {
   document.body.dataset.operationsRole = role || "signed-out";
   if (role === "coach" && state.memberFilter === "inactive") state.memberFilter = "active";
   $$(".nav-item[data-view]").forEach((button) => {
+    if (!button.dataset.adminLabel) button.dataset.adminLabel = button.textContent.trim();
+    const coachLabels = {
+      members: "회원 찾기",
+      schedule: "레슨표",
+      notes: "수업 완료",
+      issues: "오류 접수",
+    };
+    button.textContent = role === "coach"
+      ? coachLabels[button.dataset.view] || button.dataset.adminLabel
+      : button.dataset.adminLabel;
     button.hidden = role === "coach" && !coachOperationsViews.has(button.dataset.view);
   });
+  const surfaceLabel = $(".admin-surface-label");
+  if (surfaceLabel) surfaceLabel.textContent = role === "coach" ? "코치 운영" : "관리자 웹 전용";
   $$('[data-admin-only-member-filter]').forEach((button) => {
     button.hidden = role === "coach";
   });
@@ -5212,11 +5224,11 @@ function setView(view, options = {}) {
   $(`#${view}View`).classList.add("is-active");
   const titles = {
     dashboard: "대시보드",
-    members: "회원관리",
-    schedule: "레슨시간표",
+    members: operationsRole() === "coach" ? "회원 찾기" : "회원관리",
+    schedule: operationsRole() === "coach" ? "레슨표" : "레슨시간표",
     billing: "결제/정산",
-    notes: "기록/차감 확인",
-    issues: "개선·오류 접수",
+    notes: operationsRole() === "coach" ? "수업 완료" : "기록/차감 확인",
+    issues: operationsRole() === "coach" ? "오류 접수" : "개선·오류 접수",
     settings: "운영 설정",
   };
   $("#viewTitle").textContent = titles[view];
@@ -7005,6 +7017,25 @@ function currentOperationsCoachRoleIds() {
   return new Set((adminLiveDataState.coachRoles || [])
     .filter((role) => role.user_id === profileId && role.status === "approved")
     .map((role) => role.id));
+}
+
+function currentOperationsCoachIds() {
+  const roleIds = currentOperationsCoachRoleIds();
+  return new Set(coaches
+    .filter((coach) => roleIds.has(coach.serverRoleId))
+    .map((coach) => coach.id));
+}
+
+function recordBelongsToCurrentCoach(record = {}) {
+  if (operationsRole() !== "coach") return true;
+  const coachIds = currentOperationsCoachIds();
+  if (record.coachId) return coachIds.has(record.coachId);
+  const memberNames = splitMemberNames(record.member || "");
+  if (!memberNames.length) return false;
+  return members.some((member) => (
+    memberNames.includes(member.name)
+    && coachIds.has(member.coachId)
+  ));
 }
 
 function memberManagementActionAllowed(action, ticket = null) {
@@ -9041,20 +9072,20 @@ function renderMembers() {
       const ticket = memberCurrentTicket(member);
       return `
         <tr class="${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}">
-          <td class="row-select-cell"><input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedMemberIdSet().has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} /></td>
-          <td>
+          <td class="row-select-cell member-select-column"><input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedMemberIdSet().has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} /></td>
+          <td class="member-name-column">
             <button class="member-link-button" type="button" data-select-member="${member.id}">
               ${avatarMarkup(member, "small")}
               <span>${escapeHtml(member.name)}</span>
             </button>
           </td>
-          <td>${memberAuthStatusMarkup(member)}</td>
-          <td>${escapeHtml(member.coach || "미배정")}</td>
-          <td><strong class="member-table-primary">${escapeHtml(memberTicketDisplayLabel(member, ticket))}</strong></td>
-          <td>${escapeHtml(memberScheduleSummary(member))}</td>
-          <td>${ticket ? ticketUsageLabel(ticket) : "-"}</td>
-          <td>${memberStatusBadge(member)}</td>
-          <td class="member-table-note">${escapeHtml(memberRemarkLabel(member))}</td>
+          <td class="member-auth-column">${memberAuthStatusMarkup(member)}</td>
+          <td class="member-coach-column">${escapeHtml(member.coach || "미배정")}</td>
+          <td class="member-ticket-column"><strong class="member-table-primary">${escapeHtml(memberTicketDisplayLabel(member, ticket))}</strong></td>
+          <td class="member-schedule-column">${escapeHtml(memberScheduleSummary(member))}</td>
+          <td class="member-usage-column">${ticket ? ticketUsageLabel(ticket) : "-"}</td>
+          <td class="member-status-column">${memberStatusBadge(member)}</td>
+          <td class="member-table-note member-note-column">${escapeHtml(memberRemarkLabel(member))}</td>
         </tr>`;
     })
     .join("") : `<tr><td colspan="9" class="empty-text">${filterCopy.empty}</td></tr>`;
@@ -9126,7 +9157,7 @@ function renderMembers() {
           <button class="icon-button" type="button" data-close-member-detail aria-label="회원 상세 닫기" title="닫기">×</button>
         </div>
       </div>
-      <section class="member-db-section">
+      <section class="member-db-section member-db-section--profile">
         <h3>기본 정보</h3>
         <dl class="member-db-grid">
           <div><dt>연락처</dt><dd>${escapeHtml(selected.phone || enrollment.phone || "미입력")}</dd></div>
@@ -9141,7 +9172,7 @@ function renderMembers() {
           <div class="wide"><dt>플레이 스타일·관리 메모</dt><dd>${escapeHtml(selected.playStyleMemo || "미입력")}</dd></div>
         </dl>
       </section>
-      <section class="member-db-section">
+      <section class="member-db-section member-db-section--lesson">
         <h3>수업·회원권</h3>
         <dl class="member-db-grid">
           <div><dt>담당 코치</dt><dd>${escapeHtml(selected.coach || "미배정")}</dd></div>
@@ -9160,7 +9191,7 @@ function renderMembers() {
         ${renderMemberGroupAccountSettings(selected, selectedTicket)}
         ${renderMemberManagementControls(selected)}
       </section>
-      <section class="member-db-section">
+      <section class="member-db-section member-db-section--billing">
         <h3>결제·비고</h3>
         <dl class="member-db-grid">
           <div><dt>결제일자</dt><dd>${escapeHtml(paymentDate)}</dd></div>
@@ -10955,8 +10986,13 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     const slotState = getAdminDurationSlotState(day, time, coach);
     const openSlotKey = scheduleOpenSlotKey({ day, time, coachId: coach.id });
     const openSlotSelected = selectedScheduleOpenSlotKeys().has(openSlotKey);
+    const addButtonContent = state.scheduleOpenSlotMode
+      ? (openSlotSelected ? "선택됨" : "선택")
+      : slotState.pasteReady
+        ? "붙여넣기"
+        : '<span class="admin-duration-add-icon" aria-hidden="true">+</span><span class="admin-duration-add-label">수업 추가</span>';
     const addButton = slotState.canAdd
-      ? `<button class="admin-duration-add ${slotState.pasteReady ? "is-paste-ready" : ""} ${openSlotSelected ? "is-slot-selected" : ""}" type="button" data-quick-lesson-entry="true" ${state.scheduleOpenSlotMode ? `data-select-schedule-slot="${escapeHtml(openSlotKey)}" aria-pressed="${openSlotSelected ? "true" : "false"}"` : ""} ${slotState.pasteReady ? 'data-paste-schedule-lesson="true"' : ""} ${lessonAddAttrs(day, time, 20, coach.id)}>${state.scheduleOpenSlotMode ? (openSlotSelected ? "선택됨" : "선택") : slotState.pasteReady ? "붙여넣기" : "+ 수업 추가"}</button>`
+      ? `<button class="admin-duration-add ${slotState.pasteReady ? "is-paste-ready" : ""} ${openSlotSelected ? "is-slot-selected" : ""}" type="button" data-quick-lesson-entry="true" ${state.scheduleOpenSlotMode ? `data-select-schedule-slot="${escapeHtml(openSlotKey)}" aria-pressed="${openSlotSelected ? "true" : "false"}"` : ""} ${slotState.pasteReady ? 'data-paste-schedule-lesson="true"' : ""} ${lessonAddAttrs(day, time, 20, coach.id)}>${addButtonContent}</button>`
       : "";
     return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
   }).join("")).join("");
@@ -12388,19 +12424,22 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
       : "요일과 시간을 선택해 주세요.";
   if ($("#lessonQuickSchedule")) $("#lessonQuickSchedule").textContent = scheduleLabel;
   if ($("#lessonQuickGuide")) {
+    const quickTicketSummary = ticket
+      ? `${getTicketDisplayProduct(ticket) || "회원권"} · ${ticketUsageLabel(ticket)} · ${lessonSourceLabel(source)}`
+      : "";
     $("#lessonQuickGuide").textContent = state.quickLessonEdit
       ? completedCorrection
         ? "완료 기록과 피드백은 유지됩니다. 잘못된 코치·요일·시간·수업시간만 바로잡으세요."
         : "코치·요일·시간을 바꾸고 적용 범위를 선택해 저장하세요."
       : requiredCount > 1
         ? `주 ${requiredCount}회 회원권은 나머지 요일과 시간을 모두 선택해야 합니다.`
-        : "회원 검색 후 회원권을 확인하고 바로 저장할 수 있습니다.";
+        : quickTicketSummary || "회원 검색 후 회원권을 확인하고 저장하세요.";
   }
   const toggle = $("#toggleLessonQuickDetails");
   if (toggle) {
     toggle.hidden = completedCorrection || (state.quickLessonEntry && requiredCount > 1);
     toggle.setAttribute("aria-expanded", String(expanded));
-    toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "수정 범위 설정" : "요일·반복 설정";
+    toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "수정 범위 설정" : "상세 설정";
   }
 }
 
@@ -14872,11 +14911,17 @@ function adminRecordGroups() {
     ...record,
     pendingType: pendingRecordType(record),
   }));
+  const roleFilteredRecords = operationsRole() === "coach"
+    ? normalizedRecords.filter((record) => (
+      record.pendingType !== "payment"
+      && recordBelongsToCurrentCoach(record)
+    ))
+    : normalizedRecords;
   return {
-    pending: sortAdminRecords(normalizedRecords.filter((record) => record.group === "pending")),
-    feedback: sortAdminRecords(normalizedRecords.filter((record) => record.group === "feedback")),
-    done: sortAdminRecords(normalizedRecords.filter((record) => record.group === "done")),
-    issue: sortAdminRecords(normalizedRecords.filter((record) => record.group === "issue")),
+    pending: sortAdminRecords(roleFilteredRecords.filter((record) => record.group === "pending")),
+    feedback: sortAdminRecords(roleFilteredRecords.filter((record) => record.group === "feedback")),
+    done: sortAdminRecords(roleFilteredRecords.filter((record) => record.group === "done")),
+    issue: sortAdminRecords(roleFilteredRecords.filter((record) => record.group === "issue")),
   };
 }
 

@@ -2322,16 +2322,18 @@ tr.is-selected td {
 
 .reservation-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(140px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .reservation-strip article {
   display: grid;
-  gap: 6px;
-  min-height: 92px;
-  padding: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: center;
+  min-height: 58px;
+  padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: white;
@@ -2346,7 +2348,11 @@ tr.is-selected td {
 
 .reservation-strip strong {
   color: var(--green);
-  font-size: 24px;
+  font-size: 20px;
+}
+
+.reservation-strip small {
+  grid-column: 1 / -1;
 }
 
 .sheet-caption {
@@ -7162,7 +7168,10 @@ button .schedule-member-lines > span {
 }
 
 #lessonModal.is-quick-entry:not(.is-quick-expanded) .lesson-detail-field,
-#lessonModal.is-quick-entry:not(.is-quick-expanded) #lessonAdminOverridePanel {
+#lessonModal.is-quick-entry:not(.is-quick-expanded) #lessonAdminOverridePanel,
+#lessonModal.is-quick-entry:not(.is-quick-expanded) .lesson-source-field,
+#lessonModal.is-quick-entry:not(.is-quick-expanded) #lessonDurationQuickPanel,
+#lessonModal.is-quick-entry:not(.is-quick-expanded) #deleteLessonButton {
   display: none !important;
 }
 
@@ -9439,6 +9448,16 @@ button .schedule-member-lines > span {
   word-break: keep-all;
 }
 
+.admin-duration-add-icon {
+  display: block;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.admin-duration-add-label {
+  display: none;
+}
+
 .admin-duration-add:hover {
   border-color: #9bd8c2;
   background: var(--soft-green);
@@ -9745,6 +9764,18 @@ button .schedule-member-lines > span {
   display: grid;
   gap: 6px;
   margin-top: 8px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-duration-add:hover .admin-duration-add-icon,
+  .admin-duration-add:focus-visible .admin-duration-add-icon {
+    display: none;
+  }
+
+  .admin-duration-add:hover .admin-duration-add-label,
+  .admin-duration-add:focus-visible .admin-duration-add-label {
+    display: inline;
+  }
 }
 
 .schedule-sheet-paste-filters {
@@ -10846,6 +10877,39 @@ body {
   box-shadow: 0 18px 48px rgba(17, 48, 39, 0.24);
 }
 
+#membersView .detail-panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+
+#membersView .member-db-header {
+  order: 0;
+}
+
+#membersView .member-db-section--lesson {
+  order: 1;
+}
+
+#membersView .member-db-section--profile {
+  order: 2;
+}
+
+#membersView .member-db-section--billing {
+  order: 3;
+}
+
+#membersView .member-approval-card,
+#membersView .member-admin-more {
+  order: 4;
+}
+
+body[data-operations-role="coach"] #membersView .member-select-column,
+body[data-operations-role="coach"] #membersView .member-auth-column,
+body[data-operations-role="coach"] #membersView .member-note-column,
+body[data-operations-role="coach"] #membersView .member-db-section--billing {
+  display: none;
+}
+
 #membersView .detail-panel[hidden] {
   display: none;
 }
@@ -11051,7 +11115,8 @@ body {
 
   #scheduleView .reservation-strip article {
     min-width: 0;
-    padding: 9px 8px;
+    min-height: 48px;
+    padding: 7px 8px;
   }
 
   #scheduleView .reservation-strip span,
@@ -11062,10 +11127,39 @@ body {
   }
 
   #scheduleView .reservation-strip strong {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   #scheduleView .reservation-strip small {
+    display: none;
+  }
+
+  .lesson-duration-quick-panel {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .lesson-duration-quick-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .lesson-duration-quick-summary {
+    text-align: left;
+    white-space: normal;
+  }
+
+  .duration-chip {
+    min-width: 0;
+    padding: 0 5px;
+  }
+
+  #membersView .table-panel table {
+    min-width: 740px;
+  }
+
+  #membersView .member-auth-column,
+  #membersView .member-note-column {
     display: none;
   }
 
