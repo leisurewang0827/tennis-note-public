@@ -3763,6 +3763,9 @@ select {
     display: grid;
     gap: 6px;
     min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .coach-mobile-segment-title {
@@ -3786,10 +3789,12 @@ select {
 
   .coach-mobile-lane-board {
     display: grid;
-    grid-template-columns: 52px repeat(var(--coach-count, 2), minmax(0, 1fr));
+    grid-template-columns: 52px repeat(var(--coach-count, 2), minmax(88px, 1fr));
     grid-template-rows: 42px auto;
-    gap: 3px;
-    min-width: 0;
+    column-gap: 3px;
+    row-gap: 3px;
+    width: 100%;
+    min-width: calc(64px + var(--coach-count, 2) * 88px);
     border: 1px solid var(--line);
     border-radius: 8px;
     padding: 5px;
@@ -3822,7 +3827,7 @@ select {
   .coach-mobile-coach-lane {
     display: grid;
     grid-template-rows: repeat(var(--slot-count, 30), 38px);
-    gap: 3px;
+    gap: 0;
     min-width: 0;
   }
 
@@ -3831,15 +3836,26 @@ select {
     place-items: center;
     min-width: 0;
     border: 1px solid #d9e2ea;
-    border-radius: 5px;
+    border-bottom-width: 0;
+    border-radius: 0;
     color: var(--green);
     background: var(--soft-green);
     font-size: 10px;
     font-weight: 900;
   }
 
+  .coach-mobile-time-rail span:first-child {
+    border-radius: 5px 5px 0 0;
+  }
+
+  .coach-mobile-time-rail span:last-child {
+    border-bottom-width: 1px;
+    border-radius: 0 0 5px 5px;
+  }
+
   .coach-mobile-coach-lane {
     position: relative;
+    isolation: isolate;
   }
 
   .coach-mobile-slot,
@@ -3853,13 +3869,24 @@ select {
 
   .coach-mobile-slot {
     z-index: 1;
-    border: 1px solid transparent;
-    background: transparent;
+    border: 1px solid #d9e2ea;
+    border-bottom-width: 0;
+    border-radius: 0;
+    background: #fbfcfe;
+  }
+
+  .coach-mobile-slot:first-child {
+    border-radius: 5px 5px 0 0;
+  }
+
+  .coach-mobile-slot:nth-last-of-type(1) {
+    border-bottom-width: 1px;
+    border-radius: 0 0 5px 5px;
   }
 
   .coach-mobile-slot.off {
-    border-color: transparent;
-    background: transparent;
+    border-color: #e4e7ec;
+    background: #f8fafc;
   }
 
   .coach-mobile-lesson {
@@ -3870,6 +3897,7 @@ select {
     gap: 1px;
     overflow: hidden;
     border: 1px solid rgba(43, 108, 176, 0.24);
+    margin: 1px;
     padding: 4px 5px 4px 8px;
     background: var(--soft-blue);
     box-shadow: inset 3px 0 0 var(--blue);
