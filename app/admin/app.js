@@ -13389,10 +13389,11 @@ function renderBilling() {
   state.billingFilter = ["action", "verifying", "done", "refund"].includes(state.billingFilter) ? state.billingFilter : "action";
   const pendingRequests = billings.filter((item) => item.status === "draft");
   const pendingChecks = billings.filter((item) => item.status === "check" || item.status === "unverified");
+  const staleReadyPayments = billings.filter(isStaleReadyPayment);
   const rechargeTargets = tickets.filter((ticket) => ticket.remaining <= 1);
 
   $("#billingRequestCount").textContent = `${pendingRequests.length}건`;
-  $("#billingCheckCount").textContent = `${pendingChecks.length}건`;
+  $("#billingCheckCount").textContent = `${pendingChecks.length + staleReadyPayments.length}\uAC74`;
   $("#ticketRechargeCount").textContent = `${rechargeTargets.length}명`;
   renderPaymentAdminGateStatus();
   renderPaymentChargeAudit();
