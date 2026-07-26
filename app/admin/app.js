@@ -10933,9 +10933,26 @@ function renderLessonDurationQuickButtons() {
   const target = $("#lessonDurationQuickButtons");
   const select = $("#lessonDuration");
   if (!panel || !target || !select) return;
+  const summary = $("#lessonDurationQuickSummary");
+  const ticket = scheduleTicketById($("#lessonTicket")?.value);
+  const ticketDuration = getTicketDurationMinutes(ticket);
   const allowed = new Set([...select.options].map((option) => option.value));
   const current = String(select.value || "20");
+  const currentMinutes = Number(current) || 20;
+  const startTime = $("#lessonTime")?.value || "";
+  const endTime = startTime ? minutesToTime(timeToMinutes(startTime) + currentMinutes) : "";
+  const unitLabel = currentMinutes === ticketDuration
+    ? "회원권 기준 1회"
+    : currentMinutes === ticketDuration * 2
+      ? "회원권 2회 연속"
+      : adminManualOverrideEnabled()
+        ? "관리자 수동 시간"
+        : "회원권 기준과 다름";
   panel.hidden = false;
+  if (summary) {
+    summary.textContent = `${currentMinutes}분${endTime ? ` · ${startTime}~${endTime}` : ""} · ${unitLabel}`;
+    summary.classList.toggle("has-warning", unitLabel.includes("다름") || unitLabel.includes("수동"));
+  }
   target.innerHTML = [20, 30, 40, 60].map((minutes) => {
     const value = String(minutes);
     const disabled = !allowed.has(value);

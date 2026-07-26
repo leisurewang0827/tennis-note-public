@@ -7074,9 +7074,9 @@ button .schedule-member-lines > span {
 
 .lesson-duration-quick-panel {
   grid-column: 1 / -1;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(160px, auto);
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid #d7e7df;
@@ -7098,7 +7098,22 @@ button .schedule-member-lines > span {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  justify-content: flex-end;
+  justify-content: flex-start;
+}
+
+.lesson-duration-quick-summary {
+  min-width: 0;
+  overflow: hidden;
+  color: #426357;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-duration-quick-summary.has-warning {
+  color: #b45309;
 }
 
 .duration-chip {
