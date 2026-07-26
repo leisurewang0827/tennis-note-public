@@ -1484,6 +1484,8 @@ const storageKey = "tennis-note-admin-demo-v1";
 const sharedStorageKey = "tennis-note-shared-demo-v1";
 const paymentConfigKey = "tennis-note-payment-config";
 const liveSchedulePolicyKey = "app_schedule_policy";
+const operationProfiles = [];
+let activeOperationProfileId = "";
 const adminSecuritySettingsKey = "admin_security_v1";
 const holdingPolicyKey = "holding_policy";
 const notificationPolicyKey = "notification_policy_v1";
@@ -2214,6 +2216,14 @@ function restoreSnapshot() {
       scheduleSettings.memberScheduleRequestOnly = snapshot.scheduleSettings.memberScheduleRequestOnly !== false;
       scheduleSettings.adminTuningMode = snapshot.scheduleSettings.adminTuningMode === true;
     }
+    replaceArray(
+      operationProfiles,
+      Array.isArray(snapshot.operationProfiles)
+        ? snapshot.operationProfiles.map((profile, index) => normalizeOperationProfile(profile, index))
+        : [],
+    );
+    activeOperationProfileId = snapshot.activeOperationProfileId || "";
+    ensureOperationProfiles();
     Object.assign(adminLockSettings, normalizeAdminLockSettings(snapshot.adminLockSettings));
     const storedPolicyVersion = Number(snapshot.scheduleSettings?.coachWorkPolicyVersion) || 0;
     if (storedPolicyVersion < 2) applySchedulePreset("clubhouse-current");
@@ -2252,6 +2262,8 @@ function saveSnapshot() {
     deletedMembershipProductIds,
     membershipProducts: membershipProductsForMemberApp(),
     scheduleSettings,
+    operationProfiles,
+    activeOperationProfileId,
     adminLockSettings: serializableAdminLockSettings(),
   };
   try {
@@ -2266,10 +2278,170 @@ function saveSnapshot() {
   }
 }
 
-function liveSchedulePolicyPayload() {
+function cloneOperationProfileValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function currentOperationScheduleSettings() {
   return {
-    version: 2,
+    openStart: scheduleSettings.openStart,
+    openEnd: scheduleSettings.openEnd,
+    breakRules: cloneOperationProfileValue(Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : []),
+    breakFavorites: cloneOperationProfileValue(Array.isArray(scheduleSettings.breakFavorites) ? scheduleSettings.breakFavorites : []),
+    lessonColors: { ...(scheduleSettings.lessonColors || {}) },
+    lessonColorRules: cloneOperationProfileValue(Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : []),
+    coachWorkPolicyVersion: scheduleSettings.coachWorkPolicyVersion || 2,
+    memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
+    adminTuningMode: scheduleSettings.adminTuningMode === true,
+  };
+}
+
+function currentOperationCoachPolicies() {
+  return coaches.map((coach) => ({
+    id: coach.id,
+    serverRoleId: coach.serverRoleId || "",
+    name: coach.name,
+    color: coach.color || "",
+    availableDays: cloneOperationProfileValue(Array.isArray(coach.availableDays) ? coach.availableDays : []),
+    availableStart: coach.availableStart || "",
+    availableEnd: coach.availableEnd || "",
+    workBlocks: cloneOperationProfileValue((coach.status || "active") === "active" ? normalizeCoachWorkBlocks(coach) : []),
+    breakBlocks: cloneOperationProfileValue((coach.status || "active") === "active" ? normalizeCoachBreakBlocks(coach) : []),
+  }));
+}
+
+function normalizeOperationProfile(profile = {}, index = 0) {
+  const fallbackId = `operation-profile-${index + 1}`;
+  return {
+    id: String(profile.id || fallbackId),
+    name: String(profile.name || `운영 프로필 ${index + 1}`).trim() || `운영 프로필 ${index + 1}`,
+    scheduleSettings: {
+      ...currentOperationScheduleSettings(),
+      ...(profile.scheduleSettings || {}),
+      breakRules: cloneOperationProfileValue(Array.isArray(profile.scheduleSettings?.breakRules) ? profile.scheduleSettings.breakRules : []),
+      breakFavorites: cloneOperationProfileValue(Array.isArray(profile.scheduleSettings?.breakFavorites) ? profile.scheduleSettings.breakFavorites : []),
+      lessonColors: {
+        ...scheduleSettings.lessonColors,
+        ...(profile.scheduleSettings?.lessonColors || {}),
+      },
+      lessonColorRules: cloneOperationProfileValue(Array.isArray(profile.scheduleSettings?.lessonColorRules) ? profile.scheduleSettings.lessonColorRules : []),
+      adminTuningMode: profile.scheduleSettings?.adminTuningMode === true,
+      memberScheduleRequestOnly: profile.scheduleSettings?.memberScheduleRequestOnly !== false,
+    },
+    coaches: cloneOperationProfileValue(Array.isArray(profile.coaches) ? profile.coaches : []),
+    updatedAt: profile.updatedAt || new Date().toISOString(),
+  };
+}
+
+function createOperationProfile(name = "기본 운영", source = null) {
+  const base = source || {
+    scheduleSettings: currentOperationScheduleSettings(),
+    coaches: currentOperationCoachPolicies(),
+  };
+  return normalizeOperationProfile({
+    id: `operation-profile-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name,
+    scheduleSettings: cloneOperationProfileValue(base.scheduleSettings),
+    coaches: cloneOperationProfileValue(base.coaches),
     updatedAt: new Date().toISOString(),
+  }, operationProfiles.length);
+}
+
+function ensureOperationProfiles() {
+  if (!operationProfiles.length) {
+    operationProfiles.push(createOperationProfile("기본 운영"));
+  }
+  if (!operationProfiles.some((profile) => profile.id === activeOperationProfileId)) {
+    activeOperationProfileId = operationProfiles[0].id;
+  }
+}
+
+function activeOperationProfile() {
+  ensureOperationProfiles();
+  return operationProfiles.find((profile) => profile.id === activeOperationProfileId) || operationProfiles[0];
+}
+
+function updateActiveOperationProfileFromCurrent() {
+  const profile = activeOperationProfile();
+  profile.scheduleSettings = currentOperationScheduleSettings();
+  profile.coaches = currentOperationCoachPolicies();
+  profile.updatedAt = new Date().toISOString();
+  return profile;
+}
+
+function applyOperationProfile(profile) {
+  const normalized = normalizeOperationProfile(profile);
+  scheduleSettings.openStart = normalized.scheduleSettings.openStart || scheduleSettings.openStart;
+  scheduleSettings.openEnd = normalized.scheduleSettings.openEnd || scheduleSettings.openEnd;
+  replaceArray(scheduleSettings.breakRules, normalized.scheduleSettings.breakRules);
+  replaceArray(scheduleSettings.breakFavorites, normalized.scheduleSettings.breakFavorites);
+  scheduleSettings.lessonColors = { ...scheduleSettings.lessonColors, ...normalized.scheduleSettings.lessonColors };
+  scheduleSettings.lessonColorRules = cloneOperationProfileValue(normalized.scheduleSettings.lessonColorRules);
+  scheduleSettings.coachWorkPolicyVersion = Number(normalized.scheduleSettings.coachWorkPolicyVersion) || 2;
+  scheduleSettings.memberScheduleRequestOnly = normalized.scheduleSettings.memberScheduleRequestOnly !== false;
+  scheduleSettings.adminTuningMode = normalized.scheduleSettings.adminTuningMode === true;
+  coaches.forEach((coach) => {
+    const policy = normalized.coaches.find((item) => (
+      (item.serverRoleId && item.serverRoleId === coach.serverRoleId)
+      || item.id === coach.id
+      || item.name === coach.name
+    ));
+    if (!policy) return;
+    coach.color = policy.color || coach.color;
+    coach.availableDays = cloneOperationProfileValue(Array.isArray(policy.availableDays) ? policy.availableDays : []);
+    coach.availableStart = policy.availableStart || "";
+    coach.availableEnd = policy.availableEnd || "";
+    coach.workBlocks = cloneOperationProfileValue(Array.isArray(policy.workBlocks) ? policy.workBlocks : []);
+    coach.breakBlocks = cloneOperationProfileValue(Array.isArray(policy.breakBlocks) ? policy.breakBlocks : []);
+  });
+}
+
+function operationProfileWorkspaceBackup() {
+  ensureOperationProfiles();
+  updateActiveOperationProfileFromCurrent();
+  return {
+    profiles: cloneOperationProfileValue(operationProfiles),
+    activeId: activeOperationProfileId,
+    scheduleSettings: currentOperationScheduleSettings(),
+    coaches: currentOperationCoachPolicies(),
+  };
+}
+
+function restoreOperationProfileWorkspace(backup) {
+  replaceArray(operationProfiles, backup.profiles);
+  activeOperationProfileId = backup.activeId;
+  applyOperationProfile({
+    id: backup.activeId,
+    name: "복원",
+    scheduleSettings: backup.scheduleSettings,
+    coaches: backup.coaches,
+  });
+}
+
+async function persistOperationProfileWorkspace(backup, successMessage) {
+  saveSnapshot();
+  const synced = await syncLiveSchedulePolicyToServer();
+  if (synced !== "server") {
+    restoreOperationProfileWorkspace(backup);
+    saveSnapshot();
+    renderAll();
+    showToast("서버 저장에 실패해 이전 운영 프로필로 되돌렸습니다.");
+    return false;
+  }
+  saveSnapshot();
+  renderAll();
+  showToast(successMessage);
+  return true;
+}
+
+function liveSchedulePolicyPayload() {
+  ensureOperationProfiles();
+  updateActiveOperationProfileFromCurrent();
+  return {
+    version: 3,
+    updatedAt: new Date().toISOString(),
+    activeOperationProfileId,
+    operationProfiles: cloneOperationProfileValue(operationProfiles),
     scheduleSettings: {
       openStart: scheduleSettings.openStart,
       openEnd: scheduleSettings.openEnd,
@@ -3390,10 +3562,21 @@ async function loadLiveSchedulePolicyFromServer() {
       if (serverCoach.availableEnd) coach.availableEnd = serverCoach.availableEnd;
       if (serverCoach.color) coach.color = serverCoach.color;
     });
+    replaceArray(
+      operationProfiles,
+      Array.isArray(value.operationProfiles)
+        ? value.operationProfiles.map((profile, index) => normalizeOperationProfile(profile, index))
+        : [],
+    );
+    activeOperationProfileId = value.activeOperationProfileId || "";
+    ensureOperationProfiles();
+    updateActiveOperationProfileFromCurrent();
     localStorage.setItem(storageKey, JSON.stringify({
       ...(JSON.parse(localStorage.getItem(storageKey) || "{}")),
       coaches,
       scheduleSettings,
+      operationProfiles,
+      activeOperationProfileId,
     }));
     return true;
   } catch {
@@ -17755,6 +17938,45 @@ function renderCustomLessonColorRules() {
     </label>`).join("");
 }
 
+function uniqueOperationProfileName(candidate, excludedId = "") {
+  const base = String(candidate || "").trim() || "새 운영 프로필";
+  const existing = new Set(
+    operationProfiles
+      .filter((profile) => profile.id !== excludedId)
+      .map((profile) => profile.name),
+  );
+  if (!existing.has(base)) return base;
+  let suffix = 2;
+  while (existing.has(`${base} ${suffix}`)) suffix += 1;
+  return `${base} ${suffix}`;
+}
+
+function renderOperationProfileControls() {
+  const select = $("#operationProfileSelect");
+  if (!select) return;
+  ensureOperationProfiles();
+  select.innerHTML = operationProfiles
+    .map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.name)}</option>`)
+    .join("");
+  select.value = activeOperationProfileId;
+  const current = activeOperationProfile();
+  const status = $("#operationProfileStatus");
+  if (status) {
+    status.textContent = `${current.name} · 운영시간·브레이크·코치 근무시간 적용 중`;
+  }
+  const deleteButton = $("#deleteOperationProfileButton");
+  if (deleteButton) deleteButton.disabled = operationProfiles.length <= 1;
+}
+
+async function activateOperationProfile(profileId) {
+  const target = operationProfiles.find((profile) => profile.id === profileId);
+  if (!target || target.id === activeOperationProfileId) return true;
+  const backup = operationProfileWorkspaceBackup();
+  activeOperationProfileId = target.id;
+  applyOperationProfile(target);
+  return persistOperationProfileWorkspace(backup, `${target.name} 프로필을 적용했습니다.`);
+}
+
 function renderScheduleSettings() {
   const openStartInput = $("#openStartInput");
   const openEndInput = $("#openEndInput");
@@ -17765,6 +17987,7 @@ function renderScheduleSettings() {
   if (requestOnlyInput) requestOnlyInput.checked = scheduleSettings.memberScheduleRequestOnly !== false;
   const tuningModeInput = $("#adminScheduleTuningMode");
   if (tuningModeInput) tuningModeInput.checked = scheduleSettings.adminTuningMode === true;
+  renderOperationProfileControls();
   ["regular", "regular30", "makeup", "coupon", "noShow"].forEach((kind) => {
     const input = $(`[data-lesson-color="${kind}"]`);
     if (input) input.value = scheduleSettings.lessonColors[kind];
@@ -19830,6 +20053,64 @@ function bindEvents() {
       showToast(scheduleSettings.adminTuningMode ? "관리자 튜닝 모드 사용" : "관리자 튜닝 모드 해제");
     });
   }
+  const operationProfileSelect = $("#operationProfileSelect");
+  if (operationProfileSelect) {
+    operationProfileSelect.addEventListener("change", async () => {
+      const nextProfile = operationProfiles.find((profile) => profile.id === operationProfileSelect.value);
+      if (!nextProfile || nextProfile.id === activeOperationProfileId) return;
+      const approved = window.confirm(`${nextProfile.name} 운영시간과 코치 근무시간을 적용할까요?`);
+      if (!approved) {
+        operationProfileSelect.value = activeOperationProfileId;
+        return;
+      }
+      await activateOperationProfile(nextProfile.id);
+    });
+  }
+  $("#addOperationProfileButton")?.addEventListener("click", async () => {
+    const requestedName = window.prompt("새 운영 프로필 이름", "새 매장 운영");
+    if (requestedName === null) return;
+    const backup = operationProfileWorkspaceBackup();
+    const profile = createOperationProfile(uniqueOperationProfileName(requestedName), activeOperationProfile());
+    operationProfiles.push(profile);
+    activeOperationProfileId = profile.id;
+    applyOperationProfile(profile);
+    await persistOperationProfileWorkspace(backup, `${profile.name} 프로필을 만들었습니다.`);
+  });
+  $("#duplicateOperationProfileButton")?.addEventListener("click", async () => {
+    const source = activeOperationProfile();
+    const requestedName = window.prompt("복제할 운영 프로필 이름", `${source.name} 복사본`);
+    if (requestedName === null) return;
+    const backup = operationProfileWorkspaceBackup();
+    const profile = createOperationProfile(uniqueOperationProfileName(requestedName), source);
+    operationProfiles.push(profile);
+    activeOperationProfileId = profile.id;
+    applyOperationProfile(profile);
+    await persistOperationProfileWorkspace(backup, `${profile.name} 프로필을 복제했습니다.`);
+  });
+  $("#renameOperationProfileButton")?.addEventListener("click", async () => {
+    const profile = activeOperationProfile();
+    const requestedName = window.prompt("운영 프로필 이름 변경", profile.name);
+    if (requestedName === null || !String(requestedName).trim()) return;
+    const backup = operationProfileWorkspaceBackup();
+    profile.name = uniqueOperationProfileName(requestedName, profile.id);
+    profile.updatedAt = new Date().toISOString();
+    await persistOperationProfileWorkspace(backup, `${profile.name}(으)로 이름을 변경했습니다.`);
+  });
+  $("#deleteOperationProfileButton")?.addEventListener("click", async () => {
+    ensureOperationProfiles();
+    if (operationProfiles.length <= 1) {
+      showToast("운영 프로필은 하나 이상 필요합니다.");
+      return;
+    }
+    const profile = activeOperationProfile();
+    if (!window.confirm(`${profile.name} 프로필을 삭제할까요? 수업과 회원 데이터는 삭제되지 않습니다.`)) return;
+    const backup = operationProfileWorkspaceBackup();
+    const index = operationProfiles.findIndex((item) => item.id === profile.id);
+    operationProfiles.splice(index, 1);
+    activeOperationProfileId = operationProfiles[Math.max(0, index - 1)]?.id || operationProfiles[0].id;
+    applyOperationProfile(activeOperationProfile());
+    await persistOperationProfileWorkspace(backup, `${profile.name} 프로필을 삭제했습니다.`);
+  });
   $$('[data-lesson-color]').forEach((input) => {
     input.addEventListener("change", async () => {
       scheduleSettings.lessonColors[input.dataset.lessonColor] = input.value;

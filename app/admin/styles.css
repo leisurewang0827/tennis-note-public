@@ -4896,6 +4896,33 @@ tr.is-selected td {
   line-height: 1.6;
 }
 
+.operation-profile-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.operation-profile-select {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.operation-profile-select select {
+  width: min(100%, 280px);
+  min-width: 0;
+  font-weight: 800;
+}
+
+.operation-profile-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#operationProfileStatus {
+  margin: -6px 0 0;
+}
+
 .readiness-grid,
 .supabase-live-grid,
 .product-setting-list,
@@ -7173,6 +7200,25 @@ button .schedule-member-lines > span {
 #lessonModal.is-quick-entry:not(.is-quick-expanded) #lessonDurationQuickPanel,
 #lessonModal.is-quick-entry:not(.is-quick-expanded) #deleteLessonButton {
   display: none !important;
+}
+
+@media (max-width: 700px) {
+  .operation-profile-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .operation-profile-select select {
+    width: 100%;
+  }
+
+  .operation-profile-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .operation-profile-actions button {
+    min-width: 0;
+  }
 }
 
 #lessonModal.is-quick-entry .lesson-form {
