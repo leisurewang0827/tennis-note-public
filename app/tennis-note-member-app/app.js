@@ -1509,7 +1509,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.93";
+    const refreshKey = "tennis-note-sw-refresh-1.0.94";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1517,7 +1517,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.93", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.94", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -6240,8 +6240,6 @@ function renderJournalCalendar() {
     map.get(entry.dateValue).push(entry);
     return map;
   }, new Map());
-  const calendarDisclosure = $("#journalCalendarDisclosure");
-  if (calendarDisclosure && !calendarDisclosure.dataset.userToggled) calendarDisclosure.open = entriesByDate.size > 0;
   const weekdays = ["월", "화", "수", "목", "금", "토", "일"].map((day) => `<b>${day}</b>`).join("");
   const emptyMarkup = Array.from({ length: firstWeekday }, () => `<span class="calendar-empty"></span>`).join("");
   const daysMarkup = Array.from({ length: dayCount }, (_, index) => {
@@ -6262,6 +6260,8 @@ function renderJournalCalendar() {
   target.innerHTML = `<div class="calendar-weekdays">${weekdays}</div><div class="calendar-days">${emptyMarkup}${daysMarkup}</div>`;
   const monthLabel = $("#journalMonthLabel");
   if (monthLabel) monthLabel.textContent = `${year}년 ${monthIndex + 1}월`;
+  const controlLabel = $("#journalCalendarControlLabel");
+  if (controlLabel) controlLabel.textContent = `${year}년 ${monthIndex + 1}월`;
   const jumpInput = $("#journalJumpDate");
   if (jumpInput && jumpInput.value !== selectedDate) jumpInput.value = selectedDate;
   const searchInput = $("#journalSearch");
@@ -6402,6 +6402,7 @@ function selectedJournalEntries() {
 }
 
 function renderSelectedJournalCard(entry) {
+  const statusText = entry.note && entry.note !== "개인 기록" ? entry.note : entry.kind === "레슨" ? "수업 기록" : "개인 기록";
   return `
     <article class="journal-selected-card ${entry.kind === "레슨" ? "lesson" : "practice"}">
       <div class="journal-selected-card-head">
@@ -6409,13 +6410,10 @@ function renderSelectedJournalCard(entry) {
         <strong>${entry.title}</strong>
         <small>${entry.subtitle || entry.dateLabel}</small>
       </div>
-      <p>${entry.body}</p>
-      <div class="journal-selected-meta">
-        <span>${entry.note}</span>
-        ${entry.next ? `<b>${entry.next}</b>` : ""}
-        ${entry.mediaNames?.length ? `<small>첨부 ${entry.mediaNames.length}개</small>` : ""}
+      <div class="journal-selected-card-action">
+        <span>${statusText}${entry.mediaNames?.length ? ` · 첨부 ${entry.mediaNames.length}개` : ""}</span>
+        <button class="small-button" type="button" data-open-journal-detail="${entry.id}">내용 보기</button>
       </div>
-      <button class="small-button" type="button" data-open-journal-detail="${entry.id}">자세히 보기</button>
     </article>`;
 }
 
@@ -6438,7 +6436,6 @@ function renderSelectedJournalDayPanel() {
       ${entries.length ? entries.map(renderSelectedJournalCard).join("") : memberEmptyState({
         title: "이 날짜의 운동 기록이 없습니다",
         reason: "레슨 또는 개인운동 내용을 사진·영상과 함께 남길 수 있습니다.",
-        action: { label: "이 날짜에 기록", openJournal: selectedDate },
         compact: true,
       })}
     </div>`;
@@ -6733,7 +6730,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.93" });
+  const params = new URLSearchParams({ v: "1.0.94" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7957,7 +7954,7 @@ function bindEvents() {
   $("#requestMakeup").addEventListener("click", requestMakeup);
   $("#saveJournal").addEventListener("click", saveJournal);
   $("#journalMode").addEventListener("change", renderJournalMode);
-  $("#openJournalComposer")?.addEventListener("click", () => openJournalComposer());
+  $("#openJournalComposer")?.addEventListener("click", () => openJournalComposer(localDateKey()));
   $("#lessonDetailSheet")?.addEventListener("click", (event) => {
     if (event.target.closest("[data-close-lesson-detail]")) {
       closeAppSheet("lessonDetailSheet");

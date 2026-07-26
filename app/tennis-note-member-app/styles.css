@@ -2018,15 +2018,21 @@ button {
 }
 
 .journal-calendar-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
   gap: 8px;
   align-items: center;
-  justify-content: flex-end;
 }
 
 .journal-calendar-controls strong {
-  min-width: 94px;
   text-align: center;
+}
+
+.journal-month-arrow {
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+  font-size: 18px;
 }
 
 .journal-calendar-tools {
@@ -2186,6 +2192,23 @@ button {
 
 .journal-selected-card p {
   margin: 0;
+}
+
+.journal-selected-card-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.journal-selected-card-action > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 label {
@@ -5851,9 +5874,24 @@ body.modal-open {
   content: "−";
 }
 
+.journal-calendar-disclosure:not([open]) > .journal-calendar-body {
+  display: none;
+}
+
 .journal-calendar-disclosure > summary span {
   margin-left: auto;
   color: var(--green);
+}
+
+.journal-title-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.journal-write-primary {
+  min-height: 40px;
+  padding: 0 14px;
 }
 
 .journal-calendar-body,
@@ -5909,6 +5947,16 @@ body.modal-open {
 }
 
 @media (max-width: 560px) {
+  .journal-title-actions {
+    gap: 6px;
+  }
+
+  .journal-title-actions .small-button,
+  .journal-write-primary {
+    min-height: 38px;
+    padding-inline: 10px;
+  }
+
   .journal-calendar-disclosure > summary,
   .membership-help-disclosure > summary {
     min-height: 44px;
@@ -5916,6 +5964,10 @@ body.modal-open {
 
   .journal-selected-panel {
     padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .journal-selected-card-action {
+    grid-template-columns: 1fr auto;
   }
 }
 /* Compact member UX: keep the primary curriculum action visible without a long link row. */
