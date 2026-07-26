@@ -75,6 +75,8 @@ const state = {
   scheduleBulkDrag: null,
   scheduleBulkSuppressClick: false,
   scheduleLessonClipboard: null,
+  scheduleSheetPasteOpen: false,
+  scheduleSheetPasteRows: [],
   communityChannel: "홈",
   accountDeletionRequests: [],
   liveScheduleLoaded: false,
@@ -9659,6 +9661,124 @@ function clearScheduleLessonClipboard() {
   state.scheduleLessonClipboard = null;
   renderSchedule();
   showToast("수업 복사를 종료했습니다.");
+}
+
+function normalizeScheduleSheetCell(value) {
+  return String(value || "").trim();
+}
+
+function scheduleSheetCoachOptions() {
+  const roleCoaches = (adminLiveDataState.coachRoles || [])
+    .filter((role) => role?.id)
+    .map((role) => ({
+      id: role.id,
+      name: role.display_name || role.name || role.coach_name || "",
+    }));
+  return [...coaches, ...roleCoaches]
+    .filter((coach) => coach?.id)
+    .map((coach) => ({
+      id: String(coach.id),
+      name: normalizeScheduleSheetCell(coach.name || coach.display_name),
+    }));
+}
+
+function findScheduleSheetCoach(value) {
+  const token = normalizeScheduleSheetCell(value).replace(/\s+/g, "");
+  if (!token) return null;
+  return scheduleSheetCoachOptions().find((coach) => {
+    const name = normalizeScheduleSheetCell(coach.name).replace(/\s+/g, "");
+    return name === token || name.replace(/코치$/u, "") === token.replace(/코치$/u, "");
+  }) || null;
+}
+
+function normalizeScheduleSheetDay(value) {
+  const token = normalizeScheduleSheetCell(value).replace(/요일$/u, "");
+  return scheduleDays.includes(token) ? token : "";
+}
+
+function parseScheduleSheetPaste(text) {
+  const rawLines = String(text || "")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!rawLines.length) return [];
+  const firstCells = rawLines[0].split(rawLines[0].includes("\t") ? "\t" : ",").map(normalizeScheduleSheetCell);
+  const hasHeader = firstCells.some((cell) => ["요일", "시간", "코치", "회원"].includes(cell));
+  const lines = hasHeader ? rawLines.slice(1) : rawLines;
+  return lines.map((line, index) => {
+    const cells = line.split(line.includes("\t") ? "\t" : ",").map(normalizeScheduleSheetCell);
+    const [dayCell, timeCell, coachCell, memberCell, sourceCell, minutesCell] = cells;
+    const day = normalizeScheduleSheetDay(dayCell);
+    const coach = findScheduleSheetCoach(coachCell);
+    const durationMinutes = Number(minutesCell || 20);
+    const issues = [];
+    if (!day) issues.push("요일 확인");
+    if (!/^\d{1,2}:\d{2}$/u.test(timeCell || "")) issues.push("시간 확인");
+    if (!coach) issues.push("코치 확인");
+    if (!memberCell) issues.push("회원 확인");
+    if (![20, 30, 40, 60].includes(durationMinutes)) issues.push("분 확인");
+    return {
+      rowNumber: index + 1 + (hasHeader ? 1 : 0),
+      day,
+      time: timeCell || "",
+      coachId: coach?.id || "",
+      coachName: coach?.name || coachCell || "",
+      memberName: memberCell || "",
+      lessonSource: sourceCell || "정규",
+      durationMinutes: [20, 30, 40, 60].includes(durationMinutes) ? durationMinutes : 20,
+      issues,
+    };
+  });
+}
+
+function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || []) {
+  const panel = $("#scheduleSheetPastePanel");
+  const preview = $("#scheduleSheetPastePreview");
+  if (panel) panel.hidden = !state.scheduleSheetPasteOpen;
+  if (!preview) return;
+  if (!rows.length) {
+    preview.innerHTML = `<p class="empty-state">엑셀이나 구글시트에서 복사한 줄을 붙여넣고 미리보기를 눌러주세요.</p>`;
+    return;
+  }
+  const readyCount = rows.filter((row) => !row.issues.length).length;
+  const issueCount = rows.length - readyCount;
+  preview.innerHTML = `
+    <div class="schedule-sheet-paste-summary">
+      <strong>${rows.length}줄 미리보기</strong>
+      <span>등록 가능 ${readyCount}줄 · 확인 필요 ${issueCount}줄</span>
+    </div>
+    ${rows.slice(0, 20).map((row) => `
+      <div class="schedule-sheet-paste-row ${row.issues.length ? "needs-check" : "is-ready"}">
+        <strong>${escapeHtml(row.day || "-")} ${escapeHtml(row.time || "-")}</strong>
+        <span>${escapeHtml(row.memberName || "-")} · ${escapeHtml(row.coachName || "-")} · ${escapeHtml(row.lessonSource)} · ${row.durationMinutes}분</span>
+        <small>${row.issues.length ? escapeHtml(row.issues.join(", ")) : "확인 완료"}</small>
+      </div>
+    `).join("")}
+    ${rows.length > 20 ? `<p class="schedule-sheet-paste-more">외 ${rows.length - 20}줄</p>` : ""}
+  `;
+}
+
+function openScheduleSheetPastePanel() {
+  state.scheduleSheetPasteOpen = true;
+  renderScheduleSheetPastePreview();
+  $("#scheduleSheetPasteInput")?.focus();
+}
+
+function closeScheduleSheetPastePanel() {
+  state.scheduleSheetPasteOpen = false;
+  renderScheduleSheetPastePreview();
+}
+
+function previewScheduleSheetPaste() {
+  const rows = parseScheduleSheetPaste($("#scheduleSheetPasteInput")?.value || "");
+  state.scheduleSheetPasteRows = rows;
+  renderScheduleSheetPastePreview(rows);
+}
+
+function clearScheduleSheetPaste() {
+  state.scheduleSheetPasteRows = [];
+  if ($("#scheduleSheetPasteInput")) $("#scheduleSheetPasteInput").value = "";
+  renderScheduleSheetPastePreview([]);
 }
 
 function scheduleClipboardDefaults(button) {
@@ -19481,6 +19601,22 @@ function bindEvents() {
     }
     if (event.target.closest("#clearScheduleLessonClipboard")) {
       clearScheduleLessonClipboard();
+      return;
+    }
+    if (event.target.closest("#openScheduleSheetPaste")) {
+      openScheduleSheetPastePanel();
+      return;
+    }
+    if (event.target.closest("#closeScheduleSheetPaste")) {
+      closeScheduleSheetPastePanel();
+      return;
+    }
+    if (event.target.closest("#previewScheduleSheetPaste")) {
+      previewScheduleSheetPaste();
+      return;
+    }
+    if (event.target.closest("#clearScheduleSheetPaste")) {
+      clearScheduleSheetPaste();
       return;
     }
     if (event.target.closest("#clearScheduleBulkSelection")) {

@@ -9672,6 +9672,85 @@ button .schedule-member-lines > span {
   white-space: nowrap;
 }
 
+.schedule-sheet-paste {
+  margin: 8px 0 10px;
+}
+
+.schedule-sheet-paste-panel {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #d7e7df;
+  border-radius: 8px;
+  background: #fbfefd;
+}
+
+.schedule-sheet-paste-panel[hidden] {
+  display: none;
+}
+
+.schedule-sheet-paste-head,
+.schedule-sheet-paste-actions,
+.schedule-sheet-paste-summary,
+.schedule-sheet-paste-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.schedule-sheet-paste-head,
+.schedule-sheet-paste-actions,
+.schedule-sheet-paste-summary {
+  justify-content: space-between;
+}
+
+.schedule-sheet-paste-panel textarea {
+  width: 100%;
+  min-height: 92px;
+  margin: 8px 0;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.schedule-sheet-paste-actions span,
+.schedule-sheet-paste-row small,
+.schedule-sheet-paste-more {
+  color: #64746f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.schedule-sheet-paste-preview {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.schedule-sheet-paste-row {
+  min-width: 0;
+  justify-content: flex-start;
+  border: 1px solid #d7e7df;
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+}
+
+.schedule-sheet-paste-row.is-ready {
+  border-left-color: #059669;
+}
+
+.schedule-sheet-paste-row.needs-check {
+  border-left-color: #dc2626;
+}
+
+.schedule-sheet-paste-row span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-duration-add.is-paste-ready {
   border-style: solid;
   border-color: #38a3c7;
@@ -9769,6 +9848,22 @@ button .schedule-member-lines > span {
   .schedule-paste-toolbar span,
   .schedule-open-slot-toolbar span {
     display: none;
+  }
+
+  .schedule-sheet-paste-head,
+  .schedule-sheet-paste-actions,
+  .schedule-sheet-paste-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .schedule-sheet-paste-actions .primary-button,
+  .schedule-sheet-paste-actions .ghost-button {
+    width: 100%;
+  }
+
+  .schedule-sheet-paste-row span {
+    white-space: normal;
   }
 
   .schedule-bulk-actions .primary-button,

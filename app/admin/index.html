@@ -7,7 +7,7 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.82" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.83" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -374,6 +374,22 @@
               </div>
             </div>
             <div class="schedule-closed-band"><strong>평일 13:00~17:00</strong><span>수업 없음 · 긴 빈 시간은 시간표에서 접어 표시합니다.</span></div>
+            <div class="schedule-sheet-paste">
+              <button id="openScheduleSheetPaste" class="ghost-button" type="button">표 붙여넣기</button>
+              <div id="scheduleSheetPastePanel" class="schedule-sheet-paste-panel" hidden>
+                <div class="schedule-sheet-paste-head">
+                  <strong>엑셀/구글시트 붙여넣기 미리보기</strong>
+                  <button id="closeScheduleSheetPaste" class="ghost-button" type="button">닫기</button>
+                </div>
+                <textarea id="scheduleSheetPasteInput" rows="4" placeholder="요일	시간	코치	회원	수업종류	분"></textarea>
+                <div class="schedule-sheet-paste-actions">
+                  <button id="previewScheduleSheetPaste" class="primary-button" type="button">미리보기</button>
+                  <button id="clearScheduleSheetPaste" class="ghost-button" type="button">지우기</button>
+                  <span>아직 서버 저장은 하지 않습니다.</span>
+                </div>
+                <div id="scheduleSheetPastePreview" class="schedule-sheet-paste-preview" aria-live="polite"></div>
+              </div>
+            </div>
             <div class="admin-schedule-scroll" data-schedule-scroll>
               <div id="scheduleGrid" class="schedule-sheet"></div>
               <div id="coachScheduleGrid" class="coach-day-sheet" hidden></div>
@@ -1460,11 +1476,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.82"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.83"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.82"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.83"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.82"></script>
+    <script src="./app.js?v=1.0.83"></script>
   </body>
 </html>
