@@ -35,7 +35,7 @@ const state = {
   discountView: "policies",
   discountSearch: "",
   discountStatusFilter: "all",
-  selectedMemberId: 1,
+  selectedMemberId: null,
   activeMode: "admin",
   editingLessonId: null,
   editingOneDayBookingId: null,
@@ -2145,6 +2145,7 @@ function restoreSnapshot() {
       const { courtCount, ...restoredState } = snapshot.state;
       Object.assign(state, restoredState);
       state.memberSearch = "";
+      state.selectedMemberId = null;
       state.liveScheduleLoaded = false;
       state.liveScheduleLoading = false;
       state.liveScheduleMessage = "실서버 시간표 재확인 중";
@@ -5597,7 +5598,7 @@ function getAdminTasks() {
       title: `${item.member} 보강 승인`,
       detail: `${item.original || item.absence} -> ${item.requested || item.makeup}`,
       tone: item.status === "coach_required" ? "danger" : "warn",
-      action: "시간표 확인",
+      action: "보강 요청 검토",
       view: "schedule",
       dueAt: item.requested || item.makeup || "",
     })),
@@ -5622,7 +5623,7 @@ function getAdminTasks() {
       title: `${ticket.member} 잔여 ${ticket.remaining}회`,
       detail: `${ticket.product} · 재등록/충전 안내`,
       tone: ticket.remaining <= 1 ? "danger" : "warn",
-      action: "회원관리",
+      action: "회원권 확인",
       view: "members",
     })),
     ...paymentChecks.map((item) => ({
@@ -10972,9 +10973,7 @@ function renderSchedule() {
       <div class="schedule-period-summary">
         <div class="schedule-month-controls">
           <button class="ghost-button" type="button" data-go-admin-today>오늘</button>
-          <button class="ghost-button schedule-month-arrow" type="button" data-change-admin-month="-1" aria-label="이전 달" title="이전 달">‹</button>
           <input class="schedule-month-input" type="month" value="${adminScheduleMonthValue(activeWeek)}" data-admin-month aria-label="이동할 달">
-          <button class="ghost-button schedule-month-arrow" type="button" data-change-admin-month="1" aria-label="다음 달" title="다음 달">›</button>
         </div>
         <strong>${activeWeek.label}</strong>
         <span>${activeWeek.range} · ${state.liveScheduleLoaded ? "실시간 모든 코치 시간표" : "모든 코치 시간표"}</span>
@@ -11550,20 +11549,22 @@ function refreshLessonMemberOptions(keepValue = "", editingLesson = null) {
   }
   fillSelect(
     $("#lessonMember"),
-    options.map((member) => ({
+    [
+      { value: "", label: "회원 검색 또는 선택" },
+      ...options.map((member) => ({
       value: member.name,
       label: editingParticipantLabel && member.name === currentValue
         ? `현재 수업 · ${editingParticipantLabel}${editingTicket ? ` · ${getTicketOptionLabel(editingTicket)}` : ""}`
         : getMemberOptionLabel(member),
-    })),
+      })),
+    ],
   );
   const exactMatch = search
     ? options.find((member) => memberSearchValues(member)
       .some((value) => String(value || "").trim().toLowerCase() === keyword))
     : null;
   const selectedName = exactMatch?.name
-    || (currentMatchesSearch && options.some((member) => member.name === currentValue) ? currentValue : "")
-    || options[0].name;
+    || (currentMatchesSearch && options.some((member) => member.name === currentValue) ? currentValue : "");
   $("#lessonMember").value = selectedName;
 }
 
@@ -12271,14 +12272,17 @@ function renderLessonPreview() {
     .join(", ");
   const repeatPreview = renderRegularSchedulePreview(ticket, candidate, regularScheduleValidation);
   syncLessonRepeatPreviewPanel(repeatPreview);
+  const missingMember = !$("#lessonMember")?.value;
   $("#lessonPreview").innerHTML = `
     <strong>${scheduleLabel || `${candidate.day} ${candidate.time}~${minutesToTime(end)}`}</strong>
     <span>${lessonSourceLabel(candidate.lessonSource)} · ${getLessonMembersLabel(candidate)} · ${getCoachName(candidate.coachId)} · ${getLessonRoundLabel(candidate)} · ${lessonTypeLabel(candidate)}</span>
   `;
-  const normalBlocked = Boolean(!ticket || sourceTicketMismatch || !regularScheduleValidation.valid || scheduleIssueMessage || scheduleScopeMismatch || conflict);
-  const overrideBlocked = Boolean(!ticket || exactDuplicate || internalDuplicate || overrideReasonMissing);
+  const normalBlocked = Boolean(missingMember || !ticket || sourceTicketMismatch || !regularScheduleValidation.valid || scheduleIssueMessage || scheduleScopeMismatch || conflict);
+  const overrideBlocked = Boolean(missingMember || !ticket || exactDuplicate || internalDuplicate || overrideReasonMissing);
   setLessonFormMessage(
-    manualOverride
+    missingMember
+      ? "회원 이름을 검색하거나 선택해 주세요."
+      : manualOverride
       ? exactDuplicate
         ? "같은 회원권·날짜·시간의 수업이 이미 있습니다. 기존 수업을 수정해 주세요."
         : internalDuplicate
@@ -12297,7 +12301,7 @@ function renderLessonPreview() {
       : conflict
         ? conflict.message
         : "추가 가능한 시간입니다.",
-    manualOverride ? overrideBlocked ? "danger" : "good" : normalBlocked ? "danger" : "good",
+    missingMember ? "" : manualOverride ? overrideBlocked ? "danger" : "good" : normalBlocked ? "danger" : "good",
   );
   setLessonSubmitEnabled(manualOverride ? !overrideBlocked : !normalBlocked);
   syncAdminManualOverrideUi(uniqueOverrideWarnings);
@@ -12336,7 +12340,7 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   if (toggle) {
     toggle.hidden = state.quickLessonEntry && requiredCount > 1;
     toggle.setAttribute("aria-expanded", String(expanded));
-    toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "전체 기능" : "상세 설정";
+    toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "수정 범위 설정" : "요일·반복 설정";
   }
 }
 
@@ -16430,10 +16434,10 @@ function renderAdminPendingUsers() {
   const readiness = window.TennisNoteDataClient?.readiness?.();
   const canApprove = adminApprovalReady();
   const items = adminPendingUsersState.items.slice(0, 12);
-  if (!adminPendingUsersState.loading && canApprove && !items.length) {
+  if (!adminPendingUsersState.loading && !items.length) {
     target.innerHTML = `
       <section class="admin-pending-compact">
-        <div><strong>가입 계정 관리</strong><span>${escapeHtml(adminPendingUsersState.message || "처리할 가입 계정이 없습니다.")}</span></div>
+        <div><strong>가입 대기</strong><span>${escapeHtml(adminPendingUsersState.message || (canApprove ? "처리할 가입 계정이 없습니다." : "관리자 로그인 후 확인할 수 있습니다."))}</span></div>
         <button class="ghost-button" type="button" data-admin-users-action="refresh">새로고침</button>
       </section>`;
     return;
@@ -18983,6 +18987,10 @@ function installAdminLiveScheduleRefresh() {
 
 function bindEvents() {
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  document.addEventListener("click", (event) => {
+    const menuButton = event.target.closest(".compact-action-menu-panel button");
+    if (menuButton) menuButton.closest(".compact-action-menu")?.removeAttribute("open");
+  });
   document.addEventListener("click", (event) => {
     const pageButton = event.target.closest("[data-dashboard-page]");
     if (!pageButton) return;

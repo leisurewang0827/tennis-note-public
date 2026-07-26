@@ -10705,3 +10705,415 @@ body {
     min-width: 0;
   }
 }
+
+/* Field-operator simplification: keep one primary action and reveal expert tools on demand. */
+.compact-action-menu {
+  position: relative;
+}
+
+.modal-backdrop {
+  z-index: 200;
+}
+
+.compact-action-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.compact-action-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.compact-action-menu[open] > summary {
+  border-color: #77ad9b;
+  color: var(--green);
+  background: var(--soft-green);
+}
+
+.compact-action-menu-panel {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 95;
+  display: grid;
+  width: max-content;
+  min-width: 220px;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 14px 34px rgba(23, 50, 42, 0.18);
+}
+
+.compact-action-menu-panel .ghost-button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.schedule-primary-actions {
+  flex-wrap: nowrap;
+  margin-bottom: 0;
+}
+
+.schedule-save-status {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.schedule-edit-guide {
+  display: block;
+  margin: 8px 0 10px;
+  border: 1px solid #d7e7df;
+  border-radius: 7px;
+  color: #315a4b;
+  background: #fbfefd;
+  font-size: 12px;
+}
+
+.schedule-edit-guide > summary {
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--green);
+  font-weight: 900;
+}
+
+.schedule-edit-guide > ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0 12px 10px 28px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.schedule-edit-guide strong,
+.schedule-edit-guide span {
+  display: initial;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  white-space: normal;
+}
+
+#membersView .member-directory-layout,
+#membersView .member-directory-layout.is-detail-open {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#membersView .detail-panel {
+  position: fixed;
+  top: 84px;
+  right: 22px;
+  bottom: 22px;
+  z-index: 90;
+  width: min(460px, calc(100vw - 44px));
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  border: 1px solid #cbded7;
+  box-shadow: 0 18px 48px rgba(17, 48, 39, 0.24);
+}
+
+#membersView .detail-panel[hidden] {
+  display: none;
+}
+
+#membersView .member-db-header {
+  position: sticky;
+  top: -18px;
+  z-index: 2;
+  margin: -18px -18px 4px;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+#membersView .member-db-header .profile-line,
+#membersView .member-db-header .profile-line > div {
+  min-width: 0;
+}
+
+#membersView .member-db-header h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#scheduleView .reservation-strip article {
+  padding: 12px 14px;
+}
+
+@media (max-width: 760px) {
+  .app-shell,
+  .sidebar,
+  .workspace,
+  .view,
+  .toolbar,
+  .schedule-panel,
+  .admin-schedule-scroll {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .app-shell,
+  .workspace {
+    overflow-x: hidden;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    gap: 8px;
+    height: auto;
+    padding: 9px 10px 8px;
+    box-shadow: 0 8px 22px rgba(8, 44, 34, 0.16);
+  }
+
+  .sidebar .brand {
+    min-height: 34px;
+    gap: 8px;
+    padding: 0;
+  }
+
+  .sidebar .brand-mark {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+
+  .sidebar .brand strong {
+    font-size: 14px;
+  }
+
+  .sidebar .brand span,
+  .sidebar-footer {
+    display: none;
+  }
+
+  .sidebar .nav-list {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .sidebar .nav-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar .nav-item {
+    width: auto;
+    min-width: max-content;
+    min-height: 34px;
+    flex: 0 0 auto;
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+
+  .workspace {
+    padding: 10px;
+  }
+
+  .topbar {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .topbar h1 {
+    font-size: 24px;
+  }
+
+  .admin-surface-label {
+    display: none;
+  }
+
+  .admin-pending-compact,
+  .admin-pending-compact > div {
+    min-height: 44px;
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .admin-pending-compact span {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #membersView > .toolbar {
+    gap: 8px;
+  }
+
+  #membersView > .toolbar .toolbar-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .member-data-menu > summary,
+  #addMemberButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .compact-action-menu-panel {
+    position: fixed;
+    top: auto;
+    right: 10px;
+    bottom: 12px;
+    left: 10px;
+    width: auto;
+    min-width: 0;
+    padding: 10px;
+  }
+
+  #membersView .detail-panel {
+    top: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: calc(100vw - 20px);
+  }
+
+  #membersView .member-db-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  #membersView .member-detail-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .schedule-main-toolbar {
+    gap: 8px;
+  }
+
+  .schedule-primary-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
+  }
+
+  .schedule-save-status {
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    font-size: 10px;
+    text-overflow: ellipsis;
+  }
+
+  .schedule-tools-menu > summary,
+  #openLessonModal {
+    min-width: 0;
+    justify-content: center;
+    padding-inline: 10px;
+  }
+
+  #scheduleView .reservation-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  #scheduleView .reservation-strip article {
+    min-width: 0;
+    padding: 9px 8px;
+  }
+
+  #scheduleView .reservation-strip span,
+  #scheduleView .reservation-strip small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #scheduleView .reservation-strip strong {
+    font-size: 18px;
+  }
+
+  #scheduleView .reservation-strip small {
+    display: none;
+  }
+
+  .schedule-panel {
+    padding: 10px;
+  }
+
+  .sheet-caption {
+    align-items: flex-start;
+    gap: 3px;
+    flex-direction: column;
+  }
+
+  .sheet-caption span {
+    display: none;
+  }
+
+  .admin-week-switcher {
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    gap: 5px;
+  }
+
+  .week-switcher .schedule-month-controls {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .week-switcher .schedule-month-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .week-switcher .schedule-period-summary > span {
+    overflow: hidden;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .schedule-edit-guide {
+    margin-block: 6px;
+  }
+
+  .schedule-closed-band {
+    align-items: flex-start;
+    gap: 2px;
+    flex-direction: column;
+    padding: 8px;
+  }
+
+  .admin-schedule-scroll {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
+  .settings-tabs {
+    display: flex;
+    grid-template-columns: none;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .settings-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-tabs .segment {
+    min-width: max-content;
+    flex: 0 0 auto;
+  }
+}

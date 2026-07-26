@@ -7,7 +7,7 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.88" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.89" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -203,8 +203,13 @@
               <button class="segment" type="button" data-member-filter="inactive" data-admin-only-member-filter><span>삭제회원</span><strong data-member-filter-count="inactive">0</strong></button>
             </div>
             <div class="toolbar-actions">
-              <button id="openDataToolsButton" class="ghost-button" type="button">엑셀 관리</button>
-              <button id="exportMembersButton" class="ghost-button" type="button">회원 목록 저장</button>
+              <details class="compact-action-menu member-data-menu">
+                <summary class="ghost-button">데이터 도구</summary>
+                <div class="compact-action-menu-panel">
+                  <button id="openDataToolsButton" class="ghost-button" type="button">엑셀 가져오기·내보내기</button>
+                  <button id="exportMembersButton" class="ghost-button" type="button">현재 목록 엑셀 내보내기</button>
+                </div>
+              </details>
               <button id="addMemberButton" class="primary-button" type="button">회원 추가</button>
             </div>
           </div>
@@ -286,7 +291,7 @@
         </section>
 
         <section id="scheduleView" class="view" aria-label="레슨시간표">
-          <div class="toolbar">
+          <div class="toolbar schedule-main-toolbar">
             <div class="schedule-toolbar-groups">
               <div class="segmented-control" role="group" aria-label="시간표 형식">
                 <button class="segment is-active" type="button" data-schedule-view="week">주간 전체</button>
@@ -297,12 +302,19 @@
                 <button class="segment" type="button" data-schedule-filter="pending">확인대기</button>
               </div>
             </div>
-            <div class="toolbar-actions">
-              <button id="openScheduleSettingsButton" class="ghost-button" type="button">시간표 설정</button>
-              <button id="saveScheduleList" class="ghost-button" type="button">목록 저장</button>
-              <button id="openSubstituteModal" class="ghost-button" type="button">대타 지정</button>
-              <button id="toggleScheduleBulkMode" class="ghost-button" type="button" aria-pressed="false">다중 수정</button>
-              <button id="toggleScheduleOpenSlotMode" class="ghost-button" type="button" aria-pressed="false">빈칸 선택</button>
+            <div class="toolbar-actions schedule-primary-actions">
+              <span class="schedule-save-status" role="status">등록·수정 시 서버에 자동 저장</span>
+              <details class="compact-action-menu schedule-tools-menu">
+                <summary class="ghost-button">편집 도구</summary>
+                <div class="compact-action-menu-panel">
+                  <button id="openScheduleSettingsButton" class="ghost-button" type="button">근무시간·브레이크</button>
+                  <button id="openSubstituteModal" class="ghost-button" type="button">대타 지정</button>
+                  <button id="toggleScheduleBulkMode" class="ghost-button" type="button" aria-pressed="false">여러 수업 수정</button>
+                  <button id="toggleScheduleOpenSlotMode" class="ghost-button" type="button" aria-pressed="false">여러 빈칸 선택</button>
+                  <button id="openScheduleSheetPaste" class="ghost-button" type="button">표 붙여넣기</button>
+                </div>
+              </details>
+              <button id="saveScheduleList" type="button" hidden aria-hidden="true" tabindex="-1">목록 저장</button>
               <button id="openLessonModal" class="primary-button" type="button">수업 추가</button>
             </div>
           </div>
@@ -337,14 +349,14 @@
             </div>
             <div id="adminScheduleDayPicker" class="schedule-day-picker" aria-label="관리자 시간표 날짜 선택"></div>
             <div id="adminScheduleCoachPicker" class="schedule-coach-picker" aria-label="코치별 시간표 필터"></div>
-            <div class="schedule-edit-guide" aria-label="엑셀식 시간표 편집 도구">
-              <strong>엑셀식 편집</strong>
-              <span>빈칸 클릭으로 추가</span>
-              <span>빈칸 선택 후 Enter로 확정</span>
-              <span>다중 수정 또는 Alt+↑↓로 10분 이동</span>
-              <span>수업 복사 후 빈칸 붙여넣기</span>
-              <span>대타는 선택 후 일괄 지정</span>
-            </div>
+            <details class="schedule-edit-guide" aria-label="시간표 사용법">
+              <summary>시간표 사용법</summary>
+              <ul>
+                <li>빈칸을 누르면 해당 코치와 시간으로 수업을 추가합니다.</li>
+                <li>여러 수업 수정, 복사, 대타 지정은 상단 편집 도구에서 시작합니다.</li>
+                <li>키보드 편집은 선택 후 Enter 확정, Alt+↑↓ 10분 이동을 지원합니다.</li>
+              </ul>
+            </details>
             <div id="scheduleBulkToolbar" class="schedule-bulk-toolbar" hidden>
               <strong><span id="scheduleBulkCount">0</span>개 선택</strong>
               <div id="scheduleBulkPreview" class="schedule-bulk-preview" aria-live="polite"></div>
@@ -375,7 +387,6 @@
             </div>
             <div class="schedule-closed-band"><strong>평일 13:00~17:00</strong><span>수업 없음 · 긴 빈 시간은 시간표에서 접어 표시합니다.</span></div>
             <div class="schedule-sheet-paste">
-              <button id="openScheduleSheetPaste" class="ghost-button" type="button">표 붙여넣기</button>
               <div id="scheduleSheetPastePanel" class="schedule-sheet-paste-panel" hidden>
                 <div class="schedule-sheet-paste-head">
                   <strong>엑셀/구글시트 붙여넣기 미리보기</strong>
@@ -1477,11 +1488,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.88"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.89"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.88"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.89"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.88"></script>
+    <script src="./app.js?v=1.0.89"></script>
   </body>
 </html>
