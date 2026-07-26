@@ -9564,6 +9564,10 @@ button .schedule-member-lines > span {
   font-weight: 600;
 }
 
+.schedule-open-slot-preview {
+  color: #1f5f86;
+}
+
 .schedule-bulk-toolbar[hidden],
 .schedule-open-slot-toolbar[hidden] {
   display: none;
@@ -9576,7 +9580,8 @@ button .schedule-member-lines > span {
   background: #f3f9ff;
 }
 
-.schedule-open-slot-toolbar span {
+.schedule-open-slot-toolbar span,
+.schedule-open-slot-toolbar .schedule-open-slot-preview {
   min-width: 0;
   overflow: hidden;
   color: #46616f;
@@ -9700,9 +9705,22 @@ button .schedule-member-lines > span {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .schedule-open-slot-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-open-slot-toolbar .schedule-bulk-actions {
+    width: 100%;
+  }
+
   .schedule-paste-toolbar span,
   .schedule-open-slot-toolbar span {
     display: none;
+  }
+
+  .schedule-bulk-actions .primary-button,
+  .schedule-bulk-actions .ghost-button {
+    min-width: 0;
   }
 }
 

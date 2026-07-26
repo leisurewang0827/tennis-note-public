@@ -9529,6 +9529,38 @@ function sortedSelectedScheduleOpenSlots() {
     });
 }
 
+function scheduleOpenSlotPreviewText(selected = []) {
+  if (!state.scheduleOpenSlotMode) return "";
+  if (!selected.length) {
+    return state.scheduleLessonClipboard
+      ? "붙여넣을 빈 시간을 선택하세요. 같은 코치와 사용 가능한 회원권만 저장 단계로 이동합니다."
+      : "주2회·주3회 정규권 시간을 먼저 찍고 회원을 선택하세요.";
+  }
+  const clipboard = state.scheduleLessonClipboard;
+  const days = [...new Set(selected.map((slot) => slot.day).filter(Boolean))];
+  const coaches = [...new Set(selected.map((slot) => scheduleCoachDisplayName(getCoachName(slot.coachId))))];
+  const first = selected[0] || {};
+  const last = selected[selected.length - 1] || first;
+  const range = selected.length === 1
+    ? `${first.day} ${first.time}`
+    : `${first.day} ${first.time}~${last.day} ${last.time}`;
+  const coachSummary = coaches.length > 1
+    ? `${coaches[0]} 외 ${coaches.length - 1}명`
+    : (coaches[0] || "코치 미지정");
+  if (clipboard) {
+    const readyCount = selected.filter((slot) => scheduleClipboardCanPaste(slot.day, slot.time, slot.coachId)).length;
+    const blockedCount = selected.length - readyCount;
+    const blockedText = blockedCount ? ` · 불가 ${blockedCount}칸` : "";
+    return `${selected.length}칸 선택 · 붙여넣기 가능 ${readyCount}칸${blockedText} · ${coachSummary} · ${range}`;
+  }
+  const repeatHint = selected.length > 3
+    ? "정규 반복 등록은 최대 3칸까지"
+    : days.length > 1
+      ? "요일별 반복 등록 준비"
+      : "같은 요일 연속 시간 등록 준비";
+  return `${selected.length}칸 선택 · ${coachSummary} · ${range} · ${repeatHint}`;
+}
+
 function renderScheduleOpenSlotToolbar() {
   const toolbar = $("#scheduleOpenSlotToolbar");
   const toggle = $("#toggleScheduleOpenSlotMode");
@@ -9539,6 +9571,11 @@ function renderScheduleOpenSlotToolbar() {
   const selected = sortedSelectedScheduleOpenSlots();
   if (toolbar) toolbar.hidden = !state.scheduleOpenSlotMode;
   if ($("#scheduleOpenSlotCount")) $("#scheduleOpenSlotCount").textContent = String(selected.length);
+  const preview = $("#scheduleOpenSlotPreview");
+  if (preview) {
+    preview.textContent = scheduleOpenSlotPreviewText(selected);
+    preview.classList.toggle("is-empty", selected.length === 0);
+  }
   const createButton = $("#createLessonFromOpenSlots");
   if (createButton) {
     createButton.disabled = selected.length === 0;

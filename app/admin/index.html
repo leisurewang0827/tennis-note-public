@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ko" data-tennisnote-surface="admin">
   <head>
     <meta charset="utf-8" />
@@ -7,7 +7,7 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.76" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.77" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -356,7 +356,9 @@
             </div>
             <div id="scheduleOpenSlotToolbar" class="schedule-open-slot-toolbar" hidden>
               <strong><span id="scheduleOpenSlotCount">0</span>칸 선택</strong>
-              <span>주2회·주3회 정규권 시간을 먼저 찍고 회원을 선택하세요.</span>
+              <div id="scheduleOpenSlotPreview" class="schedule-bulk-preview schedule-open-slot-preview" aria-live="polite">
+                빈 시간을 선택하면 반복 등록과 붙여넣기 가능 여부를 먼저 확인합니다.
+              </div>
               <div class="schedule-bulk-actions">
                 <button id="createLessonFromOpenSlots" class="primary-button" type="button">선택칸 수업 추가</button>
                 <button id="clearScheduleOpenSlotSelection" class="ghost-button" type="button">선택 해제</button>
@@ -1448,11 +1450,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.76"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.77"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.76"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.77"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.76"></script>
+    <script src="./app.js?v=1.0.77"></script>
   </body>
 </html>
