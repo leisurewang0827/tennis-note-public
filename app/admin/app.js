@@ -1488,6 +1488,7 @@ const liveSchedulePolicyKey = "app_schedule_policy";
 const operationProfiles = [];
 let activeOperationProfileId = "";
 const activeOperationProfileIdsByBranch = {};
+let liveSchedulePolicyServerUpdatedAt = "";
 const adminSecuritySettingsKey = "admin_security_v1";
 const holdingPolicyKey = "holding_policy";
 const notificationPolicyKey = "notification_policy_v1";
@@ -2659,9 +2660,12 @@ async function persistOperationProfileWorkspace(backup, successMessage) {
   const synced = await syncLiveSchedulePolicyToServer();
   if (synced !== "server") {
     restoreOperationProfileWorkspace(backup);
+    if (synced === "conflict") await loadLiveSchedulePolicyFromServer();
     saveSnapshot();
     renderAll();
-    showToast("서버 저장에 실패해 이전 운영 프로필로 되돌렸습니다.");
+    showToast(synced === "conflict"
+      ? "다른 화면에서 설정이 변경되어 최신 운영 프로필을 다시 불러왔습니다."
+      : "서버 저장에 실패해 이전 운영 프로필로 되돌렸습니다.");
     return false;
   }
   saveSnapshot();
@@ -2711,20 +2715,61 @@ async function syncLiveSchedulePolicyToServer() {
   if (!client?.readiness?.().ready || !client.getSession?.()?.access_token) return "local";
   const value = liveSchedulePolicyPayload();
   try {
-    const updated = await client.updateRows("tn_admin_settings", { key: liveSchedulePolicyKey }, {
-      value,
-      updated_at: new Date().toISOString(),
-    });
-    if (!updated?.length) {
-      await client.insertRows("tn_admin_settings", {
+    if (!liveSchedulePolicyServerUpdatedAt) {
+      const existing = await client.selectRows("tn_admin_settings", {
+        select: "key,updated_at",
+        filters: { key: liveSchedulePolicyKey },
+        limit: 1,
+      });
+      if (existing?.length) return "conflict";
+      const inserted = await client.insertRows("tn_admin_settings", {
         key: liveSchedulePolicyKey,
         value,
       });
+      liveSchedulePolicyServerUpdatedAt = inserted?.[0]?.updated_at || "";
+      return "server";
     }
+    const nextUpdatedAt = new Date().toISOString();
+    const updated = await client.updateRows("tn_admin_settings", {
+      key: liveSchedulePolicyKey,
+      updated_at: liveSchedulePolicyServerUpdatedAt,
+    }, {
+      value,
+      updated_at: nextUpdatedAt,
+    });
+    if (!updated?.length) {
+      return "conflict";
+    }
+    liveSchedulePolicyServerUpdatedAt = updated[0]?.updated_at || nextUpdatedAt;
     return "server";
   } catch (error) {
     return "blocked";
   }
+}
+
+async function liveSchedulePolicyRevisionIsCurrent() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.selectRows) return false;
+  const rows = await client.selectRows("tn_admin_settings", {
+    select: "key,updated_at",
+    filters: { key: liveSchedulePolicyKey },
+    limit: 1,
+  });
+  if (!rows?.length) return !liveSchedulePolicyServerUpdatedAt;
+  if (!liveSchedulePolicyServerUpdatedAt) return false;
+  return String(rows[0].updated_at || "") === String(liveSchedulePolicyServerUpdatedAt);
+}
+
+async function recoverLiveSchedulePolicySave(status, rollback) {
+  if (status === "server") return true;
+  if (typeof rollback === "function") rollback();
+  if (status === "conflict") await loadLiveSchedulePolicyFromServer();
+  saveSnapshot();
+  renderAll();
+  showToast(status === "conflict"
+    ? "다른 화면에서 설정이 변경되어 최신 내용을 다시 불러왔습니다."
+    : "서버 저장에 실패해 이전 설정으로 되돌렸습니다.");
+  return false;
 }
 
 const $ = (selector) => document.querySelector(selector);
@@ -3798,6 +3843,11 @@ async function loadLiveSchedulePolicyFromServer() {
       filters: { key: liveSchedulePolicyKey },
       limit: 1,
     });
+    if (!rows?.length) {
+      liveSchedulePolicyServerUpdatedAt = "";
+      return false;
+    }
+    liveSchedulePolicyServerUpdatedAt = rows[0]?.updated_at || "";
     const value = rows?.[0]?.value;
     if (!value || typeof value !== "object") return false;
     const serverSettings = value.scheduleSettings || {};
@@ -3894,6 +3944,18 @@ async function saveLiveSchedulePolicy() {
     showToast(`${activeOperationBranchName()}에 등록된 코치를 먼저 확인해주세요.`);
     return;
   }
+  try {
+    if (!(await liveSchedulePolicyRevisionIsCurrent())) {
+      await loadLiveSchedulePolicyFromServer();
+      renderAll();
+      saveSnapshot();
+      showToast("다른 화면에서 설정이 변경되어 최신 내용을 다시 불러왔습니다.");
+      return;
+    }
+  } catch (error) {
+    showToast("최신 운영 설정을 확인하지 못했습니다. 연결을 확인한 뒤 다시 저장해 주세요.");
+    return;
+  }
   const targetCoaches = serverCoaches.map((coach) => {
     const targetedBreaks = (scheduleSettings.breakRules || [])
       .filter((rule) => breakRuleCoachRoleIds(rule).includes(coach.serverRoleId))
@@ -3942,13 +4004,18 @@ async function saveLiveSchedulePolicy() {
       target_break_rules: targetBreakRules,
     });
     const snapshotStatus = await syncLiveSchedulePolicyToServer();
-    if (snapshotStatus === "server") await loadLiveSchedulePolicyFromServer();
+    if (snapshotStatus === "server" || snapshotStatus === "conflict") {
+      await loadLiveSchedulePolicyFromServer();
+    }
     renderSchedule();
     renderScheduleSettings();
     saveSnapshot();
     billingLogs.unshift(`근무·브레이크 서버 저장: 근무 ${result?.availabilityCount || 0}개 · 브레이크 ${result?.breakCount || 0}개`);
     if (snapshotStatus === "server") {
       showToast("근무시간과 브레이크 저장 완료");
+    } else if (snapshotStatus === "conflict") {
+      billingLogs.unshift("다른 화면의 운영 설정과 충돌해 최신 설정을 다시 불러옴");
+      showToast("근무시간은 저장됐지만 표시 설정이 충돌해 최신 내용을 다시 불러왔습니다.");
     } else {
       billingLogs.unshift("앱 시간표 표시 설정 동기화 재시도 필요");
       showToast("근무시간은 저장됐습니다. 앱 표시 동기화를 다시 시도해 주세요.");
@@ -20373,10 +20440,14 @@ function bindEvents() {
   const memberScheduleRequestOnlyInput = $("#memberScheduleRequestOnly");
   if (memberScheduleRequestOnlyInput) {
     memberScheduleRequestOnlyInput.addEventListener("change", async () => {
+      const previousValue = scheduleSettings.memberScheduleRequestOnly !== false;
       scheduleSettings.memberScheduleRequestOnly = memberScheduleRequestOnlyInput.checked;
       renderScheduleSettings();
       saveSnapshot();
-      await syncLiveSchedulePolicyToServer();
+      const synced = await syncLiveSchedulePolicyToServer();
+      if (!(await recoverLiveSchedulePolicySave(synced, () => {
+        scheduleSettings.memberScheduleRequestOnly = previousValue;
+      }))) return;
       showToast("회원앱 시간표 표시 저장 완료");
     });
   }
@@ -20387,13 +20458,10 @@ function bindEvents() {
       scheduleSettings.adminTuningMode = adminScheduleTuningModeInput.checked;
       saveSnapshot();
       const synced = await syncLiveSchedulePolicyToServer();
-      if (synced !== "server") {
+      if (!(await recoverLiveSchedulePolicySave(synced, () => {
         scheduleSettings.adminTuningMode = previousValue;
         adminScheduleTuningModeInput.checked = previousValue;
-        saveSnapshot();
-        showToast("서버 저장에 실패해 이전 설정으로 되돌렸습니다.");
-        return;
-      }
+      }))) return;
       renderScheduleSettings();
       showToast(scheduleSettings.adminTuningMode ? "관리자 튜닝 모드 사용" : "관리자 튜닝 모드 해제");
     });
@@ -20483,10 +20551,15 @@ function bindEvents() {
   });
   $$('[data-lesson-color]').forEach((input) => {
     input.addEventListener("change", async () => {
-      scheduleSettings.lessonColors[input.dataset.lessonColor] = input.value;
+      const colorKey = input.dataset.lessonColor;
+      const previousValue = scheduleSettings.lessonColors[colorKey];
+      scheduleSettings.lessonColors[colorKey] = input.value;
       renderSchedule();
       saveSnapshot();
-      await syncLiveSchedulePolicyToServer();
+      const synced = await syncLiveSchedulePolicyToServer();
+      if (!(await recoverLiveSchedulePolicySave(synced, () => {
+        scheduleSettings.lessonColors[colorKey] = previousValue;
+      }))) return;
       showToast("시간표 색상 저장 완료");
     });
   });
@@ -20563,21 +20636,29 @@ function bindEvents() {
     const id = event.target.dataset.customLessonLabel || event.target.dataset.customLessonMatch || event.target.dataset.customLessonColor;
     const rule = scheduleSettings.lessonColorRules.find((item) => item.id === id);
     if (!rule) return;
+    const previousRule = cloneOperationProfileValue(rule);
     if (event.target.dataset.customLessonLabel) rule.label = event.target.value.trim() || rule.label;
     if (event.target.dataset.customLessonMatch) rule.match = event.target.value.trim();
     if (event.target.dataset.customLessonColor) rule.color = event.target.value;
     renderSchedule();
     saveSnapshot();
-    await syncLiveSchedulePolicyToServer();
+    const synced = await syncLiveSchedulePolicyToServer();
+    if (!(await recoverLiveSchedulePolicySave(synced, () => {
+      Object.assign(rule, previousRule);
+    }))) return;
     showToast("추가 표시 종류 저장 완료");
   });
   $("#customLessonColorRules")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-delete-lesson-color-rule]");
     if (!button) return;
+    const previousRules = cloneOperationProfileValue(scheduleSettings.lessonColorRules);
     scheduleSettings.lessonColorRules = scheduleSettings.lessonColorRules.filter((rule) => rule.id !== button.dataset.deleteLessonColorRule);
     renderCustomLessonColorRules();
     saveSnapshot();
-    await syncLiveSchedulePolicyToServer();
+    const synced = await syncLiveSchedulePolicyToServer();
+    await recoverLiveSchedulePolicySave(synced, () => {
+      scheduleSettings.lessonColorRules = previousRules;
+    });
   });
   $("#lessonTime").addEventListener("change", () => {
     state.pinnedLessonTime = "";
