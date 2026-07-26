@@ -9696,6 +9696,73 @@ function normalizeScheduleSheetDay(value) {
   return scheduleDays.includes(token) ? token : "";
 }
 
+function normalizeScheduleSheetLessonSource(value) {
+  const token = normalizeScheduleSheetCell(value).replace(/\s+/g, "");
+  if (!token) return "regular";
+  if (["보강", "수업변경", "변경"].some((label) => token.includes(label))) return "makeup";
+  if (["쿠폰", "횟수권"].some((label) => token.includes(label))) return "coupon";
+  if (["원데이", "체험"].some((label) => token.includes(label))) return "one_day";
+  if (["대타", "코치변경"].some((label) => token.includes(label))) return "coach_change";
+  return normalizeLessonSource(token);
+}
+
+function findScheduleSheetTicket(memberName, coachId, lessonSource, durationMinutes) {
+  return getEligibleTickets(memberName, coachId)
+    .filter((ticket) => ticketMatchesLessonSource(ticket, lessonSource))
+    .find((ticket) => Number(getTicketDurationMinutes(ticket)) === Number(durationMinutes))
+    || getEligibleTickets(memberName, coachId)
+      .find((ticket) => ticketMatchesLessonSource(ticket, lessonSource))
+    || null;
+}
+
+function scheduleSheetRowCandidate(row) {
+  if (!row?.ticketId || !row.day || !row.time || !row.coachId) return null;
+  const ticket = scheduleTicketById(row.ticketId);
+  const participantNames = ticketParticipantNames(ticket);
+  return {
+    id: `sheet-${row.rowNumber}`,
+    day: row.day,
+    time: row.time,
+    courtId: getAvailableCourtId(row.day, row.time, row.durationMinutes),
+    coachId: row.coachId,
+    member: participantNames.length ? participantNames.join("&") : row.memberName,
+    ticketId: row.ticketId,
+    type: getTicketLessonKind(ticket) || row.lessonSourceLabel || "개인",
+    lessonSource: row.lessonSource,
+    durationMinutes: row.durationMinutes,
+    status: "scheduled",
+  };
+}
+
+function scheduleSheetRowKey(row) {
+  return `${row.day}|${row.time}|${row.coachId}|${row.durationMinutes}|${row.ticketId}|${row.lessonSource}`;
+}
+
+function validateScheduleSheetRows(rows) {
+  const seen = new Map();
+  return rows.map((row) => {
+    const next = { ...row, issues: [...(row.issues || [])] };
+    const source = normalizeScheduleSheetLessonSource(row.lessonSourceLabel || row.lessonSource);
+    const ticket = findScheduleSheetTicket(row.memberName, row.coachId, source, row.durationMinutes);
+    next.lessonSource = source;
+    next.ticketId = ticket?.id || "";
+    if (!ticket) next.issues.push("회원권 확인");
+    else if (!ticketAllowsScheduleDay(ticket, row.day)) next.issues.push("평일/주말 확인");
+    const candidate = scheduleSheetRowCandidate(next);
+    const duplicateKey = scheduleSheetRowKey(next);
+    if (seen.has(duplicateKey)) next.issues.push("붙여넣기 중복");
+    else seen.set(duplicateKey, true);
+    if (candidate && !adminManualOverrideEnabled()) {
+      const conflict = getLessonConflict(candidate);
+      if (conflict) next.issues.push("시간 겹침");
+      const exactDuplicate = getAdminManualExactDuplicate(candidate);
+      if (exactDuplicate) next.issues.push("이미 등록됨");
+    }
+    next.issues = [...new Set(next.issues)];
+    return next;
+  });
+}
+
 function parseScheduleSheetPaste(text) {
   const rawLines = String(text || "")
     .split(/\r?\n/u)
@@ -9705,11 +9772,12 @@ function parseScheduleSheetPaste(text) {
   const firstCells = rawLines[0].split(rawLines[0].includes("\t") ? "\t" : ",").map(normalizeScheduleSheetCell);
   const hasHeader = firstCells.some((cell) => ["요일", "시간", "코치", "회원"].includes(cell));
   const lines = hasHeader ? rawLines.slice(1) : rawLines;
-  return lines.map((line, index) => {
+  const parsedRows = lines.map((line, index) => {
     const cells = line.split(line.includes("\t") ? "\t" : ",").map(normalizeScheduleSheetCell);
     const [dayCell, timeCell, coachCell, memberCell, sourceCell, minutesCell] = cells;
     const day = normalizeScheduleSheetDay(dayCell);
     const coach = findScheduleSheetCoach(coachCell);
+    const source = normalizeScheduleSheetLessonSource(sourceCell);
     const durationMinutes = Number(minutesCell || 20);
     const issues = [];
     if (!day) issues.push("요일 확인");
@@ -9724,11 +9792,13 @@ function parseScheduleSheetPaste(text) {
       coachId: coach?.id || "",
       coachName: coach?.name || coachCell || "",
       memberName: memberCell || "",
-      lessonSource: sourceCell || "정규",
+      lessonSource: source,
+      lessonSourceLabel: sourceCell || "정규",
       durationMinutes: [20, 30, 40, 60].includes(durationMinutes) ? durationMinutes : 20,
       issues,
     };
   });
+  return validateScheduleSheetRows(parsedRows);
 }
 
 function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || []) {
@@ -9742,6 +9812,8 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
   }
   const readyCount = rows.filter((row) => !row.issues.length).length;
   const issueCount = rows.length - readyCount;
+  const saveButton = $("#saveScheduleSheetPaste");
+  if (saveButton) saveButton.disabled = !readyCount || !adminApprovalReady();
   preview.innerHTML = `
     <div class="schedule-sheet-paste-summary">
       <strong>${rows.length}줄 미리보기</strong>
@@ -9750,7 +9822,7 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
     ${rows.slice(0, 20).map((row) => `
       <div class="schedule-sheet-paste-row ${row.issues.length ? "needs-check" : "is-ready"}">
         <strong>${escapeHtml(row.day || "-")} ${escapeHtml(row.time || "-")}</strong>
-        <span>${escapeHtml(row.memberName || "-")} · ${escapeHtml(row.coachName || "-")} · ${escapeHtml(row.lessonSource)} · ${row.durationMinutes}분</span>
+        <span>${escapeHtml(row.memberName || "-")} · ${escapeHtml(row.coachName || "-")} · ${escapeHtml(lessonSourceLabel(row.lessonSource))} · ${row.durationMinutes}분</span>
         <small>${row.issues.length ? escapeHtml(row.issues.join(", ")) : "확인 완료"}</small>
       </div>
     `).join("")}
@@ -9779,6 +9851,64 @@ function clearScheduleSheetPaste() {
   state.scheduleSheetPasteRows = [];
   if ($("#scheduleSheetPasteInput")) $("#scheduleSheetPasteInput").value = "";
   renderScheduleSheetPastePreview([]);
+}
+
+function groupScheduleSheetCandidates(rows = []) {
+  const readyRows = rows.filter((row) => !row.issues.length);
+  const grouped = new Map();
+  readyRows.forEach((row) => {
+    const candidate = scheduleSheetRowCandidate(row);
+    if (!candidate) return;
+    const key = `${candidate.ticketId}|${candidate.coachId}|${candidate.lessonSource}|${candidate.durationMinutes}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(candidate);
+  });
+  return [...grouped.values()];
+}
+
+async function submitScheduleSheetPaste() {
+  const rows = state.scheduleSheetPasteRows?.length
+    ? validateScheduleSheetRows(state.scheduleSheetPasteRows)
+    : parseScheduleSheetPaste($("#scheduleSheetPasteInput")?.value || "");
+  state.scheduleSheetPasteRows = rows;
+  renderScheduleSheetPastePreview(rows);
+  const groups = groupScheduleSheetCandidates(rows);
+  if (!groups.length) {
+    showToast("저장 가능한 줄이 없습니다. 미리보기의 확인 필요 항목을 먼저 고쳐 주세요.");
+    return;
+  }
+  if (!window.confirm(`${groups.reduce((sum, group) => sum + group.length, 0)}개 수업을 서버에 등록할까요?`)) return;
+  const saveButton = $("#saveScheduleSheetPaste");
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = "저장 중";
+  }
+  saveScheduleSafetySnapshot(lessons, "before-sheet-paste-write");
+  const savedGroups = [];
+  try {
+    for (const group of groups) {
+      state.lessonOperationKey = createAdminOperationKey("lesson-sheet-paste");
+      await saveLiveAdminLessonSet(group);
+      savedGroups.push(group);
+    }
+    const synced = await syncAdminLiveData();
+    if (!synced) throw new Error("admin_live_refresh_failed_after_sheet_paste");
+    state.scheduleSheetPasteRows = [];
+    if ($("#scheduleSheetPasteInput")) $("#scheduleSheetPasteInput").value = "";
+    renderScheduleSheetPastePreview([]);
+    renderAll();
+    showToast(`표 붙여넣기 등록 완료 · ${savedGroups.reduce((sum, group) => sum + group.length, 0)}개 수업`);
+  } catch (error) {
+    await syncAdminLiveData().catch(() => false);
+    renderScheduleSheetPastePreview(rows);
+    showToast(`표 붙여넣기 저장 실패: ${error?.payload?.message || error?.message || "서버 확인 필요"}`);
+  } finally {
+    state.lessonOperationKey = "";
+    if (saveButton) {
+      saveButton.textContent = "확인한 줄 일괄 등록";
+      renderScheduleSheetPastePreview(state.scheduleSheetPasteRows);
+    }
+  }
 }
 
 function scheduleClipboardDefaults(button) {
@@ -19613,6 +19743,10 @@ function bindEvents() {
     }
     if (event.target.closest("#previewScheduleSheetPaste")) {
       previewScheduleSheetPaste();
+      return;
+    }
+    if (event.target.closest("#saveScheduleSheetPaste")) {
+      await submitScheduleSheetPaste();
       return;
     }
     if (event.target.closest("#clearScheduleSheetPaste")) {
