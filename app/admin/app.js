@@ -87,6 +87,15 @@ const state = {
   makeupEntitlements: [],
 };
 
+function adminEmptyState(options = {}) {
+  return window.TennisNoteUiLanguage?.emptyState?.(options)
+    || `<p class="empty-text">${escapeHtml(options.title || "표시할 내용이 없습니다.")}</p>`;
+}
+
+function adminStatusLabel(group, value, fallback = "") {
+  return window.TennisNoteUiLanguage?.statusLabel?.(group, value, fallback) || fallback || value || "";
+}
+
 // Keep the last confirmed server schedule locally. A failed or unexpectedly empty
 // refresh must never make an already loaded timetable look deleted.
 const scheduleSafetySnapshotKey = "tennis-note-admin-schedule-safety-v1";
@@ -5705,7 +5714,12 @@ function renderAdminOperations() {
         </article>`,
         )
         .join("")
-    : '<p class="empty-text">지금 바로 처리할 일이 없습니다.</p>';
+    : adminEmptyState({
+        title: "지금 바로 처리할 일이 없습니다",
+        reason: "결제 오류, 마감 업무, 당일 수업 영향 항목이 생기면 우선순위대로 표시됩니다.",
+        action: { label: "오늘 시간표 확인", jump: "schedule", primary: false },
+        compact: true,
+      });
 
   renderDashboardPager("#adminTaskPager", allTasks.length, state.adminTaskPage, "tasks");
 
@@ -5729,7 +5743,12 @@ function renderAdminOperations() {
           <b>잔여 ${remaining}회</b>
         </article>`;
     })
-    .join("");
+    .join("") || adminEmptyState({
+      title: "표시할 회원 상태가 없습니다",
+      reason: "회원과 회원권을 등록하면 잔여 횟수와 상태를 확인할 수 있습니다.",
+      action: { label: "회원 관리", jump: "members", primary: false },
+      compact: true,
+    });
   renderDashboardPager("#memberStatusPager", members.length, state.memberStatusPage, "members");
 
   const shared = operationalSharedData();
@@ -8251,6 +8270,7 @@ async function submitMemberManagementForm(event) {
     }
     const verificationError = memberManagementWriteVerification(action, managementPayload, result, statusAction);
     if (verificationError) throw new Error(verificationError);
+    window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
     closeMemberManagementModal();
     const normalizedResult = normalizedRpcResult(result);
     if (action === "link_existing" && linkedTargetMemberUserId) {
@@ -12567,6 +12587,7 @@ async function markEditingLessonAbsentForMakeup() {
       target_reason: reason,
     });
     billingLogs.unshift(`${lesson.member} ${lesson.day} ${lesson.time} 불참 처리 · 보강 선택 대기`);
+    window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
     closeLessonModal();
     await syncAdminLiveData();
     setView("schedule");
@@ -12737,6 +12758,7 @@ async function submitSubstituteAssignments(event) {
       payload,
     );
     await syncAdminLiveData();
+    window.TennisNoteInputGuard?.markSaved?.("#substituteModal");
     closeSubstituteModal();
     if (state.scheduleBulkMode) {
       state.selectedScheduleLessonIds = [];
@@ -12783,6 +12805,7 @@ async function cancelSubstituteAssignments() {
       target_reason: $("#substituteReason")?.value.trim() || "관리자 대타 지정 취소",
     });
     await syncAdminLiveData();
+    window.TennisNoteInputGuard?.markSaved?.("#substituteModal");
     closeSubstituteModal();
     renderAll();
     showToast(`${Number(result?.restoredCount ?? result?.restored_count ?? 0)}개 수업 원 담당 코치 복원 완료`);
@@ -12915,6 +12938,7 @@ async function saveOneDayBooking(event) {
       target_status: values.status,
     });
     await syncAdminLiveData();
+    window.TennisNoteInputGuard?.markSaved?.("#oneDayBookingModal");
     closeOneDayBookingModal();
     setView("schedule");
     showToast("원데이 예약 저장 완료 · 가입 후 자동 연결 준비");
@@ -12945,6 +12969,7 @@ async function deleteOneDayBooking() {
       target_booking_id: booking.serverOneDayBookingId,
     });
     await syncAdminLiveData();
+    window.TennisNoteInputGuard?.markSaved?.("#oneDayBookingModal");
     closeOneDayBookingModal();
     showToast("원데이 예약 삭제 완료");
   } catch (error) {
@@ -12990,6 +13015,7 @@ async function restoreAbsentLessonFromModal() {
       target_reason: "회원 참석 재확인",
       target_cancel_booked_makeup: cancelBookedMakeup,
     });
+    window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
     closeLessonModal();
     await syncAdminLiveData();
     setView("schedule");
@@ -13341,6 +13367,7 @@ async function addLessonFromForm(event) {
       try {
         const result = await saveLivePastLessonAbsenceCorrection();
         const restoredSessions = Number(result?.restoredSessions) || 0;
+        window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
         closeLessonModal();
         await syncAdminLiveData();
         setView("schedule");
@@ -13405,6 +13432,7 @@ async function addLessonFromForm(event) {
       const deductedSessions = Number(result?.deductedSessions) || 1;
       const remainingSessions = Number(result?.remainingSessions);
       billingLogs.unshift(`${candidate.member} ${candidate.day} ${candidate.time} 과거 수업 보정 · ${deductedSessions}회 차감`);
+      window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
       closeLessonModal();
       setView("schedule");
       await syncAdminLiveData();
@@ -13549,6 +13577,7 @@ async function addLessonFromForm(event) {
         missingRows: [],
       });
       billingLogs.unshift(`${candidate.member} ${selectedSchedules.map((item) => `${item.day} ${item.time}`).join(", ")} 실서버 수업 저장`);
+      window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
       closeLessonModal();
       setView("schedule");
       showToast(manualOverride
@@ -13634,6 +13663,7 @@ async function addLessonFromForm(event) {
     billingLogs.unshift(`${candidate.member} ${selectedSchedules.map((item) => `${item.day} ${item.time}`).join(", ")} ${lessonTypeLabel(candidate)} 수업 추가`);
   }
   lessons.sort((a, b) => scheduleDays.indexOf(a.day) - scheduleDays.indexOf(b.day) || timeToMinutes(a.time) - timeToMinutes(b.time));
+  window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
   closeLessonModal();
   setView("schedule");
   renderAll();
@@ -13668,6 +13698,7 @@ async function deleteEditingLesson() {
       });
       const restoredSessions = Number(result?.restoredSessions || 0);
       billingLogs.unshift(`${getLessonMembersLabel(lesson)} ${lesson.day} ${lesson.time} 강제 삭제 · ${restoredSessions}회 복원`);
+      window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
       closeLessonModal();
       setView("schedule");
       await syncAdminLiveData();
@@ -13687,6 +13718,7 @@ async function deleteEditingLesson() {
   const index = lessons.findIndex((item) => item.id === lesson.id);
   if (index >= 0) lessons.splice(index, 1);
   billingLogs.unshift(`${getLessonMembersLabel(lesson)} ${lesson.day} ${lesson.time} 강제 삭제`);
+  window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
   closeLessonModal();
   setView("schedule");
   renderAll();
@@ -14789,7 +14821,14 @@ function renderNotes() {
           </aside>
         </article>`,
     )
-    .join("") || "<p class='empty-text'>해당 상태의 기록이 없습니다.</p>";
+    .join("") || adminEmptyState({
+      title: "해당 상태의 기록이 없습니다",
+      reason: activeFilter === "pending"
+        ? "수업 후 코멘트·커리큘럼·차감이 필요한 항목이 생기면 여기에 표시됩니다."
+        : "필터를 바꾸면 다른 처리 상태의 기록을 확인할 수 있습니다.",
+      action: { label: "오늘 시간표 확인", jump: "schedule", primary: false },
+      compact: true,
+    });
 }
 
 function closeLessonRecordModal() {
@@ -14927,6 +14966,7 @@ async function saveLessonRecord(event) {
       target_next_curriculum_ref_id: curriculumRefId,
       target_member_journal_id: lessonRecordEditorState.journalId || null,
     });
+    window.TennisNoteInputGuard?.markSaved?.("#lessonRecordModal");
     closeLessonRecordModal();
     state.recordFilter = "done";
     await syncAdminLiveData();
@@ -17404,6 +17444,7 @@ async function saveCoachStaff() {
     if (!coachStaffServerMatches(saved, draft)) {
       throw new Error("coach_staff_server_verification_failed");
     }
+    window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
     closeCoachStaffModal();
     renderCoaches();
     renderSchedule();
@@ -17438,6 +17479,7 @@ async function setCoachStaffState(targetState) {
     const saved = coaches.find((coach) => coach.serverRoleId === draft.coachRoleId);
     const expectedApproval = ["approved", "restored"].includes(targetState) ? "approved" : "disabled";
     if (!saved || saved.approvalStatus !== expectedApproval) throw new Error("coach_staff_state_verification_failed");
+    window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
     closeCoachStaffModal();
     renderCoaches();
     renderSchedule();

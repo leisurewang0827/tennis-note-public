@@ -84,6 +84,15 @@ const state = {
   ticketHistory: [],
 };
 
+function memberEmptyState(options = {}) {
+  return window.TennisNoteUiLanguage?.emptyState?.(options)
+    || `<p class="empty-text">${options.title || "표시할 내용이 없습니다."}</p>`;
+}
+
+function memberStatusLabel(group, value, fallback = "") {
+  return window.TennisNoteUiLanguage?.statusLabel?.(group, value, fallback) || fallback || String(value || "");
+}
+
 const brandSplashStartedAt = performance.now();
 // The splash should confirm that the app opened, not hold the member on a
 // blank screen while optional network requests finish.
@@ -1496,7 +1505,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.89";
+    const refreshKey = "tennis-note-sw-refresh-1.0.90";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1504,7 +1513,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.89", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.90", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1677,6 +1686,7 @@ async function submitAccountDeletionRequest(event) {
       target_reason: $("#accountDeletionReason")?.value?.trim() || "",
     });
     await syncMemberAccountDeletionRequestFromServer();
+    window.TennisNoteInputGuard?.markSaved?.("#accountDeletionModal");
     closeAccountDeletionModal();
     renderAccountDeletionSettings();
     renderPushNotificationSettings();
@@ -3006,7 +3016,12 @@ function renderMemberOwnSchedule() {
                 <span class="member-own-lesson-detail"><strong>${escapeHtml(memberCoachShortName(lesson.coach))}</strong><small>${escapeHtml(lesson.type || "레슨")}</small></span>
                 <span class="member-own-lesson-action">변경</span>
               </button>`).join("")
-          : `<p class="member-mobile-empty">이번 주에 등록된 수업이 없습니다.</p>`}
+          : memberEmptyState({
+            title: "이번 주 수업이 없습니다",
+            reason: "회원권이 있다면 시간표에서 예약 가능한 시간을 확인해 주세요.",
+            action: { label: "시간표 보기", homeAction: "makeup" },
+            compact: true,
+          })}
       </div>
     </section>`;
 }
@@ -3327,7 +3342,12 @@ function renderAvailableSlots() {
           </button>`;
         },
       )
-      .join("") || "<p class='empty-text'>현재 정책 안에서 변경 가능한 시간이 없습니다.</p>";
+      .join("") || memberEmptyState({
+        title: "변경 가능한 시간이 없습니다",
+        reason: "운영시간, 담당 코치, 회원권 조건에 맞는 빈 시간이 아직 없습니다.",
+        action: { label: "회원권 확인", homeAction: "shop", primary: false },
+        compact: true,
+      });
   updateChangeRequestAvailability(availableLessons);
 }
 
@@ -3408,7 +3428,12 @@ function renderRequests() {
             <b>${request.status}</b>
           </article>`,
       )
-      .join("") || "<p class='empty-text'>아직 수업 변경 요청이 없습니다.</p>";
+      .join("") || memberEmptyState({
+        title: "수업 변경 요청이 없습니다",
+        reason: "변경이 필요하면 내 수업에서 가능한 시간을 선택해 주세요.",
+        action: { label: "시간표 보기", homeAction: "makeup", primary: false },
+        compact: true,
+      });
 }
 
 function syncMakeupRequestsFromCoach() {
@@ -3443,12 +3468,12 @@ function renderLessonLogs() {
       .map(
         (log) => {
           const statusLabel = log.status === "confirmed"
-            ? "코치 코멘트 확인"
+            ? memberStatusLabel("coachRecord", "saved", "저장 완료")
             : log.status === "uploading"
-              ? "서버 저장 중"
+              ? memberStatusLabel("coachRecord", "sync_pending", "동기화 대기")
               : log.status === "server_error"
-                ? "서버 저장 확인 필요"
-                : "피드백 등록중";
+                ? memberStatusLabel("coachRecord", "sync_failed", "동기화 실패")
+                : memberStatusLabel("coachRecord", "writing", "작성 전");
           const dateLabel = log.journalDate || new Date(log.submittedAt || Date.now()).toISOString().slice(0, 10);
           return `
             <button class="history-card compact-log summary-log ${log.status === "confirmed" ? "done" : "wait"}" type="button" data-open-journal-detail="${log.id}">
@@ -3460,7 +3485,12 @@ function renderLessonLogs() {
             </button>`;
         },
       )
-      .join("") || "<p class='empty-text'>아직 제출된 수업기록이 없습니다.</p>";
+      .join("") || memberEmptyState({
+        title: "수업 피드백이 없습니다",
+        reason: "수업이 완료되면 코치의 코멘트와 다음 커리큘럼이 여기에 표시됩니다.",
+        action: { label: "다음 수업 확인", homeAction: "makeup", primary: false },
+        compact: true,
+      });
   renderListPager("lessonLogsPager", "lesson", lessonPage, lessonItems.length);
 }
 
@@ -3706,7 +3736,12 @@ function renderTickets() {
           </div>
         </article>`;
     })
-    .join("") || "<p class='empty-text'>아직 수업 진행 내역이 없습니다.</p>";
+    .join("") || memberEmptyState({
+      title: "수업 이용내역이 없습니다",
+      reason: "완료된 수업과 회원권 차감 내역이 여기에 표시됩니다.",
+      action: { label: "시간표 보기", homeAction: "makeup", primary: false },
+      compact: true,
+    });
   renderListPager("ticketHistoryPager", "ticket", ticketPage, ticketItems.length);
 }
 
@@ -3731,7 +3766,12 @@ function renderPracticeLogs() {
             <span class="summary-log-status">상세 보기</span>
           </button>`;
       })
-      .join("") || "<p class='empty-text'>아직 저장된 개인 운동일지가 없습니다.</p>";
+      .join("") || memberEmptyState({
+        title: "개인 운동일지가 없습니다",
+        reason: "운동한 날짜를 선택해 첫 기록을 남겨 보세요.",
+        action: { label: "운동일지 작성", openJournal: state.selectedJournalDate || localDateKey() },
+        compact: true,
+      });
   renderListPager("practiceLogsPager", "practice", practicePage, practiceItems.length);
 }
 
@@ -4005,6 +4045,7 @@ async function submitHoldingRequest(event) {
   saveSharedData(shared);
   state.ticketHistory.unshift({ text: `홀딩 신청 · ${startDate}~${endDate} · 관리자 검토중`, tone: "wait" });
   saveSnapshot();
+  window.TennisNoteInputGuard?.markSaved?.("#holdingRequestModal");
   closeHoldingRequestModal();
   renderCurrentTicketPanel();
 }
@@ -4359,6 +4400,7 @@ async function submitMemberEnrollment(event) {
     state.ticketHistory.unshift({ text: `${product.title} 수강 가입서 제출 완료`, tone: "done" });
     saveSnapshot();
     renderAll();
+    window.TennisNoteInputGuard?.markSaved?.("#memberEnrollmentModal");
     closeMemberEnrollmentModal();
     if (hasLiveMemberSession()) {
       await startProductPayment(product.id, { skipEnrollmentGate: true });
@@ -6202,7 +6244,12 @@ function renderSelectedJournalDayPanel() {
       <button class="small-button" type="button" data-journal-write-date="${selectedDate}">이 날짜에 기록</button>
     </div>
     <div class="journal-selected-list">
-      ${entries.length ? entries.map(renderSelectedJournalCard).join("") : `<p class="empty-text">선택한 날짜에 표시할 기록이 없습니다.</p>`}
+      ${entries.length ? entries.map(renderSelectedJournalCard).join("") : memberEmptyState({
+        title: "이 날짜의 운동 기록이 없습니다",
+        reason: "레슨 또는 개인운동 내용을 사진·영상과 함께 남길 수 있습니다.",
+        action: { label: "이 날짜에 기록", openJournal: selectedDate },
+        compact: true,
+      })}
     </div>`;
 }
 
@@ -6495,7 +6542,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.89" });
+  const params = new URLSearchParams({ v: "1.0.90" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -6708,12 +6755,16 @@ async function saveJournal() {
       if (button) button.disabled = false;
       renderJournalMode();
     }
-    if (saved) closeAppSheet("journalComposerSheet");
+    if (saved) {
+      window.TennisNoteInputGuard?.markSaved?.("#journalComposerSheet");
+      closeAppSheet("journalComposerSheet");
+    }
     return;
   }
   savePracticeLog();
   if (button) button.disabled = false;
   renderJournalMode();
+  window.TennisNoteInputGuard?.markSaved?.("#journalComposerSheet");
   closeAppSheet("journalComposerSheet");
 }
 
@@ -7024,6 +7075,7 @@ async function saveProfileInfo() {
   renderProfile();
   renderTickets();
   saveSnapshot();
+  window.TennisNoteInputGuard?.markSaved?.("#profileEditorSheet");
   closeAppSheet("profileEditorSheet");
 }
 
@@ -7386,6 +7438,7 @@ async function requestMakeup() {
         tone: isMakeupEntitlement || isCouponBooking || result?.status === "auto_approved" ? "done" : "wait",
       });
       if ($("#changeReason")) $("#changeReason").value = "";
+      window.TennisNoteInputGuard?.markSaved?.("#changeRequestModal");
       closeChangeRequestModal();
       renderAll();
       saveSnapshot();
@@ -7460,6 +7513,7 @@ async function requestMakeup() {
   state.ticketHistory.unshift({ text: `${originalDay} ${originalTime} → ${makeup.day} ${makeup.time} 수업 변경 요청 접수`, tone: "wait" });
   state.ticketHistory.unshift({ text: `${originalDay} ${originalTime} ${originalCoach} 시간 비움 · 다른 회원 수업변경 신청 가능`, tone: "done" });
   if ($("#changeReason")) $("#changeReason").value = "";
+  window.TennisNoteInputGuard?.markSaved?.("#changeRequestModal");
   closeChangeRequestModal();
   renderAll();
 }

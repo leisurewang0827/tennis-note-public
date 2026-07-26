@@ -7,7 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.89" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.90" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.90" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1082,7 +1083,7 @@
       </section>
     </div>
 
-    <div id="lessonModal" class="modal-backdrop" hidden>
+    <div id="lessonModal" class="modal-backdrop" data-tn-input-guard="admin-lesson" data-tn-restore-draft="true" hidden>
       <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="lessonModalTitle">
         <div class="modal-heading">
           <div>
@@ -1231,7 +1232,7 @@
       </section>
     </div>
 
-    <div id="substituteModal" class="modal-backdrop" hidden>
+    <div id="substituteModal" class="modal-backdrop" data-tn-input-guard="admin-substitute" data-tn-restore-draft="true" hidden>
       <section class="modal-panel substitute-modal-panel" role="dialog" aria-modal="true" aria-labelledby="substituteModalTitle">
         <div class="modal-heading">
           <div>
@@ -1280,7 +1281,7 @@
       </section>
     </div>
 
-    <div id="coachStaffModal" class="modal-backdrop coach-staff-modal" hidden>
+    <div id="coachStaffModal" class="modal-backdrop coach-staff-modal" data-tn-input-guard="admin-coach-staff" data-tn-restore-draft="true" hidden>
       <section class="modal-panel coach-staff-modal-panel" role="dialog" aria-modal="true" aria-labelledby="coachStaffModalTitle">
         <div class="modal-heading">
           <div>
@@ -1309,7 +1310,7 @@
       </section>
     </div>
 
-    <div id="oneDayBookingModal" class="modal-backdrop" hidden>
+    <div id="oneDayBookingModal" class="modal-backdrop" data-tn-input-guard="admin-one-day" data-tn-restore-draft="true" hidden>
       <section class="modal-panel one-day-booking-modal-panel" role="dialog" aria-modal="true" aria-labelledby="oneDayBookingModalTitle">
         <div class="modal-heading">
           <div>
@@ -1444,7 +1445,7 @@
       </section>
     </div>
 
-    <div id="memberManagementModal" class="modal-backdrop" hidden>
+    <div id="memberManagementModal" class="modal-backdrop" data-tn-input-guard="admin-member" data-tn-restore-draft="true" hidden>
       <section class="modal-panel member-management-modal-panel" role="dialog" aria-modal="true" aria-labelledby="memberManagementModalTitle">
         <div class="modal-heading">
           <div>
@@ -1457,7 +1458,7 @@
       </section>
     </div>
 
-    <div id="lessonRecordModal" class="modal-backdrop" hidden>
+    <div id="lessonRecordModal" class="modal-backdrop" data-tn-input-guard="admin-lesson-record" data-tn-restore-draft="true" hidden>
       <section class="modal-panel lesson-record-modal-panel" role="dialog" aria-modal="true" aria-labelledby="lessonRecordModalTitle">
         <div class="modal-heading">
           <div>
@@ -1488,11 +1489,13 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.89"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.90"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.89"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.90"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.90"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.90"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.89"></script>
+    <script src="./app.js?v=1.0.90"></script>
   </body>
 </html>

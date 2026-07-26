@@ -70,6 +70,15 @@ const state = {
   expiredMembers: [],
 };
 
+function coachEmptyState(options = {}) {
+  return window.TennisNoteUiLanguage?.emptyState?.(options)
+    || `<p class="empty-text">${escapeHtml(options.title || "표시할 내용이 없습니다.")}</p>`;
+}
+
+function coachStatusLabel(group, value, fallback = "") {
+  return window.TennisNoteUiLanguage?.statusLabel?.(group, value, fallback) || fallback || value || "";
+}
+
 const noticeSessionSeenIds = new Set();
 let noticePreviousFocus = null;
 let coachOfflineFlushPromise = null;
@@ -1429,7 +1438,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.89";
+  const refreshKey = "tennis-note-sw-refresh-1.0.90";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1439,7 +1448,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.89", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.90", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1491,7 +1500,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.89" });
+  const params = new URLSearchParams({ v: "1.0.90" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2130,7 +2139,12 @@ function renderTodayLessons() {
                         </section>`;
                     })
                     .join("")
-                : "<p class='empty-text'>오늘 등록된 레슨이 없습니다.</p>"}
+                : coachEmptyState({
+                    title: "오늘 예정된 수업이 없습니다",
+                    reason: "담당 수업이 등록되면 시간순으로 표시됩니다.",
+                    action: { label: "전체 레슨표 보기", view: "fullScheduleView" },
+                    compact: true,
+                  })}
             </div>
             ${transferredLessons.length ? `
               <div class="substitute-transfer-list" aria-label="대타 코치 처리 일정">
@@ -2165,7 +2179,12 @@ function renderTodayLessons() {
                           </button>`,
                     )
                     .join("")
-                : "<p class='empty-text'>확인할 보강신청이 없습니다.</p>"}
+                : coachEmptyState({
+                    title: "확인할 보강·변경 요청이 없습니다",
+                    reason: "새 요청이 접수되면 회원과 요청 시간이 여기에 표시됩니다.",
+                    action: { label: "전체 레슨표 보기", view: "fullScheduleView", primary: false },
+                    compact: true,
+                  })}
             </div>
             ${todayTaskToggleButton(ownMakeupTasks, "makeup")}
           </section>`
@@ -2336,7 +2355,12 @@ function renderLessonRecordWritePanel() {
   if (!lesson) {
     return `
       <section class="schedule-edit-panel is-empty">
-        <strong>작성할 수업이 없습니다.</strong>
+        ${coachEmptyState({
+          title: "작성할 수업이 없습니다",
+          reason: "오늘 담당 수업이 등록된 뒤 기록과 차감을 처리할 수 있습니다.",
+          action: { label: "오늘 일정 보기", view: "todayView", primary: false },
+          compact: true,
+        })}
         <div class="actions">
           <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
         </div>
@@ -2885,7 +2909,13 @@ function renderMembers() {
   const rows = visible
     .map((member) => (filter === "active" ? renderActiveMemberCard(member) : renderExpiredMemberCard(member)))
     .join("");
-  target.innerHTML = rows ? `${renderMemberHeader(filter)}${rows}` : `<p class='empty-text'>${filter === "active" ? "현재 수강생" : "만료회원"}이 없습니다.</p>`;
+  target.innerHTML = rows ? `${renderMemberHeader(filter)}${rows}` : coachEmptyState({
+    title: filter === "active" ? "현재 수강생이 없습니다" : "만료회원이 없습니다",
+    reason: query || coachFilter !== "all" || ticketFilter !== "all"
+      ? "검색어나 필터를 바꾸면 다른 회원을 확인할 수 있습니다."
+      : "관리자가 회원과 코치를 연결하면 이 목록에 표시됩니다.",
+    compact: true,
+  });
   renderMemberPager(items.length, page);
 }
 
@@ -3326,6 +3356,7 @@ async function saveLessonEdit(id) {
   Object.assign(lesson, lessonUpdates);
   const liveLesson = state.liveLessons.find((item) => item.serverLessonId && item.serverLessonId === lesson.serverLessonId);
   if (liveLesson) Object.assign(liveLesson, lessonUpdates);
+  window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
   closeLessonEditor();
   renderAll();
 }
@@ -3354,6 +3385,7 @@ async function markCoachLessonAbsent(id) {
       target_lesson_id: lesson.serverLessonId,
       target_reason: reason,
     });
+    window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
     closeLessonEditor();
     await syncCoachLessonsFromServer();
     renderAll();
@@ -3432,6 +3464,7 @@ function saveLessonRecord() {
   state.lessonLogs.unshift(log);
   state.focusedLogId = log.id;
   state.todayTaskTab = "records";
+  window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
   closeLessonEditor();
   renderAll();
   setView("todayView");
@@ -3475,6 +3508,7 @@ async function completeLessonFromModal(id) {
   }
   state.lessonLogs.unshift(log);
   lesson.validationMessage = "";
+  window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
   closeLessonEditor();
   state.todayTaskTab = "records";
   renderAll();
@@ -3614,7 +3648,7 @@ function recordProcessingMarkup() {
               </label>
               ${log.validationMessage ? `<p class="validation-text">${log.validationMessage}</p>` : ""}
               <div class="actions">
-                <b>${log.status}</b>
+                <b>${coachStatusLabel("coachRecord", log.serverDeducted || log.ticketDeducted ? "deducted" : log.status, log.status)}</b>
                 <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" ? "disabled" : ""}>
                   ${["동기화 대기", "동기화 실패"].includes(log.status) ? "다시 동기화" : "다음 커리큘럼 등록 + 확인/차감"}
                 </button>
@@ -3622,7 +3656,12 @@ function recordProcessingMarkup() {
             </div>
           </article>`;
       })
-      .join("") || "<p class='empty-text'>확인할 수업 기록이 없습니다.</p>";
+      .join("") || coachEmptyState({
+        title: "확인할 수업 기록이 없습니다",
+        reason: "수업이 끝나면 코멘트와 다음 커리큘럼을 등록해 횟수를 차감합니다.",
+        action: { label: "오늘 수업 보기", view: "todayView", primary: false },
+        compact: true,
+      });
   const feedbackMarkup =
     visibleFeedback
       .map((request) => {
@@ -3650,7 +3689,11 @@ function recordProcessingMarkup() {
             </div>
           </article>`;
       })
-      .join("") || "<p class='empty-text'>확인할 운동노트 피드백 요청이 없습니다.</p>";
+      .join("") || coachEmptyState({
+        title: "운동노트 피드백 요청이 없습니다",
+        reason: "회원이 사진·영상 기록에 피드백을 요청하면 여기에 표시됩니다.",
+        compact: true,
+      });
   return `
     <section class="record-section">
       <div class="record-section-title">
@@ -3688,7 +3731,7 @@ function renderMemberRecordPanel() {
         <article class="member-record-row ${state.focusedLogId === log.id ? "is-focused" : ""}">
           <strong>${log.member}</strong>
           <span>${log.lesson}</span>
-          <small>${log.status}</small>
+          <small>${coachStatusLabel("coachRecord", log.status, log.status)}</small>
           <button class="small-button" type="button" data-focus-record="${log.id}">처리</button>
         </article>`,
     )
@@ -4030,17 +4073,18 @@ async function confirmLog(id, options = {}) {
   const log = options.skipDraft
     ? state.lessonLogs.find((item) => item.id === id)
     : updateLogDraft(id);
-  if (!log || log.status === "확인 완료") return;
+  if (!log) return false;
+  if (log.status === "확인 완료") return true;
   if (!log.coachComment || !log.nextCurriculumId) {
     log.validationMessage = "코치 코멘트와 다음 커리큘럼을 등록해야 횟수 차감이 가능합니다.";
     renderAll();
-    return;
+    return false;
   }
   const commentError = coachCommentValidationMessage(log);
   if (commentError) {
     log.validationMessage = commentError;
     renderAll();
-    return;
+    return false;
   }
   const nextStep = selectedCurriculum(log.nextCurriculumId);
   let serverResult = null;
@@ -4049,14 +4093,14 @@ async function confirmLog(id, options = {}) {
     if (!client?.rpc || !client.getSession?.()?.access_token) {
       log.validationMessage = "서버 로그인 상태를 확인한 뒤 다시 처리해 주세요.";
       renderAll();
-      return;
+      return false;
     }
     if (client.isOnline?.() === false) {
       log.status = "동기화 대기";
       log.validationMessage = "인터넷 연결 후 자동 처리됩니다. 서버 확인 전에는 횟수가 차감되지 않습니다.";
       saveSnapshot();
       renderAll();
-      return;
+      return false;
     }
     log.status = "서버 처리 중";
     renderAll();
@@ -4074,7 +4118,7 @@ async function confirmLog(id, options = {}) {
         log.validationMessage = "인터넷 연결 후 자동 처리됩니다. 서버 확인 전에는 횟수가 차감되지 않습니다.";
         saveSnapshot();
         renderAll();
-        return;
+        return false;
       }
       let code = error?.payload?.message || error?.payload?.code || error?.message || "server_error";
       if (typeof code === "string" && code.trim().startsWith("{")) {
@@ -4098,7 +4142,7 @@ async function confirmLog(id, options = {}) {
           : "서버 횟수 차감에 실패했습니다. 같은 기록에서 다시 시도해 주세요.");
       saveSnapshot();
       renderAll();
-      return;
+      return false;
     }
   }
   log.status = "확인 완료";
@@ -4134,6 +4178,7 @@ async function confirmLog(id, options = {}) {
   }
   saveSnapshot();
   renderAll();
+  return true;
 }
 
 function coachPendingSyncLogs() {

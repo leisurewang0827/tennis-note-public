@@ -11,7 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.89" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.90" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.90" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -220,7 +221,7 @@
           </details>
           <div id="journalSelectedDayPanel" class="journal-selected-panel"></div>
 
-          <section id="journalComposerSheet" class="app-bottom-sheet" aria-labelledby="journalComposerTitle" hidden>
+          <section id="journalComposerSheet" class="app-bottom-sheet" aria-labelledby="journalComposerTitle" data-tn-input-guard="member-journal" data-tn-restore-draft="true" hidden>
             <button class="sheet-backdrop" type="button" aria-label="운동일지 작성 닫기" data-close-journal-composer></button>
             <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="journalComposerTitle">
               <div class="sheet-handle" aria-hidden="true"></div>
@@ -477,7 +478,7 @@
             <button class="small-button danger-button" type="button" id="openAccountDeletionButton">탈퇴·삭제 요청</button>
           </section>
 
-          <section id="profileEditorSheet" class="app-bottom-sheet" aria-labelledby="profileEditorTitle" hidden>
+          <section id="profileEditorSheet" class="app-bottom-sheet" aria-labelledby="profileEditorTitle" data-tn-input-guard="member-profile" data-tn-restore-draft="true" hidden>
             <button class="sheet-backdrop" type="button" aria-label="내 정보 수정 닫기" data-close-profile-editor></button>
             <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="profileEditorTitle">
               <div class="sheet-handle" aria-hidden="true"></div>
@@ -617,7 +618,7 @@
       </article>
     </section>
 
-    <section id="identitySetupModal" class="change-request-modal identity-setup-modal" hidden>
+    <section id="identitySetupModal" class="change-request-modal identity-setup-modal" data-tn-input-guard="member-identity" data-tn-restore-draft="true" hidden>
       <div class="modal-backdrop"></div>
       <article class="change-modal-card identity-setup-card" role="dialog" aria-modal="true" aria-labelledby="identitySetupTitle">
         <p class="eyebrow">가입 정보 확인</p>
@@ -673,7 +674,7 @@
       </article>
     </section>
 
-    <section id="memberEnrollmentModal" class="change-request-modal" hidden>
+    <section id="memberEnrollmentModal" class="change-request-modal" data-tn-input-guard="member-enrollment" data-tn-restore-draft="true" hidden>
       <div class="modal-backdrop" data-close-member-enrollment></div>
       <article class="change-modal-card member-enrollment-modal-card" role="dialog" aria-modal="true" aria-labelledby="memberEnrollmentTitle">
         <div class="section-title compact-title">
@@ -754,7 +755,7 @@
       </article>
     </section>
 
-    <section id="changeRequestModal" class="change-request-modal" hidden>
+    <section id="changeRequestModal" class="change-request-modal" data-tn-input-guard="member-change-request" data-tn-restore-draft="true" hidden>
       <div class="modal-backdrop" data-close-change-modal></div>
       <article class="change-modal-card" role="dialog" aria-modal="true" aria-label="수업 변경 요청">
         <div class="section-title compact-title">
@@ -795,7 +796,7 @@
       </article>
     </section>
 
-    <section id="holdingRequestModal" class="change-request-modal" hidden>
+    <section id="holdingRequestModal" class="change-request-modal" data-tn-input-guard="member-holding" data-tn-restore-draft="true" hidden>
       <div class="modal-backdrop" data-close-holding-modal></div>
       <article class="change-modal-card holding-modal-card" role="dialog" aria-modal="true" aria-label="회원권 홀딩 신청">
         <div class="section-title compact-title">
@@ -838,7 +839,7 @@
       </article>
     </section>
 
-    <section id="accountDeletionModal" class="change-request-modal" hidden>
+    <section id="accountDeletionModal" class="change-request-modal" data-tn-input-guard="member-account-deletion" hidden>
       <div class="modal-backdrop" data-close-account-deletion-modal></div>
       <article class="change-modal-card account-deletion-modal-card" role="dialog" aria-modal="true" aria-label="회원 탈퇴 및 데이터 삭제 요청">
         <div class="section-title compact-title">
@@ -881,12 +882,14 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.89"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.90"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.89"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.90"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.90"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.90"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.89"></script>
+    <script src="./app.js?v=1.0.90"></script>
   </body>
 </html>
