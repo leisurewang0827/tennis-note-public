@@ -1,7 +1,7 @@
 (function () {
   const release = Object.freeze({
-    version: "1.0.116",
-    releaseId: "2026.07.27.16",
+    version: "1.0.117",
+    releaseId: "2026.07.27.17",
     nativeShell: {
       version: "1.0.114",
       androidBuild: 46,

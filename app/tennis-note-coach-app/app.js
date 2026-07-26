@@ -1403,7 +1403,7 @@ function canonicalCoachName(name = "") {
   if (!raw) return "";
   const rawShort = shortCoachName(raw);
   const matched = approvedCoachesFromAdmin().find((coach) => coach.name === raw || shortCoachName(coach.name) === rawShort);
-  return matched?.name || raw;
+  return shortCoachName(matched?.name || raw);
 }
 
 function coachFromLesson(lesson, policy) {
@@ -1532,7 +1532,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.116";
+  const refreshKey = "tennis-note-sw-refresh-1.0.117";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1542,7 +1542,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.116", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.117", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1594,7 +1594,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.116" });
+  const params = new URLSearchParams({ v: "1.0.117" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1887,7 +1887,7 @@ function renderCoachModeList() {
   const markup = coaches
     .map(
       (coach) => `
-        <button class="coach-mode-chip ${canonicalCoachName(state.coach?.name || state.selectedCoachName) === coach.name ? "is-active" : ""}" type="button" data-select-coach-mode="${coach.name}">
+        <button class="coach-mode-chip ${canonicalCoachName(state.coach?.name || state.selectedCoachName) === canonicalCoachName(coach.name) ? "is-active" : ""}" type="button" data-select-coach-mode="${coach.name}">
           <strong>${coach.name}</strong>
           <span>${coach.role} · 코치모드 생성됨</span>
         </button>`,
