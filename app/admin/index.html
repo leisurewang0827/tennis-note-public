@@ -7,7 +7,7 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.79" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.80" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -337,6 +337,13 @@
             </div>
             <div id="adminScheduleDayPicker" class="schedule-day-picker" aria-label="관리자 시간표 날짜 선택"></div>
             <div id="adminScheduleCoachPicker" class="schedule-coach-picker" aria-label="코치별 시간표 필터"></div>
+            <div class="schedule-edit-guide" aria-label="엑셀식 시간표 편집 도구">
+              <strong>엑셀식 편집</strong>
+              <span>빈칸 클릭으로 추가</span>
+              <span>다중 수정으로 10분 이동</span>
+              <span>수업 복사 후 빈칸 붙여넣기</span>
+              <span>대타는 선택 후 일괄 지정</span>
+            </div>
             <div id="scheduleBulkToolbar" class="schedule-bulk-toolbar" hidden>
               <strong><span id="scheduleBulkCount">0</span>개 선택</strong>
               <div id="scheduleBulkPreview" class="schedule-bulk-preview" aria-live="polite"></div>
@@ -1452,11 +1459,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.79"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.80"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.79"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.80"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.79"></script>
+    <script src="./app.js?v=1.0.80"></script>
   </body>
 </html>
