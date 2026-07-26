@@ -50,6 +50,12 @@ const state = {
   practiceLogs: [],
   paymentRequests: [],
   selectedPaymentMethod: "card",
+  membershipFilters: {
+    scheduleScope: "weekday",
+    productKind: "regular",
+    groupSize: "1",
+    lessonMinutes: "20",
+  },
   liveMembershipProducts: [],
   liveTickets: [],
   liveLessons: [],
@@ -374,6 +380,8 @@ function membershipProductFromServer(row = {}) {
     lessonMinutes,
     groupSize,
     frequencyPerWeek: frequency,
+    scheduleScope: ["weekday", "weekend", "mixed"].includes(row.schedule_scope) ? row.schedule_scope : "weekday",
+    termWeeks: numericValue(row.term_weeks),
     productKind,
     discountEnabled: row.discount_enabled !== false,
     coachDiscountAllowed: Boolean(row.coach_discount_allowed),
@@ -405,13 +413,6 @@ function membershipProducts() {
     .filter((product) => product.status !== "hidden");
 }
 
-function productKindLabel(product) {
-  if (product.status === "consult" || product.productKind === "consult") return "상담형";
-  if (product.productKind === "pass" || product.mode === "pass") return "쿠폰제";
-  if (product.productKind === "group" || product.mode === "group") return "2대1";
-  return "정기권";
-}
-
 function formatWon(value) {
   const number = numericValue(value);
   return number ? `${number.toLocaleString("ko-KR")}원` : "상담";
@@ -419,13 +420,11 @@ function formatWon(value) {
 
 function productUsagePills(product) {
   const pills = [
-    productKindLabel(product),
     product.tickets ? `${product.tickets}회` : "상담",
     product.validityDays ? `사용 ${product.validityDays}일` : "기간 상담",
-    product.graceDays ? `유예 ${product.graceDays}일` : "유예 없음",
   ];
+  if (product.graceDays) pills.push(`유예 ${product.graceDays}일`);
   if (product.coachDiscountAllowed) pills.push("코치 할인권 가능");
-  if (!product.discountEnabled) pills.push("할인 불가");
   return pills.map((pill) => `<span>${escapeHtml(pill)}</span>`).join("");
 }
 
@@ -446,11 +445,138 @@ function productPriceRows(product) {
   }
   return `
     <div class="product-price-panel">
-      <div><span>온라인 결제</span><strong>${formatWon(onlinePaymentAmount(product))}</strong></div>
-      <div><span>카드가</span><b>${formatWon(product.cardAmount || product.listAmount)}</b></div>
-      <div><span>계좌이체가</span><b>${formatWon(product.cashAmount || product.amount)}</b></div>
-      <div><span>정산기준</span><b>${formatWon(product.settlementBase)}</b></div>
+      <div><span>카드 결제</span><strong>${formatWon(product.cardAmount || product.listAmount)}</strong></div>
+      <div><span>계좌이체</span><b>${formatWon(product.cashAmount || product.amount)}</b></div>
     </div>`;
+}
+
+const membershipFilterDefinitions = [
+  {
+    key: "scheduleScope",
+    label: "이용 요일",
+    options: [
+      ["all", "전체"],
+      ["weekday", "평일"],
+      ["weekend", "주말"],
+      ["mixed", "혼합"],
+    ],
+  },
+  {
+    key: "productKind",
+    label: "회원권",
+    options: [
+      ["all", "전체"],
+      ["regular", "정규권"],
+      ["coupon", "쿠폰제"],
+      ["consult", "상담"],
+    ],
+  },
+  {
+    key: "groupSize",
+    label: "수업",
+    options: [
+      ["all", "전체"],
+      ["1", "1대1"],
+      ["2", "2대1"],
+    ],
+  },
+  {
+    key: "lessonMinutes",
+    label: "시간",
+    options: [
+      ["all", "전체"],
+      ["20", "20분"],
+      ["30", "30분"],
+      ["40", "40분"],
+    ],
+  },
+];
+
+function membershipProductFacet(product, key) {
+  const title = `${product.title || ""} ${product.group || ""}`;
+  if (key === "scheduleScope") {
+    if (["weekday", "weekend", "mixed"].includes(product.scheduleScope)) return product.scheduleScope;
+    if (title.includes("주말")) return "weekend";
+    if (title.includes("혼합")) return "mixed";
+    return "weekday";
+  }
+  if (key === "productKind") {
+    if (product.status === "consult" || product.productKind === "consult") return "consult";
+    if (["coupon", "pass"].includes(product.productKind) || product.mode === "pass") return "coupon";
+    return "regular";
+  }
+  if (key === "groupSize") {
+    return String(Number(product.groupSize) || (/2대1|2:1/.test(title) ? 2 : 1));
+  }
+  if (key === "lessonMinutes") {
+    const titleMinutes = title.match(/(20|30|40)분/)?.[1];
+    return String(Number(product.lessonMinutes) || Number(titleMinutes) || 20);
+  }
+  return "";
+}
+
+function matchesMembershipFilters(product, exceptKey = "") {
+  return membershipFilterDefinitions.every(({ key }) => {
+    if (key === exceptKey) return true;
+    const selected = state.membershipFilters[key] || "all";
+    return selected === "all" || membershipProductFacet(product, key) === selected;
+  });
+}
+
+function filteredMembershipProducts(products = membershipProducts()) {
+  return products.filter((product) => matchesMembershipFilters(product));
+}
+
+function normalizeMembershipFilters(products) {
+  for (let pass = 0; pass < membershipFilterDefinitions.length; pass += 1) {
+    let changed = false;
+    membershipFilterDefinitions.forEach(({ key }) => {
+      const selected = state.membershipFilters[key] || "all";
+      if (selected === "all") return;
+      const isAvailable = products.some((product) =>
+        membershipProductFacet(product, key) === selected && matchesMembershipFilters(product, key));
+      if (!isAvailable) {
+        state.membershipFilters[key] = "all";
+        changed = true;
+      }
+    });
+    if (!changed) break;
+  }
+}
+
+function renderMembershipProductFilters(products, visibleProducts) {
+  const target = $("#membershipProductFilters");
+  if (!target) return;
+  const availableByKey = Object.fromEntries(membershipFilterDefinitions.map(({ key }) => [
+    key,
+    new Set(products
+      .filter((product) => matchesMembershipFilters(product, key))
+      .map((product) => membershipProductFacet(product, key))),
+  ]));
+  const filterRows = membershipFilterDefinitions.map(({ key, label, options }) => {
+    const selected = state.membershipFilters[key] || "all";
+    const optionButtons = options
+      .filter(([value]) => value === "all" || availableByKey[key].has(value))
+      .map(([value, optionLabel]) => `
+        <button class="membership-filter-chip ${selected === value ? "is-selected" : ""}" type="button"
+          data-membership-filter="${key}" data-membership-filter-value="${value}"
+          aria-pressed="${selected === value}">${optionLabel}</button>`)
+      .join("");
+    return `
+      <div class="membership-filter-row">
+        <strong>${label}</strong>
+        <div class="membership-filter-options" role="group" aria-label="${label} 선택">${optionButtons}</div>
+      </div>`;
+  }).join("");
+  target.innerHTML = `
+    <div class="membership-filter-heading">
+      <div>
+        <strong>조건을 선택하세요</strong>
+        <span>${visibleProducts.length}개 상품</span>
+      </div>
+      <button class="small-button membership-filter-reset" type="button" data-membership-filter-reset>전체 보기</button>
+    </div>
+    ${filterRows}`;
 }
 
 function onlinePaymentAmount(product = {}) {
@@ -1509,7 +1635,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.94";
+    const refreshKey = "tennis-note-sw-refresh-1.0.95";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1517,7 +1643,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.94", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.95", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -4533,44 +4659,57 @@ function renderProducts() {
   renderGroupAccountPanel();
   renderMemberPaymentAlerts();
   const activeProducts = membershipProducts();
+  normalizeMembershipFilters(activeProducts);
+  const visibleProducts = filteredMembershipProducts(activeProducts);
+  renderMembershipProductFilters(activeProducts, visibleProducts);
   renderRegistrationFlow();
-  $("#productGrid").innerHTML = Object.entries(
-    activeProducts.reduce((groups, product) => {
+  $("#productGrid").innerHTML = visibleProducts.length
+    ? Object.entries(
+      visibleProducts.reduce((groups, product) => {
       groups[product.group] = groups[product.group] || [];
       groups[product.group].push(product);
       return groups;
     }, {}),
-  )
-    .map(
-      ([group, groupProducts]) => `
+    )
+      .map(
+        ([group, groupProducts]) => `
         <section class="product-group">
-          <h3>${group}</h3>
+          <h3>${escapeHtml(group)}</h3>
           <div class="product-group-grid">
             ${groupProducts
               .map(
                 (product) => `
         <article class="product-card ${product.mode}">
-          <div>
+          <div class="product-card-summary">
             <div class="product-card-title">
               <i>${escapeHtml(product.status === "consult" ? "상담" : product.badge)}</i>
               <strong>${escapeHtml(product.title)}</strong>
             </div>
-            <span>${escapeHtml(product.detail)}</span>
             <div class="product-meta-pills">${productUsagePills(product)}</div>
-            <small>연결 코치: ${escapeHtml(product.coach)}</small>
-            <small>${escapeHtml(product.rule)}</small>
           </div>
           ${productPriceRows(product)}
-          <em>${escapeHtml(productOperationNote(product))}</em>
-          <small class="product-flow-text">${escapeHtml(product.flow)} · ${escapeHtml(product.discount)}</small>
+          <details class="product-card-details">
+            <summary>이용 조건</summary>
+            <div>
+              <p>${escapeHtml(product.detail)}</p>
+              <small>${escapeHtml(product.rule)}</small>
+              <small>${escapeHtml(productOperationNote(product))}</small>
+              <small>${escapeHtml(product.coach)}</small>
+            </div>
+          </details>
           <button class="primary-button" type="button" data-buy-product="${product.id}">${product.status === "consult" || !product.amount ? "상담 요청" : "결제하기"}</button>
         </article>`,
               )
               .join("")}
           </div>
         </section>`,
-    )
-    .join("");
+      )
+      .join("")
+    : memberEmptyState({
+      title: "선택한 조건의 회원권이 없습니다",
+      reason: "다른 이용 요일이나 수업 조건을 선택해 주세요.",
+      compact: true,
+    });
 
   const passItems = membershipPassRecords();
   const passPage = normalizePage("expired", passItems.length);
@@ -5771,7 +5910,7 @@ async function syncLiveMembershipProductsFromServer() {
   if (!client?.readiness?.().ready || !client.selectRows) return false;
   try {
     const rows = await client.selectRows("tn_membership_products", {
-      select: "id,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,is_active,display_order",
+      select: "id,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,schedule_scope,term_weeks,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,is_active,display_order",
       filters: { is_active: true },
       limit: 100,
     });
@@ -6730,7 +6869,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.94" });
+  const params = new URLSearchParams({ v: "1.0.95" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8178,6 +8317,26 @@ function bindEvents() {
     const groupLinkButton = event.target.closest("[data-member-group-link]");
     if (groupLinkButton) {
       linkMemberGroupPartner();
+      return;
+    }
+    const membershipFilterButton = event.target.closest("[data-membership-filter]");
+    if (membershipFilterButton) {
+      const key = membershipFilterButton.dataset.membershipFilter;
+      if (membershipFilterDefinitions.some((definition) => definition.key === key)) {
+        state.membershipFilters[key] = membershipFilterButton.dataset.membershipFilterValue || "all";
+        renderProducts();
+      }
+      return;
+    }
+    const membershipFilterReset = event.target.closest("[data-membership-filter-reset]");
+    if (membershipFilterReset) {
+      state.membershipFilters = {
+        scheduleScope: "all",
+        productKind: "all",
+        groupSize: "all",
+        lessonMinutes: "all",
+      };
+      renderProducts();
       return;
     }
     const paymentMethodButton = event.target.closest("[data-select-payment-method]");
