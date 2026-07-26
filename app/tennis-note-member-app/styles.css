@@ -1135,6 +1135,22 @@ button {
   box-shadow: inset 3px 0 0 #b7791f;
 }
 
+.member-duration-lesson.status-completed,
+.member-mobile-lesson.status-completed {
+  --lesson-color: #287a5b;
+  border-color: #78ad98 !important;
+  color: #163f32 !important;
+  background: #dff1e9 !important;
+  box-shadow: inset 4px 0 0 #287a5b !important;
+}
+
+.member-duration-lesson.status-completed span,
+.member-duration-lesson.status-completed small,
+.member-mobile-lesson.status-completed span,
+.member-mobile-lesson.status-completed small {
+  color: #315e4e !important;
+}
+
 .member-duration-lesson strong,
 .member-duration-lesson span,
 .member-duration-lesson small {

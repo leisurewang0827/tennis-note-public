@@ -3008,6 +3008,28 @@ tr.is-selected td {
   box-shadow: inset 4px 0 0 var(--lesson-color, #17805d);
 }
 
+.status-completed,
+.admin-duration-lesson.status-completed,
+.coach-day-lesson.status-completed,
+.schedule-stack-line.status-completed,
+.coach-lane-card.status-completed,
+.multi-lesson.status-completed,
+.split-segment.status-completed,
+.lesson-slot.completed .slot-lesson-main {
+  --lesson-color: #287a5b;
+  border-color: #78ad98 !important;
+  color: #163f32 !important;
+  background: #dff1e9 !important;
+  box-shadow: inset 4px 0 0 #287a5b !important;
+}
+
+.status-completed small,
+.status-completed span,
+.lesson-slot.completed .slot-lesson-main span,
+.lesson-slot.completed .slot-lesson-main small {
+  color: #315e4e !important;
+}
+
 .status-released-makeup,
 .coach-day-lesson.status-released-makeup,
 .schedule-stack-line.status-released-makeup,
@@ -11068,8 +11090,19 @@ body {
 
   .week-switcher .schedule-month-controls {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: 44px 30px minmax(0, 1fr) 30px;
     gap: 5px;
+    overflow: hidden;
+  }
+
+  .week-switcher .schedule-month-controls > button {
+    min-width: 0;
+    padding-inline: 4px;
+  }
+
+  .week-switcher .schedule-month-arrow {
+    width: 30px;
+    min-width: 30px;
   }
 
   .week-switcher .schedule-month-input {
@@ -11096,9 +11129,8 @@ body {
   }
 
   .admin-schedule-scroll {
-    max-height: none;
-    overflow-x: auto;
-    overflow-y: visible;
+    max-height: calc(100dvh - 230px);
+    overflow: auto;
   }
 
   .settings-tabs {

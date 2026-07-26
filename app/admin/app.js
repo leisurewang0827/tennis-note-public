@@ -4703,6 +4703,7 @@ function isLessonEditableScheduled(lesson = {}) {
 }
 
 function scheduleLessonExceptionLabel(lesson = {}) {
+  if (lessonStatusValue(lesson) === "completed") return "완료";
   const context = `${lesson.type || ""} ${lessonSourceValue(lesson)} ${lesson.changeNote || ""} ${lesson.task || ""}`;
   if ((lesson.originalCoachRoleId && lesson.coachRoleId && lesson.originalCoachRoleId !== lesson.coachRoleId) || /대타/.test(context)) return "대타";
   if (/코치\s*변경/.test(context)) return "코치 변경";
@@ -4739,6 +4740,7 @@ function getLessonStatusLabel(lesson) {
 }
 
 function getLessonStateClass(lesson) {
+  if (lessonStatusValue(lesson) === "completed") return "status-completed";
   if (isReleasedRegularMakeupSlot(lesson)) return "status-released-makeup";
   if (isMakeupLesson(lesson) && isLessonPendingChange(lesson)) return "status-makeup-pending";
   if (isMakeupLesson(lesson)) return "status-makeup";
@@ -12031,6 +12033,16 @@ function isPastLessonCorrectionMode(candidate = {}) {
   return Number.isFinite(endTimestamp) && endTimestamp <= Date.now();
 }
 
+function isCompletedLessonCorrectionMode() {
+  const editingLesson = getCurrentEditingLesson();
+  return Boolean(
+    state.liveScheduleLoaded
+    && operationsRole() === "admin"
+    && editingLesson?.serverLessonId
+    && lessonStatusValue(editingLesson) === "completed"
+  );
+}
+
 function getPastLessonCorrectionConflict(candidate) {
   const lessonDate = adminWeekDateForDay(candidate.day);
   const duplicate = lessons.find((lesson) => (
@@ -12167,8 +12179,9 @@ function syncPastLessonCorrectionUi(candidate = getLessonFormCandidate()) {
     $("#lessonModalTitle").textContent = absenceMode ? "지난 수업 사전 불참 보정" : editingLesson ? "지난 수업 완료 처리" : "과거 수업 보정";
     $("#saveLessonButton").textContent = absenceMode ? "불참 보정·차감 안 함" : "완료 반영·횟수 차감";
   } else if ($("#lessonModalTitle") && $("#saveLessonButton")) {
-    $("#lessonModalTitle").textContent = editingLesson ? "수업 수정" : "수업 추가";
-    $("#saveLessonButton").textContent = editingLesson ? "수정 저장" : "시간표에 추가";
+    const completedCorrection = isCompletedLessonCorrectionMode();
+    $("#lessonModalTitle").textContent = completedCorrection ? "완료 수업 정정" : editingLesson ? "수업 수정" : "수업 추가";
+    $("#saveLessonButton").textContent = completedCorrection ? "완료 이력 수정" : editingLesson ? "수정 저장" : "시간표에 추가";
   }
   return pastCorrection;
 }
@@ -12196,6 +12209,30 @@ function renderLessonPreview() {
   }
   const start = timeToMinutes(candidate.time);
   const end = start + candidate.durationMinutes;
+  if (isCompletedLessonCorrectionMode()) {
+    const editingLesson = getCurrentEditingLesson();
+    const lessonDate = adminWeekDateForDay(candidate.day);
+    const exactDuplicate = getAdminManualExactDuplicate(candidate);
+    const warnings = getAdminManualOverrideWarnings(candidate, ticket, false);
+    const futureCompletedTime = Number.isFinite(adminLessonEndTimestamp(candidate))
+      && adminLessonEndTimestamp(candidate) > Date.now();
+    const blocked = Boolean(!ticket || exactDuplicate || futureCompletedTime || !editingLesson?.serverLessonId);
+    const message = !ticket
+      ? "완료 기록에 연결된 회원권을 찾지 못했습니다."
+      : exactDuplicate
+        ? "같은 회원권·날짜·시간의 수업이 이미 있어 중복 저장할 수 없습니다."
+        : futureCompletedTime
+          ? "완료 수업은 이미 끝난 날짜와 시간으로만 정정할 수 있습니다."
+          : `완료 기록과 코치 피드백은 유지됩니다. 정책 충돌 ${warnings.length}건은 관리자 정정 이력에 남깁니다.`;
+    $("#lessonPreview").innerHTML = `
+      <strong>${candidate.day} ${candidate.time}~${minutesToTime(end)} · 완료 수업 정정</strong>
+      <span>${getLessonMembersLabel(editingLesson)} · ${scheduleCoachDisplayName(getCoachName(candidate.coachId))} · ${candidate.durationMinutes}분 · ${lessonDate || ""}</span>
+    `;
+    setLessonFormMessage(message, blocked ? "danger" : "good");
+    setLessonSubmitEnabled(!blocked);
+    syncAdminManualOverrideUi(warnings);
+    return;
+  }
   if (pastCorrection) {
     const correctionReason = adminPastCorrectionReason();
     const coachComment = $("#lessonPastCoachComment")?.value.trim() || "";
@@ -12342,6 +12379,7 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   modal.classList.toggle("is-quick-expanded", expanded);
   summary.hidden = !quickMode;
   const editingLesson = state.quickLessonEdit ? getCurrentEditingLesson() : null;
+  const completedCorrection = isCompletedLessonCorrectionMode();
   if ($("#lessonQuickLabel")) $("#lessonQuickLabel").textContent = state.quickLessonEdit ? "수정 대상" : "선택 시간";
   const scheduleLabel = state.quickLessonEdit && editingLesson
     ? `${getLessonMembersLabel(editingLesson)} · ${editingLesson.day}요일 ${adminScheduleDateLabel(editingLesson.day)} · ${editingLesson.time}`
@@ -12351,14 +12389,16 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   if ($("#lessonQuickSchedule")) $("#lessonQuickSchedule").textContent = scheduleLabel;
   if ($("#lessonQuickGuide")) {
     $("#lessonQuickGuide").textContent = state.quickLessonEdit
-      ? "코치·요일·시간을 바꾸고 적용 범위를 선택해 저장하세요."
+      ? completedCorrection
+        ? "완료 기록과 피드백은 유지됩니다. 잘못된 코치·요일·시간·수업시간만 바로잡으세요."
+        : "코치·요일·시간을 바꾸고 적용 범위를 선택해 저장하세요."
       : requiredCount > 1
         ? `주 ${requiredCount}회 회원권은 나머지 요일과 시간을 모두 선택해야 합니다.`
         : "회원 검색 후 회원권을 확인하고 바로 저장할 수 있습니다.";
   }
   const toggle = $("#toggleLessonQuickDetails");
   if (toggle) {
-    toggle.hidden = state.quickLessonEntry && requiredCount > 1;
+    toggle.hidden = completedCorrection || (state.quickLessonEntry && requiredCount > 1);
     toggle.setAttribute("aria-expanded", String(expanded));
     toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "수정 범위 설정" : "요일·반복 설정";
   }
@@ -12385,6 +12425,12 @@ function openLessonModal(defaults = {}) {
   clearLessonSaveResultPanel();
   const hasPinnedScheduleSlot = Boolean(!state.editingLessonId && defaults.day && defaults.time && defaults.coachId);
   const editingLesson = state.editingLessonId ? lessons.find((lesson) => lesson.id === state.editingLessonId) : null;
+  const completedCorrection = Boolean(
+    editingLesson
+    && lessonStatusValue(editingLesson) === "completed"
+    && operationsRole() === "admin"
+  );
+  if (completedCorrection) state.quickLessonDetailsExpanded = true;
   const editingMemberName = getEditingLessonMemberName(editingLesson);
   const requestedMemberName = defaults.memberName || restoreEntitlement?.memberNames?.[0] || "";
   const initialMemberName = editingMemberName || requestedMemberName;
@@ -12428,7 +12474,7 @@ function openLessonModal(defaults = {}) {
   );
   $("#lessonRepeatSlots").innerHTML = "";
   $("#lessonRepeatSlots").hidden = false;
-  if ($("#lessonAdminOverride")) $("#lessonAdminOverride").checked = false;
+  if ($("#lessonAdminOverride")) $("#lessonAdminOverride").checked = completedCorrection;
   const defaultCorrectionMode = document.querySelector('input[name="lessonPastCorrectionMode"][value="complete"]');
   if (defaultCorrectionMode) defaultCorrectionMode.checked = true;
   $("#lessonPastCoachComment").value = "";
@@ -12466,6 +12512,10 @@ function openLessonModal(defaults = {}) {
     state.lessonSourceTouched = true;
   } else {
     syncLessonSourceFromTicket(true);
+  }
+  if (completedCorrection) {
+    $("#lessonMember").disabled = true;
+    $("#lessonTicket").disabled = true;
   }
   if (!editingLesson && defaults.lessonSource) {
     $("#lessonSource").value = normalizeLessonSource(defaults.lessonSource);
@@ -12506,8 +12556,8 @@ function openLessonModal(defaults = {}) {
   syncLessonTypeFromForm();
   renderCurrentLessonMembers(editingLesson);
   renderLessonExpiredTickets();
-  $("#lessonModalTitle").textContent = editingLesson ? "수업 수정" : "수업 추가";
-  $("#saveLessonButton").textContent = editingLesson ? "수정 저장" : "시간표에 추가";
+  $("#lessonModalTitle").textContent = completedCorrection ? "완료 수업 정정" : editingLesson ? "수업 수정" : "수업 추가";
+  $("#saveLessonButton").textContent = completedCorrection ? "완료 이력 수정" : editingLesson ? "수정 저장" : "시간표에 추가";
   const editScopePanel = $("#lessonEditScopePanel");
   if (editScopePanel) {
     const canEditSeries = Boolean(editingLesson?.serverLessonId
@@ -13189,6 +13239,28 @@ async function saveLivePastLessonCorrection(candidate, entitlement = null) {
   return client.rpc("tn_admin_record_past_lesson", payload);
 }
 
+async function saveLiveCompletedLessonCorrection(candidate) {
+  const client = window.TennisNoteDataClient;
+  const editingLesson = getCurrentEditingLesson();
+  const coach = coaches.find((item) => item.id === candidate.coachId);
+  const lessonDate = adminWeekDateForDay(candidate.day);
+  if (!client?.rpc || operationsRole() !== "admin" || !adminApprovalReady()) {
+    throw new Error("관리자 로그인 확인이 필요합니다.");
+  }
+  if (!editingLesson?.serverLessonId || !coach?.serverRoleId || !lessonDate || !candidate.time) {
+    throw new Error("완료 수업·코치·날짜 연결을 확인해 주세요.");
+  }
+  return client.rpc("tn_admin_correct_completed_lesson", {
+    target_lesson_id: editingLesson.serverLessonId,
+    target_coach_role_id: coach.serverRoleId,
+    target_lesson_date: lessonDate,
+    target_start_time: candidate.time,
+    target_duration_minutes: candidate.durationMinutes,
+    target_lesson_source: liveLessonSource(candidate),
+    target_override_reason: "관리자 완료 수업 정정",
+  });
+}
+
 async function saveLiveMakeupEntitlement(candidate, entitlement) {
   const client = window.TennisNoteDataClient;
   const lessonDate = adminWeekDateForDay(candidate.day);
@@ -13342,6 +13414,57 @@ async function addLessonFromForm(event) {
   const manualOverride = adminManualOverrideEnabled();
   if (!ticket) {
     setLessonFormMessage("선택한 코치의 회원권이 없어 수업을 추가할 수 없습니다.", "danger");
+    return;
+  }
+  if (isCompletedLessonCorrectionMode()) {
+    const exactDuplicate = getAdminManualExactDuplicate(candidate);
+    const endTimestamp = adminLessonEndTimestamp(candidate);
+    if (exactDuplicate) {
+      setLessonFormMessage("같은 회원권·날짜·시간의 수업이 이미 있어 중복 저장할 수 없습니다.", "danger");
+      return;
+    }
+    if (!Number.isFinite(endTimestamp) || endTimestamp > Date.now()) {
+      setLessonFormMessage("완료 수업은 이미 끝난 날짜와 시간으로만 정정할 수 있습니다.", "danger");
+      return;
+    }
+    const warnings = getAdminManualOverrideWarnings(candidate, ticket, false);
+    if (!window.confirm(
+      `${getLessonMembersLabel(getCurrentEditingLesson())} 완료 수업을 정정할까요?\n\n`
+      + `${candidate.day} ${candidate.time} · ${scheduleCoachDisplayName(getCoachName(candidate.coachId))} · ${candidate.durationMinutes}분\n`
+      + `완료 피드백은 유지되고, 회차 차감은 수업시간 차이만큼 자동 조정됩니다.\n`
+      + `${warnings.length ? `정책 예외 ${warnings.length}건은 감사 기록에 남습니다.` : "정책 충돌은 없습니다."}`,
+    )) return;
+    setLessonSubmitEnabled(false);
+    setLessonFormMessage("완료 기록과 회원권 회차를 함께 정정하고 있습니다.");
+    try {
+      const result = await saveLiveCompletedLessonCorrection(candidate);
+      const synced = await syncAdminLiveData();
+      if (!synced) throw new Error("admin_live_refresh_failed_after_completed_correction");
+      window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
+      closeLessonModal();
+      setView("schedule");
+      const delta = Number(result?.deductionDelta) || 0;
+      showToast(`완료 수업 정정 완료${delta ? ` · 회차 ${delta > 0 ? "+" : ""}${delta}` : " · 회차 유지"}`);
+    } catch (error) {
+      const errorText = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
+      const messages = {
+        completed_correction_admin_required: "관리자 계정으로만 완료 수업을 정정할 수 있습니다.",
+        completed_correction_completed_lesson_required: "완료 상태가 아닌 수업입니다. 시간표를 새로고침해 주세요.",
+        completed_correction_record_required: "코치 피드백과 차감 기록을 찾지 못했습니다. 기록/차감 확인에서 먼저 확인해 주세요.",
+        completed_correction_exact_duplicate: "같은 회원권·날짜·시간의 수업이 이미 있습니다.",
+        completed_correction_future_time: "완료 수업은 이미 끝난 날짜와 시간으로만 정정할 수 있습니다.",
+        completed_correction_ticket_balance_insufficient: "수업시간 증가분을 차감할 잔여 횟수가 부족합니다.",
+        completed_correction_ticket_count_inconsistent: "회원권 사용 횟수와 완료 기록이 맞지 않아 자동 정정을 중단했습니다.",
+        completed_correction_regular_ticket_required: "쿠폰 회원권은 정규수업으로 바꿀 수 없습니다.",
+        completed_correction_coupon_ticket_required: "쿠폰수업은 쿠폰 회원권에만 연결할 수 있습니다.",
+        admin_live_refresh_failed_after_completed_correction: "정정은 저장됐지만 최신 시간표를 다시 불러오지 못했습니다. 중복 저장하지 말고 새로고침해 주세요.",
+      };
+      const message = Object.entries(messages).find(([code]) => errorText.includes(code))?.[1]
+        || error?.message
+        || "완료 수업 정정에 실패했습니다.";
+      setLessonFormMessage(message, "danger");
+      setLessonSubmitEnabled(true);
+    }
     return;
   }
   if (pastCorrection) {

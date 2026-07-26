@@ -1754,6 +1754,25 @@ a {
   box-shadow: inset 3px 0 0 var(--lesson-color, #2f6fc4);
 }
 
+.coach-duration-lesson.status-completed,
+.coach-mobile-lesson.status-completed,
+.board-lesson.status-completed {
+  --lesson-color: #287a5b;
+  border-color: #78ad98 !important;
+  color: #163f32 !important;
+  background: #dff1e9 !important;
+  box-shadow: inset 4px 0 0 #287a5b !important;
+}
+
+.coach-duration-lesson.status-completed span,
+.coach-duration-lesson.status-completed small,
+.coach-mobile-lesson.status-completed span,
+.coach-mobile-lesson.status-completed small,
+.board-lesson.status-completed span,
+.board-lesson.status-completed small {
+  color: #315e4e !important;
+}
+
 .coach-duration-lesson.released-makeup-slot,
 .coach-mobile-lesson.released-makeup-slot {
   color: #111827 !important;
