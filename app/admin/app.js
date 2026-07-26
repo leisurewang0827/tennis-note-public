@@ -2638,6 +2638,7 @@ function liveSchedulePolicyPayload() {
     coaches: coaches.map((coach) => ({
       id: coach.id,
       serverRoleId: coach.serverRoleId || "",
+      branchId: coach.branchId || "",
       name: coach.name,
       status: coach.status || "active",
       color: coach.color || "",
@@ -3412,6 +3413,7 @@ async function updateMembershipProductSetting(productId) {
   if (saleIssue && nextProduct.status === "sale") nextProduct.status = "hidden";
   const client = window.TennisNoteDataClient;
   const serverProduct = serverMembershipProductForDraft(product);
+  const branchId = activeOperationBranchId();
   const saveButton = card.querySelector("[data-save-product-setting]");
   if (!client?.updateRows || !operationsAccessReady() || operationsRole() !== "admin") {
     showToast("관리자 로그인 후 회원권 상품을 저장해 주세요.");
@@ -3421,13 +3423,20 @@ async function updateMembershipProductSetting(productId) {
     showToast("실서버 상품을 찾지 못했습니다. 새로고침 후 다시 저장해 주세요.");
     return;
   }
+  if (!branchId || String(serverProduct.branch_id || "") !== branchId) {
+    showToast("현재 운영 지점의 회원권 상품만 수정할 수 있습니다.");
+    return;
+  }
   if (saveButton) {
     saveButton.disabled = true;
     saveButton.textContent = "저장 중";
   }
   try {
     const serverKind = nextProduct.productKind === "coupon" ? "coupon" : "regular";
-    const updatedRows = await client.updateRows("tn_membership_products", { id: serverProduct.id }, {
+    const updatedRows = await client.updateRows("tn_membership_products", {
+      id: serverProduct.id,
+      branch_id: branchId,
+    }, {
       name: nextProduct.title,
       total_sessions: Math.max(1, Number(nextProduct.tickets) || 1),
       base_price: Math.max(0, Number(nextProduct.cashAmount) || 0),
@@ -3458,6 +3467,7 @@ async function updateMembershipProductSetting(productId) {
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
     const saved = (adminLiveDataState.products || []).find((item) => item.id === serverProduct.id);
     if (!saved
+      || String(saved.branch_id || "") !== branchId
       || saved.name !== nextProduct.title
       || Number(saved.total_sessions) !== Number(nextProduct.tickets)
       || Number(saved.lesson_minutes) !== Number(nextProduct.lessonMinutes)
@@ -3619,6 +3629,10 @@ async function forceDeleteMembershipProductSetting(productId) {
   const serverProduct = serverMembershipProductForDraft(product);
   try {
     if (serverProduct?.id) {
+      const branchId = activeOperationBranchId();
+      if (!branchId || String(serverProduct.branch_id || "") !== branchId) {
+        throw new Error("membership_product_branch_mismatch");
+      }
       const client = window.TennisNoteDataClient;
       if (!client?.rpc || !operationsAccessReady()) throw new Error("admin_live_connection_required");
       await client.rpc("tn_admin_force_delete_membership_product", {
@@ -3667,10 +3681,13 @@ async function runProductBulkAction() {
   try {
     const client = window.TennisNoteDataClient;
     if (!client || operationsRole() !== "admin") throw new Error("admin_required");
+    const branchId = activeOperationBranchId();
+    if (!branchId) throw new Error("active_branch_required");
     if (action === "delete") {
       for (const product of selected) {
         const serverProduct = serverMembershipProductForDraft(product);
         if (!serverProduct?.id) continue;
+        if (String(serverProduct.branch_id || "") !== branchId) throw new Error("membership_product_branch_mismatch");
         await client.rpc("tn_admin_force_delete_membership_product", {
           target_product_id: serverProduct.id,
           target_reason: "관리자 회원권 상품 일괄 강제 삭제",
@@ -3680,7 +3697,11 @@ async function runProductBulkAction() {
       for (const product of selected) {
         const serverProduct = serverMembershipProductForDraft(product);
         if (!serverProduct?.id) continue;
-        await client.updateRows("tn_membership_products", { id: serverProduct.id }, {
+        if (String(serverProduct.branch_id || "") !== branchId) throw new Error("membership_product_branch_mismatch");
+        await client.updateRows("tn_membership_products", {
+          id: serverProduct.id,
+          branch_id: branchId,
+        }, {
           is_active: action !== "hidden",
           policy_settings: { ...(serverProduct.policy_settings || {}), adminSaleStatus: action },
           updated_at: new Date().toISOString(),
@@ -3736,9 +3757,10 @@ async function loadLiveSchedulePolicyFromServer() {
     scheduleSettings.adminTuningMode = serverSettings.adminTuningMode === true;
     (Array.isArray(value.coaches) ? value.coaches : []).forEach((serverCoach) => {
       const coach = coaches.find((item) => (
-        (serverCoach.serverRoleId && item.serverRoleId === serverCoach.serverRoleId)
+        (!serverCoach.branchId || !item.branchId || String(item.branchId) === String(serverCoach.branchId))
+        && ((serverCoach.serverRoleId && item.serverRoleId === serverCoach.serverRoleId)
         || item.id === serverCoach.id
-        || item.name === serverCoach.name
+        || item.name === serverCoach.name)
       ));
       if (!coach) return;
       if (Array.isArray(serverCoach.workBlocks)) coach.workBlocks = serverCoach.workBlocks;
@@ -3803,12 +3825,18 @@ async function saveLiveSchedulePolicy() {
     showToast("관리자 로그인 후 근무·브레이크를 저장할 수 있습니다.");
     return;
   }
-  const serverCoaches = coaches.filter((coach) => coach.serverRoleId);
-  if (!serverCoaches.length) {
-    showToast("먼저 실제 코치를 등록해주세요.");
+  const branchId = activeOperationBranchId();
+  if (!branchId) {
+    showToast("운영 프로필에서 지점을 먼저 선택해주세요.");
     return;
   }
-  const branchId = serverCoaches.find((coach) => coach.branchId)?.branchId || null;
+  const serverCoaches = operationBranchCoaches().filter((coach) => (
+    coach.serverRoleId && String(coach.branchId || "") === branchId
+  ));
+  if (!serverCoaches.length) {
+    showToast(`${activeOperationBranchName()}에 등록된 코치를 먼저 확인해주세요.`);
+    return;
+  }
   const targetCoaches = serverCoaches.map((coach) => {
     const targetedBreaks = (scheduleSettings.breakRules || [])
       .filter((rule) => breakRuleCoachRoleIds(rule).includes(coach.serverRoleId))
@@ -17713,7 +17741,7 @@ function coachStaffDraftFrom(coach) {
   return {
     coachId: source.id || "",
     coachRoleId: source.serverRoleId || "",
-    branchId: source.branchId || coaches.find((item) => item.branchId)?.branchId || "",
+    branchId: source.branchId || activeOperationBranchId() || defaultOperationBranch()?.id || "",
     name: source.name || "",
     phone: source.phone || "",
     jobTitle: source.role || "레슨",
@@ -17903,7 +17931,7 @@ function openCoachStaffModal(coachId = "") {
     showToast("관리자만 코치·직원 정보를 수정할 수 있습니다.");
     return;
   }
-  const coach = coaches.find((item) => item.id === coachId) || null;
+  const coach = operationBranchCoaches().find((item) => item.id === coachId) || null;
   coachStaffEditorState.coachId = coach?.id || "";
   coachStaffEditorState.mode = coach ? "edit" : "create";
   coachStaffEditorState.tab = "basic";
@@ -18024,6 +18052,12 @@ async function saveCoachStaff() {
     renderCoachStaffModal();
     return;
   }
+  const branchId = activeOperationBranchId();
+  if (!branchId || String(draft.branchId || "") !== branchId) {
+    coachStaffEditorState.message = "현재 운영 지점과 코치 소속 지점을 다시 확인해주세요.";
+    renderCoachStaffModal();
+    return;
+  }
   if (draft.settlement.method === "ratio" && (draft.settlement.ratio < 0 || draft.settlement.ratio > 100)) {
     coachStaffEditorState.message = "정산 비율은 0~100 사이로 입력해주세요.";
     renderCoachStaffModal();
@@ -18040,8 +18074,13 @@ async function saveCoachStaff() {
     const result = await client.rpc("tn_admin_save_coach_staff", { target_record: coachStaffPayload(draft) });
     const coachRoleId = result?.coachRoleId || result?.coach_role_id || draft.coachRoleId;
     await syncAdminLiveData();
-    const saved = coaches.find((coach) => coach.serverRoleId === coachRoleId)
-      || coaches.find((coach) => coach.name === draft.name);
+    const saved = coaches.find((coach) => (
+      coach.serverRoleId === coachRoleId
+      && String(coach.branchId || "") === branchId
+    )) || coaches.find((coach) => (
+      coach.name === draft.name
+      && String(coach.branchId || "") === branchId
+    ));
     if (!coachStaffServerMatches(saved, draft)) {
       throw new Error("coach_staff_server_verification_failed");
     }

@@ -2410,7 +2410,7 @@ tr.is-selected td {
 
 .week-switcher .schedule-month-controls {
   display: grid;
-  grid-template-columns: auto 36px minmax(132px, 180px) 36px;
+  grid-template-columns: auto minmax(132px, 180px);
   gap: 6px;
   align-items: center;
   justify-content: center;
@@ -2438,7 +2438,7 @@ tr.is-selected td {
 
 @media (max-width: 720px) {
   .week-switcher .schedule-month-controls {
-    grid-template-columns: auto 36px minmax(118px, 1fr) 36px;
+    grid-template-columns: auto minmax(118px, 1fr);
     overflow-x: auto;
   }
 }
@@ -11262,7 +11262,7 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
 
   .week-switcher .schedule-month-controls {
     display: grid;
-    grid-template-columns: 44px 30px minmax(0, 1fr) 30px;
+    grid-template-columns: 44px minmax(118px, 1fr);
     gap: 5px;
     overflow: hidden;
   }
