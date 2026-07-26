@@ -78,6 +78,43 @@ body.tn-unsaved-open {
   overflow: hidden;
 }
 
+.tn-comment-draft-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tn-comment-draft-tools input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #d6e2dd;
+  border-radius: 6px;
+  color: #173a31;
+  background: #fff;
+  font: inherit;
+}
+
+.tn-comment-draft-tools button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #a9cabe;
+  border-radius: 6px;
+  color: #0f766e;
+  background: #f0faf6;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tn-comment-draft-tools button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 @media (max-width: 480px) {
   .tn-empty-state {
     min-height: 112px;
@@ -97,5 +134,9 @@ body.tn-unsaved-open {
   .tn-unsaved-prompt article > div .primary-button {
     grid-column: 1 / -1;
     order: -1;
+  }
+
+  .tn-comment-draft-tools {
+    grid-template-columns: 1fr;
   }
 }

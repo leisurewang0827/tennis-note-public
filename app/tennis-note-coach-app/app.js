@@ -1438,7 +1438,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.97";
+  const refreshKey = "tennis-note-sw-refresh-1.0.98";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1448,7 +1448,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.97", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.98", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1500,7 +1500,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.97" });
+  const params = new URLSearchParams({ v: "1.0.98" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2242,6 +2242,10 @@ function renderScheduleEditPanel() {
       <label class="wide lesson-required-field">
         <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
         <textarea data-modal-coach-comment="${lesson.id}" rows="4" placeholder="오늘 잘된 점과 다음 수업에서 보완할 점을 적어주세요." ${canProcess ? "" : "disabled"}>${defaultComment}</textarea>
+        <div class="tn-comment-draft-tools">
+          <input data-modal-comment-keywords="${lesson.id}" type="text" maxlength="160" placeholder="키워드 입력 · 예: 포핸드, 타점, 체중이동" ${canProcess ? "" : "disabled"} />
+          <button type="button" data-generate-modal-comment="${lesson.id}" ${canProcess ? "" : "disabled"}>초안 만들기</button>
+        </div>
         <small class="lesson-comment-count" data-modal-comment-count="${lesson.id}">0/5자</small>
       </label>
       <label class="wide lesson-required-field">
@@ -3672,6 +3676,10 @@ function recordProcessingMarkup() {
               <label>
                 <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
                 <textarea data-coach-comment="${log.id}" rows="3" ${confirmed ? "disabled" : ""}>${log.coachComment || ""}</textarea>
+                <div class="tn-comment-draft-tools">
+                  <input data-log-comment-keywords="${log.id}" type="text" maxlength="160" placeholder="키워드 입력 · 쉼표로 구분" ${confirmed ? "disabled" : ""} />
+                  <button type="button" data-generate-log-comment="${log.id}" ${confirmed ? "disabled" : ""}>초안 만들기</button>
+                </div>
                 <small class="lesson-comment-count ${String(log.coachComment || "").trim().length >= 5 ? "is-ready" : ""}" data-log-comment-count="${log.id}">${String(log.coachComment || "").trim().length}/5자</small>
               </label>
               <label>
@@ -3974,6 +3982,26 @@ function renderCurriculums() {
 
 function activeViewField(selector) {
   return document.querySelector(`.view.is-active ${selector}`) || document.querySelector(selector);
+}
+
+function applyCoachCommentDraft(keywordSelector, commentSelector) {
+  const keywordInput = activeViewField(keywordSelector);
+  const commentInput = activeViewField(commentSelector);
+  const generator = window.TennisNoteCommentDraft;
+  if (!keywordInput || !commentInput || !generator?.generate) {
+    showToast("코멘트 초안 기능을 불러오지 못했습니다.");
+    return;
+  }
+  const result = generator.generate(keywordInput.value);
+  if (!result.ok) {
+    showToast(result.message);
+    keywordInput.focus();
+    return;
+  }
+  commentInput.value = result.comment;
+  commentInput.dispatchEvent(new Event("input", { bubbles: true }));
+  commentInput.focus();
+  showToast("코멘트 초안을 만들었습니다. 확인 후 저장해 주세요.");
 }
 
 function updateFeedbackDraft(id) {
@@ -4404,6 +4432,20 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const modalCommentDraftButton = event.target.closest("[data-generate-modal-comment]");
+    if (modalCommentDraftButton) {
+      const id = modalCommentDraftButton.dataset.generateModalComment;
+      applyCoachCommentDraft(`[data-modal-comment-keywords="${id}"]`, `[data-modal-coach-comment="${id}"]`);
+      return;
+    }
+
+    const logCommentDraftButton = event.target.closest("[data-generate-log-comment]");
+    if (logCommentDraftButton) {
+      const id = logCommentDraftButton.dataset.generateLogComment;
+      applyCoachCommentDraft(`[data-log-comment-keywords="${id}"]`, `[data-coach-comment="${id}"]`);
+      return;
+    }
+
     const summaryActionButton = event.target.closest("[data-summary-action]");
     if (summaryActionButton) {
       handleSummaryAction(summaryActionButton.dataset.summaryAction);

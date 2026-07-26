@@ -12432,6 +12432,7 @@ function openLessonModal(defaults = {}) {
   const defaultCorrectionMode = document.querySelector('input[name="lessonPastCorrectionMode"][value="complete"]');
   if (defaultCorrectionMode) defaultCorrectionMode.checked = true;
   $("#lessonPastCoachComment").value = "";
+  $("#lessonPastCommentKeywords").value = "";
   $("#lessonType").value = "개인";
   $("#lessonSource").value = "regular";
   $("#lessonDuration").value = "20";
@@ -14936,6 +14937,26 @@ function lessonRecordErrorMessage(error) {
     lesson_complete_status_invalid: "이미 완료·취소된 수업입니다. 새로고침 후 확인해 주세요.",
     lesson_complete_ticket_unavailable: "사용 가능한 회원권 횟수가 없습니다.",
   })[code] || "서버 저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.";
+}
+
+function applyAdminCommentDraft(keywordSelector, commentSelector) {
+  const keywordInput = $(keywordSelector);
+  const commentInput = $(commentSelector);
+  const generator = window.TennisNoteCommentDraft;
+  if (!keywordInput || !commentInput || !generator?.generate) {
+    showToast("코멘트 초안 기능을 불러오지 못했습니다.");
+    return;
+  }
+  const result = generator.generate(keywordInput.value);
+  if (!result.ok) {
+    showToast(result.message);
+    keywordInput.focus();
+    return;
+  }
+  commentInput.value = result.comment;
+  commentInput.dispatchEvent(new Event("input", { bubbles: true }));
+  commentInput.focus();
+  showToast("코멘트 초안을 만들었습니다. 확인 후 저장해 주세요.");
 }
 
 async function saveLessonRecord(event) {
@@ -20587,6 +20608,16 @@ function bindEvents() {
     const lessonRecordButton = event.target.closest("[data-open-lesson-record]");
     if (lessonRecordButton) {
       openLessonRecordModal(lessonRecordButton.dataset.openLessonRecord);
+      return;
+    }
+
+    if (event.target.closest("#generateLessonRecordComment")) {
+      applyAdminCommentDraft("#lessonRecordCommentKeywords", "#lessonRecordComment");
+      return;
+    }
+
+    if (event.target.closest("#generateLessonPastComment")) {
+      applyAdminCommentDraft("#lessonPastCommentKeywords", "#lessonPastCoachComment");
       return;
     }
 
