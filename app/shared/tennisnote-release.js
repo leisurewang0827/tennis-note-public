@@ -3,9 +3,9 @@
     version: "1.0.114",
     releaseId: "2026.07.27.14",
     nativeShell: {
-      version: "1.0.100",
-      androidBuild: 45,
-      iosBuild: 50,
+      version: "1.0.114",
+      androidBuild: 46,
+      iosBuild: 51,
     },
   });
 
