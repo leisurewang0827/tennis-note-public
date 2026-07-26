@@ -4751,6 +4751,14 @@ input[type="file"] {
   padding: 18px 0 4px;
 }
 
+#appScreen > .app-legal-links {
+  display: none;
+}
+
+body[data-active-member-view="profileView"] #appScreen > .app-legal-links {
+  display: flex;
+}
+
 .release-version {
   color: var(--muted);
   font-size: 11px;
@@ -5665,7 +5673,7 @@ body {
 }
 .member-schedule-mode {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   margin: 0 0 12px;
   padding: 4px;
@@ -5684,6 +5692,137 @@ body {
 .member-schedule-mode-button.is-active {
   background: #13795b;
   color: #fff;
+}
+
+.member-availability-overview,
+.member-flex-booking {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.member-availability-overview {
+  border: 1px solid #d8e1e8;
+  padding: 12px;
+  background: #fff;
+}
+
+.member-availability-heading,
+.member-availability-heading > div,
+.member-availability-day > strong {
+  display: flex;
+  align-items: center;
+}
+
+.member-availability-heading {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.member-availability-heading > div,
+.member-availability-day > strong {
+  gap: 7px;
+}
+
+.member-availability-heading span,
+.member-availability-day small {
+  color: #667780;
+  font-size: 12px;
+}
+
+.member-availability-days,
+.member-availability-day,
+.member-availability-day > div {
+  display: grid;
+  gap: 8px;
+}
+
+.member-availability-day {
+  border-top: 1px solid #edf1f3;
+  padding-top: 9px;
+}
+
+.member-availability-day > div {
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+}
+
+.member-availability-slot {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 48px;
+  border: 1px solid #bfd2f5;
+  border-radius: 7px;
+  padding: 8px 10px;
+  color: #17375f;
+  background: #f1f6ff;
+  text-align: left;
+}
+
+.member-availability-slot span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-availability-slot small {
+  color: #2f5fae;
+  font-weight: 800;
+}
+
+.member-availability-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.member-flex-booking {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.member-flex-booking article {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  border: 1px solid #d8e1e8;
+  padding: 14px;
+  background: #fff;
+}
+
+.member-flex-booking article > div {
+  display: grid;
+  gap: 3px;
+}
+
+.member-flex-booking article > div span,
+.member-flex-booking p {
+  color: #667780;
+  font-size: 13px;
+}
+
+.member-flex-booking p {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .member-schedule-mode {
+    gap: 3px;
+    padding: 3px;
+  }
+
+  .member-schedule-mode-button {
+    min-height: 44px;
+    padding: 4px;
+    font-size: 12px;
+    line-height: 1.2;
+    word-break: keep-all;
+  }
+
+  .member-flex-booking {
+    grid-template-columns: 1fr;
+  }
 }
 
 .member-own-schedule {

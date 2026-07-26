@@ -3245,6 +3245,7 @@ select:disabled {
   color: var(--green);
   background: var(--soft-green);
   font-weight: 900;
+  text-decoration: none;
 }
 
 .mode-toggle b {
