@@ -1031,8 +1031,31 @@ function ensureMemberLists() {
   });
 }
 
+function compactCoachSnapshotState() {
+  const snapshotState = {
+    ...state,
+    coach: state.coach ? { ...state.coach } : null,
+    coachProfiles: Object.fromEntries(
+      Object.entries(state.coachProfiles || {}).map(([name, profile]) => [name, { ...profile }]),
+    ),
+  };
+  const activePhoto = String(snapshotState.coach?.profilePhotoUrl || "");
+  if (activePhoto) {
+    Object.values(snapshotState.coachProfiles).forEach((profile) => {
+      if (profile.photo === activePhoto) delete profile.photo;
+    });
+  }
+  return snapshotState;
+}
+
 function saveSnapshot() {
-  localStorage.setItem(storageKey, JSON.stringify({ state }));
+  try {
+    localStorage.setItem(storageKey, JSON.stringify({ state: compactCoachSnapshotState() }));
+    return true;
+  } catch (error) {
+    console.warn("Tennis Note coach snapshot save skipped", error?.name || error);
+    return false;
+  }
 }
 
 function approvedCoachesFromAdmin() {
@@ -1438,7 +1461,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   let controllerChanged = false;
-  const refreshKey = "tennis-note-sw-refresh-1.0.101";
+  const refreshKey = "tennis-note-sw-refresh-1.0.102";
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (controllerChanged) return;
     controllerChanged = true;
@@ -1448,7 +1471,7 @@ function registerPwaServiceWorker() {
   });
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.101", { updateViaCache: "none" })
+      .register("./service-worker.js?v=1.0.102", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1500,7 +1523,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.101" });
+  const params = new URLSearchParams({ v: "1.0.102" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
