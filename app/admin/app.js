@@ -9877,13 +9877,14 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
   const preview = $("#scheduleSheetPastePreview");
   if (panel) panel.hidden = !state.scheduleSheetPasteOpen;
   if (!preview) return;
+  const saveButton = $("#saveScheduleSheetPaste");
   if (!rows.length) {
+    if (saveButton) saveButton.disabled = true;
     preview.innerHTML = `<p class="empty-state">엑셀이나 구글시트에서 복사한 줄을 붙여넣고 미리보기를 눌러주세요.</p>`;
     return;
   }
   const readyCount = rows.filter((row) => !row.issues.length).length;
   const issueCount = rows.length - readyCount;
-  const saveButton = $("#saveScheduleSheetPaste");
   if (saveButton) saveButton.disabled = !readyCount || !adminApprovalReady();
   const indexedRows = rows.map((row, index) => ({ row, index }));
   const visibleRows = indexedRows.filter(({ row }) => (
@@ -9897,6 +9898,7 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
     <div class="schedule-sheet-paste-summary">
       <strong>${rows.length}줄 미리보기</strong>
       <span>등록 가능 ${readyCount}줄 · 확인 필요 ${issueCount}줄</span>
+      <button class="ghost-button" type="button" data-clear-schedule-sheet-issues ${issueCount ? "" : "disabled"}>확인 필요 줄 삭제</button>
     </div>
     ${scheduleSheetPasteFilterButtons(rows)}
     ${visibleRows.length ? visibleRows.map(({ row, index }) => `
@@ -9909,6 +9911,7 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
         ${scheduleSheetSourceField(row, index)}
         ${scheduleSheetDurationField(row, index)}
         <small>${row.issues.length ? escapeHtml(row.issues.join(", ")) : "확인 완료"}</small>
+        <button class="danger-text-button schedule-sheet-paste-remove" type="button" data-remove-schedule-sheet-row="${index}" aria-label="${row.rowNumber || index + 1}번 줄 삭제">삭제</button>
       </div>
     `).join("") : `<p class="empty-state">현재 필터에 표시할 줄이 없습니다.</p>`}
   `;
@@ -9934,6 +9937,22 @@ function updateScheduleSheetPasteRow(index, field, value) {
     return next;
   });
   state.scheduleSheetPasteRows = validateScheduleSheetRows(rows);
+  renderScheduleSheetPastePreview();
+}
+
+function removeScheduleSheetPasteRow(index) {
+  const rowIndex = Number(index);
+  if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= (state.scheduleSheetPasteRows || []).length) return;
+  state.scheduleSheetPasteRows = validateScheduleSheetRows(state.scheduleSheetPasteRows.filter((_, currentIndex) => currentIndex !== rowIndex));
+  renderScheduleSheetPastePreview();
+}
+
+function clearScheduleSheetPasteIssueRows() {
+  const rows = state.scheduleSheetPasteRows || [];
+  const readyRows = rows.filter((row) => !row.issues.length);
+  if (readyRows.length === rows.length) return;
+  state.scheduleSheetPasteRows = validateScheduleSheetRows(readyRows);
+  state.scheduleSheetPasteFilter = readyRows.length ? "all" : "all";
   renderScheduleSheetPastePreview();
 }
 
@@ -19860,6 +19879,15 @@ function bindEvents() {
     if (sheetPasteFilterButton) {
       state.scheduleSheetPasteFilter = sheetPasteFilterButton.dataset.scheduleSheetFilter || "all";
       renderScheduleSheetPastePreview();
+      return;
+    }
+    const removeSheetPasteRowButton = event.target.closest("[data-remove-schedule-sheet-row]");
+    if (removeSheetPasteRowButton) {
+      removeScheduleSheetPasteRow(removeSheetPasteRowButton.dataset.removeScheduleSheetRow);
+      return;
+    }
+    if (event.target.closest("[data-clear-schedule-sheet-issues]")) {
+      clearScheduleSheetPasteIssueRows();
       return;
     }
     if (event.target.closest("#saveScheduleSheetPaste")) {
