@@ -911,7 +911,7 @@
     if (profile?.id) {
       try {
         const coachRows = await selectRows("tn_coach_roles", {
-          select: "id,user_id,display_name,status",
+          select: "id,user_id,branch_id,display_name,status",
           filters: { user_id: profile.id, status: "approved" },
           limit: 1,
         });

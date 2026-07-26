@@ -1637,7 +1637,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.111";
+    const refreshKey = "tennis-note-sw-refresh-1.0.112";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1645,7 +1645,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.111", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.112", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -2089,11 +2089,47 @@ function readAdminSnapshot() {
   }
 }
 
-function writeLiveSchedulePolicySnapshot(value = {}) {
+function resolveLiveSchedulePolicyForBranch(value = {}, branchId = "") {
+  const normalizedBranchId = String(branchId || "");
+  const profiles = Array.isArray(value.operationProfiles) ? value.operationProfiles : [];
+  const activeProfile = profiles.find((item) => String(item?.id || "") === String(value.activeOperationProfileId || ""));
+  const profile = normalizedBranchId
+    ? (String(activeProfile?.branchId || activeProfile?.branch_id || "") === normalizedBranchId
+      ? activeProfile
+      : profiles.find((item) => String(item?.branchId || item?.branch_id || "") === normalizedBranchId))
+    : activeProfile;
+  if (!profile) {
+    return {
+      scheduleSettings: value.scheduleSettings || {},
+      coaches: Array.isArray(value.coaches) ? value.coaches : [],
+      branchId: normalizedBranchId,
+    };
+  }
+  const profileBranchId = String(profile.branchId || profile.branch_id || normalizedBranchId);
+  const sourceCoaches = Array.isArray(profile.coaches) && profile.coaches.length
+    ? profile.coaches
+    : Array.isArray(value.coaches) ? value.coaches : [];
+  const hasExplicitCoachBranches = sourceCoaches.some((coach) => Boolean(coach?.branchId));
+  return {
+    scheduleSettings: {
+      ...(value.scheduleSettings || {}),
+      ...(profile.scheduleSettings || {}),
+    },
+    coaches: sourceCoaches.filter((coach) => (
+      !profileBranchId
+      || (!hasExplicitCoachBranches && !coach?.branchId)
+      || String(coach.branchId) === profileBranchId
+    )),
+    branchId: profileBranchId,
+  };
+}
+
+function writeLiveSchedulePolicySnapshot(value = {}, branchId = "") {
   if (!value || typeof value !== "object") return false;
   const existing = readAdminSnapshot() || {};
-  const scheduleSettings = value.scheduleSettings || {};
-  const coaches = Array.isArray(value.coaches) ? value.coaches : [];
+  const resolved = resolveLiveSchedulePolicyForBranch(value, branchId);
+  const scheduleSettings = resolved.scheduleSettings;
+  const coaches = resolved.coaches;
   if (!scheduleSettings.openStart && !scheduleSettings.openEnd && !coaches.length) return false;
   safeLocalStorageSet(adminStorageKey, JSON.stringify({
     ...existing,
@@ -2105,11 +2141,12 @@ function writeLiveSchedulePolicySnapshot(value = {}) {
       memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
     },
     coaches: coaches.length ? coaches : existing.coaches || [],
+    operationPolicyBranchId: resolved.branchId || "",
   }));
   return true;
 }
 
-async function syncLiveSchedulePolicy() {
+async function syncLiveSchedulePolicy(branchId = "") {
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready || !client.selectRows) return false;
   try {
@@ -2118,7 +2155,7 @@ async function syncLiveSchedulePolicy() {
       filters: { key: liveSchedulePolicyKey },
       limit: 1,
     });
-    return writeLiveSchedulePolicySnapshot(rows?.[0]?.value);
+    return writeLiveSchedulePolicySnapshot(rows?.[0]?.value, branchId);
   } catch (error) {
     return false;
   }
@@ -6996,7 +7033,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.111" });
+  const params = new URLSearchParams({ v: "1.0.112" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7894,6 +7931,7 @@ async function applySupabaseMemberSession(showNotice = false) {
       syncMemberNotificationsFromServer(profile),
       syncNativePushRegistration(profile, false),
     ]);
+    await syncLiveSchedulePolicy(currentLiveTicket()?.branchId || "");
     renderAll();
     if (showNotice && !isApprovalPending()) showNoticeAfterLiveSync();
     saveSnapshot();
@@ -8798,7 +8836,7 @@ async function initApp() {
 
   // These improve data freshness but must not delay opening the member screen.
   void (async () => {
-    await syncLiveSchedulePolicy();
+    await syncLiveSchedulePolicy(currentLiveTicket()?.branchId || "");
     renderActiveMemberView();
   })().catch(() => {});
   let openedFromSupabase = false;
