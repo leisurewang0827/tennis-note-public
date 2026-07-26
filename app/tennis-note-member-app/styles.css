@@ -461,6 +461,62 @@ button {
   display: none !important;
 }
 
+.summary-grid[data-card-count="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.summary-grid[data-card-count="2"] {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+}
+
+.summary-grid article[hidden] {
+  display: none !important;
+}
+
+.home-onboarding {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 12px;
+  border: 1px solid rgba(15, 132, 91, 0.24);
+  border-radius: 12px;
+  padding: 16px;
+  background: linear-gradient(110deg, #ecfdf5, #ffffff 72%);
+}
+
+.home-onboarding[hidden] {
+  display: none !important;
+}
+
+.home-onboarding div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.home-onboarding span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.home-onboarding strong {
+  color: var(--ink);
+  font-size: 19px;
+}
+
+.home-onboarding small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.home-onboarding .primary-button {
+  min-width: 112px;
+}
+
 .home-account-summary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -521,6 +577,16 @@ button {
 .summary-grid .summary-card.primary {
   background: linear-gradient(180deg, #ecfdf5, #ffffff);
   border-color: rgba(15, 132, 91, 0.22);
+}
+
+.summary-grid .summary-card.alert {
+  border-color: rgba(185, 28, 28, 0.24);
+  background: #fff7f7;
+}
+
+.summary-grid .summary-card.wait {
+  border-color: rgba(217, 119, 6, 0.28);
+  background: #fffaf0;
 }
 
 .summary-grid span {
@@ -3152,6 +3218,16 @@ textarea {
     margin-bottom: 10px;
   }
 
+  .home-view .summary-grid[data-card-count="1"],
+  .home-view .summary-grid[data-card-count="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-view .summary-grid[data-card-count="1"] article,
+  .home-view .summary-grid[data-card-count="2"] article:not(.primary) {
+    grid-column: 1 / -1;
+  }
+
   .summary-grid article {
     gap: 5px;
     min-height: 116px;
@@ -3184,6 +3260,15 @@ textarea {
   .home-view .summary-card.primary > button {
     grid-area: action;
     align-self: center;
+  }
+
+  .home-onboarding {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .home-onboarding .primary-button {
+    width: 100%;
   }
 
   .summary-grid span {

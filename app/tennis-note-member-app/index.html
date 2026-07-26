@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.91" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.91" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.92" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.92" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -142,25 +142,33 @@
           <div class="section-title home-title">
             <h2>오늘</h2>
           </div>
-          <section class="summary-grid" aria-label="오늘의 수업 요약">
-            <article class="summary-card primary">
+          <section id="homeSummaryGrid" class="summary-grid" aria-label="오늘의 수업 요약">
+            <article id="homeNextLessonCard" class="summary-card primary" data-home-summary="lesson">
               <span>다음 수업</span>
               <strong id="nextLessonDate">가까운 수업</strong>
               <small id="followingLessonDate">다음 수업</small>
-              <button class="small-button" type="button" data-summary-action="schedule">시간표</button>
+              <button id="homeScheduleAction" class="small-button" type="button" data-summary-action="schedule">시간표</button>
             </article>
-            <article class="summary-card">
+            <article id="homeTicketCard" class="summary-card" data-home-summary="ticket">
               <span>이용권</span>
               <strong id="remainingCount">8회</strong>
               <small id="ticketStatus">10회권</small>
-              <button class="small-button" type="button" data-summary-action="shop">회원권</button>
+              <button id="homeTicketAction" class="small-button" type="button" data-summary-action="shop">회원권</button>
             </article>
-            <article class="summary-card">
-              <span>피드백</span>
+            <article id="homeFeedbackCard" class="summary-card" data-home-summary="feedback">
+              <span id="homeFeedbackEyebrow">새 코치 피드백</span>
               <strong id="pendingNoteCount">없음</strong>
               <small id="lessonRecordNote"></small>
-              <button class="small-button" type="button" data-summary-action="comments">피드백</button>
+              <button id="homeFeedbackAction" class="small-button" type="button" data-summary-action="comments">코멘트 보기</button>
             </article>
+          </section>
+          <section id="homeOnboarding" class="home-onboarding" hidden aria-label="테니스 노트 시작">
+            <div>
+              <span>테니스 노트 시작</span>
+              <strong>첫 회원권을 선택해 주세요</strong>
+              <small>회원권을 구매하면 수업 일정과 코치 피드백이 여기에 표시됩니다.</small>
+            </div>
+            <button class="primary-button" type="button" data-summary-action="shop">회원권 구매</button>
           </section>
           <button class="home-change-button" type="button" data-summary-action="change">
             <strong id="homeChangeLabel">수업 변경</strong>
@@ -884,14 +892,14 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.91"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.92"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.91"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.91"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.91"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.92"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.92"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.92"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.91"></script>
+    <script src="./app.js?v=1.0.92"></script>
   </body>
 </html>

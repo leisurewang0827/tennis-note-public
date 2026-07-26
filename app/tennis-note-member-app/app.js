@@ -77,6 +77,7 @@ const state = {
   pendingPaymentCheckStatus: null,
   lastLiveTicketKey: "",
   lastLiveNotificationKey: "",
+  lastReadFeedbackId: "",
   expiredTickets: [],
   noticeHiddenDate: "",
   noticeHiddenId: "",
@@ -1179,6 +1180,7 @@ function restoreSnapshot() {
       state.pendingPaymentCheckStatus = null;
     }
     state.lastLiveTicketKey = state.lastLiveTicketKey || "";
+    state.lastReadFeedbackId = String(state.lastReadFeedbackId || "");
     state.lessonLogPage = Number(state.lessonLogPage) || 0;
     state.ticketHistoryPage = Number(state.ticketHistoryPage) || 0;
     state.expiredTicketPage = Number(state.expiredTicketPage) || 0;
@@ -1505,7 +1507,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.91";
+    const refreshKey = "tennis-note-sw-refresh-1.0.92";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1513,7 +1515,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.91", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.92", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -2439,6 +2441,19 @@ function nextMemberLesson() {
 }
 
 function upcomingMemberLessons(limit = 2) {
+  if (state.dataMode === "live" || state.liveLessonsLoaded) {
+    const today = localDateKey();
+    return (state.liveLessons || [])
+      .filter((lesson) => {
+        const isMine = lesson.isOwnLesson || isCurrentMemberName(lesson.member);
+        return isMine
+          && lesson.status === "scheduled"
+          && lesson.lessonDate
+          && lesson.lessonDate >= today;
+      })
+      .sort((left, right) => `${left.lessonDate}T${left.time || "00:00"}`.localeCompare(`${right.lessonDate}T${right.time || "00:00"}`))
+      .slice(0, limit);
+  }
   const dayOrder = new Map(days.map((day, index) => [day, index]));
   return memberLessons()
     .filter((lesson) => lesson.status === "scheduled")
@@ -2452,6 +2467,100 @@ function upcomingMemberLessons(limit = 2) {
 function scheduleSummaryText(lesson, fallback) {
   if (!lesson) return fallback;
   return `${lesson.day} ${lesson.time}`;
+}
+
+function latestMemberFeedbackLog() {
+  return [...state.lessonLogs]
+    .filter((log) => log.status === "confirmed" && (log.coachComment || log.memberVisibleSummary || log.ticketDeducted))
+    .sort((left, right) => String(right.submittedAt || right.journalDate || "").localeCompare(String(left.submittedAt || left.journalDate || "")))[0] || null;
+}
+
+function pendingMemberFeedbackLog() {
+  return [...state.lessonLogs]
+    .filter((log) => ["coach_pending", "uploading", "server_error"].includes(log.status))
+    .sort((left, right) => String(right.submittedAt || right.journalDate || "").localeCompare(String(left.submittedAt || left.journalDate || "")))[0] || null;
+}
+
+function renderMemberHomeOverview() {
+  const grid = $("#homeSummaryGrid");
+  const onboarding = $("#homeOnboarding");
+  if (!grid || !onboarding) return;
+
+  const ticket = currentLiveTicket();
+  const upcoming = upcomingMemberLessons(2);
+  const latestFeedback = latestMemberFeedbackLog();
+  const pendingFeedback = pendingMemberFeedbackLog();
+  const hasNewFeedback = Boolean(latestFeedback && latestFeedback.id !== state.lastReadFeedbackId);
+  const ticketRefreshing = state.dataMode === "live" && state.member && /확인 중/.test(state.ticketSyncStatus?.text || "");
+  const lessonRefreshing = state.dataMode === "live" && state.member && !state.liveLessonsLoaded;
+  const refreshing = Boolean(ticketRefreshing || lessonRefreshing);
+  const syncFailed = state.ticketSyncStatus?.tone === "alert";
+  const empty = !refreshing && !syncFailed && !ticket && !upcoming.length && !latestFeedback && !pendingFeedback;
+
+  grid.hidden = empty;
+  onboarding.hidden = !empty;
+  if (empty) {
+    $(".home-change-button")?.setAttribute("hidden", "");
+    return;
+  }
+
+  const lessonCard = $("#homeNextLessonCard");
+  const ticketCard = $("#homeTicketCard");
+  const feedbackCard = $("#homeFeedbackCard");
+  const showLessonCard = refreshing || Boolean(ticket) || upcoming.length > 0;
+  const showFeedbackCard = hasNewFeedback || Boolean(pendingFeedback);
+
+  lessonCard.hidden = !showLessonCard;
+  ticketCard.hidden = false;
+  feedbackCard.hidden = !showFeedbackCard;
+  grid.dataset.cardCount = String([lessonCard, ticketCard, feedbackCard].filter((card) => !card.hidden).length);
+
+  if (refreshing) {
+    $("#nextLessonDate").textContent = "일정 확인 중";
+    $("#followingLessonDate").textContent = "서버에서 최신 수업을 불러오고 있습니다.";
+    $("#homeScheduleAction").textContent = "시간표";
+  } else if (upcoming.length) {
+    $("#nextLessonDate").textContent = scheduleSummaryText(upcoming[0], "예정 없음");
+    const following = scheduleSummaryText(upcoming[1], "");
+    $("#followingLessonDate").textContent = [upcoming[0]?.coach || "", following ? `다음 ${following}` : ""].filter(Boolean).join(" · ");
+    $("#homeScheduleAction").textContent = "시간표";
+  } else if (ticket) {
+    $("#nextLessonDate").textContent = "다음 수업 예약";
+    $("#followingLessonDate").textContent = "가능한 시간에서 수업을 선택해 주세요.";
+    $("#homeScheduleAction").textContent = "예약하기";
+  }
+
+  if (ticket) {
+    $("#remainingCount").textContent = `${ticket.remaining}회`;
+    $("#ticketStatus").textContent = `${ticket.title} · ${ticket.statusLabel}`;
+    $("#homeTicketAction").textContent = ticket.remaining <= 2 ? "연장하기" : "회원권";
+    ticketCard.classList.toggle("alert", ticket.remaining <= 2);
+  } else if (refreshing) {
+    $("#remainingCount").textContent = "확인 중";
+    $("#ticketStatus").textContent = "서버에서 최신 회원권을 불러오고 있습니다.";
+    $("#homeTicketAction").textContent = "회원권";
+    ticketCard.classList.remove("alert");
+  } else if (syncFailed) {
+    $("#remainingCount").textContent = "확인 필요";
+    $("#ticketStatus").textContent = "회원권 정보를 불러오지 못했습니다.";
+    $("#homeTicketAction").textContent = "다시 확인";
+    ticketCard.classList.add("alert");
+  } else {
+    $("#remainingCount").textContent = "구매 필요";
+    $("#ticketStatus").textContent = "수업 시작 전 회원권이 필요합니다.";
+    $("#homeTicketAction").textContent = "회원권 구매";
+    ticketCard.classList.add("alert");
+  }
+
+  const feedback = hasNewFeedback ? latestFeedback : pendingFeedback;
+  if (feedback) {
+    const feedbackDate = feedback.journalDate || String(feedback.submittedAt || "").slice(0, 10);
+    $("#homeFeedbackEyebrow").textContent = hasNewFeedback ? "새 코치 피드백" : "코치 피드백";
+    $("#pendingNoteCount").textContent = hasNewFeedback ? lessonReviewTitle(feedback) : "등록 중";
+    $("#lessonRecordNote").textContent = feedbackDate;
+    $("#homeFeedbackAction").textContent = hasNewFeedback ? "코멘트 보기" : "운동일지";
+    feedbackCard.classList.toggle("wait", !hasNewFeedback);
+  }
 }
 
 function dayName(day) {
@@ -6622,7 +6731,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.91" });
+  const params = new URLSearchParams({ v: "1.0.92" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -6692,8 +6801,13 @@ function handleSummaryAction(action) {
     return;
   }
   if (action === "comments") {
-    const latest = state.lessonLogs.find((log) => log.status === "confirmed") || state.lessonLogs[0];
+    const latest = latestMemberFeedbackLog() || state.lessonLogs[0];
     if (latest) {
+      if (latest.status === "confirmed") {
+        state.lastReadFeedbackId = latest.id;
+        saveSnapshot();
+        renderMemberHomeOverview();
+      }
       openJournalDetail(latest.id);
       return;
     }
@@ -8047,6 +8161,7 @@ function renderAll() {
   renderJournalActivitySummary();
   renderProducts();
   renderPendingApprovalGate();
+  renderMemberHomeOverview();
   saveSnapshot();
 }
 
@@ -8090,8 +8205,8 @@ function renderActiveMemberView(viewId = activeMemberViewId()) {
   renderPendingApprovalGate();
 
   if (viewId === "homeView") {
-    renderTodayActions();
     renderMakeupDueBanner();
+    renderMemberHomeOverview();
   } else if (viewId === "scheduleView") {
     renderSchedule();
     renderAvailableSlots();
