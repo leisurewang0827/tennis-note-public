@@ -9726,13 +9726,38 @@ button .schedule-member-lines > span {
 }
 
 .schedule-sheet-paste-row {
+  display: grid;
+  grid-template-columns: 32px 64px 98px minmax(92px, 0.9fr) minmax(120px, 1.2fr) 88px 72px minmax(110px, 1fr);
   min-width: 0;
-  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
   border: 1px solid #d7e7df;
   border-left-width: 4px;
   border-radius: 6px;
   padding: 8px;
   background: #fff;
+}
+
+.schedule-sheet-paste-number {
+  color: #64746f;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.schedule-sheet-paste-row input,
+.schedule-sheet-paste-row select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  box-sizing: border-box;
+  border: 1px solid #d7e7df;
+  border-radius: 6px;
+  padding: 4px 7px;
+  color: #18352c;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .schedule-sheet-paste-row.is-ready {
@@ -9743,9 +9768,8 @@ button .schedule-member-lines > span {
   border-left-color: #dc2626;
 }
 
-.schedule-sheet-paste-row span {
+.schedule-sheet-paste-row small {
   min-width: 0;
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9853,8 +9877,8 @@ button .schedule-member-lines > span {
   .schedule-sheet-paste-head,
   .schedule-sheet-paste-actions,
   .schedule-sheet-paste-row {
+    grid-template-columns: 28px 1fr 1fr;
     align-items: stretch;
-    flex-direction: column;
   }
 
   .schedule-sheet-paste-actions .primary-button,
@@ -9862,7 +9886,12 @@ button .schedule-member-lines > span {
     width: 100%;
   }
 
-  .schedule-sheet-paste-row span {
+  .schedule-sheet-paste-row input[data-schedule-sheet-field="memberName"],
+  .schedule-sheet-paste-row small {
+    grid-column: 2 / -1;
+  }
+
+  .schedule-sheet-paste-row small {
     white-space: normal;
   }
 

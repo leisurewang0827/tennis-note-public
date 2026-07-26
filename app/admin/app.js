@@ -9696,6 +9696,16 @@ function normalizeScheduleSheetDay(value) {
   return scheduleDays.includes(token) ? token : "";
 }
 
+function scheduleSheetBaseIssues(row = {}) {
+  const issues = [];
+  if (!normalizeScheduleSheetDay(row.day)) issues.push("요일 확인");
+  if (!/^\d{1,2}:\d{2}$/u.test(row.time || "")) issues.push("시간 확인");
+  if (!row.coachId || !scheduleSheetCoachOptions().some((coach) => String(coach.id) === String(row.coachId))) issues.push("코치 확인");
+  if (!normalizeScheduleSheetCell(row.memberName)) issues.push("회원 확인");
+  if (![20, 30, 40, 60].includes(Number(row.durationMinutes))) issues.push("분 확인");
+  return issues;
+}
+
 function normalizeScheduleSheetLessonSource(value) {
   const token = normalizeScheduleSheetCell(value).replace(/\s+/g, "");
   if (!token) return "regular";
@@ -9741,7 +9751,7 @@ function scheduleSheetRowKey(row) {
 function validateScheduleSheetRows(rows) {
   const seen = new Map();
   return rows.map((row) => {
-    const next = { ...row, issues: [...(row.issues || [])] };
+    const next = { ...row, issues: scheduleSheetBaseIssues(row) };
     const source = normalizeScheduleSheetLessonSource(row.lessonSourceLabel || row.lessonSource);
     const ticket = findScheduleSheetTicket(row.memberName, row.coachId, source, row.durationMinutes);
     next.lessonSource = source;
@@ -9801,6 +9811,46 @@ function parseScheduleSheetPaste(text) {
   return validateScheduleSheetRows(parsedRows);
 }
 
+function scheduleSheetSelectOptions(options = [], selectedValue = "") {
+  return options.map((option) => `
+    <option value="${escapeHtml(String(option.value))}" ${String(option.value) === String(selectedValue) ? "selected" : ""}>${escapeHtml(option.label)}</option>
+  `).join("");
+}
+
+function scheduleSheetDayField(row, index) {
+  return `<select data-schedule-sheet-field="day" data-row-index="${index}" aria-label="요일">
+    <option value="">요일</option>
+    ${scheduleSheetSelectOptions(scheduleDays.map((day) => ({ value: day, label: day })), row.day)}
+  </select>`;
+}
+
+function scheduleSheetCoachField(row, index) {
+  const options = scheduleSheetCoachOptions().map((coach) => ({ value: coach.id, label: scheduleCoachDisplayName(coach.name) }));
+  return `<select data-schedule-sheet-field="coachId" data-row-index="${index}" aria-label="코치">
+    <option value="">코치</option>
+    ${scheduleSheetSelectOptions(options, row.coachId)}
+  </select>`;
+}
+
+function scheduleSheetSourceField(row, index) {
+  const options = [
+    { value: "regular", label: "정규" },
+    { value: "makeup", label: "보강" },
+    { value: "coupon", label: "쿠폰" },
+    { value: "one_day", label: "원데이" },
+    { value: "coach_change", label: "대타" },
+  ];
+  return `<select data-schedule-sheet-field="lessonSource" data-row-index="${index}" aria-label="수업종류">
+    ${scheduleSheetSelectOptions(options, row.lessonSource)}
+  </select>`;
+}
+
+function scheduleSheetDurationField(row, index) {
+  return `<select data-schedule-sheet-field="durationMinutes" data-row-index="${index}" aria-label="수업분">
+    ${scheduleSheetSelectOptions([20, 30, 40, 60].map((minutes) => ({ value: minutes, label: `${minutes}분` })), row.durationMinutes)}
+  </select>`;
+}
+
 function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || []) {
   const panel = $("#scheduleSheetPastePanel");
   const preview = $("#scheduleSheetPastePreview");
@@ -9819,15 +9869,42 @@ function renderScheduleSheetPastePreview(rows = state.scheduleSheetPasteRows || 
       <strong>${rows.length}줄 미리보기</strong>
       <span>등록 가능 ${readyCount}줄 · 확인 필요 ${issueCount}줄</span>
     </div>
-    ${rows.slice(0, 20).map((row) => `
+    ${rows.map((row, index) => `
       <div class="schedule-sheet-paste-row ${row.issues.length ? "needs-check" : "is-ready"}">
-        <strong>${escapeHtml(row.day || "-")} ${escapeHtml(row.time || "-")}</strong>
-        <span>${escapeHtml(row.memberName || "-")} · ${escapeHtml(row.coachName || "-")} · ${escapeHtml(lessonSourceLabel(row.lessonSource))} · ${row.durationMinutes}분</span>
+        <span class="schedule-sheet-paste-number">${row.rowNumber || index + 1}</span>
+        ${scheduleSheetDayField(row, index)}
+        <input data-schedule-sheet-field="time" data-row-index="${index}" type="time" value="${escapeHtml(row.time || "")}" aria-label="시간" />
+        ${scheduleSheetCoachField(row, index)}
+        <input data-schedule-sheet-field="memberName" data-row-index="${index}" type="text" value="${escapeHtml(row.memberName || "")}" aria-label="회원" placeholder="회원" />
+        ${scheduleSheetSourceField(row, index)}
+        ${scheduleSheetDurationField(row, index)}
         <small>${row.issues.length ? escapeHtml(row.issues.join(", ")) : "확인 완료"}</small>
       </div>
     `).join("")}
-    ${rows.length > 20 ? `<p class="schedule-sheet-paste-more">외 ${rows.length - 20}줄</p>` : ""}
   `;
+}
+
+function updateScheduleSheetPasteRow(index, field, value) {
+  const rowIndex = Number(index);
+  if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= (state.scheduleSheetPasteRows || []).length) return;
+  const rows = state.scheduleSheetPasteRows.map((row, currentIndex) => {
+    if (currentIndex !== rowIndex) return row;
+    const next = { ...row };
+    if (field === "durationMinutes") next.durationMinutes = Number(value) || 20;
+    else if (field === "coachId") {
+      const coach = scheduleSheetCoachOptions().find((item) => String(item.id) === String(value));
+      next.coachId = coach?.id || "";
+      next.coachName = coach?.name || "";
+    } else if (field === "lessonSource") {
+      next.lessonSource = normalizeLessonSource(value);
+      next.lessonSourceLabel = lessonSourceLabel(next.lessonSource);
+    } else {
+      next[field] = normalizeScheduleSheetCell(value);
+    }
+    return next;
+  });
+  state.scheduleSheetPasteRows = validateScheduleSheetRows(rows);
+  renderScheduleSheetPastePreview();
 }
 
 function openScheduleSheetPastePanel() {
@@ -18810,6 +18887,10 @@ function bindEvents() {
     syncCoachStaffSettlementFieldVisibility(event.target.value);
   });
   document.addEventListener("change", (event) => {
+    if (event.target.matches("[data-schedule-sheet-field]")) {
+      updateScheduleSheetPasteRow(event.target.dataset.rowIndex, event.target.dataset.scheduleSheetField, event.target.value);
+      return;
+    }
     if (event.target.id === "recordCoachFilter") {
       state.recordCoachFilter = event.target.value || "all";
       renderNotes();
