@@ -4,7 +4,7 @@
     releaseId: "2026.07.27.19",
     nativeShell: {
       version: "1.0.118",
-      androidBuild: 48,
+      androidBuild: 49,
       iosBuild: 53,
     },
   });
