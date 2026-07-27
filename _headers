@@ -18,3 +18,9 @@
 
 /app/shared/tennisnote-release.js
   Cache-Control: no-store, no-cache, must-revalidate
+
+/app/shared/tennisnote-release-updater.js
+  Cache-Control: no-store, no-cache, must-revalidate
+
+/app/release.json
+  Cache-Control: no-store, no-cache, must-revalidate

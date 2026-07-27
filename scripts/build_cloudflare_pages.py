@@ -86,6 +86,15 @@ def write_platform_files(output: Path, target: str) -> None:
 
 /shared/config.local.js
   Cache-Control: no-cache, no-store, must-revalidate
+
+/shared/tennisnote-release.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/shared/tennisnote-release-updater.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/release.json
+  Cache-Control: no-cache, no-store, must-revalidate
 """
     if target == "member":
         headers += """
@@ -104,6 +113,7 @@ def write_platform_files(output: Path, target: str) -> None:
 def build_member(output: Path) -> None:
     copy_directory(APP_ROOT / "tennis-note-member-app", output)
     copy_directory(APP_ROOT / "shared", output / "shared")
+    shutil.copy2(APP_ROOT / "release.json", output / "release.json")
     copy_directory(APP_ROOT / "tennis-note-coach-app", output / "tennis-note-coach-app")
     copy_directory(
         APP_ROOT / "tennis-note-member-app" / "assets",
@@ -115,6 +125,7 @@ def build_member(output: Path) -> None:
 def build_admin(output: Path) -> None:
     copy_directory(APP_ROOT / "admin", output)
     copy_directory(APP_ROOT / "shared", output / "shared")
+    shutil.copy2(APP_ROOT / "release.json", output / "release.json")
     copy_directory(
         APP_ROOT / "tennis-note-member-app" / "assets",
         output / "tennis-note-member-app" / "assets",

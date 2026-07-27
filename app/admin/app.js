@@ -1521,8 +1521,93 @@ const coachStaffEditorState = {
   draft: null,
   workBlocks: [],
   breakBlocks: [],
+  editingBlockType: "",
+  editingBlockId: "",
   message: "",
 };
+const adminLayoutSettingKey = "tennisnote_admin_layout_v1";
+const adminLayoutLocalKey = "tennis-note-admin-layout-v1";
+const adminMenuDefinitions = [
+  { id: "dashboard", label: "대시보드", required: true },
+  { id: "members", label: "회원관리" },
+  { id: "schedule", label: "레슨시간표" },
+  { id: "billing", label: "결제/정산" },
+  { id: "notes", label: "기록/차감 확인" },
+  { id: "issues", label: "개선·오류 접수" },
+  { id: "settings", label: "운영 설정", required: true },
+];
+const adminDashboardGroupDefinitions = [
+  { id: "metrics", label: "핵심 운영 수치" },
+  { id: "operations", label: "오늘 처리·회원·코치", required: true },
+  { id: "lessons", label: "오늘 레슨" },
+  { id: "insights", label: "공지·운영 요약" },
+];
+const adminDashboardWidgetDefinitions = {
+  operations: [
+    { id: "tasks", label: "오늘 처리할 일", required: true },
+    { id: "members", label: "회원 현황" },
+    { id: "coaches", label: "코치 업무" },
+  ],
+  insights: [
+    { id: "notices", label: "공지·알림" },
+    { id: "reports", label: "운영 요약" },
+  ],
+};
+
+function defaultAdminLayoutSettings() {
+  return {
+    menuOrder: adminMenuDefinitions.map((item) => item.id),
+    hiddenMenus: [],
+    groupOrder: adminDashboardGroupDefinitions.map((item) => item.id),
+    hiddenGroups: [],
+    widgetOrder: Object.fromEntries(
+      Object.entries(adminDashboardWidgetDefinitions).map(([group, items]) => [group, items.map((item) => item.id)]),
+    ),
+    hiddenWidgets: [],
+  };
+}
+
+function normalizeLayoutOrder(value, definitions) {
+  const ids = definitions.map((item) => item.id);
+  const requested = Array.isArray(value) ? value.filter((id) => ids.includes(id)) : [];
+  return [...new Set([...requested, ...ids])];
+}
+
+function normalizeAdminLayoutSettings(value = {}) {
+  const defaults = defaultAdminLayoutSettings();
+  const requiredMenus = adminMenuDefinitions.filter((item) => item.required).map((item) => item.id);
+  const requiredWidgets = Object.values(adminDashboardWidgetDefinitions)
+    .flat()
+    .filter((item) => item.required)
+    .map((item) => item.id);
+  const requiredGroups = adminDashboardGroupDefinitions.filter((item) => item.required).map((item) => item.id);
+  return {
+    menuOrder: normalizeLayoutOrder(value.menuOrder, adminMenuDefinitions),
+    hiddenMenus: [...new Set((Array.isArray(value.hiddenMenus) ? value.hiddenMenus : [])
+      .filter((id) => !requiredMenus.includes(id) && defaults.menuOrder.includes(id)))],
+    groupOrder: normalizeLayoutOrder(value.groupOrder, adminDashboardGroupDefinitions),
+    hiddenGroups: [...new Set((Array.isArray(value.hiddenGroups) ? value.hiddenGroups : [])
+      .filter((id) => !requiredGroups.includes(id) && defaults.groupOrder.includes(id)))],
+    widgetOrder: Object.fromEntries(
+      Object.entries(adminDashboardWidgetDefinitions).map(([group, items]) => [
+        group,
+        normalizeLayoutOrder(value.widgetOrder?.[group], items),
+      ]),
+    ),
+    hiddenWidgets: [...new Set((Array.isArray(value.hiddenWidgets) ? value.hiddenWidgets : [])
+      .filter((id) => !requiredWidgets.includes(id)))],
+  };
+}
+
+let adminLayoutSettings = (() => {
+  try {
+    return normalizeAdminLayoutSettings(JSON.parse(localStorage.getItem(adminLayoutLocalKey) || "{}"));
+  } catch {
+    return defaultAdminLayoutSettings();
+  }
+})();
+let adminLayoutServerUpdatedAt = "";
+let adminLayoutSaveState = "local";
 const adminPinHashVersion = "tn-admin-lock-v1";
 const legacyDefaultAdminPin = "0000";
 const legacyDefaultAdminPinHashes = new Set([
@@ -3860,6 +3945,7 @@ async function loadLiveSchedulePolicyFromServer() {
     scheduleSettings.coachWorkPolicyVersion = Number(serverSettings.coachWorkPolicyVersion) || 2;
     scheduleSettings.memberScheduleRequestOnly = serverSettings.memberScheduleRequestOnly !== false;
     scheduleSettings.adminTuningMode = serverSettings.adminTuningMode === true;
+    const useProfileCoachTemplate = !state.liveScheduleLoaded;
     (Array.isArray(value.coaches) ? value.coaches : []).forEach((serverCoach) => {
       const coach = coaches.find((item) => (
         (!serverCoach.branchId || !item.branchId || String(item.branchId) === String(serverCoach.branchId))
@@ -3868,11 +3954,11 @@ async function loadLiveSchedulePolicyFromServer() {
         || item.name === serverCoach.name)
       ));
       if (!coach) return;
-      if (Array.isArray(serverCoach.workBlocks)) coach.workBlocks = serverCoach.workBlocks;
-      if (Array.isArray(serverCoach.breakBlocks)) coach.breakBlocks = serverCoach.breakBlocks;
-      if (Array.isArray(serverCoach.availableDays)) coach.availableDays = serverCoach.availableDays;
-      if (serverCoach.availableStart) coach.availableStart = serverCoach.availableStart;
-      if (serverCoach.availableEnd) coach.availableEnd = serverCoach.availableEnd;
+      if (useProfileCoachTemplate && Array.isArray(serverCoach.workBlocks)) coach.workBlocks = serverCoach.workBlocks;
+      if (useProfileCoachTemplate && Array.isArray(serverCoach.breakBlocks)) coach.breakBlocks = serverCoach.breakBlocks;
+      if (useProfileCoachTemplate && Array.isArray(serverCoach.availableDays)) coach.availableDays = serverCoach.availableDays;
+      if (useProfileCoachTemplate && serverCoach.availableStart) coach.availableStart = serverCoach.availableStart;
+      if (useProfileCoachTemplate && serverCoach.availableEnd) coach.availableEnd = serverCoach.availableEnd;
       if (serverCoach.color) coach.color = serverCoach.color;
     });
     replaceArray(
@@ -16278,6 +16364,7 @@ function mergeServerCoachRole(role, index) {
     settlementType: role.settlement_type || "ratio",
     settlementRate: Number(role.settlement_rate) || 0,
     hourlyRate: Number(role.hourly_rate) || 0,
+    availabilityRevision: Number(role.availability_revision) || 0,
   });
   return coach;
 }
@@ -16343,7 +16430,7 @@ async function syncAdminLiveData() {
     const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       client.selectRows("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", limit: 500 }),
-      client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from", limit: 100 })
+      client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
       client.selectRows("tn_coach_availability", { select: "id,coach_role_id,day_of_week,start_time,end_time,availability_type,note", limit: 1000 }).catch(() => []),
       fullAdminAccess ? client.selectRows("tn_user_auth_links", { select: "id,user_id,provider,last_sign_in_at,is_primary", limit: 500 }).catch(() => []) : Promise.resolve([]),
@@ -16960,6 +17047,7 @@ async function syncAdminLiveData() {
         : `실서버 시간표 ${mappedLessons.length}건 동기화`,
     });
     await loadLiveSchedulePolicyFromServer();
+    await loadAdminLayoutSettingsFromServer();
     await loadRefundPolicySettingsFromServer();
     await loadServerHoldingPolicy();
     await loadPolicyVersionsFromServer();
@@ -17865,6 +17953,7 @@ function coachStaffDraftFrom(coach) {
   return {
     coachId: source.id || "",
     coachRoleId: source.serverRoleId || "",
+    availabilityRevision: Number(source.availabilityRevision) || 0,
     branchId: source.branchId || activeOperationBranchId() || defaultOperationBranch()?.id || "",
     name: source.name || "",
     phone: source.phone || "",
@@ -17921,14 +18010,25 @@ function coachBlockListMarkup(blocks, type) {
           <strong>${escapeHtml(block.days.join("·"))} ${escapeHtml(block.start)}~${escapeHtml(block.end)}</strong>
           <span>${escapeHtml(block.label || title)}</span>
         </div>
-        <button class="icon-button" type="button" aria-label="${title} 삭제" title="${title} 삭제" data-remove-coach-staff-block="${escapeHtml(block.id)}" data-coach-staff-block-type="${type}">×</button>
+        <div class="coach-staff-block-actions">
+          <button class="small-button" type="button" data-edit-coach-staff-block="${escapeHtml(block.id)}" data-coach-staff-block-type="${type}">수정</button>
+          <button class="icon-button" type="button" aria-label="${title} 삭제" title="${title} 삭제" data-remove-coach-staff-block="${escapeHtml(block.id)}" data-coach-staff-block-type="${type}">×</button>
+        </div>
       </div>`).join("")
     : `<p class="empty-text">등록된 ${title} 시간이 없습니다.</p>`;
 }
 
-function coachStaffDayInputs(type) {
+function coachStaffEditingBlock(type) {
+  if (coachStaffEditorState.editingBlockType !== type || !coachStaffEditorState.editingBlockId) return null;
+  const blocks = type === "break"
+    ? coachStaffEditorState.draft?.breakBlocks
+    : coachStaffEditorState.draft?.workBlocks;
+  return blocks?.find((block) => block.id === coachStaffEditorState.editingBlockId) || null;
+}
+
+function coachStaffDayInputs(type, selectedDays = []) {
   return scheduleDays.map((day) => `
-    <label><input type="checkbox" value="${day}" data-coach-staff-${type}-day />${day}</label>`).join("");
+    <label><input type="checkbox" value="${day}" data-coach-staff-${type}-day ${selectedDays.includes(day) ? "checked" : ""} />${day}</label>`).join("");
 }
 
 function renderCoachStaffBasicTab(draft) {
@@ -17955,27 +18055,31 @@ function renderCoachStaffBasicTab(draft) {
 }
 
 function renderCoachStaffWorkTab(draft) {
+  const editingWork = coachStaffEditingBlock("work");
+  const editingBreak = coachStaffEditingBlock("break");
   return `
     <section class="coach-staff-block-section">
       <h3>근무시간</h3>
       <div class="coach-staff-block-list">${coachBlockListMarkup(draft.workBlocks, "work")}</div>
       <div class="coach-staff-block-add">
-        <div class="coach-day-grid compact">${coachStaffDayInputs("work")}</div>
-        <label><span>시작</span><input id="coachStaffWorkStart" type="time" step="600" value="06:40" /></label>
-        <label><span>종료</span><input id="coachStaffWorkEnd" type="time" step="600" value="07:00" /></label>
-        <label><span>표시명</span><input id="coachStaffWorkLabel" value="근무" maxlength="30" /></label>
-        <button class="small-button" type="button" data-add-coach-staff-block="work">근무 추가</button>
+        <div class="coach-day-grid compact">${coachStaffDayInputs("work", editingWork?.days || [])}</div>
+        <label><span>시작</span><input id="coachStaffWorkStart" type="time" step="600" value="${escapeHtml(editingWork?.start || "06:40")}" /></label>
+        <label><span>종료</span><input id="coachStaffWorkEnd" type="time" step="600" value="${escapeHtml(editingWork?.end || "07:00")}" /></label>
+        <label><span>표시명</span><input id="coachStaffWorkLabel" value="${escapeHtml(editingWork?.label || "근무")}" maxlength="30" /></label>
+        <button class="small-button" type="button" data-add-coach-staff-block="work">${editingWork ? "수정 적용" : "근무 추가"}</button>
+        ${editingWork ? '<button class="small-button is-muted" type="button" data-cancel-coach-staff-block="work">취소</button>' : ""}
       </div>
     </section>
     <section class="coach-staff-block-section is-break">
       <h3>브레이크</h3>
       <div class="coach-staff-block-list">${coachBlockListMarkup(draft.breakBlocks, "break")}</div>
       <div class="coach-staff-block-add">
-        <div class="coach-day-grid compact">${coachStaffDayInputs("break")}</div>
-        <label><span>시작</span><input id="coachStaffBreakStart" type="time" step="600" value="13:00" /></label>
-        <label><span>종료</span><input id="coachStaffBreakEnd" type="time" step="600" value="13:20" /></label>
-        <label><span>표시명</span><input id="coachStaffBreakLabel" value="브레이크" maxlength="30" /></label>
-        <button class="small-button" type="button" data-add-coach-staff-block="break">브레이크 추가</button>
+        <div class="coach-day-grid compact">${coachStaffDayInputs("break", editingBreak?.days || [])}</div>
+        <label><span>시작</span><input id="coachStaffBreakStart" type="time" step="600" value="${escapeHtml(editingBreak?.start || "13:00")}" /></label>
+        <label><span>종료</span><input id="coachStaffBreakEnd" type="time" step="600" value="${escapeHtml(editingBreak?.end || "13:20")}" /></label>
+        <label><span>표시명</span><input id="coachStaffBreakLabel" value="${escapeHtml(editingBreak?.label || "브레이크")}" maxlength="30" /></label>
+        <button class="small-button" type="button" data-add-coach-staff-block="break">${editingBreak ? "수정 적용" : "브레이크 추가"}</button>
+        ${editingBreak ? '<button class="small-button is-muted" type="button" data-cancel-coach-staff-block="break">취소</button>' : ""}
       </div>
     </section>`;
 }
@@ -18060,6 +18164,8 @@ function openCoachStaffModal(coachId = "") {
   coachStaffEditorState.mode = coach ? "edit" : "create";
   coachStaffEditorState.tab = "basic";
   coachStaffEditorState.draft = coachStaffDraftFrom(coach);
+  coachStaffEditorState.editingBlockType = "";
+  coachStaffEditorState.editingBlockId = "";
   coachStaffEditorState.message = "";
   renderCoachStaffModal();
 }
@@ -18068,6 +18174,8 @@ function closeCoachStaffModal() {
   const modal = $("#coachStaffModal");
   if (modal) modal.hidden = true;
   coachStaffEditorState.draft = null;
+  coachStaffEditorState.editingBlockType = "";
+  coachStaffEditorState.editingBlockId = "";
   coachStaffEditorState.message = "";
 }
 
@@ -18085,7 +18193,36 @@ function addCoachStaffBlock(type) {
     return;
   }
   const target = type === "break" ? draft.breakBlocks : draft.workBlocks;
-  target.push({ id: `${type}-${Date.now()}`, days, start, end, label });
+  const editingId = coachStaffEditorState.editingBlockType === type
+    ? coachStaffEditorState.editingBlockId
+    : "";
+  const nextBlock = { id: editingId || `${type}-${Date.now()}`, days, start, end, label };
+  if (editingId) {
+    const index = target.findIndex((block) => block.id === editingId);
+    if (index >= 0) target.splice(index, 1, nextBlock);
+    else target.push(nextBlock);
+  } else {
+    target.push(nextBlock);
+  }
+  coachStaffEditorState.editingBlockType = "";
+  coachStaffEditorState.editingBlockId = "";
+  coachStaffEditorState.message = "변경사항이 있습니다. 아래 저장을 눌러 서버에 반영하세요.";
+  renderCoachStaffModal();
+}
+
+function beginCoachStaffBlockEdit(type, blockId) {
+  const draft = coachStaffEditorState.draft;
+  const target = type === "break" ? draft?.breakBlocks : draft?.workBlocks;
+  if (!target?.some((block) => block.id === blockId)) return;
+  coachStaffEditorState.editingBlockType = type;
+  coachStaffEditorState.editingBlockId = blockId;
+  coachStaffEditorState.message = "요일과 시간을 수정한 뒤 수정 적용을 눌러주세요.";
+  renderCoachStaffModal();
+}
+
+function cancelCoachStaffBlockEdit() {
+  coachStaffEditorState.editingBlockType = "";
+  coachStaffEditorState.editingBlockId = "";
   coachStaffEditorState.message = "";
   renderCoachStaffModal();
 }
@@ -18095,6 +18232,11 @@ function removeCoachStaffBlock(type, blockId) {
   if (!draft) return;
   if (type === "break") draft.breakBlocks = draft.breakBlocks.filter((block) => block.id !== blockId);
   else draft.workBlocks = draft.workBlocks.filter((block) => block.id !== blockId);
+  if (coachStaffEditorState.editingBlockId === blockId) {
+    coachStaffEditorState.editingBlockType = "";
+    coachStaffEditorState.editingBlockId = "";
+  }
+  coachStaffEditorState.message = "삭제할 시간이 표시에서 빠졌습니다. 아래 저장을 눌러 서버에 반영하세요.";
   renderCoachStaffModal();
 }
 
@@ -18195,7 +18337,10 @@ async function saveCoachStaff() {
   const button = $("#saveCoachStaffButton");
   if (button) { button.disabled = true; button.textContent = "저장 중"; }
   try {
-    const result = await client.rpc("tn_admin_save_coach_staff", { target_record: coachStaffPayload(draft) });
+    const result = await client.rpc("tn_admin_save_coach_staff_v2", {
+      target_record: coachStaffPayload(draft),
+      expected_revision: draft.coachRoleId ? Number(draft.availabilityRevision) || 0 : null,
+    });
     const coachRoleId = result?.coachRoleId || result?.coach_role_id || draft.coachRoleId;
     await syncAdminLiveData();
     const saved = coaches.find((coach) => (
@@ -18208,6 +18353,11 @@ async function saveCoachStaff() {
     if (!coachStaffServerMatches(saved, draft)) {
       throw new Error("coach_staff_server_verification_failed");
     }
+    updateActiveOperationProfileFromCurrent();
+    const snapshotStatus = await syncLiveSchedulePolicyToServer();
+    if (snapshotStatus === "conflict") {
+      await loadLiveSchedulePolicyFromServer();
+    }
     window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
     closeCoachStaffModal();
     renderCoaches();
@@ -18215,8 +18365,10 @@ async function saveCoachStaff() {
     showToast("코치·직원 정보가 서버에 저장되었습니다.");
   } catch (error) {
     const raw = `${error?.payload?.message || ""} ${error?.message || ""}`;
-    coachStaffEditorState.message = raw.includes("tn_admin_save_coach_staff") || raw.includes("PGRST202")
+    coachStaffEditorState.message = raw.includes("tn_admin_save_coach_staff_v2") || raw.includes("PGRST202")
       ? "코치·직원 통합 DB 기능을 먼저 적용해주세요."
+      : raw.includes("coach_staff_revision_conflict")
+        ? "다른 화면에서 코치 정보가 먼저 수정되었습니다. 최신 내용을 다시 불러온 뒤 다시 수정해주세요."
       : raw.includes("server_verification")
         ? "저장은 요청됐지만 서버 재확인에 실패했습니다. 새로고침 후 확인해주세요."
         : `저장 실패: ${error?.payload?.code || error?.message || "server_error"}`;
@@ -19181,8 +19333,228 @@ function renderPaymentSetup() {
     </article>`;
 }
 
+function persistAdminLayoutLocal() {
+  localStorage.setItem(adminLayoutLocalKey, JSON.stringify(adminLayoutSettings));
+}
+
+function applyAdminLayoutSettings() {
+  const nav = $(".nav-list");
+  if (nav) {
+    adminLayoutSettings.menuOrder.forEach((view) => {
+      const button = nav.querySelector(`[data-view="${view}"]`);
+      if (button) nav.append(button);
+    });
+    adminMenuDefinitions.forEach((item) => {
+      const button = nav.querySelector(`[data-view="${item.id}"]`);
+      if (button) button.hidden = adminLayoutSettings.hiddenMenus.includes(item.id);
+    });
+  }
+
+  const dashboard = $("#dashboardView");
+  if (!dashboard) return;
+  dashboard.classList.add("dashboard-layout-customizable");
+  adminLayoutSettings.groupOrder.forEach((groupId, index) => {
+    const group = dashboard.querySelector(`[data-dashboard-group="${groupId}"]`);
+    if (!group) return;
+    group.style.order = String(index);
+    group.hidden = adminLayoutSettings.hiddenGroups.includes(groupId);
+  });
+  Object.entries(adminLayoutSettings.widgetOrder).forEach(([groupId, widgetOrder]) => {
+    const group = dashboard.querySelector(`[data-dashboard-group="${groupId}"]`);
+    if (!group) return;
+    widgetOrder.forEach((widgetId) => {
+      const widget = group.querySelector(`[data-dashboard-widget="${widgetId}"]`);
+      if (widget) group.append(widget);
+    });
+  });
+  Object.values(adminDashboardWidgetDefinitions).flat().forEach((item) => {
+    const widget = dashboard.querySelector(`[data-dashboard-widget="${item.id}"]`);
+    if (widget) widget.hidden = adminLayoutSettings.hiddenWidgets.includes(item.id);
+  });
+}
+
+function adminLayoutRowMarkup(item, kind, index, count, group = "") {
+  const hiddenList = kind === "menu"
+    ? adminLayoutSettings.hiddenMenus
+    : kind === "group"
+      ? adminLayoutSettings.hiddenGroups
+      : adminLayoutSettings.hiddenWidgets;
+  return `
+    <div class="admin-layout-row">
+      <label>
+        <input type="checkbox" data-admin-layout-visible="${kind}" data-admin-layout-id="${item.id}" data-admin-layout-group="${group}" ${hiddenList.includes(item.id) ? "" : "checked"} ${item.required ? "disabled" : ""} />
+        <span>${escapeHtml(item.label)}</span>
+      </label>
+      <div class="admin-layout-row-actions">
+        <button class="icon-button" type="button" aria-label="위로 이동" title="위로 이동" data-move-admin-layout="${kind}" data-admin-layout-id="${item.id}" data-admin-layout-group="${group}" data-direction="-1" ${index === 0 ? "disabled" : ""}>↑</button>
+        <button class="icon-button" type="button" aria-label="아래로 이동" title="아래로 이동" data-move-admin-layout="${kind}" data-admin-layout-id="${item.id}" data-admin-layout-group="${group}" data-direction="1" ${index === count - 1 ? "disabled" : ""}>↓</button>
+      </div>
+    </div>`;
+}
+
+function renderAdminLayoutSettings() {
+  applyAdminLayoutSettings();
+  const target = $("#adminLayoutSettingsPanel");
+  const status = $("#adminLayoutSaveStatus");
+  if (status) {
+    status.textContent = adminLayoutSaveState === "saving"
+      ? "저장 중"
+      : adminLayoutSaveState === "server"
+        ? "서버 저장"
+        : adminLayoutSaveState === "conflict"
+          ? "다시 확인 필요"
+          : "저장 전";
+  }
+  if (!target) return;
+  target.innerHTML = `
+    <div class="admin-layout-editor-grid">
+      <section>
+        <h3>왼쪽 메뉴</h3>
+        <div class="admin-layout-list">
+          ${adminLayoutSettings.menuOrder.map((id, index) => {
+            const item = adminMenuDefinitions.find((entry) => entry.id === id);
+            return item ? adminLayoutRowMarkup(item, "menu", index, adminLayoutSettings.menuOrder.length) : "";
+          }).join("")}
+        </div>
+      </section>
+      <section>
+        <h3>대시보드 묶음</h3>
+        <div class="admin-layout-list">
+          ${adminLayoutSettings.groupOrder.map((id, index) => {
+            const item = adminDashboardGroupDefinitions.find((entry) => entry.id === id);
+            return item ? adminLayoutRowMarkup(item, "group", index, adminLayoutSettings.groupOrder.length) : "";
+          }).join("")}
+        </div>
+      </section>
+      ${Object.entries(adminDashboardWidgetDefinitions).map(([group, items]) => `
+        <section>
+          <h3>${group === "operations" ? "오늘 운영 안쪽" : "공지·요약 안쪽"}</h3>
+          <div class="admin-layout-list">
+            ${adminLayoutSettings.widgetOrder[group].map((id, index) => {
+              const item = items.find((entry) => entry.id === id);
+              return item ? adminLayoutRowMarkup(item, "widget", index, items.length, group) : "";
+            }).join("")}
+          </div>
+        </section>`).join("")}
+    </div>
+    <div class="admin-layout-actions">
+      <button id="resetAdminLayoutButton" class="ghost-button" type="button">기본 배치</button>
+      <button id="saveAdminLayoutButton" class="primary-button" type="button">화면 구성 저장</button>
+    </div>`;
+}
+
+function moveAdminLayoutItem(kind, itemId, direction, group = "") {
+  const order = kind === "menu"
+    ? adminLayoutSettings.menuOrder
+    : kind === "group"
+      ? adminLayoutSettings.groupOrder
+      : adminLayoutSettings.widgetOrder[group];
+  if (!order) return;
+  const index = order.indexOf(itemId);
+  const nextIndex = index + Number(direction);
+  if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+  [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+  adminLayoutSaveState = "local";
+  persistAdminLayoutLocal();
+  renderAdminLayoutSettings();
+}
+
+function setAdminLayoutVisibility(kind, itemId, visible) {
+  const key = kind === "menu" ? "hiddenMenus" : kind === "group" ? "hiddenGroups" : "hiddenWidgets";
+  const definitions = kind === "menu"
+    ? adminMenuDefinitions
+    : kind === "group"
+      ? adminDashboardGroupDefinitions
+      : Object.values(adminDashboardWidgetDefinitions).flat();
+  if (definitions.find((item) => item.id === itemId)?.required) return;
+  const hidden = new Set(adminLayoutSettings[key]);
+  if (visible) hidden.delete(itemId);
+  else hidden.add(itemId);
+  adminLayoutSettings[key] = [...hidden];
+  adminLayoutSaveState = "local";
+  persistAdminLayoutLocal();
+  renderAdminLayoutSettings();
+}
+
+async function loadAdminLayoutSettingsFromServer() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.selectRows || !adminApprovalReady()) return false;
+  try {
+    const rows = await client.selectRows("tn_admin_settings", {
+      select: "key,value,updated_at",
+      filters: { key: adminLayoutSettingKey },
+      limit: 1,
+    });
+    if (!rows?.length) {
+      adminLayoutServerUpdatedAt = "";
+      return false;
+    }
+    adminLayoutServerUpdatedAt = rows[0].updated_at || "";
+    adminLayoutSettings = normalizeAdminLayoutSettings(rows[0].value || {});
+    adminLayoutSaveState = "server";
+    persistAdminLayoutLocal();
+    renderAdminLayoutSettings();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function saveAdminLayoutSettings() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.insertRows || !client?.updateRows || !adminApprovalReady()) {
+    showToast("관리자 로그인 후 화면 구성을 저장할 수 있습니다.");
+    return;
+  }
+  adminLayoutSaveState = "saving";
+  renderAdminLayoutSettings();
+  try {
+    if (!adminLayoutServerUpdatedAt) {
+      const existing = await client.selectRows("tn_admin_settings", {
+        select: "key,value,updated_at",
+        filters: { key: adminLayoutSettingKey },
+        limit: 1,
+      });
+      if (existing?.length) {
+        adminLayoutServerUpdatedAt = existing[0].updated_at || "";
+        throw new Error("admin_layout_revision_conflict");
+      }
+      const inserted = await client.insertRows("tn_admin_settings", {
+        key: adminLayoutSettingKey,
+        value: adminLayoutSettings,
+      });
+      adminLayoutServerUpdatedAt = inserted?.[0]?.updated_at || "";
+    } else {
+      const nextUpdatedAt = new Date().toISOString();
+      const updated = await client.updateRows("tn_admin_settings", {
+        key: adminLayoutSettingKey,
+        updated_at: adminLayoutServerUpdatedAt,
+      }, {
+        value: adminLayoutSettings,
+        updated_at: nextUpdatedAt,
+      });
+      if (!updated?.length) throw new Error("admin_layout_revision_conflict");
+      adminLayoutServerUpdatedAt = updated[0]?.updated_at || nextUpdatedAt;
+    }
+    adminLayoutSaveState = "server";
+    persistAdminLayoutLocal();
+    showToast("메뉴와 대시보드 구성을 저장했습니다.");
+  } catch (error) {
+    if (String(error?.message || "").includes("revision_conflict")) {
+      adminLayoutSaveState = "conflict";
+      await loadAdminLayoutSettingsFromServer();
+      showToast("다른 화면에서 구성이 변경되어 최신 배치를 불러왔습니다.");
+    } else {
+      adminLayoutSaveState = "local";
+      showToast(`화면 구성 저장 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+    }
+  } finally {
+    renderAdminLayoutSettings();
+  }
+}
+
 function renderSettingsTabs() {
-  const active = ["operation", "membership", "notifications", "coach", "security"].includes(state.settingsTab) ? state.settingsTab : "operation";
+  const active = ["operation", "membership", "notifications", "coach", "layout", "security"].includes(state.settingsTab) ? state.settingsTab : "operation";
   state.settingsTab = active;
   $("#settingsView .settings-grid")?.setAttribute("data-active-tab", active);
   $$("[data-settings-tab]").forEach((button) => {
@@ -19796,6 +20168,7 @@ function renderAll() {
   renderNotificationPolicySettings();
   renderMemberManagementPolicySettings();
   renderSettingsTabs();
+  renderAdminLayoutSettings();
   renderAdminSecurity();
   renderServiceReadiness();
   renderSupabaseLiveStatus();
@@ -19919,6 +20292,16 @@ function bindEvents() {
       addCoachStaffBlock(addBlockButton.dataset.addCoachStaffBlock);
       return;
     }
+    const editBlockButton = event.target.closest("[data-edit-coach-staff-block]");
+    if (editBlockButton) {
+      beginCoachStaffBlockEdit(editBlockButton.dataset.coachStaffBlockType, editBlockButton.dataset.editCoachStaffBlock);
+      return;
+    }
+    const cancelBlockButton = event.target.closest("[data-cancel-coach-staff-block]");
+    if (cancelBlockButton) {
+      cancelCoachStaffBlockEdit();
+      return;
+    }
     const removeBlockButton = event.target.closest("[data-remove-coach-staff-block]");
     if (removeBlockButton) {
       removeCoachStaffBlock(removeBlockButton.dataset.coachStaffBlockType, removeBlockButton.dataset.removeCoachStaffBlock);
@@ -19987,6 +20370,33 @@ function bindEvents() {
     state.settingsTab = button.dataset.settingsTab || "operation";
     renderSettingsTabs();
     saveSnapshot();
+  });
+  document.addEventListener("click", async (event) => {
+    const moveButton = event.target.closest("[data-move-admin-layout]");
+    if (moveButton) {
+      moveAdminLayoutItem(
+        moveButton.dataset.moveAdminLayout,
+        moveButton.dataset.adminLayoutId,
+        moveButton.dataset.direction,
+        moveButton.dataset.adminLayoutGroup,
+      );
+      return;
+    }
+    if (event.target.closest("#resetAdminLayoutButton")) {
+      adminLayoutSettings = defaultAdminLayoutSettings();
+      adminLayoutSaveState = "local";
+      persistAdminLayoutLocal();
+      renderAdminLayoutSettings();
+      return;
+    }
+    if (event.target.closest("#saveAdminLayoutButton")) {
+      await saveAdminLayoutSettings();
+    }
+  });
+  document.addEventListener("change", (event) => {
+    const input = event.target.closest("[data-admin-layout-visible]");
+    if (!input) return;
+    setAdminLayoutVisibility(input.dataset.adminLayoutVisible, input.dataset.adminLayoutId, input.checked);
   });
   document.addEventListener("click", async (event) => {
     if (event.target.closest("#addLessonPolicyButton")) {
@@ -21673,6 +22083,7 @@ function installAdminConnectivityStatus() {
 }
 
 restoreSnapshot();
+window.TennisNoteReleaseUpdater?.start({ manifestUrl: "../release.json" });
 prepareAdminLiveMode();
 resetScheduleEntryState();
 window.TennisNoteDataClient?.consumeOAuthRedirect?.();

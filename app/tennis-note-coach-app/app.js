@@ -1530,73 +1530,9 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 }
 
 function registerPwaServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
-  let controllerChanged = false;
-  const currentReleaseId = () => String(window.TENNIS_NOTE_RELEASE?.releaseId || "1.0.118");
-  const refreshKey = `tennis-note-sw-refresh-${currentReleaseId()}`;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (controllerChanged) return;
-    controllerChanged = true;
-    if (sessionStorage.getItem(refreshKey) === "done") return;
-    sessionStorage.setItem(refreshKey, "done");
-    window.location.reload();
-  });
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("./service-worker.js?v=1.0.118", { updateViaCache: "none" })
-      .then((registration) => {
-        const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
-        registration.addEventListener("updatefound", () => {
-          const worker = registration.installing;
-          worker?.addEventListener("statechange", () => {
-            if (worker.state === "installed" && navigator.serviceWorker.controller) activateWaitingWorker();
-          });
-        });
-        activateWaitingWorker();
-        let lastUpdateAt = 0;
-        let releaseCheckActive = false;
-        const checkRemoteRelease = async () => {
-          if (releaseCheckActive || !navigator.onLine) return;
-          releaseCheckActive = true;
-          try {
-            const response = await fetch(`../shared/tennisnote-release.js?release-check=${Date.now()}`, {
-              cache: "no-store",
-              headers: { "Cache-Control": "no-cache" },
-            });
-            if (!response.ok) return;
-            const source = await response.text();
-            const remoteReleaseId = source.match(/releaseId:\s*["']([^"']+)["']/)?.[1] || "";
-            if (!remoteReleaseId || remoteReleaseId === currentReleaseId()) return;
-            await registration.update().catch(() => undefined);
-            activateWaitingWorker();
-            window.setTimeout(() => {
-              const url = new URL(window.location.href);
-              if (url.searchParams.get("__tn_release") === remoteReleaseId) return;
-              url.searchParams.set("__tn_release", remoteReleaseId);
-              window.location.replace(url.toString());
-            }, 300);
-          } catch {
-            // Offline use keeps the current shell until the next successful check.
-          } finally {
-            releaseCheckActive = false;
-          }
-        };
-        const update = () => {
-          const now = Date.now();
-          if (now - lastUpdateAt < 30_000) return;
-          lastUpdateAt = now;
-          registration.update().catch(() => undefined);
-          checkRemoteRelease();
-        };
-        update();
-        window.addEventListener("focus", update);
-        window.addEventListener("online", update);
-        document.addEventListener("visibilitychange", () => {
-          if (document.visibilityState === "visible") update();
-        });
-        window.setInterval(checkRemoteRelease, 5 * 60 * 1000);
-      })
-      .catch(() => undefined);
+  window.TennisNoteReleaseUpdater?.start({
+    manifestUrl: "../release.json",
+    workerUrl: "./service-worker.js?v=1.0.119",
   });
 }
 
@@ -1625,7 +1561,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.118" });
+  const params = new URLSearchParams({ v: "1.0.119" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;

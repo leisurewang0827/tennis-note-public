@@ -913,7 +913,7 @@ h2 {
 
 .settings-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
   margin-top: 18px;
   padding: 6px;
@@ -940,6 +940,84 @@ h2 {
 
 .settings-tab-panel[hidden] {
   display: none;
+}
+
+#dashboardView.dashboard-layout-customizable.is-active {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-layout-panel {
+  grid-column: 1 / -1;
+}
+
+.admin-layout-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-layout-editor-grid > section {
+  min-width: 0;
+}
+
+.admin-layout-editor-grid h3 {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.admin-layout-list {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-layout-row {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 8px 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.admin-layout-row > label,
+.admin-layout-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.admin-layout-row > label {
+  min-width: 0;
+  font-weight: 850;
+}
+
+.admin-layout-row > label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-layout-row-actions {
+  flex: 0 0 auto;
+}
+
+.admin-layout-row-actions .icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.admin-layout-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .service-readiness-panel,
@@ -5852,6 +5930,10 @@ tr.is-selected td {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .admin-layout-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
   #membersView > .toolbar .segmented-control {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -8810,6 +8892,13 @@ button .schedule-member-lines > span {
   min-width: 0;
 }
 
+.coach-staff-block-row > .coach-staff-block-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
 .coach-staff-block-row span {
   color: var(--muted);
   font-size: 12px;
@@ -8822,7 +8911,7 @@ button .schedule-member-lines > span {
 
 .coach-staff-block-add {
   display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(90px, 0.7fr)) auto;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(90px, 0.7fr)) auto auto;
   align-items: end;
   gap: 8px;
 }

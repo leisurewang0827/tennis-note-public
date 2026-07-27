@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.118" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.118" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.119" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.119" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -99,7 +99,7 @@
         </div>
 
         <section id="dashboardView" class="view is-active" aria-label="운영 대시보드">
-          <div class="metric-grid">
+          <div class="metric-grid" data-dashboard-group="metrics">
             <article class="metric-card">
               <span>오늘 수업</span>
               <strong id="metricLessons">0</strong>
@@ -122,8 +122,8 @@
             </article>
           </div>
 
-          <section class="admin-today-grid" aria-label="오늘 운영 처리판">
-            <article class="panel today-command-panel">
+          <section class="admin-today-grid" aria-label="오늘 운영 처리판" data-dashboard-group="operations">
+            <article class="panel today-command-panel" data-dashboard-widget="tasks">
               <div class="panel-heading">
                 <div>
                   <p class="eyebrow">오늘 운영</p>
@@ -135,7 +135,7 @@
               <div id="adminTaskPager" class="dashboard-pager" aria-label="오늘 처리할 일 페이지" hidden></div>
             </article>
 
-            <article class="panel">
+            <article class="panel" data-dashboard-widget="members">
               <div class="panel-heading">
                 <h2>회원 현황</h2>
                 <button class="ghost-button" type="button" data-jump="members">회원 보기</button>
@@ -144,7 +144,7 @@
               <div id="memberStatusPager" class="dashboard-pager" aria-label="회원 현황 페이지" hidden></div>
             </article>
 
-            <article class="panel">
+            <article class="panel" data-dashboard-widget="coaches">
               <div class="panel-heading">
                 <h2>코치 업무</h2>
                 <button class="ghost-button" type="button" data-jump="notes">기록 확인</button>
@@ -152,7 +152,7 @@
               <div id="coachWorkCards" class="coach-work-grid"></div>
             </article>
           </section>
-          <div class="dashboard-grid dashboard-grid-single">
+          <div class="dashboard-grid dashboard-grid-single" data-dashboard-group="lessons">
             <section class="panel">
               <div class="panel-heading">
                 <h2>오늘 레슨</h2>
@@ -163,15 +163,15 @@
 
           </div>
 
-          <div class="dashboard-grid lower-grid">
-            <section class="panel">
+          <div class="dashboard-grid lower-grid" data-dashboard-group="insights">
+            <section class="panel" data-dashboard-widget="notices">
               <div class="panel-heading">
                 <h2>공지·알림</h2>
                 <button id="openNoticeSettingsButton" class="ghost-button" type="button">관리</button>
               </div>
               <div id="dashboardNoticeSummary" class="dashboard-notification-summary"></div>
             </section>
-            <section class="panel">
+            <section class="panel" data-dashboard-widget="reports">
               <div class="panel-heading">
                 <h2>운영 요약</h2>
                 <span class="source-pill">리포트 핵심</span>
@@ -740,10 +740,22 @@
             <button class="settings-tab" type="button" role="tab" data-settings-tab="membership">회원권·정책</button>
             <button class="settings-tab" type="button" role="tab" data-settings-tab="notifications">공지·알림</button>
             <button class="settings-tab" type="button" role="tab" data-settings-tab="coach">코치·직원</button>
+            <button class="settings-tab" type="button" role="tab" data-settings-tab="layout">화면 구성</button>
             <button class="settings-tab" type="button" role="tab" data-settings-tab="security">보안</button>
           </div>
           <div class="settings-grid">
             <section id="adminSecurityPanel" class="panel admin-security-panel settings-tab-panel" data-settings-panel="security"></section>
+
+            <section class="panel admin-layout-panel settings-tab-panel" data-settings-panel="layout">
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">공용 화면</p>
+                  <h2>메뉴·대시보드 구성</h2>
+                </div>
+                <span id="adminLayoutSaveStatus" class="source-pill"></span>
+              </div>
+              <div id="adminLayoutSettingsPanel"></div>
+            </section>
 
             <section class="panel member-management-policy-panel settings-tab-panel" data-settings-panel="security">
               <div class="panel-heading compact-heading">
@@ -1525,14 +1537,15 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.118"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.119"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.118"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.118"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.118"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.118"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.119"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.119"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.119"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.119"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.119"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.118"></script>
+    <script src="./app.js?v=1.0.119"></script>
   </body>
 </html>
