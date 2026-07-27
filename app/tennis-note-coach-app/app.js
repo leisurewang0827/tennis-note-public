@@ -408,15 +408,18 @@ async function syncCoachLessonsFromServer() {
       client.selectRows("tn_lessons", {
         select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,day_of_week,start_time,duration_minutes,status,lesson_source",
         limit: 1000,
+      }).catch((error) => {
+        console.warn("Tennis Note coach full schedule read failed; retrying with the signed-in coach scope.", error);
+        return [];
       }),
       client.selectRows("tn_lesson_participants", {
         select: "lesson_id,user_id,ticket_id",
         limit: 2000,
-      }),
-      client.selectRows("tn_users", { select: "id,name,phone,birth_year,neighborhood,gender,role,member_kind,status,profile_photo_url,self_ntrp,coach_ntrp,ntrp_requested_at,ntrp_survey,tennis_goal,play_style_memo", limit: 1000 }),
-      client.selectRows("tn_coach_roles", { select: "id,display_name,color,status", limit: 100 }),
-      client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,created_at", limit: 1000 }),
-      client.selectRows("tn_membership_products", { select: "id,name,group_size,lesson_minutes", limit: 200 }),
+      }).catch(() => []),
+      client.selectRows("tn_users", { select: "id,name,phone,birth_year,neighborhood,gender,role,member_kind,status,profile_photo_url,self_ntrp,coach_ntrp,ntrp_requested_at,ntrp_survey,tennis_goal,play_style_memo", limit: 1000 }).catch(() => []),
+      client.selectRows("tn_coach_roles", { select: "id,display_name,color,status", limit: 100 }).catch(() => []),
+      client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,created_at", limit: 1000 }).catch(() => []),
+      client.selectRows("tn_membership_products", { select: "id,name,group_size,lesson_minutes", limit: 200 }).catch(() => []),
       client.selectRows("tn_lesson_records", { select: "lesson_id", limit: 1000 }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", {
         select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,decided_at,created_at",
@@ -452,6 +455,9 @@ async function syncCoachLessonsFromServer() {
       .filter((lesson, index, items) => items.findIndex((candidate) => candidate.id === lesson.id) === index);
     const usersById = new Map((userRows || []).map((user) => [user.id, user.name]));
     const coachesById = new Map((coachRows || []).map((coach) => [coach.id, coach]));
+    if (currentProfile?.coachRole?.id && !coachesById.has(currentProfile.coachRole.id)) {
+      coachesById.set(currentProfile.coachRole.id, currentProfile.coachRole);
+    }
     const ticketsById = new Map((ticketRows || []).map((ticket) => [ticket.id, ticket]));
     const productsById = new Map((productRows || []).map((product) => [product.id, product]));
     const participantIdsByLesson = new Map();
@@ -701,14 +707,7 @@ async function syncCoachLessonsFromServer() {
     return true;
   } catch (error) {
     console.warn("Tennis Note coach lesson sync failed", error);
-    state.liveLessons = [];
-    state.releasedMakeupSlots = [];
-    state.liveLessonsLoaded = state.dataMode === "live";
-    state.liveMembersLoaded = state.dataMode === "live";
-    if (state.dataMode === "live") {
-      state.members = [];
-      state.expiredMembers = [];
-    }
+    // Keep the last confirmed schedule visible during transient network or permission failures.
     return false;
   }
 }
@@ -1532,7 +1531,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.122",
+    workerUrl: "./service-worker.js?v=1.0.123",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1562,7 +1561,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.122" });
+  const params = new URLSearchParams({ v: "1.0.123" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
