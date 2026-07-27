@@ -82,8 +82,6 @@ def write_platform_files(output: Path, target: str) -> None:
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self), microphone=(), geolocation=()
-
-/index.html
   Cache-Control: no-cache, no-store, must-revalidate
 
 /shared/config.local.js
