@@ -35,6 +35,7 @@ const state = {
   discountView: "policies",
   discountSearch: "",
   discountStatusFilter: "all",
+  membershipSettingsSection: "products",
   selectedMemberId: null,
   activeMode: "admin",
   editingLessonId: null,
@@ -19555,7 +19556,9 @@ async function saveAdminLayoutSettings() {
 
 function renderSettingsTabs() {
   const active = ["operation", "membership", "notifications", "coach", "layout", "security"].includes(state.settingsTab) ? state.settingsTab : "operation";
+  const membershipSection = state.membershipSettingsSection === "discounts" ? "discounts" : "products";
   state.settingsTab = active;
+  state.membershipSettingsSection = membershipSection;
   $("#settingsView .settings-grid")?.setAttribute("data-active-tab", active);
   $$("[data-settings-tab]").forEach((button) => {
     const selected = button.dataset.settingsTab === active;
@@ -19564,6 +19567,14 @@ function renderSettingsTabs() {
   });
   $$("[data-settings-panel]").forEach((panel) => {
     panel.hidden = panel.dataset.settingsPanel !== active;
+  });
+  $$("[data-membership-section]").forEach((button) => {
+    const selected = button.dataset.membershipSection === membershipSection;
+    button.classList.toggle("is-active", selected);
+    button.setAttribute("aria-selected", selected ? "true" : "false");
+  });
+  $$("[data-membership-panel]").forEach((panel) => {
+    panel.hidden = active !== "membership" || panel.dataset.membershipPanel !== membershipSection;
   });
 }
 
@@ -20368,6 +20379,13 @@ function bindEvents() {
     const button = event.target.closest("[data-settings-tab]");
     if (!button) return;
     state.settingsTab = button.dataset.settingsTab || "operation";
+    renderSettingsTabs();
+    saveSnapshot();
+  });
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-membership-section]");
+    if (!button) return;
+    state.membershipSettingsSection = button.dataset.membershipSection === "discounts" ? "discounts" : "products";
     renderSettingsTabs();
     saveSnapshot();
   });
