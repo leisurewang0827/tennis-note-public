@@ -83,6 +83,7 @@ def write_platform_files(output: Path, target: str) -> None:
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self), microphone=(), geolocation=()
   Cache-Control: no-cache, no-store, must-revalidate
+  Access-Control-Allow-Origin: *
 
 /shared/config.local.js
   Cache-Control: no-cache, no-store, must-revalidate
