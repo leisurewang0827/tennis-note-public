@@ -402,18 +402,29 @@ function serverLessonStatusLabel(status = "") {
 
 async function syncCoachLessonsFromServer() {
   const client = window.TennisNoteDataClient;
-  if (!client?.selectRows || !client.getSession?.()?.access_token) return false;
+  if (!client?.selectRows) return false;
   try {
+    const activeSession = client.ensureSession
+      ? await client.ensureSession().catch(() => client.getSession?.())
+      : client.getSession?.();
+    if (!activeSession?.access_token) return false;
+    const currentProfile = client.selectCurrentProfile
+      ? await client.selectCurrentProfile().catch(() => null)
+      : null;
     const scheduleRangeStart = new Date();
     scheduleRangeStart.setDate(scheduleRangeStart.getDate() - 31);
     const scheduleRangeEnd = new Date();
     scheduleRangeEnd.setDate(scheduleRangeEnd.getDate() + 370);
-    const [scheduleFeedRows, scheduleRows, participantRows, userRows, coachRows, ticketRows, productRows, recordRows, changeRequestRows, makeupEntitlementRows, oneDayBookingRows] = await Promise.all([
+    let scheduleFeedError = null;
+    const [scheduleFeedPayload, scheduleRows, participantRows, userRows, coachRows, ticketRows, productRows, recordRows, changeRequestRows, makeupEntitlementRows, oneDayBookingRows] = await Promise.all([
       client.rpc
         ? client.rpc("tn_coach_schedule_feed", {
           target_start_date: localDateKey(scheduleRangeStart),
           target_end_date: localDateKey(scheduleRangeEnd),
-        }).catch(() => [])
+        }).catch((error) => {
+          scheduleFeedError = error;
+          return [];
+        })
         : Promise.resolve([]),
       client.selectRows("tn_lessons", {
         select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,day_of_week,start_time,duration_minutes,status,lesson_source",
@@ -443,9 +454,29 @@ async function syncCoachLessonsFromServer() {
         ? client.rpc("tn_visible_one_day_bookings", {}).catch(() => [])
         : Promise.resolve([]),
     ]);
-    const currentProfile = client.selectCurrentProfile
-      ? await client.selectCurrentProfile().catch(() => null)
-      : null;
+    let scheduleFeedRows = Array.isArray(scheduleFeedPayload)
+      ? scheduleFeedPayload
+      : Array.isArray(scheduleFeedPayload?.lessons)
+        ? scheduleFeedPayload.lessons
+        : [];
+    if (!scheduleFeedRows.length && currentProfile?.coachRole?.id && client.rpc) {
+      scheduleFeedRows = await client.rpc("tn_coach_schedule_feed", {
+        target_start_date: localDateKey(scheduleRangeStart),
+        target_end_date: localDateKey(scheduleRangeEnd),
+      }).then((payload) => (
+        Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.lessons)
+            ? payload.lessons
+            : []
+      )).catch((error) => {
+        scheduleFeedError = error;
+        return [];
+      });
+    }
+    if (scheduleFeedError && !scheduleFeedRows.length) {
+      console.warn("Tennis Note coach schedule feed failed after profile confirmation.", scheduleFeedError);
+    }
     const currentCoachRoleId = currentProfile?.coachRole?.id || "";
     const currentCoachRows = currentCoachRoleId
       ? (await Promise.all([
@@ -1548,7 +1579,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.124",
+    workerUrl: "./service-worker.js?v=1.0.125",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1578,7 +1609,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.124" });
+  const params = new URLSearchParams({ v: "1.0.125" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
