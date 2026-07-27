@@ -80,6 +80,7 @@ const state = {
   scheduleSheetPasteRows: [],
   scheduleSheetPasteFilter: "all",
   selectedScheduleSheetPasteRowNumbers: [],
+  coachStaffListFilter: "active",
   communityChannel: "홈",
   accountDeletionRequests: [],
   liveScheduleLoaded: false,
@@ -18147,7 +18148,7 @@ function renderCoachStaffModal() {
     actions.innerHTML = existing ? `
       <button type="button" data-coach-staff-state="${draft.approvalStatus === "approved" ? "disabled" : "approved"}">${draft.approvalStatus === "approved" ? "코치 승인 해제" : "코치 승인"}</button>
       <button type="button" data-coach-staff-state="${draft.employmentStatus === "active" ? "ended" : "restored"}">${draft.employmentStatus === "active" ? "근무 종료" : "근무 복원"}</button>
-      ${draft.employmentStatus === "archived" ? "" : '<button type="button" data-coach-staff-state="archived">보관</button>'}
+      ${draft.employmentStatus === "archived" ? "" : '<button type="button" data-coach-staff-state="archived">목록에서 숨기기(보관)</button>'}
     ` : "";
     $("#coachStaffMoreMenu").hidden = !existing || operationsRole() !== "admin";
   }
@@ -18384,7 +18385,7 @@ async function setCoachStaffState(targetState) {
   const draft = coachStaffEditorState.draft;
   const client = window.TennisNoteDataClient;
   if (!draft?.coachRoleId || !client?.rpc || operationsRole() !== "admin") return;
-  const labels = { approved: "코치 승인", disabled: "승인 해제", ended: "근무 종료", archived: "보관", restored: "근무 복원" };
+  const labels = { approved: "코치 승인", disabled: "승인 해제", ended: "근무 종료", archived: "목록에서 숨기기(보관)", restored: "근무 복원" };
   if (!window.confirm(`${draft.name} 코치를 ${labels[targetState] || targetState} 처리할까요?`)) return;
   try {
     await client.rpc("tn_admin_set_coach_staff_state", {
@@ -18395,12 +18396,30 @@ async function setCoachStaffState(targetState) {
     await syncAdminLiveData();
     const saved = coaches.find((coach) => coach.serverRoleId === draft.coachRoleId);
     const expectedApproval = ["approved", "restored"].includes(targetState) ? "approved" : "disabled";
-    if (!saved || saved.approvalStatus !== expectedApproval) throw new Error("coach_staff_state_verification_failed");
+    const expectedEmployment = targetState === "ended"
+      ? "ended"
+      : targetState === "archived"
+        ? "archived"
+        : "active";
+    if (
+      !saved
+      || saved.approvalStatus !== expectedApproval
+      || (saved.employmentStatus || "active") !== expectedEmployment
+    ) {
+      throw new Error("coach_staff_state_verification_failed");
+    }
     window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
     closeCoachStaffModal();
     renderCoaches();
     renderSchedule();
-    showToast(`${labels[targetState] || "상태 변경"} 완료`);
+    const completion = targetState === "archived"
+      ? "보관했습니다. 근무 중 목록에서 숨겨지고 종료·보관에서 복원할 수 있습니다."
+      : targetState === "ended"
+        ? "근무 종료했습니다. 신규 수업 배정에서 제외됩니다."
+        : targetState === "restored"
+          ? "근무 중으로 복원했습니다."
+          : `${labels[targetState] || "상태 변경"} 완료`;
+    showToast(completion);
   } catch (error) {
     coachStaffEditorState.message = `상태 변경 실패: ${error?.payload?.code || error?.message || "server_error"}`;
     renderCoachStaffModal();
@@ -18409,16 +18428,28 @@ async function setCoachStaffState(targetState) {
 
 function renderCoaches() {
   const branchCoaches = operationBranchCoaches();
-  const signedUpCount = branchCoaches.filter((coach) => coach.accountLinked).length;
-  const approvedCount = branchCoaches.filter((coach) => ["approved", "active"].includes(coach.approvalStatus || coach.coachMode)).length;
+  const activeCoaches = branchCoaches.filter((coach) => (
+    (coach.employmentStatus || "active") === "active" && !coach.archivedAt
+  ));
+  const inactiveCoaches = branchCoaches.filter((coach) => !activeCoaches.includes(coach));
+  const showingInactive = state.coachStaffListFilter === "inactive";
+  const visibleCoaches = showingInactive ? inactiveCoaches : activeCoaches;
+  const signedUpCount = activeCoaches.filter((coach) => coach.accountLinked).length;
+  const approvedCount = activeCoaches.filter((coach) => ["approved", "active"].includes(coach.approvalStatus || coach.coachMode)).length;
   const target = $("#coachRows");
   if (!target) return;
+  $("#activeCoachCount").textContent = activeCoaches.length;
+  $("#inactiveCoachCount").textContent = inactiveCoaches.length;
+  $$("[data-coach-staff-filter]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.coachStaffFilter === state.coachStaffListFilter);
+  });
   target.innerHTML = `
     <div class="coach-status-summary">
-      <strong>코치 ${branchCoaches.length}명</strong>
+      <strong>근무 중 ${activeCoaches.length}명</strong>
       <span>회원가입 ${signedUpCount}명</span>
       <span>승인 완료 ${approvedCount}명</span>
-    </div>` + branchCoaches
+      ${inactiveCoaches.length ? `<span>종료·보관 ${inactiveCoaches.length}명</span>` : ""}
+    </div>` + (visibleCoaches.length ? visibleCoaches
     .map(
       (coach) => {
         const breakCount = normalizeCoachBreakBlocks(coach).length;
@@ -18442,7 +18473,7 @@ function renderCoaches() {
         </article>`;
       },
     )
-    .join("");
+    .join("") : `<p class="empty-text coach-list-empty">${showingInactive ? "종료하거나 보관한 코치가 없습니다." : "근무 중인 코치가 없습니다."}</p>`);
 }
 
 async function reconcileCoachLogin(coachId) {
@@ -20321,6 +20352,12 @@ function bindEvents() {
     const stateButton = event.target.closest("[data-coach-staff-state]");
     if (stateButton) {
       await setCoachStaffState(stateButton.dataset.coachStaffState);
+      return;
+    }
+    const listFilterButton = event.target.closest("[data-coach-staff-filter]");
+    if (listFilterButton) {
+      state.coachStaffListFilter = listFilterButton.dataset.coachStaffFilter === "inactive" ? "inactive" : "active";
+      renderCoaches();
       return;
     }
     if (event.target.closest("#closeCoachStaffModal, #cancelCoachStaffModal")) closeCoachStaffModal();

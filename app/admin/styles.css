@@ -6953,6 +6953,51 @@ button .schedule-member-lines > span {
   color: var(--ink);
 }
 
+.coach-list-filters {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: min(100%, 360px);
+  padding: 4px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7fafc;
+}
+
+.coach-list-filters button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.coach-list-filters button.is-active {
+  background: #fff;
+  color: var(--green-strong);
+  box-shadow: 0 1px 4px rgba(15, 71, 55, 0.12);
+}
+
+.coach-list-filters span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: var(--soft-green);
+  font-size: 11px;
+}
+
+.coach-list-empty {
+  padding: 18px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  text-align: center;
+}
+
 .coach-availability {
   display: grid;
   gap: 4px;

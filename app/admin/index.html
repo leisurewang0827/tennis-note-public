@@ -1077,6 +1077,10 @@
                 <h2>코치·직원</h2>
                 <button id="addCoachStaffButton" class="primary-button" type="button">코치 추가</button>
               </div>
+              <div class="coach-list-filters" role="group" aria-label="코치 목록 상태">
+                <button class="is-active" type="button" data-coach-staff-filter="active">근무 중 <span id="activeCoachCount">0</span></button>
+                <button type="button" data-coach-staff-filter="inactive">종료·보관 <span id="inactiveCoachCount">0</span></button>
+              </div>
               <div id="coachRows" class="coach-list"></div>
             </section>
 
