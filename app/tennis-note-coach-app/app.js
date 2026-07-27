@@ -403,13 +403,10 @@ function serverLessonStatusLabel(status = "") {
 async function syncCoachSchedulePreview() {
   const client = window.TennisNoteDataClient;
   if (!client?.rpc || !client.getSession?.()?.access_token) return false;
-  const scheduleRangeStart = new Date();
-  scheduleRangeStart.setDate(scheduleRangeStart.getDate() - 31);
-  const scheduleRangeEnd = new Date();
-  scheduleRangeEnd.setDate(scheduleRangeEnd.getDate() + 370);
+  const selectedWeek = activeScheduleWeek();
   const payload = await client.rpc("tn_coach_schedule_feed", {
-    target_start_date: localDateKey(scheduleRangeStart),
-    target_end_date: localDateKey(scheduleRangeEnd),
+    target_start_date: selectedWeek.startDate,
+    target_end_date: selectedWeek.endDate,
   });
   const rows = Array.isArray(payload)
     ? payload
@@ -1638,7 +1635,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.126",
+    workerUrl: "./service-worker.js?v=1.0.127",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1668,7 +1665,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.126" });
+  const params = new URLSearchParams({ v: "1.0.127" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1767,9 +1764,12 @@ function closeNotice(hideToday = false) {
 
 function activateLiveCoachProfile(profileId) {
   const nextProfileId = String(profileId || "");
+  const profileChanged = state.liveProfileId !== nextProfileId;
 
   state.dataMode = "live";
   state.liveProfileId = nextProfileId;
+  if (!profileChanged) return;
+
   state.coach = null;
   state.todayLessons = [];
   state.makeupRequests = [];
