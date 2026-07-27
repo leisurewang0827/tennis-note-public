@@ -404,7 +404,17 @@ async function syncCoachLessonsFromServer() {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !client.getSession?.()?.access_token) return false;
   try {
-    const [scheduleRows, participantRows, userRows, coachRows, ticketRows, productRows, recordRows, changeRequestRows, makeupEntitlementRows, oneDayBookingRows] = await Promise.all([
+    const scheduleRangeStart = new Date();
+    scheduleRangeStart.setDate(scheduleRangeStart.getDate() - 31);
+    const scheduleRangeEnd = new Date();
+    scheduleRangeEnd.setDate(scheduleRangeEnd.getDate() + 370);
+    const [scheduleFeedRows, scheduleRows, participantRows, userRows, coachRows, ticketRows, productRows, recordRows, changeRequestRows, makeupEntitlementRows, oneDayBookingRows] = await Promise.all([
+      client.rpc
+        ? client.rpc("tn_coach_schedule_feed", {
+          target_start_date: localDateKey(scheduleRangeStart),
+          target_end_date: localDateKey(scheduleRangeEnd),
+        }).catch(() => [])
+        : Promise.resolve([]),
       client.selectRows("tn_lessons", {
         select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,day_of_week,start_time,duration_minutes,status,lesson_source",
         limit: 1000,
@@ -451,8 +461,11 @@ async function syncCoachLessonsFromServer() {
         }).catch(() => []),
       ])).flat()
       : [];
-    const lessonRows = [...(scheduleRows || []), ...currentCoachRows]
+    const directLessonRows = [...(scheduleRows || []), ...currentCoachRows]
       .filter((lesson, index, items) => items.findIndex((candidate) => candidate.id === lesson.id) === index);
+    const lessonRows = Array.isArray(scheduleFeedRows) && scheduleFeedRows.length
+      ? scheduleFeedRows
+      : directLessonRows;
     const usersById = new Map((userRows || []).map((user) => [user.id, user.name]));
     const coachesById = new Map((coachRows || []).map((coach) => [coach.id, coach]));
     if (currentProfile?.coachRole?.id && !coachesById.has(currentProfile.coachRole.id)) {
@@ -470,8 +483,12 @@ async function syncCoachLessonsFromServer() {
     const mappedLessons = (lessonRows || [])
       .filter((lesson) => lesson.status !== "cancelled")
       .map((lesson) => {
-        const participantIds = participantIdsByLesson.get(lesson.id) || [];
-        const memberNames = participantIds.map((userId) => usersById.get(userId)).filter(Boolean);
+        const feedParticipantIds = Array.isArray(lesson.participant_user_ids) ? lesson.participant_user_ids : [];
+        const feedParticipantNames = Array.isArray(lesson.participant_names) ? lesson.participant_names : [];
+        const participantIds = feedParticipantIds.length ? feedParticipantIds : (participantIdsByLesson.get(lesson.id) || []);
+        const memberNames = feedParticipantNames.length
+          ? feedParticipantNames
+          : participantIds.map((userId) => usersById.get(userId)).filter(Boolean);
         const ticket = ticketsById.get(lesson.member_ticket_id) || {};
         const product = productsById.get(ticket.product_id) || {};
         const coach = coachesById.get(lesson.coach_role_id) || {};
@@ -491,24 +508,24 @@ async function syncCoachLessonsFromServer() {
           lessonDate: lesson.lesson_date,
           day: scheduleDays[dayIndex === 0 ? 6 : dayIndex - 1],
           time: String(lesson.start_time || "").slice(0, 5),
-          coach: coach.display_name || "담당 코치",
+          coach: lesson.coach_name || coach.display_name || "담당 코치",
           coachRoleId: lesson.coach_role_id,
           originalCoachRoleId: lesson.original_coach_role_id || "",
-          originalCoach: originalCoach.display_name || "",
+          originalCoach: lesson.original_coach_name || originalCoach.display_name || "",
           isSubstitute,
           member: memberNames.join("&") || "회원",
           memberUserIds: participantIds,
           type: `${lessonKind} ${lesson.duration_minutes}분`,
           lessonSource: lesson.lesson_source || "regular",
           durationMinutes: Number(lesson.duration_minutes) || 20,
-          ticketLessonMinutes: Number(product.lesson_minutes) || Number(lesson.duration_minutes) || 20,
+          ticketLessonMinutes: Number(lesson.product_lesson_minutes) || Number(product.lesson_minutes) || Number(lesson.duration_minutes) || 20,
           ticketId: lesson.member_ticket_id || "",
-          totalSessions: Number(ticket.total_sessions) || 0,
-          usedSessions: Number(ticket.used_sessions) || 0,
-          ticket: `${participantIds.length > 1 ? "2대1" : "개인"} ${ticket.total_sessions || ""}회`.replace("  회", ""),
+          totalSessions: Number(lesson.ticket_total_sessions ?? ticket.total_sessions) || 0,
+          usedSessions: Number(lesson.ticket_used_sessions ?? ticket.used_sessions) || 0,
+          ticket: `${Number(lesson.product_group_size ?? product.group_size) > 1 || participantIds.length > 1 ? "2대1" : "개인"} ${lesson.ticket_total_sessions ?? ticket.total_sessions ?? ""}회`.replace("  회", ""),
           status: serverLessonStatusLabel(lesson.status),
           serverStatus: lesson.status,
-          remaining: Number(ticket.remaining_sessions) || 0,
+          remaining: Number(lesson.ticket_remaining_sessions ?? ticket.remaining_sessions) || 0,
           task: lesson.status === "pending_change" ? "변경 요청 확인" : "수업 후 코멘트/다음 커리큘럼",
         };
       });
@@ -1531,7 +1548,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.123",
+    workerUrl: "./service-worker.js?v=1.0.124",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1561,7 +1578,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.123" });
+  const params = new URLSearchParams({ v: "1.0.124" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
