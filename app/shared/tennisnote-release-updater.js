@@ -5,6 +5,7 @@
   let started = false;
   let registration = null;
   let remoteRelease = null;
+  let activeRemoteAppUrl = "";
   let updateInProgress = false;
   let lastCheckAt = 0;
 
@@ -36,6 +37,11 @@
     return candidate.releaseId !== current.releaseId;
   }
 
+  function isNativeWebView() {
+    const platform = window.Capacitor?.getPlatform?.();
+    return Boolean(platform && platform !== "web");
+  }
+
   function ensureUpdateNotice() {
     let notice = document.querySelector("[data-tennisnote-update-notice]");
     if (notice) return notice;
@@ -53,7 +59,7 @@
       <button type="button" data-tennisnote-update-now>지금 업데이트</button>
     `;
     notice.querySelector("[data-tennisnote-update-now]")?.addEventListener("click", () => {
-      void applyUpdate(remoteRelease, { manual: true });
+      void applyUpdate(remoteRelease, { manual: true, remoteAppUrl: activeRemoteAppUrl });
     });
     document.body.appendChild(notice);
     return notice;
@@ -92,12 +98,37 @@
     return true;
   }
 
+  async function applyNativeRemoteShell(candidate, remoteAppUrl) {
+    if (!isNativeWebView() || !remoteAppUrl) return false;
+    const key = `tennis-note-native-shell:${candidate.releaseId}`;
+    if (sessionStorage.getItem(key) === "done") return false;
+    const url = new URL(remoteAppUrl);
+    url.searchParams.set("__tn_release", candidate.releaseId);
+    const response = await fetch(url, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!response.ok) throw new Error("remote_shell_unavailable");
+    let html = await response.text();
+    if (!html.includes("TennisNoteReleaseUpdater") && !html.includes("tennisnote-release-updater.js")) {
+      throw new Error("remote_shell_invalid");
+    }
+    const base = `<base href="${remoteAppUrl}">`;
+    html = html.replace(/<head(\s[^>]*)?>/i, (head) => `${head}\n    ${base}`);
+    sessionStorage.setItem(key, "done");
+    document.open();
+    document.write(html);
+    document.close();
+    return true;
+  }
+
   async function applyUpdate(candidate, options = {}) {
     if (!candidate?.releaseId || updateInProgress) return;
     remoteRelease = candidate;
     updateInProgress = true;
     const reloadKey = `tennis-note-release-controller:${candidate.releaseId}`;
     try {
+      if (await applyNativeRemoteShell(candidate, options.remoteAppUrl)) return;
       sessionStorage.removeItem(reloadKey);
       if (registration) {
         await registration.update();
@@ -149,7 +180,7 @@
       if (options.manualOnly) {
         showUpdateNotice(candidate);
       } else {
-        await applyUpdate(candidate);
+        await applyUpdate(candidate, { remoteAppUrl: options.remoteAppUrl });
       }
       return candidate;
     } catch {
@@ -176,7 +207,11 @@
   function start(options = {}) {
     if (started) return;
     started = true;
-    const manifestUrl = options.manifestUrl || defaultManifestUrl;
+    const remoteAppUrl = options.remoteAppUrl || "";
+    activeRemoteAppUrl = remoteAppUrl;
+    const manifestUrl = isNativeWebView()
+      ? new URL("release.json", officialAppUrl).toString()
+      : options.manifestUrl || defaultManifestUrl;
     const workerUrl = options.workerUrl || "";
     let controllerReloaded = false;
 
@@ -195,7 +230,7 @@
 
     const update = () => {
       void registration?.update().catch(() => undefined);
-      void checkForUpdate(manifestUrl);
+      void checkForUpdate(manifestUrl, { remoteAppUrl });
     };
 
     const boot = async () => {
@@ -213,16 +248,19 @@
       window.addEventListener("load", () => void boot(), { once: true });
     }
     window.addEventListener("focus", update);
-    window.addEventListener("online", () => void checkForUpdate(manifestUrl, { force: true }));
+    window.addEventListener("online", () => void checkForUpdate(manifestUrl, { force: true, remoteAppUrl }));
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") update();
     });
-    window.setInterval(() => void checkForUpdate(manifestUrl), checkIntervalMs);
+    window.setInterval(() => void checkForUpdate(manifestUrl, { remoteAppUrl }), checkIntervalMs);
   }
 
   window.TennisNoteReleaseUpdater = Object.freeze({
     officialAppUrl,
     start,
-    checkForUpdate: () => checkForUpdate(defaultManifestUrl, { force: true }),
+    checkForUpdate: () => checkForUpdate(
+      isNativeWebView() ? new URL("release.json", officialAppUrl).toString() : defaultManifestUrl,
+      { force: true, remoteAppUrl: activeRemoteAppUrl },
+    ),
   });
 })();
