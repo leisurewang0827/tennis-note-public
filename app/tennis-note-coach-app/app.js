@@ -1639,7 +1639,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.128",
+    workerUrl: "./service-worker.js?v=1.0.129",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1669,7 +1669,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.128" });
+  const params = new URLSearchParams({ v: "1.0.129" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2499,21 +2499,23 @@ function renderScheduleEditPanel() {
                   <button class="reject-button" type="button" data-mark-lesson-absent="${lesson.id}">불참 처리</button>
                 </div>`
               : ""}
-            ${canProcess && lesson.serverLessonId
-              ? `<div class="lesson-edit-mini lesson-absence-mini">
-                  <strong>노쇼 처리</strong>
-                  <div class="lesson-edit-grid">
-                    <label class="wide">
-                      <span>노쇼 사유</span>
-                      <input id="coachNoShowReason" type="text" minlength="2" maxlength="200" placeholder="예: 연락 없이 불참" />
-                    </label>
-                  </div>
-                  <div class="actions">
-                    <button class="reject-button" type="button" data-process-no-show="${lesson.id}" data-deduct="true">노쇼 · 차감</button>
-                    <button class="small-button" type="button" data-process-no-show="${lesson.id}" data-deduct="false">노쇼 · 차감 없음</button>
-                  </div>
-                </div>`
-              : ""}
+          </details>`
+        : ""}
+      ${canProcess && lesson.serverLessonId
+        ? `<details class="lesson-secondary-panel wide">
+            <summary>노쇼 처리</summary>
+            <div class="lesson-edit-mini lesson-absence-mini">
+              <div class="lesson-edit-grid">
+                <label class="wide">
+                  <span>노쇼 사유</span>
+                  <input id="coachNoShowReason" type="text" minlength="2" maxlength="200" placeholder="예: 연락 없이 불참" />
+                </label>
+              </div>
+              <div class="actions">
+                <button class="reject-button" type="button" data-process-no-show="${lesson.id}" data-deduct="true">노쇼 · 차감</button>
+                <button class="small-button" type="button" data-process-no-show="${lesson.id}" data-deduct="false">노쇼 · 차감 없음</button>
+              </div>
+            </div>
           </details>`
         : ""}
       <div class="actions lesson-completion-actions wide">
