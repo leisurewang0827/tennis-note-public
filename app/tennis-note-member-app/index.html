@@ -11,8 +11,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.117" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.117" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.118" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.118" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -267,11 +267,11 @@
             </label>
             <label>
               <span>오늘 수업 내용</span>
-              <textarea id="todayLessonContent" rows="4">포핸드 연결과 짧은 공 전진 스텝을 연습했습니다.</textarea>
+              <textarea id="todayLessonContent" rows="4" placeholder="오늘 배운 내용을 간단히 적어주세요."></textarea>
             </label>
             <label>
               <span>자기 운동 일지</span>
-              <textarea id="selfWorkoutMemo" rows="4">타점이 늦어질 때 손목이 흔들렸고, 준비 동작을 더 빨리 해야겠습니다.</textarea>
+              <textarea id="selfWorkoutMemo" rows="4" placeholder="느낀 점이나 다음에 보완할 점을 적어주세요."></textarea>
             </label>
             <label>
               <span>사진/동영상 첨부</span>
@@ -289,23 +289,23 @@
             </label>
             <label>
               <span>오늘 운동 기록</span>
-              <textarea id="practiceMemo" rows="4">서브 토스 위치와 포핸드 전진 스텝을 30분 연습했습니다.</textarea>
+              <textarea id="practiceMemo" rows="4" placeholder="오늘 한 운동을 적어주세요."></textarea>
             </label>
             <label>
               <span>다음에 연습할 것</span>
-              <textarea id="practiceNext" rows="3">짧은 공 접근 후 마무리 스윙을 반복합니다.</textarea>
+              <textarea id="practiceNext" rows="3" placeholder="다음 운동 목표를 적어주세요."></textarea>
             </label>
             <label>
               <span>사진/동영상 첨부</span>
               <input id="practiceMedia" type="file" accept="image/*,video/*" multiple />
             </label>
             <label class="check-row">
-              <input id="requestCoachFeedback" type="checkbox" checked />
+              <input id="requestCoachFeedback" type="checkbox" />
               <span>코치에게 영상/사진 코멘트 요청</span>
             </label>
             <label>
               <span>코치에게 묻고 싶은 점</span>
-              <textarea id="feedbackQuestion" rows="3">포핸드 전진 스텝에서 타점이 늦는지 봐주세요.</textarea>
+              <textarea id="feedbackQuestion" rows="3" placeholder="코치에게 확인받고 싶은 점을 적어주세요."></textarea>
             </label>
             </div>
             <button class="primary-button" type="button" id="saveJournal">운동일지 저장</button>
@@ -937,14 +937,14 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.117"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.118"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.117"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.117"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.117"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.118"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.118"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.118"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.117"></script>
+    <script src="./app.js?v=1.0.118"></script>
   </body>
 </html>

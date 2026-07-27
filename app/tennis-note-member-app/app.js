@@ -1637,7 +1637,7 @@ function registerPwaServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
     let controllerChanged = false;
-    const refreshKey = "tennis-note-sw-refresh-1.0.117";
+    const refreshKey = "tennis-note-sw-refresh-1.0.118";
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (controllerChanged) return;
       controllerChanged = true;
@@ -1645,7 +1645,7 @@ function registerPwaServiceWorker() {
       sessionStorage.setItem(refreshKey, "done");
       window.location.reload();
     });
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.117", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.118", { updateViaCache: "none" })
       .then((registration) => {
         const activateWaitingWorker = () => registration.waiting?.postMessage({ type: "SKIP_WAITING" });
         registration.addEventListener("updatefound", () => {
@@ -1686,6 +1686,71 @@ function nativePushPlugin() {
 
 function nativeAppPlatform() {
   return window.Capacitor?.getPlatform?.() || "web";
+}
+
+let nativeBackListenerReady = false;
+
+function blurActiveFormControl() {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !active.matches("input, textarea, select")) return false;
+  active.blur();
+  return true;
+}
+
+async function installNativeBackNavigation() {
+  if (nativeBackListenerReady || nativeAppPlatform() !== "android") return;
+  const appPlugin = window.Capacitor?.Plugins?.App;
+  if (!appPlugin?.addListener) return;
+  nativeBackListenerReady = true;
+  await appPlugin.addListener("backButton", async () => {
+    if (blurActiveFormControl()) return;
+    if (!$("#noticeDialog")?.hidden) {
+      closeNotice(false);
+      return;
+    }
+    if (activeAppModalId) {
+      closeVisibleAppModal();
+      return;
+    }
+    if (activeAppSheetId) {
+      closeVisibleAppSheet();
+      return;
+    }
+    if (!$("#kakaoInquiryModal")?.hidden) {
+      closeKakaoInquiryModal();
+      return;
+    }
+    if (!$("#memberEnrollmentModal")?.hidden) {
+      closeMemberEnrollmentModal();
+      return;
+    }
+    if (!$("#appScreen")?.hidden && activeMemberViewId() !== "homeView") {
+      setView("homeView", { replaceHistory: true });
+      return;
+    }
+    const minimized = await appPlugin.minimizeApp?.().then(() => true).catch(() => false);
+    if (!minimized) await appPlugin.exitApp?.().catch(() => undefined);
+  });
+}
+
+function installOAuthReturnStatusReset() {
+  const reset = () => {
+    window.setTimeout(() => {
+      const status = $("#memberEmailLoginStatus");
+      if (
+        document.hidden
+        || !status?.textContent.includes("로그인 화면을 여는 중")
+        || !$("#appScreen")?.hidden
+        || window.location.hash.includes("access_token=")
+        || window.TennisNoteDataClient?.getSession?.()?.access_token
+      ) return;
+      status.textContent = "로그인이 취소되었습니다. 다시 로그인 수단을 선택해주세요.";
+    }, 500);
+  };
+  window.addEventListener("focus", reset);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) reset();
+  });
 }
 
 function currentPushDeviceId() {
@@ -3705,7 +3770,12 @@ function renderSelects() {
 }
 
 function renderJournalMode() {
-  const mode = $("#journalMode")?.value || "lesson";
+  const modeSelect = $("#journalMode");
+  const lessonOption = modeSelect?.querySelector('option[value="lesson"]');
+  const hasLesson = memberLessons().length > 0;
+  if (lessonOption) lessonOption.disabled = !hasLesson;
+  if (!hasLesson && modeSelect?.value === "lesson") modeSelect.value = "practice";
+  const mode = modeSelect?.value || "practice";
   const isLesson = mode === "lesson";
   if ($("#journalDate") && !$("#journalDate").value) $("#journalDate").value = localDateKey();
   $("#lessonJournalFields").hidden = !isLesson;
@@ -7051,7 +7121,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.117" });
+  const params = new URLSearchParams({ v: "1.0.118" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7812,10 +7882,13 @@ function exportNtrpRequest(survey) {
 
 function activateLiveMemberProfile(profileId) {
   const nextProfileId = String(profileId || "");
+  const previousProfileId = String(state.liveProfileId || state.member?.profileId || "");
+  const sameProfile = Boolean(nextProfileId && previousProfileId === nextProfileId);
 
   state.dataMode = "live";
   state.liveProfileId = nextProfileId;
   state.demoPresentationVersion = 0;
+  if (sameProfile) return;
   state.member = null;
   state.memberEnrollment = null;
   state.pendingPurchaseProductId = "";
@@ -8836,6 +8909,8 @@ async function initApp() {
   purgeLegacyDemoStorage();
   restoreSnapshot();
   bindEvents();
+  installOAuthReturnStatusReset();
+  void installNativeBackNavigation();
   installMemberConnectivityStatus();
   installMemberLiveScheduleRefresh();
   renderActiveMemberView();
