@@ -5,9 +5,9 @@
     deployedAt: "2026-07-27T21:40:00+09:00",
     minimumNativeShellVersion: "1.0.118",
     nativeShell: {
-      version: "1.0.118",
-      androidBuild: 49,
-      iosBuild: 53,
+      version: "1.0.127",
+      androidBuild: 50,
+      iosBuild: 54,
     },
   });
 
