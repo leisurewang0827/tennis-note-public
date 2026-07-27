@@ -3133,6 +3133,36 @@ tr.is-selected td {
   color: #315e4e !important;
 }
 
+.status-completed.status-not-deducted,
+.admin-duration-lesson.status-completed.status-not-deducted,
+.schedule-stack-line.status-completed.status-not-deducted {
+  --lesson-color: #64748b;
+  border-color: #aab5c3 !important;
+  color: #334155 !important;
+  background: #eef2f6 !important;
+  box-shadow: inset 4px 0 0 #64748b !important;
+}
+
+.status-no-show,
+.admin-duration-lesson.status-no-show,
+.schedule-stack-line.status-no-show {
+  --lesson-color: #c2413b;
+  border-color: #e09a95 !important;
+  color: #6f201c !important;
+  background: #fde8e6 !important;
+  box-shadow: inset 4px 0 0 #c2413b !important;
+}
+
+.status-no-show.status-not-deducted,
+.admin-duration-lesson.status-no-show.status-not-deducted,
+.schedule-stack-line.status-no-show.status-not-deducted {
+  --lesson-color: #d97706;
+  border-color: #edb86a !important;
+  color: #713f12 !important;
+  background: #fff4d8 !important;
+  box-shadow: inset 4px 0 0 #d97706 !important;
+}
+
 .status-released-makeup,
 .coach-day-lesson.status-released-makeup,
 .schedule-stack-line.status-released-makeup,
@@ -7186,6 +7216,37 @@ button .schedule-member-lines > span {
   margin-top: 16px;
 }
 
+.lesson-outcome-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #d7e2dd;
+  border-radius: 8px;
+}
+
+.lesson-outcome-options legend {
+  padding: 0 5px;
+  font-weight: 800;
+}
+
+.lesson-outcome-options label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #dfe7e3;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.lesson-outcome-options input {
+  flex: 0 0 auto;
+}
+
 .lesson-record-form > label {
   display: grid;
   gap: 6px;
@@ -7354,6 +7415,12 @@ button .schedule-member-lines > span {
 #lessonModal.is-quick-entry:not(.is-quick-expanded) #lessonDurationQuickPanel,
 #lessonModal.is-quick-entry:not(.is-quick-expanded) #deleteLessonButton {
   display: none !important;
+}
+
+@media (max-width: 520px) {
+  .lesson-outcome-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 700px) {

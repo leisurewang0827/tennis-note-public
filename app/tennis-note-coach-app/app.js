@@ -497,7 +497,7 @@ async function syncCoachLessonsFromServer() {
       client.selectRows("tn_coach_roles", { select: "id,display_name,color,status", limit: 100 }).catch(() => []),
       client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,created_at", limit: 1000 }).catch(() => []),
       client.selectRows("tn_membership_products", { select: "id,name,group_size,lesson_minutes", limit: 200 }).catch(() => []),
-      client.selectRows("tn_lesson_records", { select: "lesson_id", limit: 1000 }).catch(() => []),
+      client.selectRows("tn_lesson_records", { select: "lesson_id,deducted_sessions,completed_at", limit: 1000 }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", {
         select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,decided_at,created_at",
         limit: 300,
@@ -565,7 +565,8 @@ async function syncCoachLessonsFromServer() {
       if (!participantIdsByLesson.has(participant.lesson_id)) participantIdsByLesson.set(participant.lesson_id, []);
       participantIdsByLesson.get(participant.lesson_id).push(participant.user_id);
     });
-    const completedLessonIds = new Set((recordRows || []).map((record) => record.lesson_id));
+    const recordsByLessonId = new Map((recordRows || []).map((record) => [record.lesson_id, record]));
+    const completedLessonIds = new Set(recordsByLessonId.keys());
 
     const mappedLessons = (lessonRows || [])
       .filter((lesson) => lesson.status !== "cancelled")
@@ -581,6 +582,7 @@ async function syncCoachLessonsFromServer() {
         const coach = coachesById.get(lesson.coach_role_id) || {};
         const originalCoach = coachesById.get(lesson.original_coach_role_id) || {};
         const isSubstitute = Boolean(lesson.original_coach_role_id && lesson.original_coach_role_id !== lesson.coach_role_id);
+        const lessonRecord = recordsByLessonId.get(lesson.id);
         const lessonKind = lesson.lesson_source === "makeup"
           ? "보강"
           : lesson.lesson_source === "coupon"
@@ -613,6 +615,8 @@ async function syncCoachLessonsFromServer() {
           status: serverLessonStatusLabel(lesson.status),
           serverStatus: lesson.status,
           remaining: Number(lesson.ticket_remaining_sessions ?? ticket.remaining_sessions) || 0,
+          deductedSessions: lessonRecord ? Number(lessonRecord.deducted_sessions) || 0 : null,
+          completedAt: lessonRecord?.completed_at || "",
           task: lesson.status === "pending_change" ? "변경 요청 확인" : "수업 후 코멘트/다음 커리큘럼",
         };
       });
@@ -1635,7 +1639,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.127",
+    workerUrl: "./service-worker.js?v=1.0.128",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1665,7 +1669,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.127" });
+  const params = new URLSearchParams({ v: "1.0.128" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2202,25 +2206,31 @@ function lessonDuration(lesson) {
 function coachScheduleRoundLabel(lesson = {}) {
   const ticketTotal = Number(lesson.totalSessions) || Number(String(lesson.ticket || "").match(/(\d+)\s*회/)?.[1]) || 0;
   const used = Math.max(0, Number(lesson.usedSessions) || Math.max(0, ticketTotal - (Number(lesson.remaining) || 0)));
-  const completed = ["completed", "no_show"].includes(String(lesson.serverStatus || "").toLowerCase());
+  const completed = Number(lesson.deductedSessions) > 0;
   const round = ticketTotal ? Math.min(ticketTotal, completed ? Math.max(1, used) : used + 1) : 0;
   return `${round}/${ticketTotal}회차`;
 }
 
 function coachScheduleExceptionLabel(lesson = {}) {
-  const completed = String(lesson.serverStatus || lesson.status || "").toLowerCase() === "completed";
+  const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
   const context = `${lesson.lessonSource || ""} ${lesson.type || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
   let detail = "";
   if ((lesson.originalCoachRoleId && lesson.coachRoleId && lesson.originalCoachRoleId !== lesson.coachRoleId) || /대타/.test(context)) detail = "대타";
   else if (/코치\s*변경/.test(context)) detail = "코치 변경";
   else if (/시간\s*변경|변경\s*완료/.test(context)) detail = "시간 변경";
-  return completed ? `완료${detail ? ` · ${detail}` : ""}` : detail;
+  const outcome = status === "completed"
+    ? `완료 · ${Number(lesson.deductedSessions) > 0 ? "차감" : "미차감"}`
+    : status === "no_show"
+      ? `노쇼 · ${Number(lesson.deductedSessions) > 0 ? "차감" : "미차감"}`
+      : "";
+  return outcome ? `${outcome}${detail ? ` · ${detail}` : ""}` : detail;
 }
 
 function coachLessonStateClass(lesson = {}) {
-  return String(lesson.serverStatus || lesson.status || "").toLowerCase() === "completed"
-    ? "status-completed"
-    : "";
+  const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
+  if (status === "completed") return `status-completed ${Number(lesson.deductedSessions) > 0 ? "status-deducted" : "status-not-deducted"}`;
+  if (status === "no_show") return `status-no-show ${Number(lesson.deductedSessions) > 0 ? "status-deducted" : "status-not-deducted"}`;
+  return "";
 }
 
 function coachLessonVisualKind(lesson = {}) {
@@ -2487,6 +2497,21 @@ function renderScheduleEditPanel() {
                     </label>
                   </div>
                   <button class="reject-button" type="button" data-mark-lesson-absent="${lesson.id}">불참 처리</button>
+                </div>`
+              : ""}
+            ${canProcess && lesson.serverLessonId
+              ? `<div class="lesson-edit-mini lesson-absence-mini">
+                  <strong>노쇼 처리</strong>
+                  <div class="lesson-edit-grid">
+                    <label class="wide">
+                      <span>노쇼 사유</span>
+                      <input id="coachNoShowReason" type="text" minlength="2" maxlength="200" placeholder="예: 연락 없이 불참" />
+                    </label>
+                  </div>
+                  <div class="actions">
+                    <button class="reject-button" type="button" data-process-no-show="${lesson.id}" data-deduct="true">노쇼 · 차감</button>
+                    <button class="small-button" type="button" data-process-no-show="${lesson.id}" data-deduct="false">노쇼 · 차감 없음</button>
+                  </div>
                 </div>`
               : ""}
           </details>`
@@ -3658,6 +3683,38 @@ async function restoreCoachLessonAbsence(entitlementId) {
   }
 }
 
+async function processCoachNoShow(lessonId, deduct) {
+  const lesson = state.lessons.find((item) => String(item.id) === String(lessonId));
+  const reason = $("#coachNoShowReason")?.value.trim() || "";
+  if (!lesson?.serverLessonId || reason.length < 2) {
+    showToast("노쇼 사유를 2자 이상 입력해 주세요.");
+    $("#coachNoShowReason")?.focus();
+    return;
+  }
+  if (!window.confirm(`${lesson.member} 수업을 노쇼 · ${deduct ? "차감" : "차감 없음"}으로 처리할까요?`)) return;
+  try {
+    await window.TennisNoteDataClient.rpc("tn_process_lesson_outcome", {
+      target_lesson_id: lesson.serverLessonId,
+      target_outcome: "no_show",
+      target_deduct: Boolean(deduct),
+      target_note: reason,
+      target_next_curriculum_ref_id: null,
+      target_member_journal_id: null,
+    });
+    closeLessonEditor();
+    await syncCoachLessonsFromServer();
+    renderAll();
+    showToast(`노쇼 · ${deduct ? "횟수 차감" : "차감 없음"} 처리 완료`);
+  } catch (error) {
+    const code = error?.payload?.message || error?.payload?.code || error?.message || "";
+    showToast(code.includes("ticket_unavailable")
+      ? "차감 가능한 회원권 횟수가 없습니다."
+      : code.includes("already_processed")
+        ? "이미 처리된 수업입니다."
+        : "노쇼 처리에 실패했습니다. 새로고침 후 다시 시도해 주세요.");
+  }
+}
+
 function saveLessonRecord() {
   const lesson = ensureCoachLessonRecord($("#recordLessonSelect")?.value) || recordableCoachLessons()[0];
   if (!lesson) return;
@@ -4775,6 +4832,12 @@ function bindEvents() {
     const absentLessonButton = event.target.closest("[data-mark-lesson-absent]");
     if (absentLessonButton) {
       markCoachLessonAbsent(absentLessonButton.dataset.markLessonAbsent);
+      return;
+    }
+
+    const noShowButton = event.target.closest("[data-process-no-show]");
+    if (noShowButton) {
+      processCoachNoShow(noShowButton.dataset.processNoShow, noShowButton.dataset.deduct === "true");
       return;
     }
 

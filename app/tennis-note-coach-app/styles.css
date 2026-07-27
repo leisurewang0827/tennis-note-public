@@ -1773,6 +1773,36 @@ a {
   color: #315e4e !important;
 }
 
+.coach-duration-lesson.status-completed.status-not-deducted,
+.coach-mobile-lesson.status-completed.status-not-deducted,
+.board-lesson.status-completed.status-not-deducted {
+  --lesson-color: #64748b;
+  border-color: #aab5c3 !important;
+  color: #334155 !important;
+  background: #eef2f6 !important;
+  box-shadow: inset 4px 0 0 #64748b !important;
+}
+
+.coach-duration-lesson.status-no-show,
+.coach-mobile-lesson.status-no-show,
+.board-lesson.status-no-show {
+  --lesson-color: #c2413b;
+  border-color: #e09a95 !important;
+  color: #6f201c !important;
+  background: #fde8e6 !important;
+  box-shadow: inset 4px 0 0 #c2413b !important;
+}
+
+.coach-duration-lesson.status-no-show.status-not-deducted,
+.coach-mobile-lesson.status-no-show.status-not-deducted,
+.board-lesson.status-no-show.status-not-deducted {
+  --lesson-color: #d97706;
+  border-color: #edb86a !important;
+  color: #713f12 !important;
+  background: #fff4d8 !important;
+  box-shadow: inset 4px 0 0 #d97706 !important;
+}
+
 .coach-duration-lesson.released-makeup-slot,
 .coach-mobile-lesson.released-makeup-slot {
   color: #111827 !important;

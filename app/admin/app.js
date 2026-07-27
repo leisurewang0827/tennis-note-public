@@ -5243,6 +5243,7 @@ function lessonRoundSortKey(lesson) {
 
 function isDeductedLesson(lesson) {
   const status = lesson?.serverStatus || lesson?.status || "";
+  if (Number.isFinite(Number(lesson?.deductedSessions))) return Number(lesson.deductedSessions) > 0;
   return ["completed", "no_show"].includes(status) || (!lesson?.serverStatus && lesson?.status === "confirmed");
 }
 
@@ -5328,7 +5329,8 @@ function isLessonEditableScheduled(lesson = {}) {
 }
 
 function scheduleLessonExceptionLabel(lesson = {}) {
-  if (lessonStatusValue(lesson) === "completed") return "완료";
+  if (lessonStatusValue(lesson) === "completed") return Number(lesson.deductedSessions) > 0 ? "완료 · 차감" : "완료 · 미차감";
+  if (lessonStatusValue(lesson) === "no_show") return Number(lesson.deductedSessions) > 0 ? "노쇼 · 차감" : "노쇼 · 미차감";
   const context = `${lesson.type || ""} ${lessonSourceValue(lesson)} ${lesson.changeNote || ""} ${lesson.task || ""}`;
   if ((lesson.originalCoachRoleId && lesson.coachRoleId && lesson.originalCoachRoleId !== lesson.coachRoleId) || /대타/.test(context)) return "대타";
   if (/코치\s*변경/.test(context)) return "코치 변경";
@@ -5353,8 +5355,8 @@ function getLessonStatusLabel(lesson) {
     return "원데이 예약";
   }
   if (isReleasedRegularMakeupSlot(lesson)) return "정규자리 · 보강 가능";
-  if (status === "completed") return "완료";
-  if (status === "no_show") return "당일 취소";
+  if (status === "completed") return Number(lesson.deductedSessions) > 0 ? "완료 · 차감" : "완료 · 미차감";
+  if (status === "no_show") return Number(lesson.deductedSessions) > 0 ? "노쇼 · 차감" : "노쇼 · 미차감";
   if (status === "cancelled") return "취소";
   if (status === "available") return "보강 가능";
   if (isMakeupLesson(lesson) && isLessonPendingChange(lesson)) return "보강접수중";
@@ -5365,7 +5367,8 @@ function getLessonStatusLabel(lesson) {
 }
 
 function getLessonStateClass(lesson) {
-  if (lessonStatusValue(lesson) === "completed") return "status-completed";
+  if (lessonStatusValue(lesson) === "completed") return Number(lesson.deductedSessions) > 0 ? "status-completed status-deducted" : "status-completed status-not-deducted";
+  if (lessonStatusValue(lesson) === "no_show") return Number(lesson.deductedSessions) > 0 ? "status-no-show status-deducted" : "status-no-show status-not-deducted";
   if (isReleasedRegularMakeupSlot(lesson)) return "status-released-makeup";
   if (isMakeupLesson(lesson) && isLessonPendingChange(lesson)) return "status-makeup-pending";
   if (isMakeupLesson(lesson)) return "status-makeup";
@@ -15651,8 +15654,27 @@ function updateLessonRecordCurriculumLink() {
   const curriculum = adminCurriculumChoices().find((item) => item.value === selectedId);
   const link = $("#lessonRecordCurriculumLink");
   if (!link) return;
-  link.hidden = !curriculum?.notionUrl;
+  link.hidden = selectedLessonRecordOutcome().startsWith("no_show") || !curriculum?.notionUrl;
   link.href = curriculum?.notionUrl || "#";
+}
+
+function selectedLessonRecordOutcome() {
+  return document.querySelector('input[name="lessonRecordOutcome"]:checked')?.value || "completed_deduct";
+}
+
+function syncLessonRecordOutcomeUi() {
+  const value = selectedLessonRecordOutcome();
+  const noShow = value.startsWith("no_show");
+  const deduct = value.endsWith("_deduct");
+  const comment = $("#lessonRecordComment");
+  const curriculum = $("#lessonRecordCurriculum");
+  $("#lessonRecordCommentLabel").textContent = noShow ? "노쇼 사유" : "코치 코멘트";
+  comment.placeholder = noShow ? "예: 연락 없이 불참" : "이번 수업에서 확인한 내용과 다음 연습 포인트를 5자 이상 작성해 주세요.";
+  comment.minLength = noShow ? 2 : 5;
+  curriculum.required = !noShow;
+  curriculum.closest("label").hidden = noShow;
+  $("#lessonRecordCurriculumLink").hidden = noShow || !$("#lessonRecordCurriculumLink").href;
+  $("#saveLessonRecordButton").textContent = `${noShow ? "노쇼" : "완료"} 저장 · ${deduct ? "횟수 차감" : "차감 없음"}`;
 }
 
 function adminCurriculumChoices() {
@@ -15719,8 +15741,11 @@ function openLessonRecordModal(lessonId) {
   const choices = adminCurriculumChoices();
   select.innerHTML = `<option value="">다음 커리큘럼 선택</option>${choices.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("")}`;
   $("#lessonRecordComment").value = "";
+  const defaultOutcome = document.querySelector('input[name="lessonRecordOutcome"][value="completed_deduct"]');
+  if (defaultOutcome) defaultOutcome.checked = true;
   $("#lessonRecordMessage").textContent = choices.length ? "" : "연결된 커리큘럼이 없습니다.";
   $("#lessonRecordModal").hidden = false;
+  syncLessonRecordOutcomeUi();
   updateLessonRecordCurriculumLink();
   $("#lessonRecordComment").focus();
 }
@@ -15770,9 +15795,14 @@ async function saveLessonRecord(event) {
   if (lessonRecordEditorState.saving) return;
   const comment = $("#lessonRecordComment").value.trim();
   const curriculumId = $("#lessonRecordCurriculum").value;
+  const outcomeValue = selectedLessonRecordOutcome();
+  const noShow = outcomeValue.startsWith("no_show");
+  const deduct = outcomeValue.endsWith("_deduct");
   const message = $("#lessonRecordMessage");
-  if (comment.length < 5 || !curriculumId) {
-    message.textContent = comment.length < 5 ? "코치 코멘트를 5자 이상 작성해 주세요." : "다음 커리큘럼을 선택해 주세요.";
+  if (comment.length < (noShow ? 2 : 5) || (!noShow && !curriculumId)) {
+    message.textContent = comment.length < (noShow ? 2 : 5)
+      ? noShow ? "노쇼 사유를 2자 이상 작성해 주세요." : "코치 코멘트를 5자 이상 작성해 주세요."
+      : "다음 커리큘럼을 선택해 주세요.";
     return;
   }
   const client = window.TennisNoteDataClient;
@@ -15786,10 +15816,12 @@ async function saveLessonRecord(event) {
   button.textContent = "서버 저장 중";
   message.textContent = "";
   try {
-    const curriculumRefId = await ensureAdminCurriculumRef(curriculumId);
-    const result = await client.rpc("tn_complete_lesson_and_deduct", {
+    const curriculumRefId = noShow ? null : await ensureAdminCurriculumRef(curriculumId);
+    const result = await client.rpc("tn_process_lesson_outcome", {
       target_lesson_id: lessonRecordEditorState.lessonId,
-      target_coach_comment: comment,
+      target_outcome: noShow ? "no_show" : "completed",
+      target_deduct: deduct,
+      target_note: comment,
       target_next_curriculum_ref_id: curriculumRefId,
       target_member_journal_id: lessonRecordEditorState.journalId || null,
     });
@@ -15798,13 +15830,13 @@ async function saveLessonRecord(event) {
     state.recordFilter = "done";
     await syncAdminLiveData();
     setView("notes", { skipLock: true });
-    showToast(result?.idempotent ? "이미 처리된 수업을 확인했습니다." : "수업 기록 저장과 횟수 차감이 완료됐습니다.");
+    showToast(result?.idempotent ? "이미 처리된 수업을 확인했습니다." : `${noShow ? "노쇼" : "수업 완료"} 처리와 ${deduct ? "횟수 차감" : "미차감 기록"}이 저장됐습니다.`);
   } catch (error) {
     message.textContent = lessonRecordErrorMessage(error);
   } finally {
     lessonRecordEditorState.saving = false;
     button.disabled = false;
-    button.textContent = "저장하고 횟수 차감";
+    syncLessonRecordOutcomeUi();
   }
 }
 
@@ -16736,6 +16768,7 @@ async function syncAdminLiveData() {
       participantIdsByLesson.set(participant.lesson_id, ids);
     });
     const mappedTicketById = new Map(mappedTickets.map((ticket) => [ticket.id, ticket]));
+    const lessonRecordByLessonId = new Map((serverLessonRecords || []).map((record) => [record.lesson_id, record]));
     const activeSubstituteByLessonId = new Map((serverSubstituteAssignments || [])
       .filter((assignment) => assignment.status === "assigned")
       .map((assignment) => [assignment.lesson_id, assignment]));
@@ -16746,6 +16779,7 @@ async function syncAdminLiveData() {
         const participantIds = participantIdsByLesson.get(lesson.id) || [];
         const memberNames = participantIds.map((id) => usersById.get(id)?.name).filter(Boolean);
         const ticket = mappedTicketById.get(lesson.member_ticket_id);
+        const lessonRecord = lessonRecordByLessonId.get(lesson.id);
         const slotKey = `${lesson.lesson_date}-${String(lesson.start_time || "").slice(0, 5)}`;
         const slotCount = (slotCounts.get(slotKey) || 0) + 1;
         slotCounts.set(slotKey, slotCount);
@@ -16782,6 +16816,8 @@ async function syncAdminLiveData() {
           status: liveLessonStatus(lesson.status),
           makeup: lesson.lesson_source === "makeup",
           lessonSource: lesson.lesson_source || "regular",
+          deductedSessions: lessonRecord ? Number(lessonRecord.deducted_sessions) || 0 : null,
+          completedAt: lessonRecord?.completed_at || "",
         };
       })
       .sort((left, right) => left.lessonDate.localeCompare(right.lessonDate) || timeToMinutes(left.time) - timeToMinutes(right.time));
@@ -22081,6 +22117,10 @@ function bindEvents() {
   });
 
   $("#lessonRecordForm")?.addEventListener("submit", saveLessonRecord);
+  $$('input[name="lessonRecordOutcome"]').forEach((input) => input.addEventListener("change", () => {
+    syncLessonRecordOutcomeUi();
+    updateLessonRecordCurriculumLink();
+  }));
   $("#lessonRecordCurriculum")?.addEventListener("change", updateLessonRecordCurriculumLink);
 
   const refreshSupabaseStatus = $("#refreshSupabaseStatus");

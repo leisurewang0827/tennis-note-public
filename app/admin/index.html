@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.127" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.127" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.128" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.128" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1524,8 +1524,15 @@
         </div>
         <form id="lessonRecordForm" class="lesson-record-form">
           <div id="lessonRecordContext" class="lesson-record-context"></div>
+          <fieldset class="lesson-outcome-options">
+            <legend>처리 결과</legend>
+            <label><input type="radio" name="lessonRecordOutcome" value="completed_deduct" checked /> 완료 · 차감</label>
+            <label><input type="radio" name="lessonRecordOutcome" value="completed_no_deduct" /> 완료 · 차감 없음</label>
+            <label><input type="radio" name="lessonRecordOutcome" value="no_show_deduct" /> 노쇼 · 차감</label>
+            <label><input type="radio" name="lessonRecordOutcome" value="no_show_no_deduct" /> 노쇼 · 차감 없음</label>
+          </fieldset>
           <label>
-            <span>코치 코멘트</span>
+            <span id="lessonRecordCommentLabel">코치 코멘트</span>
             <textarea id="lessonRecordComment" rows="4" minlength="5" required placeholder="이번 수업에서 확인한 내용과 다음 연습 포인트를 5자 이상 작성해 주세요."></textarea>
           </label>
           <div class="tn-comment-draft-tools">
@@ -1533,7 +1540,7 @@
             <button id="generateLessonRecordComment" type="button">초안 만들기</button>
           </div>
           <label>
-            <span>다음 커리큘럼</span>
+            <span id="lessonRecordCurriculumLabel">다음 커리큘럼</span>
             <select id="lessonRecordCurriculum" required></select>
           </label>
           <a id="lessonRecordCurriculumLink" class="lesson-record-curriculum-link" href="#" target="_blank" rel="noopener" hidden>커리큘럼 원본 보기</a>
@@ -1548,15 +1555,15 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.127"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.128"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.127"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.127"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.127"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.127"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.127"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.128"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.128"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.128"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.128"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.128"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.127"></script>
+    <script src="./app.js?v=1.0.128"></script>
   </body>
 </html>
