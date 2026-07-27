@@ -400,6 +400,65 @@ function serverLessonStatusLabel(status = "") {
   }[status] || status || "예정";
 }
 
+async function syncCoachSchedulePreview() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !client.getSession?.()?.access_token) return false;
+  const scheduleRangeStart = new Date();
+  scheduleRangeStart.setDate(scheduleRangeStart.getDate() - 31);
+  const scheduleRangeEnd = new Date();
+  scheduleRangeEnd.setDate(scheduleRangeEnd.getDate() + 370);
+  const payload = await client.rpc("tn_coach_schedule_feed", {
+    target_start_date: localDateKey(scheduleRangeStart),
+    target_end_date: localDateKey(scheduleRangeEnd),
+  });
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.lessons)
+      ? payload.lessons
+      : [];
+  if (!rows.length) return false;
+  const oneDayLessons = state.liveLessons.filter((lesson) => lesson.oneDayBooking);
+  state.liveLessons = [
+    ...rows
+      .filter((lesson) => lesson.status !== "cancelled")
+      .map((lesson) => {
+        const dayIndex = new Date(`${lesson.lesson_date}T00:00:00`).getDay();
+        const participantIds = Array.isArray(lesson.participant_user_ids) ? lesson.participant_user_ids : [];
+        const memberNames = Array.isArray(lesson.participant_names) ? lesson.participant_names : [];
+        const groupSize = Number(lesson.product_group_size) || participantIds.length || 1;
+        return {
+          id: lesson.id,
+          serverLessonId: lesson.id,
+          lessonDate: lesson.lesson_date,
+          day: scheduleDays[dayIndex === 0 ? 6 : dayIndex - 1],
+          time: String(lesson.start_time || "").slice(0, 5),
+          coach: lesson.coach_name || "담당 코치",
+          coachRoleId: lesson.coach_role_id,
+          originalCoachRoleId: lesson.original_coach_role_id || "",
+          originalCoach: lesson.original_coach_name || "",
+          isSubstitute: Boolean(lesson.original_coach_role_id && lesson.original_coach_role_id !== lesson.coach_role_id),
+          member: memberNames.join("&") || "회원",
+          memberUserIds: participantIds,
+          type: `${groupSize > 1 ? "2대1" : "개인"} ${Number(lesson.duration_minutes) || 20}분`,
+          lessonSource: lesson.lesson_source || "regular",
+          durationMinutes: Number(lesson.duration_minutes) || 20,
+          ticketLessonMinutes: Number(lesson.product_lesson_minutes) || Number(lesson.duration_minutes) || 20,
+          ticketId: lesson.member_ticket_id || "",
+          totalSessions: Number(lesson.ticket_total_sessions) || 0,
+          usedSessions: Number(lesson.ticket_used_sessions) || 0,
+          ticket: `${groupSize > 1 ? "2대1" : "개인"} ${lesson.ticket_total_sessions || ""}회`.replace("  회", ""),
+          status: serverLessonStatusLabel(lesson.status),
+          serverStatus: lesson.status,
+          remaining: Number(lesson.ticket_remaining_sessions) || 0,
+          task: lesson.status === "pending_change" ? "변경 요청 확인" : "수업 후 코멘트/다음 커리큘럼",
+        };
+      }),
+    ...oneDayLessons,
+  ];
+  state.liveLessonsLoaded = true;
+  return true;
+}
+
 async function syncCoachLessonsFromServer() {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows) return false;
@@ -1579,7 +1638,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.125",
+    workerUrl: "./service-worker.js?v=1.0.126",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1609,7 +1668,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.125" });
+  const params = new URLSearchParams({ v: "1.0.126" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1761,13 +1820,19 @@ async function applySupabaseCoachSession(showFromLogin = false) {
     renderAll();
     openCoachApp(showFromLogin);
     saveSnapshot();
-    await syncLiveSchedulePolicy(state.coach.branchId);
-    await Promise.allSettled([
-      syncCoachLessonsFromServer(),
-      syncCoachJournalEntriesFromServer(),
-    ]);
-    renderAll();
-    saveSnapshot();
+    void (async () => {
+      if (await syncCoachSchedulePreview().catch(() => false)) {
+        renderAll();
+        saveSnapshot();
+      }
+      await syncLiveSchedulePolicy(state.coach.branchId);
+      await Promise.allSettled([
+        syncCoachLessonsFromServer(),
+        syncCoachJournalEntriesFromServer(),
+      ]);
+      renderAll();
+      saveSnapshot();
+    })();
     return true;
   } catch (error) {
     return false;
