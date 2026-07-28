@@ -640,10 +640,28 @@
     const query = new URLSearchParams();
     query.set("select", options.select || "*");
     if (options.limit) query.set("limit", String(options.limit));
+    if (options.offset) query.set("offset", String(options.offset));
+    if (options.order) query.set("order", String(options.order));
     Object.entries(options.filters || {}).forEach(([key, value]) => {
       query.set(key, `eq.${value}`);
     });
     return request(`${tableName}?${query.toString()}`, { prefer: "return=representation" });
+  }
+
+  async function selectAllRows(tableName, options = {}) {
+    const pageSize = Math.min(Math.max(Number(options.pageSize) || 500, 1), 1000);
+    const maxRows = Math.max(Number(options.maxRows) || 10000, pageSize);
+    const rows = [];
+    for (let offset = 0; offset < maxRows; offset += pageSize) {
+      const page = await selectRows(tableName, {
+        ...options,
+        limit: pageSize,
+        offset,
+      });
+      rows.push(...(Array.isArray(page) ? page : []));
+      if (!Array.isArray(page) || page.length < pageSize) break;
+    }
+    return rows;
   }
 
   function insertRows(tableName, rows) {
@@ -991,6 +1009,7 @@
     clearOfflineResponses,
     countRows,
     selectRows,
+    selectAllRows,
     insertRows,
     updateRows,
     deleteRows,
