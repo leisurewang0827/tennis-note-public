@@ -9452,6 +9452,23 @@ button .schedule-member-lines > span {
     grid-template-columns: 1fr;
   }
 
+  .lesson-form > * {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .lesson-form input,
+  .lesson-form select,
+  .lesson-form textarea {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .lesson-inline-selects {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+  }
+
   .lesson-member-ticket-panel {
     grid-column: auto;
     grid-template-columns: 1fr;

@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.143" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.143" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.144" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.144" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -352,11 +352,13 @@
             <div id="adminScheduleDayPicker" class="schedule-day-picker" aria-label="관리자 시간표 날짜 선택"></div>
             <div id="adminScheduleCoachPicker" class="schedule-coach-picker" aria-label="코치별 시간표 필터"></div>
             <details class="schedule-edit-guide" aria-label="시간표 사용법">
-              <summary>시간표 사용법</summary>
+              <summary>상황별 처리 방법</summary>
               <ul>
-                <li>빈칸을 누르면 해당 코치와 시간으로 수업을 추가합니다.</li>
-                <li>여러 수업 수정, 복사, 대타 지정은 상단 편집 도구에서 시작합니다.</li>
-                <li>키보드 편집은 선택 후 Enter 확정, Alt+↑↓ 10분 이동을 지원합니다.</li>
+                <li><strong>당일 쿠폰:</strong> 빈칸 → 수업 추가 → 쿠폰수업을 선택합니다.</li>
+                <li><strong>사전 불참:</strong> 기존 수업 → 불참 처리. 횟수는 차감하지 않고 보강 자리가 열립니다.</li>
+                <li><strong>노쇼:</strong> 기존 수업 → 기록 처리 → 차감 또는 미차감을 선택합니다.</li>
+                <li><strong>시간 변경:</strong> 기존 수업 → 날짜·시간 수정 → 선택한 수업만 또는 이후 전체를 선택합니다.</li>
+                <li><strong>대타·여러 수업:</strong> 편집 도구에서 대상 수업을 선택한 뒤 처리합니다.</li>
               </ul>
             </details>
             <div id="scheduleBulkToolbar" class="schedule-bulk-toolbar" hidden>
@@ -1560,15 +1562,15 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.143"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.144"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.143"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.143"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.143"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.143"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.143"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.144"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.144"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.144"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.144"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.144"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.143"></script>
+    <script src="./app.js?v=1.0.144"></script>
   </body>
 </html>

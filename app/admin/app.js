@@ -12335,6 +12335,8 @@ function refreshLessonDayOptions() {
     daySelect.disabled = !isActive;
     timeSelect.disabled = !isActive;
     row.classList.toggle("is-disabled", !isActive);
+    row.hidden = !isActive;
+    row.setAttribute("aria-hidden", isActive ? "false" : "true");
     target.appendChild(row);
     daySelect.addEventListener("change", () => {
       fillSelect(timeSelect, getTimeOptionsForLessonSlot(daySelect.value));
@@ -12496,7 +12498,13 @@ function refreshLessonMemberOptions(keepValue = "", editingLesson = null) {
   const search = $("#lessonMemberSearch").value.trim();
   const keyword = search.toLowerCase();
   const currentValue = keepValue || $("#lessonMember").value;
-  const options = getSelectableMembers(search);
+  const allOptions = getSelectableMembers(search);
+  const exactMember = search
+    ? allOptions.find((member) => memberSearchValues(member)
+      .some((value) => String(value || "").trim().toLowerCase() === keyword))
+    : null;
+  const options = allOptions.slice(0, search ? 80 : 30);
+  if (exactMember && !options.some((member) => member.name === exactMember.name)) options.unshift(exactMember);
   const currentMember = members.find((member) => member.name === currentValue);
   const currentMatchesSearch = currentMember && (!keyword || memberSearchValues(currentMember)
     .some((value) => String(value || "").toLowerCase().includes(keyword)));
@@ -12520,11 +12528,7 @@ function refreshLessonMemberOptions(keepValue = "", editingLesson = null) {
       })),
     ],
   );
-  const exactMatch = search
-    ? options.find((member) => memberSearchValues(member)
-      .some((value) => String(value || "").trim().toLowerCase() === keyword))
-    : null;
-  const selectedName = exactMatch?.name
+  const selectedName = exactMember?.name
     || (currentMatchesSearch && options.some((member) => member.name === currentValue) ? currentValue : "");
   $("#lessonMember").value = selectedName;
 }
