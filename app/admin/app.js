@@ -65,6 +65,7 @@ const state = {
   recordPendingType: "all",
   selectedMemberIds: [],
   selectedMembershipProductIds: [],
+  activeMembershipProductId: "",
   selectedSubstituteLessonIds: [],
   scheduleBulkMode: false,
   scheduleOpenSlotMode: false,
@@ -3767,10 +3768,10 @@ async function createMembershipProductSetting() {
     const synced = await syncAdminLiveData();
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
     const created = membershipProductDrafts.find((item) => item.serverProductCode === productCode || item.id === productCode);
+    state.activeMembershipProductId = created ? String(created.id) : "";
     renderServiceReadiness();
     const card = created ? document.querySelector(`[data-product-card="${CSS.escape(created.id)}"]`) : null;
     if (card) {
-      card.open = true;
       card.scrollIntoView({ block: "nearest", behavior: "smooth" });
       card.querySelector('[data-product-field="title"]')?.focus();
     }
@@ -3869,6 +3870,7 @@ async function forceDeleteMembershipProductSetting(productId) {
     if (!deletedMembershipProductIds.includes(product.id)) deletedMembershipProductIds.push(product.id);
     const index = membershipProductDrafts.findIndex((item) => item.id === product.id);
     if (index >= 0) membershipProductDrafts.splice(index, 1);
+    if (String(state.activeMembershipProductId) === String(product.id)) state.activeMembershipProductId = "";
     saveSnapshot();
     if (serverProduct?.id) await syncAdminLiveData();
     renderServiceReadiness();
@@ -11832,6 +11834,13 @@ function getTicketWeeklyCount(ticket) {
   return match ? Number(match[1]) : 1;
 }
 
+function getTicketWeeklyUnitLimit(ticket) {
+  const weeklyCount = Math.max(1, getTicketWeeklyCount(ticket));
+  const explicitWeeklyLimit = Number(ticket?.maxSessionsPerWeek) || 0;
+  const dailyLimit = Number(ticket?.maxSessionsPerDay) || 0;
+  return Math.max(weeklyCount, explicitWeeklyLimit || dailyLimit || weeklyCount);
+}
+
 function isRegularScheduleSetup(ticket) {
   return Boolean(
     ticket
@@ -11879,7 +11888,8 @@ function getRegularScheduleValidation(ticket) {
   const selectedMinutes = Math.max(baseMinutes, Number($("#lessonDuration")?.value) || baseMinutes);
   const unitsPerLesson = Math.max(1, Math.ceil(selectedMinutes / baseMinutes));
   const allocatedUnits = requiredCount * unitsPerLesson;
-  const allocationMismatch = allocatedUnits !== weeklyUnits;
+  const weeklyUnitLimit = getTicketWeeklyUnitLimit(ticket);
+  const allocationMismatch = allocatedUnits < weeklyUnits || allocatedUnits > weeklyUnitLimit;
   const missingSlotNumbers = slots
     .map((slot, index) => (!slot.day || !slot.time ? index + 1 : null))
     .filter(Boolean);
@@ -11890,14 +11900,15 @@ function getRegularScheduleValidation(ticket) {
     incompleteSlots,
     duplicateDay: "",
     weeklyUnits,
+    weeklyUnitLimit,
     unitsPerLesson,
     allocatedUnits,
     allocationMismatch,
     valid: incompleteSlots.length === 0 && !allocationMismatch && slots.length === requiredCount,
     message: incompleteSlots.length
-      ? `주 ${weeklyUnits}회분 회원권입니다. 일정 ${missingSlotNumbers.join(", ")}을(를) 직접 선택해 주세요. 같은 날도 선택할 수 있습니다.`
+      ? `주 ${weeklyUnits}회 이용권입니다. 일정 ${missingSlotNumbers.join(", ")}의 요일과 시간을 선택해 주세요.`
       : allocationMismatch
-        ? `선택한 ${selectedMinutes}분 수업으로는 주 ${weeklyUnits}회분을 정확히 배정할 수 없습니다. 수업시간을 다시 선택해 주세요.`
+        ? `${selectedMinutes}분 수업은 ${unitsPerLesson}회분을 사용합니다. 이 회원권은 주 ${weeklyUnits}~${weeklyUnitLimit}회분까지 배정할 수 있습니다.`
         : "",
   };
 }
@@ -16706,6 +16717,9 @@ async function syncAdminLiveData() {
         actualLessonStart: memberRecord?.lesson_start_on || ticket.starts_on,
         groupSize: Number(product.group_size) || 1,
         durationMinutes: Number(product.lesson_minutes) || 20,
+        maxSessionsPerDay: Number(product.max_sessions_per_day) || 0,
+        maxSessionsPerWeek: Number(product.max_sessions_per_week) || 0,
+        maxBookingDaysPerWeek: Number(product.max_booking_days_per_week) || 0,
         productKind: product.product_kind || "regular",
         scheduleScope: memberRecord?.lesson_schedule_scope || liveTicketScheduleScope(product, ticket, serverLessons || []),
         status: ticket.status,
@@ -19936,8 +19950,27 @@ function renderServiceReadiness() {
       .map(
         (product) => {
           const normalized = normalizeMembershipProduct(product, membershipProductDefaults.find((item) => item.id === product.id));
+          const productId = String(normalized.id);
+          const isEditing = String(state.activeMembershipProductId || "") === productId;
+          if (!isEditing) {
+            return `
+        <article class="product-setting-card product-setting-summary-card" data-product-card="${normalized.id}">
+          <div class="product-setting-header">
+            <input class="product-select-checkbox" type="checkbox" data-select-product-row="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 선택" ${selectedProductIdSet().has(productId) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />
+            <div>
+              <strong>${escapeHtml(normalized.title)}</strong>
+              <small>${escapeHtml(normalized.group)} · ${normalized.tickets}회 · ${normalized.validityDays}일</small>
+            </div>
+            <div class="product-setting-summary-meta">
+              <b>현금 ${money.format(normalized.cashAmount)}원 / 카드 ${money.format(normalized.cardAmount)}원</b>
+              <span>${membershipProductStatusOptions.find((option) => option.id === normalized.status)?.label || "판매중"}</span>
+            </div>
+            <button class="small-button" type="button" data-open-product-setting="${normalized.id}">수정</button>
+          </div>
+        </article>`;
+          }
           return `
-        <details class="product-setting-card product-setting-form" data-product-card="${normalized.id}">
+        <details class="product-setting-card product-setting-form" data-product-card="${normalized.id}" open>
           <summary class="product-setting-header">
             <input class="product-select-checkbox" type="checkbox" data-select-product-row="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 선택" ${selectedProductIdSet().has(String(normalized.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />
             <div>
@@ -20044,6 +20077,7 @@ function renderServiceReadiness() {
             </label>
           </div>
           <div class="product-setting-actions">
+            <button class="ghost-button" type="button" data-close-product-setting="${normalized.id}">닫기</button>
             <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="위로 이동" title="위로 이동">↑</button>
             <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="아래로 이동" title="아래로 이동">↓</button>
             <button class="small-button" type="button" data-save-product-setting="${normalized.id}">저장</button>
@@ -22234,6 +22268,21 @@ function bindEvents() {
     const lessonRecordButton = event.target.closest("[data-open-lesson-record]");
     if (lessonRecordButton) {
       openLessonRecordModal(lessonRecordButton.dataset.openLessonRecord);
+      return;
+    }
+
+    const openProductSettingButton = event.target.closest("[data-open-product-setting]");
+    if (openProductSettingButton) {
+      state.activeMembershipProductId = String(openProductSettingButton.dataset.openProductSetting || "");
+      renderServiceReadiness();
+      document.querySelector(`[data-product-card="${CSS.escape(state.activeMembershipProductId)}"]`)
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      return;
+    }
+
+    if (event.target.closest("[data-close-product-setting]")) {
+      state.activeMembershipProductId = "";
+      renderServiceReadiness();
       return;
     }
 

@@ -5426,6 +5426,20 @@ tr.is-selected td {
   list-style: none;
 }
 
+.product-setting-summary-card .product-setting-header {
+  align-items: center;
+  cursor: default;
+}
+
+.product-setting-summary-card .product-setting-header > div:first-of-type {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.product-setting-summary-card .product-setting-summary-meta {
+  flex: 0 1 auto;
+}
+
 .schedule-preview-disclosure {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -5486,6 +5500,22 @@ tr.is-selected td {
 
 .product-setting-summary-meta b {
   white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+  .product-setting-summary-card .product-setting-header {
+    flex-wrap: wrap;
+  }
+
+  .product-setting-summary-card .product-setting-summary-meta {
+    width: calc(100% - 30px);
+    margin-left: 30px;
+    justify-items: start;
+  }
+
+  .product-setting-summary-meta b {
+    white-space: normal;
+  }
 }
 
 .product-setting-header > div {
