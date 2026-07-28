@@ -730,14 +730,14 @@ async function syncCoachLessonsFromServer() {
           time: entitlement.originalTime,
           coach: entitlement.coach,
           coachRoleId: entitlement.coachRoleId,
-          member: "수업 신청 가능",
+          member: "정규 자리",
           entitlementId: entitlement.id,
           sourceLessonId: entitlement.sourceLessonId,
-          type: `수업 신청 가능 ${entitlement.durationMinutes}분`,
+          type: `정규 자리 · 보강 가능 ${entitlement.durationMinutes}분`,
           lessonSource: "makeup",
           durationMinutes: entitlement.durationMinutes,
           status: "available",
-          task: "수업 신청 가능",
+          task: "보강 가능",
         };
       });
 
@@ -1719,7 +1719,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.141",
+    workerUrl: "./service-worker.js?v=1.0.142",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1749,7 +1749,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.141" });
+  const params = new URLSearchParams({ v: "1.0.142" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2857,7 +2857,7 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
                 const memberLabel = formatScheduleMemberName(lesson.member || "회원");
                 const note = coachScheduleExceptionLabel(lesson);
                 const laneCoach = coachFromLesson(lesson, policy);
-                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${memberLabel}</strong><span>${escapeHtml(lesson.releasedMakeupSlot ? "신청 가능" : coachScheduleRoundLabel(lesson))}</span><span>${escapeHtml(coachScheduleCardCoachLabel(lesson))}</span><small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small></button>`;
+                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${memberLabel}</strong><span>${escapeHtml(lesson.releasedMakeupSlot ? "보강 가능" : coachScheduleRoundLabel(lesson))}</span><span>${escapeHtml(coachScheduleCardCoachLabel(lesson))}</span><small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small></button>`;
               }).join("")}
             </div>`;
         }).join("")}

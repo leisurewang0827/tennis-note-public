@@ -1135,6 +1135,14 @@ button {
   box-shadow: inset 3px 0 0 #b7791f;
 }
 
+.member-slot-bg.available.released-regular-slot,
+.member-mobile-slot.available.released-regular-slot {
+  color: var(--ink);
+  border: 1px dashed #64748b;
+  background: #ffffff;
+  box-shadow: none;
+}
+
 .member-duration-lesson.status-completed,
 .member-mobile-lesson.status-completed {
   --lesson-color: #287a5b;

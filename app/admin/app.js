@@ -11691,10 +11691,10 @@ function renderCoachDayLessonCard(lesson, visibleTimes, column) {
     return value >= start && value < end;
   }).length);
   const memberLabel = isReleasedRegularMakeupSlot(lesson)
-    ? "수업 신청 가능"
+    ? "정규 자리"
     : isLessonAvailable(lesson) ? "보강 가능" : getLessonMembersLabel(lesson);
   const statusLabel = isReleasedRegularMakeupSlot(lesson)
-    ? `${lesson.durationMinutes}분`
+    ? `보강 가능 · ${lesson.durationMinutes}분`
     : isLessonAvailable(lesson) ? `${lesson.durationMinutes}분 신청 가능` : `${getLessonStatusLabel(lesson)} · ${lesson.durationMinutes}분`;
   const roundLabel = getLessonRoundLabel(lesson);
   const coachLabel = lessonScheduleCoachLabel(lesson);
@@ -17232,8 +17232,8 @@ async function performAdminLiveDataSync() {
           time: entitlement.originalTime,
           courtId: `court-${Math.min(slotCount, fixedCourtCount)}`,
           coachId: entitlement.coachId,
-          member: "수업 신청 가능",
-          type: "수업 신청 가능",
+          member: "정규 자리",
+          type: "정규 자리 · 보강 가능",
           durationMinutes: entitlement.durationMinutes,
           status: "available",
           makeup: true,

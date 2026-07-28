@@ -1665,7 +1665,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.141",
+    workerUrl: "./service-worker.js?v=1.0.142",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2646,7 +2646,7 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
           coachRoleId: sourceLesson.coach_role_id || sourceLesson.coachRoleId || coach.serverRoleId || coach.id || "",
           lessonDate,
           member: "",
-          type: isMakeupDue ? "보강 신청가능" : isCouponBooking ? "쿠폰 예약 가능" : "수업 변경 신청가능",
+          type: releasedSlot ? "정규 자리 · 보강 가능" : isMakeupDue ? "보강 신청가능" : isCouponBooking ? "쿠폰 예약 가능" : "수업 변경 신청가능",
           status: "available",
           policy: requestPolicy,
           generated: true,
@@ -2658,6 +2658,7 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
           member_ticket_id: sourceLesson.member_ticket_id || sourceLesson.ticketId || "",
           ticketId: sourceLesson.member_ticket_id || sourceLesson.ticketId || "",
           releasedSlotId: releasedSlot?.id || "",
+          releasedRegularSlot: Boolean(releasedSlot),
         });
       });
     });
@@ -3419,7 +3420,7 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
   const availableCount = dayLessons.filter((lesson) => lesson.status === "available"
     && minutesFromTime(lesson.time) >= segmentStart
     && minutesFromTime(lesson.time) < segmentEnd).length;
-  const hasMakeupSlots = dayLessons.some((lesson) => lesson.status === "available" && lesson.type === "보강 신청가능");
+  const hasMakeupSlots = dayLessons.some((lesson) => lesson.status === "available" && /보강/.test(lesson.type || ""));
   const hasCouponSlots = dayLessons.some((lesson) => lesson.status === "available" && lesson.type === "쿠폰 예약 가능");
   return `
     <section class="member-mobile-segment">
@@ -3438,9 +3439,9 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
               ${times.map((time, index) => {
                 const available = coachLessons.find((lesson) => lesson.status === "available" && lesson.time === time);
                 const working = isMemberCoachWorking(coach, day, time, 10);
-                const availableLabel = available?.type === "보강 신청가능" ? "보강 가능" : available?.type === "쿠폰 예약 가능" ? "쿠폰 예약 가능" : "수업 변경 가능";
-                const slotLabel = available?.type === "보강 신청가능" ? "보강" : available?.type === "쿠폰 예약 가능" ? "예약" : "+";
-                return `<button class="member-mobile-slot ${available ? "available" : working ? "busy" : "off"}" type="button" ${available ? `data-lesson="${available.id}"` : "disabled"} style="grid-row:${index + 1};" aria-label="${day}요일 ${time} ${escapeHtml(memberCoachShortName(coach.name))} ${available ? availableLabel : "신청 불가"}">${available ? slotLabel : ""}</button>`;
+                const availableLabel = /보강/.test(available?.type || "") ? "보강 가능" : available?.type === "쿠폰 예약 가능" ? "쿠폰 예약 가능" : "수업 변경 가능";
+                const slotLabel = available?.releasedRegularSlot ? "정규·보강" : /보강/.test(available?.type || "") ? "보강" : available?.type === "쿠폰 예약 가능" ? "예약" : "+";
+                return `<button class="member-mobile-slot ${available ? "available" : working ? "busy" : "off"} ${available?.releasedRegularSlot ? "released-regular-slot" : ""}" type="button" ${available ? `data-lesson="${available.id}"` : "disabled"} style="grid-row:${index + 1};" aria-label="${day}요일 ${time} ${escapeHtml(memberCoachShortName(coach.name))} ${available ? availableLabel : "신청 불가"}">${available ? slotLabel : ""}</button>`;
               }).join("")}
               ${coachLessons.filter((lesson) => lesson.status !== "available" && memberScheduleVisibleLesson(lesson, policy) && minutesFromTime(lesson.time) >= segmentStart && minutesFromTime(lesson.time) < segmentEnd).map((lesson) => {
                 const startIndex = times.indexOf(lesson.time);
@@ -3689,13 +3690,13 @@ function renderDynamicMemberSchedule() {
                   if (coachIndex < 0) return "";
                   return `
                     <button
-                      class="member-slot-bg available ${lesson.policy === "coach" ? "needs-approval" : "auto-change"}"
+                      class="member-slot-bg available ${lesson.releasedRegularSlot ? "released-regular-slot" : ""} ${lesson.policy === "coach" ? "needs-approval" : "auto-change"}"
                       type="button"
                       data-lesson="${lesson.id}"
-                      aria-label="${day}요일 ${lesson.time} ${memberCoachShortName(lessonCoach.name)} ${lesson.type === "보강 신청가능" ? "보강 신청 가능" : "수업 변경 신청 가능"}"
+                      aria-label="${day}요일 ${lesson.time} ${memberCoachShortName(lessonCoach.name)} ${/보강/.test(lesson.type || "") ? "보강 신청 가능" : "수업 변경 신청 가능"}"
                       style="grid-row:${startIndex + 1}; grid-column:${coachIndex + 1};"
                     >
-                      <span>${lesson.type === "보강 신청가능" ? "보강 가능" : "변경 가능"}</span>
+                      <span>${lesson.releasedRegularSlot ? "정규 자리 · 보강 가능" : /보강/.test(lesson.type || "") ? "보강 가능" : "변경 가능"}</span>
                     </button>`;
                 })
                 .join("")}
@@ -7275,7 +7276,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.141" });
+  const params = new URLSearchParams({ v: "1.0.142" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
