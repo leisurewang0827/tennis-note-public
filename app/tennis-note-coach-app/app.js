@@ -84,6 +84,23 @@ let noticePreviousFocus = null;
 let coachOfflineFlushPromise = null;
 let coachSyncUiState = "idle";
 let coachSyncStatusTimer = 0;
+let appToastTimer = 0;
+
+function showToast(message) {
+  let toast = document.querySelector("#appToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "appToast";
+    toast.className = "app-toast";
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    document.body.appendChild(toast);
+  }
+  toast.textContent = String(message || "");
+  toast.classList.add("is-visible");
+  window.clearTimeout(appToastTimer);
+  appToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
+}
 
 const brandSplashStartedAt = performance.now();
 const brandSplashMinimumDuration = 150;
@@ -1702,7 +1719,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.138",
+    workerUrl: "./service-worker.js?v=1.0.139",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1732,7 +1749,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.138" });
+  const params = new URLSearchParams({ v: "1.0.139" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3761,7 +3778,7 @@ async function restoreCoachLessonAbsence(entitlementId) {
 }
 
 async function processCoachNoShow(lessonId, deduct) {
-  const lesson = state.lessons.find((item) => String(item.id) === String(lessonId));
+  const lesson = (state.liveLessons || []).find((item) => String(item.id) === String(lessonId));
   const reason = $("#coachNoShowReason")?.value.trim() || "";
   if (!lesson?.serverLessonId || reason.length < 2) {
     showToast("노쇼 사유를 2자 이상 입력해 주세요.");

@@ -194,3 +194,26 @@ body.tn-unsaved-open {
     grid-template-columns: 1fr;
   }
 }
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 10050;
+  max-width: min(88vw, 420px);
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #14372e;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.app-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}

@@ -1300,6 +1300,13 @@ const adminLiveDataState = {
 };
 
 const adminLazyDataState = new Map();
+const memberSearchIndex = new Map();
+let memberSearchRenderTimer = 0;
+let adminLiveSyncPromise = null;
+
+function invalidateMemberSearchIndex() {
+  memberSearchIndex.clear();
+}
 
 function loadAdminDataOnce(key, loader) {
   const existing = adminLazyDataState.get(key);
@@ -6820,6 +6827,18 @@ function memberSearchValues(member) {
   ];
 }
 
+function normalizedMemberSearchText(member) {
+  const memberId = String(member?.serverUserId || member?.id || "");
+  const cached = memberSearchIndex.get(memberId);
+  if (cached) return cached;
+  const value = memberSearchValues(member)
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join("\n");
+  memberSearchIndex.set(memberId, value);
+  return value;
+}
+
 function memberCurrentTicket(member) {
   return ticketsForMember(member)[0];
 }
@@ -7719,9 +7738,9 @@ function filteredMembers() {
     const statusMatch = memberMatchesStatusFilter(member, state.memberFilter);
     const coachMatch = state.memberCoachFilter === "all" || member.coach === state.memberCoachFilter;
     const ticketMatch = state.memberTicketFilter === "all" || memberTicketKind(member) === state.memberTicketFilter;
-    const searchValues = memberSearchValues(member);
-    const localMatch = !localSearch || searchValues
-      .some((value) => String(value || "").toLowerCase().includes(localSearch));
+    const globalSearch = String($("#globalSearch")?.value || "").trim();
+    const searchValues = localSearch || globalSearch ? memberSearchValues(member) : [];
+    const localMatch = !localSearch || normalizedMemberSearchText(member).includes(localSearch);
     return statusMatch
       && coachMatch
       && ticketMatch
@@ -9071,7 +9090,11 @@ async function submitMemberManagementForm(event) {
       state.memberFilter = action === "deactivate" ? "inactive" : "expired";
     }
 
-    const synced = await syncAdminLiveData();
+    window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
+    closeMemberManagementModal();
+    showToast(`${memberManagementActionLabel(action)} 저장 완료`);
+
+    const synced = await syncAdminLiveData(true);
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
     if (linkedSourceSignupUserId) {
       const linkedMember = members.find((item) => memberServerUserIds(item).includes(member.serverUserId));
@@ -9083,8 +9106,6 @@ async function submitMemberManagementForm(event) {
     }
     const verificationError = memberManagementWriteVerification(action, managementPayload, result, statusAction);
     if (verificationError) throw new Error(verificationError);
-    window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
-    closeMemberManagementModal();
     const normalizedResult = normalizedRpcResult(result);
     if (action === "link_existing" && linkedTargetMemberUserId) {
       const linkedMember = members.find((item) => memberServerUserIds(item).includes(linkedTargetMemberUserId));
@@ -13419,6 +13440,11 @@ function openLessonModal(defaults = {}) {
     editScopePanel.hidden = !canEditSeries;
     const singleScope = editScopePanel.querySelector('input[name="lessonEditScope"][value="single"]');
     if (singleScope) singleScope.checked = true;
+    const resetStartInput = $("#lessonResetStartOn");
+    if (resetStartInput) {
+      resetStartInput.value = editingLesson?.lessonDate || adminWeekDateForDay(editingLesson?.day) || "";
+      resetStartInput.min = adminLocalDateKey(new Date());
+    }
   }
   const substituteButton = $("#openLessonSubstituteButton");
   if (substituteButton) {
@@ -14019,7 +14045,8 @@ async function saveLiveAdminLesson(candidate, entitlement = null) {
 }
 
 function selectedLessonEditScope() {
-  return document.querySelector('input[name="lessonEditScope"]:checked')?.value === "series" ? "series" : "single";
+  const value = document.querySelector('input[name="lessonEditScope"]:checked')?.value;
+  return value === "series" || value === "reset" ? value : "single";
 }
 
 function matchingRegularLessonSeries(editingLesson = getCurrentEditingLesson()) {
@@ -14039,17 +14066,30 @@ function syncLessonEditScopeUi() {
   const panel = $("#lessonEditScopePanel");
   if (!panel || panel.hidden || !state.editingLessonId) return;
   const scope = selectedLessonEditScope();
-  const count = scope === "series" ? Math.max(1, matchingRegularLessonSeries().length) : 1;
+  const count = scope === "series" || scope === "reset"
+    ? Math.max(1, matchingRegularLessonSeries().length)
+    : 1;
   const impact = $("#lessonEditScopeImpact");
   const saveButton = $("#saveLessonButton");
+  const resetStartField = $("#lessonResetStartField");
+  const resetStartInput = $("#lessonResetStartOn");
+
+  if (resetStartField) resetStartField.hidden = scope !== "reset";
+  if (resetStartInput) resetStartInput.required = scope === "reset";
 
   if (impact) {
-    impact.textContent = scope === "series"
+    impact.textContent = scope === "reset"
+      ? `완료된 수업은 보존하고 예정된 정규수업 ${count}건을 새 시작일부터 다시 만듭니다.`
+      : scope === "series"
       ? `선택한 날짜부터 같은 정규시간 ${count}건을 함께 변경합니다. 완료된 수업은 유지됩니다.`
       : "선택한 수업 1건만 변경하고 나머지 정규일정은 유지합니다.";
   }
   if (saveButton && !isCompletedLessonCorrectionMode()) {
-    saveButton.textContent = scope === "series" ? "이후 정규일정 저장" : "이번 수업만 저장";
+    saveButton.textContent = scope === "reset"
+      ? "정규 일정 다시 설정"
+      : scope === "series"
+        ? "이후 정규일정 저장"
+        : "이번 수업만 저장";
   }
 }
 
@@ -14083,6 +14123,29 @@ async function saveLiveAdminRegularLessonSeries(candidate) {
     "tn_admin_reschedule_regular_lesson_series",
     payload,
   );
+}
+
+async function resetLiveAdminRegularSchedule(candidate) {
+  const client = window.TennisNoteDataClient;
+  const coach = coaches.find((item) => item.id === candidate.coachId);
+  const editingLesson = getCurrentEditingLesson();
+  const startDate = $("#lessonResetStartOn")?.value || "";
+  if (!client?.rpc || !adminApprovalReady()) throw new Error("관리자 로그인 확인이 필요합니다.");
+  if (!editingLesson?.serverLessonId || !coach?.serverRoleId || !startDate) {
+    throw new Error("새 시작일과 정규수업·코치 연결을 확인해 주세요.");
+  }
+  if (!state.lessonOperationKey) {
+    state.lessonOperationKey = createAdminOperationKey("lesson-schedule-reset");
+  }
+  return client.rpc("tn_admin_reset_regular_schedule_guarded", {
+    target_lesson_id: editingLesson.serverLessonId,
+    target_lesson_date: startDate,
+    target_start_time: candidate.time,
+    target_coach_role_id: coach.serverRoleId,
+    target_duration_minutes: candidate.durationMinutes,
+    target_expected_revision: editingLesson.serverRevision ?? null,
+    target_operation_key: state.lessonOperationKey,
+  });
 }
 
 async function saveLivePastLessonCorrection(candidate, entitlement = null) {
@@ -14215,7 +14278,7 @@ async function saveLiveAdminLessonSet(candidates = []) {
 
 function expectedLiveLessonRows(ticket, candidates = []) {
   return candidates.map((candidate) => ({
-    lessonDate: adminWeekDateForDay(candidate.day),
+    lessonDate: candidate.lessonDate || adminWeekDateForDay(candidate.day),
     day: candidate.day,
     time: candidate.time,
     durationMinutes: Number(candidate.durationMinutes),
@@ -14558,6 +14621,7 @@ async function addLessonFromForm(event) {
       if (selectedEntitlement && candidates.length !== 1) throw new Error("보강 대기 한 건은 한 시간만 예약할 수 있습니다.");
       if (selectedEntitlement && manualOverride) await saveLiveAdminLesson(candidates[0], selectedEntitlement);
       else if (selectedEntitlement) await saveLiveMakeupEntitlement(candidates[0], selectedEntitlement);
+      else if (wasEditing && selectedLessonEditScope() === "reset") await resetLiveAdminRegularSchedule(candidates[0]);
       else if (wasEditing && selectedLessonEditScope() === "series") await saveLiveAdminRegularLessonSeries(candidates[0]);
       else if (wasEditing) await saveLiveAdminLesson(candidates[0]);
       else {
@@ -14572,10 +14636,13 @@ async function addLessonFromForm(event) {
         }
         await saveLiveAdminLessonSet(candidates);
       }
+      const verificationCandidates = selectedLessonEditScope() === "reset"
+        ? [{ ...candidates[0], lessonDate: $("#lessonResetStartOn")?.value || "" }]
+        : candidates;
       const synced = await syncAdminLiveData();
       if (!synced) throw new Error("admin_live_refresh_failed_after_write");
-      const verificationDetails = liveLessonWriteVerificationDetails(ticket, candidates);
-      const writeVerificationError = liveLessonWriteVerification(ticket, candidates);
+      const verificationDetails = liveLessonWriteVerificationDetails(ticket, verificationCandidates);
+      const writeVerificationError = liveLessonWriteVerification(ticket, verificationCandidates);
       if (writeVerificationError) throw new Error(writeVerificationError);
       showLessonSaveResultPanel({
         status: "good",
@@ -14624,6 +14691,9 @@ async function addLessonFromForm(event) {
         regular_series_lesson_required: "예정된 정규수업만 전체 일정으로 수정할 수 있습니다.",
         regular_series_conflict: "변경할 전체 일정 중 다른 수업과 겹치는 시간이 있습니다.",
         regular_series_outside_ticket: "변경하면 회원권 기간을 벗어나는 수업이 생깁니다. 선택일만 수정하거나 회원권 기간을 먼저 확인해 주세요.",
+        regular_schedule_rule_not_found: "연결된 정규 일정 규칙을 찾지 못했습니다. 기존 수업을 새로고침한 뒤 다시 시도해 주세요.",
+        regular_reset_start_date_invalid: "오늘 이후의 새 시작일을 선택해 주세요.",
+        regular_reset_outside_ticket: "회원권 사용기간 안에서 새 시작일을 선택해 주세요.",
         lesson_concurrent_update: "다른 화면에서 이 수업이 먼저 수정되었습니다. 최신 시간표를 불러왔으니 다시 확인해 주세요.",
         lesson_expected_revision_required: "수업의 최신 상태를 확인할 수 없습니다. 시간표를 새로고침한 뒤 다시 수정해 주세요.",
         operation_key_reused_with_different_payload: "저장 내용이 변경되었습니다. 창을 닫았다가 다시 열어 저장해 주세요.",
@@ -16658,7 +16728,7 @@ function adminWeekDateForDay(day) {
   return adminLocalDateKey(date);
 }
 
-async function syncAdminLiveData() {
+async function performAdminLiveDataSync() {
   if (adminLocalPreviewMode) return false;
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !operationsAccessReady()) return false;
@@ -17287,6 +17357,7 @@ async function syncAdminLiveData() {
       memberMembershipRecords: serverMemberMembershipRecords || [],
       substituteAssignments: serverSubstituteAssignments || [],
     });
+    invalidateMemberSearchIndex();
     saveScheduleSafetySnapshot(lessons, keepLoadedSchedule ? "protected-refresh" : "before-server-refresh");
     replaceArray(lessons, mappedLessons);
     saveScheduleSafetySnapshot(lessons, keepLoadedSchedule ? "protected-refresh" : "server-refresh");
@@ -17318,6 +17389,20 @@ async function syncAdminLiveData() {
     });
     renderDataTools();
     return false;
+  }
+}
+
+async function syncAdminLiveData(requireFresh = false) {
+  if (adminLiveSyncPromise) {
+    if (!requireFresh) return adminLiveSyncPromise;
+    await adminLiveSyncPromise;
+    return syncAdminLiveData(false);
+  }
+  adminLiveSyncPromise = performAdminLiveDataSync();
+  try {
+    return await adminLiveSyncPromise;
+  } finally {
+    adminLiveSyncPromise = null;
   }
 }
 
@@ -21162,8 +21247,11 @@ function bindEvents() {
   $("#memberListSearch")?.addEventListener("input", (event) => {
     state.memberSearch = event.target.value;
     state.memberListPage = 0;
-    state.selectedMemberId = null;
-    renderMembers();
+    window.clearTimeout(memberSearchRenderTimer);
+    memberSearchRenderTimer = window.setTimeout(() => {
+      state.selectedMemberId = null;
+      renderMembers();
+    }, 120);
   });
   $("#resetMemberFilters")?.addEventListener("click", () => {
     state.memberSearch = "";
@@ -21515,6 +21603,10 @@ function bindEvents() {
       renderLessonPreview();
       syncLessonEditScopeUi();
     });
+  });
+  $("#lessonResetStartOn")?.addEventListener("change", () => {
+    renderLessonPreview();
+    syncLessonEditScopeUi();
   });
   $("#lessonType").addEventListener("change", () => {
     syncLessonTypeFromForm();
