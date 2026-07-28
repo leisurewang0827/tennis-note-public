@@ -5990,6 +5990,7 @@ body.modal-open {
 
   .app-screen {
     padding-bottom: calc(var(--tn-bottom-nav-height) + max(18px, env(safe-area-inset-bottom)));
+    animation: none;
   }
 
   .tabbar {
@@ -6287,6 +6288,7 @@ body.modal-open {
     grid-template-columns: 1fr auto;
   }
 }
+
 /* Compact member UX: keep the primary curriculum action visible without a long link row. */
 .curriculum-hero-actions {
   display: flex;
@@ -6411,4 +6413,114 @@ body.modal-open {
 
 .connectivity-status[hidden] {
   display: none;
+}
+
+/* Compact phones: fit the full workflow without clipped horizontal strips. */
+@media (max-width: 380px) {
+  .app-screen {
+    padding-right: 8px;
+    padding-left: 8px;
+    animation: none;
+  }
+
+  .week-switcher {
+    gap: 4px;
+    padding: 7px 5px;
+  }
+
+  .week-switcher .schedule-week-arrow {
+    width: 40px;
+    min-width: 40px;
+  }
+
+  .week-switcher strong {
+    font-size: 14px;
+  }
+
+  .week-switcher span {
+    font-size: 10px;
+  }
+
+  .journal-activity-summary {
+    grid-auto-flow: initial;
+    grid-auto-columns: initial;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 3px;
+    overflow-x: visible;
+  }
+
+  .journal-activity-chip {
+    min-height: 52px;
+    padding: 6px 2px;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .journal-activity-chip span {
+    font-size: 9px;
+    text-overflow: clip;
+    white-space: normal;
+    word-break: keep-all;
+  }
+
+  .journal-activity-chip strong {
+    font-size: 15px;
+  }
+
+  .membership-product-filters {
+    padding: 9px;
+  }
+
+  .membership-filter-heading {
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .membership-filter-heading > div {
+    flex-wrap: wrap;
+    gap: 3px 6px;
+  }
+
+  .membership-filter-heading span {
+    white-space: normal;
+  }
+
+  .membership-filter-row {
+    display: grid;
+    gap: 4px;
+  }
+
+  .membership-filter-row > strong {
+    width: auto;
+  }
+
+  .membership-filter-options {
+    flex-wrap: wrap;
+    gap: 4px;
+    overflow-x: visible;
+  }
+
+  .membership-filter-chip {
+    min-height: 32px;
+    padding: 0 9px;
+    font-size: 11px;
+  }
+
+  .tabbar {
+    left: max(6px, env(safe-area-inset-left));
+    right: auto;
+    width: calc(100vw - max(6px, env(safe-area-inset-left)) - max(6px, env(safe-area-inset-right)));
+    max-width: none;
+    box-sizing: border-box;
+    transform: none;
+    -webkit-transform: none;
+    gap: 1px;
+    padding: 3px;
+  }
+
+  .tabbar .tab {
+    min-height: 46px;
+    padding-inline: 1px;
+    font-size: 9px;
+  }
 }
