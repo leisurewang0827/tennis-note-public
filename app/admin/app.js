@@ -1299,6 +1299,84 @@ const adminLiveDataState = {
   substituteAssignments: [],
 };
 
+const adminLazyDataState = new Map();
+
+function loadAdminDataOnce(key, loader) {
+  const existing = adminLazyDataState.get(key);
+  if (existing?.status === "loaded") return Promise.resolve(true);
+  if (existing?.promise) return existing.promise;
+
+  const entry = { status: "loading", promise: null };
+  entry.promise = Promise.resolve()
+    .then(loader)
+    .then(() => {
+      entry.status = "loaded";
+      entry.promise = null;
+      return true;
+    })
+    .catch((error) => {
+      entry.status = "failed";
+      entry.promise = null;
+      console.warn(`[Tennis Note] ${key} lazy load failed`, error);
+      return false;
+    });
+  adminLazyDataState.set(key, entry);
+  return entry.promise;
+}
+
+function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab) {
+  if (!operationsAccessReady()) return Promise.resolve([]);
+  const jobs = [];
+
+  if (view === "members") {
+    jobs.push(
+      loadAdminDataOnce("member-requests", () => Promise.all([
+        loadServerHoldingRequests(),
+        loadServerAccountDeletionRequests(),
+        loadMemberManagementPolicyFromServer(),
+      ])),
+    );
+  }
+
+  if (view === "settings") {
+    if (settingsTab === "membership") {
+      jobs.push(
+        loadAdminDataOnce("membership-policy", () => Promise.all([
+          loadServerHoldingPolicy(),
+          loadRefundPolicySettingsFromServer(),
+          loadPolicyVersionsFromServer(),
+          loadLessonPoliciesFromServer(),
+        ])),
+      );
+    }
+    if (settingsTab === "notifications") {
+      jobs.push(
+        loadAdminDataOnce("notification-operations", async () => {
+          await loadNotificationPolicyFromServer();
+          await loadNotificationDeliveryStatus();
+        }),
+      );
+    }
+  }
+
+  return Promise.all(jobs).then((results) => {
+    if (view === state.view) renderAdminView(view);
+    return results;
+  });
+}
+
+function ensureAdminToolData(tool) {
+  if (tool !== "data") return Promise.resolve([]);
+  return Promise.all([
+    loadAdminDataOnce("supabase-status", loadSupabaseLiveStatus),
+    loadAdminDataOnce("auth-provider-status", loadAuthProviderStatus),
+  ]).then((results) => {
+    renderSupabaseLiveStatus();
+    renderAuthProviderStatus();
+    return results;
+  });
+}
+
 const lessonRecordEditorState = {
   lessonId: "",
   journalId: "",
@@ -5854,6 +5932,7 @@ function openAdminToolsModal(tool, options = {}) {
   });
   modal.removeAttribute("hidden");
   setTimeout(() => modal.querySelector("input, select, button:not(#closeAdminToolsModal)")?.focus(), 0);
+  void ensureAdminToolData(tool);
 }
 
 function closeAdminToolsModal() {
@@ -5880,6 +5959,7 @@ function setView(view, options = {}) {
   $$(".view").forEach((section) => section.classList.remove("is-active"));
   $(`#${view}View`).classList.add("is-active");
   renderAdminView(view);
+  void ensureAdminViewData(view);
   const titles = {
     dashboard: "대시보드",
     members: operationsRole() === "coach" ? "회원 찾기" : "회원관리",
@@ -5908,6 +5988,7 @@ function openSettingsWorkspace(tab) {
   state.settingsTab = tab;
   setView("settings", { skipLock: true });
   renderSettingsTabs();
+  void ensureAdminViewData("settings", tab);
   $("#settingsView")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -17188,11 +17269,6 @@ async function syncAdminLiveData() {
     await Promise.all([
       loadLiveSchedulePolicyFromServer(),
       loadAdminLayoutSettingsFromServer(),
-      loadRefundPolicySettingsFromServer(),
-      loadServerHoldingPolicy(),
-      loadPolicyVersionsFromServer(),
-      loadLessonPoliciesFromServer(),
-      loadMemberManagementPolicyFromServer(),
       loadAdminSecuritySettingsFromServer(),
     ]);
     syncAdminScheduleWeek();
@@ -20684,6 +20760,7 @@ function bindEvents() {
     if (!button) return;
     state.settingsTab = button.dataset.settingsTab || "operation";
     renderSettingsTabs();
+    void ensureAdminViewData("settings", state.settingsTab);
     saveSnapshot();
   });
   document.addEventListener("click", (event) => {
@@ -22448,14 +22525,6 @@ window.addEventListener("resize", () => {
   }, 120);
 });
 syncPopupNoticeFromServer();
-loadNotificationPolicyFromServer().then(loadNotificationDeliveryStatus);
-loadSupabaseLiveStatus();
-loadServerHoldingRequests();
-loadServerAccountDeletionRequests();
-Promise.all([loadServerHoldingPolicy(), loadRefundPolicySettingsFromServer()])
-  .then(loadPolicyVersionsFromServer)
-  .then(loadLessonPoliciesFromServer);
-loadAuthProviderStatus();
 refreshAdminImportAuthState()
   .then(refreshAdminPendingUsers)
   .finally(hideAdminBrandSplash);
