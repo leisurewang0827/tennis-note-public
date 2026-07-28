@@ -7070,10 +7070,13 @@ button .schedule-member-lines > span {
 
 .dashboard-pager {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   justify-content: center;
   gap: 6px;
   margin-top: 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .dashboard-pager[hidden] {
@@ -7104,6 +7107,30 @@ button .schedule-member-lines > span {
   border-color: var(--green);
   color: white;
   background: var(--green);
+}
+
+.dashboard-page-number:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.dashboard-page-number:disabled:hover {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.pager-nav-button {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.dashboard-page-ellipsis {
+  display: inline-grid;
+  min-width: 24px;
+  min-height: 34px;
+  place-items: center;
+  color: var(--muted);
+  font-weight: 900;
 }
 
 .ops-card,

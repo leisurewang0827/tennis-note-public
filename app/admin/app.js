@@ -6331,17 +6331,40 @@ function normalizeDashboardPage(total, page, pageSize = dashboardPageSize) {
   return Math.min(Math.max(Number(page) || 0, 0), lastPage);
 }
 
+function compactDashboardPageIndexes(pageCount, currentPage) {
+  const lastPage = pageCount - 1;
+  const indexes = new Set([0, lastPage]);
+  const rangeStart = currentPage <= 3 ? 0 : Math.max(0, currentPage - 2);
+  const rangeEnd = currentPage >= lastPage - 3 ? lastPage : Math.min(lastPage, currentPage + 2);
+
+  for (let index = rangeStart; index <= rangeEnd; index += 1) indexes.add(index);
+
+  const sortedIndexes = [...indexes].sort((left, right) => left - right);
+  return sortedIndexes.flatMap((index, itemIndex) => {
+    const previousIndex = sortedIndexes[itemIndex - 1];
+    return itemIndex > 0 && index - previousIndex > 1 ? ["ellipsis", index] : [index];
+  });
+}
+
 function renderDashboardPager(selector, total, page, kind, pageSize = dashboardPageSize) {
   const target = $(selector);
   if (!target) return;
   const pageCount = Math.ceil(total / pageSize);
+  const currentPage = normalizeDashboardPage(total, page, pageSize);
   target.hidden = pageCount <= 1;
   target.innerHTML = pageCount <= 1
     ? ""
-    : Array.from(
-        { length: pageCount },
-        (_, index) => `<button class="dashboard-page-number ${index === page ? "is-current" : ""}" type="button" data-dashboard-page="${kind}" data-dashboard-page-index="${index}" aria-label="${index + 1}페이지" ${index === page ? 'aria-current="page"' : ""}>${index + 1}</button>`,
-      ).join("");
+    : `
+      <button class="dashboard-page-number pager-nav-button" type="button" data-dashboard-page="${kind}" data-dashboard-page-index="${currentPage - 1}" aria-label="이전 페이지" ${currentPage === 0 ? "disabled" : ""}>&lsaquo;</button>
+      ${compactDashboardPageIndexes(pageCount, currentPage)
+        .map((index) =>
+          index === "ellipsis"
+            ? '<span class="dashboard-page-ellipsis" aria-hidden="true">&hellip;</span>'
+            : `<button class="dashboard-page-number ${index === currentPage ? "is-current" : ""}" type="button" data-dashboard-page="${kind}" data-dashboard-page-index="${index}" aria-label="${index + 1}페이지" ${index === currentPage ? 'aria-current="page"' : ""}>${index + 1}</button>`,
+        )
+        .join("")}
+      <button class="dashboard-page-number pager-nav-button" type="button" data-dashboard-page="${kind}" data-dashboard-page-index="${currentPage + 1}" aria-label="다음 페이지" ${currentPage === pageCount - 1 ? "disabled" : ""}>&rsaquo;</button>
+    `;
 }
 
 function renderAdminOperations() {
