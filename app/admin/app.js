@@ -1301,11 +1301,17 @@ const adminLiveDataState = {
 
 const adminLazyDataState = new Map();
 const memberSearchIndex = new Map();
+const memberTicketsIndex = new Map();
+const ticketParticipantNamesIndex = new Map();
+let adminUserNameIndex = null;
 let memberSearchRenderTimer = 0;
 let adminLiveSyncPromise = null;
 
 function invalidateMemberSearchIndex() {
   memberSearchIndex.clear();
+  memberTicketsIndex.clear();
+  ticketParticipantNamesIndex.clear();
+  adminUserNameIndex = null;
 }
 
 function loadAdminDataOnce(key, loader) {
@@ -6659,10 +6665,18 @@ function ticketParticipantUserIds(ticket) {
 
 function ticketParticipantNames(ticket) {
   if (!ticket) return [];
+  const ticketKey = String(ticket.serverTicketId || ticket.id || "");
+  const cached = ticketKey ? ticketParticipantNamesIndex.get(ticketKey) : null;
+  if (cached) return cached;
+  if (!adminUserNameIndex) {
+    adminUserNameIndex = new Map((adminLiveDataState.users || []).map((user) => [user.id, user.name]));
+  }
   const namesById = ticketParticipantUserIds(ticket)
-    .map((userId) => (adminLiveDataState.users || []).find((user) => user.id === userId)?.name)
+    .map((userId) => adminUserNameIndex.get(userId))
     .filter(Boolean);
-  return [...new Set([...namesById, ...splitMemberNames(ticket.member)])];
+  const names = [...new Set([...namesById, ...splitMemberNames(ticket.member)])];
+  if (ticketKey) ticketParticipantNamesIndex.set(ticketKey, names);
+  return names;
 }
 
 function ticketBelongsToMember(ticket, memberReference) {
@@ -6714,9 +6728,18 @@ function ticketPriorityForMember(ticket, memberReference) {
 }
 
 function ticketsForMember(memberReference) {
-  return operationBranchTickets()
+  const memberKey = memberReference && typeof memberReference === "object"
+    ? String(memberReference.serverUserId || memberReference.id || memberReference.name || "")
+    : String(memberReference || "");
+  const branchKey = activeOperationBranchId();
+  const cacheKey = `${branchKey}|${memberKey}`;
+  const cached = memberKey ? memberTicketsIndex.get(cacheKey) : null;
+  if (cached) return cached;
+  const matches = operationBranchTickets()
     .filter((ticket) => ticketBelongsToMember(ticket, memberReference))
     .sort((left, right) => ticketPriorityForMember(right, memberReference) - ticketPriorityForMember(left, memberReference));
+  if (memberKey) memberTicketsIndex.set(cacheKey, matches);
+  return matches;
 }
 
 function memberPartnerNames(member) {
@@ -7734,12 +7757,12 @@ function memberTicketKind(member) {
 
 function filteredMembers() {
   const localSearch = String(state.memberSearch || "").trim().toLowerCase();
+  const globalSearch = String($("#globalSearch")?.value || "").trim();
   const matchingMembers = operationBranchMembers().filter((member) => {
     const statusMatch = memberMatchesStatusFilter(member, state.memberFilter);
     const coachMatch = state.memberCoachFilter === "all" || member.coach === state.memberCoachFilter;
     const ticketMatch = state.memberTicketFilter === "all" || memberTicketKind(member) === state.memberTicketFilter;
-    const globalSearch = String($("#globalSearch")?.value || "").trim();
-    const searchValues = localSearch || globalSearch ? memberSearchValues(member) : [];
+    const searchValues = globalSearch ? memberSearchValues(member) : [];
     const localMatch = !localSearch || normalizedMemberSearchText(member).includes(localSearch);
     return statusMatch
       && coachMatch
