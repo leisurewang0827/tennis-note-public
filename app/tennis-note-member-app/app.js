@@ -1665,7 +1665,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.140",
+    workerUrl: "./service-worker.js?v=1.0.141",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -4010,10 +4010,28 @@ function renderMakeupDueBanner() {
 
 function renderRequests() {
   syncMakeupRequestsFromCoach();
-  if ($("#requestCount")) $("#requestCount").textContent = `${state.makeupRequests.length}건`;
+  const bookedMakeupRequests = state.liveMakeupEntitlements
+    .filter((entitlement) => entitlement.status === "booked" && entitlement.bookedLessonId)
+    .map((entitlement) => {
+      const bookedLesson = state.liveLessons.find((lesson) => lesson.serverLessonId === entitlement.bookedLessonId) || {};
+      return {
+        id: `booked-${entitlement.id}`,
+        serverEntitlementId: entitlement.id,
+        absence: `${entitlement.lessonDate} ${entitlement.time} 불참 수업`.trim(),
+        makeup: `${bookedLesson.lessonDate || ""} ${bookedLesson.time || ""} 보강 예약`.trim(),
+        reason: entitlement.reason || "",
+        policy: "예약 시간을 잘못 선택했다면 수업 시작 전 취소할 수 있습니다.",
+        status: "보강 예약 완료",
+        cancelable: Boolean(bookedLesson.lessonDate && bookedLesson.time),
+        cancelKind: "makeup",
+      };
+    });
+  const visibleRequests = [...state.makeupRequests, ...bookedMakeupRequests]
+    .sort((left, right) => String(right.createdAt || right.makeup || "").localeCompare(String(left.createdAt || left.makeup || "")));
+  if ($("#requestCount")) $("#requestCount").textContent = `${visibleRequests.length}건`;
   if (!$("#makeupRequests")) return;
   $("#makeupRequests").innerHTML =
-    state.makeupRequests
+    visibleRequests
       .map(
         (request) => `
           <article class="request-card">
@@ -4022,6 +4040,13 @@ function renderRequests() {
             ${request.reason ? `<small>이유: ${request.reason}</small>` : ""}
             <small>${request.policy || ""}</small>
             <b>${request.status}</b>
+            ${request.cancelable ? `
+              <button
+                class="small-button"
+                type="button"
+                data-cancel-${request.cancelKind === "makeup" ? "makeup-booking" : "change-request"}="${request.cancelKind === "makeup" ? request.serverEntitlementId : request.serverRequestId}"
+              >예약 취소</button>
+            ` : ""}
           </article>`,
       )
       .join("") || memberEmptyState({
@@ -5453,6 +5478,7 @@ async function syncMemberChangeRequestsFromServer(profile = null) {
       approved: "코치 승인 완료",
       rejected: "코치 거절 · 당일 취소 차감",
       auto_approved: "자동 변경 완료",
+      cancelled: "회원 취소 완료",
     };
     state.makeupRequests = (rows || [])
       .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")))
@@ -5470,6 +5496,10 @@ async function syncMemberChangeRequestsFromServer(profile = null) {
           reason: row.reason || "이유 미입력",
           policy: row.policy_window === "auto_before_24h" ? policyDetail("auto") : policyDetail("coach"),
           status: statusLabel[row.status] || row.status,
+          rawStatus: row.status,
+          cancelable: ["pending", "approved", "auto_approved"].includes(row.status),
+          cancelKind: "change",
+          createdAt: row.created_at || "",
           source: "server",
         };
       });
@@ -7245,7 +7275,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.140" });
+  const params = new URLSearchParams({ v: "1.0.141" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7509,6 +7539,30 @@ function selectAvailableSlot(lessonId) {
   $("#makeupSlot").value = lesson.id;
   renderAvailableSlots();
   openChangeRequestModal();
+}
+
+async function cancelMemberScheduleRequest(kind, id) {
+  if (!id || !window.TennisNoteDataClient?.rpc) return;
+  const label = kind === "makeup" ? "보강 예약" : "수업 변경 요청";
+  if (!window.confirm(`${label}을 취소하고 원래 상태로 되돌릴까요?`)) return;
+  try {
+    await window.TennisNoteDataClient.rpc(
+      kind === "makeup" ? "tn_cancel_my_makeup_booking" : "tn_cancel_my_lesson_change_request",
+      kind === "makeup" ? { target_entitlement_id: id } : { target_request_id: id },
+    );
+    await syncMemberLessonsFromServer();
+    await syncMemberChangeRequestsFromServer();
+    renderAll();
+    showToast(`${label}을 취소했습니다.`);
+  } catch (error) {
+    const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
+    const message = errorText.includes("original_time_occupied")
+      ? "원래 수업 시간에 다른 수업이 들어와 자동 복원이 어렵습니다. 카카오채널로 문의해 주세요."
+      : errorText.includes("already_started") || errorText.includes("not_cancelable")
+        ? "이미 시작했거나 처리된 수업은 앱에서 취소할 수 없습니다."
+        : "취소하지 못했습니다. 새로고침 후 다시 시도해 주세요.";
+    showToast(message);
+  }
 }
 
 function changeMemberWeek(delta) {
@@ -8552,6 +8606,15 @@ function bindEvents() {
     button.addEventListener("click", () => handleSummaryAction(button.dataset.summaryAction));
   });
   $("#requestMakeup").addEventListener("click", requestMakeup);
+  $("#makeupRequests")?.addEventListener("click", (event) => {
+    const changeButton = event.target.closest("[data-cancel-change-request]");
+    if (changeButton) {
+      cancelMemberScheduleRequest("change", changeButton.dataset.cancelChangeRequest);
+      return;
+    }
+    const makeupButton = event.target.closest("[data-cancel-makeup-booking]");
+    if (makeupButton) cancelMemberScheduleRequest("makeup", makeupButton.dataset.cancelMakeupBooking);
+  });
   $("#saveJournal").addEventListener("click", saveJournal);
   $("#journalMode").addEventListener("change", renderJournalMode);
   $("#openJournalComposer")?.addEventListener("click", () => openJournalComposer(localDateKey()));

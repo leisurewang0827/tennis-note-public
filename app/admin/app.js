@@ -14536,8 +14536,18 @@ async function addLessonFromForm(event) {
         : `과거 수업 반영 완료 · ${deductedSessions}회 차감${Number.isFinite(remainingSessions) ? ` · 잔여 ${remainingSessions}회` : ""}`);
     } catch (error) {
       const errorText = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
-      if (errorText.includes("lesson_concurrent_update")) {
-        await syncAdminLiveData();
+      const occupiedConflict = errorText.includes("target_time_occupied")
+        || errorText.includes("coach_time_occupied")
+        || errorText.includes("admin_manual_exact_duplicate");
+      if (errorText.includes("lesson_concurrent_update") || occupiedConflict) {
+        const conflictDate = candidates?.[0]?.lessonDate || "";
+        if (conflictDate) {
+          state.activeAdminWeekIndex = Math.min(
+            Math.max(adminWeekOffsetForDate(conflictDate), adminScheduleMinWeekOffset),
+            adminScheduleMaxWeekOffset,
+          );
+        }
+        await syncAdminLiveData(true);
       }
       const messages = {
         past_lesson_admin_required: "관리자 계정으로만 과거 수업을 보정할 수 있습니다.",
@@ -14701,8 +14711,8 @@ async function addLessonFromForm(event) {
         coach_not_working: "담당 코치의 근무시간 안에서 선택해 주세요.",
         target_time_blocked: "브레이크타임 또는 수업 제한 시간입니다.",
         no_nearby_coach_lesson: "보강 가능 범위 밖의 시간입니다. 인접 수업과의 간격을 확인해 주세요.",
-        target_time_occupied: "담당 코치의 해당 시간이 이미 사용 중입니다.",
-        coach_time_occupied: "담당 코치의 해당 시간이 이미 사용 중입니다.",
+        target_time_occupied: "서버에 이미 등록된 수업이 있습니다. 해당 주차를 최신 상태로 열었습니다.",
+        coach_time_occupied: "서버에 이미 등록된 수업이 있습니다. 해당 주차를 최신 상태로 열었습니다.",
         daily_session_limit: "하루 이용 가능 횟수를 초과했습니다.",
         weekly_session_limit: "이번 주 이용 가능 횟수를 초과했습니다.",
         weekly_booking_day_limit: "이번 주 예약 가능 일수를 초과했습니다.",
@@ -14721,7 +14731,7 @@ async function addLessonFromForm(event) {
         lesson_expected_revision_required: "수업의 최신 상태를 확인할 수 없습니다. 시간표를 새로고침한 뒤 다시 수정해 주세요.",
         operation_key_reused_with_different_payload: "저장 내용이 변경되었습니다. 창을 닫았다가 다시 열어 저장해 주세요.",
         admin_manual_override_reason_required: "강제 처리 사유를 5자 이상 입력해 주세요.",
-        admin_manual_exact_duplicate: "같은 회원권·날짜·시간의 수업이 이미 있습니다. 기존 수업을 수정해 주세요.",
+        admin_manual_exact_duplicate: "같은 회원권·날짜·시간의 수업이 이미 있습니다. 해당 주차에서 기존 수업을 수정해 주세요.",
         admin_manual_ticket_required: "연결할 회원권을 찾지 못했습니다.",
         admin_live_refresh_failed_after_write: "저장 후 서버 시간표를 다시 불러오지 못했습니다. 중복 저장하지 말고 새로고침 후 확인해 주세요.",
         live_lesson_write_not_confirmed: "서버 저장 결과를 시간표에서 다시 확인하지 못했습니다. 중복 저장하지 말고 새로고침 후 확인해 주세요.",
