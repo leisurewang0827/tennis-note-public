@@ -5877,6 +5877,7 @@ function setView(view, options = {}) {
   $$(".nav-item").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
   $$(".view").forEach((section) => section.classList.remove("is-active"));
   $(`#${view}View`).classList.add("is-active");
+  renderAdminView(view);
   const titles = {
     dashboard: "대시보드",
     members: operationsRole() === "coach" ? "회원 찾기" : "회원관리",
@@ -9045,6 +9046,7 @@ async function loadMemberManagementPolicyFromServer() {
 }
 
 function renderMemberManagementPolicySettings() {
+  if (state.view !== "settings") return;
   const target = $("#memberManagementPolicySettings");
   if (!target) return;
   target.innerHTML = `
@@ -14736,6 +14738,7 @@ function settlementRowsForBilling(billing) {
 }
 
 function renderCoachSettlementPreview() {
+  if (!["billing", "settings"].includes(state.view)) return;
   const previewRows = $("#coachSettlementPreviewRows");
   if (previewRows) {
     const liveSettlementRows = billings
@@ -17168,14 +17171,16 @@ async function syncAdminLiveData() {
         ? `시간표 보호 모드: 기존 ${mappedLessons.length}건 유지`
         : `실서버 시간표 ${mappedLessons.length}건 동기화`,
     });
-    await loadLiveSchedulePolicyFromServer();
-    await loadAdminLayoutSettingsFromServer();
-    await loadRefundPolicySettingsFromServer();
-    await loadServerHoldingPolicy();
-    await loadPolicyVersionsFromServer();
-    await loadLessonPoliciesFromServer();
-    await loadMemberManagementPolicyFromServer();
-    await loadAdminSecuritySettingsFromServer();
+    await Promise.all([
+      loadLiveSchedulePolicyFromServer(),
+      loadAdminLayoutSettingsFromServer(),
+      loadRefundPolicySettingsFromServer(),
+      loadServerHoldingPolicy(),
+      loadPolicyVersionsFromServer(),
+      loadLessonPoliciesFromServer(),
+      loadMemberManagementPolicyFromServer(),
+      loadAdminSecuritySettingsFromServer(),
+    ]);
     syncAdminScheduleWeek();
     if (!mappedMembers.some((member) => member.id === state.selectedMemberId)) {
       state.selectedMemberId = null;
@@ -18718,6 +18723,7 @@ async function activateOperationProfile(profileId) {
 }
 
 function renderScheduleSettings() {
+  if (state.view !== "settings") return;
   const openStartInput = $("#openStartInput");
   const openEndInput = $("#openEndInput");
   if (!openStartInput || !openEndInput) return;
@@ -18915,6 +18921,7 @@ function renderPolicyVersionSettings() {
 }
 
 function renderRefundPolicySettings() {
+  if (state.view !== "settings") return;
   const target = $("#refundPolicySettings");
   if (!target) return;
   const settings = normalizeRefundPolicySettings(refundPolicySettings);
@@ -18953,6 +18960,7 @@ function renderRefundPolicySettings() {
 }
 
 function renderHoldingPolicySettings() {
+  if (state.view !== "settings") return;
   const target = $("#holdingPolicySettings");
   if (!target) return;
   target.innerHTML = `
@@ -19016,6 +19024,7 @@ async function loadServerHoldingPolicy() {
 }
 
 function renderNoticePopupSettings() {
+  if (state.view !== "settings") return;
   const target = $("#noticePopupSettings");
   if (!target) return;
   const notices = popupNotices();
@@ -19160,6 +19169,7 @@ function notificationDateTimeLabel(value = "") {
 }
 
 function renderNotificationPolicySettings() {
+  if (state.view !== "settings") return;
   const target = $("#notificationPolicySettings");
   if (!target) return;
   const policy = normalizeNotificationPolicy(notificationPolicySettings);
@@ -19580,6 +19590,7 @@ function adminLayoutRowMarkup(item, kind, index, count, group = "") {
 }
 
 function renderAdminLayoutSettings() {
+  if (state.view !== "settings") return;
   applyAdminLayoutSettings();
   const target = $("#adminLayoutSettingsPanel");
   const status = $("#adminLayoutSaveStatus");
@@ -19741,6 +19752,7 @@ async function saveAdminLayoutSettings() {
 }
 
 function renderSettingsTabs() {
+  if (state.view !== "settings") return;
   const active = ["operation", "membership", "notifications", "coach", "layout", "security"].includes(state.settingsTab) ? state.settingsTab : "operation";
   const membershipSection = state.membershipSettingsSection === "discounts" ? "discounts" : "products";
   state.settingsTab = active;
@@ -19765,6 +19777,7 @@ function renderSettingsTabs() {
 }
 
 function renderAdminSecurity() {
+  if (state.view !== "settings") return;
   $$(".nav-item").forEach((button) => {
     const view = button.dataset.view || "";
     const locked = isAdminViewLocked(view);
@@ -19903,6 +19916,7 @@ function renderServiceReadiness() {
       .join("");
   }
 
+  if (state.view !== "settings") return;
   renderPaymentSetup();
 
   const productCards = $("#productSettingCards");
@@ -20354,21 +20368,68 @@ function renderAuthProviderStatus() {
 
 function renderAll() {
   renderActiveOperationBranchContext();
-  renderMetrics();
-  renderCourtControls();
-  renderDashboard();
-  renderAdminOperations();
-  renderMembers();
-  renderHoldingRequestAdminList();
-  renderAccountDeletionAdminList();
-  renderSchedule();
-  renderMakeups();
-  renderTickets();
-  renderBilling();
-  renderNotes();
-  renderCommunity();
-  renderRackettime();
-  renderReports();
+  renderOperationsLoginGate();
+  renderSupabaseLiveStatus();
+  renderAuthProviderStatus();
+  renderServiceReadiness();
+  renderDataTools();
+  renderGlobalSearchResults();
+  if (!operationsAccessReady()) {
+    saveSnapshot();
+    return;
+  }
+  renderAdminView(state.view);
+  saveSnapshot();
+}
+
+function renderAdminView(view = state.view) {
+  if (!operationsAccessReady()) return;
+  const activeView = view === "makeup"
+    ? "schedule"
+    : view === "reports"
+      ? "dashboard"
+      : view;
+
+  if (activeView === "dashboard") {
+    renderMetrics();
+    renderCourtControls();
+    renderDashboard();
+    renderAdminOperations();
+    renderReports();
+    return;
+  }
+
+  if (activeView === "members") {
+    renderMembers();
+    renderHoldingRequestAdminList();
+    renderAccountDeletionAdminList();
+    return;
+  }
+
+  if (activeView === "schedule") {
+    renderCourtControls();
+    renderSchedule();
+    renderMakeups();
+    return;
+  }
+
+  if (activeView === "billing") {
+    renderTickets();
+    renderBilling();
+    renderCoachSettlementPreview();
+    return;
+  }
+
+  if (activeView === "notes") {
+    renderNotes();
+    return;
+  }
+
+  if (activeView === "issues") {
+    return;
+  }
+
+  if (activeView !== "settings") return;
   renderCoaches();
   renderScheduleSettings();
   renderRefundPolicySettings();
@@ -20380,18 +20441,16 @@ function renderAll() {
   renderAdminLayoutSettings();
   renderAdminSecurity();
   renderServiceReadiness();
-  renderSupabaseLiveStatus();
-  renderAuthProviderStatus();
   renderCoachSettlementPreview();
-  renderDataTools();
-  renderGlobalSearchResults();
-  saveSnapshot();
 }
 
 let adminLiveScheduleRefreshTimer = 0;
 let adminLiveScheduleRefreshInFlight = false;
+let adminLiveScheduleLastRefreshAt = 0;
 let scheduleSessionInitialized = false;
 const adminLiveRefreshViews = new Set(["dashboard", "members", "schedule", "billing", "notes"]);
+const ADMIN_LIVE_REFRESH_INTERVAL_MS = 60_000;
+const ADMIN_LIVE_REFRESH_STALE_MS = 30_000;
 
 function resetScheduleEntryState() {
   // The saved browser snapshot may contain a coach-only or pending-only view.
@@ -20405,6 +20464,7 @@ function resetScheduleEntryState() {
 }
 
 async function refreshAdminLiveSchedule(options = {}) {
+  const force = options.force === true;
   if (
     adminLiveScheduleRefreshInFlight
     || document.hidden
@@ -20412,6 +20472,7 @@ async function refreshAdminLiveSchedule(options = {}) {
     || !operationsAccessReady()
     || !$("#lessonModal")?.hidden
     || !$("#memberManagementModal")?.hidden
+    || (!force && Date.now() - adminLiveScheduleLastRefreshAt < ADMIN_LIVE_REFRESH_STALE_MS)
   ) return false;
 
   adminLiveScheduleRefreshInFlight = true;
@@ -20424,6 +20485,7 @@ async function refreshAdminLiveSchedule(options = {}) {
       else if (state.view === "notes") renderNotes();
       else renderDashboard();
     }
+    if (synced) adminLiveScheduleLastRefreshAt = Date.now();
     return synced;
   } finally {
     adminLiveScheduleRefreshInFlight = false;
@@ -20438,7 +20500,7 @@ function installAdminLiveScheduleRefresh() {
     if (!document.hidden) refresh();
   });
   renderCustomLessonColorRules();
-  adminLiveScheduleRefreshTimer = window.setInterval(refresh, 20_000);
+  adminLiveScheduleRefreshTimer = window.setInterval(refresh, ADMIN_LIVE_REFRESH_INTERVAL_MS);
 }
 
 function bindEvents() {
