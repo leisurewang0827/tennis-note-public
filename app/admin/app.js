@@ -13241,7 +13241,7 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
     $("#lessonQuickGuide").textContent = state.quickLessonEdit
       ? completedCorrection
         ? "완료 기록과 피드백은 유지됩니다. 잘못된 코치·요일·시간·수업시간만 바로잡으세요."
-        : "코치·요일·시간을 바꾸고 적용 범위를 선택해 저장하세요."
+        : "요일·시간·코치·수업 길이를 바꾸고 아래에서 적용 범위를 선택하세요."
       : requiredCount > 1
         ? `주 ${requiredCount}회 회원권은 나머지 요일과 시간을 모두 선택해야 합니다.`
         : quickTicketSummary || "회원 검색 후 회원권을 확인하고 저장하세요.";
@@ -13250,8 +13250,9 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   if (toggle) {
     toggle.hidden = completedCorrection || (state.quickLessonEntry && requiredCount > 1);
     toggle.setAttribute("aria-expanded", String(expanded));
-    toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "수정 범위 설정" : "상세 설정";
+    toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "추가 작업" : "상세 설정";
   }
+  syncLessonEditScopeUi();
 }
 
 function openLessonModal(defaults = {}) {
@@ -13442,6 +13443,7 @@ function openLessonModal(defaults = {}) {
   renderLessonAbsenceRestorePanel();
   $("#lessonModal").hidden = false;
   renderLessonPreview();
+  syncLessonEditScopeUi();
   (state.quickLessonEntry ? $("#lessonMemberSearch") : state.quickLessonEdit ? $("#lessonTime") : $("#lessonMember"))?.focus();
 }
 
@@ -14018,6 +14020,37 @@ async function saveLiveAdminLesson(candidate, entitlement = null) {
 
 function selectedLessonEditScope() {
   return document.querySelector('input[name="lessonEditScope"]:checked')?.value === "series" ? "series" : "single";
+}
+
+function matchingRegularLessonSeries(editingLesson = getCurrentEditingLesson()) {
+  if (!editingLesson) return [];
+  const sourceDate = editingLesson.lessonDate || adminWeekDateForDay(editingLesson.day);
+  return lessons.filter((lesson) => (
+    String(lesson.ticketId || lesson.serverTicketId || "") === String(editingLesson.ticketId || editingLesson.serverTicketId || "")
+    && normalizeLessonSource(lesson.lessonSource) === "regular"
+    && lessonStatusValue(lesson) === "scheduled"
+    && (lesson.lessonDate || adminWeekDateForDay(lesson.day)) >= sourceDate
+    && lesson.day === editingLesson.day
+    && lesson.time === editingLesson.time
+  ));
+}
+
+function syncLessonEditScopeUi() {
+  const panel = $("#lessonEditScopePanel");
+  if (!panel || panel.hidden || !state.editingLessonId) return;
+  const scope = selectedLessonEditScope();
+  const count = scope === "series" ? Math.max(1, matchingRegularLessonSeries().length) : 1;
+  const impact = $("#lessonEditScopeImpact");
+  const saveButton = $("#saveLessonButton");
+
+  if (impact) {
+    impact.textContent = scope === "series"
+      ? `선택한 날짜부터 같은 정규시간 ${count}건을 함께 변경합니다. 완료된 수업은 유지됩니다.`
+      : "선택한 수업 1건만 변경하고 나머지 정규일정은 유지합니다.";
+  }
+  if (saveButton && !isCompletedLessonCorrectionMode()) {
+    saveButton.textContent = scope === "series" ? "이후 정규일정 저장" : "이번 수업만 저장";
+  }
 }
 
 async function saveLiveAdminRegularLessonSeries(candidate) {
@@ -21475,6 +21508,13 @@ function bindEvents() {
     state.pinnedLessonTime = "";
     refreshLessonExtraTimeOptions();
     renderLessonPreview();
+    syncLessonEditScopeUi();
+  });
+  $$('input[name="lessonEditScope"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      renderLessonPreview();
+      syncLessonEditScopeUi();
+    });
   });
   $("#lessonType").addEventListener("change", () => {
     syncLessonTypeFromForm();

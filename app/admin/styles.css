@@ -8196,26 +8196,42 @@ button .schedule-member-lines > span {
 .lesson-edit-scope-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .lesson-edit-scope-options label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
   min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: white;
-  font-weight: 800;
+  cursor: pointer;
 }
 
 .lesson-edit-scope-options input {
-  width: 17px;
-  height: 17px;
-  margin: 0;
-  accent-color: var(--green);
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lesson-edit-scope-options span {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  padding: 8px 10px;
+  border: 1px solid #cbded5;
+  border-radius: 6px;
+  color: #285244;
+  background: white;
+  font-weight: 900;
+  text-align: center;
+}
+
+.lesson-edit-scope-options input:checked + span {
+  border-color: var(--green);
+  color: white;
+  background: var(--green);
+}
+
+#lessonEditScopeImpact {
+  color: #426357;
+  line-height: 1.45;
 }
 
 .schedule-round-label {

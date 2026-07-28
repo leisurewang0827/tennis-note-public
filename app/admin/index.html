@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.137" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.137" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.138" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.138" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1227,10 +1227,10 @@
           <section id="lessonEditScopePanel" class="lesson-edit-scope" hidden>
             <strong>변경 범위</strong>
             <div class="lesson-edit-scope-options" role="radiogroup" aria-label="정규수업 변경 범위">
-              <label><input type="radio" name="lessonEditScope" value="single" checked /> 선택한 날짜만</label>
-              <label><input type="radio" name="lessonEditScope" value="series" /> 이 날짜부터 정규일정 전체</label>
+              <label><input type="radio" name="lessonEditScope" value="single" checked /><span>이번 수업만</span></label>
+              <label><input type="radio" name="lessonEditScope" value="series" /><span>이후 정규일정</span></label>
             </div>
-            <small>완료된 지난 수업은 바꾸지 않습니다.</small>
+            <small id="lessonEditScopeImpact">선택한 수업 1건만 변경합니다.</small>
           </section>
 
           <section id="lessonPastCorrectionPanel" class="lesson-past-correction-panel" hidden>
@@ -1555,15 +1555,15 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.137"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.138"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.137"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.137"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.137"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.137"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.137"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.138"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.138"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.138"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.138"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.138"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.137"></script>
+    <script src="./app.js?v=1.0.138"></script>
   </body>
 </html>
