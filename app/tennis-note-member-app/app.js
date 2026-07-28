@@ -1638,7 +1638,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.131",
+    workerUrl: "./service-worker.js?v=1.0.132",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2543,7 +2543,7 @@ function memberBookableRegularTickets() {
         ticketId: ticket.id,
         coach_role_id: ticket.coachRoleId,
         coachRoleId: ticket.coachRoleId,
-        coach: coach?.name || "담당 코치",
+        coach: coach?.name || "코치 자동 배정",
         member: currentMemberName(),
         type: "첫 정규시간 설정",
         ticketTitle: ticket.title || "정규 회원권",
@@ -2591,7 +2591,11 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
     if (!lessonDate) return;
     if (sourceLesson.startsOn && lessonDate < sourceLesson.startsOn) return;
     if (sourceLesson.expiresOn && lessonDate > sourceLesson.expiresOn) return;
-    const coaches = memberDayCoaches(day, policy, scheduleLessons).filter((coach) => coach.id === sourceCoach.id);
+    const coaches = memberDayCoaches(day, policy, scheduleLessons).filter((coach) => (
+      isRegularInitialBooking && !sourceLesson.coachRoleId
+        ? true
+        : coach.id === sourceCoach.id
+    ));
     coaches.forEach((coach) => {
       memberCoachBookableTimes(coach, day).forEach((time) => {
         if (new Date(`${lessonDate}T${time}:00`).getTime() <= Date.now()) return;
@@ -2612,7 +2616,7 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
           day,
           time,
           coach: coach.name,
-          coachRoleId: sourceLesson.coach_role_id || sourceLesson.coachRoleId || "",
+          coachRoleId: sourceLesson.coach_role_id || sourceLesson.coachRoleId || coach.serverRoleId || coach.id || "",
           lessonDate,
           member: "",
           type: isMakeupDue ? "보강 신청가능" : isCouponBooking ? "쿠폰 예약 가능" : "수업 변경 신청가능",
@@ -2680,7 +2684,9 @@ function memberAvailableSlotsForSelectedLesson() {
   const scheduleLessons = memberScheduleLessons();
   const selectedLesson = scheduleLessons.find((lesson) => lesson.id === selectedId) || currentScheduledLessonsForChange().find((lesson) => lesson.id === selectedId);
   const options = scheduleLessons.concat(generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson));
-  const selectedCoachId = selectedLesson ? memberLessonCoach(selectedLesson, loadAdminSchedulePolicy()).id : "";
+  const selectedCoachId = selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId
+    ? ""
+    : selectedLesson ? memberLessonCoach(selectedLesson, loadAdminSchedulePolicy()).id : "";
   return options.filter((lesson) => {
     if (lesson.status !== "available") return false;
     if (!selectedCoachId) return true;
@@ -7215,7 +7221,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.131" });
+  const params = new URLSearchParams({ v: "1.0.132" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7466,6 +7472,11 @@ function selectAvailableSlot(lessonId) {
     if (existingIndex >= 0) {
       selected.splice(existingIndex, 1);
     } else {
+      const differentCoachSelected = selected.some((id) => {
+        const selectedLesson = memberScheduleOptions().find((item) => item.id === id);
+        return String(selectedLesson?.coachRoleId || "") !== String(lesson.coachRoleId || "");
+      });
+      if (differentCoachSelected) selected.splice(0, selected.length);
       const sameDayIndex = selected.findIndex((id) => (
         memberScheduleOptions().find((item) => item.id === id)?.day === lesson.day
       ));
@@ -8271,6 +8282,7 @@ async function requestMakeup() {
           lessonDate: lesson.lessonDate || memberScheduleDateForDay(lesson.day),
           startTime: lesson.time,
           durationMinutes: Number(lesson.durationMinutes) || Number(absence.durationMinutes) || 20,
+          coachRoleId: lesson.coachRoleId || "",
         }));
       if (isRegularInitialBooking && regularSchedules.length !== Math.max(1, Number(absence.frequencyPerWeek) || 1)) {
         throw new Error("regular_schedule_count_mismatch");
@@ -8344,6 +8356,8 @@ async function requestMakeup() {
         initial_regular_schedule_already_exists: "이미 정규시간이 설정된 회원권입니다. 수업 변경을 이용해주세요.",
         regular_ticket_required: "사용 가능한 정규 회원권을 다시 확인해주세요.",
         regular_schedule_day_duplicate: "같은 요일은 한 번만 선택할 수 있습니다.",
+        regular_schedule_single_coach_required: "주간 정규시간은 같은 코치로 선택해주세요.",
+        coach_role_required: "선택한 시간의 코치를 확인할 수 없습니다. 다시 선택해주세요.",
         coach_role_inactive: "담당 코치가 현재 근무 중이 아닙니다. 관리자에게 문의해주세요.",
         change_reason_required: "변경 이유를 2자 이상 입력해주세요.",
         lesson_already_started: "이미 시작한 수업은 변경할 수 없습니다.",
