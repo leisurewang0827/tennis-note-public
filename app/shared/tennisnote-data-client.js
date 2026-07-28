@@ -911,11 +911,17 @@
     if (profile?.id) {
       try {
         const coachRows = await selectRows("tn_coach_roles", {
-          select: "id,user_id,branch_id,display_name,status",
+          select: "id,user_id,branch_id,display_name,status,employment_status,archived_at,deleted_at",
           filters: { user_id: profile.id, status: "approved" },
           limit: 1,
         });
-        coachRole = coachRows?.[0] || null;
+        const candidate = coachRows?.[0] || null;
+        coachRole = candidate
+          && (candidate.employment_status || "active") === "active"
+          && !candidate.archived_at
+          && !candidate.deleted_at
+          ? candidate
+          : null;
       } catch (error) {
         coachRole = null;
       }

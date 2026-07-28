@@ -494,7 +494,7 @@ async function syncCoachLessonsFromServer() {
         limit: 2000,
       }).catch(() => []),
       client.selectRows("tn_users", { select: "id,name,phone,birth_year,neighborhood,gender,role,member_kind,status,profile_photo_url,self_ntrp,coach_ntrp,ntrp_requested_at,ntrp_survey,tennis_goal,play_style_memo", limit: 1000 }).catch(() => []),
-      client.selectRows("tn_coach_roles", { select: "id,display_name,color,status", limit: 100 }).catch(() => []),
+      client.selectRows("tn_coach_roles", { select: "id,display_name,color,status,employment_status,archived_at,deleted_at", limit: 100 }).catch(() => []),
       client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,created_at", limit: 1000 }).catch(() => []),
       client.selectRows("tn_membership_products", { select: "id,name,group_size,lesson_minutes", limit: 200 }).catch(() => []),
       client.selectRows("tn_lesson_records", { select: "lesson_id,deducted_sessions,completed_at", limit: 1000 }).catch(() => []),
@@ -554,7 +554,14 @@ async function syncCoachLessonsFromServer() {
       ? scheduleFeedRows
       : directLessonRows;
     const usersById = new Map((userRows || []).map((user) => [user.id, user.name]));
-    const coachesById = new Map((coachRows || []).map((coach) => [coach.id, coach]));
+    const coachesById = new Map((coachRows || [])
+      .filter((coach) => (
+        coach.status === "approved"
+        && (coach.employment_status || "active") === "active"
+        && !coach.archived_at
+        && !coach.deleted_at
+      ))
+      .map((coach) => [coach.id, coach]));
     if (currentProfile?.coachRole?.id && !coachesById.has(currentProfile.coachRole.id)) {
       coachesById.set(currentProfile.coachRole.id, currentProfile.coachRole);
     }
@@ -1198,7 +1205,14 @@ function approvedCoachesFromAdmin() {
     const snapshot = readAdminSnapshot();
     const adminCoaches = Array.isArray(snapshot?.coaches) ? snapshot.coaches : [];
     const approved = adminCoaches
-      .filter((coach) => coach.status === "active" && coach.coachMode === "approved" && coach.name !== "무인")
+      .filter((coach) => (
+        coach.status === "active"
+        && coach.coachMode === "approved"
+        && (coach.employmentStatus || "active") === "active"
+        && !coach.archivedAt
+        && !coach.deletedAt
+        && coach.name !== "무인"
+      ))
       .map((coach) => ({ id: coach.id, name: coach.name, role: coach.role || "레슨" }));
     if (approved.length) return approved;
   } catch {
@@ -1280,6 +1294,40 @@ function resolveLiveSchedulePolicyForBranch(value = {}, branchId = "") {
   };
 }
 
+function filterSchedulePolicyByLiveCoachRoles(value = {}, coachRows = []) {
+  const activeRoles = (coachRows || []).filter((role) => (
+    role.status === "approved"
+    && (role.employment_status || "active") === "active"
+    && !role.archived_at
+    && !role.deleted_at
+  ));
+  const activeIds = new Set(activeRoles.map((role) => String(role.id)));
+  const activeNames = new Set(activeRoles.map((role) => String(role.display_name || "").trim()).filter(Boolean));
+  const filterCoaches = (coaches = []) => (Array.isArray(coaches) ? coaches : [])
+    .filter((coach) => (
+      coach.serverRoleId
+        ? activeIds.has(String(coach.serverRoleId))
+        : activeNames.has(String(coach.name || "").trim())
+    ))
+    .map((coach) => ({
+      ...coach,
+      status: "active",
+      employmentStatus: "active",
+      archivedAt: "",
+      deletedAt: "",
+    }));
+  return {
+    ...(value || {}),
+    coaches: filterCoaches(value?.coaches),
+    operationProfiles: Array.isArray(value?.operationProfiles)
+      ? value.operationProfiles.map((profile) => ({
+        ...profile,
+        coaches: filterCoaches(profile?.coaches),
+      }))
+      : [],
+  };
+}
+
 function writeLiveSchedulePolicySnapshot(value = {}, branchId = "") {
   if (!value || typeof value !== "object") return false;
   const existing = readAdminSnapshot() || {};
@@ -1295,7 +1343,7 @@ function writeLiveSchedulePolicySnapshot(value = {}, branchId = "") {
       breakRules: Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : existing.scheduleSettings?.breakRules || [],
       coachWorkPolicyVersion: scheduleSettings.coachWorkPolicyVersion || 2,
     },
-    coaches: coaches.length ? coaches : existing.coaches || [],
+    coaches,
     operationPolicyBranchId: resolved.branchId || "",
   }));
   return true;
@@ -1305,12 +1353,21 @@ async function syncLiveSchedulePolicy(branchId = "") {
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready || !client.selectRows) return false;
   try {
-    const rows = await client.selectRows("tn_admin_settings", {
-      select: "key,value,updated_at",
-      filters: { key: liveSchedulePolicyKey },
-      limit: 1,
-    });
-    return writeLiveSchedulePolicySnapshot(rows?.[0]?.value, branchId);
+    const [rows, coachRows] = await Promise.all([
+      client.selectRows("tn_admin_settings", {
+        select: "key,value,updated_at",
+        filters: { key: liveSchedulePolicyKey },
+        limit: 1,
+      }),
+      client.selectRows("tn_coach_roles", {
+        select: "id,branch_id,display_name,status,employment_status,archived_at,deleted_at",
+        limit: 100,
+      }),
+    ]);
+    return writeLiveSchedulePolicySnapshot(
+      filterSchedulePolicyByLiveCoachRoles(rows?.[0]?.value, coachRows),
+      branchId,
+    );
   } catch (error) {
     return false;
   }
@@ -1477,8 +1534,8 @@ function loadCoachSchedulePolicy() {
     if (!snapshot) return fallback;
     const scheduleSettings = snapshot.scheduleSettings || {};
     const storedPolicyVersion = Number(scheduleSettings.coachWorkPolicyVersion) || 0;
-    const savedCoaches = storedPolicyVersion >= 2 && Array.isArray(snapshot.coaches) && snapshot.coaches.length ? snapshot.coaches : fallback.coaches;
-    const coaches = savedCoaches.concat(fallback.coaches.filter((fallbackCoach) => !savedCoaches.some((coach) => coach.id === fallbackCoach.id)));
+    const savedCoaches = storedPolicyVersion >= 2 && Array.isArray(snapshot.coaches) ? snapshot.coaches : fallback.coaches;
+    const coaches = savedCoaches;
     return {
       openStart: storedPolicyVersion < 2 ? fallback.openStart : scheduleSettings.openStart || fallback.openStart,
       openEnd: storedPolicyVersion < 2 ? fallback.openEnd : scheduleSettings.openEnd || fallback.openEnd,
@@ -1486,7 +1543,13 @@ function loadCoachSchedulePolicy() {
       lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
       lessonColorRules: Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : [],
       coaches: coaches
-        .filter((coach) => (coach.status || "active") === "active" && coach.name !== "무인")
+        .filter((coach) => (
+          (coach.status || "active") === "active"
+          && (coach.employmentStatus || "active") === "active"
+          && !coach.archivedAt
+          && !coach.deletedAt
+          && coach.name !== "무인"
+        ))
         .map(normalizeCoachPolicyItem),
     };
   } catch {

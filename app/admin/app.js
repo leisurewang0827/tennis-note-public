@@ -2394,6 +2394,10 @@ function currentOperationCoachPolicies() {
     serverRoleId: coach.serverRoleId || "",
     branchId: coach.branchId || "",
     name: coach.name,
+    status: coach.status || "active",
+    employmentStatus: coach.employmentStatus || "active",
+    archivedAt: coach.archivedAt || "",
+    deletedAt: coach.deletedAt || "",
     color: coach.color || "",
     availableDays: cloneOperationProfileValue(Array.isArray(coach.availableDays) ? coach.availableDays : []),
     availableStart: coach.availableStart || "",
@@ -2787,6 +2791,9 @@ function liveSchedulePolicyPayload() {
       branchId: coach.branchId || "",
       name: coach.name,
       status: coach.status || "active",
+      employmentStatus: coach.employmentStatus || "active",
+      archivedAt: coach.archivedAt || "",
+      deletedAt: coach.deletedAt || "",
       color: coach.color || "",
       availableDays: Array.isArray(coach.availableDays) ? coach.availableDays : [],
       availableStart: coach.availableStart || "",
@@ -16464,7 +16471,7 @@ async function syncAdminLiveData() {
     const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       client.selectRows("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", limit: 500 }),
-      client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision", limit: 100 })
+      client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
       client.selectRows("tn_coach_availability", { select: "id,coach_role_id,day_of_week,start_time,end_time,availability_type,note", limit: 1000 }).catch(() => []),
       fullAdminAccess ? client.selectRows("tn_user_auth_links", { select: "id,user_id,provider,last_sign_in_at,is_primary", limit: 500 }).catch(() => []) : Promise.resolve([]),
@@ -16559,6 +16566,7 @@ async function syncAdminLiveData() {
       coach.employmentStartedOn = role.employment_started_on || "";
       coach.employmentEndedOn = role.employment_ended_on || "";
       coach.archivedAt = role.archived_at || "";
+      coach.deletedAt = role.deleted_at || "";
       coach.authProviders = authProvidersFromLinks(authLinks);
       coach.authSwitch = (serverAuthSwitches || []).find((item) => item.user_id === role.user_id && item.status === "pending") || null;
       coach.lastSignInAt = authLinks.map((link) => link.last_sign_in_at).filter(Boolean).sort().at(-1) || "";
@@ -18185,6 +18193,7 @@ function renderCoachStaffModal() {
       <button type="button" data-coach-staff-state="${draft.approvalStatus === "approved" ? "disabled" : "approved"}">${draft.approvalStatus === "approved" ? "코치 승인 해제" : "코치 승인"}</button>
       <button type="button" data-coach-staff-state="${draft.employmentStatus === "active" ? "ended" : "restored"}">${draft.employmentStatus === "active" ? "근무 종료" : "근무 복원"}</button>
       ${draft.employmentStatus === "archived" ? "" : '<button type="button" data-coach-staff-state="archived">목록에서 숨기기(보관)</button>'}
+      <button type="button" data-delete-coach-staff>코치 삭제</button>
     ` : "";
     $("#coachStaffMoreMenu").hidden = !existing || operationsRole() !== "admin";
   }
@@ -18444,6 +18453,9 @@ async function setCoachStaffState(targetState) {
     ) {
       throw new Error("coach_staff_state_verification_failed");
     }
+    updateActiveOperationProfileFromCurrent();
+    const snapshotStatus = await syncLiveSchedulePolicyToServer();
+    if (snapshotStatus === "conflict") await loadLiveSchedulePolicyFromServer();
     window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
     closeCoachStaffModal();
     renderCoaches();
@@ -18462,8 +18474,39 @@ async function setCoachStaffState(targetState) {
   }
 }
 
+async function deleteCoachStaff() {
+  const draft = coachStaffEditorState.draft;
+  const client = window.TennisNoteDataClient;
+  if (!draft?.coachRoleId || !client?.rpc || operationsRole() !== "admin") return;
+  if (!window.confirm(`${draft.name} 코치를 삭제할까요?\n현재 앱과 시간표에서는 제외하고 과거 수업·정산 기록은 보존합니다.`)) return;
+  try {
+    const result = await client.rpc("tn_admin_delete_coach_staff", {
+      target_coach_role_id: draft.coachRoleId,
+    });
+    await syncAdminLiveData();
+    const saved = coaches.find((coach) => coach.serverRoleId === draft.coachRoleId);
+    if (!saved?.deletedAt || saved.approvalStatus !== "disabled") {
+      throw new Error("coach_staff_delete_verification_failed");
+    }
+    updateActiveOperationProfileFromCurrent();
+    const snapshotStatus = await syncLiveSchedulePolicyToServer();
+    if (snapshotStatus === "conflict") await loadLiveSchedulePolicyFromServer();
+    window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
+    closeCoachStaffModal();
+    renderCoaches();
+    renderSchedule();
+    const futureCount = Number(result?.futureLessonCount) || 0;
+    showToast(futureCount
+      ? `코치를 삭제했습니다. 남은 예정 수업 ${futureCount}건은 재배정이 필요합니다.`
+      : "코치를 삭제했습니다.");
+  } catch (error) {
+    coachStaffEditorState.message = `코치 삭제 실패: ${error?.payload?.code || error?.message || "server_error"}`;
+    renderCoachStaffModal();
+  }
+}
+
 function renderCoaches() {
-  const branchCoaches = operationBranchCoaches();
+  const branchCoaches = operationBranchCoaches().filter((coach) => !coach.deletedAt);
   const activeCoaches = branchCoaches.filter((coach) => (
     (coach.employmentStatus || "active") === "active" && !coach.archivedAt
   ));
@@ -20388,6 +20431,10 @@ function bindEvents() {
     const stateButton = event.target.closest("[data-coach-staff-state]");
     if (stateButton) {
       await setCoachStaffState(stateButton.dataset.coachStaffState);
+      return;
+    }
+    if (event.target.closest("[data-delete-coach-staff]")) {
+      await deleteCoachStaff();
       return;
     }
     const listFilterButton = event.target.closest("[data-coach-staff-filter]");
