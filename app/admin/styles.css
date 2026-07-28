@@ -9263,10 +9263,43 @@ button .schedule-member-lines > span {
   font-size: 12px;
 }
 
+.registration-stage-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.registration-stage-card.is-link_required {
+  border-color: #efb566;
+  background: #fff8ed;
+}
+
+.registration-stage-card.is-pending {
+  border-color: #9acabc;
+  background: #f2faf6;
+}
+
+.registration-stage-card .auth-link-actions {
+  display: block;
+}
+
+.registration-stage-card .auth-link-actions button {
+  min-width: 132px;
+}
+
 .auth-link-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .registration-stage-card {
+    grid-template-columns: 1fr;
+  }
+
+  .registration-stage-card .auth-link-actions button {
+    width: 100%;
+  }
 }
 
 .admin-pending-users-panel {

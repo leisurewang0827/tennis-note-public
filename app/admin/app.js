@@ -6628,7 +6628,7 @@ function memberListStatus(member) {
 function memberStatusLabel(member) {
   const status = memberListStatus(member);
   if (status === "inactive") return "삭제회원";
-  if (status === "pending") return "가입서·결제대기";
+  if (status === "pending") return memberRegistrationStage(member)?.label || "가입 대기";
   if (status === "journal") return "운동노트 회원";
   return status === "expired" ? "만료회원" : "수강중";
 }
@@ -7152,16 +7152,64 @@ function renderMemberAuthLinkCard(member) {
   </section>`;
 }
 
+function memberRegistrationStage(member = {}) {
+  const ticket = memberCurrentTicket(member);
+  const record = member.memberRecord || null;
+  const enrollmentStatus = String(member.enrollment?.status || "");
+  const hasEnrollment = Boolean(member.enrollment);
+  const hasVerifiedPayment = Boolean(member.unlinkedVerifiedPayment);
+
+  if (ticket && ["active", "paused"].includes(String(ticket.status || "")) && Number(ticket.remaining) > 0) {
+    return {
+      code: "completed",
+      label: "등록 완료",
+      detail: "회원권과 수업 정보가 연결되어 있습니다.",
+      action: "",
+      actionLabel: "",
+    };
+  }
+  if (member.authLinked && hasEnrollment && !record) {
+    return {
+      code: "link_required",
+      label: "연결 필요",
+      detail: "앱 가입 정보와 기존 수강 DB를 확인해 연결해 주세요.",
+      action: "link_existing",
+      actionLabel: "기존 회원 연결",
+    };
+  }
+  if (hasVerifiedPayment) {
+    return {
+      code: "pending",
+      label: "가입 대기",
+      detail: "결제는 확인됐으며 회원권 발급이 필요합니다.",
+      action: "assign",
+      actionLabel: "회원권 발급",
+    };
+  }
+  if (record || hasEnrollment || ["submitted", "needs_update", "approved"].includes(enrollmentStatus)) {
+    return {
+      code: "pending",
+      label: "가입 대기",
+      detail: record ? "회원권·코치·수업시간을 등록해 주세요." : "가입서를 확인하고 기존 회원 연결 여부를 결정해 주세요.",
+      action: record ? "assign" : "link_existing",
+      actionLabel: record ? "회원권 등록" : "기존 회원 확인",
+    };
+  }
+  return null;
+}
+
 function renderMemberApprovalCard(member) {
-  if (memberListStatus(member) !== "pending") return "";
+  const stage = memberRegistrationStage(member);
+  if (!stage || stage.code === "completed") return "";
   return `
-    <section class="member-approval-card">
+    <section class="member-approval-card registration-stage-card is-${stage.code}">
       <div>
-        <strong>가입서 제출 · 결제 대기</strong>
-        <span>운동노트는 이미 사용할 수 있습니다. 결제가 검증되면 수강회원으로 자동 전환됩니다.</span>
+        <small>회원 등록</small>
+        <strong>${escapeHtml(stage.label)}</strong>
+        <span>${escapeHtml(stage.detail)}</span>
       </div>
       <div class="auth-link-actions">
-        <button class="primary-button" type="button" data-jump="billing">결제 상태 확인</button>
+        <button class="primary-button" type="button" data-open-member-management="${escapeHtml(stage.action)}">${escapeHtml(stage.actionLabel)}</button>
       </div>
     </section>`;
 }
