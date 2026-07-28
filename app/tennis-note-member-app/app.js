@@ -331,6 +331,11 @@ function normalizeProduct(product = {}, fallback = {}) {
     cashAmount: numericValue(merged.cashAmount, numericValue(fallback.cashAmount, settlementBase || amount)),
     validityDays: numericValue(merged.validityDays, numericValue(fallback.validityDays, mode === "pass" ? 60 : 35)),
     graceDays: numericValue(merged.graceDays, numericValue(fallback.graceDays, mode === "pass" ? 7 : 14)),
+    lessonMinutes: numericValue(merged.lessonMinutes, numericValue(fallback.lessonMinutes, 20)),
+    frequencyPerWeek: numericValue(merged.frequencyPerWeek, numericValue(fallback.frequencyPerWeek, 1)),
+    maxSessionsPerDay: numericValue(merged.maxSessionsPerDay, numericValue(fallback.maxSessionsPerDay, 0)),
+    maxSessionsPerWeek: numericValue(merged.maxSessionsPerWeek, numericValue(fallback.maxSessionsPerWeek, 0)),
+    maxBookingDaysPerWeek: numericValue(merged.maxBookingDaysPerWeek, numericValue(fallback.maxBookingDaysPerWeek, 0)),
     productKind,
     discountEnabled: merged.discountEnabled ?? fallback.discountEnabled ?? true,
     coachDiscountAllowed: merged.coachDiscountAllowed ?? fallback.coachDiscountAllowed ?? false,
@@ -384,6 +389,9 @@ function membershipProductFromServer(row = {}) {
     lessonMinutes,
     groupSize,
     frequencyPerWeek: frequency,
+    maxSessionsPerDay: numericValue(row.max_sessions_per_day),
+    maxSessionsPerWeek: numericValue(row.max_sessions_per_week),
+    maxBookingDaysPerWeek: numericValue(row.max_booking_days_per_week),
     scheduleScope: ["weekday", "weekend", "mixed"].includes(row.schedule_scope) ? row.schedule_scope : "weekday",
     termWeeks: numericValue(row.term_weeks),
     productKind,
@@ -427,6 +435,8 @@ function productUsagePills(product) {
     product.tickets ? `${product.tickets}회` : "상담",
     product.validityDays ? `사용 ${product.validityDays}일` : "기간 상담",
   ];
+  if (product.lessonMinutes) pills.unshift(`${product.lessonMinutes}분`);
+  if (product.frequencyPerWeek) pills.unshift(`주 ${product.frequencyPerWeek}회분`);
   if (product.graceDays) pills.push(`유예 ${product.graceDays}일`);
   if (product.coachDiscountAllowed) pills.push("코치 할인권 가능");
   return pills.map((pill) => `<span>${escapeHtml(pill)}</span>`).join("");
@@ -1638,7 +1648,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.134",
+    workerUrl: "./service-worker.js?v=1.0.135",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3880,7 +3890,7 @@ function renderAvailableSlots() {
   const selectedIds = isRegularInitialBooking ? state.regularInitialSelections : [selectedId].filter(Boolean);
   if ($("#changePolicyNote")) {
     $("#changePolicyNote").textContent = isRegularInitialBooking
-      ? `서로 다른 요일의 시간을 ${requiredCount}개 선택하면 정규시간이 확정됩니다.`
+      ? `주 ${requiredCount}회분의 시간을 선택하면 정규시간이 확정됩니다. 같은 날도 선택할 수 있습니다.`
       : isMakeupDue
         ? "불참 처리된 수업의 보강입니다. 시간을 선택하면 즉시 예약됩니다."
         : isCouponBooking
@@ -3922,11 +3932,8 @@ function updateChangeRequestAvailability(availableLessons = memberAvailableSlots
   const source = sourceLessons.find((lesson) => lesson.id === $("#absenceLesson")?.value);
   const isRegularInitialBooking = Boolean(source?.regularInitialBooking);
   const requiredCount = Math.max(1, Number(source?.frequencyPerWeek) || 1);
-  const selectedDays = new Set(state.regularInitialSelections.map((id) => (
-    memberScheduleOptions().find((lesson) => lesson.id === id)?.day
-  )).filter(Boolean));
   const regularSelectionComplete = !isRegularInitialBooking
-    || (state.regularInitialSelections.length === requiredCount && selectedDays.size === requiredCount);
+    || state.regularInitialSelections.length === requiredCount;
   const canSubmit = hasSourceLesson && hasAvailableSlot && regularSelectionComplete;
   const emptyState = $("#changeRequestEmptyState");
   const reason = $("#changeReason");
@@ -6258,7 +6265,7 @@ async function syncLiveMembershipProductsFromServer() {
   if (!client?.readiness?.().ready || !client.selectRows) return false;
   try {
     const rows = await client.selectRows("tn_membership_products", {
-      select: "id,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,schedule_scope,term_weeks,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,is_active,display_order",
+      select: "id,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,schedule_scope,term_weeks,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,is_active,display_order",
       filters: { is_active: true },
       limit: 100,
     });
@@ -7221,7 +7228,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.134" });
+  const params = new URLSearchParams({ v: "1.0.135" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7477,10 +7484,6 @@ function selectAvailableSlot(lessonId) {
         return String(selectedLesson?.coachRoleId || "") !== String(lesson.coachRoleId || "");
       });
       if (differentCoachSelected) selected.splice(0, selected.length);
-      const sameDayIndex = selected.findIndex((id) => (
-        memberScheduleOptions().find((item) => item.id === id)?.day === lesson.day
-      ));
-      if (sameDayIndex >= 0) selected.splice(sameDayIndex, 1);
       if (selected.length >= requiredCount) selected.shift();
       selected.push(lessonId);
     }
@@ -8352,7 +8355,7 @@ async function requestMakeup() {
         }
       }
       const messages = {
-        regular_schedule_count_mismatch: "회원권의 주 횟수만큼 서로 다른 요일을 선택해주세요.",
+        regular_schedule_count_mismatch: "회원권의 주 횟수만큼 시간을 선택해주세요.",
         initial_regular_schedule_already_exists: "이미 정규시간이 설정된 회원권입니다. 수업 변경을 이용해주세요.",
         regular_ticket_required: "사용 가능한 정규 회원권을 다시 확인해주세요.",
         regular_schedule_day_duplicate: "같은 요일은 한 번만 선택할 수 있습니다.",

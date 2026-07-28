@@ -3187,6 +3187,9 @@ function normalizeMembershipProduct(product = {}, fallback = {}) {
     cashAmount,
     validityDays,
     graceDays,
+    maxSessionsPerDay: numericValue(merged.maxSessionsPerDay, numericValue(fallback.maxSessionsPerDay, 0)),
+    maxSessionsPerWeek: numericValue(merged.maxSessionsPerWeek, numericValue(fallback.maxSessionsPerWeek, 0)),
+    maxBookingDaysPerWeek: numericValue(merged.maxBookingDaysPerWeek, numericValue(fallback.maxBookingDaysPerWeek, 0)),
     productKind,
     discountEnabled: merged.discountEnabled ?? fallback.discountEnabled ?? true,
     coachDiscountAllowed: merged.coachDiscountAllowed ?? fallback.coachDiscountAllowed ?? false,
@@ -3261,6 +3264,9 @@ function membershipProductDraftFromServer(product = {}) {
     frequencyPerWeek: Number(product.frequency_per_week) || 0,
     scheduleScope,
     termWeeks: Number(product.term_weeks) || 0,
+    maxSessionsPerDay: Number(product.max_sessions_per_day) || 0,
+    maxSessionsPerWeek: Number(product.max_sessions_per_week) || 0,
+    maxBookingDaysPerWeek: Number(product.max_booking_days_per_week) || 0,
     productKind,
     isCoupon: Boolean(product.is_coupon),
     discountEnabled: product.discount_enabled !== false,
@@ -3304,6 +3310,9 @@ function membershipProductsForMemberApp() {
       frequencyPerWeek: normalized.frequencyPerWeek,
       scheduleScope: normalized.scheduleScope,
       termWeeks: normalized.termWeeks,
+      maxSessionsPerDay: normalized.maxSessionsPerDay,
+      maxSessionsPerWeek: normalized.maxSessionsPerWeek,
+      maxBookingDaysPerWeek: normalized.maxBookingDaysPerWeek,
       productKind: normalized.productKind,
       discountEnabled: normalized.discountEnabled,
       coachDiscountAllowed: normalized.coachDiscountAllowed,
@@ -3575,6 +3584,9 @@ async function updateMembershipProductSetting(productId) {
     lessonMinutes: numericValue(readField("lessonMinutes"), product.lessonMinutes),
     groupSize: numericValue(readField("groupSize"), product.groupSize),
     frequencyPerWeek: numericValue(readField("frequencyPerWeek"), product.frequencyPerWeek),
+    maxSessionsPerDay: numericValue(readField("maxSessionsPerDay"), product.maxSessionsPerDay),
+    maxSessionsPerWeek: numericValue(readField("maxSessionsPerWeek"), product.maxSessionsPerWeek),
+    maxBookingDaysPerWeek: numericValue(readField("maxBookingDaysPerWeek"), product.maxBookingDaysPerWeek),
     scheduleScope: readField("scheduleScope") || product.scheduleScope,
     productKind: readField("productKind") || product.productKind,
     discountEnabled: readField("discountEnabled") === "yes",
@@ -3592,6 +3604,9 @@ async function updateMembershipProductSetting(productId) {
     { key: "validityDays", label: "사용기간", value: Number(nextProduct.validityDays) },
     { key: "tickets", label: "충전 횟수", value: Number(nextProduct.tickets) },
     { key: "frequencyPerWeek", label: "주 횟수", value: Number(nextProduct.frequencyPerWeek) },
+    { key: "maxSessionsPerDay", label: "하루 최대 사용 회차", value: Number(nextProduct.maxSessionsPerDay) },
+    { key: "maxSessionsPerWeek", label: "주간 최대 사용 회차", value: Number(nextProduct.maxSessionsPerWeek) },
+    { key: "maxBookingDaysPerWeek", label: "주간 예약 가능 일수", value: Number(nextProduct.maxBookingDaysPerWeek) },
   ];
   const missingRequired = requiredFields.filter((field) => Number(field.value) <= 0 || String(field.value).trim() === "");
   if (missingRequired.length > 0) {
@@ -3601,6 +3616,14 @@ async function updateMembershipProductSetting(productId) {
   }
   if (![20, 30, 40].includes(Number(nextProduct.lessonMinutes))) {
     showToast("수업 시간은 20분, 30분 또는 40분으로 설정해 주세요.");
+    return;
+  }
+  if (Number(nextProduct.maxSessionsPerDay) > Number(nextProduct.maxSessionsPerWeek)) {
+    showToast("하루 최대 사용 회차는 주간 최대 사용 회차보다 클 수 없습니다.");
+    return;
+  }
+  if (Number(nextProduct.maxBookingDaysPerWeek) > Number(nextProduct.maxSessionsPerWeek)) {
+    showToast("주간 예약 가능 일수는 주간 최대 사용 회차보다 클 수 없습니다.");
     return;
   }
   const saleIssue = couponProductSaleIssue(nextProduct);
@@ -3642,6 +3665,9 @@ async function updateMembershipProductSetting(productId) {
       lesson_minutes: Math.max(10, Number(nextProduct.lessonMinutes) || 20),
       group_size: Math.max(1, Math.min(2, Number(nextProduct.groupSize) || 1)),
       frequency_per_week: Math.max(0, Number(nextProduct.frequencyPerWeek) || 0),
+      max_sessions_per_day: Math.max(0, Number(nextProduct.maxSessionsPerDay) || 0),
+      max_sessions_per_week: Math.max(0, Number(nextProduct.maxSessionsPerWeek) || 0),
+      max_booking_days_per_week: Math.max(0, Number(nextProduct.maxBookingDaysPerWeek) || 0),
       schedule_scope: ["weekday", "weekend", "mixed"].includes(nextProduct.scheduleScope) ? nextProduct.scheduleScope : "weekday",
       product_kind: serverKind,
       is_coupon: serverKind === "coupon",
@@ -3666,6 +3692,9 @@ async function updateMembershipProductSetting(productId) {
       || Number(saved.total_sessions) !== Number(nextProduct.tickets)
       || Number(saved.lesson_minutes) !== Number(nextProduct.lessonMinutes)
       || Number(saved.group_size) !== Number(nextProduct.groupSize)
+      || Number(saved.max_sessions_per_day || 0) !== Number(nextProduct.maxSessionsPerDay || 0)
+      || Number(saved.max_sessions_per_week || 0) !== Number(nextProduct.maxSessionsPerWeek || 0)
+      || Number(saved.max_booking_days_per_week || 0) !== Number(nextProduct.maxBookingDaysPerWeek || 0)
       || saved.schedule_scope !== nextProduct.scheduleScope
       || saved.product_kind !== serverKind
       || Number(saved.card_price) !== Number(nextProduct.cardAmount)
@@ -3713,6 +3742,9 @@ async function createMembershipProductSetting() {
       name: "새 회원권",
       lesson_minutes: 20,
       frequency_per_week: 1,
+      max_sessions_per_day: 1,
+      max_sessions_per_week: 1,
+      max_booking_days_per_week: 1,
       total_sessions: 4,
       group_size: 1,
       product_kind: "regular",
@@ -7940,7 +7972,7 @@ function memberManagementDatabaseFields({
         <option value="one_on_one" ${lessonType === "one_on_one" ? "selected" : ""}>1:1</option>
         <option value="one_on_two" ${lessonType === "one_on_two" ? "selected" : ""}>1:2</option>
       </select></label>
-      <label class="form-field span-2 member-lesson-days-field">${memberManagementFieldLabel("레슨요일", product?.product_kind === "coupon" || product?.is_coupon ? false : true, product?.product_kind === "coupon" || product?.is_coupon ? "쿠폰 선택" : "")}<span class="member-lesson-day-options" data-member-lesson-days>${memberManagementLessonDaysMarkup(lessonDays, scheduleScope)}</span></label>
+      <label class="form-field span-2 member-lesson-days-field">${memberManagementFieldLabel("레슨요일", product?.product_kind === "coupon" || product?.is_coupon ? false : true, product?.product_kind === "coupon" || product?.is_coupon ? "쿠폰 선택" : "")}<span class="member-lesson-day-options" data-member-lesson-days>${memberManagementLessonDaysMarkup(lessonDays, scheduleScope)}</span><small>주간 회차 안에서 요일을 나누거나 같은 날 연속으로 사용할 수 있습니다.</small></label>
       <label class="form-field">${memberManagementFieldLabel("레슨시작일", hasTicket)}<input name="startsOn" type="date" value="${escapeHtml(startsOn)}" ${hasTicket ? "required" : ""} /></label>
       ${hasTicket ? `<label class="form-field">${memberManagementFieldLabel("회원권 만료일", true)}<input name="expiresOn" type="date" value="${escapeHtml(expiresOn)}" required /></label>` : ""}
       <label class="form-field">${memberManagementFieldLabel("총 회차", hasTicket)}<input name="totalSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(totalSessions))}" ${hasTicket ? "required" : ""} /></label>
@@ -8793,8 +8825,8 @@ async function submitMemberManagementForm(event) {
     const couponProduct = selectedProduct?.is_coupon === true || selectedProduct?.product_kind === "coupon";
     const requiredLessonDays = Math.max(1, Number(form.elements.weeklyFrequency?.value) || 1);
     const selectedLessonDays = memberManagementSelectedDays(form);
-    if (activeRecord && !couponProduct && selectedLessonDays.length !== requiredLessonDays) {
-      if (message) message.textContent = `주 ${requiredLessonDays}회 회원권은 레슨 요일을 ${requiredLessonDays}개 직접 선택해 주세요.`;
+    if (activeRecord && !couponProduct && (selectedLessonDays.length < 1 || selectedLessonDays.length > requiredLessonDays)) {
+      if (message) message.textContent = `주 ${requiredLessonDays}회 회원권은 레슨 요일을 1개부터 ${requiredLessonDays}개까지 선택해 주세요. 같은 날 연속 수업도 가능합니다.`;
       return;
     }
     if (form.elements.lessonType.value === "one_on_two") {
@@ -11808,7 +11840,12 @@ function isRegularScheduleSetup(ticket) {
 }
 
 function requiredRegularScheduleCount(ticket) {
-  return isRegularScheduleSetup(ticket) ? Math.max(1, Math.min(3, getTicketWeeklyCount(ticket))) : 1;
+  if (!isRegularScheduleSetup(ticket)) return 1;
+  const weeklyUnits = Math.max(1, getTicketWeeklyCount(ticket));
+  const baseMinutes = Math.max(1, getTicketDurationMinutes(ticket));
+  const selectedMinutes = Math.max(baseMinutes, Number($("#lessonDuration")?.value) || baseMinutes);
+  const unitsPerLesson = Math.max(1, Math.ceil(selectedMinutes / baseMinutes));
+  return Math.max(1, Math.min(7, Math.ceil(weeklyUnits / unitsPerLesson)));
 }
 
 function getLessonScheduleSlots() {
@@ -11835,8 +11872,12 @@ function getRegularScheduleValidation(ticket) {
   const requiredCount = requiredRegularScheduleCount(ticket);
   const slots = getLessonScheduleSlots().slice(0, requiredCount);
   const incompleteSlots = slots.filter((slot) => !slot.day || !slot.time);
-  const selectedDays = slots.filter((slot) => slot.day).map((slot) => slot.day);
-  const duplicateDay = selectedDays.find((day, index) => selectedDays.indexOf(day) !== index) || "";
+  const weeklyUnits = Math.max(1, getTicketWeeklyCount(ticket));
+  const baseMinutes = Math.max(1, getTicketDurationMinutes(ticket));
+  const selectedMinutes = Math.max(baseMinutes, Number($("#lessonDuration")?.value) || baseMinutes);
+  const unitsPerLesson = Math.max(1, Math.ceil(selectedMinutes / baseMinutes));
+  const allocatedUnits = requiredCount * unitsPerLesson;
+  const allocationMismatch = allocatedUnits !== weeklyUnits;
   const missingSlotNumbers = slots
     .map((slot, index) => (!slot.day || !slot.time ? index + 1 : null))
     .filter(Boolean);
@@ -11845,12 +11886,16 @@ function getRegularScheduleValidation(ticket) {
     slots,
     isRequired: requiredCount > 1,
     incompleteSlots,
-    duplicateDay,
-    valid: incompleteSlots.length === 0 && !duplicateDay && slots.length === requiredCount,
+    duplicateDay: "",
+    weeklyUnits,
+    unitsPerLesson,
+    allocatedUnits,
+    allocationMismatch,
+    valid: incompleteSlots.length === 0 && !allocationMismatch && slots.length === requiredCount,
     message: incompleteSlots.length
-      ? `주 ${requiredCount}회 회원권입니다. 요일/시간 ${missingSlotNumbers.join(", ")}을(를) 모두 직접 선택해 주세요.`
-      : duplicateDay
-        ? `주 ${requiredCount}회 정규 수업은 서로 다른 요일로 선택해 주세요.`
+      ? `주 ${weeklyUnits}회분 회원권입니다. 일정 ${missingSlotNumbers.join(", ")}을(를) 직접 선택해 주세요. 같은 날도 선택할 수 있습니다.`
+      : allocationMismatch
+        ? `선택한 ${selectedMinutes}분 수업으로는 주 ${weeklyUnits}회분을 정확히 배정할 수 없습니다. 수업시간을 다시 선택해 주세요.`
         : "",
   };
 }
@@ -12082,7 +12127,7 @@ function refreshLessonDayOptions() {
   const primaryDayToKeep = pinnedDay || previousPrimaryDay;
   $("#lessonDay").value = selectableDays.includes(primaryDayToKeep) ? primaryDayToKeep : selectableDays[0] || "";
   const primaryDay = $("#lessonDay").value;
-  for (let index = 2; index <= 3; index += 1) {
+  for (let index = 2; index <= 7; index += 1) {
     const isActive = index <= scheduleCount;
     const previous = previousSlots[index - 2] || repeatDefaults[index - 1] || {};
     const selectedDay = previous.day && availableDays.includes(previous.day) ? previous.day : "";
@@ -12116,7 +12161,7 @@ function refreshLessonDayOptions() {
 
 function applyLessonRepeatSlotDefaults(slots = []) {
   if (!Array.isArray(slots) || slots.length <= 1) return;
-  slots.slice(1, 3).forEach((slot, index) => {
+  slots.slice(1, 7).forEach((slot, index) => {
     const row = $$(".lesson-repeat-slot")[index];
     if (!row || row.classList.contains("is-disabled")) return;
     const daySelect = row.querySelector("[data-lesson-slot-day]");
@@ -12136,9 +12181,14 @@ function refreshLessonDurationOptions() {
   const ticket = scheduleTicketById($("#lessonTicket").value);
   const durationMinutes = getTicketDurationMinutes(ticket);
   const previousDuration = $("#lessonDuration").value;
+  const ticketDurations = [...new Set([durationMinutes, durationMinutes * 2])]
+    .filter((minutes) => [20, 30, 40, 60].includes(minutes));
   const options = adminManualOverrideEnabled()
     ? [20, 30, 40, 60].map((minutes) => ({ value: String(minutes), label: `${minutes}분${minutes === durationMinutes ? " · 회원권 기준" : ""}` }))
-    : [{ value: String(durationMinutes), label: `${durationMinutes}분권 1회` }];
+    : ticketDurations.map((minutes) => ({
+        value: String(minutes),
+        label: `${minutes}분 · ${Math.max(1, Math.ceil(minutes / durationMinutes))}회 사용`,
+      }));
   fillSelect($("#lessonDuration"), options);
   $("#lessonDuration").value = options.some((item) => item.value === previousDuration)
     ? previousDuration
@@ -16500,7 +16550,7 @@ async function syncAdminLiveData() {
       fullAdminAccess ? client.selectRows("tn_user_auth_links", { select: "id,user_id,provider,last_sign_in_at,is_primary", limit: 500 }).catch(() => []) : Promise.resolve([]),
       fullAdminAccess ? client.selectRows("tn_auth_provider_switches", { select: "id,user_id,from_provider,to_provider,status,expires_at,created_at,completed_at", order: "created_at.desc", limit: 500 }).catch(() => []) : Promise.resolve([]),
       fullAdminAccess ? client.selectRows("tn_coach_settlement_terms", { select: "id,coach_role_id,settlement_type,coach_rate,hourly_rate,settlement_basis,substitute_policy,effective_from,effective_to,status", order: "effective_from.desc", limit: 500 }).catch(() => []) : Promise.resolve([]),
-      client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,policy_settings,display_order", limit: 300 }),
+      client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,policy_settings,display_order", limit: 300 }),
       client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price", limit: 500 }),
       client.selectRows("tn_ticket_participants", { select: "ticket_id,user_id,participant_order", limit: 500 }),
       client.selectRows("tn_lesson_participants", { select: "lesson_id,user_id,ticket_id", limit: 1000 }),
@@ -19940,6 +19990,18 @@ function renderServiceReadiness() {
               <input type="number" min="0" max="7" step="1" data-product-field="frequencyPerWeek" value="${normalized.frequencyPerWeek}" />
             </label>
             <label>
+              <small>${productSettingFieldLabel("하루 최대 사용 회차", true)}</small>
+              <input type="number" min="1" max="7" step="1" data-product-field="maxSessionsPerDay" value="${normalized.maxSessionsPerDay || Math.max(1, normalized.frequencyPerWeek)}" />
+            </label>
+            <label>
+              <small>${productSettingFieldLabel("주간 최대 사용 회차", true)}</small>
+              <input type="number" min="1" max="14" step="1" data-product-field="maxSessionsPerWeek" value="${normalized.maxSessionsPerWeek || Math.max(1, normalized.frequencyPerWeek)}" />
+            </label>
+            <label>
+              <small>${productSettingFieldLabel("주간 예약 가능 일수", true)}</small>
+              <input type="number" min="1" max="7" step="1" data-product-field="maxBookingDaysPerWeek" value="${normalized.maxBookingDaysPerWeek || Math.max(1, normalized.frequencyPerWeek)}" />
+            </label>
+            <label>
               <small>${productSettingFieldLabel("권종", true)}</small>
               <select data-product-field="productKind">
                 <option value="regular" ${normalized.productKind === "regular" ? "selected" : ""}>정규권</option>
@@ -21187,6 +21249,7 @@ function bindEvents() {
       // Day and duration only change slot availability. Rebuilding ticket options
       // here silently selected a different ticket after an unavailable-slot warning.
       // Ticket identity is changed only by member, coach, ticket, or source actions.
+      if (selector === "#lessonDuration") refreshLessonDayOptions();
       refreshLessonTimeOptions($("#lessonTime").value);
       renderLessonDurationQuickButtons();
       renderLessonPreview();
@@ -21196,6 +21259,7 @@ function bindEvents() {
     const button = event.target.closest("[data-lesson-duration-quick]");
     if (!button || button.disabled) return;
     $("#lessonDuration").value = button.dataset.lessonDurationQuick;
+    refreshLessonDayOptions();
     refreshLessonTimeOptions($("#lessonTime").value);
     renderLessonDurationQuickButtons();
     renderLessonPreview();

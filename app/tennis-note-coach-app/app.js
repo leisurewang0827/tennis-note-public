@@ -1702,7 +1702,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.134",
+    workerUrl: "./service-worker.js?v=1.0.135",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1732,7 +1732,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.134" });
+  const params = new URLSearchParams({ v: "1.0.135" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2266,6 +2266,18 @@ function lessonDuration(lesson) {
   return matched ? Number(matched[1]) : 20;
 }
 
+function lessonCreditUnits(lesson = {}) {
+  const duration = Math.max(1, Number(lesson.durationMinutes) || lessonDuration(lesson));
+  const ticketUnit = Math.max(1, Number(lesson.ticketLessonMinutes) || duration);
+  return Math.max(1, Math.ceil(duration / ticketUnit));
+}
+
+function lessonDurationUsageLabel(lesson = {}) {
+  const duration = Math.max(1, Number(lesson.durationMinutes) || lessonDuration(lesson));
+  const units = lessonCreditUnits(lesson);
+  return `${duration}분${units > 1 ? ` · ${units}회 사용` : ""}`;
+}
+
 function coachScheduleRoundLabel(lesson = {}) {
   const ticketTotal = Number(lesson.totalSessions) || Number(String(lesson.ticket || "").match(/(\d+)\s*회/)?.[1]) || 0;
   const used = Math.max(0, Number(lesson.usedSessions) || Math.max(0, ticketTotal - (Number(lesson.remaining) || 0)));
@@ -2388,7 +2400,7 @@ function renderTodayLessons() {
                                 (lesson) => `
                                   <button class="board-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${coachColorClass(lesson.coach)} ${coachLessonStateClass(lesson)} ${lesson.remaining <= 2 ? "needs-renewal" : ""}" style="${coachLessonColorStyle(lesson, schedulePolicy)}" type="button" data-edit-lesson-id="${lesson.id}">
                                     <strong>${lesson.member}</strong>
-                                    <span>${lesson.type}${lesson.isSubstitute ? ` · 대타 · 원 담당 ${lesson.originalCoach || "확인"}` : ""}</span>
+                                    <span>${lesson.type} · ${lessonDurationUsageLabel(lesson)}${lesson.isSubstitute ? ` · 대타 · 원 담당 ${lesson.originalCoach || "확인"}` : ""}</span>
                                   </button>`,
                               )
                               .join("") || "<p class='empty-text'>이 시간에 확정된 레슨은 없습니다.</p>"}
