@@ -1679,7 +1679,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.167",
+    workerUrl: "./service-worker.js?v=1.0.168",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2346,6 +2346,24 @@ function memberCoachShortName(name = "") {
   return name.replace(" 코치", "").replace("코치", "").trim();
 }
 
+function memberAssignedCoachRoleIds() {
+  return new Set(
+    (state.liveTickets || [])
+      .filter((ticket) => ["active", "pending_payment"].includes(String(ticket.status || "").toLowerCase()))
+      .map((ticket) => String(ticket.coachRoleId || "").trim())
+      .filter(Boolean),
+  );
+}
+
+function memberCoachMatchesAssignment(coach = {}) {
+  const assignedRoleIds = memberAssignedCoachRoleIds();
+  if (assignedRoleIds.size) {
+    return assignedRoleIds.has(String(coach.serverRoleId || coach.id || "").trim());
+  }
+  const mainCoach = memberCoachShortName(state.profile?.mainCoach || "");
+  return !mainCoach || memberCoachShortName(coach.name || "") === mainCoach;
+}
+
 function memberLessonCoach(lesson, policy) {
   const key = memberCoachKey(lesson.coach);
   const serverRoleId = lesson.coach_role_id || lesson.coachRoleId || "";
@@ -2424,12 +2442,20 @@ function scheduleTimeRangeOptions() {
 }
 
 function memberDayCoaches(day, policy, scheduleLessons = []) {
-  const working = policy.coaches.filter((coach) => (coach.workBlocks || []).some((block) => block.days.includes(day)));
+  const working = policy.coaches.filter((coach) => (
+    memberCoachMatchesAssignment(coach)
+    && (coach.workBlocks || []).some((block) => block.days.includes(day))
+  ));
   const lessonCoaches = scheduleLessons
-    .filter((lesson) => lesson.day === day && lesson.status !== "available")
+    .filter((lesson) => (
+      lesson.day === day
+      && lesson.status !== "available"
+      && (lesson.isOwnLesson || isCurrentMemberName(lesson.member))
+    ))
     .map((lesson) => memberLessonCoach(lesson, policy));
   return working
     .concat(lessonCoaches)
+    .filter((coach) => memberCoachMatchesAssignment(coach))
     .filter((coach, index, array) => array.findIndex((item) => item.id === coach.id) === index)
     .sort((a, b) => memberCoachOrder(a.id) - memberCoachOrder(b.id));
 }
@@ -7305,7 +7331,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.167" });
+  const params = new URLSearchParams({ v: "1.0.168" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
