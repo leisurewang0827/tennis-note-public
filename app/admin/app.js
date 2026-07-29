@@ -5643,7 +5643,12 @@ function getLessonConflict(candidate) {
   const releasedRegularSlot = allOverlappingBooked.find((lesson) => (
     isReleasedRegularMakeupSlot(lesson) && lesson.coachId === candidate.coachId
   ));
-  if (releasedRegularSlot && normalizeLessonSource(candidate.lessonSource) !== "makeup") {
+  const restoresReleasedRegularSlot = Boolean(
+    releasedRegularSlot
+    && normalizeLessonSource(candidate.lessonSource) === "regular"
+    && String(releasedRegularSlot.ticketId || "") === String(candidate.ticketId || "")
+  );
+  if (releasedRegularSlot && normalizeLessonSource(candidate.lessonSource) !== "makeup" && !restoresReleasedRegularSlot) {
     return {
       lesson: releasedRegularSlot,
       message: "불참으로 비워진 정규자리입니다. 이 시간에는 보강수업만 등록할 수 있습니다.",
@@ -5662,6 +5667,20 @@ function getLessonConflict(candidate) {
     return { lesson: overlappingBooked[0], message: `현재 코트 ${fixedCourtCount}개가 모두 사용 중입니다.` };
   }
   return null;
+}
+
+function getRestorableReleasedRegularSlot(candidate) {
+  if (
+    state.editingLessonId
+    || normalizeLessonSource(candidate?.lessonSource) !== "regular"
+    || !candidate?.ticketId
+  ) return null;
+  return getOverlappingBookedLessons(candidate.day, candidate.time, candidate.durationMinutes)
+    .find((lesson) => (
+      isReleasedRegularMakeupSlot(lesson)
+      && lesson.coachId === candidate.coachId
+      && String(lesson.ticketId || "") === String(candidate.ticketId)
+    )) || null;
 }
 
 function getOverlappingBookedLessons(day, time, durationMinutes = 20) {
@@ -13367,6 +13386,9 @@ function renderLessonPreview() {
     .map((schedule) => getLessonConflict(getLessonFormCandidate({ day: schedule.day, time: schedule.time })))
     .find(Boolean);
   const scheduleCandidates = selectedSchedules.map((schedule) => getLessonFormCandidate({ day: schedule.day, time: schedule.time }));
+  const restorableRegularSlot = selectedSchedules.length === 1
+    ? getRestorableReleasedRegularSlot(scheduleCandidates[0])
+    : null;
   const exactDuplicate = scheduleCandidates.map(getAdminManualExactDuplicate).find(Boolean);
   const overrideWarnings = scheduleCandidates.flatMap((item) => getAdminManualOverrideWarnings(item, ticket, false));
   const uniqueOverrideWarnings = [...new Set(overrideWarnings)];
@@ -13404,11 +13426,16 @@ function renderLessonPreview() {
         ? scheduleIssueMessage
       : scheduleScopeMismatch
         ? `${memberManagementScheduleScopeLabel(getTicketScheduleScope(ticket))}에서 이용할 수 없는 요일입니다.`
+      : restorableRegularSlot
+        ? "원래 불참 회원의 정규 자리입니다. 저장하면 정규수업을 복원하고 보강 대기를 취소합니다."
       : conflict
         ? conflict.message
         : "추가 가능한 시간입니다.",
     missingMember ? "" : manualOverride ? overrideBlocked ? "danger" : "good" : normalBlocked ? "danger" : "good",
   );
+  if (restorableRegularSlot && $("#saveLessonButton")) {
+    $("#saveLessonButton").textContent = "정규수업 복원";
+  }
   setLessonSubmitEnabled(manualOverride ? !overrideBlocked : !normalBlocked);
   syncAdminManualOverrideUi(uniqueOverrideWarnings);
 }
@@ -14767,6 +14794,12 @@ async function addLessonFromForm(event) {
       setLessonFormMessage(matchedMessage || error?.message || "과거 수업 반영에 실패했습니다. 시간표를 새로고침한 뒤 다시 확인해 주세요.", "danger");
       setLessonSubmitEnabled(true);
     }
+    return;
+  }
+  const restorableRegularSlot = getRestorableReleasedRegularSlot(candidate);
+  if (!manualOverride && restorableRegularSlot) {
+    state.releasedAbsenceEntitlementId = restorableRegularSlot.entitlementId || "";
+    await restoreAbsentLessonFromModal();
     return;
   }
   if (!manualOverride) {
