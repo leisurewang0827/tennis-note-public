@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.146" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.146" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.147" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.147" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1164,6 +1164,11 @@
             </div>
             <button id="toggleLessonQuickDetails" class="ghost-button" type="button" aria-expanded="false">상세 설정</button>
           </section>
+          <nav id="lessonQuickActions" class="lesson-quick-actions" aria-label="수업 처리 방법" hidden>
+            <button type="button" data-lesson-quick-action="schedule">시간 변경</button>
+            <button type="button" data-lesson-quick-action="absence">불참 처리</button>
+            <button type="button" data-lesson-quick-action="details">기타</button>
+          </nav>
           <section id="lessonDurationQuickPanel" class="lesson-duration-quick-panel" hidden>
             <span>수업 시간</span>
             <div id="lessonDurationQuickButtons" class="lesson-duration-quick-buttons"></div>
@@ -1262,14 +1267,14 @@
 
           <section id="lessonAbsencePanel" class="lesson-absence-panel" hidden>
             <div>
-              <strong>정규수업 불참 처리</strong>
-              <span>횟수는 차감하지 않고, 원래 시간은 보강 전용으로 열립니다.</span>
+              <strong>불참으로 변경</strong>
+              <span>횟수 차감 없음 · 회원은 보강 신청 가능</span>
             </div>
             <label class="form-field">
-              <span>불참 사유</span>
+              <span>사유</span>
               <input id="lessonAbsenceReason" type="text" minlength="2" maxlength="200" placeholder="예: 회원 사전 연락" />
             </label>
-            <button id="markLessonAbsentButton" class="warning-button" type="button">불참 처리·보강 전용으로 열기</button>
+            <button id="markLessonAbsentButton" class="warning-button" type="button">불참 처리</button>
           </section>
 
           <section id="lessonAbsenceRestorePanel" class="lesson-absence-panel is-restore" hidden>
@@ -1562,15 +1567,15 @@
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.146"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.147"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.146"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.146"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.146"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.146"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.146"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.147"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.147"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.147"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.147"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.147"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.146"></script>
+    <script src="./app.js?v=1.0.147"></script>
   </body>
 </html>

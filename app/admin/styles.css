@@ -4763,6 +4763,37 @@ tr.is-selected td {
   background: #fff7f5;
 }
 
+.lesson-quick-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f5f8f7;
+}
+
+.lesson-quick-actions[hidden] {
+  display: none;
+}
+
+.lesson-quick-actions button {
+  min-width: 0;
+  min-height: 42px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.lesson-quick-actions button.is-active {
+  background: #fff;
+  color: var(--brand);
+  box-shadow: 0 1px 4px rgba(20, 55, 45, 0.12);
+}
+
 .lesson-absence-panel[hidden] {
   display: none;
 }
@@ -7543,12 +7574,56 @@ button .schedule-member-lines > span {
 }
 
 #lessonModal.is-quick-edit #lessonQuickSummary,
+#lessonModal.is-quick-edit #lessonQuickActions,
 #lessonModal.is-quick-edit #lessonDurationQuickPanel,
 #lessonModal.is-quick-edit #lessonEditScopePanel,
 #lessonModal.is-quick-edit #lessonSaveResultPanel,
 #lessonModal.is-quick-edit #lessonFormMessage,
 #lessonModal.is-quick-edit .modal-actions {
   grid-column: 1 / -1;
+}
+
+#lessonModal.is-absence-focus .lesson-source-field,
+#lessonModal.is-absence-focus #lessonDurationQuickPanel,
+#lessonModal.is-absence-focus .lesson-member-ticket-panel,
+#lessonModal.is-absence-focus #lessonExpiredTickets,
+#lessonModal.is-absence-focus .lesson-detail-field,
+#lessonModal.is-absence-focus #lessonMakeupEntitlementField,
+#lessonModal.is-absence-focus #lessonAdminOverridePanel,
+#lessonModal.is-absence-focus #lessonRepeatSlots,
+#lessonModal.is-absence-focus #lessonRepeatPreviewPanel,
+#lessonModal.is-absence-focus #lessonEditScopePanel,
+#lessonModal.is-absence-focus #lessonPastCorrectionPanel,
+#lessonModal.is-absence-focus #lessonAbsenceRestorePanel,
+#lessonModal.is-absence-focus #lessonPreview,
+#lessonModal.is-absence-focus #lessonSaveResultPanel,
+#lessonModal.is-absence-focus #openLessonSubstituteButton,
+#lessonModal.is-absence-focus #deleteLessonButton,
+#lessonModal.is-absence-focus #saveLessonButton {
+  display: none !important;
+}
+
+#lessonModal.is-absence-focus #lessonAbsencePanel {
+  display: grid !important;
+}
+
+#lessonModal.is-absence-focus .modal-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 700px) {
+  #lessonModal.is-absence-focus .modal-panel {
+    width: min(440px, calc(100vw - 20px));
+  }
+
+  #lessonModal.is-absence-focus .lesson-form,
+  #lessonModal.is-absence-focus #lessonAbsencePanel {
+    grid-template-columns: 1fr;
+  }
+
+  #lessonModal.is-absence-focus #lessonAbsencePanel {
+    align-items: stretch;
+  }
 }
 
 .lesson-member-ticket-panel {

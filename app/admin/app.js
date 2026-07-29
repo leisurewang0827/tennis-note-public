@@ -50,6 +50,7 @@ const state = {
   quickLessonEntry: false,
   quickLessonEdit: false,
   quickLessonDetailsExpanded: false,
+  lessonQuickAction: "schedule",
   quickLessonReturnSlot: null,
   substituteOperationKey: "",
   activeAdminWeekIndex: 0,
@@ -13337,6 +13338,31 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   summary.hidden = !quickMode;
   const editingLesson = state.quickLessonEdit ? getCurrentEditingLesson() : null;
   const completedCorrection = isCompletedLessonCorrectionMode();
+  const canMarkAbsent = Boolean(
+    state.quickLessonEdit
+    && editingLesson?.serverLessonId
+    && lessonStatusValue(editingLesson) === "scheduled"
+    && normalizeLessonSource(editingLesson.lessonSource) === "regular"
+    && operationsRole() === "admin"
+  );
+  if (!canMarkAbsent && state.lessonQuickAction === "absence") state.lessonQuickAction = "schedule";
+  const absenceFocus = canMarkAbsent && state.lessonQuickAction === "absence";
+  const detailsFocus = state.lessonQuickAction === "details";
+  if (absenceFocus || detailsFocus) {
+    state.quickLessonDetailsExpanded = true;
+    modal.classList.add("is-quick-expanded");
+  }
+  modal.classList.toggle("is-absence-focus", absenceFocus);
+  const quickActions = $("#lessonQuickActions");
+  if (quickActions) {
+    quickActions.hidden = !state.quickLessonEdit || completedCorrection;
+    [...quickActions.querySelectorAll("[data-lesson-quick-action]")].forEach((button) => {
+      const action = button.dataset.lessonQuickAction;
+      button.hidden = action === "absence" && !canMarkAbsent;
+      button.classList.toggle("is-active", action === state.lessonQuickAction);
+      button.setAttribute("aria-pressed", String(action === state.lessonQuickAction));
+    });
+  }
   if ($("#lessonQuickLabel")) $("#lessonQuickLabel").textContent = state.quickLessonEdit ? "수정 대상" : "선택 시간";
   const scheduleLabel = state.quickLessonEdit && editingLesson
     ? `${getLessonMembersLabel(editingLesson)} · ${editingLesson.day}요일 ${adminScheduleDateLabel(editingLesson.day)} · ${editingLesson.time}`
@@ -13349,7 +13375,9 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
       ? `${getTicketDisplayProduct(ticket) || "회원권"} · ${ticketUsageLabel(ticket)} · ${lessonSourceLabel(source)}`
       : "";
     $("#lessonQuickGuide").textContent = state.quickLessonEdit
-      ? completedCorrection
+      ? absenceFocus
+        ? "이 수업만 불참으로 바꾸며 횟수는 차감하지 않습니다."
+        : completedCorrection
         ? "완료 기록과 피드백은 유지됩니다. 잘못된 코치·요일·시간·수업시간만 바로잡으세요."
         : "요일·시간·코치·수업 길이를 바꾸고 아래에서 적용 범위를 선택하세요."
       : requiredCount > 1
@@ -13358,7 +13386,7 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   }
   const toggle = $("#toggleLessonQuickDetails");
   if (toggle) {
-    toggle.hidden = completedCorrection || (state.quickLessonEntry && requiredCount > 1);
+    toggle.hidden = state.quickLessonEdit || completedCorrection || (state.quickLessonEntry && requiredCount > 1);
     toggle.setAttribute("aria-expanded", String(expanded));
     toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "추가 작업" : "상세 설정";
   }
@@ -13370,6 +13398,7 @@ function openLessonModal(defaults = {}) {
   state.quickLessonEntry = Boolean(!state.editingLessonId && defaults.quickEntry);
   state.quickLessonEdit = Boolean(state.editingLessonId && defaults.quickEdit);
   state.quickLessonDetailsExpanded = false;
+  state.lessonQuickAction = "schedule";
   state.quickLessonReturnSlot = state.quickLessonEntry
     ? { day: defaults.day || "", time: defaults.time || "", coachId: defaults.coachId || "" }
     : null;
@@ -13636,11 +13665,12 @@ async function markEditingLessonAbsentForMakeup() {
 function closeLessonModal() {
   const quickReturnSlot = state.quickLessonReturnSlot;
   $("#lessonModal").hidden = true;
-  $("#lessonModal").classList.remove("is-quick-entry", "is-quick-edit", "is-quick-expanded");
+  $("#lessonModal").classList.remove("is-quick-entry", "is-quick-edit", "is-quick-expanded", "is-absence-focus");
   state.editingLessonId = null;
   state.quickLessonEntry = false;
   state.quickLessonEdit = false;
   state.quickLessonDetailsExpanded = false;
+  state.lessonQuickAction = "schedule";
   state.quickLessonReturnSlot = null;
   state.lessonOperationKey = "";
   state.releasedAbsenceEntitlementId = "";
@@ -21746,6 +21776,16 @@ function bindEvents() {
   $("#toggleLessonQuickDetails")?.addEventListener("click", () => {
     state.quickLessonDetailsExpanded = !state.quickLessonDetailsExpanded;
     syncQuickLessonEntryUi();
+  });
+  $$("[data-lesson-quick-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.lessonQuickAction || "schedule";
+      state.lessonQuickAction = action;
+      state.quickLessonDetailsExpanded = action !== "schedule";
+      syncQuickLessonEntryUi();
+      if (action === "absence") $("#lessonAbsenceReason")?.focus();
+      if (action === "schedule") $("#lessonTime")?.focus();
+    });
   });
   $("#lessonMakeupEntitlement")?.addEventListener("change", () => {
     applySelectedAdminMakeupEntitlement();
