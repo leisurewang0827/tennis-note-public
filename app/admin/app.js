@@ -13753,6 +13753,10 @@ function openAdminMakeupBooking(entitlement) {
   renderLessonPreview();
 }
 
+function submitLessonFormWithoutNativeValidation() {
+  return addLessonFromForm({ preventDefault() {} });
+}
+
 async function markEditingLessonAbsentForMakeup() {
   const lesson = lessons.find((item) => item.id === state.editingLessonId);
   const reason = $("#lessonAbsenceReason")?.value.trim() || "";
@@ -13768,7 +13772,7 @@ async function markEditingLessonAbsentForMakeup() {
       + "횟수는 차감하지 않고 보강 신청을 열며, 시간표 기록은 불참 상태로 보존합니다.",
     )) return;
     renderLessonPreview();
-    $("#lessonForm")?.requestSubmit();
+    await submitLessonFormWithoutNativeValidation();
     return;
   }
   if (reason.length < 2) {
@@ -14704,7 +14708,7 @@ async function addLessonFromForm(event) {
         return;
       }
       if (!consumeAdminActionGrant("past_absence_correction")
-        && !requestAdminActionUnlock("past_absence_correction", "지난 수업 사전 불참 보정", () => $("#lessonForm")?.requestSubmit())) {
+        && !requestAdminActionUnlock("past_absence_correction", "지난 수업 사전 불참 보정", submitLessonFormWithoutNativeValidation)) {
         if (adminPinNeedsSetup()) setLessonFormMessage("운영 설정의 보안/잠금에서 관리자 PIN을 먼저 설정해 주세요.", "danger");
         return;
       }
@@ -21591,7 +21595,7 @@ function bindEvents() {
   $("#saveLessonButton")?.addEventListener("click", (event) => {
     if (!isPastLessonCorrectionMode(getLessonFormCandidate())) return;
     event.preventDefault();
-    $("#lessonForm")?.requestSubmit();
+    submitLessonFormWithoutNativeValidation();
   });
   $("#lessonForm").addEventListener("submit", addLessonFromForm);
   $("#deleteLessonButton").addEventListener("click", deleteEditingLesson);
