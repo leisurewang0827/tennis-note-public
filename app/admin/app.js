@@ -21425,6 +21425,11 @@ function bindEvents() {
   $("#cancelOneDayBookingModal")?.addEventListener("click", closeOneDayBookingModal);
   $("#oneDayBookingForm")?.addEventListener("submit", saveOneDayBooking);
   $("#deleteOneDayBookingButton")?.addEventListener("click", deleteOneDayBooking);
+  $("#saveLessonButton")?.addEventListener("click", (event) => {
+    if (!isPastLessonCorrectionMode(getLessonFormCandidate())) return;
+    event.preventDefault();
+    $("#lessonForm")?.requestSubmit();
+  });
   $("#lessonForm").addEventListener("submit", addLessonFromForm);
   $("#deleteLessonButton").addEventListener("click", deleteEditingLesson);
   $("#markLessonAbsentButton")?.addEventListener("click", markEditingLessonAbsentForMakeup);
