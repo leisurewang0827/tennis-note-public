@@ -1313,6 +1313,135 @@ const adminLiveDataState = {
   substituteAssignments: [],
 };
 
+const adminOperationalCacheDbName = "tennis-note-admin-operational-cache";
+const adminOperationalCacheStoreName = "snapshots";
+const adminOperationalCacheMaxAgeMs = 12 * 60 * 60 * 1000;
+
+function adminOperationalCacheKey() {
+  const userId = adminImportAuthState.user?.id || adminImportAuthState.profile?.id || "";
+  const role = operationsRole();
+  return userId && role ? `${userId}:${role}` : "";
+}
+
+function openAdminOperationalCache() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error("indexeddb_unavailable"));
+      return;
+    }
+    const request = window.indexedDB.open(adminOperationalCacheDbName, 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(adminOperationalCacheStoreName)) {
+        database.createObjectStore(adminOperationalCacheStoreName);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("indexeddb_open_failed"));
+  });
+}
+
+async function readAdminOperationalCache() {
+  const key = adminOperationalCacheKey();
+  if (!key) return null;
+  const database = await openAdminOperationalCache();
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = database
+        .transaction(adminOperationalCacheStoreName, "readonly")
+        .objectStore(adminOperationalCacheStoreName)
+        .get(key);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error || new Error("indexeddb_read_failed"));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function writeAdminOperationalCache() {
+  const key = adminOperationalCacheKey();
+  if (!key || !state.liveScheduleLoaded) return false;
+  const snapshot = {
+    savedAt: Date.now(),
+    coaches,
+    members,
+    lessons,
+    makeupRequests,
+    tickets,
+    expiredTickets,
+    billings,
+    billingLogs: billingLogs.slice(0, 100),
+    groupAccounts,
+    lessonNotes,
+  };
+  const database = await openAdminOperationalCache();
+  try {
+    await new Promise((resolve, reject) => {
+      const request = database
+        .transaction(adminOperationalCacheStoreName, "readwrite")
+        .objectStore(adminOperationalCacheStoreName)
+        .put(snapshot, key);
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error || new Error("indexeddb_write_failed"));
+    });
+    return true;
+  } finally {
+    database.close();
+  }
+}
+
+async function restoreAdminOperationalCache() {
+  try {
+    const snapshot = await readAdminOperationalCache();
+    if (!snapshot?.savedAt || Date.now() - Number(snapshot.savedAt) > adminOperationalCacheMaxAgeMs) return false;
+    [
+      [coaches, snapshot.coaches],
+      [members, snapshot.members],
+      [lessons, snapshot.lessons],
+      [makeupRequests, snapshot.makeupRequests],
+      [tickets, snapshot.tickets],
+      [expiredTickets, snapshot.expiredTickets],
+      [billings, snapshot.billings],
+      [billingLogs, snapshot.billingLogs],
+      [groupAccounts, snapshot.groupAccounts],
+      [lessonNotes, snapshot.lessonNotes],
+    ].forEach(([target, source]) => replaceArray(target, Array.isArray(source) ? source : []));
+    invalidateMemberSearchIndex();
+    Object.assign(state, {
+      liveScheduleLoaded: false,
+      liveScheduleLoading: true,
+      liveScheduleMessage: "최근 데이터를 먼저 표시하고 최신 서버 데이터를 확인하는 중",
+    });
+    return true;
+  } catch (error) {
+    console.warn("[Tennis Note] administrator cache restore skipped", error?.message || "cache_error");
+    return false;
+  }
+}
+
+async function clearAdminOperationalCache() {
+  const key = adminOperationalCacheKey();
+  if (!key) return;
+  try {
+    const database = await openAdminOperationalCache();
+    try {
+      await new Promise((resolve, reject) => {
+        const request = database
+          .transaction(adminOperationalCacheStoreName, "readwrite")
+          .objectStore(adminOperationalCacheStoreName)
+          .delete(key);
+        request.onsuccess = () => resolve(true);
+        request.onerror = () => reject(request.error || new Error("indexeddb_delete_failed"));
+      });
+    } finally {
+      database.close();
+    }
+  } catch {
+    // A cache cleanup failure must not block logout.
+  }
+}
+
 const adminLazyDataState = new Map();
 const memberSearchIndex = new Map();
 const memberTicketsIndex = new Map();
@@ -17701,6 +17830,9 @@ async function performAdminLiveDataSync() {
       state.selectedMemberId = null;
     }
     renderAll();
+    void writeAdminOperationalCache().catch((error) => {
+      console.warn("[Tennis Note] administrator cache write skipped", error?.message || "cache_error");
+    });
     return true;
   } catch (error) {
     Object.assign(state, {
@@ -17785,6 +17917,8 @@ async function refreshAdminImportAuthState() {
     hideAdminBrandSplash();
     if (["admin", "coach"].includes(role)) {
       if (role === "coach" && !operationsViewAllowed(state.view)) state.view = "schedule";
+      await restoreAdminOperationalCache();
+      setView(state.view, { skipLock: true });
       await syncAdminLiveData();
       setView(state.view, { skipLock: true });
     }
@@ -17886,6 +18020,7 @@ async function createAdminEmailAccount() {
 
 async function signOutAdminImport() {
   const client = window.TennisNoteDataClient;
+  await clearAdminOperationalCache();
   if (client?.signOut) await client.signOut();
   Object.assign(adminImportAuthState, {
     loading: false,
