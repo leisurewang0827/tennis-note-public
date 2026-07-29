@@ -113,6 +113,20 @@ const noticeSessionSeenIds = new Set();
 let noticePreviousFocus = null;
 let appToastTimer = 0;
 
+function syncMemberVisualViewport() {
+  const viewport = window.visualViewport;
+  const height = Math.max(1, Math.round(viewport?.height || window.innerHeight || 1));
+  const offsetTop = Math.max(0, Math.round(viewport?.offsetTop || 0));
+  document.documentElement.style.setProperty("--tn-visual-viewport-height", `${height}px`);
+  document.documentElement.style.setProperty("--tn-visual-viewport-offset-top", `${offsetTop}px`);
+  document.documentElement.style.setProperty("--tn-sheet-viewport-height", `${Math.round(height * 0.86)}px`);
+}
+
+syncMemberVisualViewport();
+window.addEventListener("resize", syncMemberVisualViewport, { passive: true });
+window.visualViewport?.addEventListener("resize", syncMemberVisualViewport, { passive: true });
+window.visualViewport?.addEventListener("scroll", syncMemberVisualViewport, { passive: true });
+
 function showToast(message) {
   let toast = document.querySelector("#appToast");
   if (!toast) {
@@ -1665,7 +1679,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.166",
+    workerUrl: "./service-worker.js?v=1.0.167",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -7291,7 +7305,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.166" });
+  const params = new URLSearchParams({ v: "1.0.167" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

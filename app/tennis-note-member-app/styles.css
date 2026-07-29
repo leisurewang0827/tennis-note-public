@@ -5203,7 +5203,11 @@ body.notice-open {
 .app-bottom-sheet {
   position: fixed;
   z-index: 140;
-  inset: 0;
+  top: var(--tn-visual-viewport-offset-top, 0px);
+  right: 0;
+  bottom: auto;
+  left: 0;
+  height: var(--tn-visual-viewport-height, 100dvh);
   display: grid;
   align-items: end;
   justify-items: center;
@@ -5278,6 +5282,31 @@ body.notice-open {
   min-height: 0;
   overflow: auto;
   padding: 14px 14px calc(20px + env(safe-area-inset-bottom));
+}
+
+.sheet-actions {
+  display: grid;
+  padding: 10px 14px max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: white;
+}
+
+#journalComposerSheet .sheet-card {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  height: min(
+    86dvh,
+    var(--tn-sheet-viewport-height, 86dvh),
+    760px
+  );
+  max-height: min(
+    86dvh,
+    var(--tn-sheet-viewport-height, 86dvh),
+    760px
+  );
+}
+
+.journal-composer-actions .primary-button {
+  width: 100%;
 }
 
 .lesson-detail-sheet-card {

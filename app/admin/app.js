@@ -8566,10 +8566,16 @@ function memberMembershipTargetLabel(candidate = {}) {
 
 async function loadMemberLinkCandidates(member, query = memberManagementModalState.linkQuery || "") {
   if (!member?.serverUserId || operationsRole() !== "admin" || member.authLinked) return;
+  const inputGuardWasDirty = Boolean(
+    window.TennisNoteInputGuard?.isDirty?.("#memberManagementModal"),
+  );
   memberManagementModalState.linkQuery = String(query || "").trim();
   memberManagementModalState.linkCandidatesLoading = true;
   memberManagementModalState.linkCandidatesLoadedFor = member.serverUserId;
   renderMemberManagementModal();
+  if (!inputGuardWasDirty) {
+    window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
+  }
   try {
     const result = await window.TennisNoteDataClient.rpc("tn_admin_member_link_candidates", {
       target_user_id: member.serverUserId,
@@ -8583,7 +8589,13 @@ async function loadMemberLinkCandidates(member, query = memberManagementModalSta
   } finally {
     memberManagementModalState.linkCandidatesLoading = false;
     if (memberManagementModalState.memberId === member.id && memberManagementModalState.action === "profile") {
+      const inputGuardWasDirtyAfterRequest = Boolean(
+        window.TennisNoteInputGuard?.isDirty?.("#memberManagementModal"),
+      );
       renderMemberManagementModal();
+      if (!inputGuardWasDirtyAfterRequest) {
+        window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
+      }
     }
   }
 }
@@ -8819,6 +8831,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
   syncMemberManagementBalance($("#memberManagementForm"));
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
+  window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   if (action === "profile" && !refreshedMember.authLinked) loadMemberLinkCandidates(refreshedMember);
   setTimeout(() => $("#memberManagementForm input, #memberManagementForm select")?.focus(), 0);
 }
@@ -8848,6 +8861,7 @@ async function openManualMemberModal() {
   syncMemberManagementBalance($("#memberManagementForm"));
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
+  window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   setTimeout(() => $("#memberManagementForm input[name='memberName']")?.focus(), 0);
 }
 
@@ -19366,6 +19380,7 @@ function openCoachStaffModal(coachId = "") {
   coachStaffEditorState.editingBlockId = "";
   coachStaffEditorState.message = "";
   renderCoachStaffModal();
+  window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
 }
 
 function closeCoachStaffModal() {
@@ -21674,10 +21689,16 @@ function bindEvents() {
     }
     const tabButton = event.target.closest("[data-coach-staff-tab]");
     if (tabButton) {
+      const inputGuardWasDirty = Boolean(
+        window.TennisNoteInputGuard?.isDirty?.("#coachStaffModal"),
+      );
       readCoachStaffPanel();
       coachStaffEditorState.tab = tabButton.dataset.coachStaffTab;
       coachStaffEditorState.message = "";
       renderCoachStaffModal();
+      if (!inputGuardWasDirty) {
+        window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
+      }
       return;
     }
     const addBlockButton = event.target.closest("[data-add-coach-staff-block]");
