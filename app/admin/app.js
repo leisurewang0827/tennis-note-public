@@ -10390,14 +10390,21 @@ function memberQuickEditorMarkup(member, ticket) {
   if (memberEditorMode === "audit" || operationsRole() !== "admin") return "";
   const record = memberDatabaseRecord(member, ticket);
   const coachRoles = memberManagementCoachRoles(ticket || {});
+  const partnerUserId = ticket ? memberTicketPartnerUserId(ticket, member) : "";
+  const partnerOptions = manualMemberPartnerOptions()
+    .filter((user) => user.id !== member.serverUserId)
+    .map((user) => `<option value="${escapeHtml(user.id)}" ${user.id === partnerUserId ? "selected" : ""}>${escapeHtml(user.name || "회원")}</option>`)
+    .join("");
   const total = Number(record?.total_sessions ?? ticket?.total ?? 0);
   const used = Number(record?.used_sessions ?? ticket?.used ?? 0);
   const remaining = Math.max(0, total - used);
+  const currentProduct = (adminLiveDataState.products || []).find((item) => item.id === ticket?.productId);
   const productOptions = membershipProductsForActiveOperationProfile()
     .map((draft) => ({ draft, server: serverMembershipProductForDraft(draft) }))
     .filter(({ draft, server }) => server?.id && draft.status !== "hidden" && draft.status !== "disabled")
-    .map(({ draft, server }) => `<option value="${escapeHtml(server.id)}" ${server.id === ticket?.productId ? "selected" : ""}>${escapeHtml(draft.title || draft.name || server.name || "회원권")}</option>`)
+    .map(({ draft, server }) => `<option value="${escapeHtml(server.id)}" data-group-size="${Number(server.group_size || 1)}" ${server.id === ticket?.productId ? "selected" : ""}>${escapeHtml(draft.title || draft.name || server.name || "회원권")}</option>`)
     .join("");
+  const isGroup = Number(currentProduct?.group_size || record?.lesson_group_size || ticket?.groupSize || 1) === 2;
   return `
     <tr class="member-inline-editor-row member-quick-editor-row" data-inline-editor-member="${member.id}">
       <td colspan="9">
@@ -10420,6 +10427,9 @@ function memberQuickEditorMarkup(member, ticket) {
               <option value="">미배정</option>
               ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === (record?.coach_role_id || ticket?.coachRoleId) ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
             </select></label>
+            <label class="member-inline-partner" data-member-quick-partner ${isGroup ? "" : "hidden"}><span>파트너</span><select name="partnerUserId" ${isGroup ? "required" : "disabled"}>
+              <option value="">선택</option>${partnerOptions}
+            </select></label>
             <label><span>총</span><input name="totalSessions" type="number" min="0" step="1" value="${total}" ${ticket ? "" : "disabled"} /></label>
             <label><span>소진</span><input name="usedSessions" type="number" min="0" step="1" value="${used}" ${ticket ? "" : "disabled"} /></label>
             <label><span>잔여</span><input name="remainingSessions" type="number" min="0" step="1" value="${remaining}" readonly aria-readonly="true" /></label>
@@ -10433,6 +10443,36 @@ function memberQuickEditorMarkup(member, ticket) {
         </form>
       </td>
     </tr>`;
+}
+
+function syncMemberQuickEditorProduct(form) {
+  if (!form?.classList.contains("member-inline-editor--compact")) return;
+  const product = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+  const groupSize = Number(product?.group_size || 1);
+  const groupProduct = Boolean(product) && groupSize === 2;
+  const partnerField = form.querySelector("[data-member-quick-partner]");
+  if (form.elements.partnerUserId) {
+    form.elements.partnerUserId.disabled = !groupProduct;
+    form.elements.partnerUserId.required = groupProduct;
+    if (!groupProduct) form.elements.partnerUserId.value = "";
+  }
+  if (partnerField) partnerField.hidden = !groupProduct;
+  if (!product) return;
+  form.elements.lessonType.value = groupProduct ? "one_on_two" : "one_on_one";
+  form.elements.scheduleScope.value = memberManagementProductScheduleScope(product);
+  form.elements.weeklyFrequency.value = Number(product.frequency_per_week) || 1;
+}
+
+function setMemberInlineDirtyState(form, dirty = true) {
+  if (!form) return;
+  form.dataset.dirty = dirty ? "true" : "false";
+  form.classList.toggle("is-dirty", dirty);
+  if (dirty) form.classList.remove("is-save-error", "is-save-success");
+  const message = form.querySelector(".member-inline-message");
+  if (dirty && message && !message.classList.contains("is-error")) {
+    message.textContent = "변경됨";
+    message.classList.remove("is-success");
+  }
 }
 
 function memberInlineEditorMarkup(member, ticket) {
@@ -10529,6 +10569,13 @@ async function submitMemberInlineEditor(form, options = {}) {
     message.classList.add("is-error");
     return;
   }
+  const selectedProduct = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+  if (Number(selectedProduct?.group_size || 1) === 2 && !form.elements.partnerUserId?.value) {
+    message.textContent = "2대1 회원권은 파트너를 선택해 주세요.";
+    message.classList.add("is-error");
+    form.classList.add("is-save-error");
+    return false;
+  }
   if (ticket && !form.classList.contains("member-inline-editor--compact") && memberEditorMode === "normal" && (!form.elements.coachRoleId.value
     || !form.elements.paymentMethod.value || !form.elements.paymentDate.value)) {
     message.textContent = "정상 운영 모드에서는 담당 코치·결제수단·결제일이 필요합니다.";
@@ -10586,6 +10633,9 @@ async function submitMemberInlineEditor(form, options = {}) {
     if (!refreshAfterSave) {
       message.textContent = "저장됨";
       message.classList.add("is-success");
+      form.classList.remove("is-dirty", "is-save-error");
+      form.classList.add("is-save-success");
+      form.dataset.dirty = "false";
       submit.disabled = false;
       submit.textContent = "저장";
       return true;
@@ -10605,12 +10655,16 @@ async function submitMemberInlineEditor(form, options = {}) {
     }
     message.textContent = ticket ? "서버 저장 완료 · 시간표 유지 확인" : "기본정보 서버 저장 완료";
     message.classList.add("is-success");
+    form.classList.remove("is-dirty", "is-save-error");
+    form.classList.add("is-save-success");
+    form.dataset.dirty = "false";
     showToast(`${member.name} 회원권 저장 완료`);
     renderMembers();
     return true;
   } catch (error) {
     message.textContent = memberManagementErrorText(error);
     message.classList.add("is-error");
+    form.classList.add("is-save-error");
     submit.disabled = false;
     submit.textContent = "다시 저장";
     return false;
@@ -10631,19 +10685,26 @@ async function saveVisibleMemberRows() {
     button.textContent = `저장 중 0/${forms.length}`;
   }
   let saved = 0;
+  let failed = 0;
   try {
     for (const form of forms) {
       const ok = await submitMemberInlineEditor(form, { refreshAfterSave: false });
-      if (!ok) throw new Error("member_page_save_failed");
-      saved += 1;
-      if (button) button.textContent = `저장 중 ${saved}/${forms.length}`;
+      if (ok) saved += 1;
+      else failed += 1;
+      if (button) button.textContent = `저장 중 ${saved + failed}/${forms.length}`;
     }
-    const synced = await syncAdminLiveData(true);
-    if (!synced) throw new Error("admin_live_refresh_failed_after_write");
-    renderMembers();
-    showToast(`${saved}명 현재 페이지 저장 완료`);
+    if (saved) {
+      const synced = await syncAdminLiveData(true);
+      if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    }
+    if (!failed) {
+      renderMembers();
+      showToast(`${saved}명 현재 페이지 저장 완료`);
+    } else {
+      showToast(`${saved}명 저장 완료 · ${failed}명 실패 행만 다시 확인해 주세요.`);
+    }
   } catch {
-    showToast(`${saved}명 저장 후 중단되었습니다. 오류가 표시된 행을 확인해 주세요.`);
+    showToast(`${saved}명 저장 완료 · 서버 재조회에 실패했습니다. 저장 결과를 다시 확인해 주세요.`);
   } finally {
     if (button?.isConnected) {
       button.disabled = false;
@@ -22963,18 +23024,19 @@ function bindEvents() {
     }
     if (event.target.matches("[data-member-inline-form] input[name='totalSessions'], [data-member-inline-form] input[name='usedSessions']")) {
       syncMemberManagementBalance(event.target.form);
-      event.target.form.dataset.dirty = "true";
+      setMemberInlineDirtyState(event.target.form);
       return;
     }
     if (event.target.matches("[data-member-inline-form] input, [data-member-inline-form] select")) {
-      event.target.form.dataset.dirty = "true";
+      setMemberInlineDirtyState(event.target.form);
     }
   });
 
   document.addEventListener("change", (event) => {
     if (!event.target.matches("[data-member-inline-form] select[name='productId']")) return;
     const form = event.target.form;
-    form.dataset.dirty = "true";
+    setMemberInlineDirtyState(form);
+    syncMemberQuickEditorProduct(form);
     if (!form.dataset.ticketId && event.target.value) {
       const product = (adminLiveDataState.products || []).find((item) => item.id === event.target.value);
       if (product) {

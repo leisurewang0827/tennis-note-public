@@ -2075,11 +2075,26 @@ tr.is-selected td {
 
 .member-inline-editor--compact {
   padding: 8px 10px 10px;
+  transition: background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.member-inline-editor--compact.is-dirty {
+  background: #fffbea;
+  box-shadow: inset 4px 0 #e0a826;
+}
+
+.member-inline-editor--compact.is-save-error {
+  background: #fff3f1;
+  box-shadow: inset 4px 0 #cf4b3f;
+}
+
+.member-inline-editor--compact.is-save-success {
+  background: #f0faf5;
 }
 
 .member-inline-compact-grid {
   display: grid;
-  grid-template-columns: minmax(210px, 2fr) minmax(130px, 1fr) 72px 72px 72px minmax(150px, 1.4fr) auto;
+  grid-template-columns: minmax(190px, 2fr) minmax(120px, 1fr) minmax(110px, 1fr) 68px 68px 68px minmax(140px, 1.4fr) auto;
   gap: 8px;
   align-items: end;
 }
@@ -2718,8 +2733,8 @@ tr.is-selected td {
   }
 
   .member-inline-compact-grid {
-    grid-template-columns: minmax(170px, 2fr) minmax(120px, 1fr) repeat(3, 68px) minmax(140px, 1.4fr) 80px;
-    min-width: 850px;
+    grid-template-columns: minmax(170px, 2fr) minmax(120px, 1fr) minmax(110px, 1fr) repeat(3, 68px) minmax(140px, 1.4fr) 80px;
+    min-width: 970px;
   }
 
   .member-inline-editor--compact {
