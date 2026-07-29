@@ -13457,6 +13457,14 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   summary.hidden = !quickMode;
   const editingLesson = state.quickLessonEdit ? getCurrentEditingLesson() : null;
   const completedCorrection = isCompletedLessonCorrectionMode();
+  const pastAbsenceCorrection = Boolean(
+    state.quickLessonEdit
+    && editingLesson?.serverLessonId
+    && lessonStatusValue(editingLesson) === "scheduled"
+    && normalizeLessonSource(editingLesson.lessonSource) === "regular"
+    && operationsRole() === "admin"
+    && isPastLessonCorrectionMode(candidate)
+  );
   const canMarkAbsent = Boolean(
     state.quickLessonEdit
     && editingLesson?.serverLessonId
@@ -13506,6 +13514,17 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
       : requiredCount > 1
         ? `주 ${requiredCount}회 회원권은 나머지 요일과 시간을 모두 선택해야 합니다.`
         : quickTicketSummary || "회원 검색 후 회원권을 확인하고 저장하세요.";
+  }
+  if (absenceFocus && pastAbsenceCorrection && $("#lessonQuickGuide")) {
+    $("#lessonQuickGuide").textContent = "지난 정규수업을 불참·차감 없음으로 보정하고 보강 신청을 엽니다.";
+  }
+  const absenceButton = quickActions?.querySelector('[data-lesson-quick-action="absence"]');
+  if (absenceButton) {
+    absenceButton.textContent = pastAbsenceCorrection ? "지난 불참 보정" : "불참 처리";
+  }
+  const markAbsentButton = $("#markLessonAbsentButton");
+  if (markAbsentButton) {
+    markAbsentButton.textContent = pastAbsenceCorrection ? "불참·차감 없음으로 보정" : "불참 처리·보강 열기";
   }
   const toggle = $("#toggleLessonQuickDetails");
   if (toggle) {
@@ -13739,6 +13758,17 @@ async function markEditingLessonAbsentForMakeup() {
   const reason = $("#lessonAbsenceReason")?.value.trim() || "";
   if (!lesson?.serverLessonId || lessonStatusValue(lesson) !== "scheduled" || lessonSourceValue(lesson) !== "regular") {
     setLessonFormMessage("예정 상태의 정규수업만 불참 처리할 수 있습니다.", "danger");
+    return;
+  }
+  if (isPastLessonCorrectionMode(getLessonFormCandidate())) {
+    const absenceCorrectionMode = document.querySelector('input[name="lessonPastCorrectionMode"][value="absence"]');
+    if (absenceCorrectionMode) absenceCorrectionMode.checked = true;
+    if (!window.confirm(
+      `${lesson.member} ${lesson.day} ${lesson.time} 지난 정규수업을 불참으로 보정할까요?\n\n`
+      + "횟수는 차감하지 않고 보강 신청을 열며, 시간표 기록은 불참 상태로 보존합니다.",
+    )) return;
+    renderLessonPreview();
+    $("#lessonForm")?.requestSubmit();
     return;
   }
   if (reason.length < 2) {
