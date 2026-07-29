@@ -10279,7 +10279,9 @@ function lessonMatchesActiveScheduleWeek(lesson, day = lesson?.day) {
 }
 
 function getLessonMembersLabel(lesson) {
-  if (isReleasedRegularMakeupSlot(lesson)) return "보강 신청 가능";
+  if (isReleasedRegularMakeupSlot(lesson)) {
+    return lesson.releasedOriginalMember || lesson.member || "정규 자리";
+  }
   return lesson.member;
 }
 
@@ -11565,13 +11567,13 @@ function renderUniformScheduleLine(kind, lesson, timeLabel = "") {
   const isCardDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
   const roundLabel = getLessonRoundLabel(lesson) || "회차 확인";
   const detailLabel = isReleasedRegularMakeupSlot(lesson)
-    ? `보강만 등록 · ${lesson.durationMinutes}분`
+    ? "차감 없음 · 보강·원데이 가능"
     : getLessonStatusLabel(lesson);
   return `
     <button class="schedule-stack-line ${kind} lesson-kind-${lessonVisualKind(lesson)} ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} ${isCardDimmed ? "is-dimmed" : ""}" style="--lesson-height:${lessonCardHeight}px;${lessonColorStyle(lesson)}" type="button" ${lessonActionAttrs(lesson)}>
       ${timeLabel ? `<span class="stack-time">${timeLabel}</span>` : ""}
       <strong>${getLessonMembersMarkup(lesson)}</strong>
-      ${!isReleasedRegularMakeupSlot(lesson) ? `<span class="schedule-round-label">${escapeHtml(roundLabel)}</span>` : ""}
+      ${isReleasedRegularMakeupSlot(lesson) ? '<span class="schedule-round-label">정규 · 불참</span>' : `<span class="schedule-round-label">${escapeHtml(roundLabel)}</span>`}
       <span class="stack-coach">${getCoachName(lesson.coachId)}</span>
       <small>${detailLabel}</small>
     </button>`;
@@ -11848,10 +11850,10 @@ function renderCoachDayLessonCard(lesson, visibleTimes, column) {
     return value >= start && value < end;
   }).length);
   const memberLabel = isReleasedRegularMakeupSlot(lesson)
-    ? "정규 자리"
+    ? getLessonMembersLabel(lesson)
     : isLessonAvailable(lesson) ? "보강 가능" : getLessonMembersLabel(lesson);
   const statusLabel = isReleasedRegularMakeupSlot(lesson)
-    ? `보강 가능 · ${lesson.durationMinutes}분`
+    ? "정규 · 불참 · 차감 없음 · 보강·원데이 가능"
     : isLessonAvailable(lesson) ? `${lesson.durationMinutes}분 신청 가능` : `${getLessonStatusLabel(lesson)} · ${lesson.durationMinutes}분`;
   const roundLabel = getLessonRoundLabel(lesson);
   const coachLabel = lessonScheduleCoachLabel(lesson);
@@ -17495,8 +17497,10 @@ async function performAdminLiveDataSync() {
           time: entitlement.originalTime,
           courtId: `court-${Math.min(slotCount, fixedCourtCount)}`,
           coachId: entitlement.coachId,
-          member: "정규 자리",
-          type: "정규 자리 · 보강 가능",
+          member: entitlement.member,
+          memberNames: entitlement.memberNames,
+          releasedOriginalMember: entitlement.member,
+          type: "정규 · 불참 · 보강·원데이 가능",
           durationMinutes: entitlement.durationMinutes,
           status: "available",
           makeup: true,
