@@ -14081,6 +14081,12 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   syncLessonEditScopeUi();
 }
 
+function pushLessonModalHistoryState() {
+  const historyState = typeof history.state === "object" && history.state ? history.state : {};
+  if (historyState.tennisNoteAdminModal === "lessonModal") return;
+  history.pushState({ ...historyState, tennisNoteAdminModal: "lessonModal" }, "", window.location.href);
+}
+
 function openLessonModal(defaults = {}) {
   state.editingLessonId = defaults.editingLessonId || null;
   state.quickLessonEntry = Boolean(!state.editingLessonId && defaults.quickEntry);
@@ -14274,6 +14280,7 @@ function openLessonModal(defaults = {}) {
   }
   renderLessonAbsenceRestorePanel();
   $("#lessonModal").hidden = false;
+  pushLessonModalHistoryState();
   renderLessonPreview();
   syncLessonEditScopeUi();
   (state.quickLessonEntry ? $("#lessonMemberSearch") : state.quickLessonEdit ? $("#lessonTime") : $("#lessonMember"))?.focus();
@@ -14365,7 +14372,8 @@ async function markEditingLessonAbsentForMakeup() {
   }
 }
 
-function closeLessonModal() {
+function closeLessonModal(options = {}) {
+  const fromHistory = options?.fromHistory === true;
   const quickReturnSlot = state.quickLessonReturnSlot;
   $("#lessonModal").hidden = true;
   $("#lessonModal").classList.remove("is-quick-entry", "is-quick-edit", "is-quick-expanded", "is-absence-focus");
@@ -14384,6 +14392,9 @@ function closeLessonModal() {
   setLessonFormMessage("");
   clearLessonSaveResultPanel();
   if (quickReturnSlot) window.requestAnimationFrame(() => focusQuickLessonReturnSlot(quickReturnSlot));
+  if (!fromHistory && history.state?.tennisNoteAdminModal === "lessonModal") {
+    history.back();
+  }
 }
 
 function coachNameForRoleId(roleId = "") {
@@ -21641,6 +21652,10 @@ function installAdminLiveScheduleRefresh() {
 }
 
 function bindEvents() {
+  window.addEventListener("popstate", () => {
+    if (!$("#lessonModal")?.hidden) closeLessonModal({ fromHistory: true });
+  });
+
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   document.addEventListener("click", (event) => {
     const menuButton = event.target.closest(".compact-action-menu-panel button");
