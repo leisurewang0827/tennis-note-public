@@ -1727,7 +1727,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.170",
+    workerUrl: "./service-worker.js?v=1.0.171",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1757,7 +1757,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.170" });
+  const params = new URLSearchParams({ v: "1.0.171" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -5162,10 +5162,23 @@ async function initCoachApp() {
     renderAll();
   })().catch(() => {});
 
-  const openedFromSupabase = await applySupabaseCoachSession(false);
+  const coachAccessResult = await Promise.race([
+    applySupabaseCoachSession(false),
+    new Promise((resolve) => window.setTimeout(() => resolve("timeout"), 8_000)),
+  ]);
+  const coachAccessTimedOut = coachAccessResult === "timeout";
+  const openedFromSupabase = coachAccessResult === true;
   const sessionStillAvailable = Boolean(client?.getSession?.()?.access_token);
   if (!sessionStillAvailable) {
     returnToMemberEntry(true);
+    return;
+  }
+  if (coachAccessTimedOut) {
+    state.coach = null;
+    $("#coachAppScreen").hidden = true;
+    $("#coachLoginScreen").hidden = false;
+    setCoachAccessMessage("코치 권한 확인이 지연되고 있습니다. 네트워크를 확인한 뒤 새로고침하거나 회원 화면으로 돌아가 주세요.", "alert");
+    saveSnapshot();
     return;
   }
   if (!openedFromSupabase) {
