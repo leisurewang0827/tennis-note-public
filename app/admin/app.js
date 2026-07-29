@@ -12061,7 +12061,8 @@ function getLessonScheduleSlots() {
 }
 
 function getRegularScheduleValidation(ticket) {
-  const requiredCount = requiredRegularScheduleCount(ticket);
+  const editingExistingLesson = Boolean(state.editingLessonId);
+  const requiredCount = editingExistingLesson ? 1 : requiredRegularScheduleCount(ticket);
   const slots = getLessonScheduleSlots().slice(0, requiredCount);
   const incompleteSlots = slots.filter((slot) => !slot.day || !slot.time);
   const weeklyUnits = Math.max(1, getTicketWeeklyCount(ticket));
@@ -12070,7 +12071,8 @@ function getRegularScheduleValidation(ticket) {
   const unitsPerLesson = Math.max(1, Math.ceil(selectedMinutes / baseMinutes));
   const allocatedUnits = requiredCount * unitsPerLesson;
   const weeklyUnitLimit = getTicketWeeklyUnitLimit(ticket);
-  const allocationMismatch = allocatedUnits < weeklyUnits || allocatedUnits > weeklyUnitLimit;
+  const allocationMismatch = !editingExistingLesson
+    && (allocatedUnits < weeklyUnits || allocatedUnits > weeklyUnitLimit);
   const missingSlotNumbers = slots
     .map((slot, index) => (!slot.day || !slot.time ? index + 1 : null))
     .filter(Boolean);
@@ -12979,18 +12981,22 @@ function adminLessonEndTimestamp(candidate = {}) {
 function isPastLessonCorrectionMode(candidate = {}) {
   if (!state.liveScheduleLoaded || operationsRole() !== "admin") return false;
   const editingLesson = getCurrentEditingLesson();
-  if (editingLesson && lessonStatusValue(editingLesson) !== "scheduled") return false;
+  if (editingLesson && !["scheduled", "completed", "no_show", "cancelled"].includes(lessonStatusValue(editingLesson))) {
+    return false;
+  }
   const endTimestamp = adminLessonEndTimestamp(candidate);
   return Number.isFinite(endTimestamp) && endTimestamp <= Date.now();
 }
 
 function isCompletedLessonCorrectionMode() {
   const editingLesson = getCurrentEditingLesson();
+  const correctingAsAbsence = document.querySelector('input[name="lessonPastCorrectionMode"]:checked')?.value === "absence";
   return Boolean(
     state.liveScheduleLoaded
     && operationsRole() === "admin"
     && editingLesson?.serverLessonId
     && lessonStatusValue(editingLesson) === "completed"
+    && !correctingAsAbsence
   );
 }
 
@@ -13380,6 +13386,8 @@ function openLessonModal(defaults = {}) {
   clearLessonSaveResultPanel();
   const hasPinnedScheduleSlot = Boolean(!state.editingLessonId && defaults.day && defaults.time && defaults.coachId);
   const editingLesson = state.editingLessonId ? lessons.find((lesson) => lesson.id === state.editingLessonId) : null;
+  const defaultCorrectionMode = document.querySelector('input[name="lessonPastCorrectionMode"][value="complete"]');
+  if (defaultCorrectionMode) defaultCorrectionMode.checked = true;
   const completedCorrection = Boolean(
     editingLesson
     && lessonStatusValue(editingLesson) === "completed"
@@ -13432,8 +13440,6 @@ function openLessonModal(defaults = {}) {
   if ($("#lessonAdminOverride")) {
     $("#lessonAdminOverride").checked = completedCorrection || scheduleSettings.adminTuningMode === true;
   }
-  const defaultCorrectionMode = document.querySelector('input[name="lessonPastCorrectionMode"][value="complete"]');
-  if (defaultCorrectionMode) defaultCorrectionMode.checked = true;
   $("#lessonPastCoachComment").value = "";
   $("#lessonPastCommentKeywords").value = "";
   $("#lessonType").value = "개인";
