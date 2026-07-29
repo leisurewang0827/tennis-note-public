@@ -103,6 +103,8 @@ function adminStatusLabel(group, value, fallback = "") {
 // Keep the last confirmed server schedule locally. A failed or unexpectedly empty
 // refresh must never make an already loaded timetable look deleted.
 const scheduleSafetySnapshotKey = "tennis-note-admin-schedule-safety-v1";
+const adminSnapshotVersion = 2;
+const scheduleSafetySnapshotLimit = 500;
 
 function persistentScheduleLessons(source = lessons) {
   return (Array.isArray(source) ? source : []).filter((lesson) => (
@@ -111,10 +113,21 @@ function persistentScheduleLessons(source = lessons) {
 }
 
 function saveScheduleSafetySnapshot(source = lessons, reason = "refresh") {
-  const savedLessons = persistentScheduleLessons(source);
+  const today = new Date();
+  const rangeStart = new Date(today);
+  const rangeEnd = new Date(today);
+  rangeStart.setDate(rangeStart.getDate() - 14);
+  rangeEnd.setDate(rangeEnd.getDate() + 63);
+  const startDate = rangeStart.toISOString().slice(0, 10);
+  const endDate = rangeEnd.toISOString().slice(0, 10);
+  const savedLessons = persistentScheduleLessons(source)
+    .filter((lesson) => !lesson.lessonDate || (lesson.lessonDate >= startDate && lesson.lessonDate <= endDate))
+    .sort((left, right) => `${left.lessonDate || ""}T${left.time || ""}`.localeCompare(`${right.lessonDate || ""}T${right.time || ""}`))
+    .slice(0, scheduleSafetySnapshotLimit);
   if (!savedLessons.length) return;
   try {
     localStorage.setItem(scheduleSafetySnapshotKey, JSON.stringify({
+      version: adminSnapshotVersion,
       savedAt: new Date().toISOString(),
       reason,
       lessons: savedLessons,
@@ -2422,26 +2435,34 @@ function restoreSnapshot() {
 
 function saveSnapshot() {
   if (state.snapshotStorageUnavailable) return false;
+  const {
+    accountDeletionRequests,
+    makeupEntitlements,
+    scheduleSheetPasteRows,
+    selectedMemberIds,
+    selectedMembershipProductIds,
+    selectedSubstituteLessonIds,
+    selectedScheduleLessonIds,
+    selectedScheduleOpenSlots,
+    ...persistedState
+  } = state;
   const snapshot = {
-    state,
-    coaches,
-    members,
-    lessons,
-    makeupRequests,
-    tickets,
-    groupAccounts,
-    billings,
-    billingLogs,
-    lessonNotes,
+    version: adminSnapshotVersion,
+    cacheMode: "settings-only",
+    state: {
+      ...persistedState,
+      snapshotStorageUnavailable: false,
+      liveScheduleLoaded: false,
+      liveScheduleLoading: false,
+      liveScheduleMessage: "실서버 시간표 재확인 중",
+    },
     discountPolicies,
-    discountIssueLogs,
     policyVersions,
     lessonPolicies,
     refundPolicySettings,
     holdingPolicySettings,
     notificationPolicySettings,
     newCoachSettlementSettings,
-    coachSettlementRules,
     membershipProductDrafts,
     deletedMembershipProductIds,
     membershipProducts: membershipProductsForMemberApp(),
@@ -2455,9 +2476,19 @@ function saveSnapshot() {
     localStorage.setItem(storageKey, JSON.stringify(snapshot));
     return true;
   } catch (error) {
-    // The local snapshot is a convenience cache only. A full browser storage
-    // must never disable the live Supabase schedule connection or save locally.
-    state.snapshotStorageUnavailable = true;
+    // Remove only the replaceable admin caches. Authentication and user
+    // preferences stored under other keys must remain intact.
+    localStorage.removeItem(storageKey);
+    localStorage.removeItem(scheduleSafetySnapshotKey);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(snapshot));
+      state.snapshotStorageUnavailable = false;
+      return true;
+    } catch {
+      // The local snapshot is a convenience cache only. A full browser storage
+      // must never disable the live Supabase schedule connection or server saves.
+      state.snapshotStorageUnavailable = true;
+    }
     console.warn("Admin snapshot was not saved", error?.name || "storage_error");
     return false;
   }
