@@ -708,23 +708,28 @@ async function syncCoachLessonsFromServer() {
     });
     const todayIso = new Date().toISOString().slice(0, 10);
     state.releasedMakeupSlots = state.makeupEntitlements
-      .filter((entitlement) => {
+      .flatMap((entitlement) => {
         const sourceLesson = lessonRowsById.get(entitlement.sourceLessonId);
-        if (!["open", "booked"].includes(entitlement.status) || sourceLesson?.status !== "cancelled") return false;
-        if (!entitlement.originalDate || !entitlement.originalTime || entitlement.originalDate < todayIso) return false;
+        if (!["open", "booked"].includes(entitlement.status) || sourceLesson?.status !== "cancelled") return [];
+        if (!entitlement.originalDate || !entitlement.originalTime) return [];
         const releasedStart = minutesFromTime(entitlement.originalTime);
         const releasedEnd = releasedStart + entitlement.durationMinutes;
-        return !state.liveLessons.some((lesson) => {
+        const occupyingLesson = state.liveLessons.find((lesson) => {
           if (lesson.lessonDate !== entitlement.originalDate || lesson.coachRoleId !== entitlement.coachRoleId) return false;
           const lessonStart = minutesFromTime(lesson.time);
           return releasedStart < lessonStart + lessonDuration(lesson) && lessonStart < releasedEnd;
         });
-      })
-      .map((entitlement) => {
+        if (occupyingLesson) {
+          occupyingLesson.releasedOriginMember = entitlement.member;
+          occupyingLesson.releasedOriginLabel = `${entitlement.member} 정규 불참 자리`;
+          return [];
+        }
         const dayIndex = new Date(`${entitlement.originalDate}T00:00:00`).getDay();
-        return {
+        const historicalReleasedSlot = entitlement.originalDate < todayIso;
+        return [{
           id: `released-${entitlement.id}`,
           releasedMakeupSlot: true,
+          historicalReleasedSlot,
           lessonDate: entitlement.originalDate,
           day: scheduleDays[dayIndex === 0 ? 6 : dayIndex - 1],
           time: entitlement.originalTime,
@@ -734,12 +739,14 @@ async function syncCoachLessonsFromServer() {
           releasedOriginalMember: entitlement.member,
           entitlementId: entitlement.id,
           sourceLessonId: entitlement.sourceLessonId,
-          type: `정규 · 불참 · 보강·원데이 가능 ${entitlement.durationMinutes}분`,
+          type: historicalReleasedSlot
+            ? `정규 · 불참 · 차감 없음 ${entitlement.durationMinutes}분`
+            : `정규 · 불참 · 보강·원데이 가능 ${entitlement.durationMinutes}분`,
           lessonSource: "makeup",
           durationMinutes: entitlement.durationMinutes,
           status: "available",
           task: "보강 가능",
-        };
+        }];
       });
 
     const ticketIdsByUser = new Map();
@@ -1720,7 +1727,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.160",
+    workerUrl: "./service-worker.js?v=1.0.161",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1750,7 +1757,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.160" });
+  const params = new URLSearchParams({ v: "1.0.161" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2305,6 +2312,7 @@ function coachScheduleRoundLabel(lesson = {}) {
 }
 
 function coachScheduleExceptionLabel(lesson = {}) {
+  if (lesson.releasedOriginLabel) return lesson.releasedOriginLabel;
   const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
   const context = `${lesson.lessonSource || ""} ${lesson.type || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
   let detail = "";
@@ -2345,6 +2353,9 @@ function coachScheduleLessonActionAttrs(lesson = {}) {
     return `disabled aria-label="${lesson.member || "회원"} 다른 코치 수업 읽기 전용"`;
   }
   if (lesson.releasedMakeupSlot) {
+    if (lesson.historicalReleasedSlot) {
+      return `disabled aria-label="${lesson.member || "회원"} 과거 정규 불참 기록"`;
+    }
     return `data-restore-absence-id="${lesson.entitlementId || ""}" aria-label="${lesson.member || "회원"} 정규수업 복원"`;
   }
   return `data-edit-lesson-id="${lesson.id}"`;
@@ -2859,7 +2870,9 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
                 const note = coachScheduleExceptionLabel(lesson);
                 const laneCoach = coachFromLesson(lesson, policy);
                 const roundOrState = lesson.releasedMakeupSlot ? "정규 · 불참" : coachScheduleRoundLabel(lesson);
-                const cardNote = lesson.releasedMakeupSlot ? "차감 없음 · 보강·원데이 가능" : (note || "-");
+                const cardNote = lesson.releasedMakeupSlot
+                  ? (lesson.historicalReleasedSlot ? "차감 없음" : "차감 없음 · 보강·원데이 가능")
+                  : (note || "-");
                 return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${memberLabel}</strong><span>${escapeHtml(roundOrState)}</span><span>${escapeHtml(coachScheduleCardCoachLabel(lesson))}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote)}</small></button>`;
               }).join("")}
             </div>`;
@@ -2975,7 +2988,9 @@ function renderFullSchedule() {
                   const coachLabel = coachScheduleCardCoachLabel(lesson);
                   const note = coachScheduleExceptionLabel(lesson);
                   const roundOrState = lesson.releasedMakeupSlot ? "정규 · 불참" : coachScheduleRoundLabel(lesson);
-                  const cardNote = lesson.releasedMakeupSlot ? "차감 없음 · 보강·원데이 가능" : (note || "-");
+                  const cardNote = lesson.releasedMakeupSlot
+                    ? (lesson.historicalReleasedSlot ? "차감 없음" : "차감 없음 · 보강·원데이 가능")
+                    : (note || "-");
                   return `
                     <button
                       class="coach-duration-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(lessonCoach.name)} ${coachLessonStateClass(lesson)} ${isLongLesson ? "is-long" : ""}"

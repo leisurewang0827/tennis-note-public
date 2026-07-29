@@ -5571,7 +5571,7 @@ function lessonRoundRange(lesson, ticket) {
 
 function getLessonRoundLabel(lesson) {
   if (lesson?.oneDayBooking) return "원데이";
-  if (isReleasedRegularMakeupSlot(lesson)) return "";
+  if (isReleasedRegularMakeupSlot(lesson)) return "정규 · 불참";
   if (!isBookedLesson(lesson)) return "";
   const ticket = getTicketByLesson(lesson);
   if (!ticket) return "회차 확인";
@@ -5622,6 +5622,10 @@ function isLessonEditableScheduled(lesson = {}) {
 }
 
 function scheduleLessonExceptionLabel(lesson = {}) {
+  if (lesson.releasedOriginLabel) return lesson.releasedOriginLabel;
+  if (isReleasedRegularMakeupSlot(lesson)) {
+    return lesson.historicalReleasedSlot ? "차감 없음" : "차감 없음 · 보강·원데이 가능";
+  }
   if (lessonStatusValue(lesson) === "completed") return Number(lesson.deductedSessions) > 0 ? "완료 · 차감" : "완료 · 미차감";
   if (lessonStatusValue(lesson) === "no_show") return Number(lesson.deductedSessions) > 0 ? "노쇼 · 차감" : "노쇼 · 미차감";
   const context = `${lesson.type || ""} ${lessonSourceValue(lesson)} ${lesson.changeNote || ""} ${lesson.task || ""}`;
@@ -5647,7 +5651,9 @@ function getLessonStatusLabel(lesson) {
     if (rawStatus === "checked_in") return "방문";
     return "원데이 예약";
   }
-  if (isReleasedRegularMakeupSlot(lesson)) return "정규자리 · 보강 가능";
+  if (isReleasedRegularMakeupSlot(lesson)) {
+    return lesson.historicalReleasedSlot ? "정규 · 불참 기록" : "정규자리 · 보강 가능";
+  }
   if (status === "completed") return Number(lesson.deductedSessions) > 0 ? "완료 · 차감" : "완료 · 미차감";
   if (status === "no_show") return Number(lesson.deductedSessions) > 0 ? "노쇼 · 차감" : "노쇼 · 미차감";
   if (status === "cancelled") return "취소";
@@ -10430,6 +10436,9 @@ function lessonActionAttrs(lesson) {
     return `data-edit-one-day-booking-id="${lesson.serverOneDayBookingId || lesson.id}"`;
   }
   if (isReleasedRegularMakeupSlot(lesson)) {
+    if (lesson.historicalReleasedSlot) {
+      return `disabled aria-label="${escapeHtml(getLessonMembersLabel(lesson))} 과거 정규 불참 기록"`;
+    }
     return [
       'data-open-released-makeup-slot="true"',
       `data-released-slot-day="${lesson.day}"`,
@@ -17620,27 +17629,32 @@ async function performAdminLiveDataSync() {
     });
     const todayIso = new Date().toISOString().slice(0, 10);
     const releasedRegularMakeupSlots = mappedMakeupEntitlements
-      .filter((entitlement) => {
+      .flatMap((entitlement) => {
         const sourceLesson = serverLessonById.get(entitlement.sourceLessonId);
-        if (!["open", "booked"].includes(entitlement.status) || sourceLesson?.status !== "cancelled") return false;
-        if (!entitlement.originalDate || !entitlement.originalTime || entitlement.originalDate < todayIso) return false;
+        if (!["open", "booked"].includes(entitlement.status) || sourceLesson?.status !== "cancelled") return [];
+        if (!entitlement.originalDate || !entitlement.originalTime) return [];
         const releasedInterval = {
           start: timeToMinutes(entitlement.originalTime),
           end: timeToMinutes(entitlement.originalTime) + entitlement.durationMinutes,
         };
-        return !mappedLessons.some((lesson) => (
+        const occupyingLesson = mappedLessons.find((lesson) => (
           lesson.lessonDate === entitlement.originalDate
           && lesson.coachId === entitlement.coachId
           && intervalsOverlap(releasedInterval, lessonInterval(lesson))
         ));
-      })
-      .map((entitlement) => {
+        if (occupyingLesson) {
+          occupyingLesson.releasedOriginMember = entitlement.member;
+          occupyingLesson.releasedOriginLabel = `${entitlement.member} 정규 불참 자리`;
+          return [];
+        }
         const slotKey = `${entitlement.originalDate}-${entitlement.originalTime}`;
         const slotCount = (slotCounts.get(slotKey) || 0) + 1;
         slotCounts.set(slotKey, slotCount);
-        return {
+        const historicalReleasedSlot = entitlement.originalDate < todayIso;
+        return [{
           id: `released-${entitlement.id}`,
           releasedMakeupSlot: true,
+          historicalReleasedSlot,
           entitlementId: entitlement.id,
           sourceLessonId: entitlement.sourceLessonId,
           serverStatus: "cancelled",
@@ -17654,12 +17668,12 @@ async function performAdminLiveDataSync() {
           member: entitlement.member,
           memberNames: entitlement.memberNames,
           releasedOriginalMember: entitlement.member,
-          type: "정규 · 불참 · 보강·원데이 가능",
+          type: historicalReleasedSlot ? "정규 · 불참 · 차감 없음" : "정규 · 불참 · 보강·원데이 가능",
           durationMinutes: entitlement.durationMinutes,
           status: "available",
           makeup: true,
           lessonSource: "makeup",
-        };
+        }];
       });
     mappedLessons.push(...releasedRegularMakeupSlots);
     mappedLessons.sort((left, right) => left.lessonDate.localeCompare(right.lessonDate) || timeToMinutes(left.time) - timeToMinutes(right.time));
