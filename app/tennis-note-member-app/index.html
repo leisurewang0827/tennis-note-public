@@ -46,6 +46,22 @@
           <h2>간편 로그인</h2>
           <button class="provider naver" type="button" data-login-provider="네이버">네이버로 시작</button>
           <button class="provider kakao" type="button" data-login-provider="카카오">카카오로 시작</button>
+          <button
+            class="provider apple is-preparing"
+            type="button"
+            data-login-provider="Apple"
+            data-ready-label="Apple로 계속"
+            aria-label="Apple 로그인 설정 중"
+            disabled
+          >
+            <img
+              class="apple-signin-logo"
+              src="https://appleid.cdn-apple.com/appleid/button/logo?color=black&amp;size=44&amp;scale=3&amp;border_radius=8"
+              alt=""
+              aria-hidden="true"
+            />
+            <span data-apple-login-label>Apple 로그인 설정 중</span>
+          </button>
           <details class="email-login-panel">
             <summary>이메일로 로그인</summary>
             <form id="memberEmailLoginForm" class="email-login-form">

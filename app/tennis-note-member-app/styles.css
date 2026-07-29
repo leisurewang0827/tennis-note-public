@@ -199,6 +199,34 @@ button {
   color: white;
 }
 
+.provider.apple {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 140px;
+  padding: 0 44px;
+  overflow: hidden;
+  background: #111111;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.apple-signin-logo {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  display: block;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.provider.apple [data-apple-login-label] {
+  white-space: nowrap;
+}
+
 .provider:disabled,
 .provider.is-preparing {
   cursor: not-allowed;

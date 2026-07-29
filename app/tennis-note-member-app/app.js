@@ -8247,6 +8247,29 @@ async function login(provider) {
   if (status) status.textContent = "실사용 로그인 연결 설정을 확인해 주세요.";
 }
 
+async function syncAppleLoginAvailability() {
+  const buttons = $$('[data-login-provider="Apple"]');
+  if (!buttons.length) return;
+  let ready = false;
+  const client = window.TennisNoteDataClient;
+  if (client?.readiness?.().ready) {
+    try {
+      const settings = await client.getAuthSettings();
+      ready = Boolean(settings?.external?.apple);
+    } catch {
+      ready = false;
+    }
+  }
+  buttons.forEach((button) => {
+    const label = button.querySelector("[data-apple-login-label]");
+    button.disabled = !ready;
+    button.classList.toggle("is-preparing", !ready);
+    const buttonLabel = ready ? button.dataset.readyLabel : "Apple 로그인 설정 중";
+    if (label) label.textContent = buttonLabel;
+    button.setAttribute("aria-label", buttonLabel);
+  });
+}
+
 function emailLoginErrorMessage(error) {
   const code = `${error?.code || error?.message || ""}`.toLowerCase();
   if (code.includes("invalid_credentials") || code.includes("invalid login")) return "이메일 또는 비밀번호를 확인해주세요.";
@@ -9181,6 +9204,7 @@ async function initApp() {
     await syncLiveSchedulePolicy(currentLiveTicket()?.branchId || "");
     renderActiveMemberView();
   })().catch(() => {});
+  void syncAppleLoginAvailability();
   let openedFromSupabase = false;
   try {
     openedFromSupabase = await applySupabaseMemberSession(true);
