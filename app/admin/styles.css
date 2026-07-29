@@ -2138,6 +2138,82 @@ tr.is-selected td {
   white-space: nowrap;
 }
 
+.admin-save-state {
+  margin: 0 24px 10px;
+  padding: 8px 12px;
+  border: 1px solid #d8e4df;
+  border-radius: 8px;
+  background: #f7faf9;
+  color: #526c63;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-save-state[data-tone="server"] {
+  border-color: #b8dccc;
+  background: #edf8f3;
+  color: #176346;
+}
+
+.admin-save-state[data-tone="saved"] {
+  border-color: #e0d4a8;
+  background: #fffaf0;
+  color: #755d13;
+}
+
+.member-create-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.member-create-steps li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #d9e3df;
+  border-radius: 8px;
+  color: #64766f;
+  background: #f7faf9;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.member-create-steps li span {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dfe8e4;
+}
+
+.member-create-steps li.is-active {
+  border-color: var(--green);
+  color: var(--green);
+  background: #eff8f4;
+}
+
+.member-create-steps li.is-active span,
+.member-create-steps li.is-done span {
+  color: #fff;
+  background: var(--green);
+}
+
+.member-create-step-help {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--green);
+  background: #f2f8f5;
+  color: #415950;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .member-inline-editor-heading {
   display: flex;
   justify-content: space-between;

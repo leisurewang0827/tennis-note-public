@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.175" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.175" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.176" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.176" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -207,10 +207,11 @@
             <button class="small-button title-action" type="button" id="openChangeHistory">요청 내역</button>
           </div>
           <div class="member-schedule-mode" aria-label="시간표 보기 방식">
-            <button class="member-schedule-mode-button is-active" type="button" data-member-schedule-mode="mine">내 일정</button>
-            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="availability">예약·변경 가능 시간</button>
-            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="flex">쿠폰·원데이</button>
+            <button class="member-schedule-mode-button is-active" type="button" data-member-schedule-mode="mine">내 수업</button>
+            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="availability">시간 바꾸기</button>
+            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="flex">자유 예약</button>
           </div>
+          <p class="member-schedule-guide">먼저 내 수업을 확인하세요. 다른 시간을 찾을 때만 ‘시간 바꾸기’를 누르면 됩니다.</p>
           <section id="makeupDueBanner" class="makeup-due-banner" hidden>
             <div>
               <strong id="makeupDueTitle">보강 시간을 선택해 주세요</strong>
@@ -432,8 +433,8 @@
             <button class="settings-row" type="button" id="openNtrpEditorButton">
               <span class="settings-row-icon" aria-hidden="true">N</span>
               <span class="settings-row-copy">
-                <strong>NTRP 레벨</strong>
-                <small id="profileNtrpSummary">자가 측정과 코치 측정을 확인하세요</small>
+                <strong>내 테니스 수준</strong>
+                <small id="profileNtrpSummary">내가 고른 수준과 코치가 본 수준을 확인하세요</small>
               </span>
               <span class="settings-row-arrow" aria-hidden="true">›</span>
             </button>
@@ -586,7 +587,7 @@
                 <input id="profileGoal" type="text" placeholder="예: 랠리 10개 연결, 게임 입문" />
               </label>
               <label>
-                <span>내가 측정한 NTRP</span>
+                <span>내가 고른 수준 (NTRP)</span>
                 <select id="profileSelfNtrp">
                   <option value="1.5">1.5 · 시작/입문</option>
                   <option value="2.0">2.0 · 기본기 연습 필요</option>
@@ -597,7 +598,7 @@
                 </select>
               </label>
               <label>
-                <span>코치 측정 NTRP</span>
+                <span>코치가 본 수준 (NTRP)</span>
                 <input id="profileCoachNtrp" type="text" readonly />
               </label>
             </div>
@@ -605,18 +606,18 @@
               <span>내 스타일 메모</span>
               <textarea id="profileStyleMemo" rows="3" placeholder="예: 포핸드는 자신 있는데 백핸드가 불안해요."></textarea>
             </label>
-            <section class="ntrp-survey" aria-label="NTRP 자가 측정 설문">
+            <section class="ntrp-survey" aria-label="내 테니스 수준 알아보기">
               <div class="section-title compact-title">
-                <h3>NTRP 자가 측정 설문</h3>
+                <h3>내 테니스 수준 알아보기</h3>
                 <span>내가 만든 포스터와 공식 기준을 보면서 현재 레벨을 체크합니다.</span>
               </div>
               <div id="ntrpReferenceCards" class="ntrp-reference-grid"></div>
               <div id="ntrpSurveyQuestions" class="ntrp-survey-list"></div>
-              <button class="small-button" type="button" id="calculateNtrp">설문으로 내 NTRP 계산</button>
+              <button class="small-button" type="button" id="calculateNtrp">답변으로 내 수준 확인</button>
             </section>
             <div id="ntrpPanel" class="ntrp-panel"></div>
             <button class="primary-button" type="button" id="saveProfileInfo">내 정보 저장</button>
-            <button class="small-button" type="button" id="requestNtrpCheck">코치에게 NTRP 측정 요청</button>
+            <button class="small-button" type="button" id="requestNtrpCheck">코치에게 수준 확인 요청</button>
           </section>
               </div>
             </article>
@@ -965,15 +966,15 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.175"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.176"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.175"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.175"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.175"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.175"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.176"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.176"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.176"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.176"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.175"></script>
+    <script src="./app.js?v=1.0.176"></script>
   </body>
 </html>

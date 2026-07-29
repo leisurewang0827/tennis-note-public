@@ -1765,6 +1765,7 @@ const memberManagementModalState = {
   memberId: null,
   action: "",
   ticketId: "",
+  createStep: 1,
   message: "",
   linkCandidates: [],
   linkCandidatesLoading: false,
@@ -2570,6 +2571,7 @@ function restoreSnapshot() {
     if (snapshot.state) {
       const { courtCount, ...restoredState } = snapshot.state;
       Object.assign(state, restoredState);
+      state.view = "dashboard";
       state.memberSearch = "";
       state.selectedMemberId = null;
       state.liveScheduleLoaded = false;
@@ -5303,6 +5305,26 @@ function showToast(message) {
   toast.classList.add("is-visible");
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => toast.classList.remove("is-visible"), 1800);
+  updateAdminSaveState(message);
+}
+
+function updateAdminSaveState(message = "") {
+  const target = $("#adminSaveState");
+  if (!target) return;
+  const text = String(message || "");
+  if (/실패|오류|확인 필요|저장 중|불러오|취소/.test(text)) return;
+  let label = "";
+  if (/서버 저장 완료|서버에 저장|DB 반영 완료/.test(text)) label = "서버 저장 완료";
+  else if (/로컬 저장 완료|임시 저장/.test(text)) label = "이 기기에 저장";
+  else if (/저장 완료|반영 완료|처리 완료|등록 완료|수정 완료/.test(text)) label = "처리 완료";
+  if (!label) return;
+  const time = new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
+  target.textContent = `${label} · ${time} · 새로고침 후에도 서버 값을 다시 확인하세요.`;
+  target.dataset.tone = label === "서버 저장 완료" ? "server" : "saved";
 }
 
 async function copyTextToClipboard(text) {
@@ -6248,7 +6270,6 @@ function setView(view, options = {}) {
     settings: "운영 설정",
   };
   $("#viewTitle").textContent = titles[view];
-  if (enteringSchedule) renderSchedule();
   if (view === "billing" && !serverPaymentSyncState.loading) {
     loadServerPaymentsIntoBilling();
   }
@@ -8719,13 +8740,25 @@ function renderMemberManagementModal() {
       <p class="member-management-rule">같은 이름만으로는 자동 연결하지 않습니다. 전화번호가 같은 한 명만 추천하며 관리자가 최종 확인합니다.</p>`;
   } else if (isCreate) {
     actionFields = products.length && coachRoles.length ? `
-      <div class="member-management-form-grid">
-        ${memberManualProfileFields()}
-        <label class="form-field span-2">${memberManagementFieldLabel("회원권", true)}<select name="productId" required>
-          ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")} · ${memberManagementScheduleScopeLabel(memberManagementProductScheduleScope(item))}</option>`).join("")}
-        </select></label>
+      <ol class="member-create-steps" aria-label="회원 추가 단계">
+        <li class="is-active" data-member-create-step-indicator="1"><span>1</span> 기본정보</li>
+        <li data-member-create-step-indicator="2"><span>2</span> 회원권·수업</li>
+      </ol>
+      <div data-member-create-panel="1">
+        <p class="member-create-step-help"><strong>1단계</strong> 이름은 필수입니다. 모르는 정보는 비워 두고 나중에 수정할 수 있습니다.</p>
+        <div class="member-management-form-grid">
+          ${memberManualProfileFields()}
+        </div>
       </div>
-      ${memberManagementDatabaseFields({ member, ticket: null, record: null, product, coachRoles, coachRoleId, partnerOptions, isCreate: true })}
+      <div data-member-create-panel="2" hidden>
+        <p class="member-create-step-help"><strong>2단계</strong> 판매할 회원권과 담당 코치를 고르면 횟수와 기간이 자동으로 채워집니다.</p>
+        <div class="member-management-form-grid">
+          <label class="form-field span-2">${memberManagementFieldLabel("회원권", true)}<select name="productId" required>
+            ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")} · ${memberManagementScheduleScopeLabel(memberManagementProductScheduleScope(item))}</option>`).join("")}
+          </select></label>
+        </div>
+        ${memberManagementDatabaseFields({ member, ticket: null, record: null, product, coachRoles, coachRoleId, partnerOptions, isCreate: true })}
+      </div>
       <p class="member-management-rule">저장하면 실서버 회원과 회원권이 함께 생성되어 기존 회원과 동일하게 수정·만료·시간표 등록을 할 수 있습니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "assign") {
     actionFields = products.length && coachRoles.length ? `
@@ -8799,9 +8832,46 @@ function renderMemberManagementModal() {
       <div id="memberManagementMessage" class="form-message danger" role="status">${escapeHtml(memberManagementModalState.message || "")}</div>
       <div class="modal-actions">
         <button class="ghost-button" type="button" data-close-member-management>취소</button>
-        <button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${(["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length) ? "disabled" : ""}>${memberManagementActionLabel(action)} 확정</button>
+        ${isCreate && products.length && coachRoles.length ? `
+          <button class="ghost-button" type="button" data-member-create-previous hidden>이전</button>
+          <button class="primary-button" type="button" data-member-create-next>다음: 회원권·수업</button>
+          <button class="primary-button" type="submit" data-member-create-submit hidden>${memberManagementActionLabel(action)} 확정</button>
+        ` : `<button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${(["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length) ? "disabled" : ""}>${memberManagementActionLabel(action)} 확정</button>`}
       </div>
     </form>`;
+}
+
+function setMemberCreateStep(step) {
+  const form = $("#memberManagementForm");
+  if (!form || memberManagementModalState.action !== "create") return;
+  const nextStep = step === 2 ? 2 : 1;
+  memberManagementModalState.createStep = nextStep;
+  [...form.querySelectorAll("[data-member-create-panel]")].forEach((panel) => {
+    panel.hidden = Number(panel.dataset.memberCreatePanel) !== nextStep;
+  });
+  [...form.querySelectorAll("[data-member-create-step-indicator]")].forEach((indicator) => {
+    const indicatorStep = Number(indicator.dataset.memberCreateStepIndicator);
+    indicator.classList.toggle("is-active", indicatorStep === nextStep);
+    indicator.classList.toggle("is-done", indicatorStep < nextStep);
+  });
+  const previous = form.querySelector("[data-member-create-previous]");
+  const next = form.querySelector("[data-member-create-next]");
+  const submit = form.querySelector("[data-member-create-submit]");
+  if (previous) previous.hidden = nextStep === 1;
+  if (next) next.hidden = nextStep === 2;
+  if (submit) submit.hidden = nextStep !== 2;
+  const heading = form.querySelector(`[data-member-create-panel="${nextStep}"] input, [data-member-create-panel="${nextStep}"] select`);
+  window.setTimeout(() => heading?.focus(), 0);
+}
+
+function memberCreateStepIsValid(step) {
+  const panel = $(`#memberManagementForm [data-member-create-panel="${step}"]`);
+  if (!panel) return true;
+  const controls = [...panel.querySelectorAll("input, select, textarea")].filter((control) => !control.disabled);
+  const invalid = controls.find((control) => !control.checkValidity());
+  if (!invalid) return true;
+  invalid.reportValidity();
+  return false;
 }
 
 async function openMemberManagementModal(member, action, ticketId = "") {
@@ -8861,12 +8931,14 @@ async function openManualMemberModal() {
     linkCandidatesLoading: false,
     linkCandidatesLoadedFor: "",
     linkQuery: "",
+    createStep: 1,
   });
   renderMemberManagementModal();
   $("#memberManagementModal")?.removeAttribute("hidden");
   syncMemberManagementBalance($("#memberManagementForm"));
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
+  setMemberCreateStep(1);
   window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   setTimeout(() => $("#memberManagementForm input[name='memberName']")?.focus(), 0);
 }
@@ -8882,6 +8954,7 @@ function closeMemberManagementModal() {
     linkCandidatesLoading: false,
     linkCandidatesLoadedFor: "",
     linkQuery: "",
+    createStep: 1,
   });
   const target = $("#memberManagementModalContent");
   if (target) target.innerHTML = "";
@@ -10444,6 +10517,7 @@ function memberQuickEditorMarkup(member, ticket) {
           </div>
           <div class="member-inline-editor-actions">
             <button class="ghost-button" type="button" data-open-member-management="profile" data-member-management-ticket="${escapeHtml(ticket?.serverTicketId || "")}" data-member-management-member="${member.id}">상세 관리</button>
+            <button class="ghost-button" type="button" data-close-member-inline>수정 닫기</button>
             <p class="member-inline-message" aria-live="polite"></p>
           </div>
         </form>
@@ -10758,7 +10832,7 @@ function renderMembers() {
     .map((member) => {
       const ticket = memberCurrentTicket(member);
       const issues = memberEditorAuditIssues(member, ticket);
-      const inlineEditor = memberQuickEditorMarkup(member, ticket);
+      const inlineEditor = state.inlineMemberId === member.id ? memberQuickEditorMarkup(member, ticket) : "";
       return `
         <tr class="${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}">
           <td class="row-select-cell member-select-column"><input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedMemberIdSet().has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} /></td>
@@ -10767,6 +10841,7 @@ function renderMembers() {
               ${avatarMarkup(member, "small")}
               <span>${escapeHtml(member.name)}</span>
             </button>
+            ${memberEditorMode !== "audit" && operationsRole() === "admin" ? `<button class="member-inline-edit-button" type="button" data-open-member-inline="${member.id}" aria-expanded="${state.inlineMemberId === member.id ? "true" : "false"}">${state.inlineMemberId === member.id ? "수정 닫기" : "이 행 수정"}</button>` : ""}
           </td>
           <td class="member-auth-column">${memberAuthStatusMarkup(member)}</td>
           <td class="member-coach-column">${escapeHtml(member.coach || "미배정")}</td>
@@ -16033,20 +16108,23 @@ function adminPaymentCancelBlockedMessage() {
 }
 
 function paymentCancelButtonFor(index, label = "결제취소") {
+  const item = billings[index] || {};
+  const context = `${item.member || "회원"} · ${item.item || "결제"} · ${label}`;
   if (adminPaymentCancelReady()) {
-    return `<button class="small-button danger-action" type="button" data-cancel-payment="${index}">${label}</button>`;
+    return `<button class="small-button danger-action" type="button" data-cancel-payment="${index}" aria-label="${escapeHtml(context)}" title="${escapeHtml(context)}">${label}</button>`;
   }
-  return `<button class="small-button danger-action" type="button" disabled title="${escapeHtml(adminPaymentCancelBlockedMessage())}">관리자 로그인 필요</button>`;
+  return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="${escapeHtml(adminPaymentCancelBlockedMessage())}">관리자 로그인 필요</button>`;
 }
 
 function paymentRefundButtonFor(item, index) {
+  const context = `${item?.member || "회원"} · ${item?.item || "결제"} · 환불 계산`;
   if (!item?.providerPaymentId) {
-    return `<button class="small-button danger-action" type="button" disabled title="서버 결제번호가 필요합니다.">환불 계산</button>`;
+    return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="서버 결제번호가 필요합니다.">환불 계산</button>`;
   }
   if (adminPaymentCancelReady()) {
-    return `<button class="small-button danger-action" type="button" data-refund-payment="${index}">환불 계산</button>`;
+    return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" aria-label="${escapeHtml(context)}" title="${escapeHtml(context)}">환불 계산</button>`;
   }
-  return `<button class="small-button danger-action" type="button" disabled title="${escapeHtml(adminPaymentCancelBlockedMessage())}">관리자 로그인 필요</button>`;
+  return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="${escapeHtml(adminPaymentCancelBlockedMessage())}">관리자 로그인 필요</button>`;
 }
 
 function renderPaymentAdminGateStatus() {
@@ -16157,18 +16235,17 @@ function renderBilling() {
 }
 
 function paymentActionFor(item, index) {
+  const context = (label) => `aria-label="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}" title="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}"`;
   if (item.status === "check") return item.providerPaymentId
-    ? `<button class="small-button" type="button" data-review-payment="${index}">서버 확인</button>${paymentCancelButtonFor(index, "대기취소")}`
+    ? `<button class="small-button" type="button" data-review-payment="${index}" ${context("서버 확인")}>서버 확인</button>${paymentCancelButtonFor(index, "대기취소")}`
     : '<button class="small-button" type="button" disabled>서버 결제번호 없음</button>';
-  if (item.status === "unverified") return `<button class="small-button" type="button" data-review-payment="${index}">서버 연결 확인</button><button class="small-button danger-action" type="button" data-cancel-payment="${index}">대기취소</button>`;
-  if (item.status === "failed") return `<button class="small-button" type="button" data-failed-payment="${index}">실패 확인</button><button class="small-button danger-action" type="button" data-cancel-payment="${index}">대기취소</button>`;
+  if (item.status === "unverified") return `<button class="small-button" type="button" data-review-payment="${index}" ${context("서버 연결 확인")}>서버 연결 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
+  if (item.status === "failed") return `<button class="small-button" type="button" data-failed-payment="${index}" ${context("실패 확인")}>실패 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
   if (item.status === "draft") return '<button class="small-button" type="button" disabled>회원 결제 대기</button>';
-  if (item.status === "server_ready") return `<button class="small-button" type="button" data-server-ready-payment="${index}">결제 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
-  if (item.status === "unverified") return `<button class="small-button" type="button" data-review-payment="${index}">서버 연결 확인</button>`;
-  if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}">완료됨</button>${paymentRefundButtonFor(item, index)}`;
+  if (item.status === "server_ready") return `<button class="small-button" type="button" data-server-ready-payment="${index}" ${context("결제 확인")}>결제 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
+  if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}" ${context("결제 완료 상세")}>완료됨</button>${paymentRefundButtonFor(item, index)}`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;
-  if (item.status === "refund_reconcile") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}">동기화 확인</button>`;
-  if (item.status === "failed") return `<button class="small-button" type="button" data-failed-payment="${index}">실패 확인</button>`;
+  if (item.status === "refund_reconcile") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("환불 동기화 확인")}>동기화 확인</button>`;
   if (item.status === "cancelled") return `<button class="small-button" type="button" disabled>취소완료</button>`;
   if (item.status === "refunded") return `<button class="small-button" type="button" disabled>환불완료</button>`;
   return "";
@@ -16937,7 +17014,7 @@ function renderNotes() {
           </div>
           <aside>
             ${recordStatusBadge(record)}
-            ${record.actionable ? `<button class="small-button" type="button" data-open-lesson-record="${escapeHtml(record.lessonId)}">${escapeHtml(record.actionLabel)}</button>` : record.actionView ? `<button class="small-button" type="button" data-record-action-view="${escapeHtml(record.actionView)}">${escapeHtml(record.actionLabel)}</button>` : record.mediaCount ? `<button class="ghost-button" type="button" data-open-journal-media="${escapeHtml(record.journalId)}">${escapeHtml(record.actionLabel)}</button>` : `<b>${escapeHtml(record.actionLabel)}</b>`}
+            ${record.actionable ? `<button class="small-button" type="button" data-open-lesson-record="${escapeHtml(record.lessonId)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.actionView ? `<button class="small-button" type="button" data-record-action-view="${escapeHtml(record.actionView)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.mediaCount ? `<button class="ghost-button" type="button" data-open-journal-media="${escapeHtml(record.journalId)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : `<b>${escapeHtml(record.actionLabel)}</b>`}
           </aside>
         </article>`,
     )
@@ -23135,6 +23212,14 @@ function bindEvents() {
       renderMembers();
       return;
     }
+    if (event.target.closest("[data-member-create-next]")) {
+      if (memberCreateStepIsValid(1)) setMemberCreateStep(2);
+      return;
+    }
+    if (event.target.closest("[data-member-create-previous]")) {
+      setMemberCreateStep(1);
+      return;
+    }
     if (event.target.closest("[data-close-member-inline]")) {
       state.inlineMemberId = null;
       renderMembers();
@@ -23293,8 +23378,8 @@ function bindEvents() {
     const memberButton = event.target.closest("[data-select-member]");
     if (memberButton) {
       const memberId = Number(memberButton.dataset.selectMember);
-      state.selectedMemberId = null;
-      state.inlineMemberId = state.inlineMemberId === memberId ? null : memberId;
+      state.selectedMemberId = state.selectedMemberId === memberId ? null : memberId;
+      state.inlineMemberId = null;
       renderMembers();
       return;
     }

@@ -5788,6 +5788,13 @@ body {
   color: #fff;
 }
 
+.member-schedule-guide {
+  margin: -4px 2px 12px;
+  color: #52616b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .member-availability-overview,
 .member-flex-booking {
   display: grid;

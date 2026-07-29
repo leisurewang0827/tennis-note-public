@@ -34,9 +34,9 @@ const state = {
   activeMemberWeekIndex: 0,
   selectedScheduleDay: "",
   scheduleTimeRange: "lesson",
-  memberScheduleMode: "availability",
+  memberScheduleMode: "mine",
   memberScheduleModeTouched: false,
-  memberScheduleFullView: true,
+  memberScheduleFullView: false,
   activeJournalMonth: "2026-07",
   selectedJournalDate: "2026-07-03",
   selectedLessonDetailId: "",
@@ -1679,7 +1679,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.175",
+    workerUrl: "./service-worker.js?v=1.0.176",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -7252,7 +7252,8 @@ function closeJournalDetail() {
 function setView(viewId, options = {}) {
   if (!viewId || !$(`#${viewId}`)) return;
   if (viewId === "scheduleView" && !state.memberScheduleModeTouched) {
-    state.memberScheduleMode = "availability";
+    state.memberScheduleMode = "mine";
+    state.memberScheduleFullView = false;
   }
   document.body.dataset.activeMemberView = viewId;
   $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === viewId));
@@ -7331,7 +7332,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.175" });
+  const params = new URLSearchParams({ v: "1.0.176" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
