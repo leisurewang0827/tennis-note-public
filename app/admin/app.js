@@ -11799,7 +11799,7 @@ function renderCoachDaySchedule(day) {
   target.innerHTML = headers + baseCells + lessonCards;
 }
 
-function getAdminDurationSlotState(day, time, coach) {
+function getAdminDurationSlotState(day, time, coach, laneLessons = null) {
   if (coach.id?.startsWith("closed-")) {
     return {
       className: "is-closed",
@@ -11810,7 +11810,10 @@ function getAdminDurationSlotState(day, time, coach) {
       pasteReady: false,
     };
   }
-  const occupyingLesson = operationBranchLessons().find((lesson) => lessonScheduleCoachId(lesson) === coach.id && lessonOverlapsScheduleSlot(lesson, day, time));
+  const candidateLessons = Array.isArray(laneLessons)
+    ? laneLessons
+    : operationBranchLessons().filter((lesson) => lessonScheduleCoachId(lesson) === coach.id);
+  const occupyingLesson = candidateLessons.find((lesson) => lessonOverlapsScheduleSlot(lesson, day, time));
   const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10) || getBreakRuleOverlapping(day, time, 10, coach.id);
   const working = !breakRule && isCoachAvailableForSlot(coach.id, day, time, 10);
   const canAdd = !occupyingLesson && working && canAddLessonAt(day, time, 20, coach.id);
@@ -11826,6 +11829,7 @@ function getAdminDurationSlotState(day, time, coach) {
 
 function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
   const target = $("#scheduleGrid");
+  const scheduleLessons = operationBranchLessons();
   const lanes = [];
   const dayRanges = [];
   displayDays.forEach((day) => {
@@ -11847,6 +11851,11 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
       ${day} · ${adminScheduleDateLabel(day)}
     </div>`).join("");
   const dayStartLaneIndexes = new Set(dayRanges.map(({ startColumn }) => startColumn - 2));
+  const laneLessons = lanes.map(({ day, coach }) => scheduleLessons
+    .filter((lesson) => lesson.day === day
+      && lessonScheduleCoachId(lesson) === coach.id
+      && !isLessonCancelled(lesson)
+      && lessonMatchesActiveScheduleWeek(lesson, day)));
   const coachHeaders = lanes.map(({ coach }, index) => `
     <div class="admin-duration-coach ${dayStartLaneIndexes.has(index) ? "admin-duration-day-start" : ""} ${coach.id?.startsWith("closed-") ? "is-closed" : getCoachToneClass(coach.id)}" style="grid-row:2;grid-column:${index + 2};">
       ${escapeHtml(String(coach.name || "운영없음").replace(/\s*코치$/, ""))}
@@ -11857,7 +11866,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
   const slotCells = visibleTimes.map((time, timeIndex) => lanes.map(({ day, coach }, laneIndex) => {
     const row = timeIndex + 3;
     const column = laneIndex + 2;
-    const slotState = getAdminDurationSlotState(day, time, coach);
+    const slotState = getAdminDurationSlotState(day, time, coach, laneLessons[laneIndex]);
     const openSlotKey = scheduleOpenSlotKey({ day, time, coachId: coach.id });
     const openSlotSelected = selectedScheduleOpenSlotKeys().has(openSlotKey);
     const addButtonContent = state.scheduleOpenSlotMode
@@ -11871,8 +11880,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
   }).join("")).join("");
 
-  const lessonCards = lanes.map(({ day, coach }, laneIndex) => operationBranchLessons()
-    .filter((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && !isLessonCancelled(lesson) && lessonMatchesActiveScheduleWeek(lesson, day))
+  const lessonCards = lanes.map((lane, laneIndex) => laneLessons[laneIndex]
     .map((lesson) => {
       const startIndex = visibleTimes.indexOf(lesson.time);
       if (startIndex < 0) return "";
