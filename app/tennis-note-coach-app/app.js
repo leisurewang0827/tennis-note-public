@@ -1727,7 +1727,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.169",
+    workerUrl: "./service-worker.js?v=1.0.170",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1757,7 +1757,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.169" });
+  const params = new URLSearchParams({ v: "1.0.170" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -5163,18 +5163,24 @@ async function initCoachApp() {
   })().catch(() => {});
 
   const openedFromSupabase = await applySupabaseCoachSession(false);
-  if (!openedFromSupabase || !state.coach) {
-    const sessionStillAvailable = Boolean(client?.getSession?.()?.access_token);
-    if (!sessionStillAvailable) {
-      returnToMemberEntry(true);
-      return;
-    }
-    if (!state.coach) {
-      $("#coachAppScreen").hidden = true;
-      $("#coachLoginScreen").hidden = false;
-      renderCoachAccessMessage();
-      return;
-    }
+  const sessionStillAvailable = Boolean(client?.getSession?.()?.access_token);
+  if (!sessionStillAvailable) {
+    returnToMemberEntry(true);
+    return;
+  }
+  if (!openedFromSupabase) {
+    state.coach = null;
+    $("#coachAppScreen").hidden = true;
+    $("#coachLoginScreen").hidden = false;
+    setCoachAccessMessage("코치 권한을 확인하지 못했습니다. 네트워크를 확인한 뒤 새로고침하거나 관리자에게 승인 상태를 확인해 주세요.", "alert");
+    saveSnapshot();
+    return;
+  }
+  if (!state.coach) {
+    $("#coachAppScreen").hidden = true;
+    $("#coachLoginScreen").hidden = false;
+    renderCoachAccessMessage();
+    return;
   }
   if (window.TennisNoteDataClient?.isOnline?.() !== false) void flushCoachOfflineLessonDrafts();
 }
