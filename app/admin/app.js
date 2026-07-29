@@ -10260,7 +10260,7 @@ function lessonMatchesActiveScheduleWeek(lesson, day = lesson?.day) {
 }
 
 function getLessonMembersLabel(lesson) {
-  if (isReleasedRegularMakeupSlot(lesson)) return "정규자리";
+  if (isReleasedRegularMakeupSlot(lesson)) return "보강 신청 가능";
   return lesson.member;
 }
 
@@ -12116,6 +12116,7 @@ function isRegularScheduleSetup(ticket) {
   return Boolean(
     ticket
     && !state.editingLessonId
+    && !state.quickLessonEntry
     && normalizeLessonSource($("#lessonSource")?.value) === "regular"
     && !isPastLessonCorrectionMode(getLessonFormCandidate())
   );
@@ -13418,8 +13419,9 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   const quickMode = state.quickLessonEntry || state.quickLessonEdit;
   const ticket = getSelectedTicket();
   const source = normalizeLessonSource($("#lessonSource")?.value);
-  const requiredCount = source === "regular" ? Math.max(1, Math.min(3, getTicketWeeklyCount(ticket))) : 1;
-  if (state.quickLessonEntry && requiredCount > 1) state.quickLessonDetailsExpanded = true;
+  const requiredCount = source === "regular" && !state.quickLessonEntry
+    ? Math.max(1, Math.min(3, getTicketWeeklyCount(ticket)))
+    : 1;
   const expanded = quickMode && state.quickLessonDetailsExpanded;
   modal.classList.toggle("is-quick-entry", state.quickLessonEntry);
   modal.classList.toggle("is-quick-edit", state.quickLessonEdit);
@@ -13469,13 +13471,17 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
         : completedCorrection
         ? "완료 기록과 피드백은 유지됩니다. 잘못된 코치·요일·시간·수업시간만 바로잡으세요."
         : "요일·시간·코치·수업 길이를 바꾸고 아래에서 적용 범위를 선택하세요."
+      : state.quickLessonEntry
+        ? quickTicketSummary
+          ? `${quickTicketSummary} · 이번 수업 1회만 등록`
+          : "회원 이름을 검색하면 회원권과 파트너가 자동으로 연결됩니다."
       : requiredCount > 1
         ? `주 ${requiredCount}회 회원권은 나머지 요일과 시간을 모두 선택해야 합니다.`
         : quickTicketSummary || "회원 검색 후 회원권을 확인하고 저장하세요.";
   }
   const toggle = $("#toggleLessonQuickDetails");
   if (toggle) {
-    toggle.hidden = state.quickLessonEdit || completedCorrection || (state.quickLessonEntry && requiredCount > 1);
+    toggle.hidden = state.quickLessonEdit || completedCorrection;
     toggle.setAttribute("aria-expanded", String(expanded));
     toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "추가 작업" : "상세 설정";
   }
@@ -14228,7 +14234,9 @@ async function saveLiveAdminLesson(candidate, entitlement = null) {
     target_duration_minutes: candidate.durationMinutes,
     target_lesson_source: liveLessonSource(candidate),
     target_participant_user_ids: participantUserIds,
-    target_update_regular_rule: !editingLesson && liveLessonSource(candidate) === "regular",
+    target_update_regular_rule: !editingLesson
+      && !state.quickLessonEntry
+      && liveLessonSource(candidate) === "regular",
   };
   if (adminManualOverrideEnabled()) {
     return client.rpc("tn_admin_force_save_lesson", {
@@ -14842,7 +14850,9 @@ async function addLessonFromForm(event) {
       else if (wasEditing && selectedLessonEditScope() === "reset") await resetLiveAdminRegularSchedule(candidates[0]);
       else if (wasEditing && selectedLessonEditScope() === "series") await saveLiveAdminRegularLessonSeries(candidates[0]);
       else if (wasEditing) await saveLiveAdminLesson(candidates[0]);
-      else {
+      else if (state.quickLessonEntry) {
+        await saveLiveAdminLesson(candidates[0]);
+      } else {
         const scheduleProtectionMessage = !manualOverride
           ? regularScheduleProtectionMessage(ticket, candidates)
           : "";

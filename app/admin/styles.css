@@ -3171,9 +3171,10 @@ tr.is-selected td {
 .split-segment.status-released-makeup {
   --lesson-color: #111827;
   color: #111827 !important;
-  border: 1px dashed #64748b !important;
-  background: #ffffff !important;
-  box-shadow: none !important;
+  border: 1px dashed rgba(71, 85, 105, 0.72) !important;
+  background: rgba(255, 255, 255, 0.56) !important;
+  box-shadow: inset 3px 0 0 rgba(71, 85, 105, 0.46) !important;
+  backdrop-filter: saturate(0.75);
 }
 
 .status-released-makeup strong,
