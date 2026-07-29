@@ -14018,7 +14018,14 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
     && normalizeLessonSource(editingLesson.lessonSource) === "regular"
     && operationsRole() === "admin"
   );
+  const canCompleteLesson = Boolean(
+    state.quickLessonEdit
+    && editingLesson?.serverLessonId
+    && lessonStatusValue(editingLesson) === "scheduled"
+    && isPastLessonCorrectionMode(candidate)
+  );
   if (!canMarkAbsent && state.lessonQuickAction === "absence") state.lessonQuickAction = "schedule";
+  if (!canCompleteLesson && state.lessonQuickAction === "record") state.lessonQuickAction = "schedule";
   const absenceFocus = canMarkAbsent && state.lessonQuickAction === "absence";
   const detailsFocus = state.lessonQuickAction === "details";
   if (absenceFocus || detailsFocus) {
@@ -14032,6 +14039,7 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
     [...quickActions.querySelectorAll("[data-lesson-quick-action]")].forEach((button) => {
       const action = button.dataset.lessonQuickAction;
       button.hidden = action === "absence" && !canMarkAbsent;
+      if (action === "record") button.hidden = !canCompleteLesson;
       button.classList.toggle("is-active", action === state.lessonQuickAction);
       button.setAttribute("aria-pressed", String(action === state.lessonQuickAction));
     });
@@ -22596,6 +22604,16 @@ function bindEvents() {
   $$("[data-lesson-quick-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.lessonQuickAction || "schedule";
+      if (action === "record") {
+        const lessonId = getCurrentEditingLesson()?.serverLessonId || "";
+        if (!lessonId) {
+          showToast("수업 정보를 다시 불러온 뒤 피드백을 작성해 주세요.");
+          return;
+        }
+        closeLessonModal();
+        openLessonRecordModal(lessonId);
+        return;
+      }
       state.lessonQuickAction = action;
       state.quickLessonDetailsExpanded = action !== "schedule";
       syncQuickLessonEntryUi();
