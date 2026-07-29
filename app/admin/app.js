@@ -1146,6 +1146,12 @@ const notificationPolicyDefaults = {
   ticketExpiryEnabled: true,
   expiryDaysBefore: 7,
   ticketExpiredEnabled: true,
+  coachFeedbackReminderEnabled: true,
+  coachFeedbackReminderMinutes: 30,
+  coachFeedbackAdminEscalationEnabled: true,
+  coachFeedbackAdminEscalationHours: 24,
+  memberFeedbackReadyEnabled: true,
+  scheduleRequestStaffEnabled: true,
   updatedAt: "",
 };
 const notificationPolicySettings = { ...notificationPolicyDefaults };
@@ -9516,6 +9522,12 @@ function normalizeNotificationPolicy(settings = {}) {
     ticketExpiryEnabled: settings.ticketExpiryEnabled !== false,
     expiryDaysBefore: clamp(settings.expiryDaysBefore, 1, 30, 7),
     ticketExpiredEnabled: settings.ticketExpiredEnabled !== false,
+    coachFeedbackReminderEnabled: settings.coachFeedbackReminderEnabled !== false,
+    coachFeedbackReminderMinutes: clamp(settings.coachFeedbackReminderMinutes, 10, 1440, 30),
+    coachFeedbackAdminEscalationEnabled: settings.coachFeedbackAdminEscalationEnabled !== false,
+    coachFeedbackAdminEscalationHours: clamp(settings.coachFeedbackAdminEscalationHours, 1, 168, 24),
+    memberFeedbackReadyEnabled: settings.memberFeedbackReadyEnabled !== false,
+    scheduleRequestStaffEnabled: settings.scheduleRequestStaffEnabled !== false,
     updatedAt: settings.updatedAt || settings.updated_at || "",
   };
 }
@@ -9534,6 +9546,11 @@ function notificationTemplateLabel(templateKey = "") {
     substitute_lesson_assigned: "대타 수업 배정",
     substitute_lesson_transferred: "대타 처리 일정",
     lesson_substitute_cancelled: "원 담당 코치 복원",
+    coach_feedback_missing: "피드백 작성 필요",
+    coach_feedback_overdue_admin: "피드백 미작성",
+    lesson_feedback_ready: "코치 피드백 등록",
+    lesson_change_staff: "수업 변경",
+    makeup_booking_staff: "보강 신청",
   })[templateKey] || "앱 알림";
 }
 
@@ -9655,6 +9672,12 @@ function readNotificationPolicyForm() {
     ticketExpiryEnabled: $("#notifyTicketExpiry")?.checked !== false,
     expiryDaysBefore: $("#notifyExpiryDaysBefore")?.value,
     ticketExpiredEnabled: $("#notifyTicketExpired")?.checked !== false,
+    coachFeedbackReminderEnabled: $("#notifyCoachFeedbackReminder")?.checked !== false,
+    coachFeedbackReminderMinutes: $("#notifyCoachFeedbackReminderMinutes")?.value,
+    coachFeedbackAdminEscalationEnabled: $("#notifyCoachFeedbackEscalation")?.checked !== false,
+    coachFeedbackAdminEscalationHours: $("#notifyCoachFeedbackEscalationHours")?.value,
+    memberFeedbackReadyEnabled: $("#notifyMemberFeedbackReady")?.checked !== false,
+    scheduleRequestStaffEnabled: $("#notifyScheduleRequestStaff")?.checked !== false,
     updatedAt: new Date().toISOString(),
   });
 }
@@ -19949,6 +19972,24 @@ function renderNotificationPolicySettings() {
       <div class="notification-rule-row">
         <input id="notifyTicketExpired" type="checkbox" role="switch" aria-label="회원권 만료일 알림" ${policy.ticketExpiredEnabled ? "checked" : ""} />
         <span><strong>만료일</strong><small>사용기간 종료 안내</small></span>
+      </div>
+      <div class="notification-rule-row">
+        <input id="notifyCoachFeedbackReminder" type="checkbox" role="switch" aria-label="코치 피드백 미작성 알림" ${policy.coachFeedbackReminderEnabled ? "checked" : ""} />
+        <span><strong>피드백 미작성</strong><small>수업 종료 후 담당 코치에게 알림</small></span>
+        <span class="notification-inline-control"><input id="notifyCoachFeedbackReminderMinutes" type="number" min="10" max="1440" aria-label="피드백 작성 알림 시간" value="${policy.coachFeedbackReminderMinutes}" /><b>분 후</b></span>
+      </div>
+      <div class="notification-rule-row">
+        <input id="notifyCoachFeedbackEscalation" type="checkbox" role="switch" aria-label="피드백 미작성 관리자 알림" ${policy.coachFeedbackAdminEscalationEnabled ? "checked" : ""} />
+        <span><strong>미작성 관리자 확인</strong><small>장기 미처리 수업을 관리자에게 알림</small></span>
+        <span class="notification-inline-control"><input id="notifyCoachFeedbackEscalationHours" type="number" min="1" max="168" aria-label="관리자 확인 알림 시간" value="${policy.coachFeedbackAdminEscalationHours}" /><b>시간 후</b></span>
+      </div>
+      <div class="notification-rule-row">
+        <input id="notifyMemberFeedbackReady" type="checkbox" role="switch" aria-label="회원 피드백 등록 알림" ${policy.memberFeedbackReadyEnabled ? "checked" : ""} />
+        <span><strong>피드백 등록 완료</strong><small>코치가 저장하면 회원에게 즉시 알림</small></span>
+      </div>
+      <div class="notification-rule-row">
+        <input id="notifyScheduleRequestStaff" type="checkbox" role="switch" aria-label="수업 변경 및 보강 신청 알림" ${policy.scheduleRequestStaffEnabled ? "checked" : ""} />
+        <span><strong>변경·보강 신청</strong><small>담당 코치와 관리자에게 즉시 알림</small></span>
       </div>
     </div>
     <div class="notification-delivery-metrics">
