@@ -1994,6 +1994,169 @@ tr.is-selected td {
   padding: 0;
 }
 
+.member-editor-mode-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #cfe1da;
+  border-radius: 8px;
+  background: #f8fcfa;
+}
+
+.member-editor-mode-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(84px, 1fr));
+  overflow: hidden;
+  border: 1px solid #bed5cc;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.member-editor-mode-switch button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-right: 1px solid #d8e7e1;
+  color: #436158;
+  background: transparent;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.member-editor-mode-switch button:last-child {
+  border-right: 0;
+}
+
+.member-editor-mode-switch button.is-active {
+  color: #fff;
+  background: var(--green);
+}
+
+.member-editor-mode-bar p {
+  min-width: 0;
+  margin: 0;
+  color: #526c63;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+#memberEditorModeSaveState {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.member-inline-edit-button {
+  display: block;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  color: var(--green);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.member-inline-editor-row > td {
+  padding: 0 !important;
+  background: #f5faf8;
+}
+
+.member-inline-editor {
+  padding: 12px 14px 14px;
+  border-top: 2px solid var(--green);
+  border-bottom: 1px solid #cfe1da;
+}
+
+.member-inline-editor-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.member-inline-editor-heading > div {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.member-inline-editor-heading span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-inline-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.25fr) repeat(2, minmax(116px, 1fr)) repeat(3, minmax(74px, .7fr)) minmax(120px, 1fr) minmax(116px, 1fr) minmax(110px, .9fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.member-inline-editor-grid label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.member-inline-editor-grid label > span {
+  color: #60776f;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.member-inline-editor-grid input,
+.member-inline-editor-grid select {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 8px;
+  border: 1px solid #cbded7;
+  border-radius: 6px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.member-inline-save {
+  min-width: 92px;
+  height: 38px;
+  white-space: nowrap;
+}
+
+.member-inline-message {
+  margin: 8px 0 0;
+  color: #587168;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.member-inline-message.is-success {
+  color: var(--green);
+}
+
+.member-inline-message.is-error {
+  color: var(--red);
+}
+
+.member-audit-issue {
+  display: block;
+  margin-top: 4px;
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 #membersView .table-panel th,
 #membersView .table-panel td {
   padding-top: 10px;
@@ -2455,6 +2618,25 @@ tr.is-selected td {
   grid-template-columns: repeat(3, minmax(120px, 1fr));
   gap: 8px;
   margin-bottom: 10px;
+}
+
+@media (max-width: 900px) {
+  .member-editor-mode-bar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .member-editor-mode-switch {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .member-inline-editor-grid {
+    grid-template-columns: repeat(3, minmax(110px, 1fr));
+  }
+
+  .member-inline-save {
+    width: 100%;
+  }
 }
 
 .reservation-strip article {
