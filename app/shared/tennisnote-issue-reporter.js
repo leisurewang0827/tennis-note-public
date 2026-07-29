@@ -136,8 +136,11 @@
         : automationStatus === "review_required"
           ? `<button type="button" disabled>검토 요청됨</button>`
           : `<button type="button" data-request-autofix>수정 검토 요청</button>`;
+    const errorDetails = row.error_message
+      ? `<details class="tn-report-error-details"><summary>오류 상세 보기</summary><code>${escapeHtml(safeMessage(row.error_message))}</code></details>`
+      : "";
     return `<article class="tn-report-row ${escapeHtml(row.priority)}" data-report-id="${escapeHtml(row.id)}">
-      <div><span>${escapeHtml(row.error_code)} · ${escapeHtml(row.surface)} · ${escapeHtml(labels[row.report_kind])}</span><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.description || row.error_message)}</p><small>${new Date(row.last_seen_at).toLocaleString("ko-KR")} · ${row.occurrence_count}회 발생 · v${escapeHtml(row.app_version)}</small><em class="tn-report-automation">${escapeHtml(automationLabel)}${automationMessage ? ` · ${escapeHtml(automationMessage)}` : ""}</em></div>
+      <div><span>${escapeHtml(row.error_code)} · ${escapeHtml(row.surface)} · ${escapeHtml(labels[row.report_kind])}</span><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.description || row.error_message)}</p>${errorDetails}<small>${new Date(row.last_seen_at).toLocaleString("ko-KR")} · ${row.occurrence_count}회 발생 · v${escapeHtml(row.app_version)}</small><em class="tn-report-automation">${escapeHtml(automationLabel)}${automationMessage ? ` · ${escapeHtml(automationMessage)}` : ""}</em></div>
       <div class="tn-report-controls"><select data-report-priority><option value="urgent" ${row.priority === "urgent" ? "selected" : ""}>긴급</option><option value="high" ${row.priority === "high" ? "selected" : ""}>높음</option><option value="normal" ${row.priority === "normal" ? "selected" : ""}>일반</option></select><select data-report-status><option value="new" ${row.status === "new" ? "selected" : ""}>신규</option><option value="reviewing" ${row.status === "reviewing" ? "selected" : ""}>확인중</option><option value="planned" ${row.status === "planned" ? "selected" : ""}>개선예정</option><option value="resolved" ${row.status === "resolved" ? "selected" : ""}>완료</option><option value="closed" ${row.status === "closed" ? "selected" : ""}>종료</option></select><button type="button" data-save-report>상태 저장</button>${automationAction}<b>${priorityLabel} · ${statusLabel}</b></div>
     </article>`;
   }

@@ -159,12 +159,42 @@
             store.createIndex("savedAt", "savedAt", { unique: false });
           }
         };
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+          const database = request.result;
+          database.onversionchange = () => {
+            database.close();
+            offlineDatabasePromise = null;
+          };
+          resolve(database);
+        };
         request.onerror = () => resolve(null);
         request.onblocked = () => resolve(null);
       });
     }
     return offlineDatabasePromise;
+  }
+
+  function resetOfflineDatabase(database) {
+    try {
+      database?.close();
+    } catch (error) {
+      // The connection may already be closing.
+    }
+    offlineDatabasePromise = null;
+  }
+
+  async function runOfflineTransaction(mode, handler) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const database = await openOfflineDatabase();
+      if (!database) return null;
+      try {
+        const transaction = database.transaction(offlineResponseStore, mode);
+        return await handler(transaction);
+      } catch (error) {
+        resetOfflineDatabase(database);
+      }
+    }
+    return null;
   }
 
   function offlineResponseKey(path, session = getSession()) {
@@ -174,10 +204,8 @@
 
   async function readOfflineResponse(path, session = getSession()) {
     const key = offlineResponseKey(path, session);
-    const database = key ? await openOfflineDatabase() : null;
-    if (!database) return null;
-    return new Promise((resolve) => {
-      const transaction = database.transaction(offlineResponseStore, "readonly");
+    if (!key) return null;
+    return runOfflineTransaction("readonly", (transaction) => new Promise((resolve) => {
       const request = transaction.objectStore(offlineResponseStore).get(key);
       request.onsuccess = () => {
         const record = request.result;
@@ -188,16 +216,15 @@
         resolve(record.payload);
       };
       request.onerror = () => resolve(null);
-    });
+      transaction.onabort = () => resolve(null);
+    }));
   }
 
   async function writeOfflineResponse(path, payload, session = getSession()) {
     const identity = sessionSubject(session);
     const key = offlineResponseKey(path, session);
-    const database = key ? await openOfflineDatabase() : null;
-    if (!database) return false;
-    return new Promise((resolve) => {
-      const transaction = database.transaction(offlineResponseStore, "readwrite");
+    if (!key) return false;
+    return (await runOfflineTransaction("readwrite", (transaction) => new Promise((resolve) => {
       transaction.objectStore(offlineResponseStore).put({
         key,
         identity,
@@ -207,14 +234,12 @@
       transaction.oncomplete = () => resolve(true);
       transaction.onerror = () => resolve(false);
       transaction.onabort = () => resolve(false);
-    });
+    }))) === true;
   }
 
   async function clearOfflineResponses(identity = sessionSubject()) {
-    const database = identity ? await openOfflineDatabase() : null;
-    if (!database) return false;
-    return new Promise((resolve) => {
-      const transaction = database.transaction(offlineResponseStore, "readwrite");
+    if (!identity) return false;
+    return (await runOfflineTransaction("readwrite", (transaction) => new Promise((resolve) => {
       const index = transaction.objectStore(offlineResponseStore).index("identity");
       const request = index.openKeyCursor(window.IDBKeyRange.only(identity));
       request.onsuccess = () => {
@@ -226,7 +251,7 @@
       transaction.oncomplete = () => resolve(true);
       transaction.onerror = () => resolve(false);
       transaction.onabort = () => resolve(false);
-    });
+    }))) === true;
   }
 
   function sessionPersistence() {
