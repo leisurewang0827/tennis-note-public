@@ -1091,6 +1091,39 @@ h2 {
   gap: 14px;
 }
 
+.admin-security-mode-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-security-mode {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  color: var(--ink);
+}
+
+.admin-security-mode span,
+.admin-security-login-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-security-mode.is-active {
+  border-color: var(--brand);
+  background: var(--soft-green);
+}
+
+.admin-security-login-note {
+  margin: -4px 0 0;
+}
+
 .admin-security-card {
   display: grid;
   align-content: start;
@@ -8661,6 +8694,10 @@ button .schedule-member-lines > span {
 @media (max-width: 1100px) {
   .admin-security-grid,
   .admin-pin-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-security-mode-list {
     grid-template-columns: minmax(0, 1fr);
   }
 

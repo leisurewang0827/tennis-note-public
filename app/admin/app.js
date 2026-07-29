@@ -1852,16 +1852,17 @@ const legacyDefaultAdminPinHashes = new Set([
   "fnv1a:526e18f3",
 ]);
 const defaultAdminLockSettings = {
-  enabled: true,
+  enabled: false,
   pinHash: "",
   legacyPin: "",
   pinConfigured: false,
-  timeoutMinutes: 10,
-  lockedViews: ["billing", "data", "settings"],
-  pastAbsenceRequirePinEveryTime: true,
+  timeoutMinutes: 30,
+  lockedViews: [],
+  pastAbsenceRequirePinEveryTime: false,
 };
 const adminLockSettings = { ...defaultAdminLockSettings, lockedViews: [...defaultAdminLockSettings.lockedViews] };
 let adminSecurityDraft = null;
+let adminSecurityModeOverride = "";
 let adminSecuritySaveState = { status: "idle", savedAt: "" };
 const adminLockSession = {
   unlockedUntil: 0,
@@ -1879,6 +1880,24 @@ const adminLockViewOptions = [
   { id: "notes", label: "기록/차감 확인", detail: "수업 완료, 횟수 차감, 코치 코멘트" },
   { id: "members", label: "회원관리", detail: "회원 상세, 회원권 상태, NTRP" },
 ];
+const adminSecurityPresets = {
+  transition: {
+    label: "과도기 운영",
+    detail: "로그인은 유지하고 추가 PIN 없이 운영합니다.",
+    enabled: false,
+    timeoutMinutes: 30,
+    lockedViews: [],
+    pastAbsenceRequirePinEveryTime: false,
+  },
+  protected: {
+    label: "중요 메뉴 보호",
+    detail: "결제·데이터·운영 설정만 PIN으로 보호합니다.",
+    enabled: true,
+    timeoutMinutes: 15,
+    lockedViews: ["billing", "data", "settings"],
+    pastAbsenceRequirePinEveryTime: true,
+  },
+};
 const defaultPopupNotice = {
   id: "notice-new",
   title: "새 공지",
@@ -2073,6 +2092,7 @@ function currentAdminSecurityDraft() {
 
 function resetAdminSecurityDraft() {
   adminSecurityDraft = { ...adminSecurityConfigPayload(), lockedViews: [...adminLockSettings.lockedViews] };
+  adminSecurityModeOverride = "";
   adminSecuritySaveState.status = "idle";
 }
 
@@ -2084,6 +2104,37 @@ function adminSecurityIsDirty() {
     || draft.pastAbsenceRequirePinEveryTime !== saved.pastAbsenceRequirePinEveryTime
     || draft.lockedViews.length !== saved.lockedViews.length
     || draft.lockedViews.some((view) => !saved.lockedViews.includes(view));
+}
+
+function adminSecurityMode(source = currentAdminSecurityDraft()) {
+  if (adminSecurityModeOverride === "custom") return "custom";
+  const payload = adminSecurityConfigPayload(source);
+  return Object.entries(adminSecurityPresets).find(([, preset]) => (
+    payload.enabled === preset.enabled
+    && payload.timeoutMinutes === preset.timeoutMinutes
+    && payload.pastAbsenceRequirePinEveryTime === preset.pastAbsenceRequirePinEveryTime
+    && payload.lockedViews.length === preset.lockedViews.length
+    && payload.lockedViews.every((view) => preset.lockedViews.includes(view))
+  ))?.[0] || "custom";
+}
+
+function applyAdminSecurityMode(mode) {
+  const preset = adminSecurityPresets[mode];
+  if (!preset) {
+    adminSecurityModeOverride = "custom";
+    adminSecuritySaveState.status = "idle";
+    renderAdminSecurity();
+    return;
+  }
+  adminSecurityModeOverride = mode;
+  adminSecurityDraft = {
+    enabled: preset.enabled,
+    timeoutMinutes: preset.timeoutMinutes,
+    lockedViews: [...preset.lockedViews],
+    pastAbsenceRequirePinEveryTime: preset.pastAbsenceRequirePinEveryTime,
+  };
+  adminSecuritySaveState.status = "idle";
+  renderAdminSecurity();
 }
 
 async function loadAdminSecuritySettingsFromServer() {
@@ -2114,6 +2165,12 @@ async function saveAdminSecuritySettings() {
     return false;
   }
   const draft = currentAdminSecurityDraft();
+  if (draft.enabled && adminPinNeedsSetup()) {
+    adminSecuritySaveState.status = "blocked";
+    renderAdminSecurity();
+    showToast("운영 PIN을 먼저 설정해 주세요.");
+    return false;
+  }
   const value = { ...adminSecurityConfigPayload(draft), updatedAt: new Date().toISOString() };
   if (button) button.disabled = true;
   adminSecuritySaveState.status = "saving";
@@ -20470,20 +20527,34 @@ function renderAdminSecurity() {
   const draft = currentAdminSecurityDraft();
   const lockedLabels = draft.lockedViews.map(adminLockViewName);
   const pinSetupRequired = adminPinNeedsSetup();
+  const securityMode = adminSecurityMode(draft);
+  const modeLabel = adminSecurityPresets[securityMode]?.label || "직접 설정";
   target.innerHTML = `
     <div class="admin-security-summary ${draft.enabled ? "is-on" : "is-off"}">
       <div>
-        <h2>관리자 보안</h2>
-        <span>${adminSecurityIsDirty() ? "저장 전 변경사항 있음" : draft.enabled ? `잠금 사용 중 · ${lockedLabels.length ? lockedLabels.join(", ") : "잠금 대상 없음"}` : "잠금 사용 안 함"}</span>
+        <h2>운영 잠금</h2>
+        <span>${adminSecurityIsDirty() ? "저장 전 변경사항 있음" : `${modeLabel} · ${draft.enabled ? lockedLabels.join(", ") || "잠금 대상 없음" : "추가 PIN 없음"}`}</span>
       </div>
       ${badge(adminSecuritySaveState.status === "blocked" ? "danger" : draft.enabled ? "warn" : "neutral", adminSecuritySaveState.status === "saving" ? "저장 중" : adminSecuritySaveState.status === "blocked" ? "저장 실패" : adminSecurityIsDirty() ? "저장 필요" : draft.enabled ? adminUnlockRemainingText() : "꺼짐")}
     </div>
+    <div class="admin-security-mode-list" role="radiogroup" aria-label="운영 잠금 방식">
+      ${Object.entries(adminSecurityPresets).map(([id, preset]) => `
+        <button class="admin-security-mode ${securityMode === id ? "is-active" : ""}" type="button" data-admin-security-mode="${id}" aria-pressed="${securityMode === id}">
+          <b>${preset.label}${id === "transition" ? " · 추천" : ""}</b>
+          <span>${preset.detail}</span>
+        </button>`).join("")}
+      <button class="admin-security-mode ${securityMode === "custom" ? "is-active" : ""}" type="button" data-admin-security-mode="custom" aria-pressed="${securityMode === "custom"}">
+        <b>직접 설정</b>
+        <span>잠글 메뉴와 유지시간을 직접 선택합니다.</span>
+      </button>
+    </div>
+    <p class="admin-security-login-note">관리자 로그인은 항상 유지됩니다. 여기서는 로그인 후 사용하는 추가 PIN만 설정합니다.</p>
     <section class="admin-security-grid">
-      <article class="admin-security-card">
-        <strong>잠금 사용</strong>
+      <article class="admin-security-card" ${securityMode === "transition" ? "hidden" : ""}>
+        <strong>추가 PIN</strong>
         <label class="toggle-row">
           <input id="adminLockEnabled" type="checkbox" ${draft.enabled ? "checked" : ""} />
-          <span>공용 PC에서 중요한 메뉴는 관리자 PIN 입력 후 접근</span>
+          <span>선택한 메뉴를 PIN으로 보호</span>
         </label>
         <label class="field-row">
           <span>잠금 해제 유지시간</span>
@@ -20493,13 +20564,13 @@ function renderAdminSecurity() {
         </label>
         <label class="toggle-row">
           <input id="adminPastAbsenceLockEveryTime" type="checkbox" ${draft.pastAbsenceRequirePinEveryTime ? "checked" : ""} />
-          <span>지난 수업 사전 불참 보정 시 매번 PIN 확인</span>
+          <span>지난 수업 보정 때마다 PIN 확인</span>
         </label>
         <div class="data-action-row">
           <button class="ghost-button" type="button" id="adminLockNowButton">지금 다시 잠그기</button>
         </div>
       </article>
-      <article class="admin-security-card">
+      <article class="admin-security-card" ${securityMode === "transition" ? "hidden" : ""}>
         <strong>잠금 대상 메뉴</strong>
         <div class="admin-lock-target-list">
           ${adminLockViewOptions
@@ -20515,8 +20586,8 @@ function renderAdminSecurity() {
             .join("")}
         </div>
       </article>
-      <article class="admin-security-card admin-pin-card">
-        <strong>PIN 변경</strong>
+      <article class="admin-security-card admin-pin-card" ${securityMode === "transition" ? "hidden" : ""}>
+        <strong>운영 PIN 변경</strong>
         <p>숫자 6~8자리 PIN을 설정합니다.</p>
         <div class="admin-pin-grid">
           <label>
@@ -20533,30 +20604,30 @@ function renderAdminSecurity() {
           </label>
         </div>
         <div class="data-action-row">
-          <button class="primary-button" type="button" id="changeAdminPinButton">PIN 변경</button>
+          <button class="primary-button" type="button" id="changeAdminPinButton">운영 PIN 변경</button>
         </div>
       </article>
       <footer class="admin-security-actions">
-        <span>${adminSecuritySaveState.status === "saved" && adminSecuritySaveState.savedAt ? `서버 저장 완료 · ${new Date(adminSecuritySaveState.savedAt).toLocaleString("ko-KR")}` : "잠금 대상과 유지시간은 저장해야 적용됩니다."}</span>
+        <span>${adminSecuritySaveState.status === "saved" && adminSecuritySaveState.savedAt ? `서버 저장 완료 · ${new Date(adminSecuritySaveState.savedAt).toLocaleString("ko-KR")}` : "저장하면 모든 관리자 기기에 적용됩니다."}</span>
         <div>
           <button class="ghost-button" type="button" id="resetAdminSecurityButton" ${adminSecurityIsDirty() && adminSecuritySaveState.status !== "saving" ? "" : "disabled"}>변경 취소</button>
-          <button class="primary-button" type="button" id="saveAdminSecurityButton" ${adminSecurityIsDirty() && adminSecuritySaveState.status !== "saving" ? "" : "disabled"}>보안 설정 저장</button>
+          <button class="primary-button" type="button" id="saveAdminSecurityButton" ${adminSecurityIsDirty() && adminSecuritySaveState.status !== "saving" ? "" : "disabled"}>잠금 설정 저장</button>
         </div>
       </footer>
     </section>`;
-  if (pinSetupRequired) {
+  if (pinSetupRequired && draft.enabled) {
     target.querySelector("#adminCurrentPin")?.closest("label")?.setAttribute("hidden", "");
     const summary = target.querySelector(".admin-security-summary span");
     const summaryBadge = target.querySelector(".admin-security-summary .badge");
     const title = target.querySelector(".admin-pin-card strong");
     const description = target.querySelector(".admin-pin-card p");
     const button = target.querySelector("#changeAdminPinButton");
-    if (summary) summary.textContent = "새 관리자 PIN 설정 필요";
+    if (summary) summary.textContent = "운영 PIN 설정 필요";
     if (summaryBadge) {
       summaryBadge.className = "badge danger";
       summaryBadge.textContent = "PIN 설정 필요";
     }
-    if (title) title.textContent = "PIN 최초 설정";
+    if (title) title.textContent = "운영 PIN 최초 설정";
     if (description) description.textContent = "숫자 6~8자리 PIN을 설정하세요.";
     if (button) button.textContent = "PIN 설정 완료";
   }
@@ -21468,30 +21539,40 @@ function bindEvents() {
   });
   document.addEventListener("change", (event) => {
     if (event.target.id === "adminLockEnabled") {
+      adminSecurityModeOverride = "custom";
       currentAdminSecurityDraft().enabled = event.target.checked;
       adminSecuritySaveState.status = "idle";
       renderAdminSecurity();
       return;
     }
     if (event.target.id === "adminLockTimeout") {
+      adminSecurityModeOverride = "custom";
       currentAdminSecurityDraft().timeoutMinutes = numericValue(event.target.value, 10);
       adminSecuritySaveState.status = "idle";
       renderAdminSecurity();
       return;
     }
     if (event.target.id === "adminPastAbsenceLockEveryTime") {
+      adminSecurityModeOverride = "custom";
       currentAdminSecurityDraft().pastAbsenceRequirePinEveryTime = event.target.checked;
       adminSecuritySaveState.status = "idle";
       renderAdminSecurity();
       return;
     }
     if (event.target.matches("[data-admin-lock-view]")) {
+      adminSecurityModeOverride = "custom";
       currentAdminSecurityDraft().lockedViews = $$("[data-admin-lock-view]:checked").map((input) => input.value);
       adminSecuritySaveState.status = "idle";
       renderAdminSecurity();
     }
   });
   document.addEventListener("click", (event) => {
+    const securityModeButton = event.target.closest("[data-admin-security-mode]");
+    if (securityModeButton) {
+      const mode = securityModeButton.dataset.adminSecurityMode;
+      applyAdminSecurityMode(mode);
+      return;
+    }
     if (event.target.id === "adminLockNowButton") {
       lockAdminNow();
       renderAll();
