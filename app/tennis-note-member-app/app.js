@@ -1679,7 +1679,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.176",
+    workerUrl: "./service-worker.js?v=1.0.177",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2825,6 +2825,7 @@ function ensureMemberScheduleLesson(lessonId) {
   let lesson = lessons.find((item) => item.id === lessonId);
   if (lesson) return lesson;
   const weekLesson = memberMakeupDueLessons().find((item) => item.id === lessonId)
+    || currentScheduledLessonsForChange().find((item) => item.id === lessonId)
     || memberScheduleOptions().find((item) => item.id === lessonId);
   if (!weekLesson) return null;
   lesson = { ...weekLesson };
@@ -7332,7 +7333,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.176" });
+  const params = new URLSearchParams({ v: "1.0.177" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
