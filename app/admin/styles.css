@@ -2073,6 +2073,56 @@ tr.is-selected td {
   border-bottom: 1px solid #cfe1da;
 }
 
+.member-inline-editor--compact {
+  padding: 8px 10px 10px;
+}
+
+.member-inline-compact-grid {
+  display: grid;
+  grid-template-columns: minmax(210px, 2fr) minmax(130px, 1fr) 72px 72px 72px minmax(150px, 1.4fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.member-inline-compact-grid label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.member-inline-compact-grid label > span {
+  color: #60776f;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.member-inline-compact-grid input,
+.member-inline-compact-grid select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 7px;
+  border: 1px solid #cbded7;
+  border-radius: 6px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.member-inline-editor--compact .member-inline-editor-actions {
+  margin-top: 5px;
+}
+
+.member-inline-editor--compact .member-inline-message {
+  flex: 1;
+  margin: 0;
+  text-align: right;
+}
+
+.member-page-save {
+  min-width: 142px;
+  white-space: nowrap;
+}
+
 .member-inline-editor-heading {
   display: flex;
   justify-content: space-between;
@@ -2665,6 +2715,15 @@ tr.is-selected td {
 
   .member-inline-save {
     width: 100%;
+  }
+
+  .member-inline-compact-grid {
+    grid-template-columns: minmax(170px, 2fr) minmax(120px, 1fr) repeat(3, 68px) minmax(140px, 1.4fr) 80px;
+    min-width: 850px;
+  }
+
+  .member-inline-editor--compact {
+    overflow-x: auto;
   }
 }
 
