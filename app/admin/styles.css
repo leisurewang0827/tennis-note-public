@@ -7257,6 +7257,19 @@ button .schedule-member-lines > span {
   margin-bottom: 10px;
 }
 
+.product-list-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(130px, 180px);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.product-list-toolbar input,
+.product-list-toolbar select {
+  width: 100%;
+  min-width: 0;
+}
+
 .discount-filter-toolbar input {
   flex: 1 1 240px;
 }
@@ -7357,6 +7370,10 @@ button .schedule-member-lines > span {
 }
 
 @media (max-width: 760px) {
+  .product-list-toolbar {
+    grid-template-columns: 1fr;
+  }
+
   .schedule-toolbar-groups,
   .schedule-toolbar-groups .segmented-control,
   .member-list-toolbar,

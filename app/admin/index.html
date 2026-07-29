@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.174" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.174" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.175" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.175" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -911,7 +911,17 @@
                 <button id="runProductBulkAction" class="small-button" type="button">적용</button>
                 <button id="clearProductBulkSelection" class="ghost-button" type="button">선택 해제</button>
               </div>
+              <div class="product-list-toolbar">
+                <input id="membershipProductSearch" type="search" placeholder="상품명·종류·횟수 검색" autocomplete="off" />
+                <select id="membershipProductStatusFilter" aria-label="회원권 상품 상태">
+                  <option value="all">전체 상태</option>
+                  <option value="sale">판매중</option>
+                  <option value="consult">상담</option>
+                  <option value="hidden">숨김</option>
+                </select>
+              </div>
               <div id="productSettingCards" class="product-setting-list"></div>
+              <nav id="membershipProductPager" class="dashboard-pager" aria-label="회원권 상품 페이지"></nav>
             </section>
 
             <section class="panel discount-policy-panel settings-tab-panel" data-settings-panel="membership" data-membership-panel="discounts">
@@ -1604,15 +1614,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.174"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.175"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.174"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.174"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.174"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.174"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.174"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.175"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.175"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.175"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.175"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.175"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.174"></script>
+    <script src="./app.js?v=1.0.175"></script>
   </body>
 </html>

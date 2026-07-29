@@ -36,6 +36,9 @@ const state = {
   discountSearch: "",
   discountStatusFilter: "all",
   membershipSettingsSection: "products",
+  membershipProductSearch: "",
+  membershipProductStatusFilter: "all",
+  membershipProductPage: 0,
   selectedMemberId: null,
   inlineMemberId: null,
   activeMode: "admin",
@@ -213,6 +216,7 @@ const timeColumnWidth = 64;
 const mobileCoachSlotWidth = 92;
 const dashboardPageSize = 5;
 const memberListPageSize = 10;
+const membershipProductPageSize = 10;
 
 const coaches = [
   { id: "coach-no", name: "노 코치", role: "레슨", status: "active", account: "김서준 회원", coachMode: "approved", availability: "split", photoUrl: "" },
@@ -4093,6 +4097,8 @@ async function createMembershipProductSetting() {
     const synced = await syncAdminLiveData();
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
     const created = membershipProductDrafts.find((item) => item.serverProductCode === productCode || item.id === productCode);
+    state.membershipProductSearch = "";
+    state.membershipProductStatusFilter = "all";
     state.activeMembershipProductId = created ? String(created.id) : "";
     renderServiceReadiness();
     const card = created ? document.querySelector(`[data-product-card="${CSS.escape(created.id)}"]`) : null;
@@ -21185,6 +21191,28 @@ function renderAdminSecurity() {
   }
 }
 
+function filteredMembershipProducts() {
+  const keyword = String(state.membershipProductSearch || "").trim().toLowerCase();
+  const status = membershipProductStatusOptions.some((option) => option.id === state.membershipProductStatusFilter)
+    ? state.membershipProductStatusFilter
+    : "all";
+  state.membershipProductStatusFilter = status;
+  return membershipProductsForActiveOperationProfile().filter((product) => {
+    const normalized = normalizeMembershipProduct(product, membershipProductDefaults.find((item) => item.id === product.id));
+    const searchText = [
+      normalized.title,
+      normalized.group,
+      normalized.productKind,
+      normalized.scheduleScope,
+      normalized.sessions,
+      `${normalized.tickets}회`,
+      `${normalized.lessonMinutes}분`,
+    ].join(" ").toLowerCase();
+    return (!keyword || searchText.includes(keyword))
+      && (status === "all" || normalized.status === status);
+  });
+}
+
 function renderServiceReadiness() {
   const dataClientReadiness = window.TennisNoteDataClient?.readiness?.();
   const paymentReady = isPaymentGatewayReady();
@@ -21223,10 +21251,25 @@ function renderServiceReadiness() {
   const productCards = $("#productSettingCards");
   if (productCards) {
     renderProductBulkToolbar();
-    const visibleProducts = membershipProductsForActiveOperationProfile();
+    const allProducts = membershipProductsForActiveOperationProfile();
+    const filteredProducts = filteredMembershipProducts();
+    const activeProductIndex = filteredProducts.findIndex((product) => String(product.id) === String(state.activeMembershipProductId || ""));
+    if (activeProductIndex >= 0) state.membershipProductPage = Math.floor(activeProductIndex / membershipProductPageSize);
+    state.membershipProductPage = normalizeDashboardPage(filteredProducts.length, state.membershipProductPage, membershipProductPageSize);
+    const visibleProducts = filteredProducts.slice(
+      state.membershipProductPage * membershipProductPageSize,
+      (state.membershipProductPage + 1) * membershipProductPageSize,
+    );
+    if ($("#membershipProductSearch") && $("#membershipProductSearch").value !== state.membershipProductSearch) {
+      $("#membershipProductSearch").value = state.membershipProductSearch || "";
+    }
+    if ($("#membershipProductStatusFilter")) $("#membershipProductStatusFilter").value = state.membershipProductStatusFilter;
+    renderDashboardPager("#membershipProductPager", filteredProducts.length, state.membershipProductPage, "membership-products", membershipProductPageSize);
     const branchStatus = $("#membershipProductBranchStatus");
     if (branchStatus) {
-      branchStatus.textContent = `${activeOperationBranchName()} 상품 ${visibleProducts.length}개`;
+      branchStatus.textContent = filteredProducts.length === allProducts.length
+        ? `${activeOperationBranchName()} 상품 ${allProducts.length}개`
+        : `${activeOperationBranchName()} 상품 ${allProducts.length}개 · 검색 ${filteredProducts.length}개`;
     }
     const addProductButton = $("#addMembershipProductButton");
     if (addProductButton) {
@@ -21373,7 +21416,7 @@ function renderServiceReadiness() {
         </details>`;
         },
       )
-      .join("") : '<p class="empty-text product-setting-empty">이 지점에 등록된 회원권 상품이 없습니다. 새 회원권을 눌러 추가해 주세요.</p>';
+      .join("") : `<p class="empty-text product-setting-empty">${allProducts.length ? "검색 조건에 맞는 회원권 상품이 없습니다." : "이 지점에 등록된 회원권 상품이 없습니다. 새 회원권을 눌러 추가해 주세요."}</p>`;
   }
 
   const discountCards = $("#discountPolicyCards");
@@ -21842,6 +21885,13 @@ function bindEvents() {
       state.memberListPage = page;
       state.selectedMemberId = null;
       renderMembers();
+      saveSnapshot();
+      return;
+    }
+    if (pageButton.dataset.dashboardPage === "membership-products") {
+      state.membershipProductPage = page;
+      state.activeMembershipProductId = "";
+      renderServiceReadiness();
       saveSnapshot();
       return;
     }
@@ -22912,6 +22962,19 @@ function bindEvents() {
     state.discountSearch = event.target.value;
     renderServiceReadiness();
   });
+  $("#membershipProductSearch")?.addEventListener("input", (event) => {
+    state.membershipProductSearch = event.target.value;
+    state.membershipProductPage = 0;
+    state.activeMembershipProductId = "";
+    renderServiceReadiness();
+  });
+  $("#membershipProductStatusFilter")?.addEventListener("change", (event) => {
+    state.membershipProductStatusFilter = event.target.value;
+    state.membershipProductPage = 0;
+    state.activeMembershipProductId = "";
+    renderServiceReadiness();
+    saveSnapshot();
+  });
   $("#discountPolicyStatusFilter")?.addEventListener("change", (event) => {
     state.discountStatusFilter = event.target.value;
     renderServiceReadiness();
@@ -23208,7 +23271,7 @@ function bindEvents() {
       return;
     }
     if (event.target.closest("#selectAllProducts")) {
-      const allIds = membershipProductsForActiveOperationProfile().map((product) => String(product.id));
+      const allIds = filteredMembershipProducts().map((product) => String(product.id));
       state.selectedMembershipProductIds = state.selectedMembershipProductIds.length === allIds.length ? [] : allIds;
       renderServiceReadiness();
       return;
