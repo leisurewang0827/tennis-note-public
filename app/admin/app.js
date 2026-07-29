@@ -21783,7 +21783,10 @@ function bindEvents() {
       state.lessonQuickAction = action;
       state.quickLessonDetailsExpanded = action !== "schedule";
       syncQuickLessonEntryUi();
-      if (action === "absence") $("#lessonAbsenceReason")?.focus();
+      if (action === "absence") {
+        setLessonFormMessage("");
+        $("#lessonAbsenceReason")?.focus();
+      }
       if (action === "schedule") $("#lessonTime")?.focus();
     });
   });
