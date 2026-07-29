@@ -68,6 +68,8 @@ const state = {
   recordFilter: "pending",
   recordCoachFilter: "all",
   recordPendingType: "all",
+  recordSearch: "",
+  recordPage: 0,
   selectedMemberIds: [],
   selectedMembershipProductIds: [],
   activeMembershipProductId: "",
@@ -2574,6 +2576,7 @@ function restoreSnapshot() {
       state.view = "dashboard";
       state.memberSearch = "";
       state.selectedMemberId = null;
+      state.inlineMemberId = null;
       state.liveScheduleLoaded = false;
       state.liveScheduleLoading = false;
       state.liveScheduleMessage = "실서버 시간표 재확인 중";
@@ -6239,6 +6242,13 @@ function closeAdminToolsModal() {
   $("#adminToolsModal")?.setAttribute("hidden", "");
 }
 
+function closeCleanMemberInlineEditor(nextView) {
+  if (state.view !== "members" || nextView === "members" || !state.inlineMemberId) return;
+  const openEditor = document.querySelector(".member-inline-editor--compact");
+  if (openEditor?.dataset.dirty === "true") return;
+  state.inlineMemberId = null;
+}
+
 function setView(view, options = {}) {
   if (!operationsAccessReady()) {
     renderOperationsLoginGate();
@@ -6253,6 +6263,7 @@ function setView(view, options = {}) {
   }
   if (!options.skipLock && !requestAdminUnlock(view)) return;
   const enteringSchedule = view === "schedule" && state.view !== "schedule";
+  closeCleanMemberInlineEditor(view);
   state.view = view;
   if (view === "schedule" && (enteringSchedule || !scheduleSessionInitialized)) resetScheduleEntryState();
   $$(".nav-item").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
@@ -16983,8 +16994,10 @@ function renderNotes() {
   state.recordFilter = activeFilter;
   if (!["all", "lesson", "payment", "makeup", "feedback"].includes(state.recordPendingType)) state.recordPendingType = "all";
   if (!state.recordCoachFilter) state.recordCoachFilter = "all";
+  if (typeof state.recordSearch !== "string") state.recordSearch = "";
 
   renderRecordFilters(Object.values(groups).flat());
+  if ($("#recordSearch")) $("#recordSearch").value = state.recordSearch;
   const visibleGroups = Object.fromEntries(Object.entries(groups).map(([key, records]) => [
     key,
     state.recordCoachFilter === "all" ? records : records.filter((record) => record.coachId === state.recordCoachFilter),
@@ -16996,12 +17009,28 @@ function renderNotes() {
   $("#recordIssueCount").textContent = `${visibleGroups.issue.length}건`;
   $$("[data-record-filter]").forEach((button) => button.classList.toggle("is-active", button.dataset.recordFilter === activeFilter));
 
+  const searchQuery = state.recordSearch.trim().toLowerCase();
   const visibleRecords = visibleGroups[activeFilter].filter((record) => (
     activeFilter !== "pending"
     || state.recordPendingType === "all"
     || record.pendingType === state.recordPendingType
+  )).filter((record) => (
+    !searchQuery
+    || [record.member, record.title, record.coachName, record.source]
+      .some((value) => String(value || "").toLowerCase().includes(searchQuery))
   ));
-  target.innerHTML = visibleRecords
+  const recordPageSize = 20;
+  state.recordPage = normalizeDashboardPage(visibleRecords.length, state.recordPage, recordPageSize);
+  const pageStart = state.recordPage * recordPageSize;
+  const pageRecords = visibleRecords.slice(pageStart, pageStart + recordPageSize);
+  const summary = $("#recordResultSummary");
+  if (summary) {
+    const first = visibleRecords.length ? pageStart + 1 : 0;
+    const last = Math.min(pageStart + recordPageSize, visibleRecords.length);
+    summary.textContent = `전체 ${visibleRecords.length}건 · ${first}-${last}건 표시`;
+  }
+  renderDashboardPager("#recordAuditPager", visibleRecords.length, state.recordPage, "records", recordPageSize);
+  target.innerHTML = pageRecords
     .map(
       (record) => `
         <article class="record-audit-card ${record.group} ${record.priority === "urgent" ? "urgent" : ""}">
@@ -22069,14 +22098,21 @@ function bindEvents() {
     }
     if (event.target.id === "recordCoachFilter") {
       state.recordCoachFilter = event.target.value || "all";
+      state.recordPage = 0;
       renderNotes();
       saveSnapshot();
     }
     if (event.target.id === "recordPendingTypeFilter") {
       state.recordPendingType = event.target.value || "all";
+      state.recordPage = 0;
       renderNotes();
       saveSnapshot();
     }
+  });
+  $("#recordSearch")?.addEventListener("input", (event) => {
+    state.recordSearch = event.target.value || "";
+    state.recordPage = 0;
+    renderNotes();
   });
   $("#coachStaffForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -23823,6 +23859,14 @@ function bindEvents() {
     const recordFilterButton = event.target.closest("[data-record-filter]");
     if (recordFilterButton) {
       state.recordFilter = recordFilterButton.dataset.recordFilter;
+      state.recordPage = 0;
+      renderNotes();
+      saveSnapshot();
+      return;
+    }
+    const recordPageButton = event.target.closest('[data-dashboard-page="records"]');
+    if (recordPageButton) {
+      state.recordPage = Number(recordPageButton.dataset.dashboardPageIndex) || 0;
       renderNotes();
       saveSnapshot();
       return;

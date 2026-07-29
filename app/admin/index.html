@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.177" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.177" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.178" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.178" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -631,6 +631,10 @@
               <button class="segment" type="button" data-record-filter="issue">오류/수정</button>
             </div>
             <div class="record-filter-bar" aria-label="기록 상세 필터">
+              <label class="record-search-field">
+                <span>회원·날짜·코치 검색</span>
+                <input id="recordSearch" type="search" autocomplete="off" placeholder="이름, 날짜 또는 코치" />
+              </label>
               <label><span>담당 코치</span><select id="recordCoachFilter"><option value="all">전체 코치</option></select></label>
               <label>
                 <span>미처리 분류</span>
@@ -643,7 +647,9 @@
                 </select>
               </label>
             </div>
+            <div id="recordResultSummary" class="record-result-summary" aria-live="polite"></div>
             <div id="recordAuditRows" class="record-audit-list"></div>
+            <nav id="recordAuditPager" class="dashboard-pager" aria-label="기록 목록 페이지" hidden></nav>
           </section>
         </section>
 
@@ -1617,15 +1623,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.177"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.178"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.177"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.177"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.177"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.177"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.177"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.178"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.178"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.178"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.178"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.178"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.177"></script>
+    <script src="./app.js?v=1.0.178"></script>
   </body>
 </html>

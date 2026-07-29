@@ -1371,14 +1371,26 @@ h2 {
   min-width: 180px;
 }
 
+.record-filter-bar .record-search-field {
+  flex: 1 1 260px;
+}
+
 .record-filter-bar label span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
-.record-filter-bar select {
+.record-filter-bar select,
+.record-filter-bar input {
   min-height: 40px;
+}
+
+.record-result-summary {
+  min-height: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .record-audit-card {

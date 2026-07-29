@@ -132,6 +132,8 @@
   }
 
   function isDirty(root) {
+    if (typeof root === "string") root = document.querySelector(root);
+    if (!root || (typeof root !== "object" && typeof root !== "function")) return false;
     const state = stateByRoot.get(root);
     if (!state?.open) begin(root);
     const current = stateByRoot.get(root);
