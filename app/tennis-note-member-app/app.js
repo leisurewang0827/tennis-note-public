@@ -1665,7 +1665,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.164",
+    workerUrl: "./service-worker.js?v=1.0.165",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3439,9 +3439,12 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
               ${times.map((time, index) => {
                 const available = coachLessons.find((lesson) => lesson.status === "available" && lesson.time === time);
                 const working = isMemberCoachWorking(coach, day, time, 10);
+                const initialOrder = available ? state.regularInitialSelections.indexOf(available.id) : -1;
                 const availableLabel = /보강/.test(available?.type || "") ? "보강 가능" : available?.type === "쿠폰 예약 가능" ? "쿠폰 예약 가능" : "수업 변경 가능";
-                const slotLabel = available?.releasedRegularSlot ? "정규·보강" : /보강/.test(available?.type || "") ? "보강" : available?.type === "쿠폰 예약 가능" ? "예약" : "+";
-                return `<button class="member-mobile-slot ${available ? "available" : working ? "busy" : "off"} ${available?.releasedRegularSlot ? "released-regular-slot" : ""}" type="button" ${available ? `data-lesson="${available.id}"` : "disabled"} style="grid-row:${index + 1};" aria-label="${day}요일 ${time} ${escapeHtml(memberCoachShortName(coach.name))} ${available ? availableLabel : "신청 불가"}">${available ? slotLabel : ""}</button>`;
+                const slotLabel = initialOrder >= 0
+                  ? `${initialOrder + 1}번째`
+                  : available?.releasedRegularSlot ? "정규·보강" : /보강/.test(available?.type || "") ? "보강" : available?.type === "쿠폰 예약 가능" ? "예약" : "선택";
+                return `<button class="member-mobile-slot ${available ? "available" : working ? "busy" : "off"} ${initialOrder >= 0 ? "is-initial-selected" : ""} ${available?.releasedRegularSlot ? "released-regular-slot" : ""}" type="button" ${available ? `data-lesson="${available.id}"` : "disabled"} style="grid-row:${index + 1};" aria-label="${day}요일 ${time} ${escapeHtml(memberCoachShortName(coach.name))} ${available ? availableLabel : "신청 불가"}">${available ? slotLabel : ""}</button>`;
               }).join("")}
               ${coachLessons.filter((lesson) => lesson.status !== "available" && memberScheduleVisibleLesson(lesson, policy) && minutesFromTime(lesson.time) >= segmentStart && minutesFromTime(lesson.time) < segmentEnd).map((lesson) => {
                 const startIndex = times.indexOf(lesson.time);
@@ -3568,6 +3571,30 @@ function renderMemberAvailabilityOverview(scheduleLessons, compact = false) {
     </section>`;
 }
 
+function regularInitialSourceLesson() {
+  return currentScheduledLessonsForChange().find((lesson) => lesson.regularInitialBooking) || null;
+}
+
+function renderRegularInitialScheduleBar() {
+  const source = regularInitialSourceLesson();
+  if (!source) return "";
+  const requiredCount = Math.max(1, Number(source.frequencyPerWeek) || 1);
+  const selected = state.regularInitialSelections
+    .map((id) => memberScheduleOptions().find((lesson) => lesson.id === id))
+    .filter(Boolean);
+  return `
+    <section class="regular-initial-bar" aria-label="첫 정규시간 선택">
+      <div>
+        <span>첫 정규시간</span>
+        <strong>${selected.length}/${requiredCount} 선택</strong>
+        <small>${selected.length
+          ? selected.map((lesson) => `${lesson.day} ${lesson.time}`).join(" · ")
+          : "시간표의 가능한 칸을 눌러주세요."}</small>
+      </div>
+      <button class="primary-button" type="button" data-confirm-initial-schedule ${selected.length === requiredCount ? "" : "disabled"}>확정</button>
+    </section>`;
+}
+
 function renderMemberFlexibleBooking() {
   const couponTickets = memberBookableCouponTickets();
   return `
@@ -3626,6 +3653,7 @@ function renderDynamicMemberSchedule() {
     return;
   }
   $("#scheduleGrid").innerHTML = `
+    ${renderRegularInitialScheduleBar()}
     ${availabilityOverview}
     ${renderMemberMobileSchedule(policy, baseLessons, scheduleLessons)}
     <div class="member-desktop-schedule">
@@ -3688,15 +3716,16 @@ function renderDynamicMemberSchedule() {
                   const lessonCoach = memberLessonCoach(lesson, policy);
                   const coachIndex = displayCoaches.findIndex((coach) => coach.id === lessonCoach.id);
                   if (coachIndex < 0) return "";
+                  const initialOrder = state.regularInitialSelections.indexOf(lesson.id);
                   return `
                     <button
-                      class="member-slot-bg available ${lesson.releasedRegularSlot ? "released-regular-slot" : ""} ${lesson.policy === "coach" ? "needs-approval" : "auto-change"}"
+                      class="member-slot-bg available ${initialOrder >= 0 ? "is-initial-selected" : ""} ${lesson.releasedRegularSlot ? "released-regular-slot" : ""} ${lesson.policy === "coach" ? "needs-approval" : "auto-change"}"
                       type="button"
                       data-lesson="${lesson.id}"
                       aria-label="${day}요일 ${lesson.time} ${memberCoachShortName(lessonCoach.name)} ${/보강/.test(lesson.type || "") ? "보강 신청 가능" : "수업 변경 신청 가능"}"
                       style="grid-row:${startIndex + 1}; grid-column:${coachIndex + 1};"
                     >
-                      <span>${lesson.releasedRegularSlot ? "정규 자리 · 보강 가능" : /보강/.test(lesson.type || "") ? "보강 가능" : "변경 가능"}</span>
+                      <span>${initialOrder >= 0 ? `${initialOrder + 1}번째 선택` : lesson.releasedRegularSlot ? "정규 자리 · 보강 가능" : /보강/.test(lesson.type || "") ? "보강 가능" : "선택 가능"}</span>
                     </button>`;
                 })
                 .join("")}
@@ -4199,26 +4228,21 @@ function renderCurriculum() {
   const active = activeCurriculumStep();
   const activeTrack = curriculumSkillTracks.find((track) => track.steps.some((step) => step.id === active.id));
   const activeIndex = activeTrack?.steps.findIndex((step) => step.id === active.id) ?? -1;
+  const nextStage = curriculumStageCards().find(({ tone }) => tone === "next")?.step;
   const guideMarkup = `
     <div class="curriculum-summary">
-      <span>다음 수업 커리큘럼</span>
+      <span>다음 수업</span>
       <strong>${escapeHtml(active.id)} · ${escapeHtml(active.title)}</strong>
-      <small>${activeTrack ? `${escapeHtml(activeTrack.title)} ${activeIndex + 1}/${activeTrack.steps.length}` : "코치가 지정한 단계"} · ${escapeHtml(latest?.lessonLabel || "최근 코치 등록 커리큘럼")} 기준</small>
+      <small>${activeTrack ? `${escapeHtml(activeTrack.title)} ${activeIndex + 1}/${activeTrack.steps.length}` : "코치 지정 단계"} · ${escapeHtml(latest?.lessonLabel || "최근 등록 기준")}</small>
       <p>${escapeHtml(active.guide || active.next || active.focus)}</p>
-      <a class="small-button notion-link" href="${active.notionUrl || notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">노션에서 자세히 보기</a>
+      <a class="primary-button notion-link" href="${active.notionUrl || notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">자세히 보기</a>
     </div>
-    <div class="curriculum-stage-grid">
-      ${curriculumStageCards()
-        .map(
-          ({ label, step, tone }) => `
-            <article class="curriculum-stage ${tone}">
-              <span>${label}</span>
-              <strong>${escapeHtml(step.title)}</strong>
-              <small>${escapeHtml(step.focus)}</small>
-            </article>`,
-        )
-        .join("")}
-    </div>`;
+    ${nextStage ? `
+      <div class="curriculum-next-preview">
+        <span>그다음 단계</span>
+        <strong>${escapeHtml(nextStage.title)}</strong>
+        <small>${escapeHtml(nextStage.focus)}</small>
+      </div>` : ""}`;
   const miniGuideMarkup = `
     <button class="curriculum-compact-card" type="button" data-open-curriculum-view>
       <span>다음 커리큘럼</span>
@@ -4230,46 +4254,37 @@ function renderCurriculum() {
   if ($("#curriculumGuide")) $("#curriculumGuide").innerHTML = `
     <section class="curriculum-hero">
       <div>
-        <span>노션 전체 커리큘럼 연동</span>
-        <strong>기술별 현재 위치와 다음 단계를 짧게 확인합니다.</strong>
-        <p>앱에서는 핵심만 보고, 필요한 단계만 노션 원본으로 열 수 있습니다. 서브는 실내 천장 제한으로 야외 훈련을 권장합니다.</p>
+        <span>내 커리큘럼</span>
+        <strong>${escapeHtml(activeTrack?.title || active.title)}</strong>
+        <p>현재 단계와 다음 수업만 간단히 확인하세요.</p>
       </div>
       <div class="curriculum-hero-actions">
-        <a class="small-button notion-link" href="${notionCurriculumGuideUrl}" target="_blank" rel="noreferrer">회원용 안내</a>
-        <a class="small-button notion-link" href="${curriculumCatalog.sources?.roadmap || notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">성장 로드맵</a>
-        <a class="small-button notion-link" href="${curriculumCatalog.sources?.goalFinder || notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">배우고 싶은 것 찾기</a>
+        <a class="small-button notion-link" href="${notionCurriculumGuideUrl}" target="_blank" rel="noreferrer">전체 커리큘럼</a>
       </div>
     </section>
     ${guideMarkup}`;
   if ($("#curriculumFullList")) {
     $("#curriculumFullList").innerHTML = `
-      <section class="curriculum-progress-board curriculum-level-board" aria-label="성장 단계">
-        ${(curriculumCatalog.levels || [])
-          .map(
-            (level) => `
-              <article class="is-waiting">
-                <span>${escapeHtml(level.period)}</span>
-                <strong>${escapeHtml(level.title)}</strong>
-                <small>${escapeHtml(level.summary)}</small>
-              </article>`,
-          )
-          .join("")}
-      </section>
-      <section class="member-curriculum-toolbar" aria-label="커리큘럼 검색과 필터">
-        <div class="member-curriculum-search-row">
-          <input id="memberCurriculumSearch" type="search" value="${escapeHtml(state.curriculumQuery || "")}" placeholder="기술, 단계, 코드 검색" />
-          <b id="memberCurriculumCount"></b>
+      <details class="curriculum-library-disclosure">
+        <summary>다른 기술 찾아보기</summary>
+        <div class="curriculum-library-body">
+          <section class="member-curriculum-toolbar" aria-label="커리큘럼 검색과 필터">
+            <div class="member-curriculum-search-row">
+              <input id="memberCurriculumSearch" type="search" value="${escapeHtml(state.curriculumQuery || "")}" placeholder="기술 검색" />
+              <b id="memberCurriculumCount"></b>
+            </div>
+            <div class="curriculum-filter-row">
+              ${memberCurriculumFilterOptions()
+                .map(
+                  (filter) => `
+                    <button class="curriculum-filter ${state.curriculumFilter === filter.id ? "is-active" : ""}" type="button" data-member-curriculum-filter="${filter.id}">${filter.label}</button>`,
+                )
+                .join("")}
+            </div>
+          </section>
+          <div id="memberCurriculumLibrary"></div>
         </div>
-        <div class="curriculum-filter-row">
-          ${memberCurriculumFilterOptions()
-            .map(
-              (filter) => `
-                <button class="curriculum-filter ${state.curriculumFilter === filter.id ? "is-active" : ""}" type="button" data-member-curriculum-filter="${filter.id}">${filter.label}</button>`,
-            )
-            .join("")}
-        </div>
-      </section>
-      <div id="memberCurriculumLibrary"></div>`;
+      </details>`;
     renderMemberCurriculumLibrary(active);
   }
 }
@@ -7276,7 +7291,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.164" });
+  const params = new URLSearchParams({ v: "1.0.165" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -7506,6 +7521,11 @@ function handleScheduleClick(lessonId) {
     return;
   }
   if (lesson.status === "available") {
+    const initialSource = regularInitialSourceLesson();
+    if (initialSource) {
+      toggleRegularInitialScheduleSlot(lesson.id);
+      return;
+    }
     const firstRegular = currentScheduledLessonsForChange()[0];
     if (firstRegular) $("#absenceLesson").value = firstRegular.id;
     renderSelects();
@@ -7514,6 +7534,48 @@ function handleScheduleClick(lessonId) {
     renderAvailableSlots();
     openChangeRequestModal();
   }
+}
+
+function toggleRegularInitialScheduleSlot(lessonId) {
+  const lesson = memberScheduleOptions().find((item) => item.id === lessonId && item.status === "available");
+  const source = regularInitialSourceLesson();
+  if (!lesson || !source) return;
+  const requiredCount = Math.max(1, Number(source.frequencyPerWeek) || 1);
+  const selected = [...state.regularInitialSelections];
+  const existingIndex = selected.indexOf(lessonId);
+  if (existingIndex >= 0) {
+    selected.splice(existingIndex, 1);
+  } else {
+    const differentCoachSelected = selected.some((id) => {
+      const selectedLesson = memberScheduleOptions().find((item) => item.id === id);
+      return String(selectedLesson?.coachRoleId || "") !== String(lesson.coachRoleId || "");
+    });
+    if (differentCoachSelected) {
+      selected.splice(0, selected.length);
+      showToast("첫 정규시간은 같은 코치로 선택합니다.");
+    }
+    if (selected.length >= requiredCount) selected.shift();
+    selected.push(lessonId);
+  }
+  state.regularInitialSelections = selected;
+  renderSchedule();
+  saveSnapshot();
+}
+
+function confirmRegularInitialSchedule() {
+  const source = regularInitialSourceLesson();
+  if (!source) return;
+  const requiredCount = Math.max(1, Number(source.frequencyPerWeek) || 1);
+  if (state.regularInitialSelections.length !== requiredCount) {
+    showToast(`${requiredCount}개의 시간을 선택해 주세요.`);
+    return;
+  }
+  renderSelects();
+  $("#absenceLesson").value = source.id;
+  renderSelects();
+  $("#makeupSlot").value = state.regularInitialSelections[0];
+  renderAvailableSlots();
+  requestMakeup();
 }
 
 function selectAvailableSlot(lessonId) {
@@ -8760,6 +8822,10 @@ function bindEvents() {
     if (button) changeMemberWeek(Number(button.dataset.changeMemberWeek));
   });
   $("#scheduleGrid")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-confirm-initial-schedule]")) {
+      confirmRegularInitialSchedule();
+      return;
+    }
     const fullScheduleButton = event.target.closest("[data-toggle-full-member-schedule]");
     if (fullScheduleButton) {
       state.memberScheduleFullView = !state.memberScheduleFullView;
