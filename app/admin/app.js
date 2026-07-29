@@ -10373,31 +10373,57 @@ async function runMemberBulkAction() {
 }
 
 function memberInlineEditorMarkup(member, ticket) {
-  if (!ticket || memberEditorMode === "audit" || operationsRole() !== "admin") return "";
+  if (memberEditorMode === "audit" || operationsRole() !== "admin") return "";
   const record = memberDatabaseRecord(member, ticket);
-  const coachRoles = memberManagementCoachRoles(ticket);
-  const startsOn = memberManagementDate(record?.lesson_start_on || ticket.actualLessonStart || ticket.purchased);
-  const expiresOn = memberManagementDate(ticket.expires);
-  const total = Number(record?.total_sessions ?? ticket.total ?? 0);
-  const used = Number(record?.used_sessions ?? ticket.used ?? 0);
+  const coachRoles = memberManagementCoachRoles(ticket || {});
+  const startsOn = memberManagementDate(record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased);
+  const expiresOn = memberManagementDate(ticket?.expires);
+  const total = Number(record?.total_sessions ?? ticket?.total ?? 0);
+  const used = Number(record?.used_sessions ?? ticket?.used ?? 0);
   const remaining = Math.max(0, total - used);
   const paymentMethod = record?.payment_method || "";
   const paymentDate = record?.payment_recorded_on || "";
   const paymentAmount = record?.payment_amount ?? "";
+  const scheduleScope = record?.lesson_schedule_scope || ticket?.scheduleScope || "";
+  const lessonType = record?.lesson_type || ticket?.lessonTypeCode || "one_on_one";
+  const weeklyFrequency = Number(record?.lesson_frequency_per_week ?? ticket?.weeklyCount ?? 1);
   const required = memberEditorMode === "normal" ? "required" : "";
   return `
     <tr class="member-inline-editor-row" data-inline-editor-member="${member.id}">
       <td colspan="9">
-        <form class="member-inline-editor" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket.serverTicketId)}">
+        <form class="member-inline-editor" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}">
           <div class="member-inline-editor-heading">
-            <div><strong>${escapeHtml(member.name)} 회원권 빠른 수정</strong><span>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</span></div>
+            <div><strong>${escapeHtml(member.name)} 행 편집</strong><span>${escapeHtml(ticket ? getTicketDisplayProduct(ticket) || ticket.product || "회원권" : "기본정보만 저장")}</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
           </div>
-          <div class="member-inline-editor-grid">
+          <div class="member-inline-editor-grid member-inline-editor-grid--profile">
+            <label><span>이름</span><input name="memberName" value="${escapeHtml(member.name || "")}" required /></label>
+            <label><span>연락처</span><input name="memberPhone" inputmode="tel" value="${escapeHtml(member.phone || "")}" /></label>
+            <label><span>출생연도</span><input name="memberBirthYear" type="number" min="1900" max="2100" value="${escapeHtml(memberManagementValue(member.birthYear))}" /></label>
+            <label><span>거주동</span><input name="memberNeighborhood" value="${escapeHtml(member.neighborhood || "")}" /></label>
+            <label><span>성별</span><select name="memberGender">
+              <option value="">미입력</option>
+              <option value="female" ${member.gender === "female" ? "selected" : ""}>여</option>
+              <option value="male" ${member.gender === "male" ? "selected" : ""}>남</option>
+              <option value="other" ${member.gender === "other" ? "selected" : ""}>기타</option>
+            </select></label>
             <label><span>담당 코치</span><select name="coachRoleId" ${required}>
               <option value="">미배정</option>
-              ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === (record?.coach_role_id || ticket.coachRoleId) ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
+              ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === (record?.coach_role_id || ticket?.coachRoleId) ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
             </select></label>
+            <label><span>레슨 방식</span><select name="scheduleScope" ${ticket ? "" : "disabled"}>
+              <option value="">미입력</option>
+              <option value="weekday" ${scheduleScope === "weekday" ? "selected" : ""}>평일</option>
+              <option value="weekend" ${scheduleScope === "weekend" ? "selected" : ""}>주말</option>
+              <option value="mixed" ${scheduleScope === "mixed" ? "selected" : ""}>혼합</option>
+            </select></label>
+            <label><span>레슨 종류</span><select name="lessonType" ${ticket ? "" : "disabled"}>
+              <option value="one_on_one" ${lessonType !== "one_on_two" ? "selected" : ""}>개인 1:1</option>
+              <option value="one_on_two" ${lessonType === "one_on_two" ? "selected" : ""}>그룹 1:2</option>
+            </select></label>
+            <label><span>주 횟수</span><input name="weeklyFrequency" type="number" min="1" max="7" value="${weeklyFrequency}" ${ticket ? "" : "disabled"} /></label>
+          </div>
+          ${ticket ? `<div class="member-inline-editor-grid member-inline-editor-grid--ticket">
             <label><span>시작일</span><input name="startsOn" type="date" value="${escapeHtml(startsOn)}" required /></label>
             <label><span>만료일</span><input name="expiresOn" type="date" value="${escapeHtml(expiresOn)}" required /></label>
             <label><span>총</span><input name="totalSessions" type="number" min="0" step="1" value="${total}" required /></label>
@@ -10412,9 +10438,14 @@ function memberInlineEditorMarkup(member, ticket) {
             </select></label>
             <label><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" ${required} /></label>
             <label><span>금액</span><input name="paymentAmount" type="number" min="0" step="1000" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
-            <button class="primary-button member-inline-save" type="submit">서버 저장</button>
+            <label class="member-inline-note"><span>비고</span><input name="note" value="${escapeHtml(record?.admin_note || member.note || "")}" /></label>
+          </div>` : ""}
+          <div class="member-inline-editor-actions">
+            ${ticket ? "" : '<span>회원권은 저장 후 ‘회원권 등록’에서 연결합니다.</span>'}
+            <button class="ghost-button" type="button" data-inline-member-management="${member.id}" data-inline-member-ticket="${escapeHtml(ticket?.serverTicketId || "")}">${ticket ? "상세 관리" : "회원권 등록"}</button>
+            <button class="primary-button member-inline-save" type="submit">저장</button>
           </div>
-          <p class="member-inline-message" aria-live="polite">${memberEditorMode === "transition" ? "결제 정보가 없어도 저장할 수 있습니다. 기존 시간표는 유지됩니다." : "필수 정보를 확인한 뒤 저장합니다. 기존 시간표는 유지됩니다."}</p>
+          <p class="member-inline-message" aria-live="polite">${memberEditorMode === "transition" ? "빈 항목이 있어도 저장할 수 있습니다. 기존 시간표는 유지됩니다." : "행의 변경값을 서버에 저장합니다. 기존 시간표는 유지됩니다."}</p>
         </form>
       </td>
     </tr>`;
@@ -10425,16 +10456,16 @@ async function submitMemberInlineEditor(form) {
   const ticket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === form.dataset.ticketId);
   const message = form.querySelector(".member-inline-message");
   const submit = form.querySelector("button[type='submit']");
-  if (!member?.serverUserId || !ticket?.serverTicketId || memberEditorMode === "audit") return;
-  syncMemberManagementBalance(form);
-  const total = memberManagementNullableNumber(form.elements.totalSessions);
-  const used = memberManagementNullableNumber(form.elements.usedSessions);
-  if (total === null || used === null || total < 0 || used < 0 || used > total) {
+  if (!member?.serverUserId || memberEditorMode === "audit") return;
+  if (ticket) syncMemberManagementBalance(form);
+  const total = ticket ? memberManagementNullableNumber(form.elements.totalSessions) : null;
+  const used = ticket ? memberManagementNullableNumber(form.elements.usedSessions) : null;
+  if (ticket && (total === null || used === null || total < 0 || used < 0 || used > total)) {
     message.textContent = "총 회차와 소진 회차를 확인해 주세요.";
     message.classList.add("is-error");
     return;
   }
-  if (memberEditorMode === "normal" && (!form.elements.coachRoleId.value
+  if (ticket && memberEditorMode === "normal" && (!form.elements.coachRoleId.value
     || !form.elements.paymentMethod.value || !form.elements.paymentDate.value)) {
     message.textContent = "정상 운영 모드에서는 담당 코치·결제수단·결제일이 필요합니다.";
     message.classList.add("is-error");
@@ -10448,19 +10479,42 @@ async function submitMemberInlineEditor(form) {
   message.textContent = "서버에 저장하고 확인하는 중입니다.";
   message.classList.remove("is-error", "is-success");
   try {
-    await window.TennisNoteDataClient.rpc("tn_admin_update_member_database_record_preserving_schedule", {
-      target_record: payload,
-    });
+    if (ticket) {
+      await window.TennisNoteDataClient.rpc("tn_admin_update_member_database_record_preserving_schedule", {
+        target_record: payload,
+      });
+    } else {
+      await window.TennisNoteDataClient.rpc("tn_admin_update_member_profile_full", {
+        target_user_id: member.serverUserId,
+        target_name: payload.name,
+        target_nickname: payload.nickname || "",
+        target_phone: payload.phone || "",
+        target_birth_year: payload.birthYear,
+        target_neighborhood: payload.neighborhood || "",
+        target_gender: payload.gender,
+        target_dominant_hand: payload.dominantHand,
+        target_backhand_style: payload.backhandStyle,
+        target_tennis_started_on: payload.tennisStartedOn,
+        target_self_ntrp: payload.selfNtrp,
+        target_coach_ntrp: payload.coachNtrp,
+        target_tennis_goal: payload.tennisGoal || "",
+        target_play_style_memo: payload.playStyleMemo || "",
+      });
+    }
     const synced = await syncAdminLiveData(true);
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
-    const refreshed = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === ticket.serverTicketId);
-    if (!refreshed
+    const refreshedMember = members.find((item) => item.serverUserId === member.serverUserId);
+    const refreshed = ticket ? [...tickets, ...expiredTickets].find((item) => item.serverTicketId === ticket.serverTicketId) : null;
+    if (!refreshedMember || refreshedMember.name !== payload.name) {
+      throw new Error("member_inline_profile_write_not_confirmed");
+    }
+    if (ticket && (!refreshed
       || Number(refreshed.total) !== Number(payload.totalSessions)
       || Number(refreshed.used) !== Number(payload.usedSessions)
-      || Number(refreshed.remaining) !== Number(payload.remainingSessions)) {
+      || Number(refreshed.remaining) !== Number(payload.remainingSessions))) {
       throw new Error("member_inline_write_not_confirmed");
     }
-    message.textContent = "서버 저장 완료 · 시간표 유지 확인";
+    message.textContent = ticket ? "서버 저장 완료 · 시간표 유지 확인" : "기본정보 서버 저장 완료";
     message.classList.add("is-success");
     showToast(`${member.name} 회원권 저장 완료`);
     window.setTimeout(() => {
@@ -10530,8 +10584,8 @@ function renderMembers() {
           <td class="member-coach-column">${escapeHtml(member.coach || "미배정")}</td>
           <td class="member-ticket-column">
             <strong class="member-table-primary">${escapeHtml(memberTicketDisplayLabel(member, ticket))}</strong>
-            ${operationsRole() === "admin" && ticket && memberEditorMode !== "audit"
-              ? `<button class="member-inline-edit-button" type="button" data-open-member-inline="${member.id}">빠른 수정</button>`
+            ${operationsRole() === "admin" && memberEditorMode !== "audit"
+              ? `<button class="member-inline-edit-button" type="button" data-open-member-inline="${member.id}">행 편집</button>`
               : ""}
           </td>
           <td class="member-schedule-column">${escapeHtml(memberScheduleSummary(member))}</td>
@@ -10543,6 +10597,10 @@ function renderMembers() {
     .join("") : `<tr><td colspan="9" class="empty-text">${filterCopy.empty}</td></tr>`;
 
   const detailPanel = $("#memberDetail");
+  if (!detailPanel) {
+    state.selectedMemberId = null;
+    return;
+  }
   const detailLayout = detailPanel?.closest(".member-directory-layout");
   const selected = visibleMembers.find((member) => member.id === state.selectedMemberId);
   detailPanel.hidden = !selected;
@@ -22926,8 +22984,20 @@ function bindEvents() {
     }
     const memberButton = event.target.closest("[data-select-member]");
     if (memberButton) {
-      state.selectedMemberId = Number(memberButton.dataset.selectMember);
+      const memberId = Number(memberButton.dataset.selectMember);
+      state.selectedMemberId = null;
+      state.inlineMemberId = state.inlineMemberId === memberId ? null : memberId;
       renderMembers();
+      return;
+    }
+
+    const inlineManagementButton = event.target.closest("[data-inline-member-management]");
+    if (inlineManagementButton) {
+      const member = members.find((item) => item.id === Number(inlineManagementButton.dataset.inlineMemberManagement));
+      const ticketId = inlineManagementButton.dataset.inlineMemberTicket || "";
+      state.selectedMemberId = member?.id || null;
+      await openMemberManagementModal(member, ticketId ? "profile" : "assign", ticketId);
+      return;
     }
 
     if (event.target.closest("[data-close-member-detail]")) {

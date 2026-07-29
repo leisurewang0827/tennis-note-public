@@ -2098,9 +2098,25 @@ tr.is-selected td {
 
 .member-inline-editor-grid {
   display: grid;
-  grid-template-columns: minmax(120px, 1.25fr) repeat(2, minmax(116px, 1fr)) repeat(3, minmax(74px, .7fr)) minmax(120px, 1fr) minmax(116px, 1fr) minmax(110px, .9fr) auto;
+  grid-template-columns: repeat(9, minmax(108px, 1fr));
   gap: 8px;
   align-items: end;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.member-inline-editor-grid + .member-inline-editor-grid {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #d8e7e1;
+}
+
+.member-inline-editor-grid--ticket {
+  grid-template-columns: repeat(9, minmax(104px, 1fr));
+}
+
+.member-inline-note {
+  grid-column: span 2;
 }
 
 .member-inline-editor-grid label {
@@ -2131,6 +2147,19 @@ tr.is-selected td {
   min-width: 92px;
   height: 38px;
   white-space: nowrap;
+}
+
+.member-inline-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.member-inline-editor-actions span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .member-inline-message {
