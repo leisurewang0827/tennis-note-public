@@ -12163,6 +12163,7 @@ function getRegularScheduleValidation(ticket) {
   const allocatedUnits = requiredCount * unitsPerLesson;
   const weeklyUnitLimit = getTicketWeeklyUnitLimit(ticket);
   const allocationMismatch = !editingExistingLesson
+    && !state.quickLessonEntry
     && (allocatedUnits < weeklyUnits || allocatedUnits > weeklyUnitLimit);
   const missingSlotNumbers = slots
     .map((slot, index) => (!slot.day || !slot.time ? index + 1 : null))
