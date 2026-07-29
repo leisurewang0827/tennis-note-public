@@ -16570,8 +16570,31 @@ function downloadRowsAsCsv(filename, rows) {
   downloadTextFile(filename, `\ufeff${rowsToCsv(rows)}`, "text/csv;charset=utf-8");
 }
 
-function downloadWorkbook(filename, sheets) {
-  if (!window.XLSX) {
+let xlsxLibraryPromise = null;
+
+function ensureXlsxLibrary() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (xlsxLibraryPromise) return xlsxLibraryPromise;
+
+  xlsxLibraryPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    script.async = true;
+    script.dataset.tennisnoteOptionalModule = "xlsx";
+    script.onload = () => (window.XLSX ? resolve(window.XLSX) : reject(new Error("xlsx_module_unavailable")));
+    script.onerror = () => reject(new Error("xlsx_module_load_failed"));
+    document.head.append(script);
+  }).catch((error) => {
+    xlsxLibraryPromise = null;
+    throw error;
+  });
+  return xlsxLibraryPromise;
+}
+
+async function downloadWorkbook(filename, sheets) {
+  try {
+    await ensureXlsxLibrary();
+  } catch {
     const firstSheet = sheets[0];
     downloadRowsAsCsv(filename.replace(/\.xlsx$/i, ".csv"), firstSheet.rows);
     showToast("엑셀 모듈을 불러오지 못해 CSV로 저장했습니다");
@@ -16606,8 +16629,8 @@ function importGuideRows() {
   ];
 }
 
-function downloadImportTemplate() {
-  downloadWorkbook("tennis-note-import-template.xlsx", [
+async function downloadImportTemplate() {
+  await downloadWorkbook("tennis-note-import-template.xlsx", [
     { name: "업로드양식", rows: [importTemplateColumns] },
     { name: "작성예시", rows: [importTemplateColumns, ...importSampleRows()] },
     { name: "작성가이드", rows: importGuideRows() },
@@ -16775,12 +16798,9 @@ function readTextFile(file) {
   });
 }
 
-function readWorkbookFile(file) {
+async function readWorkbookFile(file) {
+  await ensureXlsxLibrary();
   return new Promise((resolve, reject) => {
-    if (!window.XLSX) {
-      reject(new Error("엑셀 해석 모듈을 불러오지 못했습니다. CSV로 저장해 다시 올려주세요."));
-      return;
-    }
     const reader = new FileReader();
     reader.onload = () => {
       const workbook = window.XLSX.read(reader.result, { type: "array" });
@@ -17037,6 +17057,11 @@ async function performAdminLiveDataSync() {
     liveScheduleMessage: "실서버 회원·코치·시간표를 불러오는 중",
   });
   try {
+    const adminSettingsPromise = Promise.all([
+      loadLiveSchedulePolicyFromServer(),
+      loadAdminLayoutSettingsFromServer(),
+      loadAdminSecuritySettingsFromServer(),
+    ]);
     const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       (client.selectAllRows || client.selectRows)("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 }),
@@ -17670,11 +17695,7 @@ async function performAdminLiveDataSync() {
         ? `시간표 보호 모드: 기존 ${mappedLessons.length}건 유지`
         : `실서버 시간표 ${mappedLessons.length}건 동기화`,
     });
-    await Promise.all([
-      loadLiveSchedulePolicyFromServer(),
-      loadAdminLayoutSettingsFromServer(),
-      loadAdminSecuritySettingsFromServer(),
-    ]);
+    await adminSettingsPromise;
     syncAdminScheduleWeek();
     if (!mappedMembers.some((member) => member.id === state.selectedMemberId)) {
       state.selectedMemberId = null;
@@ -18308,7 +18329,7 @@ function selectedExportSheets() {
   return [{ name: selected.label, rows: selected.rows }];
 }
 
-function downloadDataExport() {
+async function downloadDataExport() {
   const format = $("#dataExportFormat")?.value || "xlsx";
   const dataset = $("#dataExportDataset")?.value || "all";
   const sheets = selectedExportSheets();
@@ -18322,7 +18343,7 @@ function downloadDataExport() {
       : sheets[0].rows;
     downloadRowsAsCsv(`tennis-note-${dataset}-${stamp}.csv`, rows);
   } else {
-    downloadWorkbook(`tennis-note-${dataset}-${stamp}.xlsx`, sheets);
+    await downloadWorkbook(`tennis-note-${dataset}-${stamp}.xlsx`, sheets);
   }
   billingLogs.unshift(`데이터 내보내기 생성: ${dataset} ${format}`);
   renderAll();
