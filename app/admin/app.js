@@ -9883,6 +9883,28 @@ function selectedMemberIdSet() {
   return new Set((state.selectedMemberIds || []).map(Number));
 }
 
+function syncMemberBulkRenewalFields() {
+  const action = $("#memberBulkAction")?.value || "";
+  const fields = $("#memberBulkRenewalFields");
+  if (!fields) return;
+  fields.hidden = action !== "reenroll";
+  if (fields.hidden) return;
+
+  const productSelect = $("#memberBulkRenewalProduct");
+  if (productSelect) {
+    const previousValue = productSelect.value;
+    const products = membershipProductsForActiveOperationProfile()
+      .map((draft) => ({ draft, server: serverMembershipProductForDraft(draft) }))
+      .filter(({ draft, server }) => server?.id && draft.status !== "hidden" && draft.status !== "disabled");
+    productSelect.innerHTML = products.length
+      ? products.map(({ draft, server }) => `<option value="${escapeHtml(server.id)}">${escapeHtml(draft.title || draft.name || server.name || "회원권")}</option>`).join("")
+      : '<option value="">판매 중인 회원권 없음</option>';
+    if (products.some(({ server }) => String(server.id) === previousValue)) productSelect.value = previousValue;
+  }
+  const paymentDate = $("#memberBulkRenewalPaymentDate");
+  if (paymentDate && !paymentDate.value) paymentDate.value = adminLocalDateKey(new Date());
+}
+
 function renderMemberBulkToolbar(visibleMembers = []) {
   const selected = selectedMemberIdSet();
   const validIds = new Set(members.map((member) => Number(member.id)));
@@ -9904,6 +9926,7 @@ function renderMemberBulkToolbar(visibleMembers = []) {
     coachSelect.innerHTML = activeCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name)}</option>`).join("");
     coachSelect.hidden = $("#memberBulkAction")?.value !== "assign_coach";
   }
+  syncMemberBulkRenewalFields();
 }
 
 async function runMemberBulkAction() {
@@ -9919,6 +9942,41 @@ async function runMemberBulkAction() {
   const button = $("#runMemberBulkAction");
   if (button) button.disabled = true;
   try {
+    if (action === "reenroll") {
+      const productId = $("#memberBulkRenewalProduct")?.value || "";
+      const paymentMethod = $("#memberBulkRenewalPaymentMethod")?.value || "";
+      const paymentDate = $("#memberBulkRenewalPaymentDate")?.value || "";
+      const startsOn = $("#memberBulkRenewalStartDate")?.value || null;
+      const keepSchedule = Boolean($("#memberBulkRenewalKeepSchedule")?.checked);
+      if (!productId || !["card", "bank_transfer"].includes(paymentMethod) || !paymentDate) {
+        throw new Error("bulk_reenrollment_fields_required");
+      }
+      const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_reenroll_members", {
+        target_user_ids: selectedUserIds,
+        target_product_id: productId,
+        target_payment_method: paymentMethod,
+        target_payment_date: paymentDate,
+        target_starts_on: startsOn,
+        target_keep_schedule: keepSchedule,
+        target_operation_key: createAdminOperationKey("member-bulk-reenroll"),
+      });
+      const processedCount = Number(result?.processedCount ?? result?.processed_count ?? 0);
+      const failedRows = Array.isArray(result?.failed) ? result.failed : [];
+      const resultNode = $("#memberBulkRenewalResult");
+      if (resultNode) {
+        resultNode.classList.toggle("is-error", Boolean(failedRows.length));
+        resultNode.textContent = failedRows.length
+          ? `${processedCount}명 완료 · ${failedRows.length}명 확인 필요: ${failedRows.map((row) => row.name || row.reason || "확인 필요").join(", ")}`
+          : `${processedCount}명 재등록과 회원권 연장이 완료되었습니다.`;
+      }
+      await syncAdminLiveData(true);
+      state.selectedMemberIds = failedRows.length
+        ? members.filter((member) => failedRows.some((row) => String(row.userId || row.user_id) === String(member.serverUserId))).map((member) => Number(member.id))
+        : [];
+      renderMembers();
+      showToast(failedRows.length ? `${processedCount}명 완료 · ${failedRows.length}명 확인 필요` : `${processedCount}명 일괄 재등록 완료`);
+      return;
+    }
     const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_member_action", {
       target_user_ids: selectedUserIds,
       target_action: action,
@@ -21982,6 +22040,7 @@ function bindEvents() {
     }
     if (event.target.matches("#memberBulkAction")) {
       if ($("#memberBulkCoach")) $("#memberBulkCoach").hidden = event.target.value !== "assign_coach";
+      syncMemberBulkRenewalFields();
       return;
     }
     if (event.target.matches("[data-select-product-row]")) {

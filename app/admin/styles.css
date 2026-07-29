@@ -6443,6 +6443,63 @@ tr.is-selected td {
   min-width: 150px;
 }
 
+.member-bulk-renewal-fields {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: minmax(190px, 1.6fr) repeat(3, minmax(140px, 1fr)) auto;
+  gap: 8px;
+  align-items: end;
+  padding-top: 10px;
+  border-top: 1px solid #cfe3dc;
+}
+
+.member-bulk-renewal-fields[hidden] {
+  display: none;
+}
+
+.member-bulk-renewal-fields label {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.member-bulk-renewal-fields select,
+.member-bulk-renewal-fields input {
+  width: 100%;
+  min-width: 0;
+}
+
+.member-bulk-renewal-fields small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.member-bulk-renewal-toggle {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  min-height: 42px;
+}
+
+.member-bulk-renewal-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #14805f;
+}
+
+.member-bulk-renewal-result {
+  grid-column: 1 / -1;
+  min-height: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.member-bulk-renewal-result.is-error {
+  color: #a53b32;
+}
+
 .row-select-cell {
   width: 38px;
   min-width: 38px;
@@ -6551,6 +6608,16 @@ tr.is-selected td {
   .bulk-action-toolbar button {
     flex: 1 1 140px;
     min-width: 0;
+  }
+
+  .member-bulk-renewal-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .member-bulk-renewal-fields label:first-child,
+  .member-bulk-renewal-toggle,
+  .member-bulk-renewal-result {
+    grid-column: 1 / -1;
   }
 
   .substitute-modal-panel {
