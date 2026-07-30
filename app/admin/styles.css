@@ -2018,31 +2018,7 @@ tr.is-selected td {
   background: #f8fcfa;
 }
 
-.member-editor-mode-switch {
-  display: inline-grid;
-  grid-template-columns: repeat(3, minmax(84px, 1fr));
-  overflow: hidden;
-  border: 1px solid #bed5cc;
-  border-radius: 7px;
-  background: #fff;
-}
-
-.member-editor-mode-switch button {
-  min-height: 36px;
-  padding: 0 12px;
-  border: 0;
-  border-right: 1px solid #d8e7e1;
-  color: #436158;
-  background: transparent;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.member-editor-mode-switch button:last-child {
-  border-right: 0;
-}
-
-.member-editor-mode-switch button.is-active {
+#toggleMemberAdminEdit.is-active {
   color: #fff;
   background: var(--green);
 }
@@ -2063,15 +2039,32 @@ tr.is-selected td {
 }
 
 .member-inline-edit-button {
-  display: block;
-  margin-top: 4px;
-  padding: 0;
-  border: 0;
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 3px 7px;
+  border: 1px solid #bdd9ce;
+  border-radius: 5px;
   color: var(--green);
-  background: transparent;
+  background: #f5fbf8;
   font-size: 12px;
   font-weight: 900;
   cursor: pointer;
+}
+
+.member-quick-edit-popover {
+  position: fixed;
+  z-index: 1600;
+  width: min(820px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  border: 1px solid #a9cfc0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(20, 50, 41, 0.24);
+}
+
+.member-quick-edit-popover .member-inline-editor {
+  border: 0;
 }
 
 .member-inline-editor-row > td {
@@ -2106,7 +2099,7 @@ tr.is-selected td {
 
 .member-inline-compact-grid {
   display: grid;
-  grid-template-columns: minmax(190px, 2fr) minmax(120px, 1fr) minmax(110px, 1fr) 68px 68px 68px minmax(140px, 1.4fr) auto;
+  grid-template-columns: minmax(180px, 2fr) minmax(120px, 1fr) minmax(110px, 1fr) 68px 68px 68px minmax(130px, 1.4fr) auto;
   gap: 8px;
   align-items: end;
 }
@@ -2148,6 +2141,33 @@ tr.is-selected td {
 .member-page-save {
   min-width: 142px;
   white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .member-editor-mode-bar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .member-editor-mode-bar p {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .member-quick-edit-popover {
+    inset: auto 8px 8px 8px !important;
+    width: auto;
+    max-height: min(78vh, 640px);
+  }
+
+  .member-inline-compact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .member-inline-product,
+  .member-inline-note,
+  .member-inline-save {
+    grid-column: 1 / -1;
+  }
 }
 
 .admin-save-state {

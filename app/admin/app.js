@@ -1756,14 +1756,9 @@ const defaultMemberManagementPolicy = {
   requireAdminPin: true,
 };
 const memberManagementPolicy = { ...defaultMemberManagementPolicy };
-const memberEditorModeSettingKey = "member_editor_mode_v1";
-const memberEditorModeLocalKey = "tennis-note-member-editor-mode-v1";
-const memberEditorModes = new Set(["normal", "transition", "audit"]);
-let memberEditorMode = memberEditorModes.has(localStorage.getItem(memberEditorModeLocalKey))
-  ? localStorage.getItem(memberEditorModeLocalKey)
-  : "transition";
-let memberEditorModeServerUpdatedAt = "";
-let memberEditorModeSaveState = "local";
+// Legacy mode values are intentionally collapsed into one PIN-gated admin editor.
+const memberEditorMode = "transition";
+let memberAdminEditEnabled = false;
 const memberManagementModalState = {
   memberId: null,
   action: "",
@@ -8518,6 +8513,57 @@ function memberManagementDatabaseFields({
     </div>`;
 }
 
+function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions) {
+  const total = Number(product?.total_sessions || 1);
+  const startsOn = adminLocalDateKey(new Date());
+  const validityDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
+  const isGroup = Number(product?.group_size || 1) === 2;
+  return `
+    <input name="createWithoutSchedule" type="hidden" value="true" />
+    <input name="recordStatus" type="hidden" value="active" />
+    <input name="scheduleScope" type="hidden" value="${escapeHtml(memberManagementProductScheduleScope(product))}" />
+    <input name="weeklyFrequency" type="hidden" value="${Number(product?.frequency_per_week || 1)}" />
+    <input name="lessonType" type="hidden" value="${isGroup ? "one_on_two" : "one_on_one"}" />
+    <input name="startsOn" type="hidden" value="${escapeHtml(startsOn)}" />
+    <input name="expiresOn" type="hidden" value="${escapeHtml(addMemberManagementDays(startsOn, validityDays - 1))}" />
+    <input name="usedSessions" type="hidden" value="0" />
+    <input name="remainingSessions" type="hidden" value="${total}" />
+    <input name="paymentDate" type="hidden" value="" />
+    <input name="paymentMethod" type="hidden" value="" />
+    <input name="paymentAmount" type="hidden" value="0" />
+    <input name="note" type="hidden" value="" />
+    <div class="member-management-form-grid member-simple-ticket-fields">
+      <label class="form-field span-2">${memberManagementFieldLabel("회원권", true)}<select name="productId" required>
+        ${memberManagementProducts().map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")}</option>`).join("")}
+      </select></label>
+      <label class="form-field">${memberManagementFieldLabel("담당 코치", true)}<select name="coachRoleId" required>
+        ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === coachRoleId ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
+      </select></label>
+      <label class="form-field">${memberManagementFieldLabel("총 횟수", true)}<input name="totalSessions" type="number" min="1" step="1" value="${total}" required /></label>
+      <div class="form-field span-2 member-partner-editor ${isGroup ? "" : "is-disabled"}" data-manual-member-partner-field ${isGroup ? "" : "hidden"}>
+        ${memberManagementFieldLabel("1:2 파트너", isGroup)}
+        <div class="member-partner-mode" role="radiogroup" aria-label="파트너 등록 방법">
+          <label><input name="partnerMode" type="radio" value="new" checked /> 새 파트너 같이 등록</label>
+          <label><input name="partnerMode" type="radio" value="existing" /> 기존 회원 연결</label>
+        </div>
+        <div class="member-partner-new-fields" data-manual-new-partner>
+          <label class="form-field">${memberManagementFieldLabel("파트너 이름", true)}<input name="partnerName" type="text" minlength="2" maxlength="40" /></label>
+          <label class="form-field">${memberManagementFieldLabel("파트너 휴대전화")}<input name="partnerPhone" type="tel" inputmode="tel" maxlength="20" /></label>
+          <input name="partnerBirthYear" type="hidden" value="" />
+          <input name="partnerGender" type="hidden" value="" />
+        </div>
+        <div class="member-partner-existing-fields" data-manual-existing-partner hidden>
+          <input name="partnerSearch" type="search" autocomplete="off" placeholder="파트너 이름 검색" data-manual-member-partner-search />
+          <div class="member-partner-search-results" data-manual-member-partner-results aria-live="polite"></div>
+          <select name="partnerUserId" disabled>
+            <option value="">파트너 선택</option>
+            ${partnerOptions.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+    </div>`;
+}
+
 function manualMemberPartnerOptions() {
   return (adminLiveDataState.users || [])
     .filter((user) => user.role === "member" && user.status === "active")
@@ -8666,6 +8712,23 @@ async function loadMemberLinkCandidates(member, query = memberManagementModalSta
   }
 }
 
+function memberManualRegistrationFields() {
+  return `
+    <label class="form-field span-2">${memberManagementFieldLabel("이름", true)}<input name="memberName" type="text" minlength="2" maxlength="40" autocomplete="name" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("휴대전화")}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" placeholder="010-0000-0000" /></label>
+    <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="예: 1990" /></label>
+    <input name="memberNickname" type="hidden" value="" />
+    <input name="memberNeighborhood" type="hidden" value="" />
+    <input name="memberGender" type="hidden" value="" />
+    <input name="memberDominantHand" type="hidden" value="" />
+    <input name="memberBackhandStyle" type="hidden" value="" />
+    <input name="memberTennisStartedOn" type="hidden" value="" />
+    <input name="memberSelfNtrp" type="hidden" value="" />
+    <input name="memberCoachNtrp" type="hidden" value="" />
+    <input name="memberTennisGoal" type="hidden" value="" />
+    <input name="memberPlayStyleMemo" type="hidden" value="" />`;
+}
+
 function renderMemberManagementModal() {
   const target = $("#memberManagementModalContent");
   if (!target) return;
@@ -8781,24 +8844,19 @@ function renderMemberManagementModal() {
     actionFields = products.length && coachRoles.length ? `
       <ol class="member-create-steps" aria-label="회원 추가 단계">
         <li class="is-active" data-member-create-step-indicator="1"><span>1</span> 기본정보</li>
-        <li data-member-create-step-indicator="2"><span>2</span> 회원권·수업</li>
+        <li data-member-create-step-indicator="2"><span>2</span> 회원권</li>
       </ol>
       <div data-member-create-panel="1">
-        <p class="member-create-step-help"><strong>1단계</strong> 이름은 필수입니다. 모르는 정보는 비워 두고 나중에 수정할 수 있습니다.</p>
+        <p class="member-create-step-help"><strong>1단계</strong> 현장에서는 이름만 필수입니다. 나머지는 회원이 앱에서 작성한 뒤 연결할 수 있습니다.</p>
         <div class="member-management-form-grid">
-          ${memberManualProfileFields()}
+          ${memberManualRegistrationFields()}
         </div>
       </div>
       <div data-member-create-panel="2" hidden>
-        <p class="member-create-step-help"><strong>2단계</strong> 판매할 회원권과 담당 코치를 고르면 횟수와 기간이 자동으로 채워집니다.</p>
-        <div class="member-management-form-grid">
-          <label class="form-field span-2">${memberManagementFieldLabel("회원권", true)}<select name="productId" required>
-            ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")} · ${memberManagementScheduleScopeLabel(memberManagementProductScheduleScope(item))}</option>`).join("")}
-          </select></label>
-        </div>
-        ${memberManagementDatabaseFields({ member, ticket: null, record: null, product, coachRoles, coachRoleId, partnerOptions, isCreate: true })}
+        <p class="member-create-step-help"><strong>2단계</strong> 회원권·담당 코치·횟수만 등록합니다. 정규 시간은 저장 후 시간표에서 선택합니다.</p>
+        ${memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions)}
       </div>
-      <p class="member-management-rule">저장하면 실서버 회원과 회원권이 함께 생성되어 기존 회원과 동일하게 수정·만료·시간표 등록을 할 수 있습니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
+      <p class="member-management-rule">회원권 등록 후 시간표가 열립니다. 시간 선택 전에는 정규 수업이 자동 생성되지 않습니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "assign") {
     actionFields = products.length && coachRoles.length ? `
       <div class="member-management-form-grid">
@@ -8873,8 +8931,8 @@ function renderMemberManagementModal() {
         <button class="ghost-button" type="button" data-close-member-management>취소</button>
         ${isCreate && products.length && coachRoles.length ? `
           <button class="ghost-button" type="button" data-member-create-previous hidden>이전</button>
-          <button class="primary-button" type="button" data-member-create-next>다음: 회원권·수업</button>
-          <button class="primary-button" type="submit" data-member-create-submit hidden>${memberManagementActionLabel(action)} 확정</button>
+          <button class="primary-button" type="button" data-member-create-next>다음: 회원권</button>
+          <button class="primary-button" type="submit" data-member-create-submit hidden>등록 후 시간표 열기</button>
         ` : `<button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${(["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length) ? "disabled" : ""}>${memberManagementActionLabel(action)} 확정</button>`}
       </div>
     </form>`;
@@ -9049,6 +9107,7 @@ function syncManualMemberPartnerField(form) {
   });
   if (!groupProduct || createNewPartner) form.elements.partnerUserId.value = "";
   field?.classList.toggle("is-disabled", !groupProduct);
+  if (field) field.hidden = !groupProduct;
   filterManualMemberPartnerOptions(form);
 }
 
@@ -9390,7 +9449,8 @@ async function submitMemberManagementForm(event) {
     const couponProduct = selectedProduct?.is_coupon === true || selectedProduct?.product_kind === "coupon";
     const requiredLessonDays = Math.max(1, Number(form.elements.weeklyFrequency?.value) || 1);
     const selectedLessonDays = memberManagementSelectedDays(form);
-    if (activeRecord && !couponProduct && (selectedLessonDays.length < 1 || selectedLessonDays.length > requiredLessonDays)) {
+    const createsWithoutSchedule = form.elements.createWithoutSchedule?.value === "true";
+    if (activeRecord && !createsWithoutSchedule && !couponProduct && (selectedLessonDays.length < 1 || selectedLessonDays.length > requiredLessonDays)) {
       if (message) message.textContent = `주 ${requiredLessonDays}회 회원권은 레슨 요일을 1개부터 ${requiredLessonDays}개까지 선택해 주세요. 같은 날 연속 수업도 가능합니다.`;
       return;
     }
@@ -9584,7 +9644,16 @@ async function submitMemberManagementForm(event) {
     }
     $$("[data-member-filter]").forEach((button) => button.classList.toggle("is-active", button.dataset.memberFilter === state.memberFilter));
     renderMembers();
-    showToast(`${memberManagementActionLabel(action)} 완료`);
+    if (isCreate) {
+      const createdTicketId = normalizedResult.ticketId || result?.ticket_id || "";
+      const createdTicket = tickets.find((item) => item.serverTicketId === createdTicketId);
+      state.pinnedLessonTicketId = createdTicket?.id || "";
+      state.scheduleEditMode = true;
+      setView("schedule");
+      showToast("회원권 등록 완료 · 시간표에서 첫 수업을 선택해 주세요.");
+    } else {
+      showToast(`${memberManagementActionLabel(action)} 완료`);
+    }
   } catch (error) {
     memberManagementModalState.message = memberManagementErrorText(error);
     if (message) message.textContent = memberManagementModalState.message;
@@ -9594,14 +9663,6 @@ async function submitMemberManagementForm(event) {
       submit.textContent = `${memberManagementActionLabel(action)} 확정`;
     }
   }
-}
-
-function memberEditorModeCopy(mode = memberEditorMode) {
-  return ({
-    normal: "결제·판매상품·담당 코치를 확인하고 정책에 맞게 저장합니다.",
-    transition: "기존 장부를 옮기는 동안 회차·기간·결제 메모를 바로 보정합니다.",
-    audit: "회원권·결제·시간표 연결 문제를 읽기 전용으로 확인합니다.",
-  })[mode] || "";
 }
 
 function memberEditorAuditIssues(member, ticket = memberCurrentTicket(member)) {
@@ -9631,100 +9692,51 @@ function renderMemberEditorModeBar() {
   const bar = $("#memberEditorModeBar");
   if (!bar) return;
   bar.hidden = operationsRole() !== "admin";
-  bar.querySelectorAll("[data-member-editor-mode]").forEach((button) => {
-    const selected = button.dataset.memberEditorMode === memberEditorMode;
-    button.classList.toggle("is-active", selected);
-    button.setAttribute("aria-pressed", String(selected));
-  });
-  const auditCount = operationBranchMembers()
-    .reduce((count, member) => count + Number(memberEditorAuditIssues(member).length > 0), 0);
-  const summary = $("#memberEditorModeSummary");
-  if (summary) summary.textContent = `${memberEditorModeCopy()}${memberEditorMode === "audit" ? ` · 확인 필요 ${auditCount}명` : ""}`;
-  const stateTarget = $("#memberEditorModeSaveState");
-  if (stateTarget) {
-    stateTarget.textContent = ({
-      saving: "저장 중",
-      server: "서버 적용",
-      conflict: "다른 화면 변경 확인",
-      local: "이 기기 설정",
-      failed: "저장 실패",
-    })[memberEditorModeSaveState] || "";
+  const button = $("#toggleMemberAdminEdit");
+  if (button) {
+    button.classList.toggle("is-active", memberAdminEditEnabled);
+    button.setAttribute("aria-pressed", String(memberAdminEditEnabled));
+    button.textContent = memberAdminEditEnabled ? "편집 종료" : "관리자 편집";
   }
+  const summary = $("#memberEditorModeSummary");
+  if (summary) summary.textContent = memberAdminEditEnabled
+    ? "이름 옆 수정 버튼을 누르면 회원·회원권을 바로 고칠 수 있습니다."
+    : "PIN 확인 후 이름 옆에서 회원·회원권을 바로 수정합니다.";
+  const stateTarget = $("#memberEditorModeSaveState");
+  if (stateTarget) stateTarget.textContent = memberAdminEditEnabled ? "편집 중" : "잠김";
 }
 
 async function loadMemberEditorModeFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.selectRows || !adminApprovalReady()) {
-    renderMemberEditorModeBar();
-    return false;
-  }
-  try {
-    const rows = await client.selectRows("tn_admin_settings", {
-      select: "key,value,updated_at",
-      filters: { key: memberEditorModeSettingKey },
-      limit: 1,
-    });
-    const savedMode = rows?.[0]?.value?.mode;
-    if (memberEditorModes.has(savedMode)) memberEditorMode = savedMode;
-    memberEditorModeServerUpdatedAt = rows?.[0]?.updated_at || "";
-    memberEditorModeSaveState = rows?.length ? "server" : "local";
-    localStorage.setItem(memberEditorModeLocalKey, memberEditorMode);
-    renderMemberEditorModeBar();
-    return true;
-  } catch {
-    memberEditorModeSaveState = "failed";
-    renderMemberEditorModeBar();
-    return false;
-  }
+  renderMemberEditorModeBar();
+  return true;
 }
 
-async function saveMemberEditorMode(nextMode) {
-  if (!memberEditorModes.has(nextMode) || !adminApprovalReady()) return;
-  const client = window.TennisNoteDataClient;
-  const previousMode = memberEditorMode;
-  memberEditorMode = nextMode;
+function setMemberAdminEditEnabled(enabled) {
+  memberAdminEditEnabled = Boolean(enabled);
   state.inlineMemberId = null;
-  memberEditorModeSaveState = "saving";
-  localStorage.setItem(memberEditorModeLocalKey, memberEditorMode);
   renderMembers();
-  try {
-    if (!memberEditorModeServerUpdatedAt) {
-      const existing = await client.selectRows("tn_admin_settings", {
-        select: "key,value,updated_at",
-        filters: { key: memberEditorModeSettingKey },
-        limit: 1,
-      });
-      if (existing?.length) {
-        memberEditorModeServerUpdatedAt = existing[0].updated_at || "";
-        throw new Error("member_editor_mode_conflict");
-      }
-      const inserted = await client.insertRows("tn_admin_settings", {
-        key: memberEditorModeSettingKey,
-        value: { mode: memberEditorMode, updatedAt: new Date().toISOString() },
-      });
-      memberEditorModeServerUpdatedAt = inserted?.[0]?.updated_at || "";
-    } else {
-      const nextUpdatedAt = new Date().toISOString();
-      const updated = await client.updateRows("tn_admin_settings", {
-        key: memberEditorModeSettingKey,
-        updated_at: memberEditorModeServerUpdatedAt,
-      }, {
-        value: { mode: memberEditorMode, updatedAt: nextUpdatedAt },
-        updated_at: nextUpdatedAt,
-      });
-      if (!updated?.length) throw new Error("member_editor_mode_conflict");
-      memberEditorModeServerUpdatedAt = updated[0]?.updated_at || nextUpdatedAt;
-    }
-    memberEditorModeSaveState = "server";
-    showToast(`${memberEditorMode === "normal" ? "정상 운영" : memberEditorMode === "transition" ? "과도기 설정" : "점검"} 모드 적용`);
-  } catch (error) {
-    memberEditorMode = previousMode;
-    memberEditorModeSaveState = String(error?.message || "").includes("conflict") ? "conflict" : "failed";
-    localStorage.setItem(memberEditorModeLocalKey, memberEditorMode);
-    if (memberEditorModeSaveState === "conflict") await loadMemberEditorModeFromServer();
-    showToast("운영 모드 저장에 실패해 이전 설정으로 되돌렸습니다.");
+  showToast(memberAdminEditEnabled ? "관리자 편집을 시작합니다." : "관리자 편집을 종료했습니다.");
+}
+
+function requestMemberAdminEdit() {
+  if (operationsRole() !== "admin") return;
+  if (memberAdminEditEnabled) {
+    setMemberAdminEditEnabled(false);
+    return;
   }
-  renderMembers();
+  if (adminPinNeedsSetup()) {
+    state.settingsTab = "security";
+    showToast("운영 설정의 보안·잠금에서 관리자 PIN을 먼저 설정해 주세요.");
+    return;
+  }
+  adminLockSession.pendingView = "";
+  adminLockSession.pendingAction = "member_admin_edit";
+  adminLockSession.pendingLabel = "회원 관리자 편집";
+  adminLockSession.error = "";
+  adminLockSession.afterUnlock = () => setMemberAdminEditEnabled(true);
+  renderAdminLockModal();
+  $("#adminLockModal")?.removeAttribute("hidden");
+  setTimeout(() => $("#adminPinInput")?.focus(), 0);
 }
 
 async function loadMemberManagementPolicyFromServer() {
@@ -10587,7 +10599,7 @@ async function runMemberBulkAction() {
 }
 
 function memberQuickEditorMarkup(member, ticket) {
-  if (memberEditorMode === "audit" || operationsRole() !== "admin") return "";
+  if (!memberAdminEditEnabled || operationsRole() !== "admin") return "";
   const record = memberDatabaseRecord(member, ticket);
   const coachRoles = memberManagementCoachRoles(ticket || {});
   const partnerUserId = ticket ? memberTicketPartnerUserId(ticket, member) : "";
@@ -10606,10 +10618,11 @@ function memberQuickEditorMarkup(member, ticket) {
     .join("");
   const isGroup = Number(currentProduct?.group_size || record?.lesson_group_size || ticket?.groupSize || 1) === 2;
   return `
-    <tr class="member-inline-editor-row member-quick-editor-row" data-inline-editor-member="${member.id}">
-      <td colspan="9">
         <form class="member-inline-editor member-inline-editor--compact" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}">
-          <input name="memberName" type="hidden" value="${escapeHtml(member.name || "")}" />
+          <div class="member-inline-editor-heading">
+            <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
+            <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
+          </div>
           <input name="startsOn" type="hidden" value="${escapeHtml(memberManagementDate(record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased) || adminLocalDateKey(new Date()))}" />
           <input name="expiresOn" type="hidden" value="${escapeHtml(memberManagementDate(ticket?.expires))}" />
           <input name="scheduleScope" type="hidden" value="${escapeHtml(record?.lesson_schedule_scope || ticket?.scheduleScope || "weekday")}" />
@@ -10620,6 +10633,9 @@ function memberQuickEditorMarkup(member, ticket) {
           <input name="paymentAmount" type="hidden" value="${escapeHtml(memberManagementValue(record?.payment_amount ?? ""))}" />
           <input name="recordStatus" type="hidden" value="${escapeHtml(record?.record_status || (ticket ? "active" : "pending"))}" />
           <div class="member-inline-compact-grid">
+            <label><span>이름</span><input name="memberName" value="${escapeHtml(member.name || "")}" required /></label>
+            <label><span>연락처</span><input name="memberPhone" inputmode="tel" value="${escapeHtml(member.phone || "")}" /></label>
+            <label><span>출생연도</span><input name="memberBirthYear" type="number" min="1900" max="2100" value="${escapeHtml(memberManagementValue(member.birthYear))}" /></label>
             <label class="member-inline-product"><span>회원권</span><select name="productId">
               <option value="">미등록</option>${productOptions}
             </select></label>
@@ -10638,12 +10654,40 @@ function memberQuickEditorMarkup(member, ticket) {
           </div>
           <div class="member-inline-editor-actions">
             <button class="ghost-button" type="button" data-open-member-management="profile" data-member-management-ticket="${escapeHtml(ticket?.serverTicketId || "")}" data-member-management-member="${member.id}">상세 관리</button>
-            <button class="ghost-button" type="button" data-close-member-inline>수정 닫기</button>
             <p class="member-inline-message" aria-live="polite"></p>
           </div>
-        </form>
-      </td>
-    </tr>`;
+        </form>`;
+}
+
+function positionMemberQuickEditPopover() {
+  const popover = $("#memberQuickEditPopover");
+  const anchor = document.querySelector(`[data-open-member-inline="${state.inlineMemberId || ""}"]`);
+  if (!popover || popover.hidden || !anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  const margin = 12;
+  const maxLeft = Math.max(margin, window.innerWidth - popover.offsetWidth - margin);
+  popover.style.left = `${Math.min(maxLeft, Math.max(margin, rect.right + 8))}px`;
+  popover.style.top = `${Math.min(
+    Math.max(margin, window.innerHeight - popover.offsetHeight - margin),
+    Math.max(margin, rect.top - 12),
+  )}px`;
+}
+
+function renderMemberQuickEditPopover() {
+  const popover = $("#memberQuickEditPopover");
+  if (!popover) return;
+  const member = memberAdminEditEnabled
+    ? members.find((item) => item.id === state.inlineMemberId)
+    : null;
+  if (!member) {
+    popover.hidden = true;
+    popover.innerHTML = "";
+    return;
+  }
+  popover.innerHTML = memberQuickEditorMarkup(member, memberCurrentTicket(member));
+  popover.hidden = false;
+  syncMemberQuickEditorProduct(popover.querySelector("[data-member-inline-form]"));
+  window.requestAnimationFrame(positionMemberQuickEditPopover);
 }
 
 function syncMemberQuickEditorProduct(form) {
@@ -10953,7 +10997,6 @@ function renderMembers() {
     .map((member) => {
       const ticket = memberCurrentTicket(member);
       const issues = memberEditorAuditIssues(member, ticket);
-      const inlineEditor = state.inlineMemberId === member.id ? memberQuickEditorMarkup(member, ticket) : "";
       return `
         <tr class="${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}">
           <td class="row-select-cell member-select-column"><input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedMemberIdSet().has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} /></td>
@@ -10962,7 +11005,7 @@ function renderMembers() {
               ${avatarMarkup(member, "small")}
               <span>${escapeHtml(member.name)}</span>
             </button>
-            ${memberEditorMode !== "audit" && operationsRole() === "admin" ? `<button class="member-inline-edit-button" type="button" data-open-member-inline="${member.id}" aria-expanded="${state.inlineMemberId === member.id ? "true" : "false"}">${state.inlineMemberId === member.id ? "수정 닫기" : "이 행 수정"}</button>` : ""}
+            ${memberAdminEditEnabled && operationsRole() === "admin" ? `<button class="member-inline-edit-button" type="button" data-open-member-inline="${member.id}" aria-expanded="${state.inlineMemberId === member.id ? "true" : "false"}" aria-label="${escapeHtml(member.name)} 빠른 수정">수정</button>` : ""}
           </td>
           <td class="member-auth-column">${memberAuthStatusMarkup(member)}</td>
           <td class="member-coach-column">${escapeHtml(member.coach || "미배정")}</td>
@@ -10971,11 +11014,13 @@ function renderMembers() {
           </td>
           <td class="member-schedule-column">${escapeHtml(memberScheduleSummary(member))}</td>
           <td class="member-usage-column">${ticket ? ticketUsageLabel(ticket) : "-"}</td>
-          <td class="member-status-column">${memberStatusBadge(member)}${memberEditorMode === "audit" && issues.length ? `<span class="member-audit-issue">${issues.length}건 확인</span>` : ""}</td>
-          <td class="member-table-note member-note-column">${escapeHtml(memberEditorMode === "audit" && issues.length ? issues.join(" · ") : memberRemarkLabel(member))}</td>
-        </tr>${inlineEditor}`;
+          <td class="member-status-column">${memberStatusBadge(member)}</td>
+          <td class="member-table-note member-note-column">${escapeHtml(memberRemarkLabel(member))}</td>
+        </tr>`;
     })
     .join("") : `<tr><td colspan="9" class="empty-text">${filterCopy.empty}</td></tr>`;
+
+  renderMemberQuickEditPopover();
 
   const detailPanel = $("#memberDetail");
   if (!detailPanel) {
@@ -23383,9 +23428,8 @@ function bindEvents() {
 
   document.addEventListener("click", async (event) => {
     if (event.target.matches("[data-select-product-row]")) event.stopPropagation();
-    const memberEditorModeButton = event.target.closest("[data-member-editor-mode]");
-    if (memberEditorModeButton) {
-      await saveMemberEditorMode(memberEditorModeButton.dataset.memberEditorMode);
+    if (event.target.closest("#toggleMemberAdminEdit")) {
+      requestMemberAdminEdit();
       return;
     }
     const inlineMemberButton = event.target.closest("[data-open-member-inline]");
@@ -23393,6 +23437,7 @@ function bindEvents() {
       const memberId = Number(inlineMemberButton.dataset.openMemberInline);
       state.inlineMemberId = state.inlineMemberId === memberId ? null : memberId;
       renderMembers();
+      window.requestAnimationFrame(positionMemberQuickEditPopover);
       return;
     }
     if (event.target.closest("[data-member-create-next]")) {
