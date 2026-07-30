@@ -11158,6 +11158,7 @@ async function submitMemberInlineEditor(form, options = {}) {
   const message = form.querySelector(".member-inline-message");
   const submit = form.querySelector("button[type='submit']");
   if (!member?.serverUserId || memberEditorMode === "audit") return;
+  syncMemberQuickEditorProduct(form);
   if (ticket) syncMemberManagementBalance(form);
   const total = ticket ? memberManagementNullableNumber(form.elements.totalSessions) : null;
   const used = ticket ? memberManagementNullableNumber(form.elements.usedSessions) : null;
@@ -11181,6 +11182,15 @@ async function submitMemberInlineEditor(form, options = {}) {
   }
   const reason = memberEditorMode === "transition" ? "과도기 회원권 빠른 보정" : "회원권 빠른 수정";
   const payload = memberManagementDatabasePayload(form, member, ticket, reason);
+  if (selectedProduct) {
+    const selectedGroupSize = Number(selectedProduct.group_size || 1);
+    payload.lessonType = selectedGroupSize === 2 ? "one_on_two" : "one_on_one";
+    payload.partnerUserId = selectedGroupSize === 2
+      ? form.elements.partnerUserId?.value || null
+      : null;
+    payload.scheduleScope = memberManagementProductScheduleScope(selectedProduct);
+    payload.weeklyFrequency = Number(selectedProduct.frequency_per_week) || 1;
+  }
   payload.preserveExistingSchedule = true;
   submit.disabled = true;
   submit.textContent = "저장 중";
