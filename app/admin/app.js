@@ -18529,6 +18529,173 @@ function mergeServerCoachRole(role, index) {
   return coach;
 }
 
+function applyServerCoachSnapshot({
+  serverUsers = [],
+  serverCoachRoles = [],
+  serverCoachAvailability = [],
+  serverAuthLinks = [],
+  serverAuthSwitches = [],
+  serverSettlementTerms = [],
+} = {}) {
+  const usersById = new Map(serverUsers.map((user) => [user.id, user]));
+  const authLinksByUserId = new Map();
+  serverAuthLinks.forEach((link) => {
+    const links = authLinksByUserId.get(link.user_id) || [];
+    links.push(link);
+    authLinksByUserId.set(link.user_id, links);
+  });
+  const availabilityByRoleId = new Map();
+  serverCoachAvailability.forEach((availability) => {
+    const rows = availabilityByRoleId.get(availability.coach_role_id) || [];
+    rows.push(availability);
+    availabilityByRoleId.set(availability.coach_role_id, rows);
+  });
+  const pendingAuthSwitchByUserId = new Map(
+    serverAuthSwitches
+      .filter((item) => item.status === "pending")
+      .map((item) => [item.user_id, item]),
+  );
+  const settlementTermByCoachRoleId = new Map();
+  serverSettlementTerms.forEach((term) => {
+    if (!settlementTermByCoachRoleId.has(term.coach_role_id)) {
+      settlementTermByCoachRoleId.set(term.coach_role_id, term);
+    }
+  });
+  const coachIdByRole = new Map();
+  const orderedCoachRoles = [...serverCoachRoles].sort((left, right) => {
+    const score = (role) => {
+      const user = usersById.get(role.user_id) || {};
+      const links = authLinksByUserId.get(role.user_id) || [];
+      return Number(role.employment_status === "active") * 4
+        + Number(role.status === "approved") * 2
+        + Number(Boolean(user.auth_user_id || links.length));
+    };
+    return score(left) - score(right);
+  });
+  orderedCoachRoles.forEach((role, index) => {
+    const coach = mergeServerCoachRole(role, index);
+    const coachUser = usersById.get(role.user_id) || {};
+    const authLinks = authLinksByUserId.get(role.user_id) || [];
+    coach.accountLinked = Boolean(coachUser.auth_user_id || authLinks.length);
+    coach.account = coach.accountLinked ? (coachUser.name || role.display_name || "가입 완료") : "회원가입 전";
+    coach.phone = coachUser.phone || "";
+    const coachPhone = normalizedMemberPhone(coach.phone);
+    const coachName = normalizedCoachLinkName(coachUser.name || role.display_name);
+    const loginCandidates = !coach.accountLinked && coachPhone && coachName
+      ? serverUsers.filter((candidate) => {
+        if (candidate.id === role.user_id || candidate.status !== "active" || candidate.merged_into_user_id) return false;
+        const candidateLinks = authLinksByUserId.get(candidate.id) || [];
+        return candidate.role === "member"
+          && Boolean(candidate.auth_user_id || candidateLinks.length)
+          && normalizedMemberPhone(candidate.phone) === coachPhone
+          && normalizedCoachLinkName(candidate.name) === coachName;
+      })
+      : [];
+    coach.loginCandidateUserId = loginCandidates.length === 1 ? loginCandidates[0].id : "";
+    coach.loginCandidateCount = loginCandidates.length;
+    coach.photoUrl = coachUser.profile_photo_url || coach.photoUrl || "";
+    coach.serverUserId = role.user_id;
+    coach.role = role.job_title || coach.role || "레슨";
+    coach.bio = role.bio || "";
+    coach.employmentStatus = role.employment_status || (role.status === "disabled" ? "ended" : "active");
+    coach.employmentStartedOn = role.employment_started_on || "";
+    coach.employmentEndedOn = role.employment_ended_on || "";
+    coach.archivedAt = role.archived_at || "";
+    coach.deletedAt = role.deleted_at || "";
+    coach.authProviders = authProvidersFromLinks(authLinks);
+    coach.authSwitch = pendingAuthSwitchByUserId.get(role.user_id) || null;
+    coach.lastSignInAt = authLinks.map((link) => link.last_sign_in_at).filter(Boolean).sort().at(-1) || "";
+    coach.approvalStatus = role.status || "pending";
+    const availabilityRows = availabilityByRoleId.get(role.id) || [];
+    coach.workBlocks = coachBlocksFromAvailability(availabilityRows, "available");
+    coach.breakBlocks = coachBlocksFromAvailability(availabilityRows, "blocked");
+    coachIdByRole.set(role.id, coach.id);
+  });
+  const liveCoachIds = new Set(coachIdByRole.values());
+  replaceArray(coaches, coaches.filter((coach) => liveCoachIds.has(coach.id)));
+  const savedSettlementRules = [...coachSettlementRules];
+  replaceArray(coachSettlementRules, coaches.map((coach) => {
+    const term = settlementTermByCoachRoleId.get(coach.serverRoleId);
+    const savedRule = savedSettlementRules.find((rule) => rule.coach === coach.name);
+    const baseRule = defaultCoachSettlementRule(coach, savedRule);
+    const roleRate = Number(coach.settlementRate) > 1 ? Number(coach.settlementRate) / 100 : Number(coach.settlementRate);
+    return {
+      ...baseRule,
+      method: term?.settlement_type || coach.settlementType || baseRule.method,
+      ratio: term?.settlement_type === "ratio" ? Number(term.coach_rate) : (coach.settlementType === "ratio" ? roleRate : 0),
+      hourly: term?.settlement_type === "hourly" ? Number(term.hourly_rate) : (coach.settlementType === "hourly" ? Number(coach.hourlyRate) : 0),
+      cardBase: term?.settlement_basis === "actual_paid_inc_vat" ? "paid" : "cash",
+      substitute: term?.substitute_policy || baseRule.substitute,
+      effectiveFrom: term?.effective_from || baseRule.effectiveFrom,
+      serverRoleId: coach.serverRoleId,
+    };
+  }));
+  return { coachIdByRole, pendingAuthSwitchByUserId };
+}
+
+async function refreshCoachStaffData() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.selectRows || !operationsAccessReady()) return false;
+  const serverCoachRoles = await client.selectRows("tn_coach_roles", {
+    select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision",
+    limit: 100,
+  }).catch(() => client.selectRows("tn_coach_roles", {
+    select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate",
+    limit: 100,
+  }));
+  const roleIds = serverCoachRoles.map((role) => role.id).filter(Boolean);
+  const userIds = serverCoachRoles.map((role) => role.user_id).filter(Boolean);
+  const [serverCoachAvailability, coachUsers, serverSettlementTerms] = await Promise.all([
+    roleIds.length ? client.selectRows("tn_coach_availability", {
+      select: "id,coach_role_id,day_of_week,start_time,end_time,availability_type,note",
+      filters: { coach_role_id: { in: roleIds } },
+      limit: 1000,
+    }).catch(() => []) : [],
+    userIds.length ? client.selectRows("tn_users", {
+      select: "id,name,phone,profile_photo_url,role,status,auth_user_id,merged_into_user_id",
+      filters: { id: { in: userIds } },
+      limit: 200,
+    }).catch(() => []) : [],
+    roleIds.length ? client.selectRows("tn_coach_settlement_terms", {
+      select: "id,coach_role_id,settlement_type,coach_rate,hourly_rate,settlement_basis,substitute_policy,effective_from,effective_to,status",
+      filters: { coach_role_id: { in: roleIds } },
+      order: "effective_from.desc",
+      limit: 500,
+    }).catch(() => []) : [],
+  ]);
+  const candidatePhones = [...new Set(coachUsers.map((user) => normalizedMemberPhone(user.phone)).filter(Boolean))];
+  const candidateUsers = candidatePhones.length ? await client.selectRows("tn_users", {
+    select: "id,name,phone,profile_photo_url,role,status,auth_user_id,merged_into_user_id",
+    filters: { phone: { in: candidatePhones } },
+    limit: 500,
+  }).catch(() => []) : [];
+  const serverUsers = [...new Map([...coachUsers, ...candidateUsers].map((user) => [user.id, user])).values()];
+  const relatedUserIds = serverUsers.map((user) => user.id).filter(Boolean);
+  const [serverAuthLinks, serverAuthSwitches] = await Promise.all([
+    relatedUserIds.length ? client.selectRows("tn_user_auth_links", {
+      select: "id,user_id,provider,last_sign_in_at,is_primary",
+      filters: { user_id: { in: relatedUserIds } },
+      limit: 500,
+    }).catch(() => []) : [],
+    userIds.length ? client.selectRows("tn_auth_provider_switches", {
+      select: "id,user_id,from_provider,to_provider,status,expires_at,created_at,completed_at",
+      filters: { user_id: { in: userIds } },
+      order: "created_at.desc",
+      limit: 500,
+    }).catch(() => []) : [],
+  ]);
+  applyServerCoachSnapshot({
+    serverUsers,
+    serverCoachRoles,
+    serverCoachAvailability,
+    serverAuthLinks,
+    serverAuthSwitches,
+    serverSettlementTerms,
+  });
+  scheduleAdminOperationalCacheWrite();
+  return true;
+}
+
 function liveTicketParticipantIds(ticket, ticketParticipants = []) {
   if (ticketParticipants instanceof Map) {
     return [...new Set([
@@ -18746,23 +18913,6 @@ async function performAdminLiveDataSync() {
       ids.push(participant.user_id);
       ticketParticipantIdsByTicketId.set(participant.ticket_id, ids);
     });
-    const coachAvailabilityByRoleId = new Map();
-    (serverCoachAvailability || []).forEach((availability) => {
-      const rows = coachAvailabilityByRoleId.get(availability.coach_role_id) || [];
-      rows.push(availability);
-      coachAvailabilityByRoleId.set(availability.coach_role_id, rows);
-    });
-    const pendingAuthSwitchByUserId = new Map(
-      (serverAuthSwitches || [])
-        .filter((item) => item.status === "pending")
-        .map((item) => [item.user_id, item]),
-    );
-    const settlementTermByCoachRoleId = new Map();
-    (serverSettlementTerms || []).forEach((term) => {
-      if (!settlementTermByCoachRoleId.has(term.coach_role_id)) {
-        settlementTermByCoachRoleId.set(term.coach_role_id, term);
-      }
-    });
     const firstLessonByTicketId = new Map();
     (serverLessons || []).forEach((lesson) => {
       if (
@@ -18781,75 +18931,14 @@ async function performAdminLiveDataSync() {
     const membershipRecordByTicketId = new Map((serverMemberMembershipRecords || [])
       .filter((record) => record.ticket_id)
       .map((record) => [record.ticket_id, record]));
-    const coachIdByRole = new Map();
-    const orderedCoachRoles = [...(serverCoachRoles || [])].sort((left, right) => {
-      const score = (role) => {
-        const user = usersById.get(role.user_id) || {};
-        const links = authLinksByUserId.get(role.user_id) || [];
-        return Number(role.employment_status === "active") * 4
-          + Number(role.status === "approved") * 2
-          + Number(Boolean(user.auth_user_id || links.length));
-      };
-      return score(left) - score(right);
+    const { coachIdByRole, pendingAuthSwitchByUserId } = applyServerCoachSnapshot({
+      serverUsers: serverUsers || [],
+      serverCoachRoles: serverCoachRoles || [],
+      serverCoachAvailability: serverCoachAvailability || [],
+      serverAuthLinks: serverAuthLinks || [],
+      serverAuthSwitches: serverAuthSwitches || [],
+      serverSettlementTerms: serverSettlementTerms || [],
     });
-    orderedCoachRoles.forEach((role, index) => {
-      const coach = mergeServerCoachRole(role, index);
-      const coachUser = usersById.get(role.user_id) || {};
-      const authLinks = authLinksByUserId.get(role.user_id) || [];
-      coach.accountLinked = Boolean(coachUser.auth_user_id || authLinks.length);
-      coach.account = coach.accountLinked ? (coachUser.name || role.display_name || "가입 완료") : "회원가입 전";
-      coach.phone = coachUser.phone || "";
-      const coachPhone = normalizedMemberPhone(coach.phone);
-      const coachName = normalizedCoachLinkName(coachUser.name || role.display_name);
-      const loginCandidates = !coach.accountLinked && coachPhone && coachName
-        ? (serverUsers || []).filter((candidate) => {
-          if (candidate.id === role.user_id || candidate.status !== "active" || candidate.merged_into_user_id) return false;
-          const candidateLinks = authLinksByUserId.get(candidate.id) || [];
-          return candidate.role === "member"
-            && Boolean(candidate.auth_user_id || candidateLinks.length)
-            && normalizedMemberPhone(candidate.phone) === coachPhone
-            && normalizedCoachLinkName(candidate.name) === coachName;
-        })
-        : [];
-      coach.loginCandidateUserId = loginCandidates.length === 1 ? loginCandidates[0].id : "";
-      coach.loginCandidateCount = loginCandidates.length;
-      coach.photoUrl = coachUser.profile_photo_url || coach.photoUrl || "";
-      coach.serverUserId = role.user_id;
-      coach.role = role.job_title || coach.role || "레슨";
-      coach.bio = role.bio || "";
-      coach.employmentStatus = role.employment_status || (role.status === "disabled" ? "ended" : "active");
-      coach.employmentStartedOn = role.employment_started_on || "";
-      coach.employmentEndedOn = role.employment_ended_on || "";
-      coach.archivedAt = role.archived_at || "";
-      coach.deletedAt = role.deleted_at || "";
-      coach.authProviders = authProvidersFromLinks(authLinks);
-      coach.authSwitch = pendingAuthSwitchByUserId.get(role.user_id) || null;
-      coach.lastSignInAt = authLinks.map((link) => link.last_sign_in_at).filter(Boolean).sort().at(-1) || "";
-      coach.approvalStatus = role.status || "pending";
-      const availabilityRows = coachAvailabilityByRoleId.get(role.id) || [];
-      coach.workBlocks = coachBlocksFromAvailability(availabilityRows, "available");
-      coach.breakBlocks = coachBlocksFromAvailability(availabilityRows, "blocked");
-      coachIdByRole.set(role.id, coach.id);
-    });
-    const liveCoachIds = new Set(coachIdByRole.values());
-    replaceArray(coaches, coaches.filter((coach) => liveCoachIds.has(coach.id)));
-    const savedSettlementRules = [...coachSettlementRules];
-    replaceArray(coachSettlementRules, coaches.map((coach) => {
-      const term = settlementTermByCoachRoleId.get(coach.serverRoleId);
-      const savedRule = savedSettlementRules.find((rule) => rule.coach === coach.name);
-      const baseRule = defaultCoachSettlementRule(coach, savedRule);
-      const roleRate = Number(coach.settlementRate) > 1 ? Number(coach.settlementRate) / 100 : Number(coach.settlementRate);
-      return {
-        ...baseRule,
-        method: term?.settlement_type || coach.settlementType || baseRule.method,
-        ratio: term?.settlement_type === "ratio" ? Number(term.coach_rate) : (coach.settlementType === "ratio" ? roleRate : 0),
-        hourly: term?.settlement_type === "hourly" ? Number(term.hourly_rate) : (coach.settlementType === "hourly" ? Number(coach.hourlyRate) : 0),
-        cardBase: term?.settlement_basis === "actual_paid_inc_vat" ? "paid" : "cash",
-        substitute: term?.substitute_policy || baseRule.substitute,
-        effectiveFrom: term?.effective_from || baseRule.effectiveFrom,
-        serverRoleId: coach.serverRoleId,
-      };
-    }));
 
     const mappedTickets = (serverTickets || []).map((ticket) => {
       const product = productsById.get(ticket.product_id) || {};
@@ -20686,7 +20775,7 @@ async function saveCoachStaff() {
       expected_revision: draft.coachRoleId ? Number(draft.availabilityRevision) || 0 : null,
     });
     const coachRoleId = result?.coachRoleId || result?.coach_role_id || draft.coachRoleId;
-    await syncAdminLiveData();
+    await refreshCoachStaffData();
     const saved = coaches.find((coach) => (
       coach.serverRoleId === coachRoleId
       && String(coach.branchId || "") === branchId
@@ -20735,7 +20824,7 @@ async function setCoachStaffState(targetState) {
       target_state: targetState,
       target_effective_on: new Date().toISOString().slice(0, 10),
     });
-    await syncAdminLiveData();
+    await refreshCoachStaffData();
     const saved = coaches.find((coach) => coach.serverRoleId === draft.coachRoleId);
     const expectedApproval = ["approved", "restored"].includes(targetState) ? "approved" : "disabled";
     const expectedEmployment = targetState === "ended"
@@ -20780,7 +20869,7 @@ async function deleteCoachStaff() {
     const result = await client.rpc("tn_admin_delete_coach_staff", {
       target_coach_role_id: draft.coachRoleId,
     });
-    await syncAdminLiveData();
+    await refreshCoachStaffData();
     const saved = coaches.find((coach) => coach.serverRoleId === draft.coachRoleId);
     if (!saved?.deletedAt || saved.approvalStatus !== "disabled") {
       throw new Error("coach_staff_delete_verification_failed");
@@ -20863,7 +20952,7 @@ async function reconcileCoachLogin(coachId) {
       source_signup_user_id: coach.loginCandidateUserId,
       target_reason: "관리자 코치 가입 계정 연결",
     });
-    await syncAdminLiveData();
+    await refreshCoachStaffData();
     const saved = coaches.find((item) => item.serverRoleId === coach.serverRoleId);
     if (!saved?.accountLinked) throw new Error("coach_login_reconciliation_verification_failed");
     renderCoaches();
