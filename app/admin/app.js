@@ -4779,70 +4779,161 @@ function renderProductBulkToolbar() {
   if ($("#productBulkCount")) $("#productBulkCount").textContent = String(state.selectedMembershipProductIds.length);
 }
 
-async function runProductBulkAction() {
+function membershipProductBulkSavePayload(product) {
+  const card = document.querySelector(`[data-product-card="${CSS.escape(String(product.id))}"]`);
+  const serverProduct = serverMembershipProductForDraft(product);
+  if (!card || !serverProduct?.id) throw new Error("membership_product_visible_mapping_required");
+  const fieldElement = (field) => card.querySelector(`[data-product-field="${field}"]`);
+  const readField = (field) => fieldElement(field)?.value.trim() || "";
+  const ticketValue = numericValue(readField("tickets"), product.tickets);
+  const nextProduct = normalizeMembershipProduct({
+    ...product,
+    title: readField("title") || product.title,
+    name: readField("title") || product.name,
+    sessions: readField("sessions") || `${ticketValue}회`,
+    tickets: ticketValue,
+    cardAmount: numericValue(readField("cardAmount"), product.cardAmount),
+    cashAmount: numericValue(readField("cashAmount"), product.cashAmount),
+    validityDays: numericValue(readField("validityDays"), product.validityDays),
+    graceDays: numericValue(readField("graceDays"), product.graceDays),
+    lessonMinutes: numericValue(readField("lessonMinutes"), product.lessonMinutes),
+    groupSize: numericValue(readField("groupSize"), product.groupSize),
+    frequencyPerWeek: numericValue(readField("frequencyPerWeek"), product.frequencyPerWeek),
+    maxSessionsPerDay: numericValue(readField("maxSessionsPerDay"), product.maxSessionsPerDay),
+    maxSessionsPerWeek: numericValue(readField("maxSessionsPerWeek"), product.maxSessionsPerWeek),
+    maxBookingDaysPerWeek: numericValue(readField("maxBookingDaysPerWeek"), product.maxBookingDaysPerWeek),
+    scheduleScope: readField("scheduleScope") || product.scheduleScope,
+    productKind: readField("productKind") || product.productKind,
+    discountEnabled: fieldElement("discountEnabled")
+      ? readField("discountEnabled") === "yes"
+      : product.discountEnabled,
+    coachDiscountAllowed: fieldElement("coachDiscountAllowed")
+      ? readField("coachDiscountAllowed") === "yes"
+      : product.coachDiscountAllowed,
+    status: readField("status") || product.status,
+  }, membershipProductDefaults.find((item) => item.id === product.id));
+  if (!nextProduct.title
+    || Number(nextProduct.tickets) <= 0
+    || Number(nextProduct.validityDays) <= 0
+    || ![20, 30, 40].includes(Number(nextProduct.lessonMinutes))
+    || ![1, 2].includes(Number(nextProduct.groupSize))
+    || Number(nextProduct.frequencyPerWeek) <= 0
+    || Number(nextProduct.maxSessionsPerDay) <= 0
+    || Number(nextProduct.maxSessionsPerWeek) <= 0
+    || Number(nextProduct.maxBookingDaysPerWeek) <= 0
+    || Number(nextProduct.maxSessionsPerDay) > Number(nextProduct.maxSessionsPerWeek)
+    || Number(nextProduct.maxBookingDaysPerWeek) > Number(nextProduct.maxSessionsPerWeek)) {
+    throw new Error(`membership_product_invalid:${nextProduct.title || product.title || "회원권"}`);
+  }
+  const saleIssue = couponProductSaleIssue(nextProduct);
+  if (saleIssue && nextProduct.status === "sale") {
+    throw new Error(`membership_product_invalid:${nextProduct.title}:${saleIssue}`);
+  }
+  return {
+    id: serverProduct.id,
+    name: nextProduct.title,
+    totalSessions: Number(nextProduct.tickets),
+    cashPrice: Math.max(0, Number(nextProduct.cashAmount) || 0),
+    cardPrice: Math.max(0, Number(nextProduct.cardAmount) || 0),
+    settlementBasePrice: Math.max(0, Number(nextProduct.cashAmount) || 0),
+    validityDays: Number(nextProduct.validityDays),
+    graceDays: Math.max(0, Number(nextProduct.graceDays) || 0),
+    lessonMinutes: Number(nextProduct.lessonMinutes),
+    groupSize: Number(nextProduct.groupSize),
+    frequencyPerWeek: Number(nextProduct.frequencyPerWeek),
+    maxSessionsPerDay: Number(nextProduct.maxSessionsPerDay),
+    maxSessionsPerWeek: Number(nextProduct.maxSessionsPerWeek),
+    maxBookingDaysPerWeek: Number(nextProduct.maxBookingDaysPerWeek),
+    scheduleScope: nextProduct.scheduleScope,
+    productKind: nextProduct.productKind === "coupon" ? "coupon" : "regular",
+    discountEnabled: nextProduct.discountEnabled === true,
+    coachDiscountAllowed: nextProduct.coachDiscountAllowed === true,
+    displayOrder: Math.max(0, Number(nextProduct.sortOrder) || 0),
+    status: nextProduct.status,
+    countLabel: nextProduct.sessions || `${nextProduct.tickets}회`,
+  };
+}
+
+async function runProductBulkAction(forcedAction = "") {
   const selected = membershipProductsForActiveOperationProfile().filter((product) => selectedProductIdSet().has(String(product.id)));
-  const action = $("#productBulkAction")?.value || "";
+  const action = forcedAction || $("#productBulkAction")?.value || "";
   if (!selected.length || !action) {
     showToast("회원권 상품과 일괄 작업을 선택해 주세요.");
     return;
   }
-  const label = $("#productBulkAction")?.selectedOptions?.[0]?.textContent || "일괄 작업";
+  const labels = {
+    save: "선택 저장",
+    delete: "선택 삭제",
+    sale: "판매중",
+    hidden: "숨김",
+    consult: "상담",
+  };
+  const label = labels[action] || $("#productBulkAction")?.selectedOptions?.[0]?.textContent || "일괄 작업";
   if (!window.confirm(`${selected.length}개 상품을 '${label}' 처리할까요?`)) return;
-  const button = $("#runProductBulkAction");
+  const button = action === "save"
+    ? $("#saveSelectedProducts")
+    : action === "delete"
+      ? $("#deleteSelectedProducts")
+      : $("#runProductBulkAction");
   if (button) button.disabled = true;
   try {
     const client = window.TennisNoteDataClient;
-    if (!client || operationsRole() !== "admin") throw new Error("admin_required");
+    if (!client?.rpc || operationsRole() !== "admin" || !operationsAccessReady()) throw new Error("admin_required");
     const branchId = activeOperationBranchId();
     if (!branchId) throw new Error("active_branch_required");
-    if (action === "delete") {
-      const serverProducts = selected.map((product) => serverMembershipProductForDraft(product)).filter(Boolean);
-      if (serverProducts.length !== selected.length) throw new Error("membership_product_server_mapping_required");
-      if (serverProducts.some((product) => String(product.branch_id || "") !== branchId)) {
-        throw new Error("membership_product_branch_mismatch");
-      }
-      for (let offset = 0; offset < serverProducts.length; offset += 8) {
-        await Promise.all(serverProducts.slice(offset, offset + 8).map((serverProduct) => (
-          client.rpc("tn_admin_force_delete_membership_product", {
-            target_product_id: serverProduct.id,
-            target_reason: "관리자 회원권 상품 일괄 강제 삭제",
-          })
-        )));
-      }
-      const selectedIds = new Set(selected.map((product) => String(product.id)));
-      const serverIds = new Set(serverProducts.map((product) => String(product.id)));
-      replaceArray(
-        membershipProductDrafts,
-        membershipProductDrafts.filter((product) => !selectedIds.has(String(product.id))),
-      );
-      replaceArray(
-        adminLiveDataState.products,
-        (adminLiveDataState.products || []).filter((product) => !serverIds.has(String(product.id))),
-      );
-    } else {
-      for (const product of selected) {
+    const payload = action === "save"
+      ? selected.map(membershipProductBulkSavePayload)
+      : selected.map((product) => {
         const serverProduct = serverMembershipProductForDraft(product);
-        if (!serverProduct?.id) continue;
-        if (String(serverProduct.branch_id || "") !== branchId) throw new Error("membership_product_branch_mismatch");
-        await client.updateRows("tn_membership_products", {
-          id: serverProduct.id,
-          branch_id: branchId,
-        }, {
-          is_active: action !== "hidden",
-          policy_settings: { ...(serverProduct.policy_settings || {}), adminSaleStatus: action },
-          updated_at: new Date().toISOString(),
-        });
-      }
-      selected.forEach((product) => {
-        product.status = action;
+        if (!serverProduct?.id || String(serverProduct.branch_id || "") !== branchId) {
+          throw new Error("membership_product_server_mapping_required");
+        }
+        return { id: serverProduct.id };
+      });
+    await client.rpc("tn_admin_bulk_membership_product_action", {
+      target_branch_id: branchId,
+      target_action: action,
+      target_products: payload,
+      target_reason: action === "delete" ? "관리자 회원권 상품 선택 삭제" : `관리자 회원권 상품 ${label}`,
+    });
+    const synced = await syncAdminLiveData();
+    if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    const savedIds = new Set((adminLiveDataState.products || []).map((product) => String(product.id)));
+    if (action === "delete" && payload.some((item) => savedIds.has(String(item.id)))) {
+      throw new Error("membership_product_delete_not_confirmed");
+    }
+    if (action === "save") {
+      payload.forEach((item) => {
+        const saved = (adminLiveDataState.products || []).find((product) => String(product.id) === String(item.id));
+        if (!saved
+          || saved.name !== item.name
+          || Number(saved.total_sessions) !== item.totalSessions
+          || Number(saved.lesson_minutes) !== item.lessonMinutes
+          || Number(saved.group_size) !== item.groupSize
+          || String(saved.policy_settings?.adminSaleStatus || "") !== item.status) {
+          throw new Error("membership_product_bulk_save_not_confirmed");
+        }
+      });
+    }
+    if (["sale", "hidden", "consult"].includes(action)) {
+      payload.forEach((item) => {
+        const saved = (adminLiveDataState.products || []).find((product) => String(product.id) === String(item.id));
+        if (!saved || String(saved.policy_settings?.adminSaleStatus || "") !== action) {
+          throw new Error("membership_product_status_write_not_confirmed");
+        }
       });
     }
     state.selectedMembershipProductIds = [];
     saveSnapshot();
     renderServiceReadiness();
-    showToast(`${selected.length}개 상품 일괄 처리 완료`);
+    showToast(`${selected.length}개 상품 ${label}·서버 확인 완료`);
   } catch (error) {
-    showToast("회원권 상품 일괄 처리에 실패했습니다. 참조 중인 상품과 관리자 권한을 확인해 주세요.");
+    const raw = `${error?.payload?.message || ""} ${error?.message || ""}`;
+    showToast(raw.includes("membership_product_invalid")
+      ? "선택한 상품의 필수값과 횟수·기간·가격을 확인해 주세요."
+      : raw.includes("PGRST202") || raw.includes("tn_admin_bulk_membership_product_action")
+        ? "회원권 다중 작업 DB 기능을 먼저 적용해 주세요."
+        : "회원권 상품 다중 작업에 실패했습니다. 서버에서 변경되지 않았습니다.");
   } finally {
     if (button?.isConnected) button.disabled = false;
   }
@@ -24954,9 +25045,25 @@ function bindEvents() {
       await runProductBulkAction();
       return;
     }
+    if (event.target.closest("#saveSelectedProducts")) {
+      await runProductBulkAction("save");
+      return;
+    }
+    if (event.target.closest("#deleteSelectedProducts")) {
+      await runProductBulkAction("delete");
+      return;
+    }
     if (event.target.closest("#selectAllProducts")) {
-      const allIds = filteredMembershipProducts().map((product) => String(product.id));
-      state.selectedMembershipProductIds = state.selectedMembershipProductIds.length === allIds.length ? [] : allIds;
+      const visibleIds = filteredMembershipProducts()
+        .slice(
+          state.membershipProductPage * membershipProductPageSize,
+          (state.membershipProductPage + 1) * membershipProductPageSize,
+        )
+        .map((product) => String(product.id));
+      const selected = selectedProductIdSet();
+      const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+      visibleIds.forEach((id) => allVisibleSelected ? selected.delete(id) : selected.add(id));
+      state.selectedMembershipProductIds = [...selected];
       renderServiceReadiness();
       return;
     }

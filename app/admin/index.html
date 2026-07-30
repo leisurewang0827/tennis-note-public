@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.229" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.229" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.230" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.230" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -926,15 +926,16 @@
               </div>
               <div id="productBulkToolbar" class="bulk-action-toolbar" hidden>
                 <strong><span id="productBulkCount">0</span>개 선택</strong>
-                <button id="selectAllProducts" class="ghost-button" type="button">전체 선택</button>
+                <button id="selectAllProducts" class="ghost-button" type="button">현재 페이지 선택</button>
+                <button id="saveSelectedProducts" class="small-button" type="button">선택 저장</button>
                 <select id="productBulkAction" aria-label="회원권 상품 일괄 작업">
-                  <option value="">작업 선택</option>
+                  <option value="">판매 상태 선택</option>
                   <option value="sale">판매중</option>
                   <option value="hidden">숨김</option>
                   <option value="consult">상담</option>
-                  <option value="delete">강제 삭제</option>
                 </select>
-                <button id="runProductBulkAction" class="small-button" type="button">적용</button>
+                <button id="runProductBulkAction" class="small-button" type="button">상태 적용</button>
+                <button id="deleteSelectedProducts" class="small-button danger-button" type="button">선택 삭제</button>
                 <button id="clearProductBulkSelection" class="ghost-button" type="button">선택 해제</button>
               </div>
               <div class="product-list-toolbar">
@@ -1694,15 +1695,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.229"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.230"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.229"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.229"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.229"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.229"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.229"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.230"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.230"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.230"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.230"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.230"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.229"></script>
+    <script src="./app.js?v=1.0.230"></script>
   </body>
 </html>
