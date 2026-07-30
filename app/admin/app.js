@@ -9241,7 +9241,7 @@ function memberManagementErrorText(error) {
   if (raw.includes("terminal_ticket_locked")) return "환불 또는 강제삭제가 끝난 회원권은 수정할 수 없습니다.";
   if (raw.includes("invalid_member_database_status")) return "회원 상태를 다시 확인해 주세요.";
   if (raw.includes("active_product_required")) return "사용 가능한 회원권 상품을 선택해 주세요.";
-  if (raw.includes("member_active_ticket_exists")) return "이미 사용 중이거나 결제 대기 중인 회원권이 있습니다.";
+  if (raw.includes("member_active_ticket_exists")) return "기존 사용 중·일시정지·결제 대기 회원권을 먼저 확인해 주세요. 새로고침 후 기존 회원권이 이 행에 표시됩니다.";
   if (raw.includes("ticket_price_invalid")) return "결제금액은 0원 이상으로 입력해 주세요.";
   if (raw.includes("separate_group_structure_requires_team_edit")) return "1:2 팀의 종류·파트너 변경은 팀 설정에서 함께 처리해 주세요.";
   return "처리에 실패했습니다. 입력값과 서버 적용 상태를 확인해 주세요.";
@@ -10909,6 +10909,16 @@ async function submitMemberInlineEditor(form, options = {}) {
     renderMembers();
     return true;
   } catch (error) {
+    const raw = String(error?.message || error?.payload?.message || "");
+    if (raw.includes("member_active_ticket_exists")) {
+      const synced = await syncAdminLiveData(true).catch(() => false);
+      if (synced) {
+        state.inlineMemberId = member.id;
+        renderMembers();
+        showToast("기존 회원권을 확인했습니다. 표시된 회원권을 수정하거나 만료 처리해 주세요.");
+        return false;
+      }
+    }
     message.textContent = memberManagementErrorText(error);
     message.classList.add("is-error");
     form.classList.add("is-save-error");
@@ -18086,8 +18096,20 @@ async function performAdminLiveDataSync() {
       fullAdminAccess ? client.selectRows("tn_auth_provider_switches", { select: "id,user_id,from_provider,to_provider,status,expires_at,created_at,completed_at", order: "created_at.desc", limit: 500 }).catch(() => []) : Promise.resolve([]),
       fullAdminAccess ? client.selectRows("tn_coach_settlement_terms", { select: "id,coach_role_id,settlement_type,coach_rate,hourly_rate,settlement_basis,substitute_policy,effective_from,effective_to,status", order: "effective_from.desc", limit: 500 }).catch(() => []) : Promise.resolve([]),
       client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,policy_settings,display_order", limit: 300 }),
-      client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price", limit: 500 }),
-      client.selectRows("tn_ticket_participants", { select: "ticket_id,user_id,participant_order", limit: 500 }),
+      (client.selectAllRows || client.selectRows)("tn_member_tickets", {
+        select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price",
+        order: "id.asc",
+        limit: 500,
+        pageSize: 500,
+        maxRows: 20000,
+      }),
+      (client.selectAllRows || client.selectRows)("tn_ticket_participants", {
+        select: "ticket_id,user_id,participant_order",
+        order: "ticket_id.asc,user_id.asc",
+        limit: 500,
+        pageSize: 500,
+        maxRows: 20000,
+      }),
       client.selectRows("tn_lesson_participants", { select: "lesson_id,user_id,ticket_id", limit: 1000 }),
       client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,revision,updated_at", limit: 1000 })
         .catch(() => client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,updated_at", limit: 1000 })
@@ -18111,9 +18133,12 @@ async function performAdminLiveDataSync() {
         pageSize: 500,
         maxRows: 10000,
       }).catch(() => []) : Promise.resolve([]),
-      fullAdminAccess ? client.selectRows("tn_member_membership_records", {
+      fullAdminAccess ? (client.selectAllRows || client.selectRows)("tn_member_membership_records", {
         select: "id,user_id,ticket_id,branch_id,coach_role_id,record_status,lesson_schedule_scope,lesson_frequency_per_week,lesson_type,lesson_minutes,lesson_days,lesson_start_on,total_sessions,used_sessions,remaining_sessions,payment_recorded_on,payment_method,payment_amount,admin_note,source_name,source_sheet_id,source_tab_name,source_row_number,last_updated_via",
-        limit: 2000,
+        order: "id.asc",
+        limit: 500,
+        pageSize: 500,
+        maxRows: 20000,
       }).catch(() => []) : Promise.resolve([]),
       client.selectRows("tn_lesson_substitute_assignments", {
         select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
