@@ -1484,6 +1484,16 @@ const adminLazyDataState = new Map();
 const memberSearchIndex = new Map();
 const memberTicketsIndex = new Map();
 const ticketParticipantNamesIndex = new Map();
+const adminMemberDirectoryState = {
+  loading: false,
+  loaded: false,
+  error: "",
+  signature: "",
+  rows: [],
+  total: 0,
+  counts: null,
+  requestId: 0,
+};
 let adminUserNameIndex = null;
 let memberSearchRenderTimer = 0;
 let adminLiveSyncPromise = null;
@@ -1492,7 +1502,78 @@ function invalidateMemberSearchIndex() {
   memberSearchIndex.clear();
   memberTicketsIndex.clear();
   ticketParticipantNamesIndex.clear();
+  adminMemberDirectoryState.loaded = false;
+  adminMemberDirectoryState.signature = "";
+  adminMemberDirectoryState.rows = [];
+  adminMemberDirectoryState.counts = null;
   adminUserNameIndex = null;
+}
+
+function adminMemberDirectoryCoachRoleId() {
+  if (state.memberCoachFilter === "all") return null;
+  return operationBranchCoaches().find((coach) => coach.name === state.memberCoachFilter)?.serverRoleId || null;
+}
+
+function adminMemberDirectorySignature() {
+  return JSON.stringify({
+    branchId: activeOperationBranchId() || null,
+    status: state.memberFilter || "active",
+    search: String(state.memberSearch || "").trim(),
+    coachRoleId: adminMemberDirectoryCoachRoleId(),
+    productKind: state.memberTicketFilter === "all" ? null : state.memberTicketFilter,
+    page: Number(state.memberListPage) || 0,
+    pageSize: memberListPageSize,
+  });
+}
+
+async function loadAdminMemberDirectoryPage({ force = false, render = true } = {}) {
+  if (operationsRole() !== "admin" || !window.TennisNoteDataClient?.rpc) return false;
+  const signature = adminMemberDirectorySignature();
+  if (!force && adminMemberDirectoryState.loaded && adminMemberDirectoryState.signature === signature) return true;
+
+  const requestId = adminMemberDirectoryState.requestId + 1;
+  Object.assign(adminMemberDirectoryState, {
+    loading: true,
+    error: "",
+    requestId,
+  });
+  if (render && state.view === "members") renderMembers();
+  try {
+    const query = JSON.parse(signature);
+    const response = await window.TennisNoteDataClient.rpc("tn_admin_member_directory_page", {
+      target_branch_id: query.branchId,
+      target_status: query.status,
+      target_search: query.search,
+      target_coach_role_id: query.coachRoleId,
+      target_product_kind: query.productKind,
+      target_page: query.page,
+      target_page_size: query.pageSize,
+    });
+    if (requestId !== adminMemberDirectoryState.requestId) return false;
+    const payload = Array.isArray(response) ? response[0] : response;
+    Object.assign(adminMemberDirectoryState, {
+      loading: false,
+      loaded: true,
+      error: "",
+      signature,
+      rows: Array.isArray(payload?.rows) ? payload.rows : [],
+      total: Number(payload?.total) || 0,
+      counts: payload?.counts && typeof payload.counts === "object" ? payload.counts : null,
+    });
+    if (render && state.view === "members") renderMembers();
+    return true;
+  } catch (error) {
+    if (requestId !== adminMemberDirectoryState.requestId) return false;
+    Object.assign(adminMemberDirectoryState, {
+      loading: false,
+      loaded: false,
+      error: String(error?.message || error || "member_directory_page_failed"),
+      signature: "",
+    });
+    console.warn("[Tennis Note] member directory server paging unavailable; using local fallback", error);
+    if (render && state.view === "members") renderMembers();
+    return false;
+  }
 }
 
 function loadAdminDataOnce(key, loader) {
@@ -1531,6 +1612,7 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
         loadMemberEditorModeFromServer(),
       ])),
     );
+    jobs.push(loadAdminMemberDirectoryPage());
   }
 
   if (view === "settings") {
@@ -8227,7 +8309,9 @@ function memberStatusCounts() {
 }
 
 function renderMemberStatusCounts() {
-  const counts = memberStatusCounts();
+  const counts = adminMemberDirectoryState.loaded && adminMemberDirectoryState.counts
+    ? adminMemberDirectoryState.counts
+    : memberStatusCounts();
   $$('[data-member-filter-count]').forEach((badge) => {
     badge.textContent = `${counts[badge.dataset.memberFilterCount] || 0}명`;
   });
@@ -11039,9 +11123,24 @@ function renderMembers() {
   if ($("#memberListSearch") && $("#memberListSearch").value !== state.memberSearch) $("#memberListSearch").value = state.memberSearch || "";
   if ($("#memberTicketFilter")) $("#memberTicketFilter").value = state.memberTicketFilter || "all";
 
-  const filtered = filteredMembers();
+  const localFiltered = filteredMembers();
+  const serverDirectoryReady = operationsRole() === "admin"
+    && adminMemberDirectoryState.loaded
+    && adminMemberDirectoryState.signature === adminMemberDirectorySignature();
+  const membersByServerUserId = new Map(branchMembers.map((member) => [String(member.serverUserId || ""), member]));
+  const serverPageMembers = serverDirectoryReady
+    ? adminMemberDirectoryState.rows
+      .map((row) => membersByServerUserId.get(String(row.user_id || "")))
+      .filter(Boolean)
+    : [];
+  const filtered = serverDirectoryReady ? serverPageMembers : localFiltered;
+  const filteredTotal = serverDirectoryReady ? adminMemberDirectoryState.total : localFiltered.length;
   const filterCopy = memberFilterCopy[state.memberFilter] || memberFilterCopy.active;
-  if ($("#memberFilterSummary")) $("#memberFilterSummary").textContent = `${filtered.length}${filterCopy.summary}`;
+  if ($("#memberFilterSummary")) {
+    $("#memberFilterSummary").textContent = adminMemberDirectoryState.loading
+      ? "회원 목록 불러오는 중"
+      : `${filteredTotal}${filterCopy.summary}`;
+  }
   const hasMemberListFilter = Boolean(
     String(state.memberSearch || "").trim()
     || state.memberCoachFilter !== "all"
@@ -11053,16 +11152,20 @@ function renderMembers() {
   renderMemberEditorModeBar();
 
   const selectedIndex = filtered.findIndex((member) => member.id === state.selectedMemberId);
-  if (selectedIndex >= 0) state.memberListPage = Math.floor(selectedIndex / memberListPageSize);
-  state.memberListPage = normalizeDashboardPage(filtered.length, state.memberListPage, memberListPageSize);
-  const visibleMembers = filtered.slice(
-    state.memberListPage * memberListPageSize,
-    (state.memberListPage + 1) * memberListPageSize,
-  );
-  renderDashboardPager("#memberListPager", filtered.length, state.memberListPage, "member-directory", memberListPageSize);
+  if (!serverDirectoryReady && selectedIndex >= 0) state.memberListPage = Math.floor(selectedIndex / memberListPageSize);
+  state.memberListPage = normalizeDashboardPage(filteredTotal, state.memberListPage, memberListPageSize);
+  const visibleMembers = serverDirectoryReady
+    ? filtered
+    : filtered.slice(
+      state.memberListPage * memberListPageSize,
+      (state.memberListPage + 1) * memberListPageSize,
+    );
+  renderDashboardPager("#memberListPager", filteredTotal, state.memberListPage, "member-directory", memberListPageSize);
   renderMemberBulkToolbar(visibleMembers);
 
-  $("#memberRows").innerHTML = visibleMembers.length ? visibleMembers
+  $("#memberRows").innerHTML = adminMemberDirectoryState.loading && !visibleMembers.length
+    ? '<tr><td colspan="9" class="empty-text">회원 목록을 불러오는 중입니다.</td></tr>'
+    : visibleMembers.length ? visibleMembers
     .map((member) => {
       const ticket = memberCurrentTicket(member);
       const issues = memberEditorAuditIssues(member, ticket);
@@ -22394,6 +22497,7 @@ function bindEvents() {
       state.memberListPage = page;
       state.selectedMemberId = null;
       renderMembers();
+      void loadAdminMemberDirectoryPage({ force: true });
       saveSnapshot();
       return;
     }
@@ -22930,6 +23034,7 @@ function bindEvents() {
     memberSearchRenderTimer = window.setTimeout(() => {
       state.selectedMemberId = null;
       renderMembers();
+      void loadAdminMemberDirectoryPage({ force: true });
     }, 120);
   });
   $("#resetMemberFilters")?.addEventListener("click", () => {
@@ -22939,6 +23044,7 @@ function bindEvents() {
     state.memberListPage = 0;
     state.selectedMemberId = null;
     renderMembers();
+    void loadAdminMemberDirectoryPage({ force: true });
     saveSnapshot();
   });
   $("#memberCoachFilter")?.addEventListener("change", (event) => {
@@ -22946,6 +23052,7 @@ function bindEvents() {
     state.memberListPage = 0;
     state.selectedMemberId = null;
     renderMembers();
+    void loadAdminMemberDirectoryPage({ force: true });
     saveSnapshot();
   });
   $("#memberTicketFilter")?.addEventListener("change", (event) => {
@@ -22953,6 +23060,7 @@ function bindEvents() {
     state.memberListPage = 0;
     state.selectedMemberId = null;
     renderMembers();
+    void loadAdminMemberDirectoryPage({ force: true });
     saveSnapshot();
   });
   $("#openLessonModal").addEventListener("click", openLessonModal);
@@ -23443,6 +23551,7 @@ function bindEvents() {
       state.memberListPage = 0;
       state.selectedMemberId = null;
       renderMembers();
+      void loadAdminMemberDirectoryPage({ force: true });
       if (state.memberFilter === "pending" && operationsRole() === "admin" && !adminPendingUsersState.loaded && !adminPendingUsersState.loading) {
         refreshAdminPendingUsers();
       }
