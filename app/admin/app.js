@@ -18475,7 +18475,7 @@ async function performAdminLiveDataSync() {
         pageSize: 500,
         maxRows: 20000,
       })),
-      client.selectRows("tn_lesson_participants", { select: "lesson_id,user_id,ticket_id", limit: 1000 }),
+      rosterRows("lessonParticipants", () => client.selectRows("tn_lesson_participants", { select: "lesson_id,user_id,ticket_id", limit: 1000 })),
       client.selectRows("tn_lessons", {
         select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,revision,updated_at",
         filters: { lesson_date: { gte: lessonWindow.from, lte: lessonWindow.to } },
@@ -18525,11 +18525,11 @@ async function performAdminLiveDataSync() {
         pageSize: 500,
         maxRows: 20000,
       }).catch(() => [])) : Promise.resolve([]),
-      client.selectRows("tn_lesson_substitute_assignments", {
+      rosterRows("substituteAssignments", () => client.selectRows("tn_lesson_substitute_assignments", {
         select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
         order: "assigned_at.desc",
         limit: 1000,
-      }).catch(() => []),
+      }).catch(() => [])),
     ]);
 
     const usersById = new Map((serverUsers || []).map((user) => [user.id, user]));
