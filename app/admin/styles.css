@@ -2081,16 +2081,20 @@ tr.is-selected td {
 
 .member-inline-editor-row .member-inline-compact-grid {
   grid-template-columns:
-    minmax(120px, 1.2fr)
+    minmax(110px, 1.15fr)
+    minmax(118px, 1fr)
+    82px
+    minmax(190px, 1.7fr)
     minmax(120px, 1fr)
-    minmax(90px, 0.7fr)
-    minmax(160px, 1.5fr)
-    minmax(130px, 1fr)
-    72px
-    72px
-    72px
-    minmax(150px, 1.4fr)
-    auto;
+    minmax(100px, .8fr)
+    62px
+    62px
+    62px
+    118px
+    108px
+    112px
+    minmax(150px, 1.3fr)
+    72px;
 }
 
 .member-inline-editor-row .member-inline-editor-actions {
@@ -2161,6 +2165,14 @@ tr.is-selected td {
   flex: 1;
   margin: 0;
   text-align: right;
+}
+
+.member-inline-sheet-row .member-inline-editor {
+  border-top-width: 1px;
+}
+
+.member-inline-sheet-row .member-inline-editor-actions {
+  justify-content: flex-end;
 }
 
 .member-page-save {
@@ -11544,9 +11556,16 @@ button .schedule-member-lines > span {
 
 .product-setting-sheet-head {
   display: grid;
-  grid-template-columns: 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(110px, .5fr) 168px;
+  grid-template-columns:
+    42px
+    minmax(220px, 1.35fr)
+    minmax(230px, 1.1fr)
+    minmax(210px, 1fr)
+    minmax(210px, 1fr)
+    minmax(104px, .55fr)
+    220px;
   align-items: center;
-  min-width: 860px;
+  min-width: 1240px;
   min-height: 36px;
   border-bottom: 1px solid var(--line);
   background: #f3f7f5;
@@ -11570,7 +11589,7 @@ button .schedule-member-lines > span {
 }
 
 .product-setting-sheet .product-setting-card {
-  min-width: 860px;
+  min-width: 1240px;
   margin: 0;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -11584,7 +11603,14 @@ button .schedule-member-lines > span {
 
 .product-setting-sheet .product-setting-header {
   display: grid;
-  grid-template-columns: 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(110px, .5fr) 168px;
+  grid-template-columns:
+    42px
+    minmax(220px, 1.35fr)
+    minmax(230px, 1.1fr)
+    minmax(210px, 1fr)
+    minmax(210px, 1fr)
+    minmax(104px, .55fr)
+    220px;
   align-items: center;
   gap: 0;
   padding: 0;
@@ -11639,9 +11665,80 @@ button .schedule-member-lines > span {
 
 .product-setting-row-actions {
   display: grid;
-  grid-template-columns: 36px 36px minmax(62px, 1fr);
+  grid-template-columns: 36px 36px 58px 58px;
   gap: 6px;
   align-items: center;
+}
+
+.product-setting-inline-form {
+  position: relative;
+  transition: background-color .16s ease, box-shadow .16s ease;
+}
+
+.product-setting-inline-form.is-dirty {
+  background: #fffbea;
+  box-shadow: inset 4px 0 #e0a826;
+}
+
+.product-setting-inline-form.is-save-error {
+  background: #fff3f1;
+  box-shadow: inset 4px 0 #cf4b3f;
+}
+
+.product-setting-inline-form.is-save-success {
+  background: #f0faf5;
+}
+
+.product-setting-inline-title,
+.product-setting-inline-pair,
+.product-setting-inline-triple,
+.product-setting-inline-price {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.product-setting-inline-pair {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.product-setting-inline-triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.product-setting-inline-price {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.product-setting-inline-form input:not([type="checkbox"]),
+.product-setting-inline-form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 7px;
+  border: 1px solid #cbded7;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.product-setting-inline-form .product-setting-quick-status {
+  width: calc(100% - 16px);
+}
+
+.product-inline-message {
+  grid-column: 1 / -1;
+  min-height: 0;
+  padding: 0 10px 5px !important;
+  border-left: 0 !important;
+  color: #8d6812;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: right;
 }
 
 .product-setting-row-actions .icon-button,
@@ -11654,6 +11751,10 @@ button .schedule-member-lines > span {
 .product-setting-form .product-setting-row-actions {
   grid-template-columns: repeat(2, 36px);
   justify-content: end;
+}
+
+.product-setting-sheet .product-setting-form > summary.product-setting-header {
+  grid-template-columns: 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(110px, .5fr) 168px;
 }
 
 .product-setting-sheet .product-setting-card[open] {

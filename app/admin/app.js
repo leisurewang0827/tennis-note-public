@@ -4272,18 +4272,21 @@ function couponProductSaleIssue(product = {}) {
   return "";
 }
 
-async function updateMembershipProductSetting(productId) {
+async function updateMembershipProductSetting(productId, options = {}) {
+  const refreshAfterSave = options.refreshAfterSave !== false;
   const card = document.querySelector(`[data-product-card="${productId}"]`);
   const product = membershipProductDrafts.find((item) => item.id === productId);
   if (!card || !product) return;
-  const readField = (field) => card.querySelector(`[data-product-field="${field}"]`)?.value.trim() || "";
+  const fieldElement = (field) => card.querySelector(`[data-product-field="${field}"]`);
+  const readField = (field) => fieldElement(field)?.value.trim() || "";
+  const ticketValue = numericValue(readField("tickets"), product.tickets);
   const nextProduct = normalizeMembershipProduct({
     ...product,
     title: readField("title") || product.title,
     name: readField("title") || product.name,
-    sessions: readField("sessions") || product.sessions,
+    sessions: readField("sessions") || (fieldElement("tickets") ? `${ticketValue}회` : product.sessions),
     settlementBase: undefined,
-    tickets: numericValue(readField("tickets"), product.tickets),
+    tickets: ticketValue,
     cardAmount: numericValue(readField("cardAmount"), product.cardAmount),
     cashAmount: numericValue(readField("cashAmount"), product.cashAmount),
     validityDays: numericValue(readField("validityDays"), product.validityDays),
@@ -4296,8 +4299,12 @@ async function updateMembershipProductSetting(productId) {
     maxBookingDaysPerWeek: numericValue(readField("maxBookingDaysPerWeek"), product.maxBookingDaysPerWeek),
     scheduleScope: readField("scheduleScope") || product.scheduleScope,
     productKind: readField("productKind") || product.productKind,
-    discountEnabled: readField("discountEnabled") === "yes",
-    coachDiscountAllowed: readField("coachDiscountAllowed") === "yes",
+    discountEnabled: fieldElement("discountEnabled")
+      ? readField("discountEnabled") === "yes"
+      : product.discountEnabled,
+    coachDiscountAllowed: fieldElement("coachDiscountAllowed")
+      ? readField("coachDiscountAllowed") === "yes"
+      : product.coachDiscountAllowed,
     status: readField("status") || product.status,
   }, membershipProductDefaults.find((item) => item.id === product.id));
 
@@ -4390,6 +4397,15 @@ async function updateMembershipProductSetting(productId) {
       updated_at: new Date().toISOString(),
     });
     if (!Array.isArray(updatedRows) || updatedRows.length !== 1) throw new Error("membership_product_write_not_confirmed");
+    if (!refreshAfterSave) {
+      return {
+        productId,
+        serverId: serverProduct.id,
+        expected: nextProduct,
+        expectedKind: serverKind,
+        expectedSettlementBase: settlementBase,
+      };
+    }
     const synced = await syncAdminLiveData();
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
     const saved = (adminLiveDataState.products || []).find((item) => item.id === serverProduct.id);
@@ -4412,16 +4428,111 @@ async function updateMembershipProductSetting(productId) {
     saveSnapshot();
     renderServiceReadiness();
     showToast(saleIssue ? `${saleIssue} 판매 상태는 숨김으로 저장했습니다.` : "회원권 상품이 회원 등록 화면까지 반영됐습니다.");
+    return true;
   } catch (error) {
     const raw = `${error?.message || ""}`;
     showToast(raw.includes("admin_live_refresh_failed_after_write")
       ? "상품은 저장됐지만 다시 불러오지 못했습니다. 새로고침해 주세요."
       : "회원권 상품 저장에 실패했습니다. 서버 연결과 관리자 권한을 확인해 주세요.");
+    return false;
   } finally {
     if (saveButton?.isConnected) {
       saveButton.disabled = false;
       saveButton.textContent = "저장";
     }
+  }
+}
+
+function setProductInlineDirtyState(form, dirty = true) {
+  if (!form) return;
+  form.dataset.dirty = dirty ? "true" : "false";
+  form.classList.toggle("is-dirty", dirty);
+  form.classList.remove("is-save-error", "is-save-success");
+  const message = form.querySelector(".product-inline-message");
+  if (message) message.textContent = dirty ? "변경됨" : "";
+  const saveAllButton = $("#saveVisibleProductRows");
+  if (saveAllButton) {
+    saveAllButton.hidden = !document.querySelector('[data-product-inline-form][data-dirty="true"]');
+  }
+}
+
+function savedMembershipProductMatches(result) {
+  if (!result?.serverId || !result.expected) return false;
+  const saved = (adminLiveDataState.products || []).find((item) => String(item.id) === String(result.serverId));
+  const expected = result.expected;
+  return Boolean(saved
+    && saved.name === expected.title
+    && Number(saved.total_sessions) === Number(expected.tickets)
+    && Number(saved.lesson_minutes) === Number(expected.lessonMinutes)
+    && Number(saved.group_size) === Number(expected.groupSize)
+    && Number(saved.validity_days) === Number(expected.validityDays)
+    && saved.schedule_scope === expected.scheduleScope
+    && saved.product_kind === result.expectedKind
+    && Number(saved.card_price) === Number(expected.cardAmount)
+    && Number(saved.cash_price) === Number(expected.cashAmount)
+    && String(saved.policy_settings?.adminSaleStatus || "") === String(expected.status));
+}
+
+async function saveVisibleProductRows() {
+  const forms = [...document.querySelectorAll('[data-product-inline-form][data-dirty="true"]')];
+  const button = $("#saveVisibleProductRows");
+  if (operationsRole() !== "admin" || !forms.length) {
+    showToast(forms.length ? "관리자 로그인 후 저장해 주세요." : "변경된 상품이 없습니다.");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = `저장 중 0/${forms.length}`;
+  }
+  const results = [];
+  let failed = 0;
+  for (let index = 0; index < forms.length; index += 1) {
+    const form = forms[index];
+    const result = await updateMembershipProductSetting(form.dataset.productInlineForm, { refreshAfterSave: false });
+    if (result) results.push({ form, result });
+    else {
+      failed += 1;
+      form.classList.add("is-save-error");
+      const message = form.querySelector(".product-inline-message");
+      if (message) message.textContent = "저장 실패";
+    }
+    if (button) button.textContent = `저장 중 ${index + 1}/${forms.length}`;
+  }
+  if (results.length) {
+    const synced = await syncAdminLiveData();
+    if (!synced) {
+      failed += results.length;
+      results.forEach(({ form }) => {
+        form.classList.add("is-save-error");
+        const message = form.querySelector(".product-inline-message");
+        if (message) message.textContent = "서버 재확인 실패";
+      });
+    } else {
+      results.forEach(({ form, result }) => {
+        if (!savedMembershipProductMatches(result)) {
+          failed += 1;
+          form.classList.add("is-save-error");
+          const message = form.querySelector(".product-inline-message");
+          if (message) message.textContent = "저장 확인 필요";
+          return;
+        }
+        setProductInlineDirtyState(form, false);
+        form.classList.add("is-save-success");
+        const message = form.querySelector(".product-inline-message");
+        if (message) message.textContent = "저장 완료";
+      });
+    }
+  }
+  if (!failed) {
+    renderServiceReadiness();
+    showToast(`${forms.length}개 상품 저장·서버 확인 완료`);
+  } else {
+    showToast(`${forms.length - failed}개 저장 완료 · ${failed}개 확인 필요`);
+  }
+  if (button?.isConnected) {
+    button.disabled = false;
+    button.textContent = "현재 페이지 전체 저장";
+    button.hidden = !document.querySelector('[data-product-inline-form][data-dirty="true"]');
   }
 }
 
@@ -10164,8 +10275,8 @@ function renderMemberEditorModeBar() {
   }
   const summary = $("#memberEditorModeSummary");
   if (summary) summary.textContent = memberAdminEditEnabled
-    ? "이름 옆 수정 버튼을 누르면 회원·회원권을 바로 고칠 수 있습니다."
-    : "PIN 확인 후 이름 옆에서 회원·회원권을 바로 수정합니다.";
+    ? "표에서 바로 수정한 뒤 행 저장 또는 현재 페이지 전체 저장을 누릅니다."
+    : "PIN 확인 후 회원·회원권을 표에서 바로 수정합니다.";
   const stateTarget = $("#memberEditorModeSaveState");
   if (stateTarget) stateTarget.textContent = memberAdminEditEnabled ? "편집 중" : "잠김";
 }
@@ -11204,6 +11315,11 @@ function setMemberInlineDirtyState(form, dirty = true) {
     message.textContent = "변경됨";
     message.classList.remove("is-success");
   }
+  const saveAllButton = $("#saveVisibleMemberRows");
+  if (saveAllButton) {
+    saveAllButton.hidden = !memberAdminEditEnabled
+      || !document.querySelector('[data-member-inline-form][data-dirty="true"]');
+  }
 }
 
 function memberInlineEditorMarkup(member, ticket) {
@@ -11574,8 +11690,8 @@ function renderMembers(options = {}) {
           <td class="member-table-note member-note-column">${escapeHtml(memberRemarkLabel(member))}</td>
         </tr>`;
       if (!memberAdminEditEnabled || operationsRole() !== "admin") return memberRow;
-      return `${memberRow}
-        <tr class="member-inline-editor-row" data-member-editor-row="${member.id}">
+      return `
+        <tr class="member-inline-editor-row member-inline-sheet-row" data-member-id="${member.id}" data-member-editor-row="${member.id}">
           <td colspan="9">${memberQuickEditorMarkup(member, ticket, { embedded: true })}</td>
         </tr>`;
       })
@@ -22681,24 +22797,49 @@ function renderServiceReadiness() {
           if (!isEditing) {
             return `
         <article class="product-setting-card product-setting-summary-card" data-product-card="${normalized.id}">
-          <div class="product-setting-header">
+          <form class="product-setting-header product-setting-inline-form" data-product-inline-form="${normalized.id}" data-dirty="false">
             <input class="product-select-checkbox" type="checkbox" data-select-product-row="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 선택" ${selectedProductIdSet().has(productId) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />
-            <div>
-              <strong>${escapeHtml(normalized.title)}</strong>
-              <small>${escapeHtml(normalized.group)} · ${normalized.tickets}회 · ${normalized.validityDays}일</small>
+            <label class="product-setting-inline-title">
+              <span class="sr-only">상품명</span>
+              <input type="text" data-product-field="title" value="${escapeHtml(normalized.title)}" aria-label="${escapeHtml(normalized.title)} 상품명" />
+            </label>
+            <div class="product-setting-inline-pair">
+              <select data-product-field="productKind" aria-label="${escapeHtml(normalized.title)} 권종">
+                <option value="regular" ${normalized.productKind === "regular" ? "selected" : ""}>정규권</option>
+                <option value="coupon" ${normalized.productKind === "coupon" ? "selected" : ""}>쿠폰제</option>
+              </select>
+              <select data-product-field="scheduleScope" aria-label="${escapeHtml(normalized.title)} 레슨 방식">
+                <option value="weekday" ${normalized.scheduleScope === "weekday" ? "selected" : ""}>평일</option>
+                <option value="weekend" ${normalized.scheduleScope === "weekend" ? "selected" : ""}>주말</option>
+                <option value="mixed" ${normalized.scheduleScope === "mixed" ? "selected" : ""}>혼합</option>
+              </select>
+              <select data-product-field="groupSize" aria-label="${escapeHtml(normalized.title)} 수업 종류">
+                <option value="1" ${Number(normalized.groupSize) === 1 ? "selected" : ""}>1:1</option>
+                <option value="2" ${Number(normalized.groupSize) === 2 ? "selected" : ""}>1:2</option>
+              </select>
             </div>
-            <div class="product-setting-summary-meta">
-              <b>현금 ${money.format(normalized.cashAmount)}원 / 카드 ${money.format(normalized.cardAmount)}원</b>
+            <div class="product-setting-inline-triple">
+              <select data-product-field="lessonMinutes" aria-label="${escapeHtml(normalized.title)} 수업 시간">
+                ${[20, 30, 40].map((minute) => `<option value="${minute}" ${Number(normalized.lessonMinutes) === minute ? "selected" : ""}>${minute}분</option>`).join("")}
+              </select>
+              <input type="number" min="1" step="1" data-product-field="tickets" value="${normalized.tickets}" aria-label="${escapeHtml(normalized.title)} 횟수" />
+              <input type="number" min="1" step="1" data-product-field="validityDays" value="${normalized.validityDays}" aria-label="${escapeHtml(normalized.title)} 사용기간 일수" />
             </div>
-            <select class="product-setting-quick-status" data-quick-product-status="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
+            <div class="product-setting-inline-price">
+              <input type="number" min="0" step="1000" data-product-field="cashAmount" value="${normalized.cashAmount}" aria-label="${escapeHtml(normalized.title)} 현금가격" />
+              <input type="number" min="0" step="1000" data-product-field="cardAmount" value="${normalized.cardAmount}" aria-label="${escapeHtml(normalized.title)} 카드가격" />
+            </div>
+            <select class="product-setting-quick-status" data-product-field="status" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
               ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
             </select>
             <div class="product-setting-row-actions">
               <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="${escapeHtml(normalized.title)} 위로 이동" title="위로 이동">↑</button>
               <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="${escapeHtml(normalized.title)} 아래로 이동" title="아래로 이동">↓</button>
+              <button class="small-button product-inline-save" type="button" data-save-product-setting="${normalized.id}">저장</button>
               <button class="small-button" type="button" data-open-product-setting="${normalized.id}">수정</button>
             </div>
-          </div>
+            <span class="product-inline-message" aria-live="polite"></span>
+          </form>
         </article>`;
           }
           return `
@@ -24556,6 +24697,10 @@ function bindEvents() {
   });
 
   document.addEventListener("input", (event) => {
+    if (event.target.matches("[data-product-inline-form] input:not([type='checkbox'])")) {
+      setProductInlineDirtyState(event.target.closest("[data-product-inline-form]"));
+      return;
+    }
     if (event.target.matches("#memberManagementForm input[name='totalSessions'], #memberManagementForm input[name='usedSessions']")) {
       syncMemberManagementBalance(event.target.form);
       return;
@@ -24584,6 +24729,11 @@ function bindEvents() {
   });
 
   document.addEventListener("change", (event) => {
+    if (event.target.matches("[data-select-product-row]")) return;
+    if (event.target.matches("[data-product-inline-form] input, [data-product-inline-form] select")) {
+      setProductInlineDirtyState(event.target.closest("[data-product-inline-form]"));
+      return;
+    }
     if (!event.target.matches("[data-member-inline-form] select[name='productId']")) return;
     const form = event.target.form;
     setMemberInlineDirtyState(form);
@@ -24603,6 +24753,10 @@ function bindEvents() {
   document.addEventListener("submit", async (event) => {
     if (event.target.id === "memberManagementForm") await submitMemberManagementForm(event);
     if (event.target.id === "substituteForm") await submitSubstituteAssignments(event);
+    if (event.target.matches("[data-product-inline-form]")) {
+      event.preventDefault();
+      await updateMembershipProductSetting(event.target.dataset.productInlineForm);
+    }
     if (event.target.matches("[data-member-inline-form]")) {
       event.preventDefault();
       await submitMemberInlineEditor(event.target);
@@ -24638,6 +24792,10 @@ function bindEvents() {
     }
     if (event.target.closest("#saveVisibleMemberRows")) {
       await saveVisibleMemberRows();
+      return;
+    }
+    if (event.target.closest("#saveVisibleProductRows")) {
+      await saveVisibleProductRows();
       return;
     }
     if (event.target.closest("#toggleScheduleBulkMode")) {
