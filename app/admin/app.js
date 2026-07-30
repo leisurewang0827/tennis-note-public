@@ -1543,6 +1543,13 @@ function applyAdminMemberDetail(member, payload) {
     enrollment,
     serverDetail: payload,
   });
+  const databaseRecord = payload?.databaseRecord || null;
+  if (databaseRecord?.user_id) {
+    const records = adminLiveDataState.memberDatabaseRecords || [];
+    const recordIndex = records.findIndex((item) => String(item.user_id) === String(databaseRecord.user_id));
+    if (recordIndex >= 0) records[recordIndex] = databaseRecord;
+    else records.push(databaseRecord);
+  }
   if (!ticket) return;
   const mappedTicket = tickets.find((item) => item.serverTicketId === ticket.id);
   if (!mappedTicket) return;
@@ -1554,10 +1561,16 @@ function applyAdminMemberDetail(member, payload) {
     expires: ticket.expires_on || mappedTicket.expires,
     status: ticket.status || mappedTicket.status,
     product: product.name || mappedTicket.product,
+    productId: ticket.product_id || mappedTicket.productId,
+    coachRoleId: ticket.coach_role_id || mappedTicket.coachRoleId,
+    coachId: coach.id || mappedTicket.coachId,
+    scheduleScope: databaseRecord?.lesson_schedule_scope || mappedTicket.scheduleScope,
+    weeklyCount: Number(databaseRecord?.lesson_frequency_per_week) || mappedTicket.weeklyCount,
+    lessonTypeCode: databaseRecord?.lesson_type || mappedTicket.lessonTypeCode,
   });
 }
 
-async function loadAdminMemberDetail(member, { force = false } = {}) {
+async function loadAdminMemberDetail(member, { force = false, renderResult = true } = {}) {
   const userId = String(member?.serverUserId || "");
   if (!userId || operationsRole() !== "admin" || !window.TennisNoteDataClient?.rpc) return false;
   const current = adminMemberDetailCache.get(userId);
@@ -1574,7 +1587,9 @@ async function loadAdminMemberDetail(member, { force = false } = {}) {
     const payload = Array.isArray(response) ? response[0] : response;
     applyAdminMemberDetail(member, payload);
     Object.assign(latest, { status: "loaded", error: "", data: payload, promise: null });
-    if (state.view === "members" && state.selectedMemberId === member.id) renderMembers();
+    if (renderResult && state.view === "members" && state.selectedMemberId === member.id) {
+      renderMembers({ preserveList: true });
+    }
     return true;
   }).catch((error) => {
     const latest = adminMemberDetailCache.get(userId);
@@ -1584,11 +1599,15 @@ async function loadAdminMemberDetail(member, { force = false } = {}) {
       error: String(error?.message || error || "member_detail_failed"),
       promise: null,
     });
-    if (state.view === "members" && state.selectedMemberId === member.id) renderMembers();
+    if (renderResult && state.view === "members" && state.selectedMemberId === member.id) {
+      renderMembers({ preserveList: true });
+    }
     return false;
   });
   adminMemberDetailCache.set(userId, entry);
-  if (state.view === "members" && state.selectedMemberId === member.id) renderMembers();
+  if (force && current?.status === "failed" && state.view === "members" && state.selectedMemberId === member.id) {
+    renderMembers({ preserveList: true });
+  }
   return entry.promise;
 }
 
@@ -9912,7 +9931,10 @@ async function submitMemberManagementForm(event) {
     closeMemberManagementModal();
     showToast(`${memberManagementActionLabel(action)} 저장 완료`);
 
-    const synced = await syncAdminLiveData(true);
+    const requiresFullRefresh = !ticket && Boolean(payload.productId);
+    const synced = requiresFullRefresh
+      ? await syncAdminLiveData(true)
+      : await loadAdminMemberDetail(member, { force: true, renderResult: false });
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
     if (linkedSourceSignupUserId) {
       const linkedMember = members.find((item) => memberServerUserIds(item).includes(member.serverUserId));
@@ -11276,7 +11298,7 @@ async function saveVisibleMemberRows() {
   }
 }
 
-function renderMembers() {
+function renderMembers(options = {}) {
   const branchMembers = operationBranchMembers();
   const coachFilter = $("#memberCoachFilter");
   if (coachFilter) {
@@ -11331,10 +11353,13 @@ function renderMembers() {
   renderDashboardPager("#memberListPager", filteredTotal, state.memberListPage, "member-directory", memberListPageSize);
   renderMemberBulkToolbar(visibleMembers);
 
-  $("#memberRows").innerHTML = adminMemberDirectoryState.loading && !visibleMembers.length
-    ? '<tr><td colspan="9" class="empty-text">회원 목록을 불러오는 중입니다.</td></tr>'
-    : visibleMembers.length ? visibleMembers
-    .map((member) => {
+  const memberRows = $("#memberRows");
+  const preserveList = options.preserveList === true && memberRows?.children.length;
+  if (!preserveList) {
+    memberRows.innerHTML = adminMemberDirectoryState.loading && !visibleMembers.length
+      ? '<tr><td colspan="9" class="empty-text">회원 목록을 불러오는 중입니다.</td></tr>'
+      : visibleMembers.length ? visibleMembers
+      .map((member) => {
       const ticket = memberCurrentTicket(member);
       const issues = memberEditorAuditIssues(member, ticket);
       const memberRow = `
@@ -11361,8 +11386,13 @@ function renderMembers() {
         <tr class="member-inline-editor-row" data-member-editor-row="${member.id}">
           <td colspan="9">${memberQuickEditorMarkup(member, ticket, { embedded: true })}</td>
         </tr>`;
-    })
-    .join("") : `<tr><td colspan="9" class="empty-text">${filterCopy.empty}</td></tr>`;
+      })
+      .join("") : `<tr><td colspan="9" class="empty-text">${filterCopy.empty}</td></tr>`;
+  } else {
+    memberRows.querySelectorAll("tr[data-member-id]").forEach((row) => {
+      row.classList.toggle("is-selected", Number(row.dataset.memberId) === Number(state.selectedMemberId));
+    });
+  }
 
   const popover = $("#memberQuickEditPopover");
   if (popover) {
