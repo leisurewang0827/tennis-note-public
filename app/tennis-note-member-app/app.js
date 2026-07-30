@@ -1679,7 +1679,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.234",
+    workerUrl: "./service-worker.js?v=1.0.235",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -7407,7 +7407,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.234" });
+  const params = new URLSearchParams({ v: "1.0.235" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9381,6 +9381,11 @@ async function initApp() {
   renderActiveMemberView();
   const client = window.TennisNoteDataClient;
   const hasStoredSession = Boolean(client?.getSession?.()?.access_token);
+  const oauthReturnPending = Boolean(
+    new URLSearchParams(window.location.search || "").get("code")
+    || new URLSearchParams(window.location.search || "").get("error")
+    || window.location.hash.includes("access_token=")
+  );
   const isModeTransition = Boolean(sessionStorage.getItem("tennis-note-member-mode-transition"));
   sessionStorage.removeItem("tennis-note-member-mode-transition");
   const canOpenRestoredMember = Boolean(hasStoredSession && state.member);
@@ -9388,7 +9393,7 @@ async function initApp() {
     openAppFromSession(false);
     setMemberSessionRestoring(false);
   } else {
-    setMemberSessionRestoring(hasStoredSession || isModeTransition || window.location.hash.includes("access_token="));
+    setMemberSessionRestoring(hasStoredSession || isModeTransition || oauthReturnPending);
   }
   hideBrandSplash();
 

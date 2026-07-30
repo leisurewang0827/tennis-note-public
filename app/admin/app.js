@@ -1586,6 +1586,7 @@ function applyAdminMemberDetail(member, payload) {
     scheduleScope: ticketRecord?.lesson_schedule_scope || mappedTicket.scheduleScope,
     weeklyCount: Number(ticketRecord?.lesson_frequency_per_week) || mappedTicket.weeklyCount,
     lessonTypeCode: ticketRecord?.lesson_type || mappedTicket.lessonTypeCode,
+    serverUpdatedAt: ticket.updated_at || mappedTicket.serverUpdatedAt || "",
   });
 }
 
@@ -2093,6 +2094,9 @@ const memberManagementPolicy = { ...defaultMemberManagementPolicy };
 // Legacy mode values are intentionally collapsed into one PIN-gated admin editor.
 const memberEditorMode = "transition";
 let memberAdminEditEnabled = false;
+let memberAdminEditExpiresAt = 0;
+const memberAdminEditTimeoutMs = 15 * 60 * 1000;
+let memberInlineRowFilter = "all";
 const memberManagementModalState = {
   memberId: null,
   action: "",
@@ -6939,6 +6943,15 @@ function setView(view, options = {}) {
   }
   if (view === "makeup") view = "schedule";
   if (view === "reports") view = "dashboard";
+  if (
+    state.view === "members"
+    && view !== "members"
+    && dirtyMemberInlineForms().length
+    && !options.discardMemberChanges
+  ) {
+    if (!window.confirm("저장하지 않은 회원 변경사항이 있습니다. 변경을 버리고 이동할까요?")) return;
+    dirtyMemberInlineForms().forEach((form) => setMemberInlineDirtyState(form, false));
+  }
   if (!$(`#${view}View`)) view = "dashboard";
   if (!operationsViewAllowed(view)) {
     view = operationsRole() === "coach" ? "schedule" : "dashboard";
@@ -10108,6 +10121,14 @@ function memberManagementDatabasePayload(form, member, ticket, reason) {
     ticketStatus: ticketStatus || null,
     recordStatus,
     reason,
+    expectedTicketUpdatedAt: hasControl("expectedTicketUpdatedAt")
+      ? form.elements.expectedTicketUpdatedAt.value || ticket?.serverUpdatedAt || null
+      : ticket?.serverUpdatedAt || null,
+    applyToFutureSchedule: hasControl("applyToFutureSchedule")
+      ? form.elements.applyToFutureSchedule.value === "true"
+      : false,
+    changeBatchId: form.dataset.changeBatchId || null,
+    changeSource: "admin_web",
   };
 }
 
@@ -10421,14 +10442,139 @@ async function loadMemberEditorModeFromServer() {
 
 function setMemberAdminEditEnabled(enabled) {
   memberAdminEditEnabled = Boolean(enabled);
+  memberAdminEditExpiresAt = memberAdminEditEnabled ? Date.now() + memberAdminEditTimeoutMs : 0;
   state.inlineMemberId = null;
   renderMembers();
   showToast(memberAdminEditEnabled ? "관리자 편집을 시작합니다." : "관리자 편집을 종료했습니다.");
 }
 
+function touchMemberAdminEditSession() {
+  if (!memberAdminEditEnabled) return;
+  if (Date.now() >= memberAdminEditExpiresAt) {
+    setMemberAdminEditEnabled(false);
+    showToast("개인정보 보호를 위해 관리자 편집이 자동 잠금되었습니다.");
+    return;
+  }
+  memberAdminEditExpiresAt = Date.now() + memberAdminEditTimeoutMs;
+}
+
+function dirtyMemberInlineForms() {
+  return [...document.querySelectorAll('[data-member-inline-form][data-dirty="true"]')];
+}
+
+window.addEventListener("beforeunload", (event) => {
+  if (!dirtyMemberInlineForms().length) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
+
+window.setInterval(() => {
+  if (memberAdminEditEnabled && Date.now() >= memberAdminEditExpiresAt) {
+    if (dirtyMemberInlineForms().length) {
+      memberAdminEditExpiresAt = Date.now() + 2 * 60 * 1000;
+      showToast("미저장 변경사항이 있어 자동 잠금을 2분 연장했습니다. 저장하거나 편집을 종료해 주세요.");
+      return;
+    }
+    setMemberAdminEditEnabled(false);
+    showToast("15분 동안 사용하지 않아 관리자 편집을 잠갔습니다.");
+  }
+}, 30000);
+
+function memberInlineInitialValue(control) {
+  if (control instanceof HTMLSelectElement) {
+    return control.querySelector("option[selected]")?.value ?? control.options[0]?.value ?? "";
+  }
+  if (control instanceof HTMLInputElement && ["checkbox", "radio"].includes(control.type)) {
+    return String(control.defaultChecked);
+  }
+  return String(control.defaultValue ?? "");
+}
+
+function createMemberChangeBatchId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  window.crypto?.getRandomValues?.(bytes);
+  if (!bytes.some(Boolean)) {
+    for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((value) => value.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+}
+
+function memberInlineChangeSummary(form) {
+  const member = members.find((item) => item.id === Number(form?.dataset.memberInlineForm));
+  const labels = {
+    memberName: "이름",
+    memberPhone: "연락처",
+    memberBirthYear: "출생연도",
+    productId: "회원권",
+    coachRoleId: "담당 코치",
+    partnerUserId: "파트너",
+    totalSessions: "총 횟수",
+    usedSessions: "소진 횟수",
+    paymentDate: "결제일",
+    paymentMethod: "결제수단",
+    paymentAmount: "결제금액",
+    note: "비고",
+  };
+  const changed = [...(form?.elements || [])]
+    .filter((control) => control.name && labels[control.name] && String(control.value) !== memberInlineInitialValue(control))
+    .map((control) => labels[control.name]);
+  return `${member?.name || "회원"}: ${[...new Set(changed)].join(", ") || "입력값"}`;
+}
+
+const memberInlineDraftFieldNames = [
+  "memberName",
+  "memberPhone",
+  "memberBirthYear",
+  "productId",
+  "coachRoleId",
+  "partnerUserId",
+  "totalSessions",
+  "usedSessions",
+  "paymentDate",
+  "paymentMethod",
+  "paymentAmount",
+  "note",
+  "applyToFutureSchedule",
+];
+
+function memberInlineDraft(form) {
+  return {
+    memberId: Number(form?.dataset.memberInlineForm) || 0,
+    values: Object.fromEntries(memberInlineDraftFieldNames
+      .map((name) => [name, form?.elements?.[name]?.value])
+      .filter(([, value]) => value !== undefined)),
+  };
+}
+
+function restoreFailedMemberInlineDrafts(drafts = []) {
+  drafts.forEach((draft) => {
+    const form = document.querySelector(`[data-member-inline-form="${draft.memberId}"]`);
+    if (!form) return;
+    if (form.elements.productId && draft.values.productId !== undefined) {
+      form.elements.productId.value = draft.values.productId;
+      syncMemberQuickEditorProduct(form);
+    }
+    memberInlineDraftFieldNames.forEach((name) => {
+      if (name === "productId" || draft.values[name] === undefined || !form.elements[name]) return;
+      form.elements[name].value = draft.values[name];
+    });
+    if (form.elements.totalSessions && form.elements.usedSessions) syncMemberManagementBalance(form);
+    setMemberInlineDirtyState(form, true);
+    form.classList.add("is-save-error");
+    const message = form.querySelector(".member-inline-message");
+    if (message) message.textContent = "저장하지 못한 입력값을 유지했습니다. 오류를 확인한 뒤 다시 저장해 주세요.";
+    updateMemberInlineToolbar();
+  });
+}
+
 function requestMemberAdminEdit() {
   if (operationsRole() !== "admin") return;
   if (memberAdminEditEnabled) {
+    if (dirtyMemberInlineForms().length && !window.confirm("저장하지 않은 변경사항을 버리고 관리자 편집을 종료할까요?")) return;
     setMemberAdminEditEnabled(false);
     return;
   }
@@ -11354,6 +11500,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
           <input name="lessonType" type="hidden" value="${escapeHtml(record?.lesson_type || ticket?.lessonTypeCode || "one_on_one")}" />
           <input name="weeklyFrequency" type="hidden" value="${Number(record?.lesson_frequency_per_week ?? ticket?.weeklyCount ?? 1)}" />
           <input name="recordStatus" type="hidden" value="${escapeHtml(record?.record_status || (ticket ? "active" : "pending"))}" />
+          <input name="expectedTicketUpdatedAt" type="hidden" value="${escapeHtml(ticket?.serverUpdatedAt || "")}" />
           <div class="member-inline-compact-grid">
             <label><span>이름</span><input name="memberName" value="${escapeHtml(member.name || "")}" required /></label>
             <label><span>연락처</span><input name="memberPhone" inputmode="tel" value="${escapeHtml(member.phone || "")}" /></label>
@@ -11380,10 +11527,15 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
             </select></label>
             <label><span>결제금액</span><input name="paymentAmount" type="number" min="0" step="1000" value="${escapeHtml(memberManagementValue(record?.payment_amount ?? ""))}" /></label>
             <label class="member-inline-note"><span>비고</span><input name="note" value="${escapeHtml(record?.admin_note || member.note || "")}" /></label>
+            <label class="member-inline-schedule-scope"><span>시간표 반영</span><select name="applyToFutureSchedule">
+              <option value="false">회원정보만 변경</option>
+              <option value="true">미래 일정에도 적용</option>
+            </select></label>
             <button class="primary-button member-inline-save" type="submit">저장</button>
           </div>
           <div class="member-inline-editor-actions">
             <button class="ghost-button" type="button" data-open-member-management="profile" data-member-management-ticket="${escapeHtml(ticket?.serverTicketId || "")}" data-member-management-member="${member.id}">상세 관리</button>
+            <button class="ghost-button" type="button" data-open-member-history="${escapeHtml(ticket?.serverTicketId || "")}" ${ticket?.serverTicketId ? "" : "disabled"}>변경 이력</button>
             <p class="member-inline-message" aria-live="polite"></p>
           </div>
         </form>`;
@@ -11438,8 +11590,25 @@ function syncMemberQuickEditorProduct(form) {
   form.elements.weeklyFrequency.value = Number(product.frequency_per_week) || 1;
 }
 
+function updateMemberInlineToolbar() {
+  const saveAllButton = $("#saveVisibleMemberRows");
+  if (saveAllButton) {
+    saveAllButton.hidden = !memberAdminEditEnabled
+      || !document.querySelector('[data-member-inline-form][data-dirty="true"]');
+  }
+  const changedButton = $("#showChangedMemberRows");
+  const failedButton = $("#showFailedMemberRows");
+  const allHistoryButton = $("#openAllMemberHistory");
+  if (changedButton) changedButton.hidden = !memberAdminEditEnabled;
+  if (failedButton) failedButton.hidden = !memberAdminEditEnabled
+    || !document.querySelector("[data-member-inline-form].is-save-error");
+  if (allHistoryButton) allHistoryButton.hidden = !memberAdminEditEnabled;
+  applyMemberInlineRowFilter();
+}
+
 function setMemberInlineDirtyState(form, dirty = true) {
   if (!form) return;
+  if (dirty) touchMemberAdminEditSession();
   form.dataset.dirty = dirty ? "true" : "false";
   form.classList.toggle("is-dirty", dirty);
   if (dirty) form.classList.remove("is-save-error", "is-save-success");
@@ -11448,11 +11617,73 @@ function setMemberInlineDirtyState(form, dirty = true) {
     message.textContent = "변경됨";
     message.classList.remove("is-success");
   }
-  const saveAllButton = $("#saveVisibleMemberRows");
-  if (saveAllButton) {
-    saveAllButton.hidden = !memberAdminEditEnabled
-      || !document.querySelector('[data-member-inline-form][data-dirty="true"]');
+  updateMemberInlineToolbar();
+}
+
+function applyMemberInlineRowFilter() {
+  document.querySelectorAll("[data-member-inline-form]").forEach((form) => {
+    const row = form.closest("tr");
+    if (!row) return;
+    const visible = memberInlineRowFilter === "all"
+      || (memberInlineRowFilter === "changed" && form.dataset.dirty === "true")
+      || (memberInlineRowFilter === "failed" && form.classList.contains("is-save-error"));
+    row.hidden = !visible;
+  });
+  $("#showChangedMemberRows")?.classList.toggle("is-active", memberInlineRowFilter === "changed");
+  $("#showFailedMemberRows")?.classList.toggle("is-active", memberInlineRowFilter === "failed");
+}
+
+async function openMemberTicketHistory(ticketId) {
+  if (operationsRole() !== "admin") return;
+  const modal = $("#memberHistoryModal");
+  const content = $("#memberHistoryModalContent");
+  const title = $("#memberHistoryModalTitle");
+  if (!modal || !content) return;
+  if (title) title.textContent = ticketId ? "회원 변경 이력" : "전체 변경 이력";
+  content.innerHTML = '<div class="empty-state compact"><strong>변경 이력 불러오는 중</strong></div>';
+  modal.removeAttribute("hidden");
+  try {
+    const response = await window.TennisNoteDataClient.rpc("tn_admin_member_ticket_history", {
+      target_ticket_id: ticketId,
+      target_limit: 50,
+    });
+    const rows = Array.isArray(response) ? response : [];
+    const fieldLabels = {
+      product_id: "회원권",
+      coach_role_id: "담당 코치",
+      total_sessions: "총 횟수",
+      used_sessions: "소진 횟수",
+      remaining_sessions: "잔여 횟수",
+      starts_on: "시작일",
+      expires_on: "만료일",
+      status: "상태",
+      user_id: "회원",
+    };
+    content.innerHTML = rows.length
+      ? rows.map((row) => {
+        const before = row.before || {};
+        const after = row.after || {};
+        const changes = Object.keys(fieldLabels)
+          .filter((key) => String(before[key] ?? "") !== String(after[key] ?? ""))
+          .map((key) => `${fieldLabels[key]} ${escapeHtml(before[key] ?? "-")} → ${escapeHtml(after[key] ?? "-")}`)
+          .join(" · ");
+        const changedAt = row.changedAt ? new Date(row.changedAt).toLocaleString("ko-KR") : "시각 확인 필요";
+        const resultLabel = row.result === "failed" ? `저장 실패${row.errorCode ? ` · ${escapeHtml(row.errorCode)}` : ""}` : "저장 완료";
+        return `<article class="member-history-row ${row.result === "failed" ? "is-error" : ""}">
+          <div><strong>${escapeHtml(row.memberName ? `${row.memberName} · ${resultLabel}` : resultLabel)}</strong><span>${escapeHtml(changedAt)} · ${escapeHtml(row.actorName || "관리자")}</span></div>
+          <p>${changes || (row.applyToFutureSchedule ? "미래 일정에도 적용" : "회원정보만 변경")}</p>
+        </article>`;
+      }).join("")
+      : '<div class="empty-state compact"><strong>아직 저장된 변경 이력이 없습니다.</strong></div>';
+  } catch {
+    content.innerHTML = '<div class="empty-state compact"><strong>변경 이력을 불러오지 못했습니다.</strong><span>DB 패치 적용 상태를 확인해 주세요.</span></div>';
   }
+}
+
+function closeMemberTicketHistory() {
+  $("#memberHistoryModal")?.setAttribute("hidden", "");
+  const content = $("#memberHistoryModalContent");
+  if (content) content.innerHTML = "";
 }
 
 function memberInlineEditorMarkup(member, ticket) {
@@ -11575,6 +11806,19 @@ async function submitMemberInlineEditor(form, options = {}) {
     payload.weeklyFrequency = Number(selectedProduct.frequency_per_week) || 1;
   }
   payload.preserveExistingSchedule = true;
+  payload.applyToFutureSchedule = form.elements.applyToFutureSchedule?.value === "true";
+  payload.changeBatchId = form.dataset.changeBatchId || createMemberChangeBatchId();
+  payload.changeSource = "admin_web";
+  if (ticket && !payload.expectedTicketUpdatedAt) {
+    message.textContent = "최신 회원권 정보를 다시 확인하는 중입니다. 잠시 후 다시 저장해 주세요.";
+    message.classList.add("is-error");
+    await loadAdminMemberDetail(member, { force: true, renderResult: true });
+    return false;
+  }
+  if (!options.skipConfirmation) {
+    const scopeText = payload.applyToFutureSchedule ? "미래 일정에도 적용" : "회원정보만 변경";
+    if (!window.confirm(`${memberInlineChangeSummary(form)}\n적용 범위: ${scopeText}\n서버에 저장할까요?`)) return false;
+  }
   submit.disabled = true;
   submit.textContent = "저장 중";
   message.textContent = "서버에 저장하고 확인하는 중입니다.";
@@ -11660,6 +11904,30 @@ async function submitMemberInlineEditor(form, options = {}) {
     return true;
   } catch (error) {
     const raw = String(error?.message || error?.payload?.message || "");
+    if (ticket?.serverTicketId && payload.changeBatchId) {
+      const safeErrorCode = [
+        "member_ticket_revision_conflict",
+        "member_ticket_expected_updated_at_required",
+        "ticket_not_found",
+        "active_product_required",
+        "group_partner_required",
+        "member_active_ticket_exists",
+      ].find((code) => raw.includes(code)) || "member_inline_save_failed";
+      void window.TennisNoteDataClient.rpc("tn_admin_log_member_inline_failure", {
+        target_ticket_id: ticket.serverTicketId,
+        target_change_batch_id: payload.changeBatchId,
+        target_error_code: safeErrorCode,
+      }).catch(() => false);
+    }
+    if (raw.includes("member_ticket_revision_conflict")) {
+      message.textContent = "다른 사용자가 먼저 수정했습니다. 입력값은 유지했습니다. 서버 최신값을 확인한 뒤 다시 저장해 주세요.";
+      message.classList.add("is-error");
+      form.classList.add("is-save-error");
+      updateMemberInlineToolbar();
+      submit.disabled = false;
+      submit.textContent = "다시 저장";
+      return false;
+    }
     if (raw.includes("member_active_ticket_exists") || raw.includes("member_verified_pending_ticket_exists")) {
       const synced = await syncAdminLiveData(true).catch(() => false);
       if (synced) {
@@ -11674,6 +11942,7 @@ async function submitMemberInlineEditor(form, options = {}) {
     message.textContent = memberManagementErrorText(error);
     message.classList.add("is-error");
     form.classList.add("is-save-error");
+    updateMemberInlineToolbar();
     submit.disabled = false;
     submit.textContent = "다시 저장";
     return false;
@@ -11689,28 +11958,46 @@ async function saveVisibleMemberRows() {
     showToast("변경된 행이 없습니다.");
     return;
   }
+  const summaries = forms.slice(0, 8).map(memberInlineChangeSummary);
+  const extra = forms.length > summaries.length ? `\n외 ${forms.length - summaries.length}명` : "";
+  if (!window.confirm(`현재 페이지 ${forms.length}명의 변경사항을 저장합니다.\n\n${summaries.join("\n")}${extra}\n\n실패한 행은 입력값을 유지합니다.`)) return;
+  const changeBatchId = createMemberChangeBatchId();
+  forms.forEach((form) => {
+    form.dataset.changeBatchId = changeBatchId;
+  });
   if (button) {
     button.disabled = true;
     button.textContent = `저장 중 0/${forms.length}`;
   }
   let saved = 0;
   let failed = 0;
+  const failedDrafts = [];
   try {
     for (const form of forms) {
-      const ok = await submitMemberInlineEditor(form, { refreshAfterSave: false });
+      const draft = memberInlineDraft(form);
+      const ok = await submitMemberInlineEditor(form, {
+        refreshAfterSave: false,
+        skipConfirmation: true,
+      });
       if (ok) saved += 1;
-      else failed += 1;
+      else {
+        failed += 1;
+        failedDrafts.push(draft);
+      }
       if (button) button.textContent = `저장 중 ${saved + failed}/${forms.length}`;
     }
     if (saved) {
       const synced = await syncAdminLiveData(true);
       if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+      await loadAdminMemberDirectoryPage({ force: true, render: false });
+      renderMembers();
       await refreshScheduleAfterMemberTicketSave();
     }
     if (!failed) {
-      renderMembers();
+      if (!saved) renderMembers();
       showToast(`${saved}명 현재 페이지 저장 완료`);
     } else {
+      restoreFailedMemberInlineDrafts(failedDrafts);
       showToast(`${saved}명 저장 완료 · ${failed}명 실패 행만 다시 확인해 주세요.`);
     }
   } catch {
@@ -11838,6 +12125,14 @@ function renderMembers(options = {}) {
     memberRows.querySelectorAll("tr[data-member-id]").forEach((row) => {
       row.classList.toggle("is-selected", Number(row.dataset.memberId) === Number(state.selectedMemberId));
     });
+  }
+  if (memberAdminEditEnabled) {
+    $("#showChangedMemberRows")?.removeAttribute("hidden");
+    const failedButton = $("#showFailedMemberRows");
+    if (failedButton) failedButton.hidden = !document.querySelector("[data-member-inline-form].is-save-error");
+    applyMemberInlineRowFilter();
+  } else {
+    memberInlineRowFilter = "all";
   }
 
   const popover = $("#memberQuickEditPopover");
@@ -19400,7 +19695,7 @@ async function performAdminLiveDataSync() {
       fullAdminAccess ? Promise.resolve(adminLiveDataState.coachSettlementTerms || []) : Promise.resolve([]),
       client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,policy_settings,display_order", limit: 300 }),
       rosterRows("tickets", () => (client.selectAllRows || client.selectRows)("tn_member_tickets", {
-        select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price",
+        select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price,updated_at",
         order: "id.asc",
         limit: 500,
         pageSize: 500,
@@ -19536,6 +19831,7 @@ async function performAdminLiveDataSync() {
         productKind: product.product_kind || "regular",
         scheduleScope: memberRecord?.lesson_schedule_scope || liveTicketScheduleScope(product, ticket, firstLessonByTicketId),
         status: ticket.status,
+        serverUpdatedAt: ticket.updated_at || "",
         memberRecord,
       };
     });
@@ -24939,6 +25235,29 @@ function bindEvents() {
     }
     if (event.target.closest("#saveVisibleMemberRows")) {
       await saveVisibleMemberRows();
+      return;
+    }
+    if (event.target.closest("#showChangedMemberRows")) {
+      memberInlineRowFilter = memberInlineRowFilter === "changed" ? "all" : "changed";
+      applyMemberInlineRowFilter();
+      return;
+    }
+    if (event.target.closest("#showFailedMemberRows")) {
+      memberInlineRowFilter = memberInlineRowFilter === "failed" ? "all" : "failed";
+      applyMemberInlineRowFilter();
+      return;
+    }
+    if (event.target.closest("#openAllMemberHistory")) {
+      await openMemberTicketHistory(null);
+      return;
+    }
+    const memberHistoryButton = event.target.closest("[data-open-member-history]");
+    if (memberHistoryButton) {
+      await openMemberTicketHistory(memberHistoryButton.dataset.openMemberHistory);
+      return;
+    }
+    if (event.target.closest("#closeMemberHistoryModal") || event.target === $("#memberHistoryModal")) {
+      closeMemberTicketHistory();
       return;
     }
     if (event.target.closest("#saveVisibleProductRows")) {

@@ -1727,7 +1727,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.234",
+    workerUrl: "./service-worker.js?v=1.0.235",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1757,7 +1757,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.234" });
+  const params = new URLSearchParams({ v: "1.0.235" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -5162,6 +5162,12 @@ async function initCoachApp() {
   renderAll();
   const client = window.TennisNoteDataClient;
   const hasStoredSession = Boolean(client?.getSession?.()?.access_token);
+  const oauthReturnPending = Boolean(
+    new URLSearchParams(window.location.search || "").get("code")
+    || new URLSearchParams(window.location.search || "").get("error")
+    || window.location.hash.includes("access_token=")
+  );
+  if (oauthReturnPending) document.body.classList.add("coach-session-restoring");
   if (hasStoredSession && state.coach) openCoachApp(false);
   hideCoachBrandSplash();
   void (async () => {
@@ -5175,6 +5181,7 @@ async function initCoachApp() {
   ]);
   const coachAccessTimedOut = coachAccessResult === "timeout";
   const openedFromSupabase = coachAccessResult === true;
+  document.body.classList.remove("coach-session-restoring");
   const sessionStillAvailable = Boolean(client?.getSession?.()?.access_token);
   if (!sessionStillAvailable) {
     returnToMemberEntry(true);

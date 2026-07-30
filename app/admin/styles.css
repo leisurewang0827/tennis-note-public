@@ -2180,6 +2180,50 @@ tr.is-selected td {
   white-space: nowrap;
 }
 
+.member-inline-schedule-scope {
+  min-width: 150px;
+}
+
+.member-history-modal-panel {
+  width: min(680px, calc(100vw - 28px));
+  max-height: min(78vh, 720px);
+}
+
+.member-history-modal-panel .member-history-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+
+.member-history-row {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #d8e5df;
+  border-radius: 8px;
+  background: #f8fbfa;
+}
+
+.member-history-row.is-error {
+  border-color: #edb2ac;
+  background: #fff4f2;
+}
+
+.member-history-row > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-history-row span,
+.member-history-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 @media (max-width: 720px) {
   .member-editor-mode-bar {
     grid-template-columns: 1fr auto;
@@ -2206,8 +2250,14 @@ tr.is-selected td {
 
   .member-inline-product,
   .member-inline-note,
+  .member-inline-schedule-scope,
   .member-inline-save {
     grid-column: 1 / -1;
+  }
+
+  .member-history-row > div {
+    display: grid;
+    gap: 3px;
   }
 }
 
