@@ -4586,15 +4586,17 @@ function normalizeRefundPolicySettings(settings = {}) {
   };
 }
 
-async function loadLiveSchedulePolicyFromServer() {
+async function loadLiveSchedulePolicyFromServer(preloadedRow = undefined) {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !adminApprovalReady()) return false;
   try {
-    const rows = await client.selectRows("tn_admin_settings", {
-      select: "key,value,updated_at",
-      filters: { key: liveSchedulePolicyKey },
-      limit: 1,
-    });
+    const rows = preloadedRow === undefined
+      ? await client.selectRows("tn_admin_settings", {
+        select: "key,value,updated_at",
+        filters: { key: liveSchedulePolicyKey },
+        limit: 1,
+      })
+      : preloadedRow ? [preloadedRow] : [];
     if (!rows?.length) {
       liveSchedulePolicyServerUpdatedAt = "";
       return false;
@@ -18479,11 +18481,7 @@ async function performAdminLiveDataSync() {
       : Promise.resolve(null);
     const rosterRows = (key, fallback) => operationalRosterPromise
       .then((payload) => Array.isArray(payload?.[key]) ? payload[key] : fallback());
-    const adminSettingsPromise = Promise.all([
-      loadLiveSchedulePolicyFromServer(),
-      loadAdminLayoutSettingsFromServer(),
-      loadAdminSecuritySettingsFromServer(),
-    ]);
+    const adminSettingsPromise = loadAdminStartupSettingsFromServer();
     const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       rosterRows("users", () => (client.selectAllRows || client.selectRows)("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 })),
@@ -21741,15 +21739,17 @@ function setAdminLayoutVisibility(kind, itemId, visible) {
   renderAdminLayoutSettings();
 }
 
-async function loadAdminLayoutSettingsFromServer() {
+async function loadAdminLayoutSettingsFromServer(preloadedRow = undefined) {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !adminApprovalReady()) return false;
   try {
-    const rows = await client.selectRows("tn_admin_settings", {
-      select: "key,value,updated_at",
-      filters: { key: adminLayoutSettingKey },
-      limit: 1,
-    });
+    const rows = preloadedRow === undefined
+      ? await client.selectRows("tn_admin_settings", {
+        select: "key,value,updated_at",
+        filters: { key: adminLayoutSettingKey },
+        limit: 1,
+      })
+      : preloadedRow ? [preloadedRow] : [];
     if (!rows?.length) {
       adminLayoutServerUpdatedAt = "";
       return false;
@@ -21763,6 +21763,31 @@ async function loadAdminLayoutSettingsFromServer() {
   } catch {
     return false;
   }
+}
+
+async function loadAdminStartupSettingsFromServer() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.selectRows || !adminApprovalReady()) return false;
+  let rows = [];
+  try {
+    rows = await client.selectRows("tn_admin_settings", {
+      select: "key,value,updated_at",
+      filters: { key: { in: [liveSchedulePolicyKey, adminLayoutSettingKey] } },
+      limit: 2,
+    });
+  } catch {
+    return Promise.all([
+      loadLiveSchedulePolicyFromServer(),
+      loadAdminLayoutSettingsFromServer(),
+      loadAdminSecuritySettingsFromServer(),
+    ]);
+  }
+  const rowByKey = new Map((rows || []).map((row) => [row.key, row]));
+  return Promise.all([
+    loadLiveSchedulePolicyFromServer(rowByKey.get(liveSchedulePolicyKey) || null),
+    loadAdminLayoutSettingsFromServer(rowByKey.get(adminLayoutSettingKey) || null),
+    loadAdminSecuritySettingsFromServer(),
+  ]);
 }
 
 async function saveAdminLayoutSettings() {
