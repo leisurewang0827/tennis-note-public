@@ -1782,6 +1782,9 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
         }),
       );
     }
+    if (settingsTab === "coach") {
+      jobs.push(loadAdminDataOnce("coach-staff-detail", refreshCoachStaffData));
+    }
   }
 
   if (view === "notes") {
@@ -18946,12 +18949,18 @@ async function performAdminLiveDataSync() {
   });
   try {
     const lessonWindow = adminLiveLessonWindow();
-    const operationalRosterPromise = fullAdminAccess
-      ? client.rpc("tn_admin_operational_roster", {
+    const rosterParameters = {
         target_branch_id: activeOperationBranchId() || null,
         target_lesson_from: lessonWindow.from,
         target_lesson_to: lessonWindow.to,
-      }).then((response) => (Array.isArray(response) ? response[0] : response) || null)
+      };
+    const operationalRosterPromise = fullAdminAccess
+      ? client.rpc("tn_admin_operational_roster_core", rosterParameters)
+        .catch((coreError) => {
+          console.warn("[Tennis Note] core operational roster unavailable; using compatible roster", coreError);
+          return client.rpc("tn_admin_operational_roster", rosterParameters);
+        })
+        .then((response) => (Array.isArray(response) ? response[0] : response) || null)
         .catch((error) => {
           console.warn("[Tennis Note] operational roster unavailable; using full-source fallback", error);
           return null;
@@ -18966,9 +18975,9 @@ async function performAdminLiveDataSync() {
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
       client.selectRows("tn_coach_availability", { select: "id,coach_role_id,day_of_week,start_time,end_time,availability_type,note", limit: 1000 }).catch(() => []),
-      fullAdminAccess ? rosterRows("authLinks", () => client.selectRows("tn_user_auth_links", { select: "id,user_id,provider,last_sign_in_at,is_primary", limit: 500 }).catch(() => [])) : Promise.resolve([]),
-      fullAdminAccess ? rosterRows("authSwitches", () => client.selectRows("tn_auth_provider_switches", { select: "id,user_id,from_provider,to_provider,status,expires_at,created_at,completed_at", order: "created_at.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
-      fullAdminAccess ? rosterRows("currentSettlementTerms", () => client.selectRows("tn_coach_settlement_terms", { select: "id,coach_role_id,settlement_type,coach_rate,hourly_rate,settlement_basis,substitute_policy,effective_from,effective_to,status", order: "effective_from.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
+      fullAdminAccess ? Promise.resolve(adminLiveDataState.authLinks || []) : Promise.resolve([]),
+      fullAdminAccess ? Promise.resolve(adminLiveDataState.authSwitches || []) : Promise.resolve([]),
+      fullAdminAccess ? Promise.resolve(adminLiveDataState.coachSettlementTerms || []) : Promise.resolve([]),
       client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,policy_settings,display_order", limit: 300 }),
       rosterRows("tickets", () => (client.selectAllRows || client.selectRows)("tn_member_tickets", {
         select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price",
