@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.178" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.178" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.179" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.179" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -587,7 +587,7 @@
                 <input id="profileGoal" type="text" placeholder="예: 랠리 10개 연결, 게임 입문" />
               </label>
               <label>
-                <span>내가 고른 수준 (NTRP)</span>
+                <span>내가 고른 수준</span>
                 <select id="profileSelfNtrp">
                   <option value="1.5">1.5 · 시작/입문</option>
                   <option value="2.0">2.0 · 기본기 연습 필요</option>
@@ -598,7 +598,7 @@
                 </select>
               </label>
               <label>
-                <span>코치가 본 수준 (NTRP)</span>
+                <span>코치가 본 수준</span>
                 <input id="profileCoachNtrp" type="text" readonly />
               </label>
             </div>
@@ -606,15 +606,16 @@
               <span>내 스타일 메모</span>
               <textarea id="profileStyleMemo" rows="3" placeholder="예: 포핸드는 자신 있는데 백핸드가 불안해요."></textarea>
             </label>
-            <section class="ntrp-survey" aria-label="내 테니스 수준 알아보기">
+            <details class="ntrp-survey" aria-label="내 테니스 수준 참고자료">
+              <summary>수준 기준 자세히 보기</summary>
               <div class="section-title compact-title">
-                <h3>내 테니스 수준 알아보기</h3>
-                <span>내가 만든 포스터와 공식 기준을 보면서 현재 레벨을 체크합니다.</span>
+                <h3>내 테니스 수준 참고자료</h3>
+                <span>NTRP 공식 기준과 질문은 필요할 때만 확인하세요.</span>
               </div>
               <div id="ntrpReferenceCards" class="ntrp-reference-grid"></div>
               <div id="ntrpSurveyQuestions" class="ntrp-survey-list"></div>
               <button class="small-button" type="button" id="calculateNtrp">답변으로 내 수준 확인</button>
-            </section>
+            </details>
             <div id="ntrpPanel" class="ntrp-panel"></div>
             <button class="primary-button" type="button" id="saveProfileInfo">내 정보 저장</button>
             <button class="small-button" type="button" id="requestNtrpCheck">코치에게 수준 확인 요청</button>
@@ -966,15 +967,15 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.178"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.179"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.178"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.178"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.178"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.178"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.179"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.179"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.179"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.179"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.178"></script>
+    <script src="./app.js?v=1.0.179"></script>
   </body>
 </html>

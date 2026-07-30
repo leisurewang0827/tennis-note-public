@@ -8,6 +8,8 @@
   let activeRemoteAppUrl = "";
   let updateInProgress = false;
   let lastCheckAt = 0;
+  let lastSuccessfulCheckAt = 0;
+  let lastManifestUrl = defaultManifestUrl;
 
   function currentRelease() {
     return window.TENNIS_NOTE_RELEASE || {};
@@ -72,6 +74,62 @@
 
   function hideUpdateNotice() {
     const notice = document.querySelector("[data-tennisnote-update-notice]");
+    if (notice) notice.hidden = true;
+  }
+
+  function ensureReleaseCheckNotice() {
+    let notice = document.querySelector("[data-tennisnote-release-check]");
+    if (notice) return notice;
+    notice = document.createElement("section");
+    notice.className = "tennisnote-release-check-notice";
+    notice.dataset.tennisnoteReleaseCheck = "";
+    notice.hidden = true;
+    notice.setAttribute("role", "status");
+    notice.setAttribute("aria-live", "polite");
+    notice.innerHTML = `
+      <div>
+        <strong data-release-check-title>최신 버전을 확인하지 못했습니다</strong>
+        <span data-release-check-detail></span>
+        <small data-release-check-meta></small>
+      </div>
+      <button type="button" data-release-check-retry>다시 확인</button>
+    `;
+    notice.querySelector("[data-release-check-retry]")?.addEventListener("click", () => {
+      void checkForUpdate(lastManifestUrl, {
+        force: true,
+        remoteAppUrl: activeRemoteAppUrl,
+      });
+    });
+    document.body.appendChild(notice);
+    return notice;
+  }
+
+  function formatCheckTime(value) {
+    if (!value) return "확인 기록 없음";
+    return new Intl.DateTimeFormat("ko-KR", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  }
+
+  function showReleaseCheckFailure(reason) {
+    const notice = ensureReleaseCheckNotice();
+    const offline = reason === "offline" || !navigator.onLine;
+    notice.querySelector("[data-release-check-title]").textContent = offline
+      ? "인터넷 연결을 확인해 주세요"
+      : "서버에서 최신 버전을 확인하지 못했습니다";
+    notice.querySelector("[data-release-check-detail]").textContent = offline
+      ? "저장된 운동일지와 회원권은 계속 볼 수 있습니다."
+      : "현재 화면은 계속 사용할 수 있습니다. 잠시 후 다시 확인해 주세요.";
+    notice.querySelector("[data-release-check-meta]").textContent =
+      `현재 ${currentRelease().version || "버전 확인 중"} · 마지막 확인 ${formatCheckTime(lastSuccessfulCheckAt)}`;
+    notice.hidden = false;
+  }
+
+  function hideReleaseCheckFailure() {
+    const notice = document.querySelector("[data-tennisnote-release-check]");
     if (notice) notice.hidden = true;
   }
 
@@ -166,12 +224,19 @@
   }
 
   async function checkForUpdate(manifestUrl, options = {}) {
-    if (!navigator.onLine || updateInProgress) return null;
+    lastManifestUrl = manifestUrl || defaultManifestUrl;
+    if (updateInProgress) return null;
+    if (!navigator.onLine) {
+      showReleaseCheckFailure("offline");
+      return null;
+    }
     const now = Date.now();
     if (!options.force && now - lastCheckAt < 30_000) return remoteRelease;
     lastCheckAt = now;
     try {
       const candidate = await fetchRelease(manifestUrl);
+      lastSuccessfulCheckAt = Date.now();
+      hideReleaseCheckFailure();
       remoteRelease = candidate;
       if (!isNewerRelease(candidate)) {
         hideUpdateNotice();
@@ -185,6 +250,7 @@
       return candidate;
     } catch {
       // Offline and temporary release endpoint failures keep the current cached app.
+      showReleaseCheckFailure(navigator.onLine ? "server" : "offline");
       return null;
     }
   }

@@ -132,6 +132,58 @@ body.tn-unsaved-open {
   cursor: pointer;
 }
 
+.tennisnote-release-check-notice {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  z-index: 2147483000;
+  display: flex;
+  width: min(390px, calc(100vw - 24px));
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #f0c987;
+  border-radius: 8px;
+  background: #fffaf0;
+  box-shadow: 0 12px 30px rgba(31, 41, 55, 0.18);
+  color: #3f3523;
+}
+
+.tennisnote-release-check-notice[hidden] {
+  display: none;
+}
+
+.tennisnote-release-check-notice div {
+  display: grid;
+  gap: 3px;
+}
+
+.tennisnote-release-check-notice span,
+.tennisnote-release-check-notice small {
+  color: #6b5b3f;
+  font-size: 12px;
+}
+
+.tennisnote-release-check-notice button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid #d8aa56;
+  border-radius: 6px;
+  background: #fff;
+  color: #6f4c10;
+  font-weight: 800;
+}
+
+@media (max-width: 480px) {
+  .tennisnote-release-check-notice {
+    right: 10px;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    width: calc(100vw - 20px);
+  }
+}
+
 .tn-comment-draft-tools {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

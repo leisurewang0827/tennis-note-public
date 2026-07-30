@@ -1679,7 +1679,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.178",
+    workerUrl: "./service-worker.js?v=1.0.179",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3163,7 +3163,7 @@ function renderProfile() {
   if ($("#profileNtrpSummary")) {
     const selfNtrp = state.profile.selfNtrp || "측정 전";
     const coachNtrp = state.profile.coachNtrp || "측정 전";
-    $("#profileNtrpSummary").textContent = `자가 NTRP ${selfNtrp} · 코치 ${coachNtrp}`;
+    $("#profileNtrpSummary").textContent = `내가 고른 수준 ${selfNtrp} · 코치가 본 수준 ${coachNtrp}`;
   }
   // A live schedule refresh runs while the profile sheet is open. Do not replace
   // what the member is typing with the last server value during that refresh.
@@ -3185,7 +3185,7 @@ function renderProfile() {
     $("#ntrpPanel").innerHTML = `
       <article>
         <span>내가 본 레벨</span>
-        <strong>NTRP ${state.profile.selfNtrp || "2.5"}</strong>
+        <strong>${state.profile.selfNtrp || "2.5"} 단계</strong>
         <small>자가 체크 기준입니다. 실제 레슨에서는 코치가 움직임, 랠리, 서브, 게임 이해도를 보고 다시 측정합니다.</small>
       </article>
       <article class="${state.profile.ntrpCheckRequested ? "is-requested" : ""}">
@@ -3195,8 +3195,8 @@ function renderProfile() {
       </article>
       <article>
         <span>기준표</span>
-        <strong>USTA NTRP 1.5~7.0</strong>
-        <small>데모에서는 자주 쓰는 1.5~4.0 구간을 먼저 보여줍니다.</small>
+        <strong>공식 기준 1.5~7.0</strong>
+        <small>NTRP 원문은 참고자료에서만 확인할 수 있습니다.</small>
       </article>`;
   }
   renderPushNotificationSettings();
@@ -3246,7 +3246,7 @@ function renderNtrpSurvey() {
                 (option, index) => `
                   <label>
                     <input type="radio" name="ntrp-${question.id}" value="${option.score}" ${Number(state.profile?.ntrpSurvey?.[question.id] || 0) === option.score || (!state.profile?.ntrpSurvey?.[question.id] && index === 2) ? "checked" : ""} />
-                    <span>NTRP ${option.score} · ${option.label}</span>
+                    <span>${option.score} 단계 · ${option.label}</span>
                   </label>`,
               )
               .join("")}
@@ -7333,7 +7333,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.178" });
+  const params = new URLSearchParams({ v: "1.0.179" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8130,7 +8130,7 @@ async function requestNtrpCheck() {
   });
   exportNtrpRequest(survey);
   state.ticketHistory.unshift({
-    text: serverResult.ok === false ? "NTRP 요청 서버 전송 실패 · 다시 시도 필요" : "코치에게 NTRP 측정 요청 완료",
+    text: serverResult.ok === false ? "수준 확인 요청 전송 실패 · 다시 시도 필요" : "코치에게 수준 확인 요청 완료",
     tone: serverResult.ok === false ? "alert" : "wait",
   });
   renderProfile();
@@ -8156,7 +8156,7 @@ function calculateNtrpFromSurvey() {
   state.profile.selfNtrp = survey.level;
   state.profile.ntrpSurvey = survey.answers;
   if ($("#profileSelfNtrp")) $("#profileSelfNtrp").value = survey.level;
-  state.ticketHistory.unshift({ text: `설문 기준 자가 NTRP ${survey.level} 계산 완료`, tone: "done" });
+  state.ticketHistory.unshift({ text: `질문 기준 내 테니스 수준 ${survey.level} 계산 완료`, tone: "done" });
   renderProfile();
   renderTickets();
   saveSnapshot();

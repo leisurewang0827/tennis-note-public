@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.178" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.178" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.179" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.179" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -47,7 +47,7 @@
       <span>Tennis Note 관리자 불러오는 중</span>
     </section>
     <main id="adminAppShell" class="app-shell" hidden>
-      <aside class="sidebar" aria-label="주 메뉴">
+      <aside id="adminSidebar" class="sidebar" aria-label="주 메뉴">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">TN</div>
           <div>
@@ -70,9 +70,13 @@
           <button id="adminSidebarLogoutButtonBottom" class="ghost-button" type="button" data-admin-auth-action="logout" hidden>로그아웃</button>
         </div>
       </aside>
+      <button id="adminMenuBackdrop" class="admin-menu-backdrop" type="button" aria-label="메뉴 닫기" hidden></button>
 
       <section class="workspace">
         <header class="topbar">
+          <button id="adminMenuButton" class="admin-menu-button" type="button" aria-controls="adminSidebar" aria-expanded="false">
+            <span aria-hidden="true">☰</span><span>메뉴</span>
+          </button>
           <div>
             <p class="eyebrow">테니스클럽하우스</p>
             <h1 id="viewTitle">대시보드</h1>
@@ -356,6 +360,7 @@
                   <button id="openScheduleSheetPaste" class="ghost-button" type="button">표 붙여넣기</button>
                 </div>
               </details>
+              <button id="toggleScheduleEditMode" class="ghost-button" type="button" aria-pressed="false">시간표 편집</button>
               <button id="saveScheduleList" type="button" hidden aria-hidden="true" tabindex="-1">목록 저장</button>
               <button id="openLessonModal" class="primary-button" type="button">수업 추가</button>
             </div>
@@ -504,6 +509,7 @@
             </article>
           </section>
           <div class="billing-settings-actions" aria-label="결제 설정">
+            <button id="openOnsitePaymentButton" class="primary-button" type="button">현장결제 등록</button>
             <button id="openProductSettingsButton" class="ghost-button" type="button">상품·할인 설정</button>
           </div>
           <div id="paymentAdminGateStatus" class="payment-admin-gate-status"></div>
@@ -1223,9 +1229,20 @@
           <nav id="lessonQuickActions" class="lesson-quick-actions" aria-label="수업 처리 방법" hidden>
             <button type="button" data-lesson-quick-action="schedule">시간 변경</button>
             <button type="button" data-lesson-quick-action="absence">불참 처리</button>
-            <button type="button" data-lesson-quick-action="record">피드백·완료</button>
-            <button type="button" data-lesson-quick-action="details">기타</button>
+            <button type="button" data-lesson-quick-action="record">정상 완료·노쇼</button>
+            <button type="button" data-lesson-quick-action="details">대타·복원·취소</button>
           </nav>
+          <details id="lessonStatusGuide" class="lesson-status-guide" hidden>
+            <summary>수업 상태 처리 기준</summary>
+            <div>
+              <span><strong>정상 완료</strong> 코멘트 저장 후 선택한 경우 횟수 차감</span>
+              <span><strong>불참</strong> 차감 없이 보강 신청 가능</span>
+              <span><strong>노쇼</strong> 차감 또는 미차감을 선택해 기록</span>
+              <span><strong>대타</strong> 원 담당은 유지하고 실제 코치만 변경</span>
+              <span><strong>원래 수업 복원</strong> 불참과 보강 대기를 취소</span>
+              <span><strong>수업 취소</strong> 관리자 기록을 남기고 시간표에서 제외</span>
+            </div>
+          </details>
           <section id="lessonDurationQuickPanel" class="lesson-duration-quick-panel" hidden>
             <span>수업 시간</span>
             <div id="lessonDurationQuickButtons" class="lesson-duration-quick-buttons"></div>
@@ -1351,6 +1368,37 @@
             <button class="danger-button" type="button" id="deleteLessonButton" hidden>삭제</button>
             <button class="ghost-button" type="button" id="cancelLessonModal">취소</button>
             <button class="primary-button" type="submit" id="saveLessonButton">시간표에 추가</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="onsitePaymentModal" class="modal-backdrop" hidden>
+      <section class="modal-panel onsite-payment-modal" role="dialog" aria-modal="true" aria-labelledby="onsitePaymentTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">결제/정산</p>
+            <h2 id="onsitePaymentTitle">현장결제 기록</h2>
+          </div>
+          <button class="ghost-button icon-close-button" type="button" data-close-onsite-payment aria-label="닫기">×</button>
+        </div>
+        <form id="onsitePaymentForm" class="onsite-payment-form">
+          <label><span>회원</span><select id="onsitePaymentMember" required></select></label>
+          <label><span>회원권 상품</span><select id="onsitePaymentProduct" required></select></label>
+          <label><span>결제수단</span>
+            <select id="onsitePaymentMethod" required>
+              <option value="bank_transfer">계좌이체</option>
+              <option value="card">현장 카드결제</option>
+            </select>
+          </label>
+          <label><span>결제일</span><input id="onsitePaymentDate" type="date" required /></label>
+          <label><span>시작일</span><input id="onsitePaymentStartDate" type="date" /></label>
+          <div class="onsite-payment-amount"><span>기록할 금액</span><strong id="onsitePaymentAmount">0원</strong></div>
+          <label class="onsite-payment-schedule"><input id="onsitePaymentKeepSchedule" type="checkbox" checked /><span>기존 고정시간 연장</span></label>
+          <p id="onsitePaymentMessage" class="form-message" role="status"></p>
+          <div class="modal-actions">
+            <button class="ghost-button" type="button" data-close-onsite-payment>취소</button>
+            <button class="primary-button" type="submit">현장결제 기록 저장</button>
           </div>
         </form>
       </section>
@@ -1623,15 +1671,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.178"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.179"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.178"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.178"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.178"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.178"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.178"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.179"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.179"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.179"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.179"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.179"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.178"></script>
+    <script src="./app.js?v=1.0.179"></script>
   </body>
 </html>

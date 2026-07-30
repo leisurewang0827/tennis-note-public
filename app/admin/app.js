@@ -75,6 +75,7 @@ const state = {
   activeMembershipProductId: "",
   selectedSubstituteLessonIds: [],
   scheduleBulkMode: false,
+  scheduleEditMode: false,
   scheduleOpenSlotMode: false,
   selectedScheduleLessonIds: [],
   selectedScheduleOpenSlots: [],
@@ -6242,6 +6243,20 @@ function closeAdminToolsModal() {
   $("#adminToolsModal")?.setAttribute("hidden", "");
 }
 
+function toggleAdminMenu(force) {
+  const open = typeof force === "boolean"
+    ? force
+    : !document.body.classList.contains("admin-menu-open");
+  document.body.classList.toggle("admin-menu-open", open);
+  $("#adminMenuButton")?.setAttribute("aria-expanded", String(open));
+  const backdrop = $("#adminMenuBackdrop");
+  if (backdrop) backdrop.hidden = !open;
+}
+
+function closeAdminMenu() {
+  toggleAdminMenu(false);
+}
+
 function closeCleanMemberInlineEditor(nextView) {
   if (state.view !== "members" || nextView === "members" || !state.inlineMemberId) return;
   const openEditor = document.querySelector(".member-inline-editor--compact");
@@ -6269,7 +6284,20 @@ function setView(view, options = {}) {
   $$(".nav-item").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
   $$(".view").forEach((section) => section.classList.remove("is-active"));
   $(`#${view}View`).classList.add("is-active");
-  renderAdminView(view);
+  closeAdminMenu();
+  if (enteringSchedule) {
+    const grid = $("#scheduleGrid");
+    if (grid) {
+      grid.hidden = false;
+      grid.className = "schedule-sheet schedule-loading-state";
+      grid.innerHTML = '<div class="schedule-loading-message" role="status"><span class="schedule-loading-spinner" aria-hidden="true"></span><strong>시간표 불러오는 중</strong><small>이번 주 수업을 정리하고 있습니다.</small></div>';
+    }
+    window.requestAnimationFrame(() => {
+      if (state.view === "schedule") renderAdminView(view);
+    });
+  } else {
+    renderAdminView(view);
+  }
   void ensureAdminViewData(view);
   const titles = {
     dashboard: "대시보드",
@@ -10362,6 +10390,88 @@ function selectedMemberIdSet() {
   return new Set((state.selectedMemberIds || []).map(Number));
 }
 
+function onsitePaymentProducts() {
+  return membershipProductsForActiveOperationProfile()
+    .map((draft) => ({ draft, server: serverMembershipProductForDraft(draft) }))
+    .filter(({ draft, server }) => server?.id && draft.status !== "hidden" && draft.status !== "disabled");
+}
+
+function updateOnsitePaymentAmount() {
+  const product = onsitePaymentProducts().find(({ server }) => String(server.id) === String($("#onsitePaymentProduct")?.value));
+  const method = $("#onsitePaymentMethod")?.value || "bank_transfer";
+  const amount = Number(method === "card" ? product?.server?.card_price : product?.server?.cash_price) || 0;
+  if ($("#onsitePaymentAmount")) $("#onsitePaymentAmount").textContent = money.format(amount);
+}
+
+function closeOnsitePaymentModal() {
+  $("#onsitePaymentModal")?.setAttribute("hidden", "");
+}
+
+function openOnsitePaymentModal() {
+  if (!adminApprovalReady() && !adminLocalPreviewMode) {
+    showToast("관리자 권한으로 로그인해 주세요.");
+    return;
+  }
+  const memberSelect = $("#onsitePaymentMember");
+  const eligibleMembers = operationBranchMembers()
+    .filter((member) => memberServerUserIds(member).length)
+    .sort((left, right) => String(left.name).localeCompare(String(right.name), "ko"));
+  memberSelect.innerHTML = eligibleMembers.length
+    ? eligibleMembers.map((member) => `<option value="${escapeHtml(memberServerUserIds(member)[0])}">${escapeHtml(member.name)}</option>`).join("")
+    : '<option value="">연결된 회원 없음</option>';
+  const productSelect = $("#onsitePaymentProduct");
+  const products = onsitePaymentProducts();
+  productSelect.innerHTML = products.length
+    ? products.map(({ draft, server }) => `<option value="${escapeHtml(server.id)}">${escapeHtml(draft.title || draft.name || server.name || "회원권")}</option>`).join("")
+    : '<option value="">판매 중인 회원권 없음</option>';
+  $("#onsitePaymentDate").value = adminLocalDateKey(new Date());
+  $("#onsitePaymentStartDate").value = "";
+  $("#onsitePaymentMessage").textContent = "";
+  updateOnsitePaymentAmount();
+  $("#onsitePaymentModal")?.removeAttribute("hidden");
+  window.setTimeout(() => memberSelect?.focus(), 0);
+}
+
+async function submitOnsitePayment(event) {
+  event.preventDefault();
+  const userId = $("#onsitePaymentMember")?.value || "";
+  const productId = $("#onsitePaymentProduct")?.value || "";
+  const paymentMethod = $("#onsitePaymentMethod")?.value || "";
+  const paymentDate = $("#onsitePaymentDate")?.value || "";
+  if (!userId || !productId || !paymentDate) {
+    $("#onsitePaymentMessage").textContent = "회원, 회원권 상품, 결제일을 확인해 주세요.";
+    return;
+  }
+  const submit = event.submitter || $("#onsitePaymentForm button[type='submit']");
+  submit.disabled = true;
+  $("#onsitePaymentMessage").textContent = "현장결제와 회원권을 서버에 저장하고 있습니다.";
+  try {
+    const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_reenroll_members", {
+      target_user_ids: [userId],
+      target_product_id: productId,
+      target_payment_method: paymentMethod,
+      target_payment_date: paymentDate,
+      target_starts_on: $("#onsitePaymentStartDate")?.value || null,
+      target_keep_schedule: Boolean($("#onsitePaymentKeepSchedule")?.checked),
+      target_operation_key: createAdminOperationKey("onsite-payment"),
+    });
+    const processed = Number(result?.processedCount ?? result?.processed_count ?? 0);
+    if (processed !== 1) throw new Error(result?.failed?.[0]?.reason || "onsite_payment_not_saved");
+    await syncAdminLiveData(true);
+    await loadServerPaymentsIntoBilling({ silent: true });
+    closeOnsitePaymentModal();
+    renderBilling();
+    showToast("현장결제 기록과 회원권 발급이 저장됐습니다.");
+  } catch (error) {
+    const raw = String(error?.message || error?.payload?.message || "");
+    $("#onsitePaymentMessage").textContent = raw.includes("source_ticket_not_found")
+      ? "기존 회원권이 없는 회원입니다. 회원관리에서 첫 회원권을 등록해 주세요."
+      : "저장하지 못했습니다. 회원·상품·권한을 확인해 주세요.";
+  } finally {
+    if (submit?.isConnected) submit.disabled = false;
+  }
+}
+
 function syncMemberBulkRenewalFields() {
   const action = $("#memberBulkAction")?.value || "";
   const fields = $("#memberBulkRenewalFields");
@@ -12741,6 +12851,7 @@ function getAdminDurationSlotState(day, time, coach, laneLessons = null) {
 
 function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
   const target = $("#scheduleGrid");
+  target.classList.remove("schedule-loading-state");
   const scheduleLessons = operationBranchLessons();
   const lanes = [];
   const dayRanges = [];
@@ -12786,7 +12897,8 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
       : slotState.pasteReady
         ? "붙여넣기"
         : '<span class="admin-duration-add-icon" aria-hidden="true">+</span><span class="admin-duration-add-label">수업 추가</span>';
-    const addButton = slotState.canAdd
+    const showAddButton = state.scheduleEditMode || state.scheduleOpenSlotMode || Boolean(state.scheduleLessonClipboard);
+    const addButton = slotState.canAdd && showAddButton
       ? `<button class="admin-duration-add ${slotState.pasteReady ? "is-paste-ready" : ""} ${openSlotSelected ? "is-slot-selected" : ""}" type="button" data-quick-lesson-entry="true" ${state.scheduleOpenSlotMode ? `data-select-schedule-slot="${escapeHtml(openSlotKey)}" aria-pressed="${openSlotSelected ? "true" : "false"}"` : ""} ${slotState.pasteReady ? 'data-paste-schedule-lesson="true"' : ""} ${lessonAddAttrs(day, time, 20, coach.id)}>${addButtonContent}</button>`
       : "";
     return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
@@ -12835,6 +12947,11 @@ function renderSchedule() {
   }
   state.scheduleView = state.scheduleView === "coach" ? "coach" : "week";
   state.scheduleFilter = state.scheduleFilter === "pending" ? "pending" : "all";
+  const editToggle = $("#toggleScheduleEditMode");
+  if (editToggle) {
+    editToggle.setAttribute("aria-pressed", String(state.scheduleEditMode));
+    editToggle.textContent = state.scheduleEditMode ? "편집 끝내기" : "시간표 편집";
+  }
   const coachDayView = state.scheduleView === "coach";
   const mobileDayView = !coachDayView && isAdminMobileSchedule();
   const selectedDay = selectedAdminScheduleDay();
@@ -14300,6 +14417,9 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
       button.classList.toggle("is-active", action === state.lessonQuickAction);
       button.setAttribute("aria-pressed", String(action === state.lessonQuickAction));
     });
+  }
+  if ($("#lessonStatusGuide")) {
+    $("#lessonStatusGuide").hidden = !state.quickLessonEdit || completedCorrection;
   }
   if ($("#lessonQuickLabel")) $("#lessonQuickLabel").textContent = state.quickLessonEdit ? "수정 대상" : "선택 시간";
   const scheduleLabel = state.quickLessonEdit && editingLesson
@@ -16763,7 +16883,7 @@ function legacyNoteRecord(note) {
     detail: note.reflection,
     subDetail: note.next,
     statusLabel: done ? "차감 확인됨" : "코치 확인 필요",
-    actionLabel: done ? "완료" : "처리하기",
+    actionLabel: done ? "완료" : "수업 완료·차감",
     lessonId: note.serverLessonId || "",
     actionable: !done && Boolean(note.serverLessonId),
   };
@@ -16801,7 +16921,7 @@ function pendingLessonRecord(lesson) {
     detail: `${lesson.type || "수업"} ${lesson.durationMinutes || 20}분 · ${lesson.ticketProduct || "회원권 확인 필요"}`,
     subDetail: `현재 잔여 ${Number(lesson.ticketRemaining) || 0}회`,
     statusLabel: "기록 대기",
-    actionLabel: "처리하기",
+    actionLabel: "수업 완료·차감",
     lessonId: lesson.serverLessonId,
     actionable: true,
     priority: "urgent",
@@ -17043,7 +17163,7 @@ function renderNotes() {
           </div>
           <aside>
             ${recordStatusBadge(record)}
-            ${record.actionable ? `<button class="small-button" type="button" data-open-lesson-record="${escapeHtml(record.lessonId)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.actionView ? `<button class="small-button" type="button" data-record-action-view="${escapeHtml(record.actionView)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.mediaCount ? `<button class="ghost-button" type="button" data-open-journal-media="${escapeHtml(record.journalId)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : `<b>${escapeHtml(record.actionLabel)}</b>`}
+            ${record.actionable ? `<button class="small-button" type="button" data-open-lesson-record="${escapeHtml(record.lessonId)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.coachName || "코치 미배정"} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.actionView ? `<button class="small-button" type="button" data-record-action-view="${escapeHtml(record.actionView)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.coachName || "코치 미배정"} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.mediaCount ? `<button class="ghost-button" type="button" data-open-journal-media="${escapeHtml(record.journalId)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.coachName || "코치 미배정"} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : `<b>${escapeHtml(record.actionLabel)}</b>`}
           </aside>
         </article>`,
     )
@@ -21975,10 +22095,36 @@ function installAdminLiveScheduleRefresh() {
 
 function bindEvents() {
   window.addEventListener("popstate", () => {
+    if (document.body.classList.contains("admin-menu-open")) {
+      closeAdminMenu();
+      return;
+    }
+    if (!$("#onsitePaymentModal")?.hidden) {
+      closeOnsitePaymentModal();
+      return;
+    }
     if (!$("#lessonModal")?.hidden) closeLessonModal({ fromHistory: true });
   });
 
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  $("#adminMenuButton")?.addEventListener("click", () => toggleAdminMenu());
+  $("#adminMenuBackdrop")?.addEventListener("click", () => closeAdminMenu());
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && document.body.classList.contains("admin-menu-open")) closeAdminMenu();
+  });
+  $("#toggleScheduleEditMode")?.addEventListener("click", () => {
+    state.scheduleEditMode = !state.scheduleEditMode;
+    if (!state.scheduleEditMode) toggleScheduleOpenSlotMode(false);
+    renderSchedule();
+  });
+  $("#openOnsitePaymentButton")?.addEventListener("click", openOnsitePaymentModal);
+  $$("[data-close-onsite-payment]").forEach((button) => button.addEventListener("click", closeOnsitePaymentModal));
+  $("#onsitePaymentModal")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeOnsitePaymentModal();
+  });
+  $("#onsitePaymentProduct")?.addEventListener("change", updateOnsitePaymentAmount);
+  $("#onsitePaymentMethod")?.addEventListener("change", updateOnsitePaymentAmount);
+  $("#onsitePaymentForm")?.addEventListener("submit", submitOnsitePayment);
   document.addEventListener("click", (event) => {
     const menuButton = event.target.closest(".compact-action-menu-panel button");
     if (menuButton) menuButton.closest(".compact-action-menu")?.removeAttribute("open");
@@ -23022,6 +23168,7 @@ function bindEvents() {
     loadMemberLinkCandidates(member, event.target.value);
   });
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !$("#onsitePaymentModal")?.hidden) closeOnsitePaymentModal();
     if (event.key === "Escape" && !$("#lessonModal").hidden) closeLessonModal();
     if (event.key === "Escape" && !$("#oneDayBookingModal")?.hidden) closeOneDayBookingModal();
     if (event.key === "Escape" && !$("#coachStaffModal")?.hidden) closeCoachStaffModal();
