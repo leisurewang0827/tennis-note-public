@@ -11288,18 +11288,21 @@ function renderMembers() {
   if ($("#memberListSearch") && $("#memberListSearch").value !== state.memberSearch) $("#memberListSearch").value = state.memberSearch || "";
   if ($("#memberTicketFilter")) $("#memberTicketFilter").value = state.memberTicketFilter || "all";
 
-  const localFiltered = filteredMembers();
   const serverDirectoryReady = operationsRole() === "admin"
     && adminMemberDirectoryState.loaded
     && adminMemberDirectoryState.signature === adminMemberDirectorySignature();
-  const membersByServerUserId = new Map(branchMembers.map((member) => [String(member.serverUserId || ""), member]));
-  const serverPageMembers = serverDirectoryReady
-    ? adminMemberDirectoryState.rows
+  let filtered;
+  let filteredTotal;
+  if (serverDirectoryReady) {
+    const membersByServerUserId = new Map(branchMembers.map((member) => [String(member.serverUserId || ""), member]));
+    filtered = adminMemberDirectoryState.rows
       .map((row) => membersByServerUserId.get(String(row.user_id || "")))
-      .filter(Boolean)
-    : [];
-  const filtered = serverDirectoryReady ? serverPageMembers : localFiltered;
-  const filteredTotal = serverDirectoryReady ? adminMemberDirectoryState.total : localFiltered.length;
+      .filter(Boolean);
+    filteredTotal = adminMemberDirectoryState.total;
+  } else {
+    filtered = filteredMembers();
+    filteredTotal = filtered.length;
+  }
   const filterCopy = memberFilterCopy[state.memberFilter] || memberFilterCopy.active;
   if ($("#memberFilterSummary")) {
     $("#memberFilterSummary").textContent = adminMemberDirectoryState.loading
