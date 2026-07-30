@@ -1609,6 +1609,41 @@ function adminMemberDirectorySignature() {
   });
 }
 
+function memberFromAdminDirectoryRow(row, sourceMembers = members) {
+  const userId = String(row?.user_id || "");
+  if (!userId) return null;
+  const existing = sourceMembers.find((member) => String(member.serverUserId || "") === userId);
+  if (existing) {
+    existing.directoryRow = row;
+    return existing;
+  }
+  const nextId = Math.max(1000, ...sourceMembers.map((member) => Number(member.id) || 0)) + 1;
+  const status = String(row.directory_status || "expired");
+  const member = {
+    id: nextId,
+    name: row.name || "회원",
+    status,
+    statusLabel: status === "active" ? "수강중" : status === "pending" ? "가입대기" : status === "journal" ? "운동노트 회원" : status === "inactive" ? "삭제회원" : "만료회원",
+    memberKind: status === "journal" ? "journal_only" : status === "pending" ? "lesson_pending" : status === "active" ? "lesson_member" : "former_lesson_member",
+    serverStatus: row.user_status || "active",
+    serverUserId: userId,
+    serverUserIds: [userId],
+    branchId: row.branch_id || "",
+    branchIds: row.branch_id ? [String(row.branch_id)] : [],
+    phone: row.phone || "",
+    photoUrl: row.profile_photo_url || "",
+    coach: row.coach_name || "미배정",
+    lessonType: row.product_name || "회원권 없음",
+    remaining: Number(row.remaining_sessions) || 0,
+    authLinked: Boolean(row.auth_user_id),
+    directoryRow: row,
+    source: "Supabase 회원 목록",
+    note: "",
+  };
+  members.push(member);
+  return member;
+}
+
 async function loadAdminMemberDirectoryPage({ force = false, render = true } = {}) {
   if (operationsRole() !== "admin" || !window.TennisNoteDataClient?.rpc) return false;
   const signature = adminMemberDirectorySignature();
@@ -1634,12 +1669,14 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true } = {
     });
     if (requestId !== adminMemberDirectoryState.requestId) return false;
     const payload = Array.isArray(response) ? response[0] : response;
+    const directoryRows = Array.isArray(payload?.rows) ? payload.rows : [];
+    directoryRows.forEach((row) => memberFromAdminDirectoryRow(row));
     Object.assign(adminMemberDirectoryState, {
       loading: false,
       loaded: true,
       error: "",
       signature,
-      rows: Array.isArray(payload?.rows) ? payload.rows : [],
+      rows: directoryRows,
       total: Number(payload?.total) || 0,
       counts: payload?.counts && typeof payload.counts === "object" ? payload.counts : null,
     });
@@ -10300,8 +10337,18 @@ function memberLessonPlanLabel(member, ticket) {
 }
 
 function memberTicketDisplayLabel(member, ticket = memberCurrentTicket(member)) {
-  if (!ticket) return "미등록";
+  if (!ticket) return member?.directoryRow?.product_name || "미등록";
   return getTicketDisplayProduct(ticket) || ticket.product || "회원권";
+}
+
+function memberUsageDisplayLabel(member, ticket = memberCurrentTicket(member)) {
+  if (ticket) return ticketUsageLabel(ticket);
+  const row = member?.directoryRow;
+  if (!row || row.total_sessions == null) return "-";
+  const total = Number(row.total_sessions) || 0;
+  const used = Number(row.used_sessions) || 0;
+  const remaining = Number(row.remaining_sessions) || 0;
+  return `총 ${total} / 소진 ${used} / 잔여 ${remaining}`;
 }
 
 function memberLessonRows(member) {
@@ -11267,7 +11314,7 @@ function renderMembers() {
             <strong class="member-table-primary">${escapeHtml(memberTicketDisplayLabel(member, ticket))}</strong>
           </td>
           <td class="member-schedule-column">${escapeHtml(memberScheduleSummary(member))}</td>
-          <td class="member-usage-column">${ticket ? ticketUsageLabel(ticket) : "-"}</td>
+          <td class="member-usage-column">${escapeHtml(memberUsageDisplayLabel(member, ticket))}</td>
           <td class="member-status-column">${memberStatusBadge(member)}</td>
           <td class="member-table-note member-note-column">${escapeHtml(memberRemarkLabel(member))}</td>
         </tr>`;
@@ -18386,6 +18433,19 @@ async function performAdminLiveDataSync() {
   });
   try {
     const lessonWindow = adminLiveLessonWindow();
+    const operationalRosterPromise = fullAdminAccess
+      ? client.rpc("tn_admin_operational_roster", {
+        target_branch_id: activeOperationBranchId() || null,
+        target_lesson_from: lessonWindow.from,
+        target_lesson_to: lessonWindow.to,
+      }).then((response) => (Array.isArray(response) ? response[0] : response) || null)
+        .catch((error) => {
+          console.warn("[Tennis Note] operational roster unavailable; using full-source fallback", error);
+          return null;
+        })
+      : Promise.resolve(null);
+    const rosterRows = (key, fallback) => operationalRosterPromise
+      .then((payload) => Array.isArray(payload?.[key]) ? payload[key] : fallback());
     const adminSettingsPromise = Promise.all([
       loadLiveSchedulePolicyFromServer(),
       loadAdminLayoutSettingsFromServer(),
@@ -18393,28 +18453,28 @@ async function performAdminLiveDataSync() {
     ]);
     const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
-      (client.selectAllRows || client.selectRows)("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 }),
+      rosterRows("users", () => (client.selectAllRows || client.selectRows)("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 })),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
       client.selectRows("tn_coach_availability", { select: "id,coach_role_id,day_of_week,start_time,end_time,availability_type,note", limit: 1000 }).catch(() => []),
-      fullAdminAccess ? client.selectRows("tn_user_auth_links", { select: "id,user_id,provider,last_sign_in_at,is_primary", limit: 500 }).catch(() => []) : Promise.resolve([]),
+      fullAdminAccess ? rosterRows("authLinks", () => client.selectRows("tn_user_auth_links", { select: "id,user_id,provider,last_sign_in_at,is_primary", limit: 500 }).catch(() => [])) : Promise.resolve([]),
       fullAdminAccess ? client.selectRows("tn_auth_provider_switches", { select: "id,user_id,from_provider,to_provider,status,expires_at,created_at,completed_at", order: "created_at.desc", limit: 500 }).catch(() => []) : Promise.resolve([]),
       fullAdminAccess ? client.selectRows("tn_coach_settlement_terms", { select: "id,coach_role_id,settlement_type,coach_rate,hourly_rate,settlement_basis,substitute_policy,effective_from,effective_to,status", order: "effective_from.desc", limit: 500 }).catch(() => []) : Promise.resolve([]),
       client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,policy_settings,display_order", limit: 300 }),
-      (client.selectAllRows || client.selectRows)("tn_member_tickets", {
+      rosterRows("tickets", () => (client.selectAllRows || client.selectRows)("tn_member_tickets", {
         select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price",
         order: "id.asc",
         limit: 500,
         pageSize: 500,
         maxRows: 20000,
-      }),
-      (client.selectAllRows || client.selectRows)("tn_ticket_participants", {
+      })),
+      rosterRows("ticketParticipants", () => (client.selectAllRows || client.selectRows)("tn_ticket_participants", {
         select: "ticket_id,user_id,participant_order",
         order: "ticket_id.asc,user_id.asc",
         limit: 500,
         pageSize: 500,
         maxRows: 20000,
-      }),
+      })),
       client.selectRows("tn_lesson_participants", { select: "lesson_id,user_id,ticket_id", limit: 1000 }),
       client.selectRows("tn_lessons", {
         select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,revision,updated_at",
@@ -18440,7 +18500,7 @@ async function performAdminLiveDataSync() {
         order: "booking_date.asc,start_time.asc",
         limit: 1000,
       }).catch(() => []) : Promise.resolve([]),
-      client.selectRows("tn_member_enrollments", { select: "id,user_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,submitted_at,approved_at", limit: 500 }).catch(() => []),
+      fullAdminAccess ? rosterRows("enrollments", () => client.selectRows("tn_member_enrollments", { select: "id,user_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,submitted_at,approved_at", limit: 500 }).catch(() => [])) : Promise.resolve([]),
       client.selectRows("tn_lesson_change_requests", { select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,created_at", limit: 500 }).catch(() => []),
       client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => []),
       client.selectRows("tn_lesson_records", { select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at", limit: 500 }).catch(() => []),
@@ -18451,20 +18511,20 @@ async function performAdminLiveDataSync() {
       client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => []),
       client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => []),
       client.selectRows("tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", limit: 500 }).catch(() => []),
-      fullAdminAccess ? (client.selectAllRows || client.selectRows)("tn_member_database_records", {
+      fullAdminAccess ? rosterRows("memberDatabaseRecords", () => (client.selectAllRows || client.selectRows)("tn_member_database_records", {
         select: "id,user_id,current_ticket_id,branch_id,coach_role_id,record_status,lesson_schedule_scope,lesson_frequency_per_week,lesson_type,lesson_days,lesson_start_on,total_sessions,used_sessions,remaining_sessions,payment_recorded_on,payment_method,payment_amount,admin_note,source_name,source_sheet_id,source_tab_name,source_row_number,last_updated_via",
         order: "created_at.asc",
         limit: 500,
         pageSize: 500,
         maxRows: 10000,
-      }).catch(() => []) : Promise.resolve([]),
-      fullAdminAccess ? (client.selectAllRows || client.selectRows)("tn_member_membership_records", {
+      }).catch(() => [])) : Promise.resolve([]),
+      fullAdminAccess ? rosterRows("memberMembershipRecords", () => (client.selectAllRows || client.selectRows)("tn_member_membership_records", {
         select: "id,user_id,ticket_id,branch_id,coach_role_id,record_status,lesson_schedule_scope,lesson_frequency_per_week,lesson_type,lesson_minutes,lesson_days,lesson_start_on,total_sessions,used_sessions,remaining_sessions,payment_recorded_on,payment_method,payment_amount,admin_note,source_name,source_sheet_id,source_tab_name,source_row_number,last_updated_via",
         order: "id.asc",
         limit: 500,
         pageSize: 500,
         maxRows: 20000,
-      }).catch(() => []) : Promise.resolve([]),
+      }).catch(() => [])) : Promise.resolve([]),
       client.selectRows("tn_lesson_substitute_assignments", {
         select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
         order: "assigned_at.desc",
