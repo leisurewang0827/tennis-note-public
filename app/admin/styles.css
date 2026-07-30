@@ -11557,15 +11557,16 @@ button .schedule-member-lines > span {
 .product-setting-sheet-head {
   display: grid;
   grid-template-columns:
+    78px
     42px
     minmax(220px, 1.35fr)
     minmax(230px, 1.1fr)
     minmax(210px, 1fr)
     minmax(210px, 1fr)
     minmax(104px, .55fr)
-    220px;
+    190px;
   align-items: center;
-  min-width: 1240px;
+  min-width: 1320px;
   min-height: 36px;
   border-bottom: 1px solid var(--line);
   background: #f3f7f5;
@@ -11589,7 +11590,10 @@ button .schedule-member-lines > span {
 }
 
 .product-setting-sheet .product-setting-card {
-  min-width: 1240px;
+  width: 100%;
+  min-width: 1320px;
+  box-sizing: border-box;
+  padding: 0;
   margin: 0;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -11604,13 +11608,14 @@ button .schedule-member-lines > span {
 .product-setting-sheet .product-setting-header {
   display: grid;
   grid-template-columns:
+    78px
     42px
     minmax(220px, 1.35fr)
     minmax(230px, 1.1fr)
     minmax(210px, 1fr)
     minmax(210px, 1fr)
     minmax(104px, .55fr)
-    220px;
+    190px;
   align-items: center;
   gap: 0;
   padding: 0;
@@ -11665,9 +11670,23 @@ button .schedule-member-lines > span {
 
 .product-setting-row-actions {
   display: grid;
-  grid-template-columns: 36px 36px 58px 58px;
+  grid-template-columns: repeat(3, minmax(52px, 1fr));
   gap: 6px;
   align-items: center;
+}
+
+.product-order-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 30px);
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+}
+
+.product-order-actions .icon-button {
+  width: 30px;
+  min-width: 30px;
+  min-height: 32px;
 }
 
 .product-setting-inline-form {
@@ -11754,7 +11773,7 @@ button .schedule-member-lines > span {
 }
 
 .product-setting-sheet .product-setting-form > summary.product-setting-header {
-  grid-template-columns: 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(110px, .5fr) 168px;
+  grid-template-columns: 78px 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(110px, .5fr);
 }
 
 .product-setting-sheet .product-setting-card[open] {

@@ -4626,23 +4626,29 @@ async function moveMembershipProductSetting(productId, direction) {
     showToast("서버 연결 후 순서를 변경해 주세요.");
     return;
   }
+  const previousDraftOrder = membershipProductDrafts.map((item) => ({ ...item }));
+  const branchPositions = membershipProductDrafts
+    .map((item, index) => visibleProducts.includes(item) ? index : -1)
+    .filter((index) => index >= 0);
+  branchPositions.forEach((position, index) => {
+    membershipProductDrafts[position] = nextOrder[index];
+    membershipProductDrafts[position].sortOrder = (index + 1) * 10;
+  });
+  renderServiceReadiness();
   try {
     await client.rpc("tn_admin_reorder_membership_products", {
       target_branch_id: serverProducts[0].branch_id,
       target_product_ids: serverProducts.map((item) => item.id),
     });
-    const synced = await syncAdminLiveData();
-    if (!synced) throw new Error("admin_live_refresh_failed_after_write");
-    const savedOrder = (adminLiveDataState.products || [])
-      .filter((item) => serverProducts.some((serverProduct) => serverProduct.id === item.id))
-      .sort((left, right) => Number(left.display_order || 0) - Number(right.display_order || 0))
-      .map((item) => item.id);
-    if (savedOrder.join("|") !== serverProducts.map((item) => item.id).join("|")) {
-      throw new Error("membership_product_reorder_not_confirmed");
-    }
-    renderServiceReadiness();
+    const savedOrder = new Map(serverProducts.map((item, index) => [String(item.id), (index + 1) * 10]));
+    (adminLiveDataState.products || []).forEach((item) => {
+      if (savedOrder.has(String(item.id))) item.display_order = savedOrder.get(String(item.id));
+    });
+    saveSnapshot();
     showToast("회원권 순서를 변경했습니다.");
   } catch {
+    replaceArray(membershipProductDrafts, previousDraftOrder);
+    renderServiceReadiness();
     showToast("회원권 순서 변경에 실패했습니다. 서버 권한을 확인해 주세요.");
   }
 }
@@ -4746,7 +4752,11 @@ async function forceDeleteMembershipProductSetting(productId) {
     if (index >= 0) membershipProductDrafts.splice(index, 1);
     if (String(state.activeMembershipProductId) === String(product.id)) state.activeMembershipProductId = "";
     saveSnapshot();
-    if (serverProduct?.id) await syncAdminLiveData();
+    if (serverProduct?.id) {
+      const serverIndex = (adminLiveDataState.products || [])
+        .findIndex((item) => String(item.id) === String(serverProduct.id));
+      if (serverIndex >= 0) adminLiveDataState.products.splice(serverIndex, 1);
+    }
     renderServiceReadiness();
     showToast("회원권 상품 강제 삭제 완료");
   } catch (error) {
@@ -4786,15 +4796,29 @@ async function runProductBulkAction() {
     const branchId = activeOperationBranchId();
     if (!branchId) throw new Error("active_branch_required");
     if (action === "delete") {
-      for (const product of selected) {
-        const serverProduct = serverMembershipProductForDraft(product);
-        if (!serverProduct?.id) continue;
-        if (String(serverProduct.branch_id || "") !== branchId) throw new Error("membership_product_branch_mismatch");
-        await client.rpc("tn_admin_force_delete_membership_product", {
-          target_product_id: serverProduct.id,
-          target_reason: "관리자 회원권 상품 일괄 강제 삭제",
-        });
+      const serverProducts = selected.map((product) => serverMembershipProductForDraft(product)).filter(Boolean);
+      if (serverProducts.length !== selected.length) throw new Error("membership_product_server_mapping_required");
+      if (serverProducts.some((product) => String(product.branch_id || "") !== branchId)) {
+        throw new Error("membership_product_branch_mismatch");
       }
+      for (let offset = 0; offset < serverProducts.length; offset += 8) {
+        await Promise.all(serverProducts.slice(offset, offset + 8).map((serverProduct) => (
+          client.rpc("tn_admin_force_delete_membership_product", {
+            target_product_id: serverProduct.id,
+            target_reason: "관리자 회원권 상품 일괄 강제 삭제",
+          })
+        )));
+      }
+      const selectedIds = new Set(selected.map((product) => String(product.id)));
+      const serverIds = new Set(serverProducts.map((product) => String(product.id)));
+      replaceArray(
+        membershipProductDrafts,
+        membershipProductDrafts.filter((product) => !selectedIds.has(String(product.id))),
+      );
+      replaceArray(
+        adminLiveDataState.products,
+        (adminLiveDataState.products || []).filter((product) => !serverIds.has(String(product.id))),
+      );
     } else {
       for (const product of selected) {
         const serverProduct = serverMembershipProductForDraft(product);
@@ -4809,9 +4833,12 @@ async function runProductBulkAction() {
           updated_at: new Date().toISOString(),
         });
       }
+      selected.forEach((product) => {
+        product.status = action;
+      });
     }
-    await syncAdminLiveData();
     state.selectedMembershipProductIds = [];
+    saveSnapshot();
     renderServiceReadiness();
     showToast(`${selected.length}개 상품 일괄 처리 완료`);
   } catch (error) {
@@ -22798,6 +22825,10 @@ function renderServiceReadiness() {
             return `
         <article class="product-setting-card product-setting-summary-card" data-product-card="${normalized.id}">
           <form class="product-setting-header product-setting-inline-form" data-product-inline-form="${normalized.id}" data-dirty="false">
+            <div class="product-order-actions">
+              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="${escapeHtml(normalized.title)} 위로 이동" title="위로 이동">↑</button>
+              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="${escapeHtml(normalized.title)} 아래로 이동" title="아래로 이동">↓</button>
+            </div>
             <input class="product-select-checkbox" type="checkbox" data-select-product-row="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 선택" ${selectedProductIdSet().has(productId) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />
             <label class="product-setting-inline-title">
               <span class="sr-only">상품명</span>
@@ -22833,9 +22864,8 @@ function renderServiceReadiness() {
               ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
             </select>
             <div class="product-setting-row-actions">
-              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="${escapeHtml(normalized.title)} 위로 이동" title="위로 이동">↑</button>
-              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="${escapeHtml(normalized.title)} 아래로 이동" title="아래로 이동">↓</button>
               <button class="small-button product-inline-save" type="button" data-save-product-setting="${normalized.id}">저장</button>
+              <button class="small-button danger-button" type="button" data-force-delete-product-setting="${normalized.id}">삭제</button>
               <button class="small-button" type="button" data-open-product-setting="${normalized.id}">수정</button>
             </div>
             <span class="product-inline-message" aria-live="polite"></span>
@@ -22845,6 +22875,10 @@ function renderServiceReadiness() {
           return `
         <details class="product-setting-card product-setting-form" data-product-card="${normalized.id}" open>
           <summary class="product-setting-header">
+            <div class="product-order-actions">
+              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="${escapeHtml(normalized.title)} 위로 이동" title="위로 이동">↑</button>
+              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="${escapeHtml(normalized.title)} 아래로 이동" title="아래로 이동">↓</button>
+            </div>
             <input class="product-select-checkbox" type="checkbox" data-select-product-row="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 선택" ${selectedProductIdSet().has(String(normalized.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />
             <div>
               <strong>${escapeHtml(normalized.title)}</strong>
@@ -22856,10 +22890,6 @@ function renderServiceReadiness() {
             <select class="product-setting-quick-status" data-quick-product-status="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
               ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
             </select>
-            <div class="product-setting-row-actions">
-              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="${escapeHtml(normalized.title)} 위로 이동" title="위로 이동">↑</button>
-              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="${escapeHtml(normalized.title)} 아래로 이동" title="아래로 이동">↓</button>
-            </div>
           </summary>
           <div class="product-setting-fields">
             <label>
