@@ -17010,6 +17010,21 @@ function isStaleReadyPayment(item = {}) {
   return Boolean(createdAt && Date.now() - createdAt > staleReadyPaymentMs);
 }
 
+function paymentDisplayStatus(item = {}) {
+  if (isStaleReadyPayment(item)) {
+    return {
+      status: "warn",
+      label: "오래된 결제 대기",
+      detail: "결제창 생성 후 1시간 이상 완료 확인이 없습니다. 자동 취소하지 말고 결제 상태를 확인하세요.",
+    };
+  }
+  return {
+    status: item.status,
+    label: item.statusLabel,
+    detail: "",
+  };
+}
+
 function billingFilterGroup(item = {}) {
   if (["cancelled", "refunded", "refund_processing", "refund_reconcile"].includes(item.status)) return "refund";
   if (isStaleReadyPayment(item)) return "action";
@@ -17058,13 +17073,14 @@ function renderBilling() {
     .map(
       (item) => {
         const index = billings.indexOf(item);
+        const displayStatus = paymentDisplayStatus(item);
         return `
         <tr>
           <td>${item.member}<br><small>${paymentEnvironmentBadge(item)}</small></td>
           <td>${item.item}${item.providerPaymentId ? `<br><small>${item.providerPaymentId}</small>` : ""}${item.source ? `<br><small>${paymentSourceText(item)}</small>` : ""}</td>
           <td>${money.format(item.amount)}원${item.discountTitle ? `<br><small>${escapeHtml(item.discountTitle)} · ${money.format(item.discountAmount || 0)}원 할인${item.originalAmount ? ` · 원가 ${money.format(item.originalAmount)}원` : ""}</small>` : ""}</td>
           <td>${paymentMethodLabel(item.method)}</td>
-          <td>${badge(item.status, item.statusLabel)}</td>
+          <td>${badge(displayStatus.status, displayStatus.label)}${displayStatus.detail ? `<br><small>${escapeHtml(displayStatus.detail)}</small>` : ""}</td>
           <td>
             ${paymentActionFor(item, index)}
           </td>
@@ -17107,7 +17123,10 @@ function paymentActionFor(item, index) {
   if (item.status === "unverified") return `<button class="small-button" type="button" data-review-payment="${index}" ${context("서버 연결 확인")}>서버 연결 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
   if (item.status === "failed") return `<button class="small-button" type="button" data-failed-payment="${index}" ${context("실패 확인")}>실패 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
   if (item.status === "draft") return '<button class="small-button" type="button" disabled>회원 결제 대기</button>';
-  if (item.status === "server_ready") return `<button class="small-button" type="button" data-server-ready-payment="${index}" ${context("결제 확인")}>결제 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
+  if (item.status === "server_ready") {
+    const label = isStaleReadyPayment(item) ? "상태 확인" : "결제 확인";
+    return `<button class="small-button" type="button" data-server-ready-payment="${index}" ${context(label)}>${label}</button>${paymentCancelButtonFor(index, "대기취소")}`;
+  }
   if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}" ${context("결제 완료 상세")}>완료됨</button>${paymentRefundButtonFor(item, index)}`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;
   if (item.status === "refund_reconcile") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("환불 동기화 확인")}>동기화 확인</button>`;
@@ -17132,6 +17151,7 @@ function chargeStatusForPayment(item = {}) {
   if (item.status === "paid" && item.ticketId) return { label: "회원권 충전완료", tone: "good", detail: "결제검증 후 연결 회원권이 활성화됩니다." };
   if (item.status === "paid" && isHistoricalImportedPayment(item)) return { label: "이관 결제 기록", tone: "neutral", detail: "기존 장부에서 보존한 결제 증빙이며 현재 회원권 자동 연결 대상이 아닙니다." };
   if (item.status === "paid") return { label: "회원권 연결 확인", tone: "warn", detail: "결제는 확인됐지만 연결된 회원권 ID가 없습니다." };
+  if (isStaleReadyPayment(item)) return { label: "오래된 결제 대기", tone: "warn", detail: "결제창 생성 후 1시간 이상 완료 확인이 없습니다. PortOne 상태 확인 전에는 취소하거나 회원권을 변경하지 않습니다." };
   if (item.status === "server_ready") return { label: "결제 전 대기", tone: "neutral", detail: "회원이 Toss 결제를 완료하면 서버검증 후 자동 충전됩니다." };
   if (item.status === "unverified") return { label: "서버검증 대기", tone: "warn", detail: "결제창 완료 후 서버 검증이 필요합니다." };
   if (item.status === "cancelled") return { label: "취소/환불완료", tone: "neutral", detail: "결제가 취소됐고 연결 회원권은 충전되지 않거나 환불 처리됩니다." };
