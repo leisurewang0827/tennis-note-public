@@ -535,6 +535,7 @@ function goToAdminScheduleToday() {
   syncAdminScheduleWeek();
   renderSchedule();
   saveSnapshot();
+  void ensureActiveAdminWeekLoaded();
 }
 
 function changeAdminWeek(delta) {
@@ -545,6 +546,7 @@ function changeAdminWeek(delta) {
   syncAdminScheduleWeek();
   renderSchedule();
   saveSnapshot();
+  void ensureActiveAdminWeekLoaded();
 }
 
 function adminWeekOffsetForDate(value) {
@@ -566,6 +568,7 @@ function changeAdminMonth(delta) {
   syncAdminScheduleWeek();
   renderSchedule();
   saveSnapshot();
+  void ensureActiveAdminWeekLoaded();
 }
 
 function selectAdminMonth(value) {
@@ -578,6 +581,7 @@ function selectAdminMonth(value) {
   syncAdminScheduleWeek();
   renderSchedule();
   saveSnapshot();
+  void ensureActiveAdminWeekLoaded();
 }
 
 function adminScheduleMonthValue(week = activeAdminWeek()) {
@@ -1550,10 +1554,43 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
     }
   }
 
+  if (view === "notes") {
+    jobs.push(loadAdminDataOnce("records-support", loadAdminRecordsSupportData));
+  }
+
   return Promise.all(jobs).then((results) => {
     if (view === state.view) renderAdminView(view);
     return results;
   });
+}
+
+async function loadAdminRecordsSupportData() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.selectRows) return false;
+  const [curriculumRefs, journalEntries, mediaFiles] = await Promise.all([
+    client.selectRows("tn_curriculum_refs", {
+      select: "id,level_label,skill_label,title,notion_url,status",
+      filters: { status: "active" },
+      order: "level_label.asc",
+      limit: 500,
+    }).catch(() => []),
+    client.selectRows("tn_journal_entries", {
+      select: "id,user_id,lesson_id,entry_date,entry_type,practice_type,body,created_at,updated_at",
+      order: "entry_date.desc",
+      limit: 500,
+    }).catch(() => []),
+    client.selectRows("tn_media_files", {
+      select: "id,owner_user_id,journal_entry_id,storage_path,media_type,created_at",
+      order: "created_at.desc",
+      limit: 1000,
+    }).catch(() => []),
+  ]);
+  Object.assign(adminLiveDataState, {
+    curriculumRefs,
+    journalEntries,
+    mediaFiles,
+  });
+  return true;
 }
 
 function ensureAdminToolData(tool) {
@@ -18098,6 +18135,47 @@ function adminWeekDateForDay(day) {
   return adminLocalDateKey(date);
 }
 
+function shiftedAdminDateKey(dateKey, days) {
+  const date = new Date(`${dateKey}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setDate(date.getDate() + days);
+  return adminLocalDateKey(date);
+}
+
+function adminLiveLessonWindow() {
+  const activeWeek = activeAdminWeek();
+  const today = adminLocalDateKey(new Date());
+  const selectedStart = activeWeek.startDate || today;
+  const selectedEnd = activeWeek.endDate || shiftedAdminDateKey(selectedStart, 6);
+  const lowerAnchor = selectedStart < today ? selectedStart : today;
+  const upperAnchor = selectedEnd > today ? selectedEnd : today;
+  return {
+    from: shiftedAdminDateKey(lowerAnchor, -14),
+    to: shiftedAdminDateKey(upperAnchor, 42),
+  };
+}
+
+function activeAdminWeekIsLoaded() {
+  const loadedWindow = adminLiveDataState.lessonWindow || {};
+  const week = activeAdminWeek();
+  return Boolean(
+    loadedWindow.from
+    && loadedWindow.to
+    && week.startDate >= loadedWindow.from
+    && week.endDate <= loadedWindow.to
+  );
+}
+
+async function ensureActiveAdminWeekLoaded() {
+  if (!state.liveScheduleLoaded || state.liveScheduleLoading || activeAdminWeekIsLoaded()) return false;
+  Object.assign(state, {
+    liveScheduleLoading: true,
+    liveScheduleMessage: "선택한 주의 시간표를 불러오는 중",
+  });
+  renderSchedule();
+  return refreshAdminLiveSchedule({ force: true });
+}
+
 async function performAdminLiveDataSync() {
   if (adminLocalPreviewMode) return false;
   const client = window.TennisNoteDataClient;
@@ -18109,6 +18187,7 @@ async function performAdminLiveDataSync() {
     liveScheduleMessage: "실서버 회원·코치·시간표를 불러오는 중",
   });
   try {
+    const lessonWindow = adminLiveLessonWindow();
     const adminSettingsPromise = Promise.all([
       loadLiveSchedulePolicyFromServer(),
       loadAdminLayoutSettingsFromServer(),
@@ -18139,17 +18218,37 @@ async function performAdminLiveDataSync() {
         maxRows: 20000,
       }),
       client.selectRows("tn_lesson_participants", { select: "lesson_id,user_id,ticket_id", limit: 1000 }),
-      client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,revision,updated_at", limit: 1000 })
-        .catch(() => client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,updated_at", limit: 1000 })
-          .catch(() => client.selectRows("tn_lessons", { select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source,updated_at", limit: 1000 }))),
-      fullAdminAccess ? client.selectRows("tn_one_day_bookings", { select: "id,branch_id,coach_role_id,booking_date,start_time,duration_minutes,guest_name,guest_phone,note,status,linked_user_id,created_at", limit: 1000 }).catch(() => []) : Promise.resolve([]),
+      client.selectRows("tn_lessons", {
+        select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,revision,updated_at",
+        filters: { lesson_date: { gte: lessonWindow.from, lte: lessonWindow.to } },
+        order: "lesson_date.asc,start_time.asc",
+        limit: 2000,
+      })
+        .catch(() => client.selectRows("tn_lessons", {
+          select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,updated_at",
+          filters: { lesson_date: { gte: lessonWindow.from, lte: lessonWindow.to } },
+          order: "lesson_date.asc,start_time.asc",
+          limit: 2000,
+        })
+          .catch(() => client.selectRows("tn_lessons", {
+            select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source,updated_at",
+            filters: { lesson_date: { gte: lessonWindow.from, lte: lessonWindow.to } },
+            order: "lesson_date.asc,start_time.asc",
+            limit: 2000,
+          }))),
+      fullAdminAccess ? client.selectRows("tn_one_day_bookings", {
+        select: "id,branch_id,coach_role_id,booking_date,start_time,duration_minutes,guest_name,guest_phone,note,status,linked_user_id,created_at",
+        filters: { booking_date: { gte: lessonWindow.from, lte: lessonWindow.to } },
+        order: "booking_date.asc,start_time.asc",
+        limit: 1000,
+      }).catch(() => []) : Promise.resolve([]),
       client.selectRows("tn_member_enrollments", { select: "id,user_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,submitted_at,approved_at", limit: 500 }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", { select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,created_at", limit: 500 }).catch(() => []),
       client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => []),
       client.selectRows("tn_lesson_records", { select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at", limit: 500 }).catch(() => []),
-      client.selectRows("tn_curriculum_refs", { select: "id,level_label,skill_label,title,notion_url,status", filters: { status: "active" }, order: "level_label.asc", limit: 500 }).catch(() => []),
-      client.selectRows("tn_journal_entries", { select: "id,user_id,lesson_id,entry_date,entry_type,practice_type,body,created_at,updated_at", order: "entry_date.desc", limit: 500 }).catch(() => []),
-      client.selectRows("tn_media_files", { select: "id,owner_user_id,journal_entry_id,storage_path,media_type,created_at", order: "created_at.desc", limit: 1000 }).catch(() => []),
+      Promise.resolve(adminLiveDataState.curriculumRefs || []),
+      Promise.resolve(adminLiveDataState.journalEntries || []),
+      Promise.resolve(adminLiveDataState.mediaFiles || []),
       fullAdminAccess ? client.selectRows("tn_payments", { select: "id,user_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at", limit: 500 }).catch(() => []) : Promise.resolve([]),
       client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => []),
       client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => []),
@@ -18805,6 +18904,7 @@ async function performAdminLiveDataSync() {
       memberDatabaseRecords: serverMemberDatabaseRecords || [],
       memberMembershipRecords: serverMemberMembershipRecords || [],
       substituteAssignments: serverSubstituteAssignments || [],
+      lessonWindow,
     });
     invalidateMemberSearchIndex();
     saveScheduleSafetySnapshot(lessons, keepLoadedSchedule ? "protected-refresh" : "before-server-refresh");
@@ -22196,8 +22296,8 @@ let adminLiveScheduleRefreshInFlight = false;
 let adminLiveScheduleLastRefreshAt = 0;
 let scheduleSessionInitialized = false;
 const adminLiveRefreshViews = new Set(["dashboard", "members", "schedule", "billing", "notes"]);
-const ADMIN_LIVE_REFRESH_INTERVAL_MS = 60_000;
-const ADMIN_LIVE_REFRESH_STALE_MS = 30_000;
+const ADMIN_LIVE_REFRESH_INTERVAL_MS = 300_000;
+const ADMIN_LIVE_REFRESH_STALE_MS = 120_000;
 
 function resetScheduleEntryState() {
   // The saved browser snapshot may contain a coach-only or pending-only view.
