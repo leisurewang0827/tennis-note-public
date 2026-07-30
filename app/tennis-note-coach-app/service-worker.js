@@ -1,22 +1,22 @@
-const CACHE_NAME = "tennis-note-coach-mode-v213";
+const CACHE_NAME = "tennis-note-coach-mode-v214";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.190",
-  "./app.js?v=1.0.190",
+  "./styles.css?v=1.0.191",
+  "./app.js?v=1.0.191",
   "./assets/app-icon.svg",
   "../release.json",
-  "../shared/tennisnote-data-client.js?v=1.0.190",
+  "../shared/tennisnote-data-client.js?v=1.0.191",
   "../shared/tennisnote-curriculum-catalog.js",
-  "../shared/tennisnote-release.js?v=1.0.190",
-  "../shared/tennisnote-release-updater.js?v=1.0.190",
+  "../shared/tennisnote-release.js?v=1.0.191",
+  "../shared/tennisnote-release-updater.js?v=1.0.191",
   "../shared/tennisnote-issue-reporter.js",
   "../shared/tennisnote-issue-reporter.css",
-  "../shared/tennisnote-ui-language.js?v=1.0.190",
-  "../shared/tennisnote-comment-draft.js?v=1.0.190",
-  "../shared/tennisnote-input-guard.js?v=1.0.190",
-  "../shared/tennisnote-ui-foundation.css?v=1.0.190",
+  "../shared/tennisnote-ui-language.js?v=1.0.191",
+  "../shared/tennisnote-comment-draft.js?v=1.0.191",
+  "../shared/tennisnote-input-guard.js?v=1.0.191",
+  "../shared/tennisnote-ui-foundation.css?v=1.0.191",
 ];
 
 function deleteOldCaches() {
