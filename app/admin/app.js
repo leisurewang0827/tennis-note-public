@@ -11746,7 +11746,9 @@ function renderMembers(options = {}) {
     filteredTotal = adminMemberDirectoryState.total;
   } else if (serverDirectoryPending) {
     filtered = [];
-    filteredTotal = 0;
+    // Keep the last confirmed total while the requested page is loading.
+    // Resetting the total to zero normalizes every page click back to page 1.
+    filteredTotal = adminMemberDirectoryState.total;
   } else {
     filtered = filteredMembers();
     filteredTotal = filtered.length;
@@ -11769,7 +11771,9 @@ function renderMembers(options = {}) {
 
   const selectedIndex = filtered.findIndex((member) => member.id === state.selectedMemberId);
   if (!serverDirectoryReady && selectedIndex >= 0) state.memberListPage = Math.floor(selectedIndex / memberListPageSize);
-  state.memberListPage = normalizeDashboardPage(filteredTotal, state.memberListPage, memberListPageSize);
+  if (!serverDirectoryPending) {
+    state.memberListPage = normalizeDashboardPage(filteredTotal, state.memberListPage, memberListPageSize);
+  }
   const visibleMembers = serverDirectoryReady
     ? filtered
     : filtered.slice(
