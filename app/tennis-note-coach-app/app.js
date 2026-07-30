@@ -1727,7 +1727,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.228",
+    workerUrl: "./service-worker.js?v=1.0.229",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1757,7 +1757,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.228" });
+  const params = new URLSearchParams({ v: "1.0.229" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2601,6 +2601,7 @@ function renderScheduleEditPanel() {
                   <input id="editLessonReason" type="text" maxlength="200" value="${escapeHtml(scheduleEditDraft.reason || "")}" placeholder="회원에게 안내할 변경 사유" />
                 </label>
               </div>
+              <p class="permission-note">근무시간 안의 브레이크 시간은 코치가 직접 변경할 수 있습니다. 회원 직접 신청은 계속 제한됩니다.</p>
               <button class="small-button" type="button" data-save-schedule-edit="${lesson.id}">일정 변경 저장</button>
             </div>
             ${canMarkRegularLessonAbsent(lesson) && lesson.serverLessonId
@@ -3696,7 +3697,7 @@ async function saveLessonEdit(id) {
         assigned_coach_required: "본인이 담당하는 수업만 변경할 수 있습니다.",
         lesson_not_changeable: "예정 상태인 수업만 변경할 수 있습니다.",
         coach_not_working: "선택한 시간은 코치 근무시간이 아닙니다.",
-        target_time_blocked: "선택한 시간은 브레이크 또는 운영 중지 시간입니다.",
+        target_time_blocked: "운영 중지 시간으로 변경할 수 없습니다. 근무시간 안의 브레이크 시간은 변경할 수 있습니다.",
         target_time_occupied: "선택한 시간에 이미 수업이 있습니다.",
         target_date_outside_ticket: "회원권 이용기간 밖의 날짜입니다.",
         schedule_scope_mismatch: "평일권과 주말권의 이용 가능 요일을 확인해 주세요.",
