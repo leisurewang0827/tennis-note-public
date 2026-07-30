@@ -1559,9 +1559,17 @@ function applyAdminMemberDetail(member, payload) {
     if (recordIndex >= 0) records[recordIndex] = databaseRecord;
     else records.push(databaseRecord);
   }
+  const membershipRecord = payload?.membershipRecord || null;
+  if (membershipRecord?.ticket_id) {
+    const records = adminLiveDataState.memberMembershipRecords || [];
+    const recordIndex = records.findIndex((item) => String(item.ticket_id) === String(membershipRecord.ticket_id));
+    if (recordIndex >= 0) records[recordIndex] = membershipRecord;
+    else records.push(membershipRecord);
+  }
   if (!ticket) return;
   const mappedTicket = tickets.find((item) => item.serverTicketId === ticket.id);
   if (!mappedTicket) return;
+  const ticketRecord = membershipRecord || databaseRecord;
   Object.assign(mappedTicket, {
     total: Number(ticket.total_sessions) || 0,
     used: Number(ticket.used_sessions) || 0,
@@ -1573,9 +1581,9 @@ function applyAdminMemberDetail(member, payload) {
     productId: ticket.product_id || mappedTicket.productId,
     coachRoleId: ticket.coach_role_id || mappedTicket.coachRoleId,
     coachId: coach.id || mappedTicket.coachId,
-    scheduleScope: databaseRecord?.lesson_schedule_scope || mappedTicket.scheduleScope,
-    weeklyCount: Number(databaseRecord?.lesson_frequency_per_week) || mappedTicket.weeklyCount,
-    lessonTypeCode: databaseRecord?.lesson_type || mappedTicket.lessonTypeCode,
+    scheduleScope: ticketRecord?.lesson_schedule_scope || mappedTicket.scheduleScope,
+    weeklyCount: Number(ticketRecord?.lesson_frequency_per_week) || mappedTicket.weeklyCount,
+    lessonTypeCode: ticketRecord?.lesson_type || mappedTicket.lessonTypeCode,
   });
 }
 
@@ -19094,8 +19102,8 @@ async function performAdminLiveDataSync() {
       rosterRows("groupAccounts", () => client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => [])),
       rosterRows("groupMembers", () => client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => [])),
       rosterRows("groupTicketLinks", () => client.selectRows("tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", limit: 500 }).catch(() => [])),
-      fullAdminAccess ? Promise.resolve(adminLiveDataState.memberDatabaseRecords || []) : Promise.resolve([]),
-      fullAdminAccess ? Promise.resolve(adminLiveDataState.memberMembershipRecords || []) : Promise.resolve([]),
+      fullAdminAccess ? rosterRows("memberDatabaseRecords", () => Promise.resolve(adminLiveDataState.memberDatabaseRecords || [])) : Promise.resolve([]),
+      fullAdminAccess ? rosterRows("memberMembershipRecords", () => Promise.resolve(adminLiveDataState.memberMembershipRecords || [])) : Promise.resolve([]),
       rosterRows("substituteAssignments", () => client.selectRows("tn_lesson_substitute_assignments", {
         select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
         order: "assigned_at.desc",
