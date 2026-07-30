@@ -1502,6 +1502,8 @@ const adminMemberDetailCache = new Map();
 let adminUserNameIndex = null;
 let memberSearchRenderTimer = 0;
 let adminLiveSyncPromise = null;
+let adminInitialLiveSyncHandle = 0;
+let adminInitialLiveSyncKind = "";
 
 function invalidateMemberSearchIndex() {
   memberSearchIndex.clear();
@@ -19499,6 +19501,34 @@ async function syncAdminLiveData(requireFresh = false) {
   }
 }
 
+function scheduleAdminInitialLiveSync() {
+  if (adminInitialLiveSyncHandle || adminLiveSyncPromise) return;
+  const run = async () => {
+    adminInitialLiveSyncHandle = 0;
+    adminInitialLiveSyncKind = "";
+    const synced = await syncAdminLiveData();
+    if (synced && operationsAccessReady()) setView(state.view, { skipLock: true });
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    adminInitialLiveSyncKind = "idle";
+    adminInitialLiveSyncHandle = window.requestIdleCallback(run, { timeout: 800 });
+    return;
+  }
+  adminInitialLiveSyncKind = "timer";
+  adminInitialLiveSyncHandle = window.setTimeout(run, 120);
+}
+
+function cancelAdminInitialLiveSync() {
+  if (!adminInitialLiveSyncHandle) return;
+  if (adminInitialLiveSyncKind === "idle" && typeof window.cancelIdleCallback === "function") {
+    window.cancelIdleCallback(adminInitialLiveSyncHandle);
+  } else {
+    window.clearTimeout(adminInitialLiveSyncHandle);
+  }
+  adminInitialLiveSyncHandle = 0;
+  adminInitialLiveSyncKind = "";
+}
+
 async function refreshAdminImportAuthState() {
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready) {
@@ -19557,10 +19587,14 @@ async function refreshAdminImportAuthState() {
     hideAdminBrandSplash();
     if (["admin", "coach"].includes(role)) {
       if (role === "coach" && !operationsViewAllowed(state.view)) state.view = "schedule";
-      await restoreAdminOperationalCache();
+      const restoredFromCache = await restoreAdminOperationalCache();
       setView(state.view, { skipLock: true });
-      await syncAdminLiveData();
-      setView(state.view, { skipLock: true });
+      if (restoredFromCache) {
+        scheduleAdminInitialLiveSync();
+      } else {
+        await syncAdminLiveData();
+        setView(state.view, { skipLock: true });
+      }
     }
   } catch (error) {
     Object.assign(adminImportAuthState, {
@@ -19660,6 +19694,7 @@ async function createAdminEmailAccount() {
 
 async function signOutAdminImport() {
   const client = window.TennisNoteDataClient;
+  cancelAdminInitialLiveSync();
   await clearAdminOperationalCache();
   if (client?.signOut) await client.signOut();
   Object.assign(adminImportAuthState, {
