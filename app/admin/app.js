@@ -13468,10 +13468,13 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
       : slotState.pasteReady
         ? "붙여넣기"
         : '<span class="admin-duration-add-icon" aria-hidden="true">+</span><span class="admin-duration-add-label">수업 추가</span>';
-    const addButton = slotState.canAdd
-      ? `<button class="admin-duration-add ${slotState.pasteReady ? "is-paste-ready" : ""} ${openSlotSelected ? "is-slot-selected" : ""}" type="button" data-quick-lesson-entry="true" ${state.scheduleOpenSlotMode ? `data-select-schedule-slot="${escapeHtml(openSlotKey)}" aria-pressed="${openSlotSelected ? "true" : "false"}"` : ""} ${slotState.pasteReady ? 'data-paste-schedule-lesson="true"' : ""} ${lessonAddAttrs(day, time, 20, coach.id)}>${addButtonContent}</button>`
+    const addableClass = slotState.canAdd
+      ? ` admin-duration-add ${slotState.pasteReady ? "is-paste-ready" : ""} ${openSlotSelected ? "is-slot-selected" : ""}`
       : "";
-    return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
+    const addableAttrs = slotState.canAdd
+      ? `role="button" tabindex="0" data-quick-lesson-entry="true" ${state.scheduleOpenSlotMode ? `data-select-schedule-slot="${escapeHtml(openSlotKey)}" aria-pressed="${openSlotSelected ? "true" : "false"}"` : ""} ${slotState.pasteReady ? 'data-paste-schedule-lesson="true"' : ""} ${lessonAddAttrs(day, time, 20, coach.id)}`
+      : "";
+    return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}${addableClass}" ${addableAttrs} style="grid-row:${row};grid-column:${column};">${slotState.canAdd ? addButtonContent : ""}</div>`;
   }).join("")).join("");
 
   const lessonCards = lanes.map((lane, laneIndex) => laneLessons[laneIndex]
@@ -23579,7 +23582,7 @@ function bindEvents() {
       copySelectedScheduleLesson();
       return;
     }
-    const slotButton = event.target.closest('.admin-duration-add[data-quick-lesson-entry="true"]');
+    const slotButton = event.target.closest('[data-quick-lesson-entry="true"]');
     if (!slotButton) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
       event.preventDefault();
