@@ -1769,7 +1769,7 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
 async function loadAdminRecordsSupportData() {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows) return false;
-  const [curriculumRefs, journalEntries, mediaFiles] = await Promise.all([
+  const [curriculumRefs, journalEntries, mediaFiles, lessonRecords] = await Promise.all([
     client.selectRows("tn_curriculum_refs", {
       select: "id,level_label,skill_label,title,notion_url,status",
       filters: { status: "active" },
@@ -1786,12 +1786,45 @@ async function loadAdminRecordsSupportData() {
       order: "created_at.desc",
       limit: 1000,
     }).catch(() => []),
+    client.selectRows("tn_lesson_records", {
+      select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at",
+      order: "completed_at.desc",
+      limit: 500,
+    }).catch(() => adminLiveDataState.lessonRecords || []),
   ]);
   Object.assign(adminLiveDataState, {
     curriculumRefs,
     journalEntries,
     mediaFiles,
+    lessonRecords,
   });
+  const loadedLessonById = new Map(
+    lessons.filter((lesson) => lesson.serverLessonId).map((lesson) => [lesson.serverLessonId, lesson]),
+  );
+  replaceArray(lessonNotes, (lessonRecords || []).map((record) => {
+    const lesson = loadedLessonById.get(record.lesson_id);
+    const coachName = lesson?.coachId
+      ? getCoachName(lesson.coachId)
+      : coachNameForRoleId(record.coach_role_id);
+    const completedDate = String(record.completed_at || "").slice(0, 10);
+    return {
+      id: record.id,
+      serverRecordId: record.id,
+      serverLessonId: record.lesson_id,
+      coachRoleId: record.coach_role_id,
+      member: lesson?.member || "회원 확인 필요",
+      lesson: lesson
+        ? `${lesson.lessonDate || completedDate} ${lesson.time || ""} ${coachName}`.trim()
+        : `${completedDate || "완료일 미확인"} ${coachName}`.trim(),
+      reflection: record.coach_comment || "코치 코멘트 없음",
+      next: record.next_curriculum_ref_id ? "다음 커리큘럼 등록됨" : "다음 커리큘럼 미등록",
+      nextCurriculumRefId: record.next_curriculum_ref_id || "",
+      completedAt: record.completed_at || "",
+      status: "confirmed",
+      statusLabel: "확인완료",
+      deductedSessions: Number(record.deducted_sessions) || 0,
+    };
+  }));
   return true;
 }
 
@@ -18503,7 +18536,7 @@ async function performAdminLiveDataSync() {
       fullAdminAccess ? rosterRows("enrollments", () => client.selectRows("tn_member_enrollments", { select: "id,user_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,submitted_at,approved_at", limit: 500 }).catch(() => [])) : Promise.resolve([]),
       rosterRows("changeRequests", () => client.selectRows("tn_lesson_change_requests", { select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,created_at", limit: 500 }).catch(() => [])),
       rosterRows("makeupEntitlements", () => client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => [])),
-      client.selectRows("tn_lesson_records", { select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at", limit: 500 }).catch(() => []),
+      rosterRows("lessonRecords", () => client.selectRows("tn_lesson_records", { select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at", limit: 500 }).catch(() => [])),
       Promise.resolve(adminLiveDataState.curriculumRefs || []),
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
