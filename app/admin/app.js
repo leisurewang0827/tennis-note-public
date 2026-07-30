@@ -1791,6 +1791,7 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
     jobs.push(loadAdminDataOnce("records-support", loadAdminRecordsSupportData));
   }
 
+  if (!jobs.length) return Promise.resolve([]);
   return Promise.all(jobs).then((results) => {
     if (view === state.view) renderAdminView(view);
     return results;
@@ -6686,11 +6687,7 @@ function setView(view, options = {}) {
     loadServerPaymentsIntoBilling();
   }
   if (enteringSchedule && state.liveScheduleLoaded && !state.liveScheduleLoading) {
-    refreshAdminLiveSchedule({ render: false })
-      .then((synced) => {
-        if (synced && state.view === "schedule") renderSchedule();
-      })
-      .catch(() => false);
+    refreshAdminLiveSchedule().catch(() => false);
   }
 }
 
@@ -19713,8 +19710,7 @@ function scheduleAdminInitialLiveSync() {
   const run = async () => {
     adminInitialLiveSyncHandle = 0;
     adminInitialLiveSyncKind = "";
-    const synced = await syncAdminLiveData();
-    if (synced && operationsAccessReady()) setView(state.view, { skipLock: true });
+    await syncAdminLiveData();
   };
   if (typeof window.requestIdleCallback === "function") {
     adminInitialLiveSyncKind = "idle";
@@ -23160,13 +23156,6 @@ async function refreshAdminLiveSchedule(options = {}) {
   adminLiveScheduleRefreshInFlight = true;
   try {
     const synced = await syncAdminLiveData();
-    if (synced && options.render !== false) {
-      if (state.view === "members") renderMembers();
-      else if (state.view === "schedule") renderSchedule();
-      else if (state.view === "billing") renderBilling();
-      else if (state.view === "notes") renderNotes();
-      else renderDashboard();
-    }
     if (synced) adminLiveScheduleLastRefreshAt = Date.now();
     return synced;
   } finally {
