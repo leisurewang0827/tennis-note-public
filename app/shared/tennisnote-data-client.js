@@ -2,6 +2,7 @@
   const storageKey = "tennis-note-supabase-config";
   const authStorageKey = "tennis-note-supabase-session";
   const authPersistenceKey = "tennis-note-auth-persistence";
+  const oauthCodeVerifierKey = "tennis-note-oauth-code-verifier";
   const nativeUrlFingerprintKey = "tennis-note-native-url-fingerprint";
   const offlineDatabaseName = "tennis-note-offline-cache";
   const offlineDatabaseVersion = 1;
@@ -353,6 +354,58 @@
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
 
+  function oauthStorageValue() {
+    for (const storage of authSessionStores()) {
+      try {
+        const value = storage.getItem(oauthCodeVerifierKey);
+        if (value) return value;
+      } catch (error) {
+        // Continue with the fallback storage area.
+      }
+    }
+    return "";
+  }
+
+  function clearOAuthStorageValue() {
+    authSessionStores().forEach((storage) => {
+      try { storage.removeItem(oauthCodeVerifierKey); } catch (error) { /* best effort */ }
+    });
+  }
+
+  function base64Url(bytes) {
+    let binary = "";
+    bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  async function createOAuthPkcePair() {
+    const bytes = new Uint8Array(48);
+    window.crypto?.getRandomValues?.(bytes);
+    const verifier = base64Url(bytes);
+    if (!verifier || !window.crypto?.subtle) throw new Error("oauth_pkce_unavailable");
+    const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+    const challenge = base64Url(new Uint8Array(digest));
+    authSessionStores().forEach((storage) => {
+      try { storage.setItem(oauthCodeVerifierKey, verifier); } catch (error) { /* fallback storage may still work */ }
+    });
+    return { challenge };
+  }
+
+  async function exchangeOAuthCode(code) {
+    const verifier = oauthStorageValue();
+    if (!code || !verifier) throw new Error("oauth_code_verifier_missing");
+    const config = loadConfig();
+    const response = await fetch(authUrl("token?grant_type=pkce"), {
+      method: "POST",
+      headers: { apikey: config.supabasePublishableKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
+    });
+    if (!response.ok) throw new Error("oauth_code_exchange_failed");
+    const payload = await response.json();
+    clearOAuthStorageValue();
+    return saveSession({ ...payload, provider: storedProvider() || "Supabase" });
+  }
+
   function transientNetworkError(error) {
     const message = String(error?.message || error || "").toLowerCase();
     return error instanceof TypeError
@@ -410,7 +463,14 @@
     return refreshSession();
   }
 
-  function consumeOAuthRedirect() {
+  async function consumeOAuthRedirect() {
+    const query = new URLSearchParams(window.location.search || "");
+    if (query.get("error")) throw new Error(query.get("error_description") || query.get("error"));
+    if (query.get("code")) {
+      const session = await exchangeOAuthCode(query.get("code"));
+      window.history.replaceState({}, document.title, `${window.location.pathname}`);
+      return session;
+    }
     if (!window.location.hash || !window.location.hash.includes("access_token=")) return getSession();
     const session = saveOAuthSession(window.location.hash);
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
@@ -760,6 +820,7 @@
     }
     const key = providerKey(provider);
     const slug = providerSlug(provider);
+    const pkce = await createOAuthPkcePair();
     const redirectTo = options.redirectTo || (isNativeApp()
       ? nativeOAuthRedirect()
       : `${window.location.origin}${window.location.pathname}${window.location.search}`);
@@ -767,6 +828,8 @@
     const query = new URLSearchParams({
       provider: slug,
       redirect_to: redirectTo,
+      code_challenge: pkce.challenge,
+      code_challenge_method: "S256",
     });
     // Naver otherwise reuses the browser's signed-in account without offering an account choice.
     if (key === "naver") query.set("auth_type", "reauthenticate");

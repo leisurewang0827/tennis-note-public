@@ -4272,6 +4272,62 @@ function couponProductSaleIssue(product = {}) {
   return "";
 }
 
+function membershipProductWithOperationalLimits(product = {}) {
+  const titleFrequency = String(product.title || product.name || "").match(/주\s*(\d+)\s*회/);
+  const inferredFrequency = Math.max(
+    1,
+    Math.min(
+      7,
+      Number(titleFrequency?.[1])
+        || (product.productKind === "coupon"
+          ? Math.min(2, Number(product.tickets) || 1)
+          : Math.ceil((Number(product.tickets) || 4) / 4)),
+    ),
+  );
+  const frequencyPerWeek = Math.max(1, Number(product.frequencyPerWeek) || inferredFrequency);
+  const maxSessionsPerWeek = Math.max(
+    frequencyPerWeek,
+    Number(product.maxSessionsPerWeek) || frequencyPerWeek,
+  );
+  return {
+    ...product,
+    frequencyPerWeek,
+    maxSessionsPerDay: Math.max(1, Number(product.maxSessionsPerDay) || frequencyPerWeek),
+    maxSessionsPerWeek,
+    maxBookingDaysPerWeek: Math.max(
+      1,
+      Math.min(maxSessionsPerWeek, Number(product.maxBookingDaysPerWeek) || frequencyPerWeek),
+    ),
+  };
+}
+
+function membershipProductServerSavePayload(nextProduct, serverProduct) {
+  const serverKind = nextProduct.productKind === "coupon" ? "coupon" : "regular";
+  return {
+    id: serverProduct.id,
+    name: nextProduct.title,
+    totalSessions: Math.max(1, Number(nextProduct.tickets) || 1),
+    cashPrice: Math.max(0, Number(nextProduct.cashAmount) || 0),
+    cardPrice: Math.max(0, Number(nextProduct.cardAmount) || Number(nextProduct.cashAmount) || 0),
+    settlementBasePrice: Math.max(0, Number(nextProduct.settlementBase) || Number(nextProduct.cashAmount) || 0),
+    validityDays: Math.max(1, Number(nextProduct.validityDays) || 1),
+    graceDays: Math.max(0, Number(nextProduct.graceDays) || 0),
+    lessonMinutes: Math.max(10, Number(nextProduct.lessonMinutes) || 20),
+    groupSize: Math.max(1, Math.min(2, Number(nextProduct.groupSize) || 1)),
+    frequencyPerWeek: Math.max(1, Number(nextProduct.frequencyPerWeek) || 1),
+    maxSessionsPerDay: Math.max(1, Number(nextProduct.maxSessionsPerDay) || 1),
+    maxSessionsPerWeek: Math.max(1, Number(nextProduct.maxSessionsPerWeek) || 1),
+    maxBookingDaysPerWeek: Math.max(1, Number(nextProduct.maxBookingDaysPerWeek) || 1),
+    scheduleScope: ["weekday", "weekend", "mixed"].includes(nextProduct.scheduleScope) ? nextProduct.scheduleScope : "weekday",
+    productKind: serverKind,
+    discountEnabled: nextProduct.discountEnabled === true,
+    coachDiscountAllowed: nextProduct.coachDiscountAllowed === true,
+    displayOrder: Math.max(0, Number(nextProduct.sortOrder) || 0),
+    status: nextProduct.status,
+    countLabel: nextProduct.sessions || `${nextProduct.tickets}회`,
+  };
+}
+
 async function updateMembershipProductSetting(productId, options = {}) {
   const refreshAfterSave = options.refreshAfterSave !== false;
   const card = document.querySelector(`[data-product-card="${productId}"]`);
@@ -4280,7 +4336,7 @@ async function updateMembershipProductSetting(productId, options = {}) {
   const fieldElement = (field) => card.querySelector(`[data-product-field="${field}"]`);
   const readField = (field) => fieldElement(field)?.value.trim() || "";
   const ticketValue = numericValue(readField("tickets"), product.tickets);
-  const nextProduct = normalizeMembershipProduct({
+  const nextProduct = membershipProductWithOperationalLimits(normalizeMembershipProduct({
     ...product,
     title: readField("title") || product.title,
     name: readField("title") || product.name,
@@ -4306,7 +4362,7 @@ async function updateMembershipProductSetting(productId, options = {}) {
       ? readField("coachDiscountAllowed") === "yes"
       : product.coachDiscountAllowed,
     status: readField("status") || product.status,
-  }, membershipProductDefaults.find((item) => item.id === product.id));
+  }, membershipProductDefaults.find((item) => item.id === product.id)));
 
   const settlementBase = numericValue(nextProduct.settlementBase, nextProduct.cashAmount);
 
@@ -4346,7 +4402,7 @@ async function updateMembershipProductSetting(productId, options = {}) {
   const serverProduct = serverMembershipProductForDraft(product);
   const branchId = activeOperationBranchId();
   const saveButton = card.querySelector("[data-save-product-setting]");
-  if (!client?.updateRows || !operationsAccessReady() || operationsRole() !== "admin") {
+  if (!client?.rpc || !operationsAccessReady() || operationsRole() !== "admin") {
     showToast("관리자 로그인 후 회원권 상품을 저장해 주세요.");
     return;
   }
@@ -4364,39 +4420,12 @@ async function updateMembershipProductSetting(productId, options = {}) {
   }
   try {
     const serverKind = nextProduct.productKind === "coupon" ? "coupon" : "regular";
-    const updatedRows = await client.updateRows("tn_membership_products", {
-      id: serverProduct.id,
-      branch_id: branchId,
-    }, {
-      name: nextProduct.title,
-      total_sessions: Math.max(1, Number(nextProduct.tickets) || 1),
-      base_price: Math.max(0, Number(nextProduct.cashAmount) || 0),
-      card_price: Math.max(0, Number(nextProduct.cardAmount) || Number(nextProduct.cashAmount) || 0),
-      cash_price: Math.max(0, Number(nextProduct.cashAmount) || 0),
-      settlement_base_price: Math.max(0, settlementBase || 0),
-      validity_days: Math.max(1, Number(nextProduct.validityDays) || 1),
-      grace_days: Math.max(0, Number(nextProduct.graceDays) || 0),
-      lesson_minutes: Math.max(10, Number(nextProduct.lessonMinutes) || 20),
-      group_size: Math.max(1, Math.min(2, Number(nextProduct.groupSize) || 1)),
-      frequency_per_week: Math.max(0, Number(nextProduct.frequencyPerWeek) || 0),
-      max_sessions_per_day: Math.max(0, Number(nextProduct.maxSessionsPerDay) || 0),
-      max_sessions_per_week: Math.max(0, Number(nextProduct.maxSessionsPerWeek) || 0),
-      max_booking_days_per_week: Math.max(0, Number(nextProduct.maxBookingDaysPerWeek) || 0),
-      schedule_scope: ["weekday", "weekend", "mixed"].includes(nextProduct.scheduleScope) ? nextProduct.scheduleScope : "weekday",
-      product_kind: serverKind,
-      is_coupon: serverKind === "coupon",
-      discount_enabled: nextProduct.discountEnabled === true,
-      coach_discount_allowed: nextProduct.coachDiscountAllowed === true,
-      display_order: Math.max(0, Number(nextProduct.sortOrder) || 0),
-      is_active: nextProduct.status !== "hidden",
-      policy_settings: {
-        ...(serverProduct.policy_settings || {}),
-        adminSaleStatus: nextProduct.status,
-        countLabel: nextProduct.sessions,
-      },
-      updated_at: new Date().toISOString(),
+    await client.rpc("tn_admin_bulk_membership_product_action", {
+      target_branch_id: branchId,
+      target_action: "save",
+      target_products: [membershipProductServerSavePayload(nextProduct, serverProduct)],
+      target_reason: "관리자 회원권 상품 행 저장",
     });
-    if (!Array.isArray(updatedRows) || updatedRows.length !== 1) throw new Error("membership_product_write_not_confirmed");
     if (!refreshAfterSave) {
       return {
         productId,
@@ -4420,6 +4449,8 @@ async function updateMembershipProductSetting(productId, options = {}) {
       || Number(saved.max_booking_days_per_week || 0) !== Number(nextProduct.maxBookingDaysPerWeek || 0)
       || saved.schedule_scope !== nextProduct.scheduleScope
       || saved.product_kind !== serverKind
+      || String(saved.policy_settings?.adminSaleStatus || "") !== String(nextProduct.status)
+      || Boolean(saved.is_active) !== (nextProduct.status !== "hidden")
       || Number(saved.card_price) !== Number(nextProduct.cardAmount)
       || Number(saved.cash_price) !== Number(nextProduct.cashAmount)
       || Number(saved.settlement_base_price) !== Number(settlementBase)) {
@@ -4786,7 +4817,7 @@ function membershipProductBulkSavePayload(product) {
   const fieldElement = (field) => card.querySelector(`[data-product-field="${field}"]`);
   const readField = (field) => fieldElement(field)?.value.trim() || "";
   const ticketValue = numericValue(readField("tickets"), product.tickets);
-  const nextProduct = normalizeMembershipProduct({
+  const nextProduct = membershipProductWithOperationalLimits(normalizeMembershipProduct({
     ...product,
     title: readField("title") || product.title,
     name: readField("title") || product.name,
@@ -4811,7 +4842,7 @@ function membershipProductBulkSavePayload(product) {
       ? readField("coachDiscountAllowed") === "yes"
       : product.coachDiscountAllowed,
     status: readField("status") || product.status,
-  }, membershipProductDefaults.find((item) => item.id === product.id));
+  }, membershipProductDefaults.find((item) => item.id === product.id)));
   if (!nextProduct.title
     || Number(nextProduct.tickets) <= 0
     || Number(nextProduct.validityDays) <= 0
@@ -4829,29 +4860,7 @@ function membershipProductBulkSavePayload(product) {
   if (saleIssue && nextProduct.status === "sale") {
     throw new Error(`membership_product_invalid:${nextProduct.title}:${saleIssue}`);
   }
-  return {
-    id: serverProduct.id,
-    name: nextProduct.title,
-    totalSessions: Number(nextProduct.tickets),
-    cashPrice: Math.max(0, Number(nextProduct.cashAmount) || 0),
-    cardPrice: Math.max(0, Number(nextProduct.cardAmount) || 0),
-    settlementBasePrice: Math.max(0, Number(nextProduct.cashAmount) || 0),
-    validityDays: Number(nextProduct.validityDays),
-    graceDays: Math.max(0, Number(nextProduct.graceDays) || 0),
-    lessonMinutes: Number(nextProduct.lessonMinutes),
-    groupSize: Number(nextProduct.groupSize),
-    frequencyPerWeek: Number(nextProduct.frequencyPerWeek),
-    maxSessionsPerDay: Number(nextProduct.maxSessionsPerDay),
-    maxSessionsPerWeek: Number(nextProduct.maxSessionsPerWeek),
-    maxBookingDaysPerWeek: Number(nextProduct.maxBookingDaysPerWeek),
-    scheduleScope: nextProduct.scheduleScope,
-    productKind: nextProduct.productKind === "coupon" ? "coupon" : "regular",
-    discountEnabled: nextProduct.discountEnabled === true,
-    coachDiscountAllowed: nextProduct.coachDiscountAllowed === true,
-    displayOrder: Math.max(0, Number(nextProduct.sortOrder) || 0),
-    status: nextProduct.status,
-    countLabel: nextProduct.sessions || `${nextProduct.tickets}회`,
-  };
+  return membershipProductServerSavePayload(nextProduct, serverProduct);
 }
 
 async function runProductBulkAction(forcedAction = "") {

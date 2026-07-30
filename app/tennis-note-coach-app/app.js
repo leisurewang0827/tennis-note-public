@@ -1727,7 +1727,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.232",
+    workerUrl: "./service-worker.js?v=1.0.233",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1757,7 +1757,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.232" });
+  const params = new URLSearchParams({ v: "1.0.233" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -1885,7 +1885,7 @@ function activateLiveCoachProfile(profileId) {
 async function applySupabaseCoachSession(showFromLogin = false) {
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready) return false;
-  client.consumeOAuthRedirect?.();
+  await client.consumeOAuthRedirect?.();
   const session = await client.ensureSession?.() || client.getSession?.();
   if (!session?.access_token) return false;
   try {
