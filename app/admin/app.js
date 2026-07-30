@@ -11194,7 +11194,7 @@ async function submitMemberInlineEditor(form, options = {}) {
       payload.lessonType = Number(product.group_size || 1) === 2 ? "one_on_two" : "one_on_one";
       payload.recordStatus = "active";
       payload.ticketStatus = "active";
-      await window.TennisNoteDataClient.rpc("tn_admin_assign_member_database_ticket_resolving_pending", {
+      await window.TennisNoteDataClient.rpc("tn_admin_assign_member_database_ticket_resolving_stale", {
         target_record: payload,
       });
     } else {
@@ -23036,6 +23036,24 @@ function bindEvents() {
       saveSnapshot();
       return;
     }
+    if (pageButton.dataset.dashboardPage === "billing") {
+      state.billingPage = page;
+      renderBilling();
+      saveSnapshot();
+      return;
+    }
+    if (pageButton.dataset.dashboardPage === "settlement") {
+      state.settlementPage = page;
+      renderCoachSettlementPreview();
+      saveSnapshot();
+      return;
+    }
+    if (pageButton.dataset.dashboardPage === "recharge") {
+      state.rechargePage = page;
+      renderBilling();
+      saveSnapshot();
+      return;
+    }
     if (pageButton.dataset.dashboardPage === "tasks") state.adminTaskPage = page;
     if (pageButton.dataset.dashboardPage === "members") state.memberStatusPage = page;
     renderAdminOperations();
@@ -24463,24 +24481,6 @@ function bindEvents() {
       renderMembers();
       const selectedMember = members.find((member) => member.id === state.selectedMemberId);
       if (selectedMember) void loadAdminMemberDetail(selectedMember);
-      return;
-    }
-    if (pageButton.dataset.dashboardPage === "billing") {
-      state.billingPage = page;
-      renderBilling();
-      saveSnapshot();
-      return;
-    }
-    if (pageButton.dataset.dashboardPage === "settlement") {
-      state.settlementPage = page;
-      renderCoachSettlementPreview();
-      saveSnapshot();
-      return;
-    }
-    if (pageButton.dataset.dashboardPage === "recharge") {
-      state.rechargePage = page;
-      renderBilling();
-      saveSnapshot();
       return;
     }
     const retryMemberDetailButton = event.target.closest("[data-retry-member-detail]");
