@@ -9647,6 +9647,8 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_verified_pending_ticket_exists")) return "결제가 확인된 대기 회원권이 있습니다. 결제/정산에서 회원권 연결을 확인해 주세요.";
   if (raw.includes("member_active_ticket_exists")) return "기존 사용 중·일시정지 회원권을 먼저 확인해 주세요. 새로고침 후 기존 회원권이 이 행에 표시됩니다.";
   if (raw.includes("ticket_price_invalid")) return "결제금액은 0원 이상으로 입력해 주세요.";
+  if (raw.includes("group_surviving_member_required")) return "1:1로 계속 수강할 회원을 다시 선택해 주세요.";
+  if (raw.includes("surviving_member_active_ticket_exists")) return "선택한 회원에게 다른 사용 중 회원권이 있습니다. 기존 회원권을 먼저 확인해 주세요.";
   if (raw.includes("separate_group_structure_requires_team_edit")) return "1:2 팀의 종류·파트너 변경은 팀 설정에서 함께 처리해 주세요.";
   return "처리에 실패했습니다. 입력값과 서버 적용 상태를 확인해 주세요.";
 }
@@ -11029,11 +11031,17 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
   const used = Number(record?.used_sessions ?? ticket?.used ?? 0);
   const remaining = Math.max(0, total - used);
   const currentProduct = (adminLiveDataState.products || []).find((item) => item.id === ticket?.productId);
-  const productOptions = membershipProductsForActiveOperationProfile()
+  const activeProductOptions = membershipProductsForActiveOperationProfile()
     .map((draft) => ({ draft, server: serverMembershipProductForDraft(draft) }))
     .filter(({ draft, server }) => server?.id && draft.status !== "hidden" && draft.status !== "disabled")
     .map(({ draft, server }) => `<option value="${escapeHtml(server.id)}" data-group-size="${Number(server.group_size || 1)}" ${server.id === ticket?.productId ? "selected" : ""}>${escapeHtml(draft.title || draft.name || server.name || "회원권")}</option>`)
     .join("");
+  const currentProductIncluded = Boolean(ticket?.productId)
+    && activeProductOptions.includes(`value="${escapeHtml(ticket.productId)}"`);
+  const currentProductOption = currentProduct && !currentProductIncluded
+    ? `<option value="${escapeHtml(currentProduct.id)}" data-group-size="${Number(currentProduct.group_size || ticket?.groupSize || 1)}" selected>현재 · ${escapeHtml(getTicketDisplayProduct(ticket) || currentProduct.name || "기존 회원권")}</option>`
+    : "";
+  const productOptions = currentProductOption + activeProductOptions;
   const isGroup = Number(currentProduct?.group_size || record?.lesson_group_size || ticket?.groupSize || 1) === 2;
   return `
         <form class="member-inline-editor member-inline-editor--compact" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}">
