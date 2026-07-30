@@ -6638,7 +6638,8 @@ function setView(view, options = {}) {
     showToast("현재 계정에서 사용할 수 없는 메뉴입니다.");
   }
   if (!options.skipLock && !requestAdminUnlock(view)) return;
-  const enteringSchedule = view === "schedule" && state.view !== "schedule";
+  const previousView = state.view;
+  const enteringSchedule = view === "schedule" && previousView !== "schedule";
   closeCleanMemberInlineEditor(view);
   state.view = view;
   if (view === "schedule" && (enteringSchedule || !scheduleSessionInitialized)) resetScheduleEntryState();
@@ -6660,6 +6661,14 @@ function setView(view, options = {}) {
     renderAdminView(view);
   }
   void ensureAdminViewData(view);
+  if (
+    previousView === "schedule"
+    && view !== "schedule"
+    && state.liveScheduleLoaded
+    && !adminWeekIsLoaded(adminScheduleWeek(0))
+  ) {
+    void refreshAdminLiveSchedule({ force: true });
+  }
   const titles = {
     dashboard: "대시보드",
     members: operationsRole() === "coach" ? "회원 찾기" : "회원관리",
@@ -18891,27 +18900,28 @@ function shiftedAdminDateKey(dateKey, days) {
 }
 
 function adminLiveLessonWindow() {
-  const activeWeek = activeAdminWeek();
+  const targetWeek = state.view === "schedule" ? activeAdminWeek() : adminScheduleWeek(0);
   const today = adminLocalDateKey(new Date());
-  const selectedStart = activeWeek.startDate || today;
-  const selectedEnd = activeWeek.endDate || shiftedAdminDateKey(selectedStart, 6);
-  const lowerAnchor = selectedStart < today ? selectedStart : today;
-  const upperAnchor = selectedEnd > today ? selectedEnd : today;
+  const targetStart = targetWeek.startDate || today;
+  const targetEnd = targetWeek.endDate || shiftedAdminDateKey(targetStart, 6);
   return {
-    from: shiftedAdminDateKey(lowerAnchor, -14),
-    to: shiftedAdminDateKey(upperAnchor, 42),
+    from: shiftedAdminDateKey(targetStart, -7),
+    to: shiftedAdminDateKey(targetEnd, 7),
   };
 }
 
-function activeAdminWeekIsLoaded() {
+function adminWeekIsLoaded(week) {
   const loadedWindow = adminLiveDataState.lessonWindow || {};
-  const week = activeAdminWeek();
   return Boolean(
     loadedWindow.from
     && loadedWindow.to
     && week.startDate >= loadedWindow.from
     && week.endDate <= loadedWindow.to
   );
+}
+
+function activeAdminWeekIsLoaded() {
+  return adminWeekIsLoaded(activeAdminWeek());
 }
 
 async function ensureActiveAdminWeekLoaded() {
