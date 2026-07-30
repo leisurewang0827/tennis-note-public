@@ -11,6 +11,11 @@
 .tn-report-submit { min-height: 46px; border: 0; border-radius: 6px; background: #087f5b; color: #fff; font-weight: 900; }
 .tn-report-message { min-height: 20px; margin: 0; color: #b42318; font-size: 13px; font-weight: 800; }
 .tn-report-list { display: grid; gap: 10px; }
+.tn-report-pager { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 14px; }
+.tn-report-pager[hidden] { display: none; }
+.tn-report-pager button { width: 40px; height: 40px; border: 1px solid #cad5e3; border-radius: 6px; background: #fff; color: #087f5b; font: inherit; font-weight: 900; }
+.tn-report-pager button:disabled { color: #94a3b8; background: #f4f7fa; }
+.tn-report-pager span { min-width: 64px; text-align: center; color: #35506f; font-size: 13px; font-weight: 900; }
 .tn-report-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; padding: 14px; border: 1px solid #d8e0ea; border-left: 5px solid #2f6db2; border-radius: 8px; background: #fff; }
 .tn-report-row.urgent { border-color: #efb4ad; border-left-color: #c9362b; background: #fff7f6; }
 .tn-report-row.high { border-left-color: #d97706; }

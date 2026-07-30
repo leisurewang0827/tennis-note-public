@@ -4,6 +4,12 @@
   const release = window.TENNIS_NOTE_RELEASE || {};
   const client = window.TennisNoteDataClient;
   let submitting = false;
+  const adminReportState = {
+    rows: [],
+    page: 0,
+    pageSize: 20,
+    status: "active",
+  };
 
   function escapeHtml(value) {
     return String(value || "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
@@ -145,15 +151,53 @@
     </article>`;
   }
 
+  function adminReportFilters() {
+    if (adminReportState.status === "active") return { status: { in: ["new", "reviewing", "planned"] } };
+    if (adminReportState.status === "resolved") return { status: { in: ["resolved", "closed"] } };
+    return {};
+  }
+
+  function renderAdminReportPage() {
+    const target = document.querySelector("[data-product-report-list]");
+    const pager = document.querySelector("[data-product-report-pager]");
+    const summary = document.querySelector("[data-product-report-summary]");
+    if (!target) return;
+    const pageCount = Math.max(1, Math.ceil(adminReportState.rows.length / adminReportState.pageSize));
+    adminReportState.page = Math.min(Math.max(adminReportState.page, 0), pageCount - 1);
+    const start = adminReportState.page * adminReportState.pageSize;
+    const visibleRows = adminReportState.rows.slice(start, start + adminReportState.pageSize);
+    target.innerHTML = visibleRows.map(reportCard).join("") || "<p>선택한 상태의 불편·오류가 없습니다.</p>";
+    if (summary) {
+      const first = adminReportState.rows.length ? start + 1 : 0;
+      const last = Math.min(start + adminReportState.pageSize, adminReportState.rows.length);
+      summary.textContent = `최근 ${adminReportState.rows.length}건 중 ${first}-${last}건`;
+    }
+    if (pager) {
+      pager.hidden = pageCount <= 1;
+      pager.innerHTML = pageCount <= 1
+        ? ""
+        : `
+          <button type="button" data-report-page="${adminReportState.page - 1}" ${adminReportState.page === 0 ? "disabled" : ""} aria-label="이전 페이지">&lsaquo;</button>
+          <span>${adminReportState.page + 1} / ${pageCount}</span>
+          <button type="button" data-report-page="${adminReportState.page + 1}" ${adminReportState.page === pageCount - 1 ? "disabled" : ""} aria-label="다음 페이지">&rsaquo;</button>`;
+    }
+  }
+
   async function loadAdminReports() {
     const target = document.querySelector("[data-product-report-list]");
     if (!target || !client?.selectRows) return;
     target.innerHTML = "<p>접수 내역을 불러오는 중입니다.</p>";
     try {
-      const rows = await client.selectRows("tn_product_reports", { select: "*", limit: 500 });
+      const rows = await client.selectRows("tn_product_reports", {
+        select: "id,error_code,surface,report_kind,priority,title,description,error_message,status,occurrence_count,last_seen_at,app_version,admin_note,automation_status,automation_message,automation_url",
+        filters: adminReportFilters(),
+        order: "last_seen_at.desc",
+        limit: 100,
+      });
       const score = { urgent: 3, high: 2, normal: 1 };
       rows.sort((a, b) => (score[b.priority] - score[a.priority]) || Date.parse(b.last_seen_at) - Date.parse(a.last_seen_at));
-      target.innerHTML = rows.map(reportCard).join("") || "<p>접수된 불편·오류가 없습니다.</p>";
+      adminReportState.rows = rows;
+      renderAdminReportPage();
     } catch (error) {
       target.innerHTML = `<p>${escapeHtml(safeMessage(error.message || error))}</p>`;
     }
@@ -162,6 +206,17 @@
   function bindAdmin() {
     document.querySelector('[data-view="issues"]')?.addEventListener("click", loadAdminReports);
     document.querySelector("[data-product-report-refresh]")?.addEventListener("click", loadAdminReports);
+    document.querySelector("[data-product-report-status]")?.addEventListener("change", (event) => {
+      adminReportState.status = event.target.value || "active";
+      adminReportState.page = 0;
+      loadAdminReports();
+    });
+    document.querySelector("[data-product-report-pager]")?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-report-page]");
+      if (!button || button.disabled) return;
+      adminReportState.page = Number(button.dataset.reportPage) || 0;
+      renderAdminReportPage();
+    });
     document.querySelector("[data-product-report-list]")?.addEventListener("click", async (event) => {
       const autoFixButton = event.target.closest("[data-request-autofix]");
       if (autoFixButton) {

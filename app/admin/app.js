@@ -3296,16 +3296,20 @@ function operationBranchBillings(source = billings) {
 }
 
 function operationBranchRecords(source = []) {
+  const lessonsById = new Map();
+  lessons.forEach((lesson) => {
+    if (lesson.id) lessonsById.set(String(lesson.id), lesson);
+    if (lesson.serverLessonId) lessonsById.set(String(lesson.serverLessonId), lesson);
+  });
+  const allowedMemberNames = new Set(operationBranchMembers(members).map((member) => member.name));
   return source.filter((record) => {
     if (record.branchId) return matchesActiveOperationBranch(record.branchId);
     const lessonId = record.serverLessonId || record.lessonId;
-    const lesson = lessonId
-      ? lessons.find((item) => String(item.serverLessonId || item.id) === String(lessonId))
-      : null;
+    const lesson = lessonId ? lessonsById.get(String(lessonId)) : null;
     if (lesson) return matchesActiveOperationBranch(lesson.branchId);
     const memberNames = splitMemberNames(record.member || "");
     if (memberNames.length) {
-      return operationBranchMembers(members.filter((member) => memberNames.includes(member.name))).length > 0;
+      return memberNames.some((name) => allowedMemberNames.has(name));
     }
     return operationBranchAllowsLegacyRows();
   });
@@ -17357,10 +17361,50 @@ function recordStatusBadge(record) {
   return badge(statusTone[record.group] || "neutral", record.statusLabel);
 }
 
-function recordCoachId(source = {}) {
+function buildAdminRecordContext() {
+  const ticketCoachByMember = new Map();
+  [...tickets, ...expiredTickets].forEach((ticket) => {
+    String(ticket.member || "").split("&").map((name) => name.trim()).filter(Boolean).forEach((name) => {
+      if (!ticketCoachByMember.has(name) && ticket.coachId) ticketCoachByMember.set(name, ticket.coachId);
+    });
+  });
+  const memberCoachByName = new Map(members.map((member) => [member.name, member.coachId || ""]));
+  const userNameById = new Map((adminLiveDataState.users || []).map((user) => [String(user.id), user.name]));
+  const mediaCountByJournalId = new Map();
+  (adminLiveDataState.mediaFiles || []).forEach((media) => {
+    const key = String(media.journal_entry_id || "");
+    if (!key) return;
+    mediaCountByJournalId.set(key, (mediaCountByJournalId.get(key) || 0) + 1);
+  });
+  const lessonRecordByLessonId = new Map(
+    (adminLiveDataState.lessonRecords || [])
+      .filter((record) => record.lesson_id)
+      .map((record) => [String(record.lesson_id), record]),
+  );
+  return {
+    ticketCoachByMember,
+    memberCoachByName,
+    userNameById,
+    mediaCountByJournalId,
+    lessonRecordByLessonId,
+  };
+}
+
+function recordCoachId(source = {}, context = null) {
   if (source.coachId) return source.coachId;
   const memberNames = String(source.member || "").split("&").map((name) => name.trim()).filter(Boolean);
   if (!memberNames.length) return "";
+  if (context) {
+    for (const name of memberNames) {
+      const ticketCoachId = context.ticketCoachByMember.get(name);
+      if (ticketCoachId) return ticketCoachId;
+    }
+    for (const name of memberNames) {
+      const memberCoachId = context.memberCoachByName.get(name);
+      if (memberCoachId) return memberCoachId;
+    }
+    return "";
+  }
   const memberTicket = [...tickets, ...expiredTickets].find((ticket) => (
     String(ticket.member || "").split("&").some((name) => memberNames.includes(name.trim()))
   ));
@@ -17368,8 +17412,8 @@ function recordCoachId(source = {}) {
   return members.find((member) => memberNames.includes(member.name))?.coachId || "";
 }
 
-function withRecordCoach(record, source = record) {
-  const coachId = recordCoachId(source);
+function withRecordCoach(record, source = record, context = null) {
+  const coachId = recordCoachId(source, context);
   return {
     ...record,
     coachId,
@@ -17454,10 +17498,15 @@ function journalBodySummary(body = "") {
   }
 }
 
-function memberJournalRecord(entry) {
-  const member = (adminLiveDataState.users || []).find((user) => user.id === entry.user_id);
-  const mediaCount = (adminLiveDataState.mediaFiles || []).filter((media) => media.journal_entry_id === entry.id).length;
-  const linkedRecord = (adminLiveDataState.lessonRecords || []).find((record) => record.lesson_id === entry.lesson_id);
+function memberJournalRecord(entry, context = null) {
+  const memberName = context?.userNameById.get(String(entry.user_id || ""));
+  const member = memberName ? { name: memberName } : (adminLiveDataState.users || []).find((user) => user.id === entry.user_id);
+  const mediaCount = context
+    ? context.mediaCountByJournalId.get(String(entry.id || "")) || 0
+    : (adminLiveDataState.mediaFiles || []).filter((media) => media.journal_entry_id === entry.id).length;
+  const linkedRecord = context
+    ? context.lessonRecordByLessonId.get(String(entry.lesson_id || ""))
+    : (adminLiveDataState.lessonRecords || []).find((record) => record.lesson_id === entry.lesson_id);
   const entryLabel = entry.entry_type === "lesson" ? "레슨" : "개인운동";
   return {
     id: `journal-${entry.id}`,
@@ -17481,15 +17530,18 @@ function pendingLessonRecords() {
   const now = Date.now();
   const ownRoleIds = currentOperationsCoachRoleIds();
   return lessons
-    .filter((lesson) => (
-      lesson.serverLessonId
-      && !lesson.oneDayBooking
-      && lesson.serverStatus === "scheduled"
-      && lessonEndTimestamp(lesson) > 0
-      && lessonEndTimestamp(lesson) <= now
-      && !completedLessonIds.has(lesson.serverLessonId)
-      && (operationsRole() === "admin" || ownRoleIds.has(lesson.coachRoleId))
-    ))
+    .filter((lesson) => {
+      const endedAt = lessonEndTimestamp(lesson);
+      return (
+        lesson.serverLessonId
+        && !lesson.oneDayBooking
+        && lesson.serverStatus === "scheduled"
+        && endedAt > 0
+        && endedAt <= now
+        && !completedLessonIds.has(lesson.serverLessonId)
+        && (operationsRole() === "admin" || ownRoleIds.has(lesson.coachRoleId))
+      );
+    })
     .map(pendingLessonRecord);
 }
 
@@ -17571,18 +17623,23 @@ function urgentOperationsRecords() {
 
 function adminRecordGroups() {
   const shared = operationalSharedData();
+  const context = buildAdminRecordContext();
   const records = [
     ...urgentOperationsRecords(),
     ...pendingLessonRecords(),
     ...lessonNotes.map(legacyNoteRecord),
     ...shared.lessonLogs.map(lessonLogRecord),
     ...shared.feedbackRequests.map(feedbackRecord),
-    ...(adminLiveDataState.journalEntries || []).map(memberJournalRecord),
+    ...(adminLiveDataState.journalEntries || []).map((entry) => memberJournalRecord(entry, context)),
   ];
-  const normalizedRecords = operationBranchRecords(records).map((record) => withRecordCoach({
-    ...record,
-    pendingType: pendingRecordType(record),
-  }));
+  const normalizedRecords = operationBranchRecords(records).map((record) => withRecordCoach(
+    {
+      ...record,
+      pendingType: pendingRecordType(record),
+    },
+    record,
+    context,
+  ));
   const roleFilteredRecords = operationsRole() === "coach"
     ? normalizedRecords.filter((record) => (
       record.pendingType !== "payment"
