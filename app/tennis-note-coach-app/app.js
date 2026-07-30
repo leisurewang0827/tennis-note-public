@@ -1727,7 +1727,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.222",
+    workerUrl: "./service-worker.js?v=1.0.223",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -1757,7 +1757,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.222" });
+  const params = new URLSearchParams({ v: "1.0.223" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3908,10 +3908,16 @@ async function completeLessonFromModal(id) {
   lesson.validationMessage = "";
   window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
   closeLessonEditor();
-  state.todayTaskTab = "records";
+  state.todayTaskTab = "lessons";
   renderAll();
   setView("todayView");
-  await confirmLog(log.id, { skipDraft: true });
+  const completed = await confirmLog(log.id, { skipDraft: true });
+  if (completed) {
+    state.todayTaskTab = "lessons";
+    state.focusedLogId = "";
+    renderAll();
+    setView("todayView");
+  }
 }
 
 function changeScheduleWeek(delta) {
