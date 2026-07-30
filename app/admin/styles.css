@@ -903,8 +903,9 @@ h2 {
 
 .settings-grid {
   grid-template-columns: minmax(0, 1fr);
-  max-width: 1120px;
-  margin: 16px auto 0;
+  width: 100%;
+  max-width: none;
+  margin: 16px 0 0;
 }
 
 .settings-grid > .panel {
@@ -11531,6 +11532,118 @@ button .schedule-member-lines > span {
 
 .settings-grid[data-active-tab="membership"] .refund-policy-panel {
   grid-column: 2;
+}
+
+.product-setting-sheet {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.product-setting-sheet-head {
+  display: grid;
+  grid-template-columns: 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(90px, .5fr) 76px;
+  align-items: center;
+  min-width: 860px;
+  min-height: 36px;
+  border-bottom: 1px solid var(--line);
+  background: #f3f7f5;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.product-setting-sheet-head > span {
+  min-width: 0;
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+
+.product-setting-sheet-head > span + span {
+  border-left: 1px solid var(--line);
+}
+
+.product-setting-sheet .product-setting-list {
+  display: block;
+}
+
+.product-setting-sheet .product-setting-card {
+  min-width: 860px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.product-setting-sheet .product-setting-card:last-child {
+  border-bottom: 0;
+}
+
+.product-setting-sheet .product-setting-header {
+  display: grid;
+  grid-template-columns: 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(90px, .5fr) 76px;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+}
+
+.product-setting-sheet .product-setting-header > * {
+  min-width: 0;
+  padding: 9px 10px;
+  box-sizing: border-box;
+}
+
+.product-setting-sheet .product-setting-header > * + * {
+  border-left: 1px solid var(--line);
+}
+
+.product-setting-sheet .product-setting-header > div:first-of-type,
+.product-setting-sheet .product-setting-summary-meta {
+  width: auto;
+  margin: 0;
+  overflow: hidden;
+}
+
+.product-setting-sheet .product-setting-header strong,
+.product-setting-sheet .product-setting-header small,
+.product-setting-sheet .product-setting-summary-meta b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-setting-sheet .product-setting-summary-meta {
+  justify-items: start;
+}
+
+.product-setting-sheet .product-setting-card[open] {
+  background: #fffdf3;
+}
+
+.product-setting-sheet .product-setting-card[open] .product-setting-header {
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.product-setting-sheet .product-setting-fields {
+  grid-template-columns: repeat(6, minmax(130px, 1fr));
+  padding: 12px;
+  background: #fffdf3;
+}
+
+.product-setting-sheet .product-setting-actions {
+  justify-content: flex-end;
+  padding: 0 12px 12px;
+  background: #fffdf3;
+}
+
+@media (max-width: 720px) {
+  .product-setting-sheet .product-setting-fields {
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
 }
 
 .policy-version-toolbar,

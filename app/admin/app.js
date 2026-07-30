@@ -11329,6 +11329,7 @@ async function submitMemberInlineEditor(form, options = {}) {
     }
     const synced = await syncAdminLiveData(true);
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    await refreshScheduleAfterMemberTicketSave();
     const refreshedMember = members.find((item) => item.serverUserId === member.serverUserId);
     const savedTicketId = String(saveResult?.ticketId || saveResult?.ticket_id || ticket?.serverTicketId || "");
     const refreshed = savedTicketId
@@ -11400,6 +11401,7 @@ async function saveVisibleMemberRows() {
     if (saved) {
       const synced = await syncAdminLiveData(true);
       if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+      await refreshScheduleAfterMemberTicketSave();
     }
     if (!failed) {
       renderMembers();
@@ -11415,6 +11417,14 @@ async function saveVisibleMemberRows() {
       button.textContent = "현재 페이지 전체 저장";
     }
   }
+}
+
+async function refreshScheduleAfterMemberTicketSave() {
+  adminLiveScheduleLastRefreshAt = 0;
+  if (state.view !== "schedule") return true;
+  const refreshed = await refreshAdminLiveSchedule({ force: true });
+  if (refreshed) renderSchedule();
+  return refreshed;
 }
 
 function renderMembers(options = {}) {

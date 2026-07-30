@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.224" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.224" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.225" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.225" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -945,7 +945,16 @@
                   <option value="hidden">숨김</option>
                 </select>
               </div>
-              <div id="productSettingCards" class="product-setting-list"></div>
+              <div class="product-setting-sheet" role="region" aria-label="회원권 상품 편집표">
+                <div class="product-setting-sheet-head" aria-hidden="true">
+                  <span>선택</span>
+                  <span>상품명 · 구성</span>
+                  <span>현금 / 카드</span>
+                  <span>상태</span>
+                  <span>작업</span>
+                </div>
+                <div id="productSettingCards" class="product-setting-list"></div>
+              </div>
               <nav id="membershipProductPager" class="dashboard-pager" aria-label="회원권 상품 페이지"></nav>
             </section>
 
@@ -1681,15 +1690,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.224"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.225"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.224"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.224"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.224"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.224"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.224"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.225"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.225"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.225"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.225"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.225"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.224"></script>
+    <script src="./app.js?v=1.0.225"></script>
   </body>
 </html>
