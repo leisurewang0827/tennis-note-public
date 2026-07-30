@@ -13402,6 +13402,78 @@ function getAdminDurationSlotState(day, time, coach, laneLessons = null, availab
   };
 }
 
+function buildAdminDurationSlotStateIndex(displayDays, visibleTimes, lanes, laneLessons, scheduleLessons) {
+  const stateIndex = new Map();
+  const activeCoaches = operationBranchCoaches()
+    .filter((coach) => coach.status === "active");
+  const bookedLessonsByDay = new Map(displayDays.map((day) => [day, []]));
+
+  scheduleLessons.forEach((lesson) => {
+    if (
+      !bookedLessonsByDay.has(lesson.day)
+      || !isBookedLesson(lesson)
+      || isReleasedRegularMakeupSlot(lesson)
+      || !lessonMatchesActiveScheduleWeek(lesson, lesson.day)
+    ) return;
+    bookedLessonsByDay.get(lesson.day).push(lesson);
+  });
+
+  displayDays.forEach((day) => {
+    visibleTimes.forEach((time) => {
+      const interval = {
+        start: timeToMinutes(time),
+        end: timeToMinutes(time) + 20,
+      };
+      const overlappingBooked = bookedLessonsByDay.get(day)
+        .filter((lesson) => intervalsOverlap(interval, lessonInterval(lesson)));
+      const usedCoachIds = new Set(overlappingBooked.map((lesson) => lessonScheduleCoachId(lesson)));
+      const hasCourtCapacity = overlappingBooked.length < fixedCourtCount;
+      const availableCoachIds = new Set(activeCoaches
+        .filter((coach) => (
+          !usedCoachIds.has(coach.id)
+          && !getCoachBreakOverlapping(coach.id, day, time, 20)
+          && !getBreakRuleOverlapping(day, time, 20, coach.id)
+          && isCoachAvailableForSlot(coach.id, day, time, 20)
+        ))
+        .map((coach) => coach.id));
+
+      lanes.forEach(({ day: laneDay, coach }, laneIndex) => {
+        if (laneDay !== day) return;
+        if (coach.id?.startsWith("closed-")) {
+          stateIndex.set(`${laneIndex}|${time}`, {
+            className: "is-closed",
+            occupyingLesson: null,
+            working: false,
+            breakRule: null,
+            canAdd: false,
+            pasteReady: false,
+          });
+          return;
+        }
+        const occupyingLesson = laneLessons[laneIndex]
+          .find((lesson) => lessonOverlapsScheduleSlot(lesson, day, time));
+        const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10)
+          || getBreakRuleOverlapping(day, time, 10, coach.id);
+        const working = !breakRule && isCoachAvailableForSlot(coach.id, day, time, 10);
+        const canAdd = !occupyingLesson
+          && working
+          && hasCourtCapacity
+          && availableCoachIds.has(coach.id);
+        stateIndex.set(`${laneIndex}|${time}`, {
+          className: occupyingLesson ? "is-occupied" : breakRule ? "is-break" : working ? "is-open" : "is-closed",
+          occupyingLesson,
+          working,
+          breakRule,
+          canAdd,
+          pasteReady: canAdd && scheduleClipboardCanPaste(day, time, coach.id),
+        });
+      });
+    });
+  });
+
+  return stateIndex;
+}
+
 function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
   const target = $("#scheduleGrid");
   target.classList.remove("schedule-loading-state");
@@ -13433,15 +13505,13 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     laneLessonIndex.get(`${lesson.day}|${lessonScheduleCoachId(lesson)}`)?.push(lesson);
   });
   const laneLessons = lanes.map(({ day, coach }) => laneLessonIndex.get(`${day}|${coach.id}`) || []);
-  const slotAvailability = new Map();
-  displayDays.forEach((day) => {
-    visibleTimes.forEach((time) => {
-      slotAvailability.set(`${day}|${time}`, {
-        hasCourtCapacity: hasCourtCapacity(day, time, 20),
-        coachIds: new Set(getAvailableCoachesForSlot(day, time, 20).map((coach) => coach.id)),
-      });
-    });
-  });
+  const slotStateIndex = buildAdminDurationSlotStateIndex(
+    displayDays,
+    visibleTimes,
+    lanes,
+    laneLessons,
+    scheduleLessons,
+  );
   const selectedOpenSlotKeys = selectedScheduleOpenSlotKeys();
   const visibleTimeIndexes = new Map(visibleTimes.map((time, index) => [time, index]));
   const coachHeaders = lanes.map(({ coach }, index) => `
@@ -13454,13 +13524,8 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
   const slotCells = visibleTimes.map((time, timeIndex) => lanes.map(({ day, coach }, laneIndex) => {
     const row = timeIndex + 3;
     const column = laneIndex + 2;
-    const slotState = getAdminDurationSlotState(
-      day,
-      time,
-      coach,
-      laneLessons[laneIndex],
-      slotAvailability.get(`${day}|${time}`),
-    );
+    const slotState = slotStateIndex.get(`${laneIndex}|${time}`)
+      || getAdminDurationSlotState(day, time, coach, laneLessons[laneIndex]);
     const openSlotKey = scheduleOpenSlotKey({ day, time, coachId: coach.id });
     const openSlotSelected = selectedOpenSlotKeys.has(openSlotKey);
     const addButtonContent = state.scheduleOpenSlotMode
