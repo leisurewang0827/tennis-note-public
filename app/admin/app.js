@@ -14997,6 +14997,11 @@ function pushLessonModalHistoryState() {
 }
 
 function openLessonModal(defaults = {}) {
+  const absenceButton = $("#markLessonAbsentButton");
+  if (absenceButton) {
+    absenceButton.disabled = false;
+    absenceButton.textContent = "불참 처리·보강 열기";
+  }
   state.editingLessonId = defaults.editingLessonId || null;
   state.quickLessonEntry = Boolean(!state.editingLessonId && defaults.quickEntry);
   state.quickLessonEdit = Boolean(state.editingLessonId && defaults.quickEdit);
@@ -15255,11 +15260,15 @@ async function markEditingLessonAbsentForMakeup() {
       target_reason: reason,
     });
     billingLogs.unshift(`${lesson.member} ${lesson.day} ${lesson.time} 불참 처리 · 보강 선택 대기`);
+    lesson.serverStatus = "cancelled";
+    lesson.status = "cancelled";
     window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
     closeLessonModal();
-    await syncAdminLiveData();
-    setView("schedule");
+    renderSchedule();
     showToast("불참 처리 완료 · 빈자리 공개 및 보강 안내 생성");
+    void syncAdminLiveData(true).then((synced) => {
+      if (synced && state.view === "schedule") renderSchedule();
+    });
   } catch (error) {
     const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
     const message = code.includes("absence_reason_required")
@@ -15274,6 +15283,7 @@ async function markEditingLessonAbsentForMakeup() {
             ? "관리자 또는 담당 코치만 불참 처리할 수 있습니다."
             : "불참 처리에 실패했습니다. 수업 상태를 다시 확인해 주세요.";
     setLessonFormMessage(message, "danger");
+  } finally {
     if (button) {
       button.disabled = false;
       button.textContent = "불참 처리·보강 열기";
