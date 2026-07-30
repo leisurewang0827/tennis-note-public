@@ -1679,7 +1679,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.207",
+    workerUrl: "./service-worker.js?v=1.0.208",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -5306,6 +5306,30 @@ const paymentMethodDefinitions = [
   { id: "naverpay", label: "네이버페이", shortLabel: "네이버페이", payMethod: "EASY_PAY", detail: "네이버페이 바로 결제" },
   { id: "kakaopay", label: "카카오페이", shortLabel: "카카오페이", payMethod: "EASY_PAY", detail: "카카오페이 바로 결제" },
 ];
+let portOneSdkPromise = null;
+
+function loadPortOneSdk() {
+  if (window.__TENNIS_NOTE_PORTONE_TEST_SDK__?.requestPayment) {
+    return Promise.resolve(window.__TENNIS_NOTE_PORTONE_TEST_SDK__);
+  }
+  if (!portOneSdkPromise) {
+    portOneSdkPromise = import("https://cdn.portone.io/v2/browser-sdk.esm.js")
+      .then((sdk) => {
+        if (!sdk?.requestPayment) throw new Error("portone_sdk_invalid");
+        return sdk;
+      })
+      .catch((error) => {
+        portOneSdkPromise = null;
+        throw error;
+      });
+  }
+  return portOneSdkPromise;
+}
+
+function preloadPortOneSdk() {
+  if (!isPaymentGatewayReady(normalizeSelectedPaymentMethod())) return;
+  loadPortOneSdk().catch(() => {});
+}
 
 function paymentGatewayConfig() {
   const localConfig = (() => {
@@ -6662,7 +6686,7 @@ async function resumePendingTicketPayment(ticketId = "") {
   }
 
   try {
-    const PortOne = await import("https://cdn.portone.io/v2/browser-sdk.esm.js");
+    const PortOne = await loadPortOneSdk();
     const response = await PortOne.requestPayment(portOnePaymentRequest({
       paymentId,
       productId: ticket.productId,
@@ -6681,8 +6705,9 @@ async function resumePendingTicketPayment(ticketId = "") {
       await checkPendingTicketPayment(ticketId);
       return;
     }
-  } catch {
-    state.pendingPaymentCheckStatus = { tone: "alert", text: "결제창을 열지 못했습니다. 잠시 후 다시 시도해주세요." };
+  } catch (error) {
+    const detail = paymentServerErrorMessage(error);
+    state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창을 열지 못했습니다. ${detail}` };
     state.ticketHistory.unshift({ text: `${ticket.title} 결제창 열기 실패`, tone: "alert" });
   }
 
@@ -6765,7 +6790,7 @@ async function startProductPayment(productId, options = {}) {
   }
 
   try {
-    const PortOne = await import("https://cdn.portone.io/v2/browser-sdk.esm.js");
+    const PortOne = await loadPortOneSdk();
     const response = await PortOne.requestPayment(portOnePaymentRequest({
       paymentId,
       productId: product.id,
@@ -6805,12 +6830,14 @@ async function startProductPayment(productId, options = {}) {
       state.ticketHistory.unshift({ text: `${product.title} 결제 완료 접수 · 검증 후 회원권 충전`, tone: "wait" });
     }
   } catch (error) {
+    const detail = paymentServerErrorMessage(error);
     createPaymentRecord(product, {
       paymentId,
       method: "결제창 오류",
-      status: "결제창을 열지 못했습니다. 관리자 확인이 필요합니다.",
+      status: `결제창을 열지 못했습니다. ${detail}`,
     });
-    state.ticketHistory.unshift({ text: `${product.title} 결제창 오류 · 관리자 확인 필요`, tone: "alert" });
+    state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창을 열지 못했습니다. ${detail}` };
+    state.ticketHistory.unshift({ text: `${product.title} 결제창 오류 · ${detail}`, tone: "alert" });
   }
 
   await syncMemberTicketsFromServer();
@@ -7333,7 +7360,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.207" });
+  const params = new URLSearchParams({ v: "1.0.208" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9060,6 +9087,9 @@ function bindEvents() {
     const curriculumButton = event.target.closest("[data-open-curriculum-view]");
     if (curriculumButton) setView("curriculumView");
   });
+  document.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("[data-buy-product]")) preloadPortOneSdk();
+  }, { passive: true });
   document.addEventListener("input", (event) => {
     if (event.target.id !== "memberCurriculumSearch") return;
     state.curriculumQuery = event.target.value;

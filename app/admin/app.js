@@ -11186,9 +11186,10 @@ async function submitMemberInlineEditor(form, options = {}) {
   submit.textContent = "저장 중";
   message.textContent = "서버에 저장하고 확인하는 중입니다.";
   message.classList.remove("is-error", "is-success");
+  let saveResult = null;
   try {
     if (ticket) {
-      await window.TennisNoteDataClient.rpc("tn_admin_update_member_database_record_preserving_schedule", {
+      saveResult = await window.TennisNoteDataClient.rpc("tn_admin_update_member_database_record_preserving_schedule", {
         target_record: payload,
       });
     } else if (payload.productId) {
@@ -11206,7 +11207,7 @@ async function submitMemberInlineEditor(form, options = {}) {
       payload.lessonType = Number(product.group_size || 1) === 2 ? "one_on_two" : "one_on_one";
       payload.recordStatus = "active";
       payload.ticketStatus = "active";
-      await window.TennisNoteDataClient.rpc("tn_admin_assign_member_database_ticket_resolving_stale", {
+      saveResult = await window.TennisNoteDataClient.rpc("tn_admin_assign_member_database_ticket_resolving_stale", {
         target_record: payload,
       });
     } else {
@@ -11240,18 +11241,22 @@ async function submitMemberInlineEditor(form, options = {}) {
     const synced = await syncAdminLiveData(true);
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
     const refreshedMember = members.find((item) => item.serverUserId === member.serverUserId);
-    const refreshed = ticket ? [...tickets, ...expiredTickets].find((item) => item.serverTicketId === ticket.serverTicketId) : null;
+    const savedTicketId = String(saveResult?.ticketId || saveResult?.ticket_id || ticket?.serverTicketId || "");
+    const refreshed = savedTicketId
+      ? [...tickets, ...expiredTickets].find((item) => String(item.serverTicketId || "") === savedTicketId)
+      : refreshedMember ? memberCurrentTicket(refreshedMember) : null;
     if (!refreshedMember || refreshedMember.name !== payload.name) {
       throw new Error("member_inline_profile_write_not_confirmed");
     }
-    if (ticket && (!refreshed
+    if ((ticket || payload.productId) && (!refreshed
       || Number(refreshed.total) !== Number(payload.totalSessions)
       || Number(refreshed.used) !== Number(payload.usedSessions)
       || Number(refreshed.remaining) !== Number(payload.remainingSessions)
-      || String(refreshed.productId || "") !== String(payload.productId || ""))) {
+      || String(refreshed.productId || "") !== String(payload.productId || "")
+      || !["active", "paused"].includes(String(refreshed.status || "").toLowerCase()))) {
       throw new Error("member_inline_write_not_confirmed");
     }
-    message.textContent = ticket ? "서버 저장 완료 · 시간표 유지 확인" : "기본정보 서버 저장 완료";
+    message.textContent = payload.productId ? "서버 저장 완료 · 수강중 반영 확인" : "기본정보 서버 저장 완료";
     message.classList.add("is-success");
     form.classList.remove("is-dirty", "is-save-error");
     form.classList.add("is-save-success");
