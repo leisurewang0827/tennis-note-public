@@ -11544,7 +11544,7 @@ button .schedule-member-lines > span {
 
 .product-setting-sheet-head {
   display: grid;
-  grid-template-columns: 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(90px, .5fr) 76px;
+  grid-template-columns: 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(110px, .5fr) 168px;
   align-items: center;
   min-width: 860px;
   min-height: 36px;
@@ -11584,7 +11584,7 @@ button .schedule-member-lines > span {
 
 .product-setting-sheet .product-setting-header {
   display: grid;
-  grid-template-columns: 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(90px, .5fr) 76px;
+  grid-template-columns: 42px minmax(280px, 1.5fr) minmax(220px, 1fr) minmax(110px, .5fr) 168px;
   align-items: center;
   gap: 0;
   padding: 0;
@@ -11617,6 +11617,43 @@ button .schedule-member-lines > span {
 
 .product-setting-sheet .product-setting-summary-meta {
   justify-items: start;
+}
+
+.product-setting-quick-status {
+  width: calc(100% - 16px);
+  min-height: 32px;
+  margin: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.product-setting-quick-status:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.product-setting-row-actions {
+  display: grid;
+  grid-template-columns: 36px 36px minmax(62px, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+
+.product-setting-row-actions .icon-button,
+.product-setting-row-actions .small-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+}
+
+.product-setting-form .product-setting-row-actions {
+  grid-template-columns: repeat(2, 36px);
+  justify-content: end;
 }
 
 .product-setting-sheet .product-setting-card[open] {

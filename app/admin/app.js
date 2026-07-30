@@ -4536,6 +4536,61 @@ async function moveMembershipProductSetting(productId, direction) {
   }
 }
 
+async function updateMembershipProductQuickStatus(productId, nextStatus, control) {
+  const allowedStatus = membershipProductStatusOptions.some((option) => option.id === nextStatus);
+  const product = membershipProductDrafts.find((item) => String(item.id) === String(productId));
+  const serverProduct = serverMembershipProductForDraft(product);
+  const previousStatus = normalizeMembershipProduct(product || {}).status;
+  if (!allowedStatus || !product || !serverProduct?.id) {
+    if (control) control.value = previousStatus;
+    showToast("상품 정보를 다시 불러온 뒤 판매 상태를 변경해 주세요.");
+    return false;
+  }
+  if (operationsRole() !== "admin" || !operationsAccessReady()) {
+    if (control) control.value = previousStatus;
+    showToast("관리자 로그인 후 판매 상태를 변경해 주세요.");
+    return false;
+  }
+  if (String(serverProduct.branch_id || "") !== String(activeOperationBranchId() || "")) {
+    if (control) control.value = previousStatus;
+    showToast("현재 지점의 상품만 변경할 수 있습니다.");
+    return false;
+  }
+  if (control) control.disabled = true;
+  try {
+    const rows = await window.TennisNoteDataClient.updateRows("tn_membership_products", {
+      id: serverProduct.id,
+      branch_id: serverProduct.branch_id,
+    }, {
+      is_active: nextStatus !== "hidden",
+      policy_settings: {
+        ...(serverProduct.policy_settings || {}),
+        adminSaleStatus: nextStatus,
+      },
+      updated_at: new Date().toISOString(),
+    });
+    if (!Array.isArray(rows) || rows.length !== 1) throw new Error("membership_product_status_write_not_confirmed");
+    const synced = await syncAdminLiveData();
+    if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    const saved = (adminLiveDataState.products || []).find((item) => String(item.id) === String(serverProduct.id));
+    if (!saved
+      || Boolean(saved.is_active) !== (nextStatus !== "hidden")
+      || String(saved.policy_settings?.adminSaleStatus || "") !== nextStatus) {
+      throw new Error("membership_product_status_write_not_confirmed");
+    }
+    renderServiceReadiness();
+    showToast(`판매 상태를 ${membershipProductStatusOptions.find((option) => option.id === nextStatus)?.label || nextStatus}(으)로 변경했습니다.`);
+    return true;
+  } catch {
+    if (control?.isConnected) {
+      control.value = previousStatus;
+      control.disabled = false;
+    }
+    showToast("판매 상태 저장에 실패했습니다. 서버 상태를 다시 확인해 주세요.");
+    return false;
+  }
+}
+
 function serverMembershipProductForDraft(product = {}) {
   const serverProducts = adminLiveDataState.products || [];
   const idMatch = serverProducts.find((item) => item.id === product.serverProductId);
@@ -22634,9 +22689,15 @@ function renderServiceReadiness() {
             </div>
             <div class="product-setting-summary-meta">
               <b>현금 ${money.format(normalized.cashAmount)}원 / 카드 ${money.format(normalized.cardAmount)}원</b>
-              <span>${membershipProductStatusOptions.find((option) => option.id === normalized.status)?.label || "판매중"}</span>
             </div>
-            <button class="small-button" type="button" data-open-product-setting="${normalized.id}">수정</button>
+            <select class="product-setting-quick-status" data-quick-product-status="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
+              ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
+            </select>
+            <div class="product-setting-row-actions">
+              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="${escapeHtml(normalized.title)} 위로 이동" title="위로 이동">↑</button>
+              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="${escapeHtml(normalized.title)} 아래로 이동" title="아래로 이동">↓</button>
+              <button class="small-button" type="button" data-open-product-setting="${normalized.id}">수정</button>
+            </div>
           </div>
         </article>`;
           }
@@ -22650,7 +22711,13 @@ function renderServiceReadiness() {
             </div>
             <div class="product-setting-summary-meta">
               <b>현금 ${money.format(normalized.cashAmount)}원 / 카드 ${money.format(normalized.cardAmount)}원</b>
-              <span>${membershipProductStatusOptions.find((option) => option.id === normalized.status)?.label || "판매중"}</span>
+            </div>
+            <select class="product-setting-quick-status" data-quick-product-status="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
+              ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
+            </select>
+            <div class="product-setting-row-actions">
+              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="${escapeHtml(normalized.title)} 위로 이동" title="위로 이동">↑</button>
+              <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="${escapeHtml(normalized.title)} 아래로 이동" title="아래로 이동">↓</button>
             </div>
           </summary>
           <div class="product-setting-fields">
@@ -22749,8 +22816,6 @@ function renderServiceReadiness() {
           </div>
           <div class="product-setting-actions">
             <button class="ghost-button" type="button" data-close-product-setting="${normalized.id}">닫기</button>
-            <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="위로 이동" title="위로 이동">↑</button>
-            <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="아래로 이동" title="아래로 이동">↓</button>
             <button class="small-button" type="button" data-save-product-setting="${normalized.id}">저장</button>
             <button class="ghost-button danger-button" type="button" data-force-delete-product-setting="${normalized.id}">강제 삭제</button>
           </div>
@@ -24432,6 +24497,14 @@ function bindEvents() {
       if (event.target.checked) selected.add(id); else selected.delete(id);
       state.selectedMembershipProductIds = [...selected];
       renderProductBulkToolbar();
+      return;
+    }
+    if (event.target.matches("[data-quick-product-status]")) {
+      void updateMembershipProductQuickStatus(
+        event.target.dataset.quickProductStatus,
+        event.target.value,
+        event.target,
+      );
       return;
     }
     if (event.target.matches("#substituteDate")) {
