@@ -10488,6 +10488,35 @@ button .schedule-member-lines > span {
   background: #fbfcfe;
 }
 
+.admin-duration-slot.is-direct-add {
+  cursor: pointer;
+}
+
+.admin-duration-slot.is-direct-add::after {
+  content: "+";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: transparent;
+  font-size: 18px;
+  font-weight: 800;
+  transition: color 120ms ease, background-color 120ms ease;
+  pointer-events: none;
+}
+
+.admin-duration-slot.is-direct-add:hover::after,
+.admin-duration-slot.is-direct-add:focus-visible::after {
+  color: var(--green);
+  background: rgba(21, 122, 91, 0.06);
+}
+
+.admin-duration-slot.is-direct-add:focus-visible {
+  z-index: 2;
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+}
+
 .admin-duration-slot.is-closed,
 .admin-duration-slot.is-break {
   border-color: #efc4bd;
