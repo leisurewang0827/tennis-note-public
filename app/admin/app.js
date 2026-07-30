@@ -1494,6 +1494,7 @@ const adminMemberDirectoryState = {
   counts: null,
   requestId: 0,
 };
+const adminMemberDetailCache = new Map();
 let adminUserNameIndex = null;
 let memberSearchRenderTimer = 0;
 let adminLiveSyncPromise = null;
@@ -1506,7 +1507,89 @@ function invalidateMemberSearchIndex() {
   adminMemberDirectoryState.signature = "";
   adminMemberDirectoryState.rows = [];
   adminMemberDirectoryState.counts = null;
+  adminMemberDetailCache.clear();
   adminUserNameIndex = null;
+}
+
+function adminMemberDetailEntry(member) {
+  const userId = String(member?.serverUserId || "");
+  return userId ? adminMemberDetailCache.get(userId) || null : null;
+}
+
+function applyAdminMemberDetail(member, payload) {
+  const user = payload?.user || {};
+  const enrollment = payload?.enrollment || {};
+  const ticket = payload?.ticket || null;
+  const product = payload?.product || {};
+  const coach = payload?.coach || {};
+  if (!member || !user.id) return;
+  Object.assign(member, {
+    name: user.name || member.name,
+    nickname: user.nickname || member.nickname || "",
+    phone: user.phone || enrollment.phone || member.phone || "",
+    birthYear: user.birth_year || enrollment.birth_year || member.birthYear || "",
+    neighborhood: user.neighborhood || enrollment.neighborhood || member.neighborhood || "",
+    gender: user.gender || enrollment.gender || member.gender || "",
+    photoUrl: user.profile_photo_url || member.photoUrl || "",
+    dominantHand: user.dominant_hand || member.dominantHand || "",
+    backhandStyle: user.backhand_style || member.backhandStyle || "",
+    tennisStartedOn: user.tennis_started_on || member.tennisStartedOn || "",
+    selfNtrp: user.self_ntrp || member.selfNtrp || "",
+    coachNtrp: user.coach_ntrp || member.coachNtrp || "",
+    tennisGoal: user.tennis_goal || enrollment.lesson_goal || member.tennisGoal || "",
+    playStyleMemo: user.play_style_memo || member.playStyleMemo || "",
+    coach: coach.display_name || member.coach || "",
+    authLinked: Boolean(user.auth_user_id || payload?.authLinks?.length),
+    enrollment,
+    serverDetail: payload,
+  });
+  if (!ticket) return;
+  const mappedTicket = tickets.find((item) => item.serverTicketId === ticket.id);
+  if (!mappedTicket) return;
+  Object.assign(mappedTicket, {
+    total: Number(ticket.total_sessions) || 0,
+    used: Number(ticket.used_sessions) || 0,
+    remaining: Number(ticket.remaining_sessions) || 0,
+    purchased: ticket.starts_on || mappedTicket.purchased,
+    expires: ticket.expires_on || mappedTicket.expires,
+    status: ticket.status || mappedTicket.status,
+    product: product.name || mappedTicket.product,
+  });
+}
+
+async function loadAdminMemberDetail(member, { force = false } = {}) {
+  const userId = String(member?.serverUserId || "");
+  if (!userId || operationsRole() !== "admin" || !window.TennisNoteDataClient?.rpc) return false;
+  const current = adminMemberDetailCache.get(userId);
+  if (!force && current?.status === "loaded") return true;
+  if (!force && current?.promise) return current.promise;
+
+  const requestId = Number(current?.requestId || 0) + 1;
+  const entry = { status: "loading", error: "", data: null, requestId, promise: null };
+  entry.promise = window.TennisNoteDataClient.rpc("tn_admin_member_detail", {
+    target_user_id: userId,
+  }).then((response) => {
+    const latest = adminMemberDetailCache.get(userId);
+    if (latest?.requestId !== requestId) return false;
+    const payload = Array.isArray(response) ? response[0] : response;
+    applyAdminMemberDetail(member, payload);
+    Object.assign(latest, { status: "loaded", error: "", data: payload, promise: null });
+    if (state.view === "members" && state.selectedMemberId === member.id) renderMembers();
+    return true;
+  }).catch((error) => {
+    const latest = adminMemberDetailCache.get(userId);
+    if (latest?.requestId !== requestId) return false;
+    Object.assign(latest, {
+      status: "failed",
+      error: String(error?.message || error || "member_detail_failed"),
+      promise: null,
+    });
+    if (state.view === "members" && state.selectedMemberId === member.id) renderMembers();
+    return false;
+  });
+  adminMemberDetailCache.set(userId, entry);
+  if (state.view === "members" && state.selectedMemberId === member.id) renderMembers();
+  return entry.promise;
 }
 
 function adminMemberDirectoryCoachRoleId() {
@@ -11216,6 +11299,18 @@ function renderMembers() {
     detailPanel.innerHTML = "";
   }
   if (selected) {
+    const detailEntry = adminMemberDetailEntry(selected);
+    if (operationsRole() === "admin" && selected.serverUserId && detailEntry?.status !== "loaded") {
+      if (!detailEntry) window.setTimeout(() => void loadAdminMemberDetail(selected), 0);
+      detailPanel.innerHTML = detailEntry?.status === "failed"
+        ? `<div class="empty-state compact">
+            <strong>회원 상세정보를 불러오지 못했습니다.</strong>
+            <span>목록은 그대로 사용할 수 있습니다.</span>
+            <button class="small-button" type="button" data-retry-member-detail="${escapeHtml(selected.serverUserId)}">다시 불러오기</button>
+          </div>`
+        : '<div class="empty-state compact"><strong>회원 상세정보 불러오는 중</strong><span>선택한 회원 정보만 안전하게 확인하고 있습니다.</span></div>';
+      return;
+    }
     const selectedStatus = memberListStatus(selected);
     const selectedRecordCandidate = memberDatabaseRecord(selected, null);
     const selectedTicket = memberCurrentTicket(selected)
@@ -23930,6 +24025,14 @@ function bindEvents() {
       state.selectedMemberId = state.selectedMemberId === memberId ? null : memberId;
       state.inlineMemberId = null;
       renderMembers();
+      const selectedMember = members.find((member) => member.id === state.selectedMemberId);
+      if (selectedMember) void loadAdminMemberDetail(selectedMember);
+      return;
+    }
+    const retryMemberDetailButton = event.target.closest("[data-retry-member-detail]");
+    if (retryMemberDetailButton) {
+      const selectedMember = members.find((member) => String(member.serverUserId || "") === retryMemberDetailButton.dataset.retryMemberDetail);
+      if (selectedMember) void loadAdminMemberDetail(selectedMember, { force: true });
       return;
     }
 
