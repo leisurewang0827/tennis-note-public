@@ -1,4 +1,4 @@
-const state = {
+﻿const state = {
   member: null,
   dataMode: "live",
   liveProfileId: "",
@@ -1679,7 +1679,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.209",
+    workerUrl: "./service-worker.js?v=1.0.210",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -7360,7 +7360,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.209" });
+  const params = new URLSearchParams({ v: "1.0.210" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

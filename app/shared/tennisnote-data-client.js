@@ -575,6 +575,12 @@
       throw offlineError("offline_cache_miss");
     }
     let response;
+    const controller = new AbortController();
+    const timeoutMs = Math.max(
+      5_000,
+      Number(options.timeoutMs || (method === "GET" ? 45_000 : 30_000)),
+    );
+    const timeoutId = window.setTimeout(() => controller.abort("request_timeout"), timeoutMs);
     try {
       response = await fetch(apiUrl(path), {
         method,
@@ -584,14 +590,22 @@
           ...(options.headers || {}),
         },
         body: options.body ? JSON.stringify(options.body) : undefined,
+        signal: controller.signal,
       });
     } catch (error) {
+      if (error?.name === "AbortError") {
+        const timeoutError = new Error("server_request_timeout");
+        timeoutError.code = "server_request_timeout";
+        throw timeoutError;
+      }
       if (method === "GET" && transientNetworkError(error)) {
         const cached = await readOfflineResponse(path, session);
         if (cached !== null) return cached;
         throw offlineError("offline_cache_miss");
       }
       throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
 
     if (!response.ok) {

@@ -53,6 +53,7 @@ const state = {
   pinnedLessonRepeatSlots: [],
   lessonSourceTouched: false,
   lessonWriteInFlight: false,
+  lessonWriteStartedAt: 0,
   lessonOperationKey: "",
   quickLessonEntry: false,
   quickLessonEdit: false,
@@ -8865,9 +8866,6 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
     <input name="expiresOn" type="hidden" value="${escapeHtml(addMemberManagementDays(startsOn, validityDays - 1))}" />
     <input name="usedSessions" type="hidden" value="0" />
     <input name="remainingSessions" type="hidden" value="${total}" />
-    <input name="paymentDate" type="hidden" value="" />
-    <input name="paymentMethod" type="hidden" value="" />
-    <input name="paymentAmount" type="hidden" value="0" />
     <input name="note" type="hidden" value="" />
     <div class="member-management-form-grid member-simple-ticket-fields">
       <label class="form-field span-2">${memberManagementFieldLabel("회원권", true)}<select name="productId" required>
@@ -8877,6 +8875,14 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
         ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === coachRoleId ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
       </select></label>
       <label class="form-field">${memberManagementFieldLabel("총 횟수", true)}<input name="totalSessions" type="number" min="1" step="1" value="${total}" required /></label>
+      <label class="form-field">${memberManagementFieldLabel("결제일")}<input name="paymentDate" type="date" value="${startsOn}" /></label>
+      <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod">
+        <option value="">미입력</option>
+        <option value="card">카드</option>
+        <option value="bank_transfer">계좌이체</option>
+        <option value="cash">현금</option>
+      </select></label>
+      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1000" value="0" /></label>
       <div class="form-field span-2 member-partner-editor ${isGroup ? "" : "is-disabled"}" data-manual-member-partner-field ${isGroup ? "" : "hidden"}>
         ${memberManagementFieldLabel("1:2 파트너", isGroup)}
         <div class="member-partner-mode" role="radiogroup" aria-label="파트너 등록 방법">
@@ -9055,7 +9061,7 @@ function memberManualRegistrationFields() {
     <label class="form-field">${memberManagementFieldLabel("휴대전화")}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" placeholder="010-0000-0000" /></label>
     <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="예: 1990" /></label>
     <input name="memberNickname" type="hidden" value="" />
-    <input name="memberNeighborhood" type="hidden" value="" />
+    <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="예: 군자동" /></label>
     <input name="memberGender" type="hidden" value="" />
     <input name="memberDominantHand" type="hidden" value="" />
     <input name="memberBackhandStyle" type="hidden" value="" />
@@ -9526,6 +9532,7 @@ function memberManagementNullableNumber(input) {
 
 function memberManagementErrorText(error) {
   const raw = `${error?.payload?.code || ""} ${error?.message || ""}`;
+  if (raw.includes("server_request_timeout")) return "서버 응답이 지연되었습니다. 중복 저장은 차단되어 있으니 새로고침 후 결과를 확인해 주세요.";
   if (raw.includes("admin_live_refresh_failed_after_write")) return "서버 저장은 요청됐지만 결과를 다시 확인하지 못했습니다. 새로고침 후 상태를 확인해 주세요.";
   if (raw.includes("member_management_write_not_confirmed")) return "서버에서 변경 결과를 확인하지 못했습니다. 새로고침 후 다시 확인해 주세요.";
   if (raw.includes("payment_product_mismatch")) return "기존 결제에 연결된 회원권과 선택한 회원권이 다릅니다. 결제 회원권을 선택해 주세요.";
@@ -10980,9 +10987,6 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
           <input name="scheduleScope" type="hidden" value="${escapeHtml(record?.lesson_schedule_scope || ticket?.scheduleScope || "weekday")}" />
           <input name="lessonType" type="hidden" value="${escapeHtml(record?.lesson_type || ticket?.lessonTypeCode || "one_on_one")}" />
           <input name="weeklyFrequency" type="hidden" value="${Number(record?.lesson_frequency_per_week ?? ticket?.weeklyCount ?? 1)}" />
-          <input name="paymentMethod" type="hidden" value="${escapeHtml(record?.payment_method || "")}" />
-          <input name="paymentDate" type="hidden" value="${escapeHtml(record?.payment_recorded_on || "")}" />
-          <input name="paymentAmount" type="hidden" value="${escapeHtml(memberManagementValue(record?.payment_amount ?? ""))}" />
           <input name="recordStatus" type="hidden" value="${escapeHtml(record?.record_status || (ticket ? "active" : "pending"))}" />
           <div class="member-inline-compact-grid">
             <label><span>이름</span><input name="memberName" value="${escapeHtml(member.name || "")}" required /></label>
@@ -11001,6 +11005,14 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
             <label><span>총</span><input name="totalSessions" type="number" min="0" step="1" value="${total}" ${ticket ? "" : "disabled"} /></label>
             <label><span>소진</span><input name="usedSessions" type="number" min="0" step="1" value="${used}" ${ticket ? "" : "disabled"} /></label>
             <label><span>잔여</span><input name="remainingSessions" type="number" min="0" step="1" value="${remaining}" readonly aria-readonly="true" /></label>
+            <label><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(record?.payment_recorded_on || "")}" /></label>
+            <label><span>결제수단</span><select name="paymentMethod">
+              <option value="">미입력</option>
+              <option value="card" ${record?.payment_method === "card" ? "selected" : ""}>카드</option>
+              <option value="bank_transfer" ${["bank", "bank_transfer", "transfer"].includes(record?.payment_method) ? "selected" : ""}>계좌이체</option>
+              <option value="cash" ${record?.payment_method === "cash" ? "selected" : ""}>현금</option>
+            </select></label>
+            <label><span>결제금액</span><input name="paymentAmount" type="number" min="0" step="1000" value="${escapeHtml(memberManagementValue(record?.payment_amount ?? ""))}" /></label>
             <label class="member-inline-note"><span>비고</span><input name="note" value="${escapeHtml(record?.admin_note || member.note || "")}" /></label>
             <button class="primary-button member-inline-save" type="submit">저장</button>
           </div>
@@ -11199,7 +11211,7 @@ async function submitMemberInlineEditor(form, options = {}) {
   let saveResult = null;
   try {
     if (ticket) {
-      saveResult = await window.TennisNoteDataClient.rpc("tn_admin_update_member_database_record_preserving_schedule", {
+      saveResult = await window.TennisNoteDataClient.rpc("tn_admin_update_member_record_with_payment", {
         target_record: payload,
       });
     } else if (payload.productId) {
@@ -14916,8 +14928,16 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
     quickActions.hidden = !state.quickLessonEdit || completedCorrection;
     [...quickActions.querySelectorAll("[data-lesson-quick-action]")].forEach((button) => {
       const action = button.dataset.lessonQuickAction;
-      button.hidden = action === "absence" && !canMarkAbsent;
-      if (action === "record") button.hidden = !canCompleteLesson;
+      button.hidden = false;
+      button.disabled = (action === "absence" && !canMarkAbsent)
+        || (action === "record" && !canCompleteLesson);
+      if (button.disabled) {
+        button.title = action === "record"
+          ? "수업 시작 시간이 지난 뒤 사용할 수 있습니다."
+          : "정규 예정 수업에서 사용할 수 있습니다.";
+      } else {
+        button.removeAttribute("title");
+      }
       button.classList.toggle("is-active", action === state.lessonQuickAction);
       button.setAttribute("aria-pressed", String(action === state.lessonQuickAction));
     });
@@ -15621,12 +15641,22 @@ async function deleteOneDayBooking() {
     await window.TennisNoteDataClient.rpc("tn_admin_archive_one_day_booking", {
       target_booking_id: booking.serverOneDayBookingId,
     });
-    await syncAdminLiveData();
+    const synced = await syncAdminLiveData(true);
+    if (!synced) throw new Error("one_day_refresh_failed");
+    if (oneDayBookingForId(booking.serverOneDayBookingId)) {
+      throw new Error("one_day_archive_not_confirmed");
+    }
     window.TennisNoteInputGuard?.markSaved?.("#oneDayBookingModal");
     closeOneDayBookingModal();
     showToast("원데이 예약 삭제 완료");
   } catch (error) {
-    setOneDayBookingMessage("원데이 예약 삭제에 실패했습니다.", "danger");
+    const raw = `${error?.payload?.code || ""} ${error?.message || ""}`;
+    const message = raw.includes("server_request_timeout")
+      ? "서버 응답이 지연되었습니다. 새로고침 후 삭제 여부를 확인해 주세요."
+      : raw.includes("one_day_archive_not_confirmed") || raw.includes("one_day_refresh_failed")
+        ? "삭제 결과를 서버에서 확인하지 못했습니다. 새로고침 후 다시 확인해 주세요."
+        : "원데이 예약 삭제에 실패했습니다.";
+    setOneDayBookingMessage(message, "danger");
   } finally {
     button.disabled = false;
   }
@@ -16074,8 +16104,16 @@ function regularScheduleProtectionMessage(ticket, candidates = []) {
 async function addLessonFromForm(event) {
   event.preventDefault();
   if (state.lessonWriteInFlight) {
-    setLessonFormMessage("이전 저장을 확인하는 중입니다. 잠시만 기다려 주세요.", "neutral");
-    return;
+    const writeAge = Date.now() - Number(state.lessonWriteStartedAt || 0);
+    if (writeAge < 35_000) {
+      setLessonFormMessage("이전 저장을 확인하는 중입니다. 최대 30초 안에 결과를 안내합니다.", "neutral");
+      return;
+    }
+    state.lessonWriteInFlight = false;
+    state.lessonWriteStartedAt = 0;
+    setLessonSubmitEnabled(true);
+    setLessonFormMessage("이전 요청의 응답이 늦어 최신 시간표를 다시 확인합니다. 중복 저장은 서버에서 차단됩니다.", "neutral");
+    await syncAdminLiveData(true);
   }
   refreshLessonTicketOptions();
   let candidate = getLessonFormCandidate();
@@ -16346,6 +16384,7 @@ async function addLessonFromForm(event) {
   if (state.liveScheduleLoaded) {
     const wasEditing = Boolean(state.editingLessonId);
     state.lessonWriteInFlight = true;
+    state.lessonWriteStartedAt = Date.now();
     setLessonSubmitEnabled(false);
     saveScheduleSafetySnapshot(lessons, "before-lesson-write");
     setLessonFormMessage("실서버 시간표에 저장 중입니다.");
@@ -16465,6 +16504,7 @@ async function addLessonFromForm(event) {
       setLessonSubmitEnabled(true);
     } finally {
       state.lessonWriteInFlight = false;
+      state.lessonWriteStartedAt = 0;
     }
     return;
   }
