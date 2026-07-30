@@ -13223,7 +13223,7 @@ function renderCoachDaySchedule(day) {
   target.innerHTML = headers + baseCells + lessonCards;
 }
 
-function getAdminDurationSlotState(day, time, coach, laneLessons = null) {
+function getAdminDurationSlotState(day, time, coach, laneLessons = null, availability = null) {
   if (coach.id?.startsWith("closed-")) {
     return {
       className: "is-closed",
@@ -13240,7 +13240,11 @@ function getAdminDurationSlotState(day, time, coach, laneLessons = null) {
   const occupyingLesson = candidateLessons.find((lesson) => lessonOverlapsScheduleSlot(lesson, day, time));
   const breakRule = getCoachBreakOverlapping(coach.id, day, time, 10) || getBreakRuleOverlapping(day, time, 10, coach.id);
   const working = !breakRule && isCoachAvailableForSlot(coach.id, day, time, 10);
-  const canAdd = !occupyingLesson && working && canAddLessonAt(day, time, 20, coach.id);
+  const canAdd = !occupyingLesson
+    && working
+    && (availability
+      ? availability.hasCourtCapacity && availability.coachIds.has(coach.id)
+      : canAddLessonAt(day, time, 20, coach.id));
   return {
     className: occupyingLesson ? "is-occupied" : breakRule ? "is-break" : working ? "is-open" : "is-closed",
     occupyingLesson,
@@ -13276,11 +13280,23 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
       ${day} · ${adminScheduleDateLabel(day)}
     </div>`).join("");
   const dayStartLaneIndexes = new Set(dayRanges.map(({ startColumn }) => startColumn - 2));
-  const laneLessons = lanes.map(({ day, coach }) => scheduleLessons
-    .filter((lesson) => lesson.day === day
-      && lessonScheduleCoachId(lesson) === coach.id
-      && !isLessonCancelled(lesson)
-      && lessonMatchesActiveScheduleWeek(lesson, day)));
+  const laneLessonIndex = new Map(lanes.map(({ day, coach }) => [`${day}|${coach.id}`, []]));
+  scheduleLessons.forEach((lesson) => {
+    if (isLessonCancelled(lesson) || !lessonMatchesActiveScheduleWeek(lesson, lesson.day)) return;
+    laneLessonIndex.get(`${lesson.day}|${lessonScheduleCoachId(lesson)}`)?.push(lesson);
+  });
+  const laneLessons = lanes.map(({ day, coach }) => laneLessonIndex.get(`${day}|${coach.id}`) || []);
+  const slotAvailability = new Map();
+  displayDays.forEach((day) => {
+    visibleTimes.forEach((time) => {
+      slotAvailability.set(`${day}|${time}`, {
+        hasCourtCapacity: hasCourtCapacity(day, time, 20),
+        coachIds: new Set(getAvailableCoachesForSlot(day, time, 20).map((coach) => coach.id)),
+      });
+    });
+  });
+  const selectedOpenSlotKeys = selectedScheduleOpenSlotKeys();
+  const visibleTimeIndexes = new Map(visibleTimes.map((time, index) => [time, index]));
   const coachHeaders = lanes.map(({ coach }, index) => `
     <div class="admin-duration-coach ${dayStartLaneIndexes.has(index) ? "admin-duration-day-start" : ""} ${coach.id?.startsWith("closed-") ? "is-closed" : getCoachToneClass(coach.id)}" style="grid-row:2;grid-column:${index + 2};">
       ${escapeHtml(String(coach.name || "운영없음").replace(/\s*코치$/, ""))}
@@ -13291,9 +13307,15 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
   const slotCells = visibleTimes.map((time, timeIndex) => lanes.map(({ day, coach }, laneIndex) => {
     const row = timeIndex + 3;
     const column = laneIndex + 2;
-    const slotState = getAdminDurationSlotState(day, time, coach, laneLessons[laneIndex]);
+    const slotState = getAdminDurationSlotState(
+      day,
+      time,
+      coach,
+      laneLessons[laneIndex],
+      slotAvailability.get(`${day}|${time}`),
+    );
     const openSlotKey = scheduleOpenSlotKey({ day, time, coachId: coach.id });
-    const openSlotSelected = selectedScheduleOpenSlotKeys().has(openSlotKey);
+    const openSlotSelected = selectedOpenSlotKeys.has(openSlotKey);
     const addButtonContent = state.scheduleOpenSlotMode
       ? (openSlotSelected ? "선택됨" : "선택")
       : slotState.pasteReady
@@ -13307,7 +13329,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
 
   const lessonCards = lanes.map((lane, laneIndex) => laneLessons[laneIndex]
     .map((lesson) => {
-      const startIndex = visibleTimes.indexOf(lesson.time);
+      const startIndex = visibleTimeIndexes.get(lesson.time) ?? -1;
       if (startIndex < 0) return "";
       const span = Math.max(1, Math.ceil((Number(lesson.durationMinutes) || 20) / 10));
       const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
