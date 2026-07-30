@@ -19029,20 +19029,8 @@ async function performAdminLiveDataSync() {
       rosterRows("groupAccounts", () => client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => [])),
       rosterRows("groupMembers", () => client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => [])),
       rosterRows("groupTicketLinks", () => client.selectRows("tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", limit: 500 }).catch(() => [])),
-      fullAdminAccess ? rosterRows("memberDatabaseRecords", () => (client.selectAllRows || client.selectRows)("tn_member_database_records", {
-        select: "id,user_id,current_ticket_id,branch_id,coach_role_id,record_status,lesson_schedule_scope,lesson_frequency_per_week,lesson_type,lesson_days,lesson_start_on,total_sessions,used_sessions,remaining_sessions,payment_recorded_on,payment_method,payment_amount,admin_note,source_name,source_sheet_id,source_tab_name,source_row_number,last_updated_via",
-        order: "created_at.asc",
-        limit: 500,
-        pageSize: 500,
-        maxRows: 10000,
-      }).catch(() => [])) : Promise.resolve([]),
-      fullAdminAccess ? rosterRows("memberMembershipRecords", () => (client.selectAllRows || client.selectRows)("tn_member_membership_records", {
-        select: "id,user_id,ticket_id,branch_id,coach_role_id,record_status,lesson_schedule_scope,lesson_frequency_per_week,lesson_type,lesson_minutes,lesson_days,lesson_start_on,total_sessions,used_sessions,remaining_sessions,payment_recorded_on,payment_method,payment_amount,admin_note,source_name,source_sheet_id,source_tab_name,source_row_number,last_updated_via",
-        order: "id.asc",
-        limit: 500,
-        pageSize: 500,
-        maxRows: 20000,
-      }).catch(() => [])) : Promise.resolve([]),
+      fullAdminAccess ? Promise.resolve(adminLiveDataState.memberDatabaseRecords || []) : Promise.resolve([]),
+      fullAdminAccess ? Promise.resolve(adminLiveDataState.memberMembershipRecords || []) : Promise.resolve([]),
       rosterRows("substituteAssignments", () => client.selectRows("tn_lesson_substitute_assignments", {
         select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
         order: "assigned_at.desc",
