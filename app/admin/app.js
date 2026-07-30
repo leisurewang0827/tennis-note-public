@@ -1508,14 +1508,16 @@ let adminLiveSyncPromise = null;
 let adminInitialLiveSyncHandle = 0;
 let adminInitialLiveSyncKind = "";
 
-function invalidateMemberSearchIndex() {
+function invalidateMemberSearchIndex({ preserveDirectory = false } = {}) {
   memberSearchIndex.clear();
   memberTicketsIndex.clear();
   ticketParticipantNamesIndex.clear();
-  adminMemberDirectoryState.loaded = false;
-  adminMemberDirectoryState.signature = "";
-  adminMemberDirectoryState.rows = [];
-  adminMemberDirectoryState.counts = null;
+  if (!preserveDirectory) {
+    adminMemberDirectoryState.loaded = false;
+    adminMemberDirectoryState.signature = "";
+    adminMemberDirectoryState.rows = [];
+    adminMemberDirectoryState.counts = null;
+  }
   adminMemberDetailCache.clear();
   adminUserNameIndex = null;
 }
@@ -20011,7 +20013,11 @@ async function performAdminLiveDataSync() {
       substituteAssignments: serverSubstituteAssignments || [],
       lessonWindow,
     });
-    invalidateMemberSearchIndex();
+    // Keep the confirmed directory page visible while the full operational
+    // snapshot refreshes. Clearing it here briefly exposed the legacy local
+    // member array and made the list jump from the current roster to 1,000+
+    // imported rows before the directory RPC completed.
+    invalidateMemberSearchIndex({ preserveDirectory: true });
     saveScheduleSafetySnapshot(lessons, keepLoadedSchedule ? "protected-refresh" : "before-server-refresh");
     replaceArray(lessons, mappedLessons);
     saveScheduleSafetySnapshot(lessons, keepLoadedSchedule ? "protected-refresh" : "server-refresh");
@@ -20030,6 +20036,9 @@ async function performAdminLiveDataSync() {
       state.selectedMemberId = null;
     }
     renderAll();
+    if (state.view === "members" && fullAdminAccess) {
+      void loadAdminMemberDirectoryPage({ force: true, preserveList: true });
+    }
     scheduleAdminOperationalCacheWrite();
     adminLiveScheduleLastRefreshAt = Date.now();
     return true;
