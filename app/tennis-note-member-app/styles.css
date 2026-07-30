@@ -4095,6 +4095,28 @@ body.identity-setup-required {
   gap: 8px;
 }
 
+.payment-confirmation-card {
+  max-width: 430px;
+}
+
+.payment-confirmation-summary {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.payment-confirmation-summary span,
+.payment-confirmation-summary small {
+  color: var(--muted);
+}
+
+.payment-confirmation-summary strong {
+  font-size: 1.5rem;
+}
+
 .notice-card h2,
 .notice-card p {
   margin: 0;

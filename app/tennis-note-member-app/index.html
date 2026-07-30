@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.221" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.221" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.222" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.222" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -784,6 +784,29 @@
       </article>
     </section>
 
+    <section id="paymentConfirmationModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-payment-confirmation></div>
+      <article class="change-modal-card payment-confirmation-card" role="dialog" aria-modal="true" aria-labelledby="paymentConfirmationTitle">
+        <div class="section-title compact-title">
+          <div>
+            <p class="eyebrow">회원권 결제</p>
+            <h2 id="paymentConfirmationTitle">결제 내용을 확인해 주세요</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-payment-confirmation aria-label="결제 확인창 닫기">×</button>
+        </div>
+        <div class="payment-confirmation-summary">
+          <span id="paymentConfirmationProduct">회원권</span>
+          <strong id="paymentConfirmationAmount">0원</strong>
+          <small id="paymentConfirmationMethod">카드 결제</small>
+        </div>
+        <p class="policy-note" id="paymentConfirmationMessage">결제창에서 결제 정보를 확인한 뒤 최종 결제를 완료합니다.</p>
+        <div class="modal-actions">
+          <button class="small-button" type="button" data-close-payment-confirmation>취소</button>
+          <button class="primary-button" id="openPreparedPaymentButton" type="button">결제창 열기</button>
+        </div>
+      </article>
+    </section>
+
     <section id="lessonDetailSheet" class="app-bottom-sheet lesson-detail-sheet" aria-labelledby="lessonDetailTitle" hidden>
       <button class="sheet-backdrop" type="button" aria-label="수업 상세 닫기" data-close-lesson-detail></button>
       <article class="sheet-card lesson-detail-sheet-card" role="dialog" aria-modal="true" aria-labelledby="lessonDetailTitle">
@@ -951,15 +974,15 @@
     </section>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.221"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.222"></script>
     <script src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.221"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.221"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.221"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.221"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.222"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.222"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.222"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.222"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.221"></script>
+    <script src="./app.js?v=1.0.222"></script>
   </body>
 </html>

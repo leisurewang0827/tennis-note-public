@@ -1679,7 +1679,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.221",
+    workerUrl: "./service-worker.js?v=1.0.222",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -5307,6 +5307,7 @@ const paymentMethodDefinitions = [
   { id: "kakaopay", label: "카카오페이", shortLabel: "카카오페이", payMethod: "EASY_PAY", detail: "카카오페이 바로 결제" },
 ];
 let portOneSdkPromise = null;
+let preparedPaymentContext = null;
 
 function loadPortOneSdk() {
   if (window.__TENNIS_NOTE_PORTONE_TEST_SDK__?.requestPayment) {
@@ -6716,6 +6717,96 @@ async function resumePendingTicketPayment(ticketId = "") {
   setView("shopView");
 }
 
+function closePaymentConfirmationModal() {
+  closeAppModal("paymentConfirmationModal");
+  preparedPaymentContext = null;
+}
+
+function openPaymentConfirmationModal({ product, paymentId, preparedPayment, methodId, sdk }) {
+  preparedPaymentContext = { product, paymentId, preparedPayment, methodId, sdk };
+  const modal = $("#paymentConfirmationModal");
+  if (!modal) return;
+  const amount = onlinePaymentAmount(product);
+  const method = paymentMethodDefinition(methodId);
+  $("#paymentConfirmationProduct").textContent = product.title;
+  $("#paymentConfirmationAmount").textContent = `${amount.toLocaleString("ko-KR")}원`;
+  $("#paymentConfirmationMethod").textContent = method.label;
+  $("#paymentConfirmationMessage").textContent = "결제창에서 결제 정보를 확인한 뒤 최종 결제를 완료합니다.";
+  const button = $("#openPreparedPaymentButton");
+  if (button) {
+    button.disabled = false;
+    button.textContent = `${amount.toLocaleString("ko-KR")}원 결제창 열기`;
+  }
+  openAppModal("paymentConfirmationModal", "#openPreparedPaymentButton");
+}
+
+async function completePreparedPayment() {
+  const context = preparedPaymentContext;
+  if (!context) return;
+  const { product, paymentId, preparedPayment, methodId, sdk } = context;
+  const method = paymentMethodDefinition(methodId);
+  const paymentAmount = onlinePaymentAmount(product);
+  const button = $("#openPreparedPaymentButton");
+  const message = $("#paymentConfirmationMessage");
+  if (button) button.disabled = true;
+  if (message) message.textContent = "결제창을 여는 중입니다.";
+
+  try {
+    const response = await sdk.requestPayment(portOnePaymentRequest({
+      paymentId,
+      productId: product.id,
+      orderName: product.title,
+      totalAmount: paymentAmount,
+      methodId,
+    }));
+
+    if (response?.code) {
+      await reconcileRejectedServerPayment(response?.paymentId || paymentId);
+      await syncMemberTicketsFromServer();
+      createPaymentRecord(product, {
+        paymentId,
+        method: `${method.label} 결제 실패`,
+        status: response.message || "결제가 완료되지 않았습니다.",
+      });
+      state.ticketHistory.unshift({ text: `${product.title} 결제 실패 · 다시 시도 필요`, tone: "alert" });
+    } else {
+      const paidPaymentId = response?.paymentId || paymentId;
+      let verifiedStatus = "결제 완료 · 서버 검증 후 회원권 충전 대기";
+      try {
+        const verification = await verifyServerPayment(paidPaymentId);
+        if (verification?.ok) {
+          verifiedStatus = verification.status === "verified"
+            ? "서버 검증 완료 · 이용권 충전 확인 필요"
+            : "서버 검증 확인 · 관리자 확인 필요";
+        }
+      } catch (error) {
+        verifiedStatus = `결제 완료 · 서버 검증 대기 · ${paymentServerErrorMessage(error)}`;
+      }
+      createPaymentRecord(product, {
+        paymentId: paidPaymentId,
+        serverPaymentId: preparedPayment?.localPaymentId || "",
+        method: method.label,
+        status: verifiedStatus,
+      });
+      state.ticketHistory.unshift({ text: `${product.title} 결제 완료 접수 · 검증 후 회원권 충전`, tone: "wait" });
+    }
+  } catch (error) {
+    const detail = paymentServerErrorMessage(error);
+    createPaymentRecord(product, {
+      paymentId,
+      method: "결제창 오류",
+      status: `결제창을 열지 못했습니다. ${detail}`,
+    });
+    state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창을 열지 못했습니다. ${detail}` };
+    state.ticketHistory.unshift({ text: `${product.title} 결제창 오류 · ${detail}`, tone: "alert" });
+  }
+
+  closePaymentConfirmationModal();
+  await syncMemberTicketsFromServer();
+  renderAll();
+  setView("shopView");
+}
+
 async function startProductPayment(productId, options = {}) {
   const product = membershipProducts().find((item) => item.id === productId);
   if (!product) return;
@@ -6790,59 +6881,15 @@ async function startProductPayment(productId, options = {}) {
   }
 
   try {
-    const PortOne = await loadPortOneSdk();
-    const response = await PortOne.requestPayment(portOnePaymentRequest({
-      paymentId,
-      productId: product.id,
-      orderName: product.title,
-      totalAmount: paymentAmount,
-      methodId,
-    }));
-
-    if (response?.code) {
-      await reconcileRejectedServerPayment(response?.paymentId || paymentId);
-      await syncMemberTicketsFromServer();
-      createPaymentRecord(product, {
-        paymentId,
-        method: `${method.label} 결제 실패`,
-        status: response.message || "결제가 완료되지 않았습니다.",
-      });
-      state.ticketHistory.unshift({ text: `${product.title} 결제 실패 · 다시 시도 필요`, tone: "alert" });
-    } else {
-      const paidPaymentId = response?.paymentId || paymentId;
-      let verifiedStatus = "결제 완료 · 서버 검증 후 회원권 충전 대기";
-      try {
-        const verification = await verifyServerPayment(paidPaymentId);
-        if (verification?.ok) {
-          verifiedStatus = verification.status === "verified"
-            ? "서버 검증 완료 · 이용권 충전 확인 필요"
-            : "서버 검증 확인 · 관리자 확인 필요";
-        }
-      } catch (error) {
-        verifiedStatus = `결제 완료 · 서버 검증 대기 · ${paymentServerErrorMessage(error)}`;
-      }
-      createPaymentRecord(product, {
-        paymentId: paidPaymentId,
-        serverPaymentId: preparedPayment?.localPaymentId || "",
-        method: method.label,
-        status: verifiedStatus,
-      });
-      state.ticketHistory.unshift({ text: `${product.title} 결제 완료 접수 · 검증 후 회원권 충전`, tone: "wait" });
-    }
+    const sdk = await loadPortOneSdk();
+    openPaymentConfirmationModal({ product, paymentId, preparedPayment, methodId, sdk });
   } catch (error) {
     const detail = paymentServerErrorMessage(error);
-    createPaymentRecord(product, {
-      paymentId,
-      method: "결제창 오류",
-      status: `결제창을 열지 못했습니다. ${detail}`,
-    });
-    state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창을 열지 못했습니다. ${detail}` };
-    state.ticketHistory.unshift({ text: `${product.title} 결제창 오류 · ${detail}`, tone: "alert" });
+    state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창 준비에 실패했습니다. ${detail}` };
+    state.ticketHistory.unshift({ text: `${product.title} 결제창 준비 실패 · ${detail}`, tone: "alert" });
+    renderAll();
+    setView("shopView");
   }
-
-  await syncMemberTicketsFromServer();
-  renderAll();
-  setView("shopView");
 }
 
 function renderJournalCalendar() {
@@ -7360,7 +7407,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.221" });
+  const params = new URLSearchParams({ v: "1.0.222" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9060,6 +9107,14 @@ function bindEvents() {
     if (productButton) {
       event.preventDefault();
       startProductPayment(productButton.dataset.buyProduct);
+      return;
+    }
+    if (event.target.closest("[data-close-payment-confirmation]")) {
+      closePaymentConfirmationModal();
+      return;
+    }
+    if (event.target.closest("#openPreparedPaymentButton")) {
+      completePreparedPayment();
       return;
     }
     const pageButton = event.target.closest("[data-page-list]");
