@@ -638,9 +638,11 @@ const groupAccounts = [
 const serverPaymentSyncState = {
   loading: false,
   loaded: false,
+  lastLoadedAt: 0,
   message: "서버 결제 기록을 아직 불러오지 않았습니다.",
   tone: "neutral",
 };
+const SERVER_PAYMENT_REFRESH_STALE_MS = 120_000;
 
 const refundFlowState = {
   itemIndex: -1,
@@ -4121,6 +4123,14 @@ function mergeServerPaymentRows(rows = []) {
 
 async function loadServerPaymentsIntoBilling(options = {}) {
   const silent = Boolean(options.silent);
+  const force = Boolean(options.force);
+  if (
+    !force
+    && serverPaymentSyncState.loaded
+    && Date.now() - serverPaymentSyncState.lastLoadedAt < SERVER_PAYMENT_REFRESH_STALE_MS
+  ) {
+    return true;
+  }
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !client.readiness?.().ready) {
     serverPaymentSyncState.loaded = true;
@@ -19507,6 +19517,7 @@ async function performAdminLiveDataSync() {
     Object.assign(serverPaymentSyncState, {
       loaded: true,
       loading: false,
+      lastLoadedAt: Date.now(),
       message: `서버 결제 ${mappedPayments.length}건 확인`,
       tone: "good",
     });
@@ -19563,6 +19574,7 @@ async function performAdminLiveDataSync() {
     }
     renderAll();
     scheduleAdminOperationalCacheWrite();
+    adminLiveScheduleLastRefreshAt = Date.now();
     return true;
   } catch (error) {
     Object.assign(state, {
