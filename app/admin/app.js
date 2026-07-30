@@ -20705,7 +20705,7 @@ async function saveCoachStaff() {
     window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
     closeCoachStaffModal();
     renderCoaches();
-    renderSchedule();
+    if (state.view === "schedule") renderSchedule();
     showToast("코치·직원 정보가 서버에 저장되었습니다.");
   } catch (error) {
     const raw = `${error?.payload?.message || ""} ${error?.message || ""}`;
@@ -20756,7 +20756,7 @@ async function setCoachStaffState(targetState) {
     window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
     closeCoachStaffModal();
     renderCoaches();
-    renderSchedule();
+    if (state.view === "schedule") renderSchedule();
     const completion = targetState === "archived"
       ? "보관했습니다. 근무 중 목록에서 숨겨지고 종료·보관에서 복원할 수 있습니다."
       : targetState === "ended"
@@ -20791,7 +20791,7 @@ async function deleteCoachStaff() {
     window.TennisNoteInputGuard?.markSaved?.("#coachStaffModal");
     closeCoachStaffModal();
     renderCoaches();
-    renderSchedule();
+    if (state.view === "schedule") renderSchedule();
     const futureCount = Number(result?.futureLessonCount) || 0;
     showToast(futureCount
       ? `코치를 삭제했습니다. 남은 예정 수업 ${futureCount}건은 재배정이 필요합니다.`
@@ -22703,7 +22703,6 @@ function renderAll() {
   renderOperationsLoginGate();
   renderSupabaseLiveStatus();
   renderAuthProviderStatus();
-  renderServiceReadiness();
   renderDataTools();
   renderGlobalSearchResults();
   if (!operationsAccessReady()) {
@@ -22762,18 +22761,38 @@ function renderAdminView(view = state.view) {
   }
 
   if (activeView !== "settings") return;
-  renderCoaches();
-  renderScheduleSettings();
-  renderRefundPolicySettings();
-  renderHoldingPolicySettings();
-  renderNoticePopupSettings();
-  renderNotificationPolicySettings();
-  renderMemberManagementPolicySettings();
   renderSettingsTabs();
-  renderAdminLayoutSettings();
-  renderAdminSecurity();
-  renderServiceReadiness();
-  renderCoachSettlementPreview();
+  renderActiveSettingsPanel();
+}
+
+function renderActiveSettingsPanel() {
+  if (state.view !== "settings") return;
+  switch (state.settingsTab) {
+    case "membership":
+      renderServiceReadiness();
+      break;
+    case "notifications":
+      renderNoticePopupSettings();
+      renderNotificationPolicySettings();
+      break;
+    case "coach":
+      renderCoaches();
+      renderCoachSettlementPreview();
+      break;
+    case "layout":
+      renderAdminLayoutSettings();
+      break;
+    case "security":
+      renderMemberManagementPolicySettings();
+      renderAdminSecurity();
+      break;
+    case "operation":
+    default:
+      renderScheduleSettings();
+      renderRefundPolicySettings();
+      renderHoldingPolicySettings();
+      break;
+  }
 }
 
 let adminLiveScheduleRefreshTimer = 0;
@@ -23033,6 +23052,7 @@ function bindEvents() {
     if (!button) return;
     state.settingsTab = button.dataset.settingsTab || "operation";
     renderSettingsTabs();
+    renderActiveSettingsPanel();
     void ensureAdminViewData("settings", state.settingsTab);
     saveSnapshot();
   });
@@ -23041,6 +23061,7 @@ function bindEvents() {
     if (!button) return;
     state.membershipSettingsSection = button.dataset.membershipSection === "discounts" ? "discounts" : "products";
     renderSettingsTabs();
+    renderActiveSettingsPanel();
     saveSnapshot();
   });
   document.addEventListener("click", async (event) => {
