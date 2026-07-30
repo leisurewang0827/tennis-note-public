@@ -9566,7 +9566,8 @@ function memberManagementErrorText(error) {
   if (raw.includes("terminal_ticket_locked")) return "환불 또는 강제삭제가 끝난 회원권은 수정할 수 없습니다.";
   if (raw.includes("invalid_member_database_status")) return "회원 상태를 다시 확인해 주세요.";
   if (raw.includes("active_product_required")) return "사용 가능한 회원권 상품을 선택해 주세요.";
-  if (raw.includes("member_active_ticket_exists")) return "기존 사용 중·일시정지·결제 대기 회원권을 먼저 확인해 주세요. 새로고침 후 기존 회원권이 이 행에 표시됩니다.";
+  if (raw.includes("member_verified_pending_ticket_exists")) return "결제가 확인된 대기 회원권이 있습니다. 결제/정산에서 회원권 연결을 확인해 주세요.";
+  if (raw.includes("member_active_ticket_exists")) return "기존 사용 중·일시정지 회원권을 먼저 확인해 주세요. 새로고침 후 기존 회원권이 이 행에 표시됩니다.";
   if (raw.includes("ticket_price_invalid")) return "결제금액은 0원 이상으로 입력해 주세요.";
   if (raw.includes("separate_group_structure_requires_team_edit")) return "1:2 팀의 종류·파트너 변경은 팀 설정에서 함께 처리해 주세요.";
   return "처리에 실패했습니다. 입력값과 서버 적용 상태를 확인해 주세요.";
@@ -11193,7 +11194,7 @@ async function submitMemberInlineEditor(form, options = {}) {
       payload.lessonType = Number(product.group_size || 1) === 2 ? "one_on_two" : "one_on_one";
       payload.recordStatus = "active";
       payload.ticketStatus = "active";
-      await window.TennisNoteDataClient.rpc("tn_admin_assign_member_database_ticket", {
+      await window.TennisNoteDataClient.rpc("tn_admin_assign_member_database_ticket_resolving_pending", {
         target_record: payload,
       });
     } else {
@@ -11248,12 +11249,14 @@ async function submitMemberInlineEditor(form, options = {}) {
     return true;
   } catch (error) {
     const raw = String(error?.message || error?.payload?.message || "");
-    if (raw.includes("member_active_ticket_exists")) {
+    if (raw.includes("member_active_ticket_exists") || raw.includes("member_verified_pending_ticket_exists")) {
       const synced = await syncAdminLiveData(true).catch(() => false);
       if (synced) {
         state.inlineMemberId = member.id;
         renderMembers();
-        showToast("기존 회원권을 확인했습니다. 표시된 회원권을 수정하거나 만료 처리해 주세요.");
+        showToast(raw.includes("member_verified_pending_ticket_exists")
+          ? "결제가 확인된 대기 회원권이 있습니다. 결제/정산에서 연결 상태를 확인해 주세요."
+          : "사용 중인 회원권이 있습니다. 표시된 회원권을 수정하거나 만료 처리해 주세요.");
         return false;
       }
     }
