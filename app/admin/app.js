@@ -2960,7 +2960,7 @@ function restoreSnapshot() {
   }
 }
 
-function saveSnapshot() {
+function writeSnapshotNow() {
   if (state.snapshotStorageUnavailable) return false;
   const {
     accountDeletionRequests,
@@ -3019,6 +3019,38 @@ function saveSnapshot() {
     console.warn("Admin snapshot was not saved", error?.name || "storage_error");
     return false;
   }
+}
+
+let adminSnapshotSaveHandle = 0;
+let adminSnapshotSaveQueued = false;
+
+function flushSnapshotSave() {
+  if (adminSnapshotSaveHandle) {
+    if (typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(adminSnapshotSaveHandle);
+    } else {
+      window.clearTimeout(adminSnapshotSaveHandle);
+    }
+  }
+  adminSnapshotSaveHandle = 0;
+  adminSnapshotSaveQueued = false;
+  return writeSnapshotNow();
+}
+
+function saveSnapshot() {
+  if (state.snapshotStorageUnavailable || adminSnapshotSaveQueued) return false;
+  adminSnapshotSaveQueued = true;
+  const write = () => {
+    adminSnapshotSaveHandle = 0;
+    adminSnapshotSaveQueued = false;
+    writeSnapshotNow();
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    adminSnapshotSaveHandle = window.requestIdleCallback(write, { timeout: 1000 });
+  } else {
+    adminSnapshotSaveHandle = window.setTimeout(write, 120);
+  }
+  return true;
 }
 
 function cloneOperationProfileValue(value) {
@@ -23079,6 +23111,7 @@ function installAdminLiveScheduleRefresh() {
 }
 
 function bindEvents() {
+  window.addEventListener("pagehide", flushSnapshotSave);
   window.addEventListener("popstate", () => {
     if (document.body.classList.contains("admin-menu-open")) {
       closeAdminMenu();
