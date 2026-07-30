@@ -32,6 +32,9 @@ const state = {
   scheduleSearchLastAutoJump: "",
   editingBreakRuleId: "",
   billingFilter: "action",
+  billingPage: 0,
+  settlementPage: 0,
+  rechargePage: 0,
   discountView: "policies",
   discountSearch: "",
   discountStatusFilter: "all",
@@ -220,6 +223,7 @@ const mobileCoachSlotWidth = 92;
 const dashboardPageSize = 5;
 const memberListPageSize = 10;
 const membershipProductPageSize = 10;
+const billingPageSize = 15;
 
 const coaches = [
   { id: "coach-no", name: "노 코치", role: "레슨", status: "active", account: "김서준 회원", coachMode: "approved", availability: "split", photoUrl: "" },
@@ -16570,8 +16574,10 @@ function settlementAmountFor(item) {
   return Math.round(perLessonBase * completedLessons * (Number(rule.ratio) || 0));
 }
 
-function settlementRowsForBilling(billing) {
-  const ticket = tickets.find((item) => item.serverTicketId === billing.ticketId || item.id === billing.ticketId) || {};
+function settlementRowsForBilling(billing, indexes = {}) {
+  const ticket = indexes.ticketById?.get(String(billing.ticketId || ""))
+    || tickets.find((item) => item.serverTicketId === billing.ticketId || item.id === billing.ticketId)
+    || {};
   const ticketId = ticket.serverTicketId || ticket.id;
   const base = {
     member: billing.member,
@@ -16583,19 +16589,21 @@ function settlementRowsForBilling(billing) {
     totalLessons: Number(ticket.total) || 0,
     minutes: Number(ticket.durationMinutes) || 20,
   };
-  const completedLessons = (adminLiveDataState.lessons || []).filter((lesson) => (
-    String(lesson.ticketId || "") === String(ticketId || "")
-    && lesson.serverStatus === "completed"
-  ));
+  const completedLessons = indexes.completedLessonsByTicket?.get(String(ticketId || ""))
+    || (adminLiveDataState.lessons || []).filter((lesson) => (
+      String(lesson.ticketId || "") === String(ticketId || "")
+      && lesson.serverStatus === "completed"
+    ));
   if (!completedLessons.length) return [{ ...base, actualCoach: base.coach, lessonCount: Number(ticket.used) || 0 }];
 
   const assignments = adminLiveDataState.substituteAssignments || [];
   const grouped = new Map();
   completedLessons.forEach((lesson) => {
-    const assignment = assignments.find((item) => (
-      String(item.lesson_id) === String(lesson.serverLessonId)
-      && ["assigned", "completed"].includes(item.status)
-    ));
+    const assignment = indexes.assignmentByLesson?.get(String(lesson.serverLessonId || ""))
+      || assignments.find((item) => (
+        String(item.lesson_id) === String(lesson.serverLessonId)
+        && ["assigned", "completed"].includes(item.status)
+      ));
     const actualCoach = assignment
       ? coachNameForRoleId(assignment.substitute_coach_role_id)
       : getCoachName(lesson.coachId || ticket.coachId || "");
@@ -16630,11 +16638,38 @@ function renderCoachSettlementPreview() {
   if (!["billing", "settings"].includes(state.view)) return;
   const previewRows = $("#coachSettlementPreviewRows");
   if (previewRows) {
+    const ticketById = new Map();
+    tickets.forEach((ticket) => {
+      if (ticket.id) ticketById.set(String(ticket.id), ticket);
+      if (ticket.serverTicketId) ticketById.set(String(ticket.serverTicketId), ticket);
+    });
+    const completedLessonsByTicket = new Map();
+    (adminLiveDataState.lessons || []).forEach((lesson) => {
+      if (lesson.serverStatus !== "completed" || !lesson.ticketId) return;
+      const key = String(lesson.ticketId);
+      const rows = completedLessonsByTicket.get(key) || [];
+      rows.push(lesson);
+      completedLessonsByTicket.set(key, rows);
+    });
+    const assignmentByLesson = new Map();
+    (adminLiveDataState.substituteAssignments || []).forEach((assignment) => {
+      if (!assignment.lesson_id || !["assigned", "completed"].includes(assignment.status)) return;
+      assignmentByLesson.set(String(assignment.lesson_id), assignment);
+    });
     const liveSettlementRows = billings
       .filter((billing) => billing.status === "paid")
-      .flatMap(settlementRowsForBilling);
+      .flatMap((billing) => settlementRowsForBilling(billing, {
+        ticketById,
+        completedLessonsByTicket,
+        assignmentByLesson,
+      }));
     const previewItems = adminDemoMode ? coachSettlementPreview : liveSettlementRows;
-    previewRows.innerHTML = previewItems
+    state.settlementPage = normalizeDashboardPage(previewItems.length, state.settlementPage, billingPageSize);
+    const visiblePreviewItems = previewItems.slice(
+      state.settlementPage * billingPageSize,
+      (state.settlementPage + 1) * billingPageSize,
+    );
+    previewRows.innerHTML = visiblePreviewItems
       .map((item) => {
         const settlementCoach = settlementCoachNameFor(item);
         const rule = settlementRuleFor(settlementCoach);
@@ -16655,6 +16690,13 @@ function renderCoachSettlementPreview() {
           </tr>`;
       })
       .join("") || '<tr><td colspan="6" class="empty-text">실제 결제 내역이 없습니다.</td></tr>';
+    renderDashboardPager(
+      "#coachSettlementPreviewPager",
+      previewItems.length,
+      state.settlementPage,
+      "settlement",
+      billingPageSize,
+    );
   }
 
 }
@@ -16769,8 +16811,10 @@ function renderBilling() {
   $("#ticketRechargeCount").textContent = `${rechargeTargets.length}명`;
   renderPaymentAdminGateStatus();
   renderPaymentChargeAudit();
+  const billingGroups = { action: [], verifying: [], done: [], refund: [] };
+  branchBillings.forEach((item) => billingGroups[billingFilterGroup(item)]?.push(item));
   $$('[data-billing-count]').forEach((count) => {
-    count.textContent = String(branchBillings.filter((item) => billingFilterGroup(item) === count.dataset.billingCount).length);
+    count.textContent = String(billingGroups[count.dataset.billingCount]?.length || 0);
   });
   $$('[data-billing-filter]').forEach((button) => button.classList.toggle("is-active", button.dataset.billingFilter === state.billingFilter));
 
@@ -16783,7 +16827,12 @@ function renderBilling() {
       </div>`;
   }
 
-  const visibleBillings = branchBillings.filter((item) => billingFilterGroup(item) === state.billingFilter);
+  const filteredBillings = billingGroups[state.billingFilter] || [];
+  state.billingPage = normalizeDashboardPage(filteredBillings.length, state.billingPage, billingPageSize);
+  const visibleBillings = filteredBillings.slice(
+    state.billingPage * billingPageSize,
+    (state.billingPage + 1) * billingPageSize,
+  );
   $("#billingRows").innerHTML = visibleBillings.length ? visibleBillings
     .map(
       (item) => {
@@ -16802,8 +16851,14 @@ function renderBilling() {
       },
     )
     .join("") : '<tr><td colspan="6" class="empty-text">선택한 상태의 결제 내역이 없습니다.</td></tr>';
+  renderDashboardPager("#billingPager", filteredBillings.length, state.billingPage, "billing", billingPageSize);
 
-  $("#rechargeRows").innerHTML = rechargeTargets.length ? rechargeTargets
+  state.rechargePage = normalizeDashboardPage(rechargeTargets.length, state.rechargePage, billingPageSize);
+  const visibleRechargeTargets = rechargeTargets.slice(
+    state.rechargePage * billingPageSize,
+    (state.rechargePage + 1) * billingPageSize,
+  );
+  $("#rechargeRows").innerHTML = visibleRechargeTargets.length ? visibleRechargeTargets
     .map(
       (ticket, index) => `
         <tr>
@@ -16815,8 +16870,10 @@ function renderBilling() {
         </tr>`,
     )
     .join("") : '<tr><td colspan="5" class="empty-text">연장 확인이 필요한 회원권이 없습니다.</td></tr>';
+  renderDashboardPager("#rechargePager", rechargeTargets.length, state.rechargePage, "recharge", billingPageSize);
 
   $("#billingLog").innerHTML = billingLogs
+    .slice(0, 20)
     .map((item) => `<li>${item}</li>`)
     .join("");
 }
@@ -23838,6 +23895,7 @@ function bindEvents() {
     const billingFilterButton = event.target.closest("[data-billing-filter]");
     if (billingFilterButton) {
       state.billingFilter = billingFilterButton.dataset.billingFilter || "action";
+      state.billingPage = 0;
       renderBilling();
       saveSnapshot();
       return;
@@ -24200,6 +24258,24 @@ function bindEvents() {
       renderMembers();
       const selectedMember = members.find((member) => member.id === state.selectedMemberId);
       if (selectedMember) void loadAdminMemberDetail(selectedMember);
+      return;
+    }
+    if (pageButton.dataset.dashboardPage === "billing") {
+      state.billingPage = page;
+      renderBilling();
+      saveSnapshot();
+      return;
+    }
+    if (pageButton.dataset.dashboardPage === "settlement") {
+      state.settlementPage = page;
+      renderCoachSettlementPreview();
+      saveSnapshot();
+      return;
+    }
+    if (pageButton.dataset.dashboardPage === "recharge") {
+      state.rechargePage = page;
+      renderBilling();
+      saveSnapshot();
       return;
     }
     const retryMemberDetailButton = event.target.closest("[data-retry-member-detail]");
