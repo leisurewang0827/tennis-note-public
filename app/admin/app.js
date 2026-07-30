@@ -1680,7 +1680,7 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
   return member;
 }
 
-async function loadAdminMemberDirectoryPage({ force = false, render = true } = {}) {
+async function loadAdminMemberDirectoryPage({ force = false, render = true, preserveList = false } = {}) {
   if (operationsRole() !== "admin" || !window.TennisNoteDataClient?.rpc) return false;
   const signature = adminMemberDirectorySignature();
   if (!force && adminMemberDirectoryState.loaded && adminMemberDirectoryState.signature === signature) return true;
@@ -1691,7 +1691,7 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true } = {
     error: "",
     requestId,
   });
-  if (render && state.view === "members") renderMembers();
+  if (render && state.view === "members") renderMembers({ preserveList });
   try {
     const query = JSON.parse(signature);
     const response = await window.TennisNoteDataClient.rpc("tn_admin_member_directory_page", {
@@ -8841,15 +8841,19 @@ function renderMemberStatusCounts() {
     && Boolean(window.TennisNoteDataClient?.rpc);
   const serverDirectoryCurrent = adminMemberDirectoryState.loaded
     && adminMemberDirectoryState.signature === adminMemberDirectorySignature();
-  const counts = serverDirectoryCurrent && adminMemberDirectoryState.counts
+  const confirmedServerCounts = adminMemberDirectoryState.counts
+    && typeof adminMemberDirectoryState.counts === "object"
     ? adminMemberDirectoryState.counts
-    : memberStatusCounts();
+    : null;
+  const counts = serverDirectoryCurrent && confirmedServerCounts
+    ? confirmedServerCounts
+    : confirmedServerCounts || memberStatusCounts();
   const waitingForServer = serverDirectoryExpected
     && !serverDirectoryCurrent
     && !adminMemberDirectoryState.error;
   $$('[data-member-filter-count]').forEach((badge) => {
     const filter = badge.dataset.memberFilterCount;
-    badge.textContent = waitingForServer ? "…" : `${counts[filter] || 0}명`;
+    badge.textContent = waitingForServer && !confirmedServerCounts ? "…" : `${counts[filter] || 0}명`;
     badge.setAttribute("aria-busy", String(waitingForServer));
     badge.title = filter === "expired" && !waitingForServer
       ? "과거 DB에서 이관한 만료 회원을 포함합니다."
@@ -11756,7 +11760,7 @@ function renderMembers(options = {}) {
   const filterCopy = memberFilterCopy[state.memberFilter] || memberFilterCopy.active;
   if ($("#memberFilterSummary")) {
     $("#memberFilterSummary").textContent = serverDirectoryPending
-      ? "회원 목록 불러오는 중"
+      ? `${filteredTotal}명 · ${state.memberListPage + 1}페이지 불러오는 중`
       : `${filteredTotal}${filterCopy.summary}`;
   }
   const hasMemberListFilter = Boolean(
@@ -11784,6 +11788,7 @@ function renderMembers(options = {}) {
   renderMemberBulkToolbar(visibleMembers);
 
   const memberRows = $("#memberRows");
+  memberRows?.setAttribute("aria-busy", String(serverDirectoryPending));
   const preserveList = options.preserveList === true && memberRows?.children.length;
   if (!preserveList) {
     memberRows.innerHTML = serverDirectoryPending
@@ -23595,8 +23600,7 @@ function bindEvents() {
     if (pageButton.dataset.dashboardPage === "member-directory") {
       state.memberListPage = page;
       state.selectedMemberId = null;
-      renderMembers();
-      void loadAdminMemberDirectoryPage({ force: true });
+      void loadAdminMemberDirectoryPage({ force: true, preserveList: true });
       saveSnapshot();
       return;
     }
