@@ -12952,14 +12952,10 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
       : slotState.pasteReady
         ? "붙여넣기"
         : '<span class="admin-duration-add-icon" aria-hidden="true">+</span><span class="admin-duration-add-label">수업 추가</span>';
-    const showAddButton = state.scheduleEditMode || state.scheduleOpenSlotMode || Boolean(state.scheduleLessonClipboard);
-    const addButton = slotState.canAdd && showAddButton
+    const addButton = slotState.canAdd
       ? `<button class="admin-duration-add ${slotState.pasteReady ? "is-paste-ready" : ""} ${openSlotSelected ? "is-slot-selected" : ""}" type="button" data-quick-lesson-entry="true" ${state.scheduleOpenSlotMode ? `data-select-schedule-slot="${escapeHtml(openSlotKey)}" aria-pressed="${openSlotSelected ? "true" : "false"}"` : ""} ${slotState.pasteReady ? 'data-paste-schedule-lesson="true"' : ""} ${lessonAddAttrs(day, time, 20, coach.id)}>${addButtonContent}</button>`
       : "";
-    const directAddAttrs = slotState.canAdd && !showAddButton
-      ? `role="button" tabindex="0" data-quick-lesson-entry="true" ${lessonAddAttrs(day, time, 20, coach.id)}`
-      : "";
-    return `<div class="admin-duration-slot ${directAddAttrs ? "is-direct-add" : ""} ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}" ${directAddAttrs} style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
+    return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}" style="grid-row:${row};grid-column:${column};">${addButton}</div>`;
   }).join("")).join("");
 
   const lessonCards = lanes.map((lane, laneIndex) => laneLessons[laneIndex]
@@ -22563,12 +22559,6 @@ function bindEvents() {
     });
   });
   document.addEventListener("keydown", (event) => {
-    const directAddSlot = event.target.closest(".admin-duration-slot.is-direct-add[data-add-lesson-day]");
-    if (directAddSlot && (event.key === "Enter" || event.key === " ")) {
-      event.preventDefault();
-      directAddSlot.click();
-      return;
-    }
     const lessonButton = event.target.closest("[data-edit-lesson-id], [data-select-schedule-lesson]");
     const typingTarget = event.target.closest("input, textarea, select, [contenteditable='true']");
     if (!typingTarget && state.scheduleOpenSlotMode && state.selectedScheduleOpenSlots?.length && event.key === "Enter") {
