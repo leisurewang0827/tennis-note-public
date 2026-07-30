@@ -510,6 +510,7 @@
       const session = saveOAuthSession(parsed.hash);
       if (!session) return false;
       await flushOAuthProviderCredentialCapture();
+      await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
       window.location.reload();
       return true;
     } catch (error) {
@@ -729,7 +730,7 @@
     return overrides[key] || key;
   }
 
-  function signInWithOAuth(provider, options = {}) {
+  async function signInWithOAuth(provider, options = {}) {
     if (!readiness().ready) {
       throw new Error("Supabase publishable config is missing. Demo login is still active.");
     }
@@ -745,7 +746,16 @@
     });
     // Naver otherwise reuses the browser's signed-in account without offering an account choice.
     if (key === "naver") query.set("auth_type", "reauthenticate");
-    window.location.href = authUrl(`authorize?${query.toString()}`);
+    const authorizeUrl = authUrl(`authorize?${query.toString()}`);
+    const browserPlugin = window.Capacitor?.Plugins?.Browser;
+    if (isNativeApp() && browserPlugin?.open) {
+      await browserPlugin.open({
+        url: authorizeUrl,
+        presentationStyle: "popover",
+      });
+      return;
+    }
+    window.location.href = authorizeUrl;
   }
 
   async function signInWithPassword(email, password) {

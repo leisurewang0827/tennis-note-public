@@ -10598,8 +10598,9 @@ async function runMemberBulkAction() {
   }
 }
 
-function memberQuickEditorMarkup(member, ticket) {
+function memberQuickEditorMarkup(member, ticket, options = {}) {
   if (!memberAdminEditEnabled || operationsRole() !== "admin") return "";
+  const embedded = options.embedded === true;
   const record = memberDatabaseRecord(member, ticket);
   const coachRoles = memberManagementCoachRoles(ticket || {});
   const partnerUserId = ticket ? memberTicketPartnerUserId(ticket, member) : "";
@@ -10619,7 +10620,7 @@ function memberQuickEditorMarkup(member, ticket) {
   const isGroup = Number(currentProduct?.group_size || record?.lesson_group_size || ticket?.groupSize || 1) === 2;
   return `
         <form class="member-inline-editor member-inline-editor--compact" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}">
-          <div class="member-inline-editor-heading">
+          <div class="member-inline-editor-heading" ${embedded ? "hidden" : ""}>
             <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
           </div>
@@ -10895,7 +10896,8 @@ async function submitMemberInlineEditor(form, options = {}) {
     if (ticket && (!refreshed
       || Number(refreshed.total) !== Number(payload.totalSessions)
       || Number(refreshed.used) !== Number(payload.usedSessions)
-      || Number(refreshed.remaining) !== Number(payload.remainingSessions))) {
+      || Number(refreshed.remaining) !== Number(payload.remainingSessions)
+      || String(refreshed.productId || "") !== String(payload.productId || ""))) {
       throw new Error("member_inline_write_not_confirmed");
     }
     message.textContent = ticket ? "서버 저장 완료 · 시간표 유지 확인" : "기본정보 서버 저장 완료";
@@ -10997,7 +10999,7 @@ function renderMembers() {
     .map((member) => {
       const ticket = memberCurrentTicket(member);
       const issues = memberEditorAuditIssues(member, ticket);
-      return `
+      const memberRow = `
         <tr class="${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}">
           <td class="row-select-cell member-select-column"><input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedMemberIdSet().has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} /></td>
           <td class="member-name-column">
@@ -11005,7 +11007,6 @@ function renderMembers() {
               ${avatarMarkup(member, "small")}
               <span>${escapeHtml(member.name)}</span>
             </button>
-            ${memberAdminEditEnabled && operationsRole() === "admin" ? `<button class="member-inline-edit-button" type="button" data-open-member-inline="${member.id}" aria-expanded="${state.inlineMemberId === member.id ? "true" : "false"}" aria-label="${escapeHtml(member.name)} 빠른 수정">수정</button>` : ""}
           </td>
           <td class="member-auth-column">${memberAuthStatusMarkup(member)}</td>
           <td class="member-coach-column">${escapeHtml(member.coach || "미배정")}</td>
@@ -11017,10 +11018,19 @@ function renderMembers() {
           <td class="member-status-column">${memberStatusBadge(member)}</td>
           <td class="member-table-note member-note-column">${escapeHtml(memberRemarkLabel(member))}</td>
         </tr>`;
+      if (!memberAdminEditEnabled || operationsRole() !== "admin") return memberRow;
+      return `${memberRow}
+        <tr class="member-inline-editor-row" data-member-editor-row="${member.id}">
+          <td colspan="9">${memberQuickEditorMarkup(member, ticket, { embedded: true })}</td>
+        </tr>`;
     })
     .join("") : `<tr><td colspan="9" class="empty-text">${filterCopy.empty}</td></tr>`;
 
-  renderMemberQuickEditPopover();
+  const popover = $("#memberQuickEditPopover");
+  if (popover) {
+    popover.hidden = true;
+    popover.innerHTML = "";
+  }
 
   const detailPanel = $("#memberDetail");
   if (!detailPanel) {

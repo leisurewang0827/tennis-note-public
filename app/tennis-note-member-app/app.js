@@ -1679,7 +1679,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.181",
+    workerUrl: "./service-worker.js?v=1.0.182",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -7333,7 +7333,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.181" });
+  const params = new URLSearchParams({ v: "1.0.182" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8341,7 +8341,7 @@ async function login(provider) {
   if (client?.readiness?.().ready) {
     try {
       if (status) status.textContent = `${provider} 로그인 화면을 여는 중입니다.`;
-      client.signInWithOAuth(provider);
+      await client.signInWithOAuth(provider);
       return;
     } catch (error) {
       if (status) status.textContent = `${provider} 로그인을 열지 못했습니다. 잠시 후 다시 시도해주세요.`;
