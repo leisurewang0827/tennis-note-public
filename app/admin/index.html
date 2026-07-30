@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.206" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.206" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.207" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.207" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -214,12 +214,12 @@
         <section id="membersView" class="view" aria-label="회원관리">
           <div class="toolbar">
             <div class="segmented-control" role="group" aria-label="회원 상태">
-              <button class="segment is-active" type="button" data-member-filter="active"><span>수강중</span><strong data-member-filter-count="active">0</strong></button>
-              <button class="segment" type="button" data-member-filter="expiring"><span>만료임박</span><strong data-member-filter-count="expiring">0</strong></button>
-              <button class="segment" type="button" data-member-filter="expired"><span>만료회원</span><strong data-member-filter-count="expired">0</strong></button>
-              <button class="segment" type="button" data-member-filter="pending"><span>가입대기</span><strong data-member-filter-count="pending">0</strong></button>
-              <button class="segment" type="button" data-member-filter="journal"><span>운동노트</span><strong data-member-filter-count="journal">0</strong></button>
-              <button class="segment" type="button" data-member-filter="inactive" data-admin-only-member-filter><span>삭제회원</span><strong data-member-filter-count="inactive">0</strong></button>
+              <button class="segment is-active" type="button" data-member-filter="active"><span>수강중</span><strong data-member-filter-count="active">…</strong></button>
+              <button class="segment" type="button" data-member-filter="expiring"><span>만료임박</span><strong data-member-filter-count="expiring">…</strong></button>
+              <button class="segment" type="button" data-member-filter="expired" title="과거 DB에서 이관한 만료 회원 포함"><span>만료회원</span><strong data-member-filter-count="expired">…</strong></button>
+              <button class="segment" type="button" data-member-filter="pending"><span>가입대기</span><strong data-member-filter-count="pending">…</strong></button>
+              <button class="segment" type="button" data-member-filter="journal"><span>운동노트</span><strong data-member-filter-count="journal">…</strong></button>
+              <button class="segment" type="button" data-member-filter="inactive" data-admin-only-member-filter><span>삭제회원</span><strong data-member-filter-count="inactive">…</strong></button>
             </div>
             <div class="toolbar-actions">
               <details class="compact-action-menu member-data-menu">
@@ -1681,15 +1681,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.206"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.207"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.206"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.206"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.206"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.206"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.206"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.207"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.207"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.207"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.207"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.207"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.206"></script>
+    <script src="./app.js?v=1.0.207"></script>
   </body>
 </html>

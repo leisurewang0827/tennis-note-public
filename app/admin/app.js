@@ -8493,11 +8493,23 @@ function memberStatusCounts() {
 }
 
 function renderMemberStatusCounts() {
-  const counts = adminMemberDirectoryState.loaded && adminMemberDirectoryState.counts
+  const serverDirectoryExpected = operationsRole() === "admin"
+    && Boolean(window.TennisNoteDataClient?.rpc);
+  const serverDirectoryCurrent = adminMemberDirectoryState.loaded
+    && adminMemberDirectoryState.signature === adminMemberDirectorySignature();
+  const counts = serverDirectoryCurrent && adminMemberDirectoryState.counts
     ? adminMemberDirectoryState.counts
     : memberStatusCounts();
+  const waitingForServer = serverDirectoryExpected
+    && !serverDirectoryCurrent
+    && !adminMemberDirectoryState.error;
   $$('[data-member-filter-count]').forEach((badge) => {
-    badge.textContent = `${counts[badge.dataset.memberFilterCount] || 0}명`;
+    const filter = badge.dataset.memberFilterCount;
+    badge.textContent = waitingForServer ? "…" : `${counts[filter] || 0}명`;
+    badge.setAttribute("aria-busy", String(waitingForServer));
+    badge.title = filter === "expired" && !waitingForServer
+      ? "과거 DB에서 이관한 만료 회원을 포함합니다."
+      : "";
   });
 }
 
@@ -11326,6 +11338,11 @@ function renderMembers(options = {}) {
   const serverDirectoryReady = operationsRole() === "admin"
     && adminMemberDirectoryState.loaded
     && adminMemberDirectoryState.signature === adminMemberDirectorySignature();
+  const serverDirectoryExpected = operationsRole() === "admin"
+    && Boolean(window.TennisNoteDataClient?.rpc);
+  const serverDirectoryPending = serverDirectoryExpected
+    && !serverDirectoryReady
+    && !adminMemberDirectoryState.error;
   let filtered;
   let filteredTotal;
   if (serverDirectoryReady) {
@@ -11334,13 +11351,16 @@ function renderMembers(options = {}) {
       .map((row) => membersByServerUserId.get(String(row.user_id || "")))
       .filter(Boolean);
     filteredTotal = adminMemberDirectoryState.total;
+  } else if (serverDirectoryPending) {
+    filtered = [];
+    filteredTotal = 0;
   } else {
     filtered = filteredMembers();
     filteredTotal = filtered.length;
   }
   const filterCopy = memberFilterCopy[state.memberFilter] || memberFilterCopy.active;
   if ($("#memberFilterSummary")) {
-    $("#memberFilterSummary").textContent = adminMemberDirectoryState.loading
+    $("#memberFilterSummary").textContent = serverDirectoryPending
       ? "회원 목록 불러오는 중"
       : `${filteredTotal}${filterCopy.summary}`;
   }
@@ -11369,8 +11389,8 @@ function renderMembers(options = {}) {
   const memberRows = $("#memberRows");
   const preserveList = options.preserveList === true && memberRows?.children.length;
   if (!preserveList) {
-    memberRows.innerHTML = adminMemberDirectoryState.loading && !visibleMembers.length
-      ? '<tr><td colspan="9" class="empty-text">회원 목록을 불러오는 중입니다.</td></tr>'
+    memberRows.innerHTML = serverDirectoryPending
+      ? '<tr><td colspan="9" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
       : visibleMembers.length ? visibleMembers
       .map((member) => {
       const ticket = memberCurrentTicket(member);
