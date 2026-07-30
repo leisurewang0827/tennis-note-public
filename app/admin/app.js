@@ -1405,6 +1405,26 @@ async function writeAdminOperationalCache() {
   }
 }
 
+let adminOperationalCacheWriteHandle = 0;
+let adminOperationalCacheWriteQueued = false;
+
+function scheduleAdminOperationalCacheWrite() {
+  if (adminOperationalCacheWriteQueued) return;
+  adminOperationalCacheWriteQueued = true;
+  const write = () => {
+    adminOperationalCacheWriteHandle = 0;
+    adminOperationalCacheWriteQueued = false;
+    void writeAdminOperationalCache().catch((error) => {
+      console.warn("[Tennis Note] administrator cache write skipped", error?.message || "cache_error");
+    });
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    adminOperationalCacheWriteHandle = window.requestIdleCallback(write, { timeout: 1500 });
+    return;
+  }
+  adminOperationalCacheWriteHandle = window.setTimeout(write, 250);
+}
+
 async function restoreAdminOperationalCache() {
   try {
     const snapshot = await readAdminOperationalCache();
@@ -18024,6 +18044,12 @@ function mergeServerCoachRole(role, index) {
 }
 
 function liveTicketParticipantIds(ticket, ticketParticipants = []) {
+  if (ticketParticipants instanceof Map) {
+    return [...new Set([
+      ticket.user_id,
+      ...(ticketParticipants.get(ticket.id) || []),
+    ].filter(Boolean))];
+  }
   return [...new Set([
     ticket.user_id,
     ...ticketParticipants.filter((item) => item.ticket_id === ticket.id).map((item) => item.user_id),
@@ -18043,11 +18069,13 @@ function liveTicketScheduleScope(product = {}, ticket = {}, lessons = []) {
   if (productName.includes("주말")) return "weekend";
   if (productName.includes("평일")) return "weekday";
 
-  const existingLesson = lessons.find((lesson) => (
-    lesson.member_ticket_id === ticket.id
-    && lesson.status !== "cancelled"
-    && lesson.lesson_date
-  ));
+  const existingLesson = lessons instanceof Map
+    ? lessons.get(ticket.id)
+    : lessons.find((lesson) => (
+      lesson.member_ticket_id === ticket.id
+      && lesson.status !== "cancelled"
+      && lesson.lesson_date
+    ));
   if (existingLesson) {
     const lessonDay = new Date(`${existingLesson.lesson_date}T12:00:00`).getDay();
     return [0, 6].includes(lessonDay) ? "weekend" : "weekday";
@@ -18155,6 +18183,40 @@ async function performAdminLiveDataSync() {
       authLinksByUserId.set(link.user_id, links);
     });
     const productsById = new Map((serverProducts || []).map((product) => [product.id, product]));
+    const ticketParticipantIdsByTicketId = new Map();
+    (ticketParticipants || []).forEach((participant) => {
+      const ids = ticketParticipantIdsByTicketId.get(participant.ticket_id) || [];
+      ids.push(participant.user_id);
+      ticketParticipantIdsByTicketId.set(participant.ticket_id, ids);
+    });
+    const coachAvailabilityByRoleId = new Map();
+    (serverCoachAvailability || []).forEach((availability) => {
+      const rows = coachAvailabilityByRoleId.get(availability.coach_role_id) || [];
+      rows.push(availability);
+      coachAvailabilityByRoleId.set(availability.coach_role_id, rows);
+    });
+    const pendingAuthSwitchByUserId = new Map(
+      (serverAuthSwitches || [])
+        .filter((item) => item.status === "pending")
+        .map((item) => [item.user_id, item]),
+    );
+    const settlementTermByCoachRoleId = new Map();
+    (serverSettlementTerms || []).forEach((term) => {
+      if (!settlementTermByCoachRoleId.has(term.coach_role_id)) {
+        settlementTermByCoachRoleId.set(term.coach_role_id, term);
+      }
+    });
+    const firstLessonByTicketId = new Map();
+    (serverLessons || []).forEach((lesson) => {
+      if (
+        lesson.member_ticket_id
+        && lesson.status !== "cancelled"
+        && lesson.lesson_date
+        && !firstLessonByTicketId.has(lesson.member_ticket_id)
+      ) {
+        firstLessonByTicketId.set(lesson.member_ticket_id, lesson);
+      }
+    });
     const memberRecordByUserId = new Map((serverMemberDatabaseRecords || []).map((record) => [record.user_id, record]));
     const memberRecordByTicketId = new Map((serverMemberDatabaseRecords || [])
       .filter((record) => record.current_ticket_id)
@@ -18204,10 +18266,10 @@ async function performAdminLiveDataSync() {
       coach.archivedAt = role.archived_at || "";
       coach.deletedAt = role.deleted_at || "";
       coach.authProviders = authProvidersFromLinks(authLinks);
-      coach.authSwitch = (serverAuthSwitches || []).find((item) => item.user_id === role.user_id && item.status === "pending") || null;
+      coach.authSwitch = pendingAuthSwitchByUserId.get(role.user_id) || null;
       coach.lastSignInAt = authLinks.map((link) => link.last_sign_in_at).filter(Boolean).sort().at(-1) || "";
       coach.approvalStatus = role.status || "pending";
-      const availabilityRows = (serverCoachAvailability || []).filter((item) => item.coach_role_id === role.id);
+      const availabilityRows = coachAvailabilityByRoleId.get(role.id) || [];
       coach.workBlocks = coachBlocksFromAvailability(availabilityRows, "available");
       coach.breakBlocks = coachBlocksFromAvailability(availabilityRows, "blocked");
       coachIdByRole.set(role.id, coach.id);
@@ -18216,7 +18278,7 @@ async function performAdminLiveDataSync() {
     replaceArray(coaches, coaches.filter((coach) => liveCoachIds.has(coach.id)));
     const savedSettlementRules = [...coachSettlementRules];
     replaceArray(coachSettlementRules, coaches.map((coach) => {
-      const term = (serverSettlementTerms || []).find((item) => item.coach_role_id === coach.serverRoleId);
+      const term = settlementTermByCoachRoleId.get(coach.serverRoleId);
       const savedRule = savedSettlementRules.find((rule) => rule.coach === coach.name);
       const baseRule = defaultCoachSettlementRule(coach, savedRule);
       const roleRate = Number(coach.settlementRate) > 1 ? Number(coach.settlementRate) / 100 : Number(coach.settlementRate);
@@ -18237,7 +18299,7 @@ async function performAdminLiveDataSync() {
       const memberRecord = membershipRecordByTicketId.get(ticket.id)
         || memberRecordByTicketId.get(ticket.id)
         || null;
-      const participantUserIds = liveTicketParticipantIds(ticket, ticketParticipants || []);
+      const participantUserIds = liveTicketParticipantIds(ticket, ticketParticipantIdsByTicketId);
       const memberNames = participantUserIds.map((id) => usersById.get(id)?.name).filter(Boolean);
       return {
         id: ticket.id,
@@ -18267,7 +18329,7 @@ async function performAdminLiveDataSync() {
         maxSessionsPerWeek: Number(product.max_sessions_per_week) || 0,
         maxBookingDaysPerWeek: Number(product.max_booking_days_per_week) || 0,
         productKind: product.product_kind || "regular",
-        scheduleScope: memberRecord?.lesson_schedule_scope || liveTicketScheduleScope(product, ticket, serverLessons || []),
+        scheduleScope: memberRecord?.lesson_schedule_scope || liveTicketScheduleScope(product, ticket, firstLessonByTicketId),
         status: ticket.status,
         memberRecord,
       };
@@ -18283,6 +18345,20 @@ async function performAdminLiveDataSync() {
         statusLabel: memberTicketStatusLabel(ticket),
       })));
 
+    const ticketsByParticipantUserId = new Map();
+    mappedTickets.forEach((ticket) => {
+      ticket.participantUserIds.forEach((userId) => {
+        const rows = ticketsByParticipantUserId.get(userId) || [];
+        rows.push(ticket);
+        ticketsByParticipantUserId.set(userId, rows);
+      });
+    });
+    const paymentsByUserId = new Map();
+    (serverPayments || []).forEach((payment) => {
+      const rows = paymentsByUserId.get(payment.user_id) || [];
+      rows.push(payment);
+      paymentsByUserId.set(payment.user_id, rows);
+    });
     const relevantUserIds = new Set([
       ...mappedTickets.flatMap((ticket) => ticket.participantUserIds),
       ...(serverMemberDatabaseRecords || []).map((record) => record.user_id),
@@ -18306,10 +18382,14 @@ async function performAdminLiveDataSync() {
     let nextMemberId = Math.max(1000, ...currentMembers.map((member) => Number(member.id) || 0)) + 1;
     const mappedMembers = memberUserGroups.map(({ name, userGroup }) => {
       const userIds = userGroup.map((user) => user.id);
-      const memberTickets = mappedTickets.filter((ticket) => ticket.participantUserIds.some((id) => userIds.includes(id)));
+      const memberTickets = [...new Map(
+        userIds
+          .flatMap((userId) => ticketsByParticipantUserId.get(userId) || [])
+          .map((ticket) => [ticket.id, ticket]),
+      ).values()];
       const activeTicket = memberTickets.find((ticket) => ["active", "paused"].includes(ticket.status) && ticket.remaining > 0) || null;
       const pendingTicket = memberTickets.find((ticket) => ticket.status === "pending_payment") || null;
-      const memberPayments = (serverPayments || []).filter((payment) => userIds.includes(payment.user_id));
+      const memberPayments = userIds.flatMap((userId) => paymentsByUserId.get(userId) || []);
       const unlinkedVerifiedPayments = memberPayments.filter((payment) => (
         payment.status === "verified" && !payment.ticket_id
       ));
@@ -18332,7 +18412,7 @@ async function performAdminLiveDataSync() {
       const currentMemberKind = String(preferredUser.member_kind || "journal_only");
       const authLinks = userIds.flatMap((userId) => authLinksByUserId.get(userId) || []);
       const authProviders = authProvidersFromLinks(authLinks);
-      const authSwitch = (serverAuthSwitches || []).find((item) => userIds.includes(item.user_id) && item.status === "pending") || null;
+      const authSwitch = userIds.map((userId) => pendingAuthSwitchByUserId.get(userId)).find(Boolean) || null;
       const authLinked = userGroup.some((user) => Boolean(user.auth_user_id)) || authLinks.length > 0;
       const serverStatus = String(preferredUser.status || "active");
       const status = ["inactive", "archived"].includes(serverStatus)
@@ -18745,9 +18825,7 @@ async function performAdminLiveDataSync() {
       state.selectedMemberId = null;
     }
     renderAll();
-    void writeAdminOperationalCache().catch((error) => {
-      console.warn("[Tennis Note] administrator cache write skipped", error?.message || "cache_error");
-    });
+    scheduleAdminOperationalCacheWrite();
     return true;
   } catch (error) {
     Object.assign(state, {

@@ -669,6 +669,16 @@
     if (options.offset) query.set("offset", String(options.offset));
     if (options.order) query.set("order", String(options.order));
     Object.entries(options.filters || {}).forEach(([key, value]) => {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        Object.entries(value).forEach(([operator, operand]) => {
+          if (!["eq", "neq", "gt", "gte", "lt", "lte", "in", "is"].includes(operator)) return;
+          const encodedOperand = operator === "in" && Array.isArray(operand)
+            ? `(${operand.join(",")})`
+            : operand;
+          query.append(key, `${operator}.${encodedOperand}`);
+        });
+        return;
+      }
       query.set(key, `eq.${value}`);
     });
     return request(`${tableName}?${query.toString()}`, { prefer: "return=representation" });
