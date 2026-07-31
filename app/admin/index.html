@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.248" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.248" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.249" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.249" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1299,6 +1299,14 @@
               <small id="lessonTicketHint" class="lesson-ticket-hint">회원을 검색하면 사용 가능한 회원권이 자동으로 표시됩니다.</small>
             </label>
           </section>
+          <section id="lessonSameDayAdjustmentPanel" class="lesson-same-day-adjustment" hidden>
+            <div>
+              <strong>당일 수업 이동</strong>
+              <span id="lessonSameDayAdjustmentGuide">같은 날짜의 기존 정규수업을 이 빈자리로 옮깁니다.</span>
+            </div>
+            <select id="lessonSameDayAdjustmentSource" aria-label="옮길 기존 정규수업"></select>
+            <button id="moveSameDayRegularLessonButton" class="primary-button" type="button">이 시간으로 옮기기</button>
+          </section>
           <div id="lessonExpiredTickets" class="lesson-expired-tickets lesson-detail-field" aria-live="polite"></div>
           <label class="form-field lesson-detail-field">
             <span>코치</span>
@@ -1711,15 +1719,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.248"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.249"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.248"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.248"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.248"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.248"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.248"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.249"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.249"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.249"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.249"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.249"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.248"></script>
+    <script src="./app.js?v=1.0.249"></script>
   </body>
 </html>

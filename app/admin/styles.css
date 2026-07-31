@@ -8325,6 +8325,40 @@ button .schedule-member-lines > span {
   background: #f5fbf8;
 }
 
+.lesson-same-day-adjustment {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.8fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #77bda5;
+  border-radius: 6px;
+  background: #edf9f4;
+}
+
+.lesson-same-day-adjustment[hidden] {
+  display: none;
+}
+
+.lesson-same-day-adjustment > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.lesson-same-day-adjustment span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+@media (max-width: 700px) {
+  .lesson-same-day-adjustment {
+    grid-template-columns: 1fr;
+  }
+}
+
 .lesson-ticket-hint {
   color: var(--muted);
   font-size: 12px;

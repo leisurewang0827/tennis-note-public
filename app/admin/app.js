@@ -10262,7 +10262,10 @@ function memberManagementDatabasePayload(form, member, ticket, reason) {
   const record = memberDatabaseRecord(member, ticket);
   const hasControl = (name) => Boolean(form.elements.namedItem(name));
   const product = (adminLiveDataState.products || []).find((item) => item.id === (form.elements.productId?.value || ticket?.productId));
-  const ticketStatus = form.elements.ticketStatus?.value || ticket?.status || (ticket ? "active" : "");
+  const ticketCancelledFromInlineEditor = Boolean(ticket && hasControl("productId") && !form.elements.productId.value);
+  const ticketStatus = ticketCancelledFromInlineEditor
+    ? "expired"
+    : form.elements.ticketStatus?.value || ticket?.status || (ticket ? "active" : "");
   const recordStatus = ticketStatus === "expired"
     ? "historical"
     : form.elements.recordStatus?.value || record?.record_status || (ticket || form.elements.productId ? "active" : "pending");
@@ -11699,7 +11702,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
             <label><span>연락처</span><input name="memberPhone" inputmode="tel" value="${escapeHtml(member.phone || "")}" /></label>
             <label><span>출생연도</span><input name="memberBirthYear" type="number" min="1900" max="2100" value="${escapeHtml(memberManagementValue(member.birthYear))}" /></label>
             <label class="member-inline-product"><span>회원권</span><select name="productId">
-              <option value="">미등록</option>${productOptions}
+              <option value="">${ticket ? "회원권 취소·만료" : "미등록"}</option>${productOptions}
             </select></label>
             <label><span>담당 코치</span><select name="coachRoleId">
               <option value="">미배정</option>
@@ -11711,6 +11714,12 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
             <label><span>총</span><input name="totalSessions" type="number" min="0" step="1" value="${total}" ${ticket ? "" : "disabled"} /></label>
             <label><span>소진</span><input name="usedSessions" type="number" min="0" step="1" value="${used}" ${ticket ? "" : "disabled"} /></label>
             <label><span>잔여</span><input name="remainingSessions" type="number" min="0" step="1" value="${remaining}" readonly aria-readonly="true" /></label>
+            ${ticket ? `<label><span>회원권 상태</span><select name="ticketStatus">
+              <option value="active" ${ticket.status === "active" ? "selected" : ""}>사용 중</option>
+              <option value="paused" ${ticket.status === "paused" ? "selected" : ""}>일시정지</option>
+              ${ticket.status === "pending_payment" ? '<option value="pending_payment" selected>결제 대기 유지</option>' : ""}
+              <option value="expired" ${ticket.status === "expired" ? "selected" : ""}>만료</option>
+            </select></label>` : ""}
             <label><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(record?.payment_recorded_on || "")}" /></label>
             <label><span>결제수단</span><select name="paymentMethod">
               <option value="">미입력</option>
@@ -11781,6 +11790,15 @@ function syncMemberQuickEditorProduct(form) {
   form.elements.lessonType.value = groupProduct ? "one_on_two" : "one_on_one";
   form.elements.scheduleScope.value = memberManagementProductScheduleScope(product);
   form.elements.weeklyFrequency.value = Number(product.frequency_per_week) || 1;
+}
+
+function syncMemberInlineProductCancellation(form) {
+  if (!form?.elements.ticketStatus || !form.elements.productId) return;
+  const cancelled = !form.elements.productId.value;
+  form.elements.ticketStatus.value = cancelled ? "expired" : "active";
+  if (!cancelled) return;
+  form.elements.usedSessions.value = form.elements.totalSessions.value || 0;
+  syncMemberManagementBalance(form);
 }
 
 function updateMemberInlineToolbar() {
@@ -11966,6 +11984,7 @@ async function submitMemberInlineEditor(form, options = {}) {
   const submit = form.querySelector("button[type='submit']");
   if (!member?.serverUserId || memberEditorMode === "audit") return;
   syncMemberQuickEditorProduct(form);
+  syncMemberInlineProductCancellation(form);
   if (ticket) syncMemberManagementBalance(form);
   const total = ticket ? memberManagementNullableNumber(form.elements.totalSessions) : null;
   const used = ticket ? memberManagementNullableNumber(form.elements.usedSessions) : null;
@@ -11989,6 +12008,13 @@ async function submitMemberInlineEditor(form, options = {}) {
   }
   const reason = memberEditorMode === "transition" ? "과도기 회원권 빠른 보정" : "회원권 빠른 수정";
   const payload = memberManagementDatabasePayload(form, member, ticket, reason);
+  if (ticket && !form.elements.productId?.value) {
+    payload.productId = ticket.productId || null;
+    payload.ticketStatus = "expired";
+    payload.recordStatus = "historical";
+    payload.usedSessions = Number(payload.totalSessions) || 0;
+    payload.remainingSessions = 0;
+  }
   if (selectedProduct) {
     const selectedGroupSize = Number(selectedProduct.group_size || 1);
     payload.lessonType = selectedGroupSize === 2 ? "one_on_two" : "one_on_one";
@@ -12084,10 +12110,12 @@ async function submitMemberInlineEditor(form, options = {}) {
       || Number(refreshed.used) !== Number(payload.usedSessions)
       || Number(refreshed.remaining) !== Number(payload.remainingSessions)
       || String(refreshed.productId || "") !== String(payload.productId || "")
-      || !["active", "paused"].includes(String(refreshed.status || "").toLowerCase()))) {
+      || String(refreshed.status || "").toLowerCase() !== String(payload.ticketStatus || "active").toLowerCase())) {
       throw new Error("member_inline_write_not_confirmed");
     }
-    message.textContent = payload.productId ? "서버 저장 완료 · 수강중 반영 확인" : "기본정보 서버 저장 완료";
+    message.textContent = payload.ticketStatus === "expired"
+      ? "서버 저장 완료 · 만료회원 반영 확인"
+      : payload.productId ? "서버 저장 완료 · 수강중 반영 확인" : "기본정보 서버 저장 완료";
     message.classList.add("is-success");
     form.classList.remove("is-dirty", "is-save-error");
     form.classList.add("is-save-success");
@@ -15067,6 +15095,97 @@ function renderLessonExpiredTickets() {
   `;
 }
 
+function sameDayRegularAdjustmentContext(candidate = getLessonFormCandidate()) {
+  if (operationsRole() !== "admin" || state.editingLessonId || !state.quickLessonEntry) return null;
+  const lessonDate = candidate.lessonDate || adminLessonDateForCandidate(candidate.day);
+  const releasedSlot = getOverlappingBookedLessons(candidate.day, candidate.time, candidate.durationMinutes)
+    .find((lesson) => lesson.coachId === candidate.coachId && isReleasedRegularMakeupSlot(lesson));
+  if (!lessonDate || !releasedSlot) return null;
+  const memberName = $("#lessonMember")?.value || "";
+  const sourceLessons = memberName ? lessons.filter((lesson) => (
+    lesson.serverLessonId
+    && lessonSourceValue(lesson) === "regular"
+    && isLessonEditableScheduled(lesson)
+    && String(lesson.id) !== String(releasedSlot.id)
+    && (lesson.lessonDate || adminWeekDateForDay(lesson.day)) === lessonDate
+    && getLessonParticipantNames(lesson).includes(memberName)
+  )).sort((left, right) => String(left.time || "").localeCompare(String(right.time || ""))) : [];
+  return { lessonDate, releasedSlot, memberName, sourceLessons };
+}
+
+function syncSameDayRegularAdjustmentPanel(candidate = getLessonFormCandidate()) {
+  const panel = $("#lessonSameDayAdjustmentPanel");
+  const select = $("#lessonSameDayAdjustmentSource");
+  const guide = $("#lessonSameDayAdjustmentGuide");
+  const button = $("#moveSameDayRegularLessonButton");
+  if (!panel || !select || !guide || !button) return;
+  const context = sameDayRegularAdjustmentContext(candidate);
+  panel.hidden = !context || !context.memberName;
+  if (panel.hidden) {
+    select.innerHTML = "";
+    return;
+  }
+  const options = context.sourceLessons.map((lesson) => ({
+    value: String(lesson.id),
+    label: `${lesson.time} · ${getLessonMembersLabel(lesson)} · ${getCoachName(lesson.coachId)}`,
+  }));
+  fillSelect(select, options.length ? options : [{ value: "", label: "같은 날 옮길 정규수업 없음" }]);
+  button.disabled = !options.length;
+  guide.textContent = options.length
+    ? `${context.memberName} 회원의 기존 정규수업을 선택한 ${candidate.time} 시간으로 옮깁니다. 회차는 추가 차감하지 않습니다.`
+    : `${context.memberName} 회원의 같은 날짜 정규수업을 찾지 못했습니다. 보강 예약이라면 등록 구분을 보강으로 유지하세요.`;
+}
+
+async function moveSameDayRegularLessonToSelectedSlot() {
+  const targetCandidate = getLessonFormCandidate();
+  const context = sameDayRegularAdjustmentContext(targetCandidate);
+  const sourceLessonId = $("#lessonSameDayAdjustmentSource")?.value || "";
+  const sourceLesson = context?.sourceLessons.find((lesson) => String(lesson.id) === sourceLessonId);
+  const sourceTicket = getTicketByLesson(sourceLesson);
+  if (!context || !sourceLesson || !sourceTicket) {
+    setLessonFormMessage("같은 날짜에 옮길 기존 정규수업을 선택해 주세요.", "danger");
+    return;
+  }
+  const sourceDate = sourceLesson.lessonDate || adminWeekDateForDay(sourceLesson.day);
+  if (sourceDate !== context.lessonDate) {
+    setLessonFormMessage("당일 시간조정은 같은 날짜 안에서만 가능합니다.", "danger");
+    return;
+  }
+
+  const target = {
+    day: targetCandidate.day,
+    time: targetCandidate.time,
+    coachId: targetCandidate.coachId,
+    courtId: targetCandidate.courtId,
+  };
+  state.editingLessonId = sourceLesson.id;
+  state.quickLessonEntry = false;
+  state.quickLessonEdit = true;
+  state.quickLessonDetailsExpanded = false;
+  state.releasedAbsenceEntitlementId = "";
+  state.pinnedLessonTicketId = "";
+  state.pinnedLessonRepeatSlots = [];
+  state.lessonSourceTouched = true;
+  state.lessonOperationKey = createAdminOperationKey("same-day-regular-adjustment");
+  $("#lessonRepeatSlots").innerHTML = "";
+  const memberName = getLessonParticipantNames(sourceLesson)[0] || context.memberName;
+  $("#lessonMemberSearch").value = memberName;
+  refreshLessonMemberOptions(memberName, sourceLesson);
+  $("#lessonMember").value = memberName;
+  $("#lessonCoach").value = target.coachId;
+  refreshLessonTicketOptions();
+  $("#lessonTicket").value = sourceTicket.id;
+  $("#lessonSource").value = "regular";
+  $("#lessonDuration").value = String(sourceLesson.durationMinutes || 20);
+  $("#lessonDay").value = target.day;
+  $("#lessonTime").value = target.time;
+  $("#lessonCourt").value = target.courtId;
+  const singleScope = document.querySelector('input[name="lessonEditScope"][value="single"]');
+  if (singleScope) singleScope.checked = true;
+  renderLessonPreview();
+  await addLessonFromForm({ preventDefault() {} });
+}
+
 function isTwoOnOneLessonType() {
   const selectedTicket = getSelectedTicket();
   return getTicketLessonKind(selectedTicket) === "2대1";
@@ -15650,6 +15769,7 @@ function renderLessonPreview() {
   syncQuickLessonEntryUi(candidate);
   const pastCorrection = syncPastLessonCorrectionUi(candidate);
   candidate = getLessonFormCandidate();
+  syncSameDayRegularAdjustmentPanel(candidate);
   syncAdminForceDeleteLessonButton(candidate);
   const ticket = scheduleTicketById($("#lessonTicket").value);
   const manualOverride = adminManualOverrideEnabled();
@@ -25452,6 +25572,7 @@ function bindEvents() {
     refreshLessonMakeupEntitlementOptions();
     renderLessonPreview();
   });
+  $("#moveSameDayRegularLessonButton")?.addEventListener("click", moveSameDayRegularLessonToSelectedSlot);
   $("#lessonCoach").addEventListener("change", () => {
     state.pinnedLessonTicketId = "";
     state.lessonSourceTouched = false;
@@ -25868,6 +25989,7 @@ function bindEvents() {
       return;
     }
     if (event.target.matches("[data-member-inline-form] input, [data-member-inline-form] select")) {
+      if (event.target.matches("select[name='productId']")) syncMemberInlineProductCancellation(event.target.form);
       setMemberInlineDirtyState(event.target.form);
     }
   });
@@ -25882,6 +26004,7 @@ function bindEvents() {
     const form = event.target.form;
     setMemberInlineDirtyState(form);
     syncMemberQuickEditorProduct(form);
+    syncMemberInlineProductCancellation(form);
     if (!form.dataset.ticketId && event.target.value) {
       const product = (adminLiveDataState.products || []).find((item) => item.id === event.target.value);
       if (product) {
