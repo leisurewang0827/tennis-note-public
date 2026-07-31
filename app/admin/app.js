@@ -1595,6 +1595,7 @@ const adminMemberDirectoryState = {
   rows: [],
   total: 0,
   counts: null,
+  preserveCountsWhileLoading: false,
   requestId: 0,
 };
 const adminMemberDetailCache = new Map();
@@ -1613,6 +1614,7 @@ function invalidateMemberSearchIndex({ preserveDirectory = false } = {}) {
     adminMemberDirectoryState.signature = "";
     adminMemberDirectoryState.rows = [];
     adminMemberDirectoryState.counts = null;
+    adminMemberDirectoryState.preserveCountsWhileLoading = false;
   }
   adminMemberDetailCache.clear();
   adminUserNameIndex = null;
@@ -1788,6 +1790,8 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
   Object.assign(adminMemberDirectoryState, {
     loading: true,
     error: "",
+    counts: preserveList ? adminMemberDirectoryState.counts : null,
+    preserveCountsWhileLoading: Boolean(preserveList && adminMemberDirectoryState.counts),
     requestId,
   });
   if (render && state.view === "members") renderMembers({ preserveList });
@@ -1814,6 +1818,7 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
       rows: directoryRows,
       total: Number(payload?.total) || 0,
       counts: payload?.counts && typeof payload.counts === "object" ? payload.counts : null,
+      preserveCountsWhileLoading: false,
     });
     if (render && state.view === "members") renderMembers();
     return true;
@@ -1824,6 +1829,8 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
       loaded: false,
       error: String(error?.message || error || "member_directory_page_failed"),
       signature: "",
+      counts: null,
+      preserveCountsWhileLoading: false,
     });
     console.warn("[Tennis Note] member directory server paging unavailable; using local fallback", error);
     if (render && state.view === "members") renderMembers();
@@ -9069,15 +9076,21 @@ function renderMemberStatusCounts() {
     && typeof adminMemberDirectoryState.counts === "object"
     ? adminMemberDirectoryState.counts
     : null;
+  const reusableServerCounts = adminMemberDirectoryState.loading
+    && adminMemberDirectoryState.preserveCountsWhileLoading
+    ? confirmedServerCounts
+    : null;
   const counts = serverDirectoryCurrent && confirmedServerCounts
     ? confirmedServerCounts
-    : confirmedServerCounts || memberStatusCounts();
+    : reusableServerCounts || (!serverDirectoryExpected ? memberStatusCounts() : null);
   const waitingForServer = serverDirectoryExpected
     && !serverDirectoryCurrent
     && !adminMemberDirectoryState.error;
   $$('[data-member-filter-count]').forEach((badge) => {
     const filter = badge.dataset.memberFilterCount;
-    badge.textContent = waitingForServer && !confirmedServerCounts ? "…" : `${counts[filter] || 0}명`;
+    badge.textContent = counts
+      ? `${counts[filter] || 0}명`
+      : waitingForServer ? "…" : "확인 필요";
     badge.setAttribute("aria-busy", String(waitingForServer));
     badge.title = filter === "expired" && !waitingForServer
       ? "과거 DB에서 이관한 만료 회원을 포함합니다."
