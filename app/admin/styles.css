@@ -12818,3 +12818,365 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
     flex: 0 0 auto;
   }
 }
+
+/* Mobile administrator workspace: compact navigation and touch-friendly operations. */
+@media (max-width: 760px) {
+  .workspace {
+    padding: 8px 10px 18px;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 74;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px 10px;
+    align-items: center;
+    margin: 0 0 8px;
+    padding: 8px 0 10px;
+    background: rgba(242, 246, 244, 0.98);
+  }
+
+  .topbar > div:first-of-type {
+    min-width: 0;
+  }
+
+  .topbar .eyebrow,
+  .topbar-actions > .admin-surface-label,
+  .topbar-actions > .topbar-actions-placeholder {
+    display: none !important;
+  }
+
+  .topbar h1 {
+    overflow: hidden;
+    font-size: 20px;
+    text-overflow: ellipsis;
+  }
+
+  .admin-menu-button {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 40px;
+    padding: 7px 10px;
+  }
+
+  .topbar-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .topbar-actions .operation-branch-context:not([hidden]) {
+    display: inline-flex !important;
+    min-height: 40px;
+    max-width: 96px;
+    padding-inline: 8px;
+  }
+
+  .global-search-shell,
+  .search-box {
+    width: 100%;
+  }
+
+  .topbar-actions .global-search-shell {
+    grid-column: 1 / -1;
+  }
+
+  .topbar-actions:has(.operation-branch-context:not([hidden])) .global-search-shell {
+    grid-column: 2;
+  }
+
+  .search-box {
+    height: 40px;
+  }
+
+  .search-box span {
+    display: none;
+  }
+
+  .admin-save-state {
+    margin: 0 0 8px;
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+
+  .admin-save-state:not([data-tone]) {
+    display: none;
+  }
+
+  .app-shell > .sidebar {
+    gap: 12px;
+    padding: 16px 14px;
+  }
+
+  .app-shell > .sidebar .nav-list {
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 5px;
+  }
+
+  .app-shell > .sidebar .nav-item {
+    min-height: 44px;
+    justify-content: space-between;
+    padding: 9px 12px;
+    font-size: 14px;
+  }
+
+  .app-shell > .sidebar .sidebar-footer {
+    display: grid;
+    margin-top: auto;
+  }
+
+  .metric-grid,
+  .record-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .metric-card,
+  .record-action-grid .billing-action-card {
+    min-height: 88px;
+    gap: 4px;
+    padding: 11px 12px;
+  }
+
+  .metric-card span,
+  .record-action-grid .billing-action-card span {
+    font-size: 12px;
+  }
+
+  .metric-card strong,
+  .record-action-grid .billing-action-card strong {
+    font-size: 25px;
+  }
+
+  .metric-card small,
+  .record-action-grid .billing-action-card small {
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #billingView > .billing-action-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  #billingView > .billing-action-grid .billing-action-card {
+    min-height: 82px;
+    gap: 4px;
+    padding: 10px 8px;
+  }
+
+  #billingView > .billing-action-grid .billing-action-card span {
+    font-size: 11px;
+  }
+
+  #billingView > .billing-action-grid .billing-action-card strong {
+    font-size: 21px;
+  }
+
+  #billingView > .billing-action-grid .billing-action-card small {
+    display: none;
+  }
+
+  .billing-settings-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0 0 10px;
+  }
+
+  .billing-settings-actions > button {
+    min-width: 0;
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+
+  .panel {
+    padding: 12px;
+  }
+
+  .panel-heading {
+    gap: 8px;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+
+  .panel-heading h2 {
+    font-size: 16px;
+  }
+
+  #membersView > .toolbar .segmented-control {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  #membersView > .toolbar .segment {
+    min-width: 0;
+    min-height: 40px;
+    padding-inline: 5px;
+    font-size: 11px;
+  }
+
+  #membersView > .toolbar .toolbar-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .member-editor-mode-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 8px;
+    padding: 8px;
+  }
+
+  .member-editor-mode-bar p {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .member-list-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .member-list-toolbar label,
+  .member-list-toolbar label:first-child {
+    min-width: 0;
+  }
+
+  .member-list-toolbar label:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .member-filter-result {
+    grid-column: 1 / -1;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .member-filter-summary {
+    margin-left: 0;
+  }
+
+  #membersView .table-panel {
+    position: relative;
+    overscroll-behavior-x: contain;
+  }
+
+  #membersView .table-panel th.member-select-column,
+  #membersView .table-panel td.member-select-column {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    width: 42px;
+    min-width: 42px;
+    background: var(--paper);
+  }
+
+  #membersView .table-panel th.member-name-column,
+  #membersView .table-panel td.member-name-column {
+    position: sticky;
+    left: 42px;
+    z-index: 3;
+    min-width: 118px;
+    background: var(--paper);
+    box-shadow: 2px 0 0 rgba(8, 114, 85, 0.12);
+  }
+
+  #membersView .table-panel tr.is-selected td.member-select-column,
+  #membersView .table-panel tr.is-selected td.member-name-column {
+    background: var(--soft-blue);
+  }
+
+  .schedule-main-toolbar {
+    align-items: stretch;
+  }
+
+  .schedule-toolbar-groups {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .schedule-toolbar-groups .segmented-control {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .schedule-toolbar-groups .segment {
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .schedule-primary-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .schedule-save-status {
+    display: none;
+  }
+
+  .schedule-tools-menu,
+  .schedule-tools-menu > summary,
+  #toggleScheduleEditMode,
+  #openLessonModal {
+    width: 100%;
+  }
+
+  #openLessonModal {
+    grid-column: 1 / -1;
+  }
+
+  .settings-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    margin: 8px 0 10px;
+    padding: 4px;
+    overflow: visible;
+  }
+
+  .settings-tab {
+    min-width: 0;
+    min-height: 38px;
+    padding: 4px;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .settings-grid {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 380px) {
+  .metric-card,
+  .record-action-grid .billing-action-card {
+    padding-inline: 9px;
+  }
+
+  #billingView > .billing-action-grid .billing-action-card strong {
+    font-size: 19px;
+  }
+
+  .settings-tab {
+    font-size: 10px;
+  }
+}
