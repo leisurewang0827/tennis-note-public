@@ -122,6 +122,22 @@ def write_platform_files(output: Path, target: str) -> None:
         },
       });
     }
+    const url = new URL(request.url);
+    const origin = request.headers.get("Origin") || "";
+    const nativeShell = origin === "http://localhost" || origin === "capacitor://localhost";
+    if (nativeShell && url.pathname === "/release.json") {
+      return Response.json({
+        version: "0.0.0",
+        releaseId: "native-store-managed",
+        minimumNativeShellVersion: "0.0.0",
+        deployedAt: "2026-07-31T00:00:00+09:00",
+      }, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "no-store",
+        },
+      });
+    }
     const response = await env.ASSETS.fetch(request);
     const headers = new Headers(response.headers);
     headers.set("Access-Control-Allow-Origin", "*");
