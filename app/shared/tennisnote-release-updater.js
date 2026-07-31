@@ -164,7 +164,6 @@
     url.searchParams.set("__tn_release", candidate.releaseId);
     const response = await fetch(url, {
       cache: "no-store",
-      headers: { "Cache-Control": "no-cache" },
     });
     if (!response.ok) throw new Error("remote_shell_unavailable");
     let html = await response.text();
@@ -214,7 +213,6 @@
       cache: "no-store",
       headers: {
         Accept: "application/json",
-        "Cache-Control": "no-cache",
       },
     });
     if (!response.ok) throw new Error("release_manifest_unavailable");
