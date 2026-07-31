@@ -144,6 +144,7 @@ function showToast(message) {
 }
 
 function hideBrandSplash() {
+  window.__tennisNoteBootReady?.();
   const splash = document.querySelector("#brandSplash");
   if (!splash) return;
   const elapsed = performance.now() - brandSplashStartedAt;
@@ -1679,7 +1680,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.243",
+    workerUrl: "./service-worker.js?v=1.0.244",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -6097,7 +6098,7 @@ function liveTicketProductTitle(row = {}) {
   const readableTitle = (value = "") => {
     const text = String(value || "").trim();
     if (!text) return "";
-    if (/[?�遺荑좏룿]/.test(text)) return "";
+    if (/[?\uFFFD遺荑좏룿]/u.test(text)) return "";
     return /[가-힣A-Za-z0-9]/.test(text) ? text : "";
   };
   const productTitle = readableTitle(product.name);
@@ -7407,7 +7408,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.243" });
+  const params = new URLSearchParams({ v: "1.0.244" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

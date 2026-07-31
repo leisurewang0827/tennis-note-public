@@ -275,15 +275,16 @@
   function start(options = {}) {
     if (started) return;
     started = true;
+    const nativeWebView = isNativeWebView();
     const remoteAppUrl = options.remoteAppUrl || "";
     activeRemoteAppUrl = remoteAppUrl;
-    const manifestUrl = isNativeWebView()
+    const manifestUrl = nativeWebView
       ? new URL("release.json", officialAppUrl).toString()
       : options.manifestUrl || defaultManifestUrl;
     const workerUrl = options.workerUrl || "";
     let controllerReloaded = false;
 
-    if ("serviceWorker" in navigator) {
+    if (!nativeWebView && "serviceWorker" in navigator) {
       navigator.serviceWorker.addEventListener("controllerchange", () => {
         if (controllerReloaded) return;
         controllerReloaded = true;
@@ -302,10 +303,12 @@
     };
 
     const boot = async () => {
-      try {
-        await registerWorker(workerUrl);
-      } catch {
-        // The release manifest can still refresh ordinary browser pages.
+      if (!nativeWebView) {
+        try {
+          await registerWorker(workerUrl);
+        } catch {
+          // The release manifest can still refresh ordinary browser pages.
+        }
       }
       update();
     };
