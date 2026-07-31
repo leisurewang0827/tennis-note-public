@@ -11738,8 +11738,6 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
             <button class="primary-button member-inline-save" type="submit">저장</button>
           </div>
           <div class="member-inline-editor-actions">
-            <button class="ghost-button" type="button" data-open-member-management="profile" data-member-management-ticket="${escapeHtml(ticket?.serverTicketId || "")}" data-member-management-member="${member.id}">상세 관리</button>
-            <button class="ghost-button" type="button" data-open-member-history="${escapeHtml(ticket?.serverTicketId || "")}" ${ticket?.serverTicketId ? "" : "disabled"}>변경 이력</button>
             <p class="member-inline-message" aria-live="polite"></p>
           </div>
         </form>`;
@@ -11811,11 +11809,9 @@ function updateMemberInlineToolbar() {
   }
   const changedButton = $("#showChangedMemberRows");
   const failedButton = $("#showFailedMemberRows");
-  const allHistoryButton = $("#openAllMemberHistory");
   if (changedButton) changedButton.hidden = !memberAdminEditEnabled;
   if (failedButton) failedButton.hidden = !memberAdminEditEnabled
     || !document.querySelector("[data-member-inline-form].is-save-error");
-  if (allHistoryButton) allHistoryButton.hidden = !memberAdminEditEnabled;
   applyMemberInlineRowFilter();
 }
 
@@ -11844,59 +11840,6 @@ function applyMemberInlineRowFilter() {
   });
   $("#showChangedMemberRows")?.classList.toggle("is-active", memberInlineRowFilter === "changed");
   $("#showFailedMemberRows")?.classList.toggle("is-active", memberInlineRowFilter === "failed");
-}
-
-async function openMemberTicketHistory(ticketId) {
-  if (operationsRole() !== "admin") return;
-  const modal = $("#memberHistoryModal");
-  const content = $("#memberHistoryModalContent");
-  const title = $("#memberHistoryModalTitle");
-  if (!modal || !content) return;
-  if (title) title.textContent = ticketId ? "회원 변경 이력" : "전체 변경 이력";
-  content.innerHTML = '<div class="empty-state compact"><strong>변경 이력 불러오는 중</strong></div>';
-  modal.removeAttribute("hidden");
-  try {
-    const response = await window.TennisNoteDataClient.rpc("tn_admin_member_ticket_history", {
-      target_ticket_id: ticketId,
-      target_limit: 50,
-    });
-    const rows = Array.isArray(response) ? response : [];
-    const fieldLabels = {
-      product_id: "회원권",
-      coach_role_id: "담당 코치",
-      total_sessions: "총 횟수",
-      used_sessions: "소진 횟수",
-      remaining_sessions: "잔여 횟수",
-      starts_on: "시작일",
-      expires_on: "만료일",
-      status: "상태",
-      user_id: "회원",
-    };
-    content.innerHTML = rows.length
-      ? rows.map((row) => {
-        const before = row.before || {};
-        const after = row.after || {};
-        const changes = Object.keys(fieldLabels)
-          .filter((key) => String(before[key] ?? "") !== String(after[key] ?? ""))
-          .map((key) => `${fieldLabels[key]} ${escapeHtml(before[key] ?? "-")} → ${escapeHtml(after[key] ?? "-")}`)
-          .join(" · ");
-        const changedAt = row.changedAt ? new Date(row.changedAt).toLocaleString("ko-KR") : "시각 확인 필요";
-        const resultLabel = row.result === "failed" ? `저장 실패${row.errorCode ? ` · ${escapeHtml(row.errorCode)}` : ""}` : "저장 완료";
-        return `<article class="member-history-row ${row.result === "failed" ? "is-error" : ""}">
-          <div><strong>${escapeHtml(row.memberName ? `${row.memberName} · ${resultLabel}` : resultLabel)}</strong><span>${escapeHtml(changedAt)} · ${escapeHtml(row.actorName || "관리자")}</span></div>
-          <p>${changes || (row.applyToFutureSchedule ? "미래 일정에도 적용" : "회원정보만 변경")}</p>
-        </article>`;
-      }).join("")
-      : '<div class="empty-state compact"><strong>아직 저장된 변경 이력이 없습니다.</strong></div>';
-  } catch {
-    content.innerHTML = '<div class="empty-state compact"><strong>변경 이력을 불러오지 못했습니다.</strong><span>DB 패치 적용 상태를 확인해 주세요.</span></div>';
-  }
-}
-
-function closeMemberTicketHistory() {
-  $("#memberHistoryModal")?.setAttribute("hidden", "");
-  const content = $("#memberHistoryModalContent");
-  if (content) content.innerHTML = "";
 }
 
 function memberInlineEditorMarkup(member, ticket) {
@@ -11969,7 +11912,7 @@ function memberInlineEditorMarkup(member, ticket) {
           </div>` : ""}
           <div class="member-inline-editor-actions">
             ${ticket ? "" : '<span>회원권은 저장 후 ‘회원권 등록’에서 연결합니다.</span>'}
-            <button class="ghost-button" type="button" data-inline-member-management="${member.id}" data-inline-member-ticket="${escapeHtml(ticket?.serverTicketId || "")}">${ticket ? "상세 관리" : "회원권 등록"}</button>
+            ${ticket ? "" : `<button class="ghost-button" type="button" data-inline-member-management="${member.id}" data-inline-member-ticket="">회원권 등록</button>`}
             <button class="primary-button member-inline-save" type="submit">저장</button>
           </div>
           <p class="member-inline-message" aria-live="polite">${memberEditorMode === "transition" ? "빈 항목이 있어도 저장할 수 있습니다. 기존 시간표는 유지됩니다." : "행의 변경값을 서버에 저장합니다. 기존 시간표는 유지됩니다."}</p>
@@ -26116,19 +26059,6 @@ function bindEvents() {
     if (event.target.closest("#showFailedMemberRows")) {
       memberInlineRowFilter = memberInlineRowFilter === "failed" ? "all" : "failed";
       applyMemberInlineRowFilter();
-      return;
-    }
-    if (event.target.closest("#openAllMemberHistory")) {
-      await openMemberTicketHistory(null);
-      return;
-    }
-    const memberHistoryButton = event.target.closest("[data-open-member-history]");
-    if (memberHistoryButton) {
-      await openMemberTicketHistory(memberHistoryButton.dataset.openMemberHistory);
-      return;
-    }
-    if (event.target.closest("#closeMemberHistoryModal") || event.target === $("#memberHistoryModal")) {
-      closeMemberTicketHistory();
       return;
     }
     if (event.target.closest("#saveVisibleProductRows")) {
