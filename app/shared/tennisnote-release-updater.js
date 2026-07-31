@@ -36,7 +36,7 @@
     const current = currentRelease();
     const versionDifference = compareVersions(candidate.version, current.version);
     if (versionDifference !== 0) return versionDifference > 0;
-    return candidate.releaseId !== current.releaseId;
+    return String(candidate.releaseId).localeCompare(String(current.releaseId || "")) > 0;
   }
 
   function isNativeWebView() {
@@ -58,18 +58,39 @@
         <strong>새 버전이 있습니다</strong>
         <span>현재 화면을 유지한 채 최신 버전으로 바꿉니다.</span>
       </div>
-      <button type="button" data-tennisnote-update-now>지금 업데이트</button>
+      <div class="tennisnote-update-actions">
+        <button type="button" class="tennisnote-update-dismiss" data-tennisnote-update-dismiss aria-label="나중에 닫기" title="나중에">×</button>
+        <button type="button" data-tennisnote-update-now>지금 업데이트</button>
+      </div>
     `;
     notice.querySelector("[data-tennisnote-update-now]")?.addEventListener("click", () => {
       void applyUpdate(remoteRelease, { manual: true, remoteAppUrl: activeRemoteAppUrl });
+    });
+    notice.querySelector("[data-tennisnote-update-dismiss]")?.addEventListener("click", () => {
+      if (remoteRelease?.releaseId) {
+        sessionStorage.setItem(`tennis-note-update-dismissed:${remoteRelease.releaseId}`, "done");
+      }
+      hideUpdateNotice();
     });
     document.body.appendChild(notice);
     return notice;
   }
 
-  function showUpdateNotice(candidate) {
+  function showUpdateNotice(candidate, options = {}) {
     if (candidate) remoteRelease = candidate;
-    ensureUpdateNotice().hidden = false;
+    const releaseId = remoteRelease?.releaseId;
+    if (!options.force && releaseId && sessionStorage.getItem(`tennis-note-update-dismissed:${releaseId}`) === "done") {
+      hideUpdateNotice();
+      return;
+    }
+    const notice = ensureUpdateNotice();
+    const updateButton = notice.querySelector("[data-tennisnote-update-now]");
+    if (updateButton) {
+      updateButton.textContent = isNativeWebView() && remoteRelease?.nativeUpdateMode !== "remote-shell"
+        ? "스토어에서 업데이트"
+        : "지금 업데이트";
+    }
+    notice.hidden = false;
   }
 
   function hideUpdateNotice() {
@@ -183,12 +204,28 @@
     return true;
   }
 
+  async function openNativeStoreUpdate() {
+    const storeUrl = "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote";
+    const launcher = window.Capacitor?.Plugins?.AppLauncher;
+    if (launcher?.openUrl) {
+      await launcher.openUrl({ url: storeUrl });
+      return true;
+    }
+    window.open(storeUrl, "_blank", "noopener,noreferrer");
+    return true;
+  }
+
   async function applyUpdate(candidate, options = {}) {
     if (!candidate?.releaseId || updateInProgress) return;
     remoteRelease = candidate;
     updateInProgress = true;
     const reloadKey = `tennis-note-release-controller:${candidate.releaseId}`;
     try {
+      if (isNativeWebView() && candidate?.nativeUpdateMode !== "remote-shell") {
+        if (options.manual) await openNativeStoreUpdate();
+        else showUpdateNotice(candidate);
+        return;
+      }
       if (await applyNativeRemoteShell(candidate, options.remoteAppUrl)) return;
       sessionStorage.removeItem(reloadKey);
       if (registration) {

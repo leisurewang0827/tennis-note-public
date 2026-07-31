@@ -103,8 +103,15 @@ body.tn-unsaved-open {
   display: none;
 }
 
-.tennisnote-update-notice div {
+.tennisnote-update-notice > div:first-child {
   min-width: 0;
+}
+
+.tennisnote-update-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
 }
 
 .tennisnote-update-notice strong,
@@ -130,6 +137,16 @@ body.tn-unsaved-open {
   font: inherit;
   font-weight: 800;
   cursor: pointer;
+}
+
+.tennisnote-update-notice .tennisnote-update-dismiss {
+  width: 40px;
+  padding: 0;
+  border: 1px solid #cfe0da;
+  background: #f3f8f6;
+  color: #526b62;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .tennisnote-release-check-notice {
