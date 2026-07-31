@@ -7323,6 +7323,19 @@ function adminTodayLessonRows() {
   return operationBranchLessons().filter((lesson) => lesson.lessonDate === today);
 }
 
+function billingNeedsAdminAction(item = {}) {
+  if (["draft", "check", "unverified", "refund_processing", "refund_reconcile"].includes(item.status)) return true;
+  if (item.status === "server_ready") return isStaleReadyPayment(item);
+  return item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item);
+}
+
+function dashboardOperationalMembers() {
+  return operationBranchMembers().filter((member) => {
+    const status = memberListStatus(member);
+    return ["active", "expiring", "pending"].includes(status) || memberRemainingCount(member) > 0;
+  });
+}
+
 function renderMetrics() {
   const recordGroups = adminRecordGroups();
   const todayLessonCount = adminTodayLessonRows().length;
@@ -7330,7 +7343,7 @@ function renderMetrics() {
   $("#metricLessons").textContent = todayLessonCount;
   $("#metricMakeups").textContent = operationBranchMakeupRequests().filter((item) => ["pending", "requested", "coach_required"].includes(item.status)).length;
   $("#metricNotes").textContent = recordGroups.pending.length + recordGroups.feedback.length + recordGroups.issue.length;
-  $("#metricBilling").textContent = operationBranchBillings().filter((item) => item.status !== "paid").length;
+  $("#metricBilling").textContent = operationBranchBillings().filter(billingNeedsAdminAction).length;
   if ($("#scheduleMetricToday")) $("#scheduleMetricToday").textContent = `${todayLessonCount}회`;
   if ($("#scheduleMetricPending")) $("#scheduleMetricPending").textContent = `${pendingScheduleCount}건`;
 }
@@ -7699,7 +7712,7 @@ function renderAdminOperations() {
   if (!taskList) return;
 
   const allTasks = getAdminTasks();
-  const branchMembers = operationBranchMembers();
+  const branchMembers = dashboardOperationalMembers();
   const branchCoaches = operationBranchCoaches();
   state.adminTaskPage = normalizeDashboardPage(allTasks.length, state.adminTaskPage);
   const tasks = allTasks.slice(state.adminTaskPage * dashboardPageSize, (state.adminTaskPage + 1) * dashboardPageSize);
