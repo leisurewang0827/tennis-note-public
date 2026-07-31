@@ -9279,8 +9279,16 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
 }
 
 function manualMemberPartnerOptions() {
+  const activeBranchId = activeOperationBranchId();
+  const allowedUserIds = activeBranchId
+    ? new Set(operationBranchMembers().flatMap((member) => memberServerUserIds(member)))
+    : null;
   return (adminLiveDataState.users || [])
-    .filter((user) => user.role === "member" && user.status === "active")
+    .filter((user) => (
+      user.role === "member"
+      && user.status === "active"
+      && (!allowedUserIds || allowedUserIds.has(String(user.id || "")))
+    ))
     .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "ko"));
 }
 
