@@ -1233,6 +1233,103 @@ const adminImportAuthState = {
 
 const coachOperationsViews = new Set(["members", "schedule", "notes", "issues"]);
 const operationsRememberStorageKey = "tennis-note-operations-remember-login";
+const operationsProfileCacheStorageKey = "tennis-note-operations-profile-cache";
+const ADMIN_AUTH_RECHECK_STALE_MS = 5 * 60 * 1000;
+let adminAuthLastVerifiedAt = 0;
+let adminConnectionRecoveryPromise = null;
+
+function initializeOperationsSessionPersistence() {
+  const remember = $("#operationsRememberLogin");
+  let savedRemember = null;
+  try {
+    savedRemember = localStorage.getItem(operationsRememberStorageKey);
+  } catch (error) {
+    savedRemember = null;
+  }
+  const shouldRemember = savedRemember === null ? true : savedRemember === "true";
+  if (savedRemember === null) {
+    try {
+      localStorage.setItem(operationsRememberStorageKey, "true");
+    } catch (error) {
+      // The checked UI still provides the safe default when storage is unavailable.
+    }
+  }
+  window.TennisNoteDataClient?.setSessionPersistence?.(shouldRemember);
+  if (remember) {
+    remember.checked = shouldRemember;
+    remember.dataset.ready = "true";
+  }
+  return shouldRemember;
+}
+
+function operationsProfileCacheStores() {
+  return window.TennisNoteDataClient?.sessionPersistence?.() === "session"
+    ? [sessionStorage]
+    : [localStorage, sessionStorage];
+}
+
+function readCachedOperationsIdentity() {
+  for (const storage of operationsProfileCacheStores()) {
+    try {
+      const cached = JSON.parse(storage.getItem(operationsProfileCacheStorageKey) || "null");
+      if (cached?.user?.id && ["admin", "coach"].includes(cached?.profile?.role)) return cached;
+    } catch (error) {
+      try {
+        storage.removeItem(operationsProfileCacheStorageKey);
+      } catch (storageError) {
+        // Continue to the next available storage area.
+      }
+    }
+  }
+  return null;
+}
+
+function writeCachedOperationsIdentity(user, profile) {
+  if (!user?.id || !["admin", "coach"].includes(profile?.role)) return false;
+  const cached = {
+    user: { id: user.id },
+    profile: {
+      id: profile.id || "",
+      name: profile.name || "",
+      role: profile.role,
+    },
+  };
+  const activeStorage = operationsProfileCacheStores()[0];
+  try {
+    activeStorage.setItem(operationsProfileCacheStorageKey, JSON.stringify(cached));
+    [localStorage, sessionStorage]
+      .filter((storage) => storage !== activeStorage)
+      .forEach((storage) => storage.removeItem(operationsProfileCacheStorageKey));
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function clearCachedOperationsIdentity() {
+  [localStorage, sessionStorage].forEach((storage) => {
+    try {
+      storage.removeItem(operationsProfileCacheStorageKey);
+    } catch (error) {
+      // Clearing either available store is sufficient.
+    }
+  });
+}
+
+function restoreCachedOperationsIdentity() {
+  const session = window.TennisNoteDataClient?.getSession?.();
+  if (!session?.access_token || adminImportAuthState.profile) return false;
+  const cached = readCachedOperationsIdentity();
+  if (!cached) return false;
+  Object.assign(adminImportAuthState, {
+    loading: true,
+    loaded: true,
+    user: cached.user,
+    profile: cached.profile,
+    message: "저장된 로그인으로 운영 화면을 복원하고 있습니다.",
+  });
+  return true;
+}
 
 function operationsRole() {
   if (adminLocalPreviewMode) return "admin";
@@ -1305,8 +1402,7 @@ function renderOperationsLoginGate() {
   if (shellLogout) shellLogout.hidden = !adminImportAuthState.user;
   const remember = $("#operationsRememberLogin");
   if (remember && !remember.dataset.ready) {
-    remember.checked = localStorage.getItem(operationsRememberStorageKey) === "true";
-    remember.dataset.ready = "true";
+    initializeOperationsSessionPersistence();
   }
   applyOperationsRolePermissions();
 }
@@ -20899,7 +20995,7 @@ function cancelAdminInitialLiveSync() {
   adminInitialLiveSyncKind = "";
 }
 
-async function refreshAdminImportAuthState() {
+async function refreshAdminImportAuthState(options = {}) {
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready) {
     Object.assign(adminImportAuthState, {
@@ -20940,6 +21036,9 @@ async function refreshAdminImportAuthState() {
     const result = await client.selectCurrentProfile();
     const profile = result.profile || null;
     const role = profile?.role || "";
+    if (!result.user && !client.getSession?.()?.access_token) {
+      throw new Error("admin_session_expired");
+    }
     Object.assign(adminImportAuthState, {
       loading: false,
       loaded: true,
@@ -20953,30 +21052,63 @@ async function refreshAdminImportAuthState() {
             ? "이 계정에는 운영 화면 권한이 없습니다."
             : "로그인은 되었지만 운영 권한 연결이 필요합니다.",
     });
+    adminAuthLastVerifiedAt = Date.now();
+    writeCachedOperationsIdentity(result.user, profile);
     renderOperationsLoginGate();
     hideAdminBrandSplash();
     if (["admin", "coach"].includes(role)) {
       if (role === "coach" && !operationsViewAllowed(state.view)) state.view = "schedule";
       const restoredFromCache = await restoreAdminOperationalCache();
       setView(state.view, { skipLock: true });
-      if (restoredFromCache) {
-        scheduleAdminInitialLiveSync();
-      } else {
-        await syncAdminLiveData();
-        setView(state.view, { skipLock: true });
+      if (options.syncLiveData !== false) {
+        if (restoredFromCache) {
+          scheduleAdminInitialLiveSync();
+        } else {
+          await syncAdminLiveData();
+          setView(state.view, { skipLock: true });
+        }
       }
     }
+    return ["admin", "coach"].includes(role);
   } catch (error) {
+    const storedSession = client.getSession?.();
+    const cachedIdentity = adminImportAuthState.profile
+      ? { user: adminImportAuthState.user, profile: adminImportAuthState.profile }
+      : readCachedOperationsIdentity();
+    const canKeepAccess = Boolean(
+      storedSession?.access_token
+      && cachedIdentity?.user?.id
+      && ["admin", "coach"].includes(cachedIdentity?.profile?.role)
+      && (client.isTransientConnectionError?.(error) || client.isOnline?.() === false),
+    );
+    if (canKeepAccess) {
+      Object.assign(adminImportAuthState, {
+        loading: false,
+        loaded: true,
+        user: cachedIdentity.user,
+        profile: cachedIdentity.profile,
+        message: "서버 연결이 불안정합니다. 로그인은 유지되며 연결되면 자동으로 다시 확인합니다.",
+      });
+      renderOperationsLoginGate();
+      renderAdminConnectivityStatus(true, "서버 연결이 불안정합니다. 로그인은 유지되며 자동으로 다시 확인합니다.", "warning", 0);
+      renderDataTools();
+      return false;
+    }
+    if (!storedSession?.access_token) clearCachedOperationsIdentity();
     Object.assign(adminImportAuthState, {
       loading: false,
       loaded: true,
       user: null,
       profile: null,
-      message: "로그인 세션 확인에 실패했습니다. 다시 로그인해 주세요.",
+      message: storedSession?.access_token
+        ? "운영 권한을 확인하지 못했습니다. 다시 확인해 주세요."
+        : "로그인 세션이 만료되었습니다. 다시 로그인해 주세요.",
     });
     renderOperationsLoginGate();
+    return false;
+  } finally {
+    renderDataTools();
   }
-  renderDataTools();
 }
 
 function startAdminImportLogin(provider) {
@@ -20985,7 +21117,7 @@ function startAdminImportLogin(provider) {
     blockServerPreview("Supabase 연결값을 먼저 설정해야 로그인할 수 있습니다.");
     return;
   }
-  const remember = $("#operationsRememberLogin")?.checked === true;
+  const remember = $("#operationsRememberLogin")?.checked !== false;
   localStorage.setItem(operationsRememberStorageKey, remember ? "true" : "false");
   client.setSessionPersistence?.(remember);
   client.signInWithOAuth(provider, { redirectTo: window.location.href });
@@ -21067,6 +21199,7 @@ async function signOutAdminImport() {
   cancelAdminInitialLiveSync();
   await clearAdminOperationalCache();
   if (client?.signOut) await client.signOut();
+  clearCachedOperationsIdentity();
   Object.assign(adminImportAuthState, {
     loading: false,
     loaded: true,
@@ -26555,7 +26688,12 @@ function bindEvents() {
 
 let adminConnectivityHideTimer = 0;
 
-function renderAdminConnectivityStatus(reconnected = false) {
+function renderAdminConnectivityStatus(
+  reconnected = false,
+  customMessage = "",
+  customTone = "",
+  hideAfterMs = 2500,
+) {
   const status = $("#adminConnectivityStatus");
   const message = $("#adminConnectivityMessage");
   if (!status || !message) return;
@@ -26565,6 +26703,17 @@ function renderAdminConnectivityStatus(reconnected = false) {
     status.hidden = false;
     status.dataset.tone = "offline";
     message.textContent = "오프라인 · 최근 자료 조회만 가능하며 운영 변경은 연결 후 처리할 수 있습니다.";
+    return;
+  }
+  if (customMessage) {
+    status.hidden = false;
+    status.dataset.tone = customTone || "online";
+    message.textContent = customMessage;
+    if (hideAfterMs > 0) {
+      adminConnectivityHideTimer = window.setTimeout(() => {
+        status.hidden = true;
+      }, hideAfterMs);
+    }
     return;
   }
   if (!reconnected) {
@@ -26581,24 +26730,89 @@ function renderAdminConnectivityStatus(reconnected = false) {
   }, 2500);
 }
 
+async function recoverAdminConnection() {
+  if (adminConnectionRecoveryPromise) return adminConnectionRecoveryPromise;
+  adminConnectionRecoveryPromise = (async () => {
+    const client = window.TennisNoteDataClient;
+    if (!client?.readiness?.().ready || client.isOnline?.() === false) return false;
+    renderAdminConnectivityStatus(true, "서버 연결과 로그인 상태를 다시 확인하고 있습니다.", "recovering", 0);
+    try {
+      await client.ensureSession?.();
+      if (client.getSession?.()?.access_token) {
+        restoreCachedOperationsIdentity();
+        const verified = await refreshAdminImportAuthState({ syncLiveData: false });
+        if (verified && operationsAccessReady()) {
+          await syncAdminLiveData(true);
+          if (operationsRole() === "admin") await refreshAdminPendingUsers();
+        }
+      }
+      await loadSupabaseLiveStatus();
+      renderAdminConnectivityStatus(true, "서버 연결 복구 완료 · 최신 운영 자료를 확인했습니다.", "online", 3000);
+      return true;
+    } catch (error) {
+      renderAdminConnectivityStatus(
+        true,
+        "서버 연결을 아직 복구하지 못했습니다. 로그인은 유지되며 다시 연결되면 자동 재시도합니다.",
+        "warning",
+        0,
+      );
+      return false;
+    }
+  })().finally(() => {
+    adminConnectionRecoveryPromise = null;
+  });
+  return adminConnectionRecoveryPromise;
+}
+
 function installAdminConnectivityStatus() {
   renderAdminConnectivityStatus(false);
   window.addEventListener("offline", () => renderAdminConnectivityStatus(false));
   window.addEventListener("online", () => {
-    renderAdminConnectivityStatus(true);
-    void loadSupabaseLiveStatus();
+    void recoverAdminConnection();
   });
+  const recoverStaleSession = () => {
+    if (
+      document.hidden
+      || window.TennisNoteDataClient?.isOnline?.() === false
+      || !window.TennisNoteDataClient?.getSession?.()?.access_token
+      || (operationsAccessReady() && Date.now() - adminAuthLastVerifiedAt < ADMIN_AUTH_RECHECK_STALE_MS)
+    ) return;
+    void recoverAdminConnection();
+  };
+  window.addEventListener("focus", recoverStaleSession);
+  document.addEventListener("visibilitychange", recoverStaleSession);
+}
+
+async function bootstrapAdminOperationsSession() {
+  const client = window.TennisNoteDataClient;
+  try {
+    await client?.consumeOAuthRedirect?.();
+  } catch (error) {
+    const canRetry = client?.isTransientConnectionError?.(error) || client?.isOnline?.() === false;
+    adminImportAuthState.message = canRetry
+      ? "네이버 로그인 확인 중 서버 연결이 끊겼습니다. 연결되면 자동으로 이어갑니다."
+      : "네이버 로그인 완료 정보를 확인하지 못했습니다. 다시 로그인해 주세요.";
+  }
+  restoreCachedOperationsIdentity();
+  if (client?.getSession?.()?.access_token) {
+    adminImportAuthState.loading = true;
+    adminImportAuthState.message = "로그인 상태를 확인하고 있습니다.";
+  }
+  renderOperationsLoginGate();
+  try {
+    const verified = await refreshAdminImportAuthState();
+    if (verified && operationsRole() === "admin") await refreshAdminPendingUsers();
+  } finally {
+    hideAdminBrandSplash();
+  }
 }
 
 restoreSnapshot();
 window.TennisNoteReleaseUpdater?.start({ manifestUrl: "../release.json" });
 prepareAdminLiveMode();
 resetScheduleEntryState();
-window.TennisNoteDataClient?.consumeOAuthRedirect?.();
-if (window.TennisNoteDataClient?.getSession?.()?.access_token) {
-  adminImportAuthState.loading = true;
-  adminImportAuthState.message = "로그인 상태를 확인하고 있습니다.";
-}
+initializeOperationsSessionPersistence();
+restoreCachedOperationsIdentity();
 renderOperationsLoginGate();
 organizeAdminTools();
 bindEvents();
@@ -26613,6 +26827,4 @@ window.addEventListener("resize", () => {
   }, 120);
 });
 syncPopupNoticeFromServer();
-refreshAdminImportAuthState()
-  .then(refreshAdminPendingUsers)
-  .finally(hideAdminBrandSplash);
+void bootstrapAdminOperationsSession();

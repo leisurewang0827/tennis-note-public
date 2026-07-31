@@ -414,6 +414,18 @@
       || message.includes("load failed");
   }
 
+  function isTransientConnectionError(error) {
+    const message = String(error?.code || error?.message || error || "").toLowerCase();
+    return isOfflineError(error)
+      || transientNetworkError(error)
+      || Number(error?.status || 0) >= 500
+      || [
+        "session_refresh_temporarily_unavailable",
+        "server_request_timeout",
+        "request_timeout",
+      ].some((code) => message.includes(code));
+  }
+
   async function performRefreshSession() {
     const session = getSession();
     if (!session?.refresh_token || !readiness().ready) return null;
@@ -670,7 +682,9 @@
 
     if (!response.ok) {
       const message = await response.text();
-      throw new Error(message || `Supabase request failed: ${response.status}`);
+      const error = new Error(message || `Supabase request failed: ${response.status}`);
+      error.status = response.status;
+      throw error;
     }
 
     if (response.status === 204) return null;
@@ -917,7 +931,15 @@
       const id = sessionSubject(session);
       return id ? { id } : null;
     }
-    if (!response.ok) return null;
+    if (!response.ok) {
+      if (response.status === 400 || response.status === 401) {
+        removeStoredSession();
+        return null;
+      }
+      const error = new Error(await response.text() || `Supabase auth user failed: ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
     return response.json();
   }
 
@@ -1128,6 +1150,7 @@
     signOut,
     isOnline,
     isOfflineError,
+    isTransientConnectionError,
     clearOfflineResponses,
     countRows,
     selectRows,
