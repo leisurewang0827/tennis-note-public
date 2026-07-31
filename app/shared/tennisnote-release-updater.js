@@ -157,7 +157,11 @@
   }
 
   async function applyNativeRemoteShell(candidate, remoteAppUrl) {
-    if (!isNativeWebView() || !remoteAppUrl) return false;
+    if (
+      !isNativeWebView()
+      || !remoteAppUrl
+      || candidate?.nativeUpdateMode !== "remote-shell"
+    ) return false;
     const key = `tennis-note-native-shell:${candidate.releaseId}`;
     if (sessionStorage.getItem(key) === "done") return false;
     const url = new URL(remoteAppUrl);
