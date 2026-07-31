@@ -579,13 +579,21 @@
     if (!url || !url.startsWith("com.tennisclubhouse.tennisnote://oauth/")) return false;
     try {
       const parsed = new URL(url);
-      const session = saveOAuthSession(parsed.hash);
+      const error = parsed.searchParams.get("error");
+      if (error) {
+        throw new Error(parsed.searchParams.get("error_description") || error);
+      }
+      const code = parsed.searchParams.get("code");
+      const session = code
+        ? await exchangeOAuthCode(code)
+        : saveOAuthSession(parsed.hash);
       if (!session) return false;
       await flushOAuthProviderCredentialCapture();
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
       window.location.reload();
       return true;
     } catch (error) {
+      await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
       return false;
     }
   }
