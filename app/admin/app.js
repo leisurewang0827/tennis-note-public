@@ -2301,9 +2301,69 @@ const importTemplateColumns = [
   "정규시간2",
   "메모",
 ];
+const importWorkbookVersion = "2.0";
+const importGuideSheetName = "작성안내";
+const importMemberSheetName = "회원DB";
+const importScheduleSheetName = "정규시간표";
+const importReviewSheetName = "검토대기";
+const importPaymentReviewSheetName = "결제검토";
+const importMemberColumns = [
+  "원본번호",
+  "지점명",
+  "회원명",
+  "연락처",
+  "출생연도",
+  "거주동",
+  "성별",
+  "회원상태",
+  "담당코치",
+  "회원권명",
+  "적용방식",
+  "레슨방식",
+  "레슨종류",
+  "파트너원본번호",
+  "파트너연락처",
+  "레슨시작일",
+  "만료일",
+  "총횟수",
+  "소진횟수",
+  "잔여횟수",
+  "결제일",
+  "결제수단",
+  "결제금액",
+  "비고",
+];
+const importScheduleColumns = [
+  "시간표원본번호",
+  "회원원본번호",
+  "수업일",
+  "시작시간",
+  "수업분",
+  "상태",
+  "메모",
+];
+const requiredImportMemberColumns = [
+  "원본번호",
+  "회원명",
+  "연락처",
+  "출생연도",
+  "성별",
+  "회원상태",
+  "담당코치",
+];
+const requiredActiveImportMemberColumns = [
+  "회원권명",
+  "레슨방식",
+  "레슨종류",
+  "레슨시작일",
+  "총횟수",
+  "소진횟수",
+  "잔여횟수",
+];
 const requiredImportColumns = ["회원명", "담당코치", "회원권명", "총횟수", "사용횟수", "잔여횟수"];
 const numericImportColumns = ["수업분", "주횟수", "총횟수", "사용횟수", "잔여횟수", "결제금액"];
 const dataImportState = {
+  schemaVersion: "",
   fileName: "",
   fileType: "",
   status: "idle",
@@ -2315,6 +2375,9 @@ const dataImportState = {
   errorRows: 0,
   issues: [],
   rawRows: [],
+  workbookPayload: null,
+  memberRowCount: 0,
+  scheduleRowCount: 0,
   serverStatus: "idle",
   serverMessage: "",
   serverPreview: null,
@@ -18973,14 +19036,38 @@ function ensureXlsxLibrary() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
   if (xlsxLibraryPromise) return xlsxLibraryPromise;
 
+  const sources = [
+    "../shared/vendor/xlsx.full.min.js?v=0.18.5",
+    "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+  ];
   xlsxLibraryPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
-    script.async = true;
-    script.dataset.tennisnoteOptionalModule = "xlsx";
-    script.onload = () => (window.XLSX ? resolve(window.XLSX) : reject(new Error("xlsx_module_unavailable")));
-    script.onerror = () => reject(new Error("xlsx_module_load_failed"));
-    document.head.append(script);
+    const loadSource = (index) => {
+      if (window.XLSX) {
+        resolve(window.XLSX);
+        return;
+      }
+      if (index >= sources.length) {
+        reject(new Error("xlsx_module_load_failed"));
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = sources[index];
+      script.async = true;
+      script.dataset.tennisnoteOptionalModule = "xlsx";
+      script.onload = () => {
+        if (window.XLSX) resolve(window.XLSX);
+        else {
+          script.remove();
+          loadSource(index + 1);
+        }
+      };
+      script.onerror = () => {
+        script.remove();
+        loadSource(index + 1);
+      };
+      document.head.append(script);
+    };
+    loadSource(0);
   }).catch((error) => {
     xlsxLibraryPromise = null;
     throw error;
@@ -19012,27 +19099,90 @@ function importSampleRows() {
   ];
 }
 
+function importMemberSampleRows() {
+  return [
+    ["AUG-001", "테니스클럽하우스", "홍길동", "010-0000-0000", 1990, "군자동", "남", "수강중", "노황규", "평일 4주 1대1 20분 주2회 8회", "현재 회원권 갱신", "평일", "1:1", "", "", "2026-08-03", "2026-09-06", 8, 0, 8, "2026-08-01", "카드", 286000, "가상 작성 예시"],
+    ["AUG-002", "테니스클럽하우스", "김테니스", "010-1111-1111", 1988, "능동", "여", "수강중", "박창준", "주말 4주 2대1 20분 주1회 4회", "새 회원권", "주말", "1:2", "AUG-003", "010-2222-2222", "2026-08-01", "2026-09-04", 4, 0, 4, "2026-08-01", "현금", 120000, "가상 1:2 예시"],
+    ["AUG-003", "테니스클럽하우스", "이파트너", "010-2222-2222", 1992, "화양동", "여", "수강중", "박창준", "주말 4주 2대1 20분 주1회 4회", "새 회원권", "주말", "1:2", "AUG-002", "010-1111-1111", "2026-08-01", "2026-09-04", 4, 0, 4, "2026-08-01", "현금", 120000, "가상 1:2 예시"],
+  ];
+}
+
+function importScheduleSampleRows() {
+  return [
+    ["AUG-S-001", "AUG-001", "2026-08-04", "18:40", 20, "예정", "가상 작성 예시"],
+    ["AUG-S-002", "AUG-002", "2026-08-01", "09:00", 20, "예정", "1:2는 두 회원 중 한 원본번호만 입력"],
+  ];
+}
+
+function defaultMonthlyImportMonth() {
+  const today = new Date();
+  const target = new Date(today.getFullYear(), today.getMonth() + (today.getDate() >= 20 ? 1 : 0), 1);
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function importGuideRows() {
   return [
     ["항목", "내용"],
-    ["입력 방식", "업로드양식 시트에 한 회원권 또는 한 정규시간 기준으로 한 줄씩 입력합니다."],
-    ["필수 컬럼", requiredImportColumns.join(", ")],
-    ["횟수 검증", "총횟수 - 사용횟수 = 잔여횟수로 맞아야 합니다."],
-    ["코치명", "관리자 대시보드에 등록된 코치명과 맞아야 합니다."],
-    ["2대1/그룹", "대표 회원은 회원명/연락처에, 파트너는 동반회원명/동반연락처에 각각 입력합니다."],
-    ["정규요일/시간", "주2회 이상이면 정규요일1/정규시간1, 정규요일2/정규시간2를 함께 입력합니다."],
-    ["민감정보", "연락처는 실제 서비스에서 관리자 권한으로만 저장하고 내보내기 이력에 남깁니다."],
-    ["실제 반영", "파일 업로드 후 검증 결과를 확인하고, 서버 검증이 통과한 행만 DB에 반영합니다."],
+    ["양식 버전", importWorkbookVersion],
+    ["이관월", defaultMonthlyImportMonth()],
+    ["지점명", activeOperationBranchName()],
+    ["회원DB", "회원 한 명을 한 줄에 입력합니다. 원본번호는 월이 바뀌어도 같은 회원을 식별하는 값이므로 중복되지 않게 유지합니다."],
+    ["필수 컬럼", requiredImportMemberColumns.join(", ")],
+    ["수강중 필수", requiredActiveImportMemberColumns.join(", ")],
+    ["횟수 검증", "총횟수 - 소진횟수 = 잔여횟수로 맞아야 합니다."],
+    ["회원권명", "코드표의 판매중 회원권명을 그대로 선택합니다. 비슷한 이름을 임의로 만들면 서버 검증에서 중단됩니다."],
+    ["코치명", "코드표의 승인·근무중 코치명을 그대로 선택합니다."],
+    ["1:2", "두 회원을 각각 한 줄로 적고 파트너원본번호와 파트너연락처를 서로 교차 입력합니다."],
+    ["정규시간표", "정확한 수업일과 시간이 확인된 경우만 입력합니다. 비워 두면 현재 서버 시간표는 삭제하거나 초기화하지 않습니다."],
+    ["재업로드", "같은 원본번호와 같은 내용은 중복 생성하지 않습니다. 변경 내용은 현재 회원권 갱신으로 다시 검증합니다."],
+    ["결제", "결제금액이 0이면 결제 이력을 만들지 않습니다. 금액이 있으면 결제일과 결제수단을 함께 입력합니다."],
+    ["민감정보", "실제 연락처가 포함된 작성 파일은 Git에 올리지 말고 관리자 전용 보관 위치에서만 사용합니다."],
+    ["실제 반영", "파일 검사 → 서버 미리보기 → 관리자 최종 확인 순서가 모두 통과해야 한 트랜잭션으로 반영됩니다."],
+  ];
+}
+
+function importCodeRows() {
+  const coachRows = operationBranchCoaches(coaches)
+    .filter((coach) => (
+      coach.id !== "coach-machine"
+      && coach.status === "active"
+      && coach.coachMode === "approved"
+      && coach.serverRoleId
+    ))
+    .map((coach) => ["담당코치", scheduleCoachDisplayName(coach.name), "", ""]);
+  const productRows = membershipProductsForActiveOperationProfile()
+    .filter((product) => product.status === "sale" && product.serverProductId)
+    .map((product) => ["회원권명", product.title, "판매중", product.serverProductId]);
+  return [
+    ["구분", "사용값", "상태", "코드"],
+    ["회원상태", "수강중", "", "active"],
+    ["회원상태", "만료회원", "", "historical"],
+    ["회원상태", "가입대기", "", "pending"],
+    ["적용방식", "현재 회원권 갱신", "", "update_current"],
+    ["적용방식", "새 회원권", "", "new_ticket"],
+    ["적용방식", "회원정보만", "", "member_only"],
+    ["레슨방식", "평일", "", "weekday"],
+    ["레슨방식", "주말", "", "weekend"],
+    ["레슨종류", "1:1", "", "one_on_one"],
+    ["레슨종류", "1:2", "", "one_on_two"],
+    ["결제수단", "카드", "", "card"],
+    ["결제수단", "현금", "", "cash"],
+    ["결제수단", "계좌이체", "", "bank_transfer"],
+    ...coachRows,
+    ...productRows,
   ];
 }
 
 async function downloadImportTemplate() {
-  await downloadWorkbook("tennis-note-import-template.xlsx", [
-    { name: "업로드양식", rows: [importTemplateColumns] },
-    { name: "작성예시", rows: [importTemplateColumns, ...importSampleRows()] },
-    { name: "작성가이드", rows: importGuideRows() },
+  await downloadWorkbook("tennis-note-monthly-import-v2.xlsx", [
+    { name: "작성안내", rows: importGuideRows() },
+    { name: importMemberSheetName, rows: [importMemberColumns] },
+    { name: "회원DB_작성예시", rows: [importMemberColumns, ...importMemberSampleRows()] },
+    { name: importScheduleSheetName, rows: [importScheduleColumns] },
+    { name: "시간표_작성예시", rows: [importScheduleColumns, ...importScheduleSampleRows()] },
+    { name: "코드표", rows: importCodeRows() },
   ]);
-  billingLogs.unshift("데이터 가져오기 통합 양식 다운로드");
+  billingLogs.unshift(`월별 데이터 이관 양식 ${importWorkbookVersion} 다운로드`);
   renderAll();
   showToast("엑셀 양식 다운로드 완료");
 }
@@ -19129,6 +19279,247 @@ function isNumericImportValue(value) {
   return Number.isFinite(Number(String(value).replaceAll(",", "")));
 }
 
+function nonEmptyWorkbookRows(rows = []) {
+  return rows.filter((row) => Array.isArray(row) && row.some((cell) => String(cell ?? "").trim()));
+}
+
+function importRowsAsObjects(rawRows = []) {
+  const headerRow = rawRows[0] || [];
+  const headers = headerRow.map((header) => normalizeImportHeader(header));
+  return nonEmptyWorkbookRows(rawRows.slice(1)).map((row, index) => ({
+    rowNumber: index + 2,
+    values: rowObjectFromHeaders(headers, row),
+  }));
+}
+
+function importGuideMetadata(rawRows = []) {
+  return Object.fromEntries(nonEmptyWorkbookRows(rawRows).slice(1).map((row) => [
+    normalizeImportHeader(row[0]),
+    String(row[1] ?? "").trim(),
+  ]));
+}
+
+function normalizedImportNumber(value) {
+  const text = String(value ?? "").replaceAll(",", "").trim();
+  if (!text) return null;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function importMemberStatus(value = "") {
+  const normalized = String(value).replace(/\s+/g, "");
+  if (["수강중", "활성", "active"].includes(normalized)) return "active";
+  if (["만료회원", "만료", "종료", "historical"].includes(normalized)) return "historical";
+  if (["가입대기", "대기", "pending"].includes(normalized)) return "pending";
+  return "";
+}
+
+function validateMonthlyImportWorkbook(workbookPayload, sourceName = "") {
+  const memberRows = workbookPayload?.members?.rows || [];
+  const scheduleRows = workbookPayload?.schedules?.rows || [];
+  const reviewSheetRows = importRowsAsObjects(workbookPayload?.reviews?.rows || []);
+  const paymentReviewSheetRows = importRowsAsObjects(workbookPayload?.paymentReviews?.rows || []);
+  const guide = importGuideMetadata(workbookPayload?.guide?.rows || []);
+  const importMonth = String(guide[normalizeImportHeader("이관월")] || "").trim();
+  const workbookBranchName = String(guide[normalizeImportHeader("지점명")] || "").trim();
+  const currentBranchName = activeOperationBranchName();
+  const importBranchId = activeOperationBranchId() || defaultOperationBranch()?.id || "";
+  const memberHeaders = (memberRows[0] || []).map((header) => normalizeImportHeader(header));
+  const scheduleHeaders = (scheduleRows[0] || []).map((header) => normalizeImportHeader(header));
+  const missingMemberHeaders = importMemberColumns
+    .map((column) => normalizeImportHeader(column))
+    .filter((column) => !memberHeaders.includes(column));
+  const missingScheduleHeaders = importScheduleColumns
+    .map((column) => normalizeImportHeader(column))
+    .filter((column) => scheduleRows.length && !scheduleHeaders.includes(column));
+  const memberObjects = importRowsAsObjects(memberRows);
+  const scheduleObjects = importRowsAsObjects(scheduleRows);
+  const issues = [
+    ...missingMemberHeaders.map((column) => ({ rowNumber: "-", level: "error", message: `회원DB 필수 컬럼 누락: ${column}` })),
+    ...missingScheduleHeaders.map((column) => ({ rowNumber: "-", level: "error", message: `정규시간표 필수 컬럼 누락: ${column}` })),
+  ];
+  const sourceNumbers = new Set();
+  const phoneNumbers = new Set();
+  const scheduleSourceNumbers = new Set();
+  const scheduleSlots = new Set();
+  let errorRows = 0;
+  let reviewRows = 0;
+  if (!importBranchId) {
+    errorRows += 1;
+    issues.push({ rowNumber: "-", level: "error", message: "현재 운영 지점을 먼저 선택하세요." });
+  }
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(importMonth)) {
+    errorRows += 1;
+    issues.push({ rowNumber: "-", level: "error", message: "작성안내의 이관월을 YYYY-MM 형식으로 입력하세요." });
+  }
+  if (!workbookBranchName) {
+    errorRows += 1;
+    issues.push({ rowNumber: "-", level: "error", message: "작성안내의 지점명을 입력하세요." });
+  } else if (currentBranchName && normalizeImportHeader(workbookBranchName) !== normalizeImportHeader(currentBranchName)) {
+    errorRows += 1;
+    issues.push({ rowNumber: "-", level: "error", message: `양식 지점(${workbookBranchName})과 현재 운영 지점(${currentBranchName})이 다릅니다.` });
+  }
+  if (reviewSheetRows.length) {
+    reviewRows += reviewSheetRows.length;
+    issues.push({
+      rowNumber: importReviewSheetName,
+      level: "review",
+      message: `검토대기 ${reviewSheetRows.length}행을 정리해 회원DB로 옮기거나 제외 근거를 남겨야 합니다.`,
+    });
+  }
+  if (paymentReviewSheetRows.length) {
+    reviewRows += paymentReviewSheetRows.length;
+    issues.push({
+      rowNumber: importPaymentReviewSheetName,
+      level: "review",
+      message: `결제검토 ${paymentReviewSheetRows.length}행을 정리해야 실제 반영할 수 있습니다.`,
+    });
+  }
+  const liveImportCoachNames = (adminLiveDataState.coachRoles || [])
+    .filter((role) => (
+      role?.id
+      && role.status === "approved"
+      && !["ended", "archived"].includes(role.employment_status)
+      && !role.archived_at
+      && (!importBranchId || String(role.branch_id || "") === String(importBranchId))
+    ))
+    .map((role) => normalizeImportHeader(role.display_name || role.name || role.coach_name || ""))
+    .filter(Boolean);
+
+  memberObjects.forEach(({ rowNumber, values }) => {
+    const rowIssues = [];
+    const sourceNumber = importCell(values, "원본번호");
+    const phone = importCell(values, "연락처").replace(/[^0-9]/g, "");
+    const status = importMemberStatus(importCell(values, "회원상태"));
+    const rowBranchName = importCell(values, "지점명");
+    requiredImportMemberColumns.forEach((column) => {
+      if (!importCell(values, normalizeImportHeader(column))) rowIssues.push(`${column} 없음`);
+    });
+    if (sourceNumber && sourceNumbers.has(sourceNumber)) rowIssues.push("원본번호 중복");
+    if (sourceNumber) sourceNumbers.add(sourceNumber);
+    if (phone && phoneNumbers.has(phone)) rowIssues.push("연락처 중복");
+    if (phone) phoneNumbers.add(phone);
+    if (phone.length < 10 || phone.length > 11) rowIssues.push("연락처 형식 오류");
+    const birthYear = normalizedImportNumber(importCell(values, "출생연도"));
+    if (!birthYear || birthYear < 1900 || birthYear > 2100) rowIssues.push("출생연도 오류");
+    if (!status) rowIssues.push("회원상태 선택 오류");
+    if (
+      rowBranchName
+      && workbookBranchName
+      && normalizeImportHeader(rowBranchName) !== normalizeImportHeader(workbookBranchName)
+    ) {
+      rowIssues.push("작성안내 지점명과 회원 행 지점명이 다름");
+    }
+    if (status === "active") {
+      requiredActiveImportMemberColumns.forEach((column) => {
+        if (!importCell(values, normalizeImportHeader(column))) rowIssues.push(`${column} 없음`);
+      });
+    }
+    ["총횟수", "소진횟수", "잔여횟수", "결제금액"].forEach((column) => {
+      const value = importCell(values, column);
+      if (value && normalizedImportNumber(value) === null) rowIssues.push(`${column} 숫자 오류`);
+    });
+    const total = normalizedImportNumber(importCell(values, "총횟수"));
+    const used = normalizedImportNumber(importCell(values, "소진횟수"));
+    const remaining = normalizedImportNumber(importCell(values, "잔여횟수"));
+    if ([total, used, remaining].every((value) => value !== null) && total - used !== remaining) {
+      rowIssues.push("총횟수-소진횟수와 잔여횟수 불일치");
+    }
+    const amount = normalizedImportNumber(importCell(values, "결제금액")) || 0;
+    if (amount > 0 && (!importCell(values, "결제일") || !importCell(values, "결제수단"))) {
+      rowIssues.push("결제금액이 있으면 결제일·결제수단 필요");
+    }
+    const lessonType = importCell(values, "레슨종류");
+    const partnerSourceNumber = importCell(values, "파트너원본번호");
+    const partnerPhone = importCell(values, "파트너연락처").replace(/[^0-9]/g, "");
+    if (status === "active" && ["1:2", "2대1"].includes(lessonType) && (!partnerSourceNumber || partnerPhone.length < 10)) {
+      rowIssues.push("1:2 파트너 정보 필요");
+    }
+    const coachName = importCell(values, "담당코치");
+    if (
+      coachName
+      && liveImportCoachNames.length
+      && !liveImportCoachNames.some((name) => (
+        name.includes(normalizeImportHeader(coachName))
+        || normalizeImportHeader(coachName).includes(name)
+      ))
+    ) {
+      rowIssues.push("등록되지 않은 코치명 확인 필요");
+    }
+    if (rowIssues.length) {
+      errorRows += 1;
+      rowIssues.forEach((message) => issues.push({ rowNumber, level: "error", message }));
+    }
+  });
+
+  scheduleObjects.forEach(({ rowNumber, values }) => {
+    const rowIssues = [];
+    ["시간표원본번호", "회원원본번호", "수업일", "시작시간", "수업분", "상태"].forEach((column) => {
+      if (!importCell(values, column)) rowIssues.push(`${column} 없음`);
+    });
+    const memberSourceNumber = importCell(values, "회원원본번호");
+    const scheduleSourceNumber = importCell(values, "시간표원본번호");
+    const lessonDate = importCell(values, "수업일");
+    const startTime = importCell(values, "시작시간");
+    const scheduleStatus = importCell(values, "상태");
+    if (memberSourceNumber && !sourceNumbers.has(memberSourceNumber)) rowIssues.push("회원DB에 없는 회원원본번호");
+    if (scheduleSourceNumber && scheduleSourceNumbers.has(scheduleSourceNumber)) rowIssues.push("시간표원본번호 중복");
+    if (scheduleSourceNumber) scheduleSourceNumbers.add(scheduleSourceNumber);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(lessonDate)) rowIssues.push("수업일 형식 오류");
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(startTime)) rowIssues.push("시작시간 형식 오류");
+    if (![20, 30, 40, 60].includes(normalizedImportNumber(importCell(values, "수업분")))) rowIssues.push("수업분은 20·30·40·60만 가능");
+    if (scheduleStatus !== "예정") rowIssues.push("신규 시간표 상태는 예정만 가능");
+    const scheduleSlot = `${memberSourceNumber}::${lessonDate}::${startTime}`;
+    if (memberSourceNumber && lessonDate && startTime && scheduleSlots.has(scheduleSlot)) rowIssues.push("같은 회원의 같은 시간표가 중복됨");
+    if (memberSourceNumber && lessonDate && startTime) scheduleSlots.add(scheduleSlot);
+    if (rowIssues.length) {
+      errorRows += 1;
+      rowIssues.forEach((message) => issues.push({ rowNumber: `${importScheduleSheetName} ${rowNumber}`, level: "error", message }));
+    }
+  });
+
+  if (!memberObjects.length) {
+    errorRows += 1;
+    issues.push({ rowNumber: "-", level: "error", message: "회원DB에 입력된 회원이 없습니다." });
+  }
+  if (!scheduleObjects.length) {
+    issues.push({ rowNumber: "-", level: "info", message: "정규시간표가 비어 있어 기존 서버 시간표를 그대로 보존합니다." });
+  }
+
+  const sourceMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(importMonth) ? importMonth : "invalid-month";
+  return {
+    sourceName,
+    schemaVersion: importWorkbookVersion,
+    columns: memberHeaders,
+    rowCount: memberObjects.length + scheduleObjects.length,
+    memberRowCount: memberObjects.length,
+    scheduleRowCount: scheduleObjects.length,
+    readyRows: Math.max(0, memberObjects.length + scheduleObjects.length - errorRows),
+    reviewRows,
+    errorRows: errorRows + (missingMemberHeaders.length || missingScheduleHeaders.length ? 1 : 0),
+    issues,
+    workbookPayload: {
+      schemaVersion: importWorkbookVersion,
+      sourceName,
+      targetBranchId: importBranchId,
+      importMonth: sourceMonth,
+      branchName: workbookBranchName,
+      sourceSheetId: `tennisnote-monthly-workbook:${importBranchId || "unassigned"}:${sourceMonth}`,
+      sourceTabName: sourceMonth,
+      members: { columns: memberHeaders, rows: memberRows.slice(1) },
+      schedules: { columns: scheduleHeaders, rows: scheduleRows.slice(1) },
+      reviews: {
+        columns: (workbookPayload?.reviews?.rows?.[0] || []).map((header) => normalizeImportHeader(header)),
+        rows: workbookPayload?.reviews?.rows?.slice(1) || [],
+      },
+      paymentReviews: {
+        columns: (workbookPayload?.paymentReviews?.rows?.[0] || []).map((header) => normalizeImportHeader(header)),
+        rows: workbookPayload?.paymentReviews?.rows?.slice(1) || [],
+      },
+    },
+  };
+}
+
 function validateImportRows(rawRows, sourceName = "") {
   const headerRow = rawRows[0] || [];
   const headers = headerRow.map((header) => normalizeImportHeader(header));
@@ -19201,9 +19592,23 @@ async function readWorkbookFile(file) {
     const reader = new FileReader();
     reader.onload = () => {
       const workbook = window.XLSX.read(reader.result, { type: "array" });
+      const sheets = Object.fromEntries(workbook.SheetNames.map((sheetName) => [
+        sheetName,
+        window.XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" }),
+      ]));
+      if (sheets[importMemberSheetName]) {
+        resolve({
+          schemaVersion: importWorkbookVersion,
+          guide: { name: importGuideSheetName, rows: sheets[importGuideSheetName] || [] },
+          members: { name: importMemberSheetName, rows: sheets[importMemberSheetName] },
+          schedules: { name: importScheduleSheetName, rows: sheets[importScheduleSheetName] || [importScheduleColumns] },
+          reviews: { name: importReviewSheetName, rows: sheets[importReviewSheetName] || [] },
+          paymentReviews: { name: importPaymentReviewSheetName, rows: sheets[importPaymentReviewSheetName] || [] },
+        });
+        return;
+      }
       const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      resolve(window.XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" }));
+      resolve({ schemaVersion: "1.0", legacyRows: sheets[firstSheetName] || [] });
     };
     reader.onerror = reject;
     reader.readAsArrayBuffer(file);
@@ -19224,6 +19629,10 @@ async function handleDataImportFile(file) {
     errorRows: 0,
     issues: [],
     rawRows: [],
+    schemaVersion: "",
+    workbookPayload: null,
+    memberRowCount: 0,
+    scheduleRowCount: 0,
     serverStatus: "idle",
     serverMessage: "",
     serverPreview: null,
@@ -19231,8 +19640,31 @@ async function handleDataImportFile(file) {
   try {
     const extension = file.name.split(".").pop()?.toLowerCase();
     let rows = [];
+    let workbookPayload = null;
     if (extension === "xlsx" || extension === "xls") {
-      rows = await readWorkbookFile(file);
+      const workbook = await readWorkbookFile(file);
+      if (workbook.schemaVersion === importWorkbookVersion) {
+        const result = validateMonthlyImportWorkbook(workbook, file.name);
+        setDataImportState({
+          ...result,
+          fileName: file.name,
+          fileType: extension,
+          rawRows: [],
+          serverStatus: "idle",
+          serverMessage: "서버 검증 대기 중입니다.",
+          serverPreview: null,
+          status: result.errorRows ? "error" : result.reviewRows ? "review" : "ready",
+          message: result.errorRows
+            ? "오류 행을 수정해야 실제 DB 반영이 가능합니다."
+            : result.reviewRows
+              ? "검토대기·결제검토 행을 모두 정리한 뒤 다시 업로드하세요."
+              : result.scheduleRowCount
+                ? "회원DB와 시간표 검증 통과. 서버 미리보기를 실행하세요."
+                : "회원DB 검증 통과. 기존 서버 시간표는 그대로 보존됩니다.",
+        });
+        return;
+      }
+      rows = workbook.legacyRows || [];
     } else {
       const text = await readTextFile(file);
       rows = parseDelimitedRows(text, extension === "tsv" ? "\t" : ",");
@@ -19243,6 +19675,10 @@ async function handleDataImportFile(file) {
       fileName: file.name,
       fileType: extension,
       rawRows: rows,
+      schemaVersion: "1.0",
+      workbookPayload,
+      memberRowCount: result.rowCount,
+      scheduleRowCount: 0,
       serverStatus: "idle",
       serverMessage: "서버 검증 대기 중입니다.",
       serverPreview: null,
@@ -19266,6 +19702,10 @@ async function handleDataImportFile(file) {
       errorRows: 1,
       issues: [{ rowNumber: "-", level: "error", message: error.message || "파일 읽기 실패" }],
       rawRows: [],
+      schemaVersion: "",
+      workbookPayload: null,
+      memberRowCount: 0,
+      scheduleRowCount: 0,
       serverStatus: "idle",
       serverMessage: "",
       serverPreview: null,
@@ -19288,6 +19728,10 @@ function clearDataImportResult() {
     errorRows: 0,
     issues: [],
     rawRows: [],
+    schemaVersion: "",
+    workbookPayload: null,
+    memberRowCount: 0,
+    scheduleRowCount: 0,
     serverStatus: "idle",
     serverMessage: "",
     serverPreview: null,
@@ -19296,6 +19740,7 @@ function clearDataImportResult() {
 
 const importServerIssueLabels = {
   no_rows: "가져올 행이 없습니다.",
+  no_member_rows: "회원DB에 가져올 회원이 없습니다.",
   required_value_missing: "필수값이 비어 있습니다.",
   numeric_value_invalid: "숫자로 입력해야 하는 값이 맞지 않습니다.",
   ticket_balance_mismatch: "총횟수, 사용횟수, 잔여횟수가 맞지 않습니다.",
@@ -19304,6 +19749,21 @@ const importServerIssueLabels = {
   possible_duplicate_ticket_row: "같은 회원/코치/회원권 조합이 중복될 수 있습니다.",
   group_partner_required: "2대1 회원권은 동반 회원 이름과 연락처가 필요합니다.",
   group_partner_same_phone: "대표 회원과 동반 회원의 연락처가 같습니다.",
+  source_number_duplicate: "원본번호가 중복됐습니다.",
+  source_number_missing: "원본번호가 없습니다.",
+  source_member_not_found: "시간표의 회원원본번호를 회원DB에서 찾을 수 없습니다.",
+  product_not_found: "판매중 회원권 상품과 정확히 일치하지 않습니다.",
+  target_branch_required: "현재 운영 지점을 먼저 선택해야 합니다.",
+  branch_mismatch: "현재 운영 지점에 속한 코치와 회원권만 사용할 수 있습니다.",
+  schedule_status_invalid: "새 시간표의 상태는 예정만 사용할 수 있습니다.",
+  schedule_slot_duplicate: "같은 회원의 같은 날짜·시간 수업이 중복됐습니다.",
+  schedule_preserved: "시간표 입력이 없어 기존 서버 시간표를 보존합니다.",
+  schedule_group_manual_review: "1:2 시간표는 두 회원의 회원권 연결을 확인해야 합니다.",
+  review_sheet_not_empty: "검토대기 시트의 행을 정리해야 합니다.",
+  payment_review_sheet_not_empty: "결제검토 시트의 행을 정리해야 합니다.",
+  import_month_invalid: "작성안내의 이관월을 YYYY-MM 형식으로 입력해야 합니다.",
+  workbook_branch_name_required: "작성안내의 지점명을 입력해야 합니다.",
+  workbook_branch_mismatch: "작성안내의 지점과 현재 운영 지점이 다릅니다.",
 };
 
 const importServerFieldLabels = {
@@ -19317,6 +19777,13 @@ const importServerFieldLabels = {
   usedSessions: "사용횟수",
   remainingSessions: "잔여횟수",
   paymentAmount: "결제금액",
+  targetBranchId: "운영 지점",
+  scheduleSourceNumber: "시간표원본번호",
+  memberSourceNumber: "회원원본번호",
+  lessonDate: "수업일",
+  startTime: "시작시간",
+  durationMinutes: "수업분",
+  status: "상태",
   regularTime1: "정규시간1",
   regularTime2: "정규시간2",
 };
@@ -20781,6 +21248,25 @@ function knownCoachNamesForImport() {
   return coaches.map((coach) => coach.name).filter(Boolean);
 }
 
+function hasDataImportPayload() {
+  if (dataImportState.schemaVersion === importWorkbookVersion) {
+    return Boolean(dataImportState.workbookPayload?.members?.rows?.length > 1);
+  }
+  return Array.isArray(dataImportState.rawRows) && dataImportState.rawRows.length > 0;
+}
+
+function dataImportRequestBody(mode) {
+  const common = {
+    mode,
+    sourceName: dataImportState.fileName,
+    knownCoaches: knownCoachNamesForImport(),
+  };
+  if (dataImportState.schemaVersion === importWorkbookVersion) {
+    return { ...common, workbook: dataImportState.workbookPayload };
+  }
+  return { ...common, rows: dataImportState.rawRows };
+}
+
 function serverPreviewStatus(summary = {}) {
   if (Number(summary.errorRows || 0) > 0) return "error";
   if (Number(summary.reviewRows || 0) > 0) return "review";
@@ -20807,7 +21293,7 @@ async function previewDataImportOnServer() {
     showToast("오류 없는 파일만 서버 검증할 수 있습니다.");
     return;
   }
-  if (!Array.isArray(dataImportState.rawRows) || !dataImportState.rawRows.length) {
+  if (!hasDataImportPayload()) {
     showToast("서버로 보낼 업로드 데이터가 없습니다.");
     return;
   }
@@ -20835,12 +21321,7 @@ async function previewDataImportOnServer() {
   try {
     const response = await client.invokeFunction("tennisnote-admin-import", {
       headers: { "x-tennisnote-import-mode": "preview" },
-      body: {
-        mode: "preview",
-        sourceName: dataImportState.fileName,
-        rows: dataImportState.rawRows,
-        knownCoaches: knownCoachNamesForImport(),
-      },
+      body: dataImportRequestBody("preview"),
     });
     const summary = response.summary || {};
     const status = serverPreviewStatus(summary);
@@ -20876,7 +21357,7 @@ async function commitDataImportOnServer() {
     showToast("오류 또는 확인 필요 행을 먼저 정리하세요.");
     return;
   }
-  if (!Array.isArray(dataImportState.rawRows) || !dataImportState.rawRows.length) {
+  if (!hasDataImportPayload()) {
     showToast("반영할 업로드 데이터가 없습니다.");
     return;
   }
@@ -20903,20 +21384,30 @@ async function commitDataImportOnServer() {
     const response = await client.invokeFunction("tennisnote-admin-import", {
       headers: { "x-tennisnote-import-mode": "commit" },
       body: {
-        mode: "commit",
+        ...dataImportRequestBody("commit"),
         confirm: "IMPORT_APPROVED",
-        sourceName: dataImportState.fileName,
-        rows: dataImportState.rawRows,
-        knownCoaches: knownCoachNamesForImport(),
       },
     });
     if (!response?.writesToDatabase || response?.code !== "import_committed") {
       throw Object.assign(new Error(response?.code || "import_commit_not_confirmed"), { payload: response });
     }
+    let refreshedFromServer = false;
+    try {
+      await syncAdminLiveData(true);
+      await loadAdminMemberDirectoryPage({ force: true, render: false });
+      refreshedFromServer = true;
+    } catch (refreshError) {
+      console.warn("[Tennis Note] import committed but post-import refresh failed", refreshError);
+    }
+    const importResult = response.result || {};
+    const importedMembers = Number(importResult.memberCount || importResult.member_count || dataImportState.memberRowCount || 0);
+    const importedSchedules = Number(importResult.scheduleCount || importResult.schedule_count || dataImportState.scheduleRowCount || 0);
     setDataImportState({
       serverStatus: "committed",
-      serverMessage: `DB 반영 완료. ${dataImportState.readyRows}개 행의 처리 결과를 확인하세요.`,
-      serverPreview: { ...summary, importResult: response.result || {} },
+      serverMessage: `DB 반영 완료. 회원 ${importedMembers}명, 시간표 ${importedSchedules}건을 처리했습니다. ${
+        refreshedFromServer ? "서버 재조회까지 완료했습니다." : "서버 재조회 버튼으로 결과를 확인하세요."
+      }`,
+      serverPreview: { ...summary, importResult },
     });
     billingLogs.unshift(`엑셀 DB 반영 완료: ${dataImportState.fileName} ${dataImportState.readyRows}행`);
     saveSnapshot();
@@ -21089,7 +21580,8 @@ function renderDataTools() {
         ${badge(tone, dataImportState.status === "idle" ? "대기" : dataImportState.status === "checking" ? "검증중" : dataImportState.status === "ready" ? "반영 가능" : dataImportState.status === "review" ? "확인 필요" : "오류")}
       </div>
       <div class="data-summary-grid">
-        <article><span>전체 행</span><strong>${dataImportState.rowCount}</strong></article>
+        <article><span>${dataImportState.schemaVersion === importWorkbookVersion ? "회원" : "전체 행"}</span><strong>${dataImportState.schemaVersion === importWorkbookVersion ? dataImportState.memberRowCount : dataImportState.rowCount}</strong></article>
+        ${dataImportState.schemaVersion === importWorkbookVersion ? `<article><span>시간표</span><strong>${dataImportState.scheduleRowCount}</strong></article>` : ""}
         <article><span>반영 가능</span><strong>${dataImportState.readyRows}</strong></article>
         <article><span>확인 필요</span><strong>${dataImportState.reviewRows}</strong></article>
         <article><span>오류</span><strong>${dataImportState.errorRows}</strong></article>

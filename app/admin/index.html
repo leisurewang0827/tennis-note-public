@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.236" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.236" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.237" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.237" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -724,19 +724,19 @@
                 </div>
                 <span class="source-pill">반영 전 검증</span>
               </div>
-              <p class="setting-help">정해진 양식의 엑셀 또는 CSV 파일을 먼저 검사합니다. 로컬·서버 검증을 모두 통과한 뒤 관리자가 마지막으로 확인해야 실제 DB에 반영됩니다.</p>
+              <p class="setting-help">회원DB와 정규시간표를 한 파일로 검사합니다. 시간표 시트를 비우면 기존 일정은 그대로 보존되며, 로컬·서버 검증과 관리자 최종 확인을 모두 통과해야 실제 DB에 반영됩니다.</p>
               <div class="import-step-grid">
                 <article>
                   <strong>1. 양식</strong>
-                  <span>회원, 회원권, 결제, 정규시간을 한 줄에 정리</span>
+                  <span>회원DB는 한 명 한 줄, 시간표는 날짜·시간 한 줄</span>
                 </article>
                 <article>
                   <strong>2. 검증</strong>
-                  <span>필수값, 횟수 계산, 숫자, 코치명을 확인</span>
+                  <span>중복, 회원권, 횟수, 1:2, 코치, 시간 충돌 확인</span>
                 </article>
                 <article>
                   <strong>3. 확정</strong>
-                  <span>관리자 확인 후 서버에서 Supabase에 반영</span>
+                  <span>서버 미리보기 후 한 번에 반영하고 다시 대조</span>
                 </article>
               </div>
               <div class="data-action-row">
@@ -1711,15 +1711,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.236"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.237"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.236"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.236"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.236"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.236"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.236"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.237"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.237"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.237"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.237"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.237"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.236"></script>
+    <script src="./app.js?v=1.0.237"></script>
   </body>
 </html>
