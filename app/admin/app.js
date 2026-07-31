@@ -6686,6 +6686,26 @@ function intervalsOverlap(a, b) {
   return a.start < b.end && b.start < a.end;
 }
 
+function isSameDateRegularLessonAdjustment(candidate = {}, releasedRegularSlot = null) {
+  const editingLesson = getCurrentEditingLesson();
+  if (
+    operationsRole() !== "admin"
+    || selectedLessonEditScope() !== "single"
+    || !editingLesson?.serverLessonId
+    || !isLessonEditableScheduled(editingLesson)
+    || lessonSourceValue(editingLesson) !== "regular"
+    || normalizeLessonSource(candidate.lessonSource) !== "regular"
+  ) return false;
+  const sourceDate = editingLesson.lessonDate || adminWeekDateForDay(editingLesson.day);
+  const targetDate = candidate.lessonDate || adminWeekDateForDay(candidate.day);
+  return Boolean(
+    sourceDate
+    && targetDate
+    && sourceDate === targetDate
+    && String(editingLesson.id) !== String(releasedRegularSlot?.id || "")
+  );
+}
+
 function getLessonConflict(candidate) {
   if (!candidate.day || !candidate.time) return { lesson: null, message: "선택 가능한 수업 시간이 없습니다." };
   const candidateInterval = lessonInterval(candidate);
@@ -6719,10 +6739,16 @@ function getLessonConflict(candidate) {
     && normalizeLessonSource(candidate.lessonSource) === "regular"
     && String(releasedRegularSlot.ticketId || "") === String(candidate.ticketId || "")
   );
-  if (releasedRegularSlot && normalizeLessonSource(candidate.lessonSource) !== "makeup" && !restoresReleasedRegularSlot) {
+  const adjustsRegularLessonOnSameDate = isSameDateRegularLessonAdjustment(candidate, releasedRegularSlot);
+  if (
+    releasedRegularSlot
+    && normalizeLessonSource(candidate.lessonSource) !== "makeup"
+    && !restoresReleasedRegularSlot
+    && !adjustsRegularLessonOnSameDate
+  ) {
     return {
       lesson: releasedRegularSlot,
-      message: "불참으로 비워진 정규자리입니다. 이 시간에는 보강수업만 등록할 수 있습니다.",
+      message: "불참으로 비워진 정규자리입니다. 보강 또는 기존 정규수업의 같은 날 시간조정만 가능합니다.",
     };
   }
   const overlappingBooked = allOverlappingBooked.filter((lesson) => !isReleasedRegularMakeupSlot(lesson));
@@ -15486,8 +15512,15 @@ function getPastLessonCorrectionConflict(candidate) {
     && isReleasedRegularMakeupSlot(lesson)
     && lesson.coachId === candidate.coachId
   ));
-  if (releasedRegularSlot && candidate.lessonSource !== "makeup") {
-    return { lesson: releasedRegularSlot, message: "불참으로 비워진 정규 자리는 보강 수업으로만 반영할 수 있습니다." };
+  if (
+    releasedRegularSlot
+    && candidate.lessonSource !== "makeup"
+    && !isSameDateRegularLessonAdjustment(candidate, releasedRegularSlot)
+  ) {
+    return {
+      lesson: releasedRegularSlot,
+      message: "불참으로 비워진 정규 자리는 보강 또는 기존 정규수업의 같은 날 시간조정만 가능합니다.",
+    };
   }
 
   const coachConflict = overlappingLessons
@@ -20744,7 +20777,7 @@ async function performAdminLiveDataSync() {
           historicalReleasedSlot,
           entitlementId: entitlement.id,
           sourceLessonId: entitlement.sourceLessonId,
-          serverStatus: "cancelled",
+          serverStatus: "available",
           branchId: entitlement.branchId,
           ticketId: entitlement.ticketId,
           day: scheduleDays[new Date(`${entitlement.originalDate}T00:00:00`).getDay() === 0 ? 6 : new Date(`${entitlement.originalDate}T00:00:00`).getDay() - 1],
