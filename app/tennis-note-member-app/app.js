@@ -1680,7 +1680,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.249",
+    workerUrl: "./service-worker.js?v=1.0.250",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2596,6 +2596,13 @@ function isActiveRegularLiveTicket(ticket, today = localDateKey()) {
   return String(ticket.productKind || "").toLowerCase() === "regular";
 }
 
+function isPausedRegularLiveTicket(ticket, today = localDateKey()) {
+  if (!ticket || ticket.status !== "paused" || Number(ticket.remaining) <= 0) return false;
+  if (ticket.startsOn && ticket.startsOn > today) return false;
+  if (ticket.expiresOn && ticket.expiresOn < today) return false;
+  return String(ticket.productKind || "").toLowerCase() === "regular";
+}
+
 function memberBookableRegularTickets() {
   const policy = loadAdminSchedulePolicy();
   return (state.liveTickets || [])
@@ -2621,6 +2628,39 @@ function memberBookableRegularTickets() {
         frequencyPerWeek: Math.max(1, Number(ticket.frequencyPerWeek) || 1),
         scheduleScope: ticket.scheduleScope || "weekday",
         status: "regular_initial_booking",
+        lessonSource: "regular",
+        durationMinutes: Number(ticket.lessonMinutes) || 20,
+        isOwnLesson: true,
+      };
+    });
+}
+
+function memberBookablePausedTickets() {
+  const policy = loadAdminSchedulePolicy();
+  return (state.liveTickets || [])
+    .filter((ticket) => isPausedRegularLiveTicket(ticket))
+    .map((ticket) => {
+      const coach = policy.coaches.find((item) => (
+        String(item.serverRoleId || item.id) === String(ticket.coachRoleId)
+      ));
+      return {
+        id: `paused-ticket-${ticket.id}`,
+        regularInitialBooking: true,
+        resumePausedTicket: true,
+        member_ticket_id: ticket.id,
+        ticketId: ticket.id,
+        coach_role_id: ticket.coachRoleId,
+        coachRoleId: ticket.coachRoleId,
+        coach: coach?.name || "코치 자동 배정",
+        member: currentMemberName(),
+        type: "휴회 복귀 시간 선택",
+        ticketTitle: ticket.title || "정규 회원권",
+        remaining: Number(ticket.remaining) || 0,
+        startsOn: ticket.startsOn || "",
+        expiresOn: ticket.expiresOn || "",
+        frequencyPerWeek: Math.max(1, Number(ticket.frequencyPerWeek) || 1),
+        scheduleScope: ticket.scheduleScope || "weekday",
+        status: "paused_resume_booking",
         lessonSource: "regular",
         durationMinutes: Number(ticket.lessonMinutes) || 20,
         isOwnLesson: true,
@@ -2695,6 +2735,7 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
           makeupEntitlementId: sourceLesson.makeupEntitlementId || "",
           couponBooking: isCouponBooking,
           regularInitialBooking: isRegularInitialBooking,
+          resumePausedTicket: Boolean(sourceLesson.resumePausedTicket),
           frequencyPerWeek: Number(sourceLesson.frequencyPerWeek) || 1,
           member_ticket_id: sourceLesson.member_ticket_id || sourceLesson.ticketId || "",
           ticketId: sourceLesson.member_ticket_id || sourceLesson.ticketId || "",
@@ -2715,6 +2756,7 @@ function memberScheduleOptions() {
     scheduleLessons.filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled"),
     memberBookableCouponTickets(),
     memberBookableRegularTickets(),
+    memberBookablePausedTickets(),
   );
   const selectedLesson = sourceLessons.find((lesson) => lesson.id === selectedId)
     || sourceLessons[0];
@@ -2774,8 +2816,9 @@ function currentScheduledLessonsForChange() {
   const fromSchedule = memberScheduleLessons().filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
   const couponTickets = memberBookableCouponTickets();
   const regularTickets = memberBookableRegularTickets();
-  if (dueLessons.length || fromSchedule.length || couponTickets.length || regularTickets.length || state.liveLessonsLoaded || state.dataMode === "live") {
-    return dueLessons.concat(fromSchedule, couponTickets, regularTickets);
+  const pausedTickets = memberBookablePausedTickets();
+  if (dueLessons.length || fromSchedule.length || couponTickets.length || regularTickets.length || pausedTickets.length || state.liveLessonsLoaded || state.dataMode === "live") {
+    return dueLessons.concat(fromSchedule, couponTickets, regularTickets, pausedTickets);
   }
   return lessons.filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
 }
@@ -3916,7 +3959,7 @@ function renderSelects() {
   const regularOptions = sourceLessons
     .map((lesson) => {
       if (lesson.regularInitialBooking) {
-        return `<option value="${lesson.id}">첫 정규시간 설정 · ${lesson.ticketTitle} · 주 ${lesson.frequencyPerWeek}회</option>`;
+        return `<option value="${lesson.id}">${lesson.resumePausedTicket ? "휴회 복귀 시간 선택" : "첫 정규시간 설정"} · ${lesson.ticketTitle} · 주 ${lesson.frequencyPerWeek}회</option>`;
       }
       if (lesson.couponBooking) return `<option value="${lesson.id}">쿠폰 예약 · ${lesson.ticketTitle} · 잔여 ${lesson.remaining}회</option>`;
       return `<option value="${lesson.id}">${lesson.status === "makeup_due" ? "보강 필요 · " : ""}${lesson.day} ${lesson.time} · ${lesson.coach}</option>`;
@@ -3942,13 +3985,14 @@ function renderSelects() {
   const isMakeupDue = selectedSource?.status === "makeup_due";
   const isCouponBooking = Boolean(selectedSource?.couponBooking);
   const isRegularInitialBooking = Boolean(selectedSource?.regularInitialBooking);
+  const isPausedResumeBooking = Boolean(selectedSource?.resumePausedTicket);
   if ($("#changeModalTitle")) $("#changeModalTitle").textContent = isMakeupDue ? "보강 시간 선택" : isCouponBooking ? "쿠폰 수업 예약" : "수업 변경 요청";
   if ($("#changeReasonField")) $("#changeReasonField").hidden = isMakeupDue || isCouponBooking;
   if ($("#requestMakeup")) $("#requestMakeup").textContent = isMakeupDue ? "보강 예약 확정" : isCouponBooking ? "쿠폰 예약 확정" : "수업 변경 요청";
   if (isRegularInitialBooking) {
-    if ($("#changeModalTitle")) $("#changeModalTitle").textContent = "첫 정규시간 설정";
+    if ($("#changeModalTitle")) $("#changeModalTitle").textContent = isPausedResumeBooking ? "휴회 복귀 시간 선택" : "첫 정규시간 설정";
     if ($("#changeReasonField")) $("#changeReasonField").hidden = true;
-    if ($("#requestMakeup")) $("#requestMakeup").textContent = "수업시간 확정";
+    if ($("#requestMakeup")) $("#requestMakeup").textContent = isPausedResumeBooking ? "복귀하고 시간 확정" : "수업시간 확정";
   }
 }
 
@@ -3975,11 +4019,14 @@ function renderAvailableSlots() {
   const isMakeupDue = source?.status === "makeup_due";
   const isCouponBooking = Boolean(source?.couponBooking);
   const isRegularInitialBooking = Boolean(source?.regularInitialBooking);
+  const isPausedResumeBooking = Boolean(source?.resumePausedTicket);
   const requiredCount = Math.max(1, Number(source?.frequencyPerWeek) || 1);
   const selectedIds = isRegularInitialBooking ? state.regularInitialSelections : [selectedId].filter(Boolean);
   if ($("#changePolicyNote")) {
     $("#changePolicyNote").textContent = isRegularInitialBooking
-      ? `주 ${requiredCount}회분의 시간을 선택하면 정규시간이 확정됩니다. 같은 날도 선택할 수 있습니다.`
+      ? isPausedResumeBooking
+        ? `주 ${requiredCount}회분의 시간을 선택하면 휴회를 마치고 정규시간이 확정됩니다.`
+        : `주 ${requiredCount}회분의 시간을 선택하면 정규시간이 확정됩니다. 같은 날도 선택할 수 있습니다.`
       : isMakeupDue
         ? "불참 처리된 수업의 보강입니다. 시간을 선택하면 즉시 예약됩니다."
         : isCouponBooking
@@ -6082,6 +6129,7 @@ function markTicketSyncLoginNeeded() {
 function liveTicketStatusInfo(status = "") {
   const key = String(status || "").toLowerCase();
   if (key === "active") return { label: "정상 이용중", tone: "done" };
+  if (key === "paused") return { label: "휴회 · 복귀 시간 선택 가능", tone: "wait" };
   if (key === "pending_payment") return { label: "결제 확인 대기", tone: "wait" };
   if (key === "expired") return { label: "만료", tone: "wait" };
   if (["cancelled", "canceled", "refunded"].includes(key)) return { label: "취소", tone: "alert" };
@@ -6174,13 +6222,14 @@ function normalizeLiveTicket(row = {}) {
 function liveTicketPriority(ticket = {}) {
   if (ticket.status === "active") return 0;
   if (ticket.status === "pending_payment") return 1;
+  if (ticket.status === "paused") return 2;
   if (["expired", "cancelled", "canceled", "refunded"].includes(String(ticket.status || "").toLowerCase())) return 4;
   return 3;
 }
 
 function currentLiveTicket() {
   if (!Array.isArray(state.liveTickets) || !state.liveTickets.length) return null;
-  const usableTickets = state.liveTickets.filter((ticket) => ["active", "pending_payment"].includes(String(ticket.status || "").toLowerCase()));
+  const usableTickets = state.liveTickets.filter((ticket) => ["active", "pending_payment", "paused"].includes(String(ticket.status || "").toLowerCase()));
   if (!usableTickets.length) return null;
   return [...usableTickets].sort((a, b) => {
     const priority = liveTicketPriority(a) - liveTicketPriority(b);
@@ -7408,7 +7457,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.249" });
+  const params = new URLSearchParams({ v: "1.0.250" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8523,7 +8572,10 @@ async function requestMakeup() {
   const isMakeupEntitlement = Boolean(absence.makeupEntitlementId);
   const isCouponBooking = Boolean(absence.couponBooking);
   const isRegularInitialBooking = Boolean(absence.regularInitialBooking);
-  const reason = isRegularInitialBooking
+  const isPausedResumeBooking = Boolean(absence.resumePausedTicket);
+  const reason = isPausedResumeBooking
+    ? "휴회 복귀 정규시간 설정"
+    : isRegularInitialBooking
     ? "회원 첫 정규시간 설정"
     : isMakeupEntitlement ? "불참 처리 후 보강 예약" : isCouponBooking ? "쿠폰 수업 예약" : $("#changeReason")?.value.trim() || "";
   if (!isMakeupEntitlement && !isCouponBooking && !isRegularInitialBooking && reason.length < 2) {
@@ -8568,11 +8620,17 @@ async function requestMakeup() {
         state.regularInitialOperationKey = `member_regular_${globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`}`;
       }
       const result = isRegularInitialBooking
-        ? await client.rpc("tn_book_initial_regular_schedule", {
-            target_ticket_id: absence.ticketId,
-            target_schedules: regularSchedules,
-            target_operation_key: state.regularInitialOperationKey,
-          })
+        ? isPausedResumeBooking
+          ? await client.rpc("tn_resume_paused_regular_schedule", {
+              target_ticket_id: absence.ticketId,
+              target_schedules: regularSchedules,
+              target_operation_key: state.regularInitialOperationKey,
+            })
+          : await client.rpc("tn_book_initial_regular_schedule", {
+              target_ticket_id: absence.ticketId,
+              target_schedules: regularSchedules,
+              target_operation_key: state.regularInitialOperationKey,
+            })
         : isMakeupEntitlement
         ? await client.rpc("tn_book_makeup_entitlement", {
             target_entitlement_id: absence.makeupEntitlementId,
@@ -8593,10 +8651,11 @@ async function requestMakeup() {
             target_reason: reason,
           });
       await syncMemberLessonsFromServer();
+      if (isPausedResumeBooking) await syncMemberTicketsFromServer();
       if (!isMakeupEntitlement) await syncMemberChangeRequestsFromServer();
       state.ticketHistory.unshift({
         text: isRegularInitialBooking
-          ? `${absence.ticketTitle} · 정규시간 설정 완료`
+          ? `${absence.ticketTitle} · ${isPausedResumeBooking ? "휴회 복귀 및 정규시간 설정 완료" : "정규시간 설정 완료"}`
           : isMakeupEntitlement
           ? `${originalDay} ${originalTime} 불참 수업 → ${makeup.day} ${makeup.time} 보강 예약 완료`
           : isCouponBooking
@@ -8610,7 +8669,7 @@ async function requestMakeup() {
       renderAll();
       saveSnapshot();
       showToast(isRegularInitialBooking
-        ? "정규 수업시간이 설정되었습니다."
+        ? isPausedResumeBooking ? "휴회를 마치고 정규 수업시간을 설정했습니다." : "정규 수업시간이 설정되었습니다."
         : isMakeupEntitlement
         ? "보강 예약이 완료되었습니다."
         : isCouponBooking

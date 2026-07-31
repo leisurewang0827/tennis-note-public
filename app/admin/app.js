@@ -2397,7 +2397,8 @@ const importTemplateColumns = [
   "정규시간2",
   "메모",
 ];
-const importWorkbookVersion = "2.0";
+const importWorkbookVersion = "2.1";
+const supportedImportWorkbookVersions = new Set(["2.0", importWorkbookVersion]);
 const importGuideSheetName = "작성안내";
 const importMemberSheetName = "회원DB";
 const importScheduleSheetName = "정규시간표";
@@ -2424,6 +2425,7 @@ const importMemberColumns = [
   "총횟수",
   "소진횟수",
   "잔여횟수",
+  "결제상태",
   "결제일",
   "결제수단",
   "결제금액",
@@ -19372,9 +19374,10 @@ function importSampleRows() {
 
 function importMemberSampleRows() {
   return [
-    ["AUG-001", "테니스클럽하우스", "홍길동", "010-0000-0000", 1990, "군자동", "남", "수강중", "노황규", "평일 4주 1대1 20분 주2회 8회", "현재 회원권 갱신", "평일", "1:1", "", "", "2026-08-03", "2026-09-06", 8, 0, 8, "2026-08-01", "카드", 286000, "가상 작성 예시"],
-    ["AUG-002", "테니스클럽하우스", "김테니스", "010-1111-1111", 1988, "능동", "여", "수강중", "박창준", "주말 4주 2대1 20분 주1회 4회", "새 회원권", "주말", "1:2", "AUG-003", "010-2222-2222", "2026-08-01", "2026-09-04", 4, 0, 4, "2026-08-01", "현금", 120000, "가상 1:2 예시"],
-    ["AUG-003", "테니스클럽하우스", "이파트너", "010-2222-2222", 1992, "화양동", "여", "수강중", "박창준", "주말 4주 2대1 20분 주1회 4회", "새 회원권", "주말", "1:2", "AUG-002", "010-1111-1111", "2026-08-01", "2026-09-04", 4, 0, 4, "2026-08-01", "현금", 120000, "가상 1:2 예시"],
+    ["AUG-001", "테니스클럽하우스", "홍길동", "010-0000-0000", 1990, "군자동", "남", "수강중", "노황규", "평일 4주 1대1 20분 주2회 8회", "현재 회원권 갱신", "평일", "1:1", "", "", "2026-08-03", "2026-09-06", 8, 0, 8, "결제완료", "2026-08-01", "카드", 286000, "가상 작성 예시"],
+    ["AUG-002", "테니스클럽하우스", "김테니스", "010-1111-1111", 1988, "능동", "여", "수강중", "박창준", "주말 4주 2대1 20분 주1회 4회", "새 회원권", "주말", "1:2", "AUG-003", "010-2222-2222", "2026-08-01", "2026-09-04", 4, 0, 4, "결제완료", "2026-08-01", "현금", 120000, "가상 1:2 예시"],
+    ["AUG-003", "테니스클럽하우스", "이파트너", "010-2222-2222", 1992, "화양동", "여", "수강중", "박창준", "주말 4주 2대1 20분 주1회 4회", "새 회원권", "주말", "1:2", "AUG-002", "010-1111-1111", "2026-08-01", "2026-09-04", 4, 0, 4, "결제완료", "2026-08-01", "현금", 120000, "가상 1:2 예시"],
+    ["AUG-004", "테니스클럽하우스", "휴회예시", "010-3333-3333", 1985, "군자동", "남", "휴회", "노황규", "평일 4주 1대1 20분 주1회 4회", "현재 회원권 갱신", "평일", "1:1", "", "", "2026-08-03", "2026-10-31", 4, 0, 4, "해당없음", "", "", 0, "앱에서 복귀 시간을 다시 선택하는 예시"],
   ];
 }
 
@@ -19397,16 +19400,19 @@ function importGuideRows() {
     ["양식 버전", importWorkbookVersion],
     ["이관월", defaultMonthlyImportMonth()],
     ["지점명", activeOperationBranchName()],
+    ["명단적용", "이 명단 기준 전환"],
     ["회원DB", "회원 한 명을 한 줄에 입력합니다. 원본번호는 월이 바뀌어도 같은 회원을 식별하는 값이므로 중복되지 않게 유지합니다."],
     ["필수 컬럼", requiredImportMemberColumns.join(", ")],
-    ["수강중 필수", requiredActiveImportMemberColumns.join(", ")],
+    ["수강중·휴회 필수", requiredActiveImportMemberColumns.join(", ")],
+    ["휴회", "회원권과 과거 기록은 보존하고 시간표는 배정하지 않습니다. 회원은 앱에서 복귀 시간을 선택할 수 있습니다."],
+    ["명단 기준 전환", "서버 미리보기에서 이 파일에 없는 기존 수강생과 취소될 미래 수업 수를 확인한 뒤에만 반영합니다."],
     ["횟수 검증", "총횟수 - 소진횟수 = 잔여횟수로 맞아야 합니다."],
     ["회원권명", "코드표의 판매중 회원권명을 그대로 선택합니다. 비슷한 이름을 임의로 만들면 서버 검증에서 중단됩니다."],
     ["코치명", "코드표의 승인·근무중 코치명을 그대로 선택합니다."],
     ["1:2", "두 회원을 각각 한 줄로 적고 파트너원본번호와 파트너연락처를 서로 교차 입력합니다."],
     ["정규시간표", "정확한 수업일과 시간이 확인된 경우만 입력합니다. 비워 두면 현재 서버 시간표는 삭제하거나 초기화하지 않습니다."],
     ["재업로드", "같은 원본번호와 같은 내용은 중복 생성하지 않습니다. 변경 내용은 현재 회원권 갱신으로 다시 검증합니다."],
-    ["결제", "결제금액이 0이면 결제 이력을 만들지 않습니다. 금액이 있으면 결제일과 결제수단을 함께 입력합니다."],
+    ["결제", "결제완료는 결제일·결제수단·결제금액이 필요합니다. 결제대기와 해당없음은 결제 이력을 만들지 않습니다."],
     ["민감정보", "실제 연락처가 포함된 작성 파일은 Git에 올리지 말고 관리자 전용 보관 위치에서만 사용합니다."],
     ["실제 반영", "파일 검사 → 서버 미리보기 → 관리자 최종 확인 순서가 모두 통과해야 한 트랜잭션으로 반영됩니다."],
   ];
@@ -19427,6 +19433,7 @@ function importCodeRows() {
   return [
     ["구분", "사용값", "상태", "코드"],
     ["회원상태", "수강중", "", "active"],
+    ["회원상태", "휴회", "", "paused"],
     ["회원상태", "만료회원", "", "historical"],
     ["회원상태", "가입대기", "", "pending"],
     ["적용방식", "현재 회원권 갱신", "", "update_current"],
@@ -19439,13 +19446,16 @@ function importCodeRows() {
     ["결제수단", "카드", "", "card"],
     ["결제수단", "현금", "", "cash"],
     ["결제수단", "계좌이체", "", "bank_transfer"],
+    ["결제상태", "결제완료", "", "paid"],
+    ["결제상태", "결제대기", "", "pending"],
+    ["결제상태", "해당없음", "", "not_applicable"],
     ...coachRows,
     ...productRows,
   ];
 }
 
 async function downloadImportTemplate() {
-  await downloadWorkbook("tennis-note-monthly-import-v2.xlsx", [
+  await downloadWorkbook("tennis-note-monthly-import-v2.1.xlsx", [
     { name: "작성안내", rows: importGuideRows() },
     { name: importMemberSheetName, rows: [importMemberColumns] },
     { name: "회원DB_작성예시", rows: [importMemberColumns, ...importMemberSampleRows()] },
@@ -19580,8 +19590,17 @@ function normalizedImportNumber(value) {
 function importMemberStatus(value = "") {
   const normalized = String(value).replace(/\s+/g, "");
   if (["수강중", "활성", "active"].includes(normalized)) return "active";
+  if (["휴회", "일시정지", "paused"].includes(normalized)) return "paused";
   if (["만료회원", "만료", "종료", "historical"].includes(normalized)) return "historical";
   if (["가입대기", "대기", "pending"].includes(normalized)) return "pending";
+  return "";
+}
+
+function importPaymentStatus(value = "") {
+  const normalized = String(value).replace(/\s+/g, "").toLowerCase();
+  if (["결제완료", "완료", "paid", "verified"].includes(normalized)) return "paid";
+  if (["결제대기", "미결제", "pending", "pending_payment"].includes(normalized)) return "pending";
+  if (["해당없음", "없음", "not_applicable", "none"].includes(normalized)) return "not_applicable";
   return "";
 }
 
@@ -19592,12 +19611,17 @@ function validateMonthlyImportWorkbook(workbookPayload, sourceName = "") {
   const paymentReviewSheetRows = importRowsAsObjects(workbookPayload?.paymentReviews?.rows || []);
   const guide = importGuideMetadata(workbookPayload?.guide?.rows || []);
   const importMonth = String(guide[normalizeImportHeader("이관월")] || "").trim();
+  const finalizeRoster = normalizeImportHeader(guide[normalizeImportHeader("명단적용")] || "") === normalizeImportHeader("이 명단 기준 전환");
   const workbookBranchName = String(guide[normalizeImportHeader("지점명")] || "").trim();
   const currentBranchName = activeOperationBranchName();
   const importBranchId = activeOperationBranchId() || defaultOperationBranch()?.id || "";
   const memberHeaders = (memberRows[0] || []).map((header) => normalizeImportHeader(header));
   const scheduleHeaders = (scheduleRows[0] || []).map((header) => normalizeImportHeader(header));
-  const missingMemberHeaders = importMemberColumns
+  const workbookSchemaVersion = String(workbookPayload?.schemaVersion || "2.0");
+  const expectedMemberColumns = workbookSchemaVersion === "2.0"
+    ? importMemberColumns.filter((column) => column !== "결제상태")
+    : importMemberColumns;
+  const missingMemberHeaders = expectedMemberColumns
     .map((column) => normalizeImportHeader(column))
     .filter((column) => !memberHeaders.includes(column));
   const missingScheduleHeaders = importScheduleColumns
@@ -19681,7 +19705,7 @@ function validateMonthlyImportWorkbook(workbookPayload, sourceName = "") {
     ) {
       rowIssues.push("작성안내 지점명과 회원 행 지점명이 다름");
     }
-    if (status === "active") {
+    if (["active", "paused"].includes(status)) {
       requiredActiveImportMemberColumns.forEach((column) => {
         if (!importCell(values, normalizeImportHeader(column))) rowIssues.push(`${column} 없음`);
       });
@@ -19697,13 +19721,19 @@ function validateMonthlyImportWorkbook(workbookPayload, sourceName = "") {
       rowIssues.push("총횟수-소진횟수와 잔여횟수 불일치");
     }
     const amount = normalizedImportNumber(importCell(values, "결제금액")) || 0;
-    if (amount > 0 && (!importCell(values, "결제일") || !importCell(values, "결제수단"))) {
+    const paymentStatus = importPaymentStatus(importCell(values, "결제상태"));
+    if (workbookPayload.schemaVersion === "2.1" && !paymentStatus) rowIssues.push("결제상태 선택 오류");
+    if (paymentStatus === "paid" && (amount <= 0 || !importCell(values, "결제일") || !importCell(values, "결제수단"))) {
+      rowIssues.push("결제완료는 결제일·결제수단·결제금액 필요");
+    }
+    if (["pending", "not_applicable"].includes(paymentStatus) && amount > 0) rowIssues.push("결제대기·해당없음은 결제금액을 비워야 함");
+    if (workbookPayload.schemaVersion === "2.0" && amount > 0 && (!importCell(values, "결제일") || !importCell(values, "결제수단"))) {
       rowIssues.push("결제금액이 있으면 결제일·결제수단 필요");
     }
     const lessonType = importCell(values, "레슨종류");
     const partnerSourceNumber = importCell(values, "파트너원본번호");
     const partnerPhone = importCell(values, "파트너연락처").replace(/[^0-9]/g, "");
-    if (status === "active" && ["1:2", "2대1"].includes(lessonType) && (!partnerSourceNumber || partnerPhone.length < 10)) {
+    if (["active", "paused"].includes(status) && ["1:2", "2대1"].includes(lessonType) && (!partnerSourceNumber || partnerPhone.length < 10)) {
       rowIssues.push("1:2 파트너 정보 필요");
     }
     const coachName = importCell(values, "담당코치");
@@ -19760,7 +19790,7 @@ function validateMonthlyImportWorkbook(workbookPayload, sourceName = "") {
   const sourceMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(importMonth) ? importMonth : "invalid-month";
   return {
     sourceName,
-    schemaVersion: importWorkbookVersion,
+    schemaVersion: workbookSchemaVersion,
     columns: memberHeaders,
     rowCount: memberObjects.length + scheduleObjects.length,
     memberRowCount: memberObjects.length,
@@ -19770,10 +19800,12 @@ function validateMonthlyImportWorkbook(workbookPayload, sourceName = "") {
     errorRows: errorRows + (missingMemberHeaders.length || missingScheduleHeaders.length ? 1 : 0),
     issues,
     workbookPayload: {
-      schemaVersion: importWorkbookVersion,
+      schemaVersion: workbookSchemaVersion,
       sourceName,
       targetBranchId: importBranchId,
       importMonth: sourceMonth,
+      finalizeRoster,
+      effectiveOn: `${sourceMonth}-01`,
       branchName: workbookBranchName,
       sourceSheetId: `tennisnote-monthly-workbook:${importBranchId || "unassigned"}:${sourceMonth}`,
       sourceTabName: sourceMonth,
@@ -19868,8 +19900,9 @@ async function readWorkbookFile(file) {
         window.XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" }),
       ]));
       if (sheets[importMemberSheetName]) {
+        const guideVersion = importGuideMetadata(sheets[importGuideSheetName] || [])[normalizeImportHeader("양식 버전")];
         resolve({
-          schemaVersion: importWorkbookVersion,
+          schemaVersion: String(guideVersion || "2.0"),
           guide: { name: importGuideSheetName, rows: sheets[importGuideSheetName] || [] },
           members: { name: importMemberSheetName, rows: sheets[importMemberSheetName] },
           schedules: { name: importScheduleSheetName, rows: sheets[importScheduleSheetName] || [importScheduleColumns] },
@@ -19914,7 +19947,7 @@ async function handleDataImportFile(file) {
     let workbookPayload = null;
     if (extension === "xlsx" || extension === "xls") {
       const workbook = await readWorkbookFile(file);
-      if (workbook.schemaVersion === importWorkbookVersion) {
+      if (supportedImportWorkbookVersions.has(workbook.schemaVersion)) {
         const result = validateMonthlyImportWorkbook(workbook, file.name);
         setDataImportState({
           ...result,
@@ -21569,7 +21602,7 @@ function knownCoachNamesForImport() {
 }
 
 function hasDataImportPayload() {
-  if (dataImportState.schemaVersion === importWorkbookVersion) {
+  if (supportedImportWorkbookVersions.has(dataImportState.schemaVersion)) {
     return Boolean(dataImportState.workbookPayload?.members?.rows?.length > 1);
   }
   return Array.isArray(dataImportState.rawRows) && dataImportState.rawRows.length > 0;
@@ -21581,7 +21614,7 @@ function dataImportRequestBody(mode) {
     sourceName: dataImportState.fileName,
     knownCoaches: knownCoachNamesForImport(),
   };
-  if (dataImportState.schemaVersion === importWorkbookVersion) {
+  if (supportedImportWorkbookVersions.has(dataImportState.schemaVersion)) {
     return { ...common, workbook: dataImportState.workbookPayload };
   }
   return { ...common, rows: dataImportState.rawRows };
@@ -21869,6 +21902,7 @@ function renderDataTools() {
     const tone = dataImportState.status === "ready" ? "good" : dataImportState.status === "review" ? "warn" : dataImportState.status === "error" ? "danger" : "neutral";
     const issues = dataImportState.issues.slice(0, 8);
     const serverPreview = dataImportState.serverPreview || {};
+    const rosterImpact = serverPreview.rosterImpact || {};
     const serverTone = dataImportServerTone();
     const serverIssues = Array.isArray(serverPreview.issues) ? serverPreview.issues.slice(0, 6) : [];
     const plannedOperations = Object.entries(serverPreview.plannedOperations || {})
@@ -21886,6 +21920,19 @@ function renderDataTools() {
         <div class="data-export-sheet-list">
           ${plannedOperations.map(([name, count]) => `<span>${escapeHtml(name)} ${count}</span>`).join("")}
         </div>` : ""}
+      ${serverPreview.rosterImpact ? `
+        <div class="data-status-card ${Number(rosterImpact.expireMemberCount || 0) > 0 ? "warn" : "good"}">
+          <div>
+            <strong>8월 명단 전환 영향</strong>
+            <span>명단에 없는 기존 수강생은 삭제하지 않고 만료회원으로 보관하며, 휴회 회원은 앱에서 복귀 시간을 다시 선택할 수 있습니다.</span>
+          </div>
+          <div class="data-export-sheet-list">
+            <span>수강중 ${Number(rosterImpact.activeMemberCount || 0)}</span>
+            <span>휴회 ${Number(rosterImpact.pausedMemberCount || 0)}</span>
+            <span>만료 전환 ${Number(rosterImpact.expireMemberCount || 0)}</span>
+            <span>미래 일정 종료 ${Number(rosterImpact.cancelFutureLessonCount || 0)}</span>
+          </div>
+        </div>` : ""}
       ${serverIssues.length ? `
         <div class="data-issue-list">
           ${serverIssues.map((issue) => `<p class="${issue.severity || "review"}">${escapeHtml(importServerIssueMessage(issue))}</p>`).join("")}
@@ -21900,8 +21947,8 @@ function renderDataTools() {
         ${badge(tone, dataImportState.status === "idle" ? "대기" : dataImportState.status === "checking" ? "검증중" : dataImportState.status === "ready" ? "반영 가능" : dataImportState.status === "review" ? "확인 필요" : "오류")}
       </div>
       <div class="data-summary-grid">
-        <article><span>${dataImportState.schemaVersion === importWorkbookVersion ? "회원" : "전체 행"}</span><strong>${dataImportState.schemaVersion === importWorkbookVersion ? dataImportState.memberRowCount : dataImportState.rowCount}</strong></article>
-        ${dataImportState.schemaVersion === importWorkbookVersion ? `<article><span>시간표</span><strong>${dataImportState.scheduleRowCount}</strong></article>` : ""}
+        <article><span>${supportedImportWorkbookVersions.has(dataImportState.schemaVersion) ? "회원" : "전체 행"}</span><strong>${supportedImportWorkbookVersions.has(dataImportState.schemaVersion) ? dataImportState.memberRowCount : dataImportState.rowCount}</strong></article>
+        ${supportedImportWorkbookVersions.has(dataImportState.schemaVersion) ? `<article><span>시간표</span><strong>${dataImportState.scheduleRowCount}</strong></article>` : ""}
         <article><span>반영 가능</span><strong>${dataImportState.readyRows}</strong></article>
         <article><span>확인 필요</span><strong>${dataImportState.reviewRows}</strong></article>
         <article><span>오류</span><strong>${dataImportState.errorRows}</strong></article>
