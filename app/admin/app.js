@@ -20734,7 +20734,7 @@ async function ensureActiveAdminWeekLoaded() {
   return refreshAdminLiveSchedule({ force: true });
 }
 
-async function performAdminLiveDataSync() {
+async function performAdminLiveDataSync(options = {}) {
   if (adminLocalPreviewMode) return false;
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !operationsAccessReady()) return false;
@@ -20840,6 +20840,14 @@ async function performAdminLiveDataSync() {
         limit: 1000,
       }).catch(() => [])),
     ]);
+
+    if (options.abortIfDirty && adminHasUnsavedChanges()) {
+      Object.assign(state, {
+        liveScheduleLoading: false,
+        liveScheduleMessage: "작성 중인 변경사항을 보호하기 위해 서버 새로고침을 미뤘습니다.",
+      });
+      return false;
+    }
 
     const usersById = new Map((serverUsers || []).map((user) => [user.id, user]));
     const authLinksByUserId = new Map();
@@ -21438,13 +21446,13 @@ async function performAdminLiveDataSync() {
   }
 }
 
-async function syncAdminLiveData(requireFresh = false) {
+async function syncAdminLiveData(requireFresh = false, options = {}) {
   if (adminLiveSyncPromise) {
     if (!requireFresh) return adminLiveSyncPromise;
     await adminLiveSyncPromise;
-    return syncAdminLiveData(false);
+    return syncAdminLiveData(false, options);
   }
-  adminLiveSyncPromise = performAdminLiveDataSync();
+  adminLiveSyncPromise = performAdminLiveDataSync(options);
   try {
     return await adminLiveSyncPromise;
   } finally {
@@ -21457,7 +21465,7 @@ function scheduleAdminInitialLiveSync() {
   const run = async () => {
     adminInitialLiveSyncHandle = 0;
     adminInitialLiveSyncKind = "";
-    await syncAdminLiveData();
+    await syncAdminLiveData(false, { abortIfDirty: true });
   };
   if (typeof window.requestIdleCallback === "function") {
     adminInitialLiveSyncKind = "idle";
@@ -24999,6 +25007,17 @@ const adminLiveRefreshViews = new Set(["dashboard", "members", "schedule", "bill
 const ADMIN_LIVE_REFRESH_INTERVAL_MS = 300_000;
 const ADMIN_LIVE_REFRESH_STALE_MS = 120_000;
 
+function adminHasUnsavedChanges() {
+  if (document.querySelector('[data-dirty="true"]')) return true;
+  const inputGuard = window.TennisNoteInputGuard;
+  if (!inputGuard?.isDirty) return false;
+  return [...document.querySelectorAll("[data-tn-input-guard]")].some((root) => (
+    !root.hidden
+    && root.getAttribute("aria-hidden") !== "true"
+    && inputGuard.isDirty(root)
+  ));
+}
+
 function resetScheduleEntryState() {
   // The saved browser snapshot may contain a coach-only or pending-only view.
   // A first visit must always start from the full weekly timetable instead.
@@ -25015,6 +25034,7 @@ async function refreshAdminLiveSchedule(options = {}) {
   if (
     adminLiveScheduleRefreshInFlight
     || document.hidden
+    || adminHasUnsavedChanges()
     || !adminLiveRefreshViews.has(state.view)
     || !operationsAccessReady()
     || !$("#lessonModal")?.hidden
@@ -25024,7 +25044,7 @@ async function refreshAdminLiveSchedule(options = {}) {
 
   adminLiveScheduleRefreshInFlight = true;
   try {
-    const synced = await syncAdminLiveData();
+    const synced = await syncAdminLiveData(false, { abortIfDirty: true });
     if (synced) adminLiveScheduleLastRefreshAt = Date.now();
     return synced;
   } finally {
@@ -27247,6 +27267,7 @@ async function recoverAdminConnection() {
   adminConnectionRecoveryPromise = (async () => {
     const client = window.TennisNoteDataClient;
     if (!client?.readiness?.().ready || client.isOnline?.() === false) return false;
+    let deferredLiveSync = false;
     renderAdminConnectivityStatus(true, "서버 연결과 로그인 상태를 다시 확인하고 있습니다.", "recovering", 0);
     try {
       await client.ensureSession?.();
@@ -27254,12 +27275,31 @@ async function recoverAdminConnection() {
         restoreCachedOperationsIdentity();
         const verified = await refreshAdminImportAuthState({ syncLiveData: false });
         if (verified && operationsAccessReady()) {
-          await syncAdminLiveData(true);
-          if (operationsRole() === "admin") await refreshAdminPendingUsers();
+          if (adminHasUnsavedChanges()) {
+            deferredLiveSync = true;
+            renderAdminConnectivityStatus(
+              true,
+              "작성 중인 변경사항이 있어 서버 자료 새로고침을 저장 뒤로 미뤘습니다.",
+              "warning",
+              0,
+            );
+          } else {
+            await syncAdminLiveData(true, { abortIfDirty: true });
+            if (operationsRole() === "admin") await refreshAdminPendingUsers();
+          }
         }
       }
       await loadSupabaseLiveStatus();
-      renderAdminConnectivityStatus(true, "서버 연결 복구 완료 · 최신 운영 자료를 확인했습니다.", "online", 3000);
+      if (deferredLiveSync) {
+        renderAdminConnectivityStatus(
+          true,
+          "서버 연결은 복구됐습니다. 작성 중인 내용을 저장하면 최신 운영 자료를 다시 확인합니다.",
+          "warning",
+          0,
+        );
+      } else {
+        renderAdminConnectivityStatus(true, "서버 연결 복구 완료 · 최신 운영 자료를 확인했습니다.", "online", 3000);
+      }
       return true;
     } catch (error) {
       renderAdminConnectivityStatus(
@@ -27320,7 +27360,10 @@ async function bootstrapAdminOperationsSession() {
 }
 
 restoreSnapshot();
-window.TennisNoteReleaseUpdater?.start({ manifestUrl: "../release.json" });
+window.TennisNoteReleaseUpdater?.start({
+  manifestUrl: "../release.json",
+  shouldDeferUpdate: adminHasUnsavedChanges,
+});
 prepareAdminLiveMode();
 resetScheduleEntryState();
 initializeOperationsSessionPersistence();

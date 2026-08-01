@@ -10,6 +10,7 @@
   let lastCheckAt = 0;
   let lastSuccessfulCheckAt = 0;
   let lastManifestUrl = defaultManifestUrl;
+  let shouldDeferUpdate = null;
 
   function currentRelease() {
     return window.TENNIS_NOTE_RELEASE || {};
@@ -42,6 +43,22 @@
   function isNativeWebView() {
     const platform = window.Capacitor?.getPlatform?.();
     return Boolean(platform && platform !== "web");
+  }
+
+  function hasUnsavedChanges() {
+    try {
+      if (typeof shouldDeferUpdate === "function" && shouldDeferUpdate()) return true;
+    } catch {
+      // A page-specific guard must not break release checks.
+    }
+    if (document.querySelector('[data-dirty="true"]')) return true;
+    const inputGuard = window.TennisNoteInputGuard;
+    if (!inputGuard?.isDirty) return false;
+    return [...document.querySelectorAll("[data-tn-input-guard]")].some((root) => (
+      !root.hidden
+      && root.getAttribute("aria-hidden") !== "true"
+      && inputGuard.isDirty(root)
+    ));
   }
 
   function ensureUpdateNotice() {
@@ -84,9 +101,20 @@
       return;
     }
     const notice = ensureUpdateNotice();
+    const deferred = options.deferred === true || hasUnsavedChanges();
+    const title = notice.querySelector("strong");
+    const detail = notice.querySelector("span");
     const updateButton = notice.querySelector("[data-tennisnote-update-now]");
+    if (title) title.textContent = deferred ? "업데이트 대기 중" : "새 버전이 있습니다";
+    if (detail) {
+      detail.textContent = deferred
+        ? "작성 중인 내용을 먼저 저장하면 안전하게 업데이트할 수 있습니다."
+        : "현재 화면을 유지한 채 최신 버전으로 바꿉니다.";
+    }
     if (updateButton) {
-      updateButton.textContent = isNativeWebView() && remoteRelease?.nativeUpdateMode !== "remote-shell"
+      updateButton.textContent = deferred
+        ? "저장 후 업데이트"
+        : isNativeWebView() && remoteRelease?.nativeUpdateMode !== "remote-shell"
         ? "스토어에서 업데이트"
         : "지금 업데이트";
     }
@@ -171,6 +199,10 @@
 
   async function activateWaitingWorker() {
     if (!registration) return false;
+    if (hasUnsavedChanges()) {
+      if (remoteRelease) showUpdateNotice(remoteRelease, { force: true, deferred: true });
+      return false;
+    }
     if (!registration.waiting) await registration.update().catch(() => undefined);
     if (!registration.waiting) return false;
     registration.waiting.postMessage({ type: "SKIP_WAITING" });
@@ -204,6 +236,10 @@
     }
     const base = `<base href="${remoteAppUrl}">`;
     html = html.replace(/<head(\s[^>]*)?>/i, (head) => `${head}\n    ${base}`);
+    if (hasUnsavedChanges()) {
+      showUpdateNotice(candidate, { force: true, deferred: true });
+      return false;
+    }
     sessionStorage.setItem(key, "done");
     document.open();
     document.write(html);
@@ -225,6 +261,10 @@
   async function applyUpdate(candidate, options = {}) {
     if (!candidate?.releaseId || updateInProgress) return;
     remoteRelease = candidate;
+    if (hasUnsavedChanges()) {
+      showUpdateNotice(candidate, { force: true, deferred: true });
+      return;
+    }
     updateInProgress = true;
     const reloadKey = `tennis-note-release-controller:${candidate.releaseId}`;
     try {
@@ -243,6 +283,10 @@
           }, 3500);
           return;
         }
+      }
+      if (hasUnsavedChanges()) {
+        showUpdateNotice(candidate, { force: true, deferred: true });
+        return;
       }
       if (!reloadOnce(candidate.releaseId, options.manual ? "manual" : "fallback")) {
         showUpdateNotice(candidate);
@@ -321,6 +365,7 @@
     started = true;
     const nativeWebView = isNativeWebView();
     const remoteAppUrl = options.remoteAppUrl || "";
+    shouldDeferUpdate = typeof options.shouldDeferUpdate === "function" ? options.shouldDeferUpdate : null;
     activeRemoteAppUrl = remoteAppUrl;
     const manifestUrl = nativeWebView
       ? new URL("release.json", officialAppUrl).toString()
@@ -331,11 +376,15 @@
     if (!nativeWebView && "serviceWorker" in navigator) {
       navigator.serviceWorker.addEventListener("controllerchange", () => {
         if (controllerReloaded) return;
-        controllerReloaded = true;
         const releaseId = remoteRelease?.releaseId || currentRelease().releaseId;
         if (!releaseId) return;
+        if (hasUnsavedChanges()) {
+          if (remoteRelease) showUpdateNotice(remoteRelease, { force: true, deferred: true });
+          return;
+        }
         const key = `tennis-note-release-controller:${releaseId}`;
         if (sessionStorage.getItem(key) === "done") return;
+        controllerReloaded = true;
         sessionStorage.setItem(key, "done");
         window.location.replace(releaseUrl(releaseId));
       });
@@ -373,6 +422,7 @@
   window.TennisNoteReleaseUpdater = Object.freeze({
     officialAppUrl,
     start,
+    hasUnsavedChanges,
     checkForUpdate: () => checkForUpdate(
       isNativeWebView() ? new URL("release.json", officialAppUrl).toString() : defaultManifestUrl,
       { force: true, remoteAppUrl: activeRemoteAppUrl },
