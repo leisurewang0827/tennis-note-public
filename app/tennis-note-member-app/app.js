@@ -1680,7 +1680,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.262",
+    workerUrl: "./service-worker.js?v=1.0.263",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -9362,7 +9362,9 @@ function renderActiveMemberView(viewId = activeMemberViewId()) {
 
 let memberLiveScheduleRefreshTimer = 0;
 let memberLiveScheduleRefreshInFlight = false;
+let memberLiveScheduleLastRefreshAt = 0;
 let memberConnectivityHideTimer = 0;
+const MEMBER_LIVE_REFRESH_STALE_MS = 20_000;
 
 function renderMemberConnectivityStatus(reconnected = false) {
   const status = $("#memberConnectivityStatus");
@@ -9392,6 +9394,7 @@ function renderMemberConnectivityStatus(reconnected = false) {
 
 async function refreshMemberLiveSchedule(options = {}) {
   const client = window.TennisNoteDataClient;
+  const force = options.force === true;
   if (
     memberLiveScheduleRefreshInFlight
     || document.hidden
@@ -9399,6 +9402,7 @@ async function refreshMemberLiveSchedule(options = {}) {
     || !state.member?.profileId
     || !client?.readiness?.().ready
     || !client?.getSession?.()?.access_token
+    || (!force && Date.now() - memberLiveScheduleLastRefreshAt < MEMBER_LIVE_REFRESH_STALE_MS)
   ) return false;
 
   memberLiveScheduleRefreshInFlight = true;
@@ -9413,6 +9417,7 @@ async function refreshMemberLiveSchedule(options = {}) {
     if (notificationResult?.newNotification) {
       showToast(`${notificationResult.newNotification.title} · 시간표에서 확인해 주세요.`);
     }
+    memberLiveScheduleLastRefreshAt = Date.now();
     return Boolean(lessonsSynced || requestsSynced || notificationResult?.ok);
   } finally {
     memberLiveScheduleRefreshInFlight = false;

@@ -510,7 +510,7 @@ async function syncCoachLessonsFromServer() {
         select: "lesson_id,user_id,ticket_id",
         limit: 2000,
       }).catch(() => []),
-      client.selectRows("tn_users", { select: "id,name,phone,birth_year,neighborhood,gender,role,member_kind,status,profile_photo_url,self_ntrp,coach_ntrp,ntrp_requested_at,ntrp_survey,tennis_goal,play_style_memo", limit: 1000 }).catch(() => []),
+      client.selectRows("tn_user_directory_safe", { select: "id,name,phone,birth_year,neighborhood,gender,role,member_kind,status,profile_photo_url,self_ntrp,coach_ntrp,ntrp_requested_at,ntrp_survey,tennis_goal,play_style_memo", limit: 1000 }).catch(() => []),
       client.selectRows("tn_coach_roles", { select: "id,display_name,color,status,employment_status,archived_at,deleted_at", limit: 100 }).catch(() => []),
       client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,created_at", limit: 1000 }).catch(() => []),
       client.selectRows("tn_membership_products", { select: "id,name,group_size,lesson_minutes", limit: 200 }).catch(() => []),
@@ -1727,7 +1727,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.262",
+    workerUrl: "./service-worker.js?v=1.0.263",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -5121,20 +5121,26 @@ function renderAll() {
 
 let coachLiveScheduleRefreshTimer = 0;
 let coachLiveScheduleRefreshInFlight = false;
+let coachLiveScheduleLastRefreshAt = 0;
+const COACH_LIVE_REFRESH_INTERVAL_MS = 60_000;
+const COACH_LIVE_REFRESH_STALE_MS = 30_000;
 
 async function refreshCoachLiveSchedule(options = {}) {
   const client = window.TennisNoteDataClient;
+  const force = options.force === true;
   if (
     coachLiveScheduleRefreshInFlight
     || document.hidden
     || state.dataMode !== "live"
     || !state.coach
     || !client?.getSession?.()?.access_token
+    || (!force && Date.now() - coachLiveScheduleLastRefreshAt < COACH_LIVE_REFRESH_STALE_MS)
   ) return false;
 
   coachLiveScheduleRefreshInFlight = true;
   try {
     const synced = await syncCoachLessonsFromServer();
+    if (synced) coachLiveScheduleLastRefreshAt = Date.now();
     if (synced && options.render !== false) renderAll();
     return synced;
   } finally {
@@ -5149,7 +5155,7 @@ function installCoachLiveScheduleRefresh() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refresh();
   });
-  coachLiveScheduleRefreshTimer = window.setInterval(refresh, 15_000);
+  coachLiveScheduleRefreshTimer = window.setInterval(refresh, COACH_LIVE_REFRESH_INTERVAL_MS);
 }
 
 async function initCoachApp() {

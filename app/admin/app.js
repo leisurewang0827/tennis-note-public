@@ -20700,7 +20700,7 @@ async function refreshCoachStaffData() {
       filters: { coach_role_id: { in: roleIds } },
       limit: 1000,
     }).catch(() => []) : [],
-    userIds.length ? client.selectRows("tn_users", {
+    userIds.length ? client.selectRows("tn_user_directory_safe", {
       select: "id,name,phone,profile_photo_url,role,status,auth_user_id,merged_into_user_id",
       filters: { id: { in: userIds } },
       limit: 200,
@@ -20713,7 +20713,7 @@ async function refreshCoachStaffData() {
     }).catch(() => []) : [],
   ]);
   const candidatePhones = [...new Set(coachUsers.map((user) => normalizedMemberPhone(user.phone)).filter(Boolean))];
-  const candidateUsers = candidatePhones.length ? await client.selectRows("tn_users", {
+  const candidateUsers = candidatePhones.length ? await client.selectRows("tn_user_directory_safe", {
     select: "id,name,phone,profile_photo_url,role,status,auth_user_id,merged_into_user_id",
     filters: { phone: { in: candidatePhones } },
     limit: 500,
@@ -20888,7 +20888,7 @@ async function performAdminLiveDataSync(options = {}) {
     const adminSettingsPromise = loadAdminStartupSettingsFromServer();
     const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
-      rosterRows("users", () => (client.selectAllRows || client.selectRows)("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 })),
+      rosterRows("users", () => (client.selectAllRows || client.selectRows)("tn_user_directory_safe", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 })),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
       client.selectRows("tn_coach_availability", { select: "id,coach_role_id,day_of_week,start_time,end_time,availability_type,note", limit: 1000 }).catch(() => []),
