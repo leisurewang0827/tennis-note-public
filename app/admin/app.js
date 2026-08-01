@@ -5000,8 +5000,17 @@ function renderProductBulkToolbar() {
   const validIds = new Set(membershipProductsForActiveOperationProfile().map((product) => String(product.id)));
   state.selectedMembershipProductIds = [...selectedProductIdSet()].filter((id) => validIds.has(id));
   const toolbar = $("#productBulkToolbar");
-  if (toolbar) toolbar.hidden = operationsRole() !== "admin" || !state.selectedMembershipProductIds.length;
+  if (toolbar) toolbar.hidden = operationsRole() !== "admin";
   if ($("#productBulkCount")) $("#productBulkCount").textContent = String(state.selectedMembershipProductIds.length);
+  ["saveSelectedProducts", "runProductBulkAction", "deleteSelectedProducts", "clearProductBulkSelection"].forEach((id) => {
+    if ($(`#${id}`)) $(`#${id}`).disabled = !state.selectedMembershipProductIds.length;
+  });
+  const filteredIds = filteredMembershipProducts().map((product) => String(product.id));
+  if ($("#selectAllProducts")) {
+    $("#selectAllProducts").textContent = filteredIds.length && filteredIds.every((id) => selectedProductIdSet().has(id))
+      ? "전체 해제"
+      : "전체 선택";
+  }
 }
 
 function membershipProductBulkSavePayload(product) {
@@ -11719,6 +11728,14 @@ function selectedMemberIdSet() {
   return new Set((state.selectedMemberIds || []).map(Number));
 }
 
+function chunkedValues(values = [], size = 200) {
+  const chunks = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
 function onsitePaymentProducts() {
   return membershipProductsForActiveOperationProfile()
     .map((draft) => ({ draft, server: serverMembershipProductForDraft(draft) }))
@@ -11823,13 +11840,27 @@ function syncMemberBulkRenewalFields() {
   if (paymentDate && !paymentDate.value) paymentDate.value = adminLocalDateKey(new Date());
 }
 
-function renderMemberBulkToolbar(visibleMembers = []) {
+function renderMemberBulkToolbar(visibleMembers = [], filteredSelectionIds = null) {
   const selected = selectedMemberIdSet();
   const validIds = new Set(members.map((member) => Number(member.id)));
   state.selectedMemberIds = [...selected].filter((id) => validIds.has(id));
   const toolbar = $("#memberBulkToolbar");
-  if (toolbar) toolbar.hidden = operationsRole() !== "admin" || !state.selectedMemberIds.length;
+  if (toolbar) toolbar.hidden = operationsRole() !== "admin";
   if ($("#memberBulkCount")) $("#memberBulkCount").textContent = String(state.selectedMemberIds.length);
+  ["runMemberBulkAction", "deleteSelectedMembers", "clearMemberBulkSelection"].forEach((id) => {
+    if ($(`#${id}`)) $(`#${id}`).disabled = !state.selectedMemberIds.length;
+  });
+  const filteredIds = Array.isArray(filteredSelectionIds)
+    ? filteredSelectionIds.map(Number)
+    : null;
+  if ($("#selectAllFilteredMembers")) {
+    const allFilteredSelected = filteredIds
+      ? filteredIds.length > 0 && filteredIds.every((id) => selectedMemberIdSet().has(id))
+      : state.selectedMemberIds.length > 0 && state.selectedMemberIds.length === adminMemberDirectoryState.total;
+    $("#selectAllFilteredMembers").textContent = allFilteredSelected
+      ? "전체 해제"
+      : "전체 선택";
+  }
   const selectAll = $("#selectVisibleMembers");
   if (selectAll) {
     const visibleIds = visibleMembers.map((member) => Number(member.id));
@@ -11869,17 +11900,21 @@ async function runMemberBulkAction() {
       if (!productId || !["card", "bank_transfer"].includes(paymentMethod) || !paymentDate) {
         throw new Error("bulk_reenrollment_fields_required");
       }
-      const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_reenroll_members", {
-        target_user_ids: selectedUserIds,
-        target_product_id: productId,
-        target_payment_method: paymentMethod,
-        target_payment_date: paymentDate,
-        target_starts_on: startsOn,
-        target_keep_schedule: keepSchedule,
-        target_operation_key: createAdminOperationKey("member-bulk-reenroll"),
-      });
-      const processedCount = Number(result?.processedCount ?? result?.processed_count ?? 0);
-      const failedRows = Array.isArray(result?.failed) ? result.failed : [];
+      let processedCount = 0;
+      const failedRows = [];
+      for (const [batchIndex, userIds] of chunkedValues(selectedUserIds).entries()) {
+        const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_reenroll_members", {
+          target_user_ids: userIds,
+          target_product_id: productId,
+          target_payment_method: paymentMethod,
+          target_payment_date: paymentDate,
+          target_starts_on: startsOn,
+          target_keep_schedule: keepSchedule,
+          target_operation_key: `${createAdminOperationKey("member-bulk-reenroll")}-${batchIndex + 1}`,
+        });
+        processedCount += Number(result?.processedCount ?? result?.processed_count ?? 0);
+        if (Array.isArray(result?.failed)) failedRows.push(...result.failed);
+      }
       const resultNode = $("#memberBulkRenewalResult");
       if (resultNode) {
         resultNode.classList.toggle("is-error", Boolean(failedRows.length));
@@ -11895,16 +11930,20 @@ async function runMemberBulkAction() {
       showToast(failedRows.length ? `${processedCount}명 완료 · ${failedRows.length}명 확인 필요` : `${processedCount}명 일괄 재등록 완료`);
       return;
     }
-    const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_member_action", {
-      target_user_ids: selectedUserIds,
-      target_action: action,
-      target_coach_role_id: action === "assign_coach" ? ($("#memberBulkCoach")?.value || null) : null,
-      target_reason: `관리자 회원 목록 · ${actionLabel}`,
-    });
+    let processedCount = 0;
+    for (const userIds of chunkedValues(selectedUserIds)) {
+      const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_member_action", {
+        target_user_ids: userIds,
+        target_action: action,
+        target_coach_role_id: action === "assign_coach" ? ($("#memberBulkCoach")?.value || null) : null,
+        target_reason: `관리자 회원 목록 · ${actionLabel}`,
+      });
+      processedCount += Number(result?.processedCount ?? result?.processed_count ?? userIds.length);
+    }
     await syncAdminLiveData();
     state.selectedMemberIds = [];
     renderMembers();
-    showToast(`${Number(result?.processedCount ?? result?.processed_count ?? selectedMembers.length)}명 일괄 처리 완료`);
+    showToast(`${processedCount}명 일괄 처리 완료`);
   } catch (error) {
     const message = `${error?.message || ""}`;
     showToast(message.includes("tn_admin_bulk_member_action") || message.includes("PGRST202")
@@ -12598,7 +12637,10 @@ function renderMembers(options = {}) {
       (state.memberListPage + 1) * memberListPageSize,
     );
   renderDashboardPager("#memberListPager", filteredTotal, state.memberListPage, "member-directory", memberListPageSize);
-  renderMemberBulkToolbar(visibleMembers);
+  renderMemberBulkToolbar(
+    visibleMembers,
+    serverDirectoryReady || serverDirectoryPending ? null : filtered.map((member) => Number(member.id)),
+  );
 
   const memberRows = $("#memberRows");
   memberRows?.setAttribute("aria-busy", String(serverDirectoryPending));
@@ -25725,6 +25767,11 @@ function bindEvents() {
   $("#saveRackettimeButton")?.addEventListener("click", saveRackettimeList);
   $("#downloadSettlementButton")?.addEventListener("click", downloadSettlementCsv);
   $("#downloadImportTemplateButton")?.addEventListener("click", downloadImportTemplate);
+  $("#downloadMemberImportTemplateButton")?.addEventListener("click", downloadImportTemplate);
+  $("#uploadMemberImportWorkbookButton")?.addEventListener("click", () => {
+    openAdminToolsModal("data");
+    window.setTimeout(() => $("#dataImportFile")?.click(), 0);
+  });
   $("#dataImportFile")?.addEventListener("change", (event) => handleDataImportFile(event.target.files?.[0]));
   $("#clearDataImportButton")?.addEventListener("click", clearDataImportResult);
   $("#dataImportCommitButton")?.addEventListener("click", previewDataImportOnServer);
@@ -26254,13 +26301,13 @@ function bindEvents() {
       const selected = selectedMemberIdSet();
       if (event.target.checked) selected.add(id); else selected.delete(id);
       state.selectedMemberIds = [...selected];
-      renderMemberBulkToolbar(filteredMembers().slice(state.memberListPage * memberListPageSize, (state.memberListPage + 1) * memberListPageSize));
+      renderMemberBulkToolbar();
       return;
     }
     if (event.target.matches("#selectVisibleMembers")) {
       const selected = selectedMemberIdSet();
-      const visible = filteredMembers().slice(state.memberListPage * memberListPageSize, (state.memberListPage + 1) * memberListPageSize);
-      visible.forEach((member) => event.target.checked ? selected.add(Number(member.id)) : selected.delete(Number(member.id)));
+      const visibleIds = $$('[data-select-member-row]').map((input) => Number(input.dataset.selectMemberRow));
+      visibleIds.forEach((id) => event.target.checked ? selected.add(id) : selected.delete(id));
       state.selectedMemberIds = [...selected];
       renderMembers();
       return;
@@ -26581,6 +26628,21 @@ function bindEvents() {
       await runMemberBulkAction();
       return;
     }
+    if (event.target.closest("#selectAllFilteredMembers")) {
+      const filteredIds = filteredMembers().map((member) => Number(member.id));
+      const selected = selectedMemberIdSet();
+      const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
+      filteredIds.forEach((id) => allFilteredSelected ? selected.delete(id) : selected.add(id));
+      state.selectedMemberIds = [...selected];
+      renderMembers();
+      return;
+    }
+    if (event.target.closest("#deleteSelectedMembers")) {
+      const actionSelect = $("#memberBulkAction");
+      if (actionSelect) actionSelect.value = "deactivate";
+      await runMemberBulkAction();
+      return;
+    }
     if (event.target.closest("#clearMemberBulkSelection")) {
       state.selectedMemberIds = [];
       renderMembers();
@@ -26599,12 +26661,7 @@ function bindEvents() {
       return;
     }
     if (event.target.closest("#selectAllProducts")) {
-      const visibleIds = filteredMembershipProducts()
-        .slice(
-          state.membershipProductPage * membershipProductPageSize,
-          (state.membershipProductPage + 1) * membershipProductPageSize,
-        )
-        .map((product) => String(product.id));
+      const visibleIds = filteredMembershipProducts().map((product) => String(product.id));
       const selected = selectedProductIdSet();
       const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
       visibleIds.forEach((id) => allVisibleSelected ? selected.delete(id) : selected.add(id));

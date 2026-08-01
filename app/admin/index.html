@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.257" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.257" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.258" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.258" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -223,9 +223,11 @@
             </div>
             <div class="toolbar-actions">
               <details class="compact-action-menu member-data-menu">
-                <summary class="ghost-button">데이터 도구</summary>
+                <summary class="ghost-button">엑셀 등록</summary>
                 <div class="compact-action-menu-panel">
-                  <button id="openDataToolsButton" class="ghost-button" type="button">엑셀 가져오기·내보내기</button>
+                  <button id="downloadMemberImportTemplateButton" class="ghost-button" type="button">빈 양식 다운로드</button>
+                  <button id="uploadMemberImportWorkbookButton" class="ghost-button" type="button">작성 파일 올리기</button>
+                  <button id="openDataToolsButton" class="ghost-button" type="button">검증·반영 화면</button>
                   <button id="exportMembersButton" class="ghost-button" type="button">현재 목록 엑셀 내보내기</button>
                 </div>
               </details>
@@ -268,6 +270,7 @@
               </div>
               <div id="memberBulkToolbar" class="bulk-action-toolbar" hidden>
                 <strong><span id="memberBulkCount">0</span>명 선택</strong>
+                <button id="selectAllFilteredMembers" class="ghost-button" type="button">전체 선택</button>
                 <select id="memberBulkAction" aria-label="회원 일괄 작업">
                   <option value="">작업 선택</option>
                   <option value="assign_coach">담당 코치 변경</option>
@@ -305,6 +308,7 @@
                   <p id="memberBulkRenewalResult" class="member-bulk-renewal-result" aria-live="polite"></p>
                 </div>
                 <button id="runMemberBulkAction" class="small-button" type="button">적용</button>
+                <button id="deleteSelectedMembers" class="small-button danger-button" type="button">선택 삭제</button>
                 <button id="clearMemberBulkSelection" class="ghost-button" type="button">선택 해제</button>
               </div>
               <table>
@@ -719,11 +723,11 @@
             <article class="panel data-import-panel">
               <div class="panel-heading compact-heading">
                 <div>
-                  <h2>엑셀 가져오기</h2>
+                  <h2>회원DB 엑셀 등록</h2>
                 </div>
                 <span class="source-pill">반영 전 검증</span>
               </div>
-              <p class="setting-help">회원DB와 정규시간표를 한 파일로 검사합니다. 시간표 시트를 비우면 기존 일정은 그대로 보존되며, 로컬·서버 검증과 관리자 최종 확인을 모두 통과해야 실제 DB에 반영됩니다.</p>
+              <p class="setting-help">빈 양식을 내려받아 직접 작성한 뒤 올립니다. 정규시간표를 비우면 시간표는 건드리지 않습니다.</p>
               <div class="import-step-grid">
                 <article>
                   <strong>1. 양식</strong>
@@ -739,12 +743,12 @@
                 </article>
               </div>
               <div class="data-action-row">
-                <button id="downloadImportTemplateButton" class="primary-button" type="button">엑셀 양식 다운로드</button>
+                <button id="downloadImportTemplateButton" class="primary-button" type="button">빈 양식 다운로드</button>
               </div>
               <label class="file-drop-zone" for="dataImportFile">
                 <input id="dataImportFile" type="file" accept=".xlsx,.xls,.csv,.tsv" />
-                <strong>파일 선택</strong>
-                <span>.xlsx, .xls, .csv 파일을 올려 검증합니다.</span>
+                <strong>작성한 엑셀 올리기</strong>
+                <span>.xlsx 파일을 올리면 검증 후 서버에 반영할 수 있습니다.</span>
               </label>
               <div id="dataImportStatus" class="data-import-status"></div>
               <div id="dataImportAuthStatus" class="data-import-status"></div>
@@ -928,7 +932,7 @@
               </div>
               <div id="productBulkToolbar" class="bulk-action-toolbar" hidden>
                 <strong><span id="productBulkCount">0</span>개 선택</strong>
-                <button id="selectAllProducts" class="ghost-button" type="button">현재 페이지 선택</button>
+                <button id="selectAllProducts" class="ghost-button" type="button">전체 선택</button>
                 <button id="saveSelectedProducts" class="small-button" type="button">선택 저장</button>
                 <select id="productBulkAction" aria-label="회원권 상품 일괄 작업">
                   <option value="">판매 상태 선택</option>
@@ -1705,15 +1709,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.257"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.258"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.257"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.257"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.257"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.257"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.257"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.258"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.258"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.258"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.258"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.258"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.257"></script>
+    <script src="./app.js?v=1.0.258"></script>
   </body>
 </html>
