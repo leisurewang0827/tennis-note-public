@@ -11339,6 +11339,14 @@ function memberScheduleDayAllowed(scope, day) {
   return scope === "weekend" ? [0, 6].includes(value) : value >= 1 && value <= 5;
 }
 
+function memberRegularScheduleFrequency(product = null, ticket = null) {
+  const productLabel = String(product?.name || product?.title || "");
+  const labelFrequency = Number(productLabel.match(/(?:평일|주말|혼합)[^0-9]*([1-7])\s*회/)?.[1] || 0);
+  const configuredFrequency = Number(product?.frequency_per_week || 0);
+  if (product) return Math.max(1, Math.min(7, Math.max(configuredFrequency, labelFrequency)));
+  return Math.max(1, Math.min(7, Number(ticket?.weeklyCount || 1)));
+}
+
 function memberRegularScheduleSlots(member, ticket) {
   if (!ticket?.serverTicketId) return [];
   const rules = (adminLiveDataState.regularScheduleRules || [])
@@ -11373,10 +11381,10 @@ function memberRegularScheduleSlots(member, ticket) {
 
 function memberInlineScheduleMarkup(member, ticket, product) {
   const productKind = String(product?.product_kind || ticket?.productKind || "regular");
-  const frequency = Math.max(1, Math.min(3, Number(product?.frequency_per_week || ticket?.weeklyCount || 1)));
+  const frequency = memberRegularScheduleFrequency(product, ticket);
   const scope = memberManagementProductScheduleScope(product || ticket || {});
   const slots = memberRegularScheduleSlots(member, ticket);
-  const maxRows = 3;
+  const maxRows = Math.max(3, frequency);
   const rows = Array.from({ length: maxRows }, (_, offset) => {
     const index = offset + 1;
     const slot = slots[offset] || { dayOfWeek: "", startTime: "" };
@@ -11398,7 +11406,7 @@ function memberInlineScheduleMarkup(member, ticket, product) {
     </div>`;
   }).join("");
   return `<section class="member-inline-schedule" data-member-inline-schedule data-product-kind="${escapeHtml(productKind)}" ${productKind !== "regular" ? "hidden" : ""}>
-    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>저장하면 미래 시간표에 바로 반영</span></div>
+    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>선택사항 · 시간표에서 등록하면 자동 연결</span></div>
     ${rows}
     <p class="member-inline-schedule-warning" data-member-schedule-warning></p>
   </section>`;
@@ -11407,14 +11415,15 @@ function memberInlineScheduleMarkup(member, ticket, product) {
 function memberInlineScheduleValues(form) {
   const product = (adminLiveDataState.products || []).find((item) => item.id === form?.elements.productId?.value);
   if (!product || String(product.product_kind || "regular") !== "regular") return [];
-  const frequency = Math.max(1, Math.min(3, Number(product.frequency_per_week) || 1));
+  const ticket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === form?.dataset.ticketId);
+  const frequency = memberRegularScheduleFrequency(product, ticket);
   return Array.from({ length: frequency }, (_, offset) => {
     const rawDay = form.elements[`scheduleDay${offset + 1}`]?.value;
     return {
       dayOfWeek: rawDay === "" || rawDay === undefined ? null : Number(rawDay),
       startTime: String(form.elements[`scheduleTime${offset + 1}`]?.value || "").slice(0, 5),
     };
-  });
+  }).filter((slot) => slot.dayOfWeek !== null || slot.startTime);
 }
 
 function memberInlineScheduleChanged(form, schedules = memberInlineScheduleValues(form)) {
@@ -11933,7 +11942,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
   const productOptions = currentProductOption + activeProductOptions;
   const isGroup = Number(currentProduct?.group_size || record?.lesson_group_size || ticket?.groupSize || 1) === 2;
   const initialSchedule = memberRegularScheduleSlots(member, ticket)
-    .slice(0, Math.max(1, Number(currentProduct?.frequency_per_week || ticket?.weeklyCount || 1)))
+    .slice(0, memberRegularScheduleFrequency(currentProduct, ticket))
     .map((slot) => ({ dayOfWeek: Number(slot.dayOfWeek), startTime: String(slot.startTime || "").slice(0, 5) }));
   return `
         <form class="member-inline-editor member-inline-editor--compact" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}">
@@ -12051,7 +12060,8 @@ function syncMemberQuickEditorSchedule(form, product = null) {
   const selectedProduct = product || (adminLiveDataState.products || [])
     .find((item) => item.id === form.elements.productId?.value);
   const regularProduct = Boolean(selectedProduct) && String(selectedProduct.product_kind || "regular") === "regular";
-  const frequency = Math.max(1, Math.min(3, Number(selectedProduct?.frequency_per_week) || 1));
+  const ticket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === form?.dataset.ticketId);
+  const frequency = memberRegularScheduleFrequency(selectedProduct, ticket);
   const scope = memberManagementProductScheduleScope(selectedProduct || {});
   panel.hidden = !regularProduct;
   panel.dataset.productKind = selectedProduct?.product_kind || "";
@@ -12235,25 +12245,25 @@ async function submitMemberInlineEditor(form, options = {}) {
     return false;
   }
   const regularSchedules = memberInlineScheduleValues(form);
-  const productChanged = Boolean(ticket && form.elements.productId)
-    && String(form.elements.productId.value || "") !== memberInlineInitialValue(form.elements.productId);
-  const coachChanged = Boolean(ticket && form.elements.coachRoleId)
-    && String(form.elements.coachRoleId.value || "") !== memberInlineInitialValue(form.elements.coachRoleId);
   const scheduleChanged = Boolean(ticket && selectedProduct
-    && String(selectedProduct.product_kind || "regular") === "regular")
-    && (memberInlineScheduleChanged(form, regularSchedules) || productChanged || coachChanged);
+    && String(selectedProduct.product_kind || "regular") === "regular"
+    && regularSchedules.length)
+    && memberInlineScheduleChanged(form, regularSchedules);
   if (scheduleChanged) {
     const scheduleScope = memberManagementProductScheduleScope(selectedProduct);
+    const requiredScheduleCount = memberRegularScheduleFrequency(selectedProduct, ticket);
     const invalidSchedule = regularSchedules.find((slot) => (
       !memberScheduleDayOrder.includes(slot.dayOfWeek)
       || !/^\d{2}:\d{2}$/.test(slot.startTime)
       || !memberScheduleDayAllowed(scheduleScope, slot.dayOfWeek)
     ));
     const duplicateSchedule = new Set(regularSchedules.map((slot) => `${slot.dayOfWeek}:${slot.startTime}`)).size !== regularSchedules.length;
-    if (invalidSchedule || duplicateSchedule) {
+    if (invalidSchedule || duplicateSchedule || regularSchedules.length !== requiredScheduleCount) {
       message.textContent = duplicateSchedule
         ? "같은 요일·시간을 두 번 선택할 수 없습니다."
-        : "회원권 범위에 맞는 정규 요일과 시간을 모두 선택해 주세요.";
+        : invalidSchedule
+          ? "회원권 범위에 맞는 요일과 시간을 확인해 주세요."
+          : `정규시간을 직접 바꾸려면 ${requiredScheduleCount}개를 모두 선택해 주세요. 시간표에서 등록할 예정이면 모두 비운 채 저장할 수 있습니다.`;
       message.classList.add("is-error");
       form.classList.add("is-save-error");
       return false;
@@ -12287,7 +12297,7 @@ async function submitMemberInlineEditor(form, options = {}) {
       ? form.elements.partnerUserId?.value || null
       : null;
     payload.scheduleScope = memberManagementProductScheduleScope(selectedProduct);
-    payload.weeklyFrequency = Number(selectedProduct.frequency_per_week) || 1;
+    payload.weeklyFrequency = memberRegularScheduleFrequency(selectedProduct, ticket);
   }
   if (scheduleChanged) payload.lessonDays = regularSchedules.map((slot) => slot.dayOfWeek);
   payload.preserveExistingSchedule = true;
@@ -14138,7 +14148,7 @@ function renderUniformCoachScheduleCell(day, time) {
         return `<div class="schedule-coach-slot is-closed" data-coach-lane="${coach.id}" aria-label="${escapeHtml(coach.name)} 근무 외"></div>`;
       }
       if (canAddLessonAt(day, time, 20, coach.id)) {
-        return `<button class="schedule-stack-add" type="button" data-coach-lane="${coach.id}" ${lessonAddAttrs(day, time, 20, coach.id)}>+ 수업 추가</button>`;
+        return `<button class="schedule-stack-add admin-duration-add" type="button" data-coach-lane="${coach.id}" data-quick-lesson-entry="true" ${lessonAddAttrs(day, time, 20, coach.id)}>+ 수업 추가</button>`;
       }
       return `<div class="schedule-coach-slot is-full" data-coach-lane="${coach.id}" aria-label="${escapeHtml(coach.name)} 신청 불가"></div>`;
     })
@@ -17155,7 +17165,6 @@ async function saveLiveAdminLesson(candidate, entitlement = null) {
     target_lesson_source: liveLessonSource(candidate),
     target_participant_user_ids: participantUserIds,
     target_update_regular_rule: !editingLesson
-      && !state.quickLessonEntry
       && liveLessonSource(candidate) === "regular",
   };
   if (adminManualOverrideEnabled()) {
