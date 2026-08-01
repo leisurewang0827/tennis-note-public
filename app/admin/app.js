@@ -1431,6 +1431,7 @@ const adminLiveDataState = {
   mediaFiles: [],
   memberDatabaseRecords: [],
   memberMembershipRecords: [],
+  regularScheduleRules: [],
   substituteAssignments: [],
 };
 
@@ -9301,7 +9302,8 @@ function memberManagementProductScheduleScope(product) {
   const name = String(product?.name || "");
   if (name.includes("주말")) return "weekend";
   if (name.includes("평일")) return "weekday";
-  return ["weekday", "weekend", "mixed"].includes(product?.schedule_scope) ? product.schedule_scope : "weekday";
+  const configuredScope = product?.schedule_scope || product?.scheduleScope;
+  return ["weekday", "weekend", "mixed"].includes(configuredScope) ? configuredScope : "weekday";
 }
 
 function memberManagementLessonDaysMarkup(selectedDays = [], scheduleScope = "weekday") {
@@ -10127,6 +10129,14 @@ function memberManagementErrorText(error) {
   if (raw.includes("server_request_timeout")) return "서버 응답이 지연되었습니다. 중복 저장은 차단되어 있으니 새로고침 후 결과를 확인해 주세요.";
   if (raw.includes("admin_live_refresh_failed_after_write")) return "서버 저장은 요청됐지만 결과를 다시 확인하지 못했습니다. 새로고침 후 상태를 확인해 주세요.";
   if (raw.includes("member_management_write_not_confirmed")) return "서버에서 변경 결과를 확인하지 못했습니다. 새로고침 후 다시 확인해 주세요.";
+  if (raw.includes("member_schedule_write_not_confirmed")) return "회원권은 저장됐지만 새 시간표를 확인하지 못했습니다. 새로고침 후 시간표를 확인해 주세요.";
+  if (raw.includes("regular_schedule_count_mismatch")) return "회원권의 주 횟수만큼 요일과 시간을 선택해 주세요.";
+  if (raw.includes("regular_schedule_duplicate")) return "같은 요일·시간을 두 번 선택할 수 없습니다.";
+  if (raw.includes("schedule_scope_mismatch")) return "회원권의 평일·주말 범위에 맞는 요일을 선택해 주세요.";
+  if (raw.includes("coach_not_working")) return "선택한 요일·시간은 담당 코치의 근무시간이 아닙니다.";
+  if (raw.includes("target_time_blocked")) return "선택한 시간은 브레이크 또는 수업 제한 시간입니다.";
+  if (raw.includes("target_time_occupied")) return "선택한 시간에 담당 코치의 다른 수업이 있습니다.";
+  if (raw.includes("regular_schedule_not_created")) return "선택한 시간으로 만들 수 있는 미래 수업이 없습니다. 시작일·만료일·잔여 횟수를 확인해 주세요.";
   if (raw.includes("payment_product_mismatch")) return "기존 결제에 연결된 회원권과 선택한 회원권이 다릅니다. 결제 회원권을 선택해 주세요.";
   if (raw.includes("payment_already_linked")) return "이 결제는 이미 다른 회원권에 연결되어 있습니다.";
   if (raw.includes("payment_member_mismatch")) return "기존 결제 회원과 발급 대상 회원이 맞지 않습니다.";
@@ -10742,6 +10752,12 @@ function memberInlineChangeSummary(form) {
     paymentMethod: "결제수단",
     paymentAmount: "결제금액",
     note: "비고",
+    scheduleDay1: "정규시간",
+    scheduleDay2: "정규시간",
+    scheduleDay3: "정규시간",
+    scheduleTime1: "정규시간",
+    scheduleTime2: "정규시간",
+    scheduleTime3: "정규시간",
   };
   const changed = [...(form?.elements || [])]
     .filter((control) => control.name && labels[control.name] && String(control.value) !== memberInlineInitialValue(control))
@@ -10763,6 +10779,12 @@ const memberInlineDraftFieldNames = [
   "paymentAmount",
   "note",
   "applyToFutureSchedule",
+  "scheduleDay1",
+  "scheduleDay2",
+  "scheduleDay3",
+  "scheduleTime1",
+  "scheduleTime2",
+  "scheduleTime3",
 ];
 
 function memberInlineDraft(form) {
@@ -10786,6 +10808,7 @@ function restoreFailedMemberInlineDrafts(drafts = []) {
       if (name === "productId" || draft.values[name] === undefined || !form.elements[name]) return;
       form.elements[name].value = draft.values[name];
     });
+    syncMemberQuickEditorSchedule(form);
     if (form.elements.totalSessions && form.elements.usedSessions) syncMemberManagementBalance(form);
     setMemberInlineDirtyState(form, true);
     form.classList.add("is-save-error");
@@ -11205,6 +11228,103 @@ function memberScheduleSummary(member) {
   if (record?.lesson_days?.length || ticket?.lessonDays?.length) return memberManagementLessonDaysLabel(record, ticket);
   if (member.regularTime && member.regularTime !== "시간표에서 확인") return member.regularTime;
   return "미배정";
+}
+
+const memberScheduleDayOrder = [1, 2, 3, 4, 5, 6, 0];
+
+function memberScheduleDayAllowed(scope, day) {
+  if (day === "" || day === null || day === undefined) return false;
+  const value = Number(day);
+  if (scope === "mixed") return memberScheduleDayOrder.includes(value);
+  return scope === "weekend" ? [0, 6].includes(value) : value >= 1 && value <= 5;
+}
+
+function memberRegularScheduleSlots(member, ticket) {
+  if (!ticket?.serverTicketId) return [];
+  const rules = (adminLiveDataState.regularScheduleRules || [])
+    .filter((rule) => String(rule.ticket_id || "") === String(ticket.serverTicketId)
+      && rule.status === "active")
+    .map((rule) => ({
+      dayOfWeek: Number(rule.day_of_week),
+      startTime: String(rule.start_time || "").slice(0, 5),
+    }));
+  const lessonSlots = memberLessonRows(member)
+    .filter((lesson) => String(lesson.ticketId || "") === String(ticket.serverTicketId)
+      && normalizeLessonSource(lesson.lessonSource) === "regular"
+      && ["scheduled", "pending_change"].includes(lessonStatusValue(lesson)))
+    .map((lesson) => ({
+      dayOfWeek: lesson.lessonDate
+        ? new Date(`${lesson.lessonDate}T12:00:00`).getDay()
+        : ({ 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6, 일: 0 }[lesson.day]),
+      startTime: String(lesson.time || "").slice(0, 5),
+    }));
+  const record = memberDatabaseRecord(member, ticket);
+  const dayOnlySlots = (record?.lesson_days || ticket.lessonDays || [])
+    .map((day) => ({ dayOfWeek: Number(day), startTime: "" }));
+  const source = rules.length ? rules : lessonSlots.length ? lessonSlots : dayOnlySlots;
+  return [...new Map(source
+    .filter((slot) => memberScheduleDayOrder.includes(slot.dayOfWeek))
+    .map((slot) => [`${slot.dayOfWeek}:${slot.startTime}`, slot])).values()]
+    .sort((left, right) => (
+      memberScheduleDayOrder.indexOf(left.dayOfWeek) - memberScheduleDayOrder.indexOf(right.dayOfWeek)
+      || left.startTime.localeCompare(right.startTime)
+    ));
+}
+
+function memberInlineScheduleMarkup(member, ticket, product) {
+  const productKind = String(product?.product_kind || ticket?.productKind || "regular");
+  const frequency = Math.max(1, Math.min(3, Number(product?.frequency_per_week || ticket?.weeklyCount || 1)));
+  const scope = memberManagementProductScheduleScope(product || ticket || {});
+  const slots = memberRegularScheduleSlots(member, ticket);
+  const maxRows = 3;
+  const rows = Array.from({ length: maxRows }, (_, offset) => {
+    const index = offset + 1;
+    const slot = slots[offset] || { dayOfWeek: "", startTime: "" };
+    const dayButtons = memberScheduleDayOrder.map((day) => {
+      const allowed = memberScheduleDayAllowed(scope, day);
+      const selected = Number(slot.dayOfWeek) === day;
+      return `<button type="button" class="member-inline-day-chip ${selected ? "is-selected" : ""}" data-member-schedule-day="${day}" aria-pressed="${selected ? "true" : "false"}" ${allowed || selected ? "" : "disabled"}>${memberManagementDayLabel(day)}</button>`;
+    }).join("");
+    const currentTime = String(slot.startTime || "").slice(0, 5);
+    const timeValues = [...new Set([currentTime, ...getScheduleTimeOptions()].filter(Boolean))];
+    return `<div class="member-inline-schedule-row" data-member-schedule-row="${index}" ${index > frequency ? "hidden" : ""}>
+      <span class="member-inline-schedule-index">정규 ${index}</span>
+      <input type="hidden" name="scheduleDay${index}" value="${escapeHtml(memberManagementValue(slot.dayOfWeek))}" ${index > frequency ? "disabled" : ""} />
+      <div class="member-inline-day-tabs" role="group" aria-label="정규 ${index} 요일">${dayButtons}</div>
+      <select name="scheduleTime${index}" aria-label="정규 ${index} 시간" ${index > frequency ? "disabled" : ""}>
+        <option value="">시간 선택</option>
+        ${timeValues.map((time) => `<option value="${time}" ${time === currentTime ? "selected" : ""}>${time}</option>`).join("")}
+      </select>
+    </div>`;
+  }).join("");
+  return `<section class="member-inline-schedule" data-member-inline-schedule data-product-kind="${escapeHtml(productKind)}" ${productKind !== "regular" ? "hidden" : ""}>
+    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>저장하면 미래 시간표에 바로 반영</span></div>
+    ${rows}
+    <p class="member-inline-schedule-warning" data-member-schedule-warning></p>
+  </section>`;
+}
+
+function memberInlineScheduleValues(form) {
+  const product = (adminLiveDataState.products || []).find((item) => item.id === form?.elements.productId?.value);
+  if (!product || String(product.product_kind || "regular") !== "regular") return [];
+  const frequency = Math.max(1, Math.min(3, Number(product.frequency_per_week) || 1));
+  return Array.from({ length: frequency }, (_, offset) => {
+    const rawDay = form.elements[`scheduleDay${offset + 1}`]?.value;
+    return {
+      dayOfWeek: rawDay === "" || rawDay === undefined ? null : Number(rawDay),
+      startTime: String(form.elements[`scheduleTime${offset + 1}`]?.value || "").slice(0, 5),
+    };
+  });
+}
+
+function memberInlineScheduleChanged(form, schedules = memberInlineScheduleValues(form)) {
+  let initial = [];
+  try {
+    initial = JSON.parse(decodeURIComponent(form?.dataset.initialSchedule || ""));
+  } catch {
+    initial = [];
+  }
+  return JSON.stringify(schedules) !== JSON.stringify(initial);
 }
 
 function memberRemarkLabel(member) {
@@ -11703,17 +11823,20 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
   const activeProductOptions = membershipProductsForActiveOperationProfile()
     .map((draft) => ({ draft, server: serverMembershipProductForDraft(draft) }))
     .filter(({ draft, server }) => server?.id && draft.status !== "hidden" && draft.status !== "disabled")
-    .map(({ draft, server }) => `<option value="${escapeHtml(server.id)}" data-group-size="${Number(server.group_size || 1)}" ${server.id === ticket?.productId ? "selected" : ""}>${escapeHtml(draft.title || draft.name || server.name || "회원권")}</option>`)
+    .map(({ draft, server }) => `<option value="${escapeHtml(server.id)}" data-group-size="${Number(server.group_size || 1)}" data-product-kind="${escapeHtml(server.product_kind || "regular")}" data-frequency="${Number(server.frequency_per_week || 1)}" data-scope="${escapeHtml(memberManagementProductScheduleScope(server))}" data-duration="${Number(server.lesson_minutes || 20)}" ${server.id === ticket?.productId ? "selected" : ""}>${escapeHtml(draft.title || draft.name || server.name || "회원권")}</option>`)
     .join("");
   const currentProductIncluded = Boolean(ticket?.productId)
     && activeProductOptions.includes(`value="${escapeHtml(ticket.productId)}"`);
   const currentProductOption = currentProduct && !currentProductIncluded
-    ? `<option value="${escapeHtml(currentProduct.id)}" data-group-size="${Number(currentProduct.group_size || ticket?.groupSize || 1)}" selected>현재 · ${escapeHtml(getTicketDisplayProduct(ticket) || currentProduct.name || "기존 회원권")}</option>`
+    ? `<option value="${escapeHtml(currentProduct.id)}" data-group-size="${Number(currentProduct.group_size || ticket?.groupSize || 1)}" data-product-kind="${escapeHtml(currentProduct.product_kind || ticket?.productKind || "regular")}" data-frequency="${Number(currentProduct.frequency_per_week || ticket?.weeklyCount || 1)}" data-scope="${escapeHtml(memberManagementProductScheduleScope(currentProduct))}" data-duration="${Number(currentProduct.lesson_minutes || ticket?.durationMinutes || 20)}" selected>현재 · ${escapeHtml(getTicketDisplayProduct(ticket) || currentProduct.name || "기존 회원권")}</option>`
     : "";
   const productOptions = currentProductOption + activeProductOptions;
   const isGroup = Number(currentProduct?.group_size || record?.lesson_group_size || ticket?.groupSize || 1) === 2;
+  const initialSchedule = memberRegularScheduleSlots(member, ticket)
+    .slice(0, Math.max(1, Number(currentProduct?.frequency_per_week || ticket?.weeklyCount || 1)))
+    .map((slot) => ({ dayOfWeek: Number(slot.dayOfWeek), startTime: String(slot.startTime || "").slice(0, 5) }));
   return `
-        <form class="member-inline-editor member-inline-editor--compact" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}">
+        <form class="member-inline-editor member-inline-editor--compact" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}">
           <div class="member-inline-editor-heading" ${embedded ? "hidden" : ""}>
             <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
@@ -11736,7 +11859,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
               <option value="">미배정</option>
               ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === (record?.coach_role_id || ticket?.coachRoleId) ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
             </select></label>
-            <label class="member-inline-partner" data-member-quick-partner ${isGroup ? "" : "hidden"}><span>파트너</span><select name="partnerUserId" ${isGroup ? "required" : "disabled"}>
+            <label class="member-inline-partner" data-member-quick-partner><span>파트너</span><span class="member-inline-partner-empty" data-member-quick-partner-empty ${isGroup ? "hidden" : ""}>1:1 · 해당 없음</span><select name="partnerUserId" ${isGroup ? "required" : "disabled"} ${isGroup ? "" : "hidden"}>
               <option value="">선택</option>${partnerOptions}
             </select></label>
             <label><span>총</span><input name="totalSessions" type="number" min="0" step="1" value="${total}" ${ticket ? "" : "disabled"} /></label>
@@ -11763,6 +11886,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
             </select></label>
             <button class="primary-button member-inline-save" type="submit">저장</button>
           </div>
+          ${ticket ? memberInlineScheduleMarkup(member, ticket, currentProduct) : ""}
           <div class="member-inline-editor-actions">
             <p class="member-inline-message" aria-live="polite"></p>
           </div>
@@ -11806,16 +11930,55 @@ function syncMemberQuickEditorProduct(form) {
   const groupSize = Number(product?.group_size || 1);
   const groupProduct = Boolean(product) && groupSize === 2;
   const partnerField = form.querySelector("[data-member-quick-partner]");
+  const partnerEmpty = form.querySelector("[data-member-quick-partner-empty]");
   if (form.elements.partnerUserId) {
     form.elements.partnerUserId.disabled = !groupProduct;
     form.elements.partnerUserId.required = groupProduct;
-    if (!groupProduct) form.elements.partnerUserId.value = "";
+    form.elements.partnerUserId.hidden = !groupProduct;
   }
-  if (partnerField) partnerField.hidden = !groupProduct;
+  if (partnerField) partnerField.hidden = false;
+  if (partnerEmpty) partnerEmpty.hidden = groupProduct;
+  syncMemberQuickEditorSchedule(form, product);
   if (!product) return;
   form.elements.lessonType.value = groupProduct ? "one_on_two" : "one_on_one";
   form.elements.scheduleScope.value = memberManagementProductScheduleScope(product);
   form.elements.weeklyFrequency.value = Number(product.frequency_per_week) || 1;
+}
+
+function syncMemberQuickEditorSchedule(form, product = null) {
+  const panel = form?.querySelector("[data-member-inline-schedule]");
+  if (!panel) return;
+  const selectedProduct = product || (adminLiveDataState.products || [])
+    .find((item) => item.id === form.elements.productId?.value);
+  const regularProduct = Boolean(selectedProduct) && String(selectedProduct.product_kind || "regular") === "regular";
+  const frequency = Math.max(1, Math.min(3, Number(selectedProduct?.frequency_per_week) || 1));
+  const scope = memberManagementProductScheduleScope(selectedProduct || {});
+  panel.hidden = !regularProduct;
+  panel.dataset.productKind = selectedProduct?.product_kind || "";
+  let invalidScope = false;
+  panel.querySelectorAll("[data-member-schedule-row]").forEach((row, offset) => {
+    const enabled = regularProduct && offset < frequency;
+    row.hidden = !enabled;
+    const dayInput = row.querySelector(`input[name="scheduleDay${offset + 1}"]`);
+    const timeInput = row.querySelector(`select[name="scheduleTime${offset + 1}"]`);
+    if (dayInput) dayInput.disabled = !enabled;
+    if (timeInput) timeInput.disabled = !enabled;
+    const selectedDay = Number(dayInput?.value);
+    row.querySelectorAll("[data-member-schedule-day]").forEach((button) => {
+      const day = Number(button.dataset.memberScheduleDay);
+      const selected = String(day) === String(dayInput?.value);
+      const allowed = memberScheduleDayAllowed(scope, day);
+      button.disabled = !enabled || (!allowed && !selected);
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+      button.classList.toggle("is-out-of-scope", selected && !allowed);
+    });
+    if (enabled && dayInput?.value !== "" && !memberScheduleDayAllowed(scope, selectedDay)) invalidScope = true;
+  });
+  const warning = panel.querySelector("[data-member-schedule-warning]");
+  if (warning) warning.textContent = invalidScope
+    ? "회원권의 평일·주말 범위와 기존 요일이 다릅니다. 저장 전 새 요일을 선택해 주세요."
+    : "";
 }
 
 function syncMemberInlineProductCancellation(form) {
@@ -11971,6 +12134,37 @@ async function submitMemberInlineEditor(form, options = {}) {
     form.classList.add("is-save-error");
     return false;
   }
+  const regularSchedules = memberInlineScheduleValues(form);
+  const productChanged = Boolean(ticket && form.elements.productId)
+    && String(form.elements.productId.value || "") !== memberInlineInitialValue(form.elements.productId);
+  const coachChanged = Boolean(ticket && form.elements.coachRoleId)
+    && String(form.elements.coachRoleId.value || "") !== memberInlineInitialValue(form.elements.coachRoleId);
+  const scheduleChanged = Boolean(ticket && selectedProduct
+    && String(selectedProduct.product_kind || "regular") === "regular")
+    && (memberInlineScheduleChanged(form, regularSchedules) || productChanged || coachChanged);
+  if (scheduleChanged) {
+    const scheduleScope = memberManagementProductScheduleScope(selectedProduct);
+    const invalidSchedule = regularSchedules.find((slot) => (
+      !memberScheduleDayOrder.includes(slot.dayOfWeek)
+      || !/^\d{2}:\d{2}$/.test(slot.startTime)
+      || !memberScheduleDayAllowed(scheduleScope, slot.dayOfWeek)
+    ));
+    const duplicateSchedule = new Set(regularSchedules.map((slot) => `${slot.dayOfWeek}:${slot.startTime}`)).size !== regularSchedules.length;
+    if (invalidSchedule || duplicateSchedule) {
+      message.textContent = duplicateSchedule
+        ? "같은 요일·시간을 두 번 선택할 수 없습니다."
+        : "회원권 범위에 맞는 정규 요일과 시간을 모두 선택해 주세요.";
+      message.classList.add("is-error");
+      form.classList.add("is-save-error");
+      return false;
+    }
+    if (!form.elements.coachRoleId?.value) {
+      message.textContent = "시간표를 변경하려면 담당 코치를 먼저 선택해 주세요.";
+      message.classList.add("is-error");
+      form.classList.add("is-save-error");
+      return false;
+    }
+  }
   if (ticket && !form.classList.contains("member-inline-editor--compact") && memberEditorMode === "normal" && (!form.elements.coachRoleId.value
     || !form.elements.paymentMethod.value || !form.elements.paymentDate.value)) {
     message.textContent = "정상 운영 모드에서는 담당 코치·결제수단·결제일이 필요합니다.";
@@ -11995,8 +12189,9 @@ async function submitMemberInlineEditor(form, options = {}) {
     payload.scheduleScope = memberManagementProductScheduleScope(selectedProduct);
     payload.weeklyFrequency = Number(selectedProduct.frequency_per_week) || 1;
   }
+  if (scheduleChanged) payload.lessonDays = regularSchedules.map((slot) => slot.dayOfWeek);
   payload.preserveExistingSchedule = true;
-  payload.applyToFutureSchedule = form.elements.applyToFutureSchedule?.value === "true";
+  payload.applyToFutureSchedule = scheduleChanged || form.elements.applyToFutureSchedule?.value === "true";
   payload.changeBatchId = form.dataset.changeBatchId || createMemberChangeBatchId();
   payload.changeSource = "admin_web";
   if (ticket && !payload.expectedTicketUpdatedAt) {
@@ -12016,9 +12211,15 @@ async function submitMemberInlineEditor(form, options = {}) {
   let saveResult = null;
   try {
     if (ticket) {
-      saveResult = await window.TennisNoteDataClient.rpc("tn_admin_update_member_record_with_payment", {
-        target_record: payload,
-      });
+      saveResult = scheduleChanged
+        ? await window.TennisNoteDataClient.rpc("tn_admin_update_member_record_and_regular_schedule", {
+          target_record: payload,
+          target_schedules: regularSchedules,
+          target_operation_key: createAdminOperationKey("member-schedule"),
+        })
+        : await window.TennisNoteDataClient.rpc("tn_admin_update_member_record_with_payment", {
+          target_record: payload,
+        });
     } else if (payload.productId) {
       const product = (adminLiveDataState.products || []).find((item) => item.id === payload.productId);
       if (!product) throw new Error("membership_product_not_found");
@@ -12083,6 +12284,18 @@ async function submitMemberInlineEditor(form, options = {}) {
       || String(refreshed.productId || "") !== String(payload.productId || "")
       || String(refreshed.status || "").toLowerCase() !== String(payload.ticketStatus || "active").toLowerCase())) {
       throw new Error("member_inline_write_not_confirmed");
+    }
+    if (scheduleChanged && refreshedMember) {
+      const refreshedSlots = memberRegularScheduleSlots(refreshedMember, refreshed)
+        .slice(0, regularSchedules.length)
+        .map((slot) => ({ dayOfWeek: Number(slot.dayOfWeek), startTime: String(slot.startTime || "").slice(0, 5) }));
+      const expectedSlots = [...regularSchedules].sort((left, right) => (
+        memberScheduleDayOrder.indexOf(left.dayOfWeek) - memberScheduleDayOrder.indexOf(right.dayOfWeek)
+        || left.startTime.localeCompare(right.startTime)
+      ));
+      if (JSON.stringify(refreshedSlots) !== JSON.stringify(expectedSlots)) {
+        throw new Error("member_schedule_write_not_confirmed");
+      }
     }
     message.textContent = payload.ticketStatus === "expired"
       ? "서버 저장 완료 · 만료회원 반영 확인"
@@ -20444,7 +20657,7 @@ async function performAdminLiveDataSync() {
     const rosterRows = (key, fallback) => operationalRosterPromise
       .then((payload) => Array.isArray(payload?.[key]) ? payload[key] : fallback());
     const adminSettingsPromise = loadAdminStartupSettingsFromServer();
-    const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
+    const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       rosterRows("users", () => (client.selectAllRows || client.selectRows)("tn_users", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 })),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision", limit: 100 })
@@ -20487,6 +20700,12 @@ async function performAdminLiveDataSync() {
             order: "lesson_date.asc,start_time.asc",
             limit: 2000,
           }))),
+      fullAdminAccess ? client.selectRows("tn_regular_schedule_rules", {
+        select: "id,ticket_id,coach_role_id,day_of_week,start_time,duration_minutes,effective_start_on,effective_end_on,status,updated_at",
+        filters: { status: "active" },
+        order: "ticket_id.asc,day_of_week.asc,start_time.asc",
+        limit: 1000,
+      }).catch(() => []) : Promise.resolve([]),
       fullAdminAccess ? client.selectRows("tn_one_day_bookings", {
         select: "id,branch_id,coach_role_id,booking_date,start_time,duration_minutes,guest_name,guest_phone,note,status,linked_user_id,created_at",
         filters: { booking_date: { gte: lessonWindow.from, lte: lessonWindow.to } },
@@ -21066,6 +21285,7 @@ async function performAdminLiveDataSync() {
       groupTicketLinks: serverGroupTicketLinks || [],
       memberDatabaseRecords: serverMemberDatabaseRecords || [],
       memberMembershipRecords: serverMemberMembershipRecords || [],
+      regularScheduleRules: serverRegularScheduleRules || [],
       substituteAssignments: serverSubstituteAssignments || [],
       lessonWindow,
     });
@@ -26006,6 +26226,9 @@ function bindEvents() {
     }
     if (event.target.matches("[data-member-inline-form] input, [data-member-inline-form] select")) {
       if (event.target.matches("select[name='productId']")) syncMemberInlineProductCancellation(event.target.form);
+      if (event.target.matches("select[name^='scheduleTime']") && event.target.form?.elements.applyToFutureSchedule) {
+        event.target.form.elements.applyToFutureSchedule.value = "true";
+      }
       setMemberInlineDirtyState(event.target.form);
     }
   });
@@ -26048,6 +26271,19 @@ function bindEvents() {
 
   document.addEventListener("click", async (event) => {
     if (event.target.matches("[data-select-product-row]")) event.stopPropagation();
+    const scheduleDayButton = event.target.closest("[data-member-schedule-day]");
+    if (scheduleDayButton) {
+      const row = scheduleDayButton.closest("[data-member-schedule-row]");
+      const form = scheduleDayButton.closest("[data-member-inline-form]");
+      const index = row?.dataset.memberScheduleRow || "";
+      const dayInput = form?.elements[`scheduleDay${index}`];
+      if (!form || !dayInput || scheduleDayButton.disabled) return;
+      dayInput.value = scheduleDayButton.dataset.memberScheduleDay || "";
+      if (form.elements.applyToFutureSchedule) form.elements.applyToFutureSchedule.value = "true";
+      syncMemberQuickEditorSchedule(form);
+      setMemberInlineDirtyState(form);
+      return;
+    }
     if (event.target.closest("#toggleMemberAdminEdit")) {
       requestMemberAdminEdit();
       return;
