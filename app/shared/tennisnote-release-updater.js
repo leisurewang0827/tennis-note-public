@@ -184,7 +184,14 @@
       || candidate?.nativeUpdateMode !== "remote-shell"
     ) return false;
     const key = `tennis-note-native-shell:${candidate.releaseId}`;
-    if (sessionStorage.getItem(key) === "done") return false;
+    // A previous remote-shell attempt may have written the completion marker
+    // before the downloaded page and its scripts finished replacing the
+    // bundled document. If the bundled release is still older, the marker is
+    // stale and must not make the manual update button a no-op.
+    if (sessionStorage.getItem(key) === "done") {
+      if (!isNewerRelease(candidate)) return false;
+      sessionStorage.removeItem(key);
+    }
     const url = new URL(remoteAppUrl);
     url.searchParams.set("__tn_release", candidate.releaseId);
     const response = await fetch(url, {
