@@ -1785,7 +1785,7 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
 async function loadAdminMemberDirectoryPage({ force = false, render = true, preserveList = false } = {}) {
   if (operationsRole() !== "admin" || !window.TennisNoteDataClient?.rpc) return false;
   const signature = adminMemberDirectorySignature();
-  if (!force && adminMemberDirectoryState.loaded && adminMemberDirectoryState.signature === signature) return true;
+  if (!force && adminMemberDirectoryState.loaded && adminMemberDirectoryState.signature === signature) return false;
 
   const requestId = adminMemberDirectoryState.requestId + 1;
   Object.assign(adminMemberDirectoryState, {
@@ -1795,7 +1795,10 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
     preserveCountsWhileLoading: Boolean(preserveList && adminMemberDirectoryState.counts),
     requestId,
   });
-  if (render && state.view === "members") renderMembers({ preserveList });
+  if (render && state.view === "members") {
+    renderMembers({ preserveList });
+    rememberAdminViewRender("members");
+  }
   try {
     const query = JSON.parse(signature);
     const response = await window.TennisNoteDataClient.rpc("tn_admin_member_directory_page", {
@@ -1818,10 +1821,15 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
       signature,
       rows: directoryRows,
       total: Number(payload?.total) || 0,
-      counts: payload?.counts && typeof payload.counts === "object" ? payload.counts : null,
+      counts: payload?.counts && typeof payload.counts === "object"
+        ? payload.counts
+        : adminMemberDirectoryState.counts,
       preserveCountsWhileLoading: false,
     });
-    if (render && state.view === "members") renderMembers();
+    if (render && state.view === "members") {
+      renderMembers();
+      rememberAdminViewRender("members");
+    }
     return true;
   } catch (error) {
     if (requestId !== adminMemberDirectoryState.requestId) return false;
@@ -1834,14 +1842,17 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
       preserveCountsWhileLoading: false,
     });
     console.warn("[Tennis Note] member directory server paging unavailable; using local fallback", error);
-    if (render && state.view === "members") renderMembers();
+    if (render && state.view === "members") {
+      renderMembers();
+      rememberAdminViewRender("members");
+    }
     return false;
   }
 }
 
 function loadAdminDataOnce(key, loader) {
   const existing = adminLazyDataState.get(key);
-  if (existing?.status === "loaded") return Promise.resolve(true);
+  if (existing?.status === "loaded") return Promise.resolve(false);
   if (existing?.promise) return existing.promise;
 
   const entry = { status: "loading", promise: null };
@@ -1908,7 +1919,15 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
 
   if (!jobs.length) return Promise.resolve([]);
   return Promise.all(jobs).then((results) => {
-    if (view === state.view) renderAdminView(view);
+    if (view !== state.view || !results.some(Boolean)) return results;
+    if (view === "members") {
+      // The directory loader renders its own rows. Rebuilding the full inline
+      // member sheet here made every menu visit render the same list twice.
+      renderHoldingRequestAdminList();
+      renderAccountDeletionAdminList();
+    } else {
+      renderAdminView(view);
+    }
     return results;
   });
 }
@@ -7131,6 +7150,87 @@ function closeCleanMemberInlineEditor(nextView) {
   state.inlineMemberId = null;
 }
 
+let adminViewRenderRevision = 0;
+const adminViewRenderCache = new Map();
+
+function adminViewUiSignature(view) {
+  const common = [operationsRole(), activeOperationBranchId()];
+  if (view === "members") {
+    return JSON.stringify(common.concat([
+      state.memberFilter,
+      state.memberSearch,
+      state.memberCoachFilter,
+      state.memberTicketFilter,
+      state.memberListPage,
+      state.inlineMemberId,
+      memberEditorMode,
+      adminMemberDirectoryState.signature,
+      adminMemberDirectoryState.requestId,
+      adminMemberDirectoryState.loading,
+    ]));
+  }
+  if (view === "schedule") {
+    return JSON.stringify(common.concat([
+      state.scheduleView,
+      state.scheduleFilter,
+      state.scheduleCoachFilter,
+      state.scheduleMemberSearch,
+      state.activeAdminWeekIndex,
+      state.selectedScheduleDay,
+      state.scheduleEditMode,
+      state.scheduleOpenSlotMode,
+      state.liveScheduleLoaded,
+      state.liveScheduleLoading,
+    ]));
+  }
+  if (view === "billing") {
+    return JSON.stringify(common.concat([
+      state.billingFilter,
+      state.billingPage,
+      state.settlementPage,
+      state.rechargePage,
+    ]));
+  }
+  if (view === "notes") {
+    return JSON.stringify(common.concat([
+      state.recordFilter,
+      state.recordCoachFilter,
+      state.recordPendingType,
+      state.recordSearch,
+      state.recordPage,
+    ]));
+  }
+  if (view === "settings") {
+    return JSON.stringify(common.concat([
+      state.settingsTab,
+      state.membershipSettingsSection,
+      state.membershipProductSearch,
+      state.membershipProductStatusFilter,
+      state.membershipProductPage,
+    ]));
+  }
+  return JSON.stringify(common.concat([
+    state.adminTaskPage,
+    state.memberStatusPage,
+  ]));
+}
+
+function canReuseAdminView(view) {
+  const cached = adminViewRenderCache.get(view);
+  return Boolean(
+    cached
+    && cached.revision === adminViewRenderRevision
+    && cached.signature === adminViewUiSignature(view)
+  );
+}
+
+function rememberAdminViewRender(view) {
+  adminViewRenderCache.set(view, {
+    revision: adminViewRenderRevision,
+    signature: adminViewUiSignature(view),
+  });
+}
+
 function setView(view, options = {}) {
   if (!operationsAccessReady()) {
     renderOperationsLoginGate();
@@ -7162,7 +7262,18 @@ function setView(view, options = {}) {
   $$(".view").forEach((section) => section.classList.remove("is-active"));
   $(`#${view}View`).classList.add("is-active");
   closeAdminMenu();
-  if (enteringSchedule) {
+  const titles = {
+    dashboard: "대시보드",
+    members: operationsRole() === "coach" ? "회원 찾기" : "회원관리",
+    schedule: operationsRole() === "coach" ? "레슨표" : "레슨시간표",
+    billing: "결제/정산",
+    notes: operationsRole() === "coach" ? "수업 완료" : "기록/차감 확인",
+    issues: operationsRole() === "coach" ? "오류 접수" : "개선·오류 접수",
+    settings: "운영 설정",
+  };
+  $("#viewTitle").textContent = titles[view];
+  const reuseRenderedView = canReuseAdminView(view);
+  if (enteringSchedule && !reuseRenderedView) {
     const grid = $("#scheduleGrid");
     if (grid) {
       grid.hidden = false;
@@ -7172,7 +7283,7 @@ function setView(view, options = {}) {
     window.requestAnimationFrame(() => {
       if (state.view === "schedule") renderAdminView(view);
     });
-  } else {
+  } else if (!reuseRenderedView) {
     renderAdminView(view);
   }
   void ensureAdminViewData(view);
@@ -7184,16 +7295,6 @@ function setView(view, options = {}) {
   ) {
     void refreshAdminLiveSchedule({ force: true });
   }
-  const titles = {
-    dashboard: "대시보드",
-    members: operationsRole() === "coach" ? "회원 찾기" : "회원관리",
-    schedule: operationsRole() === "coach" ? "레슨표" : "레슨시간표",
-    billing: "결제/정산",
-    notes: operationsRole() === "coach" ? "수업 완료" : "기록/차감 확인",
-    issues: operationsRole() === "coach" ? "오류 접수" : "개선·오류 접수",
-    settings: "운영 설정",
-  };
-  $("#viewTitle").textContent = titles[view];
   if (view === "billing" && !serverPaymentSyncState.loading) {
     loadServerPaymentsIntoBilling();
   }
@@ -9078,7 +9179,6 @@ function renderMemberStatusCounts() {
     ? adminMemberDirectoryState.counts
     : null;
   const reusableServerCounts = adminMemberDirectoryState.loading
-    && adminMemberDirectoryState.preserveCountsWhileLoading
     ? confirmedServerCounts
     : null;
   const counts = serverDirectoryCurrent && confirmedServerCounts
@@ -24788,6 +24888,7 @@ function renderAll() {
     saveSnapshot();
     return;
   }
+  adminViewRenderRevision += 1;
   renderAdminView(state.view);
   saveSnapshot();
 }
@@ -24806,6 +24907,7 @@ function renderAdminView(view = state.view) {
     renderDashboard();
     renderAdminOperations();
     renderReports();
+    rememberAdminViewRender(activeView);
     return;
   }
 
@@ -24813,6 +24915,7 @@ function renderAdminView(view = state.view) {
     renderMembers();
     renderHoldingRequestAdminList();
     renderAccountDeletionAdminList();
+    rememberAdminViewRender(activeView);
     return;
   }
 
@@ -24820,6 +24923,7 @@ function renderAdminView(view = state.view) {
     renderCourtControls();
     renderSchedule();
     renderMakeups();
+    rememberAdminViewRender(activeView);
     return;
   }
 
@@ -24827,21 +24931,25 @@ function renderAdminView(view = state.view) {
     renderTickets();
     renderBilling();
     renderCoachSettlementPreview();
+    rememberAdminViewRender(activeView);
     return;
   }
 
   if (activeView === "notes") {
     renderNotes();
+    rememberAdminViewRender(activeView);
     return;
   }
 
   if (activeView === "issues") {
+    rememberAdminViewRender(activeView);
     return;
   }
 
   if (activeView !== "settings") return;
   renderSettingsTabs();
   renderActiveSettingsPanel();
+  rememberAdminViewRender(activeView);
 }
 
 function renderActiveSettingsPanel() {
