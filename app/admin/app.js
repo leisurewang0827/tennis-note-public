@@ -11934,6 +11934,9 @@ async function runMemberBulkAction() {
       return;
     }
     let processedCount = 0;
+    let ticketCount = 0;
+    let pendingMemberCount = 0;
+    let skippedCount = 0;
     for (const userIds of chunkedValues(selectedUserIds)) {
       const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_member_action", {
         target_user_ids: userIds,
@@ -11941,16 +11944,31 @@ async function runMemberBulkAction() {
         target_coach_role_id: action === "assign_coach" ? ($("#memberBulkCoach")?.value || null) : null,
         target_reason: `관리자 회원 목록 · ${actionLabel}`,
       });
-      processedCount += Number(result?.processedCount ?? result?.processed_count ?? userIds.length);
+      processedCount += Number(result?.processedCount ?? result?.processed_count ?? 0);
+      ticketCount += Number(result?.ticketCount ?? result?.ticket_count ?? 0);
+      pendingMemberCount += Number(result?.pendingMemberCount ?? result?.pending_member_count ?? 0);
+      skippedCount += Number(result?.skippedCount ?? result?.skipped_count ?? 0);
     }
+    if (!processedCount) throw new Error("bulk_member_no_changes");
     await syncAdminLiveData();
     state.selectedMemberIds = [];
     renderMembers();
-    showToast(`${processedCount}명 일괄 처리 완료`);
+    if (action === "expire_tickets") {
+      const details = [
+        ticketCount ? `회원권 ${ticketCount}건` : "회원권 없음",
+        pendingMemberCount ? `가입대기 ${pendingMemberCount}명` : "",
+        skippedCount ? `확인 필요 ${skippedCount}명` : "",
+      ].filter(Boolean).join(" · ");
+      showToast(`${processedCount}명 만료회원 전환 완료 · ${details}`);
+    } else {
+      showToast(`${processedCount}명 일괄 처리 완료${skippedCount ? ` · ${skippedCount}명 확인 필요` : ""}`);
+    }
   } catch (error) {
     const message = `${error?.message || ""}`;
     showToast(message.includes("tn_admin_bulk_member_action") || message.includes("PGRST202")
       ? "회원 일괄 처리 DB 패치를 먼저 적용해 주세요."
+      : message.includes("bulk_member_no_changes")
+        ? "변경된 회원이 없습니다. 회원 연결 상태를 확인해 주세요."
       : "회원 일괄 처리에 실패했습니다. 권한과 회원 상태를 확인해 주세요.");
   } finally {
     if (button?.isConnected) button.disabled = false;
