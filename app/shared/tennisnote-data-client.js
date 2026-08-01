@@ -13,6 +13,7 @@
   let currentProfilePromise = null;
   let pendingOAuthCredentialCapture = Promise.resolve(null);
   let offlineDatabasePromise = null;
+  let nativeOAuthInFlightProvider = "";
 
   function parseStoredConfig() {
     try {
@@ -523,6 +524,10 @@
     return pendingOAuthCredentialCapture;
   }
 
+  function emitOAuthResult(detail) {
+    window.dispatchEvent(new CustomEvent("tennisnote:oauth-result", { detail }));
+  }
+
   function isNativeApp() {
     const capacitor = window.Capacitor;
     return Boolean(capacitor && (capacitor.isNativePlatform?.() || capacitor.getPlatform?.() !== "web"));
@@ -581,7 +586,16 @@
       const parsed = new URL(url);
       const error = parsed.searchParams.get("error");
       if (error) {
-        throw new Error(parsed.searchParams.get("error_description") || error);
+        clearOAuthStorageValue();
+        const provider = nativeOAuthInFlightProvider || storedProvider() || "간편";
+        nativeOAuthInFlightProvider = "";
+        await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+        emitOAuthResult({
+          ok: false,
+          provider,
+          cancelled: ["access_denied", "user_cancelled", "canceled", "cancelled"].includes(error.toLowerCase()),
+        });
+        return true;
       }
       const code = parsed.searchParams.get("code");
       const session = code
@@ -589,12 +603,17 @@
         : saveOAuthSession(parsed.hash);
       if (!session) return false;
       await flushOAuthProviderCredentialCapture();
+      nativeOAuthInFlightProvider = "";
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
       window.location.reload();
       return true;
     } catch (error) {
+      const provider = nativeOAuthInFlightProvider || storedProvider() || "간편";
+      nativeOAuthInFlightProvider = "";
+      clearOAuthStorageValue();
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
-      return false;
+      emitOAuthResult({ ok: false, provider, cancelled: false });
+      return true;
     }
   }
 
@@ -628,6 +647,13 @@
     if (!isNativeApp() || !appPlugin?.addListener) return;
     appPlugin.addListener("appUrlOpen", ({ url }) => void handleNativeAppUrl(url));
     appPlugin.getLaunchUrl?.().then((result) => handleNativeAppUrl(result?.url)).catch(() => {});
+    window.Capacitor?.Plugins?.Browser?.addListener?.("browserFinished", () => {
+      if (!nativeOAuthInFlightProvider) return;
+      const provider = nativeOAuthInFlightProvider;
+      nativeOAuthInFlightProvider = "";
+      clearOAuthStorageValue();
+      emitOAuthResult({ ok: false, provider, cancelled: true });
+    });
   }
 
   function authHeaders(extraHeaders = {}, sessionOverride = undefined) {
@@ -858,10 +884,17 @@
     const authorizeUrl = authUrl(`authorize?${query.toString()}`);
     const browserPlugin = window.Capacitor?.Plugins?.Browser;
     if (isNativeApp() && browserPlugin?.open) {
-      await browserPlugin.open({
-        url: authorizeUrl,
-        presentationStyle: "popover",
-      });
+      nativeOAuthInFlightProvider = provider || slug;
+      try {
+        await browserPlugin.open({
+          url: authorizeUrl,
+          presentationStyle: "popover",
+        });
+      } catch (error) {
+        nativeOAuthInFlightProvider = "";
+        clearOAuthStorageValue();
+        throw error;
+      }
       return;
     }
     window.location.href = authorizeUrl;

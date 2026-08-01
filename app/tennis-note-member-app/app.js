@@ -1680,7 +1680,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.259",
+    workerUrl: "./service-worker.js?v=1.0.260",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -7457,7 +7457,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.259" });
+  const params = new URLSearchParams({ v: "1.0.260" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8478,14 +8478,15 @@ async function login(provider) {
 async function syncAppleLoginAvailability() {
   const buttons = $$('[data-login-provider="Apple"]');
   if (!buttons.length) return;
-  let ready = false;
+  let ready = true;
   const client = window.TennisNoteDataClient;
   if (client?.readiness?.().ready) {
     try {
       const settings = await client.getAuthSettings();
       ready = Boolean(settings?.external?.apple);
     } catch {
-      ready = false;
+      // A temporary settings lookup failure must not hide the compliant login option.
+      ready = true;
     }
   }
   buttons.forEach((button) => {
@@ -8496,6 +8497,15 @@ async function syncAppleLoginAvailability() {
     if (label) label.textContent = buttonLabel;
     button.setAttribute("aria-label", buttonLabel);
   });
+}
+
+function handleOAuthResult(event) {
+  const status = $("#memberEmailLoginStatus");
+  if (!status || event?.detail?.ok) return;
+  const provider = event?.detail?.provider || "간편";
+  status.textContent = event?.detail?.cancelled
+    ? `${provider} 로그인이 취소되었습니다.`
+    : `${provider} 로그인을 완료하지 못했습니다. 다시 시도해주세요.`;
 }
 
 function emailLoginErrorMessage(error) {
@@ -8847,6 +8857,7 @@ function confirmLatestLesson() {
 }
 
 function bindEvents() {
+  window.addEventListener("tennisnote:oauth-result", handleOAuthResult);
   $$("[data-login-provider]").forEach((button) => {
     button.addEventListener("click", () => login(button.dataset.loginProvider));
   });
