@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.260" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.260" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.261" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.261" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1254,7 +1254,7 @@
               <strong id="lessonQuickSchedule">요일과 시간을 선택해 주세요.</strong>
               <small id="lessonQuickGuide">회원 검색 후 회원권을 확인하고 바로 저장할 수 있습니다.</small>
             </div>
-            <button id="toggleLessonQuickDetails" class="ghost-button" type="button" aria-expanded="false">상세 설정</button>
+            <button id="toggleLessonQuickDetails" class="ghost-button" type="button" aria-expanded="false">추가 설정</button>
           </section>
           <nav id="lessonQuickActions" class="lesson-quick-actions" aria-label="수업 처리 방법" hidden>
             <button type="button" data-lesson-quick-action="schedule">시간·코치</button>
@@ -1359,22 +1359,31 @@
 
           <section id="lessonPastCorrectionPanel" class="lesson-past-correction-panel" hidden>
             <div class="lesson-past-correction-heading">
-              <strong>과거 수업 보정</strong>
-              <span>실제로 진행했지만 프로그램에 넣지 못한 수업을 관리자 기록으로 남깁니다. 저장 즉시 완료 처리되고 회원권 횟수가 차감됩니다.</span>
+              <strong>처리 방법</strong>
+              <span>실제 결과를 선택하세요.</span>
             </div>
             <div class="lesson-past-correction-mode" role="radiogroup" aria-label="과거 수업 보정 방식">
-              <label><input type="radio" name="lessonPastCorrectionMode" value="complete" checked /> 수업 완료 · 횟수 차감</label>
-              <label><input type="radio" name="lessonPastCorrectionMode" value="absence" /> 사전 불참 · 차감 없음</label>
+              <label>
+                <input type="radio" name="lessonPastCorrectionMode" value="complete" checked />
+                <span><strong>수업 완료</strong><small>회원권 1회 차감</small></span>
+              </label>
+              <label>
+                <input type="radio" name="lessonPastCorrectionMode" value="absence" />
+                <span><strong>불참 처리</strong><small>차감 없음 · 보강 가능</small></span>
+              </label>
             </div>
             <label id="lessonPastCommentField" class="form-field lesson-past-comment-field">
               <span>수업 코멘트</span>
-              <textarea id="lessonPastCoachComment" rows="3" minlength="5" maxlength="1000" placeholder="실제 진행한 수업 내용과 다음 연습 포인트를 5자 이상 입력하세요."></textarea>
+              <textarea id="lessonPastCoachComment" rows="2" minlength="5" maxlength="1000" placeholder="수업 내용이나 다음 연습 포인트를 입력하세요."></textarea>
             </label>
-            <div class="tn-comment-draft-tools">
-              <input id="lessonPastCommentKeywords" type="text" maxlength="160" placeholder="키워드 입력 · 예: 포핸드, 타점, 체중이동" />
-              <button id="generateLessonPastComment" type="button">초안 만들기</button>
-            </div>
-            <small>잘못 반영한 경우 ‘관리자 강제 삭제’로 횟수를 복원한 뒤 다시 등록할 수 있습니다.</small>
+            <details class="lesson-past-draft-details">
+              <summary>코멘트 초안 도구</summary>
+              <div class="tn-comment-draft-tools">
+                <input id="lessonPastCommentKeywords" type="text" maxlength="160" placeholder="예: 포핸드, 타점, 체중이동" />
+                <button id="generateLessonPastComment" type="button">초안 만들기</button>
+              </div>
+            </details>
+            <small>저장 후 변경 이력에 기록됩니다.</small>
           </section>
 
           <section id="lessonAbsencePanel" class="lesson-absence-panel" hidden>
@@ -1709,15 +1718,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.260"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.261"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.260"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.260"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.260"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.260"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.260"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.261"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.261"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.261"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.261"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.261"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.260"></script>
+    <script src="./app.js?v=1.0.261"></script>
   </body>
 </html>

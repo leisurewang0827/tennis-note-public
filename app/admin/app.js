@@ -16397,7 +16397,7 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   if (toggle) {
     toggle.hidden = state.quickLessonEdit || completedCorrection;
     toggle.setAttribute("aria-expanded", String(expanded));
-    toggle.textContent = expanded ? "간단히 보기" : state.quickLessonEdit ? "추가 작업" : "상세 설정";
+    toggle.textContent = expanded ? "간단히 보기" : "추가 설정";
   }
   syncLessonEditScopeUi();
 }
