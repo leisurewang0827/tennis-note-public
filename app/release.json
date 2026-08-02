@@ -1,7 +1,7 @@
 {
-  "version": "1.0.264",
-  "releaseId": "2026.08.03.01",
+  "version": "1.0.265",
+  "releaseId": "2026.08.03.02",
   "minimumNativeShellVersion": "1.0.118",
   "nativeUpdateMode": "remote-shell",
-  "deployedAt": "2026-08-03T01:39:40+09:00"
+  "deployedAt": "2026-08-03T02:50:21+09:00"
 }

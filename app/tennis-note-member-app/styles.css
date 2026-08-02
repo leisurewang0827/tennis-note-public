@@ -5198,6 +5198,7 @@ select {
 
 body.sheet-open {
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body.notice-open {
@@ -5257,6 +5258,9 @@ body.notice-open {
   display: grid;
   align-items: end;
   justify-items: center;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .sheet-backdrop {
@@ -5267,6 +5271,7 @@ body.notice-open {
   border: 0;
   border-radius: 0;
   background: rgba(24, 34, 48, 0.48);
+  touch-action: none;
 }
 
 .sheet-card {
@@ -5275,9 +5280,11 @@ body.notice-open {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   width: min(100%, 680px);
-  height: min(86dvh, 760px);
-  max-height: min(86dvh, 760px);
+  height: min(var(--tn-sheet-viewport-height, 86dvh), 760px);
+  max-height: min(var(--tn-sheet-viewport-height, 86dvh), 760px);
   overflow: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   border: 1px solid rgba(208, 213, 221, 0.9);
   border-bottom: 0;
   border-radius: 20px 20px 0 0;
@@ -5326,7 +5333,11 @@ body.notice-open {
 
 .sheet-scroll {
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   padding: 14px 14px calc(20px + env(safe-area-inset-bottom));
 }
 
@@ -5619,8 +5630,8 @@ body.notice-open {
   }
 
   .sheet-card {
-    height: 90dvh;
-    max-height: 90dvh;
+    height: min(var(--tn-sheet-viewport-height, 86dvh), 760px);
+    max-height: min(var(--tn-sheet-viewport-height, 86dvh), 760px);
   }
 
   .membership-primary-card {

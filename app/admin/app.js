@@ -7485,6 +7485,12 @@ function isRegularScheduleTicket(ticket, today = adminLocalDateKey(new Date())) 
   return true;
 }
 
+function isCurrentMemberTicket(ticket, today = adminLocalDateKey(new Date())) {
+  if (!ticket || !["active", "paused"].includes(ticket.status)) return false;
+  if (Number(ticket.remaining) <= 0) return false;
+  return !ticket.expires || ticket.expires >= today;
+}
+
 function ticketHasFutureRegularLesson(ticket, today = adminLocalDateKey(new Date())) {
   return lessons.some((lesson) => {
     if (String(lesson.ticketId || "") !== String(ticket.id || "")) return false;
@@ -9100,6 +9106,10 @@ async function reviewAccountDeletionRequest(requestId, status) {
     showToast("회원 탈퇴 요청 검토 시작");
   } catch (error) {
     const code = String(error?.payload?.code || error?.message || "").toLowerCase();
+    if (Number(error?.status) === 404 || code.includes("function failed: 404") || code.includes("function_not_found")) {
+      showToast("계정 삭제 서버 기능이 아직 배포되지 않았습니다. 서버 배포를 완료한 뒤 다시 실행해 주세요");
+      return;
+    }
     if (code.includes("execution_in_progress") || code.includes("lease_mismatch")) {
       showToast("다른 관리자 화면에서 삭제를 처리 중입니다. 잠시 후 상태를 다시 확인해 주세요");
       return;
@@ -21053,7 +21063,7 @@ async function performAdminLiveDataSync(options = {}) {
       };
     });
 
-    const activeTickets = mappedTickets.filter((ticket) => ["active", "paused"].includes(ticket.status) && ticket.remaining > 0);
+    const activeTickets = mappedTickets.filter((ticket) => isCurrentMemberTicket(ticket));
     const activeTicketIds = new Set(activeTickets.map((ticket) => ticket.serverTicketId));
     replaceArray(tickets, activeTickets);
     replaceArray(expiredTickets, mappedTickets
@@ -21091,7 +21101,7 @@ async function performAdminLiveDataSync(options = {}) {
     const memberUserGroups = (serverUsers || [])
       .filter((user) => !user.merged_into_user_id)
       .filter((user) => !user.permanently_deleted_at)
-      .filter((user) => relevantUserIds.has(user.id) || ["member", "admin"].includes(user.role))
+      .filter((user) => user.role === "member" || relevantUserIds.has(user.id))
       .map((user) => ({
         name: user.name || "이름 확인 필요",
         userGroup: [user],
@@ -21105,7 +21115,7 @@ async function performAdminLiveDataSync(options = {}) {
           .flatMap((userId) => ticketsByParticipantUserId.get(userId) || [])
           .map((ticket) => [ticket.id, ticket]),
       ).values()];
-      const activeTicket = memberTickets.find((ticket) => ["active", "paused"].includes(ticket.status) && ticket.remaining > 0) || null;
+      const activeTicket = memberTickets.find((ticket) => isCurrentMemberTicket(ticket)) || null;
       const pendingTicket = memberTickets.find((ticket) => ticket.status === "pending_payment") || null;
       const memberPayments = userIds.flatMap((userId) => paymentsByUserId.get(userId) || []);
       const unlinkedVerifiedPayments = memberPayments.filter((payment) => (

@@ -1680,7 +1680,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.264",
+    workerUrl: "./service-worker.js?v=1.0.265",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -7186,9 +7186,46 @@ function changeJournalMonth(delta) {
 let activeAppSheetId = "";
 let activeAppModalId = "";
 let appModalReturnFocus = null;
+let appSheetScrollLock = null;
+
+function lockAppSheetBackground() {
+  if (appSheetScrollLock) return;
+  const scrollY = Math.max(0, window.scrollY || window.pageYOffset || 0);
+  appSheetScrollLock = {
+    scrollY,
+    bodyPosition: document.body.style.position,
+    bodyTop: document.body.style.top,
+    bodyLeft: document.body.style.left,
+    bodyRight: document.body.style.right,
+    bodyWidth: document.body.style.width,
+    htmlOverscrollBehavior: document.documentElement.style.overscrollBehavior,
+  };
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${scrollY}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+  document.documentElement.style.overscrollBehavior = "none";
+}
+
+function unlockAppSheetBackground() {
+  if (!appSheetScrollLock) return;
+  const saved = appSheetScrollLock;
+  appSheetScrollLock = null;
+  document.body.style.position = saved.bodyPosition;
+  document.body.style.top = saved.bodyTop;
+  document.body.style.left = saved.bodyLeft;
+  document.body.style.right = saved.bodyRight;
+  document.body.style.width = saved.bodyWidth;
+  document.documentElement.style.overscrollBehavior = saved.htmlOverscrollBehavior;
+  window.scrollTo({ top: saved.scrollY, left: 0, behavior: "auto" });
+}
 
 function refreshAppSheetState() {
-  document.body.classList.toggle("sheet-open", Boolean(activeAppSheetId));
+  const sheetOpen = Boolean(activeAppSheetId);
+  document.body.classList.toggle("sheet-open", sheetOpen);
+  if (sheetOpen) lockAppSheetBackground();
+  else unlockAppSheetBackground();
 }
 
 function openAppSheet(sheetId) {
@@ -7457,7 +7494,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.264" });
+  const params = new URLSearchParams({ v: "1.0.265" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
