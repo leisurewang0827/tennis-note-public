@@ -17228,6 +17228,7 @@ async function saveLiveAdminLesson(candidate, entitlement = null) {
     target_lesson_source: liveLessonSource(candidate),
     target_participant_user_ids: participantUserIds,
     target_update_regular_rule: !editingLesson
+      && !state.quickLessonEntry
       && liveLessonSource(candidate) === "regular",
   };
   if (adminManualOverrideEnabled()) {
