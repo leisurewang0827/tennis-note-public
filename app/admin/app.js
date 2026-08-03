@@ -6518,10 +6518,13 @@ function isDeductedLesson(lesson) {
 }
 
 function lessonRoundRange(lesson, ticket) {
+  const ticketStartsOn = String(ticket?.starts || ticket?.purchased || "").slice(0, 10);
   const ticketLessons = lessons
     .filter((item) => {
       if (!isBookedLesson(item) || isLessonCancelled(item) || isLessonAvailable(item)) return false;
-      return getTicketByLesson(item)?.id === ticket.id;
+      if (getTicketByLesson(item)?.id !== ticket.id) return false;
+      const lessonDate = String(item?.lessonDate || "").slice(0, 10);
+      return !ticketStartsOn || !lessonDate || lessonDate >= ticketStartsOn;
     })
     .sort((left, right) => lessonRoundSortKey(left).localeCompare(lessonRoundSortKey(right)));
   const targetKey = lessonRoundSortKey(lesson);
