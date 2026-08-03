@@ -1,8 +1,9 @@
 (function () {
   const release = Object.freeze({
-    version: "1.0.273",
-    releaseId: "2026.08.03.10",
-    deployedAt: "2026-08-03T19:14:37+09:00",
+    version: "1.0.274",
+    releaseId: "2026.08.03.11",
+    appSurfaceVersion: "1.0.273",
+    deployedAt: "2026-08-03T20:34:44+09:00",
     minimumNativeShellVersion: "1.0.118",
     nativeShell: {
       version: "1.0.266",
@@ -25,7 +26,7 @@
       element.textContent = detail
         ? `웹 v${release.version} · 배포 ${release.releaseId} · 스토어 ${nativeBuildLabel}`
         : appOnly
-          ? `앱 버전 ${release.version}`
+          ? `앱 버전 ${release.appSurfaceVersion || release.version}`
           : `웹 v${release.version} · ${release.releaseId}`;
     });
   }

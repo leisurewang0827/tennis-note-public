@@ -7521,12 +7521,22 @@ function ticketFutureRegularScheduleCoverage(ticket, today = adminLocalDateKey(n
   return [...anchors.values()].reduce((sum, units) => sum + units, 0);
 }
 
-function ticketRemainingRegularScheduleCount(ticket, today = adminLocalDateKey(new Date())) {
+function ticketRegularScheduleAssignmentProgress(ticket, today = adminLocalDateKey(new Date())) {
   const requiredCount = Math.min(
     getTicketWeeklyCount(ticket),
     Math.max(0, Number(ticket?.remaining) || 0),
   );
-  return Math.max(0, requiredCount - ticketFutureRegularScheduleCoverage(ticket, today));
+  const assignedCount = Math.min(requiredCount, ticketFutureRegularScheduleCoverage(ticket, today));
+  return {
+    requiredCount,
+    assignedCount,
+    remainingCount: Math.max(0, requiredCount - assignedCount),
+    state: assignedCount > 0 ? "partial" : "unassigned",
+  };
+}
+
+function ticketRemainingRegularScheduleCount(ticket, today = adminLocalDateKey(new Date())) {
+  return ticketRegularScheduleAssignmentProgress(ticket, today).remainingCount;
 }
 
 function ticketNeedsRegularSchedule(ticket, today = adminLocalDateKey(new Date())) {
@@ -7628,25 +7638,35 @@ function renderScheduleAssignmentPicker() {
   const bar = $("#scheduleAssignmentBar");
   if (!picker || !count || !bar) return;
   const candidates = unassignedRegularTickets();
+  const assignmentCounts = candidates.reduce((summary, ticket) => {
+    const progress = ticketRegularScheduleAssignmentProgress(ticket);
+    summary[progress.state] += 1;
+    return summary;
+  }, { unassigned: 0, partial: 0 });
   const current = currentScheduleAssignmentTicket();
   const options = [...candidates];
   if (current && !options.some((ticket) => String(ticket.id) === String(current.id))) options.unshift(current);
   picker.innerHTML = `<option value="">회원 선택</option>${options.map((ticket) => {
     const names = ticketParticipantNames(ticket).join(" & ") || ticket.member || "회원";
+    const progress = ticketRegularScheduleAssignmentProgress(ticket);
     const remaining = state.scheduleAssignmentTicketId === String(ticket.id)
       ? scheduleAssignmentRemainingCount(ticket)
-      : ticketRemainingRegularScheduleCount(ticket);
-    return `<option value="${escapeHtml(String(ticket.id))}">${escapeHtml(names)} · ${escapeHtml(getCoachName(ticket.coachId) || "코치 미배정")} · ${remaining}개 남음</option>`;
+      : progress.remainingCount;
+    const assignmentLabel = progress.assignedCount > 0
+      ? `일부 ${progress.assignedCount}/${progress.requiredCount}`
+      : `미배정 0/${progress.requiredCount}`;
+    return `<option value="${escapeHtml(String(ticket.id))}">[${assignmentLabel}] ${escapeHtml(names)} · ${escapeHtml(getCoachName(ticket.coachId) || "코치 미배정")} · ${remaining}개 남음</option>`;
   }).join("")}`;
   picker.value = current ? String(current.id) : "";
-  count.textContent = `${candidates.length}명`;
+  count.textContent = `미배정 ${assignmentCounts.unassigned} · 일부 ${assignmentCounts.partial}`;
   bar.hidden = !current;
   if (!current) return;
   const names = ticketParticipantNames(current).join(" & ") || current.member || "회원";
   const source = state.scheduleAssignmentLessonSource === "regular" ? "정규시간" : lessonTypeLabel({ lessonSource: state.scheduleAssignmentLessonSource });
   const remaining = scheduleAssignmentRemainingCount(current);
+  const progress = ticketRegularScheduleAssignmentProgress(current);
   $("#scheduleAssignmentMember").textContent = `${names} · ${source} 배정`;
-  $("#scheduleAssignmentDetail").textContent = `${getCoachName(current.coachId) || "담당 코치 미배정"} · ${getTicketDisplayProduct(current)} · ${remaining}개 더 선택`;
+  $("#scheduleAssignmentDetail").textContent = `${getCoachName(current.coachId) || "담당 코치 미배정"} · ${getTicketDisplayProduct(current)} · 현재 ${progress.assignedCount}/${progress.requiredCount} · ${remaining}개 더 선택`;
 }
 
 function isActiveCouponTicket(ticket, today = adminLocalDateKey(new Date())) {
