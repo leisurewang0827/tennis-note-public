@@ -21087,11 +21087,6 @@ async function performAdminLiveDataSync(options = {}) {
       rows.push(payment);
       paymentsByUserId.set(payment.user_id, rows);
     });
-    const relevantUserIds = new Set([
-      ...mappedTickets.flatMap((ticket) => ticket.participantUserIds),
-      ...(serverMemberDatabaseRecords || []).map((record) => record.user_id),
-      ...(serverPayments || []).map((payment) => payment.user_id),
-    ].filter(Boolean));
     const enrollmentByUserId = new Map();
     (serverEnrollments || [])
       .sort((left, right) => new Date(right.submitted_at || 0) - new Date(left.submitted_at || 0))
@@ -21101,7 +21096,7 @@ async function performAdminLiveDataSync(options = {}) {
     const memberUserGroups = (serverUsers || [])
       .filter((user) => !user.merged_into_user_id)
       .filter((user) => !user.permanently_deleted_at)
-      .filter((user) => user.role === "member" || relevantUserIds.has(user.id))
+      .filter((user) => user.role === "member")
       .map((user) => ({
         name: user.name || "이름 확인 필요",
         userGroup: [user],
