@@ -16184,11 +16184,18 @@ function renderLessonPreview() {
     if (absenceMode) {
       const editingLesson = getCurrentEditingLesson();
       const regularLesson = editingLesson && normalizeLessonSource(editingLesson.lessonSource) === "regular";
-      const blocked = !editingLesson?.serverLessonId || !regularLesson || correctionReason.length < 5;
-      const message = !editingLesson?.serverLessonId
-        ? "시간표에 등록된 지난 정규수업을 선택한 경우에만 사전 불참으로 보정할 수 있습니다."
-        : !regularLesson
+      const canCreateAbsenceRecord = Boolean(!editingLesson?.serverLessonId && ticket?.serverTicketId && !isCouponLessonTicket(ticket));
+      const blocked = (!regularLesson && !canCreateAbsenceRecord) || correctionReason.length < 5;
+      const overlappingActualLesson = getOverlappingBookedLessons(candidate.day, candidate.time, candidate.durationMinutes)
+        .find((lesson) => lesson.id !== editingLesson?.id && !isReleasedRegularMakeupSlot(lesson));
+      const message = editingLesson?.serverLessonId && !regularLesson
           ? "정규수업만 사전 불참으로 보정할 수 있습니다."
+        : !editingLesson?.serverLessonId && !ticket?.serverTicketId
+          ? "불참 회원의 정규 회원권을 선택해 주세요."
+        : canCreateAbsenceRecord && correctionReason.length >= 5
+          ? overlappingActualLesson
+            ? "실제 진행된 수업은 유지하고, 원래 정규회원의 불참·차감 없음 기록만 함께 남깁니다."
+            : "원래 정규시간을 불참·차감 없음으로 기록하고 보강 신청을 엽니다."
           : correctionReason.length < 5
             ? "보정 사유를 5자 이상 입력해 주세요."
             : "횟수를 차감하지 않고 보강 신청이 가능한 상태로 바꿉니다.";
@@ -17648,8 +17655,13 @@ async function addLessonFromForm(event) {
     const absenceMode = pastLessonCorrectionMode() === "absence";
     if (absenceMode) {
       const editingLesson = getCurrentEditingLesson();
-      if (!editingLesson?.serverLessonId || normalizeLessonSource(editingLesson.lessonSource) !== "regular") {
-        setLessonFormMessage("시간표에 등록된 지난 정규수업을 선택해 주세요.", "danger");
+      const ticket = getSelectedTicket();
+      if (editingLesson?.serverLessonId && normalizeLessonSource(editingLesson.lessonSource) !== "regular") {
+        setLessonFormMessage("정규수업만 사전 불참으로 보정할 수 있습니다.", "danger");
+        return;
+      }
+      if (!editingLesson?.serverLessonId && (!ticket?.serverTicketId || isCouponLessonTicket(ticket))) {
+        setLessonFormMessage("불참 회원의 정규 회원권을 선택해 주세요.", "danger");
         return;
       }
       if (correctionReason.length < 5) {
@@ -17666,19 +17678,27 @@ async function addLessonFromForm(event) {
       try {
         const result = await saveLivePastLessonAbsenceCorrection();
         const restoredSessions = Number(result?.restoredSessions) || 0;
+        const occupyingLessonCount = Number(result?.occupyingLessonCount) || 0;
         window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
         closeLessonModal();
         await syncAdminLiveData();
         setView("schedule");
-        showToast(restoredSessions > 0
-          ? `사전 불참 보정 완료 · ${restoredSessions}회 복원 · 보강 신청 가능`
-          : "사전 불참 보정 완료 · 횟수 차감 없음 · 보강 신청 가능");
+        const resultParts = ["사전 불참 보정 완료"];
+        if (restoredSessions > 0) resultParts.push(`${restoredSessions}회 복원`);
+        else resultParts.push("횟수 차감 없음");
+        resultParts.push("보강 신청 가능");
+        if (occupyingLessonCount > 0) resultParts.push("실제 수업 유지");
+        showToast(resultParts.join(" · "));
       } catch (error) {
         const errorText = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
         const messages = {
           past_absence_admin_required: "관리자 계정으로만 지난 수업을 보정할 수 있습니다.",
           past_absence_reason_too_short: "보정 사유를 5자 이상 입력해 주세요.",
           past_absence_lesson_not_found: "보정할 지난 수업을 찾지 못했습니다. 시간표를 새로고침해 주세요.",
+          past_absence_slot_required: "불참 회원권·코치·날짜·시간을 모두 확인해 주세요.",
+          past_absence_ticket_missing: "불참 회원의 정규 회원권을 선택해 주세요.",
+          past_absence_regular_ticket_required: "쿠폰권이 아닌 정규 회원권을 선택해 주세요.",
+          past_absence_duration_invalid: "수업 시간은 20·30·40·60분 중에서 선택해 주세요.",
           past_absence_regular_lesson_required: "정규수업만 사전 불참으로 보정할 수 있습니다.",
           past_absence_lesson_not_started: "아직 시작하지 않은 수업은 일반 불참 처리 기능을 사용해 주세요.",
           past_absence_makeup_already_booked: "이미 이 수업의 보강이 예약되어 있습니다. 보강 예약을 먼저 확인해 주세요.",
@@ -23292,13 +23312,24 @@ function renderScheduleSettings() {
 async function saveLivePastLessonAbsenceCorrection() {
   const client = window.TennisNoteDataClient;
   const editingLesson = getCurrentEditingLesson();
+  const candidate = getLessonFormCandidate();
+  const ticket = getSelectedTicket();
+  const coach = coaches.find((item) => item.id === candidate.coachId || item.serverRoleId === candidate.coachId);
+  const lessonDate = adminWeekDateForDay(candidate.day);
   const correctionReason = adminPastCorrectionReason();
   if (!client?.rpc || operationsRole() !== "admin" || !adminApprovalReady()) {
     throw new Error("관리자 로그인이 필요합니다.");
   }
-  if (!editingLesson?.serverLessonId) throw new Error("past_absence_lesson_not_found");
-  return client.rpc("tn_admin_mark_past_lesson_absent", {
-    target_lesson_id: editingLesson.serverLessonId,
+  if (!editingLesson?.serverLessonId && (!ticket?.serverTicketId || !coach?.serverRoleId || !lessonDate || !candidate.time)) {
+    throw new Error("past_absence_slot_required");
+  }
+  return client.rpc("tn_admin_record_past_regular_absence", {
+    target_lesson_id: editingLesson?.serverLessonId || null,
+    target_ticket_id: ticket?.serverTicketId || null,
+    target_coach_role_id: coach?.serverRoleId || null,
+    target_lesson_date: lessonDate || null,
+    target_start_time: candidate.time || null,
+    target_duration_minutes: Number(candidate.durationMinutes) || 20,
     target_reason: correctionReason,
   });
 }
