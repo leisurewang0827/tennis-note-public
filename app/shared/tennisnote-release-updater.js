@@ -11,6 +11,8 @@
   let lastSuccessfulCheckAt = 0;
   let lastManifestUrl = defaultManifestUrl;
   let shouldDeferUpdate = null;
+  let nativeAppInfoPromise = null;
+  let activeNativeUpdate = null;
 
   function currentRelease() {
     return window.TENNIS_NOTE_RELEASE || {};
@@ -43,6 +45,74 @@
   function isNativeWebView() {
     const platform = window.Capacitor?.getPlatform?.();
     return Boolean(platform && platform !== "web");
+  }
+
+  function nativePlatform() {
+    const platform = window.Capacitor?.getPlatform?.();
+    return platform === "android" || platform === "ios" ? platform : "";
+  }
+
+  function normalizeBuild(value) {
+    const parsed = Number.parseInt(String(value || "0"), 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function nativePlatformPolicy(candidate, platform) {
+    const explicit = candidate?.nativePlatforms?.[platform] || {};
+    const current = currentRelease().nativeShell || {};
+    const platformVersion = platform === "ios" ? current.iosVersion : current.androidVersion;
+    const platformBuild = platform === "ios" ? current.iosBuild : current.androidBuild;
+    return {
+      minimumVersion: explicit.minimumVersion || candidate?.minimumNativeShellVersion || platformVersion || "0",
+      minimumBuild: normalizeBuild(explicit.minimumBuild),
+      latestVersion: explicit.latestVersion || platformVersion || "0",
+      latestBuild: normalizeBuild(explicit.latestBuild || platformBuild),
+      storeUrl: explicit.storeUrl || (platform === "ios"
+        ? "https://apps.apple.com/app/id6790994818"
+        : "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote"),
+    };
+  }
+
+  function evaluateNativeUpdate(candidate, installed) {
+    const platform = installed?.platform || nativePlatform();
+    if (!platform || !installed?.version) return { status: "unknown", platform, policy: null, installed };
+    const policy = nativePlatformPolicy(candidate, platform);
+    const installedBuild = normalizeBuild(installed.build);
+    const belowMinimumVersion = compareVersions(installed.version, policy.minimumVersion) < 0;
+    const belowMinimumBuild = policy.minimumBuild > 0 && installedBuild > 0 && installedBuild < policy.minimumBuild;
+    const belowLatestVersion = compareVersions(installed.version, policy.latestVersion) < 0;
+    const belowLatestBuild = policy.latestBuild > 0 && installedBuild > 0 && installedBuild < policy.latestBuild;
+    return {
+      status: belowMinimumVersion || belowMinimumBuild
+        ? "required"
+        : belowLatestVersion || belowLatestBuild
+          ? "optional"
+          : "current",
+      platform,
+      policy,
+      installed: { ...installed, build: installedBuild },
+    };
+  }
+
+  async function installedNativeAppInfo() {
+    if (!isNativeWebView()) return null;
+    if (nativeAppInfoPromise) return nativeAppInfoPromise;
+    nativeAppInfoPromise = (async () => {
+      const platform = nativePlatform();
+      const appPlugin = window.Capacitor?.Plugins?.App;
+      if (!platform || !appPlugin?.getInfo) return null;
+      try {
+        const info = await appPlugin.getInfo();
+        return {
+          platform,
+          version: String(info?.version || ""),
+          build: normalizeBuild(info?.build),
+        };
+      } catch {
+        return null;
+      }
+    })();
+    return nativeAppInfoPromise;
   }
 
   function hasUnsavedChanges() {
@@ -102,22 +172,35 @@
     }
     const notice = ensureUpdateNotice();
     const deferred = options.deferred === true || hasUnsavedChanges();
+    const nativeDecision = options.nativeDecision || activeNativeUpdate;
+    const nativeStoreUpdate = nativeDecision?.status === "required" || nativeDecision?.status === "optional";
+    const required = nativeDecision?.status === "required";
+    notice.dataset.updateKind = nativeStoreUpdate ? "native-store" : "web";
+    notice.dataset.updateRequired = required ? "true" : "false";
     const title = notice.querySelector("strong");
     const detail = notice.querySelector("span");
     const updateButton = notice.querySelector("[data-tennisnote-update-now]");
-    if (title) title.textContent = deferred ? "업데이트 대기 중" : "새 버전이 있습니다";
+    const dismissButton = notice.querySelector("[data-tennisnote-update-dismiss]");
+    if (title) title.textContent = nativeStoreUpdate
+      ? required ? "앱 업데이트가 필요합니다" : "새 앱 버전이 있습니다"
+      : deferred ? "업데이트 대기 중" : "새 버전이 있습니다";
     if (detail) {
-      detail.textContent = deferred
+      detail.textContent = nativeStoreUpdate
+        ? required
+          ? "계속 사용하려면 현재 기기의 스토어에서 업데이트해 주세요."
+          : "현재 기능은 계속 사용할 수 있습니다. 편할 때 업데이트해 주세요."
+        : deferred
         ? "작성 중인 내용을 먼저 저장하면 안전하게 업데이트할 수 있습니다."
         : "현재 화면을 유지한 채 최신 버전으로 바꿉니다.";
     }
     if (updateButton) {
-      updateButton.textContent = deferred
-        ? "저장 후 업데이트"
-        : isNativeWebView() && remoteRelease?.nativeUpdateMode !== "remote-shell"
+      updateButton.textContent = nativeStoreUpdate
         ? "스토어에서 업데이트"
+        : deferred
+        ? "저장 후 업데이트"
         : "지금 업데이트";
     }
+    if (dismissButton) dismissButton.hidden = required;
     notice.hidden = false;
   }
 
@@ -248,7 +331,10 @@
   }
 
   async function openNativeStoreUpdate() {
-    const storeUrl = "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote";
+    const storeUrl = activeNativeUpdate?.policy?.storeUrl
+      || (nativePlatform() === "ios"
+        ? "https://apps.apple.com/app/id6790994818"
+        : "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote");
     const launcher = window.Capacitor?.Plugins?.AppLauncher;
     if (launcher?.openUrl) {
       await launcher.openUrl({ url: storeUrl });
@@ -268,10 +354,18 @@
     updateInProgress = true;
     const reloadKey = `tennis-note-release-controller:${candidate.releaseId}`;
     try {
-      if (isNativeWebView() && candidate?.nativeUpdateMode !== "remote-shell") {
-        if (options.manual) await openNativeStoreUpdate();
-        else showUpdateNotice(candidate);
-        return;
+      if (isNativeWebView()) {
+        const installed = await installedNativeAppInfo();
+        activeNativeUpdate = evaluateNativeUpdate(candidate, installed);
+        if (activeNativeUpdate.status === "required" || activeNativeUpdate.status === "optional") {
+          if (options.manual) await openNativeStoreUpdate();
+          else showUpdateNotice(candidate, { nativeDecision: activeNativeUpdate });
+          return;
+        }
+        if (candidate?.nativeUpdateMode !== "remote-shell") {
+          hideUpdateNotice();
+          return;
+        }
       }
       if (await applyNativeRemoteShell(candidate, options.remoteAppUrl)) return;
       sessionStorage.removeItem(reloadKey);
@@ -328,6 +422,18 @@
       lastSuccessfulCheckAt = Date.now();
       hideReleaseCheckFailure();
       remoteRelease = candidate;
+      if (isNativeWebView()) {
+        const installed = await installedNativeAppInfo();
+        activeNativeUpdate = evaluateNativeUpdate(candidate, installed);
+        if (activeNativeUpdate.status === "required" || activeNativeUpdate.status === "optional") {
+          showUpdateNotice(candidate, { nativeDecision: activeNativeUpdate });
+          return candidate;
+        }
+        if (candidate.nativeUpdateMode !== "remote-shell") {
+          hideUpdateNotice();
+          return candidate;
+        }
+      }
       if (!isNewerRelease(candidate)) {
         hideUpdateNotice();
         return candidate;
@@ -423,6 +529,7 @@
     officialAppUrl,
     start,
     hasUnsavedChanges,
+    evaluateNativeUpdate,
     checkForUpdate: () => checkForUpdate(
       isNativeWebView() ? new URL("release.json", officialAppUrl).toString() : defaultManifestUrl,
       { force: true, remoteAppUrl: activeRemoteAppUrl },

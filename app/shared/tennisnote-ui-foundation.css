@@ -80,7 +80,7 @@ body.tn-unsaved-open {
 
 .tennisnote-update-notice {
   position: fixed;
-  z-index: 10020;
+  z-index: 120;
   right: max(14px, env(safe-area-inset-right));
   bottom: calc(84px + env(safe-area-inset-bottom));
   left: max(14px, env(safe-area-inset-left));
@@ -153,7 +153,7 @@ body.tn-unsaved-open {
   position: fixed;
   right: max(12px, env(safe-area-inset-right));
   bottom: calc(86px + env(safe-area-inset-bottom));
-  z-index: 2147483000;
+  z-index: 120;
   display: flex;
   width: min(390px, calc(100vw - 24px));
   align-items: center;
@@ -165,6 +165,17 @@ body.tn-unsaved-open {
   background: #fffaf0;
   box-shadow: 0 12px 30px rgba(31, 41, 55, 0.18);
   color: #3f3523;
+}
+
+body.sheet-open .tennisnote-update-notice:not([data-update-required="true"]),
+body.modal-open .tennisnote-update-notice:not([data-update-required="true"]),
+body.sheet-open .tennisnote-release-check-notice,
+body.modal-open .tennisnote-release-check-notice {
+  display: none;
+}
+
+.tennisnote-update-notice[data-update-required="true"] {
+  z-index: 220;
 }
 
 .tennisnote-release-check-notice[hidden] {

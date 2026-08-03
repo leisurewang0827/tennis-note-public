@@ -1680,7 +1680,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.265",
+    workerUrl: "./service-worker.js?v=1.0.266",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -1721,14 +1721,8 @@ async function installNativeBackNavigation() {
       closeNotice(false);
       return;
     }
-    if (activeAppModalId) {
-      closeVisibleAppModal();
-      return;
-    }
-    if (activeAppSheetId) {
-      closeVisibleAppSheet();
-      return;
-    }
+    if (closeVisibleAppModal()) return;
+    if (closeVisibleAppSheet()) return;
     if (!$("#kakaoInquiryModal")?.hidden) {
       closeKakaoInquiryModal();
       return;
@@ -7251,7 +7245,13 @@ function closeAppSheet(sheetId, fromHistory = false) {
 }
 
 function closeVisibleAppSheet(fromHistory = false) {
-  if (activeAppSheetId) closeAppSheet(activeAppSheetId, fromHistory);
+  const trackedSheet = activeAppSheetId ? $(`#${activeAppSheetId}`) : null;
+  const visibleSheet = trackedSheet && !trackedSheet.hidden
+    ? trackedSheet
+    : document.querySelector(".app-bottom-sheet:not([hidden])");
+  if (!visibleSheet?.id) return false;
+  closeAppSheet(visibleSheet.id, fromHistory);
+  return true;
 }
 
 function focusableElements(container) {
@@ -7305,7 +7305,13 @@ function closeAppModal(modalId, fromHistory = false) {
 }
 
 function closeVisibleAppModal(fromHistory = false) {
-  if (activeAppModalId) closeAppModal(activeAppModalId, fromHistory);
+  const trackedModal = activeAppModalId ? $(`#${activeAppModalId}`) : null;
+  const visibleModal = trackedModal && !trackedModal.hidden
+    ? trackedModal
+    : document.querySelector(".change-request-modal:not([hidden]), .modal:not([hidden])");
+  if (!visibleModal?.id) return false;
+  closeAppModal(visibleModal.id, fromHistory);
+  return true;
 }
 
 function journalDateLabel(dateValue) {
@@ -7494,7 +7500,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.265" });
+  const params = new URLSearchParams({ v: "1.0.266" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
