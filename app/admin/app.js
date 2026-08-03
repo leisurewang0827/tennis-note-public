@@ -57,6 +57,7 @@ const state = {
   lessonOperationKey: "",
   quickLessonEntry: false,
   quickLessonEdit: false,
+  releasedSlotQuickEntry: false,
   quickLessonDetailsExpanded: false,
   lessonQuickAction: "schedule",
   quickLessonReturnSlot: null,
@@ -12976,16 +12977,13 @@ function lessonActionAttrs(lesson) {
     return `data-edit-one-day-booking-id="${lesson.serverOneDayBookingId || lesson.id}"`;
   }
   if (isReleasedRegularMakeupSlot(lesson)) {
-    if (lesson.historicalReleasedSlot) {
-      return `disabled aria-label="${escapeHtml(getLessonMembersLabel(lesson))} 과거 정규 불참 기록"`;
-    }
     return [
       'data-open-released-makeup-slot="true"',
       `data-released-slot-day="${lesson.day}"`,
       `data-released-slot-time="${lesson.time}"`,
       `data-released-slot-coach="${lesson.coachId}"`,
       `data-released-slot-court="${lesson.courtId || "court-1"}"`,
-      `data-released-slot-entitlement="${lesson.entitlementId || ""}"`,
+      `data-released-slot-historical="${lesson.historicalReleasedSlot ? "true" : "false"}"`,
     ].join(" ");
   }
   if (state.scheduleBulkMode && scheduleBulkEligible(lesson)) {
@@ -16414,7 +16412,9 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
         : "요일·시간·코치·수업 길이를 바꾸고 아래에서 적용 범위를 선택하세요."
       : state.quickLessonEntry
         ? quickTicketSummary
-          ? `${quickTicketSummary} · 이번 수업 1회만 등록`
+          ? source === "regular"
+            ? `${quickTicketSummary} · 이 시간을 기준으로 남은 회차까지 자동 등록`
+            : `${quickTicketSummary} · 이번 수업 1회만 등록`
           : "회원 이름을 검색하면 회원권과 파트너가 자동으로 연결됩니다."
       : requiredCount > 1
         ? `주 ${requiredCount}회 회원권은 나머지 요일과 시간을 모두 선택해야 합니다.`
@@ -16466,6 +16466,7 @@ function openLessonModal(defaults = {}) {
     : "admin-lesson-new";
   state.quickLessonEntry = Boolean(!state.editingLessonId && defaults.quickEntry);
   state.quickLessonEdit = Boolean(state.editingLessonId && defaults.quickEdit);
+  state.releasedSlotQuickEntry = Boolean(!state.editingLessonId && defaults.releasedSlot);
   state.quickLessonDetailsExpanded = false;
   state.lessonQuickAction = "schedule";
   state.quickLessonReturnSlot = state.quickLessonEntry
@@ -16609,6 +16610,12 @@ function openLessonModal(defaults = {}) {
     $("#lessonDay").value = defaults.day;
     $("#lessonCourt").value = defaults.courtId || $("#lessonCourt").value;
     refreshLessonTimeOptions(defaults.time);
+  }
+  if (state.releasedSlotQuickEntry && isPastLessonCorrectionMode(getLessonFormCandidate())) {
+    if ($("#lessonAdminOverride")) $("#lessonAdminOverride").checked = true;
+    if ($("#lessonPastCoachComment") && !$("#lessonPastCoachComment").value.trim()) {
+      $("#lessonPastCoachComment").value = "관리자 확인 실제 보강 수업";
+    }
   }
   refreshLessonDayOptions();
   if (!editingLesson && Array.isArray(defaults.repeatSlots) && defaults.repeatSlots.length > 1) {
@@ -16761,6 +16768,7 @@ function closeLessonModal(options = {}) {
   state.editingLessonId = null;
   state.quickLessonEntry = false;
   state.quickLessonEdit = false;
+  state.releasedSlotQuickEntry = false;
   state.quickLessonDetailsExpanded = false;
   state.lessonQuickAction = "schedule";
   state.quickLessonReturnSlot = null;
@@ -17271,6 +17279,28 @@ async function saveLiveAdminLesson(candidate, entitlement = null) {
     "tn_admin_save_lesson",
     payload,
   );
+}
+
+async function saveLiveAdminRegularScheduleAnchor(candidate) {
+  const client = window.TennisNoteDataClient;
+  const ticket = scheduleTicketById(candidate.ticketId);
+  const coach = coaches.find((item) => item.id === candidate.coachId);
+  const lessonDate = candidate.lessonDate || adminLessonDateForCandidate(candidate.day);
+  if (!client?.rpc || !adminApprovalReady()) throw new Error("관리자 로그인 확인이 필요합니다.");
+  if (!ticket?.serverTicketId || !coach?.serverRoleId || !lessonDate || !candidate.time) {
+    throw new Error("정규수업의 회원권·코치·날짜 연결을 확인해 주세요.");
+  }
+  if (!state.lessonOperationKey) {
+    state.lessonOperationKey = createAdminOperationKey("regular-anchor");
+  }
+  return client.rpc("tn_admin_add_regular_schedule_anchor", {
+    target_ticket_id: ticket.serverTicketId,
+    target_coach_role_id: coach.serverRoleId,
+    target_anchor_date: lessonDate,
+    target_start_time: candidate.time,
+    target_duration_minutes: candidate.durationMinutes,
+    operation_key: state.lessonOperationKey,
+  });
 }
 
 function selectedLessonEditScope() {
@@ -17888,14 +17918,17 @@ async function addLessonFromForm(event) {
       missingRows: [],
     });
     try {
+      let writeResult = null;
       if (selectedEntitlement && candidates.length !== 1) throw new Error("보강 대기 한 건은 한 시간만 예약할 수 있습니다.");
-      if (selectedEntitlement && manualOverride) await saveLiveAdminLesson(candidates[0], selectedEntitlement);
-      else if (selectedEntitlement) await saveLiveMakeupEntitlement(candidates[0], selectedEntitlement);
-      else if (wasEditing && selectedLessonEditScope() === "reset") await resetLiveAdminRegularSchedule(candidates[0]);
-      else if (wasEditing && selectedLessonEditScope() === "series") await saveLiveAdminRegularLessonSeries(candidates[0]);
-      else if (wasEditing) await saveLiveAdminLesson(candidates[0]);
+      if (selectedEntitlement && manualOverride) writeResult = await saveLiveAdminLesson(candidates[0], selectedEntitlement);
+      else if (selectedEntitlement) writeResult = await saveLiveMakeupEntitlement(candidates[0], selectedEntitlement);
+      else if (wasEditing && selectedLessonEditScope() === "reset") writeResult = await resetLiveAdminRegularSchedule(candidates[0]);
+      else if (wasEditing && selectedLessonEditScope() === "series") writeResult = await saveLiveAdminRegularLessonSeries(candidates[0]);
+      else if (wasEditing) writeResult = await saveLiveAdminLesson(candidates[0]);
       else if (state.quickLessonEntry) {
-        await saveLiveAdminLesson(candidates[0]);
+        writeResult = liveLessonSource(candidates[0]) === "regular"
+          ? await saveLiveAdminRegularScheduleAnchor(candidates[0])
+          : await saveLiveAdminLesson(candidates[0]);
       } else {
         const scheduleProtectionMessage = !manualOverride
           ? regularScheduleProtectionMessage(ticket, candidates)
@@ -17906,7 +17939,7 @@ async function addLessonFromForm(event) {
           clearLessonSaveResultPanel();
           return;
         }
-        await saveLiveAdminLessonSet(candidates);
+        writeResult = await saveLiveAdminLessonSet(candidates);
       }
       const verificationCandidates = selectedLessonEditScope() === "reset"
         ? [{ ...candidates[0], lessonDate: $("#lessonResetStartOn")?.value || "" }]
@@ -17928,9 +17961,12 @@ async function addLessonFromForm(event) {
       window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
       closeLessonModal();
       setView("schedule");
-      showToast(manualOverride
-        ? "관리자 강제 처리 완료 · 감사 기록 저장"
-        : selectedEntitlement ? "보강 예약 완료" : wasEditing ? "수업 수정 완료" : "수업 추가 완료");
+      const missingAnchorCount = Number(writeResult?.missingAnchorCount) || 0;
+      showToast(missingAnchorCount > 0
+        ? `정규시간 저장 완료 · 다른 요일/시간 ${missingAnchorCount}개를 추가해 주세요.`
+        : manualOverride
+          ? "관리자 강제 처리 완료 · 감사 기록 저장"
+          : selectedEntitlement ? "보강 예약 완료" : wasEditing ? "수업 수정 완료" : "수업 추가 완료");
     } catch (error) {
       const errorText = `${error?.payload?.message || ""} ${error?.payload?.code || ""} ${error?.message || ""}`;
       if (errorText.includes("lesson_concurrent_update")) {
@@ -17958,6 +17994,9 @@ async function addLessonFromForm(event) {
         lesson_duration_ticket_mismatch: "회원권의 수업시간과 선택한 수업시간이 맞지 않습니다.",
         regular_schedule_pending_change_exists: "처리 중인 수업 변경 요청이 있어 정규시간을 교체할 수 없습니다. 요청을 먼저 처리해 주세요.",
         regular_schedule_count_mismatch: `이 회원권은 주 ${ticket.weeklyCount}회이므로 요일/시간 ${ticket.weeklyCount}개를 모두 선택해 주세요.`,
+        regular_schedule_anchor_outside_ticket: "회원권 기간 안의 아직 시작하지 않은 날짜를 선택해 주세요.",
+        regular_schedule_anchor_limit_reached: "필요한 정규시간이 이미 모두 등록되어 있습니다. 기존 수업 카드를 눌러 시간을 수정해 주세요.",
+        regular_ticket_required: "정규권 회원만 미래 정규일정을 자동 등록할 수 있습니다.",
         regular_schedule_exists_edit_existing: "기존 정규 시간표가 보호되어 새 등록은 진행하지 않았습니다. 기존 수업 카드를 눌러 해당 수업만 수정해 주세요.",
         regular_schedule_time_invalid: "회원권 기간 안의 아직 시작하지 않은 시간만 정규시간으로 저장할 수 있습니다.",
         regular_series_lesson_required: "예정된 정규수업만 전체 일정으로 수정할 수 있습니다.",
@@ -21049,7 +21088,11 @@ async function performAdminLiveDataSync(options = {}) {
       const memberRecord = membershipRecordByTicketId.get(ticket.id)
         || memberRecordByTicketId.get(ticket.id)
         || null;
-      const participantUserIds = liveTicketParticipantIds(ticket, ticketParticipantIdsByTicketId);
+      const productGroupSize = Number(product.group_size) || 1;
+      const rawParticipantUserIds = liveTicketParticipantIds(ticket, ticketParticipantIdsByTicketId);
+      const participantUserIds = product.id && productGroupSize === 1
+        ? [ticket.user_id].filter(Boolean)
+        : rawParticipantUserIds;
       const memberNames = participantUserIds.map((id) => usersById.get(id)?.name).filter(Boolean);
       return {
         id: ticket.id,
@@ -21069,11 +21112,15 @@ async function performAdminLiveDataSync(options = {}) {
         purchased: ticket.starts_on,
         expires: ticket.expires_on,
         amount: Number(ticket.purchased_price) || 0,
-        lessonKind: memberRecord?.lesson_type === "one_on_two" ? "2대1" : liveTicketLessonKind(product),
-        lessonTypeCode: memberRecord?.lesson_type || (Number(product.group_size) === 2 ? "one_on_two" : "one_on_one"),
+        lessonKind: product.id
+          ? (productGroupSize === 2 ? "2대1" : liveTicketLessonKind(product))
+          : memberRecord?.lesson_type === "one_on_two" ? "2대1" : "개인",
+        lessonTypeCode: product.id
+          ? (productGroupSize === 2 ? "one_on_two" : "one_on_one")
+          : memberRecord?.lesson_type || "one_on_one",
         lessonDays: Array.isArray(memberRecord?.lesson_days) ? memberRecord.lesson_days.map(Number) : [],
         actualLessonStart: memberRecord?.lesson_start_on || ticket.starts_on,
-        groupSize: Number(product.group_size) || 1,
+        groupSize: productGroupSize,
         durationMinutes: Number(product.lesson_minutes) || 20,
         maxSessionsPerDay: Number(product.max_sessions_per_day) || 0,
         maxSessionsPerWeek: Number(product.max_sessions_per_week) || 0,
@@ -25634,8 +25681,9 @@ function bindEvents() {
         time: releasedSlotButton.dataset.releasedSlotTime,
         courtId: releasedSlotButton.dataset.releasedSlotCourt,
         coachId: releasedSlotButton.dataset.releasedSlotCoach,
-        entitlementId: releasedSlotButton.dataset.releasedSlotEntitlement,
         lessonSource: "makeup",
+        quickEntry: true,
+        releasedSlot: true,
       });
       return;
     }
