@@ -30,6 +30,8 @@ const state = {
   scheduleCoachFilter: "all",
   scheduleMemberSearch: "",
   scheduleSearchLastAutoJump: "",
+  scheduleAssignmentTicketId: "",
+  scheduleAssignmentLessonSource: "regular",
   editingBreakRuleId: "",
   billingFilter: "action",
   billingPage: 0,
@@ -7504,14 +7506,33 @@ function ticketHasFutureRegularLesson(ticket, today = adminLocalDateKey(new Date
   });
 }
 
+function ticketFutureRegularScheduleCoverage(ticket, today = adminLocalDateKey(new Date())) {
+  const baseMinutes = Math.max(1, getTicketDurationMinutes(ticket));
+  const anchors = new Map();
+  lessons.forEach((lesson) => {
+    if (String(lesson.ticketId || "") !== String(ticket?.id || "")) return;
+    if (!lesson.lessonDate || lesson.lessonDate < today) return;
+    if (["available", "cancelled", "completed", "no_show"].includes(lessonStatusValue(lesson))) return;
+    if (lessonSourceValue(lesson) !== "regular") return;
+    const key = [lesson.day || "", lesson.time || "", lessonScheduleCoachId(lesson) || ""].join("|");
+    const units = Math.max(1, Math.ceil((Number(lesson.durationMinutes) || baseMinutes) / baseMinutes));
+    anchors.set(key, Math.max(anchors.get(key) || 0, units));
+  });
+  return [...anchors.values()].reduce((sum, units) => sum + units, 0);
+}
+
+function ticketRemainingRegularScheduleCount(ticket, today = adminLocalDateKey(new Date())) {
+  return Math.max(0, getTicketWeeklyCount(ticket) - ticketFutureRegularScheduleCoverage(ticket, today));
+}
+
 function ticketNeedsRegularSchedule(ticket, today = adminLocalDateKey(new Date())) {
-  return isRegularScheduleTicket(ticket, today) && !ticketHasFutureRegularLesson(ticket, today);
+  return isRegularScheduleTicket(ticket, today) && ticketRemainingRegularScheduleCount(ticket, today) > 0;
 }
 
 function unassignedRegularTickets() {
   const regularTickets = operationBranchTickets().filter((ticket) => isRegularScheduleTicket(ticket));
   const candidates = regularTickets
-    .filter((ticket) => !ticketHasFutureRegularLesson(ticket))
+    .filter((ticket) => ticketNeedsRegularSchedule(ticket))
     .sort((left, right) => ticketParticipantNames(right).length - ticketParticipantNames(left).length);
   const selected = [];
 
@@ -7520,7 +7541,7 @@ function unassignedRegularTickets() {
     const startsOn = ticket.starts || ticket.purchased || "";
     const contextKey = [ticket.coachId || "", ticket.product || "", startsOn, ticket.expires || ""].join("::");
     const assignedAliasExists = regularTickets.some((other) => {
-      if (other === ticket || !ticketHasFutureRegularLesson(other)) return false;
+      if (other === ticket || ticketNeedsRegularSchedule(other)) return false;
       const otherStartsOn = other.starts || other.purchased || "";
       const otherContextKey = [other.coachId || "", other.product || "", otherStartsOn, other.expires || ""].join("::");
       const otherParticipantNames = ticketParticipantNames(other);
@@ -7538,6 +7559,90 @@ function unassignedRegularTickets() {
   });
 
   return selected.map((item) => item.ticket);
+}
+
+function currentScheduleAssignmentTicket() {
+  return scheduleTicketById(state.scheduleAssignmentTicketId);
+}
+
+function scheduleAssignmentRemainingCount(ticket = currentScheduleAssignmentTicket()) {
+  if (!ticket) return 0;
+  return state.scheduleAssignmentLessonSource === "regular"
+    ? ticketRemainingRegularScheduleCount(ticket)
+    : 1;
+}
+
+function clearScheduleTicketAssignment(render = true) {
+  state.scheduleAssignmentTicketId = "";
+  state.scheduleAssignmentLessonSource = "regular";
+  if (render) renderSchedule();
+}
+
+function beginScheduleTicketAssignment(ticketId, lessonSource = "regular") {
+  const ticket = scheduleTicketById(ticketId);
+  if (!ticket) {
+    showToast("회원권 정보를 다시 불러와 주세요.");
+    return false;
+  }
+  state.scheduleAssignmentTicketId = String(ticket.id || "");
+  state.scheduleAssignmentLessonSource = normalizeLessonSource(lessonSource);
+  state.scheduleView = "week";
+  state.scheduleCoachFilter = "all";
+  state.scheduleOpenSlotMode = false;
+  state.selectedScheduleOpenSlots = [];
+  state.scheduleOpenSlotAnchorKey = "";
+  setView("schedule");
+  showToast(`${ticketParticipantNames(ticket).join(" & ") || ticket.member} 회원의 빈 시간을 선택하세요.`);
+  return true;
+}
+
+function scheduleAssignmentAllowsCoach(coachId) {
+  const ticket = currentScheduleAssignmentTicket();
+  return !ticket?.coachId || String(ticket.coachId) === String(coachId || "");
+}
+
+function scheduleAssignmentDefaultsForSlot(day, time, coachId) {
+  const ticket = currentScheduleAssignmentTicket();
+  if (!ticket) return {};
+  if (!scheduleAssignmentAllowsCoach(coachId)) {
+    return { blockedMessage: `${scheduleCoachDisplayName(getCoachName(ticket.coachId))} 담당 시간에서 선택해 주세요.` };
+  }
+  return {
+    memberName: ticketParticipantNames(ticket)[0] || splitMemberNames(ticket.member)[0] || "",
+    ticketId: ticket.id,
+    coachId: ticket.coachId || coachId,
+    lessonSource: state.scheduleAssignmentLessonSource || "regular",
+    durationMinutes: getTicketDurationMinutes(ticket),
+    day,
+    time,
+  };
+}
+
+function renderScheduleAssignmentPicker() {
+  const picker = $("#scheduleAssignmentTicket");
+  const count = $("#scheduleAssignmentCount");
+  const bar = $("#scheduleAssignmentBar");
+  if (!picker || !count || !bar) return;
+  const candidates = unassignedRegularTickets();
+  const current = currentScheduleAssignmentTicket();
+  const options = [...candidates];
+  if (current && !options.some((ticket) => String(ticket.id) === String(current.id))) options.unshift(current);
+  picker.innerHTML = `<option value="">회원 선택</option>${options.map((ticket) => {
+    const names = ticketParticipantNames(ticket).join(" & ") || ticket.member || "회원";
+    const remaining = state.scheduleAssignmentTicketId === String(ticket.id)
+      ? scheduleAssignmentRemainingCount(ticket)
+      : ticketRemainingRegularScheduleCount(ticket);
+    return `<option value="${escapeHtml(String(ticket.id))}">${escapeHtml(names)} · ${escapeHtml(getCoachName(ticket.coachId) || "코치 미배정")} · ${remaining}개 남음</option>`;
+  }).join("")}`;
+  picker.value = current ? String(current.id) : "";
+  count.textContent = `${candidates.length}명`;
+  bar.hidden = !current;
+  if (!current) return;
+  const names = ticketParticipantNames(current).join(" & ") || current.member || "회원";
+  const source = state.scheduleAssignmentLessonSource === "regular" ? "정규시간" : lessonTypeLabel({ lessonSource: state.scheduleAssignmentLessonSource });
+  const remaining = scheduleAssignmentRemainingCount(current);
+  $("#scheduleAssignmentMember").textContent = `${names} · ${source} 배정`;
+  $("#scheduleAssignmentDetail").textContent = `${getCoachName(current.coachId) || "담당 코치 미배정"} · ${getTicketDisplayProduct(current)} · ${remaining}개 더 선택`;
 }
 
 function isActiveCouponTicket(ticket, today = adminLocalDateKey(new Date())) {
@@ -14799,6 +14904,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     scheduleLessons,
   );
   const selectedOpenSlotKeys = selectedScheduleOpenSlotKeys();
+  const assignmentTicket = currentScheduleAssignmentTicket();
   const visibleTimeIndexes = new Map(visibleTimes.map((time, index) => [time, index]));
   const coachHeaders = lanes.map(({ coach }, index) => `
     <div class="admin-duration-coach ${dayStartLaneIndexes.has(index) ? "admin-duration-day-start" : ""} ${coach.id?.startsWith("closed-") ? "is-closed" : getCoachToneClass(coach.id)}" style="grid-row:2;grid-column:${index + 2};">
@@ -14814,18 +14920,21 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
       || getAdminDurationSlotState(day, time, coach, laneLessons[laneIndex]);
     const openSlotKey = scheduleOpenSlotKey({ day, time, coachId: coach.id });
     const openSlotSelected = selectedOpenSlotKeys.has(openSlotKey);
+    const assignmentAllowsCoach = !assignmentTicket?.coachId || String(assignmentTicket.coachId) === String(coach.id || "");
+    const canAddForAssignment = slotState.canAdd && assignmentAllowsCoach;
     const addButtonContent = state.scheduleOpenSlotMode
       ? (openSlotSelected ? "선택됨" : "선택")
       : slotState.pasteReady
         ? "붙여넣기"
         : '<span class="admin-duration-add-icon" aria-hidden="true">+</span><span class="admin-duration-add-label">수업 추가</span>';
-    const addableClass = slotState.canAdd
+    const addableClass = canAddForAssignment
       ? ` admin-duration-add ${slotState.pasteReady ? "is-paste-ready" : ""} ${openSlotSelected ? "is-slot-selected" : ""}`
       : "";
-    const addableAttrs = slotState.canAdd
+    const addableAttrs = canAddForAssignment
       ? `role="button" tabindex="0" data-quick-lesson-entry="true" ${state.scheduleOpenSlotMode ? `data-select-schedule-slot="${escapeHtml(openSlotKey)}" aria-pressed="${openSlotSelected ? "true" : "false"}"` : ""} ${slotState.pasteReady ? 'data-paste-schedule-lesson="true"' : ""} ${lessonAddAttrs(day, time, 20, coach.id)}`
       : "";
-    return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}${addableClass}" ${addableAttrs} style="grid-row:${row};grid-column:${column};">${slotState.canAdd ? addButtonContent : ""}</div>`;
+    const assignmentClass = assignmentTicket && !assignmentAllowsCoach ? " is-assignment-blocked" : "";
+    return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}${addableClass}${assignmentClass}" ${addableAttrs} style="grid-row:${row};grid-column:${column};">${canAddForAssignment ? addButtonContent : ""}</div>`;
   }).join("")).join("");
 
   const lessonCards = lanes.map((lane, laneIndex) => laneLessons[laneIndex]
@@ -14855,6 +14964,7 @@ function renderSchedule() {
   if ($("#adminWeekTitle")) $("#adminWeekTitle").textContent = `${activeWeek.label} 레슨관리표`;
   if ($("#adminWeekNote")) $("#adminWeekNote").textContent = `${activeWeek.range} · ${state.liveScheduleLoaded ? state.liveScheduleMessage : activeWeek.note}`;
   renderScheduleMemberSearch();
+  renderScheduleAssignmentPicker();
   if ($("#adminWeekSwitcher")) {
     $("#adminWeekSwitcher").innerHTML = `
       <button class="ghost-button" type="button" data-change-admin-week="-1" ${state.activeAdminWeekIndex <= adminScheduleMinWeekOffset ? "disabled" : ""} aria-label="이전 주" title="이전 주">‹</button>
@@ -15774,11 +15884,15 @@ function syncLessonSourceOptions() {
   }
 }
 
-function alignTicketToLessonSource() {
+function alignTicketToLessonSource(preferredTicketId = state.pinnedLessonTicketId) {
   const memberName = $("#lessonMember").value;
   const coachId = $("#lessonCoach").value;
   const source = normalizeLessonSource($("#lessonSource").value);
-  const matchingTicket = getEligibleTickets(memberName, coachId).find((ticket) => ticketMatchesLessonSource(ticket, source));
+  const eligible = getEligibleTickets(memberName, coachId);
+  const matchingTicket = eligible.find((ticket) => (
+    String(ticket.id) === String(preferredTicketId || "")
+    && ticketMatchesLessonSource(ticket, source)
+  )) || eligible.find((ticket) => ticketMatchesLessonSource(ticket, source));
   if (matchingTicket) $("#lessonTicket").value = matchingTicket.id;
   return matchingTicket || null;
 }
@@ -16661,7 +16775,10 @@ function openLessonModal(defaults = {}) {
   if (!editingLesson && defaults.lessonSource) {
     $("#lessonSource").value = normalizeLessonSource(defaults.lessonSource);
     state.lessonSourceTouched = true;
-    alignTicketToLessonSource();
+    const matchingTicket = alignTicketToLessonSource(defaults.ticketId);
+    if (matchingTicket && String(matchingTicket.id) === String(defaults.ticketId || "")) {
+      state.pinnedLessonTicketId = String(defaults.ticketId);
+    }
   }
   if (!editingLesson && restoreEntitlement) {
     $("#lessonSource").value = "makeup";
@@ -16697,6 +16814,14 @@ function openLessonModal(defaults = {}) {
     }
   }
   refreshLessonDayOptions();
+  if (!editingLesson && defaults.ticketId && [...$("#lessonTicket").options]
+    .some((option) => String(option.value) === String(defaults.ticketId))) {
+    $("#lessonTicket").value = String(defaults.ticketId);
+    state.pinnedLessonTicketId = String(defaults.ticketId);
+    refreshLessonDurationOptions();
+    refreshLessonDayOptions();
+    refreshLessonTimeOptions(hasPinnedScheduleSlot ? defaults.time : $("#lessonTime").value);
+  }
   if (!editingLesson && Array.isArray(defaults.repeatSlots) && defaults.repeatSlots.length > 1) {
     applyLessonRepeatSlotDefaults(defaults.repeatSlots);
   }
@@ -16741,6 +16866,9 @@ function openLessonModal(defaults = {}) {
   }
   renderLessonAbsenceRestorePanel();
   $("#lessonModal").hidden = false;
+  if (!editingLesson && defaults.ticketId) {
+    window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
+  }
   pushLessonModalHistoryState();
   renderLessonPreview();
   syncLessonEditScopeUi();
@@ -17983,6 +18111,8 @@ async function addLessonFromForm(event) {
 
   if (state.liveScheduleLoaded) {
     const wasEditing = Boolean(state.editingLessonId);
+    const assignmentTicketId = state.scheduleAssignmentTicketId;
+    const assignmentLessonSource = state.scheduleAssignmentLessonSource;
     state.lessonWriteInFlight = true;
     state.lessonWriteStartedAt = Date.now();
     setLessonSubmitEnabled(false);
@@ -18028,6 +18158,11 @@ async function addLessonFromForm(event) {
       const verificationDetails = liveLessonWriteVerificationDetails(ticket, verificationCandidates);
       const writeVerificationError = liveLessonWriteVerification(ticket, verificationCandidates);
       if (writeVerificationError) throw new Error(writeVerificationError);
+      const missingAnchorCount = Number(writeResult?.missingAnchorCount) || 0;
+      if (assignmentTicketId && String(ticket.id) === String(assignmentTicketId)
+        && (assignmentLessonSource !== "regular" || missingAnchorCount === 0)) {
+        clearScheduleTicketAssignment(false);
+      }
       showLessonSaveResultPanel({
         status: "good",
         title: "서버 저장 확인 완료",
@@ -18040,7 +18175,6 @@ async function addLessonFromForm(event) {
       window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
       closeLessonModal();
       setView("schedule");
-      const missingAnchorCount = Number(writeResult?.missingAnchorCount) || 0;
       showToast(missingAnchorCount > 0
         ? `정규시간 저장 완료 · 다른 요일/시간 ${missingAnchorCount}개를 추가해 주세요.`
         : manualOverride
@@ -18133,6 +18267,9 @@ async function addLessonFromForm(event) {
     billingLogs.unshift(`${candidate.member} ${selectedSchedules.map((item) => `${item.day} ${item.time}`).join(", ")} ${lessonTypeLabel(candidate)} 수업 추가`);
   }
   lessons.sort((a, b) => scheduleDays.indexOf(a.day) - scheduleDays.indexOf(b.day) || timeToMinutes(a.time) - timeToMinutes(b.time));
+  if (state.scheduleAssignmentTicketId && String(ticket.id) === String(state.scheduleAssignmentTicketId)) {
+    clearScheduleTicketAssignment(false);
+  }
   window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
   closeLessonModal();
   setView("schedule");
@@ -25548,14 +25685,10 @@ function bindEvents() {
         showToast("회원권 정보를 다시 불러와 주세요");
         return;
       }
-      const memberName = ticketParticipantNames(ticket)[0] || splitMemberNames(ticket.member)[0] || "";
-      setView("schedule");
-      openLessonModal({
-        memberName,
-        coachId: ticket.coachId,
-        ticketId: ticket.id,
-        lessonSource: button.dataset.scheduleLessonSource || normalizeLessonSource(ticket.productKind === "pass" || ticket.productKind === "coupon" ? "coupon" : "regular"),
-      });
+      beginScheduleTicketAssignment(
+        ticket.id,
+        button.dataset.scheduleLessonSource || normalizeLessonSource(ticket.productKind === "pass" || ticket.productKind === "coupon" ? "coupon" : "regular"),
+      );
       return;
     }
     setView(button.dataset.jump);
@@ -25773,6 +25906,15 @@ function bindEvents() {
       toggleScheduleOpenSlotSelection(slotButton.dataset.selectScheduleSlot, event.shiftKey);
       return;
     }
+    const assignmentDefaults = scheduleAssignmentDefaultsForSlot(
+      slotButton.dataset.addLessonDay,
+      slotButton.dataset.addLessonTime,
+      slotButton.dataset.addLessonCoach,
+    );
+    if (assignmentDefaults.blockedMessage) {
+      showToast(assignmentDefaults.blockedMessage);
+      return;
+    }
     openLessonModal({
       day: slotButton.dataset.addLessonDay,
       time: slotButton.dataset.addLessonTime,
@@ -25780,6 +25922,7 @@ function bindEvents() {
       coachId: slotButton.dataset.addLessonCoach,
       quickEntry: slotButton.dataset.quickLessonEntry === "true",
       ...scheduleClipboardDefaults(slotButton),
+      ...assignmentDefaults,
     });
   });
   document.addEventListener("keydown", (event) => {
@@ -25888,6 +26031,18 @@ function bindEvents() {
     state.scheduleSearchLastAutoJump = "";
     renderSchedule();
     $("#adminScheduleMemberSearch")?.focus();
+  });
+  $("#scheduleAssignmentTicket")?.addEventListener("change", (event) => {
+    const ticketId = event.target.value || "";
+    if (!ticketId) {
+      clearScheduleTicketAssignment();
+      return;
+    }
+    beginScheduleTicketAssignment(ticketId, "regular");
+  });
+  $("#clearScheduleAssignment")?.addEventListener("click", () => {
+    clearScheduleTicketAssignment();
+    showToast("회원 시간 배정을 종료했습니다.");
   });
   $("#adminScheduleMemberSearchResult")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-jump-schedule-date]");

@@ -10651,6 +10651,23 @@ button .schedule-member-lines > span {
   #adminScheduleMemberSearchResult {
     grid-column: 1 / -1;
   }
+
+  .schedule-assignment-picker {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .schedule-assignment-picker label {
+    grid-column: 1 / -1;
+  }
+
+  .schedule-assignment-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .schedule-assignment-bar button {
+    width: 100%;
+  }
 }
 
 .holding-admin-main,
@@ -11998,6 +12015,76 @@ button .schedule-member-lines > span {
   font: inherit;
   font-size: 12px;
   font-weight: 850;
+}
+
+.schedule-assignment-picker {
+  display: grid;
+  grid-template-columns: auto minmax(240px, 460px) auto;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+}
+
+.schedule-assignment-picker label,
+.schedule-assignment-picker span {
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.schedule-assignment-picker select {
+  min-width: 0;
+  width: 100%;
+}
+
+.schedule-assignment-picker span {
+  color: var(--muted);
+}
+
+.schedule-assignment-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding: 9px 10px;
+  border: 1px solid #7cc7aa;
+  border-radius: 7px;
+  background: #edf9f4;
+}
+
+.schedule-assignment-bar[hidden] {
+  display: none;
+}
+
+.schedule-assignment-bar > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.schedule-assignment-bar strong,
+.schedule-assignment-bar span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-assignment-bar strong {
+  color: #06684c;
+  font-size: 13px;
+}
+
+.schedule-assignment-bar span {
+  color: #496a5f;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-duration-slot.is-assignment-blocked {
+  background: #f3f5f4;
+  opacity: 0.58;
 }
 
 .product-setting-quick-status:disabled {
