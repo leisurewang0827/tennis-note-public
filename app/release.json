@@ -1,6 +1,6 @@
 {
-  "version": "1.0.274",
-  "releaseId": "2026.08.03.11",
+  "version": "1.0.275",
+  "releaseId": "2026.08.03.12",
   "appSurfaceVersion": "1.0.273",
   "minimumNativeShellVersion": "1.0.118",
   "nativeUpdateMode": "bundled-shell",
@@ -20,5 +20,5 @@
       "storeUrl": "https://apps.apple.com/app/id6790994818"
     }
   },
-  "deployedAt": "2026-08-03T20:34:44+09:00"
+  "deployedAt": "2026-08-03T21:06:51+09:00"
 }

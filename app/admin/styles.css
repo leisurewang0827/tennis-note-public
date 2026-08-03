@@ -12019,7 +12019,7 @@ button .schedule-member-lines > span {
 
 .schedule-assignment-picker {
   display: grid;
-  grid-template-columns: auto minmax(240px, 460px) auto;
+  grid-template-columns: auto minmax(160px, 260px) minmax(110px, 150px) minmax(240px, 1fr) auto;
   gap: 8px;
   align-items: center;
   margin: 0 0 8px;
@@ -12032,6 +12032,7 @@ button .schedule-member-lines > span {
   white-space: nowrap;
 }
 
+.schedule-assignment-picker input,
 .schedule-assignment-picker select {
   min-width: 0;
   width: 100%;
@@ -12063,12 +12064,45 @@ button .schedule-member-lines > span {
   gap: 2px;
 }
 
+.schedule-assignment-actions {
+  display: flex !important;
+  grid-template-columns: none !important;
+  flex: 0 0 auto;
+  gap: 6px !important;
+}
+
 .schedule-assignment-bar strong,
 .schedule-assignment-bar span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .schedule-assignment-picker {
+    grid-template-columns: minmax(0, 1fr) minmax(100px, auto);
+  }
+
+  .schedule-assignment-picker label,
+  .schedule-assignment-picker #scheduleAssignmentSearch,
+  .schedule-assignment-picker #scheduleAssignmentTicket {
+    grid-column: 1 / -1;
+  }
+
+  .schedule-assignment-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .schedule-assignment-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .schedule-assignment-bar button {
+    width: 100%;
+  }
 }
 
 .schedule-assignment-bar strong {

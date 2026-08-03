@@ -32,6 +32,8 @@ const state = {
   scheduleSearchLastAutoJump: "",
   scheduleAssignmentTicketId: "",
   scheduleAssignmentLessonSource: "regular",
+  scheduleAssignmentSearch: "",
+  scheduleAssignmentFilter: "all",
   editingBreakRuleId: "",
   billingFilter: "action",
   billingPage: 0,
@@ -7579,6 +7581,66 @@ function currentScheduleAssignmentTicket() {
   return scheduleTicketById(state.scheduleAssignmentTicketId);
 }
 
+function scheduleAssignmentQueueCandidates({ respectUiFilters = true, excludeTicketId = "" } = {}) {
+  const query = respectUiFilters ? normalizedScheduleMemberSearch(state.scheduleAssignmentSearch) : "";
+  const filter = respectUiFilters ? state.scheduleAssignmentFilter : "all";
+  return unassignedRegularTickets()
+    .filter((ticket) => String(ticket.id || "") !== String(excludeTicketId || ""))
+    .filter((ticket) => {
+      const progress = ticketRegularScheduleAssignmentProgress(ticket);
+      if (filter !== "all" && progress.state !== filter) return false;
+      if (!query) return true;
+      const searchValue = normalizedScheduleMemberSearch([
+        ...ticketParticipantNames(ticket),
+        getCoachName(ticket.coachId),
+        getTicketDisplayProduct(ticket),
+      ].join(" "));
+      return searchValue.includes(query);
+    })
+    .sort((left, right) => {
+      const leftProgress = ticketRegularScheduleAssignmentProgress(left);
+      const rightProgress = ticketRegularScheduleAssignmentProgress(right);
+      const stateOrder = Number(leftProgress.state !== "partial") - Number(rightProgress.state !== "partial");
+      if (stateOrder) return stateOrder;
+      const coachOrder = String(getCoachName(left.coachId) || "").localeCompare(String(getCoachName(right.coachId) || ""), "ko");
+      if (coachOrder) return coachOrder;
+      return ticketParticipantNames(left).join(" & ").localeCompare(ticketParticipantNames(right).join(" & "), "ko");
+    });
+}
+
+function nextScheduleAssignmentTicket(currentTicketId = state.scheduleAssignmentTicketId, respectUiFilters = true) {
+  const current = scheduleTicketById(currentTicketId);
+  const candidates = scheduleAssignmentQueueCandidates({ respectUiFilters, excludeTicketId: currentTicketId });
+  if (!candidates.length) return null;
+  if (!current?.coachId) return candidates[0];
+  return candidates.find((ticket) => String(ticket.coachId || "") === String(current.coachId)) || candidates[0];
+}
+
+function advanceScheduleTicketAssignment({
+  currentTicketId = state.scheduleAssignmentTicketId,
+  respectUiFilters = true,
+  render = true,
+  notify = true,
+} = {}) {
+  const next = nextScheduleAssignmentTicket(currentTicketId, respectUiFilters);
+  if (!next) {
+    clearScheduleTicketAssignment(false);
+    if (render) renderSchedule();
+    if (notify) showToast(respectUiFilters ? "현재 조건의 다음 회원이 없습니다." : "정규시간 배정 대기열을 모두 처리했습니다.");
+    return null;
+  }
+  if (!respectUiFilters) {
+    state.scheduleAssignmentSearch = "";
+    state.scheduleAssignmentFilter = "all";
+  }
+  state.scheduleAssignmentTicketId = String(next.id || "");
+  state.scheduleAssignmentLessonSource = "regular";
+  state.scheduleCoachFilter = "all";
+  if (render) renderSchedule();
+  if (notify) showToast(`${ticketParticipantNames(next).join(" & ") || next.member} 회원의 빈 시간을 선택하세요.`);
+  return next;
+}
+
 function scheduleAssignmentRemainingCount(ticket = currentScheduleAssignmentTicket()) {
   if (!ticket) return 0;
   return state.scheduleAssignmentLessonSource === "regular"
@@ -7634,11 +7696,14 @@ function scheduleAssignmentDefaultsForSlot(day, time, coachId) {
 
 function renderScheduleAssignmentPicker() {
   const picker = $("#scheduleAssignmentTicket");
+  const search = $("#scheduleAssignmentSearch");
+  const statusFilter = $("#scheduleAssignmentStatusFilter");
   const count = $("#scheduleAssignmentCount");
   const bar = $("#scheduleAssignmentBar");
-  if (!picker || !count || !bar) return;
-  const candidates = unassignedRegularTickets();
-  const assignmentCounts = candidates.reduce((summary, ticket) => {
+  if (!picker || !search || !statusFilter || !count || !bar) return;
+  const allCandidates = unassignedRegularTickets();
+  const candidates = scheduleAssignmentQueueCandidates();
+  const assignmentCounts = allCandidates.reduce((summary, ticket) => {
     const progress = ticketRegularScheduleAssignmentProgress(ticket);
     summary[progress.state] += 1;
     return summary;
@@ -7646,7 +7711,14 @@ function renderScheduleAssignmentPicker() {
   const current = currentScheduleAssignmentTicket();
   const options = [...candidates];
   if (current && !options.some((ticket) => String(ticket.id) === String(current.id))) options.unshift(current);
-  picker.innerHTML = `<option value="">회원 선택</option>${options.map((ticket) => {
+  search.value = state.scheduleAssignmentSearch;
+  statusFilter.innerHTML = `
+    <option value="all">전체 ${allCandidates.length}</option>
+    <option value="partial">일부 ${assignmentCounts.partial}</option>
+    <option value="unassigned">미배정 ${assignmentCounts.unassigned}</option>
+  `;
+  statusFilter.value = state.scheduleAssignmentFilter;
+  picker.innerHTML = `<option value="">${options.length ? "회원 선택" : "검색 결과 없음"}</option>${options.map((ticket) => {
     const names = ticketParticipantNames(ticket).join(" & ") || ticket.member || "회원";
     const progress = ticketRegularScheduleAssignmentProgress(ticket);
     const remaining = state.scheduleAssignmentTicketId === String(ticket.id)
@@ -7658,7 +7730,9 @@ function renderScheduleAssignmentPicker() {
     return `<option value="${escapeHtml(String(ticket.id))}">[${assignmentLabel}] ${escapeHtml(names)} · ${escapeHtml(getCoachName(ticket.coachId) || "코치 미배정")} · ${remaining}개 남음</option>`;
   }).join("")}`;
   picker.value = current ? String(current.id) : "";
-  count.textContent = `미배정 ${assignmentCounts.unassigned} · 일부 ${assignmentCounts.partial}`;
+  count.textContent = candidates.length === allCandidates.length
+    ? `미배정 ${assignmentCounts.unassigned} · 일부 ${assignmentCounts.partial}`
+    : `${candidates.length}명 표시`;
   bar.hidden = !current;
   if (!current) return;
   const names = ticketParticipantNames(current).join(" & ") || current.member || "회원";
@@ -18183,10 +18257,11 @@ async function addLessonFromForm(event) {
       const writeVerificationError = liveLessonWriteVerification(ticket, verificationCandidates);
       if (writeVerificationError) throw new Error(writeVerificationError);
       const missingAnchorCount = Number(writeResult?.missingAnchorCount) || 0;
-      if (assignmentTicketId && String(ticket.id) === String(assignmentTicketId)
-        && (assignmentLessonSource !== "regular" || missingAnchorCount === 0)) {
-        clearScheduleTicketAssignment(false);
-      }
+      const assignmentCompleted = assignmentTicketId && String(ticket.id) === String(assignmentTicketId)
+        && (assignmentLessonSource !== "regular" || missingAnchorCount === 0);
+      const nextAssignmentTicket = assignmentCompleted
+        ? advanceScheduleTicketAssignment({ currentTicketId: assignmentTicketId, respectUiFilters: false, render: false, notify: false })
+        : null;
       showLessonSaveResultPanel({
         status: "good",
         title: "서버 저장 확인 완료",
@@ -18199,7 +18274,11 @@ async function addLessonFromForm(event) {
       window.TennisNoteInputGuard?.markSaved?.("#lessonModal");
       closeLessonModal();
       setView("schedule");
-      showToast(missingAnchorCount > 0
+      showToast(nextAssignmentTicket
+        ? `저장 완료 · 다음 ${ticketParticipantNames(nextAssignmentTicket).join(" & ") || nextAssignmentTicket.member} 회원을 배정하세요.`
+        : assignmentCompleted
+          ? "저장 완료 · 정규시간 배정 대기열을 모두 처리했습니다."
+          : missingAnchorCount > 0
         ? `정규시간 저장 완료 · 다른 요일/시간 ${missingAnchorCount}개를 추가해 주세요.`
         : manualOverride
           ? "관리자 강제 처리 완료 · 감사 기록 저장"
@@ -26063,6 +26142,24 @@ function bindEvents() {
       return;
     }
     beginScheduleTicketAssignment(ticketId, "regular");
+  });
+  $("#scheduleAssignmentSearch")?.addEventListener("input", (event) => {
+    state.scheduleAssignmentSearch = event.target.value || "";
+    renderScheduleAssignmentPicker();
+  });
+  $("#scheduleAssignmentSearch")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    const first = scheduleAssignmentQueueCandidates()[0];
+    if (!first) return;
+    event.preventDefault();
+    beginScheduleTicketAssignment(first.id, "regular");
+  });
+  $("#scheduleAssignmentStatusFilter")?.addEventListener("change", (event) => {
+    state.scheduleAssignmentFilter = event.target.value || "all";
+    renderScheduleAssignmentPicker();
+  });
+  $("#nextScheduleAssignment")?.addEventListener("click", () => {
+    advanceScheduleTicketAssignment();
   });
   $("#clearScheduleAssignment")?.addEventListener("click", () => {
     clearScheduleTicketAssignment();
