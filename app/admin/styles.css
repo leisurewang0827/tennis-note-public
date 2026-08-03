@@ -2218,6 +2218,14 @@ tr.is-selected td {
   gap: 10px;
 }
 
+.member-inline-schedule-separate {
+  min-height: 28px;
+  margin-left: auto;
+  padding: 4px 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .member-inline-schedule-heading strong {
   color: #174f3e;
   font-size: 12px;
@@ -2362,6 +2370,15 @@ tr.is-selected td {
   .member-inline-schedule-scope,
   .member-inline-save {
     grid-column: 1 / -1;
+  }
+
+  .member-inline-schedule-heading {
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .member-inline-schedule-separate {
+    margin-left: 0;
   }
 
   .member-history-row > div {

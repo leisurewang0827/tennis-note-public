@@ -10791,8 +10791,7 @@ function renderMemberEditorModeBar() {
   if (summary) summary.textContent = memberAdminEditEnabled
     ? "표에서 바로 수정한 뒤 행 저장 또는 현재 페이지 전체 저장을 누릅니다."
     : "PIN 확인 후 회원·회원권을 표에서 바로 수정합니다.";
-  const stateTarget = $("#memberEditorModeSaveState");
-  if (stateTarget) stateTarget.textContent = memberAdminEditEnabled ? "편집 중" : "잠김";
+  updateMemberInlineToolbar();
 }
 
 async function loadMemberEditorModeFromServer() {
@@ -11432,7 +11431,7 @@ function memberInlineScheduleMarkup(member, ticket, product) {
     </div>`;
   }).join("");
   return `<section class="member-inline-schedule" data-member-inline-schedule data-product-kind="${escapeHtml(productKind)}" ${productKind !== "regular" ? "hidden" : ""}>
-    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>선택사항 · 시간표에서 등록하면 자동 연결</span></div>
+    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>선택사항 · 시간표에서 등록하면 자동 연결</span><button class="ghost-button member-inline-schedule-separate" type="button" data-member-schedule-separate>기존 시간표 유지</button></div>
     ${rows}
     <p class="member-inline-schedule-warning" data-member-schedule-warning></p>
   </section>`;
@@ -11460,6 +11459,40 @@ function memberInlineScheduleChanged(form, schedules = memberInlineScheduleValue
     initial = [];
   }
   return JSON.stringify(schedules) !== JSON.stringify(initial);
+}
+
+function memberInlineTicketDefinitionChanged(form) {
+  if (!form?.dataset.ticketId) return false;
+  return String(form.elements.productId?.value || "") !== String(form.dataset.initialProductId || "")
+    || String(form.elements.coachRoleId?.value || "") !== String(form.dataset.initialCoachRoleId || "");
+}
+
+function memberInlineScheduleIsComplete(form, schedules = memberInlineScheduleValues(form)) {
+  const product = (adminLiveDataState.products || []).find((item) => item.id === form?.elements.productId?.value);
+  if (!product || String(product.product_kind || "regular") !== "regular") return false;
+  const ticket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === form?.dataset.ticketId);
+  const requiredCount = memberRegularScheduleFrequency(product, ticket);
+  return schedules.length === requiredCount
+    && schedules.every((slot) => memberScheduleDayOrder.includes(slot.dayOfWeek) && /^\d{2}:\d{2}$/.test(slot.startTime));
+}
+
+function syncMemberInlineFutureScheduleChoice(form) {
+  if (!form?.dataset.ticketId || !form.elements.applyToFutureSchedule) return;
+  const schedules = memberInlineScheduleValues(form);
+  if (memberInlineTicketDefinitionChanged(form) && memberInlineScheduleIsComplete(form, schedules)) {
+    form.elements.applyToFutureSchedule.value = "true";
+  }
+}
+
+function keepMemberInlineScheduleSeparate(form) {
+  if (!form?.elements.applyToFutureSchedule) return;
+  form.elements.applyToFutureSchedule.value = "false";
+  const message = form.querySelector(".member-inline-message");
+  if (message) {
+    message.textContent = "회원권 정보만 저장하고 기존 시간표는 유지합니다.";
+    message.classList.remove("is-error", "is-success");
+  }
+  setMemberInlineDirtyState(form);
 }
 
 function memberRemarkLabel(member) {
@@ -12019,7 +12052,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
     .slice(0, memberRegularScheduleFrequency(currentProduct, ticket))
     .map((slot) => ({ dayOfWeek: Number(slot.dayOfWeek), startTime: String(slot.startTime || "").slice(0, 5) }));
   return `
-        <form class="member-inline-editor member-inline-editor--compact" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}">
+        <form class="member-inline-editor member-inline-editor--compact" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}">
           <div class="member-inline-editor-heading" ${embedded ? "hidden" : ""}>
             <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
@@ -12064,8 +12097,8 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
             <label><span>결제금액</span><input name="paymentAmount" type="number" min="0" step="1000" value="${escapeHtml(memberManagementValue(record?.payment_amount ?? ""))}" /></label>
             <label class="member-inline-note"><span>비고</span><input name="note" value="${escapeHtml(record?.admin_note || member.note || "")}" /></label>
             <label class="member-inline-schedule-scope"><span>시간표 반영</span><select name="applyToFutureSchedule">
-              <option value="false">회원정보만 변경</option>
-              <option value="true">미래 일정에도 적용</option>
+              <option value="false">회원권만 저장 · 기존 시간표 유지</option>
+              <option value="true">미래 정규시간 다시 만들기</option>
             </select></label>
             <button class="primary-button member-inline-save" type="submit">저장</button>
           </div>
@@ -12175,11 +12208,16 @@ function syncMemberInlineProductCancellation(form) {
 }
 
 function updateMemberInlineToolbar() {
+  const dirtyCount = dirtyMemberInlineForms().length;
   const saveAllButton = $("#saveVisibleMemberRows");
   if (saveAllButton) {
-    saveAllButton.hidden = !memberAdminEditEnabled
-      || !document.querySelector('[data-member-inline-form][data-dirty="true"]');
+    saveAllButton.hidden = !memberAdminEditEnabled || dirtyCount === 0;
+    if (!saveAllButton.disabled) saveAllButton.textContent = `변경 ${dirtyCount}명 저장`;
   }
+  const stateTarget = $("#memberEditorModeSaveState");
+  if (stateTarget) stateTarget.textContent = !memberAdminEditEnabled
+    ? "잠김"
+    : dirtyCount ? `저장 대기 ${dirtyCount}명` : "저장 완료";
   const changedButton = $("#showChangedMemberRows");
   const failedButton = $("#showFailedMemberRows");
   if (changedButton) changedButton.hidden = !memberAdminEditEnabled;
@@ -12319,11 +12357,16 @@ async function submitMemberInlineEditor(form, options = {}) {
     return false;
   }
   const regularSchedules = memberInlineScheduleValues(form);
-  const scheduleChanged = Boolean(ticket && selectedProduct
-    && String(selectedProduct.product_kind || "regular") === "regular"
-    && regularSchedules.length)
+  const scheduleSlotsChanged = Boolean(ticket && selectedProduct
+    && String(selectedProduct.product_kind || "regular") === "regular")
     && memberInlineScheduleChanged(form, regularSchedules);
-  if (scheduleChanged) {
+  const ticketDefinitionChanged = memberInlineTicketDefinitionChanged(form);
+  const applyFutureRequested = form.elements.applyToFutureSchedule?.value === "true";
+  const scheduleReplacementRequested = Boolean(ticket && selectedProduct
+    && String(selectedProduct.product_kind || "regular") === "regular"
+    && applyFutureRequested
+    && (scheduleSlotsChanged || ticketDefinitionChanged));
+  if (scheduleReplacementRequested) {
     const scheduleScope = memberManagementProductScheduleScope(selectedProduct);
     const requiredScheduleCount = memberRegularScheduleFrequency(selectedProduct, ticket);
     const invalidSchedule = regularSchedules.find((slot) => (
@@ -12373,9 +12416,9 @@ async function submitMemberInlineEditor(form, options = {}) {
     payload.scheduleScope = memberManagementProductScheduleScope(selectedProduct);
     payload.weeklyFrequency = memberRegularScheduleFrequency(selectedProduct, ticket);
   }
-  if (scheduleChanged) payload.lessonDays = regularSchedules.map((slot) => slot.dayOfWeek);
+  if (scheduleReplacementRequested) payload.lessonDays = regularSchedules.map((slot) => slot.dayOfWeek);
   payload.preserveExistingSchedule = true;
-  payload.applyToFutureSchedule = scheduleChanged || form.elements.applyToFutureSchedule?.value === "true";
+  payload.applyToFutureSchedule = scheduleReplacementRequested;
   payload.changeBatchId = form.dataset.changeBatchId || createMemberChangeBatchId();
   payload.changeSource = "admin_web";
   if (ticket && !payload.expectedTicketUpdatedAt) {
@@ -12385,7 +12428,7 @@ async function submitMemberInlineEditor(form, options = {}) {
     return false;
   }
   if (!options.skipConfirmation) {
-    const scopeText = payload.applyToFutureSchedule ? "미래 일정에도 적용" : "회원정보만 변경";
+    const scopeText = payload.applyToFutureSchedule ? "미래 정규시간 다시 만들기" : "회원권만 저장 · 기존 시간표 유지";
     if (!window.confirm(`${memberInlineChangeSummary(form)}\n적용 범위: ${scopeText}\n서버에 저장할까요?`)) return false;
   }
   submit.disabled = true;
@@ -12395,7 +12438,7 @@ async function submitMemberInlineEditor(form, options = {}) {
   let saveResult = null;
   try {
     if (ticket) {
-      saveResult = scheduleChanged
+      saveResult = scheduleReplacementRequested
         ? await window.TennisNoteDataClient.rpc("tn_admin_update_member_record_and_regular_schedule", {
           target_record: payload,
           target_schedules: regularSchedules,
@@ -12448,7 +12491,11 @@ async function submitMemberInlineEditor(form, options = {}) {
       form.dataset.dirty = "false";
       submit.disabled = false;
       submit.textContent = "저장";
-      return true;
+      return {
+        ok: true,
+        ticketId: String(saveResult?.ticketId || saveResult?.ticket_id || ticket?.serverTicketId || ""),
+        ticketUpdatedAt: String(saveResult?.ticketUpdatedAt || saveResult?.ticket_updated_at || ""),
+      };
     }
     const synced = await syncAdminLiveData(true);
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
@@ -12469,7 +12516,7 @@ async function submitMemberInlineEditor(form, options = {}) {
       || String(refreshed.status || "").toLowerCase() !== String(payload.ticketStatus || "active").toLowerCase())) {
       throw new Error("member_inline_write_not_confirmed");
     }
-    if (scheduleChanged && refreshedMember) {
+    if (scheduleReplacementRequested && refreshedMember) {
       const refreshedSlots = memberRegularScheduleSlots(refreshedMember, refreshed)
         .slice(0, regularSchedules.length)
         .map((slot) => ({ dayOfWeek: Number(slot.dayOfWeek), startTime: String(slot.startTime || "").slice(0, 5) }));
@@ -12561,20 +12608,43 @@ async function saveVisibleMemberRows() {
   let saved = 0;
   let failed = 0;
   const failedDrafts = [];
-  try {
-    for (const form of forms) {
-      const draft = memberInlineDraft(form);
-      const ok = await submitMemberInlineEditor(form, {
-        refreshAfterSave: false,
-        skipConfirmation: true,
-      });
-      if (ok) saved += 1;
-      else {
-        failed += 1;
-        failedDrafts.push(draft);
+  const groupedForms = new Map();
+  forms.forEach((form) => {
+    const key = form.dataset.ticketId ? `ticket:${form.dataset.ticketId}` : `member:${form.dataset.memberInlineForm}`;
+    if (!groupedForms.has(key)) groupedForms.set(key, []);
+    groupedForms.get(key).push(form);
+  });
+  const formGroups = [...groupedForms.values()];
+  const propagateTicketRevision = (ticketId, updatedAt) => {
+    if (!ticketId || !updatedAt) return;
+    document.querySelectorAll(`[data-member-inline-form][data-ticket-id="${CSS.escape(ticketId)}"]`).forEach((targetForm) => {
+      if (targetForm.elements.expectedTicketUpdatedAt) targetForm.elements.expectedTicketUpdatedAt.value = updatedAt;
+    });
+  };
+  let nextGroupIndex = 0;
+  const saveNextGroup = async () => {
+    while (nextGroupIndex < formGroups.length) {
+      const group = formGroups[nextGroupIndex];
+      nextGroupIndex += 1;
+      for (const form of group) {
+        const draft = memberInlineDraft(form);
+        const result = await submitMemberInlineEditor(form, {
+          refreshAfterSave: false,
+          skipConfirmation: true,
+        });
+        if (result) {
+          saved += 1;
+          propagateTicketRevision(result.ticketId, result.ticketUpdatedAt);
+        } else {
+          failed += 1;
+          failedDrafts.push(draft);
+        }
+        if (button) button.textContent = `저장 중 ${saved + failed}/${forms.length}`;
       }
-      if (button) button.textContent = `저장 중 ${saved + failed}/${forms.length}`;
     }
+  };
+  try {
+    await Promise.all(Array.from({ length: Math.min(3, formGroups.length) }, () => saveNextGroup()));
     if (saved) {
       const synced = await syncAdminLiveData(true);
       if (!synced) throw new Error("admin_live_refresh_failed_after_write");
@@ -12594,7 +12664,7 @@ async function saveVisibleMemberRows() {
   } finally {
     if (button?.isConnected) {
       button.disabled = false;
-      button.textContent = "현재 페이지 전체 저장";
+      updateMemberInlineToolbar();
     }
   }
 }
@@ -26589,12 +26659,15 @@ function bindEvents() {
       setProductInlineDirtyState(event.target.closest("[data-product-inline-form]"));
       return;
     }
-    if (!event.target.matches("[data-member-inline-form] select[name='productId']")) return;
+    if (!event.target.matches("[data-member-inline-form] select[name='productId'], [data-member-inline-form] select[name='coachRoleId']")) return;
     const form = event.target.form;
     setMemberInlineDirtyState(form);
-    syncMemberQuickEditorProduct(form);
-    syncMemberInlineProductCancellation(form);
-    if (!form.dataset.ticketId && event.target.value) {
+    if (event.target.name === "productId") {
+      syncMemberQuickEditorProduct(form);
+      syncMemberInlineProductCancellation(form);
+    }
+    syncMemberInlineFutureScheduleChoice(form);
+    if (event.target.name === "productId" && !form.dataset.ticketId && event.target.value) {
       const product = (adminLiveDataState.products || []).find((item) => item.id === event.target.value);
       if (product) {
         form.elements.totalSessions.disabled = false;
@@ -26632,6 +26705,11 @@ function bindEvents() {
       if (form.elements.applyToFutureSchedule) form.elements.applyToFutureSchedule.value = "true";
       syncMemberQuickEditorSchedule(form);
       setMemberInlineDirtyState(form);
+      return;
+    }
+    const scheduleSeparateButton = event.target.closest("[data-member-schedule-separate]");
+    if (scheduleSeparateButton) {
+      keepMemberInlineScheduleSeparate(scheduleSeparateButton.closest("[data-member-inline-form]"));
       return;
     }
     if (event.target.closest("#toggleMemberAdminEdit")) {
