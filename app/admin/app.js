@@ -7522,7 +7522,11 @@ function ticketFutureRegularScheduleCoverage(ticket, today = adminLocalDateKey(n
 }
 
 function ticketRemainingRegularScheduleCount(ticket, today = adminLocalDateKey(new Date())) {
-  return Math.max(0, getTicketWeeklyCount(ticket) - ticketFutureRegularScheduleCoverage(ticket, today));
+  const requiredCount = Math.min(
+    getTicketWeeklyCount(ticket),
+    Math.max(0, Number(ticket?.remaining) || 0),
+  );
+  return Math.max(0, requiredCount - ticketFutureRegularScheduleCoverage(ticket, today));
 }
 
 function ticketNeedsRegularSchedule(ticket, today = adminLocalDateKey(new Date())) {
