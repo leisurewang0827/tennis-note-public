@@ -5579,6 +5579,37 @@ tr.is-selected td {
   gap: 10px;
 }
 
+.lesson-quick-source-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid #cfe3d9;
+  border-radius: 7px;
+  background: #f7fbf9;
+}
+
+.lesson-quick-source-panel[hidden] {
+  display: none !important;
+}
+
+.lesson-quick-source-panel button {
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid #c8d9d1;
+  border-radius: 6px;
+  color: #345248;
+  background: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lesson-quick-source-panel button.is-active {
+  border-color: var(--green);
+  color: #fff;
+  background: var(--green);
+}
+
 .lesson-past-correction-mode {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8429,6 +8460,7 @@ button .schedule-member-lines > span {
 }
 
 #lessonModal.is-quick-entry .lesson-member-ticket-panel,
+#lessonModal.is-quick-entry #lessonQuickSourcePanel,
 #lessonModal.is-quick-entry #lessonMakeupEntitlementField,
 #lessonModal.is-quick-entry #lessonRepeatPreviewPanel,
 #lessonModal.is-quick-entry #lessonPreview,

@@ -7,8 +7,8 @@
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.270" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.270" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.271" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.271" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1256,6 +1256,12 @@
             </div>
             <button id="toggleLessonQuickDetails" class="ghost-button" type="button" aria-expanded="false">추가 설정</button>
           </section>
+          <nav id="lessonQuickSourcePanel" class="lesson-quick-source-panel" aria-label="추가할 수업 종류" hidden>
+            <button type="button" data-lesson-quick-source="regular">정규</button>
+            <button type="button" data-lesson-quick-source="makeup">보강</button>
+            <button type="button" data-lesson-quick-source="coupon">쿠폰</button>
+            <button type="button" data-lesson-quick-source="one_day">원데이</button>
+          </nav>
           <nav id="lessonQuickActions" class="lesson-quick-actions" aria-label="수업 처리 방법" hidden>
             <button type="button" data-lesson-quick-action="schedule">시간·코치</button>
             <button type="button" data-lesson-quick-action="absence">불참</button>
@@ -1718,15 +1724,15 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.270"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.271"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.270"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.270"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.270"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.270"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.270"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.271"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.271"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.271"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.271"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.271"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.270"></script>
+    <script src="./app.js?v=1.0.271"></script>
   </body>
 </html>

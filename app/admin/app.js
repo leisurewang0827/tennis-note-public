@@ -6929,7 +6929,7 @@ function lessonAddAttrs(day, time, durationMinutes = 20, preferredCoachId = "") 
   const coachId = getAvailableCoachId(day, time, durationMinutes, preferredCoachId);
   const coachLabel = scheduleCoachDisplayName(getCoachName(coachId)) || "코치 미정";
   const ariaLabel = escapeHtml(`${day}요일 ${time} ${coachLabel} 수업 추가`);
-  return `data-add-lesson-day="${day}" data-add-lesson-time="${time}" data-add-lesson-court="${getAvailableCourtId(day, time, durationMinutes)}" data-add-lesson-coach="${coachId}" aria-label="${ariaLabel}"`;
+  return `data-add-lesson-day="${day}" data-add-lesson-time="${time}" data-add-lesson-court="${getAvailableCourtId(day, time, durationMinutes)}" data-add-lesson-coach="${coachId}" data-quick-lesson-entry="true" aria-label="${ariaLabel}"`;
 }
 
 function scheduleAddButtonGridPosition(button) {
@@ -14292,7 +14292,7 @@ function renderUniformCoachScheduleCell(day, time) {
         return `<div class="schedule-coach-slot is-closed" data-coach-lane="${coach.id}" aria-label="${escapeHtml(coach.name)} 근무 외"></div>`;
       }
       if (canAddLessonAt(day, time, 20, coach.id)) {
-        return `<button class="schedule-stack-add admin-duration-add" type="button" data-coach-lane="${coach.id}" data-quick-lesson-entry="true" ${lessonAddAttrs(day, time, 20, coach.id)}>+ 수업 추가</button>`;
+        return `<button class="schedule-stack-add admin-duration-add" type="button" data-coach-lane="${coach.id}" ${lessonAddAttrs(day, time, 20, coach.id)}>+ 수업 추가</button>`;
       }
       return `<div class="schedule-coach-slot is-full" data-coach-lane="${coach.id}" aria-label="${escapeHtml(coach.name)} 신청 불가"></div>`;
     })
@@ -16409,6 +16409,15 @@ function syncQuickLessonEntryUi(candidate = getLessonFormCandidate()) {
   modal.classList.toggle("is-quick-edit", state.quickLessonEdit);
   modal.classList.toggle("is-quick-expanded", expanded);
   summary.hidden = !quickMode;
+  const quickSourcePanel = $("#lessonQuickSourcePanel");
+  if (quickSourcePanel) {
+    quickSourcePanel.hidden = !state.quickLessonEntry;
+    [...quickSourcePanel.querySelectorAll("[data-lesson-quick-source]")].forEach((button) => {
+      const active = button.dataset.lessonQuickSource === source;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  }
   const editingLesson = state.quickLessonEdit ? getCurrentEditingLesson() : null;
   const completedCorrection = isCompletedLessonCorrectionMode();
   const pastAbsenceCorrection = Boolean(
@@ -26354,6 +26363,15 @@ function bindEvents() {
   $("#toggleLessonQuickDetails")?.addEventListener("click", () => {
     state.quickLessonDetailsExpanded = !state.quickLessonDetailsExpanded;
     syncQuickLessonEntryUi();
+  });
+  $$("[data-lesson-quick-source]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const source = button.dataset.lessonQuickSource || "regular";
+      const sourceSelect = $("#lessonSource");
+      if (!sourceSelect || ![...sourceSelect.options].some((option) => option.value === source)) return;
+      sourceSelect.value = source;
+      sourceSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
   });
   $$("[data-lesson-quick-action]").forEach((button) => {
     button.addEventListener("click", () => {
