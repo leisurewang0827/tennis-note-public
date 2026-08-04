@@ -249,6 +249,10 @@
     };
   }
 
+  function comparisonIsHistory(lesson = {}) {
+    return ["cancelled", "canceled"].includes(String(lesson.status || "").toLowerCase());
+  }
+
   function compareScheduleWeek(snapshot = {}, payload = {}, dates = weekDates()) {
     const dateSet = new Set((dates || []).map((date) => String(date).slice(0, 10)));
     const participantRowsByLesson = new Map();
@@ -259,13 +263,26 @@
       participantRowsByLesson.set(lessonId, rows);
     });
     const withinWeek = (lesson) => dateSet.has(String(lesson.lessonDate || lesson.lesson_date || "").slice(0, 10));
-    const legacyLessons = (snapshot.lessons || []).filter(withinWeek).map((lesson) => comparisonLesson(lesson, participantRowsByLesson));
-    const v2Lessons = (payload.lessons || []).filter(withinWeek).map((lesson) => comparisonLesson(lesson));
+    const legacyAllLessons = (snapshot.lessons || []).filter(withinWeek).map((lesson) => comparisonLesson(lesson, participantRowsByLesson));
+    const v2AllLessons = (payload.lessons || []).filter(withinWeek).map((lesson) => comparisonLesson(lesson));
+    const legacyHistory = legacyAllLessons.filter(comparisonIsHistory);
+    const v2History = v2AllLessons.filter(comparisonIsHistory);
+    const legacyLessons = legacyAllLessons.filter((lesson) => !comparisonIsHistory(lesson));
+    const v2Lessons = v2AllLessons.filter((lesson) => !comparisonIsHistory(lesson));
     const legacyBySlot = new Map();
     const v2BySlot = new Map();
     legacyLessons.forEach((lesson) => legacyBySlot.set(lesson.slotKey, [...(legacyBySlot.get(lesson.slotKey) || []), lesson]));
     v2Lessons.forEach((lesson) => v2BySlot.set(lesson.slotKey, [...(v2BySlot.get(lesson.slotKey) || []), lesson]));
-    const result = { legacyTotal: legacyLessons.length, v2Total: v2Lessons.length, matching: 0, changed: [], legacyOnly: [], v2Only: [] };
+    const result = {
+      legacyTotal: legacyLessons.length,
+      v2Total: v2Lessons.length,
+      legacyHistoryTotal: legacyHistory.length,
+      v2HistoryTotal: v2History.length,
+      matching: 0,
+      changed: [],
+      legacyOnly: [],
+      v2Only: [],
+    };
     const slotKeys = [...new Set([...legacyBySlot.keys(), ...v2BySlot.keys()])].sort();
     slotKeys.forEach((slotKey) => {
       const legacy = [...(legacyBySlot.get(slotKey) || [])];
@@ -339,7 +356,9 @@
     summary.textContent = comparison.isExact
       ? `${comparison.matching}/${comparison.v2Total} 일치`
       : `${comparison.differenceCount}건 확인 필요`;
-    description.textContent = `기존 ${comparison.legacyTotal}건 · 새 시간표 ${comparison.v2Total}건 · 동일 ${comparison.matching}건`;
+    description.textContent = comparison.isExact
+      ? `활성 수업 ${comparison.matching}/${comparison.v2Total} 일치 · 취소·불참 이력 기존 ${comparison.legacyHistoryTotal}건 / 새 시간표 ${comparison.v2HistoryTotal}건`
+      : `활성 수업 기존 ${comparison.legacyTotal}건 · 새 시간표 ${comparison.v2Total}건 · 동일 ${comparison.matching}건 · 이력 기존 ${comparison.legacyHistoryTotal}건 / 새 시간표 ${comparison.v2HistoryTotal}건`;
     const rows = [
       ...comparison.changed.map((item) => ({ type: "내용 다름", item: item.v2 })),
       ...comparison.legacyOnly.map((item) => ({ type: "기존에만 있음", item })),
