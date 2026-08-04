@@ -6806,7 +6806,9 @@ function getLessonConflict(candidate) {
     return { lesson: coachConflict, message: `${getCoachName(candidate.coachId)}가 같은 시간에 이미 수업 중입니다.` };
   }
   const courtConflict = overlappingBooked.find((lesson) => lesson.courtId === candidate.courtId);
-  if (courtConflict) {
+  const usedCourtIds = new Set(overlappingBooked.map((lesson) => lesson.courtId).filter(Boolean));
+  const availableCourt = getCourtOptions().find((court) => !usedCourtIds.has(court.value));
+  if (courtConflict && !availableCourt) {
     return { lesson: courtConflict, message: `${getCourtLabel(candidate.courtId)}가 같은 시간에 이미 사용 중입니다.` };
   }
   if (overlappingBooked.length >= fixedCourtCount) {
