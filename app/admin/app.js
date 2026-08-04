@@ -21306,7 +21306,7 @@ async function performAdminLiveDataSync(options = {}) {
       })),
       rosterRows("lessonParticipants", () => client.selectRows("tn_lesson_participants", { select: "lesson_id,user_id,ticket_id", limit: 1000 })),
       client.selectRows("tn_lessons", {
-        select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,revision,updated_at",
+        select: "id,branch_id,member_ticket_id,coach_role_id,original_coach_role_id,group_account_id,lesson_date,start_time,duration_minutes,status,lesson_source,schedule_v2_kind,revision,updated_at",
         filters: { lesson_date: { gte: lessonWindow.from, lte: lessonWindow.to } },
         order: "lesson_date.asc,start_time.asc",
         limit: 2000,
@@ -21656,7 +21656,8 @@ async function performAdminLiveDataSync(options = {}) {
           ticketProduct: ticket?.product || "회원권 확인 필요",
           status: liveLessonStatus(lesson.status),
           makeup: lesson.lesson_source === "makeup",
-          lessonSource: lesson.lesson_source || "regular",
+          lessonSource: lesson.schedule_v2_kind || lesson.lesson_source || "regular",
+          scheduleV2Kind: lesson.schedule_v2_kind || "",
           deductedSessions: lessonRecord ? Number(lessonRecord.deducted_sessions) || 0 : null,
           completedAt: lessonRecord?.completed_at || "",
         };
@@ -21946,6 +21947,9 @@ async function performAdminLiveDataSync(options = {}) {
       state.selectedMemberId = null;
     }
     renderAll();
+    window.dispatchEvent(new CustomEvent("tennisnote:admin-live-data", {
+      detail: { source: "server-sync", branchId: activeOperationBranchId() },
+    }));
     if (state.view === "members" && fullAdminAccess) {
       void loadAdminMemberDirectoryPage({ force: true, preserveList: true });
     }
@@ -27956,6 +27960,89 @@ async function bootstrapAdminOperationsSession() {
   }
 }
 
+function scheduleV2AdminBridgeSnapshot() {
+  const branchTickets = operationBranchTickets([...tickets, ...expiredTickets]);
+  const branchTicketIds = new Set(branchTickets.map((ticket) => String(ticket.serverTicketId || ticket.id || "")));
+  const branchLessonIds = new Set(operationBranchLessons().map((lesson) => String(lesson.serverLessonId || lesson.id || "")));
+  return {
+    branchId: activeOperationBranchId(),
+    branchName: activeOperationBranchName(),
+    role: operationsRole(),
+    accessReady: operationsAccessReady(),
+    liveLoaded: state.liveScheduleLoaded,
+    liveLoading: state.liveScheduleLoading,
+    liveMessage: state.liveScheduleMessage,
+    week: { ...activeAdminWeek() },
+    coaches: operationBranchCoaches().map((coach) => ({
+      id: coach.id,
+      roleId: coach.serverRoleId || "",
+      name: coach.name,
+      color: coach.color || "",
+      status: coach.status,
+      workBlocks: normalizeCoachWorkBlocks(coach).map((block) => ({ ...block, days: [...block.days] })),
+      breakBlocks: normalizeCoachBreakBlocks(coach).map((block) => ({ ...block, days: [...block.days] })),
+    })),
+    members: operationBranchMembers().map((member) => ({
+      id: member.id,
+      userId: member.serverUserId || "",
+      userIds: [...(member.serverUserIds || [])],
+      name: member.name,
+      status: member.status,
+    })),
+    tickets: branchTickets.map((ticket) => ({
+      id: ticket.serverTicketId || ticket.id || "",
+      ownerUserId: ticket.serverUserId || "",
+      participantUserIds: [...(ticket.participantUserIds || [])],
+      coachRoleId: ticket.coachRoleId || "",
+      productId: ticket.productId || "",
+      productName: ticket.product || "회원권",
+      productKind: ticket.productKind || "regular",
+      groupSize: Number(ticket.groupSize) || 1,
+      lessonMinutes: Number(ticket.durationMinutes) || 20,
+      frequencyPerWeek: Number(ticket.weeklyCount) || 1,
+      totalSessions: Number(ticket.total) || 0,
+      usedSessions: Number(ticket.used) || 0,
+      remainingSessions: Number(ticket.remaining) || 0,
+      startsOn: ticket.purchased || "",
+      expiresOn: ticket.expires || "",
+      status: ticket.status || "",
+    })),
+    lessons: operationBranchLessons().map((lesson) => ({
+      id: lesson.serverLessonId || lesson.id || "",
+      revision: Number(lesson.serverRevision) || null,
+      coachRoleId: lesson.coachRoleId || "",
+      originalCoachRoleId: lesson.originalCoachRoleId || "",
+      lessonDate: lesson.lessonDate || "",
+      startTime: lesson.time || "",
+      durationMinutes: Number(lesson.durationMinutes) || 20,
+      status: lesson.serverStatus || lesson.status || "scheduled",
+      scheduleKind: lesson.scheduleV2Kind || normalizeLessonSource(lesson.lessonSource) || "regular",
+      memberLabel: lesson.member || "회원 확인 필요",
+    })),
+    participantRows: (adminLiveDataState.participantRows || [])
+      .filter((row) => branchLessonIds.has(String(row.lesson_id || "")))
+      .map((row) => ({ lessonId: row.lesson_id, userId: row.user_id, ticketId: row.ticket_id })),
+    products: (adminLiveDataState.products || [])
+      .filter((product) => !product.branch_id || matchesActiveOperationBranch(product.branch_id))
+      .map((product) => ({ ...product })),
+    ticketIds: [...branchTicketIds],
+  };
+}
+
+window.TennisNoteAdminScheduleV2Bridge = {
+  snapshot: scheduleV2AdminBridgeSnapshot,
+  refresh: async () => {
+    const refreshed = await syncAdminLiveData(true, { abortIfDirty: true });
+    if (refreshed) {
+      window.dispatchEvent(new CustomEvent("tennisnote:admin-live-data", {
+        detail: { source: "v2-refresh", branchId: activeOperationBranchId() },
+      }));
+    }
+    return refreshed;
+  },
+  rpc: (name, parameters = {}) => window.TennisNoteDataClient?.rpc?.(name, parameters),
+};
+
 restoreSnapshot();
 window.TennisNoteReleaseUpdater?.start({
   manifestUrl: "../release.json",
@@ -27971,6 +28058,13 @@ bindEvents();
 installAdminConnectivityStatus();
 installAdminLiveScheduleRefresh();
 renderAll();
+const adminDemoView = adminQuery.get("demoView");
+if (
+  adminLocalPreviewMode
+  && ["dashboard", "members", "schedule", "billing", "notes", "issues", "settings"].includes(adminDemoView)
+) {
+  window.setTimeout(() => setView(adminDemoView, { skipLock: true }), 0);
+}
 let adminScheduleResizeTimer = 0;
 window.addEventListener("resize", () => {
   window.clearTimeout(adminScheduleResizeTimer);

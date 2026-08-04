@@ -1706,8 +1706,11 @@ let nativeBackListenerReady = false;
 function blurActiveFormControl() {
   const active = document.activeElement;
   if (!(active instanceof HTMLElement) || !active.matches("input, textarea, select")) return false;
+  const viewport = window.visualViewport;
+  const layoutHeight = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+  const keyboardVisible = Boolean(viewport && layoutHeight - viewport.height - viewport.offsetTop > 96);
   active.blur();
-  return true;
+  return keyboardVisible;
 }
 
 async function installNativeBackNavigation() {
@@ -3105,13 +3108,25 @@ function memberScheduleRoundLabel(lesson, isMine) {
 }
 
 function memberScheduleExceptionLabel(lesson = {}) {
-  const completed = String(lesson.serverStatus || lesson.status || "").toLowerCase() === "completed";
+  const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
   const context = `${lesson.lessonSource || ""} ${lesson.type || ""} ${lesson.changeNote || ""}`;
   let detail = "";
   if ((lesson.originalCoachRoleId && lesson.coach_role_id && lesson.originalCoachRoleId !== lesson.coach_role_id) || /대타/.test(context)) detail = "대타";
   else if (/코치\s*변경/.test(context)) detail = "코치 변경";
   else if (/시간\s*변경|변경\s*완료/.test(context)) detail = "시간 변경";
-  return completed ? `완료${detail ? ` · ${detail}` : ""}` : detail;
+  const deducted = Number(lesson.deductedSessions) > 0;
+  const outcome = status === "completed"
+    ? `완료 · ${deducted ? "차감" : "미차감"}`
+    : status === "no_show"
+      ? `노쇼 · ${deducted ? "차감" : "미차감"}`
+      : ["absence", "absent"].includes(status)
+        ? "불참 · 차감 없음"
+        : status === "holiday"
+          ? "휴무 · 차감 없음"
+          : status === "cancelled"
+            ? "취소 · 차감 없음"
+            : "";
+  return outcome ? `${outcome}${detail ? ` · ${detail}` : ""}` : detail;
 }
 
 function memberLessonStateClass(lesson = {}) {
@@ -5433,11 +5448,231 @@ function serverJournalBody(log = {}) {
   });
 }
 
+let memberScheduleV2WorkspaceCache = null;
+
+function scheduleV2MemberLessonKind(kind = "") {
+  return {
+    regular: "정규",
+    makeup: "보강",
+    coupon: "쿠폰",
+    one_day: "원데이",
+    correction: "관리자 보정",
+  }[String(kind || "").toLowerCase()] || "수업";
+}
+
+function scheduleV2MemberOutcomeStatus(record = null, fallback = "scheduled") {
+  if (!record || String(record.recordStatus || "") !== "final") return fallback;
+  return {
+    absence: "absent",
+  }[String(record.outcome || "").toLowerCase()] || String(record.outcome || fallback).toLowerCase();
+}
+
+function mergeScheduleV2MemberRecords(mappedLessons = []) {
+  mappedLessons
+    .filter((lesson) => {
+      const record = lesson.participantRecord;
+      if (!lesson.isOwnLesson || record?.recordStatus !== "final") return false;
+      return Boolean(record.coachComment) || ["completed", "no_show"].includes(record.outcome);
+    })
+    .forEach((lesson) => {
+      const record = lesson.participantRecord;
+      const existingIndex = state.lessonLogs.findIndex((log) => (
+        String(log.serverLessonId || "") === String(lesson.serverLessonId || "")
+      ));
+      const existing = existingIndex >= 0 ? state.lessonLogs[existingIndex] : {};
+      const nextCurriculumId = record.nextCurriculumSkillLabel || existing.nextCurriculumId || "FH-01";
+      const curriculum = curriculumById(nextCurriculumId, existing.curriculum || curriculumSteps[0]);
+      const outcomeText = record.outcome === "no_show" ? "노쇼 처리" : "코치 수업기록";
+      const log = {
+        ...existing,
+        id: existing.id || `schedule-v2-record-${lesson.serverLessonId}`,
+        serverJournalId: existing.serverJournalId || "",
+        serverLessonId: lesson.serverLessonId,
+        lessonId: existing.lessonId || lesson.id,
+        lessonLabel: existing.lessonLabel || `${lesson.day} ${lesson.time} · ${lesson.coach}`,
+        round: Number(existing.round) || Math.max(1, Number(lesson.ticketUsedSessions) || lessonRound()),
+        journalDate: existing.journalDate || lesson.lessonDate,
+        content: existing.content || `회원 운동일지 미작성 · ${outcomeText}`,
+        selfMemo: existing.selfMemo || "회원 운동일지 미작성",
+        mediaNames: existing.mediaNames || [],
+        mediaItems: existing.mediaItems || [],
+        status: "confirmed",
+        curriculum,
+        nextCurriculumId,
+        coachComment: record.coachComment || existing.coachComment || "",
+        memberVisibleSummary: record.nextGoal
+          ? `다음 수업 목표: ${record.nextGoal}`
+          : record.nextCurriculumTitle
+            ? `다음 수업: ${record.nextCurriculumTitle}`
+            : existing.memberVisibleSummary || "",
+        ticketDeducted: Number(record.deductedSessions) > 0,
+        participantOutcome: record.outcome,
+        submittedAt: record.finalizedAt || existing.submittedAt || `${lesson.lessonDate}T${lesson.time}:00`,
+      };
+      if (existingIndex >= 0) state.lessonLogs[existingIndex] = log;
+      else state.lessonLogs.unshift(log);
+    });
+}
+
+function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = [], oneDaySlots = []) {
+  if (!workspace?.actorUserId || !Array.isArray(workspace.lessons)) return false;
+  const ticketsById = new Map((workspace.tickets || []).map((ticket) => [ticket.id, ticket]));
+  const coachesById = new Map((workspace.coaches || []).map((coach) => [coach.roleId, coach]));
+  const mappedLessons = workspace.lessons.map((lesson) => {
+    const isOwnLesson = lesson.isOwnLesson === true;
+    const ticket = ticketsById.get(lesson.memberTicketId) || {};
+    const laneCoach = coachesById.get(lesson.coachRoleId) || {};
+    const substitute = lesson.substitute && lesson.substitute.coachRoleId ? lesson.substitute : null;
+    const lessonDate = String(lesson.lessonDate || "");
+    const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
+    const lessonKind = String(lesson.scheduleKind || "regular");
+    const participantRecord = lesson.participantRecord && typeof lesson.participantRecord === "object"
+      ? lesson.participantRecord
+      : null;
+    const ownStatus = scheduleV2MemberOutcomeStatus(participantRecord, lesson.status);
+    return {
+      ...lesson,
+      serverStatus: isOwnLesson ? ownStatus : lesson.status,
+      serverLessonId: lesson.id,
+      serverRevision: Number(lesson.revision) || 0,
+      lessonDate,
+      day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
+      time: String(lesson.startTime || "").slice(0, 5),
+      coach: substitute?.coachName || laneCoach.name || "담당 코치",
+      coachRoleId: lesson.coachRoleId,
+      coach_role_id: lesson.coachRoleId,
+      originalCoachRoleId: substitute ? lesson.coachRoleId : "",
+      originalCoach: substitute ? (laneCoach.name || "담당 코치") : "",
+      isSubstitute: Boolean(substitute),
+      member: isOwnLesson ? currentMemberName() : "",
+      type: `${scheduleV2MemberLessonKind(lessonKind)} ${Number(lesson.durationMinutes) || 20}분`,
+      lessonSource: lessonKind,
+      durationMinutes: Number(lesson.durationMinutes) || 20,
+      ticketId: ticket.id || lesson.memberTicketId || "",
+      ticketTotalSessions: Number(ticket.totalSessions) || 0,
+      ticketUsedSessions: Number(ticket.usedSessions) || 0,
+      ticketRemainingSessions: Number(ticket.remainingSessions) || 0,
+      ticketLessonMinutes: Number(ticket.lessonMinutes) || Number(lesson.durationMinutes) || 20,
+      participantRecord,
+      recordStatus: participantRecord?.recordStatus || "",
+      outcome: participantRecord?.outcome || "",
+      deductedSessions: Number(participantRecord?.deductedSessions) || 0,
+      coachComment: participantRecord?.coachComment || "",
+      status: isOwnLesson
+        ? ownStatus === "pending_change" ? "requested" : ownStatus
+        : "occupied",
+      isOwnLesson,
+      scheduleV2: true,
+    };
+  });
+
+  state.liveMakeupEntitlements = (workspace.makeupEntitlements || []).map((entitlement) => {
+    const sourceLesson = workspace.lessons.find((lesson) => lesson.id === entitlement.sourceLessonId) || {};
+    const lessonDate = String(sourceLesson.lessonDate || "");
+    const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
+    return {
+      id: entitlement.id,
+      sourceLessonId: entitlement.sourceLessonId,
+      ticketId: entitlement.ticketId,
+      coachRoleId: entitlement.coachRoleId,
+      coach: coachesById.get(entitlement.coachRoleId)?.name || "담당 코치",
+      lessonDate,
+      day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
+      time: String(sourceLesson.startTime || "").slice(0, 5),
+      durationMinutes: Number(entitlement.durationMinutes) || Number(sourceLesson.durationMinutes) || 20,
+      status: entitlement.status,
+      reason: entitlement.reason || "회원 불참",
+      markedAt: entitlement.markedAt || "",
+      bookedLessonId: entitlement.bookedLessonId || "",
+      bookedAt: entitlement.bookedAt || "",
+    };
+  });
+  state.liveReleasedMakeupSlots = (releasedMakeupSlots || []).map((slot) => ({
+    id: slot.slot_id,
+    coachRoleId: slot.coach_role_id,
+    lessonDate: slot.lesson_date,
+    time: String(slot.start_time || "").slice(0, 5),
+    durationMinutes: Number(slot.duration_minutes) || 20,
+  }));
+  const oneDayOccupancy = (oneDaySlots || []).map((slot) => {
+    const lessonDate = String(slot.booking_date || "");
+    const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
+    return {
+      id: `one-day-${slot.id}`,
+      oneDayBooking: true,
+      serverOneDayBookingId: slot.id,
+      lessonDate,
+      day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
+      time: String(slot.start_time || "").slice(0, 5),
+      coach: coachesById.get(slot.coach_role_id)?.name || "담당 코치",
+      coachRoleId: slot.coach_role_id,
+      coach_role_id: slot.coach_role_id,
+      member: "",
+      type: "원데이 예약",
+      lessonSource: "one_day",
+      durationMinutes: Number(slot.duration_minutes) || 20,
+      status: "occupied",
+      isOwnLesson: false,
+    };
+  });
+  const retainedLessons = (state.liveLessons || []).filter((lesson) => (
+    lesson.lessonDate
+    && (lesson.lessonDate < workspace.from || lesson.lessonDate > workspace.to)
+  ));
+  state.liveLessons = [...retainedLessons, ...mappedLessons, ...oneDayOccupancy]
+    .filter((lesson, index, items) => items.findIndex((candidate) => candidate.id === lesson.id) === index);
+  mergeScheduleV2MemberRecords(mappedLessons);
+  state.liveLessonsLoaded = true;
+  return true;
+}
+
+async function syncMemberScheduleV2(profile = null, options = {}) {
+  const client = window.TennisNoteDataClient;
+  const profileId = profile?.id || state.member?.profileId || "";
+  if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
+  const week = activeMemberWeek();
+  const cacheKey = `${profileId}:${week.startDate}:${week.endDate}`;
+  const cached = memberScheduleV2WorkspaceCache;
+  if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
+    return applyScheduleV2MemberWorkspace(cached.workspace, cached.releasedMakeupSlots, cached.oneDaySlots);
+  }
+  try {
+    const [workspace, releasedMakeupSlots, oneDaySlots] = await Promise.all([
+      client.rpc("tn_schedule_v2_member_workspace", {
+        target_from: week.startDate,
+        target_to: week.endDate,
+      }),
+      client.rpc("tn_member_released_makeup_slots", {}).catch(() => []),
+      client.rpc("tn_member_one_day_schedule_slots", {}).catch(() => []),
+    ]);
+    if (!workspace?.actorUserId || !Array.isArray(workspace.lessons)) return false;
+    memberScheduleV2WorkspaceCache = {
+      key: cacheKey,
+      loadedAt: Date.now(),
+      workspace,
+      releasedMakeupSlots: Array.isArray(releasedMakeupSlots) ? releasedMakeupSlots : [],
+      oneDaySlots: Array.isArray(oneDaySlots) ? oneDaySlots : [],
+    };
+    return applyScheduleV2MemberWorkspace(
+      workspace,
+      memberScheduleV2WorkspaceCache.releasedMakeupSlots,
+      memberScheduleV2WorkspaceCache.oneDaySlots,
+    );
+  } catch (error) {
+    const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
+    if (!/tn_schedule_v2_member_workspace|PGRST202|42883|schema cache/i.test(text)) {
+      console.warn("Tennis Note Schedule V2 member feed failed; using the compatible feed.", error);
+    }
+    return false;
+  }
+}
+
 async function syncMemberLessonsFromServer(profile = null) {
   const client = window.TennisNoteDataClient;
   const profileId = profile?.id || state.member?.profileId || "";
   if (!client?.selectRows || !profileId) return false;
   try {
+    if (await syncMemberScheduleV2(profile)) return true;
     const participants = await client.selectRows("tn_lesson_participants", {
       select: "lesson_id,ticket_id,user_id",
       filters: { user_id: profileId },
@@ -5720,7 +5955,11 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
         ticketDeducted: Boolean(record && Number(record.deducted_sessions) > 0),
         submittedAt: payload.submittedAt || row.created_at,
       };
-      const existingIndex = state.lessonLogs.findIndex((item) => item.serverJournalId === row.id || item.id === log.id);
+      const existingIndex = state.lessonLogs.findIndex((item) => (
+        item.serverJournalId === row.id
+        || item.id === log.id
+        || (row.lesson_id && String(item.serverLessonId || "") === String(row.lesson_id))
+      ));
       if (existingIndex >= 0) state.lessonLogs[existingIndex] = { ...state.lessonLogs[existingIndex], ...log };
       else state.lessonLogs.unshift(log);
     }
@@ -6998,6 +7237,7 @@ function journalActivityLessonStatus(lesson) {
   const status = String(lesson.serverStatus || lesson.status || "scheduled").toLowerCase();
   if (source === "makeup" || String(lesson.type || "").includes("보강")) return "makeup_booked";
   if (status === "no_show") return "no_show";
+  if (["absence", "absent"].includes(status)) return "absent";
   if (["completed", "confirmed"].includes(status)) return "completed";
   if (["scheduled", "pending_change", "requested"].includes(status)) return "scheduled";
   return "";
@@ -7022,7 +7262,10 @@ function journalActivityItems() {
     });
 
   const absenceItems = (state.liveMakeupEntitlements || [])
-    .filter((entitlement) => entitlement.lessonDate?.startsWith(monthValue))
+    .filter((entitlement) => (
+      entitlement.lessonDate?.startsWith(monthValue)
+      && !seenLessons.has(String(entitlement.sourceLessonId || ""))
+    ))
     .map((entitlement) => ({
       id: `absence-${entitlement.id}`,
       dateValue: entitlement.lessonDate,
@@ -7618,7 +7861,7 @@ function lessonDetailStatusInfo(lesson = {}) {
       primaryAction: "",
     };
   }
-  if (status === "makeup_due" || status === "absent" || lesson.makeupEntitlementId) {
+  if (status === "makeup_due" || ["absence", "absent"].includes(status) || lesson.makeupEntitlementId) {
     return {
       label: memberStatusLabel("lesson", "makeup_available", "보강 가능"),
       message: "운영 규칙에 맞는 보강 가능 시간을 선택할 수 있습니다.",
@@ -7636,6 +7879,13 @@ function lessonDetailStatusInfo(lesson = {}) {
     return {
       label: memberStatusLabel("lesson", "no_show", "노쇼"),
       message: "당일 불참으로 처리된 수업입니다.",
+      primaryAction: "",
+    };
+  }
+  if (status === "holiday") {
+    return {
+      label: memberStatusLabel("lesson", "holiday", "휴무"),
+      message: "센터 휴무로 처리되었으며 회원권은 차감되지 않습니다.",
       primaryAction: "",
     };
   }
@@ -7837,6 +8087,19 @@ async function cancelMemberScheduleRequest(kind, id) {
   }
 }
 
+function refreshSelectedMemberScheduleWeek() {
+  if (state.dataMode !== "live" || !state.member?.profileId) return;
+  memberScheduleV2WorkspaceCache = null;
+  void syncMemberLessonsFromServer().then((synced) => {
+    if (!synced) return false;
+    renderSchedule();
+    renderSelects();
+    renderAvailableSlots();
+    saveSnapshot();
+    return true;
+  }).catch(() => false);
+}
+
 function changeMemberWeek(delta) {
   state.activeMemberWeekIndex = Math.min(
     Math.max((Number(state.activeMemberWeekIndex) || 0) + delta, memberScheduleMinWeekOffset),
@@ -7845,6 +8108,7 @@ function changeMemberWeek(delta) {
   renderSchedule();
   renderSelects();
   renderAvailableSlots();
+  refreshSelectedMemberScheduleWeek();
 }
 
 function memberWeekOffsetForDate(value) {
@@ -7870,6 +8134,7 @@ function changeMemberMonth(delta) {
   renderSelects();
   renderAvailableSlots();
   saveSnapshot();
+  refreshSelectedMemberScheduleWeek();
 }
 
 function selectMemberMonth(value) {
@@ -7886,6 +8151,7 @@ function selectMemberMonth(value) {
   renderSelects();
   renderAvailableSlots();
   saveSnapshot();
+  refreshSelectedMemberScheduleWeek();
 }
 
 function memberScheduleMonthValue(week = activeMemberWeek()) {
@@ -8394,6 +8660,7 @@ function activateLiveMemberProfile(profileId) {
   state.ticketHistory = [];
   state.liveMembershipProducts = [];
   state.liveTickets = [];
+  memberScheduleV2WorkspaceCache = null;
   state.liveLessons = [];
   state.liveLessonsLoaded = false;
   state.groupAccount = null;
