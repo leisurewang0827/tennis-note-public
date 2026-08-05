@@ -50,6 +50,7 @@
     selectedParticipants: [],
     pendingTicketId: "",
     editingLesson: null,
+    reopeningLesson: null,
     editorOpen: false,
     editorScrollY: 0,
     editorFocusTarget: null,
@@ -827,17 +828,35 @@
       }
     });
     const periods = [];
+    const preferredLane = new Map();
     let current = null;
     times.forEach((time) => {
       const minute = timeMinutes(time);
-      const active = coaches.filter((coach) => (
+      const candidates = coaches.filter((coach) => (
         coachAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability)
         || laneOccupancy.has(`${coach.roleId}|${time}`)
       ));
-      if (!active.length) {
+      if (!candidates.length) {
         current = null;
         return;
       }
+      const lanes = Array(candidates.length).fill(null);
+      candidates
+        .filter((coach) => preferredLane.has(String(coach.roleId)))
+        .sort((left, right) => preferredLane.get(String(left.roleId)) - preferredLane.get(String(right.roleId)))
+        .forEach((coach) => {
+          const lane = preferredLane.get(String(coach.roleId));
+          if (lane < lanes.length && !lanes[lane]) lanes[lane] = coach;
+        });
+      candidates.filter((coach) => !lanes.includes(coach)).forEach((coach) => {
+        const lane = lanes.findIndex((item) => !item);
+        lanes[lane] = coach;
+      });
+      const active = lanes.filter(Boolean);
+      active.forEach((coach, lane) => {
+        const roleId = String(coach.roleId);
+        if (active.length > 1 || !preferredLane.has(roleId)) preferredLane.set(roleId, lane);
+      });
       const key = active.map((coach) => coach.roleId).sort().join("|");
       if (!current || current.key !== key) {
         current = { key, coaches: active, times: [], lessons };
@@ -1452,6 +1471,17 @@
     return true;
   }
 
+  function ticketSelectableForLesson(ticket, lessonDate) {
+    const status = String(ticket?.status || "").trim().toLowerCase();
+    if (status && status !== "active") return false;
+    if (Number(ticket?.remainingSessions ?? ticket?.remaining_sessions) <= 0) return false;
+    const startsOn = ticket?.startsOn || ticket?.starts_on || "";
+    const expiresOn = ticket?.expiresOn || ticket?.expires_on || "";
+    if (lessonDate && startsOn && lessonDate < startsOn) return false;
+    if (lessonDate && expiresOn && lessonDate > expiresOn) return false;
+    return true;
+  }
+
   function selectedKind() {
     return $("#scheduleV2EditorForm input[name='scheduleKind']:checked")?.value || "regular";
   }
@@ -1506,7 +1536,9 @@
     });
     const cancelButton = $("#scheduleV2CancelLessonButton");
     if (!cancelButton.hidden) cancelButton.textContent = future ? "이후 정규시간 종료" : "수업 취소";
-    $("#scheduleV2SaveButton").textContent = future ? "이후 정규일정 저장" : "시간표에 저장";
+    $("#scheduleV2SaveButton").textContent = state.reopeningLesson
+      ? "새 수업으로 저장"
+      : future ? "이후 정규일정 저장" : "시간표에 저장";
   }
 
   function regularRuleFromEditor(form, duration, participants) {
@@ -1591,7 +1623,10 @@
       renderSelectedTicket();
       return;
     }
-    const matchingTickets = (state.payload?.tickets || []).filter((ticket) => ticketMatchesKind(ticket, kind));
+    const lessonDate = $("#scheduleV2EditorForm")?.elements?.lessonDate?.value || state.selectedDate;
+    const matchingTickets = (state.payload?.tickets || []).filter((ticket) => (
+      ticketMatchesKind(ticket, kind) && ticketSelectableForLesson(ticket, lessonDate)
+    ));
     const candidates = matchingTickets.map((ticket) => ({ ticket, userId: "" }));
     const rows = candidates
       .filter(({ ticket, userId }) => {
@@ -1938,6 +1973,7 @@
     window.scrollTo(0, state.editorScrollY);
     state.editorFocusTarget?.focus?.({ preventScroll: true });
     state.editorFocusTarget = null;
+    state.reopeningLesson = null;
     if (state.deferredRefresh) {
       state.deferredRefresh = false;
       requestLiveRefresh();
@@ -1955,13 +1991,17 @@
   function openEditor({ date, time, coachRoleId, lesson = null, kind: preferredKind = null }) {
     const form = $("#scheduleV2EditorForm");
     form.reset();
-    state.editingLesson = lesson;
+    const reopeningLesson = lesson?.status === "cancelled" ? lesson : null;
+    state.reopeningLesson = reopeningLesson;
+    state.editingLesson = reopeningLesson ? null : lesson;
     state.selectedTicketId = "";
-    state.selectedParticipants = lesson?.oneDayBooking && lesson.linkedUserId
+    state.selectedParticipants = reopeningLesson
+      ? []
+      : lesson?.oneDayBooking && lesson.linkedUserId
       ? [{ userId: String(lesson.linkedUserId), ticketId: "", name: memberById(lesson.linkedUserId)?.name || lesson.memberLabel || "회원" }]
       : lesson?.participants?.map((participant) => ({ ...participant })) || [];
     fillEditorControls({ date, time, coachRoleId });
-    $("#scheduleV2EditorTitle").textContent = lesson ? "수업 수정" : "수업 추가";
+    $("#scheduleV2EditorTitle").textContent = reopeningLesson ? "취소 자리 새 수업" : lesson ? "수업 수정" : "수업 추가";
     $("#scheduleV2SlotLabel").textContent = `${dateLabel(date)} · ${time}`;
     const kind = lesson?.scheduleKind || preferredKind || "regular";
     const kindInput = form.querySelector(`input[name="scheduleKind"][value="${kind}"]`);
@@ -1977,9 +2017,11 @@
     $("#scheduleV2SeriesOption").hidden = Boolean(lesson) || kind !== "regular";
     $("#scheduleV2CancelLessonButton").hidden = !lesson || Boolean(lesson.oneDayBooking) || !["scheduled", "pending_change"].includes(lesson.status);
     $("#scheduleV2DeleteLessonButton").hidden = !lesson;
-    if (lesson) {
+    if (lesson && !reopeningLesson) {
       state.selectedTicketId = [...new Set(state.selectedParticipants.map((participant) => String(participant.ticketId || "")).filter(Boolean))].join(",");
       $("#scheduleV2MemberSearch").value = lessonParticipantLabel(lesson);
+    } else if (reopeningLesson) {
+      $("#scheduleV2MemberSearch").value = "";
     }
     syncMemberPickerMode();
     renderMemberResults();
@@ -1987,7 +2029,7 @@
     renderSubstituteEditor();
     renderOutcomeEditor();
     syncRegularEditScope();
-    setEditorMessage("");
+    setEditorMessage(reopeningLesson ? "취소 기록은 그대로 보존하고 이 자리에 새 수업을 등록합니다." : "", reopeningLesson ? "info" : "");
     state.editorScrollY = window.scrollY;
     state.editorFocusTarget = document.activeElement;
     editor.hidden = false;
@@ -2020,6 +2062,7 @@
       schedule_v2_substitute_same_as_original: "원 담당 코치와 다른 코치를 선택해 주세요.",
       schedule_v2_substitute_hourly_amount_required: "시급 정산 금액을 입력해 주세요.",
       schedule_v2_outcome_status_invalid: "이미 처리되거나 취소된 수업입니다. 새로고침 후 확인해 주세요.",
+      schedule_v2_closed_lesson_edit_forbidden: "완료·취소된 수업 기록은 일반 수정할 수 없습니다. 취소 기록은 보존하고 빈 자리에 새 수업을 등록해 주세요.",
       schedule_v2_outcome_ticket_units_unavailable: "차감할 회원권 잔여 횟수가 부족합니다.",
       schedule_v2_outcome_participant_ticket_mismatch: "수업 회원과 회원권 연결이 맞지 않습니다.",
       schedule_v2_feedback_comment_required: "완료 수업의 피드백을 5자 이상 입력해 주세요.",
@@ -2052,6 +2095,8 @@
     const groupTicket = tickets.find((ticket) => Number(ticket.groupSize ?? ticket.group_size) === 2);
     if (kind !== "one_day" && groupTicket && state.selectedParticipants.length < 2) return "1:2 회원권은 두 회원 연결이 필요합니다.";
     if (tickets.some((ticket) => !ticketMatchesKind(ticket, kind))) return "선택한 수업 종류와 회원권이 맞지 않습니다.";
+    const lessonDate = $("#scheduleV2EditorForm")?.elements?.lessonDate?.value || state.selectedDate;
+    if (tickets.some((ticket) => !ticketSelectableForLesson(ticket, lessonDate))) return "수업일에 사용 가능한 회원권을 선택해 주세요.";
     if (tickets.some((ticket) => duration % Math.max(1, Number(ticket.lessonMinutes ?? ticket.lesson_minutes) || 20) !== 0)) return "수업 시간이 회원권 단위와 맞지 않습니다.";
     return "";
   }
@@ -2271,7 +2316,7 @@
       return;
     }
     if (!requireWritableServer()) return;
-    const lesson = state.editingLesson;
+    const lesson = state.editingLesson || state.reopeningLesson;
     if (!lesson) return;
     const participantNames = lessonParticipantLabel(lesson) || "선택한 회원";
     const confirmation = lesson.oneDayBooking
