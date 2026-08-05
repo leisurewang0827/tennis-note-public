@@ -776,12 +776,17 @@
     return closureAtDate(state.selectedDate, time, durationMinutes);
   }
 
-  function coachAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability) {
+  function coachBaseAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability) {
     const rows = availabilityRows(coach).filter((row) => Number(row.dayOfWeek ?? row.day_of_week) === dayOfWeek);
     const available = rows.filter((row) => (row.type || row.availability_type) === "available");
+    return available.length ? available.some((row) => intervalContains(row, minute)) : !hasAnyAvailability;
+  }
+
+  function coachAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability) {
+    const rows = availabilityRows(coach).filter((row) => Number(row.dayOfWeek ?? row.day_of_week) === dayOfWeek);
     const blocked = rows.filter((row) => (row.type || row.availability_type) === "blocked");
-    const baseAvailable = available.length ? available.some((row) => intervalContains(row, minute)) : !hasAnyAvailability;
-    return baseAvailable && !blocked.some((row) => intervalContains(row, minute));
+    return coachBaseAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability)
+      && !blocked.some((row) => intervalContains(row, minute));
   }
 
   function lessonOverlaps(lesson, time) {
@@ -828,7 +833,7 @@
     times.forEach((time) => {
       const minute = timeMinutes(time);
       const candidates = coaches.filter((coach) => (
-        coachAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability)
+        coachBaseAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability)
         || laneOccupancy.has(`${coach.roleId}|${time}`)
       ));
       if (!candidates.length) {
@@ -904,7 +909,7 @@
     }) || null;
   }
 
-  function coachAvailableForLesson(coach, date, startTime, durationMinutes, hasAnyAvailability) {
+  function coachAvailableForLesson(coach, date, startTime, durationMinutes, hasAnyAvailability, allowLockedTimeOverride = false) {
     if (!coach) return false;
     const dayOfWeek = new Date(`${date}T12:00:00`).getDay();
     const start = timeMinutes(startTime);
@@ -913,12 +918,15 @@
     const branchEnd = timeMinutes(state.payload?.branch?.openEnd || state.payload?.branch?.open_end || "22:00");
     if (start < branchStart || end > branchEnd) return false;
     for (let minute = start; minute < end; minute += 10) {
-      if (!coachAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability)) return false;
+      const available = allowLockedTimeOverride
+        ? coachBaseAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability)
+        : coachAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability);
+      if (!available) return false;
     }
     return true;
   }
 
-  function canStartLessonAt({ date, startTime, coachRoleId, durationMinutes = defaultAddDurationMinutes, ignoredLessonId = null, requireAvailability = true }) {
+  function canStartLessonAt({ date, startTime, coachRoleId, durationMinutes = defaultAddDurationMinutes, ignoredLessonId = null, requireAvailability = true, allowLockedTimeOverride = false }) {
     if (!date || !startTime || !coachRoleId) return false;
     if (lessonPlacementConflict({ date, startTime, coachRoleId, durationMinutes, ignoredLessonId })) return false;
     if (!requireAvailability) return true;
@@ -926,7 +934,7 @@
     const coach = coaches.find((item) => String(item.roleId) === String(coachRoleId));
     const hasAnyAvailability = coaches.some((item) => availabilityRows(item)
       .some((row) => (row.type || row.availability_type) === "available"));
-    return coachAvailableForLesson(coach, date, startTime, durationMinutes, hasAnyAvailability);
+    return coachAvailableForLesson(coach, date, startTime, durationMinutes, hasAnyAvailability, allowLockedTimeOverride);
   }
 
   function placementConflictMessage({ date, startTime, coachRoleId, durationMinutes, ignoredLessonId = null }) {
@@ -990,7 +998,7 @@
       const minute = timeMinutes(time);
       const activeById = new Map();
       coaches.forEach((coach) => {
-        if (coachAvailableAt(coach, dayOfWeek, minute, hasConfiguredAvailability)) {
+        if (coachBaseAvailableAt(coach, dayOfWeek, minute, hasConfiguredAvailability)) {
           activeById.set(String(coach.roleId), coach);
         }
       });
@@ -1114,7 +1122,8 @@
           const occupied = Boolean(coach && collections.occupiedSlots.has(slotKey));
           const history = Boolean(coach && collections.historySlots.has(slotKey));
           const closure = coach ? closureAtDate(plan.date, time) : null;
-          const stateName = !coach ? "unavailable" : occupied ? "occupied" : history ? "history" : "available";
+          const locked = Boolean(coach && !coachAvailableAt(coach, plan.dayOfWeek, timeMinutes(time), plan.hasConfiguredAvailability));
+          const stateName = !coach ? "unavailable" : occupied ? "occupied" : history ? "history" : locked ? "manual_override" : "available";
           const closureLabel = closure?.label || "";
           const runKey = [roleId, stateName, closureLabel].join("|");
           const previousRun = runs.at(-1);
@@ -1149,10 +1158,11 @@
             return;
           }
           const closureText = run.closureLabel ? ` · ${run.closureLabel}` : "";
-          if (run.stateName !== "available") {
+          if (!["available", "manual_override"].includes(run.stateName)) {
             bodyCells.push(`<div class="schedule-v2-week-slot ${classes}" style="${styleFor(0, run.slotCount)}" title="${escapeHtml(`${run.coach.name} ${startTime}-${endTime}${closureText}`)}"></div>`);
             return;
           }
+          const lockedOverride = run.stateName === "manual_override";
           const startSegments = [];
           for (let offset = 0; offset < run.slotCount; offset += 1) {
             const candidateTime = minutesTime(timeMinutes(startTime) + offset * 10);
@@ -1161,6 +1171,7 @@
               startTime: candidateTime,
               coachRoleId: run.roleId,
               durationMinutes: defaultAddDurationMinutes,
+              allowLockedTimeOverride: true,
             });
             const previousSegment = startSegments.at(-1);
             if (previousSegment?.valid === valid) previousSegment.slotCount += 1;
@@ -1169,12 +1180,13 @@
           startSegments.forEach((segment) => {
             const segmentStart = minutesTime(timeMinutes(startTime) + segment.startOffset * 10);
             const segmentEnd = minutesTime(timeMinutes(segmentStart) + segment.slotCount * 10);
-            const segmentClasses = ["schedule-v2-week-run", dayClass, segment.startOffset === 0 ? shiftClass : "", closureClass].filter(Boolean).join(" ");
+            const segmentClasses = ["schedule-v2-week-run", dayClass, segment.startOffset === 0 ? shiftClass : "", closureClass, lockedOverride ? "is-locked-override" : ""].filter(Boolean).join(" ");
             if (!segment.valid) {
               bodyCells.push(`<div class="schedule-v2-week-slot ${segmentClasses} is-duration-unavailable" style="${styleFor(segment.startOffset, segment.slotCount)}" title="${escapeHtml(`${run.coach.name} · ${segmentStart}부터 ${defaultAddDurationMinutes}분 수업 공간 부족`)}"></div>`);
               return;
             }
-            bodyCells.push(`<button class="schedule-v2-week-slot schedule-v2-week-add schedule-v2-week-add-run ${segmentClasses}" type="button" style="${styleFor(segment.startOffset, segment.slotCount)}" data-v2-add data-v2-add-run data-date="${plan.date}" data-time="${segmentStart}" data-start-time="${segmentStart}" data-slot-count="${segment.slotCount}" data-duration-minutes="${defaultAddDurationMinutes}" data-coach-role-id="${escapeHtml(run.roleId)}" aria-label="${escapeHtml(`${run.coach.name} ${dateLabel(plan.date)} ${segmentStart}-${segmentEnd} ${defaultAddDurationMinutes}분 수업 시작 가능`)}" title="${escapeHtml(`${run.coach.name} · ${segmentStart}-${segmentEnd}${run.closureLabel ? ` · ${run.closureLabel} 관리자 등록 가능` : ""}`)}"></button>`);
+            const overrideLabel = lockedOverride ? " · 브레이크 · 관리자 수동 등록 가능" : run.closureLabel ? ` · ${run.closureLabel} 관리자 등록 가능` : "";
+            bodyCells.push(`<button class="schedule-v2-week-slot schedule-v2-week-add schedule-v2-week-add-run ${segmentClasses}" type="button" style="${styleFor(segment.startOffset, segment.slotCount)}" data-v2-add data-v2-add-run data-date="${plan.date}" data-time="${segmentStart}" data-start-time="${segmentStart}" data-slot-count="${segment.slotCount}" data-duration-minutes="${defaultAddDurationMinutes}" data-coach-role-id="${escapeHtml(run.roleId)}" aria-label="${escapeHtml(`${run.coach.name} ${dateLabel(plan.date)} ${segmentStart}-${segmentEnd} ${defaultAddDurationMinutes}분 수업 시작 가능${lockedOverride ? " 브레이크 관리자 수동 등록" : ""}`)}" title="${escapeHtml(`${run.coach.name} · ${segmentStart}-${segmentEnd}${overrideLabel}`)}"></button>`);
           });
         });
       }
@@ -1255,6 +1267,10 @@
       const closure = closureAt(time);
       const closureClass = closure ? "is-closure" : "";
       const closureLabel = closure?.label || "휴무";
+      const dayOfWeek = new Date(`${state.selectedDate}T12:00:00`).getDay();
+      const hasConfiguredAvailability = (state.payload?.coaches || []).some((item) => availabilityRows(item)
+        .some((row) => (row.type || row.availability_type) === "available"));
+      const lockedOverride = !coachAvailableAt(coach, dayOfWeek, timeMinutes(time), hasConfiguredAvailability);
       if (occupied || history) {
         return `<div class="schedule-v2-slot ${occupied ? "is-occupied" : ""} ${history ? "has-history" : ""} ${closureClass}" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" ${closure ? `title="${escapeHtml(closureLabel)}"` : ""}></div>`;
       }
@@ -1263,11 +1279,14 @@
         startTime: time,
         coachRoleId: coach.roleId,
         durationMinutes: defaultAddDurationMinutes,
+        allowLockedTimeOverride: true,
       });
       if (!canStart) {
         return `<div class="schedule-v2-slot is-duration-unavailable ${closureClass}" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" title="${escapeHtml(`${coach.name} · ${time}부터 ${defaultAddDurationMinutes}분 수업 공간 부족`)}"></div>`;
       }
-      return `<button class="schedule-v2-slot schedule-v2-add ${closureClass}" type="button" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" data-v2-add data-date="${state.selectedDate}" data-time="${time}" data-duration-minutes="${defaultAddDurationMinutes}" data-coach-role-id="${escapeHtml(coach.roleId)}" aria-label="${escapeHtml(`${coach.name} ${time} ${defaultAddDurationMinutes}분 ${closure ? `${closureLabel} 관리자 수업 추가` : "수업 추가"}`)}" ${closure ? `title="${escapeHtml(`${closureLabel} · 관리자는 직접 등록할 수 있습니다.`)}"` : ""}>+</button>`;
+      const overrideClass = lockedOverride ? "is-locked-override" : "";
+      const overrideText = lockedOverride ? "브레이크 · 관리자 수동 등록" : closure ? `${closureLabel} 관리자 수업 추가` : "수업 추가";
+      return `<button class="schedule-v2-slot schedule-v2-add ${closureClass} ${overrideClass}" type="button" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" data-v2-add data-date="${state.selectedDate}" data-time="${time}" data-duration-minutes="${defaultAddDurationMinutes}" data-coach-role-id="${escapeHtml(coach.roleId)}" aria-label="${escapeHtml(`${coach.name} ${time} ${defaultAddDurationMinutes}분 ${overrideText}`)}" ${lockedOverride || closure ? `title="${escapeHtml(`${overrideText} 가능`)}"` : ""}>+</button>`;
     })).join("");
     const lessonCards = activeLessons.map((lesson) => {
       const rowIndex = startIndex.get(String(lesson.startTime).slice(0, 5));
@@ -1554,6 +1573,7 @@
     const effectiveStart = latestStart > selectedDate ? latestStart : selectedDate;
     if (!selectedDate || effectiveStart > earliestEnd) return { error: "회원권 사용기간 안의 날짜를 선택해 주세요." };
     return {
+      selectedTickets,
       rule: {
         coachRoleId: form.elements.coachRoleId.value,
         dayOfWeek: new Date(`${selectedDate}T12:00:00`).getDay(),
@@ -1563,6 +1583,26 @@
         effectiveEndOn: earliestEnd,
       },
     };
+  }
+
+  function requiredRegularAnchorCount(duration, selectedTickets = []) {
+    return selectedTickets.reduce((required, ticket) => {
+      const weeklyUnits = Math.max(1, Number(ticket.frequencyPerWeek ?? ticket.frequency_per_week) || 1);
+      const ticketUnit = Math.max(1, Number(ticket.lessonMinutes ?? ticket.lesson_minutes) || 20);
+      const unitsPerAnchor = Math.max(1, Math.ceil(duration / ticketUnit));
+      return Math.max(required, Math.ceil(weeklyUnits / unitsPerAnchor));
+    }, 1);
+  }
+
+  function singleAnchorNeedsFillVerification(result, prepared, duration) {
+    const normalized = Array.isArray(result) ? result[0] || {} : result || {};
+    if (normalized.anchorPending || requiredRegularAnchorCount(duration, prepared.selectedTickets) !== 1) return false;
+    const unitsRequired = prepared.selectedTickets.map((ticket) => {
+      const ticketUnit = Math.max(1, Number(ticket.lessonMinutes ?? ticket.lesson_minutes) || 20);
+      return Math.max(1, Math.ceil(duration / ticketUnit));
+    });
+    const hasMoreCapacity = prepared.selectedTickets.every((ticket, index) => Number(ticket.remaining ?? ticket.remaining_sessions ?? 0) > unitsRequired[index]);
+    return hasMoreCapacity && Number(normalized.createdCount || 0) <= 1;
   }
 
   function updateSeriesGuidance() {
@@ -2402,6 +2442,21 @@
           target_operation_key: operationKey("admin-series"),
           target_replace_v2_rules: false,
         });
+        if (singleAnchorNeedsFillVerification(saveResult, prepared, duration)) {
+          const firstResult = Array.isArray(saveResult) ? saveResult[0] || {} : saveResult || {};
+          const verifiedResult = await api.rpc("tn_schedule_v2_fill_regular_series", {
+            target_branch_id: snapshot.branchId,
+            target_participants: participants,
+            target_rules: [prepared.rule],
+            target_operation_key: operationKey("admin-series-verify"),
+            target_replace_v2_rules: false,
+          });
+          const normalizedVerified = Array.isArray(verifiedResult) ? verifiedResult[0] || {} : verifiedResult || {};
+          saveResult = {
+            ...normalizedVerified,
+            createdCount: Number(firstResult.createdCount || 0) + Number(normalizedVerified.createdCount || 0),
+          };
+        }
       } else {
         saveResult = await api.rpc("tn_schedule_v2_save_lesson", {
           target_branch_id: snapshot.branchId,

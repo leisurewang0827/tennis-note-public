@@ -36,6 +36,7 @@ const state = {
   scheduleAssignmentFilter: "all",
   editingBreakRuleId: "",
   billingFilter: "action",
+  billingMonth: "",
   billingPage: 0,
   settlementPage: 0,
   rechargePage: 0,
@@ -7208,6 +7209,7 @@ function adminViewUiSignature(view) {
   if (view === "billing") {
     return JSON.stringify(common.concat([
       state.billingFilter,
+      state.billingMonth,
       state.billingPage,
       state.settlementPage,
       state.rechargePage,
@@ -9517,6 +9519,37 @@ function memberManagementTickets(member) {
   ));
 }
 
+function memberTicketListMarkup(member) {
+  const managedTickets = memberManagementTickets(member).filter((ticket) => ticket.status !== "voided");
+  if (!managedTickets.length) return '<span class="member-table-muted">미등록</span>';
+  return `<button class="member-ticket-summary-button" type="button" data-select-member="${member.id}" aria-label="${escapeHtml(member.name)} 회원권 ${managedTickets.length}개 확인">
+    ${managedTickets.slice(0, 3).map((ticket) => `
+      <span class="member-ticket-summary-line">
+        <strong>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</strong>
+        <small>${escapeHtml(memberTicketStatusLabel(ticket))} · ${escapeHtml(ticketUsageLabel(ticket))}</small>
+      </span>`).join("")}
+    ${managedTickets.length > 3 ? `<small class="member-ticket-summary-more">외 ${managedTickets.length - 3}개</small>` : ""}
+  </button>`;
+}
+
+function memberPaymentOverviewMarkup(member) {
+  const managedTickets = memberManagementTickets(member).filter((ticket) => ticket.status !== "voided");
+  const paymentRows = managedTickets.map((ticket) => {
+    const record = memberDatabaseRecord(member, ticket);
+    if (!record || (!record.payment_recorded_on && !record.payment_method && !(Number(record.payment_amount) > 0))) return null;
+    const date = record.payment_recorded_on ? memberDetailDateLabel(record.payment_recorded_on) : "일자 미입력";
+    const method = record.payment_method ? paymentMethodLabel(record.payment_method) : "수단 미입력";
+    const amount = Number.isFinite(Number(record.payment_amount)) ? `${money.format(Number(record.payment_amount))}원` : "금액 미입력";
+    return `<span class="member-payment-summary-line"><strong>${escapeHtml(date)}</strong><small>${escapeHtml(`${method} · ${amount}`)}</small></span>`;
+  }).filter(Boolean);
+  if (paymentRows.length) return paymentRows.slice(0, 3).join("") + (paymentRows.length > 3 ? `<small>외 ${paymentRows.length - 3}건</small>` : "");
+  const recentPayment = latestMemberPayment(member);
+  if (!recentPayment) return '<span class="member-table-muted">미입력</span>';
+  const date = memberDetailDateLabel(recentPayment.paidAt || recentPayment.verifiedAt || recentPayment.requestedAt);
+  const amount = money.format(recentPayment.finalAmount || recentPayment.amount || 0);
+  return `<span class="member-payment-summary-line"><strong>${escapeHtml(date)}</strong><small>${escapeHtml(`${paymentMethodLabel(recentPayment.method)} · ${amount}원`)}</small></span>`;
+}
+
 function renderMemberManagementControls(member) {
   if (!member?.serverUserId || !operationsAccessReady()) return "";
   const status = memberListStatus(member);
@@ -9742,7 +9775,7 @@ function memberManagementDatabaseFields({
         <option value="manual" ${paymentMethod === "manual" ? "selected" : ""}>관리자 입력</option>
         ${paymentMethod && !["card", "bank", "bank_transfer", "transfer", "cash", "manual"].includes(paymentMethod) ? `<option value="${escapeHtml(paymentMethod)}" selected>${escapeHtml(paymentMethodLabel(paymentMethod))}</option>` : ""}
       </select></label>
-      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1000" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
+      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
       <label class="form-field span-2">${memberManagementFieldLabel("비고")}<textarea name="note" rows="3" maxlength="500">${escapeHtml(note)}</textarea></label>
       <div class="form-field span-2 member-partner-editor ${lessonType === "one_on_two" ? "" : "is-disabled"}" data-manual-member-partner-field>
         ${memberManagementFieldLabel("1:2 파트너", lessonType === "one_on_two")}
@@ -9799,7 +9832,7 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
         <option value="bank_transfer">계좌이체</option>
         <option value="cash">현금</option>
       </select></label>
-      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1000" value="0" /></label>
+      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="0" /></label>
       <div class="form-field span-2 member-partner-editor ${isGroup ? "" : "is-disabled"}" data-manual-member-partner-field ${isGroup ? "" : "hidden"}>
         ${memberManagementFieldLabel("1:2 파트너", isGroup)}
         <div class="member-partner-mode" role="radiogroup" aria-label="파트너 등록 방법">
@@ -9844,9 +9877,9 @@ function memberManualProfileFields(member = {}) {
   return `
     <label class="form-field span-2">${memberManagementFieldLabel("실명", true)}<input name="memberName" type="text" minlength="2" maxlength="40" value="${escapeHtml(member.name || "")}" autocomplete="name" required /></label>
     <label class="form-field">${memberManagementFieldLabel("닉네임")}<input name="memberNickname" type="text" minlength="2" maxlength="16" value="${escapeHtml(member.nickname || "")}" placeholder="선택 입력" /></label>
-    <label class="form-field">${memberManagementFieldLabel("휴대전화")}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" value="${escapeHtml(member.phone || "")}" placeholder="010-0000-0000" /></label>
-    <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" value="${escapeHtml(String(member.birthYear || ""))}" placeholder="예: 1990" /></label>
-    <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" value="${escapeHtml(member.neighborhood || "")}" placeholder="예: 군자동" /></label>
+    <label class="form-field">${memberManagementFieldLabel("휴대전화", true)}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" value="${escapeHtml(member.phone || "")}" placeholder="010-0000-0000" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("출생연도", true)}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" value="${escapeHtml(String(member.birthYear || ""))}" placeholder="예: 1990" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("거주동", true)}<input name="memberNeighborhood" type="text" maxlength="40" value="${escapeHtml(member.neighborhood || "")}" placeholder="예: 군자동" required /></label>
     <label class="form-field">${memberManagementFieldLabel("성별")}<select name="memberGender">
       <option value="" ${member.gender ? "" : "selected"}>미입력</option>
       <option value="female" ${member.gender === "female" ? "selected" : ""}>여성</option>
@@ -9983,10 +10016,10 @@ async function loadMemberLinkCandidates(member, query = memberManagementModalSta
 function memberManualRegistrationFields() {
   return `
     <label class="form-field span-2">${memberManagementFieldLabel("이름", true)}<input name="memberName" type="text" minlength="2" maxlength="40" autocomplete="name" required /></label>
-    <label class="form-field">${memberManagementFieldLabel("휴대전화")}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" placeholder="010-0000-0000" /></label>
-    <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="예: 1990" /></label>
+    <label class="form-field">${memberManagementFieldLabel("휴대전화", true)}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" placeholder="010-0000-0000" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("출생연도", true)}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="예: 1990" required /></label>
     <input name="memberNickname" type="hidden" value="" />
-    <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="예: 군자동" /></label>
+    <label class="form-field">${memberManagementFieldLabel("거주동", true)}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="예: 군자동" required /></label>
     <input name="memberGender" type="hidden" value="" />
     <input name="memberDominantHand" type="hidden" value="" />
     <input name="memberBackhandStyle" type="hidden" value="" />
@@ -10171,7 +10204,7 @@ function renderMemberManagementModal() {
         <label class="form-field"><span>잔여횟수</span><input name="remainingSessions" type="number" min="0" step="1" value="${defaultRemaining}" readonly aria-readonly="true" required /><small>자동 계산</small></label>
         <label class="form-field"><span>시작일</span><input name="startsOn" type="date" value="${defaultStartsOn}" required /></label>
         <label class="form-field"><span>만료일</span><input name="expiresOn" type="date" value="${defaultExpiresOn}" required /></label>
-        <label class="form-field"><span>등록 금액</span><input name="purchasedPrice" type="number" min="0" step="1000" value="${Number(product?.cash_price || product?.card_price || ticket?.amount || 0)}" required /></label>
+        <label class="form-field"><span>등록 금액</span><input name="purchasedPrice" type="number" min="0" step="1" value="${Number(product?.cash_price || product?.card_price || ticket?.amount || 0)}" required /></label>
       </div>
       <p class="member-management-rule">과거 회원권은 그대로 보관하고 새 회원권을 만듭니다. 2대1 파트너도 함께 연결됩니다.</p>` : `<p class="form-message danger">같은 지점·수업형태의 사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "expire") {
@@ -10697,6 +10730,36 @@ function memberManagementDatabasePayload(form, member, ticket, reason) {
   };
 }
 
+function validateRequiredMemberProfile(form, message = null) {
+  const phone = form.elements.memberPhone;
+  const birthYear = form.elements.memberBirthYear;
+  const neighborhood = form.elements.memberNeighborhood;
+  if (!phone && !birthYear && !neighborhood) return true;
+  const currentYear = new Date().getFullYear();
+  const phoneDigits = String(phone?.value || "").replace(/\D/g, "");
+  const birthValue = Number(birthYear?.value || 0);
+  const neighborhoodValue = String(neighborhood?.value || "").trim();
+  let invalidControl = null;
+  let errorText = "";
+  if (phone && phoneDigits.length < 8) {
+    invalidControl = phone;
+    errorText = "휴대전화 번호를 입력해 주세요.";
+  } else if (birthYear && (!Number.isInteger(birthValue) || birthValue < 1900 || birthValue > currentYear)) {
+    invalidControl = birthYear;
+    errorText = "출생연도를 네 자리로 입력해 주세요.";
+  } else if (neighborhood && !neighborhoodValue) {
+    invalidControl = neighborhood;
+    errorText = "거주동을 입력해 주세요.";
+  }
+  if (!invalidControl) return true;
+  if (message) {
+    message.textContent = errorText;
+    message.classList?.add("is-error");
+  }
+  invalidControl.focus();
+  return false;
+}
+
 async function submitMemberManagementForm(event) {
   event.preventDefault();
   const form = event.target;
@@ -10711,6 +10774,7 @@ async function submitMemberManagementForm(event) {
     if (message) message.textContent = "현재 계정에는 이 작업 권한이 없습니다.";
     return;
   }
+  if (!validateRequiredMemberProfile(form, message)) return;
 
   syncMemberManagementBalance(form);
   const reason = automaticMemberManagementReason(action);
@@ -12001,7 +12065,7 @@ function updateOnsitePaymentAmount() {
   const product = onsitePaymentProducts().find(({ server }) => String(server.id) === String($("#onsitePaymentProduct")?.value));
   const method = $("#onsitePaymentMethod")?.value || "bank_transfer";
   const amount = Number(method === "card" ? product?.server?.card_price : product?.server?.cash_price) || 0;
-  if ($("#onsitePaymentAmount")) $("#onsitePaymentAmount").textContent = money.format(amount);
+  if ($("#onsitePaymentAmount")) $("#onsitePaymentAmount").value = String(Math.max(0, Math.round(amount)));
 }
 
 function closeOnsitePaymentModal() {
@@ -12039,25 +12103,27 @@ async function submitOnsitePayment(event) {
   const productId = $("#onsitePaymentProduct")?.value || "";
   const paymentMethod = $("#onsitePaymentMethod")?.value || "";
   const paymentDate = $("#onsitePaymentDate")?.value || "";
-  if (!userId || !productId || !paymentDate) {
-    $("#onsitePaymentMessage").textContent = "회원, 회원권 상품, 결제일을 확인해 주세요.";
+  const paymentAmount = Number($("#onsitePaymentAmount")?.value);
+  if (!userId || !productId || !paymentDate || !Number.isInteger(paymentAmount) || paymentAmount < 0) {
+    $("#onsitePaymentMessage").textContent = "회원, 회원권 상품, 결제일, 실제 결제금액을 확인해 주세요.";
     return;
   }
   const submit = event.submitter || $("#onsitePaymentForm button[type='submit']");
   submit.disabled = true;
   $("#onsitePaymentMessage").textContent = "현장결제와 회원권을 서버에 저장하고 있습니다.";
   try {
-    const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_reenroll_members", {
-      target_user_ids: [userId],
+    const result = await window.TennisNoteDataClient.rpc("tn_admin_record_onsite_payment", {
+      target_user_id: userId,
       target_product_id: productId,
       target_payment_method: paymentMethod,
       target_payment_date: paymentDate,
+      target_payment_amount: paymentAmount,
       target_starts_on: $("#onsitePaymentStartDate")?.value || null,
       target_keep_schedule: Boolean($("#onsitePaymentKeepSchedule")?.checked),
       target_operation_key: createAdminOperationKey("onsite-payment"),
     });
     const processed = Number(result?.processedCount ?? result?.processed_count ?? 0);
-    if (processed !== 1) throw new Error(result?.failed?.[0]?.reason || "onsite_payment_not_saved");
+    if (processed !== 1 && result?.idempotent !== true) throw new Error(result?.failed?.[0]?.reason || "onsite_payment_not_saved");
     await syncAdminLiveData(true);
     await loadServerPaymentsIntoBilling({ silent: true });
     closeOnsitePaymentModal();
@@ -12324,8 +12390,9 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
           <input name="expectedTicketUpdatedAt" type="hidden" value="${escapeHtml(ticket?.serverUpdatedAt || "")}" />
           <div class="member-inline-compact-grid">
             <label><span>이름</span><input name="memberName" value="${escapeHtml(member.name || "")}" required /></label>
-            <label><span>연락처</span><input name="memberPhone" inputmode="tel" value="${escapeHtml(member.phone || "")}" /></label>
-            <label><span>출생연도</span><input name="memberBirthYear" type="number" min="1900" max="2100" value="${escapeHtml(memberManagementValue(member.birthYear))}" /></label>
+            <label><span>연락처 · 필수</span><input name="memberPhone" inputmode="tel" value="${escapeHtml(member.phone || "")}" required /></label>
+            <label><span>출생연도 · 필수</span><input name="memberBirthYear" type="number" min="1900" max="2100" value="${escapeHtml(memberManagementValue(member.birthYear))}" required /></label>
+            <label><span>거주동 · 필수</span><input name="memberNeighborhood" value="${escapeHtml(member.neighborhood || "")}" required /></label>
             <label class="member-inline-product"><span>회원권</span><select name="productId">
               <option value="">${ticket ? "회원권 취소·만료" : "미등록"}</option>${productOptions}
             </select></label>
@@ -12352,7 +12419,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
               <option value="bank_transfer" ${["bank", "bank_transfer", "transfer"].includes(record?.payment_method) ? "selected" : ""}>계좌이체</option>
               <option value="cash" ${record?.payment_method === "cash" ? "selected" : ""}>현금</option>
             </select></label>
-            <label><span>결제금액</span><input name="paymentAmount" type="number" min="0" step="1000" value="${escapeHtml(memberManagementValue(record?.payment_amount ?? ""))}" /></label>
+            <label><span>결제금액</span><input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(record?.payment_amount ?? ""))}" /></label>
             <label class="member-inline-note"><span>비고</span><input name="note" value="${escapeHtml(record?.admin_note || member.note || "")}" /></label>
             <label class="member-inline-schedule-scope"><span>시간표 반영</span><select name="applyToFutureSchedule">
               <option value="false">회원권만 저장 · 기존 시간표 유지</option>
@@ -12540,9 +12607,9 @@ function memberInlineEditorMarkup(member, ticket) {
           </div>
           <div class="member-inline-editor-grid member-inline-editor-grid--profile">
             <label><span>이름</span><input name="memberName" value="${escapeHtml(member.name || "")}" required /></label>
-            <label><span>연락처</span><input name="memberPhone" inputmode="tel" value="${escapeHtml(member.phone || "")}" /></label>
-            <label><span>출생연도</span><input name="memberBirthYear" type="number" min="1900" max="2100" value="${escapeHtml(memberManagementValue(member.birthYear))}" /></label>
-            <label><span>거주동</span><input name="memberNeighborhood" value="${escapeHtml(member.neighborhood || "")}" /></label>
+            <label><span>연락처 · 필수</span><input name="memberPhone" inputmode="tel" value="${escapeHtml(member.phone || "")}" required /></label>
+            <label><span>출생연도 · 필수</span><input name="memberBirthYear" type="number" min="1900" max="2100" value="${escapeHtml(memberManagementValue(member.birthYear))}" required /></label>
+            <label><span>거주동 · 필수</span><input name="memberNeighborhood" value="${escapeHtml(member.neighborhood || "")}" required /></label>
             <label><span>성별</span><select name="memberGender">
               <option value="">미입력</option>
               <option value="female" ${member.gender === "female" ? "selected" : ""}>여</option>
@@ -12579,7 +12646,7 @@ function memberInlineEditorMarkup(member, ticket) {
               <option value="manual" ${paymentMethod === "manual" ? "selected" : ""}>관리자 입력</option>
             </select></label>
             <label><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" ${required} /></label>
-            <label><span>금액</span><input name="paymentAmount" type="number" min="0" step="1000" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
+            <label><span>금액</span><input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
             <label class="member-inline-note"><span>비고</span><input name="note" value="${escapeHtml(record?.admin_note || member.note || "")}" /></label>
           </div>` : ""}
           <div class="member-inline-editor-actions">
@@ -12600,6 +12667,10 @@ async function submitMemberInlineEditor(form, options = {}) {
   const message = form.querySelector(".member-inline-message");
   const submit = form.querySelector("button[type='submit']");
   if (!member?.serverUserId || memberEditorMode === "audit") return;
+  if (!validateRequiredMemberProfile(form, message)) {
+    form.classList.add("is-save-error");
+    return false;
+  }
   syncMemberQuickEditorProduct(form);
   syncMemberInlineProductCancellation(form);
   if (ticket) syncMemberManagementBalance(form);
@@ -13013,7 +13084,7 @@ function renderMembers(options = {}) {
   const preserveList = options.preserveList === true && memberRows?.children.length;
   if (!preserveList) {
     memberRows.innerHTML = serverDirectoryPending
-      ? '<tr><td colspan="9" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
+      ? '<tr><td colspan="10" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
       : visibleMembers.length ? visibleMembers
       .map((member) => {
       const ticket = memberCurrentTicket(member);
@@ -13036,21 +13107,20 @@ function renderMembers(options = {}) {
           </td>
           <td class="member-auth-column">${memberAuthStatusMarkup(member)}</td>
           <td class="member-coach-column">${escapeHtml(member.coach || "미배정")}</td>
-          <td class="member-ticket-column">
-            <strong class="member-table-primary">${escapeHtml(memberTicketDisplayLabel(member, ticket))}</strong>
-          </td>
+          <td class="member-ticket-column">${memberTicketListMarkup(member)}</td>
           <td class="member-schedule-column">${escapeHtml(memberScheduleSummary(member))}</td>
           <td class="member-usage-column">${escapeHtml(memberUsageDisplayLabel(member, ticket))}</td>
+          <td class="member-payment-column">${memberPaymentOverviewMarkup(member)}</td>
           <td class="member-status-column"><div class="member-status-actions">${memberStatusBadge(member)}${permanentDeleteButton}</div></td>
           <td class="member-table-note member-note-column">${escapeHtml(memberRemarkLabel(member))}</td>
         </tr>`;
       if (!memberAdminEditEnabled || operationsRole() !== "admin") return memberRow;
       return `
         <tr class="member-inline-editor-row member-inline-sheet-row" data-member-id="${member.id}" data-member-editor-row="${member.id}">
-          <td colspan="9">${memberQuickEditorMarkup(member, ticket, { embedded: true })}</td>
+          <td colspan="10">${memberQuickEditorMarkup(member, ticket, { embedded: true })}</td>
         </tr>`;
       })
-      .join("") : `<tr><td colspan="9" class="empty-text">${filterCopy.empty}</td></tr>`;
+      .join("") : `<tr><td colspan="10" class="empty-text">${filterCopy.empty}</td></tr>`;
   } else {
     memberRows.querySelectorAll("tr[data-member-id]").forEach((row) => {
       row.classList.toggle("is-selected", Number(row.dataset.memberId) === Number(state.selectedMemberId));
@@ -18655,7 +18725,7 @@ function renderCoachSettlementPreview() {
       assignmentByLesson.set(String(assignment.lesson_id), assignment);
     });
     const liveSettlementRows = billings
-      .filter((billing) => billing.status === "paid")
+      .filter((billing) => billing.status === "paid" && billingMatchesMonth(billing, state.billingMonth))
       .flatMap((billing) => settlementRowsForBilling(billing, {
         ticketById,
         completedLessonsByTicket,
@@ -18810,22 +18880,62 @@ function billingFilterGroup(item = {}) {
   return "action";
 }
 
+function billingEffectiveDate(item = {}) {
+  const candidates = [
+    item.paidAt,
+    item.paid_at,
+    item.verifiedAt,
+    item.verified_at,
+    item.requestedAt,
+    item.requested_at,
+    item.createdAt,
+    item.created_at,
+  ];
+  for (const value of candidates) {
+    const text = String(value || "");
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+    const parsed = Date.parse(text);
+    if (Number.isFinite(parsed)) return adminLocalDateKey(new Date(parsed));
+  }
+  return "";
+}
+
+function billingMatchesMonth(item, month) {
+  if (!month) return true;
+  return billingEffectiveDate(item).slice(0, 7) === month;
+}
+
+function billingMonthLabel(month) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
+  return match ? `${Number(match[1])}년 ${Number(match[2])}월 결제액` : "선택 월 결제액";
+}
+
 function renderBilling() {
   syncSharedPaymentRequests();
   state.billingFilter = ["action", "verifying", "done", "refund"].includes(state.billingFilter) ? state.billingFilter : "action";
+  state.billingMonth = /^\d{4}-\d{2}$/.test(state.billingMonth)
+    ? state.billingMonth
+    : adminLocalDateKey(new Date()).slice(0, 7);
   const branchBillings = operationBranchBillings();
-  const pendingRequests = branchBillings.filter((item) => item.status === "draft");
-  const pendingChecks = branchBillings.filter((item) => item.status === "check" || item.status === "unverified");
-  const staleReadyPayments = branchBillings.filter(isStaleReadyPayment);
+  const monthBillings = branchBillings.filter((item) => billingMatchesMonth(item, state.billingMonth));
+  const pendingRequests = monthBillings.filter((item) => item.status === "draft");
+  const pendingChecks = monthBillings.filter((item) => item.status === "check" || item.status === "unverified");
+  const staleReadyPayments = monthBillings.filter(isStaleReadyPayment);
   const rechargeTargets = operationBranchTickets().filter((ticket) => ticket.remaining <= 1);
+  const monthPaidBillings = monthBillings.filter((item) => item.status === "paid");
+  const monthPaidAmount = monthPaidBillings.reduce((sum, item) => sum + Number(item.finalAmount || item.amount || 0), 0);
 
   $("#billingRequestCount").textContent = `${pendingRequests.length}건`;
   $("#billingCheckCount").textContent = `${pendingChecks.length + staleReadyPayments.length}\uAC74`;
   $("#ticketRechargeCount").textContent = `${rechargeTargets.length}명`;
+  if ($("#billingMonthFilter")) $("#billingMonthFilter").value = state.billingMonth;
+  if ($("#billingMonthTotalLabel")) $("#billingMonthTotalLabel").textContent = billingMonthLabel(state.billingMonth);
+  if ($("#billingMonthPaidAmount")) $("#billingMonthPaidAmount").textContent = `${money.format(monthPaidAmount)}원`;
+  if ($("#billingMonthPaidCount")) $("#billingMonthPaidCount").textContent = `결제 완료 ${monthPaidBillings.length}건`;
   renderPaymentAdminGateStatus();
   renderPaymentChargeAudit();
   const billingGroups = { action: [], verifying: [], done: [], refund: [] };
-  branchBillings.forEach((item) => billingGroups[billingFilterGroup(item)]?.push(item));
+  monthBillings.forEach((item) => billingGroups[billingFilterGroup(item)]?.push(item));
   $$('[data-billing-count]').forEach((count) => {
     count.textContent = String(billingGroups[count.dataset.billingCount]?.length || 0);
   });
@@ -18855,6 +18965,7 @@ function renderBilling() {
         <tr>
           <td>${item.member}<br><small>${paymentEnvironmentBadge(item)}</small></td>
           <td>${item.item}${item.providerPaymentId ? `<br><small>${item.providerPaymentId}</small>` : ""}${item.source ? `<br><small>${paymentSourceText(item)}</small>` : ""}</td>
+          <td>${escapeHtml(billingEffectiveDate(item) || "일자 미입력")}</td>
           <td>${money.format(item.amount)}원${item.discountTitle ? `<br><small>${escapeHtml(item.discountTitle)} · ${money.format(item.discountAmount || 0)}원 할인${item.originalAmount ? ` · 원가 ${money.format(item.originalAmount)}원` : ""}</small>` : ""}</td>
           <td>${paymentMethodLabel(item.method)}</td>
           <td>${badge(displayStatus.status, displayStatus.label)}${displayStatus.detail ? `<br><small>${escapeHtml(displayStatus.detail)}</small>` : ""}</td>
@@ -18864,7 +18975,7 @@ function renderBilling() {
         </tr>`;
       },
     )
-    .join("") : '<tr><td colspan="6" class="empty-text">선택한 상태의 결제 내역이 없습니다.</td></tr>';
+    .join("") : '<tr><td colspan="7" class="empty-text">선택한 달과 상태의 결제 내역이 없습니다.</td></tr>';
   renderDashboardPager("#billingPager", filteredBillings.length, state.billingPage, "billing", billingPageSize);
 
   state.rechargePage = normalizeDashboardPage(rechargeTargets.length, state.rechargePage, billingPageSize);
@@ -25045,8 +25156,8 @@ function renderServiceReadiness() {
               <input type="number" min="1" step="1" data-product-field="validityDays" value="${normalized.validityDays}" aria-label="${escapeHtml(normalized.title)} 사용기간 일수" />
             </div>
             <div class="product-setting-inline-price">
-              <input type="number" min="0" step="1000" data-product-field="cashAmount" value="${normalized.cashAmount}" aria-label="${escapeHtml(normalized.title)} 현금가격" />
-              <input type="number" min="0" step="1000" data-product-field="cardAmount" value="${normalized.cardAmount}" aria-label="${escapeHtml(normalized.title)} 카드가격" />
+          <input type="number" min="0" step="1" data-product-field="cashAmount" value="${normalized.cashAmount}" aria-label="${escapeHtml(normalized.title)} 현금가격" />
+          <input type="number" min="0" step="1" data-product-field="cardAmount" value="${normalized.cardAmount}" aria-label="${escapeHtml(normalized.title)} 카드가격" />
             </div>
             <select class="product-setting-quick-status" data-product-field="status" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
               ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
@@ -25090,11 +25201,11 @@ function renderServiceReadiness() {
             </label>
             <label>
               <small>${productSettingFieldLabel("현금가격", true)}</small>
-              <input type="number" min="0" step="1000" data-product-field="cashAmount" value="${normalized.cashAmount}" />
+              <input type="number" min="0" step="1" data-product-field="cashAmount" value="${normalized.cashAmount}" />
             </label>
             <label>
               <small>${productSettingFieldLabel("카드가격", true)}</small>
-              <input type="number" min="0" step="1000" data-product-field="cardAmount" value="${normalized.cardAmount}" />
+              <input type="number" min="0" step="1" data-product-field="cardAmount" value="${normalized.cardAmount}" />
             </label>
             <label>
               <small>${productSettingFieldLabel("사용기간(일)", true)}</small>
@@ -25700,6 +25811,14 @@ function bindEvents() {
   document.addEventListener("click", (event) => {
     const menuButton = event.target.closest(".compact-action-menu-panel button");
     if (menuButton) menuButton.closest(".compact-action-menu")?.removeAttribute("open");
+  });
+  $("#billingMonthFilter")?.addEventListener("change", (event) => {
+    state.billingMonth = event.target.value || adminLocalDateKey(new Date()).slice(0, 7);
+    state.billingPage = 0;
+    state.settlementPage = 0;
+    renderBilling();
+    renderCoachSettlementPreview();
+    saveSnapshot();
   });
   document.addEventListener("click", (event) => {
     const pageButton = event.target.closest("[data-dashboard-page]");

@@ -603,7 +603,7 @@ h2 {
 
 .billing-action-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
@@ -2975,6 +2975,52 @@ tr.is-selected td {
   display: block;
 }
 
+.member-ticket-summary-button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-width: 180px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.member-ticket-summary-line,
+.member-payment-summary-line {
+  display: grid;
+  gap: 1px;
+}
+
+.member-ticket-summary-line + .member-ticket-summary-line,
+.member-payment-summary-line + .member-payment-summary-line {
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.member-ticket-summary-line strong,
+.member-payment-summary-line strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-ticket-summary-line small,
+.member-payment-summary-line small,
+.member-ticket-summary-more,
+.member-table-muted {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.member-payment-column {
+  min-width: 150px;
+}
+
 .member-table-primary {
   font-size: 13px;
 }
@@ -3213,10 +3259,9 @@ tr.is-selected td {
 }
 
 .onsite-payment-amount {
-  display: flex;
+  display: grid;
+  gap: 6px;
   min-height: 64px;
-  align-items: center;
-  justify-content: space-between;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -6935,6 +6980,32 @@ tr.is-selected td {
   flex-wrap: wrap;
   gap: 8px;
   margin: -4px 0 14px;
+}
+
+.onsite-payment-amount input {
+  min-width: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-month-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -4px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.billing-month-toolbar label {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.billing-month-toolbar input {
+  width: auto;
+  min-height: 38px;
 }
 
 .policy-summary-list {
@@ -13386,9 +13457,12 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
   }
 
   #billingView > .billing-action-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(118px, 1fr));
     gap: 6px;
     margin-bottom: 10px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
   }
 
   #billingView > .billing-action-grid .billing-action-card {

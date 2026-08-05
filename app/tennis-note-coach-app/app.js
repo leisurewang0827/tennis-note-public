@@ -6,6 +6,7 @@ const state = {
   coachAccessTone: "wait",
   dashboardVersion: 5,
   editingMakeupId: null,
+  coachQuickAdd: null,
   writingLessonId: null,
   memberFilter: "active",
   memberQuery: "",
@@ -420,6 +421,10 @@ function serverLessonStatusLabel(status = "") {
 }
 
 let coachScheduleV2WorkspaceCache = null;
+
+function scheduleV2CoachWorkspace() {
+  return coachScheduleV2WorkspaceCache?.workspace || null;
+}
 
 function scheduleV2LessonKindLabel(kind = "") {
   return {
@@ -1924,33 +1929,62 @@ function normalizeCoachPolicyItem(coach) {
 
 function loadCoachSchedulePolicy() {
   const fallback = defaultCoachSchedulePolicy();
+  let resolved = fallback;
   try {
     const snapshot = JSON.parse(localStorage.getItem(adminStorageKey) || "null");
-    if (!snapshot) return fallback;
-    const scheduleSettings = snapshot.scheduleSettings || {};
-    const storedPolicyVersion = Number(scheduleSettings.coachWorkPolicyVersion) || 0;
-    const savedCoaches = storedPolicyVersion >= 2 && Array.isArray(snapshot.coaches) ? snapshot.coaches : fallback.coaches;
-    const coaches = savedCoaches;
-    return {
-      openStart: storedPolicyVersion < 2 ? fallback.openStart : scheduleSettings.openStart || fallback.openStart,
-      openEnd: storedPolicyVersion < 2 ? fallback.openEnd : scheduleSettings.openEnd || fallback.openEnd,
-      breakRules: storedPolicyVersion < 2 ? fallback.breakRules : Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : fallback.breakRules,
-      lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
-      lessonColorRules: Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : [],
-      coaches: coaches
-        .filter((coach) => (
-          (coach.status || "active") === "active"
-          && (coach.employmentStatus || "active") === "active"
-          && !coach.archivedAt
-          && !coach.deletedAt
-          && coach.name !== "무인"
-        ))
-        .map(normalizeCoachPolicyItem),
-    };
+    if (snapshot) {
+      const scheduleSettings = snapshot.scheduleSettings || {};
+      const storedPolicyVersion = Number(scheduleSettings.coachWorkPolicyVersion) || 0;
+      const savedCoaches = storedPolicyVersion >= 2 && Array.isArray(snapshot.coaches) ? snapshot.coaches : fallback.coaches;
+      resolved = {
+        openStart: storedPolicyVersion < 2 ? fallback.openStart : scheduleSettings.openStart || fallback.openStart,
+        openEnd: storedPolicyVersion < 2 ? fallback.openEnd : scheduleSettings.openEnd || fallback.openEnd,
+        breakRules: storedPolicyVersion < 2 ? fallback.breakRules : Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : fallback.breakRules,
+        lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
+        lessonColorRules: Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : [],
+        coaches: savedCoaches
+          .filter((coach) => (
+            (coach.status || "active") === "active"
+            && (coach.employmentStatus || "active") === "active"
+            && !coach.archivedAt
+            && !coach.deletedAt
+            && coach.name !== "무인"
+          ))
+          .map(normalizeCoachPolicyItem),
+      };
+    }
   } catch {
     localStorage.removeItem(adminStorageKey);
-    return fallback;
   }
+  const workspace = scheduleV2CoachWorkspace();
+  if (!workspace?.coaches?.length) return resolved;
+  const serverCoaches = workspace.coaches.map((coach, coachIndex) => {
+    const workBlocks = (coach.availability || [])
+      .filter((block) => block.type === "available")
+      .map((block, blockIndex) => ({
+        id: `${coach.roleId}-server-${blockIndex}`,
+        days: [scheduleDays[Number(block.dayOfWeek) === 0 ? 6 : Number(block.dayOfWeek) - 1]].filter(Boolean),
+        start: String(block.startTime || "").slice(0, 5),
+        end: String(block.endTime || "").slice(0, 5),
+        label: "근무",
+      }))
+      .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
+    return {
+      id: coach.roleId,
+      roleId: coach.roleId,
+      name: coach.name || "이름 없음",
+      status: "active",
+      sortIndex: coachIndex,
+      workBlocks,
+    };
+  });
+  return {
+    ...resolved,
+    allowCoachLockedTimeOverride: workspace.policy?.allow_coach_locked_time_override !== false,
+    allowCrossCoachMemberEdit: workspace.policy?.allow_cross_coach_member_edit === true,
+    coachSingleAddMode: workspace.policy?.coach_single_add_mode || "approval",
+    coaches: serverCoaches,
+  };
 }
 
 function coachOrder(id = "") {
@@ -1975,8 +2009,10 @@ function coachFromLesson(lesson, policy) {
   const scheduleCoachName = lesson.isSubstitute && lesson.originalCoach
     ? lesson.originalCoach
     : lesson.coach;
+  const roleId = String(lesson.originalCoachRoleId || lesson.coachRoleId || "");
   const key = coachKeyFromName(scheduleCoachName);
-  return policy.coaches.find((coach) => coach.id === key)
+  return policy.coaches.find((coach) => String(coach.roleId || coach.id) === roleId)
+    || policy.coaches.find((coach) => coach.id === key)
     || policy.coaches.find((coach) => coach.name === scheduleCoachName)
     || normalizeCoachPolicyItem({ id: key || scheduleCoachName, name: scheduleCoachName || "미지정 코치" });
 }
@@ -1994,7 +2030,11 @@ function dayCoachesForSchedule(day, policy, lessons = []) {
   return working
     .concat(lessonCoaches)
     .filter((coach, index, array) => array.findIndex((item) => item.id === coach.id) === index)
-    .sort((a, b) => coachOrder(a.id) - coachOrder(b.id));
+    .sort((a, b) => {
+      const aOrder = Number.isFinite(Number(a.sortIndex)) ? Number(a.sortIndex) : coachOrder(a.id);
+      const bOrder = Number.isFinite(Number(b.sortIndex)) ? Number(b.sortIndex) : coachOrder(b.id);
+      return aOrder - bOrder;
+    });
 }
 
 function breakRuleForSlot(policy, day, time) {
@@ -2097,7 +2137,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.280",
+    workerUrl: "./service-worker.js?v=1.0.281",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2127,7 +2167,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.280" });
+  const params = new URLSearchParams({ v: "1.0.281" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3168,30 +3208,29 @@ function mergeCoachScheduleWindows(windows) {
 }
 
 function coachOperatingWindows(day, policy) {
-  const merged = mergeCoachScheduleWindows(policy.coaches.flatMap((coach) => (
+  return mergeCoachScheduleWindows(policy.coaches.flatMap((coach) => (
     (coach.workBlocks || []).filter((block) => block.days.includes(day))
   )));
-  const breaks = (policy.breakRules || [])
-    .filter((rule) => rule.days?.includes(day))
-    .map((rule) => ({ start: minutesFromTime(rule.start), end: minutesFromTime(rule.end) }));
-  return merged.flatMap((window) => {
-    let pieces = [{ start: window.startMinutes, end: window.endMinutes }];
-    breaks.forEach((rule) => {
-      pieces = pieces.flatMap((piece) => {
-        if (rule.end <= piece.start || rule.start >= piece.end) return [piece];
-        return [
-          piece.start < rule.start ? { start: piece.start, end: rule.start } : null,
-          rule.end < piece.end ? { start: rule.end, end: piece.end } : null,
-        ].filter(Boolean);
-      });
-    });
-    return pieces;
-  }).map((window) => ({
-    start: `${String(Math.floor(window.start / 60)).padStart(2, "0")}:${String(window.start % 60).padStart(2, "0")}`,
-    end: `${String(Math.floor(window.end / 60)).padStart(2, "0")}:${String(window.end % 60).padStart(2, "0")}`,
-    startMinutes: window.start,
-    endMinutes: window.end,
-  }));
+}
+
+function coachCanAddToSlot(coach, day, time, durationMinutes = scheduleBlockMinutes) {
+  const currentRoleId = currentCoachRoleId();
+  const laneRoleId = String(coach.roleId || coach.id || "");
+  if (!currentRoleId || laneRoleId !== currentRoleId) return false;
+  if (!isPolicyCoachWorking(coach, day, time, durationMinutes)) return false;
+  const breakRule = breakRuleForSlot(loadCoachSchedulePolicy(), day, time);
+  return !breakRule || loadCoachSchedulePolicy().allowCoachLockedTimeOverride !== false;
+}
+
+function coachQuickAddSlotMarkup({ coach, day, time, className, label, style = "" }) {
+  const canAdd = coachCanAddToSlot(coach, day, time);
+  const breakRule = breakRuleForSlot(loadCoachSchedulePolicy(), day, time);
+  const date = coachWeekDateForDay(day);
+  const overrideClass = canAdd && breakRule ? " locked-override" : "";
+  const content = canAdd ? `<span aria-hidden="true">+</span><small>${breakRule ? "수동" : ""}</small>` : (label ? `<span>${escapeHtml(label)}</span>` : "");
+  const styleAttr = style ? ` style="${style}"` : "";
+  if (!canAdd) return `<div class="${className}${overrideClass}"${styleAttr} aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${label || "빈 시간"}">${content}</div>`;
+  return `<button class="${className} coach-add-slot${overrideClass}"${styleAttr} type="button" data-coach-add-lesson data-date="${date}" data-day="${day}" data-time="${time}" data-coach-role-id="${escapeHtml(coach.roleId || coach.id)}" aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${breakRule ? "브레이크 시간 수동 등록" : "수업 추가"}">${content}</button>`;
 }
 
 function coachMobileScheduleSegments(day, policy, scheduleLessons) {
@@ -3247,7 +3286,15 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
             <div class="coach-mobile-coach-lane">
               ${times.map((time, index) => {
                 const working = isPolicyCoachWorking(coach, day, time, scheduleBlockMinutes);
-                return `<div class="coach-mobile-slot ${working ? "available" : "off"}" style="grid-row:${index + 1};" aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${working ? "빈 시간" : "근무 외"}">${working ? '<span aria-hidden="true">+</span>' : ""}</div>`;
+                const breakRule = breakRuleForSlot(policy, day, time);
+                return coachQuickAddSlotMarkup({
+                  coach,
+                  day,
+                  time,
+                  className: `coach-mobile-slot ${working ? (breakRule ? "blocked" : "available") : "off"}`,
+                  label: working ? (breakRule?.label || "빈 시간") : "근무 외",
+                  style: `grid-row:${index + 1};`,
+                });
               }).join("")}
               ${coachLessons.filter((lesson) => minutesFromTime(lesson.time) >= segment.startMinutes && minutesFromTime(lesson.time) < segment.endMinutes).map((lesson) => {
                 const startIndex = times.indexOf(lesson.time);
@@ -3367,13 +3414,17 @@ function renderFullSchedule() {
                   displayCoaches
                     .map((coach, coachIndex) => {
                       const breakRule = breakRuleForSlot(policy, day, time);
-                      const isWorking = !breakRule && isPolicyCoachWorking(coach, day, time, scheduleBlockMinutes);
+                      const isWorking = isPolicyCoachWorking(coach, day, time, scheduleBlockMinutes);
                       const className = breakRule ? "blocked" : isWorking ? "available" : "off";
                       const label = breakRule ? (breakRule.label || "브레이크") : isWorking ? "" : "근무외";
-                      return `
-                        <div class="coach-slot-bg ${className}" style="grid-row:${timeIndex + 1}; grid-column:${coachIndex + 1};">
-                          ${label ? `<span>${label}</span>` : ""}
-                        </div>`;
+                      return coachQuickAddSlotMarkup({
+                        coach,
+                        day,
+                        time,
+                        className: `coach-slot-bg ${className}`,
+                        label,
+                        style: `grid-row:${timeIndex + 1}; grid-column:${coachIndex + 1};`,
+                      });
                     })
                     .join(""),
                 )
@@ -3960,6 +4011,7 @@ function completeNtrpRequest(id) {
 
 function openLessonEditor(id) {
   ensureCoachLessonRecord(id);
+  state.coachQuickAdd = null;
   state.editingLessonId = id;
   state.editingMakeupId = null;
   state.writingLessonId = null;
@@ -3972,6 +4024,7 @@ function closeLessonEditor() {
   const lesson = state.editingLessonId ? ensureCoachLessonRecord(state.editingLessonId) : null;
   if (lesson) delete lesson.scheduleEditDraft;
   state.editingLessonId = null;
+  state.coachQuickAdd = null;
   state.editingMakeupId = null;
   state.writingLessonId = null;
   state.viewingCurriculumId = null;
@@ -3981,6 +4034,10 @@ function closeLessonEditor() {
 function renderLessonEditModal() {
   const target = $("#lessonEditModalContent");
   if (!target) return;
+  if (state.coachQuickAdd) {
+    target.innerHTML = renderCoachQuickAddPanel();
+    return;
+  }
   if (state.viewingCurriculumId) {
     target.innerHTML = renderCurriculumDetailPanel();
     return;
@@ -3995,6 +4052,166 @@ function renderLessonEditModal() {
   }
   target.innerHTML = renderScheduleEditPanel();
   if (state.editingLessonId) updateLessonCompletionUi(state.editingLessonId);
+}
+
+function coachQuickAddOperationKey(prefix = "coach-add") {
+  const random = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${random}`.slice(0, 120);
+}
+
+function coachQuickAddTickets() {
+  const workspace = scheduleV2CoachWorkspace();
+  const targetDate = state.coachQuickAdd?.date || localDateKey();
+  return (workspace?.tickets || []).filter((ticket) => {
+    if (String(ticket.coachRoleId || "") !== String(state.coachQuickAdd?.coachRoleId || "")) return false;
+    if (ticket.status !== "active" || Number(ticket.remainingSessions) <= 0) return false;
+    if (ticket.startsOn && targetDate < ticket.startsOn) return false;
+    if (ticket.expiresOn && targetDate > ticket.expiresOn) return false;
+    return ["regular", "group"].includes(ticket.productKind);
+  });
+}
+
+function coachQuickAddTicketLabel(ticket = {}) {
+  const workspace = scheduleV2CoachWorkspace();
+  const memberMap = new Map((workspace?.members || []).map((member) => [member.id, member.name || "회원"]));
+  const names = (ticket.participantUserIds || [ticket.ownerUserId]).map((userId) => memberMap.get(userId)).filter(Boolean);
+  return `${names.join(" · ") || "회원"} · ${ticket.productName || "회원권"} · 잔여 ${Number(ticket.remainingSessions) || 0}회`;
+}
+
+function openCoachQuickAdd(button) {
+  const policy = loadCoachSchedulePolicy();
+  const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(button.dataset.coachRoleId || ""));
+  if (!coach || !coachCanAddToSlot(coach, button.dataset.day, button.dataset.time)) {
+    showToast("본인 근무시간의 빈 자리만 수동 등록할 수 있습니다.");
+    return;
+  }
+  state.editingLessonId = null;
+  state.editingMakeupId = null;
+  state.writingLessonId = null;
+  state.viewingCurriculumId = null;
+  state.coachQuickAdd = {
+    date: button.dataset.date,
+    day: button.dataset.day,
+    time: button.dataset.time,
+    coachRoleId: button.dataset.coachRoleId,
+    coachName: coach.name,
+    kind: "regular",
+    durationMinutes: 20,
+    ticketId: "",
+    note: "",
+    validationMessage: "",
+  };
+  renderLessonEditModal();
+  openCoachModal("lessonEditModal");
+}
+
+function renderCoachQuickAddPanel() {
+  const draft = state.coachQuickAdd;
+  if (!draft) return "";
+  const policy = loadCoachSchedulePolicy();
+  const breakRule = breakRuleForSlot(policy, draft.day, draft.time);
+  const tickets = coachQuickAddTickets();
+  const ticketOptions = tickets.map((ticket) => `<option value="${escapeHtml(ticket.id)}" ${draft.ticketId === ticket.id ? "selected" : ""}>${escapeHtml(coachQuickAddTicketLabel(ticket))}</option>`).join("");
+  const durationOptions = [20, 30, 40, 60].map((minutes) => `<button type="button" class="${Number(draft.durationMinutes) === minutes ? "is-active" : ""}" data-coach-add-duration="${minutes}">${minutes}분</button>`).join("");
+  return `
+    <form class="schedule-edit-panel coach-quick-add-panel" data-coach-quick-add-form>
+      <div class="wide lesson-modal-head">
+        <div><strong>수업 추가</strong><span>${draft.date} · ${draft.time} · ${escapeHtml(shortCoachName(draft.coachName))}</span></div>
+        <b class="can-process">${breakRule ? "브레이크 수동 등록" : "빈 시간"}</b>
+      </div>
+      <div class="wide coach-quick-kind" role="group" aria-label="수업 종류">
+        <button type="button" class="${draft.kind === "regular" ? "is-active" : ""}" data-coach-add-kind="regular">정규</button>
+        <button type="button" class="${draft.kind === "makeup" ? "is-active" : ""}" data-coach-add-kind="makeup">보강</button>
+      </div>
+      <label class="wide lesson-required-field">
+        <span>회원권 <small>필수</small></span>
+        <select id="coachQuickAddTicket" required>
+          <option value="">회원을 선택해 주세요</option>
+          ${ticketOptions}
+        </select>
+      </label>
+      <div class="wide coach-quick-duration" role="group" aria-label="수업 시간">${durationOptions}</div>
+      <label class="wide">
+        <span>메모 <small>선택</small></span>
+        <input id="coachQuickAddNote" type="text" maxlength="200" value="${escapeHtml(draft.note || "")}" placeholder="예: 브레이크 시간 협의 등록" />
+      </label>
+      ${draft.validationMessage ? `<p class="validation-text wide">${escapeHtml(draft.validationMessage)}</p>` : ""}
+      <p class="permission-note wide">회원에게는 브레이크 시간이 열리지 않습니다. 운영 설정에 따라 즉시 저장되거나 관리자 승인 대기로 접수됩니다.</p>
+      <div class="actions wide">
+        <button class="approve-button" type="button" data-save-coach-quick-add ${tickets.length ? "" : "disabled"}>시간표에 등록</button>
+        <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
+      </div>
+    </form>`;
+}
+
+async function saveCoachQuickAdd() {
+  const draft = state.coachQuickAdd;
+  const workspace = scheduleV2CoachWorkspace();
+  const ticketId = $("#coachQuickAddTicket")?.value || "";
+  const ticket = (workspace?.tickets || []).find((item) => item.id === ticketId);
+  const note = $("#coachQuickAddNote")?.value.trim() || "";
+  if (!draft || !ticket) {
+    if (draft) draft.validationMessage = "회원권을 선택해 주세요.";
+    renderLessonEditModal();
+    return;
+  }
+  const duration = Number(draft.durationMinutes) || 20;
+  const ticketUnit = Number(ticket.lessonMinutes) || 20;
+  if (duration % ticketUnit !== 0) {
+    draft.validationMessage = `${ticketUnit}분 회원권은 ${ticketUnit}분 단위로 선택해 주세요.`;
+    renderLessonEditModal();
+    return;
+  }
+  const participants = (ticket.participantUserIds || [ticket.ownerUserId])
+    .filter(Boolean)
+    .map((userId) => ({ userId, ticketId: ticket.id }));
+  if (!participants.length) {
+    draft.validationMessage = "회원권 참여자를 확인할 수 없습니다.";
+    renderLessonEditModal();
+    return;
+  }
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !workspace?.branchId) {
+    draft.validationMessage = "서버 로그인 상태를 확인해 주세요.";
+    renderLessonEditModal();
+    return;
+  }
+  draft.validationMessage = "서버에서 시간과 회원권을 확인하고 있습니다.";
+  renderLessonEditModal();
+  try {
+    const result = await client.rpc("tn_schedule_v2_coach_save_or_request", {
+      target_branch_id: workspace.branchId,
+      target_coach_role_id: draft.coachRoleId,
+      target_lesson_date: draft.date,
+      target_start_time: draft.time,
+      target_duration_minutes: duration,
+      target_schedule_kind: draft.kind,
+      target_participants: participants,
+      target_operation_key: coachQuickAddOperationKey(),
+      target_lesson_id: null,
+      target_expected_revision: null,
+      target_note: note || null,
+    });
+    const normalized = Array.isArray(result) ? result[0] || {} : result || {};
+    closeLessonEditor();
+    coachScheduleV2WorkspaceCache = null;
+    await syncCoachScheduleV2({ force: true });
+    renderAll();
+    showToast(normalized.writeMode === "approval" ? "관리자 승인 대기로 접수했습니다." : "시간표에 수업을 등록했습니다.");
+  } catch (error) {
+    const code = String(error?.payload?.message || error?.payload?.code || error?.message || "");
+    const messages = {
+      schedule_v2_coach_time_overlap: "같은 코치의 다른 수업과 시간이 겹칩니다.",
+      schedule_v2_cross_coach_ticket_forbidden: "본인 담당 회원권만 등록할 수 있습니다.",
+      schedule_v2_ticket_unavailable: "현재 사용할 수 있는 회원권이 아닙니다.",
+      schedule_v2_duration_ticket_mismatch: "수업 시간과 회원권 단위가 맞지 않습니다.",
+      schedule_v2_coach_write_blocked: "운영 설정에서 코치 수동 등록이 꺼져 있습니다.",
+      schedule_v2_coach_slot_forbidden: "이 시간은 코치 수동 등록이 허용되지 않습니다.",
+    };
+    const key = Object.keys(messages).find((candidate) => code.includes(candidate));
+    state.coachQuickAdd.validationMessage = messages[key] || "수업을 저장하지 못했습니다. 시간표를 새로고침한 뒤 다시 시도해 주세요.";
+    renderLessonEditModal();
+  }
 }
 
 function updateLessonCompletionUi(id) {
@@ -5443,6 +5660,39 @@ function bindEvents() {
     const restoreAbsenceButton = event.target.closest("[data-restore-absence-id]");
     if (restoreAbsenceButton) {
       restoreCoachLessonAbsence(restoreAbsenceButton.dataset.restoreAbsenceId);
+      return;
+    }
+
+    const quickAddSlot = event.target.closest("[data-coach-add-lesson]");
+    if (quickAddSlot) {
+      openCoachQuickAdd(quickAddSlot);
+      return;
+    }
+
+    const quickAddKind = event.target.closest("[data-coach-add-kind]");
+    if (quickAddKind && state.coachQuickAdd) {
+      state.coachQuickAdd.kind = quickAddKind.dataset.coachAddKind;
+      state.coachQuickAdd.ticketId = $("#coachQuickAddTicket")?.value || state.coachQuickAdd.ticketId;
+      state.coachQuickAdd.note = $("#coachQuickAddNote")?.value.trim() || state.coachQuickAdd.note;
+      state.coachQuickAdd.validationMessage = "";
+      renderLessonEditModal();
+      return;
+    }
+
+    const quickAddDuration = event.target.closest("[data-coach-add-duration]");
+    if (quickAddDuration && state.coachQuickAdd) {
+      state.coachQuickAdd.durationMinutes = Number(quickAddDuration.dataset.coachAddDuration) || 20;
+      state.coachQuickAdd.ticketId = $("#coachQuickAddTicket")?.value || state.coachQuickAdd.ticketId;
+      state.coachQuickAdd.note = $("#coachQuickAddNote")?.value.trim() || state.coachQuickAdd.note;
+      state.coachQuickAdd.validationMessage = "";
+      renderLessonEditModal();
+      return;
+    }
+
+    if (event.target.closest("[data-save-coach-quick-add]")) {
+      state.coachQuickAdd.ticketId = $("#coachQuickAddTicket")?.value || "";
+      state.coachQuickAdd.note = $("#coachQuickAddNote")?.value.trim() || "";
+      saveCoachQuickAdd();
       return;
     }
 

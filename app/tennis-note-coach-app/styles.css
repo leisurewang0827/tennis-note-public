@@ -1675,6 +1675,64 @@ a {
   font-size: 9px;
 }
 
+.coach-slot-bg.coach-add-slot {
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
+}
+
+.coach-slot-bg.coach-add-slot > span:first-child {
+  color: var(--green);
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.coach-slot-bg.coach-add-slot > small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.coach-slot-bg.coach-add-slot.locked-override {
+  border-style: dashed;
+  border-color: #d7b86e;
+  background: #fff9e8;
+  box-shadow: none;
+}
+
+.coach-slot-bg.coach-add-slot:focus-visible,
+.coach-mobile-slot.coach-add-slot:focus-visible {
+  outline: 3px solid rgba(11, 124, 92, 0.3);
+  outline-offset: -3px;
+}
+
+.coach-quick-kind,
+.coach-quick-duration {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.coach-quick-duration {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.coach-quick-kind button,
+.coach-quick-duration button {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--paper);
+  font-weight: 900;
+}
+
+.coach-quick-kind button.is-active,
+.coach-quick-duration button.is-active {
+  color: #fff;
+  border-color: var(--green);
+  background: var(--green);
+}
+
 .coach-duration-lesson {
   z-index: 2;
   display: grid;
@@ -3930,6 +3988,30 @@ select {
 
   .coach-mobile-slot.available span {
     opacity: 0.55;
+  }
+
+  .coach-mobile-slot.coach-add-slot {
+    display: grid;
+    grid-template-columns: auto auto;
+    place-content: center;
+    gap: 3px;
+    appearance: none;
+    padding: 0;
+    color: var(--green);
+    font: inherit;
+  }
+
+  .coach-mobile-slot.coach-add-slot.locked-override {
+    border-style: dashed;
+    border-color: #d7b86e;
+    background: #fff9e8;
+  }
+
+  .coach-mobile-slot.coach-add-slot small {
+    align-self: center;
+    color: #8a6413;
+    font-size: 8px;
+    font-weight: 900;
   }
 
   .coach-mobile-lesson {

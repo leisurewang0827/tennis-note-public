@@ -675,6 +675,21 @@
   cursor: pointer;
 }
 
+.schedule-v2-week-add.is-locked-override,
+.schedule-v2-add.is-locked-override {
+    border-color: #9aaca5;
+  border-style: dashed;
+  background: #f3f6f5;
+  color: #526b62;
+}
+
+.schedule-v2-week-add.is-locked-override:hover,
+.schedule-v2-week-add.is-locked-override:focus-visible,
+.schedule-v2-add.is-locked-override:hover,
+.schedule-v2-add.is-locked-override:focus-visible {
+  background: #e8f1ed;
+}
+
 .schedule-v2-week-add span {
   opacity: .22;
 }
