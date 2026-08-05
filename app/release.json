@@ -8,15 +8,19 @@
     "android": {
       "minimumVersion": "1.0.245",
       "minimumBuild": 55,
-      "latestVersion": "1.0.280",
-      "latestBuild": 59,
+      "latestVersion": "1.0.279",
+      "latestBuild": 57,
+      "preparedVersion": "1.0.280",
+      "preparedBuild": 59,
       "storeUrl": "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote"
     },
     "ios": {
       "minimumVersion": "1.0.260",
       "minimumBuild": 59,
-      "latestVersion": "1.0.280",
-      "latestBuild": 62,
+      "latestVersion": "1.0.260",
+      "latestBuild": 59,
+      "preparedVersion": "1.0.280",
+      "preparedBuild": 62,
       "storeUrl": "https://apps.apple.com/app/id6790994818"
     }
   },
