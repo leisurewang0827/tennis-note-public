@@ -193,15 +193,53 @@
 
   function normalizeWorkspacePayload(raw = {}, fallback = {}) {
     const response = Array.isArray(raw) ? raw[0] || {} : raw || {};
+    const fallbackMembersById = new Map();
+    (fallback.members || []).forEach((member) => {
+      [member.id, member.userId, ...(member.userIds || [])]
+        .filter(Boolean)
+        .forEach((id) => fallbackMembersById.set(String(id), member));
+    });
+    const responseMembers = (Array.isArray(response.members) ? response.members : []).map((member) => {
+      const fallbackMember = fallbackMembersById.get(String(member.id)) || {};
+      return {
+        ...member,
+        phoneLast4: String(member.phoneLast4 || fallbackMember.phoneLast4 || "").replace(/\D/g, "").slice(-4),
+        birthYear: member.birthYear || member.birth_year || fallbackMember.birthYear || "",
+      };
+    });
+    const responseMemberIds = new Set(responseMembers.flatMap((member) => [
+      member.id,
+      member.userId,
+      ...(member.userIds || []),
+    ].filter(Boolean).map(String)));
+    const members = [
+      ...responseMembers,
+      ...(fallback.members || []).filter((member) => ![
+        member.id,
+        member.userId,
+        ...(member.userIds || []),
+      ].filter(Boolean).map(String).some((id) => responseMemberIds.has(id))),
+    ];
+    const responseLessons = Array.isArray(response.lessons) ? response.lessons : [];
+    const responseOneDayIds = new Set(responseLessons.flatMap((lesson) => [
+      lesson.oneDayBookingId,
+      lesson.one_day_booking_id,
+      lesson.oneDayBooking ? lesson.id : "",
+    ].filter(Boolean).map(String)));
+    const fallbackOneDayLessons = (fallback.lessons || []).filter((lesson) => {
+      if (!lesson.oneDayBooking) return false;
+      const bookingId = String(lesson.oneDayBookingId || lesson.id || "");
+      return bookingId && !responseOneDayIds.has(bookingId);
+    });
     return {
       branchId: response.branchId || response.branch_id || fallback.branchId || "",
       branch: response.branch || { id: fallback.branchId || "", name: fallback.branchName || "", openStart: "06:40", openEnd: "22:00" },
       policy: response.policy || {},
       closures: Array.isArray(response.closures) ? response.closures : [],
       coaches: Array.isArray(response.coaches) ? response.coaches : [],
-      members: Array.isArray(response.members) ? response.members : [],
+      members,
       tickets: Array.isArray(response.tickets) ? response.tickets : [],
-      lessons: Array.isArray(response.lessons) ? response.lessons : [],
+      lessons: [...responseLessons, ...fallbackOneDayLessons],
       unassigned: Array.isArray(response.unassigned) ? response.unassigned : [],
     };
   }
@@ -1363,8 +1401,29 @@
     return (state.payload?.tickets || []).find((ticket) => String(ticket.id) === String(ticketId)) || null;
   }
 
+  function memberById(userId) {
+    const normalizedUserId = String(userId || "");
+    return (state.payload?.members || []).find((member) => [
+      member.id,
+      member.userId,
+      ...(member.userIds || []),
+    ].filter(Boolean).map(String).includes(normalizedUserId)) || null;
+  }
+
+  function primaryMemberUserId(member = {}) {
+    return String(member.userId || member.id || (member.userIds || [])[0] || "");
+  }
+
   function memberName(userId) {
-    return (state.payload?.members || []).find((member) => String(member.id) === String(userId))?.name || "회원 확인 필요";
+    return memberById(userId)?.name || "회원 확인 필요";
+  }
+
+  function memberIdentityLabel(userId) {
+    const member = memberById(userId);
+    const parts = [];
+    if (member?.phoneLast4) parts.push(`휴대전화 끝 ${member.phoneLast4}`);
+    if (member?.birthYear) parts.push(`${member.birthYear}년생`);
+    return parts.join(" · ") || "추가 식별정보 미입력";
   }
 
   function ticketParticipantIds(ticket) {
@@ -1373,6 +1432,12 @@
 
   function ticketMemberLabel(ticket) {
     return ticketParticipantIds(ticket).map(memberName).join(" · ") || "회원 확인 필요";
+  }
+
+  function ticketIdentityLabel(ticket) {
+    return ticketParticipantIds(ticket)
+      .map((userId) => `${memberName(userId)} ${memberIdentityLabel(userId)}`)
+      .join(" / ");
   }
 
   function ticketProductKind(ticket) {
@@ -1507,19 +1572,47 @@
     const query = String($("#scheduleV2MemberSearch")?.value || "").trim().toLowerCase();
     if (!query) {
       target.innerHTML = "";
+      renderSelectedTicket();
       return;
     }
     const kind = selectedKind();
-    const rows = (state.payload?.tickets || [])
-      .filter((ticket) => ticketMatchesKind(ticket, kind))
-      .filter((ticket) => `${ticketMemberLabel(ticket)} ${ticket.productName || ticket.product_name || ""}`.toLowerCase().includes(query))
+    if (kind === "one_day") {
+      const rows = (state.payload?.members || [])
+        .filter((member) => `${member.name || ""} ${member.phoneLast4 || ""} ${member.birthYear || member.birth_year || ""}`.toLowerCase().includes(query))
+        .slice(0, 30);
+      target.innerHTML = rows.length
+        ? rows.map((member) => {
+          const userId = primaryMemberUserId(member);
+          const selected = state.selectedParticipants.some((participant) => String(participant.userId) === userId);
+          return `<button type="button" class="schedule-v2-member-result ${selected ? "is-selected" : ""}" data-v2-one-day-user-id="${escapeHtml(userId)}" aria-pressed="${selected}"><span><strong>${escapeHtml(member.name || "회원")}</strong><span class="schedule-v2-member-identity">${escapeHtml(memberIdentityLabel(userId))} · 서비스 원데이 · 차감 없음</span></span><small>${selected ? "연결됨" : "회원 연결"}</small></button>`;
+        }).join("")
+        : '<div class="schedule-v2-selected-ticket">일치하는 기존 회원이 없습니다. 입력한 이름으로 비회원 원데이를 저장할 수 있습니다.</div>';
+      renderSelectedTicket();
+      return;
+    }
+    const matchingTickets = (state.payload?.tickets || []).filter((ticket) => ticketMatchesKind(ticket, kind));
+    const candidates = matchingTickets.map((ticket) => ({ ticket, userId: "" }));
+    const rows = candidates
+      .filter(({ ticket, userId }) => {
+        const searchText = userId
+          ? `${memberName(userId)} ${memberIdentityLabel(userId)}`
+          : `${ticketMemberLabel(ticket)} ${ticketIdentityLabel(ticket)} ${ticket.productName || ticket.product_name || ""}`;
+        return searchText.toLowerCase().includes(query);
+      })
       .slice(0, 30);
     target.innerHTML = rows.length
-      ? rows.map((ticket) => {
+      ? rows.map(({ ticket, userId }) => {
         const total = Number(ticket.totalSessions ?? ticket.total_sessions) || 0;
         const remaining = Number(ticket.remainingSessions ?? ticket.remaining_sessions) || 0;
-        const selected = state.selectedParticipants.some((participant) => String(participant.ticketId) === String(ticket.id));
-        return `<button type="button" class="schedule-v2-member-result ${selected ? "is-selected" : ""}" data-v2-ticket-id="${escapeHtml(ticket.id)}" aria-pressed="${selected}"><span><strong>${escapeHtml(ticketMemberLabel(ticket))}</strong><span>${escapeHtml(ticket.productName || ticket.product_name || "회원권")}</span></span><small>${selected ? "선택됨" : `잔여 ${remaining}/${total}`}</small></button>`;
+        const selected = userId
+          ? state.selectedParticipants.some((participant) => String(participant.userId) === String(userId))
+          : state.selectedParticipants.some((participant) => String(participant.ticketId) === String(ticket.id));
+        const memberLabel = userId ? memberName(userId) : ticketMemberLabel(ticket);
+        const detail = userId
+          ? memberIdentityLabel(userId)
+          : `${ticketIdentityLabel(ticket)} · ${ticket.productName || ticket.product_name || "회원권"}`;
+        const result = userId ? (selected ? "선택됨" : "선택") : (selected ? "선택됨" : `잔여 ${remaining}/${total}`);
+        return `<button type="button" class="schedule-v2-member-result ${selected ? "is-selected" : ""}" data-v2-ticket-id="${escapeHtml(ticket.id)}"${userId ? ` data-v2-user-id="${escapeHtml(userId)}"` : ""} aria-pressed="${selected}"><span><strong>${escapeHtml(memberLabel)}</strong><span class="schedule-v2-member-identity">${escapeHtml(detail)}</span></span><small>${result}</small></button>`;
       }).join("")
       : '<div class="schedule-v2-selected-ticket">조건에 맞는 회원권이 없습니다.</div>';
   }
@@ -1538,11 +1631,25 @@
     syncEditorPlacementAvailability();
   }
 
-  function toggleSelectedTicket(ticketId) {
+  function toggleSelectedTicket(ticketId, selectedUserId = "") {
     if (regularSeriesEditEligible() && selectedRegularEditScope() === "future") return;
     const ticket = ticketById(ticketId);
     if (!ticket) return;
     const normalizedTicketId = String(ticket.id);
+    if (selectedKind() === "one_day" && selectedUserId) {
+      const normalizedUserId = String(selectedUserId);
+      const alreadySelected = state.selectedParticipants.some((participant) => String(participant.userId) === normalizedUserId);
+      state.selectedParticipants = alreadySelected
+        ? []
+        : [{ userId: normalizedUserId, ticketId: normalizedTicketId, name: memberName(normalizedUserId) }];
+      state.selectedTicketId = alreadySelected ? "" : normalizedTicketId;
+      $("#scheduleV2MemberSearch").value = alreadySelected ? "" : memberName(normalizedUserId);
+      setEditorMessage("");
+      renderMemberResults();
+      renderSelectedTicket();
+      syncEditorPlacementAvailability();
+      return;
+    }
     if (state.selectedParticipants.some((participant) => String(participant.ticketId) === normalizedTicketId)) {
       state.selectedParticipants = state.selectedParticipants.filter((participant) => String(participant.ticketId) !== normalizedTicketId);
     } else {
@@ -1566,6 +1673,22 @@
     syncEditorPlacementAvailability();
   }
 
+  function toggleSelectedOneDayMember(userId) {
+    if (selectedKind() !== "one_day") return;
+    const normalizedUserId = String(userId || "");
+    const member = memberById(normalizedUserId);
+    if (!member) return;
+    const alreadySelected = state.selectedParticipants.some((participant) => String(participant.userId) === normalizedUserId);
+    state.selectedParticipants = alreadySelected
+      ? []
+      : [{ userId: normalizedUserId, ticketId: "", name: member.name || "회원" }];
+    state.selectedTicketId = "";
+    if (!alreadySelected) $("#scheduleV2MemberSearch").value = member.name || "";
+    setEditorMessage("");
+    renderMemberResults();
+    syncEditorPlacementAvailability();
+  }
+
   function removeSelectedParticipant(userId) {
     if (regularSeriesEditEligible() && selectedRegularEditScope() === "future") return;
     state.selectedParticipants = state.selectedParticipants.filter((participant) => String(participant.userId) !== String(userId));
@@ -1576,17 +1699,32 @@
 
   function renderSelectedTicket() {
     const target = $("#scheduleV2SelectedTicket");
+    const oneDay = selectedKind() === "one_day";
     if (!state.selectedParticipants.length) {
-      target.textContent = "회원을 선택해 주세요.";
+      const guestName = String($("#scheduleV2MemberSearch")?.value || "").trim();
+      target.textContent = oneDay
+        ? guestName.length >= 2
+          ? `${guestName} · 비회원 원데이 · 회원권 차감 없음`
+          : "이름만 입력하면 비회원 원데이로 저장됩니다. 기존 회원 연결은 선택사항입니다."
+        : "회원을 선택해 주세요.";
       updateSeriesGuidance();
       syncRegularEditScope();
       return;
     }
     const ticketIds = [...new Set(state.selectedParticipants.map((participant) => participant.ticketId))];
     const ticketLabels = ticketIds.map((ticketId) => ticketById(ticketId)).filter(Boolean).map((ticket) => ticket.productName || ticket.product_name || "회원권");
-    target.innerHTML = `<div class="schedule-v2-selected-head"><strong>참여자 ${state.selectedParticipants.length}명</strong><span>${escapeHtml(ticketLabels.join(" · "))}</span></div><div class="schedule-v2-selected-members">${state.selectedParticipants.map((participant) => `<span>${escapeHtml(participant.name || memberName(participant.userId))}<button type="button" data-v2-remove-user="${escapeHtml(participant.userId)}" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 선택 해제`)}">×</button></span>`).join("")}</div>`;
+    const summary = oneDay ? "기존 회원 서비스 원데이 · 회원권 차감 없음" : ticketLabels.join(" · ");
+    target.innerHTML = `<div class="schedule-v2-selected-head"><strong>참여자 ${state.selectedParticipants.length}명</strong><span>${escapeHtml(summary)}</span></div><div class="schedule-v2-selected-members">${state.selectedParticipants.map((participant) => `<span>${escapeHtml(participant.name || memberName(participant.userId))}<small>${escapeHtml(memberIdentityLabel(participant.userId))}</small><button type="button" data-v2-remove-user="${escapeHtml(participant.userId)}" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 선택 해제`)}">×</button></span>`).join("")}</div>`;
     updateSeriesGuidance();
     syncRegularEditScope();
+  }
+
+  function syncMemberPickerMode() {
+    const input = $("#scheduleV2MemberSearch");
+    const label = input?.closest("label")?.querySelector("span");
+    const oneDay = selectedKind() === "one_day";
+    if (label) label.textContent = oneDay ? "원데이 이름" : "회원 검색";
+    if (input) input.placeholder = oneDay ? "이름만 입력해도 저장됩니다" : "이름·연락처 끝 4자리·출생연도";
   }
 
   function fillEditorControls(slot) {
@@ -1627,8 +1765,8 @@
     const panel = $("#scheduleV2SubstitutePanel");
     const form = $("#scheduleV2EditorForm");
     const lesson = state.editingLesson;
-    panel.hidden = !lesson;
-    if (!lesson) return;
+    panel.hidden = !lesson || Boolean(lesson.oneDayBooking);
+    if (!lesson || lesson.oneDayBooking) return;
 
     const current = lesson.substitute || null;
     const availableCoaches = (state.payload?.coaches || []).filter((coach) => (
@@ -1659,7 +1797,8 @@
     const outcome = row.querySelector("[data-v2-outcome]")?.value || "completed";
     const deduct = row.querySelector("[data-v2-deduct]");
     const comment = row.querySelector("[data-v2-comment]");
-    const canDeduct = ["completed", "no_show"].includes(outcome);
+    const oneDay = state.editingLesson?.scheduleKind === "one_day";
+    const canDeduct = !oneDay && ["completed", "no_show"].includes(outcome);
     if (deduct) {
       deduct.disabled = !canDeduct || row.classList.contains("is-final");
       if (!canDeduct) deduct.checked = false;
@@ -1679,8 +1818,8 @@
     const list = $("#scheduleV2OutcomeList");
     const actions = $("#scheduleV2OutcomeActions");
     const lesson = state.editingLesson;
-    panel.hidden = !lesson;
-    if (!lesson) {
+    panel.hidden = !lesson || Boolean(lesson.oneDayBooking);
+    if (!lesson || lesson.oneDayBooking) {
       list.innerHTML = "";
       return;
     }
@@ -1703,7 +1842,10 @@
         const deducted = Number(participant.deductedSessions ?? participant.deducted_sessions) > 0;
         const disabled = editable && !final ? "" : " disabled";
         const outcomeOptions = Object.entries(outcomeLabels).map(([value, label]) => `<option value="${value}" ${value === outcome ? "selected" : ""}>${label}</option>`).join("");
-        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deducted || (!participant.recordStatus && outcome === "completed") ? "checked" : ""}${disabled} /><span>차감</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${disabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea></div>`;
+        const oneDay = lesson.scheduleKind === "one_day";
+        const deductChecked = !oneDay && (deducted || (!participant.recordStatus && outcome === "completed"));
+        const deductDisabled = `${disabled}${oneDay ? " disabled" : ""}`;
+        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${disabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea></div>`;
       }).join("")
       : '<div class="schedule-v2-selected-ticket">참여자 정보가 없어 수업을 처리할 수 없습니다.</div>';
     $$(".schedule-v2-outcome-row", list).forEach((row) => syncOutcomeRow(row));
@@ -1726,7 +1868,7 @@
         userId: row.dataset.v2OutcomeUser,
         ticketId: row.dataset.v2TicketId,
         outcome,
-        deduct: row.querySelector("[data-v2-deduct]").checked,
+        deduct: state.editingLesson?.scheduleKind !== "one_day" && row.querySelector("[data-v2-deduct]").checked,
         coachComment,
         keywords: [],
       });
@@ -1749,7 +1891,8 @@
     if (!requireWritableServer()) return;
     if (finalize) {
       const deductedCount = collected.results.filter((result) => result.deduct).length;
-      if (!window.confirm(`수업 처리를 완료할까요? ${deductedCount}명의 회원권이 차감됩니다.`)) return;
+      const deductionGuide = deductedCount ? `${deductedCount}명의 회원권이 차감됩니다.` : "회원권 차감은 없습니다.";
+      if (!window.confirm(`수업 처리를 완료할까요? ${deductionGuide}`)) return;
     }
     const api = bridge();
     const draftButton = $("#scheduleV2SaveOutcomeDraftButton");
@@ -1813,7 +1956,9 @@
     form.reset();
     state.editingLesson = lesson;
     state.selectedTicketId = "";
-    state.selectedParticipants = lesson?.participants?.map((participant) => ({ ...participant })) || [];
+    state.selectedParticipants = lesson?.oneDayBooking && lesson.linkedUserId
+      ? [{ userId: String(lesson.linkedUserId), ticketId: "", name: memberById(lesson.linkedUserId)?.name || lesson.memberLabel || "회원" }]
+      : lesson?.participants?.map((participant) => ({ ...participant })) || [];
     fillEditorControls({ date, time, coachRoleId });
     $("#scheduleV2EditorTitle").textContent = lesson ? "수업 수정" : "수업 추가";
     $("#scheduleV2SlotLabel").textContent = `${dateLabel(date)} · ${time}`;
@@ -1829,12 +1974,13 @@
     state.pendingTicketId = "";
     form.elements.fillSeries.checked = !lesson && kind === "regular" && date >= localDateKey(new Date());
     $("#scheduleV2SeriesOption").hidden = Boolean(lesson) || kind !== "regular";
-    $("#scheduleV2CancelLessonButton").hidden = !lesson || !["scheduled", "pending_change"].includes(lesson.status);
+    $("#scheduleV2CancelLessonButton").hidden = !lesson || Boolean(lesson.oneDayBooking) || !["scheduled", "pending_change"].includes(lesson.status);
     $("#scheduleV2DeleteLessonButton").hidden = !lesson;
     if (lesson) {
       state.selectedTicketId = [...new Set(state.selectedParticipants.map((participant) => String(participant.ticketId || "")).filter(Boolean))].join(",");
       $("#scheduleV2MemberSearch").value = lessonParticipantLabel(lesson);
     }
+    syncMemberPickerMode();
     renderMemberResults();
     renderSelectedTicket();
     renderSubstituteEditor();
@@ -1888,17 +2034,22 @@
       schedule_v2_regular_revision_unavailable: "예정된 정규수업에서만 이후 일정을 변경할 수 있습니다.",
       lesson_not_found: "이미 삭제되었거나 다른 화면에서 변경된 수업입니다. 시간표를 새로고침해 주세요.",
       lesson_correction_ticket_inconsistent: "회원권 횟수와 완료 기록이 맞지 않아 자동 복원을 중단했습니다. 관리자 데이터 확인이 필요합니다.",
+      one_day_lesson_time_conflict: "같은 코치의 수업과 시간이 겹칩니다.",
+      one_day_booking_time_conflict: "같은 코치의 다른 원데이 예약과 시간이 겹칩니다.",
+      one_day_guest_name_required: "원데이 이름을 두 글자 이상 입력해 주세요.",
+      approved_branch_coach_required: "현재 지점의 승인된 코치를 선택해 주세요.",
     };
     const key = Object.keys(labels).find((candidate) => source.includes(candidate));
     return key ? labels[key] : `저장하지 못했습니다. ${source}`;
   }
 
   function validateParticipants(kind, duration) {
-    if (!state.selectedParticipants.length) return "회원권을 먼저 선택해 주세요.";
+    if (kind === "one_day") return "";
+    if (!state.selectedParticipants.length) return kind === "one_day" ? "검색 결과에서 정확한 회원을 선택해 주세요." : "회원권을 먼저 선택해 주세요.";
     const tickets = [...new Set(state.selectedParticipants.map((participant) => participant.ticketId))].map(ticketById).filter(Boolean);
-    if (tickets.length !== new Set(state.selectedParticipants.map((participant) => participant.ticketId)).size) return "회원권 정보를 다시 선택해 주세요.";
+    if (tickets.length !== new Set(state.selectedParticipants.map((participant) => participant.ticketId)).size) return kind === "one_day" ? "선택한 회원 정보를 다시 확인해 주세요." : "회원권 정보를 다시 선택해 주세요.";
     const groupTicket = tickets.find((ticket) => Number(ticket.groupSize ?? ticket.group_size) === 2);
-    if (groupTicket && state.selectedParticipants.length < 2) return "1:2 회원권은 두 회원 연결이 필요합니다.";
+    if (kind !== "one_day" && groupTicket && state.selectedParticipants.length < 2) return "1:2 회원권은 두 회원 연결이 필요합니다.";
     if (tickets.some((ticket) => !ticketMatchesKind(ticket, kind))) return "선택한 수업 종류와 회원권이 맞지 않습니다.";
     if (tickets.some((ticket) => duration % Math.max(1, Number(ticket.lessonMinutes ?? ticket.lesson_minutes) || 20) !== 0)) return "수업 시간이 회원권 단위와 맞지 않습니다.";
     return "";
@@ -1916,7 +2067,11 @@
     const snapshot = api?.snapshot?.() || {};
     const kind = selectedKind();
     const duration = Number(form.elements.durationMinutes.value) || 20;
-    const validation = validateParticipants(kind, duration);
+    const nativeOneDay = kind === "one_day" && (!state.editingLesson || state.editingLesson.oneDayBooking);
+    const oneDayGuestName = String(state.selectedParticipants[0]?.name || $("#scheduleV2MemberSearch")?.value || "").trim();
+    const validation = nativeOneDay
+      ? oneDayGuestName.length < 2 ? "원데이 이름을 두 글자 이상 입력해 주세요." : ""
+      : validateParticipants(kind, duration);
     if (validation) {
       setEditorMessage(validation);
       return;
@@ -1932,17 +2087,44 @@
       setEditorMessage(placementMessage);
       return;
     }
-    if (state.editingLesson && !Number.isFinite(Number(state.editingLesson.revision))) {
+    if (state.editingLesson && !nativeOneDay && !Number.isFinite(Number(state.editingLesson.revision))) {
       setEditorMessage("이 수업의 최신 변경번호를 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.");
       return;
     }
-    if (!snapshot.branchId || !api?.rpc) {
+    if (!snapshot.branchId || (nativeOneDay ? !api?.saveOneDayBooking : !api?.rpc)) {
       setEditorMessage("관리자 로그인과 운영 지점을 확인해 주세요.");
       return;
     }
     const saveButton = $("#scheduleV2SaveButton");
     saveButton.disabled = true;
     setEditorMessage("서버에 저장하는 중입니다.", "info");
+    if (nativeOneDay) {
+      try {
+        await api.saveOneDayBooking({
+          bookingId: state.editingLesson?.oneDayBookingId || null,
+          coachRoleId: form.elements.coachRoleId.value,
+          bookingDate: form.elements.lessonDate.value,
+          startTime: form.elements.startTime.value,
+          durationMinutes: duration,
+          guestName: oneDayGuestName,
+          selectedUserId: state.selectedParticipants[0]?.userId || "",
+          note: form.elements.note.value.trim(),
+        });
+        if (history.state?.tennisNoteScheduleV2Editor) history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
+        state.deferredRefresh = false;
+        actualCloseEditor();
+        await api.refresh?.({ allowWhileDirty: true });
+        state.payload = null;
+        invalidateCurrentWorkspaceCache();
+        await loadWorkspace({ force: true });
+        setStatus(`${oneDayGuestName} 원데이 예약 완료 · 회원권 차감 없음`, "success");
+      } catch (error) {
+        setEditorMessage(errorMessage(error));
+      } finally {
+        saveButton.disabled = false;
+      }
+      return;
+    }
     const participants = state.selectedParticipants.map((participant) => ({ userId: participant.userId, ticketId: participant.ticketId }));
     const editScope = selectedRegularEditScope();
     if (editScope === "future") {
@@ -2091,26 +2273,31 @@
     const lesson = state.editingLesson;
     if (!lesson) return;
     const participantNames = lessonParticipantLabel(lesson) || "선택한 회원";
-    const confirmation = `${participantNames} ${dateLabel(lesson.lessonDate)} ${lesson.startTime} 수업을 삭제할까요?\n\n완료·노쇼 수업의 차감 횟수는 복원되고 삭제 사실은 변경 이력에 남습니다.`;
+    const confirmation = lesson.oneDayBooking
+      ? `${participantNames} ${dateLabel(lesson.lessonDate)} ${lesson.startTime} 원데이 예약을 삭제할까요?`
+      : `${participantNames} ${dateLabel(lesson.lessonDate)} ${lesson.startTime} 수업을 삭제할까요?\n\n완료·노쇼 수업의 차감 횟수는 복원되고 삭제 사실은 변경 이력에 남습니다.`;
     if (!window.confirm(confirmation)) return;
     const api = bridge();
     const button = $("#scheduleV2DeleteLessonButton");
     button.disabled = true;
-    setEditorMessage("수업 기록과 차감 횟수를 확인해 삭제하는 중입니다.", "info");
+    setEditorMessage(lesson.oneDayBooking ? "원데이 예약을 삭제하는 중입니다." : "수업 기록과 차감 횟수를 확인해 삭제하는 중입니다.", "info");
     try {
-      const result = await api.rpc("tn_admin_force_delete_lesson", {
-        target_lesson_id: lesson.id,
-        target_reason: "관리자 V2 시간표 수업 삭제",
-      });
+      const result = lesson.oneDayBooking
+        ? await api.archiveOneDayBooking?.(lesson.oneDayBookingId)
+        : await api.rpc("tn_admin_force_delete_lesson", {
+          target_lesson_id: lesson.id,
+          target_reason: "관리자 V2 시간표 수업 삭제",
+        });
       const restoredSessions = Number(result?.restoredSessions || 0);
       if (history.state?.tennisNoteScheduleV2Editor) history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
       state.deferredRefresh = false;
       actualCloseEditor();
+      if (lesson.oneDayBooking) await api.refresh?.({ allowWhileDirty: true });
       state.payload = null;
       invalidateCurrentWorkspaceCache();
       await loadWorkspace({ force: true });
-      setStatus(`수업 삭제 완료${restoredSessions ? ` · ${restoredSessions}회 복원` : ""}`, "success");
-      void api.refresh?.();
+      setStatus(lesson.oneDayBooking ? "원데이 예약 삭제 완료" : `수업 삭제 완료${restoredSessions ? ` · ${restoredSessions}회 복원` : ""}`, "success");
+      if (!lesson.oneDayBooking) void api.refresh?.();
     } catch (error) {
       setEditorMessage(errorMessage(error));
     } finally {
@@ -2304,8 +2491,13 @@
       }
     });
     $("#scheduleV2MemberResults").addEventListener("click", (event) => {
+      const oneDayButton = event.target.closest("[data-v2-one-day-user-id]");
+      if (oneDayButton) {
+        toggleSelectedOneDayMember(oneDayButton.dataset.v2OneDayUserId);
+        return;
+      }
       const button = event.target.closest("[data-v2-ticket-id]");
-      if (button) toggleSelectedTicket(button.dataset.v2TicketId);
+      if (button) toggleSelectedTicket(button.dataset.v2TicketId, button.dataset.v2UserId || "");
     });
     $("#scheduleV2SelectedTicket").addEventListener("click", (event) => {
       const button = event.target.closest("[data-v2-remove-user]");
@@ -2321,6 +2513,7 @@
       }
       if (event.target.name === "durationMinutes") {
         updateSeriesGuidance();
+        renderMemberResults();
         syncEditorPlacementAvailability();
         return;
       }
@@ -2332,6 +2525,8 @@
         $("#scheduleV2SeriesOption").hidden = Boolean(state.editingLesson) || selectedKind() !== "regular";
         state.selectedTicketId = "";
         state.selectedParticipants = [];
+        $("#scheduleV2MemberSearch").value = "";
+        syncMemberPickerMode();
         renderSelectedTicket();
         renderMemberResults();
         syncRegularEditScope();

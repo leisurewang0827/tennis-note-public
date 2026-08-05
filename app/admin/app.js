@@ -21753,6 +21753,7 @@ async function performAdminLiveDataSync(options = {}) {
           coachId: coachIdByRole.get(booking.coach_role_id) || "",
           member: booking.guest_name || "원데이 방문자",
           guestPhone: booking.guest_phone || "",
+          linkedUserId: booking.linked_user_id || "",
           oneDayNote: booking.note || "",
           type: "원데이",
           durationMinutes: Number(booking.duration_minutes) || 20,
@@ -28060,6 +28061,8 @@ function scheduleV2AdminBridgeSnapshot() {
       userIds: [...(member.serverUserIds || [])],
       name: member.name,
       status: member.status,
+      phoneLast4: String(member.phone || "").replace(/\D/g, "").slice(-4),
+      birthYear: member.birthYear || "",
     })),
     tickets: branchTickets.map((ticket) => ({
       id: ticket.serverTicketId || ticket.id || "",
@@ -28092,6 +28095,11 @@ function scheduleV2AdminBridgeSnapshot() {
         : lesson.serverStatus || lesson.status || "scheduled",
       scheduleKind: lesson.scheduleV2Kind || normalizeLessonSource(lesson.lessonSource) || "regular",
       memberLabel: lesson.member || "회원 확인 필요",
+      oneDayBooking: Boolean(lesson.oneDayBooking),
+      oneDayBookingId: lesson.serverOneDayBookingId || "",
+      linkedUserId: lesson.linkedUserId || "",
+      guestPhoneLast4: String(lesson.guestPhone || "").replace(/\D/g, "").slice(-4),
+      note: lesson.oneDayNote || "",
     })),
     participantRows: (adminLiveDataState.participantRows || [])
       .filter((row) => branchLessonIds.has(String(row.lesson_id || "")))
@@ -28105,8 +28113,46 @@ function scheduleV2AdminBridgeSnapshot() {
 
 window.TennisNoteAdminScheduleV2Bridge = {
   snapshot: scheduleV2AdminBridgeSnapshot,
-  refresh: async () => {
-    const refreshed = await syncAdminLiveData(true, { abortIfDirty: true });
+  saveOneDayBooking: async ({
+    bookingId = null,
+    coachRoleId,
+    bookingDate,
+    startTime,
+    durationMinutes = 20,
+    guestName,
+    selectedUserId = "",
+    note = "",
+  } = {}) => {
+    const dataClient = window.TennisNoteDataClient;
+    if (!dataClient?.rpc) throw new Error("admin_data_client_unavailable");
+    const normalizedUserId = String(selectedUserId || "");
+    const linkedMember = normalizedUserId
+      ? operationBranchMembers().find((member) => memberServerUserIds(member).includes(normalizedUserId)) || null
+      : null;
+    const resolvedName = String(linkedMember?.name || guestName || "").trim();
+    const resolvedPhone = linkedMember ? String(linkedMember.phone || "").trim() : "";
+    return dataClient.rpc("tn_admin_save_one_day_booking", {
+      target_booking_id: bookingId || null,
+      target_branch_id: activeOperationBranchId(),
+      target_coach_role_id: coachRoleId,
+      target_booking_date: bookingDate,
+      target_start_time: startTime,
+      target_duration_minutes: Number(durationMinutes) || 20,
+      target_guest_name: resolvedName,
+      target_guest_phone: resolvedPhone || null,
+      target_note: String(note || "").trim() || null,
+      target_status: "reserved",
+    });
+  },
+  archiveOneDayBooking: (bookingId) => {
+    const dataClient = window.TennisNoteDataClient;
+    if (!dataClient?.rpc) throw new Error("admin_data_client_unavailable");
+    return dataClient.rpc("tn_admin_archive_one_day_booking", {
+      target_booking_id: bookingId,
+    });
+  },
+  refresh: async ({ allowWhileDirty = false } = {}) => {
+    const refreshed = await syncAdminLiveData(true, { abortIfDirty: !allowWhileDirty });
     if (refreshed) {
       window.dispatchEvent(new CustomEvent("tennisnote:admin-live-data", {
         detail: { source: "v2-refresh", branchId: activeOperationBranchId() },

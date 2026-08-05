@@ -1224,6 +1224,17 @@
   font-size: 10px;
 }
 
+.schedule-v2-member-result .schedule-v2-member-identity {
+  color: #425a52;
+  line-height: 1.35;
+}
+
+.schedule-v2-selected-members > span small {
+  margin-left: 5px;
+  color: #687a74;
+  font-size: 9px;
+}
+
 .schedule-v2-member-result.is-selected {
   border-color: #08795a;
   background: #e8f6f0;
