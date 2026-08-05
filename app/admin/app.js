@@ -21746,6 +21746,7 @@ async function performAdminLiveDataSync(options = {}) {
           oneDayBooking: true,
           branchId: booking.branch_id,
           ticketId: "",
+          coachRoleId: booking.coach_role_id,
           day: scheduleDays[dayIndex === 0 ? 6 : dayIndex - 1],
           lessonDate: booking.booking_date,
           time: String(booking.start_time || "").slice(0, 5),
