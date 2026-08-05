@@ -16,6 +16,8 @@
   const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
   const dayLabels = ["일", "월", "화", "수", "목", "금", "토"];
   const kindLabels = { regular: "정규", makeup: "보강", coupon: "쿠폰", one_day: "원데이" };
+  const overlapBlockingStatuses = new Set(["scheduled", "pending_change", "completed", "no_show"]);
+  const defaultAddDurationMinutes = 20;
   const statusLabels = {
     scheduled: "예정",
     pending_change: "승인 대기",
@@ -835,6 +837,53 @@
     return leftStart < rightEnd && rightStart < leftEnd;
   }
 
+  function lessonPlacementConflict({ date, startTime, coachRoleId, durationMinutes, ignoredLessonId = null }) {
+    const candidate = {
+      startTime,
+      durationMinutes: Number(durationMinutes) || defaultAddDurationMinutes,
+    };
+    return (state.payload?.lessons || []).find((lesson) => {
+      if (String(lesson.id) === String(ignoredLessonId || "")) return false;
+      if (lesson.lessonDate !== date || !overlapBlockingStatuses.has(lesson.status)) return false;
+      const usesCoach = String(lesson.coachRoleId) === String(coachRoleId)
+        || String(lesson.substitute?.coachRoleId || "") === String(coachRoleId);
+      return usesCoach && lessonsOverlapEachOther(candidate, lesson);
+    }) || null;
+  }
+
+  function coachAvailableForLesson(coach, date, startTime, durationMinutes, hasAnyAvailability) {
+    if (!coach) return false;
+    const dayOfWeek = new Date(`${date}T12:00:00`).getDay();
+    const start = timeMinutes(startTime);
+    const end = start + (Number(durationMinutes) || defaultAddDurationMinutes);
+    const branchStart = timeMinutes(state.payload?.branch?.openStart || state.payload?.branch?.open_start || "06:40");
+    const branchEnd = timeMinutes(state.payload?.branch?.openEnd || state.payload?.branch?.open_end || "22:00");
+    if (start < branchStart || end > branchEnd) return false;
+    for (let minute = start; minute < end; minute += 10) {
+      if (!coachAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability)) return false;
+    }
+    return true;
+  }
+
+  function canStartLessonAt({ date, startTime, coachRoleId, durationMinutes = defaultAddDurationMinutes, ignoredLessonId = null, requireAvailability = true }) {
+    if (!date || !startTime || !coachRoleId) return false;
+    if (lessonPlacementConflict({ date, startTime, coachRoleId, durationMinutes, ignoredLessonId })) return false;
+    if (!requireAvailability) return true;
+    const coaches = state.payload?.coaches || [];
+    const coach = coaches.find((item) => String(item.roleId) === String(coachRoleId));
+    const hasAnyAvailability = coaches.some((item) => availabilityRows(item)
+      .some((row) => (row.type || row.availability_type) === "available"));
+    return coachAvailableForLesson(coach, date, startTime, durationMinutes, hasAnyAvailability);
+  }
+
+  function placementConflictMessage({ date, startTime, coachRoleId, durationMinutes, ignoredLessonId = null }) {
+    const conflict = lessonPlacementConflict({ date, startTime, coachRoleId, durationMinutes, ignoredLessonId });
+    if (!conflict) return "";
+    const coach = (state.payload?.coaches || []).find((item) => String(item.roleId) === String(coachRoleId));
+    const conflictEnd = minutesTime(timeMinutes(conflict.startTime) + Number(conflict.durationMinutes || 20));
+    return `${coach?.name || "선택한 코치"}의 ${String(conflict.startTime).slice(0, 5)}~${conflictEnd} 수업과 겹칩니다. 다른 시작 시간이나 수업 길이를 선택해 주세요.`;
+  }
+
   function usesDesktopWeeklyView() {
     return desktopWeeklyMedia.matches;
   }
@@ -1041,17 +1090,39 @@
           const historyClass = run.stateName === "history" ? "has-history" : "";
           const closureClass = run.closureLabel ? "is-closure" : "";
           const classes = ["schedule-v2-week-run", dayClass, shiftClass, occupiedClass, historyClass, closureClass].filter(Boolean).join(" ");
-          const style = `grid-row:${run.startIndex + 3} / span ${run.slotCount};grid-column:${plan.columnStart + lane};--v2-run-rows:${run.slotCount}`;
+          const styleFor = (startOffset, slotCount) => `grid-row:${run.startIndex + startOffset + 3} / span ${slotCount};grid-column:${plan.columnStart + lane};--v2-run-rows:${slotCount}`;
           if (!run.coach) {
-            bodyCells.push(`<div class="schedule-v2-week-slot ${classes} is-unavailable" title="${escapeHtml(`${dateLabel(plan.date)} ${startTime}-${endTime} 근무 코치 없음`)}" style="${style}"></div>`);
+            bodyCells.push(`<div class="schedule-v2-week-slot ${classes} is-unavailable" title="${escapeHtml(`${dateLabel(plan.date)} ${startTime}-${endTime} 근무 코치 없음`)}" style="${styleFor(0, run.slotCount)}"></div>`);
             return;
           }
           const closureText = run.closureLabel ? ` · ${run.closureLabel}` : "";
           if (run.stateName !== "available") {
-            bodyCells.push(`<div class="schedule-v2-week-slot ${classes}" style="${style}" title="${escapeHtml(`${run.coach.name} ${startTime}-${endTime}${closureText}`)}"></div>`);
+            bodyCells.push(`<div class="schedule-v2-week-slot ${classes}" style="${styleFor(0, run.slotCount)}" title="${escapeHtml(`${run.coach.name} ${startTime}-${endTime}${closureText}`)}"></div>`);
             return;
           }
-          bodyCells.push(`<button class="schedule-v2-week-slot schedule-v2-week-add schedule-v2-week-add-run ${classes}" type="button" style="${style}" data-v2-add data-v2-add-run data-date="${plan.date}" data-time="${startTime}" data-start-time="${startTime}" data-slot-count="${run.slotCount}" data-coach-role-id="${escapeHtml(run.roleId)}" aria-label="${escapeHtml(`${run.coach.name} ${dateLabel(plan.date)} ${startTime}-${endTime} 빈 시간, 누른 위치에 수업 추가`)}" title="${escapeHtml(`${run.coach.name} · ${startTime}-${endTime}${run.closureLabel ? ` · ${run.closureLabel} 관리자 등록 가능` : ""}`)}"></button>`);
+          const startSegments = [];
+          for (let offset = 0; offset < run.slotCount; offset += 1) {
+            const candidateTime = minutesTime(timeMinutes(startTime) + offset * 10);
+            const valid = canStartLessonAt({
+              date: plan.date,
+              startTime: candidateTime,
+              coachRoleId: run.roleId,
+              durationMinutes: defaultAddDurationMinutes,
+            });
+            const previousSegment = startSegments.at(-1);
+            if (previousSegment?.valid === valid) previousSegment.slotCount += 1;
+            else startSegments.push({ valid, startOffset: offset, slotCount: 1 });
+          }
+          startSegments.forEach((segment) => {
+            const segmentStart = minutesTime(timeMinutes(startTime) + segment.startOffset * 10);
+            const segmentEnd = minutesTime(timeMinutes(segmentStart) + segment.slotCount * 10);
+            const segmentClasses = ["schedule-v2-week-run", dayClass, segment.startOffset === 0 ? shiftClass : "", closureClass].filter(Boolean).join(" ");
+            if (!segment.valid) {
+              bodyCells.push(`<div class="schedule-v2-week-slot ${segmentClasses} is-duration-unavailable" style="${styleFor(segment.startOffset, segment.slotCount)}" title="${escapeHtml(`${run.coach.name} · ${segmentStart}부터 ${defaultAddDurationMinutes}분 수업 공간 부족`)}"></div>`);
+              return;
+            }
+            bodyCells.push(`<button class="schedule-v2-week-slot schedule-v2-week-add schedule-v2-week-add-run ${segmentClasses}" type="button" style="${styleFor(segment.startOffset, segment.slotCount)}" data-v2-add data-v2-add-run data-date="${plan.date}" data-time="${segmentStart}" data-start-time="${segmentStart}" data-slot-count="${segment.slotCount}" data-duration-minutes="${defaultAddDurationMinutes}" data-coach-role-id="${escapeHtml(run.roleId)}" aria-label="${escapeHtml(`${run.coach.name} ${dateLabel(plan.date)} ${segmentStart}-${segmentEnd} ${defaultAddDurationMinutes}분 수업 시작 가능`)}" title="${escapeHtml(`${run.coach.name} · ${segmentStart}-${segmentEnd}${run.closureLabel ? ` · ${run.closureLabel} 관리자 등록 가능` : ""}`)}"></button>`);
+          });
         });
       }
 
@@ -1134,7 +1205,16 @@
       if (occupied || history) {
         return `<div class="schedule-v2-slot ${occupied ? "is-occupied" : ""} ${history ? "has-history" : ""} ${closureClass}" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" ${closure ? `title="${escapeHtml(closureLabel)}"` : ""}></div>`;
       }
-      return `<button class="schedule-v2-slot schedule-v2-add ${closureClass}" type="button" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" data-v2-add data-date="${state.selectedDate}" data-time="${time}" data-coach-role-id="${escapeHtml(coach.roleId)}" aria-label="${escapeHtml(`${coach.name} ${time} ${closure ? `${closureLabel} 관리자 수업 추가` : "수업 추가"}`)}" ${closure ? `title="${escapeHtml(`${closureLabel} · 관리자는 직접 등록할 수 있습니다.`)}"` : ""}>+</button>`;
+      const canStart = canStartLessonAt({
+        date: state.selectedDate,
+        startTime: time,
+        coachRoleId: coach.roleId,
+        durationMinutes: defaultAddDurationMinutes,
+      });
+      if (!canStart) {
+        return `<div class="schedule-v2-slot is-duration-unavailable ${closureClass}" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" title="${escapeHtml(`${coach.name} · ${time}부터 ${defaultAddDurationMinutes}분 수업 공간 부족`)}"></div>`;
+      }
+      return `<button class="schedule-v2-slot schedule-v2-add ${closureClass}" type="button" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" data-v2-add data-date="${state.selectedDate}" data-time="${time}" data-duration-minutes="${defaultAddDurationMinutes}" data-coach-role-id="${escapeHtml(coach.roleId)}" aria-label="${escapeHtml(`${coach.name} ${time} ${defaultAddDurationMinutes}분 ${closure ? `${closureLabel} 관리자 수업 추가` : "수업 추가"}`)}" ${closure ? `title="${escapeHtml(`${closureLabel} · 관리자는 직접 등록할 수 있습니다.`)}"` : ""}>+</button>`;
     })).join("");
     const lessonCards = activeLessons.map((lesson) => {
       const rowIndex = startIndex.get(String(lesson.startTime).slice(0, 5));
@@ -1455,6 +1535,7 @@
     $("#scheduleV2MemberSearch").value = ticketMemberLabel(ticket);
     renderMemberResults();
     renderSelectedTicket();
+    syncEditorPlacementAvailability();
   }
 
   function toggleSelectedTicket(ticketId) {
@@ -1482,6 +1563,7 @@
     setEditorMessage("");
     renderMemberResults();
     renderSelectedTicket();
+    syncEditorPlacementAvailability();
   }
 
   function removeSelectedParticipant(userId) {
@@ -1517,6 +1599,28 @@
     times.sort((left, right) => timeMinutes(left) - timeMinutes(right));
     form.elements.startTime.innerHTML = times.map((time) => `<option value="${time}" ${time === slot.time ? "selected" : ""}>${time}</option>`).join("");
     form.elements.coachRoleId.innerHTML = (state.payload?.coaches || []).map((coach) => `<option value="${escapeHtml(coach.roleId)}" ${String(coach.roleId) === String(slot.coachRoleId) ? "selected" : ""}>${escapeHtml(coach.name)}</option>`).join("");
+  }
+
+  function syncEditorPlacementAvailability() {
+    if (!state.editorOpen) return;
+    const form = $("#scheduleV2EditorForm");
+    const saveButton = $("#scheduleV2SaveButton");
+    const messageTarget = $("#scheduleV2EditorMessage");
+    const message = placementConflictMessage({
+      date: form.elements.lessonDate.value,
+      startTime: form.elements.startTime.value,
+      coachRoleId: form.elements.coachRoleId.value,
+      durationMinutes: Number(form.elements.durationMinutes.value) || defaultAddDurationMinutes,
+      ignoredLessonId: state.editingLesson?.id || null,
+    });
+    saveButton.disabled = Boolean(message);
+    if (message) {
+      messageTarget.dataset.placementConflict = "true";
+      setEditorMessage(message);
+    } else if (messageTarget.dataset.placementConflict === "true") {
+      delete messageTarget.dataset.placementConflict;
+      setEditorMessage("");
+    }
   }
 
   function renderSubstituteEditor() {
@@ -1719,12 +1823,14 @@
     const duration = Number(lesson?.durationMinutes) || 20;
     const durationInput = form.querySelector(`input[name="durationMinutes"][value="${duration}"]`);
     if (durationInput) durationInput.checked = true;
+    form.elements.note.value = lesson?.note || "";
     const firstTicketId = state.selectedParticipants[0]?.ticketId || state.pendingTicketId || "";
     if (!lesson && firstTicketId) setSelectedTicket(firstTicketId);
     state.pendingTicketId = "";
     form.elements.fillSeries.checked = !lesson && kind === "regular" && date >= localDateKey(new Date());
     $("#scheduleV2SeriesOption").hidden = Boolean(lesson) || kind !== "regular";
     $("#scheduleV2CancelLessonButton").hidden = !lesson || !["scheduled", "pending_change"].includes(lesson.status);
+    $("#scheduleV2DeleteLessonButton").hidden = !lesson;
     if (lesson) {
       state.selectedTicketId = [...new Set(state.selectedParticipants.map((participant) => String(participant.ticketId || "")).filter(Boolean))].join(",");
       $("#scheduleV2MemberSearch").value = lessonParticipantLabel(lesson);
@@ -1745,6 +1851,7 @@
     document.body.style.right = "0";
     document.body.style.left = "0";
     document.body.style.width = "100%";
+    syncEditorPlacementAvailability();
     history.pushState({ ...(history.state || {}), tennisNoteScheduleV2Editor: true }, "");
     window.setTimeout(() => $("#scheduleV2MemberSearch")?.focus(), 0);
   }
@@ -1779,6 +1886,8 @@
       schedule_v2_regular_revision_start_before_source: "선택한 회차보다 앞에서 시작하려면 더 이른 정규수업을 먼저 선택해 주세요.",
       schedule_v2_regular_revision_participants_invalid: "정규수업의 회원·회원권 연결을 확인해 주세요.",
       schedule_v2_regular_revision_unavailable: "예정된 정규수업에서만 이후 일정을 변경할 수 있습니다.",
+      lesson_not_found: "이미 삭제되었거나 다른 화면에서 변경된 수업입니다. 시간표를 새로고침해 주세요.",
+      lesson_correction_ticket_inconsistent: "회원권 횟수와 완료 기록이 맞지 않아 자동 복원을 중단했습니다. 관리자 데이터 확인이 필요합니다.",
     };
     const key = Object.keys(labels).find((candidate) => source.includes(candidate));
     return key ? labels[key] : `저장하지 못했습니다. ${source}`;
@@ -1810,6 +1919,17 @@
     const validation = validateParticipants(kind, duration);
     if (validation) {
       setEditorMessage(validation);
+      return;
+    }
+    const placementMessage = placementConflictMessage({
+      date: form.elements.lessonDate.value,
+      startTime: form.elements.startTime.value,
+      coachRoleId: form.elements.coachRoleId.value,
+      durationMinutes: duration,
+      ignoredLessonId: state.editingLesson?.id || null,
+    });
+    if (placementMessage) {
+      setEditorMessage(placementMessage);
       return;
     }
     if (state.editingLesson && !Number.isFinite(Number(state.editingLesson.revision))) {
@@ -1954,6 +2074,42 @@
       invalidateCurrentWorkspaceCache();
       await loadWorkspace({ force: true });
       setStatus(futureScope ? "이후 정규시간 종료 완료 · 과거 기록은 유지했습니다." : "수업 취소 완료", "success");
+      void api.refresh?.();
+    } catch (error) {
+      setEditorMessage(errorMessage(error));
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function deleteLesson() {
+    if (localDemoMode) {
+      setEditorMessage("로컬 데모에서는 수업을 삭제하지 않습니다.", "info");
+      return;
+    }
+    if (!requireWritableServer()) return;
+    const lesson = state.editingLesson;
+    if (!lesson) return;
+    const participantNames = lessonParticipantLabel(lesson) || "선택한 회원";
+    const confirmation = `${participantNames} ${dateLabel(lesson.lessonDate)} ${lesson.startTime} 수업을 삭제할까요?\n\n완료·노쇼 수업의 차감 횟수는 복원되고 삭제 사실은 변경 이력에 남습니다.`;
+    if (!window.confirm(confirmation)) return;
+    const api = bridge();
+    const button = $("#scheduleV2DeleteLessonButton");
+    button.disabled = true;
+    setEditorMessage("수업 기록과 차감 횟수를 확인해 삭제하는 중입니다.", "info");
+    try {
+      const result = await api.rpc("tn_admin_force_delete_lesson", {
+        target_lesson_id: lesson.id,
+        target_reason: "관리자 V2 시간표 수업 삭제",
+      });
+      const restoredSessions = Number(result?.restoredSessions || 0);
+      if (history.state?.tennisNoteScheduleV2Editor) history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
+      state.deferredRefresh = false;
+      actualCloseEditor();
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ force: true });
+      setStatus(`수업 삭제 완료${restoredSessions ? ` · ${restoredSessions}회 복원` : ""}`, "success");
       void api.refresh?.();
     } catch (error) {
       setEditorMessage(errorMessage(error));
@@ -2165,6 +2321,11 @@
       }
       if (event.target.name === "durationMinutes") {
         updateSeriesGuidance();
+        syncEditorPlacementAvailability();
+        return;
+      }
+      if (["lessonDate", "startTime", "coachRoleId"].includes(event.target.name)) {
+        syncEditorPlacementAvailability();
         return;
       }
       if (event.target.name === "scheduleKind") {
@@ -2178,6 +2339,7 @@
     });
     $("#scheduleV2EditorForm").addEventListener("submit", saveEditor);
     $("#scheduleV2CancelLessonButton").addEventListener("click", cancelLesson);
+    $("#scheduleV2DeleteLessonButton").addEventListener("click", deleteLesson);
     $("#scheduleV2AssignSubstituteButton").addEventListener("click", assignSubstitute);
     $("#scheduleV2CancelSubstituteButton").addEventListener("click", cancelSubstitute);
     $("#scheduleV2OutcomeList").addEventListener("change", (event) => {

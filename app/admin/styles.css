@@ -4037,6 +4037,18 @@ tr.is-selected td {
   white-space: normal;
 }
 
+.member-status-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.member-row-permanent-delete {
+  min-height: 30px;
+  padding-inline: 8px;
+}
+
 .member-ticket-assign-button {
   width: 100%;
   margin-top: 10px;

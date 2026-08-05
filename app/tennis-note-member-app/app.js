@@ -1680,7 +1680,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.273",
+    workerUrl: "./service-worker.js?v=1.0.279",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3708,6 +3708,22 @@ function renderMemberFlexibleBooking() {
     </section>`;
 }
 
+function memberDesktopScheduleBackgroundRuns(policy, day, coach, scheduleTimeList) {
+  return scheduleTimeList.reduce((runs, time, timeIndex) => {
+    const breakRule = memberBreakRuleForSlot(policy, day, time);
+    const isWorking = !breakRule && isMemberCoachWorking(coach, day, time, 10);
+    const state = breakRule ? "blocked" : isWorking ? "base" : "off";
+    const label = breakRule ? (breakRule.label || "브레이크") : state === "off" ? "근무외" : "";
+    const previous = runs.at(-1);
+    if (previous && previous.state === state && previous.label === label) {
+      previous.span += 1;
+      return runs;
+    }
+    runs.push({ state, label, startIndex: timeIndex, span: 1 });
+    return runs;
+  }, []);
+}
+
 function renderDynamicMemberSchedule() {
   const activeWeek = activeMemberWeek();
   $("#memberWeekSwitcher").innerHTML = `
@@ -3778,31 +3794,15 @@ function renderDynamicMemberSchedule() {
           const availableLessons = dayLessons.filter((lesson) => lesson.status === "available");
           return `
             <div class="member-day-column" style="--slot-count:${scheduleTimeList.length}; --coach-count:${displayCoaches.length};">
-              ${scheduleTimeList
-                .map((time, timeIndex) =>
-                  displayCoaches
-                    .map((coach, coachIndex) => {
-                      const breakRule = memberBreakRuleForSlot(policy, day, time);
-                      const isWorking = !breakRule && isMemberCoachWorking(coach, day, time, 10);
-                      const stateClass = breakRule ? "blocked" : isWorking ? "base" : "off";
-                      const label = requestOnly ? "" : timeIndex % 3 === 0
-                        ? breakRule ? (breakRule.label || "브레이크") : isWorking ? "수업 신청불가" : "근무외"
-                        : "";
-                      const fullLabel = breakRule ? (breakRule.label || "브레이크") : isWorking ? "수업 신청불가" : "근무외";
-                      return `
-                        <button
-                          class="member-slot-bg ${stateClass}"
-                          type="button"
-                          disabled
-                          aria-label="${day}요일 ${time} ${memberCoachShortName(coach.name)} ${fullLabel}"
-                          style="grid-row:${timeIndex + 1}; grid-column:${coachIndex + 1};"
-                        >
-                          <span>${label}</span>
-                        </button>`;
-                    })
-                    .join(""),
-                )
-                .join("")}
+              ${displayCoaches.map((coach, coachIndex) => {
+                const runs = memberDesktopScheduleBackgroundRuns(policy, day, coach, scheduleTimeList);
+                return `
+                  <div class="member-slot-lane" aria-hidden="true" style="grid-row:1 / span ${scheduleTimeList.length}; grid-column:${coachIndex + 1};"></div>
+                  ${runs.filter((run) => run.state !== "base").map((run) => `
+                    <div class="member-slot-run ${run.state}" aria-hidden="true" style="grid-row:${run.startIndex + 1} / span ${run.span}; grid-column:${coachIndex + 1};">
+                      <span>${requestOnly ? "" : escapeHtml(run.label)}</span>
+                    </div>`).join("")}`;
+              }).join("")}
               ${availableLessons
                 .map((lesson) => {
                   const startIndex = scheduleTimeList.indexOf(lesson.time);
@@ -7743,7 +7743,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.273" });
+  const params = new URLSearchParams({ v: "1.0.279" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

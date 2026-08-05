@@ -12099,6 +12099,9 @@ function renderMemberBulkToolbar(visibleMembers = [], filteredSelectionIds = nul
   const selected = selectedMemberIdSet();
   const validIds = new Set(members.map((member) => Number(member.id)));
   state.selectedMemberIds = [...selected].filter((id) => validIds.has(id));
+  const selectedMembers = members.filter((member) => selectedMemberIdSet().has(Number(member.id)));
+  const selectedMembersAreInactive = selectedMembers.length > 0
+    && selectedMembers.every((member) => memberListStatus(member) === "inactive" && member.authRole !== "admin");
   const toolbar = $("#memberBulkToolbar");
   if (toolbar) toolbar.hidden = operationsRole() !== "admin";
   if ($("#memberBulkCount")) $("#memberBulkCount").textContent = String(state.selectedMemberIds.length);
@@ -12130,6 +12133,18 @@ function renderMemberBulkToolbar(visibleMembers = [], filteredSelectionIds = nul
     coachSelect.innerHTML = activeCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name)}</option>`).join("");
     coachSelect.hidden = $("#memberBulkAction")?.value !== "assign_coach";
   }
+  const permanentDeleteOption = $('#memberBulkAction option[value="permanent_delete"]');
+  if (permanentDeleteOption) {
+    permanentDeleteOption.hidden = state.memberFilter !== "inactive";
+    permanentDeleteOption.disabled = !selectedMembersAreInactive;
+    if (permanentDeleteOption.hidden && $("#memberBulkAction")?.value === "permanent_delete") {
+      $("#memberBulkAction").value = "";
+    }
+  }
+  const deleteButton = $("#deleteSelectedMembers");
+  if (deleteButton) {
+    deleteButton.textContent = selectedMembersAreInactive ? "선택 영구 삭제" : "선택 삭제";
+  }
   syncMemberBulkRenewalFields();
 }
 
@@ -12146,6 +12161,42 @@ async function runMemberBulkAction() {
   const button = $("#runMemberBulkAction");
   if (button) button.disabled = true;
   try {
+    if (action === "permanent_delete") {
+      const eligibleMembers = selectedMembers.filter((member) => (
+        member.serverUserId
+        && memberListStatus(member) === "inactive"
+        && member.authRole !== "admin"
+      ));
+      if (eligibleMembers.length !== selectedMembers.length) {
+        throw new Error("permanent_delete_inactive_members_only");
+      }
+      const failedMemberIds = [];
+      for (const member of eligibleMembers) {
+        try {
+          await window.TennisNoteDataClient.rpc("tn_admin_permanently_delete_inactive_member", {
+            target_user_id: member.serverUserId,
+          });
+        } catch (error) {
+          failedMemberIds.push(Number(member.id));
+        }
+      }
+      await syncAdminLiveData(true);
+      const deletedServerIds = new Set(eligibleMembers
+        .filter((member) => !failedMemberIds.includes(Number(member.id)))
+        .map((member) => String(member.serverUserId)));
+      const unconfirmedIds = members
+        .filter((member) => deletedServerIds.has(String(member.serverUserId)))
+        .map((member) => Number(member.id));
+      const remainingIds = [...new Set([...failedMemberIds, ...unconfirmedIds])];
+      state.selectedMemberIds = remainingIds;
+      renderMembers();
+      if (remainingIds.length) {
+        showToast(`${eligibleMembers.length - remainingIds.length}명 영구 삭제 · ${remainingIds.length}명 확인 필요`);
+      } else {
+        showToast(`${eligibleMembers.length}명 영구 삭제 완료`);
+      }
+      return;
+    }
     if (action === "reenroll") {
       const productId = $("#memberBulkRenewalProduct")?.value || "";
       const paymentMethod = $("#memberBulkRenewalPaymentMethod")?.value || "";
@@ -12221,6 +12272,8 @@ async function runMemberBulkAction() {
       ? "회원 일괄 처리 DB 패치를 먼저 적용해 주세요."
       : message.includes("bulk_member_no_changes")
         ? "변경된 회원이 없습니다. 회원 연결 상태를 확인해 주세요."
+      : message.includes("permanent_delete_inactive_members_only")
+        ? "삭제회원만 영구 삭제할 수 있습니다. 선택한 회원 상태를 확인해 주세요."
       : "회원 일괄 처리에 실패했습니다. 권한과 회원 상태를 확인해 주세요.");
   } finally {
     if (button?.isConnected) button.disabled = false;
@@ -12306,6 +12359,9 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
               <option value="true">미래 정규시간 다시 만들기</option>
             </select></label>
             <button class="primary-button member-inline-save" type="submit">저장</button>
+            ${memberListStatus(member) === "inactive" && member.authRole !== "admin" && member.serverUserId
+              ? `<button class="danger-button member-row-permanent-delete" type="button" data-open-member-management="permanent_delete" data-member-management-member-id="${member.id}">영구 삭제</button>`
+              : ""}
           </div>
           ${ticket ? memberInlineScheduleMarkup(member, ticket, currentProduct) : ""}
           <div class="member-inline-editor-actions">
@@ -12962,6 +13018,13 @@ function renderMembers(options = {}) {
       .map((member) => {
       const ticket = memberCurrentTicket(member);
       const issues = memberEditorAuditIssues(member, ticket);
+      const listStatus = memberListStatus(member);
+      const permanentDeleteButton = operationsRole() === "admin"
+        && listStatus === "inactive"
+        && member.authRole !== "admin"
+        && member.serverUserId
+          ? `<button class="small-button danger-button member-row-permanent-delete" type="button" data-open-member-management="permanent_delete" data-member-management-member-id="${member.id}">영구 삭제</button>`
+          : "";
       const memberRow = `
         <tr class="${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}">
           <td class="row-select-cell member-select-column"><input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedMemberIdSet().has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} /></td>
@@ -12978,7 +13041,7 @@ function renderMembers(options = {}) {
           </td>
           <td class="member-schedule-column">${escapeHtml(memberScheduleSummary(member))}</td>
           <td class="member-usage-column">${escapeHtml(memberUsageDisplayLabel(member, ticket))}</td>
-          <td class="member-status-column">${memberStatusBadge(member)}</td>
+          <td class="member-status-column"><div class="member-status-actions">${memberStatusBadge(member)}${permanentDeleteButton}</div></td>
           <td class="member-table-note member-note-column">${escapeHtml(memberRemarkLabel(member))}</td>
         </tr>`;
       if (!memberAdminEditEnabled || operationsRole() !== "admin") return memberRow;
@@ -21268,7 +21331,11 @@ async function performAdminLiveDataSync(options = {}) {
     const operationalRosterPromise = fullAdminAccess
       ? client.rpc("tn_admin_operational_roster_core", rosterParameters)
         .catch((coreError) => {
-          console.warn("[Tennis Note] core operational roster unavailable; using compatible roster", coreError);
+          if (!isMissingRpcError(coreError, "tn_admin_operational_roster_core")) {
+            console.warn("[Tennis Note] core operational roster unavailable; using full-source fallback", coreError);
+            return null;
+          }
+          console.warn("[Tennis Note] core operational roster missing; using compatible roster", coreError);
           return client.rpc("tn_admin_operational_roster", rosterParameters);
         })
         .then((response) => (Array.isArray(response) ? response[0] : response) || null)
@@ -27183,7 +27250,10 @@ function bindEvents() {
     }
     if (event.target.closest("#deleteSelectedMembers")) {
       const actionSelect = $("#memberBulkAction");
-      if (actionSelect) actionSelect.value = "deactivate";
+      const selectedMembers = members.filter((member) => selectedMemberIdSet().has(Number(member.id)));
+      const permanentDelete = selectedMembers.length > 0
+        && selectedMembers.every((member) => memberListStatus(member) === "inactive" && member.authRole !== "admin");
+      if (actionSelect) actionSelect.value = permanentDelete ? "permanent_delete" : "deactivate";
       await runMemberBulkAction();
       return;
     }
@@ -27270,7 +27340,9 @@ function bindEvents() {
 
     const memberManagementButton = event.target.closest("[data-open-member-management]");
     if (memberManagementButton) {
-      const member = members.find((item) => item.id === state.selectedMemberId);
+      const explicitMemberId = Number(memberManagementButton.dataset.memberManagementMemberId || 0);
+      const member = members.find((item) => item.id === (explicitMemberId || state.selectedMemberId));
+      if (explicitMemberId) state.selectedMemberId = member?.id || null;
       await openMemberManagementModal(
         member,
         memberManagementButton.dataset.openMemberManagement,
@@ -28015,7 +28087,9 @@ function scheduleV2AdminBridgeSnapshot() {
       lessonDate: lesson.lessonDate || "",
       startTime: lesson.time || "",
       durationMinutes: Number(lesson.durationMinutes) || 20,
-      status: lesson.serverStatus || lesson.status || "scheduled",
+      status: (isLessonCancelled(lesson) || isReleasedRegularMakeupSlot(lesson))
+        ? "cancelled"
+        : lesson.serverStatus || lesson.status || "scheduled",
       scheduleKind: lesson.scheduleV2Kind || normalizeLessonSource(lesson.lessonSource) || "regular",
       memberLabel: lesson.member || "회원 확인 필요",
     })),

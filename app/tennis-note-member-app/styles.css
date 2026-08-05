@@ -1057,6 +1057,55 @@ button {
   min-width: 0;
 }
 
+.member-slot-lane,
+.member-slot-run {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid #d9e2ea;
+  border-radius: 6px;
+}
+
+.member-slot-lane {
+  z-index: 0;
+  background-color: #fbfcfe;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 44px,
+    #d9e2ea 44px,
+    #d9e2ea 47px
+  );
+}
+
+.member-slot-run {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 4px 3px;
+  color: #b94b3e;
+  background: #fff2ef;
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.member-slot-run.blocked {
+  color: #9f2d25;
+  border-color: #e8aaa2;
+  background: #ffe8e4;
+  box-shadow: inset 3px 0 0 #c24132;
+}
+
+.member-slot-run span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .member-slot-bg {
   z-index: 1;
   grid-template-rows: minmax(0, auto) minmax(0, auto);
@@ -1104,6 +1153,15 @@ button {
   color: transparent;
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
+}
+
+.member-duration-schedule.member-request-only .member-slot-lane,
+.member-duration-schedule.member-request-only .member-slot-run {
+  color: transparent;
+  border-color: transparent;
+  background-color: transparent;
+  background-image: none;
   box-shadow: none;
 }
 
