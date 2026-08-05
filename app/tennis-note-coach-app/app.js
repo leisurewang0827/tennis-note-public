@@ -20,6 +20,8 @@ const state = {
   liveLessons: [],
   releasedMakeupSlots: [],
   liveLessonsLoaded: false,
+  scheduleV2WorkspaceLoaded: false,
+  scheduleV2SyncError: "",
   liveMembersLoaded: false,
   scheduleFilter: "all",
   selectedFullScheduleDay: "",
@@ -711,6 +713,8 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = []) {
 
   state.liveMembersLoaded = true;
   state.liveLessonsLoaded = true;
+  state.scheduleV2WorkspaceLoaded = true;
+  state.scheduleV2SyncError = "";
   return true;
 }
 
@@ -751,6 +755,15 @@ async function syncCoachScheduleV2(options = {}) {
 }
 
 async function syncCoachSchedulePreview() {
+  if (await syncCoachScheduleV2()) {
+    state.scheduleV2SyncError = "";
+    return true;
+  }
+  return false;
+}
+
+// Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
+async function syncLegacyCoachSchedulePreview() {
   const client = window.TennisNoteDataClient;
   if (!client?.rpc || !client.getSession?.()?.access_token) return false;
   if (await syncCoachScheduleV2()) return true;
@@ -808,6 +821,28 @@ async function syncCoachSchedulePreview() {
 }
 
 async function syncCoachLessonsFromServer() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc) return false;
+  const activeSession = client.ensureSession
+    ? await client.ensureSession().catch(() => client.getSession?.())
+    : client.getSession?.();
+  if (!activeSession?.access_token || !state.coach?.branchId) return false;
+  if (await syncCoachScheduleV2({ force: true })) return true;
+  if (!state.scheduleV2WorkspaceLoaded) {
+    state.liveLessons = [];
+    state.releasedMakeupSlots = [];
+    state.makeupEntitlements = [];
+    state.members = [];
+    state.expiredMembers = [];
+  }
+  state.liveLessonsLoaded = true;
+  state.liveMembersLoaded = true;
+  state.scheduleV2SyncError = "시간표를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.";
+  return false;
+}
+
+// Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
+async function syncLegacyCoachLessonsFromServer() {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows) return false;
   try {
@@ -2062,7 +2097,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.279",
+    workerUrl: "./service-worker.js?v=1.0.280",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2092,7 +2127,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.279" });
+  const params = new URLSearchParams({ v: "1.0.280" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3249,6 +3284,21 @@ function renderCoachMobileSchedule(policy, scheduleLessons) {
 
 function renderFullSchedule() {
   if (!$("#fullScheduleBoard")) return;
+  if (state.scheduleV2SyncError && !state.scheduleV2WorkspaceLoaded) {
+    $("#fullScheduleBoard").innerHTML = `
+      <section class="tn-empty-state" role="alert">
+        <strong>시간표를 불러오지 못했습니다</strong>
+        <p>${escapeHtml(state.scheduleV2SyncError)}</p>
+        <button id="retryCoachScheduleV2" class="primary-button" type="button">다시 불러오기</button>
+      </section>`;
+    $("#retryCoachScheduleV2")?.addEventListener("click", () => {
+      state.scheduleV2SyncError = "";
+      state.liveLessonsLoaded = false;
+      renderFullSchedule();
+      void syncCoachLessonsFromServer().then(() => renderAll());
+    });
+    return;
+  }
   ensureMemberLists();
   const policy = loadCoachSchedulePolicy();
   const times = coachScheduleTimes(policy);

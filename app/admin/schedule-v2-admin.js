@@ -11,7 +11,6 @@
   const localDemoMode = query.get("demoAdmin") === "1"
     && ["127.0.0.1", "localhost"].includes(window.location.hostname);
   const parallelComparisonMode = query.get("scheduleV2Compare") === "1";
-  const scheduleEngineSessionKey = "tennisnote:admin-schedule-engine:v2";
 
   const $ = (selector, scope = document) => scope.querySelector(selector);
   const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
@@ -165,29 +164,19 @@
   function markV2Availability(available) {
     const button = $('[data-schedule-engine="v2"]', root);
     if (!button) return;
-    button.textContent = available === false ? "새 시간표 준비 중" : "새 시간표";
+    button.textContent = available === false ? "V2 확인 필요" : "V2 시간표";
     button.title = available === false
-      ? "서버 준비가 끝나면 사용할 수 있습니다. 기존 시간표는 계속 사용할 수 있습니다."
-      : "새 레슨시간표 열기";
+      ? "V2 시간표 서버 연결을 확인한 뒤 다시 불러와 주세요."
+      : "V2 레슨시간표";
     button.dataset.serverAvailable = available === false ? "false" : "true";
   }
 
   function preferredScheduleEngine() {
-    if (localDemoMode) return "v2";
-    try {
-      return sessionStorage.getItem(scheduleEngineSessionKey) === "legacy" ? "legacy" : "v2";
-    } catch {
-      return "v2";
-    }
+    return "v2";
   }
 
-  function rememberScheduleEngine(mode) {
-    if (localDemoMode) return;
-    try {
-      sessionStorage.setItem(scheduleEngineSessionKey, mode);
-    } catch {
-      // Storage can be unavailable in restricted or embedded browser contexts.
-    }
+  function rememberScheduleEngine() {
+    // Schedule V2 is the only operating timetable.
   }
 
   function requireWritableServer(surface = "editor") {
@@ -717,15 +706,16 @@
       if (missingWorkspaceRpc(error)) {
         state.payload = null;
         markV2Availability(false);
-        setEngine("legacy");
-        console.warn("[Tennis Note] Schedule V2 is not installed; keeping the compatible timetable.");
+        setStatus("시간표 서버 연결을 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.", "error");
+        renderEmpty("시간표를 불러오지 못했습니다. 연결을 확인하고 다시 불러와 주세요.");
+        console.warn("[Tennis Note] Schedule V2 workspace is unavailable.");
         return false;
       }
-      if (!state.payload) state.payload = fallbackPayload(snapshot);
+      if (!state.payload) renderEmpty("시간표를 불러오지 못했습니다. 연결을 확인하고 다시 불러와 주세요.");
       setStatus(cached
         ? "서버 연결을 확인하지 못해 최근 시간표를 표시합니다. 저장 전 새로고침해 주세요."
-        : "새 시간표 서버 연결 전 읽기 화면입니다. 연결이 끝나면 저장할 수 있습니다.", "warning");
-      console.warn("[Tennis Note] Schedule V2 workspace fallback", error?.message || "workspace_unavailable");
+        : "시간표 서버 연결을 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.", "warning");
+      console.warn("[Tennis Note] Schedule V2 workspace unavailable", error?.message || "workspace_unavailable");
     } finally {
       if (sequence === state.loadSequence) {
         state.loading = false;
@@ -1411,7 +1401,7 @@
   }
 
   function setEngine(mode) {
-    state.engine = mode === "legacy" ? "legacy" : "v2";
+    state.engine = "v2";
     rememberScheduleEngine(state.engine);
     root.dataset.scheduleEngineMode = state.engine;
     $$('[data-schedule-engine]', root).forEach((button) => {
@@ -2675,10 +2665,6 @@
   }
 
   function initializeEvents() {
-    $("#scheduleEngineSwitcher").addEventListener("click", (event) => {
-      const button = event.target.closest("[data-schedule-engine]");
-      if (button) setEngine(button.dataset.scheduleEngine);
-    });
     $("#scheduleV2DayTabs").addEventListener("click", (event) => {
       const button = event.target.closest("[data-v2-date]");
       if (!button) return;
