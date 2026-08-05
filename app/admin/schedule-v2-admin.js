@@ -16,10 +16,11 @@
   const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
   const dayLabels = ["일", "월", "화", "수", "목", "금", "토"];
   const kindLabels = { regular: "정규", makeup: "보강", coupon: "쿠폰", one_day: "원데이" };
-  const overlapBlockingStatuses = new Set(["scheduled", "pending_change", "completed", "no_show"]);
+  const overlapBlockingStatuses = new Set(["scheduled", "reserved", "pending_change", "completed", "no_show"]);
   const defaultAddDurationMinutes = 20;
   const statusLabels = {
     scheduled: "예정",
+    reserved: "예약",
     pending_change: "승인 대기",
     completed: "완료",
     no_show: "노쇼",
@@ -1030,7 +1031,7 @@
   }
 
   function dayLessonCollections(plan) {
-    const blockingStatuses = new Set(["scheduled", "pending_change", "completed", "no_show", "absent"]);
+    const blockingStatuses = new Set(["scheduled", "reserved", "pending_change", "completed", "no_show", "absent"]);
     const activeLessons = plan.lessons.filter((lesson) => blockingStatuses.has(lesson.status));
     const historyLessons = plan.lessons.filter((lesson) => lesson.status === "cancelled");
     const replacedHistoryIds = new Set(historyLessons
@@ -1206,7 +1207,7 @@
     const search = String($("#scheduleV2LessonSearch")?.value || "").trim().toLowerCase();
     const coachIndex = new Map(period.coaches.map((coach, index) => [String(coach.roleId), index]));
     const startIndex = new Map(period.times.map((time, index) => [time, index]));
-    const blockingStatuses = new Set(["scheduled", "pending_change", "completed", "no_show", "absent"]);
+    const blockingStatuses = new Set(["scheduled", "reserved", "pending_change", "completed", "no_show", "absent"]);
     const activeLessons = visibleLessons.filter((lesson) => blockingStatuses.has(lesson.status));
     const historyLessons = visibleLessons.filter((lesson) => lesson.status === "cancelled");
     const replacedHistoryIds = new Set(historyLessons
