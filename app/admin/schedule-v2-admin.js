@@ -4,6 +4,7 @@
   const root = document.querySelector("#scheduleView");
   const workspace = document.querySelector("#scheduleV2Workspace");
   const editor = document.querySelector("#scheduleV2Editor");
+  const closureEditor = document.querySelector("#scheduleV2ClosureEditor");
   if (!root || !workspace || !editor) return;
 
   const query = new URLSearchParams(window.location.search);
@@ -54,6 +55,10 @@
     editorOpen: false,
     editorScrollY: 0,
     editorFocusTarget: null,
+    closureEditorOpen: false,
+    editingClosureId: "",
+    closureScrollY: 0,
+    closureFocusTarget: null,
     deferredRefresh: false,
     refreshTimer: null,
     searchScrollTimer: null,
@@ -2045,6 +2050,186 @@
     window.setTimeout(() => $("#scheduleV2MemberSearch")?.focus(), 0);
   }
 
+  function setClosureMessage(message = "", tone = "") {
+    const target = $("#scheduleV2ClosureMessage");
+    if (!target) return;
+    target.textContent = message;
+    target.dataset.tone = tone;
+  }
+
+  function syncClosureTimeFields() {
+    const form = $("#scheduleV2ClosureForm");
+    const fields = $("#scheduleV2ClosureTimeFields");
+    if (!form || !fields) return;
+    const partial = form.elements.closureRange.value === "partial";
+    fields.hidden = !partial;
+    form.elements.closureStartTime.required = partial;
+    form.elements.closureEndTime.required = partial;
+  }
+
+  function closurePeriodLabel(closure) {
+    if (closure.allDay ?? closure.all_day) return "하루 전체";
+    return `${String(closure.startTime || closure.start_time || "").slice(0, 5)}-${String(closure.endTime || closure.end_time || "").slice(0, 5)}`;
+  }
+
+  function renderClosureList() {
+    const form = $("#scheduleV2ClosureForm");
+    const list = $("#scheduleV2ClosureList");
+    if (!form || !list) return;
+    const date = form.elements.closureDate.value;
+    const closures = closuresForDate(date);
+    list.innerHTML = closures.length
+      ? closures.map((closure) => `
+        <div class="schedule-v2-closure-row" data-v2-closure-id="${escapeHtml(closure.id)}">
+          <div><strong>${escapeHtml(closure.label || "휴무")}</strong><span>${escapeHtml(dateLabel(date))} · ${escapeHtml(closurePeriodLabel(closure))}</span></div>
+          <button type="button" data-v2-edit-closure="${escapeHtml(closure.id)}">수정</button>
+          <button class="danger-button" type="button" data-v2-delete-closure="${escapeHtml(closure.id)}">해제</button>
+        </div>
+      `).join("")
+      : '<div class="schedule-v2-closure-empty">이 날짜에 지정된 휴무가 없습니다.</div>';
+  }
+
+  function resetClosureForm({ keepDate = true } = {}) {
+    const form = $("#scheduleV2ClosureForm");
+    if (!form) return;
+    const date = keepDate ? form.elements.closureDate.value : state.selectedDate;
+    form.reset();
+    form.elements.closureDate.value = date || state.selectedDate;
+    form.elements.closureRange.value = "all_day";
+    form.elements.closureLabel.value = "휴무";
+    form.elements.closureStartTime.value = "09:00";
+    form.elements.closureEndTime.value = "18:00";
+    state.editingClosureId = "";
+    $("#scheduleV2ClosureSaveButton").textContent = "휴무일 저장";
+    syncClosureTimeFields();
+    renderClosureList();
+    setClosureMessage("");
+  }
+
+  function editClosure(closureId) {
+    const form = $("#scheduleV2ClosureForm");
+    const closure = (state.payload?.closures || []).find((item) => String(item.id) === String(closureId));
+    if (!form || !closure) return;
+    state.editingClosureId = String(closure.id);
+    form.elements.closureDate.value = String(closure.date || closure.closure_date || state.selectedDate);
+    form.elements.closureLabel.value = closure.label || "휴무";
+    const allDay = closure.allDay ?? closure.all_day;
+    form.elements.closureRange.value = allDay ? "all_day" : "partial";
+    form.elements.closureStartTime.value = String(closure.startTime || closure.start_time || "09:00").slice(0, 5);
+    form.elements.closureEndTime.value = String(closure.endTime || closure.end_time || "18:00").slice(0, 5);
+    $("#scheduleV2ClosureSaveButton").textContent = "휴무일 수정";
+    syncClosureTimeFields();
+    renderClosureList();
+    setClosureMessage("선택한 휴무를 수정합니다.", "info");
+  }
+
+  function actualCloseClosureEditor() {
+    if (!state.closureEditorOpen || !closureEditor) return;
+    state.closureEditorOpen = false;
+    closureEditor.hidden = true;
+    document.body.classList.remove("schedule-v2-editor-open");
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.right = "";
+    document.body.style.left = "";
+    document.body.style.width = "";
+    window.scrollTo(0, state.closureScrollY);
+    state.closureFocusTarget?.focus?.({ preventScroll: true });
+    state.closureFocusTarget = null;
+  }
+
+  function closeClosureEditor() {
+    if (history.state?.tennisNoteScheduleV2Closure) {
+      history.back();
+      return;
+    }
+    actualCloseClosureEditor();
+  }
+
+  function openClosureEditor() {
+    if (!closureEditor || state.editorOpen) return;
+    const form = $("#scheduleV2ClosureForm");
+    if (!form) return;
+    form.elements.closureDate.value = state.selectedDate;
+    resetClosureForm({ keepDate: true });
+    state.closureScrollY = window.scrollY;
+    state.closureFocusTarget = document.activeElement;
+    closureEditor.hidden = false;
+    state.closureEditorOpen = true;
+    document.body.classList.add("schedule-v2-editor-open");
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${state.closureScrollY}px`;
+    document.body.style.right = "0";
+    document.body.style.left = "0";
+    document.body.style.width = "100%";
+    history.pushState({ ...(history.state || {}), tennisNoteScheduleV2Closure: true }, "");
+    window.setTimeout(() => form.elements.closureDate.focus(), 0);
+  }
+
+  async function saveClosure(event) {
+    event.preventDefault();
+    if (!requireWritableServer()) return;
+    const form = event.currentTarget;
+    const allDay = form.elements.closureRange.value === "all_day";
+    const startTime = allDay ? null : form.elements.closureStartTime.value;
+    const endTime = allDay ? null : form.elements.closureEndTime.value;
+    if (!allDay && (!startTime || !endTime || startTime >= endTime)) {
+      setClosureMessage("종료 시간은 시작 시간보다 늦게 선택해 주세요.");
+      return;
+    }
+    const saveButton = $("#scheduleV2ClosureSaveButton");
+    saveButton.disabled = true;
+    setClosureMessage("휴무일을 서버에 저장하고 있습니다.", "info");
+    try {
+      const result = await bridge().rpc("tn_schedule_v2_upsert_closure", {
+        target_branch_id: state.payload.branch.id,
+        target_closure_date: form.elements.closureDate.value,
+        target_all_day: allDay,
+        target_start_time: startTime,
+        target_end_time: endTime,
+        target_label: form.elements.closureLabel.value.trim() || "휴무",
+        target_closure_id: state.editingClosureId || null,
+      });
+      const date = form.elements.closureDate.value;
+      state.weekStart = mondayOf(date);
+      state.selectedDate = date;
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ quiet: true, force: true });
+      const count = Number(result?.existingLessonCount || result?.existing_lesson_count || 0);
+      setStatus(count
+        ? `휴무일 반영 완료 · 기존 수업 ${count}건은 유지했으니 확인해 주세요.`
+        : "휴무일 반영 완료 · 시간표에 바로 표시했습니다.", count ? "warning" : "success");
+      closeClosureEditor();
+    } catch (error) {
+      setClosureMessage(errorMessage(error));
+    } finally {
+      saveButton.disabled = false;
+    }
+  }
+
+  async function deleteClosure(closureId) {
+    const closure = (state.payload?.closures || []).find((item) => String(item.id) === String(closureId));
+    if (!closure || !requireWritableServer()) return;
+    if (!window.confirm(`${closure.label || "휴무"} 지정을 해제할까요? 기존 수업은 변경되지 않습니다.`)) return;
+    setClosureMessage("휴무일을 해제하고 있습니다.", "info");
+    try {
+      await bridge().rpc("tn_schedule_v2_cancel_closure", {
+        target_branch_id: state.payload.branch.id,
+        target_closure_id: closure.id,
+      });
+      state.editingClosureId = "";
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ quiet: true, force: true });
+      resetClosureForm({ keepDate: true });
+      setClosureMessage("휴무일 해제가 서버와 시간표에 반영됐습니다.", "success");
+      setStatus("휴무일 해제 완료", "success");
+    } catch (error) {
+      setClosureMessage(errorMessage(error));
+    }
+  }
+
   function errorMessage(error) {
     const source = String(error?.message || error || "server_error");
     const labels = {
@@ -2057,6 +2242,11 @@
       schedule_v2_concurrent_update: "다른 화면에서 먼저 수정했습니다. 새로고침 후 다시 확인해 주세요.",
       schedule_v2_workspace_range_invalid: "시간표 조회 기간을 확인해 주세요.",
       schedule_v2_admin_required: "관리자 권한이 필요합니다.",
+      schedule_v2_closure_date_required: "휴무 날짜를 선택해 주세요.",
+      schedule_v2_closure_time_invalid: "휴무 시작·종료 시간을 확인해 주세요.",
+      schedule_v2_closure_overlap: "같은 날짜와 시간에 겹치는 휴무가 이미 있습니다.",
+      schedule_v2_closure_not_found: "이미 해제되었거나 찾을 수 없는 휴무입니다. 시간표를 새로고침해 주세요.",
+      schedule_v2_closure_reference_required: "해제할 휴무를 다시 선택해 주세요.",
       schedule_v2_substitute_time_overlap: "대타 코치의 다른 수업과 시간이 겹칩니다.",
       schedule_v2_substitute_coach_unavailable: "현재 근무 중인 대타 코치를 선택해 주세요.",
       schedule_v2_substitute_same_as_original: "원 담당 코치와 다른 코치를 선택해 주세요.",
@@ -2616,17 +2806,42 @@
       event.currentTarget.setAttribute("aria-expanded", String(!panel.hidden));
     });
     $("#scheduleV2PolicySaveButton").addEventListener("click", savePolicy);
+    $("#scheduleV2ClosureButton")?.addEventListener("click", openClosureEditor);
+    $("#scheduleV2ClosureForm")?.addEventListener("submit", saveClosure);
+    $("#scheduleV2ClosureForm")?.addEventListener("change", (event) => {
+      if (event.target.name === "closureRange") syncClosureTimeFields();
+      if (event.target.name === "closureDate") {
+        state.editingClosureId = "";
+        $("#scheduleV2ClosureSaveButton").textContent = "휴무일 저장";
+        renderClosureList();
+        setClosureMessage("");
+      }
+    });
+    $("#scheduleV2ClosureResetButton")?.addEventListener("click", () => resetClosureForm({ keepDate: true }));
+    $("#scheduleV2ClosureList")?.addEventListener("click", (event) => {
+      const editButton = event.target.closest("[data-v2-edit-closure]");
+      if (editButton) {
+        editClosure(editButton.dataset.v2EditClosure);
+        return;
+      }
+      const deleteButton = event.target.closest("[data-v2-delete-closure]");
+      if (deleteButton) void deleteClosure(deleteButton.dataset.v2DeleteClosure);
+    });
+    $$('[data-v2-close-closure]').forEach((button) => button.addEventListener("click", closeClosureEditor));
     window.addEventListener("popstate", () => {
-      if (state.editorOpen) actualCloseEditor();
+      if (state.closureEditorOpen) actualCloseClosureEditor();
+      else if (state.editorOpen) actualCloseEditor();
     });
     document.addEventListener("keydown", (event) => {
-      if (!state.editorOpen) return;
+      const activeEditor = state.closureEditorOpen ? closureEditor : state.editorOpen ? editor : null;
+      if (!activeEditor) return;
       if (event.key === "Escape") {
-        closeEditor();
+        if (state.closureEditorOpen) closeClosureEditor();
+        else closeEditor();
         return;
       }
       if (event.key !== "Tab") return;
-      const focusable = $$("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])", editor)
+      const focusable = $$("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])", activeEditor)
         .filter((element) => !element.hidden && element.getClientRects().length > 0);
       if (!focusable.length) return;
       const first = focusable[0];

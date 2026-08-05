@@ -82,6 +82,7 @@
 
 .schedule-v2-head-actions button,
 .schedule-v2-toolbar > button,
+.schedule-v2-toolbar-actions > button,
 .schedule-v2-editor-sheet button {
   min-height: 36px;
   border: 1px solid #c7d8d2;
@@ -185,6 +186,15 @@
   border-bottom: 1px solid #dce7e3;
 }
 
+.schedule-v2-toolbar-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.schedule-v2-toolbar-actions button {
+  white-space: nowrap;
+}
+
 .schedule-v2-day-tabs {
   display: grid;
   grid-template-columns: repeat(7, minmax(56px, 1fr));
@@ -268,6 +278,67 @@
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.schedule-v2-closure-fields,
+.schedule-v2-closure-time-fields {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(130px, 0.7fr) minmax(160px, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.schedule-v2-closure-time-fields {
+  grid-template-columns: repeat(2, minmax(130px, 1fr));
+}
+
+.schedule-v2-closure-fields label,
+.schedule-v2-closure-time-fields label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.schedule-v2-closure-list {
+  display: grid;
+  gap: 6px;
+  min-height: 48px;
+  margin-top: 12px;
+}
+
+.schedule-v2-closure-empty,
+.schedule-v2-closure-row {
+  padding: 10px;
+  border: 1px solid #d2dfdb;
+  border-radius: 6px;
+  background: #f8fbfa;
+}
+
+.schedule-v2-closure-empty {
+  color: #667872;
+  text-align: center;
+}
+
+.schedule-v2-closure-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.schedule-v2-closure-row strong,
+.schedule-v2-closure-row span {
+  display: block;
+}
+
+.schedule-v2-closure-row span {
+  margin-top: 2px;
+  color: #667872;
+  font-size: 12px;
+}
+
+.schedule-v2-closure-row .danger-button {
+  color: #a2342d;
 }
 
 .schedule-v2-policy-panel {
@@ -1611,6 +1682,23 @@ body.schedule-v2-editor-open {
 
   .schedule-v2-policy-panel {
     grid-template-columns: 1fr;
+  }
+
+  .schedule-v2-toolbar-actions {
+    align-self: end;
+  }
+
+  .schedule-v2-closure-fields,
+  .schedule-v2-closure-time-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-v2-closure-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .schedule-v2-closure-row > div:first-child {
+    grid-column: 1 / -1;
   }
 
   .schedule-v2-main {
