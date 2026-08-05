@@ -10417,7 +10417,7 @@ function syncMemberManagementScopeFields(form) {
   const scope = form.elements.scheduleScope.value;
   const frequency = form.elements.weeklyFrequency;
   if (frequency) {
-    const threeTimes = [...frequency.options].find((option) => option.value === "3");
+    const threeTimes = Array.from(frequency.options || []).find((option) => option.value === "3");
     if (threeTimes) threeTimes.disabled = scope === "weekend";
     if (scope === "weekend" && Number(frequency.value) > 2) frequency.value = "2";
   }
