@@ -1234,7 +1234,7 @@ function curriculumStageCards() {
   const trackSteps = track?.steps?.length ? track.steps : curriculumSteps;
   const activeIndex = Math.max(0, trackSteps.findIndex((step) => step.id === active.id));
   const review = trackSteps[Math.max(0, activeIndex - 1)] || active;
-  const next = trackSteps[Math.min(trackSteps.length - 1, activeIndex + 1)] || active;
+  const next = curriculumById(active.nextLessonId, trackSteps[Math.min(trackSteps.length - 1, activeIndex + 1)] || active);
   return [
     { label: "현재 단계", step: active, tone: "current" },
     { label: "다음 단계", step: next, tone: "next" },
@@ -4264,13 +4264,20 @@ function renderLessonLogs() {
 function memberCurriculumFilterOptions() {
   return [
     { id: "all", label: "전체" },
-    { id: "기초", label: "기초" },
-    { id: "포핸드", label: "포핸드" },
-    { id: "백핸드", label: "백핸드" },
-    { id: "네트플레이", label: "네트" },
-    { id: "전술전환", label: "전술" },
-    { id: "서브", label: "서브" },
+    { id: "stroke", label: "스트로크" },
+    { id: "net", label: "네트" },
+    { id: "tactics", label: "전술" },
+    { id: "foundation", label: "풋워크·서브" },
   ];
+}
+
+function memberCurriculumMatchesFilter(filter, category) {
+  if (filter === "all") return true;
+  if (filter === "stroke") return ["포핸드", "백핸드"].includes(category);
+  if (filter === "net") return category === "네트플레이";
+  if (filter === "tactics") return category === "전술전환";
+  if (filter === "foundation") return ["풋워크", "서브"].includes(category);
+  return false;
 }
 
 function filteredMemberCurriculumTracks() {
@@ -4280,13 +4287,44 @@ function filteredMemberCurriculumTracks() {
     .map((track) => {
       const matchesTrack = !query || `${track.id || ""} ${track.title} ${track.category || ""} ${track.summary || ""}`.toLowerCase().includes(query);
       const steps = track.steps.filter((step) => {
-        const matchesFilter = filter === "all" || step.category === filter || track.category === filter;
+        const matchesFilter = memberCurriculumMatchesFilter(filter, step.category || track.category);
         const text = `${step.id} ${step.title} ${step.level || ""} ${step.focus || ""} ${step.guide || ""}`.toLowerCase();
         return matchesFilter && (matchesTrack || !query || text.includes(query));
       });
       return { ...track, steps };
     })
     .filter((track) => track.steps.length > 0);
+}
+
+function curriculumResourceLinks(step = {}) {
+  const resources = Array.isArray(step.resources) ? step.resources : [];
+  if (!resources.length) return "";
+  return `
+    <div class="curriculum-resource-links" aria-label="수업 자료">
+      ${resources
+        .map((resource, index) => `<a class="small-button" href="${escapeHtml(resource.url || "")}" target="_blank" rel="noreferrer">영상 ${index + 1}</a>`)
+        .join("")}
+    </div>`;
+}
+
+function curriculumThreeStepsMarkup(step = {}) {
+  const lessonSteps = Array.isArray(step.steps) ? step.steps : [];
+  if (!lessonSteps.length) return "";
+  return `
+    <ol class="curriculum-three-steps">
+      ${lessonSteps.map((item, index) => `<li><b>${index + 1}</b><span>${escapeHtml(item)}</span></li>`).join("")}
+    </ol>`;
+}
+
+function curriculumSupportMarkup(step = {}) {
+  const checks = Array.isArray(step.selfChecks) ? step.selfChecks : [];
+  if (!checks.length && !step.personalPractice) return "";
+  return `
+    <details class="curriculum-support-details">
+      <summary>자가 체크·개인 연습</summary>
+      ${checks.length ? `<ul>${checks.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
+      ${step.personalPractice ? `<p><b>개인 연습</b>${escapeHtml(step.personalPractice)}</p>` : ""}
+    </details>`;
 }
 
 function memberCurriculumLibraryMarkup(active) {
@@ -4303,27 +4341,29 @@ function memberCurriculumLibraryMarkup(active) {
           <summary class="curriculum-category-heading">
             <div>
               <strong>${escapeHtml(track.title)}</strong>
-              <span>${escapeHtml(track.summary)}</span>
             </div>
             <b>${progressLabel}</b>
           </summary>
           <div class="curriculum-track-actions">
             <span>${escapeHtml(track.category || "기초")} · ${track.steps.length}개 단계</span>
-            <a class="small-button notion-link" href="${track.notionUrl || notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">트랙 원본</a>
           </div>
           <div class="curriculum-step-list">
             ${track.steps
               .map(
                 (step) => `
-                  <article class="curriculum-step ${step.id === active.id ? "is-current" : ""}">
-                    <div>
+                  <details class="curriculum-step ${step.id === active.id ? "is-current" : ""}">
+                    <summary>
                       <span>${escapeHtml(step.stageLabel || step.level || "단계")} · ${escapeHtml(step.id)}</span>
                       <strong>${escapeHtml(step.title)}</strong>
+                    </summary>
+                    <div class="curriculum-step-details">
+                      <p><b>오늘 할 일</b>${escapeHtml(step.goal || step.guide || step.focus || step.title)}</p>
+                      ${curriculumThreeStepsMarkup(step)}
+                      ${curriculumSupportMarkup(step)}
+                      ${step.environmentNote ? `<small class="curriculum-environment-note">${escapeHtml(step.environmentNote)}</small>` : ""}
+                      ${curriculumResourceLinks(step)}
                     </div>
-                    <p><b>핵심</b>${escapeHtml(step.focus || step.goal || step.title)}</p>
-                    ${step.environmentNote ? `<small class="curriculum-environment-note">${escapeHtml(step.environmentNote)}</small>` : ""}
-                    <a class="small-button notion-link" href="${step.notionUrl || notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">원본 보기</a>
-                  </article>`,
+                  </details>`,
               )
               .join("")}
           </div>
@@ -4350,8 +4390,13 @@ function renderCurriculum() {
       <span>다음 수업</span>
       <strong>${escapeHtml(active.id)} · ${escapeHtml(active.title)}</strong>
       <small>${activeTrack ? `${escapeHtml(activeTrack.title)} ${activeIndex + 1}/${activeTrack.steps.length}` : "코치 지정 단계"} · ${escapeHtml(latest?.lessonLabel || "최근 등록 기준")}</small>
-      <p>${escapeHtml(active.guide || active.next || active.focus)}</p>
-      <a class="primary-button notion-link" href="${active.notionUrl || notionCurriculumDetailUrl}" target="_blank" rel="noreferrer">자세히 보기</a>
+      <p>${escapeHtml(active.goal || active.guide || active.next || active.focus)}</p>
+      <details class="curriculum-action-details">
+        <summary class="primary-button">3단계 시작</summary>
+        ${curriculumThreeStepsMarkup(active)}
+        ${curriculumSupportMarkup(active)}
+        ${curriculumResourceLinks(active)}
+      </details>
     </div>
     ${nextStage ? `
       <div class="curriculum-next-preview">
@@ -4373,9 +4418,6 @@ function renderCurriculum() {
         <span>내 커리큘럼</span>
         <strong>${escapeHtml(activeTrack?.title || active.title)}</strong>
         <p>현재 단계와 다음 수업만 간단히 확인하세요.</p>
-      </div>
-      <div class="curriculum-hero-actions">
-        <a class="small-button notion-link" href="${notionCurriculumGuideUrl}" target="_blank" rel="noreferrer">전체 커리큘럼</a>
       </div>
     </section>
     ${guideMarkup}`;
@@ -4399,6 +4441,7 @@ function renderCurriculum() {
             </div>
           </section>
           <div id="memberCurriculumLibrary"></div>
+          <a class="curriculum-source-link" href="${notionCurriculumGuideUrl}" target="_blank" rel="noreferrer">Notion 전체 원본</a>
         </div>
       </details>`;
     renderMemberCurriculumLibrary(active);
@@ -9792,6 +9835,36 @@ function installMemberConnectivityStatus() {
   });
 }
 
+function openLocalCurriculumPreview() {
+  const localHost = ["127.0.0.1", "localhost", "::1"].includes(window.location.hostname);
+  const previewRequested = new URLSearchParams(window.location.search).get("curriculumPreview") === "1";
+  if (!localHost || !previewRequested) return false;
+  state.dataMode = "demo";
+  state.member = {
+    provider: "local-preview",
+    name: "커리큘럼 미리보기",
+    nickname: "미리보기",
+    profileId: "local-curriculum-preview",
+    role: "member",
+    memberKind: "lesson_member",
+    status: "active",
+    coachApproved: false,
+  };
+  state.profile = {
+    ...state.profile,
+    name: "커리큘럼 미리보기",
+    nickname: "미리보기",
+    branch: "테클하",
+    mainCoach: "담당 코치",
+    ticket: "커리큘럼 화면 검증",
+  };
+  ensureDemoPresentation();
+  renderAll();
+  openAppFromSession(false);
+  setView("curriculumView");
+  return true;
+}
+
 async function initApp() {
   registerPwaServiceWorker();
   registerPwaInstallPrompt();
@@ -9820,6 +9893,11 @@ async function initApp() {
     setMemberSessionRestoring(hasStoredSession || isModeTransition || oauthReturnPending);
   }
   hideBrandSplash();
+
+  if (openLocalCurriculumPreview()) {
+    setMemberSessionRestoring(false);
+    return;
+  }
 
   // These improve data freshness but must not delay opening the member screen.
   void (async () => {

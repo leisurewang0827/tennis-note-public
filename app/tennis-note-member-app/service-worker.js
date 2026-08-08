@@ -14,7 +14,7 @@ const APP_SHELL = [
   "../release.json",
     "../shared/tennisnote-data-client.js?v=1.0.281",
   "../shared/tennisnote-product-catalog.js",
-  "../shared/tennisnote-curriculum-catalog.js",
+  "../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3",
   "../shared/tennisnote-native-push.js",
     "../shared/tennisnote-release.js?v=1.0.281",
     "../shared/tennisnote-release-updater.js?v=1.0.281",
