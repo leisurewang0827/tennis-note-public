@@ -3531,7 +3531,11 @@ function operationBranchMakeupRequests(source = makeupRequests) {
 
 function operationBranchBillings(source = billings) {
   return source.filter((billing) => {
-    if (billing.branchId) return matchesActiveOperationBranch(billing.branchId);
+    if (billing.branchId) {
+      if (matchesActiveOperationBranch(billing.branchId)) return true;
+      if (billing.serverPaymentId && operationBranchAllowsLegacyRows()) return true;
+      return false;
+    }
     const ticket = [...tickets, ...expiredTickets].find((item) => (
       String(item.serverTicketId || item.id) === String(billing.ticketId || "")
     ));
@@ -27620,7 +27624,7 @@ function bindEvents() {
 
     const syncServerPaymentsButton = event.target.closest("#syncServerPaymentsButton");
     if (syncServerPaymentsButton) {
-      await loadServerPaymentsIntoBilling();
+      await loadServerPaymentsIntoBilling({ force: true });
       return;
     }
 
