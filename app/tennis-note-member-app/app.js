@@ -1688,6 +1688,7 @@ function registerPwaServiceWorker() {
 }
 
 const pushDeviceStorageKey = "tennis-note-push-device-id";
+const pushPreferenceStorageKey = "tennis-note-push-enabled-v1";
 let pushListenersReady = false;
 let pushProfileId = "";
 
@@ -1774,6 +1775,14 @@ function currentPushDeviceId() {
   return deviceId;
 }
 
+function pushPreferenceEnabled() {
+  return localStorage.getItem(pushPreferenceStorageKey) !== "false";
+}
+
+function setPushPreferenceEnabled(enabled) {
+  safeLocalStorageSet(pushPreferenceStorageKey, enabled ? "true" : "false");
+}
+
 function setPushNotificationState(permission, status, detail) {
   state.pushNotifications = { permission, status, detail };
   renderPushNotificationSettings();
@@ -1803,7 +1812,7 @@ function renderPushNotificationSettings() {
   card.classList.toggle("is-denied", permission === "denied");
   status.textContent = pushState.status || "앱 알림 확인 중";
   detail.textContent = pushState.detail || "수업 일정과 회원권 만료를 알려드립니다.";
-  button.textContent = permission === "granted" ? "알림 다시 연결" : permission === "denied" ? "설정 확인" : "알림 허용";
+  button.textContent = permission === "granted" ? "알림 끄기" : permission === "denied" ? "설정 확인" : "알림 켜기";
 }
 
 function renderAccountDeletionSettings() {
@@ -1934,6 +1943,7 @@ async function registerPushToken(tokenValue, platform = nativeAppPlatform()) {
     target_device_id: currentPushDeviceId(),
     target_push_token: tokenValue,
   });
+  setPushPreferenceEnabled(true);
   setPushNotificationState("granted", "앱 알림 켜짐", "수업 하루 전·30분 전과 회원권 안내를 잠금화면으로 알려드립니다.");
   return true;
 }
@@ -1991,6 +2001,10 @@ async function syncNativePushRegistration(profile = null, requestPermission = fa
     setPushNotificationState("unknown", "로그인 후 알림 설정", "회원 로그인 후 기기 알림을 연결할 수 있습니다.");
     return false;
   }
+  if (!pushPreferenceEnabled()) {
+    setPushNotificationState("disabled", "앱 알림 꺼짐", "이 기기에서는 알림을 보내지 않습니다. 알림 켜기를 누르면 다시 받을 수 있습니다.");
+    return false;
+  }
 
   await bindNativePushListeners(plugin);
   if (platform === "android") {
@@ -2036,6 +2050,20 @@ async function disableNativePushForLogout() {
   // refresh it after Firebase is available.
   pushProfileId = "";
   setPushNotificationState("unknown", "로그인 후 알림 설정", "회원 로그인 후 기기 알림을 연결할 수 있습니다.");
+}
+
+async function disableNativePushForMember() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !client.getSession?.()?.access_token) {
+    setPushNotificationState("unknown", "알림 끄기 실패", "로그인과 네트워크 연결을 확인한 뒤 다시 시도해 주세요.");
+    return false;
+  }
+  await client.rpc("tn_disable_push_device", {
+    target_device_id: currentPushDeviceId(),
+  });
+  setPushPreferenceEnabled(false);
+  setPushNotificationState("disabled", "앱 알림 꺼짐", "이 기기에서는 알림을 보내지 않습니다. 알림 켜기를 누르면 다시 받을 수 있습니다.");
+  return true;
 }
 
 function makeMemberTimeRange(startTime, endTime, stepMinutes = 10) {
@@ -8838,7 +8866,7 @@ async function applySupabaseMemberSession(showNotice = false) {
       syncMemberAccountDeletionRequestFromServer(profile),
       syncMemberGroupAccountFromServer(profile),
       syncMemberNotificationsFromServer(profile),
-      syncNativePushRegistration(profile, false),
+      syncNativePushRegistration(profile, true),
     ]);
     await syncLiveSchedulePolicy(currentLiveTicket()?.branchId || "");
     renderAll();
@@ -9339,7 +9367,12 @@ function bindEvents() {
   });
   $("#pushNotificationButton")?.addEventListener("click", async () => {
     try {
-      await syncNativePushRegistration(null, true);
+      if (state.pushNotifications?.permission === "granted") {
+        await disableNativePushForMember();
+      } else {
+        setPushPreferenceEnabled(true);
+        await syncNativePushRegistration(null, true);
+      }
     } catch {
       setPushNotificationState("unknown", "알림 연결 실패", "네트워크와 앱 설정을 확인한 뒤 다시 시도해 주세요.");
     }
