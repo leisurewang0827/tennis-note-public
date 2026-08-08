@@ -3531,6 +3531,7 @@ function operationBranchMakeupRequests(source = makeupRequests) {
 
 function operationBranchBillings(source = billings) {
   return source.filter((billing) => {
+    if (billing.branchId) return matchesActiveOperationBranch(billing.branchId);
     const ticket = [...tickets, ...expiredTickets].find((item) => (
       String(item.serverTicketId || item.id) === String(billing.ticketId || "")
     ));
@@ -4332,6 +4333,7 @@ function billingRowFromServerPayment(row = {}) {
     statusLabel,
     providerPaymentId,
     serverPaymentId: row.id || "",
+    branchId: row.branch_id || row.branchId || "",
     productId: row.product_id || row.productId || "",
     ticketId: row.ticket_id || row.ticketId || "",
     serverStatus: row.status || "",
@@ -4397,18 +4399,18 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     let rows = [];
     try {
       rows = await client.selectRows("tn_payments", {
-        select: "id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)",
+        select: "id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)",
         limit: 30,
       });
     } catch (error) {
       try {
         rows = await client.selectRows("tn_payments", {
-          select: "id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at",
+          select: "id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at",
           limit: 30,
         });
       } catch (refundSchemaError) {
         rows = await client.selectRows("tn_payments", {
-          select: "id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at",
+          select: "id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at",
           limit: 30,
         });
       }
@@ -19408,7 +19410,8 @@ async function reconcileRefundFromModal() {
 }
 
 async function cancelBillingPaymentItem(item) {
-  if (item && ["check", "unverified", "failed"].includes(item.status)) {
+  const serverBacked = Boolean(item?.serverPaymentId);
+  if (item && ["check", "unverified", "failed"].includes(item.status) && !serverBacked) {
     item.status = "cancelled";
     item.statusLabel = "대기취소";
     billingLogs.unshift(`${item.member} ${item.item} 대기건 정리: ${item.providerPaymentId || "paymentId 없음"}`);
@@ -19423,7 +19426,7 @@ async function cancelBillingPaymentItem(item) {
     showToast("paymentId가 없어 결제취소를 실행할 수 없습니다");
     return;
   }
-  if (!["paid", "server_ready"].includes(item.status)) {
+  if (!["paid", "server_ready", "failed"].includes(item.status)) {
     showToast("취소 가능한 상태가 아닙니다");
     return;
   }
