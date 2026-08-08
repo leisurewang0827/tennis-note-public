@@ -2657,6 +2657,14 @@ body.notice-open {
   }
 }
 
+@media (max-width: 720px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 .notice-action {
   display: inline-grid;
   place-items: center;

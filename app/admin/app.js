@@ -4506,13 +4506,15 @@ function membershipProductWithOperationalLimits(product = {}) {
 
 function membershipProductServerSavePayload(nextProduct, serverProduct) {
   const serverKind = nextProduct.productKind === "coupon" ? "coupon" : "regular";
+  const cashPrice = Math.max(0, Number(nextProduct.cashAmount) || 0);
+  const cardPrice = Math.max(0, Number(nextProduct.cardAmount) || cashPrice);
   return {
     id: serverProduct.id,
     name: nextProduct.title,
     totalSessions: Math.max(1, Number(nextProduct.tickets) || 1),
-    cashPrice: Math.max(0, Number(nextProduct.cashAmount) || 0),
-    cardPrice: Math.max(0, Number(nextProduct.cardAmount) || Number(nextProduct.cashAmount) || 0),
-    settlementBasePrice: Math.max(0, Number(nextProduct.settlementBase) || Number(nextProduct.cashAmount) || 0),
+    cashPrice,
+    cardPrice,
+    settlementBasePrice: cashPrice,
     validityDays: Math.max(1, Number(nextProduct.validityDays) || 1),
     graceDays: Math.max(0, Number(nextProduct.graceDays) || 0),
     lessonMinutes: Math.max(10, Number(nextProduct.lessonMinutes) || 20),

@@ -37,6 +37,21 @@
     cancelled: "취소",
     holiday: "휴무",
   };
+  const lessonHistoryLabels = {
+    schedule_v2_lesson_created: "수업 추가",
+    schedule_v2_lesson_updated: "수업 수정",
+    schedule_v2_lesson_cancelled: "수업 취소",
+    schedule_v2_lesson_outcome: "수업 처리 저장",
+    schedule_v2_lesson_finalized: "수업 처리 완료",
+    schedule_v2_substitute_assigned: "대타 지정",
+    schedule_v2_substitute_cancelled: "대타 취소",
+    schedule_v2_regular_anchor_revised: "미래 정규 일정 수정",
+    schedule_v2_regular_anchor_ended: "미래 정규 일정 종료",
+    admin_lesson_force_deleted: "관리자 강제 삭제",
+  };
+  const curriculumCatalog = window.TennisNoteCurriculumCatalog || { steps: [], aliases: {} };
+  const curriculumSteps = Array.isArray(curriculumCatalog.steps) ? curriculumCatalog.steps : [];
+  const curriculumByCode = new Map(curriculumSteps.map((step) => [String(step.id || "").toUpperCase(), step]));
   const state = {
     engine: "v2",
     weekStart: mondayOf(new Date()),
@@ -76,6 +91,27 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function curriculumStepFromValue(value = "") {
+    const code = String(value).trim().split(/\s|·/)[0].toUpperCase();
+    const canonical = String(curriculumCatalog.aliases?.[code] || code).toUpperCase();
+    return curriculumByCode.get(canonical) || null;
+  }
+
+  function curriculumInputValue(participant = {}) {
+    const code = participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "";
+    if (!code) return "";
+    const step = curriculumStepFromValue(code);
+    const title = step?.title || participant.nextCurriculumTitle || participant.next_curriculum_title || "";
+    return title ? `${step?.id || code} · ${title}` : String(code);
+  }
+
+  function renderCurriculumOptions() {
+    const target = $("#scheduleV2CurriculumOptions");
+    if (!target || target.dataset.ready === curriculumCatalog.version) return;
+    target.innerHTML = curriculumSteps.map((step) => `<option value="${escapeHtml(`${step.id} · ${step.title}`)}">${escapeHtml(step.trackTitle || step.category || "커리큘럼")}</option>`).join("");
+    target.dataset.ready = curriculumCatalog.version || "ready";
   }
 
   function localDateKey(value) {
@@ -1347,7 +1383,7 @@
       allowCrossCoachMemberEdit: String(policy.allow_cross_coach_member_edit === true),
       allowCoachLockedTimeOverride: String(policy.allow_coach_locked_time_override !== false),
       allowCoachHolidayOverride: String(policy.allow_coach_holiday_override === true),
-      makeupAnchorGapMinutes: policy.makeup_anchor_gap_minutes == null ? "unlimited" : String(policy.makeup_anchor_gap_minutes),
+      makeupAnchorGapMinutes: String(Math.min(100, Math.max(0, Number(policy.makeup_anchor_gap_minutes ?? 40) || 0))),
     };
     Object.entries(values).forEach(([name, value]) => {
       const input = panel.querySelector(`[name="${name}"]`);
@@ -1378,6 +1414,7 @@
         ? periods.map(renderPeriod).join("")
         : '<div class="schedule-v2-empty">이 날짜에 등록된 코치 운영시간이 없습니다.</div>');
     }
+    renderLessonTicketCounts();
     renderQueue();
     renderPolicy();
     renderParallelComparison();
@@ -1433,6 +1470,32 @@
 
   function ticketById(ticketId) {
     return (state.payload?.tickets || []).find((ticket) => String(ticket.id) === String(ticketId)) || null;
+  }
+
+  function lessonTicketCountsMarkup(lesson) {
+    if (String(lesson?.scheduleKind || "") === "one_day") return "";
+    const labels = [...new Set((lesson?.participants || []).map((participant) => {
+      const ticket = ticketById(participant.ticketId || participant.ticket_id);
+      if (!ticket) return "";
+      const total = Math.max(0, Number(ticket.totalSessions ?? ticket.total_sessions ?? 0));
+      const remaining = Math.max(0, Number(ticket.remainingSessions ?? ticket.remaining_sessions ?? total));
+      if (!total && !remaining) return "";
+      const explicitUsed = ticket.usedSessions ?? ticket.used_sessions;
+      const used = Math.max(0, Number(explicitUsed ?? Math.max(0, total - remaining)));
+      return `${total}/${used}/${remaining}`;
+    }).filter(Boolean))];
+    if (!labels.length) return "";
+    const text = labels.join(" · ");
+    return `<small class="schedule-v2-ticket-counts" aria-label="${escapeHtml(`총/소진/잔여 ${text}`)}" title="총/소진/잔여">${escapeHtml(text)}</small>`;
+  }
+
+  function renderLessonTicketCounts() {
+    const lessons = new Map((state.payload?.lessons || []).map((lesson) => [String(lesson.id), lesson]));
+    document.querySelectorAll("#scheduleV2Grid .schedule-v2-lesson[data-v2-lesson-id]").forEach((card) => {
+      const lesson = lessons.get(String(card.dataset.v2LessonId || ""));
+      const markup = lessonTicketCountsMarkup(lesson);
+      if (markup) card.insertAdjacentHTML("beforeend", markup);
+    });
   }
 
   function memberById(userId) {
@@ -1859,6 +1922,81 @@
     $("#scheduleV2SubstituteHourlyField").hidden = form.elements.substituteSettlementMode.value !== "hourly";
   }
 
+  function lessonHistoryTimestamp(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value || "");
+    return new Intl.DateTimeFormat("ko-KR", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  }
+
+  function lessonHistoryDetail(details = {}) {
+    const parts = [];
+    if (details.lessonDate || details.startTime) {
+      parts.push([details.lessonDate, String(details.startTime || "").slice(0, 5)].filter(Boolean).join(" "));
+    }
+    if (details.durationMinutes) parts.push(`${details.durationMinutes}분`);
+    if (details.reason) parts.push(details.reason);
+    if (details.settlementMode) {
+      parts.push(details.settlementMode === "none" ? "정산 없음" : details.settlementMode === "hourly" ? "시급 정산" : "대타 코치 정산");
+    }
+    if (details.cancelledFutureCount) parts.push(`미래 ${details.cancelledFutureCount}건 정리`);
+    if (details.restoredSessions) parts.push(`${details.restoredSessions}회 복원`);
+    return parts.filter(Boolean).join(" · ");
+  }
+
+  function renderLessonHistory(items = []) {
+    const list = $("#scheduleV2LessonHistoryList");
+    const summary = $("#scheduleV2LessonHistorySummary");
+    if (!list || !summary) return;
+    summary.textContent = items.length ? `${items.length}건` : "기록 없음";
+    list.innerHTML = items.length
+      ? items.map((item) => {
+        const action = lessonHistoryLabels[item.action] || "수업 변경";
+        const detail = lessonHistoryDetail(item.details || {});
+        return `<article><div><strong>${escapeHtml(action)}</strong><time>${escapeHtml(lessonHistoryTimestamp(item.changedAt))}</time></div><span>${escapeHtml(item.actorName || "관리자")}</span>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</article>`;
+      }).join("")
+      : '<p class="schedule-v2-history-empty">이 수업의 변경 기록이 없습니다.</p>';
+  }
+
+  function resetLessonHistory(lesson = null) {
+    const panel = $("#scheduleV2LessonHistoryPanel");
+    if (!panel) return;
+    panel.hidden = !lesson;
+    panel.open = false;
+    panel.dataset.lessonId = lesson?.id || "";
+    delete panel.dataset.loadedLessonId;
+    $("#scheduleV2LessonHistorySummary").textContent = "열어보기";
+    $("#scheduleV2LessonHistoryList").innerHTML = "";
+  }
+
+  async function loadLessonHistory() {
+    const panel = $("#scheduleV2LessonHistoryPanel");
+    const lessonId = panel?.dataset.lessonId || "";
+    if (!panel?.open || !lessonId || panel.dataset.loadedLessonId === lessonId) return;
+    const api = bridge();
+    if (!api?.rpc) return;
+    const list = $("#scheduleV2LessonHistoryList");
+    const summary = $("#scheduleV2LessonHistorySummary");
+    summary.textContent = "불러오는 중";
+    list.innerHTML = '<p class="schedule-v2-history-empty">변경 기록을 불러오는 중입니다.</p>';
+    try {
+      const response = await api.rpc("tn_schedule_v2_lesson_history", {
+        target_lesson_id: lessonId,
+        target_limit: 30,
+      });
+      const items = Array.isArray(response) ? response : [];
+      panel.dataset.loadedLessonId = lessonId;
+      renderLessonHistory(items);
+    } catch (error) {
+      summary.textContent = "다시 확인";
+      list.innerHTML = '<p class="schedule-v2-history-empty">변경 기록을 불러오지 못했습니다. 다시 열어 확인해 주세요.</p>';
+    }
+  }
+
   function outcomeRowFinal(participant) {
     return String(participant?.recordStatus || participant?.record_status || "") === "final";
   }
@@ -1919,6 +2057,12 @@
         return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${disabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea></div>`;
       }).join("")
       : '<div class="schedule-v2-selected-ticket">참여자 정보가 없어 수업을 처리할 수 없습니다.</div>';
+    renderCurriculumOptions();
+    $$("[data-v2-outcome-user]", list).forEach((row) => {
+      const participant = participants.find((item) => String(item.userId) === String(row.dataset.v2OutcomeUser)) || {};
+      const final = outcomeRowFinal(participant);
+      row.insertAdjacentHTML("beforeend", `<label class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼</span><input type="search" list="scheduleV2CurriculumOptions" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="기술명 또는 코드 검색" autocomplete="off"${editable && !final ? "" : " disabled"} /></label>`);
+    });
     $$(".schedule-v2-outcome-row", list).forEach((row) => syncOutcomeRow(row));
   }
 
@@ -1929,6 +2073,12 @@
     for (const row of rows) {
       const outcome = row.querySelector("[data-v2-outcome]").value;
       const coachComment = row.querySelector("[data-v2-comment]").value.trim();
+      const curriculumInput = row.querySelector("[data-v2-curriculum]");
+      const curriculumValue = curriculumInput?.value.trim() || "";
+      const curriculumStep = curriculumValue ? curriculumStepFromValue(curriculumValue) : null;
+      if (curriculumValue && !curriculumStep) {
+        return { error: `${row.querySelector("strong").textContent} 회원의 다음 커리큘럼을 검색 목록에서 선택해 주세요.`, results: [] };
+      }
       if (finalize && outcome === "completed" && coachComment.length < 5) {
         return { error: `${row.querySelector("strong").textContent} 회원의 피드백을 5자 이상 입력해 주세요.`, results: [] };
       }
@@ -1942,9 +2092,39 @@
         deduct: state.editingLesson?.scheduleKind !== "one_day" && row.querySelector("[data-v2-deduct]").checked,
         coachComment,
         keywords: [],
+        curriculumCode: curriculumStep?.id || "",
+        existingCurriculumCode: curriculumInput?.dataset.v2ExistingCode || "",
+        nextCurriculumRefId: curriculumInput?.dataset.v2ExistingRefId || null,
       });
     }
     return { error: "", results };
+  }
+
+  async function resolveOutcomeCurriculumRefs(api, results) {
+    const ensuredRefs = new Map();
+    return Promise.all(results.map(async (result) => {
+      let nextCurriculumRefId = result.nextCurriculumRefId || null;
+      if (result.curriculumCode && result.curriculumCode !== result.existingCurriculumCode) {
+        if (!ensuredRefs.has(result.curriculumCode)) {
+          const step = curriculumStepFromValue(result.curriculumCode);
+          ensuredRefs.set(result.curriculumCode, api.rpc("tn_ensure_curriculum_ref", {
+            target_code: step.id,
+            target_level: `${step.trackTitle || step.category || "커리큘럼"} · ${step.stageLabel || step.level || "단계"}`,
+            target_title: step.title,
+            target_notion_url: step.notionUrl || curriculumCatalog.sources?.detailedGuide || null,
+          }));
+        }
+        const response = await ensuredRefs.get(result.curriculumCode);
+        nextCurriculumRefId = Array.isArray(response)
+          ? response[0]
+          : typeof response === "object" && response
+            ? response.id || response.curriculumId || response.value
+            : response;
+        if (!nextCurriculumRefId) throw new Error("schedule_v2_curriculum_save_failed");
+      }
+      const { curriculumCode, existingCurriculumCode, ...serverResult } = result;
+      return { ...serverResult, nextCurriculumRefId };
+    }));
   }
 
   async function processLessonOutcome(finalize) {
@@ -1972,9 +2152,10 @@
     finalizeButton.disabled = true;
     setEditorMessage(finalize ? "수업 완료와 차감을 저장하는 중입니다." : "피드백 초안을 저장하는 중입니다.", "info");
     try {
+      const participantResults = await resolveOutcomeCurriculumRefs(api, collected.results);
       await api.rpc("tn_schedule_v2_process_lesson", {
         target_lesson_id: lesson.id,
-        target_participant_results: collected.results,
+        target_participant_results: participantResults,
         target_finalize: finalize,
         target_operation_key: operationKey(finalize ? "admin-outcome-final" : "admin-outcome-draft"),
       });
@@ -2063,6 +2244,7 @@
     renderSelectedTicket();
     renderSubstituteEditor();
     renderOutcomeEditor();
+    resetLessonHistory(lesson);
     syncRegularEditScope();
     setEditorMessage(reopeningLesson ? "취소 기록은 그대로 보존하고 이 자리에 새 수업을 등록합니다." : "", reopeningLesson ? "info" : "");
     state.editorScrollY = window.scrollY;
@@ -2271,6 +2453,7 @@
       schedule_v2_makeup_regular_ticket_required: "보강은 정규 회원권을 선택해 주세요.",
       schedule_v2_concurrent_update: "다른 화면에서 먼저 수정했습니다. 새로고침 후 다시 확인해 주세요.",
       schedule_v2_workspace_range_invalid: "시간표 조회 기간을 확인해 주세요.",
+      schedule_v2_makeup_gap_invalid: "보강 인접 간격은 0~100분으로 설정해 주세요.",
       schedule_v2_admin_required: "관리자 권한이 필요합니다.",
       schedule_v2_closure_date_required: "휴무 날짜를 선택해 주세요.",
       schedule_v2_closure_time_invalid: "휴무 시작·종료 시간을 확인해 주세요.",
@@ -2681,6 +2864,13 @@
     const panel = $("#scheduleV2PolicyPanel");
     const button = $("#scheduleV2PolicySaveButton");
     if (!snapshot.branchId || !api?.rpc) return;
+    const gapInput = panel.querySelector('[name="makeupAnchorGapMinutes"]');
+    const makeupGapMinutes = Number(gapInput?.value);
+    if (!Number.isInteger(makeupGapMinutes) || makeupGapMinutes < 0 || makeupGapMinutes > 100) {
+      setStatus("보강 인접 간격은 0~100분으로 설정해 주세요.", "error");
+      gapInput?.focus();
+      return;
+    }
     button.disabled = true;
     setStatus("운영 규칙을 저장하는 중입니다.");
     try {
@@ -2692,7 +2882,7 @@
           allow_cross_coach_member_edit: panel.querySelector('[name="allowCrossCoachMemberEdit"]').value === "true",
           allow_coach_locked_time_override: panel.querySelector('[name="allowCoachLockedTimeOverride"]').value === "true",
           allow_coach_holiday_override: panel.querySelector('[name="allowCoachHolidayOverride"]').value === "true",
-          makeup_anchor_gap_minutes: panel.querySelector('[name="makeupAnchorGapMinutes"]').value,
+          makeup_anchor_gap_minutes: makeupGapMinutes,
         },
       });
       state.payload.policy = Array.isArray(saved) ? saved[0] || {} : saved || {};
@@ -2820,6 +3010,7 @@
     });
     $("#scheduleV2SaveOutcomeDraftButton").addEventListener("click", () => processLessonOutcome(false));
     $("#scheduleV2FinalizeOutcomeButton").addEventListener("click", () => processLessonOutcome(true));
+    $("#scheduleV2LessonHistoryPanel")?.addEventListener("toggle", loadLessonHistory);
     $("#scheduleV2EditorForm").elements.substituteSettlementMode.addEventListener("change", (event) => {
       $("#scheduleV2SubstituteHourlyField").hidden = event.currentTarget.value !== "hourly";
     });

@@ -887,6 +887,17 @@
   font-size: 10px;
 }
 
+.schedule-v2-ticket-counts {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: #315d52;
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .schedule-v2-lesson-history {
   display: block;
   margin-top: 2px;
@@ -1550,6 +1561,28 @@
   resize: vertical;
 }
 
+.schedule-v2-outcome-curriculum {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  color: #51635d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.schedule-v2-outcome-curriculum input {
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid #c9d7d2;
+  border-radius: 4px;
+  padding: 6px 8px;
+  background: #fff;
+  color: #173d33;
+  font: inherit;
+}
+
 .schedule-v2-outcome-row.is-final {
   background: #edf7f2;
 }
@@ -1569,6 +1602,66 @@
   display: block;
   margin-top: 8px;
   color: #61736d;
+}
+
+.schedule-v2-lesson-history {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid #d7e3df;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.schedule-v2-lesson-history[hidden] {
+  display: none;
+}
+
+.schedule-v2-lesson-history summary,
+.schedule-v2-lesson-history article > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.schedule-v2-lesson-history summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.schedule-v2-lesson-history summary strong {
+  color: #08795a;
+}
+
+.schedule-v2-lesson-history-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.schedule-v2-lesson-history article {
+  padding: 8px;
+  border-left: 3px solid #9ebdb2;
+  background: #f7faf9;
+  color: #354a43;
+}
+
+.schedule-v2-lesson-history article time,
+.schedule-v2-lesson-history article span,
+.schedule-v2-lesson-history article small,
+.schedule-v2-history-empty {
+  color: #61736d;
+  font-size: 11px;
+}
+
+.schedule-v2-lesson-history article small {
+  display: block;
+  margin-top: 3px;
+}
+
+.schedule-v2-history-empty {
+  margin: 0;
 }
 
 .schedule-v2-editor-message {
@@ -1645,6 +1738,10 @@ body.schedule-v2-editor-open {
 }
 
 @media (max-width: 720px) {
+  .schedule-v2-lesson-history {
+    display: none;
+  }
+
   .schedule-engine-switcher {
     align-items: stretch;
     flex-wrap: wrap;
