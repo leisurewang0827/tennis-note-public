@@ -3904,8 +3904,16 @@
             "checklist": "발이 교차하지 않는다. · 첫발이 공 쪽으로 간다. · 돌아오는 발이 늦지 않는다.",
             "personalPractice": "좌·우·앞 방향을 10회씩 번갈아 반복합니다.",
             "mission": "좌·우·앞 방향을 10회씩 번갈아 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=k4qepoAOOHw",
+                "title": "Tennis Footwork | Get To The Ball Faster | 2 of 3",
+                "author": "Top Tennis Training - Pro Tennis Lessons",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "풋워크 3/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df48081be9a5ec283fcf0d2f0",
@@ -3939,8 +3947,16 @@
             "checklist": "발을 끌지 않는다. · 돌아오며 몸이 흔들리지 않는다. · 라켓이 준비 위치에 있다.",
             "personalPractice": "좌우 한 걸음 이동과 회복을 12회 반복합니다.",
             "mission": "좌우 한 걸음 이동과 회복을 12회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=s4Z6V5p9tDI",
+                "title": "Tennis Footwork: Cross Over Steps And Shuffle Steps",
+                "author": "Online Tennis Instruction",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "풋워크 4/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df48081f79594c4ab49f489ce",
@@ -3974,8 +3990,16 @@
             "checklist": "가까운 공에 쓰지 않는다. · 상체가 먼저 넘어가지 않는다. · 멈춘 뒤 타점 공간을 만든다.",
             "personalPractice": "좌우 두 걸음 거리에서 크로스오버를 8회씩 연습합니다.",
             "mission": "좌우 두 걸음 거리에서 크로스오버를 8회씩 연습합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=GDRO1c3ZhJ4",
+                "title": "Tennis Footwork: Crossover Step",
+                "author": "ExpertVillage Leaf Group",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "풋워크 5/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df48081859dfbff344e58e60e",
@@ -4009,8 +4033,16 @@
             "checklist": "공 앞에서 급히 멈추지 않는다. · 마지막 걸음이 작다. · 타구 뒤 바로 회복한다.",
             "personalPractice": "앞으로 3걸음·뒤로 3걸음을 10회 반복합니다.",
             "mission": "앞으로 3걸음·뒤로 3걸음을 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=RyDMw3Az_HE",
+                "title": "Tennis Tip: Footwork On Short Balls",
+                "author": "Online Tennis Instruction",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "풋워크 6/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df480816c93e0c83c57c13b99",
@@ -4044,8 +4076,16 @@
             "checklist": "한 번에 중앙으로 뛰지 않는다. · 안전한 공을 먼저 선택한다. · 회복 뒤 레디 자세를 만든다.",
             "personalPractice": "좌우 넓은 이동 뒤 중앙 회복을 10회 반복합니다.",
             "mission": "좌우 넓은 이동 뒤 중앙 회복을 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=kwZDdsQgqcQ",
+                "title": "Tennis Footwork | How To Recover Fast | 3 of 3",
+                "author": "Top Tennis Training - Pro Tennis Lessons",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "풋워크 7/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df48081bd8c9cca56232ea7a3",
@@ -4353,14 +4393,14 @@
       "validSelfChecks": 100,
       "firstActionVisible": 100,
       "personalPracticePresent": 12,
-      "withResources": 89,
-      "uniqueResourceUrls": 91,
+      "withResources": 94,
+      "uniqueResourceUrls": 96,
       "duplicateResourceUrlCount": 1,
-      "correctNextLessonLink": 1
+      "correctNextLessonLink": 6
     },
     "appMediaSummary": {
-      "readyLessons": 76,
-      "needsMaterialLessons": 24,
+      "readyLessons": 81,
+      "needsMaterialLessons": 19,
       "needsMaterialCodes": [
         "FH-R8",
         "FH-T1",
@@ -4375,11 +4415,6 @@
         "NV-F4",
         "TC-A4",
         "TC-F4",
-        "ST-03",
-        "ST-04",
-        "ST-05",
-        "ST-06",
-        "ST-07",
         "SV-02",
         "SV-03",
         "SV-04",
