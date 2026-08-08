@@ -4600,7 +4600,7 @@ function curriculumOptions(selectedId) {
   const groups = [
     { title: "기초 움직임과 서브", steps: curriculumCatalog.fundamentals || [] },
     ...curriculumCatalog.tracks.map((track) => ({ title: track.title, steps: track.lessons })),
-  ];
+  ].filter((group) => group.steps?.length);
   return groups
     .map(
       (group) => `
@@ -4813,6 +4813,7 @@ function curriculumFilterOptions() {
     { id: "백핸드", label: "백핸드" },
     { id: "네트플레이", label: "네트" },
     { id: "전술전환", label: "전술" },
+    { id: "풋워크", label: "풋워크" },
     { id: "서브", label: "서브" },
   ];
 }

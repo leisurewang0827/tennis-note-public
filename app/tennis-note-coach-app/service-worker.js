@@ -8,7 +8,7 @@ const APP_SHELL = [
   "./assets/app-icon.svg",
   "../release.json",
   "../shared/tennisnote-data-client.js?v=1.0.281",
-  "../shared/tennisnote-curriculum-catalog.js",
+  "../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3",
   "../shared/tennisnote-release.js?v=1.0.281",
   "../shared/tennisnote-release-updater.js?v=1.0.281",
   "../shared/tennisnote-issue-reporter.js",
