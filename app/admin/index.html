@@ -2,7 +2,7 @@
 <html lang="ko" data-tennisnote-surface="admin">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Tennis Note 관리자 웹</title>
     <meta name="application-name" content="Tennis Note 관리자 웹" />
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
@@ -393,7 +393,7 @@
               <label><span>다른 코치 회원 수정</span><select name="allowCrossCoachMemberEdit"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>
               <label><span>잠긴 시간 코치 등록</span><select name="allowCoachLockedTimeOverride"><option value="true">허용</option><option value="false">허용 안 함</option></select></label>
               <label><span>휴무일 코치 등록</span><select name="allowCoachHolidayOverride"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>
-              <label><span>보강 인접 간격</span><select name="makeupAnchorGapMinutes"><option value="20">20분</option><option value="40">40분</option><option value="60">60분</option><option value="90">90분</option><option value="120">120분</option><option value="unlimited">제한 없음</option></select></label>
+              <label><span>보강 인접 간격</span><input name="makeupAnchorGapMinutes" type="number" min="0" max="100" step="1" value="40" inputmode="numeric" required /><small>0~100분 · 기본 40분</small></label>
               <button id="scheduleV2PolicySaveButton" class="primary-button" type="button">규칙 저장</button>
             </div>
             <div class="schedule-v2-layout">
@@ -472,11 +472,16 @@
               <details id="scheduleV2OutcomePanel" class="schedule-v2-outcomes" hidden>
                 <summary><span>수업 처리</span><strong id="scheduleV2OutcomeSummary">처리 전</strong></summary>
                 <div id="scheduleV2OutcomeList" class="schedule-v2-outcome-list"></div>
+                <datalist id="scheduleV2CurriculumOptions"></datalist>
                 <div id="scheduleV2OutcomeActions" class="schedule-v2-outcome-actions">
                   <button id="scheduleV2SaveOutcomeDraftButton" type="button">임시 저장</button>
                   <button id="scheduleV2FinalizeOutcomeButton" class="primary-button" type="button">수업 처리 완료</button>
                 </div>
                 <small>완료·노쇼만 차감할 수 있습니다. 불참은 차감 없이 보강 권한을 만듭니다.</small>
+              </details>
+              <details id="scheduleV2LessonHistoryPanel" class="schedule-v2-audit-panel" hidden>
+                <summary><span>변경 이력</span><strong id="scheduleV2LessonHistorySummary">열어보기</strong></summary>
+                <div id="scheduleV2LessonHistoryList" class="schedule-v2-lesson-history-list"></div>
               </details>
               <div id="scheduleV2EditorMessage" class="schedule-v2-editor-message" role="status"></div>
               <footer>

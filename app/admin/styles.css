@@ -13674,3 +13674,11 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
     font-size: 10px;
   }
 }
+
+@media (max-width: 720px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

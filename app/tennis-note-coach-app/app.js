@@ -833,13 +833,8 @@ async function syncCoachLessonsFromServer() {
     : client.getSession?.();
   if (!activeSession?.access_token || !state.coach?.branchId) return false;
   if (await syncCoachScheduleV2({ force: true })) return true;
-  if (!state.scheduleV2WorkspaceLoaded) {
-    state.liveLessons = [];
-    state.releasedMakeupSlots = [];
-    state.makeupEntitlements = [];
-    state.members = [];
-    state.expiredMembers = [];
-  }
+  // Keep the last confirmed schedule and member cache during a transient read
+  // failure. The visible error and retry action explain that it may be stale.
   state.liveLessonsLoaded = true;
   state.liveMembersLoaded = true;
   state.scheduleV2SyncError = "시간표를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.";

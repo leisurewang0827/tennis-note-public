@@ -1,0 +1,45 @@
+name: Tennis Note Public PWA CI
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "scripts/build_cloudflare_pages.py"
+      - ".github/workflows/tennisnote-public-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "scripts/build_cloudflare_pages.py"
+      - ".github/workflows/tennisnote-public-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TENNISNOTE_SUPABASE_URL: https://example.supabase.co
+      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: test-publishable-key-for-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check JavaScript syntax
+        run: |
+          node --check app/admin/app.js
+          node --check app/admin/schedule-v2-admin.js
+          node --check app/tennis-note-member-app/app.js
+          node --check app/tennis-note-coach-app/app.js
+      - name: Build isolated Cloudflare artifacts
+        run: |
+          python scripts/build_cloudflare_pages.py --target member --output dist/member
+          python scripts/build_cloudflare_pages.py --target admin --output dist/admin
+      - name: Verify release and cache markers
+        run: python scripts/check_cloudflare_build.py
