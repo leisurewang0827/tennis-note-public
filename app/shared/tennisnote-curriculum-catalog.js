@@ -3861,8 +3861,16 @@
             "checklist": "너무 일찍 뛰지 않는다. · 착지 뒤 바로 움직인다. · 상체가 들리지 않는다.",
             "personalPractice": "제자리에서 10회, 좌우 첫발 연결 10회를 반복합니다.",
             "mission": "제자리에서 10회, 좌우 첫발 연결 10회를 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=zuLTHMubJws",
+                "title": "Tennis Footwork: Split-Step Timing Lesson",
+                "author": "Online Tennis Instruction",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "풋워크 2/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df48081f498c3db715685881a",
@@ -4345,14 +4353,14 @@
       "validSelfChecks": 100,
       "firstActionVisible": 100,
       "personalPracticePresent": 12,
-      "withResources": 88,
-      "uniqueResourceUrls": 90,
+      "withResources": 89,
+      "uniqueResourceUrls": 91,
       "duplicateResourceUrlCount": 1,
-      "correctNextLessonLink": 0
+      "correctNextLessonLink": 1
     },
     "appMediaSummary": {
-      "readyLessons": 75,
-      "needsMaterialLessons": 25,
+      "readyLessons": 76,
+      "needsMaterialLessons": 24,
       "needsMaterialCodes": [
         "FH-R8",
         "FH-T1",
@@ -4367,7 +4375,6 @@
         "NV-F4",
         "TC-A4",
         "TC-F4",
-        "ST-02",
         "ST-03",
         "ST-04",
         "ST-05",
