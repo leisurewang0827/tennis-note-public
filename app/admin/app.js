@@ -4404,17 +4404,20 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     try {
       rows = await client.selectRows("tn_payments", {
         select: "id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)",
+        order: "created_at.desc",
         limit: 30,
       });
     } catch (error) {
       try {
         rows = await client.selectRows("tn_payments", {
           select: "id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at",
+          order: "created_at.desc",
           limit: 30,
         });
       } catch (refundSchemaError) {
         rows = await client.selectRows("tn_payments", {
           select: "id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at",
+          order: "created_at.desc",
           limit: 30,
         });
       }
@@ -21529,7 +21532,7 @@ async function performAdminLiveDataSync(options = {}) {
       Promise.resolve(adminLiveDataState.curriculumRefs || []),
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
-      fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at", limit: 500 }).catch(() => [])) : Promise.resolve([]),
+      fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at", order: "created_at.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
       rosterRows("groupAccounts", () => client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => [])),
       rosterRows("groupMembers", () => client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => [])),
       rosterRows("groupTicketLinks", () => client.selectRows("tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", limit: 500 }).catch(() => [])),
