@@ -4179,8 +4179,16 @@
             "checklist": "몸 뒤로 토스하지 않는다. · 팔꿈치를 과하게 굽히지 않는다. · 매번 같은 시작 자세를 만든다.",
             "personalPractice": "토스만 10회씩 2세트 반복합니다.",
             "mission": "토스만 10회씩 2세트 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "url": "https://www.youtube.com/watch?v=agk2iThrHSg",
+                "label": "토스 위치를 빠르게 교정하는 방법",
+                "title": "",
+                "author": "",
+                "verifiedAccessible": false
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "서브 2/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df48081b8822bc8907b66eafc",
@@ -4214,8 +4222,16 @@
             "checklist": "토스 후 멈추지 않는다. · 라켓을 너무 빨리 내리지 않는다. · 호흡이 급해지지 않는다.",
             "personalPractice": "공 없이 준비 동작을 10회, 짧은 서브를 10회 합니다.",
             "mission": "공 없이 준비 동작을 10회, 짧은 서브를 10회 합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "url": "https://www.youtube.com/watch?v=ntBgpIRNHio",
+                "label": "서브 리듬과 타이밍 연습",
+                "title": "",
+                "author": "",
+                "verifiedAccessible": false
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "서브 3/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df480812ca5b0def9b6abd34a",
@@ -4249,8 +4265,16 @@
             "checklist": "공이 떨어진 뒤 치지 않는다. · 팔꿈치를 먼저 접지 않는다. · 목과 어깨에 힘을 주지 않는다.",
             "personalPractice": "공 없이 위로 뻗기 10회 후 짧은 서브 10회를 합니다.",
             "mission": "공 없이 위로 뻗기 10회 후 짧은 서브 10회를 합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "url": "https://www.youtube.com/watch?v=DHBPL9MqTSk",
+                "label": "서브 임팩트 높이와 타점 찾기",
+                "title": "",
+                "author": "",
+                "verifiedAccessible": false
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "서브 4/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df48081b1a20fc9c67eab4a14",
@@ -4284,8 +4308,16 @@
             "checklist": "뒤로 넘어지지 않는다. · 착지 후 멈추지 않는다. · 무릎이 안쪽으로 무너지지 않는다.",
             "personalPractice": "가벼운 서브 후 착지 자세를 10회 확인합니다.",
             "mission": "가벼운 서브 후 착지 자세를 10회 확인합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "url": "https://www.youtube.com/watch?v=Yv-3sE7BP6A",
+                "label": "서브 착지와 균형 잡기",
+                "title": "",
+                "author": "",
+                "verifiedAccessible": false
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "서브 5/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df4808116b060c0bb955806db",
@@ -4319,8 +4351,16 @@
             "checklist": "한 번에 강하게 치지 않는다. · 네트 위 여유를 둔다. · 실패 뒤 토스부터 다시 본다.",
             "personalPractice": "중앙 목표로 10구 중 7구 넣기를 반복합니다.",
             "mission": "중앙 목표로 10구 중 7구 넣기를 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "url": "https://www.youtube.com/watch?v=DPgG5oNSUIM",
+                "label": "안정적인 킥 세컨드 서브 만들기",
+                "title": "",
+                "author": "",
+                "verifiedAccessible": false
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "서브 6/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df4808135a9f1f1ce2481f08e",
@@ -4393,14 +4433,14 @@
       "validSelfChecks": 100,
       "firstActionVisible": 100,
       "personalPracticePresent": 12,
-      "withResources": 94,
-      "uniqueResourceUrls": 96,
+      "withResources": 99,
+      "uniqueResourceUrls": 101,
       "duplicateResourceUrlCount": 1,
-      "correctNextLessonLink": 6
+      "correctNextLessonLink": 11
     },
     "appMediaSummary": {
-      "readyLessons": 81,
-      "needsMaterialLessons": 19,
+      "readyLessons": 86,
+      "needsMaterialLessons": 14,
       "needsMaterialCodes": [
         "FH-R8",
         "FH-T1",
@@ -4415,11 +4455,6 @@
         "NV-F4",
         "TC-A4",
         "TC-F4",
-        "SV-02",
-        "SV-03",
-        "SV-04",
-        "SV-05",
-        "SV-06",
         "SV-07"
       ],
       "blockedPlacements": 14
