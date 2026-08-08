@@ -1604,7 +1604,7 @@
   color: #61736d;
 }
 
-.schedule-v2-lesson-history {
+.schedule-v2-audit-panel {
   margin-top: 10px;
   padding: 9px 10px;
   border: 1px solid #d7e3df;
@@ -1612,25 +1612,25 @@
   background: #fff;
 }
 
-.schedule-v2-lesson-history[hidden] {
+.schedule-v2-audit-panel[hidden] {
   display: none;
 }
 
-.schedule-v2-lesson-history summary,
-.schedule-v2-lesson-history article > div {
+.schedule-v2-audit-panel summary,
+.schedule-v2-audit-panel article > div {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.schedule-v2-lesson-history summary {
+.schedule-v2-audit-panel summary {
   cursor: pointer;
   font-size: 12px;
   font-weight: 800;
 }
 
-.schedule-v2-lesson-history summary strong {
+.schedule-v2-audit-panel summary strong {
   color: #08795a;
 }
 
@@ -1640,22 +1640,22 @@
   margin-top: 9px;
 }
 
-.schedule-v2-lesson-history article {
+.schedule-v2-audit-panel article {
   padding: 8px;
   border-left: 3px solid #9ebdb2;
   background: #f7faf9;
   color: #354a43;
 }
 
-.schedule-v2-lesson-history article time,
-.schedule-v2-lesson-history article span,
-.schedule-v2-lesson-history article small,
+.schedule-v2-audit-panel article time,
+.schedule-v2-audit-panel article span,
+.schedule-v2-audit-panel article small,
 .schedule-v2-history-empty {
   color: #61736d;
   font-size: 11px;
 }
 
-.schedule-v2-lesson-history article small {
+.schedule-v2-audit-panel article small {
   display: block;
   margin-top: 3px;
 }
@@ -1738,7 +1738,7 @@ body.schedule-v2-editor-open {
 }
 
 @media (max-width: 720px) {
-  .schedule-v2-lesson-history {
+  .schedule-v2-audit-panel {
     display: none;
   }
 
