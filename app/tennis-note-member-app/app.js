@@ -1341,7 +1341,7 @@ function restoreSnapshot() {
     if (!state.memberEnrollment || typeof state.memberEnrollment !== "object") state.memberEnrollment = null;
     state.pendingPurchaseProductId = String(state.pendingPurchaseProductId || "");
     state.selectedLessonDetailId = String(state.selectedLessonDetailId || "");
-    if (!["card", "naverpay", "kakaopay"].includes(state.selectedPaymentMethod)) state.selectedPaymentMethod = "card";
+    if (!["card", "tosspay", "naverpay", "kakaopay"].includes(state.selectedPaymentMethod)) state.selectedPaymentMethod = "card";
     if (!state.pushNotifications || typeof state.pushNotifications !== "object") {
       state.pushNotifications = {
         permission: "unknown",
@@ -5377,7 +5377,8 @@ function ticketCountFromTitle(title = "") {
 }
 
 const paymentMethodDefinitions = [
-  { id: "card", label: "카드·토스페이", shortLabel: "카드", payMethod: "CARD", detail: "카드 또는 토스 결제창" },
+  { id: "card", label: "카드", shortLabel: "카드", payMethod: "CARD", detail: "신용·체크카드 결제" },
+  { id: "tosspay", label: "토스페이", shortLabel: "토스페이", payMethod: "EASY_PAY", detail: "토스페이 바로 결제" },
   { id: "naverpay", label: "네이버페이", shortLabel: "네이버페이", payMethod: "EASY_PAY", detail: "네이버페이 바로 결제" },
   { id: "kakaopay", label: "카카오페이", shortLabel: "카카오페이", payMethod: "EASY_PAY", detail: "카카오페이 바로 결제" },
 ];
@@ -5424,6 +5425,7 @@ function paymentGatewayConfig() {
     naverPayCategoryId: browserConfig.naverPayCategoryId || localConfig.naverPayCategoryId || "",
     channels: {
       card: browserConfig.channels?.card || browserConfig.channelKey || localConfig.channels?.card || localConfig.channelKey || "",
+      tosspay: browserConfig.channels?.tosspay || browserConfig.tossPayChannelKey || localConfig.channels?.tosspay || localConfig.tossPayChannelKey || "",
       naverpay: browserConfig.channels?.naverpay || browserConfig.naverPayChannelKey || localConfig.channels?.naverpay || localConfig.naverPayChannelKey || "",
       kakaopay: browserConfig.channels?.kakaopay || browserConfig.kakaoPayChannelKey || localConfig.channels?.kakaopay || localConfig.kakaoPayChannelKey || "",
     },
@@ -6174,7 +6176,7 @@ function renderPaymentGatewayStatus() {
     <article class="payment-status-card ${ready ? "ready" : "setup"}">
       <div>
         <strong>${ready ? "안전결제 연결됨" : "결제 연결 설정 필요"}</strong>
-        <span>${ready ? `사용할 결제수단을 고른 뒤 회원권을 선택하세요. ${readyCount}/3개 수단 사용 가능` : "결제 채널 연결 후 회원권을 구매할 수 있습니다."}</span>
+        <span>${ready ? `사용할 결제수단을 고른 뒤 회원권을 선택하세요. ${readyCount}/${paymentMethodDefinitions.length}개 수단 사용 가능` : "결제 채널 연결 후 회원권을 구매할 수 있습니다."}</span>
       </div>
       <b>${ready ? paymentMethodDefinition(selectedMethodId).shortLabel : "설정 대기"}</b>
     </article>

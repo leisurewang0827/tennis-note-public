@@ -35,6 +35,7 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
           PORTONE_STORE_ID: ${{ secrets.TENNISNOTE_PORTONE_STORE_ID }}
           PORTONE_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_CHANNEL_KEY }}
+          PORTONE_TOSSPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY }}
           PORTONE_NAVERPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY }}
           PORTONE_NAVERPAY_CATEGORY_TYPE: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE }}
           PORTONE_NAVERPAY_CATEGORY_ID: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID }}
@@ -69,6 +70,7 @@ jobs:
               "naverPayCategoryId": clean("PORTONE_NAVERPAY_CATEGORY_ID"),
               "channels": {
                   "card": clean("PORTONE_CHANNEL_KEY"),
+                  "tosspay": clean("PORTONE_TOSSPAY_CHANNEL_KEY"),
                   "naverpay": clean("PORTONE_NAVERPAY_CHANNEL_KEY"),
                   "kakaopay": clean("PORTONE_KAKAOPAY_CHANNEL_KEY"),
               },

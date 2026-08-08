@@ -4420,7 +4420,7 @@ body.identity-setup-required {
 
 .payment-method-segments {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   padding: 5px;
   border: 1px solid var(--line);
@@ -4471,6 +4471,12 @@ body.identity-setup-required {
   border-color: #03c75a;
   color: #00883e;
   background: #f2fff7;
+}
+
+.payment-method-option[data-select-payment-method="tosspay"].is-selected {
+  border-color: #1b64da;
+  color: #0f4fb9;
+  background: #f1f6ff;
 }
 
 .payment-method-option[data-select-payment-method="kakaopay"].is-selected {

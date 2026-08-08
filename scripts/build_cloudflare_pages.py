@@ -61,6 +61,7 @@ def write_browser_config(output: Path) -> None:
         "naverPayCategoryId": env("TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID"),
         "channels": {
             "card": env("TENNISNOTE_PORTONE_CHANNEL_KEY"),
+            "tosspay": env("TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY"),
             "naverpay": env("TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY"),
             "kakaopay": env("TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY"),
         },
