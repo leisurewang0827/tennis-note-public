@@ -2103,7 +2103,9 @@
   async function resolveOutcomeCurriculumRefs(api, results) {
     const ensuredRefs = new Map();
     return Promise.all(results.map(async (result) => {
-      let nextCurriculumRefId = result.nextCurriculumRefId || null;
+      let nextCurriculumRefId = result.curriculumCode
+        ? result.nextCurriculumRefId || null
+        : null;
       if (result.curriculumCode && result.curriculumCode !== result.existingCurriculumCode) {
         if (!ensuredRefs.has(result.curriculumCode)) {
           const step = curriculumStepFromValue(result.curriculumCode);
