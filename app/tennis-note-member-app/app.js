@@ -1682,7 +1682,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.281",
+    workerUrl: "./service-worker.js?v=1.0.282",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -6189,6 +6189,15 @@ function paymentRedirectUrl() {
   return url.toString();
 }
 
+function createProviderPaymentId(productId = "") {
+  const timestamp = Date.now().toString(36);
+  const productToken = String(productId || "product").replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "product";
+  const randomToken = String(globalThis.crypto?.randomUUID?.() || `${Date.now()}${Math.random().toString(36).slice(2)}`)
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 12);
+  return `tn_${timestamp}_${productToken}_${randomToken}`.slice(0, 50);
+}
+
 function portOnePaymentRequest({ paymentId, productId, orderName, totalAmount, methodId = state.selectedPaymentMethod }) {
   const config = paymentGatewayConfig();
   const method = paymentMethodDefinition(methodId);
@@ -7222,7 +7231,7 @@ async function startProductPayment(productId, options = {}) {
     setView("shopView");
     return;
   }
-  const paymentId = `tn_${Date.now()}_${product.id}`;
+  const paymentId = createProviderPaymentId(product.id);
   if (!isPaymentGatewayReady(methodId)) {
     createPaymentRecord(product, {
       paymentId,
@@ -7852,7 +7861,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.281" });
+  const params = new URLSearchParams({ v: "1.0.282" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
