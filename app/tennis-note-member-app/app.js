@@ -1682,7 +1682,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.285",
+    workerUrl: "./service-worker.js?v=1.0.286",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -5309,7 +5309,7 @@ function renderProducts() {
             <div>
               <strong>${pass.title}</strong>
               <span>${pass.period}</span>
-              <small>${pass.coach || "상담 후 배정"} · 총 ${pass.total} / 소진 ${pass.used} / 잔여 ${Math.max(0, Number(pass.total || 0) - Number(pass.used || 0))} · ${pass.paid}</small>
+              <small>${pass.coach || "상담 후 배정"} · ${pass.unavailable ? `총 ${pass.total} / 소진 ${pass.used} / 사용 불가 · 잔여 0` : `총 ${pass.total} / 소진 ${pass.used} / 잔여 ${Math.max(0, Number(pass.remaining ?? (Number(pass.total || 0) - Number(pass.used || 0))))}`} · ${pass.paid}</small>
             </div>
             <b>${pass.status}</b>
             ${pass.note ? `<small>${pass.note}</small>` : ""}
@@ -5390,6 +5390,8 @@ function membershipPassRecords() {
         period: ticket.refundedAt ? `${formatDateTimeLabel(ticket.refundedAt)} 환불 완료` : ticket.expiresOn ? `${ticket.startsOn || "시작일 확인"} ~ ${ticket.expiresOn}` : "서버 환불 처리 완료",
         total: ticket.total || 0,
         used: ticket.used || 0,
+        remaining: 0,
+        unavailable: true,
         coach: state.profile.mainCoach || "담당 코치",
         paid: ticket.paymentAmount ? `결제 ${ticket.paymentAmount.toLocaleString("ko-KR")}원` : "결제금액 확인",
         status: ticket.status === "refunded" ? "환불완료" : "취소완료",
@@ -7861,7 +7863,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.285" });
+  const params = new URLSearchParams({ v: "1.0.286" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

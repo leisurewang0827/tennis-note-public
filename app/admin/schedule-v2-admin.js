@@ -455,7 +455,7 @@
       endTime,
       type: "available",
     });
-    const weeklyAvailability = (startTime, endTime) => [1, 2, 3, 4, 5, 6]
+    const weeklyAvailability = (startTime, endTime) => [0, 1, 2, 3, 4, 5, 6]
       .map((targetDay) => availability(startTime, endTime, targetDay));
     return normalizeWorkspacePayload({
       branchId: "demo-branch",
