@@ -644,11 +644,13 @@ const groupAccounts = [
 const serverPaymentSyncState = {
   loading: false,
   loaded: false,
+  directLoaded: false,
   lastLoadedAt: 0,
   message: "서버 결제 기록을 아직 불러오지 않았습니다.",
   tone: "neutral",
 };
 const SERVER_PAYMENT_REFRESH_STALE_MS = 120_000;
+const paymentCancelInFlight = new Set();
 
 const refundFlowState = {
   itemIndex: -1,
@@ -4354,24 +4356,26 @@ function billingRowFromServerPayment(row = {}) {
   };
 }
 
-function mergeServerPaymentRows(rows = []) {
-  let added = 0;
-  let updated = 0;
-  rows.forEach((row) => {
-    const next = billingRowFromServerPayment(row);
-    const existing = billings.find((item) =>
-      (next.providerPaymentId && item.providerPaymentId === next.providerPaymentId) ||
-      (next.serverPaymentId && item.serverPaymentId === next.serverPaymentId)
-    );
-    if (existing) {
-      Object.assign(existing, { ...existing, ...next });
-      updated += 1;
-    } else {
-      billings.unshift(next);
-      added += 1;
-    }
-  });
-  return { added, updated };
+function replaceServerPaymentRows(rows = []) {
+  const mapped = rows.map((row) => billingRowFromServerPayment(row));
+  const serverIds = new Set(mapped.map((item) => item.serverPaymentId).filter(Boolean));
+  const providerIds = new Set(mapped.map((item) => item.providerPaymentId).filter(Boolean));
+  const previousServerRows = billings.filter((item) => item.serverPaymentId);
+  const previousKeys = new Set(previousServerRows
+    .flatMap((item) => [item.serverPaymentId, item.providerPaymentId])
+    .filter(Boolean));
+  const preservedLocalRows = billings.filter((item) => (
+    !item.serverPaymentId
+    && (!item.providerPaymentId || !providerIds.has(item.providerPaymentId))
+  ));
+  replaceArray(billings, [...mapped, ...preservedLocalRows]);
+  return {
+    added: mapped.filter((item) => !previousKeys.has(item.serverPaymentId) && !previousKeys.has(item.providerPaymentId)).length,
+    updated: mapped.filter((item) => previousKeys.has(item.serverPaymentId) || previousKeys.has(item.providerPaymentId)).length,
+    removed: previousServerRows.filter((item) => (
+      !serverIds.has(item.serverPaymentId) && !providerIds.has(item.providerPaymentId)
+    )).length,
+  };
 }
 
 async function loadServerPaymentsIntoBilling(options = {}) {
@@ -4380,6 +4384,7 @@ async function loadServerPaymentsIntoBilling(options = {}) {
   if (
     !force
     && serverPaymentSyncState.loaded
+    && serverPaymentSyncState.directLoaded
     && Date.now() - serverPaymentSyncState.lastLoadedAt < SERVER_PAYMENT_REFRESH_STALE_MS
   ) {
     return true;
@@ -4400,31 +4405,28 @@ async function loadServerPaymentsIntoBilling(options = {}) {
   renderBilling();
 
   try {
+    const readPayments = (select) => (client.selectAllRows || client.selectRows).call(client, "tn_payments", {
+      select,
+      order: "created_at.desc",
+      limit: 500,
+      pageSize: 500,
+      maxRows: 5000,
+    });
     let rows = [];
     try {
-      rows = await client.selectRows("tn_payments", {
-        select: "id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)",
-        order: "created_at.desc",
-        limit: 30,
-      });
+      rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
     } catch (error) {
       try {
-        rows = await client.selectRows("tn_payments", {
-          select: "id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at",
-          order: "created_at.desc",
-          limit: 30,
-        });
+        rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at");
       } catch (refundSchemaError) {
-        rows = await client.selectRows("tn_payments", {
-          select: "id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at",
-          order: "created_at.desc",
-          limit: 30,
-        });
+        rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at");
       }
     }
-    const { added, updated } = mergeServerPaymentRows(Array.isArray(rows) ? rows : []);
+    const { added, updated, removed } = replaceServerPaymentRows(Array.isArray(rows) ? rows : []);
     serverPaymentSyncState.loaded = true;
-    serverPaymentSyncState.message = `서버 결제 ${rows.length}건 확인 · 새로 추가 ${added}건 · 갱신 ${updated}건`;
+    serverPaymentSyncState.directLoaded = true;
+    serverPaymentSyncState.lastLoadedAt = Date.now();
+    serverPaymentSyncState.message = `서버 결제 ${rows.length}건 확인 · 새로 추가 ${added}건 · 갱신 ${updated}건 · 정리 ${removed}건`;
     serverPaymentSyncState.tone = "good";
     billingLogs.unshift(serverPaymentSyncState.message);
     renderAll();
@@ -7331,7 +7333,7 @@ function setView(view, options = {}) {
     void refreshAdminLiveSchedule({ force: true });
   }
   if (view === "billing" && !serverPaymentSyncState.loading) {
-    loadServerPaymentsIntoBilling();
+    loadServerPaymentsIntoBilling({ force: !serverPaymentSyncState.directLoaded });
   }
   if (enteringSchedule && state.liveScheduleLoaded && !state.liveScheduleLoading) {
     refreshAdminLiveSchedule().catch(() => false);
@@ -18824,6 +18826,25 @@ function paymentCancelButtonFor(index, label = "결제취소") {
   return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="${escapeHtml(adminPaymentCancelBlockedMessage())}">관리자 로그인 필요</button>`;
 }
 
+function paymentFullCancelAmount(item = {}) {
+  return Math.max(0, Number(item.finalAmount || item.amount || 0));
+}
+
+function paymentFullCancelButtonFor(item, index) {
+  const amount = paymentFullCancelAmount(item);
+  const context = `${item?.member || "회원"} · ${item?.item || "결제"} · PG 전액 결제취소 ${money.format(amount)}원`;
+  if (!item?.providerPaymentId || amount <= 0) {
+    return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="서버 결제번호와 결제금액이 필요합니다.">PG 전액 결제취소</button>`;
+  }
+  if (paymentCancelInFlight.has(item.providerPaymentId)) {
+    return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}">취소 처리 중</button>`;
+  }
+  if (adminPaymentCancelReady()) {
+    return `<button class="small-button danger-action" type="button" data-cancel-payment="${index}" aria-label="${escapeHtml(context)}" title="테스트·오결제·당일 미사용 결제를 PG에서 전액 취소합니다.">PG 전액 결제취소</button>`;
+  }
+  return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="${escapeHtml(adminPaymentCancelBlockedMessage())}">관리자 로그인 필요</button>`;
+}
+
 function paymentRefundButtonFor(item, index) {
   const context = `${item?.member || "회원"} · ${item?.item || "결제"} · 환불 계산`;
   if (!item?.providerPaymentId) {
@@ -19026,7 +19047,7 @@ function paymentActionFor(item, index) {
     const label = isStaleReadyPayment(item) ? "상태 확인" : "결제 확인";
     return `<button class="small-button" type="button" data-server-ready-payment="${index}" ${context(label)}>${label}</button>${paymentCancelButtonFor(index, "대기취소")}`;
   }
-  if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}" ${context("결제 완료 상세")}>완료됨</button>${paymentRefundButtonFor(item, index)}`;
+  if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}" ${context("결제 완료 상세")}>완료됨</button>${paymentFullCancelButtonFor(item, index)}${paymentRefundButtonFor(item, index)}`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;
   if (item.status === "refund_reconcile") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("환불 동기화 확인")}>동기화 확인</button>`;
   if (item.status === "cancelled") return `<button class="small-button" type="button" disabled>취소완료</button>`;
@@ -19439,7 +19460,23 @@ async function cancelBillingPaymentItem(item) {
   }
   if (!(await ensureAdminPaymentCancelReady(item))) return;
   const actionLabel = item.status === "paid" ? "실제 결제취소" : "결제 전 대기취소";
-  const ok = window.confirm(`${item.member} ${item.item} ${money.format(item.amount)}원 ${actionLabel}를 진행할까요?`);
+  const cancelAmount = paymentFullCancelAmount(item);
+  let reason = item.status === "paid" ? "" : "결제 전 대기건 정리";
+  if (item.status === "paid") {
+    const reasonInput = window.prompt(
+      `${item.member} · ${item.item} · ${money.format(cancelAmount)}원\nPG 전액 결제취소 사유를 입력해 주세요.`,
+      "",
+    );
+    if (reasonInput === null) return;
+    reason = String(reasonInput || "").trim();
+    if (reason.length < 2) {
+      showToast("취소 사유를 입력해 주세요.");
+      return;
+    }
+  }
+  const ok = window.confirm(
+    `${item.status === "paid" ? "PG 전액 결제취소" : actionLabel} 최종 확인\n\n대상: ${item.member} · ${item.item}\n금액: ${money.format(cancelAmount)}원\n사유: ${reason}\n\n일반 환불 계산과 별도로 PG 승인금액 전체를 취소합니다.`,
+  );
   if (!ok) {
     billingLogs.unshift(`${item.member} ${item.item} ${actionLabel} 실행 안 함`);
     renderAll();
@@ -19455,22 +19492,24 @@ async function cancelBillingPaymentItem(item) {
 
   item.statusLabel = "취소처리중";
   billingLogs.unshift(`${item.member} ${item.item} ${actionLabel} 요청: ${item.providerPaymentId}`);
+  paymentCancelInFlight.add(item.providerPaymentId);
   renderAll();
 
   try {
     const result = await client.invokeFunction("portone-payment/cancel", {
       body: {
         paymentId: item.providerPaymentId,
-        amount: item.amount,
-        reason: item.status === "paid" ? "관리자 테스트 결제 취소" : "결제 전 대기건 정리",
+        amount: cancelAmount,
+        reason,
       },
     });
     if (result?.ok) {
       item.status = "cancelled";
       item.statusLabel = result.localOnly ? "대기취소" : "결제취소";
-      billingLogs.unshift(`${item.member} ${item.item} 취소 완료: ${result.localOnly ? "대기건 정리" : "PortOne 취소"}`);
-      await loadServerPaymentsIntoBilling({ silent: true });
-      showToast(result.localOnly ? "대기 결제 정리 완료" : "결제 취소 완료");
+      const alreadyCancelled = result?.status === "already_cancelled";
+      billingLogs.unshift(`${item.member} ${item.item} 취소 완료: ${alreadyCancelled ? "이미 취소된 결제" : result.localOnly ? "대기건 정리" : "PortOne 취소"}`);
+      await loadServerPaymentsIntoBilling({ silent: true, force: true });
+      showToast(alreadyCancelled ? "이미 취소 완료된 결제입니다" : result.localOnly ? "대기 결제 정리 완료" : "결제 취소 완료");
     } else {
       item.status = "check";
       item.statusLabel = "취소확인필요";
@@ -19483,6 +19522,8 @@ async function cancelBillingPaymentItem(item) {
     item.statusLabel = "취소실패";
     billingLogs.unshift(`${item.member} ${item.item} 취소 실패: ${code}`);
     showToast("결제 취소 실패");
+  } finally {
+    paymentCancelInFlight.delete(item.providerPaymentId);
   }
   renderAll();
 }
@@ -22077,6 +22118,7 @@ async function performAdminLiveDataSync(options = {}) {
     }));
     Object.assign(serverPaymentSyncState, {
       loaded: true,
+      directLoaded: false,
       loading: false,
       lastLoadedAt: Date.now(),
       message: `서버 결제 ${mappedPayments.length}건 확인`,
