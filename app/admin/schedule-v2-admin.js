@@ -2001,6 +2001,56 @@
     return String(participant?.recordStatus || participant?.record_status || "") === "final";
   }
 
+  function generateOutcomeComment(row) {
+    if (!row) return;
+    const keywordInput = row.querySelector("[data-v2-comment-keywords]");
+    const commentInput = row.querySelector("[data-v2-comment]");
+    const generator = window.TennisNoteCommentDraft;
+    if (!keywordInput || !commentInput || !generator?.generate) return;
+    const draft = generator.generate(keywordInput.value);
+    if (!draft.ok) {
+      setEditorMessage(draft.message || "키워드를 한 개 이상 입력해 주세요.");
+      keywordInput.focus();
+      return;
+    }
+    commentInput.value = draft.comment;
+    commentInput.dataset.v2Keywords = draft.keywords.join("|");
+    setEditorMessage("피드백 초안을 만들었습니다. 회원에게 맞게 확인한 뒤 저장해 주세요.", "success");
+  }
+
+  async function correctParticipantDeduction(row, deduct) {
+    const lesson = state.editingLesson;
+    if (!lesson || !row || !requireWritableServer()) return;
+    const memberLabel = row.querySelector("strong")?.textContent || "회원";
+    const actionLabel = deduct ? "누락 차감" : "차감 복구";
+    const reason = window.prompt(`${memberLabel} ${actionLabel} 사유를 입력해 주세요.`, deduct ? "완료 후 누락 차감" : "잘못된 차감 복구");
+    if (!reason?.trim()) return;
+    if (!window.confirm(`${memberLabel} 회원권에 ${actionLabel}을 반영할까요?`)) return;
+    const buttons = $$('[data-v2-correct-deduction]', row);
+    buttons.forEach((button) => { button.disabled = true; });
+    setEditorMessage(`${actionLabel}을 서버에 반영하는 중입니다.`, "info");
+    try {
+      const api = bridge();
+      await api.rpc("tn_admin_correct_schedule_v2_participant_deduction", {
+        target_lesson_id: lesson.id,
+        target_user_id: row.dataset.v2OutcomeUser,
+        target_ticket_id: row.dataset.v2TicketId,
+        target_deduct: deduct,
+        target_reason: reason.trim(),
+        target_operation_key: operationKey(deduct ? "admin-missing-deduction" : "admin-restore-deduction"),
+      });
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ quiet: true, force: true });
+      state.editingLesson = state.payload?.lessons.find((item) => String(item.id) === String(lesson.id)) || lesson;
+      renderOutcomeEditor();
+      setEditorMessage(`${actionLabel}이 완료되었습니다. 회원권 잔여 횟수를 다시 확인했습니다.`, "success");
+    } catch (error) {
+      setEditorMessage(errorMessage(error));
+      buttons.forEach((button) => { button.disabled = false; });
+    }
+  }
+
   function syncOutcomeRow(row, { setDefault = false } = {}) {
     if (!row) return;
     const outcome = row.querySelector("[data-v2-outcome]")?.value || "completed";
@@ -2054,7 +2104,13 @@
         const oneDay = lesson.scheduleKind === "one_day";
         const deductChecked = !oneDay && (deducted || (!participant.recordStatus && outcome === "completed"));
         const deductDisabled = `${disabled}${oneDay ? " disabled" : ""}`;
-        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${disabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea></div>`;
+        const draftTools = editable && !final
+          ? '<div class="schedule-v2-comment-draft"><input type="text" data-v2-comment-keywords placeholder="키워드: 포핸드, 타점, 풋워크" aria-label="피드백 키워드" /><button type="button" data-v2-generate-comment>초안 만들기</button></div>'
+          : "";
+        const correctionTools = final && ["completed", "no_show"].includes(outcome) && participant.ticketId
+          ? `<div class="schedule-v2-outcome-correction"><span>차감 ${deducted ? `${Number(participant.deductedSessions ?? participant.deducted_sessions)}회` : "없음"}</span><button type="button" data-v2-correct-deduction="${deducted ? "restore" : "deduct"}">${deducted ? "차감 복구" : "누락 차감"}</button></div>`
+          : "";
+        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${disabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}</div>`;
       }).join("")
       : '<div class="schedule-v2-selected-ticket">참여자 정보가 없어 수업을 처리할 수 없습니다.</div>';
     renderCurriculumOptions();
@@ -2082,6 +2138,9 @@
       if (finalize && outcome === "completed" && coachComment.length < 5) {
         return { error: `${row.querySelector("strong").textContent} 회원의 피드백을 5자 이상 입력해 주세요.`, results: [] };
       }
+      if (finalize && outcome === "completed" && !curriculumStep) {
+        return { error: `${row.querySelector("strong").textContent} 회원의 다음 커리큘럼을 선택해 주세요.`, results: [] };
+      }
       if (finalize && outcome === "no_show" && coachComment.length < 2) {
         return { error: `${row.querySelector("strong").textContent} 회원의 노쇼 사유를 입력해 주세요.`, results: [] };
       }
@@ -2091,7 +2150,9 @@
         outcome,
         deduct: state.editingLesson?.scheduleKind !== "one_day" && row.querySelector("[data-v2-deduct]").checked,
         coachComment,
-        keywords: [],
+        keywords: String(row.querySelector("[data-v2-comment]")?.dataset.v2Keywords || "")
+          .split("|")
+          .filter(Boolean),
         curriculumCode: curriculumStep?.id || "",
         existingCurriculumCode: curriculumInput?.dataset.v2ExistingCode || "",
         nextCurriculumRefId: curriculumInput?.dataset.v2ExistingRefId || null,
@@ -2471,6 +2532,15 @@
       schedule_v2_outcome_ticket_units_unavailable: "차감할 회원권 잔여 횟수가 부족합니다.",
       schedule_v2_outcome_participant_ticket_mismatch: "수업 회원과 회원권 연결이 맞지 않습니다.",
       schedule_v2_feedback_comment_required: "완료 수업의 피드백을 5자 이상 입력해 주세요.",
+      schedule_v2_next_curriculum_required: "완료 수업의 다음 커리큘럼을 선택해 주세요.",
+      schedule_v2_shared_ticket_policy_required: "같은 공유 회원권을 두 번 차감할 수 없습니다. 1:2 차감 방식을 관리자에서 확인해 주세요.",
+      schedule_v2_correction_admin_required: "누락 차감 정정은 관리자만 할 수 있습니다.",
+      schedule_v2_correction_reference_required: "정정할 수업·회원·회원권 정보를 다시 확인해 주세요.",
+      schedule_v2_correction_reason_required: "정정 사유를 2자 이상 입력해 주세요.",
+      schedule_v2_correction_final_record_required: "완료된 참여자 기록에서만 차감을 정정할 수 있습니다.",
+      schedule_v2_correction_ticket_mismatch: "완료 기록과 선택한 회원권이 일치하지 않습니다.",
+      schedule_v2_correction_ticket_balance_insufficient: "회원권 잔여 횟수가 부족해 누락 차감을 반영할 수 없습니다.",
+      schedule_v2_correction_ticket_count_inconsistent: "회원권 사용 횟수가 기록과 달라 자동 복구할 수 없습니다.",
       schedule_v2_no_show_reason_required: "노쇼 사유를 2자 이상 입력해 주세요.",
       schedule_v2_legacy_outcome_already_processed: "기존 방식으로 이미 처리된 수업입니다.",
       schedule_v2_outcome_partial_final_state: "일부 회원만 완료된 비정상 상태입니다. 관리자 점검이 필요합니다.",
@@ -3009,6 +3079,19 @@
     $("#scheduleV2OutcomeList").addEventListener("change", (event) => {
       if (!event.target.matches("[data-v2-outcome]")) return;
       syncOutcomeRow(event.target.closest("[data-v2-outcome-user]"), { setDefault: true });
+    });
+    $("#scheduleV2OutcomeList").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-v2-generate-comment]");
+      if (button) {
+        generateOutcomeComment(button.closest("[data-v2-outcome-user]"));
+        return;
+      }
+      const correctionButton = event.target.closest("[data-v2-correct-deduction]");
+      if (!correctionButton) return;
+      void correctParticipantDeduction(
+        correctionButton.closest("[data-v2-outcome-user]"),
+        correctionButton.dataset.v2CorrectDeduction === "deduct",
+      );
     });
     $("#scheduleV2SaveOutcomeDraftButton").addEventListener("click", () => processLessonOutcome(false));
     $("#scheduleV2FinalizeOutcomeButton").addEventListener("click", () => processLessonOutcome(true));

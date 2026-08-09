@@ -979,6 +979,7 @@ function couponPolicyTemplate({ id, lessonMinutes, groupSize, sessions }) {
     graceDays: 14,
     lessonMinutes,
     groupSize,
+    groupDeductionPolicy: "shared_once",
     productKind: "pass",
     discountEnabled: true,
     coachDiscountAllowed: true,
@@ -4099,6 +4100,11 @@ function normalizeMembershipProduct(product = {}, fallback = {}) {
     maxSessionsPerDay: numericValue(merged.maxSessionsPerDay, numericValue(fallback.maxSessionsPerDay, 0)),
     maxSessionsPerWeek: numericValue(merged.maxSessionsPerWeek, numericValue(fallback.maxSessionsPerWeek, 0)),
     maxBookingDaysPerWeek: numericValue(merged.maxBookingDaysPerWeek, numericValue(fallback.maxBookingDaysPerWeek, 0)),
+    groupDeductionPolicy: merged.groupDeductionPolicy
+      || merged.group_deduction_policy
+      || fallback.groupDeductionPolicy
+      || fallback.group_deduction_policy
+      || "shared_once",
     productKind,
     discountEnabled: merged.discountEnabled ?? fallback.discountEnabled ?? true,
     coachDiscountAllowed: merged.coachDiscountAllowed ?? fallback.coachDiscountAllowed ?? false,
@@ -7511,9 +7517,45 @@ function isRegularScheduleTicket(ticket, today = adminLocalDateKey(new Date())) 
 }
 
 function isCurrentMemberTicket(ticket, today = adminLocalDateKey(new Date())) {
+  const state = window.TennisNoteTicketState?.derive(ticket, today);
+  if (state) return ["current", "paused"].includes(state);
   if (!ticket || !["active", "paused"].includes(ticket.status)) return false;
   if (Number(ticket.remaining) <= 0) return false;
+  const startsOn = ticket.starts || ticket.purchased || "";
+  if (startsOn && startsOn > today) return false;
   return !ticket.expires || ticket.expires >= today;
+}
+
+async function saveGroupDeductionPolicy(productId, control) {
+  const product = membershipProductDrafts.find((item) => String(item.id) === String(productId));
+  const serverProduct = serverMembershipProductForDraft(product);
+  const policy = control?.value || "";
+  if (!product || !serverProduct?.id || !["per_participant", "shared_once", "representative_only"].includes(policy)) {
+    showToast("1:2 차감 방식을 다시 선택해 주세요.");
+    return;
+  }
+  if (operationsRole() !== "admin" || !operationsAccessReady()) {
+    showToast("관리자 로그인 후 차감 방식을 저장해 주세요.");
+    return;
+  }
+  control.disabled = true;
+  try {
+    await window.TennisNoteDataClient.rpc("tn_admin_set_group_deduction_policy", {
+      target_product_id: serverProduct.id,
+      target_policy: policy,
+    });
+    const synced = await syncAdminLiveData();
+    if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    const saved = (adminLiveDataState.products || []).find((item) => String(item.id) === String(serverProduct.id));
+    if (!saved || String(saved.group_deduction_policy || "shared_once") !== policy) {
+      throw new Error("group_deduction_policy_write_not_confirmed");
+    }
+    renderServiceReadiness();
+    showToast("1:2 차감 방식을 저장했습니다.");
+  } catch {
+    control.disabled = false;
+    showToast("차감 방식을 저장하지 못했습니다. 서버 기능 적용 여부를 확인해 주세요.");
+  }
 }
 
 function ticketHasFutureRegularLesson(ticket, today = adminLocalDateKey(new Date())) {
@@ -8280,7 +8322,9 @@ function ticketPartnerNames(ticket, memberReference) {
 
 function ticketPriorityForMember(ticket, memberReference) {
   const memberUserIds = memberRecordsForReference(memberReference).flatMap(memberServerUserIds);
-  let score = 0;
+  const derivedState = window.TennisNoteTicketState?.derive(ticket) || "";
+  const stateScore = ({ current: 5000, paused: 4000, upcoming: 3000, pending_payment: 2000 })[derivedState] || 0;
+  let score = stateScore;
   if (ticket.remaining > 0) score += 1000;
   if (ticketIsSharedGroup(ticket)) score += 500;
   score += ticketParticipantUserIds(ticket).length * 20;
@@ -8425,7 +8469,29 @@ function normalizedMemberSearchText(member) {
 }
 
 function memberCurrentTicket(member) {
-  return ticketsForMember(member)[0];
+  return memberCurrentTickets(member)[0] || null;
+}
+
+function memberTicketGroups(member) {
+  const memberTickets = ticketsForMember(member);
+  if (window.TennisNoteTicketState?.split) return window.TennisNoteTicketState.split(memberTickets);
+  return {
+    current: memberTickets.filter((ticket) => isCurrentMemberTicket(ticket)),
+    upcoming: [],
+    history: memberTickets.filter((ticket) => !isCurrentMemberTicket(ticket)),
+  };
+}
+
+function memberCurrentTickets(member) {
+  return memberTicketGroups(member).current;
+}
+
+function memberUpcomingTickets(member) {
+  return memberTicketGroups(member).upcoming;
+}
+
+function memberTicketHistory(member) {
+  return memberTicketGroups(member).history;
 }
 
 function memberDirectoryDisplayName(member, ticket = memberCurrentTicket(member)) {
@@ -8456,8 +8522,11 @@ function dedupeMembersByLessonUnit(memberList) {
 }
 
 function memberRemainingCount(member) {
-  const ticket = memberCurrentTicket(member);
-  return ticket?.remaining ?? member.remaining ?? 0;
+  const currentTickets = memberCurrentTickets(member);
+  if (currentTickets.length) {
+    return Math.min(...currentTickets.map((ticket) => Math.max(0, Number(ticket.remaining) || 0)));
+  }
+  return Math.max(0, Number(member.remaining) || 0);
 }
 
 function defaultAuthRoleForMember(member) {
@@ -9369,13 +9438,31 @@ function memberTicketKind(member) {
   return ticket ? membershipProductForTicket(ticket).productKind : "none";
 }
 
+function memberHasTicketKind(member, productKind) {
+  const groups = memberTicketGroups(member);
+  const relevantTickets = state.memberFilter === "expired"
+    ? groups.history
+    : [...groups.current, ...groups.upcoming];
+  return relevantTickets.some((ticket) => membershipProductForTicket(ticket).productKind === productKind);
+}
+
+function memberCoachNames(member) {
+  const ticketCoachNames = [...memberCurrentTickets(member), ...memberUpcomingTickets(member)]
+    .map((ticket) => coaches.find((coach) => (
+      String(coach.serverRoleId || "") === String(ticket.coachRoleId || "")
+      || String(coach.id || "") === String(ticket.coachId || "")
+    ))?.name)
+    .filter(Boolean);
+  return [...new Set([member.coach, ...ticketCoachNames].filter(Boolean))];
+}
+
 function filteredMembers() {
   const localSearch = String(state.memberSearch || "").trim().toLowerCase();
   const globalSearch = String($("#globalSearch")?.value || "").trim();
   const matchingMembers = operationBranchMembers().filter((member) => {
     const statusMatch = memberMatchesStatusFilter(member, state.memberFilter);
-    const coachMatch = state.memberCoachFilter === "all" || member.coach === state.memberCoachFilter;
-    const ticketMatch = state.memberTicketFilter === "all" || memberTicketKind(member) === state.memberTicketFilter;
+    const coachMatch = state.memberCoachFilter === "all" || memberCoachNames(member).includes(state.memberCoachFilter);
+    const ticketMatch = state.memberTicketFilter === "all" || memberHasTicketKind(member, state.memberTicketFilter);
     const searchValues = globalSearch ? memberSearchValues(member) : [];
     const localMatch = !localSearch || normalizedMemberSearchText(member).includes(localSearch);
     return statusMatch
@@ -9388,7 +9475,8 @@ function filteredMembers() {
 }
 
 function memberIsExpiring(member) {
-  return memberListStatus(member) === "active" && memberRemainingCount(member) <= 2;
+  return memberListStatus(member) === "active"
+    && memberCurrentTickets(member).some((ticket) => Math.max(0, Number(ticket.remaining) || 0) <= 2);
 }
 
 function memberMatchesStatusFilter(member, filter) {
@@ -9508,6 +9596,7 @@ function memberManagementActionAllowed(action, ticket = null) {
 }
 
 function memberTicketStatusLabel(ticket) {
+  if (window.TennisNoteTicketState?.label) return window.TennisNoteTicketState.label(ticket);
   return ({
     active: "사용 중",
     paused: "일시정지",
@@ -9525,6 +9614,7 @@ function memberManagementTickets(member) {
       byId.set(ticket.serverTicketId, ticket);
     }
   });
+  if (window.TennisNoteTicketState?.sort) return window.TennisNoteTicketState.sort([...byId.values()]);
   const statusPriority = { active: 0, paused: 1, pending_payment: 2, expired: 3, refunded: 4, voided: 5 };
   return [...byId.values()].sort((left, right) => (
     (statusPriority[left.status] ?? 9) - (statusPriority[right.status] ?? 9)
@@ -9533,7 +9623,10 @@ function memberManagementTickets(member) {
 }
 
 function memberTicketListMarkup(member) {
-  const managedTickets = memberManagementTickets(member).filter((ticket) => ticket.status !== "voided");
+  const grouped = window.TennisNoteTicketState?.split
+    ? window.TennisNoteTicketState.split(memberManagementTickets(member))
+    : { current: memberManagementTickets(member).filter((ticket) => isCurrentMemberTicket(ticket)), upcoming: [] };
+  const managedTickets = [...grouped.current, ...grouped.upcoming].filter((ticket) => ticket.status !== "voided");
   if (!managedTickets.length) return '<span class="member-table-muted">미등록</span>';
   return `<button class="member-ticket-summary-button" type="button" data-select-member="${member.id}" aria-label="${escapeHtml(member.name)} 회원권 ${managedTickets.length}개 확인">
     ${managedTickets.slice(0, 3).map((ticket) => `
@@ -9569,7 +9662,7 @@ function renderMemberManagementControls(member) {
   const managedTickets = memberManagementTickets(member);
   const unlinkedPayment = memberUnlinkedVerifiedPayment(member);
 
-  const ticketRows = managedTickets.map((ticket) => {
+  const ticketRow = (ticket) => {
     const actions = [];
     const editable = !["refunded", "voided"].includes(ticket.status);
     if (status !== "inactive" && editable && memberManagementActionAllowed("correct", ticket)) {
@@ -9586,10 +9679,11 @@ function renderMemberManagementControls(member) {
     if (operationsRole() === "admin" && ticket.status !== "voided") {
       actions.push({ action: "force_delete", label: "강제 삭제", tone: "danger-button" });
     }
+    const derivedState = window.TennisNoteTicketState?.derive(ticket) || ticket.status || "unknown";
     return `
       <div class="member-ticket-management-row" data-managed-ticket="${escapeHtml(ticket.serverTicketId)}">
         <div class="member-ticket-management-main">
-          <span class="member-ticket-status status-${escapeHtml(ticket.status || "unknown")}">${escapeHtml(memberTicketStatusLabel(ticket))}</span>
+          <span class="member-ticket-status status-${escapeHtml(derivedState)}">${escapeHtml(memberTicketStatusLabel(ticket))}</span>
           <strong>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</strong>
           <small>${escapeHtml(ticketUsageLabel(ticket))} · ${escapeHtml(memberDetailDateLabel(ticket.purchased))}~${escapeHtml(memberDetailDateLabel(ticket.expires))}</small>
         </div>
@@ -9601,7 +9695,19 @@ function renderMemberManagementControls(member) {
             <button class="small-button" type="button" data-manage-member-ticket="${escapeHtml(ticket.serverTicketId)}">관리</button>` : '<span class="member-ticket-no-action">변경 불가</span>'}
         </div>
       </div>`;
-  }).join("");
+  };
+  const groups = window.TennisNoteTicketState?.split
+    ? window.TennisNoteTicketState.split(managedTickets)
+    : { current: managedTickets, upcoming: [], history: [] };
+  const ticketRows = [
+    ["현재 사용 중", groups.current],
+    ["시작 예정", groups.upcoming],
+    ["지난 회원권 이력", groups.history],
+  ].filter(([, rows]) => rows.length).map(([label, rows]) => `
+    <section class="member-ticket-management-group">
+      <h4>${label} <small>${rows.length}개</small></h4>
+      ${rows.map(ticketRow).join("")}
+    </section>`).join("");
 
   if (!ticketRows && operationsRole() !== "admin") return "";
   return `
@@ -9615,7 +9721,7 @@ function renderMemberManagementControls(member) {
       <div class="member-ticket-management-list">
         ${ticketRows || '<p class="member-more-empty">등록된 회원권이 없습니다.</p>'}
       </div>
-      ${operationsRole() === "admin" && !managedTickets.some((ticket) => ["active", "paused", "pending_payment"].includes(ticket.status))
+      ${operationsRole() === "admin"
         ? `<button class="primary-button member-ticket-assign-button" type="button" data-open-member-management="assign">${unlinkedPayment ? "결제 연결·회원권 발급" : "판매중 회원권 등록"}</button>`
         : ""}
     </div>`;
@@ -13026,7 +13132,7 @@ function renderMembers(options = {}) {
   const branchMembers = operationBranchMembers();
   const coachFilter = $("#memberCoachFilter");
   if (coachFilter) {
-    const coachNames = [...new Set(branchMembers.map((member) => member.coach).filter(Boolean))];
+    const coachNames = [...new Set(branchMembers.flatMap(memberCoachNames))];
     coachFilter.innerHTML = `<option value="all">전체 코치</option>${coachNames.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}`;
     coachFilter.value = coachNames.includes(state.memberCoachFilter) ? state.memberCoachFilter : "all";
     state.memberCoachFilter = coachFilter.value;
@@ -21520,7 +21626,8 @@ async function performAdminLiveDataSync(options = {}) {
       fullAdminAccess ? Promise.resolve(adminLiveDataState.authLinks || []) : Promise.resolve([]),
       fullAdminAccess ? Promise.resolve(adminLiveDataState.authSwitches || []) : Promise.resolve([]),
       fullAdminAccess ? Promise.resolve(adminLiveDataState.coachSettlementTerms || []) : Promise.resolve([]),
-      client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,policy_settings,display_order", limit: 300 }),
+      client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,group_deduction_policy,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,policy_settings,display_order", limit: 300 })
+        .catch(() => client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,policy_settings,display_order", limit: 300 })),
       rosterRows("tickets", () => (client.selectAllRows || client.selectRows)("tn_member_tickets", {
         select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price,updated_at",
         order: "id.asc",
@@ -25295,6 +25402,15 @@ function renderServiceReadiness() {
               </select>
             </label>
             <label>
+              <small>${productSettingFieldLabel("1:2 차감 방식", false, "그룹권만")}</small>
+              <select data-group-deduction-policy="${normalized.id}">
+                <option value="shared_once" ${normalized.groupDeductionPolicy === "shared_once" ? "selected" : ""}>공유권 1회</option>
+                <option value="per_participant" ${normalized.groupDeductionPolicy === "per_participant" ? "selected" : ""}>회원별 각 1회</option>
+                <option value="representative_only" ${normalized.groupDeductionPolicy === "representative_only" ? "selected" : ""}>대표회원 1회</option>
+              </select>
+              <button class="small-button" type="button" data-save-group-deduction-policy="${normalized.id}">차감 방식 저장</button>
+            </label>
+            <label>
               <small>${productSettingFieldLabel("주 횟수", true)}</small>
               <input type="number" min="0" max="7" step="1" data-product-field="frequencyPerWeek" value="${normalized.frequencyPerWeek}" />
             </label>
@@ -27739,6 +27855,14 @@ function bindEvents() {
     const saveProductSettingButton = event.target.closest("[data-save-product-setting]");
     if (saveProductSettingButton) {
       await updateMembershipProductSetting(saveProductSettingButton.dataset.saveProductSetting);
+      return;
+    }
+
+    const saveGroupPolicyButton = event.target.closest("[data-save-group-deduction-policy]");
+    if (saveGroupPolicyButton) {
+      const productId = saveGroupPolicyButton.dataset.saveGroupDeductionPolicy;
+      const control = document.querySelector(`[data-group-deduction-policy="${CSS.escape(productId)}"]`);
+      await saveGroupDeductionPolicy(productId, control);
       return;
     }
 

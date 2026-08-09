@@ -1153,11 +1153,14 @@ async function syncLegacyCoachLessonsFromServer() {
             const rank = (ticketRank[left.status] ?? 9) - (ticketRank[right.status] ?? 9);
             return rank || String(right.created_at || "").localeCompare(String(left.created_at || ""));
           });
-        const ticket = userTickets[0] || {};
+        const ticketGroups = window.TennisNoteTicketState?.split
+          ? window.TennisNoteTicketState.split(userTickets)
+          : { current: userTickets.filter((item) => ["active", "paused"].includes(item.status)), upcoming: [] };
+        const ticket = ticketGroups.current[0] || ticketGroups.upcoming[0] || userTickets[0] || {};
         const product = productsById.get(ticket.product_id) || {};
         const coach = coachesById.get(ticket.coach_role_id) || {};
         const latestLesson = latestLessonByUser.get(user.id);
-        const isActive = ["active", "paused"].includes(ticket.status) && Number(ticket.remaining_sessions || 0) > 0;
+        const isActive = ticketGroups.current.length > 0;
         return {
           id: user.id,
           serverUserId: user.id,
@@ -2132,7 +2135,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.286",
+    workerUrl: "./service-worker.js?v=1.0.287",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2162,7 +2165,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.286" });
+  const params = new URLSearchParams({ v: "1.0.287" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;

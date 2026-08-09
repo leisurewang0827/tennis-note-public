@@ -1682,7 +1682,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.286",
+    workerUrl: "./service-worker.js?v=1.0.287",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2803,9 +2803,10 @@ function memberHasActiveLiveTicket() {
 }
 
 function memberHasPendingPaymentOnly() {
-  const current = currentLiveTicket();
+  const hasPendingTicket = (state.liveTickets || []).some((ticket) =>
+    String(ticket?.status || "").toLowerCase() === "pending_payment");
   return state.dataMode === "live"
-    && current?.status === "pending_payment"
+    && hasPendingTicket
     && !memberHasActiveLiveTicket()
     && memberOpenMakeupEntitlements().length === 0;
 }
@@ -6573,6 +6574,8 @@ function normalizeLiveTicket(row = {}) {
 }
 
 function liveTicketPriority(ticket = {}) {
+  const derivedState = window.TennisNoteTicketState?.derive(ticket);
+  if (derivedState) return window.TennisNoteTicketState.rank(ticket);
   if (ticket.status === "active") return 0;
   if (ticket.status === "pending_payment") return 1;
   if (ticket.status === "paused") return 2;
@@ -6582,7 +6585,9 @@ function liveTicketPriority(ticket = {}) {
 
 function currentLiveTicket() {
   if (!Array.isArray(state.liveTickets) || !state.liveTickets.length) return null;
-  const usableTickets = state.liveTickets.filter((ticket) => ["active", "pending_payment", "paused"].includes(String(ticket.status || "").toLowerCase()));
+  const usableTickets = window.TennisNoteTicketState?.split
+    ? window.TennisNoteTicketState.split(state.liveTickets).current
+    : state.liveTickets.filter((ticket) => ["active", "paused"].includes(String(ticket.status || "").toLowerCase()));
   if (!usableTickets.length) return null;
   return [...usableTickets].sort((a, b) => {
     const priority = liveTicketPriority(a) - liveTicketPriority(b);
@@ -6592,6 +6597,13 @@ function currentLiveTicket() {
     if (sharedGroupPriority) return sharedGroupPriority;
     return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
   })[0] || null;
+}
+
+function upcomingLiveTickets() {
+  if (!Array.isArray(state.liveTickets) || !state.liveTickets.length) return [];
+  return window.TennisNoteTicketState?.split
+    ? window.TennisNoteTicketState.split(state.liveTickets).upcoming
+    : state.liveTickets.filter((ticket) => ticket.status === "pending_payment");
 }
 
 async function attachLiveTicketProducts(client, rows = []) {
@@ -7863,7 +7875,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.286" });
+  const params = new URLSearchParams({ v: "1.0.287" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

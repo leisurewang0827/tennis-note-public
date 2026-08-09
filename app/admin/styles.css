@@ -2994,6 +2994,30 @@ tr.is-selected td {
   gap: 1px;
 }
 
+.member-ticket-management-group {
+  display: grid;
+  gap: 8px;
+}
+
+.member-ticket-management-group + .member-ticket-management-group {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.member-ticket-management-group h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  font-size: 13px;
+}
+
+.member-ticket-management-group h4 small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .member-ticket-summary-line + .member-ticket-summary-line,
 .member-payment-summary-line + .member-payment-summary-line {
   padding-top: 4px;

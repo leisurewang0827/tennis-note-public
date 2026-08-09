@@ -1561,6 +1561,58 @@
   resize: vertical;
 }
 
+.schedule-v2-comment-draft {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.schedule-v2-comment-draft input,
+.schedule-v2-comment-draft button {
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+.schedule-v2-comment-draft input {
+  min-width: 0;
+  border: 1px solid #c9d7d2;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.schedule-v2-comment-draft button {
+  border: 1px solid #08795a;
+  border-radius: 4px;
+  padding: 0 12px;
+  background: #fff;
+  color: #08795a;
+  font-weight: 800;
+}
+
+.schedule-v2-outcome-correction {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 7px;
+  border-top: 1px solid #c9d7d2;
+  color: #51635d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.schedule-v2-outcome-correction button {
+  min-height: 34px;
+  border: 1px solid #08795a;
+  border-radius: 4px;
+  padding: 0 12px;
+  background: #fff;
+  color: #08795a;
+  font-weight: 800;
+}
+
 .schedule-v2-outcome-curriculum {
   grid-column: 1 / -1;
   display: grid;
