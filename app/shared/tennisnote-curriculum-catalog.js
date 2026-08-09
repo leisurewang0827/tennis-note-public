@@ -350,24 +350,32 @@
             "stageLabel": "8단계",
             "level": "중급",
             "focus": "실전 리듬 유지",
-            "goal": "포핸드 실전 리듬 유지을 한 가지 목표로 반복하세요.",
-            "guide": "포핸드 실전 리듬 유지을 한 가지 목표로 반복하세요.",
+            "goal": "포핸드의 같은 준비와 타점을 유지해 랠리 리듬을 안정시킵니다.",
+            "guide": "포핸드의 같은 준비와 타점을 유지해 랠리 리듬을 안정시킵니다.",
             "steps": [
-              "공이 오기 전에 준비 자세를 만듭니다.",
-              "몸 앞에서 짧게 맞춰 목표한 공을 보냅니다.",
+              "상대 타구 전에 준비 자세를 만듭니다.",
+              "몸 앞의 같은 타점에서 맞춥니다.",
               "친 뒤 기준 위치로 돌아옵니다."
             ],
             "selfChecks": [
-              "한 번에 하나만 의식한다.",
-              "스윙보다 타점과 균형을 먼저 본다.",
-              "실수 뒤에도 같은 목표로 다시 시작한다."
+              "준비가 늦지 않는다.",
+              "타점이 몸 뒤로 밀리지 않는다.",
+              "실수 뒤에도 같은 속도로 다시 시작한다."
             ],
-            "checklist": "한 번에 하나만 의식한다. · 스윙보다 타점과 균형을 먼저 본다. · 실수 뒤에도 같은 목표로 다시 시작한다.",
-            "personalPractice": "실전 리듬 유지 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "실전 리듬 유지 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "준비가 늦지 않는다. · 타점이 몸 뒤로 밀리지 않는다. · 실수 뒤에도 같은 속도로 다시 시작한다.",
+            "personalPractice": "서비스라인 안쪽 목표로 포핸드 10구 연속 랠리를 시도합니다.",
+            "mission": "서비스라인 안쪽 목표로 포핸드 10구 연속 랠리를 시도합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=yHoHjwDggFY",
+                "title": "Forehand Consistency Drills",
+                "author": "Online Tennis Instruction",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "포핸드 리듬 8/8",
             "notionUrl": "https://app.notion.com/p/317b107df48081a28a8bea43806700eb",
             "notionPageId": "317b107df48081a28a8bea43806700eb",
@@ -394,24 +402,32 @@
             "stageLabel": "1단계",
             "level": "입문",
             "focus": "기본 톱스핀",
-            "goal": "포핸드 기본 톱스핀을 한 가지 목표로 반복하세요.",
-            "guide": "포핸드 기본 톱스핀을 한 가지 목표로 반복하세요.",
+            "goal": "라켓을 아래에서 위로 보내 안전한 포핸드 톱스핀을 만듭니다.",
+            "guide": "라켓을 아래에서 위로 보내 안전한 포핸드 톱스핀을 만듭니다.",
             "steps": [
-              "공이 오기 전에 준비 자세를 만듭니다.",
-              "몸 앞에서 짧게 맞춰 목표한 공을 보냅니다.",
-              "친 뒤 기준 위치로 돌아옵니다."
+              "공보다 낮게 라켓을 준비합니다.",
+              "몸 앞에서 아래에서 위로 맞춥니다.",
+              "반대쪽 어깨 위로 마무리합니다."
             ],
             "selfChecks": [
-              "한 번에 하나만 의식한다.",
-              "스윙보다 타점과 균형을 먼저 본다.",
-              "실수 뒤에도 같은 목표로 다시 시작한다."
+              "라켓면이 지나치게 열리지 않는다.",
+              "공을 위에서 누르지 않는다.",
+              "마무리까지 스윙을 멈추지 않는다."
             ],
-            "checklist": "한 번에 하나만 의식한다. · 스윙보다 타점과 균형을 먼저 본다. · 실수 뒤에도 같은 목표로 다시 시작한다.",
-            "personalPractice": "기본 톱스핀 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "기본 톱스핀 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "라켓면이 지나치게 열리지 않는다. · 공을 위에서 누르지 않는다. · 마무리까지 스윙을 멈추지 않는다.",
+            "personalPractice": "짧은 코트에서 네트 위 여유를 두고 톱스핀 10구를 반복합니다.",
+            "mission": "짧은 코트에서 네트 위 여유를 두고 톱스핀 10구를 반복합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=OGhHZyLt04Y",
+                "title": "The Ultimate Forehand Topspin Lesson - Tennis Lesson",
+                "author": "Top Tennis Training - Pro Tennis Lessons",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "포핸드 탄도 1/8",
             "notionUrl": "https://app.notion.com/p/317b107df480810d9cb0fcfd7f786cca",
             "notionPageId": "317b107df480810d9cb0fcfd7f786cca",
@@ -429,24 +445,32 @@
             "stageLabel": "2단계",
             "level": "입문",
             "focus": "회전량 안정화",
-            "goal": "포핸드 회전량 안정화을 한 가지 목표로 반복하세요.",
-            "guide": "포핸드 회전량 안정화을 한 가지 목표로 반복하세요.",
+            "goal": "같은 라켓면과 위쪽 스윙으로 포핸드 회전량을 일정하게 유지합니다.",
+            "guide": "같은 라켓면과 위쪽 스윙으로 포핸드 회전량을 일정하게 유지합니다.",
             "steps": [
-              "공이 오기 전에 준비 자세를 만듭니다.",
-              "몸 앞에서 짧게 맞춰 목표한 공을 보냅니다.",
-              "친 뒤 기준 위치로 돌아옵니다."
+              "공보다 낮게 라켓을 준비합니다.",
+              "같은 타점에서 위로 쓸어 올립니다.",
+              "같은 높이로 마무리합니다."
             ],
             "selfChecks": [
-              "한 번에 하나만 의식한다.",
-              "스윙보다 타점과 균형을 먼저 본다.",
-              "실수 뒤에도 같은 목표로 다시 시작한다."
+              "라켓면이 매번 달라지지 않는다.",
+              "팔만 급하게 감아 올리지 않는다.",
+              "공의 궤적 높이가 비슷하다."
             ],
-            "checklist": "한 번에 하나만 의식한다. · 스윙보다 타점과 균형을 먼저 본다. · 실수 뒤에도 같은 목표로 다시 시작한다.",
-            "personalPractice": "회전량 안정화 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "회전량 안정화 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "라켓면이 매번 달라지지 않는다. · 팔만 급하게 감아 올리지 않는다. · 공의 궤적 높이가 비슷하다.",
+            "personalPractice": "네트 위 같은 높이를 통과하도록 포핸드 10구를 반복합니다.",
+            "mission": "네트 위 같은 높이를 통과하도록 포핸드 10구를 반복합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=Cys4Fw2_ryc",
+                "title": "Improve Your Topspin Forehand Consistency (Marin Cilic Tennis Forehand Analysis)",
+                "author": "2MinuteTennis",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "포핸드 탄도 2/8",
             "notionUrl": "https://app.notion.com/p/317b107df48081e2b40bffff3a216031",
             "notionPageId": "317b107df48081e2b40bffff3a216031",
@@ -593,24 +617,32 @@
             "stageLabel": "6단계",
             "level": "중급",
             "focus": "깊이 조절",
-            "goal": "포핸드 깊이 조절을 한 가지 목표로 반복하세요.",
-            "guide": "포핸드 깊이 조절을 한 가지 목표로 반복하세요.",
+            "goal": "네트 위 여유와 전진 스윙을 이용해 공을 베이스라인 가까이 보냅니다.",
+            "guide": "네트 위 여유와 전진 스윙을 이용해 공을 베이스라인 가까이 보냅니다.",
             "steps": [
-              "공이 오기 전에 준비 자세를 만듭니다.",
-              "몸 앞에서 짧게 맞춰 목표한 공을 보냅니다.",
-              "친 뒤 기준 위치로 돌아옵니다."
+              "베이스라인 앞쪽에 목표 구역을 정합니다.",
+              "네트 위로 충분한 높이를 확보합니다.",
+              "몸을 앞으로 보내며 끝까지 스윙합니다."
             ],
             "selfChecks": [
-              "한 번에 하나만 의식한다.",
-              "스윙보다 타점과 균형을 먼저 본다.",
-              "실수 뒤에도 같은 목표로 다시 시작한다."
+              "공이 서비스라인 안쪽에 짧아지지 않는다.",
+              "깊이를 만들려고 힘만 세게 쓰지 않는다.",
+              "타구 뒤 균형을 유지한다."
             ],
-            "checklist": "한 번에 하나만 의식한다. · 스윙보다 타점과 균형을 먼저 본다. · 실수 뒤에도 같은 목표로 다시 시작한다.",
-            "personalPractice": "깊이 조절 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "깊이 조절 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "공이 서비스라인 안쪽에 짧아지지 않는다. · 깊이를 만들려고 힘만 세게 쓰지 않는다. · 타구 뒤 균형을 유지한다.",
+            "personalPractice": "코트 뒤쪽 3분의 1 구역에 포핸드 10구 중 7구 넣기를 반복합니다.",
+            "mission": "코트 뒤쪽 3분의 1 구역에 포핸드 10구 중 7구 넣기를 반복합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=kNBGCLUzPS0",
+                "title": "How To Control Depth On Your Groundstrokes",
+                "author": "Online Tennis Instruction",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "포핸드 탄도 6/8",
             "notionUrl": "https://app.notion.com/p/317b107df48081fc978ce0af9d0026b4",
             "notionPageId": "317b107df48081fc978ce0af9d0026b4",
@@ -1119,24 +1151,32 @@
             "stageLabel": "2단계",
             "level": "입문",
             "focus": "크로스 깊이",
-            "goal": "포핸드 크로스 깊이을 한 가지 목표로 반복하세요.",
-            "guide": "포핸드 크로스 깊이을 한 가지 목표로 반복하세요.",
+            "goal": "포핸드를 안전한 크로스 방향으로 보내면서 깊이를 유지합니다.",
+            "guide": "포핸드를 안전한 크로스 방향으로 보내면서 깊이를 유지합니다.",
             "steps": [
-              "공이 오기 전에 준비 자세를 만듭니다.",
-              "몸 앞에서 짧게 맞춰 목표한 공을 보냅니다.",
-              "친 뒤 기준 위치로 돌아옵니다."
+              "상대 타구 전에 어깨를 돌립니다.",
+              "몸 앞에서 크로스 방향으로 맞춥니다.",
+              "서비스라인 뒤 목표 구역까지 길게 보냅니다."
             ],
             "selfChecks": [
-              "한 번에 하나만 의식한다.",
-              "스윙보다 타점과 균형을 먼저 본다.",
-              "실수 뒤에도 같은 목표로 다시 시작한다."
+              "타점이 몸 뒤로 밀리지 않는다.",
+              "사이드라인만 노려 무리하지 않는다.",
+              "공이 서비스라인 안쪽에 짧아지지 않는다."
             ],
-            "checklist": "한 번에 하나만 의식한다. · 스윙보다 타점과 균형을 먼저 본다. · 실수 뒤에도 같은 목표로 다시 시작한다.",
-            "personalPractice": "크로스 깊이 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "크로스 깊이 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "타점이 몸 뒤로 밀리지 않는다. · 사이드라인만 노려 무리하지 않는다. · 공이 서비스라인 안쪽에 짧아지지 않는다.",
+            "personalPractice": "크로스 뒤쪽 목표에 포핸드 10구 중 7구 넣기를 반복합니다.",
+            "mission": "크로스 뒤쪽 목표에 포핸드 10구 중 7구 넣기를 반복합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=zsijSrcuhXQ",
+                "title": "Ana Ivanovic's PlaySight SmartCourt Drill - Crosscourt Forehand",
+                "author": "PlaySight Interactive",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "포핸드 코스 2/8",
             "notionUrl": "https://app.notion.com/p/317b107df48081239fe3fb7c9c664540",
             "notionPageId": "317b107df48081239fe3fb7c9c664540",
@@ -1550,24 +1590,32 @@
             "stageLabel": "4단계",
             "level": "중급",
             "focus": "압박 상황 리듬",
-            "goal": "백핸드 압박 상황 리듬을 한 가지 목표로 반복하세요.",
-            "guide": "백핸드 압박 상황 리듬을 한 가지 목표로 반복하세요.",
+            "goal": "빠른 공에서도 백핸드 준비와 스윙 속도를 일정하게 유지합니다.",
+            "guide": "빠른 공에서도 백핸드 준비와 스윙 속도를 일정하게 유지합니다.",
             "steps": [
-              "공이 오기 전에 준비 자세를 만듭니다.",
-              "몸 앞에서 짧게 맞춰 목표한 공을 보냅니다.",
-              "친 뒤 기준 위치로 돌아옵니다."
+              "공이 바운드되기 전에 어깨를 돌립니다.",
+              "백스윙을 짧게 하고 몸 앞에서 맞춥니다.",
+              "친 뒤 균형을 잡고 기준 위치로 돌아옵니다."
             ],
             "selfChecks": [
-              "한 번에 하나만 의식한다.",
-              "스윙보다 타점과 균형을 먼저 본다.",
-              "실수 뒤에도 같은 목표로 다시 시작한다."
+              "빠른 공에 라켓을 크게 빼지 않는다.",
+              "팔만 급하게 휘두르지 않는다.",
+              "실수 뒤에도 같은 리듬으로 다시 시작한다."
             ],
-            "checklist": "한 번에 하나만 의식한다. · 스윙보다 타점과 균형을 먼저 본다. · 실수 뒤에도 같은 목표로 다시 시작한다.",
-            "personalPractice": "압박 상황 리듬 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "압박 상황 리듬 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "빠른 공에 라켓을 크게 빼지 않는다. · 팔만 급하게 휘두르지 않는다. · 실수 뒤에도 같은 리듬으로 다시 시작한다.",
+            "personalPractice": "평소보다 빠른 피드로 백핸드 10구를 같은 속도로 연결합니다.",
+            "mission": "평소보다 빠른 피드로 백핸드 10구를 같은 속도로 연결합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=TXJMS1TIXao",
+                "title": "Tennis Tip: Two-Handed Backhand Power Drill",
+                "author": "Online Tennis Instruction",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "백핸드 리듬 4/4",
             "notionUrl": "https://app.notion.com/p/317b107df48081a1a65de617a2e87d26",
             "notionPageId": "317b107df48081a1a65de617a2e87d26",
@@ -1637,24 +1685,32 @@
             "stageLabel": "2단계",
             "level": "초급",
             "focus": "백핸드 낮은 드라이브",
-            "goal": "백핸드 낮은 드라이브을 한 가지 목표로 반복하세요.",
-            "guide": "백핸드 낮은 드라이브을 한 가지 목표로 반복하세요.",
+            "goal": "무릎을 낮추고 라켓을 공 아래에 둬 낮은 백핸드를 안정적으로 올립니다.",
+            "guide": "무릎을 낮추고 라켓을 공 아래에 둬 낮은 백핸드를 안정적으로 올립니다.",
             "steps": [
-              "공이 오기 전에 준비 자세를 만듭니다.",
-              "몸 앞에서 짧게 맞춰 목표한 공을 보냅니다.",
-              "친 뒤 기준 위치로 돌아옵니다."
+              "무릎을 굽혀 공 높이까지 내려갑니다.",
+              "라켓을 공보다 낮게 준비합니다.",
+              "몸 앞에서 위쪽으로 길게 밀어 올립니다."
             ],
             "selfChecks": [
-              "한 번에 하나만 의식한다.",
-              "스윙보다 타점과 균형을 먼저 본다.",
-              "실수 뒤에도 같은 목표로 다시 시작한다."
+              "허리만 숙이지 않는다.",
+              "라켓면을 지나치게 열지 않는다.",
+              "맞힌 뒤 바로 일어서지 않는다."
             ],
-            "checklist": "한 번에 하나만 의식한다. · 스윙보다 타점과 균형을 먼저 본다. · 실수 뒤에도 같은 목표로 다시 시작한다.",
-            "personalPractice": "백핸드 낮은 드라이브 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "백핸드 낮은 드라이브 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "허리만 숙이지 않는다. · 라켓면을 지나치게 열지 않는다. · 맞힌 뒤 바로 일어서지 않는다.",
+            "personalPractice": "낮게 튀긴 공을 백핸드로 10회 들어 올리는 연습을 합니다.",
+            "mission": "낮게 튀긴 공을 백핸드로 10회 들어 올리는 연습을 합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=59i3bt2OjJE",
+                "title": "TENNIS BACKHAND | How To Hit Two Handed Backhand In Tennis",
+                "author": "Tennis Evolution",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "백핸드 탄도 2/5",
             "notionUrl": "https://app.notion.com/p/317b107df4808178a3f7eac4924fa3c4",
             "notionPageId": "317b107df4808178a3f7eac4924fa3c4",
@@ -1672,24 +1728,32 @@
             "stageLabel": "3단계",
             "level": "초급",
             "focus": "백핸드 깊이",
-            "goal": "백핸드 백핸드 깊이을 한 가지 목표로 반복하세요.",
-            "guide": "백핸드 백핸드 깊이을 한 가지 목표로 반복하세요.",
+            "goal": "네트 위 여유와 전진 스윙으로 백핸드를 코트 뒤쪽까지 보냅니다.",
+            "guide": "네트 위 여유와 전진 스윙으로 백핸드를 코트 뒤쪽까지 보냅니다.",
             "steps": [
-              "공이 오기 전에 준비 자세를 만듭니다.",
-              "몸 앞에서 짧게 맞춰 목표한 공을 보냅니다.",
-              "친 뒤 기준 위치로 돌아옵니다."
+              "코트 뒤쪽에 목표 구역을 정합니다.",
+              "네트 위로 안전한 높이를 확보합니다.",
+              "몸을 앞으로 보내며 끝까지 스윙합니다."
             ],
             "selfChecks": [
-              "한 번에 하나만 의식한다.",
-              "스윙보다 타점과 균형을 먼저 본다.",
-              "실수 뒤에도 같은 목표로 다시 시작한다."
+              "공이 서비스라인 안쪽에 짧아지지 않는다.",
+              "깊이를 만들려고 팔에만 힘주지 않는다.",
+              "타구 뒤 균형을 유지한다."
             ],
-            "checklist": "한 번에 하나만 의식한다. · 스윙보다 타점과 균형을 먼저 본다. · 실수 뒤에도 같은 목표로 다시 시작한다.",
-            "personalPractice": "백핸드 깊이 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "백핸드 깊이 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "공이 서비스라인 안쪽에 짧아지지 않는다. · 깊이를 만들려고 팔에만 힘주지 않는다. · 타구 뒤 균형을 유지한다.",
+            "personalPractice": "뒤쪽 목표 구역에 백핸드 10구 중 7구 넣기를 반복합니다.",
+            "mission": "뒤쪽 목표 구역에 백핸드 10구 중 7구 넣기를 반복합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=z1P0kWfszX8",
+                "title": "Two Handed Backhand | Depth & Control",
+                "author": "CLUTCH Tennis",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "백핸드 탄도 3/5",
             "notionUrl": "https://app.notion.com/p/317b107df480811fbc5af44d6211e881",
             "notionPageId": "317b107df480811fbc5af44d6211e881",
@@ -1707,24 +1771,32 @@
             "stageLabel": "4단계",
             "level": "중급",
             "focus": "백핸드 각도 생성",
-            "goal": "백핸드 백핸드 각도 생성을 한 가지 목표로 반복하세요.",
-            "guide": "백핸드 백핸드 각도 생성을 한 가지 목표로 반복하세요.",
+            "goal": "몸 앞의 타점과 라켓면 방향으로 안전한 백핸드 크로스 각도를 만듭니다.",
+            "guide": "몸 앞의 타점과 라켓면 방향으로 안전한 백핸드 크로스 각도를 만듭니다.",
             "steps": [
-              "공이 오기 전에 준비 자세를 만듭니다.",
-              "몸 앞에서 짧게 맞춰 목표한 공을 보냅니다.",
-              "친 뒤 기준 위치로 돌아옵니다."
+              "크로스 목표를 서비스라인 바깥쪽에 정합니다.",
+              "공 바깥쪽을 몸 앞에서 맞춥니다.",
+              "목표 방향으로 라켓을 길게 보냅니다."
             ],
             "selfChecks": [
-              "한 번에 하나만 의식한다.",
-              "스윙보다 타점과 균형을 먼저 본다.",
-              "실수 뒤에도 같은 목표로 다시 시작한다."
+              "타점이 몸 뒤로 밀리지 않는다.",
+              "손목으로만 방향을 꺾지 않는다.",
+              "각도를 만들려고 힘을 과하게 쓰지 않는다."
             ],
-            "checklist": "한 번에 하나만 의식한다. · 스윙보다 타점과 균형을 먼저 본다. · 실수 뒤에도 같은 목표로 다시 시작한다.",
-            "personalPractice": "백핸드 각도 생성 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "백핸드 각도 생성 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "타점이 몸 뒤로 밀리지 않는다. · 손목으로만 방향을 꺾지 않는다. · 각도를 만들려고 힘을 과하게 쓰지 않는다.",
+            "personalPractice": "짧은 크로스 목표에 백핸드 10구 중 6구 넣기를 반복합니다.",
+            "mission": "짧은 크로스 목표에 백핸드 10구 중 6구 넣기를 반복합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=KFWJQAHUD60",
+                "title": "Hitting A Backhand Angle | ANGLES",
+                "author": "Daily Tennis Lesson",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "백핸드 탄도 4/5",
             "notionUrl": "https://app.notion.com/p/317b107df48081a592daee6f4d0be3df",
             "notionPageId": "317b107df48081a592daee6f4d0be3df",
@@ -3009,24 +3081,32 @@
             "stageLabel": "3단계",
             "level": "중급",
             "focus": "오픈코트 마무리",
-            "goal": "상황에 맞는 안전한 한 공을 선택하세요.",
-            "guide": "상황에 맞는 안전한 한 공을 선택하세요.",
+            "goal": "상대가 비운 공간을 먼저 보고 힘보다 방향으로 발리를 마무리합니다.",
+            "guide": "상대가 비운 공간을 먼저 보고 힘보다 방향으로 발리를 마무리합니다.",
             "steps": [
-              "공의 높이와 위치를 먼저 봅니다.",
-              "무리하지 않고 목표한 방향으로 짧게 보냅니다.",
-              "친 뒤 다음 공을 위해 준비합니다."
+              "상대 위치와 열린 공간을 먼저 확인합니다.",
+              "라켓면을 안정시키고 공 앞에서 짧게 맞춥니다.",
+              "빈 공간으로 보내고 균형을 유지합니다."
             ],
             "selfChecks": [
-              "힘보다 방향을 먼저 정한다.",
-              "어려우면 안전한 높이와 깊이를 선택한다.",
-              "타구 뒤 준비 자세로 돌아온다."
+              "공을 치기 전에 빈 공간을 보았는가?",
+              "큰 스윙 없이 라켓면을 유지했는가?",
+              "마무리 뒤에도 다음 공을 준비했는가?"
             ],
-            "checklist": "힘보다 방향을 먼저 정한다. · 어려우면 안전한 높이와 깊이를 선택한다. · 타구 뒤 준비 자세로 돌아온다.",
-            "personalPractice": "오픈코트 마무리 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "오픈코트 마무리 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "공을 치기 전에 빈 공간을 보았는가? · 큰 스윙 없이 라켓면을 유지했는가? · 마무리 뒤에도 다음 공을 준비했는가?",
+            "personalPractice": "좌우 열린 공간을 번갈아 정해 발리 10구 중 7구를 목표 구역에 넣습니다.",
+            "mission": "좌우 열린 공간을 번갈아 정해 발리 10구 중 7구를 목표 구역에 넣습니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=VBBsdsyEqZs",
+                "title": "How To Hit A Closing Volley",
+                "author": "TenniswithTyler",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "네트 마무리 3/4",
             "notionUrl": "https://app.notion.com/p/317b107df48081a5ad53f7c69baafcff",
             "notionPageId": "317b107df48081a5ad53f7c69baafcff",
@@ -3044,24 +3124,32 @@
             "stageLabel": "4단계",
             "level": "중급",
             "focus": "네트 2구 종료",
-            "goal": "상황에 맞는 안전한 한 공을 선택하세요.",
-            "guide": "상황에 맞는 안전한 한 공을 선택하세요.",
+            "goal": "첫 발리로 상대를 움직이고 두 번째 발리로 열린 공간을 마무리합니다.",
+            "guide": "첫 발리로 상대를 움직이고 두 번째 발리로 열린 공간을 마무리합니다.",
             "steps": [
-              "공의 높이와 위치를 먼저 봅니다.",
-              "무리하지 않고 목표한 방향으로 짧게 보냅니다.",
-              "친 뒤 다음 공을 위해 준비합니다."
+              "첫 발리는 깊고 안전하게 보내 상대를 움직입니다.",
+              "발리 뒤 한 걸음 전진하며 다음 공을 준비합니다.",
+              "두 번째 공은 열린 공간으로 짧게 마무리합니다."
             ],
             "selfChecks": [
-              "힘보다 방향을 먼저 정한다.",
-              "어려우면 안전한 높이와 깊이를 선택한다.",
-              "타구 뒤 준비 자세로 돌아온다."
+              "첫 발리를 한 번에 끝내려 하지 않았는가?",
+              "첫 발리 뒤 네트 쪽으로 전진했는가?",
+              "두 번째 공에서 빈 공간을 확인했는가?"
             ],
-            "checklist": "힘보다 방향을 먼저 정한다. · 어려우면 안전한 높이와 깊이를 선택한다. · 타구 뒤 준비 자세로 돌아온다.",
-            "personalPractice": "네트 2구 종료 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "네트 2구 종료 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "첫 발리를 한 번에 끝내려 하지 않았는가? · 첫 발리 뒤 네트 쪽으로 전진했는가? · 두 번째 공에서 빈 공간을 확인했는가?",
+            "personalPractice": "첫 발리는 깊게, 두 번째 발리는 빈 공간으로 보내는 2구 조합을 5회 반복합니다.",
+            "mission": "첫 발리는 깊게, 두 번째 발리는 빈 공간으로 보내는 2구 조합을 5회 반복합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=VnwrXON_BYg",
+                "title": "Best Tennis Drill: Two Volley Poach with #TeamTW's Quinn Gleason (volley & doubles practice)! 🔥",
+                "author": "Tennis Warehouse",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "네트 마무리 4/4",
             "notionUrl": "https://app.notion.com/p/317b107df4808125af93e03807761bf5",
             "notionPageId": "317b107df4808125af93e03807761bf5",
@@ -3398,24 +3486,32 @@
             "stageLabel": "4단계",
             "level": "중급",
             "focus": "속도 상승 압박",
-            "goal": "상황에 맞는 안전한 한 공을 선택하세요.",
-            "guide": "상황에 맞는 안전한 한 공을 선택하세요.",
+            "goal": "짧은 공을 확인한 뒤 앞으로 들어가 안전한 범위에서 속도를 높여 압박합니다.",
+            "guide": "짧은 공을 확인한 뒤 앞으로 들어가 안전한 범위에서 속도를 높여 압박합니다.",
             "steps": [
-              "공의 높이와 위치를 먼저 봅니다.",
-              "무리하지 않고 목표한 방향으로 짧게 보냅니다.",
-              "친 뒤 다음 공을 위해 준비합니다."
+              "상대 공이 짧아지는 순간을 먼저 판단합니다.",
+              "공 뒤로 빠르게 이동해 앞쪽 타점을 만듭니다.",
+              "여유가 생긴 만큼만 스윙 속도를 높이고 다음 공을 준비합니다."
             ],
             "selfChecks": [
-              "힘보다 방향을 먼저 정한다.",
-              "어려우면 안전한 높이와 깊이를 선택한다.",
-              "타구 뒤 준비 자세로 돌아온다."
+              "짧지 않은 공까지 무리하게 공격하지 않았는가?",
+              "공 뒤에 도착한 뒤 속도를 높였는가?",
+              "공격 뒤 코트 안쪽에서 다음 공을 준비했는가?"
             ],
-            "checklist": "힘보다 방향을 먼저 정한다. · 어려우면 안전한 높이와 깊이를 선택한다. · 타구 뒤 준비 자세로 돌아온다.",
-            "personalPractice": "속도 상승 압박 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "속도 상승 압박 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "짧지 않은 공까지 무리하게 공격하지 않았는가? · 공 뒤에 도착한 뒤 속도를 높였는가? · 공격 뒤 코트 안쪽에서 다음 공을 준비했는가?",
+            "personalPractice": "깊은 공 두 번 뒤 짧은 공 한 번을 공격하는 3구 패턴을 5회 반복합니다.",
+            "mission": "깊은 공 두 번 뒤 짧은 공 한 번을 공격하는 3구 패턴을 5회 반복합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=y_wyNSgTXA0",
+                "title": "Tennis Tip: How To Attack Short Balls",
+                "author": "Online Tennis Instruction",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "공격 전환 4/4",
             "notionUrl": "https://app.notion.com/p/317b107df4808169aafcfd19ce8f82db",
             "notionPageId": "317b107df4808169aafcfd19ce8f82db",
@@ -3571,24 +3667,32 @@
             "stageLabel": "4단계",
             "level": "중급",
             "focus": "2구 내 마무리",
-            "goal": "상황에 맞는 안전한 한 공을 선택하세요.",
-            "guide": "상황에 맞는 안전한 한 공을 선택하세요.",
+            "goal": "첫 공격으로 공간을 만들고 다음 공을 열린 코트에 보내 두 공 안에 마무리합니다.",
+            "guide": "첫 공격으로 공간을 만들고 다음 공을 열린 코트에 보내 두 공 안에 마무리합니다.",
             "steps": [
-              "공의 높이와 위치를 먼저 봅니다.",
-              "무리하지 않고 목표한 방향으로 짧게 보냅니다.",
-              "친 뒤 다음 공을 위해 준비합니다."
+              "첫 공격은 깊이나 각도로 상대를 코트 밖으로 움직입니다.",
+              "공격 직후 한 걸음 안으로 들어가 다음 공을 기다립니다.",
+              "두 번째 공은 힘보다 열린 공간을 선택해 마무리합니다."
             ],
             "selfChecks": [
-              "힘보다 방향을 먼저 정한다.",
-              "어려우면 안전한 높이와 깊이를 선택한다.",
-              "타구 뒤 준비 자세로 돌아온다."
+              "첫 공격으로 공간을 먼저 만들었는가?",
+              "공격 뒤 멈추지 않고 전진했는가?",
+              "두 번째 공을 무리한 강타가 아닌 빈 공간으로 보냈는가?"
             ],
-            "checklist": "힘보다 방향을 먼저 정한다. · 어려우면 안전한 높이와 깊이를 선택한다. · 타구 뒤 준비 자세로 돌아온다.",
-            "personalPractice": "2구 내 마무리 핵심 동작을 공 없이 10회 반복합니다.",
-            "mission": "2구 내 마무리 핵심 동작을 공 없이 10회 반복합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
-            "blockedResourceCount": 1,
+            "checklist": "첫 공격으로 공간을 먼저 만들었는가? · 공격 뒤 멈추지 않고 전진했는가? · 두 번째 공을 무리한 강타가 아닌 빈 공간으로 보냈는가?",
+            "personalPractice": "첫 공은 깊게 압박하고 두 번째 공은 열린 공간에 넣는 2구 패턴을 5회 반복합니다.",
+            "mission": "첫 공은 깊게 압박하고 두 번째 공은 열린 공간에 넣는 2구 패턴을 5회 반복합니다.",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=BEac0fJ84tY",
+                "title": "Tennis Lesson: Master the High Forehand Approach Shot Part 1 of 4",
+                "author": "Crunch Time Coaching",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
+            "blockedResourceCount": 0,
             "memberSummary": "포인트 마무리 4/4",
             "notionUrl": "https://app.notion.com/p/317b107df480810e83d8d43de497ba8c",
             "notionPageId": "317b107df480810e83d8d43de497ba8c",
@@ -4183,9 +4287,9 @@
               {
                 "url": "https://www.youtube.com/watch?v=agk2iThrHSg",
                 "label": "토스 위치를 빠르게 교정하는 방법",
-                "title": "",
-                "author": "",
-                "verifiedAccessible": false
+                "title": "Tennis Serve Ball Toss Tip - How To Quickly Improve The Toss Placement #tennis #tennisserve",
+                "author": "Feel Tennis Instruction",
+                "verifiedAccessible": true
               }
             ],
             "resourceStatus": "ready",
@@ -4226,9 +4330,9 @@
               {
                 "url": "https://www.youtube.com/watch?v=ntBgpIRNHio",
                 "label": "서브 리듬과 타이밍 연습",
-                "title": "",
-                "author": "",
-                "verifiedAccessible": false
+                "title": "Tennis Serve Rhythm Drill That Instantly Improves Timing",
+                "author": "Feel Tennis Instruction",
+                "verifiedAccessible": true
               }
             ],
             "resourceStatus": "ready",
@@ -4269,9 +4373,9 @@
               {
                 "url": "https://www.youtube.com/watch?v=DHBPL9MqTSk",
                 "label": "서브 임팩트 높이와 타점 찾기",
-                "title": "",
-                "author": "",
-                "verifiedAccessible": false
+                "title": "Perfect Tennis Serve Contact Point And How To Find It (Science Explained)",
+                "author": "RacquetFlex",
+                "verifiedAccessible": true
               }
             ],
             "resourceStatus": "ready",
@@ -4312,9 +4416,9 @@
               {
                 "url": "https://www.youtube.com/watch?v=Yv-3sE7BP6A",
                 "label": "서브 착지와 균형 잡기",
-                "title": "",
-                "author": "",
-                "verifiedAccessible": false
+                "title": "How To Improve Your Serve Balance | TENNIS SERVE",
+                "author": "Tennis Evolution",
+                "verifiedAccessible": true
               }
             ],
             "resourceStatus": "ready",
@@ -4355,9 +4459,9 @@
               {
                 "url": "https://www.youtube.com/watch?v=DPgG5oNSUIM",
                 "label": "안정적인 킥 세컨드 서브 만들기",
-                "title": "",
-                "author": "",
-                "verifiedAccessible": false
+                "title": "Tennis KICK SERVE Lesson - Overcoming Second Serve NERVES",
+                "author": "Karue Sell ",
+                "verifiedAccessible": true
               }
             ],
             "resourceStatus": "ready",
@@ -4394,8 +4498,16 @@
             "checklist": "서브를 보고 멈추지 않는다. · 라켓을 준비 위치에 둔다. · 첫발이 늦지 않는다.",
             "personalPractice": "서브 동작 뒤 스플릿 스텝까지 10회 연결합니다.",
             "mission": "서브 동작 뒤 스플릿 스텝까지 10회 연결합니다.",
-            "resources": [],
-            "resourceStatus": "needs_material",
+            "resources": [
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=OTY8cDoh0DA",
+                "title": "Serve Recovery | RECOVERY FOOTWORK",
+                "author": "Daily Tennis Lesson",
+                "verifiedAccessible": true
+              }
+            ],
+            "resourceStatus": "ready",
             "blockedResourceCount": 0,
             "memberSummary": "서브 7/7",
             "notionUrl": "https://app.notion.com/p/3a8b107df4808193be45e620a449c2be",
@@ -4432,32 +4544,17 @@
       "exactThreeSteps": 100,
       "validSelfChecks": 100,
       "firstActionVisible": 100,
-      "personalPracticePresent": 12,
-      "withResources": 99,
-      "uniqueResourceUrls": 101,
+      "personalPracticePresent": 25,
+      "withResources": 100,
+      "uniqueResourceUrls": 102,
       "duplicateResourceUrlCount": 1,
-      "correctNextLessonLink": 11
+      "correctNextLessonLink": 25
     },
     "appMediaSummary": {
-      "readyLessons": 86,
-      "needsMaterialLessons": 14,
-      "needsMaterialCodes": [
-        "FH-R8",
-        "FH-T1",
-        "FH-T2",
-        "FH-T6",
-        "FH-C2",
-        "BH-R4",
-        "BH-T2",
-        "BH-T3",
-        "BH-T4",
-        "NV-F3",
-        "NV-F4",
-        "TC-A4",
-        "TC-F4",
-        "SV-07"
-      ],
-      "blockedPlacements": 14
+      "readyLessons": 100,
+      "needsMaterialLessons": 0,
+      "needsMaterialCodes": [],
+      "blockedPlacements": 1
     }
   };
   catalog.steps = catalog.tracks.flatMap((track) => track.lessons);
