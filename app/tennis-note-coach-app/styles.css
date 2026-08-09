@@ -1226,6 +1226,47 @@ a {
   font-size: 13px;
 }
 
+.lesson-participant-completion-list {
+  display: grid;
+  gap: 12px;
+}
+
+.lesson-participant-completion-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.lesson-participant-completion-card.is-ready {
+  border-color: color-mix(in srgb, var(--green) 48%, var(--line));
+}
+
+.lesson-participant-completion-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.lesson-participant-completion-head strong {
+  flex: 0 0 auto;
+  color: var(--ink);
+}
+
+.lesson-participant-completion-head span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .lesson-required-field > span {
   display: flex;
   align-items: center;
@@ -3139,6 +3180,14 @@ body.notice-open {
 
   .lesson-completion-summary small {
     grid-column: 1 / -1;
+  }
+
+  .lesson-participant-completion-head {
+    display: grid;
+  }
+
+  .lesson-participant-completion-head span {
+    text-align: left;
   }
 
   .lesson-modal-head {

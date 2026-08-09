@@ -466,14 +466,21 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
     substituteSettlementMode: substitute?.settlementMode || "",
     member: participants.map((participant) => participant.name).filter(Boolean).join("&") || "회원",
     memberUserIds: participants.map((participant) => participant.userId).filter(Boolean),
-    v2Participants: participants.map((participant) => ({
-      userId: participant.userId,
-      ticketId: participant.ticketId,
-      name: participant.name || "회원",
-      recordStatus: participant.recordStatus || "",
-      outcome: participant.outcome || "",
-      deductedSessions: Number(participant.deductedSessions) || 0,
-    })),
+    v2Participants: participants.map((participant) => {
+      const ticket = ticketsById.get(participant.ticketId) || {};
+      return {
+        userId: participant.userId,
+        ticketId: participant.ticketId,
+        name: participant.name || "회원",
+        recordStatus: participant.recordStatus || "",
+        outcome: participant.outcome || "",
+        deductedSessions: Number(participant.deductedSessions) || 0,
+        ticketName: ticket.productName || `${scheduleV2LessonKindLabel(kind)} 회원권`,
+        totalSessions: Number(ticket.totalSessions) || 0,
+        usedSessions: Number(ticket.usedSessions) || 0,
+        remainingSessions: Number(ticket.remainingSessions) || 0,
+      };
+    }),
     v2Permissions: {
       canProcess: permissions.canProcess === true,
       canEdit: permissions.canEdit === true,
@@ -2135,7 +2142,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.288",
+    workerUrl: "./service-worker.js?v=1.0.289",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2165,7 +2172,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.288" });
+  const params = new URLSearchParams({ v: "1.0.289" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2601,6 +2608,58 @@ function recentLogForLesson(lesson) {
   return state.lessonLogs.find((log) => log.member === lesson?.member || names.includes(log.member) || names.some((name) => log.member.includes(name)));
 }
 
+function completionParticipantsForLesson(lesson) {
+  const v2Participants = Array.isArray(lesson?.v2Participants) ? lesson.v2Participants : [];
+  if (v2Participants.length) return v2Participants;
+  return [{
+    userId: lesson?.memberUserIds?.[0] || "",
+    ticketId: lesson?.ticketId || "",
+    name: lesson?.member || "회원",
+    ticketName: lesson?.ticket || "회원권",
+    totalSessions: Number(lesson?.totalSessions) || 0,
+    usedSessions: Number(lesson?.usedSessions) || 0,
+    remainingSessions: Number(lesson?.remaining) || 0,
+  }];
+}
+
+function recentLogForParticipant(participant, lesson) {
+  const exact = state.lessonLogs.find((log) => (
+    Array.isArray(log.participantResults)
+    && log.participantResults.some((result) => (
+      String(result.userId || "") === String(participant.userId || "")
+      && String(result.ticketId || "") === String(participant.ticketId || "")
+    ))
+  ));
+  if (exact) return exact;
+  const byName = state.lessonLogs.find((log) => recordMemberNames(log.member).includes(participant.name));
+  return byName || recentLogForLesson(lesson);
+}
+
+function participantLogResult(log, participant) {
+  const exact = Array.isArray(log?.participantResults)
+    ? log.participantResults.find((result) => (
+      String(result.userId || "") === String(participant.userId || "")
+      && String(result.ticketId || "") === String(participant.ticketId || "")
+    ))
+    : null;
+  return exact || null;
+}
+
+function completionDraftResultsForLog(log) {
+  if (Array.isArray(log?.participantResults) && log.participantResults.length) return log.participantResults;
+  return [{
+    userId: "",
+    ticketId: "",
+    name: log?.member || "회원",
+    ticketName: "",
+    totalSessions: 0,
+    usedSessions: 0,
+    remainingSessions: 0,
+    coachComment: log?.coachComment || "",
+    nextCurriculumId: log?.nextCurriculumId || log?.curriculumId || "",
+  }];
+}
+
 function canProcessLesson(lesson) {
   if (!lesson) return false;
   if (lesson.v2Permissions) return lesson.v2Permissions.canProcess === true;
@@ -2967,9 +3026,40 @@ function renderScheduleEditPanel() {
   const canReschedule = canRescheduleLesson(lesson);
   const member = memberForLesson(lesson);
   const recentLog = recentLogForLesson(lesson);
+  const completionParticipants = completionParticipantsForLesson(lesson);
   const defaultContent = `${lesson.member} ${lesson.type} 수업 진행`;
-  const defaultComment = "";
-  const defaultCurriculumId = recentLog?.nextCurriculumId || recentLog?.curriculumId || curriculumSteps[0]?.id;
+  const participantCompletionFields = completionParticipants.map((participant) => {
+    const participantRecentLog = recentLogForParticipant(participant, lesson);
+    const participantRecentResult = participantLogResult(participantRecentLog, participant);
+    const defaultCurriculumId = participantRecentResult?.nextCurriculumId
+      || participantRecentLog?.nextCurriculumId
+      || participantRecentLog?.curriculumId
+      || "";
+    const ticketSummary = `${participant.ticketName || lesson.ticket} · 총 ${Number(participant.totalSessions) || 0} / 소진 ${Number(participant.usedSessions) || 0} / 잔여 ${Number(participant.remainingSessions) || 0}`;
+    return `
+      <section class="lesson-participant-completion-card" data-modal-participant-row="${escapeHtml(lesson.id)}" data-user-id="${escapeHtml(participant.userId)}" data-ticket-id="${escapeHtml(participant.ticketId)}" data-participant-name="${escapeHtml(participant.name || "회원")}" data-ticket-name="${escapeHtml(participant.ticketName || lesson.ticket || "회원권")}" data-total-sessions="${Number(participant.totalSessions) || 0}" data-used-sessions="${Number(participant.usedSessions) || 0}" data-remaining-sessions="${Number(participant.remainingSessions) || 0}">
+        <div class="lesson-participant-completion-head">
+          <strong>${escapeHtml(participant.name || "회원")}</strong>
+          <span>${escapeHtml(ticketSummary)}</span>
+        </div>
+        <label class="lesson-required-field">
+          <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
+          <textarea data-modal-coach-comment="${escapeHtml(lesson.id)}" rows="4" placeholder="오늘 잘된 점과 다음 수업에서 보완할 점을 적어주세요." ${canProcess ? "" : "disabled"}></textarea>
+          <div class="tn-comment-draft-tools">
+            <input data-modal-comment-keywords="${escapeHtml(lesson.id)}" type="text" maxlength="160" placeholder="키워드 입력 · 예: 포핸드, 타점, 체중이동" ${canProcess ? "" : "disabled"} />
+            <button type="button" data-generate-modal-comment="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>초안 만들기</button>
+          </div>
+          <small class="lesson-comment-count" data-modal-comment-count="${escapeHtml(lesson.id)}">0/5자</small>
+        </label>
+        <label class="lesson-required-field">
+          <span>다음 커리큘럼 <small>필수</small></span>
+          <select data-modal-next-curriculum="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>
+            <option value="">검색·선택</option>
+            ${curriculumOptions(defaultCurriculumId)}
+          </select>
+        </label>
+      </section>`;
+  }).join("");
   const scheduleEditDraft = lesson.scheduleEditDraft || {};
   const selectedEditDay = scheduleEditDraft.day || lesson.day;
   const selectedEditTime = scheduleEditDraft.time || lesson.time;
@@ -3002,23 +3092,11 @@ function renderScheduleEditPanel() {
         <li><b>4</b><span>완료·차감</span></li>
       </ol>
       <div class="lesson-completion-summary wide">
-        <span>${lesson.ticket}</span>
-        <strong>잔여 ${lesson.remaining}회</strong>
+        <span>${completionParticipants.length > 1 ? `참여 회원 ${completionParticipants.length}명` : lesson.ticket}</span>
+        <strong>${completionParticipants.length > 1 ? "회원별 차감" : `잔여 ${lesson.remaining}회`}</strong>
         <small>${lesson.status}</small>
       </div>
-      <label class="wide lesson-required-field">
-        <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
-        <textarea data-modal-coach-comment="${lesson.id}" rows="4" placeholder="오늘 잘된 점과 다음 수업에서 보완할 점을 적어주세요." ${canProcess ? "" : "disabled"}>${defaultComment}</textarea>
-        <div class="tn-comment-draft-tools">
-          <input data-modal-comment-keywords="${lesson.id}" type="text" maxlength="160" placeholder="키워드 입력 · 예: 포핸드, 타점, 체중이동" ${canProcess ? "" : "disabled"} />
-          <button type="button" data-generate-modal-comment="${lesson.id}" ${canProcess ? "" : "disabled"}>초안 만들기</button>
-        </div>
-        <small class="lesson-comment-count" data-modal-comment-count="${lesson.id}">0/5자</small>
-      </label>
-      <label class="wide lesson-required-field">
-        <span>다음 커리큘럼 <small>필수</small></span>
-        <select data-modal-next-curriculum="${lesson.id}" ${canProcess ? "" : "disabled"}>${curriculumOptions(defaultCurriculumId)}</select>
-      </label>
+      <div class="lesson-participant-completion-list wide">${participantCompletionFields}</div>
       ${lesson.validationMessage ? `<p class="validation-text wide">${lesson.validationMessage}</p>` : ""}
       <details class="lesson-secondary-panel wide">
         <summary>수업 참고</summary>
@@ -4258,15 +4336,20 @@ async function saveCoachQuickAdd() {
 
 function updateLessonCompletionUi(id) {
   const lesson = ensureCoachLessonRecord(id);
-  const comment = activeViewField(`[data-modal-coach-comment="${id}"]`)?.value.trim() || "";
-  const curriculum = activeViewField(`[data-modal-next-curriculum="${id}"]`)?.value || "";
-  const count = activeViewField(`[data-modal-comment-count="${id}"]`);
+  const participantRows = $$('[data-modal-participant-row]').filter((row) => row.dataset.modalParticipantRow === id);
   const submit = activeViewField(`[data-complete-lesson-from-modal="${id}"]`);
-  const ready = Boolean(lesson && canProcessLesson(lesson) && comment.length >= 5 && curriculum);
-  if (count) {
-    count.textContent = `${comment.length}/5자`;
-    count.classList.toggle("is-ready", comment.length >= 5);
-  }
+  const rowsReady = participantRows.length > 0 && participantRows.every((row) => {
+    const comment = row.querySelector("[data-modal-coach-comment]")?.value.trim() || "";
+    const curriculum = row.querySelector("[data-modal-next-curriculum]")?.value || "";
+    const count = row.querySelector("[data-modal-comment-count]");
+    if (count) {
+      count.textContent = `${comment.length}/5자`;
+      count.classList.toggle("is-ready", comment.length >= 5);
+    }
+    row.classList.toggle("is-ready", comment.length >= 5 && Boolean(curriculum));
+    return comment.length >= 5 && Boolean(curriculum);
+  });
+  const ready = Boolean(lesson && canProcessLesson(lesson) && rowsReady);
   if (submit) submit.disabled = !ready;
 }
 
@@ -4524,32 +4607,63 @@ async function completeLessonFromModal(id) {
   const lesson = ensureCoachLessonRecord(id);
   if (!lesson || !canProcessLesson(lesson)) return;
   const content = activeViewField(`[data-modal-lesson-content="${id}"]`)?.value.trim() || `${lesson.member} ${lesson.type} 수업 진행`;
-  const coachComment = activeViewField(`[data-modal-coach-comment="${id}"]`)?.value.trim() || "";
-  const nextCurriculumId = activeViewField(`[data-modal-next-curriculum="${id}"]`)?.value || curriculumSteps[0]?.id;
+  const participantResults = $$('[data-modal-participant-row]')
+    .filter((row) => row.dataset.modalParticipantRow === id)
+    .map((row) => ({
+      userId: row.dataset.userId || "",
+      ticketId: row.dataset.ticketId || "",
+      name: row.dataset.participantName || "회원",
+      ticketName: row.dataset.ticketName || "회원권",
+      totalSessions: Number(row.dataset.totalSessions) || 0,
+      usedSessions: Number(row.dataset.usedSessions) || 0,
+      remainingSessions: Number(row.dataset.remainingSessions) || 0,
+      coachComment: row.querySelector("[data-modal-coach-comment]")?.value.trim() || "",
+      nextCurriculumId: row.querySelector("[data-modal-next-curriculum]")?.value || "",
+    }));
+  const primaryResult = participantResults[0] || {};
+  const logId = `coach-complete-${Date.now()}`;
   const log = {
-    id: `coach-complete-${Date.now()}`,
+    id: logId,
     serverLessonId: lesson.serverLessonId || "",
     serverJournalId: "",
     member: lesson.member,
     lesson: `${lesson.day} ${lesson.time} ${lesson.type}`,
     content,
     selfMemo: "회원 운동노트 미작성이어도 코치가 기록/차감 확인을 진행했습니다.",
-    curriculumId: nextCurriculumId,
-    nextCurriculumId,
-    coachComment,
+    curriculumId: primaryResult.nextCurriculumId || "",
+    nextCurriculumId: primaryResult.nextCurriculumId || "",
+    coachComment: primaryResult.coachComment || "",
+    participantResults,
     validationMessage: "",
     status: "확인 대기",
     curriculumRegistered: false,
     ticketDeducted: false,
   };
-  if (!coachComment || !nextCurriculumId) {
-    lesson.validationMessage = "코치 코멘트와 다음 커리큘럼을 등록해야 횟수 차감이 가능합니다.";
+  const usesV2Participants = Array.isArray(lesson.v2Participants) && lesson.v2Participants.length > 0;
+  const missingParticipant = participantResults.find((result) => (
+    !result.coachComment
+    || !result.nextCurriculumId
+    || (usesV2Participants && (!result.userId || !result.ticketId))
+  ));
+  if (!participantResults.length || missingParticipant) {
+    lesson.validationMessage = missingParticipant
+      ? `${missingParticipant.name} 회원의 코치 코멘트와 다음 커리큘럼을 모두 등록해 주세요.`
+      : "수업 참여자와 회원권 연결을 확인해 주세요.";
     renderLessonEditModal();
     return;
   }
-  const commentError = coachCommentValidationMessage(log);
-  if (commentError) {
-    lesson.validationMessage = commentError;
+  const invalidParticipant = participantResults
+    .map((result) => ({
+      name: result.name,
+      message: coachCommentValidationMessage({
+        id: `${logId}:${result.userId}:${result.ticketId}`,
+        member: result.name,
+        coachComment: result.coachComment,
+      }),
+    }))
+    .find((result) => result.message);
+  if (invalidParticipant) {
+    lesson.validationMessage = `${invalidParticipant.name}: ${invalidParticipant.message}`;
     renderLessonEditModal();
     return;
   }
@@ -4693,6 +4807,66 @@ function recordProcessingMarkup() {
       .map((log) => {
         const nextStep = selectedCurriculum(log.nextCurriculumId || log.curriculumId);
         const confirmed = log.status === "확인 완료";
+        const participantResults = completionDraftResultsForLog(log);
+        const hasParticipantDrafts = Array.isArray(log.participantResults) && log.participantResults.length > 0;
+        const participantDraftsRequirePairs = participantResults.some((result) => result.userId || result.ticketId)
+          || state.liveLessons.some((lesson) => (
+            lesson.serverLessonId === log.serverLessonId
+            && Array.isArray(lesson.v2Participants)
+            && lesson.v2Participants.length
+          ));
+        const participantDraftsReady = participantResults.every((result) => (
+          String(result.coachComment || "").trim().length >= 5
+          && Boolean(result.nextCurriculumId)
+          && (!participantDraftsRequirePairs || Boolean(result.userId && result.ticketId))
+        ));
+        const participantDraftMarkup = hasParticipantDrafts
+          ? `<div class="lesson-participant-completion-list lesson-log-participant-list">
+              ${participantResults.map((result) => {
+                const resultNextStep = result.nextCurriculumId ? selectedCurriculum(result.nextCurriculumId) : null;
+                const resultCommentLength = String(result.coachComment || "").trim().length;
+                const ticketSummary = result.ticketName
+                  ? `${result.ticketName} · 총 ${Number(result.totalSessions) || 0} / 소진 ${Number(result.usedSessions) || 0} / 잔여 ${Number(result.remainingSessions) || 0}`
+                  : "연결 회원권";
+                return `<section class="lesson-participant-completion-card" data-log-participant-row="${escapeHtml(log.id)}" data-user-id="${escapeHtml(result.userId || "")}" data-ticket-id="${escapeHtml(result.ticketId || "")}" data-participant-name="${escapeHtml(result.name || "회원")}">
+                  <div class="lesson-participant-completion-head">
+                    <strong>${escapeHtml(result.name || "회원")}</strong>
+                    <span>${escapeHtml(ticketSummary)}</span>
+                  </div>
+                  <label>
+                    <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
+                    <textarea data-log-participant-comment="${escapeHtml(log.id)}" rows="3" ${confirmed ? "disabled" : ""}>${escapeHtml(result.coachComment || "")}</textarea>
+                    <div class="tn-comment-draft-tools">
+                      <input data-log-participant-keywords="${escapeHtml(log.id)}" type="text" maxlength="160" placeholder="키워드 입력 · 쉼표로 구분" ${confirmed ? "disabled" : ""} />
+                      <button type="button" data-generate-log-participant-comment="${escapeHtml(log.id)}" ${confirmed ? "disabled" : ""}>초안 만들기</button>
+                    </div>
+                    <small class="lesson-comment-count ${resultCommentLength >= 5 ? "is-ready" : ""}" data-log-participant-comment-count="${escapeHtml(log.id)}">${resultCommentLength}/5자</small>
+                  </label>
+                  <label>
+                    <span>다음 커리큘럼</span>
+                    <select data-log-participant-curriculum="${escapeHtml(log.id)}" ${confirmed ? "disabled" : ""}>
+                      <option value="">검색·선택</option>
+                      ${curriculumOptions(result.nextCurriculumId || "")}
+                    </select>
+                  </label>
+                  <em>${resultNextStep ? `다음 수업: ${escapeHtml(resultNextStep.id)} · ${escapeHtml(resultNextStep.title)}` : "다음 커리큘럼 선택 필요"}</em>
+                </section>`;
+              }).join("")}
+            </div>`
+          : `<label>
+              <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
+              <textarea data-coach-comment="${log.id}" rows="3" ${confirmed ? "disabled" : ""}>${escapeHtml(log.coachComment || "")}</textarea>
+              <div class="tn-comment-draft-tools">
+                <input data-log-comment-keywords="${log.id}" type="text" maxlength="160" placeholder="키워드 입력 · 쉼표로 구분" ${confirmed ? "disabled" : ""} />
+                <button type="button" data-generate-log-comment="${log.id}" ${confirmed ? "disabled" : ""}>초안 만들기</button>
+              </div>
+              <small class="lesson-comment-count ${String(log.coachComment || "").trim().length >= 5 ? "is-ready" : ""}" data-log-comment-count="${log.id}">${String(log.coachComment || "").trim().length}/5자</small>
+            </label>
+            <label>
+              <span>다음 커리큘럼</span>
+              <select data-next-curriculum="${log.id}" ${confirmed ? "disabled" : ""}>${curriculumOptions(log.nextCurriculumId || log.curriculumId)}</select>
+            </label>
+            <em>다음 수업: ${escapeHtml(nextStep.id)} · ${escapeHtml(nextStep.title)}</em>`;
         return `
           <article class="work-card log-card lesson-completion-card ${state.focusedLogId === log.id ? "is-focused" : ""}" data-log-card="${log.id}">
             <div class="log-main">
@@ -4710,23 +4884,10 @@ function recordProcessingMarkup() {
               </details>
             </div>
             <div class="coach-confirm-panel">
-              <label>
-                <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
-                <textarea data-coach-comment="${log.id}" rows="3" ${confirmed ? "disabled" : ""}>${log.coachComment || ""}</textarea>
-                <div class="tn-comment-draft-tools">
-                  <input data-log-comment-keywords="${log.id}" type="text" maxlength="160" placeholder="키워드 입력 · 쉼표로 구분" ${confirmed ? "disabled" : ""} />
-                  <button type="button" data-generate-log-comment="${log.id}" ${confirmed ? "disabled" : ""}>초안 만들기</button>
-                </div>
-                <small class="lesson-comment-count ${String(log.coachComment || "").trim().length >= 5 ? "is-ready" : ""}" data-log-comment-count="${log.id}">${String(log.coachComment || "").trim().length}/5자</small>
-              </label>
-              <label>
-                <span>다음 커리큘럼</span>
-                <select data-next-curriculum="${log.id}" ${confirmed ? "disabled" : ""}>${curriculumOptions(log.nextCurriculumId || log.curriculumId)}</select>
-              </label>
-              <em>다음 수업: ${nextStep.id} · ${nextStep.title}</em>
+              ${participantDraftMarkup}
               ${log.validationMessage ? `<p class="validation-text">${log.validationMessage}</p>` : ""}
               <div class="actions">
-                <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" || String(log.coachComment || "").trim().length < 5 ? "disabled" : ""}>
+                <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" || !participantDraftsReady ? "disabled" : ""}>
                   ${["동기화 대기", "동기화 실패"].includes(log.status) ? "다시 동기화" : "수업 완료·횟수 차감"}
                 </button>
               </div>
@@ -5022,9 +5183,9 @@ function activeViewField(selector) {
   return document.querySelector(`.view.is-active ${selector}`) || document.querySelector(selector);
 }
 
-function applyCoachCommentDraft(keywordSelector, commentSelector) {
-  const keywordInput = activeViewField(keywordSelector);
-  const commentInput = activeViewField(commentSelector);
+function applyCoachCommentDraft(keywordSource, commentSource) {
+  const keywordInput = typeof keywordSource === "string" ? activeViewField(keywordSource) : keywordSource;
+  const commentInput = typeof commentSource === "string" ? activeViewField(commentSource) : commentSource;
   const generator = window.TennisNoteCommentDraft;
   if (!keywordInput || !commentInput || !generator?.generate) {
     showToast("코멘트 초안 기능을 불러오지 못했습니다.");
@@ -5071,6 +5232,16 @@ function normalizeCoachComment(text) {
     .toLowerCase();
 }
 
+function coachLogCommentEntries(log) {
+  if (Array.isArray(log?.participantResults) && log.participantResults.length) {
+    return log.participantResults.map((result) => ({
+      memberNames: [result.name].filter(Boolean),
+      comment: result.coachComment || "",
+    }));
+  }
+  return [{ memberNames: recordMemberNames(log?.member), comment: log?.coachComment || "" }];
+}
+
 function coachCommentValidationMessage(log) {
   const comment = log.coachComment || "";
   const normalized = normalizeCoachComment(comment);
@@ -5083,12 +5254,13 @@ function coachCommentValidationMessage(log) {
     return "반복되는 짧은 칭찬/확인 문구만으로는 횟수 차감이 불가합니다.";
   }
   const currentMemberNames = recordMemberNames(log.member);
-  const sameMemberDuplicateCount = state.lessonLogs.filter((item) => {
-    if (item.id === log.id || !item.coachComment) return false;
-    const itemMemberNames = recordMemberNames(item.member);
-    if (!currentMemberNames.some((name) => itemMemberNames.includes(name))) return false;
-    return normalizeCoachComment(item.coachComment) === normalized;
-  }).length;
+  const sameMemberDuplicateCount = state.lessonLogs.filter((item) => (
+    item.id !== log.id
+    && coachLogCommentEntries(item).some((entry) => (
+      currentMemberNames.some((name) => entry.memberNames.includes(name))
+      && normalizeCoachComment(entry.comment) === normalized
+    ))
+  )).length;
   if (sameMemberDuplicateCount >= 2) return "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.";
   return "";
 }
@@ -5201,6 +5373,33 @@ async function rejectMakeup(id) {
 function updateLogDraft(id) {
   const log = state.lessonLogs.find((item) => item.id === id);
   if (!log || log.status === "확인 완료") return log;
+  const logCard = document.querySelector(`#todayRecordPanel [data-log-card="${id}"]`);
+  const participantRows = [...(logCard?.querySelectorAll(`[data-log-participant-row="${id}"]`) || [])];
+  if (participantRows.length) {
+    const existingByPair = new Map(completionDraftResultsForLog(log).map((result) => [
+      `${result.userId || ""}:${result.ticketId || ""}`,
+      result,
+    ]));
+    log.participantResults = participantRows.map((row) => {
+      const userId = row.dataset.userId || "";
+      const ticketId = row.dataset.ticketId || "";
+      const existing = existingByPair.get(`${userId}:${ticketId}`) || {};
+      return {
+        ...existing,
+        userId,
+        ticketId,
+        name: row.dataset.participantName || existing.name || "회원",
+        coachComment: row.querySelector("[data-log-participant-comment]")?.value.trim() || "",
+        nextCurriculumId: row.querySelector("[data-log-participant-curriculum]")?.value || "",
+      };
+    });
+    const primaryResult = log.participantResults[0] || {};
+    log.coachComment = primaryResult.coachComment || "";
+    log.nextCurriculumId = primaryResult.nextCurriculumId || "";
+    log.validationMessage = "";
+    updateLogCompletionUi(log);
+    return log;
+  }
   const commentInput = activeViewField(`[data-coach-comment="${id}"]`);
   const curriculumSelect = activeViewField(`[data-next-curriculum="${id}"]`);
   log.coachComment = commentInput?.value.trim() || "";
@@ -5212,8 +5411,24 @@ function updateLogDraft(id) {
 
 function updateLogCompletionUi(log) {
   if (!log) return;
-  const count = activeViewField(`[data-log-comment-count="${log.id}"]`);
+  const logCard = document.querySelector(`#todayRecordPanel [data-log-card="${log.id}"]`);
+  const participantRows = [...(logCard?.querySelectorAll(`[data-log-participant-row="${log.id}"]`) || [])];
   const submit = activeViewField(`[data-confirm-log="${log.id}"]`);
+  if (participantRows.length) {
+    const ready = participantRows.every((row) => {
+      const length = String(row.querySelector("[data-log-participant-comment]")?.value || "").trim().length;
+      const curriculumId = row.querySelector("[data-log-participant-curriculum]")?.value || "";
+      const count = row.querySelector("[data-log-participant-comment-count]");
+      if (count) {
+        count.textContent = `${length}/5자`;
+        count.classList.toggle("is-ready", length >= 5);
+      }
+      return length >= 5 && Boolean(curriculumId);
+    });
+    if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || !ready;
+    return;
+  }
+  const count = activeViewField(`[data-log-comment-count="${log.id}"]`);
   const length = String(log.coachComment || "").trim().length;
   if (count) {
     count.textContent = `${length}/5자`;
@@ -5228,18 +5443,65 @@ async function confirmLog(id, options = {}) {
     : updateLogDraft(id);
   if (!log) return false;
   if (log.status === "확인 완료") return true;
-  if (!log.coachComment || !log.nextCurriculumId) {
+  const linkedScheduleV2Lesson = state.liveLessons.find((item) => (
+    item.serverLessonId === log.serverLessonId
+    && Array.isArray(item.v2Participants)
+    && item.v2Participants.length
+  ));
+  const participantResults = Array.isArray(log.participantResults) && log.participantResults.length
+    ? log.participantResults
+    : linkedScheduleV2Lesson
+      ? linkedScheduleV2Lesson.v2Participants.map((participant) => ({
+          userId: participant.userId,
+          ticketId: participant.ticketId,
+          name: participant.name || log.member,
+          ticketName: participant.ticketName || "회원권",
+          totalSessions: Number(participant.totalSessions) || 0,
+          usedSessions: Number(participant.usedSessions) || 0,
+          remainingSessions: Number(participant.remainingSessions) || 0,
+          coachComment: log.coachComment,
+          nextCurriculumId: log.nextCurriculumId,
+        }))
+      : [{
+          userId: "",
+          ticketId: "",
+          name: log.member,
+          coachComment: log.coachComment,
+          nextCurriculumId: log.nextCurriculumId,
+        }];
+  if ((!Array.isArray(log.participantResults) || !log.participantResults.length) && linkedScheduleV2Lesson) {
+    log.participantResults = participantResults;
+  }
+  const participantResultsHaveAnyPair = participantResults.some((result) => result.userId || result.ticketId);
+  const participantResultsHaveExactPairs = participantResults.length > 0
+    && participantResults.every((result) => result.userId && result.ticketId);
+  const requiresExactParticipantPairs = Boolean(linkedScheduleV2Lesson || participantResultsHaveAnyPair);
+  const missingParticipant = participantResults.find((result) => (
+    !result.coachComment
+    || !result.nextCurriculumId
+    || (requiresExactParticipantPairs && (!result.userId || !result.ticketId))
+  ));
+  if (missingParticipant) {
     log.validationMessage = "코치 코멘트와 다음 커리큘럼을 등록해야 횟수 차감이 가능합니다.";
     renderAll();
     return false;
   }
-  const commentError = coachCommentValidationMessage(log);
-  if (commentError) {
-    log.validationMessage = commentError;
+  const invalidParticipant = participantResults
+    .map((result) => ({
+      name: result.name,
+      message: coachCommentValidationMessage({
+        id: `${log.id}:${result.userId}:${result.ticketId}`,
+        member: result.name,
+        coachComment: result.coachComment,
+      }),
+    }))
+    .find((result) => result.message);
+  if (invalidParticipant) {
+    log.validationMessage = `${invalidParticipant.name}: ${invalidParticipant.message}`;
     renderAll();
     return false;
   }
-  const nextStep = selectedCurriculum(log.nextCurriculumId);
+  const nextStep = selectedCurriculum(participantResults[0].nextCurriculumId);
   let serverResult = null;
   if (log.serverLessonId) {
     const client = window.TennisNoteDataClient;
@@ -5258,18 +5520,29 @@ async function confirmLog(id, options = {}) {
     log.status = "서버 처리 중";
     renderAll();
     try {
-      const curriculumRefId = await liveCurriculumRefId(nextStep);
-      const scheduleV2Lesson = state.liveLessons.find((item) => (
+      const scheduleV2Lesson = linkedScheduleV2Lesson || state.liveLessons.find((item) => (
         item.serverLessonId === log.serverLessonId
         && Array.isArray(item.v2Participants)
         && item.v2Participants.length
       ));
-      if (scheduleV2Lesson) {
+      const scheduleV2Participants = scheduleV2Lesson?.v2Participants?.length
+        ? scheduleV2Lesson.v2Participants
+        : participantResultsHaveExactPairs
+          ? participantResults
+          : null;
+      if (scheduleV2Participants) {
         log.v2OperationKey ||= `schedule-v2-coach:${log.serverLessonId}:${globalThis.crypto?.randomUUID?.() || Date.now()}`;
-        const participantCount = scheduleV2Lesson.v2Participants.length;
-        serverResult = await client.rpc("tn_schedule_v2_process_lesson", {
-          target_lesson_id: log.serverLessonId,
-          target_participant_results: scheduleV2Lesson.v2Participants.map((participant) => ({
+        const participantCount = scheduleV2Participants.length;
+        const draftByTicketAndUser = new Map(participantResults.map((result) => [
+          `${result.userId}:${result.ticketId}`,
+          result,
+        ]));
+        const serverParticipantResults = await Promise.all(scheduleV2Participants.map(async (participant) => {
+          const draft = draftByTicketAndUser.get(`${participant.userId}:${participant.ticketId}`);
+          if (!draft) throw new Error("schedule_v2_participant_input_missing");
+          const participantNextStep = selectedCurriculum(draft.nextCurriculumId);
+          const participantCurriculumRefId = await liveCurriculumRefId(participantNextStep);
+          return {
             userId: participant.userId,
             ticketId: participant.ticketId,
             outcome: "completed",
@@ -5277,16 +5550,21 @@ async function confirmLog(id, options = {}) {
             technique: "",
             strength: "",
             improvement: "",
-            nextGoal: nextStep?.title || "",
-            coachComment: log.coachComment,
+            nextGoal: participantNextStep?.title || "",
+            coachComment: draft.coachComment,
             keywords: [],
-            nextCurriculumRefId: curriculumRefId || null,
+            nextCurriculumRefId: participantCurriculumRefId || null,
             memberJournalId: participantCount === 1 ? (log.serverJournalId || null) : null,
-          })),
+          };
+        }));
+        serverResult = await client.rpc("tn_schedule_v2_process_lesson", {
+          target_lesson_id: log.serverLessonId,
+          target_participant_results: serverParticipantResults,
           target_finalize: true,
           target_operation_key: log.v2OperationKey,
         });
       } else {
+        const curriculumRefId = await liveCurriculumRefId(nextStep);
         serverResult = await client.rpc("tn_complete_lesson_and_deduct", {
           target_lesson_id: log.serverLessonId,
           target_coach_comment: log.coachComment,
@@ -5328,7 +5606,9 @@ async function confirmLog(id, options = {}) {
     }
   }
   log.status = "확인 완료";
-  log.memberVisibleSummary = `다음 수업 등록 완료: ${nextStep.id} · ${nextStep.title}`;
+  log.memberVisibleSummary = participantResults.length > 1
+    ? `${participantResults.length}명 다음 커리큘럼 등록 완료`
+    : `다음 수업 등록 완료: ${nextStep.id} · ${nextStep.title}`;
   log.curriculumRegistered = true;
   log.serverDeducted = Boolean(serverResult?.ok);
   log.serverDeductionIdempotent = Boolean(serverResult?.idempotent);
@@ -5519,6 +5799,9 @@ function bindEvents() {
     const curriculumSelect = event.target.closest("[data-next-curriculum]");
     if (curriculumSelect) updateLogDraft(curriculumSelect.dataset.nextCurriculum);
 
+    const participantCurriculumSelect = event.target.closest("[data-log-participant-curriculum]");
+    if (participantCurriculumSelect) updateLogDraft(participantCurriculumSelect.dataset.logParticipantCurriculum);
+
     const modalCurriculum = event.target.closest("[data-modal-next-curriculum]");
     if (modalCurriculum) updateLessonCompletionUi(modalCurriculum.dataset.modalNextCurriculum);
 
@@ -5536,6 +5819,9 @@ function bindEvents() {
 
     const commentInput = event.target.closest("[data-coach-comment]");
     if (commentInput) updateLogDraft(commentInput.dataset.coachComment);
+
+    const participantCommentInput = event.target.closest("[data-log-participant-comment]");
+    if (participantCommentInput) updateLogDraft(participantCommentInput.dataset.logParticipantComment);
 
     const feedbackInput = event.target.closest("[data-feedback-comment]");
     if (feedbackInput) updateFeedbackDraft(feedbackInput.dataset.feedbackComment);
@@ -5559,8 +5845,11 @@ function bindEvents() {
   document.addEventListener("click", (event) => {
     const modalCommentDraftButton = event.target.closest("[data-generate-modal-comment]");
     if (modalCommentDraftButton) {
-      const id = modalCommentDraftButton.dataset.generateModalComment;
-      applyCoachCommentDraft(`[data-modal-comment-keywords="${id}"]`, `[data-modal-coach-comment="${id}"]`);
+      const participantRow = modalCommentDraftButton.closest("[data-modal-participant-row]");
+      applyCoachCommentDraft(
+        participantRow?.querySelector("[data-modal-comment-keywords]"),
+        participantRow?.querySelector("[data-modal-coach-comment]"),
+      );
       return;
     }
 
@@ -5568,6 +5857,16 @@ function bindEvents() {
     if (logCommentDraftButton) {
       const id = logCommentDraftButton.dataset.generateLogComment;
       applyCoachCommentDraft(`[data-log-comment-keywords="${id}"]`, `[data-coach-comment="${id}"]`);
+      return;
+    }
+
+    const logParticipantDraftButton = event.target.closest("[data-generate-log-participant-comment]");
+    if (logParticipantDraftButton) {
+      const participantRow = logParticipantDraftButton.closest("[data-log-participant-row]");
+      applyCoachCommentDraft(
+        participantRow?.querySelector("[data-log-participant-keywords]"),
+        participantRow?.querySelector("[data-log-participant-comment]"),
+      );
       return;
     }
 
