@@ -206,6 +206,7 @@ const memberScheduleWeeks = [
 
 const memberScheduleMinWeekOffset = -104;
 const memberScheduleMaxWeekOffset = 156;
+const memberScheduleWorkspaceDays = 31;
 
 function localDateKey(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
@@ -1682,7 +1683,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.287",
+    workerUrl: "./service-worker.js?v=1.0.288",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2849,6 +2850,17 @@ function currentScheduledLessonsForChange() {
     return dueLessons.concat(fromSchedule, couponTickets, regularTickets, pausedTickets);
   }
   return lessons.filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
+}
+
+function loadedFutureScheduledLessonsForChange(today = localDateKey()) {
+  return (state.liveLessons || [])
+    .filter((lesson) => (
+      isCurrentMemberName(lesson.member)
+      && lesson.status === "scheduled"
+      && lesson.lessonDate
+      && lesson.lessonDate >= today
+    ))
+    .sort((a, b) => `${a.lessonDate} ${a.time || ""}`.localeCompare(`${b.lessonDate} ${b.time || ""}`));
 }
 
 function activeMemberWeek() {
@@ -5727,7 +5739,14 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
   const profileId = profile?.id || state.member?.profileId || "";
   if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
   const week = activeMemberWeek();
-  const cacheKey = `${profileId}:${week.startDate}:${week.endDate}`;
+  const workspaceStart = new Date(`${week.startDate}T12:00:00`);
+  const workspaceEnd = new Date(
+    workspaceStart.getFullYear(),
+    workspaceStart.getMonth(),
+    workspaceStart.getDate() + memberScheduleWorkspaceDays,
+  );
+  const workspaceEndDate = localDateKey(workspaceEnd);
+  const cacheKey = `${profileId}:${week.startDate}:${workspaceEndDate}`;
   const cached = memberScheduleV2WorkspaceCache;
   if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
     return applyScheduleV2MemberWorkspace(cached.workspace, cached.releasedMakeupSlots, cached.oneDaySlots);
@@ -5736,7 +5755,7 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
     const [workspace, releasedMakeupSlots, oneDaySlots] = await Promise.all([
       client.rpc("tn_schedule_v2_member_workspace", {
         target_from: week.startDate,
-        target_to: week.endDate,
+        target_to: workspaceEndDate,
       }),
       client.rpc("tn_member_released_makeup_slots", {}).catch(() => []),
       client.rpc("tn_member_one_day_schedule_slots", {}).catch(() => []),
@@ -7875,7 +7894,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.287" });
+  const params = new URLSearchParams({ v: "1.0.288" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8096,11 +8115,7 @@ function handleLessonDetailAction(action) {
     return;
   }
   if (action === "change" || action === "makeup") {
-    renderSelects();
-    if ($("#absenceLesson")) $("#absenceLesson").value = lesson.id;
-    renderSelects();
-    renderAvailableSlots();
-    openChangeRequestModal();
+    void openChangeRequestModal(lesson.id);
   }
 }
 
@@ -8298,7 +8313,44 @@ function changeMemberScheduleTimeRange(range) {
   saveSnapshot();
 }
 
-function openChangeRequestModal() {
+async function prepareChangeRequestSource(preferredLessonId = "") {
+  let sources = currentScheduledLessonsForChange();
+  let futureLessons = loadedFutureScheduledLessonsForChange();
+  const hasFalseInitialSource = sources.some((lesson) => lesson.regularInitialBooking) && !futureLessons.length;
+  if (hasFalseInitialSource && state.dataMode === "live" && state.member?.profileId) {
+    memberScheduleV2WorkspaceCache = null;
+    await syncMemberScheduleV2(state.profile, { force: true });
+    sources = currentScheduledLessonsForChange();
+    futureLessons = loadedFutureScheduledLessonsForChange();
+  }
+
+  const selectedSourceId = preferredLessonId || $("#absenceLesson")?.value || "";
+  const selectedSource = sources.find((lesson) => lesson.id === selectedSourceId);
+  if (selectedSource && !selectedSource.regularInitialBooking) return selectedSource.id;
+
+  const preferredFuture = futureLessons.find((lesson) => lesson.id === selectedSourceId);
+  const nextFuture = preferredFuture || futureLessons[0];
+  if (!nextFuture) return selectedSource?.id || sources[0]?.id || "";
+
+  const targetWeekOffset = Math.min(
+    Math.max(memberWeekOffsetForDate(nextFuture.lessonDate), memberScheduleMinWeekOffset),
+    memberScheduleMaxWeekOffset,
+  );
+  if (targetWeekOffset !== state.activeMemberWeekIndex) {
+    state.activeMemberWeekIndex = targetWeekOffset;
+    state.selectedScheduleDay = nextFuture.day || state.selectedScheduleDay;
+    renderSchedule();
+    saveSnapshot();
+  }
+  return nextFuture.id;
+}
+
+async function openChangeRequestModal(preferredLessonId = "") {
+  const sourceId = await prepareChangeRequestSource(preferredLessonId);
+  renderSelects();
+  if (sourceId && [...$("#absenceLesson").options].some((option) => option.value === sourceId)) {
+    $("#absenceLesson").value = sourceId;
+  }
   renderSelects();
   renderAvailableSlots();
   renderChangeModalSummary();
@@ -9503,8 +9555,7 @@ function bindEvents() {
   $("#scheduleGrid")?.addEventListener("click", (event) => {
     if (!event.target.closest("[data-open-member-change]")) return;
     const firstLesson = currentScheduledLessonsForChange()[0];
-    if (firstLesson && $("#absenceLesson")) $("#absenceLesson").value = firstLesson.id;
-    openChangeRequestModal();
+    void openChangeRequestModal(firstLesson?.id || "");
   });
   $("#availableSlotList")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-select-slot]");

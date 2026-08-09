@@ -2135,7 +2135,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.287",
+    workerUrl: "./service-worker.js?v=1.0.288",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2165,7 +2165,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.287" });
+  const params = new URLSearchParams({ v: "1.0.288" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2357,6 +2357,50 @@ async function logoutCoach() {
 
 let activeCoachModalId = "";
 let coachModalReturnFocus = null;
+let nativeCoachBackListenerReady = false;
+
+function nativeCoachAppPlatform() {
+  return window.Capacitor?.getPlatform?.() || "web";
+}
+
+function blurActiveCoachFormControl() {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !active.matches("input, textarea, select")) return false;
+  const viewport = window.visualViewport;
+  const layoutHeight = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+  const keyboardVisible = Boolean(viewport && layoutHeight - viewport.height - viewport.offsetTop > 96);
+  active.blur();
+  return keyboardVisible;
+}
+
+async function installNativeCoachBackNavigation() {
+  if (nativeCoachBackListenerReady || nativeCoachAppPlatform() !== "android") return;
+  const appPlugin = window.Capacitor?.Plugins?.App;
+  if (!appPlugin?.addListener) return;
+  nativeCoachBackListenerReady = true;
+  await appPlugin.addListener("backButton", async () => {
+    if (blurActiveCoachFormControl()) return;
+    if (!$("#noticeDialog")?.hidden) {
+      closeNotice(false);
+      return;
+    }
+    if (activeCoachModalId) {
+      closeCoachModal(activeCoachModalId);
+      return;
+    }
+    const activeView = $(".view.is-active")?.id || "todayView";
+    if (!$("#coachAppScreen")?.hidden && activeView !== "todayView") {
+      setView("todayView", { replaceHistory: true });
+      return;
+    }
+    if (!$("#coachAppScreen")?.hidden) {
+      openUserMode();
+      return;
+    }
+    const minimized = await appPlugin.minimizeApp?.().then(() => true).catch(() => false);
+    if (!minimized) await appPlugin.exitApp?.().catch(() => undefined);
+  });
+}
 
 function coachFocusableElements(container) {
   if (!container) return [];
@@ -5902,6 +5946,7 @@ async function initCoachApp() {
   purgeLegacyDemoStorage();
   restoreSnapshot();
   bindEvents();
+  void installNativeCoachBackNavigation();
   installCoachConnectivitySync();
   installCoachLiveScheduleRefresh();
   renderAll();
