@@ -12662,6 +12662,9 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
               <option value="true">미래 정규시간 다시 만들기</option>
             </select></label>
             <button class="primary-button member-inline-save" type="submit">저장</button>
+            ${operationsRole() === "admin" && ticket && ticket.status !== "voided"
+              ? `<button class="danger-button member-inline-force-delete" type="button" data-open-member-management="force_delete" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticket.serverTicketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(ticketContextLabel)} 강제 삭제">강제 삭제</button>`
+              : ""}
             ${memberListStatus(member) === "inactive" && member.authRole !== "admin" && member.serverUserId
               ? `<button class="danger-button member-row-permanent-delete" type="button" data-open-member-management="permanent_delete" data-member-management-member-id="${member.id}">영구 삭제</button>`
               : ""}
@@ -12892,6 +12895,9 @@ function memberInlineEditorMarkup(member, ticket) {
           <div class="member-inline-editor-actions">
             ${ticket ? "" : '<span>회원권은 저장 후 ‘회원권 등록’에서 연결합니다.</span>'}
             ${ticket ? "" : `<button class="ghost-button" type="button" data-inline-member-management="${member.id}" data-inline-member-ticket="">회원권 등록</button>`}
+            ${operationsRole() === "admin" && ticket && ticket.status !== "voided"
+              ? `<button class="danger-button member-inline-force-delete" type="button" data-open-member-management="force_delete" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticket.serverTicketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")} 강제 삭제">강제 삭제</button>`
+              : ""}
             <button class="primary-button member-inline-save" type="submit">저장</button>
           </div>
           <p class="member-inline-message" aria-live="polite">${memberEditorMode === "transition" ? "빈 항목이 있어도 저장할 수 있습니다. 기존 시간표는 유지됩니다." : "행의 변경값을 서버에 저장합니다. 기존 시간표는 유지됩니다."}</p>
