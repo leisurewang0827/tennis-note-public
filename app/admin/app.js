@@ -8505,7 +8505,7 @@ function memberTicketOwnershipLabel(ticket, member) {
   const ownerUserId = String(ticket?.serverUserId || "");
   if (!ownerUserId) return "";
   const ownUserIds = new Set(memberServerUserIds(member).map(String));
-  if (ownUserIds.has(ownerUserId)) return ticketIsSharedGroup(ticket) ? "본인권" : "";
+  if (ownUserIds.has(ownerUserId)) return "본인권";
   const ownerName = (adminLiveDataState.users || []).find((user) => String(user.id || "") === ownerUserId)?.name || "";
   return ownerName ? `파트너권 · ${ownerName}` : "파트너권";
 }
@@ -9676,7 +9676,7 @@ function memberTicketListMarkup(member) {
   return `<div class="member-ticket-summary-list" aria-label="${escapeHtml(member.name)} 회원권 ${managedTickets.length}개">
     ${managedTickets.slice(0, 3).map((ticket, index) => {
       const ticketId = String(ticket.serverTicketId || ticket.id || "");
-      const ownershipLabel = memberTicketOwnershipLabel(ticket, member);
+      const ownershipLabel = managedTickets.length > 1 ? memberTicketOwnershipLabel(ticket, member) : "";
       const possibleDuplicate = possibleDuplicateIds.has(String(ticket.serverTicketId || ""));
       const sequenceLabel = managedTickets.length > 1 ? `회원권 ${index + 1}/${managedTickets.length}` : "";
       const periodLabel = [ticket.actualLessonStart || ticket.purchased, ticket.expires].filter(Boolean).map(memberDetailDateLabel).join("~");
@@ -12592,7 +12592,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
     : "";
   const productOptions = currentProductOption + activeProductOptions;
   const isGroup = Number(currentProduct?.group_size || record?.lesson_group_size || ticket?.groupSize || 1) === 2;
-  const ticketOwnershipLabel = ticket ? memberTicketOwnershipLabel(ticket, member) : "";
+  const ticketOwnershipLabel = ticket && ticketCount > 1 ? memberTicketOwnershipLabel(ticket, member) : "";
   const possibleDuplicate = Boolean(ticket?.serverTicketId)
     && memberPossibleDuplicateTicketIds(memberOperationalTickets(member)).has(String(ticket.serverTicketId));
   const ticketContextLabel = [
