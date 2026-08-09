@@ -2142,7 +2142,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.296",
+    workerUrl: "./service-worker.js?v=1.0.297",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2172,7 +2172,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.296" });
+  const params = new URLSearchParams({ v: "1.0.297" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -4340,14 +4340,13 @@ function updateLessonCompletionUi(id) {
   const submit = activeViewField(`[data-complete-lesson-from-modal="${id}"]`);
   const rowsReady = participantRows.length > 0 && participantRows.every((row) => {
     const comment = row.querySelector("[data-modal-coach-comment]")?.value.trim() || "";
-    const curriculum = row.querySelector("[data-modal-next-curriculum]")?.value || "";
     const count = row.querySelector("[data-modal-comment-count]");
     if (count) {
       count.textContent = `${comment.length}/5자`;
       count.classList.toggle("is-ready", comment.length >= 5);
     }
-    row.classList.toggle("is-ready", comment.length >= 5 && Boolean(curriculum));
-    return comment.length >= 5 && Boolean(curriculum);
+    row.classList.toggle("is-ready", comment.length >= 5);
+    return comment.length >= 5;
   });
   const ready = Boolean(lesson && canProcessLesson(lesson) && rowsReady);
   if (submit) submit.disabled = !ready;
