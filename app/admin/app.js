@@ -12592,6 +12592,14 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
     : "";
   const productOptions = currentProductOption + activeProductOptions;
   const isGroup = Number(currentProduct?.group_size || record?.lesson_group_size || ticket?.groupSize || 1) === 2;
+  const ticketOwnershipLabel = ticket ? memberTicketOwnershipLabel(ticket, member) : "";
+  const possibleDuplicate = Boolean(ticket?.serverTicketId)
+    && memberPossibleDuplicateTicketIds(memberOperationalTickets(member)).has(String(ticket.serverTicketId));
+  const ticketContextLabel = [
+    ticketCount > 1 ? `회원권 ${ticketPosition}/${ticketCount}` : "회원권",
+    ticketOwnershipLabel,
+    possibleDuplicate ? "중복 가능" : "",
+  ].filter(Boolean).join(" · ");
   const initialSchedule = memberRegularScheduleSlots(member, ticket)
     .slice(0, memberRegularScheduleFrequency(currentProduct, ticket))
     .map((slot) => ({ dayOfWeek: Number(slot.dayOfWeek), startTime: String(slot.startTime || "").slice(0, 5) }));
@@ -12601,8 +12609,8 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
             <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
           </div>
-          ${embedded ? `<div class="member-inline-ticket-context">
-            <strong>${ticketCount > 1 ? `회원권 ${ticketPosition}/${ticketCount}` : "회원권"}</strong>
+          ${embedded ? `<div class="member-inline-ticket-context ${possibleDuplicate ? "is-possible-duplicate" : ""}">
+            <strong>${escapeHtml(ticketContextLabel)}</strong>
             <span>${escapeHtml(ticket ? getTicketDisplayProduct(ticket) || ticket.product || "회원권" : "회원권 미등록")}${ticket ? ` · ${escapeHtml(memberTicketStatusLabel(ticket))}` : ""}</span>
           </div>` : ""}
           <input name="startsOn" type="hidden" value="${escapeHtml(memberManagementDate(record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased) || adminLocalDateKey(new Date()))}" />

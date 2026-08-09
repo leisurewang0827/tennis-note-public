@@ -2190,6 +2190,17 @@ tr.is-selected td {
   font-size: 12px;
 }
 
+.member-inline-ticket-context.is-possible-duplicate {
+  padding: 6px;
+  border: 1px solid #e7b54b;
+  border-radius: 6px;
+  background: #fff9e9;
+}
+
+.member-inline-ticket-context.is-possible-duplicate strong {
+  color: #8a5a00;
+}
+
 .member-inline-ticket-context span {
   overflow: hidden;
   color: var(--ink);
