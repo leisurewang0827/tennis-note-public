@@ -8494,6 +8494,13 @@ function memberTicketHistory(member) {
   return memberTicketGroups(member).history;
 }
 
+function memberOperationalTickets(member) {
+  const currentAndUpcoming = [...memberCurrentTickets(member), ...memberUpcomingTickets(member)]
+    .filter((ticket) => ticket?.status !== "voided");
+  if (currentAndUpcoming.length) return currentAndUpcoming;
+  return memberTicketHistory(member).filter((ticket) => ticket?.status !== "voided");
+}
+
 function memberDirectoryDisplayName(member, ticket = memberCurrentTicket(member)) {
   if (!member) return "회원";
   if (ticketIsSharedGroup(ticket)) {
@@ -11252,6 +11259,8 @@ function createMemberChangeBatchId() {
 
 function memberInlineChangeSummary(form) {
   const member = members.find((item) => item.id === Number(form?.dataset.memberInlineForm));
+  const ticket = [...tickets, ...expiredTickets]
+    .find((item) => String(item.serverTicketId || "") === String(form?.dataset.ticketId || ""));
   const labels = {
     memberName: "이름",
     memberPhone: "연락처",
@@ -11275,7 +11284,8 @@ function memberInlineChangeSummary(form) {
   const changed = [...(form?.elements || [])]
     .filter((control) => control.name && labels[control.name] && String(control.value) !== memberInlineInitialValue(control))
     .map((control) => labels[control.name]);
-  return `${member?.name || "회원"}: ${[...new Set(changed)].join(", ") || "입력값"}`;
+  const ticketLabel = ticket ? ` · ${getTicketDisplayProduct(ticket) || ticket.product || "회원권"}` : "";
+  return `${member?.name || "회원"}${ticketLabel}: ${[...new Set(changed)].join(", ") || "입력값"}`;
 }
 
 const memberInlineDraftFieldNames = [
@@ -11303,6 +11313,7 @@ const memberInlineDraftFieldNames = [
 function memberInlineDraft(form) {
   return {
     memberId: Number(form?.dataset.memberInlineForm) || 0,
+    ticketId: String(form?.dataset.ticketId || ""),
     values: Object.fromEntries(memberInlineDraftFieldNames
       .map((name) => [name, form?.elements?.[name]?.value])
       .filter(([, value]) => value !== undefined)),
@@ -11311,7 +11322,11 @@ function memberInlineDraft(form) {
 
 function restoreFailedMemberInlineDrafts(drafts = []) {
   drafts.forEach((draft) => {
-    const form = document.querySelector(`[data-member-inline-form="${draft.memberId}"]`);
+    const ticketSelector = draft.ticketId
+      ? `[data-ticket-id="${CSS.escape(draft.ticketId)}"]`
+      : '[data-ticket-id=""]';
+    const form = document.querySelector(`[data-member-inline-form="${draft.memberId}"]${ticketSelector}`)
+      || document.querySelector(`[data-member-inline-form="${draft.memberId}"]`);
     if (!form) return;
     if (form.elements.productId && draft.values.productId !== undefined) {
       form.elements.productId.value = draft.values.productId;
@@ -11639,32 +11654,35 @@ async function saveNotificationPolicySettings() {
 
 function exportVisibleMembers() {
   const visibleMembers = filteredMembers();
-  const rows = [["이름", "전화번호", "출생년도", "거주동", "성별", "레슨강사", "레슨방식", "레슨종류", "레슨요일", "레슨시작일", "총회차", "소진회차", "잔여회차", "결제일자", "결제수단", "결제금액", "비고"]].concat(visibleMembers.map((member) => {
-    const ticket = memberCurrentTicket(member);
-    const record = memberDatabaseRecord(member, ticket);
-    const payment = record ? null : latestMemberPayment(member);
-    return [
-      member.name,
-      member.phone || "",
-      member.birthYear || "",
-      member.neighborhood || "",
-      memberGenderLabel(member.gender),
-      member.coach,
-      memberManagementLessonMethodLabel(record, ticket),
-      memberManagementLessonTypeLabel(record?.lesson_type || ticket?.lessonTypeCode),
-      memberManagementLessonDaysLabel(record, ticket),
-      record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased || "",
-      record?.total_sessions ?? ticket?.total ?? "",
-      record?.used_sessions ?? ticket?.used ?? "",
-      record?.remaining_sessions ?? ticket?.remaining ?? "",
-      record?.payment_recorded_on || payment?.paidAt || payment?.verifiedAt || "",
-      record ? paymentMethodLabel(record.payment_method) : paymentMethodLabel(payment?.method),
-      record?.payment_amount ?? payment?.finalAmount ?? payment?.amount ?? "",
-      record ? record.admin_note || "" : member.note || "",
-    ];
-  }));
+  const bodyRows = visibleMembers.flatMap((member) => {
+    const memberTickets = memberOperationalTickets(member);
+    return (memberTickets.length ? memberTickets : [null]).map((ticket) => {
+      const record = memberDatabaseRecord(member, ticket);
+      const payment = ticket ? null : latestMemberPayment(member);
+      return [
+        member.name,
+        member.phone || "",
+        member.birthYear || "",
+        member.neighborhood || "",
+        memberGenderLabel(member.gender),
+        ticket?.coach || member.coach,
+        memberManagementLessonMethodLabel(record, ticket),
+        memberManagementLessonTypeLabel(record?.lesson_type || ticket?.lessonTypeCode),
+        memberManagementLessonDaysLabel(record, ticket),
+        record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased || "",
+        record?.total_sessions ?? ticket?.total ?? "",
+        record?.used_sessions ?? ticket?.used ?? "",
+        record?.remaining_sessions ?? ticket?.remaining ?? "",
+        record?.payment_recorded_on || payment?.paidAt || payment?.verifiedAt || "",
+        record ? paymentMethodLabel(record.payment_method) : paymentMethodLabel(payment?.method),
+        record?.payment_amount ?? payment?.finalAmount ?? payment?.amount ?? "",
+        record ? record.admin_note || "" : member.note || "",
+      ];
+    });
+  });
+  const rows = [["이름", "전화번호", "출생년도", "거주동", "성별", "레슨강사", "레슨방식", "레슨종류", "레슨요일", "레슨시작일", "총회차", "소진회차", "잔여회차", "결제일자", "결제수단", "결제금액", "비고"], ...bodyRows];
   downloadRowsAsCsv(`tennis-note-members-${new Date().toISOString().slice(0, 10)}.csv`, rows);
-  showToast(`${visibleMembers.length}명 회원 목록을 내보냈습니다`);
+  showToast(`${visibleMembers.length}명 · 회원권 ${bodyRows.length}행을 내보냈습니다`);
 }
 
 function memberDetailDateLabel(value = "") {
@@ -11719,8 +11737,7 @@ function memberLessonRows(member) {
   });
 }
 
-function memberScheduleSummary(member) {
-  const ticket = memberCurrentTicket(member);
+function memberScheduleSummary(member, ticket = memberCurrentTicket(member)) {
   if (!ticket) return "미배정";
   const product = membershipProductForTicket(ticket);
   const memberLessons = memberLessonRows(member);
@@ -11741,6 +11758,28 @@ function memberScheduleSummary(member) {
   if (record?.lesson_days?.length || ticket?.lessonDays?.length) return memberManagementLessonDaysLabel(record, ticket);
   if (member.regularTime && member.regularTime !== "시간표에서 확인") return member.regularTime;
   return "미배정";
+}
+
+function memberScheduleOverviewMarkup(member) {
+  const memberTickets = memberOperationalTickets(member);
+  if (!memberTickets.length) return '<span class="member-table-muted">미배정</span>';
+  return memberTickets.slice(0, 3).map((ticket) => `
+    <span class="member-ticket-summary-line">
+      <strong>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</strong>
+      <small>${escapeHtml(memberScheduleSummary(member, ticket))}</small>
+    </span>`).join("")
+    + (memberTickets.length > 3 ? `<small>외 ${memberTickets.length - 3}건</small>` : "");
+}
+
+function memberUsageOverviewMarkup(member) {
+  const memberTickets = memberOperationalTickets(member);
+  if (!memberTickets.length) return '<span class="member-table-muted">-</span>';
+  return memberTickets.slice(0, 3).map((ticket) => `
+    <span class="member-ticket-summary-line">
+      <strong>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</strong>
+      <small>${escapeHtml(ticketUsageLabel(ticket))}</small>
+    </span>`).join("")
+    + (memberTickets.length > 3 ? `<small>외 ${memberTickets.length - 3}건</small>` : "");
 }
 
 const memberScheduleDayOrder = [1, 2, 3, 4, 5, 6, 0];
@@ -11884,21 +11923,26 @@ function keepMemberInlineScheduleSeparate(form) {
 }
 
 function memberRemarkLabel(member) {
-  const ticket = memberCurrentTicket(member);
-  const record = memberDatabaseRecord(member, ticket);
+  const records = memberOperationalTickets(member)
+    .map((ticket) => memberDatabaseRecord(member, ticket))
+    .filter(Boolean);
   const payment = latestMemberPayment(member);
   const parts = [];
-  const note = String(record?.admin_note || member.note || "").trim();
-  if (note && !["실서버 회원권 연결", "회원권 등록 또는 연장 확인 필요", "운동노트만 이용 중", "가입서 제출 완료 · 결제 확인 필요"].includes(note)) {
-    parts.push(note);
-  }
+  const notes = [...new Set([
+    ...records.map((record) => String(record.admin_note || "").trim()),
+    String(member.note || "").trim(),
+  ].filter((note) => note && !["실서버 회원권 연결", "회원권 등록 또는 연장 확인 필요", "운동노트만 이용 중", "가입서 제출 완료 · 결제 확인 필요"].includes(note)))];
+  parts.push(...notes);
   if (Number(payment?.discountAmount || 0) > 0) parts.push(`할인 ${money.format(Number(payment.discountAmount))}원`);
   return parts.join(" · ") || "-";
 }
 
 function latestMemberPayment(member) {
-  const record = memberDatabaseRecord(member, memberCurrentTicket(member));
-  if (record && (record.payment_recorded_on || record.payment_method || Number(record.payment_amount) > 0)) {
+  const record = memberManagementTickets(member)
+    .map((ticket) => memberDatabaseRecord(member, ticket))
+    .filter((item) => item && (item.payment_recorded_on || item.payment_method || Number(item.payment_amount) > 0))
+    .sort((left, right) => String(right.payment_recorded_on || "").localeCompare(String(left.payment_recorded_on || "")))[0] || null;
+  if (record) {
     return {
       memberDatabaseRecord: true,
       paidAt: record.payment_recorded_on || "",
@@ -12468,6 +12512,8 @@ async function runMemberBulkAction() {
 function memberQuickEditorMarkup(member, ticket, options = {}) {
   if (!memberAdminEditEnabled || operationsRole() !== "admin") return "";
   const embedded = options.embedded === true;
+  const ticketPosition = Number(options.ticketPosition || 0);
+  const ticketCount = Number(options.ticketCount || 0);
   const record = memberDatabaseRecord(member, ticket);
   const coachRoles = memberManagementCoachRoles(ticket || {});
   const partnerUserId = ticket ? memberTicketPartnerUserId(ticket, member) : "";
@@ -12500,6 +12546,10 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
             <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
           </div>
+          ${embedded ? `<div class="member-inline-ticket-context">
+            <strong>${ticketCount > 1 ? `회원권 ${ticketPosition}/${ticketCount}` : "회원권"}</strong>
+            <span>${escapeHtml(ticket ? getTicketDisplayProduct(ticket) || ticket.product || "회원권" : "회원권 미등록")}${ticket ? ` · ${escapeHtml(memberTicketStatusLabel(ticket))}` : ""}</span>
+          </div>` : ""}
           <input name="startsOn" type="hidden" value="${escapeHtml(memberManagementDate(record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased) || adminLocalDateKey(new Date()))}" />
           <input name="expiresOn" type="hidden" value="${escapeHtml(memberManagementDate(ticket?.expires))}" />
           <input name="scheduleScope" type="hidden" value="${escapeHtml(record?.lesson_schedule_scope || ticket?.scheduleScope || "weekday")}" />
@@ -12659,12 +12709,12 @@ function updateMemberInlineToolbar() {
   const saveAllButton = $("#saveVisibleMemberRows");
   if (saveAllButton) {
     saveAllButton.hidden = !memberAdminEditEnabled || dirtyCount === 0;
-    if (!saveAllButton.disabled) saveAllButton.textContent = `변경 ${dirtyCount}명 저장`;
+    if (!saveAllButton.disabled) saveAllButton.textContent = `변경 ${dirtyCount}건 저장`;
   }
   const stateTarget = $("#memberEditorModeSaveState");
   if (stateTarget) stateTarget.textContent = !memberAdminEditEnabled
     ? "잠김"
-    : dirtyCount ? `저장 대기 ${dirtyCount}명` : "저장 완료";
+    : dirtyCount ? `저장 대기 ${dirtyCount}건` : "저장 완료";
   const changedButton = $("#showChangedMemberRows");
   const failedButton = $("#showFailedMemberRows");
   if (changedButton) changedButton.hidden = !memberAdminEditEnabled;
@@ -13046,8 +13096,8 @@ async function saveVisibleMemberRows() {
     return;
   }
   const summaries = forms.slice(0, 8).map(memberInlineChangeSummary);
-  const extra = forms.length > summaries.length ? `\n외 ${forms.length - summaries.length}명` : "";
-  if (!window.confirm(`현재 페이지 ${forms.length}명의 변경사항을 저장합니다.\n\n${summaries.join("\n")}${extra}\n\n실패한 행은 입력값을 유지합니다.`)) return;
+  const extra = forms.length > summaries.length ? `\n외 ${forms.length - summaries.length}건` : "";
+  if (!window.confirm(`현재 페이지 회원권 ${forms.length}건의 변경사항을 저장합니다.\n\n${summaries.join("\n")}${extra}\n\n실패한 행은 입력값을 유지합니다.`)) return;
   const changeBatchId = createMemberChangeBatchId();
   forms.forEach((form) => {
     form.dataset.changeBatchId = changeBatchId;
@@ -13227,17 +13277,23 @@ function renderMembers(options = {}) {
           <td class="member-auth-column">${memberAuthStatusMarkup(member)}</td>
           <td class="member-coach-column">${escapeHtml(member.coach || "미배정")}</td>
           <td class="member-ticket-column">${memberTicketListMarkup(member)}</td>
-          <td class="member-schedule-column">${escapeHtml(memberScheduleSummary(member))}</td>
-          <td class="member-usage-column">${escapeHtml(memberUsageDisplayLabel(member, ticket))}</td>
+          <td class="member-schedule-column">${memberScheduleOverviewMarkup(member)}</td>
+          <td class="member-usage-column">${memberUsageOverviewMarkup(member)}</td>
           <td class="member-payment-column">${memberPaymentOverviewMarkup(member)}</td>
           <td class="member-status-column"><div class="member-status-actions">${memberStatusBadge(member)}${permanentDeleteButton}</div></td>
           <td class="member-table-note member-note-column">${escapeHtml(memberRemarkLabel(member))}</td>
         </tr>`;
       if (!memberAdminEditEnabled || operationsRole() !== "admin") return memberRow;
-      return `
-        <tr class="member-inline-editor-row member-inline-sheet-row" data-member-id="${member.id}" data-member-editor-row="${member.id}">
-          <td colspan="10">${memberQuickEditorMarkup(member, ticket, { embedded: true })}</td>
-        </tr>`;
+      const editableTickets = memberOperationalTickets(member);
+      const ticketRows = editableTickets.length ? editableTickets : [null];
+      return ticketRows.map((editableTicket, ticketIndex) => `
+        <tr class="member-inline-editor-row member-inline-sheet-row" data-member-id="${member.id}" data-member-editor-row="${member.id}" data-member-editor-ticket="${escapeHtml(editableTicket?.serverTicketId || "")}">
+          <td colspan="10">${memberQuickEditorMarkup(member, editableTicket, {
+            embedded: true,
+            ticketPosition: ticketIndex + 1,
+            ticketCount: ticketRows.length,
+          })}</td>
+        </tr>`).join("");
       })
       .join("") : `<tr><td colspan="10" class="empty-text">${filterCopy.empty}</td></tr>`;
   } else {
@@ -27591,6 +27647,15 @@ function bindEvents() {
     const memberButton = event.target.closest("[data-select-member]");
     if (memberButton) {
       const memberId = Number(memberButton.dataset.selectMember);
+      const member = members.find((item) => item.id === memberId);
+      if (!$("#memberDetail")) {
+        if (!member) return;
+        state.inlineMemberId = null;
+        state.selectedMemberId = member?.id || null;
+        const ticketId = memberCurrentTicket(member)?.serverTicketId || "";
+        await openMemberManagementModal(member, "profile", ticketId);
+        return;
+      }
       state.selectedMemberId = state.selectedMemberId === memberId ? null : memberId;
       state.inlineMemberId = null;
       renderMembers();

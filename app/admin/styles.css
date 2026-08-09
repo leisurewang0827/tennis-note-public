@@ -2175,6 +2175,30 @@ tr.is-selected td {
   justify-content: flex-end;
 }
 
+.member-inline-ticket-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid #d8e7e1;
+}
+
+.member-inline-ticket-context strong {
+  flex: 0 0 auto;
+  color: var(--green);
+  font-size: 12px;
+}
+
+.member-inline-ticket-context span {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .member-page-save {
   min-width: 142px;
   white-space: nowrap;
