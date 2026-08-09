@@ -78,6 +78,7 @@
     searchScrollTimer: null,
     lastSearchScrollKey: "",
     renderMode: "",
+    cancelConfirmationKey: "",
   };
 
   function bridge() {
@@ -1612,6 +1613,8 @@
       button.disabled = future;
     });
     const cancelButton = $("#scheduleV2CancelLessonButton");
+    state.cancelConfirmationKey = "";
+    delete cancelButton.dataset.confirming;
     if (!cancelButton.hidden) cancelButton.textContent = future ? "이후 정규시간 종료" : "수업 취소";
     $("#scheduleV2SaveButton").textContent = state.reopeningLesson
       ? "새 수업으로 저장"
@@ -2250,6 +2253,7 @@
     state.editorFocusTarget?.focus?.({ preventScroll: true });
     state.editorFocusTarget = null;
     state.reopeningLesson = null;
+    state.cancelConfirmationKey = "";
     if (state.deferredRefresh) {
       state.deferredRefresh = false;
       requestLiveRefresh();
@@ -2544,6 +2548,9 @@
       schedule_v2_series_capacity_unavailable: "남은 횟수가 이 수업 길이보다 부족합니다.",
       schedule_v2_regular_anchor_conflict: "같은 요일·시간의 정규시간이 이미 다른 조건으로 연결되어 있습니다.",
       schedule_v2_regular_anchor_not_found: "이 수업은 새 시간표 정규 기준점과 연결되지 않았습니다. 이번 수업만 변경하거나 시간 미배정 목록에서 다시 연결해 주세요.",
+      schedule_v2_regular_end_reference_required: "종료할 정규수업을 다시 선택해 주세요.",
+      schedule_v2_regular_end_reason_required: "정규시간 종료 사유를 확인해 주세요.",
+      schedule_v2_regular_end_no_future_lesson: "종료할 미래 정규수업이 없습니다. 시간표를 새로고침해 주세요.",
       schedule_v2_regular_revision_past_forbidden: "지난 수업은 이후 정규일정 변경의 기준으로 사용할 수 없습니다.",
       schedule_v2_regular_revision_start_before_source: "선택한 회차보다 앞에서 시작하려면 더 이른 정규수업을 먼저 선택해 주세요.",
       schedule_v2_regular_revision_participants_invalid: "정규수업의 회원·회원권 연결을 확인해 주세요.",
@@ -2758,20 +2765,31 @@
     if (!requireWritableServer()) return;
     const lesson = state.editingLesson;
     const futureScope = regularSeriesEditEligible(lesson) && selectedRegularEditScope() === "future";
+    if (!lesson) return;
     const confirmation = futureScope
       ? "이 회차부터 같은 정규시간을 종료할까요? 지난 수업과 완료 기록은 유지되고, 예정 수업은 취소 이력으로 보존됩니다."
       : "이 수업을 취소할까요? 회원권 횟수는 차감하지 않습니다.";
-    if (!lesson || !window.confirm(confirmation)) return;
     const api = bridge();
     const button = $("#scheduleV2CancelLessonButton");
+    const confirmationKey = `${lesson.id}:${lesson.revision}:${futureScope ? "future" : "single"}`;
+    if (state.cancelConfirmationKey !== confirmationKey) {
+      state.cancelConfirmationKey = confirmationKey;
+      button.dataset.confirming = "true";
+      button.textContent = futureScope ? "종료 확인" : "취소 확인";
+      setEditorMessage(`${confirmation} 이 버튼을 한 번 더 누르면 적용됩니다.`, "warning");
+      return;
+    }
+    state.cancelConfirmationKey = "";
+    delete button.dataset.confirming;
     button.disabled = true;
-    setEditorMessage("수업을 취소하는 중입니다.", "info");
+    button.textContent = futureScope ? "종료 중..." : "취소 중...";
+    setEditorMessage(futureScope ? "이후 정규시간을 종료하는 중입니다." : "수업을 취소하는 중입니다.", "info");
     try {
       if (futureScope) {
-        await api.rpc("tn_schedule_v2_revise_regular_anchor", {
+        await api.rpc("tn_schedule_v2_end_regular_anchor", {
           target_lesson_id: lesson.id,
           target_expected_revision: lesson.revision,
-          target_new_rule: null,
+          target_reason: "관리자 시간표에서 이후 정규시간 종료",
           target_operation_key: operationKey("admin-regular-end"),
         });
       } else {
@@ -2794,6 +2812,7 @@
       setEditorMessage(errorMessage(error));
     } finally {
       button.disabled = false;
+      if (state.editorOpen) syncRegularEditScope();
     }
   }
 
@@ -3042,6 +3061,7 @@
     $("#scheduleV2MemberSearch").addEventListener("input", renderMemberResults);
     $("#scheduleV2LessonSearch").addEventListener("input", () => applyLessonSearchFilter({ scrollToMatch: true }));
     $("#scheduleV2EditorForm").addEventListener("change", (event) => {
+      state.cancelConfirmationKey = "";
       if (event.target.name === "regularEditScope") {
         syncRegularEditScope();
         setEditorMessage("");
