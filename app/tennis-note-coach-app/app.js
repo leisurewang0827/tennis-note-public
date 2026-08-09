@@ -2142,7 +2142,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.295",
+    workerUrl: "./service-worker.js?v=1.0.296",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2172,7 +2172,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.295" });
+  const params = new URLSearchParams({ v: "1.0.296" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3052,7 +3052,7 @@ function renderScheduleEditPanel() {
           <small class="lesson-comment-count" data-modal-comment-count="${escapeHtml(lesson.id)}">0/5자</small>
         </label>
         <label class="lesson-required-field">
-          <span>다음 커리큘럼 <small>필수</small></span>
+          <span>다음 커리큘럼 <small>선택</small></span>
           <select data-modal-next-curriculum="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>
             <option value="">검색·선택</option>
             ${curriculumOptions(defaultCurriculumId)}
@@ -4576,7 +4576,7 @@ async function processCoachNoShow(lessonId, deduct) {
 function saveLessonRecord() {
   const lesson = ensureCoachLessonRecord($("#recordLessonSelect")?.value) || recordableCoachLessons()[0];
   if (!lesson) return;
-  const nextCurriculumId = $("#recordNextCurriculum")?.value || curriculumSteps[0]?.id;
+  const nextCurriculumId = $("#recordNextCurriculum")?.value || "";
   const log = {
     id: `coach-record-${Date.now()}`,
     serverLessonId: lesson.serverLessonId || "",
@@ -4642,12 +4642,11 @@ async function completeLessonFromModal(id) {
   const usesV2Participants = Array.isArray(lesson.v2Participants) && lesson.v2Participants.length > 0;
   const missingParticipant = participantResults.find((result) => (
     !result.coachComment
-    || !result.nextCurriculumId
     || (usesV2Participants && (!result.userId || !result.ticketId))
   ));
   if (!participantResults.length || missingParticipant) {
     lesson.validationMessage = missingParticipant
-      ? `${missingParticipant.name} 회원의 코치 코멘트와 다음 커리큘럼을 모두 등록해 주세요.`
+      ? `${missingParticipant.name} 회원의 코치 코멘트를 5자 이상 입력해 주세요.`
       : "수업 참여자와 회원권 연결을 확인해 주세요.";
     renderLessonEditModal();
     return;
@@ -5417,13 +5416,12 @@ function updateLogCompletionUi(log) {
   if (participantRows.length) {
     const ready = participantRows.every((row) => {
       const length = String(row.querySelector("[data-log-participant-comment]")?.value || "").trim().length;
-      const curriculumId = row.querySelector("[data-log-participant-curriculum]")?.value || "";
       const count = row.querySelector("[data-log-participant-comment-count]");
       if (count) {
         count.textContent = `${length}/5자`;
         count.classList.toggle("is-ready", length >= 5);
       }
-      return length >= 5 && Boolean(curriculumId);
+      return length >= 5;
     });
     if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || !ready;
     return;
@@ -5434,7 +5432,7 @@ function updateLogCompletionUi(log) {
     count.textContent = `${length}/5자`;
     count.classList.toggle("is-ready", length >= 5);
   }
-  if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || length < 5 || !log.nextCurriculumId;
+  if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || length < 5;
 }
 
 async function confirmLog(id, options = {}) {
@@ -5478,11 +5476,10 @@ async function confirmLog(id, options = {}) {
   const requiresExactParticipantPairs = Boolean(linkedScheduleV2Lesson || participantResultsHaveAnyPair);
   const missingParticipant = participantResults.find((result) => (
     !result.coachComment
-    || !result.nextCurriculumId
     || (requiresExactParticipantPairs && (!result.userId || !result.ticketId))
   ));
   if (missingParticipant) {
-    log.validationMessage = "코치 코멘트와 다음 커리큘럼을 등록해야 횟수 차감이 가능합니다.";
+    log.validationMessage = "코치 코멘트와 정확한 회원권 연결을 확인해 주세요.";
     renderAll();
     return false;
   }

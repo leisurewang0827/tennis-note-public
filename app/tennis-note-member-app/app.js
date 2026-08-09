@@ -63,12 +63,21 @@ const state = {
   liveLessons: [],
   liveLessonsLoaded: false,
   scheduleV2WorkspaceLoaded: false,
+  scheduleV2SyncStatus: "idle",
+  scheduleV2TargetKey: "",
+  scheduleV2LoadedKey: "",
   scheduleV2SyncError: "",
+  serverChangeCandidates: [],
+  serverChangeCandidateStatus: "idle",
+  serverChangeCandidateKey: "",
+  serverChangeCandidateError: "",
+  serverChangeCandidateExclusions: {},
   liveMakeupEntitlements: [],
   liveReleasedMakeupSlots: [],
   regularInitialSelections: [],
   regularInitialOperationKey: "",
   groupAccount: null,
+  selectedHoldingTicketId: "",
   holdingPolicySettings: {
     personalMaxDays: 7,
     fourWeekPersonalMaxDays: 7,
@@ -1683,7 +1692,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.295",
+    workerUrl: "./service-worker.js?v=1.0.296",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2788,9 +2797,14 @@ function memberScheduleOptions() {
   );
   const selectedLesson = sourceLessons.find((lesson) => lesson.id === selectedId)
     || sourceLessons[0];
+  const candidateState = memberChangeCandidateLoadState(selectedLesson);
   const generated = memberHasPendingPaymentOnly()
     ? []
-    : generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson);
+    : candidateState === "ready"
+      ? state.serverChangeCandidates
+      : ["loading", "error"].includes(candidateState)
+        ? []
+        : generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson);
   return scheduleLessons.concat(generated);
 }
 
@@ -2967,12 +2981,16 @@ function renderMemberHomeOverview() {
   const onboarding = $("#homeOnboarding");
   if (!grid || !onboarding) return;
 
-  const ticket = currentLiveTicket();
+  const currentTickets = currentLiveTickets();
+  const nextTickets = upcomingLiveTickets();
+  const ticket = currentTickets[0] || nextTickets[0] || null;
+  const currentRemaining = currentTickets.reduce((sum, item) => sum + Math.max(0, Number(item.remaining) || 0), 0);
+  const hasLowTicket = currentTickets.some((item) => Number(item.remaining) <= 2);
   const upcoming = upcomingMemberLessons(2);
   const latestFeedback = latestMemberFeedbackLog();
   const pendingFeedback = pendingMemberFeedbackLog();
   const hasNewFeedback = Boolean(latestFeedback && latestFeedback.id !== state.lastReadFeedbackId);
-  const paymentPending = ticket?.status === "pending_payment";
+  const paymentPending = !currentTickets.length && nextTickets.some((item) => item.status === "pending_payment");
   const ticketRefreshing = state.dataMode === "live" && state.member && /확인 중/.test(state.ticketSyncStatus?.text || "");
   const lessonRefreshing = state.dataMode === "live" && state.member && !state.liveLessonsLoaded;
   const refreshing = Boolean(ticketRefreshing || lessonRefreshing);
@@ -3018,10 +3036,12 @@ function renderMemberHomeOverview() {
   }
 
   if (ticket) {
-    $("#remainingCount").textContent = `${ticket.remaining}회`;
-    $("#ticketStatus").textContent = `${ticket.title} · ${ticket.statusLabel}`;
-    $("#homeTicketAction").textContent = ticket.remaining <= 2 ? "연장하기" : "회원권";
-    ticketCard.classList.toggle("alert", ticket.remaining <= 2);
+    $("#remainingCount").textContent = currentTickets.length > 1 ? `총 ${currentRemaining}회` : `${ticket.remaining}회`;
+    $("#ticketStatus").textContent = currentTickets.length > 1
+      ? `현재 회원권 ${currentTickets.length}개 · 수업별 차감`
+      : `${ticket.title} · ${ticket.statusLabel}`;
+    $("#homeTicketAction").textContent = hasLowTicket ? "연장하기" : "회원권";
+    ticketCard.classList.toggle("alert", hasLowTicket);
   } else if (refreshing) {
     $("#remainingCount").textContent = "확인 중";
     $("#ticketStatus").textContent = "서버에서 최신 회원권을 불러오고 있습니다.";
@@ -3778,7 +3798,17 @@ function renderDynamicMemberSchedule() {
     <button class="ghost-button schedule-week-arrow" type="button" data-change-member-week="1" ${state.activeMemberWeekIndex >= memberScheduleMaxWeekOffset ? "disabled" : ""} aria-label="다음 주" title="다음 주">&gt;</button>
   `;
 
-  if (state.scheduleV2SyncError && !state.scheduleV2WorkspaceLoaded) {
+  const loadState = activeMemberScheduleLoadState();
+  if (loadState === "loading") {
+    $("#scheduleGrid").innerHTML = `
+      <section class="tn-empty-state" role="status" aria-live="polite">
+        <strong>시간표 확인 중</strong>
+        <p>선택한 주의 수업과 신청 가능한 시간을 불러오고 있습니다.</p>
+      </section>`;
+    return;
+  }
+
+  if (loadState === "error") {
     $("#scheduleGrid").innerHTML = `
       <section class="tn-empty-state" role="alert">
         <strong>시간표를 불러오지 못했습니다</strong>
@@ -3788,7 +3818,6 @@ function renderDynamicMemberSchedule() {
     $("#retryMemberScheduleV2")?.addEventListener("click", () => {
       state.scheduleV2SyncError = "";
       state.liveLessonsLoaded = false;
-      renderSchedule();
       refreshSelectedMemberScheduleWeek();
     });
     return;
@@ -4042,14 +4071,19 @@ function renderSelects() {
   if (previousAbsence && [...$("#absenceLesson").options].some((option) => option.value === previousAbsence)) {
     $("#absenceLesson").value = previousAbsence;
   }
-  const availableOptions = memberAvailableSlotsForSelectedLesson()
+  const selectedSource = sourceLessons.find((lesson) => lesson.id === $("#absenceLesson")?.value);
+  const scheduleLoadState = activeMemberScheduleLoadState();
+  const candidateLoadState = memberChangeCandidateLoadState(selectedSource);
+  const loadState = scheduleLoadState !== "ready"
+    ? scheduleLoadState
+    : ["loading", "error"].includes(candidateLoadState) ? candidateLoadState : "ready";
+  const availableOptions = loadState === "ready" ? memberAvailableSlotsForSelectedLesson()
     .map((lesson) => `<option value="${lesson.id}">${lesson.day} ${lesson.time} · ${lesson.coach}</option>`)
-    .join("");
-  $("#makeupSlot").innerHTML = availableOptions || "<option>가능한 변경 시간 없음</option>";
+    .join("") : "";
+  $("#makeupSlot").innerHTML = availableOptions || `<option>${loadState === "loading" ? "변경 가능한 시간 확인 중" : loadState === "error" ? "시간표 불러오기 실패" : "가능한 변경 시간 없음"}</option>`;
   if (previousMakeup && [...$("#makeupSlot").options].some((option) => option.value === previousMakeup)) {
     $("#makeupSlot").value = previousMakeup;
   }
-  const selectedSource = sourceLessons.find((lesson) => lesson.id === $("#absenceLesson")?.value);
   const isMakeupDue = selectedSource?.status === "makeup_due";
   const isCouponBooking = Boolean(selectedSource?.couponBooking);
   const isRegularInitialBooking = Boolean(selectedSource?.regularInitialBooking);
@@ -4081,9 +4115,14 @@ function renderJournalMode() {
 function renderAvailableSlots() {
   const target = $("#availableSlotList");
   const selectedId = $("#makeupSlot")?.value;
-  const availableLessons = memberAvailableSlotsForSelectedLesson();
-  const selected = memberScheduleOptions().find((lesson) => lesson.id === selectedId);
   const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === $("#absenceLesson")?.value);
+  const scheduleLoadState = activeMemberScheduleLoadState();
+  const candidateLoadState = memberChangeCandidateLoadState(source);
+  const loadState = scheduleLoadState !== "ready"
+    ? scheduleLoadState
+    : ["loading", "error"].includes(candidateLoadState) ? candidateLoadState : "ready";
+  const availableLessons = loadState === "ready" ? memberAvailableSlotsForSelectedLesson() : [];
+  const selected = memberScheduleOptions().find((lesson) => lesson.id === selectedId);
   const isMakeupDue = source?.status === "makeup_due";
   const isCouponBooking = Boolean(source?.couponBooking);
   const isRegularInitialBooking = Boolean(source?.regularInitialBooking);
@@ -4103,6 +4142,28 @@ function renderAvailableSlots() {
   }
   renderChangeModalSummary();
   if (!target) return;
+  if (loadState === "loading") {
+    target.innerHTML = memberEmptyState({
+      title: "변경 가능한 시간을 확인하고 있습니다",
+      reason: "선택한 주의 최신 시간표를 불러온 뒤 신청 가능한 시간만 표시합니다.",
+      compact: true,
+    });
+    updateChangeRequestAvailability([], loadState);
+    return;
+  }
+  if (loadState === "error") {
+    target.innerHTML = memberEmptyState({
+      title: "시간표를 불러오지 못했습니다",
+      reason: state.serverChangeCandidateError || state.scheduleV2SyncError || "인터넷 연결을 확인한 뒤 다시 시도해 주세요.",
+      compact: true,
+    }) + '<button id="retryMemberChangeSlots" class="primary-button" type="button">다시 확인</button>';
+    $("#retryMemberChangeSlots")?.addEventListener("click", () => {
+      if (memberChangeUsesServerCandidates(source)) syncMemberChangeCandidates(source);
+      else refreshSelectedMemberScheduleWeek();
+    });
+    updateChangeRequestAvailability([], loadState);
+    return;
+  }
   target.innerHTML =
     availableLessons
       .map(
@@ -4126,10 +4187,32 @@ function renderAvailableSlots() {
         action: { label: "회원권 확인", homeAction: "shop", primary: false },
         compact: true,
       });
-  updateChangeRequestAvailability(availableLessons);
+  updateChangeRequestAvailability(availableLessons, loadState);
 }
 
-function updateChangeRequestAvailability(availableLessons = memberAvailableSlotsForSelectedLesson()) {
+function memberChangeCandidateKey(source = null, week = activeMemberWeek()) {
+  const sourceId = source?.serverLessonId || "";
+  return sourceId ? `${sourceId}:${week.startDate}:${week.endDate}` : "";
+}
+
+function memberChangeUsesServerCandidates(source = null) {
+  return Boolean(
+    state.dataMode === "live"
+    && source?.serverLessonId
+    && !source?.makeupEntitlementId
+    && !source?.couponBooking
+    && !source?.regularInitialBooking,
+  );
+}
+
+function memberChangeCandidateLoadState(source = null) {
+  if (!memberChangeUsesServerCandidates(source)) return "fallback";
+  const key = memberChangeCandidateKey(source);
+  if (state.serverChangeCandidateKey !== key) return "idle";
+  return state.serverChangeCandidateStatus || "idle";
+}
+
+function updateChangeRequestAvailability(availableLessons = memberAvailableSlotsForSelectedLesson(), loadState = activeMemberScheduleLoadState()) {
   const sourceLessons = currentScheduledLessonsForChange();
   const hasSourceLesson = sourceLessons.length > 0;
   const hasAvailableSlot = availableLessons.length > 0;
@@ -4154,7 +4237,11 @@ function updateChangeRequestAvailability(availableLessons = memberAvailableSlots
   }
   if (emptyState) {
     emptyState.hidden = canSubmit || (isRegularInitialBooking && hasAvailableSlot);
-    emptyState.textContent = !hasSourceLesson
+    emptyState.textContent = loadState === "loading"
+      ? "선택한 주의 시간표를 확인하고 있습니다."
+      : loadState === "error"
+        ? "시간표를 불러오지 못했습니다. 다시 확인해 주세요."
+        : !hasSourceLesson
       ? "예약하거나 변경할 수업이 없습니다. 이용권을 구매했다면 고객지원으로 문의해 주세요."
       : "현재 변경 가능한 시간이 없습니다. 다른 주를 확인하거나 고객지원으로 문의해 주세요.";
   }
@@ -4490,16 +4577,18 @@ function renderCurriculum() {
 }
 
 function renderTickets() {
-  const liveTicket = currentLiveTicket();
-  const total = liveTicket ? liveTicket.total : 0;
-  const remaining = liveTicket ? liveTicket.remaining : 0;
-  const used = liveTicket ? liveTicket.used : 0;
-  const ticketTitle = liveTicket?.title || "현재 이용권 없음";
+  const currentTickets = currentLiveTickets();
+  const nextTickets = upcomingLiveTickets();
+  const liveTicket = currentTickets[0] || nextTickets[0] || null;
+  const total = currentTickets.length ? currentTickets.reduce((sum, ticket) => sum + Math.max(0, Number(ticket.total) || 0), 0) : Number(liveTicket?.total) || 0;
+  const remaining = currentTickets.length ? currentTickets.reduce((sum, ticket) => sum + Math.max(0, Number(ticket.remaining) || 0), 0) : Number(liveTicket?.remaining) || 0;
+  const used = currentTickets.length ? currentTickets.reduce((sum, ticket) => sum + Math.max(0, Number(ticket.used) || 0), 0) : Number(liveTicket?.used) || 0;
+  const ticketTitle = currentTickets.length > 1 ? `현재 회원권 ${currentTickets.length}개` : liveTicket?.title || "현재 이용권 없음";
   const ticketStatus = liveTicket?.statusLabel || state.ticketSyncStatus?.text || "로그인 후 회원권 확인";
   const ticketPeriod = liveTicket?.expiresOn
     ? `${liveTicket.startsOn || "시작일 확인"} ~ ${liveTicket.expiresOn}`
     : "회원권 구매 또는 관리자 충전 필요";
-  const lowTicket = !!liveTicket && remaining <= 2;
+  const lowTicket = currentTickets.some((ticket) => Number(ticket.remaining) <= 2);
   const needsTicket = !liveTicket;
   const upcoming = upcomingMemberLessons(2);
   const connectedSchedule = upcoming.length
@@ -4639,8 +4728,9 @@ function memberHoldingPolicy() {
   return { ...saved, personalMaxDays };
 }
 
-function currentHoldingTicket() {
-  const liveTicket = currentLiveTicket();
+function currentHoldingTicket(ticketId = state.selectedHoldingTicketId) {
+  const liveTicket = currentLiveTickets().find((ticket) => String(ticket.id) === String(ticketId || ""))
+    || currentLiveTicket();
   if (liveTicket) return liveTicket;
   if (state.member && state.ticketSyncStatus?.tone === "demo") {
     return {
@@ -4659,10 +4749,13 @@ function currentHoldingTicket() {
   return null;
 }
 
-function memberHoldingRequests() {
+function memberHoldingRequests(ticketId = state.selectedHoldingTicketId) {
   const shared = loadSharedData();
   const memberName = state.member?.name || state.profile.name;
-  return (shared.holdingRequests || []).filter((request) => request.member === memberName);
+  return (shared.holdingRequests || []).filter((request) => (
+    request.member === memberName
+    && (!ticketId || String(request.ticketId || "") === String(ticketId))
+  ));
 }
 
 function holdingStatusLabel(status) {
@@ -4675,60 +4768,67 @@ function holdingStatusLabel(status) {
 function renderCurrentTicketPanel() {
   const target = $("#currentTicketPanel");
   if (!target) return;
-  const ticket = currentHoldingTicket();
-  const totalSessions = Math.max(0, Number(ticket?.total || 0));
-  const remainingSessions = Math.max(0, Number(ticket?.remaining || 0));
-  const usedSessions = Math.max(0, Number(ticket?.used ?? totalSessions - remainingSessions));
-  const progress = totalSessions ? Math.min(100, Math.max(0, (usedSessions / totalSessions) * 100)) : 0;
-  const isPendingTicket = ticket?.status === "pending_payment";
-  const isLowTicket = Boolean(ticket) && remainingSessions <= 2;
-  const ticketTitle = ticket?.title || "현재 이용권 없음";
-  const ticketPeriod = ticket?.expiresOn
-    ? `${ticket.startsOn || "시작일 확인"} ~ ${ticket.expiresOn}`
-    : ticket
-      ? "이용 기간을 확인 중입니다"
-      : state.ticketSyncStatus?.text || "이용권을 구매하거나 관리자 충전 후 사용할 수 있습니다.";
-  const statusLabel = isPendingTicket
-    ? "결제 확인 중"
-    : !ticket
-      ? "구매 필요"
-      : isLowTicket
-        ? "재등록 안내"
-        : ticket.statusLabel || "정상 이용 중";
-  const holding = ticket ? memberHoldingRequests()[0] : null;
-  const pendingPaymentId = ticket?.providerPaymentId || "";
-  const canResumePayment = pendingPaymentId && Number(ticket?.paymentAmount || 0) > 0;
-  const pendingPaymentActions = isPendingTicket
-    ? `<div class="membership-pending-actions">
-        <button class="small-button" type="button" data-resume-pending-ticket="${escapeHtml(ticket.id)}" ${canResumePayment ? "" : "disabled"}>결제창 다시 열기</button>
-        <button class="small-button" type="button" data-check-pending-ticket="${escapeHtml(ticket.id)}" ${pendingPaymentId ? "" : "disabled"}>결제 상태 다시 확인</button>
-      </div>`
-    : "";
-  const holdingAction = ticket && !isPendingTicket
-    ? `<button class="membership-status-note" type="button" data-open-holding-request>${holding ? `이용권 보류 · ${escapeHtml(holdingStatusLabel(holding.status))}` : "이용권 보류 신청"}</button>`
-    : "";
+  const currentTickets = currentLiveTickets();
+  const upcomingTickets = upcomingLiveTickets();
+  const demoTicket = !currentTickets.length && !upcomingTickets.length ? currentHoldingTicket() : null;
+  const visibleTickets = [...currentTickets, ...upcomingTickets];
+  if (demoTicket) visibleTickets.push(demoTicket);
+  const currentTicketIds = new Set(currentTickets.map((ticket) => String(ticket.id || "")));
+  const ticketCards = visibleTickets.map((ticket) => {
+    const totalSessions = Math.max(0, Number(ticket?.total || 0));
+    const remainingSessions = Math.max(0, Number(ticket?.remaining || 0));
+    const usedSessions = Math.max(0, Number(ticket?.used ?? totalSessions - remainingSessions));
+    const progress = totalSessions ? Math.min(100, Math.max(0, (usedSessions / totalSessions) * 100)) : 0;
+    const derivedState = window.TennisNoteTicketState?.derive?.(ticket) || ticket.status || "current";
+    const isPendingTicket = derivedState === "pending_payment";
+    const isUpcomingTicket = derivedState === "upcoming";
+    const isCurrentTicket = currentTicketIds.has(String(ticket.id || "")) || String(ticket.id || "").startsWith("demo-");
+    const isLowTicket = isCurrentTicket && remainingSessions <= 2;
+    const statusLabel = window.TennisNoteTicketState?.label?.(ticket)
+      || (isPendingTicket ? "결제 대기" : isUpcomingTicket ? "시작 예정" : ticket.statusLabel || "사용 중");
+    const ticketPeriod = ticket?.expiresOn
+      ? `${ticket.startsOn || "시작일 확인"} ~ ${ticket.expiresOn}`
+      : "이용 기간 확인 중";
+    const holding = isCurrentTicket ? memberHoldingRequests(ticket.id)[0] : null;
+    const pendingPaymentId = ticket?.providerPaymentId || "";
+    const canResumePayment = pendingPaymentId && Number(ticket?.paymentAmount || 0) > 0;
+    const pendingPaymentActions = isPendingTicket
+      ? `<div class="membership-pending-actions">
+          <button class="small-button" type="button" data-resume-pending-ticket="${escapeHtml(ticket.id)}" ${canResumePayment ? "" : "disabled"}>결제창 다시 열기</button>
+          <button class="small-button" type="button" data-check-pending-ticket="${escapeHtml(ticket.id)}" ${pendingPaymentId ? "" : "disabled"}>결제 상태 확인</button>
+        </div>`
+      : "";
+    const holdingAction = isCurrentTicket && !isPendingTicket
+      ? `<button class="membership-status-note" type="button" data-open-holding-request="${escapeHtml(ticket.id)}">${holding ? `이용권 보류 · ${escapeHtml(holdingStatusLabel(holding.status))}` : "이용권 보류 신청"}</button>`
+      : "";
+    return `
+      <article class="membership-ticket-unit" data-member-ticket-id="${escapeHtml(ticket.id || "")}">
+        <div class="membership-primary-card ${isPendingTicket || isUpcomingTicket ? "is-pending" : ""} ${isLowTicket ? "is-low" : ""}">
+          <div class="membership-primary-head">
+            <span>${isUpcomingTicket || isPendingTicket ? "다음 회원권" : "현재 회원권"}</span>
+            <small>${escapeHtml(statusLabel)}</small>
+          </div>
+          <strong>${escapeHtml(ticket?.title || "회원권")}</strong>
+          <div class="membership-remaining-row">
+            <span>남은 횟수</span>
+            <b>${remainingSessions}<em>회</em></b>
+          </div>
+          <div class="membership-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${totalSessions || 1}" aria-valuenow="${usedSessions}" aria-label="회원권 사용 진행률">
+            <span style="width: ${progress}%"></span>
+          </div>
+          <small class="membership-period">${escapeHtml(ticketPeriod)} · 총 ${totalSessions} / 소진 ${usedSessions} / 잔여 ${remainingSessions}</small>
+        </div>
+        ${pendingPaymentActions}
+        ${holdingAction}
+      </article>`;
+  }).join("");
   target.innerHTML = `
-    <article class="membership-primary-card ${isPendingTicket ? "is-pending" : ""} ${isLowTicket ? "is-low" : ""}">
-      <div class="membership-primary-head">
-        <span>현재 이용권</span>
-        <small>${escapeHtml(statusLabel)}</small>
-      </div>
-      <strong>${escapeHtml(ticketTitle)}</strong>
-      <div class="membership-remaining-row">
-        <span>남은 횟수</span>
-        <b>${remainingSessions}<em>회</em></b>
-      </div>
-      <div class="membership-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${totalSessions || 1}" aria-valuenow="${usedSessions}" aria-label="이용권 사용 진행률">
-        <span style="width: ${progress}%"></span>
-      </div>
-      <small class="membership-period">${escapeHtml(ticketPeriod)} · 총 ${totalSessions} / 소진 ${usedSessions} / 잔여 ${remainingSessions}</small>
-    </article>
+    ${ticketCards || `<article class="membership-empty-ticket"><strong>현재 회원권이 없습니다</strong><span>${escapeHtml(state.ticketSyncStatus?.text || "회원권 구매 또는 관리자 등록이 필요합니다.")}</span></article>`}
     <div class="membership-action-row">
-      <button class="primary-button" type="button" data-open-membership-products>${isPendingTicket ? "결제 상태 확인" : ticket ? "연장하기" : "회원권 구매"}</button>
+      <button class="primary-button" type="button" data-open-membership-products>${visibleTickets.length ? "회원권 추가·연장" : "회원권 구매"}</button>
       <button class="small-button" type="button" data-open-membership-history>이용 내역</button>
     </div>
-    ${pendingPaymentActions}
-    ${holdingAction}`;
+    ${currentTickets.length > 1 ? `<p class="membership-multiple-note">현재 회원권 ${currentTickets.length}개가 수업별로 각각 차감됩니다.</p>` : ""}`;
 }
 
 function holdingRequestDays(startDate, endDate) {
@@ -4759,7 +4859,8 @@ function updateHoldingEvidenceFields() {
   }
 }
 
-function openHoldingRequestModal() {
+function openHoldingRequestModal(ticketId = "") {
+  state.selectedHoldingTicketId = ticketId || currentLiveTicket()?.id || "";
   if (!currentHoldingTicket()) return;
   const today = new Date();
   $("#holdingRequestForm")?.reset();
@@ -4884,6 +4985,7 @@ async function submitHoldingRequest(event) {
   saveSnapshot();
   window.TennisNoteInputGuard?.markSaved?.("#holdingRequestModal");
   closeHoldingRequestModal();
+  state.selectedHoldingTicketId = "";
   renderCurrentTicketPanel();
 }
 
@@ -5555,6 +5657,118 @@ function serverJournalBody(log = {}) {
 }
 
 let memberScheduleV2WorkspaceCache = null;
+let memberScheduleV2RequestSequence = 0;
+let memberChangeCandidateRequestSequence = 0;
+
+function memberScheduleV2Context(profile = null, week = activeMemberWeek()) {
+  const profileId = profile?.id || state.member?.profileId || "";
+  const workspaceStart = new Date(`${week.startDate}T12:00:00`);
+  const workspaceEnd = new Date(
+    workspaceStart.getFullYear(),
+    workspaceStart.getMonth(),
+    workspaceStart.getDate() + memberScheduleWorkspaceDays,
+  );
+  const workspaceEndDate = localDateKey(workspaceEnd);
+  return {
+    profileId,
+    week,
+    workspaceEndDate,
+    key: `${profileId}:${week.startDate}:${workspaceEndDate}`,
+  };
+}
+
+function activeMemberScheduleLoadState() {
+  if (state.dataMode !== "live" || !state.member?.profileId) return "ready";
+  const activeKey = memberScheduleV2Context().key;
+  if (state.scheduleV2TargetKey === activeKey && state.scheduleV2SyncStatus === "loading") return "loading";
+  if (state.scheduleV2TargetKey === activeKey && state.scheduleV2SyncStatus === "error") return "error";
+  if (state.scheduleV2LoadedKey === activeKey) return "ready";
+  return state.scheduleV2WorkspaceLoaded ? "ready" : "loading";
+}
+
+function mapServerMemberChangeCandidate(candidate = {}, source = null) {
+  const lessonDate = String(candidate.lessonDate || "");
+  const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
+  const time = String(candidate.startTime || "").slice(0, 5);
+  const coachRoleId = candidate.coachRoleId || source?.coachRoleId || source?.coach_role_id || "";
+  return {
+    id: `server-change-slot-${source?.serverLessonId || "lesson"}-${lessonDate}-${time}`,
+    day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
+    time,
+    coach: source?.coach || "담당 코치",
+    coachRoleId,
+    coach_role_id: coachRoleId,
+    lessonDate,
+    member: "",
+    type: "수업 변경 신청가능",
+    status: "available",
+    policy: candidate.policy || "coach",
+    generated: true,
+    authoritativeCandidate: true,
+    durationMinutes: Number(candidate.durationMinutes) || lessonDuration(source),
+    member_ticket_id: source?.member_ticket_id || source?.ticketId || "",
+    ticketId: source?.member_ticket_id || source?.ticketId || "",
+  };
+}
+
+async function syncMemberChangeCandidates(source = null) {
+  if (!memberChangeUsesServerCandidates(source)) {
+    state.serverChangeCandidateStatus = "fallback";
+    state.serverChangeCandidateKey = "";
+    state.serverChangeCandidates = [];
+    state.serverChangeCandidateError = "";
+    state.serverChangeCandidateExclusions = {};
+    return false;
+  }
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !client.getSession?.()?.access_token) return false;
+  const requestId = ++memberChangeCandidateRequestSequence;
+  const week = { ...activeMemberWeek() };
+  const key = memberChangeCandidateKey(source, week);
+  state.serverChangeCandidateStatus = "loading";
+  state.serverChangeCandidateKey = key;
+  state.serverChangeCandidates = [];
+  state.serverChangeCandidateError = "";
+  state.serverChangeCandidateExclusions = {};
+  renderSelects();
+  renderAvailableSlots();
+  try {
+    const result = await client.rpc("tn_member_change_candidates", {
+      target_lesson_id: source.serverLessonId,
+      target_from: week.startDate,
+      target_to: week.endDate,
+    });
+    if (requestId !== memberChangeCandidateRequestSequence || memberChangeCandidateKey(source) !== key) return false;
+    if (!result || !Array.isArray(result.candidates)) {
+      state.serverChangeCandidateStatus = "fallback";
+      renderSelects();
+      renderAvailableSlots();
+      return false;
+    }
+    state.serverChangeCandidates = result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source));
+    state.serverChangeCandidateExclusions = result.exclusionSummary && typeof result.exclusionSummary === "object"
+      ? result.exclusionSummary
+      : {};
+    state.serverChangeCandidateStatus = "ready";
+    renderSelects();
+    renderAvailableSlots();
+    return true;
+  } catch (error) {
+    if (requestId !== memberChangeCandidateRequestSequence) return false;
+    const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
+    if (/tn_member_change_candidates|PGRST202|42883|schema cache/i.test(errorText)) {
+      state.serverChangeCandidateStatus = "fallback";
+      renderSelects();
+      renderAvailableSlots();
+      return false;
+    }
+    state.serverChangeCandidateStatus = "error";
+    state.serverChangeCandidateError = "변경 가능한 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요.";
+    renderSelects();
+    renderAvailableSlots();
+    return false;
+  }
+}
 
 function scheduleV2MemberLessonKind(kind = "") {
   return {
@@ -5736,20 +5950,15 @@ function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = []
 
 async function syncMemberScheduleV2(profile = null, options = {}) {
   const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
+  const context = memberScheduleV2Context(profile, options.week || activeMemberWeek());
+  const { profileId, week, workspaceEndDate, key: cacheKey } = context;
   if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
-  const week = activeMemberWeek();
-  const workspaceStart = new Date(`${week.startDate}T12:00:00`);
-  const workspaceEnd = new Date(
-    workspaceStart.getFullYear(),
-    workspaceStart.getMonth(),
-    workspaceStart.getDate() + memberScheduleWorkspaceDays,
-  );
-  const workspaceEndDate = localDateKey(workspaceEnd);
-  const cacheKey = `${profileId}:${week.startDate}:${workspaceEndDate}`;
   const cached = memberScheduleV2WorkspaceCache;
   if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
-    return applyScheduleV2MemberWorkspace(cached.workspace, cached.releasedMakeupSlots, cached.oneDaySlots);
+    if (options.requestId && options.requestId !== memberScheduleV2RequestSequence) return false;
+    const applied = applyScheduleV2MemberWorkspace(cached.workspace, cached.releasedMakeupSlots, cached.oneDaySlots);
+    if (applied) state.scheduleV2LoadedKey = cacheKey;
+    return applied;
   }
   try {
     const [workspace, releasedMakeupSlots, oneDaySlots] = await Promise.all([
@@ -5760,6 +5969,7 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
       client.rpc("tn_member_released_makeup_slots", {}).catch(() => []),
       client.rpc("tn_member_one_day_schedule_slots", {}).catch(() => []),
     ]);
+    if (options.requestId && options.requestId !== memberScheduleV2RequestSequence) return false;
     if (!workspace?.actorUserId || !Array.isArray(workspace.lessons)) return false;
     memberScheduleV2WorkspaceCache = {
       key: cacheKey,
@@ -5768,11 +5978,13 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
       releasedMakeupSlots: Array.isArray(releasedMakeupSlots) ? releasedMakeupSlots : [],
       oneDaySlots: Array.isArray(oneDaySlots) ? oneDaySlots : [],
     };
-    return applyScheduleV2MemberWorkspace(
+    const applied = applyScheduleV2MemberWorkspace(
       workspace,
       memberScheduleV2WorkspaceCache.releasedMakeupSlots,
       memberScheduleV2WorkspaceCache.oneDaySlots,
     );
+    if (applied) state.scheduleV2LoadedKey = cacheKey;
+    return applied;
   } catch (error) {
     const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
     if (!/tn_schedule_v2_member_workspace|PGRST202|42883|schema cache/i.test(text)) {
@@ -5782,11 +5994,12 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
   }
 }
 
-async function syncMemberLessonsFromServer(profile = null) {
+async function syncMemberLessonsFromServer(profile = null, options = {}) {
   const client = window.TennisNoteDataClient;
   const profileId = profile?.id || state.member?.profileId || "";
   if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
-  if (await syncMemberScheduleV2(profile)) return true;
+  if (await syncMemberScheduleV2(profile, options)) return true;
+  if (options.requestId && options.requestId !== memberScheduleV2RequestSequence) return false;
   if (!state.scheduleV2WorkspaceLoaded) {
     state.liveLessons = [];
     state.liveMakeupEntitlements = [];
@@ -6000,13 +6213,12 @@ async function syncMemberChangeRequestsFromServer(profile = null) {
 }
 
 function liveLessonForJournal(log = {}) {
-  const activeTicketId = currentLiveTicket()?.id || "";
   const targetDate = log.journalDate || "";
   const targetTime = String(log.lessonLabel || "").match(/(\d{1,2}:\d{2})/)?.[1] || "";
   const candidates = state.liveLessons.filter((lesson) => lesson.isOwnLesson && lesson.status === "scheduled");
   return candidates.find((lesson) => lesson.id === log.lessonId)
-    || candidates.find((lesson) => lesson.lessonDate === targetDate && lesson.time === targetTime && (!activeTicketId || lesson.member_ticket_id === activeTicketId))
-    || candidates.find((lesson) => lesson.lessonDate === targetDate && (!activeTicketId || lesson.member_ticket_id === activeTicketId))
+    || candidates.find((lesson) => lesson.lessonDate === targetDate && lesson.time === targetTime)
+    || candidates.find((lesson) => lesson.lessonDate === targetDate)
     || null;
 }
 
@@ -6603,11 +6815,15 @@ function liveTicketPriority(ticket = {}) {
 }
 
 function currentLiveTicket() {
-  if (!Array.isArray(state.liveTickets) || !state.liveTickets.length) return null;
+  return currentLiveTickets()[0] || null;
+}
+
+function currentLiveTickets() {
+  if (!Array.isArray(state.liveTickets) || !state.liveTickets.length) return [];
   const usableTickets = window.TennisNoteTicketState?.split
     ? window.TennisNoteTicketState.split(state.liveTickets).current
     : state.liveTickets.filter((ticket) => ["active", "paused"].includes(String(ticket.status || "").toLowerCase()));
-  if (!usableTickets.length) return null;
+  if (!usableTickets.length) return [];
   return [...usableTickets].sort((a, b) => {
     const priority = liveTicketPriority(a) - liveTicketPriority(b);
     if (priority) return priority;
@@ -6615,7 +6831,7 @@ function currentLiveTicket() {
       - Number(Boolean(a.sharedGroupTicket && Number(a.groupSize) === 2));
     if (sharedGroupPriority) return sharedGroupPriority;
     return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
-  })[0] || null;
+  });
 }
 
 function upcomingLiveTickets() {
@@ -6932,7 +7148,7 @@ async function syncMemberTicketsFromServer(profile = null) {
     rows = await attachLiveTicketPayments(client, rows || []);
     state.liveTickets = Array.isArray(rows) ? rows.map(normalizeLiveTicket) : [];
     const paymentRequestsChanged = reconcileVerifiedPaymentRequests();
-    const ticket = currentLiveTicket();
+    const ticket = currentLiveTicket() || upcomingLiveTickets()[0] || null;
     if (!ticket) {
       state.remaining = 0;
       state.profile.ticket = "현재 이용권 없음";
@@ -6944,16 +7160,17 @@ async function syncMemberTicketsFromServer(profile = null) {
       state.remaining = ticket.remaining;
       state.profile.ticket = `${ticket.title} · 총 ${ticket.total}회`;
     }
-    if (ticket.status === "active" && state.member) state.member.memberKind = "lesson_member";
+    if (currentLiveTickets().length && state.member) state.member.memberKind = "lesson_member";
+    const derivedStatusLabel = window.TennisNoteTicketState?.label?.(ticket) || ticket.statusLabel;
     state.ticketSyncStatus = {
       tone: ticket.tone,
-      text: `${ticket.statusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
+      text: `${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
     };
     const syncKey = `${ticket.id}:${ticket.status}:${ticket.remaining}:${ticket.total}`;
     if (syncKey !== state.lastLiveTicketKey) {
       state.lastLiveTicketKey = syncKey;
       state.ticketHistory.unshift({
-        text: `${ticket.title} · ${ticket.statusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
+        text: `${ticket.title} · ${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
         tone: ticket.tone,
       });
     }
@@ -7894,7 +8111,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.295" });
+  const params = new URLSearchParams({ v: "1.0.296" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8234,17 +8451,43 @@ async function cancelMemberScheduleRequest(kind, id) {
   }
 }
 
+function renderSelectedMemberScheduleWeek() {
+  renderSchedule();
+  renderSelects();
+  renderAvailableSlots();
+}
+
 function refreshSelectedMemberScheduleWeek() {
-  if (state.dataMode !== "live" || !state.member?.profileId) return;
+  if (state.dataMode !== "live" || !state.member?.profileId) {
+    renderSelectedMemberScheduleWeek();
+    return Promise.resolve(false);
+  }
+  const requestId = ++memberScheduleV2RequestSequence;
+  const week = { ...activeMemberWeek() };
+  const context = memberScheduleV2Context(state.profile, week);
   memberScheduleV2WorkspaceCache = null;
-  void syncMemberLessonsFromServer().then((synced) => {
-    if (!synced) return false;
-    renderSchedule();
-    renderSelects();
-    renderAvailableSlots();
+  state.scheduleV2SyncStatus = "loading";
+  state.scheduleV2TargetKey = context.key;
+  state.scheduleV2SyncError = "";
+  renderSelectedMemberScheduleWeek();
+  return syncMemberLessonsFromServer(state.profile, { force: true, requestId, week }).then(async (synced) => {
+    if (requestId !== memberScheduleV2RequestSequence || memberScheduleV2Context().key !== context.key) return false;
+    state.scheduleV2SyncStatus = synced ? "ready" : "error";
+    if (synced) state.scheduleV2LoadedKey = context.key;
+    renderSelectedMemberScheduleWeek();
+    if (synced && !$("#changeRequestModal")?.hidden) {
+      const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === $("#absenceLesson")?.value);
+      await syncMemberChangeCandidates(source);
+    }
     saveSnapshot();
-    return true;
-  }).catch(() => false);
+    return synced;
+  }).catch(() => {
+    if (requestId !== memberScheduleV2RequestSequence) return false;
+    state.scheduleV2SyncStatus = "error";
+    state.scheduleV2SyncError = "시간표를 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.";
+    renderSelectedMemberScheduleWeek();
+    return false;
+  });
 }
 
 function changeMemberWeek(delta) {
@@ -8252,9 +8495,6 @@ function changeMemberWeek(delta) {
     Math.max((Number(state.activeMemberWeekIndex) || 0) + delta, memberScheduleMinWeekOffset),
     memberScheduleMaxWeekOffset,
   );
-  renderSchedule();
-  renderSelects();
-  renderAvailableSlots();
   refreshSelectedMemberScheduleWeek();
 }
 
@@ -8277,9 +8517,6 @@ function changeMemberMonth(delta) {
     Math.max(memberWeekOffsetForDate(target), memberScheduleMinWeekOffset),
     memberScheduleMaxWeekOffset,
   );
-  renderSchedule();
-  renderSelects();
-  renderAvailableSlots();
   saveSnapshot();
   refreshSelectedMemberScheduleWeek();
 }
@@ -8294,9 +8531,6 @@ function selectMemberMonth(value) {
     Math.max(memberWeekOffsetForDate(target), memberScheduleMinWeekOffset),
     memberScheduleMaxWeekOffset,
   );
-  renderSchedule();
-  renderSelects();
-  renderAvailableSlots();
   saveSnapshot();
   refreshSelectedMemberScheduleWeek();
 }
@@ -8339,8 +8573,8 @@ async function prepareChangeRequestSource(preferredLessonId = "") {
   if (targetWeekOffset !== state.activeMemberWeekIndex) {
     state.activeMemberWeekIndex = targetWeekOffset;
     state.selectedScheduleDay = nextFuture.day || state.selectedScheduleDay;
-    renderSchedule();
     saveSnapshot();
+    await refreshSelectedMemberScheduleWeek();
   }
   return nextFuture.id;
 }
@@ -8355,6 +8589,8 @@ async function openChangeRequestModal(preferredLessonId = "") {
   renderAvailableSlots();
   renderChangeModalSummary();
   openAppModal("changeRequestModal", "#absenceLesson");
+  const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === $("#absenceLesson")?.value);
+  await syncMemberChangeCandidates(source);
 }
 
 function startCouponBooking(ticketId) {
@@ -9473,6 +9709,8 @@ function bindEvents() {
     renderSelects();
     renderAvailableSlots();
     renderChangeModalSummary();
+    const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === $("#absenceLesson")?.value);
+    void syncMemberChangeCandidates(source);
   });
   $("#confirmLatestLesson")?.addEventListener("click", confirmLatestLesson);
   $("#noticeClose").addEventListener("click", () => closeNotice(false));
@@ -9734,7 +9972,7 @@ function bindEvents() {
     }
     const holdingButton = event.target.closest("[data-open-holding-request]");
     if (holdingButton) {
-      openHoldingRequestModal();
+      openHoldingRequestModal(holdingButton.dataset.openHoldingRequest);
       return;
     }
     const resumeButton = event.target.closest("[data-resume-pending-ticket]");

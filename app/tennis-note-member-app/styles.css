@@ -5532,6 +5532,29 @@ body.notice-open {
   box-shadow: 0 10px 22px rgba(24, 34, 48, 0.06);
 }
 
+.membership-ticket-unit {
+  display: grid;
+  gap: 8px;
+}
+
+.membership-empty-ticket {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: white;
+}
+
+.membership-empty-ticket span,
+.membership-multiple-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
 .membership-primary-card.is-low {
   border-color: #efc77b;
   background: #fffaf0;

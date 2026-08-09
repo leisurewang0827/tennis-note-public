@@ -2117,7 +2117,7 @@
     $$("[data-v2-outcome-user]", list).forEach((row) => {
       const participant = participants.find((item) => String(item.userId) === String(row.dataset.v2OutcomeUser)) || {};
       const final = outcomeRowFinal(participant);
-      row.insertAdjacentHTML("beforeend", `<label class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼</span><input type="search" list="scheduleV2CurriculumOptions" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="기술명 또는 코드 검색" autocomplete="off"${editable && !final ? "" : " disabled"} /></label>`);
+      row.insertAdjacentHTML("beforeend", `<label class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼 <small>선택</small></span><input type="search" list="scheduleV2CurriculumOptions" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="기술명 또는 코드 검색" autocomplete="off"${editable && !final ? "" : " disabled"} /></label>`);
     });
     $$(".schedule-v2-outcome-row", list).forEach((row) => syncOutcomeRow(row));
   }
@@ -2137,9 +2137,6 @@
       }
       if (finalize && outcome === "completed" && coachComment.length < 5) {
         return { error: `${row.querySelector("strong").textContent} 회원의 피드백을 5자 이상 입력해 주세요.`, results: [] };
-      }
-      if (finalize && outcome === "completed" && !curriculumStep) {
-        return { error: `${row.querySelector("strong").textContent} 회원의 다음 커리큘럼을 선택해 주세요.`, results: [] };
       }
       if (finalize && outcome === "no_show" && coachComment.length < 2) {
         return { error: `${row.querySelector("strong").textContent} 회원의 노쇼 사유를 입력해 주세요.`, results: [] };
