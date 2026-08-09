@@ -9635,14 +9635,14 @@ function memberTicketListMarkup(member) {
     : { current: memberManagementTickets(member).filter((ticket) => isCurrentMemberTicket(ticket)), upcoming: [] };
   const managedTickets = [...grouped.current, ...grouped.upcoming].filter((ticket) => ticket.status !== "voided");
   if (!managedTickets.length) return '<span class="member-table-muted">미등록</span>';
-  return `<button class="member-ticket-summary-button" type="button" data-select-member="${member.id}" aria-label="${escapeHtml(member.name)} 회원권 ${managedTickets.length}개 확인">
+  return `<div class="member-ticket-summary-list" aria-label="${escapeHtml(member.name)} 회원권 ${managedTickets.length}개">
     ${managedTickets.slice(0, 3).map((ticket) => `
-      <span class="member-ticket-summary-line">
+      <button class="member-ticket-summary-button member-ticket-summary-line" type="button" data-select-member="${member.id}" data-member-ticket="${escapeHtml(ticket.serverTicketId || ticket.id || "")}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")} ${escapeHtml(memberTicketStatusLabel(ticket))} 확인">
         <strong>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</strong>
         <small>${escapeHtml(memberTicketStatusLabel(ticket))} · ${escapeHtml(ticketUsageLabel(ticket))}</small>
-      </span>`).join("")}
+      </button>`).join("")}
     ${managedTickets.length > 3 ? `<small class="member-ticket-summary-more">외 ${managedTickets.length - 3}개</small>` : ""}
-  </button>`;
+  </div>`;
 }
 
 function memberPaymentOverviewMarkup(member) {
@@ -27652,7 +27652,7 @@ function bindEvents() {
         if (!member) return;
         state.inlineMemberId = null;
         state.selectedMemberId = member?.id || null;
-        const ticketId = memberCurrentTicket(member)?.serverTicketId || "";
+        const ticketId = memberButton.dataset.memberTicket || memberCurrentTicket(member)?.serverTicketId || "";
         await openMemberManagementModal(member, "profile", ticketId);
         return;
       }

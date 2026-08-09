@@ -2999,17 +2999,27 @@ tr.is-selected td {
   display: block;
 }
 
-.member-ticket-summary-button {
+.member-ticket-summary-list {
   display: grid;
   gap: 4px;
-  width: 100%;
   min-width: 180px;
+}
+
+.member-ticket-summary-button {
+  display: grid;
+  gap: 1px;
+  width: 100%;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--ink);
   text-align: left;
   cursor: pointer;
+}
+
+.member-ticket-summary-button:hover,
+.member-ticket-summary-button:focus-visible {
+  color: var(--accent-strong);
 }
 
 .member-ticket-summary-line,
