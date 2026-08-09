@@ -8501,6 +8501,43 @@ function memberOperationalTickets(member) {
   return memberTicketHistory(member).filter((ticket) => ticket?.status !== "voided");
 }
 
+function memberTicketOwnershipLabel(ticket, member) {
+  const ownerUserId = String(ticket?.serverUserId || "");
+  if (!ownerUserId) return "";
+  const ownUserIds = new Set(memberServerUserIds(member).map(String));
+  if (ownUserIds.has(ownerUserId)) return ticketIsSharedGroup(ticket) ? "본인권" : "";
+  const ownerName = (adminLiveDataState.users || []).find((user) => String(user.id || "") === ownerUserId)?.name || "";
+  return ownerName ? `파트너권 · ${ownerName}` : "파트너권";
+}
+
+function memberTicketDuplicateFingerprint(ticket) {
+  if (!ticket?.serverTicketId || !ticket?.serverUserId) return "";
+  const participants = ticketParticipantUserIds(ticket).map(String).sort().join(",");
+  return [
+    ticket.serverUserId,
+    ticket.productId || ticket.product || "",
+    ticket.coachRoleId || ticket.coachId || "",
+    ticket.lessonTypeCode || ticket.groupSize || "",
+    ticket.actualLessonStart || ticket.purchased || "",
+    ticket.expires || "",
+    participants,
+  ].map((value) => String(value || "")).join("|");
+}
+
+function memberPossibleDuplicateTicketIds(managedTickets = []) {
+  const ticketsByFingerprint = new Map();
+  managedTickets.forEach((ticket) => {
+    const fingerprint = memberTicketDuplicateFingerprint(ticket);
+    if (!fingerprint) return;
+    const grouped = ticketsByFingerprint.get(fingerprint) || [];
+    grouped.push(ticket);
+    ticketsByFingerprint.set(fingerprint, grouped);
+  });
+  return new Set([...ticketsByFingerprint.values()]
+    .filter((grouped) => grouped.length > 1)
+    .flatMap((grouped) => grouped.map((ticket) => String(ticket.serverTicketId || ""))));
+}
+
 function memberDirectoryDisplayName(member, ticket = memberCurrentTicket(member)) {
   if (!member) return "회원";
   if (ticketIsSharedGroup(ticket)) {
@@ -9635,12 +9672,22 @@ function memberTicketListMarkup(member) {
     : { current: memberManagementTickets(member).filter((ticket) => isCurrentMemberTicket(ticket)), upcoming: [] };
   const managedTickets = [...grouped.current, ...grouped.upcoming].filter((ticket) => ticket.status !== "voided");
   if (!managedTickets.length) return '<span class="member-table-muted">미등록</span>';
+  const possibleDuplicateIds = memberPossibleDuplicateTicketIds(managedTickets);
   return `<div class="member-ticket-summary-list" aria-label="${escapeHtml(member.name)} 회원권 ${managedTickets.length}개">
-    ${managedTickets.slice(0, 3).map((ticket) => `
-      <button class="member-ticket-summary-button member-ticket-summary-line" type="button" data-select-member="${member.id}" data-member-ticket="${escapeHtml(ticket.serverTicketId || ticket.id || "")}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")} ${escapeHtml(memberTicketStatusLabel(ticket))} 확인">
+    ${managedTickets.slice(0, 3).map((ticket, index) => {
+      const ticketId = String(ticket.serverTicketId || ticket.id || "");
+      const ownershipLabel = memberTicketOwnershipLabel(ticket, member);
+      const possibleDuplicate = possibleDuplicateIds.has(String(ticket.serverTicketId || ""));
+      const sequenceLabel = managedTickets.length > 1 ? `회원권 ${index + 1}/${managedTickets.length}` : "";
+      const periodLabel = [ticket.actualLessonStart || ticket.purchased, ticket.expires].filter(Boolean).map(memberDetailDateLabel).join("~");
+      const contextLabel = [sequenceLabel, ownershipLabel, possibleDuplicate ? "중복 가능" : ""].filter(Boolean).join(" · ");
+      return `
+      <button class="member-ticket-summary-button member-ticket-summary-line ${possibleDuplicate ? "is-possible-duplicate" : ""}" type="button" data-select-member="${member.id}" data-member-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")} ${escapeHtml(contextLabel)} ${escapeHtml(memberTicketStatusLabel(ticket))} 확인">
+        ${contextLabel ? `<span class="member-ticket-context-label">${escapeHtml(contextLabel)}</span>` : ""}
         <strong>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</strong>
-        <small>${escapeHtml(memberTicketStatusLabel(ticket))} · ${escapeHtml(ticketUsageLabel(ticket))}</small>
-      </button>`).join("")}
+        <small>${escapeHtml(memberTicketStatusLabel(ticket))} · ${escapeHtml(ticketUsageLabel(ticket))}${periodLabel ? ` · ${escapeHtml(periodLabel)}` : ""}</small>
+      </button>`;
+    }).join("")}
     ${managedTickets.length > 3 ? `<small class="member-ticket-summary-more">외 ${managedTickets.length - 3}개</small>` : ""}
   </div>`;
 }
@@ -11180,16 +11227,20 @@ function renderMemberEditorModeBar() {
   if (button) {
     button.classList.toggle("is-active", memberAdminEditEnabled);
     button.setAttribute("aria-pressed", String(memberAdminEditEnabled));
-    button.textContent = memberAdminEditEnabled ? "편집 종료" : "관리자 편집";
+    button.textContent = memberAdminEditEnabled ? "표 편집 종료" : "표 바로 편집";
   }
   const summary = $("#memberEditorModeSummary");
   if (summary) summary.textContent = memberAdminEditEnabled
     ? "표에서 바로 수정한 뒤 행 저장 또는 현재 페이지 전체 저장을 누릅니다."
-    : "PIN 확인 후 회원·회원권을 표에서 바로 수정합니다.";
+    : "PIN 확인 후 회원·회원권을 이 표에서 바로 수정합니다.";
   updateMemberInlineToolbar();
 }
 
 async function loadMemberEditorModeFromServer() {
+  if (operationsRole() === "admin" && isAdminUnlocked() && !memberAdminEditEnabled) {
+    memberAdminEditEnabled = true;
+    memberAdminEditExpiresAt = Date.now() + memberAdminEditTimeoutMs;
+  }
   renderMemberEditorModeBar();
   return true;
 }
@@ -11199,14 +11250,14 @@ function setMemberAdminEditEnabled(enabled) {
   memberAdminEditExpiresAt = memberAdminEditEnabled ? Date.now() + memberAdminEditTimeoutMs : 0;
   state.inlineMemberId = null;
   renderMembers();
-  showToast(memberAdminEditEnabled ? "관리자 편집을 시작합니다." : "관리자 편집을 종료했습니다.");
+  showToast(memberAdminEditEnabled ? "회원표 편집을 시작합니다." : "회원표 편집을 종료했습니다.");
 }
 
 function touchMemberAdminEditSession() {
   if (!memberAdminEditEnabled) return;
   if (Date.now() >= memberAdminEditExpiresAt) {
     setMemberAdminEditEnabled(false);
-    showToast("개인정보 보호를 위해 관리자 편집이 자동 잠금되었습니다.");
+    showToast("개인정보 보호를 위해 회원표 편집이 자동 잠금되었습니다.");
     return;
   }
   memberAdminEditExpiresAt = Date.now() + memberAdminEditTimeoutMs;
@@ -11230,7 +11281,7 @@ window.setInterval(() => {
       return;
     }
     setMemberAdminEditEnabled(false);
-    showToast("15분 동안 사용하지 않아 관리자 편집을 잠갔습니다.");
+    showToast("15분 동안 사용하지 않아 회원표 편집을 잠갔습니다.");
   }
 }, 30000);
 
@@ -11349,8 +11400,12 @@ function restoreFailedMemberInlineDrafts(drafts = []) {
 function requestMemberAdminEdit() {
   if (operationsRole() !== "admin") return;
   if (memberAdminEditEnabled) {
-    if (dirtyMemberInlineForms().length && !window.confirm("저장하지 않은 변경사항을 버리고 관리자 편집을 종료할까요?")) return;
+    if (dirtyMemberInlineForms().length && !window.confirm("저장하지 않은 변경사항을 버리고 회원표 편집을 종료할까요?")) return;
     setMemberAdminEditEnabled(false);
+    return;
+  }
+  if (isAdminUnlocked()) {
+    setMemberAdminEditEnabled(true);
     return;
   }
   if (adminPinNeedsSetup()) {
@@ -11360,7 +11415,7 @@ function requestMemberAdminEdit() {
   }
   adminLockSession.pendingView = "";
   adminLockSession.pendingAction = "member_admin_edit";
-  adminLockSession.pendingLabel = "회원 관리자 편집";
+  adminLockSession.pendingLabel = "회원표 바로 편집";
   adminLockSession.error = "";
   adminLockSession.afterUnlock = () => setMemberAdminEditEnabled(true);
   renderAdminLockModal();
@@ -12569,9 +12624,13 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
               <option value="">미배정</option>
               ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === (record?.coach_role_id || ticket?.coachRoleId) ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
             </select></label>
-            <label class="member-inline-partner" data-member-quick-partner><span>파트너</span><span class="member-inline-partner-empty" data-member-quick-partner-empty ${isGroup ? "hidden" : ""}>1:1 · 해당 없음</span><select name="partnerUserId" ${isGroup ? "required" : "disabled"} ${isGroup ? "" : "hidden"}>
-              <option value="">선택</option>${partnerOptions}
-            </select></label>
+            <label class="member-inline-partner" data-member-quick-partner data-manual-member-partner-field><span>파트너</span><span class="member-inline-partner-empty" data-member-quick-partner-empty ${isGroup ? "hidden" : ""}>1:1 · 해당 없음</span><span class="member-inline-partner-search" data-manual-existing-partner data-current-member-user-id="${escapeHtml(member.serverUserId || "")}" ${isGroup ? "" : "hidden"}>
+              <input name="partnerSearch" type="search" autocomplete="off" placeholder="이름 검색" data-manual-member-partner-search ${isGroup ? "" : "disabled"} />
+              <span class="member-partner-search-results" data-manual-member-partner-results aria-live="polite" hidden></span>
+              <select name="partnerUserId" ${isGroup ? "required" : "disabled"}>
+                <option value="">파트너 선택</option>${partnerOptions}
+              </select>
+            </span></label>
             <label><span>총</span><input name="totalSessions" type="number" min="0" step="1" value="${total}" ${ticket ? "" : "disabled"} /></label>
             <label><span>소진</span><input name="usedSessions" type="number" min="0" step="1" value="${used}" ${ticket ? "" : "disabled"} /></label>
             <label><span>잔여</span><input name="remainingSessions" type="number" min="0" step="1" value="${remaining}" readonly aria-readonly="true" /></label>
@@ -12647,10 +12706,14 @@ function syncMemberQuickEditorProduct(form) {
   if (form.elements.partnerUserId) {
     form.elements.partnerUserId.disabled = !groupProduct;
     form.elements.partnerUserId.required = groupProduct;
-    form.elements.partnerUserId.hidden = !groupProduct;
   }
+  if (form.elements.partnerSearch) form.elements.partnerSearch.disabled = !groupProduct;
+  const partnerSearchFields = form.querySelector("[data-manual-existing-partner]");
+  if (partnerSearchFields) partnerSearchFields.hidden = !groupProduct;
   if (partnerField) partnerField.hidden = false;
   if (partnerEmpty) partnerEmpty.hidden = groupProduct;
+  if (!groupProduct && form.elements.partnerSearch) form.elements.partnerSearch.value = "";
+  filterManualMemberPartnerOptions(form);
   syncMemberQuickEditorSchedule(form, product);
   if (!product) return;
   form.elements.lessonType.value = groupProduct ? "one_on_two" : "one_on_one";
@@ -27640,6 +27703,7 @@ function bindEvents() {
       const form = manualPartnerButton.closest("form");
       if (form?.elements?.partnerUserId) {
         form.elements.partnerUserId.value = manualPartnerButton.dataset.selectManualMemberPartner;
+        form.elements.partnerUserId.dispatchEvent(new Event("change", { bubbles: true }));
         filterManualMemberPartnerOptions(form);
       }
       return;
