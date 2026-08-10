@@ -2000,7 +2000,7 @@ tr.is-selected td {
 }
 
 #membersView .table-panel table {
-  min-width: 980px;
+  min-width: 1080px;
 }
 
 #membersView .table-panel {
@@ -2178,6 +2178,67 @@ tr.is-selected td {
 .member-inline-force-delete {
   min-width: 84px;
   white-space: nowrap;
+}
+
+.member-inline-cancel {
+  min-width: 58px;
+  white-space: nowrap;
+}
+
+.member-actions-column {
+  width: 118px;
+  min-width: 118px;
+}
+
+.member-row-actions {
+  display: grid;
+  gap: 5px;
+  align-items: center;
+}
+
+.member-row-actions button {
+  width: 100%;
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+.member-add-ticket-button {
+  font-size: 11px;
+}
+
+.member-ticket-table-row + .member-ticket-table-row[data-member-id] td {
+  border-top-color: #dce9e4;
+}
+
+.member-ticket-table-row.is-possible-duplicate td {
+  background: #fffaf0;
+}
+
+.member-secondary-ticket-mark {
+  color: #72958a;
+  font-weight: 900;
+}
+
+.member-ticket-row-summary {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.member-ticket-row-summary small {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.member-ticket-row-summary strong,
+.member-ticket-row-summary span {
+  overflow-wrap: anywhere;
+}
+
+.member-ticket-row-summary span {
+  color: #64786f;
+  font-size: 11px;
 }
 
 .member-inline-ticket-context {
