@@ -1598,6 +1598,11 @@ function isCurrentMemberName(name = "") {
   return Boolean(normalized && current && normalized === current);
 }
 
+function isOwnMemberScheduleLesson(lesson = {}) {
+  if (typeof lesson.isOwnLesson === "boolean") return lesson.isOwnLesson;
+  return isCurrentMemberName(lesson.member);
+}
+
 function ensureScheduleBaseline() {
   if (state.dataMode === "live") return;
   const baseline = [
@@ -1692,7 +1697,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.308",
+    workerUrl: "./service-worker.js?v=1.0.309",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2497,7 +2502,7 @@ function memberScheduleTimes(policy = loadAdminSchedulePolicy()) {
       && start >= openStartMinutes
       && start < openEndMinutes;
   });
-  const ownScheduleLessons = allScheduleLessons.filter((lesson) => lesson.isOwnLesson || isCurrentMemberName(lesson.member));
+  const ownScheduleLessons = allScheduleLessons.filter((lesson) => isOwnMemberScheduleLesson(lesson));
   const scheduleLessons = ownScheduleLessons.length ? ownScheduleLessons : allScheduleLessons;
   if (!scheduleLessons.length) return makeMemberTimeRange("17:00", allEnd);
   const starts = scheduleLessons.map((lesson) => minutesFromTime(lesson.time));
@@ -2528,7 +2533,7 @@ function memberDayCoaches(day, policy, scheduleLessons = []) {
     .filter((lesson) => (
       lesson.day === day
       && lesson.status !== "available"
-      && (lesson.isOwnLesson || isCurrentMemberName(lesson.member))
+      && isOwnMemberScheduleLesson(lesson)
     ))
     .map((lesson) => memberLessonCoach(lesson, policy));
   return working
@@ -2757,8 +2762,8 @@ function memberReleasedMakeupSlot(lessonDate, time, coachRoleId, durationMinutes
 function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson = null) {
   const result = [];
   const sourceLesson = selectedLesson
-    || scheduleLessons.find((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled" && lesson.serverLessonId)
-    || scheduleLessons.find((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
+    || scheduleLessons.find((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled" && lesson.serverLessonId)
+    || scheduleLessons.find((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled");
   if (!sourceLesson) return result;
   const sourceCoach = memberLessonCoach(sourceLesson, policy);
   const durationMinutes = lessonDuration(sourceLesson);
@@ -2830,7 +2835,7 @@ function memberScheduleOptions() {
   const scheduleLessons = memberScheduleLessons();
   const selectedId = $("#absenceLesson")?.value;
   const sourceLessons = memberMakeupDueLessons().concat(
-    scheduleLessons.filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled"),
+    scheduleLessons.filter((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled"),
     memberBookableCouponTickets(),
     memberBookableRegularTickets(),
     memberBookablePausedTickets(),
@@ -2875,8 +2880,7 @@ function memberHasPendingPaymentOnly() {
 
 function memberScheduleVisibleLesson(lesson, policy = loadAdminSchedulePolicy()) {
   if (lesson.status === "available") return true;
-  if (!memberScheduleRequestOnly(policy)) return true;
-  return isCurrentMemberName(lesson.member);
+  return isOwnMemberScheduleLesson(lesson);
 }
 
 function memberAvailableSlotsForSelectedLesson() {
@@ -2900,14 +2904,14 @@ function memberAvailableSlotsForSelectedLesson() {
 }
 
 function memberLessons() {
-  const current = memberScheduleLessons().filter((lesson) => isCurrentMemberName(lesson.member) && ["scheduled", "requested"].includes(lesson.status));
+  const current = memberScheduleLessons().filter((lesson) => isOwnMemberScheduleLesson(lesson) && ["scheduled", "requested"].includes(lesson.status));
   if (current.length || state.liveLessonsLoaded || state.dataMode === "live") return current;
   return lessons.filter((lesson) => isCurrentMemberName(lesson.member) && ["scheduled", "requested"].includes(lesson.status));
 }
 
 function currentScheduledLessonsForChange() {
   const dueLessons = memberMakeupDueLessons();
-  const fromSchedule = memberScheduleLessons().filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
+  const fromSchedule = memberScheduleLessons().filter((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled");
   const couponTickets = memberBookableCouponTickets();
   const regularTickets = memberBookableRegularTickets();
   const pausedTickets = memberBookablePausedTickets();
@@ -2920,7 +2924,7 @@ function currentScheduledLessonsForChange() {
 function loadedFutureScheduledLessonsForChange(today = localDateKey()) {
   return (state.liveLessons || [])
     .filter((lesson) => (
-      isCurrentMemberName(lesson.member)
+      isOwnMemberScheduleLesson(lesson)
       && lesson.status === "scheduled"
       && lesson.lessonDate
       && lesson.lessonDate >= today
@@ -2991,7 +2995,7 @@ function upcomingMemberLessons(limit = 2) {
     const today = localDateKey();
     return (state.liveLessons || [])
       .filter((lesson) => {
-        const isMine = lesson.isOwnLesson || isCurrentMemberName(lesson.member);
+        const isMine = isOwnMemberScheduleLesson(lesson);
         return isMine
           && lesson.status === "scheduled"
           && lesson.lessonDate
@@ -3589,7 +3593,7 @@ function memberMobileScheduleSegments(day, policy, baseLessons) {
   if (range === "morning") return windows.filter((window) => window.startMinutes < minutesFromTime("17:00"));
   if (range === "evening") return windows.filter((window) => window.endMinutes > minutesFromTime("17:00"));
   if (range === "all") return windows;
-  const focusLesson = baseLessons.find((lesson) => lesson.day === day && isCurrentMemberName(lesson.member))
+  const focusLesson = baseLessons.find((lesson) => lesson.day === day && isOwnMemberScheduleLesson(lesson))
     || baseLessons.find((lesson) => lesson.day === day && lesson.status === "available");
   const fallbackWindow = windows.length ? (days.indexOf(day) < 5 ? windows.at(-1) : windows[0]) : null;
   const focusMinutes = focusLesson ? minutesFromTime(focusLesson.time) : fallbackWindow?.startMinutes;
@@ -3658,7 +3662,7 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
                 const startIndex = times.indexOf(lesson.time);
                 if (startIndex < 0) return "";
                 const span = Math.max(1, Math.ceil(lessonDuration(lesson) / 10));
-                const isMine = isCurrentMemberName(lesson.member);
+                const isMine = isOwnMemberScheduleLesson(lesson);
                 const note = memberScheduleExceptionLabel(lesson);
                 const roundLabel = memberScheduleRoundLabel(lesson, isMine);
                 return `<button class="member-mobile-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${isMine ? `mine ${lesson.status}` : "occupied"} ${memberCoachColorClass(lesson.coach)} ${memberLessonStateClass(lesson)}" type="button" ${isMine ? `data-lesson="${lesson.id}"` : "disabled"} style="${memberLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${escapeHtml(memberScheduleCardName(lesson, isMine))}</strong><span class="schedule-card-round ${roundLabel ? "" : "is-empty"}">${escapeHtml(roundLabel || "-")}</span><span>${escapeHtml(memberCoachShortName(lesson.coach))}</span><small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small></button>`;
@@ -3687,7 +3691,7 @@ function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
 function currentWeekMemberLessons() {
   const week = activeMemberWeek();
   return memberScheduleLessons()
-    .filter((lesson) => isCurrentMemberName(lesson.member) && ["scheduled", "requested", "makeup_due"].includes(lesson.status))
+    .filter((lesson) => isOwnMemberScheduleLesson(lesson) && ["scheduled", "requested", "makeup_due"].includes(lesson.status))
     .filter((lesson) => !lesson.lessonDate || (lesson.lessonDate >= week.startDate && lesson.lessonDate <= week.endDate))
     .sort((a, b) => `${a.lessonDate || ""} ${a.time || ""}`.localeCompare(`${b.lessonDate || ""} ${b.time || ""}`));
 }
@@ -3982,7 +3986,7 @@ function renderDynamicMemberSchedule() {
                   const lessonCoach = memberLessonCoach(lesson, policy);
                   const coachIndex = displayCoaches.findIndex((coach) => coach.id === lessonCoach.id);
                   if (coachIndex < 0) return "";
-                  const isMine = isCurrentMemberName(lesson.member);
+                  const isMine = isOwnMemberScheduleLesson(lesson);
                   const lessonClass = isMine ? `mine ${lesson.status}` : "occupied";
                   const lessonAction = isMine ? `data-lesson="${lesson.id}"` : "disabled";
                   const note = memberScheduleExceptionLabel(lesson);
@@ -4090,7 +4094,7 @@ function renderSchedule() {
                   const startIndex = Math.max(0, times.indexOf(lesson.time));
                   const span = Math.max(1, Math.ceil(lessonDuration(lesson) / 10));
                   const coachIndex = Math.max(0, scheduleCoaches.indexOf(lesson.coach));
-                  const isMine = isCurrentMemberName(lesson.member);
+                  const isMine = isOwnMemberScheduleLesson(lesson);
                   const title = isMine ? (lesson.status === "requested" ? "변경" : "내수업") : lesson.oneDayBooking ? "원데이 예약" : "수업중";
                   const lessonClass = isMine ? `mine ${lesson.status}` : "occupied";
                   const lessonAction = isMine ? `data-lesson="${lesson.id}"` : "disabled";
@@ -7679,7 +7683,7 @@ function journalActivityItems() {
   const sourceLessons = state.liveLessonsLoaded ? state.liveLessons : memberScheduleLessons();
   const seenLessons = new Set();
   const lessonItems = sourceLessons
-    .filter((lesson) => lesson.isOwnLesson !== false && (lesson.isOwnLesson || isCurrentMemberName(lesson.member)))
+    .filter((lesson) => isOwnMemberScheduleLesson(lesson))
     .map((lesson) => {
       const id = String(lesson.serverLessonId || lesson.id || "");
       const dateValue = lesson.lessonDate || memberScheduleDateForDay(lesson.day);
@@ -8174,7 +8178,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.308" });
+  const params = new URLSearchParams({ v: "1.0.309" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8502,7 +8506,7 @@ function openLessonDetailSheet(lessonId) {
   const lesson = memberScheduleOptions().find((item) => item.id === lessonId)
     || memberMakeupDueLessons().find((item) => item.id === lessonId)
     || (state.liveLessons || []).find((item) => item.id === lessonId);
-  if (!lesson || (!lesson.isOwnLesson && !isCurrentMemberName(lesson.member))) return;
+  if (!lesson || !isOwnMemberScheduleLesson(lesson)) return;
   state.selectedLessonDetailId = lesson.id;
   renderLessonDetailSheet(lesson);
   openAppSheet("lessonDetailSheet");
@@ -8533,7 +8537,7 @@ function handleLessonDetailAction(action) {
 function handleScheduleClick(lessonId) {
   const lesson = memberScheduleOptions().find((item) => item.id === lessonId);
   if (!lesson) return;
-  if (lesson.isOwnLesson || isCurrentMemberName(lesson.member)) {
+  if (isOwnMemberScheduleLesson(lesson)) {
     openLessonDetailSheet(lesson.id);
     return;
   }

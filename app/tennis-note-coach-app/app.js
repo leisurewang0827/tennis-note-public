@@ -2210,7 +2210,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.308",
+    workerUrl: "./service-worker.js?v=1.0.309",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2240,7 +2240,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.308" });
+  const params = new URLSearchParams({ v: "1.0.309" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3573,19 +3573,10 @@ function renderFullSchedule() {
   }
   ensureMemberLists();
   const policy = loadCoachSchedulePolicy();
-  const times = coachScheduleTimes(policy);
   const weekIndex = activeWeekIndex();
   const week = activeScheduleWeek();
   const scheduleFilter = state.scheduleFilter || "all";
   const lessonsForWeek = filterFullScheduleLessons(weekLessons(), scheduleFilter);
-  const dayCoachMap = new Map(scheduleDays.map((day) => [day, dayCoachesForSchedule(day, policy, lessonsForWeek, scheduleFilter)]));
-  const dayColumnTracks = scheduleDays
-    .map((day) => {
-      const laneCount = Math.max(1, dayCoachMap.get(day)?.length || 0);
-      const minimumWidth = laneCount * coachScheduleLaneWidth + Math.max(0, laneCount - 1) * 3;
-      return `minmax(${minimumWidth}px, 1fr)`;
-    })
-    .join(" ");
   $("#fullScheduleBoard").innerHTML = `
     <div class="coach-week-calendar">
       <div class="coach-week-controls">
@@ -3607,91 +3598,8 @@ function renderFullSchedule() {
           .join("")}
       </div>
     </div>
-    ${renderCoachMobileSchedule(policy, lessonsForWeek)}
-    <div class="coach-desktop-schedule">
-    <div class="coach-duration-schedule" role="table" aria-label="전체 레슨표" style="--day-count:${scheduleDays.length}; --slot-count:${times.length}; grid-template-columns:64px ${dayColumnTracks};">
-      <div class="coach-duration-head time-head">시간</div>
-      ${scheduleDays
-        .map((day) => {
-          const dayCoaches = dayCoachMap.get(day) || [];
-          const displayCoaches = dayCoaches.length ? dayCoaches : [{ name: "운영없음" }];
-          return `
-            <div class="coach-duration-head coach-day-head" style="--coach-count:${displayCoaches.length};">
-              <strong>${day}요일</strong>
-              <div class="coach-coach-head-row">
-                ${displayCoaches.map((coach) => `<span>${shortCoachName(coach.name)}</span>`).join("")}
-              </div>
-            </div>`;
-        })
-        .join("")}
-      <div class="coach-time-rail">
-        ${times.map((time) => `<div class="coach-duration-time">${time}</div>`).join("")}
-      </div>
-      ${scheduleDays
-        .map((day) => {
-          const dayCoaches = dayCoachMap.get(day) || [];
-          const displayCoaches = dayCoaches.length ? dayCoaches : [{ id: `closed-${day}`, name: "운영없음", workBlocks: [] }];
-          const dayLessons = lessonsForWeek.filter((lesson) => lesson.day === day);
-          return `
-            <div class="coach-day-column" style="--slot-count:${times.length}; --coach-count:${displayCoaches.length};">
-              ${times
-                .map((time, timeIndex) =>
-                  displayCoaches
-                    .map((coach, coachIndex) => {
-                      const breakRule = breakRuleForSlot(policy, day, time);
-                      const blockedRule = coachBlockedRuleForSlot(coach, day, time);
-                      const closure = coachClosureForSlot(day, time);
-                      const lockedRule = blockedRule || breakRule;
-                      const isWorking = isPolicyCoachWorking(coach, day, time, scheduleBlockMinutes);
-                      const className = closure || lockedRule ? "blocked" : isWorking ? "available" : "off";
-                      const label = closure?.label || lockedRule?.label || (isWorking ? "" : "근무외");
-                      return coachQuickAddSlotMarkup({
-                        coach,
-                        day,
-                        time,
-                        policy,
-                        className: `coach-slot-bg ${className}`,
-                        label,
-                        style: `grid-row:${timeIndex + 1}; grid-column:${coachIndex + 1};`,
-                      });
-                    })
-                    .join(""),
-                )
-                .join("")}
-              ${dayLessons
-                .map((lesson) => {
-                  const lessonCoach = coachFromLesson(lesson, policy);
-                  const laneIndex = displayCoaches.findIndex((coach) => coach.id === lessonCoach.id);
-                  const startIndex = times.indexOf(lesson.time);
-                  if (startIndex < 0 || laneIndex < 0) return "";
-                  const span = Math.max(1, Math.ceil(lessonDuration(lesson) / 10));
-                  const isLongLesson = span >= 3;
-                  const memberNames = formatScheduleMemberName(lesson.member);
-                  const coachLabel = coachScheduleCardCoachLabel(lesson);
-                  const note = coachScheduleExceptionLabel(lesson);
-                  const roundOrState = lesson.releasedMakeupSlot ? "정규 · 불참" : coachScheduleRoundLabel(lesson);
-                  const cardNote = lesson.releasedMakeupSlot
-                    ? (lesson.historicalReleasedSlot ? "차감 없음" : "차감 없음 · 보강·원데이 가능")
-                    : (note || "-");
-                  return `
-                    <button
-                      class="coach-duration-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(lessonCoach.name)} ${coachLessonStateClass(lesson)} ${isLongLesson ? "is-long" : ""}"
-                      type="button"
-                      ${coachScheduleLessonActionAttrs(lesson)}
-                      style="${coachLessonColorStyle(lesson, policy)}; grid-row:${startIndex + 1} / span ${span}; grid-column:${laneIndex + 1};"
-                    >
-                      <strong>${memberNames}</strong>
-                      <span>${escapeHtml(roundOrState)}</span>
-                      <span>${escapeHtml(coachLabel)}</span>
-                      <small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote)}</small>
-                    </button>`;
-                })
-              .join("")}
-            </div>`;
-        })
-        .join("")}
-    </div>
-    </div>`;
+    <p class="coach-day-schedule-guide">요일을 고른 뒤 빈칸은 수업 등록, 수업 카드는 변경·완료·피드백 처리에 사용합니다.</p>
+    ${renderCoachMobileSchedule(policy, lessonsForWeek)}`;
 }
 
 function fullScheduleFilterOptions() {

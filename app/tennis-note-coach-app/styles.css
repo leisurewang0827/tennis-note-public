@@ -3679,7 +3679,25 @@ select {
 }
 
 .coach-mobile-schedule {
-  display: none;
+  display: grid;
+  width: 100%;
+  max-width: 1040px;
+  gap: 10px;
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.coach-day-schedule-guide {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  border-left: 3px solid var(--green);
+  padding: 8px 10px;
+  color: var(--muted);
+  background: var(--soft-green);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 /* 코치 화면은 회원앱과 같은 밀도로 유지하되, 수업 처리 기능은 그대로 둡니다. */
@@ -3819,6 +3837,7 @@ select {
 }
 
 .coach-desktop-schedule {
+  display: none;
   position: relative;
   width: 100%;
   max-width: 100%;
@@ -3853,17 +3872,6 @@ select {
   max-width: 100%;
   overflow: hidden;
 }
-
-@media (max-width: 720px) {
-  .coach-desktop-schedule {
-    display: none;
-  }
-
-  .coach-mobile-schedule {
-    display: grid;
-    gap: 10px;
-    min-width: 0;
-  }
 
   .coach-mobile-day-strip {
     display: grid;
@@ -4177,7 +4185,6 @@ select {
     font-size: 12px;
     font-weight: 800;
   }
-}
 
 button .schedule-member-lines {
   display: grid;
