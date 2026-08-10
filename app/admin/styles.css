@@ -2184,6 +2184,27 @@ tr.is-selected td {
   box-sizing: border-box;
 }
 
+.member-inline-compact-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid #d8e7e1;
+}
+
+.member-inline-compact-actions .member-inline-schedule-scope {
+  min-width: 0;
+}
+
+.member-inline-compact-actions button {
+  min-width: max-content;
+  min-height: 34px;
+  white-space: nowrap;
+}
+
 .member-inline-editor--compact .member-inline-editor-actions {
   margin-top: 5px;
 }
@@ -2529,9 +2550,21 @@ tr.is-selected td {
 
   .member-inline-product,
   .member-inline-note,
-  .member-inline-schedule-scope,
-  .member-inline-save {
+  .member-inline-schedule-scope {
     grid-column: 1 / -1;
+  }
+
+  .member-inline-compact-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .member-inline-compact-actions .member-inline-schedule-scope {
+    grid-column: 1 / -1;
+  }
+
+  .member-inline-compact-actions button {
+    width: 100%;
+    min-width: 0;
   }
 
   .member-inline-schedule-heading {
@@ -9711,6 +9744,42 @@ button .schedule-member-lines > span {
   font-size: 12px;
   font-weight: 750;
   line-height: 1.45;
+}
+
+.member-ticket-delete-preview {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid #d7e3de;
+  border-radius: 6px;
+  background: #f7faf9;
+}
+
+.member-ticket-delete-preview strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.member-ticket-delete-preview span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.member-ticket-delete-preview.is-ready {
+  border-color: #a9cfc0;
+  background: #eff8f4;
+}
+
+.member-ticket-delete-preview.is-error {
+  border-color: #e8b0aa;
+  background: #fff3f1;
+}
+
+.member-ticket-delete-preview.is-error strong,
+.member-ticket-delete-preview.is-error span {
+  color: #a33229;
 }
 
 .refund-modal-panel {
