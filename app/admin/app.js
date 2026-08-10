@@ -1438,6 +1438,9 @@ const adminLiveDataState = {
   curriculumRefs: [],
   journalEntries: [],
   mediaFiles: [],
+  groupAccounts: [],
+  groupMembers: [],
+  groupTicketLinks: [],
   memberDatabaseRecords: [],
   memberMembershipRecords: [],
   regularScheduleRules: [],
@@ -20073,6 +20076,153 @@ function urgentOperationsRecords() {
   return paymentRecords.concat(makeupRecords);
 }
 
+function ticketReviewState(ticket) {
+  return window.TennisNoteTicketState?.derive(ticket) || ticket?.status || "unknown";
+}
+
+function ticketReviewMember(userId) {
+  const normalizedUserId = String(userId || "");
+  if (!normalizedUserId) return null;
+  return operationBranchMembers().find((member) => (
+    memberServerUserIds(member).some((memberUserId) => String(memberUserId) === normalizedUserId)
+  )) || null;
+}
+
+function ticketReviewLinkContext() {
+  const activeLinks = (adminLiveDataState.groupTicketLinks || []).filter((link) => (
+    ["active", "linked"].includes(String(link.status || "active").toLowerCase())
+    && link.group_account_id
+  ));
+  const byAccount = new Map();
+  const accountIdsByTicket = new Map();
+  activeLinks.forEach((link) => {
+    const accountId = String(link.group_account_id);
+    const account = byAccount.get(accountId) || { userIds: new Set(), ticketIds: new Set() };
+    if (link.user_id) account.userIds.add(String(link.user_id));
+    if (link.ticket_id) {
+      const ticketId = String(link.ticket_id);
+      account.ticketIds.add(ticketId);
+      const accountIds = accountIdsByTicket.get(ticketId) || new Set();
+      accountIds.add(accountId);
+      accountIdsByTicket.set(ticketId, accountIds);
+    }
+    byAccount.set(accountId, account);
+  });
+  return { byAccount, accountIdsByTicket };
+}
+
+function isExpectedPersonalGroupTicketSet(ticketIds, linkContext) {
+  if (ticketIds.length < 2) return false;
+  let sharedAccountIds = null;
+  ticketIds.forEach((ticketId) => {
+    const accountIds = linkContext.accountIdsByTicket.get(String(ticketId)) || new Set();
+    sharedAccountIds = sharedAccountIds === null
+      ? new Set(accountIds)
+      : new Set([...sharedAccountIds].filter((accountId) => accountIds.has(accountId)));
+  });
+  return [...(sharedAccountIds || [])].some((accountId) => {
+    const account = linkContext.byAccount.get(accountId);
+    return account?.userIds.size >= 2 && account?.ticketIds.size >= 2;
+  });
+}
+
+function ticketIntegrityReviewRecords() {
+  if (operationsRole() !== "admin" || !state.liveScheduleLoaded) return [];
+  const relevantStates = new Set(["current", "upcoming", "paused", "pending_payment"]);
+  const linkContext = ticketReviewLinkContext();
+  const records = [];
+
+  operationBranchMembers().forEach((member) => {
+    const ticketsByFingerprint = new Map();
+    memberManagementTickets(member)
+      .filter((ticket) => relevantStates.has(ticketReviewState(ticket)))
+      .forEach((ticket) => {
+        const fingerprint = memberTicketDuplicateFingerprint(ticket);
+        if (!fingerprint) return;
+        const grouped = ticketsByFingerprint.get(fingerprint) || [];
+        grouped.push(ticket);
+        ticketsByFingerprint.set(fingerprint, grouped);
+      });
+    [...ticketsByFingerprint.values()].forEach((grouped, index) => {
+      if (grouped.length < 2) return;
+      const ticketIds = grouped.map((ticket) => String(ticket.serverTicketId || "")).filter(Boolean);
+      if (isExpectedPersonalGroupTicketSet(ticketIds, linkContext)) return;
+      const ticket = grouped[0];
+      const period = [ticket.actualLessonStart || ticket.purchased, ticket.expires].filter(Boolean).join("~");
+      records.push({
+        id: `ticket-overlap-${member.id}-${index}`,
+        group: "issue",
+        source: "회원권 점검",
+        member: member.name || "회원 확인 필요",
+        title: "회원권 중복 가능",
+        detail: `${getTicketDisplayProduct(ticket) || ticket.product || "회원권"} · ${getCoachName(ticket.coachId)}`,
+        subDetail: `${period || "기간 확인 필요"} · 자동 삭제하지 않았습니다. 두 회원권을 비교해 주세요.`,
+        statusLabel: "확인 필요",
+        actionLabel: "회원권 확인",
+        memberId: member.id,
+        ticketId: ticket.serverTicketId || "",
+        priority: "urgent",
+        urgentReason: "상품·코치·수업 유형·기간·참여자가 같은 회원권이 둘 이상입니다.",
+        sortAt: ticket.serverUpdatedAt || ticket.expires || "",
+      });
+    });
+  });
+
+  linkContext.byAccount.forEach((account, accountId) => {
+    if (account.userIds.size >= 2 && account.ticketIds.size >= 1) return;
+    const accountRow = (adminLiveDataState.groupAccounts || []).find((item) => String(item.id || "") === accountId);
+    const firstUserId = [...account.userIds][0] || "";
+    const member = ticketReviewMember(firstUserId);
+    const firstTicketId = [...account.ticketIds][0] || "";
+    const ticket = (adminLiveDataState.tickets || []).find((item) => String(item.serverTicketId || item.id || "") === firstTicketId);
+    records.push({
+      id: `group-account-incomplete-${accountId}`,
+      group: "issue",
+      source: "1:2 연결 점검",
+      member: member?.name || accountRow?.display_name || "1:2 회원 확인 필요",
+      title: "파트너 연결 미완성",
+      detail: `참여 회원 ${account.userIds.size}명 · 연결 회원권 ${account.ticketIds.size}개`,
+      subDetail: "파트너 또는 회원권 연결을 확인해야 1:2 차감이 안전하게 처리됩니다.",
+      statusLabel: "확인 필요",
+      actionLabel: member ? "회원권 확인" : "운영 설정 확인",
+      memberId: member?.id || null,
+      ticketId: ticket?.serverTicketId || firstTicketId,
+      actionView: member ? "" : "settings",
+      priority: "urgent",
+      urgentReason: "1:2 계정의 회원 또는 회원권 연결 수가 부족합니다.",
+      sortAt: ticket?.serverUpdatedAt || "",
+    });
+  });
+
+  const linkedTicketIds = new Set(linkContext.accountIdsByTicket.keys());
+  (adminLiveDataState.tickets || [])
+    .filter((ticket) => Number(ticket.groupSize || 1) === 2)
+    .filter((ticket) => relevantStates.has(ticketReviewState(ticket)))
+    .filter((ticket) => !linkedTicketIds.has(String(ticket.serverTicketId || ticket.id || "")))
+    .forEach((ticket) => {
+      const member = ticketReviewMember(ticket.serverUserId);
+      records.push({
+        id: `group-ticket-unlinked-${ticket.serverTicketId || ticket.id}`,
+        group: "issue",
+        source: "1:2 연결 점검",
+        member: member?.name || ticket.member || "회원 확인 필요",
+        title: "1:2 회원권 연결 없음",
+        detail: `${getTicketDisplayProduct(ticket) || ticket.product || "1:2 회원권"} · ${getCoachName(ticket.coachId)}`,
+        subDetail: "회원권은 유지하고 파트너 계정 연결만 확인해 주세요.",
+        statusLabel: "확인 필요",
+        actionLabel: member ? "회원권 확인" : "회원관리 확인",
+        memberId: member?.id || null,
+        ticketId: ticket.serverTicketId || "",
+        actionView: member ? "" : "members",
+        priority: "urgent",
+        urgentReason: "사용 중인 1:2 회원권이 파트너 계정과 연결되지 않았습니다.",
+        sortAt: ticket.serverUpdatedAt || ticket.expires || "",
+      });
+    });
+
+  return records;
+}
+
 function adminRecordGroups() {
   const shared = operationalSharedData();
   const context = buildAdminRecordContext();
@@ -20083,6 +20233,7 @@ function adminRecordGroups() {
     ...shared.lessonLogs.map(lessonLogRecord),
     ...shared.feedbackRequests.map(feedbackRecord),
     ...(adminLiveDataState.journalEntries || []).map((entry) => memberJournalRecord(entry, context)),
+    ...ticketIntegrityReviewRecords(),
   ];
   const normalizedRecords = operationBranchRecords(records).map((record) => withRecordCoach(
     {
@@ -20185,7 +20336,7 @@ function renderNotes() {
           </div>
           <aside>
             ${recordStatusBadge(record)}
-            ${record.actionable ? `<button class="small-button" type="button" data-open-lesson-record="${escapeHtml(record.lessonId)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.coachName || "코치 미배정"} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.actionView ? `<button class="small-button" type="button" data-record-action-view="${escapeHtml(record.actionView)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.coachName || "코치 미배정"} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.mediaCount ? `<button class="ghost-button" type="button" data-open-journal-media="${escapeHtml(record.journalId)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.coachName || "코치 미배정"} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : `<b>${escapeHtml(record.actionLabel)}</b>`}
+            ${record.memberId ? `<button class="small-button" type="button" data-record-member-id="${escapeHtml(record.memberId)}" data-record-ticket-id="${escapeHtml(record.ticketId || "")}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.actionable ? `<button class="small-button" type="button" data-open-lesson-record="${escapeHtml(record.lessonId)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.coachName || "코치 미배정"} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.actionView ? `<button class="small-button" type="button" data-record-action-view="${escapeHtml(record.actionView)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.coachName || "코치 미배정"} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : record.mediaCount ? `<button class="ghost-button" type="button" data-open-journal-media="${escapeHtml(record.journalId)}" aria-label="${escapeHtml(`${record.member} · ${record.title} · ${record.coachName || "코치 미배정"} · ${record.actionLabel}`)}">${escapeHtml(record.actionLabel)}</button>` : `<b>${escapeHtml(record.actionLabel)}</b>`}
           </aside>
         </article>`,
     )
@@ -28252,6 +28403,19 @@ function bindEvents() {
 
     if (event.target.closest("#generateLessonPastComment")) {
       applyAdminCommentDraft("#lessonPastCommentKeywords", "#lessonPastCoachComment");
+      return;
+    }
+
+    const recordMemberButton = event.target.closest("[data-record-member-id]");
+    if (recordMemberButton) {
+      const member = members.find((item) => Number(item.id) === Number(recordMemberButton.dataset.recordMemberId));
+      if (!member) {
+        showToast("회원 정보를 다시 불러온 뒤 확인해 주세요.");
+        return;
+      }
+      setView("members");
+      state.selectedMemberId = member.id;
+      await openMemberManagementModal(member, "profile", recordMemberButton.dataset.recordTicketId || "");
       return;
     }
 

@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.301" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.301" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.302" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.302" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -467,6 +467,14 @@
               </span>
               <span class="settings-row-status">승인됨</span>
             </button>
+            <button class="settings-row" type="button" id="openMemberHelpButton">
+              <span class="settings-row-icon" aria-hidden="true">?</span>
+              <span class="settings-row-copy">
+                <strong>도움말</strong>
+                <small>예약·변경·회원권·결제 빠르게 찾기</small>
+              </span>
+              <span class="settings-row-arrow" aria-hidden="true">›</span>
+            </button>
             <button class="settings-row" type="button" id="openKakaoInquiryButton">
               <span class="settings-row-icon kakao-icon" aria-hidden="true">K</span>
               <span class="settings-row-copy">
@@ -660,6 +668,34 @@
         </footer>
       </section>
     </main>
+
+    <section id="memberHelpModal" class="change-request-modal" hidden>
+      <div class="modal-backdrop" data-close-member-help></div>
+      <article class="change-modal-card member-help-card" role="dialog" aria-modal="true" aria-labelledby="memberHelpTitle">
+        <header class="member-help-heading">
+          <div>
+            <p class="eyebrow">도움말</p>
+            <h2 id="memberHelpTitle">무엇을 찾으세요?</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-member-help title="도움말 닫기" aria-label="도움말 닫기">×</button>
+        </header>
+        <label class="member-help-search">
+          <span>검색</span>
+          <input id="memberHelpSearch" type="search" autocomplete="off" placeholder="예: 보강, 결제, 알림" />
+        </label>
+        <div class="member-help-filters" role="tablist" aria-label="도움말 분류">
+          <button class="is-active" type="button" data-member-help-category="all" role="tab" aria-selected="true">전체</button>
+          <button type="button" data-member-help-category="schedule" role="tab" aria-selected="false">예약·변경</button>
+          <button type="button" data-member-help-category="ticket" role="tab" aria-selected="false">회원권·결제</button>
+          <button type="button" data-member-help-category="app" role="tab" aria-selected="false">앱 이용</button>
+        </div>
+        <div id="memberHelpList" class="member-help-list" aria-live="polite"></div>
+        <div class="modal-actions">
+          <button class="small-button" type="button" data-member-help-action="support">카카오 문의</button>
+          <button class="primary-button" type="button" data-close-member-help>닫기</button>
+        </div>
+      </article>
+    </section>
 
     <section id="kakaoInquiryModal" class="change-request-modal" hidden>
       <div class="modal-backdrop" data-close-kakao-inquiry-modal></div>
@@ -1005,15 +1041,15 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.301"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.302"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.301"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.301"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.301"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.301"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.301"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.302"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.302"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.302"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.302"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.302"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
     <script>
       (() => {
@@ -1030,7 +1066,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.301";
+          appScript.src = "./app.js?v=1.0.302";
           document.body.appendChild(appScript);
         };
         if (reusingEmbeddedApp) window.setTimeout(startApp, 0);
