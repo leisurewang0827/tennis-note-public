@@ -2142,7 +2142,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.298",
+    workerUrl: "./service-worker.js?v=1.0.300",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2172,7 +2172,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.298" });
+  const params = new URLSearchParams({ v: "1.0.300" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3052,7 +3052,8 @@ function renderScheduleEditPanel() {
           <small class="lesson-comment-count" data-modal-comment-count="${escapeHtml(lesson.id)}">0/5자</small>
         </label>
         <label class="lesson-required-field">
-          <span>다음 커리큘럼 <small>선택</small></span>
+          <span>다음 커리큘럼 <small>필수</small></span>
+          <input data-curriculum-option-search type="search" placeholder="기술명 또는 코드 검색" aria-label="${escapeHtml(participant.name || "회원")} 다음 커리큘럼 검색" ${canProcess ? "" : "disabled"} />
           <select data-modal-next-curriculum="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>
             <option value="">검색·선택</option>
             ${curriculumOptions(defaultCurriculumId)}
@@ -3267,7 +3268,8 @@ function renderLessonRecordWritePanel() {
         <textarea id="recordCoachComment" rows="3">오늘 레슨 확인 완료. 다음 시간에는 이어서 보완합니다.</textarea>
       </label>
       <label class="wide">
-        <span>다음 커리큘럼</span>
+        <span>다음 커리큘럼 <small>필수</small></span>
+        <input data-curriculum-option-search type="search" placeholder="기술명 또는 코드 검색" aria-label="다음 커리큘럼 검색" />
         <select id="recordNextCurriculum">${curriculumOptions(curriculumSteps[0]?.id)}</select>
       </label>
       <div class="actions wide">
@@ -4179,16 +4181,41 @@ function coachQuickAddOperationKey(prefix = "coach-add") {
   return `${prefix}-${random}`.slice(0, 120);
 }
 
-function coachQuickAddTickets() {
-  const workspace = scheduleV2CoachWorkspace();
+function coachQuickAddTicketAvailability(ticket = {}) {
   const targetDate = state.coachQuickAdd?.date || localDateKey();
-  return (workspace?.tickets || []).filter((ticket) => {
-    if (String(ticket.coachRoleId || "") !== String(state.coachQuickAdd?.coachRoleId || "")) return false;
-    if (ticket.status !== "active" || Number(ticket.remainingSessions) <= 0) return false;
-    if (ticket.startsOn && targetDate < ticket.startsOn) return false;
-    if (ticket.expiresOn && targetDate > ticket.expiresOn) return false;
-    return ["regular", "group"].includes(ticket.productKind);
-  });
+  if (String(ticket.coachRoleId || "") !== String(state.coachQuickAdd?.coachRoleId || "")) {
+    return { visible: false, available: false, reason: "" };
+  }
+  if (!["regular", "group"].includes(ticket.productKind)) {
+    return { visible: false, available: false, reason: "" };
+  }
+  if (ticket.status !== "active") {
+    return { visible: true, available: false, reason: ticket.status === "paused" ? "일시정지" : "사용 불가" };
+  }
+  if (Number(ticket.remainingSessions) <= 0) {
+    return { visible: true, available: false, reason: "잔여 횟수 없음" };
+  }
+  if (ticket.startsOn && targetDate < ticket.startsOn) {
+    return { visible: true, available: false, reason: `${ticket.startsOn}부터 사용 가능` };
+  }
+  if (ticket.expiresOn && targetDate > ticket.expiresOn) {
+    return { visible: true, available: false, reason: "이용기간 만료" };
+  }
+  return { visible: true, available: true, reason: "" };
+}
+
+function coachQuickAddTicketChoices() {
+  const workspace = scheduleV2CoachWorkspace();
+  return (workspace?.tickets || []).map((ticket) => ({
+    ticket,
+    availability: coachQuickAddTicketAvailability(ticket),
+  })).filter((choice) => choice.availability.visible);
+}
+
+function coachQuickAddTickets() {
+  return coachQuickAddTicketChoices()
+    .filter((choice) => choice.availability.available)
+    .map((choice) => choice.ticket);
 }
 
 function coachQuickAddTicketLabel(ticket = {}) {
@@ -4230,8 +4257,17 @@ function renderCoachQuickAddPanel() {
   if (!draft) return "";
   const policy = loadCoachSchedulePolicy();
   const breakRule = breakRuleForSlot(policy, draft.day, draft.time);
-  const tickets = coachQuickAddTickets();
-  const ticketOptions = tickets.map((ticket) => `<option value="${escapeHtml(ticket.id)}" ${draft.ticketId === ticket.id ? "selected" : ""}>${escapeHtml(coachQuickAddTicketLabel(ticket))}</option>`).join("");
+  const ticketChoices = coachQuickAddTicketChoices();
+  const tickets = ticketChoices.filter((choice) => choice.availability.available).map((choice) => choice.ticket);
+  const ticketOptions = ticketChoices.map(({ ticket, availability }) => {
+    const reason = availability.reason ? ` · ${availability.reason}` : "";
+    return `<option value="${escapeHtml(ticket.id)}" ${draft.ticketId === ticket.id ? "selected" : ""} ${availability.available ? "" : "disabled"}>${escapeHtml(`${coachQuickAddTicketLabel(ticket)}${reason}`)}</option>`;
+  }).join("");
+  const writeModeLabel = policy.coachSingleAddMode === "immediate"
+    ? "저장하면 바로 시간표에 반영됩니다."
+    : policy.coachSingleAddMode === "blocked"
+      ? "현재 운영 설정에서 코치 수업 추가가 꺼져 있습니다."
+      : "저장하면 관리자 승인 대기로 접수됩니다.";
   const durationOptions = [20, 30, 40, 60].map((minutes) => `<button type="button" class="${Number(draft.durationMinutes) === minutes ? "is-active" : ""}" data-coach-add-duration="${minutes}">${minutes}분</button>`).join("");
   return `
     <form class="schedule-edit-panel coach-quick-add-panel" data-coach-quick-add-form>
@@ -4256,7 +4292,8 @@ function renderCoachQuickAddPanel() {
         <input id="coachQuickAddNote" type="text" maxlength="200" value="${escapeHtml(draft.note || "")}" placeholder="예: 브레이크 시간 협의 등록" />
       </label>
       ${draft.validationMessage ? `<p class="validation-text wide">${escapeHtml(draft.validationMessage)}</p>` : ""}
-      <p class="permission-note wide">회원에게는 브레이크 시간이 열리지 않습니다. 운영 설정에 따라 즉시 저장되거나 관리자 승인 대기로 접수됩니다.</p>
+      ${ticketChoices.length ? "" : '<p class="validation-text wide">담당 회원권이 없습니다. 관리자에게 회원권 상태와 담당 코치를 확인해 주세요.</p>'}
+      <p class="permission-note wide">회원에게는 브레이크 시간이 열리지 않습니다. ${writeModeLabel}</p>
       <div class="actions wide">
         <button class="approve-button" type="button" data-save-coach-quick-add ${tickets.length ? "" : "disabled"}>시간표에 등록</button>
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
@@ -4320,6 +4357,12 @@ async function saveCoachQuickAdd() {
     showToast(normalized.writeMode === "approval" ? "관리자 승인 대기로 접수했습니다." : "시간표에 수업을 등록했습니다.");
   } catch (error) {
     const code = String(error?.payload?.message || error?.payload?.code || error?.message || "");
+    const slotReasonMessages = {
+      holiday_locked: "휴무일에는 관리자만 수업을 등록할 수 있습니다.",
+      outside_working_hours: "등록된 근무시간 밖입니다. 운영 설정의 잠금시간 등록 허용을 확인해 주세요.",
+      blocked_time: "브레이크·상담시간 수동 등록이 꺼져 있습니다.",
+    };
+    const slotReason = Object.keys(slotReasonMessages).find((reason) => code.includes(reason));
     const messages = {
       schedule_v2_coach_time_overlap: "같은 코치의 다른 수업과 시간이 겹칩니다.",
       schedule_v2_cross_coach_ticket_forbidden: "본인 담당 회원권만 등록할 수 있습니다.",
@@ -4329,7 +4372,9 @@ async function saveCoachQuickAdd() {
       schedule_v2_coach_slot_forbidden: "이 시간은 코치 수동 등록이 허용되지 않습니다.",
     };
     const key = Object.keys(messages).find((candidate) => code.includes(candidate));
-    state.coachQuickAdd.validationMessage = messages[key] || "수업을 저장하지 못했습니다. 시간표를 새로고침한 뒤 다시 시도해 주세요.";
+    state.coachQuickAdd.validationMessage = slotReasonMessages[slotReason]
+      || messages[key]
+      || "수업을 저장하지 못했습니다. 시간표를 새로고침한 뒤 다시 시도해 주세요.";
     renderLessonEditModal();
   }
 }
@@ -4340,13 +4385,14 @@ function updateLessonCompletionUi(id) {
   const submit = activeViewField(`[data-complete-lesson-from-modal="${id}"]`);
   const rowsReady = participantRows.length > 0 && participantRows.every((row) => {
     const comment = row.querySelector("[data-modal-coach-comment]")?.value.trim() || "";
+    const curriculumId = row.querySelector("[data-modal-next-curriculum]")?.value || "";
     const count = row.querySelector("[data-modal-comment-count]");
     if (count) {
       count.textContent = `${comment.length}/5자`;
       count.classList.toggle("is-ready", comment.length >= 5);
     }
-    row.classList.toggle("is-ready", comment.length >= 5);
-    return comment.length >= 5;
+    row.classList.toggle("is-ready", comment.length >= 5 && Boolean(curriculumId));
+    return comment.length >= 5 && Boolean(curriculumId);
   });
   const ready = Boolean(lesson && canProcessLesson(lesson) && rowsReady);
   if (submit) submit.disabled = !ready;
@@ -4641,11 +4687,12 @@ async function completeLessonFromModal(id) {
   const usesV2Participants = Array.isArray(lesson.v2Participants) && lesson.v2Participants.length > 0;
   const missingParticipant = participantResults.find((result) => (
     !result.coachComment
+    || !result.nextCurriculumId
     || (usesV2Participants && (!result.userId || !result.ticketId))
   ));
   if (!participantResults.length || missingParticipant) {
     lesson.validationMessage = missingParticipant
-      ? `${missingParticipant.name} 회원의 코치 코멘트를 5자 이상 입력해 주세요.`
+      ? `${missingParticipant.name} 회원의 코치 코멘트와 다음 커리큘럼을 입력해 주세요.`
       : "수업 참여자와 회원권 연결을 확인해 주세요.";
     renderLessonEditModal();
     return;
@@ -4744,16 +4791,21 @@ function coachScheduleMonthValue(week = activeScheduleWeek()) {
   return String(week.startDate || "").slice(0, 7);
 }
 
-function curriculumOptions(selectedId) {
+function curriculumOptions(selectedId, query = "") {
   const canonicalSelectedId = curriculumCatalog.aliases?.[selectedId] || selectedId;
+  const normalizedQuery = String(query || "").trim().toLocaleLowerCase("ko-KR");
+  const matchesQuery = (step) => !normalizedQuery || `${step.id || ""} ${step.title || ""} ${step.trackTitle || ""} ${step.category || ""}`
+    .toLocaleLowerCase("ko-KR")
+    .includes(normalizedQuery);
   if (!curriculumCatalog.tracks?.length) {
     return curriculumSteps
+      .filter(matchesQuery)
       .map((step) => `<option value="${step.id}" ${step.id === canonicalSelectedId ? "selected" : ""}>${step.id} · ${step.title}</option>`)
       .join("");
   }
   const groups = [
-    { title: "기초 움직임과 서브", steps: curriculumCatalog.fundamentals || [] },
-    ...curriculumCatalog.tracks.map((track) => ({ title: track.title, steps: track.lessons })),
+    { title: "기초 움직임과 서브", steps: (curriculumCatalog.fundamentals || []).filter(matchesQuery) },
+    ...curriculumCatalog.tracks.map((track) => ({ title: track.title, steps: (track.lessons || []).filter(matchesQuery) })),
   ].filter((group) => group.steps?.length);
   return groups
     .map(
@@ -4765,6 +4817,14 @@ function curriculumOptions(selectedId) {
         </optgroup>`,
     )
     .join("");
+}
+
+function filterCurriculumOptions(input) {
+  const select = input?.closest("label")?.querySelector("select");
+  if (!select) return;
+  const selectedId = select.value || "";
+  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(selectedId, input.value)}`;
+  if ([...select.options].some((option) => option.value === selectedId)) select.value = selectedId;
 }
 
 function selectedCurriculum(id) {
@@ -4841,7 +4901,8 @@ function recordProcessingMarkup() {
                     <small class="lesson-comment-count ${resultCommentLength >= 5 ? "is-ready" : ""}" data-log-participant-comment-count="${escapeHtml(log.id)}">${resultCommentLength}/5자</small>
                   </label>
                   <label>
-                    <span>다음 커리큘럼</span>
+                    <span>다음 커리큘럼 <small>필수</small></span>
+                    <input data-curriculum-option-search type="search" placeholder="기술명 또는 코드 검색" aria-label="${escapeHtml(result.name || "회원")} 다음 커리큘럼 검색" ${confirmed ? "disabled" : ""} />
                     <select data-log-participant-curriculum="${escapeHtml(log.id)}" ${confirmed ? "disabled" : ""}>
                       <option value="">검색·선택</option>
                       ${curriculumOptions(result.nextCurriculumId || "")}
@@ -4861,8 +4922,9 @@ function recordProcessingMarkup() {
               <small class="lesson-comment-count ${String(log.coachComment || "").trim().length >= 5 ? "is-ready" : ""}" data-log-comment-count="${log.id}">${String(log.coachComment || "").trim().length}/5자</small>
             </label>
             <label>
-              <span>다음 커리큘럼</span>
-              <select data-next-curriculum="${log.id}" ${confirmed ? "disabled" : ""}>${curriculumOptions(log.nextCurriculumId || log.curriculumId)}</select>
+              <span>다음 커리큘럼 <small>필수</small></span>
+              <input data-curriculum-option-search type="search" placeholder="기술명 또는 코드 검색" aria-label="다음 커리큘럼 검색" ${confirmed ? "disabled" : ""} />
+              <select data-next-curriculum="${log.id}" ${confirmed ? "disabled" : ""}><option value="">검색·선택</option>${curriculumOptions(log.nextCurriculumId || log.curriculumId)}</select>
             </label>
             <em>다음 수업: ${escapeHtml(nextStep.id)} · ${escapeHtml(nextStep.title)}</em>`;
         return `
@@ -5415,12 +5477,13 @@ function updateLogCompletionUi(log) {
   if (participantRows.length) {
     const ready = participantRows.every((row) => {
       const length = String(row.querySelector("[data-log-participant-comment]")?.value || "").trim().length;
+      const curriculumId = row.querySelector("[data-log-participant-curriculum]")?.value || "";
       const count = row.querySelector("[data-log-participant-comment-count]");
       if (count) {
         count.textContent = `${length}/5자`;
         count.classList.toggle("is-ready", length >= 5);
       }
-      return length >= 5;
+      return length >= 5 && Boolean(curriculumId);
     });
     if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || !ready;
     return;
@@ -5431,7 +5494,7 @@ function updateLogCompletionUi(log) {
     count.textContent = `${length}/5자`;
     count.classList.toggle("is-ready", length >= 5);
   }
-  if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || length < 5;
+  if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || length < 5 || !log.nextCurriculumId;
 }
 
 async function confirmLog(id, options = {}) {
@@ -5475,10 +5538,11 @@ async function confirmLog(id, options = {}) {
   const requiresExactParticipantPairs = Boolean(linkedScheduleV2Lesson || participantResultsHaveAnyPair);
   const missingParticipant = participantResults.find((result) => (
     !result.coachComment
+    || !result.nextCurriculumId
     || (requiresExactParticipantPairs && (!result.userId || !result.ticketId))
   ));
   if (missingParticipant) {
-    log.validationMessage = "코치 코멘트와 정확한 회원권 연결을 확인해 주세요.";
+    log.validationMessage = "코치 코멘트, 다음 커리큘럼과 정확한 회원권 연결을 확인해 주세요.";
     renderAll();
     return false;
   }
@@ -5821,6 +5885,9 @@ function bindEvents() {
 
     const feedbackInput = event.target.closest("[data-feedback-comment]");
     if (feedbackInput) updateFeedbackDraft(feedbackInput.dataset.feedbackComment);
+
+    const curriculumOptionSearch = event.target.closest("[data-curriculum-option-search]");
+    if (curriculumOptionSearch) filterCurriculumOptions(curriculumOptionSearch);
 
     const curriculumSearch = event.target.closest("#curriculumSearchInput");
     if (curriculumSearch) {
