@@ -49,6 +49,7 @@ const state = {
   membershipProductPage: 0,
   selectedMemberId: null,
   inlineMemberId: null,
+  inlineMemberTicketId: "",
   activeMode: "admin",
   editingLessonId: null,
   editingOneDayBookingId: null,
@@ -3124,6 +3125,7 @@ function restoreSnapshot() {
       state.memberSearch = "";
       state.selectedMemberId = null;
       state.inlineMemberId = null;
+      state.inlineMemberTicketId = "";
       state.liveScheduleLoaded = false;
       state.liveScheduleLoading = false;
       state.liveScheduleMessage = "실서버 시간표 재확인 중";
@@ -7209,6 +7211,7 @@ function closeCleanMemberInlineEditor(nextView) {
   const openEditor = document.querySelector(".member-inline-editor--compact");
   if (openEditor?.dataset.dirty === "true") return;
   state.inlineMemberId = null;
+  state.inlineMemberTicketId = "";
 }
 
 let adminViewRenderRevision = 0;
@@ -7224,6 +7227,7 @@ function adminViewUiSignature(view) {
       state.memberTicketFilter,
       state.memberListPage,
       state.inlineMemberId,
+      state.inlineMemberTicketId,
       memberAdminEditEnabled,
       adminMemberDirectoryState.signature,
       adminMemberDirectoryState.requestId,
@@ -8357,10 +8361,30 @@ function ticketsForMember(memberReference) {
     ? String(memberReference.serverUserId || memberReference.id || memberReference.name || "")
     : String(memberReference || "");
   const branchKey = activeOperationBranchId();
-  const cacheKey = `${branchKey}|${memberKey}`;
+  const cacheKey = `current|${branchKey}|${memberKey}`;
   const cached = memberKey ? memberTicketsIndex.get(cacheKey) : null;
   if (cached) return cached;
   const matches = operationBranchTickets()
+    .filter((ticket) => ticketBelongsToMember(ticket, memberReference))
+    .sort((left, right) => ticketPriorityForMember(right, memberReference) - ticketPriorityForMember(left, memberReference));
+  if (memberKey) memberTicketsIndex.set(cacheKey, matches);
+  return matches;
+}
+
+function allTicketsForMember(memberReference) {
+  const memberKey = memberReference && typeof memberReference === "object"
+    ? String(memberReference.serverUserId || memberReference.id || memberReference.name || "")
+    : String(memberReference || "");
+  const branchKey = activeOperationBranchId();
+  const cacheKey = `all|${branchKey}|${memberKey}`;
+  const cached = memberKey ? memberTicketsIndex.get(cacheKey) : null;
+  if (cached) return cached;
+  const ticketById = new Map();
+  [...operationBranchTickets(), ...operationBranchTickets(expiredTickets)].forEach((ticket) => {
+    const ticketId = String(ticket.serverTicketId || ticket.id || "");
+    if (ticketId && !ticketById.has(ticketId)) ticketById.set(ticketId, ticket);
+  });
+  const matches = [...ticketById.values()]
     .filter((ticket) => ticketBelongsToMember(ticket, memberReference))
     .sort((left, right) => ticketPriorityForMember(right, memberReference) - ticketPriorityForMember(left, memberReference));
   if (memberKey) memberTicketsIndex.set(cacheKey, matches);
@@ -8492,7 +8516,7 @@ function memberCurrentTicket(member) {
 }
 
 function memberTicketGroups(member) {
-  const memberTickets = ticketsForMember(member);
+  const memberTickets = allTicketsForMember(member);
   if (window.TennisNoteTicketState?.split) return window.TennisNoteTicketState.split(memberTickets);
   return {
     current: memberTickets.filter((ticket) => isCurrentMemberTicket(ticket)),
@@ -9728,6 +9752,40 @@ function memberPaymentOverviewMarkup(member) {
   return `<span class="member-payment-summary-line"><strong>${escapeHtml(date)}</strong><small>${escapeHtml(`${paymentMethodLabel(recentPayment.method)} · ${amount}원`)}</small></span>`;
 }
 
+function memberTicketRowMarkup(member, ticket, position = 1, count = 1, possibleDuplicate = false) {
+  if (!ticket) return '<span class="member-table-muted">회원권 없음</span>';
+  const ownershipLabel = count > 1 ? memberTicketOwnershipLabel(ticket, member) : "";
+  const context = [count > 1 ? `회원권 ${position}/${count}` : "", ownershipLabel, possibleDuplicate ? "중복 가능" : ""].filter(Boolean).join(" · ");
+  const period = [ticket.actualLessonStart || ticket.purchased, ticket.expires]
+    .filter(Boolean)
+    .map(memberDetailDateLabel)
+    .join("~");
+  return `<span class="member-ticket-row-summary">
+    ${context ? `<small>${escapeHtml(context)}</small>` : ""}
+    <strong>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</strong>
+    <span>${escapeHtml(memberTicketStatusLabel(ticket))}${period ? ` · ${escapeHtml(period)}` : ""}</span>
+  </span>`;
+}
+
+function memberTicketPaymentMarkup(member, ticket) {
+  if (!ticket) return '<span class="member-table-muted">미입력</span>';
+  const record = memberDatabaseRecord(member, ticket);
+  if (!record || (!record.payment_recorded_on && !record.payment_method && !(Number(record.payment_amount) > 0))) {
+    return '<span class="member-table-muted">미입력</span>';
+  }
+  const date = record.payment_recorded_on ? memberDetailDateLabel(record.payment_recorded_on) : "일자 미입력";
+  const method = record.payment_method ? paymentMethodLabel(record.payment_method) : "수단 미입력";
+  const amount = Number.isFinite(Number(record.payment_amount)) ? `${money.format(Number(record.payment_amount))}원` : "금액 미입력";
+  return `<span class="member-payment-summary-line"><strong>${escapeHtml(date)}</strong><small>${escapeHtml(`${method} · ${amount}`)}</small></span>`;
+}
+
+function memberTicketCoachLabel(member, ticket) {
+  if (!ticket) return member.coach || "미배정";
+  const coachRole = (adminLiveDataState.coachRoles || []).find((role) => role.id === ticket.coachRoleId);
+  if (coachRole?.display_name) return coachRole.display_name;
+  return getCoachName(ticket.coachId) || member.coach || "미배정";
+}
+
 function renderMemberManagementControls(member) {
   if (!member?.serverUserId || !operationsAccessReady()) return "";
   const status = memberListStatus(member);
@@ -9760,11 +9818,9 @@ function renderMemberManagementControls(member) {
           <small>${escapeHtml(ticketUsageLabel(ticket))} · ${escapeHtml(memberDetailDateLabel(ticket.purchased))}~${escapeHtml(memberDetailDateLabel(ticket.expires))}</small>
         </div>
         <div class="member-management-actions">
-          ${actions.length ? `
-            <select class="member-ticket-action-select" data-member-ticket-action="${escapeHtml(ticket.serverTicketId)}" aria-label="${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")} 관리 작업">
-              ${actions.map((item) => `<option value="${item.action}">${item.label}</option>`).join("")}
-            </select>
-            <button class="small-button" type="button" data-manage-member-ticket="${escapeHtml(ticket.serverTicketId)}">관리</button>` : '<span class="member-ticket-no-action">변경 불가</span>'}
+          ${actions.length
+            ? actions.map((item) => `<button class="small-button ${item.tone}" type="button" data-open-member-management="${item.action}" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticket.serverTicketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")} ${escapeHtml(item.label)}">${item.label}</button>`).join("")
+            : '<span class="member-ticket-no-action">변경 불가</span>'}
         </div>
       </div>`;
   };
@@ -9861,6 +9917,17 @@ function memberManagementProductScheduleScope(product) {
   return ["weekday", "weekend", "mixed"].includes(configuredScope) ? configuredScope : "weekday";
 }
 
+function memberManagementProductIsCoupon(product) {
+  return Boolean(product?.is_coupon === true || String(product?.product_kind || "").toLowerCase() === "coupon");
+}
+
+function memberManagementProductWeeklyFrequency(product, fallback = 1) {
+  if (memberManagementProductIsCoupon(product)) return 1;
+  const configured = Number(product?.frequency_per_week || fallback || 1);
+  const scope = memberManagementProductScheduleScope(product);
+  return Math.max(1, Math.min(scope === "weekend" ? 2 : 3, configured));
+}
+
 function memberManagementLessonDaysMarkup(selectedDays = [], scheduleScope = "weekday") {
   const selected = new Set((selectedDays || []).map(Number));
   return Object.entries(memberManagementDayLabels).map(([day, label]) => {
@@ -9903,9 +9970,12 @@ function memberManagementDatabaseFields({
   isAssign = false,
   includeTicketStatus = false,
 }) {
+  const couponProduct = memberManagementProductIsCoupon(product);
   const productScheduleScope = memberManagementProductScheduleScope(product);
   const scheduleScope = (isAssign ? productScheduleScope : record?.lesson_schedule_scope || ticket?.scheduleScope) || productScheduleScope;
-  const weeklyFrequency = Number((isAssign ? product?.frequency_per_week : record?.lesson_frequency_per_week || ticket?.weeklyCount) || product?.frequency_per_week || 1);
+  const weeklyFrequency = couponProduct
+    ? 1
+    : Number((isAssign ? product?.frequency_per_week : record?.lesson_frequency_per_week || ticket?.weeklyCount) || product?.frequency_per_week || 1);
   const lessonType = (isAssign ? "" : record?.lesson_type || ticket?.lessonTypeCode) || (Number(product?.group_size || 1) === 2 ? "one_on_two" : "one_on_one");
   const lessonDays = isAssign ? [] : Array.isArray(record?.lesson_days) ? record.lesson_days : ticket?.lessonDays || [];
   const hasTicket = Boolean(ticket?.serverTicketId || isCreate || isAssign);
@@ -9933,19 +10003,19 @@ function memberManagementDatabaseFields({
       <label class="form-field">${memberManagementFieldLabel("레슨강사", true)}<select name="coachRoleId" required>
         ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === coachRoleId ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
       </select></label>
-      <label class="form-field">${memberManagementFieldLabel("레슨방식", true)}<select name="scheduleScope" required>
+      ${couponProduct ? `<input name="scheduleScope" type="hidden" value="${escapeHtml(scheduleScope)}" />` : `<label class="form-field">${memberManagementFieldLabel("레슨방식", true)}<select name="scheduleScope" required>
         <option value="weekday" ${scheduleScope === "weekday" ? "selected" : ""}>평일</option>
         <option value="weekend" ${scheduleScope === "weekend" ? "selected" : ""}>주말</option>
         <option value="mixed" ${scheduleScope === "mixed" ? "selected" : ""}>혼합</option>
-      </select></label>
-      <label class="form-field">${memberManagementFieldLabel("주당 횟수", true)}<select name="weeklyFrequency" required>
+      </select></label>`}
+      ${couponProduct ? '<input name="weeklyFrequency" type="hidden" value="1" />' : `<label class="form-field">${memberManagementFieldLabel("주당 횟수", true)}<select name="weeklyFrequency" required>
         ${[1, 2, 3].map((frequency) => `<option value="${frequency}" ${frequency === weeklyFrequency ? "selected" : ""} ${scheduleScope === "weekend" && frequency === 3 ? "disabled" : ""}>주 ${frequency}회</option>`).join("")}
-      </select></label>
+      </select></label>`}
       <label class="form-field">${memberManagementFieldLabel("레슨종류", true)}<select name="lessonType" required>
         <option value="one_on_one" ${lessonType === "one_on_one" ? "selected" : ""}>1:1</option>
         <option value="one_on_two" ${lessonType === "one_on_two" ? "selected" : ""}>1:2</option>
       </select></label>
-      <label class="form-field span-2 member-lesson-days-field">${memberManagementFieldLabel("레슨요일", product?.product_kind === "coupon" || product?.is_coupon ? false : true, product?.product_kind === "coupon" || product?.is_coupon ? "쿠폰 선택" : "")}<span class="member-lesson-day-options" data-member-lesson-days>${memberManagementLessonDaysMarkup(lessonDays, scheduleScope)}</span><small>주간 회차 안에서 요일을 나누거나 같은 날 연속으로 사용할 수 있습니다.</small></label>
+      ${couponProduct ? '<input name="lessonDays" type="hidden" value="" />' : `<label class="form-field span-2 member-lesson-days-field">${memberManagementFieldLabel("레슨요일", true)}<span class="member-lesson-day-options" data-member-lesson-days>${memberManagementLessonDaysMarkup(lessonDays, scheduleScope)}</span><small>주간 회차 안에서 요일을 나누거나 같은 날 연속으로 사용할 수 있습니다.</small></label>`}
       <label class="form-field">${memberManagementFieldLabel("레슨시작일", hasTicket)}<input name="startsOn" type="date" value="${escapeHtml(startsOn)}" ${hasTicket ? "required" : ""} /></label>
       ${hasTicket ? `<label class="form-field">${memberManagementFieldLabel("회원권 만료일", true)}<input name="expiresOn" type="date" value="${escapeHtml(expiresOn)}" required /></label>` : ""}
       <label class="form-field">${memberManagementFieldLabel("총 회차", hasTicket)}<input name="totalSessions" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(totalSessions))}" ${hasTicket ? "required" : ""} /></label>
@@ -9997,11 +10067,12 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
   const startsOn = adminLocalDateKey(new Date());
   const validityDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
   const isGroup = Number(product?.group_size || 1) === 2;
+  const scheduleScope = memberManagementProductScheduleScope(product);
   return `
     <input name="createWithoutSchedule" type="hidden" value="true" />
     <input name="recordStatus" type="hidden" value="active" />
-    <input name="scheduleScope" type="hidden" value="${escapeHtml(memberManagementProductScheduleScope(product))}" />
-    <input name="weeklyFrequency" type="hidden" value="${Number(product?.frequency_per_week || 1)}" />
+    <input name="scheduleScope" type="hidden" value="${escapeHtml(scheduleScope)}" />
+    <input name="weeklyFrequency" type="hidden" value="${memberManagementProductWeeklyFrequency(product)}" />
     <input name="lessonType" type="hidden" value="${isGroup ? "one_on_two" : "one_on_one"}" />
     <input name="startsOn" type="hidden" value="${escapeHtml(startsOn)}" />
     <input name="expiresOn" type="hidden" value="${escapeHtml(addMemberManagementDays(startsOn, validityDays - 1))}" />
@@ -10211,7 +10282,13 @@ function memberManualRegistrationFields() {
     <label class="form-field">${memberManagementFieldLabel("출생연도", true)}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="예: 1990" required /></label>
     <input name="memberNickname" type="hidden" value="" />
     <label class="form-field">${memberManagementFieldLabel("거주동", true)}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="예: 군자동" required /></label>
-    <input name="memberGender" type="hidden" value="" />
+    <label class="form-field">${memberManagementFieldLabel("성별")}<select name="memberGender">
+      <option value="">미입력</option>
+      <option value="female">여성</option>
+      <option value="male">남성</option>
+      <option value="other">기타</option>
+      <option value="prefer_not">응답 안 함</option>
+    </select></label>
     <input name="memberDominantHand" type="hidden" value="" />
     <input name="memberBackhandStyle" type="hidden" value="" />
     <input name="memberTennisStartedOn" type="hidden" value="" />
@@ -10300,9 +10377,10 @@ function renderMemberManagementModal() {
             ${candidates.map((candidate) => `<option value="${escapeHtml(candidate.userId)}" ${candidate.userId === recommended ? "selected" : ""}>${escapeHtml(memberLinkCandidateLabel(candidate))}</option>`).join("")}
           </select><small>연결하면 기존 회원권과 시간표는 유지되고 앱 로그인만 합쳐집니다.</small></label>`
         : `<div class="member-link-status"><strong>${linkQuery ? "검색 결과 없음" : "자동 일치 계정 없음"}</strong><span>${linkQuery ? "이름·닉네임·전화번호 뒤 4자리를 다시 확인해 주세요." : "아래 검색으로 앱 가입 계정을 직접 찾을 수 있습니다."}</span></div>`;
-    const linkControl = connection.linked
-      ? `<div class="member-link-status is-linked"><strong>앱 계정 연결됨</strong><span>${escapeHtml(connection.summary)}</span></div>`
-      : `<div class="member-link-control span-2">
+    const existingConnectionNotice = connection.linked
+      ? `<div class="member-link-status is-linked"><strong>연결된 로그인</strong><span>${escapeHtml(connection.summary)} · 다른 로그인 수단도 추가할 수 있습니다.</span></div>`
+      : "";
+    const linkControl = `<div class="member-link-control span-2">
           <label class="form-field"><span>앱 가입 계정 수동 연결</span><div class="member-link-search-row">
             <input name="memberLinkQuery" type="search" value="${escapeHtml(linkQuery)}" placeholder="이름·닉네임·전화번호 뒤 4자리" autocomplete="off" />
             <button class="secondary-button" type="button" data-search-member-link>검색</button>
@@ -10318,7 +10396,7 @@ function renderMemberManagementModal() {
     actionFields = `
       <div class="member-management-form-grid">
         ${memberManualProfileFields(member)}
-        ${linkControl}
+        ${existingConnectionNotice}${linkControl}
         <label class="form-field span-2"><span>회원 상태</span><select name="memberStatusAction">${statusOptions}</select></label>
       </div>
       ${record || ticket ? memberManagementDatabaseFields({
@@ -10560,8 +10638,11 @@ function applyMemberManagementProductDefaults(form) {
   form.elements.remainingSessions.value = total;
   form.elements.expiresOn.value = addMemberManagementDays(start, validityDays - 1);
   if (form.elements.paymentAmount) form.elements.paymentAmount.value = Number(product.cash_price || product.card_price || 0);
-  if (form.elements.scheduleScope) form.elements.scheduleScope.value = memberManagementProductScheduleScope(product);
-  if (form.elements.weeklyFrequency) form.elements.weeklyFrequency.value = Number(product.frequency_per_week) || 1;
+  const productScope = memberManagementProductScheduleScope(product);
+  if (form.elements.scheduleScope) {
+    form.elements.scheduleScope.value = productScope;
+  }
+  if (form.elements.weeklyFrequency) form.elements.weeklyFrequency.value = memberManagementProductWeeklyFrequency(product);
   if (form.elements.lessonType) form.elements.lessonType.value = Number(product.group_size || 1) === 2 ? "one_on_two" : "one_on_one";
   syncMemberManagementScopeFields(form);
   syncManualMemberPartnerField(form);
@@ -10725,6 +10806,7 @@ function memberManagementErrorText(error) {
   if (raw.includes("ticket_not_found") || raw.includes("product_not_found")) return "회원권 정보가 변경됐습니다. 새로고침 후 다시 선택해 주세요.";
   if (raw.includes("refunded_ticket_locked")) return "환불 완료 회원권은 수정할 수 없습니다.";
   if (raw.includes("target_member_already_linked")) return "이미 다른 앱 계정이 연결된 회원입니다.";
+  if (raw.includes("target_provider_already_linked") || raw.includes("login_provider_already_linked")) return "같은 로그인 방식의 다른 계정이 이미 연결되어 있습니다. 기존 로그인 계정을 확인해 주세요.";
   if (raw.includes("membership_link_target_required")) return "연결할 기존 수강회원을 선택해 주세요.";
   if (raw.includes("member_login_link_not_confirmed")) return "앱 계정 연결 결과를 확인하지 못했습니다. 새로고침 후 회원의 계정 연결 상태를 확인해 주세요.";
   if (raw.includes("source_signup_not_linked") || raw.includes("signup_profile_not_found")) return "가입 계정이 변경됐습니다. 새로고침 후 다시 선택해 주세요.";
@@ -11249,12 +11331,12 @@ function renderMemberEditorModeBar() {
   if (button) {
     button.classList.toggle("is-active", memberAdminEditEnabled);
     button.setAttribute("aria-pressed", String(memberAdminEditEnabled));
-    button.textContent = memberAdminEditEnabled ? "표 편집 종료" : "표 바로 편집";
+    button.textContent = memberAdminEditEnabled ? "회원 수정 잠그기" : "회원 수정 잠금 해제";
   }
   const summary = $("#memberEditorModeSummary");
   if (summary) summary.textContent = memberAdminEditEnabled
-    ? "표에서 바로 수정한 뒤 행 저장 또는 현재 페이지 전체 저장을 누릅니다."
-    : "PIN 확인 후 회원·회원권을 이 표에서 바로 수정합니다.";
+    ? "회원권별 행의 수정 버튼을 누르면 그 자리에서 바로 저장·삭제할 수 있습니다."
+    : "수정을 누르면 PIN 확인 후 선택한 행만 바로 편집합니다.";
   updateMemberInlineToolbar();
 }
 
@@ -11271,8 +11353,43 @@ function setMemberAdminEditEnabled(enabled) {
   memberAdminEditEnabled = Boolean(enabled);
   memberAdminEditExpiresAt = memberAdminEditEnabled ? Date.now() + memberAdminEditTimeoutMs : 0;
   state.inlineMemberId = null;
+  state.inlineMemberTicketId = "";
   renderMembers();
-  showToast(memberAdminEditEnabled ? "회원표 편집을 시작합니다." : "회원표 편집을 종료했습니다.");
+  showToast(memberAdminEditEnabled ? "회원 수정 잠금을 해제했습니다." : "회원 수정을 잠갔습니다.");
+}
+
+function openMemberInlineEditor(memberId, ticketId = "") {
+  memberAdminEditEnabled = true;
+  memberAdminEditExpiresAt = Date.now() + memberAdminEditTimeoutMs;
+  state.inlineMemberId = Number(memberId);
+  state.inlineMemberTicketId = String(ticketId || "");
+  renderMembers();
+  window.setTimeout(() => {
+    const form = document.querySelector(`[data-member-inline-form="${Number(memberId)}"][data-ticket-id="${CSS.escape(String(ticketId || ""))}"]`);
+    form?.querySelector("input, select")?.focus();
+  }, 0);
+}
+
+function requestMemberInlineEditor(memberId, ticketId = "") {
+  if (operationsRole() !== "admin") return;
+  const openEditor = () => openMemberInlineEditor(memberId, ticketId);
+  if (memberAdminEditEnabled || isAdminUnlocked()) {
+    openEditor();
+    return;
+  }
+  if (adminPinNeedsSetup()) {
+    state.settingsTab = "security";
+    showToast("운영 설정의 보안·잠금에서 관리자 PIN을 먼저 설정해 주세요.");
+    return;
+  }
+  adminLockSession.pendingView = "";
+  adminLockSession.pendingAction = "member_admin_edit";
+  adminLockSession.pendingLabel = "회원 바로 수정";
+  adminLockSession.error = "";
+  adminLockSession.afterUnlock = openEditor;
+  renderAdminLockModal();
+  $("#adminLockModal")?.removeAttribute("hidden");
+  setTimeout(() => $("#adminPinInput")?.focus(), 0);
 }
 
 function touchMemberAdminEditSession() {
@@ -11338,6 +11455,8 @@ function memberInlineChangeSummary(form) {
     memberName: "이름",
     memberPhone: "연락처",
     memberBirthYear: "출생연도",
+    memberNeighborhood: "거주동",
+    memberGender: "성별",
     productId: "회원권",
     coachRoleId: "담당 코치",
     partnerUserId: "파트너",
@@ -11365,6 +11484,8 @@ const memberInlineDraftFieldNames = [
   "memberName",
   "memberPhone",
   "memberBirthYear",
+  "memberNeighborhood",
+  "memberGender",
   "productId",
   "coachRoleId",
   "partnerUserId",
@@ -12625,8 +12746,25 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
   const initialSchedule = memberRegularScheduleSlots(member, ticket)
     .slice(0, memberRegularScheduleFrequency(currentProduct, ticket))
     .map((slot) => ({ dayOfWeek: Number(slot.dayOfWeek), startTime: String(slot.startTime || "").slice(0, 5) }));
+  const memberProfileFields = embedded && ticket
+    ? `<input name="memberName" type="hidden" value="${escapeHtml(member.name || "")}" />
+       <input name="memberPhone" type="hidden" value="${escapeHtml(member.phone || "")}" />
+       <input name="memberBirthYear" type="hidden" value="${escapeHtml(memberManagementValue(member.birthYear))}" />
+       <input name="memberNeighborhood" type="hidden" value="${escapeHtml(member.neighborhood || "")}" />
+       <input name="memberGender" type="hidden" value="${escapeHtml(member.gender || "")}" />`
+    : `<label><span>이름</span><input name="memberName" value="${escapeHtml(member.name || "")}" required /></label>
+       <label><span>연락처 · 필수</span><input name="memberPhone" inputmode="tel" value="${escapeHtml(member.phone || "")}" required /></label>
+       <label><span>출생연도 · 필수</span><input name="memberBirthYear" type="number" min="1900" max="2100" value="${escapeHtml(memberManagementValue(member.birthYear))}" required /></label>
+       <label><span>거주동 · 필수</span><input name="memberNeighborhood" value="${escapeHtml(member.neighborhood || "")}" required /></label>
+       <label><span>성별</span><select name="memberGender">
+         <option value="" ${member.gender ? "" : "selected"}>미입력</option>
+         <option value="female" ${member.gender === "female" ? "selected" : ""}>여성</option>
+         <option value="male" ${member.gender === "male" ? "selected" : ""}>남성</option>
+         <option value="other" ${member.gender === "other" ? "selected" : ""}>기타</option>
+         <option value="prefer_not" ${member.gender === "prefer_not" ? "selected" : ""}>응답 안 함</option>
+       </select></label>`;
   return `
-        <form class="member-inline-editor member-inline-editor--compact" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}">
+        <form class="member-inline-editor member-inline-editor--compact ${embedded && ticket ? "member-inline-editor--ticket-only" : ""}" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}">
           <div class="member-inline-editor-heading" ${embedded ? "hidden" : ""}>
             <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
@@ -12639,14 +12777,12 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
           <input name="expiresOn" type="hidden" value="${escapeHtml(memberManagementDate(ticket?.expires))}" />
           <input name="scheduleScope" type="hidden" value="${escapeHtml(record?.lesson_schedule_scope || ticket?.scheduleScope || "weekday")}" />
           <input name="lessonType" type="hidden" value="${escapeHtml(record?.lesson_type || ticket?.lessonTypeCode || "one_on_one")}" />
-          <input name="weeklyFrequency" type="hidden" value="${Number(record?.lesson_frequency_per_week ?? ticket?.weeklyCount ?? 1)}" />
+          <input name="weeklyFrequency" type="hidden" value="${memberManagementProductWeeklyFrequency(currentProduct, record?.lesson_frequency_per_week ?? ticket?.weeklyCount ?? 1)}" />
           <input name="recordStatus" type="hidden" value="${escapeHtml(record?.record_status || (ticket ? "active" : "pending"))}" />
           <input name="expectedTicketUpdatedAt" type="hidden" value="${escapeHtml(ticket?.serverUpdatedAt || "")}" />
+          ${embedded && ticket ? `<p class="member-inline-profile-hint"><strong>${escapeHtml(member.name)}</strong><span>회원 기본정보는 이름을 눌러 수정합니다. 아래에서는 선택한 회원권만 바뀝니다.</span></p>` : ""}
           <div class="member-inline-compact-grid">
-            <label><span>이름</span><input name="memberName" value="${escapeHtml(member.name || "")}" required /></label>
-            <label><span>연락처 · 필수</span><input name="memberPhone" inputmode="tel" value="${escapeHtml(member.phone || "")}" required /></label>
-            <label><span>출생연도 · 필수</span><input name="memberBirthYear" type="number" min="1900" max="2100" value="${escapeHtml(memberManagementValue(member.birthYear))}" required /></label>
-            <label><span>거주동 · 필수</span><input name="memberNeighborhood" value="${escapeHtml(member.neighborhood || "")}" required /></label>
+            ${memberProfileFields}
             <label class="member-inline-product"><span>회원권</span><select name="productId">
               <option value="">${ticket ? "회원권 취소·만료" : "미등록"}</option>${productOptions}
             </select></label>
@@ -12684,6 +12820,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
               <option value="true">미래 정규시간 다시 만들기</option>
             </select></label>
             <button class="primary-button member-inline-save" type="submit">${ticket ? "이 회원권 저장" : "새 회원권 등록"}</button>
+            ${embedded ? '<button class="ghost-button member-inline-cancel" type="button" data-close-member-inline>취소</button>' : ""}
             ${operationsRole() === "admin" && ticket && ticket.status !== "voided"
               ? `<button class="danger-button member-inline-force-delete" type="button" data-open-member-management="force_delete" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticket.serverTicketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(ticketContextLabel)} 삭제">이 회원권 삭제</button>`
               : ""}
@@ -12750,8 +12887,9 @@ function syncMemberQuickEditorProduct(form) {
   syncMemberQuickEditorSchedule(form, product);
   if (!product) return;
   form.elements.lessonType.value = groupProduct ? "one_on_two" : "one_on_one";
-  form.elements.scheduleScope.value = memberManagementProductScheduleScope(product);
-  form.elements.weeklyFrequency.value = Number(product.frequency_per_week) || 1;
+  const productScope = memberManagementProductScheduleScope(product);
+  form.elements.scheduleScope.value = productScope;
+  form.elements.weeklyFrequency.value = memberManagementProductWeeklyFrequency(product);
 }
 
 function syncMemberQuickEditorSchedule(form, product = null) {
@@ -13007,8 +13145,12 @@ async function submitMemberInlineEditor(form, options = {}) {
     payload.partnerUserId = selectedGroupSize === 2
       ? form.elements.partnerUserId?.value || null
       : null;
-    payload.scheduleScope = memberManagementProductScheduleScope(selectedProduct);
-    payload.weeklyFrequency = memberRegularScheduleFrequency(selectedProduct, ticket);
+    const selectedProductScope = memberManagementProductScheduleScope(selectedProduct);
+    payload.scheduleScope = selectedProductScope;
+    payload.weeklyFrequency = memberManagementProductWeeklyFrequency(
+      selectedProduct,
+      memberRegularScheduleFrequency(selectedProduct, ticket),
+    );
   }
   if (scheduleReplacementRequested) payload.lessonDays = regularSchedules.map((slot) => slot.dayOfWeek);
   payload.preserveExistingSchedule = true;
@@ -13064,8 +13206,9 @@ async function submitMemberInlineEditor(form, options = {}) {
       payload.totalSessions = Number(product.total_sessions) || 1;
       payload.usedSessions = 0;
       payload.remainingSessions = payload.totalSessions;
-      payload.scheduleScope = memberManagementProductScheduleScope(product);
-      payload.weeklyFrequency = Number(product.frequency_per_week) || 1;
+      const productScope = memberManagementProductScheduleScope(product);
+      payload.scheduleScope = productScope;
+      payload.weeklyFrequency = memberManagementProductWeeklyFrequency(product);
       payload.lessonType = Number(product.group_size || 1) === 2 ? "one_on_two" : "one_on_one";
       payload.recordStatus = "active";
       payload.ticketStatus = "active";
@@ -13191,6 +13334,7 @@ async function submitMemberInlineEditor(form, options = {}) {
       const synced = await syncAdminLiveData(true).catch(() => false);
       if (synced) {
         state.inlineMemberId = member.id;
+        state.inlineMemberTicketId = String(ticket?.serverTicketId || "");
         renderMembers();
         showToast(raw.includes("member_verified_pending_ticket_exists")
           ? "결제가 확인된 대기 회원권이 있습니다. 결제/정산에서 연결 상태를 확인해 주세요."
@@ -13375,49 +13519,74 @@ function renderMembers(options = {}) {
   const preserveList = options.preserveList === true && memberRows?.children.length;
   if (!preserveList) {
     memberRows.innerHTML = serverDirectoryPending
-      ? '<tr><td colspan="10" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
+      ? '<tr><td colspan="11" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
       : visibleMembers.length ? visibleMembers
       .map((member) => {
-      const ticket = memberCurrentTicket(member);
-      const issues = memberEditorAuditIssues(member, ticket);
+      const editableTickets = memberOperationalTickets(member);
+      const displayedTickets = editableTickets.length ? editableTickets : [null];
+      const possibleDuplicateTicketIds = memberPossibleDuplicateTicketIds(editableTickets);
+      const selectedIds = selectedMemberIdSet();
       const listStatus = memberListStatus(member);
-      const permanentDeleteButton = operationsRole() === "admin"
-        && listStatus === "inactive"
-        && member.authRole !== "admin"
-        && member.serverUserId
-          ? `<button class="small-button danger-button member-row-permanent-delete" type="button" data-open-member-management="permanent_delete" data-member-management-member-id="${member.id}">영구 삭제</button>`
-          : "";
-      const memberRow = `
-        <tr class="${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}">
-          <td class="row-select-cell member-select-column"><input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedMemberIdSet().has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} /></td>
+      return displayedTickets.map((rowTicket, ticketIndex) => {
+        const ticketId = String(rowTicket?.serverTicketId || "");
+        const possibleDuplicate = possibleDuplicateTicketIds.has(ticketId);
+        const editingNewTicket = memberAdminEditEnabled
+          && Number(state.inlineMemberId) === Number(member.id)
+          && String(state.inlineMemberTicketId || "") === ""
+          && ticketIndex === 0;
+        const editingThisRow = memberAdminEditEnabled
+          && Number(state.inlineMemberId) === Number(member.id)
+          && String(state.inlineMemberTicketId || "") === ticketId
+          && !editingNewTicket;
+        if (editingThisRow || editingNewTicket) {
+          const editorTicket = editingNewTicket ? null : rowTicket;
+          return `<tr class="member-inline-editor-row member-inline-sheet-row" data-member-id="${member.id}" data-member-editor-row="${member.id}" data-member-editor-ticket="${escapeHtml(ticketId)}">
+            <td colspan="11">${memberQuickEditorMarkup(member, editorTicket, {
+              embedded: true,
+              ticketPosition: editingNewTicket ? editableTickets.length + 1 : ticketIndex + 1,
+              ticketCount: editableTickets.length,
+            })}</td>
+          </tr>`;
+        }
+        const permanentDeleteButton = operationsRole() === "admin"
+          && listStatus === "inactive"
+          && member.authRole !== "admin"
+          && member.serverUserId
+          && ticketIndex === 0
+            ? `<button class="small-button danger-button member-row-permanent-delete" type="button" data-open-member-management="permanent_delete" data-member-management-member-id="${member.id}">영구 삭제</button>`
+            : "";
+        const ticketStatus = rowTicket
+          ? `<span class="member-ticket-status status-${escapeHtml(window.TennisNoteTicketState?.derive(rowTicket) || rowTicket.status || "unknown")}">${escapeHtml(memberTicketStatusLabel(rowTicket))}</span>`
+          : memberStatusBadge(member);
+        return `<tr class="member-ticket-table-row ${possibleDuplicate ? "is-possible-duplicate" : ""} ${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}" data-member-ticket-row="${escapeHtml(ticketId)}">
+          <td class="row-select-cell member-select-column">${ticketIndex === 0
+            ? `<input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedIds.has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />`
+            : '<span class="member-secondary-ticket-mark" aria-hidden="true">↳</span>'}</td>
           <td class="member-name-column">
-            <button class="member-link-button" type="button" data-select-member="${member.id}">
+            <button class="member-link-button ${possibleDuplicate ? "is-possible-duplicate" : ""}" type="button" data-select-member="${member.id}" ${ticketId ? `data-member-ticket="${escapeHtml(ticketId)}"` : ""}>
               ${avatarMarkup(member, "small")}
               <span>${escapeHtml(member.name)}</span>
             </button>
           </td>
           <td class="member-auth-column">${memberAuthStatusMarkup(member)}</td>
-          <td class="member-coach-column">${escapeHtml(member.coach || "미배정")}</td>
-          <td class="member-ticket-column">${memberTicketListMarkup(member)}</td>
-          <td class="member-schedule-column">${memberScheduleOverviewMarkup(member)}</td>
-          <td class="member-usage-column">${memberUsageOverviewMarkup(member)}</td>
-          <td class="member-payment-column">${memberPaymentOverviewMarkup(member)}</td>
-          <td class="member-status-column"><div class="member-status-actions">${memberStatusBadge(member)}${permanentDeleteButton}</div></td>
-          <td class="member-table-note member-note-column">${escapeHtml(memberRemarkLabel(member))}</td>
+          <td class="member-coach-column">${escapeHtml(memberTicketCoachLabel(member, rowTicket))}</td>
+          <td class="member-ticket-column">${memberTicketRowMarkup(member, rowTicket, ticketIndex + 1, editableTickets.length, possibleDuplicate)}</td>
+          <td class="member-schedule-column">${escapeHtml(rowTicket ? memberScheduleSummary(member, rowTicket) : "미배정")}</td>
+          <td class="member-usage-column">${rowTicket ? escapeHtml(ticketUsageLabel(rowTicket)) : '<span class="member-table-muted">-</span>'}</td>
+          <td class="member-payment-column">${memberTicketPaymentMarkup(member, rowTicket)}</td>
+          <td class="member-status-column"><div class="member-status-actions">${ticketStatus}${permanentDeleteButton}</div></td>
+          <td class="member-table-note member-note-column">${escapeHtml(memberDatabaseRecord(member, rowTicket)?.admin_note || memberRemarkLabel(member))}</td>
+          <td class="member-actions-column"><div class="member-row-actions">
+            ${operationsRole() === "admin" ? `<button class="small-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="${escapeHtml(ticketId)}">${rowTicket ? "회원권 수정" : "회원권 등록"}</button>` : ""}
+            ${operationsRole() === "admin" && rowTicket && rowTicket.status !== "voided"
+              ? `<button class="small-button danger-button member-row-ticket-delete" type="button" data-open-member-management="force_delete" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 삭제">회원권 삭제</button>`
+              : ""}
+            ${operationsRole() === "admin" && ticketIndex === 0 && rowTicket ? `<button class="ghost-button member-add-ticket-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="">+ 회원권</button>` : ""}
+          </div></td>
         </tr>`;
-      if (!memberAdminEditEnabled || operationsRole() !== "admin") return memberRow;
-      const editableTickets = memberOperationalTickets(member);
-      const ticketRows = editableTickets.length ? [...editableTickets, null] : [null];
-      return ticketRows.map((editableTicket, ticketIndex) => `
-        <tr class="member-inline-editor-row member-inline-sheet-row" data-member-id="${member.id}" data-member-editor-row="${member.id}" data-member-editor-ticket="${escapeHtml(editableTicket?.serverTicketId || "")}">
-          <td colspan="10">${memberQuickEditorMarkup(member, editableTicket, {
-            embedded: true,
-            ticketPosition: ticketIndex + 1,
-            ticketCount: editableTickets.length,
-          })}</td>
-        </tr>`).join("");
+      }).join("");
       })
-      .join("") : `<tr><td colspan="10" class="empty-text">${filterCopy.empty}</td></tr>`;
+      .join("") : `<tr><td colspan="11" class="empty-text">${filterCopy.empty}</td></tr>`;
   } else {
     memberRows.querySelectorAll("tr[data-member-id]").forEach((row) => {
       row.classList.toggle("is-selected", Number(row.dataset.memberId) === Number(state.selectedMemberId));
@@ -14138,11 +14307,11 @@ function normalizeScheduleSheetLessonSource(value) {
   return normalizeLessonSource(token);
 }
 
-function findScheduleSheetTicket(memberName, coachId, lessonSource, durationMinutes) {
-  return getEligibleTickets(memberName, coachId)
+function findScheduleSheetTicket(memberName, coachId, lessonSource, durationMinutes, lessonDate = "") {
+  return getEligibleTickets(memberName, coachId, lessonDate)
     .filter((ticket) => ticketMatchesLessonSource(ticket, lessonSource))
     .find((ticket) => Number(getTicketDurationMinutes(ticket)) === Number(durationMinutes))
-    || getEligibleTickets(memberName, coachId)
+    || getEligibleTickets(memberName, coachId, lessonDate)
       .find((ticket) => ticketMatchesLessonSource(ticket, lessonSource))
     || null;
 }
@@ -14175,7 +14344,13 @@ function validateScheduleSheetRows(rows) {
   return rows.map((row) => {
     const next = { ...row, issues: scheduleSheetBaseIssues(row) };
     const source = normalizeScheduleSheetLessonSource(row.lessonSourceLabel || row.lessonSource);
-    const ticket = findScheduleSheetTicket(row.memberName, row.coachId, source, row.durationMinutes);
+    const ticket = findScheduleSheetTicket(
+      row.memberName,
+      row.coachId,
+      source,
+      row.durationMinutes,
+      adminWeekDateForDay(row.day),
+    );
     next.lessonSource = source;
     next.ticketId = ticket?.id || "";
     if (!ticket) next.issues.push("회원권 확인");
@@ -15589,7 +15764,12 @@ function renderSchedule() {
 }
 
 function fillSelect(select, options) {
-  select.innerHTML = options.map((option) => `<option value="${option.value}">${option.label}</option>`).join("");
+  select.innerHTML = options.map((option) => {
+    const memberUserId = option.memberUserId
+      ? ` data-member-user-id="${escapeHtml(String(option.memberUserId))}"`
+      : "";
+    return `<option value="${option.value}"${memberUserId}>${option.label}</option>`;
+  }).join("");
 }
 
 function getTicketDurationMinutes(ticket) {
@@ -16022,18 +16202,40 @@ function renderLessonDurationQuickButtons() {
   }).join("");
 }
 
-function getEligibleTickets(memberName, coachId) {
+function selectedLessonMemberReference() {
+  const select = $("#lessonMember");
+  const selectedUserId = select?.selectedOptions?.[0]?.dataset?.memberUserId || "";
+  if (selectedUserId) {
+    const exactMember = members.find((member) => memberServerUserIds(member).includes(selectedUserId));
+    if (exactMember) return exactMember;
+  }
+  return select?.value || "";
+}
+
+function lessonTicketEligibilityDate() {
+  const day = $("#lessonDay")?.value || "";
+  return (day ? adminLessonDateForCandidate(day) : "") || adminLocalDateKey(new Date());
+}
+
+function ticketCanBeUsedOnLessonDate(ticket, lessonDate = lessonTicketEligibilityDate()) {
+  const ticketState = window.TennisNoteTicketState?.derive(ticket, lessonDate) || "";
+  if (ticketState) return ["current", "paused"].includes(ticketState);
+  return isCurrentMemberTicket(ticket, lessonDate);
+}
+
+function getEligibleTickets(memberReference, coachId, lessonDate = lessonTicketEligibilityDate()) {
   const editingTicket = getTicketByLesson(getCurrentEditingLesson());
   const editingTicketId = editingTicket?.id || "";
   const sourceTickets = adminManualOverrideEnabled()
     ? [...operationBranchTickets(), ...operationBranchTickets(expiredTickets)].filter((ticket, index, source) => (
       source.findIndex((item) => String(item.id) === String(ticket.id)) === index
-      && ticketParticipantNames(ticket).includes(memberName)
+      && ticketBelongsToMember(ticket, memberReference)
     ))
-    : ticketsForMember(memberName);
+    : allTicketsForMember(memberReference);
   const eligibleTickets = sourceTickets.filter((ticket) => adminManualOverrideEnabled() || (
     ticket.coachId === coachId
     && (ticket.remaining > 0 || ticket.id === editingTicketId)
+    && ticketCanBeUsedOnLessonDate(ticket, lessonDate)
   ));
   // Existing lessons are already bound to a server ticket. Keep that identity
   // while editing instead of rediscovering it from display names or coach lanes.
@@ -16044,33 +16246,42 @@ function getEligibleTickets(memberName, coachId) {
 }
 
 function findFirstMemberWithCoachTicket(coachId) {
-  const ticket = operationBranchTickets().find((item) => item.coachId === coachId && item.remaining > 0);
+  const ticket = [...operationBranchTickets(), ...operationBranchTickets(expiredTickets)]
+    .find((item) => (
+      item.coachId === coachId
+      && item.remaining > 0
+      && ticketCanBeUsedOnLessonDate(item)
+    ));
   if (!ticket) return "";
   const branchMembers = operationBranchMembers();
   const owner = branchMembers.find((member) => memberServerUserIds(member).includes(ticket.serverUserId));
   return owner?.name || branchMembers.find((member) => ticketBelongsToMember(ticket, member))?.name || ticketParticipantNames(ticket)[0] || "";
 }
 
-function findFirstTicketForMember(memberName) {
-  return ticketsForMember(memberName).find((ticket) => ticket.remaining > 0);
+function findFirstTicketForMember(memberReference) {
+  return allTicketsForMember(memberReference)
+    .find((ticket) => ticket.remaining > 0 && ticketCanBeUsedOnLessonDate(ticket));
 }
 
-function getActiveTicketForMember(memberName) {
-  return ticketsForMember(memberName)[0];
+function getActiveTicketForMember(memberReference) {
+  return allTicketsForMember(memberReference)
+    .find((ticket) => ticketCanBeUsedOnLessonDate(ticket))
+    || ticketsForMember(memberReference)[0]
+    || allTicketsForMember(memberReference)[0];
 }
 
 function alignCoachToSelectedMemberTicket() {
-  const memberName = $("#lessonMember").value;
+  const memberReference = selectedLessonMemberReference();
   const coachId = $("#lessonCoach").value;
-  if (getEligibleTickets(memberName, coachId).length) return;
-  const ticket = findFirstTicketForMember(memberName);
+  if (getEligibleTickets(memberReference, coachId).length) return;
+  const ticket = findFirstTicketForMember(memberReference);
   if (ticket) $("#lessonCoach").value = ticket.coachId;
 }
 
 function ensureMemberHasCoachTicket() {
   const memberSelect = $("#lessonMember");
   const coachId = $("#lessonCoach").value;
-  if (getEligibleTickets(memberSelect.value, coachId).length) return;
+  if (getEligibleTickets(selectedLessonMemberReference(), coachId).length) return;
   const fallbackMember = findFirstMemberWithCoachTicket(coachId);
   if (fallbackMember) memberSelect.value = fallbackMember;
 }
@@ -16078,7 +16289,11 @@ function ensureMemberHasCoachTicket() {
 function getSelectableMembers(search = "") {
   const keyword = search.trim().toLowerCase();
   const matchingMembers = members.filter((member) => {
-    if (!adminManualOverrideEnabled() && ["expired", "inactive"].includes(memberListStatus(member))) return false;
+    const status = memberListStatus(member);
+    const usableOnSelectedDate = allTicketsForMember(member)
+      .some((ticket) => ticket.remaining > 0 && ticketCanBeUsedOnLessonDate(ticket));
+    if (!adminManualOverrideEnabled() && status === "inactive") return false;
+    if (!adminManualOverrideEnabled() && status === "expired" && !usableOnSelectedDate) return false;
     return !keyword || memberSearchValues(member)
       .some((value) => String(value || "").toLowerCase().includes(keyword));
   });
@@ -16120,6 +16335,7 @@ function refreshLessonMemberOptions(keepValue = "", editingLesson = null) {
       { value: "", label: "회원 검색 또는 선택" },
       ...options.map((member) => ({
       value: member.name,
+      memberUserId: member.serverUserId || memberServerUserIds(member)[0] || "",
       label: editingParticipantLabel && member.name === currentValue
         ? `현재 수업 · ${editingParticipantLabel}${editingTicket ? ` · ${getTicketOptionLabel(editingTicket)}` : ""}`
         : getMemberOptionLabel(member),
@@ -16408,10 +16624,10 @@ function syncLessonSourceOptions() {
 }
 
 function alignTicketToLessonSource(preferredTicketId = state.pinnedLessonTicketId) {
-  const memberName = $("#lessonMember").value;
+  const memberReference = selectedLessonMemberReference();
   const coachId = $("#lessonCoach").value;
   const source = normalizeLessonSource($("#lessonSource").value);
-  const eligible = getEligibleTickets(memberName, coachId);
+  const eligible = getEligibleTickets(memberReference, coachId);
   const matchingTicket = eligible.find((ticket) => (
     String(ticket.id) === String(preferredTicketId || "")
     && ticketMatchesLessonSource(ticket, source)
@@ -16548,10 +16764,10 @@ function autoAssignOpenLessonSlot() {
 }
 
 function refreshLessonTicketOptions() {
-  const memberName = $("#lessonMember").value;
+  const memberReference = selectedLessonMemberReference();
   const coachId = $("#lessonCoach").value;
   const previousTicketId = $("#lessonTicket").value;
-  const eligible = getEligibleTickets(memberName, coachId);
+  const eligible = getEligibleTickets(memberReference, coachId);
   fillSelect(
     $("#lessonTicket"),
     eligible.length
@@ -27696,9 +27912,8 @@ function bindEvents() {
     const inlineMemberButton = event.target.closest("[data-open-member-inline]");
     if (inlineMemberButton) {
       const memberId = Number(inlineMemberButton.dataset.openMemberInline);
-      state.inlineMemberId = state.inlineMemberId === memberId ? null : memberId;
-      renderMembers();
-      window.requestAnimationFrame(positionMemberQuickEditPopover);
+      const ticketId = String(inlineMemberButton.dataset.memberInlineTicket || "");
+      requestMemberInlineEditor(memberId, ticketId);
       return;
     }
     if (event.target.closest("[data-member-create-next]")) {
@@ -27711,6 +27926,7 @@ function bindEvents() {
     }
     if (event.target.closest("[data-close-member-inline]")) {
       state.inlineMemberId = null;
+      state.inlineMemberTicketId = "";
       renderMembers();
       return;
     }
@@ -27915,6 +28131,7 @@ function bindEvents() {
       if (!$("#memberDetail")) {
         if (!member) return;
         state.inlineMemberId = null;
+        state.inlineMemberTicketId = "";
         state.selectedMemberId = member?.id || null;
         const ticketId = memberButton.dataset.memberTicket || memberCurrentTicket(member)?.serverTicketId || "";
         await openMemberManagementModal(member, "profile", ticketId);
@@ -27922,6 +28139,7 @@ function bindEvents() {
       }
       state.selectedMemberId = state.selectedMemberId === memberId ? null : memberId;
       state.inlineMemberId = null;
+      state.inlineMemberTicketId = "";
       renderMembers();
       const selectedMember = members.find((member) => member.id === state.selectedMemberId);
       if (selectedMember) void loadAdminMemberDetail(selectedMember);

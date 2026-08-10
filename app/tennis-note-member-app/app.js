@@ -1692,7 +1692,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.302",
+    workerUrl: "./service-worker.js?v=1.0.306",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2384,22 +2384,62 @@ function memberCoachShortName(name = "") {
   return name.replace(" 코치", "").replace("코치", "").trim();
 }
 
+function memberScheduleCoachTickets() {
+  const visibleStates = new Set(["current", "upcoming", "paused", "pending_payment"]);
+  return (state.liveTickets || []).filter((ticket) => {
+    const derived = window.TennisNoteTicketState?.derive?.(ticket)
+      || String(ticket.status || "").toLowerCase();
+    return visibleStates.has(derived) && String(ticket.coachRoleId || "").trim();
+  });
+}
+
 function memberAssignedCoachRoleIds() {
-  return new Set(
-    (state.liveTickets || [])
-      .filter((ticket) => ["active", "pending_payment"].includes(String(ticket.status || "").toLowerCase()))
-      .map((ticket) => String(ticket.coachRoleId || "").trim())
-      .filter(Boolean),
-  );
+  return new Set(memberScheduleCoachTickets()
+    .map((ticket) => String(ticket.coachRoleId || "").trim())
+    .filter(Boolean));
 }
 
 function memberCoachMatchesAssignment(coach = {}) {
   const assignedRoleIds = memberAssignedCoachRoleIds();
-  if (assignedRoleIds.size) {
-    return assignedRoleIds.has(String(coach.serverRoleId || coach.id || "").trim());
+  return assignedRoleIds.has(String(coach.serverRoleId || coach.id || "").trim());
+}
+
+function renderMemberAssignedCoachSummary(policy = loadAdminSchedulePolicy()) {
+  const tickets = memberScheduleCoachTickets();
+  if (!tickets.length) {
+    const initialSetup = memberInitialCoachSelectionSource();
+    if (initialSetup) {
+      return `
+        <section class="member-assigned-coaches is-setup" role="status">
+          <strong>첫 정규시간과 담당 코치를 선택해 주세요</strong>
+          <span>${escapeHtml(initialSetup.ticketTitle || "정규 회원권")} 조건에 맞는 시간만 선택할 수 있습니다.</span>
+        </section>`;
+    }
+    return `
+      <section class="member-assigned-coaches is-empty" role="status">
+        <strong>담당 코치 연결 확인 필요</strong>
+        <span>로그인 계정과 회원권 연결을 확인하면 시간표가 표시됩니다.</span>
+      </section>`;
   }
-  const mainCoach = memberCoachShortName(state.profile?.mainCoach || "");
-  return !mainCoach || memberCoachShortName(coach.name || "") === mainCoach;
+  const items = tickets.map((ticket) => {
+    const roleId = String(ticket.coachRoleId || "");
+    const coach = policy.coaches.find((item) => String(item.serverRoleId || item.roleId || item.id || "") === roleId);
+    const coachName = memberCoachShortName(coach?.name || ticket.coach || "담당 코치");
+    const status = window.TennisNoteTicketState?.label?.(ticket) || ticket.statusLabel || "사용 중";
+    const ticketName = ticket.title || "회원권";
+    return `<span><b>${escapeHtml(coachName)}</b><small>${escapeHtml(ticketName)} · ${escapeHtml(status)}</small></span>`;
+  }).join("");
+  return `
+    <section class="member-assigned-coaches" aria-label="회원권 담당 코치">
+      <strong>내 회원권 담당 코치</strong>
+      <div>${items}</div>
+    </section>`;
+}
+
+function memberInitialCoachSelectionSource() {
+  return memberBookableRegularTickets()
+    .concat(memberBookablePausedTickets())
+    .find((lesson) => lesson.regularInitialBooking && !String(lesson.coachRoleId || "").trim()) || null;
 }
 
 function memberLessonCoach(lesson, policy) {
@@ -2736,11 +2776,11 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
     if (!lessonDate) return;
     if (sourceLesson.startsOn && lessonDate < sourceLesson.startsOn) return;
     if (sourceLesson.expiresOn && lessonDate > sourceLesson.expiresOn) return;
-    const coaches = memberDayCoaches(day, policy, scheduleLessons).filter((coach) => (
-      isRegularInitialBooking && !sourceLesson.coachRoleId
-        ? true
-        : coach.id === sourceCoach.id
-    ));
+    const initialCoachSelection = isRegularInitialBooking && !sourceLesson.coachRoleId;
+    const coaches = (initialCoachSelection
+      ? policy.coaches.filter((coach) => (coach.workBlocks || []).some((block) => block.days.includes(day)))
+      : memberDayCoaches(day, policy, scheduleLessons)
+    ).filter((coach) => initialCoachSelection || coach.id === sourceCoach.id);
     coaches.forEach((coach) => {
       memberCoachBookableTimes(coach, day).forEach((time) => {
         if (new Date(`${lessonDate}T${time}:00`).getTime() <= Date.now()) return;
@@ -2805,7 +2845,14 @@ function memberScheduleOptions() {
       : ["loading", "error"].includes(candidateState)
         ? []
         : generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson);
-  return scheduleLessons.concat(generated);
+  const assignedCoachIds = memberAssignedCoachRoleIds();
+  const initialCoachSelection = Boolean(selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId);
+  const visibleGenerated = generated.filter((lesson) => {
+    if (lesson.status !== "available") return true;
+    const roleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
+    return Boolean(roleId) && (initialCoachSelection || assignedCoachIds.has(roleId));
+  });
+  return scheduleLessons.concat(visibleGenerated);
 }
 
 function memberScheduleRequestOnly(policy = loadAdminSchedulePolicy()) {
@@ -2841,8 +2888,12 @@ function memberAvailableSlotsForSelectedLesson() {
   const selectedCoachId = selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId
     ? ""
     : selectedLesson ? memberLessonCoach(selectedLesson, loadAdminSchedulePolicy()).id : "";
+  const assignedCoachIds = memberAssignedCoachRoleIds();
+  const initialCoachSelection = Boolean(selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId);
   return options.filter((lesson) => {
     if (lesson.status !== "available") return false;
+    const lessonCoachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
+    if (!lessonCoachRoleId || (!initialCoachSelection && !assignedCoachIds.has(lessonCoachRoleId))) return false;
     if (!selectedCoachId) return true;
     return memberLessonCoach(lesson, loadAdminSchedulePolicy()).id === selectedCoachId;
   });
@@ -3836,21 +3887,33 @@ function renderDynamicMemberSchedule() {
     })
     .join(" ");
   const scheduleMode = state.memberScheduleMode || "mine";
+  const assignedCoachSummary = renderMemberAssignedCoachSummary(policy);
   $$("[data-member-schedule-mode]").forEach((button) => button.classList.toggle("is-active", button.dataset.memberScheduleMode === scheduleMode));
   if (scheduleMode === "mine") {
-    $("#scheduleGrid").innerHTML = renderMemberOwnSchedule();
+    $("#scheduleGrid").innerHTML = `${assignedCoachSummary}${renderMemberOwnSchedule()}`;
     return;
   }
   if (scheduleMode === "flex") {
-    $("#scheduleGrid").innerHTML = renderMemberFlexibleBooking();
+    $("#scheduleGrid").innerHTML = `${assignedCoachSummary}${renderMemberFlexibleBooking()}`;
     return;
   }
   const availabilityOverview = renderMemberAvailabilityOverview(scheduleLessons, true);
   if (memberHasPendingPaymentOnly()) {
-    $("#scheduleGrid").innerHTML = availabilityOverview;
+    $("#scheduleGrid").innerHTML = `${assignedCoachSummary}${availabilityOverview}`;
+    return;
+  }
+  if (!memberAssignedCoachRoleIds().size && !memberInitialCoachSelectionSource()) {
+    $("#scheduleGrid").innerHTML = `
+      ${assignedCoachSummary}
+      ${memberEmptyState({
+        title: "시간표를 열 수 없습니다",
+        reason: "현재 로그인 계정에 담당 코치가 연결된 회원권이 없습니다. 관리자에게 계정 연결을 요청해 주세요.",
+        compact: true,
+      })}`;
     return;
   }
   $("#scheduleGrid").innerHTML = `
+    ${assignedCoachSummary}
     ${renderRegularInitialScheduleBar()}
     ${availabilityOverview}
     ${renderMemberMobileSchedule(policy, baseLessons, scheduleLessons)}
@@ -8111,7 +8174,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.302" });
+  const params = new URLSearchParams({ v: "1.0.306" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

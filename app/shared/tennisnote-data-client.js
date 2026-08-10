@@ -1100,12 +1100,14 @@
       }
     }
 
-    if (!rows?.length && session?.access_token) {
+    const needsProfileReconciliation = !rows?.length
+      || (rows?.[0]?.role === "member" && rows?.[0]?.member_kind === "journal_only");
+    if (needsProfileReconciliation && session?.access_token) {
       try {
         const result = await bootstrapCurrentProfile({ providerHint: session.provider });
         if (result?.profile?.id) rows = [result.profile];
       } catch (error) {
-        rows = [];
+        if (!rows?.length) rows = [];
       }
     }
 

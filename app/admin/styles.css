@@ -2000,7 +2000,7 @@ tr.is-selected td {
 }
 
 #membersView .table-panel table {
-  min-width: 980px;
+  min-width: 1080px;
 }
 
 #membersView .table-panel {
@@ -2097,6 +2097,33 @@ tr.is-selected td {
     72px;
 }
 
+.member-inline-editor-row .member-inline-editor--ticket-only .member-inline-compact-grid {
+  grid-template-columns:
+    minmax(190px, 1.7fr)
+    minmax(120px, 1fr)
+    minmax(170px, 1.4fr)
+    repeat(3, 64px)
+    118px
+    112px
+    108px
+    112px
+    minmax(150px, 1.3fr);
+}
+
+.member-inline-profile-hint {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+  color: #60776f;
+  font-size: 11px;
+}
+
+.member-inline-profile-hint strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
 .member-inline-editor-row .member-inline-editor-actions {
   align-items: center;
 }
@@ -2178,6 +2205,73 @@ tr.is-selected td {
 .member-inline-force-delete {
   min-width: 84px;
   white-space: nowrap;
+}
+
+.member-inline-cancel {
+  min-width: 58px;
+  white-space: nowrap;
+}
+
+.member-actions-column {
+  width: 118px;
+  min-width: 118px;
+}
+
+.member-row-actions {
+  display: grid;
+  gap: 5px;
+  align-items: center;
+}
+
+.member-row-actions button {
+  width: 100%;
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+.member-add-ticket-button {
+  font-size: 11px;
+}
+
+.member-row-ticket-delete {
+  border-color: #e3b8b3;
+  color: #a4382f;
+  background: #fff8f7;
+}
+
+.member-ticket-table-row + .member-ticket-table-row[data-member-id] td {
+  border-top-color: #dce9e4;
+}
+
+.member-ticket-table-row.is-possible-duplicate td {
+  background: #fffaf0;
+}
+
+.member-secondary-ticket-mark {
+  color: #72958a;
+  font-weight: 900;
+}
+
+.member-ticket-row-summary {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.member-ticket-row-summary small {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.member-ticket-row-summary strong,
+.member-ticket-row-summary span {
+  overflow-wrap: anywhere;
+}
+
+.member-ticket-row-summary span {
+  color: #64786f;
+  font-size: 11px;
 }
 
 .member-inline-ticket-context {
@@ -2421,6 +2515,16 @@ tr.is-selected td {
 
   .member-inline-editor-row .member-inline-compact-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .member-inline-editor-row .member-inline-editor--ticket-only .member-inline-compact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .member-inline-profile-hint {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .member-inline-product,

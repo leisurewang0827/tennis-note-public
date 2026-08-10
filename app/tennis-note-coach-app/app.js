@@ -2050,8 +2050,15 @@ function coachScheduleCardCoachLabel(lesson = {}) {
   return lesson.isSubstitute ? `대타 ${actualCoach || "확인"}` : actualCoach;
 }
 
-function dayCoachesForSchedule(day, policy, lessons = []) {
-  const working = policy.coaches.filter((coach) => (coach.workBlocks || []).some((block) => block.days.includes(day)));
+function dayCoachesForSchedule(day, policy, lessons = [], filter = state.scheduleFilter || "all") {
+  const currentRoleId = currentCoachRoleId();
+  const currentName = currentCoachName();
+  const working = policy.coaches.filter((coach) => {
+    if (!(coach.workBlocks || []).some((block) => block.days.includes(day))) return false;
+    if (filter !== "mine") return true;
+    const roleMatches = currentRoleId && String(coach.roleId || coach.id || "") === currentRoleId;
+    return Boolean(roleMatches || canonicalCoachName(coach.name) === currentName);
+  });
   const lessonCoaches = lessons
     .filter((lesson) => lesson.day === day)
     .map((lesson) => coachFromLesson(lesson, policy));
@@ -2203,7 +2210,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.302",
+    workerUrl: "./service-worker.js?v=1.0.306",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2233,7 +2240,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.302" });
+  const params = new URLSearchParams({ v: "1.0.306" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3571,7 +3578,7 @@ function renderFullSchedule() {
   const week = activeScheduleWeek();
   const scheduleFilter = state.scheduleFilter || "all";
   const lessonsForWeek = filterFullScheduleLessons(weekLessons(), scheduleFilter);
-  const dayCoachMap = new Map(scheduleDays.map((day) => [day, dayCoachesForSchedule(day, policy, lessonsForWeek)]));
+  const dayCoachMap = new Map(scheduleDays.map((day) => [day, dayCoachesForSchedule(day, policy, lessonsForWeek, scheduleFilter)]));
   const dayColumnTracks = scheduleDays
     .map((day) => {
       const laneCount = Math.max(1, dayCoachMap.get(day)?.length || 0);
@@ -3690,7 +3697,7 @@ function renderFullSchedule() {
 function fullScheduleFilterOptions() {
   return [
     { id: "all", label: "전체" },
-    { id: "mine", label: "내수업" },
+    { id: "mine", label: "내 수업" },
     { id: "makeupChange", label: "보강&변경요청" },
   ];
 }
