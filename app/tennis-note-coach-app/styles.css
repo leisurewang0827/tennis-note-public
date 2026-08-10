@@ -3904,6 +3904,46 @@ select {
     color: white;
   }
 
+  .coach-mobile-locked-add {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: end;
+    min-width: 0;
+    border: 1px dashed #d7b86e;
+    border-radius: 8px;
+    padding: 7px;
+    background: #fff9e8;
+  }
+
+  .coach-mobile-locked-add label {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    color: #6b4d0b;
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .coach-mobile-locked-add select,
+  .coach-mobile-locked-add button {
+    min-height: 40px;
+  }
+
+  .coach-mobile-locked-add select {
+    min-width: 0;
+    border: 1px solid #d7b86e;
+    border-radius: 6px;
+    padding: 0 8px;
+    color: var(--ink);
+    background: white;
+    font: inherit;
+  }
+
+  .coach-mobile-locked-add button {
+    white-space: nowrap;
+  }
+
   .coach-mobile-segment {
     display: grid;
     gap: 6px;

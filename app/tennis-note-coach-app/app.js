@@ -1848,6 +1848,8 @@ function defaultCoachSchedulePolicy() {
   return {
     openStart: "06:40",
     openEnd: "22:00",
+    allowCoachLockedTimeOverride: true,
+    allowCoachHolidayOverride: false,
     breakRules: [{ id: "weekday-midday", days: weekdays, start: "13:00", end: "17:00", label: "수업 없음" }],
     lessonColors: { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" },
     coaches: [
@@ -1929,6 +1931,15 @@ function normalizeCoachPolicyItem(coach) {
     }))
     .filter((block) => minutesFromTime(block.start) < minutesFromTime(block.end));
   if (!normalized.workBlocks.length) normalized.workBlocks = defaultWorkBlocksForCoach(normalized);
+  normalized.blockedBlocks = (Array.isArray(normalized.blockedBlocks) ? normalized.blockedBlocks : [])
+    .map((block, index) => ({
+      id: block.id || `${normalized.id}-blocked-${index}`,
+      days: Array.isArray(block.days) && block.days.length ? block.days : scheduleDays,
+      start: block.start || "06:40",
+      end: block.end || "22:00",
+      label: block.label || "브레이크·상담",
+    }))
+    .filter((block) => minutesFromTime(block.start) < minutesFromTime(block.end));
   return normalized;
 }
 
@@ -1974,6 +1985,16 @@ function loadCoachSchedulePolicy() {
         label: "근무",
       }))
       .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
+    const blockedBlocks = (coach.availability || [])
+      .filter((block) => block.type === "blocked")
+      .map((block, blockIndex) => ({
+        id: `${coach.roleId}-server-blocked-${blockIndex}`,
+        days: [scheduleDays[Number(block.dayOfWeek) === 0 ? 6 : Number(block.dayOfWeek) - 1]].filter(Boolean),
+        start: String(block.startTime || "").slice(0, 5),
+        end: String(block.endTime || "").slice(0, 5),
+        label: block.note || "브레이크·상담",
+      }))
+      .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
     return {
       id: coach.roleId,
       roleId: coach.roleId,
@@ -1981,11 +2002,13 @@ function loadCoachSchedulePolicy() {
       status: "active",
       sortIndex: coachIndex,
       workBlocks,
+      blockedBlocks,
     };
   });
   return {
     ...resolved,
     allowCoachLockedTimeOverride: workspace.policy?.allow_coach_locked_time_override !== false,
+    allowCoachHolidayOverride: workspace.policy?.allow_coach_holiday_override === true,
     allowCrossCoachMemberEdit: workspace.policy?.allow_cross_coach_member_edit === true,
     coachSingleAddMode: workspace.policy?.coach_single_add_mode || "approval",
     coaches: serverCoaches,
@@ -2042,12 +2065,50 @@ function dayCoachesForSchedule(day, policy, lessons = []) {
     });
 }
 
-function breakRuleForSlot(policy, day, time) {
-  const current = minutesFromTime(time);
-  return (policy.breakRules || []).find((rule) => {
+function scheduleRuleForSlot(rules, day, time, durationMinutes = scheduleBlockMinutes) {
+  const start = minutesFromTime(time);
+  const end = start + durationMinutes;
+  return (rules || []).find((rule) => {
     if (!Array.isArray(rule.days) || !rule.days.includes(day)) return false;
-    return current >= minutesFromTime(rule.start) && current < minutesFromTime(rule.end);
+    return start < minutesFromTime(rule.end) && end > minutesFromTime(rule.start);
   });
+}
+
+function breakRuleForSlot(policy, day, time, durationMinutes = scheduleBlockMinutes) {
+  return scheduleRuleForSlot(policy.breakRules, day, time, durationMinutes);
+}
+
+function coachBlockedRuleForSlot(coach, day, time, durationMinutes = scheduleBlockMinutes) {
+  return scheduleRuleForSlot(coach.blockedBlocks, day, time, durationMinutes);
+}
+
+function coachClosureForSlot(day, time, durationMinutes = scheduleBlockMinutes) {
+  const date = coachWeekDateForDay(day);
+  const start = minutesFromTime(time);
+  const end = start + durationMinutes;
+  return (scheduleV2CoachWorkspace()?.closures || []).find((closure) => {
+    if (String(closure.date || "") !== date) return false;
+    if (closure.allDay) return true;
+    return start < minutesFromTime(String(closure.endTime || "").slice(0, 5))
+      && end > minutesFromTime(String(closure.startTime || "").slice(0, 5));
+  });
+}
+
+function coachSlotAccess(coach, day, time, durationMinutes = scheduleBlockMinutes, policy = loadCoachSchedulePolicy()) {
+  const currentRoleId = currentCoachRoleId();
+  const laneRoleId = String(coach.roleId || coach.id || "");
+  if (!currentRoleId || laneRoleId !== currentRoleId) return { allowed: false, reason: "other_coach" };
+  const closure = coachClosureForSlot(day, time, durationMinutes);
+  if (closure && policy.allowCoachHolidayOverride !== true) return { allowed: false, reason: "holiday_locked", closure };
+  const breakRule = breakRuleForSlot(policy, day, time, durationMinutes);
+  const blockedRule = coachBlockedRuleForSlot(coach, day, time, durationMinutes);
+  const working = isPolicyCoachWorking(coach, day, time, durationMinutes);
+  const lockedRule = blockedRule || breakRule;
+  if (lockedRule && policy.allowCoachLockedTimeOverride !== false) {
+    return { allowed: true, reason: "locked_time_override", lockedRule, closure, working };
+  }
+  if (!working || lockedRule) return { allowed: false, reason: working ? "blocked_time" : "outside_working_hours", lockedRule, closure, working };
+  return { allowed: true, reason: closure ? "holiday_override" : "available", closure, working };
 }
 
 function isPolicyCoachWorking(coach, day, time, durationMinutes = scheduleBlockMinutes) {
@@ -2142,7 +2203,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.300",
+    workerUrl: "./service-worker.js?v=1.0.301",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2172,7 +2233,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.300" });
+  const params = new URLSearchParams({ v: "1.0.301" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3335,24 +3396,20 @@ function coachOperatingWindows(day, policy) {
   )));
 }
 
-function coachCanAddToSlot(coach, day, time, durationMinutes = scheduleBlockMinutes) {
-  const currentRoleId = currentCoachRoleId();
-  const laneRoleId = String(coach.roleId || coach.id || "");
-  if (!currentRoleId || laneRoleId !== currentRoleId) return false;
-  if (!isPolicyCoachWorking(coach, day, time, durationMinutes)) return false;
-  const breakRule = breakRuleForSlot(loadCoachSchedulePolicy(), day, time);
-  return !breakRule || loadCoachSchedulePolicy().allowCoachLockedTimeOverride !== false;
+function coachCanAddToSlot(coach, day, time, durationMinutes = scheduleBlockMinutes, policy = loadCoachSchedulePolicy()) {
+  return coachSlotAccess(coach, day, time, durationMinutes, policy).allowed;
 }
 
-function coachQuickAddSlotMarkup({ coach, day, time, className, label, style = "" }) {
-  const canAdd = coachCanAddToSlot(coach, day, time);
-  const breakRule = breakRuleForSlot(loadCoachSchedulePolicy(), day, time);
+function coachQuickAddSlotMarkup({ coach, day, time, className, label, style = "", policy = loadCoachSchedulePolicy() }) {
+  const access = coachSlotAccess(coach, day, time, scheduleBlockMinutes, policy);
+  const canAdd = access.allowed;
+  const lockedOverride = access.reason === "locked_time_override";
   const date = coachWeekDateForDay(day);
-  const overrideClass = canAdd && breakRule ? " locked-override" : "";
-  const content = canAdd ? `<span aria-hidden="true">+</span><small>${breakRule ? "수동" : ""}</small>` : (label ? `<span>${escapeHtml(label)}</span>` : "");
+  const overrideClass = canAdd && lockedOverride ? " locked-override" : "";
+  const content = canAdd ? `<span aria-hidden="true">+</span><small>${lockedOverride ? "수동" : ""}</small>` : (label ? `<span>${escapeHtml(label)}</span>` : "");
   const styleAttr = style ? ` style="${style}"` : "";
   if (!canAdd) return `<div class="${className}${overrideClass}"${styleAttr} aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${label || "빈 시간"}">${content}</div>`;
-  return `<button class="${className} coach-add-slot${overrideClass}"${styleAttr} type="button" data-coach-add-lesson data-date="${date}" data-day="${day}" data-time="${time}" data-coach-role-id="${escapeHtml(coach.roleId || coach.id)}" aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${breakRule ? "브레이크 시간 수동 등록" : "수업 추가"}">${content}</button>`;
+  return `<button class="${className} coach-add-slot${overrideClass}"${styleAttr} type="button" data-coach-add-lesson data-date="${date}" data-day="${day}" data-time="${time}" data-coach-role-id="${escapeHtml(coach.roleId || coach.id)}" aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${lockedOverride ? "브레이크·상담 시간 수동 등록" : "수업 추가"}">${content}</button>`;
 }
 
 function coachMobileScheduleSegments(day, policy, scheduleLessons) {
@@ -3382,6 +3439,40 @@ function coachMobileScheduleSegments(day, policy, scheduleLessons) {
   }];
 }
 
+function coachLockedTimesForDay(day, policy) {
+  if (policy.allowCoachLockedTimeOverride === false) return [];
+  const currentRoleId = currentCoachRoleId();
+  const coach = policy.coaches.find((item) => String(item.roleId || item.id || "") === currentRoleId);
+  if (!coach || !(coach.workBlocks || []).some((block) => block.days.includes(day))) return [];
+  const rules = [...(policy.breakRules || []), ...(coach.blockedBlocks || [])]
+    .filter((rule) => Array.isArray(rule.days) && rule.days.includes(day));
+  const seen = new Set();
+  return rules.flatMap((rule) => makeCoachStartTimes(rule.start, rule.end)
+    .filter((time) => coachSlotAccess(coach, day, time, scheduleBlockMinutes, policy).allowed)
+    .map((time) => ({ time, label: rule.label || "브레이크·상담" })))
+    .filter((item) => {
+      if (seen.has(item.time)) return false;
+      seen.add(item.time);
+      return true;
+    });
+}
+
+function renderCoachMobileLockedTimeControl(day, policy) {
+  const times = coachLockedTimesForDay(day, policy);
+  if (!times.length) return "";
+  const currentRoleId = currentCoachRoleId();
+  return `
+    <div class="coach-mobile-locked-add">
+      <label>
+        <span>브레이크·상담 시간</span>
+        <select data-coach-locked-time-select aria-label="브레이크·상담 시간 선택">
+          ${times.map((item) => `<option value="${item.time}">${item.time} · ${escapeHtml(item.label)}</option>`).join("")}
+        </select>
+      </label>
+      <button class="small-button" type="button" data-coach-add-locked-time data-date="${coachWeekDateForDay(day)}" data-day="${day}" data-coach-role-id="${escapeHtml(currentRoleId)}">+ 수동 등록</button>
+    </div>`;
+}
+
 function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
   const times = makeCoachStartTimes(segment.start, segment.end);
   const dayLessons = scheduleLessons.filter((lesson) => lesson.day === day);
@@ -3409,12 +3500,16 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
               ${times.map((time, index) => {
                 const working = isPolicyCoachWorking(coach, day, time, scheduleBlockMinutes);
                 const breakRule = breakRuleForSlot(policy, day, time);
+                const blockedRule = coachBlockedRuleForSlot(coach, day, time);
+                const closure = coachClosureForSlot(day, time);
+                const lockedRule = blockedRule || breakRule;
                 return coachQuickAddSlotMarkup({
                   coach,
                   day,
                   time,
-                  className: `coach-mobile-slot ${working ? (breakRule ? "blocked" : "available") : "off"}`,
-                  label: working ? (breakRule?.label || "빈 시간") : "근무 외",
+                  policy,
+                  className: `coach-mobile-slot ${closure || lockedRule ? "blocked" : working ? "available" : "off"}`,
+                  label: closure?.label || lockedRule?.label || (working ? "빈 시간" : "근무 외"),
                   style: `grid-row:${index + 1};`,
                 });
               }).join("")}
@@ -3445,6 +3540,7 @@ function renderCoachMobileSchedule(policy, scheduleLessons) {
       <div class="coach-mobile-day-strip" aria-label="날짜 선택">
         ${scheduleDays.map((day) => `<button class="coach-mobile-day ${day === selectedDay ? "is-active" : ""}" type="button" data-coach-schedule-day="${day}"><strong>${day}</strong><span>${coachScheduleDateLabel(day)}</span></button>`).join("")}
       </div>
+      ${renderCoachMobileLockedTimeControl(selectedDay, policy)}
       ${segments.length
         ? segments.map((segment, index) => `${index > 0 ? `<div class="coach-mobile-break"><strong>${segments[index - 1].end}~${segment.start}</strong><span>수업 없음</span></div>` : ""}${renderCoachMobileSegment(selectedDay, segment, policy, scheduleLessons)}`).join("")
         : `<p class="coach-mobile-empty">${selectedDay}요일은 현재 등록된 운영시간이 없습니다.</p>`}
@@ -3536,13 +3632,17 @@ function renderFullSchedule() {
                   displayCoaches
                     .map((coach, coachIndex) => {
                       const breakRule = breakRuleForSlot(policy, day, time);
+                      const blockedRule = coachBlockedRuleForSlot(coach, day, time);
+                      const closure = coachClosureForSlot(day, time);
+                      const lockedRule = blockedRule || breakRule;
                       const isWorking = isPolicyCoachWorking(coach, day, time, scheduleBlockMinutes);
-                      const className = breakRule ? "blocked" : isWorking ? "available" : "off";
-                      const label = breakRule ? (breakRule.label || "브레이크") : isWorking ? "" : "근무외";
+                      const className = closure || lockedRule ? "blocked" : isWorking ? "available" : "off";
+                      const label = closure?.label || lockedRule?.label || (isWorking ? "" : "근무외");
                       return coachQuickAddSlotMarkup({
                         coach,
                         day,
                         time,
+                        policy,
                         className: `coach-slot-bg ${className}`,
                         label,
                         style: `grid-row:${timeIndex + 1}; grid-column:${coachIndex + 1};`,
@@ -4228,8 +4328,11 @@ function coachQuickAddTicketLabel(ticket = {}) {
 function openCoachQuickAdd(button) {
   const policy = loadCoachSchedulePolicy();
   const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(button.dataset.coachRoleId || ""));
-  if (!coach || !coachCanAddToSlot(coach, button.dataset.day, button.dataset.time)) {
-    showToast("본인 근무시간의 빈 자리만 수동 등록할 수 있습니다.");
+  const access = coach ? coachSlotAccess(coach, button.dataset.day, button.dataset.time, scheduleBlockMinutes, policy) : { allowed: false };
+  if (!coach || !access.allowed) {
+    showToast(access.reason === "holiday_locked"
+      ? "휴무일에는 관리자만 수업을 등록할 수 있습니다."
+      : "본인 수업 시간 또는 허용된 브레이크·상담 시간만 등록할 수 있습니다.");
     return;
   }
   state.editingLessonId = null;
@@ -4256,7 +4359,9 @@ function renderCoachQuickAddPanel() {
   const draft = state.coachQuickAdd;
   if (!draft) return "";
   const policy = loadCoachSchedulePolicy();
-  const breakRule = breakRuleForSlot(policy, draft.day, draft.time);
+  const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(draft.coachRoleId || ""));
+  const access = coach ? coachSlotAccess(coach, draft.day, draft.time, scheduleBlockMinutes, policy) : { reason: "available" };
+  const lockedOverride = access.reason === "locked_time_override";
   const ticketChoices = coachQuickAddTicketChoices();
   const tickets = ticketChoices.filter((choice) => choice.availability.available).map((choice) => choice.ticket);
   const ticketOptions = ticketChoices.map(({ ticket, availability }) => {
@@ -4273,7 +4378,7 @@ function renderCoachQuickAddPanel() {
     <form class="schedule-edit-panel coach-quick-add-panel" data-coach-quick-add-form>
       <div class="wide lesson-modal-head">
         <div><strong>수업 추가</strong><span>${draft.date} · ${draft.time} · ${escapeHtml(shortCoachName(draft.coachName))}</span></div>
-        <b class="can-process">${breakRule ? "브레이크 수동 등록" : "빈 시간"}</b>
+        <b class="can-process">${lockedOverride ? "브레이크·상담 수동 등록" : "빈 시간"}</b>
       </div>
       <div class="wide coach-quick-kind" role="group" aria-label="수업 종류">
         <button type="button" class="${draft.kind === "regular" ? "is-active" : ""}" data-coach-add-kind="regular">정규</button>
@@ -6065,6 +6170,25 @@ function bindEvents() {
     const restoreAbsenceButton = event.target.closest("[data-restore-absence-id]");
     if (restoreAbsenceButton) {
       restoreCoachLessonAbsence(restoreAbsenceButton.dataset.restoreAbsenceId);
+      return;
+    }
+
+    const lockedTimeButton = event.target.closest("[data-coach-add-locked-time]");
+    if (lockedTimeButton) {
+      const wrapper = lockedTimeButton.closest(".coach-mobile-locked-add");
+      const time = wrapper?.querySelector("[data-coach-locked-time-select]")?.value || "";
+      if (!time) {
+        showToast("등록할 시간을 선택해 주세요.");
+        return;
+      }
+      openCoachQuickAdd({
+        dataset: {
+          date: lockedTimeButton.dataset.date,
+          day: lockedTimeButton.dataset.day,
+          time,
+          coachRoleId: lockedTimeButton.dataset.coachRoleId,
+        },
+      });
       return;
     }
 
