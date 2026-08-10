@@ -1692,7 +1692,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.301",
+    workerUrl: "./service-worker.js?v=1.0.302",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -8111,7 +8111,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.301" });
+  const params = new URLSearchParams({ v: "1.0.302" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8119,6 +8119,137 @@ function applyRequestedMemberView() {
   const params = new URLSearchParams(window.location.search);
   const requestedView = params.get("view");
   if (requestedView && $(`#${requestedView}`)) setView(requestedView);
+}
+
+const memberHelpEntries = [
+  {
+    id: "change-lesson",
+    category: "schedule",
+    question: "수업 시간을 바꾸고 싶어요",
+    answer: "시간표의 ‘시간 바꾸기’에서 기존 수업과 가능한 시간을 선택하세요. 자동 변경 또는 코치 확인 필요 여부가 신청 전에 표시됩니다.",
+    action: "schedule",
+    actionLabel: "시간표 보기",
+  },
+  {
+    id: "makeup-lesson",
+    category: "schedule",
+    question: "불참한 수업의 보강은 어떻게 잡나요?",
+    answer: "불참 처리로 보강 권리가 생기면 홈과 시간표에 ‘보강 시간 선택’이 표시됩니다. 가능한 시간 한 곳을 고르면 예약됩니다.",
+    action: "schedule",
+    actionLabel: "보강 시간 보기",
+  },
+  {
+    id: "coupon-booking",
+    category: "schedule",
+    question: "쿠폰 수업은 어디서 예약하나요?",
+    answer: "사용 가능한 쿠폰이 있으면 시간표의 ‘자유 예약’에서 담당 코치의 가능한 시간만 확인할 수 있습니다.",
+    action: "schedule",
+    actionLabel: "쿠폰 시간 보기",
+  },
+  {
+    id: "multiple-tickets",
+    category: "ticket",
+    question: "회원권이 두 개 이상이면 어떻게 보이나요?",
+    answer: "회원권 화면에 상품과 담당 코치별로 각각 표시됩니다. 수업을 예약하거나 완료할 때 연결된 회원권에서만 횟수가 차감됩니다.",
+    action: "shop",
+    actionLabel: "회원권 보기",
+  },
+  {
+    id: "pending-payment",
+    category: "ticket",
+    question: "결제했는데 결제 확인 중으로 나와요",
+    answer: "결제 검증과 회원권 발급이 끝나면 자동으로 바뀝니다. 잠시 뒤 회원권 화면에서 다시 확인하고 계속되면 카카오로 문의해 주세요.",
+    action: "shop",
+    actionLabel: "결제 상태 보기",
+  },
+  {
+    id: "cancel-refund",
+    category: "ticket",
+    question: "결제 취소나 환불은 어떻게 하나요?",
+    answer: "이미 사용한 횟수와 환불 규칙을 확인해야 하므로 카카오 문의에서 회원 이름과 결제일을 알려주세요.",
+    action: "support",
+    actionLabel: "카카오 문의",
+  },
+  {
+    id: "notifications",
+    category: "app",
+    question: "수업과 피드백 알림을 받고 싶어요",
+    answer: "내 정보의 앱 알림에서 알림을 켜세요. 휴대전화 설정에서 테니스노트 알림도 허용되어 있어야 합니다.",
+    action: "notification",
+    actionLabel: "알림 설정 보기",
+  },
+  {
+    id: "latest-version",
+    category: "app",
+    question: "화면이 다른 사람과 다르거나 업데이트가 안 돼요",
+    answer: "내 정보의 앱 새로고침을 누르면 로그인은 유지한 채 최신 화면을 다시 확인합니다.",
+    action: "refresh",
+    actionLabel: "앱 새로고침",
+  },
+];
+
+let memberHelpCategory = "all";
+let memberHelpQuery = "";
+
+function filteredMemberHelpEntries() {
+  const query = memberHelpQuery.trim().toLowerCase();
+  return memberHelpEntries.filter((entry) => (
+    (memberHelpCategory === "all" || entry.category === memberHelpCategory)
+    && (!query || `${entry.question} ${entry.answer}`.toLowerCase().includes(query))
+  ));
+}
+
+function renderMemberHelp() {
+  const target = $("#memberHelpList");
+  if (!target) return;
+  $$('[data-member-help-category]').forEach((button) => {
+    const selected = button.dataset.memberHelpCategory === memberHelpCategory;
+    button.classList.toggle("is-active", selected);
+    button.setAttribute("aria-selected", String(selected));
+  });
+  const entries = filteredMemberHelpEntries();
+  target.innerHTML = entries.length ? entries.map((entry) => `
+    <details data-member-help-entry="${escapeHtml(entry.id)}">
+      <summary>${escapeHtml(entry.question)}</summary>
+      <div class="member-help-answer">
+        <p>${escapeHtml(entry.answer)}</p>
+        <button class="small-button" type="button" data-member-help-action="${escapeHtml(entry.action)}">${escapeHtml(entry.actionLabel)}</button>
+      </div>
+    </details>
+  `).join("") : '<p class="member-help-empty">검색 결과가 없습니다. 다른 단어로 찾아보세요.</p>';
+}
+
+function openMemberHelpModal() {
+  memberHelpCategory = "all";
+  memberHelpQuery = "";
+  if ($("#memberHelpSearch")) $("#memberHelpSearch").value = "";
+  renderMemberHelp();
+  openAppModal("memberHelpModal", "#memberHelpSearch");
+}
+
+function closeMemberHelpModal() {
+  closeAppModal("memberHelpModal");
+}
+
+function runMemberHelpAction(action) {
+  closeMemberHelpModal();
+  window.setTimeout(() => {
+    if (action === "schedule" || action === "shop") {
+      navigateMemberView(action === "schedule" ? "scheduleView" : "shopView");
+      jumpToTop();
+      return;
+    }
+    if (action === "notification") {
+      navigateMemberView("profileView");
+      $("#pushNotificationButton")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (action === "refresh") {
+      $("#memberRefreshButton")?.click();
+      return;
+    }
+    if (action === "support") openKakaoInquiryModal();
+  }, 80);
 }
 
 function openKakaoInquiryModal(context = "support") {
@@ -9599,6 +9730,25 @@ function bindEvents() {
   $("#profileLogoutButton")?.addEventListener("click", logout);
   $("#pendingLogoutButton")?.addEventListener("click", logout);
   $("#coachModeButton")?.addEventListener("click", openCoachMode);
+  $("#openMemberHelpButton")?.addEventListener("click", openMemberHelpModal);
+  $("#memberHelpSearch")?.addEventListener("input", (event) => {
+    memberHelpQuery = event.target.value;
+    renderMemberHelp();
+  });
+  $("#memberHelpModal")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-member-help]")) {
+      closeMemberHelpModal();
+      return;
+    }
+    const categoryButton = event.target.closest("[data-member-help-category]");
+    if (categoryButton) {
+      memberHelpCategory = categoryButton.dataset.memberHelpCategory || "all";
+      renderMemberHelp();
+      return;
+    }
+    const actionButton = event.target.closest("[data-member-help-action]");
+    if (actionButton) runMemberHelpAction(actionButton.dataset.memberHelpAction);
+  });
   $("#openKakaoInquiryButton")?.addEventListener("click", openKakaoInquiryModal);
   $("#kakaoInquiryModal")?.addEventListener("click", (event) => {
     if (event.target.closest("[data-close-kakao-inquiry-modal]")) closeKakaoInquiryModal();

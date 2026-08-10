@@ -4916,6 +4916,147 @@ input[type="file"] {
   font-weight: 700;
 }
 
+.member-help-card {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.member-help-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-help-heading h2,
+.member-help-heading p {
+  margin: 0;
+}
+
+.member-help-heading .icon-button {
+  display: inline-grid;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  place-items: center;
+  color: var(--ink);
+  background: #ffffff;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.member-help-search {
+  display: grid;
+  gap: 6px;
+}
+
+.member-help-search > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.member-help-search input {
+  width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+
+#memberHelpSearch {
+  font-size: 16px;
+}
+
+.member-help-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.member-help-filters button {
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 5px;
+  color: var(--muted);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.member-help-filters button.is-active {
+  border-color: var(--green);
+  color: #ffffff;
+  background: var(--green);
+}
+
+.member-help-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.member-help-list details {
+  border-bottom: 1px solid var(--line);
+}
+
+.member-help-list summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 52px;
+  align-items: center;
+  padding: 10px 2px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 850;
+  list-style: none;
+  cursor: pointer;
+}
+
+.member-help-list summary::-webkit-details-marker {
+  display: none;
+}
+
+.member-help-list summary::after {
+  content: "+";
+  color: var(--green);
+  font-size: 20px;
+}
+
+.member-help-list details[open] summary::after {
+  content: "−";
+}
+
+.member-help-answer {
+  display: grid;
+  gap: 10px;
+  padding: 0 2px 14px;
+}
+
+.member-help-answer p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.member-help-answer button {
+  justify-self: start;
+}
+
+.member-help-empty {
+  padding: 24px 4px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .legal-links a:hover,
 .app-legal-links a:hover {
   color: var(--green);
