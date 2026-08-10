@@ -1862,6 +1862,33 @@
     const oneDay = selectedKind() === "one_day";
     if (label) label.textContent = oneDay ? "원데이 이름" : "회원 검색";
     if (input) input.placeholder = oneDay ? "이름만 입력해도 저장됩니다" : "이름·연락처 끝 4자리·출생연도";
+    syncOneDayIntake();
+  }
+
+  function syncOneDayIntake() {
+    const form = $("#scheduleV2EditorForm");
+    const panel = $("#scheduleV2OneDayIntake");
+    if (!form || !panel) return;
+    const oneDay = selectedKind() === "one_day";
+    panel.hidden = !oneDay;
+    if (!oneDay) return;
+    const source = form.elements.oneDayBookingSource?.value || "walk_in";
+    const paymentStatus = form.elements.oneDayPaymentStatus?.value || "unpaid";
+    const paymentMethod = form.elements.oneDayPaymentMethod;
+    const paymentAmount = form.elements.oneDayPaymentAmount;
+    const paid = paymentStatus === "paid";
+    if (paymentMethod) {
+      paymentMethod.disabled = !paid;
+      if (!paid) paymentMethod.value = "";
+    }
+    if (paymentAmount) {
+      paymentAmount.disabled = !paid;
+      if (!paid) paymentAmount.value = "0";
+    }
+    const sourceLabels = { walk_in: "현장", phone: "전화", naver_booking: "네이버예약", kakao_channel: "카카오채널", other: "기타" };
+    const paymentLabels = { unpaid: "미수납", paid: "수납 완료", complimentary: "서비스" };
+    const summary = $("#scheduleV2OneDayIntakeSummary");
+    if (summary) summary.textContent = `${sourceLabels[source] || "현장"} · ${paymentLabels[paymentStatus] || "미수납"}`;
   }
 
   function fillEditorControls(slot) {
@@ -2293,6 +2320,10 @@
     const durationInput = form.querySelector(`input[name="durationMinutes"][value="${duration}"]`);
     if (durationInput) durationInput.checked = true;
     form.elements.note.value = lesson?.note || "";
+    if (form.elements.oneDayBookingSource) form.elements.oneDayBookingSource.value = lesson?.oneDayBookingSource || "walk_in";
+    if (form.elements.oneDayPaymentStatus) form.elements.oneDayPaymentStatus.value = lesson?.oneDayPaymentStatus || "unpaid";
+    if (form.elements.oneDayPaymentMethod) form.elements.oneDayPaymentMethod.value = lesson?.oneDayPaymentMethod || "";
+    if (form.elements.oneDayPaymentAmount) form.elements.oneDayPaymentAmount.value = String(Math.max(0, Number(lesson?.oneDayPaymentAmount) || 0));
     const firstTicketId = state.selectedParticipants[0]?.ticketId || state.pendingTicketId || "";
     if (!lesson && firstTicketId) setSelectedTicket(firstTicketId);
     state.pendingTicketId = "";
@@ -2563,6 +2594,11 @@
       one_day_lesson_time_conflict: "같은 코치의 수업과 시간이 겹칩니다.",
       one_day_booking_time_conflict: "같은 코치의 다른 원데이 예약과 시간이 겹칩니다.",
       one_day_guest_name_required: "원데이 이름을 두 글자 이상 입력해 주세요.",
+      one_day_booking_source_invalid: "원데이 예약 경로를 다시 선택해 주세요.",
+      one_day_payment_status_invalid: "원데이 수납 상태를 다시 선택해 주세요.",
+      one_day_payment_method_invalid: "원데이 결제수단을 다시 선택해 주세요.",
+      one_day_paid_method_required: "수납 완료는 결제수단을 선택해 주세요.",
+      one_day_paid_amount_required: "수납 완료는 결제금액을 1원 이상 입력해 주세요.",
       approved_branch_coach_required: "현재 지점의 승인된 코치를 선택해 주세요.",
     };
     const key = Object.keys(labels).find((candidate) => source.includes(candidate));
@@ -2597,8 +2633,17 @@
     const duration = Number(form.elements.durationMinutes.value) || 20;
     const nativeOneDay = kind === "one_day" && (!state.editingLesson || state.editingLesson.oneDayBooking);
     const oneDayGuestName = String(state.selectedParticipants[0]?.name || $("#scheduleV2MemberSearch")?.value || "").trim();
+    const oneDayPaymentStatus = form.elements.oneDayPaymentStatus?.value || "unpaid";
+    const oneDayPaymentMethod = form.elements.oneDayPaymentMethod?.value || "";
+    const oneDayPaymentAmount = Math.max(0, Number(form.elements.oneDayPaymentAmount?.value) || 0);
     const validation = nativeOneDay
-      ? oneDayGuestName.length < 2 ? "원데이 이름을 두 글자 이상 입력해 주세요." : ""
+      ? oneDayGuestName.length < 2
+        ? "원데이 이름을 두 글자 이상 입력해 주세요."
+        : oneDayPaymentStatus === "paid" && !oneDayPaymentMethod
+          ? "수납 완료 결제수단을 선택해 주세요."
+          : oneDayPaymentStatus === "paid" && oneDayPaymentAmount <= 0
+            ? "수납 완료 금액을 입력해 주세요."
+            : ""
       : validateParticipants(kind, duration);
     if (validation) {
       setEditorMessage(validation);
@@ -2637,6 +2682,10 @@
           guestName: oneDayGuestName,
           selectedUserId: state.selectedParticipants[0]?.userId || "",
           note: form.elements.note.value.trim(),
+          bookingSource: form.elements.oneDayBookingSource?.value || "walk_in",
+          paymentStatus: oneDayPaymentStatus,
+          paymentMethod: oneDayPaymentMethod,
+          paymentAmount: oneDayPaymentAmount,
         });
         if (history.state?.tennisNoteScheduleV2Editor) history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
         state.deferredRefresh = false;
@@ -3089,7 +3138,9 @@
         renderSelectedTicket();
         renderMemberResults();
         syncRegularEditScope();
+        return;
       }
+      if (["oneDayBookingSource", "oneDayPaymentStatus", "oneDayPaymentMethod", "oneDayPaymentAmount"].includes(event.target.name)) syncOneDayIntake();
     });
     $("#scheduleV2EditorForm").addEventListener("submit", saveEditor);
     $("#scheduleV2CancelLessonButton").addEventListener("click", cancelLesson);

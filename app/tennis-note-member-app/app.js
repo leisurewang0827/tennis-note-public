@@ -35,6 +35,8 @@ const state = {
   selectedScheduleDay: "",
   scheduleTimeRange: "lesson",
   memberScheduleMode: "mine",
+  selectedMemberChangeSourceId: "",
+  memberChangeCompactSelection: false,
   memberScheduleModeTouched: false,
   memberScheduleFullView: false,
   activeJournalMonth: "2026-07",
@@ -1697,7 +1699,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.309",
+    workerUrl: "./service-worker.js?v=1.0.310",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2833,9 +2835,10 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
 function memberScheduleOptions() {
   const policy = loadAdminSchedulePolicy();
   const scheduleLessons = memberScheduleLessons();
-  const selectedId = $("#absenceLesson")?.value;
+  const selectedId = state.selectedMemberChangeSourceId || $("#absenceLesson")?.value;
   const sourceLessons = memberMakeupDueLessons().concat(
     scheduleLessons.filter((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled"),
+    loadedFutureScheduledLessonsForChange(),
     memberBookableCouponTickets(),
     memberBookableRegularTickets(),
     memberBookablePausedTickets(),
@@ -2846,10 +2849,12 @@ function memberScheduleOptions() {
   const generated = memberHasPendingPaymentOnly()
     ? []
     : candidateState === "ready"
-      ? state.serverChangeCandidates
+      ? state.serverChangeCandidates.filter(memberChangeCandidateInActiveWeek)
       : ["loading", "error"].includes(candidateState)
         ? []
-        : generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson);
+        : memberChangeUsesServerCandidates(selectedLesson) && candidateState !== "fallback"
+          ? []
+          : generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson);
   const assignedCoachIds = memberAssignedCoachRoleIds();
   const initialCoachSelection = Boolean(selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId);
   const visibleGenerated = generated.filter((lesson) => {
@@ -2884,11 +2889,17 @@ function memberScheduleVisibleLesson(lesson, policy = loadAdminSchedulePolicy())
 }
 
 function memberAvailableSlotsForSelectedLesson() {
-  const selectedId = $("#absenceLesson")?.value;
+  const selectedId = state.selectedMemberChangeSourceId || $("#absenceLesson")?.value;
   const policy = loadAdminSchedulePolicy();
   const scheduleLessons = memberScheduleLessons();
   const selectedLesson = scheduleLessons.find((lesson) => lesson.id === selectedId) || currentScheduledLessonsForChange().find((lesson) => lesson.id === selectedId);
-  const options = scheduleLessons.concat(generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson));
+  const candidateState = memberChangeCandidateLoadState(selectedLesson);
+  const generated = candidateState === "ready"
+    ? state.serverChangeCandidates
+    : memberChangeUsesServerCandidates(selectedLesson) && candidateState !== "fallback"
+      ? []
+      : generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson);
+  const options = scheduleLessons.concat(generated);
   const selectedCoachId = selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId
     ? ""
     : selectedLesson ? memberLessonCoach(selectedLesson, loadAdminSchedulePolicy()).id : "";
@@ -2912,11 +2923,18 @@ function memberLessons() {
 function currentScheduledLessonsForChange() {
   const dueLessons = memberMakeupDueLessons();
   const fromSchedule = memberScheduleLessons().filter((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled");
+  const futureLessons = loadedFutureScheduledLessonsForChange();
   const couponTickets = memberBookableCouponTickets();
   const regularTickets = memberBookableRegularTickets();
   const pausedTickets = memberBookablePausedTickets();
-  if (dueLessons.length || fromSchedule.length || couponTickets.length || regularTickets.length || pausedTickets.length || state.liveLessonsLoaded || state.dataMode === "live") {
-    return dueLessons.concat(fromSchedule, couponTickets, regularTickets, pausedTickets);
+  if (dueLessons.length || fromSchedule.length || futureLessons.length || couponTickets.length || regularTickets.length || pausedTickets.length || state.liveLessonsLoaded || state.dataMode === "live") {
+    const seen = new Set();
+    return dueLessons.concat(fromSchedule, futureLessons, couponTickets, regularTickets, pausedTickets).filter((lesson) => {
+      const key = String(lesson.id || lesson.serverLessonId || "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
   return lessons.filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
 }
@@ -3587,8 +3605,17 @@ function memberOperatingWindows(day, policy) {
   }));
 }
 
-function memberMobileScheduleSegments(day, policy, baseLessons) {
-  const windows = memberOperatingWindows(day, policy);
+function memberMobileScheduleSegments(day, policy, baseLessons, scheduleLessons = []) {
+  const candidateWindows = scheduleLessons
+    .filter((lesson) => lesson.day === day && lesson.status === "available")
+    .map((lesson) => ({
+      start: lesson.time,
+      end: timeFromMinutes(minutesFromTime(lesson.time) + Math.max(10, lessonDuration(lesson))),
+    }));
+  const windows = mergeMemberScheduleWindows([
+    ...memberOperatingWindows(day, policy),
+    ...candidateWindows,
+  ]);
   const range = "all";
   if (range === "morning") return windows.filter((window) => window.startMinutes < minutesFromTime("17:00"));
   if (range === "evening") return windows.filter((window) => window.endMinutes > minutesFromTime("17:00"));
@@ -3675,7 +3702,7 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
 
 function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
   const selectedDay = selectedMemberScheduleDay();
-  const segments = memberMobileScheduleSegments(selectedDay, policy, baseLessons);
+  const segments = memberMobileScheduleSegments(selectedDay, policy, baseLessons, scheduleLessons);
   const requestOnly = memberScheduleRequestOnly(policy);
   return `
     <div class="member-mobile-schedule ${requestOnly ? "member-request-only" : ""}">
@@ -3785,6 +3812,55 @@ function renderMemberAvailabilityOverview(scheduleLessons, compact = false) {
 
 function regularInitialSourceLesson() {
   return currentScheduledLessonsForChange().find((lesson) => lesson.regularInitialBooking) || null;
+}
+
+function timeFromMinutes(minutes) {
+  const normalized = Math.max(0, Number(minutes) || 0);
+  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
+}
+
+function renderMemberChangeInlineBar() {
+  const sources = currentScheduledLessonsForChange().filter((lesson) => (
+    lesson.status === "scheduled" || lesson.status === "makeup_due"
+  ));
+  if (!sources.length) {
+    return memberEmptyState({
+      title: "변경하거나 보강할 수업이 없습니다",
+      reason: "예정 수업 또는 보강 가능 수업이 생기면 이 시간표에서 바로 선택할 수 있습니다.",
+      compact: true,
+    });
+  }
+  if (!sources.some((lesson) => lesson.id === state.selectedMemberChangeSourceId)) {
+    state.selectedMemberChangeSourceId = sources[0].id;
+  }
+  const source = sources.find((lesson) => lesson.id === state.selectedMemberChangeSourceId) || sources[0];
+  const loadState = memberChangeCandidateLoadState(source);
+  const activeWeekCandidateCount = state.serverChangeCandidates.filter(memberChangeCandidateInActiveWeek).length;
+  const statusText = loadState === "loading"
+    ? "가능한 시간을 확인 중입니다"
+    : loadState === "error"
+      ? "시간을 불러오지 못했습니다"
+      : loadState === "ready"
+        ? activeWeekCandidateCount > 0
+          ? `이번 주 가능 ${activeWeekCandidateCount}개`
+          : state.serverChangeCandidates.length > 0
+            ? "다른 주에 가능한 시간이 있습니다"
+            : "현재 신청 가능한 시간이 없습니다"
+        : "수업을 고르면 가능한 시간만 표시합니다";
+  return `
+    <section class="member-inline-change" aria-label="변경 또는 보강할 수업 선택">
+      <label for="memberInlineChangeSource">
+        <span>바꿀 수업</span>
+        <select id="memberInlineChangeSource">
+          ${sources.map((lesson) => `
+            <option value="${escapeHtml(lesson.id)}" ${lesson.id === source.id ? "selected" : ""}>
+              ${lesson.status === "makeup_due" ? "보강" : "변경"} · ${escapeHtml(lesson.lessonDate || lesson.day)} ${escapeHtml(lesson.time)} · ${escapeHtml(memberCoachShortName(lesson.coach))}
+            </option>`).join("")}
+        </select>
+      </label>
+      <p><strong>${escapeHtml(statusText)}</strong><span>밝게 표시된 빈 시간을 누르면 마지막 확인만 거쳐 신청됩니다.</span></p>
+      ${loadState === "error" ? '<button class="small-button" type="button" data-retry-member-change>다시 확인</button>' : ""}
+    </section>`;
 }
 
 function renderRegularInitialScheduleBar() {
@@ -3901,9 +3977,9 @@ function renderDynamicMemberSchedule() {
     $("#scheduleGrid").innerHTML = `${assignedCoachSummary}${renderMemberFlexibleBooking()}`;
     return;
   }
-  const availabilityOverview = renderMemberAvailabilityOverview(scheduleLessons, true);
+  const inlineChangeBar = renderMemberChangeInlineBar();
   if (memberHasPendingPaymentOnly()) {
-    $("#scheduleGrid").innerHTML = `${assignedCoachSummary}${availabilityOverview}`;
+    $("#scheduleGrid").innerHTML = `${assignedCoachSummary}${renderMemberAvailabilityOverview(scheduleLessons, true)}`;
     return;
   }
   if (!memberAssignedCoachRoleIds().size && !memberInitialCoachSelectionSource()) {
@@ -3919,7 +3995,7 @@ function renderDynamicMemberSchedule() {
   $("#scheduleGrid").innerHTML = `
     ${assignedCoachSummary}
     ${renderRegularInitialScheduleBar()}
-    ${availabilityOverview}
+    ${inlineChangeBar}
     ${renderMemberMobileSchedule(policy, baseLessons, scheduleLessons)}
     <div class="member-desktop-schedule">
     <div class="member-duration-schedule ${requestOnly ? "member-request-only" : ""}" role="table" aria-label="회원 전체 시간표" style="--day-count:${days.length}; --slot-count:${scheduleTimeList.length}; grid-template-columns:64px ${dayColumnTracks};">
@@ -4117,7 +4193,7 @@ function renderSchedule() {
 }
 
 function renderSelects() {
-  const previousAbsence = $("#absenceLesson")?.value;
+  const previousAbsence = state.selectedMemberChangeSourceId || $("#absenceLesson")?.value;
   const previousMakeup = $("#makeupSlot")?.value;
   const sourceLessons = currentScheduledLessonsForChange();
   const regularOptions = sourceLessons
@@ -4138,6 +4214,7 @@ function renderSelects() {
   if (previousAbsence && [...$("#absenceLesson").options].some((option) => option.value === previousAbsence)) {
     $("#absenceLesson").value = previousAbsence;
   }
+  state.selectedMemberChangeSourceId = $("#absenceLesson")?.value || "";
   const selectedSource = sourceLessons.find((lesson) => lesson.id === $("#absenceLesson")?.value);
   const scheduleLoadState = activeMemberScheduleLoadState();
   const candidateLoadState = memberChangeCandidateLoadState(selectedSource);
@@ -4257,9 +4334,33 @@ function renderAvailableSlots() {
   updateChangeRequestAvailability(availableLessons, loadState);
 }
 
+function memberChangeCandidateRange(source = null, week = activeMemberWeek()) {
+  const activeStart = new Date(`${week.startDate}T12:00:00`);
+  const activeEnd = new Date(`${week.endDate}T12:00:00`);
+  const sourceDate = source?.lessonDate ? new Date(`${source.lessonDate}T12:00:00`) : activeStart;
+  const sourceDayOffset = sourceDate.getDay() === 0 ? -6 : 1 - sourceDate.getDay();
+  const sourceStart = new Date(sourceDate.getFullYear(), sourceDate.getMonth(), sourceDate.getDate() + sourceDayOffset);
+  const sourceEnd = new Date(sourceStart.getFullYear(), sourceStart.getMonth(), sourceStart.getDate() + 6);
+  const nextWeekEnd = new Date(activeEnd.getFullYear(), activeEnd.getMonth(), activeEnd.getDate() + 7);
+  let from = new Date(Math.min(activeStart.getTime(), sourceStart.getTime()));
+  let to = new Date(Math.max(activeEnd.getTime(), sourceEnd.getTime(), nextWeekEnd.getTime()));
+  if ((to.getTime() - from.getTime()) / 86400000 > 30) {
+    from = new Date(sourceStart.getFullYear(), sourceStart.getMonth(), sourceStart.getDate() - 7);
+    to = new Date(sourceEnd.getFullYear(), sourceEnd.getMonth(), sourceEnd.getDate() + 7);
+  }
+  return { from: localDateKey(from), to: localDateKey(to) };
+}
+
+function memberChangeCandidateInActiveWeek(candidate = {}) {
+  const week = activeMemberWeek();
+  const lessonDate = String(candidate.lessonDate || "");
+  return Boolean(lessonDate && lessonDate >= week.startDate && lessonDate <= week.endDate);
+}
+
 function memberChangeCandidateKey(source = null, week = activeMemberWeek()) {
   const sourceId = source?.serverLessonId || "";
-  return sourceId ? `${sourceId}:${week.startDate}:${week.endDate}` : "";
+  const range = memberChangeCandidateRange(source, week);
+  return sourceId ? `${sourceId}:${range.from}:${range.to}` : "";
 }
 
 function memberChangeUsesServerCandidates(source = null) {
@@ -4318,7 +4419,8 @@ function updateChangeRequestAvailability(availableLessons = memberAvailableSlots
 function renderChangeModalSummary() {
   const target = $("#changeModalSummary");
   if (!target) return;
-  const absence = memberScheduleOptions().find((lesson) => lesson.id === $("#absenceLesson")?.value);
+  const absence = currentScheduledLessonsForChange().find((lesson) => lesson.id === $("#absenceLesson")?.value)
+    || memberScheduleOptions().find((lesson) => lesson.id === $("#absenceLesson")?.value);
   const makeup = memberScheduleOptions().find((lesson) => lesson.id === $("#makeupSlot")?.value);
   if (!absence || !makeup) {
     target.textContent = absence?.status === "makeup_due" ? "예약할 보강 시간을 선택해 주세요." : absence?.couponBooking ? "쿠폰으로 예약할 시간을 선택해 주세요." : "기존 수업과 희망 시간을 확인합니다.";
@@ -5791,6 +5893,7 @@ async function syncMemberChangeCandidates(source = null) {
   if (!client?.rpc || !client.getSession?.()?.access_token) return false;
   const requestId = ++memberChangeCandidateRequestSequence;
   const week = { ...activeMemberWeek() };
+  const range = memberChangeCandidateRange(source, week);
   const key = memberChangeCandidateKey(source, week);
   state.serverChangeCandidateStatus = "loading";
   state.serverChangeCandidateKey = key;
@@ -5799,17 +5902,27 @@ async function syncMemberChangeCandidates(source = null) {
   state.serverChangeCandidateExclusions = {};
   renderSelects();
   renderAvailableSlots();
+  renderSchedule();
   try {
-    const result = await client.rpc("tn_member_change_candidates", {
+    const candidateArgs = {
       target_lesson_id: source.serverLessonId,
-      target_from: week.startDate,
-      target_to: week.endDate,
-    });
+      target_from: range.from,
+      target_to: range.to,
+    };
+    let result;
+    try {
+      result = await client.rpc("tn_member_change_candidates_v2", candidateArgs);
+    } catch (error) {
+      const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
+      if (!/tn_member_change_candidates_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
+      result = await client.rpc("tn_member_change_candidates", candidateArgs);
+    }
     if (requestId !== memberChangeCandidateRequestSequence || memberChangeCandidateKey(source) !== key) return false;
     if (!result || !Array.isArray(result.candidates)) {
       state.serverChangeCandidateStatus = "fallback";
       renderSelects();
       renderAvailableSlots();
+      renderSchedule();
       return false;
     }
     state.serverChangeCandidates = result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source));
@@ -5819,6 +5932,7 @@ async function syncMemberChangeCandidates(source = null) {
     state.serverChangeCandidateStatus = "ready";
     renderSelects();
     renderAvailableSlots();
+    renderSchedule();
     return true;
   } catch (error) {
     if (requestId !== memberChangeCandidateRequestSequence) return false;
@@ -5827,12 +5941,14 @@ async function syncMemberChangeCandidates(source = null) {
       state.serverChangeCandidateStatus = "fallback";
       renderSelects();
       renderAvailableSlots();
+      renderSchedule();
       return false;
     }
     state.serverChangeCandidateStatus = "error";
     state.serverChangeCandidateError = "변경 가능한 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요.";
     renderSelects();
     renderAvailableSlots();
+    renderSchedule();
     return false;
   }
 }
@@ -8178,7 +8294,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.309" });
+  const params = new URLSearchParams({ v: "1.0.310" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8351,12 +8467,11 @@ function handleHomeAction(action) {
   };
   const viewId = viewMap[action];
   if (!viewId) return;
-  navigateMemberView(viewId);
   if (action === "makeup") {
-    renderSchedule();
-    requestAnimationFrame(() => $("#scheduleView")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    openMemberChangeTimetable(memberMakeupDueLessons()[0]?.id || "");
     return;
   }
+  navigateMemberView(viewId);
   if (action === "curriculum") {
     renderCurriculum();
     requestAnimationFrame(() => $("#curriculumGuide")?.scrollIntoView({ behavior: "smooth", block: "center" }));
@@ -8377,13 +8492,8 @@ function handleSummaryAction(action) {
     return;
   }
   if (action === "change" || action === "makeup") {
-    navigateMemberView("scheduleView");
-    renderSelects();
     const firstDue = memberMakeupDueLessons()[0];
-    if (firstDue && $("#absenceLesson")) $("#absenceLesson").value = firstDue.id;
-    renderSelects();
-    renderAvailableSlots();
-    openChangeRequestModal();
+    openMemberChangeTimetable(firstDue?.id || "");
     return;
   }
   if (action === "comments") {
@@ -8530,7 +8640,7 @@ function handleLessonDetailAction(action) {
     return;
   }
   if (action === "change" || action === "makeup") {
-    void openChangeRequestModal(lesson.id);
+    openMemberChangeTimetable(lesson.id);
   }
 }
 
@@ -8547,13 +8657,20 @@ function handleScheduleClick(lessonId) {
       toggleRegularInitialScheduleSlot(lesson.id);
       return;
     }
-    const firstRegular = currentScheduledLessonsForChange()[0];
-    if (firstRegular) $("#absenceLesson").value = firstRegular.id;
+    const firstRegular = currentScheduledLessonsForChange().find((item) => (
+      item.id === state.selectedMemberChangeSourceId
+    )) || currentScheduledLessonsForChange()[0];
+    if (firstRegular) {
+      state.selectedMemberChangeSourceId = firstRegular.id;
+      $("#absenceLesson").value = firstRegular.id;
+    }
     renderSelects();
     $("#makeupSlot").value = lesson.id;
-    setView("scheduleView");
+    state.memberChangeCompactSelection = true;
+    $("#changeRequestModal")?.classList.add("is-inline-confirmation");
     renderAvailableSlots();
-    openChangeRequestModal();
+    renderChangeModalSummary();
+    openAppModal("changeRequestModal", "#requestMakeup");
   }
 }
 
@@ -8673,8 +8790,10 @@ function refreshSelectedMemberScheduleWeek() {
     state.scheduleV2SyncStatus = synced ? "ready" : "error";
     if (synced) state.scheduleV2LoadedKey = context.key;
     renderSelectedMemberScheduleWeek();
-    if (synced && !$("#changeRequestModal")?.hidden) {
-      const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === $("#absenceLesson")?.value);
+    if (synced && (state.memberScheduleMode === "availability" || !$("#changeRequestModal")?.hidden)) {
+      const source = currentScheduledLessonsForChange().find((lesson) => (
+        lesson.id === (state.selectedMemberChangeSourceId || $("#absenceLesson")?.value)
+      ));
       await syncMemberChangeCandidates(source);
     }
     saveSnapshot();
@@ -8763,25 +8882,17 @@ async function prepareChangeRequestSource(preferredLessonId = "") {
   const preferredFuture = futureLessons.find((lesson) => lesson.id === selectedSourceId);
   const nextFuture = preferredFuture || futureLessons[0];
   if (!nextFuture) return selectedSource?.id || sources[0]?.id || "";
-
-  const targetWeekOffset = Math.min(
-    Math.max(memberWeekOffsetForDate(nextFuture.lessonDate), memberScheduleMinWeekOffset),
-    memberScheduleMaxWeekOffset,
-  );
-  if (targetWeekOffset !== state.activeMemberWeekIndex) {
-    state.activeMemberWeekIndex = targetWeekOffset;
-    state.selectedScheduleDay = nextFuture.day || state.selectedScheduleDay;
-    saveSnapshot();
-    await refreshSelectedMemberScheduleWeek();
-  }
   return nextFuture.id;
 }
 
 async function openChangeRequestModal(preferredLessonId = "") {
+  state.memberChangeCompactSelection = false;
+  $("#changeRequestModal")?.classList.remove("is-inline-confirmation");
   const sourceId = await prepareChangeRequestSource(preferredLessonId);
   renderSelects();
   if (sourceId && [...$("#absenceLesson").options].some((option) => option.value === sourceId)) {
     $("#absenceLesson").value = sourceId;
+    state.selectedMemberChangeSourceId = sourceId;
   }
   renderSelects();
   renderAvailableSlots();
@@ -8792,6 +8903,8 @@ async function openChangeRequestModal(preferredLessonId = "") {
 }
 
 function startCouponBooking(ticketId) {
+  state.memberChangeCompactSelection = false;
+  $("#changeRequestModal")?.classList.remove("is-inline-confirmation");
   const sourceId = `coupon-ticket-${ticketId}`;
   renderSelects();
   const sourceSelect = $("#absenceLesson");
@@ -8807,13 +8920,41 @@ function changeMemberScheduleMode(mode) {
   state.memberScheduleMode = ["availability", "flex"].includes(mode) ? mode : "mine";
   state.memberScheduleModeTouched = true;
   state.memberScheduleFullView = state.memberScheduleMode === "availability";
+  if (state.memberScheduleMode === "availability") {
+    const sources = currentScheduledLessonsForChange().filter((lesson) => (
+      lesson.status === "scheduled" || lesson.status === "makeup_due"
+    ));
+    if (!sources.some((lesson) => lesson.id === state.selectedMemberChangeSourceId)) {
+      state.selectedMemberChangeSourceId = sources[0]?.id || "";
+    }
+  }
   renderSchedule();
+  renderSelects();
+  if (state.memberScheduleMode === "availability") {
+    const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
+    void syncMemberChangeCandidates(source);
+  }
   saveSnapshot();
+}
+
+function openMemberChangeTimetable(preferredLessonId = "") {
+  state.memberScheduleMode = "availability";
+  state.memberScheduleModeTouched = true;
+  state.memberScheduleFullView = true;
+  if (preferredLessonId) state.selectedMemberChangeSourceId = preferredLessonId;
+  setView("scheduleView");
+  renderSchedule();
+  renderSelects();
+  const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
+  void syncMemberChangeCandidates(source);
+  jumpToTop();
 }
 
 function closeChangeRequestModal() {
   state.regularInitialSelections = [];
   state.regularInitialOperationKey = "";
+  state.memberChangeCompactSelection = false;
+  $("#changeRequestModal")?.classList.remove("is-inline-confirmation");
   closeAppModal("changeRequestModal");
 }
 
@@ -9526,6 +9667,16 @@ async function logout() {
   saveSnapshot();
 }
 
+async function submitMemberLessonChange(client, args) {
+  try {
+    return await client.rpc("tn_submit_lesson_change_request_v2", args);
+  } catch (error) {
+    const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
+    if (!/tn_submit_lesson_change_request_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
+    return client.rpc("tn_submit_lesson_change_request", args);
+  }
+}
+
 async function requestMakeup() {
   if ($("#requestMakeup")?.disabled) {
     showToast("현재 변경할 수 있는 수업 시간이 없습니다.");
@@ -9546,7 +9697,7 @@ async function requestMakeup() {
     ? "휴회 복귀 정규시간 설정"
     : isRegularInitialBooking
     ? "회원 첫 정규시간 설정"
-    : isMakeupEntitlement ? "불참 처리 후 보강 예약" : isCouponBooking ? "쿠폰 수업 예약" : $("#changeReason")?.value.trim() || "";
+    : isMakeupEntitlement ? "불참 처리 후 보강 예약" : isCouponBooking ? "쿠폰 수업 예약" : $("#changeReason")?.value.trim() || (state.memberChangeCompactSelection ? "시간표에서 시간 변경" : "");
   if (!isMakeupEntitlement && !isCouponBooking && !isRegularInitialBooking && reason.length < 2) {
     showToast("변경 이유를 2자 이상 입력해주세요.");
     $("#changeReason")?.focus();
@@ -9613,7 +9764,7 @@ async function requestMakeup() {
               target_lesson_date: targetDate,
               target_start_time: makeup.time,
             })
-          : await client.rpc("tn_submit_lesson_change_request", {
+          : await submitMemberLessonChange(client, {
             target_lesson_id: absence.serverLessonId,
             target_lesson_date: targetDate,
             target_start_time: makeup.time,
@@ -9954,6 +10105,7 @@ function bindEvents() {
   $("#absenceLesson").addEventListener("change", () => {
     state.regularInitialSelections = [];
     state.regularInitialOperationKey = "";
+    state.selectedMemberChangeSourceId = $("#absenceLesson")?.value || "";
     renderSelects();
     renderAvailableSlots();
     renderChangeModalSummary();
@@ -10010,6 +10162,11 @@ function bindEvents() {
       changeMemberScheduleMode(modeButton.dataset.memberScheduleMode);
       return;
     }
+    if (event.target.closest("[data-retry-member-change]")) {
+      const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
+      void syncMemberChangeCandidates(source);
+      return;
+    }
     const couponButton = event.target.closest("[data-start-coupon-ticket]");
     if (couponButton) {
       startCouponBooking(couponButton.dataset.startCouponTicket);
@@ -10035,13 +10192,23 @@ function bindEvents() {
     const button = event.target.closest("[data-member-schedule-time-range]");
     if (button) changeMemberScheduleTimeRange(button.dataset.memberScheduleTimeRange);
   });
+  $("#scheduleGrid")?.addEventListener("change", (event) => {
+    const sourceSelect = event.target.closest("#memberInlineChangeSource");
+    if (!sourceSelect) return;
+    state.selectedMemberChangeSourceId = sourceSelect.value;
+    renderSelects();
+    renderSchedule();
+    const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
+    void syncMemberChangeCandidates(source);
+    saveSnapshot();
+  });
   $$('[data-member-schedule-mode]').forEach((button) => {
     button.addEventListener("click", () => changeMemberScheduleMode(button.dataset.memberScheduleMode));
   });
   $("#scheduleGrid")?.addEventListener("click", (event) => {
     if (!event.target.closest("[data-open-member-change]")) return;
     const firstLesson = currentScheduledLessonsForChange()[0];
-    void openChangeRequestModal(firstLesson?.id || "");
+    openMemberChangeTimetable(firstLesson?.id || "");
   });
   $("#availableSlotList")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-select-slot]");

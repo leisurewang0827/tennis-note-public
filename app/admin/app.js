@@ -22286,11 +22286,16 @@ async function performAdminLiveDataSync(options = {}) {
         limit: 1000,
       }).catch(() => []) : Promise.resolve([]),
       fullAdminAccess ? client.selectRows("tn_one_day_bookings", {
+        select: "id,branch_id,coach_role_id,booking_date,start_time,duration_minutes,guest_name,guest_phone,note,status,linked_user_id,booking_source,payment_status,payment_method,payment_amount,created_at",
+        filters: { booking_date: { gte: lessonWindow.from, lte: lessonWindow.to } },
+        order: "booking_date.asc,start_time.asc",
+        limit: 1000,
+      }).catch(() => client.selectRows("tn_one_day_bookings", {
         select: "id,branch_id,coach_role_id,booking_date,start_time,duration_minutes,guest_name,guest_phone,note,status,linked_user_id,created_at",
         filters: { booking_date: { gte: lessonWindow.from, lte: lessonWindow.to } },
         order: "booking_date.asc,start_time.asc",
         limit: 1000,
-      }).catch(() => []) : Promise.resolve([]),
+      }).catch(() => [])) : Promise.resolve([]),
       fullAdminAccess ? rosterRows("enrollments", () => client.selectRows("tn_member_enrollments", { select: "id,user_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,submitted_at,approved_at", limit: 500 }).catch(() => [])) : Promise.resolve([]),
       rosterRows("changeRequests", () => client.selectRows("tn_lesson_change_requests", { select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,created_at", limit: 500 }).catch(() => [])),
       rosterRows("makeupEntitlements", () => client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => [])),
@@ -22645,6 +22650,10 @@ async function performAdminLiveDataSync(options = {}) {
           guestPhone: booking.guest_phone || "",
           linkedUserId: booking.linked_user_id || "",
           oneDayNote: booking.note || "",
+          oneDayBookingSource: booking.booking_source || "walk_in",
+          oneDayPaymentStatus: booking.payment_status || "unpaid",
+          oneDayPaymentMethod: booking.payment_method || "",
+          oneDayPaymentAmount: Math.max(0, Number(booking.payment_amount) || 0),
           type: "원데이",
           durationMinutes: Number(booking.duration_minutes) || 20,
           status: liveLessonStatus(booking.status),
@@ -29020,6 +29029,10 @@ function scheduleV2AdminBridgeSnapshot() {
       linkedUserId: lesson.linkedUserId || "",
       guestPhoneLast4: String(lesson.guestPhone || "").replace(/\D/g, "").slice(-4),
       note: lesson.oneDayNote || "",
+      oneDayBookingSource: lesson.oneDayBookingSource || "walk_in",
+      oneDayPaymentStatus: lesson.oneDayPaymentStatus || "unpaid",
+      oneDayPaymentMethod: lesson.oneDayPaymentMethod || "",
+      oneDayPaymentAmount: Math.max(0, Number(lesson.oneDayPaymentAmount) || 0),
     })),
     participantRows: (adminLiveDataState.participantRows || [])
       .filter((row) => branchLessonIds.has(String(row.lesson_id || "")))
@@ -29042,6 +29055,10 @@ window.TennisNoteAdminScheduleV2Bridge = {
     guestName,
     selectedUserId = "",
     note = "",
+    bookingSource = "walk_in",
+    paymentStatus = "unpaid",
+    paymentMethod = "",
+    paymentAmount = 0,
   } = {}) => {
     const dataClient = window.TennisNoteDataClient;
     if (!dataClient?.rpc) throw new Error("admin_data_client_unavailable");
@@ -29051,7 +29068,7 @@ window.TennisNoteAdminScheduleV2Bridge = {
       : null;
     const resolvedName = String(linkedMember?.name || guestName || "").trim();
     const resolvedPhone = linkedMember ? String(linkedMember.phone || "").trim() : "";
-    return dataClient.rpc("tn_admin_save_one_day_booking", {
+    return dataClient.rpc("tn_admin_save_one_day_booking_v2", {
       target_booking_id: bookingId || null,
       target_branch_id: activeOperationBranchId(),
       target_coach_role_id: coachRoleId,
@@ -29062,6 +29079,10 @@ window.TennisNoteAdminScheduleV2Bridge = {
       target_guest_phone: resolvedPhone || null,
       target_note: String(note || "").trim() || null,
       target_status: "reserved",
+      target_booking_source: String(bookingSource || "walk_in"),
+      target_payment_status: String(paymentStatus || "unpaid"),
+      target_payment_method: String(paymentMethod || "").trim() || null,
+      target_payment_amount: Math.max(0, Number(paymentAmount) || 0),
     });
   },
   archiveOneDayBooking: (bookingId) => {

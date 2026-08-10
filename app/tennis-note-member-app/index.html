@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.309" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.309" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.310" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.310" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -223,10 +223,10 @@
           </div>
           <div class="member-schedule-mode" aria-label="시간표 보기 방식">
             <button class="member-schedule-mode-button is-active" type="button" data-member-schedule-mode="mine">내 수업</button>
-            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="availability">시간 바꾸기</button>
+            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="availability">변경·보강</button>
             <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="flex">자유 예약</button>
           </div>
-          <p class="member-schedule-guide">먼저 내 수업을 확인하세요. 다른 시간을 찾을 때만 ‘시간 바꾸기’를 누르면 됩니다.</p>
+            <p class="member-schedule-guide">내 수업을 고른 뒤 밝게 표시된 빈 시간을 누르면 변경 또는 보강을 바로 신청할 수 있습니다.</p>
           <section id="makeupDueBanner" class="makeup-due-banner" hidden>
             <div>
               <strong id="makeupDueTitle">보강 시간을 선택해 주세요</strong>
@@ -923,11 +923,11 @@
         </div>
         <div id="changeRequestEmptyState" class="change-request-empty-state" hidden role="status"></div>
         <div class="form-card schedule-request-card">
-          <label>
+          <label class="change-source-field">
             <span>1. 변경할 수업</span>
             <select id="absenceLesson"></select>
           </label>
-          <div class="change-step-heading">2. 새 시간 선택</div>
+          <div class="change-step-heading change-slot-heading">2. 새 시간 선택</div>
           <select id="makeupSlot" class="visually-hidden-select" aria-label="선택한 변경 시간"></select>
           <div id="availableSlotList" class="slot-list" aria-label="예약 또는 변경 가능한 시간"></div>
           <p id="changePolicyNote" class="policy-note">24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요</p>
@@ -1041,15 +1041,15 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.309"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.310"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.309"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.309"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.309"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.309"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.309"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.310"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.310"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.310"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.310"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.310"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
     <script>
       (() => {
@@ -1066,7 +1066,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.309";
+          appScript.src = "./app.js?v=1.0.310";
           document.body.appendChild(appScript);
         };
         if (reusingEmbeddedApp) window.setTimeout(startApp, 0);

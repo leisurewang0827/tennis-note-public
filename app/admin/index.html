@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.309" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.310" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-10" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.309" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.310" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -456,6 +456,16 @@
                 <div id="scheduleV2MemberResults" class="schedule-v2-member-results"></div>
                 <div id="scheduleV2SelectedTicket" class="schedule-v2-selected-ticket">회원을 선택해 주세요.</div>
               </section>
+              <details id="scheduleV2OneDayIntake" class="schedule-v2-one-day-intake" hidden>
+                <summary><span>접수·수납 정보 (선택)</span><strong id="scheduleV2OneDayIntakeSummary">현장 · 미수납</strong></summary>
+                <div class="schedule-v2-one-day-intake-grid">
+                  <label><span>예약 경로</span><select name="oneDayBookingSource"><option value="walk_in">현장</option><option value="phone">전화</option><option value="naver_booking">네이버예약</option><option value="kakao_channel">카카오채널</option><option value="other">기타</option></select></label>
+                  <label><span>수납 상태</span><select name="oneDayPaymentStatus"><option value="unpaid">미수납</option><option value="paid">수납 완료</option><option value="complimentary">서비스</option></select></label>
+                  <label><span>결제수단</span><select name="oneDayPaymentMethod"><option value="">선택 안 함</option><option value="cash">현금</option><option value="card">카드</option><option value="bank_transfer">계좌이체</option><option value="online">온라인</option><option value="other">기타</option></select></label>
+                  <label><span>수납 금액</span><input name="oneDayPaymentAmount" type="number" min="0" max="99999999" step="1" inputmode="numeric" value="0" /></label>
+                </div>
+                <small>운영 기록용입니다. PG 결제·회원권·횟수 차감은 만들지 않습니다.</small>
+              </details>
               <fieldset class="schedule-v2-duration-picker">
                 <legend>수업 시간</legend>
                 <label><input type="radio" name="durationMinutes" value="20" checked /><span>20분</span></label>
@@ -1939,17 +1949,17 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.309"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.310"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.309"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.309"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.309"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.309"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.309"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.309"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.310"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.310"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.310"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.310"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.310"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.310"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.309"></script>
+    <script src="./app.js?v=1.0.310"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-10"></script>
   </body>
 </html>
