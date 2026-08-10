@@ -1692,7 +1692,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.306",
+    workerUrl: "./service-worker.js?v=1.0.307",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -8174,7 +8174,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.306" });
+  const params = new URLSearchParams({ v: "1.0.307" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9311,6 +9311,30 @@ async function applySupabaseMemberSession(showNotice = false) {
   if (!session?.access_token) return false;
   try {
     const current = await client.selectCurrentProfile();
+    if (current?.profileBootstrapError?.code === "member_login_provider_locked") {
+      const providerLabels = {
+        "custom:naver": "네이버",
+        "custom:kakao": "카카오",
+        apple: "Apple",
+        email: "이메일",
+        existing: "기존",
+      };
+      const expectedProvider = providerLabels[current.profileBootstrapError.expectedProvider] || "처음 선택한";
+      await client.signOut?.();
+      const status = $("#memberEmailLoginStatus");
+      if (status) status.textContent = `이 회원정보는 ${expectedProvider} 로그인에 연결되어 있습니다. ${expectedProvider} 로그인을 이용해 주세요.`;
+      $("#appScreen").hidden = true;
+      $("#loginScreen").hidden = false;
+      return false;
+    }
+    if (["verified_phone_member_ambiguous", "auth_switch_phone_ambiguous"].includes(current?.profileBootstrapError?.code)) {
+      await client.signOut?.();
+      const status = $("#memberEmailLoginStatus");
+      if (status) status.textContent = "같은 휴대전화 정보의 회원 DB가 여러 개입니다. 관리자에게 계정 연결을 요청해 주세요.";
+      $("#appScreen").hidden = true;
+      $("#loginScreen").hidden = false;
+      return false;
+    }
     const { user, profile, coachRole } = current;
     activateLiveMemberProfile(profile?.id);
     const displayName = profile?.name || state.profile?.name || "가입 확인 중";
@@ -9379,6 +9403,13 @@ async function applySupabaseMemberSession(showNotice = false) {
     saveSnapshot();
     return true;
   } catch (error) {
+    const status = $("#memberEmailLoginStatus");
+    const code = error?.payload?.code || error?.message || "";
+    if (status && code === "verified_phone_member_ambiguous") {
+      status.textContent = "같은 휴대전화 정보의 회원 DB가 여러 개입니다. 관리자에게 계정 연결을 요청해 주세요.";
+    } else if (status && code) {
+      status.textContent = "회원정보 연결을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+    }
     return false;
   }
 }

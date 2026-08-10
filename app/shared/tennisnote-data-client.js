@@ -1100,6 +1100,7 @@
       }
     }
 
+    let profileBootstrapError = null;
     const needsProfileReconciliation = !rows?.length
       || (rows?.[0]?.role === "member" && rows?.[0]?.member_kind === "journal_only");
     if (needsProfileReconciliation && session?.access_token) {
@@ -1107,6 +1108,11 @@
         const result = await bootstrapCurrentProfile({ providerHint: session.provider });
         if (result?.profile?.id) rows = [result.profile];
       } catch (error) {
+        profileBootstrapError = {
+          code: error?.payload?.code || error?.message || "profile_bootstrap_failed",
+          expectedProvider: error?.payload?.expectedProvider || "",
+          status: Number(error?.status || 0),
+        };
         if (!rows?.length) rows = [];
       }
     }
@@ -1132,7 +1138,7 @@
       }
     }
 
-    return { user, profile, coachRole };
+    return { user, profile, coachRole, profileBootstrapError };
   }
 
   function selectCurrentProfile() {

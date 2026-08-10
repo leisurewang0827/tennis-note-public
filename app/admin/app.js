@@ -3009,7 +3009,7 @@ function normalizeDemoData() {
   if (state.view === "reports") state.view = "dashboard";
   if (state.view === "import" || state.view === "data") state.view = "members";
   if (!["operation", "membership", "notifications", "coach", "security"].includes(state.settingsTab)) state.settingsTab = "operation";
-  if (!["active", "expiring", "expired", "pending", "journal", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
+  if (!["active", "expiring", "expired", "pending", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
   if (!coaches.some((coach) => coach.id === "coach-park")) {
     coaches.push({ id: "coach-park", name: "박창준 코치", role: "주말 레슨", status: "active", account: "박창준", coachMode: "approved", availability: "weekend", photoUrl: "" });
   }
@@ -8745,17 +8745,16 @@ function authSwitchExpiryLabel(value = "") {
 function renderAuthProviderManagement(entity = {}, compact = false) {
   const userId = entity.serverUserId || "";
   const providers = authProviderList(entity);
+  const currentProvider = providers[0] || "";
   const request = pendingAuthSwitch(entity);
   const canManage = Boolean(userId) && operationsRole() === "admin";
-  const canUnlink = canManage && providers.length > 1;
-  const availableTargets = authProviderChoices.filter((item) => !providers.includes(item.value));
-  const chips = providers.length
-    ? providers.map((provider) => `
-        <span class="auth-provider-chip">
-          ${escapeHtml(authProviderLabel(provider) || provider)}
-          <button type="button" data-unlink-auth-provider="${escapeHtml(provider)}" data-auth-user-id="${escapeHtml(userId)}" ${canUnlink ? "" : "disabled"} title="${canUnlink ? "이 로그인 수단 연결 해제" : "다른 로그인 수단을 먼저 연결해야 합니다"}" aria-label="${escapeHtml(authProviderLabel(provider) || provider)} 연결 해제">×</button>
-        </span>`).join("")
+  const availableTargets = authProviderChoices.filter((item) => item.value !== currentProvider);
+  const chips = currentProvider
+    ? `<span class="auth-provider-chip">${escapeHtml(authProviderLabel(currentProvider) || currentProvider)}</span>`
     : `<span class="auth-provider-empty">로그인 수단 미연결</span>`;
+  const duplicateWarning = providers.length > 1
+    ? `<small class="form-message danger">과거 로그인 연결 ${providers.length}개가 남아 있습니다. 로그인 변경으로 하나만 유지해 주세요.</small>`
+    : "";
 
   if (!userId) {
     return `<div class="auth-provider-manager ${compact ? "compact" : ""}"><div class="auth-provider-chip-list">${chips}</div><small>회원가입이 완료되면 로그인 수단을 관리할 수 있습니다.</small></div>`;
@@ -8765,6 +8764,7 @@ function renderAuthProviderManagement(entity = {}, compact = false) {
     return `
       <div class="auth-provider-manager ${compact ? "compact" : ""}">
         <div class="auth-provider-chip-list">${chips}</div>
+        ${duplicateWarning}
         <div class="auth-switch-pending">
           <div>
             <strong>${escapeHtml(authProviderLabel(request.from_provider))} → ${escapeHtml(authProviderLabel(request.to_provider))} 변경 대기</strong>
@@ -8778,12 +8778,13 @@ function renderAuthProviderManagement(entity = {}, compact = false) {
   return `
     <div class="auth-provider-manager ${compact ? "compact" : ""}">
       <div class="auth-provider-chip-list">${chips}</div>
-      ${providers.length && availableTargets.length ? `
+      ${duplicateWarning}
+      ${currentProvider && availableTargets.length ? `
         <div class="auth-switch-form">
           <label>
             <span>현재</span>
             <select data-auth-switch-from="${escapeHtml(userId)}" ${canManage ? "" : "disabled"}>
-              ${providers.map((provider, index) => `<option value="${escapeHtml(provider)}" ${index === 0 ? "selected" : ""}>${escapeHtml(authProviderLabel(provider) || provider)}</option>`).join("")}
+              <option value="${escapeHtml(currentProvider)}" selected>${escapeHtml(authProviderLabel(currentProvider) || currentProvider)}</option>
             </select>
           </label>
           <span class="auth-switch-arrow">→</span>
@@ -8795,7 +8796,7 @@ function renderAuthProviderManagement(entity = {}, compact = false) {
           </label>
           <button class="small-button" type="button" data-prepare-auth-switch="${escapeHtml(userId)}" ${canManage ? "" : "disabled"}>변경 준비</button>
         </div>
-        <small>새 수단 로그인 성공 전까지 현재 로그인은 유지됩니다.</small>` : `<small>${providers.length ? "연결된 수단 옆 × 버튼은 대체 로그인 수단이 있을 때만 사용할 수 있습니다." : "첫 로그인 연결 후 수단 변경이 가능합니다."}</small>`}
+        <small>한 회원은 로그인 수단 하나만 사용합니다. 새 수단 로그인 성공 전까지 현재 로그인은 유지됩니다.</small>` : `<small>${currentProvider ? "현재 로그인 수단 하나만 사용 중입니다." : "첫 로그인 연결 후 수단 변경이 가능합니다."}</small>`}
     </div>`;
 }
 
@@ -8803,14 +8804,15 @@ function memberAuthConnection(member = {}) {
   const providers = [...new Set((member.authProviders || [])
     .map(normalizedAuthProvider)
     .filter(Boolean))];
-  const labels = providers.map(authProviderLabel).filter(Boolean);
+  const primaryProvider = providers[0] || "";
+  const primaryLabel = authProviderLabel(primaryProvider) || primaryProvider;
   const linked = Boolean(member.authLinked);
   return {
     linked,
-    provider: providers[0] || "",
-    providers,
-    summary: linked ? (labels.length ? `${labels.join(" · ")} 연결` : "로그인 계정 연결됨") : "앱 가입 전",
-    detail: linked ? (labels.length ? `로그인 수단: ${labels.join(", ")}` : "로그인 계정은 연결됐으며 수단 정보는 확인 중입니다.") : "로그인 수단 미연결",
+    provider: primaryProvider,
+    providers: primaryProvider ? [primaryProvider] : [],
+    summary: linked ? (primaryLabel ? `${primaryLabel} 연결` : "로그인 계정 연결됨") : "앱 가입 전",
+    detail: linked ? (primaryLabel ? `로그인 수단: ${primaryLabel}` : "로그인 계정은 연결됐으며 수단 정보는 확인 중입니다.") : "로그인 수단 미연결",
   };
 }
 
@@ -8985,6 +8987,7 @@ function adminAccountControlErrorMessage(code = "") {
     different_target_provider_required: "현재와 다른 로그인 수단을 선택해 주세요.",
     source_provider_link_not_found: "해제할 기존 로그인 수단을 찾지 못했습니다.",
     target_provider_already_linked: "이미 연결된 로그인 수단입니다.",
+    member_login_provider_locked: "이 회원은 이미 다른 로그인 수단을 사용 중입니다. 로그인 변경을 먼저 준비해 주세요.",
     replacement_login_required_before_unlink: "다른 로그인 수단을 먼저 연결해야 기존 수단을 해제할 수 있습니다.",
     auth_provider_link_not_found: "해제할 로그인 연결을 찾지 못했습니다.",
     pending_auth_switch_not_found: "변경 대기가 이미 끝났습니다. 새로고침 후 확인해 주세요.",
@@ -9547,6 +9550,7 @@ function filteredMembers() {
   const localSearch = String(state.memberSearch || "").trim().toLowerCase();
   const globalSearch = String($("#globalSearch")?.value || "").trim();
   const matchingMembers = operationBranchMembers().filter((member) => {
+    if (memberListStatus(member) === "journal") return false;
     const statusMatch = memberMatchesStatusFilter(member, state.memberFilter);
     const coachMatch = state.memberCoachFilter === "all" || memberCoachNames(member).includes(state.memberCoachFilter);
     const ticketMatch = state.memberTicketFilter === "all" || memberHasTicketKind(member, state.memberTicketFilter);
@@ -9576,7 +9580,6 @@ const memberFilterCopy = {
   active: { summary: "명 수강중", empty: "수강중인 회원이 없습니다." },
   expiring: { summary: "명 만료임박", empty: "잔여 2회 이하 회원이 없습니다." },
   pending: { summary: "명 가입서·결제대기", empty: "가입서·결제 대기 회원이 없습니다." },
-  journal: { summary: "명 운동노트 이용", empty: "운동노트만 이용하는 회원이 없습니다." },
   expired: { summary: "명 만료", empty: "만료된 회원이 없습니다." },
   inactive: { summary: "명 삭제", empty: "삭제 처리된 회원이 없습니다." },
 };
@@ -9587,7 +9590,7 @@ function memberStatusCounts() {
     if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
     if (memberIsExpiring(member)) counts.expiring += 1;
     return counts;
-  }, { active: 0, expiring: 0, expired: 0, pending: 0, journal: 0, inactive: 0 });
+  }, { active: 0, expiring: 0, expired: 0, pending: 0, inactive: 0 });
 }
 
 function renderMemberStatusCounts() {
@@ -10375,10 +10378,10 @@ function renderMemberManagementModal() {
         ? `<label class="form-field"><span>연결할 앱 가입 계정</span><select name="sourceSignupUserId">
             <option value="">선택하세요</option>
             ${candidates.map((candidate) => `<option value="${escapeHtml(candidate.userId)}" ${candidate.userId === recommended ? "selected" : ""}>${escapeHtml(memberLinkCandidateLabel(candidate))}</option>`).join("")}
-          </select><small>연결하면 기존 회원권과 시간표는 유지되고 앱 로그인만 합쳐집니다.</small></label>`
+          </select><small>연결하면 기존 회원권과 시간표는 유지되고 선택한 앱 로그인이 기존 로그인을 대체합니다.</small></label>`
         : `<div class="member-link-status"><strong>${linkQuery ? "검색 결과 없음" : "자동 일치 계정 없음"}</strong><span>${linkQuery ? "이름·닉네임·전화번호 뒤 4자리를 다시 확인해 주세요." : "아래 검색으로 앱 가입 계정을 직접 찾을 수 있습니다."}</span></div>`;
     const existingConnectionNotice = connection.linked
-      ? `<div class="member-link-status is-linked"><strong>연결된 로그인</strong><span>${escapeHtml(connection.summary)} · 다른 로그인 수단도 추가할 수 있습니다.</span></div>`
+      ? `<div class="member-link-status is-linked"><strong>연결된 로그인</strong><span>${escapeHtml(connection.summary)} · 다른 수단을 연결하면 현재 로그인을 교체합니다.</span></div>`
       : "";
     const linkControl = `<div class="member-link-control span-2">
           <label class="form-field"><span>앱 가입 계정 수동 연결</span><div class="member-link-search-row">
@@ -10409,7 +10412,7 @@ function renderMemberManagementModal() {
         partnerOptions,
         includeTicketStatus: Boolean(ticket),
       }) : ""}
-      <p class="member-management-rule">같은 이름만으로는 자동 연결하지 않습니다. 전화번호가 같은 한 명만 추천하며 관리자가 최종 확인합니다.</p>`;
+      <p class="member-management-rule">같은 이름만으로는 자동 연결하지 않습니다. 전화번호가 같은 한 명만 추천하며, 한 회원은 확인된 로그인 수단 하나만 사용합니다.</p>`;
   } else if (isCreate) {
     actionFields = products.length && coachRoles.length ? `
       <ol class="member-create-steps" aria-label="회원 추가 단계">
@@ -11139,7 +11142,7 @@ async function submitMemberManagementForm(event) {
     } else if (action === "link_existing") {
       linkedTargetMemberUserId = form.elements.targetMembershipUserId?.value || "";
       if (!linkedTargetMemberUserId) throw new Error("membership_link_target_required");
-      result = await client.rpc("tn_admin_merge_member_login", {
+      result = await client.rpc("tn_admin_replace_member_login", {
         target_member_user_id: linkedTargetMemberUserId,
         source_signup_user_id: member.serverUserId,
         target_reason: reason,
@@ -11173,7 +11176,7 @@ async function submitMemberManagementForm(event) {
       const sourceSignupUserId = form.elements.sourceSignupUserId?.value || "";
       if (sourceSignupUserId) {
         linkedSourceSignupUserId = sourceSignupUserId;
-        result = await client.rpc("tn_admin_merge_member_login", {
+        result = await client.rpc("tn_admin_replace_member_login", {
           target_member_user_id: member.serverUserId,
           source_signup_user_id: sourceSignupUserId,
           target_reason: reason,
