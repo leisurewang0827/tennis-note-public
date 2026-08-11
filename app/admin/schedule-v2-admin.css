@@ -921,7 +921,8 @@
 }
 
 .schedule-v2-history-open,
-.schedule-v2-history-add {
+.schedule-v2-history-add,
+.schedule-v2-history-restore {
   min-width: 0;
   border: 0;
   background: transparent;
@@ -952,19 +953,38 @@
   font-size: 9px;
 }
 
-.schedule-v2-history-add {
-  padding: 3px 6px;
+.schedule-v2-history-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   border-top: 1px dashed #9fc9b9;
+}
+
+.schedule-v2-history-add,
+.schedule-v2-history-restore {
+  padding: 3px 6px;
+  border: 0;
+  background: transparent;
   color: #08795a;
   font-size: 9px;
   font-weight: 800;
   text-align: center;
+  cursor: pointer;
+}
+
+.schedule-v2-history-restore {
+  color: #8a4b12;
+}
+
+.schedule-v2-history-actions > * + * {
+  border-left: 1px dashed #9fc9b9;
 }
 
 .schedule-v2-history-open:hover,
 .schedule-v2-history-open:focus-visible,
 .schedule-v2-history-add:hover,
-.schedule-v2-history-add:focus-visible {
+.schedule-v2-history-add:focus-visible,
+.schedule-v2-history-restore:hover,
+.schedule-v2-history-restore:focus-visible {
   background: #e8f6f0;
   outline: 2px solid #58a98f;
   outline-offset: -2px;

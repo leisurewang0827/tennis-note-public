@@ -49,6 +49,18 @@
     schedule_v2_regular_anchor_ended: "미래 정규 일정 종료",
     admin_lesson_force_deleted: "관리자 강제 삭제",
   };
+  const regularCutoffLabels = {
+    ticket_status: "회원권 상태 변경으로 자동 제외",
+    date_range: "회원권 기간 종료로 자동 제외",
+    session_limit: "잔여 횟수 소진으로 자동 제외",
+    paused_schedule_replaced: "일정 재생성으로 자동 교체",
+  };
+  const entitlementStatusLabels = {
+    open: "보강 선택 대기",
+    booked: "보강 예약됨",
+    cancelled: "보강 권리 종료",
+    expired: "보강 권리 만료",
+  };
   const curriculumCatalog = window.TennisNoteCurriculumCatalog || { steps: [], aliases: {} };
   const curriculumSteps = Array.isArray(curriculumCatalog.steps) ? curriculumCatalog.steps : [];
   const curriculumByCode = new Map(curriculumSteps.map((step) => [String(step.id || "").toUpperCase(), step]));
@@ -905,13 +917,62 @@
   }
 
   function lessonHistoryLabel(lesson) {
+    const context = lessonCancellationContext(lesson);
+    const memberLabel = lessonParticipantLabel(lesson);
+    if (context.type === "automatic_cutoff") {
+      return `${memberLabel} · ${regularCutoffLabels[context.regularCutoffReason] || "회원권 상태에 따라 자동 제외"}`;
+    }
+    if (context.type === "absence") {
+      const entitlementLabel = entitlementStatusLabels[context.entitlement?.status] || "불참 처리";
+      return `${memberLabel} · 불참 · 차감 없음 · ${entitlementLabel}`;
+    }
+    if (context.type === "staff_cancelled") {
+      return `${memberLabel} · 관리자 취소 · 차감 없음`;
+    }
     const participants = lesson.participants || [];
     const details = participants.map((participant) => {
-      const label = outcomeLabels[participant.outcome] || statusLabels[lesson.status] || "취소";
+      const label = context.type === "unknown_cancelled"
+        ? "취소 기록"
+        : outcomeLabels[participant.outcome] || statusLabels[lesson.status] || "취소";
       const deduction = Number(participant.deductedSessions) > 0 ? "차감" : "차감 없음";
       return `${participant.name || "회원"} ${label} · ${deduction}`;
     });
-    return details.join(" / ") || `${lessonParticipantLabel(lesson)} · 취소 · 차감 없음`;
+    return details.join(" / ") || `${memberLabel} · 취소 기록 · 차감 없음`;
+  }
+
+  function lessonCancellationContext(lesson = {}) {
+    const raw = lesson.cancellationContext || lesson.cancellation_context || {};
+    return {
+      type: raw.type || "unknown_cancelled",
+      regularCutoffReason: raw.regularCutoffReason || raw.regular_cutoff_reason || "",
+      entitlement: raw.entitlement || null,
+      staffAction: raw.staffAction || raw.staff_action || "",
+    };
+  }
+
+  function lessonIsTodayOrFuture(lesson) {
+    return lesson.lessonDate >= localDateKey(new Date());
+  }
+
+  function lessonAbsenceCanBeRestored(lesson) {
+    const context = lessonCancellationContext(lesson);
+    return context.type === "absence"
+      && ["open", "booked"].includes(String(context.entitlement?.status || ""))
+      && Boolean(context.entitlement?.id)
+      && lessonIsTodayOrFuture(lesson);
+  }
+
+  function lessonHistoryActions(lesson) {
+    if (!lessonIsTodayOrFuture(lesson)) return "";
+    const context = lessonCancellationContext(lesson);
+    const hasActiveAbsenceEntitlement = context.type === "absence"
+      && ["open", "booked"].includes(String(context.entitlement?.status || ""));
+    const restoreButton = lessonAbsenceCanBeRestored(lesson)
+      ? `<button type="button" class="schedule-v2-history-restore" data-v2-restore-absence="${escapeHtml(lesson.id)}">원래 수업 복원</button>`
+      : "";
+    const addKind = hasActiveAbsenceEntitlement ? ' data-v2-kind="makeup"' : "";
+    const addLabel = hasActiveAbsenceEntitlement ? "+ 보강·원데이 가능" : "+ 새 수업";
+    return `<div class="schedule-v2-history-actions">${restoreButton}<button type="button" class="schedule-v2-history-add" data-v2-add${addKind} data-date="${escapeHtml(lesson.lessonDate)}" data-time="${escapeHtml(lesson.startTime)}" data-coach-role-id="${escapeHtml(lesson.coachRoleId)}">${addLabel}</button></div>`;
   }
 
   function lessonsOverlapEachOther(left, right) {
@@ -1237,8 +1298,7 @@
         const memberLabel = lessonParticipantLabel(lesson);
         const historyLabel = lessonHistoryLabel(lesson);
         const searchText = `${memberLabel} ${historyLabel}`.toLowerCase();
-        const canBook = plan.date >= today;
-        lessonCards.push(`<div class="schedule-v2-history-card schedule-v2-week-history ${search && !searchText.includes(search) ? "is-filtered" : ""}" data-v2-search-text="${escapeHtml(searchText)}" style="grid-row:${rowIndex + 3} / span ${span};grid-column:${plan.columnStart + lane}"><button type="button" class="schedule-v2-history-open" data-v2-lesson-id="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(`${historyLabel} 기록 확인`)}"><strong>${escapeHtml(memberLabel)}</strong><span>${escapeHtml(historyLabel.replace(`${memberLabel} `, ""))}</span></button>${canBook ? `<button type="button" class="schedule-v2-history-add" data-v2-add data-v2-kind="makeup" data-date="${plan.date}" data-time="${escapeHtml(lesson.startTime)}" data-coach-role-id="${escapeHtml(lesson.coachRoleId)}">+ 보강·원데이 가능</button>` : ""}</div>`);
+        lessonCards.push(`<div class="schedule-v2-history-card schedule-v2-week-history ${search && !searchText.includes(search) ? "is-filtered" : ""}" data-v2-search-text="${escapeHtml(searchText)}" style="grid-row:${rowIndex + 3} / span ${span};grid-column:${plan.columnStart + lane}"><button type="button" class="schedule-v2-history-open" data-v2-lesson-id="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(`${historyLabel} 기록 확인`)}"><strong>${escapeHtml(memberLabel)}</strong><span>${escapeHtml(historyLabel.replace(`${memberLabel} `, ""))}</span></button>${lessonHistoryActions(lesson)}</div>`);
       });
     });
 
@@ -1333,8 +1393,7 @@
       const historyLabel = lessonHistoryLabel(lesson);
       const searchText = `${memberLabel} ${historyLabel}`.toLowerCase();
       const filtered = search && !searchText.includes(search);
-      const canBook = state.selectedDate >= localDateKey(new Date());
-      return `<div class="schedule-v2-history-card ${filtered ? "is-filtered" : ""}" data-v2-search-text="${escapeHtml(searchText)}" style="grid-row:${rowIndex + 2} / span ${span};grid-column:${laneIndex + 2}"><button type="button" class="schedule-v2-history-open" data-v2-lesson-id="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(`${historyLabel} 기록 확인`)}"><strong>${escapeHtml(memberLabel)}</strong><span>${escapeHtml(historyLabel.replace(`${memberLabel} `, ""))}</span></button>${canBook ? `<button type="button" class="schedule-v2-history-add" data-v2-add data-v2-kind="makeup" data-date="${state.selectedDate}" data-time="${escapeHtml(lesson.startTime)}" data-coach-role-id="${escapeHtml(lesson.coachRoleId)}">+ 보강·원데이 가능</button>` : ""}</div>`;
+      return `<div class="schedule-v2-history-card ${filtered ? "is-filtered" : ""}" data-v2-search-text="${escapeHtml(searchText)}" style="grid-row:${rowIndex + 2} / span ${span};grid-column:${laneIndex + 2}"><button type="button" class="schedule-v2-history-open" data-v2-lesson-id="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(`${historyLabel} 기록 확인`)}"><strong>${escapeHtml(memberLabel)}</strong><span>${escapeHtml(historyLabel.replace(`${memberLabel} `, ""))}</span></button>${lessonHistoryActions(lesson)}</div>`;
     }).join("");
     const endTime = minutesTime(timeMinutes(period.times.at(-1)) + 10);
     return `<section class="schedule-v2-period"><div class="schedule-v2-period-title"><strong>${period.times[0]}~${endTime}</strong><span>${escapeHtml(period.coaches.map((coach) => coach.name.replace(/\s*코치$/, "")).join(" · "))}</span></div><div class="schedule-v2-period-scroll"><div class="schedule-v2-period-grid" style="--v2-coach-count:${period.coaches.length}" data-v2-period="${periodIndex}"><div class="schedule-v2-corner" style="grid-row:1;grid-column:1">시간</div>${period.coaches.map((coach, index) => `<div class="schedule-v2-coach-head" style="grid-row:1;grid-column:${index + 2};--coach-tone:${escapeHtml(coach.color || "#08795a")}">${escapeHtml(coach.name.replace(/\s*코치$/, ""))}</div>`).join("")}${timeCells}${slots}${historyCards}${lessonCards}</div></div></section>`;
@@ -2848,6 +2907,48 @@
     }
   }
 
+  async function restoreAbsentLesson(lessonId) {
+    if (localDemoMode || !requireWritableServer("status")) return;
+    const lesson = state.payload?.lessons.find((item) => String(item.id) === String(lessonId));
+    if (!lessonAbsenceCanBeRestored(lesson)) {
+      setStatus("복원 가능한 실제 불참 기록이 아닙니다. 시간표를 새로고침해 주세요.", "warning");
+      return;
+    }
+    const context = lessonCancellationContext(lesson);
+    const cancelBookedMakeup = context.entitlement.status === "booked";
+    const confirmation = cancelBookedMakeup
+      ? `${lessonParticipantLabel(lesson)} 회원의 원래 정규수업을 복원할까요? 예약된 보강 수업은 취소됩니다.`
+      : `${lessonParticipantLabel(lesson)} 회원의 원래 정규수업을 복원할까요? 불참 처리와 보강 대기는 취소됩니다.`;
+    if (!window.confirm(confirmation)) return;
+    const button = $(`[data-v2-restore-absence="${CSS.escape(String(lesson.id))}"]`);
+    if (button) button.disabled = true;
+    setStatus("원래 정규수업을 복원하는 중입니다.");
+    try {
+      await bridge().rpc("tn_restore_absent_lesson", {
+        target_entitlement_id: context.entitlement.id,
+        target_reason: "관리자 시간표에서 회원 참석 재확인",
+        target_cancel_booked_makeup: cancelBookedMakeup,
+      });
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ force: true });
+      setStatus("원래 정규수업 복원 완료", "success");
+      void bridge()?.refresh?.();
+    } catch (error) {
+      const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
+      const message = code.includes("absence_original_slot_occupied")
+        ? "원래 시간에 다른 수업이 있어 복원할 수 없습니다."
+        : code.includes("absence_original_lesson_already_started")
+          ? "이미 시작한 정규수업은 복원할 수 없습니다."
+          : code.includes("absence_booked_makeup_locked")
+            ? "이미 시작하거나 완료된 보강이 있어 복원할 수 없습니다."
+            : "정규수업 복원에 실패했습니다. 시간표를 새로고침해 주세요.";
+      setStatus(message, "error");
+    } finally {
+      if (button?.isConnected) button.disabled = false;
+    }
+  }
+
   async function deleteLesson() {
     if (localDemoMode) {
       setEditorMessage("로컬 데모에서는 수업을 삭제하지 않습니다.", "info");
@@ -3046,6 +3147,11 @@
       run.style.setProperty("--v2-hover-row", String(slotIndex));
     });
     $("#scheduleV2Workspace").addEventListener("click", (event) => {
+      const restoreButton = event.target.closest("[data-v2-restore-absence]");
+      if (restoreButton) {
+        void restoreAbsentLesson(restoreButton.dataset.v2RestoreAbsence);
+        return;
+      }
       const add = event.target.closest("[data-v2-add]");
       if (add) {
         let time = add.dataset.time;
