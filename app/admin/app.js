@@ -2268,6 +2268,15 @@ const coachStaffEditorState = {
   editingBlockId: "",
   message: "",
 };
+const coachLaneOrderEditorState = {
+  roleIds: [],
+  baselineRoleIds: [],
+  revision: "",
+  confirmed: false,
+  loading: false,
+  saving: false,
+  message: "",
+};
 const adminLayoutSettingKey = "tennisnote_admin_layout_v1";
 const adminLayoutLocalKey = "tennis-note-admin-layout-v1";
 const adminMenuDefinitions = [
@@ -21919,6 +21928,7 @@ function mergeServerCoachRole(role, index) {
     settlementRate: Number(role.settlement_rate) || 0,
     hourlyRate: Number(role.hourly_rate) || 0,
     availabilityRevision: Number(role.availability_revision) || 0,
+    scheduleLaneOrder: Number.isFinite(Number(role.schedule_lane_order)) ? Number(role.schedule_lane_order) : 1000 + index,
   });
   return coach;
 }
@@ -22031,7 +22041,7 @@ async function refreshCoachStaffData() {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !operationsAccessReady()) return false;
   const serverCoachRoles = await client.selectRows("tn_coach_roles", {
-    select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision",
+    select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision,schedule_lane_order",
     limit: 100,
   }).catch(() => client.selectRows("tn_coach_roles", {
     select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate",
@@ -22238,7 +22248,7 @@ async function performAdminLiveDataSync(options = {}) {
     const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       rosterRows("users", () => (client.selectAllRows || client.selectRows)("tn_user_directory_safe", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 })),
-      client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision", limit: 100 })
+      client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision,schedule_lane_order", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
       client.selectRows("tn_coach_availability", { select: "id,coach_role_id,day_of_week,start_time,end_time,availability_type,note", limit: 1000 }).catch(() => []),
       fullAdminAccess ? Promise.resolve(adminLiveDataState.authLinks || []) : Promise.resolve([]),
@@ -24449,6 +24459,188 @@ async function deleteCoachStaff() {
   }
 }
 
+function scheduleLaneActiveCoaches() {
+  const active = operationBranchCoaches().filter((coach) => (
+    coach.serverRoleId
+    && !coach.deletedAt
+    && !coach.archivedAt
+    && (coach.employmentStatus || "active") === "active"
+    && ["active", "approved"].includes(coach.status || coach.approvalStatus || "active")
+  ));
+  return active.sort((left, right) => (
+      Number(left.scheduleLaneOrder || 1000) - Number(right.scheduleLaneOrder || 1000)
+      || String(left.name || "").localeCompare(String(right.name || ""), "ko")
+    ));
+}
+
+function sameCoachRoleSet(left = [], right = []) {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right.map(String));
+  return left.every((roleId) => rightSet.has(String(roleId)));
+}
+
+function ensureCoachLaneOrderEditorState() {
+  const currentRoleIds = scheduleLaneActiveCoaches().map((coach) => String(coach.serverRoleId));
+  if (!coachLaneOrderEditorState.roleIds.length
+    || !sameCoachRoleSet(coachLaneOrderEditorState.roleIds, currentRoleIds)) {
+    coachLaneOrderEditorState.roleIds = currentRoleIds;
+    coachLaneOrderEditorState.baselineRoleIds = [...currentRoleIds];
+    coachLaneOrderEditorState.revision = "";
+    coachLaneOrderEditorState.confirmed = false;
+    coachLaneOrderEditorState.message = "";
+  }
+}
+
+function coachLaneOrderItems() {
+  const byRoleId = new Map(scheduleLaneActiveCoaches().map((coach) => [String(coach.serverRoleId), coach]));
+  return coachLaneOrderEditorState.roleIds.map((roleId) => byRoleId.get(String(roleId))).filter(Boolean);
+}
+
+function coachWorksAtPreviewTime(coach, day, time) {
+  const minute = minutesFromTime(time);
+  return (coach.workBlocks || []).some((block) => (
+    Array.isArray(block.days)
+    && block.days.includes(day)
+    && minute >= minutesFromTime(block.start)
+    && minute < minutesFromTime(block.end)
+  ));
+}
+
+function coachLaneOrderPreviewText(day, time) {
+  const names = coachLaneOrderItems()
+    .filter((coach) => coachWorksAtPreviewTime(coach, day, time))
+    .map((coach) => String(coach.name || "코치").replace(/\s*코치$/u, ""));
+  return names.length ? names.join(" | ") : "근무 코치 없음";
+}
+
+function renderCoachLaneOrderEditor() {
+  const target = $("#coachLaneOrderPanel");
+  if (!target) return;
+  if (operationsRole() !== "admin") {
+    target.hidden = true;
+    return;
+  }
+  target.hidden = false;
+  ensureCoachLaneOrderEditorState();
+  const items = coachLaneOrderItems();
+  const dirty = coachLaneOrderEditorState.roleIds.join("|") !== coachLaneOrderEditorState.baselineRoleIds.join("|");
+  const busy = coachLaneOrderEditorState.loading || coachLaneOrderEditorState.saving;
+  target.innerHTML = `
+    <div class="coach-lane-order-heading">
+      <div>
+        <p class="eyebrow">레슨표 표시</p>
+        <h3 id="coachLaneOrderTitle">시간표 열 순서</h3>
+      </div>
+      <span class="source-pill ${dirty ? "warn" : ""}">${dirty ? "변경 확인 필요" : "서버 순서"}</span>
+    </div>
+    <p class="coach-lane-order-help">교대 전후에도 같은 코치가 같은 쪽에 보이도록 왼쪽부터 순서를 정합니다.</p>
+    <div class="coach-lane-order-list">
+      ${items.length ? items.map((coach, index) => `
+        <div class="coach-lane-order-row" data-coach-lane-role-id="${escapeHtml(coach.serverRoleId)}">
+          <span class="coach-lane-order-number">${index + 1}</span>
+          <strong>${escapeHtml(coach.name)}</strong>
+          <div class="coach-lane-order-actions">
+            <button class="icon-button" type="button" data-move-coach-lane="up" data-role-id="${escapeHtml(coach.serverRoleId)}" aria-label="${escapeHtml(coach.name)} 왼쪽으로 이동" title="왼쪽으로 이동" ${index === 0 || busy ? "disabled" : ""}>↑</button>
+            <button class="icon-button" type="button" data-move-coach-lane="down" data-role-id="${escapeHtml(coach.serverRoleId)}" aria-label="${escapeHtml(coach.name)} 오른쪽으로 이동" title="오른쪽으로 이동" ${index === items.length - 1 || busy ? "disabled" : ""}>↓</button>
+          </div>
+        </div>`).join("") : '<p class="empty-text">근무 중인 코치가 없습니다.</p>'}
+    </div>
+    <div class="coach-lane-order-preview" aria-label="열 순서 미리보기">
+      <span><b>평일 오전</b>${escapeHtml(coachLaneOrderPreviewText("월", "10:00"))}</span>
+      <span><b>평일 오후</b>${escapeHtml(coachLaneOrderPreviewText("월", "19:00"))}</span>
+    </div>
+    <div class="coach-lane-order-footer">
+      <span class="form-message" role="status">${escapeHtml(coachLaneOrderEditorState.message)}</span>
+      <div>
+        <button class="small-button" type="button" data-preview-coach-lane-order ${!items.length || busy ? "disabled" : ""}>서버 확인</button>
+        <button class="primary-button" type="button" data-save-coach-lane-order ${!dirty || !coachLaneOrderEditorState.confirmed || busy ? "disabled" : ""}>순서 저장</button>
+      </div>
+    </div>`;
+}
+
+function moveCoachLaneOrder(roleId, direction) {
+  ensureCoachLaneOrderEditorState();
+  const index = coachLaneOrderEditorState.roleIds.indexOf(String(roleId));
+  const nextIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || nextIndex < 0 || nextIndex >= coachLaneOrderEditorState.roleIds.length) return;
+  const next = [...coachLaneOrderEditorState.roleIds];
+  [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+  coachLaneOrderEditorState.roleIds = next;
+  coachLaneOrderEditorState.confirmed = false;
+  coachLaneOrderEditorState.revision = "";
+  coachLaneOrderEditorState.message = "미리보기를 확인한 뒤 서버 확인을 눌러주세요.";
+  renderCoachLaneOrderEditor();
+}
+
+async function previewCoachLaneOrder() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.rpc || !branchId || operationsRole() !== "admin") return;
+  coachLaneOrderEditorState.loading = true;
+  coachLaneOrderEditorState.message = "서버의 현재 순서를 확인하는 중입니다.";
+  renderCoachLaneOrderEditor();
+  try {
+    const preview = await client.rpc("tn_admin_preview_coach_schedule_lane_order", {
+      target_branch_id: branchId,
+      target_role_ids: coachLaneOrderEditorState.roleIds,
+    });
+    coachLaneOrderEditorState.revision = String(preview?.revision || "");
+    coachLaneOrderEditorState.confirmed = Boolean(coachLaneOrderEditorState.revision);
+    coachLaneOrderEditorState.message = preview?.changed
+      ? "서버 확인 완료. 순서 저장을 누르면 모든 시간표에 적용됩니다."
+      : "현재 서버 순서와 같습니다.";
+  } catch (error) {
+    coachLaneOrderEditorState.confirmed = false;
+    coachLaneOrderEditorState.message = /tn_admin_preview_coach_schedule_lane_order|PGRST202|42883|schema cache/i.test(`${error?.message || ""} ${error?.payload?.message || ""}`)
+      ? "시간표 열 순서 DB 기능을 먼저 적용해주세요."
+      : `서버 확인 실패: ${error?.payload?.code || error?.message || "server_error"}`;
+  } finally {
+    coachLaneOrderEditorState.loading = false;
+    renderCoachLaneOrderEditor();
+  }
+}
+
+async function saveCoachLaneOrder() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.rpc || !branchId || !coachLaneOrderEditorState.confirmed || !coachLaneOrderEditorState.revision) return;
+  coachLaneOrderEditorState.saving = true;
+  coachLaneOrderEditorState.message = "시간표 열 순서를 저장하는 중입니다.";
+  renderCoachLaneOrderEditor();
+  try {
+    const saved = await client.rpc("tn_admin_save_coach_schedule_lane_order", {
+      target_branch_id: branchId,
+      target_role_ids: coachLaneOrderEditorState.roleIds,
+      target_expected_revision: coachLaneOrderEditorState.revision,
+      target_reason: "운영 설정 시간표 열 순서 변경",
+    });
+    if (!saved?.saved || !Array.isArray(saved.after)) throw new Error("coach_lane_order_save_verification_failed");
+    const savedOrder = saved.after.map((item) => String(item.roleId));
+    if (savedOrder.join("|") !== coachLaneOrderEditorState.roleIds.join("|")) {
+      throw new Error("coach_lane_order_server_mismatch");
+    }
+    await refreshCoachStaffData();
+    coachLaneOrderEditorState.roleIds = savedOrder;
+    coachLaneOrderEditorState.baselineRoleIds = [...savedOrder];
+    coachLaneOrderEditorState.revision = String(saved.revision || "");
+    coachLaneOrderEditorState.confirmed = false;
+    coachLaneOrderEditorState.message = "서버 저장 완료. 회원·코치·관리자 시간표에 같은 순서가 적용됩니다.";
+    scheduleAdminOperationalCacheWrite();
+    saveSnapshot();
+    renderCoaches();
+    showToast("시간표 열 순서를 저장했습니다.");
+  } catch (error) {
+    const raw = `${error?.message || ""} ${error?.payload?.message || ""}`;
+    coachLaneOrderEditorState.confirmed = false;
+    coachLaneOrderEditorState.message = /coach_lane_order_revision_conflict/i.test(raw)
+      ? "다른 관리자가 먼저 변경했습니다. 서버 확인을 다시 눌러주세요."
+      : `순서 저장 실패: ${error?.payload?.code || error?.message || "server_error"}`;
+  } finally {
+    coachLaneOrderEditorState.saving = false;
+    renderCoachLaneOrderEditor();
+  }
+}
+
 function renderCoaches() {
   const branchCoaches = operationBranchCoaches().filter((coach) => !coach.deletedAt);
   const activeCoaches = branchCoaches.filter((coach) => (
@@ -24466,6 +24658,7 @@ function renderCoaches() {
   $$("[data-coach-staff-filter]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.coachStaffFilter === state.coachStaffListFilter);
   });
+  renderCoachLaneOrderEditor();
   target.innerHTML = `
     <div class="coach-status-summary">
       <strong>근무 중 ${activeCoaches.length}명</strong>
@@ -26669,6 +26862,19 @@ function bindEvents() {
     if (settingsTabsByButton[buttonId]) openSettingsWorkspace(settingsTabsByButton[buttonId]);
   });
   document.addEventListener("click", async (event) => {
+    const laneMoveButton = event.target.closest("[data-move-coach-lane]");
+    if (laneMoveButton) {
+      moveCoachLaneOrder(laneMoveButton.dataset.roleId, laneMoveButton.dataset.moveCoachLane);
+      return;
+    }
+    if (event.target.closest("[data-preview-coach-lane-order]")) {
+      await previewCoachLaneOrder();
+      return;
+    }
+    if (event.target.closest("[data-save-coach-lane-order]")) {
+      await saveCoachLaneOrder();
+      return;
+    }
     const reconcileButton = event.target.closest("[data-reconcile-coach-login]");
     if (reconcileButton) {
       await reconcileCoachLogin(reconcileButton.dataset.reconcileCoachLogin);

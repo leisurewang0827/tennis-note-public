@@ -8323,6 +8323,128 @@ button .schedule-member-lines > span {
   font-size: 11px;
 }
 
+.coach-lane-order-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7fafc;
+}
+
+.coach-lane-order-heading,
+.coach-lane-order-footer,
+.coach-lane-order-footer > div,
+.coach-lane-order-row,
+.coach-lane-order-actions {
+  display: flex;
+  align-items: center;
+}
+
+.coach-lane-order-heading,
+.coach-lane-order-footer {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.coach-lane-order-heading h3,
+.coach-lane-order-heading p,
+.coach-lane-order-help {
+  margin: 0;
+}
+
+.coach-lane-order-heading h3 {
+  font-size: 15px;
+}
+
+.coach-lane-order-help,
+.coach-lane-order-footer .form-message {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.coach-lane-order-list {
+  display: grid;
+  gap: 6px;
+}
+
+.coach-lane-order-row {
+  min-width: 0;
+  min-height: 42px;
+  gap: 9px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.coach-lane-order-row strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coach-lane-order-number {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--soft-green);
+  color: var(--green-strong);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.coach-lane-order-actions,
+.coach-lane-order-footer > div {
+  gap: 6px;
+}
+
+.coach-lane-order-actions .icon-button {
+  width: 34px;
+  height: 34px;
+}
+
+.coach-lane-order-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.coach-lane-order-preview span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--green);
+  background: #fff;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.coach-lane-order-preview b {
+  color: var(--ink);
+}
+
+@media (max-width: 560px) {
+  .coach-lane-order-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .coach-lane-order-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .coach-lane-order-footer > div {
+    justify-content: flex-end;
+  }
+}
+
 .coach-list-empty {
   padding: 18px 12px;
   border: 1px dashed var(--line);

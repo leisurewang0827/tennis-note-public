@@ -1,16 +1,16 @@
 (function () {
   const release = Object.freeze({
-    version: "1.0.311",
-    releaseId: "2026.08.11.05",
-    appSurfaceVersion: "1.0.311",
-    deployedAt: "2026-08-11T09:32:39+09:00",
+    version: "1.0.312",
+    releaseId: "2026.08.11.06",
+    appSurfaceVersion: "1.0.312",
+    deployedAt: "2026-08-11T11:09:07+09:00",
     minimumNativeShellVersion: "1.0.118",
     nativeShell: {
-      version: "1.0.309",
-      androidVersion: "1.0.309",
-      androidBuild: 64,
-      iosVersion: "1.0.311",
-      iosBuild: 68,
+      version: "1.0.312",
+      androidVersion: "1.0.312",
+      androidBuild: 65,
+      iosVersion: "1.0.312",
+      iosBuild: 69,
     },
   });
 

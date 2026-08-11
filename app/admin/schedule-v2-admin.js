@@ -52,6 +52,7 @@
   const curriculumCatalog = window.TennisNoteCurriculumCatalog || { steps: [], aliases: {} };
   const curriculumSteps = Array.isArray(curriculumCatalog.steps) ? curriculumCatalog.steps : [];
   const curriculumByCode = new Map(curriculumSteps.map((step) => [String(step.id || "").toUpperCase(), step]));
+  const scheduleLaneTools = window.TennisNoteScheduleLanes;
   const state = {
     engine: "v2",
     weekStart: mondayOf(new Date()),
@@ -864,36 +865,25 @@
         laneOccupancy.add(`${lesson.coachRoleId}|${minutesTime(minute)}`);
       }
     });
-    const periods = [];
-    const preferredLane = new Map();
-    let current = null;
-    times.forEach((time) => {
+    const candidateGroups = times.map((time) => {
       const minute = timeMinutes(time);
-      const candidates = coaches.filter((coach) => (
+      return coaches.filter((coach) => (
         coachBaseAvailableAt(coach, dayOfWeek, minute, hasAnyAvailability)
         || laneOccupancy.has(`${coach.roleId}|${time}`)
       ));
-      if (!candidates.length) {
+    });
+    const lanePlan = scheduleLaneTools?.assignStableLanes?.(candidateGroups);
+    const orderedGroups = lanePlan?.rows || candidateGroups.map((group) => (
+      scheduleLaneTools?.sortByLaneOrder?.(group) || group
+    ));
+    const periods = [];
+    let current = null;
+    times.forEach((time, timeIndex) => {
+      const active = (orderedGroups[timeIndex] || []).filter(Boolean);
+      if (!active.length) {
         current = null;
         return;
       }
-      const lanes = Array(candidates.length).fill(null);
-      candidates
-        .filter((coach) => preferredLane.has(String(coach.roleId)))
-        .sort((left, right) => preferredLane.get(String(left.roleId)) - preferredLane.get(String(right.roleId)))
-        .forEach((coach) => {
-          const lane = preferredLane.get(String(coach.roleId));
-          if (lane < lanes.length && !lanes[lane]) lanes[lane] = coach;
-        });
-      candidates.filter((coach) => !lanes.includes(coach)).forEach((coach) => {
-        const lane = lanes.findIndex((item) => !item);
-        lanes[lane] = coach;
-      });
-      const active = lanes.filter(Boolean);
-      active.forEach((coach, lane) => {
-        const roleId = String(coach.roleId);
-        if (active.length > 1 || !preferredLane.has(roleId)) preferredLane.set(roleId, lane);
-      });
       const key = active.map((coach) => coach.roleId).sort().join("|");
       if (!current || current.key !== key) {
         current = { key, coaches: active, times: [], lessons };
@@ -1026,12 +1016,8 @@
     });
     const hasConfiguredAvailability = (payload.coaches || []).some((coach) => availabilityRows(coach)
       .some((row) => (row.type || row.availability_type) === "available"));
-    const coachOrder = new Map(coaches.map((coach, index) => [String(coach.roleId), index]));
-    const preferredLane = new Map();
     const assignments = new Map();
-    let laneCount = 0;
-
-    times.forEach((time) => {
+    const activeGroups = times.map((time) => {
       const minute = timeMinutes(time);
       const activeById = new Map();
       coaches.forEach((coach) => {
@@ -1043,24 +1029,18 @@
         const coach = coachById.get(String(lesson.coachRoleId));
         if (coach) activeById.set(String(coach.roleId), coach);
       });
-      const active = [...activeById.values()].sort((left, right) => {
-        const leftLane = preferredLane.has(String(left.roleId)) ? preferredLane.get(String(left.roleId)) : Number.MAX_SAFE_INTEGER;
-        const rightLane = preferredLane.has(String(right.roleId)) ? preferredLane.get(String(right.roleId)) : Number.MAX_SAFE_INTEGER;
-        return leftLane - rightLane || (coachOrder.get(String(left.roleId)) || 0) - (coachOrder.get(String(right.roleId)) || 0);
-      });
-      const used = new Set();
+      return [...activeById.values()];
+    });
+    const lanePlan = scheduleLaneTools?.assignStableLanes?.(activeGroups);
+    const laneRows = lanePlan?.rows || activeGroups.map((group) => (
+      scheduleLaneTools?.sortByLaneOrder?.(group) || group
+    ));
+    let laneCount = lanePlan?.laneCount || Math.max(1, ...laneRows.map((row) => row.length));
+
+    times.forEach((time, timeIndex) => {
       const row = new Map();
-      active.forEach((coach) => {
-        const roleId = String(coach.roleId);
-        let lane = preferredLane.get(roleId);
-        if (lane == null || used.has(lane)) {
-          lane = 0;
-          while (used.has(lane)) lane += 1;
-        }
-        preferredLane.set(roleId, lane);
-        used.add(lane);
-        row.set(roleId, lane);
-        laneCount = Math.max(laneCount, lane + 1);
+      (laneRows[timeIndex] || []).forEach((coach, lane) => {
+        if (coach) row.set(String(coach.roleId), lane);
       });
       assignments.set(time, row);
     });

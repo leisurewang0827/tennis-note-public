@@ -1983,6 +1983,10 @@ function loadCoachSchedulePolicy() {
   const workspace = scheduleV2CoachWorkspace();
   if (!workspace?.coaches?.length) return resolved;
   const serverCoaches = workspace.coaches.map((coach, coachIndex) => {
+    const serverLaneOrder = Number(coach.laneOrder);
+    const laneOrder = Number.isFinite(serverLaneOrder) && serverLaneOrder !== 1000
+      ? serverLaneOrder
+      : 1000 + coachIndex;
     const workBlocks = (coach.availability || [])
       .filter((block) => block.type === "available")
       .map((block, blockIndex) => ({
@@ -2008,7 +2012,8 @@ function loadCoachSchedulePolicy() {
       roleId: coach.roleId,
       name: coach.name || "이름 없음",
       status: "active",
-      sortIndex: coachIndex,
+      laneOrder,
+      sortIndex: laneOrder,
       workBlocks,
       blockedBlocks,
     };
@@ -2070,10 +2075,11 @@ function dayCoachesForSchedule(day, policy, lessons = [], filter = state.schedul
   const lessonCoaches = lessons
     .filter((lesson) => lesson.day === day)
     .map((lesson) => coachFromLesson(lesson, policy));
-  return working
+  const unique = working
     .concat(lessonCoaches)
-    .filter((coach, index, array) => array.findIndex((item) => item.id === coach.id) === index)
-    .sort((a, b) => {
+    .filter((coach, index, array) => array.findIndex((item) => item.id === coach.id) === index);
+  return window.TennisNoteScheduleLanes?.sortByLaneOrder?.(unique)
+    || unique.sort((a, b) => {
       const aOrder = Number.isFinite(Number(a.sortIndex)) ? Number(a.sortIndex) : coachOrder(a.id);
       const bOrder = Number.isFinite(Number(b.sortIndex)) ? Number(b.sortIndex) : coachOrder(b.id);
       return aOrder - bOrder;
@@ -2218,7 +2224,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.311",
+    workerUrl: "./service-worker.js?v=1.0.312",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2248,7 +2254,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.311" });
+  const params = new URLSearchParams({ v: "1.0.312" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;

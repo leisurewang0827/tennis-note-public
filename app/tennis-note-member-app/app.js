@@ -1699,7 +1699,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.311",
+    workerUrl: "./service-worker.js?v=1.0.312",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2387,6 +2387,18 @@ function memberCoachOrder(id = "") {
   return index >= 0 ? index : order.length;
 }
 
+function memberScheduleLaneOrder(coach = {}) {
+  const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+  const workspaceCoaches = memberScheduleV2WorkspaceCache?.workspace?.coaches || [];
+  const index = workspaceCoaches.findIndex((item) => String(item.roleId || "") === roleId);
+  const serverCoach = index >= 0 ? workspaceCoaches[index] : null;
+  if (Number.isFinite(Number(serverCoach?.laneOrder)) && Number(serverCoach.laneOrder) !== 1000) {
+    return Number(serverCoach.laneOrder);
+  }
+  if (index >= 0) return 1000 + index;
+  return Number(coach.laneOrder ?? coach.scheduleLaneOrder ?? memberCoachOrder(coach.id));
+}
+
 function memberCoachShortName(name = "") {
   return name.replace(" 코치", "").replace("코치", "").trim();
 }
@@ -2538,11 +2550,13 @@ function memberDayCoaches(day, policy, scheduleLessons = []) {
       && isOwnMemberScheduleLesson(lesson)
     ))
     .map((lesson) => memberLessonCoach(lesson, policy));
-  return working
+  const unique = working
     .concat(lessonCoaches)
     .filter((coach) => memberCoachMatchesAssignment(coach))
     .filter((coach, index, array) => array.findIndex((item) => item.id === coach.id) === index)
-    .sort((a, b) => memberCoachOrder(a.id) - memberCoachOrder(b.id));
+    .map((coach) => ({ ...coach, laneOrder: memberScheduleLaneOrder(coach) }));
+  return window.TennisNoteScheduleLanes?.sortByLaneOrder?.(unique)
+    || unique.sort((a, b) => Number(a.laneOrder) - Number(b.laneOrder));
 }
 
 function hasMemberCoachLessonAt(scheduleLessons, day, time, coach, durationMinutes = 10, policy = loadAdminSchedulePolicy()) {
@@ -8294,7 +8308,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.311" });
+  const params = new URLSearchParams({ v: "1.0.312" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
