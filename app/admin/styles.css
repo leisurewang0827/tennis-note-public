@@ -9952,6 +9952,23 @@ button .schedule-member-lines > span {
   margin-top: 18px;
 }
 
+.payment-cancel-warning {
+  padding: 12px;
+  border: 1px solid #e1a59a;
+  border-radius: 8px;
+  color: #8b2f27;
+  background: var(--soft-red);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+#paymentCancelForm .form-field > small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .refund-target-summary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

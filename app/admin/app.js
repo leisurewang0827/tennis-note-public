@@ -653,6 +653,14 @@ const serverPaymentSyncState = {
 const SERVER_PAYMENT_REFRESH_STALE_MS = 120_000;
 const paymentCancelInFlight = new Set();
 
+const paymentCancelFlowState = {
+  itemIndex: -1,
+  submitting: false,
+  idempotencyKey: "",
+  message: "",
+  tone: "neutral",
+};
+
 const refundFlowState = {
   itemIndex: -1,
   preview: null,
@@ -4308,7 +4316,9 @@ function billingStatusFromSharedPayment(request = {}) {
 function billingStatusFromServerPayment(row = {}) {
   const status = String(row.status || "").toLowerCase();
   const refundStatus = String(row.refund_status || "").toLowerCase();
+  const refundMode = String(row.refund_breakdown?.mode || "").toLowerCase();
   if (refundStatus === "processing") return { status: "refund_processing", statusLabel: "환불처리중" };
+  if (refundStatus === "reconcile_required" && refundMode === "full_pg_cancel") return { status: "cancel_reconcile", statusLabel: "취소동기화필요" };
   if (refundStatus === "reconcile_required") return { status: "refund_reconcile", statusLabel: "환불동기화필요" };
   if (refundStatus === "failed" && status === "verified") return { status: "paid", statusLabel: "환불재확인" };
   if (status === "ready") return { status: "server_ready", statusLabel: "결제준비" };
@@ -19517,7 +19527,7 @@ function paymentDisplayStatus(item = {}) {
 }
 
 function billingFilterGroup(item = {}) {
-  if (["cancelled", "refunded", "refund_processing", "refund_reconcile"].includes(item.status)) return "refund";
+  if (["cancelled", "refunded", "refund_processing", "refund_reconcile", "cancel_reconcile"].includes(item.status)) return "refund";
   if (isStaleReadyPayment(item)) return "action";
   if (["server_ready", "unverified"].includes(item.status)) return "verifying";
   if (item.status === "paid") return "done";
@@ -19552,6 +19562,35 @@ function billingMatchesMonth(item, month) {
 function billingMonthLabel(month) {
   const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
   return match ? `${Number(match[1])}년 ${Number(match[2])}월 결제액` : "선택 월 결제액";
+}
+
+function paymentAuditDateTimeLabel(value = "") {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function paymentCancellationAuditDetail(item = {}) {
+  if (!["cancelled", "refunded"].includes(item.status)) return "";
+  const amount = Number(item.refundedAmount || (item.status === "cancelled" ? paymentFullCancelAmount(item) : 0));
+  const parts = [];
+  if (amount > 0) parts.push(`${money.format(amount)}원`);
+  if (item.refundReason) parts.push(`사유: ${item.refundReason}`);
+  const completedAt = paymentAuditDateTimeLabel(item.refundedAt);
+  if (completedAt) parts.push(completedAt);
+  return parts.join(" · ");
+}
+
+function paymentCancellationAuditLog(item = {}) {
+  const detail = paymentCancellationAuditDetail(item);
+  if (!detail) return "";
+  return `${item.member || "회원"} · ${item.item || "결제"} · ${item.status === "refunded" ? "환불" : "PG 전액취소"} · ${detail}`;
 }
 
 function renderBilling() {
@@ -19612,7 +19651,7 @@ function renderBilling() {
           <td>${escapeHtml(billingEffectiveDate(item) || "일자 미입력")}</td>
           <td>${money.format(item.amount)}원${item.discountTitle ? `<br><small>${escapeHtml(item.discountTitle)} · ${money.format(item.discountAmount || 0)}원 할인${item.originalAmount ? ` · 원가 ${money.format(item.originalAmount)}원` : ""}</small>` : ""}</td>
           <td>${paymentMethodLabel(item.method)}</td>
-          <td>${badge(displayStatus.status, displayStatus.label)}${displayStatus.detail ? `<br><small>${escapeHtml(displayStatus.detail)}</small>` : ""}</td>
+          <td>${badge(displayStatus.status, displayStatus.label)}${displayStatus.detail ? `<br><small>${escapeHtml(displayStatus.detail)}</small>` : ""}${paymentCancellationAuditDetail(item) ? `<br><small>${escapeHtml(paymentCancellationAuditDetail(item))}</small>` : ""}</td>
           <td>
             ${paymentActionFor(item, index)}
           </td>
@@ -19641,9 +19680,12 @@ function renderBilling() {
     .join("") : '<tr><td colspan="5" class="empty-text">연장 확인이 필요한 회원권이 없습니다.</td></tr>';
   renderDashboardPager("#rechargePager", rechargeTargets.length, state.rechargePage, "recharge", billingPageSize);
 
-  $("#billingLog").innerHTML = billingLogs
+  const serverCancellationLogs = monthBillings
+    .map(paymentCancellationAuditLog)
+    .filter(Boolean);
+  $("#billingLog").innerHTML = [...new Set([...serverCancellationLogs, ...billingLogs])]
     .slice(0, 20)
-    .map((item) => `<li>${item}</li>`)
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join("");
 }
 
@@ -19661,6 +19703,7 @@ function paymentActionFor(item, index) {
   }
   if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}" ${context("결제 완료 상세")}>완료됨</button>${paymentFullCancelButtonFor(item, index)}${paymentRefundButtonFor(item, index)}`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;
+  if (item.status === "cancel_reconcile") return paymentCancelButtonFor(index, "취소 상태 맞추기");
   if (item.status === "refund_reconcile") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("환불 동기화 확인")}>동기화 확인</button>`;
   if (item.status === "cancelled") return `<button class="small-button" type="button" disabled>취소완료</button>`;
   if (item.status === "refunded") return `<button class="small-button" type="button" disabled>환불완료</button>`;
@@ -20049,62 +20092,155 @@ async function reconcileRefundFromModal() {
   }
 }
 
-async function cancelBillingPaymentItem(item) {
-  const serverBacked = Boolean(item?.serverPaymentId);
-  if (item && ["check", "unverified", "failed"].includes(item.status) && !serverBacked) {
-    item.status = "cancelled";
-    item.statusLabel = "대기취소";
-    billingLogs.unshift(`${item.member} ${item.item} 대기건 정리: ${item.providerPaymentId || "paymentId 없음"}`);
-    saveSnapshot();
-    renderAll();
-    showToast("결제 대기건 정리 완료");
-    return;
+function paymentCancelConfirmationPhrase(item = {}) {
+  return ["paid", "cancel_reconcile"].includes(item.status) ? "전액취소" : "대기취소";
+}
+
+function newPaymentCancelIdempotencyKey() {
+  const value = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `cancel:${value}`;
+}
+
+function renderPaymentCancelModal() {
+  const item = billings[paymentCancelFlowState.itemIndex];
+  const target = $("#paymentCancelModalContent");
+  const message = $("#paymentCancelFormMessage");
+  const submitButton = $("#confirmPaymentCancelButton");
+  const help = $("#paymentCancelConfirmationHelp");
+  const title = $("#paymentCancelModalTitle");
+  if (!target || !item) return;
+  const isPaid = ["paid", "cancel_reconcile"].includes(item.status);
+  const amount = paymentFullCancelAmount(item);
+  const phrase = paymentCancelConfirmationPhrase(item);
+  if (title) title.textContent = isPaid ? "PG 전액 결제취소" : "결제 대기건 취소";
+  target.innerHTML = `
+    <div class="refund-target-summary">
+      <div>
+        <strong>${escapeHtml(item.member || "회원")} · ${escapeHtml(item.item || "결제")}</strong>
+        <span>${escapeHtml(paymentMethodLabel(item.method))} · ${escapeHtml(item.statusLabel || item.status || "상태 확인")}</span>
+        <small>취소 대상 금액 ${money.format(amount)}원</small>
+      </div>
+      ${badge(isPaid ? "danger" : "warn", isPaid ? "실제 PG 승인" : "결제 전 대기")}
+    </div>
+    <p class="payment-cancel-warning">${isPaid ? "일반 환불 계산과 별도로 PG 승인금액 전체를 취소하고 연결 회원권을 비활성화합니다." : "결제가 완료되지 않은 대기 기록을 취소합니다. 실제 결제 여부가 불명확하면 먼저 상태 확인을 실행하세요."}</p>`;
+  if (help) help.textContent = `${isPaid ? "실제 PG 승인 전체를 취소" : "결제 대기 기록을 취소"}하려면 ${phrase}를 입력하세요.`;
+  if ($("#paymentCancelConfirmationText")) $("#paymentCancelConfirmationText").placeholder = phrase;
+  if (message) {
+    message.textContent = paymentCancelFlowState.message || "";
+    message.className = `form-message ${paymentCancelFlowState.tone === "danger" ? "danger" : paymentCancelFlowState.tone === "good" ? "good" : ""}`;
   }
+  if (submitButton) {
+    submitButton.disabled = paymentCancelFlowState.submitting;
+    submitButton.textContent = paymentCancelFlowState.submitting ? "취소 처리 중" : `${phrase} 실행`;
+  }
+  [$("#closePaymentCancelModal"), $("#dismissPaymentCancelModal")].forEach((button) => {
+    if (button) button.disabled = paymentCancelFlowState.submitting;
+  });
+}
+
+function closePaymentCancelModal() {
+  if (paymentCancelFlowState.submitting) return;
+  $("#paymentCancelModal")?.setAttribute("hidden", "");
+  $("#paymentCancelForm")?.reset();
+  Object.assign(paymentCancelFlowState, {
+    itemIndex: -1,
+    submitting: false,
+    idempotencyKey: "",
+    message: "",
+    tone: "neutral",
+  });
+}
+
+async function openPaymentCancelModal(item, itemIndex = billings.indexOf(item)) {
+  const serverBacked = Boolean(item?.serverPaymentId);
+  const localPending = item && ["check", "unverified", "failed"].includes(item.status) && !serverBacked;
   if (!item?.providerPaymentId) {
     billingLogs.unshift(`${item?.member || "회원"} ${item?.item || "결제"} 취소 실패: paymentId 없음`);
     renderAll();
     showToast("paymentId가 없어 결제취소를 실행할 수 없습니다");
     return;
   }
-  if (!["paid", "server_ready", "failed"].includes(item.status)) {
+  if (!localPending && !["paid", "server_ready", "failed", "cancel_reconcile"].includes(item.status)) {
     showToast("취소 가능한 상태가 아닙니다");
     return;
   }
   if (!(await ensureAdminPaymentCancelReady(item))) return;
-  const actionLabel = item.status === "paid" ? "실제 결제취소" : "결제 전 대기취소";
-  const cancelAmount = paymentFullCancelAmount(item);
-  let reason = item.status === "paid" ? "" : "결제 전 대기건 정리";
-  if (item.status === "paid") {
-    const reasonInput = window.prompt(
-      `${item.member} · ${item.item} · ${money.format(cancelAmount)}원\nPG 전액 결제취소 사유를 입력해 주세요.`,
-      "",
-    );
-    if (reasonInput === null) return;
-    reason = String(reasonInput || "").trim();
-    if (reason.length < 2) {
-      showToast("취소 사유를 입력해 주세요.");
-      return;
-    }
+  Object.assign(paymentCancelFlowState, {
+    itemIndex,
+    submitting: false,
+    idempotencyKey: newPaymentCancelIdempotencyKey(),
+    message: "대상과 금액을 확인하고 취소 사유와 최종 확인 문구를 입력하세요.",
+    tone: "neutral",
+  });
+  $("#paymentCancelForm")?.reset();
+  if (!item || !["paid", "cancel_reconcile"].includes(item.status)) {
+    if ($("#paymentCancelReason")) $("#paymentCancelReason").value = "결제 전 대기건 정리";
   }
-  const ok = window.confirm(
-    `${item.status === "paid" ? "PG 전액 결제취소" : actionLabel} 최종 확인\n\n대상: ${item.member} · ${item.item}\n금액: ${money.format(cancelAmount)}원\n사유: ${reason}\n\n일반 환불 계산과 별도로 PG 승인금액 전체를 취소합니다.`,
-  );
-  if (!ok) {
-    billingLogs.unshift(`${item.member} ${item.item} ${actionLabel} 실행 안 함`);
+  $("#paymentCancelModal")?.removeAttribute("hidden");
+  renderPaymentCancelModal();
+  $("#paymentCancelReason")?.focus();
+}
+
+async function confirmPaymentCancelFromModal() {
+  const item = billings[paymentCancelFlowState.itemIndex];
+  if (!item || paymentCancelFlowState.submitting) return;
+  const reason = $("#paymentCancelReason")?.value.trim() || "";
+  const confirmation = $("#paymentCancelConfirmationText")?.value.trim() || "";
+  const expectedConfirmation = paymentCancelConfirmationPhrase(item);
+  if (reason.length < 2) {
+    paymentCancelFlowState.message = "결제취소 사유를 2자 이상 입력해 주세요.";
+    paymentCancelFlowState.tone = "danger";
+    renderPaymentCancelModal();
+    return;
+  }
+  if (confirmation !== expectedConfirmation) {
+    paymentCancelFlowState.message = `최종 확인란에 ${expectedConfirmation}를 입력해 주세요.`;
+    paymentCancelFlowState.tone = "danger";
+    renderPaymentCancelModal();
+    return;
+  }
+  await executeBillingPaymentCancellation(item, reason);
+}
+
+async function executeBillingPaymentCancellation(item, reason) {
+  const serverBacked = Boolean(item?.serverPaymentId);
+  const localPending = item && ["check", "unverified", "failed"].includes(item.status) && !serverBacked;
+  const actionLabel = ["paid", "cancel_reconcile"].includes(item.status) ? "실제 결제취소" : "결제 전 대기취소";
+  const cancelAmount = paymentFullCancelAmount(item);
+  if (paymentCancelInFlight.has(item.providerPaymentId)) {
+    paymentCancelFlowState.message = "같은 결제의 취소 요청이 이미 처리 중입니다.";
+    paymentCancelFlowState.tone = "danger";
+    renderPaymentCancelModal();
+    return;
+  }
+  if (localPending) {
+    item.status = "cancelled";
+    item.statusLabel = "대기취소";
+    item.refundReason = reason;
+    item.refundedAt = new Date().toISOString();
+    billingLogs.unshift(`${item.member} ${item.item} 대기건 정리: ${reason}`);
+    saveSnapshot();
+    closePaymentCancelModal();
     renderAll();
+    showToast("결제 대기건 정리 완료");
     return;
   }
   const client = window.TennisNoteDataClient;
   if (!client?.invokeFunction || !client.readiness?.().ready) {
     billingLogs.unshift(`${item.member} ${item.item} 취소 실패: Supabase 연결값 없음`);
-    renderAll();
-    showToast("Supabase 연결값 확인 필요");
+    paymentCancelFlowState.message = "Supabase 연결값을 확인해 주세요.";
+    paymentCancelFlowState.tone = "danger";
+    renderPaymentCancelModal();
     return;
   }
 
+  paymentCancelFlowState.submitting = true;
+  paymentCancelFlowState.message = "PortOne 결제취소와 연결 회원권 비활성화를 처리하고 있습니다.";
+  paymentCancelFlowState.tone = "neutral";
   item.statusLabel = "취소처리중";
-  billingLogs.unshift(`${item.member} ${item.item} ${actionLabel} 요청: ${item.providerPaymentId}`);
+  billingLogs.unshift(`${item.member} ${item.item} ${actionLabel} 요청`);
   paymentCancelInFlight.add(item.providerPaymentId);
+  renderPaymentCancelModal();
   renderAll();
 
   try {
@@ -20113,6 +20249,7 @@ async function cancelBillingPaymentItem(item) {
         paymentId: item.providerPaymentId,
         amount: cancelAmount,
         reason,
+        idempotencyKey: paymentCancelFlowState.idempotencyKey,
       },
     });
     if (result?.ok) {
@@ -20121,23 +20258,31 @@ async function cancelBillingPaymentItem(item) {
       const alreadyCancelled = result?.status === "already_cancelled";
       billingLogs.unshift(`${item.member} ${item.item} 취소 완료: ${alreadyCancelled ? "이미 취소된 결제" : result.localOnly ? "대기건 정리" : "PortOne 취소"}`);
       await loadServerPaymentsIntoBilling({ silent: true, force: true });
+      paymentCancelFlowState.submitting = false;
+      closePaymentCancelModal();
       showToast(alreadyCancelled ? "이미 취소 완료된 결제입니다" : result.localOnly ? "대기 결제 정리 완료" : "결제 취소 완료");
     } else {
-      item.status = "check";
       item.statusLabel = "취소확인필요";
       billingLogs.unshift(`${item.member} ${item.item} 취소 확인 필요: ${result?.code || "unknown"}`);
-      showToast("취소 확인 필요");
+      paymentCancelFlowState.message = refundErrorText(result?.code || "provider_cancel_failed");
+      paymentCancelFlowState.tone = "danger";
     }
   } catch (error) {
     const code = error?.payload?.code || error?.message || "server_error";
-    item.status = "check";
     item.statusLabel = "취소실패";
     billingLogs.unshift(`${item.member} ${item.item} 취소 실패: ${code}`);
-    showToast("결제 취소 실패");
+    paymentCancelFlowState.message = refundErrorText(code);
+    paymentCancelFlowState.tone = "danger";
   } finally {
     paymentCancelInFlight.delete(item.providerPaymentId);
+    paymentCancelFlowState.submitting = false;
   }
+  renderPaymentCancelModal();
   renderAll();
+}
+
+async function cancelBillingPaymentItem(item, itemIndex = billings.indexOf(item)) {
+  await openPaymentCancelModal(item, itemIndex);
 }
 
 function recordStatusBadge(record) {
@@ -27124,6 +27269,15 @@ function bindEvents() {
     event.preventDefault();
     confirmRefundFromModal();
   });
+  $("#paymentCancelForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    confirmPaymentCancelFromModal();
+  });
+  $("#closePaymentCancelModal")?.addEventListener("click", closePaymentCancelModal);
+  $("#dismissPaymentCancelModal")?.addEventListener("click", closePaymentCancelModal);
+  $("#paymentCancelModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "paymentCancelModal") closePaymentCancelModal();
+  });
   $("#closeRefundModal")?.addEventListener("click", closeRefundModal);
   $("#cancelRefundModal")?.addEventListener("click", closeRefundModal);
   $("#retryRefundReconcile")?.addEventListener("click", reconcileRefundFromModal);
@@ -27970,6 +28124,7 @@ function bindEvents() {
     if (event.key === "Escape" && !$("#lessonModal").hidden) closeLessonModal();
     if (event.key === "Escape" && !$("#oneDayBookingModal")?.hidden) closeOneDayBookingModal();
     if (event.key === "Escape" && !$("#coachStaffModal")?.hidden) closeCoachStaffModal();
+    if (event.key === "Escape" && !$("#paymentCancelModal")?.hidden) closePaymentCancelModal();
     if (event.key === "Escape" && !$("#refundModal").hidden) closeRefundModal();
     if (event.key === "Escape" && !$("#adminLockModal").hidden) closeAdminLockModal();
     if (event.key === "Escape" && !$("#adminToolsModal").hidden) closeAdminToolsModal();
@@ -28670,8 +28825,9 @@ function bindEvents() {
 
     const cancelPaymentButton = event.target.closest("[data-cancel-payment]");
     if (cancelPaymentButton) {
-      const item = billings[Number(cancelPaymentButton.dataset.cancelPayment)];
-      await cancelBillingPaymentItem(item);
+      const itemIndex = Number(cancelPaymentButton.dataset.cancelPayment);
+      const item = billings[itemIndex];
+      await cancelBillingPaymentItem(item, itemIndex);
       return;
     }
 

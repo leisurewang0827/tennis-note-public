@@ -1699,7 +1699,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.313",
+    workerUrl: "./service-worker.js?v=1.0.314",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -5656,8 +5656,23 @@ function renderListPager(targetId, type, currentPage, total) {
 }
 
 function membershipPassRecords() {
-  const pendingPasses = state.paymentRequests.map((request) => {
+  const groupedRequests = [];
+  const groupedRequestIndex = new Map();
+  (state.paymentRequests || []).forEach((request) => {
     const display = paymentRequestDisplay(request);
+    const canGroup = display.tone === "alert";
+    const groupKey = canGroup
+      ? `${request.productId || request.productTitle || "결제"}|${display.status}`
+      : request.paymentId || request.serverPaymentId || `${request.productTitle}-${groupedRequests.length}`;
+    if (canGroup && groupedRequestIndex.has(groupKey)) {
+      groupedRequests[groupedRequestIndex.get(groupKey)].attemptCount += 1;
+      return;
+    }
+    groupedRequestIndex.set(groupKey, groupedRequests.length);
+    groupedRequests.push({ request, display, attemptCount: 1 });
+  });
+  const pendingPasses = groupedRequests.map(({ request, display, attemptCount }) => {
+    const groupedAttemptNote = attemptCount > 1 ? ` · 이전 동일 시도 ${attemptCount - 1}건 묶음` : "";
     return {
       id: request.paymentId || request.productId || `pending-${request.productTitle}`,
       title: request.productTitle,
@@ -5667,7 +5682,7 @@ function membershipPassRecords() {
       coach: request.coach || "상담 후 배정",
       paid: request.amountLabel || "금액 확인",
       status: display.status,
-      note: display.note,
+      note: `${display.note || ""}${groupedAttemptNote}`,
       tone: display.tone,
     };
   });
@@ -8309,7 +8324,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.313" });
+  const params = new URLSearchParams({ v: "1.0.314" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
