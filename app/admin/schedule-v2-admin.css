@@ -243,6 +243,51 @@
   gap: 3px;
 }
 
+.schedule-v2-integrity-panel {
+  margin: 0 14px 10px;
+  border: 1px solid #c9d8d3;
+  border-radius: 6px;
+  padding: 9px 11px;
+  background: #f7faf9;
+}
+
+.schedule-v2-integrity-panel > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.schedule-v2-integrity-panel > p,
+.schedule-v2-integrity-empty {
+  margin: 8px 0;
+  color: #526761;
+  font-size: 12px;
+}
+
+.schedule-v2-integrity-list {
+  display: grid;
+  gap: 5px;
+  max-height: 220px;
+  margin-top: 8px;
+  overflow-y: auto;
+}
+
+.schedule-v2-integrity-list > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(160px, 1.3fr) auto;
+  gap: 8px;
+  align-items: center;
+  border-top: 1px solid #dce6e2;
+  padding-top: 6px;
+  font-size: 12px;
+}
+
+.schedule-v2-integrity-list small {
+  color: #687d76;
+}
+
 .schedule-v2-search span,
 .schedule-v2-editor-sheet label > span:first-child,
 .schedule-v2-policy-panel label > span {
@@ -1857,6 +1902,11 @@ body.schedule-v2-editor-open {
 }
 
 @media (max-width: 720px) {
+  .schedule-v2-editor-sheet :is(input, select, textarea),
+  .schedule-v2-policy-panel :is(input, select, textarea) {
+    font-size: 16px !important;
+  }
+
   .schedule-v2-audit-panel {
     display: none;
   }
@@ -1893,6 +1943,16 @@ body.schedule-v2-editor-open {
   .schedule-v2-policy-panel {
     padding-right: 10px;
     padding-left: 10px;
+  }
+
+  .schedule-v2-integrity-panel {
+    margin-right: 10px;
+    margin-left: 10px;
+  }
+
+  .schedule-v2-integrity-list > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 
   .schedule-v2-toolbar {

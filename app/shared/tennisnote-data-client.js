@@ -1075,17 +1075,49 @@
     const user = await getAuthUser();
     if (!user?.id) return { user, profile: null };
     const profileSelect = "id,name,nickname,phone,birth_year,neighborhood,gender,role,member_kind,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,ntrp_survey,ntrp_requested_at,profile_completed_at,privacy_consent_version,privacy_consented_at,status";
-    let rows = await selectRows("tn_users", {
-      select: profileSelect,
-      filters: { auth_user_id: user.id },
-      limit: 1,
-    });
+    let identityContext = null;
+    try {
+      identityContext = await rpc("tn_current_identity_context", {});
+    } catch (error) {
+      const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
+      if (!/tn_current_identity_context|PGRST202|42883|schema cache/i.test(text)) throw error;
+    }
+
+    if (identityContext?.status === "ambiguous") {
+      return {
+        user,
+        profile: null,
+        coachRole: null,
+        identityContext,
+        profileBootstrapError: {
+          code: "auth_profile_mapping_ambiguous",
+          expectedProvider: "",
+          status: 409,
+        },
+      };
+    }
+
+    const resolvedProfileId = identityContext?.status === "ok"
+      ? String(identityContext.actorUserId || "")
+      : "";
+    let rows = resolvedProfileId
+      ? await selectRows("tn_users", {
+        select: profileSelect,
+        filters: { id: resolvedProfileId },
+        limit: 1,
+      })
+      : await selectRows("tn_users", {
+        select: profileSelect,
+        filters: { auth_user_id: user.id },
+        limit: 1,
+      });
 
     if (!rows?.length) {
       try {
         const links = await selectRows("tn_user_auth_links", {
           select: "user_id",
           filters: { auth_user_id: user.id },
+          order: "is_primary.desc,linked_at.asc,id.asc",
           limit: 1,
         });
         if (links?.[0]?.user_id) {
@@ -1138,7 +1170,7 @@
       }
     }
 
-    return { user, profile, coachRole, profileBootstrapError };
+    return { user, profile, coachRole, profileBootstrapError, identityContext };
   }
 
   function selectCurrentProfile() {

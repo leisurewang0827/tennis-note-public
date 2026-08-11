@@ -69,6 +69,9 @@ const state = {
   scheduleV2TargetKey: "",
   scheduleV2LoadedKey: "",
   scheduleV2SyncError: "",
+  scheduleV2SyncErrorCode: "",
+  scheduleV2Integrity: null,
+  scheduleV2LastSyncedAt: "",
   serverChangeCandidates: [],
   serverChangeCandidateStatus: "idle",
   serverChangeCandidateKey: "",
@@ -1699,7 +1702,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.318",
+    workerUrl: "./service-worker.js?v=1.0.319",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -1719,6 +1722,49 @@ function nativePushPlugin() {
 
 function nativeAppPlatform() {
   return window.Capacitor?.getPlatform?.() || "web";
+}
+
+let memberNativeAppInfo = null;
+
+function renderMemberRuntimeDiagnostics() {
+  const target = $("#memberRuntimeDiagnostics");
+  if (!target) return;
+  const release = window.TENNIS_NOTE_RELEASE || {};
+  const platform = memberNativeAppInfo?.platform || nativeAppPlatform();
+  const nativeLabel = memberNativeAppInfo?.version
+    ? `${platform} ${memberNativeAppInfo.version} (${memberNativeAppInfo.build || "-"})`
+    : platform === "web" ? "웹/PWA" : `${platform} 셸 확인 중`;
+  const syncLabel = state.scheduleV2LastSyncedAt
+    ? new Date(state.scheduleV2LastSyncedAt).toLocaleString("ko-KR", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+    : "아직 동기화 안 됨";
+  const feedLabel = state.scheduleV2SyncErrorCode
+    ? `V2 확인 필요 · ${state.scheduleV2SyncErrorCode}`
+    : state.scheduleV2WorkspaceLoaded ? "V2 정상" : "V2 확인 중";
+  target.textContent = `${nativeLabel} · 웹 ${release.version || "-"} · 배포 ${release.releaseId || "-"} · ${feedLabel} · 마지막 동기화 ${syncLabel}`;
+}
+
+async function refreshMemberRuntimeDiagnostics() {
+  const platform = nativeAppPlatform();
+  const appPlugin = window.Capacitor?.Plugins?.App;
+  if (platform !== "web" && appPlugin?.getInfo) {
+    try {
+      const info = await appPlugin.getInfo();
+      memberNativeAppInfo = {
+        platform,
+        version: String(info?.version || ""),
+        build: String(info?.build || ""),
+      };
+    } catch {
+      memberNativeAppInfo = { platform, version: "", build: "" };
+    }
+  }
+  renderMemberRuntimeDiagnostics();
 }
 
 let nativeBackListenerReady = false;
@@ -5903,6 +5949,39 @@ let memberScheduleV2WorkspaceCache = null;
 let memberScheduleV2RequestSequence = 0;
 let memberChangeCandidateRequestSequence = 0;
 
+function memberScheduleIdentityIssue(workspace = {}, integrity = null, profileId = "") {
+  const integrityStatus = String(integrity?.status || "");
+  if (integrityStatus === "identity_ambiguous") {
+    return {
+      code: "auth_profile_mapping_ambiguous",
+      message: "로그인 계정이 여러 회원 정보에 연결되어 있습니다. 관리자에게 회원 연결 확인을 요청해 주세요.",
+    };
+  }
+  if (integrityStatus === "identity_unlinked") {
+    return {
+      code: "auth_profile_unlinked",
+      message: "로그인 계정과 회원 정보 연결을 확인해야 합니다. 관리자에게 회원 연결을 요청해 주세요.",
+    };
+  }
+  if (workspace?.actorUserId && profileId && String(workspace.actorUserId) !== String(profileId)) {
+    return {
+      code: "member_profile_actor_mismatch",
+      message: "앱의 회원 정보와 서버 연결 정보가 일치하지 않습니다. 기존 화면은 유지하고 연결 확인을 기다립니다.",
+    };
+  }
+  return null;
+}
+
+function rejectMemberScheduleIdentity(issue, integrity = null) {
+  state.scheduleV2SyncStatus = "error";
+  state.scheduleV2SyncErrorCode = issue?.code || "member_schedule_identity_error";
+  state.scheduleV2SyncError = issue?.message || "회원 연결을 확인해야 시간표를 불러올 수 있습니다.";
+  state.scheduleV2Integrity = integrity;
+  state.liveLessonsLoaded = true;
+  renderMemberRuntimeDiagnostics();
+  return false;
+}
+
 function memberScheduleV2Context(profile = null, week = activeMemberWeek()) {
   const profileId = profile?.id || state.member?.profileId || "";
   const workspaceStart = new Date(`${week.startDate}T12:00:00`);
@@ -5952,6 +6031,44 @@ function mapServerMemberChangeCandidate(candidate = {}, source = null) {
     durationMinutes: Number(candidate.durationMinutes) || lessonDuration(source),
     member_ticket_id: source?.member_ticket_id || source?.ticketId || "",
     ticketId: source?.member_ticket_id || source?.ticketId || "",
+  };
+}
+
+function memberChangeCandidateFailure(errorText = "") {
+  const normalized = String(errorText || "");
+  if (/auth_profile_mapping_ambiguous/i.test(normalized)) {
+    return {
+      code: "auth_profile_mapping_ambiguous",
+      message: "로그인 계정에 회원 정보가 두 개 이상 연결되어 있습니다. 관리자에게 회원 연결 확인을 요청해 주세요.",
+    };
+  }
+  if (/auth_profile_unlinked|member_not_linked|member_required/i.test(normalized)) {
+    return {
+      code: "auth_profile_unlinked",
+      message: "로그인 계정과 회원 정보 연결을 확인해야 변경 가능한 시간을 볼 수 있습니다.",
+    };
+  }
+  if (/source_lesson_not_found|lesson_not_found/i.test(normalized)) {
+    return {
+      code: "source_lesson_not_found",
+      message: "변경할 원래 수업을 찾지 못했습니다. 최신 시간표를 다시 불러온 뒤 수업을 다시 선택해 주세요.",
+    };
+  }
+  if (/source_lesson_not_owned|lesson_not_owned|ticket_not_owned/i.test(normalized)) {
+    return {
+      code: "source_lesson_not_owned",
+      message: "이 수업과 로그인한 회원의 연결을 확인해야 합니다. 관리자에게 문의해 주세요.",
+    };
+  }
+  if (/ticket_(inactive|expired|not_started)|outside_ticket_period/i.test(normalized)) {
+    return {
+      code: "ticket_not_available",
+      message: "회원권 이용기간 또는 상태 때문에 변경할 수 없습니다. 회원권 내용을 확인해 주세요.",
+    };
+  }
+  return {
+    code: "candidate_server_failed",
+    message: "변경 가능한 시간을 서버에서 확인하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.",
   };
 }
 
@@ -6030,8 +6147,10 @@ async function syncMemberChangeCandidates(source = null) {
       renderSchedule();
       return false;
     }
+    const failure = memberChangeCandidateFailure(errorText);
     state.serverChangeCandidateStatus = "error";
-    state.serverChangeCandidateError = "변경 가능한 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요.";
+    state.serverChangeCandidateError = failure.message;
+    state.scheduleV2SyncErrorCode = failure.code;
     renderSelects();
     renderAvailableSlots();
     renderSchedule();
@@ -6214,39 +6333,52 @@ function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = []
   state.liveLessonsLoaded = true;
   state.scheduleV2WorkspaceLoaded = true;
   state.scheduleV2SyncError = "";
+  state.scheduleV2SyncErrorCode = "";
+  state.scheduleV2LastSyncedAt = new Date().toISOString();
+  renderMemberRuntimeDiagnostics();
+  void memberScheduleRevisionWatcher?.check?.();
   return true;
 }
 
 async function syncMemberScheduleV2(profile = null, options = {}) {
   const client = window.TennisNoteDataClient;
+  const requestId = options.requestId || ++memberScheduleV2RequestSequence;
   const context = memberScheduleV2Context(profile, options.week || activeMemberWeek());
   const { profileId, week, workspaceEndDate, key: cacheKey } = context;
   if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
   const cached = memberScheduleV2WorkspaceCache;
   if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
-    if (options.requestId && options.requestId !== memberScheduleV2RequestSequence) return false;
+    if (requestId !== memberScheduleV2RequestSequence) return false;
+    const identityIssue = memberScheduleIdentityIssue(cached.workspace, cached.integrity, profileId);
+    if (identityIssue) return rejectMemberScheduleIdentity(identityIssue, cached.integrity);
+    state.scheduleV2Integrity = cached.integrity || null;
     const applied = applyScheduleV2MemberWorkspace(cached.workspace, cached.releasedMakeupSlots, cached.oneDaySlots);
     if (applied) state.scheduleV2LoadedKey = cacheKey;
     return applied;
   }
   try {
-    const [workspace, releasedMakeupSlots, oneDaySlots] = await Promise.all([
+    const [workspace, releasedMakeupSlots, oneDaySlots, integrity] = await Promise.all([
       client.rpc("tn_schedule_v2_member_workspace", {
         target_from: week.startDate,
         target_to: workspaceEndDate,
       }),
       client.rpc("tn_member_released_makeup_slots", {}).catch(() => []),
       client.rpc("tn_member_one_day_schedule_slots", {}).catch(() => []),
+      client.rpc("tn_current_member_schedule_integrity", {}).catch(() => null),
     ]);
-    if (options.requestId && options.requestId !== memberScheduleV2RequestSequence) return false;
+    if (requestId !== memberScheduleV2RequestSequence) return false;
     if (!workspace?.actorUserId || !Array.isArray(workspace.lessons)) return false;
+    const identityIssue = memberScheduleIdentityIssue(workspace, integrity, profileId);
+    if (identityIssue) return rejectMemberScheduleIdentity(identityIssue, integrity);
     memberScheduleV2WorkspaceCache = {
       key: cacheKey,
       loadedAt: Date.now(),
       workspace,
       releasedMakeupSlots: Array.isArray(releasedMakeupSlots) ? releasedMakeupSlots : [],
       oneDaySlots: Array.isArray(oneDaySlots) ? oneDaySlots : [],
+      integrity,
     };
+    state.scheduleV2Integrity = integrity || null;
     const applied = applyScheduleV2MemberWorkspace(
       workspace,
       memberScheduleV2WorkspaceCache.releasedMakeupSlots,
@@ -6267,8 +6399,14 @@ async function syncMemberLessonsFromServer(profile = null, options = {}) {
   const client = window.TennisNoteDataClient;
   const profileId = profile?.id || state.member?.profileId || "";
   if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
-  if (await syncMemberScheduleV2(profile, options)) return true;
-  if (options.requestId && options.requestId !== memberScheduleV2RequestSequence) return false;
+  const requestId = options.requestId || ++memberScheduleV2RequestSequence;
+  if (await syncMemberScheduleV2(profile, { ...options, requestId })) return true;
+  if (requestId !== memberScheduleV2RequestSequence) return false;
+  if (state.scheduleV2SyncErrorCode && state.scheduleV2SyncErrorCode !== "member_schedule_load_failed") {
+    state.liveLessonsLoaded = true;
+    renderMemberRuntimeDiagnostics();
+    return false;
+  }
   if (!state.scheduleV2WorkspaceLoaded) {
     state.liveLessons = [];
     state.liveMakeupEntitlements = [];
@@ -6276,6 +6414,8 @@ async function syncMemberLessonsFromServer(profile = null, options = {}) {
   }
   state.liveLessonsLoaded = true;
   state.scheduleV2SyncError = "시간표를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.";
+  state.scheduleV2SyncErrorCode = "member_schedule_load_failed";
+  renderMemberRuntimeDiagnostics();
   return false;
 }
 
@@ -8380,7 +8520,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.318" });
+  const params = new URLSearchParams({ v: "1.0.319" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8870,6 +9010,7 @@ function refreshSelectedMemberScheduleWeek() {
   state.scheduleV2SyncStatus = "loading";
   state.scheduleV2TargetKey = context.key;
   state.scheduleV2SyncError = "";
+  state.scheduleV2SyncErrorCode = "";
   renderSelectedMemberScheduleWeek();
   return syncMemberLessonsFromServer(state.profile, { force: true, requestId, week }).then(async (synced) => {
     if (requestId !== memberScheduleV2RequestSequence || memberScheduleV2Context().key !== context.key) return false;
@@ -9544,6 +9685,13 @@ async function applySupabaseMemberSession(showNotice = false) {
   if (!session?.access_token) return false;
   try {
     const current = await client.selectCurrentProfile();
+    if (current?.profileBootstrapError?.code === "auth_profile_mapping_ambiguous") {
+      const status = $("#memberEmailLoginStatus");
+      if (status) status.textContent = "로그인 계정이 여러 회원 정보에 연결되어 있습니다. 관리자에게 회원 연결 확인을 요청해 주세요.";
+      $("#appScreen").hidden = true;
+      $("#loginScreen").hidden = false;
+      return false;
+    }
     if (current?.profileBootstrapError?.code === "member_login_provider_locked") {
       const providerLabels = {
         "custom:naver": "네이버",
@@ -10580,6 +10728,7 @@ function renderActiveMemberView(viewId = activeMemberViewId()) {
     renderMakeupDueBanner();
     renderMemberHomeOverview();
   } else if (viewId === "scheduleView") {
+    void memberScheduleRevisionWatcher?.check?.();
     renderSchedule();
     renderAvailableSlots();
     renderRequests();
@@ -10603,6 +10752,7 @@ let memberLiveScheduleRefreshTimer = 0;
 let memberLiveScheduleRefreshInFlight = false;
 let memberLiveScheduleLastRefreshAt = 0;
 let memberConnectivityHideTimer = 0;
+let memberScheduleRevisionWatcher = null;
 const MEMBER_LIVE_REFRESH_STALE_MS = 20_000;
 
 function renderMemberConnectivityStatus(reconnected = false) {
@@ -10673,6 +10823,19 @@ function installMemberLiveScheduleRefresh() {
   memberLiveScheduleRefreshTimer = window.setInterval(refresh, 60_000);
 }
 
+function installMemberScheduleRevisionWatcher() {
+  if (memberScheduleRevisionWatcher || !window.TennisNoteScheduleRevision?.watch) return;
+  memberScheduleRevisionWatcher = window.TennisNoteScheduleRevision.watch({
+    branchId: () => currentLiveTicket()?.branchId || "",
+    active: () => !$("#appScreen")?.hidden && activeMemberViewId() === "scheduleView",
+    onChange: async () => {
+      memberScheduleV2WorkspaceCache = null;
+      memberLiveScheduleLastRefreshAt = 0;
+      await refreshMemberLiveSchedule({ force: true, render: true });
+    },
+  });
+}
+
 function installMemberConnectivityStatus() {
   renderMemberConnectivityStatus(false);
   window.addEventListener("offline", () => renderMemberConnectivityStatus(false));
@@ -10715,6 +10878,7 @@ function openLocalCurriculumPreview() {
 
 async function initApp() {
   registerPwaServiceWorker();
+  void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
   restoreSnapshot();
@@ -10723,6 +10887,7 @@ async function initApp() {
   void installNativeBackNavigation();
   installMemberConnectivityStatus();
   installMemberLiveScheduleRefresh();
+  installMemberScheduleRevisionWatcher();
   renderActiveMemberView();
   const client = window.TennisNoteDataClient;
   const hasStoredSession = Boolean(client?.getSession?.()?.access_token);
@@ -10784,7 +10949,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.318",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.319",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

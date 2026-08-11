@@ -4460,6 +4460,10 @@ body {
 }
 
 @media (max-width: 720px) {
+  .lesson-edit-modal :is(input, select, textarea) {
+    font-size: 16px !important;
+  }
+
   .coach-context-bar {
     min-height: 58px;
     padding: 9px 11px;

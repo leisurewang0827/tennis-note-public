@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.318" />
-    <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-12" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.318" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.319" />
+    <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-13" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.319" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -378,6 +378,12 @@
               </div>
             </header>
             <div id="scheduleV2Status" class="schedule-v2-status" role="status">로그인과 지점을 확인하고 있습니다.</div>
+            <details id="scheduleV2IntegrityPanel" class="schedule-v2-integrity-panel">
+              <summary><span>V2 회원 연결 점검</span><strong id="scheduleV2IntegritySummary">확인 전</strong></summary>
+              <p>회원권·미래 수업·참여자 회원권·담당 코치 연결만 읽기 전용으로 확인합니다. 자동 수정하지 않습니다.</p>
+              <button id="scheduleV2IntegrityButton" class="ghost-button" type="button">전체 회원 점검</button>
+              <div id="scheduleV2IntegrityList" class="schedule-v2-integrity-list" aria-live="polite"></div>
+            </details>
             <details id="scheduleV2ParallelCheck" class="schedule-v2-parallel-check" hidden>
               <summary>
                 <span>기존 시간표 비교</span>
@@ -1979,18 +1985,19 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.318"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.318"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.319"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.319"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.319"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.318"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.318"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.318"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.318"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.318"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.318"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.319"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.319"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.319"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.319"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.319"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.319"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.318"></script>
-    <script src="./schedule-v2-admin.js?v=schedule-v2-12"></script>
+    <script src="./app.js?v=1.0.319"></script>
+    <script src="./schedule-v2-admin.js?v=schedule-v2-13"></script>
   </body>
 </html>

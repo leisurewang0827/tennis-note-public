@@ -898,7 +898,12 @@ button {
 }
 
 .schedule-grid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .member-schedule-range-row {
@@ -6802,6 +6807,7 @@ body.modal-open {
 }
 .profile-version-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 6px;
   padding: 10px 0 calc(94px + env(safe-area-inset-bottom));
@@ -6812,6 +6818,20 @@ body.modal-open {
 
 .profile-version-footer .release-version {
   font-size: inherit;
+}
+
+@media (max-width: 720px) {
+  .app-bottom-sheet :is(input, select, textarea),
+  .change-request-modal :is(input, select, textarea) {
+    font-size: 16px !important;
+  }
+}
+
+.profile-version-footer .runtime-diagnostics {
+  flex-basis: 100%;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .profile-contact-footer {

@@ -423,6 +423,7 @@ function serverLessonStatusLabel(status = "") {
 }
 
 let coachScheduleV2WorkspaceCache = null;
+let coachScheduleV2RequestSequence = 0;
 
 function scheduleV2CoachWorkspace() {
   return coachScheduleV2WorkspaceCache?.workspace || null;
@@ -729,11 +730,13 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = []) {
   state.liveLessonsLoaded = true;
   state.scheduleV2WorkspaceLoaded = true;
   state.scheduleV2SyncError = "";
+  void coachScheduleRevisionWatcher?.check?.();
   return true;
 }
 
 async function syncCoachScheduleV2(options = {}) {
   const client = window.TennisNoteDataClient;
+  const requestId = ++coachScheduleV2RequestSequence;
   const branchId = state.coach?.branchId || "";
   if (!client?.rpc || !client.getSession?.()?.access_token || !branchId) return false;
   const week = activeScheduleWeek();
@@ -751,6 +754,7 @@ async function syncCoachScheduleV2(options = {}) {
       }),
       client.rpc("tn_visible_one_day_bookings", {}).catch(() => []),
     ]);
+    if (requestId !== coachScheduleV2RequestSequence) return false;
     if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
     coachScheduleV2WorkspaceCache = {
       key: cacheKey,
@@ -2224,7 +2228,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.318",
+    workerUrl: "./service-worker.js?v=1.0.319",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2254,7 +2258,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.318" });
+  const params = new URLSearchParams({ v: "1.0.319" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -6369,6 +6373,7 @@ function renderAll() {
 let coachLiveScheduleRefreshTimer = 0;
 let coachLiveScheduleRefreshInFlight = false;
 let coachLiveScheduleLastRefreshAt = 0;
+let coachScheduleRevisionWatcher = null;
 const COACH_LIVE_REFRESH_INTERVAL_MS = 60_000;
 const COACH_LIVE_REFRESH_STALE_MS = 30_000;
 
@@ -6405,6 +6410,19 @@ function installCoachLiveScheduleRefresh() {
   coachLiveScheduleRefreshTimer = window.setInterval(refresh, COACH_LIVE_REFRESH_INTERVAL_MS);
 }
 
+function installCoachScheduleRevisionWatcher() {
+  if (coachScheduleRevisionWatcher || !window.TennisNoteScheduleRevision?.watch) return;
+  coachScheduleRevisionWatcher = window.TennisNoteScheduleRevision.watch({
+    branchId: () => state.coach?.branchId || "",
+    active: () => !$("#appScreen")?.hidden && Boolean($("#scheduleView")?.classList.contains("is-active")),
+    onChange: async () => {
+      coachScheduleV2WorkspaceCache = null;
+      coachLiveScheduleLastRefreshAt = 0;
+      await refreshCoachLiveSchedule({ force: true, render: true });
+    },
+  });
+}
+
 async function initCoachApp() {
   registerPwaServiceWorker();
   purgeLegacyDemoStorage();
@@ -6414,6 +6432,7 @@ async function initCoachApp() {
   void installNativeCoachBackNavigation();
   installCoachConnectivitySync();
   installCoachLiveScheduleRefresh();
+  installCoachScheduleRevisionWatcher();
   renderAll();
   const client = window.TennisNoteDataClient;
   const hasStoredSession = Boolean(client?.getSession?.()?.access_token);
@@ -6468,7 +6487,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.318",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.319",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

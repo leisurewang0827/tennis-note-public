@@ -92,6 +92,7 @@
     lastSearchScrollKey: "",
     renderMode: "",
     cancelConfirmationKey: "",
+    revisionWatcher: null,
   };
 
   function bridge() {
@@ -204,6 +205,46 @@
     if (!target) return;
     target.textContent = message;
     target.dataset.tone = tone;
+  }
+
+  function scheduleIntegrityIssueLabel(code = "") {
+    return {
+      active_regular_ticket_without_future_lessons: "미래 정규수업 없음",
+      future_lesson_participant_ticket_mismatch: "수업·회원권 연결 불일치",
+      ticket_coach_missing: "담당 코치 없음",
+    }[code] || "연결 확인 필요";
+  }
+
+  async function runScheduleV2MemberIntegrityPreview() {
+    const button = $("#scheduleV2IntegrityButton");
+    const summary = $("#scheduleV2IntegritySummary");
+    const list = $("#scheduleV2IntegrityList");
+    if (!button || !summary || !list || !bridge()?.rpc) return;
+    button.disabled = true;
+    summary.textContent = "확인 중";
+    list.innerHTML = "";
+    try {
+      const response = await bridge().rpc("tn_admin_schedule_v2_member_integrity_preview", {});
+      const result = Array.isArray(response) ? response[0] || {} : response || {};
+      const items = Array.isArray(result.items) ? result.items : [];
+      const affectedMembers = Number(result.affectedMemberCount) || 0;
+      const affectedTickets = Number(result.affectedTicketCount) || 0;
+      summary.textContent = affectedTickets ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권` : "문제 없음";
+      list.innerHTML = items.length
+        ? items.map((item) => {
+          const labels = (Array.isArray(item.issueCodes) ? item.issueCodes : [])
+            .map(scheduleIntegrityIssueLabel)
+            .join(" · ");
+          return `<div><strong>${escapeHtml(memberName(item.userId) || "이름 확인 필요")}</strong><span>${escapeHtml(labels)}</span><small>미래 수업 ${Number(item.futureLessonCount) || 0} · 정확히 연결 ${Number(item.exactParticipantLessonCount) || 0}</small></div>`;
+        }).join("")
+        : '<p class="schedule-v2-integrity-empty">현재 확인된 연결 오류가 없습니다.</p>';
+    } catch (error) {
+      const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
+      summary.textContent = "점검 실패";
+      list.innerHTML = `<p class="schedule-v2-integrity-empty">${escapeHtml(/admin_required/i.test(text) ? "관리자 권한을 확인해 주세요." : "서버 점검 기능을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")}</p>`;
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function missingWorkspaceRpc(error) {
@@ -748,6 +789,7 @@
       state.payload = normalizeWorkspacePayload(response, snapshot);
       cacheWorkspace(cacheKey, state.payload);
       state.serverReady = true;
+      void state.revisionWatcher?.check?.();
       markV2Availability(true);
       setStatus(`서버 저장 연결 · ${dateLabel(dates[0])}~${dateLabel(dates[6])}`, "success");
     } catch (error) {
@@ -3130,6 +3172,15 @@
     }, 250);
   }
 
+  function installScheduleRevisionWatcher() {
+    if (state.revisionWatcher || !window.TennisNoteScheduleRevision?.watch) return;
+    state.revisionWatcher = window.TennisNoteScheduleRevision.watch({
+      branchId: () => bridge()?.snapshot?.()?.branchId || "",
+      active: () => root.classList.contains("is-active") && state.engine === "v2",
+      onChange: () => requestLiveRefresh(),
+    });
+  }
+
   function initializeEvents() {
     $("#scheduleV2DayTabs").addEventListener("click", (event) => {
       const button = event.target.closest("[data-v2-date]");
@@ -3274,6 +3325,7 @@
       invalidateCurrentWorkspaceCache();
       void loadWorkspace({ force: true });
     });
+    $("#scheduleV2IntegrityButton")?.addEventListener("click", runScheduleV2MemberIntegrityPreview);
     $("#scheduleV2PolicyButton").addEventListener("click", (event) => {
       const panel = $("#scheduleV2PolicyPanel");
       panel.hidden = !panel.hidden;
@@ -3344,5 +3396,6 @@
   }
 
   initializeEvents();
+  installScheduleRevisionWatcher();
   setEngine(preferredScheduleEngine());
 })();
