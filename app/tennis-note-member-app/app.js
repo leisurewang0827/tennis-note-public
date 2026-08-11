@@ -1699,7 +1699,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.314",
+    workerUrl: "./service-worker.js?v=1.0.315",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2176,23 +2176,23 @@ function normalizeMemberCoach(coach) {
 
 function loadAdminSchedulePolicy() {
   const fallback = defaultMemberCoachPolicy();
+  let resolved = fallback;
   try {
     const snapshot = readAdminSnapshot();
-    if (!snapshot) return fallback;
-    const scheduleSettings = snapshot.scheduleSettings || {};
-    const storedPolicyVersion = Number(scheduleSettings.coachWorkPolicyVersion) || 0;
-    const savedCoaches = storedPolicyVersion >= 2 && Array.isArray(snapshot.coaches)
-      ? snapshot.coaches
-      : fallback.coaches;
-    const coaches = savedCoaches;
-    return {
-      openStart: storedPolicyVersion < 2 ? fallback.openStart : scheduleSettings.openStart || fallback.openStart,
-      openEnd: storedPolicyVersion < 2 ? fallback.openEnd : scheduleSettings.openEnd || fallback.openEnd,
-      breakRules: storedPolicyVersion < 2 ? fallback.breakRules : Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : fallback.breakRules,
-      lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
-      lessonColorRules: Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : [],
-      memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
-      coaches: coaches
+    if (snapshot) {
+      const scheduleSettings = snapshot.scheduleSettings || {};
+      const storedPolicyVersion = Number(scheduleSettings.coachWorkPolicyVersion) || 0;
+      const savedCoaches = storedPolicyVersion >= 2 && Array.isArray(snapshot.coaches)
+        ? snapshot.coaches
+        : fallback.coaches;
+      resolved = {
+        openStart: storedPolicyVersion < 2 ? fallback.openStart : scheduleSettings.openStart || fallback.openStart,
+        openEnd: storedPolicyVersion < 2 ? fallback.openEnd : scheduleSettings.openEnd || fallback.openEnd,
+        breakRules: storedPolicyVersion < 2 ? fallback.breakRules : Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : fallback.breakRules,
+        lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
+        lessonColorRules: Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : [],
+        memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
+        coaches: savedCoaches
         .filter((coach) => (
           (coach.status || "active") === "active"
           && (coach.employmentStatus || "active") === "active"
@@ -2200,11 +2200,54 @@ function loadAdminSchedulePolicy() {
           && !coach.deletedAt
         ))
         .map(normalizeMemberCoach),
-    };
+      };
+    }
   } catch {
     localStorage.removeItem(adminStorageKey);
-    return fallback;
   }
+  const workspace = memberScheduleV2WorkspaceCache?.workspace;
+  if (!workspace?.coaches?.length) return resolved;
+  const serverCoaches = workspace.coaches.map((coach, coachIndex) => {
+    const serverLaneOrder = Number(coach.laneOrder);
+    const laneOrder = Number.isFinite(serverLaneOrder) && serverLaneOrder !== 1000
+      ? serverLaneOrder
+      : 1000 + coachIndex;
+    const workBlocks = (coach.availability || [])
+      .filter((block) => block.type === "available")
+      .map((block, blockIndex) => ({
+        id: `${coach.roleId}-server-${blockIndex}`,
+        days: [days[Number(block.dayOfWeek) === 0 ? 6 : Number(block.dayOfWeek) - 1]].filter(Boolean),
+        start: String(block.startTime || "").slice(0, 5),
+        end: String(block.endTime || "").slice(0, 5),
+        label: "근무",
+      }))
+      .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
+    const blockedBlocks = (coach.availability || [])
+      .filter((block) => block.type === "blocked")
+      .map((block, blockIndex) => ({
+        id: `${coach.roleId}-server-blocked-${blockIndex}`,
+        days: [days[Number(block.dayOfWeek) === 0 ? 6 : Number(block.dayOfWeek) - 1]].filter(Boolean),
+        start: String(block.startTime || "").slice(0, 5),
+        end: String(block.endTime || "").slice(0, 5),
+        label: block.note || "브레이크·상담",
+      }))
+      .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
+    return normalizeMemberCoach({
+      id: coach.roleId,
+      serverRoleId: coach.roleId,
+      roleId: coach.roleId,
+      name: coach.name || "이름 없음",
+      status: "active",
+      laneOrder,
+      scheduleLaneOrder: laneOrder,
+      workBlocks,
+      blockedBlocks,
+    });
+  });
+  return {
+    ...resolved,
+    coaches: serverCoaches,
+  };
 }
 
 function readAdminSnapshot() {
@@ -4373,17 +4416,18 @@ function memberChangeCandidateInActiveWeek(candidate = {}) {
 }
 
 function memberChangeCandidateKey(source = null, week = activeMemberWeek()) {
-  const sourceId = source?.serverLessonId || "";
+  const ticketId = source?.member_ticket_id || source?.ticketId || "";
+  const sourceId = source?.serverLessonId || (source?.couponBooking && ticketId ? `coupon:${ticketId}` : "");
   const range = memberChangeCandidateRange(source, week);
   return sourceId ? `${sourceId}:${range.from}:${range.to}` : "";
 }
 
 function memberChangeUsesServerCandidates(source = null) {
+  const ticketId = source?.member_ticket_id || source?.ticketId || "";
   return Boolean(
     state.dataMode === "live"
-    && source?.serverLessonId
+    && (source?.serverLessonId || (source?.couponBooking && ticketId))
     && !source?.makeupEntitlementId
-    && !source?.couponBooking
     && !source?.regularInitialBooking,
   );
 }
@@ -5899,11 +5943,12 @@ function mapServerMemberChangeCandidate(candidate = {}, source = null) {
     coach_role_id: coachRoleId,
     lessonDate,
     member: "",
-    type: "수업 변경 신청가능",
+    type: source?.couponBooking ? "쿠폰 예약 가능" : "수업 변경 신청가능",
     status: "available",
     policy: candidate.policy || "coach",
     generated: true,
     authoritativeCandidate: true,
+    couponBooking: Boolean(source?.couponBooking),
     durationMinutes: Number(candidate.durationMinutes) || lessonDuration(source),
     member_ticket_id: source?.member_ticket_id || source?.ticketId || "",
     ticketId: source?.member_ticket_id || source?.ticketId || "",
@@ -5934,18 +5979,29 @@ async function syncMemberChangeCandidates(source = null) {
   renderAvailableSlots();
   renderSchedule();
   try {
-    const candidateArgs = {
-      target_lesson_id: source.serverLessonId,
-      target_from: range.from,
-      target_to: range.to,
-    };
+    const ticketId = source.member_ticket_id || source.ticketId || "";
+    const candidateArgs = source.couponBooking
+      ? {
+        target_ticket_id: ticketId,
+        target_from: range.from,
+        target_to: range.to,
+      }
+      : {
+        target_lesson_id: source.serverLessonId,
+        target_from: range.from,
+        target_to: range.to,
+      };
     let result;
-    try {
-      result = await client.rpc("tn_member_change_candidates_v2", candidateArgs);
-    } catch (error) {
-      const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
-      if (!/tn_member_change_candidates_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
-      result = await client.rpc("tn_member_change_candidates", candidateArgs);
+    if (source.couponBooking) {
+      result = await client.rpc("tn_member_coupon_candidates", candidateArgs);
+    } else {
+      try {
+        result = await client.rpc("tn_member_change_candidates_v2", candidateArgs);
+      } catch (error) {
+        const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
+        if (!/tn_member_change_candidates_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
+        result = await client.rpc("tn_member_change_candidates", candidateArgs);
+      }
     }
     if (requestId !== memberChangeCandidateRequestSequence || memberChangeCandidateKey(source) !== key) return false;
     if (!result || !Array.isArray(result.candidates)) {
@@ -5967,7 +6023,7 @@ async function syncMemberChangeCandidates(source = null) {
   } catch (error) {
     if (requestId !== memberChangeCandidateRequestSequence) return false;
     const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
-    if (/tn_member_change_candidates|PGRST202|42883|schema cache/i.test(errorText)) {
+    if (/tn_member_(change|coupon)_candidates|PGRST202|42883|schema cache/i.test(errorText)) {
       state.serverChangeCandidateStatus = "fallback";
       renderSelects();
       renderAvailableSlots();
@@ -8324,7 +8380,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.314" });
+  const params = new URLSearchParams({ v: "1.0.315" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -8944,6 +9000,8 @@ function startCouponBooking(ticketId) {
   renderAvailableSlots();
   renderChangeModalSummary();
   openAppModal("changeRequestModal", "#availableSlotList button:not([disabled])");
+  const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === sourceId);
+  void syncMemberChangeCandidates(source);
 }
 
 function changeMemberScheduleMode(mode) {
