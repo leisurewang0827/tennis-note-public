@@ -73,6 +73,8 @@ const state = {
   expiredMembers: [],
 };
 
+let coachSchedulePreferenceTouched = false;
+
 function coachEmptyState(options = {}) {
   return window.TennisNoteUiLanguage?.emptyState?.(options)
     || `<p class="empty-text">${escapeHtml(options.title || "표시할 내용이 없습니다.")}</p>`;
@@ -1477,6 +1479,12 @@ function restoreSnapshot() {
   }
 }
 
+function resetCoachScheduleLaunchView() {
+  if (coachSchedulePreferenceTouched) return;
+  state.scheduleFilter = "all";
+  state.selectedFullScheduleDay = currentCoachScheduleDay();
+}
+
 function ensureTodayLessonDashboard() {
   if (state.dataMode === "live") return;
   if (Number(state.dashboardVersion) >= 5 && state.todayLessons.length >= 8 && state.todayLessons.every((lesson) => lesson.day && lesson.ticket && lesson.task && lesson.coach)) return;
@@ -2210,7 +2218,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.310",
+    workerUrl: "./service-worker.js?v=1.0.311",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2240,7 +2248,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.310" });
+  const params = new URLSearchParams({ v: "1.0.311" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3539,8 +3547,37 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
     </section>`;
 }
 
+function renderCoachMineEmptyState(policy, scheduleLessons) {
+  if (state.scheduleFilter !== "mine") return "";
+  const selectedDay = selectedCoachScheduleDay();
+  const currentRoleId = currentCoachRoleId();
+  const currentName = currentCoachName();
+  const currentCoach = policy.coaches.find((coach) => (
+    String(coach.roleId || coach.id || "") === currentRoleId
+    || canonicalCoachName(coach.name) === currentName
+  ));
+  const worksOnSelectedDay = Boolean(currentCoach?.workBlocks?.some((block) => block.days.includes(selectedDay)));
+  const lessonsOnSelectedDay = scheduleLessons.filter((lesson) => lesson.day === selectedDay);
+  if (worksOnSelectedDay || lessonsOnSelectedDay.length) return "";
+
+  const nextLessonDay = scheduleDays.find((day) => scheduleLessons.some((lesson) => lesson.day === day));
+  const nextLessonCount = nextLessonDay
+    ? scheduleLessons.filter((lesson) => lesson.day === nextLessonDay).length
+    : 0;
+  return `
+    <section class="tn-empty-state coach-schedule-filter-empty" role="status">
+      <strong>${selectedDay}요일에는 내 수업이 없습니다</strong>
+      <p>지점의 다른 코치 수업은 전체 시간표에서 확인할 수 있습니다.</p>
+      <div class="actions">
+        <button class="primary-button" type="button" data-coach-schedule-show-all>전체 시간표 보기</button>
+        ${nextLessonDay ? `<button class="small-button" type="button" data-coach-schedule-jump-day="${nextLessonDay}">${nextLessonDay}요일 내 수업 ${nextLessonCount}건</button>` : ""}
+      </div>
+    </section>`;
+}
+
 function renderCoachMobileSchedule(policy, scheduleLessons) {
   const selectedDay = selectedCoachScheduleDay();
+  const mineEmptyState = renderCoachMineEmptyState(policy, scheduleLessons);
   const segments = coachMobileScheduleSegments(selectedDay, policy, scheduleLessons);
   return `
     <div class="coach-mobile-schedule">
@@ -3548,9 +3585,9 @@ function renderCoachMobileSchedule(policy, scheduleLessons) {
         ${scheduleDays.map((day) => `<button class="coach-mobile-day ${day === selectedDay ? "is-active" : ""}" type="button" data-coach-schedule-day="${day}"><strong>${day}</strong><span>${coachScheduleDateLabel(day)}</span></button>`).join("")}
       </div>
       ${renderCoachMobileLockedTimeControl(selectedDay, policy)}
-      ${segments.length
+      ${mineEmptyState || (segments.length
         ? segments.map((segment, index) => `${index > 0 ? `<div class="coach-mobile-break"><strong>${segments[index - 1].end}~${segment.start}</strong><span>수업 없음</span></div>` : ""}${renderCoachMobileSegment(selectedDay, segment, policy, scheduleLessons)}`).join("")
-        : `<p class="coach-mobile-empty">${selectedDay}요일은 현재 등록된 운영시간이 없습니다.</p>`}
+        : `<p class="coach-mobile-empty">${selectedDay}요일은 현재 등록된 운영시간이 없습니다.</p>`)}
     </div>`;
 }
 
@@ -6023,7 +6060,26 @@ function bindEvents() {
 
     const scheduleDayButton = event.target.closest("[data-coach-schedule-day]");
     if (scheduleDayButton) {
+      coachSchedulePreferenceTouched = true;
       state.selectedFullScheduleDay = scheduleDayButton.dataset.coachScheduleDay;
+      renderFullSchedule();
+      saveSnapshot();
+      return;
+    }
+
+    const showAllScheduleButton = event.target.closest("[data-coach-schedule-show-all]");
+    if (showAllScheduleButton) {
+      coachSchedulePreferenceTouched = true;
+      state.scheduleFilter = "all";
+      renderFullSchedule();
+      saveSnapshot();
+      return;
+    }
+
+    const jumpScheduleDayButton = event.target.closest("[data-coach-schedule-jump-day]");
+    if (jumpScheduleDayButton) {
+      coachSchedulePreferenceTouched = true;
+      state.selectedFullScheduleDay = jumpScheduleDayButton.dataset.coachScheduleJumpDay;
       renderFullSchedule();
       saveSnapshot();
       return;
@@ -6031,6 +6087,7 @@ function bindEvents() {
 
     const scheduleFilterButton = event.target.closest("[data-schedule-filter]");
     if (scheduleFilterButton) {
+      coachSchedulePreferenceTouched = true;
       state.scheduleFilter = scheduleFilterButton.dataset.scheduleFilter;
       renderFullSchedule();
       saveSnapshot();
@@ -6346,6 +6403,7 @@ async function initCoachApp() {
   registerPwaServiceWorker();
   purgeLegacyDemoStorage();
   restoreSnapshot();
+  resetCoachScheduleLaunchView();
   bindEvents();
   void installNativeCoachBackNavigation();
   installCoachConnectivitySync();
