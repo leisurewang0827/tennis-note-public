@@ -1699,7 +1699,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.312",
+    workerUrl: "./service-worker.js?v=1.0.313",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2420,6 +2420,7 @@ function memberAssignedCoachRoleIds() {
 
 function memberCoachMatchesAssignment(coach = {}) {
   const assignedRoleIds = memberAssignedCoachRoleIds();
+  if (!assignedRoleIds.size && memberInitialCoachSelectionSource()) return true;
   return assignedRoleIds.has(String(coach.serverRoleId || coach.id || "").trim());
 }
 
@@ -8308,7 +8309,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.312" });
+  const params = new URLSearchParams({ v: "1.0.313" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 

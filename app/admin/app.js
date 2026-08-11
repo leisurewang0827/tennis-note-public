@@ -9874,7 +9874,8 @@ function memberManagementActionLabel(action) {
   return ({
     create: "회원 수동 추가",
     assign: "회원권 등록",
-    profile: "회원 정보·앱 연결",
+    profile: "기본정보 수정",
+    app_link: "앱 계정 연결",
     link_existing: "기존 수강 DB 연결",
     correct: "회원권 숫자·기간 수정",
     expire: "회원권 만료 처리",
@@ -10182,11 +10183,51 @@ function memberManualProfileFields(member = {}) {
     <label class="form-field span-2">${memberManagementFieldLabel("플레이 스타일·관리 메모")}<textarea name="memberPlayStyleMemo" rows="2" maxlength="2000" placeholder="선택 입력">${escapeHtml(member.playStyleMemo || "")}</textarea></label>`;
 }
 
+function memberBasicProfileFields(member = {}) {
+  const dominantHand = member.dominantHand || "";
+  const backhandStyle = member.backhandStyle || "";
+  return `
+    <label class="form-field span-2">${memberManagementFieldLabel("이름", true)}<input name="memberName" type="text" minlength="2" maxlength="40" value="${escapeHtml(member.name || "")}" autocomplete="name" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("휴대전화")}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" value="${escapeHtml(member.phone || "")}" placeholder="010-0000-0000" /></label>
+    <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" value="${escapeHtml(String(member.birthYear || ""))}" placeholder="예: 1990" /></label>
+    <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" value="${escapeHtml(member.neighborhood || "")}" placeholder="예: 군자동" /></label>
+    <label class="form-field">${memberManagementFieldLabel("성별")}<select name="memberGender">
+      <option value="" ${member.gender ? "" : "selected"}>미입력</option>
+      <option value="female" ${member.gender === "female" ? "selected" : ""}>여성</option>
+      <option value="male" ${member.gender === "male" ? "selected" : ""}>남성</option>
+      <option value="other" ${member.gender === "other" ? "selected" : ""}>기타</option>
+      <option value="prefer_not" ${member.gender === "prefer_not" ? "selected" : ""}>응답 안 함</option>
+    </select></label>
+    <input name="memberNickname" type="hidden" value="${escapeHtml(member.nickname || "")}" />
+    <details class="member-profile-optional span-2">
+      <summary>테니스 정보 수정 <small>선택</small></summary>
+      <div class="member-management-form-grid">
+        <label class="form-field">${memberManagementFieldLabel("주사용 손")}<select name="memberDominantHand">
+          <option value="" ${dominantHand ? "" : "selected"}>미입력</option>
+          <option value="right" ${dominantHand === "right" ? "selected" : ""}>오른손</option>
+          <option value="left" ${dominantHand === "left" ? "selected" : ""}>왼손</option>
+          <option value="ambidextrous" ${dominantHand === "ambidextrous" ? "selected" : ""}>양손</option>
+        </select></label>
+        <label class="form-field">${memberManagementFieldLabel("백핸드")}<select name="memberBackhandStyle">
+          <option value="" ${backhandStyle ? "" : "selected"}>미입력</option>
+          <option value="two_handed" ${backhandStyle === "two_handed" ? "selected" : ""}>투핸드</option>
+          <option value="one_handed" ${backhandStyle === "one_handed" ? "selected" : ""}>원핸드</option>
+        </select></label>
+        <label class="form-field">${memberManagementFieldLabel("테니스 시작일")}<input name="memberTennisStartedOn" type="date" value="${escapeHtml(member.tennisStartedOn || "")}" /></label>
+        <label class="form-field">${memberManagementFieldLabel("내 테니스 수준")}<input name="memberSelfNtrp" type="number" min="1" max="7" step="0.5" value="${escapeHtml(String(member.selfNtrp || ""))}" /></label>
+        <label class="form-field">${memberManagementFieldLabel("코치 확인 수준")}<input name="memberCoachNtrp" type="number" min="1" max="7" step="0.5" value="${escapeHtml(String(member.coachNtrp || ""))}" /></label>
+        <label class="form-field span-2">${memberManagementFieldLabel("테니스 목표")}<textarea name="memberTennisGoal" rows="2" maxlength="1000">${escapeHtml(member.tennisGoal || "")}</textarea></label>
+        <label class="form-field span-2">${memberManagementFieldLabel("플레이 스타일·관리 메모")}<textarea name="memberPlayStyleMemo" rows="2" maxlength="2000">${escapeHtml(member.playStyleMemo || "")}</textarea></label>
+      </div>
+    </details>`;
+}
+
 function automaticMemberManagementReason(action) {
   return {
     create: "관리자 수동 회원 등록",
     assign: "관리자 기존 회원 회원권 등록",
     profile: "관리자 회원 정보 수정",
+    app_link: "관리자 앱 계정 연결",
     link_existing: "관리자 운동노트·기존 수강 DB 연결",
     correct: "관리자 회원권 수동 조정",
     expire: "관리자 회원권 만료 처리",
@@ -10255,7 +10296,7 @@ function memberMembershipTargetLabel(candidate = {}) {
 }
 
 async function loadMemberLinkCandidates(member, query = memberManagementModalState.linkQuery || "") {
-  if (!member?.serverUserId || operationsRole() !== "admin" || member.authLinked) return;
+  if (!member?.serverUserId || operationsRole() !== "admin") return;
   const inputGuardWasDirty = Boolean(
     window.TennisNoteInputGuard?.isDirty?.("#memberManagementModal"),
   );
@@ -10271,14 +10312,14 @@ async function loadMemberLinkCandidates(member, query = memberManagementModalSta
       target_user_id: member.serverUserId,
       target_query: memberManagementModalState.linkQuery || null,
     });
-    if (memberManagementModalState.memberId !== member.id || memberManagementModalState.action !== "profile") return;
+    if (memberManagementModalState.memberId !== member.id || memberManagementModalState.action !== "app_link") return;
     memberManagementModalState.linkCandidates = Array.isArray(result?.candidates) ? result.candidates : [];
   } catch (error) {
     memberManagementModalState.message = memberManagementErrorText(error);
     memberManagementModalState.linkCandidates = [];
   } finally {
     memberManagementModalState.linkCandidatesLoading = false;
-    if (memberManagementModalState.memberId === member.id && memberManagementModalState.action === "profile") {
+    if (memberManagementModalState.memberId === member.id && memberManagementModalState.action === "app_link") {
       const inputGuardWasDirtyAfterRequest = Boolean(
         window.TennisNoteInputGuard?.isDirty?.("#memberManagementModal"),
       );
@@ -10395,7 +10436,7 @@ function renderMemberManagementModal() {
     || (adminLiveDataState.products || []).find((item) => item.id === ticket?.productId)
     || products[0]
     || null;
-  const coachRoles = ["profile", "correct", "assign", "reenroll"].includes(action)
+  const coachRoles = ["correct", "assign", "reenroll"].includes(action)
     ? memberManagementCoachRoles(ticket || { branchId: record?.branch_id })
     : isCreate
       ? memberManagementCoachRoles({ branchId: product?.branch_id })
@@ -10403,7 +10444,7 @@ function renderMemberManagementModal() {
   const currentCoachRoleId = record?.coach_role_id || ticket?.coachRoleId || "";
   const coachRoleId = coachRoles.some((role) => role.id === currentCoachRoleId) ? currentCoachRoleId : coachRoles[0]?.id || "";
   const scheduleScope = record?.lesson_schedule_scope || ticket?.scheduleScope || product?.schedule_scope || "weekday";
-  const partnerOptions = ["profile", "correct", "assign"].includes(action) || isCreate ? manualMemberPartnerOptions() : [];
+  const partnerOptions = ["correct", "assign"].includes(action) || isCreate ? manualMemberPartnerOptions() : [];
   const groupProduct = (record?.lesson_type || ticket?.lessonTypeCode) === "one_on_two" || Number(product?.group_size || 1) === 2;
   const today = adminLocalDateKey(new Date());
   const validityDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
@@ -10414,6 +10455,11 @@ function renderMemberManagementModal() {
   const defaultExpiresOn = action === "reenroll" ? addMemberManagementDays(today, validityDays - 1) : memberManagementDate(ticket?.expires);
   const ticketStatus = ["active", "paused", "pending_payment", "expired"].includes(ticket?.status) ? ticket.status : "expired";
   const destructive = ["expire", "force_delete", "deactivate", "permanent_delete"].includes(action);
+  const submitLabel = action === "profile"
+    ? "기본정보 저장"
+    : action === "app_link"
+      ? "앱 계정 연결"
+      : `${memberManagementActionLabel(action)} 확정`;
   let actionFields = "";
 
   if (action === "link_existing") {
@@ -10436,6 +10482,12 @@ function renderMemberManagementModal() {
       </div>
       <p class="member-management-rule">연결 후 운동노트 회원은 중복 목록에서 정리되고 기존 수강회원 계정으로 앱을 이용합니다.</p>`;
   } else if (action === "profile") {
+    actionFields = `
+      <p class="member-create-step-help"><strong>기본정보만 수정</strong> 회원권·횟수·결제·파트너·시간표는 변경되지 않습니다.</p>
+      <div class="member-management-form-grid member-basic-profile-form">
+        ${memberBasicProfileFields(member)}
+      </div>`;
+  } else if (action === "app_link") {
     const connection = memberAuthConnection(member);
     const candidates = memberManagementModalState.linkCandidates || [];
     const recommended = candidates.find((candidate) => candidate.recommended)?.userId || "";
@@ -10458,28 +10510,8 @@ function renderMemberManagementModal() {
           </div></label>
           ${candidateControl}
         </div>`;
-    const status = memberListStatus(member);
-    const statusOptions = status === "inactive"
-      ? '<option value="keep">삭제 상태 유지</option><option value="restore">회원 복원</option>'
-      : member.authRole === "admin"
-        ? '<option value="keep">현재 상태 유지</option>'
-        : '<option value="keep">현재 상태 유지</option><option value="deactivate">회원 삭제 (복구 가능)</option>';
     actionFields = `
-      <div class="member-management-form-grid">
-        ${memberManualProfileFields(member)}
-        ${existingConnectionNotice}${linkControl}
-        <label class="form-field span-2"><span>회원 상태</span><select name="memberStatusAction">${statusOptions}</select></label>
-      </div>
-      ${record || ticket ? memberManagementDatabaseFields({
-        member,
-        ticket,
-        record,
-        product,
-        coachRoles,
-        coachRoleId,
-        partnerOptions,
-        includeTicketStatus: Boolean(ticket),
-      }) : ""}
+      <div class="member-management-form-grid">${existingConnectionNotice}${linkControl}</div>
       <p class="member-management-rule">같은 이름만으로는 자동 연결하지 않습니다. 전화번호가 같은 한 명만 추천하며, 한 회원은 확인된 로그인 수단 하나만 사용합니다.</p>`;
   } else if (isCreate) {
     actionFields = products.length && coachRoles.length ? `
@@ -10574,7 +10606,7 @@ function renderMemberManagementModal() {
           <button class="ghost-button" type="button" data-member-create-previous hidden>이전</button>
           <button class="primary-button" type="button" data-member-create-next>다음: 회원권</button>
           <button class="primary-button" type="submit" data-member-create-submit hidden>등록 후 시간표 열기</button>
-        ` : `<button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${((["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length)) || (action === "force_delete" && !memberManagementModalState.forceDeletePreview?.ok) ? "disabled" : ""}>${memberManagementActionLabel(action)} 확정</button>`}
+        ` : `<button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${((["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length)) || (action === "force_delete" && !memberManagementModalState.forceDeletePreview?.ok) ? "disabled" : ""}>${submitLabel}</button>`}
       </div>
     </form>`;
 }
@@ -10613,6 +10645,7 @@ function memberCreateStepIsValid(step) {
 }
 
 async function openMemberManagementModal(member, action, ticketId = "") {
+  if (["profile", "app_link"].includes(action)) ticketId = "";
   const targetUserId = member?.serverUserId || "";
   const initialTicket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === ticketId) || null;
   if (!targetUserId || !memberManagementActionAllowed(action, initialTicket)) {
@@ -10638,7 +10671,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
     linkCandidates: [],
     linkCandidatesLoading: false,
     linkCandidatesLoadedFor: "",
-    linkQuery: action === "link_existing" ? refreshedMember.name || "" : "",
+    linkQuery: ["link_existing", "app_link"].includes(action) ? refreshedMember.name || "" : "",
     forceDeletePreview: null,
     forceDeletePreviewLoading: action === "force_delete",
     forceDeletePreviewError: "",
@@ -10649,7 +10682,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
   window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
-  if (action === "profile" && !refreshedMember.authLinked) loadMemberLinkCandidates(refreshedMember);
+  if (action === "app_link") loadMemberLinkCandidates(refreshedMember);
   if (action === "force_delete") loadMemberTicketForceDeletePreview(ticketId);
   setTimeout(() => $("#memberManagementForm input, #memberManagementForm select")?.focus(), 0);
 }
@@ -10964,6 +10997,9 @@ function memberManagementWriteVerification(action, payload, result, statusAction
   if (action === "link_existing") {
     return serverUser?.auth_user_id ? "" : "member_management_write_not_confirmed:link_existing";
   }
+  if (action === "app_link") {
+    return serverUser?.auth_user_id ? "" : "member_management_write_not_confirmed:app_link";
+  }
   if (action === "profile") {
     if (!serverUser) return "member_management_write_not_confirmed:profile_user";
     if (serverUser.name !== payload?.name
@@ -11102,13 +11138,13 @@ function validateRequiredMemberProfile(form, message = null) {
   const neighborhoodValue = String(neighborhood?.value || "").trim();
   let invalidControl = null;
   let errorText = "";
-  if (phone && phoneDigits.length < 8) {
+  if (phone && ((phone.required && !phoneDigits) || (phoneDigits && phoneDigits.length < 8))) {
     invalidControl = phone;
     errorText = "휴대전화 번호를 입력해 주세요.";
-  } else if (birthYear && (!Number.isInteger(birthValue) || birthValue < 1900 || birthValue > currentYear)) {
+  } else if (birthYear && String(birthYear.value || "").trim() && (!Number.isInteger(birthValue) || birthValue < 1900 || birthValue > currentYear)) {
     invalidControl = birthYear;
     errorText = "출생연도를 네 자리로 입력해 주세요.";
-  } else if (neighborhood && !neighborhoodValue) {
+  } else if (neighborhood?.required && !neighborhoodValue) {
     invalidControl = neighborhood;
     errorText = "거주동을 입력해 주세요.";
   }
@@ -11235,48 +11271,34 @@ async function submitMemberManagementForm(event) {
         target_reason: reason,
       });
     } else if (action === "profile") {
-      if (memberDatabaseRecord(member, ticket) || ticket) {
-        result = await client.rpc("tn_admin_update_member_database_record_preserving_schedule", {
-          target_record: managementPayload,
-        });
-      } else {
-        const birthYearValue = String(form.elements.memberBirthYear?.value || "").trim();
-        const selfNtrpValue = String(form.elements.memberSelfNtrp?.value || "").trim();
-        const coachNtrpValue = String(form.elements.memberCoachNtrp?.value || "").trim();
-        result = await client.rpc("tn_admin_update_member_profile_full", {
-          target_user_id: member.serverUserId,
-          target_name: form.elements.memberName.value.trim(),
-          target_nickname: form.elements.memberNickname.value.trim(),
-          target_phone: form.elements.memberPhone.value.trim(),
-          target_birth_year: birthYearValue ? Number(birthYearValue) : null,
-          target_neighborhood: form.elements.memberNeighborhood.value.trim(),
-          target_gender: form.elements.memberGender.value || null,
-          target_dominant_hand: form.elements.memberDominantHand.value || null,
-          target_backhand_style: form.elements.memberBackhandStyle.value || null,
-          target_tennis_started_on: form.elements.memberTennisStartedOn.value || null,
-          target_self_ntrp: selfNtrpValue ? Number(selfNtrpValue) : null,
-          target_coach_ntrp: coachNtrpValue ? Number(coachNtrpValue) : null,
-          target_tennis_goal: form.elements.memberTennisGoal.value.trim(),
-          target_play_style_memo: form.elements.memberPlayStyleMemo.value.trim(),
-        });
-      }
+      const birthYearValue = String(form.elements.memberBirthYear?.value || "").trim();
+      const selfNtrpValue = String(form.elements.memberSelfNtrp?.value || "").trim();
+      const coachNtrpValue = String(form.elements.memberCoachNtrp?.value || "").trim();
+      result = await client.rpc("tn_admin_update_member_profile_full", {
+        target_user_id: member.serverUserId,
+        target_name: form.elements.memberName.value.trim(),
+        target_nickname: form.elements.memberNickname.value.trim(),
+        target_phone: form.elements.memberPhone.value.trim(),
+        target_birth_year: birthYearValue ? Number(birthYearValue) : null,
+        target_neighborhood: form.elements.memberNeighborhood.value.trim(),
+        target_gender: form.elements.memberGender.value || null,
+        target_dominant_hand: form.elements.memberDominantHand.value || null,
+        target_backhand_style: form.elements.memberBackhandStyle.value || null,
+        target_tennis_started_on: form.elements.memberTennisStartedOn.value || null,
+        target_self_ntrp: selfNtrpValue ? Number(selfNtrpValue) : null,
+        target_coach_ntrp: coachNtrpValue ? Number(coachNtrpValue) : null,
+        target_tennis_goal: form.elements.memberTennisGoal.value.trim(),
+        target_play_style_memo: form.elements.memberPlayStyleMemo.value.trim(),
+      });
+    } else if (action === "app_link") {
       const sourceSignupUserId = form.elements.sourceSignupUserId?.value || "";
-      if (sourceSignupUserId) {
-        linkedSourceSignupUserId = sourceSignupUserId;
-        result = await client.rpc("tn_admin_replace_member_login", {
-          target_member_user_id: member.serverUserId,
-          source_signup_user_id: sourceSignupUserId,
-          target_reason: reason,
-        });
-      }
-      if (["deactivate", "restore"].includes(statusAction)) {
-        await client.rpc("tn_set_member_operational_status", {
-          target_user_id: member.serverUserId,
-          target_status: statusAction === "deactivate" ? "inactive" : "active",
-          target_reason: reason,
-        });
-        state.memberFilter = statusAction === "deactivate" ? "inactive" : "expired";
-      }
+      if (!sourceSignupUserId) throw new Error("source_signup_not_linked");
+      linkedSourceSignupUserId = sourceSignupUserId;
+      result = await client.rpc("tn_admin_replace_member_login", {
+        target_member_user_id: member.serverUserId,
+        source_signup_user_id: sourceSignupUserId,
+        target_reason: reason,
+      });
     } else if (action === "correct") {
       result = operationsRole() === "admin"
         ? await client.rpc("tn_admin_update_member_database_record_preserving_schedule", {
@@ -11338,7 +11360,7 @@ async function submitMemberManagementForm(event) {
     closeMemberManagementModal();
     showToast(`${memberManagementActionLabel(action)} 저장 완료`);
 
-    const requiresFullRefresh = !ticket && Boolean(payload.productId);
+    const requiresFullRefresh = ["create", "assign"].includes(action);
     const synced = requiresFullRefresh
       ? await syncAdminLiveData(true)
       : await loadAdminMemberDetail(member, { force: true, renderResult: false });
@@ -11385,7 +11407,11 @@ async function submitMemberManagementForm(event) {
     showToast(memberManagementModalState.message);
     if (submit) {
       submit.disabled = false;
-      submit.textContent = `${memberManagementActionLabel(action)} 확정`;
+      submit.textContent = action === "profile"
+        ? "기본정보 저장"
+        : action === "app_link"
+          ? "앱 계정 연결"
+          : `${memberManagementActionLabel(action)} 확정`;
     }
   }
 }
@@ -13769,7 +13795,8 @@ function renderMembers(options = {}) {
         </div>
         <div class="member-detail-header-actions">
           ${memberStatusBadge(selected)}
-          ${operationsRole() === "admin" ? `<button class="small-button" type="button" data-open-member-management="profile" data-member-management-ticket="${escapeHtml(selectedTicket?.serverTicketId || "")}">수정</button>` : ""}
+          ${operationsRole() === "admin" ? '<button class="small-button" type="button" data-open-member-management="profile">기본정보 수정</button>' : ""}
+          ${operationsRole() === "admin" ? '<button class="ghost-button" type="button" data-open-member-management="app_link">앱 연결</button>' : ""}
           ${operationsRole() === "admin" && selectedStatus === "journal" && selected.authLinked
             ? '<button class="primary-button" type="button" data-open-member-management="link_existing">수강 DB 연결</button>'
             : ""}

@@ -9506,6 +9506,40 @@ button .schedule-member-lines > span {
   grid-column: span 2;
 }
 
+.member-basic-profile-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.member-profile-optional {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbfa;
+}
+
+.member-profile-optional > summary {
+  display: flex;
+  min-height: 44px;
+  padding: 0 12px;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.member-profile-optional > summary small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.member-profile-optional[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.member-profile-optional > .member-management-form-grid {
+  padding: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .member-management-form select,
 .member-management-form textarea {
   width: 100%;
@@ -11106,7 +11140,8 @@ button .schedule-member-lines > span {
   }
 
   .member-management-policy-grid,
-  .member-management-form-grid {
+  .member-management-form-grid,
+  .member-profile-optional > .member-management-form-grid {
     grid-template-columns: 1fr;
   }
 
