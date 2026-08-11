@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.313" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.314" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-11" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.313" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.314" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -1831,6 +1831,35 @@
       </section>
     </div>
 
+    <div id="paymentCancelModal" class="modal-backdrop" hidden>
+      <section class="modal-panel refund-modal-panel" role="dialog" aria-modal="true" aria-labelledby="paymentCancelModalTitle">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">결제취소</p>
+            <h2 id="paymentCancelModalTitle">PG 전액 결제취소</h2>
+          </div>
+          <button id="closePaymentCancelModal" class="ghost-button icon-close-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <form id="paymentCancelForm" class="refund-form">
+          <div id="paymentCancelModalContent" class="refund-modal-content" aria-live="polite"></div>
+          <label class="form-field refund-wide-field">
+            <span>결제취소 사유</span>
+            <textarea id="paymentCancelReason" rows="3" minlength="2" maxlength="200" required placeholder="테스트 결제, 중복 결제, 오결제 등 사유를 입력하세요."></textarea>
+          </label>
+          <label class="form-field">
+            <span>최종 확인 문구</span>
+            <input id="paymentCancelConfirmationText" type="text" autocomplete="off" required placeholder="전액취소" />
+            <small id="paymentCancelConfirmationHelp">실제 PG 승인 전체를 취소하려면 전액취소를 입력하세요.</small>
+          </label>
+          <div id="paymentCancelFormMessage" class="form-message" role="status"></div>
+          <div class="modal-actions">
+            <button id="dismissPaymentCancelModal" class="ghost-button" type="button">닫기</button>
+            <button id="confirmPaymentCancelButton" class="danger-button" type="submit">전액취소 실행</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div id="refundModal" class="modal-backdrop" hidden>
       <section class="modal-panel refund-modal-panel" role="dialog" aria-modal="true" aria-labelledby="refundModalTitle">
         <div class="modal-heading">
@@ -1950,18 +1979,18 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.313"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.313"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.314"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.314"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.313"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.313"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.313"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.313"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.313"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.313"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.314"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.314"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.314"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.314"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.314"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.314"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
-    <script src="./app.js?v=1.0.313"></script>
+    <script src="./app.js?v=1.0.314"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-11"></script>
   </body>
 </html>
