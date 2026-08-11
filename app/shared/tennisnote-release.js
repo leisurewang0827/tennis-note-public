@@ -9,8 +9,8 @@
       version: "1.0.312",
       androidVersion: "1.0.312",
       androidBuild: 65,
-      iosVersion: "1.0.312",
-      iosBuild: 69,
+      iosVersion: "1.0.313",
+      iosBuild: 70,
     },
   });
 
