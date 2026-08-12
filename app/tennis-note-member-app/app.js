@@ -1702,7 +1702,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.329",
+    workerUrl: "./service-worker.js?v=1.0.330",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2599,14 +2599,19 @@ function renderMemberAssignedCoachSummary(policy = loadAdminSchedulePolicy()) {
         <span>로그인 계정과 회원권 연결을 확인하면 시간표가 표시됩니다.</span>
       </section>`;
   }
-  const items = tickets.map((ticket) => {
+  const groupedTickets = tickets.reduce((groups, ticket) => {
     const roleId = String(ticket.coachRoleId || "");
     const coach = policy.coaches.find((item) => String(item.serverRoleId || item.roleId || item.id || "") === roleId);
     const coachName = memberCoachShortName(coach?.name || ticket.coach || "담당 코치");
     const status = window.TennisNoteTicketState?.label?.(ticket) || ticket.statusLabel || "사용 중";
     const ticketName = ticket.title || "회원권";
-    return `<span><b>${escapeHtml(coachName)}</b><small>${escapeHtml(ticketName)} · ${escapeHtml(status)}</small></span>`;
-  }).join("");
+    if (!groups.has(roleId)) groups.set(roleId, { coachName, tickets: [] });
+    groups.get(roleId).tickets.push(`${ticketName} · ${status}`);
+    return groups;
+  }, new Map());
+  const items = [...groupedTickets.values()].map((group) => (
+    `<span><b>${escapeHtml(group.coachName)}</b><small>${group.tickets.map(escapeHtml).join(" / ")}</small></span>`
+  )).join("");
   return `
     <section class="member-assigned-coaches" aria-label="회원권 담당 코치">
       <strong>내 회원권 담당 코치</strong>
@@ -3166,14 +3171,27 @@ function memberChangeSourceActionLabel(source = {}) {
   return "변경";
 }
 
+function compactLessonDateLabel(dateValue = "", fallbackDay = "") {
+  const match = String(dateValue || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return fallbackDay ? `${dayName(fallbackDay)}` : "";
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const day = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
+  return `${Number(match[2])}월 ${Number(match[3])}일(${day})`;
+}
+
+function lessonDateTimeLabel(lesson = {}, fallback = "수업") {
+  const date = compactLessonDateLabel(lesson.lessonDate || lesson.journalDate, lesson.day);
+  const time = String(lesson.time || "").trim();
+  return [date || fallback, time].filter(Boolean).join(" ");
+}
+
 function memberChangeSourceOptionLabel(source = {}) {
   const action = memberChangeSourceActionLabel(source);
   if (source.couponBooking || source.regularInitialBooking) {
     const remaining = Number.isFinite(Number(source.remaining)) ? ` · 잔여 ${Number(source.remaining)}회` : "";
     return `${action} · ${source.ticketTitle || source.type || "회원권"}${remaining}`;
   }
-  const date = source.lessonDate || source.day || "수업";
-  return `${action} · ${date} ${source.time || ""} · ${memberCoachShortName(source.coach || "담당 코치")}`.trim();
+  return `${action} · ${lessonDateTimeLabel(source)} · ${memberCoachShortName(source.coach || "담당 코치")}`.trim();
 }
 
 function loadedFutureScheduledLessonsForChange(today = localDateKey()) {
@@ -3271,7 +3289,7 @@ function upcomingMemberLessons(limit = 2) {
 
 function scheduleSummaryText(lesson, fallback) {
   if (!lesson) return fallback;
-  return `${lesson.day} ${lesson.time}`;
+  return lessonDateTimeLabel(lesson, fallback);
 }
 
 function latestMemberFeedbackLog() {
@@ -3386,15 +3404,16 @@ function dayName(day) {
   return { 월: "월요일", 화: "화요일", 수: "수요일", 목: "목요일", 금: "금요일", 토: "토요일", 일: "일요일" }[day] || day;
 }
 
-function lessonRound() {
-  return Math.max(1, 10 - state.remaining + 1);
-}
-
 function lessonReviewTitle(log) {
-  const lesson = lessons.find((item) => item.id === log?.lessonId);
-  const day = lesson ? dayName(lesson.day) : log?.lessonLabel?.split(" ")[0] || "이번";
-  const round = log?.round || lessonRound();
-  return `${day} ${round}회차 피드백`;
+  const lesson = [...(state.liveLessons || []), ...lessons].find((item) => (
+    String(item.id || item.serverLessonId || "") === String(log?.lessonId || log?.serverLessonId || "")
+  ));
+  const dateValue = log?.journalDate || lesson?.lessonDate || String(log?.submittedAt || "").slice(0, 10);
+  const time = lesson?.time || String(log?.lessonLabel || "").match(/(?:[01]\d|2[0-3]):[0-5]\d/)?.[0] || "";
+  const dateLabel = compactLessonDateLabel(dateValue, lesson?.day || String(log?.lessonLabel || "").split(" ")[0]);
+  if (dateLabel) return `${dateLabel}${time ? ` ${time}` : ""} 피드백`;
+  if (Number(log?.round) > 0) return `${Number(log.round)}회차 피드백`;
+  return "수업 피드백";
 }
 
 function policyLabel(policy) {
@@ -3952,7 +3971,64 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
 }
 
 function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
+  const availableLessons = scheduleLessons
+    .filter((lesson) => lesson.status === "available")
+    .sort((left, right) => (
+      String(left.lessonDate || "").localeCompare(String(right.lessonDate || ""))
+      || minutesFromTime(left.time) - minutesFromTime(right.time)
+    ));
+  const availabilityKey = `${state.serverChangeCandidateKey || state.selectedMemberChangeSourceId || "fallback"}:${activeMemberWeek().startDate}`;
+  if (state.memberScheduleMode === "availability"
+    && availableLessons.length
+    && state.memberAvailabilityAutoDayKey !== availabilityKey) {
+    state.selectedScheduleDay = availableLessons[0].day;
+    state.memberAvailabilityAutoDayKey = availabilityKey;
+  }
   const selectedDay = selectedMemberScheduleDay();
+  if (state.memberScheduleMode === "availability") {
+    const loadState = memberChangeCandidateUiState(
+      memberInlineChangeSources().find((lesson) => lesson.id === state.selectedMemberChangeSourceId),
+    );
+    const selectedLessons = availableLessons.filter((lesson) => lesson.day === selectedDay);
+    const groupedByCoach = selectedLessons.reduce((groups, lesson) => {
+      const coach = memberCoachShortName(lesson.coach || "담당 코치");
+      if (!groups.has(coach)) groups.set(coach, []);
+      groups.get(coach).push(lesson);
+      return groups;
+    }, new Map());
+    const emptyMessage = loadState === "loading"
+      ? "신청 가능한 시간을 확인하고 있습니다."
+      : loadState === "error"
+        ? "시간을 불러오지 못했습니다. 다시 확인해 주세요."
+        : availableLessons.length
+          ? `${dayName(selectedDay)}에는 신청 가능한 시간이 없습니다.`
+          : "이 주에는 신청 가능한 시간이 없습니다.";
+    return `
+      <div class="member-mobile-schedule member-mobile-availability">
+        <div class="member-mobile-day-strip" aria-label="신청 날짜 선택">
+          ${days.map((day) => {
+            const count = availableLessons.filter((lesson) => lesson.day === day).length;
+            return `<button class="member-mobile-day ${day === selectedDay ? "is-active" : ""}" type="button" data-member-schedule-day="${day}"><strong>${day}</strong><span>${memberScheduleDateLabel(day)}</span><b>${count || "-"}</b></button>`;
+          }).join("")}
+        </div>
+        <div class="member-available-coach-groups" aria-live="polite">
+          ${groupedByCoach.size
+            ? [...groupedByCoach.entries()].map(([coach, candidates]) => `
+                <section class="member-available-coach-group">
+                  <div><strong>${escapeHtml(coach)}</strong><span>${candidates.length}개 가능</span></div>
+                  <div class="member-available-time-grid">
+                    ${candidates.map((lesson) => `
+                      <button class="member-available-time" type="button" data-lesson="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(lessonDateTimeLabel(lesson))} ${escapeHtml(coach)} 신청">
+                        <strong>${escapeHtml(lesson.time)}</strong>
+                        <span>${lesson.policy === "coach" ? "승인 요청" : "바로 신청"}</span>
+                        <small>${lesson.releasedRegularSlot ? "불참 자리" : /보강/.test(lesson.type || "") ? "보강" : lesson.couponBooking || /쿠폰/.test(lesson.type || "") ? "쿠폰" : "시간 변경"}</small>
+                      </button>`).join("")}
+                  </div>
+                </section>`).join("")
+            : `<p class="member-mobile-empty">${escapeHtml(emptyMessage)}</p>`}
+        </div>
+      </div>`;
+  }
   const segments = memberMobileScheduleSegments(selectedDay, policy, baseLessons, scheduleLessons);
   const requestOnly = memberScheduleRequestOnly(policy);
   return `
@@ -3986,7 +4062,7 @@ function renderMemberOwnSchedule() {
         ${ownLessons.length
           ? ownLessons.map((lesson) => `
               <button class="member-own-lesson" type="button" data-lesson="${lesson.id}">
-                <span class="member-own-lesson-date">${escapeHtml(lesson.day)} ${escapeHtml(lesson.time)}</span>
+                <span class="member-own-lesson-date">${escapeHtml(lessonDateTimeLabel(lesson))}</span>
                 <span class="member-own-lesson-detail"><strong>${escapeHtml(memberCoachShortName(lesson.coach))}</strong><small>${escapeHtml(lesson.type || "레슨")}</small></span>
                 <span class="member-own-lesson-action">변경</span>
               </button>`).join("")
@@ -6290,35 +6366,10 @@ async function syncMemberChangeCandidates(source = null) {
       return false;
     }
     const mappedCandidates = result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source));
-    let clientRejectedAnchorCandidates = 0;
-    if (source.couponBooking) {
-      const policy = loadAdminSchedulePolicy();
-      const scheduleLessons = memberScheduleLessons();
-      state.serverChangeCandidates = mappedCandidates.filter((candidate) => {
-        const coach = policy.coaches.find((item) => (
-          String(item.serverRoleId || item.id) === String(candidate.coachRoleId)
-        ));
-        const allowed = Boolean(coach) && memberSlotInsideAnchorWindow(
-          scheduleLessons,
-          policy,
-          source,
-          candidate.day,
-          candidate.time,
-          coach,
-        );
-        if (!allowed) clientRejectedAnchorCandidates += 1;
-        return allowed;
-      });
-    } else {
-      state.serverChangeCandidates = mappedCandidates;
-    }
+    state.serverChangeCandidates = mappedCandidates;
     state.serverChangeCandidateExclusions = result.exclusionSummary && typeof result.exclusionSummary === "object"
       ? result.exclusionSummary
       : {};
-    if (clientRejectedAnchorCandidates > 0) {
-      state.serverChangeCandidateExclusions.anchor_required =
-        Number(state.serverChangeCandidateExclusions.anchor_required || 0) + clientRejectedAnchorCandidates;
-    }
     state.serverChangeCandidateStatus = "ready";
     renderSelects();
     renderAvailableSlots();
@@ -8580,15 +8631,19 @@ function openJournalDetail(id) {
   $("#journalDetailContent").innerHTML = `
     <div class="section-title compact-title">
       <h2>${entry.title}</h2>
-      <span>${entry.dateLabel} · ${entry.subtitle}</span>
+      <span>${entry.subtitle || entry.dateLabel}</span>
     </div>
     <article class="journal-detail-card">
-      <strong>작성 내용</strong>
-      <p>${entry.body}</p>
+      <section class="journal-feedback-block member-note">
+        <strong>내 기록</strong>
+        <p>${entry.body || "작성한 기록이 없습니다."}</p>
+      </section>
       ${entry.mediaItems?.length ? `<strong>첨부</strong>${renderMediaPreview(entry.mediaItems)}` : ""}
-      <strong>코치 확인</strong>
-      <p>${entry.note}</p>
-      ${entry.next ? `<strong>다음 내용</strong><p>${entry.next}</p>` : ""}
+      <section class="journal-feedback-block coach-note">
+        <strong>코치 피드백</strong>
+        <p>${entry.note || "코치 피드백을 기다리고 있습니다."}</p>
+      </section>
+      ${entry.next ? `<section class="journal-feedback-block next-note"><strong>다음 수업</strong><p>${entry.next}</p></section>` : ""}
       ${curriculumBlock}
     </article>`;
   $("#journalDetailModal").hidden = false;
@@ -8710,7 +8765,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.329" });
+  const params = new URLSearchParams({ v: "1.0.330" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -11159,7 +11214,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.329",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.330",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
