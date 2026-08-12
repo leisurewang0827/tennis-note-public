@@ -663,6 +663,66 @@ button {
   display: none;
 }
 
+.home-upcoming-lessons {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.home-ticket-lessons {
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid #cfe7de;
+  padding-top: 7px;
+}
+
+.home-ticket-lessons > div,
+.home-ticket-lessons > button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  align-items: center;
+}
+
+.home-ticket-lessons > div strong,
+.home-ticket-lessons > button strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #173f35;
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-ticket-lessons > div small,
+.home-ticket-lessons > button > span {
+  color: #4f6f65;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.home-ticket-lessons > button {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #d8e8e2;
+  padding: 7px 8px;
+  text-align: left;
+  background: #fff;
+}
+
+.home-ticket-lessons > button small {
+  grid-column: 1 / -1;
+  color: #60756e;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.home-ticket-lessons > button small b,
+.member-lesson-change b {
+  color: #9a4a00;
+}
+
 .today-action-panel {
   margin-bottom: 14px;
 }
@@ -6220,7 +6280,7 @@ body {
 }
 .member-schedule-mode {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   margin: 0 0 12px;
   padding: 4px;
@@ -6284,6 +6344,91 @@ body {
   color: #52616b;
   font-size: 12px;
   line-height: 1.4;
+}
+
+.member-ticket-picker {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.member-ticket-picker > strong {
+  color: #173f35;
+  font-size: 13px;
+}
+
+.member-ticket-picker > div {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.member-ticket-picker-button {
+  display: grid;
+  flex: 0 0 min(260px, 78vw);
+  min-width: 0;
+  min-height: 52px;
+  gap: 3px;
+  border: 1px solid #ccd9d5;
+  padding: 8px 10px;
+  color: #445851;
+  text-align: left;
+  background: #fff;
+}
+
+.member-ticket-picker-button span {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-ticket-picker-button small {
+  color: #667a73;
+  font-size: 11px;
+}
+
+.member-ticket-picker-button.is-active {
+  border-color: #13795b;
+  color: #0d5b45;
+  background: #e9f7f1;
+  box-shadow: inset 0 0 0 1px #13795b;
+}
+
+.member-booking-shortcuts {
+  display: grid;
+  gap: 0;
+  margin-top: 12px;
+  border: 1px solid #d8e1e8;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.member-booking-shortcuts article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 0;
+}
+
+.member-booking-shortcuts article + article {
+  border-top: 1px solid #e7ecef;
+}
+
+.member-booking-shortcuts article > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.member-booking-shortcuts span {
+  color: #667780;
+  font-size: 12px;
 }
 
 .member-assigned-coaches {
@@ -6524,6 +6669,11 @@ body {
   color: #667780;
 }
 
+.member-own-lesson-detail .member-lesson-change {
+  color: #5f4b3a;
+  line-height: 1.35;
+}
+
 .member-own-lesson-action {
   color: #2f5fae;
   font-weight: 700;
@@ -6560,6 +6710,19 @@ body {
 
   .member-own-lesson-date {
     flex-basis: 72px;
+  }
+
+  .member-booking-shortcuts {
+    align-items: stretch;
+  }
+
+  .member-booking-shortcuts article {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .member-booking-shortcuts .small-button {
+    width: 100%;
   }
 }
 

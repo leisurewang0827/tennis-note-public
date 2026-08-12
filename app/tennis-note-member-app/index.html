@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.330" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.330" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.331" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.331" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -187,6 +187,7 @@
               <span>다음 수업</span>
               <strong id="nextLessonDate">가까운 수업</strong>
               <small id="followingLessonDate">다음 수업</small>
+              <div id="homeUpcomingLessons" class="home-upcoming-lessons" aria-label="회원권별 다가오는 수업"></div>
               <button id="homeScheduleAction" class="small-button" type="button" data-summary-action="schedule">시간표</button>
             </article>
             <article id="homeTicketCard" class="summary-card" data-home-summary="ticket">
@@ -222,11 +223,10 @@
             <button class="small-button title-action" type="button" id="openChangeHistory">요청 내역</button>
           </div>
           <div class="member-schedule-mode" aria-label="시간표 보기 방식">
-            <button class="member-schedule-mode-button is-active" type="button" data-member-schedule-mode="mine">내 수업</button>
-            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="availability">변경·보강</button>
-            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="flex">자유 예약</button>
+            <button class="member-schedule-mode-button is-active" type="button" data-member-schedule-mode="mine">내 일정</button>
+            <button class="member-schedule-mode-button" type="button" data-member-schedule-mode="availability">변경·보강·예약</button>
           </div>
-            <p class="member-schedule-guide">내 수업을 고른 뒤 밝게 표시된 빈 시간을 누르면 변경 또는 보강을 바로 신청할 수 있습니다.</p>
+            <p class="member-schedule-guide">회원권을 고른 뒤 내 일정 또는 신청 가능한 시간을 한 화면에서 확인하세요.</p>
           <section id="makeupDueBanner" class="makeup-due-banner" hidden>
             <div>
               <strong id="makeupDueTitle">보강 시간을 선택해 주세요</strong>
@@ -1062,17 +1062,17 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.330"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.330"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.330"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.331"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.331"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.331"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.330"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.330"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.330"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.330"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.330"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.331"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.331"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.331"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.331"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.331"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
     <script>
       (() => {
@@ -1091,7 +1091,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.330";
+          appScript.src = "./app.js?v=1.0.331";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -1104,7 +1104,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.330";
+          appScript.src = "./app.js?v=1.0.331";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

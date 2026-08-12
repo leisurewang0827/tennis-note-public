@@ -2265,6 +2265,9 @@ const memberManagementModalState = {
   forceDeletePreview: null,
   forceDeletePreviewLoading: false,
   forceDeletePreviewError: "",
+  closePreview: null,
+  closePreviewLoading: false,
+  closePreviewError: "",
 };
 const coachStaffEditorState = {
   coachId: "",
@@ -9848,6 +9851,9 @@ function renderMemberManagementControls(member) {
   const status = memberListStatus(member);
   const managedTickets = memberManagementTickets(member);
   const unlinkedPayment = memberUnlinkedVerifiedPayment(member);
+  const hasClosableTickets = managedTickets.some((ticket) => (
+    ["active", "paused", "pending_payment"].includes(ticket.status)
+  ));
 
   const ticketRow = (ticket) => {
     const actions = [];
@@ -9907,7 +9913,10 @@ function renderMemberManagementControls(member) {
         ${ticketRows || '<p class="member-more-empty">등록된 회원권이 없습니다.</p>'}
       </div>
       ${operationsRole() === "admin"
-        ? `<button class="primary-button member-ticket-assign-button" type="button" data-open-member-management="assign">${unlinkedPayment ? "결제 연결·회원권 발급" : "판매중 회원권 등록"}</button>`
+        ? `<div class="member-management-actions member-ticket-management-footer">
+            <button class="primary-button member-ticket-assign-button" type="button" data-open-member-management="assign">${unlinkedPayment ? "결제 연결·회원권 발급" : "판매중 회원권 등록"}</button>
+            ${hasClosableTickets ? '<button class="danger-button" type="button" data-open-member-management="close">회원권·미래수업 종료</button>' : ""}
+          </div>`
         : ""}
     </div>`;
 }
@@ -9921,6 +9930,7 @@ function memberManagementActionLabel(action) {
     link_existing: "기존 수강 DB 연결",
     correct: "회원권 숫자·기간 수정",
     expire: "회원권 만료 처리",
+    close: "회원권·미래수업 종료",
     force_delete: "회원권 강제 삭제",
     permanent_delete: "회원 영구 삭제",
     reenroll: "다시 수강 등록",
@@ -10273,6 +10283,7 @@ function automaticMemberManagementReason(action) {
     link_existing: "관리자 운동노트·기존 수강 DB 연결",
     correct: "관리자 회원권 수동 조정",
     expire: "관리자 회원권 만료 처리",
+    close: "관리자 회원권·미래수업 종료",
     force_delete: "관리자 잘못된 회원권 강제 삭제",
     permanent_delete: "관리자 삭제회원 영구 삭제",
     reenroll: "관리자 회원 재등록",
@@ -10429,6 +10440,66 @@ async function loadMemberTicketForceDeletePreview(ticketId) {
   }
 }
 
+function memberTicketFutureClosePreviewMarkup() {
+  if (memberManagementModalState.closePreviewLoading) {
+    return `<div class="member-ticket-delete-preview is-loading" role="status">
+      <strong>종료할 회원권과 미래 수업 확인 중</strong>
+      <span>회원권·파트너·미래 수업·보존할 결제 기록을 서버에서 확인하고 있습니다.</span>
+    </div>`;
+  }
+  if (memberManagementModalState.closePreviewError) {
+    return `<div class="member-ticket-delete-preview is-error" role="alert">
+      <strong>종료 준비를 확인하지 못했습니다.</strong>
+      <span>${escapeHtml(memberManagementModalState.closePreviewError)}</span>
+    </div>`;
+  }
+  const preview = memberManagementModalState.closePreview;
+  if (!preview?.ok) return "";
+  const previewTickets = Array.isArray(preview.tickets) ? preview.tickets : [];
+  return `<div class="member-ticket-delete-preview is-ready member-ticket-close-preview" role="status">
+    <strong>회원권과 미래 수업을 모두 종료할까요?</strong>
+    <span>남은 횟수는 소멸되고, 오늘 이후 예정 수업은 취소됩니다.</span>
+    <span>회원은 만료회원으로 보존되며, 결제·환불·감사 기록은 유지됩니다.</span>
+    <dl>
+      <div><dt>회원명</dt><dd>${escapeHtml(preview.memberName || "회원")}</dd></div>
+      <div><dt>종료 회원권</dt><dd>${Math.max(0, Number(preview.ticketCount) || 0)}개</dd></div>
+      <div><dt>취소 예정 수업</dt><dd>${Math.max(0, Number(preview.futureLessonCount) || 0)}건</dd></div>
+      <div><dt>1:2 파트너</dt><dd>${preview.hasPartner ? `${Math.max(1, Number(preview.partnerCount) || 0)}명 연결 종료` : "해당 없음"}</dd></div>
+    </dl>
+    ${previewTickets.map((ticket) => `<div class="member-ticket-close-preview-row">
+      <strong>${escapeHtml(ticket.productName || "회원권")}</strong>
+      <span>총 ${Number(ticket.totalSessions) || 0} · 사용 ${Number(ticket.usedSessions) || 0} · 잔여 ${Number(ticket.remainingSessions) || 0}</span>
+    </div>`).join("")}
+  </div>`;
+}
+
+async function loadMemberTicketFutureClosePreview(memberUserId) {
+  const client = window.TennisNoteDataClient;
+  if (!memberUserId || !client?.rpc || memberManagementModalState.action !== "close") return;
+  memberManagementModalState.closePreviewLoading = true;
+  memberManagementModalState.closePreview = null;
+  memberManagementModalState.closePreviewError = "";
+  renderMemberManagementModal();
+  try {
+    const result = await client.rpc("tn_admin_preview_member_ticket_and_future_lessons_close", {
+      target_user_id: memberUserId,
+    });
+    if (memberManagementModalState.action !== "close") return;
+    const preview = normalizedRpcResult(result);
+    if (!preview?.ok || preview.userId !== memberUserId) throw new Error("member_close_preview_not_confirmed");
+    memberManagementModalState.closePreview = preview;
+  } catch (error) {
+    if (memberManagementModalState.action !== "close") return;
+    memberManagementModalState.closePreviewError = memberManagementErrorText(error);
+  } finally {
+    if (memberManagementModalState.action === "close") {
+      memberManagementModalState.closePreviewLoading = false;
+      renderMemberManagementModal();
+      window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
+    }
+  }
+}
+
 function memberManualRegistrationFields() {
   return `
     <label class="form-field span-2">${memberManagementFieldLabel("이름", true)}<input name="memberName" type="text" minlength="2" maxlength="40" autocomplete="name" required /></label>
@@ -10496,7 +10567,7 @@ function renderMemberManagementModal() {
   const defaultStartsOn = action === "reenroll" ? today : memberManagementDate(record?.lesson_start_on || ticket?.purchased);
   const defaultExpiresOn = action === "reenroll" ? addMemberManagementDays(today, validityDays - 1) : memberManagementDate(ticket?.expires);
   const ticketStatus = ["active", "paused", "pending_payment", "expired"].includes(ticket?.status) ? ticket.status : "expired";
-  const destructive = ["expire", "force_delete", "deactivate", "permanent_delete"].includes(action);
+  const destructive = ["expire", "close", "force_delete", "deactivate", "permanent_delete"].includes(action);
   const submitLabel = action === "profile"
     ? "기본정보 저장"
     : action === "app_link"
@@ -10623,6 +10694,9 @@ function renderMemberManagementModal() {
       <p class="member-management-rule">과거 회원권은 그대로 보관하고 새 회원권을 만듭니다. 2대1 파트너도 함께 연결됩니다.</p>` : `<p class="form-message danger">같은 지점·수업형태의 사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "expire") {
     actionFields = `<div class="member-management-warning"><strong>남은 횟수는 이력으로 보존됩니다.</strong><span>앞으로 예정된 수업은 취소되고 회원은 만료회원으로 이동합니다.</span></div>`;
+  } else if (action === "close") {
+    actionFields = `${memberTicketFutureClosePreviewMarkup()}
+      <label class="form-field"><span>종료 사유</span><input name="closeReason" type="text" minlength="5" maxlength="200" value="재등록하지 않아 회원권·미래수업 종료" required /></label>`;
   } else if (action === "force_delete") {
     actionFields = `<div class="member-management-warning danger"><strong>회원권과 연결 수업을 강제 삭제합니다.</strong><span>완료 수업의 차감 횟수는 복원한 뒤 수업·회원권 행을 제거합니다. 결제·환불 증빙과 감사 기록은 분리 보존합니다.</span></div>${memberTicketForceDeletePreviewMarkup()}`;
   } else if (action === "deactivate") {
@@ -10648,7 +10722,7 @@ function renderMemberManagementModal() {
           <button class="ghost-button" type="button" data-member-create-previous hidden>이전</button>
           <button class="primary-button" type="button" data-member-create-next>다음: 회원권</button>
           <button class="primary-button" type="submit" data-member-create-submit hidden>등록 후 시간표 열기</button>
-        ` : `<button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${((["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length)) || (action === "force_delete" && !memberManagementModalState.forceDeletePreview?.ok) ? "disabled" : ""}>${submitLabel}</button>`}
+        ` : `<button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${((["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length)) || (action === "force_delete" && !memberManagementModalState.forceDeletePreview?.ok) || (action === "close" && !memberManagementModalState.closePreview?.ok) ? "disabled" : ""}>${submitLabel}</button>`}
       </div>
     </form>`;
 }
@@ -10717,6 +10791,9 @@ async function openMemberManagementModal(member, action, ticketId = "") {
     forceDeletePreview: null,
     forceDeletePreviewLoading: action === "force_delete",
     forceDeletePreviewError: "",
+    closePreview: null,
+    closePreviewLoading: action === "close",
+    closePreviewError: "",
   });
   renderMemberManagementModal();
   $("#memberManagementModal")?.removeAttribute("hidden");
@@ -10726,6 +10803,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
   window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   if (action === "app_link") loadMemberLinkCandidates(refreshedMember);
   if (action === "force_delete") loadMemberTicketForceDeletePreview(ticketId);
+  if (action === "close") loadMemberTicketFutureClosePreview(refreshedMember.serverUserId);
   setTimeout(() => $("#memberManagementForm input, #memberManagementForm select")?.focus(), 0);
 }
 
@@ -10935,6 +11013,12 @@ function memberManagementErrorText(error) {
   if (raw.includes("payment_not_verified")) return "확인 완료된 결제만 회원권에 연결할 수 있습니다.";
   if (raw.includes("existing_payment_link_failed")) return "회원권은 발급됐지만 기존 결제 연결을 확인하지 못했습니다. 새로고침 후 결제/정산에서 확인해 주세요.";
   if (raw.includes("member_ticket_management_forbidden") || raw.includes("admin_role_required")) return "화면의 관리자 표시와 서버 관리자 권한이 일치하지 않습니다. 다시 로그인한 뒤 계정 권한을 확인해 주세요. (오류 코드: admin_role_required)";
+  if (raw.includes("member_close_staff_forbidden") || raw.includes("member_profile_required")) return "관리자·코치 계정은 회원권 종료 기능으로 처리할 수 없습니다.";
+  if (raw.includes("member_deleted_restore_first")) return "삭제회원은 먼저 회원 복원을 해 주세요. 회원권 종료는 만료회원으로 보존할 때 사용합니다.";
+  if (raw.includes("member_already_expired")) return "이미 만료 처리된 회원입니다. 재등록 또는 복원을 선택해 주세요.";
+  if (raw.includes("member_close_reason_required")) return "회원권 종료 사유를 5자 이상 입력해 주세요.";
+  if (raw.includes("member_close_ticket_remaining") || raw.includes("member_close_future_lesson_remaining")) return "회원권과 미래 수업을 모두 종료하지 못해 변경을 롤백했습니다. 새로고침 후 다시 확인해 주세요.";
+  if (raw.includes("PGRST202") && raw.includes("tn_admin_preview_member_ticket_and_future_lessons_close")) return "회원 종료 안전 패치가 서버에 아직 적용되지 않았습니다. DB 업데이트 후 다시 시도해 주세요.";
   if (raw.includes("force_delete_reason_required")) return "강제 삭제 사유를 5자 이상 입력해 주세요.";
   if (raw.includes("force_delete_ticket_not_removed")) return "연결 기록을 정리했지만 회원권 행이 삭제되지 않았습니다. 새로고침 후 다시 확인해 주세요. (오류 코드: force_delete_ticket_not_removed)";
   if (raw.includes("23503") || raw.toLowerCase().includes("foreign key")) return "회원권에 연결된 기록이 남아 있어 삭제하지 못했습니다. 최신 DB 패치를 적용한 뒤 다시 시도해 주세요. (오류 코드: linked_record_remaining)";
@@ -11091,6 +11175,21 @@ function memberManagementWriteVerification(action, payload, result, statusAction
     return "";
   }
   if (action === "expire") return serverTicket?.status === "expired" ? "" : "member_management_write_not_confirmed:expire";
+  if (action === "close") {
+    const refreshedMember = members.find((item) => memberServerUserIds(item).includes(userId));
+    if (!serverUser || serverUser.status !== "active" || serverUser.member_kind !== "former_lesson_member") {
+      return "member_management_write_not_confirmed:close_member";
+    }
+    if (!refreshedMember || memberListStatus(refreshedMember) !== "expired") {
+      return "member_management_write_not_confirmed:close_status";
+    }
+    if (memberManagementTickets(refreshedMember).some((item) => (
+      ["active", "paused", "pending_payment"].includes(item.status) || Number(item.remaining) > 0
+    ))) {
+      return "member_management_write_not_confirmed:close_ticket";
+    }
+    return "";
+  }
   if (action === "force_delete") return serverTicket ? "member_management_write_not_confirmed:force_delete" : "";
   if (action === "permanent_delete") return !serverUser || serverUser.permanently_deleted_at ? "" : "member_management_write_not_confirmed:permanent_delete";
   if (action === "reenroll") return serverTicket && ["active", "paused"].includes(serverTicket.status) ? "" : "member_management_write_not_confirmed:reenroll";
@@ -11217,10 +11316,16 @@ async function submitMemberManagementForm(event) {
     if (message) message.textContent = memberManagementModalState.forceDeletePreviewError || "삭제 영향을 먼저 확인해 주세요.";
     return;
   }
+  if (action === "close" && !memberManagementModalState.closePreview?.ok) {
+    if (message) message.textContent = memberManagementModalState.closePreviewError || "종료할 회원권과 미래 수업을 먼저 확인해 주세요.";
+    return;
+  }
   if (!validateRequiredMemberProfile(form, message)) return;
 
   syncMemberManagementBalance(form);
-  const reason = automaticMemberManagementReason(action);
+  const reason = action === "close"
+    ? String(form.elements.closeReason?.value || "").trim()
+    : automaticMemberManagementReason(action);
   const managementPayload = ["create", "assign", "profile", "correct"].includes(action)
     ? memberManagementDatabasePayload(form, isCreate ? null : member, ticket, reason)
     : null;
@@ -11363,6 +11468,12 @@ async function submitMemberManagementForm(event) {
         target_reason: reason,
       });
       state.memberFilter = "expired";
+    } else if (action === "close") {
+      result = await client.rpc("tn_admin_close_member_ticket_and_future_lessons", {
+        target_user_id: member.serverUserId,
+        target_reason: reason,
+      });
+      state.memberFilter = "expired";
     } else if (action === "force_delete") {
       result = await client.rpc("tn_admin_force_delete_member_ticket", {
         target_ticket_id: ticket.serverTicketId,
@@ -11401,7 +11512,7 @@ async function submitMemberManagementForm(event) {
     window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
     closeMemberManagementModal();
 
-    const requiresFullRefresh = ["create", "assign", "force_delete", "permanent_delete"].includes(action);
+    const requiresFullRefresh = ["create", "assign", "close", "force_delete", "permanent_delete"].includes(action);
     const synced = requiresFullRefresh
       ? await syncAdminLiveData(true)
       : await loadAdminMemberDetail(member, { force: true, renderResult: false });
@@ -13793,6 +13904,9 @@ function renderMembers(options = {}) {
       return;
     }
     const selectedStatus = memberListStatus(selected);
+    const selectedHasClosableTickets = memberManagementTickets(selected).some((ticket) => (
+      ["active", "paused", "pending_payment"].includes(ticket.status)
+    ));
     const selectedRecordCandidate = memberDatabaseRecord(selected, null);
     const selectedTicket = memberCurrentTicket(selected)
       || expiredTickets.find((ticket) => ticket.serverTicketId === selectedRecordCandidate?.current_ticket_id)
@@ -13841,8 +13955,11 @@ function renderMembers(options = {}) {
           ${operationsRole() === "admin" && selectedStatus === "journal" && selected.authLinked
             ? '<button class="primary-button" type="button" data-open-member-management="link_existing">수강 DB 연결</button>'
             : ""}
-          ${operationsRole() === "admin" && selectedStatus !== "inactive" && selected.authRole !== "admin"
-            ? '<button class="ghost-button danger-button" type="button" data-open-member-management="deactivate">회원 삭제</button>'
+          ${operationsRole() === "admin" && selectedHasClosableTickets && !["admin", "coach"].includes(selected.authRole)
+            ? '<button class="danger-button" type="button" data-open-member-management="close">회원권·미래수업 종료</button>'
+            : ""}
+          ${operationsRole() === "admin" && !selectedHasClosableTickets && selectedStatus !== "inactive" && !["admin", "coach"].includes(selected.authRole)
+            ? '<button class="ghost-button danger-button" type="button" data-open-member-management="deactivate">삭제회원으로 이동</button>'
             : ""}
           ${operationsRole() === "admin" && selectedStatus === "inactive" && selected.authRole !== "admin"
             ? '<button class="ghost-button danger-button" type="button" data-open-member-management="permanent_delete">영구 삭제</button>'
