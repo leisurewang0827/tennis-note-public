@@ -215,6 +215,31 @@
     }[code] || "연결 확인 필요";
   }
 
+  function scheduleIntegrityRepairLabel(result, issueCodes = []) {
+    if (!issueCodes.includes("active_regular_ticket_without_future_lessons")) {
+      return issueCodes.includes("ticket_coach_missing") ? "담당 코치를 먼저 선택하세요" : "수동 확인 필요";
+    }
+    if (!result) return "시작일·잔여횟수·정규시간을 확인하세요";
+    const created = Number(result.createdCount) || 0;
+    const remaining = Number(result.remainingUnassignedUnits) || 0;
+    const conflicts = Number(result.conflictCount) || 0;
+    const reason = String(result.reason || "");
+    if (created > 0 && remaining === 0) return `자동 생성 가능 ${created}회`;
+    if (created > 0) return `${created}회 생성 가능 · ${remaining}회는 수동 확인`;
+    if (conflicts > 0) return `코치 시간 충돌 ${conflicts}건 · 시간표에서 조정`;
+    return {
+      regular_schedule_rule_missing: "정규 요일·시간 설정 필요",
+      regular_schedule_rule_incomplete: "주 횟수와 정규시간 수가 다름",
+      regular_schedule_coach_unavailable: "담당 코치 근무 상태 확인 필요",
+      ticket_not_started: "시작 예정 회원권",
+      ticket_expired: "만료 회원권 상태 확인 필요",
+      ticket_no_remaining_sessions: "잔여횟수 없음",
+      coach_time_conflict: "코치 시간 충돌 · 시간표에서 조정",
+      closure_only: "휴무일 이후 생성 가능한 날짜 없음",
+      no_future_occurrence: "회원권 기간 안에 다음 정규 요일 없음",
+    }[reason] || "자동 생성 대상 아님 · 설정 확인 필요";
+  }
+
   async function runScheduleV2MemberIntegrityPreview() {
     const button = $("#scheduleV2IntegrityButton");
     const summary = $("#scheduleV2IntegritySummary");
@@ -229,13 +254,41 @@
       const items = Array.isArray(result.items) ? result.items : [];
       const affectedMembers = Number(result.affectedMemberCount) || 0;
       const affectedTickets = Number(result.affectedTicketCount) || 0;
-      summary.textContent = affectedTickets ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권` : "문제 없음";
+      const reconcileByTicket = new Map();
+      const missingByBranch = new Map();
+      items.forEach((item) => {
+        const codes = Array.isArray(item.issueCodes) ? item.issueCodes : [];
+        if (!codes.includes("active_regular_ticket_without_future_lessons") || !item.branchId || !item.ticketId) return;
+        const ticketIds = missingByBranch.get(item.branchId) || new Set();
+        ticketIds.add(item.ticketId);
+        missingByBranch.set(item.branchId, ticketIds);
+      });
+      await Promise.all([...missingByBranch.entries()].map(async ([branchId, ticketIds]) => {
+        try {
+          const preview = await bridge().rpc("tn_admin_reconcile_future_regular_schedules", {
+            target_branch_id: branchId,
+            target_ticket_ids: [...ticketIds],
+            target_operation_key: operationKey("integrity-preview"),
+            target_dry_run: true,
+          });
+          const rows = Array.isArray(preview?.results) ? preview.results : [];
+          rows.forEach((row) => reconcileByTicket.set(row.ticketId, row));
+        } catch (error) {
+          console.warn("Schedule V2 integrity reconciliation preview failed", error);
+        }
+      }));
+      const autoRepairable = [...reconcileByTicket.values()].filter((row) => Number(row.createdCount) > 0).length;
+      summary.textContent = affectedTickets
+        ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권 · 자동 생성 가능 ${autoRepairable}권`
+        : "문제 없음";
       list.innerHTML = items.length
         ? items.map((item) => {
-          const labels = (Array.isArray(item.issueCodes) ? item.issueCodes : [])
+          const codes = Array.isArray(item.issueCodes) ? item.issueCodes : [];
+          const labels = codes
             .map(scheduleIntegrityIssueLabel)
             .join(" · ");
-          return `<div><strong>${escapeHtml(memberName(item.userId) || "이름 확인 필요")}</strong><span>${escapeHtml(labels)}</span><small>미래 수업 ${Number(item.futureLessonCount) || 0} · 정확히 연결 ${Number(item.exactParticipantLessonCount) || 0}</small></div>`;
+          const repairLabel = scheduleIntegrityRepairLabel(reconcileByTicket.get(item.ticketId), codes);
+          return `<div><strong>${escapeHtml(memberName(item.userId) || "이름 확인 필요")}</strong><span>${escapeHtml(labels)}</span><small>${escapeHtml(repairLabel)} · 미래 수업 ${Number(item.futureLessonCount) || 0}</small></div>`;
         }).join("")
         : '<p class="schedule-v2-integrity-empty">현재 확인된 연결 오류가 없습니다.</p>';
     } catch (error) {
