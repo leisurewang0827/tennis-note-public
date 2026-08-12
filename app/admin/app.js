@@ -8349,6 +8349,37 @@ function ticketIsSharedGroup(ticket) {
   return configuredAsGroup && Math.max(ticketParticipantUserIds(ticket).length, ticketParticipantNames(ticket).length) >= 2;
 }
 
+function ticketUsesPerParticipantGroupOwnership(ticket) {
+  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
+  if (!ticketId || !ticketIsSharedGroup(ticket)) return false;
+  const activeLinks = (adminLiveDataState.groupTicketLinks || []).filter((link) => (
+    ["active", "linked"].includes(String(link.status || "active").toLowerCase())
+    && String(link.ticket_id || "") === ticketId
+    && link.group_account_id
+  ));
+  if (!activeLinks.length) return false;
+  return activeLinks.some((link) => {
+    const accountTicketIds = new Set((adminLiveDataState.groupTicketLinks || [])
+      .filter((candidate) => (
+        ["active", "linked"].includes(String(candidate.status || "active").toLowerCase())
+        && String(candidate.group_account_id || "") === String(link.group_account_id)
+      ))
+      .map((candidate) => String(candidate.ticket_id || ""))
+      .filter(Boolean));
+    return accountTicketIds.size > 1;
+  });
+}
+
+function memberDirectoryTickets(member) {
+  const operationalTickets = memberOperationalTickets(member);
+  const memberUserIds = new Set(memberServerUserIds(member).map(String));
+  const ownedTickets = operationalTickets.filter((ticket) => (
+    !ticketUsesPerParticipantGroupOwnership(ticket)
+    || memberUserIds.has(String(ticket.serverUserId || ""))
+  ));
+  return ownedTickets.length ? ownedTickets : operationalTickets;
+}
+
 function ticketPartnerNames(ticket, memberReference) {
   const memberRecords = memberRecordsForReference(memberReference);
   const memberUserIds = [...new Set(memberRecords.flatMap(memberServerUserIds))];
@@ -10919,7 +10950,7 @@ function memberManagementErrorText(error) {
   if (raw.includes("group_partner_phone_already_exists")) return "같은 휴대전화 번호의 회원이 이미 있습니다. 기존 회원 연결을 사용해 주세요.";
   if (raw.includes("group_partner_birth_year_invalid")) return "파트너 출생연도를 확인해 주세요.";
   if (raw.includes("group_partner_gender_invalid")) return "파트너 성별 값을 다시 선택해 주세요.";
-  if (raw.includes("member_phone_already_exists")) return "같은 휴대전화 번호의 회원이 이미 있습니다. 기존 회원을 검색해 주세요.";
+  if (raw.includes("member_phone_already_exists")) return "같은 휴대전화 번호가 회원 또는 직원 계정에 사용 중입니다. 회원 검색에 없으면 운영 설정의 직원 계정과 계정 연결을 확인해 주세요.";
   if (raw.includes("member_name_required")) return "회원 이름을 두 글자 이상 입력해 주세요.";
   if (raw.includes("invalid_schedule_scope")) return "평일, 주말 또는 혼합을 선택해 주세요.";
   if (raw.includes("invalid_ticket_status")) return "회원권 상태를 다시 선택해 주세요.";
@@ -11368,9 +11399,8 @@ async function submitMemberManagementForm(event) {
 
     window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
     closeMemberManagementModal();
-    showToast(`${memberManagementActionLabel(action)} 저장 완료`);
 
-    const requiresFullRefresh = ["create", "assign"].includes(action);
+    const requiresFullRefresh = ["create", "assign", "force_delete", "permanent_delete"].includes(action);
     const synced = requiresFullRefresh
       ? await syncAdminLiveData(true)
       : await loadAdminMemberDetail(member, { force: true, renderResult: false });
@@ -13650,7 +13680,7 @@ function renderMembers(options = {}) {
       ? '<tr><td colspan="11" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
       : visibleMembers.length ? visibleMembers
       .map((member) => {
-      const editableTickets = memberOperationalTickets(member);
+      const editableTickets = memberDirectoryTickets(member);
       const displayedTickets = editableTickets.length ? editableTickets : [null];
       const possibleDuplicateTicketIds = memberPossibleDuplicateTicketIds(editableTickets);
       const selectedIds = selectedMemberIdSet();
