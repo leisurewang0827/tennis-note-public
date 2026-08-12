@@ -1723,6 +1723,35 @@ button {
   background: #fff4f1;
 }
 
+.push-primer-card {
+  max-width: 440px;
+}
+
+.push-primer-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.push-primer-list li {
+  position: relative;
+  padding: 11px 12px 11px 38px;
+  border: 1px solid #cbe4da;
+  border-radius: 8px;
+  background: #f4fbf8;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.push-primer-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 14px;
+  color: var(--green);
+}
+
 .account-settings-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

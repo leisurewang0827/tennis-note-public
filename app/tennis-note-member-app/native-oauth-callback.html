@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Tennis Note 로그인 복귀</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; background: #f3faf7; color: #15362b; }
+    body { min-height: 100svh; margin: 0; display: grid; place-items: center; padding: 24px; box-sizing: border-box; }
+    main { width: min(100%, 420px); text-align: center; }
+    h1 { margin: 0 0 10px; font-size: 22px; }
+    p { margin: 0 0 20px; color: #557066; line-height: 1.6; }
+    a { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; padding: 0 20px; border-radius: 8px; background: #087f5b; color: #fff; font-weight: 800; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>앱으로 돌아가는 중</h1>
+    <p id="message">로그인 확인이 끝났습니다. Tennis Note 앱을 다시 엽니다.</p>
+    <a id="returnToApp" href="com.tennisclubhouse.tennisnote://oauth/member" hidden>앱으로 돌아가기</a>
+  </main>
+  <script>
+    (() => {
+      const query = new URLSearchParams(window.location.search);
+      const target = query.get("target") === "coach" ? "coach" : "member";
+      const appUrl = new URL(`com.tennisclubhouse.tennisnote://oauth/${target}`);
+      ["code", "error", "error_code", "error_description"].forEach((key) => {
+        if (query.has(key)) appUrl.searchParams.set(key, query.get(key) || "");
+      });
+      const returnButton = document.querySelector("#returnToApp");
+      returnButton.href = appUrl.toString();
+      if (!query.has("code") && !query.has("error")) {
+        document.querySelector("#message").textContent = "로그인 결과를 확인하지 못했습니다. 앱에서 다시 로그인해 주세요.";
+        returnButton.hidden = false;
+        return;
+      }
+      window.location.replace(appUrl.toString());
+      window.setTimeout(() => { returnButton.hidden = false; }, 1200);
+    })();
+  </script>
+</body>
+</html>

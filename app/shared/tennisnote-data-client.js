@@ -533,9 +533,13 @@
     return Boolean(capacitor && (capacitor.isNativePlatform?.() || capacitor.getPlatform?.() !== "web"));
   }
 
-  function nativeOAuthRedirect() {
+  function nativeOAuthBridgeRedirect() {
     const target = window.location.pathname.includes("coach") ? "coach" : "member";
-    return `com.tennisclubhouse.tennisnote://oauth/${target}`;
+    const configuredUrl = loadConfig().nativeOAuthCallbackUrl
+      || "https://tennisnote-app.pages.dev/native-oauth-callback.html";
+    const callback = new URL(configuredUrl);
+    callback.searchParams.set("target", target);
+    return callback.toString();
   }
 
   function nativeUrlFingerprint(url) {
@@ -870,7 +874,7 @@
     const slug = providerSlug(provider);
     const pkce = await createOAuthPkcePair();
     const redirectTo = options.redirectTo || (isNativeApp()
-      ? nativeOAuthRedirect()
+      ? nativeOAuthBridgeRedirect()
       : `${window.location.origin}${window.location.pathname}${window.location.search}`);
     saveProvider(provider || slug);
     const query = new URLSearchParams({

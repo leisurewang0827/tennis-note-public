@@ -7,6 +7,9 @@
 /app/tennis-note-member-app/index.html
   Cache-Control: no-store, no-cache, must-revalidate
 
+/native-oauth-callback.html
+  Cache-Control: no-store, no-cache, must-revalidate
+
 /app/tennis-note-member-app/service-worker.js
   Cache-Control: no-store, no-cache, must-revalidate
 

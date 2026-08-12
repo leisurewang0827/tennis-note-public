@@ -1702,15 +1702,18 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.323",
+    workerUrl: "./service-worker.js?v=1.0.324",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
 
 const pushDeviceStorageKey = "tennis-note-push-device-id";
 const pushPreferenceStorageKey = "tennis-note-push-enabled-v1";
+const pushPrimerDeferredStorageKey = "tennis-note-push-primer-deferred-at-v1";
 let pushListenersReady = false;
 let pushProfileId = "";
+let pushPrimerTimer = null;
+let pushPrimerAttempts = 0;
 
 function accountDeletionBlocksNotifications(status) {
   return ["pending", "reviewing", "processing", "failed", "completed"].includes(status || "");
@@ -1876,6 +1879,60 @@ function renderPushNotificationSettings() {
   status.textContent = pushState.status || "앱 알림 확인 중";
   detail.textContent = pushState.detail || "수업 일정과 회원권 만료를 알려드립니다.";
   button.textContent = permission === "granted" ? "알림 끄기" : permission === "denied" ? "설정 확인" : "알림 켜기";
+}
+
+function pushPrimerWasRecentlyDeferred() {
+  const deferredAt = Number(localStorage.getItem(pushPrimerDeferredStorageKey) || 0);
+  return deferredAt > 0 && Date.now() - deferredAt < 7 * 24 * 60 * 60 * 1000;
+}
+
+function canShowNativePushPrimer() {
+  const platform = nativeAppPlatform();
+  return ["android", "ios"].includes(platform)
+    && !$("#appScreen")?.hidden
+    && Boolean(state.member?.profileId)
+    && pushPreferenceEnabled()
+    && state.pushNotifications?.permission === "prompt"
+    && !pushPrimerWasRecentlyDeferred()
+    && !activeAppModalId
+    && !activeAppSheetId
+    && $("#noticeDialog")?.hidden !== false
+    && $("#kakaoInquiryModal")?.hidden !== false
+    && $("#memberEnrollmentModal")?.hidden !== false;
+}
+
+function scheduleNativePushPrimer(delay = 1400) {
+  if (pushPrimerTimer || pushPrimerWasRecentlyDeferred()) return;
+  pushPrimerTimer = window.setTimeout(() => {
+    pushPrimerTimer = null;
+    if (canShowNativePushPrimer()) {
+      pushPrimerAttempts = 0;
+      openAppModal("pushPrimerModal", "#enablePushFromPrimer");
+      return;
+    }
+    if (state.pushNotifications?.permission === "prompt" && pushPrimerAttempts < 4) {
+      pushPrimerAttempts += 1;
+      scheduleNativePushPrimer(3000);
+    }
+  }, delay);
+}
+
+function deferNativePushPrimer() {
+  safeLocalStorageSet(pushPrimerDeferredStorageKey, String(Date.now()));
+  pushPrimerAttempts = 0;
+  closeAppModal("pushPrimerModal");
+}
+
+async function enableNativePushFromPrimer() {
+  localStorage.removeItem(pushPrimerDeferredStorageKey);
+  closeAppModal("pushPrimerModal");
+  setPushPreferenceEnabled(true);
+  await new Promise((resolve) => window.setTimeout(resolve, 80));
+  try {
+    await syncNativePushRegistration(null, true);
+  } catch {
+    setPushNotificationState("unknown", "알림 연결 실패", "네트워크와 휴대폰 알림 설정을 확인한 뒤 내 정보에서 다시 시도해 주세요.");
+  }
 }
 
 function renderAccountDeletionSettings() {
@@ -2146,6 +2203,8 @@ function defaultMemberCoachPolicy() {
     breakRules: [{ id: "weekday-midday", days: weekdays, start: "13:00", end: "17:00", label: "수업 없음" }],
     lessonColors: { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" },
     memberScheduleRequestOnly: true,
+    requireMakeupDayAnchor: true,
+    makeupAnchorGapMinutes: 40,
     coaches: [
       {
         id: "coach-no",
@@ -2238,6 +2297,16 @@ function loadAdminSchedulePolicy() {
         lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
         lessonColorRules: Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : [],
         memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
+        requireMakeupDayAnchor: scheduleSettings.requireMakeupDayAnchor
+          ?? scheduleSettings.require_makeup_day_anchor
+          ?? fallback.requireMakeupDayAnchor,
+        makeupAnchorGapMinutes: (() => {
+          const configured = scheduleSettings.makeupAnchorGapMinutes
+            ?? scheduleSettings.makeup_anchor_gap_minutes
+            ?? fallback.makeupAnchorGapMinutes;
+          if (configured === null || String(configured).toLowerCase() === "unlimited") return null;
+          return Math.min(100, Math.max(0, Number(configured) || 0));
+        })(),
         coaches: savedCoaches
         .filter((coach) => (
           (coach.status || "active") === "active"
@@ -2772,6 +2841,9 @@ function memberBookableCouponTickets() {
         status: "coupon_booking",
         lessonSource: "coupon",
         durationMinutes: Number(ticket.lessonMinutes) || 20,
+        makeupAnchorMinutes: Number.isFinite(Number(ticket.makeupAnchorMinutes))
+          ? Math.min(100, Math.max(0, Number(ticket.makeupAnchorMinutes)))
+          : 40,
         isOwnLesson: true,
       };
     });
@@ -2865,6 +2937,31 @@ function memberReleasedMakeupSlot(lessonDate, time, coachRoleId, durationMinutes
   ));
 }
 
+function memberSlotInsideAnchorWindow(scheduleLessons, policy, sourceLesson, day, time, coach) {
+  if (sourceLesson.regularInitialBooking || policy.requireMakeupDayAnchor === false) return true;
+  const releasedSlot = memberReleasedMakeupSlot(
+    memberScheduleDateForDay(day),
+    time,
+    coach.id,
+    lessonDuration(sourceLesson),
+  );
+  if (releasedSlot) return true;
+
+  const configuredGap = sourceLesson.makeupAnchorMinutes ?? policy.makeupAnchorGapMinutes ?? 40;
+  if (configuredGap === null || String(configuredGap).toLowerCase() === "unlimited") return true;
+  const gapMinutes = Math.min(100, Math.max(0, Number(configuredGap) || 0));
+  const anchors = scheduleLessons.filter((lesson) => {
+    if (lesson.day !== day || lesson.status === "available" || lesson.serverStatus === "pending_change") return false;
+    return memberLessonCoach(lesson, policy).id === coach.id;
+  });
+  if (!anchors.length) return false;
+
+  const firstStart = Math.min(...anchors.map((lesson) => minutesFromTime(lesson.time)));
+  const lastEnd = Math.max(...anchors.map((lesson) => minutesFromTime(lesson.time) + lessonDuration(lesson)));
+  const slotStart = minutesFromTime(time);
+  return slotStart >= firstStart - gapMinutes && slotStart <= lastEnd + gapMinutes;
+}
+
 function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson = null) {
   const result = [];
   const sourceLesson = selectedLesson
@@ -2898,13 +2995,8 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
         if (memberBreakRuleOverlaps(policy, day, time, durationMinutes)) return;
         if (!isMemberCoachWorking(coach, day, time, durationMinutes)) return;
         if (hasMemberCoachLessonAt(scheduleLessons, day, time, coach, durationMinutes, policy)) return;
-        const hasNearbyAnchor = scheduleLessons.some((lesson) => {
-          if (lesson.day !== day || lesson.status === "available" || lesson.serverStatus === "pending_change") return false;
-          if (memberLessonCoach(lesson, policy).id !== coach.id) return false;
-          return Math.abs(minutesFromTime(lesson.time) - minutesFromTime(time)) <= 40;
-        });
         const releasedSlot = memberReleasedMakeupSlot(lessonDate, time, coach.id, durationMinutes);
-        if (!isCouponBooking && !isRegularInitialBooking && !hasNearbyAnchor && !releasedSlot) return;
+        if (!memberSlotInsideAnchorWindow(scheduleLessons, policy, sourceLesson, day, time, coach)) return;
         const existing = scheduleLessons.some((lesson) => lesson.day === day && lesson.time === time && memberLessonCoach(lesson, policy).id === coach.id);
         if (existing) return;
         result.push({
@@ -6122,7 +6214,10 @@ async function syncMemberChangeCandidates(source = null) {
     }
     if (requestId !== memberChangeCandidateRequestSequence || memberChangeCandidateKey(source) !== key) return false;
     if (!result || !Array.isArray(result.candidates)) {
-      state.serverChangeCandidateStatus = "fallback";
+      state.serverChangeCandidateStatus = source.couponBooking ? "error" : "fallback";
+      state.serverChangeCandidateError = source.couponBooking
+        ? "쿠폰 예약 가능 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요."
+        : "";
       renderSelects();
       renderAvailableSlots();
       renderSchedule();
@@ -6141,7 +6236,10 @@ async function syncMemberChangeCandidates(source = null) {
     if (requestId !== memberChangeCandidateRequestSequence) return false;
     const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
     if (/tn_member_(change|coupon)_candidates|PGRST202|42883|schema cache/i.test(errorText)) {
-      state.serverChangeCandidateStatus = "fallback";
+      state.serverChangeCandidateStatus = source.couponBooking ? "error" : "fallback";
+      state.serverChangeCandidateError = source.couponBooking
+        ? "쿠폰 예약 가능 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요."
+        : "";
       renderSelects();
       renderAvailableSlots();
       renderSchedule();
@@ -8520,7 +8618,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.323" });
+  const params = new URLSearchParams({ v: "1.0.324" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9776,11 +9874,12 @@ async function applySupabaseMemberSession(showNotice = false) {
       syncMemberAccountDeletionRequestFromServer(profile),
       syncMemberGroupAccountFromServer(profile),
       syncMemberNotificationsFromServer(profile),
-      syncNativePushRegistration(profile, true),
+      syncNativePushRegistration(profile, false),
     ]);
     await syncLiveSchedulePolicy(currentLiveTicket()?.branchId || "");
     renderAll();
     if (showNotice && !isApprovalPending()) showNoticeAfterLiveSync();
+    scheduleNativePushPrimer();
     saveSnapshot();
     return true;
   } catch (error) {
@@ -10316,6 +10415,7 @@ function bindEvents() {
       if (state.pushNotifications?.permission === "granted") {
         await disableNativePushForMember();
       } else {
+        localStorage.removeItem(pushPrimerDeferredStorageKey);
         setPushPreferenceEnabled(true);
         await syncNativePushRegistration(null, true);
       }
@@ -10323,6 +10423,10 @@ function bindEvents() {
       setPushNotificationState("unknown", "알림 연결 실패", "네트워크와 앱 설정을 확인한 뒤 다시 시도해 주세요.");
     }
   });
+  $("#pushPrimerModal")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-defer-push-primer]")) deferNativePushPrimer();
+  });
+  $("#enablePushFromPrimer")?.addEventListener("click", enableNativePushFromPrimer);
   $("#openAccountDeletionButton")?.addEventListener("click", async () => {
     if (state.accountDeletionRequest?.status === "pending") await cancelAccountDeletionRequest();
     else openAccountDeletionModal();
@@ -10949,7 +11053,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.323",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.324",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
