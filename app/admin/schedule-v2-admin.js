@@ -91,6 +91,7 @@
     searchScrollTimer: null,
     lastSearchScrollKey: "",
     renderMode: "",
+    showArchivedHistory: false,
     cancelConfirmationKey: "",
     revisionWatcher: null,
   };
@@ -946,7 +947,9 @@
     if (!payload) return [];
     const date = new Date(`${state.selectedDate}T12:00:00`);
     const dayOfWeek = date.getDay();
-    const lessons = payload.lessons.filter((lesson) => lesson.lessonDate === state.selectedDate);
+    const lessons = payload.lessons.filter((lesson) => (
+      lesson.lessonDate === state.selectedDate && lessonVisibleOnTimetable(lesson)
+    ));
     const coaches = payload.coaches.filter((coach) => coach.roleId);
     const availableRows = coaches.flatMap((coach) => availabilityRows(coach).filter((row) => (
       Number(row.dayOfWeek ?? row.day_of_week) === dayOfWeek
@@ -1014,6 +1017,9 @@
   function lessonHistoryLabel(lesson) {
     const context = lessonCancellationContext(lesson);
     const memberLabel = lessonParticipantLabel(lesson);
+    if (context.type === "member_inactive") {
+      return `${memberLabel} · 삭제회원 처리로 자동 정리`;
+    }
     if (context.type === "automatic_cutoff") {
       return `${memberLabel} · ${regularCutoffLabels[context.regularCutoffReason] || "회원권 상태에 따라 자동 제외"}`;
     }
@@ -1042,7 +1048,39 @@
       regularCutoffReason: raw.regularCutoffReason || raw.regular_cutoff_reason || "",
       entitlement: raw.entitlement || null,
       staffAction: raw.staffAction || raw.staff_action || "",
+      memberOperationalStatus: raw.memberOperationalStatus || raw.member_operational_status || "",
     };
+  }
+
+  function lessonHistoryIsArchived(lesson = {}) {
+    if (String(lesson.status || "") !== "cancelled") return false;
+    return ["automatic_cutoff", "member_inactive"].includes(lessonCancellationContext(lesson).type);
+  }
+
+  function lessonVisibleOnTimetable(lesson = {}) {
+    return state.showArchivedHistory || !lessonHistoryIsArchived(lesson);
+  }
+
+  function archivedHistoryLessons() {
+    return (state.payload?.lessons || [])
+      .filter(lessonHistoryIsArchived)
+      .sort((left, right) => [left.lessonDate, left.startTime, lessonParticipantLabel(left)].join("|")
+        .localeCompare([right.lessonDate, right.startTime, lessonParticipantLabel(right)].join("|"), "ko"));
+  }
+
+  function renderArchivedHistory() {
+    const count = $("#scheduleV2ArchivedHistoryCount");
+    const list = $("#scheduleV2ArchivedHistoryList");
+    const toggle = $("#scheduleV2ArchivedHistoryToggle");
+    if (!count || !list || !toggle) return;
+    const lessons = archivedHistoryLessons();
+    count.textContent = `${lessons.length}건`;
+    toggle.disabled = lessons.length === 0;
+    toggle.setAttribute("aria-pressed", String(state.showArchivedHistory));
+    toggle.textContent = state.showArchivedHistory ? "시간표에서 숨기기" : "시간표에 표시";
+    list.innerHTML = lessons.length
+      ? lessons.map((lesson) => `<button type="button" data-v2-lesson-id="${escapeHtml(lesson.id)}"><strong>${escapeHtml(lessonParticipantLabel(lesson))}</strong><span>${escapeHtml(`${dateLabel(lesson.lessonDate)} ${String(lesson.startTime || "").slice(0, 5)} · ${lessonHistoryLabel(lesson).replace(`${lessonParticipantLabel(lesson)} · `, "")}`)}</span></button>`).join("")
+      : '<p class="schedule-v2-history-empty">이 주에는 자동 정리된 수업이 없습니다.</p>';
   }
 
   function lessonIsTodayOrFuture(lesson) {
@@ -1144,7 +1182,9 @@
       startCandidates.push(timeMinutes(row.startTime || row.start_time));
       endCandidates.push(timeMinutes(row.endTime || row.end_time));
     }));
-    (payload?.lessons || []).filter((lesson) => dateSet.has(lesson.lessonDate)).forEach((lesson) => {
+    (payload?.lessons || []).filter((lesson) => (
+      dateSet.has(lesson.lessonDate) && lessonVisibleOnTimetable(lesson)
+    )).forEach((lesson) => {
       startCandidates.push(timeMinutes(lesson.startTime));
       endCandidates.push(timeMinutes(lesson.startTime) + Number(lesson.durationMinutes || 20));
     });
@@ -1154,7 +1194,9 @@
   function dayLanePlan(date, times) {
     const payload = state.payload;
     const dayOfWeek = new Date(`${date}T12:00:00`).getDay();
-    const lessons = (payload.lessons || []).filter((lesson) => lesson.lessonDate === date);
+    const lessons = (payload.lessons || []).filter((lesson) => (
+      lesson.lessonDate === date && lessonVisibleOnTimetable(lesson)
+    ));
     const coaches = (payload.coaches || []).filter((coach) => coach.roleId);
     const coachById = new Map(coaches.map((coach) => [String(coach.roleId), coach]));
     lessons.forEach((lesson) => {
@@ -1552,6 +1594,7 @@
     renderLessonTicketCounts();
     renderQueue();
     renderPolicy();
+    renderArchivedHistory();
     renderParallelComparison();
     applyLessonSearchFilter({ scrollToMatch: true });
   }
@@ -3379,6 +3422,10 @@
       void loadWorkspace({ force: true });
     });
     $("#scheduleV2IntegrityButton")?.addEventListener("click", runScheduleV2MemberIntegrityPreview);
+    $("#scheduleV2ArchivedHistoryToggle")?.addEventListener("click", () => {
+      state.showArchivedHistory = !state.showArchivedHistory;
+      renderWorkspace();
+    });
     $("#scheduleV2PolicyButton").addEventListener("click", (event) => {
       const panel = $("#scheduleV2PolicyPanel");
       panel.hidden = !panel.hidden;
