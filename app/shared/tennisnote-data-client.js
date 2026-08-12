@@ -1080,6 +1080,17 @@
     if (!user?.id) return { user, profile: null };
     const profileSelect = "id,name,nickname,phone,birth_year,neighborhood,gender,role,member_kind,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,ntrp_survey,ntrp_requested_at,profile_completed_at,privacy_consent_version,privacy_consented_at,status";
     let identityContext = null;
+    const identityFailure = (code, status) => ({
+      user,
+      profile: null,
+      coachRole: null,
+      identityContext,
+      profileBootstrapError: {
+        code,
+        expectedProvider: "",
+        status,
+      },
+    });
     try {
       identityContext = await rpc("tn_current_identity_context", {});
     } catch (error) {
@@ -1088,42 +1099,43 @@
     }
 
     if (identityContext?.status === "ambiguous") {
-      return {
-        user,
-        profile: null,
-        coachRole: null,
-        identityContext,
-        profileBootstrapError: {
-          code: "auth_profile_mapping_ambiguous",
-          expectedProvider: "",
-          status: 409,
-        },
-      };
+      return identityFailure("auth_profile_mapping_ambiguous", 409);
+    }
+    if (identityContext && !["ok", "unlinked"].includes(identityContext.status)) {
+      return identityFailure("auth_profile_identity_context_invalid", 503);
     }
 
     const resolvedProfileId = identityContext?.status === "ok"
       ? String(identityContext.actorUserId || "")
       : "";
-    let rows = resolvedProfileId
-      ? await selectRows("tn_users", {
+    let rows = [];
+    if (resolvedProfileId) {
+      rows = await selectRows("tn_users", {
         select: profileSelect,
         filters: { id: resolvedProfileId },
         limit: 1,
-      })
-      : await selectRows("tn_users", {
+      });
+      if (!rows?.length) return identityFailure("auth_profile_mapping_stale", 409);
+    } else if (!identityContext) {
+      rows = await selectRows("tn_users", {
         select: profileSelect,
         filters: { auth_user_id: user.id },
-        limit: 1,
+        order: "id.asc",
+        limit: 2,
       });
+      if (rows.length > 1) return identityFailure("auth_profile_mapping_ambiguous", 409);
+    }
 
-    if (!rows?.length) {
+    if (!rows?.length && !identityContext) {
       try {
         const links = await selectRows("tn_user_auth_links", {
-          select: "user_id",
+          select: "id,user_id,is_primary,linked_at",
           filters: { auth_user_id: user.id },
           order: "is_primary.desc,linked_at.asc,id.asc",
-          limit: 1,
+          limit: 2,
         });
+        const linkedProfileIds = [...new Set((links || []).map((link) => String(link.user_id || "")).filter(Boolean))];
+        if (linkedProfileIds.length > 1) return identityFailure("auth_profile_mapping_ambiguous", 409);
         if (links?.[0]?.user_id) {
           rows = await selectRows("tn_users", {
             select: profileSelect,

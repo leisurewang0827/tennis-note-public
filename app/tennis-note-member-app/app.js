@@ -1702,7 +1702,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.327",
+    workerUrl: "./service-worker.js?v=1.0.328",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -6140,6 +6140,12 @@ function memberChangeCandidateFailure(errorText = "") {
       message: "로그인 계정에 회원 정보가 두 개 이상 연결되어 있습니다. 관리자에게 회원 연결 확인을 요청해 주세요.",
     };
   }
+  if (/auth_profile_mapping_stale|auth_profile_identity_context_invalid/i.test(normalized)) {
+    return {
+      code: "auth_profile_mapping_stale",
+      message: "회원 연결 상태가 갱신 중입니다. 다시 확인해도 계속되면 관리자에게 회원 연결 확인을 요청해 주세요.",
+    };
+  }
   if (/auth_profile_unlinked|member_not_linked|member_required/i.test(normalized)) {
     return {
       code: "auth_profile_unlinked",
@@ -8650,7 +8656,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.327" });
+  const params = new URLSearchParams({ v: "1.0.328" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9818,6 +9824,13 @@ async function applySupabaseMemberSession(showNotice = false) {
     if (current?.profileBootstrapError?.code === "auth_profile_mapping_ambiguous") {
       const status = $("#memberEmailLoginStatus");
       if (status) status.textContent = "로그인 계정이 여러 회원 정보에 연결되어 있습니다. 관리자에게 회원 연결 확인을 요청해 주세요.";
+      $("#appScreen").hidden = true;
+      $("#loginScreen").hidden = false;
+      return false;
+    }
+    if (["auth_profile_mapping_stale", "auth_profile_identity_context_invalid"].includes(current?.profileBootstrapError?.code)) {
+      const status = $("#memberEmailLoginStatus");
+      if (status) status.textContent = "회원 연결 상태를 안전하게 확인하지 못했습니다. 잠시 후 다시 시도하거나 관리자에게 연결 확인을 요청해 주세요.";
       $("#appScreen").hidden = true;
       $("#loginScreen").hidden = false;
       return false;
@@ -11085,7 +11098,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.327",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.328",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
