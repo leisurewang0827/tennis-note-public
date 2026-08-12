@@ -1702,7 +1702,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.328",
+    workerUrl: "./service-worker.js?v=1.0.329",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2626,7 +2626,12 @@ function memberLessonCoach(lesson, policy) {
   return policy.coaches.find((coach) => String(coach.serverRoleId || "") === String(serverRoleId))
     || policy.coaches.find((coach) => coach.id === key)
     || policy.coaches.find((coach) => coach.name === lesson.coach)
-    || normalizeMemberCoach({ id: key || lesson.coach, name: lesson.coach || "미지정 코치" });
+    || normalizeMemberCoach({
+      id: serverRoleId || key || lesson.coach,
+      serverRoleId,
+      roleId: serverRoleId,
+      name: lesson.coach || "미지정 코치",
+    });
 }
 
 function memberBreakRuleForSlot(policy, day, time) {
@@ -2822,7 +2827,9 @@ function memberBookableCouponTickets() {
   return (state.liveTickets || [])
     .filter((ticket) => isActiveCouponLiveTicket(ticket))
     .map((ticket) => {
-      const coach = policy.coaches.find((item) => item.id === ticket.coachRoleId);
+      const coach = policy.coaches.find((item) => (
+        String(item.serverRoleId || item.roleId || item.id || "") === String(ticket.coachRoleId || "")
+      ));
       return {
         id: `coupon-ticket-${ticket.id}`,
         couponBooking: true,
@@ -3139,6 +3146,34 @@ function currentScheduledLessonsForChange() {
     });
   }
   return lessons.filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
+}
+
+function memberInlineChangeSources() {
+  return currentScheduledLessonsForChange().filter((lesson) => (
+    lesson.status === "scheduled"
+    || lesson.status === "makeup_due"
+    || lesson.couponBooking
+    || lesson.regularInitialBooking
+    || lesson.resumePausedTicket
+  ));
+}
+
+function memberChangeSourceActionLabel(source = {}) {
+  if (source.couponBooking) return "쿠폰";
+  if (source.resumePausedTicket) return "복귀";
+  if (source.regularInitialBooking) return "첫 수업";
+  if (source.status === "makeup_due") return "보강";
+  return "변경";
+}
+
+function memberChangeSourceOptionLabel(source = {}) {
+  const action = memberChangeSourceActionLabel(source);
+  if (source.couponBooking || source.regularInitialBooking) {
+    const remaining = Number.isFinite(Number(source.remaining)) ? ` · 잔여 ${Number(source.remaining)}회` : "";
+    return `${action} · ${source.ticketTitle || source.type || "회원권"}${remaining}`;
+  }
+  const date = source.lessonDate || source.day || "수업";
+  return `${action} · ${date} ${source.time || ""} · ${memberCoachShortName(source.coach || "담당 코치")}`.trim();
 }
 
 function loadedFutureScheduledLessonsForChange(today = localDateKey()) {
@@ -3814,6 +3849,20 @@ function memberMobileScheduleSegments(day, policy, baseLessons, scheduleLessons 
       start: lesson.time,
       end: timeFromMinutes(minutesFromTime(lesson.time) + Math.max(10, lessonDuration(lesson))),
     }));
+  if (state.memberScheduleMode === "availability") {
+    const focusWindows = scheduleLessons
+      .filter((lesson) => (
+        lesson.day === day
+        && (lesson.status === "available" || isOwnMemberScheduleLesson(lesson))
+      ))
+      .map((lesson) => {
+        const start = Math.max(0, minutesFromTime(lesson.time) - 20);
+        const end = Math.min(24 * 60, minutesFromTime(lesson.time) + lessonDuration(lesson) + 20);
+        return { start: timeFromMinutes(start), end: timeFromMinutes(end) };
+      });
+    const compactWindows = mergeMemberScheduleWindows(focusWindows);
+    if (compactWindows.length) return compactWindows;
+  }
   const windows = mergeMemberScheduleWindows([
     ...memberOperatingWindows(day, policy),
     ...candidateWindows,
@@ -4022,9 +4071,7 @@ function timeFromMinutes(minutes) {
 }
 
 function renderMemberChangeInlineBar() {
-  const sources = currentScheduledLessonsForChange().filter((lesson) => (
-    lesson.status === "scheduled" || lesson.status === "makeup_due"
-  ));
+  const sources = memberInlineChangeSources();
   if (!sources.length) {
     return memberEmptyState({
       title: "변경하거나 보강할 수업이 없습니다",
@@ -4036,7 +4083,7 @@ function renderMemberChangeInlineBar() {
     state.selectedMemberChangeSourceId = sources[0].id;
   }
   const source = sources.find((lesson) => lesson.id === state.selectedMemberChangeSourceId) || sources[0];
-  const loadState = memberChangeCandidateLoadState(source);
+  const loadState = memberChangeCandidateUiState(source);
   const activeWeekCandidateCount = state.serverChangeCandidates.filter(memberChangeCandidateInActiveWeek).length;
   const statusText = loadState === "loading"
     ? "가능한 시간을 확인 중입니다"
@@ -4052,11 +4099,11 @@ function renderMemberChangeInlineBar() {
   return `
     <section class="member-inline-change" aria-label="변경 또는 보강할 수업 선택">
       <label for="memberInlineChangeSource">
-        <span>바꿀 수업</span>
+        <span>신청할 수업</span>
         <select id="memberInlineChangeSource">
           ${sources.map((lesson) => `
             <option value="${escapeHtml(lesson.id)}" ${lesson.id === source.id ? "selected" : ""}>
-              ${lesson.status === "makeup_due" ? "보강" : "변경"} · ${escapeHtml(lesson.lessonDate || lesson.day)} ${escapeHtml(lesson.time)} · ${escapeHtml(memberCoachShortName(lesson.coach))}
+              ${escapeHtml(memberChangeSourceOptionLabel(lesson))}
             </option>`).join("")}
         </select>
       </label>
@@ -4419,7 +4466,7 @@ function renderSelects() {
   state.selectedMemberChangeSourceId = $("#absenceLesson")?.value || "";
   const selectedSource = sourceLessons.find((lesson) => lesson.id === $("#absenceLesson")?.value);
   const scheduleLoadState = activeMemberScheduleLoadState();
-  const candidateLoadState = memberChangeCandidateLoadState(selectedSource);
+  const candidateLoadState = memberChangeCandidateUiState(selectedSource);
   const loadState = scheduleLoadState !== "ready"
     ? scheduleLoadState
     : ["loading", "error"].includes(candidateLoadState) ? candidateLoadState : "ready";
@@ -4463,7 +4510,7 @@ function renderAvailableSlots() {
   const selectedId = $("#makeupSlot")?.value;
   const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === $("#absenceLesson")?.value);
   const scheduleLoadState = activeMemberScheduleLoadState();
-  const candidateLoadState = memberChangeCandidateLoadState(source);
+  const candidateLoadState = memberChangeCandidateUiState(source);
   const loadState = scheduleLoadState !== "ready"
     ? scheduleLoadState
     : ["loading", "error"].includes(candidateLoadState) ? candidateLoadState : "ready";
@@ -4581,6 +4628,13 @@ function memberChangeCandidateLoadState(source = null) {
   const key = memberChangeCandidateKey(source);
   if (state.serverChangeCandidateKey !== key) return "idle";
   return state.serverChangeCandidateStatus || "idle";
+}
+
+function memberChangeCandidateUiState(source = null) {
+  const loadState = memberChangeCandidateLoadState(source);
+  if (loadState === "idle") return "loading";
+  if (loadState === "fallback") return "ready";
+  return loadState;
 }
 
 function updateChangeRequestAvailability(availableLessons = memberAvailableSlotsForSelectedLesson(), loadState = activeMemberScheduleLoadState()) {
@@ -8656,7 +8710,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.328" });
+  const params = new URLSearchParams({ v: "1.0.329" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9231,7 +9285,13 @@ async function prepareChangeRequestSource(preferredLessonId = "") {
   let sources = currentScheduledLessonsForChange();
   let futureLessons = loadedFutureScheduledLessonsForChange();
   const hasFalseInitialSource = sources.some((lesson) => lesson.regularInitialBooking) && !futureLessons.length;
-  if (hasFalseInitialSource && state.dataMode === "live" && state.member?.profileId) {
+  const preferredSourceMissing = Boolean(preferredLessonId) && !sources.some((lesson) => lesson.id === preferredLessonId);
+  const workspaceNeedsRefresh = !memberScheduleV2WorkspaceCache?.workspace
+    || !state.scheduleV2WorkspaceLoaded
+    || activeMemberScheduleLoadState() !== "ready"
+    || hasFalseInitialSource
+    || preferredSourceMissing;
+  if (workspaceNeedsRefresh && state.dataMode === "live" && state.member?.profileId) {
     memberScheduleV2WorkspaceCache = null;
     await syncMemberScheduleV2(state.profile, { force: true });
     sources = currentScheduledLessonsForChange();
@@ -9266,29 +9326,21 @@ async function openChangeRequestModal(preferredLessonId = "") {
 }
 
 function startCouponBooking(ticketId) {
-  state.memberChangeCompactSelection = false;
-  $("#changeRequestModal")?.classList.remove("is-inline-confirmation");
   const sourceId = `coupon-ticket-${ticketId}`;
-  renderSelects();
-  const sourceSelect = $("#absenceLesson");
-  if (!sourceSelect || ![...sourceSelect.options].some((option) => option.value === sourceId)) return;
-  sourceSelect.value = sourceId;
-  renderSelects();
-  renderAvailableSlots();
-  renderChangeModalSummary();
-  openAppModal("changeRequestModal", "#availableSlotList button:not([disabled])");
-  const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === sourceId);
-  void syncMemberChangeCandidates(source);
+  void openMemberChangeTimetable(sourceId);
 }
 
-function changeMemberScheduleMode(mode) {
+async function changeMemberScheduleMode(mode) {
   state.memberScheduleMode = ["availability", "flex"].includes(mode) ? mode : "mine";
   state.memberScheduleModeTouched = true;
   state.memberScheduleFullView = state.memberScheduleMode === "availability";
   if (state.memberScheduleMode === "availability") {
-    const sources = currentScheduledLessonsForChange().filter((lesson) => (
-      lesson.status === "scheduled" || lesson.status === "makeup_due"
-    ));
+    renderSchedule();
+    const preferredSourceId = await prepareChangeRequestSource(state.selectedMemberChangeSourceId);
+    const sources = memberInlineChangeSources();
+    if (preferredSourceId && sources.some((lesson) => lesson.id === preferredSourceId)) {
+      state.selectedMemberChangeSourceId = preferredSourceId;
+    }
     if (!sources.some((lesson) => lesson.id === state.selectedMemberChangeSourceId)) {
       state.selectedMemberChangeSourceId = sources[0]?.id || "";
     }
@@ -9296,22 +9348,31 @@ function changeMemberScheduleMode(mode) {
   renderSchedule();
   renderSelects();
   if (state.memberScheduleMode === "availability") {
-    const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
-    void syncMemberChangeCandidates(source);
+    const source = memberInlineChangeSources().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
+    await syncMemberChangeCandidates(source);
   }
   saveSnapshot();
 }
 
-function openMemberChangeTimetable(preferredLessonId = "") {
+async function openMemberChangeTimetable(preferredLessonId = "") {
   state.memberScheduleMode = "availability";
   state.memberScheduleModeTouched = true;
   state.memberScheduleFullView = true;
   if (preferredLessonId) state.selectedMemberChangeSourceId = preferredLessonId;
   setView("scheduleView");
   renderSchedule();
+  const preparedSourceId = await prepareChangeRequestSource(preferredLessonId || state.selectedMemberChangeSourceId);
+  const sources = memberInlineChangeSources();
+  if (preparedSourceId && sources.some((lesson) => lesson.id === preparedSourceId)) {
+    state.selectedMemberChangeSourceId = preparedSourceId;
+  }
+  if (!sources.some((lesson) => lesson.id === state.selectedMemberChangeSourceId)) {
+    state.selectedMemberChangeSourceId = sources[0]?.id || "";
+  }
+  renderSchedule();
   renderSelects();
-  const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
-  void syncMemberChangeCandidates(source);
+  const source = sources.find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
+  await syncMemberChangeCandidates(source);
   jumpToTop();
 }
 
@@ -11098,7 +11159,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.328",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.329",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
