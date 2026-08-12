@@ -1807,6 +1807,7 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
     lessonType: row.product_name || "회원권 없음",
     remaining: Number(row.remaining_sessions) || 0,
     authLinked: Boolean(row.auth_user_id),
+    authRole: row.user_role || "member",
     directoryRow: row,
     source: "Supabase 회원 목록",
     note: "",
@@ -22660,7 +22661,10 @@ async function performAdminLiveDataSync(options = {}) {
     const memberUserGroups = (serverUsers || [])
       .filter((user) => !user.merged_into_user_id)
       .filter((user) => !user.permanently_deleted_at)
-      .filter((user) => user.role === "member")
+      .filter((user) => (
+        user.role === "member"
+        || (ticketsByParticipantUserId.get(user.id) || []).some((ticket) => isCurrentMemberTicket(ticket))
+      ))
       .map((user) => ({
         name: user.name || "이름 확인 필요",
         userGroup: [user],
