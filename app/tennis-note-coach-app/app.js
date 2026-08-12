@@ -2260,7 +2260,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.326",
+    workerUrl: "./service-worker.js?v=1.0.327",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2290,7 +2290,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.326" });
+  const params = new URLSearchParams({ v: "1.0.327" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2675,12 +2675,24 @@ function lessonBelongsToCurrentCoach(lesson = {}) {
   return canonicalCoachName(lesson.coach) === currentCoachName();
 }
 
+function lessonAssignedToCurrentCoachForTasks(lesson = {}) {
+  const roleId = currentCoachRoleId();
+  const lessonRoleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
+  const substituteRoleId = String(lesson.substituteCoachRoleId || lesson.substitute_coach_role_id || "").trim();
+  if (lesson.isSubstitute || substituteRoleId) {
+    if (roleId && substituteRoleId) return roleId === substituteRoleId;
+    return canonicalCoachName(lesson.coach) === currentCoachName();
+  }
+  if (roleId && lessonRoleId) return roleId === lessonRoleId;
+  return lessonBelongsToCurrentCoach(lesson);
+}
+
 function ownTodayLessons() {
   const currentLessons = state.liveLessonsLoaded || state.dataMode === "live"
     ? weekLessons().filter((lesson) => lesson.lessonDate === localDateKey())
     : weekLessons();
   return currentLessons.filter((lesson) => (
-    (lesson.v2Permissions?.canProcess === true || lessonBelongsToCurrentCoach(lesson))
+    lessonAssignedToCurrentCoachForTasks(lesson)
     && !lesson.releasedMakeupSlot
     && lesson.status !== "available"
   ));
@@ -2780,8 +2792,9 @@ function completionDraftResultsForLog(log) {
 
 function canProcessLesson(lesson) {
   if (!lesson) return false;
+  if (!lessonAssignedToCurrentCoachForTasks(lesson)) return false;
   if (lesson.v2Permissions) return lesson.v2Permissions.canProcess === true;
-  return lessonBelongsToCurrentCoach(lesson);
+  return true;
 }
 
 function transferredTodayLessons() {
@@ -2798,8 +2811,8 @@ function transferredTodayLessons() {
 
 function canRescheduleLesson(lesson) {
   if (!lesson) return false;
+  if (!lessonAssignedToCurrentCoachForTasks(lesson)) return false;
   if (lesson.v2Permissions && lesson.v2Permissions.canEdit !== true) return false;
-  if (!lesson.v2Permissions && !lessonBelongsToCurrentCoach(lesson)) return false;
   if (lesson.serverStatus) return lesson.serverStatus === "scheduled";
   return !["완료", "취소", "노쇼", "변경 요청"].includes(lesson.status);
 }
@@ -2838,7 +2851,7 @@ function memberForRecord(record = {}) {
 
 function recordBelongsToCurrentCoach(record = {}) {
   const lesson = lessonForRecord(record);
-  if (lesson) return canProcessLesson(lesson);
+  if (lesson) return lessonAssignedToCurrentCoachForTasks(lesson) && canProcessLesson(lesson);
   if (record.serverLessonId) return false;
   const member = memberForRecord(record);
   return Boolean(member?.coach && canonicalCoachName(member.coach) === currentCoachName());
@@ -6536,7 +6549,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.326",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.327",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
