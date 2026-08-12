@@ -1702,7 +1702,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.324",
+    workerUrl: "./service-worker.js?v=1.0.325",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2723,6 +2723,8 @@ function hasMemberCoachLessonAt(scheduleLessons, day, time, coach, durationMinut
   const slotEnd = slotStart + durationMinutes;
   return scheduleLessons.some((lesson) => {
     if (lesson.status === "available" || lesson.day !== day) return false;
+    const lessonStatus = String(lesson.serverStatus || lesson.status || "").toLowerCase();
+    if (["cancelled", "canceled", "absence", "absent", "makeup_due"].includes(lessonStatus)) return false;
     const lessonCoach = memberLessonCoach(lesson, policy);
     if (lessonCoach.id !== coach.id) return false;
     const lessonStart = minutesFromTime(lesson.time);
@@ -2937,6 +2939,12 @@ function memberReleasedMakeupSlot(lessonDate, time, coachRoleId, durationMinutes
   ));
 }
 
+function memberLessonExtendsAnchorWindow(lesson = {}) {
+  const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
+  return ["scheduled", "completed", "no_show"].includes(status)
+    && !lesson.releasedRegularSlot;
+}
+
 function memberSlotInsideAnchorWindow(scheduleLessons, policy, sourceLesson, day, time, coach) {
   if (sourceLesson.regularInitialBooking || policy.requireMakeupDayAnchor === false) return true;
   const releasedSlot = memberReleasedMakeupSlot(
@@ -2951,7 +2959,7 @@ function memberSlotInsideAnchorWindow(scheduleLessons, policy, sourceLesson, day
   if (configuredGap === null || String(configuredGap).toLowerCase() === "unlimited") return true;
   const gapMinutes = Math.min(100, Math.max(0, Number(configuredGap) || 0));
   const anchors = scheduleLessons.filter((lesson) => {
-    if (lesson.day !== day || lesson.status === "available" || lesson.serverStatus === "pending_change") return false;
+    if (lesson.day !== day || !memberLessonExtendsAnchorWindow(lesson)) return false;
     return memberLessonCoach(lesson, policy).id === coach.id;
   });
   if (!anchors.length) return false;
@@ -2997,8 +3005,6 @@ function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson =
         if (hasMemberCoachLessonAt(scheduleLessons, day, time, coach, durationMinutes, policy)) return;
         const releasedSlot = memberReleasedMakeupSlot(lessonDate, time, coach.id, durationMinutes);
         if (!memberSlotInsideAnchorWindow(scheduleLessons, policy, sourceLesson, day, time, coach)) return;
-        const existing = scheduleLessons.some((lesson) => lesson.day === day && lesson.time === time && memberLessonCoach(lesson, policy).id === coach.id);
-        if (existing) return;
         result.push({
           id: `auto-slot-${day}-${time}-${coach.id}`,
           day,
@@ -6223,10 +6229,36 @@ async function syncMemberChangeCandidates(source = null) {
       renderSchedule();
       return false;
     }
-    state.serverChangeCandidates = result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source));
+    const mappedCandidates = result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source));
+    let clientRejectedAnchorCandidates = 0;
+    if (source.couponBooking) {
+      const policy = loadAdminSchedulePolicy();
+      const scheduleLessons = memberScheduleLessons();
+      state.serverChangeCandidates = mappedCandidates.filter((candidate) => {
+        const coach = policy.coaches.find((item) => (
+          String(item.serverRoleId || item.id) === String(candidate.coachRoleId)
+        ));
+        const allowed = Boolean(coach) && memberSlotInsideAnchorWindow(
+          scheduleLessons,
+          policy,
+          source,
+          candidate.day,
+          candidate.time,
+          coach,
+        );
+        if (!allowed) clientRejectedAnchorCandidates += 1;
+        return allowed;
+      });
+    } else {
+      state.serverChangeCandidates = mappedCandidates;
+    }
     state.serverChangeCandidateExclusions = result.exclusionSummary && typeof result.exclusionSummary === "object"
       ? result.exclusionSummary
       : {};
+    if (clientRejectedAnchorCandidates > 0) {
+      state.serverChangeCandidateExclusions.anchor_required =
+        Number(state.serverChangeCandidateExclusions.anchor_required || 0) + clientRejectedAnchorCandidates;
+    }
     state.serverChangeCandidateStatus = "ready";
     renderSelects();
     renderAvailableSlots();
@@ -8618,7 +8650,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.324" });
+  const params = new URLSearchParams({ v: "1.0.325" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -11053,7 +11085,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.324",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.325",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

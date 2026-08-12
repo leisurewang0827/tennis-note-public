@@ -293,41 +293,12 @@
   }
 
   async function applyNativeRemoteShell(candidate, remoteAppUrl) {
-    if (
-      !isNativeWebView()
-      || !remoteAppUrl
-      || candidate?.nativeUpdateMode !== "remote-shell"
-    ) return false;
-    const key = `tennis-note-native-shell:${candidate.releaseId}`;
-    // A previous remote-shell attempt may have written the completion marker
-    // before the downloaded page and its scripts finished replacing the
-    // bundled document. If the bundled release is still older, the marker is
-    // stale and must not make the manual update button a no-op.
-    if (sessionStorage.getItem(key) === "done") {
-      if (!isNewerRelease(candidate)) return false;
-      sessionStorage.removeItem(key);
-    }
-    const url = new URL(remoteAppUrl);
-    url.searchParams.set("__tn_release", candidate.releaseId);
-    const response = await fetch(url, {
-      cache: "no-store",
-    });
-    if (!response.ok) throw new Error("remote_shell_unavailable");
-    let html = await response.text();
-    if (!html.includes("TennisNoteReleaseUpdater") && !html.includes("tennisnote-release-updater.js")) {
-      throw new Error("remote_shell_invalid");
-    }
-    const base = `<base href="${remoteAppUrl}">`;
-    html = html.replace(/<head(\s[^>]*)?>/i, (head) => `${head}\n    ${base}`);
-    if (hasUnsavedChanges()) {
-      showUpdateNotice(candidate, { force: true, deferred: true });
-      return false;
-    }
-    sessionStorage.setItem(key, "done");
-    document.open();
-    document.write(html);
-    document.close();
-    return true;
+    // Native releases use only the web assets bundled in the signed store app.
+    // Loading a remote root document can trigger its meta refresh as an external
+    // browser intent, which makes an installed app look like a PWA shortcut.
+    void candidate;
+    void remoteAppUrl;
+    return false;
   }
 
   async function openNativeStoreUpdate() {
@@ -362,10 +333,8 @@
           else showUpdateNotice(candidate, { nativeDecision: activeNativeUpdate });
           return;
         }
-        if (candidate?.nativeUpdateMode !== "remote-shell") {
-          hideUpdateNotice();
-          return;
-        }
+        hideUpdateNotice();
+        return;
       }
       if (await applyNativeRemoteShell(candidate, options.remoteAppUrl)) return;
       sessionStorage.removeItem(reloadKey);
@@ -429,10 +398,8 @@
           showUpdateNotice(candidate, { nativeDecision: activeNativeUpdate });
           return candidate;
         }
-        if (candidate.nativeUpdateMode !== "remote-shell") {
-          hideUpdateNotice();
-          return candidate;
-        }
+        hideUpdateNotice();
+        return candidate;
       }
       if (!isNewerRelease(candidate)) {
         hideUpdateNotice();
