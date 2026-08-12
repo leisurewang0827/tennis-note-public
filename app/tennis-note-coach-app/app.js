@@ -8,7 +8,7 @@ const state = {
   editingMakeupId: null,
   coachQuickAdd: null,
   writingLessonId: null,
-  memberFilter: "active",
+  memberFilter: "all",
   memberQuery: "",
   memberCoachFilter: "all",
   memberTicketFilter: "all",
@@ -536,10 +536,30 @@ function scheduleV2CoachOneDayLesson(booking = {}, workspace = {}) {
   };
 }
 
-function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = []) {
+function coachRosterTicketState(ticket = {}, today = localDateKey()) {
+  const status = String(ticket.status || "").toLowerCase();
+  const startsOn = String(ticket.startsOn || "");
+  const expiresOn = String(ticket.expiresOn || "");
+  const remaining = Number(ticket.remainingSessions || 0);
+  if (["refunded", "cancelled", "voided"].includes(status)) return "expired";
+  if (status === "pending_payment" || (startsOn && startsOn > today)) return "paused_pending";
+  if (status === "paused") return "paused_pending";
+  if (status === "expired" || remaining <= 0 || (expiresOn && expiresOn < today)) return "expired";
+  const expiringBoundary = new Date(`${today}T12:00:00`);
+  expiringBoundary.setDate(expiringBoundary.getDate() + 14);
+  const expiringOn = localDateKey(expiringBoundary);
+  if ((expiresOn && expiresOn <= expiringOn) || remaining <= 2) return "expiring";
+  return "active";
+}
+
+function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster = null) {
   if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
-  const tickets = Array.isArray(workspace.tickets) ? workspace.tickets : [];
-  const members = Array.isArray(workspace.members) ? workspace.members : [];
+  const tickets = Array.isArray(roster?.tickets)
+    ? roster.tickets
+    : Array.isArray(workspace.tickets) ? workspace.tickets : [];
+  const members = Array.isArray(roster?.members)
+    ? roster.members
+    : Array.isArray(workspace.members) ? workspace.members : [];
   const ticketsById = new Map(tickets.map((ticket) => [ticket.id, ticket]));
   const ticketsByUserId = new Map();
   tickets.forEach((ticket) => {
@@ -634,16 +654,22 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = []) {
         if (!latestLessonByUserId.has(userId)) latestLessonByUserId.set(userId, lesson);
       });
     });
-  const ticketRank = { active: 0, paused: 1, pending_payment: 2, expired: 3, refunded: 4 };
+  const ticketStateRank = { expiring: 0, active: 1, paused_pending: 2, expired: 3 };
   const memberRows = members.map((member) => {
     const memberTickets = [...(ticketsByUserId.get(member.id) || [])].sort((left, right) => (
-      (ticketRank[left.status] ?? 9) - (ticketRank[right.status] ?? 9)
+      (ticketStateRank[coachRosterTicketState(left, todayIso)] ?? 9) - (ticketStateRank[coachRosterTicketState(right, todayIso)] ?? 9)
       || String(right.startsOn || "").localeCompare(String(left.startsOn || ""))
     ));
     const ticket = memberTickets[0] || {};
     const coach = (workspace.coaches || []).find((item) => item.roleId === ticket.coachRoleId) || {};
     const latestLesson = latestLessonByUserId.get(member.id);
-    const active = ["active", "paused"].includes(ticket.status) && Number(ticket.remainingSessions || 0) > 0;
+    const statusCategory = memberTickets.length ? coachRosterTicketState(ticket, todayIso) : "expired";
+    const statusLabel = {
+      active: "수강중",
+      expiring: "만료 임박",
+      paused_pending: ticket.status === "paused" ? "휴회" : ticket.status === "pending_payment" ? "결제 대기" : "시작 예정",
+      expired: "만료",
+    }[statusCategory] || "확인 필요";
     return {
       id: member.id,
       serverUserId: member.id,
@@ -654,7 +680,10 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = []) {
       total: Number(ticket.totalSessions) || 0,
       used: Number(ticket.usedSessions) || 0,
       remaining: Number(ticket.remainingSessions) || 0,
-      status: active ? "수강중" : "회원권 마감",
+      status: statusLabel,
+      statusCategory,
+      memberTickets,
+      ticketCount: memberTickets.length,
       lastLesson: latestLesson ? `${latestLesson.day} ${latestLesson.time}` : "최근 수업 없음",
       expiredAt: ticket.expiresOn || "",
       phone: member.phone || "",
@@ -669,8 +698,8 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = []) {
       ntrpMemo: member.playStyleMemo || "",
     };
   });
-  state.members = memberRows.filter((member) => member.status === "수강중");
-  state.expiredMembers = memberRows.filter((member) => member.status !== "수강중");
+  state.members = memberRows.filter((member) => member.statusCategory !== "expired");
+  state.expiredMembers = memberRows.filter((member) => member.statusCategory === "expired");
 
   const membersById = new Map(members.map((member) => [member.id, member]));
   const coachesById = new Map((workspace.coaches || []).map((coach) => [coach.roleId, coach]));
@@ -725,7 +754,6 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = []) {
         curriculumRegistered: false,
       });
     });
-
   state.liveMembersLoaded = true;
   state.liveLessonsLoaded = true;
   state.scheduleV2WorkspaceLoaded = true;
@@ -743,16 +771,19 @@ async function syncCoachScheduleV2(options = {}) {
   const cacheKey = `${branchId}:${week.startDate}:${week.endDate}`;
   const cached = coachScheduleV2WorkspaceCache;
   if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
-    return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows);
+    return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster);
   }
   try {
-    const [workspace, oneDayRows] = await Promise.all([
+    const [workspace, oneDayRows, roster] = await Promise.all([
       client.rpc("tn_schedule_v2_coach_workspace", {
         target_branch_id: branchId,
         target_from: week.startDate,
         target_to: week.endDate,
       }),
       client.rpc("tn_visible_one_day_bookings", {}).catch(() => []),
+      client.rpc("tn_schedule_v2_coach_member_roster", {
+        target_branch_id: branchId,
+      }).catch(() => null),
     ]);
     if (requestId !== coachScheduleV2RequestSequence) return false;
     if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
@@ -761,8 +792,9 @@ async function syncCoachScheduleV2(options = {}) {
       loadedAt: Date.now(),
       workspace,
       oneDayRows: Array.isArray(oneDayRows) ? oneDayRows : [],
+      roster,
     };
-    return applyScheduleV2CoachWorkspace(workspace, coachScheduleV2WorkspaceCache.oneDayRows);
+    return applyScheduleV2CoachWorkspace(workspace, coachScheduleV2WorkspaceCache.oneDayRows, roster);
   } catch (error) {
     const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
     if (!/tn_schedule_v2_coach_workspace|PGRST202|42883|schema cache/i.test(text)) {
@@ -2228,7 +2260,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.325",
+    workerUrl: "./service-worker.js?v=1.0.326",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2258,7 +2290,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.325" });
+  const params = new URLSearchParams({ v: "1.0.326" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2807,6 +2839,7 @@ function memberForRecord(record = {}) {
 function recordBelongsToCurrentCoach(record = {}) {
   const lesson = lessonForRecord(record);
   if (lesson) return canProcessLesson(lesson);
+  if (record.serverLessonId) return false;
   const member = memberForRecord(record);
   return Boolean(member?.coach && canonicalCoachName(member.coach) === currentCoachName());
 }
@@ -2856,9 +2889,9 @@ function todayTaskToggleButton(items, tab) {
 function renderTodayTaskTabs({ lessonCount, makeupCount, recordCount }) {
   const active = todayTaskTab();
   const tabs = [
-    { id: "lessons", label: "오늘 수업", count: lessonCount },
-    { id: "makeup", label: "보강/변경 승인", count: makeupCount },
-    { id: "records", label: "수업 완료", count: recordCount },
+    { id: "lessons", label: "오늘 내 수업", count: lessonCount },
+    { id: "makeup", label: "내 승인·보강", count: makeupCount },
+    { id: "records", label: "내 미처리", count: recordCount },
   ];
   return `
     <div class="today-task-tabs" role="tablist" aria-label="오늘 처리 일정 구분">
@@ -2927,12 +2960,15 @@ function coachScheduleRoundLabel(lesson = {}) {
 function coachScheduleExceptionLabel(lesson = {}) {
   if (lesson.releasedOriginLabel) return lesson.releasedOriginLabel;
   const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
+  const participantOutcomes = (lesson.v2Participants || []).map((participant) => participant.outcome);
   const context = `${lesson.lessonSource || ""} ${lesson.type || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
   let detail = "";
   if ((lesson.originalCoachRoleId && lesson.coachRoleId && lesson.originalCoachRoleId !== lesson.coachRoleId) || /대타/.test(context)) detail = "대타";
   else if (/코치\s*변경/.test(context)) detail = "코치 변경";
   else if (/시간\s*변경|변경\s*완료/.test(context)) detail = "시간 변경";
-  const outcome = status === "completed"
+  const outcome = participantOutcomes.includes("absence")
+    ? `불참 · ${Number(lesson.deductedSessions) > 0 ? "차감" : "미차감"}`
+    : status === "completed"
     ? `완료 · ${Number(lesson.deductedSessions) > 0 ? "차감" : "미차감"}`
     : status === "no_show"
       ? `노쇼 · ${Number(lesson.deductedSessions) > 0 ? "차감" : "미차감"}`
@@ -3234,7 +3270,10 @@ function renderScheduleEditPanel() {
                       <input id="coachAbsenceReason" type="text" minlength="2" maxlength="200" placeholder="예: 회원 사전 연락" />
                     </label>
                   </div>
-                  <button class="reject-button" type="button" data-mark-lesson-absent="${lesson.id}">불참 처리</button>
+                  <div class="actions">
+                    <button class="reject-button" type="button" data-process-attendance="${lesson.id}" data-outcome="absence" data-deduct="false">불참 · 차감 없음</button>
+                    <button class="small-button" type="button" data-process-attendance="${lesson.id}" data-outcome="absence" data-deduct="true">불참 · 횟수 차감</button>
+                  </div>
                 </div>`
               : ""}
           </details>`
@@ -3250,8 +3289,8 @@ function renderScheduleEditPanel() {
                 </label>
               </div>
               <div class="actions">
-                <button class="reject-button" type="button" data-process-no-show="${lesson.id}" data-deduct="true">노쇼 · 차감</button>
-                <button class="small-button" type="button" data-process-no-show="${lesson.id}" data-deduct="false">노쇼 · 차감 없음</button>
+                <button class="reject-button" type="button" data-process-attendance="${lesson.id}" data-outcome="no_show" data-deduct="true">노쇼 · 차감</button>
+                <button class="small-button" type="button" data-process-attendance="${lesson.id}" data-outcome="no_show" data-deduct="false">노쇼 · 차감 없음</button>
               </div>
             </div>
           </details>`
@@ -3685,7 +3724,9 @@ function formatScheduleMemberName(name) {
 }
 
 function memberFilter() {
-  return state.memberFilter === "expired" ? "expired" : "active";
+  return ["all", "active", "expiring", "paused_pending", "expired"].includes(state.memberFilter)
+    ? state.memberFilter
+    : "all";
 }
 
 function memberQuery() {
@@ -3743,8 +3784,13 @@ function groupMemberNames(member) {
 }
 
 function displayMemberItemsForFilter() {
-  if (memberFilter() === "expired") return state.expiredMembers;
-  return state.members.flatMap((member) => {
+  const filter = memberFilter();
+  const source = filter === "expired"
+    ? state.expiredMembers
+    : filter === "all"
+      ? [...state.members, ...state.expiredMembers]
+      : state.members.filter((member) => member.statusCategory === filter);
+  return source.flatMap((member) => {
     const names = groupMemberNames(member);
     if (names.length <= 1) return [{ ...member, displayName: member.name, sourceMemberId: member.id, isGroupDisplay: false }];
     return names.map((name, index) => ({
@@ -3795,7 +3841,7 @@ function renderActiveMemberCard(member) {
         ${personAvatarMarkup({ ...member, name: member.displayName || member.name }, "tiny")}
         <span class="member-name-copy">
           <strong>${member.displayName || member.name}</strong>
-          <small>${member.isGroupDisplay ? `2대1 ${member.groupPosition}/${member.groupTotal}` : "개인 회원"}</small>
+          <small>${member.isGroupDisplay ? `2대1 ${member.groupPosition}/${member.groupTotal}` : "개인 회원"} · ${member.status || "수강중"}${member.ticketCount > 1 ? ` · 회원권 ${member.ticketCount}개` : ""}</small>
         </span>
       </span>
       <span>${member.coach}</span>
@@ -3829,7 +3875,7 @@ function renderExpiredMemberCard(member) {
 
 function renderMemberHeader(filter) {
   const labels =
-    filter === "active"
+    filter !== "expired"
       ? ["회원", "코치", "회원권", "총/소진/잔여", "최근 수업", "자가 NTRP", "코치 측정"]
       : ["회원", "코치", "이전 회원권", "기간", "사용", "상태"];
   return `<div class="member-row member-row-head ${filter}">${labels.map((label) => `<span>${label}</span>`).join("")}</div>`;
@@ -3854,40 +3900,27 @@ function renderMembers() {
   const filter = memberFilter();
   const query = memberQuery();
   const allItems = displayMemberItemsForFilter();
-  const coachFilter = state.memberCoachFilter || "all";
   const ticketFilter = state.memberTicketFilter || "all";
   const filteredByControls = allItems.filter((member) => {
-    const coachMatches = coachFilter === "all" || canonicalCoachName(member.coach) === coachFilter;
     const ticketMatches = ticketFilter === "all" || (ticketFilter === "group" ? isGroupTicket(member) : !isGroupTicket(member));
-    return coachMatches && ticketMatches;
+    return ticketMatches;
   });
   const items = query ? filteredByControls.filter((member) => memberSearchValues(member).includes(query)) : filteredByControls;
   const page = normalizeMemberPage(items.length);
   const visible = items.slice(page * memberPageSize, page * memberPageSize + memberPageSize);
   if ($("#memberSearchInput") && $("#memberSearchInput").value !== state.memberQuery) $("#memberSearchInput").value = state.memberQuery || "";
-  const coachSelect = $("#memberCoachFilter");
-  if (coachSelect) {
-    const coachNames = [...new Set(allItems.map((member) => canonicalCoachName(member.coach)).filter(Boolean))];
-    coachSelect.innerHTML = `<option value="all">전체 코치</option>${coachNames
-      .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
-      .join("")}`;
-    coachSelect.value = coachNames.includes(coachFilter) ? coachFilter : "all";
-    if (coachSelect.value !== coachFilter) state.memberCoachFilter = "all";
-  }
   if ($("#memberTicketFilter")) $("#memberTicketFilter").value = ticketFilter;
   $$(".member-filter").forEach((button) => button.classList.toggle("is-active", button.dataset.memberFilter === filter));
   if ($("#memberFilterSummary")) {
-    $("#memberFilterSummary").textContent =
-      filter === "active"
-        ? `현재 수강생 ${items.length}/${allItems.length}명 · ${page + 1}페이지`
-        : `만료회원 ${items.length}/${allItems.length}명 · ${page + 1}페이지`;
+    const filterLabel = { all: "내 담당 전체", active: "수강중", expiring: "만료 임박", paused_pending: "휴회·대기", expired: "만료" }[filter];
+    $("#memberFilterSummary").textContent = `${filterLabel} ${items.length}/${allItems.length}명 · ${page + 1}페이지`;
   }
   const rows = visible
-    .map((member) => (filter === "active" ? renderActiveMemberCard(member) : renderExpiredMemberCard(member)))
+    .map((member) => (filter === "expired" ? renderExpiredMemberCard(member) : renderActiveMemberCard(member)))
     .join("");
   target.innerHTML = rows ? `${renderMemberHeader(filter)}${rows}` : coachEmptyState({
-    title: filter === "active" ? "현재 수강생이 없습니다" : "만료회원이 없습니다",
-    reason: query || coachFilter !== "all" || ticketFilter !== "all"
+    title: filter === "expired" ? "만료회원이 없습니다" : "조건에 맞는 담당 회원이 없습니다",
+    reason: query || ticketFilter !== "all"
       ? "검색어나 필터를 바꾸면 다른 회원을 확인할 수 있습니다."
       : "관리자가 회원과 코치를 연결하면 이 목록에 표시됩니다.",
     compact: true,
@@ -3896,8 +3929,7 @@ function renderMembers() {
 }
 
 function findMemberDetail(memberId, groupName = "") {
-  if (memberFilter() === "expired") return state.expiredMembers.find((member) => member.id === memberId);
-  const member = state.members.find((item) => item.id === memberId);
+  const member = [...state.members, ...state.expiredMembers].find((item) => item.id === memberId);
   if (!member) return null;
   if (!groupName) return { ...member, displayName: member.name, sourceMemberId: member.id };
   return {
@@ -3936,7 +3968,7 @@ function renderMemberDetailModal(member) {
       <div class="member-detail-identity">
         ${personAvatarMarkup({ ...member, name: member.displayName || member.name }, "small")}
         <div>
-          <span>${memberFilter() === "expired" ? "만료회원" : member.isGroupDisplay ? "2대1 회원" : "현재 수강생"}</span>
+          <span>${member.statusCategory === "expired" ? "만료회원" : member.isGroupDisplay ? "2대1 회원" : member.status || "담당 회원"}</span>
           <strong>${member.displayName || member.name}</strong>
           <small>${member.coach || "담당 코치 미정"} · ${member.ticket || "회원권 미정"}</small>
         </div>
@@ -3953,7 +3985,7 @@ function renderMemberDetailModal(member) {
       <article class="modal-info-card">
         <span>회원권</span>
         <strong>${member.remaining !== undefined ? `잔여 ${member.remaining}회` : member.used || "-"}</strong>
-        <small>${memberFilter() === "expired" ? `만료 ${member.expiredAt || "-"}` : member.lastLesson || "최근 수업 없음"}</small>
+        <small>${member.statusCategory === "expired" ? `만료 ${member.expiredAt || "-"}` : member.lastLesson || "최근 수업 없음"}</small>
       </article>
       <article class="modal-info-card">
         <span>NTRP</span>
@@ -4571,48 +4603,83 @@ async function saveLessonEdit(id) {
   renderAll();
 }
 
-async function markCoachLessonAbsent(id) {
-  const lesson = ensureCoachLessonRecord(id);
-  const reason = $("#coachAbsenceReason")?.value.trim() || "";
-  if (!lesson?.serverLessonId || !canMarkRegularLessonAbsent(lesson)) return;
-  if (reason.length < 2) {
-    lesson.validationMessage = "불참 사유를 2자 이상 입력해 주세요.";
+function coachAttendanceParticipantResults(lesson, outcome, deduct, reason) {
+  return completionParticipantsForLesson(lesson).map((participant) => ({
+    userId: participant.userId || "",
+    ticketId: participant.ticketId || "",
+    outcome,
+    deduct: Boolean(deduct),
+    technique: "",
+    strength: "",
+    improvement: "",
+    nextGoal: "",
+    coachComment: reason,
+    keywords: [],
+    nextCurriculumRefId: null,
+    memberJournalId: null,
+  }));
+}
+
+async function processCoachAttendance(lessonId, outcome, deduct) {
+  const lesson = ensureCoachLessonRecord(lessonId);
+  const isAbsence = outcome === "absence";
+  const inputSelector = isAbsence ? "#coachAbsenceReason" : "#coachNoShowReason";
+  const reason = $(inputSelector)?.value.trim() || "";
+  const label = isAbsence ? "불참" : "노쇼";
+  if (!lesson?.serverLessonId || reason.length < 2) {
+    if (lesson) lesson.validationMessage = `${label} 사유를 2자 이상 입력해 주세요.`;
     renderLessonEditModal();
-    $("#coachAbsenceReason")?.focus();
+    $(inputSelector)?.focus();
     return;
   }
-  if (!window.confirm(`${lesson.member} ${lesson.day} ${lesson.time} 정규수업을 불참 처리할까요?\n\n횟수는 지금 차감되지 않습니다. 원래 시간은 보강 전용으로 열리고 회원에게 보강 안내가 전달됩니다.`)) return;
+  const participantResults = coachAttendanceParticipantResults(lesson, outcome, deduct, reason);
+  if (!participantResults.length || participantResults.some((item) => !item.userId || !item.ticketId)) {
+    lesson.validationMessage = "이 수업의 회원과 회원권 연결을 확인할 수 없습니다. 시간표를 새로고침해 주세요.";
+    renderLessonEditModal();
+    return;
+  }
+  const consequence = isAbsence && !deduct
+    ? "횟수는 차감하지 않고 보강 가능 상태로 전환합니다."
+    : `${deduct ? "회원권 횟수를 차감합니다." : "회원권 횟수는 차감하지 않습니다."}`;
+  if (!window.confirm(`${lesson.member} 수업을 ${label} · ${deduct ? "차감" : "차감 없음"}으로 처리할까요?\n\n${consequence}`)) return;
   const client = window.TennisNoteDataClient;
   if (!client?.rpc || !client.getSession?.()?.access_token) {
     lesson.validationMessage = "서버 로그인 상태를 확인한 뒤 다시 처리해 주세요.";
     renderLessonEditModal();
     return;
   }
-  lesson.validationMessage = "불참 처리와 보강 대기를 생성하고 있습니다.";
+  lesson.validationMessage = `${label} 처리와 회원권 상태를 확인하고 있습니다.`;
   renderLessonEditModal();
   try {
-    await client.rpc("tn_mark_lesson_absent_for_makeup", {
+    await client.rpc("tn_schedule_v2_process_lesson", {
       target_lesson_id: lesson.serverLessonId,
-      target_reason: reason,
+      target_participant_results: participantResults,
+      target_finalize: true,
+      target_operation_key: `schedule-v2-coach-${outcome}:${lesson.serverLessonId}:${globalThis.crypto?.randomUUID?.() || Date.now()}`,
     });
     window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
     closeLessonEditor();
+    coachScheduleV2WorkspaceCache = null;
     await syncCoachLessonsFromServer();
     renderAll();
-    showToast("불참 처리 완료 · 회원 보강 선택 대기");
+    showToast(`${label} · ${deduct ? "횟수 차감" : "차감 없음"} 처리 완료${isAbsence && !deduct ? " · 보강 가능" : ""}`);
   } catch (error) {
     const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
-    lesson.validationMessage = code.includes("absence_lesson_already_started")
-      ? "이미 시작한 수업은 사전 불참으로 처리할 수 없습니다."
-      : code.includes("absence_lesson_not_scheduled")
-        ? "예정 상태가 아닌 수업입니다. 새로고침 후 다시 확인해 주세요."
-        : code.includes("absence_regular_lesson_required")
-          ? "정규수업만 불참 처리할 수 있습니다."
-        : code.includes("absence_coach_or_admin_required")
-          ? "본인이 담당하는 수업만 불참 처리할 수 있습니다."
-          : "불참 처리에 실패했습니다. 수업 상태를 다시 확인해 주세요.";
+    lesson.validationMessage = code.includes("ticket_units_unavailable") || code.includes("ticket_unavailable")
+      ? "차감 가능한 회원권 횟수가 없습니다."
+      : code.includes("already_processed") || code.includes("existing_final")
+        ? "이미 처리된 수업입니다. 시간표를 새로고침해 주세요."
+        : code.includes("forbidden")
+          ? "본인이 담당하는 수업만 처리할 수 있습니다."
+          : code.includes("status_invalid")
+            ? "현재 상태에서는 처리할 수 없습니다. 새로고침 후 다시 확인해 주세요."
+            : `${label} 처리에 실패했습니다. 수업과 회원권 연결을 다시 확인해 주세요.`;
     renderLessonEditModal();
   }
+}
+
+async function markCoachLessonAbsent(id) {
+  return processCoachAttendance(id, "absence", false);
 }
 
 async function restoreCoachLessonAbsence(entitlementId) {
@@ -4654,35 +4721,7 @@ async function restoreCoachLessonAbsence(entitlementId) {
 }
 
 async function processCoachNoShow(lessonId, deduct) {
-  const lesson = (state.liveLessons || []).find((item) => String(item.id) === String(lessonId));
-  const reason = $("#coachNoShowReason")?.value.trim() || "";
-  if (!lesson?.serverLessonId || reason.length < 2) {
-    showToast("노쇼 사유를 2자 이상 입력해 주세요.");
-    $("#coachNoShowReason")?.focus();
-    return;
-  }
-  if (!window.confirm(`${lesson.member} 수업을 노쇼 · ${deduct ? "차감" : "차감 없음"}으로 처리할까요?`)) return;
-  try {
-    await window.TennisNoteDataClient.rpc("tn_process_lesson_outcome", {
-      target_lesson_id: lesson.serverLessonId,
-      target_outcome: "no_show",
-      target_deduct: Boolean(deduct),
-      target_note: reason,
-      target_next_curriculum_ref_id: null,
-      target_member_journal_id: null,
-    });
-    closeLessonEditor();
-    await syncCoachLessonsFromServer();
-    renderAll();
-    showToast(`노쇼 · ${deduct ? "횟수 차감" : "차감 없음"} 처리 완료`);
-  } catch (error) {
-    const code = error?.payload?.message || error?.payload?.code || error?.message || "";
-    showToast(code.includes("ticket_unavailable")
-      ? "차감 가능한 회원권 횟수가 없습니다."
-      : code.includes("already_processed")
-        ? "이미 처리된 수업입니다."
-        : "노쇼 처리에 실패했습니다. 새로고침 후 다시 시도해 주세요.");
-  }
+  return processCoachAttendance(lessonId, "no_show", deduct);
 }
 
 function saveLessonRecord() {
@@ -6219,6 +6258,16 @@ function bindEvents() {
       return;
     }
 
+    const attendanceButton = event.target.closest("[data-process-attendance]");
+    if (attendanceButton) {
+      processCoachAttendance(
+        attendanceButton.dataset.processAttendance,
+        attendanceButton.dataset.outcome,
+        attendanceButton.dataset.deduct === "true",
+      );
+      return;
+    }
+
     const noShowButton = event.target.closest("[data-process-no-show]");
     if (noShowButton) {
       processCoachNoShow(noShowButton.dataset.processNoShow, noShowButton.dataset.deduct === "true");
@@ -6487,7 +6536,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.325",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.326",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

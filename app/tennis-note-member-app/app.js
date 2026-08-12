@@ -1702,7 +1702,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.325",
+    workerUrl: "./service-worker.js?v=1.0.326",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3458,7 +3458,7 @@ function memberScheduleExceptionLabel(lesson = {}) {
     : status === "no_show"
       ? `노쇼 · ${deducted ? "차감" : "미차감"}`
       : ["absence", "absent"].includes(status)
-        ? "불참 · 차감 없음"
+        ? `불참 · ${deducted ? "차감" : "차감 없음"}`
         : status === "holiday"
           ? "휴무 · 차감 없음"
           : status === "cancelled"
@@ -8650,7 +8650,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.325" });
+  const params = new URLSearchParams({ v: "1.0.326" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -11085,7 +11085,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.325",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.326",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

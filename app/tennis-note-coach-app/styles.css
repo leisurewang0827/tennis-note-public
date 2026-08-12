@@ -2109,6 +2109,28 @@ a {
   background: var(--green);
 }
 
+.member-scope-note {
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #f8fafc;
+}
+
+.member-scope-note span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.member-scope-note strong {
+  color: var(--green-dark, #145c47);
+  font-size: 14px;
+}
+
 .member-search-box {
   display: grid;
   gap: 6px;

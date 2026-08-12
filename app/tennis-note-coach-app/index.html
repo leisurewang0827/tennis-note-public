@@ -8,8 +8,8 @@
     <title>테니스노트 코치 모드</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.325" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.325" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.326" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.326" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-2" />
   </head>
   <body>
@@ -123,20 +123,18 @@
             <h2>회원 관리</h2>
           </div>
           <div class="member-filter-tabs" aria-label="회원 구분">
-            <button class="member-filter is-active" type="button" data-member-filter="active">현재 수강생</button>
+            <button class="member-filter is-active" type="button" data-member-filter="all">전체</button>
+            <button class="member-filter" type="button" data-member-filter="active">수강중</button>
+            <button class="member-filter" type="button" data-member-filter="expiring">만료 임박</button>
+            <button class="member-filter" type="button" data-member-filter="paused_pending">휴회·대기</button>
             <button class="member-filter" type="button" data-member-filter="expired">만료회원</button>
           </div>
           <label class="member-search-box">
             <span>회원 검색</span>
-            <input id="memberSearchInput" type="search" placeholder="이름, 코치, 회원권, 시간, NTRP" autocomplete="off" />
+            <input id="memberSearchInput" type="search" placeholder="이름, 회원권, 시간, NTRP" autocomplete="off" />
           </label>
           <div class="member-quick-filters" aria-label="회원 빠른 필터">
-            <label>
-              <span>담당 코치</span>
-              <select id="memberCoachFilter">
-                <option value="all">전체 코치</option>
-              </select>
-            </label>
+            <div class="member-scope-note"><span>담당 범위</span><strong>내 담당 회원만</strong></div>
             <label>
               <span>수업 형태</span>
               <select id="memberTicketFilter">
@@ -261,16 +259,16 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.325"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.325"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.325"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.326"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.326"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.326"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.325"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.325"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.325"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.325"></script>
-    <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.325"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.325"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.326"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.326"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.326"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.326"></script>
+    <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.326"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.326"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-2"></script>
     <script>
       (() => {
@@ -289,7 +287,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.325";
+          appScript.src = "./app.js?v=1.0.326";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -302,7 +300,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.325";
+          appScript.src = "./app.js?v=1.0.326";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

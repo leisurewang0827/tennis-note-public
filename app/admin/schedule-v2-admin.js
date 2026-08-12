@@ -2264,7 +2264,7 @@
     const deduct = row.querySelector("[data-v2-deduct]");
     const comment = row.querySelector("[data-v2-comment]");
     const oneDay = state.editingLesson?.scheduleKind === "one_day";
-    const canDeduct = !oneDay && ["completed", "no_show"].includes(outcome);
+    const canDeduct = !oneDay && ["completed", "no_show", "absence"].includes(outcome);
     if (deduct) {
       deduct.disabled = !canDeduct || row.classList.contains("is-final");
       if (!canDeduct) deduct.checked = false;
@@ -2275,7 +2275,9 @@
         ? "수업 내용과 다음 연습을 5자 이상 입력"
         : outcome === "no_show"
           ? "노쇼 사유를 2자 이상 입력"
-          : "메모 (선택)";
+          : outcome === "absence"
+            ? "불참 사유를 2자 이상 입력"
+            : "메모 (선택)";
     }
   }
 
@@ -2314,7 +2316,7 @@
         const draftTools = editable && !final
           ? '<div class="schedule-v2-comment-draft"><input type="text" data-v2-comment-keywords placeholder="키워드: 포핸드, 타점, 풋워크" aria-label="피드백 키워드" /><button type="button" data-v2-generate-comment>초안 만들기</button></div>'
           : "";
-        const correctionTools = final && ["completed", "no_show"].includes(outcome) && participant.ticketId
+        const correctionTools = final && ["completed", "no_show", "absence"].includes(outcome) && participant.ticketId
           ? `<div class="schedule-v2-outcome-correction"><span>차감 ${deducted ? `${Number(participant.deductedSessions ?? participant.deducted_sessions)}회` : "없음"}</span><button type="button" data-v2-correct-deduction="${deducted ? "restore" : "deduct"}">${deducted ? "차감 복구" : "누락 차감"}</button></div>`
           : "";
         return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${disabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}</div>`;
@@ -2348,8 +2350,9 @@
       if (finalize && outcome === "completed" && !curriculumStep) {
         return { error: `${row.querySelector("strong").textContent} 회원의 다음 커리큘럼을 선택해 주세요.`, results: [] };
       }
-      if (finalize && outcome === "no_show" && coachComment.length < 2) {
-        return { error: `${row.querySelector("strong").textContent} 회원의 노쇼 사유를 입력해 주세요.`, results: [] };
+      if (finalize && ["no_show", "absence"].includes(outcome) && coachComment.length < 2) {
+        const outcomeLabel = outcome === "absence" ? "불참" : "노쇼";
+        return { error: `${row.querySelector("strong").textContent} 회원의 ${outcomeLabel} 사유를 입력해 주세요.`, results: [] };
       }
       results.push({
         userId: row.dataset.v2OutcomeUser,
