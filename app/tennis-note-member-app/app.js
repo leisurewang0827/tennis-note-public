@@ -1704,7 +1704,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.334",
+    workerUrl: "./service-worker.js?v=1.0.335",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -4725,13 +4725,7 @@ function renderSelects() {
 
 function memberCandidateWindowLabel(lesson = {}) {
   if (lesson.releasedRegularSlot) return "불참으로 열린 자리";
-  const rawGap = lesson.anchorGapMinutes !== undefined
-    ? lesson.anchorGapMinutes
-    : state.serverChangeAnchorGapMinutes;
-  if (rawGap === null) return "코치 수업이 있는 날의 빈 시간";
-  const gap = Number(rawGap);
-  if (Number.isFinite(gap)) return `코치 수업 사이·앞뒤 ${Math.max(0, gap)}분`;
-  return "코치 수업이 있는 날의 빈 시간";
+  return "예약 가능";
 }
 
 function renderJournalMode() {
@@ -8945,7 +8939,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.334" });
+  const params = new URLSearchParams({ v: "1.0.335" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9119,7 +9113,11 @@ function handleHomeAction(action) {
   const viewId = viewMap[action];
   if (!viewId) return;
   if (action === "makeup") {
-    openMemberChangeTimetable(memberMakeupDueLessons()[0]?.id || "");
+    const makeupSource = memberMakeupDueLessons()[0];
+    const couponSource = memberBookableCouponTickets()[0];
+    if (makeupSource) openMemberChangeTimetable(makeupSource.id);
+    else if (couponSource) startCouponBooking(couponSource.ticketId);
+    else openMemberChangeTimetable("");
     return;
   }
   navigateMemberView(viewId);
@@ -9144,7 +9142,10 @@ function handleSummaryAction(action) {
   }
   if (action === "change" || action === "makeup") {
     const firstDue = memberMakeupDueLessons()[0];
-    openMemberChangeTimetable(firstDue?.id || "");
+    const firstCoupon = memberBookableCouponTickets()[0];
+    if (firstDue) openMemberChangeTimetable(firstDue.id);
+    else if (firstCoupon) startCouponBooking(firstCoupon.ticketId);
+    else openMemberChangeTimetable("");
     return;
   }
   if (action === "comments") {
@@ -11239,6 +11240,7 @@ function renderActiveMemberView(viewId = activeMemberViewId()) {
 
 let memberLiveScheduleRefreshTimer = 0;
 let memberLiveScheduleRefreshInFlight = false;
+let memberLiveScheduleRefreshQueued = false;
 let memberLiveScheduleLastRefreshAt = 0;
 let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;
@@ -11273,9 +11275,12 @@ function renderMemberConnectivityStatus(reconnected = false) {
 async function refreshMemberLiveSchedule(options = {}) {
   const client = window.TennisNoteDataClient;
   const force = options.force === true;
+  if (memberLiveScheduleRefreshInFlight) {
+    if (force) memberLiveScheduleRefreshQueued = true;
+    return false;
+  }
   if (
-    memberLiveScheduleRefreshInFlight
-    || document.hidden
+    document.hidden
     || state.dataMode !== "live"
     || !state.member?.profileId
     || !client?.readiness?.().ready
@@ -11287,7 +11292,7 @@ async function refreshMemberLiveSchedule(options = {}) {
   try {
     await syncMemberTicketsFromServer();
     const [lessonsSynced, requestsSynced, notificationResult] = await Promise.all([
-      syncMemberLessonsFromServer(),
+      syncMemberLessonsFromServer(null, { force }),
       syncMemberChangeRequestsFromServer(),
       syncMemberNotificationsFromServer(),
     ]);
@@ -11299,15 +11304,22 @@ async function refreshMemberLiveSchedule(options = {}) {
     return Boolean(lessonsSynced || requestsSynced || notificationResult?.ok);
   } finally {
     memberLiveScheduleRefreshInFlight = false;
+    if (memberLiveScheduleRefreshQueued) {
+      memberLiveScheduleRefreshQueued = false;
+      queueMicrotask(() => {
+        void refreshMemberLiveSchedule({ force: true, render: options.render !== false });
+      });
+    }
   }
 }
 
 function installMemberLiveScheduleRefresh() {
   if (memberLiveScheduleRefreshTimer) return;
   const refresh = () => refreshMemberLiveSchedule().catch(() => false);
-  window.addEventListener("focus", refresh);
+  const forceRefresh = () => refreshMemberLiveSchedule({ force: true }).catch(() => false);
+  window.addEventListener("focus", forceRefresh);
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) refresh();
+    if (!document.hidden) forceRefresh();
   });
   memberLiveScheduleRefreshTimer = window.setInterval(refresh, 60_000);
 }
@@ -11316,7 +11328,7 @@ function installMemberScheduleRevisionWatcher() {
   if (memberScheduleRevisionWatcher || !window.TennisNoteScheduleRevision?.watch) return;
   memberScheduleRevisionWatcher = window.TennisNoteScheduleRevision.watch({
     branchId: () => currentLiveTicket()?.branchId || "",
-    active: () => !$("#appScreen")?.hidden && activeMemberViewId() === "scheduleView",
+    active: () => !$("#appScreen")?.hidden,
     onChange: async () => {
       memberScheduleV2WorkspaceCache = null;
       memberLiveScheduleLastRefreshAt = 0;
@@ -11329,7 +11341,9 @@ function installMemberConnectivityStatus() {
   renderMemberConnectivityStatus(false);
   window.addEventListener("offline", () => renderMemberConnectivityStatus(false));
   window.addEventListener("online", () => {
-    void refreshMemberLiveSchedule({ render: true }).finally(() => {
+    memberScheduleV2WorkspaceCache = null;
+    memberLiveScheduleLastRefreshAt = 0;
+    void refreshMemberLiveSchedule({ force: true, render: true }).finally(() => {
       renderMemberConnectivityStatus(true);
     });
   });
@@ -11438,7 +11452,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.334",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.335",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
