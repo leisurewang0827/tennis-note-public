@@ -549,9 +549,9 @@
             "resources": [
               {
                 "type": "video",
-                "url": "https://www.youtube.com/watch?v=UNSLArLm0nc",
-                "title": "How To Deal With High Heavy Topspin In Tennis (Drills Included!)",
-                "author": "RacquetFlex",
+                "url": "https://www.youtube.com/watch?v=iDUbbbL0B6E",
+                "title": "The #1 Rally Ball for Dominating Singles Matches",
+                "author": "StokkeTennis",
                 "verifiedAccessible": true
               }
             ],
@@ -1608,9 +1608,9 @@
             "resources": [
               {
                 "type": "video",
-                "url": "https://www.youtube.com/watch?v=TXJMS1TIXao",
-                "title": "Tennis Tip: Two-Handed Backhand Power Drill",
-                "author": "Online Tennis Instruction",
+                "url": "https://www.youtube.com/watch?v=RN2JoudAG5w",
+                "title": "How To Handle Fast Balls In Tennis - Tennis Lesson",
+                "author": "Top Tennis Training - Pro Tennis Lessons",
                 "verifiedAccessible": true
               }
             ],
@@ -2780,9 +2780,9 @@
             "resources": [
               {
                 "type": "video",
-                "url": "https://www.youtube.com/watch?v=SisXNTNYpzg",
-                "title": "[테니스 발리] 로우 발리:낮은공 발리의 모든것",
-                "author": "핏더테니스",
+                "url": "https://www.youtube.com/watch?v=LErP774tQ0g",
+                "title": "Tennis Volley lesson: Volley technique for dealing with hard hit balls...",
+                "author": "Total Tennis Domination",
                 "verifiedAccessible": true
               }
             ],
@@ -2875,9 +2875,9 @@
             "resources": [
               {
                 "type": "video",
-                "url": "https://www.youtube.com/watch?v=xmHs2dkxE-0",
-                "title": "Tennis Footwork Simplified and Explained",
-                "author": "Nodir Azimov | Tennis Coach",
+                "url": "https://www.youtube.com/watch?v=eMq0oS36lf8",
+                "title": "Tennis Approach FOOTWORK − Hitting While Moving Forward",
+                "author": "RacquetFlex",
                 "verifiedAccessible": true
               }
             ],
@@ -3194,9 +3194,16 @@
             "resources": [
               {
                 "type": "video",
-                "url": "https://www.youtube.com/watch?v=fXNF9SP7vSk",
-                "title": "The secret to optimal recovery | Tennis Footwork Lesson",
-                "author": "Grant VanderHayden",
+                "url": "https://www.youtube.com/watch?v=F4QyAHpKsig",
+                "title": "How to MOVE, HIT & RECOVER when you are pushed Back",
+                "author": "TENNIS360withARUL",
+                "verifiedAccessible": true
+              },
+              {
+                "type": "video",
+                "url": "https://www.youtube.com/watch?v=tiJ9zOmfPss",
+                "title": "The Importance of Depth and How to Achieve It",
+                "author": "Patrick Mouratoglou",
                 "verifiedAccessible": true
               }
             ],
@@ -3237,9 +3244,9 @@
             "resources": [
               {
                 "type": "video",
-                "url": "https://www.youtube.com/watch?v=St_RhLdtgy4",
-                "title": "How To Deal with High Balls in Tennis 🎾",
-                "author": "Top Tennis Training - Pro Tennis Lessons",
+                "url": "https://www.youtube.com/watch?v=R5GAP1OyW1w",
+                "title": "Defensive Lobs - Defensive Tennis Series by IMG Academy Bolletieri Tennis (3 of 6)",
+                "author": "IMG Academy",
                 "verifiedAccessible": true
               }
             ],
@@ -3556,9 +3563,9 @@
             "resources": [
               {
                 "type": "video",
-                "url": "https://www.youtube.com/watch?v=K_KtQaFYA2Y",
-                "title": "The tennis forehand technique - how to hit an angle",
-                "author": "Tennis Haus",
+                "url": "https://www.youtube.com/watch?v=fKCrYvxGt9E",
+                "title": "How to Hit Angles and Use Width on Tennis Court to Win Matches",
+                "author": "Top Tennis Training - Pro Tennis Lessons",
                 "verifiedAccessible": true
               }
             ],
@@ -3737,16 +3744,9 @@
             "resources": [
               {
                 "type": "video",
-                "url": "https://www.youtube.com/watch?v=JNfEK-8Vg60",
-                "title": "You should NEVER recover in the middle of the court! Did you know this? 😯#recovery #tennis #sports",
-                "author": "Patrick Mouratoglou",
-                "verifiedAccessible": true
-              },
-              {
-                "type": "video",
-                "url": "https://www.youtube.com/watch?v=eQKSBX05pCs",
-                "title": "#테니스 이렇게만 연습하면 스윙 리듬이 살아납니다 | #테니스연습",
-                "author": "에이밍 | AMYING",
+                "url": "https://www.youtube.com/watch?v=iEwYzPkwFsk",
+                "title": "Tennis Mental Toughness.  How To 'Reset' After A Bonehead Error.",
+                "author": "Brent Abel's WebTennis",
                 "verifiedAccessible": true
               }
             ],
