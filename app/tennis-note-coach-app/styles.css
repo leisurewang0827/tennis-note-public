@@ -2879,6 +2879,40 @@ body.notice-open {
   font-size: 11px;
 }
 
+.record-lesson-meta {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: start;
+  gap: 3px 8px;
+  margin-top: 8px;
+  border: 1px solid #d7e5df;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #f7fbf9;
+}
+
+.record-lesson-meta b {
+  color: #173f35;
+  font-size: 13px;
+}
+
+.record-lesson-meta span {
+  color: #0d6c51;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.record-lesson-meta small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .lesson-log-reference {
   border-top: 1px solid var(--line);
   padding-top: 4px;

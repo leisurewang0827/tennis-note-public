@@ -2260,7 +2260,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.331",
+    workerUrl: "./service-worker.js?v=1.0.332",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2290,7 +2290,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.331" });
+  const params = new URLSearchParams({ v: "1.0.332" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2840,6 +2840,38 @@ function lessonForRecord(record = {}) {
     const lessonLabel = String(record.lesson || "");
     return (!lesson.day || lessonLabel.includes(lesson.day)) && (!lesson.time || lessonLabel.includes(lesson.time));
   }) || null;
+}
+
+function coachRecordLessonMeta(record = {}) {
+  const lesson = lessonForRecord(record);
+  if (!lesson) {
+    return {
+      schedule: String(record.lesson || "수업 시간 확인 필요"),
+      round: "회차 확인 필요",
+      ticket: "회원권 확인 필요",
+    };
+  }
+  const date = String(lesson.lessonDate || "");
+  const [, month, day] = date.split("-");
+  const dateLabel = month && day
+    ? `${Number(month)}/${Number(day)}(${lesson.day || ""})`
+    : lesson.day || "날짜 확인";
+  const round = coachScheduleRoundLabel(lesson);
+  return {
+    schedule: `${dateLabel} ${lesson.time || "시간 확인"}`.trim(),
+    round: round === "0/0회차" ? "회차 미연결" : round,
+    ticket: String(lesson.ticket || lesson.type || "회원권 확인 필요"),
+  };
+}
+
+function coachRecordLessonMetaMarkup(record = {}) {
+  const meta = coachRecordLessonMeta(record);
+  return `
+    <div class="record-lesson-meta" aria-label="처리할 수업 정보">
+      <b>${escapeHtml(meta.schedule)}</b>
+      <span>${escapeHtml(meta.round)}</span>
+      <small>${escapeHtml(meta.ticket)}</small>
+    </div>`;
 }
 
 function memberForRecord(record = {}) {
@@ -5050,10 +5082,10 @@ function recordProcessingMarkup() {
           <article class="work-card log-card lesson-completion-card ${state.focusedLogId === log.id ? "is-focused" : ""}" data-log-card="${log.id}">
             <div class="log-main">
               <div class="lesson-completion-card-head">
-                <strong>${log.member}</strong>
-                <b>${coachStatusLabel("coachRecord", log.serverDeducted || log.ticketDeducted ? "deducted" : log.status, log.status)}</b>
+                <strong>${escapeHtml(log.member)}</strong>
+                <b>${escapeHtml(coachStatusLabel("coachRecord", log.serverDeducted || log.ticketDeducted ? "deducted" : log.status, log.status))}</b>
               </div>
-              <span>${log.lesson}</span>
+              ${coachRecordLessonMetaMarkup(log)}
               ${confirmed ? `<p class="coach-comment-view">코치 코멘트: ${log.coachComment}</p>` : ""}
               <details class="lesson-log-reference">
                 <summary>수업 참고</summary>
@@ -5146,9 +5178,9 @@ function renderMemberRecordPanel() {
     .map(
       (log) => `
         <article class="member-record-row ${state.focusedLogId === log.id ? "is-focused" : ""}">
-          <strong>${log.member}</strong>
-          <span>${log.lesson}</span>
-          <small>${coachStatusLabel("coachRecord", log.status, log.status)}</small>
+          <strong>${escapeHtml(log.member)}</strong>
+          ${coachRecordLessonMetaMarkup(log)}
+          <small>${escapeHtml(coachStatusLabel("coachRecord", log.status, log.status))}</small>
           <button class="small-button" type="button" data-focus-record="${log.id}">처리</button>
         </article>`,
     )
@@ -6549,7 +6581,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.331",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.332",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

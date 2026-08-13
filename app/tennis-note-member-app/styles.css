@@ -723,6 +723,43 @@ button {
   color: #9a4a00;
 }
 
+.home-lesson-change,
+.member-lesson-change {
+  display: grid;
+  gap: 2px;
+}
+
+.home-lesson-change i,
+.member-lesson-change i {
+  overflow: hidden;
+  color: #5f4b3a;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-ticket-lesson-actions {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 6px !important;
+}
+
+.home-ticket-lesson-actions button {
+  min-height: 40px;
+  border: 1px solid #bfd8cf;
+  border-radius: 6px;
+  color: #165c49;
+  background: #f7fbf9;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.home-ticket-lesson-actions button:last-child {
+  border-color: #13795b;
+  color: #fff;
+  background: #13795b;
+}
+
 .today-action-panel {
   margin-bottom: 14px;
 }
