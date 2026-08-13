@@ -3485,6 +3485,28 @@ textarea {
   min-height: 34px;
 }
 
+.curriculum-resource-links,
+.curriculum-video-item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.curriculum-video-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 8px;
+  background: #000;
+}
+
+.curriculum-video-fallback {
+  width: fit-content;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .curriculum-environment-note {
   border-left: 3px solid var(--amber);
   padding-left: 8px;

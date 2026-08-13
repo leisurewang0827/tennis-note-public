@@ -1704,7 +1704,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.336",
+    workerUrl: "./service-worker.js?v=1.0.337",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -5087,15 +5087,66 @@ function filteredMemberCurriculumTracks() {
     .filter((track) => track.steps.length > 0);
 }
 
+function curriculumYoutubeVideoId(value = "") {
+  try {
+    const url = new URL(String(value || "").trim(), window.location.origin);
+    const host = url.hostname.replace(/^www\./u, "").toLowerCase();
+    let candidate = "";
+    if (host === "youtu.be") candidate = url.pathname.split("/").filter(Boolean)[0] || "";
+    if (["youtube.com", "m.youtube.com", "youtube-nocookie.com"].includes(host)) {
+      candidate = url.searchParams.get("v") || url.pathname.match(/^\/(?:embed|shorts)\/([^/?#]+)/u)?.[1] || "";
+    }
+    return /^[A-Za-z0-9_-]{11}$/u.test(candidate) ? candidate : "";
+  } catch {
+    return "";
+  }
+}
+
 function curriculumResourceLinks(step = {}) {
   const resources = Array.isArray(step.resources) ? step.resources : [];
   if (!resources.length) return "";
   return `
     <div class="curriculum-resource-links" aria-label="수업 자료">
       ${resources
-        .map((resource, index) => `<a class="small-button" href="${escapeHtml(resource.url || "")}" target="_blank" rel="noreferrer">영상 ${index + 1}</a>`)
+        .map((resource, index) => {
+          const url = String(resource.url || "");
+          const videoId = curriculumYoutubeVideoId(url);
+          if (!videoId) {
+            return `<a class="small-button" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">자료 ${index + 1} 보기</a>`;
+          }
+          const title = String(resource.title || `커리큘럼 영상 ${index + 1}`);
+          return `
+            <div class="curriculum-video-item">
+              <button class="small-button" type="button" data-play-curriculum-video="${videoId}" data-curriculum-video-title="${escapeHtml(title)}">
+                영상 ${index + 1} 재생
+              </button>
+            </div>`;
+        })
         .join("")}
     </div>`;
+}
+
+function playCurriculumVideo(button) {
+  const videoId = String(button?.dataset?.playCurriculumVideo || "");
+  if (!/^[A-Za-z0-9_-]{11}$/u.test(videoId)) return;
+  const item = button.closest(".curriculum-video-item");
+  if (!item) return;
+  const title = String(button.dataset.curriculumVideoTitle || "커리큘럼 영상");
+  const iframe = document.createElement("iframe");
+  iframe.className = "curriculum-video-frame";
+  iframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0`;
+  iframe.title = title;
+  iframe.loading = "lazy";
+  iframe.referrerPolicy = "strict-origin-when-cross-origin";
+  iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+  iframe.allowFullscreen = true;
+  const fallback = document.createElement("a");
+  fallback.className = "curriculum-video-fallback";
+  fallback.href = `https://www.youtube.com/watch?v=${videoId}`;
+  fallback.target = "_blank";
+  fallback.rel = "noreferrer";
+  fallback.textContent = "YouTube에서 보기";
+  item.replaceChildren(iframe, fallback);
 }
 
 function curriculumThreeStepsMarkup(step = {}) {
@@ -8939,7 +8990,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.336" });
+  const params = new URLSearchParams({ v: "1.0.337" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -10985,6 +11036,11 @@ function bindEvents() {
     if (targetView && $(`#${targetView}`)) setView(targetView, { replaceHistory: false });
   });
   document.addEventListener("click", (event) => {
+    const curriculumVideoButton = event.target.closest("[data-play-curriculum-video]");
+    if (curriculumVideoButton) {
+      playCurriculumVideo(curriculumVideoButton);
+      return;
+    }
     const viewButton = event.target.closest("[data-view]");
     if (viewButton) {
       navigateMemberView(viewButton.dataset.view);
@@ -11452,7 +11508,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.336",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.337",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
