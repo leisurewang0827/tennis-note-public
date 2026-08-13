@@ -84,6 +84,7 @@
     editorFocusTarget: null,
     closureEditorOpen: false,
     editingClosureId: "",
+    closureImpact: null,
     closureScrollY: 0,
     closureFocusTarget: null,
     deferredRefresh: false,
@@ -2590,10 +2591,81 @@
     form.elements.closureStartTime.value = "09:00";
     form.elements.closureEndTime.value = "18:00";
     state.editingClosureId = "";
+    state.closureImpact = null;
+    const impact = $("#scheduleV2ClosureImpact");
+    if (impact) impact.hidden = true;
     $("#scheduleV2ClosureSaveButton").textContent = "휴무일 저장";
     syncClosureTimeFields();
     renderClosureList();
     setClosureMessage("");
+  }
+
+  function renderClosureImpact(preview) {
+    const panel = $("#scheduleV2ClosureImpact");
+    const summary = $("#scheduleV2ClosureImpactSummary");
+    const list = $("#scheduleV2ClosureImpactList");
+    if (!panel || !summary || !list) return;
+    state.closureImpact = preview || null;
+    if (!preview || Number(preview.lessonCount || 0) + Number(preview.oneDayCount || 0) === 0) {
+      panel.hidden = true;
+      list.innerHTML = "";
+      return;
+    }
+    const lessonCount = Number(preview.lessonCount || 0);
+    const oneDayCount = Number(preview.oneDayCount || 0);
+    const paidOneDayCount = Number(preview.paidOneDayCount || 0);
+    summary.textContent = `예정 수업 ${lessonCount}건 · 원데이 ${oneDayCount}건${paidOneDayCount ? ` · 결제 확인 원데이 ${paidOneDayCount}건` : ""}`;
+    const lessonRows = (preview.lessons || []).map((lesson) => {
+      const names = (lesson.participants || []).map((participant) => participant.name).filter(Boolean).join(" · ") || "참여자 확인 필요";
+      return `<div class="schedule-v2-closure-impact-row"><span>${escapeHtml(`${lesson.startTime} · ${lesson.coachName || "코치"}`)}</span><strong>${escapeHtml(names)}</strong></div>`;
+    });
+    const oneDayRows = (preview.oneDayBookings || []).map((booking) => (
+      `<div class="schedule-v2-closure-impact-row"><span>${escapeHtml(`${booking.startTime} · 원데이`)}</span><strong>${escapeHtml(booking.guestName || "이름 미입력")}${booking.paymentStatus === "paid" ? " · 결제 확인" : ""}</strong></div>`
+    ));
+    list.innerHTML = [...lessonRows, ...oneDayRows].join("");
+    panel.hidden = false;
+  }
+
+  async function previewClosureImpact(closureId) {
+    const preview = await bridge().rpc("tn_schedule_v2_preview_closure_impact", {
+      target_branch_id: state.payload.branch.id,
+      target_closure_id: closureId,
+    });
+    renderClosureImpact(preview);
+    return preview;
+  }
+
+  async function applyClosureTreatment(policy) {
+    const preview = state.closureImpact;
+    const closureId = preview?.closure?.id;
+    if (!closureId || !requireWritableServer()) return;
+    const holiday = policy === "holiday_no_deduction";
+    const button = holiday ? $("#scheduleV2ClosureApplyHolidayButton") : $("#scheduleV2ClosureKeepLessonsButton");
+    const reason = $("#scheduleV2ClosureReason")?.value?.trim() || "센터 휴무";
+    button.disabled = true;
+    setClosureMessage(holiday ? "기존 수업을 휴무·차감 없음으로 처리하고 있습니다." : "기존 수업 유지 정책을 저장하고 있습니다.", "info");
+    try {
+      const result = await bridge().rpc("tn_schedule_v2_apply_closure_treatment", {
+        target_branch_id: state.payload.branch.id,
+        target_closure_id: closureId,
+        target_policy: policy,
+        target_reason: reason,
+        target_operation_key: operationKey("admin-closure-treatment"),
+      });
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ quiet: true, force: true });
+      const paidCount = Number(result?.paidOneDayCount || 0);
+      setStatus(holiday
+        ? `휴무 처리 완료 · 수업 ${Number(result?.processedLessonCount || 0)}건 · 원데이 ${Number(result?.cancelledOneDayCount || 0)}건${paidCount ? ` · 결제 확인 ${paidCount}건` : ""}`
+        : "휴무 표시만 적용하고 기존 수업은 유지했습니다.", paidCount ? "warning" : "success");
+      state.closureImpact = null;
+      closeClosureEditor();
+    } catch (error) {
+      setClosureMessage(errorMessage(error));
+    } finally {
+      button.disabled = false;
+    }
   }
 
   function editClosure(closureId) {
@@ -2686,11 +2758,17 @@
       state.payload = null;
       invalidateCurrentWorkspaceCache();
       await loadWorkspace({ quiet: true, force: true });
-      const count = Number(result?.existingLessonCount || result?.existing_lesson_count || 0);
-      setStatus(count
-        ? `휴무일 반영 완료 · 기존 수업 ${count}건은 유지했으니 확인해 주세요.`
-        : "휴무일 반영 완료 · 시간표에 바로 표시했습니다.", count ? "warning" : "success");
-      closeClosureEditor();
+      const closureId = result?.closure?.id;
+      const preview = closureId ? await previewClosureImpact(closureId) : null;
+      const count = Number(preview?.lessonCount || result?.existingLessonCount || result?.existing_lesson_count || 0);
+      const oneDayCount = Number(preview?.oneDayCount || 0);
+      if (count + oneDayCount > 0) {
+        setClosureMessage("휴무와 겹치는 기존 일정의 처리 방법을 선택해 주세요.", "warning");
+        setStatus(`휴무일 저장 완료 · 기존 일정 ${count + oneDayCount}건 처리 확인 필요`, "warning");
+      } else {
+        setStatus("휴무일 반영 완료 · 시간표에 바로 표시했습니다.", "success");
+        closeClosureEditor();
+      }
     } catch (error) {
       setClosureMessage(errorMessage(error));
     } finally {
@@ -2738,6 +2816,9 @@
       schedule_v2_closure_overlap: "같은 날짜와 시간에 겹치는 휴무가 이미 있습니다.",
       schedule_v2_closure_not_found: "이미 해제되었거나 찾을 수 없는 휴무입니다. 시간표를 새로고침해 주세요.",
       schedule_v2_closure_reference_required: "해제할 휴무를 다시 선택해 주세요.",
+      schedule_v2_closure_policy_invalid: "기존 수업 처리 방법을 다시 선택해 주세요.",
+      schedule_v2_closure_participant_ticket_review_required: "회원권 연결을 확인해야 하는 수업이 있어 휴무 처리를 중단했습니다. 기존 수업 목록을 확인해 주세요.",
+      schedule_v2_operation_key_required: "중복 방지 정보가 없어 저장을 중단했습니다. 다시 시도해 주세요.",
       schedule_v2_substitute_time_overlap: "대타 코치의 다른 수업과 시간이 겹칩니다.",
       schedule_v2_substitute_coach_unavailable: "현재 근무 중인 대타 코치를 선택해 주세요.",
       schedule_v2_substitute_same_as_original: "원 담당 코치와 다른 코치를 선택해 주세요.",
@@ -3447,6 +3528,8 @@
       }
     });
     $("#scheduleV2ClosureResetButton")?.addEventListener("click", () => resetClosureForm({ keepDate: true }));
+    $("#scheduleV2ClosureKeepLessonsButton")?.addEventListener("click", () => void applyClosureTreatment("keep"));
+    $("#scheduleV2ClosureApplyHolidayButton")?.addEventListener("click", () => void applyClosureTreatment("holiday_no_deduction"));
     $("#scheduleV2ClosureList")?.addEventListener("click", (event) => {
       const editButton = event.target.closest("[data-v2-edit-closure]");
       if (editButton) {

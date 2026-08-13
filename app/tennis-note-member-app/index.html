@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.341" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.341" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.342" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.342" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -758,10 +758,23 @@
             <span>거주 동네 <small>선택</small></span>
             <input id="identityNeighborhood" type="text" maxlength="50" autocomplete="address-level3" placeholder="예: 화양동" />
           </label>
-          <label class="consent-row">
-            <input id="identityPrivacyConsent" type="checkbox" required />
-            <span><a href="../tennis-note-legal/privacy.html" target="_blank" rel="noreferrer">개인정보 처리방침</a>을 확인하고 동의합니다.</span>
-          </label>
+          <div class="identity-consent-list">
+            <label class="consent-row">
+              <input id="identityTermsConsent" type="checkbox" required />
+              <span><b>필수</b> <a href="../tennis-note-legal/terms.html" target="_blank" rel="noreferrer">서비스 이용약관</a> 동의</span>
+            </label>
+            <label class="consent-row">
+              <input id="identityPrivacyConsent" type="checkbox" required />
+              <span><b>필수</b> <a href="../tennis-note-legal/privacy.html" target="_blank" rel="noreferrer">개인정보 수집·이용</a> 동의</span>
+            </label>
+            <fieldset class="identity-marketing-consents">
+              <legend><b>선택</b> 이벤트·할인 소식 받기</legend>
+              <label><input id="identityMarketingPush" type="checkbox" /><span>앱 알림</span></label>
+              <label><input id="identityMarketingSms" type="checkbox" /><span>문자</span></label>
+              <label><input id="identityMarketingEmail" type="checkbox" /><span>이메일</span></label>
+            </fieldset>
+            <small>수업·변경·회원권 같은 운영 안내는 마케팅 동의와 별도로 앱 알림함에서 확인할 수 있습니다.</small>
+          </div>
           <p id="identitySetupMessage" class="policy-note" aria-live="polite"></p>
           <div class="modal-actions">
             <button class="primary-button" type="submit">가입 완료</button>
@@ -1062,17 +1075,17 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.341"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.341"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.341"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.342"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.342"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.342"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.341"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.341"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.341"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.341"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.341"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.342"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.342"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.342"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.342"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.342"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
     <script>
       (() => {
@@ -1091,7 +1104,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.341";
+          appScript.src = "./app.js?v=1.0.342";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -1104,7 +1117,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.341";
+          appScript.src = "./app.js?v=1.0.342";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

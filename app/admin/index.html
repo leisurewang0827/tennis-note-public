@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.341" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.342" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-14" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.341" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.342" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -549,6 +549,18 @@
                 <label><span>종료</span><input name="closureEndTime" type="time" step="600" /></label>
               </div>
               <div id="scheduleV2ClosureList" class="schedule-v2-closure-list" aria-live="polite"></div>
+              <section id="scheduleV2ClosureImpact" class="schedule-v2-closure-impact" aria-labelledby="scheduleV2ClosureImpactTitle" hidden>
+                <div>
+                  <strong id="scheduleV2ClosureImpactTitle">기존 수업 처리</strong>
+                  <p id="scheduleV2ClosureImpactSummary"></p>
+                </div>
+                <div id="scheduleV2ClosureImpactList" class="schedule-v2-closure-impact-list"></div>
+                <label><span>휴무 사유</span><input id="scheduleV2ClosureReason" type="text" maxlength="200" value="센터 휴무" /></label>
+                <div class="schedule-v2-closure-impact-actions">
+                  <button id="scheduleV2ClosureKeepLessonsButton" type="button">기존 수업 유지</button>
+                  <button id="scheduleV2ClosureApplyHolidayButton" class="danger-button" type="button">휴무·차감 없음으로 처리</button>
+                </div>
+              </section>
               <div id="scheduleV2ClosureMessage" class="schedule-v2-editor-message" role="status"></div>
               <footer>
                 <button id="scheduleV2ClosureResetButton" type="button">새로 입력</button>
@@ -1998,19 +2010,19 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.341"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.341"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.341"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.342"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.342"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.342"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.341"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.341"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.341"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.341"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.341"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.341"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.342"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.342"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.342"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.342"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.342"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.342"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.341"></script>
+    <script src="./app.js?v=1.0.342"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-14"></script>
   </body>
 </html>

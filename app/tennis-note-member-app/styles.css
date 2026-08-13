@@ -3857,6 +3857,45 @@ textarea {
   text-underline-offset: 2px;
 }
 
+.identity-consent-list {
+  display: grid;
+  gap: 10px;
+}
+
+.identity-marketing-consents {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.identity-marketing-consents legend {
+  padding: 0 4px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.identity-marketing-consents label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.identity-marketing-consents input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
 body.identity-setup-required {
   overflow: hidden;
 }
@@ -7218,10 +7257,33 @@ body.modal-open {
   font-size: inherit;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1024px) {
   .app-bottom-sheet :is(input, select, textarea),
   .change-request-modal :is(input, select, textarea) {
     font-size: 16px !important;
+  }
+
+  .identity-setup-modal {
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-left: max(12px, env(safe-area-inset-left));
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .identity-setup-card {
+    max-height: calc(100dvh - max(24px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+}
+
+@media (max-width: 720px) {
+  .identity-marketing-consents {
+    grid-template-columns: 1fr;
   }
 }
 

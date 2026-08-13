@@ -3,7 +3,10 @@
   const authStorageKey = "tennis-note-supabase-session";
   const authPersistenceKey = "tennis-note-auth-persistence";
   const oauthCodeVerifierKey = "tennis-note-oauth-code-verifier";
+  const oauthAttemptKey = "tennis-note-oauth-attempt";
+  const oauthCallbackFingerprintKey = "tennis-note-oauth-callback-fingerprint";
   const nativeUrlFingerprintKey = "tennis-note-native-url-fingerprint";
+  const oauthAttemptMaxAgeMs = 15 * 60 * 1000;
   const offlineDatabaseName = "tennis-note-offline-cache";
   const offlineDatabaseVersion = 1;
   const offlineResponseStore = "responses";
@@ -14,6 +17,7 @@
   let pendingOAuthCredentialCapture = Promise.resolve(null);
   let offlineDatabasePromise = null;
   let nativeOAuthInFlightProvider = "";
+  let oauthCodeExchangePromise = null;
 
   function emitClientError(stage, error, context = {}) {
     const value = error || new Error(stage || "client_error");
@@ -371,6 +375,19 @@
   }
 
   function oauthStorageValue() {
+    let attempt = null;
+    for (const storage of authSessionStores()) {
+      try {
+        attempt = JSON.parse(storage.getItem(oauthAttemptKey) || "null");
+        if (attempt) break;
+      } catch (error) {
+        try { storage.removeItem(oauthAttemptKey); } catch (storageError) { /* best effort */ }
+      }
+    }
+    if (attempt && Date.now() - Number(attempt.startedAt || 0) > oauthAttemptMaxAgeMs) {
+      clearOAuthStorageValue();
+      return "";
+    }
     for (const storage of authSessionStores()) {
       try {
         const value = storage.getItem(oauthCodeVerifierKey);
@@ -385,7 +402,39 @@
   function clearOAuthStorageValue() {
     authSessionStores().forEach((storage) => {
       try { storage.removeItem(oauthCodeVerifierKey); } catch (error) { /* best effort */ }
+      try { storage.removeItem(oauthAttemptKey); } catch (error) { /* best effort */ }
     });
+  }
+
+  function oauthCodeFingerprint(code) {
+    let hash = 2166136261;
+    const value = String(code || "");
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `${(hash >>> 0).toString(36)}:${value.length}`;
+  }
+
+  function handledOAuthCode(code) {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(oauthCallbackFingerprintKey) || "null");
+      return saved?.fingerprint === oauthCodeFingerprint(code)
+        && Date.now() - Number(saved?.handledAt || 0) < oauthAttemptMaxAgeMs;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function rememberOAuthCode(code) {
+    try {
+      window.sessionStorage.setItem(oauthCallbackFingerprintKey, JSON.stringify({
+        fingerprint: oauthCodeFingerprint(code),
+        handledAt: Date.now(),
+      }));
+    } catch (error) {
+      // The saved session still prevents a second login when session storage is unavailable.
+    }
   }
 
   function base64Url(bytes) {
@@ -394,7 +443,7 @@
     return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
   }
 
-  async function createOAuthPkcePair() {
+  async function createOAuthPkcePair(provider = "") {
     const bytes = new Uint8Array(48);
     window.crypto?.getRandomValues?.(bytes);
     const verifier = base64Url(bytes);
@@ -403,11 +452,26 @@
     const challenge = base64Url(new Uint8Array(digest));
     authSessionStores().forEach((storage) => {
       try { storage.setItem(oauthCodeVerifierKey, verifier); } catch (error) { /* fallback storage may still work */ }
+      try {
+        storage.setItem(oauthAttemptKey, JSON.stringify({
+          provider: providerKey(provider),
+          startedAt: Date.now(),
+        }));
+      } catch (error) { /* fallback storage may still work */ }
     });
     return { challenge };
   }
 
   async function exchangeOAuthCode(code) {
+    if (handledOAuthCode(code) && getSession()?.access_token) return getSession();
+    if (oauthCodeExchangePromise) return oauthCodeExchangePromise;
+    oauthCodeExchangePromise = performOAuthCodeExchange(code).finally(() => {
+      oauthCodeExchangePromise = null;
+    });
+    return oauthCodeExchangePromise;
+  }
+
+  async function performOAuthCodeExchange(code) {
     const verifier = oauthStorageValue();
     if (!code || !verifier) {
       const error = new Error("oauth_code_verifier_missing");
@@ -427,7 +491,9 @@
     }
     const payload = await response.json();
     clearOAuthStorageValue();
-    return saveSession({ ...payload, provider: storedProvider() || "Supabase" });
+    const session = saveSession({ ...payload, provider: storedProvider() || "Supabase" });
+    rememberOAuthCode(code);
+    return session;
   }
 
   function transientNetworkError(error) {
@@ -909,7 +975,7 @@
     }
     const key = providerKey(provider);
     const slug = providerSlug(provider);
-    const pkce = await createOAuthPkcePair();
+    const pkce = await createOAuthPkcePair(key);
     const redirectTo = options.redirectTo || (isNativeApp()
       ? nativeOAuthBridgeRedirect()
       : `${window.location.origin}${window.location.pathname}${window.location.search}`);

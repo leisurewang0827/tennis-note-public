@@ -12,8 +12,13 @@ const state = {
     neighborhood: "",
     gender: "",
     profileCompletedAt: "",
+    termsConsentVersion: "",
+    termsConsentedAt: "",
     privacyConsentVersion: "",
     privacyConsentedAt: "",
+    marketingPushConsent: false,
+    marketingSmsConsent: false,
+    marketingEmailConsent: false,
     suggestedNickname: "",
     branch: "",
     mainCoach: "",
@@ -182,6 +187,7 @@ const memberScheduleCoachLaneWidth = 64;
 const journalMediaBucket = "tennisnote-journal-media";
 const serverJournalSchema = "tennisnote-mobile-journal-v1";
 const memberEnrollmentFormVersion = "2026-07-15-v1";
+const identityTermsVersion = "2026-08-13-v1";
 const identityPrivacyVersion = "2026-07-19-v2";
 const memberEnrollmentLegacyDefaults = {
   lessonGoal: "미수집",
@@ -1704,7 +1710,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.341",
+    workerUrl: "./service-worker.js?v=1.0.342",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -8990,7 +8996,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.341" });
+  const params = new URLSearchParams({ v: "1.0.342" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9796,6 +9802,7 @@ function identityErrorMessage(error) {
   if (code.includes("phone_invalid")) return "휴대전화 번호를 010부터 정확히 입력해 주세요.";
   if (code.includes("birth_year_invalid")) return "출생연도를 확인해 주세요.";
   if (code.includes("gender_invalid")) return "성별을 선택해 주세요.";
+  if (code.includes("terms_consent")) return "서비스 이용약관 동의가 필요합니다.";
   if (code.includes("privacy_consent")) return "개인정보 처리방침 동의가 필요합니다.";
   if (code.includes("login_required")) return "로그인 상태를 다시 확인해 주세요.";
   return "정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
@@ -9842,6 +9849,54 @@ function applySavedIdentity(profile = {}) {
     state.member.name = state.profile.name;
     state.member.nickname = state.profile.nickname;
   }
+}
+
+function applyConsentPreferences(preferences = {}) {
+  state.profile.termsConsentVersion = preferences.termsVersion || state.profile.termsConsentVersion || "";
+  state.profile.termsConsentedAt = preferences.termsConsentedAt || state.profile.termsConsentedAt || "";
+  state.profile.privacyConsentVersion = preferences.privacyVersion || state.profile.privacyConsentVersion || "";
+  state.profile.privacyConsentedAt = preferences.privacyConsentedAt || state.profile.privacyConsentedAt || "";
+  state.profile.marketingPushConsent = preferences.marketingPush === true;
+  state.profile.marketingSmsConsent = preferences.marketingSms === true;
+  state.profile.marketingEmailConsent = preferences.marketingEmail === true;
+}
+
+async function loadIdentityConsentPreferences() {
+  const client = window.TennisNoteDataClient;
+  if (!hasLiveMemberSession() || !client?.rpc) return {};
+  const rawResult = await retryTransientNetwork(() => client.rpc("tn_my_consent_preferences"));
+  const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
+  applyConsentPreferences(result || {});
+  return result || {};
+}
+
+async function persistConsentPreferences({ marketingPush, marketingSms, marketingEmail }) {
+  const client = window.TennisNoteDataClient;
+  if (!hasLiveMemberSession() || !client?.rpc) {
+    applyConsentPreferences({
+      termsVersion: identityTermsVersion,
+      termsConsentedAt: new Date().toISOString(),
+      privacyVersion: identityPrivacyVersion,
+      privacyConsentedAt: new Date().toISOString(),
+      marketingPush,
+      marketingSms,
+      marketingEmail,
+    });
+    return { ok: true, offlinePreview: true };
+  }
+  const rawResult = await retryTransientNetwork(() => client.rpc("tn_save_my_consent_preferences", {
+    target_terms_version: identityTermsVersion,
+    target_privacy_version: identityPrivacyVersion,
+    target_terms_consent: true,
+    target_privacy_consent: true,
+    target_marketing_push: marketingPush === true,
+    target_marketing_sms: marketingSms === true,
+    target_marketing_email: marketingEmail === true,
+  }));
+  const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
+  if (!result?.ok) throw new Error("consent_update_not_confirmed");
+  applyConsentPreferences(result);
+  return result;
 }
 
 async function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender }) {
@@ -9898,9 +9953,15 @@ function populateIdentitySetup(user = null) {
   if ($("#identityBirthYear")) $("#identityBirthYear").value = state.profile.birthYear || state.member?.birthYear || "";
   if ($("#identityNeighborhood")) $("#identityNeighborhood").value = state.profile.neighborhood || state.member?.neighborhood || "";
   if ($("#identityGender")) $("#identityGender").value = state.profile.gender || state.member?.gender || "";
+  if ($("#identityTermsConsent")) {
+    $("#identityTermsConsent").checked = state.profile.termsConsentVersion === identityTermsVersion;
+  }
   if ($("#identityPrivacyConsent")) {
     $("#identityPrivacyConsent").checked = state.profile.privacyConsentVersion === identityPrivacyVersion;
   }
+  if ($("#identityMarketingPush")) $("#identityMarketingPush").checked = state.profile.marketingPushConsent === true;
+  if ($("#identityMarketingSms")) $("#identityMarketingSms").checked = state.profile.marketingSmsConsent === true;
+  if ($("#identityMarketingEmail")) $("#identityMarketingEmail").checked = state.profile.marketingEmailConsent === true;
   setNicknameStatus("identityNicknameStatus", "닉네임은 모든 회원 사이에서 중복될 수 없습니다.");
   if ($("#identitySetupMessage")) $("#identitySetupMessage").textContent = "";
 }
@@ -9925,6 +9986,10 @@ async function submitIdentitySetup(event) {
   const form = event.currentTarget;
   const button = form.querySelector('button[type="submit"]');
   const message = $("#identitySetupMessage");
+  if (!$("#identityTermsConsent")?.checked) {
+    if (message) message.textContent = "서비스 이용약관 동의가 필요합니다.";
+    return;
+  }
   if (!$("#identityPrivacyConsent")?.checked) {
     if (message) message.textContent = "개인정보 처리방침 동의가 필요합니다.";
     return;
@@ -9932,6 +9997,11 @@ async function submitIdentitySetup(event) {
   button.disabled = true;
   if (message) message.textContent = "가입 정보를 안전하게 저장하고 있습니다.";
   try {
+    await persistConsentPreferences({
+      marketingPush: $("#identityMarketingPush")?.checked === true,
+      marketingSms: $("#identityMarketingSms")?.checked === true,
+      marketingEmail: $("#identityMarketingEmail")?.checked === true,
+    });
     const result = await persistIdentityProfile({
       realName: $("#identityRealName")?.value,
       nickname: $("#identityNickname")?.value,
@@ -10241,8 +10311,13 @@ async function applySupabaseMemberSession(showNotice = false) {
     state.profile.neighborhood = profile?.neighborhood || "";
     state.profile.gender = profile?.gender || "";
     state.profile.profileCompletedAt = profile?.profile_completed_at || "";
+    state.profile.termsConsentVersion = "";
+    state.profile.termsConsentedAt = "";
     state.profile.privacyConsentVersion = profile?.privacy_consent_version || "";
     state.profile.privacyConsentedAt = profile?.privacy_consented_at || "";
+    state.profile.marketingPushConsent = false;
+    state.profile.marketingSmsConsent = false;
+    state.profile.marketingEmailConsent = false;
     state.profile.suggestedNickname = suggestedNicknameFromUser(user);
     if (profile?.profile_photo_url) state.profile.photoDataUrl = profile.profile_photo_url;
     if (profile?.dominant_hand) state.profile.hand = profile.dominant_hand;
@@ -10256,6 +10331,11 @@ async function applySupabaseMemberSession(showNotice = false) {
     state.profile.ntrpCheckRequested = Boolean(profile?.ntrp_requested_at && !profile?.coach_ntrp);
     openAppFromSession(false);
     renderAll();
+    try {
+      await loadIdentityConsentPreferences();
+    } catch (consentError) {
+      console.warn("[TennisNote] consent preferences could not be loaded", consentError?.message || consentError);
+    }
     syncIdentitySetupModal(user);
     saveSnapshot();
     setMemberSessionRestoring(false);
@@ -11508,7 +11588,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.341",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.342",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
