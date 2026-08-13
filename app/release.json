@@ -10,8 +10,8 @@
       "minimumBuild": 55,
       "latestVersion": "1.0.324",
       "latestBuild": 66,
-      "preparedVersion": "1.0.333",
-      "preparedBuild": 72,
+      "preparedVersion": "1.0.335",
+      "preparedBuild": 73,
       "storeUrl": "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote"
     },
     "ios": {
@@ -19,8 +19,8 @@
       "minimumBuild": 59,
       "latestVersion": "1.0.324",
       "latestBuild": 71,
-      "preparedVersion": "1.0.333",
-      "preparedBuild": 77,
+      "preparedVersion": "1.0.335",
+      "preparedBuild": 78,
       "storeUrl": "https://apps.apple.com/app/id6790994818"
     }
   },
