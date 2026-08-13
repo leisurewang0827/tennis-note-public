@@ -3932,7 +3932,7 @@
               }
             ],
             "resourceStatus": "ready",
-            "blockedResourceCount": 1,
+            "blockedResourceCount": 0,
             "memberSummary": "풋워크 1/7",
             "notionUrl": "https://app.notion.com/p/38ab107df4808195bff1e85caaf95dd7",
             "notionPageId": "38ab107df4808195bff1e85caaf95dd7",
@@ -4547,14 +4547,14 @@
       "personalPracticePresent": 25,
       "withResources": 100,
       "uniqueResourceUrls": 102,
-      "duplicateResourceUrlCount": 1,
+      "duplicateResourceUrlCount": 0,
       "correctNextLessonLink": 25
     },
     "appMediaSummary": {
       "readyLessons": 100,
       "needsMaterialLessons": 0,
       "needsMaterialCodes": [],
-      "blockedPlacements": 1
+      "blockedPlacements": 0
     }
   };
   catalog.steps = catalog.tracks.flatMap((track) => track.lessons);
