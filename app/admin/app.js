@@ -27826,6 +27826,8 @@ function bindEvents() {
   $("#clearDataImportButton")?.addEventListener("click", clearDataImportResult);
   $("#dataImportCommitButton")?.addEventListener("click", previewDataImportOnServer);
   $("#dataImportApplyButton")?.addEventListener("click", commitDataImportOnServer);
+  $("#scheduleV2IntegrityButton")?.addEventListener("click", previewScheduleV2Integrity);
+  $("#scheduleV2IntegrityApplyButton")?.addEventListener("click", applyScheduleV2IntegrityPreview);
   document.addEventListener("click", (event) => {
     const loginButton = event.target.closest("[data-admin-login-provider]");
     if (loginButton) startAdminImportLogin(loginButton.dataset.adminLoginProvider);
@@ -29499,6 +29501,146 @@ async function bootstrapAdminOperationsSession() {
     if (verified && operationsRole() === "admin") await refreshAdminPendingUsers();
   } finally {
     hideAdminBrandSplash();
+  }
+}
+
+let scheduleV2IntegrityPreviewState = {
+  branchId: "",
+  ticketIds: [],
+  plannedLessonCount: 0,
+  plannedUnits: 0,
+};
+
+function scheduleV2IntegrityReasonLabel(reason = "") {
+  return {
+    regular_schedule_rule_missing: "정규 요일·시간 설정 필요",
+    regular_schedule_rule_incomplete: "주간 수업 설정 확인 필요",
+    regular_schedule_coach_unavailable: "담당 코치 상태 확인 필요",
+    ticket_not_started: "시작 예정 회원권",
+    ticket_no_remaining_sessions: "잔여 횟수 없음",
+    conflicts_only: "시간 충돌 확인 필요",
+    no_future_occurrence: "기간 안에 생성할 날짜 없음",
+  }[String(reason || "").replace(/^blocked:/, "")] || "관리자 확인 필요";
+}
+
+function resetScheduleV2IntegrityPreview() {
+  scheduleV2IntegrityPreviewState = {
+    branchId: "",
+    ticketIds: [],
+    plannedLessonCount: 0,
+    plannedUnits: 0,
+  };
+  const applyButton = $("#scheduleV2IntegrityApplyButton");
+  if (applyButton) applyButton.disabled = true;
+}
+
+function renderScheduleV2IntegrityResult(result, eligibleRows) {
+  const summary = $("#scheduleV2IntegritySummary");
+  const list = $("#scheduleV2IntegrityList");
+  const applyButton = $("#scheduleV2IntegrityApplyButton");
+  const rows = Array.isArray(result?.results) ? result.results : [];
+  const eligibleIds = new Set(eligibleRows.map((row) => String(row.ticketId || "")));
+  const blocked = rows.filter((row) => !eligibleIds.has(String(row.ticketId || "")));
+  const reasonCounts = blocked.reduce((counts, row) => {
+    const key = String(row.reason || (Number(row.conflictCount) > 0 ? "conflicts_only" : "unknown"));
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
+  if (summary) summary.textContent = eligibleRows.length
+    ? `생성 가능 ${eligibleRows.length}개`
+    : "자동 생성 대상 없음";
+  if (list) list.innerHTML = `
+    <p><strong>확정 생성 가능</strong> ${eligibleRows.length}개 회원권 · ${scheduleV2IntegrityPreviewState.plannedUnits}회차</p>
+    ${Object.entries(reasonCounts).length ? `<ul>${Object.entries(reasonCounts).map(([reason, count]) => (
+      `<li>${escapeHtml(scheduleV2IntegrityReasonLabel(reason))} ${count}개</li>`
+    )).join("")}</ul>` : ""}
+    <p class="setting-help">확정되지 않은 항목은 변경하지 않습니다. 생성 후 서버 시간표를 다시 확인합니다.</p>`;
+  if (applyButton) applyButton.disabled = eligibleRows.length === 0;
+}
+
+async function previewScheduleV2Integrity() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.rpc || !client.getSession?.()?.access_token || operationsRole() !== "admin") {
+    showToast("관리자 로그인 후 점검할 수 있습니다.");
+    return false;
+  }
+  if (!branchId) {
+    showToast("먼저 운영 지점을 선택해 주세요.");
+    return false;
+  }
+  resetScheduleV2IntegrityPreview();
+  const checkButton = $("#scheduleV2IntegrityButton");
+  const summary = $("#scheduleV2IntegritySummary");
+  const list = $("#scheduleV2IntegrityList");
+  if (checkButton) checkButton.disabled = true;
+  if (summary) summary.textContent = "확인 중";
+  if (list) list.textContent = "회원권과 미래 시간표를 서버에서 확인하고 있습니다.";
+  try {
+    const result = await client.rpc("tn_admin_reconcile_future_regular_schedules", {
+      target_branch_id: branchId,
+      target_ticket_ids: null,
+      target_operation_key: `future-regular-preview-${Date.now()}`,
+      target_dry_run: true,
+    });
+    const rows = Array.isArray(result?.results) ? result.results : [];
+    const eligibleRows = rows.filter((row) => (
+      row?.eligible === true
+      && Number(row.createdCount) > 0
+      && Number(row.remainingUnassignedUnits) === 0
+      && Number(row.conflictCount) === 0
+    ));
+    scheduleV2IntegrityPreviewState = {
+      branchId,
+      ticketIds: eligibleRows.map((row) => String(row.ticketId || "")).filter(Boolean),
+      plannedLessonCount: eligibleRows.reduce((sum, row) => sum + Number(row.createdCount || 0), 0),
+      plannedUnits: eligibleRows.reduce((sum, row) => sum + Number(row.createdUnits || 0), 0),
+    };
+    renderScheduleV2IntegrityResult(result, eligibleRows);
+    return true;
+  } catch (error) {
+    if (summary) summary.textContent = "점검 실패";
+    if (list) list.textContent = "서버 점검에 실패했습니다. 로그인과 연결 상태를 확인한 뒤 다시 시도해 주세요.";
+    resetScheduleV2IntegrityPreview();
+    return false;
+  } finally {
+    if (checkButton) checkButton.disabled = false;
+  }
+}
+
+async function applyScheduleV2IntegrityPreview() {
+  const client = window.TennisNoteDataClient;
+  const preview = scheduleV2IntegrityPreviewState;
+  if (!client?.rpc || operationsRole() !== "admin" || !preview.ticketIds.length) return false;
+  if (preview.branchId !== activeOperationBranchId()) {
+    resetScheduleV2IntegrityPreview();
+    showToast("운영 지점이 바뀌었습니다. 다시 점검해 주세요.");
+    return false;
+  }
+  const approved = window.confirm(
+    `확정 가능한 회원권 ${preview.ticketIds.length}개의 미래 수업 ${preview.plannedLessonCount}건을 생성할까요?\n\n요일·시간 누락과 충돌 항목은 변경하지 않습니다.`,
+  );
+  if (!approved) return false;
+  const applyButton = $("#scheduleV2IntegrityApplyButton");
+  if (applyButton) applyButton.disabled = true;
+  try {
+    const result = await client.rpc("tn_admin_reconcile_future_regular_schedules", {
+      target_branch_id: preview.branchId,
+      target_ticket_ids: preview.ticketIds,
+      target_operation_key: `future-regular-apply-${Date.now()}`,
+      target_dry_run: false,
+    });
+    if (!result?.ok || Number(result.remainingUnassignedUnits) !== 0) {
+      throw new Error("future_regular_reconcile_incomplete");
+    }
+    await syncAdminLiveData(true, { abortIfDirty: true });
+    showToast(`미래 수업 ${Number(result.createdCount) || 0}건을 생성했습니다.`);
+    await previewScheduleV2Integrity();
+    return true;
+  } catch (error) {
+    showToast("미래 수업을 생성하지 못했습니다. 데이터는 서버에서 다시 확인해 주세요.");
+    await previewScheduleV2Integrity();
+    return false;
   }
 }
 
