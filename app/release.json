@@ -1,7 +1,7 @@
 {
-  "version": "1.0.333",
-  "releaseId": "2026.08.13.04",
-  "appSurfaceVersion": "1.0.333",
+  "version": "1.0.334",
+  "releaseId": "2026.08.13.05",
+  "appSurfaceVersion": "1.0.334",
   "minimumNativeShellVersion": "1.0.118",
   "nativeUpdateMode": "bundled-shell",
   "nativePlatforms": {
@@ -17,12 +17,12 @@
     "ios": {
       "minimumVersion": "1.0.260",
       "minimumBuild": 59,
-      "latestVersion": "1.0.309",
-      "latestBuild": 67,
+      "latestVersion": "1.0.324",
+      "latestBuild": 71,
       "preparedVersion": "1.0.333",
       "preparedBuild": 77,
       "storeUrl": "https://apps.apple.com/app/id6790994818"
     }
   },
-  "deployedAt": "2026-08-13T11:45:43+09:00"
+  "deployedAt": "2026-08-13T12:20:00+09:00"
 }
