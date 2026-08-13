@@ -392,6 +392,16 @@
   grid-template-columns: repeat(2, minmax(130px, 1fr));
 }
 
+.schedule-v2-operation-guide {
+  margin: 10px 0 0;
+  padding: 9px 10px;
+  border-left: 3px solid #2f7d65;
+  background: #f0f7f4;
+  color: #425b53;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .schedule-v2-closure-fields label,
 .schedule-v2-closure-time-fields label {
   display: grid;

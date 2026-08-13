@@ -4418,6 +4418,51 @@ body.identity-setup-required {
     font-size: 12px;
     font-weight: 800;
   }
+
+  .member-operation-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    border: 1px solid #b9d7cf;
+    border-left: 4px solid var(--green);
+    border-radius: 6px;
+    padding: 9px 10px;
+    color: #315b50;
+    background: #f1f8f6;
+    font-size: 12px;
+  }
+
+  .member-operation-notice strong {
+    flex: 0 0 auto;
+    color: var(--green);
+  }
+
+  .member-operation-notice span {
+    min-width: 0;
+  }
+
+  .member-operation-notice.is-closed {
+    border-color: #efc4bd;
+    border-left-color: #c24132;
+    color: #8f2f27;
+    background: #fff2ef;
+  }
+
+  .member-operation-notice.is-closed strong {
+    color: #a73b30;
+  }
+
+  .member-operation-notice.is-shortened {
+    border-color: #ead29e;
+    border-left-color: #9a6700;
+    color: #765000;
+    background: #fff9e8;
+  }
+
+  .member-operation-notice.is-shortened strong {
+    color: #8a5a00;
+  }
 }
 
 .ticket-card.holding {

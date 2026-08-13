@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.342" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.343" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-14" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.342" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.343" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -412,7 +412,7 @@
               </label>
               <div class="schedule-v2-toolbar-actions">
                 <button id="scheduleV2PolicyButton" type="button" aria-expanded="false">운영 규칙</button>
-                <button id="scheduleV2ClosureButton" type="button">휴무일</button>
+                <button id="scheduleV2ClosureButton" type="button">운영일·휴무</button>
               </div>
             </div>
             <div id="scheduleV2PolicyPanel" class="schedule-v2-policy-panel" hidden>
@@ -533,21 +533,24 @@
           </section>
 
           <section id="scheduleV2ClosureEditor" class="schedule-v2-editor schedule-v2-closure-editor" role="dialog" aria-modal="true" aria-labelledby="scheduleV2ClosureTitle" hidden>
-            <button class="schedule-v2-editor-backdrop" type="button" data-v2-close-closure aria-label="휴무일 설정 닫기"></button>
+            <button class="schedule-v2-editor-backdrop" type="button" data-v2-close-closure aria-label="운영일 설정 닫기"></button>
             <form id="scheduleV2ClosureForm" class="schedule-v2-editor-sheet schedule-v2-closure-sheet">
               <header>
-                <div><small>운영시간</small><h3 id="scheduleV2ClosureTitle">휴무일 설정</h3><p>지정 즉시 시간표에 표시됩니다.</p></div>
+                <div><small>운영시간</small><h3 id="scheduleV2ClosureTitle">운영일·휴무 설정</h3><p>휴무, 정상 운영, 단축 운영을 날짜별로 지정합니다.</p></div>
                 <button type="button" data-v2-close-closure aria-label="닫기">×</button>
               </header>
               <div class="schedule-v2-closure-fields">
                 <label><span>날짜</span><input name="closureDate" type="date" required /></label>
-                <label><span>범위</span><select name="closureRange"><option value="all_day">하루 전체</option><option value="partial">시간 지정</option></select></label>
+                <label><span>운영 구분</span><select name="operationMode"><option value="closed">휴무</option><option value="normal">정상 운영</option><option value="shortened">단축 운영</option></select></label>
+                <label id="scheduleV2ClosureRangeField"><span>휴무 범위</span><select name="closureRange"><option value="all_day">하루 전체</option><option value="partial">시간 지정</option></select></label>
                 <label><span>표시 이름</span><input name="closureLabel" type="text" maxlength="40" value="휴무" required /></label>
               </div>
               <div id="scheduleV2ClosureTimeFields" class="schedule-v2-closure-time-fields" hidden>
                 <label><span>시작</span><input name="closureStartTime" type="time" step="600" /></label>
                 <label><span>종료</span><input name="closureEndTime" type="time" step="600" /></label>
               </div>
+              <p id="scheduleV2OperationGuide" class="schedule-v2-operation-guide">휴무 시간에는 회원이 신청할 수 없습니다. 기존 수업은 처리 방법을 따로 확인합니다.</p>
+              <div id="scheduleV2OperationList" class="schedule-v2-closure-list" aria-live="polite"></div>
               <div id="scheduleV2ClosureList" class="schedule-v2-closure-list" aria-live="polite"></div>
               <section id="scheduleV2ClosureImpact" class="schedule-v2-closure-impact" aria-labelledby="scheduleV2ClosureImpactTitle" hidden>
                 <div>
@@ -566,7 +569,7 @@
                 <button id="scheduleV2ClosureResetButton" type="button">새로 입력</button>
                 <span></span><span></span>
                 <button type="button" data-v2-close-closure>닫기</button>
-                <button id="scheduleV2ClosureSaveButton" class="primary-button" type="submit">휴무일 저장</button>
+                <button id="scheduleV2ClosureSaveButton" class="primary-button" type="submit">운영일 저장</button>
               </footer>
             </form>
           </section>
@@ -2010,19 +2013,19 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.342"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.342"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.342"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.343"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.343"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.343"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.342"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.342"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.342"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.342"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.342"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.342"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.343"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.343"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.343"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.343"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.343"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.343"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.342"></script>
+    <script src="./app.js?v=1.0.343"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-14"></script>
   </body>
 </html>

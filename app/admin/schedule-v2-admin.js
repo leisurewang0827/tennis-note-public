@@ -84,6 +84,7 @@
     editorFocusTarget: null,
     closureEditorOpen: false,
     editingClosureId: "",
+    editingOperationDayId: "",
     closureImpact: null,
     closureScrollY: 0,
     closureFocusTarget: null,
@@ -378,6 +379,7 @@
       branch: response.branch || { id: fallback.branchId || "", name: fallback.branchName || "", openStart: "06:40", openEnd: "22:00" },
       policy: response.policy || {},
       closures: Array.isArray(response.closures) ? response.closures : [],
+      operationDays: Array.isArray(response.operationDays) ? response.operationDays : [],
       coaches: Array.isArray(response.coaches) ? response.coaches : [],
       members,
       tickets: Array.isArray(response.tickets) ? response.tickets : [],
@@ -835,13 +837,21 @@
       $("#scheduleV2Grid").innerHTML = '<div class="schedule-v2-loading">시간표 불러오는 중</div>';
     }
     try {
-      const response = await api.rpc?.("tn_schedule_v2_admin_workspace", {
-        target_branch_id: snapshot.branchId,
-        target_from: dates[0],
-        target_to: dates[6],
-      });
+      const [response, operationDays] = await Promise.all([
+        api.rpc?.("tn_schedule_v2_admin_workspace", {
+          target_branch_id: snapshot.branchId,
+          target_from: dates[0],
+          target_to: dates[6],
+        }),
+        api.rpc?.("tn_schedule_v2_operation_days_between", {
+          target_branch_id: snapshot.branchId,
+          target_from: dates[0],
+          target_to: dates[6],
+        }).catch(() => []),
+      ]);
       if (sequence !== state.loadSequence) return false;
       state.payload = normalizeWorkspacePayload(response, snapshot);
+      state.payload.operationDays = Array.isArray(operationDays) ? operationDays : [];
       cacheWorkspace(cacheKey, state.payload);
       state.serverReady = true;
       void state.revisionWatcher?.check?.();
@@ -901,6 +911,16 @@
     return (state.payload?.closures || []).filter((closure) => (
       String(closure.date || closure.closure_date || "") === date
     ));
+  }
+
+  function operationDaysForDate(date) {
+    return (state.payload?.operationDays || []).filter((operation) => (
+      String(operation.date || operation.operation_date || "") === date
+    ));
+  }
+
+  function operationModeLabel(mode) {
+    return ({ closed: "휴무", normal: "정상 운영", shortened: "단축 운영" })[String(mode || "")] || "운영 안내";
   }
 
   function selectedDateClosures() {
@@ -1309,7 +1329,14 @@
     const today = localDateKey(new Date());
     const headerCells = plans.map((plan) => {
       const value = new Date(`${plan.date}T12:00:00`);
-      const closureLabels = [...new Set(closuresForDate(plan.date).map((closure) => closure.label || "휴무"))];
+      const operationDays = operationDaysForDate(plan.date);
+      const generatedClosureIds = new Set(operationDays.flatMap((operation) => operation.closureIds || []).map(String));
+      const closureLabels = [...new Set([
+        ...operationDays.map((operation) => operation.label || operationModeLabel(operation.mode)),
+        ...closuresForDate(plan.date)
+          .filter((closure) => !generatedClosureIds.has(String(closure.id)))
+          .map((closure) => closure.label || "휴무"),
+      ])];
       const dayHeader = `<div class="schedule-v2-week-day-head ${plan.date === today ? "is-today" : ""}" style="grid-row:1;grid-column:${plan.columnStart} / span ${plan.laneCount}"><strong>${dayLabels[value.getDay()]} ${value.getMonth() + 1}/${value.getDate()}</strong>${closureLabels.length ? `<span>${escapeHtml(closureLabels.join(" · "))}</span>` : ""}</div>`;
       const laneHeaders = plan.segmentsByLane.map((segments, lane) => {
         const names = [...new Set(segments.map((segment) => (segment.coach?.name || "코치 확인 필요").replace(/\s*코치$/, "")))];
@@ -2552,10 +2579,21 @@
     const form = $("#scheduleV2ClosureForm");
     const fields = $("#scheduleV2ClosureTimeFields");
     if (!form || !fields) return;
-    const partial = form.elements.closureRange.value === "partial";
+    const mode = form.elements.operationMode?.value || "closed";
+    const partial = mode === "shortened" || (mode === "closed" && form.elements.closureRange.value === "partial");
+    const rangeField = $("#scheduleV2ClosureRangeField");
+    const guide = $("#scheduleV2OperationGuide");
+    if (rangeField) rangeField.hidden = mode !== "closed";
     fields.hidden = !partial;
     form.elements.closureStartTime.required = partial;
     form.elements.closureEndTime.required = partial;
+    if (guide) {
+      guide.textContent = mode === "normal"
+        ? "공휴일이어도 평소 코치 근무시간대로 운영합니다. 같은 날짜의 휴무 잠금은 해제됩니다."
+        : mode === "shortened"
+          ? "선택한 시간 안에서만 신청할 수 있습니다. 운영시간 밖은 기존 앱에서도 자동으로 막힙니다."
+          : "휴무 시간에는 회원이 신청할 수 없습니다. 기존 수업은 처리 방법을 따로 확인합니다.";
+    }
   }
 
   function closurePeriodLabel(closure) {
@@ -2568,7 +2606,8 @@
     const list = $("#scheduleV2ClosureList");
     if (!form || !list) return;
     const date = form.elements.closureDate.value;
-    const closures = closuresForDate(date);
+    const generatedIds = new Set(operationDaysForDate(date).flatMap((operation) => operation.closureIds || []).map(String));
+    const closures = closuresForDate(date).filter((closure) => !generatedIds.has(String(closure.id)));
     list.innerHTML = closures.length
       ? closures.map((closure) => `
         <div class="schedule-v2-closure-row" data-v2-closure-id="${escapeHtml(closure.id)}">
@@ -2577,7 +2616,29 @@
           <button class="danger-button" type="button" data-v2-delete-closure="${escapeHtml(closure.id)}">해제</button>
         </div>
       `).join("")
-      : '<div class="schedule-v2-closure-empty">이 날짜에 지정된 휴무가 없습니다.</div>';
+      : '<div class="schedule-v2-closure-empty">별도로 지정한 시간 휴무가 없습니다.</div>';
+  }
+
+  function operationPeriodLabel(operation) {
+    if (operation.mode === "shortened") return `${String(operation.startTime || "").slice(0, 5)}-${String(operation.endTime || "").slice(0, 5)}`;
+    return operation.mode === "normal" ? "평소 근무시간" : "하루 전체";
+  }
+
+  function renderOperationList() {
+    const form = $("#scheduleV2ClosureForm");
+    const list = $("#scheduleV2OperationList");
+    if (!form || !list) return;
+    const date = form.elements.closureDate.value;
+    const operations = operationDaysForDate(date);
+    list.innerHTML = operations.length
+      ? operations.map((operation) => `
+        <div class="schedule-v2-closure-row" data-v2-operation-id="${escapeHtml(operation.id)}">
+          <div><strong>${escapeHtml(operation.label || operationModeLabel(operation.mode))}</strong><span>${escapeHtml(dateLabel(date))} · ${escapeHtml(operationModeLabel(operation.mode))} · ${escapeHtml(operationPeriodLabel(operation))}</span></div>
+          <button type="button" data-v2-edit-operation="${escapeHtml(operation.id)}">수정</button>
+          <button class="danger-button" type="button" data-v2-delete-operation="${escapeHtml(operation.id)}">해제</button>
+        </div>
+      `).join("")
+      : '<div class="schedule-v2-closure-empty">이 날짜의 운영 구분을 선택해 저장하세요.</div>';
   }
 
   function resetClosureForm({ keepDate = true } = {}) {
@@ -2586,16 +2647,19 @@
     const date = keepDate ? form.elements.closureDate.value : state.selectedDate;
     form.reset();
     form.elements.closureDate.value = date || state.selectedDate;
+    form.elements.operationMode.value = "closed";
     form.elements.closureRange.value = "all_day";
     form.elements.closureLabel.value = "휴무";
     form.elements.closureStartTime.value = "09:00";
     form.elements.closureEndTime.value = "18:00";
     state.editingClosureId = "";
+    state.editingOperationDayId = "";
     state.closureImpact = null;
     const impact = $("#scheduleV2ClosureImpact");
     if (impact) impact.hidden = true;
-    $("#scheduleV2ClosureSaveButton").textContent = "휴무일 저장";
+    $("#scheduleV2ClosureSaveButton").textContent = "운영일 저장";
     syncClosureTimeFields();
+    renderOperationList();
     renderClosureList();
     setClosureMessage("");
   }
@@ -2673,6 +2737,8 @@
     const closure = (state.payload?.closures || []).find((item) => String(item.id) === String(closureId));
     if (!form || !closure) return;
     state.editingClosureId = String(closure.id);
+    state.editingOperationDayId = "";
+    form.elements.operationMode.value = "closed";
     form.elements.closureDate.value = String(closure.date || closure.closure_date || state.selectedDate);
     form.elements.closureLabel.value = closure.label || "휴무";
     const allDay = closure.allDay ?? closure.all_day;
@@ -2683,6 +2749,25 @@
     syncClosureTimeFields();
     renderClosureList();
     setClosureMessage("선택한 휴무를 수정합니다.", "info");
+  }
+
+  function editOperationDay(operationId) {
+    const form = $("#scheduleV2ClosureForm");
+    const operation = (state.payload?.operationDays || []).find((item) => String(item.id) === String(operationId));
+    if (!form || !operation) return;
+    state.editingClosureId = "";
+    state.editingOperationDayId = String(operation.id);
+    form.elements.closureDate.value = String(operation.date || state.selectedDate);
+    form.elements.operationMode.value = operation.mode || "normal";
+    form.elements.closureRange.value = operation.mode === "closed" && operation.allDay === false ? "partial" : "all_day";
+    form.elements.closureLabel.value = operation.label || operationModeLabel(operation.mode);
+    form.elements.closureStartTime.value = String(operation.startTime || "09:00").slice(0, 5);
+    form.elements.closureEndTime.value = String(operation.endTime || "18:00").slice(0, 5);
+    $("#scheduleV2ClosureSaveButton").textContent = "운영일 수정";
+    syncClosureTimeFields();
+    renderOperationList();
+    renderClosureList();
+    setClosureMessage("선택한 운영일을 수정합니다.", "info");
   }
 
   function actualCloseClosureEditor() {
@@ -2732,41 +2817,58 @@
     event.preventDefault();
     if (!requireWritableServer()) return;
     const form = event.currentTarget;
-    const allDay = form.elements.closureRange.value === "all_day";
-    const startTime = allDay ? null : form.elements.closureStartTime.value;
-    const endTime = allDay ? null : form.elements.closureEndTime.value;
-    if (!allDay && (!startTime || !endTime || startTime >= endTime)) {
+    const mode = form.elements.operationMode?.value || "closed";
+    const allDay = mode === "normal" || (mode === "closed" && form.elements.closureRange.value === "all_day");
+    const usesTime = mode === "shortened" || !allDay;
+    const startTime = usesTime ? form.elements.closureStartTime.value : null;
+    const endTime = usesTime ? form.elements.closureEndTime.value : null;
+    if (usesTime && (!startTime || !endTime || startTime >= endTime)) {
       setClosureMessage("종료 시간은 시작 시간보다 늦게 선택해 주세요.");
       return;
     }
     const saveButton = $("#scheduleV2ClosureSaveButton");
     saveButton.disabled = true;
-    setClosureMessage("휴무일을 서버에 저장하고 있습니다.", "info");
+    setClosureMessage("운영일을 서버에 저장하고 있습니다.", "info");
     try {
-      const result = await bridge().rpc("tn_schedule_v2_upsert_closure", {
-        target_branch_id: state.payload.branch.id,
-        target_closure_date: form.elements.closureDate.value,
-        target_all_day: allDay,
-        target_start_time: startTime,
-        target_end_time: endTime,
-        target_label: form.elements.closureLabel.value.trim() || "휴무",
-        target_closure_id: state.editingClosureId || null,
-      });
+      const editingManualClosure = Boolean(state.editingClosureId);
+      const result = editingManualClosure
+        ? await bridge().rpc("tn_schedule_v2_upsert_closure", {
+          target_branch_id: state.payload.branch.id,
+          target_closure_date: form.elements.closureDate.value,
+          target_all_day: allDay,
+          target_start_time: startTime,
+          target_end_time: endTime,
+          target_label: form.elements.closureLabel.value.trim() || "휴무",
+          target_closure_id: state.editingClosureId,
+        })
+        : await bridge().rpc("tn_schedule_v2_upsert_operation_day", {
+          target_branch_id: state.payload.branch.id,
+          target_operation_date: form.elements.closureDate.value,
+          target_mode: mode,
+          target_start_time: usesTime ? startTime : null,
+          target_end_time: usesTime ? endTime : null,
+          target_label: form.elements.closureLabel.value.trim() || operationModeLabel(mode),
+          target_operation_id: state.editingOperationDayId || null,
+        });
       const date = form.elements.closureDate.value;
       state.weekStart = mondayOf(date);
       state.selectedDate = date;
       state.payload = null;
       invalidateCurrentWorkspaceCache();
       await loadWorkspace({ quiet: true, force: true });
-      const closureId = result?.closure?.id;
+      renderOperationList();
+      renderClosureList();
+      const closureId = result?.closure?.id || (mode === "closed" ? result?.operation?.closureIds?.[0] : null);
       const preview = closureId ? await previewClosureImpact(closureId) : null;
       const count = Number(preview?.lessonCount || result?.existingLessonCount || result?.existing_lesson_count || 0);
       const oneDayCount = Number(preview?.oneDayCount || 0);
       if (count + oneDayCount > 0) {
-        setClosureMessage("휴무와 겹치는 기존 일정의 처리 방법을 선택해 주세요.", "warning");
-        setStatus(`휴무일 저장 완료 · 기존 일정 ${count + oneDayCount}건 처리 확인 필요`, "warning");
+        setClosureMessage(mode === "shortened"
+          ? `단축 운영시간 밖의 기존 일정 ${count}건은 그대로 유지됩니다. 시간표에서 확인해 주세요.`
+          : "휴무와 겹치는 기존 일정의 처리 방법을 선택해 주세요.", "warning");
+        setStatus(`운영일 저장 완료 · 기존 일정 ${count + oneDayCount}건 확인 필요`, "warning");
       } else {
-        setStatus("휴무일 반영 완료 · 시간표에 바로 표시했습니다.", "success");
+        setStatus(`${operationModeLabel(mode)} 반영 완료 · 시간표에 바로 표시했습니다.`, "success");
         closeClosureEditor();
       }
     } catch (error) {
@@ -2798,6 +2900,28 @@
     }
   }
 
+  async function deleteOperationDay(operationId) {
+    const operation = (state.payload?.operationDays || []).find((item) => String(item.id) === String(operationId));
+    if (!operation || !requireWritableServer()) return;
+    if (!window.confirm(`${operation.label || operationModeLabel(operation.mode)} 설정을 해제할까요? 기존 수업은 변경되지 않습니다.`)) return;
+    setClosureMessage("운영일 설정을 해제하고 있습니다.", "info");
+    try {
+      await bridge().rpc("tn_schedule_v2_cancel_operation_day", {
+        target_branch_id: state.payload.branch.id,
+        target_operation_id: operation.id,
+      });
+      state.editingOperationDayId = "";
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ quiet: true, force: true });
+      resetClosureForm({ keepDate: true });
+      setClosureMessage("운영일 설정 해제가 서버와 시간표에 반영됐습니다.", "success");
+      setStatus("운영일 설정 해제 완료", "success");
+    } catch (error) {
+      setClosureMessage(errorMessage(error));
+    }
+  }
+
   function errorMessage(error) {
     const source = String(error?.message || error || "server_error");
     const labels = {
@@ -2818,6 +2942,13 @@
       schedule_v2_closure_reference_required: "해제할 휴무를 다시 선택해 주세요.",
       schedule_v2_closure_policy_invalid: "기존 수업 처리 방법을 다시 선택해 주세요.",
       schedule_v2_closure_participant_ticket_review_required: "회원권 연결을 확인해야 하는 수업이 있어 휴무 처리를 중단했습니다. 기존 수업 목록을 확인해 주세요.",
+      schedule_v2_operation_date_required: "운영 날짜를 선택해 주세요.",
+      schedule_v2_operation_mode_invalid: "휴무, 정상 운영, 단축 운영 중 하나를 선택해 주세요.",
+      schedule_v2_operation_time_invalid: "단축 운영 시작·종료 시간을 확인해 주세요.",
+      schedule_v2_operation_reference_required: "해제할 운영일을 다시 선택해 주세요.",
+      schedule_v2_operation_not_found: "이미 해제되었거나 찾을 수 없는 운영일입니다. 시간표를 새로고침해 주세요.",
+      schedule_v2_operation_changed: "다른 화면에서 운영일을 먼저 변경했습니다. 새로고침 후 다시 확인해 주세요.",
+      schedule_v2_operation_branch_forbidden: "이 지점의 운영일을 확인할 권한이 없습니다.",
       schedule_v2_operation_key_required: "중복 방지 정보가 없어 저장을 중단했습니다. 다시 시도해 주세요.",
       schedule_v2_substitute_time_overlap: "대타 코치의 다른 수업과 시간이 겹칩니다.",
       schedule_v2_substitute_coach_unavailable: "현재 근무 중인 대타 코치를 선택해 주세요.",
@@ -3520,9 +3651,22 @@
     $("#scheduleV2ClosureForm")?.addEventListener("submit", saveClosure);
     $("#scheduleV2ClosureForm")?.addEventListener("change", (event) => {
       if (event.target.name === "closureRange") syncClosureTimeFields();
+      if (event.target.name === "operationMode") {
+        const form = event.currentTarget;
+        const mode = form.elements.operationMode.value;
+        form.elements.closureLabel.value = operationModeLabel(mode);
+        if (mode === "shortened") {
+          form.elements.closureStartTime.value ||= "09:00";
+          form.elements.closureEndTime.value ||= "18:00";
+        }
+        state.editingClosureId = "";
+        syncClosureTimeFields();
+      }
       if (event.target.name === "closureDate") {
         state.editingClosureId = "";
-        $("#scheduleV2ClosureSaveButton").textContent = "휴무일 저장";
+        state.editingOperationDayId = "";
+        $("#scheduleV2ClosureSaveButton").textContent = "운영일 저장";
+        renderOperationList();
         renderClosureList();
         setClosureMessage("");
       }
@@ -3538,6 +3682,15 @@
       }
       const deleteButton = event.target.closest("[data-v2-delete-closure]");
       if (deleteButton) void deleteClosure(deleteButton.dataset.v2DeleteClosure);
+    });
+    $("#scheduleV2OperationList")?.addEventListener("click", (event) => {
+      const editButton = event.target.closest("[data-v2-edit-operation]");
+      if (editButton) {
+        editOperationDay(editButton.dataset.v2EditOperation);
+        return;
+      }
+      const deleteButton = event.target.closest("[data-v2-delete-operation]");
+      if (deleteButton) void deleteOperationDay(deleteButton.dataset.v2DeleteOperation);
     });
     $$('[data-v2-close-closure]').forEach((button) => button.addEventListener("click", closeClosureEditor));
     window.addEventListener("popstate", () => {

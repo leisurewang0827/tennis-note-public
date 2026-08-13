@@ -86,6 +86,7 @@ const state = {
   serverChangeAnchorGapMinutes: 40,
   liveMakeupEntitlements: [],
   liveReleasedMakeupSlots: [],
+  scheduleOperationDays: [],
   regularInitialSelections: [],
   regularInitialOperationKey: "",
   groupAccount: null,
@@ -1710,7 +1711,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.342",
+    workerUrl: "./service-worker.js?v=1.0.343",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3962,6 +3963,25 @@ function memberScheduleDateLabel(day) {
   return `${Number(month)}/${Number(date)}`;
 }
 
+function memberScheduleOperationDay(day) {
+  const date = memberWeekDateForDay(day);
+  return (state.scheduleOperationDays || []).find((operation) => operation.date === date) || null;
+}
+
+function renderMemberScheduleOperationNotice(day) {
+  const operation = memberScheduleOperationDay(day);
+  if (!operation) return "";
+  const mode = String(operation.mode || "");
+  const label = operation.label || "운영 안내";
+  const detail = mode === "closed"
+    ? "회원 예약이 열리지 않습니다."
+    : mode === "shortened"
+      ? `${operation.startTime || "-"}~${operation.endTime || "-"}만 운영합니다.`
+      : "공휴일에도 정상 운영합니다.";
+  const title = mode === "closed" ? "휴무" : mode === "shortened" ? "단축 운영" : "정상 운영";
+  return `<p class="member-operation-notice is-${escapeHtml(mode || "normal")}" role="status"><strong>${title}</strong><span>${escapeHtml(label)} · ${escapeHtml(detail)}</span></p>`;
+}
+
 function mergeMemberScheduleWindows(windows) {
   return windows
     .map((window) => ({ ...window, startMinutes: minutesFromTime(window.start), endMinutes: minutesFromTime(window.end) }))
@@ -4156,6 +4176,7 @@ function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
             return `<button class="member-mobile-day ${day === selectedDay ? "is-active" : ""}" type="button" data-member-schedule-day="${day}"><strong>${day}</strong><span>${memberScheduleDateLabel(day)}</span><b>${count || "-"}</b></button>`;
           }).join("")}
         </div>
+        ${renderMemberScheduleOperationNotice(selectedDay)}
         <div class="member-available-coach-groups" aria-live="polite">
           ${groupedByCoach.size
             ? [...groupedByCoach.entries()].map(([coach, candidates]) => `
@@ -4181,6 +4202,7 @@ function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
       <div class="member-mobile-day-strip" aria-label="날짜 선택">
         ${days.map((day) => `<button class="member-mobile-day ${day === selectedDay ? "is-active" : ""}" type="button" data-member-schedule-day="${day}"><strong>${day}</strong><span>${memberScheduleDateLabel(day)}</span></button>`).join("")}
       </div>
+      ${renderMemberScheduleOperationNotice(selectedDay)}
       ${segments.length
         ? segments.map((segment, index) => `${index > 0 ? `<div class="member-mobile-break"><strong>${segments[index - 1].end}~${segment.start}</strong><span>수업 없음</span></div>` : ""}${renderMemberMobileSegment(selectedDay, segment, policy, baseLessons, scheduleLessons)}`).join("")
         : `<p class="member-mobile-empty">${selectedDay}요일은 현재 등록된 운영시간이 없습니다.</p>`}
@@ -6691,6 +6713,7 @@ function mergeScheduleV2MemberRecords(mappedLessons = []) {
 
 function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = [], oneDaySlots = []) {
   if (!workspace?.actorUserId || !Array.isArray(workspace.lessons)) return false;
+  state.scheduleOperationDays = Array.isArray(workspace.operationDays) ? workspace.operationDays : [];
   const ticketsById = new Map((workspace.tickets || []).map((ticket) => [ticket.id, ticket]));
   const coachesById = new Map((workspace.coaches || []).map((coach) => [coach.roleId, coach]));
   const mappedLessons = workspace.lessons.map((lesson) => {
@@ -6835,6 +6858,17 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
     ]);
     if (requestId !== memberScheduleV2RequestSequence) return false;
     if (!workspace?.actorUserId || !Array.isArray(workspace.lessons)) return false;
+    const branchIds = [...new Set((workspace.branches || []).map((branch) => branch.id).filter(Boolean))];
+    const operationDays = (await Promise.all(branchIds.map((branchId) => (
+      client.rpc("tn_schedule_v2_operation_days_between", {
+        target_branch_id: branchId,
+        target_from: week.startDate,
+        target_to: workspaceEndDate,
+      }).catch(() => [])
+    )))).flat();
+    if (requestId !== memberScheduleV2RequestSequence) return false;
+    workspace.operationDays = operationDays;
+    state.scheduleOperationDays = operationDays;
     const identityIssue = memberScheduleIdentityIssue(workspace, integrity, profileId);
     if (identityIssue) return rejectMemberScheduleIdentity(identityIssue, integrity);
     memberScheduleV2WorkspaceCache = {
@@ -8996,7 +9030,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.342" });
+  const params = new URLSearchParams({ v: "1.0.343" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -11588,7 +11622,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.342",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.343",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

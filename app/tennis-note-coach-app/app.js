@@ -20,6 +20,7 @@ const state = {
   expandedTodayTasks: {},
   liveLessons: [],
   releasedMakeupSlots: [],
+  scheduleOperationDays: [],
   liveLessonsLoaded: false,
   scheduleV2WorkspaceLoaded: false,
   scheduleV2SyncError: "",
@@ -554,6 +555,7 @@ function coachRosterTicketState(ticket = {}, today = localDateKey()) {
 
 function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster = null) {
   if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
+  state.scheduleOperationDays = Array.isArray(workspace.operationDays) ? workspace.operationDays : [];
   const tickets = Array.isArray(roster?.tickets)
     ? roster.tickets
     : Array.isArray(workspace.tickets) ? workspace.tickets : [];
@@ -774,7 +776,7 @@ async function syncCoachScheduleV2(options = {}) {
     return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster);
   }
   try {
-    const [workspace, oneDayRows, roster] = await Promise.all([
+    const [workspace, oneDayRows, roster, operationDays] = await Promise.all([
       client.rpc("tn_schedule_v2_coach_workspace", {
         target_branch_id: branchId,
         target_from: week.startDate,
@@ -784,9 +786,15 @@ async function syncCoachScheduleV2(options = {}) {
       client.rpc("tn_schedule_v2_coach_member_roster", {
         target_branch_id: branchId,
       }).catch(() => null),
+      client.rpc("tn_schedule_v2_operation_days_between", {
+        target_branch_id: branchId,
+        target_from: week.startDate,
+        target_to: week.endDate,
+      }).catch(() => []),
     ]);
     if (requestId !== coachScheduleV2RequestSequence) return false;
     if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
+    workspace.operationDays = Array.isArray(operationDays) ? operationDays : [];
     coachScheduleV2WorkspaceCache = {
       key: cacheKey,
       loadedAt: Date.now(),
@@ -2260,7 +2268,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.342",
+    workerUrl: "./service-worker.js?v=1.0.343",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2290,7 +2298,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.342" });
+  const params = new URLSearchParams({ v: "1.0.343" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2406,6 +2414,7 @@ function activateLiveCoachProfile(profileId) {
   state.proxySettlements = [];
   state.liveLessons = [];
   state.releasedMakeupSlots = [];
+  state.scheduleOperationDays = [];
   state.liveLessonsLoaded = false;
   state.liveMembersLoaded = false;
   coachScheduleV2WorkspaceCache = null;
@@ -3475,6 +3484,25 @@ function coachScheduleDateLabel(day) {
   return `${Number(month)}/${Number(date)}`;
 }
 
+function coachScheduleOperationDay(day) {
+  const date = coachWeekDateForDay(day);
+  return (state.scheduleOperationDays || []).find((operation) => operation.date === date) || null;
+}
+
+function renderCoachScheduleOperationNotice(day) {
+  const operation = coachScheduleOperationDay(day);
+  if (!operation) return "";
+  const mode = String(operation.mode || "");
+  const label = operation.label || "운영 안내";
+  const detail = mode === "closed"
+    ? "수업 등록은 관리자만 가능합니다."
+    : mode === "shortened"
+      ? `${operation.startTime || "-"}~${operation.endTime || "-"}만 운영합니다.`
+      : "공휴일에도 정상 운영합니다.";
+  const title = mode === "closed" ? "휴무" : mode === "shortened" ? "단축 운영" : "정상 운영";
+  return `<p class="coach-operation-notice is-${escapeHtml(mode || "normal")}" role="status"><strong>${title}</strong><span>${escapeHtml(label)} · ${escapeHtml(detail)}</span></p>`;
+}
+
 function makeCoachStartTimes(startTime, endTime, stepMinutes = scheduleBlockMinutes) {
   const result = [];
   for (let current = minutesFromTime(startTime); current < minutesFromTime(endTime); current += stepMinutes) {
@@ -3678,6 +3706,7 @@ function renderCoachMobileSchedule(policy, scheduleLessons) {
       <div class="coach-mobile-day-strip" aria-label="날짜 선택">
         ${scheduleDays.map((day) => `<button class="coach-mobile-day ${day === selectedDay ? "is-active" : ""}" type="button" data-coach-schedule-day="${day}"><strong>${day}</strong><span>${coachScheduleDateLabel(day)}</span></button>`).join("")}
       </div>
+      ${renderCoachScheduleOperationNotice(selectedDay)}
       ${renderCoachMobileLockedTimeControl(selectedDay, policy)}
       ${mineEmptyState || (segments.length
         ? segments.map((segment, index) => `${index > 0 ? `<div class="coach-mobile-break"><strong>${segments[index - 1].end}~${segment.start}</strong><span>수업 없음</span></div>` : ""}${renderCoachMobileSegment(selectedDay, segment, policy, scheduleLessons)}`).join("")
@@ -6581,7 +6610,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.342",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.343",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
