@@ -1130,11 +1130,12 @@
     });
   }
 
-  function rpc(functionName, parameters = {}) {
+  function rpc(functionName, parameters = {}, options = {}) {
     return request(`rpc/${functionName}`, {
       method: "POST",
       body: parameters,
       prefer: "return=representation",
+      timeoutMs: options.timeoutMs,
     });
   }
 

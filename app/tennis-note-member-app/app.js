@@ -1711,7 +1711,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.343",
+    workerUrl: "./service-worker.js?v=1.0.344",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -4362,9 +4362,19 @@ function renderMemberChangeInlineBar() {
             </option>`).join("")}
         </select>
       </label>
-      <p><strong>${escapeHtml(statusText)}</strong><span>밝게 표시된 빈 시간을 누르면 마지막 확인만 거쳐 신청됩니다.</span></p>
+      <p><strong>${escapeHtml(statusText)}</strong><span>${escapeHtml(loadState === "error"
+        ? state.serverChangeCandidateError || "인터넷 연결을 확인한 뒤 다시 시도해 주세요."
+        : "밝게 표시된 빈 시간을 누르면 마지막 확인만 거쳐 신청됩니다.")}</span></p>
       ${loadState === "error" ? '<button class="small-button" type="button" data-retry-member-change>다시 확인</button>' : ""}
     </section>`;
+}
+
+function memberChangeTimetableIsPending(source = null) {
+  if (!memberChangeUsesServerCandidates(source)) return false;
+  const loadState = memberChangeCandidateUiState(source);
+  return loadState === "loading"
+    || loadState === "error"
+    || (loadState === "ready" && state.serverChangeCandidates.length === 0);
 }
 
 function renderRegularInitialScheduleBar() {
@@ -4489,6 +4499,14 @@ function renderDynamicMemberSchedule() {
         reason: "현재 로그인 계정에 담당 코치가 연결된 회원권이 없습니다. 관리자에게 계정 연결을 요청해 주세요.",
         compact: true,
       })}`;
+    return;
+  }
+  const inlineSource = memberInlineChangeSources().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
+  if (memberChangeTimetableIsPending(inlineSource)) {
+    $("#scheduleGrid").innerHTML = `
+      ${assignedCoachSummary}
+      ${renderMemberScheduleTicketPicker()}
+      ${inlineChangeBar}`;
     return;
   }
   $("#scheduleGrid").innerHTML = `
@@ -6560,12 +6578,21 @@ async function syncMemberChangeCandidates(source = null) {
     state.serverChangeAnchorGapMinutes = 40;
     return false;
   }
-  const client = window.TennisNoteDataClient;
-  if (!client?.rpc || !client.getSession?.()?.access_token) return false;
-  const requestId = ++memberChangeCandidateRequestSequence;
   const week = { ...activeMemberWeek() };
   const range = memberChangeCandidateRange(source, week);
   const key = memberChangeCandidateKey(source, week);
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !client.getSession?.()?.access_token) {
+    state.serverChangeCandidateStatus = "error";
+    state.serverChangeCandidateKey = key;
+    state.serverChangeCandidates = [];
+    state.serverChangeCandidateError = "로그인 연결을 다시 확인한 뒤 가능한 시간을 조회해 주세요.";
+    renderSelects();
+    renderAvailableSlots();
+    renderSchedule();
+    return false;
+  }
+  const requestId = ++memberChangeCandidateRequestSequence;
   state.serverChangeCandidateStatus = "loading";
   state.serverChangeCandidateKey = key;
   state.serverChangeCandidates = [];
@@ -6590,14 +6617,14 @@ async function syncMemberChangeCandidates(source = null) {
       };
     let result;
     if (source.couponBooking) {
-      result = await client.rpc("tn_member_coupon_candidates", candidateArgs);
+      result = await client.rpc("tn_member_coupon_candidates", candidateArgs, { timeoutMs: 12_000 });
     } else {
       try {
-        result = await client.rpc("tn_member_change_candidates_v2", candidateArgs);
+        result = await client.rpc("tn_member_change_candidates_v2", candidateArgs, { timeoutMs: 12_000 });
       } catch (error) {
         const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
         if (!/tn_member_change_candidates_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
-        result = await client.rpc("tn_member_change_candidates", candidateArgs);
+        result = await client.rpc("tn_member_change_candidates", candidateArgs, { timeoutMs: 12_000 });
       }
     }
     if (requestId !== memberChangeCandidateRequestSequence || memberChangeCandidateKey(source) !== key) return false;
@@ -9030,7 +9057,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.343" });
+  const params = new URLSearchParams({ v: "1.0.344" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9611,6 +9638,8 @@ function changeMemberScheduleTimeRange(range) {
 async function prepareChangeRequestSource(preferredLessonId = "") {
   let sources = currentScheduledLessonsForChange();
   let futureLessons = loadedFutureScheduledLessonsForChange();
+  const alreadyAvailableSource = sources.find((lesson) => lesson.id === preferredLessonId);
+  if (alreadyAvailableSource?.couponBooking) return alreadyAvailableSource.id;
   const hasFalseInitialSource = sources.some((lesson) => lesson.regularInitialBooking) && !futureLessons.length;
   const preferredSourceMissing = Boolean(preferredLessonId) && !sources.some((lesson) => lesson.id === preferredLessonId);
   const workspaceNeedsRefresh = !memberScheduleV2WorkspaceCache?.workspace
@@ -11622,7 +11651,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.343",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.344",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
