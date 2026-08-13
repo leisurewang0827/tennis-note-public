@@ -1925,12 +1925,14 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
 
   if (view === "settings") {
     if (settingsTab === "membership") {
+      const branchKey = activeOperationBranchId() || "unselected";
       jobs.push(
-        loadAdminDataOnce("membership-policy", () => Promise.all([
+        loadAdminDataOnce(`membership-policy:${branchKey}`, () => Promise.all([
           loadServerHoldingPolicy(),
           loadRefundPolicySettingsFromServer(),
           loadPolicyVersionsFromServer(),
           loadLessonPoliciesFromServer(),
+          loadDiscountPoliciesFromServer(),
         ])),
       );
     }
@@ -2401,11 +2403,13 @@ const adminLockSession = {
   afterUnlock: null,
 };
 const adminLockViewOptions = [
+  { id: "schedule", label: "레슨시간표", detail: "수업 추가, 변경, 삭제, 상태 보정" },
   { id: "billing", label: "결제/정산", detail: "결제 확인, 수동 충전, 코치 정산" },
   { id: "data", label: "엑셀·백업", detail: "엑셀 업로드, 전체 내보내기, 백업" },
   { id: "settings", label: "운영 설정", detail: "수업 정책, 회원권 규정, 관리자 보안" },
   { id: "notes", label: "기록/차감 확인", detail: "수업 완료, 횟수 차감, 코치 코멘트" },
   { id: "members", label: "회원관리", detail: "회원 상세, 회원권 상태, NTRP" },
+  { id: "issues", label: "개선·오류 접수", detail: "접수 상태 변경과 운영 오류 기록" },
 ];
 const adminSecurityPresets = {
   transition: {
@@ -6113,23 +6117,101 @@ function normalizeDiscountPolicy(policy = {}) {
     status: policy.status || "사용",
     issued: numericValue(policy.issued, 0),
     used: numericValue(policy.used, 0),
+    branchId: policy.branchId || policy.branch_id || "",
+    serverUpdatedAt: policy.serverUpdatedAt || policy.updated_at || "",
   };
+}
+
+const discountStatusToServer = { "사용": "active", "검토": "review", "중지": "disabled", "보관": "archived" };
+const discountStatusFromServer = { active: "사용", review: "검토", disabled: "중지", archived: "보관" };
+const discountPaymentToServer = { "카드/현금": "card_cash", "카드": "card_only", "현금": "cash_only" };
+const discountPaymentFromServer = { card_cash: "카드/현금", card_only: "카드", cash_only: "현금" };
+const discountCoachPermissionToServer = {
+  "코치별 지급 수량 안에서 사용": "coach_quota",
+  "요청만 가능": "request_only",
+  "관리자만 사용": "admin_only",
+};
+const discountCoachPermissionFromServer = {
+  coach_quota: "코치별 지급 수량 안에서 사용",
+  request_only: "요청만 가능",
+  admin_only: "관리자만 사용",
+};
+const discountBurdenToServer = { "센터 부담": "branch", "코치 부담": "coach", "공동 부담": "shared" };
+const discountBurdenFromServer = { branch: "센터 부담", coach: "코치 부담", shared: "공동 부담" };
+
+function discountPolicyFromServer(row = {}, issueRows = []) {
+  const related = issueRows.filter((issue) => String(issue.policy_id) === String(row.id));
+  return normalizeDiscountPolicy({
+    id: row.id,
+    title: row.name,
+    target: row.target_label,
+    type: row.discount_type,
+    value: row.discount_value,
+    payment: discountPaymentFromServer[row.payment_scope] || "카드/현금",
+    coachPermission: discountCoachPermissionFromServer[row.coach_permission] || "관리자만 사용",
+    coachQuota: row.coach_issue_quota,
+    expiresDays: row.expires_days,
+    burden: discountBurdenFromServer[row.burden_party] || "센터 부담",
+    status: discountStatusFromServer[row.status] || "검토",
+    issued: related.length,
+    used: related.filter((issue) => issue.status === "used").length,
+    branchId: row.branch_id,
+    serverUpdatedAt: row.updated_at,
+  });
+}
+
+function discountPolicyServerPayload(policy = {}) {
+  const normalized = normalizeDiscountPolicy(policy);
+  return {
+    branch_id: normalized.branchId || activeOperationBranchId(),
+    name: normalized.title,
+    target_label: normalized.target,
+    discount_type: normalized.type,
+    discount_value: normalized.value,
+    payment_scope: discountPaymentToServer[normalized.payment] || "card_cash",
+    coach_permission: discountCoachPermissionToServer[normalized.coachPermission] || "admin_only",
+    coach_issue_quota: normalized.coachQuota,
+    expires_days: normalized.expiresDays,
+    burden_party: discountBurdenToServer[normalized.burden] || "branch",
+    status: discountStatusToServer[normalized.status] || "review",
+  };
+}
+
+async function loadDiscountPoliciesFromServer() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.selectRows || !branchId || !adminApprovalReady()) return false;
+  const [rows, issues] = await Promise.all([
+    client.selectRows("tn_discount_policies", {
+      select: "id,branch_id,name,target_label,discount_type,discount_value,payment_scope,coach_permission,coach_issue_quota,expires_days,burden_party,status,updated_at",
+      filters: { branch_id: branchId },
+      order: "created_at.desc",
+      limit: 200,
+    }),
+    client.selectRows("tn_discount_issues", {
+      select: "policy_id,status",
+      filters: { branch_id: branchId },
+      limit: 1000,
+    }).catch(() => []),
+  ]);
+  replaceArray(discountPolicies, (rows || []).map((row) => discountPolicyFromServer(row, issues || [])));
+  saveSnapshot();
+  if (state.view === "settings" && state.settingsTab === "membership") renderServiceReadiness();
+  return true;
 }
 
 function discountAvailableCount(policy = {}) {
   return Math.max(0, numericValue(policy.issued, 0) - numericValue(policy.used, 0));
 }
 
-function discountAmountForBilling(policy = {}, billing = {}) {
-  const base = numericValue(billing.originalAmount, numericValue(billing.amount));
-  if (policy.type === "amount") return Math.min(base, numericValue(policy.value));
-  return Math.min(base, Math.round(base * (numericValue(policy.value) / 100)));
-}
-
-function createDiscountPolicy() {
+async function createDiscountPolicy() {
   const title = $("#discountTitleInput")?.value.trim() || "";
   if (!title) {
     showToast("할인권 이름을 입력해주세요");
+    return;
+  }
+  if (!adminApprovalReady() || !window.TennisNoteDataClient?.insertRows || !activeOperationBranchId()) {
+    showToast("관리자 로그인과 운영 지점을 확인해 주세요");
     return;
   }
   const policy = normalizeDiscountPolicy({
@@ -6143,20 +6225,25 @@ function createDiscountPolicy() {
     expiresDays: $("#discountExpiresInput")?.value,
     burden: $("#discountBurdenInput")?.value || "센터 부담",
     status: "사용",
+    branchId: activeOperationBranchId(),
   });
-  discountPolicies.unshift(policy);
-  discountIssueLogs.unshift({ id: `discount-log-${Date.now()}`, text: `${policy.title} 생성`, at: new Date().toLocaleDateString("ko-KR") });
-  saveSnapshot();
-  renderServiceReadiness();
-  showToast("할인권 생성 완료");
+  try {
+    const inserted = await window.TennisNoteDataClient.insertRows("tn_discount_policies", discountPolicyServerPayload(policy));
+    if (!inserted?.[0]?.id) throw new Error("discount_policy_write_not_confirmed");
+    await loadDiscountPoliciesFromServer();
+    discountIssueLogs.unshift({ id: `discount-log-${Date.now()}`, text: `${policy.title} 생성`, at: new Date().toLocaleDateString("ko-KR") });
+    showToast("할인권을 서버에 생성했습니다");
+  } catch (error) {
+    showToast(`할인권 생성 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+  }
 }
 
-function updateDiscountPolicy(policyId) {
+async function updateDiscountPolicy(policyId) {
   const card = document.querySelector(`[data-discount-card="${policyId}"]`);
   const policy = discountPolicies.find((item) => item.id === policyId);
   if (!card || !policy) return;
   const readField = (field) => card.querySelector(`[data-discount-field="${field}"]`)?.value.trim() || "";
-  Object.assign(policy, normalizeDiscountPolicy({
+  const nextPolicy = normalizeDiscountPolicy({
     ...policy,
     title: readField("title") || policy.title,
     target: readField("target") || policy.target,
@@ -6168,71 +6255,46 @@ function updateDiscountPolicy(policyId) {
     expiresDays: readField("expiresDays") || policy.expiresDays,
     burden: readField("burden") || policy.burden,
     status: readField("status") || policy.status,
-  }));
-  saveSnapshot();
-  renderServiceReadiness();
-  showToast("할인권 저장 완료");
+  });
+  if (!adminApprovalReady() || !window.TennisNoteDataClient?.updateRows || !policy.serverUpdatedAt) {
+    showToast("할인권 서버 정보를 새로고침한 뒤 다시 저장해 주세요");
+    return;
+  }
+  try {
+    const updated = await window.TennisNoteDataClient.updateRows("tn_discount_policies", {
+      id: policy.id,
+      branch_id: activeOperationBranchId(),
+      updated_at: policy.serverUpdatedAt,
+    }, discountPolicyServerPayload(nextPolicy));
+    if (!updated?.length) throw new Error("discount_policy_revision_conflict");
+    await loadDiscountPoliciesFromServer();
+    showToast("할인권을 서버에 저장했습니다");
+  } catch (error) {
+    await loadDiscountPoliciesFromServer().catch(() => false);
+    showToast(String(error?.message || "").includes("revision_conflict")
+      ? "다른 관리자가 먼저 수정했습니다. 최신 값을 불러왔습니다."
+      : `할인권 저장 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+  }
 }
 
-function issueDiscountPolicy(policyId) {
+async function archiveDiscountPolicy(policyId) {
   const policy = discountPolicies.find((item) => item.id === policyId);
-  if (!policy) return;
-  if (policy.status !== "사용") {
-    showToast("사용 상태인 할인권만 지급할 수 있습니다");
-    return;
+  const client = window.TennisNoteDataClient;
+  if (!policy || !adminApprovalReady() || !client?.updateRows || !policy.serverUpdatedAt) return;
+  if (!window.confirm(`${policy.title} 할인권을 보관할까요?\n기존 발급·사용 이력은 유지됩니다.`)) return;
+  try {
+    const updated = await client.updateRows("tn_discount_policies", {
+      id: policy.id,
+      branch_id: activeOperationBranchId(),
+      updated_at: policy.serverUpdatedAt,
+    }, { status: "archived" });
+    if (!updated?.length) throw new Error("discount_policy_revision_conflict");
+    await loadDiscountPoliciesFromServer();
+    showToast("할인권을 보관했습니다");
+  } catch (error) {
+    await loadDiscountPoliciesFromServer().catch(() => false);
+    showToast(`할인권 보관 실패: ${error?.payload?.code || error?.message || "server_error"}`);
   }
-  if (policy.coachQuota > 0 && policy.issued >= policy.coachQuota) {
-    showToast("코치 지급 수량을 모두 사용했습니다");
-    return;
-  }
-  policy.issued += 1;
-  const coachName = coaches.find((coach) => coach.coachMode === "approved")?.name || "코치";
-  discountIssueLogs.unshift({ id: `discount-log-${Date.now()}`, text: `${coachName}에게 ${policy.title} 1장 지급`, at: new Date().toLocaleDateString("ko-KR") });
-  billingLogs.unshift(`${policy.title} 코치 지급 처리`);
-  saveSnapshot();
-  renderAll();
-  showToast("할인권 지급 완료");
-}
-
-function applyDiscountPolicy(policyId) {
-  const policy = discountPolicies.find((item) => item.id === policyId);
-  if (!policy) return;
-  if (policy.status !== "사용") {
-    showToast("사용 상태인 할인권만 적용할 수 있습니다");
-    return;
-  }
-  if (discountAvailableCount(policy) <= 0) {
-    showToast("먼저 할인권을 지급해주세요");
-    return;
-  }
-  let billing = billings.find((item) => item.status !== "paid");
-  if (!billing) {
-    const target = tickets.find((ticket) => ticket.remaining <= 1) || tickets[0];
-    const product = membershipProductForTicket(target);
-    billing = {
-      member: target.member,
-      item: `${product.title} 결제`,
-      amount: product.amount,
-      method: "결제요청",
-      status: "draft",
-      statusLabel: "작성중",
-    };
-    billings.unshift(billing);
-  }
-  const originalAmount = numericValue(billing.originalAmount, numericValue(billing.amount));
-  const discountAmount = discountAmountForBilling(policy, { ...billing, originalAmount });
-  billing.originalAmount = originalAmount;
-  billing.discountPolicyId = policy.id;
-  billing.discountTitle = policy.title;
-  billing.discountAmount = discountAmount;
-  billing.amount = Math.max(0, originalAmount - discountAmount);
-  billing.method = paymentMethodLabel(billing.method || "결제요청");
-  policy.used += 1;
-  discountIssueLogs.unshift({ id: `discount-log-${Date.now()}`, text: `${billing.member} ${policy.title} 사용 · ${money.format(discountAmount)}원 할인`, at: new Date().toLocaleDateString("ko-KR") });
-  billingLogs.unshift(`${billing.member} ${policy.title} 적용: ${money.format(originalAmount)}원 → ${money.format(billing.amount)}원`);
-  saveSnapshot();
-  renderAll();
-  showToast("할인권 사용 처리 완료");
 }
 
 function showToast(message) {
@@ -7183,7 +7245,6 @@ function organizeAdminTools() {
   moveAdminToolPanel("#dataView .data-export-panel", "dataToolsModalContent");
   $("#settingsView .service-readiness-panel")?.remove();
   $("#settingsView .payment-setup-panel")?.remove();
-
   $("#dataToolsModalContent .import-step-grid")?.remove();
   $("#dataView")?.remove();
 
@@ -26611,7 +26672,7 @@ function renderServiceReadiness() {
   const discountCards = $("#discountPolicyCards");
   if (discountCards) {
     state.discountView = state.discountView === "history" ? "history" : "policies";
-    state.discountStatusFilter = ["all", "사용", "검토", "중지"].includes(state.discountStatusFilter) ? state.discountStatusFilter : "all";
+    state.discountStatusFilter = ["all", "사용", "검토", "중지", "보관"].includes(state.discountStatusFilter) ? state.discountStatusFilter : "all";
     $$('[data-discount-view]').forEach((button) => button.classList.toggle("is-active", button.dataset.discountView === state.discountView));
     if ($("#discountPolicySearch") && $("#discountPolicySearch").value !== state.discountSearch) $("#discountPolicySearch").value = state.discountSearch || "";
     if ($("#discountPolicyStatusFilter")) {
@@ -26676,7 +26737,7 @@ function renderServiceReadiness() {
             <label><small>코치 지급수량</small><input data-discount-field="coachQuota" type="number" min="0" value="${normalized.coachQuota}" /></label>
             <label><small>유효기간(일)</small><input data-discount-field="expiresDays" type="number" min="1" value="${normalized.expiresDays}" /></label>
             <label><small>부담</small><input data-discount-field="burden" type="text" value="${escapeHtml(normalized.burden)}" /></label>
-            <label><small>상태</small><select data-discount-field="status"><option ${normalized.status === "사용" ? "selected" : ""}>사용</option><option ${normalized.status === "검토" ? "selected" : ""}>검토</option><option ${normalized.status === "중지" ? "selected" : ""}>중지</option></select></label>
+            <label><small>상태</small><select data-discount-field="status"><option ${normalized.status === "사용" ? "selected" : ""}>사용</option><option ${normalized.status === "검토" ? "selected" : ""}>검토</option><option ${normalized.status === "중지" ? "selected" : ""}>중지</option><option ${normalized.status === "보관" ? "selected" : ""}>보관</option></select></label>
           </div>
           <dl>
             <div><dt>할인</dt><dd>${valueLabel}</dd></div>
@@ -26689,8 +26750,7 @@ function renderServiceReadiness() {
           <p>${escapeHtml(issuedText)}</p>
           <div class="discount-action-row">
             <button class="small-button" type="button" data-save-discount-policy="${normalized.id}">저장</button>
-            <button class="ghost-button" type="button" data-issue-discount-policy="${normalized.id}">코치에게 1장 지급</button>
-            <button class="ghost-button" type="button" data-apply-discount-policy="${normalized.id}">결제에 사용처리</button>
+            <button class="ghost-button danger-button" type="button" data-archive-discount-policy="${normalized.id}" ${normalized.status === "보관" ? "disabled" : ""}>보관</button>
           </div>
         </details>`;
       })
@@ -29048,22 +29108,20 @@ function bindEvents() {
 
     const createDiscountButton = event.target.closest("#createDiscountPolicy");
     if (createDiscountButton) {
-      createDiscountPolicy();
+      await createDiscountPolicy();
+      return;
     }
 
     const saveDiscountButton = event.target.closest("[data-save-discount-policy]");
     if (saveDiscountButton) {
-      updateDiscountPolicy(saveDiscountButton.dataset.saveDiscountPolicy);
+      await updateDiscountPolicy(saveDiscountButton.dataset.saveDiscountPolicy);
+      return;
     }
 
-    const issueDiscountButton = event.target.closest("[data-issue-discount-policy]");
-    if (issueDiscountButton) {
-      issueDiscountPolicy(issueDiscountButton.dataset.issueDiscountPolicy);
-    }
-
-    const applyDiscountButton = event.target.closest("[data-apply-discount-policy]");
-    if (applyDiscountButton) {
-      applyDiscountPolicy(applyDiscountButton.dataset.applyDiscountPolicy);
+    const archiveDiscountButton = event.target.closest("[data-archive-discount-policy]");
+    if (archiveDiscountButton) {
+      await archiveDiscountPolicy(archiveDiscountButton.dataset.archiveDiscountPolicy);
+      return;
     }
 
     const copyPolicyVersionButton = event.target.closest("[data-copy-policy-version]");
