@@ -15,6 +15,21 @@
   let offlineDatabasePromise = null;
   let nativeOAuthInFlightProvider = "";
 
+  function emitClientError(stage, error, context = {}) {
+    const value = error || new Error(stage || "client_error");
+    window.dispatchEvent(new CustomEvent("tennisnote:client-error", {
+      detail: {
+        category: "auth",
+        stage: String(stage || "unknown"),
+        code: String(value?.code || value?.payload?.code || value?.message || "unknown_error"),
+        message: String(value?.message || value || "unknown_error"),
+        status: Number(value?.status || 0),
+        provider: providerKey(context.provider || storedProvider() || ""),
+        native: isNativeApp(),
+      },
+    }));
+  }
+
   function parseStoredConfig() {
     try {
       return JSON.parse(localStorage.getItem(storageKey) || "{}");
@@ -394,14 +409,22 @@
 
   async function exchangeOAuthCode(code) {
     const verifier = oauthStorageValue();
-    if (!code || !verifier) throw new Error("oauth_code_verifier_missing");
+    if (!code || !verifier) {
+      const error = new Error("oauth_code_verifier_missing");
+      emitClientError("oauth_code_exchange", error);
+      throw error;
+    }
     const config = loadConfig();
     const response = await fetch(authUrl("token?grant_type=pkce"), {
       method: "POST",
       headers: { apikey: config.supabasePublishableKey, "Content-Type": "application/json" },
       body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
     });
-    if (!response.ok) throw new Error("oauth_code_exchange_failed");
+    if (!response.ok) {
+      const error = Object.assign(new Error("oauth_code_exchange_failed"), { status: response.status });
+      emitClientError("oauth_code_exchange", error);
+      throw error;
+    }
     const payload = await response.json();
     clearOAuthStorageValue();
     return saveSession({ ...payload, provider: storedProvider() || "Supabase" });
@@ -448,13 +471,19 @@
       }
       await wait(500 * (attempt + 1));
     }
-    if (!response) throw new Error("session_refresh_temporarily_unavailable");
+    if (!response) {
+      const error = new Error("session_refresh_temporarily_unavailable");
+      emitClientError("session_refresh", error);
+      throw error;
+    }
     if (!response.ok) {
       if (response.status === 400 || response.status === 401) {
         removeStoredSession();
         return null;
       }
-      throw new Error("session_refresh_temporarily_unavailable");
+      const error = new Error("session_refresh_temporarily_unavailable");
+      emitClientError("session_refresh", error);
+      throw error;
     }
     const payload = await response.json();
     return saveSession({ ...payload, provider: session.provider });
@@ -478,7 +507,11 @@
 
   async function consumeOAuthRedirect() {
     const query = new URLSearchParams(window.location.search || "");
-    if (query.get("error")) throw new Error(query.get("error_description") || query.get("error"));
+    if (query.get("error")) {
+      const error = new Error(query.get("error") || "oauth_redirect_failed");
+      emitClientError("oauth_callback", error);
+      throw error;
+    }
     if (query.get("code")) {
       const session = await exchangeOAuthCode(query.get("code"));
       window.history.replaceState({}, document.title, `${window.location.pathname}`);
@@ -599,6 +632,9 @@
           provider,
           cancelled: ["access_denied", "user_cancelled", "canceled", "cancelled"].includes(error.toLowerCase()),
         });
+        if (!["access_denied", "user_cancelled", "canceled", "cancelled"].includes(error.toLowerCase())) {
+          emitClientError("native_oauth_callback", new Error(error), { provider });
+        }
         return true;
       }
       const code = parsed.searchParams.get("code");
@@ -617,6 +653,7 @@
       clearOAuthStorageValue();
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
       emitOAuthResult({ ok: false, provider, cancelled: false });
+      emitClientError("native_oauth_callback", error, { provider });
       return true;
     }
   }
@@ -897,6 +934,7 @@
       } catch (error) {
         nativeOAuthInFlightProvider = "";
         clearOAuthStorageValue();
+        emitClientError("oauth_browser_open", error, { provider });
         throw error;
       }
       return;
@@ -924,6 +962,7 @@
       const error = new Error(payload?.msg || payload?.message || payload?.error_description || "email_login_failed");
       error.code = payload?.error_code || payload?.code || "email_login_failed";
       error.status = response.status;
+      emitClientError("password_login", error, { provider: "email" });
       throw error;
     }
     return saveSession({ ...payload, provider: "\uc774\uba54\uc77c" });
@@ -1080,17 +1119,20 @@
     if (!user?.id) return { user, profile: null };
     const profileSelect = "id,name,nickname,phone,birth_year,neighborhood,gender,role,member_kind,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,ntrp_survey,ntrp_requested_at,profile_completed_at,privacy_consent_version,privacy_consented_at,status";
     let identityContext = null;
-    const identityFailure = (code, status) => ({
-      user,
-      profile: null,
-      coachRole: null,
-      identityContext,
-      profileBootstrapError: {
-        code,
-        expectedProvider: "",
-        status,
-      },
-    });
+    const identityFailure = (code, status) => {
+      emitClientError("profile_mapping", Object.assign(new Error(code), { code, status }));
+      return {
+        user,
+        profile: null,
+        coachRole: null,
+        identityContext,
+        profileBootstrapError: {
+          code,
+          expectedProvider: "",
+          status,
+        },
+      };
+    };
     try {
       identityContext = await rpc("tn_current_identity_context", {});
     } catch (error) {
@@ -1156,6 +1198,7 @@
         const result = await bootstrapCurrentProfile({ providerHint: session.provider });
         if (result?.profile?.id) rows = [result.profile];
       } catch (error) {
+        emitClientError("profile_bootstrap", error);
         profileBootstrapError = {
           code: error?.payload?.code || error?.message || "profile_bootstrap_failed",
           expectedProvider: error?.payload?.expectedProvider || "",

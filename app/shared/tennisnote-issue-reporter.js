@@ -3,7 +3,12 @@
   const labels = { error: "오류", inconvenience: "불편", improvement: "개선 제안" };
   const release = window.TENNIS_NOTE_RELEASE || {};
   const client = window.TennisNoteDataClient;
+  const queueStorageKey = "tennis-note-client-error-queue-v1";
+  const clientIdStorageKey = "tennis-note-client-error-id-v1";
+  const maxQueueSize = 30;
+  const maxQueueAgeMs = 7 * 24 * 60 * 60 * 1000;
   let submitting = false;
+  let flushing = false;
   const adminReportState = {
     rows: [],
     page: 0,
@@ -18,7 +23,72 @@
   function safeMessage(value) {
     return String(value || "오류 내용 없음")
       .replace(/(token|password|apikey|authorization)[=: ]+[^\s,;]+/gi, "$1=[숨김]")
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[이메일]")
+      .replace(/(?:\+?82[- ]?)?0?1[016789][- ]?\d{3,4}[- ]?\d{4}/g, "[전화번호]")
+      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[토큰]")
+      .replace(/([?&#](?:code|token|email|phone|password)=)[^&#\s]+/gi, "$1[숨김]")
       .slice(0, 1000);
+  }
+
+  function safeCode(value) {
+    return safeMessage(value || "unknown_error")
+      .toLowerCase()
+      .replace(/[^a-z0-9_.:-]+/g, "_")
+      .slice(0, 120) || "unknown_error";
+  }
+
+  function clientSessionId() {
+    try {
+      const saved = window.localStorage.getItem(clientIdStorageKey);
+      if (/^[a-z0-9-]{12,80}$/i.test(saved || "")) return saved;
+      const created = window.crypto?.randomUUID?.() || `client-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+      window.localStorage.setItem(clientIdStorageKey, created);
+      return created;
+    } catch (_) {
+      return `session-${Date.now().toString(36)}`;
+    }
+  }
+
+  function platformContext() {
+    const capacitor = window.Capacitor;
+    const nativePlatform = capacitor?.getPlatform?.() || "web";
+    return {
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      language: navigator.language || "",
+      platform: navigator.userAgentData?.platform || navigator.platform || "",
+      nativePlatform,
+      online: navigator.onLine !== false,
+      clientSessionId: clientSessionId(),
+    };
+  }
+
+  function readQueue() {
+    try {
+      const rows = JSON.parse(window.localStorage.getItem(queueStorageKey) || "[]");
+      const cutoff = Date.now() - maxQueueAgeMs;
+      return (Array.isArray(rows) ? rows : [])
+        .filter((row) => Number(row?.capturedAt || 0) >= cutoff)
+        .slice(-maxQueueSize);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function writeQueue(rows) {
+    try {
+      window.localStorage.setItem(queueStorageKey, JSON.stringify(rows.slice(-maxQueueSize)));
+    } catch (_) {
+      // Logging must never interrupt the app when storage is unavailable.
+    }
+  }
+
+  function queueDiagnostic(payload) {
+    const rows = readQueue();
+    const duplicate = rows.find((row) => row.fingerprint === payload.fingerprint && Date.now() - row.capturedAt < 60_000);
+    if (duplicate) duplicate.occurrences = Math.min(Number(duplicate.occurrences || 1) + 1, 20);
+    else rows.push({ ...payload, capturedAt: Date.now(), occurrences: 1 });
+    writeQueue(rows);
+    void flushQueue();
   }
 
   function fingerprint(message, source, line) {
@@ -47,9 +117,7 @@
       target_release_id: release.releaseId || "",
       target_fingerprint: payload.fingerprint || "",
       target_device_context: {
-        viewport: `${window.innerWidth}x${window.innerHeight}`,
-        language: navigator.language || "",
-        platform: navigator.userAgentData?.platform || navigator.platform || "",
+        ...platformContext(),
       },
     });
     return Array.isArray(result) ? result[0] : result;
@@ -57,17 +125,77 @@
 
   async function captureError(message, source, line, column) {
     const clean = safeMessage(message);
+    queueDiagnostic({
+      category: "runtime",
+      stage: "runtime_error",
+      code: safeCode(clean),
+      message: clean,
+      source: String(source || "화면").split("/").pop(),
+      line: Number(line || 0),
+      column: Number(column || 0),
+      fingerprint: fingerprint(clean, source, line),
+    });
+  }
+
+  function captureClientError(detail = {}) {
+    const category = detail.category === "auth" ? "auth" : "runtime";
+    const stage = safeCode(detail.stage || (category === "auth" ? "login_unknown" : "runtime_error"));
+    const code = safeCode(detail.code || detail.message);
+    const message = safeMessage(detail.message || detail.code);
+    queueDiagnostic({
+      category,
+      stage,
+      code,
+      message,
+      status: Number(detail.status || 0),
+      provider: safeCode(detail.provider || "unknown"),
+      native: Boolean(detail.native),
+      source: "client-event",
+      line: 0,
+      column: 0,
+      fingerprint: fingerprint(`${category}|${stage}|${code}`, "client-event", 0),
+    });
+  }
+
+  async function sendQueuedDiagnostic(row) {
+    return client.invokeFunction("tennisnote-client-error-report", {
+      body: {
+        surface,
+        category: row.category,
+        stage: row.stage,
+        code: row.code,
+        message: row.message,
+        status: row.status || 0,
+        provider: row.provider || "unknown",
+        source: row.source || "",
+        line: row.line || 0,
+        column: row.column || 0,
+        fingerprint: row.fingerprint,
+        occurrences: row.occurrences || 1,
+        pagePath: `${location.pathname}${location.hash || ""}`,
+        appVersion: release.version || "",
+        releaseId: release.releaseId || "",
+        deviceContext: platformContext(),
+      },
+    });
+  }
+
+  async function flushQueue() {
+    if (flushing || navigator.onLine === false || !client?.invokeFunction || !client.readiness?.().ready) return;
+    const rows = readQueue();
+    if (!rows.length) return;
+    flushing = true;
+    const remaining = [...rows];
     try {
-      await submit({
-        kind: "error",
-        priority: "high",
-        title: "앱 자동 오류 감지",
-        description: "사용 중 자동으로 감지된 오류입니다.",
-        errorMessage: `${clean} (${String(source || "화면").split("/").pop()}:${line || 0}:${column || 0})`,
-        fingerprint: fingerprint(clean, source, line),
-      });
+      while (remaining.length) {
+        await sendQueuedDiagnostic(remaining[0]);
+        remaining.shift();
+        writeQueue(remaining);
+      }
     } catch (_) {
-      // Automatic reporting must never interrupt the app.
+      // Keep unsent diagnostics for the next online/app-focus attempt.
+    } finally {
+      flushing = false;
     }
   }
 
@@ -258,9 +386,15 @@
 
   window.addEventListener("error", (event) => captureError(event.message, event.filename, event.lineno, event.colno));
   window.addEventListener("unhandledrejection", (event) => captureError(event.reason?.message || event.reason, "promise", 0, 0));
-  window.TennisNoteIssueReporter = { submit, loadAdminReports };
+  window.addEventListener("tennisnote:client-error", (event) => captureClientError(event.detail || {}));
+  window.addEventListener("online", () => void flushQueue());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void flushQueue();
+  });
+  window.TennisNoteIssueReporter = { submit, loadAdminReports, captureClientError, flushQueue };
   document.addEventListener("DOMContentLoaded", () => {
     installManualEntry();
     if (surface === "admin") bindAdmin();
+    void flushQueue();
   }, { once: true });
 })();
