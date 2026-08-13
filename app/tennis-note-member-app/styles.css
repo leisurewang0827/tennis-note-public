@@ -6816,6 +6816,29 @@ body.modal-open {
 }
 
 @media (max-width: 720px) {
+  .member-ticket-picker > div {
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow-x: visible;
+  }
+
+  .member-ticket-picker-button {
+    width: 100%;
+    min-height: 58px;
+  }
+
+  .member-ticket-picker-button span {
+    white-space: normal;
+  }
+
+  .member-available-time-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .member-available-coach-groups {
+    padding-bottom: calc(var(--tn-bottom-nav-height) + max(30px, env(safe-area-inset-bottom)));
+  }
+
   .member-inline-change {
     grid-template-columns: 1fr;
     align-items: stretch;

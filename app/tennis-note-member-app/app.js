@@ -78,6 +78,7 @@ const state = {
   serverChangeCandidateKey: "",
   serverChangeCandidateError: "",
   serverChangeCandidateExclusions: {},
+  serverChangeAnchorGapMinutes: 40,
   liveMakeupEntitlements: [],
   liveReleasedMakeupSlots: [],
   regularInitialSelections: [],
@@ -1703,7 +1704,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.332",
+    workerUrl: "./service-worker.js?v=1.0.333",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3342,7 +3343,7 @@ function renderMemberScheduleTicketPicker() {
   return `
     <section class="member-ticket-picker" aria-label="확인할 회원권 선택">
       <strong>회원권별 일정</strong>
-      <div>
+      <div role="group" aria-label="회원권별 일정 선택">
         ${tickets.map((ticket) => `
           <button class="member-ticket-picker-button ${String(ticket.id) === selectedTicketId ? "is-active" : ""}" type="button" data-member-ticket-filter="${escapeHtml(ticket.id)}">
             <span>${escapeHtml(memberTicketCompactLabel(ticket))}</span>
@@ -3439,7 +3440,6 @@ function renderMemberHomeOverview() {
   const currentTickets = currentLiveTickets();
   const nextTickets = upcomingLiveTickets();
   const ticket = currentTickets[0] || nextTickets[0] || null;
-  const currentRemaining = currentTickets.reduce((sum, item) => sum + Math.max(0, Number(item.remaining) || 0), 0);
   const hasLowTicket = currentTickets.some((item) => Number(item.remaining) <= 2);
   const upcoming = upcomingMemberLessons(24);
   const latestFeedback = latestMemberFeedbackLog();
@@ -3493,9 +3493,9 @@ function renderMemberHomeOverview() {
   }
 
   if (ticket) {
-    $("#remainingCount").textContent = currentTickets.length > 1 ? `총 ${currentRemaining}회` : `${ticket.remaining}회`;
+    $("#remainingCount").textContent = currentTickets.length > 1 ? `${currentTickets.length}개` : `${ticket.remaining}회`;
     $("#ticketStatus").textContent = currentTickets.length > 1
-      ? `현재 회원권 ${currentTickets.length}개 · 수업별 차감`
+      ? "회원권마다 잔여횟수와 다음 수업을 따로 확인하세요."
       : `${ticket.title} · ${ticket.statusLabel}`;
     $("#homeTicketAction").textContent = hasLowTicket ? "연장하기" : "회원권";
     ticketCard.classList.toggle("alert", hasLowTicket);
@@ -4159,8 +4159,8 @@ function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
                     ${candidates.map((lesson) => `
                       <button class="member-available-time" type="button" data-lesson="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(lessonDateTimeLabel(lesson))} ${escapeHtml(coach)} 신청">
                         <strong>${escapeHtml(lesson.time)}</strong>
-                        <span>${lesson.policy === "coach" ? "승인 요청" : "바로 신청"}</span>
-                        <small>${lesson.releasedRegularSlot ? "불참 자리" : /보강/.test(lesson.type || "") ? "보강" : lesson.couponBooking || /쿠폰/.test(lesson.type || "") ? "쿠폰" : "시간 변경"}</small>
+                        <span>${lesson.policy === "coach" ? "승인 필요" : "선택"}</span>
+                        <small>${escapeHtml(memberCandidateWindowLabel(lesson))}</small>
                       </button>`).join("")}
                   </div>
                 </section>`).join("")
@@ -4697,22 +4697,41 @@ function renderSelects() {
   const availableOptions = loadState === "ready" ? memberAvailableSlotsForSelectedLesson()
     .map((lesson) => `<option value="${lesson.id}">${lesson.day} ${lesson.time} · ${lesson.coach}</option>`)
     .join("") : "";
-  $("#makeupSlot").innerHTML = availableOptions || `<option>${loadState === "loading" ? "변경 가능한 시간 확인 중" : loadState === "error" ? "시간표 불러오기 실패" : "가능한 변경 시간 없음"}</option>`;
+  $("#makeupSlot").innerHTML = availableOptions
+    ? `<option value="">시간을 선택해 주세요</option>${availableOptions}`
+    : `<option value="">${loadState === "loading" ? "변경 가능한 시간 확인 중" : loadState === "error" ? "시간표 불러오기 실패" : "가능한 변경 시간 없음"}</option>`;
   if (previousMakeup && [...$("#makeupSlot").options].some((option) => option.value === previousMakeup)) {
     $("#makeupSlot").value = previousMakeup;
+  } else {
+    $("#makeupSlot").value = "";
   }
   const isMakeupDue = selectedSource?.status === "makeup_due";
   const isCouponBooking = Boolean(selectedSource?.couponBooking);
   const isRegularInitialBooking = Boolean(selectedSource?.regularInitialBooking);
   const isPausedResumeBooking = Boolean(selectedSource?.resumePausedTicket);
   if ($("#changeModalTitle")) $("#changeModalTitle").textContent = isMakeupDue ? "보강 시간 선택" : isCouponBooking ? "쿠폰 수업 예약" : "수업 변경 요청";
+  if ($("#changeSourceStepLabel")) $("#changeSourceStepLabel").textContent = isMakeupDue
+    ? "1. 보강할 수업"
+    : isCouponBooking ? "1. 사용할 쿠폰" : "1. 변경할 수업";
   if ($("#changeReasonField")) $("#changeReasonField").hidden = isMakeupDue || isCouponBooking;
   if ($("#requestMakeup")) $("#requestMakeup").textContent = isMakeupDue ? "보강 예약 확정" : isCouponBooking ? "쿠폰 예약 확정" : "수업 변경 요청";
   if (isRegularInitialBooking) {
     if ($("#changeModalTitle")) $("#changeModalTitle").textContent = isPausedResumeBooking ? "휴회 복귀 시간 선택" : "첫 정규시간 설정";
     if ($("#changeReasonField")) $("#changeReasonField").hidden = true;
     if ($("#requestMakeup")) $("#requestMakeup").textContent = isPausedResumeBooking ? "복귀하고 시간 확정" : "수업시간 확정";
+    if ($("#changeSourceStepLabel")) $("#changeSourceStepLabel").textContent = isPausedResumeBooking ? "1. 복귀할 회원권" : "1. 설정할 회원권";
   }
+}
+
+function memberCandidateWindowLabel(lesson = {}) {
+  if (lesson.releasedRegularSlot) return "불참으로 열린 자리";
+  const rawGap = lesson.anchorGapMinutes !== undefined
+    ? lesson.anchorGapMinutes
+    : state.serverChangeAnchorGapMinutes;
+  if (rawGap === null) return "코치 수업이 있는 날의 빈 시간";
+  const gap = Number(rawGap);
+  if (Number.isFinite(gap)) return `코치 수업 사이·앞뒤 ${Math.max(0, gap)}분`;
+  return "코치 수업이 있는 날의 빈 시간";
 }
 
 function renderJournalMode() {
@@ -4786,15 +4805,15 @@ function renderAvailableSlots() {
       .map(
         (lesson) => {
           const directionLabel = !isMakeupDue && !isCouponBooking && memberChangeDirection(source, lesson) === "advance"
-            ? "앞당기기"
-            : policyLabel(lesson.policy);
+            ? "앞당길 수 있음"
+            : memberCandidateWindowLabel(lesson);
           return `
           <button class="slot-card ${selectedIds.includes(lesson.id) ? "is-selected" : ""} ${lesson.policy === "coach" ? "needs-approval" : "auto-change"}" type="button" data-select-slot="${lesson.id}">
             <strong>${lesson.day} ${lesson.time}</strong>
             <span>${lesson.coach}</span>
             <small>${selectedIds.includes(lesson.id)
               ? isRegularInitialBooking ? `${selectedIds.indexOf(lesson.id) + 1}번째 선택` : "선택됨"
-              : isMakeupDue || isCouponBooking ? "즉시 예약" : isRegularInitialBooking ? `${selectedIds.length}/${requiredCount} 선택` : directionLabel}</small>
+              : isRegularInitialBooking ? `${selectedIds.length}/${requiredCount} 선택` : directionLabel}</small>
           </button>`;
         },
       )
@@ -6389,6 +6408,9 @@ function mapServerMemberChangeCandidate(candidate = {}, source = null) {
   const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
   const time = String(candidate.startTime || "").slice(0, 5);
   const coachRoleId = candidate.coachRoleId || source?.coachRoleId || source?.coach_role_id || "";
+  const rawAnchorGap = candidate.anchorGapMinutes !== undefined
+    ? candidate.anchorGapMinutes
+    : state.serverChangeAnchorGapMinutes;
   return {
     id: `server-change-slot-${source?.serverLessonId || "lesson"}-${lessonDate}-${time}`,
     day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
@@ -6401,6 +6423,7 @@ function mapServerMemberChangeCandidate(candidate = {}, source = null) {
     type: source?.couponBooking ? "쿠폰 예약 가능" : "수업 변경 신청가능",
     status: "available",
     policy: candidate.policy || "coach",
+    anchorGapMinutes: rawAnchorGap === null ? null : Math.max(0, Number(rawAnchorGap) || 40),
     generated: true,
     authoritativeCandidate: true,
     couponBooking: Boolean(source?.couponBooking),
@@ -6461,6 +6484,7 @@ async function syncMemberChangeCandidates(source = null) {
     state.serverChangeCandidates = [];
     state.serverChangeCandidateError = "";
     state.serverChangeCandidateExclusions = {};
+    state.serverChangeAnchorGapMinutes = 40;
     return false;
   }
   const client = window.TennisNoteDataClient;
@@ -6474,6 +6498,7 @@ async function syncMemberChangeCandidates(source = null) {
   state.serverChangeCandidates = [];
   state.serverChangeCandidateError = "";
   state.serverChangeCandidateExclusions = {};
+  state.serverChangeAnchorGapMinutes = 40;
   renderSelects();
   renderAvailableSlots();
   renderSchedule();
@@ -6513,6 +6538,8 @@ async function syncMemberChangeCandidates(source = null) {
       renderSchedule();
       return false;
     }
+    const reportedGap = result.anchorGapMinutes ?? result.anchorRule?.gapMinutes;
+    state.serverChangeAnchorGapMinutes = reportedGap === null ? null : Math.max(0, Number(reportedGap) || 40);
     const mappedCandidates = result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source));
     state.serverChangeCandidates = mappedCandidates;
     state.serverChangeCandidateExclusions = result.exclusionSummary && typeof result.exclusionSummary === "object"
@@ -7328,7 +7355,7 @@ function setNoticeDialogOpen(open) {
 
 function showNoticeIfNeeded() {
   const today = localDateKey();
-  const activeNotices = [...activeNoticesForApp("member"), ...couponBookingPopupNotices()];
+  const activeNotices = activeNoticesForApp("member");
   const hiddenToday = new Set(state.noticeHiddenDate === today
     ? [...(Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : []), state.noticeHiddenId].filter(Boolean)
     : []);
@@ -8918,7 +8945,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.332" });
+  const params = new URLSearchParams({ v: "1.0.333" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -11411,7 +11438,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.332",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.333",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
