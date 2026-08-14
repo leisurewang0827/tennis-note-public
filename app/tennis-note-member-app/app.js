@@ -1711,7 +1711,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.346",
+    workerUrl: "./service-worker.js?v=1.0.347",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2159,6 +2159,57 @@ async function authorizeMemberNotificationAction(data = {}) {
   }
 }
 
+function memberNotificationLesson(data = {}) {
+  const lessonId = String(data.lessonId || data.lesson_id || "").trim();
+  if (!lessonId) return null;
+  return memberScheduleOptions().find((lesson) => (
+    String(lesson.serverLessonId || lesson.id || "") === lessonId
+  )) || (state.liveLessons || []).find((lesson) => (
+    String(lesson.serverLessonId || lesson.id || "") === lessonId
+  )) || null;
+}
+
+function memberNotificationJournalEntry(data = {}) {
+  const lessonId = String(data.lessonId || data.lesson_id || "").trim();
+  if (!lessonId) return null;
+  return journalEntries().find((entry) => (
+    String(entry.serverLessonId || entry.lessonId || "") === lessonId
+  )) || null;
+}
+
+function openMemberNotificationTarget(data = {}, route = "home") {
+  const lesson = memberNotificationLesson(data);
+  if (route === "schedule" && lesson) {
+    state.selectedMemberScheduleTicketId = String(memberLessonTicketId(lesson) || "");
+    state.selectedScheduleDay = lesson.day || state.selectedScheduleDay;
+    state.memberScheduleMode = "mine";
+    state.memberScheduleFullView = false;
+    renderSchedule();
+    openLessonDetailSheet(lesson.id);
+    return true;
+  }
+  if (["feedback", "journal"].includes(route)) {
+    const entry = memberNotificationJournalEntry(data);
+    if (entry) {
+      openJournalDetail(entry.id);
+      return true;
+    }
+  }
+  if (route === "membership") {
+    const ticketId = String(data.ticketId || data.ticket_id || "").trim();
+    const ticketCard = $$('[data-member-ticket-id]').find((item) => item.dataset.memberTicketId === ticketId);
+    if (ticketCard) {
+      window.setTimeout(() => ticketCard.scrollIntoView({ behavior: "smooth", block: "center" }), 40);
+      return true;
+    }
+  }
+  if ((route === "schedule" || ["feedback", "journal"].includes(route)) && !lesson) {
+    showToast("알림에 연결된 수업을 찾지 못했습니다. 최신 일정을 다시 확인해 주세요.");
+  }
+  jumpToTop();
+  return false;
+}
+
 async function bindNativePushListeners(plugin) {
   if (pushListenersReady) return;
   await plugin.addListener("registration", async (token) => {
@@ -2188,11 +2239,13 @@ async function bindNativePushListeners(plugin) {
           : "homeView";
     await Promise.allSettled([
       syncMemberNotificationsFromServer(),
-      route === "schedule" ? syncMemberLessonsFromServer() : Promise.resolve(false),
+      ["schedule", "feedback", "journal"].includes(route) ? syncMemberLessonsFromServer() : Promise.resolve(false),
+      route === "membership" ? syncMemberTicketsFromServer() : Promise.resolve(false),
       ["feedback", "journal"].includes(route) ? syncMemberJournalEntriesFromServer() : Promise.resolve(false),
     ]);
+    renderAll();
     setView(viewId);
-    jumpToTop();
+    openMemberNotificationTarget(data, route);
   });
   pushListenersReady = true;
 }
@@ -5713,10 +5766,12 @@ function renderCurrentTicketPanel() {
     const holding = isCurrentTicket ? memberHoldingRequests(ticket.id)[0] : null;
     const pendingPaymentId = ticket?.providerPaymentId || "";
     const canResumePayment = pendingPaymentId && Number(ticket?.paymentAmount || 0) > 0;
+    const isCancellingPendingPayment = Boolean(pendingPaymentId && pendingPaymentCancelInFlight.has(pendingPaymentId));
     const pendingPaymentActions = isPendingTicket
       ? `<div class="membership-pending-actions">
           <button class="small-button" type="button" data-resume-pending-ticket="${escapeHtml(ticket.id)}" ${canResumePayment ? "" : "disabled"}>결제창 다시 열기</button>
           <button class="small-button" type="button" data-check-pending-ticket="${escapeHtml(ticket.id)}" ${pendingPaymentId ? "" : "disabled"}>결제 상태 확인</button>
+          <button class="small-button danger-button" type="button" data-cancel-pending-ticket="${escapeHtml(ticket.id)}" ${pendingPaymentId && !isCancellingPendingPayment ? "" : "disabled"}>${isCancellingPendingPayment ? "취소 중" : "결제 대기 취소"}</button>
         </div>`
       : "";
     const holdingAction = isCurrentTicket && !isPendingTicket
@@ -6508,6 +6563,7 @@ const paymentMethodDefinitions = [
 ];
 let portOneSdkPromise = null;
 let preparedPaymentContext = null;
+const pendingPaymentCancelInFlight = new Set();
 
 function loadPortOneSdk() {
   if (window.__TENNIS_NOTE_PORTONE_TEST_SDK__?.requestPayment) {
@@ -7786,6 +7842,12 @@ function paymentServerErrorMessage(error) {
     group_partner_duplicate_phone_review: "동반 회원 연락처를 관리자가 확인해야 합니다.",
     group_payment_not_allowed: "이 계정은 공동 회원권 결제 권한이 없습니다.",
     group_account_not_available: "선택한 2대1 공동 회원권을 확인할 수 없습니다. 회원권을 다시 선택해 주세요.",
+    membership_enrollment_required: "수강 가입서를 먼저 확인해 주세요.",
+    payment_not_found: "결제 기록을 찾지 못했습니다. 화면을 새로고침한 뒤 다시 확인해 주세요.",
+    payment_not_owned: "본인의 결제 대기건만 취소할 수 있습니다.",
+    payment_already_processed: "이미 결제 처리된 건은 회원이 직접 취소할 수 없습니다. 관리자에게 문의해 주세요.",
+    provider_status_check_failed: "결제 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    pending_payment_cancel_failed: "결제 대기건을 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.",
   };
   return labels[code] || code;
 }
@@ -8471,6 +8533,48 @@ async function resumePendingTicketPayment(ticketId = "") {
   setView("shopView");
 }
 
+async function cancelPendingTicketPayment(ticketId = "") {
+  const ticket = state.liveTickets.find((item) => item.id === ticketId) || null;
+  const paymentId = ticket?.providerPaymentId || "";
+  if (!ticket || !paymentId) {
+    state.pendingPaymentCheckStatus = { tone: "alert", text: "취소할 결제 대기 기록을 찾지 못했습니다." };
+    renderAll();
+    setView("shopView");
+    return;
+  }
+  if (pendingPaymentCancelInFlight.has(paymentId)) return;
+  if (!window.confirm(`${ticket.title || "회원권"} 결제 대기를 취소할까요?\n실제 결제가 완료된 회원권은 취소되지 않습니다.`)) return;
+
+  const client = window.TennisNoteDataClient;
+  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
+    state.pendingPaymentCheckStatus = { tone: "alert", text: "로그인 상태를 확인한 뒤 다시 시도해 주세요." };
+    renderAll();
+    return;
+  }
+
+  pendingPaymentCancelInFlight.add(paymentId);
+  state.pendingPaymentCheckStatus = { tone: "wait", text: "결제 대기건을 취소하는 중입니다." };
+  renderAll();
+  try {
+    const result = await client.invokeFunction("portone-payment/cancel-pending", {
+      body: { paymentId, reason: "회원 결제 대기 취소" },
+    });
+    if (!result?.ok) throw Object.assign(new Error(result?.code || "pending_payment_cancel_failed"), { payload: result });
+    state.pendingPaymentCheckStatus = { tone: "done", text: "결제 대기건을 취소했습니다." };
+    state.ticketHistory.unshift({ text: `${ticket.title} 결제 대기 취소`, tone: "done" });
+  } catch (error) {
+    const detail = paymentServerErrorMessage(error);
+    state.pendingPaymentCheckStatus = { tone: "alert", text: detail };
+    state.ticketHistory.unshift({ text: `${ticket.title} 결제 대기 취소 실패 · ${detail}`, tone: "alert" });
+  } finally {
+    pendingPaymentCancelInFlight.delete(paymentId);
+  }
+
+  await syncMemberTicketsFromServer();
+  renderAll();
+  setView("shopView");
+}
+
 function closePaymentConfirmationModal() {
   closeAppModal("paymentConfirmationModal");
   preparedPaymentContext = null;
@@ -8497,15 +8601,22 @@ function openPaymentConfirmationModal({ product, paymentId, preparedPayment, met
 async function completePreparedPayment() {
   const context = preparedPaymentContext;
   if (!context) return;
-  const { product, paymentId, preparedPayment, methodId, sdk } = context;
+  const { product, paymentId, methodId, sdk } = context;
+  let preparedPayment = context.preparedPayment || null;
   const method = paymentMethodDefinition(methodId);
   const paymentAmount = onlinePaymentAmount(product);
   const button = $("#openPreparedPaymentButton");
   const message = $("#paymentConfirmationMessage");
   if (button) button.disabled = true;
-  if (message) message.textContent = "결제창을 여는 중입니다.";
+  if (message) message.textContent = "결제 요청을 준비하는 중입니다.";
 
   try {
+    if (!preparedPayment) {
+      preparedPayment = await prepareServerPayment(product, paymentId, methodId);
+      context.preparedPayment = preparedPayment;
+      await syncMemberTicketsFromServer();
+    }
+    if (message) message.textContent = "결제창을 여는 중입니다.";
     const response = await sdk.requestPayment(portOnePaymentRequest({
       paymentId,
       productId: product.id,
@@ -8545,6 +8656,22 @@ async function completePreparedPayment() {
       state.ticketHistory.unshift({ text: `${product.title} 결제 완료 접수 · 검증 후 회원권 충전`, tone: "wait" });
     }
   } catch (error) {
+    const serverCode = error?.payload?.code || error?.message || "server_error";
+    if (["membership_enrollment_required", "group_enrollment_required", "group_partner_required"].includes(serverCode)) {
+      closePaymentConfirmationModal();
+      await syncMemberEnrollmentFromServer();
+      openMemberEnrollmentModal(product.id, "2대1 동반 회원 정보를 포함해 수강 가입서를 확인해 주세요.");
+      return;
+    }
+    if (serverCode === "login_required") {
+      closePaymentConfirmationModal();
+      markTicketSyncLoginNeeded();
+      state.pendingPaymentCheckStatus = { tone: "alert", text: "서버 로그인 후 결제할 수 있습니다. 간편 로그인으로 다시 접속해 주세요." };
+      state.ticketHistory.unshift({ text: `${product.title} 결제 전 서버 로그인 필요`, tone: "alert" });
+      renderAll();
+      setView("shopView");
+      return;
+    }
     const detail = paymentServerErrorMessage(error);
     createPaymentRecord(product, {
       paymentId,
@@ -8603,40 +8730,9 @@ async function startProductPayment(productId, options = {}) {
     return;
   }
 
-  let preparedPayment = null;
-  try {
-    preparedPayment = await prepareServerPayment(product, paymentId, methodId);
-    await syncMemberTicketsFromServer();
-  } catch (error) {
-    const serverCode = error?.payload?.code || error?.message || "server_error";
-    const serverError = paymentServerErrorMessage(error);
-    if (["membership_enrollment_required", "group_enrollment_required", "group_partner_required"].includes(serverCode)) {
-      await syncMemberEnrollmentFromServer();
-      openMemberEnrollmentModal(productId, "2대1 동반 회원 정보를 포함해 수강 가입서를 확인해 주세요.");
-      return;
-    }
-    if (serverCode === "login_required") {
-      markTicketSyncLoginNeeded();
-      state.pendingPaymentCheckStatus = { tone: "alert", text: "서버 로그인 후 결제할 수 있습니다. 간편 로그인으로 다시 접속해주세요." };
-      state.ticketHistory.unshift({ text: `${product.title} 결제 전 서버 로그인 필요`, tone: "alert" });
-      renderAll();
-      setView("shopView");
-      return;
-    }
-    createPaymentRecord(product, {
-      paymentId,
-      method: "서버 결제 기록 생성 실패",
-      status: `네이버 로그인 후 다시 시도 필요 · ${paymentServerErrorMessage(error)}`,
-    });
-    state.ticketHistory.unshift({ text: `${product.title} 결제 기록 생성 실패 · 로그인/회원 연결 확인`, tone: "alert" });
-    renderAll();
-    setView("shopView");
-    return;
-  }
-
   try {
     const sdk = await loadPortOneSdk();
-    openPaymentConfirmationModal({ product, paymentId, preparedPayment, methodId, sdk });
+    openPaymentConfirmationModal({ product, paymentId, preparedPayment: null, methodId, sdk });
   } catch (error) {
     const detail = paymentServerErrorMessage(error);
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창 준비에 실패했습니다. ${detail}` };
@@ -8784,6 +8880,8 @@ function journalEntries() {
     const dateValue = log.journalDate || new Date(log.submittedAt || Date.now()).toISOString().slice(0, 10);
     return {
       id: log.id,
+      serverLessonId: log.serverLessonId || "",
+      lessonId: log.lessonId || "",
       kind: "레슨",
       day: new Date(`${dateValue}T00:00:00`).getDate(),
       dateLabel: dateValue,
@@ -9218,7 +9316,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.346" });
+  const params = new URLSearchParams({ v: "1.0.347" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -11477,6 +11575,11 @@ function bindEvents() {
       resumePendingTicketPayment(resumeButton.dataset.resumePendingTicket);
       return;
     }
+    const cancelButton = event.target.closest("[data-cancel-pending-ticket]");
+    if (cancelButton) {
+      cancelPendingTicketPayment(cancelButton.dataset.cancelPendingTicket);
+      return;
+    }
     const button = event.target.closest("[data-check-pending-ticket]");
     if (button) checkPendingTicketPayment(button.dataset.checkPendingTicket);
   });
@@ -11834,7 +11937,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.346",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.347",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

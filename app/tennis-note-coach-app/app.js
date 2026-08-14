@@ -732,6 +732,7 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       policy: "운영 정책에 따른 승인 요청",
       status: "승인 대기",
       coach: coachesById.get(request.coach_role_id)?.name || "담당 코치",
+      coachRoleId: request.coach_role_id || "",
       source: "schedule_v2",
       canReview: workspace.actor?.isAdmin === true,
     };
@@ -2281,7 +2282,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.346",
+    workerUrl: "./service-worker.js?v=1.0.347",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2311,7 +2312,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.346" });
+  const params = new URLSearchParams({ v: "1.0.347" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2645,18 +2646,37 @@ async function authorizeCoachNotificationAction(data = {}) {
     }
 
     const lessonId = String(data.lessonId || data.lesson_id || "").trim();
-    if (lessonId) {
+    const requestId = String(data.requestId || data.request_id || "").trim();
+    if (lessonId || requestId) {
       const lessonsSynced = await syncCoachLessonsFromServer().catch(() => false);
       if (!lessonsSynced) {
         showToast("수업 정보를 새로 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
         return false;
       }
-      const lesson = (state.liveLessons || []).find((item) => (
-        String(item.serverLessonId || item.id || "") === lessonId
-      ));
-      if (!lesson || !lessonAssignedToCurrentCoachForTasks(lesson)) {
-        showToast("현재 코치에게 배정된 수업이 아닙니다.");
-        return false;
+      if (lessonId) {
+        const lesson = (state.liveLessons || []).find((item) => (
+          String(item.serverLessonId || item.id || "") === lessonId
+        ));
+        const templateKey = String(data.templateKey || data.template_key || "").trim();
+        const adminEscalation = templateKey === "coach_feedback_overdue_admin"
+          && current?.profile?.role === "admin";
+        if (!lesson || (!adminEscalation && !lessonAssignedToCurrentCoachForTasks(lesson))) {
+          showToast("현재 코치에게 배정된 수업이 아닙니다.");
+          return false;
+        }
+      }
+      if (requestId) {
+        const request = (state.makeupRequests || []).find((item) => (
+          String(item.serverRequestId || item.id || "") === requestId
+        ));
+        const canOpenRequest = request && (
+          current?.profile?.role === "admin"
+          || String(request.coachRoleId || "") === currentCoachRoleId()
+        );
+        if (!canOpenRequest) {
+          showToast("현재 코치에게 배정된 요청이 아닙니다.");
+          return false;
+        }
       }
     }
     return true;
@@ -2664,6 +2684,45 @@ async function authorizeCoachNotificationAction(data = {}) {
     showToast("알림 내용을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     return false;
   }
+}
+
+function coachNotificationLesson(data = {}) {
+  const lessonId = String(data.lessonId || data.lesson_id || "").trim();
+  if (!lessonId) return null;
+  return [...(state.liveLessons || []), ...(state.todayLessons || []), ...weekLessons()].find((lesson) => (
+    String(lesson.serverLessonId || lesson.id || "") === lessonId
+  )) || null;
+}
+
+function openCoachNotificationTarget(data = {}, route = "today") {
+  const requestId = String(data.requestId || data.request_id || "").trim();
+  if (requestId) {
+    const request = (state.makeupRequests || []).find((item) => (
+      String(item.serverRequestId || item.id || "") === requestId
+    ));
+    if (request) {
+      openMakeupApprovalModal(request.id);
+      return true;
+    }
+  }
+
+  const lesson = coachNotificationLesson(data);
+  if (lesson) {
+    const templateKey = String(data.templateKey || data.template_key || "").trim();
+    if (route === "feedback" || templateKey === "coach_feedback_missing") {
+      openLessonRecordWriter(lesson.id);
+      return true;
+    }
+    if (route === "schedule") state.selectedFullScheduleDay = lesson.day || state.selectedFullScheduleDay;
+    openLessonEditor(lesson.id);
+    return true;
+  }
+
+  if (requestId || String(data.lessonId || data.lesson_id || "").trim()) {
+    showToast("알림에 연결된 수업이나 요청을 찾지 못했습니다. 최신 레슨표를 다시 확인해 주세요.");
+  }
+  jumpToTop();
+  return false;
 }
 
 async function bindNativeCoachPushListeners(plugin) {
@@ -2688,12 +2747,14 @@ async function bindNativeCoachPushListeners(plugin) {
         : "todayView";
     await Promise.allSettled([
       syncLiveNotices(),
-      route === "schedule" ? syncCoachLessonsFromServer() : Promise.resolve(false),
+      ["today", "dashboard", "schedule", "feedback"].includes(route)
+        ? syncCoachLessonsFromServer()
+        : Promise.resolve(false),
       route === "feedback" ? syncCoachJournalEntriesFromServer() : Promise.resolve(false),
     ]);
-    setView(viewId);
-    jumpToTop();
     renderAll();
+    setView(viewId);
+    openCoachNotificationTarget(data, route);
   });
   coachPushListenersReady = true;
 }
@@ -3198,6 +3259,18 @@ function recordBelongsToCurrentCoach(record = {}) {
 }
 
 function feedbackBelongsToCurrentCoach(request = {}) {
+  const lessonId = String(request.lessonId || request.lesson_id || request.serverLessonId || "").trim();
+  if (lessonId) {
+    const lesson = [...(state.liveLessons || []), ...(state.todayLessons || [])].find((item) => (
+      String(item.serverLessonId || item.id || "") === lessonId
+    ));
+    return Boolean(lesson && lessonAssignedToCurrentCoachForTasks(lesson) && canProcessLesson(lesson));
+  }
+  const targetCoachRoleId = String(
+    request.coachRoleId || request.coach_role_id || request.targetCoachRoleId || request.target_coach_role_id || "",
+  ).trim();
+  if (targetCoachRoleId && currentCoachRoleId()) return targetCoachRoleId === currentCoachRoleId();
+  if (state.dataMode === "live" || state.liveProfileId) return false;
   return canonicalCoachName(requestCoach(request)) === currentCoachName();
 }
 
@@ -7049,7 +7122,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.346",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.347",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

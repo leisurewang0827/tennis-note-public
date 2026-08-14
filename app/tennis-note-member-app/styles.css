@@ -6183,6 +6183,10 @@ body.notice-open {
   width: 100%;
 }
 
+.membership-pending-actions .danger-button {
+  grid-column: 1 / -1;
+}
+
 .membership-status-note {
   width: 100%;
   min-height: 42px;
