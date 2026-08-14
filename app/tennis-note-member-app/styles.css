@@ -1465,6 +1465,44 @@ button {
   gap: 5px;
 }
 
+.week-switcher .member-week-quick-nav {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.member-week-quick-button {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid #d5dfdc;
+  border-radius: 7px;
+  padding: 7px 5px;
+  color: var(--ink);
+  background: #fff;
+  text-align: center;
+}
+
+.member-week-quick-button strong {
+  font-size: 12px;
+}
+
+.member-week-quick-button span {
+  font-size: 10px;
+}
+
+.member-week-quick-button.is-active {
+  border-color: var(--green);
+  color: #fff;
+  background: var(--green);
+}
+
+.member-week-quick-button.is-active span {
+  color: #fff;
+}
+
 .week-switcher .schedule-month-controls {
   display: grid;
   grid-template-columns: repeat(2, auto);
@@ -6462,6 +6500,116 @@ body {
   background: #f3faf7;
 }
 
+.member-inline-change label.is-coupon-source select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.member-inline-coupon-source {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  border: 1px solid #9bc8b7;
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: #eef9f5;
+}
+
+.member-inline-coupon-source strong,
+.member-inline-coupon-source small {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-inline-coupon-source strong {
+  color: #174c3a;
+  font-size: 13px;
+}
+
+.member-inline-coupon-source small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.member-coupon-quick-start {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  border: 1px solid #b8d9cc;
+  border-left: 4px solid var(--green);
+  padding: 11px 12px;
+  background: #f4fbf8;
+}
+
+.member-coupon-quick-start > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.member-coupon-quick-start > div:first-child > span {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.member-coupon-quick-start > div:first-child > strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.member-coupon-quick-start > div:first-child > small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.member-coupon-ticket-button {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 46px;
+  border: 1px solid #c9d8d3;
+  border-radius: 7px;
+  padding: 7px 9px;
+  color: var(--ink);
+  background: #fff;
+  text-align: left;
+}
+
+.member-coupon-ticket-button span,
+.member-coupon-ticket-button small {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-coupon-ticket-button span {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.member-coupon-ticket-button small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.member-coupon-ticket-button.is-active {
+  border-color: var(--green);
+  box-shadow: inset 3px 0 0 var(--green);
+  background: #fff;
+}
+
 .member-inline-change label,
 .member-inline-change p {
   display: grid;
@@ -6759,6 +6907,10 @@ body {
   }
 
   .member-flex-booking {
+    grid-template-columns: 1fr;
+  }
+
+  .member-coupon-quick-start {
     grid-template-columns: 1fr;
   }
 }
@@ -7779,6 +7931,19 @@ body.modal-open {
 
   .week-switcher span {
     font-size: 10px;
+  }
+
+  .member-week-quick-button {
+    min-height: 44px;
+    padding-inline: 2px;
+  }
+
+  .member-week-quick-button strong {
+    font-size: 11px;
+  }
+
+  .member-week-quick-button span {
+    font-size: 9px;
   }
 
   .journal-activity-summary {

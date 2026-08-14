@@ -3841,6 +3841,73 @@ select {
   justify-content: center;
 }
 
+.coach-push-settings-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  border-color: #b7dfd2;
+  background: #f2fbf7;
+}
+
+.coach-push-settings-card > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.coach-push-settings-card span,
+.coach-push-settings-card small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.coach-push-settings-card strong {
+  font-size: 15px;
+}
+
+.coach-push-settings-card.is-enabled {
+  border-color: #7fcab3;
+  background: #e8f8f1;
+}
+
+.coach-push-settings-card.is-denied {
+  border-color: #f0b5a8;
+  background: #fff4f1;
+}
+
+.coach-push-primer-card {
+  width: min(440px, 100%);
+  padding: 20px;
+}
+
+.coach-push-primer-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.coach-push-primer-list li {
+  position: relative;
+  padding: 11px 12px 11px 38px;
+  border: 1px solid #cbe4da;
+  border-radius: 8px;
+  background: #f4fbf8;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.coach-push-primer-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 14px;
+  color: var(--green);
+}
+
 .danger-button {
   color: var(--red);
   background: var(--soft-red);
@@ -3889,6 +3956,14 @@ select {
 
   .coach-account-actions {
     grid-template-columns: 1fr;
+  }
+
+  .coach-push-settings-card {
+    grid-template-columns: 1fr;
+  }
+
+  .coach-push-settings-card .small-button {
+    width: 100%;
   }
 }
 

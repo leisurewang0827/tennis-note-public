@@ -4382,7 +4382,7 @@ function billingRowFromServerPayment(row = {}) {
     item: isTest ? "브라우저 연결 테스트" : row.productTitle || row.item || "회원앱 결제",
     amount,
     originalAmount: Number(row.original_amount || row.originalAmount || amount || 0),
-    settlementBaseAmount: Number(row.settlement_base_amount || row.settlementBaseAmount || amount || 0),
+    settlementBaseAmount: Number(row.settlement_base_amount ?? row.settlementBaseAmount ?? 0) || 0,
     discountAmount: Number(row.discount_amount || row.discountAmount || 0),
     finalAmount: Number(row.final_amount || row.finalAmount || amount || 0),
     method: row.method || row.provider || "portone",
@@ -12751,6 +12751,50 @@ function onsitePaymentProducts() {
     .filter(({ draft, server }) => server?.id && draft.status !== "hidden" && draft.status !== "disabled");
 }
 
+function onsitePaymentSourceTickets(userId = $("#onsitePaymentMember")?.value || "") {
+  const member = operationBranchMembers().find((item) => memberServerUserIds(item).includes(userId));
+  if (!member) return [];
+  return memberManagementTickets(member).filter((ticket) => (
+    ticket?.serverTicketId
+    && !["refunded", "voided", "cancelled", "canceled"].includes(String(ticket.status || ""))
+  ));
+}
+
+function onsitePaymentTicketLabel(ticket) {
+  const coach = getCoachName(ticket.coachId || "") || "코치 미배정";
+  const period = [ticket.purchased, ticket.expires].filter(Boolean).join("~");
+  return `${ticket.product || "회원권"} · ${coach} · 잔여 ${Number(ticket.remaining) || 0}회${period ? ` · ${period}` : ""}`;
+}
+
+function syncOnsitePaymentSourceTickets() {
+  const select = $("#onsitePaymentSourceTicket");
+  if (!select) return;
+  const previousValue = select.value;
+  const sourceTickets = onsitePaymentSourceTickets();
+  select.innerHTML = sourceTickets.length
+    ? sourceTickets.map((ticket) => `<option value="${escapeHtml(ticket.serverTicketId)}">${escapeHtml(onsitePaymentTicketLabel(ticket))}</option>`).join("")
+    : '<option value="">연장 가능한 기존 회원권 없음</option>';
+  if (sourceTickets.some((ticket) => ticket.serverTicketId === previousValue)) select.value = previousValue;
+  const selectedTicket = sourceTickets.find((ticket) => ticket.serverTicketId === select.value) || sourceTickets[0];
+  const matchingProduct = onsitePaymentProducts().find(({ server }) => String(server.id) === String(selectedTicket?.productId || ""));
+  if (matchingProduct && $("#onsitePaymentProduct")) $("#onsitePaymentProduct").value = String(matchingProduct.server.id);
+  updateOnsitePaymentAmount();
+  syncOnsitePaymentScheduleChoice();
+}
+
+function syncOnsitePaymentScheduleChoice() {
+  const ticket = onsitePaymentSourceTickets().find((item) => item.serverTicketId === $("#onsitePaymentSourceTicket")?.value);
+  const product = onsitePaymentProducts().find(({ server }) => String(server.id) === String($("#onsitePaymentProduct")?.value));
+  const checkbox = $("#onsitePaymentKeepSchedule");
+  if (!checkbox) return;
+  const compatible = Boolean(ticket && product
+    && String(ticket.productKind || "regular") === "regular"
+    && String(product.server.product_kind || "regular") === "regular"
+    && Number(ticket.groupSize || 1) === Number(product.server.group_size || 1));
+  checkbox.disabled = !compatible;
+  if (!compatible) checkbox.checked = false;
+}
+
 function updateOnsitePaymentAmount() {
   const product = onsitePaymentProducts().find(({ server }) => String(server.id) === String($("#onsitePaymentProduct")?.value));
   const method = $("#onsitePaymentMethod")?.value || "bank_transfer";
@@ -12782,7 +12826,7 @@ function openOnsitePaymentModal() {
   $("#onsitePaymentDate").value = adminLocalDateKey(new Date());
   $("#onsitePaymentStartDate").value = "";
   $("#onsitePaymentMessage").textContent = "";
-  updateOnsitePaymentAmount();
+  syncOnsitePaymentSourceTickets();
   $("#onsitePaymentModal")?.removeAttribute("hidden");
   window.setTimeout(() => memberSelect?.focus(), 0);
 }
@@ -12790,20 +12834,22 @@ function openOnsitePaymentModal() {
 async function submitOnsitePayment(event) {
   event.preventDefault();
   const userId = $("#onsitePaymentMember")?.value || "";
+  const sourceTicketId = $("#onsitePaymentSourceTicket")?.value || "";
   const productId = $("#onsitePaymentProduct")?.value || "";
   const paymentMethod = $("#onsitePaymentMethod")?.value || "";
   const paymentDate = $("#onsitePaymentDate")?.value || "";
   const paymentAmount = Number($("#onsitePaymentAmount")?.value);
-  if (!userId || !productId || !paymentDate || !Number.isInteger(paymentAmount) || paymentAmount < 0) {
-    $("#onsitePaymentMessage").textContent = "회원, 회원권 상품, 결제일, 실제 결제금액을 확인해 주세요.";
+  if (!userId || !sourceTicketId || !productId || !paymentDate || !Number.isInteger(paymentAmount) || paymentAmount <= 0) {
+    $("#onsitePaymentMessage").textContent = "회원, 연장할 회원권, 새 상품, 결제일, 실제 결제금액을 확인해 주세요.";
     return;
   }
   const submit = event.submitter || $("#onsitePaymentForm button[type='submit']");
   submit.disabled = true;
   $("#onsitePaymentMessage").textContent = "현장결제와 회원권을 서버에 저장하고 있습니다.";
   try {
-    const result = await window.TennisNoteDataClient.rpc("tn_admin_record_onsite_payment", {
+    const result = await window.TennisNoteDataClient.rpc("tn_admin_record_onsite_payment_v2", {
       target_user_id: userId,
+      target_source_ticket_id: sourceTicketId,
       target_product_id: productId,
       target_payment_method: paymentMethod,
       target_payment_date: paymentDate,
@@ -12812,8 +12858,7 @@ async function submitOnsitePayment(event) {
       target_keep_schedule: Boolean($("#onsitePaymentKeepSchedule")?.checked),
       target_operation_key: createAdminOperationKey("onsite-payment"),
     });
-    const processed = Number(result?.processedCount ?? result?.processed_count ?? 0);
-    if (processed !== 1 && result?.idempotent !== true) throw new Error(result?.failed?.[0]?.reason || "onsite_payment_not_saved");
+    if (!result?.ok) throw new Error(result?.error || "onsite_payment_not_saved");
     await syncAdminLiveData(true);
     await loadServerPaymentsIntoBilling({ silent: true });
     closeOnsitePaymentModal();
@@ -12823,6 +12868,10 @@ async function submitOnsitePayment(event) {
     const raw = String(error?.message || error?.payload?.message || "");
     $("#onsitePaymentMessage").textContent = raw.includes("source_ticket_not_found")
       ? "기존 회원권이 없는 회원입니다. 회원관리에서 첫 회원권을 등록해 주세요."
+      : raw.includes("onsite_payment_schedule_incompatible")
+        ? "상품 형태가 달라 기존 고정시간을 이어갈 수 없습니다. 고정시간 연장을 끄고 다시 저장해 주세요."
+      : raw.includes("operation_key_reused_with_different_payload")
+        ? "저장 내용이 변경됐습니다. 결제창을 닫았다가 다시 열어 주세요."
       : "저장하지 못했습니다. 회원·상품·권한을 확인해 주세요.";
   } finally {
     if (submit?.isConnected) submit.disabled = false;
@@ -19460,6 +19509,18 @@ function settlementRuleFor(coachName) {
   return coachSettlementRules.find((rule) => rule.coach === coachName) || coachSettlementRules[0];
 }
 
+function vatExclusiveSettlementAmount(amount) {
+  return Math.max(0, Math.round((Number(amount) || 0) * 10 / 11));
+}
+
+function settlementBaseAmountForBilling(billing = {}) {
+  const explicitBase = Number(billing.settlementBaseAmount) || 0;
+  if (explicitBase > 0) return explicitBase;
+  const paidAmount = Number(billing.finalAmount || billing.amount) || 0;
+  const method = String(billing.method || "").toLowerCase();
+  return method.includes("card") ? vatExclusiveSettlementAmount(paidAmount) : paidAmount;
+}
+
 function settlementCoachNameFor(item) {
   if (item.forceActualCoach && item.actualCoach) return item.actualCoach;
   if (!item.actualCoach || item.actualCoach === item.coach) return item.coach;
@@ -19495,7 +19556,7 @@ function settlementRowsForBilling(billing, indexes = {}) {
     member: billing.member,
     coach: getCoachName(ticket.coachId || ""),
     paidAmount: Number(billing.finalAmount || billing.amount) || 0,
-    settlementBase: Number(billing.settlementBaseAmount || billing.finalAmount || billing.amount) || 0,
+    settlementBase: settlementBaseAmountForBilling(billing),
     paymentMethod: String(billing.method || "").toLowerCase().includes("card") ? "카드" : "현금",
     discount: Number(billing.discountAmount) > 0 ? `할인 ${money.format(billing.discountAmount)}원` : "할인 없음",
     totalLessons: Number(ticket.total) || 0,
@@ -27178,7 +27239,12 @@ function bindEvents() {
   $("#onsitePaymentModal")?.addEventListener("click", (event) => {
     if (event.target === event.currentTarget) closeOnsitePaymentModal();
   });
-  $("#onsitePaymentProduct")?.addEventListener("change", updateOnsitePaymentAmount);
+  $("#onsitePaymentMember")?.addEventListener("change", syncOnsitePaymentSourceTickets);
+  $("#onsitePaymentSourceTicket")?.addEventListener("change", syncOnsitePaymentSourceTickets);
+  $("#onsitePaymentProduct")?.addEventListener("change", () => {
+    updateOnsitePaymentAmount();
+    syncOnsitePaymentScheduleChoice();
+  });
   $("#onsitePaymentMethod")?.addEventListener("change", updateOnsitePaymentAmount);
   $("#onsitePaymentForm")?.addEventListener("submit", submitOnsitePayment);
   document.addEventListener("click", (event) => {

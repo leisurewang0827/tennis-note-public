@@ -1711,7 +1711,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.344",
+    workerUrl: "./service-worker.js?v=1.0.345",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2077,6 +2077,88 @@ async function registerPushToken(tokenValue, platform = nativeAppPlatform()) {
   return true;
 }
 
+function nativeNotificationData(action = {}) {
+  const data = action?.notification?.data;
+  return data && typeof data === "object" ? data : {};
+}
+
+function memberNotificationRoute(data = {}) {
+  const route = String(data.route || "").trim().toLowerCase();
+  return ["home", "schedule", "membership", "feedback", "journal"].includes(route) ? route : "home";
+}
+
+async function authorizeMemberNotificationAction(data = {}) {
+  const client = window.TennisNoteDataClient;
+  if (!client?.selectCurrentProfile || !client?.selectRows || !client.getSession?.()?.access_token) {
+    showToast("로그인 후 알림 내용을 확인해 주세요.");
+    return false;
+  }
+
+  try {
+    const current = await client.selectCurrentProfile();
+    const currentProfileId = String(current?.profile?.id || "");
+    if (!currentProfileId || currentProfileId !== String(state.member?.profileId || "")) {
+      const restored = await applySupabaseMemberSession(false);
+      if (!restored || currentProfileId !== String(state.member?.profileId || "")) {
+        showToast("회원 연결을 다시 확인한 뒤 알림을 열어 주세요.");
+        return false;
+      }
+    }
+
+    const lessonId = String(data.lessonId || data.lesson_id || "").trim();
+    if (lessonId) {
+      const [legacyParticipants, participantRecords] = await Promise.all([
+        client.selectRows("tn_lesson_participants", {
+          select: "lesson_id,user_id,ticket_id",
+          filters: { lesson_id: lessonId, user_id: currentProfileId },
+          limit: 1,
+        }).catch(() => []),
+        client.selectRows("tn_lesson_participant_records_v2", {
+          select: "id,lesson_id,user_id,member_ticket_id",
+          filters: { lesson_id: lessonId, user_id: currentProfileId },
+          limit: 1,
+        }).catch(() => []),
+      ]);
+      if (!legacyParticipants?.length && !participantRecords?.length) {
+        showToast("현재 계정에서 확인할 수 없는 수업입니다.");
+        return false;
+      }
+    }
+
+    const participantRecordId = String(
+      data.participantRecordId || data.participant_record_id || data.lessonRecordId || data.lesson_record_id || "",
+    ).trim();
+    if (participantRecordId) {
+      const records = await client.selectRows("tn_lesson_participant_records_v2", {
+        select: "id,user_id,lesson_id",
+        filters: { id: participantRecordId, user_id: currentProfileId },
+        limit: 1,
+      }).catch(() => []);
+      if (!records?.length) {
+        showToast("현재 계정에서 확인할 수 없는 피드백입니다.");
+        return false;
+      }
+    }
+
+    const ticketId = String(data.ticketId || data.ticket_id || "").trim();
+    if (ticketId) {
+      const ticketsSynced = await syncMemberTicketsFromServer(current.profile).catch(() => false);
+      if (!ticketsSynced) {
+        showToast("회원권 정보를 새로 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return false;
+      }
+      if (!(state.liveTickets || []).some((ticket) => String(ticket.id || "") === ticketId)) {
+        showToast("현재 계정에서 확인할 수 없는 회원권입니다.");
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    showToast("알림 내용을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    return false;
+  }
+}
+
 async function bindNativePushListeners(plugin) {
   if (pushListenersReady) return;
   await plugin.addListener("registration", async (token) => {
@@ -2094,11 +2176,23 @@ async function bindNativePushListeners(plugin) {
     showNoticeIfNeeded();
   });
   await plugin.addListener("pushNotificationActionPerformed", async (action) => {
-    const route = String(action?.notification?.data?.route || "").trim().toLowerCase();
-    const viewId = route === "membership" ? "shopView" : route === "schedule" ? "scheduleView" : "homeView";
+    const data = nativeNotificationData(action);
+    if (!(await authorizeMemberNotificationAction(data))) return;
+    const route = memberNotificationRoute(data);
+    const viewId = route === "membership"
+      ? "shopView"
+      : route === "schedule"
+        ? "scheduleView"
+        : ["feedback", "journal"].includes(route)
+          ? "lessonLogView"
+          : "homeView";
+    await Promise.allSettled([
+      syncMemberNotificationsFromServer(),
+      route === "schedule" ? syncMemberLessonsFromServer() : Promise.resolve(false),
+      ["feedback", "journal"].includes(route) ? syncMemberJournalEntriesFromServer() : Promise.resolve(false),
+    ]);
     setView(viewId);
     jumpToTop();
-    await syncMemberNotificationsFromServer().catch(() => false);
   });
   pushListenersReady = true;
 }
@@ -3215,12 +3309,11 @@ function loadedFutureScheduledLessonsForChange(today = localDateKey()) {
     .sort((a, b) => `${a.lessonDate} ${a.time || ""}`.localeCompare(`${b.lessonDate} ${b.time || ""}`));
 }
 
-function activeMemberWeek() {
+function memberScheduleWeekForOffset(rawOffset = 0) {
   const offset = Math.min(
-    Math.max(Number(state.activeMemberWeekIndex) || 0, memberScheduleMinWeekOffset),
+    Math.max(Number(rawOffset) || 0, memberScheduleMinWeekOffset),
     memberScheduleMaxWeekOffset,
   );
-  state.activeMemberWeekIndex = offset;
   const today = new Date();
   const mondayOffset = today.getDay() === 0 ? -6 : 1 - today.getDay();
   const currentMonday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + mondayOffset);
@@ -3237,6 +3330,23 @@ function activeMemberWeek() {
     startDate: localDateKey(start),
     endDate: localDateKey(end),
   };
+}
+
+function activeMemberWeek() {
+  const offset = Math.min(
+    Math.max(Number(state.activeMemberWeekIndex) || 0, memberScheduleMinWeekOffset),
+    memberScheduleMaxWeekOffset,
+  );
+  state.activeMemberWeekIndex = offset;
+  return memberScheduleWeekForOffset(offset);
+}
+
+function memberQuickWeekOptions() {
+  return [
+    { offset: 0, label: "이번 주" },
+    { offset: 1, label: "다음 주" },
+    { offset: 2, label: "다다음 주" },
+  ].map((option) => ({ ...option, week: memberScheduleWeekForOffset(option.offset) }));
 }
 
 function memberScheduleLessons() {
@@ -3270,12 +3380,16 @@ function ensureMemberScheduleLesson(lessonId) {
 }
 
 function nextMemberLesson() {
-  return memberLessons()[0] || null;
+  const now = new Date();
+  return memberLessons()
+    .filter((lesson) => memberLessonPriority(lesson, now).group < 2)
+    .sort((left, right) => compareMemberLessonsByNearest(left, right, now))[0] || null;
 }
 
 function upcomingMemberLessons(limit = 2, ticketId = "") {
   if (state.dataMode === "live" || state.liveLessonsLoaded) {
     const today = localDateKey();
+    const now = new Date();
     return (state.liveLessons || [])
       .filter((lesson) => {
         const isMine = isOwnMemberScheduleLesson(lesson);
@@ -3283,9 +3397,10 @@ function upcomingMemberLessons(limit = 2, ticketId = "") {
           && lesson.status === "scheduled"
           && lesson.lessonDate
           && lesson.lessonDate >= today
+          && memberLessonPriority(lesson, now).group < 2
           && (!ticketId || memberLessonTicketId(lesson) === String(ticketId));
       })
-      .sort((left, right) => `${left.lessonDate}T${left.time || "00:00"}`.localeCompare(`${right.lessonDate}T${right.time || "00:00"}`))
+      .sort((left, right) => compareMemberLessonsByNearest(left, right, now))
       .slice(0, limit);
   }
   const dayOrder = new Map(days.map((day, index) => [day, index]));
@@ -3355,6 +3470,27 @@ function renderMemberScheduleTicketPicker() {
           <button class="member-ticket-picker-button ${String(ticket.id) === selectedTicketId ? "is-active" : ""}" type="button" data-member-ticket-filter="${escapeHtml(ticket.id)}">
             <span>${escapeHtml(memberTicketCompactLabel(ticket))}</span>
             <small>잔여 ${Math.max(0, Number(ticket.remaining) || 0)}회</small>
+          </button>`).join("")}
+      </div>
+    </section>`;
+}
+
+function renderMemberCouponQuickStart() {
+  const tickets = memberBookableCouponTickets();
+  if (!tickets.length) return "";
+  const selectedSource = tickets.find((ticket) => ticket.id === state.selectedMemberChangeSourceId);
+  return `
+    <section class="member-coupon-quick-start" aria-label="쿠폰 수업 예약">
+      <div>
+        <span>쿠폰 예약</span>
+        <strong>날짜를 고르고 가능한 시간을 누르세요</strong>
+        <small>마지막 확인 후 바로 예약됩니다.</small>
+      </div>
+      <div role="group" aria-label="사용할 쿠폰 선택">
+        ${tickets.map((ticket) => `
+          <button class="member-coupon-ticket-button ${ticket.id === selectedSource?.id ? "is-active" : ""}" type="button" data-start-coupon-ticket="${escapeHtml(ticket.ticketId)}">
+            <span>${escapeHtml(ticket.ticketTitle)}</span>
+            <small>${escapeHtml(memberCoachShortName(ticket.coach))} · 잔여 ${Math.max(0, Number(ticket.remaining) || 0)}회</small>
           </button>`).join("")}
       </div>
     </section>`;
@@ -3593,6 +3729,28 @@ function lessonDuration(lesson) {
   const text = `${lesson.type || ""} ${lesson.ticket || ""}`;
   const matched = text.match(/(\d+)\s*분/);
   return matched ? Number(matched[1]) : 20;
+}
+
+function memberLessonPriority(lesson = {}, now = new Date()) {
+  const lessonDate = lesson.lessonDate || memberScheduleDateForDay(lesson.day);
+  const startAt = lessonDate && lesson.time ? new Date(`${lessonDate}T${lesson.time}:00`) : null;
+  if (!startAt || Number.isNaN(startAt.getTime())) {
+    return { group: 3, distance: Number.MAX_SAFE_INTEGER, startsAt: Number.MAX_SAFE_INTEGER };
+  }
+  const startsAt = startAt.getTime();
+  const endsAt = startsAt + Math.max(1, Number(lesson.durationMinutes) || lessonDuration(lesson)) * 60_000;
+  const current = now.getTime();
+  if (startsAt <= current && current < endsAt) return { group: 0, distance: 0, startsAt };
+  if (startsAt > current) return { group: 1, distance: startsAt - current, startsAt };
+  return { group: 2, distance: current - endsAt, startsAt: -startsAt };
+}
+
+function compareMemberLessonsByNearest(left, right, now = new Date()) {
+  const leftPriority = memberLessonPriority(left, now);
+  const rightPriority = memberLessonPriority(right, now);
+  return leftPriority.group - rightPriority.group
+    || leftPriority.distance - rightPriority.distance
+    || leftPriority.startsAt - rightPriority.startsAt;
 }
 
 function memberLessonVisualKind(lesson = {}) {
@@ -4338,6 +4496,7 @@ function renderMemberChangeInlineBar() {
     state.selectedMemberChangeSourceId = sources[0].id;
   }
   const source = sources.find((lesson) => lesson.id === state.selectedMemberChangeSourceId) || sources[0];
+  const isCouponBooking = Boolean(source.couponBooking);
   const loadState = memberChangeCandidateUiState(source);
   const activeWeekCandidateCount = state.serverChangeCandidates.filter(memberChangeCandidateInActiveWeek).length;
   const statusText = loadState === "loading"
@@ -4353,14 +4512,15 @@ function renderMemberChangeInlineBar() {
         : "수업을 고르면 가능한 시간만 표시합니다";
   return `
     <section class="member-inline-change" aria-label="변경 또는 보강할 수업 선택">
-      <label for="memberInlineChangeSource">
-        <span>신청할 수업</span>
+      <label for="memberInlineChangeSource" class="${isCouponBooking ? "is-coupon-source" : ""}">
+        <span>${isCouponBooking ? "사용할 쿠폰" : "신청할 수업"}</span>
         <select id="memberInlineChangeSource">
           ${sources.map((lesson) => `
             <option value="${escapeHtml(lesson.id)}" ${lesson.id === source.id ? "selected" : ""}>
               ${escapeHtml(memberChangeSourceOptionLabel(lesson))}
             </option>`).join("")}
         </select>
+        ${isCouponBooking ? `<span class="member-inline-coupon-source"><strong>${escapeHtml(source.ticketTitle || "쿠폰 회원권")}</strong><small>${escapeHtml(memberCoachShortName(source.coach))} · 잔여 ${Math.max(0, Number(source.remaining) || 0)}회</small></span>` : ""}
       </label>
       <p><strong>${escapeHtml(statusText)}</strong><span>${escapeHtml(loadState === "error"
         ? state.serverChangeCandidateError || "인터넷 연결을 확인한 뒤 다시 시도해 주세요."
@@ -4401,12 +4561,11 @@ function renderMemberBookingShortcuts() {
   const couponTickets = memberBookableCouponTickets();
   return `
     <section class="member-booking-shortcuts" aria-label="추가 예약">
-      <article>
-        <div><strong>쿠폰 레슨</strong><span>${couponTickets.length ? "쿠폰 회원권을 선택하면 같은 시간표에서 가능한 시간만 표시됩니다." : "필요한 횟수만 구매해 예약할 수 있습니다."}</span></div>
-        ${couponTickets.length
-          ? '<button class="small-button" type="button" data-member-schedule-mode="availability">시간표에서 선택</button>'
-          : '<button class="small-button" type="button" data-flex-booking-products="coupon">쿠폰 회원권 보기</button>'}
-      </article>
+      ${couponTickets.length ? "" : `
+        <article>
+          <div><strong>쿠폰 레슨</strong><span>필요한 횟수만 구매해 예약할 수 있습니다.</span></div>
+          <button class="small-button" type="button" data-flex-booking-products="coupon">쿠폰 회원권 보기</button>
+        </article>`}
       <article>
         <div><strong>원데이 레슨</strong><span>회원권 없이 상담 후 예약할 수 있습니다.</span></div>
         <button class="small-button" type="button" data-open-one-day-inquiry>원데이 문의</button>
@@ -4432,6 +4591,8 @@ function memberDesktopScheduleBackgroundRuns(policy, day, coach, scheduleTimeLis
 
 function renderDynamicMemberSchedule() {
   const activeWeek = activeMemberWeek();
+  const scheduleMode = state.memberScheduleMode || "mine";
+  const quickWeeks = memberQuickWeekOptions();
   $("#memberWeekSwitcher").innerHTML = `
     <button class="ghost-button schedule-week-arrow" type="button" data-change-member-week="-1" ${state.activeMemberWeekIndex <= memberScheduleMinWeekOffset ? "disabled" : ""} aria-label="이전 주" title="이전 주">&lt;</button>
     <div class="schedule-period-summary">
@@ -4439,10 +4600,18 @@ function renderDynamicMemberSchedule() {
       <span>${activeWeek.range} · 관리자 근무시간 기준</span>
     </div>
     <button class="ghost-button schedule-week-arrow" type="button" data-change-member-week="1" ${state.activeMemberWeekIndex >= memberScheduleMaxWeekOffset ? "disabled" : ""} aria-label="다음 주" title="다음 주">&gt;</button>
+    <div class="member-week-quick-nav" role="group" aria-label="가까운 주차 선택">
+      ${quickWeeks.map(({ offset, label, week }) => `
+        <button class="member-week-quick-button ${Number(state.activeMemberWeekIndex) === offset ? "is-active" : ""}" type="button" data-select-member-week="${offset}" aria-pressed="${Number(state.activeMemberWeekIndex) === offset}">
+          <strong>${label}</strong><span>${week.range}</span>
+        </button>`).join("")}
+    </div>
   `;
 
   const loadState = activeMemberScheduleLoadState();
-  if (loadState === "loading") {
+  const selectedSource = memberInlineChangeSources().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
+  const couponCandidateView = scheduleMode === "availability" && Boolean(selectedSource?.couponBooking);
+  if (loadState === "loading" && !couponCandidateView) {
     $("#scheduleGrid").innerHTML = `
       <section class="tn-empty-state" role="status" aria-live="polite">
         <strong>시간표 확인 중</strong>
@@ -4451,7 +4620,7 @@ function renderDynamicMemberSchedule() {
     return;
   }
 
-  if (loadState === "error") {
+  if (loadState === "error" && !couponCandidateView) {
     $("#scheduleGrid").innerHTML = `
       <section class="tn-empty-state" role="alert">
         <strong>시간표를 불러오지 못했습니다</strong>
@@ -4478,7 +4647,6 @@ function renderDynamicMemberSchedule() {
       return `${laneCount * memberScheduleCoachLaneWidth + Math.max(0, laneCount - 1) * 3}px`;
     })
     .join(" ");
-  const scheduleMode = state.memberScheduleMode || "mine";
   const assignedCoachSummary = renderMemberAssignedCoachSummary(policy);
   ensureMemberScheduleTicketSelection();
   $$("[data-member-schedule-mode]").forEach((button) => button.classList.toggle("is-active", button.dataset.memberScheduleMode === scheduleMode));
@@ -4501,16 +4669,9 @@ function renderDynamicMemberSchedule() {
       })}`;
     return;
   }
-  const inlineSource = memberInlineChangeSources().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
-  if (memberChangeTimetableIsPending(inlineSource)) {
-    $("#scheduleGrid").innerHTML = `
-      ${assignedCoachSummary}
-      ${renderMemberScheduleTicketPicker()}
-      ${inlineChangeBar}`;
-    return;
-  }
   $("#scheduleGrid").innerHTML = `
     ${assignedCoachSummary}
+    ${renderMemberCouponQuickStart()}
     ${renderMemberScheduleTicketPicker()}
     ${renderRegularInitialScheduleBar()}
     ${inlineChangeBar}
@@ -9057,7 +9218,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.344" });
+  const params = new URLSearchParams({ v: "1.0.345" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -9542,10 +9703,10 @@ function renderSelectedMemberScheduleWeek() {
   renderAvailableSlots();
 }
 
-function refreshSelectedMemberScheduleWeek() {
+async function refreshSelectedMemberScheduleWeek() {
   if (state.dataMode !== "live" || !state.member?.profileId) {
     renderSelectedMemberScheduleWeek();
-    return Promise.resolve(false);
+    return false;
   }
   const requestId = ++memberScheduleV2RequestSequence;
   const week = { ...activeMemberWeek() };
@@ -9556,26 +9717,34 @@ function refreshSelectedMemberScheduleWeek() {
   state.scheduleV2SyncError = "";
   state.scheduleV2SyncErrorCode = "";
   renderSelectedMemberScheduleWeek();
-  return syncMemberLessonsFromServer(state.profile, { force: true, requestId, week }).then(async (synced) => {
+  try {
+    const synced = await syncMemberLessonsFromServer(state.profile, { force: true, requestId, week });
     if (requestId !== memberScheduleV2RequestSequence || memberScheduleV2Context().key !== context.key) return false;
     state.scheduleV2SyncStatus = synced ? "ready" : "error";
     if (synced) state.scheduleV2LoadedKey = context.key;
     renderSelectedMemberScheduleWeek();
-    if (synced && (state.memberScheduleMode === "availability" || !$("#changeRequestModal")?.hidden)) {
+    if (state.memberScheduleMode === "availability" || !$("#changeRequestModal")?.hidden) {
       const source = currentScheduledLessonsForChange().find((lesson) => (
         lesson.id === (state.selectedMemberChangeSourceId || $("#absenceLesson")?.value)
       ));
-      await syncMemberChangeCandidates(source);
+      if (synced || source?.couponBooking) await syncMemberChangeCandidates(source);
     }
     saveSnapshot();
     return synced;
-  }).catch(() => {
+  } catch (_error) {
     if (requestId !== memberScheduleV2RequestSequence) return false;
     state.scheduleV2SyncStatus = "error";
     state.scheduleV2SyncError = "시간표를 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.";
     renderSelectedMemberScheduleWeek();
+    const source = currentScheduledLessonsForChange().find((lesson) => (
+      lesson.id === (state.selectedMemberChangeSourceId || $("#absenceLesson")?.value)
+    ));
+    if (source?.couponBooking && (state.memberScheduleMode === "availability" || !$("#changeRequestModal")?.hidden)) {
+      await syncMemberChangeCandidates(source);
+      renderSelectedMemberScheduleWeek();
+    }
     return false;
-  });
+  }
 }
 
 function changeMemberWeek(delta) {
@@ -9583,6 +9752,15 @@ function changeMemberWeek(delta) {
     Math.max((Number(state.activeMemberWeekIndex) || 0) + delta, memberScheduleMinWeekOffset),
     memberScheduleMaxWeekOffset,
   );
+  refreshSelectedMemberScheduleWeek();
+}
+
+function selectMemberWeekOffset(offset) {
+  state.activeMemberWeekIndex = Math.min(
+    Math.max(Number(offset) || 0, memberScheduleMinWeekOffset),
+    memberScheduleMaxWeekOffset,
+  );
+  saveSnapshot();
   refreshSelectedMemberScheduleWeek();
 }
 
@@ -11023,6 +11201,11 @@ function bindEvents() {
     true,
   );
   $("#memberWeekSwitcher")?.addEventListener("click", (event) => {
+    const quickButton = event.target.closest("[data-select-member-week]");
+    if (quickButton) {
+      selectMemberWeekOffset(Number(quickButton.dataset.selectMemberWeek));
+      return;
+    }
     const button = event.target.closest("[data-change-member-week]");
     if (button) changeMemberWeek(Number(button.dataset.changeMemberWeek));
   });
@@ -11651,7 +11834,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.344",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.345",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

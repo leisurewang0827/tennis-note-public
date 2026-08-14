@@ -8,8 +8,8 @@
     <title>테니스노트 코치 모드</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.344" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.344" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.345" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.345" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -236,6 +236,15 @@
               <button class="small-button danger-button" type="button" id="coachLogoutButton">로그아웃</button>
             </div>
           </section>
+
+          <section class="form-card coach-push-settings-card" aria-label="앱 알림 설정">
+            <div>
+              <span>앱 알림</span>
+              <strong id="coachPushNotificationStatus">앱 알림 확인 중</strong>
+              <small id="coachPushNotificationDetail">수업 일정과 처리할 기록을 알려드립니다.</small>
+            </div>
+            <button class="small-button" type="button" id="coachPushNotificationButton">알림 켜기</button>
+          </section>
         </section>
 
         <footer class="app-legal-links" aria-label="앱 정책 안내">
@@ -257,18 +266,38 @@
         <div id="memberDetailContent"></div>
       </div>
     </section>
+    <section id="coachPushPrimerModal" class="lesson-edit-modal coach-push-primer-modal" hidden>
+      <div class="modal-backdrop" data-defer-coach-push-primer></div>
+      <article class="modal-card coach-push-primer-card" role="dialog" aria-modal="true" aria-labelledby="coachPushPrimerTitle">
+        <div class="section-title compact-title">
+          <h2 id="coachPushPrimerTitle">수업 알림을 받을까요?</h2>
+          <span>코치에게 필요한 운영 소식만 알려드립니다.</span>
+        </div>
+        <ul class="coach-push-primer-list">
+          <li>오늘·다음 수업 일정</li>
+          <li>시간 변경·보강 신청</li>
+          <li>작성하지 않은 피드백</li>
+        </ul>
+        <p class="policy-note">알림은 내 정보에서 언제든 끌 수 있습니다.</p>
+        <div class="modal-actions">
+          <button id="enableCoachPushFromPrimer" class="primary-button" type="button">알림 켜기</button>
+          <button class="small-button" type="button" data-defer-coach-push-primer>나중에</button>
+        </div>
+      </article>
+    </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.344"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.344"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.344"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.345"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.345"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.345"></script>
+    <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.344"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.344"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.344"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.344"></script>
-    <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.344"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.344"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.345"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.345"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.345"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.345"></script>
+    <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.345"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.345"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
     <script>
       (() => {
@@ -287,7 +316,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.344";
+          appScript.src = "./app.js?v=1.0.345";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -300,7 +329,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.344";
+          appScript.src = "./app.js?v=1.0.345";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

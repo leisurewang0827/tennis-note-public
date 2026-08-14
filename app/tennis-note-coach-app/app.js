@@ -174,7 +174,19 @@ const curriculumSteps = curriculumCatalog.steps?.length ? curriculumCatalog.step
 const storageKey = "tennis-note-coach-live-v1";
 const sharedStorageKey = "tennis-note-shared-live-v1";
 const appModePreferenceKey = "tennis-note-app-mode";
+const coachPushDeviceStorageKey = "tennis-note-push-device-id";
+const coachPushPreferenceStorageKey = "tennis-note-push-enabled-v1";
+const coachPushPrimerDeferredStorageKey = "tennis-note-coach-push-primer-deferred-at-v1";
 const legacyDemoStorageKeys = ["tennis-note-member-demo-v1", "tennis-note-coach-demo-v1", "tennis-note-shared-demo-v1"];
+let coachPushListenersReady = false;
+let coachPushProfileId = "";
+let coachPushPrimerTimer = 0;
+let coachPushPrimerAttempts = 0;
+let coachPushUiState = {
+  permission: "unknown",
+  status: "앱 알림 확인 중",
+  detail: "수업 일정과 처리할 기록을 알려드립니다.",
+};
 
 function purgeLegacyDemoStorage() {
   legacyDemoStorageKeys.forEach((key) => localStorage.removeItem(key));
@@ -2268,7 +2280,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.344",
+    workerUrl: "./service-worker.js?v=1.0.345",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2298,7 +2310,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.344" });
+  const params = new URLSearchParams({ v: "1.0.345" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2465,6 +2477,7 @@ async function applySupabaseCoachSession(showFromLogin = false) {
       await Promise.allSettled([
         syncCoachLessonsFromServer(),
         syncCoachJournalEntriesFromServer(),
+        syncNativeCoachPushRegistration(profile),
       ]);
       renderAll();
       saveSnapshot();
@@ -2485,6 +2498,7 @@ function openUserMode(event) {
 }
 
 async function logoutCoach() {
+  await disableNativeCoachPushForLogout();
   await window.TennisNoteDataClient?.signOut?.();
   returnToMemberEntry(false, false);
 }
@@ -2495,6 +2509,290 @@ let nativeCoachBackListenerReady = false;
 
 function nativeCoachAppPlatform() {
   return window.Capacitor?.getPlatform?.() || "web";
+}
+
+function nativeCoachPushPlugin() {
+  return window.TennisNoteNativePush || window.Capacitor?.Plugins?.PushNotifications || null;
+}
+
+function currentCoachPushDeviceId() {
+  let deviceId = localStorage.getItem(coachPushDeviceStorageKey) || "";
+  if (!deviceId) {
+    deviceId = globalThis.crypto?.randomUUID?.() || `device-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    try {
+      localStorage.setItem(coachPushDeviceStorageKey, deviceId);
+    } catch {
+      return deviceId;
+    }
+  }
+  return deviceId;
+}
+
+function coachPushPreferenceEnabled() {
+  return localStorage.getItem(coachPushPreferenceStorageKey) !== "false";
+}
+
+function setCoachPushPreferenceEnabled(enabled) {
+  try {
+    localStorage.setItem(coachPushPreferenceStorageKey, enabled ? "true" : "false");
+  } catch {
+    // The server device state remains authoritative when browser storage is unavailable.
+  }
+}
+
+function setCoachPushNotificationState(permission, status, detail) {
+  coachPushUiState = { permission, status, detail };
+  renderCoachPushNotificationSettings();
+}
+
+function renderCoachPushNotificationSettings() {
+  const card = $(".coach-push-settings-card");
+  const status = $("#coachPushNotificationStatus");
+  const detail = $("#coachPushNotificationDetail");
+  const button = $("#coachPushNotificationButton");
+  if (!card || !status || !detail || !button) return;
+  const permission = coachPushUiState.permission || "unknown";
+  card.classList.toggle("is-enabled", permission === "granted");
+  card.classList.toggle("is-denied", permission === "denied");
+  status.textContent = coachPushUiState.status || "앱 알림 확인 중";
+  detail.textContent = coachPushUiState.detail || "수업 일정과 처리할 기록을 알려드립니다.";
+  button.textContent = permission === "granted"
+    ? "알림 끄기"
+    : permission === "denied"
+      ? "설정 확인"
+      : "알림 켜기";
+}
+
+function coachPushPrimerWasRecentlyDeferred() {
+  const deferredAt = Number(localStorage.getItem(coachPushPrimerDeferredStorageKey) || 0);
+  return deferredAt > 0 && Date.now() - deferredAt < 7 * 24 * 60 * 60 * 1000;
+}
+
+function canShowNativeCoachPushPrimer() {
+  return ["android", "ios"].includes(nativeCoachAppPlatform())
+    && !$("#coachAppScreen")?.hidden
+    && Boolean(state.liveProfileId)
+    && coachPushPreferenceEnabled()
+    && coachPushUiState.permission === "prompt"
+    && !coachPushPrimerWasRecentlyDeferred()
+    && !activeCoachModalId
+    && $("#noticeDialog")?.hidden !== false;
+}
+
+function scheduleNativeCoachPushPrimer(delay = 1400) {
+  if (coachPushPrimerTimer || coachPushPrimerWasRecentlyDeferred()) return;
+  coachPushPrimerTimer = window.setTimeout(() => {
+    coachPushPrimerTimer = 0;
+    if (canShowNativeCoachPushPrimer()) {
+      coachPushPrimerAttempts = 0;
+      openCoachModal("coachPushPrimerModal");
+      return;
+    }
+    if (coachPushUiState.permission === "prompt" && coachPushPrimerAttempts < 4) {
+      coachPushPrimerAttempts += 1;
+      scheduleNativeCoachPushPrimer(3000);
+    }
+  }, delay);
+}
+
+function deferNativeCoachPushPrimer() {
+  try {
+    localStorage.setItem(coachPushPrimerDeferredStorageKey, String(Date.now()));
+  } catch {
+    // Closing the primer is still enough for the current session.
+  }
+  coachPushPrimerAttempts = 0;
+  closeCoachModal("coachPushPrimerModal");
+}
+
+async function registerCoachPushToken(tokenValue, platform = nativeCoachAppPlatform()) {
+  const client = window.TennisNoteDataClient;
+  if (!tokenValue || !coachPushProfileId || !client?.rpc || !client.getSession?.()?.access_token) return false;
+  await client.rpc("tn_register_push_device", {
+    target_platform: platform,
+    target_device_id: currentCoachPushDeviceId(),
+    target_push_token: tokenValue,
+  });
+  return true;
+}
+
+function coachNotificationData(action = {}) {
+  const data = action?.notification?.data;
+  return data && typeof data === "object" ? data : {};
+}
+
+function coachNotificationRoute(data = {}) {
+  const route = String(data.route || "").trim().toLowerCase();
+  return ["today", "dashboard", "schedule", "feedback", "member", "membership"].includes(route) ? route : "today";
+}
+
+async function authorizeCoachNotificationAction(data = {}) {
+  const client = window.TennisNoteDataClient;
+  if (!client?.selectCurrentProfile || !client.getSession?.()?.access_token) {
+    showToast("로그인 후 알림 내용을 확인해 주세요.");
+    return false;
+  }
+  try {
+    const current = await client.selectCurrentProfile();
+    if (
+      !canUseCoachAppProfile(current?.profile, current?.coachRole)
+      || String(current?.profile?.id || "") !== String(state.liveProfileId || "")
+      || String(current?.coachRole?.id || "") !== currentCoachRoleId()
+    ) {
+      showToast("현재 코치 계정에서 확인할 수 없는 알림입니다.");
+      return false;
+    }
+
+    const lessonId = String(data.lessonId || data.lesson_id || "").trim();
+    if (lessonId) {
+      const lessonsSynced = await syncCoachLessonsFromServer().catch(() => false);
+      if (!lessonsSynced) {
+        showToast("수업 정보를 새로 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return false;
+      }
+      const lesson = (state.liveLessons || []).find((item) => (
+        String(item.serverLessonId || item.id || "") === lessonId
+      ));
+      if (!lesson || !lessonAssignedToCurrentCoachForTasks(lesson)) {
+        showToast("현재 코치에게 배정된 수업이 아닙니다.");
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    showToast("알림 내용을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    return false;
+  }
+}
+
+async function bindNativeCoachPushListeners(plugin) {
+  if (coachPushListenersReady) return;
+  await plugin.addListener("registration", async (token) => {
+    await registerCoachPushToken(token?.value || "", nativeCoachAppPlatform()).catch(() => false);
+  });
+  await plugin.addListener("registrationError", () => {
+    showToast("앱 알림 연결을 확인해 주세요.");
+  });
+  await plugin.addListener("pushNotificationReceived", async () => {
+    await syncLiveNotices().catch(() => false);
+  });
+  await plugin.addListener("pushNotificationActionPerformed", async (action) => {
+    const data = coachNotificationData(action);
+    if (!(await authorizeCoachNotificationAction(data))) return;
+    const route = coachNotificationRoute(data);
+    const viewId = route === "schedule"
+      ? "fullScheduleView"
+      : ["member", "membership"].includes(route)
+        ? "membersView"
+        : "todayView";
+    await Promise.allSettled([
+      syncLiveNotices(),
+      route === "schedule" ? syncCoachLessonsFromServer() : Promise.resolve(false),
+      route === "feedback" ? syncCoachJournalEntriesFromServer() : Promise.resolve(false),
+    ]);
+    setView(viewId);
+    jumpToTop();
+    renderAll();
+  });
+  coachPushListenersReady = true;
+}
+
+async function syncNativeCoachPushRegistration(profile = null, requestPermission = false) {
+  const plugin = nativeCoachPushPlugin();
+  const platform = nativeCoachAppPlatform();
+  coachPushProfileId = profile?.id || state.liveProfileId || "";
+  if (!plugin || !["android", "ios"].includes(platform)) {
+    setCoachPushNotificationState("unavailable", "설치 앱에서 사용 가능", "휴대폰에 설치한 Tennis Note 앱에서 수업 알림을 켤 수 있습니다.");
+    return false;
+  }
+  if (!coachPushProfileId || !window.TennisNoteDataClient?.getSession?.()?.access_token) {
+    setCoachPushNotificationState("unknown", "로그인 후 알림 설정", "코치 로그인 후 기기 알림을 연결할 수 있습니다.");
+    return false;
+  }
+  if (!coachPushPreferenceEnabled()) {
+    setCoachPushNotificationState("disabled", "앱 알림 꺼짐", "이 기기에서는 알림을 보내지 않습니다. 알림 켜기를 누르면 다시 받을 수 있습니다.");
+    return false;
+  }
+  await bindNativeCoachPushListeners(plugin);
+  if (platform === "android") {
+    await plugin.createChannel?.({
+      id: "lesson-reminders",
+      name: "수업·회원권 알림",
+      description: "수업 일정과 처리할 기록 알림",
+      importance: 5,
+      visibility: 1,
+      vibration: true,
+    }).catch(() => undefined);
+  }
+  let permission = await plugin.checkPermissions?.().catch(() => null);
+  if (requestPermission && ["prompt", "prompt-with-rationale"].includes(permission?.receive)) {
+    permission = await plugin.requestPermissions?.().catch(() => permission);
+  }
+  if (permission?.receive === "denied") {
+    setCoachPushNotificationState("denied", "휴대폰 알림이 꺼져 있음", "휴대폰 설정에서 Tennis Note 알림을 허용해 주세요.");
+    return false;
+  }
+  if (permission?.receive !== "granted") {
+    setCoachPushNotificationState("prompt", "알림 허용 필요", "알림 켜기를 누르면 다음 수업과 미처리 기록을 알려드립니다.");
+    scheduleNativeCoachPushPrimer();
+    return false;
+  }
+  setCoachPushNotificationState("granted", "앱 알림 연결됨", "내 수업 변경과 처리할 기록을 이 기기로 알려드립니다.");
+  await plugin.register();
+  return true;
+}
+
+async function enableNativeCoachPush() {
+  try {
+    localStorage.removeItem(coachPushPrimerDeferredStorageKey);
+  } catch {
+    // Continue with the native permission request.
+  }
+  setCoachPushPreferenceEnabled(true);
+  closeCoachModal("coachPushPrimerModal");
+  await new Promise((resolve) => window.setTimeout(resolve, 80));
+  await syncNativeCoachPushRegistration(null, true).catch(() => {
+    setCoachPushNotificationState("unknown", "알림 연결 실패", "네트워크와 휴대폰 알림 설정을 확인한 뒤 다시 시도해 주세요.");
+  });
+}
+
+async function disableNativeCoachPush() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !client.getSession?.()?.access_token) {
+    setCoachPushNotificationState("unknown", "알림 끄기 실패", "로그인과 네트워크 연결을 확인한 뒤 다시 시도해 주세요.");
+    return false;
+  }
+  await client.rpc("tn_disable_push_device", {
+    target_device_id: currentCoachPushDeviceId(),
+  });
+  setCoachPushPreferenceEnabled(false);
+  setCoachPushNotificationState("disabled", "앱 알림 꺼짐", "이 기기에서는 알림을 보내지 않습니다. 알림 켜기를 누르면 다시 받을 수 있습니다.");
+  return true;
+}
+
+async function toggleNativeCoachPush() {
+  if (coachPushUiState.permission === "granted" && coachPushPreferenceEnabled()) {
+    await disableNativeCoachPush().catch(() => {
+      setCoachPushNotificationState("unknown", "알림 끄기 실패", "네트워크 연결을 확인한 뒤 다시 시도해 주세요.");
+    });
+    return;
+  }
+  if (coachPushUiState.permission === "denied") {
+    showToast("휴대폰 설정에서 Tennis Note 알림을 허용한 뒤 다시 눌러 주세요.");
+    return;
+  }
+  await enableNativeCoachPush();
+}
+
+async function disableNativeCoachPushForLogout() {
+  const client = window.TennisNoteDataClient;
+  if (client?.getSession?.()?.access_token && client?.rpc) {
+    await client.rpc("tn_disable_push_device", {
+      target_device_id: currentCoachPushDeviceId(),
+    }).catch(() => null);
+  }
+  coachPushProfileId = "";
+  setCoachPushNotificationState("unknown", "로그인 후 알림 설정", "코치 로그인 후 기기 알림을 연결할 수 있습니다.");
 }
 
 function blurActiveCoachFormControl() {
@@ -2991,6 +3289,24 @@ function lessonDuration(lesson) {
   return matched ? Number(matched[1]) : 20;
 }
 
+function todayLessonPriority(lesson = {}, now = new Date()) {
+  const start = minutesFromTime(String(lesson.time || ""));
+  const current = now.getHours() * 60 + now.getMinutes();
+  if (!Number.isFinite(start)) return { group: 3, distance: Number.MAX_SAFE_INTEGER, start: Number.MAX_SAFE_INTEGER };
+  const end = start + Math.max(1, Number(lesson.durationMinutes) || lessonDuration(lesson));
+  if (start <= current && current < end) return { group: 0, distance: 0, start };
+  if (start > current) return { group: 1, distance: start - current, start };
+  return { group: 2, distance: current - end, start: -start };
+}
+
+function compareTodayLessonsByNearest(left, right, now = new Date()) {
+  const leftPriority = todayLessonPriority(left, now);
+  const rightPriority = todayLessonPriority(right, now);
+  return leftPriority.group - rightPriority.group
+    || leftPriority.distance - rightPriority.distance
+    || leftPriority.start - rightPriority.start;
+}
+
 function lessonCreditUnits(lesson = {}) {
   const duration = Math.max(1, Number(lesson.durationMinutes) || lessonDuration(lesson));
   const ticketUnit = Math.max(1, Number(lesson.ticketLessonMinutes) || duration);
@@ -3099,7 +3415,7 @@ function renderCoachProfile() {
 function renderTodayLessons() {
   const schedulePolicy = loadCoachSchedulePolicy();
   const pendingMakeups = state.makeupRequests.filter((request) => request.status === "승인 대기");
-  const ownLessons = ownTodayLessons();
+  const ownLessons = [...ownTodayLessons()].sort(compareTodayLessonsByNearest);
   const transferredLessons = transferredTodayLessons();
   const ownMakeups = pendingMakeups.filter((request) => canonicalCoachName(requestCoach(request)) === currentCoachName());
   const ownAbsenceMakeups = ownOpenMakeupEntitlements();
@@ -6015,6 +6331,11 @@ function bindEvents() {
   $("#noticeHideToday")?.addEventListener("click", () => closeNotice(true));
   $("#noticeAction")?.addEventListener("click", () => closeNotice(false));
   $("#saveCoachProfile")?.addEventListener("click", saveCoachProfile);
+  $("#coachPushNotificationButton")?.addEventListener("click", () => void toggleNativeCoachPush());
+  $("#enableCoachPushFromPrimer")?.addEventListener("click", () => void enableNativeCoachPush());
+  $("#coachPushPrimerModal")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-defer-coach-push-primer]")) deferNativeCoachPushPrimer();
+  });
   $("#coachSyncRetryButton")?.addEventListener("click", () => {
     if (window.TennisNoteDataClient?.isOnline?.() === false) {
       renderCoachConnectivityStatus();
@@ -6482,6 +6803,7 @@ function renderAll() {
   renderCoachAccessMessage();
   renderCoachModeList();
   renderCoachProfile();
+  renderCoachPushNotificationSettings();
   renderSummary();
   renderTodayLessons();
   renderFullSchedule();
@@ -6610,7 +6932,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.344",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.345",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
