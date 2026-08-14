@@ -49,6 +49,8 @@
         const result = await client.rpc("tn_schedule_revision_snapshot", {
           target_branch_id: branchId,
         });
+        // A branch or account change can finish while the previous request is in flight.
+        if (readBranchId() !== branchId) return false;
         const nextRevision = Number(result?.revision);
         if (!Number.isFinite(nextRevision)) return false;
         if (revision === null) {
@@ -56,7 +58,7 @@
           options.onReady?.(result);
           return true;
         }
-        if (nextRevision !== revision) {
+        if (nextRevision > revision) {
           const previousRevision = revision;
           revision = nextRevision;
           await options.onChange?.({ ...result, previousRevision });

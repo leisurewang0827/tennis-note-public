@@ -17,6 +17,7 @@ const state = {
   viewingMemberDetailId: "",
   viewingMemberGroupName: "",
   todayTaskTab: "lessons",
+  recordStatusFilter: "pending",
   expandedTodayTasks: {},
   liveLessons: [],
   releasedMakeupSlots: [],
@@ -25,7 +26,7 @@ const state = {
   scheduleV2WorkspaceLoaded: false,
   scheduleV2SyncError: "",
   liveMembersLoaded: false,
-  scheduleFilter: "all",
+  scheduleFilter: "mine",
   selectedFullScheduleDay: "",
   curriculumFilter: "all",
   curriculumQuery: "",
@@ -1537,7 +1538,7 @@ function restoreSnapshot() {
 
 function resetCoachScheduleLaunchView() {
   if (coachSchedulePreferenceTouched) return;
-  state.scheduleFilter = "all";
+  state.scheduleFilter = "mine";
   state.selectedFullScheduleDay = currentCoachScheduleDay();
 }
 
@@ -2280,7 +2281,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.345",
+    workerUrl: "./service-worker.js?v=1.0.346",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2310,7 +2311,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.345" });
+  const params = new URLSearchParams({ v: "1.0.346" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3208,6 +3209,18 @@ function ownPendingFeedbackRequests() {
   return state.feedbackRequests.filter((request) => request.status !== "코치 답변 완료" && feedbackBelongsToCurrentCoach(request));
 }
 
+function ownCompletedLessonLogs() {
+  return state.lessonLogs.filter((log) => log.status === "확인 완료" && recordBelongsToCurrentCoach(log));
+}
+
+function ownCompletedFeedbackRequests() {
+  return state.feedbackRequests.filter((request) => request.status === "코치 답변 완료" && feedbackBelongsToCurrentCoach(request));
+}
+
+function coachRecordStatusFilter() {
+  return state.recordStatusFilter === "completed" ? "completed" : "pending";
+}
+
 function lessonPermissionText(lesson) {
   if (canRescheduleLesson(lesson)) return "내 수업이라 일정 수정과 완료 처리가 가능합니다.";
   if (canProcessLesson(lesson)) return "내 수업 완료 처리와 피드백 작성이 가능합니다.";
@@ -4051,8 +4064,14 @@ function renderFullSchedule() {
   const policy = loadCoachSchedulePolicy();
   const weekIndex = activeWeekIndex();
   const week = activeScheduleWeek();
-  const scheduleFilter = state.scheduleFilter || "all";
+  const scheduleFilter = state.scheduleFilter || "mine";
   const lessonsForWeek = filterFullScheduleLessons(weekLessons(), scheduleFilter);
+  const scheduleContent = scheduleFilter === "makeupChange"
+    ? renderCoachRequestTimeline(lessonsForWeek)
+    : renderCoachMobileSchedule(policy, lessonsForWeek);
+  const scheduleGuide = scheduleFilter === "makeupChange"
+    ? "승인할 요청, 시간을 정할 보강, 처리 완료 내역을 날짜·시간순으로 확인합니다."
+    : "요일을 고른 뒤 빈칸은 수업 등록, 수업 카드는 변경·완료·피드백 처리에 사용합니다.";
   $("#fullScheduleBoard").innerHTML = `
     <div class="coach-week-calendar">
       <div class="coach-week-controls">
@@ -4074,15 +4093,15 @@ function renderFullSchedule() {
           .join("")}
       </div>
     </div>
-    <p class="coach-day-schedule-guide">요일을 고른 뒤 빈칸은 수업 등록, 수업 카드는 변경·완료·피드백 처리에 사용합니다.</p>
-    ${renderCoachMobileSchedule(policy, lessonsForWeek)}`;
+    <p class="coach-day-schedule-guide">${scheduleGuide}</p>
+    ${scheduleContent}`;
 }
 
 function fullScheduleFilterOptions() {
   return [
-    { id: "all", label: "전체" },
     { id: "mine", label: "내 수업" },
-    { id: "makeupChange", label: "보강&변경요청" },
+    { id: "makeupChange", label: "변경·보강" },
+    { id: "all", label: "전체 시간표" },
   ];
 }
 
@@ -4102,6 +4121,58 @@ function filterFullScheduleLessons(lessons, filter) {
       `${lesson.status || ""}`.includes("승인 대기"),
     );
   return lessons;
+}
+
+function coachRequestTimelineState(lesson = {}) {
+  const context = `${lesson.type || ""} ${lesson.status || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
+  if (/승인 대기|승인 필요|pending_change/.test(context)) return { id: "approval", label: "승인 필요", order: 0 };
+  if (lesson.releasedMakeupSlot || /시간 선택 대기|보강 가능/.test(context)) return { id: "slot", label: "시간 선택", order: 1 };
+  if (/변경/.test(context)) return { id: "changed", label: "변경 완료", order: 2 };
+  return { id: "booked", label: "보강 확정", order: 3 };
+}
+
+function coachRequestTimelineDate(lesson = {}) {
+  return String(lesson.lessonDate || coachWeekDateForDay(lesson.day) || "");
+}
+
+function renderCoachRequestTimeline(scheduleLessons = []) {
+  const items = [...scheduleLessons]
+    .map((lesson) => ({ lesson, state: coachRequestTimelineState(lesson), date: coachRequestTimelineDate(lesson) }))
+    .sort((left, right) => (
+      left.state.order - right.state.order
+      || `${left.date} ${left.lesson.time || ""}`.localeCompare(`${right.date} ${right.lesson.time || ""}`)
+    ));
+  if (!items.length) {
+    return coachEmptyState({
+      title: "확인할 변경·보강이 없습니다",
+      reason: "새 요청이나 시간을 정할 보강이 생기면 날짜순으로 표시됩니다.",
+      compact: true,
+    });
+  }
+  const groups = [
+    { id: "approval", title: "승인할 요청" },
+    { id: "slot", title: "시간을 정할 보강" },
+    { id: "changed", title: "변경 완료" },
+    { id: "booked", title: "보강 확정" },
+  ];
+  return `<div class="coach-request-timeline">
+    ${groups.map((group) => {
+      const groupItems = items.filter((item) => item.state.id === group.id);
+      if (!groupItems.length) return "";
+      return `<section class="coach-request-group" aria-label="${group.title}">
+        <div class="coach-request-group-title"><strong>${group.title}</strong><span>${groupItems.length}건</span></div>
+        <div class="coach-request-list">
+          ${groupItems.map(({ lesson, state: itemState, date }) => `
+            <button class="coach-request-row ${itemState.id}" type="button" ${coachScheduleLessonActionAttrs(lesson)}>
+              <time>${escapeHtml(date || lesson.day || "날짜 확인")} · ${escapeHtml(lesson.time || "시간 확인")}</time>
+              <strong>${escapeHtml(lesson.member || "회원")}</strong>
+              <span>${escapeHtml(lesson.coach || "담당 코치")} · ${escapeHtml(lesson.type || "수업")}</span>
+              <b>${itemState.label}</b>
+            </button>`).join("")}
+        </div>
+      </section>`;
+    }).join("")}
+  </div>`;
 }
 
 function formatScheduleMemberName(name) {
@@ -5352,6 +5423,44 @@ function recordProcessingMarkup() {
   importPracticeFeedbackRequests();
   const pendingLogs = ownPendingLessonLogs();
   const pendingFeedback = ownPendingFeedbackRequests();
+  const completedLogs = ownCompletedLessonLogs();
+  const completedFeedback = ownCompletedFeedbackRequests();
+  const recordFilter = coachRecordStatusFilter();
+  const recordTabs = `
+    <div class="record-status-tabs" role="tablist" aria-label="피드백 작성 상태">
+      <button type="button" role="tab" aria-selected="${recordFilter === "pending"}" class="${recordFilter === "pending" ? "is-active" : ""}" data-record-status-filter="pending">작성 필요 <b>${pendingLogs.length + pendingFeedback.length}</b></button>
+      <button type="button" role="tab" aria-selected="${recordFilter === "completed"}" class="${recordFilter === "completed" ? "is-active" : ""}" data-record-status-filter="completed">작성 완료 <b>${completedLogs.length + completedFeedback.length}</b></button>
+    </div>`;
+  if (recordFilter === "completed") {
+    const completedItems = [
+      ...completedLogs.map((log) => ({
+        id: log.id,
+        member: log.member,
+        meta: coachRecordLessonMetaMarkup(log),
+        detail: log.coachComment || "코치 피드백 저장 완료",
+        kind: "수업 피드백",
+      })),
+      ...completedFeedback.map((request) => ({
+        id: request.id,
+        member: request.member,
+        meta: `<div class="record-lesson-meta"><b>${escapeHtml(request.date || "날짜 확인")}</b><span>운동노트</span><small>회원 요청 피드백</small></div>`,
+        detail: request.coachFeedback || "코치 답변 완료",
+        kind: "운동노트 피드백",
+      })),
+    ].slice(0, 12);
+    return `${recordTabs}
+      <section class="record-section">
+        <div class="record-section-title"><strong>작성 완료</strong><small>최근 완료한 피드백을 확인합니다.</small></div>
+        <div class="completed-record-list">
+          ${completedItems.length ? completedItems.map((item) => `
+            <article class="completed-record-row">
+              <div><strong>${escapeHtml(item.member || "회원")}</strong><span>${item.kind}</span></div>
+              ${item.meta}
+              <p>${escapeHtml(item.detail)}</p>
+            </article>`).join("") : coachEmptyState({ title: "작성 완료된 피드백이 없습니다", reason: "완료 처리한 피드백이 여기에 표시됩니다.", compact: true })}
+        </div>
+      </section>`;
+  }
   const showAllRecords = isTodayTaskExpanded("records");
   const visibleLogs = showAllRecords ? pendingLogs : pendingLogs.slice(0, 3);
   const visibleFeedback = showAllRecords ? pendingFeedback : pendingFeedback.slice(0, Math.max(0, 3 - visibleLogs.length));
@@ -5488,7 +5597,7 @@ function recordProcessingMarkup() {
         reason: "회원이 사진·영상 기록에 피드백을 요청하면 여기에 표시됩니다.",
         compact: true,
       });
-  return `
+  return `${recordTabs}
     <section class="record-section">
       <div class="record-section-title">
         <strong>수업 완료</strong>
@@ -5703,7 +5812,7 @@ function renderCurriculums() {
         <button class="primary-button" type="button" data-summary-action="records">회원 선택·지정</button>
       </div>
     </section>
-    <details class="curriculum-browse-disclosure">
+    <details class="curriculum-browse-disclosure" open>
       <summary>커리큘럼 검색·빠른 보기</summary>
       <div class="curriculum-browse-body">
     <section class="curriculum-toolbar" aria-label="커리큘럼 검색과 필터">
@@ -6561,6 +6670,14 @@ function bindEvents() {
       return;
     }
 
+    const recordStatusButton = event.target.closest("[data-record-status-filter]");
+    if (recordStatusButton) {
+      state.recordStatusFilter = recordStatusButton.dataset.recordStatusFilter === "completed" ? "completed" : "pending";
+      renderLogs();
+      saveSnapshot();
+      return;
+    }
+
     const memberDetailRow = event.target.closest("[data-member-detail-id]");
     if (memberDetailRow && !event.target.closest("select, button, a, input, textarea")) {
       openMemberDetail(memberDetailRow.dataset.memberDetailId, memberDetailRow.dataset.memberGroupName || "");
@@ -6932,7 +7049,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.345",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.346",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

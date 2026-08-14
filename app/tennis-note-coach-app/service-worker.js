@@ -1,25 +1,25 @@
-const CACHE_NAME = "tennis-note-coach-mode-v364";
+const CACHE_NAME = "tennis-note-coach-mode-v366";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.345",
-  "./app.js?v=1.0.345",
+  "./styles.css?v=1.0.346",
+  "./app.js?v=1.0.346",
   "./assets/app-icon.svg",
   "../release.json",
-  "../shared/tennisnote-data-client.js?v=1.0.345",
-  "../shared/tennisnote-schedule-revision.js?v=1.0.345",
-  "../shared/tennisnote-schedule-lanes.js?v=1.0.345",
+  "../shared/tennisnote-data-client.js?v=1.0.346",
+  "../shared/tennisnote-schedule-revision.js?v=1.0.346",
+  "../shared/tennisnote-schedule-lanes.js?v=1.0.346",
   "../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3",
-  "../shared/tennisnote-release.js?v=1.0.345",
-  "../shared/tennisnote-release-updater.js?v=1.0.345",
+  "../shared/tennisnote-release.js?v=1.0.346",
+  "../shared/tennisnote-release-updater.js?v=1.0.346",
   "../shared/tennisnote-issue-reporter.js?v=issue-reporter-3",
   "../shared/tennisnote-issue-reporter.css?v=issue-reporter-3",
-  "../shared/tennisnote-ui-language.js?v=1.0.345",
-  "../shared/tennisnote-ticket-state.js?v=1.0.345",
-  "../shared/tennisnote-comment-draft.js?v=1.0.345",
-  "../shared/tennisnote-input-guard.js?v=1.0.345",
-  "../shared/tennisnote-ui-foundation.css?v=1.0.345",
+  "../shared/tennisnote-ui-language.js?v=1.0.346",
+  "../shared/tennisnote-ticket-state.js?v=1.0.346",
+  "../shared/tennisnote-comment-draft.js?v=1.0.346",
+  "../shared/tennisnote-input-guard.js?v=1.0.346",
+  "../shared/tennisnote-ui-foundation.css?v=1.0.346",
 ];
 
 function deleteOldCaches() {
@@ -48,14 +48,17 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(deleteOldCaches());
-  self.clients.claim();
+  event.waitUntil(Promise.all([deleteOldCaches(), self.clients.claim()]));
 });
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Same-script re-registration can skip install/activate, so navigation also
+  // removes only obsolete app caches without touching login or local data.
+  if (event.request.mode === "navigate") event.waitUntil(deleteOldCaches());
 
   const networkFirst = event.request.mode === "navigate"
     || ["document", "script", "style", "manifest", "worker"].includes(event.request.destination)
