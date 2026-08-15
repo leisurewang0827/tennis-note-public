@@ -492,6 +492,12 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
         recordStatus: participant.recordStatus || "",
         outcome: participant.outcome || "",
         deductedSessions: Number(participant.deductedSessions) || 0,
+        coachComment: participant.coachComment || "",
+        nextCurriculumRefId: participant.nextCurriculumRefId || "",
+        nextCurriculumId: participant.nextCurriculumSkillLabel || "",
+        nextCurriculumTitle: participant.nextCurriculumTitle || "",
+        finalizedAt: participant.finalizedAt || "",
+        updatedAt: participant.updatedAt || "",
         ticketName: ticket.productName || `${scheduleV2LessonKindLabel(kind)} 회원권`,
         totalSessions: Number(ticket.totalSessions) || 0,
         usedSessions: Number(ticket.usedSessions) || 0,
@@ -517,6 +523,76 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
     remaining: Number(primaryTicket.remainingSessions) || 0,
     deductedSessions,
     task: lesson.status === "pending_change" ? "변경 요청 확인" : "수업 후 코멘트/다음 커리큘럼",
+  };
+}
+
+function scheduleV2CoachParticipantResults(lesson = {}) {
+  return (lesson.v2Participants || []).map((participant) => ({
+    userId: participant.userId,
+    ticketId: participant.ticketId,
+    name: participant.name,
+    ticketName: participant.ticketName,
+    totalSessions: participant.totalSessions,
+    usedSessions: participant.usedSessions,
+    remainingSessions: participant.remainingSessions,
+    recordStatus: participant.recordStatus || "",
+    coachComment: participant.coachComment || "",
+    nextCurriculumId: canonicalCurriculumId(participant.nextCurriculumId),
+    finalizedAt: participant.finalizedAt || "",
+    updatedAt: participant.updatedAt || "",
+    serverCoachComment: participant.coachComment || "",
+    serverNextCurriculumId: canonicalCurriculumId(participant.nextCurriculumId),
+  }));
+}
+
+function mergeScheduleV2CoachParticipantDraft(serverDraft = {}, localDraft = {}, fallback = {}) {
+  const hasOwn = (target, key) => Object.prototype.hasOwnProperty.call(target || {}, key);
+  const useFallback = fallback.useFallback === true;
+  const hasLocalComment = hasOwn(localDraft, "coachComment") || useFallback;
+  const hasLocalCurriculum = hasOwn(localDraft, "nextCurriculumId") || useFallback;
+  const localComment = hasOwn(localDraft, "coachComment")
+    ? localDraft.coachComment || ""
+    : useFallback ? fallback.coachComment || "" : "";
+  const localCurriculumId = hasOwn(localDraft, "nextCurriculumId")
+    ? localDraft.nextCurriculumId || ""
+    : useFallback ? fallback.nextCurriculumId || "" : "";
+  const hasPreviousServerComment = hasOwn(localDraft, "serverCoachComment")
+    || (useFallback && fallback.hasServerCoachComment === true);
+  const hasPreviousServerCurriculum = hasOwn(localDraft, "serverNextCurriculumId")
+    || (useFallback && fallback.hasServerNextCurriculumId === true);
+  const previousServerComment = hasOwn(localDraft, "serverCoachComment")
+    ? localDraft.serverCoachComment || ""
+    : useFallback ? fallback.serverCoachComment || "" : "";
+  const previousServerCurriculumId = hasOwn(localDraft, "serverNextCurriculumId")
+    ? localDraft.serverNextCurriculumId || ""
+    : useFallback ? fallback.serverNextCurriculumId || "" : "";
+  const serverComment = serverDraft.coachComment || "";
+  const serverCurriculumId = canonicalCurriculumId(serverDraft.nextCurriculumId);
+  const localCommentChanged = localDraft.localCoachCommentDirty === true
+    || (useFallback && fallback.localCoachCommentDirty === true)
+    || (hasLocalComment && (
+      hasPreviousServerComment
+        ? localComment !== previousServerComment
+        : Boolean(localComment)
+    ));
+  const localCurriculumChanged = localDraft.localNextCurriculumDirty === true
+    || (useFallback && fallback.localNextCurriculumDirty === true)
+    || (hasLocalCurriculum && (
+      hasPreviousServerCurriculum
+        ? localCurriculumId !== previousServerCurriculumId
+        : Boolean(localCurriculumId)
+    ));
+  const preserveLocalComment = localCommentChanged && localComment !== serverComment;
+  const preserveLocalCurriculum = localCurriculumChanged && localCurriculumId !== serverCurriculumId;
+  return {
+    ...localDraft,
+    ...serverDraft,
+    coachComment: preserveLocalComment ? localComment : serverComment,
+    nextCurriculumId: preserveLocalCurriculum ? localCurriculumId : serverCurriculumId,
+    serverCoachComment: serverComment,
+    serverNextCurriculumId: serverCurriculumId,
+    localCoachCommentDirty: preserveLocalComment,
+    localNextCurriculumDirty: preserveLocalCurriculum,
   };
 }
 
@@ -774,6 +850,51 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
   const cutoff = localDateKey(cutoffDate);
   mappedLessons
     .filter((lesson) => (
+      lesson.lessonDate >= cutoff
+      && lesson.lessonDate <= today
+      && lesson.v2Permissions?.canProcess
+      && lesson.v2Participants?.length
+      && lesson.v2Participants.every((participant) => participant.recordStatus === "final")
+    ))
+    .forEach((lesson) => {
+      const participantResults = scheduleV2CoachParticipantResults(lesson);
+      const primaryResult = participantResults[0] || {};
+      const completedAt = participantResults
+        .map((result) => result.finalizedAt || result.updatedAt || "")
+        .filter(Boolean)
+        .sort((left, right) => String(right).localeCompare(String(left)))[0] || "";
+      const existingLog = state.lessonLogs.find((log) => log.serverLessonId === lesson.serverLessonId);
+      const completedFields = {
+        serverLessonId: lesson.serverLessonId,
+        member: lesson.member,
+        lesson: `${lesson.day} ${lesson.time} · ${lesson.type}`,
+        coachComment: primaryResult.coachComment || "",
+        nextCurriculumId: primaryResult.nextCurriculumId || "",
+        participantResults,
+        serverCoachComment: primaryResult.coachComment || "",
+        serverNextCurriculumId: primaryResult.nextCurriculumId || "",
+        localCoachCommentDirty: false,
+        localNextCurriculumDirty: false,
+        status: "확인 완료",
+        curriculumRegistered: Boolean(primaryResult.nextCurriculumId),
+        ticketDeducted: lesson.deductedSessions > 0,
+        completedAt,
+      };
+      if (existingLog) Object.assign(existingLog, completedFields);
+      else state.lessonLogs.unshift({
+        id: `schedule-v2-completed-${lesson.serverLessonId}`,
+        serverJournalId: "",
+        content: "관리자 또는 코치가 수업 피드백을 완료했습니다.",
+        selfMemo: "서버에 저장된 참여자별 완료 피드백입니다.",
+        mediaNames: [],
+        mediaItems: [],
+        curriculumId: primaryResult.nextCurriculumId || "",
+        validationMessage: "",
+        ...completedFields,
+      });
+    });
+  mappedLessons
+    .filter((lesson) => (
       lesson.serverStatus === "scheduled"
       && lesson.lessonDate >= cutoff
       && lesson.lessonDate <= today
@@ -781,7 +902,81 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       && !lesson.v2Participants?.every((participant) => participant.recordStatus === "final")
     ))
     .forEach((lesson) => {
-      if (state.lessonLogs.some((log) => log.serverLessonId === lesson.serverLessonId)) return;
+      const serverParticipantDrafts = scheduleV2CoachParticipantResults(lesson);
+      const hasServerFeedbackDraft = serverParticipantDrafts.some((result) => (
+        result.recordStatus === "draft"
+        || Boolean(result.coachComment)
+        || Boolean(result.nextCurriculumId)
+      ));
+      const existingLog = state.lessonLogs.find((log) => log.serverLessonId === lesson.serverLessonId);
+      if (existingLog) {
+        const existingParticipantDrafts = Array.isArray(existingLog.participantResults)
+          ? existingLog.participantResults
+          : [];
+        const localDrafts = new Map(existingParticipantDrafts.map((result) => [
+          `${result.userId || ""}:${result.ticketId || ""}`,
+          result,
+        ]));
+        const shouldUseParticipantDrafts = hasServerFeedbackDraft
+          || existingParticipantDrafts.length > 0
+          || serverParticipantDrafts.length > 1;
+        if (shouldUseParticipantDrafts) {
+          existingLog.participantResults = serverParticipantDrafts.map((serverDraft, index) => {
+            const localDraft = localDrafts.get(`${serverDraft.userId}:${serverDraft.ticketId}`) || {};
+            return mergeScheduleV2CoachParticipantDraft(serverDraft, localDraft, {
+              useFallback: index === 0,
+              coachComment: existingLog.coachComment || "",
+              nextCurriculumId: existingLog.nextCurriculumId || "",
+              hasServerCoachComment: Object.prototype.hasOwnProperty.call(existingLog, "serverCoachComment"),
+              hasServerNextCurriculumId: Object.prototype.hasOwnProperty.call(existingLog, "serverNextCurriculumId"),
+              serverCoachComment: existingLog.serverCoachComment || "",
+              serverNextCurriculumId: existingLog.serverNextCurriculumId || "",
+              localCoachCommentDirty: existingLog.localCoachCommentDirty === true,
+              localNextCurriculumDirty: existingLog.localNextCurriculumDirty === true,
+            });
+          });
+          const primaryDraft = existingLog.participantResults[0] || {};
+          existingLog.coachComment = primaryDraft.coachComment || "";
+          existingLog.nextCurriculumId = primaryDraft.nextCurriculumId || "";
+          existingLog.serverCoachComment = primaryDraft.serverCoachComment || "";
+          existingLog.serverNextCurriculumId = primaryDraft.serverNextCurriculumId || "";
+          existingLog.localCoachCommentDirty = primaryDraft.localCoachCommentDirty === true;
+          existingLog.localNextCurriculumDirty = primaryDraft.localNextCurriculumDirty === true;
+        } else {
+          const primaryDraft = mergeScheduleV2CoachParticipantDraft(serverParticipantDrafts[0] || {}, {}, {
+            useFallback: true,
+            coachComment: existingLog.coachComment || "",
+            nextCurriculumId: existingLog.nextCurriculumId || "",
+            hasServerCoachComment: Object.prototype.hasOwnProperty.call(existingLog, "serverCoachComment"),
+            hasServerNextCurriculumId: Object.prototype.hasOwnProperty.call(existingLog, "serverNextCurriculumId"),
+            serverCoachComment: existingLog.serverCoachComment || "",
+            serverNextCurriculumId: existingLog.serverNextCurriculumId || "",
+            localCoachCommentDirty: existingLog.localCoachCommentDirty === true,
+            localNextCurriculumDirty: existingLog.localNextCurriculumDirty === true,
+          });
+          existingLog.coachComment = primaryDraft.coachComment || "";
+          existingLog.nextCurriculumId = primaryDraft.nextCurriculumId || "";
+          existingLog.serverCoachComment = primaryDraft.serverCoachComment || "";
+          existingLog.serverNextCurriculumId = primaryDraft.serverNextCurriculumId || "";
+          existingLog.localCoachCommentDirty = primaryDraft.localCoachCommentDirty === true;
+          existingLog.localNextCurriculumDirty = primaryDraft.localNextCurriculumDirty === true;
+        }
+        existingLog.member = lesson.member;
+        existingLog.lesson = `${lesson.day} ${lesson.time} · ${lesson.type}`;
+        if (existingLog.status === "확인 완료") existingLog.status = "확인 대기";
+        existingLog.curriculumRegistered = false;
+        existingLog.ticketDeducted = false;
+        existingLog.serverDeducted = false;
+        existingLog.serverDeductionIdempotent = false;
+        existingLog.deductedSessions = Number(lesson.deductedSessions) || 0;
+        existingLog.completedAt = "";
+        existingLog.memberVisibleSummary = "";
+        return;
+      }
+      const primaryDraft = serverParticipantDrafts[0] || {};
+      const serverDraftFields = hasServerFeedbackDraft
+        ? { participantResults: serverParticipantDrafts }
+        : {};
       state.lessonLogs.unshift({
         id: `schedule-v2-lesson-${lesson.serverLessonId}`,
         serverJournalId: "",
@@ -793,8 +988,13 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
         mediaNames: [],
         mediaItems: [],
         curriculumId: "FH-01",
-        nextCurriculumId: "FH-01",
-        coachComment: "",
+        nextCurriculumId: hasServerFeedbackDraft ? (primaryDraft.nextCurriculumId || "") : "FH-01",
+        coachComment: hasServerFeedbackDraft ? (primaryDraft.coachComment || "") : "",
+        serverCoachComment: primaryDraft.coachComment || "",
+        serverNextCurriculumId: primaryDraft.nextCurriculumId || "",
+        localCoachCommentDirty: false,
+        localNextCurriculumDirty: false,
+        ...serverDraftFields,
         validationMessage: "",
         status: "확인 대기",
         curriculumRegistered: false,
@@ -2363,7 +2563,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.348",
+    workerUrl: "./service-worker.js?v=1.0.349",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2393,7 +2593,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.348" });
+  const params = new URLSearchParams({ v: "1.0.349" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -5517,7 +5717,7 @@ function coachScheduleMonthValue(week = activeScheduleWeek()) {
 }
 
 function curriculumOptions(selectedId, query = "") {
-  const canonicalSelectedId = curriculumCatalog.aliases?.[selectedId] || selectedId;
+  const canonicalSelectedId = canonicalCurriculumId(selectedId);
   const normalizedQuery = String(query || "").trim().toLocaleLowerCase("ko-KR");
   const matchesQuery = (step) => !normalizedQuery || `${step.id || ""} ${step.title || ""} ${step.trackTitle || ""} ${step.category || ""}`
     .toLocaleLowerCase("ko-KR")
@@ -5553,8 +5753,12 @@ function filterCurriculumOptions(input) {
 }
 
 function selectedCurriculum(id) {
-  const canonicalId = curriculumCatalog.aliases?.[id] || id;
+  const canonicalId = canonicalCurriculumId(id);
   return curriculumSteps.find((step) => step.id === canonicalId) || curriculumSteps[0];
+}
+
+function canonicalCurriculumId(id = "") {
+  return curriculumCatalog.aliases?.[id] || id || "";
 }
 
 function curriculumNotionUrl(step) {
@@ -6208,13 +6412,17 @@ function updateLogDraft(id) {
       const userId = row.dataset.userId || "";
       const ticketId = row.dataset.ticketId || "";
       const existing = existingByPair.get(`${userId}:${ticketId}`) || {};
+      const coachComment = row.querySelector("[data-log-participant-comment]")?.value.trim() || "";
+      const nextCurriculumId = row.querySelector("[data-log-participant-curriculum]")?.value || "";
       return {
         ...existing,
         userId,
         ticketId,
         name: row.dataset.participantName || existing.name || "회원",
-        coachComment: row.querySelector("[data-log-participant-comment]")?.value.trim() || "",
-        nextCurriculumId: row.querySelector("[data-log-participant-curriculum]")?.value || "",
+        coachComment,
+        nextCurriculumId,
+        localCoachCommentDirty: coachComment !== (existing.serverCoachComment || ""),
+        localNextCurriculumDirty: nextCurriculumId !== (existing.serverNextCurriculumId || ""),
       };
     });
     const primaryResult = log.participantResults[0] || {};
@@ -6228,6 +6436,8 @@ function updateLogDraft(id) {
   const curriculumSelect = activeViewField(`[data-next-curriculum="${id}"]`);
   log.coachComment = commentInput?.value.trim() || "";
   log.nextCurriculumId = curriculumSelect?.value || log.nextCurriculumId || log.curriculumId;
+  log.localCoachCommentDirty = log.coachComment !== (log.serverCoachComment || "");
+  log.localNextCurriculumDirty = log.nextCurriculumId !== (log.serverNextCurriculumId || "");
   log.validationMessage = "";
   updateLogCompletionUi(log);
   return log;
@@ -7209,7 +7419,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.348",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.349",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

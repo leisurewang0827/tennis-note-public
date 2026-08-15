@@ -1712,7 +1712,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.348",
+    workerUrl: "./service-worker.js?v=1.0.349",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -9422,7 +9422,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.348" });
+  const params = new URLSearchParams({ v: "1.0.349" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -10483,6 +10483,12 @@ async function submitIdentitySetup(event) {
     });
     $("#identitySetupModal").hidden = true;
     document.body.classList.remove("identity-setup-required");
+    if (result?.linkStatus === "linked") {
+      const restored = await applySupabaseMemberSession(false);
+      if (!restored) throw new Error("auto_link_session_refresh_failed");
+      showToast("가입 완료 · 기존 회원권과 앱 계정이 바로 연결되었습니다.");
+      return;
+    }
     renderAll();
     saveSnapshot();
     if (result?.linkStatus === "admin_review_required") {
@@ -12084,7 +12090,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.348",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.349",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

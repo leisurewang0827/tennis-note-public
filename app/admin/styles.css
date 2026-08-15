@@ -3351,6 +3351,31 @@ tr.is-selected td {
   background: #eef2f7;
 }
 
+.member-auth-link-action {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  color: var(--primary);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.member-auth-link-action small {
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.member-auth-link-action:hover .member-auth-status,
+.member-auth-link-action:focus-visible .member-auth-status {
+  color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
 .detail-list {
   display: grid;
   gap: 12px;

@@ -8942,6 +8942,15 @@ function memberAuthStatusMarkup(member = {}) {
   const detail = connection.linked
     ? `${connection.detail}${member.authLastSignInAt ? ` · 최근 로그인 ${notificationDateTimeLabel(member.authLastSignInAt)}` : ""}`
     : "회원이 앱에서 로그인하면 자동으로 연결 상태가 표시됩니다.";
+  if (!connection.linked && operationsRole() === "admin" && member.id) {
+    return `<button class="member-auth-link-action" type="button"
+      data-open-member-management="app_link"
+      data-member-management-member-id="${member.id}"
+      title="${escapeHtml(detail)}">
+        <span class="member-auth-status is-unlinked">${escapeHtml(label)}</span>
+        <small>앱 연결</small>
+      </button>`;
+  }
   return `<span class="member-auth-status ${connection.linked ? "is-linked" : "is-unlinked"}" title="${escapeHtml(detail)}">${escapeHtml(label)}</span>`;
 }
 
