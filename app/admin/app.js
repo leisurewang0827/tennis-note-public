@@ -19484,6 +19484,66 @@ function renderMakeups() {
     .join("");
 }
 
+function pendingLessonChangeApprovals() {
+  return operationBranchMakeupRequests()
+    .filter((request) => request.makeupType !== "entitlement" && request.serverRequestId && request.status === "pending")
+    .sort((left, right) => String(left.createdAt || "").localeCompare(String(right.createdAt || "")));
+}
+
+function renderScheduleChangeApprovalQueue() {
+  const target = $("#scheduleChangeApprovalRows");
+  const count = $("#scheduleChangeApprovalCount");
+  if (!target || !count) return;
+  const requests = pendingLessonChangeApprovals();
+  count.textContent = `${requests.length}건`;
+  target.innerHTML = requests.length
+    ? requests.map((request) => `
+        <article class="schedule-change-approval-card">
+          <span><strong>${escapeHtml(request.member)}</strong><small>${escapeHtml(request.policy || "승인 필요")}</small></span>
+          <span><b>${escapeHtml(request.original)} → ${escapeHtml(request.requested)}</b><small>${escapeHtml(request.reason || "이유 미입력")}</small></span>
+          <div class="schedule-change-approval-actions">
+            <button class="danger-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="rejected">거절</button>
+            <button class="primary-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="approved">승인</button>
+          </div>
+        </article>
+      `).join("")
+    : `<p class="empty-text">현재 승인할 24시간 이내 변경 요청이 없습니다.</p>`;
+}
+
+async function reviewAdminLessonChangeRequest(requestId, decision, button) {
+  const request = makeupRequests.find((item) => String(item.serverRequestId || item.id) === String(requestId || ""));
+  if (!request || request.status !== "pending") {
+    showToast("이미 처리되었거나 요청을 찾을 수 없습니다. 시간표를 새로고침해 주세요.");
+    return;
+  }
+  if (decision === "rejected" && !window.confirm(`${request.member}님의 변경 요청을 거절할까요? 운영 정책에 따라 원래 수업이 차감 처리될 수 있습니다.`)) return;
+  const originalLabel = button?.textContent || "처리";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "처리 중";
+  }
+  try {
+    await window.TennisNoteDataClient.rpc("tn_review_lesson_change_request", {
+      target_request_id: request.serverRequestId,
+      target_decision: decision,
+      target_note: decision === "rejected" ? "관리자 승인 불가" : null,
+    });
+    await syncAdminLiveData();
+    renderAdminView("schedule");
+    showToast(decision === "approved" ? "수업 변경을 승인했습니다." : "수업 변경 요청을 거절했습니다.");
+  } catch (error) {
+    const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
+    showToast(code.includes("request_not_pending") ? "다른 사용자가 먼저 처리했습니다. 새로고침합니다." : `변경 요청 처리 실패: ${code}`);
+    await syncAdminLiveData();
+    renderAdminView("schedule");
+  } finally {
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+}
+
 function renderTickets() {
   const target = $("#ticketRows");
   if (!target) return;
@@ -22749,7 +22809,13 @@ async function performAdminLiveDataSync(options = {}) {
         limit: 1000,
       }).catch(() => [])) : Promise.resolve([]),
       fullAdminAccess ? rosterRows("enrollments", () => client.selectRows("tn_member_enrollments", { select: "id,user_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,submitted_at,approved_at", limit: 500 }).catch(() => [])) : Promise.resolve([]),
-      rosterRows("changeRequests", () => client.selectRows("tn_lesson_change_requests", { select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,created_at", limit: 500 }).catch(() => [])),
+      rosterRows("changeRequests", () => client.selectRows("tn_lesson_change_requests", {
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_by,decided_at,created_at,updated_at",
+        limit: 500,
+      }).catch(() => client.selectRows("tn_lesson_change_requests", {
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_by,decided_at,created_at",
+        limit: 500,
+      }).catch(() => []))),
       rosterRows("makeupEntitlements", () => client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => [])),
       rosterRows("lessonRecords", () => client.selectRows("tn_lesson_records", { select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at", limit: 500 }).catch(() => [])),
       Promise.resolve(adminLiveDataState.curriculumRefs || []),
@@ -23220,7 +23286,7 @@ async function performAdminLiveDataSync(options = {}) {
         : request.status === "rejected"
           ? "거절"
           : request.policy_window === "coach_approval_within_24h"
-            ? "코치승인필요"
+            ? "담당 코치·관리자 승인 필요"
             : "승인대기";
       return {
         id: request.id,
@@ -23228,7 +23294,7 @@ async function performAdminLiveDataSync(options = {}) {
         lessonId: request.lesson_id,
         branchId: lesson.branch_id || "",
         member: usersById.get(request.requester_user_id)?.name || "회원 확인 필요",
-        original: `${lesson.lesson_date || "기존일"} ${String(lesson.start_time || "").slice(0, 5)} ${getCoachName(coachId)}`,
+        original: `${request.original_lesson_date || lesson.lesson_date || "기존일"} ${String(request.original_start_time || lesson.start_time || "").slice(0, 5)} ${getCoachName(coachId)}`,
         requested: `${request.requested_lesson_date || "변경일"} ${String(request.requested_start_time || "").slice(0, 5)}`,
         policy: request.policy_window === "coach_approval_within_24h" ? "24시간 이내" : "24시간 전",
         reason: request.reason || "",
@@ -27085,6 +27151,7 @@ function renderAdminView(view = state.view) {
   if (activeView === "schedule") {
     renderCourtControls();
     renderSchedule();
+    renderScheduleChangeApprovalQueue();
     renderMakeups();
     rememberAdminViewRender(activeView);
     return;
@@ -29045,10 +29112,24 @@ function bindEvents() {
       return;
     }
 
+    const reviewChangeRequestButton = event.target.closest("[data-review-change-request]");
+    if (reviewChangeRequestButton) {
+      await reviewAdminLessonChangeRequest(
+        reviewChangeRequestButton.dataset.reviewChangeRequest,
+        reviewChangeRequestButton.dataset.reviewDecision,
+        reviewChangeRequestButton,
+      );
+      return;
+    }
+
     const makeupButton = event.target.closest("[data-approve-makeup]");
     if (makeupButton) {
       const request = makeupRequests.find((item) => String(item.id) === String(makeupButton.dataset.approveMakeup));
       if (!request) return;
+      if (request.serverRequestId && request.makeupType !== "entitlement") {
+        await reviewAdminLessonChangeRequest(request.serverRequestId, "approved", makeupButton);
+        return;
+      }
       if (request.status === "approved") {
         showToast("이미 승인된 보강입니다");
         return;

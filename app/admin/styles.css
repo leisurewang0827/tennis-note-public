@@ -2582,6 +2582,61 @@ tr.is-selected td {
   }
 }
 
+.schedule-change-approval {
+  margin-bottom: 10px;
+  border-left: 4px solid #d5961d;
+}
+
+.schedule-change-approval > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.schedule-change-approval > summary span {
+  display: grid;
+  gap: 3px;
+}
+
+.schedule-change-approval-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.schedule-change-approval-card {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.7fr) minmax(250px, 1.5fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #d9e2df;
+  background: #fff;
+}
+
+.schedule-change-approval-card > span {
+  display: grid;
+  gap: 3px;
+}
+
+.schedule-change-approval-actions {
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .schedule-change-approval-card {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-change-approval-actions button {
+    flex: 1;
+  }
+}
+
 .admin-save-state {
   margin: 0 24px 10px;
   padding: 8px 12px;

@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.347" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.348" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-14" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.347" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.348" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -363,6 +363,13 @@
         </section>
 
         <section id="scheduleView" class="view" aria-label="레슨시간표">
+          <details id="scheduleChangeApprovalQueue" class="panel schedule-change-approval" open>
+            <summary>
+              <span><strong>24시간 이내 변경 승인</strong><small>담당 코치 또는 관리자가 처리합니다.</small></span>
+              <b id="scheduleChangeApprovalCount">0건</b>
+            </summary>
+            <div id="scheduleChangeApprovalRows" class="schedule-change-approval-list" aria-live="polite"></div>
+          </details>
           <section id="scheduleV2Workspace" class="panel schedule-v2-workspace" aria-label="새 레슨시간표 작업대">
             <header class="schedule-v2-head">
               <div>
@@ -2014,19 +2021,19 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.347"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.347"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.347"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.348"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.348"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.348"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.347"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.347"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.347"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.347"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.347"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.347"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.348"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.348"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.348"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.348"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.348"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.348"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.347"></script>
+    <script src="./app.js?v=1.0.348"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-14"></script>
   </body>
 </html>

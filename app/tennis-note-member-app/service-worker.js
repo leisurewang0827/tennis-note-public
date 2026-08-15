@@ -1,10 +1,10 @@
-const CACHE_NAME = "tennis-note-member-pwa-v393";
+const CACHE_NAME = "tennis-note-member-pwa-v394";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.347",
-  "./app.js?v=1.0.347",
+  "./styles.css?v=1.0.348",
+  "./app.js?v=1.0.348",
   "./manifest.webmanifest",
   "./assets/brand/app-icon-180.png",
   "./assets/brand/app-icon-192.png",
@@ -12,20 +12,20 @@ const APP_SHELL = [
   "./assets/brand/launch-splash.png",
   "./assets/brand/tennis-note-share-1.0.152.png",
   "../release.json",
-    "../shared/tennisnote-data-client.js?v=1.0.347",
-    "../shared/tennisnote-schedule-revision.js?v=1.0.347",
-    "../shared/tennisnote-schedule-lanes.js?v=1.0.347",
+    "../shared/tennisnote-data-client.js?v=1.0.348",
+    "../shared/tennisnote-schedule-revision.js?v=1.0.348",
+    "../shared/tennisnote-schedule-lanes.js?v=1.0.348",
   "../shared/tennisnote-product-catalog.js",
   "../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3",
   "../shared/tennisnote-native-push.js",
-    "../shared/tennisnote-release.js?v=1.0.347",
-    "../shared/tennisnote-release-updater.js?v=1.0.347",
+    "../shared/tennisnote-release.js?v=1.0.348",
+    "../shared/tennisnote-release-updater.js?v=1.0.348",
   "../shared/tennisnote-issue-reporter.js?v=issue-reporter-3",
   "../shared/tennisnote-issue-reporter.css?v=issue-reporter-3",
-    "../shared/tennisnote-ui-language.js?v=1.0.347",
-    "../shared/tennisnote-ticket-state.js?v=1.0.347",
-    "../shared/tennisnote-input-guard.js?v=1.0.347",
-    "../shared/tennisnote-ui-foundation.css?v=1.0.347",
+    "../shared/tennisnote-ui-language.js?v=1.0.348",
+    "../shared/tennisnote-ticket-state.js?v=1.0.348",
+    "../shared/tennisnote-input-guard.js?v=1.0.348",
+    "../shared/tennisnote-ui-foundation.css?v=1.0.348",
 ];
 
 function deleteOldCaches() {

@@ -6542,6 +6542,20 @@ body {
   font-weight: 800;
 }
 
+.member-inline-coupon-source .member-coupon-period {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.member-inline-coupon-source.has-period-warning {
+  border-color: #e1b157;
+  background: #fff8e7;
+}
+
+.member-inline-coupon-source.has-period-warning .member-coupon-period {
+  color: #8a5a12;
+}
+
 .member-coupon-quick-start {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
@@ -6834,6 +6848,17 @@ body {
 
 .member-availability-day > div {
   grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+}
+
+.member-availability-details > summary {
+  cursor: pointer;
+  color: #155b47;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.member-availability-details[open] > summary {
+  margin-bottom: 9px;
 }
 
 .member-availability-slot {

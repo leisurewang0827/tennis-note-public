@@ -566,7 +566,7 @@ function coachRosterTicketState(ticket = {}, today = localDateKey()) {
   return "active";
 }
 
-function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster = null) {
+function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster = null, legacyChangeRequests = []) {
   if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
   state.scheduleOperationDays = Array.isArray(workspace.operationDays) ? workspace.operationDays : [];
   const tickets = Array.isArray(roster?.tickets)
@@ -718,7 +718,7 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
 
   const membersById = new Map(members.map((member) => [member.id, member]));
   const coachesById = new Map((workspace.coaches || []).map((coach) => [coach.roleId, coach]));
-  state.makeupRequests = (workspace.requests || []).map((request) => {
+  const scheduleV2Requests = (workspace.requests || []).map((request) => {
     const participant = Array.isArray(request.participants) ? request.participants[0] : null;
     const member = membersById.get(participant?.userId || request.requester_user_id) || {};
     return {
@@ -734,9 +734,39 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       coach: coachesById.get(request.coach_role_id)?.name || "담당 코치",
       coachRoleId: request.coach_role_id || "",
       source: "schedule_v2",
-      canReview: workspace.actor?.isAdmin === true,
+      canReview: workspace.actor?.isAdmin === true || request.coach_role_id === workspace.actor?.coachRoleId,
     };
   });
+  const requestStatusLabel = {
+    pending: "승인 대기",
+    approved: "승인 완료",
+    rejected: "거절",
+    auto_approved: "자동 변경 완료",
+    cancelled: "회원 취소",
+  };
+  const legacyRequests = (legacyChangeRequests || [])
+    .map((request) => {
+      const lesson = state.liveLessons.find((item) => String(item.serverLessonId || "") === String(request.lesson_id || ""));
+      if (!lesson || !lessonAssignedToCurrentCoachForTasks(lesson)) return null;
+      const originalDate = request.original_lesson_date || lesson.lessonDate || "";
+      const originalTime = String(request.original_start_time || lesson.time || "").slice(0, 5);
+      return {
+        id: request.id,
+        serverRequestId: request.id,
+        member: lesson.member || "회원",
+        original: `${originalDate} ${originalTime}`.trim() || "기존 수업",
+        requested: `${request.requested_lesson_date || ""} ${String(request.requested_start_time || "").slice(0, 5)}`.trim(),
+        reason: request.reason || "이유 미입력",
+        policy: request.policy_window === "auto_before_24h" ? "24시간 이전 자동 변경" : "24시간 이내 담당 코치·관리자 승인",
+        status: requestStatusLabel[request.status] || request.status,
+        coach: lesson.coach || "담당 코치",
+        coachRoleId: lesson.coachRoleId || "",
+        source: "server",
+        canReview: request.status === "pending",
+      };
+    })
+    .filter(Boolean);
+  state.makeupRequests = [...legacyRequests, ...scheduleV2Requests];
 
   const today = localDateKey();
   const cutoffDate = new Date();
@@ -787,10 +817,10 @@ async function syncCoachScheduleV2(options = {}) {
   const cacheKey = `${branchId}:${week.startDate}:${week.endDate}`;
   const cached = coachScheduleV2WorkspaceCache;
   if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
-    return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster);
+    return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster, cached.legacyChangeRequests);
   }
   try {
-    const [workspace, oneDayRows, roster, operationDays] = await Promise.all([
+    const [workspace, oneDayRows, roster, operationDays, legacyChangeRequests] = await Promise.all([
       client.rpc("tn_schedule_v2_coach_workspace", {
         target_branch_id: branchId,
         target_from: week.startDate,
@@ -805,6 +835,17 @@ async function syncCoachScheduleV2(options = {}) {
         target_from: week.startDate,
         target_to: week.endDate,
       }).catch(() => []),
+      client.selectRows("tn_lesson_change_requests", {
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
+        filters: { status: "pending" },
+        order: "created_at.desc",
+        limit: 300,
+      }).catch(() => client.selectRows("tn_lesson_change_requests", {
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at",
+        filters: { status: "pending" },
+        order: "created_at.desc",
+        limit: 300,
+      }).catch(() => [])),
     ]);
     if (requestId !== coachScheduleV2RequestSequence) return false;
     if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
@@ -815,8 +856,14 @@ async function syncCoachScheduleV2(options = {}) {
       workspace,
       oneDayRows: Array.isArray(oneDayRows) ? oneDayRows : [],
       roster,
+      legacyChangeRequests: Array.isArray(legacyChangeRequests) ? legacyChangeRequests : [],
     };
-    return applyScheduleV2CoachWorkspace(workspace, coachScheduleV2WorkspaceCache.oneDayRows, roster);
+    return applyScheduleV2CoachWorkspace(
+      workspace,
+      coachScheduleV2WorkspaceCache.oneDayRows,
+      roster,
+      coachScheduleV2WorkspaceCache.legacyChangeRequests,
+    );
   } catch (error) {
     const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
     if (!/tn_schedule_v2_coach_workspace|PGRST202|42883|schema cache/i.test(text)) {
@@ -953,7 +1000,7 @@ async function syncLegacyCoachLessonsFromServer() {
       client.selectRows("tn_membership_products", { select: "id,name,group_size,lesson_minutes", limit: 200 }).catch(() => []),
       client.selectRows("tn_lesson_records", { select: "lesson_id,deducted_sessions,completed_at", limit: 1000 }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", {
-        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,decided_at,created_at",
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
         limit: 300,
       }).catch(() => []),
       client.selectRows("tn_makeup_entitlements", {
@@ -1258,6 +1305,37 @@ async function syncLegacyCoachLessonsFromServer() {
     state.liveMembersLoaded = true;
     state.liveLessonsLoaded = true;
 
+    const requestStatusLabel = {
+      pending: "승인 대기",
+      approved: "승인 완료",
+      rejected: "거절",
+      auto_approved: "자동 변경 완료",
+      cancelled: "회원 취소",
+    };
+    state.makeupRequests = (changeRequestRows || [])
+      .filter((request) => request.status === "pending")
+      .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")))
+      .map((request) => {
+        const lesson = state.liveLessons.find((item) => item.serverLessonId === request.lesson_id) || {};
+        if (!lessonAssignedToCurrentCoachForTasks(lesson)) return null;
+        const originalDate = request.original_lesson_date || lesson.lessonDate || "";
+        const originalTime = String(request.original_start_time || lesson.time || "").slice(0, 5);
+        return {
+          id: request.id,
+          serverRequestId: request.id,
+          member: usersById.get(request.requester_user_id) || lesson.member || "회원",
+          original: `${originalDate} ${originalTime}`.trim() || "기존 수업",
+          requested: `${request.requested_lesson_date || ""} ${String(request.requested_start_time || "").slice(0, 5)}`.trim(),
+          reason: request.reason || "이유 미입력",
+          policy: request.policy_window === "auto_before_24h" ? "24시간 이전 자동 변경" : "24시간 이내 담당 코치·관리자 승인",
+          status: requestStatusLabel[request.status] || request.status,
+          coach: lesson.coach || "담당 코치",
+          source: "server",
+          canReview: true,
+        };
+      })
+      .filter(Boolean);
+
     const today = localDateKey();
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - 7);
@@ -1352,6 +1430,7 @@ async function syncCoachJournalEntriesFromServer() {
         validationMessage: "",
         status: record ? "확인 완료" : "확인 대기",
         curriculumRegistered: Boolean(record),
+        completedAt: record?.completed_at || "",
       };
       const existingIndex = state.lessonLogs.findIndex((log) => log.serverJournalId === row.id || log.id === serverLog.id || (row.lesson_id && log.serverLessonId === row.lesson_id));
       if (existingIndex >= 0) state.lessonLogs[existingIndex] = { ...state.lessonLogs[existingIndex], ...serverLog };
@@ -1405,6 +1484,7 @@ function importMemberLessonLogs() {
       existing.nextCurriculumId = sharedLog.nextCurriculumId || sharedLog.curriculumId;
       existing.coachComment = sharedLog.coachComment || existing.coachComment || "";
       existing.status = mappedStatus;
+      existing.completedAt = sharedLog.confirmedAt || existing.completedAt || "";
       return;
     }
     state.lessonLogs.unshift({
@@ -1418,6 +1498,7 @@ function importMemberLessonLogs() {
       coachComment: sharedLog.coachComment || "",
       validationMessage: "",
       status: mappedStatus,
+      completedAt: sharedLog.confirmedAt || "",
     });
   });
 }
@@ -2282,7 +2363,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.347",
+    workerUrl: "./service-worker.js?v=1.0.348",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2312,7 +2393,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.347" });
+  const params = new URLSearchParams({ v: "1.0.348" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3282,12 +3363,39 @@ function ownPendingFeedbackRequests() {
   return state.feedbackRequests.filter((request) => request.status !== "코치 답변 완료" && feedbackBelongsToCurrentCoach(request));
 }
 
+const completedFeedbackVisibilityMs = 24 * 60 * 60 * 1000;
+
+function completedFeedbackTimestamp(item = {}) {
+  return item.completedAt
+    || item.completed_at
+    || item.confirmedAt
+    || item.answeredAt
+    || item.updatedAt
+    || item.updated_at
+    || "";
+}
+
+function completedFeedbackVisibleForOneDay(item = {}, now = Date.now()) {
+  const completedAt = Date.parse(completedFeedbackTimestamp(item));
+  if (!Number.isFinite(completedAt)) return state.dataMode !== "live" && !state.liveProfileId;
+  const elapsed = now - completedAt;
+  return elapsed >= 0 && elapsed < completedFeedbackVisibilityMs;
+}
+
 function ownCompletedLessonLogs() {
-  return state.lessonLogs.filter((log) => log.status === "확인 완료" && recordBelongsToCurrentCoach(log));
+  return state.lessonLogs.filter((log) => (
+    log.status === "확인 완료"
+    && recordBelongsToCurrentCoach(log)
+    && completedFeedbackVisibleForOneDay(log)
+  ));
 }
 
 function ownCompletedFeedbackRequests() {
-  return state.feedbackRequests.filter((request) => request.status === "코치 답변 완료" && feedbackBelongsToCurrentCoach(request));
+  return state.feedbackRequests.filter((request) => (
+    request.status === "코치 답변 완료"
+    && feedbackBelongsToCurrentCoach(request)
+    && completedFeedbackVisibleForOneDay(request)
+  ));
 }
 
 function coachRecordStatusFilter() {
@@ -4710,29 +4818,6 @@ async function updateMemberNtrp(memberId, value, groupName = "") {
         target_coach_ntrp: value === "측정 전" ? null : Number(value),
       });
 
-    const requestStatusLabel = {
-      pending: "승인 대기",
-      approved: "승인 완료",
-      rejected: "거절",
-      auto_approved: "자동 변경 완료",
-    };
-    state.makeupRequests = (changeRequestRows || [])
-      .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")))
-      .map((request) => {
-        const lesson = state.liveLessons.find((item) => item.serverLessonId === request.lesson_id) || {};
-        return {
-          id: request.id,
-          serverRequestId: request.id,
-          member: usersById.get(request.requester_user_id) || lesson.member || "회원",
-          original: `${lesson.lessonDate || ""} ${lesson.time || ""}`.trim() || "기존 수업",
-          requested: `${request.requested_lesson_date || ""} ${String(request.requested_start_time || "").slice(0, 5)}`.trim(),
-          reason: request.reason || "이유 미입력",
-          policy: request.policy_window === "auto_before_24h" ? "24시간 이전 자동 변경" : "24시간 이내 코치 확인",
-          status: requestStatusLabel[request.status] || request.status,
-          coach: lesson.coach || "담당 코치",
-          source: "server",
-        };
-      });
       showToast(value === "측정 전" ? "NTRP 측정 요청 상태로 변경" : "코치 NTRP 저장 완료");
     } catch (error) {
       member.coachNtrp = previousValue;
@@ -5959,6 +6044,7 @@ function confirmFeedback(id) {
     return;
   }
   request.status = "코치 답변 완료";
+  request.answeredAt = new Date().toISOString();
   exportPracticeFeedback(request);
   renderAll();
 }
@@ -6344,6 +6430,7 @@ async function confirmLog(id, options = {}) {
     }
   }
   log.status = "확인 완료";
+  log.completedAt = new Date().toISOString();
   log.memberVisibleSummary = participantResults.length > 1
     ? `${participantResults.length}명 다음 커리큘럼 등록 완료`
     : `다음 수업 등록 완료: ${nextStep.id} · ${nextStep.title}`;
@@ -7122,7 +7209,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.347",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.348",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
