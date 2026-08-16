@@ -37,6 +37,7 @@ const state = {
   editingBreakRuleId: "",
   billingFilter: "action",
   billingMonth: "",
+  managementReportMonth: "",
   billingPage: 0,
   settlementPage: 0,
   rechargePage: 0,
@@ -1443,6 +1444,8 @@ const adminLiveDataState = {
   tickets: [],
   products: [],
   participantRows: [],
+  participantRecords: [],
+  lessonRecords: [],
   makeupEntitlements: [],
   curriculumRefs: [],
   journalEntries: [],
@@ -1971,7 +1974,7 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
 async function loadAdminRecordsSupportData() {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows) return false;
-  const [curriculumRefs, journalEntries, mediaFiles, lessonRecords] = await Promise.all([
+  const [curriculumRefs, journalEntries, mediaFiles, lessonRecords, participantRecords] = await Promise.all([
     client.selectRows("tn_curriculum_refs", {
       select: "id,level_label,skill_label,title,notion_url,status",
       filters: { status: "active" },
@@ -1993,12 +1996,18 @@ async function loadAdminRecordsSupportData() {
       order: "completed_at.desc",
       limit: 500,
     }).catch(() => adminLiveDataState.lessonRecords || []),
+    client.selectRows("tn_lesson_participant_records_v2", {
+      select: "id,lesson_id,user_id,ticket_id,coach_role_id,outcome,record_status,deduction_requested,deducted_sessions,technique,strength,improvement,next_goal,coach_comment,feedback_keywords,next_curriculum_ref_id,member_journal_id,warning_codes,revision,finalized_at,created_at,updated_at",
+      order: "updated_at.desc",
+      limit: 2000,
+    }).catch(() => adminLiveDataState.participantRecords || []),
   ]);
   Object.assign(adminLiveDataState, {
     curriculumRefs,
     journalEntries,
     mediaFiles,
     lessonRecords,
+    participantRecords,
   });
   const loadedLessonById = new Map(
     lessons.filter((lesson) => lesson.serverLessonId).map((lesson) => [lesson.serverLessonId, lesson]),
@@ -2298,6 +2307,7 @@ const adminMenuDefinitions = [
   { id: "members", label: "회원관리" },
   { id: "schedule", label: "레슨시간표" },
   { id: "billing", label: "결제/정산" },
+  { id: "reports", label: "경영 리포트" },
   { id: "notes", label: "기록/차감 확인" },
   { id: "issues", label: "개선·오류 접수" },
   { id: "settings", label: "운영 설정", required: true },
@@ -2319,6 +2329,13 @@ const adminDashboardWidgetDefinitions = {
     { id: "reports", label: "운영 요약" },
   ],
 };
+const adminReportWidgetDefinitions = [
+  { id: "summary", label: "경영 핵심 수치", required: true },
+  { id: "members", label: "회원 흐름" },
+  { id: "quality", label: "피드백·출석" },
+  { id: "finance", label: "재무 자료 상태", required: true },
+  { id: "sources", label: "리포트 개발 순서" },
+];
 
 function defaultAdminLayoutSettings() {
   return {
@@ -2330,6 +2347,8 @@ function defaultAdminLayoutSettings() {
       Object.entries(adminDashboardWidgetDefinitions).map(([group, items]) => [group, items.map((item) => item.id)]),
     ),
     hiddenWidgets: [],
+    reportWidgetOrder: adminReportWidgetDefinitions.map((item) => item.id),
+    hiddenReportWidgets: [],
   };
 }
 
@@ -2347,6 +2366,7 @@ function normalizeAdminLayoutSettings(value = {}) {
     .filter((item) => item.required)
     .map((item) => item.id);
   const requiredGroups = adminDashboardGroupDefinitions.filter((item) => item.required).map((item) => item.id);
+  const requiredReportWidgets = adminReportWidgetDefinitions.filter((item) => item.required).map((item) => item.id);
   return {
     menuOrder: normalizeLayoutOrder(value.menuOrder, adminMenuDefinitions),
     hiddenMenus: [...new Set((Array.isArray(value.hiddenMenus) ? value.hiddenMenus : [])
@@ -2362,6 +2382,9 @@ function normalizeAdminLayoutSettings(value = {}) {
     ),
     hiddenWidgets: [...new Set((Array.isArray(value.hiddenWidgets) ? value.hiddenWidgets : [])
       .filter((id) => !requiredWidgets.includes(id)))],
+    reportWidgetOrder: normalizeLayoutOrder(value.reportWidgetOrder, adminReportWidgetDefinitions),
+    hiddenReportWidgets: [...new Set((Array.isArray(value.hiddenReportWidgets) ? value.hiddenReportWidgets : [])
+      .filter((id) => !requiredReportWidgets.includes(id) && adminReportWidgetDefinitions.some((item) => item.id === id)))],
   };
 }
 
@@ -3034,9 +3057,8 @@ function normalizeDemoData() {
   if (state.view === "rackettime" || state.view === "community") state.view = "dashboard";
   if (state.view === "tickets") state.view = "members";
   if (state.view === "makeup") state.view = "schedule";
-  if (state.view === "reports") state.view = "dashboard";
   if (state.view === "import" || state.view === "data") state.view = "members";
-  if (!["operation", "membership", "notifications", "coach", "security"].includes(state.settingsTab)) state.settingsTab = "operation";
+  if (!["operation", "membership", "notifications", "coach", "layout", "security"].includes(state.settingsTab)) state.settingsTab = "operation";
   if (!["active", "expiring", "expired", "pending", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
   if (!coaches.some((coach) => coach.id === "coach-park")) {
     coaches.push({ id: "coach-park", name: "박창준 코치", role: "주말 레슨", status: "active", account: "박창준", coachMode: "approved", availability: "weekend", photoUrl: "" });
@@ -7344,6 +7366,9 @@ function adminViewUiSignature(view) {
       state.rechargePage,
     ]));
   }
+  if (view === "reports") {
+    return JSON.stringify(common.concat([state.managementReportMonth]));
+  }
   if (view === "notes") {
     return JSON.stringify(common.concat([
       state.recordFilter,
@@ -7390,7 +7415,6 @@ function setView(view, options = {}) {
     return;
   }
   if (view === "makeup") view = "schedule";
-  if (view === "reports") view = "dashboard";
   if (
     state.view === "members"
     && view !== "members"
@@ -7420,6 +7444,7 @@ function setView(view, options = {}) {
     members: operationsRole() === "coach" ? "회원 찾기" : "회원관리",
     schedule: operationsRole() === "coach" ? "레슨표" : "레슨시간표",
     billing: "결제/정산",
+    reports: "경영 리포트",
     notes: operationsRole() === "coach" ? "수업 완료" : "기록/차감 확인",
     issues: operationsRole() === "coach" ? "오류 접수" : "개선·오류 접수",
     settings: "운영 설정",
@@ -7487,6 +7512,7 @@ function globalSearchItems() {
     { kind: "메뉴", title: "회원관리", detail: "수강중·승인대기·만료 회원", view: "members" },
     { kind: "메뉴", title: "레슨시간표", detail: "코치별 수업과 보강·변경 요청", view: "schedule" },
     { kind: "메뉴", title: "결제/정산", detail: "결제 상태와 코치 정산", view: "billing" },
+    { kind: "메뉴", title: "경영 리포트", detail: "매출·회원·수업 품질과 장부 자료 상태", view: "reports" },
     { kind: "메뉴", title: "기록/차감 확인", detail: "수업 코멘트·커리큘럼·횟수 처리", view: "notes" },
     { kind: "메뉴", title: "운영 설정", detail: "수업 정책·회원권 규정·관리자 보안", view: "settings" },
   ];
@@ -19685,12 +19711,17 @@ function renderScheduleChangeApprovalQueue() {
   target.innerHTML = requests.length
     ? requests.map((request) => `
         <article class="schedule-change-approval-card">
-          <span><strong>${escapeHtml(request.member)}</strong><small>${escapeHtml(request.policy || "24시간 이내 승인 요청")}</small></span>
-          <span><b>${escapeHtml(request.original)} → ${escapeHtml(request.requested)}</b><small>${escapeHtml(request.reason || "이유 미입력")}</small></span>
-          <p class="schedule-change-rejection-note">거절하면 원래 수업은 노쇼로 처리되어 회원권이 차감될 수 있습니다.</p>
+          <header><strong>${escapeHtml(request.member)}</strong><span>${escapeHtml(request.policy || "24시간 이내")}</span></header>
+          <div class="schedule-change-path">
+            <span><small>현재 수업</small><b>${escapeHtml(request.original)}</b></span>
+            <i aria-hidden="true">→</i>
+            <span><small>요청 시간</small><b>${escapeHtml(request.requested)}</b></span>
+          </div>
+          <p>${escapeHtml(request.reason || "변경 사유 미입력")}</p>
           <div class="schedule-change-approval-actions">
-            <button class="danger-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="rejected">거절</button>
-            <button class="primary-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="approved">승인</button>
+            <button class="primary-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="approved">변경 승인</button>
+            <button class="ghost-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="rejected">거절</button>
+            <small>거절하면 원래 수업은 노쇼로 처리되어 회원권이 차감될 수 있습니다.</small>
           </div>
         </article>
       `).join("")
@@ -20810,7 +20841,7 @@ async function cancelBillingPaymentItem(item, itemIndex = billings.indexOf(item)
 }
 
 function recordStatusBadge(record) {
-  if (record.priority === "urgent") return badge("danger", "긴급");
+  if (record.priority === "urgent") return badge("danger", record.statusLabel || "긴급");
   const statusTone = {
     pending: "pending",
     feedback: "requested",
@@ -20840,12 +20871,33 @@ function buildAdminRecordContext() {
       .filter((record) => record.lesson_id)
       .map((record) => [String(record.lesson_id), record]),
   );
+  const lessonById = new Map();
+  lessons.forEach((lesson) => {
+    if (lesson.id) lessonById.set(String(lesson.id), lesson);
+    if (lesson.serverLessonId) lessonById.set(String(lesson.serverLessonId), lesson);
+  });
+  const curriculumById = new Map(
+    (adminLiveDataState.curriculumRefs || [])
+      .filter((curriculum) => curriculum.id)
+      .map((curriculum) => [String(curriculum.id), curriculum]),
+  );
+  const participantRecordsByLessonId = new Map();
+  (adminLiveDataState.participantRecords || []).forEach((record) => {
+    const lessonId = String(record.lesson_id || "");
+    if (!lessonId) return;
+    const rows = participantRecordsByLessonId.get(lessonId) || [];
+    rows.push(record);
+    participantRecordsByLessonId.set(lessonId, rows);
+  });
   return {
     ticketCoachByMember,
     memberCoachByName,
     userNameById,
     mediaCountByJournalId,
     lessonRecordByLessonId,
+    lessonById,
+    curriculumById,
+    participantRecordsByLessonId,
   };
 }
 
@@ -20965,6 +21017,8 @@ function memberJournalRecord(entry, context = null) {
     : (adminLiveDataState.mediaFiles || []).filter((media) => media.journal_entry_id === entry.id).length;
   const linkedRecord = context
     ? context.lessonRecordByLessonId.get(String(entry.lesson_id || ""))
+      || (context.participantRecordsByLessonId.get(String(entry.lesson_id || "")) || [])
+        .find((record) => record.record_status === "final")
     : (adminLiveDataState.lessonRecords || []).find((record) => record.lesson_id === entry.lesson_id);
   const entryLabel = entry.entry_type === "lesson" ? "레슨" : "개인운동";
   return {
@@ -20984,8 +21038,75 @@ function memberJournalRecord(entry, context = null) {
   };
 }
 
+function participantOutcomeLabel(outcome = "completed") {
+  return ({
+    completed: "수업 완료",
+    no_show: "노쇼",
+    absence: "불참",
+    cancelled: "취소",
+    holiday: "휴무",
+  })[outcome] || "수업 처리";
+}
+
+function participantLessonRecord(record, context) {
+  const lessonId = String(record.lesson_id || "");
+  const lesson = context.lessonById.get(lessonId) || null;
+  const memberName = context.userNameById.get(String(record.user_id || "")) || "회원 확인 필요";
+  const curriculum = context.curriculumById.get(String(record.next_curriculum_ref_id || "")) || null;
+  const recordStatus = String(record.record_status || "draft");
+  const isDraft = recordStatus !== "final";
+  const deductedSessions = Math.max(0, Number(record.deducted_sessions) || 0);
+  const deductionRequested = Boolean(record.deduction_requested);
+  const missingDeduction = !isDraft
+    && deductionRequested
+    && deductedSessions === 0
+    && ["completed", "no_show", "absence"].includes(String(record.outcome || ""));
+  const outcomeLabel = participantOutcomeLabel(record.outcome);
+  const completedLabel = deductedSessions > 0
+    ? `완료 · ${deductedSessions}회 차감`
+    : "완료 · 차감 없음";
+  const detailParts = [
+    String(record.coach_comment || "").trim() || (isDraft ? "작성 중인 피드백이 있습니다." : `${outcomeLabel} 기록`),
+    curriculum?.title ? `다음 커리큘럼: ${curriculum.title}` : "",
+  ].filter(Boolean);
+  const lessonDate = lesson?.lessonDate || String(record.finalized_at || record.updated_at || "").slice(0, 10) || "날짜 미정";
+  const lessonTime = lesson?.time || "";
+  return {
+    id: `participant-record-${record.id}`,
+    group: missingDeduction ? "issue" : isDraft ? "feedback" : "done",
+    source: "수업 피드백",
+    branchId: lesson?.branchId || "",
+    member: memberName,
+    title: `${lessonDate} ${lessonTime} · ${outcomeLabel}`.replace(/\s+/g, " ").trim(),
+    detail: detailParts.join(" · "),
+    subDetail: isDraft
+      ? "피드백만 임시 저장됨 · 회원권 차감 안 됨"
+      : missingDeduction
+        ? "차감 요청과 실제 차감 결과가 다릅니다. 수업 상세에서 확인해 주세요."
+        : completedLabel,
+    statusLabel: isDraft ? "초안 · 미차감" : missingDeduction ? "차감 확인 필요" : completedLabel,
+    actionLabel: isDraft ? "이어 작성" : missingDeduction ? "차감 확인" : "처리 완료",
+    lessonId,
+    serverLessonId: lessonId,
+    ticketId: record.ticket_id || "",
+    coachId: lesson?.coachId || "",
+    coachRoleId: record.coach_role_id || lesson?.coachRoleId || "",
+    actionable: Boolean(lesson && (isDraft || missingDeduction)),
+    priority: missingDeduction ? "urgent" : isDraft ? "high" : "normal",
+    urgentReason: missingDeduction
+      ? "완료 기록은 있지만 요청된 회원권 차감 결과가 0회입니다."
+      : isDraft
+        ? "초안 저장은 수업 완료나 회원권 차감을 실행하지 않습니다."
+        : "",
+    sortAt: record.finalized_at || record.updated_at || record.created_at || lesson?.lessonDate || "",
+  };
+}
+
 function pendingLessonRecords() {
   const completedLessonIds = new Set((adminLiveDataState.lessonRecords || []).map((record) => record.lesson_id));
+  const participantRecordLessonIds = new Set(
+    (adminLiveDataState.participantRecords || []).map((record) => String(record.lesson_id || "")).filter(Boolean),
+  );
   const now = Date.now();
   const ownRoleIds = currentOperationsCoachRoleIds();
   return lessons
@@ -20998,6 +21119,7 @@ function pendingLessonRecords() {
         && endedAt > 0
         && endedAt <= now
         && !completedLessonIds.has(lesson.serverLessonId)
+        && !participantRecordLessonIds.has(String(lesson.serverLessonId))
         && (operationsRole() === "admin" || ownRoleIds.has(lesson.coachRoleId))
       );
     })
@@ -21230,10 +21352,19 @@ function ticketIntegrityReviewRecords() {
 function adminRecordGroups() {
   const shared = operationalSharedData();
   const context = buildAdminRecordContext();
+  const participantRecords = (adminLiveDataState.participantRecords || []).map((record) => (
+    participantLessonRecord(record, context)
+  ));
+  const participantRecordLessonIds = new Set(
+    (adminLiveDataState.participantRecords || []).map((record) => String(record.lesson_id || "")).filter(Boolean),
+  );
   const records = [
     ...urgentOperationsRecords(),
     ...pendingLessonRecords(),
-    ...lessonNotes.map(legacyNoteRecord),
+    ...lessonNotes
+      .filter((note) => !participantRecordLessonIds.has(String(note.serverLessonId || "")))
+      .map(legacyNoteRecord),
+    ...participantRecords,
     ...shared.lessonLogs.map(lessonLogRecord),
     ...shared.feedbackRequests.map(feedbackRecord),
     ...(adminLiveDataState.journalEntries || []).map((entry) => memberJournalRecord(entry, context)),
@@ -21490,7 +21621,8 @@ function filterLessonRecordCurriculumOptions() {
 
 function openLessonRecordModal(lessonId) {
   const lesson = lessons.find((item) => item.serverLessonId === lessonId);
-  if (!lesson || lesson.serverStatus !== "scheduled") {
+  const reviewableStatuses = new Set(["scheduled", "pending_change", "completed", "no_show"]);
+  if (!lesson || !reviewableStatuses.has(String(lesson.serverStatus || ""))) {
     showToast("처리할 수업을 새로고침 후 다시 선택해 주세요.");
     return;
   }
@@ -21507,8 +21639,12 @@ function openLessonRecordModal(lessonId) {
       lessonDate: lesson.lessonDate,
       mode: "outcome",
     }).then((opened) => {
-      if (!opened) showToast("V2 시간표에서 수업을 찾지 못했습니다. 새로고침 후 다시 선택해 주세요.");
-    }).catch(() => openLegacyLessonRecordModal(lessonId));
+      if (!opened && lesson.serverStatus === "scheduled") openLegacyLessonRecordModal(lessonId);
+      else if (!opened) showToast("V2 기록에서 수업을 찾지 못했습니다. 새로고침 후 다시 선택해 주세요.");
+    }).catch(() => {
+      if (lesson.serverStatus === "scheduled") openLegacyLessonRecordModal(lessonId);
+      else showToast("완료 기록을 불러오지 못했습니다. 새로고침 후 다시 선택해 주세요.");
+    });
     return;
   }
   openLegacyLessonRecordModal(lessonId);
@@ -23714,6 +23850,10 @@ async function performAdminLiveDataSync(options = {}) {
         : `실서버 시간표 ${mappedLessons.length}건 동기화`,
     });
     await adminSettingsPromise;
+    adminLazyDataState.delete("records-support");
+    if (state.view === "notes") {
+      await loadAdminDataOnce("records-support", loadAdminRecordsSupportData);
+    }
     syncAdminScheduleWeek();
     if (!mappedMembers.some((member) => member.id === state.selectedMemberId)) {
       state.selectedMemberId = null;
@@ -24616,60 +24756,112 @@ function writeCommunityPost() {
   showToast("커뮤니티 글쓰기 완료");
 }
 
+function managementReportMonthLabel(month = "") {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  return match ? `${Number(match[1])}년 ${Number(match[2])}월` : "선택 월";
+}
+
+function managementReportTicketIsActive(ticket = {}, today = adminLocalDateKey(new Date())) {
+  if (["expired", "cancelled", "inactive"].includes(String(ticket.status || "").toLowerCase())) return false;
+  if (Number(ticket.remaining) <= 0) return false;
+  if (ticket.starts && ticket.starts > today) return false;
+  return !ticket.expires || ticket.expires >= today;
+}
+
+function managementReportListMarkup(items = []) {
+  return items.map((item) => `
+    <article class="management-report-row ${escapeHtml(item.tone || "")}">
+      <div>
+        <strong>${escapeHtml(item.label)}</strong>
+        <small>${escapeHtml(item.detail || "")}</small>
+      </div>
+      <span>${escapeHtml(item.value)}</span>
+    </article>`).join("");
+}
+
 function renderReports() {
-  if (!$("#reportMetrics") || !$("#benchmarkCards") || !$("#notificationPlan") || !$("#coachPreview")) return;
-  $("#reportMetrics").innerHTML = reportMetrics
-    .map(
-      (item) => `
-        <article class="metric-card ${item.tone}">
-          <span>${item.label}</span>
-          <strong>${item.value}</strong>
-          <small>${item.detail}</small>
-        </article>`,
-    )
-    .join("");
+  const metricTarget = $("#reportMetrics");
+  const memberTarget = $("#managementMemberReport");
+  const qualityTarget = $("#managementQualityReport");
+  const financeTarget = $("#managementFinanceReport");
+  const sourceTarget = $("#managementSourcePlan");
+  if (!metricTarget || !memberTarget || !qualityTarget || !financeTarget || !sourceTarget) return;
 
-  $("#benchmarkCards").innerHTML = benchmarks
-    .map(
-      (item) => `
-        <article class="benchmark-card">
-          <strong>${item.name}</strong>
-          <span>${item.role}</span>
-          <p>${item.takeaway}</p>
-        </article>`,
-    )
-    .join("");
+  state.managementReportMonth = /^\d{4}-\d{2}$/.test(state.managementReportMonth)
+    ? state.managementReportMonth
+    : adminLocalDateKey(new Date()).slice(0, 7);
+  const month = state.managementReportMonth;
+  const monthLabel = managementReportMonthLabel(month);
+  const monthInput = $("#managementReportMonth");
+  if (monthInput) monthInput.value = month;
+  if ($("#managementReportPeriodLabel")) $("#managementReportPeriodLabel").textContent = `${monthLabel} 요약`;
 
-  $("#notificationPlan").innerHTML = notificationPlan
-    .map(
-      (item) => `
-        <li>
-          <strong>${item.title}</strong>
-          <span>${item.detail}</span>
-        </li>`,
-    )
-    .join("");
+  const branchMembers = operationBranchMembers();
+  const branchTickets = operationBranchTickets();
+  const branchBillings = operationBranchBillings();
+  const branchLessons = operationBranchLessons();
+  const monthBillings = branchBillings.filter((item) => (
+    billingMatchesMonth(item, month) || (adminDemoMode && !billingEffectiveDate(item))
+  ));
+  const paidBillings = monthBillings.filter((item) => item.status === "paid");
+  const paidAmount = paidBillings.reduce((sum, item) => sum + Number(item.finalAmount || item.amount || 0), 0);
+  const refundedAmount = monthBillings.reduce((sum, item) => (
+    sum + Number(item.refundedAmount || (item.status === "cancelled" ? item.finalAmount || item.amount : 0) || 0)
+  ), 0);
+  const monthLessons = branchLessons.filter((lesson) => String(lesson.lessonDate || "").startsWith(month));
+  const completedLessons = monthLessons.filter((lesson) => lessonStatusValue(lesson) === "completed");
+  const noShowLessons = monthLessons.filter((lesson) => lessonStatusValue(lesson) === "no_show");
+  const activeMembers = branchMembers.filter((member) => member.status === "active");
+  const activeTickets = branchTickets.filter((ticket) => managementReportTicketIsActive(ticket));
+  const lowTickets = activeTickets.filter((ticket) => Number(ticket.remaining) <= 2);
+  const recordGroups = adminRecordGroups();
+  const recordDone = recordGroups.done.length;
+  const recordPending = recordGroups.pending.length + recordGroups.issue.length;
+  const recordTotal = recordDone + recordPending;
+  const recordRate = recordTotal ? Math.round((recordDone / recordTotal) * 100) : 100;
+  const pendingChanges = operationBranchMakeupRequests()
+    .filter((item) => ["pending", "requested", "coach_required"].includes(item.status)).length;
+  const missingScheduleCount = unassignedRegularTickets().length + couponTicketsWithoutUpcomingLesson().length;
 
-  $("#coachPreview").innerHTML = coachPreview
-    .map(
-      (item) => `
-        <article class="preview-item">
-          <span>${item.time}</span>
-          <strong>${item.title}</strong>
-          <small>${item.detail}</small>
-        </article>`,
-    )
-    .join("");
+  const metrics = [
+    { label: "결제 완료 매출", value: `${money.format(paidAmount)}원`, detail: `${paidBillings.length}건 · 결제 DB 기준`, tone: "accent" },
+    { label: "활성 회원", value: `${activeMembers.length}명`, detail: `활성 회원권 ${activeTickets.length}개`, tone: "" },
+    { label: "완료 수업", value: `${completedLessons.length}건`, detail: `${monthLabel} 시간표 기준`, tone: "calm" },
+    { label: "기록 완료율", value: `${recordRate}%`, detail: `현재 확인 필요 ${recordPending}건`, tone: recordPending ? "warning" : "" },
+  ];
+  metricTarget.innerHTML = metrics.map((item) => `
+    <article class="metric-card ${item.tone}">
+      <span>${item.label}</span>
+      <strong>${item.value}</strong>
+      <small>${item.detail}</small>
+    </article>`).join("");
 
-  $("#memberAppPreview").innerHTML = memberAppPreview
-    .map(
-      (item) => `
-        <div class="mobile-row">
-          <span>${item.label}</span>
-          <strong>${item.value}</strong>
-        </div>`,
-    )
-    .join("");
+  memberTarget.innerHTML = managementReportListMarkup([
+    { label: "활성 회원", value: `${activeMembers.length}명`, detail: "현재 지점의 수강중 회원" },
+    { label: "활성 회원권", value: `${activeTickets.length}개`, detail: "잔여 횟수와 사용 기간이 남은 회원권" },
+    { label: "잔여 2회 이하", value: `${lowTickets.length}개`, detail: "재등록 안내가 필요한 회원권", tone: lowTickets.length ? "warning" : "" },
+    { label: "시간표 확인 필요", value: `${missingScheduleCount}개`, detail: "정규시간 미배정 또는 쿠폰 다음 예약 없음", tone: missingScheduleCount ? "warning" : "" },
+  ]);
+
+  qualityTarget.innerHTML = managementReportListMarkup([
+    { label: "완료 수업", value: `${completedLessons.length}건`, detail: `${monthLabel} 완료 처리` },
+    { label: "기록·차감 완료", value: `${recordDone}건`, detail: "최종 피드백과 차감이 확인된 기록" },
+    { label: "기록 확인 필요", value: `${recordPending}건`, detail: "초안·미차감·수정 요청", tone: recordPending ? "warning" : "" },
+    { label: "노쇼·변경 승인", value: `${noShowLessons.length} / ${pendingChanges}건`, detail: "선택 월 노쇼 / 현재 변경 승인 대기", tone: noShowLessons.length || pendingChanges ? "warning" : "" },
+  ]);
+
+  financeTarget.innerHTML = managementReportListMarkup([
+    { label: "결제 완료 매출", value: `${money.format(paidAmount)}원`, detail: "테니스노트 결제 기록에서 실시간 계산", tone: "ready" },
+    { label: "선택 월 결제건 환불", value: `${money.format(refundedAmount)}원`, detail: "취소·환불 증빙 기준" },
+    { label: "비용·영업이익", value: "Drive 연결 전", detail: "장부 원본을 DB에 저장하지 않는 읽기 전용 집계 필요", tone: "neutral" },
+    { label: "대출·창업비", value: "Drive 연결 전", detail: "대표 권한에서만 별도 보드로 노출", tone: "neutral" },
+  ]);
+
+  sourceTarget.innerHTML = `
+    <article><b>1. 운영 KPI</b><span>회원·회원권·수업·피드백·결제는 현재 운영 DB에서 자동 계산합니다.</span><em>현재 적용</em></article>
+    <article><b>2. 월간 사업 지표</b><span>매출·이익, 전체 등록, 신규·재등록·이탈, 고객 분포를 공통 지표로 정리합니다.</span><em>정의 통합</em></article>
+    <article><b>3. 장부 읽기 전용 연결</b><span>2023~2026 리포트·장부 12개 파일, 277개 탭은 원본 행을 복제하지 않고 합계와 자료 상태만 읽습니다.</span><em>다음 단계</em></article>
+    <article><b>4. 자료 품질 게이트</b><span>미입력·작성 중·검증 필요·마감과 수식 오류를 숫자보다 먼저 표시합니다.</span><em>필수</em></article>`;
 }
 
 function coachModeLabel(coach) {
@@ -26448,6 +26640,17 @@ function applyAdminLayoutSettings() {
     const widget = dashboard.querySelector(`[data-dashboard-widget="${item.id}"]`);
     if (widget) widget.hidden = adminLayoutSettings.hiddenWidgets.includes(item.id);
   });
+
+  const reportView = $("#reportsView");
+  if (reportView) {
+    reportView.classList.add("report-layout-customizable");
+    adminLayoutSettings.reportWidgetOrder.forEach((widgetId, index) => {
+      const widget = reportView.querySelector(`[data-report-widget="${widgetId}"]`);
+      if (!widget) return;
+      widget.style.order = String(index + 1);
+      widget.hidden = adminLayoutSettings.hiddenReportWidgets.includes(widgetId);
+    });
+  }
 }
 
 function adminLayoutRowMarkup(item, kind, index, count, group = "") {
@@ -26455,7 +26658,9 @@ function adminLayoutRowMarkup(item, kind, index, count, group = "") {
     ? adminLayoutSettings.hiddenMenus
     : kind === "group"
       ? adminLayoutSettings.hiddenGroups
-      : adminLayoutSettings.hiddenWidgets;
+      : kind === "reportWidget"
+        ? adminLayoutSettings.hiddenReportWidgets
+        : adminLayoutSettings.hiddenWidgets;
   return `
     <div class="admin-layout-row">
       <label>
@@ -26514,6 +26719,15 @@ function renderAdminLayoutSettings() {
             }).join("")}
           </div>
         </section>`).join("")}
+      <section>
+        <h3>경영 리포트 카드</h3>
+        <div class="admin-layout-list">
+          ${adminLayoutSettings.reportWidgetOrder.map((id, index) => {
+            const item = adminReportWidgetDefinitions.find((entry) => entry.id === id);
+            return item ? adminLayoutRowMarkup(item, "reportWidget", index, adminLayoutSettings.reportWidgetOrder.length) : "";
+          }).join("")}
+        </div>
+      </section>
     </div>
     <div class="admin-layout-actions">
       <button id="resetAdminLayoutButton" class="ghost-button" type="button">기본 배치</button>
@@ -26526,7 +26740,9 @@ function moveAdminLayoutItem(kind, itemId, direction, group = "") {
     ? adminLayoutSettings.menuOrder
     : kind === "group"
       ? adminLayoutSettings.groupOrder
-      : adminLayoutSettings.widgetOrder[group];
+      : kind === "reportWidget"
+        ? adminLayoutSettings.reportWidgetOrder
+        : adminLayoutSettings.widgetOrder[group];
   if (!order) return;
   const index = order.indexOf(itemId);
   const nextIndex = index + Number(direction);
@@ -26538,12 +26754,20 @@ function moveAdminLayoutItem(kind, itemId, direction, group = "") {
 }
 
 function setAdminLayoutVisibility(kind, itemId, visible) {
-  const key = kind === "menu" ? "hiddenMenus" : kind === "group" ? "hiddenGroups" : "hiddenWidgets";
+  const key = kind === "menu"
+    ? "hiddenMenus"
+    : kind === "group"
+      ? "hiddenGroups"
+      : kind === "reportWidget"
+        ? "hiddenReportWidgets"
+        : "hiddenWidgets";
   const definitions = kind === "menu"
     ? adminMenuDefinitions
     : kind === "group"
       ? adminDashboardGroupDefinitions
-      : Object.values(adminDashboardWidgetDefinitions).flat();
+      : kind === "reportWidget"
+        ? adminReportWidgetDefinitions
+        : Object.values(adminDashboardWidgetDefinitions).flat();
   if (definitions.find((item) => item.id === itemId)?.required) return;
   const hidden = new Set(adminLayoutSettings[key]);
   if (visible) hidden.delete(itemId);
@@ -27410,9 +27634,7 @@ function renderAdminView(view = state.view) {
   if (!operationsAccessReady()) return;
   const activeView = view === "makeup"
     ? "schedule"
-    : view === "reports"
-      ? "dashboard"
-      : view;
+    : view;
 
   if (activeView === "dashboard") {
     renderMetrics();
@@ -27445,6 +27667,13 @@ function renderAdminView(view = state.view) {
     renderTickets();
     renderBilling();
     renderCoachSettlementPreview();
+    rememberAdminViewRender(activeView);
+    return;
+  }
+
+  if (activeView === "reports") {
+    renderReports();
+    applyAdminLayoutSettings();
     rememberAdminViewRender(activeView);
     return;
   }
@@ -27501,7 +27730,7 @@ let adminLiveScheduleRefreshInFlight = false;
 let adminLiveScheduleLastRefreshAt = 0;
 let adminOperationalRevisionWatcher = null;
 let scheduleSessionInitialized = false;
-const adminLiveRefreshViews = new Set(["dashboard", "members", "schedule", "billing", "notes"]);
+const adminLiveRefreshViews = new Set(["dashboard", "members", "schedule", "billing", "reports", "notes"]);
 const ADMIN_LIVE_REFRESH_INTERVAL_MS = 300_000;
 const ADMIN_LIVE_REFRESH_STALE_MS = 120_000;
 
@@ -27626,6 +27855,11 @@ function bindEvents() {
     renderCoachSettlementPreview();
     saveSnapshot();
   });
+  $("#managementReportMonth")?.addEventListener("change", (event) => {
+    state.managementReportMonth = event.target.value || adminLocalDateKey(new Date()).slice(0, 7);
+    renderReports();
+    saveSnapshot();
+  });
   document.addEventListener("click", (event) => {
     const pageButton = event.target.closest("[data-dashboard-page]");
     if (!pageButton) return;
@@ -27673,6 +27907,7 @@ function bindEvents() {
       openScheduleSettingsButton: "operation",
       openNoticeSettingsButton: "notifications",
       openProductSettingsButton: "membership",
+      openReportLayoutSettingsButton: "layout",
     };
     if (buttonId === "openDataToolsButton") openAdminToolsModal("data");
     if (settingsTabsByButton[buttonId]) openSettingsWorkspace(settingsTabsByButton[buttonId]);

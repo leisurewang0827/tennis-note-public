@@ -142,8 +142,9 @@
     notice.setAttribute("aria-live", "polite");
     notice.innerHTML = `
       <div>
-        <strong>새 버전이 있습니다</strong>
+        <strong id="tennisnoteUpdateNoticeTitle">새 버전이 있습니다</strong>
         <span>현재 화면을 유지한 채 최신 버전으로 바꿉니다.</span>
+        <small data-tennisnote-update-meta hidden>Wi-Fi가 아니면 데이터 요금이 발생할 수 있습니다.</small>
       </div>
       <div class="tennisnote-update-actions">
         <button type="button" class="tennisnote-update-dismiss" data-tennisnote-update-dismiss aria-label="나중에 닫기" title="나중에">×</button>
@@ -179,34 +180,46 @@
     notice.dataset.updateRequired = required ? "true" : "false";
     const title = notice.querySelector("strong");
     const detail = notice.querySelector("span");
+    const meta = notice.querySelector("[data-tennisnote-update-meta]");
     const updateButton = notice.querySelector("[data-tennisnote-update-now]");
     const dismissButton = notice.querySelector("[data-tennisnote-update-dismiss]");
     if (title) title.textContent = nativeStoreUpdate
-      ? required ? "앱 업데이트가 필요합니다" : "새 앱 버전이 있습니다"
+      ? required ? "필수 업데이트가 있어요" : "새로운 버전이 업데이트되었어요"
       : deferred ? "업데이트 대기 중" : "새 버전이 있습니다";
     if (detail) {
       detail.textContent = nativeStoreUpdate
         ? required
-          ? "계속 사용하려면 현재 기기의 스토어에서 업데이트해 주세요."
-          : "현재 기능은 계속 사용할 수 있습니다. 편할 때 업데이트해 주세요."
+          ? "계속 사용하려면 최신 버전으로 업데이트해 주세요."
+          : "최신 버전으로 이용해 주세요."
         : deferred
         ? "작성 중인 내용을 먼저 저장하면 안전하게 업데이트할 수 있습니다."
         : "현재 화면을 유지한 채 최신 버전으로 바꿉니다.";
     }
+    if (meta) meta.hidden = !nativeStoreUpdate;
     if (updateButton) {
       updateButton.textContent = nativeStoreUpdate
-        ? "스토어에서 업데이트"
+        ? "업데이트"
         : deferred
         ? "저장 후 업데이트"
         : "지금 업데이트";
     }
-    if (dismissButton) dismissButton.hidden = required;
+    if (dismissButton) {
+      dismissButton.hidden = required;
+      dismissButton.textContent = nativeStoreUpdate ? "나중에" : "×";
+      dismissButton.setAttribute("aria-label", nativeStoreUpdate ? "나중에" : "나중에 닫기");
+      dismissButton.title = nativeStoreUpdate ? "" : "나중에";
+    }
+    notice.setAttribute("role", nativeStoreUpdate ? "dialog" : "status");
+    if (nativeStoreUpdate) notice.setAttribute("aria-labelledby", "tennisnoteUpdateNoticeTitle");
+    else notice.removeAttribute("aria-labelledby");
+    document.body.classList.toggle("tennisnote-native-update-open", nativeStoreUpdate);
     notice.hidden = false;
   }
 
   function hideUpdateNotice() {
     const notice = document.querySelector("[data-tennisnote-update-notice]");
     if (notice) notice.hidden = true;
+    document.body.classList.remove("tennisnote-native-update-open");
   }
 
   function ensureReleaseCheckNotice() {
@@ -479,7 +492,11 @@
       update();
     };
 
-    if (document.readyState === "complete") {
+    if (nativeWebView) {
+      // A signed store app must learn about its replacement before login or
+      // schedule restoration finishes, so the store gate starts immediately.
+      update();
+    } else if (document.readyState === "complete") {
       void boot();
     } else {
       window.addEventListener("load", () => void boot(), { once: true });

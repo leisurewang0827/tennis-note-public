@@ -2563,7 +2563,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.351",
+    workerUrl: "./service-worker.js?v=1.0.352",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2593,7 +2593,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.351" });
+  const params = new URLSearchParams({ v: "1.0.352" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3928,6 +3928,11 @@ function renderScheduleEditPanel() {
           <strong>${escapeHtml(participant.name || "회원")}</strong>
           <span>${escapeHtml(ticketSummary)}</span>
         </div>
+        ${participant.userId ? `
+          <details class="lesson-member-chart">
+            <summary>이전 수업 기록</summary>
+            ${coachMemberChartPanelMarkup(participant.userId, participant.name || "회원", 3)}
+          </details>` : ""}
         <label class="lesson-required-field">
           <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
           <textarea data-modal-coach-comment="${escapeHtml(lesson.id)}" rows="4" placeholder="오늘 잘된 점과 다음 수업에서 보완할 점을 적어주세요." ${canProcess ? "" : "disabled"}></textarea>
@@ -4793,6 +4798,164 @@ function findMemberDetail(memberId, groupName = "") {
   };
 }
 
+const coachMemberChartCache = new Map();
+
+function coachMemberChartUserId(member = {}) {
+  return String(member.serverUserId || member.sourceMemberId || member.id || "");
+}
+
+function coachMemberChartOutcomeLabel(item = {}) {
+  return {
+    completed: "수업 완료",
+    no_show: "노쇼",
+    absence: "불참",
+    cancelled: "취소",
+    holiday: "휴무",
+  }[String(item.outcome || "").toLowerCase()] || "수업 기록";
+}
+
+function coachMemberChartDateLabel(item = {}) {
+  const dateValue = String(item.lessonDate || item.finalizedAt || item.updatedAt || "").slice(0, 10);
+  if (!dateValue) return item.lessonLabel || "이전 수업";
+  const parsed = new Date(`${dateValue}T00:00:00`);
+  const dateLabel = Number.isNaN(parsed.getTime())
+    ? dateValue
+    : parsed.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", weekday: "short" });
+  return `${dateLabel}${item.startTime ? ` ${String(item.startTime).slice(0, 5)}` : ""}`;
+}
+
+function coachMemberChartLocalItems(userId = "", memberName = "") {
+  const normalizedName = String(memberName || "").trim();
+  return state.lessonLogs
+    .filter((log) => {
+      if ((log.participantResults || []).some((result) => String(result.userId || "") === String(userId))) return true;
+      return normalizedName && recordMemberNames(log.member).includes(normalizedName);
+    })
+    .map((log) => {
+      const participant = (log.participantResults || []).find((result) => String(result.userId || "") === String(userId)) || {};
+      const completedValue = log.completedAt || participant.finalizedAt || participant.updatedAt || "";
+      return {
+        id: log.id,
+        lessonId: log.serverLessonId || "",
+        lessonDate: String(log.journalDate || completedValue).slice(0, 10),
+        lessonLabel: log.lesson || "이전 수업",
+        coachName: log.coach || currentCoachName(),
+        outcome: participant.outcome || (log.status === "확인 완료" ? "completed" : ""),
+        deductedSessions: Number(participant.deductedSessions ?? log.deductedSessions ?? (log.ticketDeducted ? 1 : 0)) || 0,
+        coachComment: participant.coachComment || log.coachComment || log.content || "",
+        nextGoal: participant.nextGoal || log.memberVisibleSummary || "",
+        nextCurriculumSkillLabel: participant.nextCurriculumId || log.nextCurriculumId || "",
+        finalizedAt: completedValue,
+      };
+    });
+}
+
+function coachMemberChartItems(userId = "", memberName = "") {
+  const serverItems = coachMemberChartCache.get(String(userId))?.items || [];
+  const merged = [...serverItems, ...coachMemberChartLocalItems(userId, memberName)];
+  const seen = new Set();
+  return merged
+    .filter((item) => {
+      const key = String(item.lessonId || item.id || "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((left, right) => {
+      const leftKey = `${left.lessonDate || ""} ${left.startTime || ""} ${left.finalizedAt || ""}`;
+      const rightKey = `${right.lessonDate || ""} ${right.startTime || ""} ${right.finalizedAt || ""}`;
+      return rightKey.localeCompare(leftKey);
+    });
+}
+
+function coachMemberChartItemMarkup(item = {}) {
+  const outcome = coachMemberChartOutcomeLabel(item);
+  const deducted = Number(item.deductedSessions) || 0;
+  const focus = item.nextGoal || item.nextCurriculumTitle || "";
+  const curriculum = [item.nextCurriculumSkillLabel, item.nextCurriculumTitle].filter(Boolean).join(" · ");
+  const detail = [item.technique, item.strength, item.improvement].filter(Boolean).join(" · ");
+  return `
+    <li class="member-chart-item">
+      <time>${escapeHtml(coachMemberChartDateLabel(item))}</time>
+      <div>
+        <div class="member-chart-item-head">
+          <strong>${escapeHtml(outcome)}</strong>
+          <span>${deducted > 0 ? `${deducted}회 차감` : "차감 없음"}</span>
+        </div>
+        <p>${escapeHtml(item.coachComment || detail || "코치 기록이 완료되었습니다.")}</p>
+        ${focus || curriculum ? `<small><b>다음 수업</b> ${escapeHtml(focus || curriculum)}</small>` : ""}
+        <small>${escapeHtml([item.coachName, item.ticketName].filter(Boolean).join(" · "))}</small>
+      </div>
+    </li>`;
+}
+
+function coachMemberChartBodyMarkup(userId = "", memberName = "", limit = 5) {
+  const cache = coachMemberChartCache.get(String(userId)) || {};
+  const items = coachMemberChartItems(userId, memberName);
+  if (!items.length && cache.status === "loading") return `<p class="member-chart-state">이전 수업 기록을 불러오는 중입니다.</p>`;
+  if (!items.length && cache.status === "error") return `<p class="member-chart-state is-error">기록을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.</p>`;
+  if (!items.length) return `<p class="member-chart-state">아직 완료된 수업 기록이 없습니다.</p>`;
+  const recent = items.slice(0, Math.max(1, Number(limit) || 5));
+  const older = items.slice(recent.length);
+  const latestFocus = recent[0]?.nextGoal || recent[0]?.nextCurriculumTitle || "";
+  return `
+    ${latestFocus ? `<div class="member-chart-focus"><span>이번 수업에서 볼 것</span><strong>${escapeHtml(latestFocus)}</strong></div>` : ""}
+    <ol class="member-chart-timeline">${recent.map(coachMemberChartItemMarkup).join("")}</ol>
+    ${older.length ? `
+      <details class="member-chart-older">
+        <summary>이전 기록 ${older.length}건 더 보기</summary>
+        <ol class="member-chart-timeline">${older.map(coachMemberChartItemMarkup).join("")}</ol>
+      </details>` : ""}`;
+}
+
+function coachMemberChartPanelMarkup(userId = "", memberName = "", limit = 5) {
+  return `<div class="member-chart-body" data-member-chart-body data-member-user-id="${escapeHtml(userId)}" data-member-name="${escapeHtml(memberName)}" data-member-chart-limit="${Number(limit) || 5}">${coachMemberChartBodyMarkup(userId, memberName, limit)}</div>`;
+}
+
+function refreshCoachMemberChartBodies(userId = "") {
+  $$('[data-member-chart-body]').filter((target) => String(target.dataset.memberUserId || "") === String(userId)).forEach((target) => {
+    target.innerHTML = coachMemberChartBodyMarkup(
+      target.dataset.memberUserId || "",
+      target.dataset.memberName || "",
+      Number(target.dataset.memberChartLimit) || 5,
+    );
+  });
+}
+
+async function syncCoachMemberChart(userId = "", memberName = "", force = false) {
+  const normalizedId = String(userId || "");
+  if (!normalizedId) return false;
+  const cached = coachMemberChartCache.get(normalizedId);
+  if (!force && cached?.status === "ready" && Date.now() - Number(cached.loadedAt || 0) < 60_000) return true;
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !client.getSession?.()?.access_token) return false;
+  coachMemberChartCache.set(normalizedId, { ...(cached || {}), status: "loading", error: "" });
+  refreshCoachMemberChartBodies(normalizedId);
+  try {
+    const response = await client.rpc("tn_member_lesson_chart", {
+      target_user_id: normalizedId,
+      target_limit: 30,
+    });
+    coachMemberChartCache.set(normalizedId, {
+      status: "ready",
+      items: Array.isArray(response) ? response : [],
+      loadedAt: Date.now(),
+      memberName,
+    });
+    refreshCoachMemberChartBodies(normalizedId);
+    return true;
+  } catch (error) {
+    coachMemberChartCache.set(normalizedId, {
+      ...(cached || {}),
+      status: "error",
+      error: String(error?.payload?.message || error?.message || "member_chart_failed"),
+      memberName,
+    });
+    refreshCoachMemberChartBodies(normalizedId);
+    return false;
+  }
+}
+
 function relatedLessonsForMember(member) {
   const name = member.groupMemberName || member.displayName || member.name;
   return weekLessons().filter((lesson) => String(lesson.member || "").includes(name) || String(lesson.member || "").includes(member.name)).slice(0, 3);
@@ -4811,7 +4974,7 @@ function renderMemberDetailModal(member) {
   const phone = memberContactFor(member);
   const isRevealed = state.revealedMemberContactKey === key;
   const lessons = relatedLessonsForMember(member);
-  const logs = relatedLogsForMember(member);
+  const memberUserId = coachMemberChartUserId(member);
   target.innerHTML = `
     <div class="lesson-modal-head member-detail-head">
       <div class="member-detail-identity">
@@ -4824,51 +4987,54 @@ function renderMemberDetailModal(member) {
       </div>
       <button class="small-button" type="button" data-close-member-modal>닫기</button>
     </div>
-    <div class="modal-info-grid member-detail-grid">
-      <article class="modal-info-card">
-        <span>연락처</span>
-        <strong>${isRevealed ? phone || "연락처 미입력" : maskPhone(phone)}</strong>
-        <small>연락처 열람은 실제 서비스에서 기록으로 남깁니다.</small>
-        <button class="small-button" type="button" data-reveal-member-contact="${key}">${isRevealed ? "표시 중" : "연락처 보기"}</button>
-      </article>
-      <article class="modal-info-card">
-        <span>회원권</span>
-        <strong>${member.remaining !== undefined ? `잔여 ${member.remaining}회` : member.used || "-"}</strong>
-        <small>${member.statusCategory === "expired" ? `만료 ${member.expiredAt || "-"}` : member.lastLesson || "최근 수업 없음"}</small>
-      </article>
-      <article class="modal-info-card">
-        <span>NTRP</span>
-        <strong>자가 ${ntrpNumber(member.selfNtrp)} · 코치 ${ntrpNumber(member.coachNtrp)}</strong>
-        <small>${member.ntrpRequest || "측정 요청 없음"}</small>
-      </article>
-      <article class="modal-info-card">
-        <span>기본 정보</span>
-        <strong>${member.birthYear || "출생연도 미입력"} · ${memberGenderLabel(member.gender)}</strong>
-        <small>${member.neighborhood || "거주동 미입력"}</small>
-      </article>
-    </div>
-    <section class="member-detail-section">
-      <strong>최근/예정 수업</strong>
-      ${
-        lessons.length
-          ? lessons.map((lesson) => `<div><b>${lesson.day} ${lesson.time}</b><span>${lesson.type} · ${lesson.status} · ${lesson.task || ""}</span></div>`).join("")
-          : `<p>연결된 수업이 없습니다.</p>`
-      }
+    <section class="member-detail-section member-chart-section">
+      <div class="member-chart-heading">
+        <div><strong>수업 차트</strong><span>최근 기록부터 확인합니다.</span></div>
+        <button class="small-button" type="button" data-refresh-member-chart="${escapeHtml(memberUserId)}">새로고침</button>
+      </div>
+      ${coachMemberChartPanelMarkup(memberUserId, member.displayName || member.name, 5)}
     </section>
-    <section class="member-detail-section">
-      <strong>기록/차감 확인</strong>
-      ${
-        logs.length
-          ? logs.map((log) => `<div><b>${log.lesson}</b><span>${log.status} · ${log.coachComment || "코치 코멘트 대기"}</span></div>`).join("")
-          : `<p>아직 연결된 기록이 없습니다.</p>`
-      }
-    </section>
-    <section class="member-detail-section">
-      <strong>메모</strong>
-      <p>${member.note || "운영 메모가 없습니다."}</p>
-    </section>
+    <details class="member-detail-secondary">
+      <summary>회원·회원권 정보</summary>
+      <div class="modal-info-grid member-detail-grid">
+        <article class="modal-info-card">
+          <span>연락처</span>
+          <strong>${isRevealed ? phone || "연락처 미입력" : maskPhone(phone)}</strong>
+          <small>연락처 열람은 실제 서비스에서 기록으로 남깁니다.</small>
+          <button class="small-button" type="button" data-reveal-member-contact="${key}">${isRevealed ? "표시 중" : "연락처 보기"}</button>
+        </article>
+        <article class="modal-info-card">
+          <span>회원권</span>
+          <strong>${member.remaining !== undefined ? `잔여 ${member.remaining}회` : member.used || "-"}</strong>
+          <small>${member.statusCategory === "expired" ? `만료 ${member.expiredAt || "-"}` : member.lastLesson || "최근 수업 없음"}</small>
+        </article>
+        <article class="modal-info-card">
+          <span>NTRP</span>
+          <strong>자가 ${ntrpNumber(member.selfNtrp)} · 코치 ${ntrpNumber(member.coachNtrp)}</strong>
+          <small>${member.ntrpRequest || "측정 요청 없음"}</small>
+        </article>
+        <article class="modal-info-card">
+          <span>기본 정보</span>
+          <strong>${member.birthYear || "출생연도 미입력"} · ${memberGenderLabel(member.gender)}</strong>
+          <small>${member.neighborhood || "거주동 미입력"}</small>
+        </article>
+      </div>
+      <section class="member-detail-section">
+        <strong>최근/예정 수업</strong>
+        ${
+          lessons.length
+            ? lessons.map((lesson) => `<div><b>${lesson.day} ${lesson.time}</b><span>${lesson.type} · ${lesson.status} · ${lesson.task || ""}</span></div>`).join("")
+            : `<p>연결된 수업이 없습니다.</p>`
+        }
+      </section>
+      <section class="member-detail-section">
+        <strong>운영 메모</strong>
+        <p>${member.note || "운영 메모가 없습니다."}</p>
+      </section>
+    </details>
   `;
   openCoachModal("memberDetailModal");
+  void syncCoachMemberChart(memberUserId, member.displayName || member.name);
 }
 
 function openMemberDetail(memberId, groupName = "") {
@@ -5050,7 +5216,7 @@ function completeNtrpRequest(id) {
 }
 
 function openLessonEditor(id) {
-  ensureCoachLessonRecord(id);
+  const lesson = ensureCoachLessonRecord(id);
   state.coachQuickAdd = null;
   state.editingLessonId = id;
   state.editingMakeupId = null;
@@ -5058,6 +5224,9 @@ function openLessonEditor(id) {
   state.viewingCurriculumId = null;
   renderLessonEditModal();
   openCoachModal("lessonEditModal");
+  (completionParticipantsForLesson(lesson) || []).forEach((participant) => {
+    if (participant.userId) void syncCoachMemberChart(participant.userId, participant.name || "회원");
+  });
 }
 
 function closeLessonEditor() {
@@ -7172,6 +7341,14 @@ function bindEvents() {
       return;
     }
 
+    const refreshMemberChartButton = event.target.closest("[data-refresh-member-chart]");
+    if (refreshMemberChartButton) {
+      const member = findMemberDetail(state.viewingMemberDetailId, state.viewingMemberGroupName);
+      const userId = refreshMemberChartButton.dataset.refreshMemberChart || coachMemberChartUserId(member || {});
+      void syncCoachMemberChart(userId, member?.displayName || member?.name || "회원", true);
+      return;
+    }
+
     const memberPageButton = event.target.closest("[data-member-page]");
     if (memberPageButton) {
       state.memberPage = Number(memberPageButton.dataset.memberPage) || 0;
@@ -7529,7 +7706,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.351",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.352",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

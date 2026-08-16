@@ -1739,7 +1739,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.351",
+    workerUrl: "./service-worker.js?v=1.0.352",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3416,15 +3416,20 @@ function currentScheduledLessonsForChange() {
   return lessons.filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
 }
 
-function memberInlineChangeSources() {
-  const selectedTicketId = ensureMemberScheduleTicketSelection();
+function memberAllInlineChangeSources() {
   return currentScheduledLessonsForChange().filter((lesson) => (
     lesson.status === "scheduled"
     || lesson.status === "makeup_due"
     || lesson.couponBooking
     || lesson.regularInitialBooking
     || lesson.resumePausedTicket
-  )).filter((lesson) => !selectedTicketId || memberLessonTicketId(lesson) === selectedTicketId);
+  ));
+}
+
+function memberInlineChangeSources() {
+  const selectedTicketId = ensureMemberScheduleTicketSelection();
+  return memberAllInlineChangeSources()
+    .filter((lesson) => !selectedTicketId || memberLessonTicketId(lesson) === selectedTicketId);
 }
 
 function memberChangeSourceActionLabel(source = {}) {
@@ -3632,6 +3637,39 @@ function renderMemberScheduleTicketPicker() {
             <small>잔여 ${Math.max(0, Number(ticket.remaining) || 0)}회</small>
           </button>`).join("")}
       </div>
+    </section>`;
+}
+
+function memberScheduleTicketCoachName(ticket = {}, policy = loadAdminSchedulePolicy()) {
+  const roleId = String(ticket.coachRoleId || ticket.coach_role_id || "");
+  const coach = policy.coaches.find((item) => (
+    String(item.serverRoleId || item.roleId || item.id || "") === roleId
+  ));
+  return memberCoachShortName(coach?.name || ticket.coachName || memberTicketLessonCoach(ticket.id) || "담당 코치");
+}
+
+function renderMemberTicketOverview(policy = loadAdminSchedulePolicy()) {
+  const tickets = memberScheduleTicketOptions();
+  if (!tickets.length) return renderMemberAssignedCoachSummary(policy);
+  const selectedTicketId = ensureMemberScheduleTicketSelection();
+  const ticket = tickets.find((item) => String(item.id) === selectedTicketId) || tickets[0];
+  const title = ticket.title || ticket.productName || "회원권";
+  const remaining = Math.max(0, Number(ticket.remaining) || 0);
+  const status = window.TennisNoteTicketState?.label?.(ticket) || ticket.statusLabel || "사용 중";
+  return `
+    <section class="member-ticket-summary" aria-label="현재 회원권">
+      <div class="member-ticket-summary-copy">
+        <span>현재 회원권</span>
+        <strong>${escapeHtml(title)} · 잔여 ${remaining}회</strong>
+        <small>${escapeHtml(memberScheduleTicketCoachName(ticket, policy))} 코치 · ${escapeHtml(status)}</small>
+      </div>
+      ${tickets.length > 1 ? `
+        <label class="member-ticket-summary-switch">
+          <span>회원권 변경</span>
+          <select id="memberScheduleTicketSelect" aria-label="확인할 회원권 변경">
+            ${tickets.map((option) => `<option value="${escapeHtml(option.id)}" ${String(option.id) === String(ticket.id) ? "selected" : ""}>${escapeHtml(option.title || option.productName || "회원권")} · 잔여 ${Math.max(0, Number(option.remaining) || 0)}회</option>`).join("")}
+          </select>
+        </label>` : ""}
     </section>`;
 }
 
@@ -4550,7 +4588,6 @@ function currentWeekMemberLessons() {
 function renderMemberOwnSchedule() {
   const ownLessons = currentWeekMemberLessons();
   return `
-    ${renderMemberScheduleTicketPicker()}
     <section class="member-own-schedule" aria-label="이번 주 내 일정">
       <div class="member-own-schedule-head">
         <strong>이번 주 내 수업</strong>
@@ -4654,8 +4691,30 @@ function timeFromMinutes(minutes) {
   return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
 }
 
+function memberBookingSourceTicket(source = {}) {
+  const ticketId = memberLessonTicketId(source);
+  return (state.liveTickets || []).find((ticket) => String(ticket.id) === String(ticketId)) || null;
+}
+
+function memberBookingSourceTitle(source = {}) {
+  if (source.couponBooking || source.regularInitialBooking) {
+    return source.ticketTitle || memberBookingSourceTicket(source)?.title || "회원권";
+  }
+  if (source.status === "makeup_due") return `보강 · ${lessonDateTimeLabel(source)}`;
+  return `${lessonDateTimeLabel(source)} 수업`;
+}
+
+function memberBookingSourceMeta(source = {}) {
+  const ticket = memberBookingSourceTicket(source);
+  const remainingValue = Number.isFinite(Number(source.remaining))
+    ? Number(source.remaining)
+    : Number(ticket?.remaining);
+  const remaining = Number.isFinite(remainingValue) ? ` · 잔여 ${Math.max(0, remainingValue)}회` : "";
+  return `${memberCoachShortName(source.coach || memberScheduleTicketCoachName(ticket || {}))} 코치${remaining}`;
+}
+
 function renderMemberChangeInlineBar() {
-  const sources = memberInlineChangeSources();
+  const sources = memberAllInlineChangeSources();
   if (!sources.length) {
     return memberEmptyState({
       title: "변경하거나 보강할 수업이 없습니다",
@@ -4664,9 +4723,14 @@ function renderMemberChangeInlineBar() {
     });
   }
   if (!sources.some((lesson) => lesson.id === state.selectedMemberChangeSourceId)) {
-    state.selectedMemberChangeSourceId = sources[0].id;
+    const selectedTicketId = ensureMemberScheduleTicketSelection();
+    state.selectedMemberChangeSourceId = sources.find((lesson) => (
+      !selectedTicketId || memberLessonTicketId(lesson) === selectedTicketId
+    ))?.id || sources[0].id;
   }
   const source = sources.find((lesson) => lesson.id === state.selectedMemberChangeSourceId) || sources[0];
+  const sourceTicketId = memberLessonTicketId(source);
+  if (sourceTicketId) state.selectedMemberScheduleTicketId = sourceTicketId;
   const isCouponBooking = Boolean(source.couponBooking);
   const couponPeriodSummary = memberCouponPeriodSummary(source);
   const couponPeriodWarning = memberCouponPeriodInfo(source)?.isShorterThanProduct;
@@ -4683,21 +4747,36 @@ function renderMemberChangeInlineBar() {
             ? "다른 주에 가능한 시간이 있습니다"
             : memberCandidateEmptyReason(source)
         : "수업을 고르면 가능한 시간만 표시합니다";
+  const sourceLabel = isCouponBooking
+    ? "예약할 회원권"
+    : source.resumePausedTicket
+      ? "복귀할 회원권"
+      : source.regularInitialBooking
+        ? "첫 수업 회원권"
+        : source.status === "makeup_due"
+          ? "보강할 수업"
+          : "변경할 수업";
+  const instruction = isCouponBooking || source.regularInitialBooking
+    ? "날짜를 선택하고 가능한 시간을 누르세요."
+    : "새 날짜와 가능한 시간을 선택하세요.";
   return `
-    <section class="member-inline-change" aria-label="변경 또는 보강할 수업 선택">
-      <label for="memberInlineChangeSource" class="${isCouponBooking ? "is-coupon-source" : ""}">
-        <span>${isCouponBooking ? "사용할 쿠폰" : "신청할 수업"}</span>
-        <select id="memberInlineChangeSource">
-          ${sources.map((lesson) => `
-            <option value="${escapeHtml(lesson.id)}" ${lesson.id === source.id ? "selected" : ""}>
-              ${escapeHtml(memberChangeSourceOptionLabel(lesson))}
-            </option>`).join("")}
-        </select>
-        ${isCouponBooking ? `<span class="member-inline-coupon-source ${couponPeriodWarning ? "has-period-warning" : ""}"><strong>${escapeHtml(source.ticketTitle || "쿠폰 회원권")}</strong><small>${escapeHtml(memberCoachShortName(source.coach))} · 잔여 ${Math.max(0, Number(source.remaining) || 0)}회</small>${couponPeriodSummary ? `<small class="member-coupon-period">${escapeHtml(couponPeriodSummary)}</small>` : ""}</span>` : ""}
-      </label>
-      <p><strong>${escapeHtml(statusText)}</strong><span>${escapeHtml(loadState === "error"
+    <section class="member-booking-summary ${couponPeriodWarning ? "has-period-warning" : ""}" aria-label="${escapeHtml(sourceLabel)}">
+      <div class="member-booking-summary-main">
+        <span>${escapeHtml(sourceLabel)}</span>
+        <strong>${escapeHtml(memberBookingSourceTitle(source))}</strong>
+        <small>${escapeHtml(memberBookingSourceMeta(source))}</small>
+        ${couponPeriodSummary ? `<small class="member-booking-period">${escapeHtml(couponPeriodSummary)}</small>` : ""}
+      </div>
+      ${sources.length > 1 ? `
+        <label class="member-booking-source-switch">
+          <span>변경</span>
+          <select id="memberInlineChangeSource" aria-label="예약 또는 변경 대상 선택">
+            ${sources.map((lesson) => `<option value="${escapeHtml(lesson.id)}" ${lesson.id === source.id ? "selected" : ""}>${escapeHtml(memberChangeSourceOptionLabel(lesson))}</option>`).join("")}
+          </select>
+        </label>` : `<input id="memberInlineChangeSource" type="hidden" value="${escapeHtml(source.id)}" />`}
+      <p class="member-booking-instruction"><strong>${escapeHtml(statusText)}</strong><span>${escapeHtml(loadState === "error"
         ? state.serverChangeCandidateError || "인터넷 연결을 확인한 뒤 다시 시도해 주세요."
-        : "밝게 표시된 빈 시간을 누르면 마지막 확인만 거쳐 신청됩니다.")}</span></p>
+        : instruction)}</span></p>
       ${loadState === "error" ? '<button class="small-button" type="button" data-retry-member-change>다시 확인</button>' : ""}
     </section>`;
 }
@@ -4820,11 +4899,11 @@ function renderDynamicMemberSchedule() {
       return `${laneCount * memberScheduleCoachLaneWidth + Math.max(0, laneCount - 1) * 3}px`;
     })
     .join(" ");
-  const assignedCoachSummary = renderMemberAssignedCoachSummary(policy);
+  const ticketOverview = renderMemberTicketOverview(policy);
   ensureMemberScheduleTicketSelection();
   $$("[data-member-schedule-mode]").forEach((button) => button.classList.toggle("is-active", button.dataset.memberScheduleMode === scheduleMode));
   if (scheduleMode === "mine") {
-    $("#scheduleGrid").innerHTML = `${assignedCoachSummary}${renderMemberOwnSchedule()}`;
+    $("#scheduleGrid").innerHTML = `${ticketOverview}${renderMemberOwnSchedule()}`;
     return;
   }
   const inlineChangeBar = renderMemberChangeInlineBar();
@@ -4842,8 +4921,6 @@ function renderDynamicMemberSchedule() {
     return;
   }
   $("#scheduleGrid").innerHTML = `
-    ${renderMemberCouponQuickStart()}
-    ${renderMemberScheduleTicketPicker()}
     ${renderRegularInitialScheduleBar()}
     ${inlineChangeBar}
     ${renderMemberMobileSchedule(policy, baseLessons, scheduleLessons)}
@@ -5400,7 +5477,11 @@ function renderLessonLogs() {
     const latestDate = latestLog?.journalDate || (latestLog?.submittedAt ? latestLog.submittedAt.slice(0, 10) : "");
     $("#lessonRecordNote").textContent = latestLog ? latestDate : "";
   }
-  const lessonItems = state.lessonLogs;
+  const lessonItems = [...state.lessonLogs].sort((left, right) => {
+    const leftKey = `${left.journalDate || ""} ${left.submittedAt || ""}`;
+    const rightKey = `${right.journalDate || ""} ${right.submittedAt || ""}`;
+    return rightKey.localeCompare(leftKey);
+  });
   const lessonPage = normalizePage("lesson", lessonItems.length);
   const visibleLessonItems = paginateItems(lessonItems, lessonPage);
   $("#lessonLogs").innerHTML =
@@ -5408,18 +5489,28 @@ function renderLessonLogs() {
       .map(
         (log) => {
           const statusLabel = log.status === "confirmed"
-            ? memberStatusLabel("coachRecord", "saved", "저장 완료")
+            ? "피드백 완료"
             : log.status === "uploading"
               ? memberStatusLabel("coachRecord", "sync_pending", "동기화 대기")
               : log.status === "server_error"
                 ? memberStatusLabel("coachRecord", "sync_failed", "동기화 실패")
                 : memberStatusLabel("coachRecord", "writing", "작성 전");
           const dateLabel = log.journalDate || new Date(log.submittedAt || Date.now()).toISOString().slice(0, 10);
+          const outcomeLabel = {
+            completed: "수업 완료",
+            no_show: "노쇼",
+            absence: "불참",
+            cancelled: "취소",
+            holiday: "휴무",
+          }[String(log.participantOutcome || "").toLowerCase()] || "수업";
+          const deductionLabel = Number(log.deductedSessions) > 0 || log.ticketDeducted
+            ? `${Math.max(1, Number(log.deductedSessions) || 1)}회 차감`
+            : "차감 없음";
           return `
             <button class="history-card compact-log summary-log ${log.status === "confirmed" ? "done" : "wait"}" type="button" data-open-journal-detail="${log.id}">
               <span class="summary-log-main">
                 <strong>${lessonReviewTitle(log)}</strong>
-                <small>${dateLabel} · ${log.lessonLabel}</small>
+                <small>${dateLabel} · ${log.lessonLabel} · ${outcomeLabel} · ${deductionLabel}</small>
               </span>
               <span class="summary-log-status">${statusLabel}</span>
             </button>`;
@@ -7537,7 +7628,7 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
   const profileId = profile?.id || state.member?.profileId || "";
   if (!client?.selectRows || !client.downloadObject || !profileId) return false;
   try {
-    const [journalRows, mediaRows, recordRows, curriculumRows] = await Promise.all([
+    const [journalRows, mediaRows, recordRows, curriculumRows, lessonChartRows] = await Promise.all([
       client.selectRows("tn_journal_entries", {
         select: "id,user_id,lesson_id,entry_date,entry_type,body,created_at,updated_at",
         filters: { user_id: profileId },
@@ -7557,6 +7648,12 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
         filters: { status: "active" },
         limit: 200,
       }).catch(() => []),
+      client.rpc
+        ? client.rpc("tn_member_lesson_chart", {
+          target_user_id: profileId,
+          target_limit: 50,
+        }).catch(() => [])
+        : Promise.resolve([]),
     ]);
     const ownLessonIds = new Set(state.liveLessons.filter((lesson) => lesson.isOwnLesson).map((lesson) => lesson.id));
     const recordsByLesson = new Map((recordRows || [])
@@ -7605,6 +7702,52 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
       if (existingIndex >= 0) state.lessonLogs[existingIndex] = { ...state.lessonLogs[existingIndex], ...log };
       else state.lessonLogs.unshift(log);
     }
+
+    const existingChartLessonIds = new Set(state.lessonLogs
+      .map((item) => String(item.serverLessonId || ""))
+      .filter(Boolean));
+    const chartLogs = (Array.isArray(lessonChartRows) ? lessonChartRows : [])
+      .filter((record) => record.lessonId && !existingChartLessonIds.has(String(record.lessonId)))
+      .map((record, index) => {
+        existingChartLessonIds.add(String(record.lessonId));
+        const nextCurriculumId = record.nextCurriculumSkillLabel || "";
+        const curriculum = nextCurriculumId ? curriculumById(nextCurriculumId, curriculumSteps[0]) : null;
+        const outcomeLabel = {
+          completed: "수업 완료",
+          no_show: "노쇼",
+          absence: "불참",
+          cancelled: "취소",
+          holiday: "휴무",
+        }[String(record.outcome || "").toLowerCase()] || "수업 기록";
+        const lessonType = scheduleV2MemberLessonKind(record.scheduleKind || "regular");
+        return {
+          id: `member-chart-${record.id || record.lessonId}`,
+          serverJournalId: "",
+          serverLessonId: record.lessonId,
+          lessonId: `server-${record.lessonId}`,
+          lessonLabel: `${record.startTime || ""} · ${record.coachName || "담당 코치"} · ${lessonType}`.replace(/^ · /, ""),
+          round: Math.max(1, (Array.isArray(lessonChartRows) ? lessonChartRows.length : 1) - index),
+          journalDate: record.lessonDate || String(record.finalizedAt || record.updatedAt || "").slice(0, 10),
+          content: [record.technique, record.strength, record.improvement].filter(Boolean).join(" · ") || outcomeLabel,
+          selfMemo: "회원 운동일지 미작성",
+          mediaNames: [],
+          mediaItems: [],
+          status: "confirmed",
+          curriculum,
+          nextCurriculumId,
+          coachComment: record.coachComment || "",
+          memberVisibleSummary: record.nextGoal
+            ? `다음 수업 목표: ${record.nextGoal}`
+            : record.nextCurriculumTitle
+              ? `다음 수업: ${record.nextCurriculumTitle}`
+              : "",
+          ticketDeducted: Number(record.deductedSessions) > 0,
+          deductedSessions: Number(record.deductedSessions) || 0,
+          participantOutcome: record.outcome || "completed",
+          submittedAt: record.finalizedAt || record.updatedAt || "",
+        };
+      });
+    if (chartLogs.length) state.lessonLogs = [...chartLogs, ...state.lessonLogs];
 
     const existingRecordLessonIds = new Set(state.lessonLogs
       .map((item) => item.serverLessonId)
@@ -9033,6 +9176,8 @@ function journalEntries() {
       body: log.selfMemo,
       note: log.coachComment || "코치 피드백 대기",
       next: log.memberVisibleSummary || selectedNextText(log),
+      outcome: log.participantOutcome || "",
+      deductedSessions: Number(log.deductedSessions) || (log.ticketDeducted ? 1 : 0),
       curriculumStep: curriculumById(log.nextCurriculumId || log.curriculum?.id, log.curriculum),
       mediaNames: log.mediaNames || [],
       mediaItems: normalizeMediaItems(log),
@@ -9321,12 +9466,22 @@ function openJournalDetail(id) {
         <a class="small-button notion-link" href="${entry.curriculumStep.notionUrl || "https://www.notion.so/"}" target="_blank" rel="noreferrer">노션에서 자세히 보기</a>
       </section>`
     : "";
+  const attendanceBlock = entry.kind === "레슨"
+    ? `<div class="journal-lesson-result"><span>${{
+      completed: "수업 완료",
+      no_show: "노쇼",
+      absence: "불참",
+      cancelled: "취소",
+      holiday: "휴무",
+    }[String(entry.outcome || "").toLowerCase()] || "수업 기록"}</span><strong>${Number(entry.deductedSessions) > 0 ? `${Number(entry.deductedSessions)}회 차감` : "차감 없음"}</strong></div>`
+    : "";
   $("#journalDetailContent").innerHTML = `
     <div class="section-title compact-title">
       <h2>${entry.title}</h2>
       <span>${entry.subtitle || entry.dateLabel}</span>
     </div>
     <article class="journal-detail-card">
+      ${attendanceBlock}
       <section class="journal-feedback-block member-note">
         <strong>내 기록</strong>
         <p>${entry.body || "작성한 기록이 없습니다."}</p>
@@ -9458,7 +9613,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.351" });
+  const params = new URLSearchParams({ v: "1.0.352" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -11557,13 +11712,28 @@ function bindEvents() {
     if (button) changeMemberScheduleTimeRange(button.dataset.memberScheduleTimeRange);
   });
   $("#scheduleGrid")?.addEventListener("change", (event) => {
+    const ticketSelect = event.target.closest("#memberScheduleTicketSelect");
+    if (ticketSelect) {
+      state.selectedMemberScheduleTicketId = ticketSelect.value;
+      const source = memberAllInlineChangeSources().find((lesson) => (
+        memberLessonTicketId(lesson) === state.selectedMemberScheduleTicketId
+      ));
+      state.selectedMemberChangeSourceId = source?.id || "";
+      renderSelects();
+      renderSchedule();
+      if (state.memberScheduleMode === "availability" && source) void syncMemberChangeCandidates(source);
+      saveSnapshot();
+      return;
+    }
     const sourceSelect = event.target.closest("#memberInlineChangeSource");
     if (!sourceSelect) return;
     state.selectedMemberChangeSourceId = sourceSelect.value;
+    const selectedSource = memberAllInlineChangeSources().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
+    const selectedTicketId = memberLessonTicketId(selectedSource || {});
+    if (selectedTicketId) state.selectedMemberScheduleTicketId = selectedTicketId;
     renderSelects();
     renderSchedule();
-    const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
-    void syncMemberChangeCandidates(source);
+    void syncMemberChangeCandidates(selectedSource);
     saveSnapshot();
   });
   $$('[data-member-schedule-mode]').forEach((button) => {
@@ -12144,7 +12314,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.351",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.352",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

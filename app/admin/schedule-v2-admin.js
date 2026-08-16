@@ -2190,12 +2190,15 @@
     const nextMode = hasLesson && ["summary", "schedule", "outcome", "more"].includes(mode) ? mode : "schedule";
     form.dataset.editorMode = nextMode;
     $("#scheduleV2LessonSummary").hidden = !hasLesson || nextMode !== "summary";
+    const summaryActions = $("#scheduleV2SummaryActions");
+    if (summaryActions) summaryActions.hidden = !hasLesson || nextMode !== "summary";
     $("#scheduleV2EditorModes").hidden = !hasLesson;
     $$("[data-v2-editor-mode]", form).forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.v2EditorMode === nextMode));
     });
-    const outcomeButton = form.querySelector('[data-v2-editor-mode="outcome"]');
-    if (outcomeButton) outcomeButton.disabled = $("#scheduleV2OutcomePanel").hidden;
+    $$('[data-v2-editor-mode="outcome"]', form).forEach((outcomeButton) => {
+      outcomeButton.disabled = $("#scheduleV2OutcomePanel").hidden;
+    });
     if (nextMode === "outcome" && !$("#scheduleV2OutcomePanel").hidden) $("#scheduleV2OutcomePanel").open = true;
   }
 
@@ -3646,7 +3649,7 @@
     const loaded = await loadWorkspace({ quiet: true, force: true });
     if (!loaded || !state.payload) return false;
     const lesson = state.payload.lessons.find((item) => String(item.id) === String(lessonId));
-    if (!lesson || String(lesson.status || "") !== "scheduled") return false;
+    if (!lesson || !["scheduled", "pending_change", "completed", "no_show"].includes(String(lesson.status || ""))) return false;
     state.selectedDate = lesson.lessonDate;
     renderWorkspace();
     openEditor({
@@ -3736,11 +3739,13 @@
     });
     $("#scheduleV2MemberSearch").addEventListener("input", renderMemberResults);
     $("#scheduleV2LessonSearch").addEventListener("input", () => applyLessonSearchFilter({ scrollToMatch: true }));
-    $("#scheduleV2EditorModes").addEventListener("click", (event) => {
+    const selectEditorMode = (event) => {
       const button = event.target.closest("[data-v2-editor-mode]");
       if (!button || button.disabled) return;
       setEditorMode(button.dataset.v2EditorMode);
-    });
+    };
+    $("#scheduleV2EditorModes").addEventListener("click", selectEditorMode);
+    $("#scheduleV2SummaryActions")?.addEventListener("click", selectEditorMode);
     $("#scheduleV2EditorForm").addEventListener("change", (event) => {
       state.cancelConfirmationKey = "";
       if (event.target.name === "regularEditScope") {

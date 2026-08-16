@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.351" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.352" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-14" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.351" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.352" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -72,6 +72,7 @@
           <button class="nav-item" type="button" data-view="members">회원관리</button>
           <button class="nav-item" type="button" data-view="schedule">레슨시간표</button>
           <button class="nav-item" type="button" data-view="billing">결제/정산</button>
+          <button class="nav-item" type="button" data-view="reports">경영 리포트</button>
           <button class="nav-item" type="button" data-view="notes">기록/차감 확인</button>
           <button class="nav-item" type="button" data-view="issues">개선·오류 접수</button>
           <button class="nav-item" type="button" data-view="settings">운영 설정</button>
@@ -472,11 +473,16 @@
                 <div><span>회원권</span><strong id="scheduleV2SummaryTicket">총/소진/잔여 확인</strong></div>
                 <div><span>상태</span><strong id="scheduleV2SummaryStatus">예정</strong></div>
               </section>
+              <section id="scheduleV2SummaryActions" class="schedule-v2-summary-actions" aria-label="수업 빠른 작업" hidden>
+                <button class="primary-button" type="button" data-v2-editor-mode="outcome">피드백·출석</button>
+                <button type="button" data-v2-editor-mode="schedule">시간 변경</button>
+                <button type="button" data-v2-editor-mode="more">취소·대타·이력</button>
+              </section>
               <nav id="scheduleV2EditorModes" class="schedule-v2-editor-modes" aria-label="수업 작업 선택" hidden>
-                <button type="button" data-v2-editor-mode="summary" aria-pressed="true">요약</button>
-                <button type="button" data-v2-editor-mode="schedule" aria-pressed="false">일정 수정</button>
-                <button type="button" data-v2-editor-mode="outcome" aria-pressed="false">수업 처리</button>
-                <button type="button" data-v2-editor-mode="more" aria-pressed="false">대타·이력</button>
+                <button type="button" data-v2-editor-mode="summary" aria-pressed="true">수업 보기</button>
+                <button type="button" data-v2-editor-mode="schedule" aria-pressed="false">시간 변경</button>
+                <button type="button" data-v2-editor-mode="outcome" aria-pressed="false">피드백·출석</button>
+                <button type="button" data-v2-editor-mode="more" aria-pressed="false">기타</button>
               </nav>
               <details id="scheduleV2SlotAdjustments" class="schedule-v2-slot-adjustments" data-v2-editor-section="schedule">
                 <summary><span>선택한 시간</span><strong id="scheduleV2SlotAdjustmentSummary">날짜 · 시간 · 코치</strong></summary>
@@ -538,7 +544,7 @@
                 <small>시간표는 원 담당 코치 열에 유지되고, 대타 코치가 이 회차의 피드백과 차감을 처리합니다.</small>
               </details>
               <details id="scheduleV2OutcomePanel" class="schedule-v2-outcomes" data-v2-editor-section="outcome" hidden>
-                <summary><span>수업 처리</span><strong id="scheduleV2OutcomeSummary">처리 전</strong></summary>
+                <summary><span>피드백·출석</span><strong id="scheduleV2OutcomeSummary">처리 전</strong></summary>
                 <div id="scheduleV2OutcomeList" class="schedule-v2-outcome-list"></div>
                 <datalist id="scheduleV2CurriculumOptions"></datalist>
                 <div id="scheduleV2OutcomeActions" class="schedule-v2-outcome-actions">
@@ -963,47 +969,61 @@
           </section>
         </section>
 
-        <section id="reportsView" class="view" aria-label="운영 리포트">
-          <div id="reportMetrics" class="metric-grid"></div>
+        <section id="reportsView" class="view management-report-view" aria-label="경영 리포트">
+          <header class="management-report-toolbar">
+            <div>
+              <p class="eyebrow">경영 리포트</p>
+              <h2>운영 숫자와 장부 상태를 한눈에</h2>
+              <p>회원·수업·피드백·결제는 테니스노트 운영 데이터로 계산하고, Google 장부 원본은 DB에 복제하지 않습니다.</p>
+            </div>
+            <div class="toolbar-actions management-report-actions">
+              <label class="compact-field">
+                <span>조회 월</span>
+                <input id="managementReportMonth" type="month" />
+              </label>
+              <button id="openReportLayoutSettingsButton" class="ghost-button" type="button">보드 구성</button>
+            </div>
+          </header>
 
-          <div class="dashboard-grid">
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>따라갈 관리자 프로그램</h2>
-                <span class="source-pill">운영 벤치마크</span>
-              </div>
-              <div id="benchmarkCards" class="benchmark-grid"></div>
-            </section>
+          <section class="panel management-report-widget management-report-summary" data-report-widget="summary">
+            <div class="panel-heading">
+              <div><p class="eyebrow">실시간 운영 DB</p><h2 id="managementReportPeriodLabel">선택 월 요약</h2></div>
+              <span class="source-pill">운영 데이터</span>
+            </div>
+            <div id="reportMetrics" class="metric-grid"></div>
+          </section>
 
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>자동 알림 기준</h2>
-                <span class="source-pill">앱 푸시</span>
-              </div>
-              <ul id="notificationPlan" class="notification-list"></ul>
-            </section>
-          </div>
+          <section class="panel management-report-widget" data-report-widget="members">
+            <div class="panel-heading">
+              <div><p class="eyebrow">등록·회원권</p><h2>회원 흐름</h2></div>
+              <button class="ghost-button" type="button" data-jump="members">회원관리 열기</button>
+            </div>
+            <div id="managementMemberReport" class="management-report-list"></div>
+          </section>
 
-          <div class="dashboard-grid lower-grid">
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>코치 전용 화면</h2>
-                <span class="source-pill">간단 모드</span>
-              </div>
-              <div id="coachPreview" class="preview-stack"></div>
-            </section>
+          <section class="panel management-report-widget" data-report-widget="quality">
+            <div class="panel-heading">
+              <div><p class="eyebrow">수업 품질</p><h2>피드백·출석</h2></div>
+              <button class="ghost-button" type="button" data-jump="notes">기록 확인</button>
+            </div>
+            <div id="managementQualityReport" class="management-report-list"></div>
+          </section>
 
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>회원 앱 1차 범위</h2>
-                <span class="source-pill">나중에 앱</span>
-              </div>
-              <div class="phone-frame">
-                <div class="phone-top">테니스노트</div>
-                <div id="memberAppPreview" class="mobile-preview"></div>
-              </div>
-            </section>
-          </div>
+          <section class="panel management-report-widget" data-report-widget="finance">
+            <div class="panel-heading">
+              <div><p class="eyebrow">매출·비용·손익</p><h2>재무 자료 상태</h2></div>
+              <span class="source-pill">원본 비저장</span>
+            </div>
+            <div id="managementFinanceReport" class="management-report-list"></div>
+          </section>
+
+          <section class="panel management-report-widget" data-report-widget="sources">
+            <div class="panel-heading">
+              <div><p class="eyebrow">Drive 구조 반영</p><h2>리포트 개발 순서</h2></div>
+              <span class="source-pill">읽기 전용 계획</span>
+            </div>
+            <div id="managementSourcePlan" class="management-source-plan"></div>
+          </section>
         </section>
 
         <section id="dataView" class="view" aria-label="데이터 관리">
@@ -2046,20 +2066,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.351"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.351"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.351"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.352"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.352"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.352"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.351"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.352"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.351"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.351"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.351"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.351"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.351"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.351"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.352"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.352"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.352"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.352"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.352"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.352"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.351"></script>
+    <script src="./app.js?v=1.0.352"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-14"></script>
   </body>
 </html>

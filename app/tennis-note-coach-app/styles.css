@@ -2649,6 +2649,183 @@ a {
   line-height: 1.5;
 }
 
+.member-chart-section .member-chart-heading {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.member-detail-secondary {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  background: #f8fafc;
+}
+
+.member-detail-secondary > summary {
+  min-height: 32px;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.member-detail-secondary[open] > summary {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 9px;
+  margin-bottom: 10px;
+}
+
+.member-detail-secondary .member-detail-grid {
+  margin-bottom: 0;
+}
+
+.member-chart-heading > div {
+  display: grid;
+  grid-template-columns: none;
+  gap: 2px;
+}
+
+.member-chart-heading span {
+  font-size: 12px;
+}
+
+.member-chart-body {
+  display: grid;
+  grid-template-columns: none;
+  gap: 9px;
+}
+
+.member-chart-focus {
+  display: grid;
+  grid-template-columns: none;
+  gap: 3px;
+  border-left: 4px solid var(--green);
+  border-radius: 7px;
+  padding: 10px 12px;
+  background: #eef8f4;
+}
+
+.member-chart-focus span {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.member-chart-focus strong {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.member-chart-timeline {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.member-chart-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(88px, 0.3fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.member-chart-item:last-child {
+  border-bottom: 0;
+}
+
+.member-chart-item time {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.45;
+}
+
+.member-chart-item > div {
+  display: grid;
+  grid-template-columns: none;
+  gap: 4px;
+  min-width: 0;
+}
+
+.member-chart-item .member-chart-item-head {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.member-chart-item-head span {
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: var(--muted);
+  background: #eef2f6;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.member-chart-item p,
+.member-chart-item small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.member-chart-item small b {
+  margin-right: 4px;
+  color: var(--green);
+}
+
+.member-chart-state {
+  padding: 10px 0;
+}
+
+.member-chart-state.is-error {
+  color: var(--red, #b42318);
+}
+
+.member-chart-older {
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+
+.member-chart-older summary,
+.lesson-member-chart summary {
+  cursor: pointer;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.lesson-member-chart {
+  border: 1px solid #d7e8e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8fcfa;
+}
+
+.lesson-member-chart[open] summary {
+  margin-bottom: 8px;
+}
+
+.lesson-member-chart .member-chart-focus {
+  padding: 8px 10px;
+}
+
+.lesson-member-chart .member-chart-item {
+  grid-template-columns: minmax(80px, 0.28fr) minmax(0, 1fr);
+}
+
 .lesson-edit-modal[hidden] {
   display: none;
 }
