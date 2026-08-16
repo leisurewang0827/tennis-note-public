@@ -2474,6 +2474,27 @@ tr.is-selected td {
   font-weight: 800;
 }
 
+.member-create-schedule {
+  margin-top: 14px;
+  padding: 12px;
+  background: #f8fcfa;
+}
+
+.member-create-schedule.is-deferred .member-inline-schedule-row {
+  opacity: .45;
+}
+
+.member-create-schedule-later {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  margin-top: 4px;
+  color: #526b62;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .member-history-modal-panel {
   width: min(680px, calc(100vw - 28px));
   max-height: min(78vh, 720px);
@@ -9982,6 +10003,56 @@ button .schedule-member-lines > span {
   line-height: 1.45;
 }
 
+.member-ticket-extension-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #bcd9cf;
+  border-radius: 10px;
+  background: #f4faf8;
+}
+
+.member-ticket-extension-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.member-ticket-extension-preview span {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.member-ticket-extension-preview strong {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.member-ticket-extension-preview b {
+  color: var(--blue);
+  font-size: 18px;
+}
+
+.member-ticket-extension-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.member-ticket-extension-presets button {
+  min-height: 42px;
+}
+
+.member-ticket-extension-presets button.is-active {
+  border-color: var(--blue);
+  color: #fff;
+  background: var(--blue);
+}
+
 .member-ticket-delete-preview {
   display: grid;
   gap: 4px;
@@ -11306,6 +11377,14 @@ button .schedule-member-lines > span {
   .lesson-edit-scope-options,
   .lesson-participant-list {
     grid-template-columns: 1fr;
+  }
+
+  .member-ticket-extension-preview {
+    gap: 8px;
+  }
+
+  .member-ticket-extension-preview strong {
+    font-size: 14px;
   }
 }
 

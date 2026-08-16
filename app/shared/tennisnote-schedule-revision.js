@@ -24,7 +24,9 @@
     let revision = null;
     let revisionBranchId = "";
 
-    const readBranchId = () => normalizedBranchId(options.branchId?.() || options.branchId);
+    const readBranchId = () => normalizedBranchId(
+      typeof options.branchId === "function" ? options.branchId() : options.branchId,
+    );
     const isActive = () => document.visibilityState !== "hidden" && options.active?.() !== false;
     const schedule = (delay = isActive() ? activeIntervalMs : fallbackIntervalMs) => {
       if (stopped) return;

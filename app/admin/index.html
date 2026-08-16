@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.349" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.350" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-14" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.349" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.350" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -124,9 +124,9 @@
               <small>코치별 시간표 기준</small>
             </article>
             <article class="metric-card warning">
-              <span>보강 요청</span>
+              <span>변경 승인</span>
               <strong id="metricMakeups">0</strong>
-              <small>24시간 정책 적용</small>
+              <small>24시간 이내 요청</small>
             </article>
             <article class="metric-card accent">
               <span>기록/차감 대기</span>
@@ -385,31 +385,49 @@
               </div>
             </header>
             <div id="scheduleV2Status" class="schedule-v2-status" role="status">로그인과 지점을 확인하고 있습니다.</div>
-            <details id="scheduleV2IntegrityPanel" class="schedule-v2-integrity-panel">
-              <summary><span>V2 회원 연결 점검</span><strong id="scheduleV2IntegritySummary">확인 전</strong></summary>
-              <p>먼저 읽기 전용으로 점검하며 점검만으로는 자동 수정하지 않습니다. 충돌 없이 전부 생성 가능한 회원권만 관리자가 별도로 확정하고, 규칙 누락·시간 충돌 항목은 변경하지 않습니다.</p>
-              <div class="inline-actions">
-                <button id="scheduleV2IntegrityButton" class="ghost-button" type="button">전체 회원 점검</button>
-                <button id="scheduleV2IntegrityApplyButton" class="primary-button" type="button" disabled>확정 가능한 일정 생성</button>
+            <details id="scheduleV2AdvancedTools" class="schedule-v2-advanced-tools">
+              <summary>
+                <span><strong>고급 관리</strong><small>회원 연결 점검 · 정리 기록 · 운영 규칙</small></span>
+                <b>필요할 때 열기</b>
+              </summary>
+              <div class="schedule-v2-advanced-tools-body">
+                <details id="scheduleV2IntegrityPanel" class="schedule-v2-integrity-panel">
+                  <summary><span>회원 연결 점검</span><strong id="scheduleV2IntegritySummary">확인 전</strong></summary>
+                  <p>먼저 읽기 전용으로 점검하며 점검만으로는 자동 수정하지 않습니다. 충돌 없이 전부 생성 가능한 회원권만 관리자가 별도로 확정하고, 규칙 누락·시간 충돌 항목은 변경하지 않습니다.</p>
+                  <div class="inline-actions">
+                    <button id="scheduleV2IntegrityButton" class="ghost-button" type="button">전체 회원 점검</button>
+                    <button id="scheduleV2IntegrityApplyButton" class="primary-button" type="button" disabled>확정 가능한 일정 생성</button>
+                  </div>
+                  <div id="scheduleV2IntegrityList" class="schedule-v2-integrity-list" aria-live="polite"></div>
+                </details>
+                <details id="scheduleV2ParallelCheck" class="schedule-v2-parallel-check" hidden>
+                  <summary>
+                    <span>기존 시간표 비교</span>
+                    <strong id="scheduleV2ParallelSummary">확인 전</strong>
+                  </summary>
+                  <p id="scheduleV2ParallelDescription">같은 주의 기존 시간표와 새 시간표를 읽기 전용으로 비교합니다.</p>
+                  <div id="scheduleV2ParallelDifferences" class="schedule-v2-parallel-differences"></div>
+                </details>
+                <details id="scheduleV2ArchivedHistoryPanel" class="schedule-v2-archived-history">
+                  <summary>
+                    <span>자동 정리 기록</span>
+                    <strong id="scheduleV2ArchivedHistoryCount">0건</strong>
+                  </summary>
+                  <p>삭제회원과 회원권 상태·기간·횟수 때문에 자동 제외된 수업입니다. 기록은 보존하되 기본 시간표에서는 숨깁니다.</p>
+                  <button id="scheduleV2ArchivedHistoryToggle" class="ghost-button" type="button" aria-pressed="false">시간표에 표시</button>
+                  <div id="scheduleV2ArchivedHistoryList" class="schedule-v2-archived-history-list"></div>
+                </details>
+                <button id="scheduleV2PolicyButton" class="ghost-button schedule-v2-policy-open" type="button" aria-expanded="false">운영 규칙 열기</button>
+                <div id="scheduleV2PolicyPanel" class="schedule-v2-policy-panel" hidden>
+                  <label><span>코치 수업 추가</span><select name="coachSingleAddMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
+                  <label><span>코치 정규시간 변경</span><select name="coachRegularChangeMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
+                  <label><span>다른 코치 회원 수정</span><select name="allowCrossCoachMemberEdit"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>
+                  <label><span>잠긴 시간 코치 등록</span><select name="allowCoachLockedTimeOverride"><option value="true">허용</option><option value="false">허용 안 함</option></select></label>
+                  <label><span>휴무일 코치 등록</span><select name="allowCoachHolidayOverride"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>
+                  <label><span>보강 인접 간격</span><input name="makeupAnchorGapMinutes" type="number" min="0" max="100" step="1" value="40" inputmode="numeric" required /><small>0~100분 · 기본 40분</small></label>
+                  <button id="scheduleV2PolicySaveButton" class="primary-button" type="button">규칙 저장</button>
+                </div>
               </div>
-              <div id="scheduleV2IntegrityList" class="schedule-v2-integrity-list" aria-live="polite"></div>
-            </details>
-            <details id="scheduleV2ParallelCheck" class="schedule-v2-parallel-check" hidden>
-              <summary>
-                <span>기존 시간표 비교</span>
-                <strong id="scheduleV2ParallelSummary">확인 전</strong>
-              </summary>
-              <p id="scheduleV2ParallelDescription">같은 주의 기존 시간표와 새 시간표를 읽기 전용으로 비교합니다.</p>
-              <div id="scheduleV2ParallelDifferences" class="schedule-v2-parallel-differences"></div>
-            </details>
-            <details id="scheduleV2ArchivedHistoryPanel" class="schedule-v2-archived-history">
-              <summary>
-                <span>자동 정리 기록</span>
-                <strong id="scheduleV2ArchivedHistoryCount">0건</strong>
-              </summary>
-              <p>삭제회원과 회원권 상태·기간·횟수 때문에 자동 제외된 수업입니다. 기록은 보존하되 기본 시간표에서는 숨깁니다.</p>
-              <button id="scheduleV2ArchivedHistoryToggle" class="ghost-button" type="button" aria-pressed="false">시간표에 표시</button>
-              <div id="scheduleV2ArchivedHistoryList" class="schedule-v2-archived-history-list"></div>
             </details>
             <div class="schedule-v2-toolbar">
               <div id="scheduleV2DayTabs" class="schedule-v2-day-tabs" role="tablist" aria-label="날짜 선택"></div>
@@ -418,18 +436,8 @@
                 <input id="scheduleV2LessonSearch" type="search" autocomplete="off" placeholder="이름 입력" />
               </label>
               <div class="schedule-v2-toolbar-actions">
-                <button id="scheduleV2PolicyButton" type="button" aria-expanded="false">운영 규칙</button>
                 <button id="scheduleV2ClosureButton" type="button">운영일·휴무</button>
               </div>
-            </div>
-            <div id="scheduleV2PolicyPanel" class="schedule-v2-policy-panel" hidden>
-              <label><span>코치 수업 추가</span><select name="coachSingleAddMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
-              <label><span>코치 정규시간 변경</span><select name="coachRegularChangeMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
-              <label><span>다른 코치 회원 수정</span><select name="allowCrossCoachMemberEdit"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>
-              <label><span>잠긴 시간 코치 등록</span><select name="allowCoachLockedTimeOverride"><option value="true">허용</option><option value="false">허용 안 함</option></select></label>
-              <label><span>휴무일 코치 등록</span><select name="allowCoachHolidayOverride"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>
-              <label><span>보강 인접 간격</span><input name="makeupAnchorGapMinutes" type="number" min="0" max="100" step="1" value="40" inputmode="numeric" required /><small>0~100분 · 기본 40분</small></label>
-              <button id="scheduleV2PolicySaveButton" class="primary-button" type="button">규칙 저장</button>
             </div>
             <div class="schedule-v2-layout">
               <div class="schedule-v2-main">
@@ -458,30 +466,45 @@
                 <div><small>빠른 편집</small><h3 id="scheduleV2EditorTitle">수업 추가</h3><p id="scheduleV2SlotLabel"></p></div>
                 <button type="button" data-v2-close-editor aria-label="닫기">×</button>
               </header>
-              <div class="schedule-v2-slot-controls">
-                <label><span>날짜</span><input name="lessonDate" type="date" required /></label>
-                <label><span>시간</span><select name="startTime" required></select></label>
-                <label><span>코치</span><select name="coachRoleId" required></select></label>
-              </div>
-              <fieldset id="scheduleV2RegularEditScope" class="schedule-v2-edit-scope" hidden>
+              <section id="scheduleV2LessonSummary" class="schedule-v2-lesson-summary" hidden>
+                <div><span>회원</span><strong id="scheduleV2SummaryMember">회원 확인</strong></div>
+                <div><span>일정</span><strong id="scheduleV2SummarySchedule">날짜 · 시간 · 코치</strong></div>
+                <div><span>회원권</span><strong id="scheduleV2SummaryTicket">총/소진/잔여 확인</strong></div>
+                <div><span>상태</span><strong id="scheduleV2SummaryStatus">예정</strong></div>
+              </section>
+              <nav id="scheduleV2EditorModes" class="schedule-v2-editor-modes" aria-label="수업 작업 선택" hidden>
+                <button type="button" data-v2-editor-mode="summary" aria-pressed="true">요약</button>
+                <button type="button" data-v2-editor-mode="schedule" aria-pressed="false">일정 수정</button>
+                <button type="button" data-v2-editor-mode="outcome" aria-pressed="false">수업 처리</button>
+                <button type="button" data-v2-editor-mode="more" aria-pressed="false">대타·이력</button>
+              </nav>
+              <details id="scheduleV2SlotAdjustments" class="schedule-v2-slot-adjustments" data-v2-editor-section="schedule">
+                <summary><span>선택한 시간</span><strong id="scheduleV2SlotAdjustmentSummary">날짜 · 시간 · 코치</strong></summary>
+                <div class="schedule-v2-slot-controls">
+                  <label><span>날짜</span><input name="lessonDate" type="date" required /></label>
+                  <label><span>시간</span><select name="startTime" required></select></label>
+                  <label><span>코치</span><select name="coachRoleId" required></select></label>
+                </div>
+              </details>
+              <fieldset id="scheduleV2RegularEditScope" class="schedule-v2-edit-scope" data-v2-editor-section="schedule" hidden>
                 <legend>변경 범위</legend>
                 <label><input type="radio" name="regularEditScope" value="single" checked /><span>이번 수업만</span></label>
                 <label><input type="radio" name="regularEditScope" value="future" /><span>이후 정규일정</span></label>
                 <small id="scheduleV2RegularEditScopeGuide">선택한 회차만 바꾸고 나머지 정규시간은 유지합니다.</small>
               </fieldset>
-              <fieldset class="schedule-v2-kind-picker">
+              <fieldset class="schedule-v2-kind-picker" data-v2-editor-section="schedule">
                 <legend>수업 종류</legend>
                 <label><input type="radio" name="scheduleKind" value="regular" checked /><span>정규</span></label>
                 <label><input type="radio" name="scheduleKind" value="makeup" /><span>보강</span></label>
                 <label><input type="radio" name="scheduleKind" value="coupon" /><span>쿠폰</span></label>
                 <label><input type="radio" name="scheduleKind" value="one_day" /><span>원데이</span></label>
               </fieldset>
-              <section class="schedule-v2-member-picker" aria-label="수업 회원 선택">
+              <section class="schedule-v2-member-picker" data-v2-editor-section="schedule" aria-label="수업 회원 선택">
                 <label class="schedule-v2-member-search"><span>회원 검색</span><input id="scheduleV2MemberSearch" type="search" autocomplete="off" placeholder="이름·연락처 끝 4자리·출생연도" /></label>
                 <div id="scheduleV2MemberResults" class="schedule-v2-member-results"></div>
                 <div id="scheduleV2SelectedTicket" class="schedule-v2-selected-ticket">회원을 선택해 주세요.</div>
               </section>
-              <details id="scheduleV2OneDayIntake" class="schedule-v2-one-day-intake" hidden>
+              <details id="scheduleV2OneDayIntake" class="schedule-v2-one-day-intake" data-v2-editor-section="schedule" hidden>
                 <summary><span>접수·수납 정보 (선택)</span><strong id="scheduleV2OneDayIntakeSummary">현장 · 미수납</strong></summary>
                 <div class="schedule-v2-one-day-intake-grid">
                   <label><span>예약 경로</span><select name="oneDayBookingSource"><option value="walk_in">현장</option><option value="phone">전화</option><option value="naver_booking">네이버예약</option><option value="kakao_channel">카카오채널</option><option value="other">기타</option></select></label>
@@ -491,16 +514,16 @@
                 </div>
                 <small>운영 기록용입니다. PG 결제·회원권·횟수 차감은 만들지 않습니다.</small>
               </details>
-              <fieldset class="schedule-v2-duration-picker">
+              <fieldset class="schedule-v2-duration-picker" data-v2-editor-section="schedule">
                 <legend>수업 시간</legend>
                 <label><input type="radio" name="durationMinutes" value="20" checked /><span>20분</span></label>
                 <label><input type="radio" name="durationMinutes" value="30" /><span>30분</span></label>
                 <label><input type="radio" name="durationMinutes" value="40" /><span>40분</span></label>
                 <label><input type="radio" name="durationMinutes" value="60" /><span>60분</span></label>
               </fieldset>
-              <label id="scheduleV2SeriesOption" class="schedule-v2-series-option"><input type="checkbox" name="fillSeries" /><span><strong id="scheduleV2SeriesTitle">잔여 횟수만큼 미래 정규수업 생성</strong><small id="scheduleV2SeriesGuide">같은 요일·시간으로 회원권 종료일까지 생성합니다.</small></span></label>
-              <label class="schedule-v2-note"><span>메모 (선택)</span><input name="note" type="text" maxlength="120" /></label>
-              <details id="scheduleV2SubstitutePanel" class="schedule-v2-substitute" hidden>
+              <label id="scheduleV2SeriesOption" class="schedule-v2-series-option" data-v2-editor-section="schedule"><input type="checkbox" name="fillSeries" /><span><strong id="scheduleV2SeriesTitle">잔여 횟수만큼 미래 정규수업 생성</strong><small id="scheduleV2SeriesGuide">같은 요일·시간으로 회원권 종료일까지 생성합니다.</small></span></label>
+              <label class="schedule-v2-note" data-v2-editor-section="schedule"><span>메모 (선택)</span><input name="note" type="text" maxlength="120" /></label>
+              <details id="scheduleV2SubstitutePanel" class="schedule-v2-substitute" data-v2-editor-section="more" hidden>
                 <summary><span>이 회차 대타</span><strong id="scheduleV2SubstituteSummary">지정 없음</strong></summary>
                 <div class="schedule-v2-substitute-grid">
                   <label><span>대타 코치</span><select name="substituteCoachRoleId"></select></label>
@@ -514,7 +537,7 @@
                 </div>
                 <small>시간표는 원 담당 코치 열에 유지되고, 대타 코치가 이 회차의 피드백과 차감을 처리합니다.</small>
               </details>
-              <details id="scheduleV2OutcomePanel" class="schedule-v2-outcomes" hidden>
+              <details id="scheduleV2OutcomePanel" class="schedule-v2-outcomes" data-v2-editor-section="outcome" hidden>
                 <summary><span>수업 처리</span><strong id="scheduleV2OutcomeSummary">처리 전</strong></summary>
                 <div id="scheduleV2OutcomeList" class="schedule-v2-outcome-list"></div>
                 <datalist id="scheduleV2CurriculumOptions"></datalist>
@@ -524,17 +547,17 @@
                 </div>
                 <small>완료·노쇼만 차감할 수 있습니다. 불참은 차감 없이 보강 권한을 만듭니다.</small>
               </details>
-              <details id="scheduleV2LessonHistoryPanel" class="schedule-v2-audit-panel" hidden>
+              <details id="scheduleV2LessonHistoryPanel" class="schedule-v2-audit-panel" data-v2-editor-section="more" hidden>
                 <summary><span>변경 이력</span><strong id="scheduleV2LessonHistorySummary">열어보기</strong></summary>
                 <div id="scheduleV2LessonHistoryList" class="schedule-v2-lesson-history-list"></div>
               </details>
               <div id="scheduleV2EditorMessage" class="schedule-v2-editor-message" role="status"></div>
               <footer>
-                <button id="scheduleV2CancelLessonButton" class="danger-button" type="button" hidden>수업 취소</button>
-                <button id="scheduleV2DeleteLessonButton" class="danger-button" type="button" hidden>수업 삭제</button>
+                <button id="scheduleV2CancelLessonButton" class="danger-button" type="button" data-v2-editor-section="more" hidden>수업 취소</button>
+                <button id="scheduleV2DeleteLessonButton" class="danger-button" type="button" data-v2-editor-section="more" hidden>수업 삭제</button>
                 <span></span>
                 <button type="button" data-v2-close-editor>닫기</button>
-                <button id="scheduleV2SaveButton" class="primary-button" type="submit">시간표에 저장</button>
+                <button id="scheduleV2SaveButton" class="primary-button" type="submit" data-v2-editor-section="schedule">시간표에 저장</button>
               </footer>
             </form>
           </section>
@@ -725,19 +748,19 @@
           </section>
         </section>
 
-        <section id="makeupView" class="view" aria-label="보강요청">
+        <section id="makeupView" class="view" aria-label="보강권 관리">
           <section class="policy-strip">
             <div>
-              <strong>24시간 전</strong>
-              <span>회원 직접 변경 신청 가능</span>
+              <strong>불참 처리</strong>
+              <span>차감 없이 보강권 생성</span>
             </div>
             <div>
-              <strong>24시간 이내</strong>
-              <span>코치 또는 관리자 승인 필요</span>
+              <strong>회원 예약</strong>
+              <span>빈 시간 검증 후 즉시 예약</span>
             </div>
             <div>
-              <strong>회차 차감</strong>
-              <span>수업 완료와 코치 확인 후 처리</span>
+              <strong>별도 승인 없음</strong>
+              <span>변경 승인은 시간표에서 처리</span>
             </div>
           </section>
           <section class="panel table-panel">
@@ -745,9 +768,9 @@
               <thead>
                 <tr>
                   <th>회원</th>
-                  <th>원래 수업</th>
-                  <th>희망 보강</th>
-                  <th>정책</th>
+                  <th>발생 수업</th>
+                  <th>예약 수업</th>
+                  <th>보강권</th>
                   <th>상태</th>
                   <th>처리</th>
                 </tr>
@@ -2008,6 +2031,7 @@
           </div>
           <label>
             <span id="lessonRecordCurriculumLabel">다음 커리큘럼</span>
+            <input id="lessonRecordCurriculumSearch" type="search" placeholder="코드·기술명 검색" autocomplete="off" />
             <select id="lessonRecordCurriculum" required></select>
           </label>
           <a id="lessonRecordCurriculumLink" class="lesson-record-curriculum-link" href="#" target="_blank" rel="noopener" hidden>커리큘럼 원본 보기</a>
@@ -2021,19 +2045,19 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.349"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.349"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.349"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.350"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.350"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.350"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.349"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.349"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.349"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.349"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.349"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.349"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.350"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.350"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.350"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.350"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.350"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.350"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.349"></script>
+    <script src="./app.js?v=1.0.350"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-14"></script>
   </body>
 </html>

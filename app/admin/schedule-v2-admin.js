@@ -41,6 +41,7 @@
     schedule_v2_lesson_created: "수업 추가",
     schedule_v2_lesson_updated: "수업 수정",
     schedule_v2_lesson_cancelled: "수업 취소",
+    schedule_v2_lesson_restored: "취소 수업 복구",
     schedule_v2_lesson_outcome: "수업 처리 저장",
     schedule_v2_lesson_finalized: "수업 처리 완료",
     schedule_v2_substitute_assigned: "대타 지정",
@@ -1116,6 +1117,12 @@
       && lessonIsTodayOrFuture(lesson);
   }
 
+  function lessonStaffCancellationCanBeRestored(lesson) {
+    return String(lesson?.status || "") === "cancelled"
+      && lessonCancellationContext(lesson).type === "staff_cancelled"
+      && lessonIsTodayOrFuture(lesson);
+  }
+
   function lessonHistoryActions(lesson) {
     if (!lessonIsTodayOrFuture(lesson)) return "";
     const context = lessonCancellationContext(lesson);
@@ -1123,7 +1130,9 @@
       && ["open", "booked"].includes(String(context.entitlement?.status || ""));
     const restoreButton = lessonAbsenceCanBeRestored(lesson)
       ? `<button type="button" class="schedule-v2-history-restore" data-v2-restore-absence="${escapeHtml(lesson.id)}">원래 수업 복원</button>`
-      : "";
+      : lessonStaffCancellationCanBeRestored(lesson)
+        ? `<button type="button" class="schedule-v2-history-restore" data-v2-restore-cancelled="${escapeHtml(lesson.id)}">취소 복구</button>`
+        : "";
     const addKind = hasActiveAbsenceEntitlement ? ' data-v2-kind="makeup"' : "";
     const addLabel = hasActiveAbsenceEntitlement ? "+ 보강·원데이 가능" : "+ 새 수업";
     return `<div class="schedule-v2-history-actions">${restoreButton}<button type="button" class="schedule-v2-history-add" data-v2-add${addKind} data-date="${escapeHtml(lesson.lessonDate)}" data-time="${escapeHtml(lesson.startTime)}" data-coach-role-id="${escapeHtml(lesson.coachRoleId)}">${addLabel}</button></div>`;
@@ -1679,6 +1688,12 @@
   }
 
   function lessonTicketCountsMarkup(lesson) {
+    const text = lessonTicketCountsText(lesson);
+    if (!text) return "";
+    return `<small class="schedule-v2-ticket-counts" aria-label="${escapeHtml(`총/소진/잔여 ${text}`)}" title="총/소진/잔여">${escapeHtml(text)}</small>`;
+  }
+
+  function lessonTicketCountsText(lesson) {
     if (String(lesson?.scheduleKind || "") === "one_day") return "";
     const labels = [...new Set((lesson?.participants || []).map((participant) => {
       const ticket = ticketById(participant.ticketId || participant.ticket_id);
@@ -1690,9 +1705,7 @@
       const used = Math.max(0, Number(explicitUsed ?? Math.max(0, total - remaining)));
       return `${total}/${used}/${remaining}`;
     }).filter(Boolean))];
-    if (!labels.length) return "";
-    const text = labels.join(" · ");
-    return `<small class="schedule-v2-ticket-counts" aria-label="${escapeHtml(`총/소진/잔여 ${text}`)}" title="총/소진/잔여">${escapeHtml(text)}</small>`;
+    return labels.join(" · ");
   }
 
   function renderLessonTicketCounts() {
@@ -2106,11 +2119,49 @@
     times.sort((left, right) => timeMinutes(left) - timeMinutes(right));
     form.elements.startTime.innerHTML = times.map((time) => `<option value="${time}" ${time === slot.time ? "selected" : ""}>${time}</option>`).join("");
     form.elements.coachRoleId.innerHTML = (state.payload?.coaches || []).map((coach) => `<option value="${escapeHtml(coach.roleId)}" ${String(coach.roleId) === String(slot.coachRoleId) ? "selected" : ""}>${escapeHtml(coach.name)}</option>`).join("");
+    syncSlotAdjustmentSummary();
+  }
+
+  function syncSlotAdjustmentSummary() {
+    const form = $("#scheduleV2EditorForm");
+    const target = $("#scheduleV2SlotAdjustmentSummary");
+    if (!form || !target) return;
+    const date = form.elements.lessonDate?.value || state.selectedDate;
+    const time = form.elements.startTime?.value || "시간 확인";
+    const coach = form.elements.coachRoleId?.selectedOptions?.[0]?.textContent?.trim() || "코치 확인";
+    target.textContent = `${dateLabel(date)} · ${time} · ${coach}`;
+  }
+
+  function syncLessonSummary(lesson = null) {
+    if (!lesson) return;
+    const coach = (state.payload?.coaches || []).find((item) => String(item.roleId) === String(lesson.coachRoleId));
+    const substitute = lesson.substitute?.coachName ? ` · 대타 ${lesson.substitute.coachName}` : "";
+    const kind = kindLabels[lesson.scheduleKind] || lesson.scheduleKind || "수업";
+    $("#scheduleV2SummaryMember").textContent = lessonParticipantLabel(lesson);
+    $("#scheduleV2SummarySchedule").textContent = `${dateLabel(lesson.lessonDate)} · ${String(lesson.startTime || "").slice(0, 5)} · ${coach?.name || "코치 확인"}${substitute}`;
+    $("#scheduleV2SummaryTicket").textContent = lessonTicketCountsText(lesson) || (lesson.oneDayBooking ? "원데이 · 회원권 차감 없음" : "회원권 연결 확인");
+    $("#scheduleV2SummaryStatus").textContent = `${kind} · ${Number(lesson.durationMinutes || 20)}분 · ${statusLabels[lesson.status] || lesson.status || "예정"}`;
+  }
+
+  function setEditorMode(mode = "summary", lesson = state.editingLesson) {
+    const form = $("#scheduleV2EditorForm");
+    const hasLesson = Boolean(lesson);
+    const nextMode = hasLesson && ["summary", "schedule", "outcome", "more"].includes(mode) ? mode : "schedule";
+    form.dataset.editorMode = nextMode;
+    $("#scheduleV2LessonSummary").hidden = !hasLesson || nextMode !== "summary";
+    $("#scheduleV2EditorModes").hidden = !hasLesson;
+    $$("[data-v2-editor-mode]", form).forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.v2EditorMode === nextMode));
+    });
+    const outcomeButton = form.querySelector('[data-v2-editor-mode="outcome"]');
+    if (outcomeButton) outcomeButton.disabled = $("#scheduleV2OutcomePanel").hidden;
+    if (nextMode === "outcome" && !$("#scheduleV2OutcomePanel").hidden) $("#scheduleV2OutcomePanel").open = true;
   }
 
   function syncEditorPlacementAvailability() {
     if (!state.editorOpen) return;
     const form = $("#scheduleV2EditorForm");
+    syncSlotAdjustmentSummary();
     const saveButton = $("#scheduleV2SaveButton");
     const messageTarget = $("#scheduleV2EditorMessage");
     const message = placementConflictMessage({
@@ -2519,6 +2570,8 @@
       ? [{ userId: String(lesson.linkedUserId), ticketId: "", name: memberById(lesson.linkedUserId)?.name || lesson.memberLabel || "회원" }]
       : lesson?.participants?.map((participant) => ({ ...participant })) || [];
     fillEditorControls({ date, time, coachRoleId });
+    const slotAdjustments = $("#scheduleV2SlotAdjustments");
+    if (slotAdjustments) slotAdjustments.open = Boolean(lesson && !reopeningLesson);
     $("#scheduleV2EditorTitle").textContent = reopeningLesson ? "취소 자리 새 수업" : lesson ? "수업 수정" : "수업 추가";
     $("#scheduleV2SlotLabel").textContent = `${dateLabel(date)} · ${time}`;
     const kind = lesson?.scheduleKind || preferredKind || "regular";
@@ -2551,6 +2604,8 @@
     renderSubstituteEditor();
     renderOutcomeEditor();
     resetLessonHistory(lesson);
+    syncLessonSummary(state.editingLesson);
+    setEditorMode(state.editingLesson ? "summary" : "schedule", state.editingLesson);
     syncRegularEditScope();
     setEditorMessage(reopeningLesson ? "취소 기록은 그대로 보존하고 이 자리에 새 수업을 등록합니다." : "", reopeningLesson ? "info" : "");
     state.editorScrollY = window.scrollY;
@@ -3302,6 +3357,53 @@
     }
   }
 
+  async function restoreCancelledLesson(lessonId) {
+    if (localDemoMode || !requireWritableServer("status")) return;
+    const lesson = state.payload?.lessons.find((item) => String(item.id) === String(lessonId));
+    if (!lessonStaffCancellationCanBeRestored(lesson)) {
+      setStatus("복구 가능한 관리자 취소 수업이 아닙니다. 시간표를 새로고침해 주세요.", "warning");
+      return;
+    }
+    const confirmation = `${lessonParticipantLabel(lesson)} 회원의 취소 수업을 같은 날짜와 시간으로 복구할까요?`;
+    if (!window.confirm(confirmation)) return;
+    const button = $(`[data-v2-restore-cancelled="${CSS.escape(String(lesson.id))}"]`);
+    if (button) button.disabled = true;
+    setStatus("취소 수업을 원래 자리로 복구하는 중입니다.");
+    try {
+      await bridge().rpc("tn_schedule_v2_restore_cancelled_lesson", {
+        target_lesson_id: lesson.id,
+        target_expected_revision: lesson.revision,
+        target_operation_key: operationKey("admin-cancel-restore"),
+        target_reason: "관리자 시간표에서 취소 수업 복구",
+      });
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ force: true });
+      setStatus("취소 수업 복구 완료 · 기존 수업 기록을 그대로 살렸습니다.", "success");
+      void bridge()?.refresh?.();
+    } catch (error) {
+      const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
+      const message = code.includes("original_slot_occupied")
+        ? "원래 시간에 다른 수업이 있어 복구할 수 없습니다. 새 수업으로 등록해 주세요."
+        : code.includes("already_started")
+          ? "이미 시작한 수업은 복구할 수 없습니다."
+          : code.includes("ticket_unavailable")
+            ? "회원권이 만료·소진·중지되어 복구할 수 없습니다. 회원권을 먼저 확인해 주세요."
+            : code.includes("approved_coach_required")
+              ? "담당 코치가 현재 유효하지 않아 복구할 수 없습니다."
+              : code.includes("branch_closed") || code.includes("blocked_time") || code.includes("outside_working_hours")
+                ? "현재 휴무 또는 코치 수업 불가 시간이라 복구할 수 없습니다."
+                : code.includes("concurrent_update")
+                  ? "다른 변경이 먼저 반영되었습니다. 시간표를 새로고침한 뒤 다시 시도해 주세요."
+                  : code.includes("absence_flow_required")
+                    ? "불참 수업은 ‘원래 수업 복원’ 기능을 이용해 주세요."
+                    : "취소 수업 복구에 실패했습니다. 시간표를 새로고침해 주세요.";
+      setStatus(message, "error");
+    } finally {
+      if (button?.isConnected) button.disabled = false;
+    }
+  }
+
   async function deleteLesson() {
     if (localDemoMode) {
       setEditorMessage("로컬 데모에서는 수업을 삭제하지 않습니다.", "info");
@@ -3492,6 +3594,34 @@
     });
   }
 
+  async function openLessonFromExternal({ lessonId, lessonDate = "", mode = "outcome" } = {}) {
+    if (!lessonId) return false;
+    setEngine("v2");
+    if (lessonDate) {
+      state.weekStart = mondayOf(lessonDate);
+      state.selectedDate = localDateKey(lessonDate);
+      state.payload = null;
+    }
+    const loaded = await loadWorkspace({ quiet: true, force: true });
+    if (!loaded || !state.payload) return false;
+    const lesson = state.payload.lessons.find((item) => String(item.id) === String(lessonId));
+    if (!lesson || String(lesson.status || "") !== "scheduled") return false;
+    state.selectedDate = lesson.lessonDate;
+    renderWorkspace();
+    openEditor({
+      date: lesson.lessonDate,
+      time: lesson.startTime,
+      coachRoleId: lesson.coachRoleId,
+      lesson,
+    });
+    setEditorMode(mode, lesson);
+    window.setTimeout(() => {
+      const outcomePanel = $("#scheduleV2OutcomePanel");
+      outcomePanel?.querySelector("textarea, input[type='search'], input[data-v2-curriculum]")?.focus();
+    }, 0);
+    return true;
+  }
+
   function initializeEvents() {
     $("#scheduleV2DayTabs").addEventListener("click", (event) => {
       const button = event.target.closest("[data-v2-date]");
@@ -3509,6 +3639,11 @@
       run.style.setProperty("--v2-hover-row", String(slotIndex));
     });
     $("#scheduleV2Workspace").addEventListener("click", (event) => {
+      const cancelledRestoreButton = event.target.closest("[data-v2-restore-cancelled]");
+      if (cancelledRestoreButton) {
+        void restoreCancelledLesson(cancelledRestoreButton.dataset.v2RestoreCancelled);
+        return;
+      }
       const restoreButton = event.target.closest("[data-v2-restore-absence]");
       if (restoreButton) {
         void restoreAbsentLesson(restoreButton.dataset.v2RestoreAbsence);
@@ -3560,6 +3695,11 @@
     });
     $("#scheduleV2MemberSearch").addEventListener("input", renderMemberResults);
     $("#scheduleV2LessonSearch").addEventListener("input", () => applyLessonSearchFilter({ scrollToMatch: true }));
+    $("#scheduleV2EditorModes").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-v2-editor-mode]");
+      if (!button || button.disabled) return;
+      setEditorMode(button.dataset.v2EditorMode);
+    });
     $("#scheduleV2EditorForm").addEventListener("change", (event) => {
       state.cancelConfirmationKey = "";
       if (event.target.name === "regularEditScope") {
@@ -3734,6 +3874,9 @@
     });
   }
 
+  window.TennisNoteScheduleV2Admin = Object.freeze({
+    openLesson: openLessonFromExternal,
+  });
   initializeEvents();
   installScheduleRevisionWatcher();
   setEngine(preferredScheduleEngine());

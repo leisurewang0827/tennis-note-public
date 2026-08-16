@@ -490,14 +490,12 @@ function formatWon(value) {
 }
 
 function productUsagePills(product) {
-  const pills = [
-    product.tickets ? `${product.tickets}회` : "상담",
-    product.validityDays ? `사용 ${product.validityDays}일` : "기간 상담",
-  ];
-  if (product.lessonMinutes) pills.unshift(`${product.lessonMinutes}분`);
-  if (product.frequencyPerWeek) pills.unshift(`주 ${product.frequencyPerWeek}회분`);
-  if (product.graceDays) pills.push(`유예 ${product.graceDays}일`);
-  if (product.coachDiscountAllowed) pills.push("코치 할인권 가능");
+  const pills = [];
+  if (product.frequencyPerWeek) pills.push(`주 ${product.frequencyPerWeek}회`);
+  if (product.lessonMinutes) pills.push(`${product.lessonMinutes}분`);
+  if (product.tickets) pills.push(`${product.tickets}회`);
+  if (pills.length < 3 && product.validityDays) pills.push(`사용 ${product.validityDays}일`);
+  if (!pills.length) pills.push("상담");
   return pills.map((pill) => `<span>${escapeHtml(pill)}</span>`).join("");
 }
 
@@ -565,6 +563,32 @@ const membershipFilterDefinitions = [
   },
 ];
 
+const membershipPresetDefinitions = [
+  { id: "weekday", label: "평일 1:1", filters: { scheduleScope: "weekday", productKind: "regular", groupSize: "1", lessonMinutes: "20" } },
+  { id: "weekend", label: "주말 1:1", filters: { scheduleScope: "weekend", productKind: "regular", groupSize: "1", lessonMinutes: "20" } },
+  { id: "group", label: "2:1", filters: { scheduleScope: "all", productKind: "regular", groupSize: "2", lessonMinutes: "20" } },
+  { id: "coupon", label: "쿠폰", filters: { scheduleScope: "all", productKind: "coupon", groupSize: "1", lessonMinutes: "20" } },
+];
+
+function activeMembershipPresetId() {
+  return membershipPresetDefinitions.find(({ filters }) => (
+    Object.entries(filters).every(([key, value]) => (state.membershipFilters[key] || "all") === value)
+  ))?.id || "";
+}
+
+function renderMembershipProductPresets() {
+  const target = $("#membershipProductPresets");
+  if (!target) return;
+  const activePresetId = activeMembershipPresetId();
+  target.innerHTML = `
+    <div class="membership-product-presets-heading"><strong>빠른 선택</strong><small>원하는 수업 형태를 먼저 고르세요.</small></div>
+    <div class="membership-product-presets-grid" role="group" aria-label="회원권 빠른 선택">
+      ${membershipPresetDefinitions.map((preset) => `
+        <button class="membership-preset-chip ${preset.id === activePresetId ? "is-selected" : ""}" type="button"
+          data-membership-preset="${preset.id}" aria-pressed="${preset.id === activePresetId}">${preset.label}</button>`).join("")}
+    </div>`;
+}
+
 function membershipProductFacet(product, key) {
   const title = `${product.title || ""} ${product.group || ""}`;
   if (key === "scheduleScope") {
@@ -620,6 +644,9 @@ function normalizeMembershipFilters(products) {
 function renderMembershipProductFilters(products, visibleProducts) {
   const target = $("#membershipProductFilters");
   if (!target) return;
+  renderMembershipProductPresets();
+  const summary = $("#membershipProductFilterSummary");
+  if (summary) summary.textContent = `${visibleProducts.length}개 상품`;
   const availableByKey = Object.fromEntries(membershipFilterDefinitions.map(({ key }) => [
     key,
     new Set(products
@@ -644,10 +671,10 @@ function renderMembershipProductFilters(products, visibleProducts) {
   target.innerHTML = `
     <div class="membership-filter-heading">
       <div>
-        <strong>조건을 선택하세요</strong>
+        <strong>상세 조건</strong>
         <span>${visibleProducts.length}개 상품</span>
       </div>
-      <button class="small-button membership-filter-reset" type="button" data-membership-filter-reset>전체 보기</button>
+      <button class="small-button membership-filter-reset" type="button" data-membership-filter-reset>조건 지우기</button>
     </div>
     ${filterRows}`;
 }
@@ -1712,7 +1739,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.349",
+    workerUrl: "./service-worker.js?v=1.0.350",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3593,7 +3620,7 @@ function ensureMemberScheduleTicketSelection(preferredTicketId = "") {
 
 function renderMemberScheduleTicketPicker() {
   const tickets = memberScheduleTicketOptions();
-  if (!tickets.length) return "";
+  if (tickets.length <= 1) return "";
   const selectedTicketId = ensureMemberScheduleTicketSelection();
   return `
     <section class="member-ticket-picker" aria-label="확인할 회원권 선택">
@@ -3612,6 +3639,7 @@ function renderMemberCouponQuickStart() {
   const tickets = memberBookableCouponTickets();
   if (!tickets.length) return "";
   const selectedSource = tickets.find((ticket) => ticket.id === state.selectedMemberChangeSourceId);
+  if (selectedSource) return "";
   return `
     <section class="member-coupon-quick-start" aria-label="쿠폰 수업 예약">
       <div>
@@ -3831,8 +3859,16 @@ function policyShortLabel(policy) {
 
 function policyDetail(policy) {
   return policy === "coach"
-    ? "24시간 이내 요청이라 코치 승인이 필요합니다. 승인되지 않아도 당일 취소로 회원권은 차감됩니다."
-    : "24시간 이전 요청이라 자동 변경됩니다.";
+    ? "수업까지 24시간 미만입니다. 담당 코치 또는 관리자가 확인하며, 거절되면 원래 수업은 노쇼·차감될 수 있습니다."
+    : "수업까지 24시간 이상 남아 선택한 시간으로 바로 변경됩니다.";
+}
+
+function memberChangeSubmitLabel(source = null, selected = null) {
+  if (source?.makeupEntitlementId || source?.status === "makeup_due") return "보강 예약 확정";
+  if (source?.couponBooking) return "쿠폰 예약 확정";
+  if (source?.regularInitialBooking) return source?.resumePausedTicket ? "복귀하고 시간 확정" : "수업시간 확정";
+  if (!selected) return "새 시간 선택";
+  return selected.policy === "coach" ? "승인 요청" : "바로 변경";
 }
 
 function memberScheduleCoachNames(scheduleLessons = []) {
@@ -4793,12 +4829,11 @@ function renderDynamicMemberSchedule() {
   }
   const inlineChangeBar = renderMemberChangeInlineBar();
   if (memberHasPendingPaymentOnly()) {
-    $("#scheduleGrid").innerHTML = `${assignedCoachSummary}${renderMemberAvailabilityOverview(scheduleLessons, true)}`;
+    $("#scheduleGrid").innerHTML = renderMemberAvailabilityOverview(scheduleLessons, true);
     return;
   }
   if (!memberAssignedCoachRoleIds().size && !memberInitialCoachSelectionSource()) {
     $("#scheduleGrid").innerHTML = `
-      ${assignedCoachSummary}
       ${memberEmptyState({
         title: "시간표를 열 수 없습니다",
         reason: "현재 로그인 계정에 담당 코치가 연결된 회원권이 없습니다. 관리자에게 계정 연결을 요청해 주세요.",
@@ -4807,7 +4842,6 @@ function renderDynamicMemberSchedule() {
     return;
   }
   $("#scheduleGrid").innerHTML = `
-    ${assignedCoachSummary}
     ${renderMemberCouponQuickStart()}
     ${renderMemberScheduleTicketPicker()}
     ${renderRegularInitialScheduleBar()}
@@ -5058,7 +5092,7 @@ function renderSelects() {
     ? "1. 보강할 수업"
     : isCouponBooking ? "1. 사용할 쿠폰" : "1. 변경할 수업";
   if ($("#changeReasonField")) $("#changeReasonField").hidden = isMakeupDue || isCouponBooking;
-  if ($("#requestMakeup")) $("#requestMakeup").textContent = isMakeupDue ? "보강 예약 확정" : isCouponBooking ? "쿠폰 예약 확정" : "수업 변경 요청";
+  if ($("#requestMakeup")) $("#requestMakeup").textContent = memberChangeSubmitLabel(selectedSource, null);
   if (isRegularInitialBooking) {
     if ($("#changeModalTitle")) $("#changeModalTitle").textContent = isPausedResumeBooking ? "휴회 복귀 시간 선택" : "첫 정규시간 설정";
     if ($("#changeReasonField")) $("#changeReasonField").hidden = true;
@@ -5103,6 +5137,7 @@ function renderAvailableSlots() {
   const isPausedResumeBooking = Boolean(source?.resumePausedTicket);
   const requiredCount = Math.max(1, Number(source?.frequencyPerWeek) || 1);
   const selectedIds = isRegularInitialBooking ? state.regularInitialSelections : [selectedId].filter(Boolean);
+  if ($("#requestMakeup")) $("#requestMakeup").textContent = memberChangeSubmitLabel(source, selected);
   if ($("#changePolicyNote")) {
     $("#changePolicyNote").textContent = isRegularInitialBooking
       ? isPausedResumeBooking
@@ -6278,6 +6313,7 @@ function openMemberEnrollmentModal(productId, message = "") {
   if ($("#enrollmentBirthYear")) $("#enrollmentBirthYear").max = String(maxBirthYear);
   if ($("#enrollmentPartnerBirthYear")) $("#enrollmentPartnerBirthYear").max = String(maxBirthYear);
   if ($("#memberEnrollmentMessage")) $("#memberEnrollmentMessage").textContent = message;
+  if ($("#memberEnrollmentOptionalDetails")) $("#memberEnrollmentOptionalDetails").open = false;
   updateEnrollmentPartnerFields(product);
   modal.hidden = false;
   window.setTimeout(() => $("#enrollmentName")?.focus(), 40);
@@ -9422,7 +9458,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.349" });
+  const params = new URLSearchParams({ v: "1.0.350" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -11142,7 +11178,7 @@ async function requestMakeup() {
     } finally {
       if (button) {
         button.disabled = false;
-        button.textContent = isMakeupEntitlement ? "보강 예약 확정" : "수업 변경 요청";
+        button.textContent = memberChangeSubmitLabel(absence, makeup);
       }
     }
     return;
@@ -11642,6 +11678,15 @@ function bindEvents() {
       }
       return;
     }
+    const membershipPresetButton = event.target.closest("[data-membership-preset]");
+    if (membershipPresetButton) {
+      const preset = membershipPresetDefinitions.find((item) => item.id === membershipPresetButton.dataset.membershipPreset);
+      if (preset) {
+        state.membershipFilters = { ...preset.filters };
+        renderProducts();
+      }
+      return;
+    }
     const membershipFilterReset = event.target.closest("[data-membership-filter-reset]");
     if (membershipFilterReset) {
       state.membershipFilters = {
@@ -11962,10 +12007,19 @@ function installMemberLiveScheduleRefresh() {
   memberLiveScheduleRefreshTimer = window.setInterval(refresh, 60_000);
 }
 
+function memberRevisionBranchId() {
+  const currentBranchId = currentLiveTicket()?.branchId || upcomingLiveTickets()[0]?.branchId;
+  if (currentBranchId) return currentBranchId;
+  return [...(state.liveTickets || [])]
+    .filter((ticket) => ticket.branchId)
+    .sort((left, right) => String(right.expiresOn || "").localeCompare(String(left.expiresOn || "")))[0]
+    ?.branchId || "";
+}
+
 function installMemberScheduleRevisionWatcher() {
   if (memberScheduleRevisionWatcher || !window.TennisNoteScheduleRevision?.watch) return;
   memberScheduleRevisionWatcher = window.TennisNoteScheduleRevision.watch({
-    branchId: () => currentLiveTicket()?.branchId || "",
+    branchId: memberRevisionBranchId,
     active: () => !$("#appScreen")?.hidden,
     onChange: async () => {
       memberScheduleV2WorkspaceCache = null;
@@ -12090,7 +12144,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.349",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.350",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

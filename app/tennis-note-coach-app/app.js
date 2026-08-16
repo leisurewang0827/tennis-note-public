@@ -2563,7 +2563,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.349",
+    workerUrl: "./service-worker.js?v=1.0.350",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2593,7 +2593,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.349" });
+  const params = new URLSearchParams({ v: "1.0.350" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -4072,33 +4072,38 @@ function renderMakeupApprovalPanel() {
   if (!request) {
     return `
       <section class="schedule-edit-panel is-empty">
-        <strong>확인할 보강 요청이 없습니다.</strong>
+        <strong>확인할 수업 변경 요청이 없습니다.</strong>
         <div class="actions">
           <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
         </div>
       </section>`;
   }
   const linkedLog = getMakeupLinkedLog(request.member);
+  const canReview = !request.serverRequestV2 || request.canReview;
+  const rejectionWarning = request.serverRequestId && !request.serverRequestV2
+    ? "거절하면 원래 수업은 노쇼로 처리되어 회원권이 차감될 수 있습니다."
+    : "거절 사유는 관리자와 회원에게 처리 결과로 남습니다.";
   return `
     <section class="schedule-edit-panel makeup-detail-panel">
       <div class="wide">
-        <strong>${request.member} 보강 승인</strong>
+        <strong>${request.member} 수업 변경 승인</strong>
         <span>${request.original} → ${request.requested}</span>
       </div>
       <article class="modal-info-card">
         <span>현재 상태</span>
         <strong>${request.status}</strong>
-        <small>${requestCoach(request)} 담당으로 연결됩니다.</small>
+        <small>${requestCoach(request)} 담당 요청입니다.</small>
       </article>
       <article class="modal-info-card">
         <span>연결 기록</span>
         <strong>${linkedLog ? linkedLog.lesson : "연결된 회원기록 없음"}</strong>
         <small>${linkedLog ? linkedLog.status : "승인 후 기록/차감 확인이 가능합니다."}</small>
       </article>
+      <p class="permission-note wide">${rejectionWarning}</p>
       <div class="actions wide">
         ${linkedLog ? `<button class="small-button" type="button" data-open-linked-log="${request.id}">회원기록 보기</button>` : ""}
-        <button class="approve-button" type="button" data-approve-makeup="${request.id}">승인</button>
-        <button class="reject-button" type="button" data-reject-makeup="${request.id}">거절</button>
+        ${canReview ? `<button class="approve-button" type="button" data-approve-makeup="${request.id}">승인</button>
+        <button class="reject-button" type="button" data-reject-makeup="${request.id}">거절</button>` : '<span class="permission-note">관리자 승인 요청입니다.</span>'}
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>
     </section>`;
@@ -4879,26 +4884,24 @@ function closeMemberDetailModal() {
 function renderMakeups() {
   const target = $("#makeupRequests");
   if (!target) return;
+  const requests = state.makeupRequests.filter((request) => ["승인 대기", "pending"].includes(request.status));
   target.innerHTML =
-    state.makeupRequests
+    requests
       .map(
         (request) => `
           <article class="work-card ${state.focusedMakeupId === request.id ? "is-focused" : ""}" data-makeup-card="${request.id}">
             <div>
               <strong>${request.member}</strong>
               <span>${request.original} → ${request.requested}</span>
-              <small>${getMakeupLinkedLog(request.member) ? "관련 회원기록을 확인할 수 있습니다." : "관련 회원기록은 아직 없습니다."}</small>
+              <small>${request.policy || "24시간 이내 변경 승인 요청"}</small>
             </div>
             <div class="actions">
               <b>${request.status}</b>
-              <button class="small-button" type="button" data-open-makeup-detail="${request.id}">상세/승인창</button>
-              <button class="small-button" type="button" data-open-linked-log="${request.id}">회원기록 보기</button>
-              <button class="approve-button" type="button" data-approve-makeup="${request.id}" ${request.serverRequestV2 && !request.canReview ? "disabled" : ""}>${request.serverRequestV2 && !request.canReview ? "관리자 승인" : "승인"}</button>
-              <button class="reject-button" type="button" data-reject-makeup="${request.id}" ${request.serverRequestV2 && !request.canReview ? "disabled" : ""}>거절</button>
+              <button class="approve-button" type="button" data-open-makeup-detail="${request.id}">${request.serverRequestV2 && !request.canReview ? "요청 확인" : "승인 요청 확인"}</button>
             </div>
           </article>`,
       )
-      .join("") || "<p class='empty-text'>확인할 보강 요청이 없습니다.</p>";
+      .join("") || "<p class='empty-text'>확인할 수업 변경 요청이 없습니다.</p>";
 }
 
 function getMakeupLinkedLog(member) {
@@ -6313,7 +6316,7 @@ async function approveMakeup(id) {
       renderAll();
       showToast("수업 변경 승인 완료");
     } catch (error) {
-      showToast(`승인 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+      showToast(lessonChangeReviewErrorMessage(error, "승인"));
     }
     return;
   }
@@ -6354,6 +6357,8 @@ async function approveMakeup(id) {
 async function rejectMakeup(id) {
   const request = state.makeupRequests.find((item) => item.id === id);
   if (!request) return;
+  if (request.serverRequestId && !request.serverRequestV2
+    && !window.confirm(`${request.member}님의 요청을 거절하면 원래 수업이 노쇼로 처리되고 회원권이 차감될 수 있습니다. 그래도 거절할까요?`)) return;
   if (request.serverRequestV2 && window.TennisNoteDataClient?.rpc) {
     if (!request.canReview) {
       showToast("이 요청은 관리자만 거절할 수 있습니다.");
@@ -6371,7 +6376,7 @@ async function rejectMakeup(id) {
       renderAll();
       showToast("변경 요청 거절 완료");
     } catch (error) {
-      showToast(`거절 처리 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+      showToast(lessonChangeReviewErrorMessage(error, "거절"));
     }
     return;
   }
@@ -6396,6 +6401,18 @@ async function rejectMakeup(id) {
   exportMakeupRequest(request);
   if (state.editingMakeupId === id) closeLessonEditor();
   renderAll();
+}
+
+function lessonChangeReviewErrorMessage(error, action = "처리") {
+  const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
+  const messages = {
+    request_not_pending: "다른 사용자가 먼저 처리했습니다. 새로고침해 주세요.",
+    effective_coach_or_admin_required: "현재 담당 코치 또는 관리자만 처리할 수 있습니다.",
+    target_time_occupied: "요청한 시간에 다른 수업이 생겼습니다. 회원에게 새 시간을 요청해 주세요.",
+    target_effective_coach_unavailable: "현재 담당 코치의 근무시간과 맞지 않습니다.",
+  };
+  const key = Object.keys(messages).find((candidate) => code.includes(candidate));
+  return messages[key] || `${action} 실패: ${code}`;
 }
 
 function updateLogDraft(id) {
@@ -7346,7 +7363,7 @@ function installCoachScheduleRevisionWatcher() {
   if (coachScheduleRevisionWatcher || !window.TennisNoteScheduleRevision?.watch) return;
   coachScheduleRevisionWatcher = window.TennisNoteScheduleRevision.watch({
     branchId: () => state.coach?.branchId || "",
-    active: () => !$("#appScreen")?.hidden && Boolean($("#scheduleView")?.classList.contains("is-active")),
+    active: () => !document.hidden && !$("#appScreen")?.hidden && Boolean(state.coach),
     onChange: async () => {
       coachScheduleV2WorkspaceCache = null;
       coachLiveScheduleLastRefreshAt = 0;
@@ -7419,7 +7436,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.349",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.350",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
