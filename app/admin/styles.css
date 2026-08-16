@@ -2383,6 +2383,27 @@ tr.is-selected td {
   min-width: 118px;
 }
 
+#membersView .table-panel th.member-actions-column,
+#membersView .table-panel td.member-actions-column {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: var(--paper);
+  box-shadow: -2px 0 0 rgba(8, 114, 85, 0.12);
+}
+
+#membersView .table-panel th.member-actions-column {
+  z-index: 5;
+}
+
+#membersView .table-panel tr.is-selected td.member-actions-column {
+  background: var(--soft-blue);
+}
+
+#membersView .table-panel tr.is-possible-duplicate td.member-actions-column {
+  background: #fffaf0;
+}
+
 .member-row-actions {
   display: grid;
   gap: 5px;
