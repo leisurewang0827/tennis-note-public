@@ -133,6 +133,47 @@
     target.dataset.ready = curriculumCatalog.version || "ready";
   }
 
+  function curriculumSearchResults(value) {
+    const query = String(value || "").trim();
+    if (!query) return [];
+    const search = window.TennisNoteCurriculumSearch;
+    if (search?.search) return search.search(curriculumSteps, query, { limit: 24 }).map((result) => result.step);
+    const normalized = query.toLocaleLowerCase("ko-KR");
+    return curriculumSteps
+      .filter((step) => `${step.id} ${step.title} ${step.trackTitle || ""} ${step.category || ""}`.toLocaleLowerCase("ko-KR").includes(normalized))
+      .slice(0, 24);
+  }
+
+  function renderV2CurriculumSuggestions(input) {
+    const target = input?.closest("[data-v2-outcome-user]")?.querySelector("[data-v2-curriculum-suggestions]");
+    if (!target) return;
+    const query = String(input.value || "").trim();
+    const exactStep = curriculumStepFromValue(query);
+    const exactValue = exactStep ? `${exactStep.id} · ${exactStep.title}` : "";
+    if (!query || exactValue === query) {
+      target.hidden = true;
+      target.innerHTML = "";
+      return;
+    }
+    const matches = curriculumSearchResults(query);
+    target.hidden = false;
+    target.innerHTML = matches.length
+      ? matches.map((step, index) => `<button type="button" class="tn-curriculum-suggestion${index === 0 ? " is-active" : ""}" role="option" data-v2-curriculum-code="${escapeHtml(step.id)}"><strong>${escapeHtml(`${step.id} · ${step.title}`)}</strong><span>${escapeHtml([step.trackTitle || step.category, step.stageLabel || step.level].filter(Boolean).join(" · "))}</span><small>${escapeHtml(step.focus || step.goal || step.guide || "선택한 단계가 다음 커리큘럼으로 저장됩니다.")}</small></button>`).join("")
+      : '<p class="tn-curriculum-suggestions-empty">일치하는 단계가 없습니다. 증상이나 동작을 다른 말로 입력해 보세요.</p>';
+  }
+
+  function selectV2CurriculumSuggestion(button) {
+    const row = button?.closest("[data-v2-outcome-user]");
+    const input = row?.querySelector("[data-v2-curriculum]");
+    const target = row?.querySelector("[data-v2-curriculum-suggestions]");
+    const step = curriculumByCode.get(String(button?.dataset.v2CurriculumCode || "").toUpperCase());
+    if (!input || !step) return;
+    input.value = `${step.id} · ${step.title}`;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    if (target) target.hidden = true;
+    input.focus();
+  }
+
   function localDateKey(value) {
     const date = value instanceof Date ? value : new Date(`${value}T12:00:00`);
     return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
@@ -2301,7 +2342,7 @@
     }
     commentInput.value = draft.comment;
     commentInput.dataset.v2Keywords = draft.keywords.join("|");
-    setEditorMessage("피드백 초안을 만들었습니다. 회원에게 맞게 확인한 뒤 저장해 주세요.", "success");
+    setEditorMessage("세부 피드백 초안을 만들었습니다. 회원에게 맞게 확인한 뒤 저장해 주세요.", "success");
   }
 
   async function correctParticipantDeduction(row, deduct) {
@@ -2393,7 +2434,7 @@
         const deductChecked = !oneDay && (deducted || (!participant.recordStatus && outcome === "completed"));
         const deductDisabled = `${disabled}${oneDay ? " disabled" : ""}`;
         const draftTools = editable && !final
-          ? '<div class="schedule-v2-comment-draft"><input type="text" data-v2-comment-keywords placeholder="키워드: 포핸드, 타점, 풋워크" aria-label="피드백 키워드" /><button type="button" data-v2-generate-comment>초안 만들기</button></div>'
+          ? '<div class="schedule-v2-comment-draft"><input type="text" data-v2-comment-keywords placeholder="키워드 입력 · Enter로 초안 만들기" aria-label="피드백 키워드" /><button type="button" data-v2-generate-comment>초안 만들기</button></div>'
           : "";
         const correctionTools = final && ["completed", "no_show", "absence"].includes(outcome) && participant.ticketId
           ? `<div class="schedule-v2-outcome-correction"><span>차감 ${deducted ? `${Number(participant.deductedSessions ?? participant.deducted_sessions)}회` : "없음"}</span><button type="button" data-v2-correct-deduction="${deducted ? "restore" : "deduct"}">${deducted ? "차감 복구" : "누락 차감"}</button></div>`
@@ -2405,7 +2446,7 @@
     $$("[data-v2-outcome-user]", list).forEach((row) => {
       const participant = participants.find((item) => String(item.userId) === String(row.dataset.v2OutcomeUser)) || {};
       const final = outcomeRowFinal(participant);
-      row.insertAdjacentHTML("beforeend", `<label class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼 <small>완료 시 필수</small></span><input type="search" list="scheduleV2CurriculumOptions" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="기술명 또는 코드 검색" autocomplete="off"${editable && !final ? "" : " disabled"} /></label>`);
+      row.insertAdjacentHTML("beforeend", `<label class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼 <small>완료 시 필수</small></span><input type="search" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="증상·동작·목표·코드 검색" autocomplete="off"${editable && !final ? "" : " disabled"} /></label><div class="tn-curriculum-suggestions" data-v2-curriculum-suggestions role="listbox" hidden></div>`);
     });
     $$(".schedule-v2-outcome-row", list).forEach((row) => syncOutcomeRow(row));
   }
@@ -3740,6 +3781,11 @@
       syncOutcomeRow(event.target.closest("[data-v2-outcome-user]"), { setDefault: true });
     });
     $("#scheduleV2OutcomeList").addEventListener("click", (event) => {
+      const curriculumButton = event.target.closest("[data-v2-curriculum-code]");
+      if (curriculumButton) {
+        selectV2CurriculumSuggestion(curriculumButton);
+        return;
+      }
       const button = event.target.closest("[data-v2-generate-comment]");
       if (button) {
         generateOutcomeComment(button.closest("[data-v2-outcome-user]"));
@@ -3751,6 +3797,31 @@
         correctionButton.closest("[data-v2-outcome-user]"),
         correctionButton.dataset.v2CorrectDeduction === "deduct",
       );
+    });
+    $("#scheduleV2OutcomeList").addEventListener("input", (event) => {
+      const curriculumInput = event.target.closest("[data-v2-curriculum]");
+      if (curriculumInput) renderV2CurriculumSuggestions(curriculumInput);
+    });
+    $("#scheduleV2OutcomeList").addEventListener("keydown", (event) => {
+      if (event.isComposing) return;
+      const row = event.target.closest("[data-v2-outcome-user]");
+      if (!row) return;
+      if (event.target.matches("[data-v2-comment-keywords]") && event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
+        generateOutcomeComment(row);
+        return;
+      }
+      if (!event.target.matches("[data-v2-curriculum]")) return;
+      const suggestions = row.querySelector("[data-v2-curriculum-suggestions]");
+      if (event.key === "Escape") {
+        if (suggestions) suggestions.hidden = true;
+        return;
+      }
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      event.stopPropagation();
+      suggestions?.querySelector("[data-v2-curriculum-code]")?.click();
     });
     $("#scheduleV2SaveOutcomeDraftButton").addEventListener("click", () => processLessonOutcome(false));
     $("#scheduleV2FinalizeOutcomeButton").addEventListener("click", () => processLessonOutcome(true));

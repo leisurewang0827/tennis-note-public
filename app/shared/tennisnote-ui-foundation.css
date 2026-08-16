@@ -249,6 +249,66 @@ body.modal-open .tennisnote-release-check-notice {
   opacity: 0.55;
 }
 
+.tn-curriculum-suggestions {
+  box-sizing: border-box;
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  max-height: 280px;
+  margin-top: 6px;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid #c9dbd4;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(24, 58, 49, 0.12);
+}
+
+.tn-curriculum-suggestions[hidden] {
+  display: none;
+}
+
+.tn-curriculum-suggestion {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-height: 54px;
+  padding: 8px 10px;
+  border: 1px solid #e0ebe7;
+  border-radius: 6px;
+  color: #173a31;
+  background: #f8fcfa;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tn-curriculum-suggestion:hover,
+.tn-curriculum-suggestion:focus-visible,
+.tn-curriculum-suggestion.is-active {
+  border-color: #70a897;
+  outline: none;
+  background: #edf8f4;
+}
+
+.tn-curriculum-suggestion strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.tn-curriculum-suggestion span,
+.tn-curriculum-suggestion small,
+.tn-curriculum-suggestions-empty {
+  color: #587067;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tn-curriculum-suggestions-empty {
+  margin: 0;
+  padding: 10px;
+}
+
 @media (max-width: 480px) {
   .tn-empty-state {
     min-height: 112px;
@@ -272,6 +332,10 @@ body.modal-open .tennisnote-release-check-notice {
 
   .tn-comment-draft-tools {
     grid-template-columns: 1fr;
+  }
+
+  .tn-curriculum-suggestions {
+    max-height: 240px;
   }
 }
 .app-toast {

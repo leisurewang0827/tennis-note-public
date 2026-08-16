@@ -14140,6 +14140,9 @@ function renderMembers(options = {}) {
           <td class="member-status-column"><div class="member-status-actions">${ticketStatus}${permanentDeleteButton}</div></td>
           <td class="member-table-note member-note-column">${escapeHtml(memberDatabaseRecord(member, rowTicket)?.admin_note || memberRemarkLabel(member))}</td>
           <td class="member-actions-column"><div class="member-row-actions">
+            ${operationsRole() === "admin" && member.serverUserId && listStatus !== "inactive" && rowTicket && ["active", "paused"].includes(rowTicket.status)
+              ? `<button class="small-button primary-button member-row-ticket-extend" type="button" data-open-member-management="extend" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 기간 연장">기간 연장</button>`
+              : ""}
             ${operationsRole() === "admin" ? `<button class="small-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="${escapeHtml(ticketId)}">${rowTicket ? "회원권 수정" : "회원권 등록"}</button>` : ""}
             ${operationsRole() === "admin" && rowTicket && rowTicket.status !== "voided"
               ? `<button class="small-button danger-button member-row-ticket-delete" type="button" data-open-member-management="force_delete" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 삭제">회원권 삭제</button>`
@@ -21424,21 +21427,64 @@ async function ensureAdminCurriculumRef(choiceValue) {
   });
 }
 
+function searchableAdminCurriculumChoice(choice) {
+  const step = choice.step || {};
+  return {
+    ...step,
+    id: step.id || choice.value,
+    title: step.title || choice.label,
+    trackTitle: step.trackTitle || step.category || choice.label,
+    goal: step.goal || choice.label,
+    __choiceValue: choice.value,
+  };
+}
+
+function rankedAdminCurriculumChoices(choices, query) {
+  if (!query) return choices;
+  const search = window.TennisNoteCurriculumSearch;
+  if (!search?.search) {
+    const normalizedQuery = String(query).trim().toLocaleLowerCase("ko-KR");
+    return choices.filter((item) => `${item.value} ${item.label}`.toLocaleLowerCase("ko-KR").includes(normalizedQuery));
+  }
+  const byValue = new Map(choices.map((choice) => [choice.value, choice]));
+  return search.search(choices.map(searchableAdminCurriculumChoice), query, { limit: 24 })
+    .map((result) => byValue.get(result.step.__choiceValue))
+    .filter(Boolean);
+}
+
+function renderLessonRecordCurriculumSuggestions(choices, query) {
+  const target = $("#lessonRecordCurriculumSuggestions");
+  if (!target) return;
+  if (!query) {
+    target.hidden = true;
+    target.innerHTML = "";
+    return;
+  }
+  target.hidden = false;
+  target.innerHTML = choices.length
+    ? choices.map((choice, index) => {
+      const step = choice.step || {};
+      const detail = step.focus || step.goal || step.guide || "검색 결과에서 선택하면 다음 커리큘럼에 바로 반영됩니다.";
+      const meta = [step.category || step.trackTitle, step.stageLabel || step.level].filter(Boolean).join(" · ");
+      return `<button type="button" class="tn-curriculum-suggestion${index === 0 ? " is-active" : ""}" role="option" data-lesson-record-curriculum-choice="${escapeHtml(choice.value)}" data-curriculum-search-label="${escapeHtml(`${step.id || ""} ${step.title || choice.label}`.trim())}"><strong>${escapeHtml(choice.label)}</strong>${meta ? `<span>${escapeHtml(meta)}</span>` : ""}<small>${escapeHtml(detail)}</small></button>`;
+    }).join("")
+    : '<p class="tn-curriculum-suggestions-empty">일치하는 단계가 없습니다. 증상이나 동작을 다른 말로 입력해 보세요.</p>';
+}
+
 function filterLessonRecordCurriculumOptions() {
   const select = $("#lessonRecordCurriculum");
   if (!select) return;
   const selectedValue = select.value;
-  const query = String($("#lessonRecordCurriculumSearch")?.value || "").trim().toLowerCase();
+  const query = String($("#lessonRecordCurriculumSearch")?.value || "").trim();
   const choices = adminCurriculumChoices();
-  const filtered = query
-    ? choices.filter((item) => `${item.value} ${item.label}`.toLowerCase().includes(query))
-    : choices;
+  const filtered = rankedAdminCurriculumChoices(choices, query);
   const selectedChoice = choices.find((item) => item.value === selectedValue);
   const visibleChoices = selectedChoice && !filtered.some((item) => item.value === selectedChoice.value)
     ? [selectedChoice, ...filtered]
     : filtered;
   select.innerHTML = `<option value="">${query && !filtered.length ? "검색 결과 없음" : "다음 커리큘럼 선택"}</option>${visibleChoices.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("")}`;
   if (selectedChoice) select.value = selectedValue;
+  renderLessonRecordCurriculumSuggestions(filtered, query);
   updateLessonRecordCurriculumLink();
 }
 
@@ -21494,6 +21540,7 @@ function openLegacyLessonRecordModal(lessonId) {
   const select = $("#lessonRecordCurriculum");
   const choices = adminCurriculumChoices();
   if ($("#lessonRecordCurriculumSearch")) $("#lessonRecordCurriculumSearch").value = "";
+  if ($("#lessonRecordCurriculumSuggestions")) $("#lessonRecordCurriculumSuggestions").hidden = true;
   select.innerHTML = `<option value="">다음 커리큘럼 선택</option>${choices.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("")}`;
   $("#lessonRecordComment").value = "";
   const defaultOutcome = document.querySelector('input[name="lessonRecordOutcome"][value="completed_deduct"]');
@@ -21542,7 +21589,7 @@ function applyAdminCommentDraft(keywordSelector, commentSelector) {
   commentInput.value = result.comment;
   commentInput.dispatchEvent(new Event("input", { bubbles: true }));
   commentInput.focus();
-  showToast("코멘트 초안을 만들었습니다. 확인 후 저장해 주세요.");
+  showToast("세부 코멘트 초안을 만들었습니다. 내용을 확인한 뒤 저장해 주세요.");
 }
 
 async function saveLessonRecord(event) {
@@ -29821,6 +29868,42 @@ function bindEvents() {
   }));
   $("#lessonRecordCurriculum")?.addEventListener("change", updateLessonRecordCurriculumLink);
   $("#lessonRecordCurriculumSearch")?.addEventListener("input", filterLessonRecordCurriculumOptions);
+  $("#lessonRecordCommentKeywords")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.isComposing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    applyAdminCommentDraft("#lessonRecordCommentKeywords", "#lessonRecordComment");
+  });
+  $("#lessonPastCommentKeywords")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.isComposing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    applyAdminCommentDraft("#lessonPastCommentKeywords", "#lessonPastCoachComment");
+  });
+  $("#lessonRecordCurriculumSearch")?.addEventListener("keydown", (event) => {
+    if (event.isComposing) return;
+    const suggestions = $("#lessonRecordCurriculumSuggestions");
+    if (event.key === "Escape") {
+      if (suggestions) suggestions.hidden = true;
+      return;
+    }
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    event.stopPropagation();
+    suggestions?.querySelector("[data-lesson-record-curriculum-choice]")?.click();
+  });
+  $("#lessonRecordCurriculumSuggestions")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-lesson-record-curriculum-choice]");
+    if (!button) return;
+    const select = $("#lessonRecordCurriculum");
+    const searchInput = $("#lessonRecordCurriculumSearch");
+    if (select) {
+      select.value = button.dataset.lessonRecordCurriculumChoice;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (searchInput) searchInput.value = button.dataset.curriculumSearchLabel || button.textContent.trim();
+    $("#lessonRecordCurriculumSuggestions").hidden = true;
+  });
 
   const refreshSupabaseStatus = $("#refreshSupabaseStatus");
   if (refreshSupabaseStatus) {

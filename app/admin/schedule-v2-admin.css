@@ -2047,6 +2047,10 @@
   font-weight: 700;
 }
 
+.schedule-v2-outcome-row > .tn-curriculum-suggestions {
+  grid-column: 1 / -1;
+}
+
 .schedule-v2-outcome-curriculum input {
   min-width: 0;
   min-height: 36px;

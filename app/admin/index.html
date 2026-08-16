@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.350" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.351" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-14" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.350" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.351" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -1675,7 +1675,7 @@
             <details class="lesson-past-draft-details">
               <summary>코멘트 초안 도구</summary>
               <div class="tn-comment-draft-tools">
-                <input id="lessonPastCommentKeywords" type="text" maxlength="160" placeholder="예: 포핸드, 타점, 체중이동" />
+                <input id="lessonPastCommentKeywords" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" />
                 <button id="generateLessonPastComment" type="button">초안 만들기</button>
               </div>
             </details>
@@ -2026,12 +2026,13 @@
             <textarea id="lessonRecordComment" rows="4" minlength="5" required placeholder="이번 수업에서 확인한 내용과 다음 연습 포인트를 5자 이상 작성해 주세요."></textarea>
           </label>
           <div class="tn-comment-draft-tools">
-            <input id="lessonRecordCommentKeywords" type="text" maxlength="160" placeholder="키워드 입력 · 쉼표로 구분" />
+            <input id="lessonRecordCommentKeywords" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" />
             <button id="generateLessonRecordComment" type="button">초안 만들기</button>
           </div>
           <label>
             <span id="lessonRecordCurriculumLabel">다음 커리큘럼</span>
-            <input id="lessonRecordCurriculumSearch" type="search" placeholder="코드·기술명 검색" autocomplete="off" />
+            <input id="lessonRecordCurriculumSearch" type="search" placeholder="증상·동작·목표·코드 검색" autocomplete="off" />
+            <div id="lessonRecordCurriculumSuggestions" class="tn-curriculum-suggestions" role="listbox" hidden></div>
             <select id="lessonRecordCurriculum" required></select>
           </label>
           <a id="lessonRecordCurriculumLink" class="lesson-record-curriculum-link" href="#" target="_blank" rel="noopener" hidden>커리큘럼 원본 보기</a>
@@ -2045,19 +2046,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.350"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.350"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.350"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.351"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.351"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.351"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.351"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.350"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.350"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.350"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.350"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.350"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.350"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.351"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.351"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.351"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.351"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.351"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.351"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.350"></script>
+    <script src="./app.js?v=1.0.351"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-14"></script>
   </body>
 </html>

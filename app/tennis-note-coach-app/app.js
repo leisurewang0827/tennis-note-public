@@ -2563,7 +2563,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.350",
+    workerUrl: "./service-worker.js?v=1.0.351",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2593,7 +2593,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.350" });
+  const params = new URLSearchParams({ v: "1.0.351" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3932,14 +3932,15 @@ function renderScheduleEditPanel() {
           <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
           <textarea data-modal-coach-comment="${escapeHtml(lesson.id)}" rows="4" placeholder="오늘 잘된 점과 다음 수업에서 보완할 점을 적어주세요." ${canProcess ? "" : "disabled"}></textarea>
           <div class="tn-comment-draft-tools">
-            <input data-modal-comment-keywords="${escapeHtml(lesson.id)}" type="text" maxlength="160" placeholder="키워드 입력 · 예: 포핸드, 타점, 체중이동" ${canProcess ? "" : "disabled"} />
+            <input data-modal-comment-keywords="${escapeHtml(lesson.id)}" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" ${canProcess ? "" : "disabled"} />
             <button type="button" data-generate-modal-comment="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>초안 만들기</button>
           </div>
           <small class="lesson-comment-count" data-modal-comment-count="${escapeHtml(lesson.id)}">0/5자</small>
         </label>
         <label class="lesson-required-field">
           <span>다음 커리큘럼 <small>필수</small></span>
-          <input data-curriculum-option-search type="search" placeholder="기술명 또는 코드 검색" aria-label="${escapeHtml(participant.name || "회원")} 다음 커리큘럼 검색" ${canProcess ? "" : "disabled"} />
+          <input data-curriculum-option-search type="search" placeholder="증상·동작·목표·코드 검색" aria-label="${escapeHtml(participant.name || "회원")} 다음 커리큘럼 검색" ${canProcess ? "" : "disabled"} />
+          <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
           <select data-modal-next-curriculum="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>
             <option value="">검색·선택</option>
             ${curriculumOptions(defaultCurriculumId)}
@@ -4163,7 +4164,8 @@ function renderLessonRecordWritePanel() {
       </label>
       <label class="wide">
         <span>다음 커리큘럼 <small>필수</small></span>
-        <input data-curriculum-option-search type="search" placeholder="기술명 또는 코드 검색" aria-label="다음 커리큘럼 검색" />
+        <input data-curriculum-option-search type="search" placeholder="증상·동작·목표·코드 검색" aria-label="다음 커리큘럼 검색" />
+        <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
         <select id="recordNextCurriculum">${curriculumOptions(curriculumSteps[0]?.id)}</select>
       </label>
       <div class="actions wide">
@@ -5721,10 +5723,27 @@ function coachScheduleMonthValue(week = activeScheduleWeek()) {
 
 function curriculumOptions(selectedId, query = "") {
   const canonicalSelectedId = canonicalCurriculumId(selectedId);
-  const normalizedQuery = String(query || "").trim().toLocaleLowerCase("ko-KR");
-  const matchesQuery = (step) => !normalizedQuery || `${step.id || ""} ${step.title || ""} ${step.trackTitle || ""} ${step.category || ""}`
-    .toLocaleLowerCase("ko-KR")
-    .includes(normalizedQuery);
+  const searchQuery = String(query || "").trim();
+  const search = window.TennisNoteCurriculumSearch;
+  const rankedSteps = searchQuery && search?.search
+    ? search.search(curriculumSteps, searchQuery, { limit: 24 }).map((result) => result.step)
+    : null;
+  const normalizedQuery = searchQuery.toLocaleLowerCase("ko-KR");
+  const matchesQuery = (step) => {
+    if (!normalizedQuery) return true;
+    if (rankedSteps) return rankedSteps.includes(step);
+    return `${step.id || ""} ${step.title || ""} ${step.trackTitle || ""} ${step.category || ""}`
+      .toLocaleLowerCase("ko-KR")
+      .includes(normalizedQuery);
+  };
+  if (rankedSteps) {
+    const visibleSteps = [...rankedSteps];
+    const selectedStep = curriculumSteps.find((step) => step.id === canonicalSelectedId);
+    if (selectedStep && !visibleSteps.includes(selectedStep)) visibleSteps.unshift(selectedStep);
+    return visibleSteps
+      .map((step) => `<option value="${step.id}" ${step.id === canonicalSelectedId ? "selected" : ""}>${step.id} · ${escapeHtml(step.title)} · ${escapeHtml(step.trackTitle || step.category || "커리큘럼")}</option>`)
+      .join("");
+  }
   if (!curriculumCatalog.tracks?.length) {
     return curriculumSteps
       .filter(matchesQuery)
@@ -5753,6 +5772,51 @@ function filterCurriculumOptions(input) {
   const selectedId = select.value || "";
   select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(selectedId, input.value)}`;
   if ([...select.options].some((option) => option.value === selectedId)) select.value = selectedId;
+  renderCoachCurriculumSuggestions(input);
+}
+
+function coachCurriculumSearchResults(query) {
+  const value = String(query || "").trim();
+  if (!value) return [];
+  const search = window.TennisNoteCurriculumSearch;
+  if (search?.search) return search.search(curriculumSteps, value, { limit: 24 }).map((result) => result.step);
+  const normalized = value.toLocaleLowerCase("ko-KR");
+  return curriculumSteps
+    .filter((step) => `${step.id} ${step.title} ${step.trackTitle || ""} ${step.category || ""}`.toLocaleLowerCase("ko-KR").includes(normalized))
+    .slice(0, 24);
+}
+
+function renderCoachCurriculumSuggestions(input) {
+  const target = input?.closest("label")?.querySelector("[data-curriculum-option-suggestions]");
+  if (!target) return;
+  const query = String(input.value || "").trim();
+  const exactCode = canonicalCurriculumId(query.split(/\s|·/)[0]);
+  const exactStep = curriculumSteps.find((step) => step.id === exactCode);
+  if (!query || (exactStep && `${exactStep.id} · ${exactStep.title}` === query)) {
+    target.hidden = true;
+    target.innerHTML = "";
+    return;
+  }
+  const matches = coachCurriculumSearchResults(query);
+  target.hidden = false;
+  target.innerHTML = matches.length
+    ? matches.map((step, index) => `<button type="button" class="tn-curriculum-suggestion${index === 0 ? " is-active" : ""}" role="option" data-curriculum-option-code="${escapeHtml(step.id)}"><strong>${escapeHtml(`${step.id} · ${step.title}`)}</strong><span>${escapeHtml([step.trackTitle || step.category, step.stageLabel || step.level].filter(Boolean).join(" · "))}</span><small>${escapeHtml(step.focus || step.goal || step.guide || "선택한 단계가 다음 커리큘럼으로 저장됩니다.")}</small></button>`).join("")
+    : '<p class="tn-curriculum-suggestions-empty">일치하는 단계가 없습니다. 증상이나 동작을 다른 말로 입력해 보세요.</p>';
+}
+
+function selectCoachCurriculumSuggestion(button) {
+  const label = button?.closest("label");
+  const input = label?.querySelector("[data-curriculum-option-search]");
+  const select = label?.querySelector("select");
+  const target = label?.querySelector("[data-curriculum-option-suggestions]");
+  const step = selectedCurriculum(button?.dataset.curriculumOptionCode || "");
+  if (!input || !select || !step) return;
+  input.value = `${step.id} · ${step.title}`;
+  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(step.id)}`;
+  select.value = step.id;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  if (target) target.hidden = true;
+  input.focus();
 }
 
 function selectedCurriculum(id) {
@@ -5865,14 +5929,15 @@ function recordProcessingMarkup() {
                     <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
                     <textarea data-log-participant-comment="${escapeHtml(log.id)}" rows="3" ${confirmed ? "disabled" : ""}>${escapeHtml(result.coachComment || "")}</textarea>
                     <div class="tn-comment-draft-tools">
-                      <input data-log-participant-keywords="${escapeHtml(log.id)}" type="text" maxlength="160" placeholder="키워드 입력 · 쉼표로 구분" ${confirmed ? "disabled" : ""} />
+                      <input data-log-participant-keywords="${escapeHtml(log.id)}" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" ${confirmed ? "disabled" : ""} />
                       <button type="button" data-generate-log-participant-comment="${escapeHtml(log.id)}" ${confirmed ? "disabled" : ""}>초안 만들기</button>
                     </div>
                     <small class="lesson-comment-count ${resultCommentLength >= 5 ? "is-ready" : ""}" data-log-participant-comment-count="${escapeHtml(log.id)}">${resultCommentLength}/5자</small>
                   </label>
                   <label>
                     <span>다음 커리큘럼 <small>필수</small></span>
-                    <input data-curriculum-option-search type="search" placeholder="기술명 또는 코드 검색" aria-label="${escapeHtml(result.name || "회원")} 다음 커리큘럼 검색" ${confirmed ? "disabled" : ""} />
+                    <input data-curriculum-option-search type="search" placeholder="증상·동작·목표·코드 검색" aria-label="${escapeHtml(result.name || "회원")} 다음 커리큘럼 검색" ${confirmed ? "disabled" : ""} />
+                    <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
                     <select data-log-participant-curriculum="${escapeHtml(log.id)}" ${confirmed ? "disabled" : ""}>
                       <option value="">검색·선택</option>
                       ${curriculumOptions(result.nextCurriculumId || "")}
@@ -5886,14 +5951,15 @@ function recordProcessingMarkup() {
               <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
               <textarea data-coach-comment="${log.id}" rows="3" ${confirmed ? "disabled" : ""}>${escapeHtml(log.coachComment || "")}</textarea>
               <div class="tn-comment-draft-tools">
-                <input data-log-comment-keywords="${log.id}" type="text" maxlength="160" placeholder="키워드 입력 · 쉼표로 구분" ${confirmed ? "disabled" : ""} />
+                <input data-log-comment-keywords="${log.id}" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" ${confirmed ? "disabled" : ""} />
                 <button type="button" data-generate-log-comment="${log.id}" ${confirmed ? "disabled" : ""}>초안 만들기</button>
               </div>
               <small class="lesson-comment-count ${String(log.coachComment || "").trim().length >= 5 ? "is-ready" : ""}" data-log-comment-count="${log.id}">${String(log.coachComment || "").trim().length}/5자</small>
             </label>
             <label>
               <span>다음 커리큘럼 <small>필수</small></span>
-              <input data-curriculum-option-search type="search" placeholder="기술명 또는 코드 검색" aria-label="다음 커리큘럼 검색" ${confirmed ? "disabled" : ""} />
+              <input data-curriculum-option-search type="search" placeholder="증상·동작·목표·코드 검색" aria-label="다음 커리큘럼 검색" ${confirmed ? "disabled" : ""} />
+              <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
               <select data-next-curriculum="${log.id}" ${confirmed ? "disabled" : ""}><option value="">검색·선택</option>${curriculumOptions(log.nextCurriculumId || log.curriculumId)}</select>
             </label>
             <em>다음 수업: ${escapeHtml(nextStep.id)} · ${escapeHtml(nextStep.title)}</em>`;
@@ -6230,7 +6296,7 @@ function applyCoachCommentDraft(keywordSource, commentSource) {
   commentInput.value = result.comment;
   commentInput.dispatchEvent(new Event("input", { bubbles: true }));
   commentInput.focus();
-  showToast("코멘트 초안을 만들었습니다. 확인 후 저장해 주세요.");
+  showToast("세부 코멘트 초안을 만들었습니다. 내용을 확인한 뒤 저장해 주세요.");
 }
 
 function updateFeedbackDraft(id) {
@@ -6902,7 +6968,34 @@ function bindEvents() {
     }
   });
 
+  document.addEventListener("keydown", (event) => {
+    if (event.isComposing) return;
+    const draftKeywords = event.target.closest("[data-modal-comment-keywords], [data-log-comment-keywords], [data-log-participant-keywords]");
+    if (draftKeywords && event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      draftKeywords.closest(".tn-comment-draft-tools")?.querySelector("button")?.click();
+      return;
+    }
+    const curriculumSearch = event.target.closest("[data-curriculum-option-search]");
+    if (!curriculumSearch) return;
+    const suggestions = curriculumSearch.closest("label")?.querySelector("[data-curriculum-option-suggestions]");
+    if (event.key === "Escape") {
+      if (suggestions) suggestions.hidden = true;
+      return;
+    }
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    event.stopPropagation();
+    suggestions?.querySelector("[data-curriculum-option-code]")?.click();
+  });
+
   document.addEventListener("click", (event) => {
+    const curriculumSuggestion = event.target.closest("[data-curriculum-option-code]");
+    if (curriculumSuggestion) {
+      selectCoachCurriculumSuggestion(curriculumSuggestion);
+      return;
+    }
     const modalCommentDraftButton = event.target.closest("[data-generate-modal-comment]");
     if (modalCommentDraftButton) {
       const participantRow = modalCommentDraftButton.closest("[data-modal-participant-row]");
@@ -7436,7 +7529,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.350",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.351",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
