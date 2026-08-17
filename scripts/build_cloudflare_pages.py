@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = ROOT / "app"
+PAYMENT_METHOD_IDS = ("card", "tosspay", "naverpay", "kakaopay")
 
 
 def clean_output(path: Path) -> None:
@@ -36,6 +37,17 @@ def env(name: str) -> str:
     return os.environ.get(name, "").strip().lstrip("\ufeff")
 
 
+def payment_operating_settings() -> tuple[str, list[str]]:
+    mode = "multi" if env("TENNISNOTE_PAYMENT_MODE").lower() == "multi" else "tosspay_only"
+    configured = [
+        value.strip().lower()
+        for value in env("TENNISNOTE_ALLOWED_PAYMENT_METHODS").split(",")
+        if value.strip().lower() in PAYMENT_METHOD_IDS
+    ]
+    allowed = list(dict.fromkeys(configured)) if mode == "multi" and configured else ["tosspay"]
+    return mode, allowed
+
+
 def write_browser_config(output: Path) -> None:
     missing = [
         name
@@ -53,18 +65,31 @@ def write_browser_config(output: Path) -> None:
             "naver": "custom:naver",
         },
     }
+    payment_mode, allowed_methods = payment_operating_settings()
+    configured_channels = {
+        "card": env("TENNISNOTE_PORTONE_CHANNEL_KEY"),
+        "tosspay": env("TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY"),
+        "naverpay": env("TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY"),
+        "kakaopay": env("TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY"),
+    }
+    channels = {
+        name: value
+        for name, value in configured_channels.items()
+        if name in allowed_methods and value
+    }
+    if not env("TENNISNOTE_PORTONE_STORE_ID"):
+        raise ValueError("Missing required deployment setting: TENNISNOTE_PORTONE_STORE_ID")
+    if payment_mode == "tosspay_only" and not channels.get("tosspay"):
+        raise ValueError("Missing required deployment setting: TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY")
     payment_config = {
         "provider": "portone",
+        "mode": payment_mode,
+        "allowedMethods": allowed_methods,
         "storeId": env("TENNISNOTE_PORTONE_STORE_ID"),
-        "channelKey": env("TENNISNOTE_PORTONE_CHANNEL_KEY"),
-        "naverPayCategoryType": env("TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE"),
-        "naverPayCategoryId": env("TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID"),
-        "channels": {
-            "card": env("TENNISNOTE_PORTONE_CHANNEL_KEY"),
-            "tosspay": env("TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY"),
-            "naverpay": env("TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY"),
-            "kakaopay": env("TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY"),
-        },
+        "channelKey": channels.get("card", ""),
+        "naverPayCategoryType": env("TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE") if "naverpay" in allowed_methods else "",
+        "naverPayCategoryId": env("TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID") if "naverpay" in allowed_methods else "",
+        "channels": channels,
     }
     target = output / "shared" / "config.local.js"
     target.parent.mkdir(parents=True, exist_ok=True)

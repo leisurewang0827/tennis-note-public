@@ -33,6 +33,13 @@ def verify_local_assets(index: Path, artifact_root: Path) -> None:
         assert target.exists(), f"Missing local asset: {index} -> {reference}"
 
 
+def payment_config(path: Path) -> dict:
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r"window\.TENNIS_NOTE_PAYMENT_CONFIG\s*=\s*(\{[\s\S]*?\});", text)
+    assert match, f"Payment configuration is missing: {path}"
+    return json.loads(match.group(1))
+
+
 ROOT = Path(__file__).resolve().parents[1]
 source = json.loads((ROOT / "app" / "release.json").read_text(encoding="utf-8"))
 member = json.loads((ROOT / "dist" / "member" / "release.json").read_text(encoding="utf-8"))
@@ -63,5 +70,10 @@ for config in (
     text = config.read_text(encoding="utf-8")
     assert "service_role" not in text
     assert "PORTONE_API_SECRET" not in text
+    payment = payment_config(config)
+    assert payment["mode"] == "tosspay_only"
+    assert payment["allowedMethods"] == ["tosspay"]
+    assert set(payment["channels"]) == {"tosspay"}
+    assert payment["channels"]["tosspay"]
 
 print(f"Public PWA CI passed for {source['version']} / {source['releaseId']}")

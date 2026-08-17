@@ -31,60 +31,18 @@ jobs:
 
       - name: Generate browser client configuration
         env:
-          SUPABASE_URL: ${{ secrets.TENNISNOTE_SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
-          PORTONE_STORE_ID: ${{ secrets.TENNISNOTE_PORTONE_STORE_ID }}
-          PORTONE_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_CHANNEL_KEY }}
-          PORTONE_TOSSPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY }}
-          PORTONE_NAVERPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY }}
-          PORTONE_NAVERPAY_CATEGORY_TYPE: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE }}
-          PORTONE_NAVERPAY_CATEGORY_ID: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID }}
-          PORTONE_KAKAOPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY }}
+          TENNISNOTE_SUPABASE_URL: ${{ secrets.TENNISNOTE_SUPABASE_URL }}
+          TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
+          TENNISNOTE_PORTONE_STORE_ID: ${{ secrets.TENNISNOTE_PORTONE_STORE_ID }}
+          TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY }}
+          TENNISNOTE_PAYMENT_MODE: tosspay_only
+          TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay
         run: |
           python - <<'PY'
-          import json
-          import os
           from pathlib import Path
+          from scripts.build_cloudflare_pages import write_browser_config
 
-          def clean(name):
-              return os.environ.get(name, "").strip().lstrip("\ufeff")
-
-          required = ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"]
-          missing = [name for name in required if not clean(name)]
-          if missing:
-              raise SystemExit("Missing required GitHub Actions secrets: " + ", ".join(missing))
-
-          app_config = {
-              "supabaseUrl": clean("SUPABASE_URL"),
-              "supabasePublishableKey": clean("SUPABASE_PUBLISHABLE_KEY"),
-              "authProviderOverrides": {
-                  "kakao": "custom:kakao",
-                  "naver": "custom:naver",
-              },
-          }
-          payment_config = {
-              "provider": "portone",
-              "storeId": clean("PORTONE_STORE_ID"),
-              "channelKey": clean("PORTONE_CHANNEL_KEY"),
-              "naverPayCategoryType": clean("PORTONE_NAVERPAY_CATEGORY_TYPE"),
-              "naverPayCategoryId": clean("PORTONE_NAVERPAY_CATEGORY_ID"),
-              "channels": {
-                  "card": clean("PORTONE_CHANNEL_KEY"),
-                  "tosspay": clean("PORTONE_TOSSPAY_CHANNEL_KEY"),
-                  "naverpay": clean("PORTONE_NAVERPAY_CHANNEL_KEY"),
-                  "kakaopay": clean("PORTONE_KAKAOPAY_CHANNEL_KEY"),
-              },
-          }
-          target = Path("_site/app/shared/config.local.js")
-          target.parent.mkdir(parents=True, exist_ok=True)
-          target.write_text(
-              "window.TENNISNOTE_CONFIG = "
-              + json.dumps(app_config, ensure_ascii=False, indent=2)
-              + ";\n\nwindow.TENNIS_NOTE_PAYMENT_CONFIG = "
-              + json.dumps(payment_config, ensure_ascii=False, indent=2)
-              + ";\n",
-              encoding="utf-8",
-          )
+          write_browser_config(Path("_site/app"))
           PY
 
       - name: Configure GitHub Pages
