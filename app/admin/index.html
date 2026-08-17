@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.353" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.354" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-14" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.353" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.354" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -68,14 +68,21 @@
         </div>
 
         <nav class="nav-list" aria-label="관리자 화면">
-          <button class="nav-item is-active" type="button" data-view="dashboard">대시보드</button>
-          <button class="nav-item" type="button" data-view="members">회원관리</button>
-          <button class="nav-item" type="button" data-view="schedule">레슨시간표</button>
-          <button class="nav-item" type="button" data-view="billing">결제/정산</button>
-          <button class="nav-item" type="button" data-view="reports">경영 리포트</button>
-          <button class="nav-item" type="button" data-view="notes">기록/차감 확인</button>
-          <button class="nav-item" type="button" data-view="issues">개선·오류 접수</button>
-          <button class="nav-item" type="button" data-view="settings">운영 설정</button>
+          <div id="adminPrimaryMenu" class="admin-nav-section" aria-label="주 메뉴">
+            <button class="nav-item is-active" type="button" data-view="dashboard">대시보드</button>
+            <button class="nav-item" type="button" data-view="schedule">레슨시간표</button>
+            <button class="nav-item" type="button" data-view="members">회원관리</button>
+            <button class="nav-item" type="button" data-view="billing">결제/정산</button>
+          </div>
+          <button id="adminMoreMenuButton" class="nav-item admin-more-toggle" type="button" aria-controls="adminMoreMenu" aria-expanded="false">
+            <span>더보기</span><span class="admin-more-toggle-icon" aria-hidden="true">⌄</span>
+          </button>
+          <div id="adminMoreMenu" class="admin-nav-section admin-more-menu" aria-label="더보기 메뉴" hidden>
+            <button class="nav-item" type="button" data-view="reports">경영 리포트</button>
+            <button class="nav-item" type="button" data-view="notes">기록/차감 확인</button>
+            <button class="nav-item" type="button" data-view="issues">개선·오류 접수</button>
+            <button class="nav-item" type="button" data-view="settings">운영 설정</button>
+          </div>
         </nav>
         <div class="sidebar-footer">
           <small class="release-version" data-tennisnote-release="detail"></small>
@@ -1012,7 +1019,10 @@
           <section class="panel management-report-widget" data-report-widget="finance">
             <div class="panel-heading">
               <div><p class="eyebrow">매출·비용·손익</p><h2>재무 자료 상태</h2></div>
-              <span class="source-pill">원본 비저장</span>
+              <div class="management-report-source-actions">
+                <span id="managementFinanceSourceStatus" class="source-pill">원본 비저장</span>
+                <button id="refreshDriveReportButton" class="ghost-button" type="button">Drive 확인</button>
+              </div>
             </div>
             <div id="managementFinanceReport" class="management-report-list"></div>
           </section>
@@ -2066,20 +2076,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.353"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.353"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.353"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.354"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.354"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.354"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.353"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.354"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.353"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.353"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.353"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.353"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.353"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.353"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.354"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.354"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.354"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.354"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.354"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.354"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.353"></script>
+    <script src="./app.js?v=1.0.354"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-14"></script>
   </body>
 </html>

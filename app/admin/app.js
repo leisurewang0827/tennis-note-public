@@ -1250,6 +1250,17 @@ const adminImportAuthState = {
   message: "관리자 로그인 상태 확인 전입니다.",
 };
 
+const adminDriveReportState = {
+  loading: false,
+  loaded: false,
+  status: "idle",
+  period: "",
+  branchId: "",
+  snapshot: null,
+  message: "Drive 연결 전",
+};
+let adminDriveReportRequestSerial = 0;
+
 const coachOperationsViews = new Set(["members", "schedule", "notes", "issues"]);
 const operationsRememberStorageKey = "tennis-note-operations-remember-login";
 const operationsProfileCacheStorageKey = "tennis-note-operations-profile-cache";
@@ -1393,6 +1404,7 @@ function applyOperationsRolePermissions() {
     const element = $(`#${id}`);
     if (element) element.hidden = role === "coach";
   });
+  applyAdminLayoutSettings();
 }
 
 function renderOperationsLoginGate() {
@@ -1956,6 +1968,10 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
     jobs.push(loadAdminDataOnce("records-support", loadAdminRecordsSupportData));
   }
 
+  if (view === "reports") {
+    jobs.push(loadAdminDriveReportSnapshot());
+  }
+
   if (!jobs.length) return Promise.resolve([]);
   return Promise.all(jobs).then((results) => {
     if (view !== state.view || !results.some(Boolean)) return results;
@@ -2312,6 +2328,28 @@ const adminMenuDefinitions = [
   { id: "issues", label: "개선·오류 접수" },
   { id: "settings", label: "운영 설정", required: true },
 ];
+const adminDefaultMenuOrder = ["dashboard", "schedule", "members", "billing", "reports", "notes", "issues", "settings"];
+const adminDefaultMoreMenus = ["reports", "notes", "issues", "settings"];
+const adminLayoutPresets = {
+  owner: {
+    label: "대표",
+    detail: "경영 리포트와 결제를 주 메뉴에서 바로 확인합니다.",
+    menuOrder: ["dashboard", "reports", "billing", "schedule", "members", "notes", "issues", "settings"],
+    moreMenus: ["notes", "issues", "settings"],
+  },
+  operations: {
+    label: "운영",
+    detail: "시간표·회원·결제를 먼저 두고 나머지는 더보기에 모읍니다.",
+    menuOrder: [...adminDefaultMenuOrder],
+    moreMenus: [...adminDefaultMoreMenus],
+  },
+  simple: {
+    label: "간단 보기",
+    detail: "대시보드·시간표·회원만 남겨 처음 쓰는 직원도 쉽게 찾습니다.",
+    menuOrder: [...adminDefaultMenuOrder],
+    moreMenus: ["billing", "reports", "notes", "issues", "settings"],
+  },
+};
 const adminDashboardGroupDefinitions = [
   { id: "metrics", label: "핵심 운영 수치" },
   { id: "operations", label: "오늘 처리·회원·코치", required: true },
@@ -2330,16 +2368,26 @@ const adminDashboardWidgetDefinitions = {
   ],
 };
 const adminReportWidgetDefinitions = [
-  { id: "summary", label: "경영 핵심 수치", required: true },
-  { id: "members", label: "회원 흐름" },
-  { id: "quality", label: "피드백·출석" },
-  { id: "finance", label: "재무 자료 상태", required: true },
-  { id: "sources", label: "리포트 개발 순서" },
+  { id: "summary", label: "경영 핵심 수치", required: true, defaultSize: "full" },
+  { id: "members", label: "회원 흐름", defaultSize: "two" },
+  { id: "quality", label: "피드백·출석", defaultSize: "two" },
+  { id: "finance", label: "재무 자료 상태", required: true, defaultSize: "full" },
+  { id: "sources", label: "리포트 개발 순서", defaultSize: "full" },
+];
+const adminReportWidgetSizeOptions = [
+  { id: "one", label: "1칸" },
+  { id: "two", label: "2칸" },
+  { id: "full", label: "전체" },
+];
+const adminReportWidgetFilterOptions = [
+  { id: "all", label: "전체" },
+  { id: "attention", label: "확인 필요만" },
 ];
 
 function defaultAdminLayoutSettings() {
   return {
-    menuOrder: adminMenuDefinitions.map((item) => item.id),
+    menuOrder: [...adminDefaultMenuOrder],
+    moreMenus: [...adminDefaultMoreMenus],
     hiddenMenus: [],
     groupOrder: adminDashboardGroupDefinitions.map((item) => item.id),
     hiddenGroups: [],
@@ -2349,6 +2397,8 @@ function defaultAdminLayoutSettings() {
     hiddenWidgets: [],
     reportWidgetOrder: adminReportWidgetDefinitions.map((item) => item.id),
     hiddenReportWidgets: [],
+    reportWidgetSizes: Object.fromEntries(adminReportWidgetDefinitions.map((item) => [item.id, item.defaultSize || "two"])),
+    reportWidgetFilters: Object.fromEntries(adminReportWidgetDefinitions.map((item) => [item.id, "all"])),
   };
 }
 
@@ -2368,7 +2418,9 @@ function normalizeAdminLayoutSettings(value = {}) {
   const requiredGroups = adminDashboardGroupDefinitions.filter((item) => item.required).map((item) => item.id);
   const requiredReportWidgets = adminReportWidgetDefinitions.filter((item) => item.required).map((item) => item.id);
   return {
-    menuOrder: normalizeLayoutOrder(value.menuOrder, adminMenuDefinitions),
+    menuOrder: normalizeLayoutOrder(value.menuOrder ?? defaults.menuOrder, adminMenuDefinitions),
+    moreMenus: [...new Set((Array.isArray(value.moreMenus) ? value.moreMenus : defaults.moreMenus)
+      .filter((id) => defaults.menuOrder.includes(id) && id !== "dashboard"))],
     hiddenMenus: [...new Set((Array.isArray(value.hiddenMenus) ? value.hiddenMenus : [])
       .filter((id) => !requiredMenus.includes(id) && defaults.menuOrder.includes(id)))],
     groupOrder: normalizeLayoutOrder(value.groupOrder, adminDashboardGroupDefinitions),
@@ -2385,6 +2437,14 @@ function normalizeAdminLayoutSettings(value = {}) {
     reportWidgetOrder: normalizeLayoutOrder(value.reportWidgetOrder, adminReportWidgetDefinitions),
     hiddenReportWidgets: [...new Set((Array.isArray(value.hiddenReportWidgets) ? value.hiddenReportWidgets : [])
       .filter((id) => !requiredReportWidgets.includes(id) && adminReportWidgetDefinitions.some((item) => item.id === id)))],
+    reportWidgetSizes: Object.fromEntries(adminReportWidgetDefinitions.map((item) => {
+      const size = value.reportWidgetSizes?.[item.id];
+      return [item.id, adminReportWidgetSizeOptions.some((option) => option.id === size) ? size : defaults.reportWidgetSizes[item.id]];
+    })),
+    reportWidgetFilters: Object.fromEntries(adminReportWidgetDefinitions.map((item) => {
+      const filter = value.reportWidgetFilters?.[item.id];
+      return [item.id, adminReportWidgetFilterOptions.some((option) => option.id === filter) ? filter : defaults.reportWidgetFilters[item.id]];
+    })),
   };
 }
 
@@ -2397,6 +2457,7 @@ let adminLayoutSettings = (() => {
 })();
 let adminLayoutServerUpdatedAt = "";
 let adminLayoutSaveState = "local";
+let adminMoreMenuOpen = false;
 const adminPinHashVersion = "tn-admin-lock-v1";
 const legacyDefaultAdminPin = "0000";
 const legacyDefaultAdminPinHashes = new Set([
@@ -7435,7 +7496,9 @@ function setView(view, options = {}) {
   closeCleanMemberInlineEditor(view);
   state.view = view;
   if (view === "schedule" && (enteringSchedule || !scheduleSessionInitialized)) resetScheduleEntryState();
-  $$(".nav-item").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
+  $$(".nav-item[data-view]").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
+  $("#adminMoreMenuButton")?.classList.toggle("is-active", adminLayoutSettings.moreMenus.includes(view));
+  setAdminMoreMenuOpen(false);
   $$(".view").forEach((section) => section.classList.remove("is-active"));
   $(`#${view}View`).classList.add("is-active");
   closeAdminMenu();
@@ -24768,7 +24831,18 @@ function managementReportTicketIsActive(ticket = {}, today = adminLocalDateKey(n
   return !ticket.expires || ticket.expires >= today;
 }
 
-function managementReportListMarkup(items = []) {
+function managementReportVisibleItems(widgetId, items = []) {
+  return adminLayoutSettings.reportWidgetFilters?.[widgetId] === "attention"
+    ? items.filter((item) => item.needsAttention === true)
+    : items;
+}
+
+function managementReportEmptyMarkup(message = "현재 확인이 필요한 항목이 없습니다.") {
+  return `<div class="management-report-empty"><strong>확인 완료</strong><span>${escapeHtml(message)}</span></div>`;
+}
+
+function managementReportListMarkup(items = [], emptyMessage = "현재 확인이 필요한 항목이 없습니다.") {
+  if (!items.length) return managementReportEmptyMarkup(emptyMessage);
   return items.map((item) => `
     <article class="management-report-row ${escapeHtml(item.tone || "")}">
       <div>
@@ -24777,6 +24851,177 @@ function managementReportListMarkup(items = []) {
       </div>
       <span>${escapeHtml(item.value)}</span>
     </article>`).join("");
+}
+
+function managementDriveReportStatusInfo() {
+  const status = adminDriveReportState.status;
+  if (adminDriveReportState.loading || status === "loading") {
+    return { label: "Drive 확인 중", detail: "집계 셀을 읽고 있습니다.", tone: "neutral", pillTone: "" };
+  }
+  if (status === "fresh") {
+    return { label: "최신 자료", detail: "읽기 전용 집계 정상", tone: "ready", pillTone: "ready" };
+  }
+  if (status === "stale") {
+    return { label: "갱신 지연", detail: "원본 갱신시각을 확인해 주세요.", tone: "warning", pillTone: "warn" };
+  }
+  if (status === "provisional") {
+    return { label: "검증 필요", detail: "미입력·작성 중·수식 오류를 확인해 주세요.", tone: "warning", pillTone: "warn" };
+  }
+  if (status === "not_configured") {
+    return { label: "Drive 연결 전", detail: "서버의 읽기 전용 연결값을 설정해야 합니다.", tone: "neutral", pillTone: "" };
+  }
+  if (status === "unavailable") {
+    return { label: "선택 월 자료 없음", detail: "해당 지점·월의 집계 셀 설정을 확인해 주세요.", tone: "warning", pillTone: "warn" };
+  }
+  if (status === "error") {
+    return { label: "Drive 읽기 실패", detail: adminDriveReportState.message || "연결과 원본 권한을 확인해 주세요.", tone: "warning", pillTone: "danger" };
+  }
+  return { label: "Drive 연결 전", detail: "Drive 확인을 누르면 읽기 전용 집계 상태를 확인합니다.", tone: "neutral", pillTone: "" };
+}
+
+function managementDriveReportMetric(id) {
+  const value = Number(adminDriveReportState.snapshot?.metrics?.[id]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function managementDriveSourceDetail() {
+  const source = adminDriveReportState.snapshot?.source || {};
+  const updatedAt = source.updatedAt ? new Date(source.updatedAt) : null;
+  const updatedLabel = updatedAt && !Number.isNaN(updatedAt.getTime())
+    ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(updatedAt)
+    : "갱신시각 없음";
+  const closeLabels = { closed: "마감", review: "검토 중", draft: "작성 중", error: "오류" };
+  const closeLabel = closeLabels[source.closeStatus] || "마감상태 없음";
+  const issueCount = Number(source.qualityIssueCount) || 0;
+  return `${updatedLabel} · ${closeLabel}${issueCount ? ` · 품질 이슈 ${issueCount}건` : ""}`;
+}
+
+function managementDriveFinanceRows() {
+  const statusInfo = managementDriveReportStatusInfo();
+  const totalCost = managementDriveReportMetric("totalCost");
+  const operatingProfit = managementDriveReportMetric("operatingProfit");
+  const debtBalance = managementDriveReportMetric("debtBalance");
+  const startupCost = managementDriveReportMetric("startupCost");
+  const hasSnapshot = Boolean(adminDriveReportState.snapshot && ["fresh", "stale", "provisional"].includes(adminDriveReportState.status));
+  return [
+    {
+      label: "Drive 원본 상태",
+      value: statusInfo.label,
+      detail: hasSnapshot ? managementDriveSourceDetail() : statusInfo.detail,
+      tone: statusInfo.tone,
+      needsAttention: adminDriveReportState.status !== "fresh",
+    },
+    {
+      label: "비용·영업이익",
+      value: totalCost !== null && operatingProfit !== null
+        ? `비용 ${money.format(totalCost)}원 · 이익 ${money.format(operatingProfit)}원`
+        : statusInfo.label,
+      detail: hasSnapshot ? "Google Sheets 집계 셀 · 원본 행 비저장" : "장부 원본을 DB에 저장하지 않는 읽기 전용 집계",
+      tone: totalCost !== null && operatingProfit !== null ? statusInfo.tone : "neutral",
+      needsAttention: adminDriveReportState.status !== "fresh",
+    },
+    {
+      label: "대출·창업비",
+      value: debtBalance !== null && startupCost !== null
+        ? `대출 ${money.format(debtBalance)}원 · 창업비 ${money.format(startupCost)}원`
+        : statusInfo.label,
+      detail: hasSnapshot ? "대표 관리자에게만 노출되는 집계값" : "관리자 권한의 서버 어댑터 연결 필요",
+      tone: debtBalance !== null && startupCost !== null ? statusInfo.tone : "neutral",
+      needsAttention: adminDriveReportState.status !== "fresh",
+    },
+  ];
+}
+
+function adminDriveReportErrorState(error) {
+  const code = String(error?.payload?.code || error?.message || "drive_report_read_failed");
+  if (code.includes("drive_report_not_configured") || code.includes("drive_report_sources_invalid")) {
+    return { status: "not_configured", message: "서버의 Drive 읽기 전용 연결값이 아직 없습니다." };
+  }
+  if (code.includes("drive_report_source_not_found")) {
+    return { status: "unavailable", message: "선택한 지점과 월의 Drive 집계 설정이 없습니다." };
+  }
+  if (error?.status === 401 || error?.status === 403) {
+    return { status: "error", message: "대표 관리자 권한으로 다시 로그인해 주세요." };
+  }
+  return { status: "error", message: "Drive 원본 권한, 집계 셀 또는 서버 연결을 확인해 주세요." };
+}
+
+async function loadAdminDriveReportSnapshot({ force = false } = {}) {
+  state.managementReportMonth = /^\d{4}-\d{2}$/.test(state.managementReportMonth)
+    ? state.managementReportMonth
+    : adminLocalDateKey(new Date()).slice(0, 7);
+  const period = state.managementReportMonth;
+  const branchId = activeOperationBranchId();
+  const currentKey = `${branchId}:${period}`;
+  const loadedKey = `${adminDriveReportState.branchId}:${adminDriveReportState.period}`;
+
+  if (adminDemoMode) {
+    Object.assign(adminDriveReportState, {
+      loading: false,
+      loaded: true,
+      status: "not_configured",
+      period,
+      branchId,
+      snapshot: null,
+      message: "데모에서는 Drive 서버를 호출하지 않습니다.",
+    });
+    return false;
+  }
+  if (!force && adminDriveReportState.loaded && currentKey === loadedKey) return false;
+  const client = window.TennisNoteDataClient;
+  if (!client?.invokeFunction || !client.readiness?.().ready || operationsRole() !== "admin" || !branchId) {
+    Object.assign(adminDriveReportState, {
+      loading: false,
+      loaded: true,
+      status: "not_configured",
+      period,
+      branchId,
+      snapshot: null,
+      message: "관리자 로그인과 현재 지점 연결을 확인해 주세요.",
+    });
+    if (state.view === "reports") renderReports();
+    return false;
+  }
+
+  const requestSerial = ++adminDriveReportRequestSerial;
+  Object.assign(adminDriveReportState, {
+    loading: true,
+    loaded: false,
+    status: "loading",
+    period,
+    branchId,
+    snapshot: null,
+    message: "Drive 집계 셀 확인 중",
+  });
+  if (state.view === "reports") renderReports();
+  try {
+    const response = await client.invokeFunction("tennisnote-drive-report-snapshot", {
+      body: { period, branchId },
+    });
+    if (requestSerial !== adminDriveReportRequestSerial) return false;
+    const status = ["fresh", "stale", "provisional"].includes(response?.status)
+      ? response.status
+      : "error";
+    Object.assign(adminDriveReportState, {
+      loading: false,
+      loaded: true,
+      status,
+      snapshot: response?.ok ? response : null,
+      message: response?.ok ? "Drive 읽기 전용 집계 확인 완료" : "Drive 응답 계약을 확인해 주세요.",
+    });
+    return true;
+  } catch (error) {
+    if (requestSerial !== adminDriveReportRequestSerial) return false;
+    Object.assign(adminDriveReportState, {
+      loading: false,
+      loaded: true,
+      snapshot: null,
+      ...adminDriveReportErrorState(error),
+    });
+    return true;
+  } finally {
+    if (requestSerial === adminDriveReportRequestSerial && state.view === "reports") renderReports();
+  }
 }
 
 function renderReports() {
@@ -24795,6 +25040,17 @@ function renderReports() {
   const monthInput = $("#managementReportMonth");
   if (monthInput) monthInput.value = month;
   if ($("#managementReportPeriodLabel")) $("#managementReportPeriodLabel").textContent = `${monthLabel} 요약`;
+  const driveStatusInfo = managementDriveReportStatusInfo();
+  const driveStatusTarget = $("#managementFinanceSourceStatus");
+  if (driveStatusTarget) {
+    driveStatusTarget.textContent = driveStatusInfo.label;
+    driveStatusTarget.className = `source-pill ${driveStatusInfo.pillTone}`.trim();
+  }
+  const driveRefreshButton = $("#refreshDriveReportButton");
+  if (driveRefreshButton) {
+    driveRefreshButton.disabled = adminDriveReportState.loading;
+    driveRefreshButton.textContent = adminDriveReportState.loading ? "확인 중" : "Drive 확인";
+  }
 
   const branchMembers = operationBranchMembers();
   const branchTickets = operationBranchTickets();
@@ -24827,41 +25083,45 @@ function renderReports() {
     { label: "결제 완료 매출", value: `${money.format(paidAmount)}원`, detail: `${paidBillings.length}건 · 결제 DB 기준`, tone: "accent" },
     { label: "활성 회원", value: `${activeMembers.length}명`, detail: `활성 회원권 ${activeTickets.length}개`, tone: "" },
     { label: "완료 수업", value: `${completedLessons.length}건`, detail: `${monthLabel} 시간표 기준`, tone: "calm" },
-    { label: "기록 완료율", value: `${recordRate}%`, detail: `현재 확인 필요 ${recordPending}건`, tone: recordPending ? "warning" : "" },
+    { label: "기록 완료율", value: `${recordRate}%`, detail: `현재 확인 필요 ${recordPending}건`, tone: recordPending ? "warning" : "", needsAttention: recordPending > 0 },
   ];
-  metricTarget.innerHTML = metrics.map((item) => `
+  const visibleMetrics = managementReportVisibleItems("summary", metrics);
+  metricTarget.innerHTML = visibleMetrics.map((item) => `
     <article class="metric-card ${item.tone}">
       <span>${item.label}</span>
       <strong>${item.value}</strong>
       <small>${item.detail}</small>
-    </article>`).join("");
+    </article>`).join("") || managementReportEmptyMarkup("기록·차감 상태가 모두 정상입니다.");
 
-  memberTarget.innerHTML = managementReportListMarkup([
+  memberTarget.innerHTML = managementReportListMarkup(managementReportVisibleItems("members", [
     { label: "활성 회원", value: `${activeMembers.length}명`, detail: "현재 지점의 수강중 회원" },
     { label: "활성 회원권", value: `${activeTickets.length}개`, detail: "잔여 횟수와 사용 기간이 남은 회원권" },
-    { label: "잔여 2회 이하", value: `${lowTickets.length}개`, detail: "재등록 안내가 필요한 회원권", tone: lowTickets.length ? "warning" : "" },
-    { label: "시간표 확인 필요", value: `${missingScheduleCount}개`, detail: "정규시간 미배정 또는 쿠폰 다음 예약 없음", tone: missingScheduleCount ? "warning" : "" },
-  ]);
+    { label: "잔여 2회 이하", value: `${lowTickets.length}개`, detail: "재등록 안내가 필요한 회원권", tone: lowTickets.length ? "warning" : "", needsAttention: lowTickets.length > 0 },
+    { label: "시간표 확인 필요", value: `${missingScheduleCount}개`, detail: "정규시간 미배정 또는 쿠폰 다음 예약 없음", tone: missingScheduleCount ? "warning" : "", needsAttention: missingScheduleCount > 0 },
+  ]), "회원권과 시간표에 확인할 항목이 없습니다.");
 
-  qualityTarget.innerHTML = managementReportListMarkup([
+  qualityTarget.innerHTML = managementReportListMarkup(managementReportVisibleItems("quality", [
     { label: "완료 수업", value: `${completedLessons.length}건`, detail: `${monthLabel} 완료 처리` },
     { label: "기록·차감 완료", value: `${recordDone}건`, detail: "최종 피드백과 차감이 확인된 기록" },
-    { label: "기록 확인 필요", value: `${recordPending}건`, detail: "초안·미차감·수정 요청", tone: recordPending ? "warning" : "" },
-    { label: "노쇼·변경 승인", value: `${noShowLessons.length} / ${pendingChanges}건`, detail: "선택 월 노쇼 / 현재 변경 승인 대기", tone: noShowLessons.length || pendingChanges ? "warning" : "" },
-  ]);
+    { label: "기록 확인 필요", value: `${recordPending}건`, detail: "초안·미차감·수정 요청", tone: recordPending ? "warning" : "", needsAttention: recordPending > 0 },
+    { label: "노쇼·변경 승인", value: `${noShowLessons.length} / ${pendingChanges}건`, detail: "선택 월 노쇼 / 현재 변경 승인 대기", tone: noShowLessons.length || pendingChanges ? "warning" : "", needsAttention: noShowLessons.length > 0 || pendingChanges > 0 },
+  ]), "피드백·출석에서 확인할 항목이 없습니다.");
 
-  financeTarget.innerHTML = managementReportListMarkup([
+  financeTarget.innerHTML = managementReportListMarkup(managementReportVisibleItems("finance", [
     { label: "결제 완료 매출", value: `${money.format(paidAmount)}원`, detail: "테니스노트 결제 기록에서 실시간 계산", tone: "ready" },
-    { label: "선택 월 결제건 환불", value: `${money.format(refundedAmount)}원`, detail: "취소·환불 증빙 기준" },
-    { label: "비용·영업이익", value: "Drive 연결 전", detail: "장부 원본을 DB에 저장하지 않는 읽기 전용 집계 필요", tone: "neutral" },
-    { label: "대출·창업비", value: "Drive 연결 전", detail: "대표 권한에서만 별도 보드로 노출", tone: "neutral" },
-  ]);
+    { label: "선택 월 결제건 환불", value: `${money.format(refundedAmount)}원`, detail: "취소·환불 증빙 기준", needsAttention: refundedAmount > 0 },
+    ...managementDriveFinanceRows(),
+  ]), "재무 자료에 확인할 항목이 없습니다.");
 
-  sourceTarget.innerHTML = `
-    <article><b>1. 운영 KPI</b><span>회원·회원권·수업·피드백·결제는 현재 운영 DB에서 자동 계산합니다.</span><em>현재 적용</em></article>
-    <article><b>2. 월간 사업 지표</b><span>매출·이익, 전체 등록, 신규·재등록·이탈, 고객 분포를 공통 지표로 정리합니다.</span><em>정의 통합</em></article>
-    <article><b>3. 장부 읽기 전용 연결</b><span>2023~2026 리포트·장부 12개 파일, 277개 탭은 원본 행을 복제하지 않고 합계와 자료 상태만 읽습니다.</span><em>다음 단계</em></article>
-    <article><b>4. 자료 품질 게이트</b><span>미입력·작성 중·검증 필요·마감과 수식 오류를 숫자보다 먼저 표시합니다.</span><em>필수</em></article>`;
+  const sourceItems = managementReportVisibleItems("sources", [
+    { title: "1. 운영 KPI", detail: "회원·회원권·수업·피드백·결제는 현재 운영 DB에서 자동 계산합니다.", status: "현재 적용" },
+    { title: "2. 월간 사업 지표", detail: "매출·이익, 전체 등록, 신규·재등록·이탈, 고객 분포를 공통 지표로 정리합니다.", status: "정의 통합", needsAttention: true },
+    { title: "3. 장부 읽기 전용 연결", detail: "2023~2026 리포트·장부 12개 파일, 277개 탭은 원본 행을 복제하지 않고 allowlist 집계 셀과 자료 상태만 읽습니다.", status: adminDriveReportState.status === "fresh" ? "현재 적용" : "서버 연결 필요", needsAttention: adminDriveReportState.status !== "fresh" },
+    { title: "4. 자료 품질 게이트", detail: "미입력·작성 중·검증 필요·마감과 수식 오류를 숫자보다 먼저 표시합니다.", status: "필수", needsAttention: true },
+  ]);
+  sourceTarget.innerHTML = sourceItems.map((item) => `
+    <article><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.detail)}</span><em>${escapeHtml(item.status)}</em></article>
+  `).join("") || managementReportEmptyMarkup("리포트 개발 확인 항목이 없습니다.");
 }
 
 function coachModeLabel(coach) {
@@ -26606,17 +26866,36 @@ function persistAdminLayoutLocal() {
   localStorage.setItem(adminLayoutLocalKey, JSON.stringify(adminLayoutSettings));
 }
 
+function setAdminMoreMenuOpen(open) {
+  const menu = $("#adminMoreMenu");
+  const button = $("#adminMoreMenuButton");
+  const hasItems = Boolean(menu?.querySelector('.nav-item[data-view]:not([hidden])'));
+  adminMoreMenuOpen = Boolean(open && hasItems);
+  if (menu) menu.hidden = !adminMoreMenuOpen;
+  if (button) {
+    button.hidden = !hasItems;
+    button.classList.toggle("is-open", adminMoreMenuOpen);
+    button.setAttribute("aria-expanded", String(adminMoreMenuOpen));
+  }
+}
+
 function applyAdminLayoutSettings() {
   const nav = $(".nav-list");
   if (nav) {
+    const primaryMenu = $("#adminPrimaryMenu");
+    const moreMenu = $("#adminMoreMenu");
     adminLayoutSettings.menuOrder.forEach((view) => {
       const button = nav.querySelector(`[data-view="${view}"]`);
-      if (button) nav.append(button);
+      const destination = adminLayoutSettings.moreMenus.includes(view) ? moreMenu : primaryMenu;
+      if (button && destination) destination.append(button);
     });
     adminMenuDefinitions.forEach((item) => {
       const button = nav.querySelector(`[data-view="${item.id}"]`);
-      if (button) button.hidden = adminLayoutSettings.hiddenMenus.includes(item.id);
+      if (button) button.hidden = adminLayoutSettings.hiddenMenus.includes(item.id) || !operationsViewAllowed(item.id);
     });
+    const activeIsMore = adminLayoutSettings.moreMenus.includes(state.view);
+    $("#adminMoreMenuButton")?.classList.toggle("is-active", activeIsMore);
+    setAdminMoreMenuOpen(adminMoreMenuOpen || activeIsMore);
   }
 
   const dashboard = $("#dashboardView");
@@ -26649,6 +26928,8 @@ function applyAdminLayoutSettings() {
       if (!widget) return;
       widget.style.order = String(index + 1);
       widget.hidden = adminLayoutSettings.hiddenReportWidgets.includes(widgetId);
+      widget.dataset.reportSize = adminLayoutSettings.reportWidgetSizes[widgetId] || "two";
+      widget.dataset.reportFilter = adminLayoutSettings.reportWidgetFilters[widgetId] || "all";
     });
   }
 }
@@ -26662,12 +26943,29 @@ function adminLayoutRowMarkup(item, kind, index, count, group = "") {
         ? adminLayoutSettings.hiddenReportWidgets
         : adminLayoutSettings.hiddenWidgets;
   return `
-    <div class="admin-layout-row">
+    <div class="admin-layout-row ${kind === "reportWidget" ? "has-report-options" : ""}">
       <label>
         <input type="checkbox" data-admin-layout-visible="${kind}" data-admin-layout-id="${item.id}" data-admin-layout-group="${group}" ${hiddenList.includes(item.id) ? "" : "checked"} ${item.required ? "disabled" : ""} />
         <span>${escapeHtml(item.label)}</span>
       </label>
       <div class="admin-layout-row-actions">
+        ${kind === "menu" && item.id !== "dashboard" ? `
+          <button class="small-button admin-menu-placement-button" type="button" data-admin-menu-placement="${adminLayoutSettings.moreMenus.includes(item.id) ? "primary" : "more"}" data-admin-layout-id="${item.id}">${adminLayoutSettings.moreMenus.includes(item.id) ? "주 메뉴로" : "더보기로"}</button>
+        ` : ""}
+        ${kind === "reportWidget" ? `
+          <label class="admin-layout-option">
+            <span>폭</span>
+            <select data-admin-report-widget-size="${item.id}" aria-label="${escapeHtml(item.label)} 폭">
+              ${adminReportWidgetSizeOptions.map((option) => `<option value="${option.id}" ${adminLayoutSettings.reportWidgetSizes[item.id] === option.id ? "selected" : ""}>${option.label}</option>`).join("")}
+            </select>
+          </label>
+          <label class="admin-layout-option">
+            <span>표시</span>
+            <select data-admin-report-widget-filter="${item.id}" aria-label="${escapeHtml(item.label)} 표시 기준">
+              ${adminReportWidgetFilterOptions.map((option) => `<option value="${option.id}" ${adminLayoutSettings.reportWidgetFilters[item.id] === option.id ? "selected" : ""}>${option.label}</option>`).join("")}
+            </select>
+          </label>
+        ` : ""}
         <button class="icon-button" type="button" aria-label="위로 이동" title="위로 이동" data-move-admin-layout="${kind}" data-admin-layout-id="${item.id}" data-admin-layout-group="${group}" data-direction="-1" ${index === 0 ? "disabled" : ""}>↑</button>
         <button class="icon-button" type="button" aria-label="아래로 이동" title="아래로 이동" data-move-admin-layout="${kind}" data-admin-layout-id="${item.id}" data-admin-layout-group="${group}" data-direction="1" ${index === count - 1 ? "disabled" : ""}>↓</button>
       </div>
@@ -26689,7 +26987,20 @@ function renderAdminLayoutSettings() {
           : "저장 전";
   }
   if (!target) return;
+  const activePreset = adminLayoutPresetId();
   target.innerHTML = `
+    <section class="admin-layout-presets" aria-label="화면 구성 추천">
+      <div>
+        <h3>추천 화면</h3>
+        <p>업무에 맞는 기본 구성을 고른 뒤 세부 순서와 표시 여부를 바꿀 수 있습니다.</p>
+      </div>
+      <div class="admin-layout-preset-list">
+        ${Object.entries(adminLayoutPresets).map(([id, preset]) => `
+          <button class="admin-layout-preset ${activePreset === id ? "is-active" : ""}" type="button" data-admin-layout-preset="${id}" aria-pressed="${activePreset === id}">
+            <b>${preset.label}</b><span>${preset.detail}</span>
+          </button>`).join("")}
+      </div>
+    </section>
     <div class="admin-layout-editor-grid">
       <section>
         <h3>왼쪽 메뉴</h3>
@@ -26751,6 +27062,50 @@ function moveAdminLayoutItem(kind, itemId, direction, group = "") {
   adminLayoutSaveState = "local";
   persistAdminLayoutLocal();
   renderAdminLayoutSettings();
+}
+
+function adminLayoutPresetId() {
+  return Object.entries(adminLayoutPresets).find(([, preset]) => (
+    preset.menuOrder.length === adminLayoutSettings.menuOrder.length
+    && preset.menuOrder.every((id, index) => adminLayoutSettings.menuOrder[index] === id)
+    && preset.moreMenus.length === adminLayoutSettings.moreMenus.length
+    && preset.moreMenus.every((id) => adminLayoutSettings.moreMenus.includes(id))
+    && adminLayoutSettings.hiddenMenus.length === 0
+  ))?.[0] || "custom";
+}
+
+function applyAdminLayoutPreset(presetId) {
+  const preset = adminLayoutPresets[presetId];
+  if (!preset) return;
+  adminLayoutSettings.menuOrder = [...preset.menuOrder];
+  adminLayoutSettings.moreMenus = [...preset.moreMenus];
+  adminLayoutSettings.hiddenMenus = [];
+  adminLayoutSaveState = "local";
+  persistAdminLayoutLocal();
+  renderAdminLayoutSettings();
+}
+
+function setAdminMenuPlacement(itemId, placement) {
+  if (!adminMenuDefinitions.some((item) => item.id === itemId) || itemId === "dashboard") return;
+  const moreMenus = new Set(adminLayoutSettings.moreMenus);
+  if (placement === "more") moreMenus.add(itemId);
+  else moreMenus.delete(itemId);
+  adminLayoutSettings.moreMenus = adminLayoutSettings.menuOrder.filter((id) => moreMenus.has(id));
+  adminLayoutSaveState = "local";
+  persistAdminLayoutLocal();
+  renderAdminLayoutSettings();
+}
+
+function setAdminReportWidgetOption(kind, itemId, value) {
+  if (!adminReportWidgetDefinitions.some((item) => item.id === itemId)) return;
+  const options = kind === "size" ? adminReportWidgetSizeOptions : adminReportWidgetFilterOptions;
+  if (!options.some((option) => option.id === value)) return;
+  const key = kind === "size" ? "reportWidgetSizes" : "reportWidgetFilters";
+  adminLayoutSettings[key][itemId] = value;
+  adminLayoutSaveState = "local";
+  persistAdminLayoutLocal();
+  renderAdminLayoutSettings();
+  if (kind === "filter") renderReports();
 }
 
 function setAdminLayoutVisibility(kind, itemId, visible) {
@@ -27819,7 +28174,8 @@ function bindEvents() {
     if (!$("#lessonModal")?.hidden) closeLessonModal({ fromHistory: true });
   });
 
-  $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  $$(".nav-item[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+  $("#adminMoreMenuButton")?.addEventListener("click", () => setAdminMoreMenuOpen(!adminMoreMenuOpen));
   $("#adminMenuButton")?.addEventListener("click", () => toggleAdminMenu());
   $("#adminMenuBackdrop")?.addEventListener("click", () => closeAdminMenu());
   window.addEventListener("keydown", (event) => {
@@ -27858,7 +28214,11 @@ function bindEvents() {
   $("#managementReportMonth")?.addEventListener("change", (event) => {
     state.managementReportMonth = event.target.value || adminLocalDateKey(new Date()).slice(0, 7);
     renderReports();
+    void loadAdminDriveReportSnapshot({ force: true });
     saveSnapshot();
+  });
+  $("#refreshDriveReportButton")?.addEventListener("click", () => {
+    void loadAdminDriveReportSnapshot({ force: true });
   });
   document.addEventListener("click", (event) => {
     const pageButton = event.target.closest("[data-dashboard-page]");
@@ -28062,6 +28422,16 @@ function bindEvents() {
     saveSnapshot();
   });
   document.addEventListener("click", async (event) => {
+    const presetButton = event.target.closest("[data-admin-layout-preset]");
+    if (presetButton) {
+      applyAdminLayoutPreset(presetButton.dataset.adminLayoutPreset);
+      return;
+    }
+    const placementButton = event.target.closest("[data-admin-menu-placement]");
+    if (placementButton) {
+      setAdminMenuPlacement(placementButton.dataset.adminLayoutId, placementButton.dataset.adminMenuPlacement);
+      return;
+    }
     const moveButton = event.target.closest("[data-move-admin-layout]");
     if (moveButton) {
       moveAdminLayoutItem(
@@ -28084,6 +28454,16 @@ function bindEvents() {
     }
   });
   document.addEventListener("change", (event) => {
+    const sizeSelect = event.target.closest("[data-admin-report-widget-size]");
+    if (sizeSelect) {
+      setAdminReportWidgetOption("size", sizeSelect.dataset.adminReportWidgetSize, sizeSelect.value);
+      return;
+    }
+    const filterSelect = event.target.closest("[data-admin-report-widget-filter]");
+    if (filterSelect) {
+      setAdminReportWidgetOption("filter", filterSelect.dataset.adminReportWidgetFilter, filterSelect.value);
+      return;
+    }
     const input = event.target.closest("[data-admin-layout-visible]");
     if (!input) return;
     setAdminLayoutVisibility(input.dataset.adminLayoutVisible, input.dataset.adminLayoutId, input.checked);

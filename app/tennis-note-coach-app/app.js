@@ -644,6 +644,15 @@ function coachRosterTicketState(ticket = {}, today = localDateKey()) {
 
 function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster = null, legacyChangeRequests = []) {
   if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
+  const cancelledLessonIds = new Set(
+    workspace.lessons
+      .filter((lesson) => lesson.status === "cancelled")
+      .map((lesson) => String(lesson.id || "").trim())
+      .filter(Boolean),
+  );
+  if (cancelledLessonIds.size) {
+    state.lessonLogs = state.lessonLogs.filter((log) => !cancelledLessonIds.has(String(log.serverLessonId || "")));
+  }
   state.scheduleOperationDays = Array.isArray(workspace.operationDays) ? workspace.operationDays : [];
   const tickets = Array.isArray(roster?.tickets)
     ? roster.tickets
@@ -2563,7 +2572,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.353",
+    workerUrl: "./service-worker.js?v=1.0.354",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2593,7 +2602,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.353" });
+  const params = new URLSearchParams({ v: "1.0.354" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3447,6 +3456,28 @@ function canProcessLesson(lesson) {
   return true;
 }
 
+function lessonOutcomeWindowOpen(lesson, now = new Date()) {
+  if (!lesson) return false;
+  const lessonDate = String(lesson.lessonDate || lesson.lesson_date || "").trim();
+  const lessonTime = String(lesson.time || lesson.startTime || lesson.start_time || "").slice(0, 5);
+  const strictLiveLesson = Boolean(state.dataMode === "live" || state.liveProfileId || lesson.serverLessonId);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(lessonDate) || !/^\d{2}:\d{2}$/.test(lessonTime)) {
+    return !strictLiveLesson;
+  }
+  const today = localDateKey(now);
+  if (lessonDate < today) return true;
+  if (lessonDate > today) return false;
+  const startMinutes = minutesFromTime(lessonTime);
+  if (!Number.isFinite(startMinutes)) return !strictLiveLesson;
+  const durationMinutes = Math.max(1, Number(lesson.durationMinutes) || lessonDuration(lesson));
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  return currentMinutes >= startMinutes + durationMinutes;
+}
+
+function lessonOutcomeGuardMessage() {
+  return "수업 종료 후 피드백 완료와 회원권 횟수 차감을 처리할 수 있습니다.";
+}
+
 function transferredTodayLessons() {
   const currentLessons = state.liveLessonsLoaded || state.dataMode === "live"
     ? weekLessons().filter((lesson) => lesson.lessonDate === localDateKey())
@@ -3481,7 +3512,7 @@ function recordMemberNames(value = "") {
 function lessonForRecord(record = {}) {
   if (record.serverLessonId) {
     const serverLesson = state.liveLessons.find((lesson) => lesson.serverLessonId === record.serverLessonId);
-    if (serverLesson) return serverLesson;
+    return serverLesson || null;
   }
   const names = recordMemberNames(record.member);
   return weekLessons().find((lesson) => {
@@ -3556,7 +3587,11 @@ function feedbackBelongsToCurrentCoach(request = {}) {
 }
 
 function ownPendingLessonLogs() {
-  return state.lessonLogs.filter((log) => log.status !== "확인 완료" && recordBelongsToCurrentCoach(log));
+  return state.lessonLogs.filter((log) => {
+    if (log.status === "확인 완료" || !recordBelongsToCurrentCoach(log)) return false;
+    const lesson = lessonForRecord(log);
+    return lesson ? lessonOutcomeWindowOpen(lesson) : !(state.dataMode === "live" || state.liveProfileId);
+  });
 }
 
 function ownPendingFeedbackRequests() {
@@ -3909,6 +3944,7 @@ function renderScheduleEditPanel() {
     return `<section class="schedule-edit-panel is-empty"><strong>레슨 카드를 누르면 오늘 레슨을 바로 수정할 수 있습니다.</strong></section>`;
   }
   const canProcess = canProcessLesson(lesson);
+  const canFinalize = canProcess && lessonOutcomeWindowOpen(lesson);
   const canReschedule = canRescheduleLesson(lesson);
   const member = memberForLesson(lesson);
   const recentLog = recentLogForLesson(lesson);
@@ -3935,18 +3971,18 @@ function renderScheduleEditPanel() {
           </details>` : ""}
         <label class="lesson-required-field">
           <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
-          <textarea data-modal-coach-comment="${escapeHtml(lesson.id)}" rows="4" placeholder="오늘 잘된 점과 다음 수업에서 보완할 점을 적어주세요." ${canProcess ? "" : "disabled"}></textarea>
+          <textarea data-modal-coach-comment="${escapeHtml(lesson.id)}" rows="4" placeholder="오늘 잘된 점과 다음 수업에서 보완할 점을 적어주세요." ${canFinalize ? "" : "disabled"}></textarea>
           <div class="tn-comment-draft-tools">
-            <input data-modal-comment-keywords="${escapeHtml(lesson.id)}" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" ${canProcess ? "" : "disabled"} />
-            <button type="button" data-generate-modal-comment="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>초안 만들기</button>
+            <input data-modal-comment-keywords="${escapeHtml(lesson.id)}" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" ${canFinalize ? "" : "disabled"} />
+            <button type="button" data-generate-modal-comment="${escapeHtml(lesson.id)}" ${canFinalize ? "" : "disabled"}>초안 만들기</button>
           </div>
           <small class="lesson-comment-count" data-modal-comment-count="${escapeHtml(lesson.id)}">0/5자</small>
         </label>
         <label class="lesson-required-field">
           <span>다음 커리큘럼 <small>필수</small></span>
-          <input data-curriculum-option-search type="search" placeholder="증상·동작·목표·코드 검색" aria-label="${escapeHtml(participant.name || "회원")} 다음 커리큘럼 검색" ${canProcess ? "" : "disabled"} />
+          <input data-curriculum-option-search type="search" placeholder="증상·동작·목표·코드 검색" aria-label="${escapeHtml(participant.name || "회원")} 다음 커리큘럼 검색" ${canFinalize ? "" : "disabled"} />
           <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
-          <select data-modal-next-curriculum="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>
+          <select data-modal-next-curriculum="${escapeHtml(lesson.id)}" ${canFinalize ? "" : "disabled"}>
             <option value="">검색·선택</option>
             ${curriculumOptions(defaultCurriculumId)}
           </select>
@@ -3976,7 +4012,7 @@ function renderScheduleEditPanel() {
           <strong>${lesson.member}</strong>
           <span>${lesson.day} ${lesson.time} · ${lesson.type} · ${lesson.coach}</span>
         </div>
-        <b class="${canProcess ? "can-process" : "read-only"}">${canProcess ? "처리 가능" : "보기 전용"}</b>
+        <b class="${canFinalize ? "can-process" : "read-only"}">${canFinalize ? "처리 가능" : canProcess ? "수업 후 처리" : "보기 전용"}</b>
       </div>
       <ol class="lesson-completion-steps wide" aria-label="수업 완료 순서">
         <li class="is-complete"><b>1</b><span>수업 확인</span></li>
@@ -4069,7 +4105,9 @@ function renderScheduleEditPanel() {
         <button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>수업 완료·횟수 차감</button>
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>
-      ${canProcess ? "" : `<p class="permission-note wide">${lessonPermissionText(lesson)}</p>`}
+      ${canProcess
+        ? canFinalize ? "" : `<p class="permission-note wide">${lessonOutcomeGuardMessage()}</p>`
+        : `<p class="permission-note wide">${lessonPermissionText(lesson)}</p>`}
     </section>`;
 }
 
@@ -5486,7 +5524,7 @@ function updateLessonCompletionUi(id) {
     row.classList.toggle("is-ready", comment.length >= 5 && Boolean(curriculumId));
     return comment.length >= 5 && Boolean(curriculumId);
   });
-  const ready = Boolean(lesson && canProcessLesson(lesson) && rowsReady);
+  const ready = Boolean(lesson && canProcessLesson(lesson) && lessonOutcomeWindowOpen(lesson) && rowsReady);
   if (submit) submit.disabled = !ready;
 }
 
@@ -5750,6 +5788,11 @@ function saveLessonRecord() {
 async function completeLessonFromModal(id) {
   const lesson = ensureCoachLessonRecord(id);
   if (!lesson || !canProcessLesson(lesson)) return;
+  if (!lessonOutcomeWindowOpen(lesson)) {
+    lesson.validationMessage = lessonOutcomeGuardMessage();
+    renderLessonEditModal();
+    return;
+  }
   const content = activeViewField(`[data-modal-lesson-content="${id}"]`)?.value.trim() || `${lesson.member} ${lesson.type} 수업 진행`;
   const participantResults = $$('[data-modal-participant-row]')
     .filter((row) => row.dataset.modalParticipantRow === id)
@@ -6734,6 +6777,12 @@ async function confirmLog(id, options = {}) {
     && Array.isArray(item.v2Participants)
     && item.v2Participants.length
   ));
+  const linkedLesson = linkedScheduleV2Lesson || lessonForRecord(log);
+  if (linkedLesson && !lessonOutcomeWindowOpen(linkedLesson)) {
+    log.validationMessage = lessonOutcomeGuardMessage();
+    renderAll();
+    return false;
+  }
   const participantResults = Array.isArray(log.participantResults) && log.participantResults.length
     ? log.participantResults
     : linkedScheduleV2Lesson
@@ -6876,6 +6925,8 @@ async function confirmLog(id, options = {}) {
         }
       }
       const serverMessages = {
+        schedule_v2_outcome_lesson_not_ended: lessonOutcomeGuardMessage(),
+        lesson_complete_lesson_not_ended: lessonOutcomeGuardMessage(),
         lesson_complete_comment_too_short: "코치 코멘트는 직접 5자 이상 작성해야 합니다.",
         lesson_complete_comment_too_generic: "짧은 칭찬이나 확인 문구만으로는 횟수 차감이 불가합니다.",
         lesson_complete_comment_recent_duplicate: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
@@ -7706,7 +7757,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.353",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.354",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
