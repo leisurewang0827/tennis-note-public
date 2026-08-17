@@ -3044,9 +3044,9 @@ textarea {
   color: var(--ink);
 }
 
-/* Simplified membership purchase: four primary tabs and a four-step checkout. */
+/* Simplified membership purchase: five primary tabs and a four-step checkout. */
 .tabbar {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .membership-product-browser,
@@ -3456,7 +3456,7 @@ textarea {
 
 @media (max-width: 720px) {
   .tabbar {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .membership-product-browser,
@@ -8888,14 +8888,14 @@ body.modal-open {
   }
 }
 
-/* Final navigation override: the membership area is reached from Home, not a fifth tab. */
+/* Final navigation override: keep membership directly reachable as the fifth primary tab. */
 .tabbar {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 @media (max-width: 720px) {
   .tabbar {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 
