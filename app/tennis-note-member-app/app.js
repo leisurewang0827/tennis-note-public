@@ -60,13 +60,27 @@ const state = {
   lessonLogs: [],
   practiceLogs: [],
   paymentRequests: [],
-  selectedPaymentMethod: "card",
+  selectedPaymentMethod: "tosspay",
+  purchaseFlow: {
+    open: false,
+    step: 1,
+    familyId: "weekday-regular",
+    productId: "",
+    renewalTicketId: "",
+    scheduleMode: "keep",
+    coachRoleId: "",
+    coachName: "",
+    preferredDay: "",
+    preferredTime: "",
+    completionStatus: "",
+  },
   membershipFilters: {
     scheduleScope: "weekday",
     productKind: "regular",
     groupSize: "1",
     lessonMinutes: "20",
   },
+  membershipSelectedFamilyId: "weekday-regular",
   liveMembershipProducts: [],
   liveTickets: [],
   liveLessons: [],
@@ -420,6 +434,17 @@ function readAdminProducts() {
   }
 }
 
+function isOneDayMembershipProduct(product = {}) {
+  const productCode = String(product.productCode || product.serverProductCode || product.product_code || product.id || "").toLowerCase();
+  const productKind = String(product.productKind || product.product_kind || "").toLowerCase();
+  const mode = String(product.mode || "").toLowerCase();
+  const tickets = numericValue(product.tickets, numericValue(product.total_sessions));
+  const label = `${product.title || ""} ${product.name || ""} ${product.group || ""}`;
+  return productCode.startsWith("one-day-")
+    || product.purchaseExperience === "one_day"
+    || ((["coupon", "pass"].includes(productKind) || mode === "pass") && tickets === 1 && /원데이|1회\s*(체험|레슨)|체험\s*1회/.test(label));
+}
+
 function membershipProductFromServer(row = {}) {
   const productKind = String(row.product_kind || "regular");
   const mode = productKind === "coupon" ? "pass" : productKind === "group" ? "group" : "fixed";
@@ -429,9 +454,17 @@ function membershipProductFromServer(row = {}) {
   const frequency = numericValue(row.frequency_per_week);
   const group = productKind === "coupon" ? "쿠폰제" : groupSize === 2 ? "2대1 정기권" : "정기권";
   const couponValidityWeeks = window.TennisNoteProductCatalog?.policy?.coupon?.validityWeeksBySessions || {};
-  const status = productKind === "coupon" && ![5, 10, 15, 20].includes(sessions) ? "hidden" : "sale";
+  const oneDay = isOneDayMembershipProduct(row);
+  const savedStatus = row.policy_settings?.adminSaleStatus;
+  const status = ["sale", "consult", "hidden"].includes(savedStatus)
+    ? savedStatus
+    : productKind === "coupon" && !oneDay && ![5, 10, 15, 20].includes(sessions)
+      ? "hidden"
+      : row.is_active === false ? "hidden" : "sale";
   return normalizeProduct({
     id: row.id,
+    productCode: row.product_code || "",
+    purchaseExperience: row.policy_settings?.purchaseExperience || (oneDay ? "one_day" : ""),
     group,
     title: row.name || `${lessonMinutes}분 회원권`,
     name: row.name,
@@ -564,15 +597,88 @@ const membershipFilterDefinitions = [
 ];
 
 const membershipPresetDefinitions = [
-  { id: "weekday", label: "평일 1:1", filters: { scheduleScope: "weekday", productKind: "regular", groupSize: "1", lessonMinutes: "20" } },
-  { id: "weekend", label: "주말 1:1", filters: { scheduleScope: "weekend", productKind: "regular", groupSize: "1", lessonMinutes: "20" } },
-  { id: "group", label: "2:1", filters: { scheduleScope: "all", productKind: "regular", groupSize: "2", lessonMinutes: "20" } },
-  { id: "coupon", label: "쿠폰", filters: { scheduleScope: "all", productKind: "coupon", groupSize: "1", lessonMinutes: "20" } },
+  {
+    id: "weekday-regular",
+    label: "평일 정규",
+    description: "같은 요일·시간에 꾸준히",
+    filters: { scheduleScope: "weekday", productKind: "regular", groupSize: "1", lessonMinutes: "all" },
+  },
+  {
+    id: "weekend-regular",
+    label: "주말 정규",
+    description: "토·일 고정 레슨",
+    filters: { scheduleScope: "weekend", productKind: "regular", groupSize: "1", lessonMinutes: "all" },
+  },
+  {
+    id: "weekday-coupon",
+    label: "평일 쿠폰",
+    description: "원하는 날 예약",
+    filters: { scheduleScope: "weekday", productKind: "coupon", groupSize: "1", lessonMinutes: "all" },
+  },
+  {
+    id: "weekend-coupon",
+    label: "주말 쿠폰",
+    description: "주말 일정에 맞춰 예약",
+    filters: { scheduleScope: "weekend", productKind: "coupon", groupSize: "1", lessonMinutes: "all" },
+  },
+  {
+    id: "group",
+    label: "2대1 레슨",
+    description: "파트너와 함께",
+    filters: { scheduleScope: "all", productKind: "all", groupSize: "2", lessonMinutes: "all" },
+  },
+  {
+    id: "one-day",
+    label: "원데이 1회",
+    description: "한 번 체험·단회 레슨",
+    filters: { scheduleScope: "mixed", productKind: "coupon", groupSize: "1", lessonMinutes: "all" },
+  },
 ];
 
+function membershipProductFamilyId(product = {}) {
+  if (isOneDayMembershipProduct(product)) return "one-day";
+  const groupSize = membershipProductFacet(product, "groupSize");
+  if (groupSize === "2") return "group";
+  const productKind = membershipProductFacet(product, "productKind");
+  const scheduleScope = membershipProductFacet(product, "scheduleScope");
+  const weekend = scheduleScope === "weekend";
+  if (productKind === "coupon") return weekend ? "weekend-coupon" : "weekday-coupon";
+  return weekend ? "weekend-regular" : "weekday-regular";
+}
+
+function membershipProductFamilyDefinition(productOrId = "") {
+  const familyId = typeof productOrId === "string" ? productOrId : membershipProductFamilyId(productOrId);
+  return membershipPresetDefinitions.find((family) => family.id === familyId) || membershipPresetDefinitions[0];
+}
+
+function membershipProductsForFamily(familyId, products = membershipProducts()) {
+  return products.filter((product) => membershipProductFamilyId(product) === familyId);
+}
+
+function membershipProductRecommendationScore(product = {}, sourceTicket = null) {
+  let score = Math.max(0, 1000 - Number(product.displayOrder || product.sortOrder || 1000));
+  if (product.status === "sale") score += 500;
+  if (Number(product.lessonMinutes) === 20) score += 80;
+  if ([8, 10].includes(Number(product.tickets))) score += 60;
+  if (sourceTicket && String(sourceTicket.productId || "") === String(product.id || "")) score += 10000;
+  if (sourceTicket && Number(sourceTicket.groupSize || 1) === Number(product.groupSize || 1)) score += 400;
+  if (sourceTicket && Number(sourceTicket.lessonMinutes || 20) === Number(product.lessonMinutes || 20)) score += 300;
+  return score;
+}
+
+function recommendedMembershipProducts(products = membershipProducts(), familyId = "", sourceTicket = null) {
+  const familyProducts = familyId ? membershipProductsForFamily(familyId, products) : products;
+  return [...familyProducts]
+    .sort((left, right) => membershipProductRecommendationScore(right, sourceTicket) - membershipProductRecommendationScore(left, sourceTicket))
+    .slice(0, 3);
+}
+
 function activeMembershipPresetId() {
+  if (membershipPresetDefinitions.some((preset) => preset.id === state.membershipSelectedFamilyId)) {
+    return state.membershipSelectedFamilyId;
+  }
   return membershipPresetDefinitions.find(({ filters }) => (
-    Object.entries(filters).every(([key, value]) => (state.membershipFilters[key] || "all") === value)
+    Object.entries(filters).every(([key, value]) => value === "all" || (state.membershipFilters[key] || "all") === value)
   ))?.id || "";
 }
 
@@ -580,12 +686,15 @@ function renderMembershipProductPresets() {
   const target = $("#membershipProductPresets");
   if (!target) return;
   const activePresetId = activeMembershipPresetId();
+  const products = membershipProducts();
   target.innerHTML = `
-    <div class="membership-product-presets-heading"><strong>빠른 선택</strong><small>원하는 수업 형태를 먼저 고르세요.</small></div>
-    <div class="membership-product-presets-grid" role="group" aria-label="회원권 빠른 선택">
+    <div class="membership-product-presets-heading"><strong>수업 형태 6가지</strong><small>원하는 이용 방식부터 고르세요.</small></div>
+    <div class="membership-product-presets-grid" role="group" aria-label="회원권 수업 형태 선택">
       ${membershipPresetDefinitions.map((preset) => `
         <button class="membership-preset-chip ${preset.id === activePresetId ? "is-selected" : ""}" type="button"
-          data-membership-preset="${preset.id}" aria-pressed="${preset.id === activePresetId}">${preset.label}</button>`).join("")}
+          data-membership-preset="${preset.id}" aria-pressed="${preset.id === activePresetId}">
+          <strong>${preset.label}</strong><small>${preset.description}</small><b>${membershipProductsForFamily(preset.id, products).length}개</b>
+        </button>`).join("")}
     </div>`;
 }
 
@@ -621,6 +730,9 @@ function matchesMembershipFilters(product, exceptKey = "") {
 }
 
 function filteredMembershipProducts(products = membershipProducts()) {
+  if (state.membershipSelectedFamilyId === "one-day") {
+    return membershipProductsForFamily("one-day", products);
+  }
   return products.filter((product) => matchesMembershipFilters(product));
 }
 
@@ -1392,8 +1504,24 @@ function restoreSnapshot() {
     if (!Array.isArray(state.liveTickets)) state.liveTickets = [];
     if (!state.memberEnrollment || typeof state.memberEnrollment !== "object") state.memberEnrollment = null;
     state.pendingPurchaseProductId = String(state.pendingPurchaseProductId || "");
+    state.purchaseFlow = {
+      open: false,
+      step: 1,
+      familyId: "weekday-regular",
+      productId: "",
+      renewalTicketId: "",
+      scheduleMode: "keep",
+      coachRoleId: "",
+      coachName: "",
+      preferredDay: "",
+      preferredTime: "",
+      completionStatus: "",
+      ...(state.purchaseFlow && typeof state.purchaseFlow === "object" ? state.purchaseFlow : {}),
+    };
+    state.purchaseFlow.step = Math.min(4, Math.max(1, Number(state.purchaseFlow.step) || 1));
     state.selectedLessonDetailId = String(state.selectedLessonDetailId || "");
-    if (!["card", "tosspay", "naverpay", "kakaopay"].includes(state.selectedPaymentMethod)) state.selectedPaymentMethod = "card";
+    if (!["card", "tosspay", "naverpay", "kakaopay"].includes(state.selectedPaymentMethod)) state.selectedPaymentMethod = "tosspay";
+    state.selectedPaymentMethod = normalizeSelectedPaymentMethod();
     if (!state.pushNotifications || typeof state.pushNotifications !== "object") {
       state.pushNotifications = {
         permission: "unknown",
@@ -1688,6 +1816,7 @@ function saveSnapshot() {
       coachModeAllowed: state.coachModeAllowed,
       selectedPaymentMethod: state.selectedPaymentMethod,
       pendingPurchaseProductId: state.pendingPurchaseProductId,
+      purchaseFlow: state.purchaseFlow,
     },
     lessons: [],
   };
@@ -1739,7 +1868,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.354",
+    workerUrl: "./service-worker.js?v=1.0.355",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2746,7 +2875,7 @@ function memberCoachShortName(name = "") {
 }
 
 function memberScheduleCoachTickets() {
-  const visibleStates = new Set(["current", "upcoming", "paused", "pending_payment"]);
+  const visibleStates = new Set(["current", "upcoming", "paused"]);
   return (state.liveTickets || []).filter((ticket) => {
     const derived = window.TennisNoteTicketState?.derive?.(ticket)
       || String(ticket.status || "").toLowerCase();
@@ -5952,6 +6081,57 @@ function holdingStatusLabel(status) {
   return "검토중";
 }
 
+function membershipTicketCard(ticket = {}, options = {}) {
+  const currentTicketIds = options.currentTicketIds || new Set();
+  const compact = Boolean(options.compact);
+  const totalSessions = Math.max(0, Number(ticket.total || 0));
+  const remainingSessions = Math.max(0, Number(ticket.remaining || 0));
+  const usedSessions = Math.max(0, Number(ticket.used ?? totalSessions - remainingSessions));
+  const progress = totalSessions ? Math.min(100, Math.max(0, (usedSessions / totalSessions) * 100)) : 0;
+  const derivedState = window.TennisNoteTicketState?.derive?.(ticket) || ticket.status || "current";
+  const isPendingTicket = derivedState === "pending_payment";
+  const isUpcomingTicket = derivedState === "upcoming";
+  const isCurrentTicket = currentTicketIds.has(String(ticket.id || "")) || String(ticket.id || "").startsWith("demo-");
+  const isLowTicket = isCurrentTicket && remainingSessions <= 2;
+  const statusLabel = window.TennisNoteTicketState?.label?.(ticket)
+    || (isPendingTicket ? "결제 대기" : isUpcomingTicket ? "시작 예정" : ticket.statusLabel || "사용 중");
+  const ticketPeriod = ticket.expiresOn
+    ? `${ticket.startsOn || "시작일 확인"} ~ ${ticket.expiresOn}`
+    : "이용 기간 확인 중";
+  const holding = isCurrentTicket ? memberHoldingRequests(ticket.id)[0] : null;
+  const pendingPaymentId = ticket.providerPaymentId || "";
+  const canResumePayment = pendingPaymentId && Number(ticket.paymentAmount || 0) > 0;
+  const isCancellingPendingPayment = Boolean(pendingPaymentId && pendingPaymentCancelInFlight.has(pendingPaymentId));
+  const pendingPaymentActions = isPendingTicket
+    ? `<div class="membership-pending-actions">
+        <button class="small-button" type="button" data-resume-pending-ticket="${escapeHtml(ticket.id)}" ${canResumePayment ? "" : "disabled"}>결제 계속</button>
+        <button class="small-button" type="button" data-check-pending-ticket="${escapeHtml(ticket.id)}" ${pendingPaymentId ? "" : "disabled"}>상태 확인</button>
+        <button class="small-button danger-button" type="button" data-cancel-pending-ticket="${escapeHtml(ticket.id)}" ${pendingPaymentId && !isCancellingPendingPayment ? "" : "disabled"}>${isCancellingPendingPayment ? "취소 중" : "대기 취소"}</button>
+      </div>`
+    : "";
+  const holdingAction = isCurrentTicket && !isPendingTicket
+    ? `<button class="membership-status-note" type="button" data-open-holding-request="${escapeHtml(ticket.id)}">${holding ? `이용 보류 · ${escapeHtml(holdingStatusLabel(holding.status))}` : "기간 보류 신청"}</button>`
+    : "";
+  return `
+    <article class="membership-ticket-unit ${compact ? "is-compact" : ""}" data-member-ticket-id="${escapeHtml(ticket.id || "")}" ${options.primary ? "data-primary-member-ticket" : ""}>
+      <div class="membership-primary-card ${isPendingTicket || isUpcomingTicket ? "is-pending" : ""} ${isLowTicket ? "is-low" : ""}">
+        <div class="membership-primary-head">
+          <span>${isUpcomingTicket || isPendingTicket ? "다음 회원권" : "현재 회원권"}</span>
+          <small>${escapeHtml(statusLabel)}</small>
+        </div>
+        <strong>${escapeHtml(ticket.title || "회원권")}</strong>
+        <div class="membership-remaining-row">
+          <span>남은 횟수</span>
+          <b>${remainingSessions}<em>회</em></b>
+        </div>
+        ${compact ? "" : `<div class="membership-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${totalSessions || 1}" aria-valuenow="${usedSessions}" aria-label="회원권 사용 진행률"><span style="width: ${progress}%"></span></div>`}
+        <small class="membership-period">${escapeHtml(ticketPeriod)}${compact ? "" : ` · 총 ${totalSessions} / 사용 ${usedSessions}`}</small>
+      </div>
+      ${pendingPaymentActions}
+      ${holdingAction}
+    </article>`;
+}
+
 function renderCurrentTicketPanel() {
   const target = $("#currentTicketPanel");
   if (!target) return;
@@ -5961,63 +6141,26 @@ function renderCurrentTicketPanel() {
   const visibleTickets = [...currentTickets, ...upcomingTickets];
   if (demoTicket) visibleTickets.push(demoTicket);
   const currentTicketIds = new Set(currentTickets.map((ticket) => String(ticket.id || "")));
-  const ticketCards = visibleTickets.map((ticket) => {
-    const totalSessions = Math.max(0, Number(ticket?.total || 0));
-    const remainingSessions = Math.max(0, Number(ticket?.remaining || 0));
-    const usedSessions = Math.max(0, Number(ticket?.used ?? totalSessions - remainingSessions));
-    const progress = totalSessions ? Math.min(100, Math.max(0, (usedSessions / totalSessions) * 100)) : 0;
-    const derivedState = window.TennisNoteTicketState?.derive?.(ticket) || ticket.status || "current";
-    const isPendingTicket = derivedState === "pending_payment";
-    const isUpcomingTicket = derivedState === "upcoming";
-    const isCurrentTicket = currentTicketIds.has(String(ticket.id || "")) || String(ticket.id || "").startsWith("demo-");
-    const isLowTicket = isCurrentTicket && remainingSessions <= 2;
-    const statusLabel = window.TennisNoteTicketState?.label?.(ticket)
-      || (isPendingTicket ? "결제 대기" : isUpcomingTicket ? "시작 예정" : ticket.statusLabel || "사용 중");
-    const ticketPeriod = ticket?.expiresOn
-      ? `${ticket.startsOn || "시작일 확인"} ~ ${ticket.expiresOn}`
-      : "이용 기간 확인 중";
-    const holding = isCurrentTicket ? memberHoldingRequests(ticket.id)[0] : null;
-    const pendingPaymentId = ticket?.providerPaymentId || "";
-    const canResumePayment = pendingPaymentId && Number(ticket?.paymentAmount || 0) > 0;
-    const isCancellingPendingPayment = Boolean(pendingPaymentId && pendingPaymentCancelInFlight.has(pendingPaymentId));
-    const pendingPaymentActions = isPendingTicket
-      ? `<div class="membership-pending-actions">
-          <button class="small-button" type="button" data-resume-pending-ticket="${escapeHtml(ticket.id)}" ${canResumePayment ? "" : "disabled"}>결제창 다시 열기</button>
-          <button class="small-button" type="button" data-check-pending-ticket="${escapeHtml(ticket.id)}" ${pendingPaymentId ? "" : "disabled"}>결제 상태 확인</button>
-          <button class="small-button danger-button" type="button" data-cancel-pending-ticket="${escapeHtml(ticket.id)}" ${pendingPaymentId && !isCancellingPendingPayment ? "" : "disabled"}>${isCancellingPendingPayment ? "취소 중" : "결제 대기 취소"}</button>
-        </div>`
-      : "";
-    const holdingAction = isCurrentTicket && !isPendingTicket
-      ? `<button class="membership-status-note" type="button" data-open-holding-request="${escapeHtml(ticket.id)}">${holding ? `이용권 보류 · ${escapeHtml(holdingStatusLabel(holding.status))}` : "이용권 보류 신청"}</button>`
-      : "";
-    return `
-      <article class="membership-ticket-unit" data-member-ticket-id="${escapeHtml(ticket.id || "")}">
-        <div class="membership-primary-card ${isPendingTicket || isUpcomingTicket ? "is-pending" : ""} ${isLowTicket ? "is-low" : ""}">
-          <div class="membership-primary-head">
-            <span>${isUpcomingTicket || isPendingTicket ? "다음 회원권" : "현재 회원권"}</span>
-            <small>${escapeHtml(statusLabel)}</small>
-          </div>
-          <strong>${escapeHtml(ticket?.title || "회원권")}</strong>
-          <div class="membership-remaining-row">
-            <span>남은 횟수</span>
-            <b>${remainingSessions}<em>회</em></b>
-          </div>
-          <div class="membership-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${totalSessions || 1}" aria-valuenow="${usedSessions}" aria-label="회원권 사용 진행률">
-            <span style="width: ${progress}%"></span>
-          </div>
-          <small class="membership-period">${escapeHtml(ticketPeriod)} · 총 ${totalSessions} / 소진 ${usedSessions} / 잔여 ${remainingSessions}</small>
-        </div>
-        ${pendingPaymentActions}
-        ${holdingAction}
-      </article>`;
-  }).join("");
+  const primaryTicket = visibleTickets[0] || null;
+  const otherTickets = visibleTickets.slice(1);
+  const primaryCard = primaryTicket
+    ? membershipTicketCard(primaryTicket, { currentTicketIds, primary: true })
+    : `<article class="membership-empty-ticket"><strong>현재 회원권이 없습니다</strong><span>${escapeHtml(state.ticketSyncStatus?.text || "수업 형태를 고르면 추천 회원권을 바로 확인할 수 있습니다.")}</span></article>`;
+  const otherTicketList = otherTickets.length
+    ? `<details class="membership-other-tickets">
+        <summary>다른 회원권 ${otherTickets.length}개</summary>
+        <div>${otherTickets.map((ticket) => membershipTicketCard(ticket, { currentTicketIds, compact: true })).join("")}</div>
+      </details>`
+    : "";
   target.innerHTML = `
-    ${ticketCards || `<article class="membership-empty-ticket"><strong>현재 회원권이 없습니다</strong><span>${escapeHtml(state.ticketSyncStatus?.text || "회원권 구매 또는 관리자 등록이 필요합니다.")}</span></article>`}
-    <div class="membership-action-row">
-      <button class="primary-button" type="button" data-open-membership-products>${visibleTickets.length ? "회원권 추가·연장" : "회원권 구매"}</button>
+    ${primaryCard}
+    <div class="membership-action-row ${primaryTicket ? "has-ticket" : "is-empty"}">
+      ${primaryTicket ? `<button class="primary-button" type="button" data-renew-ticket="${escapeHtml(primaryTicket.id || "")}">같은 조건으로 연장</button>` : ""}
+      <button class="${primaryTicket ? "small-button" : "primary-button"}" type="button" data-open-purchase-flow>${primaryTicket ? "다른 회원권" : "회원권 구매"}</button>
       <button class="small-button" type="button" data-open-membership-history>이용 내역</button>
     </div>
-    ${currentTickets.length > 1 ? `<p class="membership-multiple-note">현재 회원권 ${currentTickets.length}개가 수업별로 각각 차감됩니다.</p>` : ""}`;
+    ${otherTicketList}
+    ${currentTickets.length > 1 ? `<p class="membership-multiple-note">수업별 회원권 ${currentTickets.length}개가 각각 차감됩니다. 다른 회원권에서 자세히 확인할 수 있습니다.</p>` : ""}`;
 }
 
 function holdingRequestDays(startDate, endDate) {
@@ -6545,6 +6688,362 @@ async function submitMemberEnrollment(event) {
   }
 }
 
+const membershipPurchaseSteps = ["상품", "코치·시간", "결제", "완료"];
+
+function purchaseFlowState() {
+  if (!state.purchaseFlow || typeof state.purchaseFlow !== "object") {
+    state.purchaseFlow = {
+      open: false,
+      step: 1,
+      familyId: "weekday-regular",
+      productId: "",
+      renewalTicketId: "",
+      scheduleMode: "keep",
+      coachRoleId: "",
+      coachName: "",
+      preferredDay: "",
+      preferredTime: "",
+      completionStatus: "",
+    };
+  }
+  return state.purchaseFlow;
+}
+
+function purchaseFlowSourceTicket() {
+  const flow = purchaseFlowState();
+  return (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(flow.renewalTicketId || "")) || null;
+}
+
+function purchaseFlowProduct() {
+  const flow = purchaseFlowState();
+  return membershipProducts().find((product) => String(product.id || "") === String(flow.productId || "")) || null;
+}
+
+function purchaseTicketLesson(ticket = {}) {
+  return (state.liveLessons || []).find((lesson) => (
+    String(lesson.ticketId || lesson.memberTicketId || lesson.member_ticket_id || "") === String(ticket.id || "")
+    && !["cancelled", "canceled", "absent"].includes(String(lesson.status || "").toLowerCase())
+  )) || null;
+}
+
+function purchaseCoachOptions() {
+  const policy = loadAdminSchedulePolicy();
+  return (policy.coaches || [])
+    .filter((coach) => (coach.status || "active") === "active")
+    .sort((left, right) => memberScheduleLaneOrder(left) - memberScheduleLaneOrder(right))
+    .slice(0, 6);
+}
+
+function purchaseScheduleDayOptions(product = purchaseFlowProduct()) {
+  const scope = membershipProductFacet(product || {}, "scheduleScope");
+  if (scope === "weekend") return days.slice(5);
+  if (scope === "weekday") return days.slice(0, 5);
+  return days;
+}
+
+function purchaseTimeBandOptions(product = purchaseFlowProduct()) {
+  const weekend = membershipProductFacet(product || {}, "scheduleScope") === "weekend";
+  return weekend
+    ? [
+      { id: "09:00-12:00", label: "오전", detail: "09:00~12:00" },
+      { id: "12:00-15:00", label: "낮", detail: "12:00~15:00" },
+      { id: "15:00-18:00", label: "오후", detail: "15:00~18:00" },
+    ]
+    : [
+      { id: "06:40-10:00", label: "이른 오전", detail: "06:40~10:00" },
+      { id: "10:00-13:00", label: "오전", detail: "10:00~13:00" },
+      { id: "17:00-19:30", label: "퇴근 전후", detail: "17:00~19:30" },
+      { id: "19:30-22:00", label: "저녁", detail: "19:30~22:00" },
+    ];
+}
+
+function purchaseProductCard(product = {}, selected = false) {
+  const family = membershipProductFamilyDefinition(product);
+  return `
+    <button class="purchase-product-option ${selected ? "is-selected" : ""}" type="button" data-purchase-product="${escapeHtml(product.id || "")}" aria-pressed="${selected}">
+      <span>${escapeHtml(family.label)} · ${escapeHtml(product.badge || `${product.tickets || 0}회`)}</span>
+      <strong>${escapeHtml(product.title || "회원권")}</strong>
+      <small>${escapeHtml(product.detail || "")} · ${escapeHtml(product.format || "")}</small>
+      <b>${escapeHtml(formatWon(onlinePaymentAmount(product)))}</b>
+    </button>`;
+}
+
+function purchaseFamilyOptionsHtml(products = membershipProducts(), selectedFamilyId = purchaseFlowState().familyId) {
+  return membershipPresetDefinitions.map((family) => {
+    const count = membershipProductsForFamily(family.id, products).length;
+    const selected = family.id === selectedFamilyId;
+    return `
+      <button class="purchase-family-option ${selected ? "is-selected" : ""}" type="button" data-purchase-family="${family.id}" aria-pressed="${selected}" ${count ? "" : "disabled"}>
+        <strong>${family.label}</strong><small>${family.description}</small><b>${count}개</b>
+      </button>`;
+  }).join("");
+}
+
+function purchaseStepOneHtml() {
+  const flow = purchaseFlowState();
+  const products = membershipProducts();
+  const sourceTicket = purchaseFlowSourceTicket();
+  const recommendations = recommendedMembershipProducts(products, flow.familyId, sourceTicket);
+  return `
+    <div class="purchase-step-intro">
+      <strong>수업 형태를 먼저 고르세요</strong>
+      <span>판매 상품 ${products.length}개를 5가지로 묶고, 조건에 맞는 상품은 최대 3개만 추천합니다.</span>
+    </div>
+    <div class="purchase-family-grid" role="group" aria-label="수업 형태">${purchaseFamilyOptionsHtml(products, flow.familyId)}</div>
+    <div class="purchase-recommendations">
+      <div><strong>${escapeHtml(membershipProductFamilyDefinition(flow.familyId).label)} 추천</strong><span>최대 3개</span></div>
+      ${recommendations.length
+    ? recommendations.map((product) => purchaseProductCard(product, String(product.id) === String(flow.productId))).join("")
+    : memberEmptyState({ title: "판매 중인 상품이 없습니다", reason: "다른 수업 형태를 선택하거나 관리자에게 문의해 주세요.", compact: true })}
+    </div>`;
+}
+
+function purchaseStepTwoHtml() {
+  const flow = purchaseFlowState();
+  const product = purchaseFlowProduct();
+  if (!product) return memberEmptyState({ title: "상품을 먼저 선택해 주세요", reason: "이전 단계에서 회원권을 골라주세요.", compact: true });
+  const sourceTicket = purchaseFlowSourceTicket();
+  const coupon = membershipProductFacet(product, "productKind") === "coupon";
+  const coachOptions = purchaseCoachOptions();
+  const selectedCoachName = flow.coachName || sourceTicket?.coach || state.profile.mainCoach || "";
+  const scheduleModes = sourceTicket
+    ? `<div class="purchase-choice-grid purchase-schedule-modes" role="group" aria-label="연장 방식">
+        <button class="purchase-choice ${flow.scheduleMode === "keep" ? "is-selected" : ""}" type="button" data-purchase-schedule-mode="keep" aria-pressed="${flow.scheduleMode === "keep"}"><strong>기존 코치·시간 유지</strong><small>가장 빠른 연장</small></button>
+        <button class="purchase-choice ${flow.scheduleMode === "change" ? "is-selected" : ""}" type="button" data-purchase-schedule-mode="change" aria-pressed="${flow.scheduleMode === "change"}"><strong>코치·시간 변경</strong><small>희망 조건 다시 선택</small></button>
+      </div>`
+    : "";
+  if (coupon) {
+    return `
+      <div class="purchase-selected-summary"><span>선택 회원권</span><strong>${escapeHtml(product.title)}</strong><b>${escapeHtml(formatWon(onlinePaymentAmount(product)))}</b></div>
+      <div class="purchase-step-intro"><strong>쿠폰은 예약할 때 시간을 고릅니다</strong><span>지금은 선호 코치만 선택하고, 매 수업마다 실제 빈 시간을 확인해 예약합니다.</span></div>
+      <div class="purchase-coach-grid" role="group" aria-label="선호 코치">
+        <button class="purchase-choice ${!flow.coachRoleId ? "is-selected" : ""}" type="button" data-purchase-coach="" data-purchase-coach-name="" aria-pressed="${!flow.coachRoleId}"><strong>예약할 때 선택</strong><small>코치별 빈 시간 확인</small></button>
+        ${coachOptions.map((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    const selected = roleId === String(flow.coachRoleId || "");
+    return `<button class="purchase-choice ${selected ? "is-selected" : ""}" type="button" data-purchase-coach="${escapeHtml(roleId)}" data-purchase-coach-name="${escapeHtml(coach.name)}" aria-pressed="${selected}"><strong>${escapeHtml(memberCoachShortName(coach.name))} 코치</strong><small>선호 코치</small></button>`;
+  }).join("")}
+      </div>`;
+  }
+  if (sourceTicket && flow.scheduleMode === "keep") {
+    const lesson = purchaseTicketLesson(sourceTicket);
+    const scheduleLabel = lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 정규시간";
+    return `
+      <div class="purchase-selected-summary"><span>연장 회원권</span><strong>${escapeHtml(product.title)}</strong><b>${escapeHtml(formatWon(onlinePaymentAmount(product)))}</b></div>
+      ${scheduleModes}
+      <article class="purchase-keep-summary">
+        <span>그대로 유지</span><strong>${escapeHtml(selectedCoachName || "담당 코치")} · ${escapeHtml(scheduleLabel)}</strong>
+        <small>결제 후 기존 정규시간을 이어서 등록합니다. 상품 조건이 달라 유지할 수 없으면 결제 전에 다시 안내합니다.</small>
+      </article>`;
+  }
+  const dayOptions = purchaseScheduleDayOptions(product);
+  const timeOptions = purchaseTimeBandOptions(product);
+  return `
+    <div class="purchase-selected-summary"><span>선택 회원권</span><strong>${escapeHtml(product.title)}</strong><b>${escapeHtml(formatWon(onlinePaymentAmount(product)))}</b></div>
+    ${scheduleModes}
+    <div class="purchase-step-intro"><strong>희망 코치와 시간대를 골라주세요</strong><span>결제 후 실제 빈자리와 수업 시작일을 확인해 확정합니다.</span></div>
+    <section class="purchase-choice-section"><h4>1. 코치</h4><div class="purchase-coach-grid" role="group" aria-label="희망 코치">
+      ${coachOptions.map((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    const selected = roleId === String(flow.coachRoleId || "");
+    return `<button class="purchase-choice ${selected ? "is-selected" : ""}" type="button" data-purchase-coach="${escapeHtml(roleId)}" data-purchase-coach-name="${escapeHtml(coach.name)}" aria-pressed="${selected}"><strong>${escapeHtml(memberCoachShortName(coach.name))} 코치</strong><small>가능 시간 확인</small></button>`;
+  }).join("")}
+    </div></section>
+    <section class="purchase-choice-section"><h4>2. 요일</h4><div class="purchase-day-grid" role="group" aria-label="희망 요일">
+      ${dayOptions.map((day) => `<button class="purchase-choice ${flow.preferredDay === day ? "is-selected" : ""}" type="button" data-purchase-day="${day}" aria-pressed="${flow.preferredDay === day}"><strong>${day}요일</strong></button>`).join("")}
+    </div></section>
+    <section class="purchase-choice-section"><h4>3. 시간대</h4><div class="purchase-time-grid" role="group" aria-label="희망 시간대">
+      ${timeOptions.map((time) => `<button class="purchase-choice ${flow.preferredTime === time.id ? "is-selected" : ""}" type="button" data-purchase-time="${time.id}" aria-pressed="${flow.preferredTime === time.id}"><strong>${time.label}</strong><small>${time.detail}</small></button>`).join("")}
+    </div></section>`;
+}
+
+function purchasePaymentMethodOptionsHtml() {
+  const selectedMethodId = normalizeSelectedPaymentMethod();
+  const readyMethods = paymentMethodDefinitions.filter((method) => isPaymentGatewayReady(method.id));
+  const methodOptions = readyMethods.map((method) => {
+    const selected = method.id === selectedMethodId;
+    return `<button class="payment-method-option ${selected ? "is-selected" : ""}" type="button" data-select-payment-method="${method.id}" aria-pressed="${selected}"><strong>${method.label}</strong><small>${method.detail}</small></button>`;
+  }).join("");
+  if (readyMethods.length) return methodOptions;
+  return '<p class="payment-method-unavailable" role="status">온라인 결제를 준비하고 있습니다. 지금은 센터에 문의해 주세요.</p>';
+}
+
+function purchaseStepThreeHtml() {
+  const flow = purchaseFlowState();
+  const product = purchaseFlowProduct();
+  if (!product) return memberEmptyState({ title: "선택한 상품을 찾을 수 없습니다", reason: "상품 단계로 돌아가 다시 선택해 주세요.", compact: true });
+  const sourceTicket = purchaseFlowSourceTicket();
+  const coupon = membershipProductFacet(product, "productKind") === "coupon";
+  const scheduleText = coupon
+    ? (flow.coachName ? `${memberCoachShortName(flow.coachName)} 코치 선호 · 예약할 때 시간 선택` : "예약할 때 코치·시간 선택")
+    : sourceTicket && flow.scheduleMode === "keep"
+      ? "기존 코치·정규시간 유지"
+      : `${flow.coachName ? `${memberCoachShortName(flow.coachName)} 코치 · ` : ""}${flow.preferredDay || "요일 미선택"} · ${flow.preferredTime || "시간대 미선택"}`;
+  return `
+    <article class="purchase-order-summary">
+      <div><span>회원권</span><strong>${escapeHtml(product.title)}</strong></div>
+      <div><span>코치·시간</span><strong>${escapeHtml(scheduleText)}</strong></div>
+      <div><span>결제금액</span><b>${escapeHtml(formatWon(onlinePaymentAmount(product)))}</b></div>
+    </article>
+    <section class="payment-method-selector" aria-label="결제수단 선택">
+      <div class="payment-method-selector-title"><strong>결제수단</strong><span>사용 가능한 수단만 선택됩니다.</span></div>
+      <div class="payment-method-segments" role="group" aria-label="결제수단">${purchasePaymentMethodOptionsHtml()}</div>
+    </section>
+    <p class="purchase-policy-note">결제 완료 전에는 회원권이 생성되지 않습니다. 결제가 확인되면 회원·코치·관리자 화면에서 같은 회원권을 조회합니다.</p>`;
+}
+
+function purchaseStepFourHtml() {
+  const flow = purchaseFlowState();
+  const product = purchaseFlowProduct();
+  return `
+    <article class="purchase-complete-card" role="status">
+      <span aria-hidden="true">✓</span>
+      <strong>${escapeHtml(flow.completionStatus || "결제 결과를 확인하고 있습니다")}</strong>
+      <p>${escapeHtml(product?.title || "선택 회원권")} · 회원권은 결제 검증 뒤 한 번만 생성되거나 연장됩니다.</p>
+      <div>
+        <button class="primary-button" type="button" data-close-purchase-flow>내 회원권 확인</button>
+        <button class="small-button" type="button" data-view="scheduleView">시간표 보기</button>
+      </div>
+    </article>`;
+}
+
+function purchaseStepCanContinue() {
+  const flow = purchaseFlowState();
+  const product = purchaseFlowProduct();
+  if (flow.step === 1) return Boolean(product);
+  if (flow.step === 3) return Boolean(product && isPaymentGatewayReady(normalizeSelectedPaymentMethod()));
+  if (flow.step !== 2 || !product) return true;
+  if (membershipProductFacet(product, "productKind") === "coupon") return true;
+  if (purchaseFlowSourceTicket() && flow.scheduleMode === "keep") return true;
+  return Boolean(flow.coachRoleId && flow.preferredDay && flow.preferredTime);
+}
+
+function renderMembershipPurchaseFlow() {
+  const flow = purchaseFlowState();
+  const container = $("#membershipPurchaseFlow");
+  const browser = $("#membershipProductBrowser");
+  if (!container) return;
+  container.hidden = !flow.open;
+  if (browser) browser.hidden = flow.open;
+  if (!flow.open) return;
+  const sourceTicket = purchaseFlowSourceTicket();
+  if ($("#membershipPurchaseFlowEyebrow")) $("#membershipPurchaseFlowEyebrow").textContent = sourceTicket ? "회원권 연장" : "회원권 구매";
+  const titles = ["회원권을 골라주세요", "코치·시간을 선택해 주세요", "결제 내용을 확인해 주세요", "신청이 접수되었습니다"];
+  if ($("#membershipPurchaseFlowTitle")) $("#membershipPurchaseFlowTitle").textContent = titles[flow.step - 1];
+  if ($("#membershipPurchaseProgress")) {
+    $("#membershipPurchaseProgress").innerHTML = membershipPurchaseSteps.map((label, index) => {
+      const step = index + 1;
+      return `<li class="${step === flow.step ? "is-current" : step < flow.step ? "is-done" : ""}" ${step === flow.step ? 'aria-current="step"' : ""}><span>${step}</span><b>${label}</b></li>`;
+    }).join("");
+  }
+  const stepHtml = [purchaseStepOneHtml, purchaseStepTwoHtml, purchaseStepThreeHtml, purchaseStepFourHtml][flow.step - 1]();
+  const controls = flow.step === 4 ? "" : `
+    <div class="purchase-step-actions">
+      ${flow.step > 1 ? '<button class="small-button" type="button" data-purchase-back>이전</button>' : '<button class="small-button" type="button" data-close-purchase-flow>취소</button>'}
+      ${flow.step < 3
+    ? `<button class="primary-button" type="button" data-purchase-next ${purchaseStepCanContinue() ? "" : "disabled"}>다음</button>`
+    : `<button class="primary-button" type="button" data-purchase-pay ${purchaseStepCanContinue() ? "" : "disabled"}>${escapeHtml(formatWon(onlinePaymentAmount(purchaseFlowProduct() || {})))} 결제</button>`}
+    </div>`;
+  if ($("#membershipPurchaseStep")) $("#membershipPurchaseStep").innerHTML = `${stepHtml}${controls}`;
+  if (flow.step === 3) preloadPortOneSdk();
+}
+
+function openMembershipPurchaseFlow(renewalTicketId = "", productId = "") {
+  const flow = purchaseFlowState();
+  const sourceTicket = (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
+  const products = membershipProducts();
+  const exactProduct = products.find((product) => String(product.id || "") === String(productId || sourceTicket?.productId || "")) || null;
+  const inferredSourceFamilyId = sourceTicket ? membershipProductFamilyId({
+    title: sourceTicket.title || "",
+    group: sourceTicket.group || "",
+    productKind: sourceTicket.productKind || "regular",
+    mode: sourceTicket.productKind === "coupon" ? "pass" : "fixed",
+    groupSize: sourceTicket.groupSize || 1,
+    lessonMinutes: sourceTicket.lessonMinutes || 20,
+    scheduleScope: sourceTicket.scheduleScope || (/주말/.test(sourceTicket.title || "") ? "weekend" : "weekday"),
+  }) : "";
+  const matchingProduct = exactProduct
+    || (sourceTicket ? recommendedMembershipProducts(products, inferredSourceFamilyId, sourceTicket)[0] : null)
+    || null;
+  const lesson = sourceTicket ? purchaseTicketLesson(sourceTicket) : null;
+  flow.open = true;
+  flow.renewalTicketId = sourceTicket?.id || "";
+  flow.productId = matchingProduct?.id || "";
+  flow.familyId = matchingProduct ? membershipProductFamilyId(matchingProduct) : activeMembershipPresetId() || "weekday-regular";
+  flow.step = sourceTicket && matchingProduct ? 2 : 1;
+  flow.scheduleMode = sourceTicket ? "keep" : "change";
+  flow.coachRoleId = sourceTicket?.coachRoleId || "";
+  flow.coachName = sourceTicket?.coach || memberScheduleTicketCoachName(sourceTicket || {}) || "";
+  flow.preferredDay = lesson?.day || "";
+  flow.preferredTime = lesson?.time || "";
+  flow.completionStatus = "";
+  state.membershipFilters = { ...membershipProductFamilyDefinition(flow.familyId).filters };
+  state.membershipSelectedFamilyId = flow.familyId;
+  saveSnapshot();
+  renderMembershipPurchaseFlow();
+  window.requestAnimationFrame(() => $("#membershipPurchaseFlow")?.scrollIntoView({ block: "start" }));
+}
+
+function closeMembershipPurchaseFlow() {
+  const flow = purchaseFlowState();
+  flow.open = false;
+  flow.step = 1;
+  flow.completionStatus = "";
+  saveSnapshot();
+  renderProducts();
+  window.requestAnimationFrame(() => $("#currentTicketPanel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+
+function selectPurchaseFamily(familyId = "") {
+  const family = membershipProductFamilyDefinition(familyId);
+  const flow = purchaseFlowState();
+  flow.familyId = family.id;
+  flow.productId = "";
+  state.membershipFilters = { ...family.filters };
+  state.membershipSelectedFamilyId = family.id;
+  saveSnapshot();
+  if (flow.open) renderMembershipPurchaseFlow();
+  else renderProducts();
+}
+
+function selectPurchaseProduct(productId = "") {
+  const product = membershipProducts().find((item) => String(item.id || "") === String(productId || ""));
+  if (!product) return;
+  const flow = purchaseFlowState();
+  flow.productId = product.id;
+  flow.familyId = membershipProductFamilyId(product);
+  if (!flow.open) {
+    openMembershipPurchaseFlow("", product.id);
+    return;
+  }
+  saveSnapshot();
+  renderMembershipPurchaseFlow();
+}
+
+function movePurchaseStep(direction = 1) {
+  const flow = purchaseFlowState();
+  if (direction > 0 && !purchaseStepCanContinue()) return;
+  flow.step = Math.min(3, Math.max(1, flow.step + direction));
+  saveSnapshot();
+  renderMembershipPurchaseFlow();
+  window.requestAnimationFrame(() => $("#membershipPurchaseFlow")?.scrollIntoView({ block: "start" }));
+}
+
+function completeMembershipPurchaseFlow(message = "결제가 접수되었습니다") {
+  const flow = purchaseFlowState();
+  flow.open = true;
+  flow.step = 4;
+  flow.completionStatus = message;
+  saveSnapshot();
+  renderMembershipPurchaseFlow();
+}
+
+async function submitMembershipPurchaseFlow() {
+  const product = purchaseFlowProduct();
+  if (!product || !purchaseStepCanContinue()) return;
+  await startProductPayment(product.id);
+}
+
 function renderProducts() {
   renderPaymentGatewayStatus();
   renderCurrentTicketPanel();
@@ -6552,23 +7051,20 @@ function renderProducts() {
   renderMemberPaymentAlerts();
   const activeProducts = membershipProducts();
   normalizeMembershipFilters(activeProducts);
-  const visibleProducts = filteredMembershipProducts(activeProducts);
-  renderMembershipProductFilters(activeProducts, visibleProducts);
+  const matchingProducts = filteredMembershipProducts(activeProducts);
+  const activeFamilyId = activeMembershipPresetId();
+  const visibleProducts = recommendedMembershipProducts(matchingProducts, activeFamilyId);
+  renderMembershipProductFilters(activeProducts, matchingProducts);
   renderRegistrationFlow();
   $("#productGrid").innerHTML = visibleProducts.length
-    ? Object.entries(
-      visibleProducts.reduce((groups, product) => {
-      groups[product.group] = groups[product.group] || [];
-      groups[product.group].push(product);
-      return groups;
-    }, {}),
-    )
-      .map(
-        ([group, groupProducts]) => `
+    ? `
         <section class="product-group">
-          <h3>${escapeHtml(group)}</h3>
+          <div class="product-group-heading">
+            <h3>${escapeHtml(activeFamilyId ? membershipProductFamilyDefinition(activeFamilyId).label : "조건 맞춤 회원권")}</h3>
+            <span>${matchingProducts.length}개 중 추천 ${visibleProducts.length}개</span>
+          </div>
           <div class="product-group-grid">
-            ${groupProducts
+            ${visibleProducts
               .map(
                 (product) => `
         <article class="product-card ${product.mode}">
@@ -6589,14 +7085,12 @@ function renderProducts() {
               <small>${escapeHtml(product.coach)}</small>
             </div>
           </details>
-          <button class="primary-button" type="button" data-buy-product="${product.id}">${product.status === "consult" || !product.amount ? "상담 요청" : "결제하기"}</button>
+          <button class="primary-button" type="button" data-buy-product="${product.id}">${product.status === "consult" || !product.amount ? "상담 단계로" : "이 회원권 선택"}</button>
         </article>`,
               )
               .join("")}
           </div>
-        </section>`,
-      )
-      .join("")
+        </section>`
     : memberEmptyState({
       title: "선택한 조건의 회원권이 없습니다",
       reason: "다른 이용 요일이나 수업 조건을 선택해 주세요.",
@@ -6622,6 +7116,7 @@ function renderProducts() {
       )
       .join("") || "<p class='empty-text'>아직 만기 이용권이 없습니다.</p>";
   renderListPager("paymentRequestsPager", "expired", passPage, passItems.length);
+  renderMembershipPurchaseFlow();
 }
 
 function paginateItems(items, page) {
@@ -6775,6 +7270,8 @@ const paymentMethodDefinitions = [
   { id: "naverpay", label: "네이버페이", shortLabel: "네이버페이", payMethod: "EASY_PAY", detail: "네이버페이 바로 결제" },
   { id: "kakaopay", label: "카카오페이", shortLabel: "카카오페이", payMethod: "EASY_PAY", detail: "카카오페이 바로 결제" },
 ];
+const defaultPaymentOperatingMode = "tosspay_only";
+const defaultAllowedPaymentMethods = ["tosspay"];
 let portOneSdkPromise = null;
 let preparedPaymentContext = null;
 const pendingPaymentCancelInFlight = new Set();
@@ -6802,6 +7299,13 @@ function preloadPortOneSdk() {
   loadPortOneSdk().catch(() => {});
 }
 
+function paymentMethodIdList(value) {
+  const values = Array.isArray(value) ? value : String(value || "").split(",");
+  return [...new Set(values
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter((item) => paymentMethodDefinitions.some((method) => method.id === item)))];
+}
+
 function paymentGatewayConfig() {
   const localConfig = (() => {
     try {
@@ -6812,8 +7316,12 @@ function paymentGatewayConfig() {
     }
   })();
   const browserConfig = window.TENNIS_NOTE_PAYMENT_CONFIG || {};
+  const requestedMode = String(browserConfig.mode || localConfig.mode || defaultPaymentOperatingMode).trim().toLowerCase();
+  const mode = requestedMode === "multi" ? "multi" : defaultPaymentOperatingMode;
   return {
     provider: "portone",
+    mode,
+    allowedMethods: paymentMethodIdList(browserConfig.allowedMethods || localConfig.allowedMethods || defaultAllowedPaymentMethods),
     storeId: browserConfig.storeId || localConfig.storeId || "",
     naverPayCategoryType: browserConfig.naverPayCategoryType || localConfig.naverPayCategoryType || "",
     naverPayCategoryId: browserConfig.naverPayCategoryId || localConfig.naverPayCategoryId || "",
@@ -6824,6 +7332,22 @@ function paymentGatewayConfig() {
       kakaopay: browserConfig.channels?.kakaopay || browserConfig.kakaoPayChannelKey || localConfig.channels?.kakaopay || localConfig.kakaoPayChannelKey || "",
     },
   };
+}
+
+function allowedPaymentMethodIds(config = paymentGatewayConfig()) {
+  if (config.mode !== "multi") return [...defaultAllowedPaymentMethods];
+  const configured = paymentMethodIdList(config.allowedMethods);
+  return configured.length ? configured : [...defaultAllowedPaymentMethods];
+}
+
+function isPaymentMethodAllowed(methodId, config = paymentGatewayConfig()) {
+  return allowedPaymentMethodIds(config).includes(String(methodId || "").toLowerCase());
+}
+
+function paymentMethodIdForRequest(methodId = state.selectedPaymentMethod, config = paymentGatewayConfig()) {
+  if (config.mode !== "multi") return "tosspay";
+  const allowedMethods = allowedPaymentMethodIds(config);
+  return allowedMethods.includes(methodId) ? methodId : allowedMethods[0] || "tosspay";
 }
 
 function journalMediaType(file = {}) {
@@ -7834,28 +8358,38 @@ async function persistLessonJournalToServer(log, files = []) {
 }
 
 function paymentMethodDefinition(methodId = state.selectedPaymentMethod) {
-  return paymentMethodDefinitions.find((method) => method.id === methodId) || paymentMethodDefinitions[0];
+  return paymentMethodDefinitions.find((method) => method.id === methodId)
+    || paymentMethodDefinitions.find((method) => method.id === "tosspay")
+    || paymentMethodDefinitions[0];
 }
 
-function isPaymentGatewayReady(methodId = state.selectedPaymentMethod) {
-  const config = paymentGatewayConfig();
+function isPaymentGatewayReady(methodId = state.selectedPaymentMethod, config = paymentGatewayConfig()) {
+  if (!isPaymentMethodAllowed(methodId, config)) return false;
   const channelReady = Boolean(config.storeId && config.channels?.[methodId]);
   if (methodId !== "naverpay") return channelReady;
   return channelReady && Boolean(config.naverPayCategoryType && config.naverPayCategoryId);
 }
 
 function normalizeSelectedPaymentMethod() {
-  if (isPaymentGatewayReady(state.selectedPaymentMethod)) return state.selectedPaymentMethod;
-  const readyMethod = paymentMethodDefinitions.find((method) => isPaymentGatewayReady(method.id));
-  state.selectedPaymentMethod = readyMethod?.id || "card";
+  const config = paymentGatewayConfig();
+  const enforcedMethodId = paymentMethodIdForRequest(state.selectedPaymentMethod, config);
+  if (isPaymentGatewayReady(enforcedMethodId, config)) {
+    state.selectedPaymentMethod = enforcedMethodId;
+    return state.selectedPaymentMethod;
+  }
+  const readyMethodId = allowedPaymentMethodIds(config).find((methodId) => isPaymentGatewayReady(methodId, config));
+  state.selectedPaymentMethod = readyMethodId || enforcedMethodId || "tosspay";
   return state.selectedPaymentMethod;
 }
 
 function selectPaymentMethod(methodId) {
-  if (!paymentMethodDefinitions.some((method) => method.id === methodId) || !isPaymentGatewayReady(methodId)) return;
+  if (!paymentMethodDefinitions.some((method) => method.id === methodId)
+    || !isPaymentMethodAllowed(methodId)
+    || !isPaymentGatewayReady(methodId)) return;
   state.selectedPaymentMethod = methodId;
   saveSnapshot();
-  renderProducts();
+  if (purchaseFlowState().open) renderMembershipPurchaseFlow();
+  else renderProducts();
 }
 
 function paymentRedirectUrl() {
@@ -7876,9 +8410,12 @@ function createProviderPaymentId(productId = "") {
 
 function portOnePaymentRequest({ paymentId, productId, orderName, totalAmount, methodId = state.selectedPaymentMethod }) {
   const config = paymentGatewayConfig();
-  const method = paymentMethodDefinition(methodId);
+  const enforcedMethodId = paymentMethodIdForRequest(methodId, config);
+  const method = paymentMethodDefinition(enforcedMethodId);
   const channelKey = config.channels?.[method.id] || "";
-  if (!config.storeId || !channelKey) throw new Error("payment_channel_not_ready");
+  if (!isPaymentMethodAllowed(method.id, config) || !config.storeId || !channelKey) {
+    throw new Error("payment_channel_not_ready");
+  }
   const request = {
     storeId: config.storeId,
     channelKey,
@@ -7917,29 +8454,30 @@ function renderPaymentGatewayStatus() {
   const target = $("#paymentGatewayStatus");
   if (!target) return;
   const selectedMethodId = normalizeSelectedPaymentMethod();
-  const readyCount = paymentMethodDefinitions.filter((method) => isPaymentGatewayReady(method.id)).length;
+  const config = paymentGatewayConfig();
+  const readyMethods = paymentMethodDefinitions.filter((method) => isPaymentGatewayReady(method.id, config));
+  const readyCount = readyMethods.length;
   const ready = readyCount > 0;
-  const methodButtons = paymentMethodDefinitions.map((method) => {
-    const methodReady = isPaymentGatewayReady(method.id);
+  const methodButtons = readyMethods.map((method) => {
     const selected = method.id === selectedMethodId;
     return `
-      <button class="payment-method-option ${selected ? "is-selected" : ""}" type="button" data-select-payment-method="${method.id}" aria-pressed="${selected}" ${methodReady ? "" : "disabled"}>
+      <button class="payment-method-option ${selected ? "is-selected" : ""}" type="button" data-select-payment-method="${method.id}" aria-pressed="${selected}">
         <strong>${method.label}</strong>
-        <small>${methodReady ? method.detail : "연결 준비중"}</small>
+        <small>${method.detail}</small>
       </button>`;
   }).join("");
   target.innerHTML = `
     <article class="payment-status-card ${ready ? "ready" : "setup"}">
       <div>
         <strong>${ready ? "안전결제 연결됨" : "결제 연결 설정 필요"}</strong>
-        <span>${ready ? `사용할 결제수단을 고른 뒤 회원권을 선택하세요. ${readyCount}/${paymentMethodDefinitions.length}개 수단 사용 가능` : "결제 채널 연결 후 회원권을 구매할 수 있습니다."}</span>
+        <span>${ready ? `${readyMethods.map((method) => method.label).join("·")} 결제를 사용할 수 있습니다.` : "결제 채널 연결 후 회원권을 구매할 수 있습니다."}</span>
       </div>
       <b>${ready ? paymentMethodDefinition(selectedMethodId).shortLabel : "설정 대기"}</b>
     </article>
     <section class="payment-method-selector" aria-label="결제수단 선택">
       <div class="payment-method-selector-title">
         <strong>결제수단</strong>
-        <span>온라인 결제는 카드가 기준입니다.</span>
+        <span>${config.mode === "multi" ? "승인된 결제수단만 표시됩니다." : "현재 토스페이로 안전하게 결제합니다."}</span>
       </div>
       <div class="payment-method-segments" role="group" aria-label="결제수단">${methodButtons}</div>
     </section>`;
@@ -8494,9 +9032,9 @@ async function syncLiveMembershipProductsFromServer() {
   if (!client?.readiness?.().ready || !client.selectRows) return false;
   try {
     const rows = await client.selectRows("tn_membership_products", {
-      select: "id,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,schedule_scope,term_weeks,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,is_active,display_order",
+      select: "id,product_code,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,schedule_scope,term_weeks,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,is_active,policy_settings,display_order",
       filters: { is_active: true },
-      limit: 100,
+      limit: 500,
     });
     const products = (rows || [])
       .filter((row) => numericValue(row.card_price) > 0)
@@ -8563,7 +9101,7 @@ async function syncMemberTicketsFromServer(profile = null) {
       limit: 20,
     }).catch(() => []);
     const activeSharedLinks = (sharedLinks || [])
-      .filter((link) => !["expired", "refunded"].includes(String(link.status || "").toLowerCase()));
+      .filter((link) => !["pending_payment", "expired", "refunded"].includes(String(link.status || "").toLowerCase()));
     const sharedTicketIds = new Set(activeSharedLinks
       .map((link) => link.ticket_id)
       .filter(Boolean));
@@ -8588,11 +9126,13 @@ async function syncMemberTicketsFromServer(profile = null) {
           }).catch(() => []);
         }
       }));
-    rows = [...(rows || []), ...sharedTicketRows.flat()].map((row) => ({
-      ...row,
-      shared_group_ticket: sharedTicketIds.has(row.id),
-      shared_group_account_id: sharedAccountIdByTicketId.get(row.id) || "",
-    }));
+    rows = [...(rows || []), ...sharedTicketRows.flat()]
+      .filter((row) => String(row.status || "").toLowerCase() !== "pending_payment")
+      .map((row) => ({
+        ...row,
+        shared_group_ticket: sharedTicketIds.has(row.id),
+        shared_group_account_id: sharedAccountIdByTicketId.get(row.id) || "",
+      }));
 
     rows = await attachLiveTicketProducts(client, rows || []);
     rows = await attachLiveTicketPayments(client, rows || []);
@@ -8641,6 +9181,9 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
     throw new Error("login_required");
   }
   const paymentAmount = onlinePaymentAmount(product);
+  const enforcedMethodId = paymentMethodIdForRequest(methodId);
+  if (!isPaymentGatewayReady(enforcedMethodId)) throw new Error("payment_channel_not_ready");
+  const purchaseFlow = purchaseFlowState();
   return client.invokeFunction("portone-payment/prepare", {
     body: {
       paymentId,
@@ -8658,8 +9201,13 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
       groupSize: Number(product.groupSize) || (product.title.includes("2대1") || product.detail.includes("2대1") || product.detail.includes("2:1") ? 2 : 1),
       validityDays: Number(product.validityDays) || 35,
       graceDays: Number(product.graceDays) || 0,
-      method: paymentMethodDefinition(methodId).id,
+      method: enforcedMethodId,
       groupAccountId: Number(product.groupSize) === 2 ? state.groupAccount?.id || null : null,
+      coachRoleId: purchaseFlow.productId === product.id ? purchaseFlow.coachRoleId || null : null,
+      preferredDay: purchaseFlow.productId === product.id ? purchaseFlow.preferredDay || null : null,
+      preferredTime: purchaseFlow.productId === product.id ? purchaseFlow.preferredTime || null : null,
+      scheduleMode: purchaseFlow.productId === product.id ? purchaseFlow.scheduleMode || "change" : "change",
+      renewalSourceTicketId: purchaseFlow.productId === product.id ? purchaseFlow.renewalTicketId || null : null,
     },
   });
 }
@@ -8711,6 +9259,10 @@ async function handlePaymentRedirectResult() {
       ? { tone: "done", text: "결제 검증이 끝났습니다. 회원권 상태를 확인합니다." }
       : { tone: "wait", text: "결제 접수 후 서버 검증을 기다리는 중입니다." };
     state.ticketHistory.unshift({ text: "결제창 복귀 · 서버 검증 완료", tone: verification?.ok ? "done" : "wait" });
+    const flow = purchaseFlowState();
+    flow.open = true;
+    flow.step = 4;
+    flow.completionStatus = verification?.ok ? "결제가 확인되었습니다" : "결제가 접수되었습니다";
   } catch (error) {
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제 검증 확인 필요 · ${paymentServerErrorMessage(error)}` };
     state.ticketHistory.unshift({ text: "결제창 복귀 · 관리자 검증 확인 필요", tone: "alert" });
@@ -8777,9 +9329,17 @@ async function resumePendingTicketPayment(ticketId = "") {
   const ticket = state.liveTickets.find((item) => item.id === ticketId) || currentLiveTicket();
   const paymentId = ticket?.providerPaymentId || "";
   const amount = Number(ticket?.paymentAmount || 0);
-  const methodId = paymentMethodDefinitions.some((method) => method.id === ticket?.paymentMethod)
-    ? ticket.paymentMethod
-    : normalizeSelectedPaymentMethod();
+  const methodId = String(ticket?.paymentMethod || "").toLowerCase();
+  if (ticket && (!isPaymentMethodAllowed(methodId) || !isPaymentGatewayReady(methodId))) {
+    state.pendingPaymentCheckStatus = {
+      tone: "alert",
+      text: "기존 결제 대기건은 재개할 수 없습니다. 토스페이로 새 결제를 시작해 주세요.",
+    };
+    state.ticketHistory.unshift({ text: `${ticket.title || "회원권"} 기존 결제 대기 재개 차단 · 토스페이 신규 결제 필요`, tone: "alert" });
+    renderAll();
+    setView("shopView");
+    return;
+  }
   if (!ticket || !paymentId || !amount || !isPaymentGatewayReady(methodId)) {
     state.pendingPaymentCheckStatus = { tone: "alert", text: "기존 결제창을 열 결제 기록이나 결제 설정을 확인해주세요." };
     renderAll();
@@ -8866,11 +9426,12 @@ function closePaymentConfirmationModal() {
 }
 
 function openPaymentConfirmationModal({ product, paymentId, preparedPayment, methodId, sdk }) {
-  preparedPaymentContext = { product, paymentId, preparedPayment, methodId, sdk };
+  const enforcedMethodId = paymentMethodIdForRequest(methodId);
+  preparedPaymentContext = { product, paymentId, preparedPayment, methodId: enforcedMethodId, sdk };
   const modal = $("#paymentConfirmationModal");
   if (!modal) return;
   const amount = onlinePaymentAmount(product);
-  const method = paymentMethodDefinition(methodId);
+  const method = paymentMethodDefinition(enforcedMethodId);
   $("#paymentConfirmationProduct").textContent = product.title;
   $("#paymentConfirmationAmount").textContent = `${amount.toLocaleString("ko-KR")}원`;
   $("#paymentConfirmationMethod").textContent = method.label;
@@ -8886,7 +9447,8 @@ function openPaymentConfirmationModal({ product, paymentId, preparedPayment, met
 async function completePreparedPayment() {
   const context = preparedPaymentContext;
   if (!context) return;
-  const { product, paymentId, methodId, sdk } = context;
+  const { product, paymentId, sdk } = context;
+  const methodId = paymentMethodIdForRequest(context.methodId);
   let preparedPayment = context.preparedPayment || null;
   const method = paymentMethodDefinition(methodId);
   const paymentAmount = onlinePaymentAmount(product);
@@ -8899,7 +9461,6 @@ async function completePreparedPayment() {
     if (!preparedPayment) {
       preparedPayment = await prepareServerPayment(product, paymentId, methodId);
       context.preparedPayment = preparedPayment;
-      await syncMemberTicketsFromServer();
     }
     if (message) message.textContent = "결제창을 여는 중입니다.";
     const response = await sdk.requestPayment(portOnePaymentRequest({
@@ -8939,6 +9500,10 @@ async function completePreparedPayment() {
         status: verifiedStatus,
       });
       state.ticketHistory.unshift({ text: `${product.title} 결제 완료 접수 · 검증 후 회원권 충전`, tone: "wait" });
+      const flow = purchaseFlowState();
+      flow.open = true;
+      flow.step = 4;
+      flow.completionStatus = "결제가 접수되었습니다";
     }
   } catch (error) {
     const serverCode = error?.payload?.code || error?.message || "server_error";
@@ -8979,6 +9544,13 @@ async function startProductPayment(productId, options = {}) {
   const paymentAmount = onlinePaymentAmount(product);
   if (!paymentAmount || product.status === "consult") {
     requestProduct(productId);
+    const flow = purchaseFlowState();
+    flow.productId = product.id;
+    flow.open = true;
+    flow.step = 4;
+    flow.completionStatus = "상담 요청이 접수되었습니다";
+    saveSnapshot();
+    renderProducts();
     return;
   }
 
@@ -9613,7 +10185,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.354" });
+  const params = new URLSearchParams({ v: "1.0.355" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -11839,10 +12411,81 @@ function bindEvents() {
       linkMemberGroupPartner();
       return;
     }
+    const renewalButton = event.target.closest("[data-renew-ticket]");
+    if (renewalButton) {
+      openMembershipPurchaseFlow(renewalButton.dataset.renewTicket);
+      return;
+    }
+    if (event.target.closest("[data-open-purchase-flow]")) {
+      openMembershipPurchaseFlow();
+      return;
+    }
+    if (event.target.closest("[data-close-purchase-flow]")) {
+      closeMembershipPurchaseFlow();
+      return;
+    }
+    const purchaseFamilyButton = event.target.closest("[data-purchase-family]");
+    if (purchaseFamilyButton) {
+      selectPurchaseFamily(purchaseFamilyButton.dataset.purchaseFamily);
+      return;
+    }
+    const purchaseProductButton = event.target.closest("[data-purchase-product]");
+    if (purchaseProductButton) {
+      selectPurchaseProduct(purchaseProductButton.dataset.purchaseProduct);
+      return;
+    }
+    const purchaseScheduleModeButton = event.target.closest("[data-purchase-schedule-mode]");
+    if (purchaseScheduleModeButton) {
+      const flow = purchaseFlowState();
+      flow.scheduleMode = purchaseScheduleModeButton.dataset.purchaseScheduleMode;
+      if (flow.scheduleMode === "change") {
+        flow.preferredDay = "";
+        flow.preferredTime = "";
+      }
+      saveSnapshot();
+      renderMembershipPurchaseFlow();
+      return;
+    }
+    const purchaseCoachButton = event.target.closest("[data-purchase-coach]");
+    if (purchaseCoachButton) {
+      const flow = purchaseFlowState();
+      flow.coachRoleId = purchaseCoachButton.dataset.purchaseCoach || "";
+      flow.coachName = purchaseCoachButton.dataset.purchaseCoachName || "";
+      saveSnapshot();
+      renderMembershipPurchaseFlow();
+      return;
+    }
+    const purchaseDayButton = event.target.closest("[data-purchase-day]");
+    if (purchaseDayButton) {
+      purchaseFlowState().preferredDay = purchaseDayButton.dataset.purchaseDay || "";
+      saveSnapshot();
+      renderMembershipPurchaseFlow();
+      return;
+    }
+    const purchaseTimeButton = event.target.closest("[data-purchase-time]");
+    if (purchaseTimeButton) {
+      purchaseFlowState().preferredTime = purchaseTimeButton.dataset.purchaseTime || "";
+      saveSnapshot();
+      renderMembershipPurchaseFlow();
+      return;
+    }
+    if (event.target.closest("[data-purchase-back]")) {
+      movePurchaseStep(-1);
+      return;
+    }
+    if (event.target.closest("[data-purchase-next]")) {
+      movePurchaseStep(1);
+      return;
+    }
+    if (event.target.closest("[data-purchase-pay]")) {
+      submitMembershipPurchaseFlow();
+      return;
+    }
     const membershipFilterButton = event.target.closest("[data-membership-filter]");
     if (membershipFilterButton) {
       const key = membershipFilterButton.dataset.membershipFilter;
       if (membershipFilterDefinitions.some((definition) => definition.key === key)) {
+        state.membershipSelectedFamilyId = "";
         state.membershipFilters[key] = membershipFilterButton.dataset.membershipFilterValue || "all";
         renderProducts();
       }
@@ -11851,14 +12494,12 @@ function bindEvents() {
     const membershipPresetButton = event.target.closest("[data-membership-preset]");
     if (membershipPresetButton) {
       const preset = membershipPresetDefinitions.find((item) => item.id === membershipPresetButton.dataset.membershipPreset);
-      if (preset) {
-        state.membershipFilters = { ...preset.filters };
-        renderProducts();
-      }
+      if (preset) selectPurchaseFamily(preset.id);
       return;
     }
     const membershipFilterReset = event.target.closest("[data-membership-filter-reset]");
     if (membershipFilterReset) {
+      state.membershipSelectedFamilyId = "";
       state.membershipFilters = {
         scheduleScope: "all",
         productKind: "all",
@@ -11876,7 +12517,7 @@ function bindEvents() {
     const productButton = event.target.closest("[data-buy-product]");
     if (productButton) {
       event.preventDefault();
-      startProductPayment(productButton.dataset.buyProduct);
+      selectPurchaseProduct(productButton.dataset.buyProduct);
       return;
     }
     if (event.target.closest("[data-close-payment-confirmation]")) {
@@ -11913,7 +12554,7 @@ function bindEvents() {
     if (curriculumButton) setView("curriculumView");
   });
   document.addEventListener("pointerdown", (event) => {
-    if (event.target.closest("[data-buy-product]")) preloadPortOneSdk();
+    if (event.target.closest("[data-buy-product], [data-purchase-pay]")) preloadPortOneSdk();
   }, { passive: true });
   document.addEventListener("input", (event) => {
     if (event.target.id !== "memberCurriculumSearch") return;
@@ -12314,7 +12955,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.354",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.355",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

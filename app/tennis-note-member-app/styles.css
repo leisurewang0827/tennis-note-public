@@ -3044,6 +3044,500 @@ textarea {
   color: var(--ink);
 }
 
+/* Simplified membership purchase: four primary tabs and a four-step checkout. */
+.tabbar {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.membership-product-browser,
+.membership-purchase-flow {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(18, 35, 31, 0.055);
+}
+
+.membership-product-browser[hidden],
+.membership-purchase-flow[hidden] {
+  display: none !important;
+}
+
+.membership-browser-heading,
+.membership-purchase-head,
+.product-group-heading,
+.purchase-recommendations > div:first-child,
+.purchase-selected-summary,
+.purchase-order-summary > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.membership-browser-heading > div,
+.membership-purchase-head > div,
+.purchase-step-intro,
+.purchase-selected-summary,
+.purchase-order-summary > div,
+.purchase-complete-card {
+  display: grid;
+  gap: 4px;
+}
+
+.membership-browser-heading strong,
+.membership-purchase-head h3,
+.purchase-step-intro strong,
+.purchase-recommendations strong,
+.purchase-selected-summary strong,
+.purchase-order-summary strong,
+.purchase-choice-section h4 {
+  margin: 0;
+  color: var(--ink);
+}
+
+.membership-browser-heading span,
+.purchase-step-intro span,
+.purchase-recommendations span,
+.purchase-selected-summary span,
+.purchase-order-summary span,
+.purchase-policy-note,
+.purchase-complete-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.membership-product-presets-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.membership-preset-chip {
+  position: relative;
+  display: grid;
+  min-height: 76px;
+  align-content: center;
+  justify-items: start;
+  gap: 4px;
+  text-align: left;
+}
+
+.membership-preset-chip strong,
+.membership-preset-chip small,
+.membership-preset-chip b {
+  pointer-events: none;
+}
+
+.membership-preset-chip strong {
+  color: inherit;
+  font-size: 13px;
+}
+
+.membership-preset-chip small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.membership-preset-chip b {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  color: var(--green);
+  font-size: 10px;
+}
+
+.product-group-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.membership-other-tickets {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.membership-other-tickets > summary {
+  min-height: 48px;
+  padding: 0 14px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.membership-other-tickets > summary::after {
+  content: "+";
+  color: var(--green);
+  font-size: 18px;
+}
+
+.membership-other-tickets[open] > summary::after {
+  content: "−";
+}
+
+.membership-other-tickets > div {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding: 10px;
+}
+
+.membership-ticket-unit.is-compact .membership-primary-card {
+  padding: 12px;
+  box-shadow: none;
+}
+
+.membership-ticket-unit.is-compact .membership-primary-card > strong {
+  font-size: 17px;
+}
+
+.membership-ticket-unit.is-compact .membership-remaining-row b {
+  font-size: 23px;
+}
+
+.membership-action-row.has-ticket {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.membership-action-row.has-ticket > :last-child {
+  grid-column: 1 / -1;
+}
+
+.membership-action-row.is-empty {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.membership-purchase-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.membership-purchase-progress li {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: 4px;
+  color: #8b9892;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.membership-purchase-progress li::before {
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: #e4ebe7;
+  content: "";
+}
+
+.membership-purchase-progress li.is-current,
+.membership-purchase-progress li.is-done {
+  color: var(--green);
+}
+
+.membership-purchase-progress li.is-current::before,
+.membership-purchase-progress li.is-done::before {
+  background: var(--green);
+}
+
+.membership-purchase-progress li span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  color: #69756f;
+  background: #edf2ef;
+}
+
+.membership-purchase-progress li.is-current span,
+.membership-purchase-progress li.is-done span {
+  color: #ffffff;
+  background: var(--green);
+}
+
+.membership-purchase-step,
+.purchase-recommendations,
+.purchase-choice-section {
+  display: grid;
+  gap: 10px;
+}
+
+.purchase-family-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.purchase-family-option,
+.purchase-product-option,
+.purchase-choice {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  color: var(--ink);
+  background: #ffffff;
+  text-align: left;
+}
+
+.purchase-family-option {
+  position: relative;
+  display: grid;
+  min-height: 86px;
+  align-content: center;
+  gap: 4px;
+}
+
+.purchase-family-option strong,
+.purchase-family-option small,
+.purchase-family-option b,
+.purchase-product-option > *,
+.purchase-choice > * {
+  pointer-events: none;
+}
+
+.purchase-family-option small,
+.purchase-product-option small,
+.purchase-choice small,
+.purchase-keep-summary small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.purchase-family-option b {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  color: var(--green);
+  font-size: 10px;
+}
+
+.purchase-family-option.is-selected,
+.purchase-product-option.is-selected,
+.purchase-choice.is-selected {
+  border-color: var(--green);
+  background: var(--soft-green);
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+
+.purchase-product-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 10px;
+  align-items: center;
+}
+
+.purchase-product-option > span,
+.purchase-product-option > small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.purchase-product-option > strong {
+  font-size: 15px;
+}
+
+.purchase-product-option > b,
+.purchase-selected-summary b,
+.purchase-order-summary b {
+  color: var(--green);
+  font-size: 17px;
+}
+
+.purchase-selected-summary,
+.purchase-order-summary,
+.purchase-keep-summary,
+.purchase-policy-note {
+  border: 1px solid #cfe3da;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f5fbf8;
+}
+
+.purchase-choice-grid,
+.purchase-coach-grid,
+.purchase-day-grid,
+.purchase-time-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.purchase-day-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.purchase-time-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.purchase-choice {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+}
+
+.purchase-keep-summary {
+  display: grid;
+  gap: 6px;
+}
+
+.purchase-keep-summary > span {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.purchase-step-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.45fr) minmax(0, 1fr);
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.purchase-step-actions button {
+  min-height: 48px;
+}
+
+.purchase-complete-card {
+  justify-items: center;
+  border: 1px solid #9acbb9;
+  border-radius: 12px;
+  padding: 24px 16px;
+  background: var(--soft-green);
+  text-align: center;
+}
+
+.purchase-complete-card > span {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--green);
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.purchase-complete-card > div {
+  display: grid;
+  width: min(100%, 440px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.membership-pending-records {
+  margin: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 720px) {
+  .tabbar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .membership-product-browser,
+  .membership-purchase-flow {
+    padding: 12px;
+  }
+
+  .membership-browser-heading {
+    display: grid;
+  }
+
+  .membership-browser-heading > button {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .membership-product-presets-grid,
+  .purchase-family-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .membership-product-presets-grid > :last-child,
+  .purchase-family-grid > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .purchase-coach-grid,
+  .purchase-time-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .purchase-day-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .purchase-day-grid .purchase-choice {
+    min-height: 46px;
+    padding-inline: 3px;
+    text-align: center;
+  }
+
+  .purchase-step-actions {
+    position: sticky;
+    bottom: calc(var(--tn-bottom-nav-height) + max(14px, env(safe-area-inset-bottom)));
+    z-index: 5;
+    margin: 4px -4px -4px;
+    padding: 8px 4px 4px;
+    background: rgba(255, 255, 255, 0.96);
+  }
+}
+
+@media (max-width: 420px) {
+  .membership-purchase-progress li b {
+    font-size: 10px;
+  }
+
+  .purchase-family-option,
+  .membership-preset-chip {
+    min-height: 78px;
+  }
+
+  .purchase-product-option {
+    grid-template-columns: 1fr;
+  }
+
+  .purchase-product-option > span,
+  .purchase-product-option > small {
+    grid-column: auto;
+  }
+
+  .membership-action-row.has-ticket,
+  .membership-action-row.is-empty,
+  .purchase-complete-card > div {
+    grid-template-columns: 1fr;
+  }
+
+  .membership-action-row.has-ticket > :last-child {
+    grid-column: auto;
+  }
+}
+
 .journal-lesson-result {
   display: flex;
   align-items: center;
@@ -4989,6 +5483,18 @@ body.identity-setup-required {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f3f5f7;
+}
+
+.payment-method-unavailable {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 14px 12px;
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--paper);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .payment-method-option {
@@ -8361,5 +8867,34 @@ body.modal-open {
     min-height: 46px;
     padding-inline: 1px;
     font-size: 9px;
+  }
+}
+
+/* Final navigation override: the membership area is reached from Home, not a fifth tab. */
+.tabbar {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .tabbar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.membership-product-presets-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.membership-preset-chip {
+  min-height: 76px;
+}
+
+@media (max-width: 720px) {
+  .membership-product-presets-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .membership-product-presets-grid > :last-child {
+    grid-column: auto;
   }
 }

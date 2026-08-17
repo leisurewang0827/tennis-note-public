@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.354" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.354" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.355" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.355" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -174,7 +174,6 @@
           <button class="tab is-active" type="button" data-view="homeView">홈</button>
           <button class="tab" type="button" data-view="scheduleView">시간표</button>
           <button class="tab" type="button" data-view="lessonLogView">운동일지</button>
-          <button class="tab" type="button" data-view="shopView">회원권</button>
           <button class="tab" type="button" data-view="profileView">내 정보</button>
         </nav>
 
@@ -380,44 +379,64 @@
 
         <section id="shopView" class="view" aria-label="회원권 구매 및 결제">
           <div class="section-title">
-            <h2>회원권 구매</h2>
+            <div>
+              <p class="eyebrow">회원권</p>
+              <h2>내 회원권</h2>
+            </div>
+            <button class="small-button title-action" type="button" data-view="homeView">홈으로</button>
           </div>
 
           <div id="currentTicketPanel" class="membership-overview current-ticket-panel"></div>
 
-          <details id="membershipHistoryDetails" class="membership-details">
+          <details id="membershipHistoryDetails" class="membership-details membership-secondary-details">
             <summary>지난 이용 내역</summary>
             <div id="ticketHistory" class="history-list"></div>
             <div id="ticketHistoryPager" class="list-pager"></div>
           </details>
 
-          <details id="membershipPurchaseDetails" class="membership-details" open>
-            <summary>회원권 추가·연장</summary>
-            <div class="membership-details-body">
-              <section class="membership-product-discovery" aria-label="회원권 빠른 선택">
-                <div id="membershipProductPresets" class="membership-product-presets"></div>
-                <details id="membershipProductFilterDetails" class="membership-filter-disclosure">
-                  <summary><span>상세 조건</span><small id="membershipProductFilterSummary">필터 열기</small></summary>
-                  <section id="membershipProductFilters" class="membership-product-filters" aria-label="회원권 상품 조건"></section>
-                </details>
-              </section>
-              <div class="product-grid" id="productGrid"></div>
-              <details class="membership-help-disclosure">
-                <summary>결제·가입 안내</summary>
-                <div class="membership-help-body">
-                  <div id="paymentGatewayStatus" class="payment-gateway-status"></div>
-                  <div id="groupAccountPanel" class="group-account-panel"></div>
-                  <div id="memberPaymentAlerts"></div>
-                  <div id="registrationFlow" class="flow-guide"></div>
-                </div>
-              </details>
-
-          <section class="form-card">
-            <h3>만기/충전 대기 이용권</h3>
-            <p class="form-help">결제 후에는 관리자 검증이 끝나야 이용권이 충전됩니다.</p>
-            <div id="paymentRequests" class="history-list"></div>
-            <div id="paymentRequestsPager" class="list-pager"></div>
+          <section id="membershipPurchaseFlow" class="membership-purchase-flow" aria-labelledby="membershipPurchaseFlowTitle" hidden>
+            <div class="membership-purchase-head">
+              <div>
+                <p class="eyebrow" id="membershipPurchaseFlowEyebrow">회원권 구매</p>
+                <h3 id="membershipPurchaseFlowTitle">원하는 수업을 골라주세요</h3>
+              </div>
+              <button class="small-button" type="button" data-close-purchase-flow>닫기</button>
+            </div>
+            <ol id="membershipPurchaseProgress" class="membership-purchase-progress" aria-label="회원권 구매 단계"></ol>
+            <div id="membershipPurchaseStep" class="membership-purchase-step"></div>
           </section>
+
+          <section id="membershipProductBrowser" class="membership-product-browser" aria-label="회원권 상품 둘러보기">
+            <div class="membership-browser-heading">
+              <div>
+                <strong>회원권 찾기</strong>
+                <span>상품 전체를 나열하지 않고 수업 형태별로 추천합니다.</span>
+              </div>
+              <button class="primary-button" type="button" data-open-purchase-flow>새 회원권 구매</button>
+            </div>
+            <section class="membership-product-discovery" aria-label="회원권 빠른 선택">
+              <div id="membershipProductPresets" class="membership-product-presets"></div>
+              <details id="membershipProductFilterDetails" class="membership-filter-disclosure">
+                <summary><span>상세 조건</span><small id="membershipProductFilterSummary">조건 열기</small></summary>
+                <section id="membershipProductFilters" class="membership-product-filters" aria-label="회원권 상품 조건"></section>
+              </details>
+            </section>
+            <div class="product-grid" id="productGrid"></div>
+          </section>
+
+          <details class="membership-details membership-help-disclosure">
+            <summary>결제·가입·대기 내역</summary>
+            <div class="membership-details-body membership-help-body">
+              <div id="paymentGatewayStatus" class="payment-gateway-status"></div>
+              <div id="groupAccountPanel" class="group-account-panel"></div>
+              <div id="memberPaymentAlerts"></div>
+              <div id="registrationFlow" class="flow-guide"></div>
+              <section class="form-card membership-pending-records">
+                <h3>결제 확인 중인 회원권</h3>
+                <p class="form-help">결제 이전 또는 관리자 검증이 끝나지 않은 이용권만 표시됩니다.</p>
+                <div id="paymentRequests" class="history-list"></div>
+                <div id="paymentRequestsPager" class="list-pager"></div>
+              </section>
             </div>
           </details>
         </section>
@@ -1086,17 +1105,17 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.354"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.354"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.354"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.355"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.355"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.355"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.354"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.354"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.354"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.354"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.354"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.355"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.355"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.355"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.355"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.355"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
     <script>
       (() => {
@@ -1115,7 +1134,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.354";
+          appScript.src = "./app.js?v=1.0.355";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -1128,7 +1147,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.354";
+          appScript.src = "./app.js?v=1.0.355";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

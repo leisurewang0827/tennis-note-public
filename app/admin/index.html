@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.354" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.355" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-14" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.354" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.355" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -1245,6 +1245,7 @@
                 <div class="data-action-row compact">
                   <span id="membershipProductBranchStatus" class="source-pill"></span>
                   <button id="saveVisibleProductRows" class="secondary-button product-page-save" type="button" hidden>현재 페이지 전체 저장</button>
+                  <button id="addOneDayProductButton" class="secondary-button" type="button">원데이 1회권</button>
                   <button id="addMembershipProductButton" class="primary-button" type="button">새 회원권</button>
                 </div>
               </div>
@@ -1757,8 +1758,9 @@
         </div>
         <form id="onsitePaymentForm" class="onsite-payment-form">
           <label><span>회원</span><select id="onsitePaymentMember" required></select></label>
-          <label><span>연장할 회원권</span><select id="onsitePaymentSourceTicket" required></select></label>
+          <label><span>등록 방식</span><select id="onsitePaymentSourceTicket"></select></label>
           <label><span>회원권 상품</span><select id="onsitePaymentProduct" required></select></label>
+          <label><span>담당 코치</span><select id="onsitePaymentCoach" required></select></label>
           <label><span>결제수단</span>
             <select id="onsitePaymentMethod" required>
               <option value="bank_transfer">계좌이체</option>
@@ -1768,7 +1770,7 @@
           <label><span>결제일</span><input id="onsitePaymentDate" type="date" required /></label>
           <label><span>시작일</span><input id="onsitePaymentStartDate" type="date" /></label>
           <label class="onsite-payment-amount"><span>실제 결제금액</span><input id="onsitePaymentAmount" type="number" min="1" step="1" inputmode="numeric" required /></label>
-          <label class="onsite-payment-schedule"><input id="onsitePaymentKeepSchedule" type="checkbox" checked /><span>기존 고정시간 연장</span></label>
+          <label class="onsite-payment-schedule"><input id="onsitePaymentKeepSchedule" type="checkbox" checked /><span>기존 코치·고정시간 그대로 연장</span></label>
           <p id="onsitePaymentMessage" class="form-message" role="status"></p>
           <div class="modal-actions">
             <button class="ghost-button" type="button" data-close-onsite-payment>취소</button>
@@ -2076,20 +2078,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.354"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.354"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.354"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.355"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.355"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.355"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.354"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.355"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.354"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.354"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.354"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.354"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.354"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.354"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.355"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.355"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.355"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.355"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.355"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.355"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.354"></script>
+    <script src="./app.js?v=1.0.355"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-14"></script>
   </body>
 </html>

@@ -4285,6 +4285,7 @@ function membershipProductDraftFromServer(product = {}) {
     id: product.product_code || `server-${product.id}`,
     serverProductId: product.id,
     serverProductCode: product.product_code || "",
+    purchaseExperience: product.policy_settings?.purchaseExperience || (String(product.product_code || "").startsWith("one-day-") ? "one_day" : ""),
     branchId: product.branch_id || "",
     branchName: operationBranchOptions().find((branch) => branch.id === String(product.branch_id || ""))?.name || "",
     group: `${scheduleScope === "mixed" ? "혼합" : scheduleScope === "weekend" ? "주말" : "평일"} ${productKind === "coupon" ? "쿠폰제" : "정규권"}`,
@@ -4334,6 +4335,8 @@ function membershipProductsForMemberApp() {
     const normalized = normalizeMembershipProduct(product, membershipProductDefaults.find((item) => item.id === product.id));
     return {
       id: normalized.id,
+      productCode: normalized.serverProductCode || normalized.productCode || normalized.id,
+      purchaseExperience: normalized.purchaseExperience || "",
       group: normalized.group,
       title: normalized.title,
       name: normalized.name,
@@ -4917,7 +4920,8 @@ async function saveVisibleProductRows() {
   }
 }
 
-async function createMembershipProductSetting() {
+async function createMembershipProductSetting(options = {}) {
+  const oneDay = options.preset === "one_day";
   const client = window.TennisNoteDataClient;
   if (!client?.insertRows || !operationsAccessReady() || operationsRole() !== "admin") {
     showToast("관리자 로그인 후 새 회원권을 만들 수 있습니다.");
@@ -4928,31 +4932,31 @@ async function createMembershipProductSetting() {
     showToast("지점 정보를 찾지 못했습니다. 서버 데이터를 새로고침해 주세요.");
     return;
   }
-  const button = $("#addMembershipProductButton");
+  const button = $(oneDay ? "#addOneDayProductButton" : "#addMembershipProductButton");
   if (button) {
     button.disabled = true;
     button.textContent = "만드는 중";
   }
   try {
-    const productCode = `custom-${Date.now()}`;
+    const productCode = `${oneDay ? "one-day" : "custom"}-${Date.now()}`;
     const rows = await client.insertRows("tn_membership_products", {
       branch_id: branchId,
       product_code: productCode,
-      name: "새 회원권",
+      name: oneDay ? "원데이 1회권" : "새 회원권",
       lesson_minutes: 20,
       frequency_per_week: 1,
       max_sessions_per_day: 1,
       max_sessions_per_week: 1,
       max_booking_days_per_week: 1,
-      total_sessions: 4,
+      total_sessions: oneDay ? 1 : 4,
       group_size: 1,
-      product_kind: "regular",
-      is_coupon: false,
+      product_kind: oneDay ? "coupon" : "regular",
+      is_coupon: oneDay,
       is_active: false,
-      schedule_scope: "weekday",
+      schedule_scope: oneDay ? "mixed" : "weekday",
       term_weeks: 0,
-      validity_days: 35,
-      grace_days: 7,
+      validity_days: oneDay ? 30 : 35,
+      grace_days: oneDay ? 0 : 7,
       base_price: 0,
       card_price: 0,
       cash_price: 0,
@@ -4960,7 +4964,11 @@ async function createMembershipProductSetting() {
       discount_enabled: true,
       coach_discount_allowed: false,
       display_order: Math.max(0, ...membershipProductsForActiveOperationProfile().map((item) => Number(item.sortOrder) || 0)) + 10,
-      policy_settings: { adminSaleStatus: "hidden", countLabel: "4회" },
+      policy_settings: {
+        adminSaleStatus: "hidden",
+        countLabel: oneDay ? "1회" : "4회",
+        ...(oneDay ? { purchaseExperience: "one_day" } : {}),
+      },
     });
     if (!Array.isArray(rows) || rows.length !== 1) throw new Error("membership_product_create_not_confirmed");
     const synced = await syncAdminLiveData();
@@ -4975,13 +4983,15 @@ async function createMembershipProductSetting() {
       card.scrollIntoView({ block: "nearest", behavior: "smooth" });
       card.querySelector('[data-product-field="title"]')?.focus();
     }
-    showToast("새 회원권을 만들었습니다. 내용을 입력한 뒤 판매 상태를 변경해 주세요.");
+    showToast(oneDay
+      ? "원데이 1회권 초안을 만들었습니다. 가격을 입력한 뒤 판매 상태를 변경해 주세요."
+      : "새 회원권을 만들었습니다. 내용을 입력한 뒤 판매 상태를 변경해 주세요.");
   } catch {
     showToast("새 회원권 생성에 실패했습니다. 관리자 권한과 서버 연결을 확인해 주세요.");
   } finally {
     if (button?.isConnected) {
       button.disabled = false;
-      button.textContent = "새 회원권";
+      button.textContent = oneDay ? "원데이 1회권" : "새 회원권";
     }
   }
 }
@@ -13016,20 +13026,45 @@ function onsitePaymentTicketLabel(ticket) {
   return `${ticket.product || "회원권"} · ${coach} · 잔여 ${Number(ticket.remaining) || 0}회${period ? ` · ${period}` : ""}`;
 }
 
-function syncOnsitePaymentSourceTickets() {
+function syncOnsitePaymentSourceTickets(options = {}) {
   const select = $("#onsitePaymentSourceTicket");
   if (!select) return;
   const previousValue = select.value;
   const sourceTickets = onsitePaymentSourceTickets();
-  select.innerHTML = sourceTickets.length
-    ? sourceTickets.map((ticket) => `<option value="${escapeHtml(ticket.serverTicketId)}">${escapeHtml(onsitePaymentTicketLabel(ticket))}</option>`).join("")
-    : '<option value="">연장 가능한 기존 회원권 없음</option>';
-  if (sourceTickets.some((ticket) => ticket.serverTicketId === previousValue)) select.value = previousValue;
-  const selectedTicket = sourceTickets.find((ticket) => ticket.serverTicketId === select.value) || sourceTickets[0];
+  select.innerHTML = `
+    <option value="">첫 회원권 등록</option>
+    ${sourceTickets.map((ticket) => `<option value="${escapeHtml(ticket.serverTicketId)}">기존 회원권 연장 · ${escapeHtml(onsitePaymentTicketLabel(ticket))}</option>`).join("")}`;
+  if (options.preserveEmpty && previousValue === "") select.value = "";
+  else if (sourceTickets.some((ticket) => ticket.serverTicketId === previousValue)) select.value = previousValue;
+  else select.value = sourceTickets[0]?.serverTicketId || "";
+  const selectedTicket = sourceTickets.find((ticket) => ticket.serverTicketId === select.value) || null;
+  if ($("#onsitePaymentTitle")) $("#onsitePaymentTitle").textContent = selectedTicket ? "회원권 연장·결제 등록" : "첫 회원권·결제 등록";
+  const submitButton = $("#onsitePaymentForm button[type='submit']");
+  if (submitButton) submitButton.textContent = selectedTicket ? "연장과 결제 함께 저장" : "회원권과 결제 함께 저장";
   const matchingProduct = onsitePaymentProducts().find(({ server }) => String(server.id) === String(selectedTicket?.productId || ""));
   if (matchingProduct && $("#onsitePaymentProduct")) $("#onsitePaymentProduct").value = String(matchingProduct.server.id);
+  syncOnsitePaymentCoaches();
   updateOnsitePaymentAmount();
   syncOnsitePaymentScheduleChoice();
+}
+
+function syncOnsitePaymentCoaches() {
+  const select = $("#onsitePaymentCoach");
+  if (!select) return;
+  const sourceTicket = onsitePaymentSourceTickets().find((ticket) => ticket.serverTicketId === $("#onsitePaymentSourceTicket")?.value) || null;
+  const selectedProduct = onsitePaymentProducts().find(({ server }) => String(server.id) === String($("#onsitePaymentProduct")?.value));
+  const productBranchId = String(selectedProduct?.server?.branch_id || activeOperationBranchId() || "");
+  const activeCoaches = operationBranchCoaches()
+    .filter((coach) => coach.status === "active" && coach.serverRoleId)
+    .filter((coach) => !productBranchId || !coach.branchId || String(coach.branchId) === productBranchId);
+  const sourceCoachRoleId = String(sourceTicket?.coachRoleId || "");
+  const previousValue = select.value;
+  select.innerHTML = activeCoaches.length
+    ? activeCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name)}</option>`).join("")
+    : '<option value="">승인된 담당 코치 없음</option>';
+  const preferredValue = sourceCoachRoleId || previousValue;
+  if (activeCoaches.some((coach) => String(coach.serverRoleId) === preferredValue)) select.value = preferredValue;
+  select.disabled = Boolean(sourceTicket);
 }
 
 function syncOnsitePaymentScheduleChoice() {
@@ -13037,6 +13072,11 @@ function syncOnsitePaymentScheduleChoice() {
   const product = onsitePaymentProducts().find(({ server }) => String(server.id) === String($("#onsitePaymentProduct")?.value));
   const checkbox = $("#onsitePaymentKeepSchedule");
   if (!checkbox) return;
+  if (!ticket) {
+    checkbox.disabled = true;
+    checkbox.checked = false;
+    return;
+  }
   const compatible = Boolean(ticket && product
     && String(ticket.productKind || "regular") === "regular"
     && String(product.server.product_kind || "regular") === "regular"
@@ -13086,21 +13126,23 @@ async function submitOnsitePayment(event) {
   const userId = $("#onsitePaymentMember")?.value || "";
   const sourceTicketId = $("#onsitePaymentSourceTicket")?.value || "";
   const productId = $("#onsitePaymentProduct")?.value || "";
+  const coachRoleId = $("#onsitePaymentCoach")?.value || "";
   const paymentMethod = $("#onsitePaymentMethod")?.value || "";
   const paymentDate = $("#onsitePaymentDate")?.value || "";
   const paymentAmount = Number($("#onsitePaymentAmount")?.value);
-  if (!userId || !sourceTicketId || !productId || !paymentDate || !Number.isInteger(paymentAmount) || paymentAmount <= 0) {
-    $("#onsitePaymentMessage").textContent = "회원, 연장할 회원권, 새 상품, 결제일, 실제 결제금액을 확인해 주세요.";
+  if (!userId || !productId || !coachRoleId || !paymentDate || !Number.isInteger(paymentAmount) || paymentAmount <= 0) {
+    $("#onsitePaymentMessage").textContent = "회원, 회원권 상품, 담당 코치, 결제일, 실제 결제금액을 확인해 주세요.";
     return;
   }
   const submit = event.submitter || $("#onsitePaymentForm button[type='submit']");
   submit.disabled = true;
   $("#onsitePaymentMessage").textContent = "현장결제와 회원권을 서버에 저장하고 있습니다.";
   try {
-    const result = await window.TennisNoteDataClient.rpc("tn_admin_record_onsite_payment_v2", {
+    const result = await window.TennisNoteDataClient.rpc("tn_admin_record_onsite_payment_v3", {
       target_user_id: userId,
-      target_source_ticket_id: sourceTicketId,
+      target_source_ticket_id: sourceTicketId || null,
       target_product_id: productId,
+      target_coach_role_id: coachRoleId,
       target_payment_method: paymentMethod,
       target_payment_date: paymentDate,
       target_payment_amount: paymentAmount,
@@ -13117,7 +13159,9 @@ async function submitOnsitePayment(event) {
   } catch (error) {
     const raw = String(error?.message || error?.payload?.message || "");
     $("#onsitePaymentMessage").textContent = raw.includes("source_ticket_not_found")
-      ? "기존 회원권이 없는 회원입니다. 회원관리에서 첫 회원권을 등록해 주세요."
+      ? "선택한 기존 회원권을 찾지 못했습니다. 첫 회원권 등록 또는 다른 회원권을 선택해 주세요."
+      : raw.includes("onsite_payment_group_partner_required")
+        ? "2대1 첫 등록은 파트너 연결이 필요합니다. 회원관리에서 파트너를 먼저 연결해 주세요."
       : raw.includes("onsite_payment_schedule_incompatible")
         ? "상품 형태가 달라 기존 고정시간을 이어갈 수 없습니다. 고정시간 연장을 끄고 다시 저장해 주세요."
       : raw.includes("operation_key_reused_with_different_payload")
@@ -27464,11 +27508,15 @@ function renderServiceReadiness() {
         ? `${activeOperationBranchName()} 상품 ${allProducts.length}개`
         : `${activeOperationBranchName()} 상품 ${allProducts.length}개 · 검색 ${filteredProducts.length}개`;
     }
-    const addProductButton = $("#addMembershipProductButton");
-    if (addProductButton) {
-      addProductButton.disabled = operationsRole() !== "admin" || !activeOperationBranchId();
-      addProductButton.title = activeOperationBranchId() ? `${activeOperationBranchName()}에 회원권 추가` : "운영 프로필에서 지점을 먼저 선택해 주세요.";
-    }
+    [
+      ["#addMembershipProductButton", "회원권 추가"],
+      ["#addOneDayProductButton", "원데이 1회권 추가"],
+    ].forEach(([selector, label]) => {
+      const button = $(selector);
+      if (!button) return;
+      button.disabled = operationsRole() !== "admin" || !activeOperationBranchId();
+      button.title = activeOperationBranchId() ? `${activeOperationBranchName()}에 ${label}` : "운영 프로필에서 지점을 먼저 선택해 주세요.";
+    });
     productCards.innerHTML = visibleProducts.length ? visibleProducts
       .map(
         (product) => {
@@ -28192,8 +28240,9 @@ function bindEvents() {
     if (event.target === event.currentTarget) closeOnsitePaymentModal();
   });
   $("#onsitePaymentMember")?.addEventListener("change", syncOnsitePaymentSourceTickets);
-  $("#onsitePaymentSourceTicket")?.addEventListener("change", syncOnsitePaymentSourceTickets);
+  $("#onsitePaymentSourceTicket")?.addEventListener("change", () => syncOnsitePaymentSourceTickets({ preserveEmpty: true }));
   $("#onsitePaymentProduct")?.addEventListener("change", () => {
+    syncOnsitePaymentCoaches();
     updateOnsitePaymentAmount();
     syncOnsitePaymentScheduleChoice();
   });
@@ -30162,6 +30211,11 @@ function bindEvents() {
       const productId = saveGroupPolicyButton.dataset.saveGroupDeductionPolicy;
       const control = document.querySelector(`[data-group-deduction-policy="${CSS.escape(productId)}"]`);
       await saveGroupDeductionPolicy(productId, control);
+      return;
+    }
+
+    if (event.target.closest("#addOneDayProductButton")) {
+      await createMembershipProductSetting({ preset: "one_day" });
       return;
     }
 
