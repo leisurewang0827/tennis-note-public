@@ -5680,6 +5680,24 @@ body.identity-setup-required {
   line-height: 1.2;
 }
 
+.product-price-panel.one-day-offer {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.product-price-panel.one-day-offer > small {
+  grid-column: 1 / -1;
+}
+
+.product-price-panel.one-day-offer b {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.product-price-panel.one-day-offer.is-eligible {
+  border-color: rgba(21, 122, 91, 0.42);
+  background: #e8f8f1;
+}
+
 .product-card-details {
   border-top: 1px solid var(--line);
 }
@@ -8881,8 +8899,9 @@ body.modal-open {
   }
 }
 
-.membership-product-presets-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+.membership-product-presets-grid,
+.purchase-family-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .membership-preset-chip {
@@ -8890,11 +8909,31 @@ body.modal-open {
 }
 
 @media (max-width: 720px) {
-  .membership-product-presets-grid {
+  .membership-product-presets-grid,
+  .purchase-family-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .membership-product-presets-grid > :last-child {
+  .membership-product-presets-grid > :last-child,
+  .purchase-family-grid > :last-child {
     grid-column: auto;
   }
+}
+
+.purchase-family-option.is-unavailable:not(.is-selected) {
+  border-style: dashed;
+  background: #f8faf9;
+}
+
+.purchase-family-option.is-unavailable b {
+  color: #8a6a24;
+}
+
+.purchase-family-empty {
+  gap: 8px;
+}
+
+.purchase-family-empty .small-button {
+  justify-self: start;
+  min-height: 44px;
 }

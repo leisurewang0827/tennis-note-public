@@ -4226,6 +4226,12 @@ function normalizeMembershipProduct(product = {}, fallback = {}) {
     maxSessionsPerDay: numericValue(merged.maxSessionsPerDay, numericValue(fallback.maxSessionsPerDay, 0)),
     maxSessionsPerWeek: numericValue(merged.maxSessionsPerWeek, numericValue(fallback.maxSessionsPerWeek, 0)),
     maxBookingDaysPerWeek: numericValue(merged.maxBookingDaysPerWeek, numericValue(fallback.maxBookingDaysPerWeek, 0)),
+    purchaseExperience: merged.purchaseExperience || fallback.purchaseExperience || "",
+    firstLessonOfferEnabled: merged.firstLessonOfferEnabled ?? fallback.firstLessonOfferEnabled ?? false,
+    firstLessonOfferPrice: numericValue(
+      merged.firstLessonOfferPrice,
+      numericValue(fallback.firstLessonOfferPrice, 15000),
+    ),
     groupDeductionPolicy: merged.groupDeductionPolicy
       || merged.group_deduction_policy
       || fallback.groupDeductionPolicy
@@ -4286,6 +4292,8 @@ function membershipProductDraftFromServer(product = {}) {
     serverProductId: product.id,
     serverProductCode: product.product_code || "",
     purchaseExperience: product.policy_settings?.purchaseExperience || (String(product.product_code || "").startsWith("one-day-") ? "one_day" : ""),
+    firstLessonOfferEnabled: product.policy_settings?.firstLessonOfferEnabled === true,
+    firstLessonOfferPrice: Number(product.policy_settings?.firstLessonOfferPrice) || 15000,
     branchId: product.branch_id || "",
     branchName: operationBranchOptions().find((branch) => branch.id === String(product.branch_id || ""))?.name || "",
     group: `${scheduleScope === "mixed" ? "혼합" : scheduleScope === "weekend" ? "주말" : "평일"} ${productKind === "coupon" ? "쿠폰제" : "정규권"}`,
@@ -4337,6 +4345,8 @@ function membershipProductsForMemberApp() {
       id: normalized.id,
       productCode: normalized.serverProductCode || normalized.productCode || normalized.id,
       purchaseExperience: normalized.purchaseExperience || "",
+      firstLessonOfferEnabled: normalized.firstLessonOfferEnabled === true,
+      firstLessonOfferPrice: normalized.firstLessonOfferPrice,
       group: normalized.group,
       title: normalized.title,
       name: normalized.name,
@@ -4678,6 +4688,9 @@ function membershipProductServerSavePayload(nextProduct, serverProduct) {
     displayOrder: Math.max(0, Number(nextProduct.sortOrder) || 0),
     status: nextProduct.status,
     countLabel: nextProduct.sessions || `${nextProduct.tickets}회`,
+    purchaseExperience: nextProduct.purchaseExperience || "",
+    firstLessonOfferEnabled: nextProduct.firstLessonOfferEnabled === true,
+    firstLessonOfferPrice: Math.max(0, Number(nextProduct.firstLessonOfferPrice) || 0),
   };
 }
 
@@ -4714,6 +4727,12 @@ async function updateMembershipProductSetting(productId, options = {}) {
     coachDiscountAllowed: fieldElement("coachDiscountAllowed")
       ? readField("coachDiscountAllowed") === "yes"
       : product.coachDiscountAllowed,
+    firstLessonOfferEnabled: fieldElement("firstLessonOfferEnabled")
+      ? readField("firstLessonOfferEnabled") === "yes"
+      : product.firstLessonOfferEnabled,
+    firstLessonOfferPrice: fieldElement("firstLessonOfferPrice")
+      ? numericValue(readField("firstLessonOfferPrice"), product.firstLessonOfferPrice)
+      : product.firstLessonOfferPrice,
     status: readField("status") || product.status,
   }, membershipProductDefaults.find((item) => item.id === product.id)));
 
@@ -4747,6 +4766,12 @@ async function updateMembershipProductSetting(productId, options = {}) {
   }
   if (Number(nextProduct.maxBookingDaysPerWeek) > Number(nextProduct.maxSessionsPerWeek)) {
     showToast("주간 예약 가능 일수는 주간 최대 사용 회차보다 클 수 없습니다.");
+    return;
+  }
+  if (nextProduct.firstLessonOfferEnabled === true
+    && (!Number(nextProduct.firstLessonOfferPrice)
+      || Number(nextProduct.firstLessonOfferPrice) >= Number(nextProduct.cardAmount))) {
+    showToast("첫 수업가는 1원 이상, 카드 정상가보다 낮게 입력해 주세요.");
     return;
   }
   const saleIssue = couponProductSaleIssue(nextProduct);
@@ -4803,6 +4828,9 @@ async function updateMembershipProductSetting(productId, options = {}) {
       || saved.schedule_scope !== nextProduct.scheduleScope
       || saved.product_kind !== serverKind
       || String(saved.policy_settings?.adminSaleStatus || "") !== String(nextProduct.status)
+      || String(saved.policy_settings?.purchaseExperience || "") !== String(nextProduct.purchaseExperience || "")
+      || Boolean(saved.policy_settings?.firstLessonOfferEnabled) !== Boolean(nextProduct.firstLessonOfferEnabled)
+      || Number(saved.policy_settings?.firstLessonOfferPrice || 0) !== Number(nextProduct.firstLessonOfferPrice || 0)
       || Boolean(saved.is_active) !== (nextProduct.status !== "hidden")
       || Number(saved.card_price) !== Number(nextProduct.cardAmount)
       || Number(saved.cash_price) !== Number(nextProduct.cashAmount)
@@ -4854,7 +4882,10 @@ function savedMembershipProductMatches(result) {
     && saved.product_kind === result.expectedKind
     && Number(saved.card_price) === Number(expected.cardAmount)
     && Number(saved.cash_price) === Number(expected.cashAmount)
-    && String(saved.policy_settings?.adminSaleStatus || "") === String(expected.status));
+    && String(saved.policy_settings?.adminSaleStatus || "") === String(expected.status)
+    && String(saved.policy_settings?.purchaseExperience || "") === String(expected.purchaseExperience || "")
+    && Boolean(saved.policy_settings?.firstLessonOfferEnabled) === Boolean(expected.firstLessonOfferEnabled)
+    && Number(saved.policy_settings?.firstLessonOfferPrice || 0) === Number(expected.firstLessonOfferPrice || 0));
 }
 
 async function saveVisibleProductRows() {
@@ -4957,17 +4988,21 @@ async function createMembershipProductSetting(options = {}) {
       term_weeks: 0,
       validity_days: oneDay ? 30 : 35,
       grace_days: oneDay ? 0 : 7,
-      base_price: 0,
-      card_price: 0,
-      cash_price: 0,
-      settlement_base_price: 0,
+      base_price: oneDay ? 40000 : 0,
+      card_price: oneDay ? 44000 : 0,
+      cash_price: oneDay ? 40000 : 0,
+      settlement_base_price: oneDay ? 40000 : 0,
       discount_enabled: true,
       coach_discount_allowed: false,
       display_order: Math.max(0, ...membershipProductsForActiveOperationProfile().map((item) => Number(item.sortOrder) || 0)) + 10,
       policy_settings: {
         adminSaleStatus: "hidden",
         countLabel: oneDay ? "1회" : "4회",
-        ...(oneDay ? { purchaseExperience: "one_day" } : {}),
+        ...(oneDay ? {
+          purchaseExperience: "one_day",
+          firstLessonOfferEnabled: true,
+          firstLessonOfferPrice: 15000,
+        } : {}),
       },
     });
     if (!Array.isArray(rows) || rows.length !== 1) throw new Error("membership_product_create_not_confirmed");
@@ -4984,7 +5019,7 @@ async function createMembershipProductSetting(options = {}) {
       card.querySelector('[data-product-field="title"]')?.focus();
     }
     showToast(oneDay
-      ? "원데이 1회권 초안을 만들었습니다. 가격을 입력한 뒤 판매 상태를 변경해 주세요."
+      ? "원데이 1회권 초안을 만들었습니다. 카드 44,000원·현금 40,000원·첫 수업 15,000원을 확인한 뒤 판매 상태를 변경해 주세요."
       : "새 회원권을 만들었습니다. 내용을 입력한 뒤 판매 상태를 변경해 주세요.");
   } catch {
     showToast("새 회원권 생성에 실패했습니다. 관리자 권한과 서버 연결을 확인해 주세요.");
@@ -27610,6 +27645,19 @@ function renderServiceReadiness() {
               <small>${productSettingFieldLabel("카드가격", true)}</small>
               <input type="number" min="0" step="1" data-product-field="cardAmount" value="${normalized.cardAmount}" />
             </label>
+            ${normalized.purchaseExperience === "one_day" ? `
+            <label>
+              <small>${productSettingFieldLabel("신규 첫 수업 혜택", true)}</small>
+              <select data-product-field="firstLessonOfferEnabled">
+                <option value="yes" ${normalized.firstLessonOfferEnabled ? "selected" : ""}>사용</option>
+                <option value="no" ${!normalized.firstLessonOfferEnabled ? "selected" : ""}>중지</option>
+              </select>
+            </label>
+            <label>
+              <small>${productSettingFieldLabel("신규 첫 수업가", true)}</small>
+              <input type="number" min="1" step="1" data-product-field="firstLessonOfferPrice" value="${normalized.firstLessonOfferPrice || 15000}" />
+            </label>
+            <p class="product-setting-offer-note">수업·회원권·결제 이력이 전혀 없는 회원에게만 1회 적용됩니다. 앱 가입만 새로 한 기존 회원은 제외됩니다.</p>` : ""}
             <label>
               <small>${productSettingFieldLabel("사용기간(일)", true)}</small>
               <input type="number" min="1" step="1" data-product-field="validityDays" value="${normalized.validityDays}" />

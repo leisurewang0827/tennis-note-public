@@ -82,6 +82,7 @@ const state = {
   },
   membershipSelectedFamilyId: "weekday-regular",
   liveMembershipProducts: [],
+  membershipPricingQuotes: {},
   liveTickets: [],
   liveLessons: [],
   liveLessonsLoaded: false,
@@ -409,6 +410,12 @@ function normalizeProduct(product = {}, fallback = {}) {
     maxSessionsPerDay: numericValue(merged.maxSessionsPerDay, numericValue(fallback.maxSessionsPerDay, 0)),
     maxSessionsPerWeek: numericValue(merged.maxSessionsPerWeek, numericValue(fallback.maxSessionsPerWeek, 0)),
     maxBookingDaysPerWeek: numericValue(merged.maxBookingDaysPerWeek, numericValue(fallback.maxBookingDaysPerWeek, 0)),
+    purchaseExperience: merged.purchaseExperience || fallback.purchaseExperience || "",
+    firstLessonOfferEnabled: merged.firstLessonOfferEnabled ?? fallback.firstLessonOfferEnabled ?? false,
+    firstLessonOfferPrice: numericValue(
+      merged.firstLessonOfferPrice,
+      numericValue(fallback.firstLessonOfferPrice, 15000),
+    ),
     productKind,
     discountEnabled: merged.discountEnabled ?? fallback.discountEnabled ?? true,
     coachDiscountAllowed: merged.coachDiscountAllowed ?? fallback.coachDiscountAllowed ?? false,
@@ -465,6 +472,8 @@ function membershipProductFromServer(row = {}) {
     id: row.id,
     productCode: row.product_code || "",
     purchaseExperience: row.policy_settings?.purchaseExperience || (oneDay ? "one_day" : ""),
+    firstLessonOfferEnabled: row.policy_settings?.firstLessonOfferEnabled === true,
+    firstLessonOfferPrice: numericValue(row.policy_settings?.firstLessonOfferPrice, 15000),
     group,
     title: row.name || `${lessonMinutes}분 회원권`,
     name: row.name,
@@ -545,6 +554,23 @@ function productPriceRows(product) {
       <div class="product-price-panel consult">
         <strong>상담 후 확정</strong>
         <small>${escapeHtml(product.flow)}</small>
+      </div>`;
+  }
+  const quote = membershipPricingQuote(product);
+  if (isOneDayMembershipProduct(product) && product.firstLessonOfferEnabled) {
+    const offerPrice = quote?.eligible
+      ? numericValue(quote.finalAmount, product.firstLessonOfferPrice)
+      : numericValue(product.firstLessonOfferPrice, 15000);
+    const offerLabel = quote?.eligible
+      ? "신규 첫 수업 적용"
+      : quote
+        ? "신규 혜택 적용 대상 아님"
+        : "로그인 후 신규 자격 확인";
+    return `
+      <div class="product-price-panel one-day-offer ${quote?.eligible ? "is-eligible" : ""}">
+        <div><span>첫 수업 1회</span><strong>${formatWon(offerPrice)}</strong></div>
+        <div><span>정상가</span><b>카드 ${formatWon(product.cardAmount || product.listAmount)} · 현금 ${formatWon(product.cashAmount || product.amount)}</b></div>
+        <small>${escapeHtml(offerLabel)} · 최초 1회만</small>
       </div>`;
   }
   return `
@@ -792,7 +818,15 @@ function renderMembershipProductFilters(products, visibleProducts) {
 }
 
 function onlinePaymentAmount(product = {}) {
+  const quote = membershipPricingQuote(product);
+  if (quote && Number(quote.finalAmount) > 0) return numericValue(quote.finalAmount);
   return numericValue(product.cardAmount, numericValue(product.listAmount, numericValue(product.amount)));
+}
+
+function membershipPricingQuote(product = {}) {
+  const productId = String(product.id || "");
+  if (!productId || !state.membershipPricingQuotes || typeof state.membershipPricingQuotes !== "object") return null;
+  return state.membershipPricingQuotes[productId] || null;
 }
 
 const registrationFlows = [
@@ -1501,6 +1535,7 @@ function restoreSnapshot() {
     });
     if (!Array.isArray(state.expiredTickets)) state.expiredTickets = [];
     if (!Array.isArray(state.liveMembershipProducts)) state.liveMembershipProducts = [];
+    state.membershipPricingQuotes = {};
     if (!Array.isArray(state.liveTickets)) state.liveTickets = [];
     if (!state.memberEnrollment || typeof state.memberEnrollment !== "object") state.memberEnrollment = null;
     state.pendingPurchaseProductId = String(state.pendingPurchaseProductId || "");
@@ -1868,7 +1903,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.355",
+    workerUrl: "./service-worker.js?v=1.0.356",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -6773,10 +6808,23 @@ function purchaseFamilyOptionsHtml(products = membershipProducts(), selectedFami
     const count = membershipProductsForFamily(family.id, products).length;
     const selected = family.id === selectedFamilyId;
     return `
-      <button class="purchase-family-option ${selected ? "is-selected" : ""}" type="button" data-purchase-family="${family.id}" aria-pressed="${selected}" ${count ? "" : "disabled"}>
-        <strong>${family.label}</strong><small>${family.description}</small><b>${count}개</b>
+      <button class="purchase-family-option ${selected ? "is-selected" : ""} ${count ? "" : "is-unavailable"}" type="button" data-purchase-family="${family.id}" aria-pressed="${selected}">
+        <strong>${family.label}</strong><small>${family.description}</small><b>${count ? `${count}개` : "준비 중"}</b>
       </button>`;
   }).join("");
+}
+
+function purchaseEmptyFamilyHtml(familyId = "") {
+  const family = membershipProductFamilyDefinition(familyId);
+  if (family.id === "one-day") {
+    return `
+      <div class="empty-state compact purchase-family-empty">
+        <strong>원데이 1회권 판매 준비 중</strong>
+        <span>가격이 등록되면 이 화면에서 바로 결제할 수 있습니다. 지금은 가능한 코치와 시간을 먼저 문의해 주세요.</span>
+        <button class="small-button" type="button" data-open-one-day-inquiry>원데이 문의</button>
+      </div>`;
+  }
+  return memberEmptyState({ title: `${family.label} 판매 준비 중`, reason: "상품이 등록되면 이 화면에서 바로 선택할 수 있습니다.", compact: true });
 }
 
 function purchaseStepOneHtml() {
@@ -6787,14 +6835,14 @@ function purchaseStepOneHtml() {
   return `
     <div class="purchase-step-intro">
       <strong>수업 형태를 먼저 고르세요</strong>
-      <span>판매 상품 ${products.length}개를 5가지로 묶고, 조건에 맞는 상품은 최대 3개만 추천합니다.</span>
+      <span>판매 상품 ${products.length}개를 ${membershipPresetDefinitions.length}가지로 묶고, 조건에 맞는 상품은 최대 3개만 추천합니다.</span>
     </div>
     <div class="purchase-family-grid" role="group" aria-label="수업 형태">${purchaseFamilyOptionsHtml(products, flow.familyId)}</div>
     <div class="purchase-recommendations">
       <div><strong>${escapeHtml(membershipProductFamilyDefinition(flow.familyId).label)} 추천</strong><span>최대 3개</span></div>
       ${recommendations.length
     ? recommendations.map((product) => purchaseProductCard(product, String(product.id) === String(flow.productId))).join("")
-    : memberEmptyState({ title: "판매 중인 상품이 없습니다", reason: "다른 수업 형태를 선택하거나 관리자에게 문의해 주세요.", compact: true })}
+    : purchaseEmptyFamilyHtml(flow.familyId)}
     </div>`;
 }
 
@@ -8664,6 +8712,9 @@ function paymentServerErrorMessage(error) {
     group_payment_not_allowed: "이 계정은 공동 회원권 결제 권한이 없습니다.",
     group_account_not_available: "선택한 2대1 공동 회원권을 확인할 수 없습니다. 회원권을 다시 선택해 주세요.",
     membership_enrollment_required: "수강 가입서를 먼저 확인해 주세요.",
+    first_lesson_offer_not_available: "신규 첫 수업 혜택 대상이 아닙니다. 현재 정상가를 다시 확인해 주세요.",
+    first_lesson_offer_reserved: "이전에 준비한 첫 수업 결제를 다시 열어 주세요.",
+    product_price_mismatch: "상품 가격이 변경되었습니다. 회원권 화면을 새로고침한 뒤 다시 확인해 주세요.",
     payment_not_found: "결제 기록을 찾지 못했습니다. 화면을 새로고침한 뒤 다시 확인해 주세요.",
     payment_not_owned: "본인의 결제 대기건만 취소할 수 있습니다.",
     payment_already_processed: "이미 결제 처리된 건은 회원이 직접 취소할 수 없습니다. 관리자에게 문의해 주세요.",
@@ -9041,11 +9092,41 @@ async function syncLiveMembershipProductsFromServer() {
       .sort((left, right) => numericValue(left.display_order, 999) - numericValue(right.display_order, 999))
       .map(membershipProductFromServer);
     state.liveMembershipProducts = products;
+    await syncMembershipPricingQuotesFromServer(products);
     return products.length > 0;
   } catch {
-    if (state.dataMode === "live") state.liveMembershipProducts = [];
+    if (state.dataMode === "live") {
+      state.liveMembershipProducts = [];
+      state.membershipPricingQuotes = {};
+    }
     return false;
   }
+}
+
+async function syncMembershipPricingQuotesFromServer(products = state.liveMembershipProducts) {
+  const client = window.TennisNoteDataClient;
+  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
+    state.membershipPricingQuotes = {};
+    return false;
+  }
+  const targets = (products || []).filter((product) => (
+    isOneDayMembershipProduct(product) && product.firstLessonOfferEnabled === true
+  ));
+  const entries = await Promise.all(targets.map(async (product) => {
+    try {
+      const quote = await client.invokeFunction("portone-payment/quote", {
+        body: {
+          productId: product.id,
+          productKey: product.productCode || product.id,
+        },
+      });
+      return [String(product.id), quote?.ok ? quote : null];
+    } catch {
+      return [String(product.id), null];
+    }
+  }));
+  state.membershipPricingQuotes = Object.fromEntries(entries.filter(([, quote]) => quote));
+  return true;
 }
 
 function reconcileVerifiedPaymentRequests() {
@@ -9568,7 +9649,10 @@ async function startProductPayment(productId, options = {}) {
     setView("shopView");
     return;
   }
-  const paymentId = createProviderPaymentId(product.id);
+  const pricingQuote = membershipPricingQuote(product);
+  const paymentId = pricingQuote?.eligible && pricingQuote?.reservedPaymentId
+    ? String(pricingQuote.reservedPaymentId)
+    : createProviderPaymentId(product.id);
   if (!isPaymentGatewayReady(methodId)) {
     createPaymentRecord(product, {
       paymentId,
@@ -10185,7 +10269,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.355" });
+  const params = new URLSearchParams({ v: "1.0.356" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -12955,7 +13039,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.355",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.356",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

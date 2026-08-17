@@ -172,8 +172,51 @@
     );
   }
 
+  function oneDayProduct() {
+    return {
+      id: "one-day-1to1-20m-1x",
+      productCode: "one-day-1to1-20m-1x",
+      purchaseExperience: "one_day",
+      group: "원데이",
+      name: "원데이 1대1 20분 1회",
+      title: "원데이 1대1 20분 1회",
+      detail: "처음 레슨을 받는 회원을 위한 1회 수업",
+      format: "1대1 · 20분",
+      sessions: "1회",
+      rule: "신규 첫 수업가는 수업·회원권·결제 이력이 없는 회원에게만 1회 적용",
+      listAmount: 44000,
+      amount: 40000,
+      settlementBase: 40000,
+      tickets: 1,
+      cardAmount: 44000,
+      cashAmount: 40000,
+      validityDays: 30,
+      graceDays: 0,
+      lessonMinutes: 20,
+      groupSize: 1,
+      frequencyPerWeek: 1,
+      scheduleScope: "mixed",
+      termWeeks: 0,
+      maxSessionsPerDay: 1,
+      maxSessionsPerWeek: 1,
+      maxBookingDaysPerWeek: 1,
+      makeupAnchorMinutes: 0,
+      productKind: "coupon",
+      discountEnabled: true,
+      coachDiscountAllowed: false,
+      coach: "예약 가능한 코치 선택",
+      flow: "코치·시간 선택 → 결제 → 1회 수업",
+      mode: "pass",
+      discount: "신규 첫 수업 1회 혜택",
+      badge: "첫 수업",
+      firstLessonOfferEnabled: true,
+      firstLessonOfferPrice: 15000,
+      status: "sale",
+    };
+  }
+
   function createCatalog() {
-    return [...regularProducts(), ...couponProducts()];
+    return [...regularProducts(), ...couponProducts(), oneDayProduct()];
   }
 
   const policy = Object.freeze({

@@ -271,6 +271,19 @@ function activeScheduleWeek() {
   return scheduleWeek(activeWeekIndex());
 }
 
+function coachScheduleV2SyncRange(week = activeScheduleWeek(), today = new Date()) {
+  const feedbackCutoff = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+  const todayKey = localDateKey(today);
+  const cutoffKey = localDateKey(feedbackCutoff);
+  const candidateFrom = week.startDate > cutoffKey ? cutoffKey : week.startDate;
+  const candidateTo = week.endDate < todayKey ? todayKey : week.endDate;
+  const spanDays = Math.round((
+    new Date(`${candidateTo}T12:00:00`) - new Date(`${candidateFrom}T12:00:00`)
+  ) / 86_400_000);
+  if (spanDays <= 31) return { startDate: candidateFrom, endDate: candidateTo };
+  return { startDate: week.startDate, endDate: week.endDate };
+}
+
 function weekLessons() {
   const week = activeWeekIndex();
   if (state.liveLessonsLoaded || state.dataMode === "live") {
@@ -646,7 +659,7 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
   if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
   const cancelledLessonIds = new Set(
     workspace.lessons
-      .filter((lesson) => lesson.status === "cancelled")
+      .filter((lesson) => String(lesson.status || "").toLowerCase() === "cancelled")
       .map((lesson) => String(lesson.id || "").trim())
       .filter(Boolean),
   );
@@ -1023,7 +1036,8 @@ async function syncCoachScheduleV2(options = {}) {
   const branchId = state.coach?.branchId || "";
   if (!client?.rpc || !client.getSession?.()?.access_token || !branchId) return false;
   const week = activeScheduleWeek();
-  const cacheKey = `${branchId}:${week.startDate}:${week.endDate}`;
+  const syncRange = coachScheduleV2SyncRange(week);
+  const cacheKey = `${branchId}:${syncRange.startDate}:${syncRange.endDate}`;
   const cached = coachScheduleV2WorkspaceCache;
   if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
     return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster, cached.legacyChangeRequests);
@@ -1032,8 +1046,8 @@ async function syncCoachScheduleV2(options = {}) {
     const [workspace, oneDayRows, roster, operationDays, legacyChangeRequests] = await Promise.all([
       client.rpc("tn_schedule_v2_coach_workspace", {
         target_branch_id: branchId,
-        target_from: week.startDate,
-        target_to: week.endDate,
+        target_from: syncRange.startDate,
+        target_to: syncRange.endDate,
       }),
       client.rpc("tn_visible_one_day_bookings", {}).catch(() => []),
       client.rpc("tn_schedule_v2_coach_member_roster", {
@@ -2572,7 +2586,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.355",
+    workerUrl: "./service-worker.js?v=1.0.356",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2602,7 +2616,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.355" });
+  const params = new URLSearchParams({ v: "1.0.356" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -7757,7 +7771,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.355",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.356",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
