@@ -8,8 +8,8 @@
     <title>테니스노트 코치 모드</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.362" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.362" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.363" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.363" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -64,8 +64,11 @@
               <h1 id="coachScreenTitle">오늘</h1>
             </div>
           </div>
-          <div class="topbar-session-data" hidden aria-hidden="true">
+          <button id="coachProfileButton" class="coach-profile-shortcut" type="button" aria-label="내 정보 열기" aria-pressed="false">
             <span id="coachTopAvatar" class="person-avatar small is-empty"></span>
+            <span>내 정보</span>
+          </button>
+          <div class="topbar-session-data" hidden aria-hidden="true">
             <span id="coachLoginLabel">Tennis Note Coach</span>
             <span id="coachName">노 코치</span>
           </div>
@@ -99,7 +102,6 @@
           <button class="tab" type="button" data-view="fullScheduleView">레슨표</button>
           <button class="tab" type="button" data-view="membersView">회원</button>
           <button class="tab" type="button" data-view="curriculumView">커리큘럼</button>
-          <button class="tab" type="button" data-view="coachProfileView">내 정산</button>
         </nav>
 
         <section id="todayView" class="view is-active" aria-label="오늘 처리 일정">
@@ -120,51 +122,64 @@
 
         <section id="membersView" class="view" aria-label="회원 관리">
           <div class="section-title">
-            <h2>회원 관리</h2>
+            <h2>회원</h2>
+            <span>담당 회원의 수업과 회원권 상태를 한눈에 확인합니다.</span>
           </div>
-          <div class="member-filter-tabs" aria-label="회원 구분">
-            <button class="member-filter is-active" type="button" data-member-filter="all">내 회원 전체</button>
-            <button class="member-filter" type="button" data-member-filter="active">수강중</button>
-            <button class="member-filter" type="button" data-member-filter="expiring">만료 임박</button>
-            <button class="member-filter" type="button" data-member-filter="paused_pending">휴회·대기</button>
-            <button class="member-filter" type="button" data-member-filter="expired">만료회원</button>
-          </div>
-          <label class="member-search-box">
+          <button id="coachSettlementSummaryButton" class="coach-settlement-compact" type="button" aria-haspopup="dialog" aria-controls="coachSettlementModal">
+            <span class="coach-settlement-compact-label">이번 달 정산</span>
+            <strong id="coachSettlementCompactAmount">0원</strong>
+            <small id="coachSettlementCompactMeta">정산 자료 확인 중</small>
+            <b aria-hidden="true">›</b>
+          </button>
+          <label class="member-search-box member-search-primary">
             <span>회원 검색</span>
-            <input id="memberSearchInput" type="search" placeholder="이름, 회원권, 시간, NTRP" autocomplete="off" />
+            <input id="memberSearchInput" type="search" placeholder="회원 이름 검색" autocomplete="off" />
           </label>
-          <div class="member-quick-filters" aria-label="회원 빠른 필터">
-            <div class="member-scope-note"><span>담당 범위</span><strong>내 담당 회원만</strong><small>전체 회원 관리는 관리자 웹에서 확인합니다.</small></div>
-            <label>
-              <span>수업 형태</span>
-              <select id="memberTicketFilter">
-                <option value="all">전체 형태</option>
-                <option value="individual">1대1</option>
-                <option value="group">2대1</option>
-              </select>
-            </label>
+          <div class="member-filter-tabs member-filter-primary" aria-label="주요 회원 구분">
+            <button class="member-filter is-active" type="button" data-member-filter="all">전체</button>
+            <button class="member-filter" type="button" data-member-filter="active">수강중</button>
+            <button class="member-filter" type="button" data-member-filter="attention">확인 필요</button>
           </div>
           <div id="memberFilterSummary" class="member-filter-summary"></div>
-          <details class="ntrp-coach-guide">
-            <summary>
-              <strong>코치 NTRP 간단 기준</strong>
-              <span>측정할 때 펼쳐서 확인</span>
-            </summary>
-            <div class="ntrp-guide-grid">
-              <article><b>1.0</b><span>처음 시작, 기본 동작 학습</span></article>
-              <article><b>1.5</b><span>공 넘기기 중심, 경기 전 단계</span></article>
-              <article><b>2.0</b><span>타점·기본 위치 익히는 단계</span></article>
-              <article><b>2.5</b><span>느린 랠리 가능, 움직임 불안정</span></article>
-              <article><b>3.0</b><span>중간 속도 랠리 가능, 코스 약함</span></article>
-              <article><b>3.5</b><span>방향 조절 가능, 깊이·변화 부족</span></article>
-              <article><b>4.0</b><span>포/백 방향·깊이 조절 안정</span></article>
-              <article><b>4.5</b><span>속도·회전 변화, 게임 운영 가능</span></article>
-              <article><b>5.0</b><span>예측력과 무기 샷, 찬스볼 마무리</span></article>
-              <article><b>5.5</b><span>주무기와 안정성, 압박 상황 대응</span></article>
-              <article><b>6.0</b><span>전국/대학 상위권 수준 훈련</span></article>
-              <article><b>6.5</b><span>세계급 근접, 높은 경쟁 경험</span></article>
-              <article><b>7.0</b><span>세계 정상급 투어 선수 수준</span></article>
+          <details id="memberAdvancedControls" class="member-advanced-controls">
+            <summary>필터·NTRP 측정 기준</summary>
+            <div class="member-filter-tabs member-filter-secondary" aria-label="추가 회원 구분">
+              <button class="member-filter" type="button" data-member-filter="expiring">만료 임박</button>
+              <button class="member-filter" type="button" data-member-filter="paused_pending">휴회·대기</button>
+              <button class="member-filter" type="button" data-member-filter="expired">만료회원</button>
             </div>
+            <div class="member-quick-filters" aria-label="회원 추가 필터">
+              <div class="member-scope-note"><span>담당 범위</span><strong>내 담당 회원만</strong><small>전체 회원 관리는 관리자 웹에서 확인합니다.</small></div>
+              <label>
+                <span>수업 형태</span>
+                <select id="memberTicketFilter">
+                  <option value="all">전체 형태</option>
+                  <option value="individual">1대1</option>
+                  <option value="group">2대1</option>
+                </select>
+              </label>
+            </div>
+            <details class="ntrp-coach-guide">
+              <summary>
+                <strong>코치 NTRP 간단 기준</strong>
+                <span>측정할 때 펼쳐서 확인</span>
+              </summary>
+              <div class="ntrp-guide-grid">
+                <article><b>1.0</b><span>처음 시작, 기본 동작 학습</span></article>
+                <article><b>1.5</b><span>공 넘기기 중심, 경기 전 단계</span></article>
+                <article><b>2.0</b><span>타점·기본 위치 익히는 단계</span></article>
+                <article><b>2.5</b><span>느린 랠리 가능, 움직임 불안정</span></article>
+                <article><b>3.0</b><span>중간 속도 랠리 가능, 코스 약함</span></article>
+                <article><b>3.5</b><span>방향 조절 가능, 깊이·변화 부족</span></article>
+                <article><b>4.0</b><span>포/백 방향·깊이 조절 안정</span></article>
+                <article><b>4.5</b><span>속도·회전 변화, 게임 운영 가능</span></article>
+                <article><b>5.0</b><span>예측력과 무기 샷, 찬스볼 마무리</span></article>
+                <article><b>5.5</b><span>주무기와 안정성, 압박 상황 대응</span></article>
+                <article><b>6.0</b><span>전국/대학 상위권 수준 훈련</span></article>
+                <article><b>6.5</b><span>세계급 근접, 높은 경쟁 경험</span></article>
+                <article><b>7.0</b><span>세계 정상급 투어 선수 수준</span></article>
+              </div>
+            </details>
           </details>
           <div id="memberList" class="member-grid"></div>
           <div id="memberPager" class="member-pager"></div>
@@ -178,50 +193,10 @@
           <div id="curriculumSteps" class="card-list"></div>
         </section>
 
-        <section id="coachProfileView" class="view" aria-label="코치 내 매출과 정산">
+        <section id="coachProfileView" class="view" aria-label="코치 내 정보">
           <div class="section-title">
-            <h2>내 매출·정산</h2>
-            <button id="refreshCoachSettlement" class="small-button title-action" type="button">새로고침</button>
-          </div>
-
-          <section class="coach-settlement-card" aria-labelledby="coachSettlementTitle">
-            <div class="coach-settlement-toolbar">
-              <div>
-                <strong id="coachSettlementTitle">내 담당 매출과 예상 정산</strong>
-                <small>전체 매출이 아닌 내 담당 회원권만 표시됩니다.</small>
-              </div>
-              <label>
-                <span>정산 월</span>
-                <input id="coachSettlementMonth" type="month" />
-              </label>
-            </div>
-            <div id="coachSettlementStatus" class="coach-settlement-status" role="status" aria-live="polite"></div>
-            <div class="coach-settlement-summary" aria-label="내 정산 요약">
-              <article>
-                <span>내 담당 매출</span>
-                <strong id="coachRevenueAmount">0원</strong>
-                <small id="coachRevenueCount">결제 0건</small>
-              </article>
-              <article>
-                <span>정산 진행 수업</span>
-                <strong id="coachSettledSessions">0회</strong>
-                <small>완료·이관 수업 기준</small>
-              </article>
-              <article>
-                <span>예상 정산금</span>
-                <strong id="coachEstimatedSettlement">0원</strong>
-                <small id="coachSettlementRule">정산 규칙 확인 중</small>
-              </article>
-            </div>
-            <p class="coach-settlement-note">카드 결제는 설정된 정산 기준을 적용하며, 환불·대타·시급 이관을 반영한 예상 금액입니다. 최종 확정은 관리자 정산을 기준으로 합니다.</p>
-            <details class="coach-settlement-details">
-              <summary>회원별 내역 보기</summary>
-              <div id="coachSettlementRows" class="coach-settlement-rows"></div>
-            </details>
-          </section>
-
-          <div class="section-title coach-profile-title">
-            <h2>코치 정보</h2>
+            <h2>내 정보</h2>
+            <span>프로필, 알림과 계정 설정을 관리합니다.</span>
           </div>
 
           <section class="coach-profile-card">
@@ -307,6 +282,54 @@
         <div id="memberDetailContent"></div>
       </div>
     </section>
+    <section id="coachSettlementModal" class="lesson-edit-modal coach-settlement-modal" hidden>
+      <div class="modal-backdrop" data-close-coach-settlement></div>
+      <div class="modal-card coach-settlement-modal-card" role="dialog" aria-modal="true" aria-labelledby="coachSettlementTitle">
+        <div class="lesson-modal-head coach-settlement-modal-head">
+          <div>
+            <span>회원 관리</span>
+            <strong id="coachSettlementTitle">내 정산</strong>
+          </div>
+          <button class="small-button" type="button" data-close-coach-settlement>닫기</button>
+        </div>
+        <section class="coach-settlement-card">
+          <div class="coach-settlement-toolbar">
+            <div>
+              <strong>내 담당 매출과 예상 정산</strong>
+              <small>전체 매출이 아닌 내 담당 회원권만 표시됩니다.</small>
+            </div>
+            <label>
+              <span>정산 월</span>
+              <input id="coachSettlementMonth" type="month" />
+            </label>
+          </div>
+          <div id="coachSettlementStatus" class="coach-settlement-status" role="status" aria-live="polite" hidden></div>
+          <button id="refreshCoachSettlement" class="small-button coach-settlement-retry" type="button" hidden>다시 시도</button>
+          <div class="coach-settlement-summary" aria-label="내 정산 요약">
+            <article>
+              <span>내 담당 매출</span>
+              <strong id="coachRevenueAmount">0원</strong>
+              <small id="coachRevenueCount">결제 0건</small>
+            </article>
+            <article>
+              <span>정산 진행 수업</span>
+              <strong id="coachSettledSessions">0회</strong>
+              <small>완료·이관 수업 기준</small>
+            </article>
+            <article>
+              <span>예상 정산금</span>
+              <strong id="coachEstimatedSettlement">0원</strong>
+              <small id="coachSettlementRule">정산 규칙 확인 중</small>
+            </article>
+          </div>
+          <p class="coach-settlement-note">카드 결제는 설정된 정산 기준을 적용하며, 환불·대타·시급 이관을 반영한 예상 금액입니다. 최종 확정은 관리자 정산을 기준으로 합니다.</p>
+          <details class="coach-settlement-details">
+            <summary>회원별 내역 보기</summary>
+            <div id="coachSettlementRows" class="coach-settlement-rows"></div>
+          </details>
+        </section>
+      </div>
+    </section>
     <section id="coachPushPrimerModal" class="lesson-edit-modal coach-push-primer-modal" hidden>
       <div class="modal-backdrop" data-defer-coach-push-primer></div>
       <article class="modal-card coach-push-primer-card" role="dialog" aria-modal="true" aria-labelledby="coachPushPrimerTitle">
@@ -328,18 +351,18 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.362"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.362"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.362"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.363"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.363"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.363"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
-    <script defer src="../shared/tennisnote-curriculum-search.js?v=1.0.362"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.362"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.362"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.362"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.362"></script>
-    <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.362"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.362"></script>
+    <script defer src="../shared/tennisnote-curriculum-search.js?v=1.0.363"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.363"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.363"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.363"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.363"></script>
+    <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.363"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.363"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
     <script>
       (() => {
@@ -358,7 +381,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.362";
+          appScript.src = "./app.js?v=1.0.363";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -371,7 +394,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.362";
+          appScript.src = "./app.js?v=1.0.363";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

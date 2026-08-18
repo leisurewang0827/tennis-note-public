@@ -20163,7 +20163,7 @@ function settlementAmountFor(item) {
 
 function settlementRowsForBilling(billing, indexes = {}) {
   const ticket = indexes.ticketById?.get(String(billing.ticketId || ""))
-    || tickets.find((item) => item.serverTicketId === billing.ticketId || item.id === billing.ticketId)
+    || [...tickets, ...expiredTickets].find((item) => item.serverTicketId === billing.ticketId || item.id === billing.ticketId)
     || {};
   const ticketId = ticket.serverTicketId || ticket.id;
   const base = {
@@ -20227,7 +20227,7 @@ function renderCoachSettlementPreview() {
   const previewRows = $("#coachSettlementPreviewRows");
   if (previewRows) {
     const ticketById = new Map();
-    tickets.forEach((ticket) => {
+    [...tickets, ...expiredTickets].forEach((ticket) => {
       if (ticket.id) ticketById.set(String(ticket.id), ticket);
       if (ticket.serverTicketId) ticketById.set(String(ticket.serverTicketId), ticket);
     });
@@ -20489,7 +20489,7 @@ function billingMonthLabel(month) {
 }
 
 function linkedTicketForBilling(item = {}) {
-  return tickets.find((ticket) => (
+  return [...tickets, ...expiredTickets].find((ticket) => (
     String(ticket.serverTicketId || ticket.id || "") === String(item.ticketId || "")
   )) || null;
 }
