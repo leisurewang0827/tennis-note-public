@@ -30,6 +30,7 @@ const SOURCES = [
   "app/admin/domain/lessons.js",
   "app/admin/domain/billing.js",
   "app/admin/domain/tickets.js",
+  "app/admin/domain/coaches.js",
   "app/tennis-note-member-app/app.js",
   "app/tennis-note-coach-app/app.js",
 ];
