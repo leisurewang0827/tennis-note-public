@@ -9,7 +9,7 @@ function renderCoachSettlementPreview() {
   const previewRows = $("#coachSettlementPreviewRows");
   if (previewRows) {
     const ticketById = new Map();
-    [...tickets, ...expiredTickets].forEach((ticket) => {
+    [...tickets, ...expiredTickets, ...(adminLiveDataState.settlementTickets || [])].forEach((ticket) => {
       if (ticket.id) ticketById.set(String(ticket.id), ticket);
       if (ticket.serverTicketId) ticketById.set(String(ticket.serverTicketId), ticket);
     });
@@ -27,14 +27,18 @@ function renderCoachSettlementPreview() {
       assignmentByLesson.set(String(assignment.lesson_id), assignment);
     });
     const recordProgressByTicket = settlementRecordProgressByTicket({ ticketById, assignmentByLesson });
-    const liveSettlementRows = billings
-      .filter((billing) => billing.status === "paid" && billingMatchesMonth(billing, state.billingMonth))
-      .flatMap((billing) => settlementRowsForBilling(billing, {
+    const monthBillings = billings
+      .filter((billing) => billing.status === "paid" && billingMatchesMonth(billing, state.billingMonth));
+    const settlementIndexes = {
         ticketById,
         completedLessonsByTicket,
         assignmentByLesson,
         recordProgressByTicket,
-      }));
+      };
+    const billedTicketIds = new Set(monthBillings.map((billing) => String(billing.ticketId || "")).filter(Boolean));
+    const liveSettlementRows = monthBillings
+      .flatMap((billing) => settlementRowsForBilling(billing, settlementIndexes));
+    liveSettlementRows.push(...settlementOrphanSubstituteRows(settlementIndexes, billedTicketIds));
     const previewItems = adminDemoMode ? coachSettlementPreview : liveSettlementRows;
     const settlementSummary = $("#coachSettlementSummary");
     if (settlementSummary) {
