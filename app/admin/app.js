@@ -8388,9 +8388,9 @@ function renderAdminOperations() {
           <div class="profile-line">
             ${avatarMarkup(member)}
             <div>
-              <span>${member.statusLabel}</span>
-              <strong>${member.name}</strong>
-              <small>${member.coach} · ${member.regularTime}</small>
+              <span>${escapeHtml(member.statusLabel)}</span>
+              <strong>${escapeHtml(member.name)}</strong>
+              <small>${escapeHtml(member.coach)} · ${escapeHtml(member.regularTime)}</small>
             </div>
           </div>
           <b>잔여 ${remaining}회</b>
@@ -8422,8 +8422,8 @@ function renderAdminOperations() {
         <div class="profile-line">
           ${avatarMarkup(coach)}
           <div>
-            <span>${coach.role}</span>
-            <strong>${coach.name}</strong>
+            <span>${escapeHtml(coach.role)}</span>
+            <strong>${escapeHtml(coach.name)}</strong>
             <small>오늘 수업 ${lessonsForCoach}건</small>
           </div>
         </div>
@@ -16134,7 +16134,7 @@ function renderCoachDayBaseCell(day, time, coach, row, column) {
   const content = canAdd
     ? `<button type="button" ${lessonAddAttrs(day, time, 20, coach.id)}><span>+</span><small>${label}</small></button>`
     : `<span>${occupyingLesson ? "" : label}</span>`;
-  return `<div class="coach-day-cell ${className} ${occupyingLesson ? "is-occupied" : ""}" style="grid-row:${row};grid-column:${column};" title="${day} ${time} · ${coach.name}">${content}</div>`;
+  return `<div class="coach-day-cell ${className} ${occupyingLesson ? "is-occupied" : ""}" style="grid-row:${row};grid-column:${column};" title="${escapeHtml(`${day} ${time} · ${coach.name}`)}">${content}</div>`;
 }
 
 function renderCoachDayLessonCard(lesson, visibleTimes, column) {
@@ -21968,7 +21968,7 @@ function renderRackettime() {
     .map(
       (member) => `
         <tr>
-          <td>${member.name}</td>
+          <td>${escapeHtml(member.name)}</td>
           <td>${member.reservations}회</td>
           <td>${money.format(member.total)}원</td>
           <td>${member.lastVisit}</td>

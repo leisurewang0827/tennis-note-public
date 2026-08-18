@@ -3308,9 +3308,9 @@ function renderCoachModeList() {
   const markup = coaches
     .map(
       (coach) => `
-        <button class="coach-mode-chip ${canonicalCoachName(state.coach?.name || state.selectedCoachName) === canonicalCoachName(coach.name) ? "is-active" : ""}" type="button" data-select-coach-mode="${coach.name}">
-          <strong>${coach.name}</strong>
-          <span>${coach.role} · 코치모드 생성됨</span>
+        <button class="coach-mode-chip ${canonicalCoachName(state.coach?.name || state.selectedCoachName) === canonicalCoachName(coach.name) ? "is-active" : ""}" type="button" data-select-coach-mode="${escapeHtml(coach.name)}">
+          <strong>${escapeHtml(coach.name)}</strong>
+          <span>${escapeHtml(coach.role)} · 코치모드 생성됨</span>
         </button>`,
     )
     .join("");
@@ -4743,8 +4743,8 @@ function renderActiveMemberCard(member) {
       <span class="member-name">
         ${personAvatarMarkup({ ...member, name: member.displayName || member.name }, "tiny")}
         <span class="member-name-copy">
-          <strong>${member.displayName || member.name}</strong>
-          <small>${member.isGroupDisplay ? `2대1 ${member.groupPosition}/${member.groupTotal}` : "개인 회원"} · ${member.status || "수강중"}${member.ticketCount > 1 ? ` · 회원권 ${member.ticketCount}개` : ""}</small>
+          <strong>${escapeHtml(member.displayName || member.name)}</strong>
+          <small>${member.isGroupDisplay ? `2대1 ${member.groupPosition}/${member.groupTotal}` : "개인 회원"} · ${escapeHtml(member.status || "수강중")}${member.ticketCount > 1 ? ` · 회원권 ${member.ticketCount}개` : ""}</small>
         </span>
       </span>
       <span>${member.coach}</span>
@@ -4766,9 +4766,9 @@ function renderExpiredMemberCard(member) {
     <article class="member-row expired" role="button" tabindex="0" data-member-detail-id="${member.id}">
       <span class="member-name">
         ${personAvatarMarkup(member, "tiny")}
-        <span class="member-name-copy"><strong>${member.name}</strong></span>
+        <span class="member-name-copy"><strong>${escapeHtml(member.name)}</strong></span>
       </span>
-      <span>${member.coach}</span>
+      <span>${escapeHtml(member.coach)}</span>
       <span>${member.ticket}</span>
       <span>기간 ~ ${member.expiredAt}</span>
       <span>사용 ${member.used}</span>
@@ -5030,8 +5030,8 @@ function renderMemberDetailModal(member) {
         ${personAvatarMarkup({ ...member, name: member.displayName || member.name }, "small")}
         <div>
           <span>${member.statusCategory === "expired" ? "만료회원" : member.isGroupDisplay ? "2대1 회원" : member.status || "담당 회원"}</span>
-          <strong>${member.displayName || member.name}</strong>
-          <small>${member.coach || "담당 코치 미정"} · ${member.ticket || "회원권 미정"}</small>
+          <strong>${escapeHtml(member.displayName || member.name)}</strong>
+          <small>${escapeHtml(member.coach || "담당 코치 미정")} · ${escapeHtml(member.ticket || "회원권 미정")}</small>
         </div>
       </div>
       <button class="small-button" type="button" data-close-member-modal>닫기</button>
@@ -5065,7 +5065,7 @@ function renderMemberDetailModal(member) {
         <article class="modal-info-card">
           <span>기본 정보</span>
           <strong>${member.birthYear || "출생연도 미입력"} · ${memberGenderLabel(member.gender)}</strong>
-          <small>${member.neighborhood || "거주동 미입력"}</small>
+          <small>${escapeHtml(member.neighborhood || "거주동 미입력")}</small>
         </article>
       </div>
       <section class="member-detail-section">
@@ -5078,7 +5078,7 @@ function renderMemberDetailModal(member) {
       </section>
       <section class="member-detail-section">
         <strong>운영 메모</strong>
-        <p>${member.note || "운영 메모가 없습니다."}</p>
+        <p>${escapeHtml(member.note || "운영 메모가 없습니다.")}</p>
       </section>
     </details>
   `;

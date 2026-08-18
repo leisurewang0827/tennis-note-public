@@ -4659,7 +4659,7 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
     <section class="member-mobile-segment">
       <div class="member-mobile-segment-title">
         <strong>${segment.start}~${segment.end}</strong>
-        <span>${coaches.map((coach) => memberCoachShortName(coach.name)).join(" · ")} · ${hasMakeupSlots ? "보강 가능" : hasCouponSlots ? "쿠폰 예약" : "변경 가능"} ${availableCount}개</span>
+        <span>${coaches.map((coach) => escapeHtml(memberCoachShortName(coach.name))).join(" · ")} · ${hasMakeupSlots ? "보강 가능" : hasCouponSlots ? "쿠폰 예약" : "변경 가능"} ${availableCount}개</span>
       </div>
       <div class="member-mobile-lane-board" style="--coach-count:${coaches.length}; --slot-count:${times.length};">
         <div class="member-mobile-lane-head time">시간</div>
@@ -5129,7 +5129,7 @@ function renderDynamicMemberSchedule() {
             <div class="member-duration-head member-day-head" style="--coach-count:${displayCoaches.length};">
               <strong>${day}요일</strong>
               <div class="member-coach-head-row">
-                ${displayCoaches.map((coach) => `<span>${memberCoachShortName(coach.name)}</span>`).join("")}
+                ${displayCoaches.map((coach) => `<span>${escapeHtml(memberCoachShortName(coach.name))}</span>`).join("")}
               </div>
             </div>`;
         })
