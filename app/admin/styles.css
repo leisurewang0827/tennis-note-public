@@ -665,6 +665,57 @@ h2 {
   line-height: 1.45;
 }
 
+#billingActualPaidSummary {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.coach-settlement-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.coach-settlement-summary article {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.coach-settlement-summary strong {
+  color: var(--blue);
+  font-size: 18px;
+}
+
+.coach-settlement-summary span,
+.coach-settlement-summary small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.payment-link-warning {
+  color: var(--red);
+  font-weight: 900;
+}
+
+.payment-source-details {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.payment-source-details summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
 .global-search-shell .search-box {
   min-width: 0;
   width: 100%;

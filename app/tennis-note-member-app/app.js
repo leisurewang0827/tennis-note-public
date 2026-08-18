@@ -1933,7 +1933,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.359",
+    workerUrl: "./service-worker.js?v=1.0.363",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -7192,7 +7192,8 @@ function renderMembershipPurchaseFlow() {
   const currentMembershipDetails = $("#currentMembershipDetails");
   const supportDetails = $("#membershipSupportDetails");
   if (!container) return;
-  document.body.classList.toggle("purchase-flow-open", Boolean(flow.open));
+  const purchaseFlowVisible = Boolean(flow.open && activeMemberViewId() === "shopView");
+  document.body.classList.toggle("purchase-flow-open", purchaseFlowVisible);
   container.hidden = !flow.open;
   if (browser) browser.hidden = flow.open;
   if (currentMembershipDetails) currentMembershipDetails.hidden = flow.open;
@@ -10455,6 +10456,10 @@ function setView(viewId, options = {}) {
     state.memberScheduleFullView = false;
   }
   document.body.dataset.activeMemberView = viewId;
+  document.body.classList.toggle(
+    "purchase-flow-open",
+    viewId === "shopView" && Boolean(purchaseFlowState().open),
+  );
   $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === viewId));
   $$(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.view === viewId));
   const screenTitles = {
@@ -10531,7 +10536,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.359" });
+  const params = new URLSearchParams({ v: "1.0.363" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -11998,10 +12003,25 @@ async function syncAppleLoginAvailability() {
   });
 }
 
-function handleOAuthResult(event) {
+async function handleOAuthResult(event) {
   const status = $("#memberEmailLoginStatus");
-  if (!status || event?.detail?.ok) return;
   const provider = event?.detail?.provider || "간편";
+  if (event?.detail?.ok) {
+    event.preventDefault();
+    if (status) status.textContent = `${provider} 로그인 정보를 확인하고 있습니다.`;
+    setMemberSessionRestoring(true);
+    try {
+      const opened = await applySupabaseMemberSession(true);
+      if (!opened) throw new Error("oauth_profile_bootstrap_failed");
+      if (status) status.textContent = "";
+    } catch (error) {
+      if (status) status.textContent = `${provider} 로그인 후 회원정보를 열지 못했습니다. 다시 시도해주세요.`;
+    } finally {
+      setMemberSessionRestoring(false);
+    }
+    return;
+  }
+  if (!status) return;
   status.textContent = event?.detail?.cancelled
     ? `${provider} 로그인이 취소되었습니다.`
     : `${provider} 로그인을 완료하지 못했습니다. 다시 시도해주세요.`;
@@ -13337,7 +13357,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.359",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.363",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

@@ -17,6 +17,8 @@
   let pendingOAuthCredentialCapture = Promise.resolve(null);
   let offlineDatabasePromise = null;
   let nativeOAuthInFlightProvider = "";
+  let nativeOAuthCallbackInFlight = false;
+  let nativeOAuthCancelTimer = null;
   let oauthCodeExchangePromise = null;
 
   function emitClientError(stage, error, context = {}) {
@@ -624,7 +626,35 @@
   }
 
   function emitOAuthResult(detail) {
-    window.dispatchEvent(new CustomEvent("tennisnote:oauth-result", { detail }));
+    const event = new CustomEvent("tennisnote:oauth-result", {
+      detail,
+      cancelable: Boolean(detail?.ok),
+    });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+
+  function clearNativeOAuthCancelTimer() {
+    if (nativeOAuthCancelTimer === null) return;
+    window.clearTimeout(nativeOAuthCancelTimer);
+    nativeOAuthCancelTimer = null;
+  }
+
+  function scheduleNativeOAuthCancellation() {
+    if (!nativeOAuthInFlightProvider || nativeOAuthCallbackInFlight) return;
+    const provider = nativeOAuthInFlightProvider;
+    clearNativeOAuthCancelTimer();
+    nativeOAuthCancelTimer = window.setTimeout(() => {
+      nativeOAuthCancelTimer = null;
+      if (
+        nativeOAuthCallbackInFlight
+        || nativeOAuthInFlightProvider !== provider
+        || getSession()?.access_token
+      ) return;
+      nativeOAuthInFlightProvider = "";
+      clearOAuthStorageValue();
+      emitOAuthResult({ ok: false, provider, cancelled: true });
+    }, 800);
   }
 
   function isNativeApp() {
@@ -685,12 +715,14 @@
 
   async function handleNativeOAuthUrl(url) {
     if (!url || !url.startsWith("com.tennisclubhouse.tennisnote://oauth/")) return false;
+    clearNativeOAuthCancelTimer();
+    nativeOAuthCallbackInFlight = true;
+    const provider = nativeOAuthInFlightProvider || storedProvider() || "간편";
     try {
       const parsed = new URL(url);
       const error = parsed.searchParams.get("error");
       if (error) {
         clearOAuthStorageValue();
-        const provider = nativeOAuthInFlightProvider || storedProvider() || "간편";
         nativeOAuthInFlightProvider = "";
         await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
         emitOAuthResult({
@@ -711,16 +743,18 @@
       await flushOAuthProviderCredentialCapture();
       nativeOAuthInFlightProvider = "";
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
-      window.location.reload();
+      const handledWithoutReload = emitOAuthResult({ ok: true, provider });
+      if (!handledWithoutReload) window.location.reload();
       return true;
     } catch (error) {
-      const provider = nativeOAuthInFlightProvider || storedProvider() || "간편";
       nativeOAuthInFlightProvider = "";
       clearOAuthStorageValue();
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
       emitOAuthResult({ ok: false, provider, cancelled: false });
       emitClientError("native_oauth_callback", error, { provider });
       return true;
+    } finally {
+      nativeOAuthCallbackInFlight = false;
     }
   }
 
@@ -755,11 +789,7 @@
     appPlugin.addListener("appUrlOpen", ({ url }) => void handleNativeAppUrl(url));
     appPlugin.getLaunchUrl?.().then((result) => handleNativeAppUrl(result?.url)).catch(() => {});
     window.Capacitor?.Plugins?.Browser?.addListener?.("browserFinished", () => {
-      if (!nativeOAuthInFlightProvider) return;
-      const provider = nativeOAuthInFlightProvider;
-      nativeOAuthInFlightProvider = "";
-      clearOAuthStorageValue();
-      emitOAuthResult({ ok: false, provider, cancelled: true });
+      scheduleNativeOAuthCancellation();
     });
   }
 
@@ -991,6 +1021,7 @@
     const authorizeUrl = authUrl(`authorize?${query.toString()}`);
     const browserPlugin = window.Capacitor?.Plugins?.Browser;
     if (isNativeApp() && browserPlugin?.open) {
+      clearNativeOAuthCancelTimer();
       nativeOAuthInFlightProvider = provider || slug;
       try {
         await browserPlugin.open({

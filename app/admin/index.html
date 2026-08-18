@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.359" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.363" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-14" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.359" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.363" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -811,9 +811,10 @@
               <small>잔여 횟수 부족 회원</small>
             </article>
             <article class="billing-action-card">
-              <span id="billingMonthTotalLabel">이번 달 결제액</span>
+              <span id="billingMonthTotalLabel">이번 달 회원권 매출</span>
               <strong id="billingMonthPaidAmount">0원</strong>
-              <small id="billingMonthPaidCount">결제 완료 0건</small>
+              <small id="billingMonthPaidCount">매출 귀속 0건</small>
+              <small id="billingActualPaidSummary">실제 결제일 기준 0건 · 0원</small>
             </article>
           </section>
           <div class="billing-month-toolbar">
@@ -874,6 +875,7 @@
                 <h2>코치 정산 미리보기</h2>
                 <span class="source-pill">실결제 기준 · 카드 결제는 현금가 정산</span>
               </div>
+              <div id="coachSettlementSummary" class="coach-settlement-summary" aria-live="polite"></div>
               <table>
                 <thead>
                   <tr>
@@ -2078,23 +2080,23 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.359"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.359"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.359"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.363"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.363"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.363"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.359"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.363"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.359"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.359"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.359"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.359"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.359"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.359"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.363"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.363"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.363"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.363"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.363"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.363"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./domain/values.js?v=1.0.359"></script>
-    <script src="./domain/lessons.js?v=1.0.359"></script>
-    <script src="./domain/billing.js?v=1.0.359"></script>
-    <script src="./app.js?v=1.0.359"></script>
+    <script src="./domain/values.js?v=1.0.363"></script>
+    <script src="./domain/lessons.js?v=1.0.363"></script>
+    <script src="./domain/billing.js?v=1.0.363"></script>
+    <script src="./app.js?v=1.0.363"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-14"></script>
   </body>
 </html>
