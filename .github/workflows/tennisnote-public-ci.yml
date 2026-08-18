@@ -25,8 +25,9 @@ jobs:
       TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: test-publishable-key-for-ci-only
       TENNISNOTE_PORTONE_STORE_ID: test-store-id
       TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY: test-tosspay-channel
-      TENNISNOTE_PAYMENT_MODE: tosspay_only
+      TENNISNOTE_PAYMENT_MODE: multi
       TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay
+      TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

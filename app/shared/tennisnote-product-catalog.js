@@ -47,9 +47,12 @@
     return Math.round(Number(value || 0) / 1000) * 1000;
   }
 
-  function threeMonthPrice(fourWeekCash) {
-    const cash = roundThousand(Number(fourWeekCash || 0) * 3 * 0.9);
-    return [roundThousand(cash * 1.1), cash];
+  function threeMonthPrice(fourWeekCard, fourWeekCash, discountRate = 10) {
+    const multiplier = Math.max(0, 1 - (Number(discountRate) || 0) / 100);
+    return [
+      roundThousand(Number(fourWeekCard || 0) * 3 * multiplier),
+      roundThousand(Number(fourWeekCash || 0) * 3 * multiplier),
+    ];
   }
 
   function regularProduct({ scope, weeks, frequency, groupSize, minutes, card, cash }) {
@@ -107,7 +110,7 @@
             const groupSize = Number(groupSizeText);
             const minutes = Number(minutesText);
             const [card, cash] = prices;
-            const [threeCard, threeCash] = threeMonthPrice(cash);
+            const [threeCard, threeCash] = threeMonthPrice(card, cash, 10);
             return [
               regularProduct({ scope, weeks: 4, frequency, groupSize, minutes, card, cash }),
               regularProduct({ scope, weeks: 12, frequency, groupSize, minutes, card: threeCard, cash: threeCash }),

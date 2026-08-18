@@ -4233,6 +4233,13 @@ function normalizeMembershipProduct(product = {}, fallback = {}) {
       merged.firstLessonOfferPrice,
       numericValue(fallback.firstLessonOfferPrice, 15000),
     ),
+    threeMonthDiscountRate: Math.max(0, Math.min(90, Number(merged.threeMonthDiscountRate ?? fallback.threeMonthDiscountRate ?? 10))),
+    threeMonthPriceMode: ["automatic", "manual"].includes(String(merged.threeMonthPriceMode || fallback.threeMonthPriceMode || "automatic"))
+      ? String(merged.threeMonthPriceMode || fallback.threeMonthPriceMode || "automatic")
+      : "automatic",
+    coachSaleAvailability: merged.coachSaleAvailability && typeof merged.coachSaleAvailability === "object"
+      ? { ...merged.coachSaleAvailability }
+      : fallback.coachSaleAvailability && typeof fallback.coachSaleAvailability === "object" ? { ...fallback.coachSaleAvailability } : {},
     groupDeductionPolicy: merged.groupDeductionPolicy
       || merged.group_deduction_policy
       || fallback.groupDeductionPolicy
@@ -4295,6 +4302,9 @@ function membershipProductDraftFromServer(product = {}) {
     purchaseExperience: product.policy_settings?.purchaseExperience || (String(product.product_code || "").startsWith("one-day-") ? "one_day" : ""),
     firstLessonOfferEnabled: product.policy_settings?.firstLessonOfferEnabled === true,
     firstLessonOfferPrice: Number(product.policy_settings?.firstLessonOfferPrice) || 15000,
+    threeMonthDiscountRate: Number(product.policy_settings?.threeMonthDiscountRate ?? 10),
+    threeMonthPriceMode: product.policy_settings?.threeMonthPriceMode || "automatic",
+    coachSaleAvailability: product.policy_settings?.coachSaleAvailability || {},
     branchId: product.branch_id || "",
     branchName: operationBranchOptions().find((branch) => branch.id === String(product.branch_id || ""))?.name || "",
     group: `${scheduleScope === "mixed" ? "혼합" : scheduleScope === "weekend" ? "주말" : "평일"} ${productKind === "coupon" ? "쿠폰제" : "정규권"}`,
@@ -4348,6 +4358,9 @@ function membershipProductsForMemberApp() {
       purchaseExperience: normalized.purchaseExperience || "",
       firstLessonOfferEnabled: normalized.firstLessonOfferEnabled === true,
       firstLessonOfferPrice: normalized.firstLessonOfferPrice,
+      threeMonthDiscountRate: normalized.threeMonthDiscountRate,
+      threeMonthPriceMode: normalized.threeMonthPriceMode,
+      coachSaleAvailability: normalized.coachSaleAvailability,
       group: normalized.group,
       title: normalized.title,
       name: normalized.name,
@@ -4490,6 +4503,7 @@ function billingRowFromServerPayment(row = {}) {
     branchId: row.branch_id || row.branchId || "",
     productId: row.product_id || row.productId || "",
     ticketId: row.ticket_id || row.ticketId || "",
+    oneDayBookingId: row.one_day_booking_id || row.oneDayBookingId || "",
     revenueMonth: row.revenue_month || row.revenueMonth || "",
     revenueMonthSource: row.revenue_month_source || row.revenueMonthSource || "",
     revenueAttributionStatus: row.revenue_attribution_status || row.revenueAttributionStatus || "included",
@@ -4566,7 +4580,7 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     });
     let rows = [];
     try {
-      rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
+      rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
     } catch (error) {
       try {
         rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
@@ -4710,6 +4724,10 @@ async function updateMembershipProductSetting(productId, options = {}) {
   if (!card || !product) return;
   const fieldElement = (field) => card.querySelector(`[data-product-field="${field}"]`);
   const readField = (field) => fieldElement(field)?.value.trim() || "";
+  const coachSaleAvailability = { ...(product.coachSaleAvailability || {}) };
+  card.querySelectorAll("[data-product-coach-sale]").forEach((input) => {
+    coachSaleAvailability[input.dataset.productCoachSale] = input.checked;
+  });
   const ticketValue = numericValue(readField("tickets"), product.tickets);
   const nextProduct = membershipProductWithOperationalLimits(normalizeMembershipProduct({
     ...product,
@@ -4742,6 +4760,13 @@ async function updateMembershipProductSetting(productId, options = {}) {
     firstLessonOfferPrice: fieldElement("firstLessonOfferPrice")
       ? numericValue(readField("firstLessonOfferPrice"), product.firstLessonOfferPrice)
       : product.firstLessonOfferPrice,
+    threeMonthDiscountRate: fieldElement("threeMonthDiscountRate")
+      ? Math.max(0, Math.min(90, Number(readField("threeMonthDiscountRate")) || 0))
+      : product.threeMonthDiscountRate,
+    threeMonthPriceMode: fieldElement("threeMonthPriceMode")
+      ? readField("threeMonthPriceMode")
+      : product.threeMonthPriceMode,
+    coachSaleAvailability,
     status: readField("status") || product.status,
   }, membershipProductDefaults.find((item) => item.id === product.id)));
 
@@ -4813,6 +4838,12 @@ async function updateMembershipProductSetting(productId, options = {}) {
       target_products: [membershipProductServerSavePayload(nextProduct, serverProduct)],
       target_reason: "관리자 회원권 상품 행 저장",
     });
+    await client.rpc("tn_admin_save_membership_checkout_policy", {
+      target_product_id: serverProduct.id,
+      target_three_month_discount_rate: Number(nextProduct.threeMonthDiscountRate ?? 10),
+      target_three_month_price_mode: nextProduct.threeMonthPriceMode || "automatic",
+      target_coach_sale_availability: nextProduct.coachSaleAvailability || {},
+    });
     if (!refreshAfterSave) {
       return {
         productId,
@@ -4840,6 +4871,8 @@ async function updateMembershipProductSetting(productId, options = {}) {
       || String(saved.policy_settings?.purchaseExperience || "") !== String(nextProduct.purchaseExperience || "")
       || Boolean(saved.policy_settings?.firstLessonOfferEnabled) !== Boolean(nextProduct.firstLessonOfferEnabled)
       || Number(saved.policy_settings?.firstLessonOfferPrice || 0) !== Number(nextProduct.firstLessonOfferPrice || 0)
+      || Number(saved.policy_settings?.threeMonthDiscountRate ?? 10) !== Number(nextProduct.threeMonthDiscountRate ?? 10)
+      || String(saved.policy_settings?.threeMonthPriceMode || "automatic") !== String(nextProduct.threeMonthPriceMode || "automatic")
       || Boolean(saved.is_active) !== (nextProduct.status !== "hidden")
       || Number(saved.card_price) !== Number(nextProduct.cardAmount)
       || Number(saved.cash_price) !== Number(nextProduct.cashAmount)
@@ -4862,6 +4895,38 @@ async function updateMembershipProductSetting(productId, options = {}) {
       saveButton.textContent = "저장";
     }
   }
+}
+
+function recalculateThreeMonthProductPrice(productId) {
+  const card = document.querySelector(`[data-product-card="${CSS.escape(String(productId || ""))}"]`);
+  const product = membershipProductDrafts.find((item) => String(item.id) === String(productId));
+  if (!card || !product) return;
+  const baseProduct = membershipProductsForActiveOperationProfile().find((candidate) => (
+    String(candidate.id) !== String(product.id)
+    && candidate.productKind === "regular"
+    && String(candidate.scheduleScope) === String(product.scheduleScope)
+    && Number(candidate.groupSize) === Number(product.groupSize)
+    && Number(candidate.lessonMinutes) === Number(product.lessonMinutes)
+    && Number(candidate.frequencyPerWeek) === Number(product.frequencyPerWeek)
+    && Number(candidate.termWeeks || 0) < 12
+    && Number(candidate.validityDays || 0) < 84
+  ));
+  if (!baseProduct) {
+    showToast("같은 조건의 4주 상품을 찾지 못했습니다. 가격을 직접 입력해 주세요.");
+    return;
+  }
+  const rateInput = card.querySelector('[data-product-field="threeMonthDiscountRate"]');
+  const modeInput = card.querySelector('[data-product-field="threeMonthPriceMode"]');
+  const rate = Math.max(0, Math.min(90, Number(rateInput?.value) || 10));
+  const multiplier = 1 - rate / 100;
+  const roundThousand = (value) => Math.round(Number(value || 0) * 3 * multiplier / 1000) * 1000;
+  const cashInput = card.querySelector('[data-product-field="cashAmount"]');
+  const cardInput = card.querySelector('[data-product-field="cardAmount"]');
+  if (cashInput) cashInput.value = String(roundThousand(baseProduct.cashAmount));
+  if (cardInput) cardInput.value = String(roundThousand(baseProduct.cardAmount));
+  if (modeInput) modeInput.value = "automatic";
+  card.dataset.dirty = "true";
+  showToast(`4주 카드·현금 가격에 ${rate}% 할인을 각각 적용했습니다.`);
 }
 
 function setProductInlineDirtyState(form, dirty = true) {
@@ -20050,7 +20115,7 @@ function renderScheduleChangeApprovalQueue() {
           <div class="schedule-change-approval-actions">
             <button class="primary-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="approved">변경 승인</button>
             <button class="ghost-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="rejected">거절</button>
-            <small>거절하면 원래 수업은 노쇼로 처리되어 회원권이 차감될 수 있습니다.</small>
+            <small>거절하면 원래 수업을 그대로 유지하며 회원권은 차감하지 않습니다.</small>
           </div>
         </article>
       `).join("")
@@ -20063,7 +20128,7 @@ async function reviewAdminLessonChangeRequest(requestId, decision, button) {
     showToast("이미 처리되었거나 요청을 찾을 수 없습니다. 시간표를 새로고침해 주세요.");
     return;
   }
-  if (decision === "rejected" && !window.confirm(`${request.member}님의 변경 요청을 거절할까요? 운영 정책에 따라 원래 수업이 차감 처리될 수 있습니다.`)) return;
+  if (decision === "rejected" && !window.confirm(`${request.member}님의 변경 요청을 거절할까요? 원래 수업은 그대로 유지되고 회원권은 차감되지 않습니다.`)) return;
   const originalLabel = button?.textContent || "처리";
   if (button) {
     button.disabled = true;
@@ -20496,6 +20561,7 @@ function paymentFullCancelAmount(item = {}) {
 
 function paymentFullCancelButtonFor(item, index) {
   const amount = paymentFullCancelAmount(item);
+  if (String(item?.method || "").toLowerCase() === "bank_transfer") return "";
   const context = `${item?.member || "회원"} · ${item?.item || "결제"} · PG 전액 결제취소 ${money.format(amount)}원`;
   if (!item?.providerPaymentId || amount <= 0) {
     return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="서버 결제번호와 결제금액이 필요합니다.">PG 전액 결제취소</button>`;
@@ -20785,7 +20851,9 @@ function paymentActionFor(item, index) {
   if (item.status === "failed") return `<button class="small-button" type="button" data-failed-payment="${index}" ${context("실패 확인")}>실패 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
   if (item.status === "draft") return '<button class="small-button" type="button" disabled>회원 결제 대기</button>';
   if (item.status === "server_ready") {
-    const label = isStaleReadyPayment(item) ? "상태 확인" : "결제 확인";
+    const label = String(item.method || "") === "bank_transfer"
+      ? "입금 확인"
+      : isStaleReadyPayment(item) ? "상태 확인" : "결제 확인";
     return `<button class="small-button" type="button" data-server-ready-payment="${index}" ${context(label)}>${label}</button>${paymentCancelButtonFor(index, "대기취소")}`;
   }
   if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}" ${context("결제 완료 상세")}>완료됨</button>${paymentFullCancelButtonFor(item, index)}${paymentRefundButtonFor(item, index)}`;
@@ -20810,6 +20878,7 @@ function isHistoricalImportedPayment(item = {}) {
 function chargeStatusForPayment(item = {}) {
   if (item.status === "refund_processing") return { label: "환불 처리중", tone: "warn", detail: "PortOne 취소와 내부 회원권 반영이 진행 중입니다." };
   if (item.status === "refund_reconcile") return { label: "동기화 필요", tone: "danger", detail: "PG 취소 결과와 내부 결제·회원권 상태를 다시 맞춰야 합니다." };
+  if (item.status === "paid" && item.oneDayBookingId) return { label: "원데이 예약완료", tone: "good", detail: "결제 확인 후 선택한 코치와 시간으로 한 번만 예약됐습니다." };
   if (item.status === "paid" && item.ticketId) return { label: "회원권 충전완료", tone: "good", detail: "결제검증 후 연결 회원권이 활성화됩니다." };
   if (item.status === "paid" && isHistoricalImportedPayment(item)) return { label: "이관 결제 기록", tone: "neutral", detail: "기존 장부에서 보존한 결제 증빙이며 현재 회원권 자동 연결 대상이 아닙니다." };
   if (item.status === "paid") return { label: "회원권 연결 확인", tone: "warn", detail: "결제는 확인됐지만 연결된 회원권 ID가 없습니다." };
@@ -20865,15 +20934,25 @@ async function verifyBillingPaymentItem(item) {
   renderAll();
 
   try {
-    const result = await client.invokeFunction("portone-payment/verify", {
-      body: { paymentId: item.providerPaymentId },
+    const bankTransfer = String(item.method || "") === "bank_transfer";
+    if (bankTransfer && !window.confirm(`${item.member} 회원의 ${money.format(item.finalAmount || item.amount)}원 입금을 확인했습니까?\n확인 후에만 회원권 또는 원데이 예약이 생성됩니다.`)) {
+      item.status = "server_ready";
+      item.statusLabel = "입금확인대기";
+      renderAll();
+      return;
+    }
+    const result = await client.invokeFunction(bankTransfer ? "portone-payment/bank-transfer-confirm" : "portone-payment/verify", {
+      body: {
+        paymentId: item.providerPaymentId,
+        ...(bankTransfer ? { confirmedAmount: Number(item.finalAmount || item.amount || 0) } : {}),
+      },
     });
     if (result?.ok) {
       item.status = result.status === "verified" || result.status === "already_verified" ? "paid" : "check";
       item.statusLabel = result.chargedTicket ? "검증/충전완료" : "서버검증완료";
       billingLogs.unshift(`${item.member} ${item.item} 서버검증 완료: ${result.status}`);
       await loadServerPaymentsIntoBilling({ silent: true });
-      showToast("서버 결제 검증 완료");
+      showToast(bankTransfer ? "입금 확인과 회원권 반영이 완료됐습니다" : "서버 결제 검증 완료");
     } else if (result?.code === "payment_not_paid") {
       item.status = "server_ready";
       item.statusLabel = "결제대기";
@@ -20949,6 +21028,8 @@ function refundErrorText(code = "") {
     reconcile_required: "PG 취소 결과와 내부 기록을 다시 맞춰야 합니다.",
     provider_amount_mismatch: "PG 결제금액과 서버 결제금액이 달라 환불을 중단했습니다.",
     provider_cancel_failed: "PG 환불 요청에 실패했습니다. 결제 상태를 확인해 주세요.",
+    bank_transfer_use_refund_flow: "계좌이체는 PG 취소가 아니라 환불 계산에서 처리해 주세요.",
+    linked_one_day_booking_not_found: "결제와 연결된 원데이 예약을 찾지 못했습니다.",
     nothing_to_refund: "계산된 환불액이 0원이라 자동 환불할 수 없습니다.",
   };
   return labels[code] || "환불 처리 상태를 확인해 주세요.";
@@ -21105,7 +21186,10 @@ async function confirmRefundFromModal() {
   const inputs = await verifyRefundAdminInputs();
   if (!inputs) return;
   refundFlowState.submitting = true;
-  refundFlowState.message = "PortOne 환불과 내부 이용권 반영을 처리하고 있습니다.";
+  const bankTransfer = String(item.method || "").toLowerCase() === "bank_transfer";
+  refundFlowState.message = bankTransfer
+    ? "계좌이체 환불 기록과 내부 이용권 반영을 처리하고 있습니다."
+    : "PortOne 환불과 내부 이용권 반영을 처리하고 있습니다.";
   refundFlowState.tone = "neutral";
   renderRefundModal();
   try {
@@ -21124,7 +21208,7 @@ async function confirmRefundFromModal() {
       billingLogs.unshift(`${item.member} 환불 완료: ${money.format(numericValue(result.refundAmount || preview.refundAmount))}원`);
       closeRefundModal();
       await loadServerPaymentsIntoBilling({ silent: true });
-      showToast("환불과 이용권 반영 완료");
+      showToast(bankTransfer ? "계좌이체 환불 기록과 이용권 반영 완료" : "환불과 이용권 반영 완료");
       return;
     }
     if (result?.code === "reconcile_required") {
@@ -23784,7 +23868,7 @@ async function performAdminLiveDataSync(options = {}) {
       Promise.resolve(adminLiveDataState.curriculumRefs || []),
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
-      fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at", order: "created_at.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
+      fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at", order: "created_at.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
       rosterRows("groupAccounts", () => client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => [])),
       rosterRows("groupMembers", () => client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => [])),
       rosterRows("groupTicketLinks", () => client.selectRows("tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", limit: 500 }).catch(() => [])),
@@ -23984,7 +24068,7 @@ async function performAdminLiveDataSync(options = {}) {
       const pendingTicket = memberTickets.find((ticket) => ticket.status === "pending_payment") || null;
       const memberPayments = userIds.flatMap((userId) => paymentsByUserId.get(userId) || []);
       const unlinkedVerifiedPayments = memberPayments.filter((payment) => (
-        payment.status === "verified" && !payment.ticket_id
+        payment.status === "verified" && !payment.ticket_id && !payment.one_day_booking_id
       ));
       const actionableUnlinkedPayment = unlinkedVerifiedPayments
         .filter((payment) => payment.provider !== "google_sheet_history")
@@ -27995,6 +28079,14 @@ function renderServiceReadiness() {
           const normalized = normalizeMembershipProduct(product, membershipProductDefaults.find((item) => item.id === product.id));
           const productId = String(normalized.id);
           const isEditing = String(state.activeMembershipProductId || "") === productId;
+          const isThreeMonth = Number(normalized.termWeeks) >= 12 || Number(normalized.validityDays) >= 84 || /3개월|12주/.test(normalized.title || "");
+          const saleCoaches = coaches.filter((coach) => coach.status === "active" && coach.serverRoleId);
+          const enabledSaleCoaches = saleCoaches.filter((coach) => (normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false);
+          const memberFacingGroup = normalized.purchaseExperience === "one_day"
+            ? "원데이"
+            : normalized.productKind === "coupon"
+              ? "쿠폰"
+              : isThreeMonth ? "3개월 10% 할인" : "4주";
           if (!isEditing) {
             return `
         <article class="product-setting-card product-setting-summary-card" data-product-card="${normalized.id}">
@@ -28095,6 +28187,19 @@ function renderServiceReadiness() {
               <input type="number" min="1" step="1" data-product-field="firstLessonOfferPrice" value="${normalized.firstLessonOfferPrice || 15000}" />
             </label>
             <p class="product-setting-offer-note">수업·회원권·결제 이력이 전혀 없는 회원에게만 1회 적용됩니다. 앱 가입만 새로 한 기존 회원은 제외됩니다.</p>` : ""}
+            ${isThreeMonth ? `
+            <label>
+              <small>${productSettingFieldLabel("3개월 할인율(%)", true)}</small>
+              <input type="number" min="0" max="90" step="0.1" data-product-field="threeMonthDiscountRate" value="${Number(normalized.threeMonthDiscountRate ?? 10)}" />
+            </label>
+            <label>
+              <small>${productSettingFieldLabel("3개월 가격 방식", true)}</small>
+              <select data-product-field="threeMonthPriceMode">
+                <option value="automatic" ${normalized.threeMonthPriceMode === "automatic" ? "selected" : ""}>4주 가격 × 3 자동계산</option>
+                <option value="manual" ${normalized.threeMonthPriceMode === "manual" ? "selected" : ""}>직접입력</option>
+              </select>
+              <button class="small-button" type="button" data-recalculate-three-month="${normalized.id}">할인가 다시 계산</button>
+            </label>` : ""}
             <label>
               <small>${productSettingFieldLabel("사용기간(일)", true)}</small>
               <input type="number" min="1" step="1" data-product-field="validityDays" value="${normalized.validityDays}" />
@@ -28174,6 +28279,11 @@ function renderServiceReadiness() {
                 <option value="no" ${!normalized.coachDiscountAllowed ? "selected" : ""}>관리자만</option>
               </select>
             </label>
+            ${saleCoaches.length ? `
+            <fieldset class="product-coach-sale-settings">
+              <legend>이 상품을 판매·예약할 코치</legend>
+              ${saleCoaches.map((coach) => `<label><input type="checkbox" data-product-coach-sale="${escapeHtml(coach.serverRoleId)}" ${(normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false ? "checked" : ""} /><span>${escapeHtml(coach.name)}</span></label>`).join("")}
+            </fieldset>` : ""}
             <label>
               <small>${productSettingFieldLabel("판매 상태", true)}</small>
               <select data-product-field="status">
@@ -28181,6 +28291,11 @@ function renderServiceReadiness() {
               </select>
             </label>
           </div>
+          <section class="product-member-preview" aria-label="회원 화면 미리보기">
+            <div><small>회원 화면 미리보기</small><strong>${escapeHtml(memberFacingGroup)} · ${escapeHtml(normalized.title)}</strong></div>
+            <div class="product-member-preview-prices"><span>토스페이 카드 ${money.format(normalized.cardAmount)}원</span><span>계좌이체 현금 ${money.format(normalized.cashAmount)}원</span></div>
+            <small>${enabledSaleCoaches.length ? `선택 가능 코치 ${enabledSaleCoaches.map((coach) => coach.name).join(" · ")}` : "선택 가능한 코치 없음"}</small>
+          </section>
           <div class="product-setting-actions">
             <button class="ghost-button" type="button" data-close-product-setting="${normalized.id}">닫기</button>
             <button class="small-button" type="button" data-save-product-setting="${normalized.id}">저장</button>
@@ -30688,6 +30803,12 @@ function bindEvents() {
         return;
       }
       await openMemberManagementModal(member, "reenroll", ticketId);
+      return;
+    }
+
+    const recalculateThreeMonthButton = event.target.closest("[data-recalculate-three-month]");
+    if (recalculateThreeMonthButton) {
+      recalculateThreeMonthProductPrice(recalculateThreeMonthButton.dataset.recalculateThreeMonth);
       return;
     }
 
