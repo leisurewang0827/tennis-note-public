@@ -2586,7 +2586,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.358",
+    workerUrl: "./service-worker.js?v=1.0.359",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2616,7 +2616,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.358" });
+  const params = new URLSearchParams({ v: "1.0.359" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2961,10 +2961,7 @@ async function authorizeCoachNotificationAction(data = {}) {
         const lesson = (state.liveLessons || []).find((item) => (
           String(item.serverLessonId || item.id || "") === lessonId
         ));
-        const templateKey = String(data.templateKey || data.template_key || "").trim();
-        const adminEscalation = templateKey === "coach_feedback_overdue_admin"
-          && current?.profile?.role === "admin";
-        if (!lesson || (!adminEscalation && !lessonAssignedToCurrentCoachForTasks(lesson))) {
+        if (!lesson || !lessonAssignedToCurrentCoachForTasks(lesson)) {
           showToast("현재 코치에게 배정된 수업이 아닙니다.");
           return false;
         }
@@ -7771,7 +7768,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.358",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.359",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
