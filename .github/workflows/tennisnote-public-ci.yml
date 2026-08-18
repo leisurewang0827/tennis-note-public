@@ -37,18 +37,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Run tests
-        run: node --test "tests/**/*.test.js"
-
-      - name: Check JavaScript syntax
-        run: |
-          node --check app/admin/app.js
-          node --check app/admin/schedule-v2-admin.js
-          node --check app/tennis-note-member-app/app.js
-          node --check app/tennis-note-coach-app/app.js
-      - name: Build isolated Cloudflare artifacts
-        run: |
-          python scripts/build_cloudflare_pages.py --target member --output dist/member
-          python scripts/build_cloudflare_pages.py --target admin --output dist/admin
-      - name: Verify release and cache markers
-        run: python scripts/check_cloudflare_build.py
+      # 검증 명령은 scripts/verify.sh 한 곳에만 둔다.
+      # 여기에 또 적으면 로컬과 CI 가 서로 어긋난다.
+      - name: Verify
+        run: ./scripts/verify.sh

@@ -125,6 +125,35 @@ def payment_config(path: Path) -> dict:
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def require_build(root: Path) -> None:
+    """빌드 결과물을 검사하는 스크립트이므로 dist/ 가 먼저 있어야 한다.
+
+    없을 때 파이썬 트레이스백을 띄우면 사람도 에이전트도 엉뚱한 곳을 고치려 든다.
+    무엇을 먼저 돌려야 하는지 알려준다.
+    """
+    missing = [
+        target for target in ("member", "admin")
+        if not (root / "dist" / target / "release.json").is_file()
+    ]
+    if not missing:
+        return
+    raise SystemExit(
+        "빌드 결과물이 없습니다: " + ", ".join(f"dist/{name}" for name in missing) + "\n"
+        "\n"
+        "이 스크립트는 빌드된 결과물을 검사합니다. 빌드를 먼저 돌리세요.\n"
+        "\n"
+        "  ./scripts/verify.sh        (테스트·문법·빌드·검사를 한 번에)\n"
+        "\n"
+        "빌드만 따로 돌리려면:\n"
+        "\n"
+        "  python3 scripts/build_cloudflare_pages.py --target member --output dist/member\n"
+        "  python3 scripts/build_cloudflare_pages.py --target admin  --output dist/admin\n"
+    )
+
+
+require_build(ROOT)
 source = json.loads((ROOT / "app" / "release.json").read_text(encoding="utf-8"))
 member = json.loads((ROOT / "dist" / "member" / "release.json").read_text(encoding="utf-8"))
 admin = json.loads((ROOT / "dist" / "admin" / "release.json").read_text(encoding="utf-8"))

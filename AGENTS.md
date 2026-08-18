@@ -9,33 +9,18 @@ Tennis Note 공개 저장소 작업 규칙입니다.
 
 ## 검증 명령
 
-작업 전후로 돌리세요. 전부 통과해야 끝난 것입니다.
+작업 전후로 돌리세요. 통과해야 끝난 것입니다. CI가 돌리는 것과 같습니다.
 
 ```bash
-# 테스트
-node --test "tests/**/*.test.js"
-
-# 문법
-node --check app/admin/app.js
-node --check app/admin/schedule-v2-admin.js
-node --check app/tennis-note-member-app/app.js
-node --check app/tennis-note-coach-app/app.js
-
-# 빌드 + 검사 (실제 키 필요 없음)
-export TENNISNOTE_SUPABASE_URL=https://example.supabase.co
-export TENNISNOTE_SUPABASE_PUBLISHABLE_KEY=test-publishable-key-for-ci-only
-export TENNISNOTE_PORTONE_STORE_ID=test-store-id
-export TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY=test-tosspay-channel
-export TENNISNOTE_PAYMENT_MODE=tosspay_only
-export TENNISNOTE_ALLOWED_PAYMENT_METHODS=tosspay
-
-python3 scripts/build_cloudflare_pages.py --target member --output dist/member
-python3 scripts/build_cloudflare_pages.py --target admin  --output dist/admin
-python3 scripts/check_cloudflare_build.py
+./scripts/verify.sh
 ```
 
-`check_cloudflare_build.py`가 보는 것: 버전 일치 · 깨진 링크 · 비밀키 유출 ·
-결제 설정 · 서비스워커 캐시 이름.
+테스트 → 문법 → 빌드 → 배포본 검사를 순서대로 돌립니다. **실제 키는 필요 없습니다.**
+
+검사 항목: 버전 일치 · 깨진 링크 · 비밀키 유출 · 결제 설정 · 서비스워커 캐시 이름.
+
+새 검증을 추가할 때는 `scripts/verify.sh`에만 넣으세요. CI 워크플로에 또 적으면
+로컬과 CI가 어긋납니다.
 
 ## 화면으로 확인
 
