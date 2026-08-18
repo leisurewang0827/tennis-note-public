@@ -2593,7 +2593,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.362",
+    workerUrl: "./service-worker.js?v=1.0.363",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2623,7 +2623,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.362" });
+  const params = new URLSearchParams({ v: "1.0.363" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3258,12 +3258,18 @@ function setView(viewId, options = {}) {
   if (!viewId || !$("#" + viewId)) return;
   $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === viewId));
   $$(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.view === viewId));
+  const profileButton = $("#coachProfileButton");
+  if (profileButton) {
+    const profileActive = viewId === "coachProfileView";
+    profileButton.classList.toggle("is-active", profileActive);
+    profileButton.setAttribute("aria-pressed", String(profileActive));
+  }
   const screenTitles = {
     todayView: "오늘",
     fullScheduleView: "레슨표",
     membersView: "회원",
     curriculumView: "커리큘럼",
-    coachProfileView: "내 매출·정산",
+    coachProfileView: "내 정보",
   };
   if ($("#coachScreenTitle")) $("#coachScreenTitle").textContent = screenTitles[viewId] || "코치 모드";
   document.body.dataset.activeView = viewId;
@@ -3864,6 +3870,50 @@ function coachSettlementRuleLabel(settlement = {}) {
   return `${basis}의 ${rate}%`;
 }
 
+function normalizedCoachSettlementMemberName(value = "") {
+  return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function coachSettlementRowsForMember(member = {}) {
+  const settlementRows = Array.isArray(state.coachSettlement?.rows) ? state.coachSettlement.rows : [];
+  const memberNames = member.isGroupDisplay
+    ? [member.groupMemberName, member.displayName]
+    : [member.displayName, member.name];
+  const normalizedNames = new Set(memberNames.map(normalizedCoachSettlementMemberName).filter(Boolean));
+  if (!normalizedNames.size) return [];
+  return settlementRows.filter((row) => normalizedNames.has(normalizedCoachSettlementMemberName(row.memberName)));
+}
+
+function coachMemberSettlementSummary(member = {}) {
+  const rows = coachSettlementRowsForMember(member);
+  if (!rows.length) {
+    return {
+      linked: false,
+      sessions: 0,
+      amount: 0,
+      label: state.coachSettlementLoading ? "정산 확인 중" : "정산 연결 확인 필요",
+    };
+  }
+  const sessions = rows.reduce((sum, row) => sum + (Number(row.settledSessions) || 0), 0);
+  const amount = rows.reduce((sum, row) => sum + (Number(row.estimatedSettlement) || 0), 0);
+  return {
+    linked: true,
+    sessions,
+    amount,
+    label: `${sessions}회 · ${formatCoachWon(amount)}`,
+  };
+}
+
+function renderVisibleMemberSettlement() {
+  const target = $("#memberDetailSettlementValue");
+  if (!target || !state.viewingMemberDetailId) return;
+  const member = findMemberDetail(state.viewingMemberDetailId, state.viewingMemberGroupName);
+  if (!member) return;
+  const summary = coachMemberSettlementSummary(member);
+  target.textContent = summary.label;
+  target.dataset.linked = String(summary.linked);
+}
+
 function renderCoachSettlement() {
   const monthInput = $("#coachSettlementMonth");
   if (monthInput && monthInput.value !== coachSettlementMonth()) monthInput.value = coachSettlementMonth();
@@ -3874,6 +3924,8 @@ function renderCoachSettlement() {
     status.dataset.tone = state.coachSettlementError ? "danger" : "wait";
     status.textContent = state.coachSettlementError || (state.coachSettlementLoading ? "정산 자료를 불러오는 중입니다." : "");
   }
+  const retryButton = $("#refreshCoachSettlement");
+  if (retryButton) retryButton.hidden = !state.coachSettlementError;
   if ($("#coachRevenueAmount")) $("#coachRevenueAmount").textContent = formatCoachWon(settlement.revenueAmount);
   if ($("#coachRevenueCount")) $("#coachRevenueCount").textContent = `결제 ${Number(settlement.paymentCount) || 0}건`;
   if ($("#coachSettledSessions")) $("#coachSettledSessions").textContent = `${Number(settlement.settledSessions) || 0}회`;
@@ -3884,11 +3936,27 @@ function renderCoachSettlement() {
       ? `${coachSettlementRuleLabel(settlement)}${substitute ? ` · 대타 ${formatCoachWon(substitute)}` : ""}`
       : "정산 규칙 확인 중";
   }
+  const compactAmount = $("#coachSettlementCompactAmount");
+  const compactMeta = $("#coachSettlementCompactMeta");
+  if (compactAmount) {
+    compactAmount.textContent = state.coachSettlementLoading
+      ? "확인 중"
+      : state.coachSettlementError
+        ? "다시 확인"
+        : formatCoachWon(settlement.estimatedSettlement);
+  }
+  if (compactMeta) {
+    compactMeta.textContent = state.coachSettlementError
+      ? "정산 자료를 불러오지 못했습니다. 눌러서 다시 시도하세요."
+      : state.coachSettlementLoading
+        ? "정산 자료를 불러오는 중입니다."
+        : `결제 ${Number(settlement.paymentCount) || 0}건 · 수업 ${Number(settlement.settledSessions) || 0}회`;
+  }
   const rows = Array.isArray(settlement.rows) ? settlement.rows : [];
   const rowsTarget = $("#coachSettlementRows");
-  if (!rowsTarget) return;
-  rowsTarget.innerHTML = rows.length
-    ? rows.map((row) => `
+  if (rowsTarget) {
+    rowsTarget.innerHTML = rows.length
+      ? rows.map((row) => `
         <article>
           <div>
             <strong>${escapeHtml(row.memberName || "회원")}</strong>
@@ -3899,10 +3967,22 @@ function renderCoachSettlement() {
             <small>매출 ${formatCoachWon(row.amount)} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회</small>
           </div>
         </article>`).join("")
-    : coachEmptyState({
-      title: state.coachSettlementLoading ? "정산 자료를 확인하고 있습니다." : "선택한 달의 내 담당 결제가 없습니다.",
-      description: "관리자 결제 귀속과 회원권 담당 코치를 확인해 주세요.",
-    });
+      : coachEmptyState({
+        title: state.coachSettlementLoading ? "정산 자료를 확인하고 있습니다." : "선택한 달의 내 담당 결제가 없습니다.",
+        description: "관리자 결제 귀속과 회원권 담당 코치를 확인해 주세요.",
+      });
+  }
+  renderVisibleMemberSettlement();
+}
+
+function openCoachSettlement() {
+  if (document.body.dataset.activeView !== "membersView") setView("membersView", { pushHistory: true });
+  renderCoachSettlement();
+  openCoachModal("coachSettlementModal");
+}
+
+function closeCoachSettlementModal() {
+  closeCoachModal("coachSettlementModal");
 }
 
 async function syncCoachSettlementFromServer() {
@@ -4723,7 +4803,7 @@ function formatScheduleMemberName(name) {
 }
 
 function memberFilter() {
-  return ["all", "active", "expiring", "paused_pending", "expired"].includes(state.memberFilter)
+  return ["all", "active", "attention", "expiring", "paused_pending", "expired"].includes(state.memberFilter)
     ? state.memberFilter
     : "all";
 }
@@ -4787,7 +4867,9 @@ function displayMemberItemsForFilter() {
   const source = filter === "expired"
     ? state.expiredMembers
     : filter === "all"
-      ? [...state.members, ...state.expiredMembers]
+      ? state.members
+      : filter === "attention"
+        ? state.members.filter((member) => Boolean(memberAttentionLabel(member)))
       : state.members.filter((member) => member.statusCategory === filter);
   return source.flatMap((member) => {
     const names = groupMemberNames(member);
@@ -4831,53 +4913,55 @@ function memberUsageLabel(member) {
     : `잔여 ${member.remaining || 0}회`;
 }
 
+function memberAttentionLabel(member = {}) {
+  const remaining = Number(member.remaining);
+  if (member.statusCategory === "expiring") return "만료 임박";
+  if (member.statusCategory === "paused_pending") return member.status || "휴회·대기";
+  if (Number.isFinite(remaining) && remaining <= 1) return "재등록 확인";
+  if (member.ntrpRequest === "요청") return "측정 요청";
+  return "";
+}
+
+function memberRecentLessonLabel(member = {}) {
+  const recent = String(member.lastLesson || "").trim();
+  return recent ? `최근 ${recent}` : "최근 수업 없음";
+}
+
 function renderActiveMemberCard(member) {
-  const ticketType = isGroupTicket(member) ? "그룹" : "개인";
-  const ticketLabel = `<span class="member-ticket ${isGroupTicket(member) ? "is-group" : "is-private"}"><b>${ticketType}</b><small>${member.ticket}</small></span>`;
+  const attentionLabel = memberAttentionLabel(member);
   return `
-    <article class="member-row active ${member.isGroupDisplay ? "group-child" : ""}" role="button" tabindex="0" data-member-detail-id="${member.sourceMemberId || member.id}" data-member-group-name="${member.groupMemberName || ""}">
+    <button class="member-row active ${member.isGroupDisplay ? "group-child" : ""}" type="button" data-member-detail-id="${member.sourceMemberId || member.id}" data-member-group-name="${member.groupMemberName || ""}">
       <span class="member-name">
         ${personAvatarMarkup({ ...member, name: member.displayName || member.name }, "tiny")}
         <span class="member-name-copy">
           <strong>${member.displayName || member.name}</strong>
-          <small>${member.isGroupDisplay ? `2대1 ${member.groupPosition}/${member.groupTotal}` : "개인 회원"} · ${member.status || "수강중"}${member.ticketCount > 1 ? ` · 회원권 ${member.ticketCount}개` : ""}</small>
+          <small>${escapeHtml(member.ticket || (member.isGroupDisplay ? "2대1 회원권" : "회원권 미정"))}</small>
         </span>
       </span>
-      <span>${member.coach}</span>
-      ${ticketLabel}
-      <span>${memberUsageLabel(member)}</span>
-      <span>${member.lastLesson}</span>
-      <span>자가 ${ntrpNumber(member.selfNtrp)}</span>
-      <label class="member-ntrp-inline">
-        <span>코치</span>
-        <select data-member-ntrp="${member.sourceMemberId || member.id}" data-member-group-name="${member.groupMemberName || ""}">
-          ${ntrpLevels.map((level) => `<option value="${level}" ${member.coachNtrp === level ? "selected" : ""}>${ntrpNumber(level)}</option>`).join("")}
-        </select>
-      </label>
-    </article>`;
+      <span class="member-row-summary">
+        <strong>${escapeHtml(memberRecentLessonLabel(member))}</strong>
+        <small>${escapeHtml(memberUsageLabel(member))}</small>
+      </span>
+      ${attentionLabel ? `<span class="member-attention-badge">${escapeHtml(attentionLabel)}</span>` : ""}
+      <span class="member-row-chevron" aria-hidden="true">›</span>
+    </button>`;
 }
 
 function renderExpiredMemberCard(member) {
   return `
-    <article class="member-row expired" role="button" tabindex="0" data-member-detail-id="${member.id}">
+    <button class="member-row expired" type="button" data-member-detail-id="${member.id}">
       <span class="member-name">
         ${personAvatarMarkup(member, "tiny")}
-        <span class="member-name-copy"><strong>${member.name}</strong></span>
+        <span class="member-name-copy"><strong>${member.name}</strong><small>${escapeHtml(member.ticket || "이전 회원권")}</small></span>
       </span>
-      <span>${member.coach}</span>
-      <span>${member.ticket}</span>
-      <span>기간 ~ ${member.expiredAt}</span>
-      <span>사용 ${member.used}</span>
-      <b>미재등록</b>
-    </article>`;
+      <span class="member-row-summary"><strong>만료 ${escapeHtml(member.expiredAt || "-")}</strong><small>사용 ${escapeHtml(String(member.used || 0))}회</small></span>
+      <span class="member-attention-badge">미재등록</span>
+      <span class="member-row-chevron" aria-hidden="true">›</span>
+    </button>`;
 }
 
 function renderMemberHeader(filter) {
-  const labels =
-    filter !== "expired"
-      ? ["회원", "코치", "회원권", "총/소진/잔여", "최근 수업", "자가 NTRP", "코치 측정"]
-      : ["회원", "코치", "이전 회원권", "기간", "사용", "상태"];
-  return `<div class="member-row member-row-head ${filter}">${labels.map((label) => `<span>${label}</span>`).join("")}</div>`;
+  return "";
 }
 
 function renderMemberPager(total, page) {
@@ -4910,14 +4994,16 @@ function renderMembers() {
   if ($("#memberSearchInput") && $("#memberSearchInput").value !== state.memberQuery) $("#memberSearchInput").value = state.memberQuery || "";
   if ($("#memberTicketFilter")) $("#memberTicketFilter").value = ticketFilter;
   $$(".member-filter").forEach((button) => button.classList.toggle("is-active", button.dataset.memberFilter === filter));
+  const advancedControls = $("#memberAdvancedControls");
+  if (advancedControls) advancedControls.open = ["expiring", "paused_pending", "expired"].includes(filter);
   if ($("#memberFilterSummary")) {
-    const filterLabel = { all: "내 담당 전체", active: "수강중", expiring: "만료 임박", paused_pending: "휴회·대기", expired: "만료" }[filter];
+    const filterLabel = { all: "내 담당 전체", active: "수강중", attention: "확인 필요", expiring: "만료 임박", paused_pending: "휴회·대기", expired: "만료" }[filter];
     $("#memberFilterSummary").textContent = `${filterLabel} ${items.length}/${allItems.length}명 · ${page + 1}페이지`;
   }
   const rows = visible
     .map((member) => (filter === "expired" ? renderExpiredMemberCard(member) : renderActiveMemberCard(member)))
     .join("");
-  target.innerHTML = rows ? `${renderMemberHeader(filter)}${rows}` : coachEmptyState({
+  target.innerHTML = rows || coachEmptyState({
     title: filter === "expired" ? "만료회원이 없습니다" : "조건에 맞는 담당 회원이 없습니다",
     reason: query || ticketFilter !== "all"
       ? "검색어나 필터를 바꾸면 다른 회원을 확인할 수 있습니다."
@@ -5120,6 +5206,7 @@ function renderMemberDetailModal(member) {
   const isRevealed = state.revealedMemberContactKey === key;
   const lessons = relatedLessonsForMember(member);
   const memberUserId = coachMemberChartUserId(member);
+  const memberSettlement = coachMemberSettlementSummary(member);
   target.innerHTML = `
     <div class="lesson-modal-head member-detail-head">
       <div class="member-detail-identity">
@@ -5139,6 +5226,11 @@ function renderMemberDetailModal(member) {
       </div>
       ${coachMemberChartPanelMarkup(memberUserId, member.displayName || member.name, 5)}
     </section>
+    <button class="member-detail-settlement" type="button" data-open-coach-settlement>
+      <span><b>이번 달 정산</b><small>내 담당 매출 기준</small></span>
+      <strong id="memberDetailSettlementValue" data-linked="${String(memberSettlement.linked)}">${escapeHtml(memberSettlement.label)}</strong>
+      <span aria-hidden="true">›</span>
+    </button>
     <details class="member-detail-secondary">
       <summary>회원·회원권 정보</summary>
       <div class="modal-info-grid member-detail-grid">
@@ -5157,6 +5249,12 @@ function renderMemberDetailModal(member) {
           <span>NTRP</span>
           <strong>자가 ${ntrpNumber(member.selfNtrp)} · 코치 ${ntrpNumber(member.coachNtrp)}</strong>
           <small>${member.ntrpRequest || "측정 요청 없음"}</small>
+          <label class="member-detail-ntrp">
+            <span>코치 측정</span>
+            <select data-member-ntrp="${member.sourceMemberId || member.id}" data-member-group-name="${member.groupMemberName || ""}">
+              ${ntrpLevels.map((level) => `<option value="${level}" ${member.coachNtrp === level ? "selected" : ""}>${ntrpNumber(level)}</option>`).join("")}
+            </select>
+          </label>
         </article>
         <article class="modal-info-card">
           <span>기본 정보</span>
@@ -7213,6 +7311,11 @@ function handleSummaryAction(action) {
 function bindEvents() {
   $('#coachLogoutButton').addEventListener('click', logoutCoach);
   $$(".tab").forEach((button) => button.addEventListener("click", () => navigateCoachView(button.dataset.view)));
+  $("#coachProfileButton")?.addEventListener("click", () => navigateCoachView("coachProfileView"));
+  $("#coachSettlementSummaryButton")?.addEventListener("click", () => {
+    openCoachSettlement();
+    if (!state.coachSettlement || state.coachSettlementError) void syncCoachSettlementFromServer();
+  });
   $("#refreshButton").addEventListener("click", renderAll);
   $("#userModeButton")?.addEventListener("click", openUserMode);
   $("#userModeLoginButton")?.addEventListener("click", openUserMode);
@@ -7327,6 +7430,19 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const closeSettlementButton = event.target.closest("[data-close-coach-settlement]");
+    if (closeSettlementButton) {
+      closeCoachSettlementModal();
+      return;
+    }
+
+    const openSettlementButton = event.target.closest("[data-open-coach-settlement]");
+    if (openSettlementButton) {
+      openCoachSettlement();
+      if (!state.coachSettlement || state.coachSettlementError) void syncCoachSettlementFromServer();
+      return;
+    }
+
     const curriculumSuggestion = event.target.closest("[data-curriculum-option-code]");
     if (curriculumSuggestion) {
       selectCoachCurriculumSuggestion(curriculumSuggestion);
@@ -7495,7 +7611,8 @@ function bindEvents() {
     }
 
     const memberDetailRow = event.target.closest("[data-member-detail-id]");
-    if (memberDetailRow && !event.target.closest("select, button, a, input, textarea")) {
+    const memberDetailInteractive = event.target.closest("select, button, a, input, textarea");
+    if (memberDetailRow && (!memberDetailInteractive || memberDetailInteractive === memberDetailRow)) {
       openMemberDetail(memberDetailRow.dataset.memberDetailId, memberDetailRow.dataset.memberGroupName || "");
       return;
     }
@@ -7873,7 +7990,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.362",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.363",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
