@@ -23745,7 +23745,10 @@ async function performAdminLiveDataSync(options = {}) {
         limit: 500,
       }).catch(() => []))),
       rosterRows("makeupEntitlements", () => client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => [])),
-      rosterRows("lessonRecords", () => (client.selectAllRows || client.selectRows).call(client, "tn_lesson_records", {
+      // Settlement reconciliation needs the complete record history. The lightweight
+      // operational roster only contains records inside its schedule window, so using
+      // it here silently drops older completed lessons and understates coach totals.
+      (client.selectAllRows || client.selectRows).call(client, "tn_lesson_records", {
         select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_ticket_id,deducted_sessions,completed_at,tn_lessons(member_ticket_id,duration_minutes)",
         order: "id.asc",
         limit: 500,
@@ -23754,7 +23757,7 @@ async function performAdminLiveDataSync(options = {}) {
       }).catch(() => client.selectRows("tn_lesson_records", {
         select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at",
         limit: 500,
-      }).catch(() => []))),
+      }).catch(() => [])),
       Promise.resolve(adminLiveDataState.curriculumRefs || []),
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
