@@ -1454,6 +1454,7 @@ const adminLiveDataState = {
   authSwitches: [],
   coachSettlementTerms: [],
   tickets: [],
+  settlementTickets: [],
   products: [],
   participantRows: [],
   participantRecords: [],
@@ -20344,7 +20345,7 @@ function renderCoachSettlementPreview() {
   const previewRows = $("#coachSettlementPreviewRows");
   if (previewRows) {
     const ticketById = new Map();
-    [...tickets, ...expiredTickets].forEach((ticket) => {
+    [...tickets, ...expiredTickets, ...(adminLiveDataState.settlementTickets || [])].forEach((ticket) => {
       if (ticket.id) ticketById.set(String(ticket.id), ticket);
       if (ticket.serverTicketId) ticketById.set(String(ticket.serverTicketId), ticket);
     });
@@ -23697,7 +23698,7 @@ async function performAdminLiveDataSync(options = {}) {
     const rosterRows = (key, fallback) => operationalRosterPromise
       .then((payload) => Array.isArray(payload?.[key]) ? payload[key] : fallback());
     const adminSettingsPromise = loadAdminStartupSettingsFromServer();
-    const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments] = await Promise.all([
+    const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments, serverSettlementTickets] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       rosterRows("users", () => (client.selectAllRows || client.selectRows)("tn_user_directory_safe", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 })),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision,schedule_lane_order", limit: 100 })
@@ -23794,6 +23795,16 @@ async function performAdminLiveDataSync(options = {}) {
       (client.selectAllRows || client.selectRows).call(client, "tn_lesson_substitute_assignments", {
         select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
         order: "assigned_at.desc",
+        limit: 500,
+        pageSize: 500,
+        maxRows: 20000,
+      }).catch(() => []),
+      // The operational roster intentionally omits old inactive tickets. Settlement
+      // records still reference them, so keep a minimal complete ticket index solely
+      // for reconciliation without expanding the visible member-management roster.
+      (client.selectAllRows || client.selectRows).call(client, "tn_member_tickets", {
+        select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price,updated_at",
+        order: "id.asc",
         limit: 500,
         pageSize: 500,
         maxRows: 20000,
@@ -23900,6 +23911,26 @@ async function performAdminLiveDataSync(options = {}) {
     });
 
     const activeTickets = mappedTickets.filter((ticket) => isCurrentMemberTicket(ticket));
+    const mappedSettlementTickets = (
+      serverSettlementTickets?.length ? serverSettlementTickets : serverTickets || []
+    ).map((ticket) => {
+      const product = productsById.get(ticket.product_id) || {};
+      return {
+        id: ticket.id,
+        serverTicketId: ticket.id,
+        serverUserId: ticket.user_id,
+        productId: ticket.product_id,
+        branchId: ticket.branch_id,
+        coachRoleId: ticket.coach_role_id,
+        member: usersById.get(ticket.user_id)?.name || "대타 수업",
+        coachId: coachIdByRole.get(ticket.coach_role_id) || "",
+        total: Number(ticket.total_sessions) || 0,
+        used: Number(ticket.used_sessions) || 0,
+        remaining: Number(ticket.remaining_sessions) || 0,
+        durationMinutes: Number(product.lesson_minutes) || 20,
+        status: ticket.status,
+      };
+    });
     const activeTicketIds = new Set(activeTickets.map((ticket) => ticket.serverTicketId));
     replaceArray(tickets, activeTickets);
     replaceArray(expiredTickets, mappedTickets
@@ -24361,6 +24392,7 @@ async function performAdminLiveDataSync(options = {}) {
       authSwitches: serverAuthSwitches || [],
       coachSettlementTerms: serverSettlementTerms || [],
       tickets: mappedTickets,
+      settlementTickets: mappedSettlementTickets,
       products: serverProducts || [],
       participantRows: lessonParticipants || [],
       changeRequests: serverChangeRequests || [],
