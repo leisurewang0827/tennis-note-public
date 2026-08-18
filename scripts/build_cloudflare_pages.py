@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = ROOT / "app"
-PAYMENT_METHOD_IDS = ("card", "tosspay", "naverpay", "kakaopay")
+PAYMENT_METHOD_IDS = ("card", "tosspay", "naverpay", "kakaopay", "bank_transfer")
 
 
 def clean_output(path: Path) -> None:
@@ -45,6 +45,11 @@ def payment_operating_settings() -> tuple[str, list[str]]:
         if value.strip().lower() in PAYMENT_METHOD_IDS
     ]
     allowed = list(dict.fromkeys(configured)) if mode == "multi" and configured else ["tosspay"]
+    if env("TENNISNOTE_BANK_TRANSFER_ENABLED").lower() == "true":
+        allowed.append("bank_transfer")
+    else:
+        allowed = [method for method in allowed if method != "bank_transfer"]
+    allowed = list(dict.fromkeys(allowed))
     return mode, allowed
 
 
@@ -85,6 +90,9 @@ def write_browser_config(output: Path) -> None:
         "provider": "portone",
         "mode": payment_mode,
         "allowedMethods": allowed_methods,
+        "bankTransfer": {
+            "enabled": env("TENNISNOTE_BANK_TRANSFER_ENABLED").lower() == "true",
+        },
         "storeId": env("TENNISNOTE_PORTONE_STORE_ID"),
         "channelKey": channels.get("card", ""),
         "naverPayCategoryType": env("TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE") if "naverpay" in allowed_methods else "",
