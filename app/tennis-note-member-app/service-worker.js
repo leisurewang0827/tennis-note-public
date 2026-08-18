@@ -1,4 +1,4 @@
-const CACHE_NAME = "tennis-note-member-pwa-v413";
+const CACHE_NAME = "tennis-note-member-pwa-v419";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
@@ -24,8 +24,10 @@ const APP_SHELL = [
   "../shared/tennisnote-issue-reporter.css?v=issue-reporter-3",
   "../shared/tennisnote-ui-language.js?v=1.0.367",
   "../shared/tennisnote-ticket-state.js?v=1.0.367",
+  "../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-6",
   "../shared/tennisnote-input-guard.js?v=1.0.367",
   "../shared/tennisnote-ui-foundation.css?v=1.0.367",
+  "../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-6",
 ];
 
 function deleteOldCaches() {

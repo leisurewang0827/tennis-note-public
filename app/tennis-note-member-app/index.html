@@ -23,6 +23,7 @@
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
     <link rel="stylesheet" href="./styles.css?v=1.0.367" />
     <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.367" />
+    <link rel="stylesheet" href="../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-6" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -277,19 +278,19 @@
             </div>
           </details>
 
-          <section id="journalComposerSheet" class="app-bottom-sheet" aria-labelledby="journalComposerTitle" data-tn-input-guard="member-journal" data-tn-restore-draft="true" hidden>
-            <button class="sheet-backdrop" type="button" aria-label="운동일지 작성 닫기" data-close-journal-composer></button>
-            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="journalComposerTitle">
-              <div class="sheet-handle" aria-hidden="true"></div>
-              <div class="sheet-head">
+          <section id="journalComposerSheet" class="app-bottom-sheet" aria-labelledby="journalComposerTitle" data-tn-bottom-sheet data-tn-sheet-has-footer="true" data-tn-input-guard="member-journal" data-tn-restore-draft="true" hidden>
+            <button class="sheet-backdrop" type="button" aria-label="운동일지 작성 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-journal-composer></button>
+            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="journalComposerTitle" data-tn-sheet-panel>
+              <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+              <div class="sheet-head" data-tn-sheet-header>
                 <div>
                   <p class="eyebrow">운동일지 작성</p>
                   <h3 id="journalComposerTitle">기록하기</h3>
                   <span id="journalComposerDateLabel"></span>
                 </div>
-                <button class="small-button" type="button" data-close-journal-composer>닫기</button>
+                <button class="small-button" type="button" data-tn-sheet-close data-close-journal-composer>닫기</button>
               </div>
-              <div class="sheet-scroll">
+              <div class="sheet-scroll" data-tn-sheet-scroll>
           <div class="form-card journal-composer-form">
             <label>
               <span>기록 구분</span>
@@ -352,7 +353,7 @@
             </div>
           </div>
               </div>
-              <div class="sheet-actions journal-composer-actions">
+              <div class="sheet-actions journal-composer-actions" data-tn-sheet-footer>
                 <button class="primary-button" type="button" id="saveJournal">운동일지 저장</button>
               </div>
             </article>
@@ -574,19 +575,19 @@
             <button class="small-button danger-button" type="button" id="openAccountDeletionButton">계정 삭제</button>
           </section>
 
-          <section id="profileEditorSheet" class="app-bottom-sheet" aria-labelledby="profileEditorTitle" data-tn-input-guard="member-profile" data-tn-restore-draft="true" hidden>
-            <button class="sheet-backdrop" type="button" aria-label="내 정보 수정 닫기" data-close-profile-editor></button>
-            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="profileEditorTitle">
-              <div class="sheet-handle" aria-hidden="true"></div>
-              <div class="sheet-head">
+          <section id="profileEditorSheet" class="app-bottom-sheet" aria-labelledby="profileEditorTitle" data-tn-bottom-sheet data-tn-input-guard="member-profile" data-tn-restore-draft="true" hidden>
+            <button class="sheet-backdrop" type="button" aria-label="내 정보 수정 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-profile-editor></button>
+            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="profileEditorTitle" data-tn-sheet-panel>
+              <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+              <div class="sheet-head" data-tn-sheet-header>
                 <div>
                   <p class="eyebrow">내 계정</p>
                   <h3 id="profileEditorTitle">프로필과 테니스 정보</h3>
                   <span>필요한 항목만 수정하고 저장하세요.</span>
                 </div>
-                <button class="small-button" type="button" data-close-profile-editor>닫기</button>
+                <button class="small-button" type="button" data-tn-sheet-close data-close-profile-editor>닫기</button>
               </div>
-              <div class="sheet-scroll">
+              <div class="sheet-scroll" data-tn-sheet-scroll>
           <section class="form-card profile-editor-form">
             <div class="profile-editor-photo-actions">
               <label class="upload-button" for="profilePhotoInput">사진 등록</label>
@@ -921,19 +922,19 @@
       </article>
     </section>
 
-    <section id="lessonDetailSheet" class="app-bottom-sheet lesson-detail-sheet" aria-labelledby="lessonDetailTitle" hidden>
-      <button class="sheet-backdrop" type="button" aria-label="수업 상세 닫기" data-close-lesson-detail></button>
-      <article class="sheet-card lesson-detail-sheet-card" role="dialog" aria-modal="true" aria-labelledby="lessonDetailTitle">
-        <div class="sheet-handle" aria-hidden="true"></div>
-        <div class="sheet-head">
+    <section id="lessonDetailSheet" class="app-bottom-sheet lesson-detail-sheet" aria-labelledby="lessonDetailTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="수업 상세 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-lesson-detail></button>
+      <article class="sheet-card lesson-detail-sheet-card" role="dialog" aria-modal="true" aria-labelledby="lessonDetailTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
           <div>
             <p class="eyebrow">내 수업</p>
             <h3 id="lessonDetailTitle">수업 상세</h3>
             <span id="lessonDetailStatus">예정</span>
           </div>
-          <button class="small-button" type="button" data-close-lesson-detail>닫기</button>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-lesson-detail>닫기</button>
         </div>
-        <div class="sheet-scroll lesson-detail-sheet-scroll">
+        <div class="sheet-scroll lesson-detail-sheet-scroll" data-tn-sheet-scroll>
           <dl class="lesson-detail-facts">
             <div>
               <dt>일정</dt>
@@ -1118,6 +1119,7 @@
     <script defer src="../shared/tennisnote-release-updater.js?v=1.0.367"></script>
     <script defer src="../shared/tennisnote-ui-language.js?v=1.0.367"></script>
     <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.367"></script>
+    <script defer src="../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-6"></script>
     <script defer src="../shared/tennisnote-input-guard.js?v=1.0.367"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
     <script>

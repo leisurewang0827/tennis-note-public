@@ -10193,67 +10193,32 @@ function changeJournalMonth(delta) {
 let activeAppSheetId = "";
 let activeAppModalId = "";
 let appModalReturnFocus = null;
-let appSheetScrollLock = null;
 
-function lockAppSheetBackground() {
-  if (appSheetScrollLock) return;
-  const scrollY = Math.max(0, window.scrollY || window.pageYOffset || 0);
-  appSheetScrollLock = {
-    scrollY,
-    bodyPosition: document.body.style.position,
-    bodyTop: document.body.style.top,
-    bodyLeft: document.body.style.left,
-    bodyRight: document.body.style.right,
-    bodyWidth: document.body.style.width,
-    htmlOverscrollBehavior: document.documentElement.style.overscrollBehavior,
-  };
-  document.body.style.position = "fixed";
-  document.body.style.top = `-${scrollY}px`;
-  document.body.style.left = "0";
-  document.body.style.right = "0";
-  document.body.style.width = "100%";
-  document.documentElement.style.overscrollBehavior = "none";
-}
-
-function unlockAppSheetBackground() {
-  if (!appSheetScrollLock) return;
-  const saved = appSheetScrollLock;
-  appSheetScrollLock = null;
-  document.body.style.position = saved.bodyPosition;
-  document.body.style.top = saved.bodyTop;
-  document.body.style.left = saved.bodyLeft;
-  document.body.style.right = saved.bodyRight;
-  document.body.style.width = saved.bodyWidth;
-  document.documentElement.style.overscrollBehavior = saved.htmlOverscrollBehavior;
-  window.scrollTo({ top: saved.scrollY, left: 0, behavior: "auto" });
-}
-
-function refreshAppSheetState() {
-  const sheetOpen = Boolean(activeAppSheetId);
-  document.body.classList.toggle("sheet-open", sheetOpen);
-  if (sheetOpen) lockAppSheetBackground();
-  else unlockAppSheetBackground();
-}
-
-function openAppSheet(sheetId) {
+function openAppSheet(sheetId, options = {}) {
   const target = $(`#${sheetId}`);
   if (!target) return;
-  if (activeAppSheetId && activeAppSheetId !== sheetId) closeAppSheet(activeAppSheetId, true);
-  target.hidden = false;
+  if (activeAppSheetId && activeAppSheetId !== sheetId) {
+    closeAppSheet(activeAppSheetId, true, { restoreFocus: false, immediate: true });
+  }
   activeAppSheetId = sheetId;
-  refreshAppSheetState();
-  const historyState = typeof history.state === "object" && history.state ? history.state : {};
-  if (historyState.tennisNoteSheet !== sheetId) {
-    history.pushState({ ...historyState, tennisNoteSheet: sheetId }, "", window.location.href);
+  if (window.TennisNoteBottomSheet?.open?.(target, options)) return;
+  target.hidden = false;
+  document.body.classList.add("sheet-open");
+  if (options.history !== false) {
+    const historyState = typeof history.state === "object" && history.state ? history.state : {};
+    if (historyState.tennisNoteSheet !== sheetId) {
+      history.pushState({ ...historyState, tennisNoteSheet: sheetId }, "", window.location.href);
+    }
   }
 }
 
-function closeAppSheet(sheetId, fromHistory = false) {
+function closeAppSheet(sheetId, fromHistory = false, options = {}) {
   const target = $(`#${sheetId}`);
   if (!target) return;
-  target.hidden = true;
   if (activeAppSheetId === sheetId) activeAppSheetId = "";
-  refreshAppSheetState();
+  if (window.TennisNoteBottomSheet?.close?.(target, { ...options, fromHistory })) return;
+  target.hidden = true;
+  document.body.classList.remove("sheet-open");
   if (!fromHistory && history.state?.tennisNoteSheet === sheetId) history.back();
 }
 
@@ -10339,17 +10304,14 @@ function openJournalComposer(dateValue = "") {
   if ($("#journalDate")) $("#journalDate").value = selectedDate;
   if ($("#journalComposerDateLabel")) $("#journalComposerDateLabel").textContent = journalDateLabel(selectedDate);
   renderJournalMode();
-  openAppSheet("journalComposerSheet");
-  window.setTimeout(() => $("#journalMode")?.focus(), 40);
+  const initialFocus = $("#journalMode")?.value === "lesson" ? "#todayLessonContent" : "#practiceMemo";
+  openAppSheet("journalComposerSheet", { initialFocus });
 }
 
 function openProfileEditor(focusNtrp = false) {
-  openAppSheet("profileEditorSheet");
-  window.setTimeout(() => {
-    const focusTarget = focusNtrp ? $("#profileSelfNtrp") : $("#profileNicknameInput");
-    focusTarget?.scrollIntoView({ behavior: "smooth", block: "center" });
-    focusTarget?.focus();
-  }, 40);
+  openAppSheet("profileEditorSheet", {
+    initialFocus: focusNtrp ? "#profileSelfNtrp" : "#profileNicknameInput",
+  });
 }
 
 function openMembershipDetails(detailsId) {
@@ -10872,7 +10834,7 @@ function openLessonDetailSheet(lessonId) {
 }
 
 function closeLessonDetailForAction() {
-  closeAppSheet("lessonDetailSheet", true);
+  closeAppSheet("lessonDetailSheet", true, { restoreFocus: false, immediate: true });
   if (history.state?.tennisNoteSheet === "lessonDetailSheet") {
     const nextState = { ...history.state };
     delete nextState.tennisNoteSheet;
@@ -12708,6 +12670,7 @@ function bindEvents() {
     if (event.target.closest("[data-close-ntrp-modal]")) closeNtrpReference();
   });
   document.addEventListener("keydown", (event) => {
+    if (activeAppSheetId && window.TennisNoteBottomSheet?.trapFocus?.(event)) return;
     if (activeAppModalId && event.key === "Tab") {
       const modal = $(`#${activeAppModalId}`);
       const focusable = focusableElements(modal);
