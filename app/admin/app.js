@@ -20475,7 +20475,7 @@ function billingMatchesMonth(item, month) {
 }
 
 function billingIncludedInRevenue(item = {}) {
-  return String(item.revenueAttributionStatus || item.revenue_attribution_status || "included") !== "duplicate_excluded";
+  return String(item.revenueAttributionStatus || item.revenue_attribution_status || "included") === "included";
 }
 
 function billingEffectiveMonth(item = {}) {
@@ -20551,7 +20551,11 @@ function renderBilling() {
     && billingEffectiveDate(item).slice(0, 7) === state.billingMonth
   ));
   const excludedDuplicateBillings = branchBillings.filter((item) => (
-    !billingIncludedInRevenue(item)
+    String(item.revenueAttributionStatus || "") === "duplicate_excluded"
+    && (billingEffectiveMonth(item) === state.billingMonth || billingEffectiveDate(item).slice(0, 7) === state.billingMonth)
+  ));
+  const excludedCohortBillings = branchBillings.filter((item) => (
+    String(item.revenueAttributionStatus || "") === "cohort_excluded"
     && (billingEffectiveMonth(item) === state.billingMonth || billingEffectiveDate(item).slice(0, 7) === state.billingMonth)
   ));
   const actualPaidAmount = actualPaidBillings.reduce((sum, item) => sum + Number(item.finalAmount || item.amount || 0), 0);
@@ -20564,7 +20568,11 @@ function renderBilling() {
   if ($("#billingMonthPaidAmount")) $("#billingMonthPaidAmount").textContent = `${money.format(monthPaidAmount)}원`;
   if ($("#billingMonthPaidCount")) $("#billingMonthPaidCount").textContent = `매출 귀속 ${monthPaidBillings.length}건`;
   if ($("#billingActualPaidSummary")) {
-    $("#billingActualPaidSummary").textContent = `실제 결제일 기준 ${actualPaidBillings.length}건 · ${money.format(actualPaidAmount)}원${excludedDuplicateBillings.length ? ` · 중복 근거 ${excludedDuplicateBillings.length}건 제외` : ""}`;
+    const exclusionLabels = [
+      excludedDuplicateBillings.length ? `중복 근거 ${excludedDuplicateBillings.length}건` : "",
+      excludedCohortBillings.length ? `확정 코호트 외 ${excludedCohortBillings.length}건` : "",
+    ].filter(Boolean);
+    $("#billingActualPaidSummary").textContent = `실제 결제일 기준 ${actualPaidBillings.length}건 · ${money.format(actualPaidAmount)}원${exclusionLabels.length ? ` · ${exclusionLabels.join(" · ")} 제외` : ""}`;
   }
   renderPaymentAdminGateStatus();
   renderPaymentChargeAudit();
