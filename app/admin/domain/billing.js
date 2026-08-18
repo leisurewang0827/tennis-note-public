@@ -14,14 +14,25 @@ function billingEffectiveDate(item = {}) {
   ];
   for (const value of candidates) {
     const text = String(value || "");
-    if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
     const parsed = Date.parse(text);
     if (Number.isFinite(parsed)) return adminLocalDateKey(new Date(parsed));
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
   }
   return "";
 }
 
 function billingMatchesMonth(item, month) {
   if (!month) return true;
-  return billingEffectiveDate(item).slice(0, 7) === month;
+  return billingIncludedInRevenue(item) && billingEffectiveMonth(item) === month;
+}
+
+
+function billingIncludedInRevenue(item = {}) {
+  return String(item.revenueAttributionStatus || item.revenue_attribution_status || "included") === "included";
+}
+
+function billingEffectiveMonth(item = {}) {
+  const revenueMonth = String(item.revenueMonth || item.revenue_month || "").slice(0, 7);
+  return /^\d{4}-\d{2}$/.test(revenueMonth) ? revenueMonth : billingEffectiveDate(item).slice(0, 7);
 }

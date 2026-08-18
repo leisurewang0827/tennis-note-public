@@ -137,6 +137,7 @@ function paymentMethodLabel(method = "") {
     cash: "현금",
     bank: "계좌이체",
     manual: "관리자 입력",
+    membershiptransfer: "회원권 양도",
     legacy: "기존 기록",
     virtualaccount: "가상계좌",
     mobile: "휴대폰결제",
