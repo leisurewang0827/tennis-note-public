@@ -144,6 +144,13 @@ def write_platform_files(output: Path, target: str) -> None:
 /tennis-note-member-app/index.html / 302
 """
         (output / "_redirects").write_text(redirects, encoding="utf-8")
+    else:
+        # 관리자 사이트에도 법적 페이지가 같이 올라가는데, 그 페이지의
+        # "앱으로 돌아가기" 버튼은 회원앱 경로를 가리킨다. 관리자 아티팩트에는
+        # 회원앱이 없어서 404 였다. 회원 사이트로 넘긴다.
+        redirects = """/tennis-note-member-app/* https://tennisnote-app.pages.dev/ 302
+"""
+        (output / "_redirects").write_text(redirects, encoding="utf-8")
     (output / "_headers").write_text(headers, encoding="utf-8")
     worker = """export default {
   async fetch(request, env) {
