@@ -34,6 +34,8 @@ const SOURCES = [
   "app/admin/domain/payment.js",
   "app/admin/domain/policy.js",
   "app/admin/domain/record.js",
+  "app/admin/domain/members.js",
+  "app/admin/domain/common.js",
   "app/tennis-note-member-app/app.js",
   "app/tennis-note-coach-app/app.js",
 ];

@@ -36,6 +36,8 @@ const PAGES = [
       "app/admin/domain/payment.js",
       "app/admin/domain/policy.js",
       "app/admin/domain/record.js",
+      "app/admin/domain/members.js",
+      "app/admin/domain/common.js",
       "app/admin/app.js",
       "app/admin/schedule-v2-admin.js",
     ],
