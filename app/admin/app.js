@@ -592,7 +592,7 @@ function selectAdminMonth(value) {
   void ensureActiveAdminWeekLoaded();
 }
 
-function adminScheduleMonthValue(week = activeAdminWeek()) {
+function adminScheduleMonthValue(week = activeAdminWeek(), allMembers = members) {
   return String(week.startDate || "").slice(0, 7);
 }
 
@@ -631,7 +631,7 @@ const groupAccounts = [
     paymentMode: "representative",
     nextPayer: "최유나",
     scheduleSyncRequired: true,
-    members: [
+    allMembers: [
       { name: "최유나", appStatus: "linked", canManageSchedule: true, canPay: true },
       { name: "이하린", appStatus: "not_joined", canManageSchedule: false, canPay: false },
     ],
@@ -1790,7 +1790,7 @@ function adminMemberDirectorySignature() {
   });
 }
 
-function memberFromAdminDirectoryRow(row, sourceMembers = members) {
+function memberFromAdminDirectoryRow(row, sourceMembers = members, allMembers = members) {
   const userId = String(row?.user_id || "");
   if (!userId) return null;
   const existing = sourceMembers.find((member) => String(member.serverUserId || "") === userId);
@@ -1822,7 +1822,7 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
     source: "Supabase 회원 목록",
     note: "",
   };
-  members.push(member);
+  allMembers.push(member);
   return member;
 }
 
@@ -3406,8 +3406,8 @@ function currentOperationScheduleSettings() {
   };
 }
 
-function currentOperationCoachPolicies() {
-  return coaches.map((coach) => ({
+function currentOperationCoachPolicies(allCoaches = coaches) {
+  return allCoaches.map((coach) => ({
     id: coach.id,
     serverRoleId: coach.serverRoleId || "",
     branchId: coach.branchId || "",
@@ -3610,7 +3610,7 @@ function operationBranchLessons(source = lessons, allLessons = lessons) {
   return source.filter((lesson) => matchesActiveOperationBranch(lesson.branchId));
 }
 
-function operationBranchCoaches(source = coaches) {
+function operationBranchCoaches(source = coaches, allCoaches = coaches) {
   return source.filter((coach) => matchesActiveOperationBranch(coach.branchId));
 }
 
@@ -3630,7 +3630,7 @@ function memberOperationBranchIds(member = {}) {
   ].filter(Boolean).map(String))];
 }
 
-function operationBranchMembers(source = members) {
+function operationBranchMembers(source = members, allMembers = members) {
   const activeBranchId = activeOperationBranchId();
   if (!activeBranchId) return source;
   return source.filter((member) => {
@@ -6451,11 +6451,11 @@ async function copyTextToClipboard(text) {
   textarea.remove();
 }
 
-function getCoachName(coachId) {
-  return coaches.find((coach) => coach.id === coachId)?.name || "미배정";
+function getCoachName(coachId, allCoaches = coaches) {
+  return allCoaches.find((coach) => coach.id === coachId)?.name || "미배정";
 }
 
-function getCoachAvailabilityLabel(coachId) {
+function getCoachAvailabilityLabel(coachId, allCoaches = coaches) {
   const labels = {
     full: "하루종일",
     split: "오전+저녁",
@@ -6463,7 +6463,7 @@ function getCoachAvailabilityLabel(coachId) {
     "weekday-pm": "평일 오후",
     weekend: "주말 전담",
   };
-  const coach = coaches.find((item) => item.id === coachId);
+  const coach = allCoaches.find((item) => item.id === coachId);
   return labels[coach?.availability] || "시간 협의";
 }
 
@@ -6527,8 +6527,8 @@ function normalizeCoachBreakBlocks(coach) {
   return coach.breakBlocks;
 }
 
-function getCoachBreakOverlapping(coachId, day, time, durationMinutes = 20) {
-  const coach = coaches.find((item) => item.id === coachId);
+function getCoachBreakOverlapping(coachId, day, time, durationMinutes = 20, allCoaches = coaches) {
+  const coach = allCoaches.find((item) => item.id === coachId);
   if (!coach) return null;
   const start = timeToMinutes(time);
   const end = start + Number(durationMinutes || 20);
@@ -6548,8 +6548,8 @@ function getCoachAvailabilityDefaults(coach) {
   return { days: scheduleDays, start: scheduleSettings.openStart, end: scheduleSettings.openEnd };
 }
 
-function getCoachAvailabilityDetail(coachId) {
-  const coach = coaches.find((item) => item.id === coachId);
+function getCoachAvailabilityDetail(coachId, allCoaches = coaches) {
+  const coach = allCoaches.find((item) => item.id === coachId);
   const blocks = normalizeCoachWorkBlocks(coach);
   if (blocks.length) {
     const starts = blocks.map((block) => timeToMinutes(block.start));
@@ -6568,8 +6568,8 @@ function getCoachAvailabilityDetail(coachId) {
   };
 }
 
-function getCoachAvailabilitySummary(coachId) {
-  const coach = coaches.find((item) => item.id === coachId);
+function getCoachAvailabilitySummary(coachId, allCoaches = coaches) {
+  const coach = allCoaches.find((item) => item.id === coachId);
   const blocks = normalizeCoachWorkBlocks(coach);
   if (blocks.length) {
     return blocks.map((block) => `${block.days.join("")} ${block.start}~${block.end}`).join(" / ");
@@ -6624,8 +6624,8 @@ function renderSchedulePolicyPreview() {
       .join("")}`;
 }
 
-function setCoachWorkBlocks(coachId, workBlocks) {
-  const coach = coaches.find((item) => item.id === coachId);
+function setCoachWorkBlocks(coachId, workBlocks, allCoaches = coaches) {
+  const coach = allCoaches.find((item) => item.id === coachId);
   if (!coach) return;
   coach.workBlocks = workBlocks.map((block, index) => ({
     id: block.id || `${coachId}-preset-${index}`,
@@ -6674,8 +6674,8 @@ function applySchedulePreset(preset) {
   return "시간표 설정을 확인해주세요";
 }
 
-function isCoachAvailableForSlot(coachId, day, time, durationMinutes = 20) {
-  const coach = coaches.find((item) => item.id === coachId);
+function isCoachAvailableForSlot(coachId, day, time, durationMinutes = 20, allCoaches = coaches) {
+  const coach = allCoaches.find((item) => item.id === coachId);
   const blocks = normalizeCoachWorkBlocks(coach);
   const start = timeToMinutes(time);
   const end = start + durationMinutes;
@@ -6993,18 +6993,18 @@ function breakRuleCoachRoleIds(rule = {}) {
   return Array.isArray(rule.coachRoleIds) ? rule.coachRoleIds.filter(Boolean) : [];
 }
 
-function breakRuleAppliesToCoach(rule, coachId = "") {
+function breakRuleAppliesToCoach(rule, coachId = "", allCoaches = coaches) {
   const targetRoleIds = breakRuleCoachRoleIds(rule);
   if (!targetRoleIds.length || !coachId) return true;
-  const coach = coaches.find((item) => item.id === coachId || item.serverRoleId === coachId);
+  const coach = allCoaches.find((item) => item.id === coachId || item.serverRoleId === coachId);
   return targetRoleIds.includes(coach?.serverRoleId || coachId);
 }
 
-function breakRuleCoachNames(rule = {}) {
+function breakRuleCoachNames(rule = {}, allCoaches = coaches) {
   const targetRoleIds = breakRuleCoachRoleIds(rule);
   if (!targetRoleIds.length) return "전체 코치";
   return targetRoleIds.map((roleId) => {
-    const coach = coaches.find((item) => item.serverRoleId === roleId || item.id === roleId);
+    const coach = allCoaches.find((item) => item.serverRoleId === roleId || item.id === roleId);
     return String(coach?.name || "코치").replace(/\s*코치$/, "");
   }).join(", ");
 }
@@ -7452,7 +7452,7 @@ function matchesSearch(values) {
   return values.join(" ").toLowerCase().includes(query);
 }
 
-function globalSearchItems() {
+function globalSearchItems(allMembers = members) {
   const branchMembers = operationBranchMembers();
   const branchCoaches = operationBranchCoaches();
   const branchLessons = operationBranchLessons();
@@ -7461,7 +7461,7 @@ function globalSearchItems() {
   const branchTickets = operationBranchTickets();
   const navigationItems = [
     { kind: "메뉴", title: "대시보드", detail: "오늘 수업과 운영 처리 현황", view: "dashboard" },
-    { kind: "메뉴", title: "회원관리", detail: "수강중·승인대기·만료 회원", view: "members" },
+    { kind: "메뉴", title: "회원관리", detail: "수강중·승인대기·만료 회원", view: "allMembers" },
     { kind: "메뉴", title: "레슨시간표", detail: "코치별 수업과 보강·변경 요청", view: "schedule" },
     { kind: "메뉴", title: "결제/정산", detail: "결제 상태와 코치 정산", view: "billing" },
     { kind: "메뉴", title: "경영 리포트", detail: "매출·회원·수업 품질과 장부 자료 상태", view: "reports" },
@@ -7472,14 +7472,14 @@ function globalSearchItems() {
     kind: "회원",
     title: member.name,
     detail: `${memberStatusLabel(member)} · ${member.coach} · ${member.regularTime} · ${member.lessonType}`,
-    view: "members",
+    view: "allMembers",
     memberId: member.id,
   }));
   const coachItems = branchCoaches.map((coach) => ({
     kind: "코치",
     title: coach.name,
     detail: `${coach.role} · ${coachModeLabel(coach)} · ${coach.status === "active" ? "운영중" : "사용중지"}`,
-    view: "members",
+    view: "allMembers",
   }));
   const lessonItems = branchLessons.map((lesson) => ({
     kind: "수업",
@@ -7505,7 +7505,7 @@ function globalSearchItems() {
       kind: "회원권",
       title: ticket.member,
       detail: `${getTicketDisplayProduct(ticket)} · 잔여 ${ticket.remaining}회 · ${ticket.expires || "만료일 미정"}`,
-      view: "members",
+      view: "allMembers",
       memberId: member?.id,
     };
   });
@@ -8314,10 +8314,10 @@ function memberStatusBadge(member) {
   return badge(memberListStatus(member), memberStatusLabel(member));
 }
 
-function memberRecordsForReference(memberReference) {
+function memberRecordsForReference(memberReference, allMembers = members) {
   if (memberReference && typeof memberReference === "object") return [memberReference];
   const names = splitMemberNames(memberReference);
-  return members.filter((member) => names.includes(member.name));
+  return allMembers.filter((member) => names.includes(member.name));
 }
 
 function ticketParticipantNames(ticket) {
@@ -9144,7 +9144,7 @@ function groupAccountForMemberTicket(member, ticket) {
   )) || null;
 }
 
-function renderMemberGroupAccountSettings(member, ticket) {
+function renderMemberGroupAccountSettings(member, ticket, allMembers = members) {
   if (!ticketIsSharedGroup(ticket)) return "";
   const account = groupAccountForMemberTicket(member, ticket);
   if (!account) return "";
@@ -9153,7 +9153,7 @@ function renderMemberGroupAccountSettings(member, ticket) {
     <details class="member-admin-more member-group-account-details">
       <summary>2대1 결제·앱 관리 · ${escapeHtml(groupPaymentModeLabel(account.paymentMode))}</summary>
       <article class="group-account-admin-card member-group-account-card" data-group-account="${escapeHtml(account.id)}">
-        <div class="group-account-members">
+        <div class="group-account-allMembers">
           ${(account.members || []).map((item) => `
             <div>
               <span>${escapeHtml(item.name)}</span>
@@ -9592,9 +9592,9 @@ function memberHasTicketKind(member, productKind) {
   return relevantTickets.some((ticket) => membershipProductForTicket(ticket).productKind === productKind);
 }
 
-function memberCoachNames(member) {
+function memberCoachNames(member, allCoaches = coaches) {
   const ticketCoachNames = [...memberCurrentTickets(member), ...memberUpcomingTickets(member)]
-    .map((ticket) => coaches.find((coach) => (
+    .map((ticket) => allCoaches.find((coach) => (
       String(coach.serverRoleId || "") === String(ticket.coachRoleId || "")
       || String(coach.id || "") === String(ticket.coachId || "")
     ))?.name)
@@ -9710,20 +9710,20 @@ function currentOperationsCoachRoleIds() {
     .map((role) => role.id));
 }
 
-function currentOperationsCoachIds() {
+function currentOperationsCoachIds(allCoaches = coaches) {
   const roleIds = currentOperationsCoachRoleIds();
-  return new Set(coaches
+  return new Set(allCoaches
     .filter((coach) => roleIds.has(coach.serverRoleId))
     .map((coach) => coach.id));
 }
 
-function recordBelongsToCurrentCoach(record = {}) {
+function recordBelongsToCurrentCoach(record = {}, allMembers = members) {
   if (operationsRole() !== "coach") return true;
   const coachIds = currentOperationsCoachIds();
   if (record.coachId) return coachIds.has(record.coachId);
   const memberNames = splitMemberNames(record.member || "");
   if (!memberNames.length) return false;
-  return members.some((member) => (
+  return allMembers.some((member) => (
     memberNames.includes(member.name)
     && coachIds.has(member.coachId)
   ));
@@ -10367,13 +10367,13 @@ function normalizedMemberLinkSearch(value = "") {
   return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
 }
 
-function memberMembershipLinkTargets(sourceMember, query = "") {
+function memberMembershipLinkTargets(sourceMember, query = "", allMembers = members) {
   if (!sourceMember?.serverUserId || !sourceMember.authLinked) return [];
   const keyword = normalizedMemberLinkSearch(query);
   const keywordDigits = normalizedMemberPhone(query);
   const sourceName = normalizedMemberLinkSearch(sourceMember.name);
   const sourcePhone = normalizedMemberPhone(sourceMember.phone);
-  const candidates = members.filter((candidate) => {
+  const candidates = allMembers.filter((candidate) => {
     if (!candidate?.serverUserId || candidate.serverUserId === sourceMember.serverUserId || candidate.authLinked) return false;
     const status = memberListStatus(candidate);
     if (["journal", "inactive"].includes(status)) return false;
@@ -11866,8 +11866,8 @@ function createMemberChangeBatchId() {
   return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
 }
 
-function memberInlineChangeSummary(form) {
-  const member = members.find((item) => item.id === Number(form?.dataset.memberInlineForm));
+function memberInlineChangeSummary(form, allMembers = members) {
+  const member = allMembers.find((item) => item.id === Number(form?.dataset.memberInlineForm));
   const ticket = [...tickets, ...expiredTickets]
     .find((item) => String(item.serverTicketId || "") === String(form?.dataset.ticketId || ""));
   const labels = {
@@ -12269,7 +12269,7 @@ async function saveNotificationPolicySettings() {
   showToast(result === "blocked" ? "로컬 저장 완료 · 서버 알림 패치 확인 필요" : "자동 알림 설정 저장 완료");
 }
 
-function exportVisibleMembers() {
+function exportVisibleMembers(allMembers = members) {
   const visibleMembers = filteredMembers();
   const bodyRows = visibleMembers.flatMap((member) => {
     const memberTickets = memberOperationalTickets(member);
@@ -12298,7 +12298,7 @@ function exportVisibleMembers() {
     });
   });
   const rows = [["이름", "전화번호", "출생년도", "거주동", "성별", "레슨강사", "레슨방식", "레슨종류", "레슨요일", "레슨시작일", "총회차", "소진회차", "잔여회차", "결제일자", "결제수단", "결제금액", "비고"], ...bodyRows];
-  downloadRowsAsCsv(`tennis-note-members-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  downloadRowsAsCsv(`tennis-note-allMembers-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   showToast(`${visibleMembers.length}명 · 회원권 ${bodyRows.length}행을 내보냈습니다`);
 }
 
@@ -12583,10 +12583,10 @@ function latestMemberPayment(member) {
     })[0] || null;
 }
 
-function renderMemberCoachAssignment(ticket) {
+function renderMemberCoachAssignment(ticket, allCoaches = coaches) {
   if (!ticket?.serverTicketId) return "";
-  const ticketCoach = coaches.find((coach) => coach.id === ticket.coachId);
-  const branchCoaches = coaches.filter((coach) =>
+  const ticketCoach = allCoaches.find((coach) => coach.id === ticket.coachId);
+  const branchCoaches = allCoaches.filter((coach) =>
     coach.serverRoleId &&
     coach.status === "active" &&
     (!ticket.branchId || !coach.branchId || coach.branchId === ticket.branchId)
@@ -16792,9 +16792,9 @@ function ensureMemberHasCoachTicket() {
   if (fallbackMember) memberSelect.value = fallbackMember;
 }
 
-function getSelectableMembers(search = "") {
+function getSelectableMembers(search = "", allMembers = members) {
   const keyword = search.trim().toLowerCase();
-  const matchingMembers = members.filter((member) => {
+  const matchingMembers = allMembers.filter((member) => {
     const status = memberListStatus(member);
     const usableOnSelectedDate = allTicketsForMember(member)
       .some((ticket) => ticket.remaining > 0 && ticketCanBeUsedOnLessonDate(ticket));
@@ -17205,14 +17205,14 @@ function getLessonParticipantNames(lesson) {
   return [...new Set(namesById.length ? namesById : splitMemberNames(lesson.member))];
 }
 
-function getEditingLessonMemberName(lesson) {
+function getEditingLessonMemberName(lesson, allMembers = members) {
   if (!lesson) return "";
   const participantUserIds = Array.isArray(lesson.serverParticipantUserIds)
     ? lesson.serverParticipantUserIds.filter(Boolean)
     : [];
   const participantNames = getLessonParticipantNames(lesson);
   const currentTicket = getTicketByLesson(lesson);
-  const matchingMembers = members.filter((member) => {
+  const matchingMembers = allMembers.filter((member) => {
     const matchesParticipantId = participantUserIds.length
       && memberServerUserIds(member).some((userId) => participantUserIds.includes(userId));
     const matchesParticipantName = participantNames.includes(member.name);
@@ -17222,7 +17222,7 @@ function getEditingLessonMemberName(lesson) {
   const ticketOwner = matchingMembers.find((member) => memberServerUserIds(member).includes(currentTicket?.serverUserId));
   return ticketOwner?.name
     || matchingMembers[0]?.name
-    || participantNames.find((name) => members.some((member) => member.name === name))
+    || participantNames.find((name) => allMembers.some((member) => member.name === name))
     || "";
 }
 
@@ -18236,8 +18236,8 @@ function closeLessonModal(options = {}) {
   }
 }
 
-function coachNameForRoleId(roleId = "") {
-  return coaches.find((coach) => coach.serverRoleId === roleId || coach.id === roleId)?.name || "코치";
+function coachNameForRoleId(roleId = "", allCoaches = coaches) {
+  return allCoaches.find((coach) => coach.serverRoleId === roleId || coach.id === roleId)?.name || "코치";
 }
 
 function substituteLessonsForDate(date = "", allLessons = lessons) {
@@ -20748,7 +20748,7 @@ function buildAdminRecordContext() {
   };
 }
 
-function recordCoachId(source = {}, context = null) {
+function recordCoachId(source = {}, context = null, allMembers = members) {
   if (source.coachId) return source.coachId;
   const memberNames = String(source.member || "").split("&").map((name) => name.trim()).filter(Boolean);
   if (!memberNames.length) return "";
@@ -20767,7 +20767,7 @@ function recordCoachId(source = {}, context = null) {
     String(ticket.member || "").split("&").some((name) => memberNames.includes(name.trim()))
   ));
   if (memberTicket?.coachId) return memberTicket.coachId;
-  return members.find((member) => memberNames.includes(member.name))?.coachId || "";
+  return allMembers.find((member) => memberNames.includes(member.name))?.coachId || "";
 }
 
 function withRecordCoach(record, source = record, context = null) {
@@ -21766,8 +21766,8 @@ function importGuideRows() {
   ];
 }
 
-function importCodeRows() {
-  const coachRows = operationBranchCoaches(coaches)
+function importCodeRows(allCoaches = coaches) {
+  const coachRows = operationBranchCoaches(allCoaches)
     .filter((coach) => (
       coach.id !== "coach-machine"
       && coach.status === "active"
@@ -22543,11 +22543,11 @@ function preferredLocalCoachId(displayName = "") {
   return "";
 }
 
-function mergeServerCoachRole(role, index) {
+function mergeServerCoachRole(role, index, allCoaches = coaches) {
   const preferredId = preferredLocalCoachId(role.display_name || "");
-  let coach = coaches.find((item) => item.serverRoleId === role.id)
-    || coaches.find((item) => preferredId && item.id === preferredId)
-    || coaches.find((item) => item.name === role.display_name);
+  let coach = allCoaches.find((item) => item.serverRoleId === role.id)
+    || allCoaches.find((item) => preferredId && item.id === preferredId)
+    || allCoaches.find((item) => item.name === role.display_name);
   if (!coach) {
     const availabilityByCoach = {
       "coach-no": "split",
@@ -22565,7 +22565,7 @@ function mergeServerCoachRole(role, index) {
       availability: availabilityByCoach[preferredId] || "full",
       photoUrl: "",
     };
-    coaches.push(coach);
+    allCoaches.push(coach);
   }
   Object.assign(coach, {
     serverRoleId: role.id,
@@ -24065,8 +24065,8 @@ function renderDataImportAuthStatus() {
     </div>`;
 }
 
-function knownCoachNamesForImport() {
-  return coaches.map((coach) => coach.name).filter(Boolean);
+function knownCoachNamesForImport(allCoaches = coaches) {
+  return allCoaches.map((coach) => coach.name).filter(Boolean);
 }
 
 function hasDataImportPayload() {
