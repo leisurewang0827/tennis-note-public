@@ -1,9 +1,6 @@
-# AGENTS.md
+# CLAUDE.md
 
 Tennis Note 공개 저장소 작업 규칙입니다.
-
-- 이 파일 = **항상 지켜야 하는 규칙.**
-- `TASKS.md` = **지금 해야 할 일.** 지시받은 게 없으면 1번부터 보세요.
 
 ---
 
@@ -122,7 +119,41 @@ Supabase RLS 정책이 책임집니다.** 스키마·RLS·엣지 함수는 `app-
 
 ## 미리 알아둘 것
 
-- `app/tennis-note-legal/terms.html`이 **없습니다.** 가입 동의 화면이 이 파일을
-  링크해 404입니다. 링크 검사는 `KNOWN_MISSING_PAGES`로 통과시키고 있습니다.
-- 파일이 큽니다. `app/admin/app.js`는 약 356,000토큰이라 **통째로 읽을 수 없습니다.**
-  필요한 부분만 찾아 읽으세요.
+지금 상태를 오해하지 않도록. 고칠 때 이 목록도 같이 지우세요.
+
+- **파일이 큽니다.** `app/admin/app.js`는 약 356,000토큰이라 **통째로 읽을 수
+  없습니다.** 필요한 부분만 찾아 읽으세요.
+- **`app/tennis-note-legal/terms.html`이 없습니다.** 가입 동의 화면이 이 파일을
+  링크해 404입니다. 링크 검사는 `check_cloudflare_build.py`의
+  `KNOWN_MISSING_PAGES`로 통과시키고 있습니다. 만들면 거기서 지우세요.
+- **개인정보처리방침이 두 벌입니다.** 루트 `privacy.html`이 정식본(시행일 7/18,
+  처리자·연락처 있음), `app/tennis-note-legal/privacy.html`이 옛 초안인데
+  **앱은 초안을 링크합니다.** `support.html`, `index.html`도 같은 상태입니다.
+- **`remaining` 이 없거나 `null` 이면 이용권이 "소진"으로 판정됩니다.**
+  `Number("") === 0` 이라 "잔여 0회"와 구분되지 않습니다. 지금은 모든 조회가
+  `remaining_sessions` 를 포함해 터지지 않지만, DB 에 `NULL` 인 행이 있으면
+  그 회원은 예약을 못 합니다. 현재 동작은 `tests/ticket-state.test.js` 의
+  `[알려진 문제]` 에 기록돼 있습니다.
+- **`app/shared/vendor/xlsx.full.min.js` 가 없습니다.** 엑셀 기능이 항상 외부
+  CDN(jsdelivr)에 의존합니다.
+- **루트의 `_headers` 는 GitHub Pages 에서 무시됩니다.** 실제로 적용되는 건
+  `scripts/build_cloudflare_pages.py` 가 생성하는 쪽입니다.
+
+## 로컬에서 로그인까지 테스트할 때
+
+Supabase 허용 목록에 `http://127.0.0.1:8773/**` 가 등록돼 있습니다.
+**그 포트와 호스트를 그대로 쓰세요.** `localhost` 와 `127.0.0.1` 은 브라우저
+기준으로 다른 origin 이라, 어긋나면 Supabase 가 운영 사이트로 되돌려 보냅니다.
+
+```bash
+python3 -m http.server 8773 --bind 127.0.0.1
+```
+
+접속 설정(`app/shared/config.local.js`)은 배포본에서 받아올 수 있습니다.
+`.gitignore` 대상이라 커밋에 영향 없습니다.
+
+```bash
+curl -s https://tennisnote-app.pages.dev/shared/config.local.js > app/shared/config.local.js
+```
+
+⚠️ 이 설정은 **운영 DB 에 붙습니다.** 읽기 위주로 확인하세요.

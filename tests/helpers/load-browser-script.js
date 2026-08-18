@@ -12,7 +12,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
  * 거기 붙은 것을 돌려준다.
  *
  * 원본을 고치지 않고 배포되는 파일 그대로를 검사하는 게 목적이다.
- * 나중에 이 파일들이 ES 모듈이 되면(TASKS.md 4번) 이 헬퍼는 필요 없어지고
+ * 나중에 이 파일들이 ES 모듈이 되면 이 헬퍼는 필요 없어지고
  * 테스트는 평범한 import 로 바뀐다.
  */
 export function loadSharedScript(relativePath) {

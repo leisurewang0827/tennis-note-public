@@ -152,7 +152,7 @@ test("label — 회원에게 보이는 문구", () => {
 // DB 컬럼이 NULL 인 행이 하나라도 있으면 그 회원은 이용권이 "소진"으로 보이고
 // 예약을 못 하게 된다.
 //
-// 고칠 때 이 테스트를 반대로 뒤집으면 된다. TASKS.md "발견한 것" 참고.
+// 고칠 때 이 테스트를 반대로 뒤집으면 된다. CLAUDE.md "미리 알아둘 것" 참고.
 test("[알려진 문제] remaining 이 없으면 소진으로 판정된다", () => {
   assert.equal(TicketState.derive({ status: "active" }, TODAY), "exhausted");
   assert.equal(TicketState.derive({ remaining: null }, TODAY), "exhausted");
