@@ -1,21 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadSharedScript } from "./helpers/load-browser-script.js";
+import { loadAdminDomain } from "./helpers/load-admin-domain.js";
 
-// app/admin/domain/values.js 는 전역 함수 선언만 있는 평범한 스크립트다.
-// 가짜 window 를 넘겨 실행해도 전역에는 안 붙으므로, 여기서는 파일을
-// 함수 본문으로 감싸 실행한 뒤 이름을 꺼낸다.
-const V = loadSharedScript("app/admin/domain/values.js");
-
-// loadSharedScript 는 window 에 붙은 것만 돌려준다. 이 파일은 전역 선언이라
-// 직접 평가해서 가져온다.
-const { readFileSync } = await import("node:fs");
-const { fileURLToPath } = await import("node:url");
-const { dirname, join } = await import("node:path");
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const source = readFileSync(join(repoRoot, "app/admin/domain/values.js"), "utf8");
-const NAMES = [...source.matchAll(/^function ([A-Za-z0-9_]+)/gm)].map((m) => m[1]);
-const values = new Function(`${source}\nreturn { ${NAMES.join(", ")} };`)();
+const values = loadAdminDomain("app/admin/domain/values.js");
+const NAMES = Object.keys(values);
 
 // ⚠ 이 테스트는 "지금 이렇게 동작한다"를 고정한 것이다.
 // app.js 에서 본문 그대로 옮겨왔으므로, 여기가 깨지면 옮기다 뭔가 바뀐 것이다.
