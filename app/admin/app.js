@@ -20321,6 +20321,24 @@ function settlementRowsForBilling(billing, indexes = {}) {
   return [...grouped.values()];
 }
 
+function settlementOrphanSubstituteRows(indexes = {}, billedTicketIds = new Set()) {
+  const rows = [];
+  (indexes.recordProgressByTicket || new Map()).forEach((progress, ticketId) => {
+    if (billedTicketIds.has(String(ticketId)) || !progress?.substituteGroups?.size) return;
+    const ticket = indexes.ticketById?.get(String(ticketId));
+    if (!ticket) return;
+    const syntheticBilling = {
+      member: ticket.member || "대타 수업",
+      ticketId,
+      amount: 0,
+      finalAmount: 0,
+      method: "cash",
+    };
+    rows.push(...settlementRowsForBilling(syntheticBilling, indexes).slice(1));
+  });
+  return rows;
+}
+
 function renderCoachSettlementPreview() {
   if (!["billing", "settings"].includes(state.view)) return;
   const previewRows = $("#coachSettlementPreviewRows");
@@ -20344,14 +20362,18 @@ function renderCoachSettlementPreview() {
       assignmentByLesson.set(String(assignment.lesson_id), assignment);
     });
     const recordProgressByTicket = settlementRecordProgressByTicket({ ticketById, assignmentByLesson });
-    const liveSettlementRows = billings
-      .filter((billing) => billing.status === "paid" && billingMatchesMonth(billing, state.billingMonth))
-      .flatMap((billing) => settlementRowsForBilling(billing, {
+    const monthBillings = billings
+      .filter((billing) => billing.status === "paid" && billingMatchesMonth(billing, state.billingMonth));
+    const settlementIndexes = {
         ticketById,
         completedLessonsByTicket,
         assignmentByLesson,
         recordProgressByTicket,
-      }));
+      };
+    const billedTicketIds = new Set(monthBillings.map((billing) => String(billing.ticketId || "")).filter(Boolean));
+    const liveSettlementRows = monthBillings
+      .flatMap((billing) => settlementRowsForBilling(billing, settlementIndexes));
+    liveSettlementRows.push(...settlementOrphanSubstituteRows(settlementIndexes, billedTicketIds));
     const previewItems = adminDemoMode ? coachSettlementPreview : liveSettlementRows;
     const settlementSummary = $("#coachSettlementSummary");
     if (settlementSummary) {
@@ -23767,11 +23789,15 @@ async function performAdminLiveDataSync(options = {}) {
       rosterRows("groupTicketLinks", () => client.selectRows("tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", limit: 500 }).catch(() => [])),
       fullAdminAccess ? rosterRows("memberDatabaseRecords", () => Promise.resolve(adminLiveDataState.memberDatabaseRecords || [])) : Promise.resolve([]),
       fullAdminAccess ? rosterRows("memberMembershipRecords", () => Promise.resolve(adminLiveDataState.memberMembershipRecords || [])) : Promise.resolve([]),
-      rosterRows("substituteAssignments", () => client.selectRows("tn_lesson_substitute_assignments", {
+      // Settlement modes must cover the same complete history as lesson records.
+      // The operational roster only carries assignments inside its schedule window.
+      (client.selectAllRows || client.selectRows).call(client, "tn_lesson_substitute_assignments", {
         select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
         order: "assigned_at.desc",
-        limit: 1000,
-      }).catch(() => [])),
+        limit: 500,
+        pageSize: 500,
+        maxRows: 20000,
+      }).catch(() => []),
     ]);
 
     if (options.abortIfDirty && adminHasUnsavedChanges()) {
