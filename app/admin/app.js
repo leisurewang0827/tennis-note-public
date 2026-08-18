@@ -20161,6 +20161,52 @@ function settlementAmountFor(item) {
   return Math.round(perLessonBase * completedLessons * (Number(rule.ratio) || 0));
 }
 
+function settlementRecordProgressByTicket(indexes = {}) {
+  const ticketById = indexes.ticketById || new Map();
+  const assignmentByLesson = indexes.assignmentByLesson || new Map();
+  const progressByTicket = new Map();
+  (adminLiveDataState.lessonRecords || []).forEach((record) => {
+    const linkedLesson = Array.isArray(record.tn_lessons) ? record.tn_lessons[0] : record.tn_lessons || {};
+    const ticketId = String(record.deducted_ticket_id || linkedLesson.member_ticket_id || "");
+    const ticket = ticketById.get(ticketId);
+    if (!ticketId || !ticket) return;
+    const sessions = Math.max(0, Number(record.deducted_sessions) || 0);
+    if (!sessions) return;
+    const coachRoleId = String(record.coach_role_id || "");
+    const durationMinutes = Math.max(0, Number(linkedLesson.duration_minutes || ticket.durationMinutes) || 0);
+    const progress = progressByTicket.get(ticketId) || {
+      recordedSessions: 0,
+      byCoachRole: new Map(),
+      substituteGroups: new Map(),
+    };
+    progress.recordedSessions += sessions;
+    const coachProgress = progress.byCoachRole.get(coachRoleId) || { sessions: 0, minutes: 0 };
+    coachProgress.sessions += sessions;
+    coachProgress.minutes += sessions * durationMinutes;
+    progress.byCoachRole.set(coachRoleId, coachProgress);
+
+    const originalCoachRoleId = String(ticket.coachRoleId || "");
+    if (coachRoleId && originalCoachRoleId && coachRoleId !== originalCoachRoleId) {
+      const assignment = assignmentByLesson.get(String(record.lesson_id || ""));
+      const mode = assignment?.settlement_mode || "actual_coach";
+      const hourlyAmount = mode === "hourly" ? Math.max(0, Number(assignment?.hourly_amount) || 0) : 0;
+      const key = `${coachRoleId}|${mode}|${hourlyAmount}`;
+      const substitute = progress.substituteGroups.get(key) || {
+        coachRoleId,
+        mode,
+        hourlyAmount,
+        sessions: 0,
+        minutes: 0,
+      };
+      substitute.sessions += sessions;
+      substitute.minutes += sessions * durationMinutes;
+      progress.substituteGroups.set(key, substitute);
+    }
+    progressByTicket.set(ticketId, progress);
+  });
+  return progressByTicket;
+}
+
 function settlementRowsForBilling(billing, indexes = {}) {
   const ticket = indexes.ticketById?.get(String(billing.ticketId || ""))
     || [...tickets, ...expiredTickets].find((item) => item.serverTicketId === billing.ticketId || item.id === billing.ticketId)
@@ -20177,6 +20223,59 @@ function settlementRowsForBilling(billing, indexes = {}) {
     totalLessons: Number(ticket.total) || 0,
     minutes: Number(ticket.durationMinutes) || 20,
   };
+  if (indexes.recordProgressByTicket) {
+    if (!ticketId) return [{ ...base, actualCoach: base.coach, lessonCount: 0, summaryPaidAmount: base.paidAmount }];
+    const progress = indexes.recordProgressByTicket.get(String(ticketId)) || {
+      recordedSessions: 0,
+      byCoachRole: new Map(),
+      substituteGroups: new Map(),
+    };
+    const originalCoachRoleId = String(ticket.coachRoleId || "");
+    const originalProgress = progress.byCoachRole.get(originalCoachRoleId) || { sessions: 0, minutes: 0 };
+    const fallbackSessions = Math.max(0, (Number(ticket.used) || 0) - (Number(progress.recordedSessions) || 0));
+    const lessonCount = Math.min(
+      Math.max(0, Number(ticket.total) || 0),
+      Math.max(0, Number(originalProgress.sessions) || 0) + fallbackSessions,
+    );
+    const originalMinutes = Math.max(0, Number(originalProgress.minutes) || 0)
+      + fallbackSessions * Math.max(0, Number(base.minutes) || 0);
+    const originalRule = settlementRuleFor(base.coach);
+    const ownRow = {
+      ...base,
+      actualCoach: base.coach,
+      lessonCount,
+      minutes: lessonCount ? originalMinutes / lessonCount : base.minutes,
+      sessionKey: `${ticketId}|${originalCoachRoleId}|own`,
+      summaryPaidAmount: base.paidAmount,
+      fixedSettlementAmount: originalRule?.method === "hourly"
+        ? Math.round(originalMinutes / 60 * Math.max(0, Number(originalRule.hourly) || 0))
+        : undefined,
+    };
+    const substituteRows = [...progress.substituteGroups.values()].map((substitute) => {
+      const actualCoach = coachNameForRoleId(substitute.coachRoleId);
+      const actualRule = settlementRuleFor(actualCoach);
+      const fixedSettlementAmount = substitute.mode === "none"
+        ? 0
+        : substitute.mode === "hourly"
+          ? Math.round(substitute.minutes / 60 * substitute.hourlyAmount)
+          : actualRule?.method === "hourly"
+            ? Math.round(substitute.minutes / 60 * Math.max(0, Number(actualRule.hourly) || 0))
+            : undefined;
+      return {
+        ...base,
+        actualCoach,
+        forceActualCoach: true,
+        lessonCount: substitute.sessions,
+        minutes: substitute.sessions ? substitute.minutes / substitute.sessions : base.minutes,
+        sessionKey: `${ticketId}|${substitute.coachRoleId}|${substitute.mode}|${substitute.hourlyAmount}`,
+        summaryPaidAmount: 0,
+        fixedSettlementAmount,
+        substituteHourlyRate: substitute.mode === "hourly" ? substitute.hourlyAmount : 0,
+        substituteSettlementMode: substitute.mode,
+      };
+    });
+    return [ownRow, ...substituteRows];
+  }
   const completedLessons = indexes.completedLessonsByTicket?.get(String(ticketId || ""))
     || (adminLiveDataState.lessons || []).filter((lesson) => (
       String(lesson.ticketId || "") === String(ticketId || "")
@@ -20244,17 +20343,20 @@ function renderCoachSettlementPreview() {
       if (!assignment.lesson_id || !["assigned", "completed"].includes(assignment.status)) return;
       assignmentByLesson.set(String(assignment.lesson_id), assignment);
     });
+    const recordProgressByTicket = settlementRecordProgressByTicket({ ticketById, assignmentByLesson });
     const liveSettlementRows = billings
       .filter((billing) => billing.status === "paid" && billingMatchesMonth(billing, state.billingMonth))
       .flatMap((billing) => settlementRowsForBilling(billing, {
         ticketById,
         completedLessonsByTicket,
         assignmentByLesson,
+        recordProgressByTicket,
       }));
     const previewItems = adminDemoMode ? coachSettlementPreview : liveSettlementRows;
     const settlementSummary = $("#coachSettlementSummary");
     if (settlementSummary) {
       const summaries = new Map();
+      const countedSessionKeys = new Set();
       previewItems.forEach((item) => {
         const coach = item.linkedTicket === false ? "회원권 미연결" : settlementCoachNameFor(item);
         const current = summaries.get(coach) || {
@@ -20264,8 +20366,11 @@ function renderCoachSettlementPreview() {
           settlementAmount: 0,
           issueCount: 0,
         };
-        current.paidAmount += Number(item.paidAmount) || 0;
-        current.completedLessons += Number(item.lessonCount) || 0;
+        current.paidAmount += Number(item.summaryPaidAmount ?? item.paidAmount) || 0;
+        if (!item.sessionKey || !countedSessionKeys.has(item.sessionKey)) {
+          current.completedLessons += Number(item.lessonCount) || 0;
+          if (item.sessionKey) countedSessionKeys.add(item.sessionKey);
+        }
         current.settlementAmount += settlementAmountFor(item);
         if (item.linkedTicket === false) current.issueCount += 1;
         summaries.set(coach, current);
@@ -23640,7 +23745,16 @@ async function performAdminLiveDataSync(options = {}) {
         limit: 500,
       }).catch(() => []))),
       rosterRows("makeupEntitlements", () => client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => [])),
-      rosterRows("lessonRecords", () => client.selectRows("tn_lesson_records", { select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at", limit: 500 }).catch(() => [])),
+      rosterRows("lessonRecords", () => (client.selectAllRows || client.selectRows).call(client, "tn_lesson_records", {
+        select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_ticket_id,deducted_sessions,completed_at,tn_lessons(member_ticket_id,duration_minutes)",
+        order: "id.asc",
+        limit: 500,
+        pageSize: 500,
+        maxRows: 20000,
+      }).catch(() => client.selectRows("tn_lesson_records", {
+        select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at",
+        limit: 500,
+      }).catch(() => []))),
       Promise.resolve(adminLiveDataState.curriculumRefs || []),
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
