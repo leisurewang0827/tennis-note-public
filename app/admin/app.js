@@ -125,7 +125,7 @@ const scheduleSafetySnapshotKey = "tennis-note-admin-schedule-safety-v1";
 const adminSnapshotVersion = 2;
 const scheduleSafetySnapshotLimit = 500;
 
-function persistentScheduleLessons(source = lessons) {
+function persistentScheduleLessons(source = lessons, allLessons = lessons) {
   return (Array.isArray(source) ? source : []).filter((lesson) => (
     lesson?.serverLessonId || lesson?.serverOneDayBookingId
   ));
@@ -3606,7 +3606,7 @@ function operationBranchTickets(source = tickets) {
   return source.filter((ticket) => matchesActiveOperationBranch(ticket.branchId));
 }
 
-function operationBranchLessons(source = lessons) {
+function operationBranchLessons(source = lessons, allLessons = lessons) {
   return source.filter((lesson) => matchesActiveOperationBranch(lesson.branchId));
 }
 
@@ -6731,9 +6731,9 @@ function lessonRoundSortKey(lesson) {
   return `${dateKey}T${timeKey}:${String(lesson?.id || "")}`;
 }
 
-function lessonRoundRange(lesson, ticket) {
+function lessonRoundRange(lesson, ticket, allLessons = lessons) {
   const ticketStartsOn = String(ticket?.starts || ticket?.purchased || "").slice(0, 10);
-  const ticketLessons = lessons
+  const ticketLessons = allLessons
     .filter((item) => {
       if (!isBookedLesson(item) || isLessonCancelled(item) || isLessonAvailable(item)) return false;
       if (getTicketByLesson(item)?.id !== ticket.id) return false;
@@ -7646,8 +7646,8 @@ async function saveGroupDeductionPolicy(productId, control) {
   }
 }
 
-function ticketHasFutureRegularLesson(ticket, today = adminLocalDateKey(new Date())) {
-  return lessons.some((lesson) => {
+function ticketHasFutureRegularLesson(ticket, today = adminLocalDateKey(new Date()), allLessons = lessons) {
+  return allLessons.some((lesson) => {
     if (String(lesson.ticketId || "") !== String(ticket.id || "")) return false;
     if (!lesson.lessonDate || lesson.lessonDate < today) return false;
     if (["available", "cancelled", "completed", "no_show"].includes(lessonStatusValue(lesson))) return false;
@@ -7655,10 +7655,10 @@ function ticketHasFutureRegularLesson(ticket, today = adminLocalDateKey(new Date
   });
 }
 
-function ticketFutureRegularScheduleCoverage(ticket, today = adminLocalDateKey(new Date())) {
+function ticketFutureRegularScheduleCoverage(ticket, today = adminLocalDateKey(new Date()), allLessons = lessons) {
   const baseMinutes = Math.max(1, getTicketDurationMinutes(ticket));
   const anchors = new Map();
-  lessons.forEach((lesson) => {
+  allLessons.forEach((lesson) => {
     if (String(lesson.ticketId || "") !== String(ticket?.id || "")) return;
     if (!lesson.lessonDate || lesson.lessonDate < today) return;
     if (["available", "cancelled", "completed", "no_show"].includes(lessonStatusValue(lesson))) return;
@@ -7899,8 +7899,8 @@ function isActiveCouponTicket(ticket, today = adminLocalDateKey(new Date())) {
   return productKind === "pass" || productKind === "coupon" || String(ticket.product || "").includes("쿠폰");
 }
 
-function ticketHasUpcomingLesson(ticket, today = adminLocalDateKey(new Date())) {
-  return lessons.some((lesson) => {
+function ticketHasUpcomingLesson(ticket, today = adminLocalDateKey(new Date()), allLessons = lessons) {
+  return allLessons.some((lesson) => {
     if (String(lesson.ticketId || "") !== String(ticket.id || "")) return false;
     if (!lesson.lessonDate || lesson.lessonDate < today) return false;
     return !["available", "cancelled", "completed", "no_show"].includes(lessonStatusValue(lesson));
@@ -14412,9 +14412,9 @@ function scheduleBulkEligible(lesson) {
   );
 }
 
-function selectedScheduleLessons() {
+function selectedScheduleLessons(allLessons = lessons) {
   const selected = selectedScheduleLessonIdSet();
-  return lessons.filter((lesson) => (
+  return allLessons.filter((lesson) => (
     selected.has(String(lesson.serverLessonId || ""))
     && scheduleBulkEligible(lesson)
   ));
@@ -17405,9 +17405,9 @@ function isCompletedLessonCorrectionMode() {
   );
 }
 
-function getPastLessonCorrectionConflict(candidate) {
+function getPastLessonCorrectionConflict(candidate, allLessons = lessons) {
   const lessonDate = adminWeekDateForDay(candidate.day);
-  const duplicate = lessons.find((lesson) => (
+  const duplicate = allLessons.find((lesson) => (
     lesson.id !== candidate.id
     && String(lesson.ticketId || "") === String(candidate.ticketId || "")
     && (!lessonDate || !lesson.lessonDate || lesson.lessonDate === lessonDate)
@@ -17448,9 +17448,9 @@ function getPastLessonCorrectionConflict(candidate) {
   return null;
 }
 
-function getAdminManualExactDuplicate(candidate) {
+function getAdminManualExactDuplicate(candidate, allLessons = lessons) {
   const lessonDate = candidate.lessonDate || adminLessonDateForCandidate(candidate.day);
-  return lessons.find((lesson) => (
+  return allLessons.find((lesson) => (
     String(lesson.id) !== String(candidate.id)
     && String(lesson.ticketId || "") === String(candidate.ticketId || "")
     && (!lessonDate || !lesson.lessonDate || lesson.lessonDate === lessonDate)
@@ -18240,8 +18240,8 @@ function coachNameForRoleId(roleId = "") {
   return coaches.find((coach) => coach.serverRoleId === roleId || coach.id === roleId)?.name || "코치";
 }
 
-function substituteLessonsForDate(date = "") {
-  return lessons
+function substituteLessonsForDate(date = "", allLessons = lessons) {
+  return allLessons
     .filter((lesson) => lesson.serverLessonId && !lesson.oneDayBooking)
     .filter((lesson) => lesson.lessonDate === date)
     .filter((lesson) => ["scheduled", "pending_change"].includes(lesson.serverStatus || "scheduled"))
@@ -18417,8 +18417,8 @@ async function cancelSubstituteAssignments() {
   }
 }
 
-function oneDayBookingForId(bookingId) {
-  return lessons.find((lesson) => lesson.oneDayBooking && String(lesson.serverOneDayBookingId) === String(bookingId)) || null;
+function oneDayBookingForId(bookingId, allLessons = lessons) {
+  return allLessons.find((lesson) => lesson.oneDayBooking && String(lesson.serverOneDayBookingId) === String(bookingId)) || null;
 }
 
 function oneDayBookingFormValues() {
@@ -18756,10 +18756,10 @@ function selectedLessonEditScope() {
   return value === "series" || value === "reset" ? value : "single";
 }
 
-function matchingRegularLessonSeries(editingLesson = getCurrentEditingLesson()) {
+function matchingRegularLessonSeries(editingLesson = getCurrentEditingLesson(), allLessons = lessons) {
   if (!editingLesson) return [];
   const sourceDate = editingLesson.lessonDate || adminWeekDateForDay(editingLesson.day);
-  return lessons.filter((lesson) => (
+  return allLessons.filter((lesson) => (
     String(lesson.ticketId || lesson.serverTicketId || "") === String(editingLesson.ticketId || editingLesson.serverTicketId || "")
     && normalizeLessonSource(lesson.lessonSource) === "regular"
     && lessonStatusValue(lesson) === "scheduled"
@@ -18994,8 +18994,8 @@ function expectedLiveLessonRows(ticket, candidates = []) {
   }));
 }
 
-function liveLessonExistsAfterWrite(expected, requiredParticipantIds = []) {
-  return lessons.some((lesson) => (
+function liveLessonExistsAfterWrite(expected, requiredParticipantIds = [], allLessons = lessons) {
+  return allLessons.some((lesson) => (
     lesson.ticketId === expected.ticketId
     && lesson.lessonDate === expected.lessonDate
     && lesson.time === expected.time
@@ -19032,10 +19032,10 @@ function liveLessonWriteFailureMessage(errorText = "") {
   return `서버 저장 결과를 시간표에서 다시 확인하지 못했습니다${suffix}. 중복 저장하지 말고 새로고침 후 해당 칸을 확인해 주세요.`;
 }
 
-function existingFutureRegularLessons(ticketId, targetSchedules = []) {
+function existingFutureRegularLessons(ticketId, targetSchedules = [], allLessons = lessons) {
   const replaceFromDate = targetSchedules.map((item) => item.lessonDate).filter(Boolean).sort()[0] || "";
   if (!replaceFromDate) return [];
-  return lessons.filter((lesson) => (
+  return allLessons.filter((lesson) => (
     String(lesson.ticketId || "") === String(ticketId || "")
     && normalizeLessonSource(lesson.lessonSource) === "regular"
     && lesson.serverStatus === "scheduled"
@@ -19522,9 +19522,9 @@ async function addLessonFromForm(event) {
   renderAll();
 }
 
-function openEditLessonModal(lessonId) {
+function openEditLessonModal(lessonId, allLessons = lessons) {
   const parsedId = Number.isNaN(Number(lessonId)) ? lessonId : Number(lessonId);
-  const lesson = lessons.find((item) => item.id === parsedId);
+  const lesson = allLessons.find((item) => item.id === parsedId);
   if (!lesson) return;
   openLessonModal({ editingLessonId: parsedId, quickEdit: true });
 }
