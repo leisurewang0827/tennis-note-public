@@ -364,7 +364,7 @@ function makeTimeRange(startTime, endTime, stepMinutes = scheduleBlockMinutes, a
 }
 
 const scheduleTimes = [
-  ...makeTimeRange(allScheduleSettings.openStart, allScheduleSettings.openEnd),
+  ...makeTimeRange(scheduleSettings.openStart, scheduleSettings.openEnd),
 ];
 
 function getVisibleScheduleTimes() {
@@ -631,7 +631,7 @@ const groupAccounts = [
     paymentMode: "representative",
     nextPayer: "최유나",
     scheduleSyncRequired: true,
-    allMembers: [
+    members: [
       { name: "최유나", appStatus: "linked", canManageSchedule: true, canPay: true },
       { name: "이하린", appStatus: "not_joined", canManageSchedule: false, canPay: false },
     ],
