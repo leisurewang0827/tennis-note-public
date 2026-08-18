@@ -3897,16 +3897,6 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const money = new Intl.NumberFormat("ko-KR");
 
-function escapeHtml(value = "") {
-  return String(value).replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;",
-  })[char]);
-}
-
 function normalizePopupNotice(notice = {}) {
   const fallback = defaultPopupNotice;
   const normalizedStatus = ["active", "disabled", "archived"].includes(notice.status)
@@ -8622,20 +8612,6 @@ function memberTicketOwnershipLabel(ticket, member) {
   if (ownUserIds.has(ownerUserId)) return "본인권";
   const ownerName = (adminLiveDataState.users || []).find((user) => String(user.id || "") === ownerUserId)?.name || "";
   return ownerName ? `파트너권 · ${ownerName}` : "파트너권";
-}
-
-function memberTicketDuplicateFingerprint(ticket) {
-  if (!ticket?.serverTicketId || !ticket?.serverUserId) return "";
-  const participants = ticketParticipantUserIds(ticket).map(String).sort().join(",");
-  return [
-    ticket.serverUserId,
-    ticket.productId || ticket.product || "",
-    ticket.coachRoleId || ticket.coachId || "",
-    ticket.lessonTypeCode || ticket.groupSize || "",
-    ticket.actualLessonStart || ticket.purchased || "",
-    ticket.expires || "",
-    participants,
-  ].map((value) => String(value || "")).join("|");
 }
 
 function memberPossibleDuplicateTicketIds(managedTickets = []) {
@@ -19995,31 +19971,6 @@ function billingFilterGroup(item = {}) {
   return "action";
 }
 
-function billingEffectiveDate(item = {}) {
-  const candidates = [
-    item.paidAt,
-    item.paid_at,
-    item.verifiedAt,
-    item.verified_at,
-    item.requestedAt,
-    item.requested_at,
-    item.createdAt,
-    item.created_at,
-  ];
-  for (const value of candidates) {
-    const text = String(value || "");
-    if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
-    const parsed = Date.parse(text);
-    if (Number.isFinite(parsed)) return adminLocalDateKey(new Date(parsed));
-  }
-  return "";
-}
-
-function billingMatchesMonth(item, month) {
-  if (!month) return true;
-  return billingEffectiveDate(item).slice(0, 7) === month;
-}
-
 function billingMonthLabel(month) {
   const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
   return match ? `${Number(match[1])}년 ${Number(match[2])}월 결제액` : "선택 월 결제액";
@@ -20843,15 +20794,6 @@ function legacyNoteRecord(note) {
     lessonId: note.serverLessonId || "",
     actionable: !done && Boolean(note.serverLessonId),
   };
-}
-
-function sortAdminRecords(records = []) {
-  const priorityScore = { urgent: 3, high: 2, normal: 1 };
-  return [...records].sort((left, right) => {
-    const priorityDifference = (priorityScore[right.priority] || 0) - (priorityScore[left.priority] || 0);
-    if (priorityDifference) return priorityDifference;
-    return recordTimestamp(right.sortAt) - recordTimestamp(left.sortAt);
-  });
 }
 
 function pendingLessonRecord(lesson) {

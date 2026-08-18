@@ -209,3 +209,36 @@ function isExpectedPersonalGroupTicketSet(ticketIds, linkContext) {
     return account?.userIds.size >= 2 && account?.ticketIds.size >= 2;
   });
 }
+
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[char]);
+}
+
+function memberTicketDuplicateFingerprint(ticket) {
+  if (!ticket?.serverTicketId || !ticket?.serverUserId) return "";
+  const participants = ticketParticipantUserIds(ticket).map(String).sort().join(",");
+  return [
+    ticket.serverUserId,
+    ticket.productId || ticket.product || "",
+    ticket.coachRoleId || ticket.coachId || "",
+    ticket.lessonTypeCode || ticket.groupSize || "",
+    ticket.actualLessonStart || ticket.purchased || "",
+    ticket.expires || "",
+    participants,
+  ].map((value) => String(value || "")).join("|");
+}
+
+function sortAdminRecords(records = []) {
+  const priorityScore = { urgent: 3, high: 2, normal: 1 };
+  return [...records].sort((left, right) => {
+    const priorityDifference = (priorityScore[right.priority] || 0) - (priorityScore[left.priority] || 0);
+    if (priorityDifference) return priorityDifference;
+    return recordTimestamp(right.sortAt) - recordTimestamp(left.sortAt);
+  });
+}

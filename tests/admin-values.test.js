@@ -3,13 +3,27 @@ import assert from "node:assert/strict";
 import { loadAdminDomain } from "./helpers/load-admin-domain.js";
 
 const values = loadAdminDomain("app/admin/domain/values.js");
+const B = loadAdminDomain("app/admin/domain/values.js", "app/admin/domain/billing.js");
 const NAMES = Object.keys(values);
 
 // ⚠ 이 테스트는 "지금 이렇게 동작한다"를 고정한 것이다.
 // app.js 에서 본문 그대로 옮겨왔으므로, 여기가 깨지면 옮기다 뭔가 바뀐 것이다.
 
 test("옮긴 함수가 전부 존재한다", () => {
-  assert.equal(NAMES.length, 27, "함수 개수가 바뀌었다면 이 테스트도 같이 고쳐야 한다");
+  // 개수가 아니라 이름을 적어둔다. 함수를 추가로 옮기면 여기에도 적어야 하고,
+  // 실수로 사라지면(옮기다 빠뜨리거나 중복 선언에 가려지면) 여기서 잡힌다.
+  const expected = [
+    "adminLocalDateKey", "cloneOperationProfileValue", "compactDashboardPageIndexes",
+    "escapeHtml", "getTicketDisplayProduct", "getTicketDurationMinutes", "getTicketWeeklyCount",
+    "isDeductedLesson", "isExpectedPersonalGroupTicketSet", "isHistoricalImportedPayment",
+    "isReleasedRegularMakeupSlot", "journalBodySummary", "lessonRawStatusValue",
+    "lessonScheduleCoachId", "lessonUnitLabel", "memberServerUserIds",
+    "memberTicketDuplicateFingerprint", "minutesToTime", "normalizeLessonSource",
+    "numericValue", "participantOutcomeLabel", "paymentMethodLabel", "pendingRecordType",
+    "recordTimestamp", "scheduleCoachDisplayName", "sortAdminRecords", "splitMemberNames",
+    "ticketParticipantUserIds", "timeToMinutes", "lessonEndTimestamp",
+  ];
+  assert.deepEqual([...NAMES].sort(), [...expected].sort());
   for (const name of NAMES) {
     assert.equal(typeof values[name], "function", `${name} 이 함수가 아니다`);
   }
@@ -80,4 +94,20 @@ test("cloneOperationProfileValue — 깊은 복사", () => {
   assert.deepEqual(copy, source);
   copy.branch.coaches.push("다");
   assert.deepEqual(source.branch.coaches, ["가", "나"], "원본이 바뀌면 안 된다");
+});
+
+test("billing — 결제 기준일 계산", () => {
+  // 여러 후보 필드 중 먼저 나오는 것을 쓴다 (paidAt > verifiedAt > requestedAt > createdAt)
+  assert.equal(B.billingEffectiveDate({ paidAt: "2026-08-18" }), "2026-08-18");
+  assert.equal(B.billingEffectiveDate({ paid_at: "2026-08-18T10:00:00Z" }), "2026-08-18");
+  assert.equal(
+    B.billingEffectiveDate({ createdAt: "2026-01-02", paidAt: "2026-08-18" }),
+    "2026-08-18",
+    "결제일이 생성일보다 우선",
+  );
+  assert.equal(B.billingEffectiveDate({}), "", "아무 날짜도 없으면 빈 문자열");
+
+  assert.equal(B.billingMatchesMonth({ paidAt: "2026-08-18" }, "2026-08"), true);
+  assert.equal(B.billingMatchesMonth({ paidAt: "2026-07-31" }, "2026-08"), false);
+  assert.equal(B.billingMatchesMonth({ paidAt: "2026-08-18" }, ""), true, "월 지정이 없으면 전부 통과");
 });
