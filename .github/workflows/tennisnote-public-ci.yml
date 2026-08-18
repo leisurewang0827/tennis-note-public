@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - "app/**"
+      - "tests/**"
       - "scripts/build_cloudflare_pages.py"
       - ".github/workflows/tennisnote-public-ci.yml"
   push:
     branches: [main]
     paths:
       - "app/**"
+      - "tests/**"
       - "scripts/build_cloudflare_pages.py"
       - ".github/workflows/tennisnote-public-ci.yml"
 
@@ -35,6 +37,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Run tests
+        run: node --test "tests/**/*.test.js"
+
       - name: Check JavaScript syntax
         run: |
           node --check app/admin/app.js

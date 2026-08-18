@@ -281,6 +281,20 @@ python3 scripts/check_cloudflare_build.py
 
 작업 중 발견한 것을 여기 적으세요. 바로 고치지 마세요.
 
+- **`remaining` 이 없거나 `null` 이면 이용권이 "소진"으로 판정됩니다.**
+  `app/shared/tennisnote-ticket-state.js` 의 `value()` 가 없는 필드에 `""` 를
+  돌려주고 `Number("")` 는 `0` 이라, "잔여 0회"와 "값이 없음"이 구분되지 않습니다.
+  `{ status: "active" }` 조차 `exhausted` 가 됩니다.
+
+  지금은 모든 조회 쿼리가 `remaining_sessions` 를 포함해서 터지지 않습니다.
+  하지만 **DB 에 그 컬럼이 `NULL` 인 행이 하나라도 있으면 그 회원은 이용권이
+  "소진"으로 보이고 예약을 못 합니다.** 서버 저장소를 확인할 수 있게 되면
+  (7번) 컬럼이 `NOT NULL` 인지 먼저 보세요.
+
+  현재 동작은 `tests/ticket-state.test.js` 의
+  `[알려진 문제] remaining 이 없으면 소진으로 판정된다` 에 기록돼 있습니다.
+  고칠 때 그 테스트를 반대로 뒤집으세요.
+
 - `app/shared/vendor/xlsx.full.min.js` 가 없습니다. `app/admin/app.js:22084` 가
   로컬 사본을 먼저 찾고 실패하면 jsdelivr CDN으로 넘어갑니다. 동작은 하지만
   엑셀 기능이 항상 외부 CDN에 의존합니다. 라이브러리(약 900KB)를 저장소에 넣을지는
