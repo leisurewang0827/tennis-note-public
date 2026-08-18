@@ -3640,7 +3640,7 @@ textarea {
 }
 
 @media (max-width: 720px) {
-  body.purchase-flow-open .tabbar {
+  body[data-active-member-view="shopView"].purchase-flow-open .tabbar {
     display: none;
   }
 
@@ -3705,7 +3705,7 @@ textarea {
     background: rgba(255, 255, 255, 0.96);
   }
 
-  body.purchase-flow-open .purchase-step-actions {
+  body[data-active-member-view="shopView"].purchase-flow-open .purchase-step-actions {
     bottom: max(8px, env(safe-area-inset-bottom));
   }
 }
