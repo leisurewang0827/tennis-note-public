@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.357" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.357" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.358" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.358" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -382,18 +382,10 @@
           <div class="section-title">
             <div>
               <p class="eyebrow">회원권</p>
-              <h2>내 회원권</h2>
+              <h2>회원권 구매</h2>
             </div>
             <button class="small-button title-action" type="button" data-view="homeView">홈으로</button>
           </div>
-
-          <div id="currentTicketPanel" class="membership-overview current-ticket-panel"></div>
-
-          <details id="membershipHistoryDetails" class="membership-details membership-secondary-details">
-            <summary>지난 이용 내역</summary>
-            <div id="ticketHistory" class="history-list"></div>
-            <div id="ticketHistoryPager" class="list-pager"></div>
-          </details>
 
           <section id="membershipPurchaseFlow" class="membership-purchase-flow" aria-labelledby="membershipPurchaseFlowTitle" hidden>
             <div class="membership-purchase-head">
@@ -425,7 +417,17 @@
             <div class="product-grid" id="productGrid"></div>
           </section>
 
-          <details class="membership-details membership-help-disclosure">
+          <details id="currentMembershipDetails" class="membership-details membership-secondary-details membership-current-disclosure">
+            <summary><span>현재 회원권·연장</span><small>잔여 횟수와 기간은 홈에서 바로 확인</small></summary>
+            <div id="currentTicketPanel" class="membership-overview current-ticket-panel"></div>
+            <details id="membershipHistoryDetails" class="membership-details membership-secondary-details">
+              <summary>지난 이용 내역</summary>
+              <div id="ticketHistory" class="history-list"></div>
+              <div id="ticketHistoryPager" class="list-pager"></div>
+            </details>
+          </details>
+
+          <details id="membershipSupportDetails" class="membership-details membership-help-disclosure">
             <summary>결제·가입·대기 내역</summary>
             <div class="membership-details-body membership-help-body">
               <div id="paymentGatewayStatus" class="payment-gateway-status"></div>
@@ -1106,17 +1108,17 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.357"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.357"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.357"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.358"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.358"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.358"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.357"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.357"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.357"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.357"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.357"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.358"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.358"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.358"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.358"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.358"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
     <script>
       (() => {
@@ -1135,7 +1137,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.357";
+          appScript.src = "./app.js?v=1.0.358";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -1148,7 +1150,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.357";
+          appScript.src = "./app.js?v=1.0.358";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

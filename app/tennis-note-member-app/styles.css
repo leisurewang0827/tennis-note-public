@@ -3062,8 +3062,38 @@ textarea {
 }
 
 .membership-product-browser[hidden],
-.membership-purchase-flow[hidden] {
+.membership-purchase-flow[hidden],
+.membership-current-disclosure[hidden],
+.membership-help-disclosure[hidden] {
   display: none !important;
+}
+
+.membership-current-disclosure > summary small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.membership-current-disclosure > .current-ticket-panel,
+.membership-current-disclosure > .membership-details {
+  margin: 12px;
+}
+
+.membership-current-disclosure > .current-ticket-panel {
+  margin-bottom: 0;
+}
+
+.membership-current-disclosure:not([open]) > :not(summary),
+.membership-current-disclosure .membership-details:not([open]) > :not(summary) {
+  display: none !important;
+}
+
+@media (max-width: 560px) {
+  .membership-current-disclosure > summary small {
+    display: none;
+  }
 }
 
 .membership-browser-heading,
@@ -3409,6 +3439,161 @@ textarea {
   font-weight: 900;
 }
 
+.purchase-renewal-choice,
+.purchase-slot-groups,
+.purchase-slot-group {
+  display: grid;
+  gap: 10px;
+}
+
+.purchase-coach-filter-grid,
+.purchase-date-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.purchase-coach-filter,
+.purchase-date-filter {
+  display: grid;
+  min-height: 64px;
+  align-content: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: #ffffff;
+  text-align: left;
+}
+
+.purchase-coach-filter strong,
+.purchase-date-filter strong {
+  font-size: 13px;
+}
+
+.purchase-coach-filter small,
+.purchase-date-filter small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.purchase-coach-filter.is-selected,
+.purchase-date-filter.is-selected {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--soft-green);
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+
+.purchase-slot-group {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8faf9;
+}
+
+.purchase-slot-group > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.purchase-slot-group > div:first-child strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.purchase-slot-group > div:first-child span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.purchase-time-select-field {
+  display: grid;
+  gap: 6px;
+}
+
+.purchase-time-select-field > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.purchase-time-select-field select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: #ffffff;
+  font: inherit;
+  font-weight: 850;
+}
+
+.purchase-time-select-field select:focus {
+  border-color: var(--green);
+  outline: 2px solid rgba(10, 125, 91, 0.14);
+}
+
+.purchase-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.purchase-slot {
+  display: grid;
+  min-height: 54px;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 5px;
+  color: var(--ink);
+  background: #ffffff;
+}
+
+.purchase-slot span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.purchase-slot strong {
+  font-size: 14px;
+}
+
+.purchase-slot.is-selected {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--soft-green);
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+
+.purchase-availability-state {
+  margin: 0;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 18px 12px;
+  color: var(--muted);
+  background: #f8faf9;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.purchase-availability-state.is-error {
+  border-color: #e8c7c1;
+  color: #9b3f34;
+  background: #fff8f7;
+}
+
 .purchase-step-actions {
   display: grid;
   grid-template-columns: minmax(0, 0.45fr) minmax(0, 1fr);
@@ -3455,6 +3640,10 @@ textarea {
 }
 
 @media (max-width: 720px) {
+  body.purchase-flow-open .tabbar {
+    display: none;
+  }
+
   .tabbar {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
@@ -3488,6 +3677,15 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .purchase-slot-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .purchase-coach-filter-grid,
+  .purchase-date-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .purchase-day-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
@@ -3506,6 +3704,10 @@ textarea {
     padding: 8px 4px 4px;
     background: rgba(255, 255, 255, 0.96);
   }
+
+  body.purchase-flow-open .purchase-step-actions {
+    bottom: max(8px, env(safe-area-inset-bottom));
+  }
 }
 
 @media (max-width: 420px) {
@@ -3520,6 +3722,10 @@ textarea {
 
   .purchase-product-option {
     grid-template-columns: 1fr;
+  }
+
+  .purchase-slot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .purchase-product-option > span,
