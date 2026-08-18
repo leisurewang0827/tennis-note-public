@@ -25568,12 +25568,12 @@ function coachLaneOrderItems() {
 }
 
 function coachWorksAtPreviewTime(coach, day, time) {
-  const minute = minutesFromTime(time);
+  const minute = timeToMinutes(time);
   return (coach.workBlocks || []).some((block) => (
     Array.isArray(block.days)
     && block.days.includes(day)
-    && minute >= minutesFromTime(block.start)
-    && minute < minutesFromTime(block.end)
+    && minute >= timeToMinutes(block.start)
+    && minute < timeToMinutes(block.end)
   ));
 }
 

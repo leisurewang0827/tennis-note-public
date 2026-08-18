@@ -111,3 +111,17 @@ test("billing — 결제 기준일 계산", () => {
   assert.equal(B.billingMatchesMonth({ paidAt: "2026-07-31" }, "2026-08"), false);
   assert.equal(B.billingMatchesMonth({ paidAt: "2026-08-18" }, ""), true, "월 지정이 없으면 전부 통과");
 });
+
+test("coachWorksAtPreviewTime 이 쓰는 시간 비교가 성립한다", () => {
+  // 관리자 설정 > 코치 > 레인 순서 편집기가 정의되지 않은 minutesFromTime 을
+  // 부르고 있었다. 본문이 동일한 timeToMinutes 로 바꿨다.
+  // 그 화면이 하는 비교(근무 블록 안에 있는가)가 성립하는지 확인한다.
+  const inBlock = (time, start, end) =>
+    values.timeToMinutes(time) >= values.timeToMinutes(start)
+    && values.timeToMinutes(time) < values.timeToMinutes(end);
+
+  assert.equal(inBlock("19:00", "18:00", "21:00"), true);
+  assert.equal(inBlock("18:00", "18:00", "21:00"), true, "시작 시각은 포함");
+  assert.equal(inBlock("21:00", "18:00", "21:00"), false, "종료 시각은 미포함");
+  assert.equal(inBlock("17:59", "18:00", "21:00"), false);
+});
