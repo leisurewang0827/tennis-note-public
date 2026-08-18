@@ -8,8 +8,8 @@
     <title>테니스노트 코치 모드</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.360" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.360" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.361" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.361" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -99,7 +99,7 @@
           <button class="tab" type="button" data-view="fullScheduleView">레슨표</button>
           <button class="tab" type="button" data-view="membersView">회원</button>
           <button class="tab" type="button" data-view="curriculumView">커리큘럼</button>
-          <button class="tab" type="button" data-view="coachProfileView">내 정보</button>
+          <button class="tab" type="button" data-view="coachProfileView">내 정산</button>
         </nav>
 
         <section id="todayView" class="view is-active" aria-label="오늘 처리 일정">
@@ -178,9 +178,50 @@
           <div id="curriculumSteps" class="card-list"></div>
         </section>
 
-        <section id="coachProfileView" class="view" aria-label="코치 내 정보">
+        <section id="coachProfileView" class="view" aria-label="코치 내 매출과 정산">
           <div class="section-title">
-            <h2>내 정보</h2>
+            <h2>내 매출·정산</h2>
+            <button id="refreshCoachSettlement" class="small-button title-action" type="button">새로고침</button>
+          </div>
+
+          <section class="coach-settlement-card" aria-labelledby="coachSettlementTitle">
+            <div class="coach-settlement-toolbar">
+              <div>
+                <strong id="coachSettlementTitle">내 담당 매출과 예상 정산</strong>
+                <small>전체 매출이 아닌 내 담당 회원권만 표시됩니다.</small>
+              </div>
+              <label>
+                <span>정산 월</span>
+                <input id="coachSettlementMonth" type="month" />
+              </label>
+            </div>
+            <div id="coachSettlementStatus" class="coach-settlement-status" role="status" aria-live="polite"></div>
+            <div class="coach-settlement-summary" aria-label="내 정산 요약">
+              <article>
+                <span>내 담당 매출</span>
+                <strong id="coachRevenueAmount">0원</strong>
+                <small id="coachRevenueCount">결제 0건</small>
+              </article>
+              <article>
+                <span>정산 진행 수업</span>
+                <strong id="coachSettledSessions">0회</strong>
+                <small>완료·이관 수업 기준</small>
+              </article>
+              <article>
+                <span>예상 정산금</span>
+                <strong id="coachEstimatedSettlement">0원</strong>
+                <small id="coachSettlementRule">정산 규칙 확인 중</small>
+              </article>
+            </div>
+            <p class="coach-settlement-note">카드 결제는 설정된 정산 기준을 적용하며, 환불·대타·시급 이관을 반영한 예상 금액입니다. 최종 확정은 관리자 정산을 기준으로 합니다.</p>
+            <details class="coach-settlement-details">
+              <summary>회원별 내역 보기</summary>
+              <div id="coachSettlementRows" class="coach-settlement-rows"></div>
+            </details>
+          </section>
+
+          <div class="section-title coach-profile-title">
+            <h2>코치 정보</h2>
           </div>
 
           <section class="coach-profile-card">
@@ -287,18 +328,18 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.360"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.360"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.360"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.361"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.361"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.361"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
-    <script defer src="../shared/tennisnote-curriculum-search.js?v=1.0.360"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.360"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.360"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.360"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.360"></script>
-    <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.360"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.360"></script>
+    <script defer src="../shared/tennisnote-curriculum-search.js?v=1.0.361"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.361"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.361"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.361"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.361"></script>
+    <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.361"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.361"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
     <script>
       (() => {
@@ -317,7 +358,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.360";
+          appScript.src = "./app.js?v=1.0.361";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -330,7 +371,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.360";
+          appScript.src = "./app.js?v=1.0.361";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {
