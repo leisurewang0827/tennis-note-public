@@ -104,12 +104,22 @@ def write_browser_config(output: Path) -> None:
 
 
 def write_platform_files(output: Path, target: str) -> None:
+    # Cache-Control 주의:
+    #   no-store = 저장 자체를 금지 -> 매 접속마다 전체 재다운로드(관리자 2.3MB, 회원 1.1MB).
+    #   no-cache = 저장은 하되 매번 서버에 확인 -> 안 바뀌었으면 304(본문 없음).
+    # 아래 기본값은 no-cache 라서 화면에 옛 코드가 남을 위험은 그대로 0이고,
+    # 재다운로드 용량만 사라진다. 접속 설정/릴리스 파일은 no-store 를 유지한다.
     headers = """/*
   X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self), microphone=(), geolocation=()
-  Cache-Control: no-cache, no-store, must-revalidate
+  Content-Security-Policy: base-uri 'self'; object-src 'none'; frame-ancestors 'self'
+  Cache-Control: no-cache
   Access-Control-Allow-Origin: *
+
+/assets/*
+  Cache-Control: public, max-age=86400
 
 /shared/config.local.js
   Cache-Control: no-cache, no-store, must-revalidate
