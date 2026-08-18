@@ -49,6 +49,10 @@ const state = {
     finance: "결제/전체매출/환불은 관리자만",
   },
   proxySettlements: [],
+  settlementMonth: "",
+  coachSettlement: null,
+  coachSettlementLoading: false,
+  coachSettlementError: "",
   coachProfiles: {
     "노 코치": {
       intro: "입문 회원이 테니스를 어렵게 느끼지 않도록 기본 자세와 랠리 연결을 차근차근 잡아드립니다.",
@@ -1950,6 +1954,9 @@ function compactCoachSnapshotState() {
   const snapshotState = {
     ...state,
     coach: state.coach ? { ...state.coach } : null,
+    coachSettlement: null,
+    coachSettlementLoading: false,
+    coachSettlementError: "",
     members: (state.members || []).map(compactMember),
     expiredMembers: (state.expiredMembers || []).map(compactMember),
     coachProfiles: Object.fromEntries(
@@ -2586,7 +2593,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.360",
+    workerUrl: "./service-worker.js?v=1.0.361",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2616,7 +2623,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.360" });
+  const params = new URLSearchParams({ v: "1.0.361" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2730,6 +2737,9 @@ function activateLiveCoachProfile(profileId) {
   state.members = [];
   state.expiredMembers = [];
   state.proxySettlements = [];
+  state.coachSettlement = null;
+  state.coachSettlementError = "";
+  state.coachSettlementLoading = false;
   state.liveLessons = [];
   state.releasedMakeupSlots = [];
   state.scheduleOperationDays = [];
@@ -2783,6 +2793,7 @@ async function applySupabaseCoachSession(showFromLogin = false) {
       await Promise.allSettled([
         syncCoachLessonsFromServer(),
         syncCoachJournalEntriesFromServer(),
+        syncCoachSettlementFromServer(),
         syncNativeCoachPushRegistration(profile),
       ]);
       renderAll();
@@ -3252,7 +3263,7 @@ function setView(viewId, options = {}) {
     fullScheduleView: "레슨표",
     membersView: "회원",
     curriculumView: "커리큘럼",
-    coachProfileView: "내 정보",
+    coachProfileView: "내 매출·정산",
   };
   if ($("#coachScreenTitle")) $("#coachScreenTitle").textContent = screenTitles[viewId] || "코치 모드";
   document.body.dataset.activeView = viewId;
@@ -3836,6 +3847,90 @@ function currentCoachProfile() {
   return state.coachProfiles[name] || state.coachProfiles["노 코치"] || {};
 }
 
+function coachSettlementMonth() {
+  const fallback = localDateKey().slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(String(state.settlementMonth || ""))) state.settlementMonth = fallback;
+  return state.settlementMonth;
+}
+
+function formatCoachWon(value) {
+  return `${new Intl.NumberFormat("ko-KR").format(Math.max(0, Math.round(Number(value) || 0)))}원`;
+}
+
+function coachSettlementRuleLabel(settlement = {}) {
+  if (settlement.ruleType === "hourly") return `시급 ${formatCoachWon(settlement.hourlyRate)}`;
+  const rate = Math.round((Number(settlement.ruleRate) || 0) * 100);
+  const basis = settlement.settlementBasis === "actual_paid_inc_vat" ? "실결제" : "정산 기준가";
+  return `${basis}의 ${rate}%`;
+}
+
+function renderCoachSettlement() {
+  const monthInput = $("#coachSettlementMonth");
+  if (monthInput && monthInput.value !== coachSettlementMonth()) monthInput.value = coachSettlementMonth();
+  const settlement = state.coachSettlement || {};
+  const status = $("#coachSettlementStatus");
+  if (status) {
+    status.hidden = !state.coachSettlementLoading && !state.coachSettlementError;
+    status.dataset.tone = state.coachSettlementError ? "danger" : "wait";
+    status.textContent = state.coachSettlementError || (state.coachSettlementLoading ? "정산 자료를 불러오는 중입니다." : "");
+  }
+  if ($("#coachRevenueAmount")) $("#coachRevenueAmount").textContent = formatCoachWon(settlement.revenueAmount);
+  if ($("#coachRevenueCount")) $("#coachRevenueCount").textContent = `결제 ${Number(settlement.paymentCount) || 0}건`;
+  if ($("#coachSettledSessions")) $("#coachSettledSessions").textContent = `${Number(settlement.settledSessions) || 0}회`;
+  if ($("#coachEstimatedSettlement")) $("#coachEstimatedSettlement").textContent = formatCoachWon(settlement.estimatedSettlement);
+  if ($("#coachSettlementRule")) {
+    const substitute = Number(settlement.substituteSettlement) || 0;
+    $("#coachSettlementRule").textContent = settlement.ruleType
+      ? `${coachSettlementRuleLabel(settlement)}${substitute ? ` · 대타 ${formatCoachWon(substitute)}` : ""}`
+      : "정산 규칙 확인 중";
+  }
+  const rows = Array.isArray(settlement.rows) ? settlement.rows : [];
+  const rowsTarget = $("#coachSettlementRows");
+  if (!rowsTarget) return;
+  rowsTarget.innerHTML = rows.length
+    ? rows.map((row) => `
+        <article>
+          <div>
+            <strong>${escapeHtml(row.memberName || "회원")}</strong>
+            <span>${escapeHtml(row.productName || "회원권")} · ${escapeHtml(String(row.method || "결제수단 미입력"))}</span>
+          </div>
+          <div>
+            <b>${formatCoachWon(row.estimatedSettlement)}</b>
+            <small>매출 ${formatCoachWon(row.amount)} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회</small>
+          </div>
+        </article>`).join("")
+    : coachEmptyState({
+      title: state.coachSettlementLoading ? "정산 자료를 확인하고 있습니다." : "선택한 달의 내 담당 결제가 없습니다.",
+      description: "관리자 결제 귀속과 회원권 담당 코치를 확인해 주세요.",
+    });
+}
+
+async function syncCoachSettlementFromServer() {
+  const client = window.TennisNoteDataClient;
+  if (!state.coach?.coachRoleId || !client?.rpc || !client.getSession?.()?.access_token) return false;
+  state.coachSettlementLoading = true;
+  state.coachSettlementError = "";
+  renderCoachSettlement();
+  try {
+    const result = await client.rpc("tn_coach_own_settlement", {
+      target_month: `${coachSettlementMonth()}-01`,
+    });
+    if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("coach_settlement_payload_invalid");
+    state.coachSettlement = result;
+    return true;
+  } catch (error) {
+    const raw = `${error?.payload?.message || ""} ${error?.message || ""}`;
+    state.coachSettlementError = raw.includes("tn_coach_own_settlement") || raw.includes("PGRST202")
+      ? "코치 정산 기능을 업데이트하는 중입니다. 잠시 후 다시 확인해 주세요."
+      : "정산 자료를 불러오지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.";
+    return false;
+  } finally {
+    state.coachSettlementLoading = false;
+    renderCoachSettlement();
+    saveSnapshot();
+  }
+}
+
 function renderCoachProfile() {
   const name = currentCoachName();
   const profile = currentCoachProfile();
@@ -3850,6 +3945,7 @@ function renderCoachProfile() {
   if ($("#coachLessonStyle")) $("#coachLessonStyle").value = profile.lessonStyle || "";
   if ($("#coachAvailableMemo")) $("#coachAvailableMemo").value = profile.availableMemo || "";
   if ($("#coachMemberMessage")) $("#coachMemberMessage").value = profile.memberMessage || "";
+  renderCoachSettlement();
 }
 
 function renderTodayLessons() {
@@ -7124,6 +7220,7 @@ function bindEvents() {
   $("#noticeHideToday")?.addEventListener("click", () => closeNotice(true));
   $("#noticeAction")?.addEventListener("click", () => closeNotice(false));
   $("#saveCoachProfile")?.addEventListener("click", saveCoachProfile);
+  $("#refreshCoachSettlement")?.addEventListener("click", () => void syncCoachSettlementFromServer());
   $("#coachPushNotificationButton")?.addEventListener("click", () => void toggleNativeCoachPush());
   $("#enableCoachPushFromPrimer")?.addEventListener("click", () => void enableNativeCoachPush());
   $("#coachPushPrimerModal")?.addEventListener("click", (event) => {
@@ -7137,6 +7234,14 @@ function bindEvents() {
     void flushCoachOfflineLessonDrafts();
   });
   document.addEventListener("change", (event) => {
+    const settlementMonth = event.target.closest("#coachSettlementMonth");
+    if (settlementMonth) {
+      state.settlementMonth = /^\d{4}-\d{2}$/.test(settlementMonth.value) ? settlementMonth.value : localDateKey().slice(0, 7);
+      state.coachSettlement = null;
+      void syncCoachSettlementFromServer();
+      return;
+    }
+
     const scheduleMonth = event.target.closest("[data-coach-month]");
     if (scheduleMonth) {
       selectCoachMonth(scheduleMonth.value);
@@ -7768,7 +7873,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.360",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.361",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
