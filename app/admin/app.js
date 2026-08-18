@@ -125,7 +125,7 @@ const scheduleSafetySnapshotKey = "tennis-note-admin-schedule-safety-v1";
 const adminSnapshotVersion = 2;
 const scheduleSafetySnapshotLimit = 500;
 
-function persistentScheduleLessons(source = lessons, allLessons = lessons) {
+function persistentScheduleLessons(source = lessons) {
   return (Array.isArray(source) ? source : []).filter((lesson) => (
     lesson?.serverLessonId || lesson?.serverOneDayBookingId
   ));
@@ -1790,7 +1790,7 @@ function adminMemberDirectorySignature() {
   });
 }
 
-function memberFromAdminDirectoryRow(row, sourceMembers = members, allMembers = members) {
+function memberFromAdminDirectoryRow(row, sourceMembers = members) {
   const userId = String(row?.user_id || "");
   if (!userId) return null;
   const existing = sourceMembers.find((member) => String(member.serverUserId || "") === userId);
@@ -1822,7 +1822,7 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members, allMembers = 
     source: "Supabase 회원 목록",
     note: "",
   };
-  allMembers.push(member);
+  members.push(member);
   return member;
 }
 
@@ -3606,11 +3606,11 @@ function operationBranchTickets(source = tickets) {
   return source.filter((ticket) => matchesActiveOperationBranch(ticket.branchId));
 }
 
-function operationBranchLessons(source = lessons, allLessons = lessons) {
+function operationBranchLessons(source = lessons) {
   return source.filter((lesson) => matchesActiveOperationBranch(lesson.branchId));
 }
 
-function operationBranchCoaches(source = coaches, allCoaches = coaches) {
+function operationBranchCoaches(source = coaches) {
   return source.filter((coach) => matchesActiveOperationBranch(coach.branchId));
 }
 
@@ -3630,7 +3630,7 @@ function memberOperationBranchIds(member = {}) {
   ].filter(Boolean).map(String))];
 }
 
-function operationBranchMembers(source = members, allMembers = members) {
+function operationBranchMembers(source = members) {
   const activeBranchId = activeOperationBranchId();
   if (!activeBranchId) return source;
   return source.filter((member) => {
