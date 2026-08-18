@@ -13960,7 +13960,7 @@ async function saveVisibleMemberRows() {
     showToast("변경된 행이 없습니다.");
     return;
   }
-  const summaries = forms.slice(0, 8).map(memberInlineChangeSummary);
+  const summaries = forms.slice(0, 8).map((form) => memberInlineChangeSummary(form));
   const extra = forms.length > summaries.length ? `\n외 ${forms.length - summaries.length}건` : "";
   if (!window.confirm(`현재 페이지 회원권 ${forms.length}건의 변경사항을 저장합니다.\n\n${summaries.join("\n")}${extra}\n\n실패한 행은 입력값을 유지합니다.`)) return;
   const changeBatchId = createMemberChangeBatchId();
@@ -14047,7 +14047,7 @@ function renderMembers(options = {}) {
   const branchMembers = operationBranchMembers();
   const coachFilter = $("#memberCoachFilter");
   if (coachFilter) {
-    const coachNames = [...new Set(branchMembers.flatMap(memberCoachNames))];
+    const coachNames = [...new Set(branchMembers.flatMap((member) => memberCoachNames(member)))];
     coachFilter.innerHTML = `<option value="all">전체 코치</option>${coachNames.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}`;
     coachFilter.value = coachNames.includes(state.memberCoachFilter) ? state.memberCoachFilter : "all";
     state.memberCoachFilter = coachFilter.value;
@@ -17731,7 +17731,7 @@ function renderLessonPreview() {
   const restorableRegularSlot = selectedSchedules.length === 1
     ? getRestorableReleasedRegularSlot(scheduleCandidates[0])
     : null;
-  const exactDuplicate = scheduleCandidates.map(getAdminManualExactDuplicate).find(Boolean);
+  const exactDuplicate = scheduleCandidates.map((candidate) => getAdminManualExactDuplicate(candidate)).find(Boolean);
   const overrideWarnings = scheduleCandidates.flatMap((item) => getAdminManualOverrideWarnings(item, ticket, false));
   const uniqueOverrideWarnings = [...new Set(overrideWarnings)];
   const overrideReasonMissing = false;
@@ -19374,7 +19374,7 @@ async function addLessonFromForm(event) {
     return;
   }
   if (manualOverride) {
-    const exactDuplicate = candidates.map(getAdminManualExactDuplicate).find(Boolean);
+    const exactDuplicate = candidates.map((candidate) => getAdminManualExactDuplicate(candidate)).find(Boolean);
     if (exactDuplicate) {
       setLessonFormMessage("같은 회원권·날짜·시간의 수업이 이미 있습니다. 기존 수업을 수정해 주세요.", "danger");
       return;

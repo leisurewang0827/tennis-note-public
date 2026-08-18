@@ -1,0 +1,70 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// 실제로 난 사고:
+//
+//   function memberCoachNames(member, allCoaches = coaches) { ... }
+//   branchMembers.flatMap(memberCoachNames)
+//
+//   Uncaught TypeError: allCoaches.find is not a function
+//
+// map/flatMap/filter 같은 메서드는 콜백에 (요소, 인덱스, 배열) 을 넘긴다.
+// 함수에 매개변수를 하나 추가하는 순간, 인덱스(숫자)가 그 자리로 들어간다.
+// 호출부 코드는 한 글자도 안 바뀌었는데 의미가 바뀐다.
+//
+// 그래서 기본값 이음매는 "호출부에 영향이 없다"가 아니다.
+// 콜백으로 넘겨지는 함수에는 영향이 있다.
+//
+// 해결은 호출부를 명시적으로 감싸는 것이다.
+//   .flatMap((member) => memberCoachNames(member))
+
+const SOURCES = [
+  "app/admin/app.js",
+  "app/admin/schedule-v2-admin.js",
+  "app/admin/domain/values.js",
+  "app/admin/domain/lessons.js",
+  "app/admin/domain/billing.js",
+  "app/admin/domain/tickets.js",
+  "app/tennis-note-member-app/app.js",
+  "app/tennis-note-coach-app/app.js",
+];
+
+// 콜백에 인덱스를 함께 넘기는 배열 메서드들
+const ITERATORS = "map|flatMap|filter|forEach|find|findIndex|findLast|some|every|sort|reduce|reduceRight";
+
+test("이음매가 붙은 함수를 배열 메서드에 그대로 넘기지 않는다", () => {
+  // 이음매 함수 이름을 모든 파일에서 모은다. 파일을 넘나들며 쓰이기 때문이다.
+  const seamed = new Set();
+  const sources = new Map();
+  for (const relativePath of SOURCES) {
+    const source = readFileSync(join(repoRoot, relativePath), "utf8");
+    sources.set(relativePath, source);
+    for (const match of source.matchAll(/^(?:async )?function ([A-Za-z0-9_]+)\s*\(([^)]*)\)/gm)) {
+      if (/(?<![\w.$])all[A-Z][A-Za-z0-9_]*\s*=/.test(match[2])) seamed.add(match[1]);
+    }
+  }
+
+  const problems = [];
+  const pattern = new RegExp(`\\.(${ITERATORS})\\(\\s*([A-Za-z0-9_]+)\\s*\\)`, "g");
+  for (const [relativePath, source] of sources) {
+    for (const match of source.matchAll(pattern)) {
+      if (!seamed.has(match[2])) continue;
+      const line = source.slice(0, match.index).split("\n").length;
+      problems.push(
+        `${relativePath}:${line} — .${match[1]}(${match[2]}) 로 넘기면 인덱스가 이음매 매개변수 자리에 들어간다`,
+      );
+    }
+  }
+
+  assert.deepEqual(
+    problems,
+    [],
+    `이음매 함수를 콜백으로 그대로 넘긴 곳:\n  ${problems.join("\n  ")}\n\n` +
+      "화살표 함수로 감싸세요: .map((item) => fn(item))",
+  );
+});

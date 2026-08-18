@@ -140,8 +140,20 @@ function f(candidate)                        // 이전
 function f(candidate, allLessons = lessons)  // 이후
 ```
 
-호출부는 안 바뀌고(기본값이 원래 읽던 그 전역), 테스트에서는 가짜 데이터를
-넘길 수 있습니다. 나중에 호출부들이 명시적으로 넘기게 바뀌면 기본값을 지웁니다.
+테스트에서는 가짜 데이터를 넘길 수 있고, 나중에 호출부들이 명시적으로 넘기게
+바뀌면 기본값을 지웁니다.
+
+⚠ **호출부에 영향이 없다고 생각하면 안 됩니다.** 배열 메서드에 콜백으로
+그대로 넘겨지던 함수는 깨집니다. `map`/`flatMap`/`filter` 는 콜백에
+`(요소, 인덱스, 배열)` 을 넘기므로, 매개변수를 추가하는 순간 **인덱스(숫자)가
+이음매 자리에 들어갑니다.**
+
+```js
+branchMembers.flatMap(memberCoachNames)              // 깨진다
+branchMembers.flatMap((m) => memberCoachNames(m))    // 이렇게 감싸야 한다
+```
+
+`tests/seam-callback.test.js` 가 이걸 검사합니다.
 
 - **매개변수 이름은 `all` 로 시작합니다.** `tests/undefined-identifiers.test.js`
   가 이 접두사를 기준으로, 정의되지 않은 이음매 이름이 본문에 남았는지 검사합니다.
