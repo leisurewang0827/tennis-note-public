@@ -64,6 +64,9 @@ const state = {
   livePaymentOptions: {
     allowedMethods: ["tosspay"],
     bankTransferEnabled: false,
+    paymentMethods: [],
+    settingsVersion: 0,
+    features: { threeMonth: true, oneDay: true, coupons: true },
   },
   discountCoupons: [],
   purchaseFlow: {
@@ -78,6 +81,7 @@ const state = {
     preferredDate: "",
     preferredDay: "",
     preferredTime: "",
+    preferredSchedules: [],
     discountIssueId: "",
     discountSelectionMode: "auto",
     completionStatus: "",
@@ -427,6 +431,7 @@ function normalizeProduct(product = {}, fallback = {}) {
     coachSaleAvailability: merged.coachSaleAvailability && typeof merged.coachSaleAvailability === "object"
       ? { ...merged.coachSaleAvailability }
       : fallback.coachSaleAvailability && typeof fallback.coachSaleAvailability === "object" ? { ...fallback.coachSaleAvailability } : {},
+    coachSaleMode: String(merged.coachSaleMode || fallback.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active",
     productKind,
     discountEnabled: merged.discountEnabled ?? fallback.discountEnabled ?? true,
     coachDiscountAllowed: merged.coachDiscountAllowed ?? fallback.coachDiscountAllowed ?? false,
@@ -487,6 +492,7 @@ function membershipProductFromServer(row = {}) {
     firstLessonOfferEnabled: row.policy_settings?.firstLessonOfferEnabled === true,
     firstLessonOfferPrice: numericValue(row.policy_settings?.firstLessonOfferPrice, 15000),
     coachSaleAvailability: row.policy_settings?.coachSaleAvailability || {},
+    coachSaleMode: row.policy_settings?.coachSaleMode === "selected" ? "selected" : "all_active",
     group,
     title: row.name || `${lessonMinutes}분 회원권`,
     name: row.name,
@@ -522,11 +528,19 @@ function membershipProductFromServer(row = {}) {
 }
 
 function membershipProducts() {
+  const features = state.livePaymentOptions?.features || {};
+  const featureEnabled = (product) => {
+    const familyId = membershipProductFamilyId(product);
+    if (familyId === "three-month") return features.threeMonth !== false;
+    if (familyId === "one-day") return features.oneDay !== false;
+    if (familyId === "coupon") return features.coupons !== false;
+    return true;
+  };
   if (state.dataMode === "live") {
-    return state.liveMembershipProducts.filter((product) => product.status !== "hidden");
+    return state.liveMembershipProducts.filter((product) => product.status !== "hidden" && featureEnabled(product));
   }
   if (state.liveMembershipProducts.length) {
-    return state.liveMembershipProducts.filter((product) => product.status !== "hidden");
+    return state.liveMembershipProducts.filter((product) => product.status !== "hidden" && featureEnabled(product));
   }
   const adminProducts = readAdminProducts();
   const mergedProducts = defaultProducts.map((defaultProduct) =>
@@ -536,7 +550,7 @@ function membershipProducts() {
     .map((product) => ["coupon-20", "coupon-30", "group-20"].includes(product.id)
       ? { ...product, status: "hidden" }
       : product)
-    .filter((product) => product.status !== "hidden");
+    .filter((product) => product.status !== "hidden" && featureEnabled(product));
 }
 
 function formatWon(value) {
@@ -878,6 +892,7 @@ function discountCouponMatchesPayment(coupon = {}, methodId = state.selectedPaym
 }
 
 function purchaseDiscountCoupons(product = {}, methodId = state.selectedPaymentMethod) {
+  if (paymentMethodDefinition(methodId).couponAllowed === false) return [];
   if (product.discountEnabled === false || membershipPricingQuote(product)?.eligible === true) return [];
   const productScope = isOneDayMembershipProduct(product)
     ? "one_day"
@@ -1651,10 +1666,13 @@ function restoreSnapshot() {
     if (!Array.isArray(state.expiredTickets)) state.expiredTickets = [];
     if (!Array.isArray(state.liveMembershipProducts)) state.liveMembershipProducts = [];
     if (!state.livePaymentOptions || typeof state.livePaymentOptions !== "object") {
-      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false };
+      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
     }
     state.livePaymentOptions.allowedMethods = paymentMethodIdList(state.livePaymentOptions.allowedMethods || ["tosspay"]);
     state.livePaymentOptions.bankTransferEnabled = state.livePaymentOptions.bankTransferEnabled === true;
+    if (!Array.isArray(state.livePaymentOptions.paymentMethods)) state.livePaymentOptions.paymentMethods = [];
+    state.livePaymentOptions.settingsVersion = Math.max(0, Number(state.livePaymentOptions.settingsVersion) || 0);
+    state.livePaymentOptions.features = { threeMonth: true, oneDay: true, coupons: true, ...(state.livePaymentOptions.features || {}) };
     if (!Array.isArray(state.discountCoupons)) state.discountCoupons = [];
     state.membershipPricingQuotes = {};
     if (!Array.isArray(state.liveTickets)) state.liveTickets = [];
@@ -1672,12 +1690,14 @@ function restoreSnapshot() {
       preferredDate: "",
       preferredDay: "",
       preferredTime: "",
+      preferredSchedules: [],
       discountIssueId: "",
       discountSelectionMode: "auto",
       completionStatus: "",
       ...(state.purchaseFlow && typeof state.purchaseFlow === "object" ? state.purchaseFlow : {}),
     };
     state.purchaseFlow.step = Math.min(4, Math.max(1, Number(state.purchaseFlow.step) || 1));
+    if (!Array.isArray(state.purchaseFlow.preferredSchedules)) state.purchaseFlow.preferredSchedules = [];
     if (["weekday-coupon", "weekend-coupon"].includes(state.purchaseFlow.familyId)) state.purchaseFlow.familyId = "coupon";
     if (["weekday-coupon", "weekend-coupon"].includes(state.membershipSelectedFamilyId)) state.membershipSelectedFamilyId = "coupon";
     state.selectedLessonDetailId = String(state.selectedLessonDetailId || "");
@@ -2029,7 +2049,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.369",
+    workerUrl: "./service-worker.js?v=1.0.370",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -4027,6 +4047,9 @@ function memberLessonChangeContext(lesson = {}) {
 function memberHomeUpcomingLessonsMarkup(upcoming = []) {
   if (!upcoming.length) return "";
   const ticketMap = new Map(memberScheduleTicketOptions().map((ticket) => [String(ticket.id), ticket]));
+  // The top card already shows the nearest lesson. Only expand this section
+  // when the member actually needs to distinguish two or more tickets.
+  if (ticketMap.size <= 1) return "";
   const groups = new Map();
   upcoming.forEach((lesson) => {
     const ticketId = memberLessonTicketId(lesson) || "unlinked";
@@ -4046,7 +4069,7 @@ function memberHomeUpcomingLessonsMarkup(upcoming = []) {
               <span>${escapeHtml(round || "예정")}</span>
               <strong>${escapeHtml(lessonDateTimeLabel(lesson))}</strong>
               ${change
-                ? `<small class="home-lesson-change"><b>변경된 수업</b><i>변경 전 ${escapeHtml(change.original)}</i><i>현재 ${escapeHtml(change.current)}</i></small>`
+                ? `<small class="home-lesson-change"><b>시간 변경</b><i>${escapeHtml(change.original)} → ${escapeHtml(change.current)}</i></small>`
                 : `<small>${escapeHtml(memberCoachShortName(lesson.coach || "담당 코치"))}</small>`}
             </button>`;
         }).join("")}
@@ -6888,6 +6911,7 @@ function purchaseFlowState() {
       preferredDate: "",
       preferredDay: "",
       preferredTime: "",
+      preferredSchedules: [],
       discountIssueId: "",
       discountSelectionMode: "auto",
       completionStatus: "",
@@ -6897,6 +6921,19 @@ function purchaseFlowState() {
   state.purchaseFlow.purchasePurpose = String(state.purchaseFlow.purchasePurpose || "");
   state.purchaseFlow.showMoreSlots = state.purchaseFlow.showMoreSlots === true;
   state.purchaseFlow.preferredDate = String(state.purchaseFlow.preferredDate || "");
+  state.purchaseFlow.preferredSchedules = Array.isArray(state.purchaseFlow.preferredSchedules)
+    ? state.purchaseFlow.preferredSchedules
+      .filter((schedule) => schedule && typeof schedule === "object")
+      .map((schedule) => ({
+        lessonDate: String(schedule.lessonDate || schedule.lesson_date || ""),
+        day: String(schedule.day || schedule.preferredDay || ""),
+        startTime: String(schedule.startTime || schedule.preferredTime || "").slice(0, 5),
+        coachRoleId: String(schedule.coachRoleId || schedule.coach_role_id || ""),
+        coachName: String(schedule.coachName || ""),
+        durationMinutes: Math.max(10, Number(schedule.durationMinutes) || 20),
+      }))
+      .filter((schedule) => schedule.lessonDate && schedule.startTime && schedule.coachRoleId)
+    : [];
   state.purchaseFlow.discountIssueId = String(state.purchaseFlow.discountIssueId || "");
   state.purchaseFlow.discountSelectionMode = state.purchaseFlow.discountSelectionMode === "manual" ? "manual" : "auto";
   return state.purchaseFlow;
@@ -6920,6 +6957,10 @@ function purchaseTicketLesson(ticket = {}) {
 }
 
 function purchaseCoachOptions() {
+  if (state.dataMode === "live") {
+    const workspaceCoaches = memberScheduleV2WorkspaceCache?.workspace?.coaches;
+    if (!Array.isArray(workspaceCoaches) || !workspaceCoaches.length) return [];
+  }
   const policy = loadAdminSchedulePolicy();
   return (policy.coaches || [])
     .filter((coach) => ["active", "approved"].includes(String(coach.status || "active").toLowerCase()))
@@ -6976,8 +7017,21 @@ function purchaseDateLabel(dateKey = "") {
   return month && date ? `${Number(month)}/${Number(date)}(${day})` : day;
 }
 
+function purchaseEffectiveStartDate() {
+  const sourceTicket = purchaseFlowSourceTicket();
+  if (purchaseFlowState().purchasePurpose !== "renew_same" || !sourceTicket?.expiresOn) return localDateKey();
+  const nextDate = new Date(`${sourceTicket.expiresOn}T12:00:00`);
+  if (Number.isNaN(nextDate.getTime())) return localDateKey();
+  nextDate.setDate(nextDate.getDate() + 1);
+  return [localDateKey(), localDateKey(nextDate)].sort().at(-1) || localDateKey();
+}
+
+function purchaseScheduleWeek() {
+  return memberScheduleWeekForOffset(memberWeekOffsetForDate(purchaseEffectiveStartDate()));
+}
+
 function purchaseAvailabilityRange() {
-  const today = localDateKey();
+  const today = purchaseEffectiveStartDate();
   const workspace = memberScheduleV2WorkspaceCache?.workspace || {};
   const start = [today, String(workspace.from || "")].filter(Boolean).sort().at(-1) || today;
   const defaultEndDate = new Date(`${start}T12:00:00`);
@@ -7020,7 +7074,40 @@ function purchaseHasCoachLessonAtDate(scheduleLessons, lessonDate, time, coach, 
 function purchaseScheduleAvailabilityState() {
   if (state.dataMode !== "live" || !state.member?.profileId) return "ready";
   if (state.scheduleV2SyncStatus === "error") return "error";
-  return state.scheduleV2WorkspaceLoaded && memberScheduleV2WorkspaceCache?.workspace ? "ready" : "loading";
+  if (!state.scheduleV2WorkspaceLoaded || !memberScheduleV2WorkspaceCache?.workspace) return "loading";
+  if (!Array.isArray(memberScheduleV2WorkspaceCache.workspace.coaches)
+    || !memberScheduleV2WorkspaceCache.workspace.coaches.length) return "coach_error";
+  return "ready";
+}
+
+function purchaseRequiredScheduleCount(product = purchaseFlowProduct()) {
+  if (!product || membershipProductFacet(product, "productKind") === "coupon") return 1;
+  return Math.max(1, Number(product.frequencyPerWeek) || 1);
+}
+
+function purchaseSelectedSchedules(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  const durationMinutes = Math.max(10, Number(product?.lessonMinutes) || 20);
+  const coachRoleId = String(flow.coachRoleId || "");
+  return flow.preferredSchedules
+    .filter((schedule) => !coachRoleId || String(schedule.coachRoleId) === coachRoleId)
+    .map((schedule) => ({ ...schedule, durationMinutes }));
+}
+
+function clearPurchaseSchedules() {
+  const flow = purchaseFlowState();
+  flow.preferredSchedules = [];
+  flow.preferredDate = "";
+  flow.preferredDay = "";
+  flow.preferredTime = "";
+}
+
+function syncLegacyPurchaseScheduleFields() {
+  const flow = purchaseFlowState();
+  const first = flow.preferredSchedules[0] || null;
+  flow.preferredDate = first?.lessonDate || "";
+  flow.preferredDay = first?.day || purchaseDateDay(first?.lessonDate || "");
+  flow.preferredTime = first?.startTime || "";
 }
 
 function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
@@ -7036,9 +7123,10 @@ function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
     ? String(sourceTicket?.coachRoleId || "")
     : "";
   const coachSaleAvailability = product.coachSaleAvailability || {};
+  const coachSaleMode = String(product.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
   const coaches = purchaseCoachOptions().filter((coach) => {
     const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
-    if (coachSaleAvailability[roleId] === false) return false;
+    if (coachSaleMode === "selected" ? coachSaleAvailability[roleId] !== true : coachSaleAvailability[roleId] === false) return false;
     if (!sourceCoachId) return true;
     return roleId === sourceCoachId;
   });
@@ -7083,11 +7171,13 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
   const status = purchaseScheduleAvailabilityState();
   if (status === "loading") return '<p class="purchase-availability-state" role="status">실제 시간표에서 가능한 시간을 확인하고 있습니다.</p>';
   if (status === "error") return '<p class="purchase-availability-state is-error" role="status">시간표를 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.</p>';
+  if (status === "coach_error") return '<p class="purchase-availability-state is-error" role="status">운영 중인 선생님 정보를 확인하지 못했습니다. 임시 선생님을 대신 표시하지 않으며, 새로고침 후 다시 확인해 주세요.</p>';
   const slots = purchaseAvailableScheduleSlots(product);
   const coachSaleAvailability = product?.coachSaleAvailability || {};
+  const coachSaleMode = String(product?.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
   const coachOptions = purchaseCoachOptions().filter((coach) => {
     const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
-    return coachSaleAvailability[roleId] !== false;
+    return coachSaleMode === "selected" ? coachSaleAvailability[roleId] === true : coachSaleAvailability[roleId] !== false;
   });
   const sourceTicket = purchaseFlowSourceTicket();
   const sourceCoachId = flow.purchasePurpose === "renew_same" ? String(sourceTicket?.coachRoleId || "") : "";
@@ -7122,10 +7212,14 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
     : [];
   const visibleLimit = flow.showMoreSlots ? 12 : 6;
   const visibleSlots = matchingSlots.slice(0, visibleLimit);
+  const requiredCount = purchaseRequiredScheduleCount(product);
+  const selectedSchedules = purchaseSelectedSchedules(product);
   const slotButtons = visibleSlots.map((slot) => {
-    const selected = String(flow.coachRoleId) === String(slot.coachRoleId)
-      && flow.preferredDate === slot.lessonDate
-      && flow.preferredTime === slot.time;
+    const selected = selectedSchedules.some((schedule) => (
+      String(schedule.coachRoleId) === String(slot.coachRoleId)
+      && schedule.lessonDate === slot.lessonDate
+      && schedule.startTime === slot.time
+    ));
     return `<button class="purchase-slot-card ${selected ? "is-selected" : ""}" type="button"
       data-purchase-slot="${escapeHtml(slot.id)}" data-purchase-slot-date="${escapeHtml(slot.lessonDate)}"
       data-purchase-slot-day="${escapeHtml(slot.day)}" data-purchase-slot-time="${escapeHtml(slot.time)}"
@@ -7134,6 +7228,7 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
   }).join("");
   return `<div class="purchase-slot-groups">
     ${coachSelector}
+    ${activeCoachRoleId ? `<div class="purchase-schedule-count" role="status"><strong>${selectedSchedules.length}/${requiredCount}개 선택</strong><span>${requiredCount > 1 ? `주 ${requiredCount}회 수업 시간을 모두 골라주세요.` : "수업 시간 하나를 골라주세요."}</span></div>` : ""}
     ${activeCoachRoleId
     ? `<div class="purchase-slot-card-grid" role="group" aria-label="선택한 선생님의 가능한 시간">${slotButtons || '<p class="purchase-availability-state" role="status">선택한 선생님의 가능한 빈 시간이 없습니다.</p>'}</div>`
     : '<p class="purchase-availability-state purchase-coach-first" role="status">선생님을 선택하면 그 선생님의 가능한 시간만 보여드립니다.</p>'}
@@ -7149,11 +7244,31 @@ function applyPurchaseScheduleSlot(selectedSlot = {}) {
     return false;
   }
   flow.productId = selectedProduct.id;
-  flow.coachRoleId = selectedSlot.coachRoleId || "";
+  const selectedCoachRoleId = String(selectedSlot.coachRoleId || "");
+  if (flow.coachRoleId && String(flow.coachRoleId) !== selectedCoachRoleId) clearPurchaseSchedules();
+  flow.coachRoleId = selectedCoachRoleId;
   flow.coachName = selectedSlot.coachName || "";
-  flow.preferredDate = selectedSlot.lessonDate || "";
-  flow.preferredDay = selectedSlot.day || "";
-  flow.preferredTime = selectedSlot.time || "";
+  const nextSchedule = {
+    lessonDate: selectedSlot.lessonDate || "",
+    day: selectedSlot.day || purchaseDateDay(selectedSlot.lessonDate || ""),
+    startTime: selectedSlot.time || "",
+    coachRoleId: selectedCoachRoleId,
+    coachName: selectedSlot.coachName || "",
+    durationMinutes: Math.max(10, Number(selectedProduct.lessonMinutes) || 20),
+  };
+  const scheduleKey = (schedule) => `${schedule.lessonDate}:${schedule.startTime}:${schedule.coachRoleId}`;
+  const existingIndex = flow.preferredSchedules.findIndex((schedule) => scheduleKey(schedule) === scheduleKey(nextSchedule));
+  if (existingIndex >= 0) {
+    flow.preferredSchedules.splice(existingIndex, 1);
+  } else {
+    const requiredCount = purchaseRequiredScheduleCount(selectedProduct);
+    if (flow.preferredSchedules.length >= requiredCount) {
+      showToast(`주 ${requiredCount}회 상품은 시간 ${requiredCount}개만 선택할 수 있습니다. 기존 선택을 눌러 해제해 주세요.`);
+      return false;
+    }
+    flow.preferredSchedules.push(nextSchedule);
+  }
+  syncLegacyPurchaseScheduleFields();
   saveSnapshot();
   renderMembershipPurchaseFlow();
   return true;
@@ -7172,12 +7287,20 @@ function purchaseProductCard(product = {}, selected = false) {
     </button>`;
 }
 
+function memberPurchaseLifecycle() {
+  const allTickets = [...(state.liveTickets || []), ...(state.expiredTickets || [])];
+  const hasActiveTicket = allTickets.some((ticket) => !["expired", "refunded", "cancelled"].includes(String(ticket.status || "").toLowerCase()));
+  if (hasActiveTicket) return "active";
+  return allTickets.some((ticket) => Boolean(ticket?.id || ticket?.title)) ? "returning" : "new";
+}
+
 function purchasePurposeOptionsHtml() {
   const flow = purchaseFlowState();
   const activeTickets = (state.liveTickets || []).filter((ticket) => !["expired", "refunded", "cancelled"].includes(String(ticket.status || "").toLowerCase()));
   if (!activeTickets.length) {
     flow.purchasePurpose = membershipProductFamilyId(purchaseFlowProduct() || {}) === "one-day" ? "one_day" : "new_purchase";
-    return '<input type="hidden" value="new_purchase" /><p class="purchase-policy-note">신규 구매로 진행합니다. 모든 활성 코치의 실제 가능한 시간을 확인할 수 있습니다.</p>';
+    const returning = memberPurchaseLifecycle() === "returning";
+    return `<input type="hidden" value="new_purchase" /><p class="purchase-policy-note"><strong>${returning ? "재등록" : "신규 등록"}</strong> · ${returning ? "상품·선생님·시간을 다시 선택합니다. 이전 이용권 기록은 그대로 보관됩니다." : "모든 활성 코치의 실제 가능한 시간을 확인할 수 있습니다."}</p>`;
   }
   const renewing = flow.purchasePurpose === "renew_same";
   const selectedTicket = purchaseFlowSourceTicket() || activeTickets[0] || null;
@@ -7239,10 +7362,11 @@ function purchaseStepOneHtml() {
   const sourceTicket = purchaseFlowSourceTicket();
   const recommendations = recommendedMembershipProducts(products, flow.familyId, sourceTicket);
   const renewing = flow.purchasePurpose === "renew_same" && Boolean(sourceTicket);
+  const returning = !renewing && memberPurchaseLifecycle() === "returning";
   return `
     <div class="purchase-step-intro">
-      <strong>${renewing ? "연장 기간만 고르세요" : "원하는 상품 하나만 고르세요"}</strong>
-      <span>${renewing ? "선생님과 시간은 그대로 유지됩니다. 바꾸고 싶을 때만 위의 ‘시간만 변경’을 누르세요." : "추천 상품만 최대 3개 보여드립니다. 선생님과 시간은 다음 영역에서 간단히 선택합니다."}</span>
+      <strong>${renewing ? "연장 기간만 고르세요" : returning ? "재등록할 상품 하나만 고르세요" : "원하는 상품 하나만 고르세요"}</strong>
+      <span>${renewing ? "선생님과 시간은 그대로 유지됩니다. 바꾸고 싶을 때만 위의 ‘시간만 변경’을 누르세요." : returning ? "이전 이용권은 건드리지 않고 새 이용권으로 등록합니다. 추천 상품은 최대 3개만 보여드립니다." : "추천 상품만 최대 3개 보여드립니다. 선생님과 시간은 다음 영역에서 간단히 선택합니다."}</span>
     </div>
     <div class="purchase-family-grid" role="group" aria-label="수업 형태">${purchaseFamilyOptionsHtml(products, flow.familyId)}</div>
     <div class="purchase-recommendations">
@@ -7272,8 +7396,13 @@ function purchaseStepTwoHtml() {
     : fixedRenewal
       ? "선생님은 그대로 두고 시간만 변경합니다."
       : "선생님을 선택하면 다른 선생님의 시간은 숨기고 실제 빈 시간만 보여드립니다.";
+  const selectedSchedules = purchaseSelectedSchedules(product);
+  const selectedSummary = selectedSchedules.length
+    ? `<div class="purchase-selected-schedule-list" aria-label="선택한 수업 시간">${selectedSchedules.map((schedule, index) => `<span><b>${index + 1}</b>${escapeHtml(purchaseDateLabel(schedule.lessonDate))} ${escapeHtml(schedule.startTime)}</span>`).join("")}</div>`
+    : "";
   return `
     <div class="purchase-step-intro"><strong>${availabilityTitle}</strong><span>${availabilityDetail}</span></div>
+    ${selectedSummary}
     <section class="purchase-choice-section purchase-actual-slots" aria-label="실제 예약 가능한 시간">
       ${purchaseScheduleSlotGroupsHtml(product)}
     </section>
@@ -7282,7 +7411,10 @@ function purchaseStepTwoHtml() {
 
 function purchasePaymentMethodOptionsHtml() {
   const selectedMethodId = normalizeSelectedPaymentMethod();
-  const readyMethods = paymentMethodDefinitions.filter((method) => isPaymentGatewayReady(method.id));
+  const readyMethods = paymentMethodDefinitions
+    .map((method) => paymentMethodDefinition(method.id))
+    .filter((method) => isPaymentGatewayReady(method.id))
+    .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999));
   const methodOptions = readyMethods.map((method) => {
     const selected = method.id === selectedMethodId;
     const amount = purchasePaymentAmount(purchaseFlowProduct() || {}, method.id);
@@ -7347,7 +7479,18 @@ function purchaseStepCanContinue() {
   const purposeReady = ["renew_same", "add_coach", "new_purchase", "one_day"].includes(flow.purchasePurpose);
   if (!purposeReady || !product || !isPaymentGatewayReady(normalizeSelectedPaymentMethod())) return false;
   if (flow.purchasePurpose === "renew_same" && purchaseFlowSourceTicket() && flow.scheduleMode === "keep") return true;
-  return Boolean(flow.coachRoleId && flow.preferredDate && flow.preferredDay && flow.preferredTime);
+  const schedules = purchaseSelectedSchedules(product);
+  const requiredCount = purchaseRequiredScheduleCount(product);
+  return Boolean(
+    flow.coachRoleId
+    && schedules.length === requiredCount
+    && schedules.every((schedule) => (
+      schedule.lessonDate
+      && schedule.day
+      && schedule.startTime
+      && String(schedule.coachRoleId) === String(flow.coachRoleId)
+    ))
+  );
 }
 
 function purchaseSinglePageHtml() {
@@ -7436,6 +7579,7 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "") {
   flow.preferredDate = lesson?.lessonDate || "";
   flow.preferredDay = lesson?.day || "";
   flow.preferredTime = lesson?.time || "";
+  flow.preferredSchedules = [];
   flow.discountIssueId = "";
   flow.discountSelectionMode = "auto";
   flow.completionStatus = "";
@@ -7478,6 +7622,7 @@ function selectPurchasePurpose(purpose = "") {
     flow.preferredDate = lesson?.lessonDate || "";
     flow.preferredDay = lesson?.day || "";
     flow.preferredTime = lesson?.time || "";
+    flow.preferredSchedules = [];
     const matchingProduct = membershipProducts().find((product) => String(product.id) === String(sourceTicket.productId || ""))
       || recommendedMembershipProducts(membershipProducts(), membershipProductFamilyId(sourceTicket), sourceTicket)[0];
     if (matchingProduct) {
@@ -7490,9 +7635,7 @@ function selectPurchasePurpose(purpose = "") {
     flow.scheduleMode = "change";
     flow.coachRoleId = "";
     flow.coachName = "";
-    flow.preferredDate = "";
-    flow.preferredDay = "";
-    flow.preferredTime = "";
+    clearPurchaseSchedules();
   }
   saveSnapshot();
   renderMembershipPurchaseFlow();
@@ -7518,9 +7661,7 @@ function selectPurchaseFamily(familyId = "") {
   if (!keepingRenewal) {
     flow.coachRoleId = "";
     flow.coachName = "";
-    flow.preferredDate = "";
-    flow.preferredDay = "";
-    flow.preferredTime = "";
+    clearPurchaseSchedules();
   }
   flow.showMoreSlots = false;
   state.membershipFilters = { ...family.filters };
@@ -7552,9 +7693,7 @@ function selectPurchaseProduct(productId = "") {
   if (productChanged && !flow.renewalTicketId) {
     flow.coachRoleId = "";
     flow.coachName = "";
-    flow.preferredDate = "";
-    flow.preferredDay = "";
-    flow.preferredTime = "";
+    clearPurchaseSchedules();
   }
   if (!flow.open) {
     openMembershipPurchaseFlow("", product.id);
@@ -7579,7 +7718,7 @@ function movePurchaseStep(direction = 1) {
 
 async function refreshPurchaseScheduleAvailability() {
   if (state.dataMode !== "live" || !state.member?.profileId) return true;
-  await syncMemberScheduleV2(null, { force: false }).catch(() => false);
+  await syncMemberScheduleV2(null, { force: false, week: purchaseScheduleWeek() }).catch(() => false);
   const flow = purchaseFlowState();
   if (flow.open && flow.step !== 4) renderMembershipPurchaseFlow();
   return purchaseScheduleAvailabilityState() === "ready";
@@ -7928,11 +8067,14 @@ async function syncMemberPaymentOptionsFromServer(targetBranchId = "") {
     state.livePaymentOptions = {
       allowedMethods: paymentMethodIdList(options?.allowedMethods || ["tosspay"]),
       bankTransferEnabled: options?.bankTransferEnabled === true,
+      paymentMethods: Array.isArray(options?.paymentMethods) ? options.paymentMethods : [],
+      settingsVersion: Math.max(0, Number(options?.settingsVersion) || 0),
+      features: { threeMonth: true, oneDay: true, coupons: true, ...(options?.features || {}) },
     };
     normalizeSelectedPaymentMethod();
     return true;
   } catch {
-    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false };
+    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
     normalizeSelectedPaymentMethod();
     return false;
   }
@@ -7941,8 +8083,9 @@ async function syncMemberPaymentOptionsFromServer(targetBranchId = "") {
 async function syncMemberDiscountCouponsFromServer() {
   const client = window.TennisNoteDataClient;
   if (!client?.invokeFunction || !client.getSession?.()?.access_token) return false;
+  const branchId = currentLiveTicket()?.branchId || upcomingLiveTickets()[0]?.branchId || state.liveMembershipProducts?.[0]?.branchId || null;
   try {
-    const response = await client.invokeFunction("portone-payment/coupon-wallet", { body: {} });
+    const response = await client.invokeFunction("portone-payment/coupon-wallet", { body: { branchId } });
     state.discountCoupons = Array.isArray(response?.coupons) ? response.coupons : [];
     renderDiscountCouponWallet();
     return true;
@@ -9059,9 +9202,18 @@ async function persistLessonJournalToServer(log, files = []) {
 }
 
 function paymentMethodDefinition(methodId = state.selectedPaymentMethod) {
-  return paymentMethodDefinitions.find((method) => method.id === methodId)
+  const base = paymentMethodDefinitions.find((method) => method.id === methodId)
     || paymentMethodDefinitions.find((method) => method.id === "tosspay")
     || paymentMethodDefinitions[0];
+  const configured = (state.livePaymentOptions?.paymentMethods || []).find((method) => method.id === base.id) || {};
+  return {
+    ...base,
+    label: String(configured.title || base.label),
+    shortLabel: String(configured.title || base.shortLabel),
+    displayOrder: Number(configured.displayOrder || 999),
+    priceBasis: String(configured.priceBasis || (base.id === "bank_transfer" ? "cash" : "card")),
+    couponAllowed: configured.couponAllowed !== false,
+  };
 }
 
 function isPaymentGatewayReady(methodId = state.selectedPaymentMethod, config = paymentGatewayConfig()) {
@@ -9162,7 +9314,10 @@ function renderPaymentGatewayStatus() {
   if (!target) return;
   const selectedMethodId = normalizeSelectedPaymentMethod();
   const config = paymentGatewayConfig();
-  const readyMethods = paymentMethodDefinitions.filter((method) => isPaymentGatewayReady(method.id, config));
+  const readyMethods = paymentMethodDefinitions
+    .map((method) => paymentMethodDefinition(method.id))
+    .filter((method) => isPaymentGatewayReady(method.id, config))
+    .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999));
   const readyCount = readyMethods.length;
   const ready = readyCount > 0;
   const methodButtons = readyMethods.map((method) => {
@@ -9962,6 +10117,15 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
       preferredDate: purchaseFlow.productId === product.id ? purchaseFlow.preferredDate || null : null,
       preferredDay: purchaseFlow.productId === product.id ? purchaseFlow.preferredDay || null : null,
       preferredTime: purchaseFlow.productId === product.id ? purchaseFlow.preferredTime || null : null,
+      preferredSchedules: purchaseFlow.productId === product.id
+        ? purchaseSelectedSchedules(product).map((schedule) => ({
+          lessonDate: schedule.lessonDate,
+          day: schedule.day,
+          startTime: schedule.startTime,
+          durationMinutes: schedule.durationMinutes,
+          coachRoleId: schedule.coachRoleId,
+        }))
+        : [],
       scheduleMode: purchaseFlow.productId === product.id ? purchaseFlow.scheduleMode || "change" : "change",
       renewalSourceTicketId: purchaseFlow.productId === product.id ? purchaseFlow.renewalTicketId || null : null,
       purchasePurpose: purchaseFlow.productId === product.id ? purchaseFlow.purchasePurpose || "new_purchase" : "new_purchase",
@@ -10992,7 +11156,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.369" });
+  const params = new URLSearchParams({ v: "1.0.370" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -12253,7 +12417,7 @@ function activateLiveMemberProfile(profileId) {
   state.lessonLogs = [];
   state.practiceLogs = [];
   state.paymentRequests = [];
-  state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false };
+  state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
   state.discountCoupons = [];
   state.expiredTickets = [];
   state.ticketHistory = [];
@@ -13311,9 +13475,7 @@ function bindEvents() {
       flow.scheduleMode = purchaseScheduleModeButton.dataset.purchaseScheduleMode;
       if (flow.scheduleMode === "change") {
         flow.showMoreSlots = false;
-        flow.preferredDate = "";
-        flow.preferredDay = "";
-        flow.preferredTime = "";
+        clearPurchaseSchedules();
       } else {
         const sourceTicket = purchaseFlowSourceTicket();
         const lesson = purchaseTicketLesson(sourceTicket || {});
@@ -13322,6 +13484,7 @@ function bindEvents() {
         flow.preferredDate = lesson?.lessonDate || "";
         flow.preferredDay = lesson?.day || "";
         flow.preferredTime = lesson?.time || "";
+        flow.preferredSchedules = [];
       }
       saveSnapshot();
       renderMembershipPurchaseFlow();
@@ -13330,11 +13493,10 @@ function bindEvents() {
     const purchaseCoachFilterButton = event.target.closest("[data-purchase-coach-filter]");
     if (purchaseCoachFilterButton) {
       const flow = purchaseFlowState();
-      flow.coachRoleId = purchaseCoachFilterButton.dataset.purchaseCoachFilter || "";
+      const nextCoachRoleId = purchaseCoachFilterButton.dataset.purchaseCoachFilter || "";
+      if (String(flow.coachRoleId || "") !== String(nextCoachRoleId)) clearPurchaseSchedules();
+      flow.coachRoleId = nextCoachRoleId;
       flow.coachName = purchaseCoachFilterButton.dataset.purchaseCoachFilterName || "";
-      flow.preferredDate = "";
-      flow.preferredDay = "";
-      flow.preferredTime = "";
       flow.showMoreSlots = false;
       saveSnapshot();
       renderMembershipPurchaseFlow();
@@ -13344,9 +13506,7 @@ function bindEvents() {
       const flow = purchaseFlowState();
       flow.coachRoleId = "";
       flow.coachName = "";
-      flow.preferredDate = "";
-      flow.preferredDay = "";
-      flow.preferredTime = "";
+      clearPurchaseSchedules();
       flow.showMoreSlots = false;
       saveSnapshot();
       renderMembershipPurchaseFlow();
@@ -13362,6 +13522,7 @@ function bindEvents() {
     const purchaseScheduleDateButton = event.target.closest("[data-purchase-schedule-date]");
     if (purchaseScheduleDateButton) {
       const flow = purchaseFlowState();
+      clearPurchaseSchedules();
       flow.preferredDate = purchaseScheduleDateButton.dataset.purchaseScheduleDate || "";
       flow.preferredDay = purchaseScheduleDateButton.dataset.purchaseScheduleDay || purchaseDateDay(flow.preferredDate);
       flow.preferredTime = "";
@@ -13890,7 +14051,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.369",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.370",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

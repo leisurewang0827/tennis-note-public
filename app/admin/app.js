@@ -1948,6 +1948,8 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
       const branchKey = activeOperationBranchId() || "unselected";
       jobs.push(
         loadAdminDataOnce(`membership-policy:${branchKey}`, () => Promise.all([
+          loadBranchSalesSettingsFromServer(),
+          loadBranchPaymentAccountFromServer(),
           loadServerHoldingPolicy(),
           loadRefundPolicySettingsFromServer(),
           loadPolicyVersionsFromServer(),
@@ -4172,6 +4174,94 @@ function paymentGatewayConfig() {
 let branchPaymentAccount = null;
 let branchPaymentAccountStatus = "idle";
 
+function defaultBranchSalesConfig() {
+  return {
+    features: {
+      threeMonth: true,
+      oneDay: true,
+      coupons: true,
+      newMemberBenefit: false,
+      returningMemberBenefit: false,
+      referralBenefit: false,
+      bankNotificationEvidence: false,
+    },
+    paymentMethods: {
+      tosspay: { enabled: true, title: "토스페이", displayOrder: 10, priceBasis: "card", couponAllowed: true },
+      bank_transfer: { enabled: true, title: "계좌이체", displayOrder: 20, priceBasis: "cash", couponAllowed: true },
+      card: { enabled: false, title: "카드", displayOrder: 30, priceBasis: "card", couponAllowed: true },
+      kakaopay: { enabled: false, title: "카카오페이", displayOrder: 40, priceBasis: "card", couponAllowed: true },
+      naverpay: { enabled: false, title: "네이버페이", displayOrder: 50, priceBasis: "card", couponAllowed: true },
+      onsite_cash: { enabled: true, title: "현장 현금", displayOrder: 60, priceBasis: "cash", couponAllowed: false, adminOnly: true },
+    },
+    benefits: {
+      newMember: { enabled: false, title: "신규회원 할인", discountType: "percent", discountValue: 5, expiresDays: 30 },
+      returningMember: { enabled: false, title: "다시 시작 할인", discountType: "percent", discountValue: 5, expiresDays: 30, inactiveDays: 90 },
+      referral: { enabled: false, title: "친구추천 할인", discountType: "percent", discountValue: 5, expiresDays: 30 },
+    },
+  };
+}
+
+function normalizeBranchSalesConfig(value = {}) {
+  const defaults = defaultBranchSalesConfig();
+  const source = value && typeof value === "object" ? value : {};
+  const features = { ...defaults.features, ...(source.features || {}) };
+  const paymentMethods = Object.fromEntries(Object.entries(defaults.paymentMethods).map(([id, method]) => {
+    const next = { ...method, ...(source.paymentMethods?.[id] || {}) };
+    next.priceBasis = ["bank_transfer", "onsite_cash"].includes(id) ? "cash" : "card";
+    next.displayOrder = Math.max(1, Math.min(999, Number(next.displayOrder || method.displayOrder)));
+    return [id, next];
+  }));
+  const benefits = Object.fromEntries(Object.entries(defaults.benefits).map(([id, benefit]) => [
+    id,
+    { ...benefit, ...(source.benefits?.[id] || {}) },
+  ]));
+  features.newMemberBenefit = benefits.newMember.enabled === true;
+  features.returningMemberBenefit = benefits.returningMember.enabled === true;
+  features.referralBenefit = benefits.referral.enabled === true;
+  return { features, paymentMethods, benefits };
+}
+
+const branchSalesSettingsState = {
+  status: "idle",
+  branchId: "",
+  version: 0,
+  appliedAt: "",
+  appliedConfig: defaultBranchSalesConfig(),
+  draftConfig: defaultBranchSalesConfig(),
+  message: "",
+};
+
+function applyBranchSalesSettingsResponse(response = {}) {
+  const value = Array.isArray(response) ? response[0] || {} : response || {};
+  branchSalesSettingsState.status = "loaded";
+  branchSalesSettingsState.branchId = String(value.branchId || value.branch_id || activeOperationBranchId() || "");
+  branchSalesSettingsState.version = Number(value.version || 0);
+  branchSalesSettingsState.appliedAt = String(value.appliedAt || value.applied_at || "");
+  branchSalesSettingsState.appliedConfig = normalizeBranchSalesConfig(value.appliedConfig || value.applied_config || {});
+  branchSalesSettingsState.draftConfig = normalizeBranchSalesConfig(value.draftConfig || value.draft_config || value.appliedConfig || value.applied_config || {});
+  branchSalesSettingsState.message = "";
+}
+
+async function loadBranchSalesSettingsFromServer() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.rpc || !branchId || !adminApprovalReady()) return false;
+  branchSalesSettingsState.status = "loading";
+  branchSalesSettingsState.branchId = branchId;
+  renderBranchSalesSetup();
+  try {
+    const response = await client.rpc("tn_admin_get_branch_sales_settings", { target_branch_id: branchId });
+    applyBranchSalesSettingsResponse(response);
+    renderBranchSalesSetup();
+    return true;
+  } catch (error) {
+    branchSalesSettingsState.status = "failed";
+    branchSalesSettingsState.message = error?.payload?.code || error?.message || "server_error";
+    renderBranchSalesSetup();
+    return false;
+  }
+}
+
 async function loadBranchPaymentAccountFromServer() {
   const client = window.TennisNoteDataClient;
   const branchId = activeOperationBranchId();
@@ -4185,12 +4275,18 @@ async function loadBranchPaymentAccountFromServer() {
     });
     branchPaymentAccount = rows?.[0] || { branch_id: branchId, is_enabled: false };
     branchPaymentAccountStatus = "loaded";
-    if (state.view === "settings") renderPaymentSetup();
+    if (state.view === "settings") {
+      renderPaymentSetup();
+      renderBranchSalesSetup();
+    }
     return true;
   } catch (error) {
     branchPaymentAccount = null;
     branchPaymentAccountStatus = "failed";
-    if (state.view === "settings") renderPaymentSetup();
+    if (state.view === "settings") {
+      renderPaymentSetup();
+      renderBranchSalesSetup();
+    }
     console.warn("[Tennis Note] branch payment account unavailable", error?.message || error);
     return false;
   }
@@ -4199,11 +4295,11 @@ async function loadBranchPaymentAccountFromServer() {
 async function saveBranchPaymentAccount() {
   const client = window.TennisNoteDataClient;
   const branchId = activeOperationBranchId();
-  const bankName = $("#branchBankName")?.value.trim() || "";
-  const accountNumber = $("#branchBankAccountNumber")?.value.trim() || "";
-  const accountHolder = $("#branchBankAccountHolder")?.value.trim() || "";
-  const transferInstructions = $("#branchBankTransferInstructions")?.value.trim() || "";
-  const enabled = $("#branchBankTransferEnabled")?.checked === true;
+  const bankName = ($("#salesBranchBankName") || $("#branchBankName"))?.value.trim() || "";
+  const accountNumber = ($("#salesBranchBankAccountNumber") || $("#branchBankAccountNumber"))?.value.trim() || "";
+  const accountHolder = ($("#salesBranchBankAccountHolder") || $("#branchBankAccountHolder"))?.value.trim() || "";
+  const transferInstructions = ($("#salesBranchBankTransferInstructions") || $("#branchBankTransferInstructions"))?.value.trim() || "";
+  const enabled = ($("#salesBranchBankTransferEnabled") || $("#branchBankTransferEnabled"))?.checked === true;
   const digits = accountNumber.replace(/[^0-9]/g, "");
   if (!client?.insertRows || !client?.updateRows || !branchId || !adminApprovalReady()) {
     showToast("관리자 로그인과 운영 지점을 확인해 주세요");
@@ -4221,7 +4317,7 @@ async function saveBranchPaymentAccount() {
     is_enabled: enabled,
     updated_at: new Date().toISOString(),
   };
-  const button = $("#saveBranchPaymentAccountButton");
+  const button = $("#saveSalesBranchPaymentAccountButton") || $("#saveBranchPaymentAccountButton");
   if (button) button.disabled = true;
   try {
     const existing = String(branchPaymentAccount?.branch_id || "") === String(branchId);
@@ -4315,6 +4411,7 @@ function normalizeMembershipProduct(product = {}, fallback = {}) {
     coachSaleAvailability: merged.coachSaleAvailability && typeof merged.coachSaleAvailability === "object"
       ? { ...merged.coachSaleAvailability }
       : fallback.coachSaleAvailability && typeof fallback.coachSaleAvailability === "object" ? { ...fallback.coachSaleAvailability } : {},
+    coachSaleMode: String(merged.coachSaleMode || fallback.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active",
     groupDeductionPolicy: merged.groupDeductionPolicy
       || merged.group_deduction_policy
       || fallback.groupDeductionPolicy
@@ -4380,6 +4477,7 @@ function membershipProductDraftFromServer(product = {}) {
     threeMonthDiscountRate: Number(product.policy_settings?.threeMonthDiscountRate ?? 10),
     threeMonthPriceMode: product.policy_settings?.threeMonthPriceMode || "automatic",
     coachSaleAvailability: product.policy_settings?.coachSaleAvailability || {},
+    coachSaleMode: product.policy_settings?.coachSaleMode === "selected" ? "selected" : "all_active",
     branchId: product.branch_id || "",
     branchName: operationBranchOptions().find((branch) => branch.id === String(product.branch_id || ""))?.name || "",
     group: `${scheduleScope === "mixed" ? "혼합" : scheduleScope === "weekend" ? "주말" : "평일"} ${productKind === "coupon" ? "쿠폰제" : "정규권"}`,
@@ -4842,6 +4940,9 @@ async function updateMembershipProductSetting(productId, options = {}) {
     threeMonthPriceMode: fieldElement("threeMonthPriceMode")
       ? readField("threeMonthPriceMode")
       : product.threeMonthPriceMode,
+    coachSaleMode: fieldElement("coachSaleMode")
+      ? readField("coachSaleMode")
+      : product.coachSaleMode,
     coachSaleAvailability,
     status: readField("status") || product.status,
   }, membershipProductDefaults.find((item) => item.id === product.id)));
@@ -4884,6 +4985,11 @@ async function updateMembershipProductSetting(productId, options = {}) {
     showToast("첫 수업가는 1원 이상, 카드 정상가보다 낮게 입력해 주세요.");
     return;
   }
+  if (nextProduct.status === "sale" && nextProduct.coachSaleMode === "selected"
+    && !Object.values(nextProduct.coachSaleAvailability || {}).some((value) => value === true)) {
+    showToast("선택한 코치만 표시하려면 판매할 코치를 한 명 이상 선택해 주세요.");
+    return;
+  }
   const saleIssue = couponProductSaleIssue(nextProduct);
   if (saleIssue && nextProduct.status === "sale") nextProduct.status = "hidden";
   const client = window.TennisNoteDataClient;
@@ -4914,10 +5020,11 @@ async function updateMembershipProductSetting(productId, options = {}) {
       target_products: [membershipProductServerSavePayload(nextProduct, serverProduct)],
       target_reason: "관리자 회원권 상품 행 저장",
     });
-    await client.rpc("tn_admin_save_membership_checkout_policy", {
+    await client.rpc("tn_admin_save_membership_checkout_policy_v2", {
       target_product_id: serverProduct.id,
       target_three_month_discount_rate: Number(nextProduct.threeMonthDiscountRate ?? 10),
       target_three_month_price_mode: nextProduct.threeMonthPriceMode || "automatic",
+      target_coach_sale_mode: nextProduct.coachSaleMode || "all_active",
       target_coach_sale_availability: nextProduct.coachSaleAvailability || {},
     });
     if (!refreshAfterSave) {
@@ -27557,6 +27664,198 @@ async function deletePopupNotice(noticeId = "") {
   showToast("공지를 삭제했습니다");
 }
 
+function branchSalesSettingsDirty() {
+  return JSON.stringify(normalizeBranchSalesConfig(branchSalesSettingsState.draftConfig))
+    !== JSON.stringify(normalizeBranchSalesConfig(branchSalesSettingsState.appliedConfig));
+}
+
+function branchSalesConfigFromForm() {
+  const panel = $("#branchSalesSetupPanel");
+  const next = normalizeBranchSalesConfig(branchSalesSettingsState.draftConfig);
+  if (!panel) return next;
+  panel.querySelectorAll("[data-sales-feature]").forEach((input) => {
+    next.features[input.dataset.salesFeature] = input.checked === true;
+  });
+  panel.querySelectorAll("[data-sales-payment-method][data-sales-field]").forEach((input) => {
+    const method = next.paymentMethods[input.dataset.salesPaymentMethod];
+    if (!method) return;
+    const field = input.dataset.salesField;
+    method[field] = input.type === "checkbox" ? input.checked === true : input.type === "number" ? Number(input.value || 0) : input.value.trim();
+  });
+  panel.querySelectorAll("[data-sales-benefit][data-sales-field]").forEach((input) => {
+    const benefit = next.benefits[input.dataset.salesBenefit];
+    if (!benefit) return;
+    const field = input.dataset.salesField;
+    benefit[field] = input.type === "checkbox" ? input.checked === true : input.type === "number" ? Number(input.value || 0) : input.value.trim();
+  });
+  next.features.newMemberBenefit = next.benefits.newMember.enabled === true;
+  next.features.returningMemberBenefit = next.benefits.returningMember.enabled === true;
+  next.features.referralBenefit = next.benefits.referral.enabled === true;
+  return normalizeBranchSalesConfig(next);
+}
+
+function syncBranchSalesDraftFromForm() {
+  branchSalesSettingsState.draftConfig = branchSalesConfigFromForm();
+  renderBranchSalesPreview();
+}
+
+function branchSalesPreviewMarkup() {
+  const config = normalizeBranchSalesConfig(branchSalesSettingsState.draftConfig);
+  const methods = Object.entries(config.paymentMethods)
+    .filter(([id, method]) => id !== "onsite_cash" && method.enabled === true)
+    .sort((left, right) => Number(left[1].displayOrder) - Number(right[1].displayOrder));
+  const products = membershipProductsForActiveOperationProfile()
+    .map((product) => normalizeMembershipProduct(product, membershipProductDefaults.find((item) => item.id === product.id)))
+    .filter((product) => product.status === "sale")
+    .filter((product) => config.features.oneDay || product.purchaseExperience !== "one_day")
+    .filter((product) => config.features.threeMonth || Number(product.termWeeks) < 12)
+    .slice(0, 3);
+  const benefit = Object.values(config.benefits).find((item) => item.enabled === true);
+  return `
+    <div class="branch-sales-phone" aria-label="회원앱 390픽셀 미리보기">
+      <div class="branch-sales-phone-head"><small>회원권</small><strong>${escapeHtml(activeOperationBranchName())}</strong></div>
+      <div class="branch-sales-phone-body">
+        <strong>${products[0] ? "원하는 수업을 선택하세요" : "판매 상품을 준비 중입니다"}</strong>
+        ${products.map((product, index) => `<button type="button" tabindex="-1" class="branch-sales-preview-product ${index === 0 ? "is-selected" : ""}"><span>${escapeHtml(product.title)}</span><b>${money.format(Number(product.cashAmount || product.cardAmount || 0))}원~</b></button>`).join("")}
+        ${benefit ? `<span class="branch-sales-preview-benefit">${escapeHtml(benefit.title)} · ${Number(benefit.discountValue || 0)}% 자동 확인</span>` : ""}
+        <div class="branch-sales-preview-methods">${methods.map(([, method], index) => `<span class="${index === 0 ? "is-selected" : ""}">${escapeHtml(method.title)}</span>`).join("") || "<span>결제수단 준비 중</span>"}</div>
+        <button type="button" tabindex="-1" class="branch-sales-preview-pay">결제하기</button>
+      </div>
+    </div>`;
+}
+
+function renderBranchSalesPreview() {
+  const target = $("#branchSalesMemberPreview");
+  if (target) target.innerHTML = branchSalesPreviewMarkup();
+  const status = $("#branchSalesDraftStatus");
+  if (status) status.textContent = branchSalesSettingsDirty() ? "적용 전 변경 있음" : "현재 앱과 동일";
+}
+
+function branchSalesPaymentMethodMarkup(id, method) {
+  const labels = {
+    tosspay: "승인된 토스 간편결제",
+    bank_transfer: "입금 확인 후 회원권 생성",
+    card: "일반 카드 PG 승인 후 사용",
+    kakaopay: "카카오페이 승인 후 사용",
+    naverpay: "네이버페이 승인 후 사용",
+  };
+  return `
+    <article class="branch-sales-method-card">
+      <label class="branch-sales-toggle"><input type="checkbox" data-sales-payment-method="${id}" data-sales-field="enabled" ${method.enabled ? "checked" : ""} /><span>${escapeHtml(method.title)}</span></label>
+      <small>${labels[id]} · ${method.priceBasis === "cash" ? "현금가" : "카드가"}</small>
+      <div class="branch-sales-inline-fields">
+        <label><span>앱 표기</span><input type="text" maxlength="30" value="${escapeHtml(method.title)}" data-sales-payment-method="${id}" data-sales-field="title" /></label>
+        <label><span>순서</span><input type="number" min="1" max="999" value="${Number(method.displayOrder || 10)}" data-sales-payment-method="${id}" data-sales-field="displayOrder" /></label>
+        <label class="branch-sales-check"><input type="checkbox" data-sales-payment-method="${id}" data-sales-field="couponAllowed" ${method.couponAllowed !== false ? "checked" : ""} /> 쿠폰 허용</label>
+      </div>
+    </article>`;
+}
+
+function branchSalesBenefitMarkup(id, benefit) {
+  const descriptions = {
+    newMember: "처음 등록하는 회원",
+    returningMember: `${Number(benefit.inactiveDays || 90)}일 이상 쉬고 돌아온 회원`,
+    referral: "추천 관계가 확인된 두 회원",
+  };
+  return `
+    <article class="branch-sales-benefit-card">
+      <label class="branch-sales-toggle"><input type="checkbox" data-sales-benefit="${id}" data-sales-field="enabled" ${benefit.enabled ? "checked" : ""} /><span>${escapeHtml(benefit.title)}</span></label>
+      <small>${descriptions[id]}</small>
+      <div class="branch-sales-inline-fields">
+        <label><span>쿠폰 이름</span><input type="text" maxlength="40" value="${escapeHtml(benefit.title)}" data-sales-benefit="${id}" data-sales-field="title" /></label>
+        <label><span>할인율</span><input type="number" min="1" max="100" value="${Number(benefit.discountValue || 5)}" data-sales-benefit="${id}" data-sales-field="discountValue" /></label>
+        <label><span>사용기한</span><input type="number" min="1" max="365" value="${Number(benefit.expiresDays || 30)}" data-sales-benefit="${id}" data-sales-field="expiresDays" /></label>
+        ${id === "returningMember" ? `<label><span>미이용 일수</span><input type="number" min="30" max="730" value="${Number(benefit.inactiveDays || 90)}" data-sales-benefit="${id}" data-sales-field="inactiveDays" /></label>` : ""}
+      </div>
+    </article>`;
+}
+
+function renderBranchSalesSetup() {
+  const target = $("#branchSalesSetupPanel");
+  if (!target) return;
+  const branchId = activeOperationBranchId();
+  if (!branchId) {
+    target.innerHTML = '<p class="empty-text">운영 지점을 먼저 선택해 주세요.</p>';
+    return;
+  }
+  if (branchSalesSettingsState.status === "loading") {
+    target.innerHTML = '<p class="empty-text">회원 판매 설정을 불러오는 중입니다.</p>';
+    return;
+  }
+  const config = normalizeBranchSalesConfig(branchSalesSettingsState.draftConfig);
+  const account = branchPaymentAccount || {};
+  const activeCoaches = coaches.filter((coach) => coach.status === "active" && coach.serverRoleId);
+  const failed = branchSalesSettingsState.status === "failed";
+  target.innerHTML = `
+    <div class="panel-heading compact-heading branch-sales-heading">
+      <div><p class="eyebrow">초보자 빠른 설정</p><h2>회원 판매 5단계</h2><span>기존 상품·시간표·쿠폰·결제를 한곳에서 설정합니다.</span></div>
+      <span id="branchSalesDraftStatus" class="source-pill">${failed ? "서버 설정 필요" : branchSalesSettingsDirty() ? "적용 전 변경 있음" : "현재 앱과 동일"}</span>
+    </div>
+    ${failed ? `<p class="branch-sales-error" role="alert">설정 기능을 불러오지 못했습니다. DB 업데이트와 관리자 권한을 확인한 뒤 다시 시도해 주세요. (${escapeHtml(branchSalesSettingsState.message)})</p>` : ""}
+    <div class="branch-sales-steps ${failed ? "is-disabled" : ""}">
+      <section class="branch-sales-step"><div class="branch-sales-step-title"><b>1</b><span><strong>상품</strong><small>판매할 종류만 켭니다</small></span></div><div class="branch-sales-toggle-grid">
+        <label><input type="checkbox" data-sales-feature="threeMonth" ${config.features.threeMonth ? "checked" : ""} /> 3개월</label>
+        <label><input type="checkbox" data-sales-feature="oneDay" ${config.features.oneDay ? "checked" : ""} /> 원데이</label>
+        <label><input type="checkbox" data-sales-feature="coupons" ${config.features.coupons ? "checked" : ""} /> 쿠폰</label>
+      </div><small>가격·주 1/2회·평일/주말은 아래 기존 상품 편집에서 그대로 관리합니다.</small></section>
+      <section class="branch-sales-step"><div class="branch-sales-step-title"><b>2</b><span><strong>코치·시간</strong><small>실제 시간표와 연결</small></span></div><p><strong>활동 코치 ${activeCoaches.length}명</strong> · ${activeCoaches.map((coach) => escapeHtml(coach.name)).join(" · ") || "연결된 코치 없음"}</p><small>모든 코치 또는 선택 코치는 상품별 상세에서 정합니다. 앱에는 서버에 연결되고 빈 시간이 있는 코치만 예약 가능으로 표시됩니다.</small></section>
+      <section class="branch-sales-step branch-sales-payment-step"><div class="branch-sales-step-title"><b>3</b><span><strong>결제</strong><small>수단별 이름·노출·쿠폰</small></span></div><div class="branch-sales-method-grid">${["tosspay", "bank_transfer", "card", "kakaopay", "naverpay"].map((id) => branchSalesPaymentMethodMarkup(id, config.paymentMethods[id])).join("")}</div>
+        <details class="branch-sales-bank-details" ${account.is_enabled ? "open" : ""}><summary>계좌이체 입금 계좌</summary><div class="branch-sales-bank-grid">
+          <label><span>은행</span><input id="salesBranchBankName" type="text" maxlength="40" value="${escapeHtml(account.bank_name || "")}" placeholder="예: 우리은행" /></label>
+          <label><span>계좌번호</span><input id="salesBranchBankAccountNumber" type="text" maxlength="32" inputmode="numeric" value="${escapeHtml(account.account_number || "")}" /></label>
+          <label><span>예금주</span><input id="salesBranchBankAccountHolder" type="text" maxlength="60" value="${escapeHtml(account.account_holder || "")}" /></label>
+          <label class="branch-sales-check"><input id="salesBranchBankTransferEnabled" type="checkbox" ${account.is_enabled ? "checked" : ""} /> 회원앱 사용</label>
+          <label class="branch-sales-bank-note"><span>입금 안내</span><input id="salesBranchBankTransferInstructions" type="text" maxlength="300" value="${escapeHtml(account.transfer_instructions || "")}" placeholder="신청자 이름으로 입금해 주세요" /></label>
+          <button id="saveSalesBranchPaymentAccountButton" class="small-button" type="button">계좌 저장</button>
+        </div><small>통장 알림은 결제 확정이 아니라 후보 증거입니다. 관리자 확인 전에는 회원권을 만들지 않습니다.</small></details>
+      </section>
+      <section class="branch-sales-step"><div class="branch-sales-step-title"><b>4</b><span><strong>혜택·쿠폰</strong><small>대상별 이름·할인율</small></span></div><div class="branch-sales-benefit-grid">${Object.entries(config.benefits).map(([id, benefit]) => branchSalesBenefitMarkup(id, benefit)).join("")}</div><small>혜택은 켠 뒤에도 대상 판정과 중복 방지를 서버에서 다시 확인합니다.</small></section>
+      <section class="branch-sales-step branch-sales-preview-step"><div class="branch-sales-step-title"><b>5</b><span><strong>미리보기·적용</strong><small>390px 회원 화면 기준</small></span></div><div id="branchSalesMemberPreview">${branchSalesPreviewMarkup()}</div><div class="branch-sales-actions"><button id="saveBranchSalesDraftButton" class="secondary-button" type="button" ${failed ? "disabled" : ""}>초안 저장</button><button id="applyBranchSalesSettingsButton" class="primary-button" type="button" ${failed ? "disabled" : ""}>회원앱에 적용</button></div><small>초안 저장만으로는 앱이 바뀌지 않습니다. 적용 후 새 주문부터 새 설정과 가격이 고정됩니다.</small></section>
+    </div>`;
+}
+
+async function saveBranchSalesSettings(apply = false) {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.rpc || !branchId || !adminApprovalReady() || branchSalesSettingsState.status === "failed") {
+    showToast("관리자 로그인과 판매 설정 서버를 확인해 주세요");
+    return false;
+  }
+  const config = branchSalesConfigFromForm();
+  const enabledMemberMethods = Object.entries(config.paymentMethods).filter(([id, method]) => id !== "onsite_cash" && method.enabled === true);
+  if (!enabledMemberMethods.length) {
+    showToast("회원이 사용할 결제수단을 하나 이상 켜 주세요");
+    return false;
+  }
+  const invalidMethod = enabledMemberMethods.find(([, method]) => !String(method.title || "").trim());
+  const invalidBenefit = Object.values(config.benefits).find((benefit) => benefit.enabled && (!String(benefit.title || "").trim() || Number(benefit.discountValue) < 1 || Number(benefit.discountValue) > 100));
+  if (invalidMethod || invalidBenefit) {
+    showToast("결제수단 이름과 혜택 이름·할인율을 확인해 주세요");
+    return false;
+  }
+  const button = $(apply ? "#applyBranchSalesSettingsButton" : "#saveBranchSalesDraftButton");
+  if (button) button.disabled = true;
+  try {
+    const response = await client.rpc("tn_admin_save_branch_sales_settings", {
+      target_branch_id: branchId,
+      target_config: config,
+      target_apply: apply,
+      target_expected_version: branchSalesSettingsState.version || null,
+    });
+    applyBranchSalesSettingsResponse(response);
+    renderBranchSalesSetup();
+    showToast(apply ? "새 설정을 회원앱에 적용했습니다" : "초안을 저장했습니다. 적용 전까지 회원앱은 바뀌지 않습니다");
+    return true;
+  } catch (error) {
+    const code = error?.payload?.code || error?.message || "server_error";
+    if (String(code).includes("revision_conflict")) await loadBranchSalesSettingsFromServer();
+    showToast(String(code).includes("revision_conflict") ? "다른 화면에서 변경되어 최신 설정을 다시 불렀습니다" : `판매 설정 저장 실패: ${code}`);
+    return false;
+  } finally {
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
 function renderPaymentSetup() {
   const target = $("#paymentSetupPanel");
   if (!target) return;
@@ -28211,6 +28510,7 @@ function renderServiceReadiness() {
 
   if (state.view !== "settings") return;
   renderPaymentSetup();
+  renderBranchSalesSetup();
 
   const productCards = $("#productSettingCards");
   if (productCards) {
@@ -28252,7 +28552,11 @@ function renderServiceReadiness() {
           const isEditing = String(state.activeMembershipProductId || "") === productId;
           const isThreeMonth = Number(normalized.termWeeks) >= 12 || Number(normalized.validityDays) >= 84 || /3개월|12주/.test(normalized.title || "");
           const saleCoaches = coaches.filter((coach) => coach.status === "active" && coach.serverRoleId);
-          const enabledSaleCoaches = saleCoaches.filter((coach) => (normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false);
+          const enabledSaleCoaches = saleCoaches.filter((coach) => (
+            normalized.coachSaleMode === "selected"
+              ? (normalized.coachSaleAvailability || {})[coach.serverRoleId] === true
+              : (normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false
+          ));
           const memberFacingGroup = normalized.purchaseExperience === "one_day"
             ? "원데이"
             : normalized.productKind === "coupon"
@@ -28454,7 +28758,8 @@ function renderServiceReadiness() {
             ${saleCoaches.length ? `
             <fieldset class="product-coach-sale-settings">
               <legend>이 상품을 판매·예약할 코치</legend>
-              ${saleCoaches.map((coach) => `<label><input type="checkbox" data-product-coach-sale="${escapeHtml(coach.serverRoleId)}" ${(normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false ? "checked" : ""} /><span>${escapeHtml(coach.name)}</span></label>`).join("")}
+              <label class="product-coach-sale-mode"><span>표시 방식</span><select data-product-field="coachSaleMode"><option value="all_active" ${normalized.coachSaleMode !== "selected" ? "selected" : ""}>활동 중인 코치 모두</option><option value="selected" ${normalized.coachSaleMode === "selected" ? "selected" : ""}>선택한 코치만</option></select></label>
+              ${saleCoaches.map((coach) => `<label><input type="checkbox" data-product-coach-sale="${escapeHtml(coach.serverRoleId)}" ${normalized.coachSaleMode === "selected" ? ((normalized.coachSaleAvailability || {})[coach.serverRoleId] === true ? "checked" : "") : ((normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false ? "checked" : "")} /><span>${escapeHtml(coach.name)}</span></label>`).join("")}
             </fieldset>` : ""}
             <label>
               <small>${productSettingFieldLabel("판매 상태", true)}</small>
@@ -30264,6 +30569,11 @@ function bindEvents() {
     state.discountSearch = event.target.value;
     renderServiceReadiness();
   });
+  document.addEventListener("input", (event) => {
+    if (!event.target.closest("#branchSalesSetupPanel")) return;
+    if (!event.target.matches("[data-sales-payment-method], [data-sales-benefit], [data-sales-feature]")) return;
+    syncBranchSalesDraftFromForm();
+  });
   $("#discountIssueMemberSearch")?.addEventListener("input", () => renderDiscountIssueControls());
   $("#discountIssueMember")?.addEventListener("change", () => renderDiscountIssueControls());
   $("#membershipProductSearch")?.addEventListener("input", (event) => {
@@ -30294,6 +30604,10 @@ function bindEvents() {
   });
 
   document.addEventListener("change", (event) => {
+    if (event.target.closest("#branchSalesSetupPanel") && event.target.matches("[data-sales-payment-method], [data-sales-benefit], [data-sales-feature]")) {
+      syncBranchSalesDraftFromForm();
+      return;
+    }
     if (event.target.matches("[data-select-member-row]")) {
       const id = Number(event.target.dataset.selectMemberRow);
       const selected = selectedMemberIdSet();
@@ -31106,6 +31420,18 @@ function bindEvents() {
 
     if (event.target.closest("#saveBranchPaymentAccountButton")) {
       await saveBranchPaymentAccount();
+      return;
+    }
+    if (event.target.closest("#saveSalesBranchPaymentAccountButton")) {
+      await saveBranchPaymentAccount();
+      return;
+    }
+    if (event.target.closest("#saveBranchSalesDraftButton")) {
+      await saveBranchSalesSettings(false);
+      return;
+    }
+    if (event.target.closest("#applyBranchSalesSettingsButton")) {
+      await saveBranchSalesSettings(true);
       return;
     }
 
