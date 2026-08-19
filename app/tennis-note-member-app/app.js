@@ -2049,7 +2049,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.370",
+    workerUrl: "./service-worker.js?v=1.0.371",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2072,6 +2072,151 @@ function nativePushPlugin() {
 
 function nativeAppPlatform() {
   return window.Capacitor?.getPlatform?.() || "web";
+}
+
+const bankNotificationDeviceStorageKey = "tennis-note-bank-notification-device-v1";
+let bankNotificationBridgePluginCache = null;
+let bankNotificationBridgeState = null;
+
+function bankNotificationAdminAllowed() {
+  return nativeAppPlatform() === "android"
+    && ["admin", "owner", "manager"].includes(String(state.member?.role || ""));
+}
+
+function nativeBankNotificationBridgePlugin() {
+  if (nativeAppPlatform() !== "android") return null;
+  if (bankNotificationBridgePluginCache) return bankNotificationBridgePluginCache;
+  bankNotificationBridgePluginCache = window.Capacitor?.Plugins?.BankNotificationBridge
+    || window.Capacitor?.registerPlugin?.("BankNotificationBridge")
+    || null;
+  return bankNotificationBridgePluginCache;
+}
+
+function bankNotificationDevicePublicId() {
+  let value = String(localStorage.getItem(bankNotificationDeviceStorageKey) || "").trim();
+  if (value.length >= 16) return value;
+  value = `tn-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+  localStorage.setItem(bankNotificationDeviceStorageKey, value);
+  return value;
+}
+
+function renderBankNotificationBridge() {
+  const card = $("#bankNotificationBridgeCard");
+  const status = $("#bankNotificationBridgeStatus");
+  const detail = $("#bankNotificationBridgeDetail");
+  const button = $("#bankNotificationBridgeButton");
+  if (!card) return;
+  const allowed = bankNotificationAdminAllowed();
+  card.hidden = !allowed;
+  if (!allowed) return;
+  const bridge = bankNotificationBridgeState || {};
+  const configured = bridge.configured === true;
+  const permissionGranted = bridge.permissionGranted === true;
+  const repairRequired = bridge.repairRequired === true
+    || bridge.remoteDisabled === true
+    || String(bridge.lastError || "").includes("repair_required")
+    || String(bridge.lastError || "").includes("feature_disabled")
+    || String(bridge.lastError || "").includes("device_unauthorized");
+  const pendingCount = Math.max(0, Number(bridge.pendingCount || 0));
+  card.classList.toggle("is-enabled", configured && permissionGranted && !repairRequired);
+  card.classList.toggle("is-denied", configured && !permissionGranted);
+  if (status) {
+    status.textContent = repairRequired
+      ? "계좌 변경 후 다시 연결 필요"
+      : configured && permissionGranted
+        ? `입금 알림 연결됨${pendingCount ? ` · 전송 대기 ${pendingCount}건` : ""}`
+        : configured ? "휴대폰 알림 접근을 허용해 주세요" : "이 기기는 아직 연결되지 않았습니다";
+  }
+  if (detail) {
+    detail.textContent = repairRequired
+      ? "관리자 웹에서 계좌가 변경되어 기존 연결을 안전하게 중단했습니다. 다시 연결해 주세요."
+      : configured && permissionGranted
+        ? "정확히 일치한 입금만 자동 확인하며 일부·초과·지연 입금은 관리자 검토로 남습니다."
+        : "우리은행·카카오뱅크 알림의 금액과 입금자만 읽으며 알림 원문은 서버에 저장하지 않습니다.";
+  }
+  if (button) button.textContent = repairRequired ? "다시 연결" : configured && permissionGranted ? "지금 확인" : configured ? "알림 접근 허용" : "이 기기 연결";
+}
+
+async function refreshBankNotificationBridge() {
+  if (!bankNotificationAdminAllowed()) {
+    bankNotificationBridgeState = null;
+    renderBankNotificationBridge();
+    return false;
+  }
+  const plugin = nativeBankNotificationBridgePlugin();
+  if (!plugin?.getStatus) {
+    bankNotificationBridgeState = { configured: false, permissionGranted: false, lastError: "plugin_unavailable" };
+    renderBankNotificationBridge();
+    return false;
+  }
+  try {
+    bankNotificationBridgeState = await plugin.getStatus();
+  } catch (error) {
+    bankNotificationBridgeState = { configured: false, permissionGranted: false, lastError: error?.message || "status_failed" };
+  }
+  renderBankNotificationBridge();
+  return bankNotificationBridgeState?.configured === true;
+}
+
+async function connectBankNotificationBridge() {
+  if (!bankNotificationAdminAllowed()) return;
+  const client = window.TennisNoteDataClient;
+  const plugin = nativeBankNotificationBridgePlugin();
+  if (!client?.invokeFunction || !client.getSession?.()?.access_token || !plugin?.getStatus) {
+    showToast("관리자 로그인과 Android 앱 연결을 확인해 주세요.");
+    return;
+  }
+  const currentStatus = await plugin.getStatus().catch(() => ({}));
+  const repairRequired = currentStatus.repairRequired === true
+    || currentStatus.remoteDisabled === true
+    || String(currentStatus.lastError || "").includes("repair_required")
+    || String(currentStatus.lastError || "").includes("feature_disabled")
+    || String(currentStatus.lastError || "").includes("device_unauthorized");
+  if (currentStatus.configured === true && currentStatus.permissionGranted !== true && !repairRequired) {
+    await plugin.openNotificationAccessSettings?.();
+    await refreshBankNotificationBridge();
+    return;
+  }
+  if (currentStatus.configured === true && currentStatus.permissionGranted === true && !repairRequired) {
+    await plugin.flush?.();
+    await refreshBankNotificationBridge();
+    showToast("입금 알림 연결 상태를 확인했습니다.");
+    return;
+  }
+  const branchId = String(currentLiveTicket()?.branchId || "");
+  try {
+    const paired = await client.invokeFunction("portone-payment/bank-notification-pair", {
+      body: {
+        ...(branchId ? { branchId } : {}),
+        devicePublicId: bankNotificationDevicePublicId(),
+        deviceName: `관리자 Android ${memberNativeAppInfo?.version || ""}`.trim(),
+      },
+    });
+    await plugin.configure({
+      branchId: paired.branchId,
+      deviceToken: paired.deviceToken,
+      ingestUrl: paired.ingestUrl,
+      heartbeatUrl: paired.heartbeatUrl,
+      allowedPackages: paired.allowedPackages || [],
+      accountRevision: Number(paired.accountRevision || 1),
+    });
+    await plugin.flush?.();
+    bankNotificationBridgeState = await plugin.getStatus();
+    renderBankNotificationBridge();
+    if (bankNotificationBridgeState.permissionGranted !== true) {
+      await plugin.openNotificationAccessSettings?.();
+      showToast("알림 접근에서 Tennis Note를 허용한 뒤 앱으로 돌아와 주세요.");
+    } else showToast("이 기기의 입금 알림을 연결했습니다.");
+  } catch (error) {
+    const code = error?.payload?.code || error?.message || "pair_failed";
+    const messages = {
+      bank_notification_feature_disabled: "관리자 웹에서 Android 입금 알림 확인을 먼저 켜 주세요.",
+      bank_transfer_account_not_ready: "관리자 웹에서 사용할 입금 계좌를 먼저 저장해 주세요.",
+      bank_notification_bank_not_supported: "현재 우리은행과 카카오뱅크 알림만 연결할 수 있습니다.",
+    };
+    showToast(messages[code] || `입금 알림 연결 실패: ${code}`);
+    await refreshBankNotificationBridge();
+  }
 }
 
 let memberNativeAppInfo = null;
@@ -7985,6 +8130,13 @@ function openBankTransferInstructions(preparedPayment = {}, product = {}, amount
   if ($("#bankTransferBankName")) $("#bankTransferBankName").textContent = account.bankName || "관리자 확인 필요";
   if ($("#bankTransferAccountNumber")) $("#bankTransferAccountNumber").textContent = bankTransferAccountNumberForCopy || "관리자 확인 필요";
   if ($("#bankTransferAccountHolder")) $("#bankTransferAccountHolder").textContent = account.accountHolder || "관리자 확인 필요";
+  if ($("#bankTransferDepositorName")) $("#bankTransferDepositorName").textContent = preparedPayment?.depositorName || state.profile?.name || "신청자명";
+  if ($("#bankTransferDepositDueAt")) {
+    const dueAt = new Date(preparedPayment?.depositDueAt || "");
+    $("#bankTransferDepositDueAt").textContent = Number.isFinite(dueAt.getTime())
+      ? dueAt.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+      : `${Number(account.depositDeadlineHours || 24)}시간 이내`;
+  }
   if ($("#bankTransferCustomInstructions")) {
     $("#bankTransferCustomInstructions").textContent = account.instructions || "신청자 이름으로 입금해 주세요.";
   }
@@ -11148,6 +11300,7 @@ function updateCoachModeAccess() {
   const button = $("#coachModeButton");
   if (!button) return;
   button.hidden = !canUseCoachMode();
+  renderBankNotificationBridge();
 }
 
 function openCoachMode() {
@@ -11156,7 +11309,7 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.370" });
+  const params = new URLSearchParams({ v: "1.0.371" });
   window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
@@ -12446,6 +12599,7 @@ function openAppFromSession(showNotice = false) {
   document.body.dataset.screen = "app";
   renderPendingApprovalGate();
   updateCoachModeAccess();
+  void refreshBankNotificationBridge();
   applyRequestedMemberView();
   setView(activeMemberViewId(), { replaceHistory: true });
   jumpToTop();
@@ -13155,6 +13309,9 @@ function bindEvents() {
     } catch {
       setPushNotificationState("unknown", "알림 연결 실패", "네트워크와 앱 설정을 확인한 뒤 다시 시도해 주세요.");
     }
+  });
+  $("#bankNotificationBridgeButton")?.addEventListener("click", () => {
+    void connectBankNotificationBridge();
   });
   $("#pushPrimerModal")?.addEventListener("click", (event) => {
     if (event.target.closest("[data-defer-push-primer]")) deferNativePushPrimer();
@@ -14051,7 +14208,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.370",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.371",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

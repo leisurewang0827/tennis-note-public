@@ -3464,6 +3464,15 @@ textarea {
   gap: 3px;
 }
 
+.bank-notification-bridge-card {
+  border-color: #b7d8cd;
+  background: #f4fbf8;
+}
+
+.bank-notification-bridge-card[hidden] {
+  display: none;
+}
+
 .bank-transfer-instructions {
   display: grid;
   gap: 14px;
