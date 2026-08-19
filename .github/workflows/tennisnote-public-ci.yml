@@ -29,11 +29,11 @@ jobs:
       TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay
       TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - name: Check JavaScript syntax
