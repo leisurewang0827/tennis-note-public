@@ -1942,7 +1942,10 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
   if (view === "settings") {
     if (settingsTab === "live") {
       const branchKey = activeOperationBranchId() || "unselected";
-      jobs.push(loadAdminDataOnce(`branch-payment-account:${branchKey}`, loadBranchPaymentAccountFromServer));
+      jobs.push(loadAdminDataOnce(`branch-payment-account:${branchKey}`, () => Promise.all([
+        loadBranchPaymentAccountFromServer(),
+        loadBankNotificationStatusFromServer(),
+      ])));
     }
     if (settingsTab === "membership") {
       const branchKey = activeOperationBranchId() || "unselected";
@@ -1950,6 +1953,7 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
         loadAdminDataOnce(`membership-policy:${branchKey}`, () => Promise.all([
           loadBranchSalesSettingsFromServer(),
           loadBranchPaymentAccountFromServer(),
+          loadBankNotificationStatusFromServer(),
           loadServerHoldingPolicy(),
           loadRefundPolicySettingsFromServer(),
           loadPolicyVersionsFromServer(),
@@ -4173,6 +4177,13 @@ function paymentGatewayConfig() {
 
 let branchPaymentAccount = null;
 let branchPaymentAccountStatus = "idle";
+const bankNotificationStatusState = {
+  status: "idle",
+  devices: [],
+  reviewEvents: [],
+  accountHistory: [],
+  message: "",
+};
 
 function defaultBranchSalesConfig() {
   return {
@@ -4269,7 +4280,7 @@ async function loadBranchPaymentAccountFromServer() {
   branchPaymentAccountStatus = "loading";
   try {
     const rows = await client.selectRows("tn_branch_payment_accounts", {
-      select: "branch_id,bank_name,account_number,account_holder,transfer_instructions,is_enabled,updated_at",
+      select: "branch_id,bank_name,account_number,account_holder,transfer_instructions,deposit_deadline_hours,revision,is_enabled,retired_at,updated_at",
       filters: { branch_id: branchId },
       limit: 1,
     });
@@ -4292,6 +4303,46 @@ async function loadBranchPaymentAccountFromServer() {
   }
 }
 
+async function loadBankNotificationStatusFromServer() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.rpc || !client?.selectRows || !branchId || !adminApprovalReady()) return false;
+  bankNotificationStatusState.status = "loading";
+  bankNotificationStatusState.message = "";
+  try {
+    const [statusResponse, accountHistory] = await Promise.all([
+      client.rpc("tn_admin_bank_notification_status", { target_branch_id: branchId }),
+      client.selectRows("tn_branch_payment_account_history", {
+        select: "id,branch_id,revision,action,bank_name,account_number,account_holder,deposit_deadline_hours,is_enabled,created_at",
+        filters: { branch_id: branchId },
+        order: "revision.desc",
+        limit: 8,
+      }),
+    ]);
+    const status = Array.isArray(statusResponse) ? statusResponse[0] || {} : statusResponse || {};
+    bankNotificationStatusState.status = "loaded";
+    bankNotificationStatusState.devices = Array.isArray(status.devices) ? status.devices : [];
+    bankNotificationStatusState.reviewEvents = Array.isArray(status.reviewEvents) ? status.reviewEvents : [];
+    bankNotificationStatusState.accountHistory = Array.isArray(accountHistory) ? accountHistory : [];
+    if (state.view === "settings") {
+      renderPaymentSetup();
+      renderBranchSalesSetup();
+    }
+    return true;
+  } catch (error) {
+    bankNotificationStatusState.status = "failed";
+    bankNotificationStatusState.message = error?.payload?.code || error?.message || "server_error";
+    bankNotificationStatusState.devices = [];
+    bankNotificationStatusState.reviewEvents = [];
+    bankNotificationStatusState.accountHistory = [];
+    if (state.view === "settings") {
+      renderPaymentSetup();
+      renderBranchSalesSetup();
+    }
+    return false;
+  }
+}
+
 async function saveBranchPaymentAccount() {
   const client = window.TennisNoteDataClient;
   const branchId = activeOperationBranchId();
@@ -4300,6 +4351,9 @@ async function saveBranchPaymentAccount() {
   const accountHolder = ($("#salesBranchBankAccountHolder") || $("#branchBankAccountHolder"))?.value.trim() || "";
   const transferInstructions = ($("#salesBranchBankTransferInstructions") || $("#branchBankTransferInstructions"))?.value.trim() || "";
   const enabled = ($("#salesBranchBankTransferEnabled") || $("#branchBankTransferEnabled"))?.checked === true;
+  const depositDeadlineHours = Number((
+    $("#salesBranchBankDepositDeadlineHours") || $("#branchBankDepositDeadlineHours")
+  )?.value || 24);
   const digits = accountNumber.replace(/[^0-9]/g, "");
   if (!client?.insertRows || !client?.updateRows || !branchId || !adminApprovalReady()) {
     showToast("관리자 로그인과 운영 지점을 확인해 주세요");
@@ -4309,11 +4363,16 @@ async function saveBranchPaymentAccount() {
     showToast("은행명·예금주·계좌번호를 확인해 주세요");
     return false;
   }
+  if (!Number.isInteger(depositDeadlineHours) || depositDeadlineHours < 1 || depositDeadlineHours > 168) {
+    showToast("입금기한은 1시간부터 168시간 사이로 입력해 주세요");
+    return false;
+  }
   const payload = {
     bank_name: bankName,
     account_number: accountNumber,
     account_holder: accountHolder,
     transfer_instructions: transferInstructions,
+    deposit_deadline_hours: depositDeadlineHours,
     is_enabled: enabled,
     updated_at: new Date().toISOString(),
   };
@@ -4326,6 +4385,7 @@ async function saveBranchPaymentAccount() {
       : await client.insertRows("tn_branch_payment_accounts", { branch_id: branchId, ...payload });
     if (!rows?.[0]?.branch_id) throw new Error("bank_account_write_not_confirmed");
     await loadBranchPaymentAccountFromServer();
+    await loadBankNotificationStatusFromServer();
     showToast(enabled ? "계좌이체 계좌를 서버에 저장하고 회원 결제에 표시했습니다" : "계좌를 저장하고 회원 결제 노출을 껐습니다");
     return true;
   } catch (error) {
@@ -4685,6 +4745,9 @@ function billingRowFromServerPayment(row = {}) {
     requestedAt: row.created_at || row.createdAt || "",
     paidAt: row.paid_at || row.paidAt || "",
     verifiedAt: row.verified_at || row.verifiedAt || "",
+    depositDueAt: row.deposit_due_at || row.depositDueAt || "",
+    depositorName: row.depositor_name_snapshot || row.depositorName || "",
+    bankAccountSnapshot: row.bank_account_snapshot || row.bankAccountSnapshot || {},
     refundedAmount: Number(row.refunded_amount || row.refundedAmount || 0),
     refundStatus: row.refund_status || row.refundStatus || "none",
     refundReason: row.refund_reason || row.refundReason || "",
@@ -4753,13 +4816,13 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     });
     let rows = [];
     try {
-      rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
+      rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
     } catch (error) {
       try {
-        rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
+        rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
       } catch (legacyJoinError) {
         try {
-          rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at");
+          rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at");
         } catch (refundSchemaError) {
           rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at");
         }
@@ -21183,7 +21246,11 @@ async function verifyBillingPaymentItem(item) {
 
   try {
     const bankTransfer = String(item.method || "") === "bank_transfer";
-    if (bankTransfer && !window.confirm(`${item.member} 회원의 ${money.format(item.finalAmount || item.amount)}원 입금을 확인했습니까?\n확인 후에만 회원권 또는 원데이 예약이 생성됩니다.`)) {
+    const lateDeposit = bankTransfer && Number.isFinite(Date.parse(item.depositDueAt || "")) && Date.now() > Date.parse(item.depositDueAt);
+    const bankPrompt = lateDeposit
+      ? `${item.member} 회원의 입금기한이 지났습니다.\n실제 입금 ${money.format(item.finalAmount || item.amount)}원을 직접 확인한 경우에만 승인하세요.`
+      : `${item.member} 회원의 ${money.format(item.finalAmount || item.amount)}원 입금을 확인했습니까?\n확인 후에만 회원권 또는 원데이 예약이 생성됩니다.`;
+    if (bankTransfer && !window.confirm(bankPrompt)) {
       item.status = "server_ready";
       item.statusLabel = "입금확인대기";
       renderAll();
@@ -21192,7 +21259,10 @@ async function verifyBillingPaymentItem(item) {
     const result = await client.invokeFunction(bankTransfer ? "portone-payment/bank-transfer-confirm" : "portone-payment/verify", {
       body: {
         paymentId: item.providerPaymentId,
-        ...(bankTransfer ? { confirmedAmount: Number(item.finalAmount || item.amount || 0) } : {}),
+        ...(bankTransfer ? {
+          confirmedAmount: Number(item.finalAmount || item.amount || 0),
+          acceptLateDeposit: lateDeposit,
+        } : {}),
       },
     });
     if (result?.ok) {
@@ -24116,7 +24186,7 @@ async function performAdminLiveDataSync(options = {}) {
       Promise.resolve(adminLiveDataState.curriculumRefs || []),
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
-      fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at", order: "created_at.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
+      fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at", order: "created_at.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
       rosterRows("groupAccounts", () => client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => [])),
       rosterRows("groupMembers", () => client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => [])),
       rosterRows("groupTicketLinks", () => client.selectRows("tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", limit: 500 }).catch(() => [])),
@@ -27770,6 +27840,54 @@ function branchSalesBenefitMarkup(id, benefit) {
     </article>`;
 }
 
+function bankNotificationDateTime(value) {
+  const date = new Date(value || "");
+  if (!Number.isFinite(date.getTime())) return "기록 없음";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function bankNotificationStatusMarkup() {
+  if (bankNotificationStatusState.status === "loading") {
+    return '<p class="empty-text">입금 알림 기기 상태를 확인하는 중입니다.</p>';
+  }
+  if (bankNotificationStatusState.status === "failed") {
+    return `<p class="branch-sales-error">알림 상태를 불러오지 못했습니다. (${escapeHtml(bankNotificationStatusState.message)})</p>`;
+  }
+  const devices = bankNotificationStatusState.devices || [];
+  const reviewEvents = bankNotificationStatusState.reviewEvents || [];
+  const history = bankNotificationStatusState.accountHistory || [];
+  const currentRevision = Number(branchPaymentAccount?.revision || 0);
+  const deviceMarkup = devices.length
+    ? devices.slice(0, 4).map((device) => {
+        const online = device.status === "active"
+          && Date.now() - Date.parse(device.lastHeartbeatAt || "") < 15 * 60 * 1000;
+        const revisionMatches = Number(device.accountRevision || 0) === currentRevision;
+        return `<li><span><strong>${escapeHtml(device.deviceName || "관리자 Android")}</strong><small>마지막 연결 ${escapeHtml(bankNotificationDateTime(device.lastHeartbeatAt))}</small></span><span class="bank-device-actions">${badge(online && revisionMatches ? "ready" : "pending", !revisionMatches ? "다시 연결 필요" : online ? "연결됨" : "연결 확인")}${device.status === "active" ? `<button class="ghost-button" type="button" data-revoke-bank-device="${escapeHtml(device.id || "")}">연결 해제</button>` : ""}</span></li>`;
+      }).join("")
+    : '<li class="empty-text">연결된 Android 관리기기가 없습니다. 관리자 계정으로 앱에서 연결해 주세요.</li>';
+  const reviewMarkup = reviewEvents.length
+    ? reviewEvents.slice(0, 5).map((event) => `<li><span><strong>${money.format(Number(event.amount || 0))}원 · ${escapeHtml(event.depositorHint || "입금자 미확인")}</strong><small>${escapeHtml(bankNotificationDateTime(event.receivedAt))}</small></span>${badge("pending", ({ partial: "일부 입금", overpaid: "초과 입금", late: "기한 지남", ambiguous: "중복 후보", rejected: "해석 실패", disabled: "자동확인 꺼짐" })[event.status] || "확인 필요")}</li>`).join("")
+    : '<li class="empty-text">직접 확인할 입금 알림이 없습니다.</li>';
+  const actionLabels = { created: "등록", updated: "변경", retired: "사용 중지", reactivated: "다시 사용", migration_snapshot: "기존 설정" };
+  const historyMarkup = history.length
+    ? history.slice(0, 5).map((entry) => {
+        const digits = String(entry.account_number || "").replace(/[^0-9]/g, "");
+        return `<li><span><strong>v${Number(entry.revision || 0)} · ${escapeHtml(entry.bank_name || "은행")} · 끝 ${escapeHtml(digits.slice(-4) || "----")}</strong><small>${escapeHtml(bankNotificationDateTime(entry.created_at))} · 입금기한 ${Number(entry.deposit_deadline_hours || 24)}시간</small></span>${badge(entry.is_enabled ? "ready" : "neutral", actionLabels[entry.action] || "변경")}</li>`;
+      }).join("")
+    : '<li class="empty-text">계좌 변경이력은 새 DB 업데이트 적용 후 기록됩니다.</li>';
+  return `
+    <div class="bank-notification-status-grid">
+      <section><h4>알림 기기</h4><ul>${deviceMarkup}</ul></section>
+      <section><h4>확인 필요</h4><ul>${reviewMarkup}</ul></section>
+      <section><h4>계좌 변경이력</h4><ul>${historyMarkup}</ul></section>
+    </div>`;
+}
+
 function renderBranchSalesSetup() {
   const target = $("#branchSalesSetupPanel");
   if (!target) return;
@@ -27797,6 +27915,7 @@ function renderBranchSalesSetup() {
         <label><input type="checkbox" data-sales-feature="threeMonth" ${config.features.threeMonth ? "checked" : ""} /> 3개월</label>
         <label><input type="checkbox" data-sales-feature="oneDay" ${config.features.oneDay ? "checked" : ""} /> 원데이</label>
         <label><input type="checkbox" data-sales-feature="coupons" ${config.features.coupons ? "checked" : ""} /> 쿠폰</label>
+        <label><input type="checkbox" data-sales-feature="bankNotificationEvidence" ${config.features.bankNotificationEvidence ? "checked" : ""} /> Android 입금 알림 확인</label>
       </div><small>가격·주 1/2회·평일/주말은 아래 기존 상품 편집에서 그대로 관리합니다.</small></section>
       <section class="branch-sales-step"><div class="branch-sales-step-title"><b>2</b><span><strong>코치·시간</strong><small>실제 시간표와 연결</small></span></div><p><strong>활동 코치 ${activeCoaches.length}명</strong> · ${activeCoaches.map((coach) => escapeHtml(coach.name)).join(" · ") || "연결된 코치 없음"}</p><small>모든 코치 또는 선택 코치는 상품별 상세에서 정합니다. 앱에는 서버에 연결되고 빈 시간이 있는 코치만 예약 가능으로 표시됩니다.</small></section>
       <section class="branch-sales-step branch-sales-payment-step"><div class="branch-sales-step-title"><b>3</b><span><strong>결제</strong><small>수단별 이름·노출·쿠폰</small></span></div><div class="branch-sales-method-grid">${["tosspay", "bank_transfer", "card", "kakaopay", "naverpay"].map((id) => branchSalesPaymentMethodMarkup(id, config.paymentMethods[id])).join("")}</div>
@@ -27804,10 +27923,11 @@ function renderBranchSalesSetup() {
           <label><span>은행</span><input id="salesBranchBankName" type="text" maxlength="40" value="${escapeHtml(account.bank_name || "")}" placeholder="예: 우리은행" /></label>
           <label><span>계좌번호</span><input id="salesBranchBankAccountNumber" type="text" maxlength="32" inputmode="numeric" value="${escapeHtml(account.account_number || "")}" /></label>
           <label><span>예금주</span><input id="salesBranchBankAccountHolder" type="text" maxlength="60" value="${escapeHtml(account.account_holder || "")}" /></label>
+          <label><span>입금기한</span><select id="salesBranchBankDepositDeadlineHours"><option value="12" ${Number(account.deposit_deadline_hours || 24) === 12 ? "selected" : ""}>12시간</option><option value="24" ${Number(account.deposit_deadline_hours || 24) === 24 ? "selected" : ""}>24시간</option><option value="48" ${Number(account.deposit_deadline_hours || 24) === 48 ? "selected" : ""}>48시간</option><option value="72" ${Number(account.deposit_deadline_hours || 24) === 72 ? "selected" : ""}>72시간</option></select></label>
           <label class="branch-sales-check"><input id="salesBranchBankTransferEnabled" type="checkbox" ${account.is_enabled ? "checked" : ""} /> 회원앱 사용</label>
           <label class="branch-sales-bank-note"><span>입금 안내</span><input id="salesBranchBankTransferInstructions" type="text" maxlength="300" value="${escapeHtml(account.transfer_instructions || "")}" placeholder="신청자 이름으로 입금해 주세요" /></label>
           <button id="saveSalesBranchPaymentAccountButton" class="small-button" type="button">계좌 저장</button>
-        </div><small>통장 알림은 결제 확정이 아니라 후보 증거입니다. 관리자 확인 전에는 회원권을 만들지 않습니다.</small></details>
+        </div><small>계좌는 주문할 때 복사되어 이후 계좌를 바꿔도 기존 주문은 그대로 유지됩니다. 정확히 일치한 Android 입금 알림만 자동 확인하고, 나머지는 관리자 검토로 남깁니다.</small>${bankNotificationStatusMarkup()}</details>
       </section>
       <section class="branch-sales-step"><div class="branch-sales-step-title"><b>4</b><span><strong>혜택·쿠폰</strong><small>대상별 이름·할인율</small></span></div><div class="branch-sales-benefit-grid">${Object.entries(config.benefits).map(([id, benefit]) => branchSalesBenefitMarkup(id, benefit)).join("")}</div><small>혜택은 켠 뒤에도 대상 판정과 중복 방지를 서버에서 다시 확인합니다.</small></section>
       <section class="branch-sales-step branch-sales-preview-step"><div class="branch-sales-step-title"><b>5</b><span><strong>미리보기·적용</strong><small>390px 회원 화면 기준</small></span></div><div id="branchSalesMemberPreview">${branchSalesPreviewMarkup()}</div><div class="branch-sales-actions"><button id="saveBranchSalesDraftButton" class="secondary-button" type="button" ${failed ? "disabled" : ""}>초안 저장</button><button id="applyBranchSalesSettingsButton" class="primary-button" type="button" ${failed ? "disabled" : ""}>회원앱에 적용</button></div><small>초안 저장만으로는 앱이 바뀌지 않습니다. 적용 후 새 주문부터 새 설정과 가격이 고정됩니다.</small></section>
@@ -27853,6 +27973,21 @@ async function saveBranchSalesSettings(apply = false) {
     return false;
   } finally {
     if (button?.isConnected) button.disabled = false;
+  }
+}
+
+async function revokeBankNotificationDevice(deviceId = "") {
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !deviceId || !adminApprovalReady()) return false;
+  if (!window.confirm("이 기기의 입금 알림 연결을 해제할까요? 다시 사용하려면 Android 앱에서 재연결해야 합니다.")) return false;
+  try {
+    await client.rpc("tn_admin_revoke_bank_notification_device", { target_device_id: deviceId });
+    await loadBankNotificationStatusFromServer();
+    showToast("입금 알림 기기 연결을 해제했습니다.");
+    return true;
+  } catch (error) {
+    showToast(`기기 연결 해제 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+    return false;
   }
 }
 
@@ -27922,11 +28057,13 @@ function renderPaymentSetup() {
         <label><small>은행명</small><input id="branchBankName" type="text" maxlength="40" autocomplete="off" value="${escapeHtml(bankAccount.bank_name || "")}" placeholder="예: 우리은행" /></label>
         <label><small>계좌번호</small><input id="branchBankAccountNumber" type="text" maxlength="32" inputmode="numeric" autocomplete="off" value="${escapeHtml(bankAccount.account_number || "")}" placeholder="숫자와 하이픈만 입력" /></label>
         <label><small>예금주</small><input id="branchBankAccountHolder" type="text" maxlength="60" autocomplete="off" value="${escapeHtml(bankAccount.account_holder || "")}" /></label>
+        <label><small>입금기한</small><select id="branchBankDepositDeadlineHours"><option value="12" ${Number(bankAccount.deposit_deadline_hours || 24) === 12 ? "selected" : ""}>12시간</option><option value="24" ${Number(bankAccount.deposit_deadline_hours || 24) === 24 ? "selected" : ""}>24시간</option><option value="48" ${Number(bankAccount.deposit_deadline_hours || 24) === 48 ? "selected" : ""}>48시간</option><option value="72" ${Number(bankAccount.deposit_deadline_hours || 24) === 72 ? "selected" : ""}>72시간</option></select></label>
         <label class="branch-bank-account-toggle"><small>회원앱 사용</small><span><input id="branchBankTransferEnabled" type="checkbox" ${bankAccount.is_enabled === true ? "checked" : ""} /> 계좌이체 선택 허용</span></label>
         <label class="branch-bank-account-instructions"><small>입금 안내</small><textarea id="branchBankTransferInstructions" rows="2" maxlength="300" placeholder="예: 신청자 이름으로 입금해 주세요.">${escapeHtml(bankAccount.transfer_instructions || "")}</textarea></label>
       </div>
+      ${bankNotificationStatusMarkup()}
       <div class="payment-setup-actions">
-        <small>은행 알림은 자동 승인하지 않고 후보 증거로만 저장한 뒤, 관리자 확인 시 회원권을 1회 발급합니다.</small>
+        <small>금액·입금자·기한이 한 주문과 정확히 일치할 때만 자동 확인합니다. 일부·초과·지연·중복 후보는 관리자 확인 후 회원권을 1회만 발급합니다.</small>
         <button class="small-button" type="button" id="saveBranchPaymentAccountButton">계좌 저장</button>
       </div>
     </article>`;
@@ -31424,6 +31561,11 @@ function bindEvents() {
     }
     if (event.target.closest("#saveSalesBranchPaymentAccountButton")) {
       await saveBranchPaymentAccount();
+      return;
+    }
+    const revokeBankDeviceButton = event.target.closest("[data-revoke-bank-device]");
+    if (revokeBankDeviceButton) {
+      await revokeBankNotificationDevice(revokeBankDeviceButton.dataset.revokeBankDevice);
       return;
     }
     if (event.target.closest("#saveBranchSalesDraftButton")) {

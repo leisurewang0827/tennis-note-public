@@ -7533,6 +7533,75 @@ tr.is-selected td {
   line-height: 1.5;
 }
 
+.bank-notification-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.bank-notification-status-grid section {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.bank-notification-status-grid h4 {
+  margin: 0 0 8px;
+}
+
+.bank-notification-status-grid ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bank-notification-status-grid li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.bank-notification-status-grid li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.bank-notification-status-grid li > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bank-notification-status-grid li strong,
+.bank-notification-status-grid li small {
+  overflow-wrap: anywhere;
+}
+
+.bank-device-actions {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.bank-device-actions .ghost-button {
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.bank-notification-status-grid li small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .branch-sales-setup-panel {
   overflow: hidden;
 }
@@ -7766,6 +7835,10 @@ tr.is-selected td {
   .branch-sales-method-grid,
   .branch-sales-benefit-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .bank-notification-status-grid {
+    grid-template-columns: 1fr;
   }
 }
 

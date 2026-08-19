@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.370" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.370" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.371" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.371" />
     <link rel="stylesheet" href="../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-1" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
@@ -574,6 +574,15 @@
             <button class="small-button" type="button" id="pushNotificationButton">알림 켜기</button>
           </section>
 
+          <section id="bankNotificationBridgeCard" class="push-settings-card bank-notification-bridge-card" aria-label="관리자 입금 알림 연결" hidden>
+            <div>
+              <span>관리자 전용 · 입금 알림</span>
+              <strong id="bankNotificationBridgeStatus">연결 확인 중</strong>
+              <small id="bankNotificationBridgeDetail">우리은행·카카오뱅크 입금 알림에서 금액과 입금자만 읽어 안전하게 대조합니다.</small>
+            </div>
+            <button class="small-button" type="button" id="bankNotificationBridgeButton">이 기기 연결</button>
+          </section>
+
           <section class="account-settings-card" aria-label="계정 및 데이터 관리">
             <div>
               <span>계정 및 데이터</span>
@@ -1004,6 +1013,8 @@
             <div><dt>은행</dt><dd id="bankTransferBankName">-</dd></div>
             <div><dt>계좌번호</dt><dd id="bankTransferAccountNumber">-</dd></div>
             <div><dt>예금주</dt><dd id="bankTransferAccountHolder">-</dd></div>
+            <div><dt>입금자명</dt><dd id="bankTransferDepositorName">-</dd></div>
+            <div><dt>입금기한</dt><dd id="bankTransferDepositDueAt">-</dd></div>
           </dl>
           <p id="bankTransferCustomInstructions">신청자 이름으로 입금해 주세요.</p>
           <button class="primary-button" type="button" id="copyBankTransferAccountButton">계좌번호 복사</button>
@@ -1176,18 +1187,18 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.370"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.370"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.370"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.371"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.371"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.371"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.370"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.370"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.370"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.370"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.371"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.371"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.371"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.371"></script>
     <script defer src="../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-1"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.370"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.371"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
     <script>
       (() => {
@@ -1206,7 +1217,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.370";
+          appScript.src = "./app.js?v=1.0.371";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -1219,7 +1230,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.370";
+          appScript.src = "./app.js?v=1.0.371";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {
