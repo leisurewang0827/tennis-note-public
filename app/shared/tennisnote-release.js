@@ -12,19 +12,26 @@
       iosVersion: "1.0.371",
       iosBuild: 88,
     },
+    store: {
+      androidVersion: "1.0.349",
+      androidBuild: 83,
+      iosVersion: "1.0.359",
+      iosBuild: 85,
+    },
   });
 
   window.TENNIS_NOTE_RELEASE = release;
 
   function renderReleaseLabels() {
-    const nativeBuildLabel =
-      `Android ${release.nativeShell.androidVersion} (${release.nativeShell.androidBuild})` +
-      ` / iOS ${release.nativeShell.iosVersion} (${release.nativeShell.iosBuild})`;
+    const storeLabel = `A ${release.store.androidVersion} / iOS ${release.store.iosVersion}`;
+    const preparedLabel = release.nativeShell.androidVersion === release.nativeShell.iosVersion
+      ? release.nativeShell.androidVersion
+      : `A ${release.nativeShell.androidVersion} / iOS ${release.nativeShell.iosVersion}`;
     document.querySelectorAll("[data-tennisnote-release]").forEach((element) => {
       const detail = element.dataset.tennisnoteRelease === "detail";
       const appOnly = element.dataset.tennisnoteRelease === "app";
       element.textContent = detail
-        ? `웹 v${release.version} · 배포 ${release.releaseId} · 스토어 ${nativeBuildLabel}`
+        ? `웹 ${release.version} · 스토어 ${storeLabel} · 준비 ${preparedLabel}`
         : appOnly
           ? `앱 버전 ${release.appSurfaceVersion || release.version}`
           : `웹 v${release.version} · ${release.releaseId}`;
