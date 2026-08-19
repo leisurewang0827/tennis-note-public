@@ -1940,6 +1940,10 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
   }
 
   if (view === "settings") {
+    if (settingsTab === "live") {
+      const branchKey = activeOperationBranchId() || "unselected";
+      jobs.push(loadAdminDataOnce(`branch-payment-account:${branchKey}`, loadBranchPaymentAccountFromServer));
+    }
     if (settingsTab === "membership") {
       const branchKey = activeOperationBranchId() || "unselected";
       jobs.push(
@@ -4165,6 +4169,77 @@ function paymentGatewayConfig() {
   }
 }
 
+let branchPaymentAccount = null;
+let branchPaymentAccountStatus = "idle";
+
+async function loadBranchPaymentAccountFromServer() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.selectRows || !branchId || !adminApprovalReady()) return false;
+  branchPaymentAccountStatus = "loading";
+  try {
+    const rows = await client.selectRows("tn_branch_payment_accounts", {
+      select: "branch_id,bank_name,account_number,account_holder,transfer_instructions,is_enabled,updated_at",
+      filters: { branch_id: branchId },
+      limit: 1,
+    });
+    branchPaymentAccount = rows?.[0] || { branch_id: branchId, is_enabled: false };
+    branchPaymentAccountStatus = "loaded";
+    if (state.view === "settings") renderPaymentSetup();
+    return true;
+  } catch (error) {
+    branchPaymentAccount = null;
+    branchPaymentAccountStatus = "failed";
+    if (state.view === "settings") renderPaymentSetup();
+    console.warn("[Tennis Note] branch payment account unavailable", error?.message || error);
+    return false;
+  }
+}
+
+async function saveBranchPaymentAccount() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  const bankName = $("#branchBankName")?.value.trim() || "";
+  const accountNumber = $("#branchBankAccountNumber")?.value.trim() || "";
+  const accountHolder = $("#branchBankAccountHolder")?.value.trim() || "";
+  const transferInstructions = $("#branchBankTransferInstructions")?.value.trim() || "";
+  const enabled = $("#branchBankTransferEnabled")?.checked === true;
+  const digits = accountNumber.replace(/[^0-9]/g, "");
+  if (!client?.insertRows || !client?.updateRows || !branchId || !adminApprovalReady()) {
+    showToast("관리자 로그인과 운영 지점을 확인해 주세요");
+    return false;
+  }
+  if (bankName.length < 2 || accountHolder.length < 2 || digits.length < 8 || digits.length > 24) {
+    showToast("은행명·예금주·계좌번호를 확인해 주세요");
+    return false;
+  }
+  const payload = {
+    bank_name: bankName,
+    account_number: accountNumber,
+    account_holder: accountHolder,
+    transfer_instructions: transferInstructions,
+    is_enabled: enabled,
+    updated_at: new Date().toISOString(),
+  };
+  const button = $("#saveBranchPaymentAccountButton");
+  if (button) button.disabled = true;
+  try {
+    const existing = String(branchPaymentAccount?.branch_id || "") === String(branchId);
+    const rows = existing
+      ? await client.updateRows("tn_branch_payment_accounts", { branch_id: branchId }, payload)
+      : await client.insertRows("tn_branch_payment_accounts", { branch_id: branchId, ...payload });
+    if (!rows?.[0]?.branch_id) throw new Error("bank_account_write_not_confirmed");
+    await loadBranchPaymentAccountFromServer();
+    showToast(enabled ? "계좌이체 계좌를 서버에 저장하고 회원 결제에 표시했습니다" : "계좌를 저장하고 회원 결제 노출을 껐습니다");
+    return true;
+  } catch (error) {
+    showToast(`계좌 저장 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+    return false;
+  } finally {
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
 function isPaymentGatewayReady() {
   const config = paymentGatewayConfig();
   return Boolean(config.storeId && config.channelKey);
@@ -4688,7 +4763,7 @@ function membershipProductWithOperationalLimits(product = {}) {
 function membershipProductServerSavePayload(nextProduct, serverProduct) {
   const serverKind = nextProduct.productKind === "coupon" ? "coupon" : "regular";
   const cashPrice = Math.max(0, Number(nextProduct.cashAmount) || 0);
-  const cardPrice = Math.max(0, Number(nextProduct.cardAmount) || cashPrice);
+  const cardPrice = Math.round(cashPrice * 1.1);
   return {
     id: serverProduct.id,
     name: nextProduct.title,
@@ -4729,6 +4804,7 @@ async function updateMembershipProductSetting(productId, options = {}) {
     coachSaleAvailability[input.dataset.productCoachSale] = input.checked;
   });
   const ticketValue = numericValue(readField("tickets"), product.tickets);
+  const cashAmount = numericValue(readField("cashAmount"), product.cashAmount);
   const nextProduct = membershipProductWithOperationalLimits(normalizeMembershipProduct({
     ...product,
     title: readField("title") || product.title,
@@ -4736,8 +4812,8 @@ async function updateMembershipProductSetting(productId, options = {}) {
     sessions: readField("sessions") || (fieldElement("tickets") ? `${ticketValue}회` : product.sessions),
     settlementBase: undefined,
     tickets: ticketValue,
-    cardAmount: numericValue(readField("cardAmount"), product.cardAmount),
-    cashAmount: numericValue(readField("cashAmount"), product.cashAmount),
+    cardAmount: Math.round(cashAmount * 1.1),
+    cashAmount,
     validityDays: numericValue(readField("validityDays"), product.validityDays),
     graceDays: numericValue(readField("graceDays"), product.graceDays),
     lessonMinutes: numericValue(readField("lessonMinutes"), product.lessonMinutes),
@@ -4919,14 +4995,15 @@ function recalculateThreeMonthProductPrice(productId) {
   const modeInput = card.querySelector('[data-product-field="threeMonthPriceMode"]');
   const rate = Math.max(0, Math.min(90, Number(rateInput?.value) || 10));
   const multiplier = 1 - rate / 100;
-  const roundThousand = (value) => Math.round(Number(value || 0) * 3 * multiplier / 1000) * 1000;
   const cashInput = card.querySelector('[data-product-field="cashAmount"]');
   const cardInput = card.querySelector('[data-product-field="cardAmount"]');
-  if (cashInput) cashInput.value = String(roundThousand(baseProduct.cashAmount));
-  if (cardInput) cardInput.value = String(roundThousand(baseProduct.cardAmount));
+  const cashPrice = Math.round(Number(baseProduct.cashAmount || 0) * 3 * multiplier);
+  const cardPrice = Math.round(cashPrice * 1.1);
+  if (cashInput) cashInput.value = String(cashPrice);
+  if (cardInput) cardInput.value = String(cardPrice);
   if (modeInput) modeInput.value = "automatic";
   card.dataset.dirty = "true";
-  showToast(`4주 카드·현금 가격에 ${rate}% 할인을 각각 적용했습니다.`);
+  showToast(`4주 현금가에 ${rate}% 할인을 적용하고 카드가는 10%를 더해 계산했습니다.`);
 }
 
 function setProductInlineDirtyState(form, dirty = true) {
@@ -5295,14 +5372,15 @@ function membershipProductBulkSavePayload(product) {
   const fieldElement = (field) => card.querySelector(`[data-product-field="${field}"]`);
   const readField = (field) => fieldElement(field)?.value.trim() || "";
   const ticketValue = numericValue(readField("tickets"), product.tickets);
+  const cashAmount = numericValue(readField("cashAmount"), product.cashAmount);
   const nextProduct = membershipProductWithOperationalLimits(normalizeMembershipProduct({
     ...product,
     title: readField("title") || product.title,
     name: readField("title") || product.name,
     sessions: readField("sessions") || `${ticketValue}회`,
     tickets: ticketValue,
-    cardAmount: numericValue(readField("cardAmount"), product.cardAmount),
-    cashAmount: numericValue(readField("cashAmount"), product.cashAmount),
+    cardAmount: Math.round(cashAmount * 1.1),
+    cashAmount,
     validityDays: numericValue(readField("validityDays"), product.validityDays),
     graceDays: numericValue(readField("graceDays"), product.graceDays),
     lessonMinutes: numericValue(readField("lessonMinutes"), product.lessonMinutes),
@@ -6310,6 +6388,8 @@ function normalizeDiscountPolicy(policy = {}) {
     type,
     value: numericValue(policy.value, type === "percent" ? 10 : 10000),
     target: policy.target || "전체 회원권",
+    productScope: ["all", "regular", "coupon", "one_day"].includes(policy.productScope) ? policy.productScope : "all",
+    campaignType: ["general", "new_member", "returning", "referral"].includes(policy.campaignType) ? policy.campaignType : "general",
     payment: policy.payment || "카드/현금",
     issueRule: policy.issueRule || "관리자 발급",
     coachPermission: policy.coachPermission || "코치별 지급 수량 안에서 사용",
@@ -6347,6 +6427,8 @@ function discountPolicyFromServer(row = {}, issueRows = []) {
     id: row.id,
     title: row.name,
     target: row.target_label,
+    productScope: row.product_scope || "all",
+    campaignType: row.campaign_type || "general",
     type: row.discount_type,
     value: row.discount_value,
     payment: discountPaymentFromServer[row.payment_scope] || "카드/현금",
@@ -6368,6 +6450,8 @@ function discountPolicyServerPayload(policy = {}) {
     branch_id: normalized.branchId || activeOperationBranchId(),
     name: normalized.title,
     target_label: normalized.target,
+    product_scope: normalized.productScope,
+    campaign_type: normalized.campaignType,
     discount_type: normalized.type,
     discount_value: normalized.value,
     payment_scope: discountPaymentToServer[normalized.payment] || "card_cash",
@@ -6385,7 +6469,7 @@ async function loadDiscountPoliciesFromServer() {
   if (!client?.selectRows || !branchId || !adminApprovalReady()) return false;
   const [rows, issues] = await Promise.all([
     client.selectRows("tn_discount_policies", {
-      select: "id,branch_id,name,target_label,discount_type,discount_value,payment_scope,coach_permission,coach_issue_quota,expires_days,burden_party,status,updated_at",
+      select: "id,branch_id,name,target_label,product_scope,campaign_type,discount_type,discount_value,payment_scope,coach_permission,coach_issue_quota,expires_days,burden_party,status,updated_at",
       filters: { branch_id: branchId },
       order: "created_at.desc",
       limit: 200,
@@ -6400,6 +6484,85 @@ async function loadDiscountPoliciesFromServer() {
   saveSnapshot();
   if (state.view === "settings" && state.settingsTab === "membership") renderServiceReadiness();
   return true;
+}
+
+function discountIssueEligibleMembers(query = "") {
+  const keyword = String(query || "").trim().toLowerCase();
+  return members
+    .filter((member) => member.serverUserId && !["admin", "coach"].includes(String(member.authRole || "").toLowerCase()))
+    .filter((member) => !keyword || `${member.name || ""} ${member.phone || ""}`.toLowerCase().includes(keyword))
+    .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "ko"));
+}
+
+function renderDiscountIssueControls() {
+  const policySelect = $("#discountIssuePolicy");
+  const memberSelect = $("#discountIssueMember");
+  const referralSelect = $("#discountIssueReferralMember");
+  if (!policySelect || !memberSelect || !referralSelect) return;
+  const previousPolicy = policySelect.value;
+  const previousMember = memberSelect.value;
+  const previousReferral = referralSelect.value;
+  const policies = discountPolicies.filter((policy) => normalizeDiscountPolicy(policy).status === "사용");
+  policySelect.innerHTML = policies.length
+    ? policies.map((policy) => `<option value="${escapeHtml(policy.id)}">${escapeHtml(policy.title)} · ${escapeHtml(policy.type === "percent" ? `${policy.value}%` : `${money.format(policy.value)}원`)}</option>`).join("")
+    : '<option value="">사용 가능한 정책 없음</option>';
+  if (policies.some((policy) => String(policy.id) === previousPolicy)) policySelect.value = previousPolicy;
+
+  const visibleMembers = discountIssueEligibleMembers($("#discountIssueMemberSearch")?.value || "");
+  const memberOptions = visibleMembers.map((member) => `<option value="${escapeHtml(member.serverUserId)}">${escapeHtml(member.name || "회원")} · ${escapeHtml(maskMemberPhone(member.phone || ""))}</option>`).join("");
+  memberSelect.innerHTML = memberOptions || '<option value="">검색 결과 없음</option>';
+  if (visibleMembers.some((member) => String(member.serverUserId) === previousMember)) memberSelect.value = previousMember;
+
+  const allMembers = discountIssueEligibleMembers();
+  referralSelect.innerHTML = `<option value="">선택 안 함</option>${allMembers
+    .filter((member) => String(member.serverUserId) !== String(memberSelect.value || ""))
+    .map((member) => `<option value="${escapeHtml(member.serverUserId)}">${escapeHtml(member.name || "회원")} · ${escapeHtml(maskMemberPhone(member.phone || ""))}</option>`).join("")}`;
+  if (allMembers.some((member) => String(member.serverUserId) === previousReferral) && previousReferral !== memberSelect.value) {
+    referralSelect.value = previousReferral;
+  }
+}
+
+async function issueDiscountCoupons() {
+  const client = window.TennisNoteDataClient;
+  const policyId = $("#discountIssuePolicy")?.value || "";
+  const memberUserId = $("#discountIssueMember")?.value || "";
+  const referralUserId = $("#discountIssueReferralMember")?.value || "";
+  const note = $("#discountIssueNote")?.value.trim() || "";
+  const status = $("#discountIssueStatus");
+  const userIds = [...new Set([memberUserId, referralUserId].filter(Boolean))];
+  if (!client?.rpc || !adminApprovalReady() || !policyId || !userIds.length) {
+    if (status) status.textContent = "할인 정책과 발급 회원을 선택해 주세요.";
+    return false;
+  }
+  const button = $("#issueDiscountCouponButton");
+  if (button) button.disabled = true;
+  if (status) status.textContent = "서버에 쿠폰을 발급하는 중입니다.";
+  try {
+    const response = await client.rpc("tn_admin_issue_discount_coupons", {
+      target_policy_id: policyId,
+      target_user_ids: userIds,
+      target_note: note || null,
+    });
+    const result = Array.isArray(response) ? response[0] || {} : response || {};
+    const issuedCount = Number(result.issuedCount ?? result.issued_count ?? 0);
+    const skippedCount = Number(result.skippedCount ?? result.skipped_count ?? 0);
+    await loadDiscountPoliciesFromServer();
+    const policy = discountPolicies.find((item) => String(item.id) === String(policyId));
+    discountIssueLogs.unshift({
+      id: `discount-issue-log-${Date.now()}`,
+      text: `${policy?.title || "할인 쿠폰"} ${issuedCount}명 발급${skippedCount ? ` · 중복 ${skippedCount}명 제외` : ""}`,
+      at: new Date().toLocaleDateString("ko-KR"),
+    });
+    if (status) status.textContent = `${issuedCount}명 발급 완료${skippedCount ? ` · 이미 보유한 ${skippedCount}명은 제외` : ""}`;
+    showToast(status?.textContent || "할인 쿠폰 발급 완료");
+    renderServiceReadiness();
+    return true;
+  } catch (error) {
+    if (status) status.textContent = `발급 실패: ${error?.payload?.code || error?.message || "server_error"}`;
+    return false;
+  } finally {
+    if (button?.isConnected) button.disabled = false;
+  }
 }
 
 function discountAvailableCount(policy = {}) {
@@ -6419,6 +6582,8 @@ async function createDiscountPolicy() {
   const policy = normalizeDiscountPolicy({
     title,
     target: $("#discountTargetInput")?.value.trim() || "전체 회원권",
+    productScope: $("#discountProductScopeInput")?.value || "all",
+    campaignType: $("#discountCampaignTypeInput")?.value || "general",
     type: $("#discountTypeInput")?.value || "percent",
     value: $("#discountValueInput")?.value,
     payment: $("#discountPaymentInput")?.value || "카드/현금",
@@ -6449,6 +6614,8 @@ async function updateDiscountPolicy(policyId) {
     ...policy,
     title: readField("title") || policy.title,
     target: readField("target") || policy.target,
+    productScope: readField("productScope") || policy.productScope,
+    campaignType: readField("campaignType") || policy.campaignType,
     type: readField("type") || policy.type,
     value: readField("value") || policy.value,
     payment: readField("payment") || policy.payment,
@@ -12937,6 +13104,11 @@ function memberInlineTicketDefinitionChanged(form) {
     || String(form.elements.coachRoleId?.value || "") !== String(form.dataset.initialCoachRoleId || "");
 }
 
+function memberInlineCoachChanged(form) {
+  if (!form?.dataset.ticketId) return false;
+  return String(form.elements.coachRoleId?.value || "") !== String(form.dataset.initialCoachRoleId || "");
+}
+
 function memberInlineScheduleIsComplete(form, schedules = memberInlineScheduleValues(form)) {
   const product = (adminLiveDataState.products || []).find((item) => item.id === form?.elements.productId?.value);
   if (!product || String(product.product_kind || "regular") !== "regular") return false;
@@ -12956,6 +13128,15 @@ function syncMemberInlineFutureScheduleChoice(form) {
 
 function keepMemberInlineScheduleSeparate(form) {
   if (!form?.elements.applyToFutureSchedule) return;
+  if (memberInlineCoachChanged(form)) {
+    const message = form.querySelector(".member-inline-message");
+    if (message) {
+      message.textContent = "코치 변경은 기존 시간표를 그대로 둘 수 없습니다. 새 코치의 가능한 요일·시간을 선택해 함께 저장해 주세요.";
+      message.classList.add("is-error");
+      message.classList.remove("is-success");
+    }
+    return;
+  }
   form.elements.applyToFutureSchedule.value = "false";
   const message = form.querySelector(".member-inline-message");
   if (message) {
@@ -13011,55 +13192,15 @@ function latestMemberPayment(member) {
 
 function renderMemberCoachAssignment(ticket) {
   if (!ticket?.serverTicketId) return "";
-  const ticketCoach = coaches.find((coach) => coach.id === ticket.coachId);
-  const branchCoaches = coaches.filter((coach) =>
-    coach.serverRoleId &&
-    coach.status === "active" &&
-    (!ticket.branchId || !coach.branchId || coach.branchId === ticket.branchId)
-  );
+  const memberId = Number(state.selectedMemberId || 0);
   return `
     <div class="member-coach-assignment">
-      <label>
-        <span>담당 코치 지정</span>
-        <select data-ticket-coach-select="${escapeHtml(ticket.serverTicketId)}" ${adminApprovalReady() ? "" : "disabled"}>
-          <option value="">미배정</option>
-          ${branchCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}" ${coach.serverRoleId === ticketCoach?.serverRoleId ? "selected" : ""}>${escapeHtml(coach.name)}</option>`).join("")}
-        </select>
-      </label>
-      <button class="primary-button" type="button" data-save-ticket-coach="${escapeHtml(ticket.serverTicketId)}" ${adminApprovalReady() ? "" : "disabled"}>저장</button>
-      <small>${adminApprovalReady() ? "이 이용권으로 신청 가능한 코치를 지정합니다." : "관리자 로그인 후 변경할 수 있습니다."}</small>
+      <div>
+        <strong>코치 변경</strong>
+        <small>${adminApprovalReady() ? "새 코치와 가능한 정규시간을 함께 확인한 뒤 한 번에 저장합니다." : "관리자 로그인 후 변경할 수 있습니다."}</small>
+      </div>
+      <button class="primary-button" type="button" data-open-member-inline="${memberId}" data-member-inline-ticket="${escapeHtml(ticket.serverTicketId)}" ${adminApprovalReady() && memberId ? "" : "disabled"}>코치·시간 변경</button>
     </div>`;
-}
-
-async function assignMemberTicketCoach(button) {
-  const ticketId = button?.dataset.saveTicketCoach || "";
-  const ticket = tickets.find((item) => item.serverTicketId === ticketId);
-  const select = button?.closest(".member-coach-assignment")?.querySelector("[data-ticket-coach-select]");
-  const coachRoleId = select?.value || null;
-  const client = window.TennisNoteDataClient;
-  if (!ticket || !select || !client?.rpc || !adminApprovalReady()) {
-    showToast("관리자 로그인과 이용권 정보를 확인해주세요");
-    return;
-  }
-
-  button.disabled = true;
-  const previousText = button.textContent;
-  button.textContent = "저장 중";
-  try {
-    await client.rpc("tn_admin_assign_ticket_coach", {
-      target_ticket_id: ticketId,
-      target_coach_role_id: coachRoleId,
-    });
-    await syncAdminLiveData();
-    const coach = coaches.find((item) => item.serverRoleId === coachRoleId);
-    showToast(coach ? `${coach.name} 담당 코치 지정 완료` : "담당 코치 미배정 처리 완료");
-  } catch (error) {
-    const message = String(error?.message || "");
-    showToast(message.includes("approved_branch_coach_required") ? "같은 지점의 승인 코치를 선택해주세요" : "담당 코치 저장에 실패했습니다");
-  } finally {
-    button.disabled = false;
-    button.textContent = previousText;
-  }
 }
 
 function memberOwnsTicket(ticket, member) {
@@ -13482,12 +13623,6 @@ function renderMemberBulkToolbar(visibleMembers = [], filteredSelectionIds = nul
     selectAll.indeterminate = selectedCount > 0 && selectedCount < visibleIds.length;
     selectAll.disabled = operationsRole() !== "admin" || !visibleIds.length;
   }
-  const coachSelect = $("#memberBulkCoach");
-  if (coachSelect) {
-    const activeCoaches = operationBranchCoaches().filter((coach) => coach.status === "active" && coach.serverRoleId);
-    coachSelect.innerHTML = activeCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name)}</option>`).join("");
-    coachSelect.hidden = $("#memberBulkAction")?.value !== "assign_coach";
-  }
   const permanentDeleteOption = $('#memberBulkAction option[value="permanent_delete"]');
   if (permanentDeleteOption) {
     permanentDeleteOption.hidden = state.memberFilter !== "inactive";
@@ -13599,7 +13734,7 @@ async function runMemberBulkAction() {
       const result = await window.TennisNoteDataClient.rpc("tn_admin_bulk_member_action", {
         target_user_ids: userIds,
         target_action: action,
-        target_coach_role_id: action === "assign_coach" ? ($("#memberBulkCoach")?.value || null) : null,
+        target_coach_role_id: null,
         target_reason: `관리자 회원 목록 · ${actionLabel}`,
       });
       processedCount += Number(result?.processedCount ?? result?.processed_count ?? 0);
@@ -14090,6 +14225,12 @@ async function submitMemberInlineEditor(form, options = {}) {
     && String(selectedProduct.product_kind || "regular") === "regular"
     && applyFutureRequested
     && (scheduleSlotsChanged || ticketDefinitionChanged));
+  if (memberInlineCoachChanged(form) && !scheduleReplacementRequested) {
+    message.textContent = "코치 변경은 새 코치의 요일·시간을 함께 선택해야 합니다.";
+    message.classList.add("is-error");
+    form.classList.add("is-save-error");
+    return false;
+  }
   if (scheduleReplacementRequested) {
     const scheduleScope = memberManagementProductScheduleScope(selectedProduct);
     const requiredScheduleCount = memberRegularScheduleFrequency(selectedProduct, ticket);
@@ -27421,6 +27562,10 @@ function renderPaymentSetup() {
   if (!target) return;
   const config = paymentGatewayConfig();
   const ready = isPaymentGatewayReady();
+  const bankAccount = branchPaymentAccount || {};
+  const bankReady = branchPaymentAccountStatus === "loaded"
+    && bankAccount.is_enabled === true
+    && Boolean(bankAccount.bank_name && bankAccount.account_number && bankAccount.account_holder);
   target.innerHTML = `
     <article class="payment-setup-card ${ready ? "ready" : "setup"}">
       <div class="payment-setup-summary">
@@ -27459,6 +27604,32 @@ function renderPaymentSetup() {
         <button class="ghost-button" type="button" id="clearPaymentConfigButton">삭제</button>
       </div>
       <small>이 값은 이 브라우저의 로컬 저장소에만 저장됩니다. Git 커밋에는 포함되지 않습니다.</small>
+    </article>
+    <article class="payment-setup-card branch-bank-account-card ${bankReady ? "ready" : "setup"}">
+      <div class="payment-setup-summary">
+        <div>
+          <strong>계좌이체 입금 계좌</strong>
+          <span>${branchPaymentAccountStatus === "loading"
+            ? "서버 설정을 불러오는 중입니다."
+            : branchPaymentAccountStatus === "failed"
+              ? "계좌 설정 테이블 또는 관리자 권한을 확인해 주세요."
+              : bankReady
+                ? "결제 대기건을 정상 생성한 회원에게만 이 계좌가 표시됩니다."
+                : "계좌를 저장하고 사용을 켜야 회원앱에서 계좌이체를 선택할 수 있습니다."}</span>
+        </div>
+        ${badge(bankReady ? "ready" : "pending", bankReady ? "사용 중" : "사용 전")}
+      </div>
+      <div class="product-setting-fields payment-setting-fields branch-bank-account-fields">
+        <label><small>은행명</small><input id="branchBankName" type="text" maxlength="40" autocomplete="off" value="${escapeHtml(bankAccount.bank_name || "")}" placeholder="예: 우리은행" /></label>
+        <label><small>계좌번호</small><input id="branchBankAccountNumber" type="text" maxlength="32" inputmode="numeric" autocomplete="off" value="${escapeHtml(bankAccount.account_number || "")}" placeholder="숫자와 하이픈만 입력" /></label>
+        <label><small>예금주</small><input id="branchBankAccountHolder" type="text" maxlength="60" autocomplete="off" value="${escapeHtml(bankAccount.account_holder || "")}" /></label>
+        <label class="branch-bank-account-toggle"><small>회원앱 사용</small><span><input id="branchBankTransferEnabled" type="checkbox" ${bankAccount.is_enabled === true ? "checked" : ""} /> 계좌이체 선택 허용</span></label>
+        <label class="branch-bank-account-instructions"><small>입금 안내</small><textarea id="branchBankTransferInstructions" rows="2" maxlength="300" placeholder="예: 신청자 이름으로 입금해 주세요.">${escapeHtml(bankAccount.transfer_instructions || "")}</textarea></label>
+      </div>
+      <div class="payment-setup-actions">
+        <small>은행 알림은 자동 승인하지 않고 후보 증거로만 저장한 뒤, 관리자 확인 시 회원권을 1회 발급합니다.</small>
+        <button class="small-button" type="button" id="saveBranchPaymentAccountButton">계좌 저장</button>
+      </div>
     </article>`;
 }
 
@@ -28123,8 +28294,8 @@ function renderServiceReadiness() {
               <input type="number" min="1" step="1" data-product-field="validityDays" value="${normalized.validityDays}" aria-label="${escapeHtml(normalized.title)} 사용기간 일수" />
             </div>
             <div class="product-setting-inline-price">
-          <input type="number" min="0" step="1" data-product-field="cashAmount" value="${normalized.cashAmount}" aria-label="${escapeHtml(normalized.title)} 현금가격" />
-          <input type="number" min="0" step="1" data-product-field="cardAmount" value="${normalized.cardAmount}" aria-label="${escapeHtml(normalized.title)} 카드가격" />
+          <input type="number" min="0" step="1" data-product-field="cashAmount" value="${normalized.cashAmount}" aria-label="${escapeHtml(normalized.title)} 현금 기준가격" />
+          <input type="number" min="0" step="1" data-product-field="cardAmount" value="${Math.round(Number(normalized.cashAmount || 0) * 1.1)}" aria-label="${escapeHtml(normalized.title)} 카드가격 현금가의 110퍼센트 자동계산" readonly />
             </div>
             <select class="product-setting-quick-status" data-product-field="status" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
               ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
@@ -28151,7 +28322,7 @@ function renderServiceReadiness() {
               <small>${escapeHtml(normalized.group)} · ${normalized.tickets}회 · ${normalized.validityDays}일</small>
             </div>
             <div class="product-setting-summary-meta">
-              <b>현금 ${money.format(normalized.cashAmount)}원 / 카드 ${money.format(normalized.cardAmount)}원</b>
+              <b>기준가 ${money.format(normalized.cashAmount)}원 · 카드 ${money.format(Math.round(Number(normalized.cashAmount || 0) * 1.1))}원</b>
             </div>
             <select class="product-setting-quick-status" data-quick-product-status="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
               ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
@@ -28167,12 +28338,13 @@ function renderServiceReadiness() {
               <input type="text" data-product-field="sessions" value="${escapeHtml(normalized.sessions)}" />
             </label>
             <label>
-              <small>${productSettingFieldLabel("현금가격", true)}</small>
+              <small>${productSettingFieldLabel("현금 기준가격", true)}</small>
               <input type="number" min="0" step="1" data-product-field="cashAmount" value="${normalized.cashAmount}" />
             </label>
             <label>
-              <small>${productSettingFieldLabel("카드가격", true)}</small>
-              <input type="number" min="0" step="1" data-product-field="cardAmount" value="${normalized.cardAmount}" />
+              <small>${productSettingFieldLabel("카드가격 (자동)", true)}</small>
+              <input type="number" min="0" step="1" data-product-field="cardAmount" value="${Math.round(Number(normalized.cashAmount || 0) * 1.1)}" readonly aria-describedby="productCardPriceRule-${normalized.id}" />
+              <span id="productCardPriceRule-${normalized.id}" class="field-help">현금 기준가격에 10%를 더해 자동 계산합니다.</span>
             </label>
             ${normalized.purchaseExperience === "one_day" ? `
             <label>
@@ -28195,8 +28367,8 @@ function renderServiceReadiness() {
             <label>
               <small>${productSettingFieldLabel("3개월 가격 방식", true)}</small>
               <select data-product-field="threeMonthPriceMode">
-                <option value="automatic" ${normalized.threeMonthPriceMode === "automatic" ? "selected" : ""}>4주 가격 × 3 자동계산</option>
-                <option value="manual" ${normalized.threeMonthPriceMode === "manual" ? "selected" : ""}>직접입력</option>
+                <option value="automatic" ${normalized.threeMonthPriceMode === "automatic" ? "selected" : ""}>4주 현금가 × 3에서 할인</option>
+                <option value="manual" ${normalized.threeMonthPriceMode === "manual" ? "selected" : ""}>3개월 현금가 직접입력</option>
               </select>
               <button class="small-button" type="button" data-recalculate-three-month="${normalized.id}">할인가 다시 계산</button>
             </label>` : ""}
@@ -28293,7 +28465,7 @@ function renderServiceReadiness() {
           </div>
           <section class="product-member-preview" aria-label="회원 화면 미리보기">
             <div><small>회원 화면 미리보기</small><strong>${escapeHtml(memberFacingGroup)} · ${escapeHtml(normalized.title)}</strong></div>
-            <div class="product-member-preview-prices"><span>토스페이 카드 ${money.format(normalized.cardAmount)}원</span><span>계좌이체 현금 ${money.format(normalized.cashAmount)}원</span></div>
+            <div class="product-member-preview-prices"><span>기준가 ${money.format(normalized.cashAmount)}원</span><span>결제 방법 선택 시 토스페이 ${money.format(Math.round(Number(normalized.cashAmount || 0) * 1.1))}원</span></div>
             <small>${enabledSaleCoaches.length ? `선택 가능 코치 ${enabledSaleCoaches.map((coach) => coach.name).join(" · ")}` : "선택 가능한 코치 없음"}</small>
           </section>
           <div class="product-setting-actions">
@@ -28307,6 +28479,7 @@ function renderServiceReadiness() {
       .join("") : `<p class="empty-text product-setting-empty">${allProducts.length ? "검색 조건에 맞는 회원권 상품이 없습니다." : "이 지점에 등록된 회원권 상품이 없습니다. 새 회원권을 눌러 추가해 주세요."}</p>`;
   }
 
+  renderDiscountIssueControls();
   const discountCards = $("#discountPolicyCards");
   if (discountCards) {
     state.discountView = state.discountView === "history" ? "history" : "policies";
@@ -28343,6 +28516,8 @@ function renderServiceReadiness() {
         <div class="discount-create-grid">
           <label><small>이름</small><input id="discountTitleInput" type="text" placeholder="예: 주말 신규 15% 할인권" /></label>
           <label><small>대상</small><input id="discountTargetInput" type="text" value="쿠폰제/정기권" /></label>
+          <label><small>적용 상품</small><select id="discountProductScopeInput"><option value="all">전체 상품</option><option value="regular">정기권</option><option value="coupon">쿠폰제</option><option value="one_day">원데이</option></select></label>
+          <label><small>캠페인</small><select id="discountCampaignTypeInput"><option value="general">일반</option><option value="new_member">신규</option><option value="returning">복귀·재등록</option><option value="referral">친구추천 2인</option></select></label>
           <label><small>방식</small><select id="discountTypeInput"><option value="percent">할인율</option><option value="amount">할인금액</option></select></label>
           <label><small>값</small><input id="discountValueInput" type="number" min="0" value="10" /></label>
           <label><small>결제수단</small><input id="discountPaymentInput" type="text" value="카드/현금" /></label>
@@ -28368,6 +28543,8 @@ function renderServiceReadiness() {
           <div class="discount-create-grid">
             <label><small>이름</small><input data-discount-field="title" type="text" value="${escapeHtml(normalized.title)}" /></label>
             <label><small>대상</small><input data-discount-field="target" type="text" value="${escapeHtml(normalized.target)}" /></label>
+            <label><small>적용 상품</small><select data-discount-field="productScope"><option value="all" ${normalized.productScope === "all" ? "selected" : ""}>전체 상품</option><option value="regular" ${normalized.productScope === "regular" ? "selected" : ""}>정기권</option><option value="coupon" ${normalized.productScope === "coupon" ? "selected" : ""}>쿠폰제</option><option value="one_day" ${normalized.productScope === "one_day" ? "selected" : ""}>원데이</option></select></label>
+            <label><small>캠페인</small><select data-discount-field="campaignType"><option value="general" ${normalized.campaignType === "general" ? "selected" : ""}>일반</option><option value="new_member" ${normalized.campaignType === "new_member" ? "selected" : ""}>신규</option><option value="returning" ${normalized.campaignType === "returning" ? "selected" : ""}>복귀·재등록</option><option value="referral" ${normalized.campaignType === "referral" ? "selected" : ""}>친구추천 2인</option></select></label>
             <label><small>방식</small><select data-discount-field="type"><option value="percent" ${normalized.type === "percent" ? "selected" : ""}>할인율</option><option value="amount" ${normalized.type === "amount" ? "selected" : ""}>할인금액</option></select></label>
             <label><small>값</small><input data-discount-field="value" type="number" min="0" value="${normalized.value}" /></label>
             <label><small>결제수단</small><input data-discount-field="payment" type="text" value="${escapeHtml(normalized.payment)}" /></label>
@@ -30087,6 +30264,8 @@ function bindEvents() {
     state.discountSearch = event.target.value;
     renderServiceReadiness();
   });
+  $("#discountIssueMemberSearch")?.addEventListener("input", () => renderDiscountIssueControls());
+  $("#discountIssueMember")?.addEventListener("change", () => renderDiscountIssueControls());
   $("#membershipProductSearch")?.addEventListener("input", (event) => {
     state.membershipProductSearch = event.target.value;
     state.membershipProductPage = 0;
@@ -30132,7 +30311,6 @@ function bindEvents() {
       return;
     }
     if (event.target.matches("#memberBulkAction")) {
-      if ($("#memberBulkCoach")) $("#memberBulkCoach").hidden = event.target.value !== "assign_coach";
       syncMemberBulkRenewalFields();
       return;
     }
@@ -30205,6 +30383,11 @@ function bindEvents() {
   });
 
   document.addEventListener("input", (event) => {
+    if (event.target.matches('[data-product-field="cashAmount"]')) {
+      const productCard = event.target.closest("[data-product-card]");
+      const cardPriceInput = productCard?.querySelector('[data-product-field="cardAmount"]');
+      if (cardPriceInput) cardPriceInput.value = String(Math.round(Math.max(0, Number(event.target.value) || 0) * 1.1));
+    }
     if (event.target.matches("#memberManagementForm input[name='extendedExpiresOn']")) {
       syncMemberTicketExtensionPreview(event.target.form);
       return;
@@ -30607,12 +30790,6 @@ function bindEvents() {
       return;
     }
 
-    const saveTicketCoachButton = event.target.closest("[data-save-ticket-coach]");
-    if (saveTicketCoachButton) {
-      await assignMemberTicketCoach(saveTicketCoachButton);
-      return;
-    }
-
     const saveTicketLessonSetupButton = event.target.closest("[data-save-ticket-lesson-setup]");
     if (saveTicketLessonSetupButton) {
       await saveMemberTicketLessonSetup(saveTicketLessonSetupButton);
@@ -30925,6 +31102,16 @@ function bindEvents() {
     const clearPaymentConfigButton = event.target.closest("#clearPaymentConfigButton");
     if (clearPaymentConfigButton) {
       clearPaymentGatewayConfig();
+    }
+
+    if (event.target.closest("#saveBranchPaymentAccountButton")) {
+      await saveBranchPaymentAccount();
+      return;
+    }
+
+    if (event.target.closest("#issueDiscountCouponButton")) {
+      await issueDiscountCoupons();
+      return;
     }
 
     const editNoticeButton = event.target.closest("[data-edit-notice]");

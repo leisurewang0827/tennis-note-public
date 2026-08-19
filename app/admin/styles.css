@@ -3459,24 +3459,20 @@ tr.is-selected td {
   background: #f8fafc;
 }
 
-.member-coach-assignment label {
+.member-coach-assignment > div {
   display: grid;
   gap: 5px;
 }
 
-.member-coach-assignment label span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.member-coach-assignment select {
-  width: 100%;
-  min-height: 40px;
+.member-coach-assignment strong {
+  color: var(--ink);
+  font-size: 13px;
 }
 
 .member-coach-assignment small {
-  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .member-ticket-lesson-setup {
@@ -7451,6 +7447,90 @@ tr.is-selected td {
 
 .payment-setting-fields {
   grid-template-columns: repeat(2, minmax(180px, 1fr));
+}
+
+.discount-issue-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  border: 1px solid #b7dfd2;
+  border-radius: 10px;
+  padding: 14px;
+  background: #f6fffb;
+}
+
+.discount-issue-panel > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.discount-issue-panel > div:first-child span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.discount-issue-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.discount-issue-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.discount-issue-grid small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.discount-issue-grid :is(input, select) {
+  width: 100%;
+  min-height: 42px;
+}
+
+.discount-issue-note {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .discount-issue-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .discount-issue-note {
+    grid-column: auto;
+  }
+}
+
+.branch-bank-account-card {
+  margin-top: 12px;
+}
+
+.branch-bank-account-fields .branch-bank-account-instructions {
+  grid-column: 1 / -1;
+}
+
+.branch-bank-account-fields textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.branch-bank-account-toggle > span {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.branch-bank-account-card .payment-setup-actions small {
+  max-width: 720px;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .payment-server-checklist {

@@ -21,8 +21,9 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.368" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.368" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.369" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.369" />
+    <link rel="stylesheet" href="../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-1" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -277,19 +278,19 @@
             </div>
           </details>
 
-          <section id="journalComposerSheet" class="app-bottom-sheet" aria-labelledby="journalComposerTitle" data-tn-input-guard="member-journal" data-tn-restore-draft="true" hidden>
-            <button class="sheet-backdrop" type="button" aria-label="운동일지 작성 닫기" data-close-journal-composer></button>
-            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="journalComposerTitle">
-              <div class="sheet-handle" aria-hidden="true"></div>
-              <div class="sheet-head">
+          <section id="journalComposerSheet" class="app-bottom-sheet" aria-labelledby="journalComposerTitle" data-tn-bottom-sheet data-tn-sheet-has-footer="true" data-tn-input-guard="member-journal" data-tn-restore-draft="true" hidden>
+            <button class="sheet-backdrop" type="button" aria-label="운동일지 작성 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-journal-composer></button>
+            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="journalComposerTitle" data-tn-sheet-panel>
+              <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+              <div class="sheet-head" data-tn-sheet-header>
                 <div>
                   <p class="eyebrow">운동일지 작성</p>
                   <h3 id="journalComposerTitle">기록하기</h3>
                   <span id="journalComposerDateLabel"></span>
                 </div>
-                <button class="small-button" type="button" data-close-journal-composer>닫기</button>
+                <button class="small-button" type="button" data-tn-sheet-close data-close-journal-composer>닫기</button>
               </div>
-              <div class="sheet-scroll">
+              <div class="sheet-scroll" data-tn-sheet-scroll>
           <div class="form-card journal-composer-form">
             <label>
               <span>기록 구분</span>
@@ -352,7 +353,7 @@
             </div>
           </div>
               </div>
-              <div class="sheet-actions journal-composer-actions">
+              <div class="sheet-actions journal-composer-actions" data-tn-sheet-footer>
                 <button class="primary-button" type="button" id="saveJournal">운동일지 저장</button>
               </div>
             </article>
@@ -481,6 +482,14 @@
               </span>
               <span class="settings-row-arrow" aria-hidden="true">›</span>
             </button>
+            <button class="settings-row" type="button" id="openDiscountCouponWalletButton">
+              <span class="settings-row-icon" aria-hidden="true">%</span>
+              <span class="settings-row-copy">
+                <strong>할인 쿠폰함</strong>
+                <small id="profileCouponWalletSummary">사용 가능한 쿠폰을 확인하세요</small>
+              </span>
+              <span id="profileCouponWalletCount" class="settings-row-status">0장</span>
+            </button>
           </section>
 
           <section class="profile-settings-card" aria-label="앱 및 계정 설정">
@@ -574,19 +583,19 @@
             <button class="small-button danger-button" type="button" id="openAccountDeletionButton">계정 삭제</button>
           </section>
 
-          <section id="profileEditorSheet" class="app-bottom-sheet" aria-labelledby="profileEditorTitle" data-tn-input-guard="member-profile" data-tn-restore-draft="true" hidden>
-            <button class="sheet-backdrop" type="button" aria-label="내 정보 수정 닫기" data-close-profile-editor></button>
-            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="profileEditorTitle">
-              <div class="sheet-handle" aria-hidden="true"></div>
-              <div class="sheet-head">
+          <section id="profileEditorSheet" class="app-bottom-sheet" aria-labelledby="profileEditorTitle" data-tn-bottom-sheet data-tn-input-guard="member-profile" data-tn-restore-draft="true" hidden>
+            <button class="sheet-backdrop" type="button" aria-label="내 정보 수정 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-profile-editor></button>
+            <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="profileEditorTitle" data-tn-sheet-panel>
+              <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+              <div class="sheet-head" data-tn-sheet-header>
                 <div>
                   <p class="eyebrow">내 계정</p>
                   <h3 id="profileEditorTitle">프로필과 테니스 정보</h3>
                   <span>필요한 항목만 수정하고 저장하세요.</span>
                 </div>
-                <button class="small-button" type="button" data-close-profile-editor>닫기</button>
+                <button class="small-button" type="button" data-tn-sheet-close data-close-profile-editor>닫기</button>
               </div>
-              <div class="sheet-scroll">
+              <div class="sheet-scroll" data-tn-sheet-scroll>
           <section class="form-card profile-editor-form">
             <div class="profile-editor-photo-actions">
               <label class="upload-button" for="profilePhotoInput">사진 등록</label>
@@ -921,19 +930,19 @@
       </article>
     </section>
 
-    <section id="lessonDetailSheet" class="app-bottom-sheet lesson-detail-sheet" aria-labelledby="lessonDetailTitle" hidden>
-      <button class="sheet-backdrop" type="button" aria-label="수업 상세 닫기" data-close-lesson-detail></button>
-      <article class="sheet-card lesson-detail-sheet-card" role="dialog" aria-modal="true" aria-labelledby="lessonDetailTitle">
-        <div class="sheet-handle" aria-hidden="true"></div>
-        <div class="sheet-head">
+    <section id="lessonDetailSheet" class="app-bottom-sheet lesson-detail-sheet" aria-labelledby="lessonDetailTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="수업 상세 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-lesson-detail></button>
+      <article class="sheet-card lesson-detail-sheet-card" role="dialog" aria-modal="true" aria-labelledby="lessonDetailTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
           <div>
             <p class="eyebrow">내 수업</p>
             <h3 id="lessonDetailTitle">수업 상세</h3>
             <span id="lessonDetailStatus">예정</span>
           </div>
-          <button class="small-button" type="button" data-close-lesson-detail>닫기</button>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-lesson-detail>닫기</button>
         </div>
-        <div class="sheet-scroll lesson-detail-sheet-scroll">
+        <div class="sheet-scroll lesson-detail-sheet-scroll" data-tn-sheet-scroll>
           <dl class="lesson-detail-facts">
             <div>
               <dt>일정</dt>
@@ -958,6 +967,65 @@
             <button id="lessonDetailJournalAction" class="small-button" type="button" hidden>운동기록 작성</button>
           </div>
         </div>
+      </article>
+    </section>
+
+    <section id="purchasePaymentMethodSheet" class="app-bottom-sheet purchase-payment-method-sheet" aria-labelledby="purchasePaymentMethodTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="결제 방법 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-payment-method></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchasePaymentMethodTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">회원권 결제</p>
+            <h3 id="purchasePaymentMethodTitle">결제 방법 선택</h3>
+            <span>선택한 방법의 금액만 결제됩니다.</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-purchase-payment-method>닫기</button>
+        </div>
+        <div id="purchasePaymentMethodSheetOptions" class="sheet-scroll payment-method-sheet-options" data-tn-sheet-scroll></div>
+      </article>
+    </section>
+
+    <section id="bankTransferInstructionsSheet" class="app-bottom-sheet bank-transfer-instructions-sheet" aria-labelledby="bankTransferInstructionsTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="입금 안내 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-bank-transfer-instructions></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="bankTransferInstructionsTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">계좌이체 신청 완료</p>
+            <h3 id="bankTransferInstructionsTitle">아래 계좌로 입금해 주세요</h3>
+            <span>입금 확인 전에는 회원권이 생성되지 않습니다.</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-bank-transfer-instructions>닫기</button>
+        </div>
+        <div class="sheet-scroll bank-transfer-instructions" data-tn-sheet-scroll>
+          <div class="bank-transfer-order-summary"><span id="bankTransferProductName">회원권</span><strong id="bankTransferAmount">0원</strong></div>
+          <dl>
+            <div><dt>은행</dt><dd id="bankTransferBankName">-</dd></div>
+            <div><dt>계좌번호</dt><dd id="bankTransferAccountNumber">-</dd></div>
+            <div><dt>예금주</dt><dd id="bankTransferAccountHolder">-</dd></div>
+          </dl>
+          <p id="bankTransferCustomInstructions">신청자 이름으로 입금해 주세요.</p>
+          <button class="primary-button" type="button" id="copyBankTransferAccountButton">계좌번호 복사</button>
+          <button class="small-button" type="button" id="cancelBankTransferRequestButton">입금 신청 취소</button>
+          <small>은행 알림 또는 관리자 확인이 완료되면 회원·코치·관리자 화면에 같은 회원권이 한 번만 반영됩니다.</small>
+        </div>
+      </article>
+    </section>
+
+    <section id="discountCouponWalletSheet" class="app-bottom-sheet discount-coupon-wallet-sheet" aria-labelledby="discountCouponWalletTitle" data-tn-bottom-sheet hidden>
+      <button class="sheet-backdrop" type="button" aria-label="할인 쿠폰함 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-discount-coupon-wallet></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="discountCouponWalletTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">내 정보</p>
+            <h3 id="discountCouponWalletTitle">할인 쿠폰함</h3>
+            <span>관리자가 발급한 쿠폰과 사용 상태를 확인합니다.</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-discount-coupon-wallet>닫기</button>
+        </div>
+        <div id="discountCouponWalletList" class="sheet-scroll discount-coupon-wallet-list" data-tn-sheet-scroll></div>
       </article>
     </section>
 
@@ -1108,17 +1176,18 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.368"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.368"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.368"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.369"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.369"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.369"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
-    <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-1"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.368"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.368"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.368"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.368"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.368"></script>
+    <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.369"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.369"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.369"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.369"></script>
+    <script defer src="../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-1"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.369"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
     <script>
       (() => {
@@ -1137,7 +1206,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.368";
+          appScript.src = "./app.js?v=1.0.369";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -1150,7 +1219,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.368";
+          appScript.src = "./app.js?v=1.0.369";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

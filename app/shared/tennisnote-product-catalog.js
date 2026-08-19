@@ -47,11 +47,12 @@
     return Math.round(Number(value || 0) / 1000) * 1000;
   }
 
-  function threeMonthPrice(fourWeekCard, fourWeekCash, discountRate = 10) {
+  function threeMonthPrice(_fourWeekCard, fourWeekCash, discountRate = 10) {
     const multiplier = Math.max(0, 1 - (Number(discountRate) || 0) / 100);
+    const cash = Math.round(Number(fourWeekCash || 0) * 3 * multiplier);
     return [
-      roundThousand(Number(fourWeekCard || 0) * 3 * multiplier),
-      roundThousand(Number(fourWeekCash || 0) * 3 * multiplier),
+      Math.round(cash * 1.1),
+      cash,
     ];
   }
 
