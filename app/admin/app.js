@@ -4344,7 +4344,8 @@ async function loadBankNotificationStatusFromServer() {
   }
 }
 
-async function saveBranchPaymentAccount() {
+async function saveBranchPaymentAccount(options = {}) {
+  const silent = options.silent === true;
   const client = window.TennisNoteDataClient;
   const branchId = activeOperationBranchId();
   const bankName = ($("#salesBranchBankName") || $("#branchBankName"))?.value.trim() || "";
@@ -4387,7 +4388,9 @@ async function saveBranchPaymentAccount() {
     if (!rows?.[0]?.branch_id) throw new Error("bank_account_write_not_confirmed");
     await loadBranchPaymentAccountFromServer();
     await loadBankNotificationStatusFromServer();
-    showToast(enabled ? "계좌이체 계좌를 서버에 저장하고 회원 결제에 표시했습니다" : "계좌를 저장하고 회원 결제 노출을 껐습니다");
+    if (!silent) {
+      showToast(enabled ? "계좌이체 계좌를 서버에 저장하고 회원 결제에 표시했습니다" : "계좌를 저장하고 회원 결제 노출을 껐습니다");
+    }
     return true;
   } catch (error) {
     showToast(`계좌 저장 실패: ${error?.payload?.code || error?.message || "server_error"}`);
@@ -28245,8 +28248,8 @@ function renderBranchSalesSetup() {
           <label><span>입금기한</span><select id="salesBranchBankDepositDeadlineHours"><option value="12" ${Number(account.deposit_deadline_hours || 24) === 12 ? "selected" : ""}>12시간</option><option value="24" ${Number(account.deposit_deadline_hours || 24) === 24 ? "selected" : ""}>24시간</option><option value="48" ${Number(account.deposit_deadline_hours || 24) === 48 ? "selected" : ""}>48시간</option><option value="72" ${Number(account.deposit_deadline_hours || 24) === 72 ? "selected" : ""}>72시간</option></select></label>
           <label class="branch-sales-check"><input id="salesBranchBankTransferEnabled" type="checkbox" ${account.is_enabled ? "checked" : ""} /> 회원앱 사용</label>
           <label class="branch-sales-bank-note"><span>입금 안내</span><input id="salesBranchBankTransferInstructions" type="text" maxlength="300" value="${escapeHtml(account.transfer_instructions || "")}" placeholder="신청자 이름으로 입금해 주세요" /></label>
-          <button id="saveSalesBranchPaymentAccountButton" class="small-button" type="button">계좌 저장</button>
-        </div><small>계좌는 주문할 때 복사되어 이후 계좌를 바꿔도 기존 주문은 그대로 유지됩니다. 정확히 일치한 Android 입금 알림만 자동 확인하고, 나머지는 관리자 검토로 남깁니다.</small>${bankNotificationStatusMarkup()}</details>
+          <button id="saveSalesBranchPaymentAccountButton" class="small-button" type="button">계좌만 저장</button>
+        </div><small>회원앱에 적용을 누르면 계좌와 결제 설정을 함께 저장합니다. 계좌는 주문할 때 복사되어 이후 계좌를 바꿔도 기존 주문은 그대로 유지됩니다. 정확히 일치한 Android 입금 알림만 자동 확인하고, 나머지는 관리자 검토로 남깁니다.</small>${bankNotificationStatusMarkup()}</details>
       </section>
       <section class="branch-sales-step"><div class="branch-sales-step-title"><b>4</b><span><strong>혜택·쿠폰</strong><small>대상별 이름·할인율</small></span></div><div class="branch-sales-benefit-grid">${Object.entries(config.benefits).map(([id, benefit]) => branchSalesBenefitMarkup(id, benefit)).join("")}</div><small>혜택은 켠 뒤에도 대상 판정과 중복 방지를 서버에서 다시 확인합니다.</small></section>
       <section class="branch-sales-step branch-sales-preview-step"><div class="branch-sales-step-title"><b>5</b><span><strong>미리보기·적용</strong><small>390px 회원 화면 기준</small></span></div><div id="branchSalesMemberPreview">${branchSalesPreviewMarkup()}</div><div class="branch-sales-actions"><button id="saveBranchSalesDraftButton" class="secondary-button" type="button" ${failed ? "disabled" : ""}>초안 저장</button><button id="applyBranchSalesSettingsButton" class="primary-button" type="button" ${failed ? "disabled" : ""}>회원앱에 적용</button></div><small>초안 저장만으로는 앱이 바뀌지 않습니다. 적용 후 새 주문부터 새 설정과 가격이 고정됩니다.</small></section>
@@ -28271,6 +28274,16 @@ async function saveBranchSalesSettings(apply = false) {
   if (invalidMethod || invalidBenefit) {
     showToast("결제수단 이름과 혜택 이름·할인율을 확인해 주세요");
     return false;
+  }
+  if (apply && config.paymentMethods.bank_transfer?.enabled === true) {
+    const bankEnabled = $("#salesBranchBankTransferEnabled")?.checked === true;
+    if (!bankEnabled) {
+      showToast("계좌이체를 사용하려면 입금 계좌의 회원앱 사용을 켜 주세요");
+      $("#salesBranchBankTransferEnabled")?.focus();
+      return false;
+    }
+    const accountSaved = await saveBranchPaymentAccount({ silent: true });
+    if (!accountSaved) return false;
   }
   const button = $(apply ? "#applyBranchSalesSettingsButton" : "#saveBranchSalesDraftButton");
   if (button) button.disabled = true;
