@@ -2125,8 +2125,8 @@ const settlements = [
 ];
 
 const coachSettlementRules = [
-  { coach: "노 코치", method: "ratio", ratio: 0.5, hourly: 0, cardBase: "cash", substitute: "actualCoach" },
-  { coach: "강 코치", method: "ratio", ratio: 0.6, hourly: 0, cardBase: "cash", substitute: "actualCoach" },
+  { coach: "노 코치", method: "ratio", ratio: 0.5, hourly: 0, cardBase: "cash", calculationMode: "session_progress", substitute: "actualCoach" },
+  { coach: "강 코치", method: "ratio", ratio: 0.6, hourly: 0, cardBase: "cash", calculationMode: "session_progress", substitute: "actualCoach" },
   { coach: "황 코치", method: "hourly", ratio: 0, hourly: 35000, cardBase: "cash", substitute: "actualCoach" },
   { coach: "박창준 코치", method: "hourly", ratio: 0, hourly: 40000, cardBase: "cash", substitute: "actualCoach" },
 ];
@@ -2154,6 +2154,7 @@ function defaultCoachSettlementRule(coach, existingRule = null) {
     ratio: hourlyCoach ? 0 : newCoachSettlementSettings.regularRatio / 100,
     hourly: hourlyCoach ? (substituteCoach ? newCoachSettlementSettings.substituteHourly : newCoachSettlementSettings.weekendHourly) : 0,
     cardBase: newCoachSettlementSettings.cardBase,
+    calculationMode: existingRule?.calculationMode || "session_progress",
     substitute: newCoachSettlementSettings.substitute,
     effectiveFrom: existingRule?.effectiveFrom || new Date().toISOString().slice(0, 10),
     serverRoleId: coach?.serverRoleId || existingRule?.serverRoleId || "",
@@ -9191,6 +9192,70 @@ function memberUnlinkedVerifiedPayment(member = null) {
       .localeCompare(String(left.verified_at || left.paid_at || left.created_at || "")))[0] || null;
 }
 
+function memberTicketLinkedPayment(ticket = null) {
+  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
+  if (!ticketId) return null;
+  return (adminLiveDataState.payments || [])
+    .filter((payment) => String(payment.ticket_id || payment.ticketId || "") === ticketId)
+    .sort((left, right) => {
+      const statusScore = (payment) => payment.status === "verified" ? 2 : payment.status === "pending" ? 1 : 0;
+      const scoreDelta = statusScore(right) - statusScore(left);
+      if (scoreDelta) return scoreDelta;
+      return String(right.verified_at || right.paid_at || right.created_at || "")
+        .localeCompare(String(left.verified_at || left.paid_at || left.created_at || ""));
+    })[0] || null;
+}
+
+function memberTicketPaymentProjection(member = null, ticket = null) {
+  const payment = memberTicketLinkedPayment(ticket);
+  if (payment) {
+    return {
+      payment,
+      protected: payment.status === "verified",
+      payment_record_state: payment.status === "verified" ? "complete" : "incomplete",
+      payment_recorded_on: String(payment.paid_at || payment.verified_at || payment.created_at || "").slice(0, 10),
+      payment_method: payment.method || payment.provider || "",
+      payment_amount: Number(payment.final_amount ?? payment.amount ?? 0),
+    };
+  }
+  const record = memberDatabaseRecord(member, ticket);
+  return record ? { ...record, payment: null, protected: false } : null;
+}
+
+function memberPaymentInitialSnapshot(projection = null) {
+  return encodeURIComponent(JSON.stringify({
+    state: memberPaymentRecordState(projection),
+    date: String(projection?.payment_recorded_on || ""),
+    method: normalizeMemberPaymentMethod(projection?.payment_method || ""),
+    amount: Number(projection?.payment_amount || 0),
+  }));
+}
+
+function memberInlinePaymentChanged(form) {
+  const encoded = String(form?.dataset?.initialPayment || "");
+  if (!encoded) return true;
+  let initial = null;
+  try {
+    initial = JSON.parse(decodeURIComponent(encoded));
+  } catch {
+    return true;
+  }
+  const current = {
+    state: String(form.elements.paymentRecordState?.value || memberPaymentRecordState({
+      payment_recorded_on: form.elements.paymentDate?.value || "",
+      payment_method: form.elements.paymentMethod?.value || "",
+      payment_amount: memberManagementNullableNumber(form.elements.paymentAmount) || 0,
+    })),
+    date: String(form.elements.paymentDate?.value || ""),
+    method: normalizeMemberPaymentMethod(form.elements.paymentMethod?.value || ""),
+    amount: memberManagementNullableNumber(form.elements.paymentAmount) || 0,
+  };
+  return initial.state !== current.state
+    || initial.date !== current.date
+    || initial.method !== current.method
+    || Number(initial.amount || 0) !== Number(current.amount || 0);
+}
+
 function memberManagementLessonTypeLabel(value = "") {
   return value === "one_on_two" ? "1:2" : value === "one_on_one" ? "1:1" : "미입력";
 }
@@ -10496,7 +10561,7 @@ function memberTicketListMarkup(member) {
 function memberPaymentOverviewMarkup(member) {
   const managedTickets = memberManagementTickets(member).filter((ticket) => ticket.status !== "voided");
   const paymentRows = managedTickets.map((ticket) => {
-    const record = memberDatabaseRecord(member, ticket);
+    const record = memberTicketPaymentProjection(member, ticket);
     const paymentState = memberPaymentRecordState(record);
     if (!record || paymentState === "unentered") return null;
     if (paymentState === "transfer_zero") {
@@ -10534,7 +10599,7 @@ function memberTicketRowMarkup(member, ticket, position = 1, count = 1, possible
 
 function memberTicketPaymentMarkup(member, ticket) {
   if (!ticket) return '<span class="member-table-muted">미입력</span>';
-  const record = memberDatabaseRecord(member, ticket);
+  const record = memberTicketPaymentProjection(member, ticket);
   const paymentState = memberPaymentRecordState(record);
   if (!record || paymentState === "unentered") {
     return '<span class="member-table-muted">미입력</span>';
@@ -10783,23 +10848,37 @@ function memberManagementDatabaseFields({
   const lessonType = (isAssign ? "" : record?.lesson_type || ticket?.lessonTypeCode) || (Number(product?.group_size || 1) === 2 ? "one_on_two" : "one_on_one");
   const lessonDays = isAssign ? [] : Array.isArray(record?.lesson_days) ? record.lesson_days : ticket?.lessonDays || [];
   const hasTicket = Boolean(ticket?.serverTicketId || isCreate || isAssign);
-  const totalSessions = isAssign ? Number(product?.total_sessions || 1) : record?.total_sessions ?? ticket?.total ?? (isCreate ? Number(product?.total_sessions || 1) : null);
-  const usedSessions = isAssign ? 0 : record?.used_sessions ?? ticket?.used ?? (isCreate ? 0 : null);
-  const remainingSessions = isAssign ? Number(product?.total_sessions || 1) : record?.remaining_sessions ?? ticket?.remaining ?? (isCreate ? Number(product?.total_sessions || 1) : null);
+  const totalSessions = isAssign ? Number(product?.total_sessions || 1) : ticket?.total ?? record?.total_sessions ?? (isCreate ? Number(product?.total_sessions || 1) : null);
+  const usedSessions = isAssign ? 0 : ticket?.used ?? record?.used_sessions ?? (isCreate ? 0 : null);
+  const remainingSessions = isAssign ? Number(product?.total_sessions || 1) : ticket?.remaining ?? record?.remaining_sessions ?? (isCreate ? Number(product?.total_sessions || 1) : null);
   const startsOn = isAssign ? adminLocalDateKey(new Date()) : record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased || (isCreate ? adminLocalDateKey(new Date()) : "");
   const validityDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
   const expiresOn = ticket?.expires || (isCreate || isAssign ? addMemberManagementDays(startsOn, validityDays - 1) : "");
-  const existingPaymentDate = String(existingPayment?.paid_at || existingPayment?.verified_at || existingPayment?.created_at || "").slice(0, 10);
-  const paymentDate = isAssign ? existingPaymentDate : record?.payment_recorded_on || "";
-  const paymentMethod = isAssign ? existingPayment?.method || "" : record?.payment_method || "";
+  const paymentProjection = isAssign
+    ? existingPayment
+      ? {
+          payment: existingPayment,
+          protected: existingPayment.status === "verified",
+          payment_record_state: existingPayment.status === "verified" ? "complete" : "incomplete",
+          payment_recorded_on: String(existingPayment.paid_at || existingPayment.verified_at || existingPayment.created_at || "").slice(0, 10),
+          payment_method: existingPayment.method || existingPayment.provider || "",
+          payment_amount: Number(existingPayment.final_amount ?? existingPayment.amount ?? 0),
+        }
+      : null
+    : memberTicketPaymentProjection(member, ticket) || record;
+  const existingPaymentDate = String(paymentProjection?.payment_recorded_on || "");
+  const paymentDate = existingPaymentDate;
+  const paymentMethod = paymentProjection?.payment_method || "";
   const paymentAmount = isAssign
     ? Number(existingPayment?.final_amount ?? existingPayment?.amount ?? product?.cash_price ?? product?.card_price ?? 0)
-    : record?.payment_amount ?? (isCreate ? 0 : "");
+    : paymentProjection?.payment_amount ?? (isCreate ? 0 : "");
   const paymentRecordState = isAssign && existingPayment
     ? "complete"
-    : record
-      ? memberPaymentRecordState(record)
+    : paymentProjection
+      ? memberPaymentRecordState(paymentProjection)
       : "unentered";
+  const paymentProtected = Boolean(paymentProjection?.protected && !isAssign);
+  const paymentControlState = paymentProtected ? "disabled aria-disabled=\"true\"" : "";
   const note = record ? record.admin_note || "" : member?.note || "";
   const partnerUserId = ticket && member ? memberTicketPartnerUserId(ticket, member) : "";
   const recordStatus = record?.record_status || (ticket?.status === "expired" ? "historical" : hasTicket ? "active" : "pending");
@@ -10836,14 +10915,15 @@ function memberManagementDatabaseFields({
         ${ticketStatus === "pending_payment" ? '<option value="pending_payment" selected>결제 대기 유지</option>' : ""}
         <option value="expired" ${ticketStatus === "expired" ? "selected" : ""}>만료</option>
       </select></label>` : ""}
-      <label class="form-field">${memberManagementFieldLabel("결제 구분")}<select name="paymentRecordState">${memberPaymentRecordStateOptions({
+      ${paymentProtected ? '<div class="member-management-warning span-2"><strong>확인 완료 결제</strong><span>회원권 정보만 수정할 수 있습니다. 결제 변경·환불은 결제관리에서 진행하세요.</span></div>' : ""}
+      <label class="form-field">${memberManagementFieldLabel("결제 구분")}<select name="paymentRecordState" ${paymentControlState}>${memberPaymentRecordStateOptions({
         payment_record_state: paymentRecordState,
         payment_recorded_on: paymentDate,
         payment_method: paymentMethod,
         payment_amount: paymentAmount,
       })}</select></label>
-      <label class="form-field">${memberManagementFieldLabel("결제일자")}<input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" /></label>
-      <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod">
+      <label class="form-field">${memberManagementFieldLabel("결제일자")}<input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" ${paymentControlState} /></label>
+      <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod" ${paymentControlState}>
         <option value="" ${paymentMethod ? "" : "selected"}>미입력</option>
         <option value="card" ${paymentMethod === "card" ? "selected" : ""}>카드</option>
         <option value="bank" ${["bank", "bank_transfer", "transfer"].includes(paymentMethod) ? "selected" : ""}>계좌이체</option>
@@ -10851,7 +10931,7 @@ function memberManagementDatabaseFields({
         <option value="manual" ${paymentMethod === "manual" ? "selected" : ""}>관리자 입력</option>
         ${paymentMethod && !["card", "bank", "bank_transfer", "transfer", "cash", "manual"].includes(paymentMethod) ? `<option value="${escapeHtml(paymentMethod)}" selected>${escapeHtml(paymentMethodLabel(paymentMethod))}</option>` : ""}
       </select></label>
-      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
+      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" ${paymentControlState} /></label>
       <label class="form-field span-2">${memberManagementFieldLabel("비고")}<textarea name="note" rows="3" maxlength="500">${escapeHtml(note)}</textarea></label>
       <div class="form-field span-2 member-partner-editor ${lessonType === "one_on_two" ? "" : "is-disabled"}" data-manual-member-partner-field>
         ${memberManagementFieldLabel("1:2 파트너", lessonType === "one_on_two")}
@@ -11436,7 +11516,7 @@ function renderMemberManagementModal() {
       <p class="member-management-rule">판매 중인 상품을 선택하면 기간과 회차가 자동 입력됩니다. 저장 후 시간표에서 정규 수업을 등록합니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "correct") {
     actionFields = operationsRole() === "admin" ? `
-      ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, includeTicketStatus: true })}
+      ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: memberTicketLinkedPayment(ticket), includeTicketStatus: true })}
       <p class="member-management-rule">레슨 방식·종류·요일·횟수·결제 메모를 한 번에 수정합니다. 기존 결제 증빙은 변경하지 않습니다.</p>` : `
       <div class="member-management-form-grid">
         <label class="form-field"><span>총횟수</span><input name="totalSessions" type="number" min="1" step="1" value="${defaultTotal}" required /></label>
@@ -13946,19 +14026,22 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
   const ticketPosition = Number(options.ticketPosition || 0);
   const ticketCount = Number(options.ticketCount || 0);
   const record = memberDatabaseRecord(member, ticket);
+  const paymentProjection = memberTicketPaymentProjection(member, ticket) || record;
+  const paymentProtected = Boolean(paymentProjection?.protected);
+  const paymentControlState = paymentProtected ? 'disabled aria-disabled="true"' : "";
   const coachRoles = memberManagementCoachRoles(ticket || {});
   const partnerUserId = ticket ? memberTicketPartnerUserId(ticket, member) : "";
   const partnerOptions = manualMemberPartnerOptions()
     .filter((user) => user.id !== member.serverUserId)
     .map((user) => `<option value="${escapeHtml(user.id)}" ${user.id === partnerUserId ? "selected" : ""}>${escapeHtml(user.name || "회원")}</option>`)
     .join("");
-  const total = Number(record?.total_sessions ?? ticket?.total ?? 0);
-  const used = Number(record?.used_sessions ?? ticket?.used ?? 0);
+  const total = Number(ticket?.total ?? record?.total_sessions ?? 0);
+  const used = Number(ticket?.used ?? record?.used_sessions ?? 0);
   const remaining = Math.max(0, total - used);
   const startsOn = memberManagementDate(record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased)
     || adminLocalDateKey(new Date());
   const expiresOn = memberManagementDate(ticket?.expires);
-  const paymentRecordState = memberPaymentRecordState(record);
+  const paymentRecordState = memberPaymentRecordState(paymentProjection);
   const currentProduct = (adminLiveDataState.products || []).find((item) => item.id === ticket?.productId);
   const activeProductOptions = membershipProductsForActiveOperationProfile()
     .map((draft) => ({ draft, server: serverMembershipProductForDraft(draft) }))
@@ -14001,7 +14084,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
          <option value="prefer_not" ${member.gender === "prefer_not" ? "selected" : ""}>응답 안 함</option>
        </select></label>`;
   return `
-        <form class="member-inline-editor member-inline-editor--compact ${embedded && ticket ? "member-inline-editor--ticket-only" : ""}" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}">
+        <form class="member-inline-editor member-inline-editor--compact ${embedded && ticket ? "member-inline-editor--ticket-only" : ""}" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(paymentProjection))}">
           <div class="member-inline-editor-heading" ${embedded ? "hidden" : ""}>
             <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
@@ -14056,20 +14139,22 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
               ${ticket.status === "pending_payment" ? '<option value="pending_payment" selected>결제 대기 유지</option>' : ""}
               <option value="expired" ${ticket.status === "expired" ? "selected" : ""}>만료</option>
             </select></label>` : ""}
-            <label class="member-inline-payment-state"><span>결제 구분</span><select name="paymentRecordState">${memberPaymentRecordStateOptions({
+            ${paymentProtected ? '<div class="member-management-warning member-inline-payment-protected"><strong>확인 결제 보존</strong><span>결제 변경·환불은 결제관리에서 진행하세요.</span></div>' : ""}
+            <label class="member-inline-payment-state"><span>결제 구분</span><select name="paymentRecordState" ${paymentControlState}>${memberPaymentRecordStateOptions({
               payment_record_state: paymentRecordState,
-              payment_recorded_on: record?.payment_recorded_on,
-              payment_method: record?.payment_method,
-              payment_amount: record?.payment_amount,
+              payment_recorded_on: paymentProjection?.payment_recorded_on,
+              payment_method: paymentProjection?.payment_method,
+              payment_amount: paymentProjection?.payment_amount,
             })}</select></label>
-            <label class="member-inline-payment-date"><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(record?.payment_recorded_on || "")}" /></label>
-            <label class="member-inline-payment-method"><span>결제수단</span><select name="paymentMethod">
+            <label class="member-inline-payment-date"><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(paymentProjection?.payment_recorded_on || "")}" ${paymentControlState} /></label>
+            <label class="member-inline-payment-method"><span>결제수단</span><select name="paymentMethod" ${paymentControlState}>
               <option value="">미입력</option>
-              <option value="card" ${record?.payment_method === "card" ? "selected" : ""}>카드</option>
-              <option value="bank_transfer" ${["bank", "bank_transfer", "transfer"].includes(record?.payment_method) ? "selected" : ""}>계좌이체</option>
-              <option value="cash" ${record?.payment_method === "cash" ? "selected" : ""}>현금</option>
+              <option value="card" ${paymentProjection?.payment_method === "card" ? "selected" : ""}>카드</option>
+              <option value="bank_transfer" ${["bank", "bank_transfer", "transfer"].includes(paymentProjection?.payment_method) ? "selected" : ""}>계좌이체</option>
+              <option value="cash" ${paymentProjection?.payment_method === "cash" ? "selected" : ""}>현금</option>
+              ${paymentProjection?.payment_method && !["card", "bank", "bank_transfer", "transfer", "cash"].includes(paymentProjection.payment_method) ? `<option value="${escapeHtml(paymentProjection.payment_method)}" selected>${escapeHtml(paymentMethodLabel(paymentProjection.payment_method))}</option>` : ""}
             </select></label>
-            <label class="member-inline-payment-amount"><span>결제금액</span><input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(record?.payment_amount ?? ""))}" /></label>
+            <label class="member-inline-payment-amount"><span>결제금액</span><input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentProjection?.payment_amount ?? ""))}" ${paymentControlState} /></label>
             <label class="member-inline-note"><span>비고</span><input name="note" value="${escapeHtml(record?.admin_note || member.note || "")}" /></label>
             <div class="member-inline-compact-actions">
               <label class="member-inline-schedule-scope"><span>시간표 반영</span><select name="applyToFutureSchedule">
@@ -14416,15 +14501,18 @@ function applyMemberInlineRowFilter() {
 function memberInlineEditorMarkup(member, ticket) {
   if (operationsRole() !== "admin") return "";
   const record = memberDatabaseRecord(member, ticket);
+  const paymentProjection = memberTicketPaymentProjection(member, ticket) || record;
+  const paymentProtected = Boolean(paymentProjection?.protected);
+  const paymentControlState = paymentProtected ? 'disabled aria-disabled="true"' : "";
   const coachRoles = memberManagementCoachRoles(ticket || {});
   const startsOn = memberManagementDate(record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased);
   const expiresOn = memberManagementDate(ticket?.expires);
-  const total = Number(record?.total_sessions ?? ticket?.total ?? 0);
-  const used = Number(record?.used_sessions ?? ticket?.used ?? 0);
+  const total = Number(ticket?.total ?? record?.total_sessions ?? 0);
+  const used = Number(ticket?.used ?? record?.used_sessions ?? 0);
   const remaining = Math.max(0, total - used);
-  const paymentMethod = record?.payment_method || "";
-  const paymentDate = record?.payment_recorded_on || "";
-  const paymentAmount = record?.payment_amount ?? "";
+  const paymentMethod = paymentProjection?.payment_method || "";
+  const paymentDate = paymentProjection?.payment_recorded_on || "";
+  const paymentAmount = paymentProjection?.payment_amount ?? "";
   const scheduleScope = record?.lesson_schedule_scope || ticket?.scheduleScope || "";
   const lessonType = record?.lesson_type || ticket?.lessonTypeCode || "one_on_one";
   const weeklyFrequency = Number(record?.lesson_frequency_per_week ?? ticket?.weeklyCount ?? 1);
@@ -14432,7 +14520,7 @@ function memberInlineEditorMarkup(member, ticket) {
   return `
     <tr class="member-inline-editor-row" data-inline-editor-member="${member.id}">
       <td colspan="9">
-        <form class="member-inline-editor" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}">
+        <form class="member-inline-editor" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(paymentProjection))}">
           <div class="member-inline-editor-heading">
             <div><strong>${escapeHtml(member.name)} 행 편집</strong><span>${escapeHtml(ticket ? getTicketDisplayProduct(ticket) || ticket.product || "회원권" : "기본정보만 저장")}</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
@@ -14464,21 +14552,21 @@ function memberInlineEditorMarkup(member, ticket) {
             </select></label>
             <label><span>주 횟수</span><input name="weeklyFrequency" type="number" min="1" max="7" value="${weeklyFrequency}" ${ticket ? "" : "disabled"} /></label>
           </div>
-          ${ticket ? `<div class="member-inline-editor-grid member-inline-editor-grid--ticket">
+          ${ticket ? `${paymentProtected ? '<div class="member-management-warning"><strong>확인 결제 보존</strong><span>회원권 정보만 수정할 수 있습니다. 결제 변경·환불은 결제관리에서 진행하세요.</span></div>' : ""}<div class="member-inline-editor-grid member-inline-editor-grid--ticket">
             <label><span>시작일</span><input name="startsOn" type="date" value="${escapeHtml(startsOn)}" required /></label>
             <label><span>만료일</span><input name="expiresOn" type="date" value="${escapeHtml(expiresOn)}" required /></label>
             <label><span>총</span><input name="totalSessions" type="number" min="0" step="1" value="${total}" required /></label>
             <label><span>소진</span><input name="usedSessions" type="number" min="0" step="1" value="${used}" required /></label>
             <label><span>잔여</span><input name="remainingSessions" type="number" min="0" step="1" value="${remaining}" readonly aria-readonly="true" /></label>
-            <label><span>결제수단</span><select name="paymentMethod" ${required}>
+            <label><span>결제수단</span><select name="paymentMethod" ${required} ${paymentControlState}>
               <option value="">미입력</option>
               <option value="card" ${paymentMethod === "card" ? "selected" : ""}>카드</option>
               <option value="bank_transfer" ${["bank", "bank_transfer", "transfer"].includes(paymentMethod) ? "selected" : ""}>계좌이체</option>
               <option value="cash" ${paymentMethod === "cash" ? "selected" : ""}>현금</option>
               <option value="manual" ${paymentMethod === "manual" ? "selected" : ""}>관리자 입력</option>
             </select></label>
-            <label><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" ${required} /></label>
-            <label><span>금액</span><input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
+            <label><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" ${required} ${paymentControlState} /></label>
+            <label><span>금액</span><input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" ${paymentControlState} /></label>
             <label class="member-inline-note"><span>비고</span><input name="note" value="${escapeHtml(record?.admin_note || member.note || "")}" /></label>
           </div>` : ""}
           <div class="member-inline-editor-actions">
@@ -14509,6 +14597,7 @@ async function submitMemberInlineEditor(form, options = {}) {
   syncMemberQuickEditorProduct(form);
   syncMemberInlineProductCancellation(form);
   const selectedProduct = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+  const paymentChanged = memberInlinePaymentChanged(form);
   if (ticket || selectedProduct) syncMemberManagementBalance(form);
   const total = selectedProduct ? memberManagementNullableNumber(form.elements.totalSessions) : null;
   const used = selectedProduct ? memberManagementNullableNumber(form.elements.usedSessions) : null;
@@ -14537,12 +14626,12 @@ async function submitMemberInlineEditor(form, options = {}) {
     payment_method: paymentMethod,
     payment_amount: paymentAmount,
   });
-  if (paymentRecordState === "complete" && (paymentAmount <= 0 || !paymentDate || !paymentMethod)) {
+  if (paymentChanged && paymentRecordState === "complete" && (paymentAmount <= 0 || !paymentDate || !paymentMethod)) {
     message.textContent = "결제 완료는 결제일자, 결제수단, 1원 이상의 결제금액을 모두 입력해 주세요.";
     message.classList.add("is-error");
     return false;
   }
-  if (paymentRecordState === "unentered" && (paymentAmount > 0 || paymentDate || paymentMethod)) {
+  if (paymentChanged && paymentRecordState === "unentered" && (paymentAmount > 0 || paymentDate || paymentMethod)) {
     message.textContent = "결제값을 입력했다면 결제 구분을 결제 완료로 바꿔 주세요.";
     message.classList.add("is-error");
     return false;
@@ -14592,7 +14681,16 @@ async function submitMemberInlineEditor(form, options = {}) {
   const reason = "관리자 회원표 수정";
   const payload = memberManagementDatabasePayload(form, member, ticket, reason);
   normalizeMemberManagementTicketPayload(payload);
-  normalizeMemberManagementPaymentPayload(payload);
+  payload.paymentChanged = paymentChanged;
+  if (paymentChanged) {
+    normalizeMemberManagementPaymentPayload(payload);
+  } else {
+    delete payload.paymentDate;
+    delete payload.paymentMethod;
+    delete payload.paymentAmount;
+    delete payload.paymentRecordState;
+    delete payload.existingPaymentId;
+  }
   if (ticket && !form.elements.productId?.value) {
     payload.productId = ticket.productId || null;
     payload.ticketStatus = "expired";
@@ -14719,7 +14817,7 @@ async function submitMemberInlineEditor(form, options = {}) {
     if (!refreshedMember || refreshedMember.name !== payload.name) {
       throw new Error("member_inline_profile_write_not_confirmed");
     }
-    if ((ticket || payload.productId) && !memberManagementTicketMatchesPayload(refreshed, payload)) {
+    if ((ticket || payload.productId) && !memberManagementTicketMatchesPayload(refreshed, payload, { verifyPayment: payload.paymentChanged !== false })) {
       throw new Error("member_inline_write_not_confirmed");
     }
     if (scheduleReplacementRequested && refreshedMember) {
@@ -15102,22 +15200,23 @@ function renderMembers(options = {}) {
       || expiredTickets.find((ticket) => ticketBelongsToMember(ticket, selected))
       || null;
     const selectedRecord = memberDatabaseRecord(selected, selectedTicket);
+    const selectedPayment = memberTicketPaymentProjection(selected, selectedTicket);
     const enrollment = selected.enrollment || {};
     const recentPayment = latestMemberPayment(selected);
     const ticketName = selectedTicket
       ? getTicketDisplayProduct(selectedTicket) || selectedTicket.product
       : selectedStatus === "expired" ? "현재 회원권 없음" : selected.lessonType || "회원권 없음";
-    const hasRecordedPayment = Boolean(selectedRecord && (
-      selectedRecord.payment_recorded_on
-      || selectedRecord.payment_method
-      || Number(selectedRecord.payment_amount) > 0
+    const hasRecordedPayment = Boolean(selectedPayment && (
+      selectedPayment.payment_recorded_on
+      || selectedPayment.payment_method
+      || Number(selectedPayment.payment_amount) > 0
     ));
-    const paymentDate = selectedRecord
-      ? selectedRecord.payment_recorded_on ? memberDetailDateLabel(selectedRecord.payment_recorded_on) : "미입력"
+    const paymentDate = selectedPayment
+      ? selectedPayment.payment_recorded_on ? memberDetailDateLabel(selectedPayment.payment_recorded_on) : "미입력"
       : recentPayment ? memberDetailDateLabel(recentPayment.paidAt || recentPayment.verifiedAt || recentPayment.requestedAt) : "없음";
-    const paymentSummary = selectedRecord
+    const paymentSummary = selectedPayment
       ? hasRecordedPayment
-        ? `${selectedRecord.payment_method ? paymentMethodLabel(selectedRecord.payment_method) : "미입력"} · ${money.format(Number(selectedRecord.payment_amount) || 0)}원`
+        ? `${selectedPayment.payment_method ? paymentMethodLabel(selectedPayment.payment_method) : "미입력"} · ${money.format(Number(selectedPayment.payment_amount) || 0)}원`
         : "미입력"
       : recentPayment
         ? `${paymentMethodLabel(recentPayment.method)} · ${money.format(recentPayment.finalAmount || recentPayment.amount || 0)}원`
@@ -15125,9 +15224,9 @@ function renderMembers(options = {}) {
     const lessonStart = selectedTicket
       ? selectedRecord?.lesson_start_on || selectedTicket.actualLessonStart || selectedTicket.purchased || ""
       : "";
-    const totalSessions = selectedTicket ? selectedRecord?.total_sessions ?? selectedTicket.total : null;
-    const usedSessions = selectedTicket ? selectedRecord?.used_sessions ?? selectedTicket.used : null;
-    const remainingSessions = selectedTicket ? selectedRecord?.remaining_sessions ?? selectedTicket.remaining : null;
+    const totalSessions = selectedTicket ? selectedTicket.total ?? selectedRecord?.total_sessions : null;
+    const usedSessions = selectedTicket ? selectedTicket.used ?? selectedRecord?.used_sessions : null;
+    const remainingSessions = selectedTicket ? selectedTicket.remaining ?? selectedRecord?.remaining_sessions : null;
     detailPanel.innerHTML = `
       <div class="detail-header member-db-header">
         <div class="profile-line large">
@@ -20696,6 +20795,9 @@ function settlementAmountFor(item) {
   }
   const totalLessons = Math.max(completedLessons, Number(item.totalLessons) || completedLessons);
   const baseAmount = Number(rule.cardBase === "paid" ? item.paidAmount : item.settlementBase) || 0;
+  if (rule.calculationMode === "monthly_payment") {
+    return Math.round(baseAmount * (Number(rule.ratio) || 0));
+  }
   const perLessonBase = baseAmount / totalLessons;
   return Math.round(perLessonBase * completedLessons * (Number(rule.ratio) || 0));
 }
@@ -23944,6 +24046,7 @@ function mergeServerCoachRole(role, index) {
     settlementType: role.settlement_type || "ratio",
     settlementRate: Number(role.settlement_rate) || 0,
     hourlyRate: Number(role.hourly_rate) || 0,
+    settlementCalculationMode: role.settlement_calculation_mode || "session_progress",
     availabilityRevision: Number(role.availability_revision) || 0,
     scheduleLaneOrder: Number.isFinite(Number(role.schedule_lane_order)) ? Number(role.schedule_lane_order) : 1000 + index,
   });
@@ -24046,6 +24149,7 @@ function applyServerCoachSnapshot({
       ratio: term?.settlement_type === "ratio" ? Number(term.coach_rate) : (coach.settlementType === "ratio" ? roleRate : 0),
       hourly: term?.settlement_type === "hourly" ? Number(term.hourly_rate) : (coach.settlementType === "hourly" ? Number(coach.hourlyRate) : 0),
       cardBase: term?.settlement_basis === "actual_paid_inc_vat" ? "paid" : "cash",
+      calculationMode: term?.settlement_calculation_mode || coach.settlementCalculationMode || baseRule.calculationMode,
       substitute: term?.substitute_policy || baseRule.substitute,
       effectiveFrom: term?.effective_from || baseRule.effectiveFrom,
       serverRoleId: coach.serverRoleId,
@@ -24058,7 +24162,7 @@ async function refreshCoachStaffData() {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !operationsAccessReady()) return false;
   const serverCoachRoles = await client.selectRows("tn_coach_roles", {
-    select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision,schedule_lane_order",
+    select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_calculation_mode,settlement_effective_from,availability_revision,schedule_lane_order",
     limit: 100,
   }).catch(() => client.selectRows("tn_coach_roles", {
     select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate",
@@ -24078,7 +24182,7 @@ async function refreshCoachStaffData() {
       limit: 200,
     }).catch(() => []) : [],
     roleIds.length ? client.selectRows("tn_coach_settlement_terms", {
-      select: "id,coach_role_id,settlement_type,coach_rate,hourly_rate,settlement_basis,substitute_policy,effective_from,effective_to,status",
+      select: "id,coach_role_id,settlement_type,coach_rate,hourly_rate,settlement_basis,settlement_calculation_mode,substitute_policy,effective_from,effective_to,status",
       filters: { coach_role_id: { in: roleIds } },
       order: "effective_from.desc",
       limit: 500,
@@ -24265,7 +24369,7 @@ async function performAdminLiveDataSync(options = {}) {
     const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments, serverSettlementTickets] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       rosterRows("users", () => (client.selectAllRows || client.selectRows)("tn_user_directory_safe", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 })),
-      client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision,schedule_lane_order", limit: 100 })
+      client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_calculation_mode,settlement_effective_from,availability_revision,schedule_lane_order", limit: 100 })
         .catch(() => client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate", limit: 100 })),
       client.selectRows("tn_coach_availability", { select: "id,coach_role_id,day_of_week,start_time,end_time,availability_type,note", limit: 1000 }).catch(() => []),
       fullAdminAccess ? Promise.resolve(adminLiveDataState.authLinks || []) : Promise.resolve([]),
@@ -26264,7 +26368,8 @@ function coachSettlementRule(coach) {
 function coachSettlementSummary(coach) {
   const rule = coachSettlementRule(coach);
   if (rule.method === "hourly") return `시급 ${money.format(Number(rule.hourly) || 0)}원`;
-  return `비율 ${Math.round((Number(rule.ratio) || 0) * 100)}%`;
+  const mode = rule.calculationMode === "monthly_payment" ? "월 결제액" : "진행 횟수";
+  return `${mode}의 ${Math.round((Number(rule.ratio) || 0) * 100)}%`;
 }
 
 function coachEmploymentLabel(coach) {
@@ -26299,6 +26404,7 @@ function coachStaffDraftFrom(coach) {
       ratio: Math.round((Number(settlement.ratio) || 0) * 100),
       hourly: Number(settlement.hourly) || 0,
       basis: settlement.cardBase === "paid" ? "actual_paid_inc_vat" : "cash_ex_vat",
+      calculationMode: settlement.calculationMode || "session_progress",
       substitute: settlement.substitute || "actualCoach",
       effectiveFrom: settlement.effectiveFrom || new Date().toISOString().slice(0, 10),
     },
@@ -26322,6 +26428,7 @@ function readCoachStaffPanel() {
     draft.settlement.ratio = numericValue($("#coachStaffSettlementRatio")?.value, draft.settlement.ratio);
     draft.settlement.hourly = numericValue($("#coachStaffSettlementHourly")?.value, draft.settlement.hourly);
     draft.settlement.basis = $("#coachStaffSettlementBasis")?.value || "cash_ex_vat";
+    draft.settlement.calculationMode = $("#coachStaffSettlementCalculationMode")?.value || "session_progress";
     draft.settlement.substitute = $("#coachStaffSettlementSubstitute")?.value || "actualCoach";
     draft.settlement.effectiveFrom = $("#coachStaffSettlementEffectiveFrom")?.value || new Date().toISOString().slice(0, 10);
   }
@@ -26422,6 +26529,13 @@ function renderCoachStaffSettlementTab(draft) {
         </select>
       </label>
       <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>코치 비율(%)</span><input id="coachStaffSettlementRatio" type="number" min="0" max="100" step="1" value="${settlement.ratio}" /></label>
+      <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>비율 계산 방법</span>
+        <select id="coachStaffSettlementCalculationMode">
+          <option value="monthly_payment" ${settlement.calculationMode === "monthly_payment" ? "selected" : ""}>결제한 달 전체 금액 × 비율</option>
+          <option value="session_progress" ${settlement.calculationMode !== "monthly_payment" ? "selected" : ""}>진행한 수업 횟수만큼 × 비율</option>
+        </select>
+        <small>월 결제액은 해당 월에 확인 완료된 결제금액 전체를 기준으로 계산합니다.</small>
+      </label>
       <label class="form-field ${ratio ? "is-hidden" : ""}" data-settlement-mode-field="hourly"><span>시급</span><input id="coachStaffSettlementHourly" type="number" min="0" step="1000" value="${settlement.hourly}" /></label>
       <label class="form-field"><span>정산 기준</span>
         <select id="coachStaffSettlementBasis">
@@ -26603,6 +26717,7 @@ function coachStaffPayload(draft) {
       ratio: draft.settlement.method === "ratio" ? draft.settlement.ratio / 100 : null,
       hourly: draft.settlement.method === "hourly" ? draft.settlement.hourly : null,
       basis: draft.settlement.basis,
+      calculationMode: draft.settlement.calculationMode,
       substitute: draft.settlement.substitute,
       effectiveFrom: draft.settlement.effectiveFrom,
     },
@@ -26628,6 +26743,7 @@ function coachStaffServerMatches(saved, draft) {
   if (settlement.method !== draft.settlement.method) return false;
   if ((settlement.effectiveFrom || "") !== (draft.settlement.effectiveFrom || "")) return false;
   if (draft.settlement.method === "ratio" && Math.round((Number(settlement.ratio) || 0) * 100) !== Number(draft.settlement.ratio)) return false;
+  if (draft.settlement.method === "ratio" && (settlement.calculationMode || "session_progress") !== draft.settlement.calculationMode) return false;
   if (draft.settlement.method === "hourly" && Number(settlement.hourly) !== Number(draft.settlement.hourly)) return false;
   return true;
 }

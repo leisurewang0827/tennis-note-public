@@ -2052,7 +2052,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.373",
+    workerUrl: "./service-worker.js?v=1.0.374",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3787,11 +3787,11 @@ function memberScheduleOptions() {
           : generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson);
   const assignedCoachIds = memberAssignedCoachRoleIds();
   const initialCoachSelection = Boolean(selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId);
-  const visibleGenerated = generated.filter((lesson) => {
+  const visibleGenerated = memberUniqueAvailableSlots(generated.filter((lesson) => {
     if (lesson.status !== "available") return true;
     const roleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
     return Boolean(roleId) && (initialCoachSelection || assignedCoachIds.has(roleId));
-  });
+  }));
   return scheduleLessons.concat(visibleGenerated);
 }
 
@@ -3835,13 +3835,31 @@ function memberAvailableSlotsForSelectedLesson() {
     : selectedLesson ? memberLessonCoach(selectedLesson, loadAdminSchedulePolicy()).id : "";
   const assignedCoachIds = memberAssignedCoachRoleIds();
   const initialCoachSelection = Boolean(selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId);
-  return options.filter((lesson) => {
+  return memberUniqueAvailableSlots(options.filter((lesson) => {
     if (lesson.status !== "available") return false;
     const lessonCoachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
     if (!lessonCoachRoleId || (!initialCoachSelection && !assignedCoachIds.has(lessonCoachRoleId))) return false;
     if (!selectedCoachId) return true;
     return memberLessonCoach(lesson, loadAdminSchedulePolicy()).id === selectedCoachId;
+  }));
+}
+
+function memberAvailableSlotIdentity(lesson = {}) {
+  const coachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
+  const lessonDate = String(lesson.lessonDate || memberScheduleDateForDay(lesson.day) || "");
+  const time = String(lesson.time || lesson.startTime || "").slice(0, 5);
+  const ticketId = String(lesson.ticketId || lesson.member_ticket_id || "");
+  const duration = Number(lesson.durationMinutes) || 0;
+  return `${coachRoleId}|${lessonDate}|${time}|${ticketId}|${duration}`;
+}
+
+function memberUniqueAvailableSlots(slots = []) {
+  const unique = new Map();
+  slots.forEach((slot) => {
+    const key = memberAvailableSlotIdentity(slot);
+    if (!unique.has(key)) unique.set(key, slot);
   });
+  return [...unique.values()];
 }
 
 function memberLessons() {
@@ -8458,7 +8476,7 @@ function mapServerMemberChangeCandidate(candidate = {}, source = null) {
     ? candidate.anchorGapMinutes
     : state.serverChangeAnchorGapMinutes;
   return {
-    id: `server-change-slot-${source?.serverLessonId || "lesson"}-${lessonDate}-${time}`,
+    id: `server-change-slot-${source?.serverLessonId || "lesson"}-${coachRoleId || "coach"}-${lessonDate}-${time}`,
     day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
     time,
     coach: source?.coach || "담당 코치",
@@ -8610,7 +8628,9 @@ async function syncMemberChangeCandidates(source = null) {
     }
     const reportedGap = result.anchorGapMinutes ?? result.anchorRule?.gapMinutes;
     state.serverChangeAnchorGapMinutes = reportedGap === null ? null : Math.max(0, Number(reportedGap) || 40);
-    const mappedCandidates = result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source));
+    const mappedCandidates = memberUniqueAvailableSlots(
+      result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source)),
+    );
     state.serverChangeCandidates = mappedCandidates;
     state.serverChangeCandidateExclusions = result.exclusionSummary && typeof result.exclusionSummary === "object"
       ? result.exclusionSummary
@@ -11313,7 +11333,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.373", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.374", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -13048,6 +13068,7 @@ async function requestMakeup() {
         daily_session_limit: "하루 이용 가능 횟수를 초과합니다.",
         weekly_session_limit: "이번 주 이용 가능 횟수를 초과합니다.",
         weekly_booking_day_limit: "이번 주 예약 가능 일수를 초과합니다.",
+        lesson_change_request_already_pending: "이미 승인 대기 중인 변경 요청이 있습니다. 요청 내역에서 기존 요청을 수정해 주세요.",
         target_date_outside_ticket: "회원권 사용기간 밖의 날짜입니다.",
         coupon_booking_forbidden: "이 쿠폰을 예약할 권한이 없습니다.",
         coupon_ticket_required: "사용 가능한 쿠폰 회원권을 확인해 주세요.",
@@ -14220,7 +14241,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.373",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.374",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

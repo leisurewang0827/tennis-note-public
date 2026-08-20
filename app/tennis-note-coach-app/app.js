@@ -2596,7 +2596,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.373",
+    workerUrl: "./service-worker.js?v=1.0.374",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2627,7 +2627,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.373" });
+  const params = new URLSearchParams({ v: "1.0.374" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3878,7 +3878,8 @@ function coachSettlementRuleLabel(settlement = {}) {
   if (settlement.ruleType === "hourly") return `시급 ${formatCoachWon(settlement.hourlyRate)}`;
   const rate = Math.round((Number(settlement.ruleRate) || 0) * 100);
   const basis = settlement.settlementBasis === "actual_paid_inc_vat" ? "실결제" : "정산 기준가";
-  return `${basis}의 ${rate}%`;
+  const calculation = settlement.calculationMode === "monthly_payment" ? "월 결제액" : "진행 횟수";
+  return `${calculation} · ${basis}의 ${rate}%`;
 }
 
 function normalizedCoachSettlementMemberName(value = "") {
@@ -8000,7 +8001,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.373",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.374",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
