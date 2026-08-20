@@ -78,15 +78,31 @@ localhost에서는 서비스워커를 등록하지 않으므로 고친 파일이
 
 코드만 봐서는 알 수 없는 것들입니다. 어기면 실사용자에게 사고가 납니다.
 
-### 버전은 다섯 군데가 같이 움직인다
+### 버전은 손으로 올리지 마세요
 
-하나라도 빠뜨리면 **그 파일만 옛 캐시에 남아 사용자가 옛 화면을 봅니다.**
+버전은 9개 파일 109곳에 박혀 있습니다. 하나라도 빠뜨리면 **그 파일만 옛 캐시에
+남아 사용자가 옛 화면을 봅니다.** 스크립트가 전부 한 번에 바꿉니다.
 
-1. `app/release.json` — 기준 원본
-2. `app/shared/tennisnote-release.js` — `version`, `releaseId`, `appSurfaceVersion`
-3. 각 `index.html`의 `?v=` (9개 파일 73곳)
-4. `app/tennis-note-member-app/service-worker.js` — `CACHE_NAME`
-5. `app/tennis-note-coach-app/service-worker.js` — `CACHE_NAME`
+```bash
+./scripts/bump_release.py --next        # 끝자리 +1
+./scripts/bump_release.py 1.0.380       # 버전 지정
+./scripts/bump_release.py --next --dry-run   # 무엇이 바뀔지만 확인
+```
+
+바꾸는 곳: `release.json` · `tennisnote-release.js` · 각 `index.html`·`app.js` 의
+`?v=` · 서비스워커 두 개의 `CACHE_NAME` 카운터.
+
+**건드리지 않는 곳**은 네이티브 배포 때 따로 움직입니다. 이력에서도 늘 별도
+커밋이었습니다.
+
+- `release.json` 의 `nativePlatforms.*` (`preparedVersion`, `latestBuild` 등)
+- `tennisnote-release.js` 의 `nativeShell.*` (`androidVersion` 등)
+
+스크립트는 끝나고 **옛 버전이 남았는지 스스로 검사하고, 남으면 아무것도 쓰지
+않고 멈춥니다.** 모르는 자리가 새로 생기면 그때 스크립트에 추가하세요.
+
+`?v=notion-catalog-3` 처럼 세머버가 아닌 캐시 키는 대상이 아닙니다. 그 파일만
+따로 무효화하려는 것이므로 손대지 마세요.
 
 서비스워커의 `APP_SHELL` 목록과 `index.html`의 스크립트 목록도 일치해야 합니다.
 스크립트를 추가·삭제하면 양쪽 다 고치세요.
