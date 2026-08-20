@@ -27,6 +27,8 @@ const PAGES = [
     pathname: "/app/admin/",
     scripts: [
       "app/shared/tennisnote-release.js",
+      "app/admin/catalog.js",
+      "app/admin/settings.js",
       "app/admin/domain/values.js",
       "app/admin/domain/lessons.js",
       "app/admin/domain/billing.js",

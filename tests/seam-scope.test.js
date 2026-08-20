@@ -48,6 +48,8 @@ const SOURCES = [
   "app/admin/storage.js",
   "app/admin/app.js",
   "app/admin/schedule-v2-admin.js",
+  "app/admin/catalog.js",
+  "app/admin/settings.js",
   "app/admin/domain/values.js",
   "app/admin/domain/lessons.js",
   "app/admin/domain/billing.js",
