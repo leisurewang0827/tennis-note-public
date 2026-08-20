@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.375" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.376" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-15" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.375" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.376" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -134,7 +134,7 @@
             <article class="metric-card warning">
               <span>변경 승인</span>
               <strong id="metricMakeups">0</strong>
-              <small>24시간 이내 요청</small>
+              <small>운영 규칙상 승인 요청</small>
             </article>
             <article class="metric-card accent">
               <span>기록/차감 대기</span>
@@ -371,7 +371,7 @@
         <section id="scheduleView" class="view" aria-label="레슨시간표">
           <details id="scheduleChangeApprovalQueue" class="panel schedule-change-approval" open>
             <summary>
-              <span><strong>24시간 이내 변경 승인</strong><small>담당 코치 또는 관리자가 처리합니다.</small></span>
+              <span><strong>수업 변경 승인</strong><small>담당 코치 또는 관리자가 처리합니다.</small></span>
               <b id="scheduleChangeApprovalCount">0건</b>
             </summary>
             <div id="scheduleChangeApprovalRows" class="schedule-change-approval-list" aria-live="polite"></div>
@@ -428,6 +428,22 @@
                 </details>
                 <button id="scheduleV2PolicyButton" class="ghost-button schedule-v2-policy-open" type="button" aria-expanded="false">운영 규칙 열기</button>
                 <div id="scheduleV2PolicyPanel" class="schedule-v2-policy-panel" hidden>
+                  <section class="schedule-v2-member-change-policy" aria-labelledby="scheduleV2MemberChangePolicyTitle">
+                    <header>
+                      <div><small>회원 앱</small><strong id="scheduleV2MemberChangePolicyTitle">수업 시간 변경</strong></div>
+                      <span>새 신청부터 적용</span>
+                    </header>
+                    <div class="schedule-v2-member-change-policy-fields">
+                      <label><span>회원 앱 시간 변경</span><select name="memberChangeEnabled"><option value="true">사용</option><option value="false">사용 안 함</option></select></label>
+                      <label><span>자동 변경</span><select name="memberAutoChangeEnabled"><option value="true">사용</option><option value="false">사용 안 함</option></select></label>
+                      <label><span>자동 변경 기준</span><span class="schedule-v2-policy-number"><input name="memberAutoApproveBeforeHours" type="number" min="1" max="168" step="1" value="24" inputmode="numeric" /><em>시간 전</em></span></label>
+                      <label><span>기준 이내 신청</span><select name="memberWithinCutoffMode"><option value="coach_approval">코치 승인</option><option value="blocked">신청 불가</option></select></label>
+                      <label><span>자동 변경 사유</span><select name="memberAutoReasonMode"><option value="none">받지 않음</option><option value="optional">선택</option><option value="required">필수</option></select></label>
+                      <label><span>승인 요청 사유</span><select name="memberApprovalReasonMode"><option value="required">필수</option><option value="optional">선택</option><option value="none">받지 않음</option></select></label>
+                      <label><span>그룹수업 변경</span><select name="groupMemberChangeMode"><option value="coach_approval">코치 승인</option><option value="blocked">신청 불가</option></select></label>
+                    </div>
+                    <p id="scheduleV2MemberChangePolicyPreview" class="schedule-v2-member-change-policy-preview" aria-live="polite"></p>
+                  </section>
                   <label><span>코치 수업 추가</span><select name="coachSingleAddMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
                   <label><span>코치 정규시간 변경</span><select name="coachRegularChangeMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
                   <label><span>다른 코치 회원 수정</span><select name="allowCrossCoachMemberEdit"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>
@@ -2093,20 +2109,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.375"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.375"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.375"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.376"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.376"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.376"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.375"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.376"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.375"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.375"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.375"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.375"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.375"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.375"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.376"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.376"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.376"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.376"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.376"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.376"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.375"></script>
+    <script src="./app.js?v=1.0.376"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-15"></script>
   </body>
 </html>

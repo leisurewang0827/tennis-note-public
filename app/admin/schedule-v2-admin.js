@@ -1716,11 +1716,44 @@
       allowCoachLockedTimeOverride: String(policy.allow_coach_locked_time_override !== false),
       allowCoachHolidayOverride: String(policy.allow_coach_holiday_override === true),
       makeupAnchorGapMinutes: String(Math.min(100, Math.max(0, Number(policy.makeup_anchor_gap_minutes ?? 40) || 0))),
+      memberChangeEnabled: String(policy.member_change_enabled !== false),
+      memberAutoChangeEnabled: String(policy.member_auto_change_enabled !== false),
+      memberAutoApproveBeforeHours: String(Math.min(168, Math.max(1, Number(policy.member_auto_approve_before_hours ?? 24) || 24))),
+      memberWithinCutoffMode: policy.member_within_cutoff_mode || "coach_approval",
+      memberAutoReasonMode: policy.member_auto_reason_mode || "none",
+      memberApprovalReasonMode: policy.member_approval_reason_mode || "required",
+      groupMemberChangeMode: policy.group_member_change_mode || "coach_approval",
     };
     Object.entries(values).forEach(([name, value]) => {
       const input = panel.querySelector(`[name="${name}"]`);
       if (input) input.value = value;
     });
+    renderMemberChangePolicyPreview();
+  }
+
+  function renderMemberChangePolicyPreview() {
+    const panel = $("#scheduleV2PolicyPanel");
+    const preview = $("#scheduleV2MemberChangePolicyPreview");
+    if (!panel || !preview) return;
+    const enabled = panel.querySelector('[name="memberChangeEnabled"]')?.value !== "false";
+    const autoEnabled = panel.querySelector('[name="memberAutoChangeEnabled"]')?.value !== "false";
+    const hours = Math.min(168, Math.max(1, Number(panel.querySelector('[name="memberAutoApproveBeforeHours"]')?.value) || 24));
+    const withinMode = panel.querySelector('[name="memberWithinCutoffMode"]')?.value || "coach_approval";
+    const autoHours = panel.querySelector('[name="memberAutoApproveBeforeHours"]');
+    const within = panel.querySelector('[name="memberWithinCutoffMode"]');
+    if (autoHours) autoHours.disabled = !enabled || !autoEnabled;
+    if (within) within.disabled = !enabled;
+    if (!enabled) {
+      preview.textContent = "회원 앱에서 수업을 변경할 수 없습니다. 담당 코치에게 문의해 주세요.";
+      return;
+    }
+    if (!autoEnabled) {
+      preview.textContent = withinMode === "blocked"
+        ? "회원 앱의 수업 변경 신청을 받지 않습니다."
+        : "모든 수업 변경은 담당 코치 승인이 필요합니다.";
+      return;
+    }
+    preview.textContent = `${hours}시간 이상 남은 수업은 설정한 사유 방식으로 바로 변경됩니다.\n${hours}시간 미만 남은 수업은 ${withinMode === "blocked" ? "앱에서 변경할 수 없습니다." : "담당 코치 승인이 필요합니다."}`;
   }
 
   function renderWorkspace() {
@@ -3115,6 +3148,7 @@
       schedule_v2_closure_not_found: "이미 해제되었거나 찾을 수 없는 휴무입니다. 시간표를 새로고침해 주세요.",
       schedule_v2_closure_reference_required: "해제할 휴무를 다시 선택해 주세요.",
       schedule_v2_closure_policy_invalid: "기존 수업 처리 방법을 다시 선택해 주세요.",
+      schedule_v2_policy_revision_conflict: "다른 관리자가 운영 규칙을 먼저 변경했습니다. 최신 설정을 다시 불러온 뒤 저장해 주세요.",
       schedule_v2_closure_participant_ticket_review_required: "회원권 연결을 확인해야 하는 수업이 있어 휴무 처리를 중단했습니다. 기존 수업 목록을 확인해 주세요.",
       schedule_v2_operation_date_required: "운영 날짜를 선택해 주세요.",
       schedule_v2_operation_mode_invalid: "휴무, 정상 운영, 단축 운영 중 하나를 선택해 주세요.",
@@ -3731,6 +3765,7 @@
     const panel = $("#scheduleV2PolicyPanel");
     const button = $("#scheduleV2PolicySaveButton");
     if (!snapshot.branchId || !api?.rpc) return;
+    const panelValue = (name, fallback = "") => panel.querySelector(`[name="${name}"]`)?.value ?? fallback;
     const gapInput = panel.querySelector('[name="makeupAnchorGapMinutes"]');
     const makeupGapMinutes = Number(gapInput?.value);
     if (!Number.isInteger(makeupGapMinutes) || makeupGapMinutes < 0 || makeupGapMinutes > 100) {
@@ -3738,18 +3773,33 @@
       gapInput?.focus();
       return;
     }
+    const autoHoursInput = panel.querySelector('[name="memberAutoApproveBeforeHours"]');
+    const memberAutoApproveBeforeHours = autoHoursInput ? Number(autoHoursInput.value) : 24;
+    if (!Number.isInteger(memberAutoApproveBeforeHours) || memberAutoApproveBeforeHours < 1 || memberAutoApproveBeforeHours > 168) {
+      setStatus("자동 변경 기준은 1~168시간으로 설정해 주세요.", "error");
+      autoHoursInput?.focus();
+      return;
+    }
     button.disabled = true;
     setStatus("운영 규칙을 저장하는 중입니다.");
     try {
-      const saved = await api.rpc("tn_admin_save_schedule_v2_policy", {
+      const saved = await api.rpc("tn_admin_save_schedule_v2_policy_v2", {
         target_branch_id: snapshot.branchId,
+        target_revision: Number(state.payload?.policy?.revision) || 0,
         target_policy: {
-          coach_single_add_mode: panel.querySelector('[name="coachSingleAddMode"]').value,
-          coach_regular_change_mode: panel.querySelector('[name="coachRegularChangeMode"]').value,
-          allow_cross_coach_member_edit: panel.querySelector('[name="allowCrossCoachMemberEdit"]').value === "true",
-          allow_coach_locked_time_override: panel.querySelector('[name="allowCoachLockedTimeOverride"]').value === "true",
-          allow_coach_holiday_override: panel.querySelector('[name="allowCoachHolidayOverride"]').value === "true",
+          coach_single_add_mode: panelValue("coachSingleAddMode", "approval"),
+          coach_regular_change_mode: panelValue("coachRegularChangeMode", "approval"),
+          allow_cross_coach_member_edit: panelValue("allowCrossCoachMemberEdit", "false") === "true",
+          allow_coach_locked_time_override: panelValue("allowCoachLockedTimeOverride", "true") === "true",
+          allow_coach_holiday_override: panelValue("allowCoachHolidayOverride", "false") === "true",
           makeup_anchor_gap_minutes: makeupGapMinutes,
+          member_change_enabled: panelValue("memberChangeEnabled", "true") === "true",
+          member_auto_change_enabled: panelValue("memberAutoChangeEnabled", "true") === "true",
+          member_auto_approve_before_hours: memberAutoApproveBeforeHours,
+          member_within_cutoff_mode: panelValue("memberWithinCutoffMode", "coach_approval"),
+          member_auto_reason_mode: panelValue("memberAutoReasonMode", "none"),
+          member_approval_reason_mode: panelValue("memberApprovalReasonMode", "required"),
+          group_member_change_mode: panelValue("groupMemberChangeMode", "coach_approval"),
         },
       });
       state.payload.policy = Array.isArray(saved) ? saved[0] || {} : saved || {};
@@ -4047,6 +4097,8 @@
       event.currentTarget.setAttribute("aria-expanded", String(!panel.hidden));
     });
     $("#scheduleV2PolicySaveButton").addEventListener("click", savePolicy);
+    $("#scheduleV2PolicyPanel")?.addEventListener("input", renderMemberChangePolicyPreview);
+    $("#scheduleV2PolicyPanel")?.addEventListener("change", renderMemberChangePolicyPreview);
     $("#scheduleV2ClosureButton")?.addEventListener("click", openClosureEditor);
     $("#scheduleV2ClosureForm")?.addEventListener("submit", saveClosure);
     $("#scheduleV2ClosureForm")?.addEventListener("change", (event) => {
