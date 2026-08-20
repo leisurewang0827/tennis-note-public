@@ -1,0 +1,372 @@
+// 화면별 모달과 패널을 여닫는 함수들.
+//
+// DOM 을 직접 만진다. app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라
+// 호출부는 예전과 같다.
+
+async function showNoticeAfterLiveSync() {
+  await syncLiveNotices();
+  showNoticeIfNeeded();
+}
+
+function openCoachApp(showFromLogin = false) {
+  if (!state.coach) return;
+  setCoachAccessMessage("");
+  $("#coachLoginLabel").textContent = `${state.coach.provider} 로그인 유지`;
+  $("#coachName").textContent = state.coach.name;
+  renderPersonAvatar($("#coachTopAvatar"), state.coach, "small");
+  $("#coachLoginScreen").hidden = true;
+  $("#coachAppScreen").hidden = false;
+  document.body.dataset.screen = "coach-app";
+  jumpToTop();
+  setView(showFromLogin ? "todayView" : document.body.dataset.activeView || "todayView", { replaceHistory: true });
+  window.setTimeout(showNoticeAfterLiveSync, 0);
+}
+
+function showNoticeIfNeeded() {
+  if (!state.coach) {
+    setNoticeDialogOpen(false);
+    return;
+  }
+  const today = localDateKey();
+  const activeNotices = activeNoticesForApp("coach");
+  const hiddenToday = new Set(state.noticeHiddenDate === today
+    ? [...(Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : []), state.noticeHiddenId].filter(Boolean)
+    : []);
+  const notice = activeNotices.find((item) => !noticeSessionSeenIds.has(item.id) && !(item.showOncePerDay && hiddenToday.has(item.id)));
+  if (!notice) {
+    setNoticeDialogOpen(false);
+    return;
+  }
+  const noticeIndex = activeNotices.findIndex((item) => item.id === notice.id);
+  $("#noticeTitle").textContent = notice.title;
+  $("#noticeBody").textContent = notice.body;
+  $("#noticeMeta").textContent = `${noticeMetaText(notice)} · ${noticeIndex + 1}/${activeNotices.length}`;
+  const noticeImage = $("#noticeImage");
+  noticeImage.hidden = !notice.imageUrl;
+  noticeImage.src = notice.imageUrl || "";
+  noticeImage.alt = notice.imageAlt || notice.title;
+  const noticeAction = $("#noticeAction");
+  const safeActionUrl = /^https?:\/\//i.test(notice.actionUrl) ? notice.actionUrl : "";
+  const hasAction = Boolean(safeActionUrl);
+  noticeAction.hidden = !hasAction;
+  noticeAction.href = hasAction ? safeActionUrl : "#";
+  noticeAction.textContent = notice.actionLabel || "자세히 보기";
+  $("#noticeDialog").dataset.noticeId = notice.id;
+  setNoticeDialogOpen(true);
+}
+
+function closeNotice(hideToday = false) {
+  const noticeId = $("#noticeDialog")?.dataset.noticeId || "";
+  if (noticeId) noticeSessionSeenIds.add(noticeId);
+  if (hideToday) {
+    const today = localDateKey();
+    const previousIds = state.noticeHiddenDate === today && Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : [];
+    state.noticeHiddenDate = today;
+    state.noticeHiddenId = noticeId;
+    state.noticeHiddenIds = [...new Set([...previousIds, noticeId].filter(Boolean))];
+  }
+  setNoticeDialogOpen(false);
+  saveSnapshot();
+  window.setTimeout(showNoticeIfNeeded, 0);
+}
+
+function openUserMode(event) {
+  event?.preventDefault?.();
+  sessionStorage.setItem(appModePreferenceKey, "member");
+  sessionStorage.setItem("tennis-note-member-mode-transition", String(Date.now()));
+  sessionStorage.removeItem("tennis-note-coach-mode-entry");
+  saveSnapshot();
+  window.location.assign(new URL(memberModeUrl(true), window.location.href).href);
+}
+
+function openCoachNotificationTarget(data = {}, route = "today") {
+  const requestId = String(data.requestId || data.request_id || "").trim();
+  if (requestId) {
+    const request = (state.makeupRequests || []).find((item) => (
+      String(item.serverRequestId || item.id || "") === requestId
+    ));
+    if (request) {
+      openMakeupApprovalModal(request.id);
+      return true;
+    }
+  }
+
+  const lesson = coachNotificationLesson(data);
+  if (lesson) {
+    const templateKey = String(data.templateKey || data.template_key || "").trim();
+    if (route === "feedback" || templateKey === "coach_feedback_missing") {
+      openLessonRecordWriter(lesson.id);
+      return true;
+    }
+    if (route === "schedule") state.selectedFullScheduleDay = lesson.day || state.selectedFullScheduleDay;
+    openLessonEditor(lesson.id);
+    return true;
+  }
+
+  if (requestId || String(data.lessonId || data.lesson_id || "").trim()) {
+    showToast("알림에 연결된 수업이나 요청을 찾지 못했습니다. 최신 레슨표를 다시 확인해 주세요.");
+  }
+  jumpToTop();
+  return false;
+}
+
+async function toggleNativeCoachPush() {
+  if (coachPushUiState.permission === "granted" && coachPushPreferenceEnabled()) {
+    await disableNativeCoachPush().catch(() => {
+      setCoachPushNotificationState("unknown", "알림 끄기 실패", "네트워크 연결을 확인한 뒤 다시 시도해 주세요.");
+    });
+    return;
+  }
+  if (coachPushUiState.permission === "denied") {
+    showToast("휴대폰 설정에서 Tennis Note 알림을 허용한 뒤 다시 눌러 주세요.");
+    return;
+  }
+  await enableNativeCoachPush();
+}
+
+function openTodayTaskTab(tab, shouldScroll = true) {
+  state.todayTaskTab = ["lessons", "makeup", "records"].includes(tab) ? tab : "lessons";
+  setView("todayView");
+  renderAll();
+  if (shouldScroll) {
+    requestAnimationFrame(() => {
+      document.querySelector("#todayView")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+}
+
+function toggleTodayTaskList(tab) {
+  state.expandedTodayTasks = {
+    ...(state.expandedTodayTasks || {}),
+    [tab]: !isTodayTaskExpanded(tab),
+  };
+  renderAll();
+}
+
+function openCoachSettlement() {
+  if (document.body.dataset.activeView !== "membersView") setView("membersView", { pushHistory: true });
+  renderCoachSettlement();
+  openCoachModal("coachSettlementModal");
+}
+
+function closeCoachSettlementModal() {
+  closeCoachModal("coachSettlementModal");
+}
+
+function openMemberDetail(memberId, groupName = "") {
+  const member = findMemberDetail(memberId, groupName);
+  if (!member) return;
+  state.viewingMemberDetailId = memberId;
+  state.viewingMemberGroupName = groupName;
+  renderMemberDetailModal(member);
+}
+
+function closeMemberDetailModal() {
+  closeCoachModal("memberDetailModal");
+}
+
+function openMakeupDetail(id) {
+  state.focusedMakeupId = id;
+  openMakeupApprovalModal(id);
+}
+
+function openLinkedLog(id) {
+  const request = state.makeupRequests.find((item) => item.id === id);
+  if (!request) return;
+  const log = getMakeupLinkedLog(request.member);
+  if (log) state.focusedLogId = log.id;
+  state.todayTaskTab = "records";
+  if (!$("#lessonEditModal")?.hidden) closeLessonEditor();
+  renderAll();
+  setView("todayView");
+  requestAnimationFrame(() => {
+    const selector = log ? `#todayRecordPanel [data-log-card="${log.id}"]` : "#todayRecordPanel";
+    document.querySelector(selector)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
+function openLessonEditor(id) {
+  const lesson = ensureCoachLessonRecord(id);
+  state.coachQuickAdd = null;
+  state.editingLessonId = id;
+  state.editingMakeupId = null;
+  state.writingLessonId = null;
+  state.viewingCurriculumId = null;
+  renderLessonEditModal();
+  openCoachModal("lessonEditModal");
+  (completionParticipantsForLesson(lesson) || []).forEach((participant) => {
+    if (participant.userId) void syncCoachMemberChart(participant.userId, participant.name || "회원");
+  });
+}
+
+function closeLessonEditor() {
+  const lesson = state.editingLessonId ? ensureCoachLessonRecord(state.editingLessonId) : null;
+  if (lesson) delete lesson.scheduleEditDraft;
+  state.editingLessonId = null;
+  state.coachQuickAdd = null;
+  state.editingMakeupId = null;
+  state.writingLessonId = null;
+  state.viewingCurriculumId = null;
+  closeCoachModal("lessonEditModal");
+}
+
+function openCoachQuickAdd(button) {
+  const policy = loadCoachSchedulePolicy();
+  const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(button.dataset.coachRoleId || ""));
+  const access = coach ? coachSlotAccess(coach, button.dataset.day, button.dataset.time, scheduleBlockMinutes, policy) : { allowed: false };
+  if (!coach || !access.allowed) {
+    showToast(access.reason === "holiday_locked"
+      ? "휴무일에는 관리자만 수업을 등록할 수 있습니다."
+      : "본인 수업 시간 또는 허용된 브레이크·상담 시간만 등록할 수 있습니다.");
+    return;
+  }
+  state.editingLessonId = null;
+  state.editingMakeupId = null;
+  state.writingLessonId = null;
+  state.viewingCurriculumId = null;
+  state.coachQuickAdd = {
+    date: button.dataset.date,
+    day: button.dataset.day,
+    time: button.dataset.time,
+    coachRoleId: button.dataset.coachRoleId,
+    coachName: coach.name,
+    kind: "regular",
+    durationMinutes: 20,
+    ticketId: "",
+    note: "",
+    validationMessage: "",
+  };
+  renderLessonEditModal();
+  openCoachModal("lessonEditModal");
+}
+
+function openMakeupApprovalModal(id) {
+  state.editingLessonId = null;
+  state.writingLessonId = null;
+  state.viewingCurriculumId = null;
+  state.editingMakeupId = id || ownPendingMakeupRequests()[0]?.id || pendingMakeupRequests()[0]?.id || "__none__";
+  renderLessonEditModal();
+  openCoachModal("lessonEditModal");
+}
+
+function openLessonRecordWriter(id) {
+  const firstLesson = recordableCoachLessons()[0];
+  state.editingLessonId = null;
+  state.editingMakeupId = null;
+  state.viewingCurriculumId = null;
+  state.writingLessonId = id || firstLesson?.id || "__none__";
+  renderLessonEditModal();
+  openCoachModal("lessonEditModal");
+}
+
+async function completeLessonFromModal(id) {
+  const lesson = ensureCoachLessonRecord(id);
+  if (!lesson || !canProcessLesson(lesson)) return;
+  if (!lessonOutcomeWindowOpen(lesson)) {
+    lesson.validationMessage = lessonOutcomeGuardMessage();
+    renderLessonEditModal();
+    return;
+  }
+  const content = activeViewField(`[data-modal-lesson-content="${id}"]`)?.value.trim() || `${lesson.member} ${lesson.type} 수업 진행`;
+  const participantResults = $$('[data-modal-participant-row]')
+    .filter((row) => row.dataset.modalParticipantRow === id)
+    .map((row) => ({
+      userId: row.dataset.userId || "",
+      ticketId: row.dataset.ticketId || "",
+      name: row.dataset.participantName || "회원",
+      ticketName: row.dataset.ticketName || "회원권",
+      totalSessions: Number(row.dataset.totalSessions) || 0,
+      usedSessions: Number(row.dataset.usedSessions) || 0,
+      remainingSessions: Number(row.dataset.remainingSessions) || 0,
+      coachComment: row.querySelector("[data-modal-coach-comment]")?.value.trim() || "",
+      nextCurriculumId: row.querySelector("[data-modal-next-curriculum]")?.value || "",
+    }));
+  const primaryResult = participantResults[0] || {};
+  const logId = `coach-complete-${Date.now()}`;
+  const log = {
+    id: logId,
+    serverLessonId: lesson.serverLessonId || "",
+    serverJournalId: "",
+    member: lesson.member,
+    lesson: `${lesson.day} ${lesson.time} ${lesson.type}`,
+    content,
+    selfMemo: "회원 운동노트 미작성이어도 코치가 기록/차감 확인을 진행했습니다.",
+    curriculumId: primaryResult.nextCurriculumId || "",
+    nextCurriculumId: primaryResult.nextCurriculumId || "",
+    coachComment: primaryResult.coachComment || "",
+    participantResults,
+    validationMessage: "",
+    status: "확인 대기",
+    curriculumRegistered: false,
+    ticketDeducted: false,
+  };
+  const usesV2Participants = Array.isArray(lesson.v2Participants) && lesson.v2Participants.length > 0;
+  const missingParticipant = participantResults.find((result) => (
+    !result.coachComment
+    || !result.nextCurriculumId
+    || (usesV2Participants && (!result.userId || !result.ticketId))
+  ));
+  if (!participantResults.length || missingParticipant) {
+    lesson.validationMessage = missingParticipant
+      ? `${missingParticipant.name} 회원의 코치 코멘트와 다음 커리큘럼을 입력해 주세요.`
+      : "수업 참여자와 회원권 연결을 확인해 주세요.";
+    renderLessonEditModal();
+    return;
+  }
+  const invalidParticipant = participantResults
+    .map((result) => ({
+      name: result.name,
+      message: coachCommentValidationMessage({
+        id: `${logId}:${result.userId}:${result.ticketId}`,
+        member: result.name,
+        coachComment: result.coachComment,
+      }),
+    }))
+    .find((result) => result.message);
+  if (invalidParticipant) {
+    lesson.validationMessage = `${invalidParticipant.name}: ${invalidParticipant.message}`;
+    renderLessonEditModal();
+    return;
+  }
+  state.lessonLogs.unshift(log);
+  lesson.validationMessage = "";
+  window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
+  closeLessonEditor();
+  state.todayTaskTab = "lessons";
+  renderAll();
+  setView("todayView");
+  const completed = await confirmLog(log.id, { skipDraft: true });
+  if (completed) {
+    state.todayTaskTab = "lessons";
+    state.focusedLogId = "";
+    renderAll();
+    setView("todayView");
+  }
+}
+
+function filterCurriculumOptions(input) {
+  const select = input?.closest("label")?.querySelector("select");
+  if (!select) return;
+  const selectedId = select.value || "";
+  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(selectedId, input.value)}`;
+  if ([...select.options].some((option) => option.value === selectedId)) select.value = selectedId;
+  renderCoachCurriculumSuggestions(input);
+}
+
+function openCurriculumDetail(id) {
+  state.viewingCurriculumId = id;
+  state.editingLessonId = null;
+  state.editingMakeupId = null;
+  state.writingLessonId = null;
+  renderLessonEditModal();
+  openCoachModal("lessonEditModal");
+}
+
+function toggleCurriculumFavorite(id) {
+  const favorites = new Set(state.favoriteCurriculums || []);
+  if (favorites.has(id)) favorites.delete(id);
+  else favorites.add(id);
+  state.favoriteCurriculums = [...favorites];
+  renderCurriculums();
+  saveSnapshot();
+}
