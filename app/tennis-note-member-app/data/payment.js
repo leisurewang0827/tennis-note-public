@@ -160,3 +160,12 @@ async function verifyServerPayment(paymentId) {
     body: { paymentId },
   });
 }
+
+async function reconcileRejectedServerPayment(paymentId) {
+  if (!paymentId) return;
+  try {
+    await verifyServerPayment(paymentId);
+  } catch {
+    // Terminal provider states are persisted before the server returns a verification error.
+  }
+}

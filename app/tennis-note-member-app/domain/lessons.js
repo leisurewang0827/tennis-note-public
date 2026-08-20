@@ -1,6 +1,8 @@
 // 수업 하나를 어떻게 보여주고 정렬할지 정하는 함수들.
 //
-// 전역 상태도 DOM 도 서버도 참조하지 않는다. 필요한 값은 인자로 받는다.
+// 화면(DOM)을 직접 만지지 않고 서버도 부르지 않는다. 값을 받아 판정해 돌려준다.
+// 일부는 app.js 에 남은 읽기 도우미를 부른다. 그 이름은 호출 시점에 해석되므로
+// 동작에는 문제가 없다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
 function isOwnMemberScheduleLesson(lesson = {}) {
@@ -164,17 +166,4 @@ function lessonDetailStatusInfo(lesson = {}) {
     message: "수업 변경 가능 시간은 센터 운영 규칙에 따라 표시됩니다.",
     primaryAction: "change",
   };
-}
-
-function handleLessonDetailAction(action) {
-  const lesson = selectedLessonDetail();
-  if (!lesson) return;
-  closeLessonDetailForAction();
-  if (action === "journal") {
-    openJournalComposer(lesson.lessonDate || localDateKey());
-    return;
-  }
-  if (action === "change" || action === "makeup") {
-    openMemberChangeTimetable(lesson.id);
-  }
 }

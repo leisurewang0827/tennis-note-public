@@ -110,3 +110,7 @@ async function submitLessonLog() {
   renderAll();
   return true;
 }
+
+function prepareJournalWriteDate(dateValue) {
+  openJournalComposer(dateValue);
+}

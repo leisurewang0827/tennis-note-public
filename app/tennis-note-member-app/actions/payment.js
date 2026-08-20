@@ -144,3 +144,50 @@ async function cancelPendingTicketPayment(ticketId = "") {
   renderAll();
   setView("shopView");
 }
+
+function applyPurchaseScheduleSlot(selectedSlot = {}) {
+  const flow = purchaseFlowState();
+  const selectedProduct = purchaseProductForScheduleSlot(purchaseFlowProduct() || {}, selectedSlot);
+  if (!selectedProduct) {
+    showToast("선택한 날짜에 사용할 수 있는 쿠폰 상품을 확인하지 못했습니다.");
+    return false;
+  }
+  flow.productId = selectedProduct.id;
+  const selectedCoachRoleId = String(selectedSlot.coachRoleId || "");
+  if (flow.coachRoleId && String(flow.coachRoleId) !== selectedCoachRoleId) clearPurchaseSchedules();
+  flow.coachRoleId = selectedCoachRoleId;
+  flow.coachName = selectedSlot.coachName || "";
+  const nextSchedule = {
+    lessonDate: selectedSlot.lessonDate || "",
+    day: selectedSlot.day || purchaseDateDay(selectedSlot.lessonDate || ""),
+    startTime: selectedSlot.time || "",
+    coachRoleId: selectedCoachRoleId,
+    coachName: selectedSlot.coachName || "",
+    durationMinutes: Math.max(10, Number(selectedProduct.lessonMinutes) || 20),
+  };
+  const scheduleKey = (schedule) => `${schedule.lessonDate}:${schedule.startTime}:${schedule.coachRoleId}`;
+  const existingIndex = flow.preferredSchedules.findIndex((schedule) => scheduleKey(schedule) === scheduleKey(nextSchedule));
+  if (existingIndex >= 0) {
+    flow.preferredSchedules.splice(existingIndex, 1);
+  } else {
+    const requiredCount = purchaseRequiredScheduleCount(selectedProduct);
+    if (flow.preferredSchedules.length >= requiredCount) {
+      showToast(`주 ${requiredCount}회 상품은 시간 ${requiredCount}개만 선택할 수 있습니다. 기존 선택을 눌러 해제해 주세요.`);
+      return false;
+    }
+    flow.preferredSchedules.push(nextSchedule);
+  }
+  syncLegacyPurchaseScheduleFields();
+  saveSnapshot();
+  renderMembershipPurchaseFlow();
+  return true;
+}
+
+function completeMembershipPurchaseFlow(message = "결제가 접수되었습니다") {
+  const flow = purchaseFlowState();
+  flow.open = true;
+  flow.step = 4;
+  flow.completionStatus = message;
+  saveSnapshot();
+  renderMembershipPurchaseFlow();
+}

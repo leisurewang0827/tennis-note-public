@@ -495,3 +495,16 @@ function confirmLatestLesson() {
   }
   renderAll();
 }
+
+function handleLessonDetailAction(action) {
+  const lesson = selectedLessonDetail();
+  if (!lesson) return;
+  closeLessonDetailForAction();
+  if (action === "journal") {
+    openJournalComposer(lesson.lessonDate || localDateKey());
+    return;
+  }
+  if (action === "change" || action === "makeup") {
+    openMemberChangeTimetable(lesson.id);
+  }
+}
