@@ -105,6 +105,7 @@ localhost에서는 서비스워커를 등록하지 않으므로 고친 파일이
 | `storage.js` | 338줄 | 209줄 | 297줄 |
 | `catalog.js` | 410줄 | 55줄 | 806줄 |
 | `settings.js` | 61줄 | 47줄 | 127줄 |
+| `app/shared/` 공용 | 282+11줄 | 282+11줄 | 11줄 |
 | **`app.js`** | **3,763줄** | **721줄** | **8,967줄** |
 
 시작할 때는 각각 14,218 · 7,998 · 31,096줄이었습니다.
@@ -176,20 +177,32 @@ localhost에서는 서비스워커를 등록하지 않으므로 고친 파일이
 
 **CSP의 `script-src`를 아직 조이지 못했으므로 이스케이프가 유일한 방어선입니다.**
 
-### 회원 앱과 코치 앱은 코드가 중복돼 있다
+### 앱 사이에 같은 코드를 두 벌 만들지 마세요
 
-이름이 같은 함수가 38개, 그중 **본문까지 완전히 같은 것이 21개(258줄)** 입니다.
-**한쪽을 고쳤으면 반드시 다른 쪽도 확인하세요.**
-새 공용 로직은 `app/shared/`에 두세요.
+예전에는 회원앱과 코치앱에 글자까지 같은 함수가 20개 있었습니다.
+한쪽만 고치면 다른 쪽이 깨진 채 남았습니다. **지금 두 앱 사이의 중복은 0입니다.**
 
-두 앱을 같은 구조로 나눠서 짝이 눈에 보입니다. 대부분 **같은 이름의 파일끼리**
-짝을 이룹니다 — `domain/policy.js` ↔ `domain/policy.js`, `ui/sheet.js` ↔
-`ui/sheet.js`, `data/sync.js` ↔ `data/sync.js`.
+공용 코드는 `app/shared/` 에 둡니다. 지금 있는 것:
 
-이름은 같은데 본문이 다른 17개 중 대부분(`bindDelegatedEvents`, `renderAll`,
-`setView`)은 앱마다 달라야 하는 것입니다. 페이지가 다르므로 이름이 겹쳐도
-문제없습니다. `escapeHtml` 세 벌은 표기만 다르고 **하는 일은 같습니다**
-(같은 5개 문자를 이스케이프).
+| 파일 | 누가 싣나 | 무엇 |
+|---|---|---|
+| `tennisnote-escape-html.js` | 세 앱 전부 | `escapeHtml` — 유일한 XSS 방어선이라 한곳에서만 고치게 |
+| `tennisnote-app-common.js` | 회원앱·코치앱 | 두 앱이 함께 쓰는 20개 (`$`, `showToast`, `syncLiveNotices` 등) |
+
+⚠ **`tennisnote-app-common.js` 를 관리자에 싣지 마세요.** 관리자는 `$` 와
+`$$` 를 `const` 화살표 함수로 선언해서, 이 파일의 `function` 선언과 만나면
+**SyntaxError 로 페이지가 통째로 죽습니다.** `global-scope` 검사가 막습니다.
+
+남은 중복은 세 개(13줄)뿐이고 서로 다른 짝이라 그냥 두었습니다 —
+`numericValue`·`holdingRequestDays`(회원↔관리자), `saveSharedData`(코치↔관리자).
+**고칠 일이 생기면 짝도 같이 고치세요.**
+
+이름은 같은데 본문이 다른 것들(`renderAll`, `setView`, `bindDelegatedEvents`)은
+앱마다 달라야 하는 것입니다. 페이지가 다르므로 이름이 겹쳐도 문제없습니다.
+
+`app/admin/schedule-v2-admin.js` 와 `app/shared/tennisnote-ui-language.js`
+안에도 `escapeHtml` 사본이 하나씩 더 있습니다. 둘 다 IIFE 안이라 전역 충돌은
+없지만, 이스케이프를 강화한다면 그 둘도 같이 고쳐야 합니다.
 
 ### 서버는 이 저장소에 없다
 
@@ -324,6 +337,9 @@ branchMembers.flatMap((m) => memberCoachNames(m))    // 이렇게 감싸야 한�
 - **전역 함수 이름은 겹치면 안 됩니다.** 같은 페이지의 스크립트끼리 이름이 겹치면
   뒤에 로드된 쪽이 조용히 덮어씁니다. 현재 충돌 0건입니다.
 - `app/shared/`의 파일은 IIFE로 감싸고 `window.TennisNoteXxx`로 내보냅니다.
+  예외 둘: `tennisnote-escape-html.js` 와 `tennisnote-app-common.js` 는
+  전역 함수 선언 그대로 둡니다. 그래야 앱들의 호출부를 안 바꾸고,
+  `global-scope` 검사가 이름 충돌을 볼 수 있습니다. 파일 머리말에 적혀 있습니다.
 - `localStorage` 키는 `tennis-note-` 접두사에 하이픈.
 
 ## 커밋
