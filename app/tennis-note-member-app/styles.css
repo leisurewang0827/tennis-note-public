@@ -8775,8 +8775,7 @@ body.modal-open {
 
 .change-request-modal.is-inline-confirmation .change-source-field,
 .change-request-modal.is-inline-confirmation .change-slot-heading,
-.change-request-modal.is-inline-confirmation .slot-list,
-.change-request-modal.is-inline-confirmation #changeReasonField {
+.change-request-modal.is-inline-confirmation .slot-list {
   display: none !important;
 }
 

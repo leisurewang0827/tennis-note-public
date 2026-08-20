@@ -2056,7 +2056,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.377",
+    workerUrl: "./service-worker.js?v=1.0.378",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -11931,7 +11931,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.377", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.378", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -13539,7 +13539,9 @@ async function requestMakeup() {
     : isMakeupEntitlement ? "불참 처리 후 보강 예약" : isCouponBooking ? "쿠폰 수업 예약" : reasonMode === "none" ? "" : enteredReason;
   if (!isMakeupEntitlement && !isCouponBooking && !isRegularInitialBooking && reasonMode === "required" && reason.length < 2) {
     showToast("변경 이유를 2자 이상 입력해주세요.");
-    $("#changeReason")?.focus();
+    const reasonInput = $("#changeReason");
+    reasonInput?.focus?.({ preventScroll: true });
+    reasonInput?.scrollIntoView?.({ block: "center", behavior: "smooth" });
     return;
   }
   const client = window.TennisNoteDataClient;
@@ -14932,7 +14934,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.377",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.378",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
