@@ -13291,7 +13291,7 @@ function memberInlineScheduleIsComplete(form, schedules = memberInlineScheduleVa
 function syncMemberInlineFutureScheduleChoice(form) {
   if (!form?.dataset.ticketId || !form.elements.applyToFutureSchedule) return;
   const schedules = memberInlineScheduleValues(form);
-  if (memberInlineTicketDefinitionChanged(form) && memberInlineScheduleIsComplete(form, schedules)) {
+  if (memberInlineCoachChanged(form) && memberInlineScheduleIsComplete(form, schedules)) {
     form.elements.applyToFutureSchedule.value = "true";
   }
 }
@@ -14018,9 +14018,22 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
           ${embedded && ticket ? `<p class="member-inline-profile-hint"><strong>${escapeHtml(member.name)}</strong><span>회원 기본정보는 이름을 눌러 수정합니다. 아래에서는 선택한 회원권만 바뀝니다.</span></p>` : ""}
           <div class="member-inline-compact-grid">
             ${memberProfileFields}
-            <label class="member-inline-product"><span>회원권</span><select name="productId">
+            <label class="member-inline-product"><span>회원권</span>
+              <span class="member-inline-product-search" data-member-product-search-shell>
+                <input name="productSearch" type="search" autocomplete="off" placeholder="회원권 검색 · 30분, 평일 2회, 그룹, 쿠폰" data-member-product-search role="combobox" aria-autocomplete="list" aria-expanded="false" />
+                <button type="button" data-clear-member-product-search aria-label="회원권 검색어 지우기">지우기</button>
+                <span class="member-inline-product-results" data-member-product-results role="listbox" aria-live="polite" hidden></span>
+              </span>
+              <span class="member-inline-duration-shortcuts" role="group" aria-label="수업시간 빠른 변경">
+                <span>빠른 변경</span>
+                <button type="button" data-member-product-duration="20" aria-pressed="${Number(currentProduct?.lesson_minutes || ticket?.durationMinutes || 0) === 20 ? "true" : "false"}">20분</button>
+                <button type="button" data-member-product-duration="30" aria-pressed="${Number(currentProduct?.lesson_minutes || ticket?.durationMinutes || 0) === 30 ? "true" : "false"}">30분</button>
+              </span>
+              <select name="productId">
               <option value="">${ticket ? "회원권 취소·만료" : "미등록"}</option>${productOptions}
-            </select></label>
+              </select>
+              <span class="member-inline-product-change-note" data-member-product-change-note hidden></span>
+            </label>
             <label class="member-inline-coach"><span>담당 코치</span><select name="coachRoleId">
               <option value="">미배정</option>
               ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === (record?.coach_role_id || ticket?.coachRoleId) ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
@@ -14130,11 +14143,160 @@ function syncMemberQuickEditorProduct(form) {
   if (!groupProduct && form.elements.partnerSearch) form.elements.partnerSearch.value = "";
   filterManualMemberPartnerOptions(form);
   syncMemberQuickEditorSchedule(form, product);
+  syncMemberInlineProductChangeNote(form, product);
+  syncMemberInlineDurationShortcuts(form, product);
   if (!product) return;
   form.elements.lessonType.value = groupProduct ? "one_on_two" : "one_on_one";
   const productScope = memberManagementProductScheduleScope(product);
   form.elements.scheduleScope.value = productScope;
   form.elements.weeklyFrequency.value = memberManagementProductWeeklyFrequency(product);
+}
+
+function memberInlineProductSearchTokens(value = "") {
+  return String(value || "")
+    .toLocaleLowerCase("ko-KR")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+function memberInlineProductSearchMatches(option, tokens = []) {
+  const searchable = String(option?.dataset?.search || option?.textContent || "")
+    .toLocaleLowerCase("ko-KR")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+  return tokens.every((token) => searchable.includes(token));
+}
+
+function closeMemberInlineProductResults(form) {
+  const input = form?.querySelector("[data-member-product-search]");
+  const results = form?.querySelector("[data-member-product-results]");
+  if (input) input.setAttribute("aria-expanded", "false");
+  if (results) results.hidden = true;
+}
+
+function filterMemberInlineProductOptions(form) {
+  const input = form?.querySelector("[data-member-product-search]");
+  const select = form?.elements?.productId;
+  if (!input || !select) return;
+  const tokens = memberInlineProductSearchTokens(input.value);
+  const selectedValue = String(select.value || "");
+  const matches = [];
+  [...select.options].forEach((option) => {
+    if (!option.value) {
+      option.hidden = tokens.length > 0;
+      return;
+    }
+    const matched = memberInlineProductSearchMatches(option, tokens);
+    option.hidden = tokens.length > 0 && !matched && option.value !== selectedValue;
+    if (matched) matches.push(option);
+  });
+  const results = form.querySelector("[data-member-product-results]");
+  if (!results) return;
+  results.innerHTML = tokens.length
+    ? matches.length
+      ? `<span class="member-inline-product-result-count">검색 결과 ${matches.length}개</span>${matches.slice(0, 12).map((option) => `<button type="button" data-select-member-product="${escapeHtml(option.value)}" role="option" aria-selected="${option.value === selectedValue ? "true" : "false"}">${escapeHtml(option.textContent.trim())}</button>`).join("")}`
+      : '<span class="member-inline-product-no-result">검색 결과가 없습니다.</span>'
+    : "";
+  results.hidden = tokens.length === 0;
+  input.setAttribute("aria-expanded", tokens.length > 0 ? "true" : "false");
+}
+
+function selectMemberInlineProductSearchResult(button) {
+  const form = button?.closest("[data-member-inline-form]");
+  const select = form?.elements?.productId;
+  const input = form?.querySelector("[data-member-product-search]");
+  if (!form || !select || !button?.dataset.selectMemberProduct) return;
+  select.value = button.dataset.selectMemberProduct;
+  if (input) input.value = "";
+  filterMemberInlineProductOptions(form);
+  closeMemberInlineProductResults(form);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  select.focus();
+}
+
+function memberInlineProductsMatchExceptDuration(currentProduct, candidateProduct) {
+  if (!currentProduct || !candidateProduct) return false;
+  if (String(currentProduct.product_kind || "regular") !== String(candidateProduct.product_kind || "regular")) return false;
+  if (Number(currentProduct.group_size || 1) !== Number(candidateProduct.group_size || 1)) return false;
+  if (memberManagementProductWeeklyFrequency(currentProduct) !== memberManagementProductWeeklyFrequency(candidateProduct)) return false;
+  if (memberManagementProductScheduleScope(currentProduct) !== memberManagementProductScheduleScope(candidateProduct)) return false;
+  if (memberManagementProductIsCoupon(currentProduct) !== memberManagementProductIsCoupon(candidateProduct)) return false;
+  return ["total_sessions", "term_weeks", "validity_days", "grace_days"].every((key) => {
+    const currentValue = Number(currentProduct[key] || 0);
+    return !currentValue || Number(candidateProduct[key] || 0) === currentValue;
+  });
+}
+
+function syncMemberInlineDurationShortcuts(form, selectedProduct = null) {
+  const product = selectedProduct || (adminLiveDataState.products || [])
+    .find((item) => String(item.id || "") === String(form?.elements?.productId?.value || ""));
+  const selectedMinutes = Number(product?.lesson_minutes || 0);
+  form?.querySelectorAll("[data-member-product-duration]").forEach((button) => {
+    button.setAttribute("aria-pressed", Number(button.dataset.memberProductDuration) === selectedMinutes ? "true" : "false");
+  });
+}
+
+function requestMemberInlineProductDuration(form, targetMinutes) {
+  const select = form?.elements?.productId;
+  const input = form?.querySelector("[data-member-product-search]");
+  const message = form?.querySelector(".member-inline-message");
+  if (!form || !select || ![20, 30].includes(Number(targetMinutes))) return;
+  const currentProduct = (adminLiveDataState.products || [])
+    .find((item) => String(item.id || "") === String(select.value || ""));
+  const setGuidance = (value) => {
+    if (!message) return;
+    message.textContent = value;
+    message.classList.remove("is-error", "is-success");
+  };
+  if (Number(currentProduct?.lesson_minutes || 0) === Number(targetMinutes)) {
+    setGuidance(`이미 ${targetMinutes}분 회원권입니다. 시간표에서 해당 수업 길이만 ${targetMinutes}분으로 저장해 주세요.`);
+    syncMemberInlineDurationShortcuts(form, currentProduct);
+    return;
+  }
+  const selectableProductIds = new Set([...select.options].map((option) => String(option.value || "")).filter(Boolean));
+  const candidates = (adminLiveDataState.products || []).filter((product) => (
+    selectableProductIds.has(String(product.id || ""))
+    && Number(product.lesson_minutes || 0) === Number(targetMinutes)
+    && memberInlineProductsMatchExceptDuration(currentProduct, product)
+  ));
+  if (candidates.length !== 1) {
+    if (input) {
+      input.value = `${targetMinutes}분`;
+      filterMemberInlineProductOptions(form);
+      input.focus();
+    }
+    setGuidance(candidates.length
+      ? `${targetMinutes}분 회원권이 ${candidates.length}개입니다. 검색 결과에서 정확한 회원권을 선택해 주세요.`
+      : `조건이 같은 ${targetMinutes}분 회원권을 자동으로 찾지 못했습니다. 검색 결과에서 직접 선택해 주세요.`);
+    return;
+  }
+  select.value = String(candidates[0].id);
+  if (input) input.value = "";
+  filterMemberInlineProductOptions(form);
+  closeMemberInlineProductResults(form);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  setGuidance(`${targetMinutes}분 회원권을 선택했습니다. 저장하면 기존 시간표는 유지됩니다.`);
+  select.focus();
+}
+
+function syncMemberInlineProductChangeNote(form, selectedProduct = null) {
+  const note = form?.querySelector("[data-member-product-change-note]");
+  if (!note) return;
+  const initialProduct = (adminLiveDataState.products || [])
+    .find((item) => String(item.id || "") === String(form.dataset.initialProductId || ""));
+  const product = selectedProduct || (adminLiveDataState.products || [])
+    .find((item) => String(item.id || "") === String(form.elements.productId?.value || ""));
+  const changed = Boolean(initialProduct && product && initialProduct.id !== product.id);
+  note.hidden = !changed;
+  if (!changed) {
+    note.textContent = "";
+    return;
+  }
+  const fromMinutes = Number(initialProduct.lesson_minutes || 0);
+  const toMinutes = Number(product.lesson_minutes || 0);
+  const durationText = fromMinutes && toMinutes && fromMinutes !== toMinutes
+    ? `${fromMinutes}분 → ${toMinutes}분 · `
+    : "";
+  note.textContent = `${durationText}회원권만 먼저 저장하면 기존 시간표는 유지됩니다.`;
 }
 
 function syncMemberQuickEditorSchedule(form, product = null) {
@@ -30859,6 +31021,10 @@ function bindEvents() {
       filterManualMemberPartnerOptions(event.target.form);
       return;
     }
+    if (event.target.matches("[data-member-product-search]")) {
+      filterMemberInlineProductOptions(event.target.form);
+      return;
+    }
     if (event.target.matches("#memberManagementForm input[name='memberName']")) {
       const label = event.target.form?.querySelector("[data-manual-primary-member]");
       if (label) label.textContent = event.target.value.trim() || "새 회원";
@@ -30910,6 +31076,21 @@ function bindEvents() {
     }
   });
 
+  document.addEventListener("keydown", (event) => {
+    if (!event.target.matches("[data-member-product-search]")) return;
+    const form = event.target.form;
+    const firstResult = form?.querySelector("[data-select-member-product]");
+    if (event.key === "Enter" && firstResult) {
+      event.preventDefault();
+      selectMemberInlineProductSearchResult(firstResult);
+    } else if (event.key === "ArrowDown" && firstResult) {
+      event.preventDefault();
+      firstResult.focus();
+    } else if (event.key === "Escape") {
+      closeMemberInlineProductResults(form);
+    }
+  });
+
   document.addEventListener("submit", async (event) => {
     if (event.target.id === "memberManagementForm") await submitMemberManagementForm(event);
     if (event.target.id === "substituteForm") await submitSubstituteAssignments(event);
@@ -30925,6 +31106,31 @@ function bindEvents() {
 
   document.addEventListener("click", async (event) => {
     if (event.target.matches("[data-select-product-row]")) event.stopPropagation();
+    const memberProductDuration = event.target.closest("[data-member-product-duration]");
+    if (memberProductDuration) {
+      requestMemberInlineProductDuration(
+        memberProductDuration.closest("[data-member-inline-form]"),
+        Number(memberProductDuration.dataset.memberProductDuration),
+      );
+      return;
+    }
+    const memberProductResult = event.target.closest("[data-select-member-product]");
+    if (memberProductResult) {
+      selectMemberInlineProductSearchResult(memberProductResult);
+      return;
+    }
+    const clearMemberProductSearch = event.target.closest("[data-clear-member-product-search]");
+    if (clearMemberProductSearch) {
+      const form = clearMemberProductSearch.closest("[data-member-inline-form]");
+      const input = form?.querySelector("[data-member-product-search]");
+      if (input) input.value = "";
+      filterMemberInlineProductOptions(form);
+      input?.focus();
+      return;
+    }
+    if (!event.target.closest("[data-member-product-search-shell]")) {
+      document.querySelectorAll("[data-member-inline-form]").forEach(closeMemberInlineProductResults);
+    }
     const ticketExtensionPreset = event.target.closest("[data-ticket-extension-days]");
     if (ticketExtensionPreset) {
       applyMemberTicketExtensionPreset(ticketExtensionPreset);
