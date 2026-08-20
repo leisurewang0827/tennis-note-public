@@ -1361,3 +1361,107 @@ function renderScheduleV2IntegrityResult(result, eligibleRows) {
     <p class="setting-help">확정되지 않은 항목은 변경하지 않습니다. 생성 후 서버 시간표를 다시 확인합니다.</p>`;
   if (applyButton) applyButton.disabled = eligibleRows.length === 0;
 }
+
+// ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──
+
+function memberManagementLessonDaysMarkup(selectedDays = [], scheduleScope = "weekday") {
+  const selected = new Set((selectedDays || []).map(Number));
+  return Object.entries(memberManagementDayLabels).map(([day, label]) => {
+    const dayNumber = Number(day);
+    const scopeAllowed = scheduleScope === "mixed"
+      || (scheduleScope === "weekend" ? [0, 6].includes(dayNumber) : dayNumber >= 1 && dayNumber <= 5);
+    return `<label class="member-lesson-day-option ${scopeAllowed ? "" : "is-disabled"}">
+      <input name="lessonDays" type="checkbox" value="${dayNumber}" ${selected.has(dayNumber) ? "checked" : ""} ${scopeAllowed ? "" : "disabled"} />
+      <span>${label}</span>
+    </label>`;
+  }).join("");
+}
+
+function memberCreateScheduleMarkup(product) {
+  const regularProduct = memberManagementProductSupportsRegularSchedule(product);
+  const frequency = memberManagementProductWeeklyFrequency(product);
+  const scope = memberManagementProductScheduleScope(product);
+  const rows = Array.from({ length: 3 }, (_, offset) => {
+    const index = offset + 1;
+    const dayButtons = memberScheduleDayOrder.map((day) => {
+      const allowed = memberScheduleDayAllowed(scope, day);
+      return `<button type="button" class="member-inline-day-chip" data-member-schedule-day="${day}" aria-pressed="false" ${allowed ? "" : "disabled"}>${memberManagementDayLabel(day)}</button>`;
+    }).join("");
+    return `<div class="member-inline-schedule-row" data-member-schedule-row="${index}" ${index > frequency ? "hidden" : ""}>
+      <span class="member-inline-schedule-index">정규 ${index}</span>
+      <input type="hidden" name="scheduleDay${index}" value="" ${index > frequency ? "disabled" : ""} />
+      <div class="member-inline-day-tabs" role="group" aria-label="정규 ${index} 요일">${dayButtons}</div>
+      <select name="scheduleTime${index}" aria-label="정규 ${index} 시간" ${index > frequency ? "disabled" : ""}>
+        <option value="">시간 선택</option>
+        ${getScheduleTimeOptions().map((time) => `<option value="${time}">${time}</option>`).join("")}
+      </select>
+    </div>`;
+  }).join("");
+  return `<section class="member-inline-schedule member-create-schedule" data-member-inline-schedule data-member-create-schedule data-product-kind="${escapeHtml(product?.product_kind || "")}" ${regularProduct ? "" : "hidden"}>
+    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>회원 저장과 동시에 시간표에 생성됩니다.</span></div>
+    ${rows}
+    <label class="member-create-schedule-later"><input name="createScheduleLater" type="checkbox" /> 시간표는 나중에 설정</label>
+    <p class="member-inline-schedule-warning" data-member-schedule-warning></p>
+  </section>`;
+}
+
+function memberScheduleOverviewMarkup(member) {
+  const memberTickets = memberOperationalTickets(member);
+  if (!memberTickets.length) return '<span class="member-table-muted">미배정</span>';
+  return memberTickets.slice(0, 3).map((ticket) => `
+    <span class="member-ticket-summary-line">
+      <strong>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</strong>
+      <small>${escapeHtml(memberScheduleSummary(member, ticket))}</small>
+    </span>`).join("")
+    + (memberTickets.length > 3 ? `<small>외 ${memberTickets.length - 3}건</small>` : "");
+}
+
+function memberInlineScheduleMarkup(member, ticket, product) {
+  const productKind = String(product?.product_kind || ticket?.productKind || "regular");
+  const frequency = memberRegularScheduleFrequency(product, ticket);
+  const scope = memberManagementProductScheduleScope(product || ticket || {});
+  const slots = memberRegularScheduleSlots(member, ticket);
+  const maxRows = Math.max(3, frequency);
+  const rows = Array.from({ length: maxRows }, (_, offset) => {
+    const index = offset + 1;
+    const slot = slots[offset] || { dayOfWeek: "", startTime: "" };
+    const dayButtons = memberScheduleDayOrder.map((day) => {
+      const allowed = memberScheduleDayAllowed(scope, day);
+      const selected = Number(slot.dayOfWeek) === day;
+      return `<button type="button" class="member-inline-day-chip ${selected ? "is-selected" : ""}" data-member-schedule-day="${day}" aria-pressed="${selected ? "true" : "false"}" ${allowed || selected ? "" : "disabled"}>${memberManagementDayLabel(day)}</button>`;
+    }).join("");
+    const currentTime = String(slot.startTime || "").slice(0, 5);
+    const timeValues = [...new Set([currentTime, ...getScheduleTimeOptions()].filter(Boolean))];
+    return `<div class="member-inline-schedule-row" data-member-schedule-row="${index}" ${index > frequency ? "hidden" : ""}>
+      <span class="member-inline-schedule-index">정규 ${index}</span>
+      <input type="hidden" name="scheduleDay${index}" value="${escapeHtml(memberManagementValue(slot.dayOfWeek))}" ${index > frequency ? "disabled" : ""} />
+      <div class="member-inline-day-tabs" role="group" aria-label="정규 ${index} 요일">${dayButtons}</div>
+      <select name="scheduleTime${index}" aria-label="정규 ${index} 시간" ${index > frequency ? "disabled" : ""}>
+        <option value="">시간 선택</option>
+        ${timeValues.map((time) => `<option value="${time}" ${time === currentTime ? "selected" : ""}>${time}</option>`).join("")}
+      </select>
+    </div>`;
+  }).join("");
+  return `<section class="member-inline-schedule" data-member-inline-schedule data-product-kind="${escapeHtml(productKind)}" ${productKind !== "regular" ? "hidden" : ""}>
+    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>선택사항 · 시간표에서 등록하면 자동 연결</span><button class="ghost-button member-inline-schedule-separate" type="button" data-member-schedule-separate>기존 시간표 유지</button></div>
+    ${rows}
+    <p class="member-inline-schedule-warning" data-member-schedule-warning></p>
+  </section>`;
+}
+
+function filterLessonRecordCurriculumOptions() {
+  const select = $("#lessonRecordCurriculum");
+  if (!select) return;
+  const selectedValue = select.value;
+  const query = String($("#lessonRecordCurriculumSearch")?.value || "").trim();
+  const choices = adminCurriculumChoices();
+  const filtered = rankedAdminCurriculumChoices(choices, query);
+  const selectedChoice = choices.find((item) => item.value === selectedValue);
+  const visibleChoices = selectedChoice && !filtered.some((item) => item.value === selectedChoice.value)
+    ? [selectedChoice, ...filtered]
+    : filtered;
+  select.innerHTML = `<option value="">${query && !filtered.length ? "검색 결과 없음" : "다음 커리큘럼 선택"}</option>${visibleChoices.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("")}`;
+  if (selectedChoice) select.value = selectedValue;
+  renderLessonRecordCurriculumSuggestions(filtered, query);
+  updateLessonRecordCurriculumLink();
+}

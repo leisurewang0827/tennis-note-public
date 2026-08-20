@@ -409,3 +409,301 @@ function importMemberStatus(value = "") {
   if (["가입대기", "대기", "pending"].includes(normalized)) return "pending";
   return "";
 }
+
+// ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──
+
+function readCachedOperationsIdentity() {
+  for (const storage of operationsProfileCacheStores()) {
+    try {
+      const cached = JSON.parse(storage.getItem(operationsProfileCacheStorageKey) || "null");
+      if (cached?.user?.id && ["admin", "coach"].includes(cached?.profile?.role)) return cached;
+    } catch (error) {
+      try {
+        storage.removeItem(operationsProfileCacheStorageKey);
+      } catch (storageError) {
+        // Continue to the next available storage area.
+      }
+    }
+  }
+  return null;
+}
+
+function invalidateMemberSearchIndex({ preserveDirectory = false } = {}) {
+  memberSearchIndex.clear();
+  memberTicketsIndex.clear();
+  ticketParticipantNamesIndex.clear();
+  if (!preserveDirectory) {
+    adminMemberDirectoryState.loaded = false;
+    adminMemberDirectoryState.signature = "";
+    adminMemberDirectoryState.rows = [];
+    adminMemberDirectoryState.counts = null;
+    adminMemberDirectoryState.preserveCountsWhileLoading = false;
+  }
+  adminMemberDetailCache.clear();
+  adminUserNameIndex = null;
+}
+
+function adminMemberDetailEntry(member) {
+  const userId = String(member?.serverUserId || "");
+  return userId ? adminMemberDetailCache.get(userId) || null : null;
+}
+
+function adminMemberDirectoryCoachRoleId() {
+  if (state.memberCoachFilter === "all") return null;
+  return operationBranchCoaches().find((coach) => coach.name === state.memberCoachFilter)?.serverRoleId || null;
+}
+
+function adminMemberDirectorySignature() {
+  return JSON.stringify({
+    branchId: activeOperationBranchId() || null,
+    status: state.memberFilter || "active",
+    search: String(state.memberSearch || "").trim(),
+    coachRoleId: adminMemberDirectoryCoachRoleId(),
+    productKind: state.memberTicketFilter === "all" ? null : state.memberTicketFilter,
+    page: Number(state.memberListPage) || 0,
+    pageSize: memberListPageSize,
+  });
+}
+
+function inferCoachIdForMember(memberName) {
+  const member = members.find((item) => item.name === memberName);
+  if (!member) return coaches.find((coach) => coach.status === "active")?.id || "coach-no";
+  return coaches.find((coach) => member.coach.includes(coach.name.replace(" 코치", "")))?.id || coaches.find((coach) => coach.name === member.coach)?.id || "coach-no";
+}
+
+function operationBranchMembers(source = members) {
+  const activeBranchId = activeOperationBranchId();
+  if (!activeBranchId) return source;
+  return source.filter((member) => {
+    const branchIds = memberOperationBranchIds(member);
+    return branchIds.length
+      ? branchIds.includes(activeBranchId)
+      : operationBranchAllowsLegacyRows();
+  });
+}
+
+function discountIssueEligibleMembers(query = "") {
+  const keyword = String(query || "").trim().toLowerCase();
+  return members
+    .filter((member) => member.serverUserId && !["admin", "coach"].includes(String(member.authRole || "").toLowerCase()))
+    .filter((member) => !keyword || `${member.name || ""} ${member.phone || ""}`.toLowerCase().includes(keyword))
+    .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "ko"));
+}
+
+function dashboardOperationalMembers() {
+  return operationBranchMembers().filter((member) => {
+    const status = memberListStatus(member);
+    return ["active", "expiring", "pending"].includes(status) || memberRemainingCount(member) > 0;
+  });
+}
+
+function ticketBelongsToMember(ticket, memberReference) {
+  if (!ticket || !memberReference) return false;
+  const memberRecords = memberRecordsForReference(memberReference);
+  const memberUserIds = [...new Set(memberRecords.flatMap(memberServerUserIds))];
+  const participantUserIds = ticketParticipantUserIds(ticket);
+  if (memberUserIds.length && participantUserIds.length) {
+    return participantUserIds.some((userId) => memberUserIds.includes(userId));
+  }
+  const memberNames = memberRecords.length
+    ? memberRecords.map((member) => member.name)
+    : splitMemberNames(memberReference);
+  const participantNames = ticketParticipantNames(ticket);
+  return participantNames.some((name) => memberNames.includes(name));
+}
+
+function ticketsForMember(memberReference) {
+  const memberKey = memberReference && typeof memberReference === "object"
+    ? String(memberReference.serverUserId || memberReference.id || memberReference.name || "")
+    : String(memberReference || "");
+  const branchKey = activeOperationBranchId();
+  const cacheKey = `current|${branchKey}|${memberKey}`;
+  const cached = memberKey ? memberTicketsIndex.get(cacheKey) : null;
+  if (cached) return cached;
+  const matches = operationBranchTickets()
+    .filter((ticket) => ticketBelongsToMember(ticket, memberReference))
+    .sort((left, right) => ticketPriorityForMember(right, memberReference) - ticketPriorityForMember(left, memberReference));
+  if (memberKey) memberTicketsIndex.set(cacheKey, matches);
+  return matches;
+}
+
+function normalizeMemberManagementPaymentPayload(payload = null) {
+  if (!payload) return payload;
+  const inferredState = memberPaymentRecordState({
+    payment_record_state: payload.paymentRecordState,
+    payment_recorded_on: payload.paymentDate,
+    payment_method: payload.paymentMethod,
+    payment_amount: payload.paymentAmount,
+  });
+  payload.paymentRecordState = inferredState;
+  if (inferredState === "transfer_zero") {
+    payload.paymentAmount = 0;
+    payload.paymentMethod = "membership_transfer";
+  } else if (inferredState === "unentered") {
+    payload.paymentDate = null;
+    payload.paymentMethod = null;
+    payload.paymentAmount = 0;
+  }
+  return payload;
+}
+
+function normalizedMemberSearchText(member) {
+  const memberId = String(member?.serverUserId || member?.id || "");
+  const cached = memberSearchIndex.get(memberId);
+  if (cached) return cached;
+  const value = memberSearchValues(member)
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join("\n");
+  memberSearchIndex.set(memberId, value);
+  return value;
+}
+
+function dedupeMembersByLessonUnit(memberList) {
+  const units = new Map();
+  memberList.forEach((member) => {
+    const key = memberDirectoryUnitKey(member);
+    const current = units.get(key);
+    const ticket = memberCurrentTicket(member);
+    const isTicketOwner = memberServerUserIds(member).includes(ticket?.serverUserId);
+    if (!current || isTicketOwner) units.set(key, member);
+  });
+  return [...units.values()];
+}
+
+function manualMemberPartnerOptions() {
+  const activeBranchId = activeOperationBranchId();
+  const allowedUserIds = activeBranchId
+    ? new Set(operationBranchMembers().flatMap((member) => memberServerUserIds(member)))
+    : null;
+  return (adminLiveDataState.users || [])
+    .filter((user) => (
+      user.role === "member"
+      && user.status === "active"
+      && (!allowedUserIds || allowedUserIds.has(String(user.id || "")))
+    ))
+    .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "ko"));
+}
+
+function touchMemberAdminEditSession() {
+  if (!memberAdminEditEnabled) return;
+  if (Date.now() >= memberAdminEditExpiresAt) {
+    setMemberAdminEditEnabled(false);
+    showToast("개인정보 보호를 위해 회원표 편집이 자동 잠금되었습니다.");
+    return;
+  }
+  memberAdminEditExpiresAt = Date.now() + memberAdminEditTimeoutMs;
+}
+
+function latestMemberPayment(member) {
+  const record = memberManagementTickets(member)
+    .map((ticket) => memberDatabaseRecord(member, ticket))
+    .filter((item) => item && (item.payment_recorded_on || item.payment_method || Number(item.payment_amount) > 0))
+    .sort((left, right) => String(right.payment_recorded_on || "").localeCompare(String(left.payment_recorded_on || "")))[0] || null;
+  if (record) {
+    return {
+      memberDatabaseRecord: true,
+      paidAt: record.payment_recorded_on || "",
+      method: record.payment_method || "",
+      amount: record.payment_amount ?? 0,
+      finalAmount: record.payment_amount ?? 0,
+    };
+  }
+  const rows = billings.filter((billing) => {
+    const matchesMember = member.serverUserId && billing.serverUserId
+      ? member.serverUserId === billing.serverUserId
+      : billing.member === member.name;
+    return matchesMember && !["draft", "failed"].includes(billing.status);
+  });
+  const liveRows = rows.filter((billing) => billing.environment !== "테스트");
+  return (liveRows.length ? liveRows : rows)
+    .sort((left, right) => {
+      const leftAt = new Date(left.paidAt || left.verifiedAt || left.requestedAt || 0).getTime() || 0;
+      const rightAt = new Date(right.paidAt || right.verifiedAt || right.requestedAt || 0).getTime() || 0;
+      return rightAt - leftAt;
+    })[0] || null;
+}
+
+function selectedMemberIdSet() {
+  return new Set((state.selectedMemberIds || []).map(Number));
+}
+
+function scheduleLessonMatchesMemberSearch(lesson) {
+  const keyword = normalizedScheduleMemberSearch(state.scheduleMemberSearch);
+  if (!keyword) return true;
+  return normalizedScheduleMemberSearch(getLessonMembersLabel(lesson)).includes(keyword);
+}
+
+function scheduleMemberSearchMatches() {
+  const keyword = normalizedScheduleMemberSearch(state.scheduleMemberSearch);
+  if (!keyword) return [];
+  return operationBranchLessons()
+    .filter((lesson) => lesson.status !== "cancelled" && scheduleLessonMatchesMemberSearch(lesson))
+    .sort((left, right) => `${left.lessonDate || "9999-12-31"} ${left.time || ""}`.localeCompare(`${right.lessonDate || "9999-12-31"} ${right.time || ""}`));
+}
+
+function autoJumpToExactScheduleMember() {
+  const keyword = normalizedScheduleMemberSearch(state.scheduleMemberSearch);
+  if (!keyword || keyword === state.scheduleSearchLastAutoJump) return;
+  const exactMatches = scheduleMemberSearchMatches().filter((lesson) => (
+    splitMemberNames(getLessonMembersLabel(lesson))
+      .some((name) => normalizedScheduleMemberSearch(name) === keyword)
+  ));
+  if (!exactMatches.length) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const target = exactMatches.find((lesson) => lessonMatchesActiveScheduleWeek(lesson, lesson.day))
+    || exactMatches.find((lesson) => !lesson.lessonDate || lesson.lessonDate >= today)
+    || exactMatches[exactMatches.length - 1];
+  state.scheduleSearchLastAutoJump = keyword;
+  jumpToScheduleSearchResult(target.lessonDate, target.day, target.id);
+}
+
+function getSelectableMembers(search = "") {
+  const keyword = search.trim().toLowerCase();
+  const matchingMembers = members.filter((member) => {
+    const status = memberListStatus(member);
+    const usableOnSelectedDate = allTicketsForMember(member)
+      .some((ticket) => ticket.remaining > 0 && ticketCanBeUsedOnLessonDate(ticket));
+    if (!adminManualOverrideEnabled() && status === "inactive") return false;
+    if (!adminManualOverrideEnabled() && status === "expired" && !usableOnSelectedDate) return false;
+    return !keyword || memberSearchValues(member)
+      .some((value) => String(value || "").toLowerCase().includes(keyword));
+  });
+  return dedupeMembersByLessonUnit(matchingMembers);
+}
+
+function getMemberOptionLabel(member) {
+  const ticket = getActiveTicketForMember(member);
+  if (!ticket) return `${member.name} · 회원권 없음`;
+  const displayName = memberDirectoryDisplayName(member, ticket);
+  return `${displayName} · ${getTicketDisplayProduct(ticket)} · 총 ${ticket.total}회 · 잔여 ${ticket.remaining}회`;
+}
+
+function getEditingLessonMemberName(lesson) {
+  if (!lesson) return "";
+  const participantUserIds = Array.isArray(lesson.serverParticipantUserIds)
+    ? lesson.serverParticipantUserIds.filter(Boolean)
+    : [];
+  const participantNames = getLessonParticipantNames(lesson);
+  const currentTicket = getTicketByLesson(lesson);
+  const matchingMembers = members.filter((member) => {
+    const matchesParticipantId = participantUserIds.length
+      && memberServerUserIds(member).some((userId) => participantUserIds.includes(userId));
+    const matchesParticipantName = participantNames.includes(member.name);
+    return (matchesParticipantId || matchesParticipantName)
+      && (!currentTicket || ticketBelongsToMember(currentTicket, member));
+  });
+  const ticketOwner = matchingMembers.find((member) => memberServerUserIds(member).includes(currentTicket?.serverUserId));
+  return ticketOwner?.name
+    || matchingMembers[0]?.name
+    || participantNames.find((name) => members.some((member) => member.name === name))
+    || "";
+}
+
+function ticketReviewMember(userId) {
+  const normalizedUserId = String(userId || "");
+  if (!normalizedUserId) return null;
+  return operationBranchMembers().find((member) => (
+    memberServerUserIds(member).some((memberUserId) => String(memberUserId) === normalizedUserId)
+  )) || null;
+}

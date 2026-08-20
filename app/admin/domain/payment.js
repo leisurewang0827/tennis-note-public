@@ -263,3 +263,100 @@ function importPaymentStatus(value = "") {
   if (["해당없음", "없음", "not_applicable", "none"].includes(normalized)) return "not_applicable";
   return "";
 }
+
+// ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──
+
+function isPaymentGatewayReady() {
+  const config = paymentGatewayConfig();
+  return Boolean(config.storeId && config.channelKey);
+}
+
+function replaceServerPaymentRows(rows = []) {
+  const mapped = rows.map((row) => billingRowFromServerPayment(row));
+  const serverIds = new Set(mapped.map((item) => item.serverPaymentId).filter(Boolean));
+  const providerIds = new Set(mapped.map((item) => item.providerPaymentId).filter(Boolean));
+  const previousServerRows = billings.filter((item) => item.serverPaymentId);
+  const previousKeys = new Set(previousServerRows
+    .flatMap((item) => [item.serverPaymentId, item.providerPaymentId])
+    .filter(Boolean));
+  const preservedLocalRows = billings.filter((item) => (
+    !item.serverPaymentId
+    && (!item.providerPaymentId || !providerIds.has(item.providerPaymentId))
+  ));
+  replaceArray(billings, [...mapped, ...preservedLocalRows]);
+  return {
+    added: mapped.filter((item) => !previousKeys.has(item.serverPaymentId) && !previousKeys.has(item.providerPaymentId)).length,
+    updated: mapped.filter((item) => previousKeys.has(item.serverPaymentId) || previousKeys.has(item.providerPaymentId)).length,
+    removed: previousServerRows.filter((item) => (
+      !serverIds.has(item.serverPaymentId) && !providerIds.has(item.providerPaymentId)
+    )).length,
+  };
+}
+
+function reflectRefundPolicyInActiveVersion() {
+  const policy = activePolicyVersion();
+  if (!policy) return;
+  let section = policy.sections.find((item) => item.id === "refund");
+  if (!section) {
+    section = { id: "refund", title: "환불", rules: [] };
+    policy.sections.push(section);
+  }
+  const settings = normalizeRefundPolicySettings(refundPolicySettings);
+  section.rules = [
+    `회원 사유 환불은 실납부액에서 할인 전 원가의 ${settings.penaltyRate}% 위약금을 차감`,
+    "사용한 수업은 할인 전 회차 금액으로 차감",
+    settings.reservationFee > 0 ? `첫 수업을 진행한 달에는 예약금 ${money.format(settings.reservationFee)}원을 추가 차감` : "별도 예약금 차감 없음",
+    "분쟁이 생긴 경우에만 관리자가 소비자분쟁해결기준 검토 절차를 별도로 진행",
+  ];
+}
+
+function memberPaymentRecordState(record = null) {
+  const explicitState = String(record?.payment_record_state || "").trim();
+  if (memberPaymentRecordStates.has(explicitState)) return explicitState;
+  const amount = Number(record?.payment_amount) || 0;
+  const date = String(record?.payment_recorded_on || "").trim();
+  const method = String(record?.payment_method || "").trim();
+  if (amount === 0 && method === "membership_transfer") return "transfer_zero";
+  if (amount > 0 && date && method) return "complete";
+  if (amount > 0 || date || method) return "incomplete";
+  return "unentered";
+}
+
+function memberPaymentRecordStateLabel(state = "") {
+  return ({
+    unentered: "미입력",
+    complete: "결제 완료",
+    transfer_zero: "양도 · 0원",
+    incomplete: "확인 필요",
+  })[state] || "미입력";
+}
+
+function memberPaymentRecordMatchesPayload(record = null, payload = null) {
+  if (!record || !payload) return false;
+  return memberPaymentRecordState(record) === String(payload.paymentRecordState || "unentered")
+    && String(record.payment_recorded_on || "") === String(payload.paymentDate || "")
+    && normalizeMemberPaymentMethod(record.payment_method) === normalizeMemberPaymentMethod(payload.paymentMethod)
+    && Number(record.payment_amount || 0) === Number(payload.paymentAmount || 0);
+}
+
+function isStaleReadyPayment(item = {}) {
+  if (item.status !== "server_ready") return false;
+  const createdAt = paymentCreatedAtMs(item);
+  return Boolean(createdAt && Date.now() - createdAt > staleReadyPaymentMs);
+}
+
+function chargeStatusForPayment(item = {}) {
+  if (item.status === "refund_processing") return { label: "환불 처리중", tone: "warn", detail: "PortOne 취소와 내부 회원권 반영이 진행 중입니다." };
+  if (item.status === "refund_reconcile") return { label: "동기화 필요", tone: "danger", detail: "PG 취소 결과와 내부 결제·회원권 상태를 다시 맞춰야 합니다." };
+  if (item.status === "paid" && item.oneDayBookingId) return { label: "원데이 예약완료", tone: "good", detail: "결제 확인 후 선택한 코치와 시간으로 한 번만 예약됐습니다." };
+  if (item.status === "paid" && item.ticketId) return { label: "회원권 충전완료", tone: "good", detail: "결제검증 후 연결 회원권이 활성화됩니다." };
+  if (item.status === "paid" && isHistoricalImportedPayment(item)) return { label: "이관 결제 기록", tone: "neutral", detail: "기존 장부에서 보존한 결제 증빙이며 현재 회원권 자동 연결 대상이 아닙니다." };
+  if (item.status === "paid") return { label: "회원권 연결 확인", tone: "warn", detail: "결제는 확인됐지만 연결된 회원권 ID가 없습니다." };
+  if (isStaleReadyPayment(item)) return { label: "오래된 결제 대기", tone: "warn", detail: "결제창 생성 후 1시간 이상 완료 확인이 없습니다. PortOne 상태 확인 전에는 취소하거나 회원권을 변경하지 않습니다." };
+  if (item.status === "server_ready") return { label: "결제 전 대기", tone: "neutral", detail: "회원이 Toss 결제를 완료하면 서버검증 후 자동 충전됩니다." };
+  if (item.status === "unverified") return { label: "서버검증 대기", tone: "warn", detail: "결제창 완료 후 서버 검증이 필요합니다." };
+  if (item.status === "cancelled") return { label: "취소/환불완료", tone: "neutral", detail: "결제가 취소됐고 연결 회원권은 충전되지 않거나 환불 처리됩니다." };
+  if (item.status === "refunded") return { label: "환불완료", tone: "neutral", detail: "환불 완료 항목은 현재 이용권으로 보지 않습니다." };
+  if (item.status === "failed") return { label: "충전 중단", tone: "danger", detail: "결제 실패 항목은 회원권을 충전하지 않습니다." };
+  return { label: "확인 필요", tone: "warn", detail: "관리자 확인 후 회원권 상태를 맞춰야 합니다." };
+}

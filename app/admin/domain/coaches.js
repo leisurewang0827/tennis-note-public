@@ -437,3 +437,396 @@ function coachWorksAtPreviewTime(coach, day, time) {
     && minute < timeToMinutes(block.end)
   ));
 }
+
+// ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──
+
+function defaultCoachSettlementRule(coach, existingRule = null) {
+  const hourlyCoach = usesHourlySettlementDefault(coach, existingRule);
+  const substituteCoach = /대타|보강/.test(`${coach?.role || ""}`);
+  return {
+    coach: coach?.name || "새 코치",
+    method: hourlyCoach ? "hourly" : "ratio",
+    ratio: hourlyCoach ? 0 : newCoachSettlementSettings.regularRatio / 100,
+    hourly: hourlyCoach ? (substituteCoach ? newCoachSettlementSettings.substituteHourly : newCoachSettlementSettings.weekendHourly) : 0,
+    cardBase: newCoachSettlementSettings.cardBase,
+    substitute: newCoachSettlementSettings.substitute,
+    effectiveFrom: existingRule?.effectiveFrom || new Date().toISOString().slice(0, 10),
+    serverRoleId: coach?.serverRoleId || existingRule?.serverRoleId || "",
+  };
+}
+
+function currentOperationCoachPolicies() {
+  return coaches.map((coach) => ({
+    id: coach.id,
+    serverRoleId: coach.serverRoleId || "",
+    branchId: coach.branchId || "",
+    name: coach.name,
+    status: coach.status || "active",
+    employmentStatus: coach.employmentStatus || "active",
+    archivedAt: coach.archivedAt || "",
+    deletedAt: coach.deletedAt || "",
+    color: coach.color || "",
+    availableDays: cloneOperationProfileValue(Array.isArray(coach.availableDays) ? coach.availableDays : []),
+    availableStart: coach.availableStart || "",
+    availableEnd: coach.availableEnd || "",
+    workBlocks: cloneOperationProfileValue((coach.status || "active") === "active" ? normalizeCoachWorkBlocks(coach) : []),
+    breakBlocks: cloneOperationProfileValue((coach.status || "active") === "active" ? normalizeCoachBreakBlocks(coach) : []),
+  }));
+}
+
+function operationBranchCoaches(source = coaches) {
+  return source.filter((coach) => matchesActiveOperationBranch(coach.branchId));
+}
+
+function defaultCoachWorkBlocks(coach) {
+  const weekdays = scheduleDays.slice(0, 5);
+  const weekend = scheduleDays.slice(5);
+  if (coach?.id === "coach-no" || coach?.availability === "split") {
+    return [
+      { id: `${coach.id}-weekday-am`, days: weekdays, start: "06:40", end: "13:00", label: "평일 오전" },
+      { id: `${coach.id}-weekday-pm`, days: weekdays, start: "17:00", end: "22:00", label: "평일 저녁" },
+    ];
+  }
+  if (coach?.id === "coach-kang" || coach?.availability === "weekday-pm") {
+    return [{ id: `${coach.id}-weekday-pm`, days: weekdays, start: "17:00", end: "22:00", label: "평일 저녁" }];
+  }
+  if (coach?.id === "coach-hwang" || coach?.availability === "weekday-am") {
+    return [{ id: `${coach.id}-weekday-am`, days: weekdays, start: "06:40", end: "13:00", label: "평일 오전" }];
+  }
+  if (coach?.id === "coach-park" || coach?.availability === "weekend") {
+    return [{ id: `${coach.id}-weekend`, days: weekend, start: "09:00", end: "15:00", label: "주말 탄력 운영" }];
+  }
+  return [{ id: `${coach?.id || "coach"}-all`, days: scheduleDays, start: scheduleSettings.openStart, end: scheduleSettings.openEnd, label: "전체" }];
+}
+
+function normalizeCoachWorkBlocks(coach) {
+  if (!coach) return [];
+  if (!Array.isArray(coach.workBlocks)) {
+    coach.workBlocks = defaultCoachWorkBlocks(coach);
+  }
+  coach.workBlocks = coach.workBlocks
+    .map((block, index) => ({
+      id: block.id || `${coach.id}-block-${index}-${Date.now()}`,
+      days: Array.isArray(block.days) && block.days.length ? block.days : scheduleDays,
+      start: block.start || scheduleSettings.openStart,
+      end: block.end || scheduleSettings.openEnd,
+      label: block.label || "근무",
+    }))
+    .filter((block) => timeToMinutes(block.start) < timeToMinutes(block.end))
+    .sort((left, right) => {
+      const leftDay = Math.min(...left.days.map((day) => scheduleDays.indexOf(day)).filter((index) => index >= 0));
+      const rightDay = Math.min(...right.days.map((day) => scheduleDays.indexOf(day)).filter((index) => index >= 0));
+      return leftDay - rightDay
+        || timeToMinutes(left.start) - timeToMinutes(right.start)
+        || timeToMinutes(left.end) - timeToMinutes(right.end);
+    });
+  return coach.workBlocks;
+}
+
+function normalizeCoachBreakBlocks(coach) {
+  if (!coach) return [];
+  if (!Array.isArray(coach.breakBlocks)) coach.breakBlocks = [];
+  coach.breakBlocks = coach.breakBlocks
+    .map((block, index) => ({
+      id: block.id || `${coach.id}-break-${index}-${Date.now()}`,
+      days: Array.isArray(block.days) && block.days.length ? block.days : scheduleDays,
+      start: block.start || scheduleSettings.openStart,
+      end: block.end || scheduleSettings.openEnd,
+      label: block.label || "브레이크",
+    }))
+    .filter((block) => timeToMinutes(block.start) < timeToMinutes(block.end));
+  return coach.breakBlocks;
+}
+
+function getCoachBreakOverlapping(coachId, day, time, durationMinutes = 20) {
+  const coach = coaches.find((item) => item.id === coachId);
+  if (!coach) return null;
+  const start = timeToMinutes(time);
+  const end = start + Number(durationMinutes || 20);
+  return normalizeCoachBreakBlocks(coach).find((block) => (
+    block.days.includes(day)
+    && start < timeToMinutes(block.end)
+    && end > timeToMinutes(block.start)
+  )) || null;
+}
+
+function getCoachAvailabilityDefaults(coach) {
+  const availability = coach?.availability || "full";
+  if (availability === "weekday-am") return { days: scheduleDays.slice(0, 5), start: "06:40", end: "13:00" };
+  if (availability === "weekday-pm") return { days: scheduleDays.slice(0, 5), start: "17:00", end: "22:00" };
+  if (availability === "weekend") return { days: scheduleDays.slice(5), start: "09:00", end: "15:00" };
+  if (availability === "split") return { days: scheduleDays.slice(0, 5), start: "06:40", end: "22:00" };
+  return { days: scheduleDays, start: scheduleSettings.openStart, end: scheduleSettings.openEnd };
+}
+
+function getCoachAvailabilityDetail(coachId) {
+  const coach = coaches.find((item) => item.id === coachId);
+  const blocks = normalizeCoachWorkBlocks(coach);
+  if (blocks.length) {
+    const starts = blocks.map((block) => timeToMinutes(block.start));
+    const ends = blocks.map((block) => timeToMinutes(block.end));
+    return {
+      days: [...new Set(blocks.flatMap((block) => block.days))],
+      start: minutesToTime(Math.min(...starts)),
+      end: minutesToTime(Math.max(...ends)),
+    };
+  }
+  const defaults = getCoachAvailabilityDefaults(coach);
+  return {
+    days: Array.isArray(coach?.availableDays) && coach.availableDays.length ? coach.availableDays : defaults.days,
+    start: coach?.availableStart || defaults.start,
+    end: coach?.availableEnd || defaults.end,
+  };
+}
+
+function getCoachAvailabilitySummary(coachId) {
+  const coach = coaches.find((item) => item.id === coachId);
+  const blocks = normalizeCoachWorkBlocks(coach);
+  if (blocks.length) {
+    return blocks.map((block) => `${block.days.join("")} ${block.start}~${block.end}`).join(" / ");
+  }
+  const detail = getCoachAvailabilityDetail(coachId);
+  return `${detail.days.join(", ")} ${detail.start}~${detail.end}`;
+}
+
+function scheduleCoachSummaryForDay(day) {
+  const dayCoaches = getScheduleCoachLanes(day).filter((coach) => coach.id !== "coach-machine");
+  if (!dayCoaches.length) return "운영 없음";
+  return dayCoaches
+    .map((coach) => {
+      const blocks = normalizeCoachWorkBlocks(coach)
+        .filter((block) => block.days.includes(day))
+        .map((block) => `${block.start}~${block.end}`)
+        .join(", ");
+      return `${coach.name.replace(" 코치", "")} ${blocks || "등록수업"}`;
+    })
+    .join(" / ");
+}
+
+function isCoachAvailableForSlot(coachId, day, time, durationMinutes = 20) {
+  const coach = coaches.find((item) => item.id === coachId);
+  const blocks = normalizeCoachWorkBlocks(coach);
+  const start = timeToMinutes(time);
+  const end = start + durationMinutes;
+  return !getCoachBreakOverlapping(coachId, day, time, durationMinutes)
+    && blocks.some((block) => block.days.includes(day) && start >= timeToMinutes(block.start) && end <= timeToMinutes(block.end));
+}
+
+function getCoachTimeOptions(coachId, day, durationMinutes = 20) {
+  return getScheduleTimeOptions().filter((time) => isCoachAvailableForSlot(coachId, day, time, durationMinutes));
+}
+
+function getAvailableCoachesForSlot(day, time, durationMinutes = 20) {
+  const usedCoachIds = new Set(getOverlappingBookedLessons(day, time, durationMinutes)
+    .filter((lesson) => !isReleasedRegularMakeupSlot(lesson))
+    .map((lesson) => lesson.coachId));
+  return operationBranchCoaches().filter((coach) => (
+    coach.status === "active" &&
+    !usedCoachIds.has(coach.id) &&
+    !getCoachBreakOverlapping(coach.id, day, time, durationMinutes) &&
+    !getBreakRuleOverlapping(day, time, durationMinutes, coach.id) &&
+    isCoachAvailableForSlot(coach.id, day, time, durationMinutes)
+  ));
+}
+
+function getAvailableCoachId(day, time, durationMinutes = 20, preferredCoachId = "") {
+  const availableCoaches = getAvailableCoachesForSlot(day, time, durationMinutes);
+  if (preferredCoachId && availableCoaches.some((coach) => coach.id === preferredCoachId)) return preferredCoachId;
+  return availableCoaches[0]?.id
+    || operationBranchCoaches().find((coach) => coach.status === "active")?.id
+    || "coach-no";
+}
+
+function getScheduleCoachLanes(day = "") {
+  const preferredOrder = ["coach-no", "coach-kang", "coach-hwang", "coach-park", "coach-machine"];
+  const activeCoaches = operationBranchCoaches().filter((coach) => coach.status === "active");
+  const orderedCoaches = preferredOrder.map((coachId) => activeCoaches.find((coach) => coach.id === coachId)).filter(Boolean);
+  const extraCoaches = activeCoaches.filter((coach) => !preferredOrder.includes(coach.id));
+  const lanes = orderedCoaches.concat(extraCoaches);
+  if (!day) return lanes;
+  return lanes.filter((coach) => (
+    normalizeCoachWorkBlocks(coach).some((block) => block.days.includes(day)) ||
+    operationBranchLessons().some((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson))
+  ));
+}
+
+function findStartingLessonForCoach(day, time, coachId) {
+  return operationBranchLessons().find((lesson) => lesson.day === day && lesson.time === time && lessonScheduleCoachId(lesson) === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && isBookedLesson(lesson));
+}
+
+function findLessonStartingInBlockForCoach(day, blockStart, blockEnd, coachId) {
+  return operationBranchLessons().find((lesson) => {
+    const starts = timeToMinutes(lesson.time);
+    return lesson.day === day && lessonScheduleCoachId(lesson) === coachId && lessonMatchesActiveScheduleWeek(lesson, day) && starts > blockStart && starts < blockEnd;
+  });
+}
+
+function findOccupyingLessonForCoach(day, time, coachId) {
+  const current = timeToMinutes(time);
+  return operationBranchLessons().find((lesson) => {
+    if (lesson.day !== day || lesson.time === time || lessonScheduleCoachId(lesson) !== coachId || !lessonMatchesActiveScheduleWeek(lesson, day) || !isBookedLesson(lesson)) return false;
+    const starts = timeToMinutes(lesson.time);
+    const ends = starts + lesson.durationMinutes;
+    return current > starts && current < ends;
+  });
+}
+
+function scheduleAssignmentAllowsCoach(coachId) {
+  const ticket = currentScheduleAssignmentTicket();
+  return !ticket?.coachId || String(ticket.coachId) === String(coachId || "");
+}
+
+function memberCoachNames(member) {
+  const ticketCoachNames = [...memberCurrentTickets(member), ...memberUpcomingTickets(member)]
+    .map((ticket) => coaches.find((coach) => (
+      String(coach.serverRoleId || "") === String(ticket.coachRoleId || "")
+      || String(coach.id || "") === String(ticket.coachId || "")
+    ))?.name)
+    .filter(Boolean);
+  return [...new Set([member.coach, ...ticketCoachNames].filter(Boolean))];
+}
+
+function currentOperationsCoachRoleIds() {
+  const profileId = adminImportAuthState.profile?.id || "";
+  return new Set((adminLiveDataState.coachRoles || [])
+    .filter((role) => role.user_id === profileId && role.status === "approved")
+    .map((role) => role.id));
+}
+
+function currentOperationsCoachIds() {
+  const roleIds = currentOperationsCoachRoleIds();
+  return new Set(coaches
+    .filter((coach) => roleIds.has(coach.serverRoleId))
+    .map((coach) => coach.id));
+}
+
+function recordBelongsToCurrentCoach(record = {}) {
+  if (operationsRole() !== "coach") return true;
+  const coachIds = currentOperationsCoachIds();
+  if (record.coachId) return coachIds.has(record.coachId);
+  const memberNames = splitMemberNames(record.member || "");
+  if (!memberNames.length) return false;
+  return members.some((member) => (
+    memberNames.includes(member.name)
+    && coachIds.has(member.coachId)
+  ));
+}
+
+function memberManagementCoachRoles(sourceTicket = null) {
+  const ownRoleIds = currentOperationsCoachRoleIds();
+  const branchId = sourceTicket?.branchId || activeOperationBranchId();
+  return (adminLiveDataState.coachRoles || [])
+    .filter((role) => role.status === "approved"
+      && !["ended", "archived"].includes(role.employment_status)
+      && !role.archived_at
+      && (!branchId || role.branch_id === branchId)
+      && (operationsRole() === "admin" || ownRoleIds.has(role.id)))
+    .sort((left, right) => String(left.display_name || "").localeCompare(String(right.display_name || ""), "ko"));
+}
+
+function settlementCoachNameFor(item) {
+  if (item.forceActualCoach && item.actualCoach) return item.actualCoach;
+  if (!item.actualCoach || item.actualCoach === item.coach) return item.coach;
+  const actualRule = settlementRuleFor(item.actualCoach);
+  if (actualRule.substitute === "originalCoach") return item.coach;
+  return item.actualCoach;
+}
+
+function coachSettlementRule(coach) {
+  const rule = coachSettlementRules.find((item) => (
+    item.serverRoleId === coach?.serverRoleId || item.coach === coach?.name
+  ));
+  return rule || defaultCoachSettlementRule(coach);
+}
+
+function coachSettlementSummary(coach) {
+  const rule = coachSettlementRule(coach);
+  if (rule.method === "hourly") return `시급 ${money.format(Number(rule.hourly) || 0)}원`;
+  return `비율 ${Math.round((Number(rule.ratio) || 0) * 100)}%`;
+}
+
+function coachStaffDraftFrom(coach) {
+  const source = coach || {};
+  const settlement = coachSettlementRule(source);
+  return {
+    coachId: source.id || "",
+    coachRoleId: source.serverRoleId || "",
+    availabilityRevision: Number(source.availabilityRevision) || 0,
+    branchId: source.branchId || activeOperationBranchId() || defaultOperationBranch()?.id || "",
+    name: source.name || "",
+    phone: source.phone || "",
+    jobTitle: source.role || "레슨",
+    bio: source.bio || "",
+    color: source.color || "#157a5b",
+    approvalStatus: source.approvalStatus || (source.coachMode === "approved" ? "approved" : "pending"),
+    employmentStatus: source.employmentStatus || "active",
+    employmentStartedOn: source.employmentStartedOn || new Date().toISOString().slice(0, 10),
+    employmentEndedOn: source.employmentEndedOn || "",
+    accountLinked: Boolean(source.accountLinked),
+    accountDetail: coachAccountDetail(source),
+    workBlocks: coach ? normalizeCoachWorkBlocks(source).map((block) => ({ ...block, days: [...block.days] })) : [],
+    breakBlocks: coach ? normalizeCoachBreakBlocks(source).map((block) => ({ ...block, days: [...block.days] })) : [],
+    settlement: {
+      method: settlement.method || "ratio",
+      ratio: Math.round((Number(settlement.ratio) || 0) * 100),
+      hourly: Number(settlement.hourly) || 0,
+      basis: settlement.cardBase === "paid" ? "actual_paid_inc_vat" : "cash_ex_vat",
+      substitute: settlement.substitute || "actualCoach",
+      effectiveFrom: settlement.effectiveFrom || new Date().toISOString().slice(0, 10),
+    },
+  };
+}
+
+function beginCoachStaffBlockEdit(type, blockId) {
+  const draft = coachStaffEditorState.draft;
+  const target = type === "break" ? draft?.breakBlocks : draft?.workBlocks;
+  if (!target?.some((block) => block.id === blockId)) return;
+  coachStaffEditorState.editingBlockType = type;
+  coachStaffEditorState.editingBlockId = blockId;
+  coachStaffEditorState.message = "요일과 시간을 수정한 뒤 수정 적용을 눌러주세요.";
+  renderCoachStaffModal();
+}
+
+function coachStaffServerMatches(saved, draft) {
+  if (!saved || saved.name !== draft.name || saved.approvalStatus !== draft.approvalStatus) return false;
+  if (normalizedMemberPhone(saved.phone) !== normalizedMemberPhone(draft.phone)) return false;
+  if ((saved.role || "레슨") !== (draft.jobTitle || "레슨")) return false;
+  if ((saved.bio || "") !== (draft.bio || "")) return false;
+  if ((saved.employmentStatus || "active") !== (draft.employmentStatus || "active")) return false;
+  if (coachBlockSignature(normalizeCoachWorkBlocks(saved)) !== coachBlockSignature(draft.workBlocks)) return false;
+  if (coachBlockSignature(normalizeCoachBreakBlocks(saved)) !== coachBlockSignature(draft.breakBlocks)) return false;
+  const settlement = coachSettlementRule(saved);
+  if (settlement.method !== draft.settlement.method) return false;
+  if ((settlement.effectiveFrom || "") !== (draft.settlement.effectiveFrom || "")) return false;
+  if (draft.settlement.method === "ratio" && Math.round((Number(settlement.ratio) || 0) * 100) !== Number(draft.settlement.ratio)) return false;
+  if (draft.settlement.method === "hourly" && Number(settlement.hourly) !== Number(draft.settlement.hourly)) return false;
+  return true;
+}
+
+function scheduleLaneActiveCoaches() {
+  const active = operationBranchCoaches().filter((coach) => (
+    coach.serverRoleId
+    && !coach.deletedAt
+    && !coach.archivedAt
+    && (coach.employmentStatus || "active") === "active"
+    && ["active", "approved"].includes(coach.status || coach.approvalStatus || "active")
+  ));
+  return active.sort((left, right) => (
+      Number(left.scheduleLaneOrder || 1000) - Number(right.scheduleLaneOrder || 1000)
+      || String(left.name || "").localeCompare(String(right.name || ""), "ko")
+    ));
+}
+
+function moveCoachLaneOrder(roleId, direction) {
+  ensureCoachLaneOrderEditorState();
+  const index = coachLaneOrderEditorState.roleIds.indexOf(String(roleId));
+  const nextIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || nextIndex < 0 || nextIndex >= coachLaneOrderEditorState.roleIds.length) return;
+  const next = [...coachLaneOrderEditorState.roleIds];
+  [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+  coachLaneOrderEditorState.roleIds = next;
+  coachLaneOrderEditorState.confirmed = false;
+  coachLaneOrderEditorState.revision = "";
+  coachLaneOrderEditorState.message = "미리보기를 확인한 뒤 서버 확인을 눌러주세요.";
+  renderCoachLaneOrderEditor();
+}

@@ -160,3 +160,373 @@ function lessonRecordErrorMessage(error) {
     lesson_complete_ticket_unavailable: "사용 가능한 회원권 횟수가 없습니다.",
   })[code] || "서버 저장에 실패했습니다. 새로고침 후 다시 시도해 주세요.";
 }
+
+// ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──
+
+function operationBranchRecords(source = []) {
+  const lessonsById = new Map();
+  lessons.forEach((lesson) => {
+    if (lesson.id) lessonsById.set(String(lesson.id), lesson);
+    if (lesson.serverLessonId) lessonsById.set(String(lesson.serverLessonId), lesson);
+  });
+  const allowedMemberNames = new Set(operationBranchMembers(members).map((member) => member.name));
+  return source.filter((record) => {
+    if (record.branchId) return matchesActiveOperationBranch(record.branchId);
+    const lessonId = record.serverLessonId || record.lessonId;
+    const lesson = lessonId ? lessonsById.get(String(lessonId)) : null;
+    if (lesson) return matchesActiveOperationBranch(lesson.branchId);
+    const memberNames = splitMemberNames(record.member || "");
+    if (memberNames.length) {
+      return memberNames.some((name) => allowedMemberNames.has(name));
+    }
+    return operationBranchAllowsLegacyRows();
+  });
+}
+
+function getAdminTasks() {
+  const shared = operationalSharedData();
+  const pendingLessonLogs = shared.lessonLogs.filter((log) => log.status !== "confirmed");
+  const pendingFeedbacks = shared.feedbackRequests.filter((item) => item.status !== "코치 답변 완료");
+  const branchTickets = operationBranchTickets();
+  const branchBillings = operationBranchBillings();
+  const lowTickets = branchTickets.filter((ticket) => ticket.remaining <= 2);
+  const paymentChecks = branchBillings.filter((item) => item.status === "check" || item.status === "unverified");
+  const draftBillings = branchBillings.filter((item) => item.status === "draft");
+  const paymentDataErrors = branchBillings.filter((item) => item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item));
+  const urgentMakeups = operationBranchMakeupRequests()
+    .filter((item) => item.status === "coach_required" || item.status === "requested")
+    .concat(shared.makeupRequests.filter((item) => item.status === "승인 대기"));
+  const unassignedTickets = unassignedRegularTickets();
+  const couponNoBookingTickets = couponTicketsWithoutUpcomingLesson();
+
+  const tasks = [
+    ...paymentDataErrors.map((item) => ({
+      type: "결제오류",
+      title: `${item.member} 회원권 연결 누락`,
+      detail: `${item.item} · ${money.format(item.amount)}원 · 서버 결제 확인 필요`,
+      tone: "danger",
+      action: "결제 확인",
+      view: "billing",
+      dueAt: item.verifiedAt || item.paidAt || item.requestedAt || "",
+    })),
+    ...unassignedTickets.map((ticket) => ({
+      type: "긴급",
+      title: `${ticketParticipantNames(ticket).join(" & ") || ticket.member} 정규시간 미배정`,
+      detail: `${ticket.product} · ${getCoachName(ticket.coachId) || "담당 코치 미배정"}`,
+      tone: "danger",
+      action: "시간표 배정",
+      view: "schedule",
+      scheduleTicketId: ticket.id,
+    })),
+    ...couponNoBookingTickets.map((ticket) => ({
+      type: "쿠폰 일정",
+      title: `${ticketParticipantNames(ticket).join(" & ") || ticket.member} 다음 일정 미예약`,
+      detail: `${ticket.product} · 잔여 ${ticket.remaining}회${ticket.expires ? ` · ${ticket.expires}까지` : ""}`,
+      tone: "warn",
+      action: "일정 예약",
+      view: "schedule",
+      scheduleTicketId: ticket.id,
+      scheduleLessonSource: "coupon",
+    })),
+    ...urgentMakeups.map((item) => ({
+      type: "보강",
+      title: `${item.member} 보강 승인`,
+      detail: `${item.original || item.absence} -> ${item.requested || item.makeup}`,
+      tone: item.status === "coach_required" ? "danger" : "warn",
+      action: "보강 요청 검토",
+      view: "schedule",
+      dueAt: item.requested || item.makeup || "",
+    })),
+    ...pendingLessonLogs.map((log) => ({
+      type: "수업기록",
+      title: `${log.member || "회원"} 코치 확인`,
+      detail: `${log.lessonLabel || log.lesson || "수업기록"} · 다음 커리큘럼 등록 필요`,
+      tone: "warn",
+      action: "기록/차감",
+      view: "notes",
+    })),
+    ...pendingFeedbacks.map((item) => ({
+      type: "운동노트",
+      title: `${item.member || "회원"} 원격 피드백`,
+      detail: item.question || item.memo || "사진/영상 코멘트 요청",
+      tone: "warn",
+      action: "피드백 확인",
+      view: "notes",
+    })),
+    ...lowTickets.map((ticket) => ({
+      type: "횟수",
+      title: `${ticket.member} 잔여 ${ticket.remaining}회`,
+      detail: `${ticket.product} · 재등록/충전 안내`,
+      tone: ticket.remaining <= 1 ? "danger" : "warn",
+      action: "회원권 확인",
+      view: "members",
+    })),
+    ...paymentChecks.map((item) => ({
+      type: "결제확인",
+      title: `${item.member} 결제 확인`,
+      detail: `${item.item} · ${money.format(item.amount)}원`,
+      tone: "warn",
+      action: "결제 확인",
+      view: "billing",
+      dueAt: item.requestedAt || "",
+    })),
+    ...draftBillings.map((item) => ({
+      type: "결제요청",
+      title: `${item.member} 결제요청 발송`,
+      detail: `${item.item} · ${money.format(item.amount)}원`,
+      tone: "neutral",
+      action: "결제 요청",
+      view: "billing",
+      dueAt: item.requestedAt || "",
+    })),
+  ];
+  const priorityByType = {
+    결제오류: 0,
+    긴급: 1,
+    보강: 2,
+    결제확인: 3,
+    횟수: 4,
+    "쿠폰 일정": 4,
+    수업기록: 5,
+    운동노트: 6,
+    결제요청: 7,
+  };
+  return tasks
+    .map((task, index) => ({ ...task, originalIndex: index }))
+    .sort((left, right) => {
+      const priorityDifference = (priorityByType[left.type] ?? 99) - (priorityByType[right.type] ?? 99);
+      if (priorityDifference) return priorityDifference;
+      const latestDifference = recordTimestamp(right.dueAt) - recordTimestamp(left.dueAt);
+      return latestDifference || left.originalIndex - right.originalIndex;
+    });
+}
+
+function buildAdminRecordContext() {
+  const ticketCoachByMember = new Map();
+  [...tickets, ...expiredTickets].forEach((ticket) => {
+    String(ticket.member || "").split("&").map((name) => name.trim()).filter(Boolean).forEach((name) => {
+      if (!ticketCoachByMember.has(name) && ticket.coachId) ticketCoachByMember.set(name, ticket.coachId);
+    });
+  });
+  const memberCoachByName = new Map(members.map((member) => [member.name, member.coachId || ""]));
+  const userNameById = new Map((adminLiveDataState.users || []).map((user) => [String(user.id), user.name]));
+  const mediaCountByJournalId = new Map();
+  (adminLiveDataState.mediaFiles || []).forEach((media) => {
+    const key = String(media.journal_entry_id || "");
+    if (!key) return;
+    mediaCountByJournalId.set(key, (mediaCountByJournalId.get(key) || 0) + 1);
+  });
+  const lessonRecordByLessonId = new Map(
+    (adminLiveDataState.lessonRecords || [])
+      .filter((record) => record.lesson_id)
+      .map((record) => [String(record.lesson_id), record]),
+  );
+  const lessonById = new Map();
+  lessons.forEach((lesson) => {
+    if (lesson.id) lessonById.set(String(lesson.id), lesson);
+    if (lesson.serverLessonId) lessonById.set(String(lesson.serverLessonId), lesson);
+  });
+  const curriculumById = new Map(
+    (adminLiveDataState.curriculumRefs || [])
+      .filter((curriculum) => curriculum.id)
+      .map((curriculum) => [String(curriculum.id), curriculum]),
+  );
+  const participantRecordsByLessonId = new Map();
+  (adminLiveDataState.participantRecords || []).forEach((record) => {
+    const lessonId = String(record.lesson_id || "");
+    if (!lessonId) return;
+    const rows = participantRecordsByLessonId.get(lessonId) || [];
+    rows.push(record);
+    participantRecordsByLessonId.set(lessonId, rows);
+  });
+  return {
+    ticketCoachByMember,
+    memberCoachByName,
+    userNameById,
+    mediaCountByJournalId,
+    lessonRecordByLessonId,
+    lessonById,
+    curriculumById,
+    participantRecordsByLessonId,
+  };
+}
+
+function urgentOperationsRecords() {
+  const paymentRecords = billings
+    .filter((item) => item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item))
+    .map((item) => ({
+      id: `urgent-payment-${item.serverPaymentId || item.providerPaymentId || item.member}`,
+      group: "pending",
+      source: "결제 오류",
+      member: item.member || "회원 확인 필요",
+      title: `${item.item || "회원권 결제"} 연결 누락`,
+      detail: `${money.format(Number(item.amount) || 0)}원 결제 후 회원권이 발급되지 않았습니다.`,
+      subDetail: "결제 확인 후 회원권 연결이 필요합니다.",
+      statusLabel: "긴급",
+      actionLabel: "결제 확인",
+      actionView: "billing",
+      priority: "urgent",
+      urgentReason: "결제 완료와 회원권 데이터가 일치하지 않습니다.",
+      sortAt: item.verifiedAt || item.paidAt || item.requestedAt || "",
+    }));
+  const makeupRecords = makeupRequests
+    .filter((item) => ["coach_required", "requested", "pending"].includes(item.status))
+    .map((item) => ({
+      id: `urgent-makeup-${item.id}`,
+      group: "pending",
+      source: "긴급 보강·변경",
+      member: item.member || "회원 확인 필요",
+      title: `${item.original || item.absence || "기존 수업"} 변경 요청`,
+      detail: `${item.requested || item.makeup || "변경 시간 확인 필요"} · ${item.reason || "사유 미입력"}`,
+      subDetail: item.policy || item.statusLabel || "승인 여부 확인 필요",
+      statusLabel: "긴급",
+      actionLabel: "시간표 확인",
+      actionView: "schedule",
+      priority: "urgent",
+      urgentReason: item.policy === "24시간 이내" || item.status === "coach_required"
+        ? "24시간 이내 수업에 영향을 주는 승인 요청입니다."
+        : "접수된 보강·변경 요청을 확인해야 합니다.",
+      sortAt: item.createdAt || item.requestedAt || item.requested || "",
+    }));
+  return paymentRecords.concat(makeupRecords);
+}
+
+function ticketIntegrityReviewRecords() {
+  if (operationsRole() !== "admin" || !state.liveScheduleLoaded) return [];
+  const relevantStates = new Set(["current", "upcoming", "paused", "pending_payment"]);
+  const linkContext = ticketReviewLinkContext();
+  const records = [];
+
+  operationBranchMembers().forEach((member) => {
+    const ticketsByFingerprint = new Map();
+    memberManagementTickets(member)
+      .filter((ticket) => relevantStates.has(ticketReviewState(ticket)))
+      .forEach((ticket) => {
+        const fingerprint = memberTicketDuplicateFingerprint(ticket);
+        if (!fingerprint) return;
+        const grouped = ticketsByFingerprint.get(fingerprint) || [];
+        grouped.push(ticket);
+        ticketsByFingerprint.set(fingerprint, grouped);
+      });
+    [...ticketsByFingerprint.values()].forEach((grouped, index) => {
+      if (grouped.length < 2) return;
+      const ticketIds = grouped.map((ticket) => String(ticket.serverTicketId || "")).filter(Boolean);
+      if (isExpectedPersonalGroupTicketSet(ticketIds, linkContext)) return;
+      const ticket = grouped[0];
+      const period = [ticket.actualLessonStart || ticket.purchased, ticket.expires].filter(Boolean).join("~");
+      records.push({
+        id: `ticket-overlap-${member.id}-${index}`,
+        group: "issue",
+        source: "회원권 점검",
+        member: member.name || "회원 확인 필요",
+        title: "회원권 중복 가능",
+        detail: `${getTicketDisplayProduct(ticket) || ticket.product || "회원권"} · ${getCoachName(ticket.coachId)}`,
+        subDetail: `${period || "기간 확인 필요"} · 자동 삭제하지 않았습니다. 두 회원권을 비교해 주세요.`,
+        statusLabel: "확인 필요",
+        actionLabel: "회원권 확인",
+        memberId: member.id,
+        ticketId: ticket.serverTicketId || "",
+        priority: "urgent",
+        urgentReason: "상품·코치·수업 유형·기간·참여자가 같은 회원권이 둘 이상입니다.",
+        sortAt: ticket.serverUpdatedAt || ticket.expires || "",
+      });
+    });
+  });
+
+  linkContext.byAccount.forEach((account, accountId) => {
+    if (account.userIds.size >= 2 && account.ticketIds.size >= 1) return;
+    const accountRow = (adminLiveDataState.groupAccounts || []).find((item) => String(item.id || "") === accountId);
+    const firstUserId = [...account.userIds][0] || "";
+    const member = ticketReviewMember(firstUserId);
+    const firstTicketId = [...account.ticketIds][0] || "";
+    const ticket = (adminLiveDataState.tickets || []).find((item) => String(item.serverTicketId || item.id || "") === firstTicketId);
+    records.push({
+      id: `group-account-incomplete-${accountId}`,
+      group: "issue",
+      source: "1:2 연결 점검",
+      member: member?.name || accountRow?.display_name || "1:2 회원 확인 필요",
+      title: "파트너 연결 미완성",
+      detail: `참여 회원 ${account.userIds.size}명 · 연결 회원권 ${account.ticketIds.size}개`,
+      subDetail: "파트너 또는 회원권 연결을 확인해야 1:2 차감이 안전하게 처리됩니다.",
+      statusLabel: "확인 필요",
+      actionLabel: member ? "회원권 확인" : "운영 설정 확인",
+      memberId: member?.id || null,
+      ticketId: ticket?.serverTicketId || firstTicketId,
+      actionView: member ? "" : "settings",
+      priority: "urgent",
+      urgentReason: "1:2 계정의 회원 또는 회원권 연결 수가 부족합니다.",
+      sortAt: ticket?.serverUpdatedAt || "",
+    });
+  });
+
+  const linkedTicketIds = new Set(linkContext.accountIdsByTicket.keys());
+  (adminLiveDataState.tickets || [])
+    .filter((ticket) => Number(ticket.groupSize || 1) === 2)
+    .filter((ticket) => relevantStates.has(ticketReviewState(ticket)))
+    .filter((ticket) => !linkedTicketIds.has(String(ticket.serverTicketId || ticket.id || "")))
+    .forEach((ticket) => {
+      const member = ticketReviewMember(ticket.serverUserId);
+      records.push({
+        id: `group-ticket-unlinked-${ticket.serverTicketId || ticket.id}`,
+        group: "issue",
+        source: "1:2 연결 점검",
+        member: member?.name || ticket.member || "회원 확인 필요",
+        title: "1:2 회원권 연결 없음",
+        detail: `${getTicketDisplayProduct(ticket) || ticket.product || "1:2 회원권"} · ${getCoachName(ticket.coachId)}`,
+        subDetail: "회원권은 유지하고 파트너 계정 연결만 확인해 주세요.",
+        statusLabel: "확인 필요",
+        actionLabel: member ? "회원권 확인" : "회원관리 확인",
+        memberId: member?.id || null,
+        ticketId: ticket.serverTicketId || "",
+        actionView: member ? "" : "members",
+        priority: "urgent",
+        urgentReason: "사용 중인 1:2 회원권이 파트너 계정과 연결되지 않았습니다.",
+        sortAt: ticket.serverUpdatedAt || ticket.expires || "",
+      });
+    });
+
+  return records;
+}
+
+function adminRecordGroups() {
+  const shared = operationalSharedData();
+  const context = buildAdminRecordContext();
+  const participantRecords = (adminLiveDataState.participantRecords || []).map((record) => (
+    participantLessonRecord(record, context)
+  ));
+  const participantRecordLessonIds = new Set(
+    (adminLiveDataState.participantRecords || []).map((record) => String(record.lesson_id || "")).filter(Boolean),
+  );
+  const records = [
+    ...urgentOperationsRecords(),
+    ...pendingLessonRecords(),
+    ...lessonNotes
+      .filter((note) => !participantRecordLessonIds.has(String(note.serverLessonId || "")))
+      .map(legacyNoteRecord),
+    ...participantRecords,
+    ...shared.lessonLogs.map(lessonLogRecord),
+    ...shared.feedbackRequests.map(feedbackRecord),
+    ...(adminLiveDataState.journalEntries || []).map((entry) => memberJournalRecord(entry, context)),
+    ...ticketIntegrityReviewRecords(),
+  ];
+  const normalizedRecords = operationBranchRecords(records).map((record) => withRecordCoach(
+    {
+      ...record,
+      pendingType: pendingRecordType(record),
+    },
+    record,
+    context,
+  ));
+  const roleFilteredRecords = operationsRole() === "coach"
+    ? normalizedRecords.filter((record) => (
+      record.pendingType !== "payment"
+      && recordBelongsToCurrentCoach(record)
+    ))
+    : normalizedRecords;
+  return {
+    pending: sortAdminRecords(roleFilteredRecords.filter((record) => record.group === "pending")),
+    feedback: sortAdminRecords(roleFilteredRecords.filter((record) => record.group === "feedback")),
+    done: sortAdminRecords(roleFilteredRecords.filter((record) => record.group === "done")),
+    issue: sortAdminRecords(roleFilteredRecords.filter((record) => record.group === "issue")),
+  };
+}
