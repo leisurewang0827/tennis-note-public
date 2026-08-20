@@ -116,6 +116,15 @@ const SOURCES = [
   "app/tennis-note-coach-app/domain/makeup.js",
   "app/tennis-note-coach-app/domain/shared-data.js",
   "app/tennis-note-coach-app/domain/tasks.js",
+  "app/tennis-note-coach-app/views/home.js",
+  "app/tennis-note-coach-app/views/schedule.js",
+  "app/tennis-note-coach-app/views/members.js",
+  "app/tennis-note-coach-app/views/records.js",
+  "app/tennis-note-coach-app/views/curriculum.js",
+  "app/tennis-note-coach-app/views/settlement.js",
+  "app/tennis-note-coach-app/views/profile.js",
+  "app/tennis-note-coach-app/events/account.js",
+  "app/tennis-note-coach-app/events/delegated.js",
   "app/tennis-note-coach-app/app.js",
 ];
 

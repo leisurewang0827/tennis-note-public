@@ -15,11 +15,12 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 //    다른 리스너가 실행되지 않아, 등록 순서가 결과를 바꾼다.
 //    (stopPropagation 은 상위로 올라가는 것만 막으므로 무관하다.)
 //
-// 관리자와 회원앱이 같은 구조라 같은 검사를 돌린다. 새 앱을 나누면
+// 세 앱이 같은 구조라 같은 검사를 돌린다. 새 앱을 나누면
 // 여기에 한 줄 추가하세요. 빠뜨리면 그 앱만 검사 밖에 남는다.
 const APPS = [
   { label: "관리자", events: "app/admin/events", app: "app/admin/app.js" },
   { label: "회원앱", events: "app/tennis-note-member-app/events", app: "app/tennis-note-member-app/app.js" },
+  { label: "코치앱", events: "app/tennis-note-coach-app/events", app: "app/tennis-note-coach-app/app.js" },
 ];
 
 /** 줄 주석을 걷어낸 소스. 주석에 적힌 단어를 코드로 오인하지 않기 위해서다. */
@@ -93,6 +94,24 @@ for (const { label, events, app } of APPS) {
       [],
       "bindEvents 에 직접 등록 코드를 다시 넣지 마세요. 화면 파일에 넣으세요:\n  " + notACall.join("\n  "),
     );
-    assert.ok(lines.length >= 5, "화면별 등록 함수 호출이 사라졌다");
+
+    // 화면 파일이 만든 등록 함수와 bindEvents 가 부르는 목록이 정확히 같아야 한다.
+    // 예전에는 "5개 이상" 이었는데, 그건 앱마다 파일 수가 달라 의미가 없었고
+    // 파일을 하나 추가하고 호출을 빠뜨려도 통과했다.
+    const called = new Set(lines.map((l) => l.replace("();", "")));
+    const defined = new Set();
+    for (const file of eventFiles(events)) {
+      for (const m of file.source.matchAll(/^function (bind[A-Za-z]+Events)\(\)/gm)) defined.add(m[1]);
+    }
+    assert.deepEqual(
+      [...defined].filter((name) => !called.has(name)),
+      [],
+      "화면 파일에 등록 함수를 만들고 bindEvents 에서 부르지 않았습니다. 그 화면은 아무 반응도 하지 않습니다.",
+    );
+    assert.deepEqual(
+      [...called].filter((name) => !defined.has(name)),
+      [],
+      "bindEvents 가 어느 화면 파일에도 없는 함수를 부릅니다.",
+    );
   });
 }
