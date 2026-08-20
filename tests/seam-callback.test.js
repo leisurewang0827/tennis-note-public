@@ -103,6 +103,8 @@ const SOURCES = [
   "app/tennis-note-member-app/actions/payment.js",
   "app/tennis-note-member-app/actions/session.js",
   "app/tennis-note-member-app/app.js",
+  "app/tennis-note-coach-app/settings.js",
+  "app/tennis-note-coach-app/catalog.js",
   "app/tennis-note-coach-app/domain/values.js",
   "app/tennis-note-coach-app/domain/schedule.js",
   "app/tennis-note-coach-app/domain/policy.js",

@@ -98,47 +98,6 @@ let coachSyncStatusTimer = 0;
 let appToastTimer = 0;
 
 const brandSplashStartedAt = performance.now();
-const brandSplashMinimumDuration = 150;
-
-const legacyCurriculumSteps = [
-  {
-    id: "FH-01",
-    title: "포핸드 연결 안정화",
-    level: "초급",
-    category: "포핸드",
-    focus: "라켓면 고정, 전진 스텝, 짧은 공 처리",
-    guide: "다음 수업은 짧은 공 접근 후 크로스 방향 컨트롤을 진행합니다.",
-    checklist: "라켓면이 흔들리는지, 전진 스텝 후 몸이 열리는지 확인",
-    mission: "짧은 공 10구 중 6구 이상 안정적으로 넘기기",
-    notionSource: "Notion · 입문/초급 포핸드 DB",
-    notionUrl: "https://app.notion.com/p/305b107df4808096a7f9f2a1776487ed",
-  },
-  {
-    id: "BH-R1",
-    title: "백핸드 리턴 준비",
-    level: "입문",
-    category: "백핸드",
-    focus: "스플릿 스텝, 어깨 회전, 임팩트 전 준비",
-    guide: "다음 수업은 백핸드 리턴 타이밍과 낮은 공 처리를 진행합니다.",
-    checklist: "스플릿 스텝 후 어깨가 먼저 돌아가는지 확인",
-    mission: "느린 리턴 공을 6구 이상 같은 방향으로 연결",
-    notionSource: "Notion · 리턴/백핸드 DB",
-    notionUrl: "https://app.notion.com/p/317b107df48080b6a6f4fc1c42348dd8",
-  },
-  {
-    id: "SV-01",
-    title: "서브 기본 루틴",
-    level: "입문",
-    category: "서브",
-    focus: "토스 위치, 리듬, 임팩트 후 밸런스",
-    guide: "다음 수업은 토스 안정화와 세컨드 서브 루틴을 진행합니다.",
-    checklist: "토스 위치, 임팩트 후 밸런스, 마무리 발 위치 확인",
-    mission: "토스 10회 중 7회 이상 같은 위치로 올리기",
-    notionSource: "Notion · 서브 루틴 DB",
-    notionUrl: "https://app.notion.com/p/38ab107df480817188a2e3f84eeb12cf",
-  },
-];
-
 const curriculumCatalog = window.TennisNoteCurriculumCatalog || {
   sources: {},
   tracks: [],
@@ -148,13 +107,6 @@ const curriculumCatalog = window.TennisNoteCurriculumCatalog || {
 };
 const curriculumSteps = curriculumCatalog.steps?.length ? curriculumCatalog.steps : legacyCurriculumSteps;
 
-const storageKey = "tennis-note-coach-live-v1";
-const sharedStorageKey = "tennis-note-shared-live-v1";
-const appModePreferenceKey = "tennis-note-app-mode";
-const coachPushDeviceStorageKey = "tennis-note-push-device-id";
-const coachPushPreferenceStorageKey = "tennis-note-push-enabled-v1";
-const coachPushPrimerDeferredStorageKey = "tennis-note-coach-push-primer-deferred-at-v1";
-const legacyDemoStorageKeys = ["tennis-note-member-demo-v1", "tennis-note-coach-demo-v1", "tennis-note-shared-demo-v1"];
 let coachPushListenersReady = false;
 let coachPushProfileId = "";
 let coachPushPrimerTimer = 0;
@@ -165,30 +117,9 @@ let coachPushUiState = {
   detail: "수업 일정과 처리할 기록을 알려드립니다.",
 };
 
-const adminStorageKey = "tennis-note-admin-demo-v1";
-const liveSchedulePolicyKey = "app_schedule_policy";
-const serverJournalSchema = "tennisnote-mobile-journal-v1";
-const journalMediaBucket = "tennisnote-journal-media";
-const coachScheduleLaneWidth = 64;
-const defaultCoachNotice = {
-  id: "notice-coach-default",
-  title: "코치 공지",
-  body: "관리자 대시보드에서 등록한 공지가 이곳에 표시됩니다.",
-  audience: "coach",
-  status: "disabled",
-  priority: "normal",
-  showOncePerDay: true,
-};
 const notionCurriculumGuideUrl = curriculumCatalog.sources?.memberGuide || "https://app.notion.com/p/94544cb6f3d546e991db21dbab5fb163";
 const notionCurriculumDetailUrl = curriculumCatalog.sources?.detailedGuide || "https://app.notion.com/p/312b107df48080e282cbe84b95cff64b";
-const memberPageSize = 10;
-const ntrpLevels = ["측정 전", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0", "4.5", "5.0", "5.5", "6.0", "6.5", "7.0"];
-const scheduleDays = ["월", "화", "수", "목", "금", "토", "일"];
-const scheduleBlockMinutes = 10;
 const scheduleWeeks = buildScheduleWeeks();
-const coachScheduleMinWeekOffset = -104;
-const coachScheduleMaxWeekOffset = 156;
-
 let coachScheduleV2WorkspaceCache = null;
 let coachScheduleV2RequestSequence = 0;
 
@@ -445,8 +376,6 @@ function navigateCoachView(viewId) {
   setView(viewId, { pushHistory: true });
 }
 
-const completedFeedbackVisibilityMs = 24 * 60 * 60 * 1000;
-
 function mergeCoachScheduleWindows(windows) {
   return windows
     .map((window) => ({ ...window, startMinutes: minutesFromTime(window.start), endMinutes: minutesFromTime(window.end) }))
@@ -695,9 +624,6 @@ let coachLiveScheduleRefreshTimer = 0;
 let coachLiveScheduleRefreshInFlight = false;
 let coachLiveScheduleLastRefreshAt = 0;
 let coachScheduleRevisionWatcher = null;
-const COACH_LIVE_REFRESH_INTERVAL_MS = 60_000;
-const COACH_LIVE_REFRESH_STALE_MS = 30_000;
-
 function installCoachLiveScheduleRefresh() {
   if (coachLiveScheduleRefreshTimer) return;
   const refresh = () => refreshCoachLiveSchedule().catch(() => false);
