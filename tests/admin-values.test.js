@@ -13,8 +13,11 @@ test("옮긴 함수가 전부 존재한다", () => {
   // 개수가 아니라 이름을 적어둔다. 함수를 추가로 옮기면 여기에도 적어야 하고,
   // 실수로 사라지면(옮기다 빠뜨리거나 중복 선언에 가려지면) 여기서 잡힌다.
   const expected = [
+    // escapeHtml 은 app/shared/tennisnote-escape-html.js 로 옮겼다.
+    // 세 앱이 같은 사본을 갖고 있었고, 그것이 유일한 XSS 방어선이라
+    // 한곳에서만 고치도록 모았다.
     "adminLocalDateKey", "cloneOperationProfileValue", "compactDashboardPageIndexes",
-    "escapeHtml", "getTicketDisplayProduct", "getTicketDurationMinutes", "getTicketWeeklyCount",
+    "getTicketDisplayProduct", "getTicketDurationMinutes", "getTicketWeeklyCount",
     "isDeductedLesson", "isExpectedPersonalGroupTicketSet", "isHistoricalImportedPayment",
     "isReleasedRegularMakeupSlot", "journalBodySummary", "lessonRawStatusValue",
     "lessonScheduleCoachId", "lessonUnitLabel", "memberServerUserIds",

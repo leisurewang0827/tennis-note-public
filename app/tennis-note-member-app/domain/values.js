@@ -10,16 +10,6 @@ function numericValue(value, fallback = 0) {
   return Number.isFinite(number) ? number : fallback;
 }
 
-function escapeHtml(value = "") {
-  return String(value).replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;",
-  })[char]);
-}
-
 function formatDateTimeLabel(value = "") {
   if (!value) return "방금 전";
   const date = new Date(value);

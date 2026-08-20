@@ -211,16 +211,6 @@ function isExpectedPersonalGroupTicketSet(ticketIds, linkContext) {
   });
 }
 
-function escapeHtml(value = "") {
-  return String(value).replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;",
-  })[char]);
-}
-
 function memberTicketDuplicateFingerprint(ticket) {
   if (!ticket?.serverTicketId || !ticket?.serverUserId) return "";
   const participants = ticketParticipantUserIds(ticket).map(String).sort().join(",");

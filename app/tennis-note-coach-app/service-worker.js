@@ -44,6 +44,7 @@ const APP_SHELL = [
   "./app.js?v=1.0.371",
   "./assets/app-icon.svg",
   "../release.json",
+  "../shared/tennisnote-escape-html.js?v=1.0.371",
   "../shared/tennisnote-data-client.js?v=1.0.371",
   "../shared/tennisnote-schedule-revision.js?v=1.0.371",
   "../shared/tennisnote-schedule-lanes.js?v=1.0.371",

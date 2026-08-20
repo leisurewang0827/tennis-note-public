@@ -27,6 +27,7 @@ const PAGES = [
     pathname: "/app/admin/",
     scripts: [
       "app/shared/tennisnote-release.js",
+      "app/shared/tennisnote-escape-html.js",
       "app/admin/catalog.js",
       "app/admin/settings.js",
       "app/admin/domain/values.js",
@@ -91,6 +92,7 @@ const PAGES = [
     pathname: "/app/tennis-note-member-app/",
     scripts: [
       "app/shared/tennisnote-release.js",
+      "app/shared/tennisnote-escape-html.js",
       "app/shared/tennisnote-app-common.js",
       "app/tennis-note-member-app/settings.js",
       "app/tennis-note-member-app/catalog.js",
@@ -146,6 +148,7 @@ const PAGES = [
     pathname: "/app/tennis-note-coach-app/",
     scripts: [
       "app/shared/tennisnote-release.js",
+      "app/shared/tennisnote-escape-html.js",
       "app/shared/tennisnote-app-common.js",
       "app/tennis-note-coach-app/settings.js",
       "app/tennis-note-coach-app/catalog.js",

@@ -25,15 +25,6 @@ function canonicalCoachName(name = "") {
   return shortCoachName(matched?.name || raw);
 }
 
-function escapeHtml(value = "") {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 function personPhotoUrl(person = {}) {
   return String(person.profilePhotoUrl || person.photoUrl || person.photo || "").trim();
 }
