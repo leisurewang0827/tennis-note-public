@@ -84,9 +84,11 @@ def verify_artifact_links(artifact_root: Path) -> None:
 def verify_version_consistency(repo_root: Path, expected: dict) -> None:
     """버전 문자열이 release.json 과 어긋나면 막는다.
 
-    앱 버전은 지금 9개 파일 73곳에 손으로 박혀 있다. 한 곳만 빠뜨려도
-    그 파일만 예전 캐시에 남아 사용자가 옛 화면을 보게 된다.
+    앱 버전은 9개 파일 100곳 넘게 박혀 있다. 한 곳만 빠뜨려도 그 파일만
+    예전 캐시에 남아 사용자가 옛 화면을 보게 된다.
     (실제로 관리자만 옛 커리큘럼 카탈로그를 보던 사고가 있었다.)
+
+    손으로 맞추지 말고 scripts/bump_release.py 를 쓴다.
     """
     version = expected["version"]
     problems: list[str] = []
@@ -105,6 +107,24 @@ def verify_version_consistency(repo_root: Path, expected: dict) -> None:
                     f"{path.relative_to(repo_root)}: {reference}?v={found} (release.json 은 {version})"
                 )
 
+    # ?v= 가 아닌 형태로 버전이 박힌 자리. 위의 semver_query 가 비켜가므로
+    # 따로 본다. 실제로 bump 스크립트를 만들면서 여기가 빈 것을 발견했다.
+    literal_patterns = (
+        # new URLSearchParams({ v: "1.2.3" })
+        re.compile(r'\bv:\s*"(\d+\.\d+\.\d+)"'),
+        # window.TENNIS_NOTE_RELEASE?.version || "1.2.3"
+        re.compile(r'\?\.version\s*\|\|\s*"(\d+\.\d+\.\d+)"'),
+    )
+    for app_name in ("tennis-note-member-app", "tennis-note-coach-app"):
+        path = repo_root / "app" / app_name / "app.js"
+        text = path.read_text(encoding="utf-8")
+        for pattern in literal_patterns:
+            for found in set(pattern.findall(text)):
+                if found != version:
+                    problems.append(
+                        f"{path.relative_to(repo_root)}: \"{found}\" (release.json 은 {version})"
+                    )
+
     release_js = (repo_root / "app" / "shared" / "tennisnote-release.js").read_text(encoding="utf-8")
     for field in ("version", "releaseId", "appSurfaceVersion"):
         match = re.search(rf'{field}:\s*"([^"]+)"', release_js)
@@ -114,7 +134,12 @@ def verify_version_consistency(repo_root: Path, expected: dict) -> None:
                 f"app/shared/tennisnote-release.js: {field}={match.group(1)} (release.json 은 {expected[field]})"
             )
 
-    assert not problems, "버전 문자열이 release.json 과 어긋납니다:\n  " + "\n  ".join(problems)
+    assert not problems, (
+        "버전 문자열이 release.json 과 어긋납니다:\n  "
+        + "\n  ".join(problems)
+        + "\n\n  손으로 고치지 말고 아래를 돌리세요:"
+        + f"\n    ./scripts/bump_release.py {version}"
+    )
 
 
 def payment_config(path: Path) -> dict:
