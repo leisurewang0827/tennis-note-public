@@ -1,0 +1,185 @@
+// 운영 정책·홀딩·쿠폰 기간을 판정하는 함수들.
+//
+// 전역 상태도 DOM 도 서버도 참조하지 않는다. 필요한 값은 인자로 받는다.
+// app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
+
+function memberCouponPolicyTemplate({ id, lessonMinutes, groupSize, sessions }) {
+  const lessonType = groupSize === 2 ? "2대1" : "1대1";
+  return {
+    id,
+    group: "쿠폰제",
+    title: `${lessonType} ${lessonMinutes}분 쿠폰 ${sessions}회`,
+    detail: "고정시간 없이 담당 코치의 가능한 시간에 예약",
+    listAmount: 0,
+    amount: 0,
+    settlementBase: 0,
+    tickets: sessions,
+    cardAmount: 0,
+    cashAmount: 0,
+    validityDays: sessions * 14,
+    graceDays: 14,
+    lessonMinutes,
+    groupSize,
+    productKind: "pass",
+    coachDiscountAllowed: true,
+    coach: "선택 코치 전용",
+    flow: groupSize === 2 ? "2대1 팀 연결 → 결제방식 선택 → 공동 시간표 예약" : "코치 선택 → 결제 → 가능한 시간 예약",
+    mode: "pass",
+    discount: sessions === 10 ? "10회권은 5회권보다 회당가 할인" : "기준 회당가",
+    badge: `${sessions}회`,
+    rule: `${sessions}회는 ${sessions * 2}주 사용 · 개인 사정 유예 2주`,
+    status: "hidden",
+  };
+}
+
+function resolveLiveSchedulePolicyForBranch(value = {}, branchId = "") {
+  const normalizedBranchId = String(branchId || "");
+  const profiles = Array.isArray(value.operationProfiles) ? value.operationProfiles : [];
+  const activeProfile = profiles.find((item) => String(item?.id || "") === String(value.activeOperationProfileId || ""));
+  const branchActiveProfileId = String(value.activeOperationProfileIdsByBranch?.[normalizedBranchId] || "");
+  const branchActiveProfile = profiles.find((item) => (
+    String(item?.id || "") === branchActiveProfileId
+    && String(item?.branchId || item?.branch_id || "") === normalizedBranchId
+  ));
+  const profile = normalizedBranchId
+    ? (branchActiveProfile
+      || (String(activeProfile?.branchId || activeProfile?.branch_id || "") === normalizedBranchId
+      ? activeProfile
+      : profiles.find((item) => String(item?.branchId || item?.branch_id || "") === normalizedBranchId)))
+    : activeProfile;
+  if (!profile) {
+    return {
+      scheduleSettings: value.scheduleSettings || {},
+      coaches: Array.isArray(value.coaches) ? value.coaches : [],
+      branchId: normalizedBranchId,
+    };
+  }
+  const profileBranchId = String(profile.branchId || profile.branch_id || normalizedBranchId);
+  const sourceCoaches = Array.isArray(profile.coaches) && profile.coaches.length
+    ? profile.coaches
+    : Array.isArray(value.coaches) ? value.coaches : [];
+  const hasExplicitCoachBranches = sourceCoaches.some((coach) => Boolean(coach?.branchId));
+  return {
+    scheduleSettings: {
+      ...(value.scheduleSettings || {}),
+      ...(profile.scheduleSettings || {}),
+    },
+    coaches: sourceCoaches.filter((coach) => (
+      !profileBranchId
+      || (!hasExplicitCoachBranches && !coach?.branchId)
+      || String(coach.branchId) === profileBranchId
+    )),
+    branchId: profileBranchId,
+  };
+}
+
+function filterSchedulePolicyByLiveCoachRoles(value = {}, coachRows = []) {
+  const activeRoles = (coachRows || []).filter((role) => (
+    role.status === "approved"
+    && (role.employment_status || "active") === "active"
+    && !role.archived_at
+    && !role.deleted_at
+  ));
+  const activeIds = new Set(activeRoles.map((role) => String(role.id)));
+  const activeNames = new Set(activeRoles.map((role) => String(role.display_name || "").trim()).filter(Boolean));
+  const filterCoaches = (coaches = []) => (Array.isArray(coaches) ? coaches : [])
+    .filter((coach) => (
+      coach.serverRoleId
+        ? activeIds.has(String(coach.serverRoleId))
+        : activeNames.has(String(coach.name || "").trim())
+    ))
+    .map((coach) => ({
+      ...coach,
+      status: "active",
+      employmentStatus: "active",
+      archivedAt: "",
+      deletedAt: "",
+    }));
+  return {
+    ...(value || {}),
+    coaches: filterCoaches(value?.coaches),
+    operationProfiles: Array.isArray(value?.operationProfiles)
+      ? value.operationProfiles.map((profile) => ({
+        ...profile,
+        coaches: filterCoaches(profile?.coaches),
+      }))
+      : [],
+  };
+}
+
+function writeLiveSchedulePolicySnapshot(value = {}, branchId = "") {
+  if (!value || typeof value !== "object") return false;
+  const existing = readAdminSnapshot() || {};
+  const resolved = resolveLiveSchedulePolicyForBranch(value, branchId);
+  const scheduleSettings = resolved.scheduleSettings;
+  const coaches = resolved.coaches;
+  if (!scheduleSettings.openStart && !scheduleSettings.openEnd && !coaches.length) return false;
+  safeLocalStorageSet(adminStorageKey, JSON.stringify({
+    ...existing,
+    scheduleSettings: {
+      ...(existing.scheduleSettings || {}),
+      ...scheduleSettings,
+      breakRules: Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : existing.scheduleSettings?.breakRules || [],
+      coachWorkPolicyVersion: scheduleSettings.coachWorkPolicyVersion || 2,
+      memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
+    },
+    coaches,
+    operationPolicyBranchId: resolved.branchId || "",
+  }));
+  return true;
+}
+
+function memberCouponPeriodInfo(source = {}) {
+  if (!source?.couponBooking) return null;
+  const expectedDays = Math.max(0, Number(source.productValidityDays) || 0)
+    + Math.max(0, Number(source.productGraceDays) || 0);
+  const actualDays = memberInclusiveDateDays(source.startsOn, source.expiresOn);
+  return {
+    startsOn: source.startsOn || "",
+    expiresOn: source.expiresOn || "",
+    expectedDays,
+    actualDays,
+    isShorterThanProduct: Boolean(expectedDays && actualDays && actualDays < expectedDays),
+  };
+}
+
+function memberCouponPeriodSummary(source = {}) {
+  const period = memberCouponPeriodInfo(source);
+  if (!period?.startsOn || !period.expiresOn) return "";
+  const range = `${memberReadableDate(period.startsOn)}~${memberReadableDate(period.expiresOn)}`;
+  if (!period.isShorterThanProduct) return `예약 가능 기간 ${range}`;
+  return `예약 가능 기간 ${range} · 상품 기본 ${period.expectedDays}일보다 짧게 등록됨`;
+}
+
+function policyLabel(policy) {
+  return policy === "coach" ? "24h 이내" : "24h 이전";
+}
+
+function policyShortLabel(policy) {
+  return policy === "coach" ? "24h내" : "24h전";
+}
+
+function policyDetail(policy) {
+  return policy === "coach"
+    ? "담당 코치 또는 관리자가 확인합니다. 승인 전까지 원래 수업은 그대로 유지되며, 거절돼도 차감되지 않습니다."
+    : "수업까지 24시간 이상 남아 선택한 시간으로 바로 변경됩니다.";
+}
+
+function holdingStatusLabel(status) {
+  if (status === "approved") return "승인";
+  if (status === "rejected") return "반려";
+  if (status === "cancelled") return "취소";
+  return "검토중";
+}
+
+function holdingRequestDays(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  return Math.floor((end - start) / 86400000) + 1;
+}
+
+function safeHoldingFileName(fileName = "evidence") {
+  const extension = `${fileName}`.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+  return `evidence.${extension}`;
+}

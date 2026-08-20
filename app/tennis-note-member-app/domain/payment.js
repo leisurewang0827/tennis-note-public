@@ -1,0 +1,151 @@
+// 결제 수단·상태·오류 문구를 정하는 함수들.
+//
+// 전역 상태도 DOM 도 서버도 참조하지 않는다. 필요한 값은 인자로 받는다.
+// app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
+
+function paymentRequestDisplay(request = {}) {
+  const text = `${request.method || ""} ${request.status || ""}`;
+  if (text.includes("설정")) {
+    return {
+      period: "결제창 연결 전 요청",
+      status: "설정 필요",
+      note: "관리자 결제 설정 후 실제 결제창을 다시 연결합니다.",
+      tone: "alert",
+    };
+  }
+  if (text.includes("실패") || text.includes("오류")) {
+    return {
+      period: "결제 재확인 필요",
+      status: "확인 필요",
+      note: request.status || "결제가 끝나지 않아 관리자 확인이 필요합니다.",
+      tone: "alert",
+    };
+  }
+  if (text.includes("서버 검증") || text.includes("PortOne 결제창")) {
+    return {
+      period: "결제 완료 접수 · 이용권 충전 대기",
+      status: "검증 대기",
+      note: "관리자 화면에 접수됐고, 서버 검증 후 이용권이 충전됩니다.",
+      tone: "wait",
+    };
+  }
+  if (text.includes("상담")) {
+    return {
+      period: "상담 후 이용권 확정",
+      status: "상담 대기",
+      note: request.status || "관리자가 시간과 코치를 확인합니다.",
+      tone: "wait",
+    };
+  }
+  return {
+    period: "관리자 확인 후 이용권 시작",
+    status: "확인 대기",
+    note: request.status || "결제 확인 후 이용권이 충전됩니다.",
+    tone: "wait",
+  };
+}
+
+function preloadPortOneSdk() {
+  if (!isPaymentGatewayReady(normalizeSelectedPaymentMethod())) return;
+  loadPortOneSdk().catch(() => {});
+}
+
+function paymentMethodIdList(value) {
+  const values = Array.isArray(value) ? value : String(value || "").split(",");
+  return [...new Set(values
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter((item) => paymentMethodDefinitions.some((method) => method.id === item)))];
+}
+
+function discountCouponStatus(coupon = {}) {
+  const status = String(coupon.status || "issued").toLowerCase();
+  if (status === "issued") return { label: "사용 가능", tone: "done" };
+  if (status === "reserved") return { label: "결제 진행 중", tone: "wait" };
+  if (status === "used") return { label: "사용 완료", tone: "muted" };
+  if (status === "expired") return { label: "기간 만료", tone: "muted" };
+  return { label: "사용 불가", tone: "muted" };
+}
+
+function discountCouponValueLabel(coupon = {}) {
+  return coupon.discountType === "amount"
+    ? `${Number(coupon.discountValue || 0).toLocaleString("ko-KR")}원 할인`
+    : `${Number(coupon.discountValue || 0)}% 할인`;
+}
+
+function allowedPaymentMethodIds(config = paymentGatewayConfig()) {
+  if (config.mode !== "multi") {
+    return config.bankTransfer?.enabled ? [...defaultAllowedPaymentMethods, "bank_transfer"] : [...defaultAllowedPaymentMethods];
+  }
+  const configured = paymentMethodIdList(config.allowedMethods);
+  return configured.length ? configured : [...defaultAllowedPaymentMethods];
+}
+
+function isPaymentMethodAllowed(methodId, config = paymentGatewayConfig()) {
+  return allowedPaymentMethodIds(config).includes(String(methodId || "").toLowerCase());
+}
+
+function paymentMethodIdForRequest(methodId = state.selectedPaymentMethod, config = paymentGatewayConfig()) {
+  if (config.mode !== "multi") {
+    return methodId === "bank_transfer" && config.bankTransfer?.enabled ? "bank_transfer" : "tosspay";
+  }
+  const allowedMethods = allowedPaymentMethodIds(config);
+  return allowedMethods.includes(methodId) ? methodId : allowedMethods[0] || "tosspay";
+}
+
+function isPaymentGatewayReady(methodId = state.selectedPaymentMethod, config = paymentGatewayConfig()) {
+  if (!isPaymentMethodAllowed(methodId, config)) return false;
+  if (methodId === "bank_transfer") return config.bankTransfer?.enabled === true;
+  const channelReady = Boolean(config.storeId && config.channels?.[methodId]);
+  if (methodId !== "naverpay") return channelReady;
+  return channelReady && Boolean(config.naverPayCategoryType && config.naverPayCategoryId);
+}
+
+function createProviderPaymentId(productId = "") {
+  const timestamp = Date.now().toString(36);
+  const productToken = String(productId || "product").replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "product";
+  const randomToken = String(globalThis.crypto?.randomUUID?.() || `${Date.now()}${Math.random().toString(36).slice(2)}`)
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 12);
+  return `tn_${timestamp}_${productToken}_${randomToken}`.slice(0, 50);
+}
+
+function paymentServerErrorMessage(error) {
+  const code = error?.payload?.code || error?.message || "server_error";
+  const labels = {
+    group_next_payer_required: "이번 결제 담당 회원의 로그인이 필요합니다.",
+    group_partner_required: "2대1 동반 회원 정보를 확인해주세요.",
+    group_enrollment_required: "2대1 수강 가입서를 먼저 작성해주세요.",
+    group_partner_duplicate_phone_review: "동반 회원 연락처를 관리자가 확인해야 합니다.",
+    group_payment_not_allowed: "이 계정은 공동 회원권 결제 권한이 없습니다.",
+    group_account_not_available: "선택한 2대1 공동 회원권을 확인할 수 없습니다. 회원권을 다시 선택해 주세요.",
+    membership_enrollment_required: "수강 가입서를 먼저 확인해 주세요.",
+    first_lesson_offer_not_available: "신규 첫 수업 혜택 대상이 아닙니다. 현재 정상가를 다시 확인해 주세요.",
+    first_lesson_offer_reserved: "이전에 준비한 첫 수업 결제를 다시 열어 주세요.",
+    product_price_mismatch: "상품 가격이 변경되었습니다. 회원권 화면을 새로고침한 뒤 다시 확인해 주세요.",
+    payment_not_found: "결제 기록을 찾지 못했습니다. 화면을 새로고침한 뒤 다시 확인해 주세요.",
+    payment_not_owned: "본인의 결제 대기건만 취소할 수 있습니다.",
+    payment_already_processed: "이미 결제 처리된 건은 회원이 직접 취소할 수 없습니다. 관리자에게 문의해 주세요.",
+    provider_status_check_failed: "결제 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    pending_payment_cancel_failed: "결제 대기건을 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    bank_transfer_account_not_ready: "센터의 입금 계좌가 아직 준비되지 않았습니다. 관리자에게 문의해 주세요.",
+    bank_transfer_account_lookup_failed: "입금 계좌를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    discount_coupon_not_available: "이 쿠폰은 이미 사용되었거나 사용할 수 없습니다.",
+    discount_coupon_expired: "쿠폰 사용기간이 만료되었습니다.",
+    discount_coupon_branch_mismatch: "선택한 지점에서 사용할 수 없는 쿠폰입니다.",
+    discount_coupon_product_mismatch: "선택한 상품에는 사용할 수 없는 쿠폰입니다.",
+    discount_coupon_payment_method_mismatch: "선택한 결제 방법에는 이 쿠폰을 사용할 수 없습니다.",
+    discount_coupon_not_stackable_with_first_lesson: "신규 첫 수업 혜택과 할인 쿠폰은 함께 사용할 수 없습니다.",
+    discount_coupon_already_reserved: "다른 결제에서 사용 중인 쿠폰입니다. 쿠폰함을 새로고침해 주세요.",
+    discount_coupon_zero_amount_not_supported: "전액 할인 쿠폰은 관리자 확인 결제가 필요합니다.",
+  };
+  return labels[code] || code;
+}
+
+async function reconcileRejectedServerPayment(paymentId) {
+  if (!paymentId) return;
+  try {
+    await verifyServerPayment(paymentId);
+  } catch {
+    // Terminal provider states are persisted before the server returns a verification error.
+  }
+}
