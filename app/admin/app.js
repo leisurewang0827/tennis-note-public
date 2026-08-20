@@ -712,8 +712,8 @@ const lessonRecordEditorState = {
 };
 
 const coachSettlementRules = [
-  { coach: "노 코치", method: "ratio", ratio: 0.5, hourly: 0, cardBase: "cash", substitute: "actualCoach" },
-  { coach: "강 코치", method: "ratio", ratio: 0.6, hourly: 0, cardBase: "cash", substitute: "actualCoach" },
+  { coach: "노 코치", method: "ratio", ratio: 0.5, hourly: 0, cardBase: "cash", calculationMode: "session_progress", substitute: "actualCoach" },
+  { coach: "강 코치", method: "ratio", ratio: 0.6, hourly: 0, cardBase: "cash", calculationMode: "session_progress", substitute: "actualCoach" },
   { coach: "황 코치", method: "hourly", ratio: 0, hourly: 35000, cardBase: "cash", substitute: "actualCoach" },
   { coach: "박창준 코치", method: "hourly", ratio: 0, hourly: 40000, cardBase: "cash", substitute: "actualCoach" },
 ];
@@ -867,6 +867,70 @@ const adminViewRenderCache = new Map();
 
 const memberPaymentRecordStates = new Set(["unentered", "complete", "transfer_zero", "incomplete"]);
 
+function memberTicketLinkedPayment(ticket = null) {
+  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
+  if (!ticketId) return null;
+  return (adminLiveDataState.payments || [])
+    .filter((payment) => String(payment.ticket_id || payment.ticketId || "") === ticketId)
+    .sort((left, right) => {
+      const statusScore = (payment) => payment.status === "verified" ? 2 : payment.status === "pending" ? 1 : 0;
+      const scoreDelta = statusScore(right) - statusScore(left);
+      if (scoreDelta) return scoreDelta;
+      return String(right.verified_at || right.paid_at || right.created_at || "")
+        .localeCompare(String(left.verified_at || left.paid_at || left.created_at || ""));
+    })[0] || null;
+}
+
+function memberTicketPaymentProjection(member = null, ticket = null) {
+  const payment = memberTicketLinkedPayment(ticket);
+  if (payment) {
+    return {
+      payment,
+      protected: payment.status === "verified",
+      payment_record_state: payment.status === "verified" ? "complete" : "incomplete",
+      payment_recorded_on: String(payment.paid_at || payment.verified_at || payment.created_at || "").slice(0, 10),
+      payment_method: payment.method || payment.provider || "",
+      payment_amount: Number(payment.final_amount ?? payment.amount ?? 0),
+    };
+  }
+  const record = memberDatabaseRecord(member, ticket);
+  return record ? { ...record, payment: null, protected: false } : null;
+}
+
+function memberPaymentInitialSnapshot(projection = null) {
+  return encodeURIComponent(JSON.stringify({
+    state: memberPaymentRecordState(projection),
+    date: String(projection?.payment_recorded_on || ""),
+    method: normalizeMemberPaymentMethod(projection?.payment_method || ""),
+    amount: Number(projection?.payment_amount || 0),
+  }));
+}
+
+function memberInlinePaymentChanged(form) {
+  const encoded = String(form?.dataset?.initialPayment || "");
+  if (!encoded) return true;
+  let initial = null;
+  try {
+    initial = JSON.parse(decodeURIComponent(encoded));
+  } catch {
+    return true;
+  }
+  const current = {
+    state: String(form.elements.paymentRecordState?.value || memberPaymentRecordState({
+      payment_recorded_on: form.elements.paymentDate?.value || "",
+      payment_method: form.elements.paymentMethod?.value || "",
+      payment_amount: memberManagementNullableNumber(form.elements.paymentAmount) || 0,
+    })),
+    date: String(form.elements.paymentDate?.value || ""),
+    method: normalizeMemberPaymentMethod(form.elements.paymentMethod?.value || ""),
+    amount: memberManagementNullableNumber(form.elements.paymentAmount) || 0,
+  };
+  return initial.state !== current.state
+    || initial.date !== current.date
+    || initial.method !== current.method
+    || Number(initial.amount || 0) !== Number(current.amount || 0);
+}
+
 const accountDeletionExecutionInFlight = new Set();
 let accountDeletionRetryTimer = 0;
 
@@ -896,6 +960,20 @@ let adminLiveScheduleLastRefreshAt = 0;
 let adminOperationalRevisionWatcher = null;
 let scheduleSessionInitialized = false;
 const adminLiveRefreshViews = new Set(["dashboard", "members", "schedule", "billing", "reports", "notes"]);
+function bindEvents() {
+  // 화면별 등록 함수로 나눴다. 각 파일은 app/admin/events/ 에 있다.
+  bindDelegatedEvents();
+  bindCommonEvents();
+  bindMembersEvents();
+  bindScheduleEvents();
+  bindBillingEvents();
+  bindNotesEvents();
+  bindReportsEvents();
+  bindDataEvents();
+  bindSettingsEvents();
+
+}
+
 let adminConnectivityHideTimer = 0;
 
 let scheduleV2IntegrityPreviewState = {
@@ -976,20 +1054,6 @@ initializeOperationsSessionPersistence();
 restoreCachedOperationsIdentity();
 renderOperationsLoginGate();
 organizeAdminTools();
-function bindEvents() {
-  // 화면별 등록 함수로 나눴다. 각 파일은 app/admin/events/ 에 있다.
-  bindDelegatedEvents();
-  bindCommonEvents();
-  bindMembersEvents();
-  bindScheduleEvents();
-  bindBillingEvents();
-  bindNotesEvents();
-  bindReportsEvents();
-  bindDataEvents();
-  bindSettingsEvents();
-
-}
-
 bindEvents();
 installAdminConnectivityStatus();
 installAdminLiveScheduleRefresh();

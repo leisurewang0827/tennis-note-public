@@ -299,6 +299,24 @@ let memberNativeAppInfo = null;
 
 let nativeBackListenerReady = false;
 
+function memberAvailableSlotIdentity(lesson = {}) {
+  const coachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
+  const lessonDate = String(lesson.lessonDate || memberScheduleDateForDay(lesson.day) || "");
+  const time = String(lesson.time || lesson.startTime || "").slice(0, 5);
+  const ticketId = String(lesson.ticketId || lesson.member_ticket_id || "");
+  const duration = Number(lesson.durationMinutes) || 0;
+  return `${coachRoleId}|${lessonDate}|${time}|${ticketId}|${duration}`;
+}
+
+function memberUniqueAvailableSlots(slots = []) {
+  const unique = new Map();
+  slots.forEach((slot) => {
+    const key = memberAvailableSlotIdentity(slot);
+    if (!unique.has(key)) unique.set(key, slot);
+  });
+  return [...unique.values()];
+}
+
 let portOneSdkPromise = null;
 let preparedPaymentContext = null;
 let bankTransferAccountNumberForCopy = "";
@@ -419,7 +437,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.373",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.374",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

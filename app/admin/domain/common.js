@@ -1997,6 +1997,9 @@ function settlementAmountFor(item) {
   }
   const totalLessons = Math.max(completedLessons, Number(item.totalLessons) || completedLessons);
   const baseAmount = Number(rule.cardBase === "paid" ? item.paidAmount : item.settlementBase) || 0;
+  if (rule.calculationMode === "monthly_payment") {
+    return Math.round(baseAmount * (Number(rule.ratio) || 0));
+  }
   const perLessonBase = baseAmount / totalLessons;
   return Math.round(perLessonBase * completedLessons * (Number(rule.ratio) || 0));
 }

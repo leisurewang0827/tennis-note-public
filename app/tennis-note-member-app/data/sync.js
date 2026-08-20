@@ -141,7 +141,9 @@ async function syncMemberChangeCandidates(source = null) {
     }
     const reportedGap = result.anchorGapMinutes ?? result.anchorRule?.gapMinutes;
     state.serverChangeAnchorGapMinutes = reportedGap === null ? null : Math.max(0, Number(reportedGap) || 40);
-    const mappedCandidates = result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source));
+    const mappedCandidates = memberUniqueAvailableSlots(
+      result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source)),
+    );
     state.serverChangeCandidates = mappedCandidates;
     state.serverChangeCandidateExclusions = result.exclusionSummary && typeof result.exclusionSummary === "object"
       ? result.exclusionSummary

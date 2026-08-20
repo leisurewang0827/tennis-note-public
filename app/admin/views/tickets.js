@@ -72,7 +72,7 @@ function memberTicketRowMarkup(member, ticket, position = 1, count = 1, possible
 
 function memberTicketPaymentMarkup(member, ticket) {
   if (!ticket) return '<span class="member-table-muted">미입력</span>';
-  const record = memberDatabaseRecord(member, ticket);
+  const record = memberTicketPaymentProjection(member, ticket);
   const paymentState = memberPaymentRecordState(record);
   if (!record || paymentState === "unentered") {
     return '<span class="member-table-muted">미입력</span>';

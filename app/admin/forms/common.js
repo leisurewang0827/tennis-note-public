@@ -857,6 +857,7 @@ function readCoachStaffPanel() {
     draft.settlement.ratio = numericValue($("#coachStaffSettlementRatio")?.value, draft.settlement.ratio);
     draft.settlement.hourly = numericValue($("#coachStaffSettlementHourly")?.value, draft.settlement.hourly);
     draft.settlement.basis = $("#coachStaffSettlementBasis")?.value || "cash_ex_vat";
+    draft.settlement.calculationMode = $("#coachStaffSettlementCalculationMode")?.value || "session_progress";
     draft.settlement.substitute = $("#coachStaffSettlementSubstitute")?.value || "actualCoach";
     draft.settlement.effectiveFrom = $("#coachStaffSettlementEffectiveFrom")?.value || new Date().toISOString().slice(0, 10);
   }

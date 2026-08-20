@@ -15,7 +15,8 @@ function coachSettlementRuleLabel(settlement = {}) {
   if (settlement.ruleType === "hourly") return `시급 ${formatCoachWon(settlement.hourlyRate)}`;
   const rate = Math.round((Number(settlement.ruleRate) || 0) * 100);
   const basis = settlement.settlementBasis === "actual_paid_inc_vat" ? "실결제" : "정산 기준가";
-  return `${basis}의 ${rate}%`;
+  const calculation = settlement.calculationMode === "monthly_payment" ? "월 결제액" : "진행 횟수";
+  return `${calculation} · ${basis}의 ${rate}%`;
 }
 
 function normalizedCoachSettlementMemberName(value = "") {

@@ -608,7 +608,7 @@ function accountDeletionActionButton(request) {
 function memberPaymentOverviewMarkup(member) {
   const managedTickets = memberManagementTickets(member).filter((ticket) => ticket.status !== "voided");
   const paymentRows = managedTickets.map((ticket) => {
-    const record = memberDatabaseRecord(member, ticket);
+    const record = memberTicketPaymentProjection(member, ticket);
     const paymentState = memberPaymentRecordState(record);
     if (!record || paymentState === "unentered") return null;
     if (paymentState === "transfer_zero") {
@@ -651,23 +651,37 @@ function memberManagementDatabaseFields({
   const lessonType = (isAssign ? "" : record?.lesson_type || ticket?.lessonTypeCode) || (Number(product?.group_size || 1) === 2 ? "one_on_two" : "one_on_one");
   const lessonDays = isAssign ? [] : Array.isArray(record?.lesson_days) ? record.lesson_days : ticket?.lessonDays || [];
   const hasTicket = Boolean(ticket?.serverTicketId || isCreate || isAssign);
-  const totalSessions = isAssign ? Number(product?.total_sessions || 1) : record?.total_sessions ?? ticket?.total ?? (isCreate ? Number(product?.total_sessions || 1) : null);
-  const usedSessions = isAssign ? 0 : record?.used_sessions ?? ticket?.used ?? (isCreate ? 0 : null);
-  const remainingSessions = isAssign ? Number(product?.total_sessions || 1) : record?.remaining_sessions ?? ticket?.remaining ?? (isCreate ? Number(product?.total_sessions || 1) : null);
+  const totalSessions = isAssign ? Number(product?.total_sessions || 1) : ticket?.total ?? record?.total_sessions ?? (isCreate ? Number(product?.total_sessions || 1) : null);
+  const usedSessions = isAssign ? 0 : ticket?.used ?? record?.used_sessions ?? (isCreate ? 0 : null);
+  const remainingSessions = isAssign ? Number(product?.total_sessions || 1) : ticket?.remaining ?? record?.remaining_sessions ?? (isCreate ? Number(product?.total_sessions || 1) : null);
   const startsOn = isAssign ? adminLocalDateKey(new Date()) : record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased || (isCreate ? adminLocalDateKey(new Date()) : "");
   const validityDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
   const expiresOn = ticket?.expires || (isCreate || isAssign ? addMemberManagementDays(startsOn, validityDays - 1) : "");
-  const existingPaymentDate = String(existingPayment?.paid_at || existingPayment?.verified_at || existingPayment?.created_at || "").slice(0, 10);
-  const paymentDate = isAssign ? existingPaymentDate : record?.payment_recorded_on || "";
-  const paymentMethod = isAssign ? existingPayment?.method || "" : record?.payment_method || "";
+  const paymentProjection = isAssign
+    ? existingPayment
+      ? {
+          payment: existingPayment,
+          protected: existingPayment.status === "verified",
+          payment_record_state: existingPayment.status === "verified" ? "complete" : "incomplete",
+          payment_recorded_on: String(existingPayment.paid_at || existingPayment.verified_at || existingPayment.created_at || "").slice(0, 10),
+          payment_method: existingPayment.method || existingPayment.provider || "",
+          payment_amount: Number(existingPayment.final_amount ?? existingPayment.amount ?? 0),
+        }
+      : null
+    : memberTicketPaymentProjection(member, ticket) || record;
+  const existingPaymentDate = String(paymentProjection?.payment_recorded_on || "");
+  const paymentDate = existingPaymentDate;
+  const paymentMethod = paymentProjection?.payment_method || "";
   const paymentAmount = isAssign
     ? Number(existingPayment?.final_amount ?? existingPayment?.amount ?? product?.cash_price ?? product?.card_price ?? 0)
-    : record?.payment_amount ?? (isCreate ? 0 : "");
+    : paymentProjection?.payment_amount ?? (isCreate ? 0 : "");
   const paymentRecordState = isAssign && existingPayment
     ? "complete"
-    : record
-      ? memberPaymentRecordState(record)
+    : paymentProjection
+      ? memberPaymentRecordState(paymentProjection)
       : "unentered";
+  const paymentProtected = Boolean(paymentProjection?.protected && !isAssign);
+  const paymentControlState = paymentProtected ? "disabled aria-disabled=\"true\"" : "";
   const note = record ? record.admin_note || "" : member?.note || "";
   const partnerUserId = ticket && member ? memberTicketPartnerUserId(ticket, member) : "";
   const recordStatus = record?.record_status || (ticket?.status === "expired" ? "historical" : hasTicket ? "active" : "pending");
@@ -704,14 +718,15 @@ function memberManagementDatabaseFields({
         ${ticketStatus === "pending_payment" ? '<option value="pending_payment" selected>결제 대기 유지</option>' : ""}
         <option value="expired" ${ticketStatus === "expired" ? "selected" : ""}>만료</option>
       </select></label>` : ""}
-      <label class="form-field">${memberManagementFieldLabel("결제 구분")}<select name="paymentRecordState">${memberPaymentRecordStateOptions({
+      ${paymentProtected ? '<div class="member-management-warning span-2"><strong>확인 완료 결제</strong><span>회원권 정보만 수정할 수 있습니다. 결제 변경·환불은 결제관리에서 진행하세요.</span></div>' : ""}
+      <label class="form-field">${memberManagementFieldLabel("결제 구분")}<select name="paymentRecordState" ${paymentControlState}>${memberPaymentRecordStateOptions({
         payment_record_state: paymentRecordState,
         payment_recorded_on: paymentDate,
         payment_method: paymentMethod,
         payment_amount: paymentAmount,
       })}</select></label>
-      <label class="form-field">${memberManagementFieldLabel("결제일자")}<input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" /></label>
-      <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod">
+      <label class="form-field">${memberManagementFieldLabel("결제일자")}<input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" ${paymentControlState} /></label>
+      <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod" ${paymentControlState}>
         <option value="" ${paymentMethod ? "" : "selected"}>미입력</option>
         <option value="card" ${paymentMethod === "card" ? "selected" : ""}>카드</option>
         <option value="bank" ${["bank", "bank_transfer", "transfer"].includes(paymentMethod) ? "selected" : ""}>계좌이체</option>
@@ -719,7 +734,7 @@ function memberManagementDatabaseFields({
         <option value="manual" ${paymentMethod === "manual" ? "selected" : ""}>관리자 입력</option>
         ${paymentMethod && !["card", "bank", "bank_transfer", "transfer", "cash", "manual"].includes(paymentMethod) ? `<option value="${escapeHtml(paymentMethod)}" selected>${escapeHtml(paymentMethodLabel(paymentMethod))}</option>` : ""}
       </select></label>
-      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
+      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" ${paymentControlState} /></label>
       <label class="form-field span-2">${memberManagementFieldLabel("비고")}<textarea name="note" rows="3" maxlength="500">${escapeHtml(note)}</textarea></label>
       <div class="form-field span-2 member-partner-editor ${lessonType === "one_on_two" ? "" : "is-disabled"}" data-manual-member-partner-field>
         ${memberManagementFieldLabel("1:2 파트너", lessonType === "one_on_two")}
@@ -789,19 +804,22 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
   const ticketPosition = Number(options.ticketPosition || 0);
   const ticketCount = Number(options.ticketCount || 0);
   const record = memberDatabaseRecord(member, ticket);
+  const paymentProjection = memberTicketPaymentProjection(member, ticket) || record;
+  const paymentProtected = Boolean(paymentProjection?.protected);
+  const paymentControlState = paymentProtected ? 'disabled aria-disabled="true"' : "";
   const coachRoles = memberManagementCoachRoles(ticket || {});
   const partnerUserId = ticket ? memberTicketPartnerUserId(ticket, member) : "";
   const partnerOptions = manualMemberPartnerOptions()
     .filter((user) => user.id !== member.serverUserId)
     .map((user) => `<option value="${escapeHtml(user.id)}" ${user.id === partnerUserId ? "selected" : ""}>${escapeHtml(user.name || "회원")}</option>`)
     .join("");
-  const total = Number(record?.total_sessions ?? ticket?.total ?? 0);
-  const used = Number(record?.used_sessions ?? ticket?.used ?? 0);
+  const total = Number(ticket?.total ?? record?.total_sessions ?? 0);
+  const used = Number(ticket?.used ?? record?.used_sessions ?? 0);
   const remaining = Math.max(0, total - used);
   const startsOn = memberManagementDate(record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased)
     || adminLocalDateKey(new Date());
   const expiresOn = memberManagementDate(ticket?.expires);
-  const paymentRecordState = memberPaymentRecordState(record);
+  const paymentRecordState = memberPaymentRecordState(paymentProjection);
   const currentProduct = (adminLiveDataState.products || []).find((item) => item.id === ticket?.productId);
   const activeProductOptions = membershipProductsForActiveOperationProfile()
     .map((draft) => ({ draft, server: serverMembershipProductForDraft(draft) }))
@@ -844,7 +862,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
          <option value="prefer_not" ${member.gender === "prefer_not" ? "selected" : ""}>응답 안 함</option>
        </select></label>`;
   return `
-        <form class="member-inline-editor member-inline-editor--compact ${embedded && ticket ? "member-inline-editor--ticket-only" : ""}" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}">
+        <form class="member-inline-editor member-inline-editor--compact ${embedded && ticket ? "member-inline-editor--ticket-only" : ""}" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(paymentProjection))}">
           <div class="member-inline-editor-heading" ${embedded ? "hidden" : ""}>
             <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
@@ -899,20 +917,22 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
               ${ticket.status === "pending_payment" ? '<option value="pending_payment" selected>결제 대기 유지</option>' : ""}
               <option value="expired" ${ticket.status === "expired" ? "selected" : ""}>만료</option>
             </select></label>` : ""}
-            <label class="member-inline-payment-state"><span>결제 구분</span><select name="paymentRecordState">${memberPaymentRecordStateOptions({
+            ${paymentProtected ? '<div class="member-management-warning member-inline-payment-protected"><strong>확인 결제 보존</strong><span>결제 변경·환불은 결제관리에서 진행하세요.</span></div>' : ""}
+            <label class="member-inline-payment-state"><span>결제 구분</span><select name="paymentRecordState" ${paymentControlState}>${memberPaymentRecordStateOptions({
               payment_record_state: paymentRecordState,
-              payment_recorded_on: record?.payment_recorded_on,
-              payment_method: record?.payment_method,
-              payment_amount: record?.payment_amount,
+              payment_recorded_on: paymentProjection?.payment_recorded_on,
+              payment_method: paymentProjection?.payment_method,
+              payment_amount: paymentProjection?.payment_amount,
             })}</select></label>
-            <label class="member-inline-payment-date"><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(record?.payment_recorded_on || "")}" /></label>
-            <label class="member-inline-payment-method"><span>결제수단</span><select name="paymentMethod">
+            <label class="member-inline-payment-date"><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(paymentProjection?.payment_recorded_on || "")}" ${paymentControlState} /></label>
+            <label class="member-inline-payment-method"><span>결제수단</span><select name="paymentMethod" ${paymentControlState}>
               <option value="">미입력</option>
-              <option value="card" ${record?.payment_method === "card" ? "selected" : ""}>카드</option>
-              <option value="bank_transfer" ${["bank", "bank_transfer", "transfer"].includes(record?.payment_method) ? "selected" : ""}>계좌이체</option>
-              <option value="cash" ${record?.payment_method === "cash" ? "selected" : ""}>현금</option>
+              <option value="card" ${paymentProjection?.payment_method === "card" ? "selected" : ""}>카드</option>
+              <option value="bank_transfer" ${["bank", "bank_transfer", "transfer"].includes(paymentProjection?.payment_method) ? "selected" : ""}>계좌이체</option>
+              <option value="cash" ${paymentProjection?.payment_method === "cash" ? "selected" : ""}>현금</option>
+              ${paymentProjection?.payment_method && !["card", "bank", "bank_transfer", "transfer", "cash"].includes(paymentProjection.payment_method) ? `<option value="${escapeHtml(paymentProjection.payment_method)}" selected>${escapeHtml(paymentMethodLabel(paymentProjection.payment_method))}</option>` : ""}
             </select></label>
-            <label class="member-inline-payment-amount"><span>결제금액</span><input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(record?.payment_amount ?? ""))}" /></label>
+            <label class="member-inline-payment-amount"><span>결제금액</span><input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentProjection?.payment_amount ?? ""))}" ${paymentControlState} /></label>
             <label class="member-inline-note"><span>비고</span><input name="note" value="${escapeHtml(record?.admin_note || member.note || "")}" /></label>
             <div class="member-inline-compact-actions">
               <label class="member-inline-schedule-scope"><span>시간표 반영</span><select name="applyToFutureSchedule">
@@ -939,15 +959,18 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
 function memberInlineEditorMarkup(member, ticket) {
   if (operationsRole() !== "admin") return "";
   const record = memberDatabaseRecord(member, ticket);
+  const paymentProjection = memberTicketPaymentProjection(member, ticket) || record;
+  const paymentProtected = Boolean(paymentProjection?.protected);
+  const paymentControlState = paymentProtected ? 'disabled aria-disabled="true"' : "";
   const coachRoles = memberManagementCoachRoles(ticket || {});
   const startsOn = memberManagementDate(record?.lesson_start_on || ticket?.actualLessonStart || ticket?.purchased);
   const expiresOn = memberManagementDate(ticket?.expires);
-  const total = Number(record?.total_sessions ?? ticket?.total ?? 0);
-  const used = Number(record?.used_sessions ?? ticket?.used ?? 0);
+  const total = Number(ticket?.total ?? record?.total_sessions ?? 0);
+  const used = Number(ticket?.used ?? record?.used_sessions ?? 0);
   const remaining = Math.max(0, total - used);
-  const paymentMethod = record?.payment_method || "";
-  const paymentDate = record?.payment_recorded_on || "";
-  const paymentAmount = record?.payment_amount ?? "";
+  const paymentMethod = paymentProjection?.payment_method || "";
+  const paymentDate = paymentProjection?.payment_recorded_on || "";
+  const paymentAmount = paymentProjection?.payment_amount ?? "";
   const scheduleScope = record?.lesson_schedule_scope || ticket?.scheduleScope || "";
   const lessonType = record?.lesson_type || ticket?.lessonTypeCode || "one_on_one";
   const weeklyFrequency = Number(record?.lesson_frequency_per_week ?? ticket?.weeklyCount ?? 1);
@@ -955,7 +978,7 @@ function memberInlineEditorMarkup(member, ticket) {
   return `
     <tr class="member-inline-editor-row" data-inline-editor-member="${member.id}">
       <td colspan="9">
-        <form class="member-inline-editor" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}">
+        <form class="member-inline-editor" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(paymentProjection))}">
           <div class="member-inline-editor-heading">
             <div><strong>${escapeHtml(member.name)} 행 편집</strong><span>${escapeHtml(ticket ? getTicketDisplayProduct(ticket) || ticket.product || "회원권" : "기본정보만 저장")}</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
@@ -987,21 +1010,21 @@ function memberInlineEditorMarkup(member, ticket) {
             </select></label>
             <label><span>주 횟수</span><input name="weeklyFrequency" type="number" min="1" max="7" value="${weeklyFrequency}" ${ticket ? "" : "disabled"} /></label>
           </div>
-          ${ticket ? `<div class="member-inline-editor-grid member-inline-editor-grid--ticket">
+          ${ticket ? `${paymentProtected ? '<div class="member-management-warning"><strong>확인 결제 보존</strong><span>회원권 정보만 수정할 수 있습니다. 결제 변경·환불은 결제관리에서 진행하세요.</span></div>' : ""}<div class="member-inline-editor-grid member-inline-editor-grid--ticket">
             <label><span>시작일</span><input name="startsOn" type="date" value="${escapeHtml(startsOn)}" required /></label>
             <label><span>만료일</span><input name="expiresOn" type="date" value="${escapeHtml(expiresOn)}" required /></label>
             <label><span>총</span><input name="totalSessions" type="number" min="0" step="1" value="${total}" required /></label>
             <label><span>소진</span><input name="usedSessions" type="number" min="0" step="1" value="${used}" required /></label>
             <label><span>잔여</span><input name="remainingSessions" type="number" min="0" step="1" value="${remaining}" readonly aria-readonly="true" /></label>
-            <label><span>결제수단</span><select name="paymentMethod" ${required}>
+            <label><span>결제수단</span><select name="paymentMethod" ${required} ${paymentControlState}>
               <option value="">미입력</option>
               <option value="card" ${paymentMethod === "card" ? "selected" : ""}>카드</option>
               <option value="bank_transfer" ${["bank", "bank_transfer", "transfer"].includes(paymentMethod) ? "selected" : ""}>계좌이체</option>
               <option value="cash" ${paymentMethod === "cash" ? "selected" : ""}>현금</option>
               <option value="manual" ${paymentMethod === "manual" ? "selected" : ""}>관리자 입력</option>
             </select></label>
-            <label><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" ${required} /></label>
-            <label><span>금액</span><input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" /></label>
+            <label><span>결제일</span><input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" ${required} ${paymentControlState} /></label>
+            <label><span>금액</span><input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" ${paymentControlState} /></label>
             <label class="member-inline-note"><span>비고</span><input name="note" value="${escapeHtml(record?.admin_note || member.note || "")}" /></label>
           </div>` : ""}
           <div class="member-inline-editor-actions">

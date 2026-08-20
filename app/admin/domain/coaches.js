@@ -194,6 +194,7 @@ function mergeServerCoachRole(role, index, allCoaches = coaches) {
     settlementType: role.settlement_type || "ratio",
     settlementRate: Number(role.settlement_rate) || 0,
     hourlyRate: Number(role.hourly_rate) || 0,
+    settlementCalculationMode: role.settlement_calculation_mode || "session_progress",
     availabilityRevision: Number(role.availability_revision) || 0,
     scheduleLaneOrder: Number.isFinite(Number(role.schedule_lane_order)) ? Number(role.schedule_lane_order) : 1000 + index,
   });
@@ -355,6 +356,13 @@ function renderCoachStaffSettlementTab(draft) {
         </select>
       </label>
       <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>코치 비율(%)</span><input id="coachStaffSettlementRatio" type="number" min="0" max="100" step="1" value="${settlement.ratio}" /></label>
+      <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>비율 계산 방법</span>
+        <select id="coachStaffSettlementCalculationMode">
+          <option value="monthly_payment" ${settlement.calculationMode === "monthly_payment" ? "selected" : ""}>결제한 달 전체 금액 × 비율</option>
+          <option value="session_progress" ${settlement.calculationMode !== "monthly_payment" ? "selected" : ""}>진행한 수업 횟수만큼 × 비율</option>
+        </select>
+        <small>월 결제액은 해당 월에 확인 완료된 결제금액 전체를 기준으로 계산합니다.</small>
+      </label>
       <label class="form-field ${ratio ? "is-hidden" : ""}" data-settlement-mode-field="hourly"><span>시급</span><input id="coachStaffSettlementHourly" type="number" min="0" step="1000" value="${settlement.hourly}" /></label>
       <label class="form-field"><span>정산 기준</span>
         <select id="coachStaffSettlementBasis">
@@ -409,6 +417,7 @@ function coachStaffPayload(draft) {
       ratio: draft.settlement.method === "ratio" ? draft.settlement.ratio / 100 : null,
       hourly: draft.settlement.method === "hourly" ? draft.settlement.hourly : null,
       basis: draft.settlement.basis,
+      calculationMode: draft.settlement.calculationMode,
       substitute: draft.settlement.substitute,
       effectiveFrom: draft.settlement.effectiveFrom,
     },
@@ -449,6 +458,7 @@ function defaultCoachSettlementRule(coach, existingRule = null) {
     ratio: hourlyCoach ? 0 : newCoachSettlementSettings.regularRatio / 100,
     hourly: hourlyCoach ? (substituteCoach ? newCoachSettlementSettings.substituteHourly : newCoachSettlementSettings.weekendHourly) : 0,
     cardBase: newCoachSettlementSettings.cardBase,
+    calculationMode: existingRule?.calculationMode || "session_progress",
     substitute: newCoachSettlementSettings.substitute,
     effectiveFrom: existingRule?.effectiveFrom || new Date().toISOString().slice(0, 10),
     serverRoleId: coach?.serverRoleId || existingRule?.serverRoleId || "",
@@ -742,7 +752,8 @@ function coachSettlementRule(coach) {
 function coachSettlementSummary(coach) {
   const rule = coachSettlementRule(coach);
   if (rule.method === "hourly") return `시급 ${money.format(Number(rule.hourly) || 0)}원`;
-  return `비율 ${Math.round((Number(rule.ratio) || 0) * 100)}%`;
+  const mode = rule.calculationMode === "monthly_payment" ? "월 결제액" : "진행 횟수";
+  return `${mode}의 ${Math.round((Number(rule.ratio) || 0) * 100)}%`;
 }
 
 function coachStaffDraftFrom(coach) {
@@ -771,6 +782,7 @@ function coachStaffDraftFrom(coach) {
       ratio: Math.round((Number(settlement.ratio) || 0) * 100),
       hourly: Number(settlement.hourly) || 0,
       basis: settlement.cardBase === "paid" ? "actual_paid_inc_vat" : "cash_ex_vat",
+      calculationMode: settlement.calculationMode || "session_progress",
       substitute: settlement.substitute || "actualCoach",
       effectiveFrom: settlement.effectiveFrom || new Date().toISOString().slice(0, 10),
     },
@@ -799,6 +811,7 @@ function coachStaffServerMatches(saved, draft) {
   if (settlement.method !== draft.settlement.method) return false;
   if ((settlement.effectiveFrom || "") !== (draft.settlement.effectiveFrom || "")) return false;
   if (draft.settlement.method === "ratio" && Math.round((Number(settlement.ratio) || 0) * 100) !== Number(draft.settlement.ratio)) return false;
+  if (draft.settlement.method === "ratio" && (settlement.calculationMode || "session_progress") !== draft.settlement.calculationMode) return false;
   if (draft.settlement.method === "hourly" && Number(settlement.hourly) !== Number(draft.settlement.hourly)) return false;
   return true;
 }

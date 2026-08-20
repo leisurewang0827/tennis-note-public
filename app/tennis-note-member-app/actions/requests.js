@@ -411,6 +411,7 @@ async function requestMakeup() {
         daily_session_limit: "하루 이용 가능 횟수를 초과합니다.",
         weekly_session_limit: "이번 주 이용 가능 횟수를 초과합니다.",
         weekly_booking_day_limit: "이번 주 예약 가능 일수를 초과합니다.",
+        lesson_change_request_already_pending: "이미 승인 대기 중인 변경 요청이 있습니다. 요청 내역에서 기존 요청을 수정해 주세요.",
         target_date_outside_ticket: "회원권 사용기간 밖의 날짜입니다.",
         coupon_booking_forbidden: "이 쿠폰을 예약할 권한이 없습니다.",
         coupon_ticket_required: "사용 가능한 쿠폰 회원권을 확인해 주세요.",

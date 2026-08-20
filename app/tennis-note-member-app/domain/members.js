@@ -151,7 +151,7 @@ function mapServerMemberChangeCandidate(candidate = {}, source = null) {
     ? candidate.anchorGapMinutes
     : state.serverChangeAnchorGapMinutes;
   return {
-    id: `server-change-slot-${source?.serverLessonId || "lesson"}-${lessonDate}-${time}`,
+    id: `server-change-slot-${source?.serverLessonId || "lesson"}-${coachRoleId || "coach"}-${lessonDate}-${time}`,
     day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
     time,
     coach: source?.coach || "담당 코치",

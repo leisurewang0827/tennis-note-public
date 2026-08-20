@@ -134,6 +134,7 @@ function applyServerCoachSnapshot({
       ratio: term?.settlement_type === "ratio" ? Number(term.coach_rate) : (coach.settlementType === "ratio" ? roleRate : 0),
       hourly: term?.settlement_type === "hourly" ? Number(term.hourly_rate) : (coach.settlementType === "hourly" ? Number(coach.hourlyRate) : 0),
       cardBase: term?.settlement_basis === "actual_paid_inc_vat" ? "paid" : "cash",
+      calculationMode: term?.settlement_calculation_mode || coach.settlementCalculationMode || baseRule.calculationMode,
       substitute: term?.substitute_policy || baseRule.substitute,
       effectiveFrom: term?.effective_from || baseRule.effectiveFrom,
       serverRoleId: coach.serverRoleId,

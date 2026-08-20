@@ -351,7 +351,7 @@ function renderMemberManagementModal() {
       <p class="member-management-rule">판매 중인 상품을 선택하면 기간과 회차가 자동 입력됩니다. 저장 후 시간표에서 정규 수업을 등록합니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "correct") {
     actionFields = operationsRole() === "admin" ? `
-      ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, includeTicketStatus: true })}
+      ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: memberTicketLinkedPayment(ticket), includeTicketStatus: true })}
       <p class="member-management-rule">레슨 방식·종류·요일·횟수·결제 메모를 한 번에 수정합니다. 기존 결제 증빙은 변경하지 않습니다.</p>` : `
       <div class="member-management-form-grid">
         <label class="form-field"><span>총횟수</span><input name="totalSessions" type="number" min="1" step="1" value="${defaultTotal}" required /></label>
@@ -811,22 +811,23 @@ function renderMembers(options = {}) {
       || expiredTickets.find((ticket) => ticketBelongsToMember(ticket, selected))
       || null;
     const selectedRecord = memberDatabaseRecord(selected, selectedTicket);
+    const selectedPayment = memberTicketPaymentProjection(selected, selectedTicket);
     const enrollment = selected.enrollment || {};
     const recentPayment = latestMemberPayment(selected);
     const ticketName = selectedTicket
       ? getTicketDisplayProduct(selectedTicket) || selectedTicket.product
       : selectedStatus === "expired" ? "현재 회원권 없음" : selected.lessonType || "회원권 없음";
-    const hasRecordedPayment = Boolean(selectedRecord && (
-      selectedRecord.payment_recorded_on
-      || selectedRecord.payment_method
-      || Number(selectedRecord.payment_amount) > 0
+    const hasRecordedPayment = Boolean(selectedPayment && (
+      selectedPayment.payment_recorded_on
+      || selectedPayment.payment_method
+      || Number(selectedPayment.payment_amount) > 0
     ));
-    const paymentDate = selectedRecord
-      ? selectedRecord.payment_recorded_on ? memberDetailDateLabel(selectedRecord.payment_recorded_on) : "미입력"
+    const paymentDate = selectedPayment
+      ? selectedPayment.payment_recorded_on ? memberDetailDateLabel(selectedPayment.payment_recorded_on) : "미입력"
       : recentPayment ? memberDetailDateLabel(recentPayment.paidAt || recentPayment.verifiedAt || recentPayment.requestedAt) : "없음";
-    const paymentSummary = selectedRecord
+    const paymentSummary = selectedPayment
       ? hasRecordedPayment
-        ? `${selectedRecord.payment_method ? paymentMethodLabel(selectedRecord.payment_method) : "미입력"} · ${money.format(Number(selectedRecord.payment_amount) || 0)}원`
+        ? `${selectedPayment.payment_method ? paymentMethodLabel(selectedPayment.payment_method) : "미입력"} · ${money.format(Number(selectedPayment.payment_amount) || 0)}원`
         : "미입력"
       : recentPayment
         ? `${paymentMethodLabel(recentPayment.method)} · ${money.format(recentPayment.finalAmount || recentPayment.amount || 0)}원`
@@ -834,9 +835,9 @@ function renderMembers(options = {}) {
     const lessonStart = selectedTicket
       ? selectedRecord?.lesson_start_on || selectedTicket.actualLessonStart || selectedTicket.purchased || ""
       : "";
-    const totalSessions = selectedTicket ? selectedRecord?.total_sessions ?? selectedTicket.total : null;
-    const usedSessions = selectedTicket ? selectedRecord?.used_sessions ?? selectedTicket.used : null;
-    const remainingSessions = selectedTicket ? selectedRecord?.remaining_sessions ?? selectedTicket.remaining : null;
+    const totalSessions = selectedTicket ? selectedTicket.total ?? selectedRecord?.total_sessions : null;
+    const usedSessions = selectedTicket ? selectedTicket.used ?? selectedRecord?.used_sessions : null;
+    const remainingSessions = selectedTicket ? selectedTicket.remaining ?? selectedRecord?.remaining_sessions : null;
     detailPanel.innerHTML = `
       <div class="detail-header member-db-header">
         <div class="profile-line large">

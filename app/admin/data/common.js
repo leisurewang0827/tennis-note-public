@@ -415,7 +415,7 @@ async function refreshCoachStaffData() {
   const client = window.TennisNoteDataClient;
   if (!client?.selectRows || !operationsAccessReady()) return false;
   const serverCoachRoles = await client.selectRows("tn_coach_roles", {
-    select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_effective_from,availability_revision,schedule_lane_order",
+    select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_calculation_mode,settlement_effective_from,availability_revision,schedule_lane_order",
     limit: 100,
   }).catch(() => client.selectRows("tn_coach_roles", {
     select: "id,user_id,branch_id,display_name,bio,color,status,settlement_type,settlement_rate,hourly_rate",
@@ -435,7 +435,7 @@ async function refreshCoachStaffData() {
       limit: 200,
     }).catch(() => []) : [],
     roleIds.length ? client.selectRows("tn_coach_settlement_terms", {
-      select: "id,coach_role_id,settlement_type,coach_rate,hourly_rate,settlement_basis,substitute_policy,effective_from,effective_to,status",
+      select: "id,coach_role_id,settlement_type,coach_rate,hourly_rate,settlement_basis,settlement_calculation_mode,substitute_policy,effective_from,effective_to,status",
       filters: { coach_role_id: { in: roleIds } },
       order: "effective_from.desc",
       limit: 500,

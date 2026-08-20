@@ -1229,6 +1229,7 @@ async function submitMemberInlineEditor(form, options = {}) {
   syncMemberQuickEditorProduct(form);
   syncMemberInlineProductCancellation(form);
   const selectedProduct = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+  const paymentChanged = memberInlinePaymentChanged(form);
   if (ticket || selectedProduct) syncMemberManagementBalance(form);
   const total = selectedProduct ? memberManagementNullableNumber(form.elements.totalSessions) : null;
   const used = selectedProduct ? memberManagementNullableNumber(form.elements.usedSessions) : null;
@@ -1257,12 +1258,12 @@ async function submitMemberInlineEditor(form, options = {}) {
     payment_method: paymentMethod,
     payment_amount: paymentAmount,
   });
-  if (paymentRecordState === "complete" && (paymentAmount <= 0 || !paymentDate || !paymentMethod)) {
+  if (paymentChanged && paymentRecordState === "complete" && (paymentAmount <= 0 || !paymentDate || !paymentMethod)) {
     message.textContent = "결제 완료는 결제일자, 결제수단, 1원 이상의 결제금액을 모두 입력해 주세요.";
     message.classList.add("is-error");
     return false;
   }
-  if (paymentRecordState === "unentered" && (paymentAmount > 0 || paymentDate || paymentMethod)) {
+  if (paymentChanged && paymentRecordState === "unentered" && (paymentAmount > 0 || paymentDate || paymentMethod)) {
     message.textContent = "결제값을 입력했다면 결제 구분을 결제 완료로 바꿔 주세요.";
     message.classList.add("is-error");
     return false;
@@ -1312,7 +1313,16 @@ async function submitMemberInlineEditor(form, options = {}) {
   const reason = "관리자 회원표 수정";
   const payload = memberManagementDatabasePayload(form, member, ticket, reason);
   normalizeMemberManagementTicketPayload(payload);
-  normalizeMemberManagementPaymentPayload(payload);
+  payload.paymentChanged = paymentChanged;
+  if (paymentChanged) {
+    normalizeMemberManagementPaymentPayload(payload);
+  } else {
+    delete payload.paymentDate;
+    delete payload.paymentMethod;
+    delete payload.paymentAmount;
+    delete payload.paymentRecordState;
+    delete payload.existingPaymentId;
+  }
   if (ticket && !form.elements.productId?.value) {
     payload.productId = ticket.productId || null;
     payload.ticketStatus = "expired";
@@ -1439,7 +1449,7 @@ async function submitMemberInlineEditor(form, options = {}) {
     if (!refreshedMember || refreshedMember.name !== payload.name) {
       throw new Error("member_inline_profile_write_not_confirmed");
     }
-    if ((ticket || payload.productId) && !memberManagementTicketMatchesPayload(refreshed, payload)) {
+    if ((ticket || payload.productId) && !memberManagementTicketMatchesPayload(refreshed, payload, { verifyPayment: payload.paymentChanged !== false })) {
       throw new Error("member_inline_write_not_confirmed");
     }
     if (scheduleReplacementRequested && refreshedMember) {

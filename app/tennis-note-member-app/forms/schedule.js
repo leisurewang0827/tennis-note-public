@@ -26,11 +26,11 @@ function memberScheduleOptions() {
           : generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson);
   const assignedCoachIds = memberAssignedCoachRoleIds();
   const initialCoachSelection = Boolean(selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId);
-  const visibleGenerated = generated.filter((lesson) => {
+  const visibleGenerated = memberUniqueAvailableSlots(generated.filter((lesson) => {
     if (lesson.status !== "available") return true;
     const roleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
     return Boolean(roleId) && (initialCoachSelection || assignedCoachIds.has(roleId));
-  });
+  }));
   return scheduleLessons.concat(visibleGenerated);
 }
 
@@ -51,13 +51,13 @@ function memberAvailableSlotsForSelectedLesson() {
     : selectedLesson ? memberLessonCoach(selectedLesson, loadAdminSchedulePolicy()).id : "";
   const assignedCoachIds = memberAssignedCoachRoleIds();
   const initialCoachSelection = Boolean(selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId);
-  return options.filter((lesson) => {
+  return memberUniqueAvailableSlots(options.filter((lesson) => {
     if (lesson.status !== "available") return false;
     const lessonCoachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
     if (!lessonCoachRoleId || (!initialCoachSelection && !assignedCoachIds.has(lessonCoachRoleId))) return false;
     if (!selectedCoachId) return true;
     return memberLessonCoach(lesson, loadAdminSchedulePolicy()).id === selectedCoachId;
-  });
+  }));
 }
 
 function memberMobileScheduleSegments(day, policy, baseLessons, scheduleLessons = []) {
