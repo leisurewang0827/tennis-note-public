@@ -142,3 +142,160 @@ function paymentServerErrorMessage(error) {
   };
   return labels[code] || code;
 }
+
+// ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──
+
+function pushPaymentRequestToShared(request) {
+  const shared = loadSharedData();
+  const paymentId = request.paymentId || `local_${Date.now()}_${request.productId}`;
+  const nextRequest = {
+    ...request,
+    paymentId,
+    member: state.profile.name,
+    phone: state.profile.phone,
+    requestedAt: new Date().toISOString(),
+    source: "member-app",
+  };
+  shared.paymentRequests = [
+    nextRequest,
+    ...(shared.paymentRequests || []).filter((item) => item.paymentId !== paymentId),
+  ].slice(0, 30);
+  saveSharedData(shared);
+}
+
+async function refreshBankNotificationBridge() {
+  if (!bankNotificationAdminAllowed()) {
+    bankNotificationBridgeState = null;
+    renderBankNotificationBridge();
+    return false;
+  }
+  const plugin = nativeBankNotificationBridgePlugin();
+  if (!plugin?.getStatus) {
+    bankNotificationBridgeState = { configured: false, permissionGranted: false, lastError: "plugin_unavailable" };
+    renderBankNotificationBridge();
+    return false;
+  }
+  try {
+    bankNotificationBridgeState = await plugin.getStatus();
+  } catch (error) {
+    bankNotificationBridgeState = { configured: false, permissionGranted: false, lastError: error?.message || "status_failed" };
+  }
+  renderBankNotificationBridge();
+  return bankNotificationBridgeState?.configured === true;
+}
+
+function memberHasPendingPaymentOnly() {
+  const hasPendingTicket = (state.liveTickets || []).some((ticket) =>
+    String(ticket?.status || "").toLowerCase() === "pending_payment");
+  return state.dataMode === "live"
+    && hasPendingTicket
+    && !memberHasActiveLiveTicket()
+    && memberOpenMakeupEntitlements().length === 0;
+}
+
+async function copyBankTransferAccountNumber() {
+  if (!bankTransferAccountNumberForCopy) {
+    showToast("복사할 계좌번호를 찾지 못했습니다.");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(bankTransferAccountNumberForCopy);
+    showToast("계좌번호를 복사했습니다.");
+  } catch {
+    showToast("계좌번호를 길게 눌러 복사해 주세요.");
+  }
+}
+
+function normalizeSelectedPaymentMethod() {
+  const config = paymentGatewayConfig();
+  const enforcedMethodId = paymentMethodIdForRequest(state.selectedPaymentMethod, config);
+  if (isPaymentGatewayReady(enforcedMethodId, config)) {
+    state.selectedPaymentMethod = enforcedMethodId;
+    return state.selectedPaymentMethod;
+  }
+  const readyMethodId = allowedPaymentMethodIds(config).find((methodId) => isPaymentGatewayReady(methodId, config));
+  state.selectedPaymentMethod = readyMethodId || enforcedMethodId || "tosspay";
+  return state.selectedPaymentMethod;
+}
+
+function selectPaymentMethod(methodId) {
+  if (!paymentMethodDefinitions.some((method) => method.id === methodId)
+    || !isPaymentMethodAllowed(methodId)
+    || !isPaymentGatewayReady(methodId)) return;
+  const flow = purchaseFlowState();
+  if (state.selectedPaymentMethod !== methodId) {
+    flow.discountIssueId = "";
+    flow.discountSelectionMode = "auto";
+  }
+  state.selectedPaymentMethod = methodId;
+  saveSnapshot();
+  if (purchaseFlowState().open) renderMembershipPurchaseFlow();
+  else renderProducts();
+}
+
+function portOnePaymentRequest({ paymentId, productId, orderName, totalAmount, methodId = state.selectedPaymentMethod }) {
+  const config = paymentGatewayConfig();
+  const enforcedMethodId = paymentMethodIdForRequest(methodId, config);
+  const method = paymentMethodDefinition(enforcedMethodId);
+  const channelKey = config.channels?.[method.id] || "";
+  if (!isPaymentMethodAllowed(method.id, config) || !config.storeId || !channelKey) {
+    throw new Error("payment_channel_not_ready");
+  }
+  const request = {
+    storeId: config.storeId,
+    channelKey,
+    paymentId,
+    orderName,
+    totalAmount,
+    currency: "CURRENCY_KRW",
+    payMethod: method.payMethod,
+    locale: "KO_KR",
+    customer: {
+      fullName: state.profile.name,
+      phoneNumber: state.profile.phone,
+    },
+    redirectUrl: paymentRedirectUrl(),
+  };
+  if (method.id === "naverpay") {
+    request.windowType = { pc: "POPUP", mobile: "REDIRECTION" };
+    request.bypass = {
+      naverpay: {
+        productItems: [{
+          categoryType: config.naverPayCategoryType,
+          categoryId: config.naverPayCategoryId,
+          uid: String(productId || paymentId),
+          name: orderName,
+          count: 1,
+        }],
+      },
+    };
+  }
+  if (method.id === "kakaopay") request.windowType = { pc: "IFRAME", mobile: "REDIRECTION" };
+  if (nativeAppPlatform() !== "web") request.appScheme = "com.tennisclubhouse.tennisnote://";
+  return request;
+}
+
+function reconcileVerifiedPaymentRequests() {
+  const completedPaymentIds = new Set();
+  (state.liveTickets || [])
+    .filter((ticket) => String(ticket.status || "").toLowerCase() === "active")
+    .forEach((ticket) => {
+      [ticket.paymentId, ticket.providerPaymentId, ticket.sourcePaymentId].filter(Boolean).forEach((id) => completedPaymentIds.add(String(id)));
+    });
+  if (!completedPaymentIds.size) return false;
+
+  const isCompletedRequest = (request = {}) => [request.paymentId, request.serverPaymentId]
+    .filter(Boolean)
+    .some((id) => completedPaymentIds.has(String(id)));
+  const beforeCount = state.paymentRequests.length;
+  state.paymentRequests = state.paymentRequests.filter((request) => !isCompletedRequest(request));
+
+  const shared = loadSharedData();
+  const sharedRequests = Array.isArray(shared.paymentRequests) ? shared.paymentRequests : [];
+  const nextSharedRequests = sharedRequests.filter((request) => !isCompletedRequest(request));
+  if (nextSharedRequests.length !== sharedRequests.length) {
+    shared.paymentRequests = nextSharedRequests;
+    saveSharedData(shared);
+  }
+  return beforeCount !== state.paymentRequests.length;
+}

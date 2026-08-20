@@ -457,3 +457,316 @@ function memberWeekOffsetForDate(value) {
 function memberScheduleMonthValue(week = activeMemberWeek()) {
   return String(week.startDate || "").slice(0, 7);
 }
+
+// ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──
+
+function ensureScheduleBaseline() {
+  if (state.dataMode === "live") return;
+  const baseline = [
+    { id: "mon-1840", day: "월", time: "18:40", coach: "노 코치", member: "김서준", type: "정규", status: "scheduled" },
+    { id: "wed-2000", day: "수", time: "20:00", coach: "노 코치", member: "김서준", type: "정규", status: "scheduled" },
+    { id: "mon-1900", day: "월", time: "19:00", coach: "강 코치", member: "최유나&이하린", type: "정규", status: "occupied" },
+    { id: "mon-1900-no", day: "월", time: "19:00", coach: "노 코치", member: "윤서준", type: "정규", status: "occupied" },
+    { id: "tue-1920", day: "화", time: "19:20", coach: "노 코치", member: "", type: "수업 변경 가능", status: "available", policy: "auto" },
+    { id: "thu-1940", day: "목", time: "19:40", coach: "노 코치", member: "", type: "수업 변경 가능", status: "available", policy: "coach" },
+    { id: "fri-1900", day: "금", time: "19:00", coach: "강 코치", member: "", type: "수업 변경 가능", status: "available", policy: "auto" },
+    { id: "sat-2020", day: "토", time: "20:20", coach: "강 코치", member: "", type: "수업 변경 가능", status: "available", policy: "coach" },
+    { id: "thu-2020", day: "목", time: "20:20", coach: "강 코치", member: "박민재", type: "정규", status: "occupied" },
+    { id: "fri-2050", day: "금", time: "20:50", coach: "노 코치", member: "강다현", type: "정규", status: "occupied" },
+    { id: "sat-1840", day: "토", time: "18:40", coach: "황 코치", member: "임현우", type: "정규", status: "occupied" },
+  ];
+  baseline.forEach((item) => {
+    const existing = lessons.find((lesson) => lesson.id === item.id);
+    if (existing) {
+      if (existing.type.includes("보강") || existing.type.includes("변경")) existing.type = "수업 변경 가능";
+      existing.policy = existing.policy || item.policy;
+      if (!existing.status && existing.member && !isCurrentMemberName(existing.member)) existing.status = "occupied";
+      return;
+    }
+    lessons.push(item);
+  });
+}
+
+function memberNotificationLesson(data = {}) {
+  const lessonId = String(data.lessonId || data.lesson_id || "").trim();
+  if (!lessonId) return null;
+  return memberScheduleOptions().find((lesson) => (
+    String(lesson.serverLessonId || lesson.id || "") === lessonId
+  )) || (state.liveLessons || []).find((lesson) => (
+    String(lesson.serverLessonId || lesson.id || "") === lessonId
+  )) || null;
+}
+
+function memberScheduleLaneOrder(coach = {}) {
+  const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+  const workspaceCoaches = memberScheduleV2WorkspaceCache?.workspace?.coaches || [];
+  const index = workspaceCoaches.findIndex((item) => String(item.roleId || "") === roleId);
+  const serverCoach = index >= 0 ? workspaceCoaches[index] : null;
+  if (Number.isFinite(Number(serverCoach?.laneOrder)) && Number(serverCoach.laneOrder) !== 1000) {
+    return Number(serverCoach.laneOrder);
+  }
+  if (index >= 0) return 1000 + index;
+  return Number(coach.laneOrder ?? coach.scheduleLaneOrder ?? memberCoachOrder(coach.id));
+}
+
+function sourceLessonScheduleScope(sourceLesson = {}) {
+  const ticketId = sourceLesson.member_ticket_id || sourceLesson.ticketId || "";
+  const ticket = (state.liveTickets || []).find((item) => item.id === ticketId);
+  return ticket?.scheduleScope || activeTicketScheduleScope();
+}
+
+function memberOpenMakeupEntitlements() {
+  return (state.liveMakeupEntitlements || []).filter((item) => item.status === "open");
+}
+
+function memberReleasedMakeupSlot(lessonDate, time, coachRoleId, durationMinutes) {
+  return (state.liveReleasedMakeupSlots || []).find((slot) => (
+    slot.lessonDate === lessonDate
+    && slot.time === time
+    && slot.coachRoleId === coachRoleId
+    && Number(slot.durationMinutes) === Number(durationMinutes)
+  ));
+}
+
+function memberLessons() {
+  const current = memberScheduleLessons().filter((lesson) => isOwnMemberScheduleLesson(lesson) && ["scheduled", "requested"].includes(lesson.status));
+  if (current.length || state.liveLessonsLoaded || state.dataMode === "live") return current;
+  return lessons.filter((lesson) => isCurrentMemberName(lesson.member) && ["scheduled", "requested"].includes(lesson.status));
+}
+
+function currentScheduledLessonsForChange() {
+  const dueLessons = memberMakeupDueLessons();
+  const fromSchedule = memberScheduleLessons().filter((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled");
+  const futureLessons = loadedFutureScheduledLessonsForChange();
+  const couponTickets = memberBookableCouponTickets();
+  const regularTickets = memberBookableRegularTickets();
+  const pausedTickets = memberBookablePausedTickets();
+  const editingRequest = state.makeupRequests.find((request) => (
+    String(request.serverRequestId || request.id || "") === String(state.editingChangeRequestId || "")
+    && request.rawStatus === "pending"
+  ));
+  const editablePendingLesson = editingRequest
+    ? memberScheduleLessons().find((lesson) => (
+      isOwnMemberScheduleLesson(lesson)
+      && String(lesson.serverLessonId || "") === String(editingRequest.lessonId || "")
+    ))
+    : null;
+  const editablePending = editablePendingLesson ? [{ ...editablePendingLesson, status: "scheduled", editingChangeRequest: true }] : [];
+  if (dueLessons.length || fromSchedule.length || futureLessons.length || couponTickets.length || regularTickets.length || pausedTickets.length || editablePending.length || state.liveLessonsLoaded || state.dataMode === "live") {
+    const seen = new Set();
+    return editablePending.concat(dueLessons, fromSchedule, futureLessons, couponTickets, regularTickets, pausedTickets).filter((lesson) => {
+      const key = String(lesson.id || lesson.serverLessonId || "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  return lessons.filter((lesson) => isCurrentMemberName(lesson.member) && lesson.status === "scheduled");
+}
+
+function loadedFutureScheduledLessonsForChange(today = localDateKey()) {
+  return (state.liveLessons || [])
+    .filter((lesson) => (
+      isOwnMemberScheduleLesson(lesson)
+      && lesson.status === "scheduled"
+      && lesson.lessonDate
+      && lesson.lessonDate >= today
+    ))
+    .sort((a, b) => `${a.lessonDate} ${a.time || ""}`.localeCompare(`${b.lessonDate} ${b.time || ""}`));
+}
+
+function memberScheduleLessons() {
+  const liveLessons = (state.liveLessons || []).filter((lesson) => {
+    const week = activeMemberWeek();
+    if (!lesson.lessonDate || !week.startDate || !week.endDate) return true;
+    return lesson.lessonDate >= week.startDate && lesson.lessonDate <= week.endDate;
+  });
+  if (state.dataMode === "live" || state.liveLessonsLoaded || liveLessons.length || state.liveLessons?.length) return liveLessons;
+  const adminLessons = adminMemberScheduleLessons();
+  if (state.activeMemberWeekIndex === 0 && adminLessons.length) {
+    return adminLessons.map((adminLesson) => lessons.find((stored) => stored.id === adminLesson.id) || adminLesson);
+  }
+  const weekLessons = activeMemberWeek().lessons || [];
+  if (!weekLessons.length && state.activeMemberWeekIndex !== 0) return [];
+  const storedWeekIds = new Set(weekLessons.map((lesson) => lesson.id));
+  const mergedWeekLessons = weekLessons.map((lesson) => lessons.find((stored) => stored.id === lesson.id) || lesson);
+  return lessons.filter((lesson) => !storedWeekIds.has(lesson.id)).concat(mergedWeekLessons);
+}
+
+function memberApprovedChangeForLesson(lesson = {}) {
+  const lessonId = String(lesson.serverLessonId || lesson.id || "");
+  return (state.makeupRequests || []).find((request) => (
+    String(request.lessonId || "") === lessonId
+    && ["approved", "auto_approved"].includes(request.rawStatus)
+    && request.originalDate
+    && request.targetDate
+  )) || null;
+}
+
+function memberScheduleRoundLabel(lesson, isMine) {
+  if (!isMine) return "";
+  const total = Math.max(0, Number(lesson.ticketTotalSessions) || 0);
+  const used = Math.max(0, Number(lesson.ticketUsedSessions) || 0);
+  const completed = ["completed", "no_show"].includes(String(lesson.serverStatus || "").toLowerCase());
+  const ticketId = memberLessonTicketId(lesson);
+  const futureLessons = (state.liveLessons || [])
+    .filter((item) => (
+      isOwnMemberScheduleLesson(item)
+      && item.status === "scheduled"
+      && memberLessonTicketId(item) === ticketId
+    ))
+    .sort((left, right) => `${left.lessonDate || ""}T${left.time || ""}`.localeCompare(`${right.lessonDate || ""}T${right.time || ""}`));
+  const futureIndex = futureLessons.findIndex((item) => String(item.id) === String(lesson.id));
+  const nextRound = used + Math.max(0, futureIndex) + 1;
+  const round = total ? Math.min(total, completed ? Math.max(1, used) : nextRound) : 0;
+  return `${round}/${total}회차`;
+}
+
+function memberScheduleOperationDay(day) {
+  const date = memberWeekDateForDay(day);
+  return (state.scheduleOperationDays || []).find((operation) => operation.date === date) || null;
+}
+
+function memberChangeTimetableIsPending(source = null) {
+  if (!memberChangeUsesServerCandidates(source)) return false;
+  const loadState = memberChangeCandidateUiState(source);
+  return loadState === "loading"
+    || loadState === "error"
+    || (loadState === "ready" && state.serverChangeCandidates.length === 0);
+}
+
+function memberDesktopScheduleBackgroundRuns(policy, day, coach, scheduleTimeList) {
+  return scheduleTimeList.reduce((runs, time, timeIndex) => {
+    const breakRule = memberBreakRuleForSlot(policy, day, time);
+    const isWorking = !breakRule && isMemberCoachWorking(coach, day, time, 10);
+    const state = breakRule ? "blocked" : isWorking ? "base" : "off";
+    const label = breakRule ? (breakRule.label || "브레이크") : state === "off" ? "근무외" : "";
+    const previous = runs.at(-1);
+    if (previous && previous.state === state && previous.label === label) {
+      previous.span += 1;
+      return runs;
+    }
+    runs.push({ state, label, startIndex: timeIndex, span: 1 });
+    return runs;
+  }, []);
+}
+
+function memberChangeUsesServerCandidates(source = null) {
+  const ticketId = source?.member_ticket_id || source?.ticketId || "";
+  return Boolean(
+    state.dataMode === "live"
+    && (source?.serverLessonId || (source?.couponBooking && ticketId))
+    && !source?.makeupEntitlementId
+    && !source?.regularInitialBooking,
+  );
+}
+
+function memberChangeCandidateLoadState(source = null) {
+  if (!memberChangeUsesServerCandidates(source)) return "fallback";
+  const key = memberChangeCandidateKey(source);
+  if (state.serverChangeCandidateKey !== key) return "idle";
+  return state.serverChangeCandidateStatus || "idle";
+}
+
+function purchaseScheduleOperationForDate(dateKey = "") {
+  return (state.scheduleOperationDays || []).find((operation) => String(operation.date || "") === dateKey) || null;
+}
+
+function purchaseScheduleAvailabilityState() {
+  if (state.dataMode !== "live" || !state.member?.profileId) return "ready";
+  if (state.scheduleV2SyncStatus === "error") return "error";
+  if (!state.scheduleV2WorkspaceLoaded || !memberScheduleV2WorkspaceCache?.workspace) return "loading";
+  if (!Array.isArray(memberScheduleV2WorkspaceCache.workspace.coaches)
+    || !memberScheduleV2WorkspaceCache.workspace.coaches.length) return "coach_error";
+  return "ready";
+}
+
+function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
+  if (!product || purchaseScheduleAvailabilityState() !== "ready") return [];
+  const policy = loadAdminSchedulePolicy();
+  const sourceTicket = purchaseFlowSourceTicket();
+  const durationMinutes = Math.max(10, Number(product.lessonMinutes) || 20);
+  const scopes = purchaseProductScheduleScopes(product);
+  const scheduleLessons = state.liveLessons || [];
+  const { start, end } = purchaseAvailabilityRange();
+  const now = Date.now();
+  const sourceCoachId = purchaseFlowState().purchasePurpose === "renew_same"
+    ? String(sourceTicket?.coachRoleId || "")
+    : "";
+  const coachSaleAvailability = product.coachSaleAvailability || {};
+  const coachSaleMode = String(product.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
+  const coaches = purchaseCoachOptions().filter((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    if (coachSaleMode === "selected" ? coachSaleAvailability[roleId] !== true : coachSaleAvailability[roleId] === false) return false;
+    if (!sourceCoachId) return true;
+    return roleId === sourceCoachId;
+  });
+  const slots = [];
+  for (let dateKey = start; dateKey <= end;) {
+    const day = purchaseDateDay(dateKey);
+    const dateScope = ["토", "일"].includes(day) ? "weekend" : "weekday";
+    const operation = purchaseScheduleOperationForDate(dateKey);
+    if (scopes.has(dateScope) && operation?.mode !== "closed") {
+      coaches.forEach((coach) => {
+        memberCoachBookableTimes(coach, day, durationMinutes).forEach((time) => {
+          if (new Date(`${dateKey}T${time}:00`).getTime() <= now) return;
+          if (!purchaseOperationAllowsSlot(operation, time, durationMinutes)) return;
+          if (memberBreakRuleOverlaps(policy, day, time, durationMinutes)) return;
+          if (!isMemberCoachWorking(coach, day, time, durationMinutes)) return;
+          if (purchaseHasCoachLessonAtDate(scheduleLessons, dateKey, time, coach, durationMinutes, policy)) return;
+          const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+          if (!roleId) return;
+          slots.push({
+            id: `purchase-slot-${dateKey}-${time}-${roleId}`,
+            lessonDate: dateKey,
+            day,
+            time,
+            coachRoleId: roleId,
+            coachName: coach.name || "담당 코치",
+          });
+        });
+      });
+    }
+    const next = new Date(`${dateKey}T12:00:00`);
+    next.setDate(next.getDate() + 1);
+    dateKey = localDateKey(next);
+  }
+  return slots.sort((left, right) => (
+    `${left.lessonDate} ${left.time}`.localeCompare(`${right.lessonDate} ${right.time}`)
+    || left.coachName.localeCompare(right.coachName, "ko")
+  ));
+}
+
+function memberScheduleV2Context(profile = null, week = activeMemberWeek()) {
+  const profileId = profile?.id || state.member?.profileId || "";
+  const workspaceStart = new Date(`${week.startDate}T12:00:00`);
+  const workspaceEnd = new Date(
+    workspaceStart.getFullYear(),
+    workspaceStart.getMonth(),
+    workspaceStart.getDate() + memberScheduleWorkspaceDays,
+  );
+  const workspaceEndDate = localDateKey(workspaceEnd);
+  return {
+    profileId,
+    week,
+    workspaceEndDate,
+    key: `${profileId}:${week.startDate}:${workspaceEndDate}`,
+  };
+}
+
+function liveLessonForJournal(log = {}) {
+  const targetDate = log.journalDate || "";
+  const targetTime = String(log.lessonLabel || "").match(/(\d{1,2}:\d{2})/)?.[1] || "";
+  const candidates = state.liveLessons.filter((lesson) => lesson.isOwnLesson && lesson.status === "scheduled");
+  return candidates.find((lesson) => lesson.id === log.lessonId)
+    || candidates.find((lesson) => lesson.lessonDate === targetDate && lesson.time === targetTime)
+    || candidates.find((lesson) => lesson.lessonDate === targetDate)
+    || null;
+}
+
+function selectedLessonDetail() {
+  return memberScheduleOptions().find((lesson) => lesson.id === state.selectedLessonDetailId)
+    || memberMakeupDueLessons().find((lesson) => lesson.id === state.selectedLessonDetailId)
+    || (state.liveLessons || []).find((lesson) => lesson.id === state.selectedLessonDetailId)
+    || null;
+}

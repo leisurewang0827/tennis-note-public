@@ -87,3 +87,90 @@ function currentCoachProfile() {
   const name = currentCoachName();
   return state.coachProfiles[name] || state.coachProfiles["노 코치"] || {};
 }
+
+// ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──
+
+function scheduleV2CoachWorkspace() {
+  return coachScheduleV2WorkspaceCache?.workspace || null;
+}
+
+async function syncCoachSchedulePreview() {
+  if (await syncCoachScheduleV2()) {
+    state.scheduleV2SyncError = "";
+    return true;
+  }
+  return false;
+}
+
+async function downloadCoachJournalMedia(client, row, displayName) {
+  const blob = await client.downloadObject(journalMediaBucket, row.storage_path);
+  return {
+    name: displayName || "첨부파일",
+    type: row.media_type === "video" ? (blob.type || "video/mp4") : (blob.type || "image/jpeg"),
+    url: URL.createObjectURL(blob),
+    storagePath: row.storage_path,
+  };
+}
+
+function resetCoachScheduleLaunchView() {
+  if (coachSchedulePreferenceTouched) return;
+  state.scheduleFilter = "mine";
+  state.selectedFullScheduleDay = currentCoachScheduleDay();
+}
+
+function setCoachPushNotificationState(permission, status, detail) {
+  coachPushUiState = { permission, status, detail };
+  renderCoachPushNotificationSettings();
+}
+
+function navigateCoachView(viewId) {
+  setView(viewId, { pushHistory: true });
+}
+
+async function markCoachLessonAbsent(id) {
+  return processCoachAttendance(id, "absence", false);
+}
+
+async function processCoachNoShow(lessonId, deduct) {
+  return processCoachAttendance(lessonId, "no_show", deduct);
+}
+
+function refreshSelectedCoachScheduleWeek() {
+  if (state.dataMode !== "live" || !state.coach?.branchId) return;
+  coachScheduleV2WorkspaceCache = null;
+  void syncCoachScheduleV2({ force: true }).then((synced) => {
+    if (!synced) return refreshCoachLiveSchedule({ force: true });
+    renderAll();
+    saveSnapshot();
+    return true;
+  }).catch(() => false);
+}
+
+function changeCoachMonth(delta) {
+  const currentStart = new Date(`${activeScheduleWeek().startDate}T12:00:00`);
+  const targetMonthStart = new Date(currentStart.getFullYear(), currentStart.getMonth() + delta, 1);
+  const targetLastDay = new Date(targetMonthStart.getFullYear(), targetMonthStart.getMonth() + 1, 0).getDate();
+  const target = new Date(targetMonthStart.getFullYear(), targetMonthStart.getMonth(), Math.min(currentStart.getDate(), targetLastDay));
+  state.selectedWeekIndex = Math.max(
+    coachScheduleMinWeekOffset,
+    Math.min(coachWeekOffsetForDate(target), coachScheduleMaxWeekOffset),
+  );
+  renderAll();
+  saveSnapshot();
+  refreshSelectedCoachScheduleWeek();
+}
+
+function selectCoachMonth(value) {
+  if (!/^\d{4}-\d{2}$/.test(value || "")) return;
+  const [year, month] = value.split("-").map(Number);
+  const currentStart = new Date(`${activeScheduleWeek().startDate}T12:00:00`);
+  const targetLastDay = new Date(year, month, 0).getDate();
+  const target = new Date(year, month - 1, Math.min(currentStart.getDate(), targetLastDay));
+  state.selectedWeekIndex = Math.max(
+    coachScheduleMinWeekOffset,
+    Math.min(coachWeekOffsetForDate(target), coachScheduleMaxWeekOffset),
+  );
+  renderAll();
+  saveSnapshot();
+  refreshSelectedCoachScheduleWeek();
+}

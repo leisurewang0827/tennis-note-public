@@ -202,3 +202,81 @@ function memberCoachColorClass(name = "") {
   if (name.includes("박")) return "coach-color-park";
   return "coach-color-default";
 }
+
+// ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──
+
+function syncConfirmationsFromCoach() {
+  const shared = loadSharedData();
+  state.lessonLogs.forEach((log) => {
+    const sharedLog = shared.lessonLogs.find((item) => item.id === log.id);
+    if (!sharedLog) return;
+    const wasConfirmed = log.status === "confirmed";
+    log.status = sharedLog.status;
+    log.coachComment = sharedLog.coachComment || log.coachComment || "";
+    log.nextCurriculumId = sharedLog.nextCurriculumId || log.nextCurriculumId || log.curriculum?.id;
+    log.curriculum = curriculumById(log.nextCurriculumId, log.curriculum);
+    log.memberVisibleSummary = sharedLog.memberVisibleSummary || log.memberVisibleSummary || "";
+    if (!Array.isArray(log.mediaItems)) log.mediaItems = mediaItemsFromNames(log.mediaNames || []);
+    if (!wasConfirmed && log.status === "confirmed" && !log.ticketDeducted && state.remaining > 0) {
+      state.remaining -= 1;
+      log.ticketDeducted = true;
+      state.ticketHistory.unshift({ text: `${lessonReviewTitle(log)} · 1회 차감`, tone: "done" });
+      if (state.remaining === 2) {
+        state.ticketHistory.unshift({ text: "잔여횟수 2회 · 재등록 안내 및 결제 요청 필요", tone: "alert" });
+      }
+    }
+  });
+}
+
+function syncPracticeFeedbackFromCoach() {
+  const shared = loadSharedData();
+  state.practiceLogs.forEach((log) => {
+    const sharedRequest = shared.feedbackRequests.find((item) => item.id === log.id);
+    if (!sharedRequest) return;
+    log.feedbackStatus = sharedRequest.status;
+    log.coachFeedback = sharedRequest.coachFeedback || log.coachFeedback || "";
+    if (!Array.isArray(log.mediaItems)) log.mediaItems = mediaItemsFromNames(log.mediaNames || []);
+  });
+}
+
+function syncNtrpResultFromCoach() {
+  const shared = loadSharedData();
+  const request = shared.ntrpRequests.find((item) => isCurrentMemberName(item.member));
+  if (!request) return;
+  state.profile.ntrpCheckRequested = request.status !== "측정 완료";
+  state.profile.selfNtrp = request.selfNtrp || state.profile.selfNtrp;
+  state.profile.coachNtrp = request.coachNtrp || state.profile.coachNtrp || "측정 전";
+  state.profile.ntrpSurvey = request.surveyAnswers || state.profile.ntrpSurvey || {};
+}
+
+function syncMakeupRequestsFromCoach() {
+  const shared = loadSharedData();
+  shared.makeupRequests.forEach((sharedRequest) => {
+    const existing = state.makeupRequests.find((request) => request.id === sharedRequest.id);
+    if (!existing) return;
+    if (sharedRequest.status === "승인 완료") existing.status = "코치 승인 완료";
+    else if (sharedRequest.status === "거절") existing.status = "코치 거절";
+    else existing.status = sharedRequest.status || existing.status;
+  });
+}
+
+function purchaseCoachOptions() {
+  if (state.dataMode === "live") {
+    const workspaceCoaches = memberScheduleV2WorkspaceCache?.workspace?.coaches;
+    if (!Array.isArray(workspaceCoaches) || !workspaceCoaches.length) return [];
+  }
+  const policy = loadAdminSchedulePolicy();
+  return (policy.coaches || [])
+    .filter((coach) => ["active", "approved"].includes(String(coach.status || "active").toLowerCase()))
+    .filter((coach) => String(coach.employmentStatus || coach.employment_status || "active").toLowerCase() === "active")
+    .filter((coach) => !coach.archivedAt && !coach.archived_at && !coach.deletedAt && !coach.deleted_at)
+    .sort((left, right) => memberScheduleLaneOrder(left) - memberScheduleLaneOrder(right));
+}
+
+function canUseCoachMode() {
+  return state.member?.coachApproved === true && !isApprovalPending();
+}
+
+function shouldOpenCoachModeByDefault() {
+  return canUseCoachMode() && !memberModeOverrideActive();
+}
