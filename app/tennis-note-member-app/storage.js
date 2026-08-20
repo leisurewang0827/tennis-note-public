@@ -26,10 +26,6 @@ function safeLocalStorageSet(key, value) {
   }
 }
 
-function purgeLegacyDemoStorage() {
-  legacyDemoStorageKeys.forEach((key) => localStorage.removeItem(key));
-}
-
 function loadSharedData() {
   try {
     const shared = JSON.parse(localStorage.getItem(sharedStorageKey) || "null") || {};
@@ -257,15 +253,6 @@ function loadAdminSchedulePolicy() {
     ...resolved,
     coaches: serverCoaches,
   };
-}
-
-function readAdminSnapshot() {
-  try {
-    return JSON.parse(localStorage.getItem(adminStorageKey) || "null");
-  } catch {
-    localStorage.removeItem(adminStorageKey);
-    return null;
-  }
 }
 
 function memberHoldingPolicy() {

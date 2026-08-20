@@ -729,14 +729,6 @@ function ensureScheduleBaseline() {
   });
 }
 
-function $(selector) {
-  return document.querySelector(selector);
-}
-
-function $$(selector) {
-  return [...document.querySelectorAll(selector)];
-}
-
 let deferredPwaInstallPrompt = null;
 
 function isStandalonePwa() {
@@ -2622,26 +2614,6 @@ function portOnePaymentRequest({ paymentId, productId, orderName, totalAmount, m
   return request;
 }
 
-function setNoticeDialogOpen(open) {
-  const dialog = $("#noticeDialog");
-  if (!dialog) return;
-  if (open) {
-    if (dialog.hidden) {
-      noticePreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    }
-    dialog.hidden = false;
-    document.body.classList.add("notice-open");
-    window.requestAnimationFrame(() => {
-      if (!dialog.hidden) $("#noticeClose")?.focus({ preventScroll: true });
-    });
-    return;
-  }
-  dialog.hidden = true;
-  document.body.classList.remove("notice-open");
-  if (noticePreviousFocus?.isConnected) noticePreviousFocus.focus({ preventScroll: true });
-  noticePreviousFocus = null;
-}
-
 function liveTicketHasUpcomingLesson(ticket, today = localDateKey()) {
   return (state.liveLessons || []).some((lesson) => {
     if (String(lesson.member_ticket_id || lesson.ticketId || "") !== String(ticket.id || "")) return false;
@@ -3206,12 +3178,6 @@ function setView(viewId, options = {}) {
 
 function navigateMemberView(viewId) {
   setView(viewId, { pushHistory: true });
-}
-
-function jumpToTop() {
-  window.scrollTo(0, 0);
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
 }
 
 function memberApprovalStatus() {

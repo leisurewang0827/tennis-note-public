@@ -254,21 +254,6 @@ function showNoticeIfNeeded() {
   setNoticeDialogOpen(true);
 }
 
-function closeNotice(hideToday = false) {
-  const noticeId = $("#noticeDialog")?.dataset.noticeId || "";
-  if (noticeId) noticeSessionSeenIds.add(noticeId);
-  if (hideToday) {
-    const today = localDateKey();
-    const previousIds = state.noticeHiddenDate === today && Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : [];
-    state.noticeHiddenDate = today;
-    state.noticeHiddenId = noticeId;
-    state.noticeHiddenIds = [...new Set([...previousIds, noticeId].filter(Boolean))];
-  }
-  setNoticeDialogOpen(false);
-  saveSnapshot();
-  window.setTimeout(showNoticeIfNeeded, 0);
-}
-
 function closePaymentConfirmationModal() {
   closeAppModal("paymentConfirmationModal");
   preparedPaymentContext = null;

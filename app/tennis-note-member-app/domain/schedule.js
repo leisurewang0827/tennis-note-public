@@ -54,15 +54,6 @@ function memberScheduleTimes(policy = loadAdminSchedulePolicy()) {
   return makeMemberTimeRange(startText, endText);
 }
 
-function scheduleTimeRangeOptions() {
-  return [
-    { id: "lesson", label: "추천" },
-    { id: "morning", label: "오전" },
-    { id: "evening", label: "저녁" },
-    { id: "all", label: "전체" },
-  ];
-}
-
 function hasMemberCoachLessonAt(scheduleLessons, day, time, coach, durationMinutes = 10, policy = loadAdminSchedulePolicy()) {
   const slotStart = minutesFromTime(time);
   const slotEnd = slotStart + durationMinutes;

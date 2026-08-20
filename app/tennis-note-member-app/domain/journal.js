@@ -41,15 +41,6 @@ function safeJournalObjectName(file = {}, index = 0) {
   return `${uniqueId}.${extension}`;
 }
 
-function parseServerJournalBody(body = "") {
-  try {
-    const payload = JSON.parse(body || "{}");
-    return payload?.schema === serverJournalSchema ? payload : null;
-  } catch {
-    return null;
-  }
-}
-
 function serverJournalBody(log = {}) {
   return JSON.stringify({
     schema: serverJournalSchema,

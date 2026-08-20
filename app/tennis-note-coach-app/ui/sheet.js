@@ -3,22 +3,6 @@
 // DOM 을 직접 만진다. app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라
 // 호출부는 예전과 같다.
 
-function showToast(message) {
-  let toast = document.querySelector("#appToast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.id = "appToast";
-    toast.className = "app-toast";
-    toast.setAttribute("role", "status");
-    toast.setAttribute("aria-live", "polite");
-    document.body.appendChild(toast);
-  }
-  toast.textContent = String(message || "");
-  toast.classList.add("is-visible");
-  window.clearTimeout(appToastTimer);
-  appToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
-}
-
 function hideCoachBrandSplash() {
   const splash = document.querySelector("#coachBrandSplash");
   if (!splash) return;

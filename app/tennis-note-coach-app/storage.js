@@ -4,10 +4,6 @@
 // 그래서 읽기·쓰기를 여기 한곳에 모아 감싼다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-function purgeLegacyDemoStorage() {
-  legacyDemoStorageKeys.forEach((key) => localStorage.removeItem(key));
-}
-
 function loadSharedData() {
   try {
     const shared = JSON.parse(localStorage.getItem(sharedStorageKey) || "null") || {};
@@ -44,15 +40,6 @@ function restoreSnapshot() {
     importMakeupRequests();
   } catch {
     localStorage.removeItem(storageKey);
-  }
-}
-
-function readAdminSnapshot() {
-  try {
-    return JSON.parse(localStorage.getItem(adminStorageKey) || "null");
-  } catch {
-    localStorage.removeItem(adminStorageKey);
-    return null;
   }
 }
 

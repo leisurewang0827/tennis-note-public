@@ -176,26 +176,12 @@ function dayCoachesForSchedule(day, policy, lessons = [], filter = state.schedul
     });
 }
 
-function $(selector) {
-  return document.querySelector(selector);
-}
-
-function $$(selector) {
-  return [...document.querySelectorAll(selector)];
-}
-
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
     workerUrl: "./service-worker.js?v=1.0.371",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
-}
-
-function jumpToTop() {
-  window.scrollTo(0, 0);
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
 }
 
 function setCoachAccessMessage(message, tone = "wait") {
@@ -206,26 +192,6 @@ function setCoachAccessMessage(message, tone = "wait") {
   target.hidden = !state.coachAccessMessage;
   target.textContent = state.coachAccessMessage;
   target.dataset.tone = tone;
-}
-
-function setNoticeDialogOpen(open) {
-  const dialog = $("#noticeDialog");
-  if (!dialog) return;
-  if (open) {
-    if (dialog.hidden) {
-      noticePreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    }
-    dialog.hidden = false;
-    document.body.classList.add("notice-open");
-    window.requestAnimationFrame(() => {
-      if (!dialog.hidden) $("#noticeClose")?.focus({ preventScroll: true });
-    });
-    return;
-  }
-  dialog.hidden = true;
-  document.body.classList.remove("notice-open");
-  if (noticePreviousFocus?.isConnected) noticePreviousFocus.focus({ preventScroll: true });
-  noticePreviousFocus = null;
 }
 
 let activeCoachModalId = "";

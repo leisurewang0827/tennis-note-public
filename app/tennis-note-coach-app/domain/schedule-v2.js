@@ -5,15 +5,6 @@
 // 동작에는 문제가 없다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-function parseServerJournalBody(body = "") {
-  try {
-    const payload = JSON.parse(body || "{}");
-    return payload?.schema === serverJournalSchema ? payload : null;
-  } catch {
-    return null;
-  }
-}
-
 function serverLessonStatusLabel(status = "") {
   return {
     scheduled: "예정",

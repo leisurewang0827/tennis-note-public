@@ -4,6 +4,7 @@ const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css?v=1.0.371",
+  "../shared/tennisnote-app-common.js?v=1.0.371",
   "./settings.js?v=1.0.371",
   "./catalog.js?v=1.0.371",
   "./domain/products.js?v=1.0.371",

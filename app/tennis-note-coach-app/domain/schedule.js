@@ -134,15 +134,6 @@ function coachScheduleTimes(policy = loadCoachSchedulePolicy()) {
   return makeCoachTimeRange(startText, endText);
 }
 
-function scheduleTimeRangeOptions() {
-  return [
-    { id: "lesson", label: "추천" },
-    { id: "morning", label: "오전" },
-    { id: "evening", label: "저녁" },
-    { id: "all", label: "전체" },
-  ];
-}
-
 function coachScheduleRoundLabel(lesson = {}) {
   const ticketTotal = Number(lesson.totalSessions) || Number(String(lesson.ticket || "").match(/(\d+)\s*회/)?.[1]) || 0;
   const used = Math.max(0, Number(lesson.usedSessions) || Math.max(0, ticketTotal - (Number(lesson.remaining) || 0)));

@@ -3,33 +3,6 @@
 // 서버(Supabase)에 붙는다. 권한은 여기가 아니라 RLS 정책이 책임진다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-async function syncLiveNotices() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.selectRows) return false;
-  try {
-    const rows = await client.selectRows("tn_notice_popups", {
-      select: "id,title,body,audience,priority,status,starts_on,ends_on,show_once_per_day,display_order,image_url,image_alt,action_label,action_url,created_at,updated_at",
-      limit: 100,
-    });
-    const notices = (rows || [])
-      .map((row) => noticeRowToAppNotice(row))
-      .sort((a, b) => a.displayOrder - b.displayOrder || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-    const shared = loadSharedData();
-    if (!notices.length) {
-      shared.notices = [];
-      shared.noticeSource = "server";
-      saveSharedData(shared);
-      return true;
-    }
-    shared.notices = notices.slice(0, 100);
-    shared.noticeSource = "server";
-    saveSharedData(shared);
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
 async function syncMemberNotificationsFromServer(profile = null) {
   const client = window.TennisNoteDataClient;
   const profileId = profile?.id || state.member?.profileId || "";
@@ -57,30 +30,6 @@ async function syncMemberNotificationsFromServer(profile = null) {
       newNotification: previousKey && latest && latestKey !== previousKey ? latest : null,
     };
   } catch {
-    return false;
-  }
-}
-
-async function syncLiveSchedulePolicy(branchId = "") {
-  const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.selectRows) return false;
-  try {
-    const [rows, coachRows] = await Promise.all([
-      client.selectRows("tn_admin_settings", {
-        select: "key,value,updated_at",
-        filters: { key: liveSchedulePolicyKey },
-        limit: 1,
-      }),
-      client.selectRows("tn_coach_roles", {
-        select: "id,branch_id,display_name,status,employment_status,archived_at,deleted_at",
-        limit: 100,
-      }),
-    ]);
-    return writeLiveSchedulePolicySnapshot(
-      filterSchedulePolicyByLiveCoachRoles(rows?.[0]?.value, coachRows),
-      branchId,
-    );
-  } catch (error) {
     return false;
   }
 }

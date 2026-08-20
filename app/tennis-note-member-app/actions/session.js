@@ -388,8 +388,3 @@ async function handleOAuthResult(event) {
     ? `${provider} 로그인이 취소되었습니다.`
     : `${provider} 로그인을 완료하지 못했습니다. 다시 시도해주세요.`;
 }
-
-async function showNoticeAfterLiveSync() {
-  await syncLiveNotices();
-  showNoticeIfNeeded();
-}

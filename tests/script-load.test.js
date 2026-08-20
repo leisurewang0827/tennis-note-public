@@ -91,6 +91,7 @@ const PAGES = [
     pathname: "/app/tennis-note-member-app/",
     scripts: [
       "app/shared/tennisnote-release.js",
+      "app/shared/tennisnote-app-common.js",
       "app/tennis-note-member-app/settings.js",
       "app/tennis-note-member-app/catalog.js",
       "app/tennis-note-member-app/domain/products.js",
@@ -145,6 +146,7 @@ const PAGES = [
     pathname: "/app/tennis-note-coach-app/",
     scripts: [
       "app/shared/tennisnote-release.js",
+      "app/shared/tennisnote-app-common.js",
       "app/tennis-note-coach-app/settings.js",
       "app/tennis-note-coach-app/catalog.js",
       "app/tennis-note-coach-app/domain/values.js",

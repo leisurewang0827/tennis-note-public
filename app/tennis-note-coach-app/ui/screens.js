@@ -3,11 +3,6 @@
 // DOM 을 직접 만진다. app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라
 // 호출부는 예전과 같다.
 
-async function showNoticeAfterLiveSync() {
-  await syncLiveNotices();
-  showNoticeIfNeeded();
-}
-
 function openCoachApp(showFromLogin = false) {
   if (!state.coach) return;
   setCoachAccessMessage("");
@@ -53,21 +48,6 @@ function showNoticeIfNeeded() {
   noticeAction.textContent = notice.actionLabel || "자세히 보기";
   $("#noticeDialog").dataset.noticeId = notice.id;
   setNoticeDialogOpen(true);
-}
-
-function closeNotice(hideToday = false) {
-  const noticeId = $("#noticeDialog")?.dataset.noticeId || "";
-  if (noticeId) noticeSessionSeenIds.add(noticeId);
-  if (hideToday) {
-    const today = localDateKey();
-    const previousIds = state.noticeHiddenDate === today && Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : [];
-    state.noticeHiddenDate = today;
-    state.noticeHiddenId = noticeId;
-    state.noticeHiddenIds = [...new Set([...previousIds, noticeId].filter(Boolean))];
-  }
-  setNoticeDialogOpen(false);
-  saveSnapshot();
-  window.setTimeout(showNoticeIfNeeded, 0);
 }
 
 function openUserMode(event) {

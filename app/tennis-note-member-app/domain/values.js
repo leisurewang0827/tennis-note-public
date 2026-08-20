@@ -5,11 +5,6 @@
 // 동작에는 문제가 없다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-function localDateKey(value = new Date()) {
-  const date = value instanceof Date ? value : new Date(value);
-  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
-}
-
 function numericValue(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -92,17 +87,6 @@ function dayName(day) {
 
 function shortCoachName(name = "") {
   return name.replace(" 코치", "");
-}
-
-function minutesFromTime(time) {
-  const [hour, minute] = time.split(":").map(Number);
-  return hour * 60 + minute;
-}
-
-function lessonDuration(lesson) {
-  const text = `${lesson.type || ""} ${lesson.ticket || ""}`;
-  const matched = text.match(/(\d+)\s*분/);
-  return matched ? Number(matched[1]) : 20;
 }
 
 function timeFromMinutes(minutes) {

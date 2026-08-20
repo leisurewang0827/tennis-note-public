@@ -43,32 +43,6 @@ function activeNoticesForApp(audience = "coach") {
     .sort((a, b) => a.displayOrder - b.displayOrder || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 }
 
-function noticeMetaText(notice = {}) {
-  const audienceLabel = notice.audience === "coach" ? "코치용" : notice.audience === "member" ? "회원용" : "회원/코치 공통";
-  const priorityLabel = notice.priority === "urgent" ? "긴급" : notice.priority === "important" ? "중요" : "일반";
-  return `${audienceLabel} · ${priorityLabel}`;
-}
-
-function noticeRowToAppNotice(row = {}) {
-  return normalizeAppNotice({
-    id: row.id,
-    title: row.title,
-    body: row.body,
-    audience: row.audience,
-    status: row.status,
-    priority: row.priority,
-    startDate: row.starts_on || "",
-    endDate: row.ends_on || "",
-    showOncePerDay: row.show_once_per_day !== false,
-    displayOrder: row.display_order,
-    imageUrl: row.image_url || "",
-    imageAlt: row.image_alt || "",
-    actionLabel: row.action_label || "",
-    actionUrl: row.action_url || "",
-    updatedAt: row.updated_at || row.created_at || "",
-  });
-}
-
 function coachNotificationData(action = {}) {
   const data = action?.notification?.data;
   return data && typeof data === "object" ? data : {};
