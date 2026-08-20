@@ -3464,6 +3464,276 @@ textarea {
   gap: 3px;
 }
 
+/* P2: simple product filters and a full weekly timetable picker. */
+.purchase-simple-filters {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+}
+
+.purchase-simple-filters > div {
+  display: grid;
+  gap: 7px;
+}
+
+.purchase-simple-filters span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.purchase-simple-filters [role="group"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.purchase-simple-filters button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--paper);
+  font-weight: 800;
+}
+
+.purchase-simple-filters button.is-selected {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--soft-green);
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+
+.purchase-show-all-products {
+  width: 100%;
+  color: var(--green);
+}
+
+.purchase-schedule-picker-launch {
+  display: grid;
+  gap: 10px;
+}
+
+.purchase-schedule-picker-launch > .primary-button {
+  width: 100%;
+  min-height: 48px;
+}
+
+.purchase-schedule-sheet {
+  --tn-sheet-max-width: 980px;
+  --tn-sheet-max-height: 920px;
+}
+
+.purchase-schedule-sheet-card {
+  height: min(var(--tn-sheet-viewport-height, 94dvh), 920px);
+  max-height: min(var(--tn-sheet-viewport-height, 94dvh), 920px);
+}
+
+.purchase-schedule-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 18px 12px;
+}
+
+.purchase-schedule-sheet-head h3,
+.purchase-schedule-sheet-head p {
+  margin: 0;
+}
+
+.purchase-schedule-sheet-head span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.purchase-schedule-sheet-scroll {
+  padding: 0 18px 18px;
+}
+
+.purchase-schedule-weekbar {
+  position: sticky;
+  z-index: 8;
+  top: 0;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  background: var(--wash);
+}
+
+.purchase-schedule-weekbar button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: var(--ink);
+  background: var(--paper);
+  font-weight: 900;
+}
+
+.purchase-schedule-weekbar button:disabled {
+  opacity: 0.4;
+}
+
+.purchase-schedule-weekbar button.is-selected {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--soft-green);
+}
+
+.purchase-schedule-weekbar strong {
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.purchase-schedule-grid {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--paper);
+  overscroll-behavior-x: contain;
+}
+
+.purchase-timetable {
+  width: max-content;
+  min-width: 100%;
+}
+
+.purchase-timetable-row {
+  display: grid;
+  min-width: 100%;
+  border-bottom: 1px solid var(--line);
+}
+
+.purchase-timetable-row:last-child {
+  border-bottom: 0;
+}
+
+.purchase-timetable-row.is-header {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  background: var(--paper);
+}
+
+.purchase-timetable-row.is-header strong,
+.purchase-timetable-time,
+.purchase-timetable-cell {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  padding: 6px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  text-align: center;
+  font-size: 11px;
+}
+
+.purchase-timetable-row.is-header strong {
+  gap: 2px;
+}
+
+.purchase-timetable-row.is-header small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.purchase-timetable-time {
+  position: sticky;
+  z-index: 4;
+  left: 0;
+  color: var(--muted);
+  background: var(--paper);
+  font-weight: 800;
+}
+
+.purchase-timetable-row.is-header .purchase-timetable-time {
+  z-index: 6;
+}
+
+button.purchase-timetable-cell {
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.purchase-timetable-cell.is-available {
+  color: var(--green);
+  background: var(--soft-green);
+}
+
+.purchase-timetable-cell.is-selected {
+  color: #fff;
+  background: var(--green);
+}
+
+.purchase-timetable-cell.is-conflict {
+  color: #9a3412;
+  background: #fff1e8;
+}
+
+.purchase-timetable-cell.is-busy {
+  color: var(--muted);
+  background: #eef1ef;
+}
+
+.purchase-timetable-cell.is-off {
+  color: #b8c2bd;
+  background: var(--wash);
+}
+
+.purchase-schedule-sheet-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 220px);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px max(14px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.purchase-schedule-sheet-actions span {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .purchase-schedule-sheet-card {
+    width: 100%;
+    height: var(--tn-sheet-viewport-height, 100dvh);
+    max-height: var(--tn-sheet-viewport-height, 100dvh);
+    border-radius: 0;
+  }
+
+  .purchase-schedule-sheet-scroll {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .purchase-schedule-weekbar {
+    grid-template-columns: 36px minmax(0, 1fr) 36px auto;
+    gap: 5px;
+  }
+
+  .purchase-schedule-sheet-actions {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+}
+
 .bank-notification-bridge-card {
   border-color: #b7d8cd;
   background: #f4fbf8;

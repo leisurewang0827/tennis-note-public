@@ -139,6 +139,12 @@ function paymentServerErrorMessage(error) {
     discount_coupon_not_stackable_with_first_lesson: "신규 첫 수업 혜택과 할인 쿠폰은 함께 사용할 수 없습니다.",
     discount_coupon_already_reserved: "다른 결제에서 사용 중인 쿠폰입니다. 쿠폰함을 새로고침해 주세요.",
     discount_coupon_zero_amount_not_supported: "전액 할인 쿠폰은 관리자 확인 결제가 필요합니다.",
+    purchase_schedule_count_mismatch: "상품의 주당 횟수만큼 수업 시간을 선택해 주세요.",
+    purchase_schedule_single_coach_required: "한 회원권은 같은 선생님의 시간으로 선택해 주세요.",
+    purchase_schedule_duplicate: "같은 수업 시간이 중복 선택되었습니다.",
+    purchase_schedule_weekly_duplicate: "같은 요일과 시간은 한 번만 선택할 수 있습니다.",
+    purchase_schedule_same_week_required: "주 1·2·3회 수업은 같은 주 안에서 선택해 주세요.",
+    purchase_weekend_30m_not_available: "30분 수업은 평일 시간표에서 선택해 주세요.",
   };
   return labels[code] || code;
 }

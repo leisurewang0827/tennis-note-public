@@ -706,7 +706,9 @@ function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
     const day = purchaseDateDay(dateKey);
     const dateScope = ["토", "일"].includes(day) ? "weekend" : "weekday";
     const operation = purchaseScheduleOperationForDate(dateKey);
-    if (scopes.has(dateScope) && operation?.mode !== "closed") {
+    if (scopes.has(dateScope)
+      && !(durationMinutes === 30 && dateScope === "weekend")
+      && operation?.mode !== "closed") {
       coaches.forEach((coach) => {
         memberCoachBookableTimes(coach, day, durationMinutes).forEach((time) => {
           if (new Date(`${dateKey}T${time}:00`).getTime() <= now) return;

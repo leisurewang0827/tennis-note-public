@@ -471,6 +471,7 @@ function memberPurchaseLifecycle() {
 function selectPurchasePurpose(purpose = "") {
   const flow = purchaseFlowState();
   flow.showMoreSlots = false;
+  flow.showAllProducts = false;
   const activeTickets = (state.liveTickets || []).filter((ticket) => !["expired", "refunded", "cancelled"].includes(String(ticket.status || "").toLowerCase()));
   if (purpose === "renew_same") {
     const sourceTicket = activeTickets.find((ticket) => String(ticket.id) === String(flow.renewalTicketId)) || activeTickets[0] || null;
@@ -490,6 +491,10 @@ function selectPurchasePurpose(purpose = "") {
     if (matchingProduct) {
       flow.productId = matchingProduct.id;
       flow.familyId = membershipProductFamilyId(matchingProduct);
+      flow.productFrequency = purchaseProductFrequency(matchingProduct);
+      if (["weekday", "weekend"].includes(membershipProductFacet(matchingProduct, "scheduleScope"))) {
+        flow.productScheduleScope = membershipProductFacet(matchingProduct, "scheduleScope");
+      }
     }
   } else if (purpose === "add_coach") {
     flow.purchasePurpose = "add_coach";
@@ -511,6 +516,7 @@ function selectPurchaseFamily(familyId = "") {
   if (family.id === "one-day") flow.purchasePurpose = "one_day";
   else if (flow.purchasePurpose === "one_day") flow.purchasePurpose = (state.liveTickets || []).length ? "" : "new_purchase";
   flow.productId = "";
+  flow.showAllProducts = false;
   flow.discountIssueId = "";
   flow.discountSelectionMode = "auto";
   const keepingRenewal = flow.purchasePurpose === "renew_same" && Boolean(purchaseFlowSourceTicket());
@@ -539,6 +545,10 @@ function selectPurchaseProduct(productId = "") {
   }
   flow.productId = product.id;
   flow.familyId = membershipProductFamilyId(product);
+  flow.productFrequency = purchaseProductFrequency(product);
+  if (["weekday", "weekend"].includes(membershipProductFacet(product, "scheduleScope"))) {
+    flow.productScheduleScope = membershipProductFacet(product, "scheduleScope");
+  }
   if (flow.familyId === "one-day") {
     flow.purchasePurpose = "one_day";
     flow.renewalTicketId = "";
@@ -567,6 +577,7 @@ async function refreshPurchaseScheduleAvailability() {
   await syncMemberScheduleV2(null, { force: false, week: purchaseScheduleWeek() }).catch(() => false);
   const flow = purchaseFlowState();
   if (flow.open && flow.step !== 4) renderMembershipPurchaseFlow();
+  if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
   return purchaseScheduleAvailabilityState() === "ready";
 }
 

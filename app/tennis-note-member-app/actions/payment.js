@@ -165,8 +165,14 @@ function applyPurchaseScheduleSlot(selectedSlot = {}) {
     coachName: selectedSlot.coachName || "",
     durationMinutes: Math.max(10, Number(selectedProduct.lessonMinutes) || 20),
   };
-  const scheduleKey = (schedule) => `${schedule.lessonDate}:${schedule.startTime}:${schedule.coachRoleId}`;
-  const existingIndex = flow.preferredSchedules.findIndex((schedule) => scheduleKey(schedule) === scheduleKey(nextSchedule));
+  const selectedWeek = purchaseScheduleSelectionWeek(flow.preferredSchedules);
+  const nextWeek = purchaseWeekStartDate(nextSchedule.lessonDate);
+  if (selectedWeek && selectedWeek !== nextWeek) {
+    showToast("주 1·2·3회 시간은 같은 시작 주에서 선택해 주세요.");
+    return false;
+  }
+  flow.scheduleWeekStart = nextWeek;
+  const existingIndex = flow.preferredSchedules.findIndex((schedule) => purchaseScheduleKey(schedule) === purchaseScheduleKey(nextSchedule));
   if (existingIndex >= 0) {
     flow.preferredSchedules.splice(existingIndex, 1);
   } else {
@@ -180,6 +186,7 @@ function applyPurchaseScheduleSlot(selectedSlot = {}) {
   syncLegacyPurchaseScheduleFields();
   saveSnapshot();
   renderMembershipPurchaseFlow();
+  if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
   return true;
 }
 

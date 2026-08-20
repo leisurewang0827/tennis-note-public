@@ -317,6 +317,241 @@ function memberUniqueAvailableSlots(slots = []) {
   return [...unique.values()];
 }
 
+function purchaseProductFrequency(product = {}) {
+  return Math.max(1, Number(product.frequencyPerWeek || product.frequency_per_week) || 1);
+}
+
+function purchaseWeekStartDate(dateKey = "") {
+  const value = new Date(`${dateKey || localDateKey()}T12:00:00`);
+  if (Number.isNaN(value.getTime())) return purchaseWeekStartDate(localDateKey());
+  const day = value.getDay();
+  value.setDate(value.getDate() + (day === 0 ? -6 : 1 - day));
+  return localDateKey(value);
+}
+
+function purchaseWeekDates(weekStart = "") {
+  const start = new Date(`${purchaseWeekStartDate(weekStart)}T12:00:00`);
+  return Array.from({ length: 7 }, (_, index) => {
+    const value = new Date(start);
+    value.setDate(start.getDate() + index);
+    return localDateKey(value);
+  });
+}
+
+function purchaseScheduleScopeDates(product = purchaseFlowProduct(), weekStart = purchaseFlowState().scheduleWeekStart) {
+  const scopes = purchaseProductScheduleScopes(product || {});
+  return purchaseWeekDates(weekStart).filter((dateKey) => {
+    const weekend = ["토", "일"].includes(purchaseDateDay(dateKey));
+    return scopes.has(weekend ? "weekend" : "weekday");
+  });
+}
+
+function purchaseScheduleSelectionWeek(schedules = purchaseSelectedSchedules()) {
+  return schedules.length ? purchaseWeekStartDate(schedules[0].lessonDate) : "";
+}
+
+function purchaseScheduleKey(schedule = {}) {
+  return `${schedule.lessonDate || ""}:${String(schedule.startTime || schedule.time || "").slice(0, 5)}:${schedule.coachRoleId || ""}`;
+}
+
+function purchaseSchedulesAvailableNow(product = purchaseFlowProduct()) {
+  const selectedSchedules = purchaseSelectedSchedules(product);
+  if (!selectedSchedules.length || purchaseScheduleAvailabilityState() !== "ready") return false;
+  const availableKeys = new Set(purchaseAvailableScheduleSlots(product).map((slot) => purchaseScheduleKey({
+    lessonDate: slot.lessonDate,
+    startTime: slot.time,
+    coachRoleId: slot.coachRoleId,
+  })));
+  return selectedSchedules.every((schedule) => availableKeys.has(purchaseScheduleKey(schedule)));
+}
+
+function purchaseSchedulePickerCoach() {
+  const flow = purchaseFlowState();
+  const sourceTicket = purchaseFlowSourceTicket();
+  const coachRoleId = String(flow.coachRoleId || (flow.purchasePurpose === "renew_same" ? sourceTicket?.coachRoleId : "") || "");
+  return purchaseCoachOptions().find((coach) => (
+    String(coach.serverRoleId || coach.roleId || coach.id || "") === coachRoleId
+  )) || null;
+}
+
+function purchaseScheduleCellState(product, coach, dateKey, time, availableKeys, selectedKeys) {
+  const coachRoleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+  const key = purchaseScheduleKey({ lessonDate: dateKey, startTime: time, coachRoleId });
+  const selected = selectedKeys.has(key);
+  const durationMinutes = Math.max(10, Number(product?.lessonMinutes) || 20);
+  const lessonTime = new Date(`${dateKey}T${time}:00`).getTime();
+  const day = purchaseDateDay(dateKey);
+  const policy = loadAdminSchedulePolicy();
+  const operation = purchaseScheduleOperationForDate(dateKey);
+  const working = isMemberCoachWorking(coach, day, time, durationMinutes);
+  const closed = lessonTime <= Date.now()
+    || !purchaseOperationAllowsSlot(operation, time, durationMinutes)
+    || memberBreakRuleOverlaps(policy, day, time, durationMinutes)
+    || !working;
+  if (selected) return availableKeys.has(key) ? "selected" : "conflict";
+  if (closed) return "off";
+  if (availableKeys.has(key)) return "available";
+  if (purchaseHasCoachLessonAtDate(state.liveLessons || [], dateKey, time, coach, durationMinutes, policy)) return "busy";
+  return "off";
+}
+
+function purchaseSchedulePickerGridHtml(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  const coach = purchaseSchedulePickerCoach();
+  if (!product || !coach) return '<p class="purchase-availability-state">코치를 먼저 선택해 주세요.</p>';
+  const weekStart = flow.scheduleWeekStart || purchaseWeekStartDate(purchaseAvailabilityRange().start);
+  const dateKeys = purchaseScheduleScopeDates(product, weekStart);
+  const durationMinutes = Math.max(10, Number(product.lessonMinutes) || 20);
+  const coachRoleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+  const slots = purchaseAvailableScheduleSlots(product).filter((slot) => (
+    String(slot.coachRoleId) === coachRoleId && dateKeys.includes(slot.lessonDate)
+  ));
+  const availableKeys = new Set(slots.map((slot) => purchaseScheduleKey({
+    lessonDate: slot.lessonDate,
+    startTime: slot.time,
+    coachRoleId: slot.coachRoleId,
+  })));
+  const selectedSchedules = purchaseSelectedSchedules(product);
+  const selectedKeys = new Set(selectedSchedules.map((schedule) => purchaseScheduleKey(schedule)));
+  const times = [...new Set(dateKeys.flatMap((dateKey) => (
+    memberCoachBookableTimes(coach, purchaseDateDay(dateKey), durationMinutes)
+  )))].sort((left, right) => minutesFromTime(left) - minutesFromTime(right));
+  const visibleTimes = flow.scheduleAvailableOnly
+    ? times.filter((time) => dateKeys.some((dateKey) => {
+      const stateName = purchaseScheduleCellState(product, coach, dateKey, time, availableKeys, selectedKeys);
+      return ["available", "selected", "conflict"].includes(stateName);
+    }))
+    : times;
+  if (!visibleTimes.length) return '<p class="purchase-availability-state">이 주에는 선택 가능한 시간이 없습니다.</p>';
+  const columns = `64px repeat(${Math.max(1, dateKeys.length)}, minmax(82px, 1fr))`;
+  const header = `<div class="purchase-timetable-row is-header" style="grid-template-columns:${columns}">
+    <span class="purchase-timetable-time">시간</span>
+    ${dateKeys.map((dateKey) => `<strong><span>${escapeHtml(purchaseDateDay(dateKey))}</span><small>${escapeHtml(purchaseDateLabel(dateKey).split("(")[0])}</small></strong>`).join("")}
+  </div>`;
+  const rows = visibleTimes.map((time) => `<div class="purchase-timetable-row" style="grid-template-columns:${columns}">
+    <span class="purchase-timetable-time">${escapeHtml(time)}</span>
+    ${dateKeys.map((dateKey) => {
+    const cellState = purchaseScheduleCellState(product, coach, dateKey, time, availableKeys, selectedKeys);
+    const selectedSchedule = selectedSchedules.find((schedule) => purchaseScheduleKey(schedule) === purchaseScheduleKey({ lessonDate: dateKey, startTime: time, coachRoleId }));
+    const slot = slots.find((candidate) => candidate.lessonDate === dateKey && candidate.time === time) || selectedSchedule;
+    if (["available", "selected", "conflict"].includes(cellState) && slot) {
+      const label = cellState === "selected" ? "선택" : cellState === "conflict" ? "다시 선택" : "가능";
+      return `<button type="button" class="purchase-timetable-cell is-${cellState}" data-purchase-slot="${escapeHtml(slot.id || `selected-${dateKey}-${time}`)}"
+        data-purchase-slot-date="${escapeHtml(dateKey)}" data-purchase-slot-day="${escapeHtml(purchaseDateDay(dateKey))}"
+        data-purchase-slot-time="${escapeHtml(time)}" data-purchase-slot-coach="${escapeHtml(coachRoleId)}"
+        data-purchase-slot-coach-name="${escapeHtml(coach.name || flow.coachName || "담당 코치")}" aria-pressed="${cellState === "selected"}">${label}</button>`;
+    }
+    if (cellState === "busy") return '<span class="purchase-timetable-cell is-busy">예약됨</span>';
+    return '<span class="purchase-timetable-cell is-off" aria-label="선택 불가">-</span>';
+  }).join("")}
+  </div>`).join("");
+  return `<div class="purchase-timetable" role="grid" aria-label="${escapeHtml(memberCoachShortName(coach.name || "담당 코치"))} 코치 주간 시간표">${header}${rows}</div>`;
+}
+
+function renderPurchaseScheduleSheet() {
+  const sheet = $("#purchaseScheduleSheet");
+  if (!sheet) return;
+  const flow = purchaseFlowState();
+  const product = purchaseFlowProduct();
+  const coach = purchaseSchedulePickerCoach();
+  const range = purchaseAvailabilityRange();
+  const selectedSchedules = purchaseSelectedSchedules(product);
+  const requiredCount = purchaseRequiredScheduleCount(product);
+  const selectedWeek = purchaseScheduleSelectionWeek(selectedSchedules);
+  if (!flow.scheduleWeekStart) flow.scheduleWeekStart = selectedWeek || purchaseWeekStartDate(range.start);
+  const weekDates = purchaseWeekDates(flow.scheduleWeekStart);
+  const previousWeek = new Date(`${flow.scheduleWeekStart}T12:00:00`);
+  previousWeek.setDate(previousWeek.getDate() - 7);
+  const nextWeek = new Date(`${flow.scheduleWeekStart}T12:00:00`);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+  const previousAllowed = purchaseWeekDates(localDateKey(previousWeek)).some((dateKey) => dateKey >= range.start && dateKey <= range.end);
+  const nextAllowed = purchaseWeekDates(localDateKey(nextWeek)).some((dateKey) => dateKey >= range.start && dateKey <= range.end);
+  if ($("#purchaseScheduleSheetTitle")) $("#purchaseScheduleSheetTitle").textContent = `${memberCoachShortName(coach?.name || flow.coachName || "담당 코치")} 코치 시간표`;
+  if ($("#purchaseScheduleSheetWeek")) $("#purchaseScheduleSheetWeek").textContent = `${purchaseDateLabel(weekDates[0])} - ${purchaseDateLabel(weekDates[6])}`;
+  if ($("#purchaseScheduleSheetProgress")) $("#purchaseScheduleSheetProgress").textContent = `${selectedSchedules.length}/${requiredCount} 선택`;
+  if ($("#purchaseScheduleSheetGrid")) $("#purchaseScheduleSheetGrid").innerHTML = purchaseSchedulePickerGridHtml(product);
+  if ($("#purchaseSchedulePreviousWeek")) $("#purchaseSchedulePreviousWeek").disabled = !previousAllowed;
+  if ($("#purchaseScheduleNextWeek")) $("#purchaseScheduleNextWeek").disabled = !nextAllowed;
+  const availableToggle = $("#purchaseScheduleAvailableOnly");
+  if (availableToggle) {
+    availableToggle.classList.toggle("is-selected", flow.scheduleAvailableOnly);
+    availableToggle.setAttribute("aria-pressed", String(flow.scheduleAvailableOnly));
+  }
+  const summary = $("#purchaseScheduleSheetSummary");
+  if (summary) summary.textContent = selectedSchedules.length
+    ? selectedSchedules.map((schedule) => `${purchaseDateLabel(schedule.lessonDate)} ${schedule.startTime}`).join(" · ")
+    : "시간을 선택해 주세요";
+  const completeButton = $("#completePurchaseScheduleSelection");
+  if (completeButton) completeButton.disabled = selectedSchedules.length !== requiredCount || !purchaseSchedulesAvailableNow(product);
+}
+
+function openPurchaseScheduleSheet() {
+  const flow = purchaseFlowState();
+  const selectedSchedules = purchaseSelectedSchedules();
+  const range = purchaseAvailabilityRange();
+  flow.scheduleWeekStart = purchaseScheduleSelectionWeek(selectedSchedules) || flow.scheduleWeekStart || purchaseWeekStartDate(range.start);
+  renderPurchaseScheduleSheet();
+  openAppSheet("purchaseScheduleSheet", { initialFocus: "#purchaseScheduleAvailableOnly" });
+}
+
+function movePurchaseSchedulePickerWeek(offset = 0) {
+  const flow = purchaseFlowState();
+  const value = new Date(`${flow.scheduleWeekStart || purchaseWeekStartDate(purchaseAvailabilityRange().start)}T12:00:00`);
+  value.setDate(value.getDate() + Number(offset || 0) * 7);
+  flow.scheduleWeekStart = purchaseWeekStartDate(localDateKey(value));
+  saveSnapshot();
+  renderPurchaseScheduleSheet();
+}
+
+function completePurchaseScheduleSelection() {
+  const product = purchaseFlowProduct();
+  const selectedSchedules = purchaseSelectedSchedules(product);
+  const requiredCount = purchaseRequiredScheduleCount(product);
+  if (selectedSchedules.length !== requiredCount) {
+    showToast(`시간 ${requiredCount}개를 모두 선택해 주세요.`);
+    return;
+  }
+  if (!purchaseSchedulesAvailableNow(product)) {
+    showToast("선택한 시간 중 예약할 수 없는 시간이 있습니다. 다시 선택해 주세요.");
+    renderPurchaseScheduleSheet();
+    return;
+  }
+  closeAppSheet("purchaseScheduleSheet");
+  renderMembershipPurchaseFlow();
+}
+
+function purchaseMatchingProducts(products = membershipProducts(), sourceTicket = purchaseFlowSourceTicket()) {
+  const flow = purchaseFlowState();
+  const familyProducts = distinctMembershipProductsForFamily(flow.familyId, products).filter((product) => {
+    const weekendOnlyThirtyMinute = Number(product.lessonMinutes || 0) === 30
+      && membershipProductFacet(product, "scheduleScope") === "weekend";
+    return !weekendOnlyThirtyMinute
+      || (flow.purchasePurpose === "renew_same" && flow.scheduleMode === "keep");
+  });
+  const renewing = flow.purchasePurpose === "renew_same" && Boolean(sourceTicket);
+  if (renewing || ["coupon", "one-day"].includes(flow.familyId)) return familyProducts;
+  return familyProducts.filter((product) => {
+    const scope = membershipProductFacet(product, "scheduleScope");
+    return purchaseProductFrequency(product) === flow.productFrequency
+      && (scope === flow.productScheduleScope || scope === "mixed");
+  });
+}
+
+function purchaseSimpleProductFiltersHtml() {
+  const flow = purchaseFlowState();
+  if (["coupon", "one-day"].includes(flow.familyId)
+    || (flow.purchasePurpose === "renew_same" && purchaseFlowSourceTicket())) return "";
+  return `
+    <div class="purchase-simple-filters">
+      <div><span>주 횟수</span><div role="group" aria-label="주 수업 횟수">
+        ${[1, 2, 3].map((frequency) => `<button type="button" data-purchase-frequency="${frequency}" aria-pressed="${flow.productFrequency === frequency}" class="${flow.productFrequency === frequency ? "is-selected" : ""}">주 ${frequency}회</button>`).join("")}
+      </div></div>
+      <div><span>수업 요일</span><div role="group" aria-label="평일 또는 주말">
+        ${[["weekday", "평일"], ["weekend", "주말"]].map(([scope, label]) => `<button type="button" data-purchase-scope="${scope}" aria-pressed="${flow.productScheduleScope === scope}" class="${flow.productScheduleScope === scope ? "is-selected" : ""}">${label}</button>`).join("")}
+      </div></div>
+    </div>`;
+}
+
 let portOneSdkPromise = null;
 let preparedPaymentContext = null;
 let bankTransferAccountNumberForCopy = "";
@@ -437,7 +672,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.374",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.375",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

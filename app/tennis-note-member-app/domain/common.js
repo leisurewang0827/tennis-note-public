@@ -291,7 +291,12 @@ function purchaseFlowState() {
       renewalTicketId: "",
       purchasePurpose: "",
       showMoreSlots: false,
+      showAllProducts: false,
+      productFrequency: 1,
+      productScheduleScope: "weekday",
       scheduleMode: "keep",
+      scheduleWeekStart: "",
+      scheduleAvailableOnly: false,
       coachRoleId: "",
       coachName: "",
       preferredDate: "",
@@ -306,6 +311,13 @@ function purchaseFlowState() {
   state.purchaseFlow.familyId = membershipProductFamilyDefinition(state.purchaseFlow.familyId).id;
   state.purchaseFlow.purchasePurpose = String(state.purchaseFlow.purchasePurpose || "");
   state.purchaseFlow.showMoreSlots = state.purchaseFlow.showMoreSlots === true;
+  state.purchaseFlow.showAllProducts = state.purchaseFlow.showAllProducts === true;
+  state.purchaseFlow.productFrequency = Math.max(1, Math.min(3, Number(state.purchaseFlow.productFrequency) || 1));
+  state.purchaseFlow.productScheduleScope = ["weekday", "weekend"].includes(state.purchaseFlow.productScheduleScope)
+    ? state.purchaseFlow.productScheduleScope
+    : "weekday";
+  state.purchaseFlow.scheduleWeekStart = String(state.purchaseFlow.scheduleWeekStart || "");
+  state.purchaseFlow.scheduleAvailableOnly = state.purchaseFlow.scheduleAvailableOnly === true;
   state.purchaseFlow.preferredDate = String(state.purchaseFlow.preferredDate || "");
   state.purchaseFlow.preferredSchedules = Array.isArray(state.purchaseFlow.preferredSchedules)
     ? state.purchaseFlow.preferredSchedules

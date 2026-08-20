@@ -165,12 +165,10 @@ function purchaseFamilyOptionsHtml(products = membershipProducts(), selectedFami
   return visibleFamilies.map((family) => {
     const count = distinctMembershipProductsForFamily(family.id, products).length;
     const selected = family.id === selectedFamilyId;
-    const readyLabel = family.id === "three-month"
-      ? "10% 할인 적용"
-      : family.id === "one-day" ? "바로 예약" : "바로 구매";
+    const readyLabel = family.id === "three-month" ? "10% 할인" : `${count}개`;
     return `
       <button class="purchase-family-option ${selected ? "is-selected" : ""} ${count ? "" : "is-unavailable"}" type="button" data-purchase-family="${family.id}" aria-pressed="${selected}">
-        <strong>${family.label}</strong><small>${family.description}</small><b>${count ? readyLabel : "준비 중"}</b>
+        <strong>${family.label}</strong><b>${count ? readyLabel : "준비 중"}</b>
       </button>`;
   }).join("");
 }
@@ -179,20 +177,20 @@ function purchaseStepOneHtml() {
   const flow = purchaseFlowState();
   const products = membershipProducts();
   const sourceTicket = purchaseFlowSourceTicket();
-  const recommendations = recommendedMembershipProducts(products, flow.familyId, sourceTicket);
+  const matchingProducts = purchaseMatchingProducts(products, sourceTicket)
+    .sort((left, right) => membershipProductRecommendationScore(right, sourceTicket) - membershipProductRecommendationScore(left, sourceTicket));
+  const recommendations = matchingProducts.slice(0, 3);
+  const visibleProducts = flow.showAllProducts ? matchingProducts : recommendations;
   const renewing = flow.purchasePurpose === "renew_same" && Boolean(sourceTicket);
-  const returning = !renewing && memberPurchaseLifecycle() === "returning";
   return `
-    <div class="purchase-step-intro">
-      <strong>${renewing ? "연장 기간만 고르세요" : returning ? "재등록할 상품 하나만 고르세요" : "원하는 상품 하나만 고르세요"}</strong>
-      <span>${renewing ? "선생님과 시간은 그대로 유지됩니다. 바꾸고 싶을 때만 위의 ‘시간만 변경’을 누르세요." : returning ? "이전 이용권은 건드리지 않고 새 이용권으로 등록합니다. 추천 상품은 최대 3개만 보여드립니다." : "추천 상품만 최대 3개 보여드립니다. 선생님과 시간은 다음 영역에서 간단히 선택합니다."}</span>
-    </div>
     <div class="purchase-family-grid" role="group" aria-label="수업 형태">${purchaseFamilyOptionsHtml(products, flow.familyId)}</div>
+    ${purchaseSimpleProductFiltersHtml()}
     <div class="purchase-recommendations">
-      <div><strong>${escapeHtml(membershipProductFamilyDefinition(flow.familyId).label)} 추천</strong><span>최대 3개</span></div>
-      ${recommendations.length
-    ? recommendations.map((product) => purchaseProductCard(product, String(product.id) === String(flow.productId))).join("")
+      <div><strong>${renewing ? "연장 상품" : "상품 선택"}</strong><span>${matchingProducts.length}개</span></div>
+      ${visibleProducts.length
+    ? visibleProducts.map((product) => purchaseProductCard(product, String(product.id) === String(flow.productId))).join("")
     : purchaseEmptyFamilyHtml(flow.familyId)}
+      ${matchingProducts.length > 3 ? `<button class="small-button purchase-show-all-products" type="button" data-purchase-show-all-products>${flow.showAllProducts ? "추천 상품만 보기" : `전체 상품 ${matchingProducts.length}개 보기`}</button>` : ""}
     </div>`;
 }
 
@@ -263,9 +261,12 @@ function purchaseStepCanContinue() {
   if (flow.purchasePurpose === "renew_same" && purchaseFlowSourceTicket() && flow.scheduleMode === "keep") return true;
   const schedules = purchaseSelectedSchedules(product);
   const requiredCount = purchaseRequiredScheduleCount(product);
+  const selectedWeeks = new Set(schedules.map((schedule) => purchaseWeekStartDate(schedule.lessonDate)));
   return Boolean(
     flow.coachRoleId
     && schedules.length === requiredCount
+    && selectedWeeks.size === 1
+    && purchaseSchedulesAvailableNow(product)
     && schedules.every((schedule) => (
       schedule.lessonDate
       && schedule.day

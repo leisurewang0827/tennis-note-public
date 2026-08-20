@@ -184,29 +184,20 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
   const matchingSlots = activeCoachRoleId
     ? slots.filter((slot) => String(slot.coachRoleId) === activeCoachRoleId)
     : [];
-  const visibleLimit = flow.showMoreSlots ? 12 : 6;
-  const visibleSlots = matchingSlots.slice(0, visibleLimit);
   const requiredCount = purchaseRequiredScheduleCount(product);
   const selectedSchedules = purchaseSelectedSchedules(product);
-  const slotButtons = visibleSlots.map((slot) => {
-    const selected = selectedSchedules.some((schedule) => (
-      String(schedule.coachRoleId) === String(slot.coachRoleId)
-      && schedule.lessonDate === slot.lessonDate
-      && schedule.startTime === slot.time
-    ));
-    return `<button class="purchase-slot-card ${selected ? "is-selected" : ""}" type="button"
-      data-purchase-slot="${escapeHtml(slot.id)}" data-purchase-slot-date="${escapeHtml(slot.lessonDate)}"
-      data-purchase-slot-day="${escapeHtml(slot.day)}" data-purchase-slot-time="${escapeHtml(slot.time)}"
-      data-purchase-slot-coach="${escapeHtml(slot.coachRoleId)}" data-purchase-slot-coach-name="${escapeHtml(slot.coachName)}"
-      aria-pressed="${selected}"><strong>${escapeHtml(purchaseDateLabel(slot.lessonDate))}</strong><span>${escapeHtml(slot.time)}</span></button>`;
-  }).join("");
+  const selectedSummary = selectedSchedules.length
+    ? `<div class="purchase-selected-schedule-list" aria-label="선택한 수업 시간">${selectedSchedules.map((schedule, index) => `<span><b>${index + 1}</b>${escapeHtml(purchaseDateLabel(schedule.lessonDate))} ${escapeHtml(schedule.startTime)}</span>`).join("")}</div>`
+    : '<p class="purchase-availability-state" role="status">요일과 시간을 선택해 주세요.</p>';
   return `<div class="purchase-slot-groups">
     ${coachSelector}
-    ${activeCoachRoleId ? `<div class="purchase-schedule-count" role="status"><strong>${selectedSchedules.length}/${requiredCount}개 선택</strong><span>${requiredCount > 1 ? `주 ${requiredCount}회 수업 시간을 모두 골라주세요.` : "수업 시간 하나를 골라주세요."}</span></div>` : ""}
     ${activeCoachRoleId
-    ? `<div class="purchase-slot-card-grid" role="group" aria-label="선택한 선생님의 가능한 시간">${slotButtons || '<p class="purchase-availability-state" role="status">선택한 선생님의 가능한 빈 시간이 없습니다.</p>'}</div>`
-    : '<p class="purchase-availability-state purchase-coach-first" role="status">선생님을 선택하면 그 선생님의 가능한 시간만 보여드립니다.</p>'}
-    ${matchingSlots.length > visibleSlots.length ? `<button class="small-button purchase-show-more-slots" type="button" data-purchase-show-more-slots>다른 시간 ${Math.min(6, matchingSlots.length - visibleSlots.length)}개 더 보기</button>` : ""}
+    ? `<div class="purchase-schedule-picker-launch">
+        <div class="purchase-schedule-count" role="status"><strong>${selectedSchedules.length}/${requiredCount}개 선택</strong><span>${matchingSlots.length ? "실제 시간표에서 선택" : "현재 가능한 시간이 없습니다"}</span></div>
+        ${selectedSummary}
+        <button class="primary-button" type="button" data-open-purchase-schedule ${matchingSlots.length ? "" : "disabled"}>요일·시간 선택</button>
+      </div>`
+    : '<p class="purchase-availability-state purchase-coach-first" role="status">선생님을 선택해 주세요.</p>'}
   </div>`;
 }
 
@@ -262,22 +253,11 @@ function purchaseStepTwoHtml() {
     return "";
   }
   const availabilityTitle = fixedRenewal
-    ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치의 변경할 시간을 고르세요`
-    : flow.coachRoleId ? `${memberCoachShortName(flow.coachName || "선택한 선생님")} 코치의 시간을 고르세요` : "선생님을 먼저 고르세요";
-  const availabilityDetail = coupon
-    ? "쿠폰 가격은 평일·주말이 같고, 선택한 코치와 실제 빈 시간으로만 구분합니다."
-    : fixedRenewal
-      ? "선생님은 그대로 두고 시간만 변경합니다."
-      : "선생님을 선택하면 다른 선생님의 시간은 숨기고 실제 빈 시간만 보여드립니다.";
-  const selectedSchedules = purchaseSelectedSchedules(product);
-  const selectedSummary = selectedSchedules.length
-    ? `<div class="purchase-selected-schedule-list" aria-label="선택한 수업 시간">${selectedSchedules.map((schedule, index) => `<span><b>${index + 1}</b>${escapeHtml(purchaseDateLabel(schedule.lessonDate))} ${escapeHtml(schedule.startTime)}</span>`).join("")}</div>`
-    : "";
+    ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치`
+    : flow.coachRoleId ? `${memberCoachShortName(flow.coachName || "선택한 선생님")} 코치` : "코치 선택";
   return `
-    <div class="purchase-step-intro"><strong>${availabilityTitle}</strong><span>${availabilityDetail}</span></div>
-    ${selectedSummary}
+    <div class="purchase-step-intro"><strong>${availabilityTitle}</strong></div>
     <section class="purchase-choice-section purchase-actual-slots" aria-label="실제 예약 가능한 시간">
       ${purchaseScheduleSlotGroupsHtml(product)}
-    </section>
-    <p class="purchase-policy-note">표시된 시간은 현재 시간표 기준입니다. 결제 확인과 최종 등록 사이에 다른 예약이 생기면 관리자 확인 후 가장 가까운 시간으로 안내합니다.</p>`;
+    </section>`;
 }

@@ -141,6 +141,39 @@ function bindDelegatedEvents() {
       selectPurchaseFamily(purchaseFamilyButton.dataset.purchaseFamily);
       return;
     }
+    const purchaseFrequencyButton = event.target.closest("[data-purchase-frequency]");
+    if (purchaseFrequencyButton) {
+      const flow = purchaseFlowState();
+      flow.productFrequency = Math.max(1, Math.min(3, Number(purchaseFrequencyButton.dataset.purchaseFrequency) || 1));
+      flow.productId = "";
+      flow.showAllProducts = false;
+      flow.coachRoleId = "";
+      flow.coachName = "";
+      clearPurchaseSchedules();
+      saveSnapshot();
+      renderMembershipPurchaseFlow();
+      return;
+    }
+    const purchaseScopeButton = event.target.closest("[data-purchase-scope]");
+    if (purchaseScopeButton) {
+      const flow = purchaseFlowState();
+      flow.productScheduleScope = purchaseScopeButton.dataset.purchaseScope === "weekend" ? "weekend" : "weekday";
+      flow.productId = "";
+      flow.showAllProducts = false;
+      flow.coachRoleId = "";
+      flow.coachName = "";
+      clearPurchaseSchedules();
+      saveSnapshot();
+      renderMembershipPurchaseFlow();
+      return;
+    }
+    if (event.target.closest("[data-purchase-show-all-products]")) {
+      const flow = purchaseFlowState();
+      flow.showAllProducts = !flow.showAllProducts;
+      saveSnapshot();
+      renderMembershipPurchaseFlow();
+      return;
+    }
     const purchaseProductButton = event.target.closest("[data-purchase-product]");
     if (purchaseProductButton) {
       selectPurchaseProduct(purchaseProductButton.dataset.purchaseProduct);
@@ -175,6 +208,7 @@ function bindDelegatedEvents() {
       flow.coachRoleId = nextCoachRoleId;
       flow.coachName = purchaseCoachFilterButton.dataset.purchaseCoachFilterName || "";
       flow.showMoreSlots = false;
+      flow.scheduleWeekStart = purchaseWeekStartDate(purchaseAvailabilityRange().start);
       saveSnapshot();
       renderMembershipPurchaseFlow();
       return;
@@ -185,6 +219,7 @@ function bindDelegatedEvents() {
       flow.coachName = "";
       clearPurchaseSchedules();
       flow.showMoreSlots = false;
+      flow.scheduleWeekStart = purchaseWeekStartDate(purchaseAvailabilityRange().start);
       saveSnapshot();
       renderMembershipPurchaseFlow();
       return;
@@ -194,6 +229,30 @@ function bindDelegatedEvents() {
       flow.showMoreSlots = true;
       saveSnapshot();
       renderMembershipPurchaseFlow();
+      return;
+    }
+    if (event.target.closest("[data-open-purchase-schedule]")) {
+      openPurchaseScheduleSheet();
+      return;
+    }
+    if (event.target.closest("[data-close-purchase-schedule]")) {
+      closeAppSheet("purchaseScheduleSheet");
+      return;
+    }
+    const purchaseScheduleWeekButton = event.target.closest("[data-purchase-schedule-week]");
+    if (purchaseScheduleWeekButton) {
+      movePurchaseSchedulePickerWeek(Number(purchaseScheduleWeekButton.dataset.purchaseScheduleWeek) || 0);
+      return;
+    }
+    if (event.target.closest("#purchaseScheduleAvailableOnly")) {
+      const flow = purchaseFlowState();
+      flow.scheduleAvailableOnly = !flow.scheduleAvailableOnly;
+      saveSnapshot();
+      renderPurchaseScheduleSheet();
+      return;
+    }
+    if (event.target.closest("#completePurchaseScheduleSelection")) {
+      completePurchaseScheduleSelection();
       return;
     }
     const purchaseScheduleDateButton = event.target.closest("[data-purchase-schedule-date]");
