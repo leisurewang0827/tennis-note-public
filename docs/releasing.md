@@ -16,6 +16,22 @@
 바꾸는 곳: `release.json` · `tennisnote-release.js` · 각 `index.html`·`app.js` 의
 `?v=` · 서비스워커 두 개의 `CACHE_NAME` 카운터.
 
+## 버전 커밋은 따로 하세요
+
+**실제 변경을 먼저 커밋하고, 버전 올리기는 그 다음 별도 커밋입니다.**
+
+```bash
+git commit -m "fix(member): ..."      # 실제 변경. 버전은 안 건드림
+./scripts/bump_release.py --next
+git commit -am "chore: 1.0.375"       # 버전만
+```
+
+버전 올리기는 **345곳**을 건드립니다. 한 커밋에 섞으면 실제 변경이 파묻혀
+리뷰도 `git log -p` 도 무용지물이 됩니다. 되돌릴 때도 버전까지 같이 돌아갑니다.
+
+운영 저장소는 배포할 때 한 번만 커밋해서 둘이 섞여 있습니다
+(`Publish Tennis Note PWA 1.0.x`). **그 방식을 따라오지 마세요.**
+
 ## 건드리지 않는 곳
 
 네이티브 배포 때 따로 움직입니다. 이력에서도 늘 별도 커밋이었습니다.
