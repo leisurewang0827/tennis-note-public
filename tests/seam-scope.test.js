@@ -78,6 +78,13 @@ const SOURCES = [
   "app/tennis-note-member-app/views/journal.js",
   "app/tennis-note-member-app/views/curriculum.js",
   "app/tennis-note-member-app/views/requests.js",
+  "app/tennis-note-member-app/events/delegated.js",
+  "app/tennis-note-member-app/events/account.js",
+  "app/tennis-note-member-app/events/makeup.js",
+  "app/tennis-note-member-app/events/journal.js",
+  "app/tennis-note-member-app/events/profile.js",
+  "app/tennis-note-member-app/events/schedule.js",
+  "app/tennis-note-member-app/events/home.js",
   "app/tennis-note-member-app/app.js",
   "app/tennis-note-coach-app/app.js",
 ];
