@@ -4,9 +4,10 @@
 지켜야 할 규칙은 `CLAUDE.md`에 있습니다. 여기서는 반복하지 않습니다.
 
 - 브랜치: `stabilize/phase-0` (**로컬 전용, 아직 푸시 안 함**)
-- 커밋: 35개
-- 기준: `origin/main` 1.0.367 까지 병합됨
-- 검증: `./scripts/verify.sh` — 테스트 124개 통과
+- 커밋: 38개
+- 기준: `origin/main` **1.0.371 까지 병합됨** (저쪽보다 뒤처진 커밋 0개)
+- 검증: `./scripts/verify.sh` — 테스트 126개 통과
+- ⚠ **1.0.371 병합분은 아직 브라우저에서 안 봤습니다.** 아래 "지금 당장 할 것" 참조
 
 ---
 
@@ -17,14 +18,15 @@
 
 ```
 app/admin/
-  domain/   11개  3,246줄   순수 규칙. 전역·DOM·서버 안 봄. 단위 테스트 대상
-  views/    10개  5,165줄   화면 그리기 (render*)
-  events/    9개  2,465줄   이벤트 등록 (bindEvents 를 쪼갠 것)
-  app.js          20,852줄  아직 남은 것
+  domain/   11개  3,254줄   순수 규칙. 전역·DOM·서버 안 봄. 단위 테스트 대상
+  views/    10개  5,225줄   화면 그리기 (render*)
+  events/    9개  2,507줄   이벤트 등록 (bindEvents 를 쪼갠 것)
+  app.js          21,520줄  아직 남은 것
   schedule-v2-admin.js 3,959줄  손대지 않음
 ```
 
-`app.js` 31,096 → 20,852줄 (-33%). 호출부는 **한 줄도 안 바꿨습니다.**
+`app.js` 31,096 → 21,520줄 (-31%). 호출부는 **한 줄도 안 바꿨습니다.**
+(1.0.371 병합으로 저쪽 신규 코드 약 700줄이 `app.js` 에 새로 들어왔습니다.)
 
 ---
 
@@ -70,7 +72,7 @@ app/admin/
 
 ---
 
-## 검사기 7종이 각각 막는 것
+## 검사기 8종이 각각 막는 것
 
 `./scripts/verify.sh` 하나로 전부 돕니다. 새 파일을 만들면 아래 목록에도 등록해야 합니다.
 
@@ -82,6 +84,7 @@ app/admin/
 | `seam-callback` | 이음매 함수를 배열 메서드 콜백으로 그대로 넘김 |
 | `undefined-identifiers` | 정의 없는 이음매 이름을 본문에서 사용 |
 | `event-binding` | `document` 리스너가 화면 파일로 새거나, `stopImmediatePropagation` 사용 |
+| `verify-env` | `verify.sh` 와 CI 워크플로의 환경변수가 어긋남 (로컬만 통과/실패) |
 | `check_cloudflare_build.py` | 버전 불일치, 깨진 링크, 비밀키 유출, 결제 설정 |
 
 새 파일을 추가하면 **네 곳**에 등록해야 합니다.
@@ -92,28 +95,75 @@ app/admin/
 
 ## 다음에 할 수 있는 것
 
-### 1. `origin/main` 병합 (가장 급함)
+### 1. 브라우저에서 1.0.371 병합분 확인 (가장 급함)
 
-**저쪽이 13커밋 앞서 있습니다.** 하루 3~4번 배포되므로 미룰수록 비용이 커집니다.
+**코드 검증은 다 통과했지만 화면으로는 못 봤습니다.** 지금까지 사고 5건이
+전부 브라우저에서만 드러났으므로 이걸 먼저 하세요.
 
-지금까지 세 번 병합했고 충돌은 늘 비슷했습니다.
-- `app/admin/index.html` — 우리 스크립트 목록 유지 + 버전만 저쪽 것으로
-- `app/admin/app.js` — 우리가 옮긴 함수를 저쪽이 수정한 경우.
-  **`app.js` 로 되돌리지 말고 `domain/`·`views/` 사본에 반영하세요.**
-  되돌리면 중복 선언이 되고 나중 로드가 이겨 저쪽 수정이 무시됩니다.
-  (`global-scope` 검사가 잡습니다.)
+```bash
+python3 -m http.server 8773 --bind 127.0.0.1
+```
+
+콘솔을 열어 둔 채 관리자 화면(`/app/admin/`)에서 아래를 훑으세요.
+저쪽 1.0.371 이 새로 넣은 것과, 우리가 나눠 담은 자리가 만나는 지점입니다.
+
+| 볼 곳 | 왜 |
+|---|---|
+| 설정 → 서비스 준비 | `renderServiceReadiness` 를 저쪽 본문으로 교체했습니다 |
+| 설정 → 할인 쿠폰 발급 | 신규 화면. 회원 검색·발급 버튼이 `events/settings.js` 와 `delegated.js` 로 나뉘었습니다 |
+| 결제 설정 → 회원 판매 5단계 | 신규 화면. 입력할 때 미리보기가 갱신되면 위임 리스너가 제자리에 있는 것입니다 |
+| 회원 → 목록 일괄 선택 | `renderMemberBulkToolbar` 교체 + `memberBulkCoach` 줄 삭제 |
+| 회원 → 이용권 → 코치·시간 변경 | `renderMemberCoachAssignment` 이 버튼 하나로 바뀌었습니다 |
+| 결제 → 환불 모달 | `renderRefundModal`·`refundErrorText` 교체 |
+| 시간표 → 변경 승인 대기 | `renderScheduleChangeApprovalQueue` 교체 |
+| 상품 편집에서 현금가 입력 | 카드가가 1.1배로 자동 계산되면 됩니다 (저쪽 신규) |
+
+`config.local.js` 가 있으면 **운영 DB 에 붙습니다.** 읽기만 하세요.
+저장·삭제를 눌러보려면 그 파일을 잠시 치워 데모 모드로 두는 편이 안전합니다.
+
+### 1-2. 다음 `origin/main` 병합 — 이번에 쓴 절차
+
+저쪽은 하루 3~4번 배포합니다. 며칠 지나면 또 벌어집니다.
+이번(1.0.367 → 1.0.371)에는 충돌이 `app.js` 12곳, `index.html` 1곳이었고,
+**손으로 읽어서 고르지 말고** 아래 순서로 기계적으로 풀었습니다.
+
+1. **저쪽이 실제로 뭘 바꿨는지부터 확정합니다.** 충돌 마커만 보면 오판합니다.
+   병합 기준본(`git merge-base`)과 `origin/main` 의 `app.js` 를 함수 단위로
+   갈라 비교하면 "수정 N개 · 신규 M개 · 삭제 K개" 목록이 나옵니다.
+   이번엔 수정 36 · 신규 20 · 삭제 1 이었습니다.
+2. **함수마다 "지금 어디 사는지" 를 붙입니다** (`app.js` / `domain/` / `views/` /
+   `events/`). 이 표가 있으면 각 충돌을 어떻게 풀지 고민할 필요가 없습니다.
+3. **충돌 블록은 "저쪽 내용에서 우리가 옮긴 함수만 빼기" 로 풉니다.**
+   남는 것이 저쪽 신규 코드이고, 그건 `app.js` 에 그대로 둡니다.
+4. **옮겨 둔 함수는 저쪽 본문으로 통째 교체하고 바이트 대조합니다.**
+   우리가 이음매를 넣어 둔 함수만 손으로 봅니다. 이번엔 1개뿐이었고,
+   저쪽이 그 전역을 아예 안 쓰게 고쳐서 이음매를 걷어냈습니다.
+5. **`app.js` 로 되돌리지 마세요.** 중복 선언이 되고 나중 로드가 이겨
+   저쪽 수정이 조용히 무시됩니다 (`global-scope` 가 잡습니다).
+6. **`bindEvents` 는 특별히 다룹니다.** 우리가 9개 파일로 나눠서 통째 대조가
+   안 됩니다. 대신 나눈 파일들의 `bind*Events` 본문을 다 모아 저쪽 `bindEvents`
+   본문과 **줄 단위로 비교**하면 됩니다. 이번엔 양쪽 2,331줄로 차이 0 이었습니다.
+   새 `document` 리스너는 `delegated.js` 안에서 **원래 등록 순서 자리**에
+   넣어야 합니다 (`event-binding` 검사의 전제입니다).
+7. 끝나고 **중복 선언 0 · 유실 0** 을 확인합니다. 저쪽 변경 함수가 `app.js`
+   에도 `domain/` 에도 없으면 유실된 것입니다.
+
+`index.html` 은 늘 같습니다 — 우리 스크립트 목록을 유지하고 버전만 저쪽 것으로.
+다만 `?v=notion-catalog-3` 처럼 **우리가 고친 캐시 키는 되돌리지 마세요.**
+(저쪽 관리자 `index.html` 은 아직 `-2` 로 남아 있는데 이건 저쪽 실수입니다.)
 
 ### 2. `app.js` 에 남은 큰 함수
 
 100줄 넘는 함수 18개가 남았습니다.
 
 ```
-795줄  performAdminLiveDataSync      서버 동기화
-466줄  addLessonFromForm             폼 처리
-339줄  submitMemberManagementForm    폼 처리
-305줄  submitMemberInlineEditor      폼 처리
-227줄  openLessonModal
-217줄  validateMonthlyImportWorkbook
+796줄  performAdminLiveDataSync      서버 동기화
+467줄  addLessonFromForm             폼 처리
+340줄  submitMemberManagementForm    폼 처리
+312줄  submitMemberInlineEditor      폼 처리
+228줄  openLessonModal
+218줄  validateMonthlyImportWorkbook
+189줄  updateMembershipProductSetting
 ```
 
 폼 처리 함수들은 `events/` 나 새 `actions/` 로, 서버 동기화는 `data/` 로 갈 만합니다.
@@ -128,6 +178,7 @@ app/admin/
 
 버전이 9개 파일 76곳에 하드코딩돼 있습니다. 매 병합마다 `index.html` 충돌이
 나는 것도 이것 때문입니다. 반나절이면 되고 리스크가 거의 없습니다.
+**이번 병합에서도 `index.html` 충돌은 오직 버전 때문이었습니다.**
 
 ### 5. 회원·코치 앱 중복 제거
 
