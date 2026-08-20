@@ -93,6 +93,12 @@ const SOURCES = [
   "app/tennis-note-member-app/ui/sheet.js",
   "app/tennis-note-member-app/ui/screens.js",
   "app/tennis-note-member-app/storage.js",
+  "app/tennis-note-member-app/actions/requests.js",
+  "app/tennis-note-member-app/actions/enrollment.js",
+  "app/tennis-note-member-app/actions/profile.js",
+  "app/tennis-note-member-app/actions/journal.js",
+  "app/tennis-note-member-app/actions/payment.js",
+  "app/tennis-note-member-app/actions/session.js",
   "app/tennis-note-member-app/app.js",
   "app/tennis-note-coach-app/app.js",
 ];
