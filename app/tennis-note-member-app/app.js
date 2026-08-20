@@ -179,36 +179,6 @@ window.addEventListener("resize", syncMemberVisualViewport, { passive: true });
 window.visualViewport?.addEventListener("resize", syncMemberVisualViewport, { passive: true });
 window.visualViewport?.addEventListener("scroll", syncMemberVisualViewport, { passive: true });
 
-function showToast(message) {
-  let toast = document.querySelector("#appToast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.id = "appToast";
-    toast.className = "app-toast";
-    toast.setAttribute("role", "status");
-    toast.setAttribute("aria-live", "polite");
-    document.body.appendChild(toast);
-  }
-  toast.textContent = String(message || "");
-  toast.classList.add("is-visible");
-  window.clearTimeout(appToastTimer);
-  appToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
-}
-
-function hideBrandSplash() {
-  window.__tennisNoteBootReady?.();
-  const splash = document.querySelector("#brandSplash");
-  if (!splash) return;
-  const elapsed = performance.now() - brandSplashStartedAt;
-  const delay = Math.max(0, brandSplashMinimumDuration - elapsed);
-  window.setTimeout(() => {
-    splash.classList.add("is-hidden");
-    window.setTimeout(() => {
-      splash.hidden = true;
-    }, 240);
-  }, delay);
-}
-
 const days = ["월", "화", "수", "목", "금", "토", "일"];
 const times = makeMemberTimeRange("18:40", "21:20");
 const listPageSize = 5;
@@ -308,18 +278,6 @@ const paymentConfigKey = "tennis-note-payment-config";
 const adminStorageKey = "tennis-note-admin-demo-v1";
 const liveSchedulePolicyKey = "app_schedule_policy";
 const holdingPolicyKey = "holding_policy";
-
-function readAdminProducts() {
-  try {
-    const snapshot = JSON.parse(localStorage.getItem(adminStorageKey) || "null");
-    const source = snapshot?.membershipProducts || snapshot?.membershipProductDrafts;
-    if (!Array.isArray(source) || !source.length) return [];
-    return source
-      .map((product) => normalizeProduct(product, defaultProducts.find((item) => item.id === product.id)));
-  } catch {
-    return [];
-  }
-}
 
 function membershipProductFromServer(row = {}) {
   const productKind = String(row.product_kind || "regular");
@@ -680,19 +638,6 @@ const appModePreferenceKey = "tennis-note-app-mode";
 const legacyDemoStorageKeys = ["tennis-note-member-demo-v1", "tennis-note-coach-demo-v1", "tennis-note-shared-demo-v1"];
 let coachModeNavigationStarted = false;
 
-function safeLocalStorageSet(key, value) {
-  try {
-    localStorage.setItem(key, value);
-    return true;
-  } catch (error) {
-    if (error?.name !== "QuotaExceededError") console.warn("임시 저장 실패", error);
-    return false;
-  }
-}
-
-function purgeLegacyDemoStorage() {
-  legacyDemoStorageKeys.forEach((key) => localStorage.removeItem(key));
-}
 const notionCurriculumGuideUrl = curriculumCatalog.sources?.memberGuide || "https://app.notion.com/p/94544cb6f3d546e991db21dbab5fb163";
 const notionCurriculumDetailUrl = curriculumCatalog.sources?.detailedGuide || "https://app.notion.com/p/312b107df48080e282cbe84b95cff64b";
 
@@ -844,83 +789,6 @@ const ntrpSurveyQuestions = [
   },
 ];
 
-function loadSharedData() {
-  try {
-    const shared = JSON.parse(localStorage.getItem(sharedStorageKey) || "null") || {};
-    return {
-      lessonLogs: shared.lessonLogs || [],
-      feedbackRequests: shared.feedbackRequests || [],
-      ntrpRequests: shared.ntrpRequests || [],
-      paymentRequests: shared.paymentRequests || [],
-      makeupRequests: shared.makeupRequests || [],
-      holdingRequests: shared.holdingRequests || [],
-      notices: shared.notices || [],
-      noticeSource: shared.noticeSource || "",
-    };
-  } catch {
-    localStorage.removeItem(sharedStorageKey);
-    return { lessonLogs: [], feedbackRequests: [], ntrpRequests: [], paymentRequests: [], makeupRequests: [], holdingRequests: [], notices: [], noticeSource: "" };
-  }
-}
-
-async function syncLiveNotices() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.selectRows) return false;
-  try {
-    const rows = await client.selectRows("tn_notice_popups", {
-      select: "id,title,body,audience,priority,status,starts_on,ends_on,show_once_per_day,display_order,image_url,image_alt,action_label,action_url,created_at,updated_at",
-      limit: 100,
-    });
-    const notices = (rows || [])
-      .map((row) => noticeRowToAppNotice(row))
-      .sort((a, b) => a.displayOrder - b.displayOrder || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-    const shared = loadSharedData();
-    if (!notices.length) {
-      shared.notices = [];
-      shared.noticeSource = "server";
-      saveSharedData(shared);
-      return true;
-    }
-    shared.notices = notices.slice(0, 100);
-    shared.noticeSource = "server";
-    saveSharedData(shared);
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-async function syncMemberNotificationsFromServer(profile = null) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.readiness?.().ready || !client.selectRows || !profileId) return false;
-  try {
-    const rows = await client.selectRows("tn_notifications", {
-      select: "id,user_id,channel,template_key,title,body,payload,scheduled_at,sent_at,status,created_at",
-      filters: { user_id: profileId },
-      limit: 20,
-    });
-    const notifications = (rows || [])
-      .filter((row) => row.channel === "app")
-      .map((row) => normalizeLiveNotification(row))
-      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-    const previousKey = state.lastLiveNotificationKey;
-    state.liveNotifications = notifications;
-    const latest = notifications[0];
-    const latestKey = latest ? `${latest.id}:${latest.status}` : "";
-    if (latest && latestKey !== state.lastLiveNotificationKey) {
-      state.lastLiveNotificationKey = latestKey;
-      state.ticketHistory.unshift({ text: `${latest.title} · ${latest.body}`, tone: latest.tone });
-    }
-    return {
-      ok: true,
-      newNotification: previousKey && latest && latestKey !== previousKey ? latest : null,
-    };
-  } catch {
-    return false;
-  }
-}
-
 function pushPaymentRequestToShared(request) {
   const shared = loadSharedData();
   const paymentId = request.paymentId || `local_${Date.now()}_${request.productId}`;
@@ -975,86 +843,6 @@ function syncPracticeFeedbackFromCoach() {
     log.coachFeedback = sharedRequest.coachFeedback || log.coachFeedback || "";
     if (!Array.isArray(log.mediaItems)) log.mediaItems = mediaItemsFromNames(log.mediaNames || []);
   });
-}
-
-function restoreSnapshot() {
-  try {
-    const snapshot = JSON.parse(localStorage.getItem(storageKey) || "null");
-    if (!snapshot) return;
-    if (snapshot.state) Object.assign(state, snapshot.state);
-    if (Array.isArray(snapshot.lessons)) lessons.splice(0, lessons.length, ...snapshot.lessons);
-    const visibleLessons = lessons.filter((lesson) => !["무인", "볼머신"].some((word) => `${lesson.coach} ${lesson.type}`.includes(word)));
-    lessons.splice(0, lessons.length, ...visibleLessons);
-    state.lessonLogs.forEach((log) => {
-      if (!Array.isArray(log.mediaItems)) log.mediaItems = mediaItemsFromNames(log.mediaNames || []);
-    });
-    state.practiceLogs.forEach((log) => {
-      if (!Array.isArray(log.mediaItems)) log.mediaItems = mediaItemsFromNames(log.mediaNames || []);
-    });
-    if (!Array.isArray(state.expiredTickets)) state.expiredTickets = [];
-    if (!Array.isArray(state.liveMembershipProducts)) state.liveMembershipProducts = [];
-    if (!state.livePaymentOptions || typeof state.livePaymentOptions !== "object") {
-      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
-    }
-    state.livePaymentOptions.allowedMethods = paymentMethodIdList(state.livePaymentOptions.allowedMethods || ["tosspay"]);
-    state.livePaymentOptions.bankTransferEnabled = state.livePaymentOptions.bankTransferEnabled === true;
-    if (!Array.isArray(state.livePaymentOptions.paymentMethods)) state.livePaymentOptions.paymentMethods = [];
-    state.livePaymentOptions.settingsVersion = Math.max(0, Number(state.livePaymentOptions.settingsVersion) || 0);
-    state.livePaymentOptions.features = { threeMonth: true, oneDay: true, coupons: true, ...(state.livePaymentOptions.features || {}) };
-    if (!Array.isArray(state.discountCoupons)) state.discountCoupons = [];
-    state.membershipPricingQuotes = {};
-    if (!Array.isArray(state.liveTickets)) state.liveTickets = [];
-    if (!state.memberEnrollment || typeof state.memberEnrollment !== "object") state.memberEnrollment = null;
-    state.pendingPurchaseProductId = String(state.pendingPurchaseProductId || "");
-    state.purchaseFlow = {
-      open: false,
-      step: 1,
-      familyId: "weekday-regular",
-      productId: "",
-      renewalTicketId: "",
-      scheduleMode: "keep",
-      coachRoleId: "",
-      coachName: "",
-      preferredDate: "",
-      preferredDay: "",
-      preferredTime: "",
-      preferredSchedules: [],
-      discountIssueId: "",
-      discountSelectionMode: "auto",
-      completionStatus: "",
-      ...(state.purchaseFlow && typeof state.purchaseFlow === "object" ? state.purchaseFlow : {}),
-    };
-    state.purchaseFlow.step = Math.min(4, Math.max(1, Number(state.purchaseFlow.step) || 1));
-    if (!Array.isArray(state.purchaseFlow.preferredSchedules)) state.purchaseFlow.preferredSchedules = [];
-    if (["weekday-coupon", "weekend-coupon"].includes(state.purchaseFlow.familyId)) state.purchaseFlow.familyId = "coupon";
-    if (["weekday-coupon", "weekend-coupon"].includes(state.membershipSelectedFamilyId)) state.membershipSelectedFamilyId = "coupon";
-    state.selectedLessonDetailId = String(state.selectedLessonDetailId || "");
-    if (!["card", "tosspay", "bank_transfer", "naverpay", "kakaopay"].includes(state.selectedPaymentMethod)) state.selectedPaymentMethod = "tosspay";
-    state.selectedPaymentMethod = normalizeSelectedPaymentMethod();
-    if (!state.pushNotifications || typeof state.pushNotifications !== "object") {
-      state.pushNotifications = {
-        permission: "unknown",
-        status: "checking",
-        detail: "수업 일정과 회원권 만료를 알려드립니다.",
-      };
-    }
-    if (!state.ticketSyncStatus || typeof state.ticketSyncStatus !== "object") {
-      state.ticketSyncStatus = { tone: "wait", text: "서버 회원권 확인 중" };
-    }
-    if (state.pendingPaymentCheckStatus && typeof state.pendingPaymentCheckStatus !== "object") {
-      state.pendingPaymentCheckStatus = null;
-    }
-    state.lastLiveTicketKey = state.lastLiveTicketKey || "";
-    state.lastReadFeedbackId = String(state.lastReadFeedbackId || "");
-    state.lessonLogPage = Number(state.lessonLogPage) || 0;
-    state.ticketHistoryPage = Number(state.ticketHistoryPage) || 0;
-    state.expiredTicketPage = Number(state.expiredTicketPage) || 0;
-    state.practiceLogPage = Number(state.practiceLogPage) || 0;
-    syncConfirmationsFromCoach();
-    syncPracticeFeedbackFromCoach();
-  } catch {
-    localStorage.removeItem(storageKey);
-  }
 }
 
 function ensureDemoPresentation() {
@@ -1401,14 +1189,6 @@ function nativeBankNotificationBridgePlugin() {
   return bankNotificationBridgePluginCache;
 }
 
-function bankNotificationDevicePublicId() {
-  let value = String(localStorage.getItem(bankNotificationDeviceStorageKey) || "").trim();
-  if (value.length >= 16) return value;
-  value = `tn-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
-  localStorage.setItem(bankNotificationDeviceStorageKey, value);
-  return value;
-}
-
 async function refreshBankNotificationBridge() {
   if (!bankNotificationAdminAllowed()) {
     bankNotificationBridgeState = null;
@@ -1428,67 +1208,6 @@ async function refreshBankNotificationBridge() {
   }
   renderBankNotificationBridge();
   return bankNotificationBridgeState?.configured === true;
-}
-
-async function connectBankNotificationBridge() {
-  if (!bankNotificationAdminAllowed()) return;
-  const client = window.TennisNoteDataClient;
-  const plugin = nativeBankNotificationBridgePlugin();
-  if (!client?.invokeFunction || !client.getSession?.()?.access_token || !plugin?.getStatus) {
-    showToast("관리자 로그인과 Android 앱 연결을 확인해 주세요.");
-    return;
-  }
-  const currentStatus = await plugin.getStatus().catch(() => ({}));
-  const repairRequired = currentStatus.repairRequired === true
-    || currentStatus.remoteDisabled === true
-    || String(currentStatus.lastError || "").includes("repair_required")
-    || String(currentStatus.lastError || "").includes("feature_disabled")
-    || String(currentStatus.lastError || "").includes("device_unauthorized");
-  if (currentStatus.configured === true && currentStatus.permissionGranted !== true && !repairRequired) {
-    await plugin.openNotificationAccessSettings?.();
-    await refreshBankNotificationBridge();
-    return;
-  }
-  if (currentStatus.configured === true && currentStatus.permissionGranted === true && !repairRequired) {
-    await plugin.flush?.();
-    await refreshBankNotificationBridge();
-    showToast("입금 알림 연결 상태를 확인했습니다.");
-    return;
-  }
-  const branchId = String(currentLiveTicket()?.branchId || "");
-  try {
-    const paired = await client.invokeFunction("portone-payment/bank-notification-pair", {
-      body: {
-        ...(branchId ? { branchId } : {}),
-        devicePublicId: bankNotificationDevicePublicId(),
-        deviceName: `관리자 Android ${memberNativeAppInfo?.version || ""}`.trim(),
-      },
-    });
-    await plugin.configure({
-      branchId: paired.branchId,
-      deviceToken: paired.deviceToken,
-      ingestUrl: paired.ingestUrl,
-      heartbeatUrl: paired.heartbeatUrl,
-      allowedPackages: paired.allowedPackages || [],
-      accountRevision: Number(paired.accountRevision || 1),
-    });
-    await plugin.flush?.();
-    bankNotificationBridgeState = await plugin.getStatus();
-    renderBankNotificationBridge();
-    if (bankNotificationBridgeState.permissionGranted !== true) {
-      await plugin.openNotificationAccessSettings?.();
-      showToast("알림 접근에서 Tennis Note를 허용한 뒤 앱으로 돌아와 주세요.");
-    } else showToast("이 기기의 입금 알림을 연결했습니다.");
-  } catch (error) {
-    const code = error?.payload?.code || error?.message || "pair_failed";
-    const messages = {
-      bank_notification_feature_disabled: "관리자 웹에서 Android 입금 알림 확인을 먼저 켜 주세요.",
-      bank_transfer_account_not_ready: "관리자 웹에서 사용할 입금 계좌를 먼저 저장해 주세요.",
-      bank_notification_bank_not_supported: "현재 우리은행과 카카오뱅크 알림만 연결할 수 있습니다.",
-    };
-    showToast(messages[code] || `입금 알림 연결 실패: ${code}`);
-    await refreshBankNotificationBridge();
-  }
 }
 
 let memberNativeAppInfo = null;
@@ -1553,48 +1272,10 @@ async function installNativeBackNavigation() {
   });
 }
 
-function installOAuthReturnStatusReset() {
-  const reset = () => {
-    window.setTimeout(() => {
-      const status = $("#memberEmailLoginStatus");
-      if (
-        document.hidden
-        || !status?.textContent.includes("로그인 화면을 여는 중")
-        || !$("#appScreen")?.hidden
-        || window.location.hash.includes("access_token=")
-        || window.TennisNoteDataClient?.getSession?.()?.access_token
-      ) return;
-      status.textContent = "로그인이 취소되었습니다. 다시 로그인 수단을 선택해주세요.";
-    }, 500);
-  };
-  window.addEventListener("focus", reset);
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) reset();
-  });
-}
-
-function currentPushDeviceId() {
-  let deviceId = localStorage.getItem(pushDeviceStorageKey) || "";
-  if (!deviceId) {
-    deviceId = globalThis.crypto?.randomUUID?.() || `device-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    safeLocalStorageSet(pushDeviceStorageKey, deviceId);
-  }
-  return deviceId;
-}
-
-function pushPreferenceEnabled() {
-  return localStorage.getItem(pushPreferenceStorageKey) !== "false";
-}
-
 function setPushNotificationState(permission, status, detail) {
   state.pushNotifications = { permission, status, detail };
   renderPushNotificationSettings();
   saveSnapshot();
-}
-
-function pushPrimerWasRecentlyDeferred() {
-  const deferredAt = Number(localStorage.getItem(pushPrimerDeferredStorageKey) || 0);
-  return deferredAt > 0 && Date.now() - deferredAt < 7 * 24 * 60 * 60 * 1000;
 }
 
 function canShowNativePushPrimer() {
@@ -1626,39 +1307,6 @@ function scheduleNativePushPrimer(delay = 1400) {
       scheduleNativePushPrimer(3000);
     }
   }, delay);
-}
-
-function deferNativePushPrimer() {
-  safeLocalStorageSet(pushPrimerDeferredStorageKey, String(Date.now()));
-  pushPrimerAttempts = 0;
-  closeAppModal("pushPrimerModal");
-}
-
-async function enableNativePushFromPrimer() {
-  localStorage.removeItem(pushPrimerDeferredStorageKey);
-  closeAppModal("pushPrimerModal");
-  setPushPreferenceEnabled(true);
-  await new Promise((resolve) => window.setTimeout(resolve, 80));
-  try {
-    await syncNativePushRegistration(null, true);
-  } catch {
-    setPushNotificationState("unknown", "알림 연결 실패", "네트워크와 휴대폰 알림 설정을 확인한 뒤 내 정보에서 다시 시도해 주세요.");
-  }
-}
-
-function openAccountDeletionModal() {
-  const client = window.TennisNoteDataClient;
-  if (!state.member?.profileId || !client?.getSession?.()?.access_token) {
-    showToast("로그인한 회원만 탈퇴 요청을 접수할 수 있습니다");
-    return;
-  }
-  $("#accountDeletionForm")?.reset();
-  if ($("#accountDeletionMessage")) $("#accountDeletionMessage").textContent = "요청 접수 후 관리자가 처리 상태를 확인합니다.";
-  if ($("#accountDeletionModal")) $("#accountDeletionModal").hidden = false;
-}
-
-function closeAccountDeletionModal() {
-  if ($("#accountDeletionModal")) $("#accountDeletionModal").hidden = true;
 }
 
 async function submitAccountDeletionRequest(event) {
@@ -1709,93 +1357,6 @@ async function cancelAccountDeletionRequest() {
   }
 }
 
-async function registerPushToken(tokenValue, platform = nativeAppPlatform()) {
-  const client = window.TennisNoteDataClient;
-  if (accountDeletionBlocksNotifications(state.accountDeletionRequest?.status)) return false;
-  if (!["android", "ios"].includes(platform)) return false;
-  if (!tokenValue || !pushProfileId || !client?.rpc || !client.getSession?.()?.access_token) return false;
-  await client.rpc("tn_register_push_device", {
-    target_platform: platform,
-    target_device_id: currentPushDeviceId(),
-    target_push_token: tokenValue,
-  });
-  setPushPreferenceEnabled(true);
-  setPushNotificationState("granted", "앱 알림 켜짐", "수업 하루 전·30분 전과 회원권 안내를 잠금화면으로 알려드립니다.");
-  return true;
-}
-
-async function authorizeMemberNotificationAction(data = {}) {
-  const client = window.TennisNoteDataClient;
-  if (!client?.selectCurrentProfile || !client?.selectRows || !client.getSession?.()?.access_token) {
-    showToast("로그인 후 알림 내용을 확인해 주세요.");
-    return false;
-  }
-
-  try {
-    const current = await client.selectCurrentProfile();
-    const currentProfileId = String(current?.profile?.id || "");
-    if (!currentProfileId || currentProfileId !== String(state.member?.profileId || "")) {
-      const restored = await applySupabaseMemberSession(false);
-      if (!restored || currentProfileId !== String(state.member?.profileId || "")) {
-        showToast("회원 연결을 다시 확인한 뒤 알림을 열어 주세요.");
-        return false;
-      }
-    }
-
-    const lessonId = String(data.lessonId || data.lesson_id || "").trim();
-    if (lessonId) {
-      const [legacyParticipants, participantRecords] = await Promise.all([
-        client.selectRows("tn_lesson_participants", {
-          select: "lesson_id,user_id,ticket_id",
-          filters: { lesson_id: lessonId, user_id: currentProfileId },
-          limit: 1,
-        }).catch(() => []),
-        client.selectRows("tn_lesson_participant_records_v2", {
-          select: "id,lesson_id,user_id,member_ticket_id",
-          filters: { lesson_id: lessonId, user_id: currentProfileId },
-          limit: 1,
-        }).catch(() => []),
-      ]);
-      if (!legacyParticipants?.length && !participantRecords?.length) {
-        showToast("현재 계정에서 확인할 수 없는 수업입니다.");
-        return false;
-      }
-    }
-
-    const participantRecordId = String(
-      data.participantRecordId || data.participant_record_id || data.lessonRecordId || data.lesson_record_id || "",
-    ).trim();
-    if (participantRecordId) {
-      const records = await client.selectRows("tn_lesson_participant_records_v2", {
-        select: "id,user_id,lesson_id",
-        filters: { id: participantRecordId, user_id: currentProfileId },
-        limit: 1,
-      }).catch(() => []);
-      if (!records?.length) {
-        showToast("현재 계정에서 확인할 수 없는 피드백입니다.");
-        return false;
-      }
-    }
-
-    const ticketId = String(data.ticketId || data.ticket_id || "").trim();
-    if (ticketId) {
-      const ticketsSynced = await syncMemberTicketsFromServer(current.profile).catch(() => false);
-      if (!ticketsSynced) {
-        showToast("회원권 정보를 새로 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        return false;
-      }
-      if (!(state.liveTickets || []).some((ticket) => String(ticket.id || "") === ticketId)) {
-        showToast("현재 계정에서 확인할 수 없는 회원권입니다.");
-        return false;
-      }
-    }
-    return true;
-  } catch {
-    showToast("알림 내용을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-    return false;
-  }
-}
-
 function memberNotificationLesson(data = {}) {
   const lessonId = String(data.lessonId || data.lesson_id || "").trim();
   if (!lessonId) return null;
@@ -1804,39 +1365,6 @@ function memberNotificationLesson(data = {}) {
   )) || (state.liveLessons || []).find((lesson) => (
     String(lesson.serverLessonId || lesson.id || "") === lessonId
   )) || null;
-}
-
-function openMemberNotificationTarget(data = {}, route = "home") {
-  const lesson = memberNotificationLesson(data);
-  if (route === "schedule" && lesson) {
-    state.selectedMemberScheduleTicketId = String(memberLessonTicketId(lesson) || "");
-    state.selectedScheduleDay = lesson.day || state.selectedScheduleDay;
-    state.memberScheduleMode = "mine";
-    state.memberScheduleFullView = false;
-    renderSchedule();
-    openLessonDetailSheet(lesson.id);
-    return true;
-  }
-  if (["feedback", "journal"].includes(route)) {
-    const entry = memberNotificationJournalEntry(data);
-    if (entry) {
-      openJournalDetail(entry.id);
-      return true;
-    }
-  }
-  if (route === "membership") {
-    const ticketId = String(data.ticketId || data.ticket_id || "").trim();
-    const ticketCard = $$('[data-member-ticket-id]').find((item) => item.dataset.memberTicketId === ticketId);
-    if (ticketCard) {
-      window.setTimeout(() => ticketCard.scrollIntoView({ behavior: "smooth", block: "center" }), 40);
-      return true;
-    }
-  }
-  if ((route === "schedule" || ["feedback", "journal"].includes(route)) && !lesson) {
-    showToast("알림에 연결된 수업을 찾지 못했습니다. 최신 일정을 다시 확인해 주세요.");
-  }
-  jumpToTop();
-  return false;
 }
 
 async function bindNativePushListeners(plugin) {
@@ -1877,217 +1405,6 @@ async function bindNativePushListeners(plugin) {
     openMemberNotificationTarget(data, route);
   });
   pushListenersReady = true;
-}
-
-async function syncNativePushRegistration(profile = null, requestPermission = false) {
-  const plugin = nativePushPlugin();
-  const platform = nativeAppPlatform();
-  const profileId = profile?.id || state.member?.profileId || "";
-  pushProfileId = profileId;
-
-  if (accountDeletionBlocksNotifications(state.accountDeletionRequest?.status)) {
-    // The deletion-request RPC already disabled every currently enabled
-    // device. Do not touch updated_at here because cancellation uses that
-    // request-time marker to restore only devices disabled by the request.
-    pushProfileId = "";
-    setPushNotificationState("disabled", "탈퇴 요청으로 알림 중지", "계정 삭제 요청을 처리하는 동안 새 기기 알림을 등록하지 않습니다.");
-    return false;
-  }
-
-  if (!["android", "ios"].includes(platform) || !plugin) {
-    setPushNotificationState(
-      "unavailable",
-      "설치 앱에서 사용 가능",
-      "휴대폰에 설치한 Tennis Note 앱에서 수업·회원권 알림을 켤 수 있습니다.",
-    );
-    return false;
-  }
-  if (!profileId || !window.TennisNoteDataClient?.getSession?.()?.access_token) {
-    setPushNotificationState("unknown", "로그인 후 알림 설정", "회원 로그인 후 기기 알림을 연결할 수 있습니다.");
-    return false;
-  }
-  if (!pushPreferenceEnabled()) {
-    setPushNotificationState("disabled", "앱 알림 꺼짐", "이 기기에서는 알림을 보내지 않습니다. 알림 켜기를 누르면 다시 받을 수 있습니다.");
-    return false;
-  }
-
-  await bindNativePushListeners(plugin);
-  if (platform === "android") {
-    await plugin.createChannel({
-      id: "lesson-reminders",
-      name: "수업·회원권 알림",
-      description: "수업 일정과 회원권 만료 알림",
-      importance: 5,
-      visibility: 1,
-      vibration: true,
-    }).catch(() => undefined);
-  }
-
-  let permission = await plugin.checkPermissions();
-  if (requestPermission && ["prompt", "prompt-with-rationale"].includes(permission.receive)) {
-    permission = await plugin.requestPermissions();
-  }
-  if (permission.receive === "denied") {
-    setPushNotificationState("denied", "휴대폰 알림이 꺼져 있음", "휴대폰 설정에서 Tennis Note 알림을 허용해 주세요.");
-    return false;
-  }
-  if (permission.receive !== "granted") {
-    setPushNotificationState("prompt", "알림 허용 필요", "알림 허용을 누르면 하루 전과 30분 전에 알려드립니다.");
-    return false;
-  }
-
-  setPushNotificationState("granted", "앱 알림 연결 중", "기기 알림 토큰을 안전하게 등록하고 있습니다.");
-  await plugin.register();
-  return true;
-}
-
-async function disableNativePushForLogout() {
-  const client = window.TennisNoteDataClient;
-  if (client?.getSession?.()?.access_token && client?.rpc) {
-    await client.rpc("tn_disable_push_device", {
-      target_device_id: currentPushDeviceId(),
-    }).catch(() => null);
-  }
-  // The server-side device record above is the authoritative push opt-out.
-  // Calling the Android plugin's unregister method without an initialized
-  // Firebase app terminates the whole native process instead of rejecting.
-  // Keep the native registration intact and let the next signed-in session
-  // refresh it after Firebase is available.
-  pushProfileId = "";
-  setPushNotificationState("unknown", "로그인 후 알림 설정", "회원 로그인 후 기기 알림을 연결할 수 있습니다.");
-}
-
-async function disableNativePushForMember() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.rpc || !client.getSession?.()?.access_token) {
-    setPushNotificationState("unknown", "알림 끄기 실패", "로그인과 네트워크 연결을 확인한 뒤 다시 시도해 주세요.");
-    return false;
-  }
-  await client.rpc("tn_disable_push_device", {
-    target_device_id: currentPushDeviceId(),
-  });
-  setPushPreferenceEnabled(false);
-  setPushNotificationState("disabled", "앱 알림 꺼짐", "이 기기에서는 알림을 보내지 않습니다. 알림 켜기를 누르면 다시 받을 수 있습니다.");
-  return true;
-}
-
-function loadAdminSchedulePolicy() {
-  const fallback = defaultMemberCoachPolicy();
-  let resolved = fallback;
-  try {
-    const snapshot = readAdminSnapshot();
-    if (snapshot) {
-      const scheduleSettings = snapshot.scheduleSettings || {};
-      const storedPolicyVersion = Number(scheduleSettings.coachWorkPolicyVersion) || 0;
-      const savedCoaches = storedPolicyVersion >= 2 && Array.isArray(snapshot.coaches)
-        ? snapshot.coaches
-        : fallback.coaches;
-      resolved = {
-        openStart: storedPolicyVersion < 2 ? fallback.openStart : scheduleSettings.openStart || fallback.openStart,
-        openEnd: storedPolicyVersion < 2 ? fallback.openEnd : scheduleSettings.openEnd || fallback.openEnd,
-        breakRules: storedPolicyVersion < 2 ? fallback.breakRules : Array.isArray(scheduleSettings.breakRules) ? scheduleSettings.breakRules : fallback.breakRules,
-        lessonColors: { ...fallback.lessonColors, ...(scheduleSettings.lessonColors || {}) },
-        lessonColorRules: Array.isArray(scheduleSettings.lessonColorRules) ? scheduleSettings.lessonColorRules : [],
-        memberScheduleRequestOnly: scheduleSettings.memberScheduleRequestOnly !== false,
-        requireMakeupDayAnchor: scheduleSettings.requireMakeupDayAnchor
-          ?? scheduleSettings.require_makeup_day_anchor
-          ?? fallback.requireMakeupDayAnchor,
-        makeupAnchorGapMinutes: (() => {
-          const configured = scheduleSettings.makeupAnchorGapMinutes
-            ?? scheduleSettings.makeup_anchor_gap_minutes
-            ?? fallback.makeupAnchorGapMinutes;
-          if (configured === null || String(configured).toLowerCase() === "unlimited") return null;
-          return Math.min(100, Math.max(0, Number(configured) || 0));
-        })(),
-        coaches: savedCoaches
-        .filter((coach) => (
-          (coach.status || "active") === "active"
-          && (coach.employmentStatus || "active") === "active"
-          && !coach.archivedAt
-          && !coach.deletedAt
-        ))
-        .map(normalizeMemberCoach),
-      };
-    }
-  } catch {
-    localStorage.removeItem(adminStorageKey);
-  }
-  const workspace = memberScheduleV2WorkspaceCache?.workspace;
-  if (!workspace?.coaches?.length) return resolved;
-  const serverCoaches = workspace.coaches.map((coach, coachIndex) => {
-    const serverLaneOrder = Number(coach.laneOrder);
-    const laneOrder = Number.isFinite(serverLaneOrder) && serverLaneOrder !== 1000
-      ? serverLaneOrder
-      : 1000 + coachIndex;
-    const workBlocks = (coach.availability || [])
-      .filter((block) => block.type === "available")
-      .map((block, blockIndex) => ({
-        id: `${coach.roleId}-server-${blockIndex}`,
-        days: [days[Number(block.dayOfWeek) === 0 ? 6 : Number(block.dayOfWeek) - 1]].filter(Boolean),
-        start: String(block.startTime || "").slice(0, 5),
-        end: String(block.endTime || "").slice(0, 5),
-        label: "근무",
-      }))
-      .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
-    const blockedBlocks = (coach.availability || [])
-      .filter((block) => block.type === "blocked")
-      .map((block, blockIndex) => ({
-        id: `${coach.roleId}-server-blocked-${blockIndex}`,
-        days: [days[Number(block.dayOfWeek) === 0 ? 6 : Number(block.dayOfWeek) - 1]].filter(Boolean),
-        start: String(block.startTime || "").slice(0, 5),
-        end: String(block.endTime || "").slice(0, 5),
-        label: block.note || "브레이크·상담",
-      }))
-      .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
-    return normalizeMemberCoach({
-      id: coach.roleId,
-      serverRoleId: coach.roleId,
-      roleId: coach.roleId,
-      name: coach.name || "이름 없음",
-      status: "active",
-      laneOrder,
-      scheduleLaneOrder: laneOrder,
-      workBlocks,
-      blockedBlocks,
-    });
-  });
-  return {
-    ...resolved,
-    coaches: serverCoaches,
-  };
-}
-
-function readAdminSnapshot() {
-  try {
-    return JSON.parse(localStorage.getItem(adminStorageKey) || "null");
-  } catch {
-    localStorage.removeItem(adminStorageKey);
-    return null;
-  }
-}
-
-async function syncLiveSchedulePolicy(branchId = "") {
-  const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.selectRows) return false;
-  try {
-    const [rows, coachRows] = await Promise.all([
-      client.selectRows("tn_admin_settings", {
-        select: "key,value,updated_at",
-        filters: { key: liveSchedulePolicyKey },
-        limit: 1,
-      }),
-      client.selectRows("tn_coach_roles", {
-        select: "id,branch_id,display_name,status,employment_status,archived_at,deleted_at",
-        limit: 100,
-      }),
-    ]);
-    return writeLiveSchedulePolicySnapshot(
-      filterSchedulePolicyByLiveCoachRoles(rows?.[0]?.value, coachRows),
-      branchId,
-    );
-  } catch (error) {
-    return false;
-  }
 }
 
 function adminMemberScheduleLessons() {
@@ -2610,39 +1927,6 @@ function syncNtrpResultFromCoach() {
   state.profile.ntrpSurvey = request.surveyAnswers || state.profile.ntrpSurvey || {};
 }
 
-function openNtrpReference(referenceId) {
-  const item = ntrpReferences.find((reference) => reference.id === referenceId);
-  if (!item) return;
-  const isPoster = Boolean(item.image);
-  $("#ntrpReferenceContent").innerHTML = `
-    <div class="section-title compact-title">
-      <h2>${item.title}</h2>
-      <span>${item.detail}</span>
-    </div>
-    ${
-      isPoster
-        ? `<img class="ntrp-modal-image" src="${item.image}" alt="${item.title}" />`
-        : `<div class="ntrp-official-summary">
-            ${ntrpQuickLevels
-              .map(
-                (level) => `
-                  <article>
-                    <strong>NTRP ${level.level}</strong>
-                    <span>${level.label}</span>
-                    <small>${level.detail}</small>
-                  </article>`,
-              )
-              .join("")}
-            <a class="small-button" href="${item.url}" target="_blank" rel="noreferrer">공식 PDF 열기</a>
-          </div>`
-    }`;
-  $("#ntrpReferenceModal").hidden = false;
-}
-
-function closeNtrpReference() {
-  $("#ntrpReferenceModal").hidden = true;
-}
-
 function selectedMemberScheduleDay() {
   if (!days.includes(state.selectedScheduleDay)) state.selectedScheduleDay = currentMemberScheduleDay();
   return state.selectedScheduleDay;
@@ -2939,33 +2223,6 @@ function memberCurriculumLibraryMarkup(active) {
     .join("");
 }
 
-function memberHoldingPolicy() {
-  const fallback = {
-    personalMaxDays: 7,
-    fourWeekPersonalMaxDays: 7,
-    threeMonthPersonalMaxDays: 14,
-    couponPersonalMaxDays: 0,
-    injuryMaxDays: 30,
-    emergencyRetroactiveDays: 3,
-    evidenceRequired: true,
-    evidenceRetentionDays: 30,
-  };
-  let saved = fallback;
-  try {
-    const snapshot = JSON.parse(localStorage.getItem(adminStorageKey) || "null");
-    saved = { ...fallback, ...(state.holdingPolicySettings || {}), ...(snapshot?.holdingPolicySettings || {}) };
-  } catch {
-    saved = fallback;
-  }
-  const ticketTitle = String(currentHoldingTicket()?.title || "");
-  const personalMaxDays = /쿠폰/.test(ticketTitle)
-    ? Number(saved.couponPersonalMaxDays) || 0
-    : /3개월|12주/.test(ticketTitle)
-      ? Number(saved.threeMonthPersonalMaxDays) || 14
-      : Number(saved.fourWeekPersonalMaxDays ?? saved.personalMaxDays) || 7;
-  return { ...saved, personalMaxDays };
-}
-
 function currentHoldingTicket(ticketId = state.selectedHoldingTicketId) {
   const liveTicket = currentLiveTickets().find((ticket) => String(ticket.id) === String(ticketId || ""))
     || currentLiveTicket();
@@ -3066,22 +2323,6 @@ function updateHoldingEvidenceFields() {
       ? `부상 홀딩 최대 ${policy.injuryMaxDays}일 · 증빙 확인 필요`
       : `개인 사유 홀딩 최대 ${policy.personalMaxDays}일`;
   }
-}
-
-function openHoldingRequestModal(ticketId = "") {
-  state.selectedHoldingTicketId = ticketId || currentLiveTicket()?.id || "";
-  if (!currentHoldingTicket()) return;
-  const today = new Date();
-  $("#holdingRequestForm")?.reset();
-  $("#holdingStartDate").value = today.toISOString().slice(0, 10);
-  $("#holdingEndDate").value = new Date(today.getTime() + 6 * 86400000).toISOString().slice(0, 10);
-  $("#holdingRequestMessage").textContent = "승인되면 해당 기간만큼 회원권 종료일이 연장됩니다.";
-  updateHoldingEvidenceFields();
-  $("#holdingRequestModal").hidden = false;
-}
-
-function closeHoldingRequestModal() {
-  $("#holdingRequestModal").hidden = true;
 }
 
 async function submitHoldingRequest(event) {
@@ -3193,38 +2434,6 @@ async function submitHoldingRequest(event) {
   renderCurrentTicketPanel();
 }
 
-async function setMemberGroupPaymentMode(mode) {
-  const account = state.groupAccount;
-  if (!account) return;
-  const linkedMembers = account.members.filter((member) => member.appStatus === "linked");
-  if (mode !== "representative" && linkedMembers.length < 2) return;
-  let nextPayer = linkedMembers.find((member) => member.name === account.nextPayer) || linkedMembers[0];
-  if (mode === "alternate") {
-    const currentIndex = linkedMembers.findIndex((member) => member.name === account.nextPayer);
-    nextPayer = linkedMembers[(currentIndex + 1) % linkedMembers.length] || nextPayer;
-  }
-  const client = window.TennisNoteDataClient;
-  if (!account.demoOnly && client?.rpc) {
-    try {
-      await client.rpc("tn_set_group_payment_mode", {
-        target_group_account_id: account.id,
-        target_payment_mode: mode,
-        target_next_payer_user_id: mode === "separate" ? null : nextPayer?.userId || null,
-      });
-    } catch {
-      state.ticketHistory.unshift({ text: "2대1 결제방식 변경 실패 · 관리자 확인 필요", tone: "alert" });
-      renderGroupAccountPanel();
-      return;
-    }
-  }
-  account.paymentMode = mode;
-  account.nextPayer = nextPayer?.name || account.nextPayer;
-  account.nextPayerUserId = nextPayer?.userId || account.nextPayerUserId;
-  state.ticketHistory.unshift({ text: `2대1 결제방식 변경 · ${memberGroupPaymentModeLabel(mode)}`, tone: "done" });
-  saveSnapshot();
-  renderGroupAccountPanel();
-}
-
 function linkMemberGroupPartner() {
   if (state.groupAccount && !state.groupAccount.demoOnly) {
     state.ticketHistory.unshift({ text: "파트너 앱 연결 요청 · 관리자 확인 필요", tone: "wait" });
@@ -3284,67 +2493,6 @@ function updateEnrollmentPartnerFields(product = null) {
     const input = $(selector);
     if (input) input.required = isGroup;
   });
-}
-
-function openMemberEnrollmentModal(productId, message = "") {
-  const product = membershipProducts().find((item) => item.id === productId);
-  const modal = $("#memberEnrollmentModal");
-  if (!product || !modal) return;
-  state.pendingPurchaseProductId = productId;
-  const enrollment = state.memberEnrollment || {};
-  const productSummary = $("#memberEnrollmentProduct");
-  if (productSummary) {
-    productSummary.innerHTML = `
-      <span>선택 회원권</span>
-      <strong>${escapeHtml(product.title)}</strong>
-      <small>${escapeHtml(product.detail)} · ${formatWon(onlinePaymentAmount(product))}</small>`;
-  }
-  setEnrollmentInputValue("#enrollmentName", enrollment.applicant_name || state.member?.name || state.profile.name || "");
-  setEnrollmentInputValue("#enrollmentPhone", enrollment.phone || state.profile.phone || "");
-  setEnrollmentInputValue("#enrollmentBirthYear", enrollment.birth_year || state.member?.birthYear || "");
-  setEnrollmentInputValue("#enrollmentNeighborhood", enrollment.neighborhood || state.member?.neighborhood || "");
-  setEnrollmentInputValue("#enrollmentGender", enrollment.gender || state.member?.gender || "");
-  setEnrollmentInputValue("#enrollmentExperience", enrollment.experience_level || "beginner");
-  setEnrollmentInputValue("#enrollmentPartnerName", enrollment.partner_name || "");
-  setEnrollmentInputValue("#enrollmentPartnerPhone", enrollment.partner_phone || "");
-  setEnrollmentInputValue("#enrollmentPartnerBirthYear", enrollment.partner_birth_year || "");
-  setEnrollmentInputValue("#enrollmentPartnerNeighborhood", enrollment.partner_neighborhood || "");
-  setEnrollmentInputValue("#enrollmentPartnerGender", enrollment.partner_gender || "");
-  if ($("#enrollmentPrivacyConsent")) $("#enrollmentPrivacyConsent").checked = false;
-  if ($("#enrollmentTermsConsent")) $("#enrollmentTermsConsent").checked = false;
-  const maxBirthYear = new Date().getFullYear() - 5;
-  if ($("#enrollmentBirthYear")) $("#enrollmentBirthYear").max = String(maxBirthYear);
-  if ($("#enrollmentPartnerBirthYear")) $("#enrollmentPartnerBirthYear").max = String(maxBirthYear);
-  if ($("#memberEnrollmentMessage")) $("#memberEnrollmentMessage").textContent = message;
-  if ($("#memberEnrollmentOptionalDetails")) $("#memberEnrollmentOptionalDetails").open = false;
-  updateEnrollmentPartnerFields(product);
-  modal.hidden = false;
-  window.setTimeout(() => $("#enrollmentName")?.focus(), 40);
-}
-
-function closeMemberEnrollmentModal() {
-  const modal = $("#memberEnrollmentModal");
-  if (modal) modal.hidden = true;
-}
-
-async function syncMemberEnrollmentFromServer(profile = null) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.selectRows || !client.readiness?.().ready || !profileId) return false;
-  try {
-    const rows = await client.selectRows("tn_member_enrollments", {
-      select: "id,user_id,branch_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,partner_birth_year,partner_neighborhood,partner_gender,submitted_at,approved_at,updated_at",
-      filters: { user_id: profileId },
-      limit: 20,
-    });
-    state.memberEnrollment = (rows || [])
-      .filter((row) => row.form_version === memberEnrollmentFormVersion)
-      .sort((left, right) => new Date(right.submitted_at || 0) - new Date(left.submitted_at || 0))[0] || null;
-    return true;
-  } catch {
-    state.memberEnrollment = null;
-    return false;
-  }
 }
 
 async function submitMemberEnrollment(event) {
@@ -3744,64 +2892,6 @@ function purchaseStepTwoHtml() {
     <p class="purchase-policy-note">표시된 시간은 현재 시간표 기준입니다. 결제 확인과 최종 등록 사이에 다른 예약이 생기면 관리자 확인 후 가장 가까운 시간으로 안내합니다.</p>`;
 }
 
-function openMembershipPurchaseFlow(renewalTicketId = "", productId = "") {
-  const flow = purchaseFlowState();
-  const sourceTicket = (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
-  const products = membershipProducts();
-  const exactProduct = products.find((product) => String(product.id || "") === String(productId || sourceTicket?.productId || "")) || null;
-  const inferredSourceFamilyId = sourceTicket ? membershipProductFamilyId({
-    title: sourceTicket.title || "",
-    group: sourceTicket.group || "",
-    productKind: sourceTicket.productKind || "regular",
-    mode: sourceTicket.productKind === "coupon" ? "pass" : "fixed",
-    groupSize: sourceTicket.groupSize || 1,
-    lessonMinutes: sourceTicket.lessonMinutes || 20,
-    scheduleScope: sourceTicket.scheduleScope || (/주말/.test(sourceTicket.title || "") ? "weekend" : "weekday"),
-  }) : "";
-  const matchingProduct = exactProduct
-    || (sourceTicket ? recommendedMembershipProducts(products, inferredSourceFamilyId, sourceTicket)[0] : null)
-    || null;
-  const lesson = sourceTicket ? purchaseTicketLesson(sourceTicket) : null;
-  flow.open = true;
-  flow.renewalTicketId = sourceTicket?.id || "";
-  flow.productId = matchingProduct?.id || "";
-  flow.familyId = matchingProduct ? membershipProductFamilyId(matchingProduct) : activeMembershipPresetId() || "four-week";
-  flow.step = 1;
-  flow.purchasePurpose = sourceTicket ? "renew_same" : (state.liveTickets || []).length ? "" : "new_purchase";
-  flow.showMoreSlots = false;
-  flow.scheduleMode = sourceTicket && matchingProduct && membershipProductFacet(matchingProduct, "productKind") !== "coupon" ? "keep" : "change";
-  flow.coachRoleId = sourceTicket?.coachRoleId || "";
-  flow.coachName = sourceTicket?.coach || memberScheduleTicketCoachName(sourceTicket || {}) || "";
-  flow.preferredDate = lesson?.lessonDate || "";
-  flow.preferredDay = lesson?.day || "";
-  flow.preferredTime = lesson?.time || "";
-  flow.preferredSchedules = [];
-  flow.discountIssueId = "";
-  flow.discountSelectionMode = "auto";
-  flow.completionStatus = "";
-  state.membershipFilters = { ...membershipProductFamilyDefinition(flow.familyId).filters };
-  state.membershipSelectedFamilyId = flow.familyId;
-  saveSnapshot();
-  renderMembershipPurchaseFlow();
-  void refreshPurchaseScheduleAvailability();
-  window.requestAnimationFrame(() => $("#membershipPurchaseFlow")?.scrollIntoView({ block: "start" }));
-}
-
-function closeMembershipPurchaseFlow(options = {}) {
-  const flow = purchaseFlowState();
-  flow.open = false;
-  flow.step = 1;
-  flow.completionStatus = "";
-  saveSnapshot();
-  renderProducts();
-  const showCurrentMembership = options.showCurrentMembership === true;
-  if (showCurrentMembership && $("#currentMembershipDetails")) $("#currentMembershipDetails").open = true;
-  window.requestAnimationFrame(() => {
-    const target = showCurrentMembership ? $("#currentMembershipDetails") : $("#membershipProductBrowser");
-    target?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-}
-
 function selectPurchasePurpose(purpose = "") {
   const flow = purchaseFlowState();
   flow.showMoreSlots = false;
@@ -3996,28 +3086,6 @@ let preparedPaymentContext = null;
 let bankTransferAccountNumberForCopy = "";
 let bankTransferPaymentIdForCancel = "";
 
-function openBankTransferInstructions(preparedPayment = {}, product = {}, amount = 0) {
-  const account = preparedPayment?.bankTransferAccount || {};
-  bankTransferAccountNumberForCopy = String(account.accountNumber || "");
-  bankTransferPaymentIdForCancel = String(preparedPayment?.paymentId || "");
-  if ($("#bankTransferProductName")) $("#bankTransferProductName").textContent = product.title || "회원권";
-  if ($("#bankTransferAmount")) $("#bankTransferAmount").textContent = formatWon(Number(preparedPayment?.amount || amount || 0));
-  if ($("#bankTransferBankName")) $("#bankTransferBankName").textContent = account.bankName || "관리자 확인 필요";
-  if ($("#bankTransferAccountNumber")) $("#bankTransferAccountNumber").textContent = bankTransferAccountNumberForCopy || "관리자 확인 필요";
-  if ($("#bankTransferAccountHolder")) $("#bankTransferAccountHolder").textContent = account.accountHolder || "관리자 확인 필요";
-  if ($("#bankTransferDepositorName")) $("#bankTransferDepositorName").textContent = preparedPayment?.depositorName || state.profile?.name || "신청자명";
-  if ($("#bankTransferDepositDueAt")) {
-    const dueAt = new Date(preparedPayment?.depositDueAt || "");
-    $("#bankTransferDepositDueAt").textContent = Number.isFinite(dueAt.getTime())
-      ? dueAt.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
-      : `${Number(account.depositDeadlineHours || 24)}시간 이내`;
-  }
-  if ($("#bankTransferCustomInstructions")) {
-    $("#bankTransferCustomInstructions").textContent = account.instructions || "신청자 이름으로 입금해 주세요.";
-  }
-  openAppSheet("bankTransferInstructionsSheet", { initialFocus: "#copyBankTransferAccountButton" });
-}
-
 async function copyBankTransferAccountNumber() {
   if (!bankTransferAccountNumberForCopy) {
     showToast("복사할 계좌번호를 찾지 못했습니다.");
@@ -4073,82 +3141,8 @@ function loadPortOneSdk() {
   return portOneSdkPromise;
 }
 
-async function syncMemberPaymentOptionsFromServer(targetBranchId = "") {
-  const client = window.TennisNoteDataClient;
-  if (!client?.invokeFunction || !client.getSession?.()?.access_token) return false;
-  const branchId = targetBranchId || currentLiveTicket()?.branchId || upcomingLiveTickets()[0]?.branchId || null;
-  try {
-    const options = await client.invokeFunction("portone-payment/options", { body: { branchId } });
-    state.livePaymentOptions = {
-      allowedMethods: paymentMethodIdList(options?.allowedMethods || ["tosspay"]),
-      bankTransferEnabled: options?.bankTransferEnabled === true,
-      paymentMethods: Array.isArray(options?.paymentMethods) ? options.paymentMethods : [],
-      settingsVersion: Math.max(0, Number(options?.settingsVersion) || 0),
-      features: { threeMonth: true, oneDay: true, coupons: true, ...(options?.features || {}) },
-    };
-    normalizeSelectedPaymentMethod();
-    return true;
-  } catch {
-    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
-    normalizeSelectedPaymentMethod();
-    return false;
-  }
-}
-
-async function syncMemberDiscountCouponsFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.invokeFunction || !client.getSession?.()?.access_token) return false;
-  const branchId = currentLiveTicket()?.branchId || upcomingLiveTickets()[0]?.branchId || state.liveMembershipProducts?.[0]?.branchId || null;
-  try {
-    const response = await client.invokeFunction("portone-payment/coupon-wallet", { body: { branchId } });
-    state.discountCoupons = Array.isArray(response?.coupons) ? response.coupons : [];
-    renderDiscountCouponWallet();
-    return true;
-  } catch {
-    state.discountCoupons = [];
-    renderDiscountCouponWallet();
-    return false;
-  }
-}
-
 function availableDiscountCoupons() {
   return (state.discountCoupons || []).filter((coupon) => discountCouponStatus(coupon).label === "사용 가능");
-}
-
-function paymentGatewayConfig() {
-  const localConfig = (() => {
-    try {
-      return JSON.parse(localStorage.getItem(paymentConfigKey) || "{}");
-    } catch {
-      localStorage.removeItem(paymentConfigKey);
-      return {};
-    }
-  })();
-  const browserConfig = window.TENNIS_NOTE_PAYMENT_CONFIG || {};
-  const liveOptions = state.livePaymentOptions || {};
-  const requestedMode = String(browserConfig.mode || localConfig.mode || defaultPaymentOperatingMode).trim().toLowerCase();
-  const mode = requestedMode === "multi" ? "multi" : defaultPaymentOperatingMode;
-  return {
-    provider: "portone",
-    mode,
-    allowedMethods: paymentMethodIdList(liveOptions.allowedMethods?.length
-      ? liveOptions.allowedMethods
-      : browserConfig.allowedMethods || localConfig.allowedMethods || defaultAllowedPaymentMethods),
-    storeId: browserConfig.storeId || localConfig.storeId || "",
-    naverPayCategoryType: browserConfig.naverPayCategoryType || localConfig.naverPayCategoryType || "",
-    naverPayCategoryId: browserConfig.naverPayCategoryId || localConfig.naverPayCategoryId || "",
-    bankTransfer: {
-      enabled: liveOptions.bankTransferEnabled === true
-        || browserConfig.bankTransfer?.enabled === true
-        || localConfig.bankTransfer?.enabled === true,
-    },
-    channels: {
-      card: browserConfig.channels?.card || browserConfig.channelKey || localConfig.channels?.card || localConfig.channelKey || "",
-      tosspay: browserConfig.channels?.tosspay || browserConfig.tossPayChannelKey || localConfig.channels?.tosspay || localConfig.tossPayChannelKey || "",
-      naverpay: browserConfig.channels?.naverpay || browserConfig.naverPayChannelKey || localConfig.channels?.naverpay || localConfig.naverPayChannelKey || "",
-      kakaopay: browserConfig.channels?.kakaopay || browserConfig.kakaoPayChannelKey || localConfig.channels?.kakaopay || localConfig.kakaoPayChannelKey || "",
-    },
-  };
 }
 
 let memberScheduleV2WorkspaceCache = null;
@@ -4219,127 +3213,6 @@ function mapServerMemberChangeCandidate(candidate = {}, source = null) {
     member_ticket_id: source?.member_ticket_id || source?.ticketId || "",
     ticketId: source?.member_ticket_id || source?.ticketId || "",
   };
-}
-
-async function syncMemberChangeCandidates(source = null) {
-  if (!memberChangeUsesServerCandidates(source)) {
-    state.serverChangeCandidateStatus = "fallback";
-    state.serverChangeCandidateKey = "";
-    state.serverChangeCandidates = [];
-    state.serverChangeCandidateError = "";
-    state.serverChangeCandidateExclusions = {};
-    state.serverChangeAnchorGapMinutes = 40;
-    return false;
-  }
-  // A pending request keeps its source lesson scheduled. Use the same local
-  // slot preview while editing and let the update RPC perform the final,
-  // locked server validation before it changes the held target.
-  if (state.editingChangeRequestId) {
-    state.serverChangeCandidateStatus = "fallback";
-    state.serverChangeCandidateKey = memberChangeCandidateKey(source);
-    state.serverChangeCandidates = [];
-    state.serverChangeCandidateError = "";
-    state.serverChangeCandidateExclusions = {};
-    state.serverChangeAnchorGapMinutes = 40;
-    renderSelects();
-    renderAvailableSlots();
-    renderSchedule();
-    return false;
-  }
-  const week = { ...activeMemberWeek() };
-  const range = memberChangeCandidateRange(source, week);
-  const key = memberChangeCandidateKey(source, week);
-  const client = window.TennisNoteDataClient;
-  if (!client?.rpc || !client.getSession?.()?.access_token) {
-    state.serverChangeCandidateStatus = "error";
-    state.serverChangeCandidateKey = key;
-    state.serverChangeCandidates = [];
-    state.serverChangeCandidateError = "로그인 연결을 다시 확인한 뒤 가능한 시간을 조회해 주세요.";
-    renderSelects();
-    renderAvailableSlots();
-    renderSchedule();
-    return false;
-  }
-  const requestId = ++memberChangeCandidateRequestSequence;
-  state.serverChangeCandidateStatus = "loading";
-  state.serverChangeCandidateKey = key;
-  state.serverChangeCandidates = [];
-  state.serverChangeCandidateError = "";
-  state.serverChangeCandidateExclusions = {};
-  state.serverChangeAnchorGapMinutes = 40;
-  renderSelects();
-  renderAvailableSlots();
-  renderSchedule();
-  try {
-    const ticketId = source.member_ticket_id || source.ticketId || "";
-    const candidateArgs = source.couponBooking
-      ? {
-        target_ticket_id: ticketId,
-        target_from: range.from,
-        target_to: range.to,
-      }
-      : {
-        target_lesson_id: source.serverLessonId,
-        target_from: range.from,
-        target_to: range.to,
-      };
-    let result;
-    if (source.couponBooking) {
-      result = await client.rpc("tn_member_coupon_candidates", candidateArgs, { timeoutMs: 12_000 });
-    } else {
-      try {
-        result = await client.rpc("tn_member_change_candidates_v2", candidateArgs, { timeoutMs: 12_000 });
-      } catch (error) {
-        const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
-        if (!/tn_member_change_candidates_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
-        result = await client.rpc("tn_member_change_candidates", candidateArgs, { timeoutMs: 12_000 });
-      }
-    }
-    if (requestId !== memberChangeCandidateRequestSequence || memberChangeCandidateKey(source) !== key) return false;
-    if (!result || !Array.isArray(result.candidates)) {
-      state.serverChangeCandidateStatus = source.couponBooking ? "error" : "fallback";
-      state.serverChangeCandidateError = source.couponBooking
-        ? "쿠폰 예약 가능 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요."
-        : "";
-      renderSelects();
-      renderAvailableSlots();
-      renderSchedule();
-      return false;
-    }
-    const reportedGap = result.anchorGapMinutes ?? result.anchorRule?.gapMinutes;
-    state.serverChangeAnchorGapMinutes = reportedGap === null ? null : Math.max(0, Number(reportedGap) || 40);
-    const mappedCandidates = result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source));
-    state.serverChangeCandidates = mappedCandidates;
-    state.serverChangeCandidateExclusions = result.exclusionSummary && typeof result.exclusionSummary === "object"
-      ? result.exclusionSummary
-      : {};
-    state.serverChangeCandidateStatus = "ready";
-    renderSelects();
-    renderAvailableSlots();
-    renderSchedule();
-    return true;
-  } catch (error) {
-    if (requestId !== memberChangeCandidateRequestSequence) return false;
-    const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
-    if (/tn_member_(change|coupon)_candidates|PGRST202|42883|schema cache/i.test(errorText)) {
-      state.serverChangeCandidateStatus = source.couponBooking ? "error" : "fallback";
-      state.serverChangeCandidateError = source.couponBooking
-        ? "쿠폰 예약 가능 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요."
-        : "";
-      renderSelects();
-      renderAvailableSlots();
-      renderSchedule();
-      return false;
-    }
-    const failure = memberChangeCandidateFailure(errorText);
-    state.serverChangeCandidateStatus = "error";
-    state.serverChangeCandidateError = failure.message;
-    state.scheduleV2SyncErrorCode = failure.code;
-    renderSelects();
-    renderAvailableSlots();
-    renderSchedule();
-    return false;
-  }
 }
 
 function mergeScheduleV2MemberRecords(mappedLessons = []) {
@@ -4508,304 +3381,7 @@ function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = []
   return true;
 }
 
-async function syncMemberScheduleV2(profile = null, options = {}) {
-  const client = window.TennisNoteDataClient;
-  const requestId = options.requestId || ++memberScheduleV2RequestSequence;
-  const context = memberScheduleV2Context(profile, options.week || activeMemberWeek());
-  const { profileId, week, workspaceEndDate, key: cacheKey } = context;
-  if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
-  const cached = memberScheduleV2WorkspaceCache;
-  if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
-    if (requestId !== memberScheduleV2RequestSequence) return false;
-    const identityIssue = memberScheduleIdentityIssue(cached.workspace, cached.integrity, profileId);
-    if (identityIssue) return rejectMemberScheduleIdentity(identityIssue, cached.integrity);
-    state.scheduleV2Integrity = cached.integrity || null;
-    const applied = applyScheduleV2MemberWorkspace(cached.workspace, cached.releasedMakeupSlots, cached.oneDaySlots);
-    if (applied) state.scheduleV2LoadedKey = cacheKey;
-    return applied;
-  }
-  try {
-    const [workspace, releasedMakeupSlots, oneDaySlots, integrity] = await Promise.all([
-      client.rpc("tn_schedule_v2_member_workspace", {
-        target_from: week.startDate,
-        target_to: workspaceEndDate,
-      }),
-      client.rpc("tn_member_released_makeup_slots", {}).catch(() => []),
-      client.rpc("tn_member_one_day_schedule_slots", {}).catch(() => []),
-      client.rpc("tn_current_member_schedule_integrity", {}).catch(() => null),
-    ]);
-    if (requestId !== memberScheduleV2RequestSequence) return false;
-    if (!workspace?.actorUserId || !Array.isArray(workspace.lessons)) return false;
-    const branchIds = [...new Set((workspace.branches || []).map((branch) => branch.id).filter(Boolean))];
-    const operationDays = (await Promise.all(branchIds.map((branchId) => (
-      client.rpc("tn_schedule_v2_operation_days_between", {
-        target_branch_id: branchId,
-        target_from: week.startDate,
-        target_to: workspaceEndDate,
-      }).catch(() => [])
-    )))).flat();
-    if (requestId !== memberScheduleV2RequestSequence) return false;
-    workspace.operationDays = operationDays;
-    state.scheduleOperationDays = operationDays;
-    const identityIssue = memberScheduleIdentityIssue(workspace, integrity, profileId);
-    if (identityIssue) return rejectMemberScheduleIdentity(identityIssue, integrity);
-    memberScheduleV2WorkspaceCache = {
-      key: cacheKey,
-      loadedAt: Date.now(),
-      workspace,
-      releasedMakeupSlots: Array.isArray(releasedMakeupSlots) ? releasedMakeupSlots : [],
-      oneDaySlots: Array.isArray(oneDaySlots) ? oneDaySlots : [],
-      integrity,
-    };
-    state.scheduleV2Integrity = integrity || null;
-    const applied = applyScheduleV2MemberWorkspace(
-      workspace,
-      memberScheduleV2WorkspaceCache.releasedMakeupSlots,
-      memberScheduleV2WorkspaceCache.oneDaySlots,
-    );
-    if (applied) state.scheduleV2LoadedKey = cacheKey;
-    return applied;
-  } catch (error) {
-    const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
-    if (!/tn_schedule_v2_member_workspace|PGRST202|42883|schema cache/i.test(text)) {
-      console.warn("Tennis Note Schedule V2 member feed failed; using the compatible feed.", error);
-    }
-    return false;
-  }
-}
-
-async function syncMemberLessonsFromServer(profile = null, options = {}) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
-  const requestId = options.requestId || ++memberScheduleV2RequestSequence;
-  if (await syncMemberScheduleV2(profile, { ...options, requestId })) return true;
-  if (requestId !== memberScheduleV2RequestSequence) return false;
-  if (state.scheduleV2SyncErrorCode && state.scheduleV2SyncErrorCode !== "member_schedule_load_failed") {
-    state.liveLessonsLoaded = true;
-    renderMemberRuntimeDiagnostics();
-    return false;
-  }
-  if (!state.scheduleV2WorkspaceLoaded) {
-    state.liveLessons = [];
-    state.liveMakeupEntitlements = [];
-    state.liveReleasedMakeupSlots = [];
-  }
-  state.liveLessonsLoaded = true;
-  state.scheduleV2SyncError = "시간표를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.";
-  state.scheduleV2SyncErrorCode = "member_schedule_load_failed";
-  renderMemberRuntimeDiagnostics();
-  return false;
-}
-
 // Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
-async function syncLegacyMemberLessonsFromServer(profile = null) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.selectRows || !profileId) return false;
-  try {
-    if (await syncMemberScheduleV2(profile)) return true;
-    const participants = await client.selectRows("tn_lesson_participants", {
-      select: "lesson_id,ticket_id,user_id",
-      filters: { user_id: profileId },
-      limit: 100,
-    });
-    const ownLessonIds = new Set((participants || []).map((item) => item.lesson_id));
-    const [scheduleRows, coachRoles, makeupEntitlementRows, releasedMakeupSlots, oneDaySlots] = await Promise.all([
-      client.selectRows("tn_lessons", {
-        select: "id,member_ticket_id,coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source",
-        limit: 1000,
-      }),
-      client.selectRows("tn_coach_roles", {
-        select: "id,display_name,color,status",
-        filters: { status: "approved" },
-        limit: 50,
-      }).catch(() => []),
-      client.selectRows("tn_makeup_entitlements", {
-        select: "id,source_lesson_id,ticket_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at",
-        limit: 100,
-      }).catch(() => []),
-      client.rpc
-        ? client.rpc("tn_member_released_makeup_slots", {}).catch(() => [])
-        : Promise.resolve([]),
-      client.rpc
-        ? client.rpc("tn_member_one_day_schedule_slots", {}).catch(() => [])
-        : Promise.resolve([]),
-    ]);
-    const loadedLessonIds = new Set((scheduleRows || []).map((lesson) => lesson.id));
-    const missingOwnLessonIds = [...ownLessonIds].filter((lessonId) => !loadedLessonIds.has(lessonId));
-    const missingOwnLessonRows = missingOwnLessonIds.length
-      ? await Promise.all(missingOwnLessonIds.map((lessonId) =>
-        client.selectRows("tn_lessons", {
-          select: "id,member_ticket_id,coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source",
-          filters: { id: lessonId },
-          limit: 1,
-        }).catch(() => [])))
-      : [];
-    const rows = [...(scheduleRows || []), ...missingOwnLessonRows.flat()]
-      .filter((lesson, index, items) => items.findIndex((candidate) => candidate.id === lesson.id) === index);
-    const coachNames = new Map((coachRoles || []).map((coach) => [coach.id, coach.display_name]));
-    const lessonsById = new Map((rows || []).map((lesson) => [lesson.id, lesson]));
-    const memberName = currentMemberName();
-    state.liveMakeupEntitlements = (makeupEntitlementRows || [])
-      .filter((entitlement) => ownLessonIds.has(entitlement.source_lesson_id))
-      .map((entitlement) => {
-        const sourceLesson = lessonsById.get(entitlement.source_lesson_id) || {};
-        const lessonDate = sourceLesson.lesson_date || "";
-        const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
-        return {
-          id: entitlement.id,
-          sourceLessonId: entitlement.source_lesson_id,
-          ticketId: entitlement.ticket_id,
-          coachRoleId: entitlement.coach_role_id,
-          coach: coachNames.get(entitlement.coach_role_id) || "담당 코치",
-          lessonDate,
-          day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
-          time: String(sourceLesson.start_time || "").slice(0, 5),
-          durationMinutes: Number(entitlement.duration_minutes) || Number(sourceLesson.duration_minutes) || 20,
-          status: entitlement.status,
-          reason: entitlement.reason || "회원 불참",
-          markedAt: entitlement.marked_at || "",
-          bookedLessonId: entitlement.booked_lesson_id || "",
-          bookedAt: entitlement.booked_at || "",
-        };
-      });
-    state.liveReleasedMakeupSlots = (releasedMakeupSlots || []).map((slot) => ({
-      id: slot.slot_id,
-      coachRoleId: slot.coach_role_id,
-      lessonDate: slot.lesson_date,
-      time: String(slot.start_time || "").slice(0, 5),
-      durationMinutes: Number(slot.duration_minutes) || 20,
-    }));
-    const mappedLessons = (rows || [])
-      .filter((lesson) => lesson.status !== "cancelled")
-      .map((lesson) => {
-        const isOwnLesson = ownLessonIds.has(lesson.id);
-        const ticket = (state.liveTickets || []).find((item) => item.id === lesson.member_ticket_id) || {};
-        const lessonSource = lesson.lesson_source === "makeup"
-          ? "보강"
-          : lesson.lesson_source === "coupon"
-            ? "쿠폰"
-            : lesson.lesson_source === "coach_change"
-              ? "코치변경"
-              : "정규";
-        const visibleStatus = isOwnLesson
-          ? lesson.status === "pending_change" ? "requested" : lesson.status
-          : "occupied";
-        return {
-          ...lesson,
-          serverStatus: lesson.status,
-          serverLessonId: lesson.id,
-          lessonDate: lesson.lesson_date,
-          day: days[new Date(`${lesson.lesson_date}T00:00:00`).getDay() === 0 ? 6 : new Date(`${lesson.lesson_date}T00:00:00`).getDay() - 1],
-          time: String(lesson.start_time || "").slice(0, 5),
-          coach: coachNames.get(lesson.coach_role_id) || "담당 코치",
-          originalCoachRoleId: lesson.original_coach_role_id || "",
-          member: isOwnLesson ? memberName : "",
-          type: `${lessonSource} ${lesson.duration_minutes}분`,
-          lessonSource: lesson.lesson_source || "regular",
-          durationMinutes: Number(lesson.duration_minutes) || 20,
-          ticketTotalSessions: Number(ticket.total) || 0,
-          ticketUsedSessions: Number(ticket.used) || 0,
-          ticketRemainingSessions: Number(ticket.remaining) || 0,
-          ticketLessonMinutes: Number(ticket.lessonMinutes) || Number(lesson.duration_minutes) || 20,
-          status: visibleStatus,
-          isOwnLesson,
-        };
-      });
-    const oneDayOccupancy = (oneDaySlots || []).map((slot) => {
-      const lessonDate = slot.booking_date || "";
-      const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
-      return {
-        id: `one-day-${slot.id}`,
-        oneDayBooking: true,
-        serverOneDayBookingId: slot.id,
-        lessonDate,
-        day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
-        time: String(slot.start_time || "").slice(0, 5),
-        coach: coachNames.get(slot.coach_role_id) || "담당 코치",
-        coach_role_id: slot.coach_role_id,
-        member: "",
-        type: "원데이 예약",
-        lessonSource: "one_day",
-        durationMinutes: Number(slot.duration_minutes) || 20,
-        status: "occupied",
-        isOwnLesson: false,
-      };
-    });
-    state.liveLessons = [...mappedLessons, ...oneDayOccupancy];
-    state.liveLessonsLoaded = true;
-    return true;
-  } catch {
-    state.liveLessons = [];
-    state.liveMakeupEntitlements = [];
-    state.liveReleasedMakeupSlots = [];
-    state.liveLessonsLoaded = state.dataMode === "live";
-    return false;
-  }
-}
-
-async function syncMemberChangeRequestsFromServer(profile = null) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.selectRows || !profileId) return false;
-  try {
-    let rows;
-    try {
-      rows = await client.selectRows("tn_lesson_change_requests", {
-        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at",
-        filters: { requester_user_id: profileId },
-        limit: 100,
-      });
-    } catch {
-      rows = await client.selectRows("tn_lesson_change_requests", {
-        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,decided_at,created_at",
-        filters: { requester_user_id: profileId },
-        limit: 100,
-      });
-    }
-    const statusLabel = {
-      pending: "변경 확인 중",
-      approved: "변경 완료",
-      rejected: "변경되지 않았습니다",
-      auto_approved: "변경 완료",
-      cancelled: "변경 요청 취소",
-    };
-    state.makeupRequests = (rows || [])
-      .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")))
-      .map((row) => {
-        const sourceLesson = state.liveLessons.find((lesson) => lesson.serverLessonId === row.lesson_id) || {};
-        const originalDate = row.original_lesson_date || sourceLesson.lessonDate || "";
-        const originalTime = String(row.original_start_time || sourceLesson.time || "").slice(0, 5);
-        const targetDate = row.requested_lesson_date || "";
-        const targetTime = String(row.requested_start_time || "").slice(0, 5);
-        return {
-          id: row.id,
-          serverRequestId: row.id,
-          lessonId: row.lesson_id,
-          originalDate,
-          originalTime,
-          targetDate,
-          targetTime,
-          absence: `${compactLessonDateLabel(originalDate)} ${originalTime}`.trim(),
-          makeup: `${compactLessonDateLabel(targetDate)} ${targetTime}`.trim(),
-          reason: row.reason || "이유 미입력",
-          policy: row.policy_window === "auto_before_24h" ? policyDetail("auto") : policyDetail("coach"),
-          status: statusLabel[row.status] || row.status,
-          rawStatus: row.status,
-          editable: row.status === "pending",
-          cancelable: ["pending", "approved", "auto_approved"].includes(row.status),
-          cancelKind: "change",
-          createdAt: row.created_at || "",
-          source: "server",
-        };
-      });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function liveLessonForJournal(log = {}) {
   const targetDate = log.journalDate || "";
   const targetTime = String(log.lessonLabel || "").match(/(\d{1,2}:\d{2})/)?.[1] || "";
@@ -4814,216 +3390,6 @@ function liveLessonForJournal(log = {}) {
     || candidates.find((lesson) => lesson.lessonDate === targetDate && lesson.time === targetTime)
     || candidates.find((lesson) => lesson.lessonDate === targetDate)
     || null;
-}
-
-async function syncMemberJournalEntriesFromServer(profile = null) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.selectRows || !client.downloadObject || !profileId) return false;
-  try {
-    const [journalRows, mediaRows, recordRows, curriculumRows, lessonChartRows] = await Promise.all([
-      client.selectRows("tn_journal_entries", {
-        select: "id,user_id,lesson_id,entry_date,entry_type,body,created_at,updated_at",
-        filters: { user_id: profileId },
-        limit: 100,
-      }),
-      client.selectRows("tn_media_files", {
-        select: "id,owner_user_id,journal_entry_id,storage_path,media_type,created_at",
-        filters: { owner_user_id: profileId },
-        limit: 200,
-      }),
-      client.selectRows("tn_lesson_records", {
-        select: "lesson_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at",
-        limit: 100,
-      }).catch(() => []),
-      client.selectRows("tn_curriculum_refs", {
-        select: "id,skill_label,title,notion_url,status",
-        filters: { status: "active" },
-        limit: 200,
-      }).catch(() => []),
-      client.rpc
-        ? client.rpc("tn_member_lesson_chart", {
-          target_user_id: profileId,
-          target_limit: 50,
-        }).catch(() => [])
-        : Promise.resolve([]),
-    ]);
-    const ownLessonIds = new Set(state.liveLessons.filter((lesson) => lesson.isOwnLesson).map((lesson) => lesson.id));
-    const recordsByLesson = new Map((recordRows || [])
-      .filter((record) => ownLessonIds.has(record.lesson_id))
-      .map((record) => [record.lesson_id, record]));
-    const curriculaById = new Map((curriculumRows || []).map((curriculum) => [curriculum.id, curriculum]));
-
-    for (const row of (journalRows || []).sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))) {
-      const payload = parseServerJournalBody(row.body);
-      if (!payload) continue;
-      const rowsForJournal = (mediaRows || [])
-        .filter((media) => media.journal_entry_id === row.id)
-        .sort((left, right) => String(left.created_at).localeCompare(String(right.created_at)));
-      const mediaItems = await Promise.all(rowsForJournal.map((media, index) => (
-        downloadServerMediaItem(client, media, payload.mediaNames?.[index] || `첨부 ${index + 1}`)
-      )));
-      const record = recordsByLesson.get(row.lesson_id);
-      const recordCurriculum = curriculaById.get(record?.next_curriculum_ref_id);
-      const nextCurriculumId = recordCurriculum?.skill_label || payload.nextCurriculumId || payload.curriculumId;
-      const curriculum = curriculumById(nextCurriculumId, curriculumSteps[0]);
-      const log = {
-        id: payload.clientLogId || `server-journal-${row.id}`,
-        serverJournalId: row.id,
-        serverLessonId: row.lesson_id || "",
-        lessonId: payload.lessonId || "",
-        lessonLabel: payload.lessonLabel || "서버 수업기록",
-        round: Number(payload.round) || lessonRound(),
-        journalDate: row.entry_date,
-        content: payload.content || "수업 내용 미입력",
-        selfMemo: payload.selfMemo || "자기 운동 일지 미입력",
-        mediaNames: payload.mediaNames || mediaItems.map((item) => item.name),
-        mediaItems,
-        status: record ? "confirmed" : "coach_pending",
-        curriculum,
-        nextCurriculumId: nextCurriculumId || curriculum.id,
-        coachComment: record?.coach_comment || "",
-        memberVisibleSummary: record ? `다음 수업 등록 완료: ${curriculum.id} · ${curriculum.title}` : "",
-        ticketDeducted: Boolean(record && Number(record.deducted_sessions) > 0),
-        submittedAt: payload.submittedAt || row.created_at,
-      };
-      const existingIndex = state.lessonLogs.findIndex((item) => (
-        item.serverJournalId === row.id
-        || item.id === log.id
-        || (row.lesson_id && String(item.serverLessonId || "") === String(row.lesson_id))
-      ));
-      if (existingIndex >= 0) state.lessonLogs[existingIndex] = { ...state.lessonLogs[existingIndex], ...log };
-      else state.lessonLogs.unshift(log);
-    }
-
-    const existingChartLessonIds = new Set(state.lessonLogs
-      .map((item) => String(item.serverLessonId || ""))
-      .filter(Boolean));
-    const chartLogs = (Array.isArray(lessonChartRows) ? lessonChartRows : [])
-      .filter((record) => record.lessonId && !existingChartLessonIds.has(String(record.lessonId)))
-      .map((record, index) => {
-        existingChartLessonIds.add(String(record.lessonId));
-        const nextCurriculumId = record.nextCurriculumSkillLabel || "";
-        const curriculum = nextCurriculumId ? curriculumById(nextCurriculumId, curriculumSteps[0]) : null;
-        const outcomeLabel = {
-          completed: "수업 완료",
-          no_show: "노쇼",
-          absence: "불참",
-          cancelled: "취소",
-          holiday: "휴무",
-        }[String(record.outcome || "").toLowerCase()] || "수업 기록";
-        const lessonType = scheduleV2MemberLessonKind(record.scheduleKind || "regular");
-        return {
-          id: `member-chart-${record.id || record.lessonId}`,
-          serverJournalId: "",
-          serverLessonId: record.lessonId,
-          lessonId: `server-${record.lessonId}`,
-          lessonLabel: `${record.startTime || ""} · ${record.coachName || "담당 코치"} · ${lessonType}`.replace(/^ · /, ""),
-          round: Math.max(1, (Array.isArray(lessonChartRows) ? lessonChartRows.length : 1) - index),
-          journalDate: record.lessonDate || String(record.finalizedAt || record.updatedAt || "").slice(0, 10),
-          content: [record.technique, record.strength, record.improvement].filter(Boolean).join(" · ") || outcomeLabel,
-          selfMemo: "회원 운동일지 미작성",
-          mediaNames: [],
-          mediaItems: [],
-          status: "confirmed",
-          curriculum,
-          nextCurriculumId,
-          coachComment: record.coachComment || "",
-          memberVisibleSummary: record.nextGoal
-            ? `다음 수업 목표: ${record.nextGoal}`
-            : record.nextCurriculumTitle
-              ? `다음 수업: ${record.nextCurriculumTitle}`
-              : "",
-          ticketDeducted: Number(record.deductedSessions) > 0,
-          deductedSessions: Number(record.deductedSessions) || 0,
-          participantOutcome: record.outcome || "completed",
-          submittedAt: record.finalizedAt || record.updatedAt || "",
-        };
-      });
-    if (chartLogs.length) state.lessonLogs = [...chartLogs, ...state.lessonLogs];
-
-    const existingRecordLessonIds = new Set(state.lessonLogs
-      .map((item) => item.serverLessonId)
-      .filter(Boolean));
-    const recordOnlyLogs = (recordRows || [])
-      .filter((record) => ownLessonIds.has(record.lesson_id))
-      .sort((left, right) => String(left.completed_at || "").localeCompare(String(right.completed_at || "")))
-      .map((record, index) => ({ record, round: index + 1 }))
-      .filter(({ record }) => !existingRecordLessonIds.has(record.lesson_id))
-      .map(({ record, round }) => {
-        const lesson = state.liveLessons.find((item) => item.id === record.lesson_id || item.serverLessonId === record.lesson_id) || {};
-        const recordCurriculum = curriculaById.get(record.next_curriculum_ref_id);
-        const nextCurriculumId = recordCurriculum?.skill_label || "FH-01";
-        const curriculum = curriculumById(nextCurriculumId, curriculumSteps[0]);
-        return {
-          id: `server-record-${record.lesson_id}`,
-          serverJournalId: "",
-          serverLessonId: record.lesson_id,
-          lessonId: lesson.id || `server-${record.lesson_id}`,
-          lessonLabel: `${lesson.day || lesson.lessonDate || "수업"} ${lesson.time || ""} · ${lesson.type || "레슨"}`.trim(),
-          round,
-          journalDate: lesson.lessonDate || String(record.completed_at || "").slice(0, 10),
-          content: "회원 운동일지 미작성 · 코치 수업기록",
-          selfMemo: "운동일지 미작성",
-          mediaNames: [],
-          mediaItems: [],
-          status: "confirmed",
-          curriculum,
-          nextCurriculumId,
-          coachComment: record.coach_comment || "",
-          memberVisibleSummary: `다음 수업 등록 완료: ${curriculum.id} · ${curriculum.title}`,
-          ticketDeducted: Number(record.deducted_sessions) > 0,
-          submittedAt: record.completed_at,
-        };
-      })
-      .reverse();
-    if (recordOnlyLogs.length) state.lessonLogs = [...recordOnlyLogs, ...state.lessonLogs];
-    return true;
-  } catch (error) {
-    console.warn("Tennis Note member journal sync failed", error);
-    return false;
-  }
-}
-
-async function persistLessonJournalToServer(log, files = []) {
-  const client = window.TennisNoteDataClient;
-  const profileId = state.member?.profileId || "";
-  if (!profileId || !client?.insertRows || !client?.uploadObject || !client.getSession?.()?.access_token) return false;
-  const liveLesson = liveLessonForJournal(log);
-  const inserted = await client.insertRows("tn_journal_entries", {
-    user_id: profileId,
-    lesson_id: liveLesson?.id || null,
-    entry_date: log.journalDate,
-    entry_type: "lesson",
-    practice_type: null,
-    body: serverJournalBody(log),
-  });
-  const journal = inserted?.[0];
-  if (!journal?.id) throw new Error("journal_insert_failed");
-
-  const uploadedPaths = [];
-  try {
-    for (let index = 0; index < files.length; index += 1) {
-      const file = files[index];
-      const storagePath = `${profileId}/${journal.id}/${safeJournalObjectName(file, index)}`;
-      await client.uploadObject(journalMediaBucket, storagePath, file);
-      uploadedPaths.push(storagePath);
-      await client.insertRows("tn_media_files", {
-        owner_user_id: profileId,
-        journal_entry_id: journal.id,
-        storage_path: storagePath,
-        media_type: journalMediaType(file),
-      });
-    }
-  } catch (error) {
-    await Promise.allSettled(uploadedPaths.map((storagePath) => client.deleteObject(journalMediaBucket, storagePath)));
-    await client.deleteRows?.("tn_journal_entries", { id: journal.id }).catch(() => {});
-    throw error;
-  }
-
-  log.serverJournalId = journal.id;
-  log.serverLessonId = liveLesson?.id || "";
-  return true;
 }
 
 function paymentMethodDefinition(methodId = state.selectedPaymentMethod) {
@@ -5137,39 +3503,6 @@ function setNoticeDialogOpen(open) {
   noticePreviousFocus = null;
 }
 
-function showNoticeIfNeeded() {
-  const today = localDateKey();
-  const activeNotices = activeNoticesForApp("member");
-  const hiddenToday = new Set(state.noticeHiddenDate === today
-    ? [...(Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : []), state.noticeHiddenId].filter(Boolean)
-    : []);
-  const notice = activeNotices.find((item) => !noticeSessionSeenIds.has(item.id) && !(item.showOncePerDay && hiddenToday.has(item.id)));
-  if (!notice) {
-    setNoticeDialogOpen(false);
-    return;
-  }
-  const noticeIndex = activeNotices.findIndex((item) => item.id === notice.id);
-  $("#noticeEyebrow").textContent = notice.source === "coupon-booking" ? "회원권 알림" : "공지사항";
-  $("#noticeTitle").textContent = notice.title;
-  $("#noticeBody").textContent = notice.body;
-  $("#noticeMeta").textContent = `${noticeMetaText(notice)} · ${noticeIndex + 1}/${activeNotices.length}`;
-  const noticeImage = $("#noticeImage");
-  noticeImage.hidden = !notice.imageUrl;
-  noticeImage.src = notice.imageUrl || "";
-  noticeImage.alt = notice.imageAlt || notice.title;
-  const noticeAction = $("#noticeAction");
-  const safeActionUrl = /^https?:\/\//i.test(notice.actionUrl) ? notice.actionUrl : "";
-  const actionRoute = notice.actionRoute === "schedule" ? "schedule" : "";
-  const hasAction = Boolean(safeActionUrl || actionRoute);
-  noticeAction.hidden = !hasAction;
-  noticeAction.href = safeActionUrl || "#";
-  noticeAction.dataset.route = actionRoute;
-  noticeAction.target = safeActionUrl ? "_blank" : "_self";
-  noticeAction.textContent = notice.actionLabel || "자세히 보기";
-  $("#noticeDialog").dataset.noticeId = notice.id;
-  setNoticeDialogOpen(true);
-}
-
 function liveTicketHasUpcomingLesson(ticket, today = localDateKey()) {
   return (state.liveLessons || []).some((lesson) => {
     if (String(lesson.member_ticket_id || lesson.ticketId || "") !== String(ticket.id || "")) return false;
@@ -5199,21 +3532,6 @@ function couponBookingPopupNotices() {
       imageUrl: "",
       imageAlt: "",
     }));
-}
-
-function closeNotice(hideToday = false) {
-  const noticeId = $("#noticeDialog")?.dataset.noticeId || "";
-  if (noticeId) noticeSessionSeenIds.add(noticeId);
-  if (hideToday) {
-    const today = localDateKey();
-    const previousIds = state.noticeHiddenDate === today && Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : [];
-    state.noticeHiddenDate = today;
-    state.noticeHiddenId = noticeId;
-    state.noticeHiddenIds = [...new Set([...previousIds, noticeId].filter(Boolean))];
-  }
-  setNoticeDialogOpen(false);
-  saveSnapshot();
-  window.setTimeout(showNoticeIfNeeded, 0);
 }
 
 function savePracticeLog() {
@@ -5283,30 +3601,6 @@ function createPaymentRecord(product, overrides = {}) {
   pushPaymentRequestToShared(request);
 }
 
-function hasLiveMemberSession() {
-  const client = window.TennisNoteDataClient;
-  return Boolean(client?.readiness?.().ready && client.getSession?.()?.access_token);
-}
-
-function markTicketSyncLoginNeeded() {
-  const client = window.TennisNoteDataClient;
-  if (client?.readiness?.().ready) {
-    if (hasLiveMemberSession()) {
-      state.ticketSyncStatus = {
-        tone: "alert",
-        text: "서버 회원 연결 확인 필요 · 관리자 승인/회원권 확인",
-      };
-      return;
-    }
-    state.ticketSyncStatus = {
-      tone: "wait",
-      text: "서버 로그인 필요 · 간편 로그인 후 실제 회원권 확인",
-    };
-    return;
-  }
-  state.ticketSyncStatus = { tone: "alert", text: "실사용 데이터 연결 설정이 필요합니다" };
-}
-
 function liveTicketPriority(ticket = {}) {
   const derivedState = window.TennisNoteTicketState?.derive(ticket);
   if (derivedState) return window.TennisNoteTicketState.rank(ticket);
@@ -5340,203 +3634,6 @@ function upcomingLiveTickets() {
     : state.liveTickets.filter((ticket) => ticket.status === "pending_payment");
 }
 
-async function syncMemberGroupAccountFromServer(profile = null) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.readiness?.().ready || !client.selectRows || !profileId) return false;
-  try {
-    const ownRows = await client.selectRows("tn_group_account_members", {
-      select: "id,group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay",
-      filters: { user_id: profileId },
-      limit: 20,
-    });
-    const activeGroupAccountId = currentLiveTicket()?.groupAccountId || "";
-    const ownMembership = (ownRows || []).find((row) => row.group_account_id === activeGroupAccountId) || ownRows?.[0];
-    if (!ownMembership?.group_account_id) {
-      state.groupAccount = null;
-      return true;
-    }
-    const [accountRows, memberRows] = await Promise.all([
-      client.selectRows("tn_group_accounts", {
-        select: "id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required",
-        filters: { id: ownMembership.group_account_id },
-        limit: 1,
-      }),
-      client.selectRows("tn_group_account_members", {
-        select: "id,group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay",
-        filters: { group_account_id: ownMembership.group_account_id },
-        limit: 2,
-      }),
-    ]);
-    const account = accountRows?.[0];
-    if (!account) {
-      state.groupAccount = null;
-      return true;
-    }
-    let coachName = "담당 코치";
-    if (account.coach_role_id) {
-      const coachRows = await client.selectRows("tn_coach_roles", {
-        select: "id,display_name",
-        filters: { id: account.coach_role_id },
-        limit: 1,
-      }).catch(() => []);
-      coachName = coachRows?.[0]?.display_name || coachName;
-    }
-    const members = [...(memberRows || [])]
-      .sort((a, b) => Number(a.participant_order) - Number(b.participant_order))
-      .map((member, index) => ({
-        userId: member.user_id,
-        name: member.display_name || `회원 ${index + 1}`,
-        appStatus: member.app_status || "not_joined",
-        canManageSchedule: member.can_manage_schedule === true,
-        canPay: member.can_pay === true,
-      }));
-    state.groupAccount = {
-      id: account.id,
-      demoOnly: false,
-      name: account.display_name || members.map((member) => member.name).join(" · "),
-      schedule: "공동 시간표",
-      coach: coachName,
-      paymentMode: account.payment_mode || "representative",
-      nextPayerUserId: account.next_payer_user_id || "",
-      nextPayer: members.find((member) => member.userId === account.next_payer_user_id)?.name || members[0]?.name || "대표회원",
-      scheduleSyncRequired: account.schedule_sync_required !== false,
-      members,
-    };
-    return true;
-  } catch {
-    state.groupAccount = null;
-    return false;
-  }
-}
-
-async function syncMemberHoldingRequestsFromServer(profile = null) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.readiness?.().ready || !client.selectRows || !profileId) return false;
-  try {
-    const rows = await client.selectRows("tn_holding_requests", {
-      select: "id,ticket_id,request_type,requested_start_on,requested_end_on,reason_summary,evidence_object_path,evidence_status,status,reviewed_at,created_at",
-      filters: { user_id: profileId },
-      limit: 20,
-    });
-    const shared = loadSharedData();
-    const otherMembers = (shared.holdingRequests || []).filter((request) => request.member !== (state.member?.name || state.profile.name));
-    const ownRequests = (rows || []).map((row) => ({
-      id: row.id,
-      member: state.member?.name || state.profile.name,
-      ticketId: row.ticket_id,
-      ticketTitle: state.profile.ticket || "회원권",
-      type: row.request_type,
-      typeLabel: row.request_type === "injury" ? "부상·입원" : "개인 사유",
-      startDate: row.requested_start_on,
-      endDate: row.requested_end_on,
-      days: holdingRequestDays(row.requested_start_on, row.requested_end_on),
-      reason: row.reason_summary || "",
-      evidencePath: row.evidence_object_path || "",
-      evidenceLabel: row.request_type === "injury" ? "증빙 첨부" : "증빙 없음",
-      status: row.status || "pending",
-      source: "server",
-      reviewedAt: row.reviewed_at || "",
-      createdAt: row.created_at || "",
-    }));
-    shared.holdingRequests = [...ownRequests, ...otherMembers];
-    saveSharedData(shared);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function syncMemberAccountDeletionRequestFromServer(profile = null) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.readiness?.().ready || !client.selectRows || !profileId) return false;
-  try {
-    const rows = await client.selectRows("tn_account_deletion_requests", {
-      select: "*",
-      filters: { user_id: profileId },
-      limit: 20,
-    });
-    state.accountDeletionRequest = (rows || [])
-      .sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0))[0] || null;
-    renderAccountDeletionSettings();
-    return true;
-  } catch {
-    state.accountDeletionRequest = null;
-    renderAccountDeletionSettings();
-    return false;
-  }
-}
-
-async function syncMemberHoldingPolicyFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.selectRows) return false;
-  try {
-    const rows = await client.selectRows("tn_admin_settings", {
-      select: "key,value,updated_at",
-      filters: { key: holdingPolicyKey },
-      limit: 1,
-    });
-    if (rows?.[0]?.value) state.holdingPolicySettings = { ...state.holdingPolicySettings, ...rows[0].value };
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function syncLiveMembershipProductsFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.selectRows) return false;
-  try {
-    const rows = await client.selectRows("tn_membership_products", {
-      select: "id,branch_id,product_code,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,schedule_scope,term_weeks,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,is_active,policy_settings,display_order",
-      filters: { is_active: true },
-      limit: 500,
-    });
-    const products = (rows || [])
-      .filter((row) => numericValue(row.card_price) > 0)
-      .sort((left, right) => numericValue(left.display_order, 999) - numericValue(right.display_order, 999))
-      .map(membershipProductFromServer);
-    state.liveMembershipProducts = products;
-    await syncMembershipPricingQuotesFromServer(products);
-    return products.length > 0;
-  } catch {
-    if (state.dataMode === "live") {
-      state.liveMembershipProducts = [];
-      state.membershipPricingQuotes = {};
-    }
-    return false;
-  }
-}
-
-async function syncMembershipPricingQuotesFromServer(products = state.liveMembershipProducts) {
-  const client = window.TennisNoteDataClient;
-  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
-    state.membershipPricingQuotes = {};
-    return false;
-  }
-  const targets = (products || []).filter((product) => (
-    isOneDayMembershipProduct(product) && product.firstLessonOfferEnabled === true
-  ));
-  const entries = await Promise.all(targets.map(async (product) => {
-    try {
-      const quote = await client.invokeFunction("portone-payment/quote", {
-        body: {
-          branchId: product.branchId || null,
-          productId: product.id,
-          productKey: product.productCode || product.id,
-        },
-      });
-      return [String(product.id), quote?.ok ? quote : null];
-    } catch {
-      return [String(product.id), null];
-    }
-  }));
-  state.membershipPricingQuotes = Object.fromEntries(entries.filter(([, quote]) => quote));
-  return true;
-}
-
 function reconcileVerifiedPaymentRequests() {
   const completedPaymentIds = new Set();
   (state.liveTickets || [])
@@ -5560,169 +3657,6 @@ function reconcileVerifiedPaymentRequests() {
     saveSharedData(shared);
   }
   return beforeCount !== state.paymentRequests.length;
-}
-
-async function syncMemberTicketsFromServer(profile = null) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.readiness?.().ready || !client.selectRows || !profileId) return false;
-
-  state.ticketSyncStatus = { tone: "wait", text: "서버 회원권 확인 중" };
-  try {
-    let rows;
-    try {
-      rows = await client.selectRows("tn_member_tickets", {
-        select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,frequency_per_week,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,validity_days,grace_days)",
-        filters: { user_id: profileId },
-        limit: 20,
-      });
-    } catch {
-      rows = await client.selectRows("tn_member_tickets", {
-        select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at",
-        filters: { user_id: profileId },
-        limit: 20,
-      });
-    }
-
-    const sharedLinks = await client.selectRows("tn_group_ticket_links", {
-      select: "group_account_id,ticket_id,status",
-      filters: { user_id: profileId },
-      limit: 20,
-    }).catch(() => []);
-    const activeSharedLinks = (sharedLinks || [])
-      .filter((link) => !["pending_payment", "expired", "refunded"].includes(String(link.status || "").toLowerCase()));
-    const sharedTicketIds = new Set(activeSharedLinks
-      .map((link) => link.ticket_id)
-      .filter(Boolean));
-    const sharedAccountIdByTicketId = new Map(activeSharedLinks
-      .filter((link) => link.ticket_id && link.group_account_id)
-      .map((link) => [link.ticket_id, link.group_account_id]));
-    const ownedTicketIds = new Set((rows || []).map((row) => row.id));
-    const sharedTicketRows = await Promise.all(activeSharedLinks
-      .filter((link) => link.ticket_id && !ownedTicketIds.has(link.ticket_id))
-      .map(async (link) => {
-        try {
-          return await client.selectRows("tn_member_tickets", {
-            select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,frequency_per_week,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,validity_days,grace_days)",
-            filters: { id: link.ticket_id },
-            limit: 1,
-          });
-        } catch {
-          return client.selectRows("tn_member_tickets", {
-            select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at",
-            filters: { id: link.ticket_id },
-            limit: 1,
-          }).catch(() => []);
-        }
-      }));
-    rows = [...(rows || []), ...sharedTicketRows.flat()]
-      .filter((row) => String(row.status || "").toLowerCase() !== "pending_payment")
-      .map((row) => ({
-        ...row,
-        shared_group_ticket: sharedTicketIds.has(row.id),
-        shared_group_account_id: sharedAccountIdByTicketId.get(row.id) || "",
-      }));
-
-    rows = await attachLiveTicketProducts(client, rows || []);
-    rows = await attachLiveTicketPayments(client, rows || []);
-    state.liveTickets = Array.isArray(rows) ? rows.map(normalizeLiveTicket) : [];
-    const paymentRequestsChanged = reconcileVerifiedPaymentRequests();
-    const ticket = currentLiveTicket() || upcomingLiveTickets()[0] || null;
-    if (!ticket) {
-      state.remaining = 0;
-      state.profile.ticket = "현재 이용권 없음";
-      state.ticketSyncStatus = { tone: "wait", text: "현재 이용 가능한 회원권 없음 · 결제 또는 관리자 충전 필요" };
-      return true;
-    }
-
-    if (ticket.total) {
-      state.remaining = ticket.remaining;
-      state.profile.ticket = `${ticket.title} · 총 ${ticket.total}회`;
-    }
-    if (currentLiveTickets().length && state.member) state.member.memberKind = "lesson_member";
-    const derivedStatusLabel = window.TennisNoteTicketState?.label?.(ticket) || ticket.statusLabel;
-    state.ticketSyncStatus = {
-      tone: ticket.tone,
-      text: `${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
-    };
-    const syncKey = `${ticket.id}:${ticket.status}:${ticket.remaining}:${ticket.total}`;
-    if (syncKey !== state.lastLiveTicketKey) {
-      state.lastLiveTicketKey = syncKey;
-      state.ticketHistory.unshift({
-        text: `${ticket.title} · ${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
-        tone: ticket.tone,
-      });
-    }
-    if (paymentRequestsChanged) saveSnapshot();
-    return true;
-  } catch {
-    state.liveTickets = [];
-    state.remaining = 0;
-    state.profile.ticket = "회원권 확인 필요";
-    state.ticketSyncStatus = { tone: "alert", text: "서버 회원권 확인 실패 · 다시 로그인하거나 관리자에게 문의해주세요" };
-    return false;
-  }
-}
-
-async function prepareServerPayment(product, paymentId, methodId = state.selectedPaymentMethod) {
-  const client = window.TennisNoteDataClient;
-  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
-    throw new Error("login_required");
-  }
-  const paymentAmount = purchasePaymentAmount(product, methodId);
-  const enforcedMethodId = paymentMethodIdForRequest(methodId);
-  if (!isPaymentGatewayReady(enforcedMethodId)) throw new Error("payment_channel_not_ready");
-  const purchaseFlow = purchaseFlowState();
-  return client.invokeFunction("portone-payment/prepare", {
-    body: {
-      paymentId,
-      branchId: product.branchId || null,
-      productKey: product.id,
-      productTitle: product.title,
-      amount: paymentAmount,
-      originalAmount: product.cardAmount || product.listAmount || paymentAmount,
-      cashPrice: product.cashAmount || product.settlementBase || paymentAmount,
-      settlementBaseAmount: product.settlementBase || product.cashAmount || paymentAmount,
-      finalAmount: paymentAmount,
-      priceType: enforcedMethodId === "bank_transfer" ? "cash" : "card",
-      totalSessions: product.tickets || 1,
-      lessonMinutes: Number(product.lessonMinutes) || (product.title.includes("30") || product.detail.includes("30") ? 30 : 20),
-      machineMinutes: Number(product.lessonMinutes) || (product.title.includes("30") || product.detail.includes("30") ? 30 : 20),
-      productKind: product.productKind === "pass" || product.mode === "coupon" || product.mode === "pass" ? "coupon" : product.mode === "add" ? "add" : product.mode === "renewal" ? "renewal" : "regular",
-      groupSize: Number(product.groupSize) || (product.title.includes("2대1") || product.detail.includes("2대1") || product.detail.includes("2:1") ? 2 : 1),
-      validityDays: Number(product.validityDays) || 35,
-      graceDays: Number(product.graceDays) || 0,
-      method: enforcedMethodId,
-      groupAccountId: Number(product.groupSize) === 2 ? state.groupAccount?.id || null : null,
-      coachRoleId: purchaseFlow.productId === product.id ? purchaseFlow.coachRoleId || null : null,
-      preferredDate: purchaseFlow.productId === product.id ? purchaseFlow.preferredDate || null : null,
-      preferredDay: purchaseFlow.productId === product.id ? purchaseFlow.preferredDay || null : null,
-      preferredTime: purchaseFlow.productId === product.id ? purchaseFlow.preferredTime || null : null,
-      preferredSchedules: purchaseFlow.productId === product.id
-        ? purchaseSelectedSchedules(product).map((schedule) => ({
-          lessonDate: schedule.lessonDate,
-          day: schedule.day,
-          startTime: schedule.startTime,
-          durationMinutes: schedule.durationMinutes,
-          coachRoleId: schedule.coachRoleId,
-        }))
-        : [],
-      scheduleMode: purchaseFlow.productId === product.id ? purchaseFlow.scheduleMode || "change" : "change",
-      renewalSourceTicketId: purchaseFlow.productId === product.id ? purchaseFlow.renewalTicketId || null : null,
-      purchasePurpose: purchaseFlow.productId === product.id ? purchaseFlow.purchasePurpose || "new_purchase" : "new_purchase",
-      discountIssueId: purchaseFlow.productId === product.id ? purchaseFlow.discountIssueId || null : null,
-    },
-  });
-}
-
-async function verifyServerPayment(paymentId) {
-  const client = window.TennisNoteDataClient;
-  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
-    throw new Error("login_required");
-  }
-  return client.invokeFunction("portone-payment/verify", {
-    body: { paymentId },
-  });
 }
 
 function clearPaymentRedirectParams() {
@@ -5912,30 +3846,6 @@ async function cancelPendingTicketPayment(ticketId = "") {
   await Promise.allSettled([syncMemberTicketsFromServer(), syncMemberDiscountCouponsFromServer()]);
   renderAll();
   setView("shopView");
-}
-
-function closePaymentConfirmationModal() {
-  closeAppModal("paymentConfirmationModal");
-  preparedPaymentContext = null;
-}
-
-function openPaymentConfirmationModal({ product, paymentId, preparedPayment, methodId, sdk }) {
-  const enforcedMethodId = paymentMethodIdForRequest(methodId);
-  preparedPaymentContext = { product, paymentId, preparedPayment, methodId: enforcedMethodId, sdk };
-  const modal = $("#paymentConfirmationModal");
-  if (!modal) return;
-  const amount = purchasePaymentAmount(product, enforcedMethodId);
-  const method = paymentMethodDefinition(enforcedMethodId);
-  $("#paymentConfirmationProduct").textContent = product.title;
-  $("#paymentConfirmationAmount").textContent = `${amount.toLocaleString("ko-KR")}원`;
-  $("#paymentConfirmationMethod").textContent = method.label;
-  $("#paymentConfirmationMessage").textContent = "결제창에서 결제 정보를 확인한 뒤 최종 결제를 완료합니다.";
-  const button = $("#openPreparedPaymentButton");
-  if (button) {
-    button.disabled = false;
-    button.textContent = `${amount.toLocaleString("ko-KR")}원 결제창 열기`;
-  }
-  openAppModal("paymentConfirmationModal", "#openPreparedPaymentButton");
 }
 
 async function completePreparedPayment() {
@@ -6262,240 +4172,10 @@ let activeAppModalId = "";
 let appModalReturnFocus = null;
 let appSheetScrollLock = null;
 
-function lockAppSheetBackground() {
-  if (appSheetScrollLock) return;
-  const scrollY = Math.max(0, window.scrollY || window.pageYOffset || 0);
-  appSheetScrollLock = {
-    scrollY,
-    bodyPosition: document.body.style.position,
-    bodyTop: document.body.style.top,
-    bodyLeft: document.body.style.left,
-    bodyRight: document.body.style.right,
-    bodyWidth: document.body.style.width,
-    htmlOverscrollBehavior: document.documentElement.style.overscrollBehavior,
-  };
-  document.body.style.position = "fixed";
-  document.body.style.top = `-${scrollY}px`;
-  document.body.style.left = "0";
-  document.body.style.right = "0";
-  document.body.style.width = "100%";
-  document.documentElement.style.overscrollBehavior = "none";
-}
-
-function unlockAppSheetBackground() {
-  if (!appSheetScrollLock) return;
-  const saved = appSheetScrollLock;
-  appSheetScrollLock = null;
-  document.body.style.position = saved.bodyPosition;
-  document.body.style.top = saved.bodyTop;
-  document.body.style.left = saved.bodyLeft;
-  document.body.style.right = saved.bodyRight;
-  document.body.style.width = saved.bodyWidth;
-  document.documentElement.style.overscrollBehavior = saved.htmlOverscrollBehavior;
-  window.scrollTo({ top: saved.scrollY, left: 0, behavior: "auto" });
-}
-
-function refreshAppSheetState() {
-  const sheetOpen = Boolean(activeAppSheetId);
-  document.body.classList.toggle("sheet-open", sheetOpen);
-  if (sheetOpen) lockAppSheetBackground();
-  else unlockAppSheetBackground();
-}
-
-function openAppSheet(sheetId, options = {}) {
-  const target = $(`#${sheetId}`);
-  if (!target) return;
-  if (activeAppSheetId && activeAppSheetId !== sheetId) {
-    closeAppSheet(activeAppSheetId, true, { restoreFocus: false, immediate: true });
-  }
-  activeAppSheetId = sheetId;
-  if (window.TennisNoteBottomSheet?.open?.(target, options)) return;
-  target.hidden = false;
-  refreshAppSheetState();
-  if (options.history !== false) {
-    const historyState = typeof history.state === "object" && history.state ? history.state : {};
-    if (historyState.tennisNoteSheet !== sheetId) {
-      history.pushState({ ...historyState, tennisNoteSheet: sheetId }, "", window.location.href);
-    }
-  }
-}
-
-function closeAppSheet(sheetId, fromHistory = false, options = {}) {
-  const target = $(`#${sheetId}`);
-  if (!target) return false;
-  if (activeAppSheetId === sheetId) activeAppSheetId = "";
-  if (window.TennisNoteBottomSheet?.close?.(target, { ...options, fromHistory })) return true;
-  target.hidden = true;
-  refreshAppSheetState();
-  if (!fromHistory && history.state?.tennisNoteSheet === sheetId) history.back();
-  return true;
-}
-
-function closeVisibleAppSheet(fromHistory = false, options = {}) {
-  const trackedSheet = activeAppSheetId ? $(`#${activeAppSheetId}`) : null;
-  const visibleSheet = trackedSheet && !trackedSheet.hidden
-    ? trackedSheet
-    : document.querySelector(".app-bottom-sheet:not([hidden])");
-  if (!visibleSheet?.id) return false;
-  closeAppSheet(visibleSheet.id, fromHistory, options);
-  return true;
-}
-
-function refreshAppModalState() {
-  const modalOpen = Boolean(activeAppModalId);
-  document.body.classList.toggle("modal-open", modalOpen);
-  const tabbar = $(".tabbar");
-  if (tabbar) {
-    if (modalOpen) tabbar.setAttribute("aria-hidden", "true");
-    else tabbar.removeAttribute("aria-hidden");
-  }
-}
-
-function openAppModal(modalId, focusSelector = "") {
-  const target = $(`#${modalId}`);
-  if (!target) return;
-  if (activeAppModalId && activeAppModalId !== modalId) closeAppModal(activeAppModalId, true);
-  appModalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  target.hidden = false;
-  activeAppModalId = modalId;
-  refreshAppModalState();
-  const historyState = typeof history.state === "object" && history.state ? history.state : {};
-  if (historyState.tennisNoteModal !== modalId) {
-    history.pushState({ ...historyState, tennisNoteModal: modalId }, "", window.location.href);
-  }
-  window.setTimeout(() => {
-    const preferred = focusSelector ? target.querySelector(focusSelector) : null;
-    const focusTarget = preferred && !preferred.disabled ? preferred : focusableElements(target)[0];
-    focusTarget?.focus({ preventScroll: true });
-  }, 40);
-}
-
-function closeAppModal(modalId, fromHistory = false) {
-  const target = $(`#${modalId}`);
-  if (!target) return;
-  target.hidden = true;
-  if (activeAppModalId === modalId) activeAppModalId = "";
-  refreshAppModalState();
-  if (!fromHistory && history.state?.tennisNoteModal === modalId) {
-    history.back();
-    return;
-  }
-  appModalReturnFocus?.focus?.({ preventScroll: true });
-  appModalReturnFocus = null;
-}
-
-function closeVisibleAppModal(fromHistory = false) {
-  const trackedModal = activeAppModalId ? $(`#${activeAppModalId}`) : null;
-  const visibleModal = trackedModal && !trackedModal.hidden
-    ? trackedModal
-    : document.querySelector(".change-request-modal:not([hidden]), .modal:not([hidden])");
-  if (!visibleModal?.id) return false;
-  closeAppModal(visibleModal.id, fromHistory);
-  return true;
-}
-
-function openJournalComposer(dateValue = "") {
-  const selectedDate = dateValue || state.selectedJournalDate || $("#journalDate")?.value || localDateKey();
-  selectJournalDate(selectedDate);
-  if ($("#journalDate")) $("#journalDate").value = selectedDate;
-  if ($("#journalComposerDateLabel")) $("#journalComposerDateLabel").textContent = journalDateLabel(selectedDate);
-  renderJournalMode();
-  const initialFocus = $("#journalMode")?.value === "lesson" ? "#todayLessonContent" : "#practiceMemo";
-  openAppSheet("journalComposerSheet", { initialFocus });
-}
-
 function openProfileEditor(focusNtrp = false) {
   openAppSheet("profileEditorSheet", {
     initialFocus: focusNtrp ? "#profileSelfNtrp" : "",
   });
-}
-
-function openMembershipDetails(detailsId) {
-  const target = $(`#${detailsId}`);
-  if (!target) return;
-  target.open = true;
-  let ancestor = target.parentElement?.closest("details");
-  while (ancestor) {
-    ancestor.open = true;
-    ancestor = ancestor.parentElement?.closest("details");
-  }
-  window.setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
-}
-
-function openJournalDetail(id) {
-  const entry = journalEntries().find((item) => item.id === id);
-  if (!entry) return;
-  const curriculumBlock = entry.curriculumStep
-    ? `
-      <section class="journal-curriculum-card">
-        <span>다음 수업 커리큘럼</span>
-        <strong>${entry.curriculumStep.id} · ${entry.curriculumStep.title}</strong>
-        <p>${entry.curriculumStep.focus}</p>
-        <a class="small-button notion-link" href="${entry.curriculumStep.notionUrl || "https://www.notion.so/"}" target="_blank" rel="noreferrer">노션에서 자세히 보기</a>
-      </section>`
-    : "";
-  const attendanceBlock = entry.kind === "레슨"
-    ? `<div class="journal-lesson-result"><span>${{
-      completed: "수업 완료",
-      no_show: "노쇼",
-      absence: "불참",
-      cancelled: "취소",
-      holiday: "휴무",
-    }[String(entry.outcome || "").toLowerCase()] || "수업 기록"}</span><strong>${Number(entry.deductedSessions) > 0 ? `${Number(entry.deductedSessions)}회 차감` : "차감 없음"}</strong></div>`
-    : "";
-  $("#journalDetailContent").innerHTML = `
-    <div class="section-title compact-title">
-      <h2>${entry.title}</h2>
-      <span>${entry.subtitle || entry.dateLabel}</span>
-    </div>
-    <article class="journal-detail-card">
-      ${attendanceBlock}
-      <section class="journal-feedback-block member-note">
-        <strong>내 기록</strong>
-        <p>${entry.body || "작성한 기록이 없습니다."}</p>
-      </section>
-      ${entry.mediaItems?.length ? `<strong>첨부</strong>${renderMediaPreview(entry.mediaItems)}` : ""}
-      <section class="journal-feedback-block coach-note">
-        <strong>코치 피드백</strong>
-        <p>${entry.note || "코치 피드백을 기다리고 있습니다."}</p>
-      </section>
-      ${entry.next ? `<section class="journal-feedback-block next-note"><strong>다음 수업</strong><p>${entry.next}</p></section>` : ""}
-      ${curriculumBlock}
-    </article>`;
-  $("#journalDetailModal").hidden = false;
-}
-
-function openJournalDay(day) {
-  const monthValue = state.activeJournalMonth || new Date().toISOString().slice(0, 7);
-  const dateValue = `${monthValue}-${String(day).padStart(2, "0")}`;
-  const entries = journalEntries().filter((item) => item.dateValue === dateValue);
-  if (!entries.length) return;
-  if (entries.length === 1) {
-    openJournalDetail(entries[0].id);
-    return;
-  }
-  $("#journalDetailContent").innerHTML = `
-    <div class="section-title compact-title">
-      <h2>${day}일 운동 기록</h2>
-      <span>하루에 작성한 기록을 모두 확인합니다.</span>
-    </div>
-    <div class="journal-entry-list">
-      ${entries
-        .map(
-          (entry) => `
-            <button class="journal-entry-button" type="button" data-open-journal-detail="${entry.id}">
-              <strong>${entry.kind}</strong>
-              <span>${entry.title}</span>
-              <small>${entry.subtitle}</small>
-            </button>`,
-        )
-        .join("")}
-    </div>`;
-  $("#journalDetailModal").hidden = false;
-}
-
-function closeJournalDetail() {
-  $("#journalDetailModal").hidden = true;
 }
 
 function setView(viewId, options = {}) {
@@ -6552,12 +4232,6 @@ function canUseCoachMode() {
   return state.member?.coachApproved === true && !isApprovalPending();
 }
 
-function memberModeOverrideActive() {
-  const requestedMode = new URLSearchParams(window.location.search).get("mode");
-  if (requestedMode === "member") sessionStorage.setItem(appModePreferenceKey, "member");
-  return requestedMode === "member" || sessionStorage.getItem(appModePreferenceKey) === "member";
-}
-
 function shouldOpenCoachModeByDefault() {
   return canUseCoachMode() && !memberModeOverrideActive();
 }
@@ -6567,16 +4241,6 @@ function updateCoachModeAccess() {
   if (!button) return;
   button.hidden = !canUseCoachMode();
   renderBankNotificationBridge();
-}
-
-function openCoachMode() {
-  if (!canUseCoachMode()) return;
-  coachModeNavigationStarted = true;
-  sessionStorage.setItem(appModePreferenceKey, "coach");
-  sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
-  saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.371" });
-  window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
 }
 
 function applyRequestedMemberView() {
@@ -6663,18 +4327,6 @@ function filteredMemberHelpEntries() {
   ));
 }
 
-function openMemberHelpModal() {
-  memberHelpCategory = "all";
-  memberHelpQuery = "";
-  if ($("#memberHelpSearch")) $("#memberHelpSearch").value = "";
-  renderMemberHelp();
-  openAppModal("memberHelpModal", "#memberHelpSearch");
-}
-
-function closeMemberHelpModal() {
-  closeAppModal("memberHelpModal");
-}
-
 function runMemberHelpAction(action) {
   closeMemberHelpModal();
   window.setTimeout(() => {
@@ -6694,28 +4346,6 @@ function runMemberHelpAction(action) {
     }
     if (action === "support") openKakaoInquiryModal();
   }, 80);
-}
-
-function openKakaoInquiryModal(context = "support") {
-  const modal = $("#kakaoInquiryModal");
-  if (!modal) return;
-  const oneDay = context === "one-day";
-  if ($("#kakaoInquiryTitle")) $("#kakaoInquiryTitle").textContent = oneDay ? "원데이 레슨 문의" : "카카오로 문의하기";
-  const description = modal.querySelector(".support-modal-card > p:not(.eyebrow)");
-  if (description) {
-    description.textContent = oneDay
-      ? "희망 날짜, 시간, 레슨 경험을 남기면 가능한 코치와 결제 방법을 안내합니다."
-      : "수업 변경, 회원권, 결제 관련 내용을 남겨주시면 운영시간에 순서대로 답변드립니다.";
-  }
-  modal.hidden = false;
-  $("#kakaoChannelLink")?.focus();
-}
-
-function closeKakaoInquiryModal() {
-  const modal = $("#kakaoInquiryModal");
-  if (!modal) return;
-  modal.hidden = true;
-  $("#openKakaoInquiryButton")?.focus();
 }
 
 function handleHomeAction(action) {
@@ -6787,25 +4417,6 @@ function selectedLessonDetail() {
     || null;
 }
 
-function openLessonDetailSheet(lessonId) {
-  const lesson = memberScheduleOptions().find((item) => item.id === lessonId)
-    || memberMakeupDueLessons().find((item) => item.id === lessonId)
-    || (state.liveLessons || []).find((item) => item.id === lessonId);
-  if (!lesson || !isOwnMemberScheduleLesson(lesson)) return;
-  state.selectedLessonDetailId = lesson.id;
-  renderLessonDetailSheet(lesson);
-  openAppSheet("lessonDetailSheet");
-}
-
-function closeLessonDetailForAction() {
-  closeAppSheet("lessonDetailSheet", true, { restoreFocus: false, immediate: true });
-  if (history.state?.tennisNoteSheet === "lessonDetailSheet") {
-    const nextState = { ...history.state };
-    delete nextState.tennisNoteSheet;
-    history.replaceState(nextState, "", window.location.href);
-  }
-}
-
 function handleScheduleClick(lessonId) {
   const lesson = memberScheduleOptions().find((item) => item.id === lessonId);
   if (!lesson) return;
@@ -6836,32 +4447,6 @@ function handleScheduleClick(lessonId) {
     renderChangeModalSummary();
     openAppModal("changeRequestModal", "#requestMakeup");
   }
-}
-
-function toggleRegularInitialScheduleSlot(lessonId) {
-  const lesson = memberScheduleOptions().find((item) => item.id === lessonId && item.status === "available");
-  const source = regularInitialSourceLesson();
-  if (!lesson || !source) return;
-  const requiredCount = Math.max(1, Number(source.frequencyPerWeek) || 1);
-  const selected = [...state.regularInitialSelections];
-  const existingIndex = selected.indexOf(lessonId);
-  if (existingIndex >= 0) {
-    selected.splice(existingIndex, 1);
-  } else {
-    const differentCoachSelected = selected.some((id) => {
-      const selectedLesson = memberScheduleOptions().find((item) => item.id === id);
-      return String(selectedLesson?.coachRoleId || "") !== String(lesson.coachRoleId || "");
-    });
-    if (differentCoachSelected) {
-      selected.splice(0, selected.length);
-      showToast("첫 정규시간은 같은 코치로 선택합니다.");
-    }
-    if (selected.length >= requiredCount) selected.shift();
-    selected.push(lessonId);
-  }
-  state.regularInitialSelections = selected;
-  renderSchedule();
-  saveSnapshot();
 }
 
 function confirmRegularInitialSchedule() {
@@ -7056,24 +4641,6 @@ async function prepareChangeRequestSource(preferredLessonId = "") {
   return nextFuture.id;
 }
 
-async function openChangeRequestModal(preferredLessonId = "", options = {}) {
-  if (!options.editing) state.editingChangeRequestId = "";
-  state.memberChangeCompactSelection = false;
-  $("#changeRequestModal")?.classList.remove("is-inline-confirmation");
-  const sourceId = await prepareChangeRequestSource(preferredLessonId);
-  renderSelects();
-  if (sourceId && [...$("#absenceLesson").options].some((option) => option.value === sourceId)) {
-    $("#absenceLesson").value = sourceId;
-    state.selectedMemberChangeSourceId = sourceId;
-  }
-  renderSelects();
-  renderAvailableSlots();
-  renderChangeModalSummary();
-  openAppModal("changeRequestModal", "#absenceLesson");
-  const source = currentScheduledLessonsForChange().find((lesson) => lesson.id === $("#absenceLesson")?.value);
-  await syncMemberChangeCandidates(source);
-}
-
 function startCouponBooking(ticketId) {
   state.selectedMemberScheduleTicketId = String(ticketId || "");
   const sourceId = `coupon-ticket-${ticketId}`;
@@ -7104,41 +4671,6 @@ async function changeMemberScheduleMode(mode) {
   saveSnapshot();
 }
 
-async function openMemberChangeTimetable(preferredLessonId = "") {
-  state.memberScheduleMode = "availability";
-  state.memberScheduleModeTouched = true;
-  state.memberScheduleFullView = true;
-  if (preferredLessonId) {
-    state.selectedMemberChangeSourceId = preferredLessonId;
-    const preferredSource = currentScheduledLessonsForChange().find((lesson) => lesson.id === preferredLessonId);
-    if (preferredSource) ensureMemberScheduleTicketSelection(memberLessonTicketId(preferredSource));
-  }
-  setView("scheduleView");
-  renderSchedule();
-  const preparedSourceId = await prepareChangeRequestSource(preferredLessonId || state.selectedMemberChangeSourceId);
-  const sources = memberInlineChangeSources();
-  if (preparedSourceId && sources.some((lesson) => lesson.id === preparedSourceId)) {
-    state.selectedMemberChangeSourceId = preparedSourceId;
-  }
-  if (!sources.some((lesson) => lesson.id === state.selectedMemberChangeSourceId)) {
-    state.selectedMemberChangeSourceId = "";
-  }
-  renderSchedule();
-  renderSelects();
-  const source = sources.find((lesson) => lesson.id === state.selectedMemberChangeSourceId);
-  await syncMemberChangeCandidates(source);
-  jumpToTop();
-}
-
-function closeChangeRequestModal() {
-  state.regularInitialSelections = [];
-  state.regularInitialOperationKey = "";
-  state.memberChangeCompactSelection = false;
-  state.editingChangeRequestId = "";
-  $("#changeRequestModal")?.classList.remove("is-inline-confirmation");
-  closeAppModal("changeRequestModal");
-}
-
 async function editMemberChangeRequest(requestId) {
   const request = state.makeupRequests.find((item) => (
     String(item.serverRequestId || item.id || "") === String(requestId || "")
@@ -7161,15 +4693,6 @@ async function editMemberChangeRequest(requestId) {
   closeAppModal("requestHistoryModal");
   if ($("#changeReason")) $("#changeReason").value = request.reason || "";
   await openChangeRequestModal(source.id, { editing: true });
-}
-
-function openChangeHistoryModal() {
-  renderRequests();
-  $("#changeHistoryModal").hidden = false;
-}
-
-function closeChangeHistoryModal() {
-  $("#changeHistoryModal").hidden = true;
 }
 
 async function saveJournal() {
@@ -7246,33 +4769,6 @@ function setNicknameStatus(targetId, message, tone = "") {
   target.classList.toggle("is-unavailable", tone === "unavailable");
 }
 
-async function checkNicknameAvailability(inputId, statusId) {
-  const nickname = normalizeIdentityText($(`#${inputId}`)?.value || "");
-  if (nickname.length < 2 || nickname.length > 20) {
-    setNicknameStatus(statusId, "닉네임은 2~20자로 입력해 주세요.", "unavailable");
-    return false;
-  }
-  const client = window.TennisNoteDataClient;
-  if (!hasLiveMemberSession() || !client?.rpc) {
-    setNicknameStatus(statusId, "실사용 로그인 후 중복을 확인할 수 있습니다.", "unavailable");
-    return false;
-  }
-  setNicknameStatus(statusId, "중복 여부를 확인하고 있습니다.");
-  try {
-    const rawResult = await client.rpc("tn_check_nickname_available", { target_nickname: nickname });
-    const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
-    if (result?.available) {
-      setNicknameStatus(statusId, "사용할 수 있는 닉네임입니다.", "available");
-      return true;
-    }
-    setNicknameStatus(statusId, identityErrorMessage(result?.reason || "nickname_already_taken"), "unavailable");
-    return false;
-  } catch (error) {
-    setNicknameStatus(statusId, identityErrorMessage(error), "unavailable");
-    return false;
-  }
-}
-
 function applySavedIdentity(profile = {}) {
   state.profile.name = normalizeIdentityText(profile.name || state.profile.name);
   state.profile.nickname = normalizeIdentityText(profile.nickname || state.profile.nickname);
@@ -7299,89 +4795,6 @@ function applyConsentPreferences(preferences = {}) {
   state.profile.marketingEmailConsent = preferences.marketingEmail === true;
 }
 
-async function loadIdentityConsentPreferences() {
-  const client = window.TennisNoteDataClient;
-  if (!hasLiveMemberSession() || !client?.rpc) return {};
-  const rawResult = await retryTransientNetwork(() => client.rpc("tn_my_consent_preferences"));
-  const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
-  applyConsentPreferences(result || {});
-  return result || {};
-}
-
-async function persistConsentPreferences({ marketingPush, marketingSms, marketingEmail }) {
-  const client = window.TennisNoteDataClient;
-  if (!hasLiveMemberSession() || !client?.rpc) {
-    applyConsentPreferences({
-      termsVersion: identityTermsVersion,
-      termsConsentedAt: new Date().toISOString(),
-      privacyVersion: identityPrivacyVersion,
-      privacyConsentedAt: new Date().toISOString(),
-      marketingPush,
-      marketingSms,
-      marketingEmail,
-    });
-    return { ok: true, offlinePreview: true };
-  }
-  const rawResult = await retryTransientNetwork(() => client.rpc("tn_save_my_consent_preferences", {
-    target_terms_version: identityTermsVersion,
-    target_privacy_version: identityPrivacyVersion,
-    target_terms_consent: true,
-    target_privacy_consent: true,
-    target_marketing_push: marketingPush === true,
-    target_marketing_sms: marketingSms === true,
-    target_marketing_email: marketingEmail === true,
-  }));
-  const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
-  if (!result?.ok) throw new Error("consent_update_not_confirmed");
-  applyConsentPreferences(result);
-  return result;
-}
-
-async function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender }) {
-  const normalizedRealName = normalizeIdentityText(realName);
-  const normalizedNickname = normalizeIdentityText(nickname);
-  const normalizedPhone = normalizeIdentityPhone(phone);
-  const normalizedBirthYear = Number(birthYear) || 0;
-  const normalizedNeighborhood = normalizeIdentityText(neighborhood);
-  const normalizedGender = String(gender || "");
-  if (!normalizedRealName || normalizedRealName.length > 40) throw new Error("real_name_invalid");
-  if (normalizedNickname.length < 2 || normalizedNickname.length > 20) throw new Error("nickname_invalid");
-  if (!/^01[0-9]{8,9}$/u.test(normalizedPhone)) throw new Error("phone_invalid");
-  if (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear()) throw new Error("birth_year_invalid");
-  if (!["female", "male", "other", "prefer_not"].includes(normalizedGender)) throw new Error("gender_invalid");
-
-  const client = window.TennisNoteDataClient;
-  if (hasLiveMemberSession() && client?.rpc) {
-    const rawResult = await retryTransientNetwork(() => client.rpc("tn_update_my_identity_profile_v2", {
-      target_real_name: normalizedRealName,
-      target_nickname: normalizedNickname,
-      target_phone: normalizedPhone,
-      target_birth_year: normalizedBirthYear,
-      target_neighborhood: normalizedNeighborhood,
-      target_gender: normalizedGender,
-      target_privacy_version: identityPrivacyVersion,
-    }));
-    const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
-    if (!result?.ok || !result?.profile) throw new Error("identity_profile_update_not_confirmed");
-    applySavedIdentity(result.profile);
-    return result;
-  }
-
-  const profile = {
-    name: normalizedRealName,
-    nickname: normalizedNickname,
-    phone: normalizedPhone,
-    birth_year: normalizedBirthYear,
-    neighborhood: normalizedNeighborhood,
-    gender: normalizedGender,
-    profile_completed_at: new Date().toISOString(),
-    privacy_consent_version: identityPrivacyVersion,
-    privacy_consented_at: new Date().toISOString(),
-  };
-  applySavedIdentity(profile);
-  return { ok: true, profile, linkStatus: "offline_preview" };
-}
-
 function populateIdentitySetup(user = null) {
   const realName = state.profile.name === "가입 확인 중" ? "" : state.profile.name || "";
   const suggestedNickname = state.profile.nickname || state.profile.suggestedNickname || suggestedNicknameFromUser(user);
@@ -7402,21 +4815,6 @@ function populateIdentitySetup(user = null) {
   if ($("#identityMarketingEmail")) $("#identityMarketingEmail").checked = state.profile.marketingEmailConsent === true;
   setNicknameStatus("identityNicknameStatus", "닉네임은 모든 회원 사이에서 중복될 수 없습니다.");
   if ($("#identitySetupMessage")) $("#identitySetupMessage").textContent = "";
-}
-
-function syncIdentitySetupModal(user = null) {
-  const modal = $("#identitySetupModal");
-  if (!modal) return;
-  if (!hasLiveMemberSession() || identityProfileComplete()) {
-    modal.hidden = true;
-    document.body.classList.remove("identity-setup-required");
-    return;
-  }
-  state.profile.suggestedNickname = state.profile.suggestedNickname || suggestedNicknameFromUser(user);
-  populateIdentitySetup(user);
-  modal.hidden = false;
-  document.body.classList.add("identity-setup-required");
-  window.setTimeout(() => $("#identityRealName")?.focus(), 40);
 }
 
 async function submitIdentitySetup(event) {
@@ -7607,82 +5005,6 @@ function exportNtrpRequest(survey) {
   saveSharedData(shared);
 }
 
-function activateLiveMemberProfile(profileId) {
-  const nextProfileId = String(profileId || "");
-  const previousProfileId = String(state.liveProfileId || state.member?.profileId || "");
-  const sameProfile = Boolean(nextProfileId && previousProfileId === nextProfileId);
-
-  state.dataMode = "live";
-  state.liveProfileId = nextProfileId;
-  state.demoPresentationVersion = 0;
-  if (sameProfile) return;
-  state.member = null;
-  state.memberEnrollment = null;
-  state.pendingPurchaseProductId = "";
-  state.coachModeAllowed = false;
-  state.remaining = 0;
-  state.profile = {
-    ...state.profile,
-    name: "",
-    nickname: "",
-    phone: "",
-    profileCompletedAt: "",
-    privacyConsentVersion: "",
-    privacyConsentedAt: "",
-    suggestedNickname: "",
-    branch: "",
-    mainCoach: "",
-    ticket: "현재 이용권 없음",
-    photoDataUrl: "",
-    hand: "",
-    backhand: "",
-    startedAt: "",
-    goal: "",
-    styleMemo: "",
-    selfNtrp: "",
-    coachNtrp: "측정 전",
-    ntrpCheckRequested: false,
-  };
-  state.makeupRequests = [];
-  state.lessonLogs = [];
-  state.practiceLogs = [];
-  state.paymentRequests = [];
-  state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
-  state.discountCoupons = [];
-  state.expiredTickets = [];
-  state.ticketHistory = [];
-  state.liveMembershipProducts = [];
-  state.liveTickets = [];
-  memberScheduleV2WorkspaceCache = null;
-  state.liveLessons = [];
-  state.liveLessonsLoaded = false;
-  state.groupAccount = null;
-  state.liveNotifications = [];
-  state.accountDeletionRequest = null;
-  state.ticketSyncStatus = { tone: "wait", text: "서버 회원권 확인 중" };
-  state.pendingPaymentCheckStatus = null;
-  state.lastLiveTicketKey = "";
-  state.lastLiveNotificationKey = "";
-  state.activeJournalMonth = localDateKey().slice(0, 7);
-  state.selectedJournalDate = localDateKey();
-  lessons.splice(0, lessons.length);
-  localStorage.removeItem(sharedStorageKey);
-}
-
-function openAppFromSession(showNotice = false) {
-  if (!state.member) return;
-  $("#loginScreen").hidden = true;
-  $("#appScreen").hidden = false;
-  document.body.dataset.screen = "app";
-  renderPendingApprovalGate();
-  updateCoachModeAccess();
-  void refreshBankNotificationBridge();
-  applyRequestedMemberView();
-  setView(activeMemberViewId(), { replaceHistory: true });
-  jumpToTop();
-  if (showNotice && !isApprovalPending()) showNoticeAfterLiveSync();
-}
-
 async function applySupabaseMemberSession(showNotice = false) {
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready) return false;
@@ -7821,46 +5143,6 @@ async function applySupabaseMemberSession(showNotice = false) {
   }
 }
 
-async function login(provider) {
-  const client = window.TennisNoteDataClient;
-  const status = $("#memberEmailLoginStatus");
-  if (client?.readiness?.().ready) {
-    try {
-      if (status) status.textContent = `${provider} 로그인 화면을 여는 중입니다.`;
-      await client.signInWithOAuth(provider);
-      return;
-    } catch (error) {
-      if (status) status.textContent = `${provider} 로그인을 열지 못했습니다. 잠시 후 다시 시도해주세요.`;
-      return;
-    }
-  }
-  if (status) status.textContent = "실사용 로그인 연결 설정을 확인해 주세요.";
-}
-
-async function syncAppleLoginAvailability() {
-  const buttons = $$('[data-login-provider="Apple"]');
-  if (!buttons.length) return;
-  let ready = true;
-  const client = window.TennisNoteDataClient;
-  if (client?.readiness?.().ready) {
-    try {
-      const settings = await client.getAuthSettings();
-      ready = Boolean(settings?.external?.apple);
-    } catch {
-      // A temporary settings lookup failure must not hide the compliant login option.
-      ready = true;
-    }
-  }
-  buttons.forEach((button) => {
-    const label = button.querySelector("[data-apple-login-label]");
-    button.disabled = !ready;
-    button.classList.toggle("is-preparing", !ready);
-    const buttonLabel = ready ? button.dataset.readyLabel : "Apple 로그인 설정 중";
-    if (label) label.textContent = buttonLabel;
-    button.setAttribute("aria-label", buttonLabel);
-  });
-}
-
 async function handleOAuthResult(event) {
   const status = $("#memberEmailLoginStatus");
   const provider = event?.detail?.provider || "간편";
@@ -7883,57 +5165,6 @@ async function handleOAuthResult(event) {
   status.textContent = event?.detail?.cancelled
     ? `${provider} 로그인이 취소되었습니다.`
     : `${provider} 로그인을 완료하지 못했습니다. 다시 시도해주세요.`;
-}
-
-async function loginWithEmail(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const submitButton = form.querySelector('button[type="submit"]');
-  const status = $("#memberEmailLoginStatus");
-  submitButton.disabled = true;
-  status.textContent = "로그인 확인 중";
-  try {
-    const client = window.TennisNoteDataClient;
-    await client.signInWithPassword($("#memberLoginEmail").value, $("#memberLoginPassword").value);
-    const opened = await applySupabaseMemberSession(true);
-    if (!opened) throw new Error("profile_bootstrap_failed");
-    form.reset();
-    status.textContent = "";
-  } catch (error) {
-    status.textContent = emailLoginErrorMessage(error);
-  } finally {
-    submitButton.disabled = false;
-  }
-}
-
-async function logout() {
-  await disableNativePushForLogout();
-  try {
-    await window.TennisNoteDataClient?.signOut?.();
-  } catch {
-    state.ticketHistory.unshift({ text: "외부 로그인 해제 확인 필요 · 앱에서는 로그아웃 처리", tone: "wait" });
-  }
-  state.member = null;
-  state.memberEnrollment = null;
-  state.pendingPurchaseProductId = "";
-  state.liveTickets = [];
-  state.liveLessons = [];
-  state.liveMakeupEntitlements = [];
-  state.liveReleasedMakeupSlots = [];
-  state.ticketSyncStatus = { tone: "wait", text: "로그인 후 실제 회원권을 확인합니다" };
-  state.lastLiveTicketKey = "";
-  sessionStorage.removeItem(appModePreferenceKey);
-  sessionStorage.removeItem("tennis-note-coach-mode-entry");
-  $("#appScreen").hidden = true;
-  $("#loginScreen").hidden = false;
-  if ($("#identitySetupModal")) $("#identitySetupModal").hidden = true;
-  document.body.classList.remove("identity-setup-required");
-  delete document.body.dataset.screen;
-  document.body.classList.remove("member-pending-approval");
-  if ($("#pendingApprovalGate")) $("#pendingApprovalGate").hidden = true;
-  updateCoachModeAccess();
-  jumpToTop();
-  saveSnapshot();
 }
 
 async function submitMemberLessonChange(client, args) {
@@ -8313,49 +5544,6 @@ let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;
 const MEMBER_LIVE_REFRESH_STALE_MS = 20_000;
 
-async function refreshMemberLiveSchedule(options = {}) {
-  const client = window.TennisNoteDataClient;
-  const force = options.force === true;
-  if (memberLiveScheduleRefreshInFlight) {
-    if (force) memberLiveScheduleRefreshQueued = true;
-    return false;
-  }
-  if (
-    document.hidden
-    || state.dataMode !== "live"
-    || !state.member?.profileId
-    || !client?.readiness?.().ready
-    || !client?.getSession?.()?.access_token
-    || (!force && Date.now() - memberLiveScheduleLastRefreshAt < MEMBER_LIVE_REFRESH_STALE_MS)
-  ) return false;
-
-  memberLiveScheduleRefreshInFlight = true;
-  try {
-    await syncMemberTicketsFromServer();
-    const [lessonsSynced, requestsSynced, notificationResult] = await Promise.all([
-      syncMemberLessonsFromServer(null, { force }),
-      syncMemberChangeRequestsFromServer(),
-      syncMemberNotificationsFromServer(),
-      syncMemberPaymentOptionsFromServer(),
-      syncMemberDiscountCouponsFromServer(),
-    ]);
-    if (options.render !== false) renderActiveMemberView();
-    if (notificationResult?.newNotification) {
-      showToast(`${notificationResult.newNotification.title} · 시간표에서 확인해 주세요.`);
-    }
-    memberLiveScheduleLastRefreshAt = Date.now();
-    return Boolean(lessonsSynced || requestsSynced || notificationResult?.ok);
-  } finally {
-    memberLiveScheduleRefreshInFlight = false;
-    if (memberLiveScheduleRefreshQueued) {
-      memberLiveScheduleRefreshQueued = false;
-      queueMicrotask(() => {
-        void refreshMemberLiveSchedule({ force: true, render: options.render !== false });
-      });
-    }
-  }
-}
-
 function installMemberLiveScheduleRefresh() {
   if (memberLiveScheduleRefreshTimer) return;
   const refresh = () => refreshMemberLiveSchedule().catch(() => false);
@@ -8399,36 +5587,6 @@ function installMemberConnectivityStatus() {
       renderMemberConnectivityStatus(true);
     });
   });
-}
-
-function openLocalCurriculumPreview() {
-  const localHost = ["127.0.0.1", "localhost", "::1"].includes(window.location.hostname);
-  const previewRequested = new URLSearchParams(window.location.search).get("curriculumPreview") === "1";
-  if (!localHost || !previewRequested) return false;
-  state.dataMode = "demo";
-  state.member = {
-    provider: "local-preview",
-    name: "커리큘럼 미리보기",
-    nickname: "미리보기",
-    profileId: "local-curriculum-preview",
-    role: "member",
-    memberKind: "lesson_member",
-    status: "active",
-    coachApproved: false,
-  };
-  state.profile = {
-    ...state.profile,
-    name: "커리큘럼 미리보기",
-    nickname: "미리보기",
-    branch: "테클하",
-    mainCoach: "담당 코치",
-    ticket: "커리큘럼 화면 검증",
-  };
-  ensureDemoPresentation();
-  renderAll();
-  openAppFromSession(false);
-  setView("curriculumView");
-  return true;
 }
 
 async function initApp() {
