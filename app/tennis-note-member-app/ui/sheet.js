@@ -13,6 +13,9 @@ function hideBrandSplash() {
     splash.classList.add("is-hidden");
     window.setTimeout(() => {
       splash.hidden = true;
+      window.TennisNoteModeTransition?.finish("member", {
+        view: document.body.dataset.activeMemberView || "homeView",
+      });
     }, 240);
   }, delay);
 }

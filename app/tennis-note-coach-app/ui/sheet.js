@@ -11,6 +11,9 @@ function hideCoachBrandSplash() {
     splash.classList.add("is-hidden");
     window.setTimeout(() => {
       splash.hidden = true;
+      window.TennisNoteModeTransition?.finish("coach", {
+        view: document.body.dataset.activeView || "todayView",
+      });
     }, 220);
   }, delay);
 }

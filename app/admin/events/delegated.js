@@ -691,6 +691,10 @@ function bindDelegatedEvents() {
       filterManualMemberPartnerOptions(event.target.form);
       return;
     }
+    if (event.target.matches("[data-member-product-search]")) {
+      filterMemberInlineProductOptions(event.target.form);
+      return;
+    }
     if (event.target.matches("#memberManagementForm input[name='memberName']")) {
       const label = event.target.form?.querySelector("[data-manual-primary-member]");
       if (label) label.textContent = event.target.value.trim() || "새 회원";
@@ -740,6 +744,21 @@ function bindDelegatedEvents() {
       }
     }
   });
+  document.addEventListener("keydown", (event) => {
+    if (!event.target.matches("[data-member-product-search]")) return;
+    const form = event.target.form;
+    const firstResult = form?.querySelector("[data-select-member-product]");
+    if (event.key === "Enter" && firstResult) {
+      event.preventDefault();
+      selectMemberInlineProductSearchResult(firstResult);
+    } else if (event.key === "ArrowDown" && firstResult) {
+      event.preventDefault();
+      firstResult.focus();
+    } else if (event.key === "Escape") {
+      closeMemberInlineProductResults(form);
+    }
+  });
+
   document.addEventListener("submit", async (event) => {
     if (event.target.id === "memberManagementForm") await submitMemberManagementForm(event);
     if (event.target.id === "substituteForm") await submitSubstituteAssignments(event);
@@ -754,6 +773,31 @@ function bindDelegatedEvents() {
   });
   document.addEventListener("click", async (event) => {
     if (event.target.matches("[data-select-product-row]")) event.stopPropagation();
+    const memberProductDuration = event.target.closest("[data-member-product-duration]");
+    if (memberProductDuration) {
+      requestMemberInlineProductDuration(
+        memberProductDuration.closest("[data-member-inline-form]"),
+        Number(memberProductDuration.dataset.memberProductDuration),
+      );
+      return;
+    }
+    const memberProductResult = event.target.closest("[data-select-member-product]");
+    if (memberProductResult) {
+      selectMemberInlineProductSearchResult(memberProductResult);
+      return;
+    }
+    const clearMemberProductSearch = event.target.closest("[data-clear-member-product-search]");
+    if (clearMemberProductSearch) {
+      const form = clearMemberProductSearch.closest("[data-member-inline-form]");
+      const input = form?.querySelector("[data-member-product-search]");
+      if (input) input.value = "";
+      filterMemberInlineProductOptions(form);
+      input?.focus();
+      return;
+    }
+    if (!event.target.closest("[data-member-product-search-shell]")) {
+      document.querySelectorAll("[data-member-inline-form]").forEach(closeMemberInlineProductResults);
+    }
     const ticketExtensionPreset = event.target.closest("[data-ticket-extension-days]");
     if (ticketExtensionPreset) {
       applyMemberTicketExtensionPreset(ticketExtensionPreset);

@@ -124,7 +124,7 @@ async function loadMemberEditorModeFromServer() {
 function syncMemberInlineFutureScheduleChoice(form) {
   if (!form?.dataset.ticketId || !form.elements.applyToFutureSchedule) return;
   const schedules = memberInlineScheduleValues(form);
-  if (memberInlineTicketDefinitionChanged(form) && memberInlineScheduleIsComplete(form, schedules)) {
+  if (memberInlineCoachChanged(form) && memberInlineScheduleIsComplete(form, schedules)) {
     form.elements.applyToFutureSchedule.value = "true";
   }
 }
@@ -184,6 +184,8 @@ function syncMemberQuickEditorProduct(form) {
   if (!groupProduct && form.elements.partnerSearch) form.elements.partnerSearch.value = "";
   filterManualMemberPartnerOptions(form);
   syncMemberQuickEditorSchedule(form, product);
+  syncMemberInlineProductChangeNote(form, product);
+  syncMemberInlineDurationShortcuts(form, product);
   if (!product) return;
   form.elements.lessonType.value = groupProduct ? "one_on_two" : "one_on_one";
   const productScope = memberManagementProductScheduleScope(product);

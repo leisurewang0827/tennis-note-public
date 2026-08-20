@@ -97,6 +97,8 @@
     showArchivedHistory: false,
     cancelConfirmationKey: "",
     revisionWatcher: null,
+    absorbingRevisionRefresh: false,
+    postSaveRefreshPending: false,
   };
 
   function bridge() {
@@ -238,11 +240,67 @@
     return `${prefix}-${suffix}`;
   }
 
-  function setStatus(message, tone = "") {
+  function setStatus(message, tone = "", { retry = false } = {}) {
     const target = $("#scheduleV2Status");
     if (!target) return;
-    target.textContent = message;
+    const text = $("#scheduleV2StatusText") || target;
+    text.textContent = message;
     target.dataset.tone = tone;
+    const retryButton = $("#scheduleV2RefreshAfterSaveButton");
+    if (retryButton) retryButton.hidden = !retry;
+  }
+
+  function workspaceFocusToken(element = document.activeElement) {
+    if (!(element instanceof HTMLElement)) return null;
+    if (element.id) return { type: "id", value: element.id };
+    const lesson = element.closest?.("[data-v2-lesson-id]");
+    if (lesson?.dataset.v2LessonId) return { type: "lesson", value: lesson.dataset.v2LessonId };
+    return null;
+  }
+
+  function captureWorkspaceViewState({ focusLessonId = "" } = {}) {
+    const scrollContainers = [
+      ...document.querySelectorAll("#scheduleV2Grid .schedule-v2-week-scroll, #scheduleV2Grid .schedule-v2-period-scroll"),
+    ].map((element, index) => ({ index, left: element.scrollLeft, top: element.scrollTop }));
+    return {
+      weekStart: localDateKey(state.weekStart),
+      selectedDate: state.selectedDate,
+      pageScrollY: state.editorOpen ? state.editorScrollY : Math.max(0, window.scrollY || 0),
+      search: String($("#scheduleV2LessonSearch")?.value || ""),
+      focus: focusLessonId ? { type: "lesson", value: String(focusLessonId) } : workspaceFocusToken(),
+      scrollContainers,
+    };
+  }
+
+  function restoreWorkspaceViewState(snapshot) {
+    if (!snapshot) return;
+    state.weekStart = mondayOf(snapshot.weekStart || state.weekStart);
+    state.selectedDate = snapshot.selectedDate || state.selectedDate;
+    const searchInput = $("#scheduleV2LessonSearch");
+    if (searchInput) searchInput.value = snapshot.search || "";
+    const restore = () => {
+      const containers = document.querySelectorAll("#scheduleV2Grid .schedule-v2-week-scroll, #scheduleV2Grid .schedule-v2-period-scroll");
+      (snapshot.scrollContainers || []).forEach((item) => {
+        const target = containers[item.index];
+        if (!target) return;
+        target.scrollLeft = item.left;
+        target.scrollTop = item.top;
+      });
+      window.scrollTo({ top: snapshot.pageScrollY || 0, left: 0, behavior: "auto" });
+      const focusTarget = snapshot.focus?.type === "lesson"
+        ? document.querySelector(`[data-v2-lesson-id="${CSS.escape(String(snapshot.focus.value || ""))}"]`)
+        : snapshot.focus?.type === "id"
+          ? document.getElementById(snapshot.focus.value)
+          : null;
+      focusTarget?.focus?.({ preventScroll: true });
+    };
+    restore();
+    window.requestAnimationFrame(restore);
+  }
+
+  function renderWorkspacePreservingView(snapshot = captureWorkspaceViewState()) {
+    renderWorkspace();
+    restoreWorkspaceViewState(snapshot);
   }
 
   function setEditorMessage(message = "", tone = "error") {
@@ -411,10 +469,13 @@
       lesson.one_day_booking_id,
       lesson.oneDayBooking ? lesson.id : "",
     ].filter(Boolean).map(String)));
+    const fallbackOneDayIds = new Set(responseOneDayIds);
     const fallbackOneDayLessons = (fallback.lessons || []).filter((lesson) => {
       if (!lesson.oneDayBooking) return false;
-      const bookingId = String(lesson.oneDayBookingId || lesson.id || "");
-      return bookingId && !responseOneDayIds.has(bookingId);
+      const bookingId = String(lesson.oneDayBookingId || lesson.one_day_booking_id || lesson.id || "");
+      if (!bookingId || fallbackOneDayIds.has(bookingId)) return false;
+      fallbackOneDayIds.add(bookingId);
+      return true;
     });
     return {
       branchId: response.branchId || response.branch_id || fallback.branchId || "",
@@ -843,7 +904,7 @@
     }, snapshot);
   }
 
-  async function loadWorkspace({ quiet = false, force = false } = {}) {
+  async function loadWorkspace({ quiet = false, force = false, absorbRevisionRefresh = false, preserveViewState = null } = {}) {
     if (state.engine !== "v2") return false;
     if (localDemoMode) {
       state.payload = demoWorkspacePayload();
@@ -874,6 +935,7 @@
       quiet = true;
     }
     state.loading = true;
+    let loadSucceeded = false;
     if (!quiet) {
       setStatus("선택한 주의 시간표를 불러오는 중입니다.");
       $("#scheduleV2Grid").innerHTML = '<div class="schedule-v2-loading">시간표 불러오는 중</div>';
@@ -892,13 +954,27 @@
         }).catch(() => []),
       ]);
       if (sequence !== state.loadSequence) return false;
-      state.payload = normalizeWorkspacePayload(response, snapshot);
+      const optimisticOneDayLessons = (state.payload?.lessons || []).filter((lesson) => lesson.oneDayBooking);
+      const fallbackSnapshot = optimisticOneDayLessons.length
+        ? { ...snapshot, lessons: [...(snapshot.lessons || []), ...optimisticOneDayLessons] }
+        : snapshot;
+      state.payload = normalizeWorkspacePayload(response, fallbackSnapshot);
       state.payload.operationDays = Array.isArray(operationDays) ? operationDays : [];
       cacheWorkspace(cacheKey, state.payload);
       state.serverReady = true;
-      void state.revisionWatcher?.check?.();
+      if (absorbRevisionRefresh && state.revisionWatcher?.check) {
+        state.absorbingRevisionRefresh = true;
+        try {
+          await state.revisionWatcher.check();
+        } finally {
+          state.absorbingRevisionRefresh = false;
+        }
+      } else {
+        void state.revisionWatcher?.check?.();
+      }
       markV2Availability(true);
       setStatus(`서버 저장 연결 · ${dateLabel(dates[0])}~${dateLabel(dates[6])}`, "success");
+      loadSucceeded = true;
     } catch (error) {
       if (sequence !== state.loadSequence) return false;
       state.serverReady = false;
@@ -921,8 +997,9 @@
         state.activeLoadKey = "";
       }
     }
-    renderWorkspace();
-    return true;
+    if (preserveViewState) renderWorkspacePreservingView(preserveViewState);
+    else renderWorkspace();
+    return loadSucceeded;
   }
 
   function renderEmpty(message) {
@@ -2190,8 +2267,6 @@
     const nextMode = hasLesson && ["summary", "schedule", "outcome", "more"].includes(mode) ? mode : "schedule";
     form.dataset.editorMode = nextMode;
     $("#scheduleV2LessonSummary").hidden = !hasLesson || nextMode !== "summary";
-    const summaryActions = $("#scheduleV2SummaryActions");
-    if (summaryActions) summaryActions.hidden = !hasLesson || nextMode !== "summary";
     $("#scheduleV2EditorModes").hidden = !hasLesson;
     $$("[data-v2-editor-mode]", form).forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.v2EditorMode === nextMode));
@@ -3080,6 +3155,7 @@
       schedule_v2_regular_revision_start_before_source: "선택한 회차보다 앞에서 시작하려면 더 이른 정규수업을 먼저 선택해 주세요.",
       schedule_v2_regular_revision_participants_invalid: "정규수업의 회원·회원권 연결을 확인해 주세요.",
       schedule_v2_regular_revision_unavailable: "예정된 정규수업에서만 이후 일정을 변경할 수 있습니다.",
+      schedule_v2_saved_refresh_failed: "저장은 완료됐지만 최신 시간표를 불러오지 못했습니다. 저장 버튼을 다시 누르지 말고 시간표 새로고침을 눌러 주세요.",
       lesson_not_found: "이미 삭제되었거나 다른 화면에서 변경된 수업입니다. 시간표를 새로고침해 주세요.",
       lesson_correction_ticket_inconsistent: "회원권 횟수와 완료 기록이 맞지 않아 자동 복원을 중단했습니다. 관리자 데이터 확인이 필요합니다.",
       one_day_lesson_time_conflict: "같은 코치의 수업과 시간이 겹칩니다.",
@@ -3106,8 +3182,77 @@
     if (tickets.some((ticket) => !ticketMatchesKind(ticket, kind))) return "선택한 수업 종류와 회원권이 맞지 않습니다.";
     const lessonDate = $("#scheduleV2EditorForm")?.elements?.lessonDate?.value || state.selectedDate;
     if (tickets.some((ticket) => !ticketSelectableForLesson(ticket, lessonDate))) return "수업일에 사용 가능한 회원권을 선택해 주세요.";
-    if (tickets.some((ticket) => duration % Math.max(1, Number(ticket.lessonMinutes ?? ticket.lesson_minutes) || 20) !== 0)) return "수업 시간이 회원권 단위와 맞지 않습니다.";
+    const mismatchedTickets = tickets.filter((ticket) => (
+      duration % Math.max(1, Number(ticket.lessonMinutes ?? ticket.lesson_minutes) || 20) !== 0
+    ));
+    if (mismatchedTickets.length) {
+      const ticketMinutes = [...new Set(mismatchedTickets.map((ticket) => (
+        Math.max(1, Number(ticket.lessonMinutes ?? ticket.lesson_minutes) || 20)
+      )))].sort((left, right) => left - right);
+      return `선택한 회원권은 ${ticketMinutes.map((minutes) => `${minutes}분`).join("·")} 단위입니다. ${duration}분 수업으로 저장하려면 회원관리에서 먼저 ${duration}분 회원권으로 변경해 주세요.`;
+    }
     return "";
+  }
+
+  function normalizedSaveResult(result) {
+    return Array.isArray(result) ? result[0] || {} : result || {};
+  }
+
+  function optimisticLessonFromEditor({ form, duration, kind, participants, result, oneDay = false, guestName = "" }) {
+    const normalized = normalizedSaveResult(result);
+    const previous = state.editingLesson || {};
+    const bookingId = String(normalized.bookingId || previous.oneDayBookingId || "");
+    const lessonId = String(normalized.lessonId || previous.id || (oneDay && bookingId ? `one-day-${bookingId}` : ""));
+    if (!lessonId) return null;
+    const normalizedParticipants = (participants || []).map((participant) => ({
+      ...participant,
+      name: participant.name || memberName(participant.userId),
+    }));
+    return {
+      ...previous,
+      id: lessonId,
+      revision: Number(normalized.revision) || Math.max(1, Number(previous.revision || 0) + 1),
+      coachRoleId: form.elements.coachRoleId.value,
+      lessonDate: form.elements.lessonDate.value,
+      startTime: form.elements.startTime.value,
+      durationMinutes: duration,
+      scheduleKind: kind,
+      status: oneDay ? "scheduled" : (["scheduled", "pending_change"].includes(previous.status) ? previous.status : "scheduled"),
+      participants: normalizedParticipants,
+      memberLabel: oneDay ? guestName : normalizedParticipants.map((participant) => participant.name).filter(Boolean).join(" · "),
+      note: form.elements.note.value.trim(),
+      oneDayBooking: oneDay,
+      oneDayBookingId: oneDay ? bookingId : "",
+      linkedUserId: oneDay ? String(normalizedParticipants[0]?.userId || "") : "",
+      oneDayBookingSource: oneDay ? form.elements.oneDayBookingSource?.value || "walk_in" : "",
+      oneDayPaymentStatus: oneDay ? form.elements.oneDayPaymentStatus?.value || "unpaid" : "",
+      oneDayPaymentMethod: oneDay ? form.elements.oneDayPaymentMethod?.value || "" : "",
+      oneDayPaymentAmount: oneDay ? Math.max(0, Number(form.elements.oneDayPaymentAmount?.value) || 0) : 0,
+    };
+  }
+
+  function upsertOptimisticLesson(lesson, viewState) {
+    if (!lesson || !state.payload) return false;
+    state.payload.lessons = [
+      ...(state.payload.lessons || []).filter((item) => String(item.id) !== String(lesson.id)),
+      lesson,
+    ];
+    const snapshot = bridge()?.snapshot?.() || {};
+    const dates = weekDates();
+    if (snapshot.branchId) cacheWorkspace(workspaceCacheKey(snapshot.branchId, dates), state.payload);
+    if (viewState) viewState.focus = { type: "lesson", value: lesson.id };
+    renderWorkspacePreservingView(viewState);
+    return true;
+  }
+
+  function closeEditorAfterSuccessfulSave(lesson, viewState, message) {
+    if (history.state?.tennisNoteScheduleV2Editor) {
+      history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
+    }
+    state.deferredRefresh = false;
+    actualCloseEditor();
+    if (!upsertOptimisticLesson(lesson, viewState)) restoreWorkspaceViewState(viewState);
+    setStatus(message, "success");
   }
 
   async function saveEditor(event) {
@@ -3160,11 +3305,12 @@
       return;
     }
     const saveButton = $("#scheduleV2SaveButton");
+    const savedViewState = captureWorkspaceViewState({ focusLessonId: state.editingLesson?.id || "" });
     saveButton.disabled = true;
     setEditorMessage("서버에 저장하는 중입니다.", "info");
     if (nativeOneDay) {
       try {
-        await api.saveOneDayBooking({
+        const savedOneDay = await api.saveOneDayBooking({
           bookingId: state.editingLesson?.oneDayBookingId || null,
           coachRoleId: form.elements.coachRoleId.value,
           bookingDate: form.elements.lessonDate.value,
@@ -3178,14 +3324,19 @@
           paymentMethod: oneDayPaymentMethod,
           paymentAmount: oneDayPaymentAmount,
         });
-        if (history.state?.tennisNoteScheduleV2Editor) history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
-        state.deferredRefresh = false;
-        actualCloseEditor();
-        await api.refresh?.({ allowWhileDirty: true });
-        state.payload = null;
-        invalidateCurrentWorkspaceCache();
-        await loadWorkspace({ force: true });
-        setStatus(`${oneDayGuestName} 원데이 예약 완료 · 회원권 차감 없음`, "success");
+        const optimisticLesson = optimisticLessonFromEditor({
+          form,
+          duration,
+          kind,
+          participants: state.selectedParticipants,
+          result: savedOneDay,
+          oneDay: true,
+          guestName: oneDayGuestName,
+        });
+        const successMessage = `${oneDayGuestName} 원데이 예약 완료 · 회원권 차감 없음`;
+        closeEditorAfterSuccessfulSave(optimisticLesson, savedViewState, successMessage);
+        const refreshed = await refreshWorkspaceAfterWrite(api, savedViewState);
+        if (refreshed) setStatus(successMessage, "success");
       } catch (error) {
         setEditorMessage(errorMessage(error));
       } finally {
@@ -3275,7 +3426,7 @@
           target_note: form.elements.note.value.trim() || null,
         });
       }
-      const normalizedResult = Array.isArray(saveResult) ? saveResult[0] || {} : saveResult || {};
+      const normalizedResult = normalizedSaveResult(saveResult);
       if (normalizedResult.anchorPending) {
         const missingUnits = Object.values(normalizedResult.missingWeeklyUnitsByTicket || {})
           .map(Number)
@@ -3285,14 +3436,10 @@
       } else if (Number(normalizedResult.createdCount) > 1) {
         successMessage = `정규시간 저장 완료 · 미래수업 ${Number(normalizedResult.createdCount)}회가 연결되었습니다.`;
       }
-      if (history.state?.tennisNoteScheduleV2Editor) history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
-      state.deferredRefresh = false;
-      actualCloseEditor();
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus(successMessage, "success");
-      void api.refresh?.();
+      const optimisticLesson = optimisticLessonFromEditor({ form, duration, kind, participants, result: saveResult });
+      closeEditorAfterSuccessfulSave(optimisticLesson, savedViewState, successMessage);
+      const refreshed = await refreshWorkspaceAfterWrite(api, savedViewState);
+      if (refreshed) setStatus(successMessage, "success");
     } catch (error) {
       setEditorMessage(errorMessage(error));
     } finally {
@@ -3629,12 +3776,37 @@
     }, 250);
   }
 
+  async function refreshWorkspaceAfterWrite(api = bridge(), viewState = captureWorkspaceViewState()) {
+    state.deferredRefresh = false;
+    state.postSaveRefreshPending = true;
+    invalidateCurrentWorkspaceCache();
+    try {
+      const refreshed = await loadWorkspace({
+        quiet: true,
+        force: true,
+        absorbRevisionRefresh: true,
+        preserveViewState: viewState,
+      });
+      if (refreshed && state.payload) return true;
+      setStatus("저장은 완료됐습니다. 화면을 유지한 채 서버 최신값만 다시 확인해 주세요.", "warning", { retry: true });
+      return false;
+    } catch (error) {
+      console.warn("[Tennis Note] schedule saved but refresh failed", error?.message || "schedule_v2_saved_refresh_failed");
+      setStatus("저장은 완료됐습니다. 화면을 유지한 채 서버 최신값만 다시 확인해 주세요.", "warning", { retry: true });
+      return false;
+    } finally {
+      state.postSaveRefreshPending = false;
+    }
+  }
+
   function installScheduleRevisionWatcher() {
     if (state.revisionWatcher || !window.TennisNoteScheduleRevision?.watch) return;
     state.revisionWatcher = window.TennisNoteScheduleRevision.watch({
       branchId: () => bridge()?.snapshot?.()?.branchId || "",
       active: () => root.classList.contains("is-active") && state.engine === "v2",
-      onChange: () => requestLiveRefresh(),
+      onChange: () => {
+        if (!state.absorbingRevisionRefresh) requestLiveRefresh();
+      },
     });
   }
 
@@ -3745,7 +3917,6 @@
       setEditorMode(button.dataset.v2EditorMode);
     };
     $("#scheduleV2EditorModes").addEventListener("click", selectEditorMode);
-    $("#scheduleV2SummaryActions")?.addEventListener("click", selectEditorMode);
     $("#scheduleV2EditorForm").addEventListener("change", (event) => {
       state.cancelConfirmationKey = "";
       if (event.target.name === "regularEditScope") {
@@ -3852,6 +4023,19 @@
       invalidateCurrentWorkspaceCache();
       void loadWorkspace({ force: true });
     });
+    $("#scheduleV2RefreshAfterSaveButton")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const viewState = captureWorkspaceViewState();
+      button.disabled = true;
+      state.postSaveRefreshPending = true;
+      try {
+        const refreshed = await loadWorkspace({ quiet: true, force: true, absorbRevisionRefresh: true, preserveViewState: viewState });
+        if (!refreshed) setStatus("서버 최신값을 아직 확인하지 못했습니다. 저장된 화면을 유지하고 다시 시도해 주세요.", "warning", { retry: true });
+      } finally {
+        state.postSaveRefreshPending = false;
+        button.disabled = false;
+      }
+    });
     $("#scheduleV2IntegrityButton")?.addEventListener("click", runScheduleV2MemberIntegrityPreview);
     $("#scheduleV2ArchivedHistoryToggle")?.addEventListener("click", () => {
       state.showArchivedHistory = !state.showArchivedHistory;
@@ -3937,6 +4121,7 @@
     });
     window.addEventListener("tennisnote:admin-live-data", () => {
       if (state.engine !== "v2" || state.loading) return;
+      if (state.postSaveRefreshPending) return;
       requestLiveRefresh();
     });
     let resizeTimer = null;

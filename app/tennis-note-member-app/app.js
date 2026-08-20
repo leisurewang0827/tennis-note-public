@@ -759,7 +759,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.371",
+    workerUrl: "./service-worker.js?v=1.0.373",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3652,6 +3652,7 @@ async function initApp() {
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
   restoreSnapshot();
+  window.TennisNoteModeTransition?.consume("member", { splashSelector: "#brandSplash" });
   bindEvents();
   installOAuthReturnStatusReset();
   void installNativeBackNavigation();
@@ -3719,7 +3720,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.371",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.373",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

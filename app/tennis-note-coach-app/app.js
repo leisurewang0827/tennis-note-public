@@ -179,7 +179,7 @@ function dayCoachesForSchedule(day, policy, lessons = [], filter = state.schedul
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.371",
+    workerUrl: "./service-worker.js?v=1.0.373",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -618,6 +618,7 @@ async function initCoachApp() {
   purgeLegacyDemoStorage();
   restoreSnapshot();
   resetCoachScheduleLaunchView();
+  window.TennisNoteModeTransition?.consume("coach", { splashSelector: "#coachBrandSplash" });
   bindEvents();
   void installNativeCoachBackNavigation();
   installCoachConnectivitySync();
@@ -677,7 +678,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.371",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.373",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

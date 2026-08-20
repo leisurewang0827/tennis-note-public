@@ -13,7 +13,8 @@ function openCoachApp(showFromLogin = false) {
   $("#coachAppScreen").hidden = false;
   document.body.dataset.screen = "coach-app";
   jumpToTop();
-  setView(showFromLogin ? "todayView" : document.body.dataset.activeView || "todayView", { replaceHistory: true });
+  const requestedView = new URLSearchParams(window.location.search).get("view");
+  setView(showFromLogin ? "todayView" : requestedView || document.body.dataset.activeView || "todayView", { replaceHistory: true });
   window.setTimeout(showNoticeAfterLiveSync, 0);
 }
 
@@ -56,7 +57,14 @@ function openUserMode(event) {
   sessionStorage.setItem("tennis-note-member-mode-transition", String(Date.now()));
   sessionStorage.removeItem("tennis-note-coach-mode-entry");
   saveSnapshot();
-  window.location.assign(new URL(memberModeUrl(true), window.location.href).href);
+  const url = new URL(memberModeUrl(true), window.location.href).href;
+  if (!window.TennisNoteModeTransition?.navigate(url, {
+    from: "coach",
+    to: "member",
+    sourceView: document.body.dataset.activeView || "coachProfileView",
+    targetView: "profileView",
+    label: "회원 화면을 여는 중",
+  })) window.location.replace(url);
 }
 
 function openCoachNotificationTarget(data = {}, route = "today") {

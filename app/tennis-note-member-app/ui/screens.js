@@ -382,8 +382,16 @@ function openCoachMode() {
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
-  const params = new URLSearchParams({ v: "1.0.371" });
-  window.location.href = `../tennis-note-coach-app/index.html?${params.toString()}`;
+  const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
+  const params = new URLSearchParams({ v: "1.0.373", view: target.view || "todayView" });
+  const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
+  if (!window.TennisNoteModeTransition?.navigate(url, {
+    from: "member",
+    to: "coach",
+    sourceView: document.body.dataset.activeMemberView || "profileView",
+    targetView: target.view || "todayView",
+    label: "코치 화면을 여는 중",
+  })) window.location.replace(url);
 }
 
 function openMemberHelpModal() {

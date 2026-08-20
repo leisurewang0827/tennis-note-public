@@ -109,6 +109,30 @@
   font-size: 12px;
 }
 
+.schedule-v2-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.schedule-v2-status > span {
+  min-width: 0;
+}
+
+.schedule-v2-status > button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .schedule-v2-status[data-tone="error"] {
   background: #fff0ef;
   color: #9e2f2a;
@@ -1497,25 +1521,6 @@
   font-size: 14px;
 }
 
-.schedule-v2-summary-actions {
-  display: grid;
-  grid-template-columns: 1.25fr 1fr 1fr;
-  gap: 7px;
-  margin-top: 10px;
-}
-
-.schedule-v2-summary-actions[hidden] {
-  display: none;
-}
-
-.schedule-v2-summary-actions button {
-  min-width: 0;
-  min-height: 42px;
-  padding: 8px 9px;
-  font-size: 12px;
-  font-weight: 900;
-}
-
 .schedule-v2-editor-modes {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2400,10 +2405,6 @@ body.schedule-v2-editor-open {
   .schedule-v2-lesson-summary,
   .schedule-v2-editor-modes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .schedule-v2-summary-actions {
-    grid-template-columns: 1fr;
   }
 
   .schedule-v2-slot-controls {
