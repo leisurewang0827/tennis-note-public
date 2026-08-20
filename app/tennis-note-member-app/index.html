@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.375" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.375" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.376" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.376" />
     <link rel="stylesheet" href="../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-1" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
@@ -1084,7 +1084,7 @@
           <div class="change-step-heading change-slot-heading">2. 새 시간 선택</div>
           <select id="makeupSlot" class="visually-hidden-select" aria-label="선택한 변경 시간"></select>
           <div id="availableSlotList" class="slot-list" aria-label="예약 또는 변경 가능한 시간"></div>
-          <p id="changePolicyNote" class="policy-note">24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요</p>
+          <p id="changePolicyNote" class="policy-note">수업 변경 규칙을 확인하고 있습니다.</p>
           <label id="changeReasonField">
             <span>3. 이유</span>
             <textarea id="changeReason" rows="2" minlength="2" maxlength="100" required placeholder="간단히 입력해 주세요"></textarea>
@@ -1215,19 +1215,19 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.375"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.375"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.375"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.376"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.376"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.376"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.375"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.375"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.375"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.375"></script>
-    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.375"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.376"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.376"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.376"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.376"></script>
+    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.376"></script>
     <script defer src="../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-1"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.375"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.376"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
     <script>
       (() => {
@@ -1246,7 +1246,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.375";
+          appScript.src = "./app.js?v=1.0.376";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -1259,7 +1259,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.375";
+          appScript.src = "./app.js?v=1.0.376";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

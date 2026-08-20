@@ -312,7 +312,7 @@ function weekLessons() {
     return [
       ...baseLessons.filter((lesson) => !["lesson-1", "lesson-4"].includes(lesson.id)),
       { id: "week2-change-1", day: "화", time: "18:50", coach: "노 코치", member: "김서준", type: "시간변경", ticket: "개인레슨 10회", status: "변경 완료", remaining: 7, task: "수요일 20:00에서 변경됨", changeNote: "변경 완료" },
-      { id: "week2-request-1", day: "금", time: "19:00", coach: "강 코치", member: "이하린", type: "변경요청", ticket: "개인레슨 8회", status: "승인 대기", remaining: 2, task: "24시간 이내 요청", changeNote: "승인 필요" },
+      { id: "week2-request-1", day: "금", time: "19:00", coach: "강 코치", member: "이하린", type: "변경요청", ticket: "개인레슨 8회", status: "승인 대기", remaining: 2, task: "기준시간 이내 요청", changeNote: "승인 필요" },
     { id: "week2-change-2", day: "토", time: "20:20", coach: "박창준 코치", member: "임현우", type: "시간변경", ticket: "주말반 8회", status: "변경 완료", remaining: 3, task: "코치 일정 변경", changeNote: "코치 변경" },
     ];
   }
@@ -662,6 +662,40 @@ function coachRosterTicketState(ticket = {}, today = localDateKey()) {
   return "active";
 }
 
+function lessonChangePolicySnapshot(request = {}) {
+  return request.policy_snapshot && typeof request.policy_snapshot === "object"
+    ? request.policy_snapshot
+    : request.policySnapshot && typeof request.policySnapshot === "object" ? request.policySnapshot : null;
+}
+
+function lessonChangePolicyText(request = {}) {
+  const snapshot = lessonChangePolicySnapshot(request);
+  const hours = Math.min(168, Math.max(1, Number(snapshot?.cutoffHours) || 24));
+  if (snapshot?.isGroup) return "그룹수업 · 담당 코치 승인";
+  if (snapshot?.outcome === "auto" || request.policy_window === "auto_before_24h") {
+    return `${hours}시간 이상 남아 자동 변경`;
+  }
+  return `${hours}시간 미만 · 담당 코치 승인`;
+}
+
+function lessonChangeRequestedAtText(value = "") {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "신청 시각 확인 필요";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(date);
+}
+
+function lessonChangeRemainingText(originalDate = "", originalTime = "") {
+  const lessonAt = new Date(`${originalDate}T${String(originalTime || "").slice(0, 5)}:00+09:00`);
+  if (Number.isNaN(lessonAt.getTime())) return "남은 시간 확인 필요";
+  const seconds = Math.floor((lessonAt.getTime() - Date.now()) / 1000);
+  if (seconds <= 0) return "원래 수업 시작 시각 경과";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return hours > 0 ? `${hours}시간 ${minutes}분 남음` : `${Math.max(1, minutes)}분 남음`;
+}
+
 function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster = null, legacyChangeRequests = []) {
   if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
   const cancelledLessonIds = new Set(
@@ -861,8 +895,11 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
         member: lesson.member || "회원",
         original: `${originalDate} ${originalTime}`.trim() || "기존 수업",
         requested: `${request.requested_lesson_date || ""} ${String(request.requested_start_time || "").slice(0, 5)}`.trim(),
-        reason: request.reason || "이유 미입력",
-        policy: request.policy_window === "auto_before_24h" ? "24시간 이전 자동 변경" : "24시간 이내 담당 코치·관리자 승인",
+        reason: request.reason === "정책상 사유 없음" ? "사유 없음" : request.reason || "이유 미입력",
+        policy: lessonChangePolicyText(request),
+        policySnapshot: lessonChangePolicySnapshot(request),
+        requestedAt: lessonChangeRequestedAtText(request.created_at),
+        remainingTime: lessonChangeRemainingText(originalDate, originalTime),
         status: requestStatusLabel[request.status] || request.status,
         coach: lesson.coach || "담당 코치",
         coachRoleId: lesson.coachRoleId || "",
@@ -1066,7 +1103,7 @@ async function syncCoachScheduleV2(options = {}) {
         target_to: week.endDate,
       }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", {
-        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,policy_snapshot,policy_revision,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
         filters: { status: "pending" },
         order: "created_at.desc",
         limit: 300,
@@ -1230,7 +1267,7 @@ async function syncLegacyCoachLessonsFromServer() {
       client.selectRows("tn_membership_products", { select: "id,name,group_size,lesson_minutes", limit: 200 }).catch(() => []),
       client.selectRows("tn_lesson_records", { select: "lesson_id,deducted_sessions,completed_at", limit: 1000 }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", {
-        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,policy_snapshot,policy_revision,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
         limit: 300,
       }).catch(() => []),
       client.selectRows("tn_makeup_entitlements", {
@@ -1556,8 +1593,11 @@ async function syncLegacyCoachLessonsFromServer() {
           member: usersById.get(request.requester_user_id) || lesson.member || "회원",
           original: `${originalDate} ${originalTime}`.trim() || "기존 수업",
           requested: `${request.requested_lesson_date || ""} ${String(request.requested_start_time || "").slice(0, 5)}`.trim(),
-          reason: request.reason || "이유 미입력",
-          policy: request.policy_window === "auto_before_24h" ? "24시간 이전 자동 변경" : "24시간 이내 담당 코치·관리자 승인",
+          reason: request.reason === "정책상 사유 없음" ? "사유 없음" : request.reason || "이유 미입력",
+          policy: lessonChangePolicyText(request),
+          policySnapshot: lessonChangePolicySnapshot(request),
+          requestedAt: lessonChangeRequestedAtText(request.created_at),
+          remainingTime: lessonChangeRemainingText(originalDate, originalTime),
           status: requestStatusLabel[request.status] || request.status,
           coach: lesson.coach || "담당 코치",
           source: "server",
@@ -2596,7 +2636,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.375",
+    workerUrl: "./service-worker.js?v=1.0.376",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2627,7 +2667,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.375" });
+  const params = new URLSearchParams({ v: "1.0.376" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -4333,7 +4373,12 @@ function renderMakeupApprovalPanel() {
       <article class="modal-info-card">
         <span>현재 상태</span>
         <strong>${request.status}</strong>
-        <small>${requestCoach(request)} 담당 요청입니다.</small>
+        <small>${requestCoach(request)} 담당 · ${request.policy}</small>
+      </article>
+      <article class="modal-info-card">
+        <span>변경 사유</span>
+        <strong>${escapeHtml(request.reason || "이유 미입력")}</strong>
+        <small>${escapeHtml(request.requestedAt || "신청 시각 확인 필요")} · ${escapeHtml(request.remainingTime || "남은 시간 확인 필요")}</small>
       </article>
       <article class="modal-info-card">
         <span>연결 기록</span>
@@ -4343,8 +4388,8 @@ function renderMakeupApprovalPanel() {
       <p class="permission-note wide">${rejectionWarning}</p>
       <div class="actions wide">
         ${linkedLog ? `<button class="small-button" type="button" data-open-linked-log="${request.id}">회원기록 보기</button>` : ""}
-        ${canReview ? `<button class="approve-button" type="button" data-approve-makeup="${request.id}">승인</button>
-        <button class="reject-button" type="button" data-reject-makeup="${request.id}">거절</button>` : '<span class="permission-note">관리자 승인 요청입니다.</span>'}
+        ${canReview ? `<button class="approve-button" type="button" data-approve-makeup="${request.id}" ${request.reviewing ? "disabled" : ""}>${request.reviewing ? "처리 중" : "승인"}</button>
+        <button class="reject-button" type="button" data-reject-makeup="${request.id}" ${request.reviewing ? "disabled" : ""}>거절</button>` : '<span class="permission-note">담당 코치 또는 관리자만 처리할 수 있습니다.</span>'}
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>
     </section>`;
@@ -5314,7 +5359,7 @@ function renderMakeups() {
             <div>
               <strong>${request.member}</strong>
               <span>${request.original} → ${request.requested}</span>
-              <small>${request.policy || "24시간 이내 변경 승인 요청"}</small>
+              <small>${request.policy || "수업 변경 승인 요청"}</small>
             </div>
             <div class="actions">
               <b>${request.status}</b>
@@ -6792,11 +6837,14 @@ function coachCommentValidationMessage(log) {
 async function approveMakeup(id) {
   const request = state.makeupRequests.find((item) => item.id === id);
   if (!request) return;
+  if (request.reviewing) return;
   if (request.serverRequestV2 && window.TennisNoteDataClient?.rpc) {
     if (!request.canReview) {
       showToast("이 요청은 관리자 승인 후 시간표에 반영됩니다.");
       return;
     }
+    request.reviewing = true;
+    renderAll();
     try {
       await window.TennisNoteDataClient.rpc("tn_schedule_v2_review_request", {
         target_request_id: request.serverRequestId,
@@ -6810,10 +6858,14 @@ async function approveMakeup(id) {
       showToast("수업 변경 승인 완료");
     } catch (error) {
       showToast(lessonChangeReviewErrorMessage(error, "승인"));
+    } finally {
+      request.reviewing = false;
     }
     return;
   }
   if (request.serverRequestId && window.TennisNoteDataClient?.rpc) {
+    request.reviewing = true;
+    renderAll();
     try {
       await window.TennisNoteDataClient.rpc("tn_review_lesson_change_request", {
         target_request_id: request.serverRequestId,
@@ -6826,6 +6878,8 @@ async function approveMakeup(id) {
       showToast("수업 변경 승인 완료");
     } catch (error) {
       showToast(`승인 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+    } finally {
+      request.reviewing = false;
     }
     return;
   }
@@ -6850,6 +6904,7 @@ async function approveMakeup(id) {
 async function rejectMakeup(id) {
   const request = state.makeupRequests.find((item) => item.id === id);
   if (!request) return;
+  if (request.reviewing) return;
   if (request.serverRequestId && !request.serverRequestV2
     && !window.confirm(`${request.member}님의 요청을 거절할까요? 원래 수업은 그대로 유지되고 회원권은 차감되지 않습니다.`)) return;
   if (request.serverRequestV2 && window.TennisNoteDataClient?.rpc) {
@@ -6857,6 +6912,8 @@ async function rejectMakeup(id) {
       showToast("이 요청은 관리자만 거절할 수 있습니다.");
       return;
     }
+    request.reviewing = true;
+    renderAll();
     try {
       await window.TennisNoteDataClient.rpc("tn_schedule_v2_review_request", {
         target_request_id: request.serverRequestId,
@@ -6870,10 +6927,14 @@ async function rejectMakeup(id) {
       showToast("변경 요청 거절 완료");
     } catch (error) {
       showToast(lessonChangeReviewErrorMessage(error, "거절"));
+    } finally {
+      request.reviewing = false;
     }
     return;
   }
   if (request.serverRequestId && window.TennisNoteDataClient?.rpc) {
+    request.reviewing = true;
+    renderAll();
     try {
       const result = await window.TennisNoteDataClient.rpc("tn_review_lesson_change_request", {
         target_request_id: request.serverRequestId,
@@ -6887,6 +6948,8 @@ async function rejectMakeup(id) {
       showToast(`변경 요청 거절 완료${deductedSessions ? ` · ${deductedSessions}회 차감` : ""}`);
     } catch (error) {
       showToast(`거절 처리 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+    } finally {
+      request.reviewing = false;
     }
     return;
   }
@@ -8001,7 +8064,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.375",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.376",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

@@ -171,8 +171,8 @@ const policyGuideTemplates = [
   {
     id: "makeup",
     title: "수업 변경",
-    summary: "24시간 전 자동 변경, 24시간 이내 코치 승인",
-    copy: "수업 24시간 전까지는 앱에서 직접 변경할 수 있습니다. 24시간 이내 요청은 코치 승인 대상이며, 미승인 또는 당일 취소는 이용권이 차감될 수 있습니다.",
+    summary: "지점 기준시간에 따라 바로 변경 또는 코치 승인",
+    copy: "회원 수업 변경의 기준시간·사유·승인 여부는 시간표의 운영 규칙에서 설정합니다. 승인 전에는 원래 수업을 유지하고, 거절돼도 이용권은 차감하지 않습니다.",
   },
   {
     id: "holding",
@@ -191,7 +191,7 @@ const policyGuideTemplates = [
 const lessonPolicyDefaults = [
   {
     id: "lesson-change-before",
-    title: "24시간 전 변경",
+    title: "기준시간 이상 남은 변경",
     detail: "회원이 가능한 시간으로 바로 변경",
     category: "수업 변경",
     status: "active",
@@ -199,8 +199,8 @@ const lessonPolicyDefaults = [
   },
   {
     id: "lesson-change-within",
-    title: "24시간 이내 변경",
-    detail: "코치 승인 필요 · 당일 취소는 차감",
+    title: "기준시간 미만 남은 변경",
+    detail: "설정에 따라 코치 승인 또는 신청 불가",
     category: "수업 변경",
     status: "active",
     systemKey: "change_within_24h",
@@ -451,7 +451,7 @@ const makeupRequests = [
     member: "김서준",
     original: "수 20:00 노 코치",
     requested: "월 19:00 강 코치",
-    policy: "24시간 전",
+    policy: "기준시간 이상",
     status: "requested",
     statusLabel: "승인대기",
   },
@@ -460,7 +460,7 @@ const makeupRequests = [
     member: "이하린",
     original: "목 19:20 강 코치",
     requested: "금 18:40 황 코치",
-    policy: "24시간 이내",
+    policy: "기준시간 미만",
     status: "coach_required",
     statusLabel: "코치승인필요",
   },
@@ -20668,6 +20668,32 @@ function pendingLessonChangeApprovals() {
     .sort((left, right) => String(left.createdAt || "").localeCompare(String(right.createdAt || "")));
 }
 
+function adminLessonChangePolicyText(request = {}) {
+  const snapshot = request.policySnapshot || request.policy_snapshot || null;
+  const hours = Math.min(168, Math.max(1, Number(snapshot?.cutoffHours) || 24));
+  if (snapshot?.isGroup) return "그룹수업 · 담당 코치 승인";
+  if (snapshot?.outcome === "auto" || request.policy_window === "auto_before_24h") return `${hours}시간 이상 · 바로 변경`;
+  return `${hours}시간 미만 · 담당 코치 승인`;
+}
+
+function adminLessonChangeRequestedAt(value = "") {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "신청 시각 확인 필요";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(date);
+}
+
+function adminLessonChangeRemaining(originalDate = "", originalTime = "") {
+  const date = new Date(`${originalDate}T${String(originalTime || "").slice(0, 5)}:00+09:00`);
+  if (Number.isNaN(date.getTime())) return "남은 시간 확인 필요";
+  const seconds = Math.floor((date.getTime() - Date.now()) / 1000);
+  if (seconds <= 0) return "원래 수업 시작 시각 경과";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return hours > 0 ? `${hours}시간 ${minutes}분 남음` : `${Math.max(1, minutes)}분 남음`;
+}
+
 function renderScheduleChangeApprovalQueue() {
   const target = $("#scheduleChangeApprovalRows");
   const count = $("#scheduleChangeApprovalCount");
@@ -20677,13 +20703,13 @@ function renderScheduleChangeApprovalQueue() {
   target.innerHTML = requests.length
     ? requests.map((request) => `
         <article class="schedule-change-approval-card">
-          <header><strong>${escapeHtml(request.member)}</strong><span>${escapeHtml(request.policy || "24시간 이내")}</span></header>
+          <header><strong>${escapeHtml(request.member)}</strong><span>${escapeHtml(request.policy || "담당 코치 승인")}</span></header>
           <div class="schedule-change-path">
             <span><small>현재 수업</small><b>${escapeHtml(request.original)}</b></span>
             <i aria-hidden="true">→</i>
             <span><small>요청 시간</small><b>${escapeHtml(request.requested)}</b></span>
           </div>
-          <p>${escapeHtml(request.reason || "변경 사유 미입력")}</p>
+          <p>${escapeHtml(request.reason || "변경 사유 미입력")}<br><small>${escapeHtml(request.requestedAtLabel || "신청 시각 확인 필요")} · ${escapeHtml(request.remainingTime || "남은 시간 확인 필요")}</small></p>
           <div class="schedule-change-approval-actions">
             <button class="primary-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="approved">변경 승인</button>
             <button class="ghost-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="rejected">거절</button>
@@ -20691,7 +20717,7 @@ function renderScheduleChangeApprovalQueue() {
           </div>
         </article>
       `).join("")
-    : `<p class="empty-text">현재 승인할 24시간 이내 변경 요청이 없습니다.</p>`;
+    : `<p class="empty-text">현재 승인할 수업 변경 요청이 없습니다.</p>`;
 }
 
 async function reviewAdminLessonChangeRequest(requestId, decision, button) {
@@ -22392,8 +22418,8 @@ function urgentOperationsRecords() {
       actionLabel: "시간표 확인",
       actionView: "schedule",
       priority: "urgent",
-      urgentReason: item.policy === "24시간 이내" || item.status === "coach_required"
-        ? "24시간 이내 수업에 영향을 주는 승인 요청입니다."
+      urgentReason: item.status === "coach_required" || item.status === "pending"
+        ? "승인 전 원래 수업을 유지하는 변경 요청입니다."
         : "접수된 보강·변경 요청을 확인해야 합니다.",
       sortAt: item.createdAt || item.requestedAt || item.requested || "",
     }));
@@ -24429,7 +24455,7 @@ async function performAdminLiveDataSync(options = {}) {
       }).catch(() => [])) : Promise.resolve([]),
       fullAdminAccess ? rosterRows("enrollments", () => client.selectRows("tn_member_enrollments", { select: "id,user_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,submitted_at,approved_at", limit: 500 }).catch(() => [])) : Promise.resolve([]),
       rosterRows("changeRequests", () => client.selectRows("tn_lesson_change_requests", {
-        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_by,decided_at,created_at,updated_at",
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,policy_snapshot,policy_revision,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_by,decided_at,created_at,updated_at",
         limit: 500,
       }).catch(() => client.selectRows("tn_lesson_change_requests", {
         select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_by,decided_at,created_at",
@@ -24953,16 +24979,22 @@ async function performAdminLiveDataSync(options = {}) {
           : request.policy_window === "coach_approval_within_24h"
             ? "담당 코치·관리자 승인 필요"
             : "승인대기";
+      const originalDate = request.original_lesson_date || lesson.lesson_date || "";
+      const originalTime = String(request.original_start_time || lesson.start_time || "").slice(0, 5);
+      const policySnapshot = request.policy_snapshot && typeof request.policy_snapshot === "object" ? request.policy_snapshot : null;
       return {
         id: request.id,
         serverRequestId: request.id,
         lessonId: request.lesson_id,
         branchId: lesson.branch_id || "",
         member: usersById.get(request.requester_user_id)?.name || "회원 확인 필요",
-        original: `${request.original_lesson_date || lesson.lesson_date || "기존일"} ${String(request.original_start_time || lesson.start_time || "").slice(0, 5)} ${getCoachName(coachId)}`,
+        original: `${originalDate || "기존일"} ${originalTime} ${getCoachName(coachId)}`,
         requested: `${request.requested_lesson_date || "변경일"} ${String(request.requested_start_time || "").slice(0, 5)}`,
-        policy: request.policy_window === "coach_approval_within_24h" ? "24시간 이내" : "24시간 전",
-        reason: request.reason || "",
+        policy: adminLessonChangePolicyText(request),
+        policySnapshot,
+        reason: request.reason === "정책상 사유 없음" ? "사유 없음" : request.reason || "",
+        requestedAtLabel: adminLessonChangeRequestedAt(request.created_at || request.updated_at),
+        remainingTime: adminLessonChangeRemaining(originalDate, originalTime),
         status: request.status,
         statusLabel,
         createdAt: request.created_at || request.updated_at || "",
