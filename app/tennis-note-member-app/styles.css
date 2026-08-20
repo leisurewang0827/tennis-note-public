@@ -3044,7 +3044,7 @@ textarea {
   color: var(--ink);
 }
 
-/* Simplified membership purchase: five primary tabs and a four-step checkout. */
+/* Simplified membership purchase: five primary tabs and one-page checkout. */
 .tabbar {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
@@ -3311,8 +3311,43 @@ textarea {
 
 .purchase-family-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+}
+
+.purchase-single-section,
+.purchase-purpose-section {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.purchase-single-section > h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.purchase-renewal-ticket-field {
+  display: grid;
+  gap: 6px;
+}
+
+.purchase-renewal-ticket-field > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.purchase-renewal-ticket-field select {
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0 10px;
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
 }
 
 .purchase-family-option,
@@ -3406,6 +3441,7 @@ textarea {
 }
 
 .purchase-choice-grid,
+.purchase-purpose-toggle,
 .purchase-coach-grid,
 .purchase-day-grid,
 .purchase-time-grid {
@@ -3428,6 +3464,221 @@ textarea {
   gap: 3px;
 }
 
+.bank-notification-bridge-card {
+  border-color: #b7d8cd;
+  background: #f4fbf8;
+}
+
+.bank-notification-bridge-card[hidden] {
+  display: none;
+}
+
+.bank-transfer-instructions {
+  display: grid;
+  gap: 14px;
+}
+
+.bank-transfer-order-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--soft-green);
+}
+
+.bank-transfer-order-summary span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bank-transfer-order-summary strong {
+  color: var(--green);
+  font-size: 20px;
+}
+
+.bank-transfer-instructions dl {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--line);
+}
+
+.bank-transfer-instructions dl > div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.bank-transfer-instructions dt {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bank-transfer-instructions dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 900;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.bank-transfer-instructions > p,
+.bank-transfer-instructions > small {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.discount-coupon-wallet-list {
+  display: grid;
+  gap: 10px;
+}
+
+.discount-coupon-wallet-card {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-left: 5px solid #98a2b3;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+
+.discount-coupon-wallet-card.done {
+  border-left-color: var(--green);
+  background: #f6fffb;
+}
+
+.discount-coupon-wallet-card.wait {
+  border-left-color: #e9a23b;
+  background: #fffaf0;
+}
+
+.discount-coupon-wallet-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.discount-coupon-wallet-card > div span,
+.discount-coupon-wallet-card small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.discount-coupon-wallet-card b {
+  color: var(--green);
+  font-size: 20px;
+}
+
+.discount-coupon-wallet-card.muted {
+  opacity: 0.68;
+}
+
+.purchase-coupon-select {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.purchase-coupon-select > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.purchase-coupon-select select {
+  width: 100%;
+  min-width: 0;
+}
+
+.purchase-coupon-note,
+.purchase-discount-result {
+  margin: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f5f7f6;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.purchase-discount-result {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--green);
+}
+
+.purchase-renewal-summary,
+.purchase-selected-coach {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #cfe3da;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f5fbf8;
+}
+
+.purchase-renewal-summary > div,
+.purchase-selected-coach > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.purchase-renewal-summary span,
+.purchase-selected-coach span {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.purchase-renewal-summary strong,
+.purchase-selected-coach strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.purchase-renewal-summary small,
+.purchase-selected-coach small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.purchase-renewal-summary > button,
+.purchase-selected-coach > button {
+  flex: 0 0 auto;
+  min-height: 40px;
+}
+
+.purchase-coach-first {
+  margin: 0;
+  text-align: center;
+}
+
 .purchase-keep-summary {
   display: grid;
   gap: 6px;
@@ -3444,6 +3695,54 @@ textarea {
 .purchase-slot-group {
   display: grid;
   gap: 10px;
+}
+
+.purchase-schedule-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 9px;
+  padding: 9px 11px;
+  color: var(--muted);
+  background: #f5f7f6;
+  font-size: 11px;
+}
+
+.purchase-schedule-count strong {
+  flex: 0 0 auto;
+  color: var(--green);
+  font-size: 13px;
+}
+
+.purchase-selected-schedule-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.purchase-selected-schedule-list span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #cfe3da;
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: var(--ink);
+  background: #f5fbf8;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.purchase-selected-schedule-list b {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--green);
+  font-size: 10px;
 }
 
 .purchase-coach-filter-grid,
@@ -3481,6 +3780,50 @@ textarea {
 
 .purchase-coach-filter.is-selected,
 .purchase-date-filter.is-selected {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--soft-green);
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+
+.purchase-coach-filter.is-unavailable,
+.purchase-coach-filter:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  background: #f3f5f4;
+}
+
+.purchase-slot-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.purchase-show-more-slots {
+  width: 100%;
+  min-height: 44px;
+}
+
+.purchase-slot-card {
+  display: grid;
+  min-height: 58px;
+  align-content: center;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px;
+  color: var(--ink);
+  background: #fff;
+  text-align: left;
+}
+
+.purchase-slot-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.purchase-slot-card.is-selected {
   border-color: var(--green);
   color: var(--green);
   background: var(--soft-green);
@@ -3667,8 +4010,7 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .membership-product-presets-grid > :last-child,
-  .purchase-family-grid > :last-child {
+  .membership-product-presets-grid > :last-child {
     grid-column: 1 / -1;
   }
 
@@ -3683,6 +4025,10 @@ textarea {
 
   .purchase-coach-filter-grid,
   .purchase-date-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .purchase-slot-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -5764,6 +6110,71 @@ body.identity-setup-required {
   color: #8a929c;
   cursor: not-allowed;
   opacity: 0.72;
+}
+
+.purchase-payment-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 68px;
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--ink);
+  background: white;
+  text-align: left;
+}
+
+.purchase-payment-summary span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.purchase-payment-summary small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.purchase-payment-summary strong,
+.purchase-payment-summary b {
+  font-size: 15px;
+}
+
+.purchase-payment-summary em {
+  color: var(--green);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.purchase-payment-summary:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.25);
+  outline-offset: 2px;
+}
+
+.purchase-payment-method-sheet .sheet-card {
+  max-height: min(68dvh, 560px);
+}
+
+.payment-method-sheet-options {
+  display: grid;
+  gap: 8px;
+  padding: 8px 16px calc(18px + env(safe-area-inset-bottom));
+}
+
+.payment-method-sheet-options .payment-method-option {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  width: 100%;
+  min-height: 70px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  text-align: left;
 }
 
 .product-group {

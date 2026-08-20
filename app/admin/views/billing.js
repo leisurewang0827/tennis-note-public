@@ -396,6 +396,10 @@ function renderPaymentSetup() {
   if (!target) return;
   const config = paymentGatewayConfig();
   const ready = isPaymentGatewayReady();
+  const bankAccount = branchPaymentAccount || {};
+  const bankReady = branchPaymentAccountStatus === "loaded"
+    && bankAccount.is_enabled === true
+    && Boolean(bankAccount.bank_name && bankAccount.account_number && bankAccount.account_holder);
   target.innerHTML = `
     <article class="payment-setup-card ${ready ? "ready" : "setup"}">
       <div class="payment-setup-summary">
@@ -434,5 +438,33 @@ function renderPaymentSetup() {
         <button class="ghost-button" type="button" id="clearPaymentConfigButton">삭제</button>
       </div>
       <small>이 값은 이 브라우저의 로컬 저장소에만 저장됩니다. Git 커밋에는 포함되지 않습니다.</small>
+    </article>
+    <article class="payment-setup-card branch-bank-account-card ${bankReady ? "ready" : "setup"}">
+      <div class="payment-setup-summary">
+        <div>
+          <strong>계좌이체 입금 계좌</strong>
+          <span>${branchPaymentAccountStatus === "loading"
+            ? "서버 설정을 불러오는 중입니다."
+            : branchPaymentAccountStatus === "failed"
+              ? "계좌 설정 테이블 또는 관리자 권한을 확인해 주세요."
+              : bankReady
+                ? "결제 대기건을 정상 생성한 회원에게만 이 계좌가 표시됩니다."
+                : "계좌를 저장하고 사용을 켜야 회원앱에서 계좌이체를 선택할 수 있습니다."}</span>
+        </div>
+        ${badge(bankReady ? "ready" : "pending", bankReady ? "사용 중" : "사용 전")}
+      </div>
+      <div class="product-setting-fields payment-setting-fields branch-bank-account-fields">
+        <label><small>은행명</small><input id="branchBankName" type="text" maxlength="40" autocomplete="off" value="${escapeHtml(bankAccount.bank_name || "")}" placeholder="예: 우리은행" /></label>
+        <label><small>계좌번호</small><input id="branchBankAccountNumber" type="text" maxlength="32" inputmode="numeric" autocomplete="off" value="${escapeHtml(bankAccount.account_number || "")}" placeholder="숫자와 하이픈만 입력" /></label>
+        <label><small>예금주</small><input id="branchBankAccountHolder" type="text" maxlength="60" autocomplete="off" value="${escapeHtml(bankAccount.account_holder || "")}" /></label>
+        <label><small>입금기한</small><select id="branchBankDepositDeadlineHours"><option value="12" ${Number(bankAccount.deposit_deadline_hours || 24) === 12 ? "selected" : ""}>12시간</option><option value="24" ${Number(bankAccount.deposit_deadline_hours || 24) === 24 ? "selected" : ""}>24시간</option><option value="48" ${Number(bankAccount.deposit_deadline_hours || 24) === 48 ? "selected" : ""}>48시간</option><option value="72" ${Number(bankAccount.deposit_deadline_hours || 24) === 72 ? "selected" : ""}>72시간</option></select></label>
+        <label class="branch-bank-account-toggle"><small>회원앱 사용</small><span><input id="branchBankTransferEnabled" type="checkbox" ${bankAccount.is_enabled === true ? "checked" : ""} /> 계좌이체 선택 허용</span></label>
+        <label class="branch-bank-account-instructions"><small>입금 안내</small><textarea id="branchBankTransferInstructions" rows="2" maxlength="300" placeholder="예: 신청자 이름으로 입금해 주세요.">${escapeHtml(bankAccount.transfer_instructions || "")}</textarea></label>
+      </div>
+      ${bankNotificationStatusMarkup()}
+      <div class="payment-setup-actions">
+        <small>금액·입금자·기한이 한 주문과 정확히 일치할 때만 자동 확인합니다. 일부·초과·지연·중복 후보는 관리자 확인 후 회원권을 1회만 발급합니다.</small>
+        <button class="small-button" type="button" id="saveBranchPaymentAccountButton">계좌 저장</button>
+      </div>
     </article>`;
 }

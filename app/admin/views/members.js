@@ -473,25 +473,16 @@ function renderMemberManagementPolicySettings() {
     <small>회원 삭제·복원은 항상 관리자만 가능합니다. 관리자는 추가 PIN이나 사유 입력 없이 처리하며, 계정·시각·이전 값은 자동으로 감사 이력에 남습니다.</small>`;
 }
 
-function renderMemberCoachAssignment(ticket, allCoaches = coaches) {
+function renderMemberCoachAssignment(ticket) {
   if (!ticket?.serverTicketId) return "";
-  const ticketCoach = allCoaches.find((coach) => coach.id === ticket.coachId);
-  const branchCoaches = allCoaches.filter((coach) =>
-    coach.serverRoleId &&
-    coach.status === "active" &&
-    (!ticket.branchId || !coach.branchId || coach.branchId === ticket.branchId)
-  );
+  const memberId = Number(state.selectedMemberId || 0);
   return `
     <div class="member-coach-assignment">
-      <label>
-        <span>담당 코치 지정</span>
-        <select data-ticket-coach-select="${escapeHtml(ticket.serverTicketId)}" ${adminApprovalReady() ? "" : "disabled"}>
-          <option value="">미배정</option>
-          ${branchCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}" ${coach.serverRoleId === ticketCoach?.serverRoleId ? "selected" : ""}>${escapeHtml(coach.name)}</option>`).join("")}
-        </select>
-      </label>
-      <button class="primary-button" type="button" data-save-ticket-coach="${escapeHtml(ticket.serverTicketId)}" ${adminApprovalReady() ? "" : "disabled"}>저장</button>
-      <small>${adminApprovalReady() ? "이 이용권으로 신청 가능한 코치를 지정합니다." : "관리자 로그인 후 변경할 수 있습니다."}</small>
+      <div>
+        <strong>코치 변경</strong>
+        <small>${adminApprovalReady() ? "새 코치와 가능한 정규시간을 함께 확인한 뒤 한 번에 저장합니다." : "관리자 로그인 후 변경할 수 있습니다."}</small>
+      </div>
+      <button class="primary-button" type="button" data-open-member-inline="${memberId}" data-member-inline-ticket="${escapeHtml(ticket.serverTicketId)}" ${adminApprovalReady() && memberId ? "" : "disabled"}>코치·시간 변경</button>
     </div>`;
 }
 
@@ -585,12 +576,6 @@ function renderMemberBulkToolbar(visibleMembers = [], filteredSelectionIds = nul
     selectAll.checked = Boolean(visibleIds.length && selectedCount === visibleIds.length);
     selectAll.indeterminate = selectedCount > 0 && selectedCount < visibleIds.length;
     selectAll.disabled = operationsRole() !== "admin" || !visibleIds.length;
-  }
-  const coachSelect = $("#memberBulkCoach");
-  if (coachSelect) {
-    const activeCoaches = operationBranchCoaches().filter((coach) => coach.status === "active" && coach.serverRoleId);
-    coachSelect.innerHTML = activeCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name)}</option>`).join("");
-    coachSelect.hidden = $("#memberBulkAction")?.value !== "assign_coach";
   }
   const permanentDeleteOption = $('#memberBulkAction option[value="permanent_delete"]');
   if (permanentDeleteOption) {

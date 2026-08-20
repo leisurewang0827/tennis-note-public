@@ -27,14 +27,15 @@ jobs:
       TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: test-publishable-key-for-ci-only
       TENNISNOTE_PORTONE_STORE_ID: test-store-id
       TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY: test-tosspay-channel
-      TENNISNOTE_PAYMENT_MODE: tosspay_only
+      TENNISNOTE_PAYMENT_MODE: multi
       TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay
+      TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       # 검증 명령은 scripts/verify.sh 한 곳에만 둔다.

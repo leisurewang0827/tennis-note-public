@@ -181,8 +181,9 @@ for config in (
     assert "service_role" not in text
     assert "PORTONE_API_SECRET" not in text
     payment = payment_config(config)
-    assert payment["mode"] == "tosspay_only"
-    assert payment["allowedMethods"] == ["tosspay"]
+    assert payment["mode"] == "multi"
+    assert payment["allowedMethods"] == ["tosspay", "bank_transfer"]
+    assert payment["bankTransfer"] == {"enabled": True}
     assert set(payment["channels"]) == {"tosspay"}
     assert payment["channels"]["tosspay"]
 

@@ -1233,7 +1233,7 @@ function renderScheduleChangeApprovalQueue() {
           <div class="schedule-change-approval-actions">
             <button class="primary-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="approved">변경 승인</button>
             <button class="ghost-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="rejected">거절</button>
-            <small>거절하면 원래 수업은 노쇼로 처리되어 회원권이 차감될 수 있습니다.</small>
+            <small>거절하면 원래 수업을 그대로 유지하며 회원권은 차감하지 않습니다.</small>
           </div>
         </article>
       `).join("")

@@ -5395,7 +5395,7 @@ body.modal-open {
   opacity: 0.65;
 }
 
-/* Compact phones: preserve all four primary actions and week context at 320-375px. */
+/* Compact phones: preserve all five primary actions and week context at 320-375px. */
 @media (max-width: 380px) {
   .app-screen {
     padding-right: 8px;
@@ -5440,9 +5440,9 @@ body.modal-open {
   }
 }
 
-/* Member-first navigation: settlement stays one tap away without occupying a bottom tab. */
+/* Keep profile discoverable in the primary navigation; settlement stays inside profile. */
 .tabbar {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .coach-profile-shortcut {

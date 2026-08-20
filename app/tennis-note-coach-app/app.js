@@ -2593,7 +2593,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.367",
+    workerUrl: "./service-worker.js?v=1.0.371",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2623,7 +2623,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.367" });
+  const params = new URLSearchParams({ v: "1.0.371" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -4311,9 +4311,7 @@ function renderMakeupApprovalPanel() {
   }
   const linkedLog = getMakeupLinkedLog(request.member);
   const canReview = !request.serverRequestV2 || request.canReview;
-  const rejectionWarning = request.serverRequestId && !request.serverRequestV2
-    ? "거절하면 원래 수업은 노쇼로 처리되어 회원권이 차감될 수 있습니다."
-    : "거절 사유는 관리자와 회원에게 처리 결과로 남습니다.";
+  const rejectionWarning = "거절하면 원래 수업을 그대로 유지하며 회원권은 차감하지 않습니다. 거절 사유는 처리 결과로 남습니다.";
   return `
     <section class="schedule-edit-panel makeup-detail-panel">
       <div class="wide">
@@ -6841,7 +6839,7 @@ async function rejectMakeup(id) {
   const request = state.makeupRequests.find((item) => item.id === id);
   if (!request) return;
   if (request.serverRequestId && !request.serverRequestV2
-    && !window.confirm(`${request.member}님의 요청을 거절하면 원래 수업이 노쇼로 처리되고 회원권이 차감될 수 있습니다. 그래도 거절할까요?`)) return;
+    && !window.confirm(`${request.member}님의 요청을 거절할까요? 원래 수업은 그대로 유지되고 회원권은 차감되지 않습니다.`)) return;
   if (request.serverRequestV2 && window.TennisNoteDataClient?.rpc) {
     if (!request.canReview) {
       showToast("이 요청은 관리자만 거절할 수 있습니다.");
@@ -7990,7 +7988,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.367",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.371",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

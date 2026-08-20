@@ -126,6 +126,8 @@ function bindSettingsEvents() {
     state.discountSearch = event.target.value;
     renderServiceReadiness();
   });
+  $("#discountIssueMemberSearch")?.addEventListener("input", () => renderDiscountIssueControls());
+  $("#discountIssueMember")?.addEventListener("change", () => renderDiscountIssueControls());
   $("#discountPolicyStatusFilter")?.addEventListener("change", (event) => {
     state.discountStatusFilter = event.target.value;
     renderServiceReadiness();

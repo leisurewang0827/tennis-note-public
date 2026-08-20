@@ -25,13 +25,14 @@ jobs:
       TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE }}
       TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID }}
       TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY }}
-      TENNISNOTE_PAYMENT_MODE: tosspay_only
+      TENNISNOTE_PAYMENT_MODE: multi
       TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay
+      TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build isolated member and admin sites
         run: |
@@ -40,16 +41,18 @@ jobs:
 
       - name: Deploy member PWA
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
+          wranglerVersion: "3.90.0"
           apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist/member --project-name=tennisnote-app --branch=main
 
       - name: Deploy administrator web
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
+          wranglerVersion: "3.90.0"
           apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist/admin --project-name=tennisnote-admin --branch=main

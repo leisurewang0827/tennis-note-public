@@ -93,6 +93,7 @@ function billingRowFromServerPayment(row = {}) {
     branchId: row.branch_id || row.branchId || "",
     productId: row.product_id || row.productId || "",
     ticketId: row.ticket_id || row.ticketId || "",
+    oneDayBookingId: row.one_day_booking_id || row.oneDayBookingId || "",
     revenueMonth: row.revenue_month || row.revenueMonth || "",
     revenueMonthSource: row.revenue_month_source || row.revenueMonthSource || "",
     revenueAttributionStatus: row.revenue_attribution_status || row.revenueAttributionStatus || "included",
@@ -101,6 +102,9 @@ function billingRowFromServerPayment(row = {}) {
     requestedAt: row.created_at || row.createdAt || "",
     paidAt: row.paid_at || row.paidAt || "",
     verifiedAt: row.verified_at || row.verifiedAt || "",
+    depositDueAt: row.deposit_due_at || row.depositDueAt || "",
+    depositorName: row.depositor_name_snapshot || row.depositorName || "",
+    bankAccountSnapshot: row.bank_account_snapshot || row.bankAccountSnapshot || {},
     refundedAmount: Number(row.refunded_amount || row.refundedAmount || 0),
     refundStatus: row.refund_status || row.refundStatus || "none",
     refundReason: row.refund_reason || row.refundReason || "",
@@ -241,6 +245,8 @@ function refundErrorText(code = "") {
     reconcile_required: "PG 취소 결과와 내부 기록을 다시 맞춰야 합니다.",
     provider_amount_mismatch: "PG 결제금액과 서버 결제금액이 달라 환불을 중단했습니다.",
     provider_cancel_failed: "PG 환불 요청에 실패했습니다. 결제 상태를 확인해 주세요.",
+    bank_transfer_use_refund_flow: "계좌이체는 PG 취소가 아니라 환불 계산에서 처리해 주세요.",
+    linked_one_day_booking_not_found: "결제와 연결된 원데이 예약을 찾지 못했습니다.",
     nothing_to_refund: "계산된 환불액이 0원이라 자동 환불할 수 없습니다.",
   };
   return labels[code] || "환불 처리 상태를 확인해 주세요.";

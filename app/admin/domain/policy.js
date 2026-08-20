@@ -51,7 +51,7 @@ function membershipProductWithOperationalLimits(product = {}) {
 function membershipProductServerSavePayload(nextProduct, serverProduct) {
   const serverKind = nextProduct.productKind === "coupon" ? "coupon" : "regular";
   const cashPrice = Math.max(0, Number(nextProduct.cashAmount) || 0);
-  const cardPrice = Math.max(0, Number(nextProduct.cardAmount) || cashPrice);
+  const cardPrice = Math.round(cashPrice * 1.1);
   return {
     id: serverProduct.id,
     name: nextProduct.title,
@@ -208,6 +208,8 @@ function normalizeDiscountPolicy(policy = {}) {
     type,
     value: numericValue(policy.value, type === "percent" ? 10 : 10000),
     target: policy.target || "전체 회원권",
+    productScope: ["all", "regular", "coupon", "one_day"].includes(policy.productScope) ? policy.productScope : "all",
+    campaignType: ["general", "new_member", "returning", "referral"].includes(policy.campaignType) ? policy.campaignType : "general",
     payment: policy.payment || "카드/현금",
     issueRule: policy.issueRule || "관리자 발급",
     coachPermission: policy.coachPermission || "코치별 지급 수량 안에서 사용",

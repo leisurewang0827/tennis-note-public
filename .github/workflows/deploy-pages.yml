@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Prepare public site
         shell: bash
@@ -35,8 +35,9 @@ jobs:
           TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
           TENNISNOTE_PORTONE_STORE_ID: ${{ secrets.TENNISNOTE_PORTONE_STORE_ID }}
           TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY }}
-          TENNISNOTE_PAYMENT_MODE: tosspay_only
+          TENNISNOTE_PAYMENT_MODE: multi
           TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay
+          TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -46,10 +47,10 @@ jobs:
           PY
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
@@ -62,4 +63,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

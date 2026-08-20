@@ -943,6 +943,7 @@ function renderServiceReadiness() {
 
   if (state.view !== "settings") return;
   renderPaymentSetup();
+  renderBranchSalesSetup();
 
   const productCards = $("#productSettingCards");
   if (productCards) {
@@ -982,6 +983,18 @@ function renderServiceReadiness() {
           const normalized = normalizeMembershipProduct(product, membershipProductDefaults.find((item) => item.id === product.id));
           const productId = String(normalized.id);
           const isEditing = String(state.activeMembershipProductId || "") === productId;
+          const isThreeMonth = Number(normalized.termWeeks) >= 12 || Number(normalized.validityDays) >= 84 || /3개월|12주/.test(normalized.title || "");
+          const saleCoaches = coaches.filter((coach) => coach.status === "active" && coach.serverRoleId);
+          const enabledSaleCoaches = saleCoaches.filter((coach) => (
+            normalized.coachSaleMode === "selected"
+              ? (normalized.coachSaleAvailability || {})[coach.serverRoleId] === true
+              : (normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false
+          ));
+          const memberFacingGroup = normalized.purchaseExperience === "one_day"
+            ? "원데이"
+            : normalized.productKind === "coupon"
+              ? "쿠폰"
+              : isThreeMonth ? "3개월 10% 할인" : "4주";
           if (!isEditing) {
             return `
         <article class="product-setting-card product-setting-summary-card" data-product-card="${normalized.id}">
@@ -1018,8 +1031,8 @@ function renderServiceReadiness() {
               <input type="number" min="1" step="1" data-product-field="validityDays" value="${normalized.validityDays}" aria-label="${escapeHtml(normalized.title)} 사용기간 일수" />
             </div>
             <div class="product-setting-inline-price">
-          <input type="number" min="0" step="1" data-product-field="cashAmount" value="${normalized.cashAmount}" aria-label="${escapeHtml(normalized.title)} 현금가격" />
-          <input type="number" min="0" step="1" data-product-field="cardAmount" value="${normalized.cardAmount}" aria-label="${escapeHtml(normalized.title)} 카드가격" />
+          <input type="number" min="0" step="1" data-product-field="cashAmount" value="${normalized.cashAmount}" aria-label="${escapeHtml(normalized.title)} 현금 기준가격" />
+          <input type="number" min="0" step="1" data-product-field="cardAmount" value="${Math.round(Number(normalized.cashAmount || 0) * 1.1)}" aria-label="${escapeHtml(normalized.title)} 카드가격 현금가의 110퍼센트 자동계산" readonly />
             </div>
             <select class="product-setting-quick-status" data-product-field="status" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
               ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
@@ -1046,7 +1059,7 @@ function renderServiceReadiness() {
               <small>${escapeHtml(normalized.group)} · ${normalized.tickets}회 · ${normalized.validityDays}일</small>
             </div>
             <div class="product-setting-summary-meta">
-              <b>현금 ${money.format(normalized.cashAmount)}원 / 카드 ${money.format(normalized.cardAmount)}원</b>
+              <b>기준가 ${money.format(normalized.cashAmount)}원 · 카드 ${money.format(Math.round(Number(normalized.cashAmount || 0) * 1.1))}원</b>
             </div>
             <select class="product-setting-quick-status" data-quick-product-status="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
               ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
@@ -1062,12 +1075,13 @@ function renderServiceReadiness() {
               <input type="text" data-product-field="sessions" value="${escapeHtml(normalized.sessions)}" />
             </label>
             <label>
-              <small>${productSettingFieldLabel("현금가격", true)}</small>
+              <small>${productSettingFieldLabel("현금 기준가격", true)}</small>
               <input type="number" min="0" step="1" data-product-field="cashAmount" value="${normalized.cashAmount}" />
             </label>
             <label>
-              <small>${productSettingFieldLabel("카드가격", true)}</small>
-              <input type="number" min="0" step="1" data-product-field="cardAmount" value="${normalized.cardAmount}" />
+              <small>${productSettingFieldLabel("카드가격 (자동)", true)}</small>
+              <input type="number" min="0" step="1" data-product-field="cardAmount" value="${Math.round(Number(normalized.cashAmount || 0) * 1.1)}" readonly aria-describedby="productCardPriceRule-${normalized.id}" />
+              <span id="productCardPriceRule-${normalized.id}" class="field-help">현금 기준가격에 10%를 더해 자동 계산합니다.</span>
             </label>
             ${normalized.purchaseExperience === "one_day" ? `
             <label>
@@ -1082,6 +1096,19 @@ function renderServiceReadiness() {
               <input type="number" min="1" step="1" data-product-field="firstLessonOfferPrice" value="${normalized.firstLessonOfferPrice || 15000}" />
             </label>
             <p class="product-setting-offer-note">수업·회원권·결제 이력이 전혀 없는 회원에게만 1회 적용됩니다. 앱 가입만 새로 한 기존 회원은 제외됩니다.</p>` : ""}
+            ${isThreeMonth ? `
+            <label>
+              <small>${productSettingFieldLabel("3개월 할인율(%)", true)}</small>
+              <input type="number" min="0" max="90" step="0.1" data-product-field="threeMonthDiscountRate" value="${Number(normalized.threeMonthDiscountRate ?? 10)}" />
+            </label>
+            <label>
+              <small>${productSettingFieldLabel("3개월 가격 방식", true)}</small>
+              <select data-product-field="threeMonthPriceMode">
+                <option value="automatic" ${normalized.threeMonthPriceMode === "automatic" ? "selected" : ""}>4주 현금가 × 3에서 할인</option>
+                <option value="manual" ${normalized.threeMonthPriceMode === "manual" ? "selected" : ""}>3개월 현금가 직접입력</option>
+              </select>
+              <button class="small-button" type="button" data-recalculate-three-month="${normalized.id}">할인가 다시 계산</button>
+            </label>` : ""}
             <label>
               <small>${productSettingFieldLabel("사용기간(일)", true)}</small>
               <input type="number" min="1" step="1" data-product-field="validityDays" value="${normalized.validityDays}" />
@@ -1161,6 +1188,12 @@ function renderServiceReadiness() {
                 <option value="no" ${!normalized.coachDiscountAllowed ? "selected" : ""}>관리자만</option>
               </select>
             </label>
+            ${saleCoaches.length ? `
+            <fieldset class="product-coach-sale-settings">
+              <legend>이 상품을 판매·예약할 코치</legend>
+              <label class="product-coach-sale-mode"><span>표시 방식</span><select data-product-field="coachSaleMode"><option value="all_active" ${normalized.coachSaleMode !== "selected" ? "selected" : ""}>활동 중인 코치 모두</option><option value="selected" ${normalized.coachSaleMode === "selected" ? "selected" : ""}>선택한 코치만</option></select></label>
+              ${saleCoaches.map((coach) => `<label><input type="checkbox" data-product-coach-sale="${escapeHtml(coach.serverRoleId)}" ${normalized.coachSaleMode === "selected" ? ((normalized.coachSaleAvailability || {})[coach.serverRoleId] === true ? "checked" : "") : ((normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false ? "checked" : "")} /><span>${escapeHtml(coach.name)}</span></label>`).join("")}
+            </fieldset>` : ""}
             <label>
               <small>${productSettingFieldLabel("판매 상태", true)}</small>
               <select data-product-field="status">
@@ -1168,6 +1201,11 @@ function renderServiceReadiness() {
               </select>
             </label>
           </div>
+          <section class="product-member-preview" aria-label="회원 화면 미리보기">
+            <div><small>회원 화면 미리보기</small><strong>${escapeHtml(memberFacingGroup)} · ${escapeHtml(normalized.title)}</strong></div>
+            <div class="product-member-preview-prices"><span>기준가 ${money.format(normalized.cashAmount)}원</span><span>결제 방법 선택 시 토스페이 ${money.format(Math.round(Number(normalized.cashAmount || 0) * 1.1))}원</span></div>
+            <small>${enabledSaleCoaches.length ? `선택 가능 코치 ${enabledSaleCoaches.map((coach) => coach.name).join(" · ")}` : "선택 가능한 코치 없음"}</small>
+          </section>
           <div class="product-setting-actions">
             <button class="ghost-button" type="button" data-close-product-setting="${normalized.id}">닫기</button>
             <button class="small-button" type="button" data-save-product-setting="${normalized.id}">저장</button>
@@ -1179,6 +1217,7 @@ function renderServiceReadiness() {
       .join("") : `<p class="empty-text product-setting-empty">${allProducts.length ? "검색 조건에 맞는 회원권 상품이 없습니다." : "이 지점에 등록된 회원권 상품이 없습니다. 새 회원권을 눌러 추가해 주세요."}</p>`;
   }
 
+  renderDiscountIssueControls();
   const discountCards = $("#discountPolicyCards");
   if (discountCards) {
     state.discountView = state.discountView === "history" ? "history" : "policies";
@@ -1215,6 +1254,8 @@ function renderServiceReadiness() {
         <div class="discount-create-grid">
           <label><small>이름</small><input id="discountTitleInput" type="text" placeholder="예: 주말 신규 15% 할인권" /></label>
           <label><small>대상</small><input id="discountTargetInput" type="text" value="쿠폰제/정기권" /></label>
+          <label><small>적용 상품</small><select id="discountProductScopeInput"><option value="all">전체 상품</option><option value="regular">정기권</option><option value="coupon">쿠폰제</option><option value="one_day">원데이</option></select></label>
+          <label><small>캠페인</small><select id="discountCampaignTypeInput"><option value="general">일반</option><option value="new_member">신규</option><option value="returning">복귀·재등록</option><option value="referral">친구추천 2인</option></select></label>
           <label><small>방식</small><select id="discountTypeInput"><option value="percent">할인율</option><option value="amount">할인금액</option></select></label>
           <label><small>값</small><input id="discountValueInput" type="number" min="0" value="10" /></label>
           <label><small>결제수단</small><input id="discountPaymentInput" type="text" value="카드/현금" /></label>
@@ -1240,6 +1281,8 @@ function renderServiceReadiness() {
           <div class="discount-create-grid">
             <label><small>이름</small><input data-discount-field="title" type="text" value="${escapeHtml(normalized.title)}" /></label>
             <label><small>대상</small><input data-discount-field="target" type="text" value="${escapeHtml(normalized.target)}" /></label>
+            <label><small>적용 상품</small><select data-discount-field="productScope"><option value="all" ${normalized.productScope === "all" ? "selected" : ""}>전체 상품</option><option value="regular" ${normalized.productScope === "regular" ? "selected" : ""}>정기권</option><option value="coupon" ${normalized.productScope === "coupon" ? "selected" : ""}>쿠폰제</option><option value="one_day" ${normalized.productScope === "one_day" ? "selected" : ""}>원데이</option></select></label>
+            <label><small>캠페인</small><select data-discount-field="campaignType"><option value="general" ${normalized.campaignType === "general" ? "selected" : ""}>일반</option><option value="new_member" ${normalized.campaignType === "new_member" ? "selected" : ""}>신규</option><option value="returning" ${normalized.campaignType === "returning" ? "selected" : ""}>복귀·재등록</option><option value="referral" ${normalized.campaignType === "referral" ? "selected" : ""}>친구추천 2인</option></select></label>
             <label><small>방식</small><select data-discount-field="type"><option value="percent" ${normalized.type === "percent" ? "selected" : ""}>할인율</option><option value="amount" ${normalized.type === "amount" ? "selected" : ""}>할인금액</option></select></label>
             <label><small>값</small><input data-discount-field="value" type="number" min="0" value="${normalized.value}" /></label>
             <label><small>결제수단</small><input data-discount-field="payment" type="text" value="${escapeHtml(normalized.payment)}" /></label>

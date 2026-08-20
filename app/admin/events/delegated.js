@@ -568,7 +568,16 @@ function bindDelegatedEvents() {
     const policyGuideButton = event.target.closest("[data-copy-policy-guide]");
     if (policyGuideButton) copyPolicyGuide(policyGuideButton.dataset.copyPolicyGuide);
   });
+  document.addEventListener("input", (event) => {
+    if (!event.target.closest("#branchSalesSetupPanel")) return;
+    if (!event.target.matches("[data-sales-payment-method], [data-sales-benefit], [data-sales-feature]")) return;
+    syncBranchSalesDraftFromForm();
+  });
   document.addEventListener("change", (event) => {
+    if (event.target.closest("#branchSalesSetupPanel") && event.target.matches("[data-sales-payment-method], [data-sales-benefit], [data-sales-feature]")) {
+      syncBranchSalesDraftFromForm();
+      return;
+    }
     if (event.target.matches("[data-select-member-row]")) {
       const id = Number(event.target.dataset.selectMemberRow);
       const selected = selectedMemberIdSet();
@@ -586,7 +595,6 @@ function bindDelegatedEvents() {
       return;
     }
     if (event.target.matches("#memberBulkAction")) {
-      if ($("#memberBulkCoach")) $("#memberBulkCoach").hidden = event.target.value !== "assign_coach";
       syncMemberBulkRenewalFields();
       return;
     }
@@ -658,6 +666,11 @@ function bindDelegatedEvents() {
     }
   });
   document.addEventListener("input", (event) => {
+    if (event.target.matches('[data-product-field="cashAmount"]')) {
+      const productCard = event.target.closest("[data-product-card]");
+      const cardPriceInput = productCard?.querySelector('[data-product-field="cardAmount"]');
+      if (cardPriceInput) cardPriceInput.value = String(Math.round(Math.max(0, Number(event.target.value) || 0) * 1.1));
+    }
     if (event.target.matches("#memberManagementForm input[name='extendedExpiresOn']")) {
       syncMemberTicketExtensionPreview(event.target.form);
       return;
@@ -1057,12 +1070,6 @@ function bindDelegatedEvents() {
       return;
     }
 
-    const saveTicketCoachButton = event.target.closest("[data-save-ticket-coach]");
-    if (saveTicketCoachButton) {
-      await assignMemberTicketCoach(saveTicketCoachButton);
-      return;
-    }
-
     const saveTicketLessonSetupButton = event.target.closest("[data-save-ticket-lesson-setup]");
     if (saveTicketLessonSetupButton) {
       await saveMemberTicketLessonSetup(saveTicketLessonSetupButton);
@@ -1256,6 +1263,12 @@ function bindDelegatedEvents() {
       return;
     }
 
+    const recalculateThreeMonthButton = event.target.closest("[data-recalculate-three-month]");
+    if (recalculateThreeMonthButton) {
+      recalculateThreeMonthProductPrice(recalculateThreeMonthButton.dataset.recalculateThreeMonth);
+      return;
+    }
+
     const saveProductSettingButton = event.target.closest("[data-save-product-setting]");
     if (saveProductSettingButton) {
       await updateMembershipProductSetting(saveProductSettingButton.dataset.saveProductSetting);
@@ -1369,6 +1382,33 @@ function bindDelegatedEvents() {
     const clearPaymentConfigButton = event.target.closest("#clearPaymentConfigButton");
     if (clearPaymentConfigButton) {
       clearPaymentGatewayConfig();
+    }
+
+    if (event.target.closest("#saveBranchPaymentAccountButton")) {
+      await saveBranchPaymentAccount();
+      return;
+    }
+    if (event.target.closest("#saveSalesBranchPaymentAccountButton")) {
+      await saveBranchPaymentAccount();
+      return;
+    }
+    const revokeBankDeviceButton = event.target.closest("[data-revoke-bank-device]");
+    if (revokeBankDeviceButton) {
+      await revokeBankNotificationDevice(revokeBankDeviceButton.dataset.revokeBankDevice);
+      return;
+    }
+    if (event.target.closest("#saveBranchSalesDraftButton")) {
+      await saveBranchSalesSettings(false);
+      return;
+    }
+    if (event.target.closest("#applyBranchSalesSettingsButton")) {
+      await saveBranchSalesSettings(true);
+      return;
+    }
+
+    if (event.target.closest("#issueDiscountCouponButton")) {
+      await issueDiscountCoupons();
+      return;
     }
 
     const editNoticeButton = event.target.closest("[data-edit-notice]");
