@@ -124,6 +124,9 @@ function hideCoachBrandSplash() {
     splash.classList.add("is-hidden");
     window.setTimeout(() => {
       splash.hidden = true;
+      window.TennisNoteModeTransition?.finish("coach", {
+        view: document.body.dataset.activeView || "todayView",
+      });
     }, 220);
   }, delay);
 }
@@ -2593,7 +2596,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.372",
+    workerUrl: "./service-worker.js?v=1.0.373",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2614,7 +2617,8 @@ function openCoachApp(showFromLogin = false) {
   $("#coachAppScreen").hidden = false;
   document.body.dataset.screen = "coach-app";
   jumpToTop();
-  setView(showFromLogin ? "todayView" : document.body.dataset.activeView || "todayView", { replaceHistory: true });
+  const requestedView = new URLSearchParams(window.location.search).get("view");
+  setView(showFromLogin ? "todayView" : requestedView || document.body.dataset.activeView || "todayView", { replaceHistory: true });
   window.setTimeout(showNoticeAfterLiveSync, 0);
 }
 
@@ -2623,7 +2627,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.372" });
+  const params = new URLSearchParams({ v: "1.0.373" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2811,7 +2815,14 @@ function openUserMode(event) {
   sessionStorage.setItem("tennis-note-member-mode-transition", String(Date.now()));
   sessionStorage.removeItem("tennis-note-coach-mode-entry");
   saveSnapshot();
-  window.location.assign(new URL(memberModeUrl(true), window.location.href).href);
+  const url = new URL(memberModeUrl(true), window.location.href).href;
+  if (!window.TennisNoteModeTransition?.navigate(url, {
+    from: "coach",
+    to: "member",
+    sourceView: document.body.dataset.activeView || "coachProfileView",
+    targetView: "profileView",
+    label: "회원 화면을 여는 중",
+  })) window.location.replace(url);
 }
 
 async function logoutCoach() {
@@ -7929,6 +7940,7 @@ async function initCoachApp() {
   purgeLegacyDemoStorage();
   restoreSnapshot();
   resetCoachScheduleLaunchView();
+  window.TennisNoteModeTransition?.consume("coach", { splashSelector: "#coachBrandSplash" });
   bindEvents();
   void installNativeCoachBackNavigation();
   installCoachConnectivitySync();
@@ -7988,7 +8000,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.372",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.373",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

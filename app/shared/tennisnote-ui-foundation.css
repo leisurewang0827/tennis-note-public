@@ -1,3 +1,92 @@
+.tn-mode-transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 16px 16px;
+  background: rgba(239, 247, 243, 0.78);
+  backdrop-filter: blur(5px) saturate(0.9);
+  -webkit-backdrop-filter: blur(5px) saturate(0.9);
+}
+
+.tn-mode-transition-overlay[hidden] {
+  display: none !important;
+}
+
+.tn-mode-transition-card {
+  width: min(100%, 520px);
+  min-height: 66px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #15362f;
+  box-shadow: 0 14px 36px rgba(28, 70, 58, 0.16);
+  text-align: left;
+}
+
+.tn-mode-transition-mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #0f766e;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.tn-mode-transition-card strong,
+.tn-mode-transition-card small {
+  display: block;
+}
+
+.tn-mode-transition-card strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.tn-mode-transition-card small {
+  margin-top: 3px;
+  color: #61736d;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tn-mode-transition-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(15, 118, 110, 0.18);
+  border-top-color: #0f766e;
+  border-radius: 50%;
+  animation: tn-mode-transition-spin 0.72s linear infinite;
+}
+
+.brand-splash.is-mode-transition > img,
+.brand-splash.is-mode-transition > span,
+.brand-splash.is-mode-transition > .brand-splash-fallback {
+  opacity: 0.12;
+}
+
+.brand-splash.is-mode-transition .tn-mode-transition-card {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 18px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@keyframes tn-mode-transition-spin {
+  to { transform: rotate(360deg); }
+}
+
 .tn-empty-state {
   display: grid;
   justify-items: start;

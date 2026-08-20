@@ -109,6 +109,30 @@
   font-size: 12px;
 }
 
+.schedule-v2-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.schedule-v2-status > span {
+  min-width: 0;
+}
+
+.schedule-v2-status > button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .schedule-v2-status[data-tone="error"] {
   background: #fff0ef;
   color: #9e2f2a;
