@@ -66,6 +66,8 @@ const PAGES = [
     pathname: "/app/tennis-note-member-app/",
     scripts: [
       "app/shared/tennisnote-release.js",
+      "app/tennis-note-member-app/settings.js",
+      "app/tennis-note-member-app/catalog.js",
       "app/tennis-note-member-app/domain/products.js",
       "app/tennis-note-member-app/domain/identity.js",
       "app/tennis-note-member-app/domain/journal.js",
