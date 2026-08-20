@@ -4218,6 +4218,24 @@ button.purchase-timetable-cell {
   min-height: 48px;
 }
 
+.purchase-pay-action {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.purchase-pay-action .primary-button {
+  width: 100%;
+}
+
+.purchase-pay-action small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.35;
+  text-align: center;
+}
+
 .purchase-complete-card {
   justify-items: center;
   border: 1px solid #9acbb9;
@@ -4253,10 +4271,6 @@ button.purchase-timetable-cell {
 }
 
 @media (max-width: 720px) {
-  body[data-active-member-view="shopView"].purchase-flow-open .tabbar {
-    display: none;
-  }
-
   .tabbar {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
@@ -4321,9 +4335,6 @@ button.purchase-timetable-cell {
     background: rgba(255, 255, 255, 0.96);
   }
 
-  body[data-active-member-view="shopView"].purchase-flow-open .purchase-step-actions {
-    bottom: max(8px, env(safe-area-inset-bottom));
-  }
 }
 
 @media (max-width: 420px) {
@@ -9823,4 +9834,71 @@ body.modal-open {
 .purchase-family-empty .small-button {
   justify-self: start;
   min-height: 44px;
+}
+
+/* Member checkout chrome: keep primary navigation reachable on phones and tablets. */
+@media (max-width: 1024px) {
+  :root {
+    --tn-bottom-nav-height: 66px;
+  }
+
+  .app-screen {
+    padding-bottom: calc(var(--tn-bottom-nav-height) + max(22px, env(safe-area-inset-bottom)));
+    animation: none;
+    transform: none;
+  }
+
+  .tabbar,
+  body[data-active-member-view="shopView"].purchase-flow-open .tabbar {
+    position: fixed;
+    z-index: 80;
+    right: auto;
+    left: 50%;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    display: grid;
+    width: min(calc(100% - 20px), 760px);
+    max-width: none;
+    box-sizing: border-box;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    transform: translateX(-50%);
+    -webkit-transform: translateX(-50%);
+    margin: 0;
+    border: 1px solid #dbe6e0;
+    border-radius: 8px;
+    padding: 4px;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(18, 35, 31, 0.16);
+  }
+
+  .tabbar .tab,
+  .tabbar .tab.is-active {
+    min-width: 0;
+    min-height: 48px;
+    padding: 4px 2px;
+    font-size: 10px;
+    line-height: 1.15;
+    white-space: normal;
+    word-break: keep-all;
+  }
+
+  .purchase-step-actions,
+  body[data-active-member-view="shopView"].purchase-flow-open .purchase-step-actions {
+    bottom: calc(var(--tn-bottom-nav-height) + max(14px, env(safe-area-inset-bottom)));
+  }
+}
+
+@media (max-width: 560px), (max-height: 520px) and (orientation: landscape) {
+  .tabbar,
+  body[data-active-member-view="shopView"].purchase-flow-open .tabbar {
+    width: calc(100% - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)));
+    gap: 1px;
+    padding: 3px;
+  }
+
+  .tabbar .tab,
+  .tabbar .tab.is-active {
+    min-height: 46px;
+    padding-inline: 1px;
+    font-size: 9px;
+  }
 }

@@ -1701,6 +1701,8 @@ function restoreSnapshot() {
       completionStatus: "",
       ...(state.purchaseFlow && typeof state.purchaseFlow === "object" ? state.purchaseFlow : {}),
     };
+    // Purchase UI is transient. Never reopen a half-finished checkout after an app relaunch.
+    state.purchaseFlow.open = false;
     state.purchaseFlow.step = Math.min(4, Math.max(1, Number(state.purchaseFlow.step) || 1));
     if (!Array.isArray(state.purchaseFlow.preferredSchedules)) state.purchaseFlow.preferredSchedules = [];
     if (["weekday-coupon", "weekend-coupon"].includes(state.purchaseFlow.familyId)) state.purchaseFlow.familyId = "coupon";
@@ -2054,7 +2056,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.376",
+    workerUrl: "./service-worker.js?v=1.0.377",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -2292,6 +2294,10 @@ async function installNativeBackNavigation() {
     }
     if (closeVisibleAppModal()) return;
     if (closeVisibleAppSheet(false, { immediate: true })) return;
+    if (purchaseFlowState().open) {
+      closeMembershipPurchaseFlow();
+      return;
+    }
     if (!$("#kakaoInquiryModal")?.hidden) {
       closeKakaoInquiryModal();
       return;
@@ -2904,10 +2910,11 @@ function memberDefaultWorkBlocksForCoach(coach) {
 
 function normalizeMemberCoach(coach) {
   const normalized = { ...coach };
+  const hasExplicitWorkBlocks = Array.isArray(normalized.workBlocks);
   normalized.id = normalized.id || memberCoachKey(normalized.name) || `coach-${normalized.name || Date.now()}`;
   normalized.name = normalized.name || "이름 없음";
   normalized.status = normalized.status || "active";
-  normalized.workBlocks = Array.isArray(normalized.workBlocks) && normalized.workBlocks.length
+  normalized.workBlocks = hasExplicitWorkBlocks
     ? normalized.workBlocks
     : memberDefaultWorkBlocksForCoach(normalized);
   normalized.workBlocks = normalized.workBlocks
@@ -2919,7 +2926,7 @@ function normalizeMemberCoach(coach) {
       label: block.label || "근무",
     }))
     .filter((block) => minutesFromTime(block.start) < minutesFromTime(block.end));
-  if (!normalized.workBlocks.length) normalized.workBlocks = memberDefaultWorkBlocksForCoach(normalized);
+  if (!normalized.workBlocks.length && !hasExplicitWorkBlocks) normalized.workBlocks = memberDefaultWorkBlocksForCoach(normalized);
   return normalized;
 }
 
@@ -7192,10 +7199,115 @@ function purchaseTicketLesson(ticket = {}) {
   )) || null;
 }
 
+function purchaseDirectoryContext(product = purchaseFlowProduct()) {
+  const sourceTicket = purchaseFlowSourceTicket();
+  const branchId = String(product?.branchId || sourceTicket?.branchId || sourceTicket?.branch_id || "");
+  const week = purchaseScheduleWeek();
+  const rangeStart = new Date(`${week.startDate}T12:00:00`);
+  const rangeEnd = new Date(rangeStart);
+  rangeEnd.setDate(rangeStart.getDate() + memberScheduleWorkspaceDays);
+  const from = localDateKey(rangeStart);
+  const to = localDateKey(rangeEnd);
+  return {
+    branchId,
+    from,
+    to,
+    key: `${branchId}:${from}:${to}`,
+  };
+}
+
+function purchaseDirectoryForCurrentProduct(product = purchaseFlowProduct()) {
+  const context = purchaseDirectoryContext(product);
+  if (!memberPurchaseDirectoryCache || memberPurchaseDirectoryCache.key !== context.key) return null;
+  return memberPurchaseDirectoryCache.directory || null;
+}
+
+function normalizePurchaseDirectoryCoach(coach = {}, coachIndex = 0) {
+  const availability = Array.isArray(coach.availability) ? coach.availability : [];
+  const workBlocks = availability
+    .filter((block) => String(block.type || "available") === "available")
+    .map((block, blockIndex) => ({
+      id: `${coach.roleId || coach.id || "coach"}-purchase-${blockIndex}`,
+      days: [days[Number(block.dayOfWeek) === 0 ? 6 : Number(block.dayOfWeek) - 1]].filter(Boolean),
+      start: String(block.startTime || "").slice(0, 5),
+      end: String(block.endTime || "").slice(0, 5),
+      label: "근무",
+    }))
+    .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
+  const blockedBlocks = availability
+    .filter((block) => String(block.type || "") === "blocked")
+    .map((block, blockIndex) => ({
+      id: `${coach.roleId || coach.id || "coach"}-purchase-blocked-${blockIndex}`,
+      days: [days[Number(block.dayOfWeek) === 0 ? 6 : Number(block.dayOfWeek) - 1]].filter(Boolean),
+      start: String(block.startTime || "").slice(0, 5),
+      end: String(block.endTime || "").slice(0, 5),
+      label: block.note || "브레이크·상담",
+    }))
+    .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
+  const serverLaneOrder = Number(coach.laneOrder);
+  const laneOrder = Number.isFinite(serverLaneOrder) ? serverLaneOrder : 1000 + coachIndex;
+  return normalizeMemberCoach({
+    id: coach.roleId || coach.id,
+    serverRoleId: coach.roleId || coach.id,
+    roleId: coach.roleId || coach.id,
+    branchId: coach.branchId || "",
+    name: coach.name || "이름 없음",
+    status: "approved",
+    employmentStatus: "active",
+    laneOrder,
+    scheduleLaneOrder: laneOrder,
+    workBlocks,
+    blockedBlocks,
+  });
+}
+
+function purchaseDirectoryCoaches(product = purchaseFlowProduct()) {
+  const directory = purchaseDirectoryForCurrentProduct(product);
+  return (directory?.coaches || []).map(normalizePurchaseDirectoryCoach);
+}
+
+function purchaseSchedulePolicy(product = purchaseFlowProduct()) {
+  const fallback = loadAdminSchedulePolicy();
+  const directory = purchaseDirectoryForCurrentProduct(product);
+  if (!directory) return fallback;
+  const breakRules = (directory.breakRules || []).map((rule, ruleIndex) => ({
+    id: rule.id || `purchase-break-${ruleIndex}`,
+    days: [days[Number(rule.dayOfWeek) === 0 ? 6 : Number(rule.dayOfWeek) - 1]].filter(Boolean),
+    start: String(rule.startTime || "").slice(0, 5),
+    end: String(rule.endTime || "").slice(0, 5),
+    label: rule.label || "브레이크타임",
+  })).filter((rule) => rule.days.length && minutesFromTime(rule.start) < minutesFromTime(rule.end));
+  return {
+    ...fallback,
+    openStart: String(directory.openStart || fallback.openStart || "06:40").slice(0, 5),
+    openEnd: String(directory.openEnd || fallback.openEnd || "22:00").slice(0, 5),
+    breakRules,
+    coaches: purchaseDirectoryCoaches(product),
+  };
+}
+
+function purchaseOccupancyLessons(product = purchaseFlowProduct()) {
+  const directory = purchaseDirectoryForCurrentProduct(product);
+  if (!directory) return state.liveLessons || [];
+  return (directory.occupancy || []).map((occupied, index) => ({
+    id: `purchase-occupancy-${index}-${occupied.lessonDate || ""}-${occupied.startTime || ""}-${occupied.coachRoleId || ""}`,
+    lessonDate: String(occupied.lessonDate || ""),
+    time: String(occupied.startTime || "").slice(0, 5),
+    coachRoleId: String(occupied.coachRoleId || ""),
+    coach_role_id: String(occupied.coachRoleId || ""),
+    durationMinutes: Math.max(10, Number(occupied.durationMinutes) || 20),
+    status: "occupied",
+    serverStatus: "occupied",
+  }));
+}
+
 function purchaseCoachOptions() {
   if (state.dataMode === "live") {
-    const workspaceCoaches = memberScheduleV2WorkspaceCache?.workspace?.coaches;
-    if (!Array.isArray(workspaceCoaches) || !workspaceCoaches.length) return [];
+    return purchaseDirectoryCoaches()
+      .filter((coach) => ["active", "approved"].includes(String(coach.status || "active").toLowerCase()))
+      .filter((coach) => String(coach.employmentStatus || coach.employment_status || "active").toLowerCase() === "active")
+      .filter((coach) => !coach.archivedAt && !coach.archived_at && !coach.deletedAt && !coach.deleted_at)
+      .sort((left, right) => memberScheduleLaneOrder(left) - memberScheduleLaneOrder(right));
   }
   const policy = loadAdminSchedulePolicy();
   return (policy.coaches || [])
@@ -7301,7 +7413,7 @@ function purchaseScheduleWeek() {
 
 function purchaseAvailabilityRange() {
   const today = purchaseEffectiveStartDate();
-  const workspace = memberScheduleV2WorkspaceCache?.workspace || {};
+  const workspace = purchaseDirectoryForCurrentProduct() || memberScheduleV2WorkspaceCache?.workspace || {};
   const start = [today, String(workspace.from || "")].filter(Boolean).sort().at(-1) || today;
   const defaultEndDate = new Date(`${start}T12:00:00`);
   defaultEndDate.setDate(defaultEndDate.getDate() + 20);
@@ -7311,7 +7423,9 @@ function purchaseAvailabilityRange() {
 }
 
 function purchaseScheduleOperationForDate(dateKey = "") {
-  return (state.scheduleOperationDays || []).find((operation) => String(operation.date || "") === dateKey) || null;
+  const directory = purchaseDirectoryForCurrentProduct();
+  const operationDays = Array.isArray(directory?.operationDays) ? directory.operationDays : state.scheduleOperationDays || [];
+  return operationDays.find((operation) => String(operation.date || "") === dateKey) || null;
 }
 
 function purchaseOperationAllowsSlot(operation, time, durationMinutes) {
@@ -7333,7 +7447,9 @@ function purchaseHasCoachLessonAtDate(scheduleLessons, lessonDate, time, coach, 
     if (lesson.status === "available" || String(lesson.lessonDate || "") !== lessonDate) return false;
     const lessonStatus = String(lesson.serverStatus || lesson.status || "").toLowerCase();
     if (["cancelled", "canceled", "absence", "absent", "makeup_due"].includes(lessonStatus)) return false;
-    if (memberLessonCoach(lesson, policy).id !== coach.id) return false;
+    const lessonCoachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || memberLessonCoach(lesson, policy).id || "");
+    const coachRoleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    if (lessonCoachRoleId !== coachRoleId) return false;
     const lessonStart = minutesFromTime(lesson.time);
     const lessonEnd = lessonStart + lessonDuration(lesson);
     return slotStart < lessonEnd && slotEnd > lessonStart;
@@ -7342,10 +7458,12 @@ function purchaseHasCoachLessonAtDate(scheduleLessons, lessonDate, time, coach, 
 
 function purchaseScheduleAvailabilityState() {
   if (state.dataMode !== "live" || !state.member?.profileId) return "ready";
-  if (state.scheduleV2SyncStatus === "error") return "error";
-  if (!state.scheduleV2WorkspaceLoaded || !memberScheduleV2WorkspaceCache?.workspace) return "loading";
-  if (!Array.isArray(memberScheduleV2WorkspaceCache.workspace.coaches)
-    || !memberScheduleV2WorkspaceCache.workspace.coaches.length) return "coach_error";
+  const context = purchaseDirectoryContext();
+  if (memberPurchaseDirectoryLoad.key !== context.key || memberPurchaseDirectoryLoad.status === "idle") return "loading";
+  if (memberPurchaseDirectoryLoad.status === "error") return "error";
+  if (memberPurchaseDirectoryLoad.status !== "ready") return "loading";
+  const directory = purchaseDirectoryForCurrentProduct();
+  if (!Array.isArray(directory?.coaches) || !directory.coaches.length) return "coach_error";
   return "ready";
 }
 
@@ -7381,11 +7499,11 @@ function syncLegacyPurchaseScheduleFields() {
 
 function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
   if (!product || purchaseScheduleAvailabilityState() !== "ready") return [];
-  const policy = loadAdminSchedulePolicy();
+  const policy = purchaseSchedulePolicy(product);
   const sourceTicket = purchaseFlowSourceTicket();
   const durationMinutes = Math.max(10, Number(product.lessonMinutes) || 20);
   const scopes = purchaseProductScheduleScopes(product);
-  const scheduleLessons = state.liveLessons || [];
+  const scheduleLessons = purchaseOccupancyLessons(product);
   const { start, end } = purchaseAvailabilityRange();
   const now = Date.now();
   const sourceCoachId = purchaseFlowState().purchasePurpose === "renew_same"
@@ -7452,6 +7570,29 @@ function purchaseSchedulesAvailableNow(product = purchaseFlowProduct()) {
   return selectedSchedules.every((schedule) => availableKeys.has(purchaseScheduleKey(schedule)));
 }
 
+function reconcilePurchaseSchedulesAfterRefresh(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  if (!product || !flow.preferredSchedules.length || purchaseScheduleAvailabilityState() !== "ready") return 0;
+  const availableSlots = purchaseAvailableScheduleSlots(product);
+  const availableKeys = new Set(availableSlots.map((slot) => purchaseScheduleKey({
+    lessonDate: slot.lessonDate,
+    startTime: slot.time,
+    coachRoleId: slot.coachRoleId,
+  })));
+  const previous = [...flow.preferredSchedules];
+  flow.preferredSchedules = previous.filter((schedule) => availableKeys.has(purchaseScheduleKey(schedule)));
+  const removedCount = previous.length - flow.preferredSchedules.length;
+  if (!removedCount) return 0;
+  const selectedCoachSlots = availableSlots.filter((slot) => String(slot.coachRoleId) === String(flow.coachRoleId || ""));
+  const firstAvailable = selectedCoachSlots[0] || availableSlots[0] || null;
+  if (!flow.preferredSchedules.length && firstAvailable) {
+    flow.scheduleWeekStart = purchaseWeekStartDate(firstAvailable.lessonDate);
+  }
+  syncLegacyPurchaseScheduleFields();
+  saveSnapshot();
+  return removedCount;
+}
+
 function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
   const flow = purchaseFlowState();
   const status = purchaseScheduleAvailabilityState();
@@ -7499,7 +7640,7 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
   const requiredCount = purchaseRequiredScheduleCount(product);
   const selectedSchedules = purchaseSelectedSchedules(product);
   const selectedSummary = selectedSchedules.length
-    ? `<div class="purchase-selected-schedule-list" aria-label="선택한 수업 시간">${selectedSchedules.map((schedule, index) => `<span><b>${index + 1}</b>${escapeHtml(purchaseDateLabel(schedule.lessonDate))} ${escapeHtml(schedule.startTime)}</span>`).join("")}</div>`
+    ? `<div class="purchase-selected-schedule-list" aria-label="선택한 수업 시간">${selectedSchedules.map((schedule, index) => `<span><b>${index + 1}</b>${escapeHtml(purchaseDateLabel(schedule.lessonDate))} ${escapeHtml(schedule.startTime)}</span>`).join("")}<button class="small-button" type="button" data-clear-purchase-schedules>선택 초기화</button></div>`
     : '<p class="purchase-availability-state" role="status">요일과 시간을 선택해 주세요.</p>';
   return `<div class="purchase-slot-groups">
     ${coachSelector}
@@ -7533,6 +7674,8 @@ function applyPurchaseScheduleSlot(selectedSlot = {}) {
     coachName: selectedSlot.coachName || "",
     durationMinutes: Math.max(10, Number(selectedProduct.lessonMinutes) || 20),
   };
+  reconcilePurchaseSchedulesAfterRefresh(selectedProduct);
+  const requiredCount = purchaseRequiredScheduleCount(selectedProduct);
   const selectedWeek = purchaseScheduleSelectionWeek(flow.preferredSchedules);
   const nextWeek = purchaseWeekStartDate(nextSchedule.lessonDate);
   if (selectedWeek && selectedWeek !== nextWeek) {
@@ -7544,12 +7687,15 @@ function applyPurchaseScheduleSlot(selectedSlot = {}) {
   if (existingIndex >= 0) {
     flow.preferredSchedules.splice(existingIndex, 1);
   } else {
-    const requiredCount = purchaseRequiredScheduleCount(selectedProduct);
     if (flow.preferredSchedules.length >= requiredCount) {
-      showToast(`주 ${requiredCount}회 상품은 시간 ${requiredCount}개만 선택할 수 있습니다. 기존 선택을 눌러 해제해 주세요.`);
-      return false;
+      if (requiredCount === 1) flow.preferredSchedules = [nextSchedule];
+      else {
+        showToast(`주 ${requiredCount}회 상품은 시간 ${requiredCount}개만 선택할 수 있습니다. 선택 초기화 후 다시 골라주세요.`);
+        return false;
+      }
+    } else {
+      flow.preferredSchedules.push(nextSchedule);
     }
-    flow.preferredSchedules.push(nextSchedule);
   }
   syncLegacyPurchaseScheduleFields();
   saveSnapshot();
@@ -7574,7 +7720,7 @@ function purchaseScheduleCellState(product, coach, dateKey, time, availableKeys,
   const durationMinutes = Math.max(10, Number(product?.lessonMinutes) || 20);
   const lessonTime = new Date(`${dateKey}T${time}:00`).getTime();
   const day = purchaseDateDay(dateKey);
-  const policy = loadAdminSchedulePolicy();
+  const policy = purchaseSchedulePolicy(product);
   const operation = purchaseScheduleOperationForDate(dateKey);
   const working = isMemberCoachWorking(coach, day, time, durationMinutes);
   const closed = lessonTime <= Date.now()
@@ -7584,7 +7730,7 @@ function purchaseScheduleCellState(product, coach, dateKey, time, availableKeys,
   if (selected) return availableKeys.has(key) ? "selected" : "conflict";
   if (closed) return "off";
   if (availableKeys.has(key)) return "available";
-  if (purchaseHasCoachLessonAtDate(state.liveLessons || [], dateKey, time, coach, durationMinutes, policy)) return "busy";
+  if (purchaseHasCoachLessonAtDate(purchaseOccupancyLessons(product), dateKey, time, coach, durationMinutes, policy)) return "busy";
   return "off";
 }
 
@@ -7954,6 +8100,28 @@ function purchaseStepCanContinue() {
   );
 }
 
+function purchaseContinueReason() {
+  const flow = purchaseFlowState();
+  const product = purchaseFlowProduct();
+  if (!["renew_same", "add_coach", "new_purchase", "one_day"].includes(flow.purchasePurpose)) {
+    return "연장 또는 새 이용권을 선택해 주세요.";
+  }
+  if (!product) return "상품을 선택해 주세요.";
+  if (!isPaymentGatewayReady(normalizeSelectedPaymentMethod())) return "토스페이 결제를 준비하고 있습니다. 잠시 후 다시 확인해 주세요.";
+  if (flow.purchasePurpose === "renew_same" && purchaseFlowSourceTicket() && flow.scheduleMode === "keep") {
+    return "선택 내용을 확인한 뒤 결제할 수 있습니다.";
+  }
+  const availabilityState = purchaseScheduleAvailabilityState();
+  if (availabilityState === "loading") return "선생님과 가능한 시간을 최신 시간표에서 확인하고 있습니다.";
+  if (availabilityState === "error" || availabilityState === "coach_error") return "선생님·시간 정보를 다시 불러온 뒤 결제할 수 있습니다.";
+  if (!flow.coachRoleId) return "선생님을 선택해 주세요.";
+  const schedules = purchaseSelectedSchedules(product);
+  const requiredCount = purchaseRequiredScheduleCount(product);
+  if (schedules.length !== requiredCount) return `요일·시간을 ${requiredCount}개 선택해 주세요.`;
+  if (!purchaseSchedulesAvailableNow(product)) return "선택한 시간이 바뀌었습니다. 최신 가능한 시간을 다시 선택해 주세요.";
+  return "선택 내용을 확인한 뒤 결제할 수 있습니다.";
+}
+
 function purchaseSinglePageHtml() {
   const flow = purchaseFlowState();
   const product = purchaseFlowProduct();
@@ -7999,10 +8167,14 @@ function renderMembershipPurchaseFlow() {
     $("#membershipPurchaseProgress").innerHTML = "";
   }
   const stepHtml = flow.step === 4 ? purchaseStepFourHtml() : purchaseSinglePageHtml();
+  const canPay = purchaseStepCanContinue();
   const controls = flow.step === 4 ? "" : `
     <div class="purchase-step-actions">
       <button class="small-button" type="button" data-close-purchase-flow>취소</button>
-      <button class="primary-button" type="button" data-purchase-pay ${purchaseStepCanContinue() ? "" : "disabled"}>${escapeHtml(formatWon(purchasePaymentAmount(purchaseFlowProduct() || {}, normalizeSelectedPaymentMethod())))} 결제</button>
+      <div class="purchase-pay-action">
+        <button class="primary-button" type="button" data-purchase-pay aria-describedby="purchasePayReason" ${canPay ? "" : "disabled"}>${escapeHtml(formatWon(purchasePaymentAmount(purchaseFlowProduct() || {}, normalizeSelectedPaymentMethod())))} 결제</button>
+        <small id="purchasePayReason" role="status">${escapeHtml(purchaseContinueReason())}</small>
+      </div>
     </div>`;
   if ($("#membershipPurchaseStep")) $("#membershipPurchaseStep").innerHTML = `${stepHtml}${controls}`;
   renderPurchasePaymentMethodSheet();
@@ -8032,7 +8204,7 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "") {
   flow.productId = matchingProduct?.id || "";
   flow.familyId = matchingProduct ? membershipProductFamilyId(matchingProduct) : activeMembershipPresetId() || "four-week";
   flow.step = 1;
-  flow.purchasePurpose = sourceTicket ? "renew_same" : (state.liveTickets || []).length ? "" : "new_purchase";
+  flow.purchasePurpose = sourceTicket ? "renew_same" : (state.liveTickets || []).length ? "add_coach" : "new_purchase";
   flow.showMoreSlots = false;
   flow.showAllProducts = false;
   flow.productFrequency = matchingProduct ? purchaseProductFrequency(matchingProduct) : 1;
@@ -8054,12 +8226,25 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "") {
   state.membershipFilters = { ...membershipProductFamilyDefinition(flow.familyId).filters };
   state.membershipSelectedFamilyId = flow.familyId;
   saveSnapshot();
+  const historyState = typeof history.state === "object" && history.state ? history.state : {};
+  if (!historyState.tennisNotePurchase) {
+    history.pushState({
+      ...historyState,
+      tennisNoteMode: "member",
+      tennisNoteView: "shopView",
+      tennisNotePurchase: true,
+    }, "", window.location.href);
+  }
   renderMembershipPurchaseFlow();
   void refreshPurchaseScheduleAvailability();
   window.requestAnimationFrame(() => $("#membershipPurchaseFlow")?.scrollIntoView({ block: "start" }));
 }
 
 function closeMembershipPurchaseFlow(options = {}) {
+  if (options.fromHistory !== true && history.state?.tennisNotePurchase) {
+    history.back();
+    return;
+  }
   const flow = purchaseFlowState();
   flow.open = false;
   flow.step = 1;
@@ -8068,6 +8253,7 @@ function closeMembershipPurchaseFlow(options = {}) {
   renderProducts();
   const showCurrentMembership = options.showCurrentMembership === true;
   if (showCurrentMembership && $("#currentMembershipDetails")) $("#currentMembershipDetails").open = true;
+  if (options.skipScroll === true) return;
   window.requestAnimationFrame(() => {
     const target = showCurrentMembership ? $("#currentMembershipDetails") : $("#membershipProductBrowser");
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -8126,7 +8312,7 @@ function selectPurchaseFamily(familyId = "") {
   const flow = purchaseFlowState();
   flow.familyId = family.id;
   if (family.id === "one-day") flow.purchasePurpose = "one_day";
-  else if (flow.purchasePurpose === "one_day") flow.purchasePurpose = (state.liveTickets || []).length ? "" : "new_purchase";
+  else if (flow.purchasePurpose === "one_day") flow.purchasePurpose = (state.liveTickets || []).length ? "add_coach" : "new_purchase";
   flow.productId = "";
   flow.showAllProducts = false;
   flow.discountIssueId = "";
@@ -8166,7 +8352,7 @@ function selectPurchaseProduct(productId = "") {
     flow.renewalTicketId = "";
     flow.scheduleMode = "change";
   } else if (flow.purchasePurpose === "one_day") {
-    flow.purchasePurpose = (state.liveTickets || []).length ? "" : "new_purchase";
+    flow.purchasePurpose = (state.liveTickets || []).length ? "add_coach" : "new_purchase";
   }
   if (productChanged && !flow.renewalTicketId) {
     flow.coachRoleId = "";
@@ -8179,6 +8365,7 @@ function selectPurchaseProduct(productId = "") {
   }
   saveSnapshot();
   renderMembershipPurchaseFlow();
+  void refreshPurchaseScheduleAvailability();
   if (productChanged && product.branchId) {
     void syncMemberPaymentOptionsFromServer(product.branchId).then(() => renderMembershipPurchaseFlow());
   }
@@ -8194,9 +8381,69 @@ function movePurchaseStep(direction = 1) {
   window.requestAnimationFrame(() => $("#membershipPurchaseFlow")?.scrollIntoView({ block: "start" }));
 }
 
-async function refreshPurchaseScheduleAvailability() {
+async function refreshPurchaseScheduleAvailability(options = {}) {
   if (state.dataMode !== "live" || !state.member?.profileId) return true;
-  await syncMemberScheduleV2(null, { force: false, week: purchaseScheduleWeek() }).catch(() => false);
+  const client = window.TennisNoteDataClient;
+  const product = purchaseFlowProduct();
+  const context = purchaseDirectoryContext(product);
+  if (!client?.rpc || !client.getSession?.()?.access_token || !context.branchId) {
+    memberPurchaseDirectoryLoad = {
+      key: context.key,
+      status: "error",
+      error: "member_purchase_directory_unavailable",
+    };
+    renderMembershipPurchaseFlow();
+    return false;
+  }
+
+  const cached = memberPurchaseDirectoryCache;
+  if (!options.force && cached?.key === context.key && Date.now() - cached.loadedAt < 10_000) {
+    memberPurchaseDirectoryLoad = { key: context.key, status: "ready", error: "" };
+    const removedCount = reconcilePurchaseSchedulesAfterRefresh(product);
+    if (removedCount) showToast("마감되거나 변경된 시간을 해제했습니다. 가능한 시간을 다시 선택해 주세요.");
+    const flow = purchaseFlowState();
+    if (flow.open && flow.step !== 4) renderMembershipPurchaseFlow();
+    if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
+    return true;
+  }
+
+  const requestId = ++memberPurchaseDirectoryRequestSequence;
+  memberPurchaseDirectoryLoad = { key: context.key, status: "loading", error: "" };
+  if (purchaseFlowState().open && purchaseFlowState().step !== 4) renderMembershipPurchaseFlow();
+  if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
+  try {
+    const directory = await client.rpc("tn_member_purchase_coach_directory", {
+      target_branch_id: context.branchId,
+      target_from: context.from,
+      target_to: context.to,
+    });
+    if (requestId !== memberPurchaseDirectoryRequestSequence
+      || purchaseDirectoryContext(purchaseFlowProduct()).key !== context.key) return false;
+    if (!directory
+      || String(directory.branchId || "") !== context.branchId
+      || !Array.isArray(directory.coaches)
+      || !Array.isArray(directory.occupancy)
+      || !Array.isArray(directory.operationDays)
+      || !Array.isArray(directory.breakRules)) {
+      throw new Error("member_purchase_directory_response_invalid");
+    }
+    memberPurchaseDirectoryCache = {
+      key: context.key,
+      loadedAt: Date.now(),
+      directory,
+    };
+    memberPurchaseDirectoryLoad = { key: context.key, status: "ready", error: "" };
+    const removedCount = reconcilePurchaseSchedulesAfterRefresh(product);
+    if (removedCount) showToast("마감되거나 변경된 시간을 해제했습니다. 가능한 시간을 다시 선택해 주세요.");
+  } catch (error) {
+    if (requestId !== memberPurchaseDirectoryRequestSequence) return false;
+    memberPurchaseDirectoryLoad = {
+      key: context.key,
+      status: "error",
+      error: error?.payload?.code || error?.message || "member_purchase_directory_failed",
+    };
+    console.warn("Tennis Note purchase directory failed", memberPurchaseDirectoryLoad.error);
+  }
   const flow = purchaseFlowState();
   if (flow.open && flow.step !== 4) renderMembershipPurchaseFlow();
   if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
@@ -8215,6 +8462,13 @@ function completeMembershipPurchaseFlow(message = "결제가 접수되었습니�
 async function submitMembershipPurchaseFlow() {
   const product = purchaseFlowProduct();
   if (!product || !purchaseStepCanContinue()) return;
+  if (state.dataMode === "live") {
+    const ready = await refreshPurchaseScheduleAvailability();
+    if (!ready || !purchaseStepCanContinue()) {
+      showToast("최신 시간표에서 가능한 시간을 다시 확인해 주세요.");
+      return;
+    }
+  }
   await startProductPayment(product.id);
 }
 
@@ -8720,6 +8974,9 @@ function serverJournalBody(log = {}) {
 let memberScheduleV2WorkspaceCache = null;
 let memberScheduleV2RequestSequence = 0;
 let memberChangeCandidateRequestSequence = 0;
+let memberPurchaseDirectoryCache = null;
+let memberPurchaseDirectoryRequestSequence = 0;
+let memberPurchaseDirectoryLoad = { key: "", status: "idle", error: "" };
 
 function memberScheduleIdentityIssue(workspace = {}, integrity = null, profileId = "") {
   const integrityStatus = String(integrity?.status || "");
@@ -11607,11 +11864,17 @@ function setView(viewId, options = {}) {
   const nextState = { ...historyState, tennisNoteMode: "member", tennisNoteView: viewId };
   delete nextState.tennisNoteModal;
   delete nextState.tennisNoteSheet;
+  delete nextState.tennisNotePurchase;
   if (options.pushHistory && historyState.tennisNoteView !== viewId) history.pushState(nextState, "", window.location.href);
   else if (!historyState.tennisNoteView || options.replaceHistory) history.replaceState(nextState, "", window.location.href);
 }
 
 function navigateMemberView(viewId) {
+  if (purchaseFlowState().open && viewId !== "shopView") {
+    closeMembershipPurchaseFlow({ fromHistory: true, skipScroll: true });
+    setView(viewId, { replaceHistory: true });
+    return;
+  }
   setView(viewId, { pushHistory: true });
 }
 
@@ -11668,7 +11931,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.376", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.377", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -13913,6 +14176,11 @@ function bindEvents() {
       closeVisibleAppSheet();
       return;
     }
+    if (event.key === "Escape" && purchaseFlowState().open) {
+      event.preventDefault();
+      closeMembershipPurchaseFlow();
+      return;
+    }
     if (event.key === "Escape" && !$("#kakaoInquiryModal")?.hidden) closeKakaoInquiryModal();
     if (event.key === "Escape" && !$("#memberEnrollmentModal")?.hidden) closeMemberEnrollmentModal();
   });
@@ -13923,6 +14191,13 @@ function bindEvents() {
     }
     if (activeAppSheetId) {
       closeVisibleAppSheet(true);
+      return;
+    }
+    if (purchaseFlowState().open) {
+      // A nested modal/sheet returns to the purchase history entry first.
+      // Only a back action leaving that entry should close the purchase flow.
+      if (event.state?.tennisNotePurchase === true) return;
+      closeMembershipPurchaseFlow({ fromHistory: true });
       return;
     }
     const targetView = event.state?.tennisNoteView;
@@ -14084,6 +14359,13 @@ function bindEvents() {
       flow.scheduleWeekStart = purchaseWeekStartDate(purchaseAvailabilityRange().start);
       saveSnapshot();
       renderMembershipPurchaseFlow();
+      return;
+    }
+    if (event.target.closest("[data-clear-purchase-schedules]")) {
+      clearPurchaseSchedules();
+      saveSnapshot();
+      renderMembershipPurchaseFlow();
+      if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
       return;
     }
     if (event.target.closest("[data-purchase-show-more-slots]")) {
@@ -14650,7 +14932,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.376",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.377",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

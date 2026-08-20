@@ -26972,12 +26972,12 @@ function coachLaneOrderItems() {
 }
 
 function coachWorksAtPreviewTime(coach, day, time) {
-  const minute = minutesFromTime(time);
+  const minute = timeToMinutes(time);
   return (coach.workBlocks || []).some((block) => (
     Array.isArray(block.days)
     && block.days.includes(day)
-    && minute >= minutesFromTime(block.start)
-    && minute < minutesFromTime(block.end)
+    && minute >= timeToMinutes(block.start)
+    && minute < timeToMinutes(block.end)
   ));
 }
 
@@ -27133,7 +27133,6 @@ function renderCoaches() {
   $$("[data-coach-staff-filter]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.coachStaffFilter === state.coachStaffListFilter);
   });
-  renderCoachLaneOrderEditor();
   target.innerHTML = `
     <div class="coach-status-summary">
       <strong>근무 중 ${activeCoaches.length}명</strong>
@@ -27165,6 +27164,16 @@ function renderCoaches() {
       },
     )
     .join("") : `<p class="empty-text coach-list-empty">${showingInactive ? "종료하거나 보관한 코치가 없습니다." : "근무 중인 코치가 없습니다."}</p>`);
+  try {
+    renderCoachLaneOrderEditor();
+  } catch (error) {
+    console.error("Tennis Note coach lane preview render failed", error);
+    const panel = $("#coachLaneOrderPanel");
+    if (panel) {
+      panel.hidden = false;
+      panel.innerHTML = '<p class="empty-text">시간표 열 순서 미리보기를 불러오지 못했습니다. 코치 목록과 설정은 계속 사용할 수 있습니다.</p>';
+    }
+  }
 }
 
 async function reconcileCoachLogin(coachId) {
