@@ -64,7 +64,11 @@ const PAGES = [
   {
     label: "회원앱",
     pathname: "/app/tennis-note-member-app/",
-    scripts: ["app/shared/tennisnote-release.js", "app/tennis-note-member-app/app.js"],
+    scripts: [
+      "app/shared/tennisnote-release.js",
+      "app/tennis-note-member-app/domain/products.js",
+      "app/tennis-note-member-app/app.js",
+    ],
   },
   {
     label: "코치앱",

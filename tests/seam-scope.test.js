@@ -55,6 +55,7 @@ const SOURCES = [
   "app/admin/views/reports.js",
   "app/admin/views/schedule.js",
   "app/admin/views/settings.js",
+  "app/tennis-note-member-app/domain/products.js",
   "app/tennis-note-member-app/app.js",
   "app/tennis-note-coach-app/app.js",
 ];
