@@ -2575,6 +2575,117 @@ tr.is-selected td {
   box-sizing: border-box;
 }
 
+.member-inline-product-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+  min-width: 0;
+}
+
+.member-inline-product-search > button {
+  min-width: 52px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid #cbded7;
+  border-radius: 6px;
+  color: #526b62;
+  background: #f4f8f6;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.member-inline-duration-shortcuts {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.member-inline-duration-shortcuts > span {
+  color: #60776f !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+}
+
+.member-inline-duration-shortcuts > button {
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid #bcd6cc;
+  border-radius: 999px;
+  color: #526b62;
+  background: #f4f8f6;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.member-inline-duration-shortcuts > button:hover,
+.member-inline-duration-shortcuts > button:focus-visible,
+.member-inline-duration-shortcuts > button[aria-pressed="true"] {
+  border-color: var(--green);
+  color: #fff;
+  background: var(--green);
+  outline: none;
+}
+
+.member-inline-product-results {
+  grid-column: 1 / -1;
+  display: grid;
+  max-height: 190px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid #bcd6cc;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(24, 51, 42, 0.14);
+}
+
+.member-inline-product-results[hidden] {
+  display: none;
+}
+
+.member-inline-product-results > button {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ink);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.member-inline-product-results > button:hover,
+.member-inline-product-results > button:focus-visible,
+.member-inline-product-results > button[aria-selected="true"] {
+  color: var(--green);
+  background: #edf7f2;
+  outline: none;
+}
+
+.member-inline-product-result-count,
+.member-inline-product-no-result {
+  padding: 5px 8px;
+  color: #647a72 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.member-inline-product-change-note {
+  color: #8a5a00 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.35;
+}
+
+.member-inline-product-change-note[hidden] {
+  display: none;
+}
+
 .member-inline-compact-actions {
   grid-column: 1 / -1;
   display: grid;
