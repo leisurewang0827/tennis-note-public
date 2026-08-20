@@ -118,7 +118,24 @@ const PAGES = [
   {
     label: "코치앱",
     pathname: "/app/tennis-note-coach-app/",
-    scripts: ["app/shared/tennisnote-release.js", "app/tennis-note-coach-app/app.js"],
+    scripts: [
+      "app/shared/tennisnote-release.js",
+      "app/tennis-note-coach-app/domain/values.js",
+      "app/tennis-note-coach-app/domain/schedule.js",
+      "app/tennis-note-coach-app/domain/policy.js",
+      "app/tennis-note-coach-app/domain/coaches.js",
+      "app/tennis-note-coach-app/domain/lessons.js",
+      "app/tennis-note-coach-app/domain/records.js",
+      "app/tennis-note-coach-app/domain/members.js",
+      "app/tennis-note-coach-app/domain/schedule-v2.js",
+      "app/tennis-note-coach-app/domain/notices.js",
+      "app/tennis-note-coach-app/domain/curriculum.js",
+      "app/tennis-note-coach-app/domain/settlement.js",
+      "app/tennis-note-coach-app/domain/makeup.js",
+      "app/tennis-note-coach-app/domain/shared-data.js",
+      "app/tennis-note-coach-app/domain/tasks.js",
+      "app/tennis-note-coach-app/app.js",
+    ],
   },
 ];
 
