@@ -109,14 +109,16 @@ def verify_version_consistency(repo_root: Path, expected: dict) -> None:
 
     # ?v= 가 아닌 형태로 버전이 박힌 자리. 위의 semver_query 가 비켜가므로
     # 따로 본다. 실제로 bump 스크립트를 만들면서 여기가 빈 것을 발견했다.
+    # app/ 아래 전체를 본다. app.js 두 개만 보면 파일을 쪼갤 때 놓친다.
     literal_patterns = (
         # new URLSearchParams({ v: "1.2.3" })
         re.compile(r'\bv:\s*"(\d+\.\d+\.\d+)"'),
         # window.TENNIS_NOTE_RELEASE?.version || "1.2.3"
         re.compile(r'\?\.version\s*\|\|\s*"(\d+\.\d+\.\d+)"'),
     )
-    for app_name in ("tennis-note-member-app", "tennis-note-coach-app"):
-        path = repo_root / "app" / app_name / "app.js"
+    for path in sorted((repo_root / "app").rglob("*.js")):
+        if not path.is_file() or "/vendor/" in path.as_posix():
+            continue
         text = path.read_text(encoding="utf-8")
         for pattern in literal_patterns:
             for found in set(pattern.findall(text)):

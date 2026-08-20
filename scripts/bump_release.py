@@ -157,12 +157,16 @@ def plan_version_queries(old: str, new: str, read: Reader) -> list[tuple[Path, s
 def plan_app_literals(old: str, new: str, read: Reader) -> list[tuple[Path, str, int]]:
     """?v= 가 아닌 형태로 버전이 박힌 자리.
 
-    회원앱·코치앱 app.js 두 곳씩 있고, 지금 검사기가 못 잡는 자리다.
+    app/ 아래 전체를 본다. 예전에는 app.js 두 개만 봤는데, app.js 를 쪼개면서
+    이 자리가 ui/screens.js 로 옮겨가 스크립트가 놓쳤다. 파일 위치에 기대지 않는다.
     """
     plans: list[tuple[Path, str, int]] = []
-    for name in ("tennis-note-member-app", "tennis-note-coach-app"):
-        path = APP / name / "app.js"
+    for path in sorted(APP.rglob("*.js")):
+        if not path.is_file() or "/vendor/" in path.as_posix():
+            continue
         text = read(path)
+        if old not in text:
+            continue
         changed = 0
         for pattern, replacement in (
             (rf'(\bv:\s*")({re.escape(old)})(")', rf"\g<1>{new}\g<3>"),
