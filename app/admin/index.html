@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.382" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.383" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-15" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.382" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.383" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -1999,9 +1999,13 @@
         </div>
         <form id="refundForm" class="refund-form">
           <div id="refundModalContent" class="refund-modal-content" aria-live="polite"></div>
-          <label class="form-field refund-wide-field">
+          <label id="refundReasonField" class="form-field refund-wide-field">
             <span>환불 사유</span>
             <textarea id="refundReason" rows="3" maxlength="200" placeholder="회원 요청, 운영 취소 등 사유를 입력하세요."></textarea>
+          </label>
+          <label id="refundTransferReferenceField" class="form-field refund-wide-field" hidden>
+            <span>송금 확인 메모</span>
+            <input id="refundTransferReference" type="text" maxlength="80" autocomplete="off" placeholder="은행명·끝 4자리 또는 이체확인번호 (전체 계좌번호 금지)" />
           </label>
           <div id="refundFallbackConfirmation" class="refund-fallback-confirmation" hidden>
             <label>
@@ -2022,6 +2026,7 @@
           <div id="refundFormMessage" class="form-message" role="status"></div>
           <div class="modal-actions">
             <button id="cancelRefundModal" class="ghost-button" type="button">취소</button>
+            <button id="cancelManualRefundRequest" class="ghost-button" type="button" hidden>환불 접수 취소</button>
             <button id="retryRefundReconcile" class="ghost-button" type="button" hidden>상태 다시 맞추기</button>
             <button id="confirmRefundButton" class="danger-button" type="submit">환불 확정</button>
           </div>
@@ -2109,20 +2114,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.382"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.382"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.382"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.383"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.383"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.383"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.382"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.383"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.382"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.382"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.382"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.382"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.382"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.382"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.383"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.383"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.383"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.383"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.383"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.383"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.382"></script>
+    <script src="./app.js?v=1.0.383"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-15"></script>
   </body>
 </html>

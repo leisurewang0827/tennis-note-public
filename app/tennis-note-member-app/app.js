@@ -1426,7 +1426,13 @@ async function syncLiveNotices() {
 
 function normalizeLiveNotification(row = {}) {
   const templateKey = String(row.template_key || "");
-  const isRefund = ["payment_cancelled", "payment_request_cancelled", "payment_refunded"].includes(templateKey);
+  const isRefund = [
+    "payment_cancelled",
+    "payment_request_cancelled",
+    "payment_refunded",
+    "payment_refund_pending",
+    "payment_refund_request_cancelled",
+  ].includes(templateKey);
   const isMakeupRequired = templateKey === "lesson_absence_makeup_required";
   const isMakeupBooked = templateKey === "makeup_booking_completed";
   const title = row.title || (templateKey === "payment_refunded" ? "환불 완료" : isRefund ? "결제취소 완료" : "앱 알림");
@@ -2085,7 +2091,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.382",
+    workerUrl: "./service-worker.js?v=1.0.383",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3246,7 +3252,7 @@ function memberScheduleCoachTickets() {
   return (state.liveTickets || []).filter((ticket) => {
     const derived = window.TennisNoteTicketState?.derive?.(ticket)
       || String(ticket.status || "").toLowerCase();
-    return visibleStates.has(derived) && String(ticket.coachRoleId || "").trim();
+    return !ticket.refundHoldId && visibleStates.has(derived) && String(ticket.coachRoleId || "").trim();
   });
 }
 
@@ -3488,7 +3494,9 @@ function sourceLessonScheduleScope(sourceLesson = {}) {
 }
 
 function memberOpenMakeupEntitlements() {
-  return (state.liveMakeupEntitlements || []).filter((item) => item.status === "open");
+  return (state.liveMakeupEntitlements || []).filter((item) => (
+    item.status === "open" && !memberTicketRefundHeld(item.ticketId)
+  ));
 }
 
 function memberMakeupDueLessons() {
@@ -3619,14 +3627,14 @@ function memberCandidateEmptyReason(source = null) {
 }
 
 function isActiveRegularLiveTicket(ticket, today = localDateKey()) {
-  if (!ticket || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
+  if (!ticket || ticket.refundHoldId || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
   if (ticket.startsOn && ticket.startsOn > today) return false;
   if (ticket.expiresOn && ticket.expiresOn < today) return false;
   return String(ticket.productKind || "").toLowerCase() === "regular";
 }
 
 function isPausedRegularLiveTicket(ticket, today = localDateKey()) {
-  if (!ticket || ticket.status !== "paused" || Number(ticket.remaining) <= 0) return false;
+  if (!ticket || ticket.refundHoldId || ticket.status !== "paused" || Number(ticket.remaining) <= 0) return false;
   if (ticket.startsOn && ticket.startsOn > today) return false;
   if (ticket.expiresOn && ticket.expiresOn < today) return false;
   return String(ticket.productKind || "").toLowerCase() === "regular";
@@ -3841,7 +3849,9 @@ function memberScheduleRequestOnly(policy = loadAdminSchedulePolicy()) {
 
 function memberHasActiveLiveTicket() {
   return (state.liveTickets || []).some((ticket) =>
-    String(ticket.status || "").toLowerCase() === "active" && Number(ticket.remaining) > 0);
+    !ticket.refundHoldId
+    && String(ticket.status || "").toLowerCase() === "active"
+    && Number(ticket.remaining) > 0);
 }
 
 function memberHasPendingPaymentOnly() {
@@ -3910,8 +3920,13 @@ function memberLessons() {
 
 function currentScheduledLessonsForChange() {
   const dueLessons = memberMakeupDueLessons();
-  const fromSchedule = memberScheduleLessons().filter((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled");
-  const futureLessons = loadedFutureScheduledLessonsForChange();
+  const fromSchedule = memberScheduleLessons().filter((lesson) => (
+    isOwnMemberScheduleLesson(lesson)
+    && lesson.status === "scheduled"
+    && !memberTicketRefundHeld(memberLessonTicketId(lesson))
+  ));
+  const futureLessons = loadedFutureScheduledLessonsForChange()
+    .filter((lesson) => !memberTicketRefundHeld(memberLessonTicketId(lesson)));
   const couponTickets = memberBookableCouponTickets();
   const regularTickets = memberBookableRegularTickets();
   const pausedTickets = memberBookablePausedTickets();
@@ -4109,6 +4124,12 @@ function memberLessonTicketId(lesson = {}) {
   return String(lesson.ticketId || lesson.member_ticket_id || lesson.memberTicketId || "");
 }
 
+function memberTicketRefundHeld(ticketId = "") {
+  return Boolean((state.liveTickets || []).find((ticket) => (
+    String(ticket.id || "") === String(ticketId || "") && ticket.refundHoldId
+  )));
+}
+
 function memberScheduleTicketOptions() {
   const byId = new Map();
   [...currentLiveTickets(), ...upcomingLiveTickets()].forEach((ticket) => {
@@ -4117,7 +4138,7 @@ function memberScheduleTicketOptions() {
   (state.liveLessons || []).filter(isOwnMemberScheduleLesson).forEach((lesson) => {
     const ticketId = memberLessonTicketId(lesson);
     const ticket = (state.liveTickets || []).find((item) => String(item.id) === ticketId);
-    if (ticketId && ticket) byId.set(ticketId, ticket);
+    if (ticketId && ticket && !ticket.refundHoldId) byId.set(ticketId, ticket);
   });
   return [...byId.values()];
 }
@@ -4436,7 +4457,7 @@ function policyShortLabel(policy, snapshot = null) {
 function policyDetail(policy, snapshot = null) {
   const hours = memberChangeCutoffHours(snapshot);
   if (snapshot?.isGroup) {
-    return "그룹수업 · 담당 코치 승인 후 변경됩니다. 승인 전 원래 수업은 유지됩니다.";
+    return "그룹수업 · 한 명이 신청하면 그룹원 모두에게 함께 적용됩니다. 담당 코치 승인 전까지 원래 수업은 유지됩니다.";
   }
   return policy === "coach"
     ? `수업까지 ${hours}시간 미만 남음 · 담당 코치 승인 후 변경됩니다. 승인 전 원래 수업은 유지됩니다.`
@@ -4475,6 +4496,7 @@ function memberChangeSubmitLabel(source = null, selected = null) {
   if (source?.couponBooking) return "쿠폰 예약 확정";
   if (source?.regularInitialBooking) return source?.resumePausedTicket ? "복귀하고 시간 확정" : "수업시간 확정";
   if (!selected) return "새 시간 선택";
+  if (memberChangePolicySnapshot(selected)?.isGroup) return "그룹 변경 승인 요청";
   return selected.policy === "coach" ? "승인 요청" : "바로 변경";
 }
 
@@ -5976,6 +5998,8 @@ function renderChangeModalSummary() {
     ? `${absence.day} ${absence.time} 불참 수업의 보강을 ${makeup.day} ${makeup.time}에 예약합니다.`
     : absence.couponBooking
       ? `${absence.ticketTitle}으로 ${makeup.day} ${makeup.time} 수업을 예약합니다.`
+      : memberChangePolicySnapshot(makeup)?.isGroup
+        ? `그룹수업 전체를 ${absence.day} ${absence.time}에서 ${makeup.day} ${makeup.time}으로 변경 요청합니다.`
       : memberChangeDirection(absence, makeup) === "advance"
         ? `${absence.day} ${absence.time} 수업을 ${makeup.day} ${makeup.time}으로 앞당깁니다.`
         : `${absence.day} ${absence.time} 수업을 ${makeup.day} ${makeup.time} 수업으로 변경합니다.`;
@@ -6558,10 +6582,13 @@ function membershipTicketCard(ticket = {}, options = {}) {
   const derivedState = window.TennisNoteTicketState?.derive?.(ticket) || ticket.status || "current";
   const isPendingTicket = derivedState === "pending_payment";
   const isUpcomingTicket = derivedState === "upcoming";
+  const isRefundHeld = Boolean(ticket.refundHoldId);
   const isCurrentTicket = currentTicketIds.has(String(ticket.id || "")) || String(ticket.id || "").startsWith("demo-");
   const isLowTicket = isCurrentTicket && remainingSessions <= 2;
-  const statusLabel = window.TennisNoteTicketState?.label?.(ticket)
-    || (isPendingTicket ? "결제 대기" : isUpcomingTicket ? "시작 예정" : ticket.statusLabel || "사용 중");
+  const statusLabel = isRefundHeld
+    ? "환불 접수 · 송금 대기"
+    : window.TennisNoteTicketState?.label?.(ticket)
+      || (isPendingTicket ? "결제 대기" : isUpcomingTicket ? "시작 예정" : ticket.statusLabel || "사용 중");
   const ticketPeriod = ticket.expiresOn
     ? `${ticket.startsOn || "시작일 확인"} ~ ${ticket.expiresOn}`
     : "이용 기간 확인 중";
@@ -6595,6 +6622,7 @@ function membershipTicketCard(ticket = {}, options = {}) {
         <small class="membership-period">${escapeHtml(ticketPeriod)}${compact ? "" : ` · 총 ${totalSessions} / 사용 ${usedSessions}`}</small>
       </div>
       ${pendingPaymentActions}
+      ${isRefundHeld ? '<p class="membership-status-note">송금 완료 또는 접수취소 전까지 수업 차감과 예약 변경이 잠시 정지됩니다.</p>' : ""}
       ${holdingAction}
     </article>`;
 }
@@ -6610,8 +6638,9 @@ function renderCurrentTicketPanel() {
   if (!target) return;
   const currentTickets = currentLiveTickets();
   const upcomingTickets = upcomingLiveTickets();
-  const demoTicket = !currentTickets.length && !upcomingTickets.length ? currentHoldingTicket() : null;
-  const visibleTickets = [...currentTickets, ...upcomingTickets];
+  const refundHeldTickets = refundHeldLiveTickets();
+  const demoTicket = !currentTickets.length && !upcomingTickets.length && !refundHeldTickets.length ? currentHoldingTicket() : null;
+  const visibleTickets = [...currentTickets, ...refundHeldTickets, ...upcomingTickets];
   if (demoTicket) visibleTickets.push(demoTicket);
   const currentTicketIds = new Set(currentTickets.map((ticket) => String(ticket.id || "")));
   const primaryTicket = visibleTickets[0] || null;
@@ -6635,12 +6664,16 @@ function renderCurrentTicketPanel() {
       </details>`
     : "";
   const primaryAction = primaryTicket
-    ? `<button class="primary-button" type="button" data-renew-ticket="${escapeHtml(primaryTicket.id || "")}">연장</button>`
+    ? primaryTicket.refundHoldId
+      ? '<button class="primary-button" type="button" disabled>환불 송금 대기</button>'
+      : `<button class="primary-button" type="button" data-renew-ticket="${escapeHtml(primaryTicket.id || "")}">연장</button>`
     : previousTicket
       ? `<button class="primary-button" type="button" data-reregister-ticket="${escapeHtml(previousTicket.id || "")}">재등록</button>`
       : '<button class="primary-button" type="button" data-open-purchase-flow="new_purchase">등록</button>';
   const secondaryAction = primaryTicket
-    ? '<button class="small-button membership-secondary-action" type="button" data-open-purchase-flow="add_coach">다른 코치·이용권 추가</button>'
+    ? primaryTicket.refundHoldId
+      ? ""
+      : '<button class="small-button membership-secondary-action" type="button" data-open-purchase-flow="add_coach">다른 코치·이용권 추가</button>'
     : previousTicket
       ? '<button class="small-button membership-secondary-action" type="button" data-open-purchase-flow="new_purchase">다른 상품으로 등록</button>'
       : "";
@@ -7379,6 +7412,14 @@ function purchaseCoachOptions() {
     .sort((left, right) => memberScheduleLaneOrder(left) - memberScheduleLaneOrder(right));
 }
 
+function purchaseProductAllowsCoach(product = {}, coachRoleId = "") {
+  const roleId = String(coachRoleId || "");
+  if (!roleId) return false;
+  const coachSaleMode = String(product.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
+  if (coachSaleMode === "all_active") return true;
+  return product.coachSaleAvailability?.[roleId] === true;
+}
+
 function purchaseProductDisplayTitle(product = {}) {
   const title = String(product.title || "회원권");
   if (membershipProductFamilyId(product) !== "coupon") return title;
@@ -7571,11 +7612,9 @@ function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
   const sourceCoachId = purchaseFlowState().purchasePurpose === "renew_same"
     ? String(sourceTicket?.coachRoleId || "")
     : "";
-  const coachSaleAvailability = product.coachSaleAvailability || {};
-  const coachSaleMode = String(product.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
   const coaches = purchaseCoachOptions().filter((coach) => {
     const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
-    if (coachSaleMode === "selected" ? coachSaleAvailability[roleId] !== true : coachSaleAvailability[roleId] === false) return false;
+    if (!purchaseProductAllowsCoach(product, roleId)) return false;
     if (!sourceCoachId) return true;
     return roleId === sourceCoachId;
   });
@@ -7662,13 +7701,11 @@ function purchaseCoachSelectionHtml(product = purchaseFlowProduct()) {
   if (status === "loading") return '<p class="purchase-availability-state" role="status">선생님과 가능한 시간을 확인하고 있습니다.</p>';
   if (status === "error" || status === "coach_error") return '<p class="purchase-availability-state is-error" role="status">선생님 정보를 불러오지 못했습니다. 다시 확인해 주세요.</p>';
   const slots = purchaseAvailableScheduleSlots(product);
-  const coachSaleAvailability = product?.coachSaleAvailability || {};
-  const coachSaleMode = String(product?.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
   const sourceTicket = purchaseFlowSourceTicket();
   const sourceCoachId = flow.purchasePurpose === "renew_same" ? String(sourceTicket?.coachRoleId || "") : "";
   const coaches = purchaseCoachOptions().filter((coach) => {
     const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
-    const productAllowed = coachSaleMode === "selected" ? coachSaleAvailability[roleId] === true : coachSaleAvailability[roleId] !== false;
+    const productAllowed = purchaseProductAllowsCoach(product, roleId);
     return productAllowed && (!sourceCoachId || roleId === sourceCoachId);
   });
   const selectedCoach = coaches.find((coach) => (
@@ -7700,11 +7737,9 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
   if (status === "error") return '<p class="purchase-availability-state is-error" role="status">시간표를 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.</p>';
   if (status === "coach_error") return '<p class="purchase-availability-state is-error" role="status">운영 중인 선생님 정보를 확인하지 못했습니다. 임시 선생님을 대신 표시하지 않으며, 새로고침 후 다시 확인해 주세요.</p>';
   const slots = purchaseAvailableScheduleSlots(product);
-  const coachSaleAvailability = product?.coachSaleAvailability || {};
-  const coachSaleMode = String(product?.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
   const coachOptions = purchaseCoachOptions().filter((coach) => {
     const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
-    return coachSaleMode === "selected" ? coachSaleAvailability[roleId] === true : coachSaleAvailability[roleId] !== false;
+    return purchaseProductAllowsCoach(product, roleId);
   });
   const sourceTicket = purchaseFlowSourceTicket();
   const sourceCoachId = flow.purchasePurpose === "renew_same" ? String(sourceTicket?.coachRoleId || "") : "";
@@ -8743,6 +8778,20 @@ function membershipPassRecords() {
       tone: display.tone,
     };
   });
+  const heldPasses = refundHeldLiveTickets().map((ticket) => ({
+    id: `refund-held-${ticket.id}`,
+    title: ticket.title || "환불 접수된 이용권",
+    period: ticket.refundHoldAt ? `${formatDateTimeLabel(ticket.refundHoldAt)} 접수` : "관리자 송금 대기",
+    total: ticket.total || 0,
+    used: ticket.used || 0,
+    remaining: ticket.remaining || 0,
+    unavailable: true,
+    coach: state.profile.mainCoach || "담당 코치",
+    paid: ticket.paymentAmount ? `결제 ${ticket.paymentAmount.toLocaleString("ko-KR")}원` : "결제금액 확인",
+    status: "환불 송금 대기",
+    note: "송금 완료 또는 접수취소 전까지 이용권 사용이 잠시 정지됩니다.",
+    tone: "alert",
+  }));
   const refundedPasses = (state.liveTickets || [])
     .filter((ticket) => ["refunded", "cancelled", "canceled"].includes(String(ticket.status || "").toLowerCase()))
     .map((ticket) => {
@@ -8770,7 +8819,7 @@ function membershipPassRecords() {
         tone: "alert",
       };
     });
-  return [...pendingPasses, ...refundedPasses, ...(state.expiredTickets || [])];
+  return [...pendingPasses, ...heldPasses, ...refundedPasses, ...(state.expiredTickets || [])];
 }
 
 function paymentRequestDisplay(request = {}) {
@@ -10299,7 +10348,7 @@ function showNoticeIfNeeded() {
 }
 
 function isActiveCouponLiveTicket(ticket, today = localDateKey()) {
-  if (!ticket || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
+  if (!ticket || ticket.refundHoldId || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
   if (ticket.startsOn && ticket.startsOn > today) return false;
   if (ticket.expiresOn && ticket.expiresOn < today) return false;
   return String(ticket.productKind || "").toLowerCase() === "coupon" || String(ticket.title || "").includes("쿠폰");
@@ -10534,7 +10583,10 @@ function normalizeLiveTicket(row = {}) {
   const used = Math.max(0, Number(row.used_sessions ?? 0));
   const remainingValue = row.remaining_sessions ?? Math.max(0, total - used);
   const remaining = Math.max(0, Number(remainingValue));
-  const statusInfo = liveTicketStatusInfo(row.status);
+  const refundHoldId = row.refund_hold_refund_id || "";
+  const statusInfo = refundHoldId
+    ? { label: "환불 접수 · 송금 대기", tone: "alert" }
+    : liveTicketStatusInfo(row.status);
   const configuredAnchorMinutes = row.makeup_anchor_minutes !== undefined
     ? row.makeup_anchor_minutes
     : product.makeup_anchor_minutes;
@@ -10568,6 +10620,8 @@ function normalizeLiveTicket(row = {}) {
     expiresOn: row.expires_on || "",
     createdAt: row.created_at || "",
     sourcePaymentId: row.source_payment_id || "",
+    refundHoldId,
+    refundHoldAt: row.refund_hold_at || "",
     paymentId: payment.id || row.source_payment_id || "",
     providerPaymentId: payment.provider_payment_id || row.provider_payment_id || "",
     paymentStatus: payment.status || "",
@@ -10602,7 +10656,7 @@ function currentLiveTickets() {
     ? window.TennisNoteTicketState.split(state.liveTickets).current
     : state.liveTickets.filter((ticket) => ["active", "paused"].includes(String(ticket.status || "").toLowerCase()));
   if (!usableTickets.length) return [];
-  return [...usableTickets].sort((a, b) => {
+  return [...usableTickets].filter((ticket) => !ticket.refundHoldId).sort((a, b) => {
     const priority = liveTicketPriority(a) - liveTicketPriority(b);
     if (priority) return priority;
     const sharedGroupPriority = Number(Boolean(b.sharedGroupTicket && Number(b.groupSize) === 2))
@@ -10610,6 +10664,13 @@ function currentLiveTickets() {
     if (sharedGroupPriority) return sharedGroupPriority;
     return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
   });
+}
+
+function refundHeldLiveTickets() {
+  return (state.liveTickets || [])
+    .filter((ticket) => Boolean(ticket.refundHoldId))
+    .sort((left, right) => String(right.refundHoldAt || right.createdAt || "")
+      .localeCompare(String(left.refundHoldAt || left.createdAt || "")));
 }
 
 function upcomingLiveTickets() {
@@ -10904,7 +10965,7 @@ async function syncMemberTicketsFromServer(profile = null) {
     let rows;
     try {
       rows = await client.selectRows("tn_member_tickets", {
-        select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,frequency_per_week,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,validity_days,grace_days)",
+        select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,refund_hold_refund_id,refund_hold_at,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,frequency_per_week,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,validity_days,grace_days)",
         filters: { user_id: profileId },
         limit: 20,
       });
@@ -10935,7 +10996,7 @@ async function syncMemberTicketsFromServer(profile = null) {
       .map(async (link) => {
         try {
           return await client.selectRows("tn_member_tickets", {
-            select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,frequency_per_week,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,validity_days,grace_days)",
+            select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,refund_hold_refund_id,refund_hold_at,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,frequency_per_week,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,validity_days,grace_days)",
             filters: { id: link.ticket_id },
             limit: 1,
           });
@@ -12092,7 +12153,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.382", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.383", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -13807,6 +13868,8 @@ async function requestMakeup() {
           ? "쿠폰 수업 예약이 완료되었습니다."
           : editingRequestId
             ? "수업 변경 요청을 수정했습니다. 담당 코치 또는 관리자가 확인합니다."
+          : memberChangePolicySnapshot(makeup)?.isGroup
+            ? "그룹수업 전체 변경 요청을 보냈습니다. 담당 코치 또는 관리자가 승인하기 전까지 기존 수업을 유지합니다."
           : result?.status === "auto_approved"
             ? changeDirection === "advance" ? "수업을 앞당겼습니다." : "수업 시간이 변경되었습니다."
             : changeDirection === "advance" ? "담당 코치·관리자에게 수업 앞당기기 요청을 보냈습니다." : "담당 코치·관리자에게 변경 요청을 보냈습니다.");
@@ -15120,7 +15183,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.382",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.383",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
