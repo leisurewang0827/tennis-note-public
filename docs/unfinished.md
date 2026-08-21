@@ -57,21 +57,21 @@ push:
 
 
 
-`app.js` 를 폴더별로 나눈 작업(커밋 70여 개)이 아직 `origin` 에 올라가지
-않았습니다. 채택하면 그 브랜치를 올리고, 안 하면 되돌립니다.
+`app.js` 를 폴더별로 나눈 작업이 아직 `origin` 에 올라가지 않았습니다
+(커밋 수는 `git rev-list --count origin/main..HEAD` 로 보세요). 채택하면 그 브랜치를 올리고, 안 하면 되돌립니다.
 **이 결정 전에는 브랜치 이름을 바꾸거나 푸시하지 마세요** — 되돌릴 여지가 사라집니다.
 
 ### 3. `schedule-v2-admin.js` 를 어떻게 할지
 
-4,144줄이고 함수 156개가 IIFE 안에 있습니다. 나누려면 다른 방법이 필요합니다.
+4,196줄이고 함수 178개가 IIFE 안에 있습니다. 나누려면 다른 방법이 필요합니다.
 그대로 두는 것도 선택지입니다.
 
 ## 구조
 
-- **`app/admin/schedule-v2-admin.js` (4,144줄)** — 함수 156개가 전부 IIFE 안에
+- **`app/admin/schedule-v2-admin.js` (4,196줄)** — 함수 178개가 전부 IIFE 안에
   있습니다. 다른 파일들과 구조가 달라 [splitting.md](splitting.md) 방법이 그대로
   통하지 않습니다. **방향을 정하고 시작해야 합니다.**
-- **기본값 이음매 102개가 남아 있습니다.** 새로 적용하지 말고, 만질 때만
+- **기본값 이음매 61개가 남아 있습니다.** 새로 적용하지 말고, 만질 때만
   [splitting.md](splitting.md#기본값-이음매는-쓰지-마세요) 규칙을 지키세요.
 
 ## 남은 중복
@@ -83,9 +83,11 @@ push:
 | `numericValue` · `holdingRequestDays` | 회원앱 ↔ 관리자 |
 | `saveSharedData` | 코치앱 ↔ 관리자 |
 
-`app/admin/schedule-v2-admin.js` 와 `app/shared/tennisnote-ui-language.js` 안에도
-`escapeHtml` 사본이 하나씩 더 있습니다. 둘 다 IIFE 안이라 전역 충돌은 없지만,
-**이스케이프를 강화한다면 그 둘도 같이 고쳐야 합니다.**
+`escapeHtml` 은 정본(`app/shared/tennisnote-escape-html.js`) 말고도 사본이 **셋**
+더 있습니다 — `app/admin/schedule-v2-admin.js`, `app/shared/tennisnote-ui-language.js`,
+`app/shared/tennisnote-issue-reporter.js`. 넷 다 IIFE 안이라 전역 충돌은 없고 지금은
+같은 다섯 글자(`& < > " '`)를 막지만 **구현이 제각각입니다.**
+**이스케이프를 강화한다면 셋을 같이 고쳐야 합니다.**
 
 ## 법무 · 문서
 

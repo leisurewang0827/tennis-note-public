@@ -20,8 +20,9 @@
 | `allScheduleSettings is not defined` | 이음매 치환이 함수 밖으로 샘 | `seam-scope` · `script-load` |
 | `allCoaches.find is not a function` | 이음매 함수를 `flatMap` 콜백으로 넘김 | `seam-callback` |
 | 중복 이음매 5곳 | 시그니처 기본값을 본문 참조로 오인 | `undefined-identifiers` |
-| `renderCoachSettlementPreview` 중복 선언 | 병합 중 발생 | `global-scope` 가 잡음 |
-| `minutesFromTime is not defined` | **기존 버그** (정리와 무관, 별도 커밋으로 수정) | — |
+
+정리 중에 `minutesFromTime is not defined` 도 브라우저에서 봤지만, 그건 **정리와
+무관한 기존 버그**였습니다. 별도 커밋으로 고쳤습니다.
 
 이 사고들 때문에 **기본값 이음매 방식을 중단**했습니다.
 [docs/splitting.md](splitting.md#기본값-이음매는-쓰지-마세요) 참조.
@@ -38,6 +39,7 @@
 | `admin-values` | `escapeHtml` 을 옮겼는데 함수 목록에서 안 지운 것 |
 | `event-binding` | `bindEvents` 가 `app.js` 밖으로 나간 것 |
 | `global-scope` | 공용 파일을 관리자에 실으면 `$`·`$$` 가 `const` 선언과 충돌하는 것 |
+| `global-scope` | 병합 중에 `renderCoachSettlementPreview` 가 두 번 선언된 것 |
 
 ## 검사기가 못 잡아서 시간을 잡아먹은 것
 
