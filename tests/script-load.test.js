@@ -84,7 +84,6 @@ const PAGES = [
       "app/admin/ui/settings.js",
       "app/admin/storage.js",
       "app/admin/views/tickets.js",
-      "app/admin/forms/members.js",
       "app/admin/forms/policy.js",
       "app/admin/forms/tickets.js",
       "app/admin/app.js",
