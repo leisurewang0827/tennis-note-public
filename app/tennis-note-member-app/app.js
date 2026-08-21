@@ -84,6 +84,8 @@ const state = {
     preferredSchedules: [],
     discountIssueId: "",
     discountSelectionMode: "auto",
+    paymentErrorCode: "",
+    paymentErrorMessage: "",
     completionStatus: "",
   },
   membershipFilters: {
@@ -112,6 +114,8 @@ const state = {
   serverChangeCandidateError: "",
   serverChangeCandidateExclusions: {},
   serverChangeAnchorGapMinutes: 40,
+  serverChangePolicySnapshot: null,
+  serverChangeBlockedReason: "",
   liveMakeupEntitlements: [],
   liveReleasedMakeupSlots: [],
   scheduleOperationDays: [],
@@ -238,6 +242,15 @@ if (finalizedMemberProducts.length) {
   defaultProducts.splice(0, defaultProducts.length, ...finalizedMemberProducts, ...consultProducts);
 }
 
+function isDirectPurchaseMembershipProduct(product = {}) {
+  const mode = String(product.mode || "").toLowerCase();
+  const productKind = String(product.productKind || "").toLowerCase();
+  const status = String(product.status || "").toLowerCase();
+  return productKind !== "consult"
+    && status !== "consult"
+    && !["renewal", "add"].includes(mode);
+}
+
 const curriculumCatalog = window.TennisNoteCurriculumCatalog || {
   sources: {},
   levels: [],
@@ -317,6 +330,153 @@ function memberUniqueAvailableSlots(slots = []) {
   return [...unique.values()];
 }
 
+function memberChangePolicySnapshot(candidate = null) {
+  return candidate?.policySnapshot && typeof candidate.policySnapshot === "object"
+    ? candidate.policySnapshot
+    : state.serverChangePolicySnapshot && typeof state.serverChangePolicySnapshot === "object"
+      ? state.serverChangePolicySnapshot
+      : null;
+}
+
+function memberChangeCutoffHours(snapshot = null) {
+  return Math.min(168, Math.max(1, Number(snapshot?.cutoffHours) || 24));
+}
+
+function memberChangeReasonMode(source = null, selected = null) {
+  if (source?.makeupEntitlementId || source?.couponBooking || source?.regularInitialBooking) return "none";
+  return memberChangePolicySnapshot(selected)?.reasonMode || "required";
+}
+
+function renderMemberChangeReasonControl(source = null, selected = null) {
+  const field = $("#changeReasonField");
+  const input = $("#changeReason");
+  if (!field || !input) return;
+  const mode = memberChangeReasonMode(source, selected);
+  field.hidden = mode === "none";
+  input.required = mode === "required";
+  input.disabled = mode === "none";
+  const title = field.querySelector("span");
+  if (title) title.textContent = mode === "required" ? "3. 변경 사유" : "3. 변경 사유 (선택)";
+  input.placeholder = mode === "required" ? "담당 코치가 확인할 수 있게 입력해 주세요" : "필요한 경우에만 입력해 주세요";
+}
+
+function memberChangeBlockedMessage(code = "", snapshot = null) {
+  const hours = memberChangeCutoffHours(snapshot);
+  return {
+    member_change_disabled: "회원 앱에서 수업을 변경할 수 없습니다. 담당 코치에게 문의해 주세요.",
+    group_member_change_blocked: "그룹수업은 앱에서 변경할 수 없습니다. 담당 코치에게 문의해 주세요.",
+    member_change_within_cutoff_blocked: `수업까지 ${hours}시간 미만 남아 앱에서 변경할 수 없습니다. 담당 코치에게 문의해 주세요.`,
+  }[code] || "현재 회원 앱에서 이 수업을 변경할 수 없습니다.";
+}
+
+function latestPreviousMembershipTicket() {
+  return [...(state.liveTickets || []), ...(state.expiredTickets || [])]
+    .filter((ticket) => ["expired", "cancelled", "canceled", "refunded"].includes(String(ticket.status || "").toLowerCase()))
+    .sort((left, right) => String(right.expiresOn || right.createdAt || "").localeCompare(String(left.expiresOn || left.createdAt || "")))[0] || null;
+}
+
+function purchaseDirectoryContext(product = purchaseFlowProduct()) {
+  const sourceTicket = purchaseFlowSourceTicket();
+  const branchId = String(product?.branchId || sourceTicket?.branchId || sourceTicket?.branch_id || "");
+  const week = purchaseScheduleWeek();
+  const rangeStart = new Date(`${week.startDate}T12:00:00`);
+  const rangeEnd = new Date(rangeStart);
+  rangeEnd.setDate(rangeStart.getDate() + memberScheduleWorkspaceDays);
+  const from = localDateKey(rangeStart);
+  const to = localDateKey(rangeEnd);
+  return {
+    branchId,
+    from,
+    to,
+    key: `${branchId}:${from}:${to}`,
+  };
+}
+
+function purchaseDirectoryForCurrentProduct(product = purchaseFlowProduct()) {
+  const context = purchaseDirectoryContext(product);
+  if (!memberPurchaseDirectoryCache || memberPurchaseDirectoryCache.key !== context.key) return null;
+  return memberPurchaseDirectoryCache.directory || null;
+}
+
+function normalizePurchaseDirectoryCoach(coach = {}, coachIndex = 0) {
+  const availability = Array.isArray(coach.availability) ? coach.availability : [];
+  const workBlocks = availability
+    .filter((block) => String(block.type || "available") === "available")
+    .map((block, blockIndex) => ({
+      id: `${coach.roleId || coach.id || "coach"}-purchase-${blockIndex}`,
+      days: [days[Number(block.dayOfWeek) === 0 ? 6 : Number(block.dayOfWeek) - 1]].filter(Boolean),
+      start: String(block.startTime || "").slice(0, 5),
+      end: String(block.endTime || "").slice(0, 5),
+      label: "근무",
+    }))
+    .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
+  const blockedBlocks = availability
+    .filter((block) => String(block.type || "") === "blocked")
+    .map((block, blockIndex) => ({
+      id: `${coach.roleId || coach.id || "coach"}-purchase-blocked-${blockIndex}`,
+      days: [days[Number(block.dayOfWeek) === 0 ? 6 : Number(block.dayOfWeek) - 1]].filter(Boolean),
+      start: String(block.startTime || "").slice(0, 5),
+      end: String(block.endTime || "").slice(0, 5),
+      label: block.note || "브레이크·상담",
+    }))
+    .filter((block) => block.days.length && minutesFromTime(block.start) < minutesFromTime(block.end));
+  const serverLaneOrder = Number(coach.laneOrder);
+  const laneOrder = Number.isFinite(serverLaneOrder) ? serverLaneOrder : 1000 + coachIndex;
+  return normalizeMemberCoach({
+    id: coach.roleId || coach.id,
+    serverRoleId: coach.roleId || coach.id,
+    roleId: coach.roleId || coach.id,
+    branchId: coach.branchId || "",
+    name: coach.name || "이름 없음",
+    status: "approved",
+    employmentStatus: "active",
+    laneOrder,
+    scheduleLaneOrder: laneOrder,
+    workBlocks,
+    blockedBlocks,
+  });
+}
+
+function purchaseDirectoryCoaches(product = purchaseFlowProduct()) {
+  const directory = purchaseDirectoryForCurrentProduct(product);
+  return (directory?.coaches || []).map(normalizePurchaseDirectoryCoach);
+}
+
+function purchaseSchedulePolicy(product = purchaseFlowProduct()) {
+  const fallback = loadAdminSchedulePolicy();
+  const directory = purchaseDirectoryForCurrentProduct(product);
+  if (!directory) return fallback;
+  const breakRules = (directory.breakRules || []).map((rule, ruleIndex) => ({
+    id: rule.id || `purchase-break-${ruleIndex}`,
+    days: [days[Number(rule.dayOfWeek) === 0 ? 6 : Number(rule.dayOfWeek) - 1]].filter(Boolean),
+    start: String(rule.startTime || "").slice(0, 5),
+    end: String(rule.endTime || "").slice(0, 5),
+    label: rule.label || "브레이크타임",
+  })).filter((rule) => rule.days.length && minutesFromTime(rule.start) < minutesFromTime(rule.end));
+  return {
+    ...fallback,
+    openStart: String(directory.openStart || fallback.openStart || "06:40").slice(0, 5),
+    openEnd: String(directory.openEnd || fallback.openEnd || "22:00").slice(0, 5),
+    breakRules,
+    coaches: purchaseDirectoryCoaches(product),
+  };
+}
+
+function purchaseOccupancyLessons(product = purchaseFlowProduct()) {
+  const directory = purchaseDirectoryForCurrentProduct(product);
+  if (!directory) return state.liveLessons || [];
+  return (directory.occupancy || []).map((occupied, index) => ({
+    id: `purchase-occupancy-${index}-${occupied.lessonDate || ""}-${occupied.startTime || ""}-${occupied.coachRoleId || ""}`,
+    lessonDate: String(occupied.lessonDate || ""),
+    time: String(occupied.startTime || "").slice(0, 5),
+    coachRoleId: String(occupied.coachRoleId || ""),
+    coach_role_id: String(occupied.coachRoleId || ""),
+    durationMinutes: Math.max(10, Number(occupied.durationMinutes) || 20),
+    status: "occupied",
+    serverStatus: "occupied",
+  }));
+}
+
 function purchaseProductFrequency(product = {}) {
   return Math.max(1, Number(product.frequencyPerWeek || product.frequency_per_week) || 1);
 }
@@ -365,6 +525,66 @@ function purchaseSchedulesAvailableNow(product = purchaseFlowProduct()) {
   return selectedSchedules.every((schedule) => availableKeys.has(purchaseScheduleKey(schedule)));
 }
 
+function reconcilePurchaseSchedulesAfterRefresh(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  if (!product || !flow.preferredSchedules.length || purchaseScheduleAvailabilityState() !== "ready") return 0;
+  const availableSlots = purchaseAvailableScheduleSlots(product);
+  const availableKeys = new Set(availableSlots.map((slot) => purchaseScheduleKey({
+    lessonDate: slot.lessonDate,
+    startTime: slot.time,
+    coachRoleId: slot.coachRoleId,
+  })));
+  const previous = [...flow.preferredSchedules];
+  flow.preferredSchedules = previous.filter((schedule) => availableKeys.has(purchaseScheduleKey(schedule)));
+  const removedCount = previous.length - flow.preferredSchedules.length;
+  if (!removedCount) return 0;
+  const selectedCoachSlots = availableSlots.filter((slot) => String(slot.coachRoleId) === String(flow.coachRoleId || ""));
+  const firstAvailable = selectedCoachSlots[0] || availableSlots[0] || null;
+  if (!flow.preferredSchedules.length && firstAvailable) {
+    flow.scheduleWeekStart = purchaseWeekStartDate(firstAvailable.lessonDate);
+  }
+  syncLegacyPurchaseScheduleFields();
+  saveSnapshot();
+  return removedCount;
+}
+
+function purchaseCoachSelectionHtml(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  const status = purchaseScheduleAvailabilityState();
+  if (status === "loading") return '<p class="purchase-availability-state" role="status">선생님과 가능한 시간을 확인하고 있습니다.</p>';
+  if (status === "error" || status === "coach_error") return '<p class="purchase-availability-state is-error" role="status">선생님 정보를 불러오지 못했습니다. 다시 확인해 주세요.</p>';
+  const slots = purchaseAvailableScheduleSlots(product);
+  const coachSaleAvailability = product?.coachSaleAvailability || {};
+  const coachSaleMode = String(product?.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
+  const sourceTicket = purchaseFlowSourceTicket();
+  const sourceCoachId = flow.purchasePurpose === "renew_same" ? String(sourceTicket?.coachRoleId || "") : "";
+  const coaches = purchaseCoachOptions().filter((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    const productAllowed = coachSaleMode === "selected" ? coachSaleAvailability[roleId] === true : coachSaleAvailability[roleId] !== false;
+    return productAllowed && (!sourceCoachId || roleId === sourceCoachId);
+  });
+  const selectedCoach = coaches.find((coach) => (
+    String(coach.serverRoleId || coach.roleId || coach.id || "") === String(flow.coachRoleId || sourceCoachId)
+  ));
+  if (selectedCoach) {
+    const roleId = String(selectedCoach.serverRoleId || selectedCoach.roleId || selectedCoach.id || "");
+    const first = slots.find((slot) => String(slot.coachRoleId) === roleId);
+    return `<article class="purchase-selected-coach">
+      <div><span>선택한 선생님</span><strong>${escapeHtml(memberCoachShortName(selectedCoach.name || flow.coachName || "담당 코치"))} 코치</strong><small>${first ? `가장 빠른 ${escapeHtml(purchaseDateLabel(first.lessonDate))} ${escapeHtml(first.time)}` : "현재 가능한 시간 없음"}</small></div>
+      ${sourceCoachId ? "" : '<button class="small-button" type="button" data-clear-purchase-coach>다시 선택</button>'}
+    </article>`;
+  }
+  return `<div class="purchase-coach-filter-grid" role="group" aria-label="선생님 선택">
+    ${coaches.map((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    const first = slots.find((slot) => String(slot.coachRoleId) === roleId);
+    return `<button class="purchase-coach-filter ${first ? "" : "is-unavailable"}" type="button"
+      data-purchase-coach-filter="${escapeHtml(roleId)}" data-purchase-coach-filter-name="${escapeHtml(coach.name || "담당 코치")}" ${first ? "" : "disabled"}
+      aria-pressed="false"><strong>${escapeHtml(memberCoachShortName(coach.name || "담당 코치"))} 코치</strong><small>${first ? `가장 빠른 ${escapeHtml(purchaseDateLabel(first.lessonDate))} ${escapeHtml(first.time)}` : "현재 가능한 시간 없음"}</small></button>`;
+  }).join("")}
+  </div>`;
+}
+
 function purchaseSchedulePickerCoach() {
   const flow = purchaseFlowState();
   const sourceTicket = purchaseFlowSourceTicket();
@@ -381,7 +601,7 @@ function purchaseScheduleCellState(product, coach, dateKey, time, availableKeys,
   const durationMinutes = Math.max(10, Number(product?.lessonMinutes) || 20);
   const lessonTime = new Date(`${dateKey}T${time}:00`).getTime();
   const day = purchaseDateDay(dateKey);
-  const policy = loadAdminSchedulePolicy();
+  const policy = purchaseSchedulePolicy(product);
   const operation = purchaseScheduleOperationForDate(dateKey);
   const working = isMemberCoachWorking(coach, day, time, durationMinutes);
   const closed = lessonTime <= Date.now()
@@ -391,7 +611,7 @@ function purchaseScheduleCellState(product, coach, dateKey, time, availableKeys,
   if (selected) return availableKeys.has(key) ? "selected" : "conflict";
   if (closed) return "off";
   if (availableKeys.has(key)) return "available";
-  if (purchaseHasCoachLessonAtDate(state.liveLessons || [], dateKey, time, coach, durationMinutes, policy)) return "busy";
+  if (purchaseHasCoachLessonAtDate(purchaseOccupancyLessons(product), dateKey, time, coach, durationMinutes, policy)) return "busy";
   return "off";
 }
 
@@ -466,7 +686,12 @@ function renderPurchaseScheduleSheet() {
   nextWeek.setDate(nextWeek.getDate() + 7);
   const previousAllowed = purchaseWeekDates(localDateKey(previousWeek)).some((dateKey) => dateKey >= range.start && dateKey <= range.end);
   const nextAllowed = purchaseWeekDates(localDateKey(nextWeek)).some((dateKey) => dateKey >= range.start && dateKey <= range.end);
-  if ($("#purchaseScheduleSheetTitle")) $("#purchaseScheduleSheetTitle").textContent = `${memberCoachShortName(coach?.name || flow.coachName || "담당 코치")} 코치 시간표`;
+  if ($("#purchaseScheduleSheetCoachOptions")) $("#purchaseScheduleSheetCoachOptions").innerHTML = purchaseCoachSelectionHtml(product);
+  if ($("#purchaseScheduleSheetTitle")) {
+    $("#purchaseScheduleSheetTitle").textContent = coach || flow.coachName
+      ? `${memberCoachShortName(coach?.name || flow.coachName)} 코치 시간표`
+      : "선생님·시간 선택";
+  }
   if ($("#purchaseScheduleSheetWeek")) $("#purchaseScheduleSheetWeek").textContent = `${purchaseDateLabel(weekDates[0])} - ${purchaseDateLabel(weekDates[6])}`;
   if ($("#purchaseScheduleSheetProgress")) $("#purchaseScheduleSheetProgress").textContent = `${selectedSchedules.length}/${requiredCount} 선택`;
   if ($("#purchaseScheduleSheetGrid")) $("#purchaseScheduleSheetGrid").innerHTML = purchaseSchedulePickerGridHtml(product);
@@ -552,8 +777,64 @@ function purchaseSimpleProductFiltersHtml() {
     </div>`;
 }
 
+function renderPurchaseProductSheet() {
+  const options = $("#purchaseProductSheetOptions");
+  if (options) options.innerHTML = purchaseStepOneHtml();
+}
+
+function openPurchaseProductSheet() {
+  renderPurchaseProductSheet();
+  openAppSheet("purchaseProductSheet", { initialFocus: "[data-purchase-family]" });
+}
+
+function purchaseContinueReason() {
+  const flow = purchaseFlowState();
+  const product = purchaseFlowProduct();
+  if (membershipPurchasePaymentInFlight) return "중복 주문 없이 결제 상태를 확인하고 있습니다.";
+  if (!["renew_same", "add_coach", "new_purchase", "one_day"].includes(flow.purchasePurpose)) {
+    return "연장 또는 새 이용권을 선택해 주세요.";
+  }
+  if (!product) return "상품을 선택해 주세요.";
+  if (flow.purchasePurpose === "renew_same" && purchaseFlowSourceTicket() && flow.scheduleMode === "keep") {
+    return isPaymentGatewayReady(normalizeSelectedPaymentMethod())
+      ? "선택 내용을 확인한 뒤 결제할 수 있습니다."
+      : "토스페이 결제를 준비하고 있습니다. 잠시 후 다시 확인해 주세요.";
+  }
+  const availabilityState = purchaseScheduleAvailabilityState();
+  if (availabilityState === "loading") return "선생님과 가능한 시간을 최신 시간표에서 확인하고 있습니다.";
+  if (availabilityState === "error" || availabilityState === "coach_error") return "선생님·시간 정보를 다시 불러온 뒤 결제할 수 있습니다.";
+  if (!flow.coachRoleId) return "선생님을 선택해 주세요.";
+  const schedules = purchaseSelectedSchedules(product);
+  const requiredCount = purchaseRequiredScheduleCount(product);
+  if (schedules.length !== requiredCount) return `요일·시간을 ${requiredCount}개 선택해 주세요.`;
+  if (!purchaseSchedulesAvailableNow(product)) return "선택한 시간이 바뀌었습니다. 최신 가능한 시간을 다시 선택해 주세요.";
+  if (!isPaymentGatewayReady(normalizeSelectedPaymentMethod())) return "토스페이 결제를 준비하고 있습니다. 잠시 후 다시 확인해 주세요.";
+  return "선택 내용을 확인한 뒤 결제할 수 있습니다.";
+}
+
+function purchaseSlotInsideAnchorWindow(scheduleLessons, product, lessonDate, time, coach, policy) {
+  if (policy.requireMakeupDayAnchor === false) return true;
+  const configuredGap = product.makeupAnchorMinutes ?? policy.makeupAnchorGapMinutes ?? 40;
+  if (configuredGap === null || String(configuredGap).toLowerCase() === "unlimited") return true;
+  const gapMinutes = Math.min(100, Math.max(0, Number(configuredGap) || 0));
+  const coachRoleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+  const anchors = scheduleLessons.filter((lesson) => {
+    if (String(lesson.lessonDate || "") !== String(lessonDate || "")) return false;
+    const lessonStatus = String(lesson.serverStatus || lesson.status || "").toLowerCase();
+    if (["cancelled", "canceled", "absence", "absent", "makeup_due", "available"].includes(lessonStatus)) return false;
+    const lessonCoachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || memberLessonCoach(lesson, policy).id || "");
+    return lessonCoachRoleId === coachRoleId;
+  });
+  if (!anchors.length) return false;
+  const firstStart = Math.min(...anchors.map((lesson) => minutesFromTime(lesson.time)));
+  const lastEnd = Math.max(...anchors.map((lesson) => minutesFromTime(lesson.time) + lessonDuration(lesson)));
+  const slotStart = minutesFromTime(time);
+  return slotStart >= firstStart - gapMinutes && slotStart <= lastEnd + gapMinutes;
+}
+
 let portOneSdkPromise = null;
 let preparedPaymentContext = null;
+let membershipPurchasePaymentInFlight = false;
 let bankTransferAccountNumberForCopy = "";
 let bankTransferPaymentIdForCancel = "";
 
@@ -562,8 +843,17 @@ const pendingPaymentCancelInFlight = new Set();
 let memberScheduleV2WorkspaceCache = null;
 let memberScheduleV2RequestSequence = 0;
 let memberChangeCandidateRequestSequence = 0;
+let memberPurchaseDirectoryCache = null;
+let memberPurchaseDirectoryRequestSequence = 0;
+let memberPurchaseDirectoryLoad = { key: "", status: "idle", error: "" };
 
 // Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
+function clearPurchasePaymentError() {
+  const flow = purchaseFlowState();
+  flow.paymentErrorCode = "";
+  flow.paymentErrorMessage = "";
+}
+
 const journalActivityStatuses = [
   { key: "scheduled", label: () => memberStatusLabel("lesson", "scheduled", "예정") },
   { key: "completed", label: () => memberStatusLabel("lesson", "completed", "완료") },
@@ -672,7 +962,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.375",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.382",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

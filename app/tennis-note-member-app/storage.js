@@ -89,9 +89,13 @@ function restoreSnapshot() {
       preferredSchedules: [],
       discountIssueId: "",
       discountSelectionMode: "auto",
+      paymentErrorCode: "",
+      paymentErrorMessage: "",
       completionStatus: "",
       ...(state.purchaseFlow && typeof state.purchaseFlow === "object" ? state.purchaseFlow : {}),
     };
+    // Purchase UI is transient. Never reopen a half-finished checkout after an app relaunch.
+    state.purchaseFlow.open = false;
     state.purchaseFlow.step = Math.min(4, Math.max(1, Number(state.purchaseFlow.step) || 1));
     if (!Array.isArray(state.purchaseFlow.preferredSchedules)) state.purchaseFlow.preferredSchedules = [];
     if (["weekday-coupon", "weekend-coupon"].includes(state.purchaseFlow.familyId)) state.purchaseFlow.familyId = "coupon";
@@ -293,21 +297,27 @@ function paymentGatewayConfig() {
   })();
   const browserConfig = window.TENNIS_NOTE_PAYMENT_CONFIG || {};
   const liveOptions = state.livePaymentOptions || {};
+  // Once the member is connected to the live service, the authenticated
+  // branch response is the source of truth. Static/native config is only a
+  // bootstrap fallback; otherwise it can expose bank transfer even when the
+  // branch has no saved active deposit account.
+  const liveOptionsAreAuthoritative = state.dataMode === "live"
+    || Number(liveOptions.settingsVersion || 0) > 0;
   const requestedMode = String(browserConfig.mode || localConfig.mode || defaultPaymentOperatingMode).trim().toLowerCase();
   const mode = requestedMode === "multi" ? "multi" : defaultPaymentOperatingMode;
   return {
     provider: "portone",
     mode,
-    allowedMethods: paymentMethodIdList(liveOptions.allowedMethods?.length
-      ? liveOptions.allowedMethods
+    allowedMethods: paymentMethodIdList(liveOptionsAreAuthoritative
+      ? liveOptions.allowedMethods || []
       : browserConfig.allowedMethods || localConfig.allowedMethods || defaultAllowedPaymentMethods),
     storeId: browserConfig.storeId || localConfig.storeId || "",
     naverPayCategoryType: browserConfig.naverPayCategoryType || localConfig.naverPayCategoryType || "",
     naverPayCategoryId: browserConfig.naverPayCategoryId || localConfig.naverPayCategoryId || "",
     bankTransfer: {
-      enabled: liveOptions.bankTransferEnabled === true
-        || browserConfig.bankTransfer?.enabled === true
-        || localConfig.bankTransfer?.enabled === true,
+      enabled: liveOptionsAreAuthoritative
+        ? liveOptions.bankTransferEnabled === true
+        : browserConfig.bankTransfer?.enabled === true || localConfig.bankTransfer?.enabled === true,
     },
     channels: {
       card: browserConfig.channels?.card || browserConfig.channelKey || localConfig.channels?.card || localConfig.channelKey || "",

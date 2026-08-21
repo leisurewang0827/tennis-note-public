@@ -273,7 +273,7 @@ const makeupRequests = [
     member: "김서준",
     original: "수 20:00 노 코치",
     requested: "월 19:00 강 코치",
-    policy: "24시간 전",
+    policy: "기준시간 이상",
     status: "requested",
     statusLabel: "승인대기",
   },
@@ -282,7 +282,7 @@ const makeupRequests = [
     member: "이하린",
     original: "목 19:20 강 코치",
     requested: "금 18:40 황 코치",
-    policy: "24시간 이내",
+    policy: "기준시간 미만",
     status: "coach_required",
     statusLabel: "코치승인필요",
   },
@@ -848,6 +848,18 @@ let adminSnapshotSaveQueued = false;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+function popupNoticeDisplayState(notice = {}, todayKey = adminLocalDateKey()) {
+  const status = String(notice.status || "disabled").toLowerCase();
+  const startsOn = String(notice.startDate || notice.startsOn || "").slice(0, 10);
+  const endsOn = String(notice.endDate || notice.endsOn || "").slice(0, 10);
+  const today = String(todayKey || adminLocalDateKey()).slice(0, 10);
+  if (status === "archived") return { key: "archived", label: "보관됨", tone: "neutral", visible: false };
+  if (status !== "active") return { key: "disabled", label: "꺼짐", tone: "neutral", visible: false };
+  if (startsOn && startsOn > today) return { key: "scheduled", label: "노출 예정", tone: "neutral", visible: false };
+  if (endsOn && endsOn < today) return { key: "ended", label: "기간 종료", tone: "neutral", visible: false };
+  return { key: "visible", label: "현재 노출", tone: "ready", visible: true };
+}
+
 const authUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 let branchPaymentAccount = null;
@@ -951,6 +963,32 @@ window.setInterval(() => {
     showToast("15분 동안 사용하지 않아 회원표 편집을 잠갔습니다.");
   }
 }, 30000);
+
+function adminLessonChangePolicyText(request = {}) {
+  const snapshot = request.policySnapshot || request.policy_snapshot || null;
+  const hours = Math.min(168, Math.max(1, Number(snapshot?.cutoffHours) || 24));
+  if (snapshot?.isGroup) return "그룹수업 · 담당 코치 승인";
+  if (snapshot?.outcome === "auto" || request.policy_window === "auto_before_24h") return `${hours}시간 이상 · 바로 변경`;
+  return `${hours}시간 미만 · 담당 코치 승인`;
+}
+
+function adminLessonChangeRequestedAt(value = "") {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "신청 시각 확인 필요";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(date);
+}
+
+function adminLessonChangeRemaining(originalDate = "", originalTime = "") {
+  const date = new Date(`${originalDate}T${String(originalTime || "").slice(0, 5)}:00+09:00`);
+  if (Number.isNaN(date.getTime())) return "남은 시간 확인 필요";
+  const seconds = Math.floor((date.getTime() - Date.now()) / 1000);
+  if (seconds <= 0) return "원래 수업 시작 시각 경과";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return hours > 0 ? `${hours}시간 ${minutes}분 남음` : `${Math.max(1, minutes)}분 남음`;
+}
 
 let xlsxLibraryPromise = null;
 

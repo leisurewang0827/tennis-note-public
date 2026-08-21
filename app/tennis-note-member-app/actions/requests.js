@@ -32,6 +32,8 @@ function updateChangeRequestAvailability(availableLessons = memberAvailableSlots
       ? "선택한 주의 시간표를 확인하고 있습니다."
       : loadState === "error"
         ? "시간표를 불러오지 못했습니다. 다시 확인해 주세요."
+        : state.serverChangeBlockedReason
+          ? memberChangeBlockedMessage(state.serverChangeBlockedReason, memberChangePolicySnapshot())
         : !hasSourceLesson
       ? "예약하거나 변경할 수업이 없습니다. 이용권을 구매했다면 고객지원으로 문의해 주세요."
       : "현재 변경 가능한 시간이 없습니다. 다른 주를 확인하거나 고객지원으로 문의해 주세요.";
@@ -243,11 +245,19 @@ async function cancelMemberScheduleRequest(kind, id) {
 
 async function submitMemberLessonChange(client, args) {
   try {
-    return await client.rpc("tn_submit_lesson_change_request_v2", args);
+    return await client.rpc("tn_submit_lesson_change_request_v3", args);
+  } catch (error) {
+    const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
+    if (!/tn_submit_lesson_change_request_v3|PGRST202|42883|schema cache/i.test(errorText)) throw error;
+  }
+  const compatibilityArgs = { ...args };
+  delete compatibilityArgs.target_policy_revision;
+  try {
+    return await client.rpc("tn_submit_lesson_change_request_v2", compatibilityArgs);
   } catch (error) {
     const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
     if (!/tn_submit_lesson_change_request_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
-    return client.rpc("tn_submit_lesson_change_request", args);
+    return client.rpc("tn_submit_lesson_change_request", compatibilityArgs);
   }
 }
 
@@ -267,14 +277,18 @@ async function requestMakeup() {
   const isCouponBooking = Boolean(absence.couponBooking);
   const isRegularInitialBooking = Boolean(absence.regularInitialBooking);
   const isPausedResumeBooking = Boolean(absence.resumePausedTicket);
+  const enteredReason = $("#changeReason")?.value.trim() || "";
+  const reasonMode = memberChangeReasonMode(absence, makeup);
   const reason = isPausedResumeBooking
     ? "휴회 복귀 정규시간 설정"
     : isRegularInitialBooking
     ? "회원 첫 정규시간 설정"
-    : isMakeupEntitlement ? "불참 처리 후 보강 예약" : isCouponBooking ? "쿠폰 수업 예약" : $("#changeReason")?.value.trim() || (state.memberChangeCompactSelection ? "시간표에서 시간 변경" : "");
-  if (!isMakeupEntitlement && !isCouponBooking && !isRegularInitialBooking && reason.length < 2) {
+    : isMakeupEntitlement ? "불참 처리 후 보강 예약" : isCouponBooking ? "쿠폰 수업 예약" : reasonMode === "none" ? "" : enteredReason;
+  if (!isMakeupEntitlement && !isCouponBooking && !isRegularInitialBooking && reasonMode === "required" && reason.length < 2) {
     showToast("변경 이유를 2자 이상 입력해주세요.");
-    $("#changeReason")?.focus();
+    const reasonInput = $("#changeReason");
+    reasonInput?.focus?.({ preventScroll: true });
+    reasonInput?.scrollIntoView?.({ block: "center", behavior: "smooth" });
     return;
   }
   const client = window.TennisNoteDataClient;
@@ -351,6 +365,7 @@ async function requestMakeup() {
             target_lesson_date: targetDate,
             target_start_time: makeup.time,
             target_reason: reason,
+            target_policy_revision: Number(memberChangePolicySnapshot(makeup)?.revision) || 0,
           });
       await syncMemberLessonsFromServer();
       if (isPausedResumeBooking) await syncMemberTicketsFromServer();
@@ -399,7 +414,13 @@ async function requestMakeup() {
         regular_schedule_single_coach_required: "주간 정규시간은 같은 코치로 선택해주세요.",
         coach_role_required: "선택한 시간의 코치를 확인할 수 없습니다. 다시 선택해주세요.",
         coach_role_inactive: "담당 코치가 현재 근무 중이 아닙니다. 관리자에게 문의해주세요.",
+        regular_slot_anchor_required: "해당 날짜에는 담당 코치의 기존 수업이 없어 새 정규시간을 선택할 수 없습니다.",
+        regular_slot_outside_anchor_window: "담당 코치의 기존 수업 전후 허용 범위 안에서 시간을 다시 선택해주세요.",
         change_reason_required: "변경 이유를 2자 이상 입력해주세요.",
+        member_change_policy_changed: "운영 규칙이 방금 변경되었습니다. 가능한 시간을 다시 확인한 뒤 신청해 주세요.",
+        member_change_disabled: "회원 앱 수업 변경이 현재 꺼져 있습니다. 담당 코치에게 문의해 주세요.",
+        member_change_within_cutoff_blocked: "수업 변경 가능 시간이 지나 앱에서 신청할 수 없습니다. 담당 코치에게 문의해 주세요.",
+        group_member_change_blocked: "그룹수업은 앱에서 변경할 수 없습니다. 담당 코치에게 문의해 주세요.",
         lesson_already_started: "이미 시작한 수업은 변경할 수 없습니다.",
         target_time_must_be_future: "이미 지난 시간으로는 변경할 수 없습니다.",
         same_lesson_time: "현재 수업과 다른 시간을 선택해주세요.",
@@ -445,7 +466,7 @@ async function requestMakeup() {
     absence: `${originalDay} ${originalTime} 기존 수업`,
     makeup: `${makeup.day} ${makeup.time} 수업 변경 희망 · ${makeup.coach}`,
     reason,
-    policy: policyDetail(makeup.policy),
+    policy: policyDetail(makeup.policy, memberChangePolicySnapshot(makeup)),
     status: needsApproval ? "코치 승인 대기 · 당일 취소 차감" : "자동 변경 완료",
   };
   state.makeupRequests.unshift(request);

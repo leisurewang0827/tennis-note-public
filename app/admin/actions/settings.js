@@ -410,6 +410,16 @@ async function saveBranchSalesSettings(apply = false) {
     showToast("결제수단 이름과 혜택 이름·할인율을 확인해 주세요");
     return false;
   }
+  if (apply && config.paymentMethods.bank_transfer?.enabled === true) {
+    const bankEnabled = $("#salesBranchBankTransferEnabled")?.checked === true;
+    if (!bankEnabled) {
+      showToast("계좌이체를 사용하려면 입금 계좌의 회원앱 사용을 켜 주세요");
+      $("#salesBranchBankTransferEnabled")?.focus();
+      return false;
+    }
+    const accountSaved = await saveBranchPaymentAccount({ silent: true });
+    if (!accountSaved) return false;
+  }
   const button = $(apply ? "#applyBranchSalesSettingsButton" : "#saveBranchSalesDraftButton");
   if (button) button.disabled = true;
   try {

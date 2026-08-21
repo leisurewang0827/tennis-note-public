@@ -62,6 +62,8 @@ async function syncMemberChangeCandidates(source = null) {
     state.serverChangeCandidateError = "";
     state.serverChangeCandidateExclusions = {};
     state.serverChangeAnchorGapMinutes = 40;
+    state.serverChangePolicySnapshot = null;
+    state.serverChangeBlockedReason = "";
     return false;
   }
   // A pending request keeps its source lesson scheduled. Use the same local
@@ -74,6 +76,8 @@ async function syncMemberChangeCandidates(source = null) {
     state.serverChangeCandidateError = "";
     state.serverChangeCandidateExclusions = {};
     state.serverChangeAnchorGapMinutes = 40;
+    state.serverChangePolicySnapshot = null;
+    state.serverChangeBlockedReason = "";
     renderSelects();
     renderAvailableSlots();
     renderSchedule();
@@ -100,6 +104,8 @@ async function syncMemberChangeCandidates(source = null) {
   state.serverChangeCandidateError = "";
   state.serverChangeCandidateExclusions = {};
   state.serverChangeAnchorGapMinutes = 40;
+  state.serverChangePolicySnapshot = null;
+  state.serverChangeBlockedReason = "";
   renderSelects();
   renderAvailableSlots();
   renderSchedule();
@@ -141,6 +147,10 @@ async function syncMemberChangeCandidates(source = null) {
     }
     const reportedGap = result.anchorGapMinutes ?? result.anchorRule?.gapMinutes;
     state.serverChangeAnchorGapMinutes = reportedGap === null ? null : Math.max(0, Number(reportedGap) || 40);
+    state.serverChangePolicySnapshot = result.policySnapshot && typeof result.policySnapshot === "object"
+      ? result.policySnapshot
+      : null;
+    state.serverChangeBlockedReason = String(result.blockedReason || "");
     const mappedCandidates = memberUniqueAvailableSlots(
       result.candidates.map((candidate) => mapServerMemberChangeCandidate(candidate, source)),
     );
@@ -421,7 +431,7 @@ async function syncMemberChangeRequestsFromServer(profile = null) {
     let rows;
     try {
       rows = await client.selectRows("tn_lesson_change_requests", {
-        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at",
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,policy_snapshot,policy_revision,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at",
         filters: { requester_user_id: profileId },
         limit: 100,
       });
@@ -447,6 +457,7 @@ async function syncMemberChangeRequestsFromServer(profile = null) {
         const originalTime = String(row.original_start_time || sourceLesson.time || "").slice(0, 5);
         const targetDate = row.requested_lesson_date || "";
         const targetTime = String(row.requested_start_time || "").slice(0, 5);
+        const policySnapshot = row.policy_snapshot && typeof row.policy_snapshot === "object" ? row.policy_snapshot : null;
         return {
           id: row.id,
           serverRequestId: row.id,
@@ -457,8 +468,12 @@ async function syncMemberChangeRequestsFromServer(profile = null) {
           targetTime,
           absence: `${compactLessonDateLabel(originalDate)} ${originalTime}`.trim(),
           makeup: `${compactLessonDateLabel(targetDate)} ${targetTime}`.trim(),
-          reason: row.reason || "이유 미입력",
-          policy: row.policy_window === "auto_before_24h" ? policyDetail("auto") : policyDetail("coach"),
+          reason: row.reason === "정책상 사유 없음" ? "사유 없음" : row.reason || "이유 미입력",
+          policy: policyDetail(
+            policySnapshot?.outcome === "auto" || row.policy_window === "auto_before_24h" ? "auto" : "coach",
+            policySnapshot,
+          ),
+          policySnapshot,
           status: statusLabel[row.status] || row.status,
           rawStatus: row.status,
           editable: row.status === "pending",
@@ -624,7 +639,7 @@ async function syncLiveMembershipProductsFromServer() {
   if (!client?.readiness?.().ready || !client.selectRows) return false;
   try {
     const rows = await client.selectRows("tn_membership_products", {
-      select: "id,branch_id,product_code,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,schedule_scope,term_weeks,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,is_active,policy_settings,display_order",
+      select: "id,branch_id,product_code,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,schedule_scope,term_weeks,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,is_active,policy_settings,display_order",
       filters: { is_active: true },
       limit: 500,
     });

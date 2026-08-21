@@ -162,6 +162,7 @@ function mapServerMemberChangeCandidate(candidate = {}, source = null) {
     type: source?.couponBooking ? "쿠폰 예약 가능" : "수업 변경 신청가능",
     status: "available",
     policy: candidate.policy || "coach",
+    policySnapshot: candidate.policySnapshot || state.serverChangePolicySnapshot || null,
     anchorGapMinutes: rawAnchorGap === null ? null : Math.max(0, Number(rawAnchorGap) || 40),
     generated: true,
     authoritativeCandidate: true,
@@ -226,6 +227,11 @@ function openProfileEditor(focusNtrp = false) {
 }
 
 function navigateMemberView(viewId) {
+  if (purchaseFlowState().open && viewId !== "shopView") {
+    closeMembershipPurchaseFlow({ fromHistory: true, skipScroll: true });
+    setView(viewId, { replaceHistory: true });
+    return;
+  }
   setView(viewId, { pushHistory: true });
 }
 

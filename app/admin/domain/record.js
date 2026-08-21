@@ -383,8 +383,8 @@ function urgentOperationsRecords() {
       actionLabel: "시간표 확인",
       actionView: "schedule",
       priority: "urgent",
-      urgentReason: item.policy === "24시간 이내" || item.status === "coach_required"
-        ? "24시간 이내 수업에 영향을 주는 승인 요청입니다."
+      urgentReason: item.status === "coach_required" || item.status === "pending"
+        ? "승인 전 원래 수업을 유지하는 변경 요청입니다."
         : "접수된 보강·변경 요청을 확인해야 합니다.",
       sortAt: item.createdAt || item.requestedAt || item.requested || "",
     }));

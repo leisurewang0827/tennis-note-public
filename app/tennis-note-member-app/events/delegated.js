@@ -51,6 +51,11 @@ function bindDelegatedEvents() {
       closeVisibleAppSheet();
       return;
     }
+    if (event.key === "Escape" && purchaseFlowState().open) {
+      event.preventDefault();
+      closeMembershipPurchaseFlow();
+      return;
+    }
     if (event.key === "Escape" && !$("#kakaoInquiryModal")?.hidden) closeKakaoInquiryModal();
     if (event.key === "Escape" && !$("#memberEnrollmentModal")?.hidden) closeMemberEnrollmentModal();
   });
@@ -61,6 +66,13 @@ function bindDelegatedEvents() {
     }
     if (activeAppSheetId) {
       closeVisibleAppSheet(true);
+      return;
+    }
+    if (purchaseFlowState().open) {
+      // A nested modal/sheet returns to the purchase history entry first.
+      // Only a back action leaving that entry should close the purchase flow.
+      if (event.state?.tennisNotePurchase === true) return;
+      closeMembershipPurchaseFlow({ fromHistory: true });
       return;
     }
     const targetView = event.state?.tennisNoteView;
@@ -116,11 +128,17 @@ function bindDelegatedEvents() {
     }
     const renewalButton = event.target.closest("[data-renew-ticket]");
     if (renewalButton) {
-      openMembershipPurchaseFlow(renewalButton.dataset.renewTicket);
+      openMembershipPurchaseFlow(renewalButton.dataset.renewTicket, "", "renew_same");
       return;
     }
-    if (event.target.closest("[data-open-purchase-flow]")) {
-      openMembershipPurchaseFlow();
+    const reregisterButton = event.target.closest("[data-reregister-ticket]");
+    if (reregisterButton) {
+      openMembershipPurchaseFlow(reregisterButton.dataset.reregisterTicket, "", "new_purchase");
+      return;
+    }
+    const openPurchaseFlowButton = event.target.closest("[data-open-purchase-flow]");
+    if (openPurchaseFlowButton) {
+      openMembershipPurchaseFlow("", "", openPurchaseFlowButton.dataset.openPurchaseFlow || "");
       return;
     }
     if (event.target.closest("[data-open-current-membership]")) {
@@ -139,6 +157,14 @@ function bindDelegatedEvents() {
     const purchaseFamilyButton = event.target.closest("[data-purchase-family]");
     if (purchaseFamilyButton) {
       selectPurchaseFamily(purchaseFamilyButton.dataset.purchaseFamily);
+      return;
+    }
+    if (event.target.closest("[data-open-purchase-product]")) {
+      openPurchaseProductSheet();
+      return;
+    }
+    if (event.target.closest("[data-close-purchase-product]")) {
+      closeAppSheet("purchaseProductSheet");
       return;
     }
     const purchaseFrequencyButton = event.target.closest("[data-purchase-frequency]");
@@ -167,16 +193,19 @@ function bindDelegatedEvents() {
       renderMembershipPurchaseFlow();
       return;
     }
-    if (event.target.closest("[data-purchase-show-all-products]")) {
-      const flow = purchaseFlowState();
-      flow.showAllProducts = !flow.showAllProducts;
-      saveSnapshot();
-      renderMembershipPurchaseFlow();
-      return;
-    }
     const purchaseProductButton = event.target.closest("[data-purchase-product]");
     if (purchaseProductButton) {
       selectPurchaseProduct(purchaseProductButton.dataset.purchaseProduct);
+      closeAppSheet("purchaseProductSheet", false, { restoreFocus: true });
+      return;
+    }
+    if (event.target.closest("[data-edit-purchase-renewal-schedule]")) {
+      const flow = purchaseFlowState();
+      flow.scheduleMode = "change";
+      clearPurchaseSchedules();
+      saveSnapshot();
+      renderMembershipPurchaseFlow();
+      openPurchaseScheduleSheet();
       return;
     }
     const purchaseScheduleModeButton = event.target.closest("[data-purchase-schedule-mode]");
@@ -198,6 +227,7 @@ function bindDelegatedEvents() {
       }
       saveSnapshot();
       renderMembershipPurchaseFlow();
+      if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
       return;
     }
     const purchaseCoachFilterButton = event.target.closest("[data-purchase-coach-filter]");
@@ -211,6 +241,7 @@ function bindDelegatedEvents() {
       flow.scheduleWeekStart = purchaseWeekStartDate(purchaseAvailabilityRange().start);
       saveSnapshot();
       renderMembershipPurchaseFlow();
+      if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
       return;
     }
     if (event.target.closest("[data-clear-purchase-coach]")) {
@@ -222,6 +253,13 @@ function bindDelegatedEvents() {
       flow.scheduleWeekStart = purchaseWeekStartDate(purchaseAvailabilityRange().start);
       saveSnapshot();
       renderMembershipPurchaseFlow();
+      return;
+    }
+    if (event.target.closest("[data-clear-purchase-schedules]")) {
+      clearPurchaseSchedules();
+      saveSnapshot();
+      renderMembershipPurchaseFlow();
+      if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
       return;
     }
     if (event.target.closest("[data-purchase-show-more-slots]")) {
@@ -286,7 +324,11 @@ function bindDelegatedEvents() {
       return;
     }
     if (event.target.closest("[data-purchase-pay]")) {
-      submitMembershipPurchaseFlow();
+      void submitMembershipPurchaseFlow();
+      return;
+    }
+    if (event.target.closest("[data-retry-bank-transfer]")) {
+      void submitMembershipPurchaseFlow();
       return;
     }
     const membershipFilterButton = event.target.closest("[data-membership-filter]");

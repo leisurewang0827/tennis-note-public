@@ -78,18 +78,23 @@ function memberCouponPeriodSummary(source = {}) {
   return `예약 가능 기간 ${range} · 상품 기본 ${period.expectedDays}일보다 짧게 등록됨`;
 }
 
-function policyLabel(policy) {
-  return policy === "coach" ? "24h 이내" : "24h 이전";
+function policyLabel(policy, snapshot = null) {
+  const hours = memberChangeCutoffHours(snapshot);
+  return policy === "coach" ? `${hours}시간 미만 · 승인` : `${hours}시간 이상 · 바로 변경`;
 }
 
-function policyShortLabel(policy) {
-  return policy === "coach" ? "24h내" : "24h전";
+function policyShortLabel(policy, snapshot = null) {
+  return policy === "coach" ? "승인 필요" : "바로 변경";
 }
 
-function policyDetail(policy) {
+function policyDetail(policy, snapshot = null) {
+  const hours = memberChangeCutoffHours(snapshot);
+  if (snapshot?.isGroup) {
+    return "그룹수업 · 담당 코치 승인 후 변경됩니다. 승인 전 원래 수업은 유지됩니다.";
+  }
   return policy === "coach"
-    ? "담당 코치 또는 관리자가 확인합니다. 승인 전까지 원래 수업은 그대로 유지되며, 거절돼도 차감되지 않습니다."
-    : "수업까지 24시간 이상 남아 선택한 시간으로 바로 변경됩니다.";
+    ? `수업까지 ${hours}시간 미만 남음 · 담당 코치 승인 후 변경됩니다. 승인 전 원래 수업은 유지됩니다.`
+    : `수업까지 ${hours}시간 이상 남음 · 바로 변경됩니다.`;
 }
 
 function holdingStatusLabel(status) {

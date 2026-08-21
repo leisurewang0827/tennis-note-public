@@ -26,7 +26,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.375",
+    workerUrl: "./service-worker.js?v=1.0.382",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -58,6 +58,10 @@ async function installNativeBackNavigation() {
     }
     if (closeVisibleAppModal()) return;
     if (closeVisibleAppSheet(false, { immediate: true })) return;
+    if (purchaseFlowState().open) {
+      closeMembershipPurchaseFlow();
+      return;
+    }
     if (!$("#kakaoInquiryModal")?.hidden) {
       closeKakaoInquiryModal();
       return;
@@ -196,6 +200,7 @@ function setView(viewId, options = {}) {
   const nextState = { ...historyState, tennisNoteMode: "member", tennisNoteView: viewId };
   delete nextState.tennisNoteModal;
   delete nextState.tennisNoteSheet;
+  delete nextState.tennisNotePurchase;
   if (options.pushHistory && historyState.tennisNoteView !== viewId) history.pushState(nextState, "", window.location.href);
   else if (!historyState.tennisNoteView || options.replaceHistory) history.replaceState(nextState, "", window.location.href);
 }

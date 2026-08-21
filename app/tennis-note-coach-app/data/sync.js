@@ -32,7 +32,7 @@ async function syncCoachScheduleV2(options = {}) {
         target_to: week.endDate,
       }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", {
-        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,policy_snapshot,policy_revision,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
         filters: { status: "pending" },
         order: "created_at.desc",
         limit: 300,
@@ -186,7 +186,7 @@ async function syncLegacyCoachLessonsFromServer() {
       client.selectRows("tn_membership_products", { select: "id,name,group_size,lesson_minutes", limit: 200 }).catch(() => []),
       client.selectRows("tn_lesson_records", { select: "lesson_id,deducted_sessions,completed_at", limit: 1000 }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", {
-        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,policy_snapshot,policy_revision,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
         limit: 300,
       }).catch(() => []),
       client.selectRows("tn_makeup_entitlements", {
@@ -512,8 +512,11 @@ async function syncLegacyCoachLessonsFromServer() {
           member: usersById.get(request.requester_user_id) || lesson.member || "회원",
           original: `${originalDate} ${originalTime}`.trim() || "기존 수업",
           requested: `${request.requested_lesson_date || ""} ${String(request.requested_start_time || "").slice(0, 5)}`.trim(),
-          reason: request.reason || "이유 미입력",
-          policy: request.policy_window === "auto_before_24h" ? "24시간 이전 자동 변경" : "24시간 이내 담당 코치·관리자 승인",
+          reason: request.reason === "정책상 사유 없음" ? "사유 없음" : request.reason || "이유 미입력",
+          policy: lessonChangePolicyText(request),
+          policySnapshot: lessonChangePolicySnapshot(request),
+          requestedAt: lessonChangeRequestedAtText(request.created_at),
+          remainingTime: lessonChangeRemainingText(originalDate, originalTime),
           status: requestStatusLabel[request.status] || request.status,
           coach: lesson.coach || "담당 코치",
           source: "server",

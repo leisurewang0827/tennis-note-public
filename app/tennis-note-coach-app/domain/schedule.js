@@ -89,7 +89,7 @@ function weekLessons() {
     return [
       ...baseLessons.filter((lesson) => !["lesson-1", "lesson-4"].includes(lesson.id)),
       { id: "week2-change-1", day: "화", time: "18:50", coach: "노 코치", member: "김서준", type: "시간변경", ticket: "개인레슨 10회", status: "변경 완료", remaining: 7, task: "수요일 20:00에서 변경됨", changeNote: "변경 완료" },
-      { id: "week2-request-1", day: "금", time: "19:00", coach: "강 코치", member: "이하린", type: "변경요청", ticket: "개인레슨 8회", status: "승인 대기", remaining: 2, task: "24시간 이내 요청", changeNote: "승인 필요" },
+      { id: "week2-request-1", day: "금", time: "19:00", coach: "강 코치", member: "이하린", type: "변경요청", ticket: "개인레슨 8회", status: "승인 대기", remaining: 2, task: "기준시간 이내 요청", changeNote: "승인 필요" },
     { id: "week2-change-2", day: "토", time: "20:20", coach: "박창준 코치", member: "임현우", type: "시간변경", ticket: "주말반 8회", status: "변경 완료", remaining: 3, task: "코치 일정 변경", changeNote: "코치 변경" },
     ];
   }

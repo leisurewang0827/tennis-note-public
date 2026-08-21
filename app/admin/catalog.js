@@ -7,8 +7,8 @@ const policyGuideTemplates = [
   {
     id: "makeup",
     title: "수업 변경",
-    summary: "24시간 전 자동 변경, 24시간 이내 코치 승인",
-    copy: "수업 24시간 전까지는 앱에서 직접 변경할 수 있습니다. 24시간 이내 요청은 코치 승인 대상이며, 미승인 또는 당일 취소는 이용권이 차감될 수 있습니다.",
+    summary: "지점 기준시간에 따라 바로 변경 또는 코치 승인",
+    copy: "회원 수업 변경의 기준시간·사유·승인 여부는 시간표의 운영 규칙에서 설정합니다. 승인 전에는 원래 수업을 유지하고, 거절돼도 이용권은 차감하지 않습니다.",
   },
   {
     id: "holding",
@@ -27,7 +27,7 @@ const policyGuideTemplates = [
 const lessonPolicyDefaults = [
   {
     id: "lesson-change-before",
-    title: "24시간 전 변경",
+    title: "기준시간 이상 남은 변경",
     detail: "회원이 가능한 시간으로 바로 변경",
     category: "수업 변경",
     status: "active",
@@ -35,8 +35,8 @@ const lessonPolicyDefaults = [
   },
   {
     id: "lesson-change-within",
-    title: "24시간 이내 변경",
-    detail: "코치 승인 필요 · 당일 취소는 차감",
+    title: "기준시간 미만 남은 변경",
+    detail: "설정에 따라 코치 승인 또는 신청 불가",
     category: "수업 변경",
     status: "active",
     systemKey: "change_within_24h",

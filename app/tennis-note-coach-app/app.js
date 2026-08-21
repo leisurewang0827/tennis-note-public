@@ -114,6 +114,40 @@ const scheduleWeeks = buildScheduleWeeks();
 let coachScheduleV2WorkspaceCache = null;
 let coachScheduleV2RequestSequence = 0;
 
+function lessonChangePolicySnapshot(request = {}) {
+  return request.policy_snapshot && typeof request.policy_snapshot === "object"
+    ? request.policy_snapshot
+    : request.policySnapshot && typeof request.policySnapshot === "object" ? request.policySnapshot : null;
+}
+
+function lessonChangePolicyText(request = {}) {
+  const snapshot = lessonChangePolicySnapshot(request);
+  const hours = Math.min(168, Math.max(1, Number(snapshot?.cutoffHours) || 24));
+  if (snapshot?.isGroup) return "그룹수업 · 담당 코치 승인";
+  if (snapshot?.outcome === "auto" || request.policy_window === "auto_before_24h") {
+    return `${hours}시간 이상 남아 자동 변경`;
+  }
+  return `${hours}시간 미만 · 담당 코치 승인`;
+}
+
+function lessonChangeRequestedAtText(value = "") {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "신청 시각 확인 필요";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(date);
+}
+
+function lessonChangeRemainingText(originalDate = "", originalTime = "") {
+  const lessonAt = new Date(`${originalDate}T${String(originalTime || "").slice(0, 5)}:00+09:00`);
+  if (Number.isNaN(lessonAt.getTime())) return "남은 시간 확인 필요";
+  const seconds = Math.floor((lessonAt.getTime() - Date.now()) / 1000);
+  if (seconds <= 0) return "원래 수업 시작 시각 경과";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return hours > 0 ? `${hours}시간 ${minutes}분 남음` : `${Math.max(1, minutes)}분 남음`;
+}
+
 // Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
 // Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
 let activeCoachModalId = "";
@@ -196,7 +230,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.375",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.382",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

@@ -89,6 +89,9 @@ function normalizeLiveTicket(row = {}) {
   const remainingValue = row.remaining_sessions ?? Math.max(0, total - used);
   const remaining = Math.max(0, Number(remainingValue));
   const statusInfo = liveTicketStatusInfo(row.status);
+  const configuredAnchorMinutes = row.makeup_anchor_minutes !== undefined
+    ? row.makeup_anchor_minutes
+    : product.makeup_anchor_minutes;
   return {
     id: row.id || "",
     branchId: row.branch_id || "",
@@ -103,7 +106,9 @@ function normalizeLiveTicket(row = {}) {
     maxSessionsPerDay: Number(row.max_sessions_per_day || product.max_sessions_per_day || 0),
     maxSessionsPerWeek: Number(row.max_sessions_per_week || product.max_sessions_per_week || 0),
     maxBookingDaysPerWeek: Number(row.max_booking_days_per_week || product.max_booking_days_per_week || 0),
-    makeupAnchorMinutes: Number(row.makeup_anchor_minutes || product.makeup_anchor_minutes || 40),
+    makeupAnchorMinutes: configuredAnchorMinutes === null
+      ? null
+      : numericValue(configuredAnchorMinutes, 40),
     productValidityDays: Math.max(0, Number(row.validity_days || product.validity_days || 0)),
     productGraceDays: Math.max(0, Number(row.grace_days || product.grace_days || 0)),
     title: liveTicketProductTitle({ ...row, tn_membership_products: product }),
@@ -333,6 +338,7 @@ function memberBookableRegularTickets() {
         expiresOn: ticket.expiresOn || "",
         frequencyPerWeek: Math.max(1, Number(ticket.frequencyPerWeek) || 1),
         scheduleScope: ticket.scheduleScope || "weekday",
+        makeupAnchorMinutes: ticket.makeupAnchorMinutes,
         status: "regular_initial_booking",
         lessonSource: "regular",
         durationMinutes: Number(ticket.lessonMinutes) || 20,
@@ -366,6 +372,7 @@ function memberBookablePausedTickets() {
         expiresOn: ticket.expiresOn || "",
         frequencyPerWeek: Math.max(1, Number(ticket.frequencyPerWeek) || 1),
         scheduleScope: ticket.scheduleScope || "weekday",
+        makeupAnchorMinutes: ticket.makeupAnchorMinutes,
         status: "paused_resume_booking",
         lessonSource: "regular",
         durationMinutes: Number(ticket.lessonMinutes) || 20,
@@ -462,17 +469,15 @@ function purchaseTicketLesson(ticket = {}) {
 }
 
 function memberPurchaseLifecycle() {
-  const allTickets = [...(state.liveTickets || []), ...(state.expiredTickets || [])];
-  const hasActiveTicket = allTickets.some((ticket) => !["expired", "refunded", "cancelled"].includes(String(ticket.status || "").toLowerCase()));
-  if (hasActiveTicket) return "active";
-  return allTickets.some((ticket) => Boolean(ticket?.id || ticket?.title)) ? "returning" : "new";
+  if (currentLiveTickets().length) return "active";
+  return latestPreviousMembershipTicket() ? "returning" : "new";
 }
 
 function selectPurchasePurpose(purpose = "") {
   const flow = purchaseFlowState();
   flow.showMoreSlots = false;
   flow.showAllProducts = false;
-  const activeTickets = (state.liveTickets || []).filter((ticket) => !["expired", "refunded", "cancelled"].includes(String(ticket.status || "").toLowerCase()));
+  const activeTickets = currentLiveTickets();
   if (purpose === "renew_same") {
     const sourceTicket = activeTickets.find((ticket) => String(ticket.id) === String(flow.renewalTicketId)) || activeTickets[0] || null;
     if (!sourceTicket) return;
@@ -514,11 +519,12 @@ function selectPurchaseFamily(familyId = "") {
   const flow = purchaseFlowState();
   flow.familyId = family.id;
   if (family.id === "one-day") flow.purchasePurpose = "one_day";
-  else if (flow.purchasePurpose === "one_day") flow.purchasePurpose = (state.liveTickets || []).length ? "" : "new_purchase";
+  else if (flow.purchasePurpose === "one_day") flow.purchasePurpose = currentLiveTickets().length ? "add_coach" : "new_purchase";
   flow.productId = "";
   flow.showAllProducts = false;
   flow.discountIssueId = "";
   flow.discountSelectionMode = "auto";
+  clearPurchasePaymentError();
   const keepingRenewal = flow.purchasePurpose === "renew_same" && Boolean(purchaseFlowSourceTicket());
   if (!keepingRenewal) {
     flow.coachRoleId = "";
@@ -534,7 +540,10 @@ function selectPurchaseFamily(familyId = "") {
 }
 
 function selectPurchaseProduct(productId = "") {
-  const product = membershipProducts().find((item) => String(item.id || "") === String(productId || ""));
+  const product = membershipProducts().find((item) => (
+    String(item.id || "") === String(productId || "")
+    && isDirectPurchaseMembershipProduct(item)
+  ));
   if (!product) return;
   const flow = purchaseFlowState();
   const productChanged = String(flow.productId || "") !== String(product.id || "");
@@ -542,6 +551,7 @@ function selectPurchaseProduct(productId = "") {
     flow.showMoreSlots = false;
     flow.discountIssueId = "";
     flow.discountSelectionMode = "auto";
+    clearPurchasePaymentError();
   }
   flow.productId = product.id;
   flow.familyId = membershipProductFamilyId(product);
@@ -554,7 +564,7 @@ function selectPurchaseProduct(productId = "") {
     flow.renewalTicketId = "";
     flow.scheduleMode = "change";
   } else if (flow.purchasePurpose === "one_day") {
-    flow.purchasePurpose = (state.liveTickets || []).length ? "" : "new_purchase";
+    flow.purchasePurpose = currentLiveTickets().length ? "add_coach" : "new_purchase";
   }
   if (productChanged && !flow.renewalTicketId) {
     flow.coachRoleId = "";
@@ -567,14 +577,75 @@ function selectPurchaseProduct(productId = "") {
   }
   saveSnapshot();
   renderMembershipPurchaseFlow();
+  void refreshPurchaseScheduleAvailability();
   if (productChanged && product.branchId) {
     void syncMemberPaymentOptionsFromServer(product.branchId).then(() => renderMembershipPurchaseFlow());
   }
 }
 
-async function refreshPurchaseScheduleAvailability() {
+async function refreshPurchaseScheduleAvailability(options = {}) {
   if (state.dataMode !== "live" || !state.member?.profileId) return true;
-  await syncMemberScheduleV2(null, { force: false, week: purchaseScheduleWeek() }).catch(() => false);
+  const client = window.TennisNoteDataClient;
+  const product = purchaseFlowProduct();
+  const context = purchaseDirectoryContext(product);
+  if (!client?.rpc || !client.getSession?.()?.access_token || !context.branchId) {
+    memberPurchaseDirectoryLoad = {
+      key: context.key,
+      status: "error",
+      error: "member_purchase_directory_unavailable",
+    };
+    renderMembershipPurchaseFlow();
+    return false;
+  }
+
+  const cached = memberPurchaseDirectoryCache;
+  if (!options.force && cached?.key === context.key && Date.now() - cached.loadedAt < 10_000) {
+    memberPurchaseDirectoryLoad = { key: context.key, status: "ready", error: "" };
+    const removedCount = reconcilePurchaseSchedulesAfterRefresh(product);
+    if (removedCount) showToast("마감되거나 변경된 시간을 해제했습니다. 가능한 시간을 다시 선택해 주세요.");
+    const flow = purchaseFlowState();
+    if (flow.open && flow.step !== 4) renderMembershipPurchaseFlow();
+    if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
+    return true;
+  }
+
+  const requestId = ++memberPurchaseDirectoryRequestSequence;
+  memberPurchaseDirectoryLoad = { key: context.key, status: "loading", error: "" };
+  if (purchaseFlowState().open && purchaseFlowState().step !== 4) renderMembershipPurchaseFlow();
+  if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
+  try {
+    const directory = await client.rpc("tn_member_purchase_coach_directory", {
+      target_branch_id: context.branchId,
+      target_from: context.from,
+      target_to: context.to,
+    });
+    if (requestId !== memberPurchaseDirectoryRequestSequence
+      || purchaseDirectoryContext(purchaseFlowProduct()).key !== context.key) return false;
+    if (!directory
+      || String(directory.branchId || "") !== context.branchId
+      || !Array.isArray(directory.coaches)
+      || !Array.isArray(directory.occupancy)
+      || !Array.isArray(directory.operationDays)
+      || !Array.isArray(directory.breakRules)) {
+      throw new Error("member_purchase_directory_response_invalid");
+    }
+    memberPurchaseDirectoryCache = {
+      key: context.key,
+      loadedAt: Date.now(),
+      directory,
+    };
+    memberPurchaseDirectoryLoad = { key: context.key, status: "ready", error: "" };
+    const removedCount = reconcilePurchaseSchedulesAfterRefresh(product);
+    if (removedCount) showToast("마감되거나 변경된 시간을 해제했습니다. 가능한 시간을 다시 선택해 주세요.");
+  } catch (error) {
+    if (requestId !== memberPurchaseDirectoryRequestSequence) return false;
+    memberPurchaseDirectoryLoad = {
+      key: context.key,
+      status: "error",
+      error: error?.payload?.code || error?.message || "member_purchase_directory_failed",
+    };
+    console.warn("Tennis Note purchase directory failed", memberPurchaseDirectoryLoad.error);
+  }
   const flow = purchaseFlowState();
   if (flow.open && flow.step !== 4) renderMembershipPurchaseFlow();
   if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
@@ -752,6 +823,7 @@ async function startProductPayment(productId, options = {}) {
   }
 
   if (methodId === "bank_transfer") {
+    clearPurchasePaymentError();
     try {
       const prepared = await prepareServerPayment(product, paymentId, methodId);
       createPaymentRecord(product, {
@@ -771,9 +843,23 @@ async function startProductPayment(productId, options = {}) {
       setView("shopView");
       openBankTransferInstructions(prepared, product, paymentAmount);
     } catch (error) {
+      const flow = purchaseFlowState();
+      const serverCode = String(error?.payload?.code || error?.message || "bank_transfer_request_failed");
       const detail = paymentServerErrorMessage(error);
-      state.pendingPaymentCheckStatus = { tone: "alert", text: `계좌이체 신청에 실패했습니다. ${detail}` };
+      flow.paymentErrorCode = serverCode;
+      if (serverCode === "bank_transfer_account_not_ready") {
+        await syncMemberPaymentOptionsFromServer(product.branchId).catch(() => false);
+        state.selectedPaymentMethod = "tosspay";
+        normalizeSelectedPaymentMethod();
+        flow.paymentErrorMessage = "현재 계좌이체를 사용할 수 없어 토스페이로 변경했습니다. 선택한 상품·시간·쿠폰은 유지됩니다.";
+      } else if (serverCode === "bank_transfer_account_lookup_failed") {
+        flow.paymentErrorMessage = "입금 계좌를 확인하지 못했습니다. 선택 내용은 유지했으며 다시 확인할 수 있습니다.";
+      } else {
+        flow.paymentErrorMessage = `계좌이체 신청에 실패했습니다. ${detail}`;
+      }
+      state.pendingPaymentCheckStatus = { tone: "alert", text: flow.paymentErrorMessage };
       state.ticketHistory.unshift({ text: `${product.title} 계좌이체 신청 실패 · ${detail}`, tone: "alert" });
+      saveSnapshot();
       renderAll();
       setView("shopView");
     }

@@ -892,7 +892,7 @@ async function performAdminLiveDataSync(options = {}) {
       }).catch(() => [])) : Promise.resolve([]),
       fullAdminAccess ? rosterRows("enrollments", () => client.selectRows("tn_member_enrollments", { select: "id,user_id,requested_product_id,form_version,status,applicant_name,phone,birth_year,neighborhood,gender,experience_level,lesson_goal,preferred_schedule,group_size,partner_name,partner_phone,submitted_at,approved_at", limit: 500 }).catch(() => [])) : Promise.resolve([]),
       rosterRows("changeRequests", () => client.selectRows("tn_lesson_change_requests", {
-        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_by,decided_at,created_at,updated_at",
+        select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,policy_snapshot,policy_revision,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_by,decided_at,created_at,updated_at",
         limit: 500,
       }).catch(() => client.selectRows("tn_lesson_change_requests", {
         select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_by,decided_at,created_at",
@@ -1416,16 +1416,22 @@ async function performAdminLiveDataSync(options = {}) {
           : request.policy_window === "coach_approval_within_24h"
             ? "담당 코치·관리자 승인 필요"
             : "승인대기";
+      const originalDate = request.original_lesson_date || lesson.lesson_date || "";
+      const originalTime = String(request.original_start_time || lesson.start_time || "").slice(0, 5);
+      const policySnapshot = request.policy_snapshot && typeof request.policy_snapshot === "object" ? request.policy_snapshot : null;
       return {
         id: request.id,
         serverRequestId: request.id,
         lessonId: request.lesson_id,
         branchId: lesson.branch_id || "",
         member: usersById.get(request.requester_user_id)?.name || "회원 확인 필요",
-        original: `${request.original_lesson_date || lesson.lesson_date || "기존일"} ${String(request.original_start_time || lesson.start_time || "").slice(0, 5)} ${getCoachName(coachId)}`,
+        original: `${originalDate || "기존일"} ${originalTime} ${getCoachName(coachId)}`,
         requested: `${request.requested_lesson_date || "변경일"} ${String(request.requested_start_time || "").slice(0, 5)}`,
-        policy: request.policy_window === "coach_approval_within_24h" ? "24시간 이내" : "24시간 전",
-        reason: request.reason || "",
+        policy: adminLessonChangePolicyText(request),
+        policySnapshot,
+        reason: request.reason === "정책상 사유 없음" ? "사유 없음" : request.reason || "",
+        requestedAtLabel: adminLessonChangeRequestedAt(request.created_at || request.updated_at),
+        remainingTime: adminLessonChangeRemaining(originalDate, originalTime),
         status: request.status,
         statusLabel,
         createdAt: request.created_at || request.updated_at || "",

@@ -141,11 +141,17 @@ function closeMemberEnrollmentModal() {
   if (modal) modal.hidden = true;
 }
 
-function openMembershipPurchaseFlow(renewalTicketId = "", productId = "") {
+function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", requestedPurpose = "") {
   const flow = purchaseFlowState();
-  const sourceTicket = (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
+  const activeTickets = currentLiveTickets();
+  const requestedSource = (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
+  const sourceTicket = requestedSource || (requestedPurpose !== "add_coach" ? activeTickets[0] || null : null);
+  const sourceIsActive = Boolean(sourceTicket && activeTickets.some((ticket) => String(ticket.id || "") === String(sourceTicket.id || "")));
   const products = membershipProducts();
-  const exactProduct = products.find((product) => String(product.id || "") === String(productId || sourceTicket?.productId || "")) || null;
+  const exactProduct = products.find((product) => (
+    String(product.id || "") === String(productId || sourceTicket?.productId || "")
+    && isDirectPurchaseMembershipProduct(product)
+  )) || null;
   const inferredSourceFamilyId = sourceTicket ? membershipProductFamilyId({
     title: sourceTicket.title || "",
     group: sourceTicket.group || "",
@@ -164,14 +170,16 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "") {
   flow.productId = matchingProduct?.id || "";
   flow.familyId = matchingProduct ? membershipProductFamilyId(matchingProduct) : activeMembershipPresetId() || "four-week";
   flow.step = 1;
-  flow.purchasePurpose = sourceTicket ? "renew_same" : (state.liveTickets || []).length ? "" : "new_purchase";
+  flow.purchasePurpose = ["renew_same", "add_coach", "new_purchase"].includes(requestedPurpose)
+    ? requestedPurpose
+    : sourceIsActive ? "renew_same" : "new_purchase";
   flow.showMoreSlots = false;
   flow.showAllProducts = false;
   flow.productFrequency = matchingProduct ? purchaseProductFrequency(matchingProduct) : 1;
   flow.productScheduleScope = matchingProduct && ["weekday", "weekend"].includes(membershipProductFacet(matchingProduct, "scheduleScope"))
     ? membershipProductFacet(matchingProduct, "scheduleScope")
     : "weekday";
-  flow.scheduleMode = sourceTicket && matchingProduct && membershipProductFacet(matchingProduct, "productKind") !== "coupon" ? "keep" : "change";
+  flow.scheduleMode = sourceIsActive && matchingProduct && membershipProductFacet(matchingProduct, "productKind") !== "coupon" ? "keep" : "change";
   flow.scheduleWeekStart = purchaseWeekStartDate(lesson?.lessonDate || purchaseEffectiveStartDate());
   flow.scheduleAvailableOnly = false;
   flow.coachRoleId = sourceTicket?.coachRoleId || "";
@@ -182,26 +190,40 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "") {
   flow.preferredSchedules = [];
   flow.discountIssueId = "";
   flow.discountSelectionMode = "auto";
+  flow.paymentErrorCode = "";
+  flow.paymentErrorMessage = "";
   flow.completionStatus = "";
   state.membershipFilters = { ...membershipProductFamilyDefinition(flow.familyId).filters };
   state.membershipSelectedFamilyId = flow.familyId;
   saveSnapshot();
+  const historyState = typeof history.state === "object" && history.state ? history.state : {};
+  if (!historyState.tennisNotePurchase) {
+    history.pushState({
+      ...historyState,
+      tennisNoteMode: "member",
+      tennisNoteView: "shopView",
+      tennisNotePurchase: true,
+    }, "", window.location.href);
+  }
   renderMembershipPurchaseFlow();
   void refreshPurchaseScheduleAvailability();
   window.requestAnimationFrame(() => $("#membershipPurchaseFlow")?.scrollIntoView({ block: "start" }));
 }
 
 function closeMembershipPurchaseFlow(options = {}) {
+  if (options.fromHistory !== true && history.state?.tennisNotePurchase) {
+    history.back();
+    return;
+  }
   const flow = purchaseFlowState();
   flow.open = false;
   flow.step = 1;
   flow.completionStatus = "";
   saveSnapshot();
   renderProducts();
-  const showCurrentMembership = options.showCurrentMembership === true;
-  if (showCurrentMembership && $("#currentMembershipDetails")) $("#currentMembershipDetails").open = true;
+  if (options.skipScroll === true) return;
   window.requestAnimationFrame(() => {
-    const target = showCurrentMembership ? $("#currentMembershipDetails") : $("#membershipProductBrowser");
+    const target = $("#membershipProductBrowser");
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
@@ -390,7 +412,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.375", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.382", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",

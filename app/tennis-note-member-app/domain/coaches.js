@@ -79,10 +79,11 @@ function memberDefaultWorkBlocksForCoach(coach) {
 
 function normalizeMemberCoach(coach) {
   const normalized = { ...coach };
+  const hasExplicitWorkBlocks = Array.isArray(normalized.workBlocks);
   normalized.id = normalized.id || memberCoachKey(normalized.name) || `coach-${normalized.name || Date.now()}`;
   normalized.name = normalized.name || "이름 없음";
   normalized.status = normalized.status || "active";
-  normalized.workBlocks = Array.isArray(normalized.workBlocks) && normalized.workBlocks.length
+  normalized.workBlocks = hasExplicitWorkBlocks
     ? normalized.workBlocks
     : memberDefaultWorkBlocksForCoach(normalized);
   normalized.workBlocks = normalized.workBlocks
@@ -94,7 +95,7 @@ function normalizeMemberCoach(coach) {
       label: block.label || "근무",
     }))
     .filter((block) => minutesFromTime(block.start) < minutesFromTime(block.end));
-  if (!normalized.workBlocks.length) normalized.workBlocks = memberDefaultWorkBlocksForCoach(normalized);
+  if (!normalized.workBlocks.length && !hasExplicitWorkBlocks) normalized.workBlocks = memberDefaultWorkBlocksForCoach(normalized);
   return normalized;
 }
 
@@ -262,8 +263,11 @@ function syncMakeupRequestsFromCoach() {
 
 function purchaseCoachOptions() {
   if (state.dataMode === "live") {
-    const workspaceCoaches = memberScheduleV2WorkspaceCache?.workspace?.coaches;
-    if (!Array.isArray(workspaceCoaches) || !workspaceCoaches.length) return [];
+    return purchaseDirectoryCoaches()
+      .filter((coach) => ["active", "approved"].includes(String(coach.status || "active").toLowerCase()))
+      .filter((coach) => String(coach.employmentStatus || coach.employment_status || "active").toLowerCase() === "active")
+      .filter((coach) => !coach.archivedAt && !coach.archived_at && !coach.deletedAt && !coach.deleted_at)
+      .sort((left, right) => memberScheduleLaneOrder(left) - memberScheduleLaneOrder(right));
   }
   const policy = loadAdminSchedulePolicy();
   return (policy.coaches || [])

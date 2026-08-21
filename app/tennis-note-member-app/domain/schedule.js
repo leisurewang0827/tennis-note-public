@@ -99,7 +99,7 @@ function memberLessonExtendsAnchorWindow(lesson = {}) {
 }
 
 function memberSlotInsideAnchorWindow(scheduleLessons, policy, sourceLesson, day, time, coach) {
-  if (sourceLesson.regularInitialBooking || policy.requireMakeupDayAnchor === false) return true;
+  if (policy.requireMakeupDayAnchor === false) return true;
   const releasedSlot = memberReleasedMakeupSlot(
     memberScheduleDateForDay(day),
     time,
@@ -669,25 +669,29 @@ function memberChangeCandidateLoadState(source = null) {
 }
 
 function purchaseScheduleOperationForDate(dateKey = "") {
-  return (state.scheduleOperationDays || []).find((operation) => String(operation.date || "") === dateKey) || null;
+  const directory = purchaseDirectoryForCurrentProduct();
+  const operationDays = Array.isArray(directory?.operationDays) ? directory.operationDays : state.scheduleOperationDays || [];
+  return operationDays.find((operation) => String(operation.date || "") === dateKey) || null;
 }
 
 function purchaseScheduleAvailabilityState() {
   if (state.dataMode !== "live" || !state.member?.profileId) return "ready";
-  if (state.scheduleV2SyncStatus === "error") return "error";
-  if (!state.scheduleV2WorkspaceLoaded || !memberScheduleV2WorkspaceCache?.workspace) return "loading";
-  if (!Array.isArray(memberScheduleV2WorkspaceCache.workspace.coaches)
-    || !memberScheduleV2WorkspaceCache.workspace.coaches.length) return "coach_error";
+  const context = purchaseDirectoryContext();
+  if (memberPurchaseDirectoryLoad.key !== context.key || memberPurchaseDirectoryLoad.status === "idle") return "loading";
+  if (memberPurchaseDirectoryLoad.status === "error") return "error";
+  if (memberPurchaseDirectoryLoad.status !== "ready") return "loading";
+  const directory = purchaseDirectoryForCurrentProduct();
+  if (!Array.isArray(directory?.coaches) || !directory.coaches.length) return "coach_error";
   return "ready";
 }
 
 function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
   if (!product || purchaseScheduleAvailabilityState() !== "ready") return [];
-  const policy = loadAdminSchedulePolicy();
+  const policy = purchaseSchedulePolicy(product);
   const sourceTicket = purchaseFlowSourceTicket();
   const durationMinutes = Math.max(10, Number(product.lessonMinutes) || 20);
   const scopes = purchaseProductScheduleScopes(product);
-  const scheduleLessons = state.liveLessons || [];
+  const scheduleLessons = purchaseOccupancyLessons(product);
   const { start, end } = purchaseAvailabilityRange();
   const now = Date.now();
   const sourceCoachId = purchaseFlowState().purchasePurpose === "renew_same"
@@ -716,6 +720,7 @@ function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
           if (memberBreakRuleOverlaps(policy, day, time, durationMinutes)) return;
           if (!isMemberCoachWorking(coach, day, time, durationMinutes)) return;
           if (purchaseHasCoachLessonAtDate(scheduleLessons, dateKey, time, coach, durationMinutes, policy)) return;
+          if (!purchaseSlotInsideAnchorWindow(scheduleLessons, product, dateKey, time, coach, policy)) return;
           const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
           if (!roleId) return;
           slots.push({

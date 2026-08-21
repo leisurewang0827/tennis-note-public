@@ -39,6 +39,19 @@ function normalizeProduct(product = {}, fallback = {}) {
     maxSessionsPerDay: numericValue(merged.maxSessionsPerDay, numericValue(fallback.maxSessionsPerDay, 0)),
     maxSessionsPerWeek: numericValue(merged.maxSessionsPerWeek, numericValue(fallback.maxSessionsPerWeek, 0)),
     maxBookingDaysPerWeek: numericValue(merged.maxBookingDaysPerWeek, numericValue(fallback.maxBookingDaysPerWeek, 0)),
+    makeupAnchorMinutes: (() => {
+      const configured = Object.prototype.hasOwnProperty.call(merged, "makeupAnchorMinutes")
+        ? merged.makeupAnchorMinutes
+        : Object.prototype.hasOwnProperty.call(merged, "makeup_anchor_minutes")
+          ? merged.makeup_anchor_minutes
+          : Object.prototype.hasOwnProperty.call(fallback, "makeupAnchorMinutes")
+            ? fallback.makeupAnchorMinutes
+            : Object.prototype.hasOwnProperty.call(fallback, "makeup_anchor_minutes")
+              ? fallback.makeup_anchor_minutes
+              : 40;
+      if (configured === null || String(configured).toLowerCase() === "unlimited") return null;
+      return Math.min(100, Math.max(0, numericValue(configured, 40)));
+    })(),
     purchaseExperience: merged.purchaseExperience || fallback.purchaseExperience || "",
     firstLessonOfferEnabled: merged.firstLessonOfferEnabled ?? fallback.firstLessonOfferEnabled ?? false,
     firstLessonOfferPrice: numericValue(
@@ -177,7 +190,7 @@ function couponProductOfferKey(product = {}) {
 }
 
 function distinctMembershipProductsForFamily(familyId, products = membershipProducts()) {
-  const familyProducts = membershipProductsForFamily(familyId, products);
+  const familyProducts = membershipProductsForFamily(familyId, products).filter(isDirectPurchaseMembershipProduct);
   if (familyId !== "coupon") return familyProducts;
   const seen = new Set();
   return familyProducts.filter((product) => {
@@ -226,7 +239,7 @@ function onlinePaymentAmount(product = {}) {
 
 function purchasePaymentBaseAmount(product = {}, methodId = state.selectedPaymentMethod) {
   const quote = membershipPricingQuote(product);
-  if (quote && Number(quote.finalAmount) > 0) return numericValue(quote.finalAmount);
+  if (quote?.eligible === true && Number(quote.finalAmount) > 0) return numericValue(quote.finalAmount);
   if (String(methodId) === "bank_transfer") {
     return numericValue(product.cashAmount, numericValue(product.settlementBase, numericValue(product.amount)));
   }

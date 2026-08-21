@@ -206,11 +206,11 @@ function renderSelects() {
   if ($("#changeSourceStepLabel")) $("#changeSourceStepLabel").textContent = isMakeupDue
     ? "1. 보강할 수업"
     : isCouponBooking ? "1. 사용할 쿠폰" : "1. 변경할 수업";
-  if ($("#changeReasonField")) $("#changeReasonField").hidden = isMakeupDue || isCouponBooking;
+  renderMemberChangeReasonControl(selectedSource, null);
   if ($("#requestMakeup")) $("#requestMakeup").textContent = memberChangeSubmitLabel(selectedSource, null);
   if (isRegularInitialBooking) {
     if ($("#changeModalTitle")) $("#changeModalTitle").textContent = isPausedResumeBooking ? "휴회 복귀 시간 선택" : "첫 정규시간 설정";
-    if ($("#changeReasonField")) $("#changeReasonField").hidden = true;
+    renderMemberChangeReasonControl(selectedSource, null);
     if ($("#requestMakeup")) $("#requestMakeup").textContent = isPausedResumeBooking ? "복귀하고 시간 확정" : "수업시간 확정";
     if ($("#changeSourceStepLabel")) $("#changeSourceStepLabel").textContent = isPausedResumeBooking ? "1. 복귀할 회원권" : "1. 설정할 회원권";
   }

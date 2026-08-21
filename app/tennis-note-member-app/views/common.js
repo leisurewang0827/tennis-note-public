@@ -187,7 +187,7 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
   const requiredCount = purchaseRequiredScheduleCount(product);
   const selectedSchedules = purchaseSelectedSchedules(product);
   const selectedSummary = selectedSchedules.length
-    ? `<div class="purchase-selected-schedule-list" aria-label="선택한 수업 시간">${selectedSchedules.map((schedule, index) => `<span><b>${index + 1}</b>${escapeHtml(purchaseDateLabel(schedule.lessonDate))} ${escapeHtml(schedule.startTime)}</span>`).join("")}</div>`
+    ? `<div class="purchase-selected-schedule-list" aria-label="선택한 수업 시간">${selectedSchedules.map((schedule, index) => `<span><b>${index + 1}</b>${escapeHtml(purchaseDateLabel(schedule.lessonDate))} ${escapeHtml(schedule.startTime)}</span>`).join("")}<button class="small-button" type="button" data-clear-purchase-schedules>선택 초기화</button></div>`
     : '<p class="purchase-availability-state" role="status">요일과 시간을 선택해 주세요.</p>';
   return `<div class="purchase-slot-groups">
     ${coachSelector}
@@ -203,11 +203,11 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
 
 function purchasePurposeOptionsHtml() {
   const flow = purchaseFlowState();
-  const activeTickets = (state.liveTickets || []).filter((ticket) => !["expired", "refunded", "cancelled"].includes(String(ticket.status || "").toLowerCase()));
+  const activeTickets = currentLiveTickets();
   if (!activeTickets.length) {
     flow.purchasePurpose = membershipProductFamilyId(purchaseFlowProduct() || {}) === "one-day" ? "one_day" : "new_purchase";
     const returning = memberPurchaseLifecycle() === "returning";
-    return `<input type="hidden" value="new_purchase" /><p class="purchase-policy-note"><strong>${returning ? "재등록" : "신규 등록"}</strong> · ${returning ? "상품·선생님·시간을 다시 선택합니다. 이전 이용권 기록은 그대로 보관됩니다." : "모든 활성 코치의 실제 가능한 시간을 확인할 수 있습니다."}</p>`;
+    return `<input type="hidden" value="new_purchase" /><p class="purchase-policy-note"><strong>${returning ? "재등록" : "등록"}</strong> · ${returning ? "이전 조건을 불러왔습니다. 만료된 회원권은 그대로 보관하고 새 회원권을 만듭니다." : "모든 활성 코치의 실제 가능한 시간을 확인할 수 있습니다."}</p>`;
   }
   const renewing = flow.purchasePurpose === "renew_same";
   const selectedTicket = purchaseFlowSourceTicket() || activeTickets[0] || null;
@@ -216,15 +216,10 @@ function purchasePurposeOptionsHtml() {
   const scheduleLabel = lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 정규시간";
   return `
     <section class="purchase-purpose-section" aria-label="구매 목적">
-      <div class="purchase-purpose-toggle" role="group" aria-label="연장 또는 새 선생님 추가">
-        <button class="purchase-choice ${renewing ? "is-selected" : ""}" type="button" data-purchase-purpose="renew_same" aria-pressed="${renewing}"><strong>연장</strong><small>선생님·시간 유지</small></button>
-        <button class="purchase-choice ${flow.purchasePurpose === "add_coach" ? "is-selected" : ""}" type="button" data-purchase-purpose="add_coach" aria-pressed="${flow.purchasePurpose === "add_coach"}"><strong>새 이용권</strong><small>다른 선생님 선택</small></button>
-      </div>
       ${renewing && selectedTicket ? `<article class="purchase-renewal-summary">
-        <div><span>연장 대상</span><strong>${escapeHtml(memberTicketCompactLabel(selectedTicket))}</strong><small>${escapeHtml(memberCoachShortName(coachName))} 코치 · ${escapeHtml(scheduleLabel)}</small></div>
-        <button class="small-button" type="button" data-purchase-schedule-mode="${flow.scheduleMode === "change" ? "keep" : "change"}">${flow.scheduleMode === "change" ? "기존 시간 유지" : "시간만 변경"}</button>
+        <div><span>연장</span><strong>${escapeHtml(memberTicketCompactLabel(selectedTicket))}</strong><small>${escapeHtml(memberCoachShortName(coachName))} 코치 · ${escapeHtml(scheduleLabel)}</small></div>
       </article>
-      ${activeTickets.length > 1 ? `<label class="purchase-renewal-ticket-field"><span>다른 이용권 선택</span><select id="purchaseRenewalTicket" aria-label="연장할 이용권 선택">${activeTickets.map((ticket) => `<option value="${escapeHtml(ticket.id || "")}" ${String(ticket.id) === String(flow.renewalTicketId) ? "selected" : ""}>${escapeHtml(memberTicketCompactLabel(ticket))} · ${escapeHtml(memberCoachShortName(ticket.coach || "담당 코치"))} 코치</option>`).join("")}</select></label>` : ""}` : '<p class="purchase-policy-note">새 선생님을 먼저 선택한 뒤 그 선생님의 가능한 시간만 고릅니다. 기존 이용권은 그대로 유지됩니다.</p>'}
+      ${activeTickets.length > 1 ? `<label class="purchase-renewal-ticket-field"><span>연장할 회원권</span><select id="purchaseRenewalTicket" aria-label="연장할 이용권 선택">${activeTickets.map((ticket) => `<option value="${escapeHtml(ticket.id || "")}" ${String(ticket.id) === String(flow.renewalTicketId) ? "selected" : ""}>${escapeHtml(memberTicketCompactLabel(ticket))} · ${escapeHtml(memberCoachShortName(ticket.coach || "담당 코치"))} 코치</option>`).join("")}</select></label>` : ""}` : '<p class="purchase-policy-note"><strong>다른 코치·이용권 추가</strong> · 기존 회원권의 코치와 남은 횟수는 바뀌지 않습니다.</p>'}
     </section>`;
 }
 

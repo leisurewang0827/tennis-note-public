@@ -78,6 +78,7 @@ function renderDashboardNoticeSummary() {
   const target = $("#dashboardNoticeSummary");
   if (!target) return;
   const notice = currentPopupNotice();
+  const dashboardDisplayState = popupNoticeDisplayState(notice);
   const lessonAlerts = [
     notificationPolicySettings.lessonDayBeforeEnabled,
     notificationPolicySettings.lesson30MinutesEnabled,
@@ -97,10 +98,10 @@ function renderDashboardNoticeSummary() {
     <div class="dashboard-notification-summary-row">
       <div>
         <span>공지 팝업</span>
-        <strong>${notice.status === "active" ? "노출중" : "꺼짐"}</strong>
-        <small>${escapeHtml(notice.status === "active" ? notice.title : "현재 노출 공지 없음")}</small>
+        <strong>${dashboardDisplayState.label}</strong>
+        <small>${escapeHtml(dashboardDisplayState.visible ? notice.title : "현재 노출 공지 없음")}</small>
       </div>
-      ${badge(notice.status === "active" ? "ready" : "neutral", notice.status === "active" ? "ON" : "OFF")}
+      ${badge(dashboardDisplayState.tone, dashboardDisplayState.visible ? "ON" : "OFF")}
     </div>
     <div class="dashboard-notification-summary-row">
       <div>
@@ -467,7 +468,6 @@ function renderCoaches() {
   $$("[data-coach-staff-filter]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.coachStaffFilter === state.coachStaffListFilter);
   });
-  renderCoachLaneOrderEditor();
   target.innerHTML = `
     <div class="coach-status-summary">
       <strong>근무 중 ${activeCoaches.length}명</strong>
@@ -499,6 +499,16 @@ function renderCoaches() {
       },
     )
     .join("") : `<p class="empty-text coach-list-empty">${showingInactive ? "종료하거나 보관한 코치가 없습니다." : "근무 중인 코치가 없습니다."}</p>`);
+  try {
+    renderCoachLaneOrderEditor();
+  } catch (error) {
+    console.error("Tennis Note coach lane preview render failed", error);
+    const panel = $("#coachLaneOrderPanel");
+    if (panel) {
+      panel.hidden = false;
+      panel.innerHTML = '<p class="empty-text">시간표 열 순서 미리보기를 불러오지 못했습니다. 코치 목록과 설정은 계속 사용할 수 있습니다.</p>';
+    }
+  }
 }
 
 function renderOperationProfileControls() {
@@ -592,7 +602,7 @@ function renderNoticePopupSettings() {
   if (!state.noticeEditingId) state.noticeEditingId = notice.id;
   target.dataset.noticeId = notice.id || "notice-new";
   const audienceLabel = { all: "회원+코치", member: "회원만", coach: "코치만" }[notice.audience] || "회원+코치";
-  const statusLabel = notice.status === "active" ? "노출중" : notice.status === "archived" ? "지난 공지" : "꺼짐";
+  const displayState = popupNoticeDisplayState(notice);
   const previewUrl = noticeImageRemoveRequested ? "" : (noticeImageDraftUrl || notice.imageUrl || "");
   target.innerHTML = `
     <section class="notice-list-section" aria-label="등록 공지 목록">
@@ -606,7 +616,7 @@ function renderNoticePopupSettings() {
       <div class="notice-list">
         ${notices.length ? notices.map((item, index) => {
           const itemAudience = { all: "회원+코치", member: "회원", coach: "코치" }[item.audience] || "회원+코치";
-          const itemStatus = item.status === "active" ? "노출중" : item.status === "archived" ? "지난 공지" : "꺼짐";
+          const itemStatus = popupNoticeDisplayState(item).label;
           return `
             <div class="notice-list-row ${item.id === notice.id ? "selected" : ""}">
               <span class="notice-order-number">${index + 1}</span>
@@ -624,13 +634,13 @@ function renderNoticePopupSettings() {
         }).join("") : '<p class="empty-text">등록된 공지가 없습니다. 새 공지를 만들어주세요.</p>'}
       </div>
     </section>
-    <article class="notice-control-summary ${notice.status === "active" ? "active" : "disabled"}">
+    <article class="notice-control-summary ${displayState.visible ? "active" : "disabled"}">
       <div>
         <p class="eyebrow">${isUuid(notice.id) ? "공지 수정" : "새 공지"}</p>
         <strong>${escapeHtml(notice.title)}</strong>
         <span>${escapeHtml(notice.body)}</span>
       </div>
-      ${badge(notice.status === "active" ? "ready" : "neutral", statusLabel)}
+      ${badge(displayState.tone, displayState.label)}
     </article>
     <div class="notice-control-grid">
       <label>

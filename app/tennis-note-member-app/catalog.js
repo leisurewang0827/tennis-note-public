@@ -59,7 +59,7 @@ const membershipPresetDefinitions = [
   },
   {
     id: "three-month",
-    label: "3개월 10% 할인",
+    label: "3개월",
     description: "12주 등록·보강 21일",
     filters: { scheduleScope: "all", productKind: "regular", groupSize: "all", lessonMinutes: "all" },
   },

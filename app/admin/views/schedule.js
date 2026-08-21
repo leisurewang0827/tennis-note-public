@@ -68,17 +68,17 @@ function renderLessonPolicySettings() {
 function renderSchedulePolicyPreview() {
   const target = $("#schedulePolicyPreview");
   if (!target) return;
-  const compactDays = ["월", "화", "토"];
+  const previewDays = scheduleDays;
   target.innerHTML = `
     <article>
       <strong>표시 기준</strong>
-      <span>회원앱/코치앱 기본은 수업근처만 표시합니다. 오전·오후·저녁·전체는 필요할 때 눌러 확인합니다.</span>
+      <span>회원권 구매는 아래 등록 근무시간 안에서 기존 수업과 브레이크를 뺀 빈 시간만 표시합니다.</span>
     </article>
     <article>
       <strong>운영 시간</strong>
       <span>${scheduleSettings.openStart}~${scheduleSettings.openEnd} · 10분 단위 표시 · 20/30분 수업 전체 시간으로 충돌 검사</span>
     </article>
-    ${compactDays
+    ${previewDays
       .map((day) => `
         <article>
           <strong>${day}요일</strong>
@@ -1223,13 +1223,13 @@ function renderScheduleChangeApprovalQueue() {
   target.innerHTML = requests.length
     ? requests.map((request) => `
         <article class="schedule-change-approval-card">
-          <header><strong>${escapeHtml(request.member)}</strong><span>${escapeHtml(request.policy || "24시간 이내")}</span></header>
+          <header><strong>${escapeHtml(request.member)}</strong><span>${escapeHtml(request.policy || "담당 코치 승인")}</span></header>
           <div class="schedule-change-path">
             <span><small>현재 수업</small><b>${escapeHtml(request.original)}</b></span>
             <i aria-hidden="true">→</i>
             <span><small>요청 시간</small><b>${escapeHtml(request.requested)}</b></span>
           </div>
-          <p>${escapeHtml(request.reason || "변경 사유 미입력")}</p>
+          <p>${escapeHtml(request.reason || "변경 사유 미입력")}<br><small>${escapeHtml(request.requestedAtLabel || "신청 시각 확인 필요")} · ${escapeHtml(request.remainingTime || "남은 시간 확인 필요")}</small></p>
           <div class="schedule-change-approval-actions">
             <button class="primary-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="approved">변경 승인</button>
             <button class="ghost-button" type="button" data-review-change-request="${request.serverRequestId}" data-review-decision="rejected">거절</button>
@@ -1237,7 +1237,7 @@ function renderScheduleChangeApprovalQueue() {
           </div>
         </article>
       `).join("")
-    : `<p class="empty-text">현재 승인할 24시간 이내 변경 요청이 없습니다.</p>`;
+    : `<p class="empty-text">현재 승인할 수업 변경 요청이 없습니다.</p>`;
 }
 
 function renderLessonRecordCurriculumSuggestions(choices, query) {

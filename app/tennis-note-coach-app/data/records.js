@@ -102,11 +102,14 @@ async function restoreCoachLessonAbsence(entitlementId) {
 async function approveMakeup(id) {
   const request = state.makeupRequests.find((item) => item.id === id);
   if (!request) return;
+  if (request.reviewing) return;
   if (request.serverRequestV2 && window.TennisNoteDataClient?.rpc) {
     if (!request.canReview) {
       showToast("이 요청은 관리자 승인 후 시간표에 반영됩니다.");
       return;
     }
+    request.reviewing = true;
+    renderAll();
     try {
       await window.TennisNoteDataClient.rpc("tn_schedule_v2_review_request", {
         target_request_id: request.serverRequestId,
@@ -120,10 +123,14 @@ async function approveMakeup(id) {
       showToast("수업 변경 승인 완료");
     } catch (error) {
       showToast(lessonChangeReviewErrorMessage(error, "승인"));
+    } finally {
+      request.reviewing = false;
     }
     return;
   }
   if (request.serverRequestId && window.TennisNoteDataClient?.rpc) {
+    request.reviewing = true;
+    renderAll();
     try {
       await window.TennisNoteDataClient.rpc("tn_review_lesson_change_request", {
         target_request_id: request.serverRequestId,
@@ -136,6 +143,8 @@ async function approveMakeup(id) {
       showToast("수업 변경 승인 완료");
     } catch (error) {
       showToast(`승인 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+    } finally {
+      request.reviewing = false;
     }
     return;
   }
@@ -160,6 +169,7 @@ async function approveMakeup(id) {
 async function rejectMakeup(id) {
   const request = state.makeupRequests.find((item) => item.id === id);
   if (!request) return;
+  if (request.reviewing) return;
   if (request.serverRequestId && !request.serverRequestV2
     && !window.confirm(`${request.member}님의 요청을 거절할까요? 원래 수업은 그대로 유지되고 회원권은 차감되지 않습니다.`)) return;
   if (request.serverRequestV2 && window.TennisNoteDataClient?.rpc) {
@@ -167,6 +177,8 @@ async function rejectMakeup(id) {
       showToast("이 요청은 관리자만 거절할 수 있습니다.");
       return;
     }
+    request.reviewing = true;
+    renderAll();
     try {
       await window.TennisNoteDataClient.rpc("tn_schedule_v2_review_request", {
         target_request_id: request.serverRequestId,
@@ -180,10 +192,14 @@ async function rejectMakeup(id) {
       showToast("변경 요청 거절 완료");
     } catch (error) {
       showToast(lessonChangeReviewErrorMessage(error, "거절"));
+    } finally {
+      request.reviewing = false;
     }
     return;
   }
   if (request.serverRequestId && window.TennisNoteDataClient?.rpc) {
+    request.reviewing = true;
+    renderAll();
     try {
       const result = await window.TennisNoteDataClient.rpc("tn_review_lesson_change_request", {
         target_request_id: request.serverRequestId,
@@ -197,6 +213,8 @@ async function rejectMakeup(id) {
       showToast(`변경 요청 거절 완료${deductedSessions ? ` · ${deductedSessions}회 차감` : ""}`);
     } catch (error) {
       showToast(`거절 처리 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+    } finally {
+      request.reviewing = false;
     }
     return;
   }

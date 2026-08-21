@@ -3,7 +3,8 @@
 // 화면을 읽고 서버를 부르고 상태를 바꾼다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-async function saveBranchPaymentAccount() {
+async function saveBranchPaymentAccount(options = {}) {
+  const silent = options.silent === true;
   const client = window.TennisNoteDataClient;
   const branchId = activeOperationBranchId();
   const bankName = ($("#salesBranchBankName") || $("#branchBankName"))?.value.trim() || "";
@@ -15,7 +16,7 @@ async function saveBranchPaymentAccount() {
     $("#salesBranchBankDepositDeadlineHours") || $("#branchBankDepositDeadlineHours")
   )?.value || 24);
   const digits = accountNumber.replace(/[^0-9]/g, "");
-  if (!client?.insertRows || !client?.updateRows || !branchId || !adminApprovalReady()) {
+  if (!client?.rpc || !branchId || !adminApprovalReady()) {
     showToast("관리자 로그인과 운영 지점을 확인해 주세요");
     return false;
   }
@@ -40,16 +41,36 @@ async function saveBranchPaymentAccount() {
   if (button) button.disabled = true;
   try {
     const existing = String(branchPaymentAccount?.branch_id || "") === String(branchId);
-    const rows = existing
-      ? await client.updateRows("tn_branch_payment_accounts", { branch_id: branchId }, payload)
-      : await client.insertRows("tn_branch_payment_accounts", { branch_id: branchId, ...payload });
-    if (!rows?.[0]?.branch_id) throw new Error("bank_account_write_not_confirmed");
+    const saved = await client.rpc("tn_admin_save_branch_payment_account", {
+      target_branch_id: branchId,
+      target_bank_name: payload.bank_name,
+      target_account_number: payload.account_number,
+      target_account_holder: payload.account_holder,
+      target_transfer_instructions: payload.transfer_instructions,
+      target_deposit_deadline_hours: payload.deposit_deadline_hours,
+      target_is_enabled: payload.is_enabled,
+      target_expected_revision: existing && Number.isInteger(Number(branchPaymentAccount?.revision))
+        ? Number(branchPaymentAccount.revision)
+        : null,
+    });
+    const result = Array.isArray(saved) ? saved[0] || {} : saved || {};
+    if (result.ok !== true || String(result.branchId || "") !== String(branchId)) {
+      throw new Error("bank_account_write_not_confirmed");
+    }
     await loadBranchPaymentAccountFromServer();
     await loadBankNotificationStatusFromServer();
-    showToast(enabled ? "계좌이체 계좌를 서버에 저장하고 회원 결제에 표시했습니다" : "계좌를 저장하고 회원 결제 노출을 껐습니다");
+    if (!silent) {
+      showToast(enabled ? "계좌이체 계좌를 서버에 저장하고 회원 결제에 표시했습니다" : "계좌를 저장하고 회원 결제 노출을 껐습니다");
+    }
     return true;
   } catch (error) {
-    showToast(`계좌 저장 실패: ${error?.payload?.code || error?.message || "server_error"}`);
+    const code = error?.payload?.code || error?.message || "server_error";
+    if (String(code).includes("branch_payment_account_revision_conflict")) {
+      await loadBranchPaymentAccountFromServer();
+      showToast("다른 관리자가 계좌를 먼저 수정했습니다. 최신 내용을 확인하고 다시 저장해 주세요");
+    } else {
+      showToast(`계좌 저장 실패: ${code}`);
+    }
     return false;
   } finally {
     if (button?.isConnected) button.disabled = false;

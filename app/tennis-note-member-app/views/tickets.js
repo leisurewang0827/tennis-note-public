@@ -156,21 +156,41 @@ function renderCurrentTicketPanel() {
   if (demoTicket) visibleTickets.push(demoTicket);
   const currentTicketIds = new Set(currentTickets.map((ticket) => String(ticket.id || "")));
   const primaryTicket = visibleTickets[0] || null;
+  const lifecycle = memberPurchaseLifecycle();
+  const previousTicket = lifecycle === "returning" ? latestPreviousMembershipTicket() : null;
   const otherTickets = visibleTickets.slice(1);
   const primaryCard = primaryTicket
     ? membershipTicketCard(primaryTicket, { currentTicketIds, primary: true })
-    : `<article class="membership-empty-ticket"><strong>현재 회원권이 없습니다</strong><span>${escapeHtml(state.ticketSyncStatus?.text || "수업 형태를 고르면 추천 회원권을 바로 확인할 수 있습니다.")}</span></article>`;
+    : previousTicket
+      ? `<article class="membership-empty-ticket membership-previous-ticket">
+          <span>이전 회원권</span>
+          <strong>${escapeHtml(previousTicket.title || "회원권")}</strong>
+          <small>마지막 이용 ${escapeHtml(previousTicket.expiresOn || "기간 확인")}</small>
+          <p>다시 시작하시겠어요? 이전 수업 조건을 불러왔습니다.</p>
+        </article>`
+      : `<article class="membership-empty-ticket"><strong>아직 등록된 회원권이 없습니다</strong><span>상품과 선생님·시간을 한 번에 선택할 수 있습니다.</span></article>`;
   const otherTicketList = otherTickets.length
     ? `<details class="membership-other-tickets">
         <summary>다른 회원권 ${otherTickets.length}개</summary>
         <div>${otherTickets.map((ticket) => membershipTicketCard(ticket, { currentTicketIds, compact: true })).join("")}</div>
       </details>`
     : "";
+  const primaryAction = primaryTicket
+    ? `<button class="primary-button" type="button" data-renew-ticket="${escapeHtml(primaryTicket.id || "")}">연장</button>`
+    : previousTicket
+      ? `<button class="primary-button" type="button" data-reregister-ticket="${escapeHtml(previousTicket.id || "")}">재등록</button>`
+      : '<button class="primary-button" type="button" data-open-purchase-flow="new_purchase">등록</button>';
+  const secondaryAction = primaryTicket
+    ? '<button class="small-button membership-secondary-action" type="button" data-open-purchase-flow="add_coach">다른 코치·이용권 추가</button>'
+    : previousTicket
+      ? '<button class="small-button membership-secondary-action" type="button" data-open-purchase-flow="new_purchase">다른 상품으로 등록</button>'
+      : "";
   target.innerHTML = `
     ${primaryCard}
     <div class="membership-action-row ${primaryTicket ? "has-ticket" : "is-empty"}">
-      ${primaryTicket ? `<button class="primary-button" type="button" data-renew-ticket="${escapeHtml(primaryTicket.id || "")}">같은 조건으로 연장</button>` : ""}
-      <button class="${primaryTicket ? "small-button" : "primary-button"}" type="button" data-open-purchase-flow>${primaryTicket ? "다른 회원권" : "회원권 구매"}</button>
+      ${primaryAction}
+      ${secondaryAction}
+      <button class="small-button" type="button" data-open-discount-coupon-wallet>쿠폰함</button>
       <button class="small-button" type="button" data-open-membership-history>이용 내역</button>
     </div>
     ${otherTicketList}
@@ -240,5 +260,5 @@ function renderDiscountCouponWallet() {
         <small>${escapeHtml(coupon.targetLabel || "회원권")} · ${escapeHtml(expires)}</small>
       </article>`;
     }).join("")
-    : memberEmptyState({ title: "아직 발급된 할인 쿠폰이 없습니다", reason: "신규·재등록·추천 할인은 관리자 발급 후 바로 표시됩니다.", compact: true });
+    : memberEmptyState({ title: "아직 발급된 할인 쿠폰이 없습니다", reason: "사용 가능한 쿠폰이 여기에 표시됩니다.", compact: true });
 }

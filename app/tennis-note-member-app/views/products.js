@@ -132,20 +132,31 @@ function renderMembershipPurchaseFlow() {
   if (supportDetails) supportDetails.hidden = flow.open;
   if (!flow.open) return;
   const sourceTicket = purchaseFlowSourceTicket();
-  if ($("#membershipPurchaseFlowEyebrow")) $("#membershipPurchaseFlowEyebrow").textContent = sourceTicket ? "회원권 연장" : "회원권 구매";
-  if ($("#membershipPurchaseFlowTitle")) $("#membershipPurchaseFlowTitle").textContent = flow.step === 4 ? "신청이 접수되었습니다" : "한 화면에서 바로 선택하세요";
+  if ($("#membershipPurchaseFlowEyebrow")) $("#membershipPurchaseFlowEyebrow").textContent = flow.purchasePurpose === "renew_same"
+    ? "회원권 연장"
+    : sourceTicket && memberPurchaseLifecycle() === "returning" ? "회원권 재등록" : "회원권 등록";
+  if ($("#membershipPurchaseFlowTitle")) $("#membershipPurchaseFlowTitle").textContent = flow.step === 4 ? "신청이 접수되었습니다" : "선택 내용을 확인하세요";
   if ($("#membershipPurchaseProgress")) {
     $("#membershipPurchaseProgress").hidden = true;
     $("#membershipPurchaseProgress").innerHTML = "";
   }
   const stepHtml = flow.step === 4 ? purchaseStepFourHtml() : purchaseSinglePageHtml();
+  const canPay = purchaseStepCanContinue();
+  const selectedProduct = purchaseFlowProduct();
+  const payButtonLabel = membershipPurchasePaymentInFlight
+    ? "처리 중"
+    : selectedProduct ? `${formatWon(purchasePaymentAmount(selectedProduct, normalizeSelectedPaymentMethod()))} 결제` : "결제";
   const controls = flow.step === 4 ? "" : `
     <div class="purchase-step-actions">
       <button class="small-button" type="button" data-close-purchase-flow>취소</button>
-      <button class="primary-button" type="button" data-purchase-pay ${purchaseStepCanContinue() ? "" : "disabled"}>${escapeHtml(formatWon(purchasePaymentAmount(purchaseFlowProduct() || {}, normalizeSelectedPaymentMethod())))} 결제</button>
+      <div class="purchase-pay-action">
+        <button class="primary-button" type="button" data-purchase-pay aria-describedby="purchasePayReason" ${canPay && !membershipPurchasePaymentInFlight ? "" : "disabled"}>${escapeHtml(payButtonLabel)}</button>
+        <small id="purchasePayReason" role="status">${escapeHtml(purchaseContinueReason())}</small>
+      </div>
     </div>`;
   if ($("#membershipPurchaseStep")) $("#membershipPurchaseStep").innerHTML = `${stepHtml}${controls}`;
   renderPurchasePaymentMethodSheet();
+  if (!$("#purchaseProductSheet")?.hidden) renderPurchaseProductSheet();
   if (flow.step !== 4 && normalizeSelectedPaymentMethod() !== "bank_transfer") preloadPortOneSdk();
 }
 
@@ -154,56 +165,7 @@ function renderProducts() {
   renderCurrentTicketPanel();
   renderGroupAccountPanel();
   renderMemberPaymentAlerts();
-  const activeProducts = membershipProducts();
-  normalizeMembershipFilters(activeProducts);
-  const matchingProducts = filteredMembershipProducts(activeProducts);
-  const activeFamilyId = activeMembershipPresetId();
-  const visibleProducts = recommendedMembershipProducts(matchingProducts, activeFamilyId);
-  const matchingProductCount = activeFamilyId === "coupon"
-    ? distinctMembershipProductsForFamily("coupon", matchingProducts).length
-    : matchingProducts.length;
-  renderMembershipProductFilters(activeProducts, matchingProducts);
   renderRegistrationFlow();
-  $("#productGrid").innerHTML = visibleProducts.length
-    ? `
-        <section class="product-group">
-          <div class="product-group-heading">
-            <h3>${escapeHtml(activeFamilyId ? membershipProductFamilyDefinition(activeFamilyId).label : "조건 맞춤 회원권")}</h3>
-            <span>${matchingProductCount}개 중 추천 ${visibleProducts.length}개</span>
-          </div>
-          <div class="product-group-grid">
-            ${visibleProducts
-              .map(
-                (product) => `
-        <article class="product-card ${product.mode}">
-          <div class="product-card-summary">
-            <div class="product-card-title">
-              <i>${escapeHtml(product.status === "consult" ? "상담" : product.badge)}</i>
-              <strong>${escapeHtml(purchaseProductDisplayTitle(product))}</strong>
-            </div>
-            <div class="product-meta-pills">${productUsagePills(product)}</div>
-          </div>
-          ${productPriceRows(product)}
-          <details class="product-card-details">
-            <summary>이용 조건</summary>
-            <div>
-              <p>${escapeHtml(product.detail)}</p>
-              <small>${escapeHtml(product.rule)}</small>
-              <small>${escapeHtml(productOperationNote(product))}</small>
-              <small>${escapeHtml(product.coach)}</small>
-            </div>
-          </details>
-          <button class="primary-button" type="button" data-buy-product="${product.id}">${product.status === "consult" || !product.amount ? "상담 단계로" : "이 회원권 선택"}</button>
-        </article>`,
-              )
-              .join("")}
-          </div>
-        </section>`
-    : memberEmptyState({
-      title: "선택한 조건의 회원권이 없습니다",
-      reason: "다른 이용 요일이나 수업 조건을 선택해 주세요.",
-      compact: true,
-    });
 
   const passItems = membershipPassRecords();
   const passPage = normalizePage("expired", passItems.length);

@@ -669,7 +669,7 @@ function renderSchedule() {
                       style="grid-row:${startIndex + 1} / span ${span}; grid-column:${coachIndex + 1};"
                     >
                       <span>가능</span>
-                      <small>${policyShortLabel(lesson.policy)}</small>
+                      <small>${policyShortLabel(lesson.policy, memberChangePolicySnapshot(lesson))}</small>
                     </button>`;
                 })
                 .join("")}
@@ -718,6 +718,7 @@ function renderAvailableSlots() {
   const requiredCount = Math.max(1, Number(source?.frequencyPerWeek) || 1);
   const selectedIds = isRegularInitialBooking ? state.regularInitialSelections : [selectedId].filter(Boolean);
   if ($("#requestMakeup")) $("#requestMakeup").textContent = memberChangeSubmitLabel(source, selected);
+  renderMemberChangeReasonControl(source, selected);
   if ($("#changePolicyNote")) {
     $("#changePolicyNote").textContent = isRegularInitialBooking
       ? isPausedResumeBooking
@@ -727,7 +728,16 @@ function renderAvailableSlots() {
         ? "불참 처리된 수업의 보강입니다. 시간을 선택하면 즉시 예약됩니다."
         : isCouponBooking
           ? "담당 코치의 빈 시간을 선택하면 쿠폰 수업으로 즉시 예약됩니다."
-          : selected ? policyDetail(selected.policy) : "24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요";
+          : selected
+            ? policyDetail(selected.policy, memberChangePolicySnapshot(selected))
+            : state.serverChangeBlockedReason
+              ? memberChangeBlockedMessage(state.serverChangeBlockedReason, memberChangePolicySnapshot())
+              : memberChangePolicySnapshot()
+                ? policyDetail(
+                  memberChangePolicySnapshot()?.outcome === "auto" ? "auto" : "coach",
+                  memberChangePolicySnapshot(),
+                )
+                : "수업 변경 규칙을 확인하고 있습니다.";
   }
   renderChangeModalSummary();
   if (!target) return;

@@ -46,6 +46,9 @@ function membershipProductFromServer(row = {}) {
     maxSessionsPerDay: numericValue(row.max_sessions_per_day),
     maxSessionsPerWeek: numericValue(row.max_sessions_per_week),
     maxBookingDaysPerWeek: numericValue(row.max_booking_days_per_week),
+    makeupAnchorMinutes: row.makeup_anchor_minutes === null
+      ? null
+      : numericValue(row.makeup_anchor_minutes, 40),
     scheduleScope: ["weekday", "weekend", "mixed"].includes(row.schedule_scope) ? row.schedule_scope : "weekday",
     termWeeks: numericValue(row.term_weeks),
     productKind,

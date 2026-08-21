@@ -145,6 +145,8 @@ function paymentServerErrorMessage(error) {
     purchase_schedule_weekly_duplicate: "같은 요일과 시간은 한 번만 선택할 수 있습니다.",
     purchase_schedule_same_week_required: "주 1·2·3회 수업은 같은 주 안에서 선택해 주세요.",
     purchase_weekend_30m_not_available: "30분 수업은 평일 시간표에서 선택해 주세요.",
+    purchase_slot_anchor_required: "선택한 선생님의 기존 수업과 가까운 시간만 신청할 수 있습니다.",
+    purchase_slot_outside_anchor_window: "기존 수업 전후 40분 안의 시간을 선택해 주세요.",
   };
   return labels[code] || code;
 }
@@ -234,6 +236,7 @@ function selectPaymentMethod(methodId) {
     flow.discountSelectionMode = "auto";
   }
   state.selectedPaymentMethod = methodId;
+  clearPurchasePaymentError();
   saveSnapshot();
   if (purchaseFlowState().open) renderMembershipPurchaseFlow();
   else renderProducts();

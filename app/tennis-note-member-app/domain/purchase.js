@@ -20,7 +20,10 @@ function isGroupMembershipProduct(product = {}) {
 
 function purchaseFlowProduct() {
   const flow = purchaseFlowState();
-  return membershipProducts().find((product) => String(product.id || "") === String(flow.productId || "")) || null;
+  return membershipProducts().find((product) => (
+    String(product.id || "") === String(flow.productId || "")
+    && isDirectPurchaseMembershipProduct(product)
+  )) || null;
 }
 
 function purchaseProductDisplayTitle(product = {}) {
@@ -103,7 +106,9 @@ function purchaseHasCoachLessonAtDate(scheduleLessons, lessonDate, time, coach, 
     if (lesson.status === "available" || String(lesson.lessonDate || "") !== lessonDate) return false;
     const lessonStatus = String(lesson.serverStatus || lesson.status || "").toLowerCase();
     if (["cancelled", "canceled", "absence", "absent", "makeup_due"].includes(lessonStatus)) return false;
-    if (memberLessonCoach(lesson, policy).id !== coach.id) return false;
+    const lessonCoachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || memberLessonCoach(lesson, policy).id || "");
+    const coachRoleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    if (lessonCoachRoleId !== coachRoleId) return false;
     const lessonStart = minutesFromTime(lesson.time);
     const lessonEnd = lessonStart + lessonDuration(lesson);
     return slotStart < lessonEnd && slotEnd > lessonStart;
@@ -144,11 +149,12 @@ function purchaseProductCard(product = {}, selected = false) {
   const family = membershipProductFamilyDefinition(product);
   const paymentMethod = paymentMethodDefinition(normalizeSelectedPaymentMethod());
   const amount = purchasePaymentAmount(product, paymentMethod.id);
+  const validityLabel = Number(product.validityDays || 0) > 0 ? `사용 ${Number(product.validityDays)}일` : "";
   return `
     <button class="purchase-product-option ${selected ? "is-selected" : ""}" type="button" data-purchase-product="${escapeHtml(product.id || "")}" aria-pressed="${selected}">
       <span>${escapeHtml(family.label)} · ${escapeHtml(product.badge || `${product.tickets || 0}회`)}</span>
       <strong>${escapeHtml(purchaseProductDisplayTitle(product))}</strong>
-      <small>${escapeHtml(product.detail || "")} · ${escapeHtml(product.format || "")}</small>
+      ${validityLabel ? `<small>${escapeHtml(validityLabel)}</small>` : ""}
       <b>${escapeHtml(paymentMethod.shortLabel)} ${escapeHtml(formatWon(amount))}</b>
     </button>`;
 }
@@ -178,19 +184,17 @@ function purchaseStepOneHtml() {
   const products = membershipProducts();
   const sourceTicket = purchaseFlowSourceTicket();
   const matchingProducts = purchaseMatchingProducts(products, sourceTicket)
-    .sort((left, right) => membershipProductRecommendationScore(right, sourceTicket) - membershipProductRecommendationScore(left, sourceTicket));
-  const recommendations = matchingProducts.slice(0, 3);
-  const visibleProducts = flow.showAllProducts ? matchingProducts : recommendations;
+    .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999)
+      || purchaseProductDisplayTitle(left).localeCompare(purchaseProductDisplayTitle(right), "ko"));
   const renewing = flow.purchasePurpose === "renew_same" && Boolean(sourceTicket);
   return `
     <div class="purchase-family-grid" role="group" aria-label="수업 형태">${purchaseFamilyOptionsHtml(products, flow.familyId)}</div>
     ${purchaseSimpleProductFiltersHtml()}
-    <div class="purchase-recommendations">
-      <div><strong>${renewing ? "연장 상품" : "상품 선택"}</strong><span>${matchingProducts.length}개</span></div>
-      ${visibleProducts.length
-    ? visibleProducts.map((product) => purchaseProductCard(product, String(product.id) === String(flow.productId))).join("")
+    <div class="purchase-product-options">
+      <div><strong>${renewing ? "연장 기간" : "상품"}</strong><span>${matchingProducts.length}개</span></div>
+      ${matchingProducts.length
+    ? matchingProducts.map((product) => purchaseProductCard(product, String(product.id) === String(flow.productId))).join("")
     : purchaseEmptyFamilyHtml(flow.familyId)}
-      ${matchingProducts.length > 3 ? `<button class="small-button purchase-show-all-products" type="button" data-purchase-show-all-products>${flow.showAllProducts ? "추천 상품만 보기" : `전체 상품 ${matchingProducts.length}개 보기`}</button>` : ""}
     </div>`;
 }
 
@@ -205,7 +209,10 @@ function purchasePaymentMethodOptionsHtml() {
     const amount = purchasePaymentAmount(purchaseFlowProduct() || {}, method.id);
     return `<button class="payment-method-option ${selected ? "is-selected" : ""}" type="button" data-select-payment-method="${method.id}" aria-pressed="${selected}"><strong>${method.label} · ${escapeHtml(formatWon(amount))}</strong><small>${method.detail}</small></button>`;
   }).join("");
-  if (readyMethods.length) return methodOptions;
+  const bankUnavailable = !readyMethods.some((method) => method.id === "bank_transfer")
+    ? '<p class="payment-method-unavailable-note" role="status">현재 계좌이체를 사용할 수 없습니다.</p>'
+    : "";
+  if (readyMethods.length) return `${methodOptions}${bankUnavailable}`;
   return '<p class="payment-method-unavailable" role="status">온라인 결제를 준비하고 있습니다. 지금은 센터에 문의해 주세요.</p>';
 }
 
@@ -222,6 +229,9 @@ function purchaseStepThreeHtml() {
   const discountQuote = ensureBestPurchaseDiscountCoupon(product, method.id);
   const amount = purchasePaymentAmount(product, method.id);
   const automaticOffer = membershipPricingQuote(product)?.eligible === true;
+  const paymentError = flow.paymentErrorMessage
+    ? `<div class="purchase-payment-error" role="alert"><span>${escapeHtml(flow.paymentErrorMessage)}</span>${flow.paymentErrorCode === "bank_transfer_account_lookup_failed" ? '<button class="small-button" type="button" data-retry-bank-transfer>다시 확인</button>' : ""}</div>`
+    : "";
   const couponControl = automaticOffer
     ? '<p class="purchase-coupon-note">신규 첫 수업 15,000원 혜택이 자동 적용되어 다른 쿠폰과 중복되지 않습니다.</p>'
     : coupons.length
@@ -235,7 +245,8 @@ function purchaseStepThreeHtml() {
     </button>
     ${couponControl}
     ${discountQuote ? `<p class="purchase-discount-result"><span>쿠폰 할인</span><strong>-${escapeHtml(formatWon(discountQuote.discountAmount))}</strong></p>` : ""}
-    <p class="purchase-policy-note">결제 완료 전에는 회원권이 생성되지 않습니다. 결제가 확인되면 회원·코치·관리자 화면에서 같은 회원권을 조회합니다.</p>`;
+    ${paymentError}
+    <p class="purchase-policy-note">결제가 확인된 뒤 회원권이 생성됩니다.</p>`;
 }
 
 function purchaseStepFourHtml() {
@@ -287,16 +298,25 @@ function purchaseSinglePageHtml() {
     && flow.scheduleMode === "keep"
     && membershipProductFacet(product, "productKind") !== "coupon"
   );
-  const scheduleHeading = flow.purchasePurpose === "renew_same" ? "2. 변경할 시간" : "2. 선생님·시간";
-  const paymentHeading = keepRenewalSchedule ? "2. 결제" : "3. 결제";
+  const lesson = sourceTicket ? purchaseTicketLesson(sourceTicket) : null;
+  const selectedSchedules = purchaseSelectedSchedules(product);
+  const selectedCoachName = flow.coachName || sourceTicket?.coach || memberScheduleTicketCoachName(sourceTicket || {}) || "";
+  const scheduleSummary = keepRenewalSchedule
+    ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치 · ${lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 시간 유지"}`
+    : selectedSchedules.length
+      ? `${memberCoachShortName(selectedCoachName || "선택한 코치")} 코치 · ${selectedSchedules.map((schedule) => `${schedule.day} ${schedule.startTime}`).join(" · ")}`
+      : "선생님과 시간을 선택해 주세요";
   return `
     ${purchasePurposeOptionsHtml()}
-    <section class="purchase-single-section" aria-labelledby="purchaseProductHeading">
-      <h4 id="purchaseProductHeading">1. ${flow.purchasePurpose === "renew_same" ? "기간" : "상품"}</h4>
-      ${purchaseStepOneHtml()}
-    </section>
-    ${product ? `${keepRenewalSchedule ? "" : `<section class="purchase-single-section" aria-labelledby="purchaseScheduleHeading"><h4 id="purchaseScheduleHeading">${scheduleHeading}</h4>${purchaseStepTwoHtml()}</section>`}
-      <section class="purchase-single-section" aria-labelledby="purchasePaymentHeading"><h4 id="purchasePaymentHeading">${paymentHeading}</h4>${purchaseStepThreeHtml()}</section>` : ""}`;
+    <section class="purchase-selection-summary" aria-label="결제 선택 내용">
+      <button class="purchase-selection-row" type="button" data-open-purchase-product aria-haspopup="dialog">
+        <span><small>상품</small><strong>${escapeHtml(product ? purchaseProductDisplayTitle(product) : "상품을 선택해 주세요")}</strong></span><em>변경</em>
+      </button>
+      ${product ? `<button class="purchase-selection-row" type="button" ${keepRenewalSchedule ? "data-edit-purchase-renewal-schedule" : "data-open-purchase-schedule"} aria-haspopup="dialog">
+        <span><small>선생님·시간</small><strong>${escapeHtml(scheduleSummary)}</strong></span><em>변경</em>
+      </button>
+      <div class="purchase-selection-payment">${purchaseStepThreeHtml()}</div>` : ""}
+    </section>`;
 }
 
 function selectPurchaseRenewalTicket(ticketId = "") {
@@ -306,7 +326,22 @@ function selectPurchaseRenewalTicket(ticketId = "") {
 }
 
 async function submitMembershipPurchaseFlow() {
+  if (membershipPurchasePaymentInFlight) return;
   const product = purchaseFlowProduct();
   if (!product || !purchaseStepCanContinue()) return;
-  await startProductPayment(product.id);
+  membershipPurchasePaymentInFlight = true;
+  renderMembershipPurchaseFlow();
+  try {
+    if (state.dataMode === "live") {
+      const ready = await refreshPurchaseScheduleAvailability();
+      if (!ready || !purchaseStepCanContinue()) {
+        showToast("최신 시간표에서 가능한 시간을 다시 확인해 주세요.");
+        return;
+      }
+    }
+    await startProductPayment(product.id);
+  } finally {
+    membershipPurchasePaymentInFlight = false;
+    if (purchaseFlowState().open) renderMembershipPurchaseFlow();
+  }
 }

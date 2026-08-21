@@ -165,6 +165,8 @@ function applyPurchaseScheduleSlot(selectedSlot = {}) {
     coachName: selectedSlot.coachName || "",
     durationMinutes: Math.max(10, Number(selectedProduct.lessonMinutes) || 20),
   };
+  reconcilePurchaseSchedulesAfterRefresh(selectedProduct);
+  const requiredCount = purchaseRequiredScheduleCount(selectedProduct);
   const selectedWeek = purchaseScheduleSelectionWeek(flow.preferredSchedules);
   const nextWeek = purchaseWeekStartDate(nextSchedule.lessonDate);
   if (selectedWeek && selectedWeek !== nextWeek) {
@@ -176,12 +178,15 @@ function applyPurchaseScheduleSlot(selectedSlot = {}) {
   if (existingIndex >= 0) {
     flow.preferredSchedules.splice(existingIndex, 1);
   } else {
-    const requiredCount = purchaseRequiredScheduleCount(selectedProduct);
     if (flow.preferredSchedules.length >= requiredCount) {
-      showToast(`주 ${requiredCount}회 상품은 시간 ${requiredCount}개만 선택할 수 있습니다. 기존 선택을 눌러 해제해 주세요.`);
-      return false;
+      if (requiredCount === 1) flow.preferredSchedules = [nextSchedule];
+      else {
+        showToast(`주 ${requiredCount}회 상품은 시간 ${requiredCount}개만 선택할 수 있습니다. 선택 초기화 후 다시 골라주세요.`);
+        return false;
+      }
+    } else {
+      flow.preferredSchedules.push(nextSchedule);
     }
-    flow.preferredSchedules.push(nextSchedule);
   }
   syncLegacyPurchaseScheduleFields();
   saveSnapshot();

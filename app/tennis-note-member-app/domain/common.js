@@ -205,7 +205,7 @@ function ensureDemoPresentation() {
         absence: "수 20:00 기존 수업",
         makeup: "금 19:00 수업 변경 희망 · 강 코치",
         reason: "회사 일정",
-        policy: "24시간 이전 요청이라 자동 변경됩니다.",
+        policy: "운영 기준시간 이상 남아 자동 변경되었습니다.",
         status: "자동 변경 완료",
       },
     ];
@@ -334,12 +334,14 @@ function purchaseFlowState() {
     : [];
   state.purchaseFlow.discountIssueId = String(state.purchaseFlow.discountIssueId || "");
   state.purchaseFlow.discountSelectionMode = state.purchaseFlow.discountSelectionMode === "manual" ? "manual" : "auto";
+  state.purchaseFlow.paymentErrorCode = String(state.purchaseFlow.paymentErrorCode || "");
+  state.purchaseFlow.paymentErrorMessage = String(state.purchaseFlow.paymentErrorMessage || "");
   return state.purchaseFlow;
 }
 
 function purchaseAvailabilityRange() {
   const today = purchaseEffectiveStartDate();
-  const workspace = memberScheduleV2WorkspaceCache?.workspace || {};
+  const workspace = purchaseDirectoryForCurrentProduct() || memberScheduleV2WorkspaceCache?.workspace || {};
   const start = [today, String(workspace.from || "")].filter(Boolean).sort().at(-1) || today;
   const defaultEndDate = new Date(`${start}T12:00:00`);
   defaultEndDate.setDate(defaultEndDate.getDate() + 20);

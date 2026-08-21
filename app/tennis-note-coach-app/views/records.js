@@ -27,7 +27,12 @@ function renderMakeupApprovalPanel() {
       <article class="modal-info-card">
         <span>현재 상태</span>
         <strong>${request.status}</strong>
-        <small>${requestCoach(request)} 담당 요청입니다.</small>
+        <small>${requestCoach(request)} 담당 · ${request.policy}</small>
+      </article>
+      <article class="modal-info-card">
+        <span>변경 사유</span>
+        <strong>${escapeHtml(request.reason || "이유 미입력")}</strong>
+        <small>${escapeHtml(request.requestedAt || "신청 시각 확인 필요")} · ${escapeHtml(request.remainingTime || "남은 시간 확인 필요")}</small>
       </article>
       <article class="modal-info-card">
         <span>연결 기록</span>
@@ -37,8 +42,8 @@ function renderMakeupApprovalPanel() {
       <p class="permission-note wide">${rejectionWarning}</p>
       <div class="actions wide">
         ${linkedLog ? `<button class="small-button" type="button" data-open-linked-log="${request.id}">회원기록 보기</button>` : ""}
-        ${canReview ? `<button class="approve-button" type="button" data-approve-makeup="${request.id}">승인</button>
-        <button class="reject-button" type="button" data-reject-makeup="${request.id}">거절</button>` : '<span class="permission-note">관리자 승인 요청입니다.</span>'}
+        ${canReview ? `<button class="approve-button" type="button" data-approve-makeup="${request.id}" ${request.reviewing ? "disabled" : ""}>${request.reviewing ? "처리 중" : "승인"}</button>
+        <button class="reject-button" type="button" data-reject-makeup="${request.id}" ${request.reviewing ? "disabled" : ""}>거절</button>` : '<span class="permission-note">담당 코치 또는 관리자만 처리할 수 있습니다.</span>'}
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>
     </section>`;
@@ -108,7 +113,7 @@ function renderMakeups() {
             <div>
               <strong>${request.member}</strong>
               <span>${request.original} → ${request.requested}</span>
-              <small>${request.policy || "24시간 이내 변경 승인 요청"}</small>
+              <small>${request.policy || "수업 변경 승인 요청"}</small>
             </div>
             <div class="actions">
               <b>${request.status}</b>
