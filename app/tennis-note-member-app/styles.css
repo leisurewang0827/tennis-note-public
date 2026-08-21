@@ -4072,6 +4072,12 @@ button.purchase-timetable-cell {
   gap: 8px;
 }
 
+.purchase-quick-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .purchase-show-more-slots {
   width: 100%;
   min-height: 44px;
@@ -4323,7 +4329,8 @@ button.purchase-timetable-cell {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .purchase-slot-card-grid {
+  .purchase-slot-card-grid,
+  .purchase-quick-slot-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -7872,6 +7879,36 @@ body.notice-open {
 
 .membership-action-row button {
   width: 100%;
+}
+
+.membership-more-actions {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.membership-more-actions > summary {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+  list-style: none;
+}
+
+.membership-more-actions > summary::-webkit-details-marker {
+  display: none;
+}
+
+.membership-more-actions > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .membership-pending-actions {

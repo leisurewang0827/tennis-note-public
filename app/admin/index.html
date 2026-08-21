@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.383" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.384" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-15" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.383" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.384" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -461,13 +461,14 @@
                 <input id="scheduleV2LessonSearch" type="search" autocomplete="off" placeholder="이름 입력" />
               </label>
               <div class="schedule-v2-toolbar-actions">
+                <button id="scheduleV2FeedbackFilter" type="button" aria-pressed="false">피드백 미작성만</button>
                 <button id="scheduleV2ClosureButton" type="button">운영일·휴무</button>
               </div>
             </div>
             <div class="schedule-v2-layout">
               <div class="schedule-v2-main">
                 <div class="schedule-v2-legend" aria-label="수업 종류">
-                  <span data-kind="regular">정규</span><span data-kind="makeup">보강</span><span data-kind="coupon">쿠폰</span><span data-kind="one_day">원데이</span><span data-kind="pending">승인 대기</span><span data-kind="closure">휴무</span>
+                  <span data-kind="regular">정규</span><span data-kind="changed">보강·쿠폰·원데이</span><span data-kind="complete">피드백 완료</span><span data-kind="problem">피드백 필요·노쇼</span><span data-kind="pending">승인 대기</span><span data-kind="closure">휴무</span>
                 </div>
                 <div id="scheduleV2Grid" class="schedule-v2-grid" aria-live="polite">
                   <div class="schedule-v2-loading">시간표 불러오는 중</div>
@@ -2114,20 +2115,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.383"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.383"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.383"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.384"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.384"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.384"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.383"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.384"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.383"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.383"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.383"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.383"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.383"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.383"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.384"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.384"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.384"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.384"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.384"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.384"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.383"></script>
+    <script src="./app.js?v=1.0.384"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-15"></script>
   </body>
 </html>
