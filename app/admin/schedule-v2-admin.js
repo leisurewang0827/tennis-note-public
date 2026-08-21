@@ -95,6 +95,7 @@
     lastSearchScrollKey: "",
     renderMode: "",
     showArchivedHistory: false,
+    feedbackOnly: false,
     cancelConfirmationKey: "",
     revisionWatcher: null,
     absorbingRevisionRefresh: false,
@@ -267,6 +268,7 @@
       selectedDate: state.selectedDate,
       pageScrollY: state.editorOpen ? state.editorScrollY : Math.max(0, window.scrollY || 0),
       search: String($("#scheduleV2LessonSearch")?.value || ""),
+      feedbackOnly: state.feedbackOnly,
       focus: focusLessonId ? { type: "lesson", value: String(focusLessonId) } : workspaceFocusToken(),
       scrollContainers,
     };
@@ -278,6 +280,8 @@
     state.selectedDate = snapshot.selectedDate || state.selectedDate;
     const searchInput = $("#scheduleV2LessonSearch");
     if (searchInput) searchInput.value = snapshot.search || "";
+    state.feedbackOnly = snapshot.feedbackOnly === true;
+    syncFeedbackFilterButton();
     const restore = () => {
       const containers = document.querySelectorAll("#scheduleV2Grid .schedule-v2-week-scroll, #scheduleV2Grid .schedule-v2-period-scroll");
       (snapshot.scrollContainers || []).forEach((item) => {
@@ -1575,10 +1579,10 @@
           && lessonsOverlapEachOther(lesson, history)
         ));
         const historyLabel = relatedHistory.map(lessonHistoryLabel).join(" / ");
-        const searchText = `${memberLabel} ${historyLabel}`.trim().toLowerCase();
         const coach = plan.coachById.get(String(lesson.coachRoleId));
         const scheduledAvailable = coach ? coachAvailableAt(coach, plan.dayOfWeek, timeMinutes(startTime), plan.hasConfiguredAvailability) : false;
-        lessonCards.push(`<button type="button" class="schedule-v2-lesson schedule-v2-week-lesson kind-${escapeHtml(kind)} status-${escapeHtml(lesson.status || "scheduled")} ${search && !searchText.includes(search) ? "is-filtered" : ""} ${scheduledAvailable ? "" : "is-outside-hours"}" data-v2-lesson-id="${escapeHtml(lesson.id)}" data-v2-search-text="${escapeHtml(searchText)}" style="grid-row:${rowIndex + 3} / span ${span};grid-column:${plan.columnStart + lane}" aria-label="${escapeHtml(lessonEditAriaLabel(lesson, memberLabel, kind))}"><strong>${escapeHtml(memberLabel)}</strong><span>${escapeHtml(kindLabels[kind] || kind)} · ${Number(lesson.durationMinutes || 20)}분 · ${escapeHtml(statusLabels[lesson.status] || lesson.status || "예정")}${escapeHtml(substituteLabel)}</span>${historyLabel ? `<small class="schedule-v2-lesson-history">기존 ${escapeHtml(historyLabel)} 자리</small>` : ""}${scheduledAvailable ? "" : '<small class="schedule-v2-lesson-warning">근무시간 확인 필요</small>'}</button>`);
+        const card = lessonCardMarkup(lesson, { memberLabel, kind, historyLabel, substituteLabel, scheduledAvailable });
+        lessonCards.push(`<button type="button" class="schedule-v2-lesson schedule-v2-week-lesson kind-${escapeHtml(kind)} status-${escapeHtml(lesson.status || "scheduled")} ${card.classes} ${search && !card.searchText.includes(search) ? "is-filtered" : ""} ${scheduledAvailable ? "" : "is-outside-hours"}" data-v2-lesson-id="${escapeHtml(lesson.id)}" data-v2-search-text="${escapeHtml(card.searchText)}" data-v2-feedback-pending="${card.needsFeedback}" style="grid-row:${rowIndex + 3} / span ${span};grid-column:${plan.columnStart + lane}" aria-label="${escapeHtml(`${lessonEditAriaLabel(lesson, memberLabel, kind)} · ${lessonCardState(lesson).label}`)}"><strong>${escapeHtml(memberLabel)}</strong>${card.detailMarkup}${card.stateMarkup}</button>`);
       });
 
       collections.standaloneHistory.forEach((lesson) => {
@@ -1655,7 +1659,7 @@
       }
       const overrideClass = lockedOverride ? "is-locked-override" : "";
       const overrideText = lockedOverride ? "브레이크 · 관리자 수동 등록" : closure ? `${closureLabel} 관리자 수업 추가` : "수업 추가";
-      return `<button class="schedule-v2-slot schedule-v2-add ${closureClass} ${overrideClass}" type="button" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" data-v2-add data-date="${state.selectedDate}" data-time="${time}" data-duration-minutes="${defaultAddDurationMinutes}" data-coach-role-id="${escapeHtml(coach.roleId)}" aria-label="${escapeHtml(`${coach.name} ${time} ${defaultAddDurationMinutes}분 ${overrideText}`)}" ${lockedOverride || closure ? `title="${escapeHtml(`${overrideText} 가능`)}"` : ""}>+</button>`;
+      return `<button class="schedule-v2-slot schedule-v2-add ${closureClass} ${overrideClass}" type="button" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" data-v2-add data-date="${state.selectedDate}" data-time="${time}" data-duration-minutes="${defaultAddDurationMinutes}" data-coach-role-id="${escapeHtml(coach.roleId)}" aria-label="${escapeHtml(`${coach.name} ${time} ${defaultAddDurationMinutes}분 ${overrideText}`)}" ${lockedOverride || closure ? `title="${escapeHtml(`${overrideText} 가능`)}"` : ""}></button>`;
     })).join("");
     const lessonCards = activeLessons.map((lesson) => {
       const rowIndex = startIndex.get(String(lesson.startTime).slice(0, 5));
@@ -1672,9 +1676,9 @@
         && lessonsOverlapEachOther(lesson, history)
       ));
       const historyLabel = relatedHistory.map(lessonHistoryLabel).join(" / ");
-      const searchText = `${memberLabel} ${historyLabel}`.trim().toLowerCase();
-      const filtered = search && !searchText.includes(search);
-      return `<button type="button" class="schedule-v2-lesson kind-${escapeHtml(kind)} status-${escapeHtml(lesson.status || "scheduled")} ${filtered ? "is-filtered" : ""}" data-v2-lesson-id="${escapeHtml(lesson.id)}" data-v2-search-text="${escapeHtml(searchText)}" style="grid-row:${rowIndex + 2} / span ${span};grid-column:${laneIndex + 2}" aria-label="${escapeHtml(lessonEditAriaLabel(lesson, memberLabel, kind))}"><strong>${escapeHtml(memberLabel)}</strong><span>${escapeHtml(kindLabels[kind] || kind)} · ${Number(lesson.durationMinutes || 20)}분 · ${escapeHtml(statusLabels[lesson.status] || lesson.status || "예정")}${escapeHtml(substituteLabel)}</span>${historyLabel ? `<small class="schedule-v2-lesson-history">기존 ${escapeHtml(historyLabel)} 자리</small>` : ""}</button>`;
+      const card = lessonCardMarkup(lesson, { memberLabel, kind, historyLabel, substituteLabel });
+      const filtered = search && !card.searchText.includes(search);
+      return `<button type="button" class="schedule-v2-lesson kind-${escapeHtml(kind)} status-${escapeHtml(lesson.status || "scheduled")} ${card.classes} ${filtered ? "is-filtered" : ""}" data-v2-lesson-id="${escapeHtml(lesson.id)}" data-v2-search-text="${escapeHtml(card.searchText)}" data-v2-feedback-pending="${card.needsFeedback}" style="grid-row:${rowIndex + 2} / span ${span};grid-column:${laneIndex + 2}" aria-label="${escapeHtml(`${lessonEditAriaLabel(lesson, memberLabel, kind)} · ${lessonCardState(lesson).label}`)}"><strong>${escapeHtml(memberLabel)}</strong>${card.detailMarkup}${card.stateMarkup}</button>`;
     }).join("");
     const historyCards = standaloneHistory.map((lesson) => {
       const rowIndex = startIndex.get(String(lesson.startTime).slice(0, 5));
@@ -1787,15 +1791,85 @@
     applyLessonSearchFilter({ scrollToMatch: true });
   }
 
+  function lessonEndPassed(lesson = {}, now = new Date()) {
+    const date = String(lesson.lessonDate || lesson.lesson_date || "").trim();
+    const time = String(lesson.startTime || lesson.start_time || "").slice(0, 5);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return false;
+    const end = new Date(`${date}T${time}:00`);
+    if (!Number.isFinite(end.getTime())) return false;
+    end.setMinutes(end.getMinutes() + Math.max(1, Number(lesson.durationMinutes || lesson.duration_minutes) || 20));
+    return now.getTime() >= end.getTime();
+  }
+
+  function lessonCardState(lesson = {}, now = new Date()) {
+    const status = String(lesson.status || "scheduled").toLowerCase();
+    const participants = Array.isArray(lesson.participants) ? lesson.participants : [];
+    const finalParticipants = participants.filter(outcomeRowFinal);
+    const incompleteCount = Math.max(0, participants.length - finalParticipants.length);
+    const finalizedOutcomes = finalParticipants.map((participant) => String(participant.outcome || "completed").toLowerCase());
+    const deducted = finalParticipants.some((participant) => Number(participant.deductedSessions ?? participant.deducted_sessions) > 0);
+    const ended = lessonEndPassed(lesson, now);
+
+    if (status === "pending_change") {
+      return { id: "approval", label: "승인 대기", className: "record-approval", needsFeedback: false };
+    }
+    if (["cancelled", "holiday"].includes(status)) {
+      return { id: status, label: statusLabels[status] || "취소", className: "record-neutral", needsFeedback: false };
+    }
+    if (finalizedOutcomes.includes("no_show") || status === "no_show") {
+      return { id: "no_show", label: `노쇼 · ${deducted ? "1회 차감" : "차감 없음"}`, className: "record-problem outcome-no-show", needsFeedback: false };
+    }
+    if (finalizedOutcomes.includes("absence") || status === "absent") {
+      return { id: "absence", label: `불참 · ${deducted ? "1회 차감" : "차감 없음"}`, className: "record-neutral outcome-absence", needsFeedback: false };
+    }
+    if (participants.length && incompleteCount > 0 && ended) {
+      const label = participants.length > 1
+        ? `${participants.length}명 중 ${incompleteCount}명 미작성`
+        : "피드백 필요";
+      return { id: "feedback_pending", label, className: "record-problem", needsFeedback: true };
+    }
+    if (!participants.length && ended && ["scheduled", "reserved", "completed"].includes(status)) {
+      return { id: "feedback_pending", label: "피드백 필요", className: "record-problem", needsFeedback: true };
+    }
+    if (participants.length && finalParticipants.length === participants.length) {
+      return { id: "feedback_complete", label: "피드백 완료", className: "record-complete", needsFeedback: false };
+    }
+    return { id: "scheduled", label: statusLabels[status] || "예정", className: "record-planned", needsFeedback: false };
+  }
+
+  function lessonCardMarkup(lesson, { memberLabel, kind, historyLabel = "", substituteLabel = "", scheduledAvailable = true } = {}) {
+    const cardState = lessonCardState(lesson);
+    const typeClass = kind === "regular" ? "type-regular" : "type-changed";
+    const kindLabel = kindLabels[kind] || kind || "수업";
+    const searchText = `${memberLabel} ${historyLabel} ${kindLabel} ${cardState.label}`.trim().toLowerCase();
+    return {
+      classes: `${typeClass} ${cardState.className}`,
+      searchText,
+      stateMarkup: `<small class="schedule-v2-card-state">${escapeHtml(cardState.label)}</small>`,
+      detailMarkup: `<span>${escapeHtml(kindLabel)} · ${Number(lesson.durationMinutes || 20)}분${escapeHtml(substituteLabel)}</span>${historyLabel ? `<small class="schedule-v2-lesson-history">기존 ${escapeHtml(historyLabel)} 자리</small>` : ""}${scheduledAvailable ? "" : '<small class="schedule-v2-lesson-warning">근무시간 확인 필요</small>'}`,
+      needsFeedback: cardState.needsFeedback,
+    };
+  }
+
+  function syncFeedbackFilterButton() {
+    const button = $("#scheduleV2FeedbackFilter");
+    if (!button) return;
+    button.classList.toggle("is-active", state.feedbackOnly);
+    button.setAttribute("aria-pressed", String(state.feedbackOnly));
+    button.textContent = state.feedbackOnly ? "미작성만 보는 중" : "피드백 미작성만";
+  }
+
   function applyLessonSearchFilter({ scrollToMatch = false } = {}) {
     const search = String($("#scheduleV2LessonSearch")?.value || "").trim().toLowerCase();
     let firstMatch = null;
     $$("[data-v2-search-text]", workspace).forEach((lesson) => {
       const matches = Boolean(search) && lesson.dataset.v2SearchText.includes(search);
+      const feedbackFiltered = state.feedbackOnly && lesson.dataset.v2FeedbackPending !== "true";
+      lesson.classList.toggle("is-feedback-filtered", feedbackFiltered);
       lesson.classList.toggle("is-filtered", Boolean(search) && !matches);
       lesson.classList.toggle("is-search-match", matches);
       lesson.classList.remove("is-search-primary");
-      if (!firstMatch && matches) firstMatch = lesson;
+      if (!feedbackFiltered && !firstMatch && matches) firstMatch = lesson;
     });
     if (firstMatch) firstMatch.classList.add("is-search-primary");
 
@@ -1841,7 +1915,7 @@
   function lessonTicketCountsMarkup(lesson) {
     const text = lessonTicketCountsText(lesson);
     if (!text) return "";
-    return `<small class="schedule-v2-ticket-counts" aria-label="${escapeHtml(`총/소진/잔여 ${text}`)}" title="총/소진/잔여">${escapeHtml(text)}</small>`;
+    return `<small class="schedule-v2-ticket-counts" aria-label="${escapeHtml(lessonTicketCountsAria(lesson))}" title="회원권 상세는 수업을 눌러 확인">${escapeHtml(text)}</small>`;
   }
 
   function lessonTicketCountsText(lesson) {
@@ -1852,9 +1926,20 @@
       const total = Math.max(0, Number(ticket.totalSessions ?? ticket.total_sessions ?? 0));
       const remaining = Math.max(0, Number(ticket.remainingSessions ?? ticket.remaining_sessions ?? total));
       if (!total && !remaining) return "";
+      return `잔여 ${remaining}회`;
+    }).filter(Boolean))];
+    return labels.join(" · ");
+  }
+
+  function lessonTicketCountsAria(lesson) {
+    const labels = [...new Set((lesson?.participants || []).map((participant) => {
+      const ticket = ticketById(participant.ticketId || participant.ticket_id);
+      if (!ticket) return "";
+      const total = Math.max(0, Number(ticket.totalSessions ?? ticket.total_sessions ?? 0));
+      const remaining = Math.max(0, Number(ticket.remainingSessions ?? ticket.remaining_sessions ?? total));
       const explicitUsed = ticket.usedSessions ?? ticket.used_sessions;
       const used = Math.max(0, Number(explicitUsed ?? Math.max(0, total - remaining)));
-      return `${total}/${used}/${remaining}`;
+      return `총 ${total}회, 사용 ${used}회, 잔여 ${remaining}회`;
     }).filter(Boolean))];
     return labels.join(" · ");
   }
@@ -3961,6 +4046,11 @@
     });
     $("#scheduleV2MemberSearch").addEventListener("input", renderMemberResults);
     $("#scheduleV2LessonSearch").addEventListener("input", () => applyLessonSearchFilter({ scrollToMatch: true }));
+    $("#scheduleV2FeedbackFilter")?.addEventListener("click", () => {
+      state.feedbackOnly = !state.feedbackOnly;
+      syncFeedbackFilterButton();
+      applyLessonSearchFilter();
+    });
     const selectEditorMode = (event) => {
       const button = event.target.closest("[data-v2-editor-mode]");
       if (!button || button.disabled) return;

@@ -2066,53 +2066,28 @@ a {
   box-shadow: inset 3px 0 0 var(--lesson-color, #2f6fc4);
 }
 
-.coach-duration-lesson.status-completed,
-.coach-mobile-lesson.status-completed,
-.board-lesson.status-completed {
-  --lesson-color: #287a5b;
-  border-color: #78ad98 !important;
-  color: #163f32 !important;
-  background: #dff1e9 !important;
-  box-shadow: inset 4px 0 0 #287a5b !important;
+:is(.coach-duration-lesson, .coach-mobile-lesson, .board-lesson).record-complete .schedule-card-note {
+  background: #dff1e9;
+  color: #176044;
 }
 
-.coach-duration-lesson.status-completed span,
-.coach-duration-lesson.status-completed small,
-.coach-mobile-lesson.status-completed span,
-.coach-mobile-lesson.status-completed small,
-.board-lesson.status-completed span,
-.board-lesson.status-completed small {
-  color: #315e4e !important;
+:is(.coach-duration-lesson, .coach-mobile-lesson, .board-lesson).record-problem .schedule-card-note {
+  background: #fde7e5;
+  color: #9f2924;
 }
 
-.coach-duration-lesson.status-completed.status-not-deducted,
-.coach-mobile-lesson.status-completed.status-not-deducted,
-.board-lesson.status-completed.status-not-deducted {
-  --lesson-color: #64748b;
-  border-color: #aab5c3 !important;
-  color: #334155 !important;
-  background: #eef2f6 !important;
-  box-shadow: inset 4px 0 0 #64748b !important;
+:is(.coach-duration-lesson, .coach-mobile-lesson, .board-lesson).record-approval {
+  border-style: dashed;
 }
 
-.coach-duration-lesson.status-no-show,
-.coach-mobile-lesson.status-no-show,
-.board-lesson.status-no-show {
-  --lesson-color: #c2413b;
-  border-color: #e09a95 !important;
-  color: #6f201c !important;
-  background: #fde8e6 !important;
-  box-shadow: inset 4px 0 0 #c2413b !important;
+:is(.coach-duration-lesson, .coach-mobile-lesson, .board-lesson).record-approval .schedule-card-note {
+  background: #fff0cf;
+  color: #85570d;
 }
 
-.coach-duration-lesson.status-no-show.status-not-deducted,
-.coach-mobile-lesson.status-no-show.status-not-deducted,
-.board-lesson.status-no-show.status-not-deducted {
-  --lesson-color: #d97706;
-  border-color: #edb86a !important;
-  color: #713f12 !important;
-  background: #fff4d8 !important;
-  box-shadow: inset 4px 0 0 #d97706 !important;
+:is(.coach-duration-lesson, .coach-mobile-lesson, .board-lesson).outcome-absence .schedule-card-note {
+  background: #e9eef3;
+  color: #46586a;
 }
 
 .coach-duration-lesson.released-makeup-slot,
@@ -3906,8 +3881,14 @@ select:disabled {
 }
 
 .coach-duration-lesson .schedule-card-note,
-.coach-mobile-lesson .schedule-card-note {
-  color: #9a3412;
+.coach-mobile-lesson .schedule-card-note,
+.board-lesson .schedule-card-note {
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 2px 5px;
+  background: #edf2f7;
+  color: #52606d;
   font-size: 9px;
   font-weight: 900;
 }
