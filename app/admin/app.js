@@ -668,6 +668,8 @@ const refundFlowState = {
   loading: false,
   submitting: false,
   reconcileRequired: false,
+  manualTransferPending: false,
+  manualPreviewChanged: false,
   idempotencyKey: "",
   message: "",
   tone: "neutral",
@@ -4702,6 +4704,9 @@ function billingStatusFromServerPayment(row = {}) {
   const status = String(row.status || "").toLowerCase();
   const refundStatus = String(row.refund_status || "").toLowerCase();
   const refundMode = String(row.refund_breakdown?.mode || "").toLowerCase();
+  if (refundStatus === "processing" && refundMode === "manual_bank_transfer_pending") {
+    return { status: "refund_manual_pending", statusLabel: "환불송금대기" };
+  }
   if (refundStatus === "processing") return { status: "refund_processing", statusLabel: "환불처리중" };
   if (refundStatus === "reconcile_required" && refundMode === "full_pg_cancel") return { status: "cancel_reconcile", statusLabel: "취소동기화필요" };
   if (refundStatus === "reconcile_required") return { status: "refund_reconcile", statusLabel: "환불동기화필요" };
@@ -4994,10 +4999,14 @@ async function updateMembershipProductSetting(productId, options = {}) {
   if (!card || !product) return;
   const fieldElement = (field) => card.querySelector(`[data-product-field="${field}"]`);
   const readField = (field) => fieldElement(field)?.value.trim() || "";
-  const coachSaleAvailability = { ...(product.coachSaleAvailability || {}) };
+  let coachSaleAvailability = { ...(product.coachSaleAvailability || {}) };
   card.querySelectorAll("[data-product-coach-sale]").forEach((input) => {
     coachSaleAvailability[input.dataset.productCoachSale] = input.checked;
   });
+  const selectedCoachSaleMode = fieldElement("coachSaleMode")
+    ? readField("coachSaleMode")
+    : product.coachSaleMode;
+  if (selectedCoachSaleMode !== "selected") coachSaleAvailability = {};
   const ticketValue = numericValue(readField("tickets"), product.tickets);
   const cashAmount = numericValue(readField("cashAmount"), product.cashAmount);
   const nextProduct = membershipProductWithOperationalLimits(normalizeMembershipProduct({
@@ -5037,9 +5046,7 @@ async function updateMembershipProductSetting(productId, options = {}) {
     threeMonthPriceMode: fieldElement("threeMonthPriceMode")
       ? readField("threeMonthPriceMode")
       : product.threeMonthPriceMode,
-    coachSaleMode: fieldElement("coachSaleMode")
-      ? readField("coachSaleMode")
-      : product.coachSaleMode,
+    coachSaleMode: selectedCoachSaleMode,
     coachSaleAvailability,
     status: readField("status") || product.status,
   }, membershipProductDefaults.find((item) => item.id === product.id)));
@@ -8165,7 +8172,7 @@ function adminTodayLessonRows() {
 }
 
 function billingNeedsAdminAction(item = {}) {
-  if (["draft", "check", "unverified", "refund_processing", "refund_reconcile"].includes(item.status)) return true;
+  if (["draft", "check", "unverified", "refund_processing", "refund_manual_pending", "refund_reconcile"].includes(item.status)) return true;
   if (item.status === "server_ready") return isStaleReadyPayment(item);
   return item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item);
 }
@@ -20705,7 +20712,7 @@ function pendingLessonChangeApprovals() {
 function adminLessonChangePolicyText(request = {}) {
   const snapshot = request.policySnapshot || request.policy_snapshot || null;
   const hours = Math.min(168, Math.max(1, Number(snapshot?.cutoffHours) || 24));
-  if (snapshot?.isGroup) return "그룹수업 · 담당 코치 승인";
+  if (snapshot?.isGroup) return "그룹 전체 · 담당 코치 승인";
   if (snapshot?.outcome === "auto" || request.policy_window === "auto_before_24h") return `${hours}시간 이상 · 바로 변경`;
   return `${hours}시간 미만 · 담당 코치 승인`;
 }
@@ -20908,24 +20915,42 @@ function settlementRecordProgressByTicket(indexes = {}) {
   return progressByTicket;
 }
 
+function oneDayBookingForBilling(billing = {}) {
+  const bookingId = String(billing.oneDayBookingId || "");
+  if (!bookingId) return null;
+  return lessons.find((lesson) => (
+    lesson.oneDayBooking
+    && String(lesson.serverOneDayBookingId || "") === bookingId
+  )) || null;
+}
+
 function settlementRowsForBilling(billing, indexes = {}) {
   const ticket = indexes.ticketById?.get(String(billing.ticketId || ""))
     || [...tickets, ...expiredTickets].find((item) => item.serverTicketId === billing.ticketId || item.id === billing.ticketId)
     || {};
   const ticketId = ticket.serverTicketId || ticket.id;
+  const oneDayBooking = oneDayBookingForBilling(billing);
+  const oneDayLinked = Boolean(billing.oneDayBookingId);
+  const oneDayCoach = oneDayBooking ? getCoachName(oneDayBooking.coachId || "") : "원데이 예약";
   const base = {
     member: billing.member,
-    coach: ticketId ? getCoachName(ticket.coachId || "") : "회원권 미연결",
-    linkedTicket: Boolean(ticketId),
+    coach: ticketId ? getCoachName(ticket.coachId || "") : oneDayLinked ? oneDayCoach : "회원권 미연결",
+    linkedTicket: Boolean(ticketId || oneDayLinked),
+    oneDayLinked,
     paidAmount: Number(billing.finalAmount || billing.amount) || 0,
     settlementBase: settlementBaseAmountForBilling(billing),
     paymentMethod: String(billing.method || "").toLowerCase().includes("card") ? "카드" : "현금",
     discount: Number(billing.discountAmount) > 0 ? `할인 ${money.format(billing.discountAmount)}원` : "할인 없음",
-    totalLessons: Number(ticket.total) || 0,
-    minutes: Number(ticket.durationMinutes) || 20,
+    totalLessons: oneDayLinked ? 1 : Number(ticket.total) || 0,
+    minutes: oneDayBooking ? Number(oneDayBooking.durationMinutes) || 20 : Number(ticket.durationMinutes) || 20,
   };
   if (indexes.recordProgressByTicket) {
-    if (!ticketId) return [{ ...base, actualCoach: base.coach, lessonCount: 0, summaryPaidAmount: base.paidAmount }];
+    if (!ticketId) return [{
+      ...base,
+      actualCoach: base.coach,
+      lessonCount: oneDayBooking?.status === "completed" ? 1 : 0,
+      summaryPaidAmount: base.paidAmount,
+    }];
     const progress = indexes.recordProgressByTicket.get(String(ticketId)) || {
       recordedSessions: 0,
       byCoachRole: new Map(),
@@ -21194,9 +21219,13 @@ function paymentFullCancelAmount(item = {}) {
   return Math.max(0, Number(item.finalAmount || item.amount || 0));
 }
 
+function isManualCashRefundItem(item = {}) {
+  return ["bank_transfer", "cash", "account_transfer", "transfer"].includes(String(item.method || "").trim().toLowerCase());
+}
+
 function paymentFullCancelButtonFor(item, index) {
   const amount = paymentFullCancelAmount(item);
-  if (String(item?.method || "").toLowerCase() === "bank_transfer") return "";
+  if (isManualCashRefundItem(item)) return "";
   const context = `${item?.member || "회원"} · ${item?.item || "결제"} · PG 전액 결제취소 ${money.format(amount)}원`;
   if (!item?.providerPaymentId || amount <= 0) {
     return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="서버 결제번호와 결제금액이 필요합니다.">PG 전액 결제취소</button>`;
@@ -21270,7 +21299,7 @@ function paymentDisplayStatus(item = {}) {
 }
 
 function billingFilterGroup(item = {}) {
-  if (["cancelled", "refunded", "refund_processing", "refund_reconcile", "cancel_reconcile"].includes(item.status)) return "refund";
+  if (["cancelled", "refunded", "refund_manual_pending", "refund_processing", "refund_reconcile", "cancel_reconcile"].includes(item.status)) return "refund";
   if (isStaleReadyPayment(item)) return "action";
   if (["server_ready", "unverified"].includes(item.status)) return "verifying";
   if (item.status === "paid") return "done";
@@ -21324,6 +21353,14 @@ function linkedTicketForBilling(item = {}) {
 }
 
 function billingMembershipDetail(item = {}) {
+  if (item.oneDayBookingId) {
+    const booking = oneDayBookingForBilling(item);
+    if (!booking) return '<strong>원데이 예약</strong><br><small>결제와 예약이 연결됐습니다.</small>';
+    const coach = getCoachName(booking.coachId || "") || "코치 확인 필요";
+    const schedule = [booking.lessonDate, booking.time].filter(Boolean).join(" ");
+    const status = booking.status === "completed" ? "수업 완료" : "예약 완료";
+    return `<strong>원데이 예약</strong><br><small>${escapeHtml(coach)}${schedule ? ` · ${escapeHtml(schedule)}` : ""} · ${status}</small>`;
+  }
   const ticket = linkedTicketForBilling(item);
   if (!ticket) return '<span class="payment-link-warning">회원권 연결 필요</span>';
   const product = getTicketDisplayProduct(ticket) || ticket.product || "회원권";
@@ -21492,6 +21529,7 @@ function paymentActionFor(item, index) {
     return `<button class="small-button" type="button" data-server-ready-payment="${index}" ${context(label)}>${label}</button>${paymentCancelButtonFor(index, "대기취소")}`;
   }
   if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}" ${context("결제 완료 상세")}>완료됨</button>${paymentFullCancelButtonFor(item, index)}${paymentRefundButtonFor(item, index)}`;
+  if (item.status === "refund_manual_pending") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("실제 송금 후 환불 완료 확인")}>송금완료 확인</button>`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;
   if (item.status === "cancel_reconcile") return paymentCancelButtonFor(index, "취소 상태 맞추기");
   if (item.status === "refund_reconcile") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("환불 동기화 확인")}>동기화 확인</button>`;
@@ -21511,6 +21549,7 @@ function isHistoricalImportedPayment(item = {}) {
 }
 
 function chargeStatusForPayment(item = {}) {
+  if (item.status === "refund_manual_pending") return { label: "환불 송금 대기", tone: "warn", detail: "현금 환불이 접수됐습니다. 실제 송금 확인 전까지 이용권 사용과 원데이 예약이 잠시 정지됩니다." };
   if (item.status === "refund_processing") return { label: "환불 처리중", tone: "warn", detail: "PortOne 취소와 내부 회원권 반영이 진행 중입니다." };
   if (item.status === "refund_reconcile") return { label: "동기화 필요", tone: "danger", detail: "PG 취소 결과와 내부 결제·회원권 상태를 다시 맞춰야 합니다." };
   if (item.status === "paid" && item.oneDayBookingId) return { label: "원데이 예약완료", tone: "good", detail: "결제 확인 후 선택한 코치와 시간으로 한 번만 예약됐습니다." };
@@ -21667,6 +21706,13 @@ function refundErrorText(code = "") {
     refund_confirmation_required: "최종 확인란에 환불을 입력해 주세요.",
     refund_reason_required: "환불 사유를 입력해 주세요.",
     refund_in_progress: "같은 결제의 환불이 이미 처리 중입니다.",
+    manual_refund_request_failed: "현금 환불 접수를 저장하지 못했습니다. 결제 상태를 다시 확인해 주세요.",
+    manual_refund_cancel_confirmation_required: "환불 접수를 취소하려면 최종 확인란에 접수취소를 입력해 주세요.",
+    manual_transfer_confirmation_required: "실제 송금 후 최종 확인란에 송금완료를 입력해 주세요.",
+    manual_transfer_reference_required: "은행명·끝 4자리 또는 이체확인번호를 입력해 주세요.",
+    manual_transfer_reference_contains_account_number: "전체 계좌번호는 저장할 수 없습니다. 끝 4자리만 입력해 주세요.",
+    manual_refund_not_awaiting_transfer: "송금 대기 중인 현금 환불이 아닙니다. 결제 상태를 새로고침해 주세요.",
+    manual_refund_bank_transfer_only: "현금·계좌이체 결제만 수동 송금 완료 처리할 수 있습니다.",
     reconcile_required: "PG 취소 결과와 내부 기록을 다시 맞춰야 합니다.",
     provider_amount_mismatch: "PG 결제금액과 서버 결제금액이 달라 환불을 중단했습니다.",
     provider_cancel_failed: "PG 환불 요청에 실패했습니다. 결제 상태를 확인해 주세요.",
@@ -21683,6 +21729,12 @@ function renderRefundModal() {
   const message = $("#refundFormMessage");
   const confirmButton = $("#confirmRefundButton");
   const reconcileButton = $("#retryRefundReconcile");
+  const cancelManualRequestButton = $("#cancelManualRefundRequest");
+  const reasonField = $("#refundReasonField");
+  const transferReferenceField = $("#refundTransferReferenceField");
+  const confirmationInput = $("#refundConfirmationText");
+  const item = billings[refundFlowState.itemIndex] || {};
+  const manualCashRefund = isManualCashRefundItem(item);
   if (!target) return;
   if (refundFlowState.loading) {
     target.innerHTML = `<div class="refund-loading">결제와 이용권 기록을 확인하고 있습니다.</div>`;
@@ -21708,7 +21760,8 @@ function renderRefundModal() {
         ${numericValue(preview.reservationFee) ? `<div><span>첫 수업 월 예약금</span><strong>-${money.format(numericValue(preview.reservationFee))}원</strong></div>` : ""}
         <div class="refund-total"><span>최종 환불액</span><strong>${money.format(numericValue(preview.refundAmount))}원</strong></div>
       </div>
-      <p class="refund-policy-line">실납부액 - 할인 전 사용 회차 - 할인 전 원가의 위약금 - 첫 수업 월 예약금 · 환불 완료 시 연결 이용권의 잔여 횟수는 0회가 됩니다.</p>`;
+      <p class="refund-policy-line">실납부액 - 할인 전 사용 회차 - 할인 전 원가의 위약금 - 첫 수업 월 예약금 · 환불 완료 시 연결 이용권의 잔여 횟수는 0회가 됩니다.</p>
+      ${manualCashRefund ? `<div class="refund-fallback-confirmation"><strong>${refundFlowState.manualTransferPending ? "환불 접수됨" : "현금·계좌이체 환불"}</strong><span>${refundFlowState.manualTransferPending ? "실제 송금을 완료한 뒤에만 송금완료를 확인하세요. 그 전에는 이용권 사용이 잠시 정지되고 원데이 자리는 반환됩니다." : "이 버튼은 돈을 자동 송금하지 않습니다. 접수 즉시 이용권 사용을 잠그고, 직접 송금 후 별도로 완료 확인해야 합니다."}</span></div>` : ""}`;
   }
   if (fallback) {
     fallback.hidden = !refundFlowState.preview?.requiresPolicyFallbackConfirmation;
@@ -21718,14 +21771,27 @@ function renderRefundModal() {
     message.className = `form-message ${refundFlowState.tone === "danger" ? "danger" : refundFlowState.tone === "good" ? "good" : ""}`;
   }
   if (confirmButton) {
-    confirmButton.disabled = refundFlowState.loading || refundFlowState.submitting || !refundFlowState.preview || refundFlowState.reconcileRequired;
+    confirmButton.disabled = refundFlowState.loading || refundFlowState.submitting || !refundFlowState.preview || refundFlowState.reconcileRequired || refundFlowState.manualPreviewChanged;
     confirmButton.hidden = refundFlowState.reconcileRequired;
-    confirmButton.textContent = refundFlowState.submitting ? "환불 처리중" : "환불 확정";
+    confirmButton.textContent = refundFlowState.submitting
+      ? "처리중"
+      : refundFlowState.manualTransferPending
+        ? "송금 완료 확인"
+        : manualCashRefund
+          ? "환불 접수"
+          : "환불 확정";
   }
   if (reconcileButton) {
     reconcileButton.hidden = !refundFlowState.reconcileRequired;
     reconcileButton.disabled = refundFlowState.submitting;
   }
+  if (cancelManualRequestButton) {
+    cancelManualRequestButton.hidden = !refundFlowState.manualTransferPending || refundFlowState.reconcileRequired;
+    cancelManualRequestButton.disabled = refundFlowState.submitting;
+  }
+  if (reasonField) reasonField.hidden = refundFlowState.manualTransferPending;
+  if (transferReferenceField) transferReferenceField.hidden = !refundFlowState.manualTransferPending;
+  if (confirmationInput) confirmationInput.placeholder = refundFlowState.manualTransferPending ? "송금완료" : "환불";
 }
 
 function closeRefundModal() {
@@ -21737,6 +21803,8 @@ function closeRefundModal() {
     loading: false,
     submitting: false,
     reconcileRequired: false,
+    manualTransferPending: false,
+    manualPreviewChanged: false,
     idempotencyKey: "",
     message: "",
     tone: "neutral",
@@ -21755,6 +21823,8 @@ async function openRefundModal(item, itemIndex) {
     loading: true,
     submitting: false,
     reconcileRequired: item.status === "refund_reconcile",
+    manualTransferPending: item.status === "refund_manual_pending",
+    manualPreviewChanged: false,
     idempotencyKey: newRefundIdempotencyKey(),
     message: "",
     tone: "neutral",
@@ -21773,7 +21843,17 @@ async function openRefundModal(item, itemIndex) {
       return;
     }
     refundFlowState.preview = result?.preview || null;
-    refundFlowState.message = refundFlowState.reconcileRequired ? "PG 취소 결과를 확인한 뒤 내부 기록을 다시 맞춰 주세요." : "계산값을 확인한 뒤 관리자 PIN과 확인 문구를 입력하세요.";
+    refundFlowState.manualPreviewChanged = refundFlowState.manualTransferPending && result?.previewChanged === true;
+    refundFlowState.message = refundFlowState.reconcileRequired
+      ? "취소 결과를 확인한 뒤 내부 기록을 다시 맞춰 주세요."
+      : refundFlowState.manualPreviewChanged
+        ? `접수 후 이용 횟수 또는 환불액이 바뀌었습니다. 송금하지 말고 환불 접수를 취소한 뒤 ${money.format(numericValue(result?.preview?.refundAmount))}원으로 다시 접수하세요.`
+      : refundFlowState.manualTransferPending
+        ? "실제 송금을 확인한 뒤 관리자 PIN, 송금 확인 메모, 송금완료 문구를 입력하세요."
+        : isManualCashRefundItem(item)
+          ? "계산값을 확인해 환불을 접수하세요. 이 단계에서는 실제 송금과 이용권 환불이 실행되지 않습니다."
+          : "계산값을 확인한 뒤 관리자 PIN과 확인 문구를 입력하세요.";
+    if (refundFlowState.manualPreviewChanged) refundFlowState.tone = "danger";
   } catch (error) {
     const code = error?.payload?.code || "refund_preview_failed";
     refundFlowState.message = refundErrorText(code);
@@ -21784,9 +21864,14 @@ async function openRefundModal(item, itemIndex) {
   }
 }
 
-async function verifyRefundAdminInputs({ requireReason = true } = {}) {
+async function verifyRefundAdminInputs({
+  requireReason = true,
+  confirmationPhrase = "환불",
+  requireTransferReference = false,
+} = {}) {
   const reason = $("#refundReason")?.value.trim() || "";
   const confirmation = $("#refundConfirmationText")?.value.trim() || "";
+  const transferReference = $("#refundTransferReference")?.value.trim() || "";
   const pin = $("#refundAdminPin")?.value.trim() || "";
   if (requireReason && reason.length < 2) {
     refundFlowState.message = "환불 사유를 2자 이상 입력해 주세요.";
@@ -21794,8 +21879,20 @@ async function verifyRefundAdminInputs({ requireReason = true } = {}) {
     renderRefundModal();
     return null;
   }
-  if (confirmation !== "환불") {
-    refundFlowState.message = "최종 확인란에 환불을 입력해 주세요.";
+  if (confirmation !== confirmationPhrase) {
+    refundFlowState.message = `최종 확인란에 ${confirmationPhrase}를 입력해 주세요.`;
+    refundFlowState.tone = "danger";
+    renderRefundModal();
+    return null;
+  }
+  if (requireTransferReference && transferReference.length < 2) {
+    refundFlowState.message = "송금 확인 메모를 입력해 주세요.";
+    refundFlowState.tone = "danger";
+    renderRefundModal();
+    return null;
+  }
+  if (requireTransferReference && /\d{8,}/.test(transferReference.replace(/[\s-]/g, ""))) {
+    refundFlowState.message = "전체 계좌번호는 저장하지 마세요. 은행명·끝 4자리 또는 짧은 이체확인번호만 입력해 주세요.";
     refundFlowState.tone = "danger";
     renderRefundModal();
     return null;
@@ -21818,39 +21915,62 @@ async function verifyRefundAdminInputs({ requireReason = true } = {}) {
     renderRefundModal();
     return null;
   }
-  return { reason, confirmation };
+  return { reason, confirmation, transferReference };
 }
 
 async function confirmRefundFromModal() {
   const item = billings[refundFlowState.itemIndex];
   const preview = refundFlowState.preview;
   if (!item || !preview || refundFlowState.submitting) return;
-  const inputs = await verifyRefundAdminInputs();
+  const manualTransferConfirmation = refundFlowState.manualTransferPending;
+  const inputs = await verifyRefundAdminInputs({
+    requireReason: !manualTransferConfirmation,
+    confirmationPhrase: manualTransferConfirmation ? "송금완료" : "환불",
+    requireTransferReference: manualTransferConfirmation,
+  });
   if (!inputs) return;
   refundFlowState.submitting = true;
-  const bankTransfer = String(item.method || "").toLowerCase() === "bank_transfer";
-  refundFlowState.message = bankTransfer
-    ? "계좌이체 환불 기록과 내부 이용권 반영을 처리하고 있습니다."
+  const manualCashRefund = isManualCashRefundItem(item);
+  refundFlowState.message = manualTransferConfirmation
+    ? "송금 완료 증빙과 내부 이용권 반영을 처리하고 있습니다."
+    : manualCashRefund
+      ? "현금·계좌이체 환불을 접수하고 이용권 사용을 잠그고 있습니다."
     : "PortOne 환불과 내부 이용권 반영을 처리하고 있습니다.";
   refundFlowState.tone = "neutral";
   renderRefundModal();
   try {
-    const result = await window.TennisNoteDataClient.invokeFunction("portone-payment/refund", {
-      body: {
-        paymentId: item.providerPaymentId,
-        expectedRefundAmount: numericValue(preview.refundAmount),
-        expectedUsedSessions: numericValue(preview.usedSessions),
-        reason: inputs.reason,
-        confirmation: inputs.confirmation,
-        acceptPolicyFallback: Boolean($("#acceptRefundPolicyFallback")?.checked),
-        idempotencyKey: refundFlowState.idempotencyKey,
-      },
-    });
+    const result = manualTransferConfirmation
+      ? await window.TennisNoteDataClient.invokeFunction("portone-payment/refund-manual-confirm", {
+          body: {
+            paymentId: item.providerPaymentId,
+            expectedRefundAmount: numericValue(preview.refundAmount),
+            confirmation: inputs.confirmation,
+            transferReference: inputs.transferReference,
+          },
+        })
+      : await window.TennisNoteDataClient.invokeFunction("portone-payment/refund", {
+          body: {
+            paymentId: item.providerPaymentId,
+            expectedRefundAmount: numericValue(preview.refundAmount),
+            expectedUsedSessions: numericValue(preview.usedSessions),
+            reason: inputs.reason,
+            confirmation: inputs.confirmation,
+            acceptPolicyFallback: Boolean($("#acceptRefundPolicyFallback")?.checked),
+            idempotencyKey: refundFlowState.idempotencyKey,
+          },
+        });
     if (result?.ok) {
-      billingLogs.unshift(`${item.member} 환불 완료: ${money.format(numericValue(result.refundAmount || preview.refundAmount))}원`);
+      const manualPending = result.status === "manual_transfer_pending";
+      billingLogs.unshift(manualPending
+        ? `${item.member} 현금 환불 접수: ${money.format(numericValue(result.refundAmount || preview.refundAmount))}원 · 실제 송금 대기`
+        : `${item.member} 환불 완료: ${money.format(numericValue(result.refundAmount || preview.refundAmount))}원`);
       closeRefundModal();
       await loadServerPaymentsIntoBilling({ silent: true });
-      showToast(bankTransfer ? "계좌이체 환불 기록과 이용권 반영 완료" : "환불과 이용권 반영 완료");
+      showToast(manualPending
+        ? "환불 접수됨 · 실제 송금 후 송금완료를 확인하세요"
+        : manualCashRefund
+          ? "송금 확인과 이용권 환불 반영 완료"
+          : "환불과 이용권 반영 완료");
       return;
     }
     if (result?.code === "reconcile_required") {
@@ -21898,6 +22018,51 @@ async function reconcileRefundFromModal() {
     refundFlowState.tone = "danger";
   } catch (error) {
     refundFlowState.message = refundErrorText(error?.payload?.code || "reconcile_failed");
+    refundFlowState.tone = "danger";
+  } finally {
+    refundFlowState.submitting = false;
+    renderRefundModal();
+  }
+}
+
+async function cancelManualRefundRequestFromModal() {
+  const item = billings[refundFlowState.itemIndex];
+  if (!item || !refundFlowState.manualTransferPending || refundFlowState.submitting) return;
+  const confirmation = $("#refundConfirmationText")?.value.trim() || "";
+  const pin = $("#refundAdminPin")?.value.trim() || "";
+  if (confirmation !== "접수취소") {
+    refundFlowState.message = "환불 접수를 취소하려면 최종 확인란에 접수취소를 입력해 주세요.";
+    refundFlowState.tone = "danger";
+    renderRefundModal();
+    return;
+  }
+  if (adminPinNeedsSetup() || !(await verifyAdminPin(pin))) {
+    refundFlowState.message = adminPinNeedsSetup()
+      ? "먼저 설정의 보안/잠금에서 관리자 PIN을 설정해 주세요."
+      : "관리자 PIN이 맞지 않습니다.";
+    refundFlowState.tone = "danger";
+    renderRefundModal();
+    return;
+  }
+  refundFlowState.submitting = true;
+  refundFlowState.message = "실제 송금 전 환불 접수를 취소하고 있습니다.";
+  refundFlowState.tone = "neutral";
+  renderRefundModal();
+  try {
+    const result = await window.TennisNoteDataClient.invokeFunction("portone-payment/refund-manual-cancel", {
+      body: { paymentId: item.providerPaymentId, confirmation },
+    });
+    if (result?.ok) {
+      billingLogs.unshift(`${item.member} 현금 환불 접수 취소 · 결제와 이용권 유지`);
+      closeRefundModal();
+      await loadServerPaymentsIntoBilling({ silent: true });
+      showToast("환불 접수 취소됨 · 결제와 이용권은 유지됩니다");
+      return;
+    }
+    refundFlowState.message = refundErrorText(result?.code);
+    refundFlowState.tone = "danger";
+  } catch (error) {
+    refundFlowState.message = refundErrorText(error?.payload?.code || "manual_refund_cancel_failed");
     refundFlowState.tone = "danger";
   } finally {
     refundFlowState.submitting = false;
@@ -26314,6 +26479,10 @@ function renderReports() {
   const refundedAmount = monthBillings.reduce((sum, item) => (
     sum + Number(item.refundedAmount || (item.status === "cancelled" ? item.finalAmount || item.amount : 0) || 0)
   ), 0);
+  const manualRefundPendingBillings = monthBillings.filter((item) => item.status === "refund_manual_pending");
+  const manualRefundPendingAmount = manualRefundPendingBillings.reduce((sum, item) => (
+    sum + Number(item.refundBreakdown?.refundAmount || item.refundBreakdown?.refund_amount || 0)
+  ), 0);
   const monthLessons = branchLessons.filter((lesson) => String(lesson.lessonDate || "").startsWith(month));
   const completedLessons = monthLessons.filter((lesson) => lessonStatusValue(lesson) === "completed");
   const noShowLessons = monthLessons.filter((lesson) => lessonStatusValue(lesson) === "no_show");
@@ -26359,6 +26528,7 @@ function renderReports() {
 
   financeTarget.innerHTML = managementReportListMarkup(managementReportVisibleItems("finance", [
     { label: "결제 완료 매출", value: `${money.format(paidAmount)}원`, detail: "테니스노트 결제 기록에서 실시간 계산", tone: "ready" },
+    { label: "환불 송금 대기", value: `${money.format(manualRefundPendingAmount)}원`, detail: `${manualRefundPendingBillings.length}건 · 실제 송금 전`, tone: manualRefundPendingBillings.length ? "warning" : "", needsAttention: manualRefundPendingBillings.length > 0 },
     { label: "선택 월 결제건 환불", value: `${money.format(refundedAmount)}원`, detail: "취소·환불 증빙 기준", needsAttention: refundedAmount > 0 },
     ...managementDriveFinanceRows(),
   ]), "재무 자료에 확인할 항목이 없습니다.");
@@ -29055,7 +29225,7 @@ function renderServiceReadiness() {
           const enabledSaleCoaches = saleCoaches.filter((coach) => (
             normalized.coachSaleMode === "selected"
               ? (normalized.coachSaleAvailability || {})[coach.serverRoleId] === true
-              : (normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false
+              : true
           ));
           const memberFacingGroup = normalized.purchaseExperience === "one_day"
             ? "원데이"
@@ -29065,52 +29235,28 @@ function renderServiceReadiness() {
           if (!isEditing) {
             return `
         <article class="product-setting-card product-setting-summary-card" data-product-card="${normalized.id}">
-          <form class="product-setting-header product-setting-inline-form" data-product-inline-form="${normalized.id}" data-dirty="false">
+          <div class="product-setting-header">
             <div class="product-order-actions">
               <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="${escapeHtml(normalized.title)} 위로 이동" title="위로 이동">↑</button>
               <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="${escapeHtml(normalized.title)} 아래로 이동" title="아래로 이동">↓</button>
             </div>
             <input class="product-select-checkbox" type="checkbox" data-select-product-row="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 선택" ${selectedProductIdSet().has(productId) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />
-            <label class="product-setting-inline-title">
-              <span class="sr-only">상품명</span>
-              <input type="text" data-product-field="title" value="${escapeHtml(normalized.title)}" aria-label="${escapeHtml(normalized.title)} 상품명" />
-            </label>
-            <div class="product-setting-inline-pair">
-              <select data-product-field="productKind" aria-label="${escapeHtml(normalized.title)} 권종">
-                <option value="regular" ${normalized.productKind === "regular" ? "selected" : ""}>정규권</option>
-                <option value="coupon" ${normalized.productKind === "coupon" ? "selected" : ""}>쿠폰제</option>
-              </select>
-              <select data-product-field="scheduleScope" aria-label="${escapeHtml(normalized.title)} 레슨 방식">
-                <option value="weekday" ${normalized.scheduleScope === "weekday" ? "selected" : ""}>평일</option>
-                <option value="weekend" ${normalized.scheduleScope === "weekend" ? "selected" : ""}>주말</option>
-                <option value="mixed" ${normalized.scheduleScope === "mixed" ? "selected" : ""}>혼합</option>
-              </select>
-              <select data-product-field="groupSize" aria-label="${escapeHtml(normalized.title)} 수업 종류">
-                <option value="1" ${Number(normalized.groupSize) === 1 ? "selected" : ""}>1:1</option>
-                <option value="2" ${Number(normalized.groupSize) === 2 ? "selected" : ""}>1:2</option>
-              </select>
+            <div class="product-setting-compact-info">
+              <strong>${escapeHtml(normalized.title)}</strong>
+              <small>${escapeHtml(memberFacingGroup)} · ${escapeHtml(normalized.scheduleScope === "weekend" ? "주말" : normalized.scheduleScope === "mixed" ? "혼합" : "평일")} · ${Number(normalized.groupSize) === 2 ? "1:2" : "1:1"} · ${normalized.lessonMinutes}분</small>
+              <small>주 ${Math.max(1, Number(normalized.frequencyPerWeek) || 1)}회 · 총 ${normalized.tickets}회 · ${normalized.validityDays}일 · ${enabledSaleCoaches.length}명 코치</small>
             </div>
-            <div class="product-setting-inline-triple">
-              <select data-product-field="lessonMinutes" aria-label="${escapeHtml(normalized.title)} 수업 시간">
-                ${[20, 30, 40].map((minute) => `<option value="${minute}" ${Number(normalized.lessonMinutes) === minute ? "selected" : ""}>${minute}분</option>`).join("")}
+            <div class="product-setting-summary-meta">
+              <small>현금</small><b>${money.format(normalized.cashAmount)}원</b>
+              <small>카드</small><b>${money.format(Math.round(Number(normalized.cashAmount || 0) * 1.1))}원</b>
+            </div>
+            <div class="product-setting-compact-actions">
+              <select class="product-setting-quick-status" data-quick-product-status="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
+                ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
               </select>
-              <input type="number" min="1" step="1" data-product-field="tickets" value="${normalized.tickets}" aria-label="${escapeHtml(normalized.title)} 횟수" />
-              <input type="number" min="1" step="1" data-product-field="validityDays" value="${normalized.validityDays}" aria-label="${escapeHtml(normalized.title)} 사용기간 일수" />
-            </div>
-            <div class="product-setting-inline-price">
-          <input type="number" min="0" step="1" data-product-field="cashAmount" value="${normalized.cashAmount}" aria-label="${escapeHtml(normalized.title)} 현금 기준가격" />
-          <input type="number" min="0" step="1" data-product-field="cardAmount" value="${Math.round(Number(normalized.cashAmount || 0) * 1.1)}" aria-label="${escapeHtml(normalized.title)} 카드가격 현금가의 110퍼센트 자동계산" readonly />
-            </div>
-            <select class="product-setting-quick-status" data-product-field="status" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
-              ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
-            </select>
-            <div class="product-setting-row-actions">
-              <button class="small-button product-inline-save" type="button" data-save-product-setting="${normalized.id}">저장</button>
-              <button class="small-button danger-button" type="button" data-force-delete-product-setting="${normalized.id}">삭제</button>
               <button class="small-button" type="button" data-open-product-setting="${normalized.id}">수정</button>
             </div>
-            <span class="product-inline-message" aria-live="polite"></span>
-          </form>
+          </div>
         </article>`;
           }
           return `
@@ -29259,7 +29405,7 @@ function renderServiceReadiness() {
             <fieldset class="product-coach-sale-settings">
               <legend>이 상품을 판매·예약할 코치</legend>
               <label class="product-coach-sale-mode"><span>표시 방식</span><select data-product-field="coachSaleMode"><option value="all_active" ${normalized.coachSaleMode !== "selected" ? "selected" : ""}>활동 중인 코치 모두</option><option value="selected" ${normalized.coachSaleMode === "selected" ? "selected" : ""}>선택한 코치만</option></select></label>
-              ${saleCoaches.map((coach) => `<label><input type="checkbox" data-product-coach-sale="${escapeHtml(coach.serverRoleId)}" ${normalized.coachSaleMode === "selected" ? ((normalized.coachSaleAvailability || {})[coach.serverRoleId] === true ? "checked" : "") : ((normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false ? "checked" : "")} /><span>${escapeHtml(coach.name)}</span></label>`).join("")}
+              ${saleCoaches.map((coach) => `<label><input type="checkbox" data-product-coach-sale="${escapeHtml(coach.serverRoleId)}" ${normalized.coachSaleMode === "selected" ? ((normalized.coachSaleAvailability || {})[coach.serverRoleId] === true ? "checked" : "") : "checked"} /><span>${escapeHtml(coach.name)}</span></label>`).join("")}
             </fieldset>` : ""}
             <label>
               <small>${productSettingFieldLabel("판매 상태", true)}</small>
@@ -30170,6 +30316,7 @@ function bindEvents() {
   });
   $("#closeRefundModal")?.addEventListener("click", closeRefundModal);
   $("#cancelRefundModal")?.addEventListener("click", closeRefundModal);
+  $("#cancelManualRefundRequest")?.addEventListener("click", cancelManualRefundRequestFromModal);
   $("#retryRefundReconcile")?.addEventListener("click", reconcileRefundFromModal);
   $("#refundModal")?.addEventListener("click", (event) => {
     if (event.target.id === "refundModal") closeRefundModal();

@@ -13824,12 +13824,9 @@ button .schedule-member-lines > span {
   grid-template-columns:
     78px
     42px
-    minmax(220px, 1.35fr)
-    minmax(230px, 1.1fr)
-    minmax(210px, 1fr)
-    minmax(210px, 1fr)
-    minmax(104px, .55fr)
-    190px;
+    minmax(260px, 1.5fr)
+    minmax(220px, 1fr)
+    minmax(180px, .7fr);
   align-items: center;
   gap: 0;
   padding: 0;
@@ -13875,6 +13872,18 @@ button .schedule-member-lines > span {
   font: inherit;
   font-size: 12px;
   font-weight: 850;
+}
+
+.product-setting-compact-actions {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.product-setting-compact-actions .product-setting-quick-status {
+  width: 100%;
+  margin: 0;
 }
 
 .schedule-assignment-picker {

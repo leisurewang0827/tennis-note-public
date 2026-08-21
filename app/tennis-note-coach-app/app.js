@@ -671,7 +671,7 @@ function lessonChangePolicySnapshot(request = {}) {
 function lessonChangePolicyText(request = {}) {
   const snapshot = lessonChangePolicySnapshot(request);
   const hours = Math.min(168, Math.max(1, Number(snapshot?.cutoffHours) || 24));
-  if (snapshot?.isGroup) return "그룹수업 · 담당 코치 승인";
+  if (snapshot?.isGroup) return "그룹 전체 · 담당 코치 승인";
   if (snapshot?.outcome === "auto" || request.policy_window === "auto_before_24h") {
     return `${hours}시간 이상 남아 자동 변경`;
   }
@@ -2636,7 +2636,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.382",
+    workerUrl: "./service-worker.js?v=1.0.383",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2667,7 +2667,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.382" });
+  const params = new URLSearchParams({ v: "1.0.383" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -8064,7 +8064,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.382",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.383",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
