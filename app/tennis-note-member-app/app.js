@@ -429,6 +429,19 @@ function normalizeProduct(product = {}, fallback = {}) {
     maxSessionsPerDay: numericValue(merged.maxSessionsPerDay, numericValue(fallback.maxSessionsPerDay, 0)),
     maxSessionsPerWeek: numericValue(merged.maxSessionsPerWeek, numericValue(fallback.maxSessionsPerWeek, 0)),
     maxBookingDaysPerWeek: numericValue(merged.maxBookingDaysPerWeek, numericValue(fallback.maxBookingDaysPerWeek, 0)),
+    makeupAnchorMinutes: (() => {
+      const configured = Object.prototype.hasOwnProperty.call(merged, "makeupAnchorMinutes")
+        ? merged.makeupAnchorMinutes
+        : Object.prototype.hasOwnProperty.call(merged, "makeup_anchor_minutes")
+          ? merged.makeup_anchor_minutes
+          : Object.prototype.hasOwnProperty.call(fallback, "makeupAnchorMinutes")
+            ? fallback.makeupAnchorMinutes
+            : Object.prototype.hasOwnProperty.call(fallback, "makeup_anchor_minutes")
+              ? fallback.makeup_anchor_minutes
+              : 40;
+      if (configured === null || String(configured).toLowerCase() === "unlimited") return null;
+      return Math.min(100, Math.max(0, numericValue(configured, 40)));
+    })(),
     purchaseExperience: merged.purchaseExperience || fallback.purchaseExperience || "",
     firstLessonOfferEnabled: merged.firstLessonOfferEnabled ?? fallback.firstLessonOfferEnabled ?? false,
     firstLessonOfferPrice: numericValue(
@@ -519,6 +532,9 @@ function membershipProductFromServer(row = {}) {
     maxSessionsPerDay: numericValue(row.max_sessions_per_day),
     maxSessionsPerWeek: numericValue(row.max_sessions_per_week),
     maxBookingDaysPerWeek: numericValue(row.max_booking_days_per_week),
+    makeupAnchorMinutes: row.makeup_anchor_minutes === null
+      ? null
+      : numericValue(row.makeup_anchor_minutes, 40),
     scheduleScope: ["weekday", "weekend", "mixed"].includes(row.schedule_scope) ? row.schedule_scope : "weekday",
     termWeeks: numericValue(row.term_weeks),
     productKind,
@@ -893,7 +909,7 @@ function onlinePaymentAmount(product = {}) {
 
 function purchasePaymentBaseAmount(product = {}, methodId = state.selectedPaymentMethod) {
   const quote = membershipPricingQuote(product);
-  if (quote && Number(quote.finalAmount) > 0) return numericValue(quote.finalAmount);
+  if (quote?.eligible === true && Number(quote.finalAmount) > 0) return numericValue(quote.finalAmount);
   if (String(methodId) === "bank_transfer") {
     return numericValue(product.cashAmount, numericValue(product.settlementBase, numericValue(product.amount)));
   }
@@ -2069,7 +2085,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.381",
+    workerUrl: "./service-worker.js?v=1.0.382",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3640,6 +3656,7 @@ function memberBookableRegularTickets() {
         expiresOn: ticket.expiresOn || "",
         frequencyPerWeek: Math.max(1, Number(ticket.frequencyPerWeek) || 1),
         scheduleScope: ticket.scheduleScope || "weekday",
+        makeupAnchorMinutes: ticket.makeupAnchorMinutes,
         status: "regular_initial_booking",
         lessonSource: "regular",
         durationMinutes: Number(ticket.lessonMinutes) || 20,
@@ -3673,6 +3690,7 @@ function memberBookablePausedTickets() {
         expiresOn: ticket.expiresOn || "",
         frequencyPerWeek: Math.max(1, Number(ticket.frequencyPerWeek) || 1),
         scheduleScope: ticket.scheduleScope || "weekday",
+        makeupAnchorMinutes: ticket.makeupAnchorMinutes,
         status: "paused_resume_booking",
         lessonSource: "regular",
         durationMinutes: Number(ticket.lessonMinutes) || 20,
@@ -3697,7 +3715,7 @@ function memberLessonExtendsAnchorWindow(lesson = {}) {
 }
 
 function memberSlotInsideAnchorWindow(scheduleLessons, policy, sourceLesson, day, time, coach) {
-  if (sourceLesson.regularInitialBooking || policy.requireMakeupDayAnchor === false) return true;
+  if (policy.requireMakeupDayAnchor === false) return true;
   const releasedSlot = memberReleasedMakeupSlot(
     memberScheduleDateForDay(day),
     time,
@@ -7576,6 +7594,7 @@ function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
           if (memberBreakRuleOverlaps(policy, day, time, durationMinutes)) return;
           if (!isMemberCoachWorking(coach, day, time, durationMinutes)) return;
           if (purchaseHasCoachLessonAtDate(scheduleLessons, dateKey, time, coach, durationMinutes, policy)) return;
+          if (!purchaseSlotInsideAnchorWindow(scheduleLessons, product, dateKey, time, coach, policy)) return;
           const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
           if (!roleId) return;
           slots.push({
@@ -8380,6 +8399,26 @@ function closeMembershipPurchaseFlow(options = {}) {
     const target = $("#membershipProductBrowser");
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+}
+
+function purchaseSlotInsideAnchorWindow(scheduleLessons, product, lessonDate, time, coach, policy) {
+  if (policy.requireMakeupDayAnchor === false) return true;
+  const configuredGap = product.makeupAnchorMinutes ?? policy.makeupAnchorGapMinutes ?? 40;
+  if (configuredGap === null || String(configuredGap).toLowerCase() === "unlimited") return true;
+  const gapMinutes = Math.min(100, Math.max(0, Number(configuredGap) || 0));
+  const coachRoleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+  const anchors = scheduleLessons.filter((lesson) => {
+    if (String(lesson.lessonDate || "") !== String(lessonDate || "")) return false;
+    const lessonStatus = String(lesson.serverStatus || lesson.status || "").toLowerCase();
+    if (["cancelled", "canceled", "absence", "absent", "makeup_due", "available"].includes(lessonStatus)) return false;
+    const lessonCoachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || memberLessonCoach(lesson, policy).id || "");
+    return lessonCoachRoleId === coachRoleId;
+  });
+  if (!anchors.length) return false;
+  const firstStart = Math.min(...anchors.map((lesson) => minutesFromTime(lesson.time)));
+  const lastEnd = Math.max(...anchors.map((lesson) => minutesFromTime(lesson.time) + lessonDuration(lesson)));
+  const slotStart = minutesFromTime(time);
+  return slotStart >= firstStart - gapMinutes && slotStart <= lastEnd + gapMinutes;
 }
 
 function selectPurchasePurpose(purpose = "") {
@@ -10413,6 +10452,8 @@ function paymentServerErrorMessage(error) {
     purchase_schedule_weekly_duplicate: "같은 요일과 시간은 한 번만 선택할 수 있습니다.",
     purchase_schedule_same_week_required: "주 1·2·3회 수업은 같은 주 안에서 선택해 주세요.",
     purchase_weekend_30m_not_available: "30분 수업은 평일 시간표에서 선택해 주세요.",
+    purchase_slot_anchor_required: "선택한 선생님의 기존 수업과 가까운 시간만 신청할 수 있습니다.",
+    purchase_slot_outside_anchor_window: "기존 수업 전후 40분 안의 시간을 선택해 주세요.",
   };
   return labels[code] || code;
 }
@@ -10494,6 +10535,9 @@ function normalizeLiveTicket(row = {}) {
   const remainingValue = row.remaining_sessions ?? Math.max(0, total - used);
   const remaining = Math.max(0, Number(remainingValue));
   const statusInfo = liveTicketStatusInfo(row.status);
+  const configuredAnchorMinutes = row.makeup_anchor_minutes !== undefined
+    ? row.makeup_anchor_minutes
+    : product.makeup_anchor_minutes;
   return {
     id: row.id || "",
     branchId: row.branch_id || "",
@@ -10508,7 +10552,9 @@ function normalizeLiveTicket(row = {}) {
     maxSessionsPerDay: Number(row.max_sessions_per_day || product.max_sessions_per_day || 0),
     maxSessionsPerWeek: Number(row.max_sessions_per_week || product.max_sessions_per_week || 0),
     maxBookingDaysPerWeek: Number(row.max_booking_days_per_week || product.max_booking_days_per_week || 0),
-    makeupAnchorMinutes: Number(row.makeup_anchor_minutes || product.makeup_anchor_minutes || 40),
+    makeupAnchorMinutes: configuredAnchorMinutes === null
+      ? null
+      : numericValue(configuredAnchorMinutes, 40),
     productValidityDays: Math.max(0, Number(row.validity_days || product.validity_days || 0)),
     productGraceDays: Math.max(0, Number(row.grace_days || product.grace_days || 0)),
     title: liveTicketProductTitle({ ...row, tn_membership_products: product }),
@@ -10776,7 +10822,7 @@ async function syncLiveMembershipProductsFromServer() {
   if (!client?.readiness?.().ready || !client.selectRows) return false;
   try {
     const rows = await client.selectRows("tn_membership_products", {
-      select: "id,branch_id,product_code,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,schedule_scope,term_weeks,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,is_active,policy_settings,display_order",
+      select: "id,branch_id,product_code,name,lesson_minutes,machine_minutes,frequency_per_week,total_sessions,group_size,schedule_scope,term_weeks,card_price,cash_price,settlement_base_price,validity_days,grace_days,product_kind,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,is_active,policy_settings,display_order",
       filters: { is_active: true },
       limit: 500,
     });
@@ -12046,7 +12092,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.381", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.382", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -13782,6 +13828,8 @@ async function requestMakeup() {
         regular_schedule_single_coach_required: "주간 정규시간은 같은 코치로 선택해주세요.",
         coach_role_required: "선택한 시간의 코치를 확인할 수 없습니다. 다시 선택해주세요.",
         coach_role_inactive: "담당 코치가 현재 근무 중이 아닙니다. 관리자에게 문의해주세요.",
+        regular_slot_anchor_required: "해당 날짜에는 담당 코치의 기존 수업이 없어 새 정규시간을 선택할 수 없습니다.",
+        regular_slot_outside_anchor_window: "담당 코치의 기존 수업 전후 허용 범위 안에서 시간을 다시 선택해주세요.",
         change_reason_required: "변경 이유를 2자 이상 입력해주세요.",
         member_change_policy_changed: "운영 규칙이 방금 변경되었습니다. 가능한 시간을 다시 확인한 뒤 신청해 주세요.",
         member_change_disabled: "회원 앱 수업 변경이 현재 꺼져 있습니다. 담당 코치에게 문의해 주세요.",
@@ -15072,7 +15120,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.381",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.382",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
