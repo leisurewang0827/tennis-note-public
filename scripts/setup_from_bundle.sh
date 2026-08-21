@@ -43,9 +43,18 @@ fi
 bundle="$(cd "$(dirname "$bundle")" && pwd)/$(basename "$bundle")"
 ok "$(basename "$bundle")  ($(du -h "$bundle" | cut -f1))"
 
-git bundle verify "$bundle" >/dev/null 2>&1 \
-  || die "번들이 깨졌습니다. 옮기는 중에 잘렸을 수 있으니 다시 복사하세요."
-ok "번들 무결성 확인"
+# git bundle verify 는 저장소 안에서만 돈다("need a repository to verify a bundle").
+# 아직 클론 전이므로 빈 저장소를 잠깐 만들어 거기서 검사한다.
+#
+# ⚠ verify 는 머리말(ref 목록과 선행 커밋)만 읽는다. 뒤쪽 데이터가 잘려도
+#   통과한다. 실제로 잘린 파일로 시험해보니 여기를 지나가고 클론에서 터졌다.
+#   그래서 진짜 검사는 아래 클론이고, 여기서는 "번들이 맞는가" 만 본다.
+scratch="$(mktemp -d)"
+trap 'rm -rf "$scratch"' EXIT
+git init -q --bare "$scratch/verify.git"
+git -C "$scratch/verify.git" bundle verify "$bundle" >/dev/null 2>&1 \
+  || die "깃 번들이 아니거나 머리말이 깨졌습니다. 다시 복사하세요."
+ok "번들 형식 확인 (내용은 클론에서 확인됩니다)"
 
 # ── 3. 어느 브랜치를 꺼낼지 번들이 알고 있다. 이름을 박아두지 않는다.
 branches="$(git bundle list-heads "$bundle" | awk '$2 ~ /^refs\/heads\// {sub(/^refs\/heads\//,"",$2); print $2}')"
@@ -63,7 +72,11 @@ ok "브랜치: $branch"
 # ── 4. 클론. 이미 있는 폴더를 건드리지 않는다.
 say "클론"
 [ -e "$target" ] && die "'$target' 이 이미 있습니다. 다른 이름을 주거나 옮기고 다시 실행하세요."
-git clone -b "$branch" "$bundle" "$target" --quiet
+if ! git clone -b "$branch" "$bundle" "$target" --quiet 2>"$scratch/clone.err"; then
+  rm -rf "$target"            # 반쯤 만들어진 폴더를 남기지 않는다
+  sed 's/^/    /' "$scratch/clone.err" >&2
+  die "클론에 실패했습니다. 번들이 옮기다 잘렸을 수 있습니다 — 원본에서 다시 복사하세요."
+fi
 cd "$target"
 ok "$(git rev-list --count HEAD)개 커밋  ·  HEAD $(git rev-parse --short HEAD)"
 
