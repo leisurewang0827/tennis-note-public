@@ -8580,6 +8580,7 @@ function renderDashboardNoticeSummary() {
   const target = $("#dashboardNoticeSummary");
   if (!target) return;
   const notice = currentPopupNotice();
+  const dashboardDisplayState = popupNoticeDisplayState(notice);
   const lessonAlerts = [
     notificationPolicySettings.lessonDayBeforeEnabled,
     notificationPolicySettings.lesson30MinutesEnabled,
@@ -8599,10 +8600,10 @@ function renderDashboardNoticeSummary() {
     <div class="dashboard-notification-summary-row">
       <div>
         <span>공지 팝업</span>
-        <strong>${notice.status === "active" ? "노출중" : "꺼짐"}</strong>
-        <small>${escapeHtml(notice.status === "active" ? notice.title : "현재 노출 공지 없음")}</small>
+        <strong>${dashboardDisplayState.label}</strong>
+        <small>${escapeHtml(dashboardDisplayState.visible ? notice.title : "현재 노출 공지 없음")}</small>
       </div>
-      ${badge(notice.status === "active" ? "ready" : "neutral", notice.status === "active" ? "ON" : "OFF")}
+      ${badge(dashboardDisplayState.tone, dashboardDisplayState.visible ? "ON" : "OFF")}
     </div>
     <div class="dashboard-notification-summary-row">
       <div>
