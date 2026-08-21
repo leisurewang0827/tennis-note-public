@@ -4105,6 +4105,18 @@ function popupNotices() {
     .sort((a, b) => a.displayOrder - b.displayOrder || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 }
 
+function popupNoticeDisplayState(notice = {}, todayKey = adminLocalDateKey()) {
+  const status = String(notice.status || "disabled").toLowerCase();
+  const startsOn = String(notice.startDate || notice.startsOn || "").slice(0, 10);
+  const endsOn = String(notice.endDate || notice.endsOn || "").slice(0, 10);
+  const today = String(todayKey || adminLocalDateKey()).slice(0, 10);
+  if (status === "archived") return { key: "archived", label: "보관됨", tone: "neutral", visible: false };
+  if (status !== "active") return { key: "disabled", label: "꺼짐", tone: "neutral", visible: false };
+  if (startsOn && startsOn > today) return { key: "scheduled", label: "노출 예정", tone: "neutral", visible: false };
+  if (endsOn && endsOn < today) return { key: "ended", label: "기간 종료", tone: "neutral", visible: false };
+  return { key: "visible", label: "현재 노출", tone: "ready", visible: true };
+}
+
 function currentPopupNotice() {
   const savedNotices = popupNotices();
   return savedNotices.find((notice) => notice.status === "active")
@@ -7061,17 +7073,17 @@ function scheduleCoachSummaryForDay(day) {
 function renderSchedulePolicyPreview() {
   const target = $("#schedulePolicyPreview");
   if (!target) return;
-  const compactDays = ["월", "화", "토"];
+  const previewDays = scheduleDays;
   target.innerHTML = `
     <article>
       <strong>표시 기준</strong>
-      <span>회원앱/코치앱 기본은 수업근처만 표시합니다. 오전·오후·저녁·전체는 필요할 때 눌러 확인합니다.</span>
+      <span>회원권 구매는 아래 등록 근무시간 안에서 기존 수업과 브레이크를 뺀 빈 시간만 표시합니다.</span>
     </article>
     <article>
       <strong>운영 시간</strong>
       <span>${scheduleSettings.openStart}~${scheduleSettings.openEnd} · 10분 단위 표시 · 20/30분 수업 전체 시간으로 충돌 검사</span>
     </article>
-    ${compactDays
+    ${previewDays
       .map((day) => `
         <article>
           <strong>${day}요일</strong>
@@ -27604,7 +27616,7 @@ function renderNoticePopupSettings() {
   if (!state.noticeEditingId) state.noticeEditingId = notice.id;
   target.dataset.noticeId = notice.id || "notice-new";
   const audienceLabel = { all: "회원+코치", member: "회원만", coach: "코치만" }[notice.audience] || "회원+코치";
-  const statusLabel = notice.status === "active" ? "노출중" : notice.status === "archived" ? "지난 공지" : "꺼짐";
+  const displayState = popupNoticeDisplayState(notice);
   const previewUrl = noticeImageRemoveRequested ? "" : (noticeImageDraftUrl || notice.imageUrl || "");
   target.innerHTML = `
     <section class="notice-list-section" aria-label="등록 공지 목록">
@@ -27618,7 +27630,7 @@ function renderNoticePopupSettings() {
       <div class="notice-list">
         ${notices.length ? notices.map((item, index) => {
           const itemAudience = { all: "회원+코치", member: "회원", coach: "코치" }[item.audience] || "회원+코치";
-          const itemStatus = item.status === "active" ? "노출중" : item.status === "archived" ? "지난 공지" : "꺼짐";
+          const itemStatus = popupNoticeDisplayState(item).label;
           return `
             <div class="notice-list-row ${item.id === notice.id ? "selected" : ""}">
               <span class="notice-order-number">${index + 1}</span>
@@ -27636,13 +27648,13 @@ function renderNoticePopupSettings() {
         }).join("") : '<p class="empty-text">등록된 공지가 없습니다. 새 공지를 만들어주세요.</p>'}
       </div>
     </section>
-    <article class="notice-control-summary ${notice.status === "active" ? "active" : "disabled"}">
+    <article class="notice-control-summary ${displayState.visible ? "active" : "disabled"}">
       <div>
         <p class="eyebrow">${isUuid(notice.id) ? "공지 수정" : "새 공지"}</p>
         <strong>${escapeHtml(notice.title)}</strong>
         <span>${escapeHtml(notice.body)}</span>
       </div>
-      ${badge(notice.status === "active" ? "ready" : "neutral", statusLabel)}
+      ${badge(displayState.tone, displayState.label)}
     </article>
     <div class="notice-control-grid">
       <label>

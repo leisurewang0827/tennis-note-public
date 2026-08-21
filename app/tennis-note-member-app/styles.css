@@ -3099,7 +3099,7 @@ textarea {
 .membership-browser-heading,
 .membership-purchase-head,
 .product-group-heading,
-.purchase-recommendations > div:first-child,
+.purchase-product-options > div:first-child,
 .purchase-selected-summary,
 .purchase-order-summary > div {
   display: flex;
@@ -3121,7 +3121,7 @@ textarea {
 .membership-browser-heading strong,
 .membership-purchase-head h3,
 .purchase-step-intro strong,
-.purchase-recommendations strong,
+.purchase-product-options strong,
 .purchase-selected-summary strong,
 .purchase-order-summary strong,
 .purchase-choice-section h4 {
@@ -3131,7 +3131,7 @@ textarea {
 
 .membership-browser-heading span,
 .purchase-step-intro span,
-.purchase-recommendations span,
+.purchase-product-options span,
 .purchase-selected-summary span,
 .purchase-order-summary span,
 .purchase-policy-note,
@@ -3241,7 +3241,10 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.membership-action-row.has-ticket > :last-child {
+.membership-action-row.has-ticket > .primary-button,
+.membership-action-row.has-ticket > .membership-secondary-action,
+.membership-action-row.is-empty > .primary-button,
+.membership-action-row.is-empty > .membership-secondary-action {
   grid-column: 1 / -1;
 }
 
@@ -3303,7 +3306,7 @@ textarea {
 }
 
 .membership-purchase-step,
-.purchase-recommendations,
+.purchase-product-options,
 .purchase-choice-section {
   display: grid;
   gap: 10px;
@@ -4228,6 +4231,14 @@ button.purchase-timetable-cell {
   width: 100%;
 }
 
+.purchase-pay-action .primary-button:disabled {
+  color: #66766f;
+  background: #d6dfdb;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .purchase-pay-action small {
   color: var(--muted);
   font-size: 10px;
@@ -4366,7 +4377,10 @@ button.purchase-timetable-cell {
     grid-template-columns: 1fr;
   }
 
-  .membership-action-row.has-ticket > :last-child {
+  .membership-action-row.has-ticket > .primary-button,
+  .membership-action-row.has-ticket > .membership-secondary-action,
+  .membership-action-row.is-empty > .primary-button,
+  .membership-action-row.is-empty > .membership-secondary-action {
     grid-column: auto;
   }
 }
@@ -6393,6 +6407,78 @@ body.identity-setup-required {
   opacity: 0.72;
 }
 
+.purchase-selection-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.purchase-selection-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 68px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--ink);
+  background: #fff;
+  text-align: left;
+}
+
+.purchase-selection-row span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.purchase-selection-row small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.purchase-selection-row strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.purchase-selection-row em {
+  color: var(--green);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.purchase-selection-payment {
+  display: grid;
+  gap: 10px;
+}
+
+.purchase-payment-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #e4b864;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #7a4f00;
+  background: #fff8e8;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.payment-method-unavailable-note {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .purchase-payment-summary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -6439,6 +6525,22 @@ body.identity-setup-required {
 
 .purchase-payment-method-sheet .sheet-card {
   max-height: min(68dvh, 560px);
+}
+
+.purchase-product-sheet .sheet-card {
+  max-height: min(86dvh, 820px);
+}
+
+.purchase-product-sheet-options {
+  display: grid;
+  gap: 12px;
+  padding: 8px 16px calc(18px + env(safe-area-inset-bottom));
+}
+
+.purchase-schedule-sheet-coaches {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .payment-method-sheet-options {
@@ -7679,6 +7781,21 @@ body.notice-open {
   font-size: 13px;
   font-weight: 750;
   line-height: 1.45;
+}
+
+.membership-previous-ticket small,
+.membership-previous-ticket p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.membership-previous-ticket > span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .membership-primary-card.is-low {
