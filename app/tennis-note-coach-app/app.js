@@ -2637,7 +2637,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.387",
+    workerUrl: "./service-worker.js?v=1.0.388",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2668,7 +2668,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.387" });
+  const params = new URLSearchParams({ v: "1.0.388" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -6523,6 +6523,7 @@ function filterCurriculumOptions(input) {
   select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(selectedId, input.value)}`;
   if ([...select.options].some((option) => option.value === selectedId)) select.value = selectedId;
   renderCoachCurriculumSuggestions(input);
+  updateCoachCurriculumDetailLink(input);
 }
 
 function coachCurriculumSearchResults(query) {
@@ -6534,6 +6535,49 @@ function coachCurriculumSearchResults(query) {
   return curriculumSteps
     .filter((step) => `${step.id} ${step.title} ${step.trackTitle || ""} ${step.category || ""}`.toLocaleLowerCase("ko-KR").includes(normalized))
     .slice(0, 24);
+}
+
+function exactCoachCurriculum(value = "") {
+  const code = canonicalCurriculumId(String(value).trim().split(/\s|·/)[0]);
+  return curriculumSteps.find((step) => step.id === code) || null;
+}
+
+function coachCurriculumNotionUrl(step) {
+  const value = String(step?.notionUrl || "").trim();
+  return /^https:\/\/(?:www\.)?(?:app\.)?notion\.(?:com|so|site)\//i.test(value) ? value : "";
+}
+
+function coachCurriculumDetailLinkMarkup(step) {
+  const notionUrl = coachCurriculumNotionUrl(step);
+  if (!notionUrl) return "";
+  return `<a class="tn-curriculum-detail-link" href="${escapeHtml(notionUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(`${step.id} ${step.title} 자세히 보기`)}">자세히 보기</a>`;
+}
+
+function updateCoachCurriculumDetailLink(input) {
+  const label = input?.closest("label");
+  if (!label) return;
+  let link = label.querySelector("[data-curriculum-detail-link]");
+  if (!link) {
+    link = document.createElement("a");
+    link.className = "tn-curriculum-detail-link tn-curriculum-selected-detail";
+    link.dataset.curriculumDetailLink = "";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "자세히 보기";
+    link.hidden = true;
+    input.insertAdjacentElement("afterend", link);
+  }
+  const step = exactCoachCurriculum(input.value)
+    || exactCoachCurriculum(label.querySelector("select")?.value || "");
+  const notionUrl = coachCurriculumNotionUrl(step);
+  link.hidden = !notionUrl;
+  if (!notionUrl) {
+    link.removeAttribute("href");
+    link.removeAttribute("aria-label");
+    return;
+  }
+  link.href = notionUrl;
+  link.setAttribute("aria-label", `${step.id} ${step.title} 자세히 보기`);
 }
 
 function renderCoachCurriculumSuggestions(input) {
@@ -6550,7 +6594,7 @@ function renderCoachCurriculumSuggestions(input) {
   const matches = coachCurriculumSearchResults(query);
   target.hidden = false;
   target.innerHTML = matches.length
-    ? matches.map((step, index) => `<button type="button" class="tn-curriculum-suggestion${index === 0 ? " is-active" : ""}" role="option" data-curriculum-option-code="${escapeHtml(step.id)}"><strong>${escapeHtml(`${step.id} · ${step.title}`)}</strong><span>${escapeHtml([step.trackTitle || step.category, step.stageLabel || step.level].filter(Boolean).join(" · "))}</span><small>${escapeHtml(step.focus || step.goal || step.guide || "선택한 단계가 다음 커리큘럼으로 저장됩니다.")}</small></button>`).join("")
+    ? matches.map((step, index) => `<div class="tn-curriculum-suggestion-row"><button type="button" class="tn-curriculum-suggestion${index === 0 ? " is-active" : ""}" role="option" data-curriculum-option-code="${escapeHtml(step.id)}"><strong>${escapeHtml(`${step.id} · ${step.title}`)}</strong><span>${escapeHtml([step.trackTitle || step.category, step.stageLabel || step.level].filter(Boolean).join(" · "))}</span><small>${escapeHtml(step.focus || step.goal || step.guide || "선택한 단계가 다음 커리큘럼으로 저장됩니다.")}</small></button>${coachCurriculumDetailLinkMarkup(step)}</div>`).join("")
     : '<p class="tn-curriculum-suggestions-empty">일치하는 단계가 없습니다. 증상이나 동작을 다른 말로 입력해 보세요.</p>';
 }
 
@@ -6566,6 +6610,7 @@ function selectCoachCurriculumSuggestion(button) {
   select.value = step.id;
   select.dispatchEvent(new Event("change", { bubbles: true }));
   if (target) target.hidden = true;
+  updateCoachCurriculumDetailLink(input);
   input.focus();
 }
 
@@ -7037,7 +7082,15 @@ function applyCoachCommentDraft(keywordSource, commentSource) {
     showToast("코멘트 초안 기능을 불러오지 못했습니다.");
     return;
   }
-  const result = generator.generate(keywordInput.value);
+  const scope = keywordInput.closest("[data-modal-participant-row], [data-log-participant-row], [data-log-card], .lesson-action-panel, .view")
+    || commentInput.parentElement;
+  const curriculumSearch = scope?.querySelector("[data-curriculum-option-search]");
+  const curriculumSelect = curriculumSearch?.closest("label")?.querySelector("select");
+  const curriculum = exactCoachCurriculum(curriculumSearch?.value || "")
+    || exactCoachCurriculum(curriculumSelect?.value || "")
+    || coachCurriculumSearchResults(curriculumSearch?.value || keywordInput.value)[0]
+    || null;
+  const result = generator.generate(keywordInput.value, { curriculum });
   if (!result.ok) {
     showToast(result.message);
     keywordInput.focus();
@@ -8395,7 +8448,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.387",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.388",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

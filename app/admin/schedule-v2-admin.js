@@ -148,6 +148,34 @@
       .slice(0, 24);
   }
 
+  function curriculumNotionUrl(step) {
+    const value = String(step?.notionUrl || "").trim();
+    return /^https:\/\/(?:www\.)?(?:app\.)?notion\.(?:com|so|site)\//i.test(value) ? value : "";
+  }
+
+  function curriculumDetailLinkMarkup(step, dataAttribute = "") {
+    const notionUrl = curriculumNotionUrl(step);
+    if (!notionUrl) return "";
+    const title = `${step.id} ${step.title} 자세히 보기`;
+    return `<a class="tn-curriculum-detail-link" href="${escapeHtml(notionUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(title)}" ${dataAttribute}>자세히 보기</a>`;
+  }
+
+  function updateV2CurriculumDetailLink(input) {
+    const row = input?.closest("[data-v2-outcome-user]");
+    const link = row?.querySelector("[data-v2-curriculum-detail-link]");
+    if (!link) return;
+    const step = curriculumStepFromValue(input.value);
+    const notionUrl = curriculumNotionUrl(step);
+    link.hidden = !notionUrl;
+    if (!notionUrl) {
+      link.removeAttribute("href");
+      link.removeAttribute("aria-label");
+      return;
+    }
+    link.href = notionUrl;
+    link.setAttribute("aria-label", `${step.id} ${step.title} 자세히 보기`);
+  }
+
   function renderV2CurriculumSuggestions(input) {
     const target = input?.closest("[data-v2-outcome-user]")?.querySelector("[data-v2-curriculum-suggestions]");
     if (!target) return;
@@ -162,7 +190,7 @@
     const matches = curriculumSearchResults(query);
     target.hidden = false;
     target.innerHTML = matches.length
-      ? matches.map((step, index) => `<button type="button" class="tn-curriculum-suggestion${index === 0 ? " is-active" : ""}" role="option" data-v2-curriculum-code="${escapeHtml(step.id)}"><strong>${escapeHtml(`${step.id} · ${step.title}`)}</strong><span>${escapeHtml([step.trackTitle || step.category, step.stageLabel || step.level].filter(Boolean).join(" · "))}</span><small>${escapeHtml(step.focus || step.goal || step.guide || "선택한 단계가 다음 커리큘럼으로 저장됩니다.")}</small></button>`).join("")
+      ? matches.map((step, index) => `<div class="tn-curriculum-suggestion-row"><button type="button" class="tn-curriculum-suggestion${index === 0 ? " is-active" : ""}" role="option" data-v2-curriculum-code="${escapeHtml(step.id)}"><strong>${escapeHtml(`${step.id} · ${step.title}`)}</strong><span>${escapeHtml([step.trackTitle || step.category, step.stageLabel || step.level].filter(Boolean).join(" · "))}</span><small>${escapeHtml(step.focus || step.goal || step.guide || "선택한 단계가 다음 커리큘럼으로 저장됩니다.")}</small></button>${curriculumDetailLinkMarkup(step)}</div>`).join("")
       : '<p class="tn-curriculum-suggestions-empty">일치하는 단계가 없습니다. 증상이나 동작을 다른 말로 입력해 보세요.</p>';
   }
 
@@ -175,6 +203,7 @@
     input.value = `${step.id} · ${step.title}`;
     input.dispatchEvent(new Event("change", { bubbles: true }));
     if (target) target.hidden = true;
+    updateV2CurriculumDetailLink(input);
     input.focus();
   }
 
@@ -2551,7 +2580,11 @@
     const commentInput = row.querySelector("[data-v2-comment]");
     const generator = window.TennisNoteCommentDraft;
     if (!keywordInput || !commentInput || !generator?.generate) return;
-    const draft = generator.generate(keywordInput.value);
+    const curriculumInput = row.querySelector("[data-v2-curriculum]");
+    const selectedCurriculum = curriculumStepFromValue(curriculumInput?.value || "")
+      || curriculumSearchResults(curriculumInput?.value || keywordInput.value)[0]
+      || null;
+    const draft = generator.generate(keywordInput.value, { curriculum: selectedCurriculum });
     if (!draft.ok) {
       setEditorMessage(draft.message || "키워드를 한 개 이상 입력해 주세요.");
       keywordInput.focus();
@@ -2760,7 +2793,8 @@
       const participant = participants.find((item) => String(item.userId) === String(row.dataset.v2OutcomeUser)) || {};
       const final = outcomeRowFinal(participant);
       const feedbackEditing = final && String(state.feedbackRevisionUserId || "") === String(participant.userId || "");
-      row.insertAdjacentHTML("beforeend", `<label class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼 <small>${feedbackEditing ? "수정" : "완료 시 필수"}</small></span><input type="search" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="증상·동작·목표·코드 검색" autocomplete="off"${editable && !final || feedbackEditing ? "" : " disabled"} /></label><div class="tn-curriculum-suggestions" data-v2-curriculum-suggestions role="listbox" hidden></div>`);
+      row.insertAdjacentHTML("beforeend", `<div class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼 <small>${feedbackEditing ? "수정" : "완료 시 필수"}</small></span><div class="tn-curriculum-field-control"><input type="search" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="증상·동작·목표·코드 검색" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 다음 커리큘럼 검색`)}" autocomplete="off"${editable && !final || feedbackEditing ? "" : " disabled"} />${curriculumDetailLinkMarkup(curriculumStepFromValue(curriculumInputValue(participant)), "data-v2-curriculum-detail-link") || '<a class="tn-curriculum-detail-link" data-v2-curriculum-detail-link target="_blank" rel="noopener noreferrer" hidden>자세히 보기</a>'}</div></div><div class="tn-curriculum-suggestions" data-v2-curriculum-suggestions role="listbox" hidden></div>`);
+      updateV2CurriculumDetailLink(row.querySelector("[data-v2-curriculum]"));
     });
     $$(".schedule-v2-outcome-row", list).forEach((row) => syncOutcomeRow(row));
   }
@@ -4257,7 +4291,10 @@
     });
     $("#scheduleV2OutcomeList").addEventListener("input", (event) => {
       const curriculumInput = event.target.closest("[data-v2-curriculum]");
-      if (curriculumInput) renderV2CurriculumSuggestions(curriculumInput);
+      if (curriculumInput) {
+        renderV2CurriculumSuggestions(curriculumInput);
+        updateV2CurriculumDetailLink(curriculumInput);
+      }
     });
     $("#scheduleV2OutcomeList").addEventListener("keydown", (event) => {
       if (event.isComposing) return;

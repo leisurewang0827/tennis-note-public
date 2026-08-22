@@ -2217,6 +2217,13 @@
   font-weight: 700;
 }
 
+.tn-curriculum-field-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
 .schedule-v2-outcome-row > .tn-curriculum-suggestions {
   grid-column: 1 / -1;
 }
@@ -2230,6 +2237,20 @@
   background: #fff;
   color: #173d33;
   font: inherit;
+}
+
+.schedule-v2-outcome-curriculum .tn-curriculum-detail-link {
+  min-height: 36px;
+}
+
+@media (max-width: 480px) {
+  .schedule-v2-outcome-curriculum {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-v2-outcome-curriculum > span {
+    margin-bottom: -2px;
+  }
 }
 
 .schedule-v2-outcome-row.is-final {
