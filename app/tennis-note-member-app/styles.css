@@ -5486,6 +5486,127 @@ body.identity-setup-required {
   display: none;
 }
 
+.member-mobile-schedule.member-mobile-availability {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.member-mobile-availability .member-mobile-day-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.member-mobile-availability .member-mobile-day {
+  display: grid;
+  gap: 2px;
+  place-items: center;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 1px;
+  color: var(--muted);
+  background: white;
+}
+
+.member-mobile-availability .member-mobile-day strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.member-mobile-availability .member-mobile-day span {
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.member-mobile-availability .member-mobile-day b {
+  display: grid;
+  min-width: 20px;
+  height: 18px;
+  place-items: center;
+  border-radius: 9px;
+  color: #52645e;
+  background: #edf1ef;
+  font-size: 9px;
+}
+
+.member-mobile-availability .member-mobile-day.is-active {
+  border-color: var(--green);
+  color: white;
+  background: var(--green);
+}
+
+.member-mobile-availability .member-mobile-day.is-active strong {
+  color: white;
+}
+
+.member-mobile-availability .member-mobile-day.is-active b {
+  color: var(--green);
+  background: white;
+}
+
+.member-mobile-availability .member-available-coach-groups,
+.member-mobile-availability .member-available-coach-group {
+  display: grid;
+  gap: 10px;
+}
+
+.member-mobile-availability .member-available-coach-group {
+  border: 1px solid #d8e1e8;
+  border-radius: 8px;
+  padding: 11px;
+  background: white;
+}
+
+.member-mobile-availability .member-available-coach-group > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.member-mobile-availability .member-available-coach-group > div:first-child span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.member-mobile-availability .member-available-time-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 7px;
+}
+
+.member-mobile-availability .member-available-time {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 8px;
+  align-items: center;
+  min-width: 0;
+  min-height: 58px;
+  border: 1px solid #9bc8b7;
+  border-radius: 7px;
+  padding: 9px 10px;
+  color: #174c3a;
+  background: #eef9f5;
+  text-align: left;
+}
+
+.member-mobile-availability .member-available-time strong {
+  grid-row: 1 / span 2;
+  font-size: 16px;
+}
+
+.member-mobile-availability .member-available-time span,
+.member-mobile-availability .member-available-time small {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .member-desktop-schedule {
   min-width: 0;
   overflow-x: auto;
@@ -5493,9 +5614,23 @@ body.identity-setup-required {
   -webkit-overflow-scrolling: touch;
 }
 
+.member-full-schedule-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.member-full-schedule-action span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 @media (max-width: 720px) {
   .member-desktop-schedule {
-    display: none;
+    display: block;
   }
 
   .member-mobile-schedule {

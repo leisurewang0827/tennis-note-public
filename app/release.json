@@ -1,15 +1,15 @@
 {
-  "version": "1.0.393",
-  "releaseId": "2026.08.22.09",
-  "appSurfaceVersion": "1.0.393",
+  "version": "1.0.394",
+  "releaseId": "2026.08.22.10",
+  "appSurfaceVersion": "1.0.394",
   "minimumNativeShellVersion": "1.0.118",
   "nativeUpdateMode": "bundled-shell",
   "nativePlatforms": {
     "android": {
       "minimumVersion": "1.0.245",
       "minimumBuild": 55,
-      "latestVersion": "1.0.371",
-      "latestBuild": 89,
+      "latestVersion": "1.0.384",
+      "latestBuild": 93,
       "preparedVersion": "1.0.389",
       "preparedBuild": 94,
       "storeUrl": "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote"

@@ -46,8 +46,8 @@ const state = {
   memberChangeCompactSelection: false,
   memberScheduleModeTouched: false,
   memberScheduleFullView: false,
-  activeJournalMonth: "2026-07",
-  selectedJournalDate: "2026-07-03",
+  activeJournalMonth: localDateKey().slice(0, 7),
+  selectedJournalDate: localDateKey(),
   selectedLessonDetailId: "",
   journalSearchQuery: "",
   curriculumQuery: "",
@@ -2091,7 +2091,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.393",
+    workerUrl: "./service-worker.js?v=1.0.394",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -3887,6 +3887,7 @@ function memberAvailableSlotsForSelectedLesson() {
   const initialCoachSelection = Boolean(selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId);
   return memberUniqueAvailableSlots(options.filter((lesson) => {
     if (lesson.status !== "available") return false;
+    if (!memberChangeCandidateInActiveWeek(lesson)) return false;
     const lessonCoachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
     if (!lessonCoachRoleId || (!initialCoachSelection && !assignedCoachIds.has(lessonCoachRoleId))) return false;
     if (!selectedCoachId) return true;
@@ -5530,6 +5531,13 @@ function renderDynamicMemberSchedule() {
     ${renderRegularInitialScheduleBar()}
     ${inlineChangeBar}
     ${renderMemberMobileSchedule(policy, baseLessons, scheduleLessons)}
+    <div class="member-full-schedule-action">
+      <button class="small-button" type="button" data-toggle-full-member-schedule aria-expanded="${state.memberScheduleFullView}">
+        ${state.memberScheduleFullView ? "가능한 시간만 보기" : "전체 시간표 보기"}
+      </button>
+      <span>${state.memberScheduleFullView ? "등록된 수업과 근무시간을 함께 표시합니다." : "필요할 때만 전체 시간표를 펼칠 수 있습니다."}</span>
+    </div>
+    ${state.memberScheduleFullView ? `
     <div class="member-desktop-schedule">
     <div class="member-duration-schedule ${requestOnly ? "member-request-only" : ""}" role="table" aria-label="회원 전체 시간표" style="--day-count:${days.length}; --slot-count:${scheduleTimeList.length}; grid-template-columns:64px ${dayColumnTracks};">
       <div class="member-duration-head time-head">시간</div>
@@ -5619,6 +5627,7 @@ function renderDynamicMemberSchedule() {
         .join("")}
     </div>
     </div>
+    ` : ""}
     ${renderMemberBookingShortcuts()}`;
   $$("#scheduleGrid [data-lesson]").forEach((button) => {
     button.addEventListener("click", (event) => {
@@ -5756,7 +5765,7 @@ function renderSelects() {
     ? scheduleLoadState
     : ["loading", "error"].includes(candidateLoadState) ? candidateLoadState : "ready";
   const availableOptions = loadState === "ready" ? memberAvailableSlotsForSelectedLesson()
-    .map((lesson) => `<option value="${lesson.id}">${lesson.day} ${lesson.time} · ${lesson.coach}</option>`)
+    .map((lesson) => `<option value="${lesson.id}">${escapeHtml(lessonDateTimeLabel(lesson))} · ${escapeHtml(memberCoachShortName(lesson.coach))} 코치</option>`)
     .join("") : "";
   $("#makeupSlot").innerHTML = availableOptions
     ? `<option value="">시간을 선택해 주세요</option>${availableOptions}`
@@ -5875,7 +5884,7 @@ function renderAvailableSlots() {
             : memberCandidateWindowLabel(lesson);
           return `
           <button class="slot-card ${selectedIds.includes(lesson.id) ? "is-selected" : ""} ${lesson.policy === "coach" ? "needs-approval" : "auto-change"}" type="button" data-select-slot="${lesson.id}">
-            <strong>${lesson.day} ${lesson.time}</strong>
+            <strong>${escapeHtml(lessonDateTimeLabel(lesson))}</strong>
             <span>${lesson.coach}</span>
             <small>${selectedIds.includes(lesson.id)
               ? isRegularInitialBooking ? `${selectedIds.indexOf(lesson.id) + 1}번째 선택` : "선택됨"
@@ -8061,9 +8070,10 @@ function purchaseProductCard(product = {}, selected = false) {
   const paymentMethod = paymentMethodDefinition(normalizeSelectedPaymentMethod());
   const amount = purchasePaymentAmount(product, paymentMethod.id);
   const validityLabel = Number(product.validityDays || 0) > 0 ? `사용 ${Number(product.validityDays)}일` : "";
+  const lessonFormat = Number(product.groupSize || 1) > 1 ? `${Number(product.groupSize)}대1` : "1대1";
   return `
     <button class="purchase-product-option ${selected ? "is-selected" : ""}" type="button" data-purchase-product="${escapeHtml(product.id || "")}" aria-pressed="${selected}">
-      <span>${escapeHtml(family.label)} · ${escapeHtml(product.badge || `${product.tickets || 0}회`)}</span>
+      <span>${escapeHtml(family.label)} · ${escapeHtml(lessonFormat)} · ${escapeHtml(product.badge || `${product.tickets || 0}회`)}</span>
       <strong>${escapeHtml(purchaseProductDisplayTitle(product))}</strong>
       ${validityLabel ? `<small>${escapeHtml(validityLabel)}</small>` : ""}
       <b>${escapeHtml(paymentMethod.shortLabel)} ${escapeHtml(formatWon(amount))}</b>
@@ -12296,7 +12306,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.393", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.394", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -12957,7 +12967,7 @@ function startCouponBooking(ticketId) {
 async function changeMemberScheduleMode(mode) {
   state.memberScheduleMode = ["availability", "flex"].includes(mode) ? "availability" : "mine";
   state.memberScheduleModeTouched = true;
-  state.memberScheduleFullView = state.memberScheduleMode === "availability";
+  state.memberScheduleFullView = false;
   if (state.memberScheduleMode === "availability") {
     renderSchedule();
     const preferredSourceId = await prepareChangeRequestSource(state.selectedMemberChangeSourceId);
@@ -12981,7 +12991,7 @@ async function changeMemberScheduleMode(mode) {
 async function openMemberChangeTimetable(preferredLessonId = "") {
   state.memberScheduleMode = "availability";
   state.memberScheduleModeTouched = true;
-  state.memberScheduleFullView = true;
+  state.memberScheduleFullView = false;
   if (preferredLessonId) {
     state.selectedMemberChangeSourceId = preferredLessonId;
     const preferredSource = currentScheduledLessonsForChange().find((lesson) => lesson.id === preferredLessonId);
@@ -15328,7 +15338,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.393",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.394",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

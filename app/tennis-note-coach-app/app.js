@@ -2637,7 +2637,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.393",
+    workerUrl: "./service-worker.js?v=1.0.394",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2668,7 +2668,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.393" });
+  const params = new URLSearchParams({ v: "1.0.394" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -5044,7 +5044,7 @@ function memberAttentionLabel(member = {}) {
 
 function memberRecentLessonLabel(member = {}) {
   const recent = String(member.lastLesson || "").trim();
-  return recent ? `최근 ${recent}` : "최근 수업 없음";
+  return recent ? (recent.startsWith("최근 ") ? recent : `최근 ${recent}`) : "최근 수업 없음";
 }
 
 function renderActiveMemberCard(member) {
@@ -6471,9 +6471,15 @@ function coachScheduleMonthValue(week = activeScheduleWeek()) {
   return String(week.startDate || "").slice(0, 7);
 }
 
-function curriculumOptions(selectedId, query = "") {
+function curriculumOptions(selectedId, query = "", selectedOnlyWhenIdle = false) {
   const canonicalSelectedId = canonicalCurriculumId(selectedId);
   const searchQuery = String(query || "").trim();
+  if (selectedOnlyWhenIdle && !searchQuery) {
+    const selectedStep = curriculumSteps.find((step) => step.id === canonicalSelectedId);
+    return selectedStep
+      ? `<option value="${selectedStep.id}" selected>${selectedStep.id} · ${escapeHtml(selectedStep.title)} · ${escapeHtml(selectedStep.trackTitle || selectedStep.category || "커리큘럼")}</option>`
+      : "";
+  }
   const search = window.TennisNoteCurriculumSearch;
   const rankedSteps = searchQuery && search?.search
     ? search.search(curriculumSteps, searchQuery, { limit: 24 }).map((result) => result.step)
@@ -6520,7 +6526,7 @@ function filterCurriculumOptions(input) {
   const select = input?.closest("label")?.querySelector("select");
   if (!select) return;
   const selectedId = select.value || "";
-  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(selectedId, input.value)}`;
+  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(selectedId, input.value, true)}`;
   if ([...select.options].some((option) => option.value === selectedId)) select.value = selectedId;
   renderCoachCurriculumSuggestions(input);
   updateCoachCurriculumDetailLink(input);
@@ -6606,7 +6612,7 @@ function selectCoachCurriculumSuggestion(button) {
   const step = selectedCurriculum(button?.dataset.curriculumOptionCode || "");
   if (!input || !select || !step) return;
   input.value = `${step.id} · ${step.title}`;
-  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(step.id)}`;
+  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(step.id, "", true)}`;
   select.value = step.id;
   select.dispatchEvent(new Event("change", { bubbles: true }));
   if (target) target.hidden = true;
@@ -6735,7 +6741,7 @@ function recordProcessingMarkup() {
                     <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
                     <select data-log-participant-curriculum="${escapeHtml(log.id)}" ${confirmed ? "disabled" : ""}>
                       <option value="">검색·선택</option>
-                      ${curriculumOptions(result.nextCurriculumId || "")}
+                      ${curriculumOptions(result.nextCurriculumId || "", "", true)}
                     </select>
                   </label>
                   <em>${resultNextStep ? `다음 수업: ${escapeHtml(resultNextStep.id)} · ${escapeHtml(resultNextStep.title)}` : "다음 커리큘럼 선택 필요"}</em>
@@ -6755,7 +6761,7 @@ function recordProcessingMarkup() {
               <span>다음 커리큘럼 <small>필수</small></span>
               <input data-curriculum-option-search type="search" placeholder="증상·동작·목표·코드 검색" aria-label="다음 커리큘럼 검색" ${confirmed ? "disabled" : ""} />
               <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
-              <select data-next-curriculum="${log.id}" ${confirmed ? "disabled" : ""}><option value="">검색·선택</option>${curriculumOptions(log.nextCurriculumId || log.curriculumId)}</select>
+              <select data-next-curriculum="${log.id}" ${confirmed ? "disabled" : ""}><option value="">검색·선택</option>${curriculumOptions(log.nextCurriculumId || log.curriculumId, "", true)}</select>
             </label>
             <em>다음 수업: ${escapeHtml(nextStep.id)} · ${escapeHtml(nextStep.title)}</em>`;
         return `
@@ -8448,7 +8454,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.393",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.394",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
