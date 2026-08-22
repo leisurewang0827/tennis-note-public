@@ -2091,7 +2091,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.386",
+    workerUrl: "./service-worker.js?v=1.0.387",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -6132,7 +6132,7 @@ function renderLessonLogs() {
                 <strong>${lessonReviewTitle(log)}</strong>
                 <small>${dateLabel} · ${log.lessonLabel} · ${outcomeLabel} · ${deductionLabel}</small>
               </span>
-              <span class="summary-log-status">${statusLabel}</span>
+              <span class="summary-log-status">${statusLabel}${log.feedbackRevised ? " · 수정됨" : ""}</span>
             </button>`;
         },
       )
@@ -8502,8 +8502,9 @@ function closeMembershipPurchaseFlow(options = {}) {
 }
 
 function purchaseSlotInsideAnchorWindow(scheduleLessons, product, lessonDate, time, coach, policy) {
-  if (policy.requireMakeupDayAnchor === false) return true;
-  const configuredGap = product.makeupAnchorMinutes ?? policy.makeupAnchorGapMinutes ?? 40;
+  const configuredGap = Object.prototype.hasOwnProperty.call(product, "makeupAnchorMinutes")
+    ? product.makeupAnchorMinutes
+    : policy.makeupAnchorGapMinutes ?? 40;
   if (configuredGap === null || String(configuredGap).toLowerCase() === "unlimited") return true;
   const gapMinutes = Math.min(100, Math.max(0, Number(configuredGap) || 0));
   const coachRoleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
@@ -8515,10 +8516,15 @@ function purchaseSlotInsideAnchorWindow(scheduleLessons, product, lessonDate, ti
     return lessonCoachRoleId === coachRoleId;
   });
   if (!anchors.length) return false;
-  const firstStart = Math.min(...anchors.map((lesson) => minutesFromTime(lesson.time)));
-  const lastEnd = Math.max(...anchors.map((lesson) => minutesFromTime(lesson.time) + lessonDuration(lesson)));
   const slotStart = minutesFromTime(time);
-  return slotStart >= firstStart - gapMinutes && slotStart <= lastEnd + gapMinutes;
+  const slotEnd = slotStart + Math.max(1, numericValue(product.lessonMinutes, 20));
+  return anchors.some((lesson) => {
+    const anchorStart = minutesFromTime(lesson.time);
+    const anchorEnd = anchorStart + lessonDuration(lesson);
+    const gapAfterAnchor = slotStart >= anchorEnd ? slotStart - anchorEnd : Number.POSITIVE_INFINITY;
+    const gapBeforeAnchor = slotEnd <= anchorStart ? anchorStart - slotEnd : Number.POSITIVE_INFINITY;
+    return gapAfterAnchor <= gapMinutes || gapBeforeAnchor <= gapMinutes;
+  });
 }
 
 function selectPurchasePurpose(purpose = "") {
@@ -9562,6 +9568,12 @@ function scheduleV2MemberOutcomeStatus(record = null, fallback = "scheduled") {
   }[String(record.outcome || "").toLowerCase()] || String(record.outcome || fallback).toLowerCase();
 }
 
+function scheduleV2FeedbackWasRevised(record = {}) {
+  const finalizedAt = Date.parse(String(record.finalizedAt || record.finalized_at || ""));
+  const updatedAt = Date.parse(String(record.updatedAt || record.updated_at || ""));
+  return Number.isFinite(finalizedAt) && Number.isFinite(updatedAt) && updatedAt > finalizedAt + 1000;
+}
+
 function mergeScheduleV2MemberRecords(mappedLessons = []) {
   mappedLessons
     .filter((lesson) => {
@@ -9602,6 +9614,9 @@ function mergeScheduleV2MemberRecords(mappedLessons = []) {
             : existing.memberVisibleSummary || "",
         ticketDeducted: Number(record.deductedSessions) > 0,
         participantOutcome: record.outcome,
+        feedbackFinalizedAt: record.finalizedAt || "",
+        feedbackUpdatedAt: record.updatedAt || record.finalizedAt || "",
+        feedbackRevised: scheduleV2FeedbackWasRevised(record),
         submittedAt: record.finalizedAt || existing.submittedAt || `${lesson.lessonDate}T${lesson.time}:00`,
       };
       if (existingIndex >= 0) state.lessonLogs[existingIndex] = log;
@@ -10173,6 +10188,9 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
           ticketDeducted: Number(record.deductedSessions) > 0,
           deductedSessions: Number(record.deductedSessions) || 0,
           participantOutcome: record.outcome || "completed",
+          feedbackFinalizedAt: record.finalizedAt || "",
+          feedbackUpdatedAt: record.updatedAt || record.finalizedAt || "",
+          feedbackRevised: scheduleV2FeedbackWasRevised(record),
           submittedAt: record.finalizedAt || record.updatedAt || "",
         };
       });
@@ -10627,6 +10645,7 @@ function paymentServerErrorMessage(error) {
     purchase_weekend_30m_not_available: "30분 수업은 평일 시간표에서 선택해 주세요.",
     purchase_slot_anchor_required: "선택한 선생님의 기존 수업과 가까운 시간만 신청할 수 있습니다.",
     purchase_slot_outside_anchor_window: "기존 수업 전후 40분 안의 시간을 선택해 주세요.",
+    purchase_slot_outside_adjacent_anchor: "기존 수업과 실제 빈 시간이 40분 이내인 시간을 선택해 주세요.",
   };
   return labels[code] || code;
 }
@@ -12277,7 +12296,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.386", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.387", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -14017,6 +14036,7 @@ async function requestMakeup() {
         coach_role_inactive: "담당 코치가 현재 근무 중이 아닙니다. 관리자에게 문의해주세요.",
         regular_slot_anchor_required: "해당 날짜에는 담당 코치의 기존 수업이 없어 새 정규시간을 선택할 수 없습니다.",
         regular_slot_outside_anchor_window: "담당 코치의 기존 수업 전후 허용 범위 안에서 시간을 다시 선택해주세요.",
+        regular_slot_outside_adjacent_anchor: "담당 코치의 기존 수업과 실제 빈 시간이 40분 이내인 시간을 다시 선택해주세요.",
         change_reason_required: "변경 이유를 2자 이상 입력해주세요.",
         member_change_policy_changed: "운영 규칙이 방금 변경되었습니다. 가능한 시간을 다시 확인한 뒤 신청해 주세요.",
         member_change_disabled: "회원 앱 수업 변경이 현재 꺼져 있습니다. 담당 코치에게 문의해 주세요.",
@@ -15307,7 +15327,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.386",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.387",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

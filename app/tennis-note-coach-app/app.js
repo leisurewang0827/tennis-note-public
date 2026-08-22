@@ -2637,7 +2637,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.386",
+    workerUrl: "./service-worker.js?v=1.0.387",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2668,7 +2668,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.386" });
+  const params = new URLSearchParams({ v: "1.0.387" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -4255,17 +4255,34 @@ function renderScheduleEditPanel() {
     const used = Number(participant.usedSessions) || Math.max(0, total - (Number(participant.remainingSessions) || Number(lesson.remaining) || 0));
     const remaining = Number(participant.remainingSessions) || Number(lesson.remaining) || 0;
     const finalComment = participant.coachComment || participant.coach_comment || "";
-    const finalCurriculumId = participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "";
+    const finalCurriculumId = participant.nextCurriculumId || participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "";
     const finalCurriculumTitle = participant.nextCurriculumTitle || participant.next_curriculum_title || (finalCurriculumId ? selectedCurriculum(finalCurriculumId)?.title : "");
     if (finalized) {
       const outcome = String(participant.outcome || "completed").toLowerCase();
       const outcomeLabel = outcome === "no_show" ? "노쇼" : outcome === "absence" ? "불참" : "완료";
       const deducted = Number(participant.deductedSessions ?? participant.deducted_sessions) || 0;
+      const feedbackEditing = outcome === "completed" && lesson.feedbackRevisionKey === key;
       return `
-        <section class="lesson-participant-completion-card lesson-chart-participant is-final" data-lesson-participant-panel="${escapeHtml(key)}" ${index === 0 ? "" : "hidden"}>
+        <section class="lesson-participant-completion-card lesson-chart-participant is-final ${feedbackEditing ? "is-feedback-editing" : ""}" data-lesson-participant-panel="${escapeHtml(key)}" data-feedback-revision-row="${escapeHtml(key)}" data-user-id="${escapeHtml(participant.userId)}" data-record-updated-at="${escapeHtml(participant.updatedAt || "")}" ${index === 0 ? "" : "hidden"}>
           ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
           <div class="lesson-chart-result-line"><b>${escapeHtml(outcomeLabel)}</b><span>${deducted ? `${deducted}회 차감` : "차감 없음"} · 잔여 ${remaining}회</span></div>
-          ${outcome === "completed" ? `<div class="lesson-chart-readonly"><span>코치 피드백</span><p>${escapeHtml(finalComment || "등록된 피드백이 없습니다.")}</p></div><div class="lesson-chart-readonly"><span>다음 목표</span><strong>${escapeHtml(finalCurriculumTitle || "선택 안 됨")}</strong>${finalCurriculumId ? `<small>${escapeHtml(finalCurriculumId)}</small>` : ""}</div>` : ""}
+          ${outcome === "completed" && feedbackEditing ? `
+            <label class="lesson-required-field">
+              <span>코치 피드백 <small>횟수는 변경되지 않음</small></span>
+              <textarea data-feedback-revision-comment rows="5" maxlength="500">${escapeHtml(finalComment)}</textarea>
+              <small class="lesson-comment-count">5자 이상</small>
+            </label>
+            <label class="lesson-required-field">
+              <span>다음 목표 <small>필수</small></span>
+              <input data-curriculum-option-search type="search" value="${escapeHtml(finalCurriculumId && finalCurriculumTitle ? `${finalCurriculumId} · ${finalCurriculumTitle}` : "")}" placeholder="동작·증상·목표·코드 검색" aria-label="${escapeHtml(participant.name || "회원")} 다음 목표 검색" />
+              <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
+              <select data-feedback-revision-curriculum>
+                <option value="">검색·선택</option>
+                ${curriculumOptions(finalCurriculumId)}
+              </select>
+            </label>
+            <div class="actions lesson-feedback-revision-actions"><button class="approve-button" type="button" data-save-final-feedback="${escapeHtml(lesson.id)}">피드백 저장</button><button class="small-button" type="button" data-cancel-final-feedback="${escapeHtml(lesson.id)}">취소</button></div>
+          ` : outcome === "completed" ? `<div class="lesson-chart-readonly"><span>코치 피드백</span><p>${escapeHtml(finalComment || "등록된 피드백이 없습니다.")}</p></div><div class="lesson-chart-readonly"><span>다음 목표</span><strong>${escapeHtml(finalCurriculumTitle || "선택 안 됨")}</strong>${finalCurriculumId ? `<small>${escapeHtml(finalCurriculumId)}</small>` : ""}</div><button class="small-button" type="button" data-edit-final-feedback="${escapeHtml(key)}">피드백 수정</button>` : ""}
           <button class="small-button lesson-chart-history-toggle" type="button" data-toggle-lesson-history="${escapeHtml(key)}">지난 기록 보기</button>
           <div class="lesson-chart-history" data-lesson-history-panel="${escapeHtml(key)}" hidden>${participant.userId ? coachMemberChartPanelMarkup(participant.userId, participant.name || "회원", 5) : '<p class="member-chart-state">연결된 회원 기록이 없습니다.</p>'}</div>
         </section>`;
@@ -6065,6 +6082,112 @@ async function processCoachNoShow(lessonId, deduct) {
   return processCoachAttendance(lessonId, "no_show", deduct);
 }
 
+function openFinalFeedbackRevision(lessonId, participantKey) {
+  const lesson = ensureCoachLessonRecord(lessonId);
+  if (!lesson || !canProcessLesson(lesson)) return;
+  lesson.feedbackRevisionKey = participantKey;
+  lesson.validationMessage = "";
+  renderLessonEditModal();
+  activeViewField("[data-feedback-revision-comment]")?.focus({ preventScroll: true });
+}
+
+function cancelFinalFeedbackRevision(lessonId) {
+  const lesson = ensureCoachLessonRecord(lessonId);
+  if (!lesson) return;
+  delete lesson.feedbackRevisionKey;
+  lesson.validationMessage = "";
+  renderLessonEditModal();
+}
+
+async function saveFinalFeedbackRevision(lessonId) {
+  const lesson = ensureCoachLessonRecord(lessonId);
+  if (!lesson || !lesson.serverLessonId || !canProcessLesson(lesson) || !lesson.feedbackRevisionKey) return;
+  const rows = $$('[data-feedback-revision-row]');
+  const row = rows.find((candidate) => candidate.dataset.feedbackRevisionRow === lesson.feedbackRevisionKey);
+  const participant = completionParticipantsForLesson(lesson)
+    .find((candidate, index) => lessonChartParticipantKey(candidate, index) === lesson.feedbackRevisionKey);
+  const coachComment = row?.querySelector("[data-feedback-revision-comment]")?.value.trim() || "";
+  const nextCurriculumId = row?.querySelector("[data-feedback-revision-curriculum]")?.value || "";
+  const expectedUpdatedAt = row?.dataset.recordUpdatedAt || participant?.updatedAt || "";
+  if (!row || !participant?.userId || !expectedUpdatedAt) {
+    lesson.validationMessage = "최신 피드백 정보를 다시 불러온 뒤 수정해 주세요.";
+    renderLessonEditModal();
+    return;
+  }
+  const validationMessage = coachCommentValidationMessage({
+    id: `feedback-revision:${lesson.serverLessonId}:${participant.userId}`,
+    member: participant.name || lesson.member,
+    coachComment,
+  });
+  if (validationMessage) {
+    lesson.validationMessage = validationMessage;
+    renderLessonEditModal();
+    return;
+  }
+  if (!nextCurriculumId) {
+    lesson.validationMessage = "다음 커리큘럼을 검색해서 선택해 주세요.";
+    renderLessonEditModal();
+    return;
+  }
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !client.getSession?.()?.access_token || client.isOnline?.() === false) {
+    lesson.validationMessage = "서버 연결 후 완료 피드백을 수정할 수 있습니다.";
+    renderLessonEditModal();
+    return;
+  }
+  const button = row.querySelector("[data-save-final-feedback]");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "저장 중";
+  }
+  try {
+    const nextStep = selectedCurriculum(nextCurriculumId);
+    const curriculumRefId = await liveCurriculumRefId(nextStep);
+    if (!curriculumRefId) throw new Error("schedule_v2_outcome_curriculum_invalid");
+    const result = await client.rpc("tn_schedule_v2_update_feedback", {
+      target_lesson_id: lesson.serverLessonId,
+      target_user_id: participant.userId,
+      target_coach_comment: coachComment,
+      target_next_curriculum_ref_id: curriculumRefId,
+      target_expected_updated_at: expectedUpdatedAt,
+      target_operation_key: `schedule-v2-coach-feedback-revision:${lesson.serverLessonId}:${globalThis.crypto?.randomUUID?.() || Date.now()}`,
+    });
+    Object.assign(participant, {
+      coachComment,
+      nextCurriculumRefId: curriculumRefId,
+      nextCurriculumId: nextStep.id,
+      nextCurriculumTitle: nextStep.title || "",
+      updatedAt: result?.updatedAt || new Date().toISOString(),
+    });
+    const log = state.lessonLogs.find((item) => String(item.serverLessonId || "") === String(lesson.serverLessonId));
+    if (log) {
+      log.coachComment = coachComment;
+      log.nextCurriculumId = nextStep.id;
+      log.curriculumId = nextStep.id;
+      log.feedbackRevised = true;
+      if (Array.isArray(log.participantResults)) {
+        const participantResult = log.participantResults.find((item) => String(item.userId || "") === String(participant.userId));
+        if (participantResult) Object.assign(participantResult, { coachComment, nextCurriculumId: nextStep.id });
+      }
+    }
+    delete lesson.feedbackRevisionKey;
+    lesson.validationMessage = "";
+    saveSnapshot();
+    renderLessonEditModal();
+    renderAll();
+    showToast("완료 피드백을 수정했습니다. 회원권 횟수는 그대로입니다.");
+    void syncCoachScheduleV2({ force: true }).then(() => renderAll()).catch(() => false);
+  } catch (error) {
+    const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
+    lesson.validationMessage = code.includes("schedule_v2_feedback_revision_stale")
+      ? "다른 화면에서 피드백을 먼저 수정했습니다. 새로고침 후 다시 확인해 주세요."
+      : code.includes("schedule_v2_feedback_revision_forbidden")
+        ? "담당 코치 또는 관리자만 완료 피드백을 수정할 수 있습니다."
+        : "피드백을 저장하지 못했습니다. 내용을 유지한 채 다시 확인해 주세요.";
+    renderLessonEditModal();
+  }
+}
+
 function captureLessonChartDraft(id) {
   const lesson = ensureCoachLessonRecord(id);
   if (!lesson) return [];
@@ -7695,6 +7818,22 @@ function bindEvents() {
       return;
     }
 
+    const editFinalFeedbackButton = event.target.closest("[data-edit-final-feedback]");
+    if (editFinalFeedbackButton) {
+      openFinalFeedbackRevision(state.editingLessonId, editFinalFeedbackButton.dataset.editFinalFeedback);
+      return;
+    }
+    const saveFinalFeedbackButton = event.target.closest("[data-save-final-feedback]");
+    if (saveFinalFeedbackButton) {
+      void saveFinalFeedbackRevision(saveFinalFeedbackButton.dataset.saveFinalFeedback);
+      return;
+    }
+    const cancelFinalFeedbackButton = event.target.closest("[data-cancel-final-feedback]");
+    if (cancelFinalFeedbackButton) {
+      cancelFinalFeedbackRevision(cancelFinalFeedbackButton.dataset.cancelFinalFeedback);
+      return;
+    }
+
     const historyToggle = event.target.closest("[data-toggle-lesson-history]");
     if (historyToggle) {
       const key = historyToggle.dataset.toggleLessonHistory;
@@ -8256,7 +8395,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.386",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.387",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

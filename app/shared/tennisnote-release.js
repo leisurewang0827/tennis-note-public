@@ -1,8 +1,8 @@
 (function () {
   const release = Object.freeze({
-    version: "1.0.386",
-    releaseId: "2026.08.22.02",
-    appSurfaceVersion: "1.0.386",
+    version: "1.0.387",
+    releaseId: "2026.08.22.03",
+    appSurfaceVersion: "1.0.387",
     deployedAt: "2026-08-22T10:54:39+09:00",
     minimumNativeShellVersion: "1.0.118",
     nativeShell: {

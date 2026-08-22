@@ -96,6 +96,7 @@
     renderMode: "",
     showArchivedHistory: false,
     feedbackOnly: false,
+    feedbackRevisionUserId: "",
     cancelConfirmationKey: "",
     revisionWatcher: null,
     absorbingRevisionRefresh: false,
@@ -2594,6 +2595,89 @@
     }
   }
 
+  function openParticipantFeedbackRevision(row) {
+    if (!row) return;
+    state.feedbackRevisionUserId = row.dataset.v2OutcomeUser || "";
+    renderOutcomeEditor();
+    const activeRow = $$('[data-v2-outcome-user]', $("#scheduleV2OutcomeList"))
+      .find((candidate) => candidate.dataset.v2OutcomeUser === state.feedbackRevisionUserId);
+    activeRow?.querySelector("[data-v2-comment]")?.focus({ preventScroll: true });
+  }
+
+  function cancelParticipantFeedbackRevision() {
+    state.feedbackRevisionUserId = "";
+    renderOutcomeEditor();
+    setEditorMessage("피드백 수정 내용을 저장하지 않았습니다.", "info");
+  }
+
+  async function saveParticipantFeedbackRevision(row) {
+    const lesson = state.editingLesson;
+    if (!lesson || !row || !requireWritableServer()) return;
+    const memberLabel = row.querySelector("strong")?.textContent || "회원";
+    const coachComment = row.querySelector("[data-v2-comment]")?.value.trim() || "";
+    const curriculumInput = row.querySelector("[data-v2-curriculum]");
+    const curriculumValue = curriculumInput?.value.trim() || "";
+    const curriculumStep = curriculumValue ? curriculumStepFromValue(curriculumValue) : null;
+    if (coachComment.length < 5) {
+      setEditorMessage(`${memberLabel} 회원의 피드백을 5자 이상 입력해 주세요.`);
+      return;
+    }
+    if (feedbackCommentIsPlaceholder(coachComment)) {
+      setEditorMessage("'테스트 기간'은 완료 피드백으로 저장할 수 없습니다. 실제 수업 피드백을 입력해 주세요.");
+      return;
+    }
+    if (!curriculumStep) {
+      setEditorMessage(`${memberLabel} 회원의 다음 커리큘럼을 검색 목록에서 선택해 주세요.`);
+      return;
+    }
+    const expectedUpdatedAt = row.dataset.v2RecordUpdatedAt || "";
+    if (!expectedUpdatedAt) {
+      setEditorMessage("최신 피드백 정보를 다시 불러온 뒤 수정해 주세요.");
+      return;
+    }
+    const saveButton = row.querySelector("[data-v2-save-feedback-revision]");
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.textContent = "저장 중";
+    }
+    setEditorMessage("피드백만 수정하고 있습니다. 회원권 횟수는 변경하지 않습니다.", "info");
+    try {
+      const api = bridge();
+      const [resolved] = await resolveOutcomeCurriculumRefs(api, [{
+        userId: row.dataset.v2OutcomeUser,
+        ticketId: row.dataset.v2TicketId,
+        coachComment,
+        curriculumCode: curriculumStep.id,
+        existingCurriculumCode: curriculumInput?.dataset.v2ExistingCode || "",
+        nextCurriculumRefId: curriculumInput?.dataset.v2ExistingRefId || null,
+      }]);
+      await api.rpc("tn_schedule_v2_update_feedback", {
+        target_lesson_id: lesson.id,
+        target_user_id: row.dataset.v2OutcomeUser,
+        target_coach_comment: coachComment,
+        target_next_curriculum_ref_id: resolved.nextCurriculumRefId,
+        target_expected_updated_at: expectedUpdatedAt,
+        target_operation_key: operationKey("admin-feedback-revision"),
+      });
+      state.feedbackRevisionUserId = "";
+      state.deferredRefresh = false;
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ quiet: true, force: true });
+      state.editingLesson = state.payload?.lessons.find((item) => String(item.id) === String(lesson.id)) || lesson;
+      renderOutcomeEditor();
+      setEditorMessage("피드백과 다음 커리큘럼을 수정했습니다. 회원권 횟수는 그대로입니다.", "success");
+      setStatus("완료 피드백 수정 완료", "success");
+      void api.refresh?.();
+    } catch (error) {
+      setEditorMessage(errorMessage(error));
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.textContent = "피드백 저장";
+      }
+    }
+  }
+
   function syncOutcomeRow(row, { setDefault = false } = {}) {
     if (!row) return;
     const outcome = row.querySelector("[data-v2-outcome]")?.value || "completed";
@@ -2647,8 +2731,12 @@
       ? participants.map((participant) => {
         const final = outcomeRowFinal(participant);
         const outcome = participant.outcome || "completed";
+        const feedbackEditing = final
+          && outcome === "completed"
+          && String(state.feedbackRevisionUserId || "") === String(participant.userId || "");
         const deducted = Number(participant.deductedSessions ?? participant.deducted_sessions) > 0;
         const disabled = editable && !final ? "" : " disabled";
+        const feedbackDisabled = editable && !final || feedbackEditing ? "" : " disabled";
         const outcomeOptions = Object.entries(outcomeLabels).map(([value, label]) => `<option value="${value}" ${value === outcome ? "selected" : ""}>${label}</option>`).join("");
         const oneDay = lesson.scheduleKind === "one_day";
         const deductChecked = !oneDay && (deducted || (!participant.recordStatus && outcome === "completed"));
@@ -2659,14 +2747,20 @@
         const correctionTools = final && ["completed", "no_show", "absence"].includes(outcome) && participant.ticketId
           ? `<div class="schedule-v2-outcome-correction"><span>차감 ${deducted ? `${Number(participant.deductedSessions ?? participant.deducted_sessions)}회` : "없음"}</span><button type="button" data-v2-correct-deduction="${deducted ? "restore" : "deduct"}">${deducted ? "차감 복구" : "누락 차감"}</button></div>`
           : "";
-        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${disabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}</div>`;
+        const revisionTools = final && outcome === "completed"
+          ? feedbackEditing
+            ? '<div class="schedule-v2-feedback-revision-actions"><button type="button" data-v2-save-feedback-revision>피드백 저장</button><button type="button" data-v2-cancel-feedback-revision>취소</button><small>회원권 횟수는 변경되지 않습니다.</small></div>'
+            : '<button type="button" class="schedule-v2-feedback-revision-open" data-v2-open-feedback-revision>피드백 수정</button>'
+          : "";
+        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""} ${feedbackEditing ? "is-feedback-editing" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}" data-v2-record-updated-at="${escapeHtml(participant.updatedAt || participant.updated_at || "")}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${feedbackDisabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}${revisionTools}</div>`;
       }).join("")
       : '<div class="schedule-v2-selected-ticket">참여자 정보가 없어 수업을 처리할 수 없습니다.</div>';
     renderCurriculumOptions();
     $$("[data-v2-outcome-user]", list).forEach((row) => {
       const participant = participants.find((item) => String(item.userId) === String(row.dataset.v2OutcomeUser)) || {};
       const final = outcomeRowFinal(participant);
-      row.insertAdjacentHTML("beforeend", `<label class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼 <small>완료 시 필수</small></span><input type="search" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="증상·동작·목표·코드 검색" autocomplete="off"${editable && !final ? "" : " disabled"} /></label><div class="tn-curriculum-suggestions" data-v2-curriculum-suggestions role="listbox" hidden></div>`);
+      const feedbackEditing = final && String(state.feedbackRevisionUserId || "") === String(participant.userId || "");
+      row.insertAdjacentHTML("beforeend", `<label class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼 <small>${feedbackEditing ? "수정" : "완료 시 필수"}</small></span><input type="search" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="증상·동작·목표·코드 검색" autocomplete="off"${editable && !final || feedbackEditing ? "" : " disabled"} /></label><div class="tn-curriculum-suggestions" data-v2-curriculum-suggestions role="listbox" hidden></div>`);
     });
     $$(".schedule-v2-outcome-row", list).forEach((row) => syncOutcomeRow(row));
   }
@@ -3280,6 +3374,10 @@
       schedule_v2_outcome_participant_ticket_mismatch: "수업 회원과 회원권 연결이 맞지 않습니다.",
       schedule_v2_feedback_comment_required: "완료 수업의 피드백을 5자 이상 입력해 주세요.",
       schedule_v2_feedback_placeholder_forbidden: "'테스트 기간'은 완료 피드백으로 저장할 수 없습니다. 실제 수업 피드백을 입력해 주세요.",
+      schedule_v2_feedback_revision_reference_required: "최신 피드백 정보를 다시 불러온 뒤 수정해 주세요.",
+      schedule_v2_feedback_revision_forbidden: "담당 코치 또는 관리자만 완료 피드백을 수정할 수 있습니다.",
+      schedule_v2_feedback_revision_final_completed_required: "완료된 출석 수업의 피드백만 수정할 수 있습니다.",
+      schedule_v2_feedback_revision_stale: "다른 화면에서 피드백을 먼저 수정했습니다. 새로고침 후 다시 확인해 주세요.",
       schedule_v2_next_curriculum_required: "완료 수업의 다음 커리큘럼을 선택해 주세요.",
       schedule_v2_shared_ticket_policy_required: "같은 공유 회원권을 두 번 차감할 수 없습니다. 1:2 차감 방식을 관리자에서 확인해 주세요.",
       schedule_v2_correction_admin_required: "누락 차감 정정은 관리자만 할 수 있습니다.",
@@ -4136,11 +4234,26 @@
         return;
       }
       const correctionButton = event.target.closest("[data-v2-correct-deduction]");
-      if (!correctionButton) return;
-      void correctParticipantDeduction(
-        correctionButton.closest("[data-v2-outcome-user]"),
-        correctionButton.dataset.v2CorrectDeduction === "deduct",
-      );
+      if (correctionButton) {
+        void correctParticipantDeduction(
+          correctionButton.closest("[data-v2-outcome-user]"),
+          correctionButton.dataset.v2CorrectDeduction === "deduct",
+        );
+        return;
+      }
+      const openRevisionButton = event.target.closest("[data-v2-open-feedback-revision]");
+      if (openRevisionButton) {
+        openParticipantFeedbackRevision(openRevisionButton.closest("[data-v2-outcome-user]"));
+        return;
+      }
+      if (event.target.closest("[data-v2-cancel-feedback-revision]")) {
+        cancelParticipantFeedbackRevision();
+        return;
+      }
+      const saveRevisionButton = event.target.closest("[data-v2-save-feedback-revision]");
+      if (saveRevisionButton) {
+        void saveParticipantFeedbackRevision(saveRevisionButton.closest("[data-v2-outcome-user]"));
+      }
     });
     $("#scheduleV2OutcomeList").addEventListener("input", (event) => {
       const curriculumInput = event.target.closest("[data-v2-curriculum]");

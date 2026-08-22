@@ -4768,6 +4768,7 @@ function billingRowFromServerPayment(row = {}) {
     discountAmount: Number(row.discount_amount || row.discountAmount || 0),
     finalAmount: Number(row.final_amount || row.finalAmount || amount || 0),
     method: row.method || row.provider || "portone",
+    provider: row.provider || "",
     status,
     statusLabel,
     providerPaymentId,
@@ -8174,7 +8175,7 @@ function adminTodayLessonRows() {
 function billingNeedsAdminAction(item = {}) {
   if (["draft", "check", "unverified", "refund_processing", "refund_manual_pending", "refund_reconcile"].includes(item.status)) return true;
   if (item.status === "server_ready") return isStaleReadyPayment(item);
-  return item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item);
+  return paymentRequiresTicketRepair(item);
 }
 
 function dashboardOperationalMembers() {
@@ -8647,7 +8648,7 @@ function getAdminTasks() {
   const lowTickets = branchTickets.filter((ticket) => ticket.remaining <= 2);
   const paymentChecks = branchBillings.filter((item) => item.status === "check" || item.status === "unverified");
   const draftBillings = branchBillings.filter((item) => item.status === "draft");
-  const paymentDataErrors = branchBillings.filter((item) => item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item));
+  const paymentDataErrors = branchBillings.filter(paymentRequiresTicketRepair);
   const urgentMakeups = operationBranchMakeupRequests()
     .filter((item) => item.status === "coach_required" || item.status === "requested")
     .concat(shared.makeupRequests.filter((item) => item.status === "승인 대기"));
@@ -21540,12 +21541,29 @@ function paymentActionFor(item, index) {
 
 function isHistoricalImportedPayment(item = {}) {
   const providerPaymentId = String(item.providerPaymentId || "").toLowerCase();
+  const provider = String(item.provider || "").toLowerCase();
   const method = String(item.method || "").toLowerCase();
+  const requestedAt = Date.parse(String(item.requestedAt || ""));
+  const verifiedAt = Date.parse(String(item.verifiedAt || item.paidAt || ""));
+  const preservedManualEvidence = provider === "admin_manual"
+    && !item.productId
+    && Number.isFinite(requestedAt)
+    && Number.isFinite(verifiedAt)
+    && requestedAt - verifiedAt >= 24 * 60 * 60 * 1000;
   return providerPaymentId.startsWith("sheet_")
     || providerPaymentId.startsWith("legacy_")
     || providerPaymentId.startsWith("import_")
+    || provider === "google_sheet_history"
     || method.includes("legacy")
-    || method.includes("기존 기록");
+    || method.includes("기존 기록")
+    || preservedManualEvidence;
+}
+
+function paymentRequiresTicketRepair(item = {}) {
+  return item.status === "paid"
+    && !item.ticketId
+    && !item.oneDayBookingId
+    && !isHistoricalImportedPayment(item);
 }
 
 function chargeStatusForPayment(item = {}) {
@@ -22587,7 +22605,7 @@ function feedbackRecord(request) {
 
 function urgentOperationsRecords() {
   const paymentRecords = billings
-    .filter((item) => item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item))
+    .filter(paymentRequiresTicketRepair)
     .map((item) => ({
       id: `urgent-payment-${item.serverPaymentId || item.providerPaymentId || item.member}`,
       group: "pending",
