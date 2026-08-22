@@ -1198,9 +1198,13 @@ const notificationPolicySettings = { ...notificationPolicyDefaults };
 const notificationDeliveryState = {
   status: "idle",
   queued: 0,
+  processing: 0,
   sentToday: 0,
   failed: 0,
+  noDevice: 0,
   activeDevices: null,
+  activeAndroidDevices: null,
+  activeIosDevices: null,
   recent: [],
   checkedAt: "",
   message: "서버 현황 확인 전",
@@ -12975,11 +12979,19 @@ function normalizeNotificationOverview(payload = {}, source = "server") {
   return {
     status: source === "server" ? "ready" : "limited",
     queued: Number(payload.queued) || 0,
+    processing: Number(payload.processing) || 0,
     sentToday: Number(payload.sentToday ?? payload.sent_today) || 0,
     failed: Number(payload.failed) || 0,
+    noDevice: Number(payload.noDevice ?? payload.no_device) || 0,
     activeDevices: payload.activeDevices === null || payload.activeDevices === undefined
       ? null
       : Number(payload.activeDevices),
+    activeAndroidDevices: payload.activeAndroidDevices === null || payload.activeAndroidDevices === undefined
+      ? null
+      : Number(payload.activeAndroidDevices),
+    activeIosDevices: payload.activeIosDevices === null || payload.activeIosDevices === undefined
+      ? null
+      : Number(payload.activeIosDevices),
     recent,
     checkedAt: payload.generatedAt || payload.generated_at || new Date().toISOString(),
     message: source === "server" ? "실서버 발송 현황" : "기본 발송 현황",
@@ -13055,12 +13067,23 @@ async function loadNotificationDeliveryStatus() {
       .slice(0, 8);
     applyNotificationOverview({
       queued: appRows.filter((row) => row.status === "queued").length,
+      processing: appRows.filter((row) => row.status === "processing").length,
       sentToday: appRows.filter((row) => (
         row.status === "sent"
         && row.sent_at
         && new Date(row.sent_at).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }) === today
       )).length,
-      failed: appRows.filter((row) => row.status === "failed" && new Date(row.created_at || 0).getTime() >= sevenDaysAgo).length,
+      failed: appRows.filter((row) => (
+        ["queued", "processing", "sent", "failed"].includes(row.status)
+        && String(row.last_error || "")
+        && !String(row.last_error || "").startsWith("no_active_push_device")
+        && new Date(row.created_at || 0).getTime() >= sevenDaysAgo
+      )).length,
+      noDevice: appRows.filter((row) => (
+        ["failed", "cancelled"].includes(row.status)
+        && String(row.last_error || "").startsWith("no_active_push_device")
+        && new Date(row.created_at || 0).getTime() >= sevenDaysAgo
+      )).length,
       activeDevices: null,
       recent,
       generatedAt: new Date().toISOString(),
@@ -27952,6 +27975,19 @@ function notificationDateTimeLabel(value = "") {
   });
 }
 
+function notificationDeliveryStatusLabel(row = {}) {
+  const status = String(row.status || "queued").toLowerCase();
+  const lastError = String(row.last_error || row.lastError || "");
+  if (lastError.startsWith("no_active_push_device")) return "기기 없음";
+  if (status === "sent" && lastError) return "일부 기기 오류";
+  if (status === "sent") return "발송 성공";
+  if (["queued", "processing"].includes(status) && lastError) return "재시도 예정";
+  if (["queued", "processing"].includes(status)) return "발송 예정";
+  if (status === "failed") return "실제 오류";
+  if (status === "cancelled") return "발송 취소";
+  return "상태 확인";
+}
+
 function renderNotificationPolicySettings() {
   if (state.view !== "settings") return;
   const target = $("#notificationPolicySettings");
@@ -27970,6 +28006,11 @@ function renderNotificationPolicySettings() {
         ? "기본 확인"
         : "확인 필요";
   const recentRows = (notificationDeliveryState.recent || []).slice(0, 8);
+  const pendingDeliveries = notificationDeliveryState.queued + notificationDeliveryState.processing;
+  const activeDeviceDetail = notificationDeliveryState.activeAndroidDevices === null
+    || notificationDeliveryState.activeIosDevices === null
+    ? ""
+    : ` · Android ${notificationDeliveryState.activeAndroidDevices} · iPhone ${notificationDeliveryState.activeIosDevices}`;
 
   target.innerHTML = `
     <div class="notification-rule-list">
@@ -28019,13 +28060,14 @@ function renderNotificationPolicySettings() {
       </div>
     </div>
     <div class="notification-delivery-metrics">
-      <div><span>발송 대기</span><strong>${notificationDeliveryState.queued}</strong></div>
-      <div><span>오늘 발송</span><strong>${notificationDeliveryState.sentToday}</strong></div>
-      <div class="${notificationDeliveryState.failed ? "has-error" : ""}"><span>최근 오류</span><strong>${notificationDeliveryState.failed}</strong></div>
+      <div><span>발송 예정</span><strong>${pendingDeliveries}</strong></div>
+      <div><span>오늘 성공</span><strong>${notificationDeliveryState.sentToday}</strong></div>
+      <div><span>기기 없음</span><strong>${notificationDeliveryState.noDevice}</strong></div>
+      <div class="${notificationDeliveryState.failed ? "has-error" : ""}"><span>실제 오류</span><strong>${notificationDeliveryState.failed}</strong></div>
       <div><span>연결 기기</span><strong>${notificationDeliveryState.activeDevices ?? "-"}</strong></div>
     </div>
     <div class="notification-control-footer">
-      <span>${escapeHtml(notificationDeliveryState.message)} · ${notificationDateTimeLabel(notificationDeliveryState.checkedAt)}</span>
+      <span>${escapeHtml(notificationDeliveryState.message)}${escapeHtml(activeDeviceDetail)} · ${notificationDateTimeLabel(notificationDeliveryState.checkedAt)}</span>
       ${badge(stateTone, stateLabel)}
     </div>
     <div class="data-action-row notification-action-row">
@@ -28040,7 +28082,7 @@ function renderNotificationPolicySettings() {
             <div>
               <span>${escapeHtml(notificationTemplateLabel(row.template_key || row.templateKey))}</span>
               <strong>${escapeHtml(row.title || "앱 알림")}</strong>
-              <small>${escapeHtml(row.status || "queued")} · ${notificationDateTimeLabel(row.sent_at || row.sentAt || row.scheduled_at || row.scheduledAt)}</small>
+              <small>${escapeHtml(notificationDeliveryStatusLabel(row))} · ${notificationDateTimeLabel(row.sent_at || row.sentAt || row.scheduled_at || row.scheduledAt)}</small>
             </div>`).join("")
           : '<p class="empty-text">아직 발송 기록이 없습니다.</p>'}
       </div>
