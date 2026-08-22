@@ -1394,6 +1394,117 @@ a {
   border-color: color-mix(in srgb, var(--green) 48%, var(--line));
 }
 
+.lesson-chart-member-tabs {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.lesson-chart-member-tabs button {
+  flex: 1 0 auto;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 14px;
+  color: var(--muted);
+  background: #fff;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lesson-chart-member-tabs button.is-active {
+  border-color: var(--green);
+  color: #fff;
+  background: var(--green);
+}
+
+.lesson-chart-participant[hidden] {
+  display: none;
+}
+
+.lesson-chart-participant-name {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.lesson-chart-deduction-preview {
+  margin: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #176044;
+  background: var(--soft-green);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.lesson-chart-goal,
+.lesson-chart-readonly,
+.lesson-chart-result-line {
+  display: grid;
+  gap: 4px;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f5f8f7;
+}
+
+.lesson-chart-goal span,
+.lesson-chart-readonly span,
+.lesson-chart-result-line span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.lesson-chart-goal strong,
+.lesson-chart-readonly strong,
+.lesson-chart-result-line b {
+  color: var(--ink);
+}
+
+.lesson-chart-readonly p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.lesson-chart-history-toggle {
+  justify-self: start;
+}
+
+.lesson-chart-history {
+  max-height: min(46dvh, 420px);
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.lesson-ai-draft {
+  justify-self: start;
+}
+
+.lesson-ai-draft summary {
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lesson-ai-draft[open] {
+  width: 100%;
+}
+
+.lesson-ai-draft[open] summary {
+  margin-bottom: 8px;
+}
+
 .lesson-participant-completion-head {
   display: flex;
   align-items: flex-start;

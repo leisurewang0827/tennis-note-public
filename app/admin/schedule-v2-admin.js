@@ -1933,7 +1933,7 @@
   function lessonTicketCountsMarkup(lesson) {
     const text = lessonTicketCountsText(lesson);
     if (!text) return "";
-    return `<small class="schedule-v2-ticket-counts" aria-label="${escapeHtml(lessonTicketCountsAria(lesson))}" title="회원권 상세는 수업을 눌러 확인">${escapeHtml(text)}</small>`;
+    return `<small class="schedule-v2-ticket-counts" aria-label="${escapeHtml(lessonTicketCountsAria(lesson))}" title="총/사용/잔여 · 회원권 상세는 수업을 눌러 확인">${escapeHtml(text)}</small>`;
   }
 
   function lessonTicketCountsText(lesson) {
@@ -1944,7 +1944,9 @@
       const total = Math.max(0, Number(ticket.totalSessions ?? ticket.total_sessions ?? 0));
       const remaining = Math.max(0, Number(ticket.remainingSessions ?? ticket.remaining_sessions ?? total));
       if (!total && !remaining) return "";
-      return `잔여 ${remaining}회`;
+      const explicitUsed = ticket.usedSessions ?? ticket.used_sessions;
+      const used = Math.max(0, Number(explicitUsed ?? Math.max(0, total - remaining)));
+      return `${total}/${used}/${remaining}`;
     }).filter(Boolean))];
     return labels.join(" · ");
   }

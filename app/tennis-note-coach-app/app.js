@@ -41,6 +41,7 @@ const state = {
   feedbackRequests: [],
   ntrpRequests: [],
   lessonLogs: [],
+  lessonChartDrafts: {},
   members: [],
   branchPermissions: {
     branch: "어린이대공원점",
@@ -2636,7 +2637,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.385",
+    workerUrl: "./service-worker.js?v=1.0.386",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2667,7 +2668,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.385" });
+  const params = new URLSearchParams({ v: "1.0.386" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -4138,7 +4139,7 @@ function renderTodayLessons() {
                                 (lesson) => `
                                   <button class="board-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${coachColorClass(lesson.coach)} ${coachLessonStateClass(lesson)} ${lesson.remaining <= 2 ? "needs-renewal" : ""}" style="${coachLessonColorStyle(lesson, schedulePolicy)}" type="button" data-edit-lesson-id="${lesson.id}">
                                     <strong>${lesson.member}</strong>
-                                    <span>${lesson.type} · ${lessonDurationUsageLabel(lesson)}${lesson.isSubstitute ? ` · 대타 · 원 담당 ${lesson.originalCoach || "확인"}` : ""}</span>
+                                    <span>${recentLogForLesson(lesson)?.nextCurriculumId ? `오늘 목표 · ${escapeHtml(selectedCurriculum(recentLogForLesson(lesson).nextCurriculumId).title)}` : `${lesson.type} · ${lessonDurationUsageLabel(lesson)}`}${lesson.isSubstitute ? ` · 대타 · 원 담당 ${lesson.originalCoach || "확인"}` : ""}</span>
                                     <small class="schedule-card-note">${escapeHtml(coachLessonCardState(lesson).label)}</small>
                                   </button>`,
                               )
@@ -4200,6 +4201,40 @@ function renderTodayLessons() {
     }`;
 }
 
+function lessonChartParticipantKey(participant = {}, index = 0) {
+  return `${participant.userId || participant.name || "member"}:${participant.ticketId || index}`;
+}
+
+function lessonChartDraftFor(lesson = {}, participant = {}, index = 0) {
+  const lessonDrafts = state.lessonChartDrafts?.[lesson.id] || {};
+  return lessonDrafts[lessonChartParticipantKey(participant, index)] || null;
+}
+
+function lessonChartParticipantDefaults(lesson, participant, index) {
+  const recentLog = recentLogForParticipant(participant, lesson);
+  const recentResult = participantLogResult(recentLog, participant);
+  const localDraft = lessonChartDraftFor(lesson, participant, index);
+  const serverDraft = String(participant.recordStatus || participant.record_status || "") === "draft" ? participant : null;
+  const todayGoalId = recentResult?.nextCurriculumId || recentLog?.nextCurriculumId || recentLog?.curriculumId || "";
+  const nextCurriculumId = localDraft?.nextCurriculumId
+    ?? serverDraft?.nextCurriculumSkillLabel
+    ?? serverDraft?.next_curriculum_skill_label
+    ?? "";
+  const comment = localDraft?.coachComment ?? serverDraft?.coachComment ?? serverDraft?.coach_comment ?? "";
+  return {
+    comment,
+    nextCurriculumId,
+    todayGoalId,
+    todayGoal: todayGoalId ? selectedCurriculum(todayGoalId)?.title || "선택 안 됨" : "선택 안 됨",
+  };
+}
+
+function lessonChartFinalized(lesson = {}) {
+  const participants = completionParticipantsForLesson(lesson);
+  if (participants.length && participants.every((participant) => String(participant.recordStatus || participant.record_status || "") === "final")) return true;
+  return ["completed", "no_show", "cancelled"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase());
+}
+
 function renderScheduleEditPanel() {
   const lesson = ensureCoachLessonRecord(state.editingLessonId);
   if (!lesson) {
@@ -4208,45 +4243,58 @@ function renderScheduleEditPanel() {
   const canProcess = canProcessLesson(lesson);
   const canFinalize = canProcess && lessonOutcomeWindowOpen(lesson);
   const canReschedule = canRescheduleLesson(lesson);
-  const member = memberForLesson(lesson);
-  const recentLog = recentLogForLesson(lesson);
+  const finalized = lessonChartFinalized(lesson);
   const completionParticipants = completionParticipantsForLesson(lesson);
-  const defaultContent = `${lesson.member} ${lesson.type} 수업 진행`;
-  const participantCompletionFields = completionParticipants.map((participant) => {
-    const participantRecentLog = recentLogForParticipant(participant, lesson);
-    const participantRecentResult = participantLogResult(participantRecentLog, participant);
-    const defaultCurriculumId = participantRecentResult?.nextCurriculumId
-      || participantRecentLog?.nextCurriculumId
-      || participantRecentLog?.curriculumId
-      || "";
-    const ticketSummary = `${participant.ticketName || lesson.ticket} · 총 ${Number(participant.totalSessions) || 0} / 소진 ${Number(participant.usedSessions) || 0} / 잔여 ${Number(participant.remainingSessions) || 0}`;
+  const participantTabs = completionParticipants.length > 1
+    ? `<div class="lesson-chart-member-tabs" role="tablist" aria-label="그룹 회원 선택">${completionParticipants.map((participant, index) => `<button type="button" role="tab" class="${index === 0 ? "is-active" : ""}" aria-selected="${index === 0}" data-lesson-participant-tab="${escapeHtml(lessonChartParticipantKey(participant, index))}">${escapeHtml(participant.name || `회원 ${index + 1}`)}</button>`).join("")}</div>`
+    : "";
+  const participantCompletionFields = completionParticipants.map((participant, index) => {
+    const key = lessonChartParticipantKey(participant, index);
+    const defaults = lessonChartParticipantDefaults(lesson, participant, index);
+    const total = Number(participant.totalSessions) || Number(lesson.totalSessions) || 0;
+    const used = Number(participant.usedSessions) || Math.max(0, total - (Number(participant.remainingSessions) || Number(lesson.remaining) || 0));
+    const remaining = Number(participant.remainingSessions) || Number(lesson.remaining) || 0;
+    const finalComment = participant.coachComment || participant.coach_comment || "";
+    const finalCurriculumId = participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "";
+    const finalCurriculumTitle = participant.nextCurriculumTitle || participant.next_curriculum_title || (finalCurriculumId ? selectedCurriculum(finalCurriculumId)?.title : "");
+    if (finalized) {
+      const outcome = String(participant.outcome || "completed").toLowerCase();
+      const outcomeLabel = outcome === "no_show" ? "노쇼" : outcome === "absence" ? "불참" : "완료";
+      const deducted = Number(participant.deductedSessions ?? participant.deducted_sessions) || 0;
+      return `
+        <section class="lesson-participant-completion-card lesson-chart-participant is-final" data-lesson-participant-panel="${escapeHtml(key)}" ${index === 0 ? "" : "hidden"}>
+          ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
+          <div class="lesson-chart-result-line"><b>${escapeHtml(outcomeLabel)}</b><span>${deducted ? `${deducted}회 차감` : "차감 없음"} · 잔여 ${remaining}회</span></div>
+          ${outcome === "completed" ? `<div class="lesson-chart-readonly"><span>코치 피드백</span><p>${escapeHtml(finalComment || "등록된 피드백이 없습니다.")}</p></div><div class="lesson-chart-readonly"><span>다음 목표</span><strong>${escapeHtml(finalCurriculumTitle || "선택 안 됨")}</strong>${finalCurriculumId ? `<small>${escapeHtml(finalCurriculumId)}</small>` : ""}</div>` : ""}
+          <button class="small-button lesson-chart-history-toggle" type="button" data-toggle-lesson-history="${escapeHtml(key)}">지난 기록 보기</button>
+          <div class="lesson-chart-history" data-lesson-history-panel="${escapeHtml(key)}" hidden>${participant.userId ? coachMemberChartPanelMarkup(participant.userId, participant.name || "회원", 5) : '<p class="member-chart-state">연결된 회원 기록이 없습니다.</p>'}</div>
+        </section>`;
+    }
     return `
-      <section class="lesson-participant-completion-card" data-modal-participant-row="${escapeHtml(lesson.id)}" data-user-id="${escapeHtml(participant.userId)}" data-ticket-id="${escapeHtml(participant.ticketId)}" data-participant-name="${escapeHtml(participant.name || "회원")}" data-ticket-name="${escapeHtml(participant.ticketName || lesson.ticket || "회원권")}" data-total-sessions="${Number(participant.totalSessions) || 0}" data-used-sessions="${Number(participant.usedSessions) || 0}" data-remaining-sessions="${Number(participant.remainingSessions) || 0}">
-        <div class="lesson-participant-completion-head">
-          <strong>${escapeHtml(participant.name || "회원")}</strong>
-          <span>${escapeHtml(ticketSummary)}</span>
-        </div>
-        ${participant.userId ? `
-          <details class="lesson-member-chart">
-            <summary>이전 수업 기록</summary>
-            ${coachMemberChartPanelMarkup(participant.userId, participant.name || "회원", 3)}
-          </details>` : ""}
+      <section class="lesson-participant-completion-card lesson-chart-participant" data-modal-participant-row="${escapeHtml(lesson.id)}" data-lesson-participant-panel="${escapeHtml(key)}" data-user-id="${escapeHtml(participant.userId)}" data-ticket-id="${escapeHtml(participant.ticketId)}" data-participant-name="${escapeHtml(participant.name || "회원")}" data-ticket-name="${escapeHtml(participant.ticketName || lesson.ticket || "회원권")}" data-total-sessions="${total}" data-used-sessions="${used}" data-remaining-sessions="${remaining}" ${index === 0 ? "" : "hidden"}>
+        ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
+        <div class="lesson-chart-goal"><span>오늘 목표</span><strong>${escapeHtml(defaults.todayGoal)}</strong></div>
+        <button class="small-button lesson-chart-history-toggle" type="button" data-toggle-lesson-history="${escapeHtml(key)}">지난 기록 보기</button>
+        <div class="lesson-chart-history" data-lesson-history-panel="${escapeHtml(key)}" hidden>${participant.userId ? coachMemberChartPanelMarkup(participant.userId, participant.name || "회원", 5) : '<p class="member-chart-state">연결된 회원 기록이 없습니다.</p>'}</div>
         <label class="lesson-required-field">
-          <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
-          <textarea data-modal-coach-comment="${escapeHtml(lesson.id)}" rows="4" placeholder="오늘 잘된 점과 다음 수업에서 보완할 점을 적어주세요." ${canFinalize ? "" : "disabled"}></textarea>
-          <div class="tn-comment-draft-tools">
-            <input data-modal-comment-keywords="${escapeHtml(lesson.id)}" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" ${canFinalize ? "" : "disabled"} />
-            <button type="button" data-generate-modal-comment="${escapeHtml(lesson.id)}" ${canFinalize ? "" : "disabled"}>초안 만들기</button>
-          </div>
+          <span>메모 <small>${canFinalize ? "완료 시 회원에게 공개" : "코치만 보는 임시 메모"}</small></span>
+          <textarea data-modal-coach-comment="${escapeHtml(lesson.id)}" rows="5" placeholder="수업 내용이나 피드백을 입력하세요" ${canProcess ? "" : "disabled"}>${escapeHtml(defaults.comment)}</textarea>
+          <details class="lesson-ai-draft">
+            <summary>AI</summary>
+            <div class="tn-comment-draft-tools">
+              <input data-modal-comment-keywords="${escapeHtml(lesson.id)}" type="text" maxlength="160" placeholder="허리 회전, 타점, 리듬" ${canProcess ? "" : "disabled"} />
+              <button type="button" data-generate-modal-comment="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>초안 만들기</button>
+            </div>
+          </details>
           <small class="lesson-comment-count" data-modal-comment-count="${escapeHtml(lesson.id)}">0/5자</small>
         </label>
         <label class="lesson-required-field">
-          <span>다음 커리큘럼 <small>필수</small></span>
-          <input data-curriculum-option-search type="search" placeholder="증상·동작·목표·코드 검색" aria-label="${escapeHtml(participant.name || "회원")} 다음 커리큘럼 검색" ${canFinalize ? "" : "disabled"} />
+          <span>다음 목표 <small>${canFinalize ? "필수" : "미리 선택 가능"}</small></span>
+          <input data-curriculum-option-search type="search" placeholder="동작·증상·목표·코드 검색" aria-label="${escapeHtml(participant.name || "회원")} 다음 목표 검색" ${canProcess ? "" : "disabled"} />
           <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
-          <select data-modal-next-curriculum="${escapeHtml(lesson.id)}" ${canFinalize ? "" : "disabled"}>
+          <select data-modal-next-curriculum="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>
             <option value="">검색·선택</option>
-            ${curriculumOptions(defaultCurriculumId)}
+            ${curriculumOptions(defaults.nextCurriculumId)}
           </select>
         </label>
       </section>`;
@@ -4272,46 +4320,20 @@ function renderScheduleEditPanel() {
       <div class="wide lesson-modal-head">
         <div>
           <strong>${lesson.member}</strong>
-          <span>${lesson.day} ${lesson.time} · ${lesson.type} · ${lesson.coach}</span>
+          <span>${lesson.day} ${lesson.time} · ${lessonDuration(lesson)}분${completionParticipants.length === 1 ? ` · 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회` : ""}</span>
         </div>
-        <b class="${canFinalize ? "can-process" : "read-only"}">${canFinalize ? "처리 가능" : canProcess ? "수업 후 처리" : "보기 전용"}</b>
+        <b class="${finalized || canFinalize ? "can-process" : "read-only"}">${finalized ? "완료" : canFinalize ? "처리 필요" : canProcess ? "예정" : "보기 전용"}</b>
       </div>
-      <ol class="lesson-completion-steps wide" aria-label="수업 완료 순서">
-        <li class="is-complete"><b>1</b><span>수업 확인</span></li>
-        <li><b>2</b><span>코멘트</span></li>
-        <li><b>3</b><span>커리큘럼</span></li>
-        <li><b>4</b><span>완료·차감</span></li>
-      </ol>
-      <div class="lesson-completion-summary wide">
-        <span>${completionParticipants.length > 1 ? `참여 회원 ${completionParticipants.length}명` : lesson.ticket}</span>
-        <strong>${completionParticipants.length > 1 ? "회원별 차감" : `잔여 ${lesson.remaining}회`}</strong>
-        <small>${lesson.status}</small>
-      </div>
+      ${canFinalize && !finalized && completionParticipants.length === 1 ? `<p class="lesson-chart-deduction-preview wide">완료 시 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회 → ${Math.max(0, (Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0) - 1)}회</p>` : ""}
+      ${participantTabs}
       <div class="lesson-participant-completion-list wide">${participantCompletionFields}</div>
       ${lesson.validationMessage ? `<p class="validation-text wide">${lesson.validationMessage}</p>` : ""}
-      <details class="lesson-secondary-panel wide">
-        <summary>수업 참고</summary>
-        <div class="lesson-reference-grid">
-          <article class="modal-info-card">
-            <span>회원 정보</span>
-            <strong>${member ? `${member.ticket} · 자가 ${ntrpNumber(member.selfNtrp)}` : "회원정보 연결 전"}</strong>
-            <small>${member ? `코치 NTRP ${ntrpNumber(member.coachNtrp)} · 최근 ${member.lastLesson}` : "회원관리에서 연결하면 요약이 보입니다."}</small>
-          </article>
-          <article class="modal-info-card">
-            <span>최근 기록</span>
-            <strong>${recentLog ? recentLog.lesson : "기록 없음"}</strong>
-            <small>${recentLog?.coachComment || recentLog?.content || "이번 수업 완료 후 첫 기록을 남깁니다."}</small>
-          </article>
-        </div>
-        <label>
-          <span>오늘 레슨 내용 <small>선택</small></span>
-          <textarea data-modal-lesson-content="${lesson.id}" rows="3" ${canProcess ? "" : "disabled"}>${defaultContent}</textarea>
-        </label>
-      </details>
-      ${canReschedule
-        ? `<details class="lesson-secondary-panel wide">
-            <summary>일정 변경·불참</summary>
+      ${!finalized && (canReschedule || (canProcess && lesson.serverLessonId))
+        ? `<details class="lesson-secondary-panel lesson-other-actions wide">
+            <summary>다른 처리</summary>
+            ${canReschedule ? `
             <div class="lesson-edit-mini">
+              <strong>일정 변경</strong>
               <div class="lesson-edit-grid">
                 <label>
                   <span>요일</span>
@@ -4342,14 +4364,10 @@ function renderScheduleEditPanel() {
                     <button class="reject-button" type="button" data-process-attendance="${lesson.id}" data-outcome="absence" data-deduct="false">불참 · 차감 없음</button>
                     <button class="small-button" type="button" data-process-attendance="${lesson.id}" data-outcome="absence" data-deduct="true">불참 · 횟수 차감</button>
                   </div>
-                </div>`
-              : ""}
-          </details>`
-        : ""}
-      ${canProcess && lesson.serverLessonId
-        ? `<details class="lesson-secondary-panel wide">
-            <summary>노쇼 처리</summary>
+                </div>` : ""}` : ""}
+            ${canProcess && lesson.serverLessonId ? `
             <div class="lesson-edit-mini lesson-absence-mini">
+              <strong>노쇼</strong>
               <div class="lesson-edit-grid">
                 <label class="wide">
                   <span>노쇼 사유</span>
@@ -4360,11 +4378,13 @@ function renderScheduleEditPanel() {
                 <button class="reject-button" type="button" data-process-attendance="${lesson.id}" data-outcome="no_show" data-deduct="true">노쇼 · 차감</button>
                 <button class="small-button" type="button" data-process-attendance="${lesson.id}" data-outcome="no_show" data-deduct="false">노쇼 · 차감 없음</button>
               </div>
-            </div>
+            </div>` : ""}
           </details>`
         : ""}
       <div class="actions lesson-completion-actions wide">
-        <button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>수업 완료·횟수 차감</button>
+        ${!finalized && canProcess ? canFinalize
+          ? `<button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>저장하고 완료</button>`
+          : `<button class="approve-button" type="button" data-save-lesson-draft="${lesson.id}">저장</button>` : ""}
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>
       ${canProcess
@@ -5543,6 +5563,8 @@ function completeNtrpRequest(id) {
 
 function openLessonEditor(id) {
   const lesson = ensureCoachLessonRecord(id);
+  const lessonModal = $("#lessonEditModal");
+  if (lessonModal) lessonModal.dataset.tnInputGuard = `coach-lesson-record:${id}`;
   state.coachQuickAdd = null;
   state.editingLessonId = id;
   state.editingMakeupId = null;
@@ -6043,6 +6065,105 @@ async function processCoachNoShow(lessonId, deduct) {
   return processCoachAttendance(lessonId, "no_show", deduct);
 }
 
+function captureLessonChartDraft(id) {
+  const lesson = ensureCoachLessonRecord(id);
+  if (!lesson) return [];
+  const rows = $$('[data-modal-participant-row]').filter((row) => row.dataset.modalParticipantRow === id);
+  const participantResults = rows.map((row) => ({
+    userId: row.dataset.userId || "",
+    ticketId: row.dataset.ticketId || "",
+    name: row.dataset.participantName || "회원",
+    ticketName: row.dataset.ticketName || "회원권",
+    totalSessions: Number(row.dataset.totalSessions) || 0,
+    usedSessions: Number(row.dataset.usedSessions) || 0,
+    remainingSessions: Number(row.dataset.remainingSessions) || 0,
+    coachComment: row.querySelector("[data-modal-coach-comment]")?.value.trim() || "",
+    nextCurriculumId: row.querySelector("[data-modal-next-curriculum]")?.value || "",
+  }));
+  const drafts = {};
+  participantResults.forEach((result, index) => {
+    drafts[lessonChartParticipantKey(result, index)] = {
+      coachComment: result.coachComment,
+      nextCurriculumId: result.nextCurriculumId,
+      savedAt: Date.now(),
+    };
+  });
+  state.lessonChartDrafts ||= {};
+  state.lessonChartDrafts[id] = drafts;
+  saveSnapshot();
+  return participantResults;
+}
+
+async function saveLessonChartDraft(id) {
+  const lesson = ensureCoachLessonRecord(id);
+  if (!lesson || !canProcessLesson(lesson)) return false;
+  const participantResults = captureLessonChartDraft(id);
+  if (!participantResults.length) {
+    lesson.validationMessage = "수업 참여자와 회원권 연결을 확인해 주세요.";
+    renderLessonEditModal();
+    return false;
+  }
+  const exactPairs = participantResults.every((result) => result.userId && result.ticketId);
+  const client = window.TennisNoteDataClient;
+  const canSaveServer = Boolean(lesson.serverLessonId && exactPairs && client?.rpc && client.getSession?.()?.access_token && client.isOnline?.() !== false);
+  if (!canSaveServer) {
+    window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
+    showToast(lesson.serverLessonId ? "이 기기에 임시 저장했습니다. 연결되면 다시 저장해 주세요." : "이 기기에 임시 저장했습니다.");
+    return true;
+  }
+  const button = activeViewField(`[data-save-lesson-draft="${id}"]`);
+  if (button) {
+    button.disabled = true;
+    button.textContent = "저장 중";
+  }
+  try {
+    const serverParticipantResults = await Promise.all(participantResults.map(async (result) => {
+      const nextStep = result.nextCurriculumId ? selectedCurriculum(result.nextCurriculumId) : null;
+      const curriculumRefId = nextStep ? await liveCurriculumRefId(nextStep) : null;
+      return {
+        userId: result.userId,
+        ticketId: result.ticketId,
+        outcome: "completed",
+        deduct: false,
+        technique: "",
+        strength: "",
+        improvement: "",
+        nextGoal: nextStep?.title || "",
+        coachComment: result.coachComment,
+        keywords: [],
+        nextCurriculumRefId: curriculumRefId || null,
+        memberJournalId: null,
+      };
+    }));
+    await client.rpc("tn_schedule_v2_process_lesson", {
+      target_lesson_id: lesson.serverLessonId,
+      target_participant_results: serverParticipantResults,
+      target_finalize: false,
+      target_operation_key: `schedule-v2-coach-draft:${lesson.serverLessonId}:${globalThis.crypto?.randomUUID?.() || Date.now()}`,
+    });
+    const draftsByPair = new Map(participantResults.map((result) => [`${result.userId}:${result.ticketId}`, result]));
+    lesson.v2Participants = (lesson.v2Participants || []).map((participant) => {
+      const draft = draftsByPair.get(`${participant.userId}:${participant.ticketId}`);
+      return draft ? {
+        ...participant,
+        recordStatus: "draft",
+        coachComment: draft.coachComment,
+        nextCurriculumSkillLabel: draft.nextCurriculumId,
+        nextCurriculumTitle: draft.nextCurriculumId ? selectedCurriculum(draft.nextCurriculumId)?.title || "" : "",
+      } : participant;
+    });
+    lesson.validationMessage = "";
+    window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
+    saveSnapshot();
+    showToast("코치 메모를 저장했습니다. 회원에게는 아직 공개되지 않습니다.");
+    return true;
+  } catch (error) {
+    lesson.validationMessage = "메모를 서버에 저장하지 못했습니다. 작성 내용은 이 기기에 보관했습니다.";
+    renderLessonEditModal();
+    return false;
+  }
+}
+
 function saveLessonRecord() {
   const lesson = ensureCoachLessonRecord($("#recordLessonSelect")?.value) || recordableCoachLessons()[0];
   if (!lesson) return;
@@ -6075,29 +6196,18 @@ function saveLessonRecord() {
 
 async function completeLessonFromModal(id) {
   const lesson = ensureCoachLessonRecord(id);
-  if (!lesson || !canProcessLesson(lesson)) return;
+  if (!lesson || !canProcessLesson(lesson) || lesson.completionSubmitting) return;
   if (!lessonOutcomeWindowOpen(lesson)) {
     lesson.validationMessage = lessonOutcomeGuardMessage();
     renderLessonEditModal();
     return;
   }
-  const content = activeViewField(`[data-modal-lesson-content="${id}"]`)?.value.trim() || `${lesson.member} ${lesson.type} 수업 진행`;
-  const participantResults = $$('[data-modal-participant-row]')
-    .filter((row) => row.dataset.modalParticipantRow === id)
-    .map((row) => ({
-      userId: row.dataset.userId || "",
-      ticketId: row.dataset.ticketId || "",
-      name: row.dataset.participantName || "회원",
-      ticketName: row.dataset.ticketName || "회원권",
-      totalSessions: Number(row.dataset.totalSessions) || 0,
-      usedSessions: Number(row.dataset.usedSessions) || 0,
-      remainingSessions: Number(row.dataset.remainingSessions) || 0,
-      coachComment: row.querySelector("[data-modal-coach-comment]")?.value.trim() || "",
-      nextCurriculumId: row.querySelector("[data-modal-next-curriculum]")?.value || "",
-    }));
+  const content = `${lesson.member} ${lesson.type} 수업 진행`;
+  const participantResults = captureLessonChartDraft(id);
   const primaryResult = participantResults[0] || {};
-  const logId = `coach-complete-${Date.now()}`;
-  const log = {
+  const existingLog = state.lessonLogs.find((item) => item.serverLessonId && item.serverLessonId === lesson.serverLessonId && item.status !== "확인 완료");
+  const logId = existingLog?.id || `coach-complete-${Date.now()}`;
+  const log = existingLog || {
     id: logId,
     serverLessonId: lesson.serverLessonId || "",
     serverJournalId: "",
@@ -6114,6 +6224,14 @@ async function completeLessonFromModal(id) {
     curriculumRegistered: false,
     ticketDeducted: false,
   };
+  Object.assign(log, {
+    content,
+    curriculumId: primaryResult.nextCurriculumId || "",
+    nextCurriculumId: primaryResult.nextCurriculumId || "",
+    coachComment: primaryResult.coachComment || "",
+    participantResults,
+    validationMessage: "",
+  });
   const usesV2Participants = Array.isArray(lesson.v2Participants) && lesson.v2Participants.length > 0;
   const missingParticipant = participantResults.find((result) => (
     !result.coachComment
@@ -6142,20 +6260,29 @@ async function completeLessonFromModal(id) {
     renderLessonEditModal();
     return;
   }
-  state.lessonLogs.unshift(log);
+  if (!existingLog) state.lessonLogs.unshift(log);
   lesson.validationMessage = "";
+  lesson.completionSubmitting = true;
+  const submit = activeViewField(`[data-complete-lesson-from-modal="${id}"]`);
+  if (submit) {
+    submit.disabled = true;
+    submit.textContent = "저장 중";
+  }
+  const completed = await confirmLog(log.id, { skipDraft: true });
+  lesson.completionSubmitting = false;
+  if (!completed) {
+    lesson.validationMessage = log.validationMessage || "완료 처리에 실패했습니다. 같은 화면에서 다시 시도해 주세요.";
+    renderLessonEditModal();
+    return;
+  }
+  delete state.lessonChartDrafts?.[id];
+  saveSnapshot();
   window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
-  closeLessonEditor();
   state.todayTaskTab = "lessons";
+  state.focusedLogId = "";
+  closeLessonEditor();
   renderAll();
   setView("todayView");
-  const completed = await confirmLog(log.id, { skipDraft: true });
-  if (completed) {
-    state.todayTaskTab = "lessons";
-    state.focusedLogId = "";
-    renderAll();
-    setView("todayView");
-  }
 }
 
 function refreshSelectedCoachScheduleWeek() {
@@ -7510,7 +7637,7 @@ function bindEvents() {
 
   document.addEventListener("keydown", (event) => {
     if (event.isComposing) return;
-    const draftKeywords = event.target.closest("[data-modal-comment-keywords], [data-log-comment-keywords], [data-log-participant-keywords]");
+    const draftKeywords = event.target.closest("[data-log-comment-keywords], [data-log-participant-keywords]");
     if (draftKeywords && event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();
@@ -7547,6 +7674,37 @@ function bindEvents() {
     const curriculumSuggestion = event.target.closest("[data-curriculum-option-code]");
     if (curriculumSuggestion) {
       selectCoachCurriculumSuggestion(curriculumSuggestion);
+      return;
+    }
+
+    const participantTab = event.target.closest("[data-lesson-participant-tab]");
+    if (participantTab) {
+      const key = participantTab.dataset.lessonParticipantTab;
+      const panel = participantTab.closest(".lesson-action-panel");
+      panel?.querySelectorAll("[data-lesson-participant-tab]").forEach((button) => {
+        const active = button === participantTab;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", String(active));
+      });
+      panel?.querySelectorAll("[data-lesson-participant-panel]").forEach((participantPanel) => {
+        participantPanel.hidden = participantPanel.dataset.lessonParticipantPanel !== key;
+      });
+      const activePanel = [...(panel?.querySelectorAll("[data-lesson-participant-panel]") || [])]
+        .find((participantPanel) => participantPanel.dataset.lessonParticipantPanel === key);
+      activePanel?.querySelector("textarea, button")?.focus({ preventScroll: true });
+      return;
+    }
+
+    const historyToggle = event.target.closest("[data-toggle-lesson-history]");
+    if (historyToggle) {
+      const key = historyToggle.dataset.toggleLessonHistory;
+      const participantPanel = historyToggle.closest("[data-lesson-participant-panel]");
+      const history = [...(participantPanel?.querySelectorAll("[data-lesson-history-panel]") || [])]
+        .find((candidate) => candidate.dataset.lessonHistoryPanel === key);
+      if (history) {
+        history.hidden = !history.hidden;
+        historyToggle.textContent = history.hidden ? "지난 기록 보기" : "지난 기록 닫기";
+      }
       return;
     }
     const modalCommentDraftButton = event.target.closest("[data-generate-modal-comment]");
@@ -7845,6 +8003,12 @@ function bindEvents() {
       return;
     }
 
+    const saveLessonDraftButton = event.target.closest("[data-save-lesson-draft]");
+    if (saveLessonDraftButton) {
+      void saveLessonChartDraft(saveLessonDraftButton.dataset.saveLessonDraft);
+      return;
+    }
+
     const completeLessonButton = event.target.closest("[data-complete-lesson-from-modal]");
     if (completeLessonButton) {
       completeLessonFromModal(completeLessonButton.dataset.completeLessonFromModal);
@@ -8092,7 +8256,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.385",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.386",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
