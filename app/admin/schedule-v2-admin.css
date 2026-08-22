@@ -2206,6 +2206,15 @@
   font-weight: 800;
 }
 
+.schedule-v2-outcome-correction.is-shared {
+  color: #08795a;
+}
+
+.schedule-v2-outcome-correction.is-warning {
+  color: #9a4d00;
+  border-top-color: #e9c897;
+}
+
 .schedule-v2-outcome-curriculum {
   grid-column: 1 / -1;
   display: grid;

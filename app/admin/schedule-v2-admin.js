@@ -1960,6 +1960,98 @@
     return (state.payload?.tickets || []).find((ticket) => String(ticket.id) === String(ticketId)) || null;
   }
 
+  function normalizedGroupDeductionPolicy(ticket, participantCount = 1) {
+    const configured = String(ticket?.groupDeductionPolicy || ticket?.group_deduction_policy || "").trim();
+    if (["per_participant", "shared_once", "representative_only"].includes(configured)) return configured;
+    return participantCount > 1 ? "shared_once" : "per_participant";
+  }
+
+  function participantDeductionContext(lesson, participant) {
+    const participants = lesson?.participants || [];
+    const ticketId = String(participant?.ticketId || participant?.ticket_id || "");
+    const ticketParticipants = ticketId
+      ? participants.filter((item) => String(item.ticketId || item.ticket_id || "") === ticketId)
+      : [];
+    const ticket = ticketById(ticketId);
+    const policy = normalizedGroupDeductionPolicy(ticket, ticketParticipants.length);
+    const shared = ticketParticipants.length > 1 && ["shared_once", "representative_only"].includes(policy);
+    const lessonMinutes = Math.max(1, Number(ticket?.lessonMinutes || ticket?.lesson_minutes || lesson?.durationMinutes || 20));
+    const expectedUnits = lesson?.scheduleKind === "one_day"
+      ? 0
+      : Math.max(1, Math.ceil(Number(lesson?.durationMinutes || lessonMinutes) / lessonMinutes));
+    const actualUnits = ticketParticipants.reduce(
+      (sum, item) => sum + Math.max(0, Number(item.deductedSessions ?? item.deducted_sessions) || 0),
+      0,
+    );
+    const deductedParticipant = ticketParticipants.find(
+      (item) => Number(item.deductedSessions ?? item.deducted_sessions) > 0,
+    );
+    const ownerUserId = String(ticket?.ownerUserId || ticket?.owner_user_id || "");
+    const ownerParticipant = ticketParticipants.find((item) => String(item.userId || item.user_id || "") === ownerUserId);
+    const actionParticipant = actualUnits > 0
+      ? deductedParticipant || ownerParticipant || ticketParticipants[0]
+      : ownerParticipant || ticketParticipants[0];
+    return {
+      policy,
+      shared,
+      expectedUnits,
+      actualUnits,
+      actionUserId: String(actionParticipant?.userId || actionParticipant?.user_id || ""),
+      isActionParticipant: String(participant?.userId || participant?.user_id || "")
+        === String(actionParticipant?.userId || actionParticipant?.user_id || ""),
+    };
+  }
+
+  function outcomeCorrectionMarkup(lesson, participant, outcome, final) {
+    if (!final || lesson?.scheduleKind === "one_day" || !["completed", "no_show", "absence"].includes(outcome) || !participant.ticketId) return "";
+    const deducted = Math.max(0, Number(participant.deductedSessions ?? participant.deducted_sessions) || 0);
+    const context = participantDeductionContext(lesson, participant);
+    if (!context.shared) {
+      return `<div class="schedule-v2-outcome-correction"><span>차감 ${deducted > 0 ? `${deducted}회` : "없음"}</span><button type="button" data-v2-correct-deduction="${deducted > 0 ? "restore" : "deduct"}">${deducted > 0 ? "차감 복구" : "누락 차감"}</button></div>`;
+    }
+    if (context.actualUnits > context.expectedUnits) {
+      const action = context.isActionParticipant
+        ? '<button type="button" data-v2-correct-deduction="restore">그룹 과다 차감 복구</button>'
+        : "";
+      return `<div class="schedule-v2-outcome-correction is-warning"><span>공유 회원권 과다 차감 확인 필요 · ${context.actualUnits}/${context.expectedUnits}회</span>${action}</div>`;
+    }
+    if (context.actualUnits < context.expectedUnits) {
+      const action = context.isActionParticipant
+        ? '<button type="button" data-v2-correct-deduction="deduct">그룹 누락 차감</button>'
+        : "";
+      return `<div class="schedule-v2-outcome-correction is-warning"><span>공유 회원권 차감 확인 필요 · ${context.actualUnits}/${context.expectedUnits}회</span>${action}</div>`;
+    }
+    const action = context.isActionParticipant
+      ? '<button type="button" data-v2-correct-deduction="restore">그룹 차감 복구</button>'
+      : "";
+    return `<div class="schedule-v2-outcome-correction is-shared"><span>공유 회원권 ${context.actualUnits}회 차감 완료</span>${action}</div>`;
+  }
+
+  function deductionConfirmationGuide(results) {
+    const requested = results.filter((result) => result.deduct && result.ticketId);
+    if (!requested.length) return "회원권 차감은 없습니다.";
+    const groups = new Map();
+    results.forEach((result) => {
+      const ticketId = String(result.ticketId || "");
+      if (!ticketId) return;
+      const group = groups.get(ticketId) || [];
+      group.push(result);
+      groups.set(ticketId, group);
+    });
+    let sharedTickets = 0;
+    let individualDeductions = 0;
+    groups.forEach((group, ticketId) => {
+      const requestedCount = group.filter((result) => result.deduct).length;
+      if (!requestedCount) return;
+      const policy = normalizedGroupDeductionPolicy(ticketById(ticketId), group.length);
+      if (group.length > 1 && ["shared_once", "representative_only"].includes(policy)) sharedTickets += 1;
+      else individualDeductions += requestedCount;
+    });
+    if (sharedTickets && !individualDeductions) return `공유 회원권 ${sharedTickets}개가 차감됩니다.`;
+    if (!sharedTickets) return `${individualDeductions}명의 회원권이 차감됩니다.`;
+    return `공유 회원권 ${sharedTickets}개와 개별 회원권 ${individualDeductions}건이 차감됩니다.`;
+  }
+
   function lessonTicketCountsMarkup(lesson) {
     const text = lessonTicketCountsText(lesson);
     if (!text) return "";
@@ -2777,9 +2869,7 @@
         const draftTools = editable && !final
           ? '<div class="schedule-v2-comment-draft"><input type="text" data-v2-comment-keywords placeholder="키워드 입력 · Enter로 초안 만들기" aria-label="피드백 키워드" /><button type="button" data-v2-generate-comment>초안 만들기</button></div>'
           : "";
-        const correctionTools = final && ["completed", "no_show", "absence"].includes(outcome) && participant.ticketId
-          ? `<div class="schedule-v2-outcome-correction"><span>차감 ${deducted ? `${Number(participant.deductedSessions ?? participant.deducted_sessions)}회` : "없음"}</span><button type="button" data-v2-correct-deduction="${deducted ? "restore" : "deduct"}">${deducted ? "차감 복구" : "누락 차감"}</button></div>`
-          : "";
+        const correctionTools = outcomeCorrectionMarkup(lesson, participant, outcome, final);
         const revisionTools = final && outcome === "completed"
           ? feedbackEditing
             ? '<div class="schedule-v2-feedback-revision-actions"><button type="button" data-v2-save-feedback-revision>피드백 저장</button><button type="button" data-v2-cancel-feedback-revision>취소</button><small>회원권 횟수는 변경되지 않습니다.</small></div>'
@@ -2885,8 +2975,7 @@
     }
     if (!requireWritableServer()) return;
     if (finalize) {
-      const deductedCount = collected.results.filter((result) => result.deduct).length;
-      const deductionGuide = deductedCount ? `${deductedCount}명의 회원권이 차감됩니다.` : "회원권 차감은 없습니다.";
+      const deductionGuide = deductionConfirmationGuide(collected.results);
       if (!window.confirm(`수업 처리를 완료할까요? ${deductionGuide}`)) return;
     }
     const api = bridge();
@@ -3414,6 +3503,7 @@
       schedule_v2_feedback_revision_stale: "다른 화면에서 피드백을 먼저 수정했습니다. 새로고침 후 다시 확인해 주세요.",
       schedule_v2_next_curriculum_required: "완료 수업의 다음 커리큘럼을 선택해 주세요.",
       schedule_v2_shared_ticket_policy_required: "같은 공유 회원권을 두 번 차감할 수 없습니다. 1:2 차감 방식을 관리자에서 확인해 주세요.",
+      schedule_v2_representative_ticket_owner_required: "대표회원 기준 차감 상품입니다. 회원권 대표회원 행에서 정정해 주세요.",
       schedule_v2_correction_admin_required: "누락 차감 정정은 관리자만 할 수 있습니다.",
       schedule_v2_correction_reference_required: "정정할 수업·회원·회원권 정보를 다시 확인해 주세요.",
       schedule_v2_correction_reason_required: "정정 사유를 2자 이상 입력해 주세요.",
