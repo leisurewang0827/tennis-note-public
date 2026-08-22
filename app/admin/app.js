@@ -22419,14 +22419,14 @@ function legacyNoteRecord(note) {
   const done = note.status === "confirmed";
   return {
     id: `legacy-note-${note.id}`,
-    group: done ? "done" : "pending",
+    group: done ? "done" : "feedback",
     source: "관리자 샘플",
     member: note.member,
     title: note.lesson,
     detail: note.reflection,
     subDetail: note.next,
-    statusLabel: done ? "차감 확인됨" : "코치 확인 필요",
-    actionLabel: done ? "완료" : "수업 완료·차감",
+    statusLabel: done ? "차감 확인됨" : "작성 필요",
+    actionLabel: done ? "완료" : "피드백 작성",
     lessonId: note.serverLessonId || "",
     actionable: !done && Boolean(note.serverLessonId),
   };
@@ -22453,22 +22453,23 @@ function sortAdminRecords(records = []) {
   });
 }
 
-function pendingLessonRecord(lesson) {
+function pendingLessonRecord(lesson, participant = null) {
   const endedAt = lessonEndTimestamp(lesson);
+  const writingDelayed = endedAt > 0 && Date.now() - endedAt > 24 * 60 * 60 * 1000;
   return {
-    id: `pending-lesson-${lesson.serverLessonId}`,
-    group: "pending",
-    source: "수업 완료 대기",
-    member: lesson.member || "회원 확인 필요",
+    id: `pending-lesson-${lesson.serverLessonId}-${participant?.userId || "all"}`,
+    group: "feedback",
+    source: "피드백 미작성",
+    member: participant?.name || lesson.member || "회원 확인 필요",
     title: `${lesson.lessonDate || "수업일"} ${lesson.time || ""} · ${getCoachName(lesson.coachId)}`.trim(),
-    detail: `${lesson.type || "수업"} ${lesson.durationMinutes || 20}분 · ${lesson.ticketProduct || "회원권 확인 필요"}`,
-    subDetail: `현재 잔여 ${Number(lesson.ticketRemaining) || 0}회`,
-    statusLabel: "기록 대기",
-    actionLabel: "수업 완료·차감",
+    detail: `${lesson.type || "수업"} ${lesson.durationMinutes || 20}분 · ${writingDelayed ? "수업 종료 후 24시간 초과" : "정상 작성 대기"}`,
+    subDetail: "최종 저장 전까지 회원권 차감은 실행되지 않습니다.",
+    statusLabel: writingDelayed ? "작성 지연" : "작성 필요",
+    actionLabel: "피드백 작성",
     lessonId: lesson.serverLessonId,
     actionable: true,
-    priority: "urgent",
-    urgentReason: "수업 기록 미처리로 횟수 차감이 대기 중입니다.",
+    priority: writingDelayed ? "high" : "normal",
+    urgentReason: "",
     sortAt: endedAt ? new Date(endedAt).toISOString() : `${lesson.lessonDate || ""}T${lesson.time || "00:00"}:00`,
   };
 }
@@ -22532,10 +22533,14 @@ function participantLessonRecord(record, context) {
   const isDraft = recordStatus !== "final";
   const deductedSessions = Math.max(0, Number(record.deducted_sessions) || 0);
   const deductionRequested = Boolean(record.deduction_requested);
+  const deductionOutcome = ["completed", "no_show", "absence"].includes(String(record.outcome || ""));
   const missingDeduction = !isDraft
     && deductionRequested
     && deductedSessions === 0
-    && ["completed", "no_show", "absence"].includes(String(record.outcome || ""));
+    && deductionOutcome;
+  const missingTicket = !isDraft && deductionRequested && deductionOutcome && !record.ticket_id;
+  const finalizedLessonWithDraft = isDraft && ["completed", "no_show"].includes(String(lesson?.serverStatus || ""));
+  const actualIssue = missingDeduction || missingTicket || finalizedLessonWithDraft;
   const outcomeLabel = participantOutcomeLabel(record.outcome);
   const completedLabel = deductedSessions > 0
     ? `완료 · ${deductedSessions}회 차감`
@@ -22548,40 +22553,63 @@ function participantLessonRecord(record, context) {
   const lessonTime = lesson?.time || "";
   return {
     id: `participant-record-${record.id}`,
-    group: missingDeduction ? "issue" : isDraft ? "feedback" : "done",
+    group: actualIssue ? "issue" : isDraft ? "feedback" : "done",
     source: "수업 피드백",
     branchId: lesson?.branchId || "",
     member: memberName,
     title: `${lessonDate} ${lessonTime} · ${outcomeLabel}`.replace(/\s+/g, " ").trim(),
     detail: detailParts.join(" · "),
-    subDetail: isDraft
+    subDetail: finalizedLessonWithDraft
+      ? "수업 상태는 완료지만 참여자 기록은 아직 초안입니다. 최종 저장 여부를 확인해 주세요."
+      : missingTicket
+        ? "차감 요청은 있지만 연결된 회원권이 없습니다. 회원권 연결을 확인해 주세요."
+        : isDraft
       ? "피드백만 임시 저장됨 · 회원권 차감 안 됨"
       : missingDeduction
         ? "차감 요청과 실제 차감 결과가 다릅니다. 수업 상세에서 확인해 주세요."
         : completedLabel,
-    statusLabel: isDraft ? "초안 · 미차감" : missingDeduction ? "차감 확인 필요" : completedLabel,
-    actionLabel: isDraft ? "이어 작성" : missingDeduction ? "차감 확인" : "처리 완료",
+    statusLabel: finalizedLessonWithDraft
+      ? "완료 상태·초안"
+      : missingTicket
+        ? "회원권 연결 확인"
+        : isDraft
+          ? "초안 · 미차감"
+          : missingDeduction
+            ? "차감 확인 필요"
+            : completedLabel,
+    actionLabel: actualIssue ? "기록 확인" : isDraft ? "이어 작성" : "처리 완료",
     lessonId,
     serverLessonId: lessonId,
     ticketId: record.ticket_id || "",
     coachId: lesson?.coachId || "",
     coachRoleId: record.coach_role_id || lesson?.coachRoleId || "",
-    actionable: Boolean(lesson && (isDraft || missingDeduction)),
-    priority: missingDeduction ? "urgent" : isDraft ? "high" : "normal",
-    urgentReason: missingDeduction
-      ? "완료 기록은 있지만 요청된 회원권 차감 결과가 0회입니다."
-      : isDraft
-        ? "초안 저장은 수업 완료나 회원권 차감을 실행하지 않습니다."
-        : "",
+    actionable: Boolean(lesson && (isDraft || actualIssue)),
+    priority: actualIssue ? "urgent" : isDraft ? "high" : "normal",
+    urgentReason: finalizedLessonWithDraft
+      ? "수업 상태와 참여자 기록 상태가 일치하지 않습니다."
+      : missingTicket
+        ? "최종 차감 기록에 회원권 연결이 없습니다."
+        : missingDeduction
+          ? "완료 기록은 있지만 요청된 회원권 차감 결과가 0회입니다."
+          : "",
     sortAt: record.finalized_at || record.updated_at || record.created_at || lesson?.lessonDate || "",
   };
 }
 
-function pendingLessonRecords() {
+function lessonParticipantTargets(lesson, context) {
+  const participantUserIds = Array.isArray(lesson.serverParticipantUserIds)
+    ? lesson.serverParticipantUserIds.map(String).filter(Boolean)
+    : [];
+  if (!participantUserIds.length) return [];
+  return participantUserIds.map((userId) => ({
+    userId,
+    name: context?.userNameById.get(userId) || lesson.member || "회원 확인 필요",
+  }));
+}
+
+function pendingLessonRecords(context) {
   const completedLessonIds = new Set((adminLiveDataState.lessonRecords || []).map((record) => record.lesson_id));
-  const participantRecordLessonIds = new Set(
-    (adminLiveDataState.participantRecords || []).map((record) => String(record.lesson_id || "")).filter(Boolean),
-  );
+  const participantRecordsByLessonId = context?.participantRecordsByLessonId || new Map();
   const now = Date.now();
   const ownRoleIds = currentOperationsCoachRoleIds();
   return lessons
@@ -22594,11 +22622,58 @@ function pendingLessonRecords() {
         && endedAt > 0
         && endedAt <= now
         && !completedLessonIds.has(lesson.serverLessonId)
-        && !participantRecordLessonIds.has(String(lesson.serverLessonId))
         && (operationsRole() === "admin" || ownRoleIds.has(lesson.coachRoleId))
       );
     })
-    .map(pendingLessonRecord);
+    .flatMap((lesson) => {
+      const lessonRecords = participantRecordsByLessonId.get(String(lesson.serverLessonId)) || [];
+      const targets = lessonParticipantTargets(lesson, context);
+      if (!targets.length) return lessonRecords.length ? [] : [pendingLessonRecord(lesson)];
+      return targets
+        .filter((target) => !lessonRecords.some((record) => String(record.user_id || "") === target.userId))
+        .map((target) => pendingLessonRecord(lesson, target));
+    });
+}
+
+function completedLessonRecordIssues(context) {
+  const legacyLessonIds = new Set((adminLiveDataState.lessonRecords || []).map((record) => String(record.lesson_id || "")));
+  const participantRecordsByLessonId = context?.participantRecordsByLessonId || new Map();
+  const ownRoleIds = currentOperationsCoachRoleIds();
+  return lessons
+    .filter((lesson) => (
+      lesson.serverLessonId
+      && !lesson.oneDayBooking
+      && ["completed", "no_show"].includes(String(lesson.serverStatus || ""))
+      && !legacyLessonIds.has(String(lesson.serverLessonId))
+      && (operationsRole() === "admin" || ownRoleIds.has(lesson.coachRoleId))
+    ))
+    .flatMap((lesson) => {
+      const lessonRecords = participantRecordsByLessonId.get(String(lesson.serverLessonId)) || [];
+      const targets = lessonParticipantTargets(lesson, context);
+      const missingTargets = targets.length
+        ? targets.filter((target) => !lessonRecords.some((record) => String(record.user_id || "") === target.userId))
+        : lessonRecords.length ? [] : [{ userId: "", name: lesson.member || "회원 확인 필요" }];
+      return missingTargets.map((target) => ({
+        id: `completed-record-missing-${lesson.serverLessonId}-${target.userId || "all"}`,
+        group: "issue",
+        source: "수업 기록 오류",
+        branchId: lesson.branchId || "",
+        member: target.name,
+        title: `${lesson.lessonDate || "수업일"} ${lesson.time || ""} · ${getCoachName(lesson.coachId)}`.trim(),
+        detail: `${lesson.type || "수업"} ${lesson.durationMinutes || 20}분 · 수업 상태 ${lesson.serverStatus === "no_show" ? "노쇼" : "완료"}`,
+        subDetail: "해당 참여자의 최종 수업 기록이 없습니다. 수업 상세에서 기록 상태를 확인해 주세요.",
+        statusLabel: "완료 기록 누락",
+        actionLabel: "기록 확인",
+        lessonId: lesson.serverLessonId,
+        serverLessonId: lesson.serverLessonId,
+        coachId: lesson.coachId || "",
+        coachRoleId: lesson.coachRoleId || "",
+        actionable: true,
+        priority: "urgent",
+        urgentReason: "수업 완료 상태와 참여자 최종 기록이 일치하지 않습니다.",
+        sortAt: `${lesson.lessonDate || ""}T${lesson.time || "00:00"}:00`,
+      }));
+    });
 }
 
 function lessonLogRecord(log) {
@@ -22606,16 +22681,16 @@ function lessonLogRecord(log) {
   const hasIssue = done && (!log.coachComment || !(log.nextCurriculumId || log.curriculumId || log.curriculum?.id));
   return {
     id: log.id || `lesson-log-${log.member}-${log.submittedAt || Date.now()}`,
-    group: hasIssue ? "issue" : done ? "done" : "pending",
+    group: hasIssue ? "issue" : done ? "done" : "feedback",
     source: "회원/코치 기록",
     member: log.member || "회원",
     title: log.lessonLabel || log.lesson || `${log.date || ""} 수업`,
     detail: log.content || log.selfMemo || "회원 운동일지 또는 코치 완료 처리 확인",
     subDetail: log.coachComment ? `코치 코멘트: ${log.coachComment}` : "코치 코멘트 미등록",
-    statusLabel: hasIssue ? "기록 보완 필요" : done ? "차감 완료" : "차감 대기",
-    actionLabel: hasIssue ? "관리자 확인" : done ? "완료" : "코치앱 처리",
-    priority: hasIssue || !done ? "urgent" : "normal",
-    urgentReason: hasIssue ? "코멘트 또는 다음 커리큘럼 누락을 확인해야 합니다." : !done ? "기록 완료 전이라 횟수 차감이 대기 중입니다." : "",
+    statusLabel: hasIssue ? "기록 보완 필요" : done ? "차감 완료" : "작성 필요",
+    actionLabel: hasIssue ? "관리자 확인" : done ? "완료" : "코치앱 작성",
+    priority: hasIssue ? "urgent" : !done ? "high" : "normal",
+    urgentReason: hasIssue ? "코멘트 또는 다음 커리큘럼 누락을 확인해야 합니다." : "",
     sortAt: log.completedAt || log.submittedAt || log.updatedAt || log.date || "",
   };
 }
@@ -22835,7 +22910,8 @@ function adminRecordGroups() {
   );
   const records = [
     ...urgentOperationsRecords(),
-    ...pendingLessonRecords(),
+    ...pendingLessonRecords(context),
+    ...completedLessonRecordIssues(context),
     ...lessonNotes
       .filter((note) => !participantRecordLessonIds.has(String(note.serverLessonId || "")))
       .map(legacyNoteRecord),

@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.392" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.393" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-17" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.392" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.393" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-3" />
   </head>
   <body>
@@ -931,17 +931,17 @@
           </div>
         </section>
 
-        <section id="notesView" class="view" aria-label="기록/차감 확인">
+        <section id="notesView" class="view" aria-label="기록·차감 상태">
           <section class="record-action-grid" aria-label="기록 차감 요약">
             <article class="billing-action-card">
-              <span>미처리 수업</span>
+              <span>운영 요청</span>
               <strong id="recordPendingCount">0건</strong>
-              <small>코치 코멘트와 다음 커리큘럼 필요</small>
+              <small>결제 연결·보강 승인 등</small>
             </article>
             <article class="billing-action-card">
-              <span>회원 피드</span>
+              <span>피드·작성</span>
               <strong id="recordFeedbackCount">0건</strong>
-              <small>운동일지와 사진·영상 확인</small>
+              <small>정상 미작성·초안·회원 운동일지</small>
             </article>
             <article class="billing-action-card">
               <span>차감 완료</span>
@@ -949,24 +949,24 @@
               <small>회원권 횟수 반영 완료</small>
             </article>
             <article class="billing-action-card">
-              <span>오류/수정</span>
+              <span>실제 오류</span>
               <strong id="recordIssueCount">0건</strong>
-              <small>관리자 확인 또는 복구 필요</small>
+              <small>완료 기록·차감·회원권 연결 불일치</small>
             </article>
           </section>
 
           <section class="panel">
             <div class="panel-heading">
               <div>
-                <h2>기록/차감 확인</h2>
+                <h2>기록·차감 상태</h2>
                 <span class="source-pill">회원 피드 · 코치 코멘트 · 다음 커리큘럼 · 횟수 차감</span>
               </div>
             </div>
             <div class="segmented-control compact-segments" role="group" aria-label="기록 상태">
-              <button class="segment is-active" type="button" data-record-filter="pending">미처리</button>
-              <button class="segment" type="button" data-record-filter="feedback">회원 피드</button>
+              <button class="segment is-active" type="button" data-record-filter="pending">운영 요청</button>
+              <button class="segment" type="button" data-record-filter="feedback">피드·작성</button>
               <button class="segment" type="button" data-record-filter="done">차감 완료</button>
-              <button class="segment" type="button" data-record-filter="issue">오류/수정</button>
+              <button class="segment" type="button" data-record-filter="issue">실제 오류</button>
             </div>
             <div class="record-filter-bar" aria-label="기록 상세 필터">
               <label class="record-search-field">
@@ -975,10 +975,10 @@
               </label>
               <label><span>담당 코치</span><select id="recordCoachFilter"><option value="all">전체 코치</option></select></label>
               <label>
-                <span>미처리 분류</span>
+                <span>운영 요청 분류</span>
                 <select id="recordPendingTypeFilter">
-                  <option value="all">전체 미처리</option>
-                  <option value="lesson">수업 기록</option>
+                  <option value="all">전체 운영 요청</option>
+                  <option value="lesson">기타 운영</option>
                   <option value="payment">결제 연결</option>
                   <option value="makeup">보강·변경</option>
                   <option value="feedback">회원 피드</option>
@@ -2115,20 +2115,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.392"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.392"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.392"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.393"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.393"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.393"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.392"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.393"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.392"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.392"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.392"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.392"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.392"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.392"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.393"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.393"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.393"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.393"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.393"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.393"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-3"></script>
-    <script src="./app.js?v=1.0.392"></script>
+    <script src="./app.js?v=1.0.393"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-17"></script>
   </body>
 </html>
