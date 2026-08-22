@@ -1801,11 +1801,27 @@
     return now.getTime() >= end.getTime();
   }
 
+  function normalizedFeedbackComment(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function feedbackCommentIsPlaceholder(value) {
+    return normalizedFeedbackComment(value).replace(/\s/g, "").toLowerCase() === "테스트기간";
+  }
+
+  function participantFeedbackComplete(participant = {}) {
+    if (!outcomeRowFinal(participant)) return false;
+    const outcome = String(participant.outcome || "completed").toLowerCase();
+    if (outcome !== "completed") return true;
+    const comment = normalizedFeedbackComment(participant.coachComment || participant.coach_comment);
+    return comment.length >= 5 && !feedbackCommentIsPlaceholder(comment);
+  }
+
   function lessonCardState(lesson = {}, now = new Date()) {
     const status = String(lesson.status || "scheduled").toLowerCase();
     const participants = Array.isArray(lesson.participants) ? lesson.participants : [];
     const finalParticipants = participants.filter(outcomeRowFinal);
-    const incompleteCount = Math.max(0, participants.length - finalParticipants.length);
+    const incompleteCount = participants.filter((participant) => !participantFeedbackComplete(participant)).length;
     const finalizedOutcomes = finalParticipants.map((participant) => String(participant.outcome || "completed").toLowerCase());
     const deducted = finalParticipants.some((participant) => Number(participant.deductedSessions ?? participant.deducted_sessions) > 0);
     const ended = lessonEndPassed(lesson, now);
@@ -1824,14 +1840,16 @@
     }
     if (participants.length && incompleteCount > 0 && ended) {
       const label = participants.length > 1
-        ? `${participants.length}명 중 ${incompleteCount}명 미작성`
-        : "피드백 필요";
+        ? `${participants.length}명 중 ${incompleteCount}명 피드백 필요`
+        : finalParticipants.length === participants.length
+          ? "출석 완료 · 피드백 필요"
+          : "피드백 필요";
       return { id: "feedback_pending", label, className: "record-problem", needsFeedback: true };
     }
     if (!participants.length && ended && ["scheduled", "reserved", "completed"].includes(status)) {
       return { id: "feedback_pending", label: "피드백 필요", className: "record-problem", needsFeedback: true };
     }
-    if (participants.length && finalParticipants.length === participants.length) {
+    if (participants.length && finalParticipants.length === participants.length && incompleteCount === 0) {
       return { id: "feedback_complete", label: "피드백 완료", className: "record-complete", needsFeedback: false };
     }
     return { id: "scheduled", label: statusLabels[status] || "예정", className: "record-planned", needsFeedback: false };
@@ -2610,9 +2628,13 @@
     const participants = lesson.participants || [];
     const anyFinal = participants.some(outcomeRowFinal);
     const allFinal = participants.length > 0 && participants.every(outcomeRowFinal);
+    const allFeedbackComplete = participants.length > 0 && participants.every(participantFeedbackComplete);
+    const hasCompletedOutcome = participants.some((participant) => String(participant.outcome || "completed").toLowerCase() === "completed");
     const editable = ["scheduled", "pending_change"].includes(lesson.status) && !anyFinal;
     $("#scheduleV2OutcomeSummary").textContent = allFinal
-      ? "처리 완료"
+      ? allFeedbackComplete
+        ? hasCompletedOutcome ? "처리 완료 · 피드백 완료" : "처리 완료"
+        : "출석 처리 완료 · 피드백 필요"
       : anyFinal
         ? "점검 필요"
       : editable
@@ -2662,6 +2684,9 @@
       }
       if (finalize && outcome === "completed" && coachComment.length < 5) {
         return { error: `${row.querySelector("strong").textContent} 회원의 피드백을 5자 이상 입력해 주세요.`, results: [] };
+      }
+      if (finalize && outcome === "completed" && feedbackCommentIsPlaceholder(coachComment)) {
+        return { error: `${row.querySelector("strong").textContent} 회원의 실제 수업 피드백을 입력해 주세요. '테스트 기간'은 완료 피드백으로 저장할 수 없습니다.`, results: [] };
       }
       if (finalize && outcome === "completed" && !curriculumStep) {
         return { error: `${row.querySelector("strong").textContent} 회원의 다음 커리큘럼을 선택해 주세요.`, results: [] };
@@ -3252,6 +3277,7 @@
       schedule_v2_outcome_ticket_units_unavailable: "차감할 회원권 잔여 횟수가 부족합니다.",
       schedule_v2_outcome_participant_ticket_mismatch: "수업 회원과 회원권 연결이 맞지 않습니다.",
       schedule_v2_feedback_comment_required: "완료 수업의 피드백을 5자 이상 입력해 주세요.",
+      schedule_v2_feedback_placeholder_forbidden: "'테스트 기간'은 완료 피드백으로 저장할 수 없습니다. 실제 수업 피드백을 입력해 주세요.",
       schedule_v2_next_curriculum_required: "완료 수업의 다음 커리큘럼을 선택해 주세요.",
       schedule_v2_shared_ticket_policy_required: "같은 공유 회원권을 두 번 차감할 수 없습니다. 1:2 차감 방식을 관리자에서 확인해 주세요.",
       schedule_v2_correction_admin_required: "누락 차감 정정은 관리자만 할 수 있습니다.",

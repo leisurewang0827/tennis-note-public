@@ -2091,7 +2091,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.384",
+    workerUrl: "./service-worker.js?v=1.0.385",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -7673,6 +7673,37 @@ function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
   ));
 }
 
+function purchaseEarliestScheduleWeekStart(coachRoleId = "", product = purchaseFlowProduct()) {
+  const targetCoachRoleId = String(coachRoleId || "");
+  const firstAvailable = purchaseAvailableScheduleSlots(product).find((slot) => (
+    !targetCoachRoleId || String(slot.coachRoleId) === targetCoachRoleId
+  ));
+  return purchaseWeekStartDate(firstAvailable?.lessonDate || purchaseAvailabilityRange().start);
+}
+
+function alignPurchaseScheduleWeekToAvailability(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  const selectedWeek = purchaseScheduleSelectionWeek(purchaseSelectedSchedules(product));
+  if (selectedWeek) {
+    const changed = flow.scheduleWeekStart !== selectedWeek;
+    flow.scheduleWeekStart = selectedWeek;
+    return changed;
+  }
+  if (!product || purchaseScheduleAvailabilityState() !== "ready") return false;
+  const coachRoleId = String(flow.coachRoleId || "");
+  const currentWeek = purchaseWeekStartDate(flow.scheduleWeekStart || purchaseAvailabilityRange().start);
+  const matchingSlots = purchaseAvailableScheduleSlots(product).filter((slot) => (
+    !coachRoleId || String(slot.coachRoleId) === coachRoleId
+  ));
+  const currentWeekHasSlot = matchingSlots.some((slot) => purchaseWeekStartDate(slot.lessonDate) === currentWeek);
+  const nextWeek = currentWeekHasSlot
+    ? currentWeek
+    : purchaseWeekStartDate(matchingSlots[0]?.lessonDate || purchaseAvailabilityRange().start);
+  const changed = flow.scheduleWeekStart !== nextWeek;
+  flow.scheduleWeekStart = nextWeek;
+  return changed;
+}
+
 function purchaseScheduleKey(schedule = {}) {
   return `${schedule.lessonDate || ""}:${String(schedule.startTime || schedule.time || "").slice(0, 5)}:${schedule.coachRoleId || ""}`;
 }
@@ -7994,6 +8025,7 @@ function openPurchaseScheduleSheet() {
   const selectedSchedules = purchaseSelectedSchedules();
   const range = purchaseAvailabilityRange();
   flow.scheduleWeekStart = purchaseScheduleSelectionWeek(selectedSchedules) || flow.scheduleWeekStart || purchaseWeekStartDate(range.start);
+  if (alignPurchaseScheduleWeekToAvailability()) saveSnapshot();
   renderPurchaseScheduleSheet();
   openAppSheet("purchaseScheduleSheet", { initialFocus: "#purchaseScheduleAvailableOnly" });
 }
@@ -8634,6 +8666,8 @@ async function refreshPurchaseScheduleAvailability(options = {}) {
   if (!options.force && cached?.key === context.key && Date.now() - cached.loadedAt < 10_000) {
     memberPurchaseDirectoryLoad = { key: context.key, status: "ready", error: "" };
     const removedCount = reconcilePurchaseSchedulesAfterRefresh(product);
+    const weekChanged = alignPurchaseScheduleWeekToAvailability(product);
+    if (weekChanged) saveSnapshot();
     if (removedCount) showToast("마감되거나 변경된 시간을 해제했습니다. 가능한 시간을 다시 선택해 주세요.");
     const flow = purchaseFlowState();
     if (flow.open && flow.step !== 4) renderMembershipPurchaseFlow();
@@ -8668,6 +8702,8 @@ async function refreshPurchaseScheduleAvailability(options = {}) {
     };
     memberPurchaseDirectoryLoad = { key: context.key, status: "ready", error: "" };
     const removedCount = reconcilePurchaseSchedulesAfterRefresh(product);
+    const weekChanged = alignPurchaseScheduleWeekToAvailability(product);
+    if (weekChanged) saveSnapshot();
     if (removedCount) showToast("마감되거나 변경된 시간을 해제했습니다. 가능한 시간을 다시 선택해 주세요.");
   } catch (error) {
     if (requestId !== memberPurchaseDirectoryRequestSequence) return false;
@@ -12241,7 +12277,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.384", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.385", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -14679,7 +14715,7 @@ function bindEvents() {
       flow.coachRoleId = nextCoachRoleId;
       flow.coachName = purchaseCoachFilterButton.dataset.purchaseCoachFilterName || "";
       flow.showMoreSlots = false;
-      flow.scheduleWeekStart = purchaseWeekStartDate(purchaseAvailabilityRange().start);
+      flow.scheduleWeekStart = purchaseEarliestScheduleWeekStart(nextCoachRoleId, purchaseFlowProduct());
       saveSnapshot();
       renderMembershipPurchaseFlow();
       if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
@@ -15271,7 +15307,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.384",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.385",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
