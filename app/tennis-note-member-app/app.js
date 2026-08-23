@@ -169,19 +169,40 @@ const noticeSessionSeenIds = new Set();
 let noticePreviousFocus = null;
 let appToastTimer = 0;
 
-function syncMemberVisualViewport() {
+function memberViewportGeometry() {
   const viewport = window.visualViewport;
-  const height = Math.max(1, Math.round(viewport?.height || window.innerHeight || 1));
-  const offsetTop = Math.max(0, Math.round(viewport?.offsetTop || 0));
+  const layoutHeight = Math.max(1, Math.round(window.innerHeight || viewport?.height || 1));
+  const rawHeight = Math.max(1, Math.round(viewport?.height || layoutHeight));
+  const rawOffsetTop = Math.max(0, Math.round(viewport?.offsetTop || 0));
+  const offsetTop = Math.min(rawOffsetTop, Math.max(0, layoutHeight - 1));
+  const height = Math.max(1, Math.min(rawHeight, layoutHeight - offsetTop));
+  return { height, offsetTop };
+}
+
+function syncMemberVisualViewport() {
+  const { height, offsetTop } = memberViewportGeometry();
   document.documentElement.style.setProperty("--tn-visual-viewport-height", `${height}px`);
   document.documentElement.style.setProperty("--tn-visual-viewport-offset-top", `${offsetTop}px`);
   document.documentElement.style.setProperty("--tn-sheet-viewport-height", `${Math.round(height * 0.86)}px`);
 }
 
+function stabilizeMemberVisualViewport() {
+  syncMemberVisualViewport();
+  window.requestAnimationFrame(syncMemberVisualViewport);
+  window.setTimeout(syncMemberVisualViewport, 240);
+}
+
 syncMemberVisualViewport();
 window.addEventListener("resize", syncMemberVisualViewport, { passive: true });
+window.addEventListener("pageshow", stabilizeMemberVisualViewport, { passive: true });
+window.addEventListener("orientationchange", stabilizeMemberVisualViewport, { passive: true });
 window.visualViewport?.addEventListener("resize", syncMemberVisualViewport, { passive: true });
 window.visualViewport?.addEventListener("scroll", syncMemberVisualViewport, { passive: true });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") stabilizeMemberVisualViewport();
+});
+document.addEventListener("tennisnote:sheet-opened", stabilizeMemberVisualViewport);
+document.addEventListener("tennisnote:sheet-closed", stabilizeMemberVisualViewport);
 
 function showToast(message) {
   let toast = document.querySelector("#appToast");
@@ -2091,7 +2112,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.394",
+    workerUrl: "./service-worker.js?v=1.0.395",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -7878,7 +7899,7 @@ function applyPurchaseScheduleSlot(selectedSlot = {}) {
   const requiredCount = purchaseRequiredScheduleCount(selectedProduct);
   const selectedWeek = purchaseScheduleSelectionWeek(flow.preferredSchedules);
   const nextWeek = purchaseWeekStartDate(nextSchedule.lessonDate);
-  if (selectedWeek && selectedWeek !== nextWeek) {
+  if (requiredCount > 1 && selectedWeek && selectedWeek !== nextWeek) {
     showToast("주 1·2·3회 시간은 같은 시작 주에서 선택해 주세요.");
     return false;
   }
@@ -8362,7 +8383,7 @@ function purchaseSinglePageHtml() {
   const scheduleSummary = keepRenewalSchedule
     ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치 · ${lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 시간 유지"}`
     : selectedSchedules.length
-      ? `${memberCoachShortName(selectedCoachName || "선택한 코치")} 코치 · ${selectedSchedules.map((schedule) => `${schedule.day} ${schedule.startTime}`).join(" · ")}`
+      ? `${memberCoachShortName(selectedCoachName || "선택한 코치")} 코치 · ${selectedSchedules.map((schedule) => `${purchaseDateLabel(schedule.lessonDate)} ${schedule.startTime}`).join(" · ")}`
       : "선생님과 시간을 선택해 주세요";
   return `
     ${purchasePurposeOptionsHtml()}
@@ -12057,6 +12078,7 @@ function openAppModal(modalId, focusSelector = "") {
   target.hidden = false;
   activeAppModalId = modalId;
   refreshAppModalState();
+  stabilizeMemberVisualViewport();
   const historyState = typeof history.state === "object" && history.state ? history.state : {};
   if (historyState.tennisNoteModal !== modalId) {
     history.pushState({ ...historyState, tennisNoteModal: modalId }, "", window.location.href);
@@ -12074,6 +12096,7 @@ function closeAppModal(modalId, fromHistory = false) {
   target.hidden = true;
   if (activeAppModalId === modalId) activeAppModalId = "";
   refreshAppModalState();
+  stabilizeMemberVisualViewport();
   if (!fromHistory && history.state?.tennisNoteModal === modalId) {
     history.back();
     return;
@@ -12109,9 +12132,13 @@ function openJournalComposer(dateValue = "") {
 }
 
 function openProfileEditor(focusNtrp = false) {
-  openAppSheet("profileEditorSheet", {
-    initialFocus: focusNtrp ? "#profileSelfNtrp" : "",
-  });
+  openAppSheet("profileEditorSheet");
+  if (!focusNtrp) return;
+  // Keep the opening tap on the sheet itself. Focusing the select during the
+  // same pointer sequence makes iOS open the native picker as a second layer.
+  window.setTimeout(() => {
+    window.TennisNoteBottomSheet?.ensureFieldVisible?.("#profileSelfNtrp", { behavior: "auto" });
+  }, 80);
 }
 
 function openMembershipDetails(detailsId) {
@@ -12306,7 +12333,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.394", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.395", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -13049,11 +13076,11 @@ async function editMemberChangeRequest(requestId) {
 
 function openChangeHistoryModal() {
   renderRequests();
-  $("#changeHistoryModal").hidden = false;
+  openAppModal("changeHistoryModal", "[data-history-top-close]");
 }
 
 function closeChangeHistoryModal() {
-  $("#changeHistoryModal").hidden = true;
+  closeAppModal("changeHistoryModal");
 }
 
 async function saveJournal() {
@@ -15338,7 +15365,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.394",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.395",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

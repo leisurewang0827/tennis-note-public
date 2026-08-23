@@ -2,6 +2,7 @@
   const officialAppUrl = "https://tennisnote-app.pages.dev/";
   const defaultManifestUrl = "../release.json";
   const checkIntervalMs = 5 * 60 * 1000;
+  const releaseFetchTimeoutMs = 7_000;
   let started = false;
   let registration = null;
   let remoteRelease = null;
@@ -232,18 +233,24 @@
     notice.setAttribute("role", "status");
     notice.setAttribute("aria-live", "polite");
     notice.innerHTML = `
-      <div>
+      <div class="tennisnote-release-check-copy">
         <strong data-release-check-title>최신 버전을 확인하지 못했습니다</strong>
         <span data-release-check-detail></span>
         <small data-release-check-meta></small>
       </div>
-      <button type="button" data-release-check-retry>다시 확인</button>
+      <div class="tennisnote-release-check-actions">
+        <button type="button" data-release-check-retry>다시 확인</button>
+        <button type="button" data-release-check-dismiss aria-label="업데이트 확인 안내 닫기">닫기</button>
+      </div>
     `;
     notice.querySelector("[data-release-check-retry]")?.addEventListener("click", () => {
       void checkForUpdate(lastManifestUrl, {
         force: true,
         remoteAppUrl: activeRemoteAppUrl,
       });
+    });
+    notice.querySelector("[data-release-check-dismiss]")?.addEventListener("click", () => {
+      notice.hidden = true;
     });
     document.body.appendChild(notice);
     return notice;
@@ -377,16 +384,23 @@
   async function fetchRelease(manifestUrl) {
     const url = new URL(manifestUrl || defaultManifestUrl, window.location.href);
     url.searchParams.set("_", Date.now().toString());
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-    if (!response.ok) throw new Error("release_manifest_unavailable");
-    const candidate = await response.json();
-    if (!candidate?.version || !candidate?.releaseId) throw new Error("release_manifest_invalid");
-    return candidate;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), releaseFetchTimeoutMs);
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          Accept: "application/json",
+        },
+      });
+      if (!response.ok) throw new Error("release_manifest_unavailable");
+      const candidate = await response.json();
+      if (!candidate?.version || !candidate?.releaseId) throw new Error("release_manifest_invalid");
+      return candidate;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   }
 
   async function checkForUpdate(manifestUrl, options = {}) {

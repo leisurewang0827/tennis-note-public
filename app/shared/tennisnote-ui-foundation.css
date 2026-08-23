@@ -361,9 +361,16 @@ body.modal-open .tennisnote-release-check-notice {
   display: none;
 }
 
-.tennisnote-release-check-notice div {
+.tennisnote-release-check-copy {
   display: grid;
   gap: 3px;
+  min-width: 0;
+}
+
+.tennisnote-release-check-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
 }
 
 .tennisnote-release-check-notice span,
@@ -383,11 +390,22 @@ body.modal-open .tennisnote-release-check-notice {
   font-weight: 800;
 }
 
+.tennisnote-release-check-notice [data-release-check-dismiss] {
+  min-width: 48px;
+  border-color: #e6d6b7;
+  color: #6b5b3f;
+}
+
 @media (max-width: 480px) {
   .tennisnote-release-check-notice {
     right: 10px;
     bottom: calc(82px + env(safe-area-inset-bottom));
     width: calc(100vw - 20px);
+    align-items: start;
+  }
+
+  .tennisnote-release-check-actions {
+    flex-direction: column;
   }
 }
 

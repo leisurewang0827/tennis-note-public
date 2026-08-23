@@ -22,6 +22,18 @@
   let systemSurfaceState = null;
   let accessoryBarQueue = Promise.resolve();
 
+  function viewportGeometry() {
+    const viewport = window.visualViewport;
+    const layoutHeight = Math.max(1, Math.round(window.innerHeight || viewport?.height || 1));
+    const rawHeight = Math.max(1, Math.round(viewport?.height || layoutHeight));
+    const rawOffsetTop = Math.max(0, Math.round(viewport?.offsetTop || 0));
+    const offsetTop = Math.min(rawOffsetTop, Math.max(0, layoutHeight - 1));
+    const height = Math.max(1, Math.min(rawHeight, layoutHeight - offsetTop));
+    const layoutWidth = Math.max(1, Math.round(window.innerWidth || viewport?.width || 1));
+    const width = Math.max(1, Math.min(Math.round(viewport?.width || layoutWidth), layoutWidth));
+    return { height, offsetTop, width, visibleBottom: offsetTop + height };
+  }
+
   function resolveSheet(target) {
     if (target instanceof HTMLElement) return target.matches(rootSelector) ? target : null;
     if (!target) return null;
@@ -47,20 +59,14 @@
   }
 
   function resetViewportBaseline() {
-    const viewport = window.visualViewport;
-    const height = Math.max(1, Math.round(viewport?.height || window.innerHeight || 1));
-    const offsetTop = Math.max(0, Math.round(viewport?.offsetTop || 0));
-    stableViewportBottom = offsetTop + height;
-    stableViewportWidth = Math.max(1, Math.round(viewport?.width || window.innerWidth || 1));
+    const { visibleBottom, width } = viewportGeometry();
+    stableViewportBottom = visibleBottom;
+    stableViewportWidth = width;
     keyboardWasVisible = false;
   }
 
   function syncViewport() {
-    const viewport = window.visualViewport;
-    const height = Math.max(1, Math.round(viewport?.height || window.innerHeight || 1));
-    const offsetTop = Math.max(0, Math.round(viewport?.offsetTop || 0));
-    const width = Math.max(1, Math.round(viewport?.width || window.innerWidth || 1));
-    const visibleBottom = offsetTop + height;
+    const { height, offsetTop, width, visibleBottom } = viewportGeometry();
     const activeElement = document.activeElement;
     const focusedEditor = Boolean(
       activeSheet
@@ -81,6 +87,13 @@
     document.documentElement.style.setProperty("--tn-sheet-viewport-height", `${Math.round(height * 0.86)}px`);
     document.documentElement.style.setProperty("--tn-sheet-keyboard-offset", `${keyboardOffset}px`);
     if (focusedEditor) scheduleFieldVisibility(activeSheet, activeElement);
+  }
+
+  function stabilizeViewport() {
+    resetViewportBaseline();
+    syncViewport();
+    window.requestAnimationFrame(syncViewport);
+    window.setTimeout(syncViewport, 240);
   }
 
   function setNativeAccessoryBarVisible(sheet, isVisible) {
@@ -299,10 +312,15 @@
     }
     const previous = stateBySheet.get(sheet) || {};
     window.clearTimeout(previous.closeTimer);
+    window.clearTimeout(previous.inputReadyTimer);
     const returnFocus = options.returnFocus instanceof HTMLElement
       ? options.returnFocus
       : document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    stateBySheet.set(sheet, { ...previous, options, returnFocus, closeTimer: 0 });
+    sheet.dataset.tnSheetInputReady = "false";
+    const inputReadyTimer = window.setTimeout(() => {
+      if (activeSheet === sheet && !sheet.hidden) sheet.dataset.tnSheetInputReady = "true";
+    }, 220);
+    stateBySheet.set(sheet, { ...previous, options, returnFocus, closeTimer: 0, inputReadyTimer });
     resetViewportBaseline();
     sheet.hidden = false;
     sheet.setAttribute("aria-hidden", "false");
@@ -332,9 +350,11 @@
   }
 
   function finishClose(sheet, options, savedState) {
+    window.clearTimeout(savedState?.inputReadyTimer);
     sheet.hidden = true;
     sheet.setAttribute("aria-hidden", "true");
     delete sheet.dataset.tnSheetState;
+    delete sheet.dataset.tnSheetInputReady;
     if (!activeSheet) {
       unlockBackground();
       restoreSystemSurface(sheet);
@@ -407,8 +427,13 @@
   document.addEventListener("pointerup", (event) => finishDrag(event));
   document.addEventListener("pointercancel", (event) => finishDrag(event, true));
   window.addEventListener("resize", syncViewport, { passive: true });
+  window.addEventListener("pageshow", stabilizeViewport, { passive: true });
+  window.addEventListener("orientationchange", stabilizeViewport, { passive: true });
   window.visualViewport?.addEventListener("resize", syncViewport, { passive: true });
   window.visualViewport?.addEventListener("scroll", syncViewport, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") stabilizeViewport();
+  });
   resetViewportBaseline();
   syncViewport();
 

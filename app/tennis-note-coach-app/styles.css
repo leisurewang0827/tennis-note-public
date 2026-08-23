@@ -484,7 +484,7 @@ a {
 
 .coach-profile-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 14px;
   align-items: center;
   border: 1px solid var(--line);
@@ -494,7 +494,7 @@ a {
   background: white;
 }
 
-.coach-profile-card div:last-child {
+.coach-profile-copy {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -624,6 +624,10 @@ a {
 .coach-profile-form {
   display: grid;
   gap: 12px;
+}
+
+.coach-profile-form[hidden] {
+  display: none;
 }
 
 .profile-form-grid {
@@ -2442,6 +2446,24 @@ a {
   margin-bottom: 10px;
 }
 
+.member-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
+.member-search-row .member-search-box {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.member-search-clear {
+  min-width: 88px;
+  padding-inline: 10px;
+}
+
 .member-search-box span {
   color: var(--muted);
   font-size: 12px;
@@ -3737,9 +3759,29 @@ body.notice-open {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
 
-  .coach-profile-card,
   .profile-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .coach-profile-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .coach-profile-card .coach-profile-badge,
+  .coach-profile-card .person-avatar.large {
+    width: 54px;
+    height: 54px;
+  }
+
+  .coach-profile-card strong {
+    font-size: 17px;
+  }
+
+  .coach-profile-edit-toggle {
+    min-height: 40px;
+    padding-inline: 10px;
   }
 
   .coach-week-controls,
@@ -4337,6 +4379,55 @@ select {
   background: var(--soft-green);
 }
 
+.coach-feedback-list {
+  display: grid;
+  gap: 8px;
+}
+
+.coach-profile-edit-toggle {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.coach-profile-form-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.coach-feedback-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.75fr) minmax(110px, 0.5fr) minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 56px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--red);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: white;
+  text-align: left;
+}
+
+.coach-feedback-row time,
+.coach-feedback-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.coach-feedback-row b {
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: var(--red);
+  background: var(--soft-red);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 /* 코치 화면은 회원앱과 같은 밀도로 유지하되, 수업 처리 기능은 그대로 둡니다. */
 .brand-splash {
   position: fixed;
@@ -4694,12 +4785,12 @@ select {
 
   .coach-mobile-lane-board {
     display: grid;
-    grid-template-columns: 52px repeat(var(--coach-count, 2), minmax(88px, 1fr));
+    grid-template-columns: 48px repeat(var(--coach-count, 2), minmax(80px, 1fr));
     grid-template-rows: 42px auto;
     column-gap: 3px;
     row-gap: 3px;
     width: 100%;
-    min-width: calc(64px + var(--coach-count, 2) * 88px);
+    min-width: calc(60px + var(--coach-count, 2) * 80px);
     border: 1px solid var(--line);
     border-radius: 8px;
     padding: 5px;
@@ -4835,7 +4926,7 @@ select {
     z-index: 3;
     display: grid;
     width: auto;
-    grid-template-rows: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(3, minmax(0, 1fr));
     align-content: stretch;
     gap: 1px;
     overflow: hidden;
@@ -4871,6 +4962,21 @@ select {
   .coach-mobile-lesson.coach-color-kang { border-color: #abc8ff; background: #eaf2ff; box-shadow: inset 3px 0 0 #2b6cb0; }
   .coach-mobile-lesson.coach-color-hwang { border-color: #f4c06d; background: #fff4dc; box-shadow: inset 3px 0 0 #b7791f; }
   .coach-mobile-lesson.coach-color-park { border-color: #d6b2f4; background: #f6efff; box-shadow: inset 3px 0 0 #7c3aed; }
+
+  .coach-mobile-lesson.lesson-source:not(.released-makeup-slot) {
+    border-color: #cbd8e6;
+    background: #f7fbff;
+    box-shadow: inset 3px 0 0 var(--lesson-color, #2f6fc4);
+  }
+
+  .coach-mobile-lesson.record-complete:not(.released-makeup-slot) {
+    background: #f4fbf7;
+  }
+
+  .coach-mobile-lesson.record-problem:not(.released-makeup-slot),
+  .coach-mobile-lesson.record-approval:not(.released-makeup-slot) {
+    background: #fffaf2;
+  }
 
   .coach-mobile-break {
     display: flex;
@@ -5222,6 +5328,7 @@ body {
   }
 
   .coach-request-row,
+  .coach-feedback-row,
   .completed-record-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -5236,13 +5343,25 @@ body {
     grid-row: 1;
   }
 
+  .coach-feedback-row time {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
   .coach-request-row b {
     grid-column: 2;
     grid-row: 1;
   }
 
+  .coach-feedback-row b {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   .coach-request-row strong,
-  .coach-request-row span {
+  .coach-request-row span,
+  .coach-feedback-row strong,
+  .coach-feedback-row span {
     grid-column: 1 / -1;
   }
 
@@ -5250,7 +5369,15 @@ body {
     grid-row: 2;
   }
 
+  .coach-feedback-row strong {
+    grid-row: 2;
+  }
+
   .coach-request-row span {
+    grid-row: 3;
+  }
+
+  .coach-feedback-row span {
     grid-row: 3;
   }
 
@@ -5612,7 +5739,17 @@ body.modal-open {
 }
 
 .member-search-primary {
-  margin-bottom: 8px;
+  margin-bottom: 0;
+}
+
+@media (max-width: 420px) {
+  .member-search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .member-search-clear {
+    width: 100%;
+  }
 }
 
 .member-filter-primary {

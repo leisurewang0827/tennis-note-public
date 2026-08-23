@@ -82,6 +82,29 @@ const state = {
 
 let coachSchedulePreferenceTouched = false;
 
+function hasTrustedCoachSchedulePolicySnapshot() {
+  const snapshot = readAdminSnapshot();
+  const settings = snapshot?.scheduleSettings || {};
+  if (Number(settings.coachWorkPolicyVersion) < 2) return false;
+  const activeBranchId = String(state.coach?.branchId || "");
+  const snapshotBranchId = String(snapshot?.operationPolicyBranchId || "");
+  if (activeBranchId && snapshotBranchId !== activeBranchId) return false;
+  const coaches = Array.isArray(snapshot?.coaches) ? snapshot.coaches : [];
+  return Boolean(
+    (settings.openStart && settings.openEnd)
+    || coaches.some((coach) => Array.isArray(coach.workBlocks)),
+  );
+}
+
+function coachSchedulePolicyReady() {
+  const workspaceBranchId = String(scheduleV2CoachWorkspace()?.branchId || "");
+  const activeBranchId = String(state.coach?.branchId || "");
+  return Boolean(
+    (workspaceBranchId && (!activeBranchId || workspaceBranchId === activeBranchId))
+    || hasTrustedCoachSchedulePolicySnapshot(),
+  );
+}
+
 function coachEmptyState(options = {}) {
   return window.TennisNoteUiLanguage?.emptyState?.(options)
     || `<p class="empty-text">${escapeHtml(options.title || "표시할 내용이 없습니다.")}</p>`;
@@ -2637,7 +2660,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.394",
+    workerUrl: "./service-worker.js?v=1.0.395",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2668,7 +2691,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.394" });
+  const params = new URLSearchParams({ v: "1.0.395" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3856,6 +3879,9 @@ function coachLessonCardState(lesson = {}, now = new Date()) {
   const outcomes = finalParticipants.map((participant) => String(participant.outcome || "completed").toLowerCase());
   const deducted = Number(lesson.deductedSessions) > 0
     || finalParticipants.some((participant) => Number(participant.deductedSessions) > 0);
+  if (lesson.releasedMakeupSlot || lesson.releasedRegularSlot || status === "available") {
+    return { id: "released", label: "차감 없음 · 예약 가능", className: "record-neutral", needsFeedback: false };
+  }
   if (/pending_change|변경 요청/.test(status)) {
     return { id: "approval", label: "승인 대기", className: "record-approval", needsFeedback: false };
   }
@@ -4095,12 +4121,27 @@ function renderCoachProfile() {
   renderPersonAvatar($("#coachTopAvatar"), profilePerson, "small");
   if ($("#coachProfileName")) $("#coachProfileName").textContent = name;
   if ($("#coachProfileSummary")) $("#coachProfileSummary").textContent = profile.specialty;
-  if ($("#coachIntro")) $("#coachIntro").value = profile.intro || "";
-  if ($("#coachSpecialty")) $("#coachSpecialty").value = profile.specialty || "";
-  if ($("#coachLessonStyle")) $("#coachLessonStyle").value = profile.lessonStyle || "";
-  if ($("#coachAvailableMemo")) $("#coachAvailableMemo").value = profile.availableMemo || "";
-  if ($("#coachMemberMessage")) $("#coachMemberMessage").value = profile.memberMessage || "";
+  const form = $("#coachProfileFormCard");
+  if (!form || form.hidden) {
+    if ($("#coachIntro")) $("#coachIntro").value = profile.intro || "";
+    if ($("#coachSpecialty")) $("#coachSpecialty").value = profile.specialty || "";
+    if ($("#coachLessonStyle")) $("#coachLessonStyle").value = profile.lessonStyle || "";
+    if ($("#coachAvailableMemo")) $("#coachAvailableMemo").value = profile.availableMemo || "";
+    if ($("#coachMemberMessage")) $("#coachMemberMessage").value = profile.memberMessage || "";
+  }
   renderCoachSettlement();
+}
+
+function setCoachProfileEditOpen(open) {
+  const form = $("#coachProfileFormCard");
+  const toggle = $("#toggleCoachProfileEdit");
+  if (!form || !toggle) return;
+  const shouldOpen = Boolean(open);
+  if (shouldOpen && form.hidden) renderCoachProfile();
+  form.hidden = !shouldOpen;
+  toggle.setAttribute("aria-expanded", String(shouldOpen));
+  toggle.textContent = shouldOpen ? "수정 닫기" : "프로필 수정";
+  if (shouldOpen) window.setTimeout(() => $("#coachIntro")?.focus({ preventScroll: true }), 0);
 }
 
 function renderTodayLessons() {
@@ -4719,11 +4760,15 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
                 const memberLabel = formatScheduleMemberName(lesson.member || "회원");
                 const note = coachScheduleExceptionLabel(lesson);
                 const laneCoach = coachFromLesson(lesson, policy);
-                const roundOrState = lesson.releasedMakeupSlot ? "정규 · 불참" : coachScheduleRoundLabel(lesson);
+                const releasedLabel = lesson.historicalReleasedSlot ? "과거 빈자리" : "예약 가능한 빈자리";
+                const primaryLabel = lesson.releasedMakeupSlot ? releasedLabel : memberLabel;
+                const roundOrState = lesson.releasedMakeupSlot
+                  ? `${memberLabel} 불참으로 발생`
+                  : coachScheduleRoundLabel(lesson);
                 const cardNote = lesson.releasedMakeupSlot
-                  ? (lesson.historicalReleasedSlot ? "차감 없음" : "차감 없음 · 보강·원데이 가능")
-                  : (note || "-");
-                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${memberLabel}</strong><span>${escapeHtml(roundOrState)}</span><span>${escapeHtml(coachScheduleCardCoachLabel(lesson))}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote)}</small></button>`;
+                  ? (lesson.historicalReleasedSlot ? "차감 없음" : "보강·원데이 가능")
+                  : note;
+                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${escapeHtml(primaryLabel)}</strong><span>${escapeHtml(roundOrState)}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote || "-")}</small></button>`;
               }).join("")}
             </div>`;
         }).join("")}
@@ -4776,6 +4821,35 @@ function renderCoachMobileSchedule(policy, scheduleLessons) {
     </div>`;
 }
 
+function renderCoachFeedbackScheduleList(scheduleLessons = []) {
+  const items = [...scheduleLessons].sort((left, right) => {
+    const leftKey = `${coachRequestTimelineDate(left)} ${left.time || ""}`;
+    const rightKey = `${coachRequestTimelineDate(right)} ${right.time || ""}`;
+    return leftKey.localeCompare(rightKey, "ko");
+  });
+  if (!items.length) {
+    return `
+      <section class="tn-empty-state coach-feedback-empty" role="status">
+        <strong>작성할 피드백이 없습니다</strong>
+        <p>완료되지 않은 수업만 이 목록에 표시됩니다.</p>
+      </section>`;
+  }
+  return `
+    <section class="coach-feedback-list" aria-label="피드백 작성이 필요한 수업">
+      ${items.map((lesson) => {
+    const date = coachRequestTimelineDate(lesson);
+    const cardState = coachLessonCardState(lesson);
+    const round = coachScheduleRoundLabel(lesson);
+    return `<button class="coach-feedback-row" type="button" ${coachScheduleLessonActionAttrs(lesson)}>
+          <time>${escapeHtml(date || lesson.day || "날짜 확인")} · ${escapeHtml(lesson.time || "시간 확인")}</time>
+          <strong>${escapeHtml(lesson.member || "회원")}</strong>
+          <span>${escapeHtml(lesson.coach || "담당 코치")} · ${escapeHtml(round === "0/0회차" ? "회차 미연결" : round)}</span>
+          <b>${escapeHtml(cardState.label)}</b>
+        </button>`;
+  }).join("")}
+    </section>`;
+}
+
 function renderFullSchedule() {
   if (!$("#fullScheduleBoard")) return;
   if (state.scheduleV2SyncError && !state.scheduleV2WorkspaceLoaded) {
@@ -4793,18 +4867,30 @@ function renderFullSchedule() {
     });
     return;
   }
+  const scheduleFilter = state.scheduleFilter || "mine";
+  if (["mine", "all"].includes(scheduleFilter) && !coachSchedulePolicyReady()) {
+    $("#fullScheduleBoard").innerHTML = `
+      <section class="tn-empty-state coach-schedule-policy-loading" role="status" aria-live="polite">
+        <strong>코치 근무시간을 확인하고 있습니다</strong>
+        <p>확인되지 않은 기본 시간표는 표시하지 않습니다.</p>
+      </section>`;
+    return;
+  }
   ensureMemberLists();
   const policy = loadCoachSchedulePolicy();
   const weekIndex = activeWeekIndex();
   const week = activeScheduleWeek();
-  const scheduleFilter = state.scheduleFilter || "mine";
   const lessonsForWeek = filterFullScheduleLessons(weekLessons(), scheduleFilter);
   const scheduleContent = scheduleFilter === "makeupChange"
     ? renderCoachRequestTimeline(lessonsForWeek)
-    : renderCoachMobileSchedule(policy, lessonsForWeek);
+    : scheduleFilter === "feedback"
+      ? renderCoachFeedbackScheduleList(lessonsForWeek)
+      : renderCoachMobileSchedule(policy, lessonsForWeek);
   const scheduleGuide = scheduleFilter === "makeupChange"
     ? "승인할 요청, 시간을 정할 보강, 처리 완료 내역을 날짜·시간순으로 확인합니다."
-    : "요일을 고른 뒤 빈칸은 수업 등록, 수업 카드는 변경·완료·피드백 처리에 사용합니다.";
+    : scheduleFilter === "feedback"
+      ? "피드백을 작성해야 하는 내 수업만 날짜·시간순으로 표시합니다."
+      : "요일을 고른 뒤 빈칸은 수업 등록, 수업 카드는 변경·완료·피드백 처리에 사용합니다.";
   $("#fullScheduleBoard").innerHTML = `
     <div class="coach-week-calendar">
       <div class="coach-week-controls">
@@ -5112,13 +5198,15 @@ function renderMembers() {
   const page = normalizeMemberPage(items.length);
   const visible = items.slice(page * memberPageSize, page * memberPageSize + memberPageSize);
   if ($("#memberSearchInput") && $("#memberSearchInput").value !== state.memberQuery) $("#memberSearchInput").value = state.memberQuery || "";
+  if ($("#memberSearchClearButton")) $("#memberSearchClearButton").hidden = !query;
   if ($("#memberTicketFilter")) $("#memberTicketFilter").value = ticketFilter;
   $$(".member-filter").forEach((button) => button.classList.toggle("is-active", button.dataset.memberFilter === filter));
   const advancedControls = $("#memberAdvancedControls");
   if (advancedControls) advancedControls.open = ["expiring", "paused_pending", "expired"].includes(filter);
   if ($("#memberFilterSummary")) {
     const filterLabel = { all: "내 담당 전체", active: "수강중", attention: "확인 필요", expiring: "만료 임박", paused_pending: "휴회·대기", expired: "만료" }[filter];
-    $("#memberFilterSummary").textContent = `${filterLabel} ${items.length}/${allItems.length}명 · ${page + 1}페이지`;
+    const queryLabel = query ? ` · 검색 “${state.memberQuery.trim()}” 적용 중` : "";
+    $("#memberFilterSummary").textContent = `${filterLabel} ${items.length}/${allItems.length}명 · ${page + 1}페이지${queryLabel}`;
   }
   const rows = visible
     .map((member) => (filter === "expired" ? renderExpiredMemberCard(member) : renderActiveMemberCard(member)))
@@ -5480,6 +5568,8 @@ function selectCoachMode(name) {
   renderCoachModeList();
   renderCoachProfile();
   saveSnapshot();
+  setCoachProfileEditOpen(false);
+  showToast("이 기기에 코치 프로필을 저장했습니다.");
 }
 
 function saveCoachProfile() {
@@ -7733,6 +7823,9 @@ function bindEvents() {
   $("#noticeHideToday")?.addEventListener("click", () => closeNotice(true));
   $("#noticeAction")?.addEventListener("click", () => closeNotice(false));
   $("#saveCoachProfile")?.addEventListener("click", saveCoachProfile);
+  $("#toggleCoachProfileEdit")?.addEventListener("click", () => {
+    setCoachProfileEditOpen($("#coachProfileFormCard")?.hidden !== false);
+  });
   $("#refreshCoachSettlement")?.addEventListener("click", () => void syncCoachSettlementFromServer());
   $("#coachPushNotificationButton")?.addEventListener("click", () => void toggleNativeCoachPush());
   $("#enableCoachPushFromPrimer")?.addEventListener("click", () => void enableNativeCoachPush());
@@ -8053,9 +8146,23 @@ function bindEvents() {
     const memberFilterButton = event.target.closest("[data-member-filter]");
     if (memberFilterButton) {
       state.memberFilter = memberFilterButton.dataset.memberFilter;
+      if (state.memberFilter === "all") {
+        state.memberQuery = "";
+        state.memberTicketFilter = "all";
+      }
       state.memberPage = 0;
       renderMembers();
       saveSnapshot();
+      return;
+    }
+
+    const clearMemberSearchButton = event.target.closest("[data-clear-member-search]");
+    if (clearMemberSearchButton) {
+      state.memberQuery = "";
+      state.memberPage = 0;
+      renderMembers();
+      saveSnapshot();
+      $("#memberSearchInput")?.focus({ preventScroll: true });
       return;
     }
 
@@ -8454,7 +8561,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.394",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.395",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

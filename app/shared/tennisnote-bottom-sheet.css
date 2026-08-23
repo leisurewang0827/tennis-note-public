@@ -26,6 +26,15 @@ html.tn-sheet-system-surface-active body {
   touch-action: pan-y;
 }
 
+[data-tn-bottom-sheet][data-tn-sheet-input-ready="false"]::after {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  content: "";
+  background: transparent;
+  touch-action: none;
+}
+
 [data-tn-sheet-backdrop] {
   position: absolute;
   inset: 0;

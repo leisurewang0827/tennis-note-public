@@ -9606,6 +9606,8 @@ function renderAuthProviderManagement(entity = {}, compact = false) {
   const currentProvider = providers[0] || "";
   const request = pendingAuthSwitch(entity);
   const canManage = Boolean(userId) && operationsRole() === "admin";
+  const hasVerifiedPhone = normalizedMemberPhone(entity.phone).length >= 10;
+  const canPrepareSwitch = canManage && hasVerifiedPhone;
   const availableTargets = authProviderChoices.filter((item) => item.value !== currentProvider);
   const chips = currentProvider
     ? `<span class="auth-provider-chip">${escapeHtml(authProviderLabel(currentProvider) || currentProvider)}</span>`
@@ -9641,20 +9643,22 @@ function renderAuthProviderManagement(entity = {}, compact = false) {
         <div class="auth-switch-form">
           <label>
             <span>현재</span>
-            <select data-auth-switch-from="${escapeHtml(userId)}" ${canManage ? "" : "disabled"}>
+            <select data-auth-switch-from="${escapeHtml(userId)}" ${canPrepareSwitch ? "" : "disabled"}>
               <option value="${escapeHtml(currentProvider)}" selected>${escapeHtml(authProviderLabel(currentProvider) || currentProvider)}</option>
             </select>
           </label>
           <span class="auth-switch-arrow">→</span>
           <label>
             <span>변경</span>
-            <select data-auth-switch-target="${escapeHtml(userId)}" ${canManage ? "" : "disabled"}>
+            <select data-auth-switch-target="${escapeHtml(userId)}" ${canPrepareSwitch ? "" : "disabled"}>
               ${availableTargets.map((item) => `<option value="${item.value}">${item.label}</option>`).join("")}
             </select>
           </label>
-          <button class="small-button" type="button" data-prepare-auth-switch="${escapeHtml(userId)}" ${canManage ? "" : "disabled"}>변경 준비</button>
+          <button class="small-button" type="button" data-prepare-auth-switch="${escapeHtml(userId)}" ${canPrepareSwitch ? "" : "disabled"}>변경 준비</button>
         </div>
-        <small>한 회원은 로그인 수단 하나만 사용합니다. 새 수단 로그인 성공 전까지 현재 로그인은 유지됩니다.</small>` : `<small>${currentProvider ? "현재 로그인 수단 하나만 사용 중입니다." : "첫 로그인 연결 후 수단 변경이 가능합니다."}</small>`}
+        <small>${hasVerifiedPhone
+          ? "한 회원은 로그인 수단 하나만 사용합니다. 새 수단 로그인 성공 전까지 현재 로그인은 유지됩니다."
+          : "휴대전화가 없어 자동 변경을 준비할 수 없습니다. 회원이 본인 네이버로 한 번 로그인한 뒤 아래 가입 계정 직접 교체를 사용해 주세요."}</small>` : `<small>${currentProvider ? "현재 로그인 수단 하나만 사용 중입니다." : "첫 로그인 연결 후 수단 변경이 가능합니다."}</small>`}
     </div>`;
 }
 
@@ -9682,13 +9686,13 @@ function memberAuthStatusMarkup(member = {}) {
   const detail = connection.linked
     ? `${connection.detail}${member.authLastSignInAt ? ` · 최근 로그인 ${notificationDateTimeLabel(member.authLastSignInAt)}` : ""}`
     : "회원이 앱에서 로그인하면 자동으로 연결 상태가 표시됩니다.";
-  if (!connection.linked && operationsRole() === "admin" && member.id) {
+  if (operationsRole() === "admin" && member.id) {
     return `<button class="member-auth-link-action" type="button"
       data-open-member-management="app_link"
       data-member-management-member-id="${member.id}"
       title="${escapeHtml(detail)}">
-        <span class="member-auth-status is-unlinked">${escapeHtml(label)}</span>
-        <small>앱 연결</small>
+        <span class="member-auth-status ${connection.linked ? "is-linked" : "is-unlinked"}">${escapeHtml(label)}</span>
+        <small>${connection.linked ? "로그인 변경" : "앱 연결"}</small>
       </button>`;
   }
   return `<span class="member-auth-status ${connection.linked ? "is-linked" : "is-unlinked"}" title="${escapeHtml(detail)}">${escapeHtml(label)}</span>`;
@@ -10751,7 +10755,7 @@ function memberManagementActionLabel(action) {
     create: "회원 수동 추가",
     assign: "회원권 등록",
     profile: "기본정보 수정",
-    app_link: "앱 계정 연결",
+    app_link: "앱 로그인 관리",
     link_existing: "기존 수강 DB 연결",
     extend: "회원권 기간 연장",
     correct: "회원권 숫자·기간 수정",
@@ -11256,6 +11260,44 @@ function memberMembershipTargetLabel(candidate = {}) {
   return `${candidate.name || "회원"}${phoneLast4 ? ` · ${phoneLast4}` : ""} · ${ticketLabel}${candidate.recommended ? " · 추천" : ""}`;
 }
 
+async function refreshMemberAuthManagement(member) {
+  const client = window.TennisNoteDataClient;
+  const userIds = memberServerUserIds(member);
+  if (!member?.serverUserId || !userIds.length || !client?.selectRows || operationsRole() !== "admin") return false;
+  try {
+    const [links, switches] = await Promise.all([
+      client.selectRows("tn_user_auth_links", {
+        select: "id,user_id,provider,last_sign_in_at,is_primary",
+        filters: { user_id: { in: userIds } },
+        order: "is_primary.desc,linked_at.desc",
+        limit: 20,
+      }),
+      client.selectRows("tn_auth_provider_switches", {
+        select: "id,user_id,from_provider,to_provider,status,expires_at,created_at,completed_at",
+        filters: { user_id: { in: userIds } },
+        order: "created_at.desc",
+        limit: 20,
+      }),
+    ]);
+    member.authLinks = Array.isArray(links) ? links : [];
+    member.authProviders = authProvidersFromLinks(member.authLinks);
+    member.authSwitch = (Array.isArray(switches) ? switches : [])
+      .find((request) => pendingAuthSwitch({ authSwitch: request })) || null;
+    member.authLinked = Boolean(member.authLinked || member.authLinks.length);
+    member.authLastSignInAt = member.authLinks
+      .map((link) => link.last_sign_in_at)
+      .filter(Boolean)
+      .sort()
+      .at(-1) || "";
+    member.authManagementLoadFailed = false;
+    return true;
+  } catch (error) {
+    console.warn("[Tennis Note] member auth management unavailable", error);
+    member.authManagementLoadFailed = true;
+    return false;
+  }
+}
+
 async function loadMemberLinkCandidates(member, query = memberManagementModalState.linkQuery || "") {
   if (!member?.serverUserId || operationsRole() !== "admin") return;
   const inputGuardWasDirty = Boolean(
@@ -11479,7 +11521,7 @@ function renderMemberManagementModal() {
   const submitLabel = action === "profile"
     ? "기본정보 저장"
     : action === "app_link"
-      ? "앱 계정 연결"
+      ? (memberAuthConnection(member).linked ? "선택 계정으로 교체" : "앱 계정 연결")
       : `${memberManagementActionLabel(action)} 확정`;
   let actionFields = "";
 
@@ -11510,6 +11552,11 @@ function renderMemberManagementModal() {
       </div>`;
   } else if (action === "app_link") {
     const connection = memberAuthConnection(member);
+    const directReplacementRequired = connection.linked && (
+      !connection.providers.length
+      || normalizedMemberPhone(member.phone).length < 10
+      || member.authManagementLoadFailed
+    );
     const candidates = memberManagementModalState.linkCandidates || [];
     const recommended = candidates.find((candidate) => candidate.recommended)?.userId || "";
     const linkQuery = memberManagementModalState.linkQuery || "";
@@ -11531,9 +11578,23 @@ function renderMemberManagementModal() {
           </div></label>
           ${candidateControl}
         </div>`;
+    const providerSwitchControl = connection.linked ? `
+      <section class="member-link-control span-2" aria-label="로그인 수단 변경">
+        <div class="member-link-status is-linked">
+          <strong>로그인 수단 변경</strong>
+          <span>회원권·수업·결제 기록은 그대로 두고 새 로그인만 교체합니다.</span>
+        </div>
+        ${member.authManagementLoadFailed ? '<p class="form-message danger">로그인 연결 정보를 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.</p>' : ""}
+        ${renderAuthProviderManagement(member)}
+      </section>` : "";
+    const directReplacementControl = connection.linked ? `
+      <details class="member-admin-more member-technical-details span-2" ${directReplacementRequired ? "open" : ""}>
+        <summary>가입 계정 직접 교체 (예외 처리)</summary>
+        ${linkControl}
+      </details>` : linkControl;
     actionFields = `
-      <div class="member-management-form-grid">${existingConnectionNotice}${linkControl}</div>
-      <p class="member-management-rule">같은 이름만으로는 자동 연결하지 않습니다. 전화번호가 같은 한 명만 추천하며, 한 회원은 확인된 로그인 수단 하나만 사용합니다.</p>`;
+      <div class="member-management-form-grid">${existingConnectionNotice}${providerSwitchControl}${directReplacementControl}</div>
+      <p class="member-management-rule">새 로그인 성공 전까지 현재 연결은 유지됩니다. 같은 이름만으로 자동 연결하지 않으며, 전화번호가 일치하는 한 명만 전환할 수 있습니다.</p>`;
   } else if (isCreate) {
     actionFields = products.length && coachRoles.length ? `
       <ol class="member-create-steps" aria-label="회원 추가 단계">
@@ -11703,6 +11764,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
     showToast("회원 또는 회원권 상태가 변경됐습니다. 회원 목록에서 다시 확인해 주세요.");
     return;
   }
+  if (action === "app_link") await refreshMemberAuthManagement(refreshedMember);
   Object.assign(memberManagementModalState, {
     memberId: refreshedMember.id,
     action,
@@ -11785,6 +11847,20 @@ function closeMemberManagementModal() {
   });
   const target = $("#memberManagementModalContent");
   if (target) target.innerHTML = "";
+}
+
+function memberManagementTicketPeriodReview(product, startsOn = "", expiresOn = "") {
+  const expectedDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
+  const start = new Date(`${memberManagementDate(startsOn)}T00:00:00`);
+  const end = new Date(`${memberManagementDate(expiresOn)}T00:00:00`);
+  const actualDays = Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start
+    ? 0
+    : Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  return {
+    expectedDays,
+    actualDays,
+    isShorter: Boolean(actualDays && actualDays < expectedDays),
+  };
 }
 
 function applyMemberManagementProductDefaults(form) {
@@ -14677,6 +14753,9 @@ async function submitMemberInlineEditor(form, options = {}) {
     message.classList.add("is-error");
     return false;
   }
+  const ticketPeriodReview = selectedProduct
+    ? memberManagementTicketPeriodReview(selectedProduct, form.elements.startsOn?.value, form.elements.expiresOn?.value)
+    : null;
   if (Number(selectedProduct?.group_size || 1) === 2 && !form.elements.partnerUserId?.value) {
     message.textContent = "2대1 회원권은 파트너를 선택해 주세요.";
     message.classList.add("is-error");
@@ -14802,7 +14881,10 @@ async function submitMemberInlineEditor(form, options = {}) {
   }
   if (!options.skipConfirmation) {
     const scopeText = payload.applyToFutureSchedule ? "미래 정규시간 다시 만들기" : "회원권만 저장 · 기존 시간표 유지";
-    if (!window.confirm(`${memberInlineChangeSummary(form)}\n적용 범위: ${scopeText}\n서버에 저장할까요?`)) return false;
+    const periodWarning = ticketPeriodReview?.isShorter
+      ? `\n주의: 입력한 이용기간 ${ticketPeriodReview.actualDays}일이 상품 기본 ${ticketPeriodReview.expectedDays}일보다 짧습니다. 의도한 단축 등록인지 확인해 주세요.`
+      : "";
+    if (!window.confirm(`${memberInlineChangeSummary(form)}\n적용 범위: ${scopeText}${periodWarning}\n서버에 저장할까요?`)) return false;
   }
   submit.disabled = true;
   submit.textContent = "저장 중";

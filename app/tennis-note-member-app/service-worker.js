@@ -1,10 +1,10 @@
-const CACHE_NAME = "tennis-note-member-pwa-v442";
+const CACHE_NAME = "tennis-note-member-pwa-v443";
 const CACHE_PREFIX = "tennis-note-member-pwa-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.394",
-  "./app.js?v=1.0.394",
+  "./styles.css?v=1.0.395",
+  "./app.js?v=1.0.395",
   "./manifest.webmanifest",
   "./assets/brand/app-icon-180.png",
   "./assets/brand/app-icon-192.png",
@@ -12,23 +12,23 @@ const APP_SHELL = [
   "./assets/brand/launch-splash.png",
   "./assets/brand/tennis-note-share-1.0.152.png",
   "../release.json",
-  "../shared/tennisnote-data-client.js?v=1.0.394",
-  "../shared/tennisnote-schedule-revision.js?v=1.0.394",
-  "../shared/tennisnote-schedule-lanes.js?v=1.0.394",
+  "../shared/tennisnote-data-client.js?v=1.0.395",
+  "../shared/tennisnote-schedule-revision.js?v=1.0.395",
+  "../shared/tennisnote-schedule-lanes.js?v=1.0.395",
   "../shared/tennisnote-product-catalog.js?v=policy-catalog-2",
   "../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3",
   "../shared/tennisnote-native-push.js",
-  "../shared/tennisnote-release.js?v=1.0.394",
-  "../shared/tennisnote-release-updater.js?v=1.0.394",
-  "../shared/tennisnote-issue-reporter.js?v=issue-reporter-3",
-  "../shared/tennisnote-issue-reporter.css?v=issue-reporter-3",
-  "../shared/tennisnote-ui-language.js?v=1.0.394",
-  "../shared/tennisnote-ticket-state.js?v=1.0.394",
-  "../shared/tennisnote-mode-transition.js?v=1.0.394",
-  "../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-1",
-  "../shared/tennisnote-input-guard.js?v=1.0.394",
-  "../shared/tennisnote-ui-foundation.css?v=1.0.394",
-  "../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-1",
+  "../shared/tennisnote-release.js?v=1.0.395",
+  "../shared/tennisnote-release-updater.js?v=1.0.395",
+  "../shared/tennisnote-issue-reporter.js?v=issue-reporter-4",
+  "../shared/tennisnote-issue-reporter.css?v=issue-reporter-4",
+  "../shared/tennisnote-ui-language.js?v=1.0.395",
+  "../shared/tennisnote-ticket-state.js?v=1.0.395",
+  "../shared/tennisnote-mode-transition.js?v=1.0.395",
+  "../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-2",
+  "../shared/tennisnote-input-guard.js?v=1.0.395",
+  "../shared/tennisnote-ui-foundation.css?v=1.0.395",
+  "../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-2",
 ];
 
 function deleteOldCaches() {
@@ -69,21 +69,24 @@ self.addEventListener("fetch", (event) => {
   // removes only obsolete app caches without touching login or local data.
   if (event.request.mode === "navigate") event.waitUntil(deleteOldCaches());
 
+  const isReleaseManifest = url.pathname.endsWith("/release.json");
+  const cacheKey = isReleaseManifest ? `${url.origin}${url.pathname}` : event.request;
   const networkFirst = event.request.mode === "navigate"
     || ["document", "script", "style", "manifest", "worker"].includes(event.request.destination)
-    || url.pathname.endsWith("/config.local.js");
+    || url.pathname.endsWith("/config.local.js")
+    || isReleaseManifest;
 
   event.respondWith(
     fetch(event.request, networkFirst ? { cache: "no-store" } : undefined)
       .then((response) => {
         if (response.ok) {
           const copy = response.clone();
-          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)));
+          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(cacheKey, copy)).catch(() => undefined));
         }
         return response;
       })
       .catch(async () => {
-        const cached = await caches.open(CACHE_NAME).then((cache) => cache.match(event.request));
+        const cached = await caches.open(CACHE_NAME).then((cache) => cache.match(cacheKey, isReleaseManifest ? { ignoreSearch: true } : undefined));
         if (cached) return cached;
         if (event.request.mode === "navigate") return caches.match("./index.html");
         return Response.error();
