@@ -63,6 +63,16 @@ coach_worker = (
 assert re.search(r"tennis-note-member-pwa-v\d+", member_worker)
 assert re.search(r"tennis-note-coach-mode-v\d+", coach_worker)
 
+for worker_path in (
+    ROOT / "dist" / "member" / "_worker.js",
+    ROOT / "dist" / "admin" / "_worker.js",
+):
+    worker = worker_path.read_text(encoding="utf-8")
+    assert "native-store-managed" not in worker
+    assert 'url.pathname === "/release.json"' not in worker
+    assert "env.ASSETS.fetch(request)" in worker
+    assert 'headers.set("Access-Control-Allow-Origin", "*")' in worker
+
 for config in (
     ROOT / "dist" / "member" / "shared" / "config.local.js",
     ROOT / "dist" / "admin" / "shared" / "config.local.js",
