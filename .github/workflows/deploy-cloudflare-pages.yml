@@ -1,62 +1,47 @@
-name: Deploy Tennis Note short URLs
+name: Deploy Tennis Note isolated QA PWA
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-pages
+  group: cloudflare-pages-isolated-qa
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  build-and-deploy-qa:
     runs-on: ubuntu-latest
     env:
-      TENNISNOTE_SUPABASE_URL: ${{ secrets.TENNISNOTE_SUPABASE_URL }}
-      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
-      TENNISNOTE_PORTONE_STORE_ID: ${{ secrets.TENNISNOTE_PORTONE_STORE_ID }}
-      TENNISNOTE_PORTONE_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_CHANNEL_KEY }}
-      TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY }}
-      TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CHANNEL_KEY }}
-      TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_TYPE }}
-      TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID: ${{ secrets.TENNISNOTE_PORTONE_NAVERPAY_CATEGORY_ID }}
-      TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY: ${{ secrets.TENNISNOTE_PORTONE_KAKAOPAY_CHANNEL_KEY }}
+      TENNISNOTE_SUPABASE_URL: https://kyfvohaodavyudzdszue.supabase.co
+      TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_pe7H7ghX0T_3EZDzLm_S5A_4qo8I51o
+      TENNISNOTE_PORTONE_STORE_ID: qa-disabled-no-charge
       TENNISNOTE_PAYMENT_MODE: multi
-      TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay
-      TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
+      TENNISNOTE_ALLOWED_PAYMENT_METHODS: card
+      TENNISNOTE_BANK_TRANSFER_ENABLED: "false"
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Build isolated member and admin sites
+      - name: Build isolated member and coach PWA
+        run: python scripts/build_cloudflare_pages.py --target member --output dist/member
+
+      - name: Verify QA configuration and payment lock
         run: |
-          python scripts/build_cloudflare_pages.py --target member --output dist/member
-          python scripts/build_cloudflare_pages.py --target admin --output dist/admin
+          grep -F 'https://kyfvohaodavyudzdszue.supabase.co' dist/member/shared/config.local.js
+          grep -F 'qa-disabled-no-charge' dist/member/shared/config.local.js
+          if grep -Eq 'ch_[A-Za-z0-9_-]+' dist/member/shared/config.local.js; then
+            echo 'Unexpected live payment channel in QA bundle' >&2
+            exit 1
+          fi
 
-      - name: Deploy member PWA
-        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+      - name: Deploy isolated QA preview
         uses: cloudflare/wrangler-action@v4
         with:
           wranglerVersion: "3.90.0"
           apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist/member --project-name=tennisnote-app --branch=main
-
-      - name: Deploy administrator web
-        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        uses: cloudflare/wrangler-action@v4
-        with:
-          wranglerVersion: "3.90.0"
-          apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist/admin --project-name=tennisnote-admin --branch=main
-
-      - name: Explain skipped short URL deployment
-        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
-        run: echo "Cloudflare credentials are not configured yet. Existing GitHub Pages deployment remains active."
+          command: pages deploy dist/member --project-name=tennisnote-app --branch=qa-isolated
