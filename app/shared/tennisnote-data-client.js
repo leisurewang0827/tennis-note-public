@@ -573,16 +573,60 @@
     return refreshSession();
   }
 
+  function oauthCallbackFailure(params) {
+    const error = params?.get?.("error") || "";
+    const code = params?.get?.("error_code") || error || "oauth_redirect_failed";
+    const description = params?.get?.("error_description") || "";
+    return { error, code, description };
+  }
+
+  function oauthCallbackWasAlreadyConsumed(failure = {}) {
+    return failure.code === "flow_state_already_used"
+      || /state\s+has\s+already\s+been\s+used/iu.test(failure.description || "");
+  }
+
+  function oauthReplaySessionMatchesAttempt(session) {
+    const attemptedProvider = storedProvider();
+    const sessionProvider = session?.provider || "";
+    return Boolean(
+      attemptedProvider
+      && sessionProvider
+      && providerKey(attemptedProvider) === providerKey(sessionProvider),
+    );
+  }
+
+  function clearOAuthCallbackLocation() {
+    const url = new URL(window.location.href);
+    ["code", "error", "error_code", "error_description"].forEach((key) => url.searchParams.delete(key));
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function oauthCallbackError(failure = {}) {
+    return Object.assign(new Error(failure.error || "oauth_redirect_failed"), {
+      code: failure.code || failure.error || "oauth_redirect_failed",
+      description: failure.description || "",
+    });
+  }
+
   async function consumeOAuthRedirect() {
     const query = new URLSearchParams(window.location.search || "");
     if (query.get("error")) {
-      const error = new Error(query.get("error") || "oauth_redirect_failed");
+      const failure = oauthCallbackFailure(query);
+      const session = getSession();
+      clearOAuthCallbackLocation();
+      if (
+        session?.access_token
+        && oauthReplaySessionMatchesAttempt(session)
+        && oauthCallbackWasAlreadyConsumed(failure)
+      ) return session;
+      clearOAuthStorageValue();
+      const error = oauthCallbackError(failure);
       emitClientError("oauth_callback", error);
       throw error;
     }
     if (query.get("code")) {
       const session = await exchangeOAuthCode(query.get("code"));
-      window.history.replaceState({}, document.title, `${window.location.pathname}`);
+      clearOAuthCallbackLocation();
       return session;
     }
     if (!window.location.hash || !window.location.hash.includes("access_token=")) return getSession();
@@ -720,18 +764,32 @@
     const provider = nativeOAuthInFlightProvider || storedProvider() || "간편";
     try {
       const parsed = new URL(url);
-      const error = parsed.searchParams.get("error");
-      if (error) {
+      const failure = oauthCallbackFailure(parsed.searchParams);
+      if (failure.error) {
+        const existingSession = getSession();
+        if (
+          existingSession?.access_token
+          && oauthReplaySessionMatchesAttempt(existingSession)
+          && oauthCallbackWasAlreadyConsumed(failure)
+        ) {
+          nativeOAuthInFlightProvider = "";
+          await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+          emitOAuthResult({ ok: true, provider, replayed: true });
+          return true;
+        }
         clearOAuthStorageValue();
         nativeOAuthInFlightProvider = "";
         await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+        const callbackError = oauthCallbackError(failure);
+        const normalizedError = failure.error.toLowerCase();
         emitOAuthResult({
           ok: false,
           provider,
-          cancelled: ["access_denied", "user_cancelled", "canceled", "cancelled"].includes(error.toLowerCase()),
+          cancelled: ["access_denied", "user_cancelled", "canceled", "cancelled"].includes(normalizedError),
+          errorCode: callbackError.code,
         });
-        if (!["access_denied", "user_cancelled", "canceled", "cancelled"].includes(error.toLowerCase())) {
-          emitClientError("native_oauth_callback", new Error(error), { provider });
+        if (!["access_denied", "user_cancelled", "canceled", "cancelled"].includes(normalizedError)) {
+          emitClientError("native_oauth_callback", callbackError, { provider });
         }
         return true;
       }
