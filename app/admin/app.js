@@ -1947,6 +1947,10 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
     jobs.push(loadAdminMemberDirectoryPage());
   }
 
+  if (view === "billing") {
+    jobs.push(loadAdminDataOnce("settlement-support", loadAdminSettlementSupportData));
+  }
+
   if (view === "settings") {
     if (settingsTab === "live") {
       const branchKey = activeOperationBranchId() || "unselected";
@@ -7484,7 +7488,7 @@ function getLessonConflict(candidate) {
   }
   const replacementTicket = !state.editingLessonId
     && normalizeLessonSource(candidate.lessonSource) === "regular"
-    ? tickets.find((ticket) => String(ticket.id) === String(candidate.ticketId) && ticket.productKind === "regular")
+    ? scheduleTicketById(candidate.ticketId)
     : null;
   const allOverlappingBooked = getOverlappingBookedLessons(candidate.day, candidate.time, candidate.durationMinutes)
     .filter((lesson) => (
@@ -8229,6 +8233,42 @@ function isCurrentMemberTicket(ticket, today = adminLocalDateKey(new Date())) {
   return !ticket.expires || ticket.expires >= today;
 }
 
+function ticketScheduleStartDate(ticket, fallback = adminLocalDateKey(new Date())) {
+  return String(ticket?.actualLessonStart || ticket?.starts || ticket?.purchased || fallback).slice(0, 10);
+}
+
+function ticketScheduleEndDate(ticket) {
+  return String(ticket?.expires || "9999-12-31").slice(0, 10);
+}
+
+function isSchedulableRegularTicket(ticket, today = adminLocalDateKey(new Date())) {
+  if (!ticket || !["active", "paused"].includes(String(ticket.status || "active"))) return false;
+  if (Number(ticket.remaining) <= 0 || ticketScheduleEndDate(ticket) < today) return false;
+  const productKind = ticket.productKind || membershipProductForTicket(ticket).productKind;
+  return !["pass", "coupon"].includes(String(productKind).toLowerCase())
+    && !String(ticket.product || "").includes("쿠폰");
+}
+
+function firstEligibleScheduleDateForTicket(ticket, day, requestedDate = "") {
+  if (!ticket || !scheduleDays.includes(day) || !ticketAllowsScheduleDay(ticket, day)) return "";
+  const today = adminLocalDateKey(new Date());
+  const baseDate = [requestedDate, ticketScheduleStartDate(ticket), today]
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  const targetDay = ({ 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 })[day];
+  const candidate = new Date(`${baseDate}T12:00:00`);
+  if (!Number.isFinite(candidate.getTime())) return "";
+  candidate.setDate(candidate.getDate() + ((targetDay - candidate.getDay() + 7) % 7));
+  const candidateDate = adminLocalDateKey(candidate);
+  return candidateDate <= ticketScheduleEndDate(ticket) ? candidateDate : "";
+}
+
+function ticketCanBeScheduledOnOrAfterDate(ticket, day, requestedDate = "") {
+  return isSchedulableRegularTicket(ticket)
+    && Boolean(firstEligibleScheduleDateForTicket(ticket, day, requestedDate));
+}
+
 async function saveGroupDeductionPolicy(productId, control) {
   const product = membershipProductDrafts.find((item) => String(item.id) === String(productId));
   const serverProduct = serverMembershipProductForDraft(product);
@@ -8308,9 +8348,14 @@ function ticketNeedsRegularSchedule(ticket, today = adminLocalDateKey(new Date()
 }
 
 function unassignedRegularTickets() {
-  const regularTickets = operationBranchTickets().filter((ticket) => isRegularScheduleTicket(ticket));
+  const ticketById = new Map();
+  [...operationBranchTickets(), ...operationBranchTickets(expiredTickets)].forEach((ticket) => {
+    const ticketId = String(ticket?.id || ticket?.serverTicketId || "");
+    if (ticketId && !ticketById.has(ticketId)) ticketById.set(ticketId, ticket);
+  });
+  const regularTickets = [...ticketById.values()].filter((ticket) => isSchedulableRegularTicket(ticket));
   const candidates = regularTickets
-    .filter((ticket) => ticketNeedsRegularSchedule(ticket))
+    .filter((ticket) => ticketRemainingRegularScheduleCount(ticket) > 0)
     .sort((left, right) => ticketParticipantNames(right).length - ticketParticipantNames(left).length);
   const selected = [];
 
@@ -8426,10 +8471,21 @@ function beginScheduleTicketAssignment(ticketId, lessonSource = "regular") {
   state.scheduleAssignmentLessonSource = normalizeLessonSource(lessonSource);
   state.scheduleView = "week";
   state.scheduleCoachFilter = "all";
+  const focusDate = [ticketScheduleStartDate(ticket), adminLocalDateKey(new Date())].sort().at(-1);
   state.scheduleOpenSlotMode = false;
   state.selectedScheduleOpenSlots = [];
   state.scheduleOpenSlotAnchorKey = "";
   setView("schedule");
+  state.activeAdminWeekIndex = Math.min(
+    Math.max(adminWeekOffsetForDate(focusDate), adminScheduleMinWeekOffset),
+    adminScheduleMaxWeekOffset,
+  );
+  const focusDay = scheduleDays[(new Date(`${focusDate}T12:00:00`).getDay() + 6) % 7];
+  if (focusDay) state.selectedScheduleDay = focusDay;
+  syncAdminScheduleWeek();
+  renderSchedule();
+  saveSnapshot();
+  void ensureActiveAdminWeekLoaded();
   showToast(`${ticketParticipantNames(ticket).join(" & ") || ticket.member} 회원의 빈 시간을 선택하세요.`);
   return true;
 }
@@ -10768,6 +10824,12 @@ function renderMemberManagementControls(member) {
   const hasClosableTickets = managedTickets.some((ticket) => (
     ["active", "paused", "pending_payment"].includes(ticket.status)
   ));
+  const hasCurrentOrUpcomingTicket = managedTickets.some((ticket) => (
+    ["current", "paused", "upcoming", "pending_payment"].includes(window.TennisNoteTicketState?.derive(ticket) || ticket.status)
+  ));
+  const assignTicketLabel = unlinkedPayment
+    ? "결제 연결·회원권 발급"
+    : hasCurrentOrUpcomingTicket ? "다른 회원권 추가" : "새 회원권 등록";
 
   const ticketRow = (ticket) => {
     const actions = [];
@@ -10831,7 +10893,7 @@ function renderMemberManagementControls(member) {
       </div>
       ${operationsRole() === "admin"
         ? `<div class="member-management-actions member-ticket-management-footer">
-            <button class="primary-button member-ticket-assign-button" type="button" data-open-member-management="assign">${unlinkedPayment ? "결제 연결·회원권 발급" : "판매중 회원권 등록"}</button>
+            <button class="primary-button member-ticket-assign-button" type="button" data-open-member-management="assign">${assignTicketLabel}</button>
             ${hasClosableTickets ? '<button class="danger-button" type="button" data-open-member-management="close">회원권·미래수업 종료</button>' : ""}
           </div>`
         : ""}
@@ -11708,7 +11770,9 @@ function renderMemberManagementModal() {
         </select></label>
       </div>
       ${memberManagementDatabaseFields({ member, ticket: null, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: unlinkedPayment, isAssign: true })}
-      <p class="member-management-rule">판매 중인 상품을 선택하면 기간과 회차가 자동 입력됩니다. 저장 후 시간표에서 정규 수업을 등록합니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
+      <input name="createWithoutSchedule" type="hidden" value="${memberManagementProductSupportsRegularSchedule(product) ? "false" : "true"}" />
+      ${memberCreateScheduleMarkup(product)}
+      <p class="member-management-rule">주 2회·주 3회는 정규 요일과 시간을 모두 선택하면 회원권과 시간표가 한 번에 저장됩니다. 예외일 때만 ‘시간표는 나중에 설정’을 선택하세요.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "correct") {
     actionFields = operationsRole() === "admin" ? `
       ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: memberTicketLinkedPayment(ticket), includeTicketStatus: true })}
@@ -12107,6 +12171,11 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_create_schedule_duplicate")) return "같은 요일과 시간을 중복 선택할 수 없습니다.";
   if (raw.includes("member_create_schedule_value_invalid")) return "회원권의 평일·주말 범위에 맞는 10분 단위 시간을 선택해 주세요.";
   if (raw.includes("member_create_schedule_blocked_time") || raw.includes("member_create_schedule_outside_working_hours")) return "코치 수업 가능 시간과 브레이크 시간을 확인해 다른 시간을 선택해 주세요.";
+  if (raw.includes("member_assignment_schedule_not_created")) return "회원권과 정규시간을 함께 만들지 못해 전체 저장을 취소했습니다. 시작일·만료일·코치 시간을 확인해 주세요.";
+  if (raw.includes("member_assignment_schedule_frequency_mismatch")) return "주 횟수만큼 정규 요일과 시간을 모두 선택해 주세요.";
+  if (raw.includes("member_assignment_schedule_duplicate")) return "같은 요일과 시간을 중복 선택할 수 없습니다.";
+  if (raw.includes("member_assignment_schedule_value_invalid")) return "회원권의 평일·주말 범위에 맞는 시간을 선택해 주세요.";
+  if (raw.includes("member_assignment_schedule_blocked_time") || raw.includes("member_assignment_schedule_outside_working_hours")) return "코치 근무시간·브레이크와 겹치지 않는 시간을 선택해 주세요.";
   if (raw.includes("schedule_v2_approved_coach_required")) return "같은 지점의 현재 승인 코치를 선택해 주세요.";
   if (raw.includes("schedule_v2_rule_outside_ticket_window")) return "회원권 사용기간 안에 선택한 정규 요일이 없습니다. 시작일과 만료일을 확인해 주세요.";
   if (raw.includes("payment_product_mismatch")) return "기존 결제에 연결된 회원권과 선택한 회원권이 다릅니다. 결제 회원권을 선택해 주세요.";
@@ -12468,7 +12537,7 @@ async function submitMemberManagementForm(event) {
   if (managementPayload && ["create", "assign", "correct"].includes(action)) {
     normalizeMemberManagementTicketPayload(managementPayload);
   }
-  const createRegularSchedules = isCreate ? memberInlineScheduleValues(form) : [];
+  const createRegularSchedules = (isCreate || action === "assign") ? memberInlineScheduleValues(form) : [];
   if (managementPayload && action === "profile") {
     // Profile, note, and partner edits must never recalculate or replace a fixed schedule.
     managementPayload.preserveExistingSchedule = true;
@@ -12493,7 +12562,7 @@ async function submitMemberManagementForm(event) {
     const requiredLessonDays = Math.max(1, Number(form.elements.weeklyFrequency?.value) || 1);
     const selectedLessonDays = memberManagementSelectedDays(form);
     const createsWithoutSchedule = form.elements.createWithoutSchedule?.value === "true";
-    if (isCreate && activeRecord && !createsWithoutSchedule && memberManagementProductSupportsRegularSchedule(selectedProduct)) {
+    if ((isCreate || action === "assign") && activeRecord && !createsWithoutSchedule && memberManagementProductSupportsRegularSchedule(selectedProduct)) {
       const completeSchedule = memberInlineScheduleIsComplete(form, createRegularSchedules);
       const uniqueScheduleCount = new Set(createRegularSchedules.map((slot) => `${slot.dayOfWeek}:${slot.startTime}`)).size;
       const scope = memberManagementProductScheduleScope(selectedProduct);
@@ -12570,16 +12639,11 @@ async function submitMemberManagementForm(event) {
       const assignmentPayload = existingPaymentId
         ? { ...managementPayload, assignmentRequestId, paymentAmount: 0, paymentDate: null, paymentMethod: null }
         : { ...managementPayload, assignmentRequestId };
-      result = await client.rpc("tn_admin_assign_member_database_ticket", {
+      result = await client.rpc("tn_admin_assign_member_ticket_and_regular_schedule", {
         target_record: assignmentPayload,
+        target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
+        target_operation_key: assignmentRequestId,
       });
-      if (existingPaymentId) {
-        const linkedPayment = await client.rpc("tn_admin_link_existing_payment_to_ticket", {
-          target_payment_id: existingPaymentId,
-          target_ticket_id: result?.ticketId || result?.ticket_id,
-        });
-        if (!linkedPayment?.ok) throw new Error(linkedPayment?.code || "existing_payment_link_failed");
-      }
       state.memberFilter = "active";
     } else if (action === "link_existing") {
       linkedTargetMemberUserId = form.elements.targetMembershipUserId?.value || "";
@@ -15392,11 +15456,12 @@ function renderMembers(options = {}) {
             ${operationsRole() === "admin" && member.serverUserId && listStatus !== "inactive" && rowTicket && ["active", "paused"].includes(rowTicket.status)
               ? `<button class="small-button primary-button member-row-ticket-extend" type="button" data-open-member-management="extend" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 기간 연장">기간 연장</button>`
               : ""}
-            ${operationsRole() === "admin" ? `<button class="small-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="${escapeHtml(ticketId)}">${rowTicket ? "회원권 수정" : "회원권 등록"}</button>` : ""}
+            ${operationsRole() === "admin" && rowTicket ? `<button class="small-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="${escapeHtml(ticketId)}">회원권 수정</button>` : ""}
+            ${operationsRole() === "admin" && !rowTicket ? `<button class="small-button primary-button" type="button" data-open-member-management="assign" data-member-management-member-id="${member.id}">회원권 등록</button>` : ""}
             ${operationsRole() === "admin" && rowTicket && rowTicket.status !== "voided"
               ? `<button class="small-button danger-button member-row-ticket-delete" type="button" data-open-member-management="force_delete" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 삭제">회원권 삭제</button>`
               : ""}
-            ${operationsRole() === "admin" && ticketIndex === 0 && rowTicket ? `<button class="ghost-button member-add-ticket-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="">+ 회원권</button>` : ""}
+            ${operationsRole() === "admin" && ticketIndex === 0 && rowTicket ? `<button class="ghost-button member-add-ticket-button" type="button" data-open-member-management="assign" data-member-management-member-id="${member.id}">+ 다른 회원권</button>` : ""}
           </div></td>
         </tr>`;
       }).join("");
@@ -18046,6 +18111,13 @@ function ticketCanBeUsedOnLessonDate(ticket, lessonDate = lessonTicketEligibilit
   return isCurrentMemberTicket(ticket, lessonDate);
 }
 
+function lessonTicketCanBeSelected(ticket, lessonDate = lessonTicketEligibilityDate()) {
+  if (state.editingLessonId) return ticketCanBeUsedOnLessonDate(ticket, lessonDate);
+  const day = $("#lessonDay")?.value || currentScheduleDay();
+  return ticketCanBeUsedOnLessonDate(ticket, lessonDate)
+    || ticketCanBeScheduledOnOrAfterDate(ticket, day, lessonDate);
+}
+
 function getEligibleTickets(memberReference, coachId, lessonDate = lessonTicketEligibilityDate()) {
   const editingTicket = getTicketByLesson(getCurrentEditingLesson());
   const editingTicketId = editingTicket?.id || "";
@@ -18058,7 +18130,7 @@ function getEligibleTickets(memberReference, coachId, lessonDate = lessonTicketE
   const eligibleTickets = sourceTickets.filter((ticket) => adminManualOverrideEnabled() || (
     ticket.coachId === coachId
     && (ticket.remaining > 0 || ticket.id === editingTicketId)
-    && ticketCanBeUsedOnLessonDate(ticket, lessonDate)
+    && lessonTicketCanBeSelected(ticket, lessonDate)
   ));
   // Existing lessons are already bound to a server ticket. Keep that identity
   // while editing instead of rediscovering it from display names or coach lanes.
@@ -18073,7 +18145,7 @@ function findFirstMemberWithCoachTicket(coachId) {
     .find((item) => (
       item.coachId === coachId
       && item.remaining > 0
-      && ticketCanBeUsedOnLessonDate(item)
+      && lessonTicketCanBeSelected(item)
     ));
   if (!ticket) return "";
   const branchMembers = operationBranchMembers();
@@ -18083,14 +18155,101 @@ function findFirstMemberWithCoachTicket(coachId) {
 
 function findFirstTicketForMember(memberReference) {
   return allTicketsForMember(memberReference)
-    .find((ticket) => ticket.remaining > 0 && ticketCanBeUsedOnLessonDate(ticket));
+    .find((ticket) => ticket.remaining > 0 && lessonTicketCanBeSelected(ticket));
 }
 
 function getActiveTicketForMember(memberReference) {
   return allTicketsForMember(memberReference)
     .find((ticket) => ticketCanBeUsedOnLessonDate(ticket))
+    || allTicketsForMember(memberReference).find((ticket) => lessonTicketCanBeSelected(ticket))
     || ticketsForMember(memberReference)[0]
     || allTicketsForMember(memberReference)[0];
+}
+
+function syncLessonModalWeekToSelectedTicket() {
+  if (state.editingLessonId) return false;
+  const ticket = scheduleTicketById($("#lessonTicket")?.value);
+  const day = $("#lessonDay")?.value || currentScheduleDay();
+  const displayedDate = adminWeekDateForDay(day);
+  const targetDate = firstEligibleScheduleDateForTicket(ticket, day, displayedDate);
+  if (!targetDate || targetDate === displayedDate) return false;
+  state.activeAdminWeekIndex = Math.min(
+    Math.max(adminWeekOffsetForDate(targetDate), adminScheduleMinWeekOffset),
+    adminScheduleMaxWeekOffset,
+  );
+  state.selectedScheduleDay = day;
+  syncAdminScheduleWeek();
+  renderSchedule();
+  saveSnapshot();
+  void ensureActiveAdminWeekLoaded();
+  setLessonFormMessage(`시작 예정 회원권이라 ${memberDetailDateLabel(targetDate)} 주차로 이동했습니다.`, "good");
+  return true;
+}
+
+function mapAdminSettlementTicketRows(rows = [], context = {}) {
+  const productsById = new Map((context.products || adminLiveDataState.products || [])
+    .map((product) => [product.id, product]));
+  const usersById = new Map((context.users || adminLiveDataState.users || [])
+    .map((user) => [user.id, user]));
+  const coachIdByRole = context.coachIdByRole instanceof Map
+    ? context.coachIdByRole
+    : new Map(coaches
+      .filter((coach) => coach.serverRoleId)
+      .map((coach) => [coach.serverRoleId, coach.id]));
+  return rows.map((ticket) => {
+    const product = productsById.get(ticket.product_id) || {};
+    return {
+      id: ticket.id,
+      serverTicketId: ticket.id,
+      serverUserId: ticket.user_id,
+      productId: ticket.product_id,
+      branchId: ticket.branch_id,
+      coachRoleId: ticket.coach_role_id,
+      member: usersById.get(ticket.user_id)?.name || "대타 수업",
+      coachId: coachIdByRole.get(ticket.coach_role_id) || "",
+      total: Number(ticket.total_sessions) || 0,
+      used: Number(ticket.used_sessions) || 0,
+      remaining: Number(ticket.remaining_sessions) || 0,
+      durationMinutes: Number(product.lesson_minutes) || 20,
+      status: ticket.status,
+    };
+  });
+}
+
+async function loadAdminSettlementSupportData() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.selectRows) return false;
+  const readAll = (table, options) => (client.selectAllRows || client.selectRows).call(client, table, {
+    limit: 500,
+    pageSize: 500,
+    maxRows: 20000,
+    ...options,
+  });
+  const [lessonRecords, substituteAssignments, settlementTicketRows] = await Promise.all([
+    readAll("tn_lesson_records", {
+      select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_ticket_id,deducted_sessions,completed_at,tn_lessons(member_ticket_id,duration_minutes)",
+      order: "id.asc",
+    }).catch(() => client.selectRows("tn_lesson_records", {
+      select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at",
+      limit: 500,
+    }).catch(() => adminLiveDataState.lessonRecords || [])),
+    readAll("tn_lesson_substitute_assignments", {
+      select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
+      order: "assigned_at.desc",
+    }).catch(() => adminLiveDataState.substituteAssignments || []),
+    readAll("tn_member_tickets", {
+      select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price,updated_at",
+      order: "id.asc",
+    }).catch(() => []),
+  ]);
+  Object.assign(adminLiveDataState, {
+    lessonRecords,
+    substituteAssignments,
+    settlementTickets: settlementTicketRows.length
+      ? mapAdminSettlementTicketRows(settlementTicketRows)
+      : adminLiveDataState.settlementTickets || [],
+  });
+  return true;
 }
 
 function alignCoachToSelectedMemberTicket() {
@@ -18114,7 +18273,7 @@ function getSelectableMembers(search = "") {
   const matchingMembers = members.filter((member) => {
     const status = memberListStatus(member);
     const usableOnSelectedDate = allTicketsForMember(member)
-      .some((ticket) => ticket.remaining > 0 && ticketCanBeUsedOnLessonDate(ticket));
+      .some((ticket) => ticket.remaining > 0 && lessonTicketCanBeSelected(ticket));
     if (!adminManualOverrideEnabled() && status === "inactive") return false;
     if (!adminManualOverrideEnabled() && status === "expired" && !usableOnSelectedDate) return false;
     return !keyword || memberSearchValues(member)
@@ -18612,11 +18771,15 @@ function getLessonFormCandidate(overrides = {}) {
   const durationMinutes = Number($("#lessonDuration").value);
   const selectedTicket = getSelectedTicket();
   const participantNames = ticketParticipantNames(selectedTicket);
+  const displayedLessonDate = overrides.lessonDate || adminLessonDateForCandidate(day);
+  const lessonDate = !state.editingLessonId && normalizeLessonSource($("#lessonSource").value) === "regular"
+    ? firstEligibleScheduleDateForTicket(selectedTicket, day, displayedLessonDate) || displayedLessonDate
+    : displayedLessonDate;
   syncLessonTypeFromForm();
   return {
     id: state.editingLessonId || Date.now(),
     day,
-    lessonDate: overrides.lessonDate || adminLessonDateForCandidate(day),
+    lessonDate,
     time: $("#lessonTime").value,
     courtId: $("#lessonCourt").value,
     coachId: $("#lessonCoach").value,
@@ -18696,7 +18859,7 @@ function setLessonSubmitEnabled(enabled) {
 }
 
 function adminLessonEndTimestamp(candidate = {}) {
-  const lessonDate = adminWeekDateForDay(candidate.day || $("#lessonDay")?.value);
+  const lessonDate = candidate.lessonDate || adminWeekDateForDay(candidate.day || $("#lessonDay")?.value);
   const lessonTime = candidate.time || $("#lessonTime")?.value;
   const durationMinutes = Number(candidate.durationMinutes || $("#lessonDuration")?.value) || 20;
   if (!lessonDate || !lessonTime) return Number.NaN;
@@ -18727,7 +18890,7 @@ function isCompletedLessonCorrectionMode() {
 }
 
 function getPastLessonCorrectionConflict(candidate) {
-  const lessonDate = adminWeekDateForDay(candidate.day);
+  const lessonDate = candidate.lessonDate || adminWeekDateForDay(candidate.day);
   const duplicate = lessons.find((lesson) => (
     lesson.id !== candidate.id
     && String(lesson.ticketId || "") === String(candidate.ticketId || "")
@@ -18902,7 +19065,7 @@ function renderLessonPreview() {
   const end = start + candidate.durationMinutes;
   if (isCompletedLessonCorrectionMode()) {
     const editingLesson = getCurrentEditingLesson();
-    const lessonDate = adminWeekDateForDay(candidate.day);
+    const lessonDate = candidate.lessonDate || adminWeekDateForDay(candidate.day);
     const exactDuplicate = getAdminManualExactDuplicate(candidate);
     const warnings = getAdminManualOverrideWarnings(candidate, ticket, false);
     const futureCompletedTime = Number.isFinite(adminLessonEndTimestamp(candidate))
@@ -18960,9 +19123,10 @@ function renderLessonPreview() {
     const sourceInvalid = !state.editingLessonId && candidate.lessonSource === "regular";
     const conflict = getPastLessonCorrectionConflict(candidate);
     const exactDuplicate = getAdminManualExactDuplicate(candidate);
+    const correctionLessonDate = candidate.lessonDate || adminWeekDateForDay(candidate.day);
     const ticketDateMismatch = ticket && (
-      adminWeekDateForDay(candidate.day) < (ticket.purchased || "")
-      || adminWeekDateForDay(candidate.day) > (ticket.expires || "9999-12-31")
+      correctionLessonDate < ticketScheduleStartDate(ticket, "")
+      || correctionLessonDate > ticketScheduleEndDate(ticket)
     );
     const overrideWarnings = getAdminManualOverrideWarnings(candidate, ticket, true);
     const overrideReasonMissing = false;
@@ -19387,6 +19551,7 @@ function openLessonModal(defaults = {}) {
   if (!editingLesson && Array.isArray(defaults.repeatSlots) && defaults.repeatSlots.length > 1) {
     applyLessonRepeatSlotDefaults(defaults.repeatSlots);
   }
+  if (!editingLesson) syncLessonModalWeekToSelectedTicket();
   syncLessonTypeFromForm();
   renderCurrentLessonMembers(editingLesson);
   renderLessonExpiredTickets();
@@ -24992,19 +25157,9 @@ async function performAdminLiveDataSync(options = {}) {
         limit: 500,
       }).catch(() => []))),
       rosterRows("makeupEntitlements", () => client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => [])),
-      // Settlement reconciliation needs the complete record history. The lightweight
-      // operational roster only contains records inside its schedule window, so using
-      // it here silently drops older completed lessons and understates coach totals.
-      (client.selectAllRows || client.selectRows).call(client, "tn_lesson_records", {
-        select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_ticket_id,deducted_sessions,completed_at,tn_lessons(member_ticket_id,duration_minutes)",
-        order: "id.asc",
-        limit: 500,
-        pageSize: 500,
-        maxRows: 20000,
-      }).catch(() => client.selectRows("tn_lesson_records", {
-        select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at",
-        limit: 500,
-      }).catch(() => [])),
+      // The initial screen only needs records inside the operational window. Complete
+      // history is loaded once when the administrator opens 결제/정산.
+      rosterRows("lessonRecords", () => Promise.resolve(adminLiveDataState.lessonRecords || [])),
       Promise.resolve(adminLiveDataState.curriculumRefs || []),
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
@@ -25014,25 +25169,9 @@ async function performAdminLiveDataSync(options = {}) {
       rosterRows("groupTicketLinks", () => (client.selectAllRows || client.selectRows).call(client, "tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", pageSize: 500 }).catch(() => [])),
       fullAdminAccess ? rosterRows("memberDatabaseRecords", () => Promise.resolve(adminLiveDataState.memberDatabaseRecords || [])) : Promise.resolve([]),
       fullAdminAccess ? rosterRows("memberMembershipRecords", () => Promise.resolve(adminLiveDataState.memberMembershipRecords || [])) : Promise.resolve([]),
-      // Settlement modes must cover the same complete history as lesson records.
-      // The operational roster only carries assignments inside its schedule window.
-      (client.selectAllRows || client.selectRows).call(client, "tn_lesson_substitute_assignments", {
-        select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
-        order: "assigned_at.desc",
-        limit: 500,
-        pageSize: 500,
-        maxRows: 20000,
-      }).catch(() => []),
-      // The operational roster intentionally omits old inactive tickets. Settlement
-      // records still reference them, so keep a minimal complete ticket index solely
-      // for reconciliation without expanding the visible member-management roster.
-      (client.selectAllRows || client.selectRows).call(client, "tn_member_tickets", {
-        select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price,updated_at",
-        order: "id.asc",
-        limit: 500,
-        pageSize: 500,
-        maxRows: 20000,
-      }).catch(() => []),
+      rosterRows("substituteAssignments", () => Promise.resolve(adminLiveDataState.substituteAssignments || [])),
+      // Complete inactive-ticket history is a settlement-only dependency.
+      Promise.resolve([]),
     ]);
 
     if (options.abortIfDirty && adminHasUnsavedChanges()) {
@@ -25135,26 +25274,16 @@ async function performAdminLiveDataSync(options = {}) {
     });
 
     const activeTickets = mappedTickets.filter((ticket) => isCurrentMemberTicket(ticket));
-    const mappedSettlementTickets = (
-      serverSettlementTickets?.length ? serverSettlementTickets : serverTickets || []
-    ).map((ticket) => {
-      const product = productsById.get(ticket.product_id) || {};
-      return {
-        id: ticket.id,
-        serverTicketId: ticket.id,
-        serverUserId: ticket.user_id,
-        productId: ticket.product_id,
-        branchId: ticket.branch_id,
-        coachRoleId: ticket.coach_role_id,
-        member: usersById.get(ticket.user_id)?.name || "대타 수업",
-        coachId: coachIdByRole.get(ticket.coach_role_id) || "",
-        total: Number(ticket.total_sessions) || 0,
-        used: Number(ticket.used_sessions) || 0,
-        remaining: Number(ticket.remaining_sessions) || 0,
-        durationMinutes: Number(product.lesson_minutes) || 20,
-        status: ticket.status,
-      };
-    });
+    const settlementTicketContext = {
+      products: serverProducts || [],
+      users: serverUsers || [],
+      coachIdByRole,
+    };
+    const mappedSettlementTickets = serverSettlementTickets?.length
+      ? mapAdminSettlementTicketRows(serverSettlementTickets, settlementTicketContext)
+      : adminLiveDataState.settlementTickets?.length
+        ? adminLiveDataState.settlementTickets
+        : mapAdminSettlementTicketRows(serverTickets || [], settlementTicketContext);
     const activeTicketIds = new Set(activeTickets.map((ticket) => ticket.serverTicketId));
     replaceArray(tickets, activeTickets);
     replaceArray(expiredTickets, mappedTickets
@@ -25660,8 +25789,14 @@ async function performAdminLiveDataSync(options = {}) {
     });
     await adminSettingsPromise;
     adminLazyDataState.delete("records-support");
+    adminLazyDataState.delete("settlement-support");
     if (state.view === "notes") {
       await loadAdminDataOnce("records-support", loadAdminRecordsSupportData);
+    }
+    if (state.view === "billing") {
+      void loadAdminDataOnce("settlement-support", loadAdminSettlementSupportData).then((changed) => {
+        if (changed && state.view === "billing") renderAdminView("billing");
+      });
     }
     syncAdminScheduleWeek();
     if (!mappedMembers.some((member) => member.id === state.selectedMemberId)) {
@@ -30518,7 +30653,7 @@ function bindEvents() {
     const button = event.target.closest("[data-jump]");
     if (!button) return;
     if (button.dataset.scheduleTicketId) {
-      const ticket = tickets.find((item) => String(item.id) === String(button.dataset.scheduleTicketId));
+      const ticket = scheduleTicketById(button.dataset.scheduleTicketId);
       if (!ticket) {
         showToast("회원권 정보를 다시 불러와 주세요");
         return;
@@ -31274,6 +31409,7 @@ function bindEvents() {
     state.lessonSourceTouched = false;
     alignCoachToSelectedMemberTicket();
     refreshLessonTicketOptions();
+    syncLessonModalWeekToSelectedTicket();
     syncLessonSourceFromTicket(true);
     refreshLessonDayOptions();
     renderLessonExpiredTickets();
@@ -31374,6 +31510,7 @@ function bindEvents() {
     state.pinnedLessonTicketId = $("#lessonTicket").value || "";
     state.lessonSourceTouched = false;
     syncLessonSourceFromTicket(true);
+    syncLessonModalWeekToSelectedTicket();
     refreshLessonDurationOptions();
     refreshLessonTimeOptions($("#lessonTime").value);
     refreshLessonDayOptions();

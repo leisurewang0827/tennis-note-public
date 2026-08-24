@@ -29,9 +29,10 @@
       ["code", "error", "error_code", "error_description"].forEach((key) => {
         if (query.has(key)) appUrl.searchParams.set(key, query.get(key) || "");
       });
+      if (window.location.hash) appUrl.hash = window.location.hash;
       const returnButton = document.querySelector("#returnToApp");
       returnButton.href = appUrl.toString();
-      if (!query.has("code") && !query.has("error")) {
+      if (!query.has("code") && !query.has("error") && !window.location.hash.includes("access_token=")) {
         document.querySelector("#message").textContent = "로그인 결과를 확인하지 못했습니다. 앱에서 다시 로그인해 주세요.";
         returnButton.hidden = false;
         return;
