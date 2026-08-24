@@ -663,13 +663,15 @@ const paymentCancelFlowState = {
 };
 
 const refundFlowState = {
-  itemIndex: -1,
+  paymentId: "",
+  itemSnapshot: null,
   preview: null,
   loading: false,
   submitting: false,
   reconcileRequired: false,
   manualTransferPending: false,
   manualPreviewChanged: false,
+  previewNeedsConfirmation: false,
   idempotencyKey: "",
   message: "",
   tone: "neutral",
@@ -21857,6 +21859,24 @@ function refundErrorText(code = "") {
   return labels[code] || "환불 처리 상태를 확인해 주세요.";
 }
 
+function refundFlowPaymentItem() {
+  const paymentId = String(refundFlowState.paymentId || "");
+  if (!paymentId) return refundFlowState.itemSnapshot || null;
+  return billings.find((item) => String(item.providerPaymentId || "") === paymentId)
+    || refundFlowState.itemSnapshot
+    || null;
+}
+
+function applyRefundPreviewChange(code, preview) {
+  if (!preview || !["refund_preview_changed", "ticket_usage_changed"].includes(code)) return false;
+  refundFlowState.preview = preview;
+  refundFlowState.previewNeedsConfirmation = true;
+  refundFlowState.idempotencyKey = newRefundIdempotencyKey();
+  refundFlowState.message = `최신 계산값 ${money.format(numericValue(preview.refundAmount))}원으로 바뀌었습니다. 대상과 금액을 확인한 뒤 다시 접수하세요.`;
+  refundFlowState.tone = "danger";
+  return true;
+}
+
 function renderRefundModal() {
   const target = $("#refundModalContent");
   const fallback = $("#refundFallbackConfirmation");
@@ -21866,8 +21886,7 @@ function renderRefundModal() {
   const cancelManualRequestButton = $("#cancelManualRefundRequest");
   const reasonField = $("#refundReasonField");
   const transferReferenceField = $("#refundTransferReferenceField");
-  const confirmationInput = $("#refundConfirmationText");
-  const item = billings[refundFlowState.itemIndex] || {};
+  const item = refundFlowPaymentItem() || {};
   const manualCashRefund = isManualCashRefundItem(item);
   if (!target) return;
   if (refundFlowState.loading) {
@@ -21909,6 +21928,8 @@ function renderRefundModal() {
     confirmButton.hidden = refundFlowState.reconcileRequired;
     confirmButton.textContent = refundFlowState.submitting
       ? "처리중"
+      : refundFlowState.previewNeedsConfirmation
+        ? `${money.format(numericValue(refundFlowState.preview?.refundAmount))}원으로 다시 접수`
       : refundFlowState.manualTransferPending
         ? "송금 완료 확인"
         : manualCashRefund
@@ -21925,40 +21946,43 @@ function renderRefundModal() {
   }
   if (reasonField) reasonField.hidden = refundFlowState.manualTransferPending;
   if (transferReferenceField) transferReferenceField.hidden = !refundFlowState.manualTransferPending;
-  if (confirmationInput) confirmationInput.placeholder = refundFlowState.manualTransferPending ? "송금완료" : "환불";
 }
 
 function closeRefundModal() {
   $("#refundModal")?.setAttribute("hidden", "");
   $("#refundForm")?.reset();
   Object.assign(refundFlowState, {
-    itemIndex: -1,
+    paymentId: "",
+    itemSnapshot: null,
     preview: null,
     loading: false,
     submitting: false,
     reconcileRequired: false,
     manualTransferPending: false,
     manualPreviewChanged: false,
+    previewNeedsConfirmation: false,
     idempotencyKey: "",
     message: "",
     tone: "neutral",
   });
 }
 
-async function openRefundModal(item, itemIndex) {
+async function openRefundModal(item) {
   if (!(await ensureAdminPaymentCancelReady(item))) return;
   if (!item?.providerPaymentId) {
     showToast("서버 결제번호가 필요합니다");
     return;
   }
   Object.assign(refundFlowState, {
-    itemIndex,
+    paymentId: String(item.providerPaymentId || ""),
+    itemSnapshot: { ...item },
     preview: null,
     loading: true,
     submitting: false,
     reconcileRequired: item.status === "refund_reconcile",
     manualTransferPending: item.status === "refund_manual_pending",
     manualPreviewChanged: false,
+    previewNeedsConfirmation: false,
     idempotencyKey: newRefundIdempotencyKey(),
     message: "",
     tone: "neutral",
@@ -21967,7 +21991,7 @@ async function openRefundModal(item, itemIndex) {
   renderRefundModal();
   try {
     const result = await window.TennisNoteDataClient.invokeFunction("portone-payment/refund-preview", {
-      body: { paymentId: item.providerPaymentId },
+      body: { paymentId: refundFlowState.paymentId },
     });
     if (result?.status === "already_refunded") {
       billingLogs.unshift(`${item.member} 환불은 이미 완료된 결제입니다.`);
@@ -22000,21 +22024,13 @@ async function openRefundModal(item, itemIndex) {
 
 async function verifyRefundAdminInputs({
   requireReason = true,
-  confirmationPhrase = "환불",
   requireTransferReference = false,
 } = {}) {
   const reason = $("#refundReason")?.value.trim() || "";
-  const confirmation = $("#refundConfirmationText")?.value.trim() || "";
   const transferReference = $("#refundTransferReference")?.value.trim() || "";
   const pin = $("#refundAdminPin")?.value.trim() || "";
   if (requireReason && reason.length < 2) {
     refundFlowState.message = "환불 사유를 2자 이상 입력해 주세요.";
-    refundFlowState.tone = "danger";
-    renderRefundModal();
-    return null;
-  }
-  if (confirmation !== confirmationPhrase) {
-    refundFlowState.message = `최종 확인란에 ${confirmationPhrase}를 입력해 주세요.`;
     refundFlowState.tone = "danger";
     renderRefundModal();
     return null;
@@ -22049,17 +22065,16 @@ async function verifyRefundAdminInputs({
     renderRefundModal();
     return null;
   }
-  return { reason, confirmation, transferReference };
+  return { reason, transferReference };
 }
 
 async function confirmRefundFromModal() {
-  const item = billings[refundFlowState.itemIndex];
+  const item = refundFlowPaymentItem();
   const preview = refundFlowState.preview;
   if (!item || !preview || refundFlowState.submitting) return;
   const manualTransferConfirmation = refundFlowState.manualTransferPending;
   const inputs = await verifyRefundAdminInputs({
     requireReason: !manualTransferConfirmation,
-    confirmationPhrase: manualTransferConfirmation ? "송금완료" : "환불",
     requireTransferReference: manualTransferConfirmation,
   });
   if (!inputs) return;
@@ -22076,19 +22091,19 @@ async function confirmRefundFromModal() {
     const result = manualTransferConfirmation
       ? await window.TennisNoteDataClient.invokeFunction("portone-payment/refund-manual-confirm", {
           body: {
-            paymentId: item.providerPaymentId,
+            paymentId: refundFlowState.paymentId,
             expectedRefundAmount: numericValue(preview.refundAmount),
-            confirmation: inputs.confirmation,
+            confirmation: "송금완료",
             transferReference: inputs.transferReference,
           },
         })
       : await window.TennisNoteDataClient.invokeFunction("portone-payment/refund", {
           body: {
-            paymentId: item.providerPaymentId,
+            paymentId: refundFlowState.paymentId,
             expectedRefundAmount: numericValue(preview.refundAmount),
             expectedUsedSessions: numericValue(preview.usedSessions),
             reason: inputs.reason,
-            confirmation: inputs.confirmation,
+            confirmation: "환불",
             acceptPolicyFallback: Boolean($("#acceptRefundPolicyFallback")?.checked),
             idempotencyKey: refundFlowState.idempotencyKey,
           },
@@ -22112,16 +22127,20 @@ async function confirmRefundFromModal() {
       refundFlowState.message = refundErrorText(result.code);
       refundFlowState.tone = "danger";
     } else {
-      refundFlowState.message = refundErrorText(result?.code);
-      refundFlowState.tone = "danger";
-      if (result?.preview) refundFlowState.preview = result.preview;
+      if (!applyRefundPreviewChange(result?.code, result?.preview)) {
+        refundFlowState.message = refundErrorText(result?.code);
+        refundFlowState.tone = "danger";
+        if (result?.preview) refundFlowState.preview = result.preview;
+      }
     }
   } catch (error) {
     const code = error?.payload?.code || "refund_failed";
     if (code === "reconcile_required") refundFlowState.reconcileRequired = true;
-    if (error?.payload?.preview) refundFlowState.preview = error.payload.preview;
-    refundFlowState.message = refundErrorText(code);
-    refundFlowState.tone = "danger";
+    if (!applyRefundPreviewChange(code, error?.payload?.preview)) {
+      if (error?.payload?.preview) refundFlowState.preview = error.payload.preview;
+      refundFlowState.message = refundErrorText(code);
+      refundFlowState.tone = "danger";
+    }
   } finally {
     refundFlowState.submitting = false;
     renderRefundModal();
@@ -22129,7 +22148,7 @@ async function confirmRefundFromModal() {
 }
 
 async function reconcileRefundFromModal() {
-  const item = billings[refundFlowState.itemIndex];
+  const item = refundFlowPaymentItem();
   if (!item || refundFlowState.submitting) return;
   const inputs = await verifyRefundAdminInputs({ requireReason: false });
   if (!inputs) return;
@@ -22139,7 +22158,7 @@ async function reconcileRefundFromModal() {
   renderRefundModal();
   try {
     const result = await window.TennisNoteDataClient.invokeFunction("portone-payment/refund-reconcile", {
-      body: { paymentId: item.providerPaymentId },
+      body: { paymentId: refundFlowState.paymentId },
     });
     if (result?.ok) {
       billingLogs.unshift(`${item.member} 환불 상태 동기화 완료`);
@@ -22160,16 +22179,9 @@ async function reconcileRefundFromModal() {
 }
 
 async function cancelManualRefundRequestFromModal() {
-  const item = billings[refundFlowState.itemIndex];
+  const item = refundFlowPaymentItem();
   if (!item || !refundFlowState.manualTransferPending || refundFlowState.submitting) return;
-  const confirmation = $("#refundConfirmationText")?.value.trim() || "";
   const pin = $("#refundAdminPin")?.value.trim() || "";
-  if (confirmation !== "접수취소") {
-    refundFlowState.message = "환불 접수를 취소하려면 최종 확인란에 접수취소를 입력해 주세요.";
-    refundFlowState.tone = "danger";
-    renderRefundModal();
-    return;
-  }
   if (adminPinNeedsSetup() || !(await verifyAdminPin(pin))) {
     refundFlowState.message = adminPinNeedsSetup()
       ? "먼저 설정의 보안/잠금에서 관리자 PIN을 설정해 주세요."
@@ -22184,7 +22196,7 @@ async function cancelManualRefundRequestFromModal() {
   renderRefundModal();
   try {
     const result = await window.TennisNoteDataClient.invokeFunction("portone-payment/refund-manual-cancel", {
-      body: { paymentId: item.providerPaymentId, confirmation },
+      body: { paymentId: refundFlowState.paymentId, confirmation: "접수취소" },
     });
     if (result?.ok) {
       billingLogs.unshift(`${item.member} 현금 환불 접수 취소 · 결제와 이용권 유지`);
@@ -32177,7 +32189,7 @@ function bindEvents() {
     if (refundPaymentButton) {
       const itemIndex = Number(refundPaymentButton.dataset.refundPayment);
       const item = billings[itemIndex];
-      await openRefundModal(item, itemIndex);
+      await openRefundModal(item);
       return;
     }
 
