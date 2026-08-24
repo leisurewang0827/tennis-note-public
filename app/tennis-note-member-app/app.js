@@ -582,6 +582,8 @@ function renderPublicProductPreview() {
   const title = $("#publicProductPreviewTitle");
   const step = $("#publicProductPreviewStep");
   const loginActions = $("#publicOnboardingLoginActions");
+  const existingMemberLogin = $("#publicOnboardingExistingLogin");
+  const existingMemberNote = $("#publicOnboardingExistingMemberNote");
   if (!list || !status || !title) return;
   let intent = storedOnboardingIntent();
   if (!intent) {
@@ -603,6 +605,8 @@ function renderPublicProductPreview() {
   title.textContent = labels[stage][1];
   list.innerHTML = publicOnboardingStageHtml(intent);
   if (loginActions) loginActions.hidden = stage !== "login";
+  if (existingMemberLogin) existingMemberLogin.hidden = stage === "login";
+  if (existingMemberNote) existingMemberNote.hidden = true;
   if (state.publicMembershipProductStatus === "error") {
     status.textContent = "기준 상품을 표시합니다. 판매 여부와 최종 가격은 로그인 후 다시 확인합니다.";
   } else if (["coach", "time"].includes(stage) && publicPurchaseDirectoryLoad.status === "error") {
@@ -612,6 +616,23 @@ function renderPublicProductPreview() {
   } else {
     status.textContent = state.publicMembershipProductStatus === "ready" ? "현재 판매 중인 상품 기준입니다." : "최신 상품을 확인하고 있습니다.";
   }
+}
+
+function openExistingMemberLoginFromOnboarding() {
+  saveOnboardingIntent(null);
+  const url = new URL(window.location.href);
+  url.searchParams.delete("start");
+  url.searchParams.delete("source");
+  const cleanUrl = `${url.pathname}${url.search}${url.hash}`;
+  const currentState = typeof history.state === "object" && history.state ? history.state : {};
+  history.replaceState({ ...currentState, tennisNoteOnboardingCaptured: false }, "", cleanUrl);
+  renderOnboardingEntryIntro();
+  renderPublicProductPreview();
+  const existingMemberNote = $("#publicOnboardingExistingMemberNote");
+  if (existingMemberNote) existingMemberNote.hidden = false;
+  const status = $("#memberEmailLoginStatus");
+  if (status) status.textContent = "로그인하면 등록된 전화번호로 기존 회원권과 시간표를 연결합니다.";
+  window.setTimeout(() => $("#publicOnboardingLoginActions [data-login-provider]")?.focus(), 40);
 }
 
 function updatePublicOnboardingIntent(changes = {}) {
@@ -2743,7 +2764,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.398",
+    workerUrl: "./service-worker.js?v=1.0.399",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -4133,7 +4154,9 @@ function memberChangeDirection(sourceLesson, targetLesson) {
 }
 
 function activeTicketScheduleScope() {
-  const ticket = currentLiveTicket();
+  const selectedTicketId = String(state.selectedMemberScheduleTicketId || "");
+  const ticket = currentLiveTickets().find((item) => String(item.id || "") === selectedTicketId)
+    || currentLiveTicket();
   if (ticket?.scheduleScope) return ticket.scheduleScope;
   const title = `${ticket?.title || state.profile?.ticket || ""}`;
   return title.includes("주말") ? "weekend" : "weekday";
@@ -5494,10 +5517,17 @@ function renderTodayActions() {
   const target = $("#todayActionCards");
   if (!target) return;
   const nextLesson = nextMemberLesson();
+  const nextLessonTicket = liveTicketForLesson(nextLesson);
+  const currentTicketSummary = liveTicketAggregate();
+  const nextLessonRemaining = nextLessonTicket
+    ? Math.max(0, Number(nextLessonTicket.remaining) || 0)
+    : currentTicketSummary.count ? currentTicketSummary.remaining : state.remaining;
   const latestLog = state.lessonLogs[0];
   const pendingLogCount = state.lessonLogs.filter((log) => log.status === "coach_pending").length;
   const makeupCount = state.makeupRequests.filter((request) => request.rawStatus === "pending").length;
-  const lowTicket = state.remaining <= 2;
+  const lowTicket = currentLiveTickets().length
+    ? currentLiveTickets().some((ticket) => Number(ticket.remaining) <= 2)
+    : state.remaining <= 2;
   const curriculum = activeCurriculumStep();
   const lessonLabel = nextLesson
     ? `${nextLesson.day} ${nextLesson.time} · ${nextLesson.coach}`
@@ -5508,7 +5538,7 @@ function renderTodayActions() {
       <div>
         <span>다음 수업</span>
         <strong>${lessonLabel}</strong>
-        <small>${nextLesson ? `${nextLesson.type} · 잔여 ${state.remaining}회` : "관리자에게 시간표 확인이 필요합니다."}</small>
+        <small>${nextLesson ? `${nextLesson.type} · 연결 회원권 잔여 ${nextLessonRemaining}회` : "관리자에게 시간표 확인이 필요합니다."}</small>
         <small>다음 커리큘럼: ${curriculum.title}</small>
       </div>
       <button class="primary-button" type="button" data-home-action="curriculum">커리큘럼 보기</button>
@@ -7046,16 +7076,23 @@ function renderCurriculum() {
 
 function renderTickets() {
   const currentTickets = currentLiveTickets();
+  const renewalOverlapCount = currentLiveTicketOverlapCount();
   const nextTickets = upcomingLiveTickets();
   const liveTicket = currentTickets[0] || nextTickets[0] || null;
-  const total = currentTickets.length ? currentTickets.reduce((sum, ticket) => sum + Math.max(0, Number(ticket.total) || 0), 0) : Number(liveTicket?.total) || 0;
-  const remaining = currentTickets.length ? currentTickets.reduce((sum, ticket) => sum + Math.max(0, Number(ticket.remaining) || 0), 0) : Number(liveTicket?.remaining) || 0;
-  const used = currentTickets.length ? currentTickets.reduce((sum, ticket) => sum + Math.max(0, Number(ticket.used) || 0), 0) : Number(liveTicket?.used) || 0;
+  const summary = liveTicketAggregate(currentTickets.length ? currentTickets : liveTicket ? [liveTicket] : []);
+  const { total, remaining, used } = summary;
   const ticketTitle = currentTickets.length > 1 ? `현재 회원권 ${currentTickets.length}개` : liveTicket?.title || "현재 이용권 없음";
-  const ticketStatus = liveTicket?.statusLabel || state.ticketSyncStatus?.text || "로그인 후 회원권 확인";
-  const ticketPeriod = liveTicket?.expiresOn
-    ? `${liveTicket.startsOn || "시작일 확인"} ~ ${liveTicket.expiresOn}`
-    : "회원권 구매 또는 관리자 충전 필요";
+  const ticketStatus = renewalOverlapCount > 0
+    ? `재등록 회원권 ${renewalOverlapCount}건 연결 확인 중`
+    : currentTickets.length > 1
+    ? `사용 중 ${currentTickets.length}개 · 회원권별 개별 차감`
+    : liveTicket?.statusLabel || state.ticketSyncStatus?.text || "로그인 후 회원권 확인";
+  const earliestExpiry = currentTickets.map((ticket) => ticket.expiresOn).filter(Boolean).sort()[0] || "";
+  const ticketPeriod = currentTickets.length > 1
+    ? earliestExpiry ? `가장 빠른 만료 ${earliestExpiry}` : "회원권별 이용 기간 확인"
+    : liveTicket?.expiresOn
+      ? `${liveTicket.startsOn || "시작일 확인"} ~ ${liveTicket.expiresOn}`
+      : "회원권 구매 또는 관리자 충전 필요";
   const lowTicket = currentTickets.some((ticket) => Number(ticket.remaining) <= 2);
   const needsTicket = !liveTicket;
   const upcoming = upcomingMemberLessons(2);
@@ -7298,6 +7335,7 @@ function renderCurrentTicketPanel() {
   const target = $("#currentTicketPanel");
   if (!target) return;
   const currentTickets = currentLiveTickets();
+  const renewalOverlapCount = currentLiveTicketOverlapCount();
   const upcomingTickets = upcomingLiveTickets();
   const refundHeldTickets = refundHeldLiveTickets();
   const demoTicket = !currentTickets.length && !upcomingTickets.length && !refundHeldTickets.length ? currentHoldingTicket() : null;
@@ -7319,8 +7357,8 @@ function renderCurrentTicketPanel() {
         </article>`
       : `<article class="membership-empty-ticket"><strong>아직 등록된 회원권이 없습니다</strong><span>상품과 선생님·시간을 한 번에 선택할 수 있습니다.</span></article>`;
   const otherTicketList = otherTickets.length
-    ? `<details class="membership-other-tickets">
-        <summary>다른 회원권 ${otherTickets.length}개</summary>
+    ? `<details class="membership-other-tickets" ${currentTickets.length > 1 ? "open" : ""}>
+        <summary>${currentTickets.length > 1 ? "함께 사용 중인" : "다른"} 회원권 ${otherTickets.length}개</summary>
         <div>${otherTickets.map((ticket) => membershipTicketCard(ticket, { currentTicketIds, compact: true })).join("")}</div>
       </details>`
     : "";
@@ -7352,7 +7390,8 @@ function renderCurrentTicketPanel() {
       </details>
     </div>
     ${otherTicketList}
-    ${currentTickets.length > 1 ? `<p class="membership-multiple-note">수업별 회원권 ${currentTickets.length}개가 각각 차감됩니다. 다른 회원권에서 자세히 확인할 수 있습니다.</p>` : ""}`;
+    ${renewalOverlapCount > 0 ? `<p class="membership-multiple-note">같은 코치·같은 회원권의 겹친 재등록 ${renewalOverlapCount}건은 합산하지 않았습니다. 관리자가 만료·시작일 연결을 확인하고 있습니다.</p>` : ""}
+    ${currentTickets.length > 1 ? `<p class="membership-multiple-note">현재 회원권 ${currentTickets.length}개가 모두 적용되어 있습니다. 수업에 연결된 회원권에서만 횟수가 차감됩니다.</p>` : ""}`;
 }
 
 function holdingRequestDays(startDate, endDate) {
@@ -11467,7 +11506,66 @@ function currentLiveTicket() {
   return currentLiveTickets()[0] || null;
 }
 
-function currentLiveTickets() {
+function liveTicketAggregate(ticketList = currentLiveTickets()) {
+  const tickets = Array.isArray(ticketList) ? ticketList : [];
+  return tickets.reduce((summary, ticket) => ({
+    count: summary.count + 1,
+    total: summary.total + Math.max(0, Number(ticket?.total) || 0),
+    used: summary.used + Math.max(0, Number(ticket?.used) || 0),
+    remaining: summary.remaining + Math.max(0, Number(ticket?.remaining) || 0),
+  }), { count: 0, total: 0, used: 0, remaining: 0 });
+}
+
+function liveTicketForLesson(lesson = null) {
+  const ticketId = lesson ? memberLessonTicketId(lesson) : "";
+  if (!ticketId) return null;
+  return (state.liveTickets || []).find((ticket) => String(ticket.id || "") === ticketId) || null;
+}
+
+function liveTicketDateRangesOverlap(left = {}, right = {}) {
+  if (!left.startsOn || !left.expiresOn || !right.startsOn || !right.expiresOn) return false;
+  return left.startsOn <= right.expiresOn && right.startsOn <= left.expiresOn;
+}
+
+function liveTicketRenewalPlanKey(ticket = {}) {
+  const productId = String(ticket.productId || "");
+  const coachRoleId = String(ticket.coachRoleId || "");
+  if (!productId || !coachRoleId) return "";
+  return [productId, coachRoleId, String(ticket.groupAccountId || "")].join("|");
+}
+
+function liveTicketLessonReferenceCount(ticket = {}) {
+  const ticketId = String(ticket.id || "");
+  if (!ticketId) return 0;
+  return (state.lessons || []).filter((lesson) => memberLessonTicketId(lesson) === ticketId).length;
+}
+
+function preferredRenewalOverlapTicket(left = {}, right = {}) {
+  const leftReferences = liveTicketLessonReferenceCount(left);
+  const rightReferences = liveTicketLessonReferenceCount(right);
+  if (leftReferences !== rightReferences) return leftReferences > rightReferences ? left : right;
+  const leftUsed = Math.max(0, Number(left.used) || 0);
+  const rightUsed = Math.max(0, Number(right.used) || 0);
+  if (leftUsed !== rightUsed) return leftUsed > rightUsed ? left : right;
+  const startOrder = String(left.startsOn || "").localeCompare(String(right.startsOn || ""));
+  if (startOrder) return startOrder < 0 ? left : right;
+  return String(left.createdAt || "").localeCompare(String(right.createdAt || "")) <= 0 ? left : right;
+}
+
+function canonicalCurrentLiveTickets(ticketList = []) {
+  return ticketList.reduce((result, ticket) => {
+    const planKey = liveTicketRenewalPlanKey(ticket);
+    const existingIndex = planKey ? result.findIndex((candidate) => (
+      liveTicketRenewalPlanKey(candidate) === planKey
+      && liveTicketDateRangesOverlap(candidate, ticket)
+    )) : -1;
+    if (existingIndex < 0) result.push(ticket);
+    else result[existingIndex] = preferredRenewalOverlapTicket(result[existingIndex], ticket);
+    return result;
+  }, []);
+}
+
+function rawCurrentLiveTickets() {
   if (!Array.isArray(state.liveTickets) || !state.liveTickets.length) return [];
   const usableTickets = window.TennisNoteTicketState?.split
     ? window.TennisNoteTicketState.split(state.liveTickets).current
@@ -11481,6 +11579,15 @@ function currentLiveTickets() {
     if (sharedGroupPriority) return sharedGroupPriority;
     return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
   });
+}
+
+function currentLiveTickets() {
+  return canonicalCurrentLiveTickets(rawCurrentLiveTickets());
+}
+
+function currentLiveTicketOverlapCount() {
+  const rawTickets = rawCurrentLiveTickets();
+  return Math.max(0, rawTickets.length - canonicalCurrentLiveTickets(rawTickets).length);
 }
 
 function refundHeldLiveTickets() {
@@ -11560,7 +11667,7 @@ async function syncMemberGroupAccountFromServer(profile = null) {
       filters: { user_id: profileId },
       limit: 20,
     });
-    const activeGroupAccountId = currentLiveTicket()?.groupAccountId || "";
+    const activeGroupAccountId = currentLiveTickets().find((ticket) => ticket.groupAccountId)?.groupAccountId || "";
     const ownMembership = (ownRows || []).find((row) => row.group_account_id === activeGroupAccountId) || ownRows?.[0];
     if (!ownMembership?.group_account_id) {
       state.groupAccount = null;
@@ -11837,7 +11944,8 @@ async function syncMemberTicketsFromServer(profile = null) {
     rows = await attachLiveTicketPayments(client, rows || []);
     state.liveTickets = Array.isArray(rows) ? rows.map(normalizeLiveTicket) : [];
     const paymentRequestsChanged = reconcileVerifiedPaymentRequests();
-    const ticket = currentLiveTicket() || upcomingLiveTickets()[0] || null;
+    const currentTickets = currentLiveTickets();
+    const ticket = currentTickets[0] || upcomingLiveTickets()[0] || null;
     if (!ticket) {
       state.remaining = 0;
       state.profile.ticket = "현재 이용권 없음";
@@ -11845,21 +11953,31 @@ async function syncMemberTicketsFromServer(profile = null) {
       return true;
     }
 
-    if (ticket.total) {
-      state.remaining = ticket.remaining;
-      state.profile.ticket = `${ticket.title} · 총 ${ticket.total}회`;
-    }
-    if (currentLiveTickets().length && state.member) state.member.memberKind = "lesson_member";
+    const aggregate = liveTicketAggregate(currentTickets.length ? currentTickets : [ticket]);
+    const renewalOverlapCount = currentLiveTicketOverlapCount();
+    state.remaining = aggregate.remaining;
+    state.profile.ticket = currentTickets.length > 1
+      ? `현재 회원권 ${aggregate.count}개 · 총 ${aggregate.total}회`
+      : `${ticket.title} · 총 ${ticket.total || 0}회`;
+    if (currentTickets.length && state.member) state.member.memberKind = "lesson_member";
     const derivedStatusLabel = window.TennisNoteTicketState?.label?.(ticket) || ticket.statusLabel;
     state.ticketSyncStatus = {
-      tone: ticket.tone,
-      text: `${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
+      tone: renewalOverlapCount > 0 ? "alert" : ticket.tone,
+      text: renewalOverlapCount > 0
+        ? `재등록 회원권 ${renewalOverlapCount}건 연결 확인 중 · 현재 연결권 잔여 ${aggregate.remaining}`
+        : currentTickets.length > 1
+        ? `회원권 ${aggregate.count}개 적용 · 총 ${aggregate.total} / 소진 ${aggregate.used} / 잔여 ${aggregate.remaining}`
+        : `${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
     };
-    const syncKey = `${ticket.id}:${ticket.status}:${ticket.remaining}:${ticket.total}`;
+    const syncKey = currentTickets.length > 1
+      ? currentTickets.map((item) => `${item.id}:${item.status}:${item.remaining}:${item.total}`).join("|")
+      : `${ticket.id}:${ticket.status}:${ticket.remaining}:${ticket.total}`;
     if (syncKey !== state.lastLiveTicketKey) {
       state.lastLiveTicketKey = syncKey;
       state.ticketHistory.unshift({
-        text: `${ticket.title} · ${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
+        text: currentTickets.length > 1
+          ? `회원권 ${aggregate.count}개 · 총 ${aggregate.total} / 소진 ${aggregate.used} / 잔여 ${aggregate.remaining}`
+          : `${ticket.title} · ${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
         tone: ticket.tone,
       });
     }
@@ -12976,7 +13094,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.398", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.399", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -14881,6 +14999,7 @@ function bindEvents() {
   $("#publicProductPreviewList")?.addEventListener("click", (event) => {
     void handlePublicOnboardingAction(event.target);
   });
+  $("#publicOnboardingExistingLogin")?.addEventListener("click", openExistingMemberLoginFromOnboarding);
   $$("[data-login-provider]").forEach((button) => {
     button.addEventListener("click", () => login(button.dataset.loginProvider));
   });
@@ -16022,7 +16141,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.398",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.399",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

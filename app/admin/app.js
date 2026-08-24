@@ -9029,12 +9029,24 @@ function ticketUsesPerParticipantGroupOwnership(ticket) {
   });
 }
 
+function memberHasActiveGroupTicketLink(member, ticket) {
+  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
+  if (!ticketId) return false;
+  const memberUserIds = new Set(memberServerUserIds(member).map(String));
+  return (adminLiveDataState.groupTicketLinks || []).some((link) => (
+    ["active", "linked"].includes(String(link.status || "active").toLowerCase())
+    && String(link.ticket_id || "") === ticketId
+    && memberUserIds.has(String(link.user_id || ""))
+  ));
+}
+
 function memberDirectoryTickets(member) {
   const operationalTickets = memberOperationalTickets(member);
   const memberUserIds = new Set(memberServerUserIds(member).map(String));
   const ownedTickets = operationalTickets.filter((ticket) => (
     !ticketUsesPerParticipantGroupOwnership(ticket)
     || memberUserIds.has(String(ticket.serverUserId || ""))
+    || memberHasActiveGroupTicketLink(member, ticket)
   ));
   return ownedTickets.length ? ownedTickets : operationalTickets;
 }
@@ -9404,6 +9416,25 @@ function memberOperationalTickets(member) {
   return memberTicketHistory(member).filter((ticket) => ticket?.status !== "voided");
 }
 
+function memberTicketLifecyclePositionLabel(member, ticket) {
+  if (!ticket) return "회원권";
+  const groups = memberTicketGroups(member);
+  const ticketId = String(ticket.serverTicketId || ticket.id || "");
+  const currentIndex = groups.current.findIndex((item) => String(item.serverTicketId || item.id || "") === ticketId);
+  if (currentIndex >= 0) {
+    return groups.current.length > 1
+      ? `현재 회원권 ${currentIndex + 1}/${groups.current.length}`
+      : "현재 회원권";
+  }
+  const upcomingIndex = groups.upcoming.findIndex((item) => String(item.serverTicketId || item.id || "") === ticketId);
+  if (upcomingIndex >= 0) {
+    return groups.upcoming.length > 1
+      ? `다음 회원권 ${upcomingIndex + 1}/${groups.upcoming.length}`
+      : "다음 회원권";
+  }
+  return "지난 회원권";
+}
+
 function memberTicketOwnershipLabel(ticket, member) {
   const ownerUserId = String(ticket?.serverUserId || "");
   if (!ownerUserId) return "";
@@ -9439,6 +9470,57 @@ function memberPossibleDuplicateTicketIds(managedTickets = []) {
   return new Set([...ticketsByFingerprint.values()]
     .filter((grouped) => grouped.length > 1)
     .flatMap((grouped) => grouped.map((ticket) => String(ticket.serverTicketId || ""))));
+}
+
+function memberTicketPlanValue(ticket = {}, key = "") {
+  const values = {
+    product: ticket.productId || ticket.product_id || "",
+    coach: ticket.coachRoleId || ticket.coach_role_id || "",
+    starts: ticket.starts || ticket.startsOn || ticket.starts_on || ticket.purchased || "",
+    expires: ticket.expires || ticket.expiresOn || ticket.expires_on || "",
+  };
+  return String(values[key] || "");
+}
+
+function memberTicketDateRangesOverlap(left = {}, right = {}) {
+  const leftStart = memberTicketPlanValue(left, "starts");
+  const leftEnd = memberTicketPlanValue(left, "expires");
+  const rightStart = memberTicketPlanValue(right, "starts");
+  const rightEnd = memberTicketPlanValue(right, "expires");
+  if (!leftStart || !leftEnd || !rightStart || !rightEnd) return false;
+  return leftStart <= rightEnd && rightStart <= leftEnd;
+}
+
+function memberTicketsUseSameRenewalPlan(left = {}, right = {}) {
+  const leftProduct = memberTicketPlanValue(left, "product");
+  const rightProduct = memberTicketPlanValue(right, "product");
+  const leftCoach = memberTicketPlanValue(left, "coach");
+  const rightCoach = memberTicketPlanValue(right, "coach");
+  return Boolean(leftProduct && rightProduct && leftCoach && rightCoach)
+    && leftProduct === rightProduct
+    && leftCoach === rightCoach;
+}
+
+function memberRenewalOverlapTicketIds(managedTickets = []) {
+  const result = new Set();
+  managedTickets.forEach((ticket, index) => {
+    managedTickets.slice(index + 1).forEach((candidate) => {
+      if (!memberTicketsUseSameRenewalPlan(ticket, candidate)
+        || !memberTicketDateRangesOverlap(ticket, candidate)) return;
+      [ticket, candidate].forEach((item) => {
+        const ticketId = String(item.serverTicketId || item.id || "");
+        if (ticketId) result.add(ticketId);
+      });
+    });
+  });
+  return result;
+}
+
+function memberRenewalOverlapForPayload(member, payload = {}) {
+  return memberOperationalTickets(member).find((ticket) => (
+    memberTicketsUseSameRenewalPlan(ticket, payload)
+    && memberTicketDateRangesOverlap(ticket, payload)
+  )) || null;
 }
 
 function memberDirectoryDisplayName(member, ticket = memberCurrentTicket(member)) {
@@ -10634,10 +10716,14 @@ function memberPaymentOverviewMarkup(member) {
   return `<span class="member-payment-summary-line"><strong>${escapeHtml(date)}</strong><small>${escapeHtml(`${paymentMethodLabel(recentPayment.method)} · ${amount}원`)}</small></span>`;
 }
 
-function memberTicketRowMarkup(member, ticket, position = 1, count = 1, possibleDuplicate = false) {
+function memberTicketRowMarkup(member, ticket, position = 1, count = 1, possibleDuplicate = false, renewalOverlap = false) {
   if (!ticket) return '<span class="member-table-muted">회원권 없음</span>';
   const ownershipLabel = count > 1 ? memberTicketOwnershipLabel(ticket, member) : "";
-  const context = [count > 1 ? `회원권 ${position}/${count}` : "", ownershipLabel, possibleDuplicate ? "중복 가능" : ""].filter(Boolean).join(" · ");
+  const context = [
+    count > 1 ? memberTicketLifecyclePositionLabel(member, ticket) : "",
+    ownershipLabel,
+    renewalOverlap ? "연장 겹침 · 확인 필요" : possibleDuplicate ? "중복 가능" : "",
+  ].filter(Boolean).join(" · ");
   const period = [ticket.actualLessonStart || ticket.purchased, ticket.expires]
     .filter(Boolean)
     .map(memberDetailDateLabel)
@@ -12089,8 +12175,9 @@ function memberManagementErrorText(error) {
   if (raw.includes("invalid_member_database_status")) return "회원 상태를 다시 확인해 주세요.";
   if (raw.includes("active_product_required")) return "사용 가능한 회원권 상품을 선택해 주세요.";
   if (raw.includes("member_verified_pending_ticket_exists")) return "결제가 확인된 대기 회원권이 있습니다. 결제/정산에서 회원권 연결을 확인해 주세요.";
+  if (raw.includes("member_ticket_renewal_overlap_forbidden")) return "같은 코치·같은 회원권의 이용기간이 겹칩니다. 기존권 만료 다음 날부터 시작하는 재등록권으로 입력해 주세요.";
   if (raw.includes("member_ticket_exact_duplicate")) return "같은 코치·상품·기간·참여자의 회원권이 이미 있습니다.";
-  if (raw.includes("member_ticket_overlap_confirmation_required")) return "같은 유형의 회원권 기간이 겹칩니다. 비교 후 겹침 등록을 확인해 주세요.";
+  if (raw.includes("member_ticket_overlap_confirmation_required")) return "같은 코치·같은 회원권의 이용기간이 겹칩니다. 별도 복수권이 아니라 재등록권으로 이어서 입력해 주세요.";
   if (raw.includes("member_active_ticket_exists")) return "구형 회원권 등록 규칙이 남아 있습니다. 최신 DB 패치를 적용한 뒤 다시 시도해 주세요.";
   if (raw.includes("ticket_price_invalid")) return "결제금액은 0원 이상으로 입력해 주세요.";
   if (raw.includes("group_surviving_member_required")) return "1:1로 계속 수강할 회원을 다시 선택해 주세요.";
@@ -13340,10 +13427,19 @@ function memberLessonRows(member) {
   });
 }
 
+function memberTicketLessonRows(member, ticket = null, candidateLessons = null) {
+  const memberLessons = Array.isArray(candidateLessons) ? candidateLessons : memberLessonRows(member);
+  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
+  if (!ticketId) return memberLessons;
+  return memberLessons.filter((lesson) => (
+    String(lesson.ticketId || lesson.serverTicketId || "") === ticketId
+  ));
+}
+
 function memberScheduleSummary(member, ticket = memberCurrentTicket(member)) {
   if (!ticket) return "미배정";
   const product = membershipProductForTicket(ticket);
-  const memberLessons = memberLessonRows(member);
+  const memberLessons = memberTicketLessonRows(member, ticket);
   const today = adminLocalDateKey(new Date());
   const upcoming = memberLessons
     .filter((lesson) => !lesson.lessonDate || lesson.lessonDate >= today)
@@ -14199,12 +14295,15 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
   const productOptions = currentProductOption + activeProductOptions;
   const isGroup = Number(currentProduct?.group_size || record?.lesson_group_size || ticket?.groupSize || 1) === 2;
   const ticketOwnershipLabel = ticket && ticketCount > 1 ? memberTicketOwnershipLabel(ticket, member) : "";
+  const managedTickets = memberOperationalTickets(member);
   const possibleDuplicate = Boolean(ticket?.serverTicketId)
-    && memberPossibleDuplicateTicketIds(memberOperationalTickets(member)).has(String(ticket.serverTicketId));
+    && memberPossibleDuplicateTicketIds(managedTickets).has(String(ticket.serverTicketId));
+  const renewalOverlap = Boolean(ticket?.serverTicketId)
+    && memberRenewalOverlapTicketIds(managedTickets).has(String(ticket.serverTicketId));
   const ticketContextLabel = [
-    ticket ? (ticketCount > 1 ? `회원권 ${ticketPosition}/${ticketCount}` : "회원권") : "새 회원권",
+    ticket ? memberTicketLifecyclePositionLabel(member, ticket) : "새 회원권",
     ticketOwnershipLabel,
-    possibleDuplicate ? "중복 가능" : "",
+    renewalOverlap ? "연장 겹침 · 확인 필요" : possibleDuplicate ? "중복 가능" : "",
   ].filter(Boolean).join(" · ");
   const initialSchedule = memberRegularScheduleSlots(member, ticket)
     .slice(0, memberRegularScheduleFrequency(currentProduct, ticket))
@@ -14586,11 +14685,16 @@ function syncMemberCreateSchedule(form, product = null) {
   if (warning && scheduleLater) warning.textContent = "회원과 회원권만 저장한 뒤 시간표에서 정규시간을 설정합니다.";
 }
 
-function syncMemberInlineProductCancellation(form) {
+function syncMemberInlineProductCancellation(form, options = {}) {
   if (!form?.elements.ticketStatus || !form.elements.productId) return;
   const cancelled = !form.elements.productId.value;
-  form.elements.ticketStatus.value = cancelled ? "expired" : "active";
-  if (!cancelled) return;
+  if (!cancelled) {
+    if (options.restoreActive && form.elements.ticketStatus.value === "expired") {
+      form.elements.ticketStatus.value = "active";
+    }
+    return;
+  }
+  form.elements.ticketStatus.value = "expired";
   form.elements.usedSessions.value = form.elements.totalSessions.value || 0;
   syncMemberManagementBalance(form);
 }
@@ -14862,8 +14966,15 @@ async function submitMemberInlineEditor(form, options = {}) {
   payload.applyToFutureSchedule = scheduleReplacementRequested;
   payload.changeBatchId = form.dataset.changeBatchId || createMemberChangeBatchId();
   payload.changeSource = "admin_web";
-  payload.allowOverlap = form.dataset.allowTicketOverlap === "true";
-  payload.allowExactDuplicate = form.dataset.allowExactTicketDuplicate === "true";
+  if (!ticket) {
+    const overlapTicket = memberRenewalOverlapForPayload(member, payload);
+    if (overlapTicket) {
+      message.textContent = "같은 코치·같은 회원권의 기간이 겹칩니다. 기존권 만료 다음 날부터 시작하도록 날짜를 수정해 주세요.";
+      message.classList.add("is-error");
+      form.classList.add("is-save-error");
+      return false;
+    }
+  }
   if (ticket && !payload.expectedTicketUpdatedAt) {
     message.textContent = "최신 회원권 정보를 확인하는 중입니다.";
     message.classList.remove("is-error");
@@ -15001,6 +15112,9 @@ async function submitMemberInlineEditor(form, options = {}) {
         "active_product_required",
         "group_partner_required",
         "member_active_ticket_exists",
+        "member_ticket_renewal_overlap_forbidden",
+        "member_ticket_overlap_confirmation_required",
+        "member_ticket_exact_duplicate",
       ].find((code) => raw.includes(code)) || "member_inline_save_failed";
       void window.TennisNoteDataClient.rpc("tn_admin_log_member_inline_failure", {
         target_ticket_id: ticket.serverTicketId,
@@ -15019,19 +15133,12 @@ async function submitMemberInlineEditor(form, options = {}) {
     }
     if (raw.includes("member_ticket_overlap_confirmation_required") || raw.includes("member_ticket_exact_duplicate")) {
       submit.disabled = false;
-      submit.textContent = ticket ? "이 회원권 저장" : "회원권 등록";
-      const exactDuplicate = raw.includes("member_ticket_exact_duplicate");
-      const confirmed = window.confirm(exactDuplicate
-        ? "같은 코치·상품·기간·참여자의 회원권이 이미 있습니다. 그래도 별도 회원권으로 등록할까요?"
-        : "같은 코치·상품·수업 유형의 회원권 기간이 겹칩니다. 그래도 별도 회원권으로 등록할까요?");
-      if (!confirmed) {
-        message.textContent = exactDuplicate ? "중복 등록을 취소했습니다." : "겹침 등록을 취소했습니다.";
-        message.classList.add("is-error");
-        return false;
-      }
-      if (exactDuplicate) form.dataset.allowExactTicketDuplicate = "true";
-      else form.dataset.allowTicketOverlap = "true";
-      return submitMemberInlineEditor(form, { ...options, skipConfirmation: true });
+      submit.textContent = "회원권 등록";
+      message.textContent = memberManagementErrorText(error);
+      message.classList.add("is-error");
+      form.classList.add("is-save-error");
+      updateMemberInlineToolbar();
+      return false;
     }
     if (raw.includes("member_active_ticket_exists") || raw.includes("member_verified_pending_ticket_exists")) {
       const synced = await syncAdminLiveData(true).catch(() => false);
@@ -15228,11 +15335,13 @@ function renderMembers(options = {}) {
       const editableTickets = memberDirectoryTickets(member);
       const displayedTickets = editableTickets.length ? editableTickets : [null];
       const possibleDuplicateTicketIds = memberPossibleDuplicateTicketIds(editableTickets);
+      const renewalOverlapTicketIds = memberRenewalOverlapTicketIds(editableTickets);
       const selectedIds = selectedMemberIdSet();
       const listStatus = memberListStatus(member);
       return displayedTickets.map((rowTicket, ticketIndex) => {
         const ticketId = String(rowTicket?.serverTicketId || "");
         const possibleDuplicate = possibleDuplicateTicketIds.has(ticketId);
+        const renewalOverlap = renewalOverlapTicketIds.has(ticketId);
         const editingNewTicket = memberAdminEditEnabled
           && Number(state.inlineMemberId) === Number(member.id)
           && String(state.inlineMemberTicketId || "") === ""
@@ -15261,19 +15370,19 @@ function renderMembers(options = {}) {
         const ticketStatus = rowTicket
           ? `<span class="member-ticket-status status-${escapeHtml(window.TennisNoteTicketState?.derive(rowTicket) || rowTicket.status || "unknown")}">${escapeHtml(memberTicketStatusLabel(rowTicket))}</span>`
           : memberStatusBadge(member);
-        return `<tr class="member-ticket-table-row ${possibleDuplicate ? "is-possible-duplicate" : ""} ${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}" data-member-ticket-row="${escapeHtml(ticketId)}">
+        return `<tr class="member-ticket-table-row ${possibleDuplicate || renewalOverlap ? "is-possible-duplicate" : ""} ${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}" data-member-ticket-row="${escapeHtml(ticketId)}">
           <td class="row-select-cell member-select-column">${ticketIndex === 0
             ? `<input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedIds.has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />`
             : '<span class="member-secondary-ticket-mark" aria-hidden="true">↳</span>'}</td>
           <td class="member-name-column">
-            <button class="member-link-button ${possibleDuplicate ? "is-possible-duplicate" : ""}" type="button" data-select-member="${member.id}" ${ticketId ? `data-member-ticket="${escapeHtml(ticketId)}"` : ""}>
+            <button class="member-link-button ${possibleDuplicate || renewalOverlap ? "is-possible-duplicate" : ""}" type="button" data-select-member="${member.id}" ${ticketId ? `data-member-ticket="${escapeHtml(ticketId)}"` : ""}>
               ${avatarMarkup(member, "small")}
               <span>${escapeHtml(member.name)}</span>
             </button>
           </td>
           <td class="member-auth-column">${memberAuthStatusMarkup(member)}</td>
           <td class="member-coach-column">${escapeHtml(memberTicketCoachLabel(member, rowTicket))}</td>
-          <td class="member-ticket-column">${memberTicketRowMarkup(member, rowTicket, ticketIndex + 1, editableTickets.length, possibleDuplicate)}</td>
+          <td class="member-ticket-column">${memberTicketRowMarkup(member, rowTicket, ticketIndex + 1, editableTickets.length, possibleDuplicate, renewalOverlap)}</td>
           <td class="member-schedule-column">${escapeHtml(rowTicket ? memberScheduleSummary(member, rowTicket) : "미배정")}</td>
           <td class="member-usage-column">${rowTicket ? escapeHtml(ticketUsageLabel(rowTicket)) : '<span class="member-table-muted">-</span>'}</td>
           <td class="member-payment-column">${memberTicketPaymentMarkup(member, rowTicket)}</td>
@@ -17685,7 +17794,7 @@ function getTicketLessonKind(ticket) {
 function getTicketDisplayProduct(ticket) {
   return (ticket?.product || "")
     .replace(/^[^\s]+ 코치\s*/, "")
-    .replace(/\s*\d+분.*$/, "")
+    .replace(/\s+\d+분(?:\s+.*)?$/, "")
     .trim();
 }
 
@@ -24902,7 +25011,7 @@ async function performAdminLiveDataSync(options = {}) {
       fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at", order: "created_at.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
       rosterRows("groupAccounts", () => client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => [])),
       rosterRows("groupMembers", () => client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => [])),
-      rosterRows("groupTicketLinks", () => client.selectRows("tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", limit: 500 }).catch(() => [])),
+      rosterRows("groupTicketLinks", () => (client.selectAllRows || client.selectRows).call(client, "tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", pageSize: 500 }).catch(() => [])),
       fullAdminAccess ? rosterRows("memberDatabaseRecords", () => Promise.resolve(adminLiveDataState.memberDatabaseRecords || [])) : Promise.resolve([]),
       fullAdminAccess ? rosterRows("memberMembershipRecords", () => Promise.resolve(adminLiveDataState.memberMembershipRecords || [])) : Promise.resolve([]),
       // Settlement modes must cover the same complete history as lesson records.
@@ -31625,7 +31734,7 @@ function bindEvents() {
       return;
     }
     if (event.target.matches("[data-member-inline-form] input, [data-member-inline-form] select")) {
-      if (event.target.matches("select[name='productId']")) syncMemberInlineProductCancellation(event.target.form);
+      if (event.target.matches("select[name='productId']")) syncMemberInlineProductCancellation(event.target.form, { restoreActive: true });
       if (event.target.matches("select[name^='scheduleTime']") && event.target.form?.elements.applyToFutureSchedule) {
         event.target.form.elements.applyToFutureSchedule.value = "true";
       }
@@ -31644,7 +31753,7 @@ function bindEvents() {
     setMemberInlineDirtyState(form);
     if (event.target.name === "productId") {
       syncMemberQuickEditorProduct(form);
-      syncMemberInlineProductCancellation(form);
+      syncMemberInlineProductCancellation(form, { restoreActive: true });
     }
     syncMemberInlineFutureScheduleChoice(form);
     if (event.target.name === "productId" && !form.dataset.ticketId && event.target.value) {
