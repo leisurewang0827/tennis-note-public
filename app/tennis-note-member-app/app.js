@@ -246,10 +246,164 @@ const serverJournalSchema = "tennisnote-mobile-journal-v1";
 const memberEnrollmentFormVersion = "2026-07-15-v1";
 const identityTermsVersion = "2026-08-13-v1";
 const identityPrivacyVersion = "2026-07-19-v2";
+const onboardingIntentStorageKey = "tennis-note-onboarding-intent-v1";
+const onboardingIntentStartValues = new Set(["join", "one-day", "membership", "renew"]);
+const onboardingIntentSourceValues = new Set(["direct", "onsite_qr", "kakao_channel", "naver_place"]);
 const memberEnrollmentLegacyDefaults = {
+  experienceLevel: "beginner",
   lessonGoal: "미수집",
   preferredSchedule: "시간표에서 선택",
 };
+let onboardingIntentApplying = false;
+let onboardingIntentRecordedKey = "";
+
+function normalizeOnboardingStart(value = "") {
+  const normalized = String(value || "").trim().toLowerCase().replaceAll("_", "-");
+  if (["oneday", "one-day", "trial"].includes(normalized)) return "one-day";
+  return onboardingIntentStartValues.has(normalized) ? normalized : "";
+}
+
+function normalizeOnboardingSource(value = "") {
+  const normalized = String(value || "").trim().toLowerCase().replaceAll("-", "_");
+  return onboardingIntentSourceValues.has(normalized) ? normalized : "";
+}
+
+function storedOnboardingIntent() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(onboardingIntentStorageKey) || "null");
+    if (!parsed || !normalizeOnboardingStart(parsed.start)) return null;
+    return {
+      start: normalizeOnboardingStart(parsed.start),
+      source: normalizeOnboardingSource(parsed.source) || "direct",
+      capturedAt: String(parsed.capturedAt || ""),
+      applied: parsed.applied === true,
+    };
+  } catch {
+    sessionStorage.removeItem(onboardingIntentStorageKey);
+    return null;
+  }
+}
+
+function saveOnboardingIntent(intent = null) {
+  if (!intent) {
+    sessionStorage.removeItem(onboardingIntentStorageKey);
+    return;
+  }
+  sessionStorage.setItem(onboardingIntentStorageKey, JSON.stringify(intent));
+}
+
+function captureOnboardingIntent() {
+  const params = new URLSearchParams(window.location.search);
+  const start = normalizeOnboardingStart(params.get("start"));
+  if (!start) return storedOnboardingIntent();
+  const source = normalizeOnboardingSource(params.get("source")) || "direct";
+  const existing = storedOnboardingIntent();
+  const returningFromExternalFlow = Boolean(
+    params.get("code")
+    || params.get("error")
+    || params.get("paymentId")
+    || window.location.hash.includes("access_token="),
+  );
+  const sameIntent = existing?.start === start && existing?.source === source;
+  const alreadyCapturedInEntry = history.state?.tennisNoteOnboardingCaptured === true;
+  const shouldReset = !sameIntent || (!returningFromExternalFlow && !alreadyCapturedInEntry);
+  const intent = shouldReset
+    ? { start, source, capturedAt: new Date().toISOString(), applied: false }
+    : existing;
+  saveOnboardingIntent(intent);
+  const currentState = typeof history.state === "object" && history.state ? history.state : {};
+  if (!currentState.tennisNoteOnboardingCaptured) {
+    history.replaceState({ ...currentState, tennisNoteOnboardingCaptured: true }, "", window.location.href);
+  }
+  return intent;
+}
+
+function onboardingIntentCopy(intent = storedOnboardingIntent()) {
+  if (intent?.start === "one-day") {
+    return {
+      eyebrow: "원데이 체험 신청",
+      title: "로그인 후 실제 빈 시간을 바로 선택합니다.",
+      detail: "처음 방문하거나 기존 회원이어도 같은 방법으로 시작할 수 있습니다.",
+    };
+  }
+  if (intent?.start === "membership") {
+    return {
+      eyebrow: "정규 회원권 등록",
+      title: "가입 확인 후 코치와 시간을 선택합니다.",
+      detail: "기존 회원은 로그인하면 현재 회원권과 재등록 정보를 먼저 확인합니다.",
+    };
+  }
+  return {
+    eyebrow: "테니스노트 시작",
+    title: "가입 후 바로 수업을 신청할 수 있습니다.",
+    detail: "기존 회원은 같은 방법으로 로그인하면 회원권이 자동으로 연결됩니다.",
+  };
+}
+
+function renderOnboardingEntryIntro() {
+  const intro = $("#onboardingEntryIntro");
+  if (!intro) return;
+  const intent = storedOnboardingIntent();
+  intro.hidden = !intent;
+  if (!intent) return;
+  const copy = onboardingIntentCopy(intent);
+  if ($("#onboardingEntryEyebrow")) $("#onboardingEntryEyebrow").textContent = copy.eyebrow;
+  if ($("#onboardingEntryTitle")) $("#onboardingEntryTitle").textContent = copy.title;
+  if ($("#onboardingEntryDetail")) $("#onboardingEntryDetail").textContent = copy.detail;
+}
+
+async function recordOnboardingIntent(intent = storedOnboardingIntent()) {
+  const client = window.TennisNoteDataClient;
+  if (!intent || !hasLiveMemberSession() || !client?.rpc) return false;
+  const recordKey = `${state.member?.profileId || ""}:${intent.source}:${intent.start}`;
+  if (onboardingIntentRecordedKey === recordKey) return true;
+  try {
+    await client.rpc("tn_record_my_onboarding_entry", {
+      target_source_channel: intent.source,
+      target_start_intent: intent.start,
+      target_entry_path: window.location.pathname,
+    });
+    onboardingIntentRecordedKey = recordKey;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function markOnboardingIntentApplied(intent = storedOnboardingIntent()) {
+  if (!intent) return;
+  saveOnboardingIntent({ ...intent, applied: true });
+}
+
+async function applyPendingOnboardingIntent() {
+  const intent = storedOnboardingIntent();
+  renderOnboardingEntryIntro();
+  if (!intent || intent.applied || onboardingIntentApplying || !state.member) return false;
+  void recordOnboardingIntent(intent);
+  if (!identityProfileComplete()) {
+    if ($("#identitySetupTitle")) $("#identitySetupTitle").textContent = "가입 정보를 확인해 주세요";
+    if ($("#identitySetupMessage")) $("#identitySetupMessage").textContent = "이름·휴대전화·출생연도 확인 후 수업 신청으로 이어집니다.";
+    return false;
+  }
+  onboardingIntentApplying = true;
+  try {
+    if (intent.start === "one-day") {
+      await openOneDayPurchaseFlow();
+    } else if (intent.start === "membership") {
+      setView("shopView", { replaceHistory: true });
+      openMembershipPurchaseFlow("", "", "new_purchase");
+    } else if (intent.start === "renew") {
+      setView("shopView", { replaceHistory: true });
+      openMembershipPurchaseFlow(currentLiveTickets()[0]?.id || "", "", "renew_same");
+    } else {
+      setView("homeView", { replaceHistory: true });
+    }
+    markOnboardingIntentApplied(intent);
+    return true;
+  } finally {
+    onboardingIntentApplying = false;
+  }
+}
 
 const lessons = [];
 
@@ -1014,7 +1168,7 @@ function membershipPricingQuote(product = {}) {
 
 const registrationFlows = [
   { title: "운동노트 회원", detail: "간편 로그인만 하면 회원권 없이도 운동 기록을 바로 남길 수 있습니다.", steps: ["간편 로그인", "운동 기록", "사진·영상", "계속 이용"] },
-  { title: "첫 회원권 구매", detail: "처음 유료 레슨을 구매할 때만 수강 가입서를 작성하고 결제로 이어집니다.", steps: ["회원권 선택", "수강 가입서", "결제", "수강 시작"] },
+  { title: "첫 회원권 구매", detail: "이름·연락처·출생연도만 확인하고 결제로 이어집니다.", steps: ["회원권 선택", "기본정보 확인", "결제", "수강 시작"] },
   { title: "재등록", detail: "현재 가입서가 유효한 회원은 다시 작성하지 않고 기존 시간과 회원권을 연장합니다.", steps: ["잔여 2회 알림", "기존 시간 보호", "결제", "연장"] },
   { title: "2대1 공동관리", detail: "한 명이 가입서와 결제를 진행해도 파트너 일정이 함께 연결됩니다.", steps: ["파트너 입력", "공동 시간표", "대표 결제", "앱 추가 연결"] },
 ];
@@ -2112,7 +2266,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.396",
+    workerUrl: "./service-worker.js?v=1.0.397",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -5447,8 +5601,8 @@ function renderMemberBookingShortcuts() {
           <button class="small-button" type="button" data-flex-booking-products="coupon">쿠폰 회원권 보기</button>
         </article>`}
       <article>
-        <div><strong>원데이 레슨</strong><span>회원권 없이 상담 후 예약할 수 있습니다.</span></div>
-        <button class="small-button" type="button" data-open-one-day-inquiry>원데이 문의</button>
+        <div><strong>원데이 레슨</strong><span>실제 가능한 코치와 시간을 선택해 바로 신청할 수 있습니다.</span></div>
+        <button class="small-button" type="button" data-start-one-day-purchase>원데이 시간 보기</button>
       </article>
     </section>`;
 }
@@ -7107,7 +7261,6 @@ function openMemberEnrollmentModal(productId, message = "") {
   setEnrollmentInputValue("#enrollmentBirthYear", enrollment.birth_year || state.member?.birthYear || "");
   setEnrollmentInputValue("#enrollmentNeighborhood", enrollment.neighborhood || state.member?.neighborhood || "");
   setEnrollmentInputValue("#enrollmentGender", enrollment.gender || state.member?.gender || "");
-  setEnrollmentInputValue("#enrollmentExperience", enrollment.experience_level || "beginner");
   setEnrollmentInputValue("#enrollmentPartnerName", enrollment.partner_name || "");
   setEnrollmentInputValue("#enrollmentPartnerPhone", enrollment.partner_phone || "");
   setEnrollmentInputValue("#enrollmentPartnerBirthYear", enrollment.partner_birth_year || "");
@@ -7180,7 +7333,7 @@ async function submitMemberEnrollment(event) {
     target_birth_year: birthYear,
     target_neighborhood: $("#enrollmentNeighborhood")?.value.trim() || "",
     target_gender: $("#enrollmentGender")?.value || "",
-    target_experience_level: $("#enrollmentExperience")?.value || "beginner",
+    target_experience_level: memberEnrollmentLegacyDefaults.experienceLevel,
     target_lesson_goal: memberEnrollmentLegacyDefaults.lessonGoal,
     target_preferred_schedule: memberEnrollmentLegacyDefaults.preferredSchedule,
     target_partner_name: isGroup ? $("#enrollmentPartnerName")?.value.trim() || "" : "",
@@ -8441,11 +8594,22 @@ function renderMembershipPurchaseFlow() {
   if (flow.step !== 4 && normalizeSelectedPaymentMethod() !== "bank_transfer") preloadPortOneSdk();
 }
 
+async function openOneDayPurchaseFlow() {
+  setView("shopView", { replaceHistory: true });
+  await ensureMembershipPurchaseData();
+  const oneDayProduct = membershipProducts()
+    .filter((product) => isDirectPurchaseMembershipProduct(product) && membershipProductFamilyId(product) === "one-day")
+    .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999))[0] || null;
+  openMembershipPurchaseFlow("", oneDayProduct?.id || "", "one_day");
+  return Boolean(oneDayProduct);
+}
+
 function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", requestedPurpose = "") {
   const flow = purchaseFlowState();
   const activeTickets = currentLiveTickets();
   const requestedSource = (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
-  const sourceTicket = requestedSource || (requestedPurpose !== "add_coach" ? activeTickets[0] || null : null);
+  const sourceTicket = requestedSource
+    || (!["add_coach", "new_purchase", "one_day"].includes(requestedPurpose) ? activeTickets[0] || null : null);
   const sourceIsActive = Boolean(sourceTicket && activeTickets.some((ticket) => String(ticket.id || "") === String(sourceTicket.id || "")));
   const products = membershipProducts();
   const exactProduct = products.find((product) => (
@@ -8468,9 +8632,11 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
   flow.open = true;
   flow.renewalTicketId = sourceTicket?.id || "";
   flow.productId = matchingProduct?.id || "";
-  flow.familyId = matchingProduct ? membershipProductFamilyId(matchingProduct) : activeMembershipPresetId() || "four-week";
+  flow.familyId = matchingProduct
+    ? membershipProductFamilyId(matchingProduct)
+    : requestedPurpose === "one_day" ? "one-day" : activeMembershipPresetId() || "four-week";
   flow.step = 1;
-  flow.purchasePurpose = ["renew_same", "add_coach", "new_purchase"].includes(requestedPurpose)
+  flow.purchasePurpose = ["renew_same", "add_coach", "new_purchase", "one_day"].includes(requestedPurpose)
     ? requestedPurpose
     : sourceIsActive ? "renew_same" : "new_purchase";
   flow.showMoreSlots = false;
@@ -12333,7 +12499,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.396", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.397", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -13414,9 +13580,11 @@ async function submitIdentitySetup(event) {
     saveSnapshot();
     if (result?.linkStatus === "admin_review_required") {
       showToast("가입 완료. 기존 회원 정보는 관리자 확인 후 연결됩니다.");
+      await applyPendingOnboardingIntent();
       return;
     }
     showToast("가입 정보가 저장되었습니다.");
+    await applyPendingOnboardingIntent();
   } catch (error) {
     const errorMessage = identityErrorMessage(error);
     if (message) message.textContent = errorMessage;
@@ -13750,6 +13918,7 @@ async function applySupabaseMemberSession(showNotice = false) {
     await syncLiveSchedulePolicy(currentLiveTicket()?.branchId || "");
     renderAll();
     saveSnapshot();
+    await applyPendingOnboardingIntent();
     void Promise.allSettled([
       syncMemberChangeRequestsFromServer(profile),
       syncMemberJournalEntriesFromServer(profile),
@@ -14477,6 +14646,10 @@ function bindEvents() {
     if (couponProductsButton) {
       state.membershipFilters.productKind = "coupon";
       navigateMemberView("shopView");
+      return;
+    }
+    if (event.target.closest("[data-start-one-day-purchase]")) {
+      void openOneDayPurchaseFlow();
       return;
     }
     if (event.target.closest("[data-open-one-day-inquiry]")) {
@@ -15296,7 +15469,9 @@ async function initApp() {
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
+  captureOnboardingIntent();
   restoreSnapshot();
+  renderOnboardingEntryIntro();
   window.TennisNoteModeTransition?.consume("member", { splashSelector: "#brandSplash" });
   bindEvents();
   installOAuthReturnStatusReset();
@@ -15365,7 +15540,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.396",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.397",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

@@ -210,6 +210,38 @@ button {
   margin: 0 0 4px;
 }
 
+.onboarding-entry-intro {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(15, 132, 91, 0.26);
+  border-radius: 10px;
+  padding: 13px 14px;
+  background: linear-gradient(115deg, #ecfdf5, #ffffff 76%);
+}
+
+.onboarding-entry-intro[hidden] {
+  display: none !important;
+}
+
+.onboarding-entry-intro span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.onboarding-entry-intro strong {
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.onboarding-entry-intro small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
 .provider,
 .primary-button,
 .small-button,
@@ -566,6 +598,18 @@ button {
 }
 
 .home-onboarding .primary-button {
+  min-width: 112px;
+}
+
+.home-onboarding .home-onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.home-onboarding-actions .small-button,
+.home-onboarding-actions .primary-button {
   min-width: 112px;
 }
 
@@ -5019,6 +5063,18 @@ button.purchase-timetable-cell {
 
   .home-onboarding .primary-button {
     width: 100%;
+  }
+
+  .home-onboarding .home-onboarding-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .home-onboarding-actions .small-button,
+  .home-onboarding-actions .primary-button {
+    width: 100%;
+    min-width: 0;
   }
 
   .summary-grid span {
