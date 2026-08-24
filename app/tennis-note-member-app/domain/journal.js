@@ -57,17 +57,6 @@ function serverJournalBody(log = {}) {
   });
 }
 
-async function downloadServerMediaItem(client, row, displayName = "첨부파일") {
-  const blob = await client.downloadObject(journalMediaBucket, row.storage_path);
-  return {
-    name: displayName,
-    type: row.media_type === "video" ? (blob.type || "video/mp4") : (blob.type || "image/jpeg"),
-    url: URL.createObjectURL(blob),
-    storagePath: row.storage_path,
-    serverMediaId: row.id,
-  };
-}
-
 function journalActivityLessonStatus(lesson) {
   const source = String(lesson.lessonSource || lesson.lesson_source || "").toLowerCase();
   const status = String(lesson.serverStatus || lesson.status || "scheduled").toLowerCase();

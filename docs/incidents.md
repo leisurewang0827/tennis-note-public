@@ -40,6 +40,7 @@
 | `event-binding` | `bindEvents` 가 `app.js` 밖으로 나간 것 |
 | `global-scope` | 공용 파일을 관리자에 실으면 `$`·`$$` 가 `const` 선언과 충돌하는 것 |
 | `global-scope` | 병합 중에 `renderCoachSettlementPreview` 가 두 번 선언된 것 |
+| `layer-boundaries` | `domain/` 에서 서버를 부르던 함수 6개 (판정만 하는 곳이 아니었다) |
 
 ## 검사기가 못 잡아서 시간을 잡아먹은 것
 
@@ -57,5 +58,9 @@
 - **`escapeHtml` 누락** — 새 코드가 입력값을 감싸지 않아도 아무것도 막지 않습니다.
   `innerHTML` 에 들어가는 템플릿에서 `${...}` 가 `escapeHtml` 을 거치는지 보는
   검사를 만들 수 있을 것 같은데, 오탐이 많아 아직 안 만들었습니다.
+- **`ui/`·`forms/` 의 서버 호출** — `domain/`·`views/` 만 `layer-boundaries` 가
+  막습니다. 관리자 `ui/billing.js` 등 6곳이 서버를 부르는데, 저쪽이 만든 환불
+  흐름이라 옮기려면 손이 큽니다. **분류가 틀렸던 게 아니라 나중에 어긋난
+  것입니다** — 나눌 때는 정말 여닫기만 했는데 저쪽이 서버 호출을 넣었습니다.
 - **서비스워커 `CACHE_NAME` 미증가** — 파일만 봐서는 "올렸는지" 판단할 수 없습니다.
   [releasing.md](releasing.md#서비스워커-캐시-이름) 참조.

@@ -923,3 +923,24 @@ async function loadSupabaseLiveStatus() {
   }
   renderSupabaseLiveStatus();
 }
+
+async function uploadNoticeDraftImage(notice) {
+  if (!noticeImageDraftFile) return { notice, uploadedPath: "" };
+  const client = liveNoticeClient();
+  if (!client?.uploadObject) throw new Error("관리자 로그인 후 이미지를 첨부할 수 있습니다");
+  const current = await client.selectCurrentProfile?.();
+  const authUser = current?.user || await client.getAuthUser?.();
+  const ownerId = current?.profile?.id || authUser?.id;
+  if (!ownerId) throw new Error("관리자 계정을 확인할 수 없습니다");
+  const objectPath = `${ownerId}/${safeNoticeFileName(noticeImageDraftFile.name)}`;
+  await client.uploadObject(noticeMediaBucket, objectPath, noticeImageDraftFile);
+  const imageUrl = noticeStoragePublicUrl(objectPath);
+  if (!imageUrl) {
+    await client.deleteObject?.(noticeMediaBucket, objectPath).catch(() => {});
+    throw new Error("공지 이미지 주소를 만들 수 없습니다");
+  }
+  return {
+    notice: normalizePopupNotice({ ...notice, imageUrl, imageStoragePath: objectPath }),
+    uploadedPath: objectPath,
+  };
+}

@@ -134,6 +134,7 @@ const PAGES = [
       "app/tennis-note-member-app/data/push.js",
       "app/tennis-note-member-app/data/payment.js",
       "app/tennis-note-member-app/data/journal.js",
+      "app/tennis-note-member-app/data/tickets.js",
       "app/tennis-note-member-app/ui/sheet.js",
       "app/tennis-note-member-app/ui/screens.js",
       "app/tennis-note-member-app/storage.js",

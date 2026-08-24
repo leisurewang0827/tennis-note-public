@@ -42,6 +42,7 @@ const APP_SHELL = [
   "./data/push.js?v=1.0.396",
   "./data/payment.js?v=1.0.396",
   "./data/journal.js?v=1.0.396",
+  "./data/tickets.js?v=1.0.396",
   "./ui/sheet.js?v=1.0.396",
   "./ui/screens.js?v=1.0.396",
   "./storage.js?v=1.0.396",

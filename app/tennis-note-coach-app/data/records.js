@@ -249,3 +249,13 @@ function flushCoachOfflineLessonDrafts() {
   });
   return coachOfflineFlushPromise;
 }
+
+async function downloadCoachJournalMedia(client, row, displayName) {
+  const blob = await client.downloadObject(journalMediaBucket, row.storage_path);
+  return {
+    name: displayName || "첨부파일",
+    type: row.media_type === "video" ? (blob.type || "video/mp4") : (blob.type || "image/jpeg"),
+    url: URL.createObjectURL(blob),
+    storagePath: row.storage_path,
+  };
+}
