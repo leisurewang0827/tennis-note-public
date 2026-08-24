@@ -1820,6 +1820,7 @@ const sharedStorageKey = "tennis-note-shared-live-v1";
 const appModePreferenceKey = "tennis-note-app-mode";
 const legacyDemoStorageKeys = ["tennis-note-member-demo-v1", "tennis-note-coach-demo-v1", "tennis-note-shared-demo-v1"];
 let coachModeNavigationStarted = false;
+let oauthLoginInFlightProvider = "";
 
 function safeLocalStorageSet(key, value) {
   try {
@@ -2764,7 +2765,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.399",
+    workerUrl: "./service-worker.js?v=1.0.400",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -13094,7 +13095,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.399", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.400", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -14539,19 +14540,57 @@ async function applySupabaseMemberSession(showNotice = false) {
   }
 }
 
+function beginOAuthLogin(provider) {
+  if (oauthLoginInFlightProvider) return false;
+  oauthLoginInFlightProvider = provider || "간편";
+  $$('[data-login-provider]').forEach((button) => {
+    button.dataset.oauthDisabledBefore = button.disabled ? "true" : "false";
+    button.disabled = true;
+    button.setAttribute("aria-busy", button.dataset.loginProvider === provider ? "true" : "false");
+  });
+  return true;
+}
+
+function finishOAuthLogin() {
+  oauthLoginInFlightProvider = "";
+  $$('[data-login-provider]').forEach((button) => {
+    const disabledBefore = button.dataset.oauthDisabledBefore;
+    if (disabledBefore) button.disabled = disabledBefore === "true";
+    delete button.dataset.oauthDisabledBefore;
+    button.removeAttribute("aria-busy");
+  });
+}
+
+function oauthLoginErrorMessage(error, provider = "간편") {
+  const code = String(error?.code || error?.message || "").toLowerCase();
+  if (code.includes("flow_state_already_used")) {
+    return `${provider} 로그인 요청이 겹쳤습니다. 버튼을 한 번만 눌러 다시 진행해 주세요.`;
+  }
+  if (code.includes("server_error") || code.includes("unexpected_failure") || code.includes("request_timeout")) {
+    return `${provider} 로그인 서버 응답이 늦어졌습니다. 잠시 후 다시 시도해 주세요.`;
+  }
+  return `${provider} 로그인을 완료하지 못했습니다. 다시 시도해 주세요.`;
+}
+
 async function login(provider) {
   const client = window.TennisNoteDataClient;
   const status = $("#memberEmailLoginStatus");
+  if (!beginOAuthLogin(provider)) {
+    if (status) status.textContent = `${oauthLoginInFlightProvider} 로그인을 진행하고 있습니다.`;
+    return;
+  }
   if (client?.readiness?.().ready) {
     try {
       if (status) status.textContent = `${provider} 로그인 화면을 여는 중입니다.`;
       await client.signInWithOAuth(provider);
       return;
     } catch (error) {
-      if (status) status.textContent = `${provider} 로그인을 열지 못했습니다. 잠시 후 다시 시도해주세요.`;
+      finishOAuthLogin();
+      if (status) status.textContent = oauthLoginErrorMessage(error, provider);
       return;
     }
   }
+  finishOAuthLogin();
   if (status) status.textContent = "실사용 로그인 연결 설정을 확인해 주세요.";
 }
 
@@ -14571,7 +14610,12 @@ async function syncAppleLoginAvailability() {
   }
   buttons.forEach((button) => {
     const label = button.querySelector("[data-apple-login-label]");
-    button.disabled = !ready;
+    if (oauthLoginInFlightProvider && button.dataset.oauthDisabledBefore) {
+      button.dataset.oauthDisabledBefore = ready ? "false" : "true";
+      button.disabled = true;
+    } else {
+      button.disabled = !ready;
+    }
     button.classList.toggle("is-preparing", !ready);
     const buttonLabel = ready ? button.dataset.readyLabel : "Apple 로그인 설정 중";
     if (label) label.textContent = buttonLabel;
@@ -14582,6 +14626,7 @@ async function syncAppleLoginAvailability() {
 async function handleOAuthResult(event) {
   const status = $("#memberEmailLoginStatus");
   const provider = event?.detail?.provider || "간편";
+  finishOAuthLogin();
   if (event?.detail?.ok) {
     event.preventDefault();
     if (status) status.textContent = `${provider} 로그인 정보를 확인하고 있습니다.`;
@@ -14600,7 +14645,7 @@ async function handleOAuthResult(event) {
   if (!status) return;
   status.textContent = event?.detail?.cancelled
     ? `${provider} 로그인이 취소되었습니다.`
-    : `${provider} 로그인을 완료하지 못했습니다. 다시 시도해주세요.`;
+    : oauthLoginErrorMessage({ code: event?.detail?.errorCode }, provider);
 }
 
 function emailLoginErrorMessage(error) {
@@ -16116,6 +16161,7 @@ async function initApp() {
   } catch (error) {
     const status = $("#memberEmailLoginStatus");
     if (status && isTransientNetworkError(error)) status.textContent = identityErrorMessage(error);
+    else if (status && oauthReturnPending) status.textContent = oauthLoginErrorMessage(error);
   }
   setMemberSessionRestoring(false);
   if (coachModeNavigationStarted) return;
@@ -16141,7 +16187,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.399",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.400",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

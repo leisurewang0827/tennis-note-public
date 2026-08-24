@@ -472,9 +472,14 @@
       : options.manifestUrl || defaultManifestUrl;
     const workerUrl = options.workerUrl || "";
     let controllerReloaded = false;
+    let pageWasControlled = Boolean(navigator.serviceWorker?.controller);
 
     if (!nativeWebView && "serviceWorker" in navigator) {
       navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!pageWasControlled) {
+          pageWasControlled = true;
+          return;
+        }
         if (controllerReloaded) return;
         const releaseId = remoteRelease?.releaseId || currentRelease().releaseId;
         if (!releaseId) return;
