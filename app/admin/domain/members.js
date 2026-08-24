@@ -342,8 +342,9 @@ function memberManagementErrorText(error) {
   if (raw.includes("invalid_member_database_status")) return "회원 상태를 다시 확인해 주세요.";
   if (raw.includes("active_product_required")) return "사용 가능한 회원권 상품을 선택해 주세요.";
   if (raw.includes("member_verified_pending_ticket_exists")) return "결제가 확인된 대기 회원권이 있습니다. 결제/정산에서 회원권 연결을 확인해 주세요.";
+  if (raw.includes("member_ticket_renewal_overlap_forbidden")) return "같은 코치·같은 회원권의 이용기간이 겹칩니다. 기존권 만료 다음 날부터 시작하는 재등록권으로 입력해 주세요.";
   if (raw.includes("member_ticket_exact_duplicate")) return "같은 코치·상품·기간·참여자의 회원권이 이미 있습니다.";
-  if (raw.includes("member_ticket_overlap_confirmation_required")) return "같은 유형의 회원권 기간이 겹칩니다. 비교 후 겹침 등록을 확인해 주세요.";
+  if (raw.includes("member_ticket_overlap_confirmation_required")) return "같은 코치·같은 회원권의 이용기간이 겹칩니다. 별도 복수권이 아니라 재등록권으로 이어서 입력해 주세요.";
   if (raw.includes("member_active_ticket_exists")) return "구형 회원권 등록 규칙이 남아 있습니다. 최신 DB 패치를 적용한 뒤 다시 시도해 주세요.";
   if (raw.includes("ticket_price_invalid")) return "결제금액은 0원 이상으로 입력해 주세요.";
   if (raw.includes("group_surviving_member_required")) return "1:1로 계속 수강할 회원을 다시 선택해 주세요.";

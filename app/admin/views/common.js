@@ -834,12 +834,15 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
   const productOptions = currentProductOption + activeProductOptions;
   const isGroup = Number(currentProduct?.group_size || record?.lesson_group_size || ticket?.groupSize || 1) === 2;
   const ticketOwnershipLabel = ticket && ticketCount > 1 ? memberTicketOwnershipLabel(ticket, member) : "";
+  const managedTickets = memberOperationalTickets(member);
   const possibleDuplicate = Boolean(ticket?.serverTicketId)
-    && memberPossibleDuplicateTicketIds(memberOperationalTickets(member)).has(String(ticket.serverTicketId));
+    && memberPossibleDuplicateTicketIds(managedTickets).has(String(ticket.serverTicketId));
+  const renewalOverlap = Boolean(ticket?.serverTicketId)
+    && memberRenewalOverlapTicketIds(managedTickets).has(String(ticket.serverTicketId));
   const ticketContextLabel = [
-    ticket ? (ticketCount > 1 ? `회원권 ${ticketPosition}/${ticketCount}` : "회원권") : "새 회원권",
+    ticket ? memberTicketLifecyclePositionLabel(member, ticket) : "새 회원권",
     ticketOwnershipLabel,
-    possibleDuplicate ? "중복 가능" : "",
+    renewalOverlap ? "연장 겹침 · 확인 필요" : possibleDuplicate ? "중복 가능" : "",
   ].filter(Boolean).join(" · ");
   const initialSchedule = memberRegularScheduleSlots(member, ticket)
     .slice(0, memberRegularScheduleFrequency(currentProduct, ticket))

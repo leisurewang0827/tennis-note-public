@@ -706,7 +706,7 @@ function bindDelegatedEvents() {
       return;
     }
     if (event.target.matches("[data-member-inline-form] input, [data-member-inline-form] select")) {
-      if (event.target.matches("select[name='productId']")) syncMemberInlineProductCancellation(event.target.form);
+      if (event.target.matches("select[name='productId']")) syncMemberInlineProductCancellation(event.target.form, { restoreActive: true });
       if (event.target.matches("select[name^='scheduleTime']") && event.target.form?.elements.applyToFutureSchedule) {
         event.target.form.elements.applyToFutureSchedule.value = "true";
       }
@@ -724,7 +724,7 @@ function bindDelegatedEvents() {
     setMemberInlineDirtyState(form);
     if (event.target.name === "productId") {
       syncMemberQuickEditorProduct(form);
-      syncMemberInlineProductCancellation(form);
+      syncMemberInlineProductCancellation(form, { restoreActive: true });
     }
     syncMemberInlineFutureScheduleChoice(form);
     if (event.target.name === "productId" && !form.dataset.ticketId && event.target.value) {

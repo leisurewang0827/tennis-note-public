@@ -222,7 +222,9 @@ function membershipPricingQuote(product = {}) {
 }
 
 function activeTicketScheduleScope() {
-  const ticket = currentLiveTicket();
+  const selectedTicketId = String(state.selectedMemberScheduleTicketId || "");
+  const ticket = currentLiveTickets().find((item) => String(item.id || "") === selectedTicketId)
+    || currentLiveTicket();
   if (ticket?.scheduleScope) return ticket.scheduleScope;
   const title = `${ticket?.title || state.profile?.ticket || ""}`;
   return title.includes("주말") ? "weekend" : "weekday";

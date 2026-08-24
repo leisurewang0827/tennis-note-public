@@ -281,11 +281,16 @@ function normalizeNotificationPolicy(settings = {}) {
   };
 }
 
-function syncMemberInlineProductCancellation(form) {
+function syncMemberInlineProductCancellation(form, options = {}) {
   if (!form?.elements.ticketStatus || !form.elements.productId) return;
   const cancelled = !form.elements.productId.value;
-  form.elements.ticketStatus.value = cancelled ? "expired" : "active";
-  if (!cancelled) return;
+  if (!cancelled) {
+    if (options.restoreActive && form.elements.ticketStatus.value === "expired") {
+      form.elements.ticketStatus.value = "active";
+    }
+    return;
+  }
+  form.elements.ticketStatus.value = "expired";
   form.elements.usedSessions.value = form.elements.totalSessions.value || 0;
   syncMemberManagementBalance(form);
 }

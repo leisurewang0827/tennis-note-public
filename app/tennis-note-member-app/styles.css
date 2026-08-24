@@ -280,6 +280,28 @@ button {
   line-height: 1.45;
 }
 
+.public-onboarding-existing-login {
+  justify-self: center;
+  border: 0;
+  padding: 4px 6px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.public-onboarding-existing-login strong {
+  color: var(--green);
+}
+
+.public-onboarding-existing-login[hidden] {
+  display: none !important;
+}
+
 .public-product-preview-list {
   display: grid;
   gap: 10px;
@@ -409,6 +431,21 @@ button {
 }
 
 .public-onboarding-login-actions[hidden] {
+  display: none !important;
+}
+
+.public-onboarding-existing-note {
+  margin: 0;
+  border-radius: 12px;
+  padding: 11px 12px;
+  color: var(--green);
+  background: var(--mint);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.public-onboarding-existing-note[hidden] {
   display: none !important;
 }
 

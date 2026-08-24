@@ -8,6 +8,7 @@ function bindDelegatedEvents() {
   $("#publicProductPreviewList")?.addEventListener("click", (event) => {
     void handlePublicOnboardingAction(event.target);
   });
+  $("#publicOnboardingExistingLogin")?.addEventListener("click", openExistingMemberLoginFromOnboarding);
   document.addEventListener(
     "click",
     (event) => {

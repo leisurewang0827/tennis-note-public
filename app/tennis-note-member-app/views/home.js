@@ -105,10 +105,17 @@ function renderTodayActions() {
   const target = $("#todayActionCards");
   if (!target) return;
   const nextLesson = nextMemberLesson();
+  const nextLessonTicket = liveTicketForLesson(nextLesson);
+  const currentTicketSummary = liveTicketAggregate();
+  const nextLessonRemaining = nextLessonTicket
+    ? Math.max(0, Number(nextLessonTicket.remaining) || 0)
+    : currentTicketSummary.count ? currentTicketSummary.remaining : state.remaining;
   const latestLog = state.lessonLogs[0];
   const pendingLogCount = state.lessonLogs.filter((log) => log.status === "coach_pending").length;
   const makeupCount = state.makeupRequests.filter((request) => request.rawStatus === "pending").length;
-  const lowTicket = state.remaining <= 2;
+  const lowTicket = currentLiveTickets().length
+    ? currentLiveTickets().some((ticket) => Number(ticket.remaining) <= 2)
+    : state.remaining <= 2;
   const curriculum = activeCurriculumStep();
   const lessonLabel = nextLesson
     ? `${nextLesson.day} ${nextLesson.time} · ${nextLesson.coach}`
@@ -119,7 +126,7 @@ function renderTodayActions() {
       <div>
         <span>다음 수업</span>
         <strong>${lessonLabel}</strong>
-        <small>${nextLesson ? `${nextLesson.type} · 잔여 ${state.remaining}회` : "관리자에게 시간표 확인이 필요합니다."}</small>
+        <small>${nextLesson ? `${nextLesson.type} · 연결 회원권 잔여 ${nextLessonRemaining}회` : "관리자에게 시간표 확인이 필요합니다."}</small>
         <small>다음 커리큘럼: ${curriculum.title}</small>
       </div>
       <button class="primary-button" type="button" data-home-action="curriculum">커리큘럼 보기</button>

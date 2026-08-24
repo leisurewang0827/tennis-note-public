@@ -499,7 +499,7 @@ async function syncMemberGroupAccountFromServer(profile = null) {
       filters: { user_id: profileId },
       limit: 20,
     });
-    const activeGroupAccountId = currentLiveTicket()?.groupAccountId || "";
+    const activeGroupAccountId = currentLiveTickets().find((ticket) => ticket.groupAccountId)?.groupAccountId || "";
     const ownMembership = (ownRows || []).find((row) => row.group_account_id === activeGroupAccountId) || ownRows?.[0];
     if (!ownMembership?.group_account_id) {
       state.groupAccount = null;
@@ -724,7 +724,8 @@ async function syncMemberTicketsFromServer(profile = null) {
     rows = await attachLiveTicketPayments(client, rows || []);
     state.liveTickets = Array.isArray(rows) ? rows.map(normalizeLiveTicket) : [];
     const paymentRequestsChanged = reconcileVerifiedPaymentRequests();
-    const ticket = currentLiveTicket() || upcomingLiveTickets()[0] || null;
+    const currentTickets = currentLiveTickets();
+    const ticket = currentTickets[0] || upcomingLiveTickets()[0] || null;
     if (!ticket) {
       state.remaining = 0;
       state.profile.ticket = "현재 이용권 없음";
@@ -732,21 +733,31 @@ async function syncMemberTicketsFromServer(profile = null) {
       return true;
     }
 
-    if (ticket.total) {
-      state.remaining = ticket.remaining;
-      state.profile.ticket = `${ticket.title} · 총 ${ticket.total}회`;
-    }
-    if (currentLiveTickets().length && state.member) state.member.memberKind = "lesson_member";
+    const aggregate = liveTicketAggregate(currentTickets.length ? currentTickets : [ticket]);
+    const renewalOverlapCount = currentLiveTicketOverlapCount();
+    state.remaining = aggregate.remaining;
+    state.profile.ticket = currentTickets.length > 1
+      ? `현재 회원권 ${aggregate.count}개 · 총 ${aggregate.total}회`
+      : `${ticket.title} · 총 ${ticket.total || 0}회`;
+    if (currentTickets.length && state.member) state.member.memberKind = "lesson_member";
     const derivedStatusLabel = window.TennisNoteTicketState?.label?.(ticket) || ticket.statusLabel;
     state.ticketSyncStatus = {
-      tone: ticket.tone,
-      text: `${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
+      tone: renewalOverlapCount > 0 ? "alert" : ticket.tone,
+      text: renewalOverlapCount > 0
+        ? `재등록 회원권 ${renewalOverlapCount}건 연결 확인 중 · 현재 연결권 잔여 ${aggregate.remaining}`
+        : currentTickets.length > 1
+        ? `회원권 ${aggregate.count}개 적용 · 총 ${aggregate.total} / 소진 ${aggregate.used} / 잔여 ${aggregate.remaining}`
+        : `${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
     };
-    const syncKey = `${ticket.id}:${ticket.status}:${ticket.remaining}:${ticket.total}`;
+    const syncKey = currentTickets.length > 1
+      ? currentTickets.map((item) => `${item.id}:${item.status}:${item.remaining}:${item.total}`).join("|")
+      : `${ticket.id}:${ticket.status}:${ticket.remaining}:${ticket.total}`;
     if (syncKey !== state.lastLiveTicketKey) {
       state.lastLiveTicketKey = syncKey;
       state.ticketHistory.unshift({
-        text: `${ticket.title} · ${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
+        text: currentTickets.length > 1
+          ? `회원권 ${aggregate.count}개 · 총 ${aggregate.total} / 소진 ${aggregate.used} / 잔여 ${aggregate.remaining}`
+          : `${ticket.title} · ${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
         tone: ticket.tone,
       });
     }

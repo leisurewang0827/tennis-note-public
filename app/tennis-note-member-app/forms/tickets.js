@@ -94,19 +94,7 @@ function liveTicketPriority(ticket = {}) {
 }
 
 function currentLiveTickets() {
-  if (!Array.isArray(state.liveTickets) || !state.liveTickets.length) return [];
-  const usableTickets = window.TennisNoteTicketState?.split
-    ? window.TennisNoteTicketState.split(state.liveTickets).current
-    : state.liveTickets.filter((ticket) => ["active", "paused"].includes(String(ticket.status || "").toLowerCase()));
-  if (!usableTickets.length) return [];
-  return [...usableTickets].filter((ticket) => !ticket.refundHoldId).sort((a, b) => {
-    const priority = liveTicketPriority(a) - liveTicketPriority(b);
-    if (priority) return priority;
-    const sharedGroupPriority = Number(Boolean(b.sharedGroupTicket && Number(b.groupSize) === 2))
-      - Number(Boolean(a.sharedGroupTicket && Number(a.groupSize) === 2));
-    if (sharedGroupPriority) return sharedGroupPriority;
-    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
-  });
+  return canonicalCurrentLiveTickets(rawCurrentLiveTickets());
 }
 
 function upcomingLiveTickets() {

@@ -566,7 +566,7 @@ function memberLessonRows(member) {
 function memberScheduleSummary(member, ticket = memberCurrentTicket(member)) {
   if (!ticket) return "미배정";
   const product = membershipProductForTicket(ticket);
-  const memberLessons = memberLessonRows(member);
+  const memberLessons = memberTicketLessonRows(member, ticket);
   const today = adminLocalDateKey(new Date());
   const upcoming = memberLessons
     .filter((lesson) => !lesson.lessonDate || lesson.lessonDate >= today)

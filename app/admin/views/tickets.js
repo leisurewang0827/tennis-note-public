@@ -55,10 +55,14 @@ function memberTicketListMarkup(member) {
   </div>`;
 }
 
-function memberTicketRowMarkup(member, ticket, position = 1, count = 1, possibleDuplicate = false) {
+function memberTicketRowMarkup(member, ticket, position = 1, count = 1, possibleDuplicate = false, renewalOverlap = false) {
   if (!ticket) return '<span class="member-table-muted">회원권 없음</span>';
   const ownershipLabel = count > 1 ? memberTicketOwnershipLabel(ticket, member) : "";
-  const context = [count > 1 ? `회원권 ${position}/${count}` : "", ownershipLabel, possibleDuplicate ? "중복 가능" : ""].filter(Boolean).join(" · ");
+  const context = [
+    count > 1 ? memberTicketLifecyclePositionLabel(member, ticket) : "",
+    ownershipLabel,
+    renewalOverlap ? "연장 겹침 · 확인 필요" : possibleDuplicate ? "중복 가능" : "",
+  ].filter(Boolean).join(" · ");
   const period = [ticket.actualLessonStart || ticket.purchased, ticket.expires]
     .filter(Boolean)
     .map(memberDetailDateLabel)

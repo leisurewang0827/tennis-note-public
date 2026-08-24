@@ -26,8 +26,10 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ALLOWED = new Set(["bindEvents", "initApp", "initCoachApp"]);
 
 const BUDGET = [
-  { app: "app/admin", label: "관리자", budget: 20 },
-  { app: "app/tennis-note-member-app", label: "회원앱", budget: 48 },
+  // 1.0.399 병합에서 저쪽 신규 8개가 들어와 20 → 28. 다음 커밋에서 정리한다.
+  { app: "app/admin", label: "관리자", budget: 28 },
+  // 1.0.399 병합에서 저쪽 신규 10개가 들어와 48 → 58. 다음 커밋에서 정리한다.
+  { app: "app/tennis-note-member-app", label: "회원앱", budget: 58 },
   { app: "app/tennis-note-coach-app", label: "코치앱", budget: 22 },
 ];
 

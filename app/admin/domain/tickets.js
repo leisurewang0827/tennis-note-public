@@ -566,6 +566,7 @@ function memberDirectoryTickets(member) {
   const ownedTickets = operationalTickets.filter((ticket) => (
     !ticketUsesPerParticipantGroupOwnership(ticket)
     || memberUserIds.has(String(ticket.serverUserId || ""))
+    || memberHasActiveGroupTicketLink(member, ticket)
   ));
   return ownedTickets.length ? ownedTickets : operationalTickets;
 }

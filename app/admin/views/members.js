@@ -709,11 +709,13 @@ function renderMembers(options = {}) {
       const editableTickets = memberDirectoryTickets(member);
       const displayedTickets = editableTickets.length ? editableTickets : [null];
       const possibleDuplicateTicketIds = memberPossibleDuplicateTicketIds(editableTickets);
+      const renewalOverlapTicketIds = memberRenewalOverlapTicketIds(editableTickets);
       const selectedIds = selectedMemberIdSet();
       const listStatus = memberListStatus(member);
       return displayedTickets.map((rowTicket, ticketIndex) => {
         const ticketId = String(rowTicket?.serverTicketId || "");
         const possibleDuplicate = possibleDuplicateTicketIds.has(ticketId);
+        const renewalOverlap = renewalOverlapTicketIds.has(ticketId);
         const editingNewTicket = memberAdminEditEnabled
           && Number(state.inlineMemberId) === Number(member.id)
           && String(state.inlineMemberTicketId || "") === ""
@@ -742,19 +744,19 @@ function renderMembers(options = {}) {
         const ticketStatus = rowTicket
           ? `<span class="member-ticket-status status-${escapeHtml(window.TennisNoteTicketState?.derive(rowTicket) || rowTicket.status || "unknown")}">${escapeHtml(memberTicketStatusLabel(rowTicket))}</span>`
           : memberStatusBadge(member);
-        return `<tr class="member-ticket-table-row ${possibleDuplicate ? "is-possible-duplicate" : ""} ${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}" data-member-ticket-row="${escapeHtml(ticketId)}">
+        return `<tr class="member-ticket-table-row ${possibleDuplicate || renewalOverlap ? "is-possible-duplicate" : ""} ${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}" data-member-ticket-row="${escapeHtml(ticketId)}">
           <td class="row-select-cell member-select-column">${ticketIndex === 0
             ? `<input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedIds.has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />`
             : '<span class="member-secondary-ticket-mark" aria-hidden="true">↳</span>'}</td>
           <td class="member-name-column">
-            <button class="member-link-button ${possibleDuplicate ? "is-possible-duplicate" : ""}" type="button" data-select-member="${member.id}" ${ticketId ? `data-member-ticket="${escapeHtml(ticketId)}"` : ""}>
+            <button class="member-link-button ${possibleDuplicate || renewalOverlap ? "is-possible-duplicate" : ""}" type="button" data-select-member="${member.id}" ${ticketId ? `data-member-ticket="${escapeHtml(ticketId)}"` : ""}>
               ${avatarMarkup(member, "small")}
               <span>${escapeHtml(member.name)}</span>
             </button>
           </td>
           <td class="member-auth-column">${memberAuthStatusMarkup(member)}</td>
           <td class="member-coach-column">${escapeHtml(memberTicketCoachLabel(member, rowTicket))}</td>
-          <td class="member-ticket-column">${memberTicketRowMarkup(member, rowTicket, ticketIndex + 1, editableTickets.length, possibleDuplicate)}</td>
+          <td class="member-ticket-column">${memberTicketRowMarkup(member, rowTicket, ticketIndex + 1, editableTickets.length, possibleDuplicate, renewalOverlap)}</td>
           <td class="member-schedule-column">${escapeHtml(rowTicket ? memberScheduleSummary(member, rowTicket) : "미배정")}</td>
           <td class="member-usage-column">${rowTicket ? escapeHtml(ticketUsageLabel(rowTicket)) : '<span class="member-table-muted">-</span>'}</td>
           <td class="member-payment-column">${memberTicketPaymentMarkup(member, rowTicket)}</td>

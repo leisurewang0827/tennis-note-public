@@ -1353,8 +1353,15 @@ async function submitMemberInlineEditor(form, options = {}) {
   payload.applyToFutureSchedule = scheduleReplacementRequested;
   payload.changeBatchId = form.dataset.changeBatchId || createMemberChangeBatchId();
   payload.changeSource = "admin_web";
-  payload.allowOverlap = form.dataset.allowTicketOverlap === "true";
-  payload.allowExactDuplicate = form.dataset.allowExactTicketDuplicate === "true";
+  if (!ticket) {
+    const overlapTicket = memberRenewalOverlapForPayload(member, payload);
+    if (overlapTicket) {
+      message.textContent = "같은 코치·같은 회원권의 기간이 겹칩니다. 기존권 만료 다음 날부터 시작하도록 날짜를 수정해 주세요.";
+      message.classList.add("is-error");
+      form.classList.add("is-save-error");
+      return false;
+    }
+  }
   if (ticket && !payload.expectedTicketUpdatedAt) {
     message.textContent = "최신 회원권 정보를 확인하는 중입니다.";
     message.classList.remove("is-error");
@@ -1492,6 +1499,9 @@ async function submitMemberInlineEditor(form, options = {}) {
         "active_product_required",
         "group_partner_required",
         "member_active_ticket_exists",
+        "member_ticket_renewal_overlap_forbidden",
+        "member_ticket_overlap_confirmation_required",
+        "member_ticket_exact_duplicate",
       ].find((code) => raw.includes(code)) || "member_inline_save_failed";
       void window.TennisNoteDataClient.rpc("tn_admin_log_member_inline_failure", {
         target_ticket_id: ticket.serverTicketId,
@@ -1510,19 +1520,12 @@ async function submitMemberInlineEditor(form, options = {}) {
     }
     if (raw.includes("member_ticket_overlap_confirmation_required") || raw.includes("member_ticket_exact_duplicate")) {
       submit.disabled = false;
-      submit.textContent = ticket ? "이 회원권 저장" : "회원권 등록";
-      const exactDuplicate = raw.includes("member_ticket_exact_duplicate");
-      const confirmed = window.confirm(exactDuplicate
-        ? "같은 코치·상품·기간·참여자의 회원권이 이미 있습니다. 그래도 별도 회원권으로 등록할까요?"
-        : "같은 코치·상품·수업 유형의 회원권 기간이 겹칩니다. 그래도 별도 회원권으로 등록할까요?");
-      if (!confirmed) {
-        message.textContent = exactDuplicate ? "중복 등록을 취소했습니다." : "겹침 등록을 취소했습니다.";
-        message.classList.add("is-error");
-        return false;
-      }
-      if (exactDuplicate) form.dataset.allowExactTicketDuplicate = "true";
-      else form.dataset.allowTicketOverlap = "true";
-      return submitMemberInlineEditor(form, { ...options, skipConfirmation: true });
+      submit.textContent = "회원권 등록";
+      message.textContent = memberManagementErrorText(error);
+      message.classList.add("is-error");
+      form.classList.add("is-save-error");
+      updateMemberInlineToolbar();
+      return false;
     }
     if (raw.includes("member_active_ticket_exists") || raw.includes("member_verified_pending_ticket_exists")) {
       const synced = await syncAdminLiveData(true).catch(() => false);

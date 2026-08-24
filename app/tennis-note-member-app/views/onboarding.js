@@ -57,6 +57,8 @@ function renderPublicProductPreview() {
   const title = $("#publicProductPreviewTitle");
   const step = $("#publicProductPreviewStep");
   const loginActions = $("#publicOnboardingLoginActions");
+  const existingMemberLogin = $("#publicOnboardingExistingLogin");
+  const existingMemberNote = $("#publicOnboardingExistingMemberNote");
   if (!list || !status || !title) return;
   let intent = storedOnboardingIntent();
   if (!intent) {
@@ -78,6 +80,8 @@ function renderPublicProductPreview() {
   title.textContent = labels[stage][1];
   list.innerHTML = publicOnboardingStageHtml(intent);
   if (loginActions) loginActions.hidden = stage !== "login";
+  if (existingMemberLogin) existingMemberLogin.hidden = stage === "login";
+  if (existingMemberNote) existingMemberNote.hidden = true;
   if (state.publicMembershipProductStatus === "error") {
     status.textContent = "기준 상품을 표시합니다. 판매 여부와 최종 가격은 로그인 후 다시 확인합니다.";
   } else if (["coach", "time"].includes(stage) && publicPurchaseDirectoryLoad.status === "error") {

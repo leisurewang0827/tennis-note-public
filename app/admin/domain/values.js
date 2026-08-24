@@ -115,7 +115,7 @@ function getTicketWeeklyCount(ticket) {
 function getTicketDisplayProduct(ticket) {
   return (ticket?.product || "")
     .replace(/^[^\s]+ 코치\s*/, "")
-    .replace(/\s*\d+분.*$/, "")
+    .replace(/\s+\d+분(?:\s+.*)?$/, "")
     .trim();
 }
 
