@@ -2845,10 +2845,14 @@ tr.is-selected td {
 }
 
 .member-inline-ticket-context span {
-  overflow: hidden;
+  min-width: 0;
+  overflow: visible;
   color: var(--ink);
   font-size: 12px;
   font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3756,9 +3760,11 @@ tr.is-selected td {
 .member-ticket-management-main strong,
 .member-ticket-management-main small {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .member-ticket-management-main small {
@@ -3927,10 +3933,11 @@ tr.is-selected td {
 
 .member-ticket-summary-line strong,
 .member-payment-summary-line strong {
-  overflow: hidden;
+  overflow: visible;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .member-ticket-summary-line small,
@@ -10698,9 +10705,13 @@ button .schedule-member-lines > span {
 
 .member-management-summary > small {
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   color: var(--ink);
   font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

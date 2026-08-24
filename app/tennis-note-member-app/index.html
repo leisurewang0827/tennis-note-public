@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.400" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.400" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.401" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.401" />
     <link rel="stylesheet" href="../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-2" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
   </head>
@@ -101,8 +101,12 @@
             >
               <span data-apple-login-label>Apple로 계속</span>
             </button>
-            <details class="email-login-panel">
-              <summary>이메일로 로그인</summary>
+            <details id="memberEmailAuthPanel" class="email-login-panel">
+              <summary id="memberEmailAuthSummary">이메일 로그인·가입</summary>
+              <div id="memberEmailAuthTabs" class="email-auth-tabs" role="tablist" aria-label="이메일 계정 선택">
+                <button id="memberEmailLoginTab" class="email-auth-tab is-active" type="button" role="tab" aria-selected="true" data-email-auth-mode="login">로그인</button>
+                <button id="memberEmailSignupTab" class="email-auth-tab" type="button" role="tab" aria-selected="false" data-email-auth-mode="signup">회원가입</button>
+              </div>
               <form id="memberEmailLoginForm" class="email-login-form">
                 <label>
                   이메일
@@ -112,9 +116,46 @@
                   비밀번호
                   <input id="memberLoginPassword" type="password" autocomplete="current-password" required />
                 </label>
-                <button class="small-button" type="submit">로그인</button>
-                <p id="memberEmailLoginStatus" class="login-form-status" role="status"></p>
+                <div class="email-auth-actions">
+                  <button class="small-button" type="submit">로그인</button>
+                  <button id="memberPasswordResetButton" class="email-auth-link" type="button">비밀번호 찾기</button>
+                </div>
               </form>
+              <form id="memberEmailSignupForm" class="email-login-form" hidden>
+                <label>
+                  이메일
+                  <input id="memberSignupEmail" type="email" autocomplete="email" required />
+                </label>
+                <label>
+                  비밀번호
+                  <input id="memberSignupPassword" type="password" autocomplete="new-password" minlength="8" required />
+                  <small>8자 이상 입력해주세요.</small>
+                </label>
+                <label>
+                  비밀번호 확인
+                  <input id="memberSignupPasswordConfirm" type="password" autocomplete="new-password" minlength="8" required />
+                </label>
+                <label class="email-auth-consent">
+                  <input id="memberSignupConsent" type="checkbox" required />
+                  <span><a href="../tennis-note-legal/commerce.html" target="_blank" rel="noopener">이용약관</a>과 <a href="../tennis-note-legal/privacy.html" target="_blank" rel="noopener">개인정보 처리방침</a>에 동의합니다.</span>
+                </label>
+                <p class="email-auth-note">기존 회원권이 있다면 가입 후 이름과 휴대전화 확인으로 자동 연결됩니다. 이미 다른 로그인 수단을 연결했다면 그 수단으로 로그인해주세요.</p>
+                <button class="small-button" type="submit">회원가입</button>
+              </form>
+              <form id="memberPasswordRecoveryForm" class="email-login-form" hidden>
+                <strong>새 비밀번호 설정</strong>
+                <p class="email-auth-note">이메일 인증이 완료됐습니다. 새 비밀번호를 입력해주세요.</p>
+                <label>
+                  새 비밀번호
+                  <input id="memberRecoveryPassword" type="password" autocomplete="new-password" minlength="8" required />
+                </label>
+                <label>
+                  새 비밀번호 확인
+                  <input id="memberRecoveryPasswordConfirm" type="password" autocomplete="new-password" minlength="8" required />
+                </label>
+                <button class="small-button" type="submit">비밀번호 변경</button>
+              </form>
+              <p id="memberEmailLoginStatus" class="login-form-status" role="status" aria-live="polite"></p>
             </details>
           </div>
           <button class="small-button install-button" type="button" data-install-pwa hidden>앱 설치</button>
@@ -1238,19 +1279,19 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.400"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.400"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.400"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.401"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.401"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.401"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.400"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.400"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.400"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.400"></script>
-    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.400"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.401"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.401"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.401"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.401"></script>
+    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.401"></script>
     <script defer src="../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-2"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.400"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.401"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
     <script>
       (() => {
@@ -1269,7 +1310,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.400";
+          appScript.src = "./app.js?v=1.0.401";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -1282,7 +1323,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.400";
+          appScript.src = "./app.js?v=1.0.401";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {
