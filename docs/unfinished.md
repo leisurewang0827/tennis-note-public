@@ -90,8 +90,12 @@ push:
 - **`app/admin/schedule-v2-admin.js` (4,196줄)** — 함수 178개가 전부 IIFE 안에
   있습니다. 다른 파일들과 구조가 달라 [splitting.md](splitting.md) 방법이 그대로
   통하지 않습니다. **방향을 정하고 시작해야 합니다.**
-- **`app.js` 에 폴더로 갔어야 할 함수 90개가 남아 있습니다.** 관리자 20 · 회원앱 48
+- **`app.js` 에 폴더로 갔어야 할 함수 120개가 남아 있습니다.** 관리자 20 · 회원앱 78
   · 코치앱 22. 병합할 때마다 저쪽 신규 함수가 여기 쌓인 것입니다.
+  회원앱 78개 중 **30개가 1.0.398 병합에서 들어온 공개 온보딩** 함수입니다
+  (`publicOnboarding*`, `*OnboardingIntent`, `renderPublicProductPreview` 등).
+  한 기능이 통째로 들어온 것이라 `domain/onboarding.js`·`views/onboarding.js`·
+  `data/onboarding.js` 로 가르면 깔끔합니다.
   `app-js-budget` 검사가 **더 늘어나는 것만** 막습니다. 줄이는 것은 사람 몫이고,
   줄이면 그 검사의 budget 도 같이 낮추세요.
 - **`ui/`·`forms/` 에 서버 호출 6곳이 남아 있습니다.** 관리자 `ui/billing.js` 4,

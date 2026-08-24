@@ -27,7 +27,9 @@ const ALLOWED = new Set(["bindEvents", "initApp", "initCoachApp"]);
 
 const BUDGET = [
   { app: "app/admin", label: "관리자", budget: 20 },
-  { app: "app/tennis-note-member-app", label: "회원앱", budget: 48 },
+  // 1.0.398 병합에서 저쪽 공개 온보딩 함수 30개가 들어와 48 → 78 이 됐다.
+  // 아직 폴더로 안 옮겼다. docs/unfinished.md 참조.
+  { app: "app/tennis-note-member-app", label: "회원앱", budget: 78 },
   { app: "app/tennis-note-coach-app", label: "코치앱", budget: 22 },
 ];
 

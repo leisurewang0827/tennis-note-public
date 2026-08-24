@@ -119,7 +119,6 @@ function openMemberEnrollmentModal(productId, message = "") {
   setEnrollmentInputValue("#enrollmentBirthYear", enrollment.birth_year || state.member?.birthYear || "");
   setEnrollmentInputValue("#enrollmentNeighborhood", enrollment.neighborhood || state.member?.neighborhood || "");
   setEnrollmentInputValue("#enrollmentGender", enrollment.gender || state.member?.gender || "");
-  setEnrollmentInputValue("#enrollmentExperience", enrollment.experience_level || "beginner");
   setEnrollmentInputValue("#enrollmentPartnerName", enrollment.partner_name || "");
   setEnrollmentInputValue("#enrollmentPartnerPhone", enrollment.partner_phone || "");
   setEnrollmentInputValue("#enrollmentPartnerBirthYear", enrollment.partner_birth_year || "");
@@ -146,7 +145,8 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
   const flow = purchaseFlowState();
   const activeTickets = currentLiveTickets();
   const requestedSource = (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
-  const sourceTicket = requestedSource || (requestedPurpose !== "add_coach" ? activeTickets[0] || null : null);
+  const sourceTicket = requestedSource
+    || (!["add_coach", "new_purchase", "one_day"].includes(requestedPurpose) ? activeTickets[0] || null : null);
   const sourceIsActive = Boolean(sourceTicket && activeTickets.some((ticket) => String(ticket.id || "") === String(sourceTicket.id || "")));
   const products = membershipProducts();
   const exactProduct = products.find((product) => (
@@ -169,9 +169,11 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
   flow.open = true;
   flow.renewalTicketId = sourceTicket?.id || "";
   flow.productId = matchingProduct?.id || "";
-  flow.familyId = matchingProduct ? membershipProductFamilyId(matchingProduct) : activeMembershipPresetId() || "four-week";
+  flow.familyId = matchingProduct
+    ? membershipProductFamilyId(matchingProduct)
+    : requestedPurpose === "one_day" ? "one-day" : activeMembershipPresetId() || "four-week";
   flow.step = 1;
-  flow.purchasePurpose = ["renew_same", "add_coach", "new_purchase"].includes(requestedPurpose)
+  flow.purchasePurpose = ["renew_same", "add_coach", "new_purchase", "one_day"].includes(requestedPurpose)
     ? requestedPurpose
     : sourceIsActive ? "renew_same" : "new_purchase";
   flow.showMoreSlots = false;
@@ -417,7 +419,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.396", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.398", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",

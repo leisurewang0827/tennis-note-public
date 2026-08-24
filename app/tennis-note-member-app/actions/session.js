@@ -340,6 +340,7 @@ async function applySupabaseMemberSession(showNotice = false) {
     await syncLiveSchedulePolicy(currentLiveTicket()?.branchId || "");
     renderAll();
     saveSnapshot();
+    await applyPendingOnboardingIntent();
     void Promise.allSettled([
       syncMemberChangeRequestsFromServer(profile),
       syncMemberJournalEntriesFromServer(profile),

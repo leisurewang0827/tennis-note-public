@@ -5,6 +5,9 @@
 
 function bindDelegatedEvents() {
   window.addEventListener("tennisnote:oauth-result", handleOAuthResult);
+  $("#publicProductPreviewList")?.addEventListener("click", (event) => {
+    void handlePublicOnboardingAction(event.target);
+  });
   document.addEventListener(
     "click",
     (event) => {

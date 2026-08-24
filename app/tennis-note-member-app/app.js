@@ -96,6 +96,8 @@ const state = {
   },
   membershipSelectedFamilyId: "weekday-regular",
   liveMembershipProducts: [],
+  publicMembershipProducts: [],
+  publicMembershipProductStatus: "loading",
   membershipPricingQuotes: {},
   liveTickets: [],
   liveLessons: [],
@@ -188,6 +190,635 @@ document.addEventListener("tennisnote:sheet-opened", stabilizeMemberVisualViewpo
 document.addEventListener("tennisnote:sheet-closed", stabilizeMemberVisualViewport);
 
 const times = makeMemberTimeRange("18:40", "21:20");
+const onboardingIntentStorageKey = "tennis-note-onboarding-intent-v1";
+const onboardingIntentStartValues = new Set(["join", "one-day", "membership", "renew"]);
+const onboardingIntentSourceValues = new Set(["direct", "onsite_qr", "kakao_channel", "naver_place"]);
+let onboardingIntentApplying = false;
+let onboardingIntentRecordedKey = "";
+let publicPurchaseDirectoryCache = null;
+let publicPurchaseDirectoryLoad = { key: "", status: "idle", error: "" };
+
+function normalizeOnboardingStart(value = "") {
+  const normalized = String(value || "").trim().toLowerCase().replaceAll("_", "-");
+  if (["oneday", "one-day", "trial"].includes(normalized)) return "one-day";
+  return onboardingIntentStartValues.has(normalized) ? normalized : "";
+}
+
+function normalizeOnboardingSource(value = "") {
+  const normalized = String(value || "").trim().toLowerCase().replaceAll("-", "_");
+  return onboardingIntentSourceValues.has(normalized) ? normalized : "";
+}
+
+function storedOnboardingIntent() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(onboardingIntentStorageKey) || "null");
+    if (!parsed || !normalizeOnboardingStart(parsed.start)) return null;
+    const preferredSchedules = Array.isArray(parsed.preferredSchedules)
+      ? parsed.preferredSchedules.map((schedule) => ({
+        lessonDate: String(schedule?.lessonDate || ""),
+        day: String(schedule?.day || ""),
+        startTime: String(schedule?.startTime || "").slice(0, 5),
+        coachRoleId: String(schedule?.coachRoleId || ""),
+        coachName: String(schedule?.coachName || ""),
+        durationMinutes: Math.max(10, Number(schedule?.durationMinutes) || 20),
+      })).filter((schedule) => schedule.lessonDate && schedule.startTime && schedule.coachRoleId)
+      : [];
+    return {
+      start: normalizeOnboardingStart(parsed.start),
+      source: normalizeOnboardingSource(parsed.source) || "direct",
+      choiceKind: ["one-day", "regular"].includes(parsed.choiceKind) ? parsed.choiceKind : "",
+      scheduleScope: ["weekday", "weekend"].includes(parsed.scheduleScope) ? parsed.scheduleScope : "",
+      frequency: Math.max(0, Math.min(3, Number(parsed.frequency) || 0)),
+      familyId: String(parsed.familyId || ""),
+      productId: String(parsed.productId || ""),
+      coachRoleId: String(parsed.coachRoleId || ""),
+      coachName: String(parsed.coachName || ""),
+      preferredSchedules,
+      capturedAt: String(parsed.capturedAt || ""),
+      applied: parsed.applied === true,
+    };
+  } catch {
+    sessionStorage.removeItem(onboardingIntentStorageKey);
+    return null;
+  }
+}
+
+function saveOnboardingIntent(intent = null) {
+  if (!intent) {
+    sessionStorage.removeItem(onboardingIntentStorageKey);
+    return;
+  }
+  sessionStorage.setItem(onboardingIntentStorageKey, JSON.stringify(intent));
+}
+
+function captureOnboardingIntent() {
+  const params = new URLSearchParams(window.location.search);
+  const start = normalizeOnboardingStart(params.get("start"));
+  if (!start) return storedOnboardingIntent();
+  const source = normalizeOnboardingSource(params.get("source")) || "direct";
+  const existing = storedOnboardingIntent();
+  const returningFromExternalFlow = Boolean(
+    params.get("code")
+    || params.get("error")
+    || params.get("paymentId")
+    || window.location.hash.includes("access_token="),
+  );
+  const sameIntent = existing?.start === start && existing?.source === source;
+  const alreadyCapturedInEntry = history.state?.tennisNoteOnboardingCaptured === true;
+  const shouldReset = !sameIntent || (!returningFromExternalFlow && !alreadyCapturedInEntry);
+  const seededChoice = start === "one-day" ? "one-day" : start === "membership" ? "regular" : "";
+  const intent = shouldReset
+    ? { start, source, choiceKind: seededChoice, capturedAt: new Date().toISOString(), applied: false }
+    : existing;
+  saveOnboardingIntent(intent);
+  const currentState = typeof history.state === "object" && history.state ? history.state : {};
+  if (!currentState.tennisNoteOnboardingCaptured) {
+    history.replaceState({ ...currentState, tennisNoteOnboardingCaptured: true }, "", window.location.href);
+  }
+  return intent;
+}
+
+function onboardingIntentCopy(intent = storedOnboardingIntent()) {
+  if (intent?.start === "one-day") {
+    return {
+      eyebrow: "원데이 체험 신청",
+      title: "코치와 시간을 먼저 고른 뒤 로그인합니다.",
+      detail: "로그인 후 빈 시간을 다시 확인하고 최종 결제합니다.",
+    };
+  }
+  if (intent?.start === "membership") {
+    return {
+      eyebrow: "정규 회원권 등록",
+      title: "평일·주말, 코치, 횟수와 시간을 먼저 선택합니다.",
+      detail: "로그인 후 선택 내용을 그대로 불러와 최종 결제합니다.",
+    };
+  }
+  return {
+    eyebrow: "테니스노트 시작",
+    title: "원하는 수업을 먼저 고른 뒤 가입합니다.",
+    detail: "기존 회원은 일반 앱 화면에서 바로 로그인할 수 있습니다.",
+  };
+}
+
+function renderOnboardingEntryIntro() {
+  const intro = $("#onboardingEntryIntro");
+  if (!intro) return;
+  const intent = storedOnboardingIntent();
+  intro.hidden = !intent;
+  if (!intent) return;
+  const copy = onboardingIntentCopy(intent);
+  if ($("#onboardingEntryEyebrow")) $("#onboardingEntryEyebrow").textContent = copy.eyebrow;
+  if ($("#onboardingEntryTitle")) $("#onboardingEntryTitle").textContent = copy.title;
+  if ($("#onboardingEntryDetail")) $("#onboardingEntryDetail").textContent = copy.detail;
+}
+
+function publicProductPreviewProducts() {
+  if (state.publicMembershipProducts.length) return state.publicMembershipProducts;
+  return defaultProducts.filter((product) => product.status !== "hidden");
+}
+
+function publicProductPreviewPrice(product = {}) {
+  const firstLessonPrice = Number(product.firstLessonOfferPrice || 0);
+  if (isOneDayMembershipProduct(product) && product.firstLessonOfferEnabled === true && firstLessonPrice > 0) {
+    return `신규 ${formatWon(firstLessonPrice)}`;
+  }
+  const cash = Number(product.cashAmount || product.settlementBase || 0);
+  const card = Number(product.cardAmount || product.listAmount || product.amount || 0);
+  if (cash > 0 && card > 0) return `계좌 ${formatWon(cash)} · 토스 ${formatWon(card)}`;
+  return formatWon(cash || card);
+}
+
+function publicOnboardingRegularProduct(scope = "weekday", frequency = 1, coachRoleId = "") {
+  return publicProductPreviewProducts().find((product) => (
+    membershipProductFacet(product, "productKind") === "regular"
+    && membershipProductFacet(product, "scheduleScope") === scope
+    && Number(product.groupSize || 1) === 1
+    && Number(product.lessonMinutes || 20) === 20
+    && Number(product.frequencyPerWeek || 0) === Number(frequency || 1)
+    && membershipProductFamilyId(product) === "four-week"
+    && (!coachRoleId || purchaseProductAllowsCoach(product, coachRoleId))
+  )) || null;
+}
+
+function publicOnboardingProduct(intent = storedOnboardingIntent()) {
+  const products = publicProductPreviewProducts();
+  if (intent?.choiceKind === "one-day") {
+    return products.find((product) => isOneDayMembershipProduct(product)) || null;
+  }
+  if (intent?.choiceKind === "regular" && intent.scheduleScope) {
+    return publicOnboardingRegularProduct(intent.scheduleScope, intent.frequency || 1, intent.coachRoleId);
+  }
+  return null;
+}
+
+function publicOnboardingStage(intent = storedOnboardingIntent()) {
+  if (!intent?.choiceKind) return "kind";
+  if (intent.choiceKind === "regular" && !intent.scheduleScope) return "scope";
+  if (!intent.coachRoleId) return "coach";
+  if (intent.choiceKind === "regular" && !intent.frequency) return "frequency";
+  const required = intent.choiceKind === "regular" ? Math.max(1, Number(intent.frequency) || 1) : 1;
+  if ((intent.preferredSchedules || []).length !== required) return "time";
+  return "login";
+}
+
+function publicOnboardingDirectoryContext(product = publicOnboardingProduct()) {
+  const start = localDateKey();
+  const endValue = new Date(`${start}T12:00:00`);
+  endValue.setDate(endValue.getDate() + 27);
+  const end = localDateKey(endValue);
+  const branchId = String(product?.branchId || "");
+  return { branchId, from: start, to: end, key: `${branchId}:${start}:${end}` };
+}
+
+function publicOnboardingDirectory(product = publicOnboardingProduct()) {
+  const context = publicOnboardingDirectoryContext(product);
+  return publicPurchaseDirectoryCache?.key === context.key ? publicPurchaseDirectoryCache.directory : null;
+}
+
+function publicOnboardingCoaches(product = publicOnboardingProduct()) {
+  const directory = publicOnboardingDirectory(product);
+  return (directory?.coaches || [])
+    .map(normalizePurchaseDirectoryCoach)
+    .filter((coach) => purchaseProductAllowsCoach(product || {}, coach.serverRoleId || coach.roleId || coach.id))
+    .sort((left, right) => memberScheduleLaneOrder(left) - memberScheduleLaneOrder(right));
+}
+
+function publicOnboardingSchedulePolicy(directory = publicOnboardingDirectory()) {
+  return {
+    ...loadAdminSchedulePolicy(),
+    openStart: String(directory?.openStart || "06:40").slice(0, 5),
+    openEnd: String(directory?.openEnd || "22:00").slice(0, 5),
+    breakRules: (directory?.breakRules || []).map((rule, index) => ({
+      id: rule.id || `public-break-${index}`,
+      days: [days[Number(rule.dayOfWeek) === 0 ? 6 : Number(rule.dayOfWeek) - 1]].filter(Boolean),
+      start: String(rule.startTime || "").slice(0, 5),
+      end: String(rule.endTime || "").slice(0, 5),
+      label: "예약 불가",
+    })),
+  };
+}
+
+function publicOnboardingOccupancy(directory = publicOnboardingDirectory()) {
+  return (directory?.occupancy || []).map((occupied, index) => ({
+    id: `public-occupancy-${index}`,
+    lessonDate: String(occupied.lessonDate || ""),
+    time: String(occupied.startTime || "").slice(0, 5),
+    coachRoleId: String(occupied.coachRoleId || ""),
+    coach_role_id: String(occupied.coachRoleId || ""),
+    durationMinutes: Math.max(10, Number(occupied.durationMinutes) || 20),
+    status: "occupied",
+    serverStatus: "occupied",
+  }));
+}
+
+function publicOnboardingAvailableSlots(product = publicOnboardingProduct(), coachRoleId = "") {
+  const directory = publicOnboardingDirectory(product);
+  if (!product || !directory) return [];
+  const policy = publicOnboardingSchedulePolicy(directory);
+  const lessons = publicOnboardingOccupancy(directory);
+  const durationMinutes = Math.max(10, Number(product.lessonMinutes) || 20);
+  const scopes = purchaseProductScheduleScopes(product);
+  const coaches = publicOnboardingCoaches(product).filter((coach) => (
+    !coachRoleId || String(coach.serverRoleId || coach.roleId || coach.id || "") === String(coachRoleId)
+  ));
+  const operations = Array.isArray(directory.operationDays) ? directory.operationDays : [];
+  const slots = [];
+  const now = Date.now();
+  let dateKey = String(directory.from || localDateKey());
+  const end = String(directory.to || dateKey);
+  while (dateKey <= end) {
+    const day = purchaseDateDay(dateKey);
+    const dateScope = ["토", "일"].includes(day) ? "weekend" : "weekday";
+    const operation = operations.find((item) => String(item.date || "") === dateKey) || null;
+    if (scopes.has(dateScope) && !(durationMinutes === 30 && dateScope === "weekend") && operation?.mode !== "closed") {
+      coaches.forEach((coach) => {
+        memberCoachBookableTimes(coach, day, durationMinutes).forEach((time) => {
+          if (new Date(`${dateKey}T${time}:00`).getTime() <= now) return;
+          if (!purchaseOperationAllowsSlot(operation, time, durationMinutes)) return;
+          if (memberBreakRuleOverlaps(policy, day, time, durationMinutes)) return;
+          if (!isMemberCoachWorking(coach, day, time, durationMinutes)) return;
+          if (purchaseHasCoachLessonAtDate(lessons, dateKey, time, coach, durationMinutes, policy)) return;
+          if (!purchaseSlotInsideAnchorWindow(lessons, product, dateKey, time, coach, policy)) return;
+          const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+          slots.push({
+            lessonDate: dateKey,
+            day,
+            startTime: time,
+            coachRoleId: roleId,
+            coachName: coach.name || "담당 코치",
+            durationMinutes,
+          });
+        });
+      });
+    }
+    const next = new Date(`${dateKey}T12:00:00`);
+    next.setDate(next.getDate() + 1);
+    dateKey = localDateKey(next);
+  }
+  return slots.sort((left, right) => `${left.lessonDate} ${left.startTime}`.localeCompare(`${right.lessonDate} ${right.startTime}`));
+}
+
+function publicOnboardingSummary(intent = storedOnboardingIntent(), product = publicOnboardingProduct(intent)) {
+  const scope = intent?.scheduleScope === "weekend" ? "주말" : "평일";
+  const lesson = intent?.choiceKind === "one-day" ? "원데이" : `${scope} · 주 ${intent?.frequency || 1}회`;
+  const schedules = (intent?.preferredSchedules || []).map((item) => `${purchaseDateLabel(item.lessonDate)} ${item.startTime}`).join(" · ");
+  return `${lesson} · ${memberCoachShortName(intent?.coachName || "선택 코치")} 코치${schedules ? ` · ${schedules}` : ""}${product ? ` · ${publicProductPreviewPrice(product)}` : ""}`;
+}
+
+function publicOnboardingBackButton(stage = "") {
+  return stage === "kind" ? "" : '<button class="public-onboarding-back" type="button" data-public-onboarding-back>이전</button>';
+}
+
+function publicOnboardingStageHtml(intent = storedOnboardingIntent()) {
+  const stage = publicOnboardingStage(intent);
+  const product = publicOnboardingProduct(intent);
+  if (stage === "kind") {
+    const oneDay = publicProductPreviewProducts().find((item) => isOneDayMembershipProduct(item));
+    const regular = publicOnboardingRegularProduct("weekday", 1);
+    return `<div class="public-onboarding-choice-grid">
+      <button type="button" data-public-onboarding-kind="one-day"><span>원데이</span><strong>${escapeHtml(oneDay ? publicProductPreviewPrice(oneDay) : "가격 확인")}</strong><small>한 번 체험하기</small></button>
+      <button type="button" data-public-onboarding-kind="regular"><span>정규 레슨</span><strong>${escapeHtml(regular ? `${formatWon(regular.cashAmount || regular.cardAmount)}부터` : "가격 확인")}</strong><small>4주부터 시작하기</small></button>
+    </div>`;
+  }
+  if (stage === "scope") {
+    return `${publicOnboardingBackButton(stage)}<div class="public-onboarding-choice-grid">
+      <button type="button" data-public-onboarding-scope="weekday"><span>평일</span><strong>월–금</strong><small>주 1·2·3회</small></button>
+      <button type="button" data-public-onboarding-scope="weekend"><span>주말</span><strong>토–일</strong><small>가능한 상품만 표시</small></button>
+    </div>`;
+  }
+  if (stage === "coach") {
+    const coaches = publicOnboardingCoaches(product);
+    if (publicPurchaseDirectoryLoad.status === "loading") return `${publicOnboardingBackButton(stage)}<div class="public-onboarding-loading">활동 중인 코치와 시간을 확인하고 있습니다.</div>`;
+    if (!coaches.length) return `${publicOnboardingBackButton(stage)}<div class="public-onboarding-empty"><strong>현재 선택 가능한 코치가 없습니다.</strong><button type="button" data-public-onboarding-retry>다시 확인</button></div>`;
+    return `${publicOnboardingBackButton(stage)}<div class="public-onboarding-coach-grid">${coaches.map((coach) => {
+      const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+      const hasTime = publicOnboardingAvailableSlots(product, roleId).length > 0;
+      return `<button type="button" data-public-onboarding-coach="${escapeHtml(roleId)}" data-public-onboarding-coach-name="${escapeHtml(coach.name || "담당 코치")}" ${hasTime ? "" : "disabled"}><strong>${escapeHtml(memberCoachShortName(coach.name || "담당"))} 코치</strong><small>${hasTime ? "가능한 시간 보기" : "현재 가능한 시간 없음"}</small></button>`;
+    }).join("")}</div>`;
+  }
+  if (stage === "frequency") {
+    const frequencies = [1, 2, 3].filter((frequency) => publicOnboardingRegularProduct(intent.scheduleScope, frequency, intent.coachRoleId));
+    return `${publicOnboardingBackButton(stage)}<div class="public-onboarding-frequency-grid">${frequencies.map((frequency) => `<button type="button" data-public-onboarding-frequency="${frequency}"><strong>주 ${frequency}회</strong><small>4주 · 총 ${frequency * 4}회</small></button>`).join("")}</div>`;
+  }
+  if (stage === "time") {
+    const selectedKeys = new Set((intent.preferredSchedules || []).map((item) => `${item.lessonDate}:${item.startTime}:${item.coachRoleId}`));
+    const slots = publicOnboardingAvailableSlots(product, intent.coachRoleId).slice(0, 12);
+    const required = intent.choiceKind === "regular" ? Math.max(1, Number(intent.frequency) || 1) : 1;
+    return `${publicOnboardingBackButton(stage)}<div class="public-onboarding-selection-count">요일·시간 ${selectedKeys.size}/${required} 선택</div><div class="public-onboarding-slot-grid">${slots.map((slot) => {
+      const key = `${slot.lessonDate}:${slot.startTime}:${slot.coachRoleId}`;
+      return `<button type="button" class="${selectedKeys.has(key) ? "is-selected" : ""}" data-public-onboarding-slot="${escapeHtml(key)}" data-slot-date="${escapeHtml(slot.lessonDate)}" data-slot-day="${escapeHtml(slot.day)}" data-slot-time="${escapeHtml(slot.startTime)}" aria-pressed="${selectedKeys.has(key)}"><span>${escapeHtml(purchaseDateLabel(slot.lessonDate))}</span><strong>${escapeHtml(slot.startTime)}</strong></button>`;
+    }).join("")}</div>${slots.length ? "" : '<div class="public-onboarding-empty"><strong>선택 가능한 시간이 없습니다.</strong><button type="button" data-public-onboarding-retry>다시 확인</button></div>'}`;
+  }
+  return `${publicOnboardingBackButton(stage)}<article class="public-onboarding-summary"><span>선택 완료</span><strong>${escapeHtml(publicOnboardingSummary(intent, product))}</strong><small>로그인하면 같은 선택으로 최종 결제를 이어갑니다.</small></article>`;
+}
+
+function renderPublicProductPreview() {
+  const preview = $("#publicProductPreview");
+  const list = $("#publicProductPreviewList");
+  const status = $("#publicProductPreviewStatus");
+  const title = $("#publicProductPreviewTitle");
+  const step = $("#publicProductPreviewStep");
+  const loginActions = $("#publicOnboardingLoginActions");
+  if (!list || !status || !title) return;
+  let intent = storedOnboardingIntent();
+  if (!intent) {
+    if (preview) preview.hidden = true;
+    if (loginActions) loginActions.hidden = false;
+    return;
+  }
+  if (preview) preview.hidden = false;
+  const stage = publicOnboardingStage(intent);
+  const labels = {
+    kind: ["1단계", "원데이 또는 정규 레슨을 선택하세요"],
+    scope: ["2단계", "평일 또는 주말을 선택하세요"],
+    coach: [intent.choiceKind === "one-day" ? "2단계" : "3단계", "코치를 선택하세요"],
+    frequency: ["4단계", "주 수업 횟수를 선택하세요"],
+    time: [intent.choiceKind === "one-day" ? "3단계" : "5단계", "요일과 시간을 선택하세요"],
+    login: ["선택 완료", "로그인 후 최종 결제합니다"],
+  };
+  if (step) step.textContent = labels[stage][0];
+  title.textContent = labels[stage][1];
+  list.innerHTML = publicOnboardingStageHtml(intent);
+  if (loginActions) loginActions.hidden = stage !== "login";
+  if (state.publicMembershipProductStatus === "error") {
+    status.textContent = "기준 상품을 표시합니다. 판매 여부와 최종 가격은 로그인 후 다시 확인합니다.";
+  } else if (["coach", "time"].includes(stage) && publicPurchaseDirectoryLoad.status === "error") {
+    status.textContent = "시간표를 불러오지 못했습니다. 다시 확인해 주세요.";
+  } else if (stage === "login") {
+    status.textContent = "로그인 직후 선택한 시간이 아직 비어 있는지 다시 확인합니다.";
+  } else {
+    status.textContent = state.publicMembershipProductStatus === "ready" ? "현재 판매 중인 상품 기준입니다." : "최신 상품을 확인하고 있습니다.";
+  }
+}
+
+function updatePublicOnboardingIntent(changes = {}) {
+  const current = storedOnboardingIntent() || { start: "join", source: "direct", capturedAt: new Date().toISOString() };
+  saveOnboardingIntent({ ...current, ...changes, applied: false });
+  renderOnboardingEntryIntro();
+  renderPublicProductPreview();
+  return storedOnboardingIntent();
+}
+
+async function syncPublicPurchaseDirectory(product = publicOnboardingProduct(), options = {}) {
+  const client = window.TennisNoteDataClient;
+  const context = publicOnboardingDirectoryContext(product);
+  if (!client?.readiness?.().ready || !client.rpc || !context.branchId) {
+    publicPurchaseDirectoryLoad = { key: context.key, status: "error", error: "public_purchase_directory_unavailable" };
+    renderPublicProductPreview();
+    return false;
+  }
+  if (!options.force && publicPurchaseDirectoryCache?.key === context.key) {
+    publicPurchaseDirectoryLoad = { key: context.key, status: "ready", error: "" };
+    renderPublicProductPreview();
+    return true;
+  }
+  publicPurchaseDirectoryLoad = { key: context.key, status: "loading", error: "" };
+  renderPublicProductPreview();
+  try {
+    const directory = await client.rpc("tn_public_membership_purchase_directory", {
+      target_branch_id: context.branchId,
+      target_from: context.from,
+      target_to: context.to,
+    });
+    if (!directory || String(directory.branchId || "") !== context.branchId || !Array.isArray(directory.coaches) || !Array.isArray(directory.occupancy)) {
+      throw new Error("public_purchase_directory_response_invalid");
+    }
+    publicPurchaseDirectoryCache = { key: context.key, loadedAt: Date.now(), directory };
+    publicPurchaseDirectoryLoad = { key: context.key, status: "ready", error: "" };
+  } catch (error) {
+    publicPurchaseDirectoryLoad = { key: context.key, status: "error", error: error?.payload?.code || error?.message || "public_purchase_directory_failed" };
+  }
+  renderPublicProductPreview();
+  return publicPurchaseDirectoryLoad.status === "ready";
+}
+
+async function handlePublicOnboardingAction(target) {
+  if (!target) return false;
+  const intent = storedOnboardingIntent();
+  if (target.closest("[data-public-onboarding-retry]")) {
+    await syncPublicPurchaseDirectory(publicOnboardingProduct(intent), { force: true });
+    return true;
+  }
+  if (target.closest("[data-public-onboarding-back]")) {
+    const stage = publicOnboardingStage(intent);
+    if (stage === "login") updatePublicOnboardingIntent({ preferredSchedules: [] });
+    else if (stage === "time" && intent.choiceKind === "regular") {
+      updatePublicOnboardingIntent({ frequency: 0, productId: "", preferredSchedules: [] });
+    } else if (stage === "time") {
+      updatePublicOnboardingIntent({ coachRoleId: "", coachName: "", preferredSchedules: [] });
+    } else if (stage === "frequency") {
+      updatePublicOnboardingIntent({ coachRoleId: "", coachName: "", frequency: 0, productId: "", preferredSchedules: [] });
+    } else if (stage === "coach" && intent.choiceKind === "regular") {
+      updatePublicOnboardingIntent({ scheduleScope: "", coachRoleId: "", coachName: "", frequency: 0, productId: "", preferredSchedules: [] });
+    } else {
+      updatePublicOnboardingIntent({ start: "join", choiceKind: "", scheduleScope: "", coachRoleId: "", coachName: "", frequency: 0, familyId: "", productId: "", preferredSchedules: [] });
+    }
+    return true;
+  }
+  const kindButton = target.closest("[data-public-onboarding-kind]");
+  if (kindButton) {
+    const choiceKind = kindButton.dataset.publicOnboardingKind === "one-day" ? "one-day" : "regular";
+    const product = choiceKind === "one-day"
+      ? publicProductPreviewProducts().find((item) => isOneDayMembershipProduct(item)) || null
+      : null;
+    const next = updatePublicOnboardingIntent({
+      start: choiceKind === "one-day" ? "one-day" : "membership",
+      choiceKind,
+      scheduleScope: "",
+      frequency: 0,
+      familyId: product ? membershipProductFamilyId(product) : "",
+      productId: String(product?.id || ""),
+      coachRoleId: "",
+      coachName: "",
+      preferredSchedules: [],
+    });
+    if (choiceKind === "one-day") await syncPublicPurchaseDirectory(publicOnboardingProduct(next));
+    return true;
+  }
+  const scopeButton = target.closest("[data-public-onboarding-scope]");
+  if (scopeButton) {
+    const scheduleScope = scopeButton.dataset.publicOnboardingScope === "weekend" ? "weekend" : "weekday";
+    const product = publicOnboardingRegularProduct(scheduleScope, 1);
+    const next = updatePublicOnboardingIntent({
+      scheduleScope,
+      frequency: 0,
+      familyId: product ? membershipProductFamilyId(product) : "four-week",
+      productId: String(product?.id || ""),
+      coachRoleId: "",
+      coachName: "",
+      preferredSchedules: [],
+    });
+    await syncPublicPurchaseDirectory(publicOnboardingProduct(next));
+    return true;
+  }
+  const coachButton = target.closest("[data-public-onboarding-coach]");
+  if (coachButton) {
+    const product = publicOnboardingProduct(intent);
+    updatePublicOnboardingIntent({
+      familyId: product ? membershipProductFamilyId(product) : intent.familyId,
+      productId: String(product?.id || intent.productId || ""),
+      coachRoleId: String(coachButton.dataset.publicOnboardingCoach || ""),
+      coachName: String(coachButton.dataset.publicOnboardingCoachName || ""),
+      preferredSchedules: [],
+    });
+    return true;
+  }
+  const frequencyButton = target.closest("[data-public-onboarding-frequency]");
+  if (frequencyButton) {
+    const frequency = Math.max(1, Math.min(3, Number(frequencyButton.dataset.publicOnboardingFrequency) || 1));
+    const product = publicOnboardingRegularProduct(intent.scheduleScope, frequency, intent.coachRoleId);
+    if (!product) return false;
+    updatePublicOnboardingIntent({
+      frequency,
+      familyId: membershipProductFamilyId(product),
+      productId: String(product.id || ""),
+      preferredSchedules: [],
+    });
+    return true;
+  }
+  const slotButton = target.closest("[data-public-onboarding-slot]");
+  if (slotButton) {
+    const product = publicOnboardingProduct(intent);
+    const key = String(slotButton.dataset.publicOnboardingSlot || "");
+    const available = publicOnboardingAvailableSlots(product, intent.coachRoleId);
+    const slot = available.find((item) => `${item.lessonDate}:${item.startTime}:${item.coachRoleId}` === key);
+    if (!slot) {
+      if ($("#publicProductPreviewStatus")) $("#publicProductPreviewStatus").textContent = "방금 마감된 시간입니다. 가능한 시간을 다시 선택해 주세요.";
+      return false;
+    }
+    const required = intent.choiceKind === "regular" ? Math.max(1, Number(intent.frequency) || 1) : 1;
+    const schedules = [...(intent.preferredSchedules || [])];
+    const existingIndex = schedules.findIndex((item) => `${item.lessonDate}:${item.startTime}:${item.coachRoleId}` === key);
+    if (existingIndex >= 0) schedules.splice(existingIndex, 1);
+    else if (required === 1) schedules.splice(0, schedules.length, slot);
+    else if (schedules.length < required) {
+      const selectedWeek = schedules[0] ? purchaseWeekStartDate(schedules[0].lessonDate) : "";
+      if (selectedWeek && selectedWeek !== purchaseWeekStartDate(slot.lessonDate)) {
+        schedules.splice(0, schedules.length, slot);
+      } else if (schedules.some((item) => item.lessonDate === slot.lessonDate)) {
+        if ($("#publicProductPreviewStatus")) $("#publicProductPreviewStatus").textContent = `주 ${required}회는 서로 다른 요일을 선택해 주세요.`;
+        return false;
+      } else schedules.push(slot);
+    }
+    updatePublicOnboardingIntent({ preferredSchedules: schedules });
+    return true;
+  }
+  return false;
+}
+
+async function syncPublicMembershipProductsFromServer() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.readiness?.().ready || !client.rpc) {
+    state.publicMembershipProductStatus = "error";
+    renderPublicProductPreview();
+    return false;
+  }
+  try {
+    const rows = await client.rpc("tn_public_membership_product_catalog", {});
+    const products = (Array.isArray(rows) ? rows : [])
+      .map(membershipProductFromServer)
+      .filter((product) => product.status !== "hidden" && Number(product.cardAmount || 0) > 0);
+    state.publicMembershipProducts = products;
+    state.publicMembershipProductStatus = products.length ? "ready" : "error";
+    renderPublicProductPreview();
+    const intent = storedOnboardingIntent();
+    if (["coach", "time"].includes(publicOnboardingStage(intent))) {
+      void syncPublicPurchaseDirectory(publicOnboardingProduct(intent));
+    }
+    return products.length > 0;
+  } catch {
+    state.publicMembershipProducts = [];
+    state.publicMembershipProductStatus = "error";
+    renderPublicProductPreview();
+    return false;
+  }
+}
+
+async function recordOnboardingIntent(intent = storedOnboardingIntent()) {
+  const client = window.TennisNoteDataClient;
+  if (!intent || !hasLiveMemberSession() || !client?.rpc) return false;
+  const recordKey = `${state.member?.profileId || ""}:${intent.source}:${intent.start}`;
+  if (onboardingIntentRecordedKey === recordKey) return true;
+  try {
+    await client.rpc("tn_record_my_onboarding_entry", {
+      target_source_channel: intent.source,
+      target_start_intent: intent.start,
+      target_entry_path: window.location.pathname,
+    });
+    onboardingIntentRecordedKey = recordKey;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function markOnboardingIntentApplied(intent = storedOnboardingIntent()) {
+  if (!intent) return;
+  saveOnboardingIntent({ ...intent, applied: true });
+}
+
+async function applyPendingOnboardingIntent() {
+  const intent = storedOnboardingIntent();
+  renderOnboardingEntryIntro();
+  if (!intent || intent.applied || onboardingIntentApplying || !state.member) return false;
+  void recordOnboardingIntent(intent);
+  if (!identityProfileComplete()) {
+    if ($("#identitySetupTitle")) $("#identitySetupTitle").textContent = "가입 정보를 확인해 주세요";
+    if ($("#identitySetupMessage")) $("#identitySetupMessage").textContent = "이름·휴대전화·출생연도 확인 후 수업 신청으로 이어집니다.";
+    return false;
+  }
+  onboardingIntentApplying = true;
+  try {
+    if (intent.start === "one-day") {
+      await ensureMembershipPurchaseData();
+      const selectedProduct = membershipProducts().find((product) => (
+        String(product.id || "") === String(intent.productId || "")
+        && isOneDayMembershipProduct(product)
+      ));
+      if (selectedProduct) {
+        setView("shopView", { replaceHistory: true });
+        openMembershipPurchaseFlow("", selectedProduct.id, "one_day");
+        const flow = purchaseFlowState();
+        flow.coachRoleId = intent.coachRoleId || "";
+        flow.coachName = intent.coachName || "";
+        flow.preferredSchedules = (intent.preferredSchedules || []).map((schedule) => ({ ...schedule }));
+        syncLegacyPurchaseScheduleFields();
+        saveSnapshot();
+        renderMembershipPurchaseFlow();
+      }
+      else await openOneDayPurchaseFlow();
+    } else if (intent.start === "membership") {
+      setView("shopView", { replaceHistory: true });
+      await ensureMembershipPurchaseData();
+      const selectedProduct = membershipProducts().find((product) => (
+        String(product.id || "") === String(intent.productId || "")
+        && isDirectPurchaseMembershipProduct(product)
+      ));
+      openMembershipPurchaseFlow("", selectedProduct?.id || "", "new_purchase");
+      if (selectedProduct) {
+        const flow = purchaseFlowState();
+        flow.productFrequency = Math.max(1, Number(intent.frequency) || purchaseProductFrequency(selectedProduct));
+        flow.productScheduleScope = intent.scheduleScope || membershipProductFacet(selectedProduct, "scheduleScope");
+        flow.coachRoleId = intent.coachRoleId || "";
+        flow.coachName = intent.coachName || "";
+        flow.preferredSchedules = (intent.preferredSchedules || []).map((schedule) => ({ ...schedule }));
+        syncLegacyPurchaseScheduleFields();
+        saveSnapshot();
+        renderMembershipPurchaseFlow();
+      }
+    } else if (intent.start === "renew") {
+      setView("shopView", { replaceHistory: true });
+      openMembershipPurchaseFlow(currentLiveTickets()[0]?.id || "", "", "renew_same");
+    } else {
+      setView("homeView", { replaceHistory: true });
+    }
+    markOnboardingIntentApplied(intent);
+    return true;
+  } finally {
+    onboardingIntentApplying = false;
+  }
+}
+
 const lessons = [];
 
 const memberScheduleWeeks = [
@@ -879,6 +1510,16 @@ function purchaseContinueReason() {
   return "선택 내용을 확인한 뒤 결제할 수 있습니다.";
 }
 
+async function openOneDayPurchaseFlow() {
+  setView("shopView", { replaceHistory: true });
+  await ensureMembershipPurchaseData();
+  const oneDayProduct = membershipProducts()
+    .filter((product) => isDirectPurchaseMembershipProduct(product) && membershipProductFamilyId(product) === "one-day")
+    .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999))[0] || null;
+  openMembershipPurchaseFlow("", oneDayProduct?.id || "", "one_day");
+  return Boolean(oneDayProduct);
+}
+
 function purchaseSlotInsideAnchorWindow(scheduleLessons, product, lessonDate, time, coach, policy) {
   const configuredGap = Object.prototype.hasOwnProperty.call(product, "makeupAnchorMinutes")
     ? product.makeupAnchorMinutes
@@ -1018,7 +1659,10 @@ async function initApp() {
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
+  captureOnboardingIntent();
   restoreSnapshot();
+  renderOnboardingEntryIntro();
+  renderPublicProductPreview();
   window.TennisNoteModeTransition?.consume("member", { splashSelector: "#brandSplash" });
   bindEvents();
   installOAuthReturnStatusReset();
@@ -1028,6 +1672,7 @@ async function initApp() {
   installMemberScheduleRevisionWatcher();
   renderActiveMemberView();
   const client = window.TennisNoteDataClient;
+  void syncPublicMembershipProductsFromServer();
   const hasStoredSession = Boolean(client?.getSession?.()?.access_token);
   const oauthReturnPending = Boolean(
     new URLSearchParams(window.location.search || "").get("code")
@@ -1087,7 +1732,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.396",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.398",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

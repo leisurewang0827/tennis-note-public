@@ -415,8 +415,8 @@ function renderMemberBookingShortcuts() {
           <button class="small-button" type="button" data-flex-booking-products="coupon">쿠폰 회원권 보기</button>
         </article>`}
       <article>
-        <div><strong>원데이 레슨</strong><span>회원권 없이 상담 후 예약할 수 있습니다.</span></div>
-        <button class="small-button" type="button" data-open-one-day-inquiry>원데이 문의</button>
+        <div><strong>원데이 레슨</strong><span>실제 가능한 코치와 시간을 선택해 바로 신청할 수 있습니다.</span></div>
+        <button class="small-button" type="button" data-start-one-day-purchase>원데이 시간 보기</button>
       </article>
     </section>`;
 }

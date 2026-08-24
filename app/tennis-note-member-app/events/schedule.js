@@ -87,6 +87,10 @@ function bindScheduleEvents() {
       navigateMemberView("shopView");
       return;
     }
+    if (event.target.closest("[data-start-one-day-purchase]")) {
+      void openOneDayPurchaseFlow();
+      return;
+    }
     if (event.target.closest("[data-open-one-day-inquiry]")) {
       openKakaoInquiryModal("one-day");
       return;

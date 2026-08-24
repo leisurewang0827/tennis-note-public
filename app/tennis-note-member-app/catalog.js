@@ -4,6 +4,7 @@
 // app.js 에서 본문 그대로 옮겨왔고 전역 선언이라 쓰는 쪽은 예전과 같다.
 
 const memberEnrollmentLegacyDefaults = {
+  experienceLevel: "beginner",
   lessonGoal: "미수집",
   preferredSchedule: "시간표에서 선택",
 };
@@ -79,7 +80,7 @@ const membershipPresetDefinitions = [
 
 const registrationFlows = [
   { title: "운동노트 회원", detail: "간편 로그인만 하면 회원권 없이도 운동 기록을 바로 남길 수 있습니다.", steps: ["간편 로그인", "운동 기록", "사진·영상", "계속 이용"] },
-  { title: "첫 회원권 구매", detail: "처음 유료 레슨을 구매할 때만 수강 가입서를 작성하고 결제로 이어집니다.", steps: ["회원권 선택", "수강 가입서", "결제", "수강 시작"] },
+  { title: "첫 회원권 구매", detail: "이름·연락처·출생연도만 확인하고 결제로 이어집니다.", steps: ["회원권 선택", "기본정보 확인", "결제", "수강 시작"] },
   { title: "재등록", detail: "현재 가입서가 유효한 회원은 다시 작성하지 않고 기존 시간과 회원권을 연장합니다.", steps: ["잔여 2회 알림", "기존 시간 보호", "결제", "연장"] },
   { title: "2대1 공동관리", detail: "한 명이 가입서와 결제를 진행해도 파트너 일정이 함께 연결됩니다.", steps: ["파트너 입력", "공동 시간표", "대표 결제", "앱 추가 연결"] },
 ];

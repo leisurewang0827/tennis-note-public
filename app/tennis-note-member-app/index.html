@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.396" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.396" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.398" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.398" />
     <link rel="stylesheet" href="../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-2" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
   </head>
@@ -66,33 +66,51 @@
             <strong>회원 화면을 여는 중</strong>
             <small>로그인 상태를 확인하고 있습니다.</small>
           </div>
-          <h2>간편 로그인</h2>
-          <button class="provider naver" type="button" data-login-provider="네이버">네이버로 시작</button>
-          <button class="provider kakao" type="button" data-login-provider="카카오">카카오로 시작</button>
-          <button
-            class="provider apple"
-            type="button"
-            data-login-provider="Apple"
-            data-ready-label="Apple로 계속"
-            aria-label="Apple로 계속"
-          >
-            <span data-apple-login-label>Apple로 계속</span>
-          </button>
-          <details class="email-login-panel">
-            <summary>이메일로 로그인</summary>
-            <form id="memberEmailLoginForm" class="email-login-form">
-              <label>
-                이메일
-                <input id="memberLoginEmail" type="email" autocomplete="username" required />
-              </label>
-              <label>
-                비밀번호
-                <input id="memberLoginPassword" type="password" autocomplete="current-password" required />
-              </label>
-              <button class="small-button" type="submit">로그인</button>
-              <p id="memberEmailLoginStatus" class="login-form-status" role="status"></p>
-            </form>
-          </details>
+          <div id="onboardingEntryIntro" class="onboarding-entry-intro" hidden>
+            <span id="onboardingEntryEyebrow">테니스노트 시작</span>
+            <strong id="onboardingEntryTitle">원하는 수업을 먼저 고른 뒤 가입합니다.</strong>
+            <small id="onboardingEntryDetail">로그인 후 선택 내용을 그대로 불러와 최종 결제합니다.</small>
+          </div>
+          <section id="publicProductPreview" class="public-product-preview" aria-labelledby="publicProductPreviewTitle" hidden>
+            <div class="public-product-preview-heading">
+              <div>
+                <span id="publicProductPreviewStep">신규 수업 신청</span>
+                <strong id="publicProductPreviewTitle">원데이 또는 정규 레슨을 선택하세요</strong>
+              </div>
+              <small id="publicProductPreviewStatus" role="status" aria-live="polite">판매 중인 상품을 확인하고 있습니다.</small>
+            </div>
+            <div id="publicProductPreviewList" class="public-product-preview-list"></div>
+            <small class="public-product-preview-note">선택한 시간은 로그인 후 다시 확인합니다. 결제 전에는 회원권이나 수업이 만들어지지 않습니다.</small>
+          </section>
+          <div id="publicOnboardingLoginActions" class="public-onboarding-login-actions" hidden>
+            <h2>간편 로그인</h2>
+            <button class="provider naver" type="button" data-login-provider="네이버">네이버로 시작</button>
+            <button class="provider kakao" type="button" data-login-provider="카카오">카카오로 시작</button>
+            <button
+              class="provider apple"
+              type="button"
+              data-login-provider="Apple"
+              data-ready-label="Apple로 계속"
+              aria-label="Apple로 계속"
+            >
+              <span data-apple-login-label>Apple로 계속</span>
+            </button>
+            <details class="email-login-panel">
+              <summary>이메일로 로그인</summary>
+              <form id="memberEmailLoginForm" class="email-login-form">
+                <label>
+                  이메일
+                  <input id="memberLoginEmail" type="email" autocomplete="username" required />
+                </label>
+                <label>
+                  비밀번호
+                  <input id="memberLoginPassword" type="password" autocomplete="current-password" required />
+                </label>
+                <button class="small-button" type="submit">로그인</button>
+                <p id="memberEmailLoginStatus" class="login-form-status" role="status"></p>
+              </form>
+            </details>
+          </div>
           <button class="small-button install-button" type="button" data-install-pwa hidden>앱 설치</button>
           <div class="legal-links" aria-label="정책 안내">
             <a href="../tennis-note-legal/commerce.html">이용약관</a>
@@ -207,10 +225,13 @@
           <section id="homeOnboarding" class="home-onboarding" hidden aria-label="테니스 노트 시작">
             <div>
               <span>테니스 노트 시작</span>
-              <strong>첫 회원권을 선택해 주세요</strong>
-              <small>회원권을 구매하면 수업 일정과 코치 피드백이 여기에 표시됩니다.</small>
+              <strong>원하는 시작 방법을 선택해 주세요</strong>
+              <small>원데이 체험 또는 정규 회원권을 선택하면 실제 가능한 코치와 시간이 표시됩니다.</small>
             </div>
-            <button class="primary-button" type="button" data-summary-action="shop">회원권 구매</button>
+            <div class="home-onboarding-actions">
+              <button class="primary-button" type="button" data-start-one-day-purchase>원데이 체험</button>
+              <button class="small-button" type="button" data-open-purchase-flow="new_purchase">정규 회원권</button>
+            </div>
           </section>
           <button class="home-change-button" type="button" data-summary-action="change">
             <strong id="homeChangeLabel">수업 변경</strong>
@@ -857,7 +878,7 @@
             </label>
           </div>
           <details id="memberEnrollmentOptionalDetails" class="member-enrollment-optional">
-            <summary><span>추가 정보</span><small>선택</small></summary>
+            <summary><span>추가 정보</span><small>선택 · 나중에 입력 가능</small></summary>
             <div class="member-enrollment-grid">
               <label>
                 <span>거주 동네 <small>선택</small></span>
@@ -871,15 +892,6 @@
                   <option value="male">남성</option>
                   <option value="other">기타</option>
                   <option value="prefer_not">응답하지 않음</option>
-                </select>
-              </label>
-              <label>
-                <span>테니스 경험 <small>선택</small></span>
-                <select id="enrollmentExperience">
-                  <option value="first">처음 시작</option>
-                  <option value="beginner" selected>입문·초급</option>
-                  <option value="intermediate">중급</option>
-                  <option value="advanced">상급</option>
                 </select>
               </label>
             </div>
@@ -1190,79 +1202,79 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-escape-html.js?v=1.0.396"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.396"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.396"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.396"></script>
+    <script defer src="../shared/tennisnote-escape-html.js?v=1.0.398"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.398"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.398"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.398"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.396"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.396"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.396"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.396"></script>
-    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.396"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.398"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.398"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.398"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.398"></script>
+    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.398"></script>
     <script defer src="../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-2"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.396"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.398"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
-    <script defer src="../shared/tennisnote-app-common.js?v=1.0.396"></script>
-    <script defer src="./settings.js?v=1.0.396"></script>
-    <script defer src="./catalog.js?v=1.0.396"></script>
-    <script defer src="./domain/products.js?v=1.0.396"></script>
-    <script defer src="./domain/identity.js?v=1.0.396"></script>
-    <script defer src="./domain/journal.js?v=1.0.396"></script>
-    <script defer src="./domain/curriculum.js?v=1.0.396"></script>
-    <script defer src="./domain/payment.js?v=1.0.396"></script>
-    <script defer src="./domain/purchase.js?v=1.0.396"></script>
-    <script defer src="./domain/tickets.js?v=1.0.396"></script>
-    <script defer src="./domain/policy.js?v=1.0.396"></script>
-    <script defer src="./domain/lessons.js?v=1.0.396"></script>
-    <script defer src="./domain/changes.js?v=1.0.396"></script>
-    <script defer src="./domain/schedule.js?v=1.0.396"></script>
-    <script defer src="./domain/coaches.js?v=1.0.396"></script>
-    <script defer src="./domain/shared-data.js?v=1.0.396"></script>
-    <script defer src="./domain/notices.js?v=1.0.396"></script>
-    <script defer src="./domain/values.js?v=1.0.396"></script>
-    <script defer src="./views/home.js?v=1.0.396"></script>
-    <script defer src="./views/schedule.js?v=1.0.396"></script>
-    <script defer src="./views/profile.js?v=1.0.396"></script>
-    <script defer src="./views/tickets.js?v=1.0.396"></script>
-    <script defer src="./views/products.js?v=1.0.396"></script>
-    <script defer src="./views/journal.js?v=1.0.396"></script>
-    <script defer src="./views/curriculum.js?v=1.0.396"></script>
-    <script defer src="./views/requests.js?v=1.0.396"></script>
-    <script defer src="./events/delegated.js?v=1.0.396"></script>
-    <script defer src="./domain/common.js?v=1.0.396"></script>
-    <script defer src="./domain/members.js?v=1.0.396"></script>
-    <script defer src="./views/common.js?v=1.0.396"></script>
-    <script defer src="./forms/common.js?v=1.0.396"></script>
-    <script defer src="./forms/members.js?v=1.0.396"></script>
-    <script defer src="./forms/notices.js?v=1.0.396"></script>
-    <script defer src="./forms/payment.js?v=1.0.396"></script>
-    <script defer src="./forms/schedule.js?v=1.0.396"></script>
-    <script defer src="./forms/tickets.js?v=1.0.396"></script>
-    <script defer src="./ui/common.js?v=1.0.396"></script>
-    <script defer src="./events/account.js?v=1.0.396"></script>
-    <script defer src="./events/makeup.js?v=1.0.396"></script>
-    <script defer src="./events/journal.js?v=1.0.396"></script>
-    <script defer src="./events/profile.js?v=1.0.396"></script>
-    <script defer src="./events/schedule.js?v=1.0.396"></script>
-    <script defer src="./events/home.js?v=1.0.396"></script>
-    <script defer src="./data/auth.js?v=1.0.396"></script>
-    <script defer src="./data/sync.js?v=1.0.396"></script>
-    <script defer src="./data/push.js?v=1.0.396"></script>
-    <script defer src="./data/payment.js?v=1.0.396"></script>
-    <script defer src="./data/journal.js?v=1.0.396"></script>
-    <script defer src="./data/tickets.js?v=1.0.396"></script>
-    <script defer src="./ui/sheet.js?v=1.0.396"></script>
-    <script defer src="./ui/screens.js?v=1.0.396"></script>
-    <script defer src="./storage.js?v=1.0.396"></script>
-    <script defer src="./actions/requests.js?v=1.0.396"></script>
-    <script defer src="./actions/enrollment.js?v=1.0.396"></script>
-    <script defer src="./actions/profile.js?v=1.0.396"></script>
-    <script defer src="./actions/journal.js?v=1.0.396"></script>
-    <script defer src="./actions/payment.js?v=1.0.396"></script>
-    <script defer src="./actions/session.js?v=1.0.396"></script>
+    <script defer src="../shared/tennisnote-app-common.js?v=1.0.398"></script>
+    <script defer src="./settings.js?v=1.0.398"></script>
+    <script defer src="./catalog.js?v=1.0.398"></script>
+    <script defer src="./domain/products.js?v=1.0.398"></script>
+    <script defer src="./domain/identity.js?v=1.0.398"></script>
+    <script defer src="./domain/journal.js?v=1.0.398"></script>
+    <script defer src="./domain/curriculum.js?v=1.0.398"></script>
+    <script defer src="./domain/payment.js?v=1.0.398"></script>
+    <script defer src="./domain/purchase.js?v=1.0.398"></script>
+    <script defer src="./domain/tickets.js?v=1.0.398"></script>
+    <script defer src="./domain/policy.js?v=1.0.398"></script>
+    <script defer src="./domain/lessons.js?v=1.0.398"></script>
+    <script defer src="./domain/changes.js?v=1.0.398"></script>
+    <script defer src="./domain/schedule.js?v=1.0.398"></script>
+    <script defer src="./domain/coaches.js?v=1.0.398"></script>
+    <script defer src="./domain/shared-data.js?v=1.0.398"></script>
+    <script defer src="./domain/notices.js?v=1.0.398"></script>
+    <script defer src="./domain/values.js?v=1.0.398"></script>
+    <script defer src="./views/home.js?v=1.0.398"></script>
+    <script defer src="./views/schedule.js?v=1.0.398"></script>
+    <script defer src="./views/profile.js?v=1.0.398"></script>
+    <script defer src="./views/tickets.js?v=1.0.398"></script>
+    <script defer src="./views/products.js?v=1.0.398"></script>
+    <script defer src="./views/journal.js?v=1.0.398"></script>
+    <script defer src="./views/curriculum.js?v=1.0.398"></script>
+    <script defer src="./views/requests.js?v=1.0.398"></script>
+    <script defer src="./events/delegated.js?v=1.0.398"></script>
+    <script defer src="./domain/common.js?v=1.0.398"></script>
+    <script defer src="./domain/members.js?v=1.0.398"></script>
+    <script defer src="./views/common.js?v=1.0.398"></script>
+    <script defer src="./forms/common.js?v=1.0.398"></script>
+    <script defer src="./forms/members.js?v=1.0.398"></script>
+    <script defer src="./forms/notices.js?v=1.0.398"></script>
+    <script defer src="./forms/payment.js?v=1.0.398"></script>
+    <script defer src="./forms/schedule.js?v=1.0.398"></script>
+    <script defer src="./forms/tickets.js?v=1.0.398"></script>
+    <script defer src="./ui/common.js?v=1.0.398"></script>
+    <script defer src="./events/account.js?v=1.0.398"></script>
+    <script defer src="./events/makeup.js?v=1.0.398"></script>
+    <script defer src="./events/journal.js?v=1.0.398"></script>
+    <script defer src="./events/profile.js?v=1.0.398"></script>
+    <script defer src="./events/schedule.js?v=1.0.398"></script>
+    <script defer src="./events/home.js?v=1.0.398"></script>
+    <script defer src="./data/auth.js?v=1.0.398"></script>
+    <script defer src="./data/sync.js?v=1.0.398"></script>
+    <script defer src="./data/push.js?v=1.0.398"></script>
+    <script defer src="./data/payment.js?v=1.0.398"></script>
+    <script defer src="./data/journal.js?v=1.0.398"></script>
+    <script defer src="./data/tickets.js?v=1.0.398"></script>
+    <script defer src="./ui/sheet.js?v=1.0.398"></script>
+    <script defer src="./ui/screens.js?v=1.0.398"></script>
+    <script defer src="./storage.js?v=1.0.398"></script>
+    <script defer src="./actions/requests.js?v=1.0.398"></script>
+    <script defer src="./actions/enrollment.js?v=1.0.398"></script>
+    <script defer src="./actions/profile.js?v=1.0.398"></script>
+    <script defer src="./actions/journal.js?v=1.0.398"></script>
+    <script defer src="./actions/payment.js?v=1.0.398"></script>
+    <script defer src="./actions/session.js?v=1.0.398"></script>
     <script>
       (() => {
         let started = false;
@@ -1280,7 +1292,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.396";
+          appScript.src = "./app.js?v=1.0.398";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -1293,7 +1305,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.396";
+          appScript.src = "./app.js?v=1.0.398";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

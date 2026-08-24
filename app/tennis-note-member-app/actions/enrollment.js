@@ -31,7 +31,7 @@ async function submitMemberEnrollment(event) {
     target_birth_year: birthYear,
     target_neighborhood: $("#enrollmentNeighborhood")?.value.trim() || "",
     target_gender: $("#enrollmentGender")?.value || "",
-    target_experience_level: $("#enrollmentExperience")?.value || "beginner",
+    target_experience_level: memberEnrollmentLegacyDefaults.experienceLevel,
     target_lesson_goal: memberEnrollmentLegacyDefaults.lessonGoal,
     target_preferred_schedule: memberEnrollmentLegacyDefaults.preferredSchedule,
     target_partner_name: isGroup ? $("#enrollmentPartnerName")?.value.trim() || "" : "",
@@ -178,9 +178,11 @@ async function submitIdentitySetup(event) {
     saveSnapshot();
     if (result?.linkStatus === "admin_review_required") {
       showToast("가입 완료. 기존 회원 정보는 관리자 확인 후 연결됩니다.");
+      await applyPendingOnboardingIntent();
       return;
     }
     showToast("가입 정보가 저장되었습니다.");
+    await applyPendingOnboardingIntent();
   } catch (error) {
     const errorMessage = identityErrorMessage(error);
     if (message) message.textContent = errorMessage;
