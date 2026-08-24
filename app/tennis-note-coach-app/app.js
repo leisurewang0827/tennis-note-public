@@ -1624,6 +1624,7 @@ async function syncLegacyCoachLessonsFromServer() {
           remainingTime: lessonChangeRemainingText(originalDate, originalTime),
           status: requestStatusLabel[request.status] || request.status,
           coach: lesson.coach || "담당 코치",
+          coachRoleId: lesson.coachRoleId || "",
           source: "server",
           canReview: true,
         };
@@ -2660,7 +2661,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.401",
+    workerUrl: "./service-worker.js?v=1.0.402",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2691,7 +2692,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.401" });
+  const params = new URLSearchParams({ v: "1.0.402" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -3430,10 +3431,29 @@ function currentCoachRoleId() {
   return String(state.coach?.coachRoleId || "").trim();
 }
 
+function requestCoachRoleId(request = {}) {
+  return String(
+    request.coachRoleId
+    || request.coach_role_id
+    || request.targetCoachRoleId
+    || request.target_coach_role_id
+    || "",
+  ).trim();
+}
+
+function makeupRequestBelongsToCurrentCoach(request = {}) {
+  const roleId = currentCoachRoleId();
+  const targetRoleId = requestCoachRoleId(request);
+  if (roleId && targetRoleId) return roleId === targetRoleId;
+  if (state.dataMode === "live" || state.liveProfileId) return false;
+  return canonicalCoachName(requestCoach(request)) === currentCoachName();
+}
+
 function lessonBelongsToCurrentCoach(lesson = {}) {
   const roleId = currentCoachRoleId();
   const lessonRoleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
   if (roleId && lessonRoleId) return roleId === lessonRoleId;
+  if (roleId && (state.dataMode === "live" || state.liveProfileId)) return false;
   return canonicalCoachName(lesson.coach) === currentCoachName();
 }
 
@@ -3443,6 +3463,8 @@ function lessonAssignedToCurrentCoachForTasks(lesson = {}) {
   const substituteRoleId = String(lesson.substituteCoachRoleId || lesson.substitute_coach_role_id || "").trim();
   if (lesson.isSubstitute || substituteRoleId) {
     if (roleId && substituteRoleId) return roleId === substituteRoleId;
+    if (roleId && lessonRoleId) return roleId === lessonRoleId;
+    if (roleId && (state.dataMode === "live" || state.liveProfileId)) return false;
     return canonicalCoachName(lesson.coach) === currentCoachName();
   }
   if (roleId && lessonRoleId) return roleId === lessonRoleId;
@@ -3469,13 +3491,13 @@ function pendingMakeupRequests() {
 }
 
 function ownPendingMakeupRequests() {
-  return pendingMakeupRequests().filter((request) => canonicalCoachName(requestCoach(request)) === currentCoachName());
+  return pendingMakeupRequests().filter(makeupRequestBelongsToCurrentCoach);
 }
 
 function ownOpenMakeupEntitlements() {
   return (state.makeupEntitlements || []).filter((item) => (
     item.status === "open"
-    && canonicalCoachName(item.coach) === currentCoachName()
+    && makeupRequestBelongsToCurrentCoach(item)
   ));
 }
 
@@ -4146,10 +4168,9 @@ function setCoachProfileEditOpen(open) {
 
 function renderTodayLessons() {
   const schedulePolicy = loadCoachSchedulePolicy();
-  const pendingMakeups = state.makeupRequests.filter((request) => request.status === "승인 대기");
   const ownLessons = [...ownTodayLessons()].sort(compareTodayLessonsByNearest);
   const transferredLessons = transferredTodayLessons();
-  const ownMakeups = pendingMakeups.filter((request) => canonicalCoachName(requestCoach(request)) === currentCoachName());
+  const ownMakeups = ownPendingMakeupRequests();
   const ownAbsenceMakeups = ownOpenMakeupEntitlements();
   const ownMakeupTasks = [
     ...ownMakeups.map((request) => ({ ...request, taskKind: "approval" })),
@@ -4757,18 +4778,19 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
                 const startIndex = times.indexOf(lesson.time);
                 if (startIndex < 0) return "";
                 const span = Math.max(1, Math.ceil(lessonDuration(lesson) / scheduleBlockMinutes));
-                const memberLabel = formatScheduleMemberName(lesson.member || "회원");
+                const memberName = String(lesson.member || "회원").trim() || "회원";
+                const memberMarkup = formatScheduleMemberName(memberName);
                 const note = coachScheduleExceptionLabel(lesson);
                 const laneCoach = coachFromLesson(lesson, policy);
                 const releasedLabel = lesson.historicalReleasedSlot ? "과거 빈자리" : "예약 가능한 빈자리";
-                const primaryLabel = lesson.releasedMakeupSlot ? releasedLabel : memberLabel;
+                const primaryMarkup = lesson.releasedMakeupSlot ? escapeHtml(releasedLabel) : memberMarkup;
                 const roundOrState = lesson.releasedMakeupSlot
-                  ? `${memberLabel} 불참으로 발생`
+                  ? `${memberName} 불참으로 발생`
                   : coachScheduleRoundLabel(lesson);
                 const cardNote = lesson.releasedMakeupSlot
                   ? (lesson.historicalReleasedSlot ? "차감 없음" : "보강·원데이 가능")
                   : note;
-                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${escapeHtml(primaryLabel)}</strong><span>${escapeHtml(roundOrState)}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote || "-")}</small></button>`;
+                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${primaryMarkup}</strong><span>${escapeHtml(roundOrState)}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote || "-")}</small></button>`;
               }).join("")}
             </div>`;
         }).join("")}
@@ -4931,19 +4953,18 @@ function fullScheduleFilterLabel(filter) {
 
 function filterFullScheduleLessons(lessons, filter) {
   if (filter === "mine") return lessons.filter((lesson) => (
-    canonicalCoachName(lesson.coach) === currentCoachName()
-    || canonicalCoachName(lesson.originalCoach) === currentCoachName()
+    lessonBelongsToCurrentCoach(lesson)
+    || lessonAssignedToCurrentCoachForTasks(lesson)
   ));
   if (filter === "feedback") return lessons.filter((lesson) => (
     lessonAssignedToCurrentCoachForTasks(lesson)
     && coachLessonCardState(lesson).needsFeedback
   ));
-  if (filter === "makeupChange")
-    return lessons.filter((lesson) =>
-      `${lesson.type || ""} ${lesson.status || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`.includes("보강") ||
-      `${lesson.type || ""} ${lesson.status || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`.includes("변경") ||
-      `${lesson.status || ""}`.includes("승인 대기"),
-    );
+  if (filter === "makeupChange") return lessons.filter((lesson) => {
+    if (!lessonBelongsToCurrentCoach(lesson)) return false;
+    const context = `${lesson.type || ""} ${lesson.status || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
+    return context.includes("보강") || context.includes("변경") || context.includes("승인 대기");
+  });
   return lessons;
 }
 
@@ -5949,7 +5970,7 @@ function openMakeupApprovalModal(id) {
   state.editingLessonId = null;
   state.writingLessonId = null;
   state.viewingCurriculumId = null;
-  state.editingMakeupId = id || ownPendingMakeupRequests()[0]?.id || pendingMakeupRequests()[0]?.id || "__none__";
+  state.editingMakeupId = id || ownPendingMakeupRequests()[0]?.id || "__none__";
   renderLessonEditModal();
   openCoachModal("lessonEditModal");
 }
@@ -8561,7 +8582,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.401",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.402",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
