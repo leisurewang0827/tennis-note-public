@@ -629,3 +629,13 @@ function openLocalCurriculumPreview() {
   setView("curriculumView");
   return true;
 }
+
+async function openOneDayPurchaseFlow() {
+  setView("shopView", { replaceHistory: true });
+  await ensureMembershipPurchaseData();
+  const oneDayProduct = membershipProducts()
+    .filter((product) => isDirectPurchaseMembershipProduct(product) && membershipProductFamilyId(product) === "one-day")
+    .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999))[0] || null;
+  openMembershipPurchaseFlow("", oneDayProduct?.id || "", "one_day");
+  return Boolean(oneDayProduct);
+}

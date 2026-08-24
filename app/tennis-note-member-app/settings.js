@@ -59,3 +59,6 @@ const defaultPaymentOperatingMode = "tosspay_only";
 const defaultAllowedPaymentMethods = ["tosspay"];
 
 const MEMBER_LIVE_REFRESH_STALE_MS = 20_000;
+
+// 비회원이 들어올 때 담아두는 의도. sessionStorage 라 탭을 닫으면 사라진다.
+const onboardingIntentStorageKey = "tennis-note-onboarding-intent-v1";

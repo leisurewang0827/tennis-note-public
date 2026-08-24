@@ -333,3 +333,77 @@ function memberModeOverrideActive() {
   if (requestedMode === "member") sessionStorage.setItem(appModePreferenceKey, "member");
   return requestedMode === "member" || sessionStorage.getItem(appModePreferenceKey) === "member";
 }
+
+function storedOnboardingIntent() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(onboardingIntentStorageKey) || "null");
+    if (!parsed || !normalizeOnboardingStart(parsed.start)) return null;
+    const preferredSchedules = Array.isArray(parsed.preferredSchedules)
+      ? parsed.preferredSchedules.map((schedule) => ({
+        lessonDate: String(schedule?.lessonDate || ""),
+        day: String(schedule?.day || ""),
+        startTime: String(schedule?.startTime || "").slice(0, 5),
+        coachRoleId: String(schedule?.coachRoleId || ""),
+        coachName: String(schedule?.coachName || ""),
+        durationMinutes: Math.max(10, Number(schedule?.durationMinutes) || 20),
+      })).filter((schedule) => schedule.lessonDate && schedule.startTime && schedule.coachRoleId)
+      : [];
+    return {
+      start: normalizeOnboardingStart(parsed.start),
+      source: normalizeOnboardingSource(parsed.source) || "direct",
+      choiceKind: ["one-day", "regular"].includes(parsed.choiceKind) ? parsed.choiceKind : "",
+      scheduleScope: ["weekday", "weekend"].includes(parsed.scheduleScope) ? parsed.scheduleScope : "",
+      frequency: Math.max(0, Math.min(3, Number(parsed.frequency) || 0)),
+      familyId: String(parsed.familyId || ""),
+      productId: String(parsed.productId || ""),
+      coachRoleId: String(parsed.coachRoleId || ""),
+      coachName: String(parsed.coachName || ""),
+      preferredSchedules,
+      capturedAt: String(parsed.capturedAt || ""),
+      applied: parsed.applied === true,
+    };
+  } catch {
+    sessionStorage.removeItem(onboardingIntentStorageKey);
+    return null;
+  }
+}
+
+function saveOnboardingIntent(intent = null) {
+  if (!intent) {
+    sessionStorage.removeItem(onboardingIntentStorageKey);
+    return;
+  }
+  sessionStorage.setItem(onboardingIntentStorageKey, JSON.stringify(intent));
+}
+
+function markOnboardingIntentApplied(intent = storedOnboardingIntent()) {
+  if (!intent) return;
+  saveOnboardingIntent({ ...intent, applied: true });
+}
+
+function captureOnboardingIntent() {
+  const params = new URLSearchParams(window.location.search);
+  const start = normalizeOnboardingStart(params.get("start"));
+  if (!start) return storedOnboardingIntent();
+  const source = normalizeOnboardingSource(params.get("source")) || "direct";
+  const existing = storedOnboardingIntent();
+  const returningFromExternalFlow = Boolean(
+    params.get("code")
+    || params.get("error")
+    || params.get("paymentId")
+    || window.location.hash.includes("access_token="),
+  );
+  const sameIntent = existing?.start === start && existing?.source === source;
+  const alreadyCapturedInEntry = history.state?.tennisNoteOnboardingCaptured === true;
+  const shouldReset = !sameIntent || (!returningFromExternalFlow && !alreadyCapturedInEntry);
+  const seededChoice = start === "one-day" ? "one-day" : start === "membership" ? "regular" : "";
+  const intent = shouldReset
+    ? { start, source, choiceKind: seededChoice, capturedAt: new Date().toISOString(), applied: false }
+    : existing;
+  saveOnboardingIntent(intent);
+  const currentState = typeof history.state === "object" && history.state ? history.state : {};
+  if (!currentState.tennisNoteOnboardingCaptured) {
+    history.replaceState({ ...currentState, tennisNoteOnboardingCaptured: true }, "", window.location.href);
+  }
+  return intent;
+}
