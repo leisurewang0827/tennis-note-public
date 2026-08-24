@@ -770,3 +770,83 @@ function startCouponBooking(ticketId) {
   const sourceId = `coupon-ticket-${ticketId}`;
   void openMemberChangeTimetable(sourceId);
 }
+
+function rawCurrentLiveTickets() {
+  if (!Array.isArray(state.liveTickets) || !state.liveTickets.length) return [];
+  const usableTickets = window.TennisNoteTicketState?.split
+    ? window.TennisNoteTicketState.split(state.liveTickets).current
+    : state.liveTickets.filter((ticket) => ["active", "paused"].includes(String(ticket.status || "").toLowerCase()));
+  if (!usableTickets.length) return [];
+  return [...usableTickets].filter((ticket) => !ticket.refundHoldId).sort((a, b) => {
+    const priority = liveTicketPriority(a) - liveTicketPriority(b);
+    if (priority) return priority;
+    const sharedGroupPriority = Number(Boolean(b.sharedGroupTicket && Number(b.groupSize) === 2))
+      - Number(Boolean(a.sharedGroupTicket && Number(a.groupSize) === 2));
+    if (sharedGroupPriority) return sharedGroupPriority;
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+}
+
+function canonicalCurrentLiveTickets(ticketList = []) {
+  return ticketList.reduce((result, ticket) => {
+    const planKey = liveTicketRenewalPlanKey(ticket);
+    const existingIndex = planKey ? result.findIndex((candidate) => (
+      liveTicketRenewalPlanKey(candidate) === planKey
+      && liveTicketDateRangesOverlap(candidate, ticket)
+    )) : -1;
+    if (existingIndex < 0) result.push(ticket);
+    else result[existingIndex] = preferredRenewalOverlapTicket(result[existingIndex], ticket);
+    return result;
+  }, []);
+}
+
+function liveTicketAggregate(ticketList = currentLiveTickets()) {
+  const tickets = Array.isArray(ticketList) ? ticketList : [];
+  return tickets.reduce((summary, ticket) => ({
+    count: summary.count + 1,
+    total: summary.total + Math.max(0, Number(ticket?.total) || 0),
+    used: summary.used + Math.max(0, Number(ticket?.used) || 0),
+    remaining: summary.remaining + Math.max(0, Number(ticket?.remaining) || 0),
+  }), { count: 0, total: 0, used: 0, remaining: 0 });
+}
+
+function liveTicketRenewalPlanKey(ticket = {}) {
+  const productId = String(ticket.productId || "");
+  const coachRoleId = String(ticket.coachRoleId || "");
+  if (!productId || !coachRoleId) return "";
+  return [productId, coachRoleId, String(ticket.groupAccountId || "")].join("|");
+}
+
+function liveTicketDateRangesOverlap(left = {}, right = {}) {
+  if (!left.startsOn || !left.expiresOn || !right.startsOn || !right.expiresOn) return false;
+  return left.startsOn <= right.expiresOn && right.startsOn <= left.expiresOn;
+}
+
+function currentLiveTicketOverlapCount() {
+  const rawTickets = rawCurrentLiveTickets();
+  return Math.max(0, rawTickets.length - canonicalCurrentLiveTickets(rawTickets).length);
+}
+
+function preferredRenewalOverlapTicket(left = {}, right = {}) {
+  const leftReferences = liveTicketLessonReferenceCount(left);
+  const rightReferences = liveTicketLessonReferenceCount(right);
+  if (leftReferences !== rightReferences) return leftReferences > rightReferences ? left : right;
+  const leftUsed = Math.max(0, Number(left.used) || 0);
+  const rightUsed = Math.max(0, Number(right.used) || 0);
+  if (leftUsed !== rightUsed) return leftUsed > rightUsed ? left : right;
+  const startOrder = String(left.startsOn || "").localeCompare(String(right.startsOn || ""));
+  if (startOrder) return startOrder < 0 ? left : right;
+  return String(left.createdAt || "").localeCompare(String(right.createdAt || "")) <= 0 ? left : right;
+}
+
+function liveTicketForLesson(lesson = null) {
+  const ticketId = lesson ? memberLessonTicketId(lesson) : "";
+  if (!ticketId) return null;
+  return (state.liveTickets || []).find((ticket) => String(ticket.id || "") === ticketId) || null;
+}
+
+function liveTicketLessonReferenceCount(ticket = {}) {
+  const ticketId = String(ticket.id || "");
+  if (!ticketId) return 0;
+  return (state.lessons || []).filter((lesson) => memberLessonTicketId(lesson) === ticketId).length;
+}

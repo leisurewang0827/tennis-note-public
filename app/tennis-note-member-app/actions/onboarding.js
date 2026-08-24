@@ -186,3 +186,22 @@ function updatePublicOnboardingIntent(changes = {}) {
   renderPublicProductPreview();
   return storedOnboardingIntent();
 }
+// 이름은 open* 이지만 여기 둔다. 하는 일이 updatePublicOnboardingIntent 와 같다 —
+// 담아둔 의도를 지우고 주소를 정리한 뒤 화면을 다시 그린다.
+
+function openExistingMemberLoginFromOnboarding() {
+  saveOnboardingIntent(null);
+  const url = new URL(window.location.href);
+  url.searchParams.delete("start");
+  url.searchParams.delete("source");
+  const cleanUrl = `${url.pathname}${url.search}${url.hash}`;
+  const currentState = typeof history.state === "object" && history.state ? history.state : {};
+  history.replaceState({ ...currentState, tennisNoteOnboardingCaptured: false }, "", cleanUrl);
+  renderOnboardingEntryIntro();
+  renderPublicProductPreview();
+  const existingMemberNote = $("#publicOnboardingExistingMemberNote");
+  if (existingMemberNote) existingMemberNote.hidden = false;
+  const status = $("#memberEmailLoginStatus");
+  if (status) status.textContent = "로그인하면 등록된 전화번호로 기존 회원권과 시간표를 연결합니다.";
+  window.setTimeout(() => $("#publicOnboardingLoginActions [data-login-provider]")?.focus(), 40);
+}

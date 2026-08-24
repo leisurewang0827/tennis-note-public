@@ -885,17 +885,6 @@ const branchSalesSettingsState = {
 let adminViewRenderRevision = 0;
 const adminViewRenderCache = new Map();
 
-function memberHasActiveGroupTicketLink(member, ticket) {
-  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
-  if (!ticketId) return false;
-  const memberUserIds = new Set(memberServerUserIds(member).map(String));
-  return (adminLiveDataState.groupTicketLinks || []).some((link) => (
-    ["active", "linked"].includes(String(link.status || "active").toLowerCase())
-    && String(link.ticket_id || "") === ticketId
-    && memberUserIds.has(String(link.user_id || ""))
-  ));
-}
-
 const memberPaymentRecordStates = new Set(["unentered", "complete", "transfer_zero", "incomplete"]);
 
 function memberTicketLinkedPayment(ticket = null) {
@@ -960,76 +949,6 @@ function memberInlinePaymentChanged(form) {
     || initial.date !== current.date
     || initial.method !== current.method
     || Number(initial.amount || 0) !== Number(current.amount || 0);
-}
-
-function memberTicketLifecyclePositionLabel(member, ticket) {
-  if (!ticket) return "회원권";
-  const groups = memberTicketGroups(member);
-  const ticketId = String(ticket.serverTicketId || ticket.id || "");
-  const currentIndex = groups.current.findIndex((item) => String(item.serverTicketId || item.id || "") === ticketId);
-  if (currentIndex >= 0) {
-    return groups.current.length > 1
-      ? `현재 회원권 ${currentIndex + 1}/${groups.current.length}`
-      : "현재 회원권";
-  }
-  const upcomingIndex = groups.upcoming.findIndex((item) => String(item.serverTicketId || item.id || "") === ticketId);
-  if (upcomingIndex >= 0) {
-    return groups.upcoming.length > 1
-      ? `다음 회원권 ${upcomingIndex + 1}/${groups.upcoming.length}`
-      : "다음 회원권";
-  }
-  return "지난 회원권";
-}
-
-function memberTicketPlanValue(ticket = {}, key = "") {
-  const values = {
-    product: ticket.productId || ticket.product_id || "",
-    coach: ticket.coachRoleId || ticket.coach_role_id || "",
-    starts: ticket.starts || ticket.startsOn || ticket.starts_on || ticket.purchased || "",
-    expires: ticket.expires || ticket.expiresOn || ticket.expires_on || "",
-  };
-  return String(values[key] || "");
-}
-
-function memberTicketDateRangesOverlap(left = {}, right = {}) {
-  const leftStart = memberTicketPlanValue(left, "starts");
-  const leftEnd = memberTicketPlanValue(left, "expires");
-  const rightStart = memberTicketPlanValue(right, "starts");
-  const rightEnd = memberTicketPlanValue(right, "expires");
-  if (!leftStart || !leftEnd || !rightStart || !rightEnd) return false;
-  return leftStart <= rightEnd && rightStart <= leftEnd;
-}
-
-function memberTicketsUseSameRenewalPlan(left = {}, right = {}) {
-  const leftProduct = memberTicketPlanValue(left, "product");
-  const rightProduct = memberTicketPlanValue(right, "product");
-  const leftCoach = memberTicketPlanValue(left, "coach");
-  const rightCoach = memberTicketPlanValue(right, "coach");
-  return Boolean(leftProduct && rightProduct && leftCoach && rightCoach)
-    && leftProduct === rightProduct
-    && leftCoach === rightCoach;
-}
-
-function memberRenewalOverlapTicketIds(managedTickets = []) {
-  const result = new Set();
-  managedTickets.forEach((ticket, index) => {
-    managedTickets.slice(index + 1).forEach((candidate) => {
-      if (!memberTicketsUseSameRenewalPlan(ticket, candidate)
-        || !memberTicketDateRangesOverlap(ticket, candidate)) return;
-      [ticket, candidate].forEach((item) => {
-        const ticketId = String(item.serverTicketId || item.id || "");
-        if (ticketId) result.add(ticketId);
-      });
-    });
-  });
-  return result;
-}
-
-function memberRenewalOverlapForPayload(member, payload = {}) {
-  return memberOperationalTickets(member).find((ticket) => (
-    memberTicketsUseSameRenewalPlan(ticket, payload)
-    && memberTicketDateRangesOverlap(ticket, payload)
-  )) || null;
 }
 
 const accountDeletionExecutionInFlight = new Set();
@@ -1104,15 +1023,6 @@ window.setInterval(() => {
     showToast("15분 동안 사용하지 않아 회원표 편집을 잠갔습니다.");
   }
 }, 30000);
-
-function memberTicketLessonRows(member, ticket = null, candidateLessons = null) {
-  const memberLessons = Array.isArray(candidateLessons) ? candidateLessons : memberLessonRows(member);
-  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
-  if (!ticketId) return memberLessons;
-  return memberLessons.filter((lesson) => (
-    String(lesson.ticketId || lesson.serverTicketId || "") === ticketId
-  ));
-}
 
 function adminLessonChangePolicyText(request = {}) {
   const snapshot = request.policySnapshot || request.policy_snapshot || null;
