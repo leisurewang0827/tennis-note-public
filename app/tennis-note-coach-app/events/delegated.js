@@ -77,7 +77,7 @@ function bindDelegatedEvents() {
 
   document.addEventListener("keydown", (event) => {
     if (event.isComposing) return;
-    const draftKeywords = event.target.closest("[data-modal-comment-keywords], [data-log-comment-keywords], [data-log-participant-keywords]");
+    const draftKeywords = event.target.closest("[data-log-comment-keywords], [data-log-participant-keywords]");
     if (draftKeywords && event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();
@@ -114,6 +114,53 @@ function bindDelegatedEvents() {
     const curriculumSuggestion = event.target.closest("[data-curriculum-option-code]");
     if (curriculumSuggestion) {
       selectCoachCurriculumSuggestion(curriculumSuggestion);
+      return;
+    }
+
+    const participantTab = event.target.closest("[data-lesson-participant-tab]");
+    if (participantTab) {
+      const key = participantTab.dataset.lessonParticipantTab;
+      const panel = participantTab.closest(".lesson-action-panel");
+      panel?.querySelectorAll("[data-lesson-participant-tab]").forEach((button) => {
+        const active = button === participantTab;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", String(active));
+      });
+      panel?.querySelectorAll("[data-lesson-participant-panel]").forEach((participantPanel) => {
+        participantPanel.hidden = participantPanel.dataset.lessonParticipantPanel !== key;
+      });
+      const activePanel = [...(panel?.querySelectorAll("[data-lesson-participant-panel]") || [])]
+        .find((participantPanel) => participantPanel.dataset.lessonParticipantPanel === key);
+      activePanel?.querySelector("textarea, button")?.focus({ preventScroll: true });
+      return;
+    }
+
+    const editFinalFeedbackButton = event.target.closest("[data-edit-final-feedback]");
+    if (editFinalFeedbackButton) {
+      openFinalFeedbackRevision(state.editingLessonId, editFinalFeedbackButton.dataset.editFinalFeedback);
+      return;
+    }
+    const saveFinalFeedbackButton = event.target.closest("[data-save-final-feedback]");
+    if (saveFinalFeedbackButton) {
+      void saveFinalFeedbackRevision(saveFinalFeedbackButton.dataset.saveFinalFeedback);
+      return;
+    }
+    const cancelFinalFeedbackButton = event.target.closest("[data-cancel-final-feedback]");
+    if (cancelFinalFeedbackButton) {
+      cancelFinalFeedbackRevision(cancelFinalFeedbackButton.dataset.cancelFinalFeedback);
+      return;
+    }
+
+    const historyToggle = event.target.closest("[data-toggle-lesson-history]");
+    if (historyToggle) {
+      const key = historyToggle.dataset.toggleLessonHistory;
+      const participantPanel = historyToggle.closest("[data-lesson-participant-panel]");
+      const history = [...(participantPanel?.querySelectorAll("[data-lesson-history-panel]") || [])]
+        .find((candidate) => candidate.dataset.lessonHistoryPanel === key);
+      if (history) {
+        history.hidden = !history.hidden;
+        historyToggle.textContent = history.hidden ? "지난 기록 보기" : "지난 기록 닫기";
+      }
       return;
     }
     const modalCommentDraftButton = event.target.closest("[data-generate-modal-comment]");
@@ -264,9 +311,23 @@ function bindDelegatedEvents() {
     const memberFilterButton = event.target.closest("[data-member-filter]");
     if (memberFilterButton) {
       state.memberFilter = memberFilterButton.dataset.memberFilter;
+      if (state.memberFilter === "all") {
+        state.memberQuery = "";
+        state.memberTicketFilter = "all";
+      }
       state.memberPage = 0;
       renderMembers();
       saveSnapshot();
+      return;
+    }
+
+    const clearMemberSearchButton = event.target.closest("[data-clear-member-search]");
+    if (clearMemberSearchButton) {
+      state.memberQuery = "";
+      state.memberPage = 0;
+      renderMembers();
+      saveSnapshot();
+      $("#memberSearchInput")?.focus({ preventScroll: true });
       return;
     }
 
@@ -411,6 +472,12 @@ function bindDelegatedEvents() {
       saveLessonRecord();
       return;
     }
+    const saveLessonDraftButton = event.target.closest("[data-save-lesson-draft]");
+    if (saveLessonDraftButton) {
+      void saveLessonChartDraft(saveLessonDraftButton.dataset.saveLessonDraft);
+      return;
+    }
+
 
     const completeLessonButton = event.target.closest("[data-complete-lesson-from-modal]");
     if (completeLessonButton) {

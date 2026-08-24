@@ -361,9 +361,16 @@ body.modal-open .tennisnote-release-check-notice {
   display: none;
 }
 
-.tennisnote-release-check-notice div {
+.tennisnote-release-check-copy {
   display: grid;
   gap: 3px;
+  min-width: 0;
+}
+
+.tennisnote-release-check-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
 }
 
 .tennisnote-release-check-notice span,
@@ -383,11 +390,22 @@ body.modal-open .tennisnote-release-check-notice {
   font-weight: 800;
 }
 
+.tennisnote-release-check-notice [data-release-check-dismiss] {
+  min-width: 48px;
+  border-color: #e6d6b7;
+  color: #6b5b3f;
+}
+
 @media (max-width: 480px) {
   .tennisnote-release-check-notice {
     right: 10px;
     bottom: calc(82px + env(safe-area-inset-bottom));
     width: calc(100vw - 20px);
+    align-items: start;
+  }
+
+  .tennisnote-release-check-actions {
+    flex-direction: column;
   }
 }
 
@@ -447,6 +465,13 @@ body.modal-open .tennisnote-release-check-notice {
   display: none;
 }
 
+.tn-curriculum-suggestion-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: stretch;
+}
+
 .tn-curriculum-suggestion {
   display: grid;
   gap: 3px;
@@ -460,6 +485,42 @@ body.modal-open .tennisnote-release-check-notice {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.tn-curriculum-detail-link {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 78px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #b7d3c9;
+  border-radius: 6px;
+  color: #0f766e;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+}
+
+.tn-curriculum-detail-link:hover,
+.tn-curriculum-detail-link:focus-visible {
+  border-color: #0f766e;
+  outline: 2px solid rgba(15, 118, 110, 0.18);
+  outline-offset: 1px;
+  background: #edf8f4;
+}
+
+.tn-curriculum-detail-link[hidden] {
+  display: none;
+}
+
+.tn-curriculum-selected-detail {
+  width: max-content;
+  margin: 5px 0 0 auto;
 }
 
 .tn-curriculum-suggestion:hover,
@@ -515,6 +576,15 @@ body.modal-open .tennisnote-release-check-notice {
 
   .tn-curriculum-suggestions {
     max-height: 240px;
+  }
+
+  .tn-curriculum-suggestion-row {
+    grid-template-columns: minmax(0, 1fr) 72px;
+  }
+
+  .tn-curriculum-detail-link {
+    min-width: 72px;
+    padding-inline: 6px;
   }
 }
 .app-toast {

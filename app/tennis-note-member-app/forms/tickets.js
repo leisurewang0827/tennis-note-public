@@ -69,7 +69,7 @@ function memberScheduleCoachTickets() {
   return (state.liveTickets || []).filter((ticket) => {
     const derived = window.TennisNoteTicketState?.derive?.(ticket)
       || String(ticket.status || "").toLowerCase();
-    return visibleStates.has(derived) && String(ticket.coachRoleId || "").trim();
+    return !ticket.refundHoldId && visibleStates.has(derived) && String(ticket.coachRoleId || "").trim();
   });
 }
 
@@ -99,7 +99,7 @@ function currentLiveTickets() {
     ? window.TennisNoteTicketState.split(state.liveTickets).current
     : state.liveTickets.filter((ticket) => ["active", "paused"].includes(String(ticket.status || "").toLowerCase()));
   if (!usableTickets.length) return [];
-  return [...usableTickets].sort((a, b) => {
+  return [...usableTickets].filter((ticket) => !ticket.refundHoldId).sort((a, b) => {
     const priority = liveTicketPriority(a) - liveTicketPriority(b);
     if (priority) return priority;
     const sharedGroupPriority = Number(Boolean(b.sharedGroupTicket && Number(b.groupSize) === 2))

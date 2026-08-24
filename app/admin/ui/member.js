@@ -30,6 +30,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
     showToast("회원 또는 회원권 상태가 변경됐습니다. 회원 목록에서 다시 확인해 주세요.");
     return;
   }
+  if (action === "app_link") await refreshMemberAuthManagement(refreshedMember);
   Object.assign(memberManagementModalState, {
     memberId: refreshedMember.id,
     action,

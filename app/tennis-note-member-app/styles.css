@@ -4072,6 +4072,12 @@ button.purchase-timetable-cell {
   gap: 8px;
 }
 
+.purchase-quick-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .purchase-show-more-slots {
   width: 100%;
   min-height: 44px;
@@ -4323,7 +4329,8 @@ button.purchase-timetable-cell {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .purchase-slot-card-grid {
+  .purchase-slot-card-grid,
+  .purchase-quick-slot-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -5479,6 +5486,127 @@ body.identity-setup-required {
   display: none;
 }
 
+.member-mobile-schedule.member-mobile-availability {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.member-mobile-availability .member-mobile-day-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.member-mobile-availability .member-mobile-day {
+  display: grid;
+  gap: 2px;
+  place-items: center;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 1px;
+  color: var(--muted);
+  background: white;
+}
+
+.member-mobile-availability .member-mobile-day strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.member-mobile-availability .member-mobile-day span {
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.member-mobile-availability .member-mobile-day b {
+  display: grid;
+  min-width: 20px;
+  height: 18px;
+  place-items: center;
+  border-radius: 9px;
+  color: #52645e;
+  background: #edf1ef;
+  font-size: 9px;
+}
+
+.member-mobile-availability .member-mobile-day.is-active {
+  border-color: var(--green);
+  color: white;
+  background: var(--green);
+}
+
+.member-mobile-availability .member-mobile-day.is-active strong {
+  color: white;
+}
+
+.member-mobile-availability .member-mobile-day.is-active b {
+  color: var(--green);
+  background: white;
+}
+
+.member-mobile-availability .member-available-coach-groups,
+.member-mobile-availability .member-available-coach-group {
+  display: grid;
+  gap: 10px;
+}
+
+.member-mobile-availability .member-available-coach-group {
+  border: 1px solid #d8e1e8;
+  border-radius: 8px;
+  padding: 11px;
+  background: white;
+}
+
+.member-mobile-availability .member-available-coach-group > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.member-mobile-availability .member-available-coach-group > div:first-child span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.member-mobile-availability .member-available-time-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 7px;
+}
+
+.member-mobile-availability .member-available-time {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 8px;
+  align-items: center;
+  min-width: 0;
+  min-height: 58px;
+  border: 1px solid #9bc8b7;
+  border-radius: 7px;
+  padding: 9px 10px;
+  color: #174c3a;
+  background: #eef9f5;
+  text-align: left;
+}
+
+.member-mobile-availability .member-available-time strong {
+  grid-row: 1 / span 2;
+  font-size: 16px;
+}
+
+.member-mobile-availability .member-available-time span,
+.member-mobile-availability .member-available-time small {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .member-desktop-schedule {
   min-width: 0;
   overflow-x: auto;
@@ -5486,9 +5614,23 @@ body.identity-setup-required {
   -webkit-overflow-scrolling: touch;
 }
 
+.member-full-schedule-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.member-full-schedule-action span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 @media (max-width: 720px) {
   .member-desktop-schedule {
-    display: none;
+    display: block;
   }
 
   .member-mobile-schedule {
@@ -5983,6 +6125,27 @@ body.identity-setup-required {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
+}
+
+.change-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding-bottom: 8px;
+  background: #ffffff;
+}
+
+.change-modal-header .section-title {
+  min-width: 0;
+  margin: 0;
+}
+
+.change-modal-header .small-button {
+  min-width: 54px;
 }
 
 .payment-confirmation-card {
@@ -7553,6 +7716,7 @@ body.notice-open {
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: pan-y;
+  max-width: 100vw;
 }
 
 .sheet-backdrop {
@@ -7572,6 +7736,7 @@ body.notice-open {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   width: min(100%, 680px);
+  max-width: 100vw;
   height: min(var(--tn-sheet-viewport-height, 86dvh), 760px);
   max-height: min(var(--tn-sheet-viewport-height, 86dvh), 760px);
   overflow: hidden;
@@ -7872,6 +8037,36 @@ body.notice-open {
 
 .membership-action-row button {
   width: 100%;
+}
+
+.membership-more-actions {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.membership-more-actions > summary {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+  list-style: none;
+}
+
+.membership-more-actions > summary::-webkit-details-marker {
+  display: none;
+}
+
+.membership-more-actions > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .membership-pending-actions {

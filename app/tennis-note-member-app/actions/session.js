@@ -331,27 +331,27 @@ async function applySupabaseMemberSession(showNotice = false) {
     saveSnapshot();
     setMemberSessionRestoring(false);
 
+    memberPurchaseDataLoaded = false;
     await Promise.allSettled([
-      syncLiveMembershipProductsFromServer(),
-      syncMemberPaymentOptionsFromServer(),
-      syncMemberDiscountCouponsFromServer(),
-      syncMemberEnrollmentFromServer(profile),
       syncMemberTicketsFromServer(profile),
       syncMemberLessonsFromServer(profile),
-      syncMemberChangeRequestsFromServer(profile),
-      syncMemberJournalEntriesFromServer(profile),
-      syncMemberHoldingPolicyFromServer(),
-      syncMemberHoldingRequestsFromServer(profile),
       syncMemberAccountDeletionRequestFromServer(profile),
-      syncMemberGroupAccountFromServer(profile),
-      syncMemberNotificationsFromServer(profile),
-      syncNativePushRegistration(profile, false),
     ]);
     await syncLiveSchedulePolicy(currentLiveTicket()?.branchId || "");
     renderAll();
-    if (showNotice && !isApprovalPending()) showNoticeAfterLiveSync();
-    scheduleNativePushPrimer();
     saveSnapshot();
+    void Promise.allSettled([
+      syncMemberChangeRequestsFromServer(profile),
+      syncMemberJournalEntriesFromServer(profile),
+      syncMemberGroupAccountFromServer(profile),
+      syncMemberNotificationsFromServer(profile),
+      syncNativePushRegistration(profile, false),
+    ]).then(() => {
+      renderAll();
+      if (showNotice && !isApprovalPending()) showNoticeAfterLiveSync();
+      scheduleNativePushPrimer();
+      saveSnapshot();
+    });
     return true;
   } catch (error) {
     const status = $("#memberEmailLoginStatus");

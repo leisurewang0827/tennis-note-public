@@ -94,7 +94,7 @@ function renderLessonLogs() {
                 <strong>${lessonReviewTitle(log)}</strong>
                 <small>${dateLabel} · ${log.lessonLabel} · ${outcomeLabel} · ${deductionLabel}</small>
               </span>
-              <span class="summary-log-status">${statusLabel}</span>
+              <span class="summary-log-status">${statusLabel}${log.feedbackRevised ? " · 수정됨" : ""}</span>
             </button>`;
         },
       )

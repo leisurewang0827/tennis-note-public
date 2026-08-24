@@ -268,7 +268,7 @@ function renderMemberManagementModal() {
   const submitLabel = action === "profile"
     ? "기본정보 저장"
     : action === "app_link"
-      ? "앱 계정 연결"
+      ? (memberAuthConnection(member).linked ? "선택 계정으로 교체" : "앱 계정 연결")
       : `${memberManagementActionLabel(action)} 확정`;
   let actionFields = "";
 
@@ -299,6 +299,11 @@ function renderMemberManagementModal() {
       </div>`;
   } else if (action === "app_link") {
     const connection = memberAuthConnection(member);
+    const directReplacementRequired = connection.linked && (
+      !connection.providers.length
+      || normalizedMemberPhone(member.phone).length < 10
+      || member.authManagementLoadFailed
+    );
     const candidates = memberManagementModalState.linkCandidates || [];
     const recommended = candidates.find((candidate) => candidate.recommended)?.userId || "";
     const linkQuery = memberManagementModalState.linkQuery || "";
@@ -320,9 +325,23 @@ function renderMemberManagementModal() {
           </div></label>
           ${candidateControl}
         </div>`;
+    const providerSwitchControl = connection.linked ? `
+      <section class="member-link-control span-2" aria-label="로그인 수단 변경">
+        <div class="member-link-status is-linked">
+          <strong>로그인 수단 변경</strong>
+          <span>회원권·수업·결제 기록은 그대로 두고 새 로그인만 교체합니다.</span>
+        </div>
+        ${member.authManagementLoadFailed ? '<p class="form-message danger">로그인 연결 정보를 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.</p>' : ""}
+        ${renderAuthProviderManagement(member)}
+      </section>` : "";
+    const directReplacementControl = connection.linked ? `
+      <details class="member-admin-more member-technical-details span-2" ${directReplacementRequired ? "open" : ""}>
+        <summary>가입 계정 직접 교체 (예외 처리)</summary>
+        ${linkControl}
+      </details>` : linkControl;
     actionFields = `
-      <div class="member-management-form-grid">${existingConnectionNotice}${linkControl}</div>
-      <p class="member-management-rule">같은 이름만으로는 자동 연결하지 않습니다. 전화번호가 같은 한 명만 추천하며, 한 회원은 확인된 로그인 수단 하나만 사용합니다.</p>`;
+      <div class="member-management-form-grid">${existingConnectionNotice}${providerSwitchControl}${directReplacementControl}</div>
+      <p class="member-management-rule">새 로그인 성공 전까지 현재 연결은 유지됩니다. 같은 이름만으로 자동 연결하지 않으며, 전화번호가 일치하는 한 명만 전환할 수 있습니다.</p>`;
   } else if (isCreate) {
     actionFields = products.length && coachRoles.length ? `
       <ol class="member-create-steps" aria-label="회원 추가 단계">

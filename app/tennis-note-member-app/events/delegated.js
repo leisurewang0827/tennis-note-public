@@ -238,7 +238,7 @@ function bindDelegatedEvents() {
       flow.coachRoleId = nextCoachRoleId;
       flow.coachName = purchaseCoachFilterButton.dataset.purchaseCoachFilterName || "";
       flow.showMoreSlots = false;
-      flow.scheduleWeekStart = purchaseWeekStartDate(purchaseAvailabilityRange().start);
+      flow.scheduleWeekStart = purchaseEarliestScheduleWeekStart(nextCoachRoleId, purchaseFlowProduct());
       saveSnapshot();
       renderMembershipPurchaseFlow();
       if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
@@ -253,6 +253,7 @@ function bindDelegatedEvents() {
       flow.scheduleWeekStart = purchaseWeekStartDate(purchaseAvailabilityRange().start);
       saveSnapshot();
       renderMembershipPurchaseFlow();
+      if (!$("#purchaseScheduleSheet")?.hidden) renderPurchaseScheduleSheet();
       return;
     }
     if (event.target.closest("[data-clear-purchase-schedules]")) {

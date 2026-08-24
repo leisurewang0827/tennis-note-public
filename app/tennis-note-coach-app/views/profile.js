@@ -31,10 +31,13 @@ function renderCoachProfile() {
   renderPersonAvatar($("#coachTopAvatar"), profilePerson, "small");
   if ($("#coachProfileName")) $("#coachProfileName").textContent = name;
   if ($("#coachProfileSummary")) $("#coachProfileSummary").textContent = profile.specialty;
-  if ($("#coachIntro")) $("#coachIntro").value = profile.intro || "";
-  if ($("#coachSpecialty")) $("#coachSpecialty").value = profile.specialty || "";
-  if ($("#coachLessonStyle")) $("#coachLessonStyle").value = profile.lessonStyle || "";
-  if ($("#coachAvailableMemo")) $("#coachAvailableMemo").value = profile.availableMemo || "";
-  if ($("#coachMemberMessage")) $("#coachMemberMessage").value = profile.memberMessage || "";
+  const form = $("#coachProfileFormCard");
+  if (!form || form.hidden) {
+    if ($("#coachIntro")) $("#coachIntro").value = profile.intro || "";
+    if ($("#coachSpecialty")) $("#coachSpecialty").value = profile.specialty || "";
+    if ($("#coachLessonStyle")) $("#coachLessonStyle").value = profile.lessonStyle || "";
+    if ($("#coachAvailableMemo")) $("#coachAvailableMemo").value = profile.availableMemo || "";
+    if ($("#coachMemberMessage")) $("#coachMemberMessage").value = profile.memberMessage || "";
+  }
   renderCoachSettlement();
 }

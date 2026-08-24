@@ -44,6 +44,10 @@ function renderReports() {
   const refundedAmount = monthBillings.reduce((sum, item) => (
     sum + Number(item.refundedAmount || (item.status === "cancelled" ? item.finalAmount || item.amount : 0) || 0)
   ), 0);
+  const manualRefundPendingBillings = monthBillings.filter((item) => item.status === "refund_manual_pending");
+  const manualRefundPendingAmount = manualRefundPendingBillings.reduce((sum, item) => (
+    sum + Number(item.refundBreakdown?.refundAmount || item.refundBreakdown?.refund_amount || 0)
+  ), 0);
   const monthLessons = branchLessons.filter((lesson) => String(lesson.lessonDate || "").startsWith(month));
   const completedLessons = monthLessons.filter((lesson) => lessonStatusValue(lesson) === "completed");
   const noShowLessons = monthLessons.filter((lesson) => lessonStatusValue(lesson) === "no_show");
@@ -89,6 +93,7 @@ function renderReports() {
 
   financeTarget.innerHTML = managementReportListMarkup(managementReportVisibleItems("finance", [
     { label: "결제 완료 매출", value: `${money.format(paidAmount)}원`, detail: "테니스노트 결제 기록에서 실시간 계산", tone: "ready" },
+    { label: "환불 송금 대기", value: `${money.format(manualRefundPendingAmount)}원`, detail: `${manualRefundPendingBillings.length}건 · 실제 송금 전`, tone: manualRefundPendingBillings.length ? "warning" : "", needsAttention: manualRefundPendingBillings.length > 0 },
     { label: "선택 월 결제건 환불", value: `${money.format(refundedAmount)}원`, detail: "취소·환불 증빙 기준", needsAttention: refundedAmount > 0 },
     ...managementDriveFinanceRows(),
   ]), "재무 자료에 확인할 항목이 없습니다.");

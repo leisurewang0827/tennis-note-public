@@ -332,12 +332,23 @@ async function loadNotificationDeliveryStatus() {
       .slice(0, 8);
     applyNotificationOverview({
       queued: appRows.filter((row) => row.status === "queued").length,
+      processing: appRows.filter((row) => row.status === "processing").length,
       sentToday: appRows.filter((row) => (
         row.status === "sent"
         && row.sent_at
         && new Date(row.sent_at).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }) === today
       )).length,
-      failed: appRows.filter((row) => row.status === "failed" && new Date(row.created_at || 0).getTime() >= sevenDaysAgo).length,
+      failed: appRows.filter((row) => (
+        ["queued", "processing", "sent", "failed"].includes(row.status)
+        && String(row.last_error || "")
+        && !String(row.last_error || "").startsWith("no_active_push_device")
+        && new Date(row.created_at || 0).getTime() >= sevenDaysAgo
+      )).length,
+      noDevice: appRows.filter((row) => (
+        ["failed", "cancelled"].includes(row.status)
+        && String(row.last_error || "").startsWith("no_active_push_device")
+        && new Date(row.created_at || 0).getTime() >= sevenDaysAgo
+      )).length,
       activeDevices: null,
       recent,
       generatedAt: new Date().toISOString(),

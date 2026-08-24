@@ -393,6 +393,8 @@ async function requestMakeup() {
           ? "쿠폰 수업 예약이 완료되었습니다."
           : editingRequestId
             ? "수업 변경 요청을 수정했습니다. 담당 코치 또는 관리자가 확인합니다."
+          : memberChangePolicySnapshot(makeup)?.isGroup
+            ? "그룹수업 전체 변경 요청을 보냈습니다. 담당 코치 또는 관리자가 승인하기 전까지 기존 수업을 유지합니다."
           : result?.status === "auto_approved"
             ? changeDirection === "advance" ? "수업을 앞당겼습니다." : "수업 시간이 변경되었습니다."
             : changeDirection === "advance" ? "담당 코치·관리자에게 수업 앞당기기 요청을 보냈습니다." : "담당 코치·관리자에게 변경 요청을 보냈습니다.");
@@ -416,6 +418,7 @@ async function requestMakeup() {
         coach_role_inactive: "담당 코치가 현재 근무 중이 아닙니다. 관리자에게 문의해주세요.",
         regular_slot_anchor_required: "해당 날짜에는 담당 코치의 기존 수업이 없어 새 정규시간을 선택할 수 없습니다.",
         regular_slot_outside_anchor_window: "담당 코치의 기존 수업 전후 허용 범위 안에서 시간을 다시 선택해주세요.",
+        regular_slot_outside_adjacent_anchor: "담당 코치의 기존 수업과 실제 빈 시간이 40분 이내인 시간을 다시 선택해주세요.",
         change_reason_required: "변경 이유를 2자 이상 입력해주세요.",
         member_change_policy_changed: "운영 규칙이 방금 변경되었습니다. 가능한 시간을 다시 확인한 뒤 신청해 주세요.",
         member_change_disabled: "회원 앱 수업 변경이 현재 꺼져 있습니다. 담당 코치에게 문의해 주세요.",

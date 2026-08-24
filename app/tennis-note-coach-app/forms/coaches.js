@@ -169,6 +169,8 @@ function selectCoachMode(name) {
   renderCoachModeList();
   renderCoachProfile();
   saveSnapshot();
+  setCoachProfileEditOpen(false);
+  showToast("이 기기에 코치 프로필을 저장했습니다.");
 }
 
 function installCoachConnectivitySync() {

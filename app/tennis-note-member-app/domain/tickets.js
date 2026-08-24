@@ -6,14 +6,14 @@
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
 function isActiveRegularLiveTicket(ticket, today = localDateKey()) {
-  if (!ticket || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
+  if (!ticket || ticket.refundHoldId || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
   if (ticket.startsOn && ticket.startsOn > today) return false;
   if (ticket.expiresOn && ticket.expiresOn < today) return false;
   return String(ticket.productKind || "").toLowerCase() === "regular";
 }
 
 function isPausedRegularLiveTicket(ticket, today = localDateKey()) {
-  if (!ticket || ticket.status !== "paused" || Number(ticket.remaining) <= 0) return false;
+  if (!ticket || ticket.refundHoldId || ticket.status !== "paused" || Number(ticket.remaining) <= 0) return false;
   if (ticket.startsOn && ticket.startsOn > today) return false;
   if (ticket.expiresOn && ticket.expiresOn < today) return false;
   return String(ticket.productKind || "").toLowerCase() === "regular";
@@ -30,7 +30,7 @@ function ticketCountFromTitle(title = "") {
 }
 
 function isActiveCouponLiveTicket(ticket, today = localDateKey()) {
-  if (!ticket || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
+  if (!ticket || ticket.refundHoldId || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
   if (ticket.startsOn && ticket.startsOn > today) return false;
   if (ticket.expiresOn && ticket.expiresOn < today) return false;
   return String(ticket.productKind || "").toLowerCase() === "coupon" || String(ticket.title || "").includes("쿠폰");
@@ -88,7 +88,10 @@ function normalizeLiveTicket(row = {}) {
   const used = Math.max(0, Number(row.used_sessions ?? 0));
   const remainingValue = row.remaining_sessions ?? Math.max(0, total - used);
   const remaining = Math.max(0, Number(remainingValue));
-  const statusInfo = liveTicketStatusInfo(row.status);
+  const refundHoldId = row.refund_hold_refund_id || "";
+  const statusInfo = refundHoldId
+    ? { label: "환불 접수 · 송금 대기", tone: "alert" }
+    : liveTicketStatusInfo(row.status);
   const configuredAnchorMinutes = row.makeup_anchor_minutes !== undefined
     ? row.makeup_anchor_minutes
     : product.makeup_anchor_minutes;
@@ -122,6 +125,8 @@ function normalizeLiveTicket(row = {}) {
     expiresOn: row.expires_on || "",
     createdAt: row.created_at || "",
     sourcePaymentId: row.source_payment_id || "",
+    refundHoldId,
+    refundHoldAt: row.refund_hold_at || "",
     paymentId: payment.id || row.source_payment_id || "",
     providerPaymentId: payment.provider_payment_id || row.provider_payment_id || "",
     paymentStatus: payment.status || "",
@@ -383,7 +388,9 @@ function memberBookablePausedTickets() {
 
 function memberHasActiveLiveTicket() {
   return (state.liveTickets || []).some((ticket) =>
-    String(ticket.status || "").toLowerCase() === "active" && Number(ticket.remaining) > 0);
+    !ticket.refundHoldId
+    && String(ticket.status || "").toLowerCase() === "active"
+    && Number(ticket.remaining) > 0);
 }
 
 function memberScheduleTicketOptions() {
@@ -394,7 +401,7 @@ function memberScheduleTicketOptions() {
   (state.liveLessons || []).filter(isOwnMemberScheduleLesson).forEach((lesson) => {
     const ticketId = memberLessonTicketId(lesson);
     const ticket = (state.liveTickets || []).find((item) => String(item.id) === ticketId);
-    if (ticketId && ticket) byId.set(ticketId, ticket);
+    if (ticketId && ticket && !ticket.refundHoldId) byId.set(ticketId, ticket);
   });
   return [...byId.values()];
 }
@@ -602,6 +609,8 @@ async function refreshPurchaseScheduleAvailability(options = {}) {
   if (!options.force && cached?.key === context.key && Date.now() - cached.loadedAt < 10_000) {
     memberPurchaseDirectoryLoad = { key: context.key, status: "ready", error: "" };
     const removedCount = reconcilePurchaseSchedulesAfterRefresh(product);
+    const weekChanged = alignPurchaseScheduleWeekToAvailability(product);
+    if (weekChanged) saveSnapshot();
     if (removedCount) showToast("마감되거나 변경된 시간을 해제했습니다. 가능한 시간을 다시 선택해 주세요.");
     const flow = purchaseFlowState();
     if (flow.open && flow.step !== 4) renderMembershipPurchaseFlow();
@@ -636,6 +645,8 @@ async function refreshPurchaseScheduleAvailability(options = {}) {
     };
     memberPurchaseDirectoryLoad = { key: context.key, status: "ready", error: "" };
     const removedCount = reconcilePurchaseSchedulesAfterRefresh(product);
+    const weekChanged = alignPurchaseScheduleWeekToAvailability(product);
+    if (weekChanged) saveSnapshot();
     if (removedCount) showToast("마감되거나 변경된 시간을 해제했습니다. 가능한 시간을 다시 선택해 주세요.");
   } catch (error) {
     if (requestId !== memberPurchaseDirectoryRequestSequence) return false;

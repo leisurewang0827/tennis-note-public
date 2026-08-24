@@ -75,7 +75,7 @@ function memberManagementActionLabel(action) {
     create: "회원 수동 추가",
     assign: "회원권 등록",
     profile: "기본정보 수정",
-    app_link: "앱 계정 연결",
+    app_link: "앱 로그인 관리",
     link_existing: "기존 수강 DB 연결",
     extend: "회원권 기간 연장",
     correct: "회원권 숫자·기간 수정",
@@ -385,6 +385,14 @@ function getLessonMembersMarkup(lesson) {
 }
 
 function billingMembershipDetail(item = {}) {
+  if (item.oneDayBookingId) {
+    const booking = oneDayBookingForBilling(item);
+    if (!booking) return '<strong>원데이 예약</strong><br><small>결제와 예약이 연결됐습니다.</small>';
+    const coach = getCoachName(booking.coachId || "") || "코치 확인 필요";
+    const schedule = [booking.lessonDate, booking.time].filter(Boolean).join(" ");
+    const status = booking.status === "completed" ? "수업 완료" : "예약 완료";
+    return `<strong>원데이 예약</strong><br><small>${escapeHtml(coach)}${schedule ? ` · ${escapeHtml(schedule)}` : ""} · ${status}</small>`;
+  }
   const ticket = linkedTicketForBilling(item);
   if (!ticket) return '<span class="payment-link-warning">회원권 연결 필요</span>';
   const product = getTicketDisplayProduct(ticket) || ticket.product || "회원권";

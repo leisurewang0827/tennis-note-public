@@ -175,6 +175,8 @@ function openLinkedLog(id) {
 
 function openLessonEditor(id) {
   const lesson = ensureCoachLessonRecord(id);
+  const lessonModal = $("#lessonEditModal");
+  if (lessonModal) lessonModal.dataset.tnInputGuard = `coach-lesson-record:${id}`;
   state.coachQuickAdd = null;
   state.editingLessonId = id;
   state.editingMakeupId = null;
@@ -249,29 +251,18 @@ function openLessonRecordWriter(id) {
 
 async function completeLessonFromModal(id) {
   const lesson = ensureCoachLessonRecord(id);
-  if (!lesson || !canProcessLesson(lesson)) return;
+  if (!lesson || !canProcessLesson(lesson) || lesson.completionSubmitting) return;
   if (!lessonOutcomeWindowOpen(lesson)) {
     lesson.validationMessage = lessonOutcomeGuardMessage();
     renderLessonEditModal();
     return;
   }
-  const content = activeViewField(`[data-modal-lesson-content="${id}"]`)?.value.trim() || `${lesson.member} ${lesson.type} 수업 진행`;
-  const participantResults = $$('[data-modal-participant-row]')
-    .filter((row) => row.dataset.modalParticipantRow === id)
-    .map((row) => ({
-      userId: row.dataset.userId || "",
-      ticketId: row.dataset.ticketId || "",
-      name: row.dataset.participantName || "회원",
-      ticketName: row.dataset.ticketName || "회원권",
-      totalSessions: Number(row.dataset.totalSessions) || 0,
-      usedSessions: Number(row.dataset.usedSessions) || 0,
-      remainingSessions: Number(row.dataset.remainingSessions) || 0,
-      coachComment: row.querySelector("[data-modal-coach-comment]")?.value.trim() || "",
-      nextCurriculumId: row.querySelector("[data-modal-next-curriculum]")?.value || "",
-    }));
+  const content = `${lesson.member} ${lesson.type} 수업 진행`;
+  const participantResults = captureLessonChartDraft(id);
   const primaryResult = participantResults[0] || {};
-  const logId = `coach-complete-${Date.now()}`;
-  const log = {
+  const existingLog = state.lessonLogs.find((item) => item.serverLessonId && item.serverLessonId === lesson.serverLessonId && item.status !== "확인 완료");
+  const logId = existingLog?.id || `coach-complete-${Date.now()}`;
+  const log = existingLog || {
     id: logId,
     serverLessonId: lesson.serverLessonId || "",
     serverJournalId: "",
@@ -288,6 +279,14 @@ async function completeLessonFromModal(id) {
     curriculumRegistered: false,
     ticketDeducted: false,
   };
+  Object.assign(log, {
+    content,
+    curriculumId: primaryResult.nextCurriculumId || "",
+    nextCurriculumId: primaryResult.nextCurriculumId || "",
+    coachComment: primaryResult.coachComment || "",
+    participantResults,
+    validationMessage: "",
+  });
   const usesV2Participants = Array.isArray(lesson.v2Participants) && lesson.v2Participants.length > 0;
   const missingParticipant = participantResults.find((result) => (
     !result.coachComment
@@ -316,29 +315,39 @@ async function completeLessonFromModal(id) {
     renderLessonEditModal();
     return;
   }
-  state.lessonLogs.unshift(log);
+  if (!existingLog) state.lessonLogs.unshift(log);
   lesson.validationMessage = "";
+  lesson.completionSubmitting = true;
+  const submit = activeViewField(`[data-complete-lesson-from-modal="${id}"]`);
+  if (submit) {
+    submit.disabled = true;
+    submit.textContent = "저장 중";
+  }
+  const completed = await confirmLog(log.id, { skipDraft: true });
+  lesson.completionSubmitting = false;
+  if (!completed) {
+    lesson.validationMessage = log.validationMessage || "완료 처리에 실패했습니다. 같은 화면에서 다시 시도해 주세요.";
+    renderLessonEditModal();
+    return;
+  }
+  delete state.lessonChartDrafts?.[id];
+  saveSnapshot();
   window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
-  closeLessonEditor();
   state.todayTaskTab = "lessons";
+  state.focusedLogId = "";
+  closeLessonEditor();
   renderAll();
   setView("todayView");
-  const completed = await confirmLog(log.id, { skipDraft: true });
-  if (completed) {
-    state.todayTaskTab = "lessons";
-    state.focusedLogId = "";
-    renderAll();
-    setView("todayView");
-  }
 }
 
 function filterCurriculumOptions(input) {
   const select = input?.closest("label")?.querySelector("select");
   if (!select) return;
   const selectedId = select.value || "";
-  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(selectedId, input.value)}`;
+  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(selectedId, input.value, true)}`;
   if ([...select.options].some((option) => option.value === selectedId)) select.value = selectedId;
   renderCoachCurriculumSuggestions(input);
+  updateCoachCurriculumDetailLink(input);
 }
 
 function openCurriculumDetail(id) {

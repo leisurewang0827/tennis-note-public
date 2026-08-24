@@ -349,11 +349,15 @@ const paymentCancelFlowState = {
 };
 
 const refundFlowState = {
-  itemIndex: -1,
+  paymentId: "",
+  itemSnapshot: null,
   preview: null,
   loading: false,
   submitting: false,
   reconcileRequired: false,
+  manualTransferPending: false,
+  manualPreviewChanged: false,
+  previewNeedsConfirmation: false,
   idempotencyKey: "",
   message: "",
   tone: "neutral",
@@ -615,9 +619,13 @@ const notificationPolicySettings = { ...notificationPolicyDefaults };
 const notificationDeliveryState = {
   status: "idle",
   queued: 0,
+  processing: 0,
   sentToday: 0,
   failed: 0,
+  noDevice: 0,
   activeDevices: null,
+  activeAndroidDevices: null,
+  activeIosDevices: null,
   recent: [],
   checkedAt: "",
   message: "서버 현황 확인 전",
@@ -946,6 +954,58 @@ function memberInlinePaymentChanged(form) {
 const accountDeletionExecutionInFlight = new Set();
 let accountDeletionRetryTimer = 0;
 
+async function refreshMemberAuthManagement(member) {
+  const client = window.TennisNoteDataClient;
+  const userIds = memberServerUserIds(member);
+  if (!member?.serverUserId || !userIds.length || !client?.selectRows || operationsRole() !== "admin") return false;
+  try {
+    const [links, switches] = await Promise.all([
+      client.selectRows("tn_user_auth_links", {
+        select: "id,user_id,provider,last_sign_in_at,is_primary",
+        filters: { user_id: { in: userIds } },
+        order: "is_primary.desc,linked_at.desc",
+        limit: 20,
+      }),
+      client.selectRows("tn_auth_provider_switches", {
+        select: "id,user_id,from_provider,to_provider,status,expires_at,created_at,completed_at",
+        filters: { user_id: { in: userIds } },
+        order: "created_at.desc",
+        limit: 20,
+      }),
+    ]);
+    member.authLinks = Array.isArray(links) ? links : [];
+    member.authProviders = authProvidersFromLinks(member.authLinks);
+    member.authSwitch = (Array.isArray(switches) ? switches : [])
+      .find((request) => pendingAuthSwitch({ authSwitch: request })) || null;
+    member.authLinked = Boolean(member.authLinked || member.authLinks.length);
+    member.authLastSignInAt = member.authLinks
+      .map((link) => link.last_sign_in_at)
+      .filter(Boolean)
+      .sort()
+      .at(-1) || "";
+    member.authManagementLoadFailed = false;
+    return true;
+  } catch (error) {
+    console.warn("[Tennis Note] member auth management unavailable", error);
+    member.authManagementLoadFailed = true;
+    return false;
+  }
+}
+
+function memberManagementTicketPeriodReview(product, startsOn = "", expiresOn = "") {
+  const expectedDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
+  const start = new Date(`${memberManagementDate(startsOn)}T00:00:00`);
+  const end = new Date(`${memberManagementDate(expiresOn)}T00:00:00`);
+  const actualDays = Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start
+    ? 0
+    : Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  return {
+    expectedDays,
+    actualDays,
+    isShorter: Boolean(actualDays && actualDays < expectedDays),
+  };
+}
+
 window.addEventListener("beforeunload", (event) => {
   if (!dirtyMemberInlineForms().length) return;
   event.preventDefault();
@@ -967,7 +1027,7 @@ window.setInterval(() => {
 function adminLessonChangePolicyText(request = {}) {
   const snapshot = request.policySnapshot || request.policy_snapshot || null;
   const hours = Math.min(168, Math.max(1, Number(snapshot?.cutoffHours) || 24));
-  if (snapshot?.isGroup) return "그룹수업 · 담당 코치 승인";
+  if (snapshot?.isGroup) return "그룹 전체 · 담당 코치 승인";
   if (snapshot?.outcome === "auto" || request.policy_window === "auto_before_24h") return `${hours}시간 이상 · 바로 변경`;
   return `${hours}시간 미만 · 담당 코치 승인`;
 }
@@ -990,7 +1050,158 @@ function adminLessonChangeRemaining(originalDate = "", originalTime = "") {
   return hours > 0 ? `${hours}시간 ${minutes}분 남음` : `${Math.max(1, minutes)}분 남음`;
 }
 
+function oneDayBookingForBilling(billing = {}) {
+  const bookingId = String(billing.oneDayBookingId || "");
+  if (!bookingId) return null;
+  return lessons.find((lesson) => (
+    lesson.oneDayBooking
+    && String(lesson.serverOneDayBookingId || "") === bookingId
+  )) || null;
+}
+
+function isManualCashRefundItem(item = {}) {
+  return ["bank_transfer", "cash", "account_transfer", "transfer"].includes(String(item.method || "").trim().toLowerCase());
+}
+
+function paymentOwnerHasHistoricalRecord(item = {}) {
+  const userId = String(item.serverUserId || "");
+  if (!userId) return false;
+  return (adminLiveDataState.memberDatabaseRecords || []).some((record) => (
+    String(record.user_id || record.userId || "") === userId
+    && String(record.record_status || record.recordStatus || "").toLowerCase() === "historical"
+    && !String(record.current_ticket_id || record.currentTicketId || "")
+  ));
+}
+
+function paymentRequiresTicketRepair(item = {}) {
+  return item.status === "paid"
+    && !item.ticketId
+    && !item.oneDayBookingId
+    && !isHistoricalImportedPayment(item);
+}
+
+function refundFlowPaymentItem() {
+  const paymentId = String(refundFlowState.paymentId || "");
+  if (!paymentId) return refundFlowState.itemSnapshot || null;
+  return billings.find((item) => String(item.providerPaymentId || "") === paymentId)
+    || refundFlowState.itemSnapshot
+    || null;
+}
+
+function applyRefundPreviewChange(code, preview) {
+  if (!preview || !["refund_preview_changed", "ticket_usage_changed"].includes(code)) return false;
+  refundFlowState.preview = preview;
+  refundFlowState.previewNeedsConfirmation = true;
+  refundFlowState.idempotencyKey = newRefundIdempotencyKey();
+  refundFlowState.message = `최신 계산값 ${money.format(numericValue(preview.refundAmount))}원으로 바뀌었습니다. 대상과 금액을 확인한 뒤 다시 접수하세요.`;
+  refundFlowState.tone = "danger";
+  return true;
+}
+
+async function cancelManualRefundRequestFromModal() {
+  const item = refundFlowPaymentItem();
+  if (!item || !refundFlowState.manualTransferPending || refundFlowState.submitting) return;
+  const pin = $("#refundAdminPin")?.value.trim() || "";
+  if (adminPinNeedsSetup() || !(await verifyAdminPin(pin))) {
+    refundFlowState.message = adminPinNeedsSetup()
+      ? "먼저 설정의 보안/잠금에서 관리자 PIN을 설정해 주세요."
+      : "관리자 PIN이 맞지 않습니다.";
+    refundFlowState.tone = "danger";
+    renderRefundModal();
+    return;
+  }
+  refundFlowState.submitting = true;
+  refundFlowState.message = "실제 송금 전 환불 접수를 취소하고 있습니다.";
+  refundFlowState.tone = "neutral";
+  renderRefundModal();
+  try {
+    const result = await window.TennisNoteDataClient.invokeFunction("portone-payment/refund-manual-cancel", {
+      body: { paymentId: refundFlowState.paymentId, confirmation: "접수취소" },
+    });
+    if (result?.ok) {
+      billingLogs.unshift(`${item.member} 현금 환불 접수 취소 · 결제와 이용권 유지`);
+      closeRefundModal();
+      await loadServerPaymentsIntoBilling({ silent: true });
+      showToast("환불 접수 취소됨 · 결제와 이용권은 유지됩니다");
+      return;
+    }
+    refundFlowState.message = refundErrorText(result?.code);
+    refundFlowState.tone = "danger";
+  } catch (error) {
+    refundFlowState.message = refundErrorText(error?.payload?.code || "manual_refund_cancel_failed");
+    refundFlowState.tone = "danger";
+  } finally {
+    refundFlowState.submitting = false;
+    renderRefundModal();
+  }
+}
+
+function lessonParticipantTargets(lesson, context) {
+  const participantUserIds = Array.isArray(lesson.serverParticipantUserIds)
+    ? lesson.serverParticipantUserIds.map(String).filter(Boolean)
+    : [];
+  if (!participantUserIds.length) return [];
+  return participantUserIds.map((userId) => ({
+    userId,
+    name: context?.userNameById.get(userId) || lesson.member || "회원 확인 필요",
+  }));
+}
+
+function completedLessonRecordIssues(context) {
+  const legacyLessonIds = new Set((adminLiveDataState.lessonRecords || []).map((record) => String(record.lesson_id || "")));
+  const participantRecordsByLessonId = context?.participantRecordsByLessonId || new Map();
+  const ownRoleIds = currentOperationsCoachRoleIds();
+  return lessons
+    .filter((lesson) => (
+      lesson.serverLessonId
+      && !lesson.oneDayBooking
+      && ["completed", "no_show"].includes(String(lesson.serverStatus || ""))
+      && !legacyLessonIds.has(String(lesson.serverLessonId))
+      && (operationsRole() === "admin" || ownRoleIds.has(lesson.coachRoleId))
+    ))
+    .flatMap((lesson) => {
+      const lessonRecords = participantRecordsByLessonId.get(String(lesson.serverLessonId)) || [];
+      const targets = lessonParticipantTargets(lesson, context);
+      const missingTargets = targets.length
+        ? targets.filter((target) => !lessonRecords.some((record) => String(record.user_id || "") === target.userId))
+        : lessonRecords.length ? [] : [{ userId: "", name: lesson.member || "회원 확인 필요" }];
+      return missingTargets.map((target) => ({
+        id: `completed-record-missing-${lesson.serverLessonId}-${target.userId || "all"}`,
+        group: "issue",
+        source: "수업 기록 오류",
+        branchId: lesson.branchId || "",
+        member: target.name,
+        title: `${lesson.lessonDate || "수업일"} ${lesson.time || ""} · ${getCoachName(lesson.coachId)}`.trim(),
+        detail: `${lesson.type || "수업"} ${lesson.durationMinutes || 20}분 · 수업 상태 ${lesson.serverStatus === "no_show" ? "노쇼" : "완료"}`,
+        subDetail: "해당 참여자의 최종 수업 기록이 없습니다. 수업 상세에서 기록 상태를 확인해 주세요.",
+        statusLabel: "완료 기록 누락",
+        actionLabel: "기록 확인",
+        lessonId: lesson.serverLessonId,
+        serverLessonId: lesson.serverLessonId,
+        coachId: lesson.coachId || "",
+        coachRoleId: lesson.coachRoleId || "",
+        actionable: true,
+        priority: "urgent",
+        urgentReason: "수업 완료 상태와 참여자 최종 기록이 일치하지 않습니다.",
+        sortAt: `${lesson.lessonDate || ""}T${lesson.time || "00:00"}:00`,
+      }));
+    });
+}
+
 let xlsxLibraryPromise = null;
+
+function notificationDeliveryStatusLabel(row = {}) {
+  const status = String(row.status || "queued").toLowerCase();
+  const lastError = String(row.last_error || row.lastError || "");
+  if (lastError.startsWith("no_active_push_device")) return "기기 없음";
+  if (status === "sent" && lastError) return "일부 기기 오류";
+  if (status === "sent") return "발송 성공";
+  if (["queued", "processing"].includes(status) && lastError) return "재시도 예정";
+  if (["queued", "processing"].includes(status)) return "발송 예정";
+  if (status === "failed") return "실제 오류";
+  if (status === "cancelled") return "발송 취소";
+  return "상태 확인";
+}
 
 let adminLiveScheduleRefreshTimer = 0;
 let adminLiveScheduleRefreshInFlight = false;

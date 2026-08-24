@@ -137,7 +137,7 @@ function memberAttentionLabel(member = {}) {
 
 function memberRecentLessonLabel(member = {}) {
   const recent = String(member.lastLesson || "").trim();
-  return recent ? `최근 ${recent}` : "최근 수업 없음";
+  return recent ? (recent.startsWith("최근 ") ? recent : `최근 ${recent}`) : "최근 수업 없음";
 }
 
 function findMemberDetail(memberId, groupName = "") {

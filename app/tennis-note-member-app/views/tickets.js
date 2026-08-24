@@ -151,8 +151,9 @@ function renderCurrentTicketPanel() {
   if (!target) return;
   const currentTickets = currentLiveTickets();
   const upcomingTickets = upcomingLiveTickets();
-  const demoTicket = !currentTickets.length && !upcomingTickets.length ? currentHoldingTicket() : null;
-  const visibleTickets = [...currentTickets, ...upcomingTickets];
+  const refundHeldTickets = refundHeldLiveTickets();
+  const demoTicket = !currentTickets.length && !upcomingTickets.length && !refundHeldTickets.length ? currentHoldingTicket() : null;
+  const visibleTickets = [...currentTickets, ...refundHeldTickets, ...upcomingTickets];
   if (demoTicket) visibleTickets.push(demoTicket);
   const currentTicketIds = new Set(currentTickets.map((ticket) => String(ticket.id || "")));
   const primaryTicket = visibleTickets[0] || null;
@@ -176,12 +177,16 @@ function renderCurrentTicketPanel() {
       </details>`
     : "";
   const primaryAction = primaryTicket
-    ? `<button class="primary-button" type="button" data-renew-ticket="${escapeHtml(primaryTicket.id || "")}">연장</button>`
+    ? primaryTicket.refundHoldId
+      ? '<button class="primary-button" type="button" disabled>환불 송금 대기</button>'
+      : `<button class="primary-button" type="button" data-renew-ticket="${escapeHtml(primaryTicket.id || "")}">연장</button>`
     : previousTicket
       ? `<button class="primary-button" type="button" data-reregister-ticket="${escapeHtml(previousTicket.id || "")}">재등록</button>`
       : '<button class="primary-button" type="button" data-open-purchase-flow="new_purchase">등록</button>';
   const secondaryAction = primaryTicket
-    ? '<button class="small-button membership-secondary-action" type="button" data-open-purchase-flow="add_coach">다른 코치·이용권 추가</button>'
+    ? primaryTicket.refundHoldId
+      ? ""
+      : '<button class="small-button membership-secondary-action" type="button" data-open-purchase-flow="add_coach">다른 코치·이용권 추가</button>'
     : previousTicket
       ? '<button class="small-button membership-secondary-action" type="button" data-open-purchase-flow="new_purchase">다른 상품으로 등록</button>'
       : "";
@@ -190,8 +195,13 @@ function renderCurrentTicketPanel() {
     <div class="membership-action-row ${primaryTicket ? "has-ticket" : "is-empty"}">
       ${primaryAction}
       ${secondaryAction}
-      <button class="small-button" type="button" data-open-discount-coupon-wallet>쿠폰함</button>
-      <button class="small-button" type="button" data-open-membership-history>이용 내역</button>
+      <details class="membership-more-actions">
+        <summary>더보기</summary>
+        <div>
+          <button class="small-button" type="button" data-open-discount-coupon-wallet>쿠폰함</button>
+          <button class="small-button" type="button" data-open-membership-history>이용 내역</button>
+        </div>
+      </details>
     </div>
     ${otherTicketList}
     ${currentTickets.length > 1 ? `<p class="membership-multiple-note">수업별 회원권 ${currentTickets.length}개가 각각 차감됩니다. 다른 회원권에서 자세히 확인할 수 있습니다.</p>` : ""}`;

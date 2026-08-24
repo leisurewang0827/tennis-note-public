@@ -117,7 +117,8 @@ function renderTodayLessons() {
                                 (lesson) => `
                                   <button class="board-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${coachColorClass(lesson.coach)} ${coachLessonStateClass(lesson)} ${lesson.remaining <= 2 ? "needs-renewal" : ""}" style="${coachLessonColorStyle(lesson, schedulePolicy)}" type="button" data-edit-lesson-id="${lesson.id}">
                                     <strong>${lesson.member}</strong>
-                                    <span>${lesson.type} · ${lessonDurationUsageLabel(lesson)}${lesson.isSubstitute ? ` · 대타 · 원 담당 ${lesson.originalCoach || "확인"}` : ""}</span>
+                                    <span>${recentLogForLesson(lesson)?.nextCurriculumId ? `오늘 목표 · ${escapeHtml(selectedCurriculum(recentLogForLesson(lesson).nextCurriculumId).title)}` : `${lesson.type} · ${lessonDurationUsageLabel(lesson)}`}${lesson.isSubstitute ? ` · 대타 · 원 담당 ${lesson.originalCoach || "확인"}` : ""}</span>
+                                    <small class="schedule-card-note">${escapeHtml(coachLessonCardState(lesson).label)}</small>
                                   </button>`,
                               )
                               .join("") || "<p class='empty-text'>이 시간에 확정된 레슨은 없습니다.</p>"}

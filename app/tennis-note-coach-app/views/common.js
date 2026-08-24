@@ -7,9 +7,15 @@ function coachEmptyState(options = {}) {
     || `<p class="empty-text">${escapeHtml(options.title || "표시할 내용이 없습니다.")}</p>`;
 }
 
-function curriculumOptions(selectedId, query = "") {
+function curriculumOptions(selectedId, query = "", selectedOnlyWhenIdle = false) {
   const canonicalSelectedId = canonicalCurriculumId(selectedId);
   const searchQuery = String(query || "").trim();
+  if (selectedOnlyWhenIdle && !searchQuery) {
+    const selectedStep = curriculumSteps.find((step) => step.id === canonicalSelectedId);
+    return selectedStep
+      ? `<option value="${selectedStep.id}" selected>${selectedStep.id} · ${escapeHtml(selectedStep.title)} · ${escapeHtml(selectedStep.trackTitle || selectedStep.category || "커리큘럼")}</option>`
+      : "";
+  }
   const search = window.TennisNoteCurriculumSearch;
   const rankedSteps = searchQuery && search?.search
     ? search.search(curriculumSteps, searchQuery, { limit: 24 }).map((result) => result.step)
@@ -60,9 +66,10 @@ function selectCoachCurriculumSuggestion(button) {
   const step = selectedCurriculum(button?.dataset.curriculumOptionCode || "");
   if (!input || !select || !step) return;
   input.value = `${step.id} · ${step.title}`;
-  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(step.id)}`;
+  select.innerHTML = `<option value="">검색·선택</option>${curriculumOptions(step.id, "", true)}`;
   select.value = step.id;
   select.dispatchEvent(new Event("change", { bubbles: true }));
   if (target) target.hidden = true;
+  updateCoachCurriculumDetailLink(input);
   input.focus();
 }

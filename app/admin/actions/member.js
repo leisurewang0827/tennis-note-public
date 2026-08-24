@@ -85,10 +85,14 @@ async function updateMembershipProductSetting(productId, options = {}) {
   if (!card || !product) return;
   const fieldElement = (field) => card.querySelector(`[data-product-field="${field}"]`);
   const readField = (field) => fieldElement(field)?.value.trim() || "";
-  const coachSaleAvailability = { ...(product.coachSaleAvailability || {}) };
+  let coachSaleAvailability = { ...(product.coachSaleAvailability || {}) };
   card.querySelectorAll("[data-product-coach-sale]").forEach((input) => {
     coachSaleAvailability[input.dataset.productCoachSale] = input.checked;
   });
+  const selectedCoachSaleMode = fieldElement("coachSaleMode")
+    ? readField("coachSaleMode")
+    : product.coachSaleMode;
+  if (selectedCoachSaleMode !== "selected") coachSaleAvailability = {};
   const ticketValue = numericValue(readField("tickets"), product.tickets);
   const cashAmount = numericValue(readField("cashAmount"), product.cashAmount);
   const nextProduct = membershipProductWithOperationalLimits(normalizeMembershipProduct({
@@ -128,9 +132,7 @@ async function updateMembershipProductSetting(productId, options = {}) {
     threeMonthPriceMode: fieldElement("threeMonthPriceMode")
       ? readField("threeMonthPriceMode")
       : product.threeMonthPriceMode,
-    coachSaleMode: fieldElement("coachSaleMode")
-      ? readField("coachSaleMode")
-      : product.coachSaleMode,
+    coachSaleMode: selectedCoachSaleMode,
     coachSaleAvailability,
     status: readField("status") || product.status,
   }, membershipProductDefaults.find((item) => item.id === product.id)));
@@ -1244,6 +1246,9 @@ async function submitMemberInlineEditor(form, options = {}) {
     message.classList.add("is-error");
     return false;
   }
+  const ticketPeriodReview = selectedProduct
+    ? memberManagementTicketPeriodReview(selectedProduct, form.elements.startsOn?.value, form.elements.expiresOn?.value)
+    : null;
   if (Number(selectedProduct?.group_size || 1) === 2 && !form.elements.partnerUserId?.value) {
     message.textContent = "2대1 회원권은 파트너를 선택해 주세요.";
     message.classList.add("is-error");
@@ -1369,7 +1374,10 @@ async function submitMemberInlineEditor(form, options = {}) {
   }
   if (!options.skipConfirmation) {
     const scopeText = payload.applyToFutureSchedule ? "미래 정규시간 다시 만들기" : "회원권만 저장 · 기존 시간표 유지";
-    if (!window.confirm(`${memberInlineChangeSummary(form)}\n적용 범위: ${scopeText}\n서버에 저장할까요?`)) return false;
+    const periodWarning = ticketPeriodReview?.isShorter
+      ? `\n주의: 입력한 이용기간 ${ticketPeriodReview.actualDays}일이 상품 기본 ${ticketPeriodReview.expectedDays}일보다 짧습니다. 의도한 단축 등록인지 확인해 주세요.`
+      : "";
+    if (!window.confirm(`${memberInlineChangeSummary(form)}\n적용 범위: ${scopeText}${periodWarning}\n서버에 저장할까요?`)) return false;
   }
   submit.disabled = true;
   submit.textContent = "저장 중";

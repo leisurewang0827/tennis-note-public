@@ -333,7 +333,7 @@ function recordProcessingMarkup() {
                     <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
                     <select data-log-participant-curriculum="${escapeHtml(log.id)}" ${confirmed ? "disabled" : ""}>
                       <option value="">검색·선택</option>
-                      ${curriculumOptions(result.nextCurriculumId || "")}
+                      ${curriculumOptions(result.nextCurriculumId || "", "", true)}
                     </select>
                   </label>
                   <em>${resultNextStep ? `다음 수업: ${escapeHtml(resultNextStep.id)} · ${escapeHtml(resultNextStep.title)}` : "다음 커리큘럼 선택 필요"}</em>
@@ -353,7 +353,7 @@ function recordProcessingMarkup() {
               <span>다음 커리큘럼 <small>필수</small></span>
               <input data-curriculum-option-search type="search" placeholder="증상·동작·목표·코드 검색" aria-label="다음 커리큘럼 검색" ${confirmed ? "disabled" : ""} />
               <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
-              <select data-next-curriculum="${log.id}" ${confirmed ? "disabled" : ""}><option value="">검색·선택</option>${curriculumOptions(log.nextCurriculumId || log.curriculumId)}</select>
+              <select data-next-curriculum="${log.id}" ${confirmed ? "disabled" : ""}><option value="">검색·선택</option>${curriculumOptions(log.nextCurriculumId || log.curriculumId, "", true)}</select>
             </label>
             <em>다음 수업: ${escapeHtml(nextStep.id)} · ${escapeHtml(nextStep.title)}</em>`;
         return `

@@ -93,14 +93,24 @@ function renderMemberPaymentAlerts() {
 function renderRegistrationFlow() {
   const target = $("#registrationFlow");
   if (!target) return;
+  const lifecycle = memberPurchaseLifecycle();
+  const groupAccount = state.groupAccount?.members?.length ? state.groupAccount : null;
+  if (lifecycle !== "new" && !groupAccount) {
+    target.innerHTML = "";
+    return;
+  }
   const status = memberEnrollmentStatusInfo();
+  const relevantFlows = registrationFlows.filter((flow) => (
+    (lifecycle === "new" && /첫 회원권/.test(flow.title))
+    || (groupAccount && /2대1/.test(flow.title))
+  ));
   target.innerHTML = `
-    <article class="member-enrollment-status ${status.tone}">
+    ${lifecycle === "new" ? `<article class="member-enrollment-status ${status.tone}">
       <span>현재 계정</span>
       <strong>${escapeHtml(status.title)}</strong>
       <p>${escapeHtml(status.detail)}</p>
-    </article>
-    ${registrationFlows
+    </article>` : ""}
+    ${relevantFlows
       .map(
         (flow) => `
           <article class="flow-card">
@@ -129,7 +139,7 @@ function renderMembershipPurchaseFlow() {
   container.hidden = !flow.open;
   if (browser) browser.hidden = flow.open;
   if (currentMembershipDetails) currentMembershipDetails.hidden = flow.open;
-  if (supportDetails) supportDetails.hidden = flow.open;
+  if (supportDetails) supportDetails.hidden = flow.open || supportDetails.dataset.hasContent !== "true";
   if (!flow.open) return;
   const sourceTicket = purchaseFlowSourceTicket();
   if ($("#membershipPurchaseFlowEyebrow")) $("#membershipPurchaseFlowEyebrow").textContent = flow.purchasePurpose === "renew_same"
@@ -167,7 +177,7 @@ function renderProducts() {
   renderMemberPaymentAlerts();
   renderRegistrationFlow();
 
-  const passItems = membershipPassRecords();
+  const passItems = membershipPassRecords().filter((pass) => ["wait", "alert"].includes(pass.tone));
   const passPage = normalizePage("expired", passItems.length);
   const visiblePassItems = paginateItems(passItems, passPage);
   $("#paymentRequests").innerHTML =
@@ -184,14 +194,30 @@ function renderProducts() {
             ${pass.note ? `<small>${pass.note}</small>` : ""}
           </article>`,
       )
-      .join("") || "<p class='empty-text'>아직 만기 이용권이 없습니다.</p>";
+      .join("") || "";
   renderListPager("paymentRequestsPager", "expired", passPage, passItems.length);
+  const supportDetails = $("#membershipSupportDetails");
+  if (supportDetails) {
+    const hasSupportContent = Boolean(
+      $("#groupAccountPanel")?.textContent.trim()
+      || $("#memberPaymentAlerts")?.textContent.trim()
+      || $("#registrationFlow")?.textContent.trim()
+      || passItems.length
+    );
+    supportDetails.dataset.hasContent = String(hasSupportContent);
+    supportDetails.hidden = purchaseFlowState().open || !hasSupportContent;
+  }
   renderMembershipPurchaseFlow();
 }
 
 function renderPaymentGatewayStatus() {
   const target = $("#paymentGatewayStatus");
   if (!target) return;
+  const flow = purchaseFlowState();
+  if (!flow.open && !flow.paymentErrorMessage) {
+    target.innerHTML = "";
+    return;
+  }
   const selectedMethodId = normalizeSelectedPaymentMethod();
   const config = paymentGatewayConfig();
   const readyMethods = paymentMethodDefinitions

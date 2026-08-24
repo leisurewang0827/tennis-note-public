@@ -3,9 +3,7 @@
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
 function syncMemberVisualViewport() {
-  const viewport = window.visualViewport;
-  const height = Math.max(1, Math.round(viewport?.height || window.innerHeight || 1));
-  const offsetTop = Math.max(0, Math.round(viewport?.offsetTop || 0));
+  const { height, offsetTop } = memberViewportGeometry();
   document.documentElement.style.setProperty("--tn-visual-viewport-height", `${height}px`);
   document.documentElement.style.setProperty("--tn-visual-viewport-offset-top", `${offsetTop}px`);
   document.documentElement.style.setProperty("--tn-sheet-viewport-height", `${Math.round(height * 0.86)}px`);

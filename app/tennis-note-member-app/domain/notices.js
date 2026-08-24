@@ -43,7 +43,13 @@ function activeNoticesForApp(audience = "member") {
 
 function normalizeLiveNotification(row = {}) {
   const templateKey = String(row.template_key || "");
-  const isRefund = ["payment_cancelled", "payment_request_cancelled", "payment_refunded"].includes(templateKey);
+  const isRefund = [
+    "payment_cancelled",
+    "payment_request_cancelled",
+    "payment_refunded",
+    "payment_refund_pending",
+    "payment_refund_request_cancelled",
+  ].includes(templateKey);
   const isMakeupRequired = templateKey === "lesson_absence_makeup_required";
   const isMakeupBooked = templateKey === "makeup_booking_completed";
   const title = row.title || (templateKey === "payment_refunded" ? "환불 완료" : isRefund ? "결제취소 완료" : "앱 알림");

@@ -94,6 +94,7 @@ function openHoldingRequestModal(ticketId = "") {
   $("#holdingRequestMessage").textContent = "승인되면 해당 기간만큼 회원권 종료일이 연장됩니다.";
   updateHoldingEvidenceFields();
   $("#holdingRequestModal").hidden = false;
+  void ensureMemberHoldingData();
 }
 
 function closeHoldingRequestModal() {
@@ -181,7 +182,7 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
     : "weekday";
   flow.scheduleMode = sourceIsActive && matchingProduct && membershipProductFacet(matchingProduct, "productKind") !== "coupon" ? "keep" : "change";
   flow.scheduleWeekStart = purchaseWeekStartDate(lesson?.lessonDate || purchaseEffectiveStartDate());
-  flow.scheduleAvailableOnly = false;
+  flow.scheduleAvailableOnly = true;
   flow.coachRoleId = sourceTicket?.coachRoleId || "";
   flow.coachName = sourceTicket?.coach || memberScheduleTicketCoachName(sourceTicket || {}) || "";
   flow.preferredDate = lesson?.lessonDate || "";
@@ -206,7 +207,11 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
     }, "", window.location.href);
   }
   renderMembershipPurchaseFlow();
-  void refreshPurchaseScheduleAvailability();
+  void ensureMembershipPurchaseData().then(() => {
+    if (!purchaseFlowState().open) return false;
+    renderMembershipPurchaseFlow();
+    return refreshPurchaseScheduleAvailability();
+  });
   window.requestAnimationFrame(() => $("#membershipPurchaseFlow")?.scrollIntoView({ block: "start" }));
 }
 
@@ -412,7 +417,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.382", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.396", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -523,7 +528,7 @@ async function openChangeRequestModal(preferredLessonId = "", options = {}) {
 async function openMemberChangeTimetable(preferredLessonId = "") {
   state.memberScheduleMode = "availability";
   state.memberScheduleModeTouched = true;
-  state.memberScheduleFullView = true;
+  state.memberScheduleFullView = false;
   if (preferredLessonId) {
     state.selectedMemberChangeSourceId = preferredLessonId;
     const preferredSource = currentScheduledLessonsForChange().find((lesson) => lesson.id === preferredLessonId);
@@ -557,11 +562,11 @@ function closeChangeRequestModal() {
 
 function openChangeHistoryModal() {
   renderRequests();
-  $("#changeHistoryModal").hidden = false;
+  openAppModal("changeHistoryModal", "[data-history-top-close]");
 }
 
 function closeChangeHistoryModal() {
-  $("#changeHistoryModal").hidden = true;
+  closeAppModal("changeHistoryModal");
 }
 
 function syncIdentitySetupModal(user = null) {

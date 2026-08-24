@@ -1,70 +1,70 @@
-const CACHE_NAME = "tennis-note-coach-mode-v403";
+const CACHE_NAME = "tennis-note-coach-mode-v418";
 const CACHE_PREFIX = "tennis-note-coach-mode-";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=1.0.382",
-  "../shared/tennisnote-app-common.js?v=1.0.382",
-  "./settings.js?v=1.0.382",
-  "./catalog.js?v=1.0.382",
-  "./domain/values.js?v=1.0.382",
-  "./domain/schedule.js?v=1.0.382",
-  "./domain/policy.js?v=1.0.382",
-  "./domain/coaches.js?v=1.0.382",
-  "./domain/lessons.js?v=1.0.382",
-  "./domain/records.js?v=1.0.382",
-  "./domain/members.js?v=1.0.382",
-  "./domain/schedule-v2.js?v=1.0.382",
-  "./domain/notices.js?v=1.0.382",
-  "./domain/curriculum.js?v=1.0.382",
-  "./domain/settlement.js?v=1.0.382",
-  "./domain/makeup.js?v=1.0.382",
-  "./domain/shared-data.js?v=1.0.382",
-  "./domain/tasks.js?v=1.0.382",
-  "./views/home.js?v=1.0.382",
-  "./views/schedule.js?v=1.0.382",
-  "./views/members.js?v=1.0.382",
-  "./views/records.js?v=1.0.382",
-  "./views/curriculum.js?v=1.0.382",
-  "./views/settlement.js?v=1.0.382",
-  "./views/profile.js?v=1.0.382",
-  "./events/account.js?v=1.0.382",
-  "./events/delegated.js?v=1.0.382",
-  "./data/auth.js?v=1.0.382",
-  "./data/sync.js?v=1.0.382",
-  "./data/push.js?v=1.0.382",
-  "./data/records.js?v=1.0.382",
-  "./ui/sheet.js?v=1.0.382",
-  "./ui/screens.js?v=1.0.382",
-  "./actions/records.js?v=1.0.382",
-  "./actions/schedule.js?v=1.0.382",
-  "./actions/profile.js?v=1.0.382",
-  "./actions/session.js?v=1.0.382",
-  "./storage.js?v=1.0.382",
-  "./domain/common.js?v=1.0.382",
-  "./views/common.js?v=1.0.382",
-  "./forms/coaches.js?v=1.0.382",
-  "./forms/common.js?v=1.0.382",
-  "./ui/common.js?v=1.0.382",
-  "./app.js?v=1.0.382",
+  "./styles.css?v=1.0.396",
+  "../shared/tennisnote-app-common.js?v=1.0.396",
+  "./settings.js?v=1.0.396",
+  "./catalog.js?v=1.0.396",
+  "./domain/values.js?v=1.0.396",
+  "./domain/schedule.js?v=1.0.396",
+  "./domain/policy.js?v=1.0.396",
+  "./domain/coaches.js?v=1.0.396",
+  "./domain/lessons.js?v=1.0.396",
+  "./domain/records.js?v=1.0.396",
+  "./domain/members.js?v=1.0.396",
+  "./domain/schedule-v2.js?v=1.0.396",
+  "./domain/notices.js?v=1.0.396",
+  "./domain/curriculum.js?v=1.0.396",
+  "./domain/settlement.js?v=1.0.396",
+  "./domain/makeup.js?v=1.0.396",
+  "./domain/shared-data.js?v=1.0.396",
+  "./domain/tasks.js?v=1.0.396",
+  "./views/home.js?v=1.0.396",
+  "./views/schedule.js?v=1.0.396",
+  "./views/members.js?v=1.0.396",
+  "./views/records.js?v=1.0.396",
+  "./views/curriculum.js?v=1.0.396",
+  "./views/settlement.js?v=1.0.396",
+  "./views/profile.js?v=1.0.396",
+  "./events/account.js?v=1.0.396",
+  "./events/delegated.js?v=1.0.396",
+  "./data/auth.js?v=1.0.396",
+  "./data/sync.js?v=1.0.396",
+  "./data/push.js?v=1.0.396",
+  "./data/records.js?v=1.0.396",
+  "./ui/sheet.js?v=1.0.396",
+  "./ui/screens.js?v=1.0.396",
+  "./actions/records.js?v=1.0.396",
+  "./actions/schedule.js?v=1.0.396",
+  "./actions/profile.js?v=1.0.396",
+  "./actions/session.js?v=1.0.396",
+  "./storage.js?v=1.0.396",
+  "./domain/common.js?v=1.0.396",
+  "./views/common.js?v=1.0.396",
+  "./forms/coaches.js?v=1.0.396",
+  "./forms/common.js?v=1.0.396",
+  "./ui/common.js?v=1.0.396",
+  "./app.js?v=1.0.396",
   "./assets/app-icon.svg",
   "../release.json",
-  "../shared/tennisnote-escape-html.js?v=1.0.382",
-  "../shared/tennisnote-data-client.js?v=1.0.382",
-  "../shared/tennisnote-schedule-revision.js?v=1.0.382",
-  "../shared/tennisnote-schedule-lanes.js?v=1.0.382",
+  "../shared/tennisnote-escape-html.js?v=1.0.396",
+  "../shared/tennisnote-data-client.js?v=1.0.396",
+  "../shared/tennisnote-schedule-revision.js?v=1.0.396",
+  "../shared/tennisnote-schedule-lanes.js?v=1.0.396",
   "../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3",
-  "../shared/tennisnote-curriculum-search.js?v=1.0.382",
-  "../shared/tennisnote-release.js?v=1.0.382",
-  "../shared/tennisnote-release-updater.js?v=1.0.382",
-  "../shared/tennisnote-issue-reporter.js?v=issue-reporter-3",
-  "../shared/tennisnote-issue-reporter.css?v=issue-reporter-3",
-  "../shared/tennisnote-ui-language.js?v=1.0.382",
-  "../shared/tennisnote-ticket-state.js?v=1.0.382",
-  "../shared/tennisnote-mode-transition.js?v=1.0.382",
-  "../shared/tennisnote-comment-draft.js?v=1.0.382",
-  "../shared/tennisnote-input-guard.js?v=1.0.382",
-  "../shared/tennisnote-ui-foundation.css?v=1.0.382",
+  "../shared/tennisnote-curriculum-search.js?v=1.0.396",
+  "../shared/tennisnote-release.js?v=1.0.396",
+  "../shared/tennisnote-release-updater.js?v=1.0.396",
+  "../shared/tennisnote-issue-reporter.js?v=issue-reporter-4",
+  "../shared/tennisnote-issue-reporter.css?v=issue-reporter-4",
+  "../shared/tennisnote-ui-language.js?v=1.0.396",
+  "../shared/tennisnote-ticket-state.js?v=1.0.396",
+  "../shared/tennisnote-mode-transition.js?v=1.0.396",
+  "../shared/tennisnote-comment-draft.js?v=1.0.396",
+  "../shared/tennisnote-input-guard.js?v=1.0.396",
+  "../shared/tennisnote-ui-foundation.css?v=1.0.396",
 ];
 
 function deleteOldCaches() {
@@ -105,21 +105,24 @@ self.addEventListener("fetch", (event) => {
   // removes only obsolete app caches without touching login or local data.
   if (event.request.mode === "navigate") event.waitUntil(deleteOldCaches());
 
+  const isReleaseManifest = url.pathname.endsWith("/release.json");
+  const cacheKey = isReleaseManifest ? `${url.origin}${url.pathname}` : event.request;
   const networkFirst = event.request.mode === "navigate"
     || ["document", "script", "style", "manifest", "worker"].includes(event.request.destination)
-    || url.pathname.endsWith("/config.local.js");
+    || url.pathname.endsWith("/config.local.js")
+    || isReleaseManifest;
 
   event.respondWith(
     fetch(event.request, networkFirst ? { cache: "no-store" } : undefined)
       .then((response) => {
         if (response.ok) {
           const copy = response.clone();
-          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)));
+          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(cacheKey, copy)).catch(() => undefined));
         }
         return response;
       })
       .catch(async () => {
-        const cached = await caches.open(CACHE_NAME).then((cache) => cache.match(event.request));
+        const cached = await caches.open(CACHE_NAME).then((cache) => cache.match(cacheKey, isReleaseManifest ? { ignoreSearch: true } : undefined));
         if (cached) return cached;
         if (event.request.mode === "navigate") return caches.match("./index.html");
         return Response.error();

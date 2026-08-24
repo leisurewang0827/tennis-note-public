@@ -205,9 +205,12 @@ function syncAdminManualOverrideUi(warnings = []) {
     .join("");
 }
 
-async function verifyRefundAdminInputs({ requireReason = true } = {}) {
+async function verifyRefundAdminInputs({
+  requireReason = true,
+  requireTransferReference = false,
+} = {}) {
   const reason = $("#refundReason")?.value.trim() || "";
-  const confirmation = $("#refundConfirmationText")?.value.trim() || "";
+  const transferReference = $("#refundTransferReference")?.value.trim() || "";
   const pin = $("#refundAdminPin")?.value.trim() || "";
   if (requireReason && reason.length < 2) {
     refundFlowState.message = "환불 사유를 2자 이상 입력해 주세요.";
@@ -215,8 +218,14 @@ async function verifyRefundAdminInputs({ requireReason = true } = {}) {
     renderRefundModal();
     return null;
   }
-  if (confirmation !== "환불") {
-    refundFlowState.message = "최종 확인란에 환불을 입력해 주세요.";
+  if (requireTransferReference && transferReference.length < 2) {
+    refundFlowState.message = "송금 확인 메모를 입력해 주세요.";
+    refundFlowState.tone = "danger";
+    renderRefundModal();
+    return null;
+  }
+  if (requireTransferReference && /\d{8,}/.test(transferReference.replace(/[\s-]/g, ""))) {
+    refundFlowState.message = "전체 계좌번호는 저장하지 마세요. 은행명·끝 4자리 또는 짧은 이체확인번호만 입력해 주세요.";
     refundFlowState.tone = "danger";
     renderRefundModal();
     return null;
@@ -239,7 +248,7 @@ async function verifyRefundAdminInputs({ requireReason = true } = {}) {
     renderRefundModal();
     return null;
   }
-  return { reason, confirmation };
+  return { reason, transferReference };
 }
 
 function loadBreakFavorite(favoriteId) {

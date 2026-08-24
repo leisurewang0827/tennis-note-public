@@ -46,8 +46,8 @@ const state = {
   memberChangeCompactSelection: false,
   memberScheduleModeTouched: false,
   memberScheduleFullView: false,
-  activeJournalMonth: "2026-07",
-  selectedJournalDate: "2026-07-03",
+  activeJournalMonth: localDateKey().slice(0, 7),
+  selectedJournalDate: localDateKey(),
   selectedLessonDetailId: "",
   journalSearchQuery: "",
   curriculumQuery: "",
@@ -159,10 +159,33 @@ const noticeSessionSeenIds = new Set();
 let noticePreviousFocus = null;
 let appToastTimer = 0;
 
+function memberViewportGeometry() {
+  const viewport = window.visualViewport;
+  const layoutHeight = Math.max(1, Math.round(window.innerHeight || viewport?.height || 1));
+  const rawHeight = Math.max(1, Math.round(viewport?.height || layoutHeight));
+  const rawOffsetTop = Math.max(0, Math.round(viewport?.offsetTop || 0));
+  const offsetTop = Math.min(rawOffsetTop, Math.max(0, layoutHeight - 1));
+  const height = Math.max(1, Math.min(rawHeight, layoutHeight - offsetTop));
+  return { height, offsetTop };
+}
+
+function stabilizeMemberVisualViewport() {
+  syncMemberVisualViewport();
+  window.requestAnimationFrame(syncMemberVisualViewport);
+  window.setTimeout(syncMemberVisualViewport, 240);
+}
+
 syncMemberVisualViewport();
 window.addEventListener("resize", syncMemberVisualViewport, { passive: true });
+window.addEventListener("pageshow", stabilizeMemberVisualViewport, { passive: true });
+window.addEventListener("orientationchange", stabilizeMemberVisualViewport, { passive: true });
 window.visualViewport?.addEventListener("resize", syncMemberVisualViewport, { passive: true });
 window.visualViewport?.addEventListener("scroll", syncMemberVisualViewport, { passive: true });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") stabilizeMemberVisualViewport();
+});
+document.addEventListener("tennisnote:sheet-opened", stabilizeMemberVisualViewport);
+document.addEventListener("tennisnote:sheet-closed", stabilizeMemberVisualViewport);
 
 const times = makeMemberTimeRange("18:40", "21:20");
 const lessons = [];
@@ -330,6 +353,12 @@ function memberUniqueAvailableSlots(slots = []) {
   return [...unique.values()];
 }
 
+function memberTicketRefundHeld(ticketId = "") {
+  return Boolean((state.liveTickets || []).find((ticket) => (
+    String(ticket.id || "") === String(ticketId || "") && ticket.refundHoldId
+  )));
+}
+
 function memberChangePolicySnapshot(candidate = null) {
   return candidate?.policySnapshot && typeof candidate.policySnapshot === "object"
     ? candidate.policySnapshot
@@ -477,6 +506,14 @@ function purchaseOccupancyLessons(product = purchaseFlowProduct()) {
   }));
 }
 
+function purchaseProductAllowsCoach(product = {}, coachRoleId = "") {
+  const roleId = String(coachRoleId || "");
+  if (!roleId) return false;
+  const coachSaleMode = String(product.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
+  if (coachSaleMode === "all_active") return true;
+  return product.coachSaleAvailability?.[roleId] === true;
+}
+
 function purchaseProductFrequency(product = {}) {
   return Math.max(1, Number(product.frequencyPerWeek || product.frequency_per_week) || 1);
 }
@@ -508,6 +545,37 @@ function purchaseScheduleScopeDates(product = purchaseFlowProduct(), weekStart =
 
 function purchaseScheduleSelectionWeek(schedules = purchaseSelectedSchedules()) {
   return schedules.length ? purchaseWeekStartDate(schedules[0].lessonDate) : "";
+}
+
+function purchaseEarliestScheduleWeekStart(coachRoleId = "", product = purchaseFlowProduct()) {
+  const targetCoachRoleId = String(coachRoleId || "");
+  const firstAvailable = purchaseAvailableScheduleSlots(product).find((slot) => (
+    !targetCoachRoleId || String(slot.coachRoleId) === targetCoachRoleId
+  ));
+  return purchaseWeekStartDate(firstAvailable?.lessonDate || purchaseAvailabilityRange().start);
+}
+
+function alignPurchaseScheduleWeekToAvailability(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  const selectedWeek = purchaseScheduleSelectionWeek(purchaseSelectedSchedules(product));
+  if (selectedWeek) {
+    const changed = flow.scheduleWeekStart !== selectedWeek;
+    flow.scheduleWeekStart = selectedWeek;
+    return changed;
+  }
+  if (!product || purchaseScheduleAvailabilityState() !== "ready") return false;
+  const coachRoleId = String(flow.coachRoleId || "");
+  const currentWeek = purchaseWeekStartDate(flow.scheduleWeekStart || purchaseAvailabilityRange().start);
+  const matchingSlots = purchaseAvailableScheduleSlots(product).filter((slot) => (
+    !coachRoleId || String(slot.coachRoleId) === coachRoleId
+  ));
+  const currentWeekHasSlot = matchingSlots.some((slot) => purchaseWeekStartDate(slot.lessonDate) === currentWeek);
+  const nextWeek = currentWeekHasSlot
+    ? currentWeek
+    : purchaseWeekStartDate(matchingSlots[0]?.lessonDate || purchaseAvailabilityRange().start);
+  const changed = flow.scheduleWeekStart !== nextWeek;
+  flow.scheduleWeekStart = nextWeek;
+  return changed;
 }
 
 function purchaseScheduleKey(schedule = {}) {
@@ -554,13 +622,11 @@ function purchaseCoachSelectionHtml(product = purchaseFlowProduct()) {
   if (status === "loading") return '<p class="purchase-availability-state" role="status">선생님과 가능한 시간을 확인하고 있습니다.</p>';
   if (status === "error" || status === "coach_error") return '<p class="purchase-availability-state is-error" role="status">선생님 정보를 불러오지 못했습니다. 다시 확인해 주세요.</p>';
   const slots = purchaseAvailableScheduleSlots(product);
-  const coachSaleAvailability = product?.coachSaleAvailability || {};
-  const coachSaleMode = String(product?.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
   const sourceTicket = purchaseFlowSourceTicket();
   const sourceCoachId = flow.purchasePurpose === "renew_same" ? String(sourceTicket?.coachRoleId || "") : "";
   const coaches = purchaseCoachOptions().filter((coach) => {
     const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
-    const productAllowed = coachSaleMode === "selected" ? coachSaleAvailability[roleId] === true : coachSaleAvailability[roleId] !== false;
+    const productAllowed = purchaseProductAllowsCoach(product, roleId);
     return productAllowed && (!sourceCoachId || roleId === sourceCoachId);
   });
   const selectedCoach = coaches.find((coach) => (
@@ -715,6 +781,7 @@ function openPurchaseScheduleSheet() {
   const selectedSchedules = purchaseSelectedSchedules();
   const range = purchaseAvailabilityRange();
   flow.scheduleWeekStart = purchaseScheduleSelectionWeek(selectedSchedules) || flow.scheduleWeekStart || purchaseWeekStartDate(range.start);
+  if (alignPurchaseScheduleWeekToAvailability()) saveSnapshot();
   renderPurchaseScheduleSheet();
   openAppSheet("purchaseScheduleSheet", { initialFocus: "#purchaseScheduleAvailableOnly" });
 }
@@ -813,8 +880,9 @@ function purchaseContinueReason() {
 }
 
 function purchaseSlotInsideAnchorWindow(scheduleLessons, product, lessonDate, time, coach, policy) {
-  if (policy.requireMakeupDayAnchor === false) return true;
-  const configuredGap = product.makeupAnchorMinutes ?? policy.makeupAnchorGapMinutes ?? 40;
+  const configuredGap = Object.prototype.hasOwnProperty.call(product, "makeupAnchorMinutes")
+    ? product.makeupAnchorMinutes
+    : policy.makeupAnchorGapMinutes ?? 40;
   if (configuredGap === null || String(configuredGap).toLowerCase() === "unlimited") return true;
   const gapMinutes = Math.min(100, Math.max(0, Number(configuredGap) || 0));
   const coachRoleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
@@ -826,10 +894,15 @@ function purchaseSlotInsideAnchorWindow(scheduleLessons, product, lessonDate, ti
     return lessonCoachRoleId === coachRoleId;
   });
   if (!anchors.length) return false;
-  const firstStart = Math.min(...anchors.map((lesson) => minutesFromTime(lesson.time)));
-  const lastEnd = Math.max(...anchors.map((lesson) => minutesFromTime(lesson.time) + lessonDuration(lesson)));
   const slotStart = minutesFromTime(time);
-  return slotStart >= firstStart - gapMinutes && slotStart <= lastEnd + gapMinutes;
+  const slotEnd = slotStart + Math.max(1, numericValue(product.lessonMinutes, 20));
+  return anchors.some((lesson) => {
+    const anchorStart = minutesFromTime(lesson.time);
+    const anchorEnd = anchorStart + lessonDuration(lesson);
+    const gapAfterAnchor = slotStart >= anchorEnd ? slotStart - anchorEnd : Number.POSITIVE_INFINITY;
+    const gapBeforeAnchor = slotEnd <= anchorStart ? anchorStart - slotEnd : Number.POSITIVE_INFINITY;
+    return gapAfterAnchor <= gapMinutes || gapBeforeAnchor <= gapMinutes;
+  });
 }
 
 let portOneSdkPromise = null;
@@ -846,12 +919,64 @@ let memberChangeCandidateRequestSequence = 0;
 let memberPurchaseDirectoryCache = null;
 let memberPurchaseDirectoryRequestSequence = 0;
 let memberPurchaseDirectoryLoad = { key: "", status: "idle", error: "" };
+let memberPurchaseDataPromise = null;
+let memberPurchaseDataLoaded = false;
+let memberHoldingDataPromise = null;
+
+async function ensureMembershipPurchaseData({ force = false } = {}) {
+  if (state.dataMode !== "live" || !state.member?.profileId) return true;
+  if (memberPurchaseDataLoaded && !force) return true;
+  if (memberPurchaseDataPromise) return memberPurchaseDataPromise;
+  memberPurchaseDataPromise = Promise.allSettled([
+    syncLiveMembershipProductsFromServer(),
+    syncMemberPaymentOptionsFromServer(),
+    syncMemberDiscountCouponsFromServer(),
+    syncMemberEnrollmentFromServer(),
+  ]).then((results) => {
+    const requiredReady = results[0]?.status === "fulfilled" && results[1]?.status === "fulfilled";
+    memberPurchaseDataLoaded = requiredReady;
+    renderProducts();
+    return requiredReady;
+  }).finally(() => {
+    memberPurchaseDataPromise = null;
+  });
+  return memberPurchaseDataPromise;
+}
+
+async function ensureMemberHoldingData() {
+  if (state.dataMode !== "live" || !state.member?.profileId) return true;
+  if (memberHoldingDataPromise) return memberHoldingDataPromise;
+  memberHoldingDataPromise = Promise.allSettled([
+    syncMemberHoldingPolicyFromServer(),
+    syncMemberHoldingRequestsFromServer(),
+  ]).then((results) => {
+    updateHoldingEvidenceFields();
+    renderCurrentTicketPanel();
+    return results.every((result) => result.status === "fulfilled");
+  }).finally(() => {
+    memberHoldingDataPromise = null;
+  });
+  return memberHoldingDataPromise;
+}
+
+function scheduleV2FeedbackWasRevised(record = {}) {
+  const finalizedAt = Date.parse(String(record.finalizedAt || record.finalized_at || ""));
+  const updatedAt = Date.parse(String(record.updatedAt || record.updated_at || ""));
+  return Number.isFinite(finalizedAt) && Number.isFinite(updatedAt) && updatedAt > finalizedAt + 1000;
+}
 
 // Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
 function clearPurchasePaymentError() {
   const flow = purchaseFlowState();
   flow.paymentErrorCode = "";
   flow.paymentErrorMessage = "";
+}
+
+function refundHeldLiveTickets() {
+  return (state.liveTickets || [])
+    .filter((ticket) => Boolean(ticket.refundHoldId))
+    .sort((left, right) => String(right.refundHoldAt || right.createdAt || "")
+      .localeCompare(String(left.refundHoldAt || left.createdAt || "")));
 }
 
 const journalActivityStatuses = [
@@ -962,7 +1087,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.382",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.396",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

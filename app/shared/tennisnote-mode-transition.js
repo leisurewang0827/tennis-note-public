@@ -136,11 +136,21 @@
     return payload;
   }
 
+  function clearTransitionQueryParam() {
+    try {
+      const current = new URL(window.location.href);
+      if (!current.searchParams.has("modeTransition")) return;
+      current.searchParams.delete("modeTransition");
+      window.history.replaceState(window.history.state, "", current.toString());
+    } catch {}
+  }
+
   function finish(mode, { view = "" } = {}) {
     const payload = transitionPayload();
     document.querySelector("#tennisNoteModeTransitionOverlay")?.remove();
     document.documentElement.classList.remove("tn-mode-transitioning");
     navigationStarted = false;
+    clearTransitionQueryParam();
     if (!payload || payload.to !== mode) {
       remember(mode, view);
       return false;

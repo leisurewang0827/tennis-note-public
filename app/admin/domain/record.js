@@ -43,35 +43,36 @@ function legacyNoteRecord(note) {
   const done = note.status === "confirmed";
   return {
     id: `legacy-note-${note.id}`,
-    group: done ? "done" : "pending",
+    group: done ? "done" : "feedback",
     source: "관리자 샘플",
     member: note.member,
     title: note.lesson,
     detail: note.reflection,
     subDetail: note.next,
-    statusLabel: done ? "차감 확인됨" : "코치 확인 필요",
-    actionLabel: done ? "완료" : "수업 완료·차감",
+    statusLabel: done ? "차감 확인됨" : "작성 필요",
+    actionLabel: done ? "완료" : "피드백 작성",
     lessonId: note.serverLessonId || "",
     actionable: !done && Boolean(note.serverLessonId),
   };
 }
 
-function pendingLessonRecord(lesson) {
+function pendingLessonRecord(lesson, participant = null) {
   const endedAt = lessonEndTimestamp(lesson);
+  const writingDelayed = endedAt > 0 && Date.now() - endedAt > 24 * 60 * 60 * 1000;
   return {
-    id: `pending-lesson-${lesson.serverLessonId}`,
-    group: "pending",
-    source: "수업 완료 대기",
-    member: lesson.member || "회원 확인 필요",
+    id: `pending-lesson-${lesson.serverLessonId}-${participant?.userId || "all"}`,
+    group: "feedback",
+    source: "피드백 미작성",
+    member: participant?.name || lesson.member || "회원 확인 필요",
     title: `${lesson.lessonDate || "수업일"} ${lesson.time || ""} · ${getCoachName(lesson.coachId)}`.trim(),
-    detail: `${lesson.type || "수업"} ${lesson.durationMinutes || 20}분 · ${lesson.ticketProduct || "회원권 확인 필요"}`,
-    subDetail: `현재 잔여 ${Number(lesson.ticketRemaining) || 0}회`,
-    statusLabel: "기록 대기",
-    actionLabel: "수업 완료·차감",
+    detail: `${lesson.type || "수업"} ${lesson.durationMinutes || 20}분 · ${writingDelayed ? "수업 종료 후 24시간 초과" : "정상 작성 대기"}`,
+    subDetail: "최종 저장 전까지 회원권 차감은 실행되지 않습니다.",
+    statusLabel: writingDelayed ? "작성 지연" : "작성 필요",
+    actionLabel: "피드백 작성",
     lessonId: lesson.serverLessonId,
     actionable: true,
-    priority: "urgent",
-    urgentReason: "수업 기록 미처리로 횟수 차감이 대기 중입니다.",
+    priority: writingDelayed ? "high" : "normal",
+    urgentReason: "",
     sortAt: endedAt ? new Date(endedAt).toISOString() : `${lesson.lessonDate || ""}T${lesson.time || "00:00"}:00`,
   };
 }
@@ -110,16 +111,16 @@ function lessonLogRecord(log) {
   const hasIssue = done && (!log.coachComment || !(log.nextCurriculumId || log.curriculumId || log.curriculum?.id));
   return {
     id: log.id || `lesson-log-${log.member}-${log.submittedAt || Date.now()}`,
-    group: hasIssue ? "issue" : done ? "done" : "pending",
+    group: hasIssue ? "issue" : done ? "done" : "feedback",
     source: "회원/코치 기록",
     member: log.member || "회원",
     title: log.lessonLabel || log.lesson || `${log.date || ""} 수업`,
     detail: log.content || log.selfMemo || "회원 운동일지 또는 코치 완료 처리 확인",
     subDetail: log.coachComment ? `코치 코멘트: ${log.coachComment}` : "코치 코멘트 미등록",
-    statusLabel: hasIssue ? "기록 보완 필요" : done ? "차감 완료" : "차감 대기",
-    actionLabel: hasIssue ? "관리자 확인" : done ? "완료" : "코치앱 처리",
-    priority: hasIssue || !done ? "urgent" : "normal",
-    urgentReason: hasIssue ? "코멘트 또는 다음 커리큘럼 누락을 확인해야 합니다." : !done ? "기록 완료 전이라 횟수 차감이 대기 중입니다." : "",
+    statusLabel: hasIssue ? "기록 보완 필요" : done ? "차감 완료" : "작성 필요",
+    actionLabel: hasIssue ? "관리자 확인" : done ? "완료" : "코치앱 작성",
+    priority: hasIssue ? "urgent" : !done ? "high" : "normal",
+    urgentReason: hasIssue ? "코멘트 또는 다음 커리큘럼 누락을 확인해야 합니다." : "",
     sortAt: log.completedAt || log.submittedAt || log.updatedAt || log.date || "",
   };
 }
@@ -192,7 +193,7 @@ function getAdminTasks() {
   const lowTickets = branchTickets.filter((ticket) => ticket.remaining <= 2);
   const paymentChecks = branchBillings.filter((item) => item.status === "check" || item.status === "unverified");
   const draftBillings = branchBillings.filter((item) => item.status === "draft");
-  const paymentDataErrors = branchBillings.filter((item) => item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item));
+  const paymentDataErrors = branchBillings.filter(paymentRequiresTicketRepair);
   const urgentMakeups = operationBranchMakeupRequests()
     .filter((item) => item.status === "coach_required" || item.status === "requested")
     .concat(shared.makeupRequests.filter((item) => item.status === "승인 대기"));
@@ -353,7 +354,7 @@ function buildAdminRecordContext() {
 
 function urgentOperationsRecords() {
   const paymentRecords = billings
-    .filter((item) => item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item))
+    .filter(paymentRequiresTicketRepair)
     .map((item) => ({
       id: `urgent-payment-${item.serverPaymentId || item.providerPaymentId || item.member}`,
       group: "pending",
@@ -499,7 +500,8 @@ function adminRecordGroups() {
   );
   const records = [
     ...urgentOperationsRecords(),
-    ...pendingLessonRecords(),
+    ...pendingLessonRecords(context),
+    ...completedLessonRecordIssues(context),
     ...lessonNotes
       .filter((note) => !participantRecordLessonIds.has(String(note.serverLessonId || "")))
       .map(legacyNoteRecord),

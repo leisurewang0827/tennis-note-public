@@ -130,6 +130,20 @@ function membershipPassRecords() {
       tone: display.tone,
     };
   });
+  const heldPasses = refundHeldLiveTickets().map((ticket) => ({
+    id: `refund-held-${ticket.id}`,
+    title: ticket.title || "환불 접수된 이용권",
+    period: ticket.refundHoldAt ? `${formatDateTimeLabel(ticket.refundHoldAt)} 접수` : "관리자 송금 대기",
+    total: ticket.total || 0,
+    used: ticket.used || 0,
+    remaining: ticket.remaining || 0,
+    unavailable: true,
+    coach: state.profile.mainCoach || "담당 코치",
+    paid: ticket.paymentAmount ? `결제 ${ticket.paymentAmount.toLocaleString("ko-KR")}원` : "결제금액 확인",
+    status: "환불 송금 대기",
+    note: "송금 완료 또는 접수취소 전까지 이용권 사용이 잠시 정지됩니다.",
+    tone: "alert",
+  }));
   const refundedPasses = (state.liveTickets || [])
     .filter((ticket) => ["refunded", "cancelled", "canceled"].includes(String(ticket.status || "").toLowerCase()))
     .map((ticket) => {
@@ -157,7 +171,7 @@ function membershipPassRecords() {
         tone: "alert",
       };
     });
-  return [...pendingPasses, ...refundedPasses, ...(state.expiredTickets || [])];
+  return [...pendingPasses, ...heldPasses, ...refundedPasses, ...(state.expiredTickets || [])];
 }
 
 function selectedJournalEntries() {

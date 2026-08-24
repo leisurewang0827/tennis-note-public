@@ -504,6 +504,13 @@ function renderDynamicMemberSchedule() {
     ${renderRegularInitialScheduleBar()}
     ${inlineChangeBar}
     ${renderMemberMobileSchedule(policy, baseLessons, scheduleLessons)}
+    <div class="member-full-schedule-action">
+      <button class="small-button" type="button" data-toggle-full-member-schedule aria-expanded="${state.memberScheduleFullView}">
+        ${state.memberScheduleFullView ? "가능한 시간만 보기" : "전체 시간표 보기"}
+      </button>
+      <span>${state.memberScheduleFullView ? "등록된 수업과 근무시간을 함께 표시합니다." : "필요할 때만 전체 시간표를 펼칠 수 있습니다."}</span>
+    </div>
+    ${state.memberScheduleFullView ? `
     <div class="member-desktop-schedule">
     <div class="member-duration-schedule ${requestOnly ? "member-request-only" : ""}" role="table" aria-label="회원 전체 시간표" style="--day-count:${days.length}; --slot-count:${scheduleTimeList.length}; grid-template-columns:64px ${dayColumnTracks};">
       <div class="member-duration-head time-head">시간</div>
@@ -593,6 +600,7 @@ function renderDynamicMemberSchedule() {
         .join("")}
     </div>
     </div>
+    ` : ""}
     ${renderMemberBookingShortcuts()}`;
   $$("#scheduleGrid [data-lesson]").forEach((button) => {
     button.addEventListener("click", (event) => {
@@ -772,7 +780,7 @@ function renderAvailableSlots() {
             : memberCandidateWindowLabel(lesson);
           return `
           <button class="slot-card ${selectedIds.includes(lesson.id) ? "is-selected" : ""} ${lesson.policy === "coach" ? "needs-approval" : "auto-change"}" type="button" data-select-slot="${lesson.id}">
-            <strong>${lesson.day} ${lesson.time}</strong>
+            <strong>${escapeHtml(lessonDateTimeLabel(lesson))}</strong>
             <span>${lesson.coach}</span>
             <small>${selectedIds.includes(lesson.id)
               ? isRegularInitialBooking ? `${selectedIds.indexOf(lesson.id) + 1}번째 선택` : "선택됨"
@@ -803,6 +811,8 @@ function renderChangeModalSummary() {
     ? `${absence.day} ${absence.time} 불참 수업의 보강을 ${makeup.day} ${makeup.time}에 예약합니다.`
     : absence.couponBooking
       ? `${absence.ticketTitle}으로 ${makeup.day} ${makeup.time} 수업을 예약합니다.`
+      : memberChangePolicySnapshot(makeup)?.isGroup
+        ? `그룹수업 전체를 ${absence.day} ${absence.time}에서 ${makeup.day} ${makeup.time}으로 변경 요청합니다.`
       : memberChangeDirection(absence, makeup) === "advance"
         ? `${absence.day} ${absence.time} 수업을 ${makeup.day} ${makeup.time}으로 앞당깁니다.`
         : `${absence.day} ${absence.time} 수업을 ${makeup.day} ${makeup.time} 수업으로 변경합니다.`;

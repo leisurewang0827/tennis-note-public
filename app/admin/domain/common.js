@@ -369,11 +369,19 @@ function normalizeNotificationOverview(payload = {}, source = "server") {
   return {
     status: source === "server" ? "ready" : "limited",
     queued: Number(payload.queued) || 0,
+    processing: Number(payload.processing) || 0,
     sentToday: Number(payload.sentToday ?? payload.sent_today) || 0,
     failed: Number(payload.failed) || 0,
+    noDevice: Number(payload.noDevice ?? payload.no_device) || 0,
     activeDevices: payload.activeDevices === null || payload.activeDevices === undefined
       ? null
       : Number(payload.activeDevices),
+    activeAndroidDevices: payload.activeAndroidDevices === null || payload.activeAndroidDevices === undefined
+      ? null
+      : Number(payload.activeAndroidDevices),
+    activeIosDevices: payload.activeIosDevices === null || payload.activeIosDevices === undefined
+      ? null
+      : Number(payload.activeIosDevices),
     recent,
     checkedAt: payload.generatedAt || payload.generated_at || new Date().toISOString(),
     message: source === "server" ? "실서버 발송 현황" : "기본 발송 현황",
@@ -1444,9 +1452,9 @@ function getGlobalSearchResults(query) {
 }
 
 function billingNeedsAdminAction(item = {}) {
-  if (["draft", "check", "unverified", "refund_processing", "refund_reconcile"].includes(item.status)) return true;
+  if (["draft", "check", "unverified", "refund_processing", "refund_manual_pending", "refund_reconcile"].includes(item.status)) return true;
   if (item.status === "server_ready") return isStaleReadyPayment(item);
-  return item.status === "paid" && !item.ticketId && !isHistoricalImportedPayment(item);
+  return paymentRequiresTicketRepair(item);
 }
 
 function scheduleAssignmentQueueCandidates({ respectUiFilters = true, excludeTicketId = "" } = {}) {
@@ -2009,19 +2017,28 @@ function settlementRowsForBilling(billing, indexes = {}) {
     || [...tickets, ...expiredTickets].find((item) => item.serverTicketId === billing.ticketId || item.id === billing.ticketId)
     || {};
   const ticketId = ticket.serverTicketId || ticket.id;
+  const oneDayBooking = oneDayBookingForBilling(billing);
+  const oneDayLinked = Boolean(billing.oneDayBookingId);
+  const oneDayCoach = oneDayBooking ? getCoachName(oneDayBooking.coachId || "") : "원데이 예약";
   const base = {
     member: billing.member,
-    coach: ticketId ? getCoachName(ticket.coachId || "") : "회원권 미연결",
-    linkedTicket: Boolean(ticketId),
+    coach: ticketId ? getCoachName(ticket.coachId || "") : oneDayLinked ? oneDayCoach : "회원권 미연결",
+    linkedTicket: Boolean(ticketId || oneDayLinked),
+    oneDayLinked,
     paidAmount: Number(billing.finalAmount || billing.amount) || 0,
     settlementBase: settlementBaseAmountForBilling(billing),
     paymentMethod: String(billing.method || "").toLowerCase().includes("card") ? "카드" : "현금",
     discount: Number(billing.discountAmount) > 0 ? `할인 ${money.format(billing.discountAmount)}원` : "할인 없음",
-    totalLessons: Number(ticket.total) || 0,
-    minutes: Number(ticket.durationMinutes) || 20,
+    totalLessons: oneDayLinked ? 1 : Number(ticket.total) || 0,
+    minutes: oneDayBooking ? Number(oneDayBooking.durationMinutes) || 20 : Number(ticket.durationMinutes) || 20,
   };
   if (indexes.recordProgressByTicket) {
-    if (!ticketId) return [{ ...base, actualCoach: base.coach, lessonCount: 0, summaryPaidAmount: base.paidAmount }];
+    if (!ticketId) return [{
+      ...base,
+      actualCoach: base.coach,
+      lessonCount: oneDayBooking?.status === "completed" ? 1 : 0,
+      summaryPaidAmount: base.paidAmount,
+    }];
     const progress = indexes.recordProgressByTicket.get(String(ticketId)) || {
       recordedSessions: 0,
       byCoachRole: new Map(),
@@ -2152,7 +2169,7 @@ function paymentDisplayStatus(item = {}) {
 }
 
 function billingFilterGroup(item = {}) {
-  if (["cancelled", "refunded", "refund_processing", "refund_reconcile", "cancel_reconcile"].includes(item.status)) return "refund";
+  if (["cancelled", "refunded", "refund_manual_pending", "refund_processing", "refund_reconcile", "cancel_reconcile"].includes(item.status)) return "refund";
   if (isStaleReadyPayment(item)) return "action";
   if (["server_ready", "unverified"].includes(item.status)) return "verifying";
   if (item.status === "paid") return "done";

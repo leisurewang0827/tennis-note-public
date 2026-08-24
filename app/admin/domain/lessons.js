@@ -112,10 +112,14 @@ function participantLessonRecord(record, context) {
   const isDraft = recordStatus !== "final";
   const deductedSessions = Math.max(0, Number(record.deducted_sessions) || 0);
   const deductionRequested = Boolean(record.deduction_requested);
+  const deductionOutcome = ["completed", "no_show", "absence"].includes(String(record.outcome || ""));
   const missingDeduction = !isDraft
     && deductionRequested
     && deductedSessions === 0
-    && ["completed", "no_show", "absence"].includes(String(record.outcome || ""));
+    && deductionOutcome;
+  const missingTicket = !isDraft && deductionRequested && deductionOutcome && !record.ticket_id;
+  const finalizedLessonWithDraft = isDraft && ["completed", "no_show"].includes(String(lesson?.serverStatus || ""));
+  const actualIssue = missingDeduction || missingTicket || finalizedLessonWithDraft;
   const outcomeLabel = participantOutcomeLabel(record.outcome);
   const completedLabel = deductedSessions > 0
     ? `완료 · ${deductedSessions}회 차감`
@@ -128,31 +132,45 @@ function participantLessonRecord(record, context) {
   const lessonTime = lesson?.time || "";
   return {
     id: `participant-record-${record.id}`,
-    group: missingDeduction ? "issue" : isDraft ? "feedback" : "done",
+    group: actualIssue ? "issue" : isDraft ? "feedback" : "done",
     source: "수업 피드백",
     branchId: lesson?.branchId || "",
     member: memberName,
     title: `${lessonDate} ${lessonTime} · ${outcomeLabel}`.replace(/\s+/g, " ").trim(),
     detail: detailParts.join(" · "),
-    subDetail: isDraft
+    subDetail: finalizedLessonWithDraft
+      ? "수업 상태는 완료지만 참여자 기록은 아직 초안입니다. 최종 저장 여부를 확인해 주세요."
+      : missingTicket
+        ? "차감 요청은 있지만 연결된 회원권이 없습니다. 회원권 연결을 확인해 주세요."
+        : isDraft
       ? "피드백만 임시 저장됨 · 회원권 차감 안 됨"
       : missingDeduction
         ? "차감 요청과 실제 차감 결과가 다릅니다. 수업 상세에서 확인해 주세요."
         : completedLabel,
-    statusLabel: isDraft ? "초안 · 미차감" : missingDeduction ? "차감 확인 필요" : completedLabel,
-    actionLabel: isDraft ? "이어 작성" : missingDeduction ? "차감 확인" : "처리 완료",
+    statusLabel: finalizedLessonWithDraft
+      ? "완료 상태·초안"
+      : missingTicket
+        ? "회원권 연결 확인"
+        : isDraft
+          ? "초안 · 미차감"
+          : missingDeduction
+            ? "차감 확인 필요"
+            : completedLabel,
+    actionLabel: actualIssue ? "기록 확인" : isDraft ? "이어 작성" : "처리 완료",
     lessonId,
     serverLessonId: lessonId,
     ticketId: record.ticket_id || "",
     coachId: lesson?.coachId || "",
     coachRoleId: record.coach_role_id || lesson?.coachRoleId || "",
-    actionable: Boolean(lesson && (isDraft || missingDeduction)),
-    priority: missingDeduction ? "urgent" : isDraft ? "high" : "normal",
-    urgentReason: missingDeduction
-      ? "완료 기록은 있지만 요청된 회원권 차감 결과가 0회입니다."
-      : isDraft
-        ? "초안 저장은 수업 완료나 회원권 차감을 실행하지 않습니다."
-        : "",
+    actionable: Boolean(lesson && (isDraft || actualIssue)),
+    priority: actualIssue ? "urgent" : isDraft ? "high" : "normal",
+    urgentReason: finalizedLessonWithDraft
+      ? "수업 상태와 참여자 기록 상태가 일치하지 않습니다."
+      : missingTicket
+        ? "최종 차감 기록에 회원권 연결이 없습니다."
+        : missingDeduction
+          ? "완료 기록은 있지만 요청된 회원권 차감 결과가 0회입니다."
+          : "",
     sortAt: record.finalized_at || record.updated_at || record.created_at || lesson?.lessonDate || "",
   };
 }

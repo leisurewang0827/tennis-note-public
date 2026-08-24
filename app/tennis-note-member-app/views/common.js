@@ -99,10 +99,13 @@ function membershipTicketCard(ticket = {}, options = {}) {
   const derivedState = window.TennisNoteTicketState?.derive?.(ticket) || ticket.status || "current";
   const isPendingTicket = derivedState === "pending_payment";
   const isUpcomingTicket = derivedState === "upcoming";
+  const isRefundHeld = Boolean(ticket.refundHoldId);
   const isCurrentTicket = currentTicketIds.has(String(ticket.id || "")) || String(ticket.id || "").startsWith("demo-");
   const isLowTicket = isCurrentTicket && remainingSessions <= 2;
-  const statusLabel = window.TennisNoteTicketState?.label?.(ticket)
-    || (isPendingTicket ? "결제 대기" : isUpcomingTicket ? "시작 예정" : ticket.statusLabel || "사용 중");
+  const statusLabel = isRefundHeld
+    ? "환불 접수 · 송금 대기"
+    : window.TennisNoteTicketState?.label?.(ticket)
+      || (isPendingTicket ? "결제 대기" : isUpcomingTicket ? "시작 예정" : ticket.statusLabel || "사용 중");
   const ticketPeriod = ticket.expiresOn
     ? `${ticket.startsOn || "시작일 확인"} ~ ${ticket.expiresOn}`
     : "이용 기간 확인 중";
@@ -136,6 +139,7 @@ function membershipTicketCard(ticket = {}, options = {}) {
         <small class="membership-period">${escapeHtml(ticketPeriod)}${compact ? "" : ` · 총 ${totalSessions} / 사용 ${usedSessions}`}</small>
       </div>
       ${pendingPaymentActions}
+      ${isRefundHeld ? '<p class="membership-status-note">송금 완료 또는 접수취소 전까지 수업 차감과 예약 변경이 잠시 정지됩니다.</p>' : ""}
       ${holdingAction}
     </article>`;
 }
@@ -147,11 +151,9 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
   if (status === "error") return '<p class="purchase-availability-state is-error" role="status">시간표를 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.</p>';
   if (status === "coach_error") return '<p class="purchase-availability-state is-error" role="status">운영 중인 선생님 정보를 확인하지 못했습니다. 임시 선생님을 대신 표시하지 않으며, 새로고침 후 다시 확인해 주세요.</p>';
   const slots = purchaseAvailableScheduleSlots(product);
-  const coachSaleAvailability = product?.coachSaleAvailability || {};
-  const coachSaleMode = String(product?.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
   const coachOptions = purchaseCoachOptions().filter((coach) => {
     const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
-    return coachSaleMode === "selected" ? coachSaleAvailability[roleId] === true : coachSaleAvailability[roleId] !== false;
+    return purchaseProductAllowsCoach(product, roleId);
   });
   const sourceTicket = purchaseFlowSourceTicket();
   const sourceCoachId = flow.purchasePurpose === "renew_same" ? String(sourceTicket?.coachRoleId || "") : "";
@@ -184,6 +186,7 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
   const matchingSlots = activeCoachRoleId
     ? slots.filter((slot) => String(slot.coachRoleId) === activeCoachRoleId)
     : [];
+  const quickSlots = matchingSlots.slice(0, 6);
   const requiredCount = purchaseRequiredScheduleCount(product);
   const selectedSchedules = purchaseSelectedSchedules(product);
   const selectedSummary = selectedSchedules.length
@@ -195,7 +198,15 @@ function purchaseScheduleSlotGroupsHtml(product = purchaseFlowProduct()) {
     ? `<div class="purchase-schedule-picker-launch">
         <div class="purchase-schedule-count" role="status"><strong>${selectedSchedules.length}/${requiredCount}개 선택</strong><span>${matchingSlots.length ? "실제 시간표에서 선택" : "현재 가능한 시간이 없습니다"}</span></div>
         ${selectedSummary}
-        <button class="primary-button" type="button" data-open-purchase-schedule ${matchingSlots.length ? "" : "disabled"}>요일·시간 선택</button>
+        ${quickSlots.length ? `<div class="purchase-quick-slot-grid" aria-label="가장 빠른 예약 가능 시간">${quickSlots.map((slot) => {
+    const selected = selectedSchedules.some((schedule) => purchaseScheduleKey(schedule) === purchaseScheduleKey({
+      lessonDate: slot.lessonDate,
+      startTime: slot.time,
+      coachRoleId: slot.coachRoleId,
+    }));
+    return `<button class="purchase-slot-card ${selected ? "is-selected" : ""}" type="button" data-purchase-slot data-purchase-slot-date="${escapeHtml(slot.lessonDate)}" data-purchase-slot-day="${escapeHtml(slot.day)}" data-purchase-slot-time="${escapeHtml(slot.time)}" data-purchase-slot-coach="${escapeHtml(slot.coachRoleId)}" data-purchase-slot-coach-name="${escapeHtml(slot.coachName || flow.coachName || "담당 코치")}" aria-pressed="${selected}"><span>${escapeHtml(purchaseDateLabel(slot.lessonDate))}</span><strong>${escapeHtml(slot.time)}</strong></button>`;
+  }).join("")}</div>` : ""}
+        <button class="small-button" type="button" data-open-purchase-schedule ${matchingSlots.length ? "" : "disabled"}>전체 시간표에서 선택</button>
       </div>`
     : '<p class="purchase-availability-state purchase-coach-first" role="status">선생님을 선택해 주세요.</p>'}
   </div>`;

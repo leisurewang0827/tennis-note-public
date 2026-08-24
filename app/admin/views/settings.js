@@ -230,6 +230,8 @@ function renderAuthProviderManagement(entity = {}, compact = false) {
   const currentProvider = providers[0] || "";
   const request = pendingAuthSwitch(entity);
   const canManage = Boolean(userId) && operationsRole() === "admin";
+  const hasVerifiedPhone = normalizedMemberPhone(entity.phone).length >= 10;
+  const canPrepareSwitch = canManage && hasVerifiedPhone;
   const availableTargets = authProviderChoices.filter((item) => item.value !== currentProvider);
   const chips = currentProvider
     ? `<span class="auth-provider-chip">${escapeHtml(authProviderLabel(currentProvider) || currentProvider)}</span>`
@@ -265,20 +267,22 @@ function renderAuthProviderManagement(entity = {}, compact = false) {
         <div class="auth-switch-form">
           <label>
             <span>현재</span>
-            <select data-auth-switch-from="${escapeHtml(userId)}" ${canManage ? "" : "disabled"}>
+            <select data-auth-switch-from="${escapeHtml(userId)}" ${canPrepareSwitch ? "" : "disabled"}>
               <option value="${escapeHtml(currentProvider)}" selected>${escapeHtml(authProviderLabel(currentProvider) || currentProvider)}</option>
             </select>
           </label>
           <span class="auth-switch-arrow">→</span>
           <label>
             <span>변경</span>
-            <select data-auth-switch-target="${escapeHtml(userId)}" ${canManage ? "" : "disabled"}>
+            <select data-auth-switch-target="${escapeHtml(userId)}" ${canPrepareSwitch ? "" : "disabled"}>
               ${availableTargets.map((item) => `<option value="${item.value}">${item.label}</option>`).join("")}
             </select>
           </label>
-          <button class="small-button" type="button" data-prepare-auth-switch="${escapeHtml(userId)}" ${canManage ? "" : "disabled"}>변경 준비</button>
+          <button class="small-button" type="button" data-prepare-auth-switch="${escapeHtml(userId)}" ${canPrepareSwitch ? "" : "disabled"}>변경 준비</button>
         </div>
-        <small>한 회원은 로그인 수단 하나만 사용합니다. 새 수단 로그인 성공 전까지 현재 로그인은 유지됩니다.</small>` : `<small>${currentProvider ? "현재 로그인 수단 하나만 사용 중입니다." : "첫 로그인 연결 후 수단 변경이 가능합니다."}</small>`}
+        <small>${hasVerifiedPhone
+          ? "한 회원은 로그인 수단 하나만 사용합니다. 새 수단 로그인 성공 전까지 현재 로그인은 유지됩니다."
+          : "휴대전화가 없어 자동 변경을 준비할 수 없습니다. 회원이 본인 네이버로 한 번 로그인한 뒤 아래 가입 계정 직접 교체를 사용해 주세요."}</small>` : `<small>${currentProvider ? "현재 로그인 수단 하나만 사용 중입니다." : "첫 로그인 연결 후 수단 변경이 가능합니다."}</small>`}
     </div>`;
 }
 
@@ -743,6 +747,11 @@ function renderNotificationPolicySettings() {
         ? "기본 확인"
         : "확인 필요";
   const recentRows = (notificationDeliveryState.recent || []).slice(0, 8);
+  const pendingDeliveries = notificationDeliveryState.queued + notificationDeliveryState.processing;
+  const activeDeviceDetail = notificationDeliveryState.activeAndroidDevices === null
+    || notificationDeliveryState.activeIosDevices === null
+    ? ""
+    : ` · Android ${notificationDeliveryState.activeAndroidDevices} · iPhone ${notificationDeliveryState.activeIosDevices}`;
 
   target.innerHTML = `
     <div class="notification-rule-list">
@@ -792,13 +801,14 @@ function renderNotificationPolicySettings() {
       </div>
     </div>
     <div class="notification-delivery-metrics">
-      <div><span>발송 대기</span><strong>${notificationDeliveryState.queued}</strong></div>
-      <div><span>오늘 발송</span><strong>${notificationDeliveryState.sentToday}</strong></div>
-      <div class="${notificationDeliveryState.failed ? "has-error" : ""}"><span>최근 오류</span><strong>${notificationDeliveryState.failed}</strong></div>
+      <div><span>발송 예정</span><strong>${pendingDeliveries}</strong></div>
+      <div><span>오늘 성공</span><strong>${notificationDeliveryState.sentToday}</strong></div>
+      <div><span>기기 없음</span><strong>${notificationDeliveryState.noDevice}</strong></div>
+      <div class="${notificationDeliveryState.failed ? "has-error" : ""}"><span>실제 오류</span><strong>${notificationDeliveryState.failed}</strong></div>
       <div><span>연결 기기</span><strong>${notificationDeliveryState.activeDevices ?? "-"}</strong></div>
     </div>
     <div class="notification-control-footer">
-      <span>${escapeHtml(notificationDeliveryState.message)} · ${notificationDateTimeLabel(notificationDeliveryState.checkedAt)}</span>
+      <span>${escapeHtml(notificationDeliveryState.message)}${escapeHtml(activeDeviceDetail)} · ${notificationDateTimeLabel(notificationDeliveryState.checkedAt)}</span>
       ${badge(stateTone, stateLabel)}
     </div>
     <div class="data-action-row notification-action-row">
@@ -813,7 +823,7 @@ function renderNotificationPolicySettings() {
             <div>
               <span>${escapeHtml(notificationTemplateLabel(row.template_key || row.templateKey))}</span>
               <strong>${escapeHtml(row.title || "앱 알림")}</strong>
-              <small>${escapeHtml(row.status || "queued")} · ${notificationDateTimeLabel(row.sent_at || row.sentAt || row.scheduled_at || row.scheduledAt)}</small>
+              <small>${escapeHtml(notificationDeliveryStatusLabel(row))} · ${notificationDateTimeLabel(row.sent_at || row.sentAt || row.scheduled_at || row.scheduledAt)}</small>
             </div>`).join("")
           : '<p class="empty-text">아직 발송 기록이 없습니다.</p>'}
       </div>
@@ -998,7 +1008,7 @@ function renderServiceReadiness() {
           const enabledSaleCoaches = saleCoaches.filter((coach) => (
             normalized.coachSaleMode === "selected"
               ? (normalized.coachSaleAvailability || {})[coach.serverRoleId] === true
-              : (normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false
+              : true
           ));
           const memberFacingGroup = normalized.purchaseExperience === "one_day"
             ? "원데이"
@@ -1008,52 +1018,28 @@ function renderServiceReadiness() {
           if (!isEditing) {
             return `
         <article class="product-setting-card product-setting-summary-card" data-product-card="${normalized.id}">
-          <form class="product-setting-header product-setting-inline-form" data-product-inline-form="${normalized.id}" data-dirty="false">
+          <div class="product-setting-header">
             <div class="product-order-actions">
               <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="up" aria-label="${escapeHtml(normalized.title)} 위로 이동" title="위로 이동">↑</button>
               <button class="icon-button" type="button" data-move-product-setting="${normalized.id}" data-move-direction="down" aria-label="${escapeHtml(normalized.title)} 아래로 이동" title="아래로 이동">↓</button>
             </div>
             <input class="product-select-checkbox" type="checkbox" data-select-product-row="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 선택" ${selectedProductIdSet().has(productId) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />
-            <label class="product-setting-inline-title">
-              <span class="sr-only">상품명</span>
-              <input type="text" data-product-field="title" value="${escapeHtml(normalized.title)}" aria-label="${escapeHtml(normalized.title)} 상품명" />
-            </label>
-            <div class="product-setting-inline-pair">
-              <select data-product-field="productKind" aria-label="${escapeHtml(normalized.title)} 권종">
-                <option value="regular" ${normalized.productKind === "regular" ? "selected" : ""}>정규권</option>
-                <option value="coupon" ${normalized.productKind === "coupon" ? "selected" : ""}>쿠폰제</option>
-              </select>
-              <select data-product-field="scheduleScope" aria-label="${escapeHtml(normalized.title)} 레슨 방식">
-                <option value="weekday" ${normalized.scheduleScope === "weekday" ? "selected" : ""}>평일</option>
-                <option value="weekend" ${normalized.scheduleScope === "weekend" ? "selected" : ""}>주말</option>
-                <option value="mixed" ${normalized.scheduleScope === "mixed" ? "selected" : ""}>혼합</option>
-              </select>
-              <select data-product-field="groupSize" aria-label="${escapeHtml(normalized.title)} 수업 종류">
-                <option value="1" ${Number(normalized.groupSize) === 1 ? "selected" : ""}>1:1</option>
-                <option value="2" ${Number(normalized.groupSize) === 2 ? "selected" : ""}>1:2</option>
-              </select>
+            <div class="product-setting-compact-info">
+              <strong>${escapeHtml(normalized.title)}</strong>
+              <small>${escapeHtml(memberFacingGroup)} · ${escapeHtml(normalized.scheduleScope === "weekend" ? "주말" : normalized.scheduleScope === "mixed" ? "혼합" : "평일")} · ${Number(normalized.groupSize) === 2 ? "1:2" : "1:1"} · ${normalized.lessonMinutes}분</small>
+              <small>주 ${Math.max(1, Number(normalized.frequencyPerWeek) || 1)}회 · 총 ${normalized.tickets}회 · ${normalized.validityDays}일 · ${enabledSaleCoaches.length}명 코치</small>
             </div>
-            <div class="product-setting-inline-triple">
-              <select data-product-field="lessonMinutes" aria-label="${escapeHtml(normalized.title)} 수업 시간">
-                ${[20, 30, 40].map((minute) => `<option value="${minute}" ${Number(normalized.lessonMinutes) === minute ? "selected" : ""}>${minute}분</option>`).join("")}
+            <div class="product-setting-summary-meta">
+              <small>현금</small><b>${money.format(normalized.cashAmount)}원</b>
+              <small>카드</small><b>${money.format(Math.round(Number(normalized.cashAmount || 0) * 1.1))}원</b>
+            </div>
+            <div class="product-setting-compact-actions">
+              <select class="product-setting-quick-status" data-quick-product-status="${normalized.id}" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
+                ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
               </select>
-              <input type="number" min="1" step="1" data-product-field="tickets" value="${normalized.tickets}" aria-label="${escapeHtml(normalized.title)} 횟수" />
-              <input type="number" min="1" step="1" data-product-field="validityDays" value="${normalized.validityDays}" aria-label="${escapeHtml(normalized.title)} 사용기간 일수" />
-            </div>
-            <div class="product-setting-inline-price">
-          <input type="number" min="0" step="1" data-product-field="cashAmount" value="${normalized.cashAmount}" aria-label="${escapeHtml(normalized.title)} 현금 기준가격" />
-          <input type="number" min="0" step="1" data-product-field="cardAmount" value="${Math.round(Number(normalized.cashAmount || 0) * 1.1)}" aria-label="${escapeHtml(normalized.title)} 카드가격 현금가의 110퍼센트 자동계산" readonly />
-            </div>
-            <select class="product-setting-quick-status" data-product-field="status" aria-label="${escapeHtml(normalized.title)} 판매 상태" ${operationsRole() !== "admin" ? "disabled" : ""}>
-              ${membershipProductStatusOptions.map((option) => `<option value="${option.id}" ${option.id === normalized.status ? "selected" : ""}>${option.label}</option>`).join("")}
-            </select>
-            <div class="product-setting-row-actions">
-              <button class="small-button product-inline-save" type="button" data-save-product-setting="${normalized.id}">저장</button>
-              <button class="small-button danger-button" type="button" data-force-delete-product-setting="${normalized.id}">삭제</button>
               <button class="small-button" type="button" data-open-product-setting="${normalized.id}">수정</button>
             </div>
-            <span class="product-inline-message" aria-live="polite"></span>
-          </form>
+          </div>
         </article>`;
           }
           return `
@@ -1202,7 +1188,7 @@ function renderServiceReadiness() {
             <fieldset class="product-coach-sale-settings">
               <legend>이 상품을 판매·예약할 코치</legend>
               <label class="product-coach-sale-mode"><span>표시 방식</span><select data-product-field="coachSaleMode"><option value="all_active" ${normalized.coachSaleMode !== "selected" ? "selected" : ""}>활동 중인 코치 모두</option><option value="selected" ${normalized.coachSaleMode === "selected" ? "selected" : ""}>선택한 코치만</option></select></label>
-              ${saleCoaches.map((coach) => `<label><input type="checkbox" data-product-coach-sale="${escapeHtml(coach.serverRoleId)}" ${normalized.coachSaleMode === "selected" ? ((normalized.coachSaleAvailability || {})[coach.serverRoleId] === true ? "checked" : "") : ((normalized.coachSaleAvailability || {})[coach.serverRoleId] !== false ? "checked" : "")} /><span>${escapeHtml(coach.name)}</span></label>`).join("")}
+              ${saleCoaches.map((coach) => `<label><input type="checkbox" data-product-coach-sale="${escapeHtml(coach.serverRoleId)}" ${normalized.coachSaleMode === "selected" ? ((normalized.coachSaleAvailability || {})[coach.serverRoleId] === true ? "checked" : "") : "checked"} /><span>${escapeHtml(coach.name)}</span></label>`).join("")}
             </fieldset>` : ""}
             <label>
               <small>${productSettingFieldLabel("판매 상태", true)}</small>

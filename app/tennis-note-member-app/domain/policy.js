@@ -90,7 +90,7 @@ function policyShortLabel(policy, snapshot = null) {
 function policyDetail(policy, snapshot = null) {
   const hours = memberChangeCutoffHours(snapshot);
   if (snapshot?.isGroup) {
-    return "그룹수업 · 담당 코치 승인 후 변경됩니다. 승인 전 원래 수업은 유지됩니다.";
+    return "그룹수업 · 한 명이 신청하면 그룹원 모두에게 함께 적용됩니다. 담당 코치 승인 전까지 원래 수업은 유지됩니다.";
   }
   return policy === "coach"
     ? `수업까지 ${hours}시간 미만 남음 · 담당 코치 승인 후 변경됩니다. 승인 전 원래 수업은 유지됩니다.`

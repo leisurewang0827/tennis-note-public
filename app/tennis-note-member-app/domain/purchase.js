@@ -150,9 +150,10 @@ function purchaseProductCard(product = {}, selected = false) {
   const paymentMethod = paymentMethodDefinition(normalizeSelectedPaymentMethod());
   const amount = purchasePaymentAmount(product, paymentMethod.id);
   const validityLabel = Number(product.validityDays || 0) > 0 ? `사용 ${Number(product.validityDays)}일` : "";
+  const lessonFormat = Number(product.groupSize || 1) > 1 ? `${Number(product.groupSize)}대1` : "1대1";
   return `
     <button class="purchase-product-option ${selected ? "is-selected" : ""}" type="button" data-purchase-product="${escapeHtml(product.id || "")}" aria-pressed="${selected}">
-      <span>${escapeHtml(family.label)} · ${escapeHtml(product.badge || `${product.tickets || 0}회`)}</span>
+      <span>${escapeHtml(family.label)} · ${escapeHtml(lessonFormat)} · ${escapeHtml(product.badge || `${product.tickets || 0}회`)}</span>
       <strong>${escapeHtml(purchaseProductDisplayTitle(product))}</strong>
       ${validityLabel ? `<small>${escapeHtml(validityLabel)}</small>` : ""}
       <b>${escapeHtml(paymentMethod.shortLabel)} ${escapeHtml(formatWon(amount))}</b>
@@ -186,14 +187,18 @@ function purchaseStepOneHtml() {
   const matchingProducts = purchaseMatchingProducts(products, sourceTicket)
     .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999)
       || purchaseProductDisplayTitle(left).localeCompare(purchaseProductDisplayTitle(right), "ko"));
+  const selectedProduct = matchingProducts.find((product) => String(product.id) === String(flow.productId));
+  const visibleProducts = selectedProduct
+    ? [selectedProduct, ...matchingProducts.filter((product) => String(product.id) !== String(selectedProduct.id))].slice(0, 3)
+    : matchingProducts.slice(0, 3);
   const renewing = flow.purchasePurpose === "renew_same" && Boolean(sourceTicket);
   return `
     <div class="purchase-family-grid" role="group" aria-label="수업 형태">${purchaseFamilyOptionsHtml(products, flow.familyId)}</div>
     ${purchaseSimpleProductFiltersHtml()}
     <div class="purchase-product-options">
-      <div><strong>${renewing ? "연장 기간" : "상품"}</strong><span>${matchingProducts.length}개</span></div>
-      ${matchingProducts.length
-    ? matchingProducts.map((product) => purchaseProductCard(product, String(product.id) === String(flow.productId))).join("")
+      <div><strong>${renewing ? "연장 기간" : "상품"}</strong><span>${visibleProducts.length}개</span></div>
+      ${visibleProducts.length
+    ? visibleProducts.map((product) => purchaseProductCard(product, String(product.id) === String(flow.productId))).join("")
     : purchaseEmptyFamilyHtml(flow.familyId)}
     </div>`;
 }
@@ -236,7 +241,7 @@ function purchaseStepThreeHtml() {
     ? '<p class="purchase-coupon-note">신규 첫 수업 15,000원 혜택이 자동 적용되어 다른 쿠폰과 중복되지 않습니다.</p>'
     : coupons.length
       ? `<label class="purchase-coupon-select"><span>할인 쿠폰${flow.discountSelectionMode === "auto" && discountQuote ? " · 최대 할인 자동 적용" : ""}</span><select data-select-discount-coupon><option value="">적용 안 함</option>${coupons.map((coupon) => `<option value="${escapeHtml(coupon.id)}" ${String(coupon.id) === String(flow.discountIssueId) ? "selected" : ""}>${escapeHtml(coupon.name)} · ${escapeHtml(discountCouponValueLabel(coupon))}</option>`).join("")}</select></label>`
-      : '<p class="purchase-coupon-note">현재 적용 가능한 할인 쿠폰이 없습니다.</p>';
+      : "";
   return `
     <button class="purchase-payment-summary" type="button" data-open-purchase-payment-method aria-haspopup="dialog">
       <span><small>결제 방법</small><strong>${escapeHtml(method.label)}</strong></span>
@@ -304,7 +309,7 @@ function purchaseSinglePageHtml() {
   const scheduleSummary = keepRenewalSchedule
     ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치 · ${lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 시간 유지"}`
     : selectedSchedules.length
-      ? `${memberCoachShortName(selectedCoachName || "선택한 코치")} 코치 · ${selectedSchedules.map((schedule) => `${schedule.day} ${schedule.startTime}`).join(" · ")}`
+      ? `${memberCoachShortName(selectedCoachName || "선택한 코치")} 코치 · ${selectedSchedules.map((schedule) => `${purchaseDateLabel(schedule.lessonDate)} ${schedule.startTime}`).join(" · ")}`
       : "선생님과 시간을 선택해 주세요";
   return `
     ${purchasePurposeOptionsHtml()}

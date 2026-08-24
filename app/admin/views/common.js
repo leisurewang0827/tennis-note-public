@@ -574,13 +574,13 @@ function memberAuthStatusMarkup(member = {}) {
   const detail = connection.linked
     ? `${connection.detail}${member.authLastSignInAt ? ` · 최근 로그인 ${notificationDateTimeLabel(member.authLastSignInAt)}` : ""}`
     : "회원이 앱에서 로그인하면 자동으로 연결 상태가 표시됩니다.";
-  if (!connection.linked && operationsRole() === "admin" && member.id) {
+  if (operationsRole() === "admin" && member.id) {
     return `<button class="member-auth-link-action" type="button"
       data-open-member-management="app_link"
       data-member-management-member-id="${member.id}"
       title="${escapeHtml(detail)}">
-        <span class="member-auth-status is-unlinked">${escapeHtml(label)}</span>
-        <small>앱 연결</small>
+        <span class="member-auth-status ${connection.linked ? "is-linked" : "is-unlinked"}">${escapeHtml(label)}</span>
+        <small>${connection.linked ? "로그인 변경" : "앱 연결"}</small>
       </button>`;
   }
   return `<span class="member-auth-status ${connection.linked ? "is-linked" : "is-unlinked"}" title="${escapeHtml(detail)}">${escapeHtml(label)}</span>`;
@@ -1061,7 +1061,7 @@ function paymentCancelButtonFor(index, label = "결제취소") {
 
 function paymentFullCancelButtonFor(item, index) {
   const amount = paymentFullCancelAmount(item);
-  if (String(item?.method || "").toLowerCase() === "bank_transfer") return "";
+  if (isManualCashRefundItem(item)) return "";
   const context = `${item?.member || "회원"} · ${item?.item || "결제"} · PG 전액 결제취소 ${money.format(amount)}원`;
   if (!item?.providerPaymentId || amount <= 0) {
     return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="서버 결제번호와 결제금액이 필요합니다.">PG 전액 결제취소</button>`;
@@ -1101,6 +1101,7 @@ function paymentActionFor(item, index) {
     return `<button class="small-button" type="button" data-server-ready-payment="${index}" ${context(label)}>${label}</button>${paymentCancelButtonFor(index, "대기취소")}`;
   }
   if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}" ${context("결제 완료 상세")}>완료됨</button>${paymentFullCancelButtonFor(item, index)}${paymentRefundButtonFor(item, index)}`;
+  if (item.status === "refund_manual_pending") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("실제 송금 후 환불 완료 확인")}>송금완료 확인</button>`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;
   if (item.status === "cancel_reconcile") return paymentCancelButtonFor(index, "취소 상태 맞추기");
   if (item.status === "refund_reconcile") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("환불 동기화 확인")}>동기화 확인</button>`;

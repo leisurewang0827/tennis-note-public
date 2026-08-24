@@ -187,10 +187,7 @@ function lessonDurationUsageLabel(lesson = {}) {
 }
 
 function coachLessonStateClass(lesson = {}) {
-  const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
-  if (status === "completed") return `status-completed ${Number(lesson.deductedSessions) > 0 ? "status-deducted" : "status-not-deducted"}`;
-  if (status === "no_show") return `status-no-show ${Number(lesson.deductedSessions) > 0 ? "status-deducted" : "status-not-deducted"}`;
-  return "";
+  return coachLessonCardState(lesson).className;
 }
 
 function coachLessonVisualKind(lesson = {}) {
@@ -223,9 +220,12 @@ function coachScheduleLessonActionAttrs(lesson = {}) {
 function coachLessonColorStyle(lesson, policy) {
   const kind = coachLessonVisualKind(lesson);
   if (kind === "released") return "--lesson-color:#111827";
-  const fallback = { regular: "#2f6fc4", regular30: "#6b5fc7", makeup: "#17805d", coupon: "#b7791f", noShow: "#c2413b" };
+  const changed = ["makeup", "coupon"].includes(kind);
+  const fallback = { regular: "#2f6fc4", regular30: "#2f6fc4", makeup: "#7357ad", coupon: "#7357ad", noShow: "#7357ad" };
   const custom = (policy?.lessonColorRules || []).find((rule) => rule.match && `${lesson.type || ""} ${lesson.lessonSource || ""}`.includes(rule.match));
-  const saved = custom?.color || policy?.lessonColors?.[kind] || "";
+  const saved = changed
+    ? policy?.lessonColors?.changed || ""
+    : custom?.color || policy?.lessonColors?.[kind] || "";
   const color = /^#[0-9a-f]{6}$/i.test(saved) ? saved : fallback[kind];
   return `--lesson-color:${color}`;
 }

@@ -1,5 +1,5 @@
 .tn-report-modal[hidden] { display: none !important; }
-.tn-report-modal { position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; padding: 16px; }
+.tn-report-modal { position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
 .tn-report-backdrop { position: absolute; inset: 0; border: 0; background: rgba(15, 23, 42, .56); }
 .tn-report-card { position: relative; width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow: auto; display: grid; gap: 14px; padding: 20px; border-radius: 8px; background: #fff; box-shadow: 0 24px 70px rgba(15, 23, 42, .24); }
 .tn-report-card header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
@@ -8,7 +8,10 @@
 .tn-report-card header button { width: 40px; height: 40px; border: 0; border-radius: 6px; font-size: 24px; background: #eef4ff; }
 .tn-report-card label { display: grid; gap: 6px; font-weight: 850; }
 .tn-report-card input, .tn-report-card select, .tn-report-card textarea { box-sizing: border-box; width: 100%; padding: 11px 12px; border: 1px solid #cad5e3; border-radius: 6px; font: inherit; }
-.tn-report-submit { min-height: 46px; border: 0; border-radius: 6px; background: #087f5b; color: #fff; font-weight: 900; }
+.tn-report-actions { position: sticky; bottom: 0; display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); gap: 8px; padding-bottom: max(0px, env(safe-area-inset-bottom)); background: #fff; }
+.tn-report-submit, .tn-report-cancel { min-height: 46px; border: 0; border-radius: 6px; font-weight: 900; }
+.tn-report-submit { background: #087f5b; color: #fff; }
+.tn-report-cancel { background: #eef4ff; color: #35506f; }
 .tn-report-message { min-height: 20px; margin: 0; color: #b42318; font-size: 13px; font-weight: 800; }
 .tn-report-list { display: grid; gap: 10px; }
 .tn-report-pager { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 14px; }
@@ -31,4 +34,5 @@
 .tn-report-controls button, .tn-report-link { min-height: 38px; display: grid; place-items: center; border: 0; border-radius: 6px; background: #087f5b; color: #fff; font-weight: 900; text-decoration: none; }
 .tn-report-controls button:disabled { background: #94a3b8; }
 .tn-report-controls b { grid-column: 1 / -1; font-size: 12px; text-align: right; }
-@media (max-width: 720px) { .tn-report-card { padding: 16px; } .tn-report-row { grid-template-columns: 1fr; } .tn-report-controls b { text-align: left; } }
+@media (max-width: 1024px) { .tn-report-card input, .tn-report-card select, .tn-report-card textarea { font-size: 16px; } }
+@media (max-width: 720px) { .tn-report-card { max-height: calc(100dvh - max(32px, env(safe-area-inset-top) + env(safe-area-inset-bottom))); padding: 16px; } .tn-report-row { grid-template-columns: 1fr; } .tn-report-controls b { text-align: left; } }

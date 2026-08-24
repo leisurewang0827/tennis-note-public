@@ -95,6 +95,8 @@
     lastSearchScrollKey: "",
     renderMode: "",
     showArchivedHistory: false,
+    feedbackOnly: false,
+    feedbackRevisionUserId: "",
     cancelConfirmationKey: "",
     revisionWatcher: null,
     absorbingRevisionRefresh: false,
@@ -146,6 +148,34 @@
       .slice(0, 24);
   }
 
+  function curriculumNotionUrl(step) {
+    const value = String(step?.notionUrl || "").trim();
+    return /^https:\/\/(?:www\.)?(?:app\.)?notion\.(?:com|so|site)\//i.test(value) ? value : "";
+  }
+
+  function curriculumDetailLinkMarkup(step, dataAttribute = "") {
+    const notionUrl = curriculumNotionUrl(step);
+    if (!notionUrl) return "";
+    const title = `${step.id} ${step.title} 자세히 보기`;
+    return `<a class="tn-curriculum-detail-link" href="${escapeHtml(notionUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(title)}" ${dataAttribute}>자세히 보기</a>`;
+  }
+
+  function updateV2CurriculumDetailLink(input) {
+    const row = input?.closest("[data-v2-outcome-user]");
+    const link = row?.querySelector("[data-v2-curriculum-detail-link]");
+    if (!link) return;
+    const step = curriculumStepFromValue(input.value);
+    const notionUrl = curriculumNotionUrl(step);
+    link.hidden = !notionUrl;
+    if (!notionUrl) {
+      link.removeAttribute("href");
+      link.removeAttribute("aria-label");
+      return;
+    }
+    link.href = notionUrl;
+    link.setAttribute("aria-label", `${step.id} ${step.title} 자세히 보기`);
+  }
+
   function renderV2CurriculumSuggestions(input) {
     const target = input?.closest("[data-v2-outcome-user]")?.querySelector("[data-v2-curriculum-suggestions]");
     if (!target) return;
@@ -160,7 +190,7 @@
     const matches = curriculumSearchResults(query);
     target.hidden = false;
     target.innerHTML = matches.length
-      ? matches.map((step, index) => `<button type="button" class="tn-curriculum-suggestion${index === 0 ? " is-active" : ""}" role="option" data-v2-curriculum-code="${escapeHtml(step.id)}"><strong>${escapeHtml(`${step.id} · ${step.title}`)}</strong><span>${escapeHtml([step.trackTitle || step.category, step.stageLabel || step.level].filter(Boolean).join(" · "))}</span><small>${escapeHtml(step.focus || step.goal || step.guide || "선택한 단계가 다음 커리큘럼으로 저장됩니다.")}</small></button>`).join("")
+      ? matches.map((step, index) => `<div class="tn-curriculum-suggestion-row"><button type="button" class="tn-curriculum-suggestion${index === 0 ? " is-active" : ""}" role="option" data-v2-curriculum-code="${escapeHtml(step.id)}"><strong>${escapeHtml(`${step.id} · ${step.title}`)}</strong><span>${escapeHtml([step.trackTitle || step.category, step.stageLabel || step.level].filter(Boolean).join(" · "))}</span><small>${escapeHtml(step.focus || step.goal || step.guide || "선택한 단계가 다음 커리큘럼으로 저장됩니다.")}</small></button>${curriculumDetailLinkMarkup(step)}</div>`).join("")
       : '<p class="tn-curriculum-suggestions-empty">일치하는 단계가 없습니다. 증상이나 동작을 다른 말로 입력해 보세요.</p>';
   }
 
@@ -173,6 +203,7 @@
     input.value = `${step.id} · ${step.title}`;
     input.dispatchEvent(new Event("change", { bubbles: true }));
     if (target) target.hidden = true;
+    updateV2CurriculumDetailLink(input);
     input.focus();
   }
 
@@ -267,6 +298,7 @@
       selectedDate: state.selectedDate,
       pageScrollY: state.editorOpen ? state.editorScrollY : Math.max(0, window.scrollY || 0),
       search: String($("#scheduleV2LessonSearch")?.value || ""),
+      feedbackOnly: state.feedbackOnly,
       focus: focusLessonId ? { type: "lesson", value: String(focusLessonId) } : workspaceFocusToken(),
       scrollContainers,
     };
@@ -278,6 +310,8 @@
     state.selectedDate = snapshot.selectedDate || state.selectedDate;
     const searchInput = $("#scheduleV2LessonSearch");
     if (searchInput) searchInput.value = snapshot.search || "";
+    state.feedbackOnly = snapshot.feedbackOnly === true;
+    syncFeedbackFilterButton();
     const restore = () => {
       const containers = document.querySelectorAll("#scheduleV2Grid .schedule-v2-week-scroll, #scheduleV2Grid .schedule-v2-period-scroll");
       (snapshot.scrollContainers || []).forEach((item) => {
@@ -1575,10 +1609,10 @@
           && lessonsOverlapEachOther(lesson, history)
         ));
         const historyLabel = relatedHistory.map(lessonHistoryLabel).join(" / ");
-        const searchText = `${memberLabel} ${historyLabel}`.trim().toLowerCase();
         const coach = plan.coachById.get(String(lesson.coachRoleId));
         const scheduledAvailable = coach ? coachAvailableAt(coach, plan.dayOfWeek, timeMinutes(startTime), plan.hasConfiguredAvailability) : false;
-        lessonCards.push(`<button type="button" class="schedule-v2-lesson schedule-v2-week-lesson kind-${escapeHtml(kind)} status-${escapeHtml(lesson.status || "scheduled")} ${search && !searchText.includes(search) ? "is-filtered" : ""} ${scheduledAvailable ? "" : "is-outside-hours"}" data-v2-lesson-id="${escapeHtml(lesson.id)}" data-v2-search-text="${escapeHtml(searchText)}" style="grid-row:${rowIndex + 3} / span ${span};grid-column:${plan.columnStart + lane}" aria-label="${escapeHtml(lessonEditAriaLabel(lesson, memberLabel, kind))}"><strong>${escapeHtml(memberLabel)}</strong><span>${escapeHtml(kindLabels[kind] || kind)} · ${Number(lesson.durationMinutes || 20)}분 · ${escapeHtml(statusLabels[lesson.status] || lesson.status || "예정")}${escapeHtml(substituteLabel)}</span>${historyLabel ? `<small class="schedule-v2-lesson-history">기존 ${escapeHtml(historyLabel)} 자리</small>` : ""}${scheduledAvailable ? "" : '<small class="schedule-v2-lesson-warning">근무시간 확인 필요</small>'}</button>`);
+        const card = lessonCardMarkup(lesson, { memberLabel, kind, historyLabel, substituteLabel, scheduledAvailable });
+        lessonCards.push(`<button type="button" class="schedule-v2-lesson schedule-v2-week-lesson kind-${escapeHtml(kind)} status-${escapeHtml(lesson.status || "scheduled")} ${card.classes} ${search && !card.searchText.includes(search) ? "is-filtered" : ""} ${scheduledAvailable ? "" : "is-outside-hours"}" data-v2-lesson-id="${escapeHtml(lesson.id)}" data-v2-search-text="${escapeHtml(card.searchText)}" data-v2-feedback-pending="${card.needsFeedback}" style="grid-row:${rowIndex + 3} / span ${span};grid-column:${plan.columnStart + lane}" aria-label="${escapeHtml(`${lessonEditAriaLabel(lesson, memberLabel, kind)} · ${lessonCardState(lesson).label}`)}"><strong>${escapeHtml(memberLabel)}</strong>${card.detailMarkup}${card.stateMarkup}</button>`);
       });
 
       collections.standaloneHistory.forEach((lesson) => {
@@ -1655,7 +1689,7 @@
       }
       const overrideClass = lockedOverride ? "is-locked-override" : "";
       const overrideText = lockedOverride ? "브레이크 · 관리자 수동 등록" : closure ? `${closureLabel} 관리자 수업 추가` : "수업 추가";
-      return `<button class="schedule-v2-slot schedule-v2-add ${closureClass} ${overrideClass}" type="button" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" data-v2-add data-date="${state.selectedDate}" data-time="${time}" data-duration-minutes="${defaultAddDurationMinutes}" data-coach-role-id="${escapeHtml(coach.roleId)}" aria-label="${escapeHtml(`${coach.name} ${time} ${defaultAddDurationMinutes}분 ${overrideText}`)}" ${lockedOverride || closure ? `title="${escapeHtml(`${overrideText} 가능`)}"` : ""}>+</button>`;
+      return `<button class="schedule-v2-slot schedule-v2-add ${closureClass} ${overrideClass}" type="button" style="grid-row:${timeIndex + 2};grid-column:${laneIndex + 2}" data-v2-add data-date="${state.selectedDate}" data-time="${time}" data-duration-minutes="${defaultAddDurationMinutes}" data-coach-role-id="${escapeHtml(coach.roleId)}" aria-label="${escapeHtml(`${coach.name} ${time} ${defaultAddDurationMinutes}분 ${overrideText}`)}" ${lockedOverride || closure ? `title="${escapeHtml(`${overrideText} 가능`)}"` : ""}></button>`;
     })).join("");
     const lessonCards = activeLessons.map((lesson) => {
       const rowIndex = startIndex.get(String(lesson.startTime).slice(0, 5));
@@ -1672,9 +1706,9 @@
         && lessonsOverlapEachOther(lesson, history)
       ));
       const historyLabel = relatedHistory.map(lessonHistoryLabel).join(" / ");
-      const searchText = `${memberLabel} ${historyLabel}`.trim().toLowerCase();
-      const filtered = search && !searchText.includes(search);
-      return `<button type="button" class="schedule-v2-lesson kind-${escapeHtml(kind)} status-${escapeHtml(lesson.status || "scheduled")} ${filtered ? "is-filtered" : ""}" data-v2-lesson-id="${escapeHtml(lesson.id)}" data-v2-search-text="${escapeHtml(searchText)}" style="grid-row:${rowIndex + 2} / span ${span};grid-column:${laneIndex + 2}" aria-label="${escapeHtml(lessonEditAriaLabel(lesson, memberLabel, kind))}"><strong>${escapeHtml(memberLabel)}</strong><span>${escapeHtml(kindLabels[kind] || kind)} · ${Number(lesson.durationMinutes || 20)}분 · ${escapeHtml(statusLabels[lesson.status] || lesson.status || "예정")}${escapeHtml(substituteLabel)}</span>${historyLabel ? `<small class="schedule-v2-lesson-history">기존 ${escapeHtml(historyLabel)} 자리</small>` : ""}</button>`;
+      const card = lessonCardMarkup(lesson, { memberLabel, kind, historyLabel, substituteLabel });
+      const filtered = search && !card.searchText.includes(search);
+      return `<button type="button" class="schedule-v2-lesson kind-${escapeHtml(kind)} status-${escapeHtml(lesson.status || "scheduled")} ${card.classes} ${filtered ? "is-filtered" : ""}" data-v2-lesson-id="${escapeHtml(lesson.id)}" data-v2-search-text="${escapeHtml(card.searchText)}" data-v2-feedback-pending="${card.needsFeedback}" style="grid-row:${rowIndex + 2} / span ${span};grid-column:${laneIndex + 2}" aria-label="${escapeHtml(`${lessonEditAriaLabel(lesson, memberLabel, kind)} · ${lessonCardState(lesson).label}`)}"><strong>${escapeHtml(memberLabel)}</strong>${card.detailMarkup}${card.stateMarkup}</button>`;
     }).join("");
     const historyCards = standaloneHistory.map((lesson) => {
       const rowIndex = startIndex.get(String(lesson.startTime).slice(0, 5));
@@ -1787,15 +1821,103 @@
     applyLessonSearchFilter({ scrollToMatch: true });
   }
 
+  function lessonEndPassed(lesson = {}, now = new Date()) {
+    const date = String(lesson.lessonDate || lesson.lesson_date || "").trim();
+    const time = String(lesson.startTime || lesson.start_time || "").slice(0, 5);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return false;
+    const end = new Date(`${date}T${time}:00`);
+    if (!Number.isFinite(end.getTime())) return false;
+    end.setMinutes(end.getMinutes() + Math.max(1, Number(lesson.durationMinutes || lesson.duration_minutes) || 20));
+    return now.getTime() >= end.getTime();
+  }
+
+  function normalizedFeedbackComment(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function feedbackCommentIsPlaceholder(value) {
+    return normalizedFeedbackComment(value).replace(/\s/g, "").toLowerCase() === "테스트기간";
+  }
+
+  function participantFeedbackComplete(participant = {}) {
+    if (!outcomeRowFinal(participant)) return false;
+    const outcome = String(participant.outcome || "completed").toLowerCase();
+    if (outcome !== "completed") return true;
+    const comment = normalizedFeedbackComment(participant.coachComment || participant.coach_comment);
+    return comment.length >= 5 && !feedbackCommentIsPlaceholder(comment);
+  }
+
+  function lessonCardState(lesson = {}, now = new Date()) {
+    const status = String(lesson.status || "scheduled").toLowerCase();
+    const participants = Array.isArray(lesson.participants) ? lesson.participants : [];
+    const finalParticipants = participants.filter(outcomeRowFinal);
+    const incompleteCount = participants.filter((participant) => !participantFeedbackComplete(participant)).length;
+    const finalizedOutcomes = finalParticipants.map((participant) => String(participant.outcome || "completed").toLowerCase());
+    const deducted = finalParticipants.some((participant) => Number(participant.deductedSessions ?? participant.deducted_sessions) > 0);
+    const ended = lessonEndPassed(lesson, now);
+
+    if (status === "pending_change") {
+      return { id: "approval", label: "승인 대기", className: "record-approval", needsFeedback: false };
+    }
+    if (["cancelled", "holiday"].includes(status)) {
+      return { id: status, label: statusLabels[status] || "취소", className: "record-neutral", needsFeedback: false };
+    }
+    if (finalizedOutcomes.includes("no_show") || status === "no_show") {
+      return { id: "no_show", label: `노쇼 · ${deducted ? "1회 차감" : "차감 없음"}`, className: "record-problem outcome-no-show", needsFeedback: false };
+    }
+    if (finalizedOutcomes.includes("absence") || status === "absent") {
+      return { id: "absence", label: `불참 · ${deducted ? "1회 차감" : "차감 없음"}`, className: "record-neutral outcome-absence", needsFeedback: false };
+    }
+    if (participants.length && incompleteCount > 0 && ended) {
+      const label = participants.length > 1
+        ? `${participants.length}명 중 ${incompleteCount}명 피드백 필요`
+        : finalParticipants.length === participants.length
+          ? "출석 완료 · 피드백 필요"
+          : "피드백 필요";
+      return { id: "feedback_pending", label, className: "record-problem", needsFeedback: true };
+    }
+    if (!participants.length && ended && ["scheduled", "reserved", "completed"].includes(status)) {
+      return { id: "feedback_pending", label: "피드백 필요", className: "record-problem", needsFeedback: true };
+    }
+    if (participants.length && finalParticipants.length === participants.length && incompleteCount === 0) {
+      return { id: "feedback_complete", label: "피드백 완료", className: "record-complete", needsFeedback: false };
+    }
+    return { id: "scheduled", label: statusLabels[status] || "예정", className: "record-planned", needsFeedback: false };
+  }
+
+  function lessonCardMarkup(lesson, { memberLabel, kind, historyLabel = "", substituteLabel = "", scheduledAvailable = true } = {}) {
+    const cardState = lessonCardState(lesson);
+    const typeClass = kind === "regular" ? "type-regular" : "type-changed";
+    const kindLabel = kindLabels[kind] || kind || "수업";
+    const searchText = `${memberLabel} ${historyLabel} ${kindLabel} ${cardState.label}`.trim().toLowerCase();
+    return {
+      classes: `${typeClass} ${cardState.className}`,
+      searchText,
+      stateMarkup: `<small class="schedule-v2-card-state">${escapeHtml(cardState.label)}</small>`,
+      detailMarkup: `<span>${escapeHtml(kindLabel)} · ${Number(lesson.durationMinutes || 20)}분${escapeHtml(substituteLabel)}</span>${historyLabel ? `<small class="schedule-v2-lesson-history">기존 ${escapeHtml(historyLabel)} 자리</small>` : ""}${scheduledAvailable ? "" : '<small class="schedule-v2-lesson-warning">근무시간 확인 필요</small>'}`,
+      needsFeedback: cardState.needsFeedback,
+    };
+  }
+
+  function syncFeedbackFilterButton() {
+    const button = $("#scheduleV2FeedbackFilter");
+    if (!button) return;
+    button.classList.toggle("is-active", state.feedbackOnly);
+    button.setAttribute("aria-pressed", String(state.feedbackOnly));
+    button.textContent = state.feedbackOnly ? "미작성만 보는 중" : "피드백 미작성만";
+  }
+
   function applyLessonSearchFilter({ scrollToMatch = false } = {}) {
     const search = String($("#scheduleV2LessonSearch")?.value || "").trim().toLowerCase();
     let firstMatch = null;
     $$("[data-v2-search-text]", workspace).forEach((lesson) => {
       const matches = Boolean(search) && lesson.dataset.v2SearchText.includes(search);
+      const feedbackFiltered = state.feedbackOnly && lesson.dataset.v2FeedbackPending !== "true";
+      lesson.classList.toggle("is-feedback-filtered", feedbackFiltered);
       lesson.classList.toggle("is-filtered", Boolean(search) && !matches);
       lesson.classList.toggle("is-search-match", matches);
       lesson.classList.remove("is-search-primary");
-      if (!firstMatch && matches) firstMatch = lesson;
+      if (!feedbackFiltered && !firstMatch && matches) firstMatch = lesson;
     });
     if (firstMatch) firstMatch.classList.add("is-search-primary");
 
@@ -1838,10 +1960,102 @@
     return (state.payload?.tickets || []).find((ticket) => String(ticket.id) === String(ticketId)) || null;
   }
 
+  function normalizedGroupDeductionPolicy(ticket, participantCount = 1) {
+    const configured = String(ticket?.groupDeductionPolicy || ticket?.group_deduction_policy || "").trim();
+    if (["per_participant", "shared_once", "representative_only"].includes(configured)) return configured;
+    return participantCount > 1 ? "shared_once" : "per_participant";
+  }
+
+  function participantDeductionContext(lesson, participant) {
+    const participants = lesson?.participants || [];
+    const ticketId = String(participant?.ticketId || participant?.ticket_id || "");
+    const ticketParticipants = ticketId
+      ? participants.filter((item) => String(item.ticketId || item.ticket_id || "") === ticketId)
+      : [];
+    const ticket = ticketById(ticketId);
+    const policy = normalizedGroupDeductionPolicy(ticket, ticketParticipants.length);
+    const shared = ticketParticipants.length > 1 && ["shared_once", "representative_only"].includes(policy);
+    const lessonMinutes = Math.max(1, Number(ticket?.lessonMinutes || ticket?.lesson_minutes || lesson?.durationMinutes || 20));
+    const expectedUnits = lesson?.scheduleKind === "one_day"
+      ? 0
+      : Math.max(1, Math.ceil(Number(lesson?.durationMinutes || lessonMinutes) / lessonMinutes));
+    const actualUnits = ticketParticipants.reduce(
+      (sum, item) => sum + Math.max(0, Number(item.deductedSessions ?? item.deducted_sessions) || 0),
+      0,
+    );
+    const deductedParticipant = ticketParticipants.find(
+      (item) => Number(item.deductedSessions ?? item.deducted_sessions) > 0,
+    );
+    const ownerUserId = String(ticket?.ownerUserId || ticket?.owner_user_id || "");
+    const ownerParticipant = ticketParticipants.find((item) => String(item.userId || item.user_id || "") === ownerUserId);
+    const actionParticipant = actualUnits > 0
+      ? deductedParticipant || ownerParticipant || ticketParticipants[0]
+      : ownerParticipant || ticketParticipants[0];
+    return {
+      policy,
+      shared,
+      expectedUnits,
+      actualUnits,
+      actionUserId: String(actionParticipant?.userId || actionParticipant?.user_id || ""),
+      isActionParticipant: String(participant?.userId || participant?.user_id || "")
+        === String(actionParticipant?.userId || actionParticipant?.user_id || ""),
+    };
+  }
+
+  function outcomeCorrectionMarkup(lesson, participant, outcome, final) {
+    if (!final || lesson?.scheduleKind === "one_day" || !["completed", "no_show", "absence"].includes(outcome) || !participant.ticketId) return "";
+    const deducted = Math.max(0, Number(participant.deductedSessions ?? participant.deducted_sessions) || 0);
+    const context = participantDeductionContext(lesson, participant);
+    if (!context.shared) {
+      return `<div class="schedule-v2-outcome-correction"><span>차감 ${deducted > 0 ? `${deducted}회` : "없음"}</span><button type="button" data-v2-correct-deduction="${deducted > 0 ? "restore" : "deduct"}">${deducted > 0 ? "차감 복구" : "누락 차감"}</button></div>`;
+    }
+    if (context.actualUnits > context.expectedUnits) {
+      const action = context.isActionParticipant
+        ? '<button type="button" data-v2-correct-deduction="restore">그룹 과다 차감 복구</button>'
+        : "";
+      return `<div class="schedule-v2-outcome-correction is-warning"><span>공유 회원권 과다 차감 확인 필요 · ${context.actualUnits}/${context.expectedUnits}회</span>${action}</div>`;
+    }
+    if (context.actualUnits < context.expectedUnits) {
+      const action = context.isActionParticipant
+        ? '<button type="button" data-v2-correct-deduction="deduct">그룹 누락 차감</button>'
+        : "";
+      return `<div class="schedule-v2-outcome-correction is-warning"><span>공유 회원권 차감 확인 필요 · ${context.actualUnits}/${context.expectedUnits}회</span>${action}</div>`;
+    }
+    const action = context.isActionParticipant
+      ? '<button type="button" data-v2-correct-deduction="restore">그룹 차감 복구</button>'
+      : "";
+    return `<div class="schedule-v2-outcome-correction is-shared"><span>공유 회원권 ${context.actualUnits}회 차감 완료</span>${action}</div>`;
+  }
+
+  function deductionConfirmationGuide(results) {
+    const requested = results.filter((result) => result.deduct && result.ticketId);
+    if (!requested.length) return "회원권 차감은 없습니다.";
+    const groups = new Map();
+    results.forEach((result) => {
+      const ticketId = String(result.ticketId || "");
+      if (!ticketId) return;
+      const group = groups.get(ticketId) || [];
+      group.push(result);
+      groups.set(ticketId, group);
+    });
+    let sharedTickets = 0;
+    let individualDeductions = 0;
+    groups.forEach((group, ticketId) => {
+      const requestedCount = group.filter((result) => result.deduct).length;
+      if (!requestedCount) return;
+      const policy = normalizedGroupDeductionPolicy(ticketById(ticketId), group.length);
+      if (group.length > 1 && ["shared_once", "representative_only"].includes(policy)) sharedTickets += 1;
+      else individualDeductions += requestedCount;
+    });
+    if (sharedTickets && !individualDeductions) return `공유 회원권 ${sharedTickets}개가 차감됩니다.`;
+    if (!sharedTickets) return `${individualDeductions}명의 회원권이 차감됩니다.`;
+    return `공유 회원권 ${sharedTickets}개와 개별 회원권 ${individualDeductions}건이 차감됩니다.`;
+  }
+
   function lessonTicketCountsMarkup(lesson) {
     const text = lessonTicketCountsText(lesson);
     if (!text) return "";
-    return `<small class="schedule-v2-ticket-counts" aria-label="${escapeHtml(`총/소진/잔여 ${text}`)}" title="총/소진/잔여">${escapeHtml(text)}</small>`;
+    return `<small class="schedule-v2-ticket-counts" aria-label="${escapeHtml(lessonTicketCountsAria(lesson))}" title="총/사용/잔여 · 회원권 상세는 수업을 눌러 확인">${escapeHtml(text)}</small>`;
   }
 
   function lessonTicketCountsText(lesson) {
@@ -1855,6 +2069,19 @@
       const explicitUsed = ticket.usedSessions ?? ticket.used_sessions;
       const used = Math.max(0, Number(explicitUsed ?? Math.max(0, total - remaining)));
       return `${total}/${used}/${remaining}`;
+    }).filter(Boolean))];
+    return labels.join(" · ");
+  }
+
+  function lessonTicketCountsAria(lesson) {
+    const labels = [...new Set((lesson?.participants || []).map((participant) => {
+      const ticket = ticketById(participant.ticketId || participant.ticket_id);
+      if (!ticket) return "";
+      const total = Math.max(0, Number(ticket.totalSessions ?? ticket.total_sessions ?? 0));
+      const remaining = Math.max(0, Number(ticket.remainingSessions ?? ticket.remaining_sessions ?? total));
+      const explicitUsed = ticket.usedSessions ?? ticket.used_sessions;
+      const used = Math.max(0, Number(explicitUsed ?? Math.max(0, total - remaining)));
+      return `총 ${total}회, 사용 ${used}회, 잔여 ${remaining}회`;
     }).filter(Boolean))];
     return labels.join(" · ");
   }
@@ -2445,7 +2672,11 @@
     const commentInput = row.querySelector("[data-v2-comment]");
     const generator = window.TennisNoteCommentDraft;
     if (!keywordInput || !commentInput || !generator?.generate) return;
-    const draft = generator.generate(keywordInput.value);
+    const curriculumInput = row.querySelector("[data-v2-curriculum]");
+    const selectedCurriculum = curriculumStepFromValue(curriculumInput?.value || "")
+      || curriculumSearchResults(curriculumInput?.value || keywordInput.value)[0]
+      || null;
+    const draft = generator.generate(keywordInput.value, { curriculum: selectedCurriculum });
     if (!draft.ok) {
       setEditorMessage(draft.message || "키워드를 한 개 이상 입력해 주세요.");
       keywordInput.focus();
@@ -2489,6 +2720,89 @@
     }
   }
 
+  function openParticipantFeedbackRevision(row) {
+    if (!row) return;
+    state.feedbackRevisionUserId = row.dataset.v2OutcomeUser || "";
+    renderOutcomeEditor();
+    const activeRow = $$('[data-v2-outcome-user]', $("#scheduleV2OutcomeList"))
+      .find((candidate) => candidate.dataset.v2OutcomeUser === state.feedbackRevisionUserId);
+    activeRow?.querySelector("[data-v2-comment]")?.focus({ preventScroll: true });
+  }
+
+  function cancelParticipantFeedbackRevision() {
+    state.feedbackRevisionUserId = "";
+    renderOutcomeEditor();
+    setEditorMessage("피드백 수정 내용을 저장하지 않았습니다.", "info");
+  }
+
+  async function saveParticipantFeedbackRevision(row) {
+    const lesson = state.editingLesson;
+    if (!lesson || !row || !requireWritableServer()) return;
+    const memberLabel = row.querySelector("strong")?.textContent || "회원";
+    const coachComment = row.querySelector("[data-v2-comment]")?.value.trim() || "";
+    const curriculumInput = row.querySelector("[data-v2-curriculum]");
+    const curriculumValue = curriculumInput?.value.trim() || "";
+    const curriculumStep = curriculumValue ? curriculumStepFromValue(curriculumValue) : null;
+    if (coachComment.length < 5) {
+      setEditorMessage(`${memberLabel} 회원의 피드백을 5자 이상 입력해 주세요.`);
+      return;
+    }
+    if (feedbackCommentIsPlaceholder(coachComment)) {
+      setEditorMessage("'테스트 기간'은 완료 피드백으로 저장할 수 없습니다. 실제 수업 피드백을 입력해 주세요.");
+      return;
+    }
+    if (!curriculumStep) {
+      setEditorMessage(`${memberLabel} 회원의 다음 커리큘럼을 검색 목록에서 선택해 주세요.`);
+      return;
+    }
+    const expectedUpdatedAt = row.dataset.v2RecordUpdatedAt || "";
+    if (!expectedUpdatedAt) {
+      setEditorMessage("최신 피드백 정보를 다시 불러온 뒤 수정해 주세요.");
+      return;
+    }
+    const saveButton = row.querySelector("[data-v2-save-feedback-revision]");
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.textContent = "저장 중";
+    }
+    setEditorMessage("피드백만 수정하고 있습니다. 회원권 횟수는 변경하지 않습니다.", "info");
+    try {
+      const api = bridge();
+      const [resolved] = await resolveOutcomeCurriculumRefs(api, [{
+        userId: row.dataset.v2OutcomeUser,
+        ticketId: row.dataset.v2TicketId,
+        coachComment,
+        curriculumCode: curriculumStep.id,
+        existingCurriculumCode: curriculumInput?.dataset.v2ExistingCode || "",
+        nextCurriculumRefId: curriculumInput?.dataset.v2ExistingRefId || null,
+      }]);
+      await api.rpc("tn_schedule_v2_update_feedback", {
+        target_lesson_id: lesson.id,
+        target_user_id: row.dataset.v2OutcomeUser,
+        target_coach_comment: coachComment,
+        target_next_curriculum_ref_id: resolved.nextCurriculumRefId,
+        target_expected_updated_at: expectedUpdatedAt,
+        target_operation_key: operationKey("admin-feedback-revision"),
+      });
+      state.feedbackRevisionUserId = "";
+      state.deferredRefresh = false;
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ quiet: true, force: true });
+      state.editingLesson = state.payload?.lessons.find((item) => String(item.id) === String(lesson.id)) || lesson;
+      renderOutcomeEditor();
+      setEditorMessage("피드백과 다음 커리큘럼을 수정했습니다. 회원권 횟수는 그대로입니다.", "success");
+      setStatus("완료 피드백 수정 완료", "success");
+      void api.refresh?.();
+    } catch (error) {
+      setEditorMessage(errorMessage(error));
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.textContent = "피드백 저장";
+      }
+    }
+  }
+
   function syncOutcomeRow(row, { setDefault = false } = {}) {
     if (!row) return;
     const outcome = row.querySelector("[data-v2-outcome]")?.value || "completed";
@@ -2525,9 +2839,13 @@
     const participants = lesson.participants || [];
     const anyFinal = participants.some(outcomeRowFinal);
     const allFinal = participants.length > 0 && participants.every(outcomeRowFinal);
+    const allFeedbackComplete = participants.length > 0 && participants.every(participantFeedbackComplete);
+    const hasCompletedOutcome = participants.some((participant) => String(participant.outcome || "completed").toLowerCase() === "completed");
     const editable = ["scheduled", "pending_change"].includes(lesson.status) && !anyFinal;
     $("#scheduleV2OutcomeSummary").textContent = allFinal
-      ? "처리 완료"
+      ? allFeedbackComplete
+        ? hasCompletedOutcome ? "처리 완료 · 피드백 완료" : "처리 완료"
+        : "출석 처리 완료 · 피드백 필요"
       : anyFinal
         ? "점검 필요"
       : editable
@@ -2538,8 +2856,12 @@
       ? participants.map((participant) => {
         const final = outcomeRowFinal(participant);
         const outcome = participant.outcome || "completed";
+        const feedbackEditing = final
+          && outcome === "completed"
+          && String(state.feedbackRevisionUserId || "") === String(participant.userId || "");
         const deducted = Number(participant.deductedSessions ?? participant.deducted_sessions) > 0;
         const disabled = editable && !final ? "" : " disabled";
+        const feedbackDisabled = editable && !final || feedbackEditing ? "" : " disabled";
         const outcomeOptions = Object.entries(outcomeLabels).map(([value, label]) => `<option value="${value}" ${value === outcome ? "selected" : ""}>${label}</option>`).join("");
         const oneDay = lesson.scheduleKind === "one_day";
         const deductChecked = !oneDay && (deducted || (!participant.recordStatus && outcome === "completed"));
@@ -2547,17 +2869,22 @@
         const draftTools = editable && !final
           ? '<div class="schedule-v2-comment-draft"><input type="text" data-v2-comment-keywords placeholder="키워드 입력 · Enter로 초안 만들기" aria-label="피드백 키워드" /><button type="button" data-v2-generate-comment>초안 만들기</button></div>'
           : "";
-        const correctionTools = final && ["completed", "no_show", "absence"].includes(outcome) && participant.ticketId
-          ? `<div class="schedule-v2-outcome-correction"><span>차감 ${deducted ? `${Number(participant.deductedSessions ?? participant.deducted_sessions)}회` : "없음"}</span><button type="button" data-v2-correct-deduction="${deducted ? "restore" : "deduct"}">${deducted ? "차감 복구" : "누락 차감"}</button></div>`
+        const correctionTools = outcomeCorrectionMarkup(lesson, participant, outcome, final);
+        const revisionTools = final && outcome === "completed"
+          ? feedbackEditing
+            ? '<div class="schedule-v2-feedback-revision-actions"><button type="button" data-v2-save-feedback-revision>피드백 저장</button><button type="button" data-v2-cancel-feedback-revision>취소</button><small>회원권 횟수는 변경되지 않습니다.</small></div>'
+            : '<button type="button" class="schedule-v2-feedback-revision-open" data-v2-open-feedback-revision>피드백 수정</button>'
           : "";
-        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${disabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}</div>`;
+        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""} ${feedbackEditing ? "is-feedback-editing" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}" data-v2-record-updated-at="${escapeHtml(participant.updatedAt || participant.updated_at || "")}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${feedbackDisabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}${revisionTools}</div>`;
       }).join("")
       : '<div class="schedule-v2-selected-ticket">참여자 정보가 없어 수업을 처리할 수 없습니다.</div>';
     renderCurriculumOptions();
     $$("[data-v2-outcome-user]", list).forEach((row) => {
       const participant = participants.find((item) => String(item.userId) === String(row.dataset.v2OutcomeUser)) || {};
       const final = outcomeRowFinal(participant);
-      row.insertAdjacentHTML("beforeend", `<label class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼 <small>완료 시 필수</small></span><input type="search" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="증상·동작·목표·코드 검색" autocomplete="off"${editable && !final ? "" : " disabled"} /></label><div class="tn-curriculum-suggestions" data-v2-curriculum-suggestions role="listbox" hidden></div>`);
+      const feedbackEditing = final && String(state.feedbackRevisionUserId || "") === String(participant.userId || "");
+      row.insertAdjacentHTML("beforeend", `<div class="schedule-v2-outcome-curriculum"><span>다음 커리큘럼 <small>${feedbackEditing ? "수정" : "완료 시 필수"}</small></span><div class="tn-curriculum-field-control"><input type="search" data-v2-curriculum value="${escapeHtml(curriculumInputValue(participant))}" data-v2-existing-code="${escapeHtml(participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "")}" data-v2-existing-ref-id="${escapeHtml(participant.nextCurriculumRefId || participant.next_curriculum_ref_id || "")}" placeholder="증상·동작·목표·코드 검색" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 다음 커리큘럼 검색`)}" autocomplete="off"${editable && !final || feedbackEditing ? "" : " disabled"} />${curriculumDetailLinkMarkup(curriculumStepFromValue(curriculumInputValue(participant)), "data-v2-curriculum-detail-link") || '<a class="tn-curriculum-detail-link" data-v2-curriculum-detail-link target="_blank" rel="noopener noreferrer" hidden>자세히 보기</a>'}</div></div><div class="tn-curriculum-suggestions" data-v2-curriculum-suggestions role="listbox" hidden></div>`);
+      updateV2CurriculumDetailLink(row.querySelector("[data-v2-curriculum]"));
     });
     $$(".schedule-v2-outcome-row", list).forEach((row) => syncOutcomeRow(row));
   }
@@ -2577,6 +2904,9 @@
       }
       if (finalize && outcome === "completed" && coachComment.length < 5) {
         return { error: `${row.querySelector("strong").textContent} 회원의 피드백을 5자 이상 입력해 주세요.`, results: [] };
+      }
+      if (finalize && outcome === "completed" && feedbackCommentIsPlaceholder(coachComment)) {
+        return { error: `${row.querySelector("strong").textContent} 회원의 실제 수업 피드백을 입력해 주세요. '테스트 기간'은 완료 피드백으로 저장할 수 없습니다.`, results: [] };
       }
       if (finalize && outcome === "completed" && !curriculumStep) {
         return { error: `${row.querySelector("strong").textContent} 회원의 다음 커리큘럼을 선택해 주세요.`, results: [] };
@@ -2645,8 +2975,7 @@
     }
     if (!requireWritableServer()) return;
     if (finalize) {
-      const deductedCount = collected.results.filter((result) => result.deduct).length;
-      const deductionGuide = deductedCount ? `${deductedCount}명의 회원권이 차감됩니다.` : "회원권 차감은 없습니다.";
+      const deductionGuide = deductionConfirmationGuide(collected.results);
       if (!window.confirm(`수업 처리를 완료할까요? ${deductionGuide}`)) return;
     }
     const api = bridge();
@@ -3167,8 +3496,14 @@
       schedule_v2_outcome_ticket_units_unavailable: "차감할 회원권 잔여 횟수가 부족합니다.",
       schedule_v2_outcome_participant_ticket_mismatch: "수업 회원과 회원권 연결이 맞지 않습니다.",
       schedule_v2_feedback_comment_required: "완료 수업의 피드백을 5자 이상 입력해 주세요.",
+      schedule_v2_feedback_placeholder_forbidden: "'테스트 기간'은 완료 피드백으로 저장할 수 없습니다. 실제 수업 피드백을 입력해 주세요.",
+      schedule_v2_feedback_revision_reference_required: "최신 피드백 정보를 다시 불러온 뒤 수정해 주세요.",
+      schedule_v2_feedback_revision_forbidden: "담당 코치 또는 관리자만 완료 피드백을 수정할 수 있습니다.",
+      schedule_v2_feedback_revision_final_completed_required: "완료된 출석 수업의 피드백만 수정할 수 있습니다.",
+      schedule_v2_feedback_revision_stale: "다른 화면에서 피드백을 먼저 수정했습니다. 새로고침 후 다시 확인해 주세요.",
       schedule_v2_next_curriculum_required: "완료 수업의 다음 커리큘럼을 선택해 주세요.",
       schedule_v2_shared_ticket_policy_required: "같은 공유 회원권을 두 번 차감할 수 없습니다. 1:2 차감 방식을 관리자에서 확인해 주세요.",
+      schedule_v2_representative_ticket_owner_required: "대표회원 기준 차감 상품입니다. 회원권 대표회원 행에서 정정해 주세요.",
       schedule_v2_correction_admin_required: "누락 차감 정정은 관리자만 할 수 있습니다.",
       schedule_v2_correction_reference_required: "정정할 수업·회원·회원권 정보를 다시 확인해 주세요.",
       schedule_v2_correction_reason_required: "정정 사유를 2자 이상 입력해 주세요.",
@@ -3961,6 +4296,11 @@
     });
     $("#scheduleV2MemberSearch").addEventListener("input", renderMemberResults);
     $("#scheduleV2LessonSearch").addEventListener("input", () => applyLessonSearchFilter({ scrollToMatch: true }));
+    $("#scheduleV2FeedbackFilter")?.addEventListener("click", () => {
+      state.feedbackOnly = !state.feedbackOnly;
+      syncFeedbackFilterButton();
+      applyLessonSearchFilter();
+    });
     const selectEditorMode = (event) => {
       const button = event.target.closest("[data-v2-editor-mode]");
       if (!button || button.disabled) return;
@@ -4018,15 +4358,33 @@
         return;
       }
       const correctionButton = event.target.closest("[data-v2-correct-deduction]");
-      if (!correctionButton) return;
-      void correctParticipantDeduction(
-        correctionButton.closest("[data-v2-outcome-user]"),
-        correctionButton.dataset.v2CorrectDeduction === "deduct",
-      );
+      if (correctionButton) {
+        void correctParticipantDeduction(
+          correctionButton.closest("[data-v2-outcome-user]"),
+          correctionButton.dataset.v2CorrectDeduction === "deduct",
+        );
+        return;
+      }
+      const openRevisionButton = event.target.closest("[data-v2-open-feedback-revision]");
+      if (openRevisionButton) {
+        openParticipantFeedbackRevision(openRevisionButton.closest("[data-v2-outcome-user]"));
+        return;
+      }
+      if (event.target.closest("[data-v2-cancel-feedback-revision]")) {
+        cancelParticipantFeedbackRevision();
+        return;
+      }
+      const saveRevisionButton = event.target.closest("[data-v2-save-feedback-revision]");
+      if (saveRevisionButton) {
+        void saveParticipantFeedbackRevision(saveRevisionButton.closest("[data-v2-outcome-user]"));
+      }
     });
     $("#scheduleV2OutcomeList").addEventListener("input", (event) => {
       const curriculumInput = event.target.closest("[data-v2-curriculum]");
-      if (curriculumInput) renderV2CurriculumSuggestions(curriculumInput);
+      if (curriculumInput) {
+        renderV2CurriculumSuggestions(curriculumInput);
+        updateV2CurriculumDetailLink(curriculumInput);
+      }
     });
     $("#scheduleV2OutcomeList").addEventListener("keydown", (event) => {
       if (event.isComposing) return;

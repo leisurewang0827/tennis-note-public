@@ -274,6 +274,12 @@
   white-space: nowrap;
 }
 
+.schedule-v2-toolbar-actions button.is-active {
+  border-color: #a8231d;
+  background: #fff0ef;
+  color: #8f241f;
+}
+
 .schedule-v2-advanced-tools {
   margin: 0 14px 10px;
   overflow: hidden;
@@ -759,10 +765,10 @@
   content: "";
 }
 
-.schedule-v2-legend [data-kind="makeup"]::before { background: #218667; }
-.schedule-v2-legend [data-kind="coupon"]::before { background: #c6851c; }
-.schedule-v2-legend [data-kind="one_day"]::before { background: #7a65b6; }
-.schedule-v2-legend [data-kind="pending"]::before { background: #b3524d; }
+.schedule-v2-legend [data-kind="changed"]::before { background: #7357ad; }
+.schedule-v2-legend [data-kind="complete"]::before { background: #287a5b; }
+.schedule-v2-legend [data-kind="problem"]::before { background: #bd3b35; }
+.schedule-v2-legend [data-kind="pending"]::before { background: #b7791f; }
 .schedule-v2-legend [data-kind="closure"]::before { background: #7b8581; }
 
 .schedule-v2-grid {
@@ -1215,11 +1221,23 @@
   cursor: pointer;
 }
 
+.schedule-v2-add::before {
+  color: #188060;
+  content: "";
+  font-size: 18px;
+  font-weight: 800;
+}
+
 .schedule-v2-add:hover,
 .schedule-v2-add:focus-visible {
   background: #e9f7f1;
   outline: 2px solid #58a98f;
   outline-offset: -2px;
+}
+
+.schedule-v2-add:hover::before,
+.schedule-v2-add:focus-visible::before {
+  content: "+";
 }
 
 .schedule-v2-lesson {
@@ -1274,6 +1292,20 @@
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.schedule-v2-card-state {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 3px;
+  border-radius: 999px;
+  padding: 2px 5px;
+  background: #edf2f7;
+  color: #52606d;
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1.15;
 }
 
 .schedule-v2-history-card {
@@ -1357,12 +1389,62 @@
   outline-offset: -2px;
 }
 
-.schedule-v2-lesson.kind-makeup { border-color: #79b6a2; border-left-color: #218667; background: #e9f6f1; color: #164b3b; }
-.schedule-v2-lesson.kind-coupon { border-color: #d7b36d; border-left-color: #c6851c; background: #fff7e6; color: #5c410d; }
-.schedule-v2-lesson.kind-one_day { border-color: #aa9bd1; border-left-color: #7a65b6; background: #f3effb; color: #403467; }
-.schedule-v2-lesson.status-pending_change { border-style: dashed; border-left-color: #b3524d; background: #fff1ef; color: #6d2926; }
-.schedule-v2-lesson.status-completed { border-color: #84a99d; border-left-color: #4d7568; background: #eef4f2; color: #344e46; }
+.schedule-v2-lesson:is(.kind-makeup, .kind-coupon, .kind-one_day, .type-changed) {
+  border-color: #b5a4da;
+  border-left-color: #7357ad;
+  background: #f3effb;
+  color: #403467;
+}
+
+/* After the lesson ends, the result takes priority over the schedule type. */
+.schedule-v2-lesson.record-complete {
+  border-color: #78ad98 !important;
+  border-left-color: #287a5b !important;
+  background: #dff1e9 !important;
+  color: #163f32 !important;
+  box-shadow: none !important;
+}
+.schedule-v2-lesson.record-problem {
+  border-color: #e09a95 !important;
+  border-left-color: #c2413b !important;
+  background: #fde8e6 !important;
+  color: #6f201c !important;
+  box-shadow: none !important;
+}
+.schedule-v2-lesson.record-neutral {
+  border-color: #aab5c3 !important;
+  border-left-color: #64748b !important;
+  background: #eef2f6 !important;
+  color: #334155 !important;
+  box-shadow: none !important;
+}
+.schedule-v2-lesson.record-complete :is(span, small),
+.schedule-v2-lesson.record-problem :is(span, small),
+.schedule-v2-lesson.record-neutral :is(span, small) {
+  color: inherit !important;
+}
+.schedule-v2-lesson.record-complete .schedule-v2-card-state {
+  background: #dff1e9;
+  color: #176044;
+}
+.schedule-v2-lesson.record-problem .schedule-v2-card-state {
+  background: #fde7e5;
+  color: #9f2924;
+}
+.schedule-v2-lesson.record-approval {
+  border-style: dashed;
+}
+.schedule-v2-lesson.record-approval .schedule-v2-card-state {
+  background: #fff0cf;
+  color: #85570d;
+}
+.schedule-v2-lesson.outcome-absence .schedule-v2-card-state {
+  background: #e9eef3;
+  color: #46586a;
+}
 .schedule-v2-lesson.status-cancelled { opacity: .55; text-decoration: line-through; }
+.schedule-v2-lesson.is-feedback-filtered,
+.schedule-v2-history-card.is-feedback-filtered { display: none; }
 .schedule-v2-lesson.is-filtered,
 .schedule-v2-history-card.is-filtered { opacity: .18; }
 
@@ -2124,6 +2206,15 @@
   font-weight: 800;
 }
 
+.schedule-v2-outcome-correction.is-shared {
+  color: #08795a;
+}
+
+.schedule-v2-outcome-correction.is-warning {
+  color: #9a4d00;
+  border-top-color: #e9c897;
+}
+
 .schedule-v2-outcome-curriculum {
   grid-column: 1 / -1;
   display: grid;
@@ -2133,6 +2224,13 @@
   color: #51635d;
   font-size: 11px;
   font-weight: 700;
+}
+
+.tn-curriculum-field-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
 }
 
 .schedule-v2-outcome-row > .tn-curriculum-suggestions {
@@ -2148,6 +2246,20 @@
   background: #fff;
   color: #173d33;
   font: inherit;
+}
+
+.schedule-v2-outcome-curriculum .tn-curriculum-detail-link {
+  min-height: 36px;
+}
+
+@media (max-width: 480px) {
+  .schedule-v2-outcome-curriculum {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-v2-outcome-curriculum > span {
+    margin-bottom: -2px;
+  }
 }
 
 .schedule-v2-outcome-row.is-final {

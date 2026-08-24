@@ -1267,7 +1267,7 @@ function bindDelegatedEvents() {
     if (refundPaymentButton) {
       const itemIndex = Number(refundPaymentButton.dataset.refundPayment);
       const item = billings[itemIndex];
-      await openRefundModal(item, itemIndex);
+      await openRefundModal(item);
       return;
     }
 

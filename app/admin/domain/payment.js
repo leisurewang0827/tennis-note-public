@@ -25,6 +25,9 @@ function billingStatusFromServerPayment(row = {}) {
   const status = String(row.status || "").toLowerCase();
   const refundStatus = String(row.refund_status || "").toLowerCase();
   const refundMode = String(row.refund_breakdown?.mode || "").toLowerCase();
+  if (refundStatus === "processing" && refundMode === "manual_bank_transfer_pending") {
+    return { status: "refund_manual_pending", statusLabel: "환불송금대기" };
+  }
   if (refundStatus === "processing") return { status: "refund_processing", statusLabel: "환불처리중" };
   if (refundStatus === "reconcile_required" && refundMode === "full_pg_cancel") return { status: "cancel_reconcile", statusLabel: "취소동기화필요" };
   if (refundStatus === "reconcile_required") return { status: "refund_reconcile", statusLabel: "환불동기화필요" };
@@ -86,6 +89,7 @@ function billingRowFromServerPayment(row = {}) {
     discountAmount: Number(row.discount_amount || row.discountAmount || 0),
     finalAmount: Number(row.final_amount || row.finalAmount || amount || 0),
     method: row.method || row.provider || "portone",
+    provider: row.provider || "",
     status,
     statusLabel,
     providerPaymentId,
@@ -242,6 +246,13 @@ function refundErrorText(code = "") {
     refund_confirmation_required: "최종 확인란에 환불을 입력해 주세요.",
     refund_reason_required: "환불 사유를 입력해 주세요.",
     refund_in_progress: "같은 결제의 환불이 이미 처리 중입니다.",
+    manual_refund_request_failed: "현금 환불 접수를 저장하지 못했습니다. 결제 상태를 다시 확인해 주세요.",
+    manual_refund_cancel_confirmation_required: "환불 접수를 취소하려면 최종 확인란에 접수취소를 입력해 주세요.",
+    manual_transfer_confirmation_required: "실제 송금 후 최종 확인란에 송금완료를 입력해 주세요.",
+    manual_transfer_reference_required: "은행명·끝 4자리 또는 이체확인번호를 입력해 주세요.",
+    manual_transfer_reference_contains_account_number: "전체 계좌번호는 저장할 수 없습니다. 끝 4자리만 입력해 주세요.",
+    manual_refund_not_awaiting_transfer: "송금 대기 중인 현금 환불이 아닙니다. 결제 상태를 새로고침해 주세요.",
+    manual_refund_bank_transfer_only: "현금·계좌이체 결제만 수동 송금 완료 처리할 수 있습니다.",
     reconcile_required: "PG 취소 결과와 내부 기록을 다시 맞춰야 합니다.",
     provider_amount_mismatch: "PG 결제금액과 서버 결제금액이 달라 환불을 중단했습니다.",
     provider_cancel_failed: "PG 환불 요청에 실패했습니다. 결제 상태를 확인해 주세요.",
@@ -346,6 +357,7 @@ function isStaleReadyPayment(item = {}) {
 }
 
 function chargeStatusForPayment(item = {}) {
+  if (item.status === "refund_manual_pending") return { label: "환불 송금 대기", tone: "warn", detail: "현금 환불이 접수됐습니다. 실제 송금 확인 전까지 이용권 사용과 원데이 예약이 잠시 정지됩니다." };
   if (item.status === "refund_processing") return { label: "환불 처리중", tone: "warn", detail: "PortOne 취소와 내부 회원권 반영이 진행 중입니다." };
   if (item.status === "refund_reconcile") return { label: "동기화 필요", tone: "danger", detail: "PG 취소 결과와 내부 결제·회원권 상태를 다시 맞춰야 합니다." };
   if (item.status === "paid" && item.oneDayBookingId) return { label: "원데이 예약완료", tone: "good", detail: "결제 확인 후 선택한 코치와 시간으로 한 번만 예약됐습니다." };

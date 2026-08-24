@@ -208,7 +208,10 @@
         <label><span>제목</span><input name="title" maxlength="120" required placeholder="어떤 문제가 있었나요?" /></label>
         <label><span>내용</span><textarea name="description" rows="5" maxlength="2000" required placeholder="어느 화면에서 무엇을 하다가 발생했는지 적어주세요."></textarea></label>
         <p class="tn-report-message" data-tn-report-message></p>
-        <button class="tn-report-submit" type="submit">접수하기</button>
+        <div class="tn-report-actions">
+          <button class="tn-report-cancel" type="button" data-tn-report-close data-tn-report-cancel>취소</button>
+          <button class="tn-report-submit" type="submit">접수하기</button>
+        </div>
       </form>
     </section>`;
   }

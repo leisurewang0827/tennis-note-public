@@ -270,6 +270,11 @@ function renderRefundModal() {
   const message = $("#refundFormMessage");
   const confirmButton = $("#confirmRefundButton");
   const reconcileButton = $("#retryRefundReconcile");
+  const cancelManualRequestButton = $("#cancelManualRefundRequest");
+  const reasonField = $("#refundReasonField");
+  const transferReferenceField = $("#refundTransferReferenceField");
+  const item = refundFlowPaymentItem() || {};
+  const manualCashRefund = isManualCashRefundItem(item);
   if (!target) return;
   if (refundFlowState.loading) {
     target.innerHTML = `<div class="refund-loading">결제와 이용권 기록을 확인하고 있습니다.</div>`;
@@ -295,7 +300,8 @@ function renderRefundModal() {
         ${numericValue(preview.reservationFee) ? `<div><span>첫 수업 월 예약금</span><strong>-${money.format(numericValue(preview.reservationFee))}원</strong></div>` : ""}
         <div class="refund-total"><span>최종 환불액</span><strong>${money.format(numericValue(preview.refundAmount))}원</strong></div>
       </div>
-      <p class="refund-policy-line">실납부액 - 할인 전 사용 회차 - 할인 전 원가의 위약금 - 첫 수업 월 예약금 · 환불 완료 시 연결 이용권의 잔여 횟수는 0회가 됩니다.</p>`;
+      <p class="refund-policy-line">실납부액 - 할인 전 사용 회차 - 할인 전 원가의 위약금 - 첫 수업 월 예약금 · 환불 완료 시 연결 이용권의 잔여 횟수는 0회가 됩니다.</p>
+      ${manualCashRefund ? `<div class="refund-fallback-confirmation"><strong>${refundFlowState.manualTransferPending ? "환불 접수됨" : "현금·계좌이체 환불"}</strong><span>${refundFlowState.manualTransferPending ? "실제 송금을 완료한 뒤에만 송금완료를 확인하세요. 그 전에는 이용권 사용이 잠시 정지되고 원데이 자리는 반환됩니다." : "이 버튼은 돈을 자동 송금하지 않습니다. 접수 즉시 이용권 사용을 잠그고, 직접 송금 후 별도로 완료 확인해야 합니다."}</span></div>` : ""}`;
   }
   if (fallback) {
     fallback.hidden = !refundFlowState.preview?.requiresPolicyFallbackConfirmation;
@@ -305,14 +311,28 @@ function renderRefundModal() {
     message.className = `form-message ${refundFlowState.tone === "danger" ? "danger" : refundFlowState.tone === "good" ? "good" : ""}`;
   }
   if (confirmButton) {
-    confirmButton.disabled = refundFlowState.loading || refundFlowState.submitting || !refundFlowState.preview || refundFlowState.reconcileRequired;
+    confirmButton.disabled = refundFlowState.loading || refundFlowState.submitting || !refundFlowState.preview || refundFlowState.reconcileRequired || refundFlowState.manualPreviewChanged;
     confirmButton.hidden = refundFlowState.reconcileRequired;
-    confirmButton.textContent = refundFlowState.submitting ? "환불 처리중" : "환불 확정";
+    confirmButton.textContent = refundFlowState.submitting
+      ? "처리중"
+      : refundFlowState.previewNeedsConfirmation
+        ? `${money.format(numericValue(refundFlowState.preview?.refundAmount))}원으로 다시 접수`
+      : refundFlowState.manualTransferPending
+        ? "송금 완료 확인"
+        : manualCashRefund
+          ? "환불 접수"
+          : "환불 확정";
   }
   if (reconcileButton) {
     reconcileButton.hidden = !refundFlowState.reconcileRequired;
     reconcileButton.disabled = refundFlowState.submitting;
   }
+  if (cancelManualRequestButton) {
+    cancelManualRequestButton.hidden = !refundFlowState.manualTransferPending || refundFlowState.reconcileRequired;
+    cancelManualRequestButton.disabled = refundFlowState.submitting;
+  }
+  if (reasonField) reasonField.hidden = refundFlowState.manualTransferPending;
+  if (transferReferenceField) transferReferenceField.hidden = !refundFlowState.manualTransferPending;
 }
 
 function renderPaymentCancelModal() {

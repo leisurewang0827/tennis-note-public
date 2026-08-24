@@ -124,6 +124,9 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
           ticketDeducted: Number(record.deductedSessions) > 0,
           deductedSessions: Number(record.deductedSessions) || 0,
           participantOutcome: record.outcome || "completed",
+          feedbackFinalizedAt: record.finalizedAt || "",
+          feedbackUpdatedAt: record.updatedAt || record.finalizedAt || "",
+          feedbackRevised: scheduleV2FeedbackWasRevised(record),
           submittedAt: record.finalizedAt || record.updatedAt || "",
         };
       });

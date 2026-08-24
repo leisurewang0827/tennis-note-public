@@ -60,7 +60,15 @@ function applyCoachCommentDraft(keywordSource, commentSource) {
     showToast("코멘트 초안 기능을 불러오지 못했습니다.");
     return;
   }
-  const result = generator.generate(keywordInput.value);
+  const scope = keywordInput.closest("[data-modal-participant-row], [data-log-participant-row], [data-log-card], .lesson-action-panel, .view")
+    || commentInput.parentElement;
+  const curriculumSearch = scope?.querySelector("[data-curriculum-option-search]");
+  const curriculumSelect = curriculumSearch?.closest("label")?.querySelector("select");
+  const curriculum = exactCoachCurriculum(curriculumSearch?.value || "")
+    || exactCoachCurriculum(curriculumSelect?.value || "")
+    || coachCurriculumSearchResults(curriculumSearch?.value || keywordInput.value)[0]
+    || null;
+  const result = generator.generate(keywordInput.value, { curriculum });
   if (!result.ok) {
     showToast(result.message);
     keywordInput.focus();

@@ -516,7 +516,9 @@ function sourceLessonScheduleScope(sourceLesson = {}) {
 }
 
 function memberOpenMakeupEntitlements() {
-  return (state.liveMakeupEntitlements || []).filter((item) => item.status === "open");
+  return (state.liveMakeupEntitlements || []).filter((item) => (
+    item.status === "open" && !memberTicketRefundHeld(item.ticketId)
+  ));
 }
 
 function memberReleasedMakeupSlot(lessonDate, time, coachRoleId, durationMinutes) {
@@ -536,8 +538,13 @@ function memberLessons() {
 
 function currentScheduledLessonsForChange() {
   const dueLessons = memberMakeupDueLessons();
-  const fromSchedule = memberScheduleLessons().filter((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled");
-  const futureLessons = loadedFutureScheduledLessonsForChange();
+  const fromSchedule = memberScheduleLessons().filter((lesson) => (
+    isOwnMemberScheduleLesson(lesson)
+    && lesson.status === "scheduled"
+    && !memberTicketRefundHeld(memberLessonTicketId(lesson))
+  ));
+  const futureLessons = loadedFutureScheduledLessonsForChange()
+    .filter((lesson) => !memberTicketRefundHeld(memberLessonTicketId(lesson)));
   const couponTickets = memberBookableCouponTickets();
   const regularTickets = memberBookableRegularTickets();
   const pausedTickets = memberBookablePausedTickets();
@@ -697,11 +704,9 @@ function purchaseAvailableScheduleSlots(product = purchaseFlowProduct()) {
   const sourceCoachId = purchaseFlowState().purchasePurpose === "renew_same"
     ? String(sourceTicket?.coachRoleId || "")
     : "";
-  const coachSaleAvailability = product.coachSaleAvailability || {};
-  const coachSaleMode = String(product.coachSaleMode || "all_active") === "selected" ? "selected" : "all_active";
   const coaches = purchaseCoachOptions().filter((coach) => {
     const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
-    if (coachSaleMode === "selected" ? coachSaleAvailability[roleId] !== true : coachSaleAvailability[roleId] === false) return false;
+    if (!purchaseProductAllowsCoach(product, roleId)) return false;
     if (!sourceCoachId) return true;
     return roleId === sourceCoachId;
   });

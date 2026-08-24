@@ -18,6 +18,9 @@ function bindAccountEvents() {
   $("#noticeHideToday")?.addEventListener("click", () => closeNotice(true));
   $("#noticeAction")?.addEventListener("click", () => closeNotice(false));
   $("#saveCoachProfile")?.addEventListener("click", saveCoachProfile);
+  $("#toggleCoachProfileEdit")?.addEventListener("click", () => {
+    setCoachProfileEditOpen($("#coachProfileFormCard")?.hidden !== false);
+  });
   $("#refreshCoachSettlement")?.addEventListener("click", () => void syncCoachSettlementFromServer());
   $("#coachPushNotificationButton")?.addEventListener("click", () => void toggleNativeCoachPush());
   $("#enableCoachPushFromPrimer")?.addEventListener("click", () => void enableNativeCoachPush());

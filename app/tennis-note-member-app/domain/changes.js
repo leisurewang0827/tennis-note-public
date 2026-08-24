@@ -103,5 +103,6 @@ function memberChangeSubmitLabel(source = null, selected = null) {
   if (source?.couponBooking) return "쿠폰 예약 확정";
   if (source?.regularInitialBooking) return source?.resumePausedTicket ? "복귀하고 시간 확정" : "수업시간 확정";
   if (!selected) return "새 시간 선택";
+  if (memberChangePolicySnapshot(selected)?.isGroup) return "그룹 변경 승인 요청";
   return selected.policy === "coach" ? "승인 요청" : "바로 변경";
 }

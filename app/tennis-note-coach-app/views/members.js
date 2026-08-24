@@ -78,13 +78,15 @@ function renderMembers() {
   const page = normalizeMemberPage(items.length);
   const visible = items.slice(page * memberPageSize, page * memberPageSize + memberPageSize);
   if ($("#memberSearchInput") && $("#memberSearchInput").value !== state.memberQuery) $("#memberSearchInput").value = state.memberQuery || "";
+  if ($("#memberSearchClearButton")) $("#memberSearchClearButton").hidden = !query;
   if ($("#memberTicketFilter")) $("#memberTicketFilter").value = ticketFilter;
   $$(".member-filter").forEach((button) => button.classList.toggle("is-active", button.dataset.memberFilter === filter));
   const advancedControls = $("#memberAdvancedControls");
   if (advancedControls) advancedControls.open = ["expiring", "paused_pending", "expired"].includes(filter);
   if ($("#memberFilterSummary")) {
     const filterLabel = { all: "내 담당 전체", active: "수강중", attention: "확인 필요", expiring: "만료 임박", paused_pending: "휴회·대기", expired: "만료" }[filter];
-    $("#memberFilterSummary").textContent = `${filterLabel} ${items.length}/${allItems.length}명 · ${page + 1}페이지`;
+    const queryLabel = query ? ` · 검색 “${state.memberQuery.trim()}” 적용 중` : "";
+    $("#memberFilterSummary").textContent = `${filterLabel} ${items.length}/${allItems.length}명 · ${page + 1}페이지${queryLabel}`;
   }
   const rows = visible
     .map((member) => (filter === "expired" ? renderExpiredMemberCard(member) : renderActiveMemberCard(member)))

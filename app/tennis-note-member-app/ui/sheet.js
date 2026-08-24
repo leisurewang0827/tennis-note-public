@@ -117,6 +117,7 @@ function openAppModal(modalId, focusSelector = "") {
   target.hidden = false;
   activeAppModalId = modalId;
   refreshAppModalState();
+  stabilizeMemberVisualViewport();
   const historyState = typeof history.state === "object" && history.state ? history.state : {};
   if (historyState.tennisNoteModal !== modalId) {
     history.pushState({ ...historyState, tennisNoteModal: modalId }, "", window.location.href);
@@ -134,6 +135,7 @@ function closeAppModal(modalId, fromHistory = false) {
   target.hidden = true;
   if (activeAppModalId === modalId) activeAppModalId = "";
   refreshAppModalState();
+  stabilizeMemberVisualViewport();
   if (!fromHistory && history.state?.tennisNoteModal === modalId) {
     history.back();
     return;

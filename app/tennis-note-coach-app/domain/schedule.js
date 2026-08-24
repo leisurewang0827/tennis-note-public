@@ -144,21 +144,14 @@ function coachScheduleRoundLabel(lesson = {}) {
 
 function coachScheduleExceptionLabel(lesson = {}) {
   if (lesson.releasedOriginLabel) return lesson.releasedOriginLabel;
-  const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
-  const participantOutcomes = (lesson.v2Participants || []).map((participant) => participant.outcome);
   const context = `${lesson.lessonSource || ""} ${lesson.type || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
   let detail = "";
   if ((lesson.originalCoachRoleId && lesson.coachRoleId && lesson.originalCoachRoleId !== lesson.coachRoleId) || /대타/.test(context)) detail = "대타";
   else if (/코치\s*변경/.test(context)) detail = "코치 변경";
   else if (/시간\s*변경|변경\s*완료/.test(context)) detail = "시간 변경";
-  const outcome = participantOutcomes.includes("absence")
-    ? `불참 · ${Number(lesson.deductedSessions) > 0 ? "차감" : "미차감"}`
-    : status === "completed"
-    ? `완료 · ${Number(lesson.deductedSessions) > 0 ? "차감" : "미차감"}`
-    : status === "no_show"
-      ? `노쇼 · ${Number(lesson.deductedSessions) > 0 ? "차감" : "미차감"}`
-      : "";
-  return outcome ? `${outcome}${detail ? ` · ${detail}` : ""}` : detail;
+  const cardState = coachLessonCardState(lesson);
+  const stateLabel = cardState.id === "scheduled" ? "" : cardState.label;
+  return stateLabel ? `${stateLabel}${detail ? ` · ${detail}` : ""}` : detail;
 }
 
 function currentCoachScheduleDay() {
@@ -243,6 +236,7 @@ function coachLockedTimesForDay(day, policy) {
 function fullScheduleFilterOptions() {
   return [
     { id: "mine", label: "내 수업" },
+    { id: "feedback", label: "피드백 필요" },
     { id: "makeupChange", label: "변경·보강" },
     { id: "all", label: "전체 시간표" },
   ];
@@ -256,6 +250,10 @@ function filterFullScheduleLessons(lessons, filter) {
   if (filter === "mine") return lessons.filter((lesson) => (
     canonicalCoachName(lesson.coach) === currentCoachName()
     || canonicalCoachName(lesson.originalCoach) === currentCoachName()
+  ));
+  if (filter === "feedback") return lessons.filter((lesson) => (
+    lessonAssignedToCurrentCoachForTasks(lesson)
+    && coachLessonCardState(lesson).needsFeedback
   ));
   if (filter === "makeupChange")
     return lessons.filter((lesson) =>

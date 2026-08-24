@@ -169,7 +169,7 @@ function applyPurchaseScheduleSlot(selectedSlot = {}) {
   const requiredCount = purchaseRequiredScheduleCount(selectedProduct);
   const selectedWeek = purchaseScheduleSelectionWeek(flow.preferredSchedules);
   const nextWeek = purchaseWeekStartDate(nextSchedule.lessonDate);
-  if (selectedWeek && selectedWeek !== nextWeek) {
+  if (requiredCount > 1 && selectedWeek && selectedWeek !== nextWeek) {
     showToast("주 1·2·3회 시간은 같은 시작 주에서 선택해 주세요.");
     return false;
   }

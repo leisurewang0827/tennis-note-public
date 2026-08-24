@@ -53,6 +53,7 @@ function memberAvailableSlotsForSelectedLesson() {
   const initialCoachSelection = Boolean(selectedLesson?.regularInitialBooking && !selectedLesson.coachRoleId);
   return memberUniqueAvailableSlots(options.filter((lesson) => {
     if (lesson.status !== "available") return false;
+    if (!memberChangeCandidateInActiveWeek(lesson)) return false;
     const lessonCoachRoleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
     if (!lessonCoachRoleId || (!initialCoachSelection && !assignedCoachIds.has(lessonCoachRoleId))) return false;
     if (!selectedCoachId) return true;

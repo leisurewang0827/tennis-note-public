@@ -147,12 +147,23 @@ function paymentMethodLabel(method = "") {
 
 function isHistoricalImportedPayment(item = {}) {
   const providerPaymentId = String(item.providerPaymentId || "").toLowerCase();
+  const provider = String(item.provider || "").toLowerCase();
   const method = String(item.method || "").toLowerCase();
+  const requestedAt = Date.parse(String(item.requestedAt || ""));
+  const verifiedAt = Date.parse(String(item.verifiedAt || item.paidAt || ""));
+  const historicalMemberEvidence = paymentOwnerHasHistoricalRecord(item);
+  const preservedManualEvidence = provider === "admin_manual"
+    && (!item.productId || historicalMemberEvidence)
+    && Number.isFinite(requestedAt)
+    && Number.isFinite(verifiedAt)
+    && requestedAt - verifiedAt >= 24 * 60 * 60 * 1000;
   return providerPaymentId.startsWith("sheet_")
     || providerPaymentId.startsWith("legacy_")
     || providerPaymentId.startsWith("import_")
+    || provider === "google_sheet_history"
     || method.includes("legacy")
-    || method.includes("기존 기록");
+    || method.includes("기존 기록")
+    || preservedManualEvidence;
 }
 
 function pendingRecordType(record = {}) {

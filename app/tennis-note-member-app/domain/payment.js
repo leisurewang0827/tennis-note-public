@@ -147,6 +147,7 @@ function paymentServerErrorMessage(error) {
     purchase_weekend_30m_not_available: "30분 수업은 평일 시간표에서 선택해 주세요.",
     purchase_slot_anchor_required: "선택한 선생님의 기존 수업과 가까운 시간만 신청할 수 있습니다.",
     purchase_slot_outside_anchor_window: "기존 수업 전후 40분 안의 시간을 선택해 주세요.",
+    purchase_slot_outside_adjacent_anchor: "기존 수업과 실제 빈 시간이 40분 이내인 시간을 선택해 주세요.",
   };
   return labels[code] || code;
 }

@@ -188,7 +188,7 @@ function renderSelects() {
     ? scheduleLoadState
     : ["loading", "error"].includes(candidateLoadState) ? candidateLoadState : "ready";
   const availableOptions = loadState === "ready" ? memberAvailableSlotsForSelectedLesson()
-    .map((lesson) => `<option value="${lesson.id}">${lesson.day} ${lesson.time} · ${lesson.coach}</option>`)
+    .map((lesson) => `<option value="${lesson.id}">${escapeHtml(lessonDateTimeLabel(lesson))} · ${escapeHtml(memberCoachShortName(lesson.coach))} 코치</option>`)
     .join("") : "";
   $("#makeupSlot").innerHTML = availableOptions
     ? `<option value="">시간을 선택해 주세요</option>${availableOptions}`

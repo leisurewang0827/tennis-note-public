@@ -213,6 +213,9 @@ function mergeScheduleV2MemberRecords(mappedLessons = []) {
             : existing.memberVisibleSummary || "",
         ticketDeducted: Number(record.deductedSessions) > 0,
         participantOutcome: record.outcome,
+        feedbackFinalizedAt: record.finalizedAt || "",
+        feedbackUpdatedAt: record.updatedAt || record.finalizedAt || "",
+        feedbackRevised: scheduleV2FeedbackWasRevised(record),
         submittedAt: record.finalizedAt || existing.submittedAt || `${lesson.lessonDate}T${lesson.time}:00`,
       };
       if (existingIndex >= 0) state.lessonLogs[existingIndex] = log;
@@ -221,9 +224,13 @@ function mergeScheduleV2MemberRecords(mappedLessons = []) {
 }
 
 function openProfileEditor(focusNtrp = false) {
-  openAppSheet("profileEditorSheet", {
-    initialFocus: focusNtrp ? "#profileSelfNtrp" : "",
-  });
+  openAppSheet("profileEditorSheet");
+  if (!focusNtrp) return;
+  // Keep the opening tap on the sheet itself. Focusing the select during the
+  // same pointer sequence makes iOS open the native picker as a second layer.
+  window.setTimeout(() => {
+    window.TennisNoteBottomSheet?.ensureFieldVisible?.("#profileSelfNtrp", { behavior: "auto" });
+  }, 80);
 }
 
 function navigateMemberView(viewId) {
@@ -298,7 +305,7 @@ function changeMemberScheduleTimeRange(range) {
 async function changeMemberScheduleMode(mode) {
   state.memberScheduleMode = ["availability", "flex"].includes(mode) ? "availability" : "mine";
   state.memberScheduleModeTouched = true;
-  state.memberScheduleFullView = state.memberScheduleMode === "availability";
+  state.memberScheduleFullView = false;
   if (state.memberScheduleMode === "availability") {
     renderSchedule();
     const preferredSourceId = await prepareChangeRequestSource(state.selectedMemberChangeSourceId);

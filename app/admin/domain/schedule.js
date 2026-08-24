@@ -1117,11 +1117,9 @@ function pendingLessonChangeApprovals() {
     .sort((left, right) => String(left.createdAt || "").localeCompare(String(right.createdAt || "")));
 }
 
-function pendingLessonRecords() {
+function pendingLessonRecords(context) {
   const completedLessonIds = new Set((adminLiveDataState.lessonRecords || []).map((record) => record.lesson_id));
-  const participantRecordLessonIds = new Set(
-    (adminLiveDataState.participantRecords || []).map((record) => String(record.lesson_id || "")).filter(Boolean),
-  );
+  const participantRecordsByLessonId = context?.participantRecordsByLessonId || new Map();
   const now = Date.now();
   const ownRoleIds = currentOperationsCoachRoleIds();
   return lessons
@@ -1134,11 +1132,17 @@ function pendingLessonRecords() {
         && endedAt > 0
         && endedAt <= now
         && !completedLessonIds.has(lesson.serverLessonId)
-        && !participantRecordLessonIds.has(String(lesson.serverLessonId))
         && (operationsRole() === "admin" || ownRoleIds.has(lesson.coachRoleId))
       );
     })
-    .map(pendingLessonRecord);
+    .flatMap((lesson) => {
+      const lessonRecords = participantRecordsByLessonId.get(String(lesson.serverLessonId)) || [];
+      const targets = lessonParticipantTargets(lesson, context);
+      if (!targets.length) return lessonRecords.length ? [] : [pendingLessonRecord(lesson)];
+      return targets
+        .filter((target) => !lessonRecords.some((record) => String(record.user_id || "") === target.userId))
+        .map((target) => pendingLessonRecord(lesson, target));
+    });
 }
 
 function adminWeeklyScheduleExportRows() {
