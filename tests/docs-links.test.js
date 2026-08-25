@@ -72,6 +72,25 @@ test("CLAUDE.md 는 규칙을 직접 적지 않고 AGENTS.md 를 가리킨다", 
   assert.ok(lines <= 20, `CLAUDE.md 가 ${lines}줄입니다. 규칙은 AGENTS.md 와 docs/ 에 적으세요.`);
 });
 
+test("structure.md 의 폴더 정의 표가 크기 숫자로 덮이지 않았다", () => {
+  // 규모 표를 갱신하는 스크립트가 행 모양이 같은 "폴더가 뜻하는 것" 표까지
+  // 덮어써서, 폴더 정의가 전부 크기 숫자로 바뀐 사고가 있었다.
+  // 뜻 표에는 "N개 N줄" 모양의 셀이 있을 수 없다.
+  const source = readFileSync(join(repoRoot, "docs", "structure.md"), "utf8");
+  const start = source.indexOf("## 폴더가 뜻하는 것");
+  const end = source.indexOf("\n## ", start + 1);
+  assert.ok(start >= 0 && end > start, "'폴더가 뜻하는 것' 절이 없습니다");
+  const section = source.slice(start, end);
+  assert.doesNotMatch(
+    section,
+    /\d+개 [\d,]+줄/,
+    "폴더 정의 표에 크기 숫자가 들어 있습니다. 규모 표 갱신이 이 표를 덮어쓴 것입니다.\n"
+      + "  git 이력에서 표를 복원하고, 갱신은 scripts/update_structure_sizes.py 로만 하세요.",
+  );
+  // 표가 아예 사라진 것도 잡는다
+  assert.ok(section.includes("판정해 돌려주는 것"), "domain/ 정의가 사라졌습니다");
+});
+
 test("AGENTS.md 가 docs/ 의 모든 문서를 안내한다", () => {
   // 문서를 새로 만들고 안내에 안 넣으면 아무도 읽지 않는다.
   const agents = readFileSync(join(repoRoot, "AGENTS.md"), "utf8");
