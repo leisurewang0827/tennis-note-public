@@ -52,6 +52,7 @@
 | 브라우저가 캐시한 옛 파일을 써서 "함수가 없다" | 로컬 브라우저 상태는 저장소가 알 수 없음 | [verification.md](verification.md#함수가-없다고-나오면-캐시부터-의심하세요) |
 | `merge --abort` 로 스크립트가 고친 파일이 안 돌아옴 | git 이 관리하는 상태가 아님 | [merging.md](merging.md) |
 | 정규식 정적 분석 오분류 (누적 8회) | 정규식으로 JS 를 파싱하는 것 자체가 한계 | [splitting.md](splitting.md#검출기를-믿지-마세요) |
+| 문서 규모 표를 갱신하다 행 모양이 같은 "폴더 뜻" 표까지 덮어씀 (사흘간 방치) | 문서 내용 검사가 없었음 → `docs-links` 에 불변식 추가, 갱신은 `update_structure_sizes.py` 로만 | [structure.md](structure.md) |
 
 ## 아직 검사기가 없는 위험
 
