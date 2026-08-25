@@ -39,6 +39,16 @@ command -v python3 >/dev/null || fail "python3 이 필요합니다."
 step "테스트"
 node --test "tests/**/*.test.js"
 
+step "충돌 마커 검사"
+# 병합 충돌을 9곳 세고 8곳만 푼 적이 있다. 남은 마커가 커밋까지 갔고,
+# verify.sh 를 파이프 뒤에서 돌리는 바람에 실패가 가려졌다.
+if git grep -nE "^(<{7} |={7}$|>{7} )" -- . >/dev/null 2>&1; then
+  git grep -nE "^(<{7} |={7}$|>{7} )" -- . | head -5
+  echo "✘ 충돌 마커가 남아 있습니다. 병합 충돌 목록(git diff --name-only --diff-filter=U)을 다시 보세요." >&2
+  exit 1
+fi
+echo "  ok  마커 없음"
+
 step "문법 검사"
 for script in "${APP_SCRIPTS[@]}"; do
   node --check "$script"

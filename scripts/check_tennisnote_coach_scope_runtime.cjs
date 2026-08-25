@@ -40,22 +40,16 @@ function functionSource(name) {
 }
 
 const runtimeSource = [
-<<<<<<< HEAD
   "requestCoachRoleId",
   "makeupRequestBelongsToCurrentCoach",
   "lessonBelongsToCurrentCoach",
   "lessonAssignedToCurrentCoachForTasks",
   "filterFullScheduleLessons",
+  // 1.0.405 에서 저쪽이 추가한 조각. normalize 가 decode 를 부르므로 둘 다 싣는다.
+  "decodeCoachScheduleMemberEntities",
+  "normalizeCoachScheduleMemberName",
   "formatScheduleMemberName",
 ].map(functionSource).join("\n");
-=======
-  sourceBetween("function requestCoachRoleId(request = {})", "function lessonBelongsToCurrentCoach(lesson = {})"),
-  sourceBetween("function lessonBelongsToCurrentCoach(lesson = {})", "function ownTodayLessons()"),
-  sourceBetween("function filterFullScheduleLessons(lessons, filter)", "function coachRequestTimelineState(lesson = {})"),
-  sourceBetween("function normalizeCoachScheduleMemberName(value, fallback = \"회원\")", "function formatScheduleMemberName(name)"),
-  sourceBetween("function formatScheduleMemberName(name)", "function memberFilter()"),
-].join("\n");
->>>>>>> origin/main
 
 const context = {
   state: { dataMode: "live", liveProfileId: "profile-park" },
