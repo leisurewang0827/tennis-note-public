@@ -148,6 +148,10 @@ function paymentServerErrorMessage(error) {
     purchase_slot_anchor_required: "선택한 선생님의 기존 수업과 가까운 시간만 신청할 수 있습니다.",
     purchase_slot_outside_anchor_window: "기존 수업 전후 40분 안의 시간을 선택해 주세요.",
     purchase_slot_outside_adjacent_anchor: "기존 수업과 실제 빈 시간이 40분 이내인 시간을 선택해 주세요.",
+    purchase_slot_temporarily_held: "방금 다른 결제에서 선택한 시간입니다. 가능한 시간을 다시 선택해 주세요.",
+    purchase_slot_occupied: "이미 예약된 시간입니다. 최신 가능한 시간을 다시 선택해 주세요.",
+    payment_hold_expired: "선택 시간의 보관 시간이 끝났습니다. 가능한 시간을 다시 선택해 주세요.",
+    purchase_slot_hold_failed: "선택 시간을 안전하게 보관하지 못했습니다. 잠시 후 다시 선택해 주세요.",
   };
   return labels[code] || code;
 }
@@ -196,8 +200,9 @@ async function refreshBankNotificationBridge() {
 function memberHasPendingPaymentOnly() {
   const hasPendingTicket = (state.liveTickets || []).some((ticket) =>
     String(ticket?.status || "").toLowerCase() === "pending_payment");
+  const hasPendingSchedule = (state.pendingPurchaseSchedules || []).some((schedule) => schedule.active !== false);
   return state.dataMode === "live"
-    && hasPendingTicket
+    && (hasPendingTicket || hasPendingSchedule)
     && !memberHasActiveLiveTicket()
     && memberOpenMakeupEntitlements().length === 0;
 }

@@ -30,20 +30,67 @@ def show(ref, path):
     return r.stdout if r.returncode == 0 else None
 
 def strip_quotes(text):
-    out, i, n = [], 0, len(text)
+    """문자열·주석을 공백으로 지운다. 템플릿 리터럴의 ${ } 중첩을 따라간다.
+
+    예전 버전은 백틱을 만나면 다음 백틱까지를 통째로 문자열로 봤다.
+    이 코드베이스는 템플릿 안 템플릿(`${...}` 속 백틱) 처럼 템플릿 안에 템플릿이
+    흔해서, 그 지점부터 코드와 문자열이 뒤집힌 채 끝까지 갔다.
+    실제로 1.0.405 병합에서 그 어긋난 구간의 상수 선언을 못 보고
+    잘라내지 못해 중복 선언이 생겼다 (script-load 가 잡았다).
+    """
+    out = []
+    stack = []          # "s" 홑, "d" 쌍, "t" 템플릿, 정수 = 템플릿 식의 { 깊이
+    i, n = 0, len(text)
+    last_code = ""      # 정규식/나눗셈 구분용: 마지막으로 내보낸 코드 문자
     while i < n:
         c = text[i]
-        if c in "\"'`":
-            q = c; out.append(" "); i += 1
-            while i < n:
-                if text[i] == "\\": out.append("  "); i += 2; continue
-                if text[i] == q: break
-                out.append("\n" if text[i] == "\n" else " "); i += 1
+        top = stack[-1] if stack else None
+        in_string = top in ("s", "d", "t")
+        if in_string:
+            if c == "\\":
+                out.append("  "); i += 2; continue
+            if c == "\n":
+                out.append("\n"); i += 1; continue
+            if top == "s" and c == "'" or top == "d" and c == '"' or top == "t" and c == "`":
+                stack.pop(); out.append(" "); i += 1; continue
+            if top == "t" and c == "$" and i + 1 < n and text[i+1] == "{":
+                stack.append(0); out.append("  "); i += 2; continue   # 템플릿 식 시작 = 코드로 복귀
             out.append(" "); i += 1; continue
+        # 코드 상태 (최상위이거나 템플릿 식 안)
+        if c == "'": stack.append("s"); out.append(" "); i += 1; continue
+        if c == '"': stack.append("d"); out.append(" "); i += 1; continue
+        if c == "`": stack.append("t"); out.append(" "); i += 1; continue
         if c == "/" and i + 1 < n and text[i+1] == "/":
             while i < n and text[i] != "\n": out.append(" "); i += 1
             continue
-        out.append(c); i += 1
+        if c == "/":
+            # 정규식인가 나눗셈인가: 직전 코드 문자가 값이면 나눗셈, 아니면 정규식.
+            # 정규식 안의 따옴표(.replace(/&quot;/gi, '"')) 때문에 이걸 안 가리면
+            # 그 지점부터 문자열과 코드가 뒤집힌다.
+            if last_code == "" or last_code in "(,=:[!&|?{};+-*%~^<>":
+                out.append(" "); i += 1
+                in_class = False
+                while i < n:
+                    r = text[i]
+                    if r == "\\": out.append("  "); i += 2; continue
+                    if r == "\n": break                      # 정규식은 줄을 못 넘는다
+                    if r == "[": in_class = True
+                    elif r == "]": in_class = False
+                    elif r == "/" and not in_class:
+                        out.append(" "); i += 1
+                        while i < n and text[i].isalpha(): out.append(" "); i += 1
+                        break
+                    out.append(" "); i += 1
+                continue
+        if isinstance(top, int):
+            if c == "{": stack[-1] += 1
+            elif c == "}":
+                if top == 0:
+                    stack.pop(); out.append(" "); i += 1; continue    # 템플릿으로 복귀
+                stack[-1] -= 1
+        out.append(c)
+        if not c.isspace(): last_code = c
+        i += 1
     return "".join(out)
 
 def functions(lines):

@@ -136,10 +136,12 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
           <label class="form-field">${memberManagementFieldLabel("파트너 휴대전화")}<input name="partnerPhone" type="tel" inputmode="tel" maxlength="20" /></label>
           <input name="partnerBirthYear" type="hidden" value="" />
           <input name="partnerGender" type="hidden" value="" />
+          <p class="form-message span-2" data-manual-partner-phone-status role="status" hidden></p>
         </div>
         <div class="member-partner-existing-fields" data-manual-existing-partner hidden>
-          <input name="partnerSearch" type="search" autocomplete="off" placeholder="파트너 이름 검색" data-manual-member-partner-search />
+          <input name="partnerSearch" type="search" autocomplete="off" placeholder="이름 또는 전화번호 검색" data-manual-member-partner-search />
           <div class="member-partner-search-results" data-manual-member-partner-results aria-live="polite"></div>
+          <p class="form-message" data-manual-existing-partner-status role="status">앱 가입만 하고 회원권이 없는 회원도 검색됩니다.</p>
           <select name="partnerUserId" disabled>
             <option value="">파트너 선택</option>
             ${partnerOptions.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}</option>`).join("")}

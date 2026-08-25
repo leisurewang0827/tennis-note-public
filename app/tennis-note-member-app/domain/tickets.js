@@ -724,7 +724,7 @@ async function startProductPayment(productId, options = {}) {
       state.pendingPaymentCheckStatus = { tone: "wait", text: "계좌이체 신청이 접수되었습니다. 입금 확인 후 회원권이 발급됩니다." };
       state.ticketHistory.unshift({ text: `${product.title} 계좌이체 신청 · 입금 확인 대기`, tone: "wait" });
       completeMembershipPurchaseFlow("계좌이체 신청이 접수되었습니다");
-      await syncMemberDiscountCouponsFromServer();
+      await Promise.allSettled([syncMemberPendingPurchaseSchedulesFromServer(), syncMemberDiscountCouponsFromServer()]);
       saveSnapshot();
       renderAll();
       setView("shopView");

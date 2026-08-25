@@ -134,7 +134,7 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
     return {
       id: member.id,
       serverUserId: member.id,
-      name: member.name || "이름 확인 필요",
+      name: normalizeCoachScheduleMemberName(member.name, "이름 확인 필요"),
       photoUrl: member.photoUrl || "",
       coach: coach.name || "담당 코치 미지정",
       ticket: ticket.productName || `${Number(ticket.totalSessions) || 0}회 회원권`,

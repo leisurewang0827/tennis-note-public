@@ -110,6 +110,14 @@ function bindDelegatedEvents() {
     });
   });
   document.addEventListener("click", (event) => {
+    const pendingPurchaseCancelButton = event.target.closest("[data-cancel-pending-purchase]");
+    if (pendingPurchaseCancelButton) {
+      void cancelPendingPurchasePayment(
+        pendingPurchaseCancelButton.dataset.cancelPendingPurchase,
+        pendingPurchaseCancelButton.dataset.pendingPurchaseTitle || "회원권",
+      );
+      return;
+    }
     const curriculumVideoButton = event.target.closest("[data-play-curriculum-video]");
     if (curriculumVideoButton) {
       playCurriculumVideo(curriculumVideoButton);

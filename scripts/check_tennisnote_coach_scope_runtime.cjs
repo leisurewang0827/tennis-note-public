@@ -40,6 +40,7 @@ function functionSource(name) {
 }
 
 const runtimeSource = [
+<<<<<<< HEAD
   "requestCoachRoleId",
   "makeupRequestBelongsToCurrentCoach",
   "lessonBelongsToCurrentCoach",
@@ -47,6 +48,14 @@ const runtimeSource = [
   "filterFullScheduleLessons",
   "formatScheduleMemberName",
 ].map(functionSource).join("\n");
+=======
+  sourceBetween("function requestCoachRoleId(request = {})", "function lessonBelongsToCurrentCoach(lesson = {})"),
+  sourceBetween("function lessonBelongsToCurrentCoach(lesson = {})", "function ownTodayLessons()"),
+  sourceBetween("function filterFullScheduleLessons(lessons, filter)", "function coachRequestTimelineState(lesson = {})"),
+  sourceBetween("function normalizeCoachScheduleMemberName(value, fallback = \"회원\")", "function formatScheduleMemberName(name)"),
+  sourceBetween("function formatScheduleMemberName(name)", "function memberFilter()"),
+].join("\n");
+>>>>>>> origin/main
 
 const context = {
   state: { dataMode: "live", liveProfileId: "profile-park" },

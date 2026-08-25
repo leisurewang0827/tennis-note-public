@@ -747,10 +747,12 @@ function memberManagementDatabaseFields({
           <label class="form-field">${memberManagementFieldLabel("파트너 휴대전화")}<input name="partnerPhone" type="tel" inputmode="tel" maxlength="20" placeholder="010-0000-0000" /></label>
           <label class="form-field">${memberManagementFieldLabel("파트너 출생연도")}<input name="partnerBirthYear" type="number" min="1900" max="2100" step="1" /></label>
           <label class="form-field">${memberManagementFieldLabel("파트너 성별")}<select name="partnerGender"><option value="">미입력</option><option value="female">여성</option><option value="male">남성</option><option value="other">기타</option><option value="prefer_not">응답 안 함</option></select></label>
+          <p class="form-message span-2" data-manual-partner-phone-status role="status" hidden></p>
         </div>` : ""}
         <div class="member-partner-existing-fields" data-manual-existing-partner data-current-member-user-id="${escapeHtml(member?.serverUserId || "")}" ${isCreate ? "hidden" : ""}>
           <input name="partnerSearch" type="search" autocomplete="off" placeholder="이름 또는 전화번호 검색" data-manual-member-partner-search />
           <div class="member-partner-search-results" data-manual-member-partner-results aria-live="polite"></div>
+          <p class="form-message" data-manual-existing-partner-status role="status">앱 가입만 하고 회원권이 없는 회원도 검색됩니다.</p>
           <select name="partnerUserId" ${lessonType === "one_on_two" && !isCreate ? "required" : "disabled"}>
             <option value="">파트너 선택</option>
             ${partnerOptions.filter((user) => user.id !== member?.serverUserId).map((user) => `<option value="${escapeHtml(user.id)}" ${user.id === partnerUserId ? "selected" : ""}>${escapeHtml(user.name || "회원")}</option>`).join("")}
@@ -765,23 +767,35 @@ function filterManualMemberPartnerOptions(form) {
   const select = form.elements.partnerUserId;
   const currentValue = select.value;
   const keyword = String(form.elements.partnerSearch?.value || "").trim().toLowerCase();
+  const keywordDigits = normalizedMemberPhone(keyword);
   const currentMemberUserId = form.querySelector("[data-manual-existing-partner]")?.dataset.currentMemberUserId || "";
-  const options = manualMemberPartnerOptions().filter((user) => user.id !== currentMemberUserId && (
+  const remoteState = manualMemberPartnerSearchState.get(form);
+  const remoteMatchesKeyword = remoteState?.query === keyword;
+  const options = manualMemberPartnerOptions(form).filter((user) => String(user.id || "") !== String(currentMemberUserId) && (
     !keyword
-    || [user.name, user.nickname, user.phone].some((value) => String(value || "").toLowerCase().includes(keyword))
+    || [user.name, user.nickname].some((value) => String(value || "").toLowerCase().includes(keyword))
+    || (keywordDigits.length >= 4 && normalizedMemberPhone(user.phone).includes(keywordDigits))
+    || (remoteMatchesKeyword && (remoteState?.candidates || []).some((candidate) => String(candidate.id) === String(user.id)))
   ));
   select.innerHTML = [
     `<option value="">${keyword && !options.length ? "검색 결과 없음" : "파트너 선택"}</option>`,
-    ...options.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}${user.phone ? ` · ${escapeHtml(maskMemberPhone(user.phone))}` : ""}</option>`),
+    ...options.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}${user.phone ? ` · ${escapeHtml(maskMemberPhone(user.phone))}` : ""}${user.eligibilityCode ? ` · ${escapeHtml(manualMemberPartnerCandidateStatus(user))}` : ""}</option>`),
   ].join("");
   if (options.some((user) => String(user.id) === String(currentValue))) select.value = currentValue;
   const results = form.querySelector("[data-manual-member-partner-results]");
   if (results) {
     const visible = keyword ? options.slice(0, 8) : [];
+    const blocked = remoteMatchesKeyword
+      ? (remoteState?.candidates || []).filter((candidate) => candidate.eligible !== true).slice(0, 4)
+      : [];
     results.innerHTML = keyword
-      ? visible.length
-        ? visible.map((user) => `<button type="button" class="member-partner-result-button ${String(user.id) === String(select.value) ? "is-selected" : ""}" data-select-manual-member-partner="${escapeHtml(user.id)}"><strong>${escapeHtml(user.name || "회원")}</strong><span>${escapeHtml(maskMemberPhone(user.phone))}</span></button>`).join("")
-        : '<p class="member-partner-no-result">검색 결과가 없습니다.</p>'
+      ? remoteState?.loading && remoteMatchesKeyword
+        ? '<p class="member-partner-no-result">회원 계정을 확인하고 있습니다.</p>'
+        : [
+          ...visible.map((user) => `<button type="button" class="member-partner-result-button ${String(user.id) === String(select.value) ? "is-selected" : ""}" data-select-manual-member-partner="${escapeHtml(user.id)}"><strong>${escapeHtml(user.name || "회원")}</strong><span>${escapeHtml(maskMemberPhone(user.phone))} · ${escapeHtml(manualMemberPartnerCandidateStatus(user))}</span></button>`),
+          ...blocked.map((user) => `<p class="member-partner-no-result"><strong>${escapeHtml(user.name || "회원")}</strong> · ${escapeHtml(maskMemberPhone(user.phone))}<br />${escapeHtml(manualMemberPartnerCandidateStatus(user))}</p>`),
+          ...(!visible.length && !blocked.length ? ['<p class="member-partner-no-result">검색 결과가 없습니다.</p>'] : []),
+        ].join("")
       : "";
     results.hidden = !keyword;
   }

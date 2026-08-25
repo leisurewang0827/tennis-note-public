@@ -431,7 +431,8 @@ function renderMemberManagementModal() {
         <label class="form-field"><span>만료일</span><input name="expiresOn" type="date" value="${defaultExpiresOn}" required /></label>
         <label class="form-field"><span>등록 금액</span><input name="purchasedPrice" type="number" min="0" step="1" value="${Number(product?.cash_price || product?.card_price || ticket?.amount || 0)}" required /></label>
       </div>
-      <p class="member-management-rule">과거 회원권은 그대로 보관하고 새 회원권을 만듭니다. 2대1 파트너도 함께 연결됩니다.</p>` : `<p class="form-message danger">같은 지점·수업형태의 사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
+      ${memberCreateScheduleMarkup(product, { reenroll: true })}
+      <p class="member-management-rule">과거 회원권과 취소 일정은 이력으로 보관하고, 새 회원권과 선택한 정규시간만 활성화합니다. 2대1 파트너 연결도 그대로 보존합니다.</p>` : `<p class="form-message danger">같은 지점·수업형태의 사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "expire") {
     actionFields = `<div class="member-management-warning"><strong>남은 횟수는 이력으로 보존됩니다.</strong><span>앞으로 예정된 수업은 취소되고 회원은 만료회원으로 이동합니다.</span></div>`;
   } else if (action === "close") {
@@ -453,7 +454,7 @@ function renderMemberManagementModal() {
       <strong>${memberManagementActionLabel(action)}</strong>
       <small>${ticket ? `${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product)} · ${ticketUsageLabel(ticket)}` : isCreate ? "실서버 회원·회원권 동시 등록" : memberStatusLabel(member)}</small>
     </div>
-    <form id="memberManagementForm" class="member-management-form" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(memberTicketPaymentProjection(member, ticket)))}" ${action === "extend" ? `data-current-expires-on="${escapeHtml(defaultExpiresOn)}"` : ""}>
+    <form id="memberManagementForm" class="member-management-form" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(memberTicketPaymentProjection(member, ticket)))}" ${action === "extend" ? `data-current-expires-on="${escapeHtml(defaultExpiresOn)}"` : ""}>
       ${actionFields}
       <div id="memberManagementMessage" class="form-message danger" role="status">${escapeHtml(memberManagementModalState.message || "")}</div>
       <div class="modal-actions">

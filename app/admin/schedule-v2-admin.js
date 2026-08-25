@@ -51,10 +51,10 @@
     admin_lesson_force_deleted: "관리자 강제 삭제",
   };
   const regularCutoffLabels = {
-    ticket_status: "회원권 상태 변경으로 자동 제외",
-    date_range: "회원권 기간 종료로 자동 제외",
-    session_limit: "잔여 횟수 소진으로 자동 제외",
-    paused_schedule_replaced: "일정 재생성으로 자동 교체",
+    ticket_status: "이전 회원권 일정",
+    date_range: "회원권 기간 종료",
+    session_limit: "회원권 횟수 종료",
+    paused_schedule_replaced: "시간 변경으로 종료",
   };
   const entitlementStatusLabels = {
     open: "보강 선택 대기",
@@ -101,6 +101,7 @@
     revisionWatcher: null,
     absorbingRevisionRefresh: false,
     postSaveRefreshPending: false,
+    integrityRepairGroups: new Map(),
   };
 
   function bridge() {
@@ -379,10 +380,16 @@
 
   async function runScheduleV2MemberIntegrityPreview() {
     const button = $("#scheduleV2IntegrityButton");
+    const applyButton = $("#scheduleV2IntegrityApplyButton");
     const summary = $("#scheduleV2IntegritySummary");
     const list = $("#scheduleV2IntegrityList");
     if (!button || !summary || !list || !bridge()?.rpc) return;
     button.disabled = true;
+    state.integrityRepairGroups = new Map();
+    if (applyButton) {
+      applyButton.disabled = true;
+      applyButton.textContent = "확정 가능한 일정 생성";
+    }
     summary.textContent = "확인 중";
     list.innerHTML = "";
     try {
@@ -415,6 +422,24 @@
         }
       }));
       const autoRepairable = [...reconcileByTicket.values()].filter((row) => Number(row.createdCount) > 0).length;
+      reconcileByTicket.forEach((row, ticketId) => {
+        const created = Number(row.createdCount) || 0;
+        const remaining = Number(row.remainingUnassignedUnits) || 0;
+        const conflicts = Number(row.conflictCount) || 0;
+        const item = items.find((candidate) => String(candidate.ticketId) === String(ticketId));
+        if (!item?.branchId || created < 1 || remaining > 0 || conflicts > 0) return;
+        const ticketIds = state.integrityRepairGroups.get(item.branchId) || new Set();
+        ticketIds.add(ticketId);
+        state.integrityRepairGroups.set(item.branchId, ticketIds);
+      });
+      const repairableTicketCount = [...state.integrityRepairGroups.values()]
+        .reduce((total, ticketIds) => total + ticketIds.size, 0);
+      if (applyButton) {
+        applyButton.disabled = repairableTicketCount === 0;
+        applyButton.textContent = repairableTicketCount
+          ? `확정 가능한 ${repairableTicketCount}권 일정 생성`
+          : "확정 가능한 일정 없음";
+      }
       summary.textContent = affectedTickets
         ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권 · 자동 생성 가능 ${autoRepairable}권`
         : "문제 없음";
@@ -429,11 +454,91 @@
         }).join("")
         : '<p class="schedule-v2-integrity-empty">현재 확인된 연결 오류가 없습니다.</p>';
     } catch (error) {
+      state.integrityRepairGroups = new Map();
+      if (applyButton) applyButton.disabled = true;
       const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
       summary.textContent = "점검 실패";
       list.innerHTML = `<p class="schedule-v2-integrity-empty">${escapeHtml(/admin_required/i.test(text) ? "관리자 권한을 확인해 주세요." : "서버 점검 기능을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")}</p>`;
     } finally {
       button.disabled = false;
+    }
+  }
+
+  async function applyScheduleV2IntegrityRepairs() {
+    const button = $("#scheduleV2IntegrityApplyButton");
+    const groups = [...state.integrityRepairGroups.entries()];
+    const ticketCount = groups.reduce((total, [, ticketIds]) => total + ticketIds.size, 0);
+    if (!button || !ticketCount || !bridge()?.rpc || !requireWritableServer("status")) return;
+    if (!window.confirm(`충돌 없이 복구 가능한 회원권 ${ticketCount}개의 미래 고정수업을 생성할까요?`)) return;
+    button.disabled = true;
+    setStatus("미래 고정수업을 복구하는 중입니다.");
+    try {
+      for (const [branchId, ticketIds] of groups) {
+        await bridge().rpc("tn_admin_reconcile_future_regular_schedules", {
+          target_branch_id: branchId,
+          target_ticket_ids: [...ticketIds],
+          target_operation_key: operationKey("integrity-apply"),
+          target_dry_run: false,
+        });
+      }
+      state.integrityRepairGroups = new Map();
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ force: true });
+      setStatus(`미래 고정수업 복구 완료 · 회원권 ${ticketCount}개`, "success");
+      await runScheduleV2MemberIntegrityPreview();
+      void bridge()?.refresh?.();
+    } catch (error) {
+      setStatus(errorMessage(error), "error");
+      button.disabled = false;
+    }
+  }
+
+  async function repairExpectedRegularSlot(slot) {
+    if (!slot?.ticketId || !requireWritableServer("status")) return;
+    const branchId = slot.branchId || state.payload?.branchId || state.payload?.branch?.id || ticketById(slot.ticketId)?.branchId;
+    if (!branchId) {
+      setStatus("지점 정보를 다시 불러온 뒤 고정수업을 복구해 주세요.", "error");
+      return;
+    }
+    const memberLabel = lessonParticipantLabel(slot);
+    setStatus(`${memberLabel} 현재 회원권 일정을 확인하는 중입니다.`);
+    try {
+      const preview = await bridge().rpc("tn_admin_reconcile_future_regular_schedules", {
+        target_branch_id: branchId,
+        target_ticket_ids: [slot.ticketId],
+        target_operation_key: operationKey("expected-slot-preview"),
+        target_dry_run: true,
+      });
+      const row = (Array.isArray(preview?.results) ? preview.results : [])
+        .find((item) => String(item.ticketId || item.ticket_id || "") === String(slot.ticketId)) || {};
+      const createdCount = Number(row.createdCount ?? row.created_count) || 0;
+      const conflictCount = Number(row.conflictCount ?? row.conflict_count) || 0;
+      const remainingCount = Number(row.remainingUnassignedUnits ?? row.remaining_unassigned_units) || 0;
+      if (!createdCount || conflictCount || remainingCount) {
+        const detail = conflictCount
+          ? `겹치는 시간 ${conflictCount}건`
+          : remainingCount ? `배정하지 못한 횟수 ${remainingCount}회` : "생성할 일정 없음";
+        setStatus(`${memberLabel} 일정은 자동 생성할 수 없습니다. ${detail}을 확인해 주세요.`, "warning");
+        return;
+      }
+      if (!window.confirm(`${memberLabel} 현재 회원권으로 미래 고정수업 ${createdCount}건을 생성할까요?`)) {
+        setStatus("일정 생성이 취소됐습니다.");
+        return;
+      }
+      await bridge().rpc("tn_admin_reconcile_future_regular_schedules", {
+        target_branch_id: branchId,
+        target_ticket_ids: [slot.ticketId],
+        target_operation_key: operationKey("expected-slot-apply"),
+        target_dry_run: false,
+      });
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ force: true });
+      setStatus(`${memberLabel} 현재 회원권 일정 ${createdCount}건을 생성했습니다.`, "success");
+      void bridge()?.refresh?.();
+    } catch (error) {
+      setStatus(errorMessage(error), "error");
     }
   }
 
@@ -521,8 +626,33 @@
       members,
       tickets: Array.isArray(response.tickets) ? response.tickets : [],
       lessons: [...responseLessons, ...fallbackOneDayLessons],
+      expectedRegularSlots: Array.isArray(response.expectedRegularSlots) ? response.expectedRegularSlots : [],
       unassigned: Array.isArray(response.unassigned) ? response.unassigned : [],
     };
+  }
+
+  function expectedRegularLesson(slot = {}) {
+    const participantUserIds = Array.isArray(slot.participantUserIds) ? slot.participantUserIds : [];
+    return {
+      ...slot,
+      expectedRegularSlot: true,
+      participants: participantUserIds.map((userId) => ({
+        userId,
+        ticketId: slot.ticketId,
+        name: memberName(userId),
+      })),
+      memberLabel: participantUserIds.map((userId) => memberName(userId)).filter(Boolean).join(" · ") || "회원 연결 확인",
+      status: "reserved",
+      scheduleKind: "regular",
+    };
+  }
+
+  function timetableLessons(payload = state.payload) {
+    if (!payload) return [];
+    return [
+      ...(payload.lessons || []),
+      ...(payload.expectedRegularSlots || []).map(expectedRegularLesson),
+    ];
   }
 
   function comparisonParticipantIds(lesson = {}, participantRowsByLesson = new Map()) {
@@ -1121,7 +1251,7 @@
     if (!payload) return [];
     const date = new Date(`${state.selectedDate}T12:00:00`);
     const dayOfWeek = date.getDay();
-    const lessons = payload.lessons.filter((lesson) => (
+    const lessons = timetableLessons(payload).filter((lesson) => (
       lesson.lessonDate === state.selectedDate && lessonVisibleOnTimetable(lesson)
     ));
     const coaches = payload.coaches.filter((coach) => coach.roleId);
@@ -1194,6 +1324,12 @@
     if (context.type === "member_inactive") {
       return `${memberLabel} · 삭제회원 처리로 자동 정리`;
     }
+    if (context.type === "superseded") {
+      return `${memberLabel} · 시간 변경으로 종료된 이전 일정`;
+    }
+    if (context.type === "prior_ticket") {
+      return `${memberLabel} · 이전 회원권 일정 · 차감 대상 아님`;
+    }
     if (context.type === "automatic_cutoff") {
       return `${memberLabel} · ${regularCutoffLabels[context.regularCutoffReason] || "회원권 상태에 따라 자동 제외"}`;
     }
@@ -1223,12 +1359,15 @@
       entitlement: raw.entitlement || null,
       staffAction: raw.staffAction || raw.staff_action || "",
       memberOperationalStatus: raw.memberOperationalStatus || raw.member_operational_status || "",
+      sourceTicketId: raw.sourceTicketId || raw.source_ticket_id || "",
+      currentTicketId: raw.currentTicketId || raw.current_ticket_id || "",
+      currentTicketAvailable: Boolean(raw.currentTicketAvailable ?? raw.current_ticket_available),
     };
   }
 
   function lessonHistoryIsArchived(lesson = {}) {
     if (String(lesson.status || "") !== "cancelled") return false;
-    return ["automatic_cutoff", "member_inactive"].includes(lessonCancellationContext(lesson).type);
+    return ["automatic_cutoff", "member_inactive", "superseded", "prior_ticket"].includes(lessonCancellationContext(lesson).type);
   }
 
   function lessonVisibleOnTimetable(lesson = {}) {
@@ -1280,14 +1419,17 @@
     const context = lessonCancellationContext(lesson);
     const hasActiveAbsenceEntitlement = context.type === "absence"
       && ["open", "booked"].includes(String(context.entitlement?.status || ""));
-    const restoreButton = lessonAbsenceCanBeRestored(lesson)
-      ? `<button type="button" class="schedule-v2-history-restore" data-v2-restore-absence="${escapeHtml(lesson.id)}">원래 수업 복원</button>`
-      : lessonStaffCancellationCanBeRestored(lesson)
-        ? `<button type="button" class="schedule-v2-history-restore" data-v2-restore-cancelled="${escapeHtml(lesson.id)}">취소 복구</button>`
-        : "";
-    const addKind = hasActiveAbsenceEntitlement ? ' data-v2-kind="makeup"' : "";
-    const addLabel = hasActiveAbsenceEntitlement ? "+ 보강·원데이 가능" : "+ 새 수업";
-    return `<div class="schedule-v2-history-actions">${restoreButton}<button type="button" class="schedule-v2-history-add" data-v2-add${addKind} data-date="${escapeHtml(lesson.lessonDate)}" data-time="${escapeHtml(lesson.startTime)}" data-coach-role-id="${escapeHtml(lesson.coachRoleId)}">${addLabel}</button></div>`;
+    if (lessonAbsenceCanBeRestored(lesson)) {
+      return `<div class="schedule-v2-history-actions"><button type="button" class="schedule-v2-history-restore" data-v2-restore-absence="${escapeHtml(lesson.id)}">원래 수업 복원</button><button type="button" class="schedule-v2-history-add" data-v2-add data-v2-kind="makeup" data-date="${escapeHtml(lesson.lessonDate)}" data-time="${escapeHtml(lesson.startTime)}" data-coach-role-id="${escapeHtml(lesson.coachRoleId)}">+ 보강·원데이</button></div>`;
+    }
+    if (lessonStaffCancellationCanBeRestored(lesson)) {
+      return `<div class="schedule-v2-history-actions"><button type="button" class="schedule-v2-history-restore" data-v2-restore-cancelled="${escapeHtml(lesson.id)}">취소 복구</button></div>`;
+    }
+    if (context.type === "prior_ticket" && context.currentTicketAvailable && context.currentTicketId) {
+      return `<div class="schedule-v2-history-actions"><button type="button" class="schedule-v2-history-restore" data-v2-reconcile-ticket="${escapeHtml(context.currentTicketId)}" data-v2-source-lesson-id="${escapeHtml(lesson.id)}">현재 회원권 일정 생성</button></div>`;
+    }
+    if (hasActiveAbsenceEntitlement) return "";
+    return "";
   }
 
   function lessonsOverlapEachOther(left, right) {
@@ -1303,7 +1445,7 @@
       startTime,
       durationMinutes: Number(durationMinutes) || defaultAddDurationMinutes,
     };
-    return (state.payload?.lessons || []).find((lesson) => {
+    return timetableLessons().find((lesson) => {
       if (String(lesson.id) === String(ignoredLessonId || "")) return false;
       if (lesson.lessonDate !== date || !overlapBlockingStatuses.has(lesson.status)) return false;
       const usesCoach = String(lesson.coachRoleId) === String(coachRoleId)
@@ -1364,7 +1506,7 @@
       startCandidates.push(timeMinutes(row.startTime || row.start_time));
       endCandidates.push(timeMinutes(row.endTime || row.end_time));
     }));
-    (payload?.lessons || []).filter((lesson) => (
+    timetableLessons(payload).filter((lesson) => (
       dateSet.has(lesson.lessonDate) && lessonVisibleOnTimetable(lesson)
     )).forEach((lesson) => {
       startCandidates.push(timeMinutes(lesson.startTime));
@@ -1376,7 +1518,7 @@
   function dayLanePlan(date, times) {
     const payload = state.payload;
     const dayOfWeek = new Date(`${date}T12:00:00`).getDay();
-    const lessons = (payload.lessons || []).filter((lesson) => (
+    const lessons = timetableLessons(payload).filter((lesson) => (
       lesson.lessonDate === date && lessonVisibleOnTimetable(lesson)
     ));
     const coaches = (payload.coaches || []).filter((coach) => coach.roleId);
@@ -1886,6 +2028,15 @@
   }
 
   function lessonCardMarkup(lesson, { memberLabel, kind, historyLabel = "", substituteLabel = "", scheduledAvailable = true } = {}) {
+    if (lesson.expectedRegularSlot) {
+      return {
+        classes: "type-regular record-problem expected-regular-slot",
+        searchText: `${memberLabel} 고정수업 연결 확인 미래 수업 복구`.toLowerCase(),
+        stateMarkup: '<small class="schedule-v2-card-state">연결 확인</small>',
+        detailMarkup: `<span>고정수업 · ${Number(lesson.durationMinutes || 20)}분</span><small class="schedule-v2-lesson-warning">눌러서 미래 수업 복구</small>`,
+        needsFeedback: false,
+      };
+    }
     const cardState = lessonCardState(lesson);
     const typeClass = kind === "regular" ? "type-regular" : "type-changed";
     const kindLabel = kindLabels[kind] || kind || "수업";
@@ -2196,8 +2347,8 @@
     const guide = $("#scheduleV2RegularEditScopeGuide");
     if (guide) {
       guide.textContent = future
-        ? "이 회차부터 같은 정규시간을 끝내고 선택한 날짜·시간·코치로 다시 연결합니다. 회원과 회원권은 유지됩니다."
-        : "선택한 회차만 바꾸고 나머지 정규시간은 유지합니다.";
+        ? "선택한 날짜부터 매주 새 시간으로 바뀝니다. 회원과 회원권은 그대로 유지됩니다."
+        : "이번 수업만 바뀌고 다음 주부터는 기존 시간 그대로 진행됩니다.";
     }
     $$("input[name='scheduleKind']", form).forEach((input) => {
       input.disabled = future && input.value !== "regular";
@@ -3462,6 +3613,7 @@
     const source = String(error?.message || error || "server_error");
     const labels = {
       schedule_v2_coach_time_overlap: "같은 코치의 수업 시간이 겹칩니다.",
+      schedule_v2_expected_regular_slot_reserved: "누락된 미래 고정수업 자리입니다. 고정수업을 먼저 복구하거나 다른 시간을 선택해 주세요.",
       schedule_v2_ticket_unavailable: "사용할 수 있는 회원권이 아닙니다.",
       schedule_v2_duration_ticket_mismatch: "수업 시간과 회원권 단위가 맞지 않습니다.",
       schedule_v2_regular_ticket_required: "정규 회원권을 선택해 주세요.",
@@ -4250,6 +4402,17 @@
         void restoreAbsentLesson(restoreButton.dataset.v2RestoreAbsence);
         return;
       }
+      const reconcileButton = event.target.closest("[data-v2-reconcile-ticket]");
+      if (reconcileButton) {
+        const sourceLesson = timetableLessons().find((item) => String(item.id) === String(reconcileButton.dataset.v2SourceLessonId));
+        void repairExpectedRegularSlot({
+          ticketId: reconcileButton.dataset.v2ReconcileTicket,
+          branchId: state.payload?.branchId || state.payload?.branch?.id || "",
+          participants: sourceLesson?.participants || [],
+          memberLabel: lessonParticipantLabel(sourceLesson || {}),
+        });
+        return;
+      }
       const add = event.target.closest("[data-v2-add]");
       if (add) {
         let time = add.dataset.time;
@@ -4269,8 +4432,9 @@
       }
       const lessonButton = event.target.closest("[data-v2-lesson-id]");
       if (lessonButton) {
-        const lesson = state.payload?.lessons.find((item) => String(item.id) === String(lessonButton.dataset.v2LessonId));
-        if (lesson) openEditor({ date: lesson.lessonDate, time: lesson.startTime, coachRoleId: lesson.coachRoleId, lesson });
+        const lesson = timetableLessons().find((item) => String(item.id) === String(lessonButton.dataset.v2LessonId));
+        if (lesson?.expectedRegularSlot) void repairExpectedRegularSlot(lesson);
+        else if (lesson) openEditor({ date: lesson.lessonDate, time: lesson.startTime, coachRoleId: lesson.coachRoleId, lesson });
         return;
       }
       const queueButton = event.target.closest("[data-v2-queue-ticket]");
@@ -4445,6 +4609,7 @@
       }
     });
     $("#scheduleV2IntegrityButton")?.addEventListener("click", runScheduleV2MemberIntegrityPreview);
+    $("#scheduleV2IntegrityApplyButton")?.addEventListener("click", applyScheduleV2IntegrityRepairs);
     $("#scheduleV2ArchivedHistoryToggle")?.addEventListener("click", () => {
       state.showArchivedHistory = !state.showArchivedHistory;
       renderWorkspace();

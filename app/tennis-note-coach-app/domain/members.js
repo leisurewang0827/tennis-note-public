@@ -22,7 +22,7 @@ function coachRosterTicketState(ticket = {}, today = localDateKey()) {
 }
 
 function formatScheduleMemberName(name) {
-  const label = String(name || "회원").trim() || "회원";
+  const label = normalizeCoachScheduleMemberName(name);
   const lines = label
     .split(/[&·]/)
     .map((part) => part.trim())

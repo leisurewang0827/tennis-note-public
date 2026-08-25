@@ -552,6 +552,7 @@ function applyMemberManagementProductDefaults(form, allLiveData = adminLiveDataS
   syncMemberManagementScopeFields(form);
   syncManualMemberPartnerField(form);
   syncMemberCreateSchedule(form, product);
+  syncMemberReenrollSchedule(form, product);
 }
 
 async function submitMemberManagementForm(event) {
@@ -597,6 +598,12 @@ async function submitMemberManagementForm(event) {
     normalizeMemberManagementTicketPayload(managementPayload);
   }
   const createRegularSchedules = (isCreate || action === "assign") ? memberInlineScheduleValues(form) : [];
+  const reenrollScheduleMode = action === "reenroll" && form.elements.reenrollScheduleMode
+    ? form.elements.reenrollScheduleMode.value || "keep"
+    : "keep";
+  const reenrollRegularSchedules = action === "reenroll" && reenrollScheduleMode === "change"
+    ? memberInlineScheduleValues(form)
+    : [];
   if (managementPayload && action === "profile") {
     // Profile, note, and partner edits must never recalculate or replace a fixed schedule.
     managementPayload.preserveExistingSchedule = true;
@@ -670,6 +677,23 @@ async function submitMemberManagementForm(event) {
       return;
     }
     normalizeMemberManagementPaymentPayload(managementPayload);
+  }
+  if (action === "reenroll" && memberManagementProductSupportsRegularSchedule(selectedManagementProduct) && reenrollScheduleMode === "change") {
+    const requiredScheduleCount = memberManagementProductWeeklyFrequency(selectedManagementProduct);
+    const uniqueScheduleCount = new Set(reenrollRegularSchedules.map((slot) => `${slot.dayOfWeek}:${slot.startTime}`)).size;
+    const scope = memberManagementProductScheduleScope(selectedManagementProduct);
+    if (!memberInlineScheduleIsComplete(form, reenrollRegularSchedules) || reenrollRegularSchedules.length !== requiredScheduleCount) {
+      if (message) message.textContent = `주 ${requiredScheduleCount}회 정규 요일과 시간을 모두 선택해 주세요.`;
+      return;
+    }
+    if (uniqueScheduleCount !== reenrollRegularSchedules.length) {
+      if (message) message.textContent = "같은 요일과 시간을 중복 선택할 수 없습니다.";
+      return;
+    }
+    if (reenrollRegularSchedules.some((slot) => !memberScheduleDayAllowed(scope, slot.dayOfWeek))) {
+      if (message) message.textContent = "회원권의 평일·주말 이용 범위에 맞는 요일을 선택해 주세요.";
+      return;
+    }
   }
 
   if (submit) {
@@ -809,17 +833,24 @@ async function submitMemberManagementForm(event) {
       state.memberFilter = "inactive";
       state.selectedMemberId = null;
     } else if (action === "reenroll") {
-      result = await client.rpc("tn_reenroll_member_database_ticket", {
-        target_source_ticket_id: ticket.serverTicketId,
-        target_product_id: form.elements.productId.value,
-        target_coach_role_id: form.elements.coachRoleId.value,
-        target_total_sessions: Number(form.elements.totalSessions.value),
-        target_used_sessions: Number(form.elements.usedSessions.value),
-        target_remaining_sessions: Number(form.elements.remainingSessions.value),
-        target_starts_on: form.elements.startsOn.value,
-        target_expires_on: form.elements.expiresOn.value,
-        target_purchased_price: Number(form.elements.purchasedPrice.value),
-        target_reason: reason,
+      const reenrollOperationKey = form.dataset.reenrollOperationKey || createAdminOperationKey("member-reenroll");
+      form.dataset.reenrollOperationKey = reenrollOperationKey;
+      result = await client.rpc("tn_admin_reenroll_member_ticket_and_regular_schedule", {
+        target_record: {
+          sourceTicketId: ticket.serverTicketId,
+          productId: form.elements.productId.value,
+          coachRoleId: form.elements.coachRoleId.value,
+          totalSessions: Number(form.elements.totalSessions.value),
+          usedSessions: Number(form.elements.usedSessions.value),
+          remainingSessions: Number(form.elements.remainingSessions.value),
+          startsOn: form.elements.startsOn.value,
+          expiresOn: form.elements.expiresOn.value,
+          purchasedPrice: Number(form.elements.purchasedPrice.value),
+          scheduleMode: reenrollScheduleMode,
+          reason,
+        },
+        target_schedules: reenrollRegularSchedules,
+        target_operation_key: reenrollOperationKey,
       });
       state.memberFilter = "active";
     } else if (["deactivate", "restore"].includes(action)) {
@@ -834,7 +865,7 @@ async function submitMemberManagementForm(event) {
     window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
     closeMemberManagementModal();
 
-    const requiresFullRefresh = ["create", "assign", "close", "force_delete", "permanent_delete"].includes(action);
+    const requiresFullRefresh = ["create", "assign", "reenroll", "close", "force_delete", "permanent_delete"].includes(action);
     const synced = requiresFullRefresh
       ? await syncAdminLiveData(true)
       : await loadAdminMemberDetail(member, { force: true, renderResult: false });
@@ -883,6 +914,10 @@ async function submitMemberManagementForm(event) {
       showToast(`${memberManagementActionLabel(action)} 완료`);
     }
   } catch (error) {
+    if (String(error?.message || error || "").includes("group_partner_phone_already_exists") && form.elements.partnerPhone && form.elements.partnerSearch) {
+      form.elements.partnerSearch.value = normalizedMemberPhone(form.elements.partnerPhone.value);
+      await searchManualMemberPartnerCandidates(form, { promoteExactPhone: true });
+    }
     memberManagementModalState.message = memberManagementErrorText(error);
     if (message) message.textContent = memberManagementModalState.message;
     showToast(memberManagementModalState.message);

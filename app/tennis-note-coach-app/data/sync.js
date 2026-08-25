@@ -240,7 +240,10 @@ async function syncLegacyCoachLessonsFromServer() {
     const lessonRows = Array.isArray(scheduleFeedRows) && scheduleFeedRows.length
       ? scheduleFeedRows
       : directLessonRows;
-    const usersById = new Map((userRows || []).map((user) => [user.id, user.name]));
+    const usersById = new Map((userRows || []).map((user) => [
+      user.id,
+      normalizeCoachScheduleMemberName(user.name, ""),
+    ]));
     const coachesById = new Map((coachRows || [])
       .filter((coach) => (
         coach.status === "approved"
@@ -268,9 +271,10 @@ async function syncLegacyCoachLessonsFromServer() {
         const feedParticipantIds = Array.isArray(lesson.participant_user_ids) ? lesson.participant_user_ids : [];
         const feedParticipantNames = Array.isArray(lesson.participant_names) ? lesson.participant_names : [];
         const participantIds = feedParticipantIds.length ? feedParticipantIds : (participantIdsByLesson.get(lesson.id) || []);
-        const memberNames = feedParticipantNames.length
+        const memberNames = (feedParticipantNames.length
           ? feedParticipantNames
-          : participantIds.map((userId) => usersById.get(userId)).filter(Boolean);
+          : participantIds.map((userId) => usersById.get(userId)).filter(Boolean)
+        ).map((name) => normalizeCoachScheduleMemberName(name, "")).filter(Boolean);
         const ticket = ticketsById.get(lesson.member_ticket_id) || {};
         const product = productsById.get(ticket.product_id) || {};
         const coach = coachesById.get(lesson.coach_role_id) || {};

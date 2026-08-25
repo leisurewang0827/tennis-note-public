@@ -174,7 +174,7 @@ function purchaseFamilyOptionsHtml(products = membershipProducts(), selectedFami
     const selected = family.id === selectedFamilyId;
     const readyLabel = family.id === "three-month" ? "10% 할인" : `${count}개`;
     return `
-      <button class="purchase-family-option ${selected ? "is-selected" : ""} ${count ? "" : "is-unavailable"}" type="button" data-purchase-family="${family.id}" aria-pressed="${selected}">
+      <button class="purchase-family-option ${selected ? "is-selected" : ""} ${count ? "" : "is-unavailable"}" type="button" data-purchase-family="${family.id}" aria-pressed="${selected}" ${count ? "" : 'disabled aria-disabled="true" title="현재 판매 가능한 상품이 없습니다"'}>
         <strong>${family.label}</strong><b>${count ? readyLabel : "준비 중"}</b>
       </button>`;
   }).join("");
@@ -199,7 +199,9 @@ function purchaseStepOneHtml() {
       <div><strong>${renewing ? "연장 기간" : "상품"}</strong><span>${visibleProducts.length}개</span></div>
       ${visibleProducts.length
     ? visibleProducts.map((product) => purchaseProductCard(product, String(product.id) === String(flow.productId))).join("")
-    : purchaseEmptyFamilyHtml(flow.familyId)}
+    : distinctMembershipProductsForFamily(flow.familyId, products).length
+      ? memberEmptyState({ title: "선택한 조건의 상품이 없습니다", reason: "주 횟수 또는 평일·주말 조건을 바꿔 주세요.", compact: true })
+      : purchaseEmptyFamilyHtml(flow.familyId)}
     </div>`;
 }
 

@@ -163,9 +163,17 @@ async function verifyServerPayment(paymentId) {
 
 async function reconcileRejectedServerPayment(paymentId) {
   if (!paymentId) return;
+  const client = window.TennisNoteDataClient;
   try {
     await verifyServerPayment(paymentId);
   } catch {
     // Terminal provider states are persisted before the server returns a verification error.
+  }
+  try {
+    await client?.invokeFunction?.("portone-payment/cancel-pending", {
+      body: { paymentId, reason: "결제창 미완료 자동 정리" },
+    });
+  } catch {
+    // Paid or concurrently verified orders are intentionally not cancelled by this endpoint.
   }
 }

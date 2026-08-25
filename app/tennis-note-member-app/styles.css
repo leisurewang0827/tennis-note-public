@@ -3842,6 +3842,13 @@ textarea {
   box-shadow: inset 0 0 0 1px var(--green);
 }
 
+.purchase-simple-filters button:disabled,
+.purchase-family-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  box-shadow: none;
+}
+
 .purchase-show-all-products {
   width: 100%;
   color: var(--green);
@@ -6492,7 +6499,12 @@ body.identity-setup-required {
 }
 
 .payment-confirmation-card {
-  max-width: 430px;
+  --tn-sheet-max-width: 430px;
+}
+
+.payment-confirmation-scroll {
+  display: grid;
+  gap: 12px;
 }
 
 .payment-confirmation-summary {
@@ -9345,6 +9357,39 @@ body {
 .member-own-lesson-action {
   color: #2f5fae;
   font-weight: 700;
+}
+
+.member-pending-purchase-schedules {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #d8e1e8;
+}
+
+.member-pending-purchase-schedules > div,
+.member-pending-purchase-schedule {
+  display: grid;
+  gap: 3px;
+}
+
+.member-pending-purchase-schedules > div span,
+.member-pending-purchase-schedule small {
+  color: #766126;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.member-pending-purchase-schedule {
+  padding: 11px 12px;
+  border: 1px solid #e8cf8c;
+  border-radius: 10px;
+  background: #fff9e9;
+}
+
+.member-pending-purchase-schedule > span {
+  color: #8a5a00;
+  font-weight: 900;
 }
 
 .change-step-heading {

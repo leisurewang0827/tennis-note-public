@@ -208,6 +208,7 @@ function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
 
 function renderMemberOwnSchedule() {
   const ownLessons = currentWeekMemberLessons();
+  const pendingSchedules = currentWeekPendingPurchaseSchedules();
   return `
     <section class="member-own-schedule" aria-label="이번 주 내 일정">
       <div class="member-own-schedule-head">
@@ -231,13 +232,24 @@ function renderMemberOwnSchedule() {
                 <span class="member-own-lesson-action">변경</span>
               </button>`;
             }).join("")
-          : memberEmptyState({
-            title: "이번 주 수업이 없습니다",
-            reason: "회원권이 있다면 시간표에서 예약 가능한 시간을 확인해 주세요.",
-            action: { label: "시간표 보기", homeAction: "makeup" },
-            compact: true,
-          })}
+          : pendingSchedules.length
+            ? '<p class="member-mobile-empty">결제 확인 후 이곳에 정식 수업으로 표시됩니다.</p>'
+            : memberEmptyState({
+              title: "이번 주 수업이 없습니다",
+              reason: "회원권이 있다면 시간표에서 예약 가능한 시간을 확인해 주세요.",
+              action: { label: "시간표 보기", homeAction: "makeup" },
+              compact: true,
+            })}
       </div>
+      ${pendingSchedules.length ? `<section class="member-pending-purchase-schedules" aria-label="입금 확인 대기 일정">
+        <div><strong>결제 확인 대기</strong><span>결제 또는 입금 확인 후 정식 수업으로 등록됩니다.</span></div>
+        ${pendingSchedules.map((schedule) => `<article class="member-pending-purchase-schedule">
+          <span>${escapeHtml(pendingPurchaseScheduleLabel(schedule))}</span>
+          <strong>${escapeHtml([memberCoachShortName(schedule.coachName || "담당 코치"), schedule.productName || "회원권"].filter(Boolean).join(" · "))}</strong>
+          <small>${schedule.active === false ? "시간 보관 만료 · 신청을 취소하고 다시 선택해 주세요." : schedule.expiresAt ? `${escapeHtml(formatDateTimeLabel(schedule.expiresAt))}까지 시간 보관` : schedule.paymentMethod === "bank_transfer" ? "입금 확인 대기" : "결제 확인 대기"}</small>
+          ${schedule.paymentStatus === "ready" && schedule.providerPaymentId ? `<button class="small-button" type="button" data-cancel-pending-purchase="${escapeHtml(schedule.providerPaymentId)}" data-pending-purchase-title="${escapeHtml(schedule.productName || "회원권")}">신청 취소</button>` : ""}
+        </article>`).join("")}
+      </section>` : ""}
     </section>`;
 }
 

@@ -623,7 +623,7 @@ function moveScheduleAddButtonFocus(button, key) {
 
 function memberInlineScheduleIsComplete(form, schedules = memberInlineScheduleValues(form)) {
   const product = (adminLiveDataState.products || []).find((item) => item.id === form?.elements.productId?.value);
-  if (!product || String(product.product_kind || "regular") !== "regular") return false;
+  if (!memberManagementProductSupportsRegularSchedule(product)) return false;
   const ticket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === form?.dataset.ticketId);
   const requiredCount = memberRegularScheduleFrequency(product, ticket);
   return schedules.length === requiredCount

@@ -29,6 +29,9 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
   const coachesById = new Map((workspace.coaches || []).map((coach) => [coach.roleId, coach]));
   const ticketsById = new Map((workspace.tickets || []).map((ticket) => [ticket.id, ticket]));
   const participants = Array.isArray(lesson.participants) ? lesson.participants : [];
+  const participantNames = participants
+    .map((participant) => normalizeCoachScheduleMemberName(participant.name, ""))
+    .filter(Boolean);
   const primaryTicket = ticketsById.get(participants[0]?.ticketId) || {};
   const laneCoach = coachesById.get(lesson.coachRoleId) || {};
   const substitute = lesson.substitute && lesson.substitute.coachRoleId ? lesson.substitute : null;
@@ -53,14 +56,14 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
     isSubstitute: Boolean(substitute),
     substituteCoachRoleId: substitute?.coachRoleId || "",
     substituteSettlementMode: substitute?.settlementMode || "",
-    member: participants.map((participant) => participant.name).filter(Boolean).join("&") || "회원",
+    member: participantNames.join("&") || "회원",
     memberUserIds: participants.map((participant) => participant.userId).filter(Boolean),
     v2Participants: participants.map((participant) => {
       const ticket = ticketsById.get(participant.ticketId) || {};
       return {
         userId: participant.userId,
         ticketId: participant.ticketId,
-        name: participant.name || "회원",
+        name: normalizeCoachScheduleMemberName(participant.name),
         recordStatus: participant.recordStatus || "",
         outcome: participant.outcome || "",
         deductedSessions: Number(participant.deductedSessions) || 0,

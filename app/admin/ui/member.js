@@ -53,6 +53,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
   syncMemberCreateSchedule($("#memberManagementForm"));
+  syncMemberReenrollSchedule($("#memberManagementForm"));
   window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   if (action === "app_link") loadMemberLinkCandidates(refreshedMember);
   if (action === "force_delete") loadMemberTicketForceDeletePreview(ticketId);
@@ -90,6 +91,7 @@ async function openManualMemberModal() {
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
   syncMemberCreateSchedule($("#memberManagementForm"));
+  syncMemberReenrollSchedule($("#memberManagementForm"));
   setMemberCreateStep(1);
   window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   setTimeout(() => $("#memberManagementForm input[name='memberName']")?.focus(), 0);

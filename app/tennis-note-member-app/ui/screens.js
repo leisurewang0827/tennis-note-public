@@ -291,7 +291,7 @@ function showNoticeIfNeeded() {
 }
 
 function closePaymentConfirmationModal() {
-  closeAppModal("paymentConfirmationModal");
+  closeAppSheet("paymentConfirmationModal");
   preparedPaymentContext = null;
 }
 
@@ -311,7 +311,7 @@ function openPaymentConfirmationModal({ product, paymentId, preparedPayment, met
     button.disabled = false;
     button.textContent = `${amount.toLocaleString("ko-KR")}원 결제창 열기`;
   }
-  openAppModal("paymentConfirmationModal", "#openPreparedPaymentButton");
+  openAppSheet("paymentConfirmationModal", { initialFocus: "#openPreparedPaymentButton" });
 }
 
 function openJournalComposer(dateValue = "") {
@@ -419,7 +419,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.403", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.405", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",

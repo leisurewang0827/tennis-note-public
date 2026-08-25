@@ -287,6 +287,13 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_assignment_schedule_duplicate")) return "같은 요일과 시간을 중복 선택할 수 없습니다.";
   if (raw.includes("member_assignment_schedule_value_invalid")) return "회원권의 평일·주말 범위에 맞는 시간을 선택해 주세요.";
   if (raw.includes("member_assignment_schedule_blocked_time") || raw.includes("member_assignment_schedule_outside_working_hours")) return "코치 근무시간·브레이크와 겹치지 않는 시간을 선택해 주세요.";
+  if (raw.includes("reenrollment_keep_schedule_product_mismatch")) return "새 회원권의 수업시간·주 횟수·인원이 달라 기존 시간을 유지할 수 없습니다. ‘새 요일·시간 선택’을 사용해 주세요.";
+  if (raw.includes("reenrollment_regular_schedule_missing")) return "기존 정규시간을 확인할 수 없습니다. ‘새 요일·시간 선택’에서 주 횟수만큼 다시 선택해 주세요.";
+  if (raw.includes("reenrollment_schedule_frequency_mismatch")) return "새 회원권의 주 횟수만큼 요일과 시간을 모두 선택해 주세요.";
+  if (raw.includes("reenrollment_schedule_duplicate")) return "재등록 시간에 같은 요일·시간을 중복 선택할 수 없습니다.";
+  if (raw.includes("reenrollment_schedule_value_invalid")) return "회원권의 평일·주말 범위와 시작 시간 규칙에 맞는 시간을 선택해 주세요.";
+  if (raw.includes("reenrollment_schedule_not_supported")) return "쿠폰·원데이는 정규시간 변경 없이 재등록해 주세요.";
+  if (raw.includes("reenrollment_operation_in_progress")) return "같은 재등록 요청을 처리 중입니다. 잠시 후 새로고침해 결과를 확인해 주세요.";
   if (raw.includes("schedule_v2_approved_coach_required")) return "같은 지점의 현재 승인 코치를 선택해 주세요.";
   if (raw.includes("schedule_v2_rule_outside_ticket_window")) return "회원권 사용기간 안에 선택한 정규 요일이 없습니다. 시작일과 만료일을 확인해 주세요.";
   if (raw.includes("payment_product_mismatch")) return "기존 결제에 연결된 회원권과 선택한 회원권이 다릅니다. 결제 회원권을 선택해 주세요.";
@@ -314,7 +321,8 @@ function memberManagementErrorText(error) {
   if (raw.includes("group_partner_required")) return "2대1 회원권은 파트너를 선택해야 합니다.";
   if (raw.includes("group_partner_name_required")) return "같이 등록할 파트너 실명을 두 글자 이상 입력해 주세요.";
   if (raw.includes("group_partner_phone_invalid")) return "파트너 휴대전화 번호를 확인해 주세요.";
-  if (raw.includes("group_partner_phone_already_exists")) return "같은 휴대전화 번호의 회원이 이미 있습니다. 기존 회원 연결을 사용해 주세요.";
+  if (raw.includes("group_partner_phone_already_exists")) return "앱 가입 또는 기존 회원 계정이 있습니다. 자동으로 열린 기존 회원 검색에서 이름과 전화번호 끝자리를 확인해 선택해 주세요.";
+  if (raw.includes("partner_search_query_too_short")) return "파트너 이름은 두 글자, 전화번호는 네 자리 이상 입력해 주세요.";
   if (raw.includes("group_partner_birth_year_invalid")) return "파트너 출생연도를 확인해 주세요.";
   if (raw.includes("group_partner_gender_invalid")) return "파트너 성별 값을 다시 선택해 주세요.";
   if (raw.includes("member_phone_already_exists")) return "같은 휴대전화 번호가 회원 또는 직원 계정에 사용 중입니다. 회원 검색에 없으면 운영 설정의 직원 계정과 계정 연결을 확인해 주세요.";
@@ -593,17 +601,11 @@ function dedupeMembersByLessonUnit(memberList) {
   return [...units.values()];
 }
 
-function manualMemberPartnerOptions() {
-  const activeBranchId = activeOperationBranchId();
-  const allowedUserIds = activeBranchId
-    ? new Set(operationBranchMembers().flatMap((member) => memberServerUserIds(member)))
-    : null;
-  return (adminLiveDataState.users || [])
-    .filter((user) => (
-      user.role === "member"
-      && user.status === "active"
-      && (!allowedUserIds || allowedUserIds.has(String(user.id || "")))
-    ))
+function manualMemberPartnerOptions(form = null) {
+  const local = (adminLiveDataState.users || []).filter(manualMemberPartnerLocalEligibility);
+  const remoteState = form ? manualMemberPartnerSearchState.get(form) : null;
+  const remote = (remoteState?.candidates || []).filter((candidate) => candidate.eligible === true);
+  return [...new Map([...local, ...remote].map((user) => [String(user.id || ""), user])).values()]
     .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "ko"));
 }
 

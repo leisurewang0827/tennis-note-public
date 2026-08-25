@@ -522,6 +522,12 @@ function bindDelegatedEvents() {
       const fromOfflineQueue = ["동기화 대기", "동기화 실패"].includes(log?.status);
       confirmLog(logId, { fromOfflineQueue });
     }
+    const refreshLogButton = event.target.closest("[data-refresh-log-completion]");
+    if (refreshLogButton) void refreshLessonCompletionFromUi({ logId: refreshLogButton.dataset.refreshLogCompletion });
+
+    const refreshLessonButton = event.target.closest("[data-refresh-lesson-completion]");
+    if (refreshLessonButton) void refreshLessonCompletionFromUi({ lessonId: refreshLessonButton.dataset.refreshLessonCompletion });
+
 
     const feedbackButton = event.target.closest("[data-confirm-feedback]");
     if (feedbackButton) confirmFeedback(feedbackButton.dataset.confirmFeedback);

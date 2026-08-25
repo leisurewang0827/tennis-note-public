@@ -34,7 +34,7 @@ function renderScheduleEditPanel() {
       return `
         <section class="lesson-participant-completion-card lesson-chart-participant is-final ${feedbackEditing ? "is-feedback-editing" : ""}" data-lesson-participant-panel="${escapeHtml(key)}" data-feedback-revision-row="${escapeHtml(key)}" data-user-id="${escapeHtml(participant.userId)}" data-record-updated-at="${escapeHtml(participant.updatedAt || "")}" ${index === 0 ? "" : "hidden"}>
           ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
-          <div class="lesson-chart-result-line"><b>${escapeHtml(outcomeLabel)}</b><span>${deducted ? `${deducted}회 차감` : "차감 없음"} · 잔여 ${remaining}회</span></div>
+          <div class="lesson-chart-result-line"><b>${escapeHtml(outcomeLabel)}</b><span>${completionParticipants.length > 1 ? `잔여 ${remaining}회` : `${deducted ? `${deducted}회 차감` : "차감 없음"} · 잔여 ${remaining}회`}</span></div>
           ${outcome === "completed" && feedbackEditing ? `
             <label class="lesson-required-field">
               <span>코치 피드백 <small>횟수는 변경되지 않음</small></span>
@@ -111,9 +111,10 @@ function renderScheduleEditPanel() {
         <b class="${finalized || canFinalize ? "can-process" : "read-only"}">${finalized ? "완료" : canFinalize ? "처리 필요" : canProcess ? "예정" : "보기 전용"}</b>
       </div>
       ${canFinalize && !finalized && completionParticipants.length === 1 ? `<p class="lesson-chart-deduction-preview wide">완료 시 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회 → ${Math.max(0, (Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0) - 1)}회</p>` : ""}
+      ${lessonGroupDeductionSummary(lesson, completionParticipants) ? `<p class="lesson-chart-deduction-preview wide">${escapeHtml(lessonGroupDeductionSummary(lesson, completionParticipants))}</p>` : ""}
       ${participantTabs}
       <div class="lesson-participant-completion-list wide">${participantCompletionFields}</div>
-      ${lesson.validationMessage ? `<p class="validation-text wide">${lesson.validationMessage}</p>` : ""}
+      ${lesson.validationMessage ? `<div class="wide"><p class="validation-text">${lesson.validationMessage}</p><button class="small-button" type="button" data-refresh-lesson-completion="${escapeHtml(lesson.id)}">최신 상태 다시 확인</button></div>` : ""}
       ${!finalized && (canReschedule || (canProcess && lesson.serverLessonId))
         ? `<details class="lesson-secondary-panel lesson-other-actions wide">
             <summary>다른 처리</summary>

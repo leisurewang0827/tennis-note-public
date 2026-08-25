@@ -3,6 +3,7 @@
   const savedStatePrefix = "tennis-note-mode-state-v1:";
   const transitionMaxAgeMs = 30_000;
   let navigationStarted = false;
+  const warmedUrls = new Set();
 
   function readJson(key) {
     try {
@@ -128,6 +129,28 @@
     return true;
   }
 
+  function warm(url) {
+    try {
+      const target = new URL(url, window.location.href);
+      if (target.origin !== window.location.origin || !["http:", "https:"].includes(target.protocol)) return false;
+      target.searchParams.delete("modeTransition");
+      const href = target.href;
+      if (warmedUrls.has(href)) return true;
+      warmedUrls.add(href);
+      const link = document.createElement("link");
+      link.rel = "prefetch";
+      link.href = href;
+      link.as = "document";
+      document.head.appendChild(link);
+      const prefetch = () => fetch(href, { credentials: "same-origin", cache: "force-cache" }).catch(() => undefined);
+      if ("requestIdleCallback" in window) window.requestIdleCallback(prefetch, { timeout: 2500 });
+      else window.setTimeout(prefetch, 800);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function consume(mode, { splashSelector = "" } = {}) {
     const payload = transitionPayload();
     if (!payload || payload.to !== mode) return null;
@@ -166,5 +189,5 @@
     return true;
   }
 
-  window.TennisNoteModeTransition = Object.freeze({ begin, consume, finish, navigate, remember, saved });
+  window.TennisNoteModeTransition = Object.freeze({ begin, consume, finish, navigate, warm, remember, saved });
 })();

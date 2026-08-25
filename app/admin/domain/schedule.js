@@ -85,7 +85,7 @@ function memberRegularScheduleFrequency(product = null, ticket = null) {
 
 function memberInlineScheduleValues(form, allLiveData = adminLiveDataState) {
   const product = (allLiveData.products || []).find((item) => item.id === form?.elements.productId?.value);
-  if (!product || String(product.product_kind || "regular") !== "regular") return [];
+  if (!memberManagementProductSupportsRegularSchedule(product)) return [];
   const ticket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === form?.dataset.ticketId);
   const frequency = memberRegularScheduleFrequency(product, ticket);
   return Array.from({ length: frequency }, (_, offset) => {

@@ -664,6 +664,10 @@ function bindDelegatedEvents() {
       syncMemberCreateSchedule(event.target.form);
       return;
     }
+    if (event.target.matches("#memberManagementForm input[name='reenrollScheduleMode']")) {
+      syncMemberReenrollSchedule(event.target.form);
+      return;
+    }
   });
   document.addEventListener("input", (event) => {
     if (event.target.matches('[data-product-field="cashAmount"]')) {
@@ -689,6 +693,17 @@ function bindDelegatedEvents() {
     }
     if (event.target.matches("[data-manual-member-partner-search]")) {
       filterManualMemberPartnerOptions(event.target.form);
+      queueManualMemberPartnerSearch(event.target.form);
+      return;
+    }
+    if (event.target.matches("#memberManagementForm input[name='partnerPhone']")) {
+      const form = event.target.form;
+      const digits = normalizedMemberPhone(event.target.value);
+      setManualMemberPartnerStatus(form, "", "", "new");
+      if (digits.length >= 9 && form?.elements?.partnerSearch) {
+        form.elements.partnerSearch.value = digits;
+        queueManualMemberPartnerSearch(form, { promoteExactPhone: true });
+      }
       return;
     }
     if (event.target.matches("[data-member-product-search]")) {
@@ -820,7 +835,8 @@ function bindDelegatedEvents() {
         syncMemberQuickEditorSchedule(form);
         setMemberInlineDirtyState(form);
       } else {
-        syncMemberCreateSchedule(form);
+        if (memberManagementModalState.action === "reenroll") syncMemberReenrollSchedule(form);
+        else syncMemberCreateSchedule(form);
       }
       return;
     }

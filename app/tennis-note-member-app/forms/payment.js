@@ -128,7 +128,7 @@ async function completePreparedPayment() {
   }
 
   closePaymentConfirmationModal();
-  await Promise.allSettled([syncMemberTicketsFromServer(), syncMemberDiscountCouponsFromServer()]);
+  await Promise.allSettled([syncMemberTicketsFromServer(), syncMemberPendingPurchaseSchedulesFromServer(), syncMemberDiscountCouponsFromServer()]);
   renderAll();
   setView("shopView");
 }

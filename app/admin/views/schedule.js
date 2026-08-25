@@ -1378,7 +1378,8 @@ function memberManagementLessonDaysMarkup(selectedDays = [], scheduleScope = "we
   }).join("");
 }
 
-function memberCreateScheduleMarkup(product) {
+function memberCreateScheduleMarkup(product, options = {}) {
+  const reenroll = options.reenroll === true;
   const regularProduct = memberManagementProductSupportsRegularSchedule(product);
   const frequency = memberManagementProductWeeklyFrequency(product);
   const scope = memberManagementProductScheduleScope(product);
@@ -1398,10 +1399,14 @@ function memberCreateScheduleMarkup(product) {
       </select>
     </div>`;
   }).join("");
-  return `<section class="member-inline-schedule member-create-schedule" data-member-inline-schedule data-member-create-schedule data-product-kind="${escapeHtml(product?.product_kind || "")}" ${regularProduct ? "" : "hidden"}>
-    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>회원 저장과 동시에 시간표에 생성됩니다.</span></div>
-    ${rows}
-    <label class="member-create-schedule-later"><input name="createScheduleLater" type="checkbox" /> 시간표는 나중에 설정</label>
+  return `<section class="member-inline-schedule member-create-schedule" data-member-inline-schedule ${reenroll ? "data-member-reenroll-schedule" : "data-member-create-schedule"} data-product-kind="${escapeHtml(product?.product_kind || "")}" ${regularProduct ? "" : "hidden"}>
+    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>${reenroll ? "기존 시간을 유지하거나 새 시간으로 바꿉니다." : "회원 저장과 동시에 시간표에 생성됩니다."}</span></div>
+    ${reenroll ? `<div class="member-partner-mode" role="radiogroup" aria-label="재등록 정규시간 선택">
+      <label><input name="reenrollScheduleMode" type="radio" value="keep" checked /> 기존 정규시간 유지</label>
+      <label><input name="reenrollScheduleMode" type="radio" value="change" /> 새 요일·시간 선택</label>
+    </div>` : ""}
+    <div ${reenroll ? "data-member-reenroll-schedule-fields hidden" : ""}>${rows}</div>
+    ${reenroll ? '<p class="member-inline-schedule-warning" data-member-reenroll-schedule-note>기존 회원권의 마지막 정규시간을 새 회원권 기간으로 이어갑니다.</p>' : '<label class="member-create-schedule-later"><input name="createScheduleLater" type="checkbox" /> 시간표는 나중에 설정</label>'}
     <p class="member-inline-schedule-warning" data-member-schedule-warning></p>
   </section>`;
 }

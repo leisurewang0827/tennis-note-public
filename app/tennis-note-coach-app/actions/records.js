@@ -182,16 +182,49 @@ async function confirmLog(id, options = {}) {
     : updateLogDraft(id);
   if (!log) return false;
   if (log.status === "확인 완료") return true;
-  const linkedScheduleV2Lesson = state.liveLessons.find((item) => (
+  let linkedScheduleV2Lesson = state.liveLessons.find((item) => (
     item.serverLessonId === log.serverLessonId
     && Array.isArray(item.v2Participants)
     && item.v2Participants.length
   ));
-  const linkedLesson = linkedScheduleV2Lesson || lessonForRecord(log);
+  let linkedLesson = linkedScheduleV2Lesson || lessonForRecord(log);
   if (linkedLesson && !lessonOutcomeWindowOpen(linkedLesson)) {
     log.validationMessage = lessonOutcomeGuardMessage();
     renderAll();
     return false;
+  }
+  let completionClient = null;
+  if (log.serverLessonId) {
+    completionClient = window.TennisNoteDataClient;
+    if (!completionClient?.rpc || !completionClient.getSession?.()?.access_token) {
+      log.validationMessage = "서버 로그인 상태를 확인한 뒤 다시 처리해 주세요.";
+      renderAll();
+      return false;
+    }
+    if (completionClient.isOnline?.() === false) {
+      log.status = "동기화 대기";
+      log.validationMessage = "인터넷 연결 후 자동 처리됩니다. 서버 확인 전에는 횟수가 차감되지 않습니다.";
+      saveSnapshot();
+      renderAll();
+      return false;
+    }
+    log.validationMessage = "최신 수업·회원권 상태를 확인하고 있습니다.";
+    renderAll();
+    const preflight = await refreshLessonCompletionState({ log });
+    if (!preflight.ok) {
+      log.status = "확인 대기";
+      log.validationMessage = preflight.message;
+      saveSnapshot();
+      renderAll();
+      return false;
+    }
+    if (preflight.alreadyFinal) {
+      saveSnapshot();
+      renderAll();
+      return true;
+    }
+    linkedScheduleV2Lesson = preflight.lesson;
+    linkedLesson = preflight.lesson || linkedLesson;
   }
   const participantResults = Array.isArray(log.participantResults) && log.participantResults.length
     ? log.participantResults
@@ -249,19 +282,7 @@ async function confirmLog(id, options = {}) {
   const nextStep = selectedCurriculum(participantResults[0].nextCurriculumId);
   let serverResult = null;
   if (log.serverLessonId) {
-    const client = window.TennisNoteDataClient;
-    if (!client?.rpc || !client.getSession?.()?.access_token) {
-      log.validationMessage = "서버 로그인 상태를 확인한 뒤 다시 처리해 주세요.";
-      renderAll();
-      return false;
-    }
-    if (client.isOnline?.() === false) {
-      log.status = "동기화 대기";
-      log.validationMessage = "인터넷 연결 후 자동 처리됩니다. 서버 확인 전에는 횟수가 차감되지 않습니다.";
-      saveSnapshot();
-      renderAll();
-      return false;
-    }
+    const client = completionClient;
     log.status = "서버 처리 중";
     renderAll();
     try {
@@ -325,28 +346,10 @@ async function confirmLog(id, options = {}) {
         renderAll();
         return false;
       }
-      let code = error?.payload?.message || error?.payload?.code || error?.message || "server_error";
-      if (typeof code === "string" && code.trim().startsWith("{")) {
-        try {
-          const parsed = JSON.parse(code);
-          code = parsed.message || parsed.code || code;
-        } catch {
-          // Keep the original server message when it is not valid JSON.
-        }
-      }
-      const serverMessages = {
-        schedule_v2_outcome_lesson_not_ended: lessonOutcomeGuardMessage(),
-        lesson_complete_lesson_not_ended: lessonOutcomeGuardMessage(),
-        lesson_complete_comment_too_short: "코치 코멘트는 직접 5자 이상 작성해야 합니다.",
-        lesson_complete_comment_too_generic: "짧은 칭찬이나 확인 문구만으로는 횟수 차감이 불가합니다.",
-        lesson_complete_comment_recent_duplicate: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
-        lesson_complete_comment_member_duplicate_limit: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
-      };
+      const code = normalizedLessonCompletionErrorCode(error);
       log.status = options.fromOfflineQueue ? "동기화 실패" : "확인 대기";
-      log.validationMessage = serverMessages[code]
-        || (options.fromOfflineQueue
-          ? "자동 동기화에 실패했습니다. 연결 상태를 확인한 뒤 다시 동기화해 주세요."
-          : "서버 횟수 차감에 실패했습니다. 같은 기록에서 다시 시도해 주세요.");
+      log.validationMessage = lessonCompletionErrorMessage(code, options);
+      captureLessonCompletionFailure(code, linkedLesson, Boolean(options.fromOfflineQueue));
       saveSnapshot();
       renderAll();
       return false;

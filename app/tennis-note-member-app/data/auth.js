@@ -203,6 +203,7 @@ function activateLiveMemberProfile(profileId) {
   state.ticketHistory = [];
   state.liveMembershipProducts = [];
   state.liveTickets = [];
+  state.pendingPurchaseSchedules = [];
   memberScheduleV2WorkspaceCache = null;
   state.liveLessons = [];
   state.liveLessonsLoaded = false;

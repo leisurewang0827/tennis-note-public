@@ -343,6 +343,7 @@ async function applySupabaseMemberSession(showNotice = false) {
     memberPurchaseDataLoaded = false;
     await Promise.allSettled([
       syncMemberTicketsFromServer(profile),
+      syncMemberPendingPurchaseSchedulesFromServer(),
       syncMemberLessonsFromServer(profile),
       syncMemberAccountDeletionRequestFromServer(profile),
     ]);

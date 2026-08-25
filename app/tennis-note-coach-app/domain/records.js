@@ -376,6 +376,7 @@ function recordProcessingMarkup() {
               ${participantDraftMarkup}
               ${log.validationMessage ? `<p class="validation-text">${log.validationMessage}</p>` : ""}
               <div class="actions">
+                ${log.validationMessage ? `<button class="small-button" type="button" data-refresh-log-completion="${escapeHtml(log.id)}">최신 상태 다시 확인</button>` : ""}
                 <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" || !participantDraftsReady ? "disabled" : ""}>
                   ${["동기화 대기", "동기화 실패"].includes(log.status) ? "다시 동기화" : "수업 완료·횟수 차감"}
                 </button>

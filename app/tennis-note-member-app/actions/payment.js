@@ -140,7 +140,7 @@ async function cancelPendingTicketPayment(ticketId = "") {
     pendingPaymentCancelInFlight.delete(paymentId);
   }
 
-  await Promise.allSettled([syncMemberTicketsFromServer(), syncMemberDiscountCouponsFromServer()]);
+  await Promise.allSettled([syncMemberTicketsFromServer(), syncMemberPendingPurchaseSchedulesFromServer(), syncMemberDiscountCouponsFromServer()]);
   renderAll();
   setView("shopView");
 }
