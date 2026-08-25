@@ -68,3 +68,32 @@ function emailLoginErrorMessage(error) {
   if (code.includes("credentials_required")) return "이메일과 비밀번호를 입력해주세요.";
   return "로그인을 완료하지 못했습니다. 고객지원으로 문의해주세요.";
 }
+
+function oauthLoginErrorMessage(error, provider = "간편") {
+  const code = String(error?.code || error?.message || "").toLowerCase();
+  if (code.includes("flow_state_already_used")) {
+    return `${provider} 로그인 요청이 겹쳤습니다. 버튼을 한 번만 눌러 다시 진행해 주세요.`;
+  }
+  if (code.includes("server_error") || code.includes("unexpected_failure") || code.includes("request_timeout")) {
+    return `${provider} 로그인 서버 응답이 늦어졌습니다. 잠시 후 다시 시도해 주세요.`;
+  }
+  return `${provider} 로그인을 완료하지 못했습니다. 다시 시도해 주세요.`;
+}
+
+function emailSignupErrorMessage(error) {
+  const code = `${error?.code || error?.message || ""}`.toLowerCase();
+  if (code.includes("already") || code.includes("registered") || code.includes("exists")) return "이미 가입된 이메일입니다. 로그인하거나 비밀번호 찾기를 이용해주세요.";
+  if (code.includes("weak_password") || code.includes("at least") || code.includes("too short")) return "비밀번호는 8자 이상 입력해주세요.";
+  if (code.includes("invalid") && code.includes("email")) return "사용할 수 있는 이메일 주소를 입력해주세요.";
+  if (code.includes("rate") || code.includes("too many")) return "요청이 많습니다. 잠시 후 다시 시도해주세요.";
+  if (code.includes("signup_disabled")) return "현재 이메일 회원가입을 준비 중입니다. 고객지원으로 문의해주세요.";
+  return "회원가입을 완료하지 못했습니다. 잠시 후 다시 시도해주세요.";
+}
+
+function passwordUpdateErrorMessage(error) {
+  const code = `${error?.code || error?.message || ""}`.toLowerCase();
+  if (code.includes("same_password")) return "기존 비밀번호와 다른 비밀번호를 입력해주세요.";
+  if (code.includes("session") || code.includes("token") || code.includes("jwt")) return "인증 링크가 만료됐습니다. 비밀번호 찾기를 다시 진행해주세요.";
+  if (code.includes("weak_password") || code.includes("at least") || code.includes("too short")) return "비밀번호는 8자 이상 입력해주세요.";
+  return "비밀번호를 변경하지 못했습니다. 비밀번호 찾기를 다시 진행해주세요.";
+}

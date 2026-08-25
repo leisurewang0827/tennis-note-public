@@ -245,3 +245,21 @@ function lessonRecordOptions(selectedId) {
     .map((lesson) => `<option value="${lesson.id}" ${lesson.id === selectedId ? "selected" : ""}>${lesson.day} ${lesson.time} · ${lesson.member} · ${lesson.type}</option>`)
     .join("");
 }
+
+function requestCoachRoleId(request = {}) {
+  return String(
+    request.coachRoleId
+    || request.coach_role_id
+    || request.targetCoachRoleId
+    || request.target_coach_role_id
+    || "",
+  ).trim();
+}
+
+function makeupRequestBelongsToCurrentCoach(request = {}) {
+  const roleId = currentCoachRoleId();
+  const targetRoleId = requestCoachRoleId(request);
+  if (roleId && targetRoleId) return roleId === targetRoleId;
+  if (state.dataMode === "live" || state.liveProfileId) return false;
+  return canonicalCoachName(requestCoach(request)) === currentCoachName();
+}

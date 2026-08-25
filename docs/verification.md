@@ -28,6 +28,7 @@
 | `undefined-identifiers` | 정의 없는 이음매 이름을 본문에서 사용 | 같음 |
 | `verify-env` | `verify.sh` 와 CI 워크플로의 환경변수가 어긋남 | 로컬만 통과하거나 CI 만 통과합니다 |
 | `app-js-budget` | `app.js` 가 다시 커짐 | 새 함수를 `app.js` 에 두지 말고 동작에 맞는 폴더로 보내세요. 병합 직후라면 저쪽이 넣은 것이 남은 것입니다 |
+| `check_tennisnote_coach_scope_runtime.cjs` | 코치가 남의 수업을 보게 되는 회귀 · 회원 이름 이스케이프 | **`origin/main` 에서 온 검사입니다.** 저쪽은 `app.js` 에서 함수를 잘라내는데 우리는 위치가 달라 꺼내는 방식만 고쳤습니다. 저쪽이 단언을 바꾸면 같이 맞추세요 |
 | `layer-boundaries` | `domain/`·`views/` 에서 서버 호출 | 서버에 붙는 함수는 `data/` 로 옮기세요. 전역이라 호출부는 안 고쳐도 됩니다 |
 | `admin-*` · `ticket-state` | 도메인 함수의 **현재 동작**을 고정 | 옮기다 뭔가 바뀌었거나, 의도한 변경이면 기대값을 갱신하세요 |
 | `check_cloudflare_build.py` | 버전 불일치 · 깨진 링크 · 비밀키 유출 · 결제 설정 | 메시지가 무엇을 하라고 알려줍니다 |

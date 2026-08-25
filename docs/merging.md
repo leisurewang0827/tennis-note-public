@@ -35,8 +35,16 @@ git branch backup/pre-merge-<버전>
 
 ## 3. app.js 는 "저쪽 것에서 우리가 옮긴 것만 빼기" 로 풉니다
 
+```bash
+git merge origin/main --no-commit
+./scripts/merge_resolve.py app/admin app/tennis-note-member-app app/tennis-note-coach-app
+```
+
 충돌 블록을 손으로 고르지 마세요. **저쪽 `app.js` 를 통째로 가져와서, 우리가
 다른 파일로 옮긴 함수·상수를 다시 빼냅니다.** 그러면 저쪽 변경을 하나도 안 놓칩니다.
+
+스크립트가 `⚠ 손으로 확인` 으로 짚어주는 것은 **우리도 고쳐둔 함수**입니다.
+저쪽 본문을 받고 우리 수정을 다시 얹으세요. 대개 서로 다른 줄이라 겹치지 않습니다.
 
 ⚠ **저쪽 본문과 우리 본문이 다르다고 바로 바꾸면 안 됩니다.**
 우리 쪽에는 [기본값 이음매](splitting.md#기본값-이음매는-쓰지-마세요) 가 61개
@@ -56,8 +64,15 @@ git branch backup/pre-merge-<버전>
 
 ## 5. `bindEvents` 는 따로 다룹니다
 
+```bash
+./scripts/merge_bindevents.py restore <병합전-브랜치> app/admin …   # 우리 호출 목록 복원
+./scripts/merge_bindevents.py place   app/admin …                  # 어디에 넣을지 보여만 줌
+./scripts/merge_bindevents.py apply   app/admin …                  # 실제로 넣음
+./scripts/merge_bindevents.py diff    app/admin …                  # 집합 비교로 확인
+```
+
 우리가 `events/` 로 쪼개서 통째 대조가 안 됩니다. 저쪽이 넣은 덩어리를 **문맥으로
-찾아 제자리에** 넣으세요. 앞 문맥이 유일하지 않으면 뒤 문맥으로 찾습니다.
+찾아 제자리에** 넣습니다. 앞 문맥이 유일하지 않으면 폭을 넓혀가며 찾습니다.
 
 확인은 **"우리 `events/` 전체를 이으면 저쪽 `bindEvents` 본문과 같은 줄들인가"**
 로 합니다. 순서는 다릅니다(우리는 `delegated` 를 앞으로 뺐습니다). 그래서

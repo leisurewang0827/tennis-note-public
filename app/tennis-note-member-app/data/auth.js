@@ -318,3 +318,108 @@ async function logout() {
   jumpToTop();
   saveSnapshot();
 }
+
+async function signUpWithEmail(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submitButton = form.querySelector('button[type="submit"]');
+  const email = $("#memberSignupEmail").value.trim().toLowerCase();
+  const password = $("#memberSignupPassword").value;
+  const passwordConfirm = $("#memberSignupPasswordConfirm").value;
+  if (password.length < 8) {
+    setEmailAuthStatus("비밀번호는 8자 이상 입력해주세요.", "alert");
+    $("#memberSignupPassword").focus();
+    return;
+  }
+  if (password !== passwordConfirm) {
+    setEmailAuthStatus("비밀번호 확인이 일치하지 않습니다.", "alert");
+    $("#memberSignupPasswordConfirm").focus();
+    return;
+  }
+  if (!$("#memberSignupConsent").checked) {
+    setEmailAuthStatus("이용약관과 개인정보 처리방침에 동의해주세요.", "alert");
+    $("#memberSignupConsent").focus();
+    return;
+  }
+  submitButton.disabled = true;
+  setEmailAuthStatus("회원가입 처리 중");
+  try {
+    const client = window.TennisNoteDataClient;
+    const result = await client.signUpWithPassword(email, password);
+    if (result?.access_token) {
+      const opened = await applySupabaseMemberSession(true);
+      if (!opened) throw new Error("profile_bootstrap_failed");
+      form.reset();
+      setEmailAuthStatus();
+      return;
+    }
+    $("#memberLoginEmail").value = email;
+    form.reset();
+    setEmailAuthMode("login", {
+      message: "인증 메일을 보냈습니다. 메일에서 인증한 뒤 이메일로 로그인해주세요.",
+      tone: "done",
+      focus: false,
+    });
+  } catch (error) {
+    setEmailAuthStatus(emailSignupErrorMessage(error), "alert");
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function requestPasswordReset() {
+  const emailInput = $("#memberLoginEmail");
+  const button = $("#memberPasswordResetButton");
+  const email = emailInput?.value.trim().toLowerCase() || "";
+  if (!email) {
+    setEmailAuthStatus("가입한 이메일을 먼저 입력해주세요.", "alert");
+    emailInput?.focus();
+    return;
+  }
+  button.disabled = true;
+  setEmailAuthStatus("비밀번호 재설정 메일을 보내는 중입니다.");
+  try {
+    await window.TennisNoteDataClient.sendPasswordResetEmail(email);
+    setEmailAuthStatus("가입 여부와 관계없이 재설정 안내를 보냈습니다. 이메일을 확인해주세요.", "done");
+  } catch {
+    setEmailAuthStatus("재설정 메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요.", "alert");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function updateRecoveredPassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submitButton = form.querySelector('button[type="submit"]');
+  const password = $("#memberRecoveryPassword").value;
+  const passwordConfirm = $("#memberRecoveryPasswordConfirm").value;
+  if (password.length < 8) {
+    setEmailAuthStatus("새 비밀번호는 8자 이상 입력해주세요.", "alert");
+    $("#memberRecoveryPassword").focus();
+    return;
+  }
+  if (password !== passwordConfirm) {
+    setEmailAuthStatus("새 비밀번호 확인이 일치하지 않습니다.", "alert");
+    $("#memberRecoveryPasswordConfirm").focus();
+    return;
+  }
+  submitButton.disabled = true;
+  setEmailAuthStatus("새 비밀번호를 저장하는 중입니다.");
+  try {
+    const client = window.TennisNoteDataClient;
+    await client.updatePassword(password);
+    await client.signOut?.().catch(() => {});
+    emailPasswordRecoveryPending = false;
+    form.reset();
+    setEmailAuthMode("login", {
+      message: "비밀번호가 변경됐습니다. 새 비밀번호로 로그인해주세요.",
+      tone: "done",
+      focus: false,
+    });
+  } catch (error) {
+    setEmailAuthStatus(passwordUpdateErrorMessage(error), "alert");
+  } finally {
+    submitButton.disabled = false;
+  }
+}

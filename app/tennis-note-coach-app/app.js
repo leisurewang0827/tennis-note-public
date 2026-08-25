@@ -178,24 +178,6 @@ let activeCoachModalId = "";
 let coachModalReturnFocus = null;
 let nativeCoachBackListenerReady = false;
 
-function requestCoachRoleId(request = {}) {
-  return String(
-    request.coachRoleId
-    || request.coach_role_id
-    || request.targetCoachRoleId
-    || request.target_coach_role_id
-    || "",
-  ).trim();
-}
-
-function makeupRequestBelongsToCurrentCoach(request = {}) {
-  const roleId = currentCoachRoleId();
-  const targetRoleId = requestCoachRoleId(request);
-  if (roleId && targetRoleId) return roleId === targetRoleId;
-  if (state.dataMode === "live" || state.liveProfileId) return false;
-  return canonicalCoachName(requestCoach(request)) === currentCoachName();
-}
-
 function coachLessonCardState(lesson = {}, now = new Date()) {
   const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
   const participants = Array.isArray(lesson.v2Participants) ? lesson.v2Participants : [];

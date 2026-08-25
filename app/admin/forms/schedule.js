@@ -933,3 +933,30 @@ function installAdminLiveScheduleRefresh() {
   renderCustomLessonColorRules();
   adminLiveScheduleRefreshTimer = window.setInterval(refresh, ADMIN_LIVE_REFRESH_INTERVAL_MS);
 }
+
+function lessonTicketCanBeSelected(ticket, lessonDate = lessonTicketEligibilityDate()) {
+  if (state.editingLessonId) return ticketCanBeUsedOnLessonDate(ticket, lessonDate);
+  const day = $("#lessonDay")?.value || currentScheduleDay();
+  return ticketCanBeUsedOnLessonDate(ticket, lessonDate)
+    || ticketCanBeScheduledOnOrAfterDate(ticket, day, lessonDate);
+}
+
+function syncLessonModalWeekToSelectedTicket() {
+  if (state.editingLessonId) return false;
+  const ticket = scheduleTicketById($("#lessonTicket")?.value);
+  const day = $("#lessonDay")?.value || currentScheduleDay();
+  const displayedDate = adminWeekDateForDay(day);
+  const targetDate = firstEligibleScheduleDateForTicket(ticket, day, displayedDate);
+  if (!targetDate || targetDate === displayedDate) return false;
+  state.activeAdminWeekIndex = Math.min(
+    Math.max(adminWeekOffsetForDate(targetDate), adminScheduleMinWeekOffset),
+    adminScheduleMaxWeekOffset,
+  );
+  state.selectedScheduleDay = day;
+  syncAdminScheduleWeek();
+  renderSchedule();
+  saveSnapshot();
+  void ensureActiveAdminWeekLoaded();
+  setLessonFormMessage(`시작 예정 회원권이라 ${memberDetailDateLabel(targetDate)} 주차로 이동했습니다.`, "good");
+  return true;
+}

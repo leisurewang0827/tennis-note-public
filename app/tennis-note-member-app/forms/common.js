@@ -242,3 +242,64 @@ async function retryTransientNetwork(operation, attempts = 3) {
   }
   throw lastError;
 }
+
+function beginOAuthLogin(provider) {
+  if (oauthLoginInFlightProvider) return false;
+  oauthLoginInFlightProvider = provider || "간편";
+  $$('[data-login-provider]').forEach((button) => {
+    button.dataset.oauthDisabledBefore = button.disabled ? "true" : "false";
+    button.disabled = true;
+    button.setAttribute("aria-busy", button.dataset.loginProvider === provider ? "true" : "false");
+  });
+  return true;
+}
+
+function finishOAuthLogin() {
+  oauthLoginInFlightProvider = "";
+  $$('[data-login-provider]').forEach((button) => {
+    const disabledBefore = button.dataset.oauthDisabledBefore;
+    if (disabledBefore) button.disabled = disabledBefore === "true";
+    delete button.dataset.oauthDisabledBefore;
+    button.removeAttribute("aria-busy");
+  });
+}
+
+function setEmailAuthStatus(message = "", tone = "") {
+  const status = $("#memberEmailLoginStatus");
+  if (!status) return;
+  status.textContent = message;
+  if (tone) status.dataset.tone = tone;
+  else delete status.dataset.tone;
+}
+
+function setEmailAuthMode(mode = "login", options = {}) {
+  const nextMode = ["login", "signup", "recovery"].includes(mode) ? mode : "login";
+  emailAuthMode = nextMode;
+  const panel = $("#memberEmailAuthPanel");
+  const tabs = $("#memberEmailAuthTabs");
+  const summary = $("#memberEmailAuthSummary");
+  const forms = {
+    login: $("#memberEmailLoginForm"),
+    signup: $("#memberEmailSignupForm"),
+    recovery: $("#memberPasswordRecoveryForm"),
+  };
+  if (panel) panel.open = true;
+  if (tabs) tabs.hidden = nextMode === "recovery";
+  if (summary) summary.textContent = nextMode === "recovery" ? "새 비밀번호 설정" : "이메일 로그인·가입";
+  Object.entries(forms).forEach(([key, form]) => {
+    if (form) form.hidden = key !== nextMode;
+  });
+  $$('[data-email-auth-mode]').forEach((button) => {
+    const selected = button.dataset.emailAuthMode === nextMode;
+    button.classList.toggle("is-active", selected);
+    button.setAttribute("aria-selected", selected ? "true" : "false");
+  });
+  if (Object.prototype.hasOwnProperty.call(options, "message")) {
+    setEmailAuthStatus(options.message, options.tone || "");
+  } else if (options.clearStatus !== false) {
+    setEmailAuthStatus();
+  }
+  if (options.focus === false) return;
+  const focusTarget = forms[nextMode]?.querySelector("input:not([type=checkbox])");
+  window.requestAnimationFrame(() => focusTarget?.focus());
+}

@@ -310,3 +310,39 @@ async function ensureAdminPaymentCancelReady(item = {}) {
   }
   return true;
 }
+
+async function loadAdminSettlementSupportData() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.selectRows) return false;
+  const readAll = (table, options) => (client.selectAllRows || client.selectRows).call(client, table, {
+    limit: 500,
+    pageSize: 500,
+    maxRows: 20000,
+    ...options,
+  });
+  const [lessonRecords, substituteAssignments, settlementTicketRows] = await Promise.all([
+    readAll("tn_lesson_records", {
+      select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_ticket_id,deducted_sessions,completed_at,tn_lessons(member_ticket_id,duration_minutes)",
+      order: "id.asc",
+    }).catch(() => client.selectRows("tn_lesson_records", {
+      select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at",
+      limit: 500,
+    }).catch(() => adminLiveDataState.lessonRecords || [])),
+    readAll("tn_lesson_substitute_assignments", {
+      select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
+      order: "assigned_at.desc",
+    }).catch(() => adminLiveDataState.substituteAssignments || []),
+    readAll("tn_member_tickets", {
+      select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price,updated_at",
+      order: "id.asc",
+    }).catch(() => []),
+  ]);
+  Object.assign(adminLiveDataState, {
+    lessonRecords,
+    substituteAssignments,
+    settlementTickets: settlementTicketRows.length
+      ? mapAdminSettlementTicketRows(settlementTicketRows)
+      : adminLiveDataState.settlementTickets || [],
+  });
+  return true;
+}

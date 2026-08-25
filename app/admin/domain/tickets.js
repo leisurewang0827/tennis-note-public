@@ -1070,3 +1070,69 @@ function memberTicketLifecyclePositionLabel(member, ticket) {
   }
   return "지난 회원권";
 }
+
+function ticketScheduleStartDate(ticket, fallback = adminLocalDateKey(new Date())) {
+  return String(ticket?.actualLessonStart || ticket?.starts || ticket?.purchased || fallback).slice(0, 10);
+}
+
+function ticketScheduleEndDate(ticket) {
+  return String(ticket?.expires || "9999-12-31").slice(0, 10);
+}
+
+function isSchedulableRegularTicket(ticket, today = adminLocalDateKey(new Date())) {
+  if (!ticket || !["active", "paused"].includes(String(ticket.status || "active"))) return false;
+  if (Number(ticket.remaining) <= 0 || ticketScheduleEndDate(ticket) < today) return false;
+  const productKind = ticket.productKind || membershipProductForTicket(ticket).productKind;
+  return !["pass", "coupon"].includes(String(productKind).toLowerCase())
+    && !String(ticket.product || "").includes("쿠폰");
+}
+
+function ticketCanBeScheduledOnOrAfterDate(ticket, day, requestedDate = "") {
+  return isSchedulableRegularTicket(ticket)
+    && Boolean(firstEligibleScheduleDateForTicket(ticket, day, requestedDate));
+}
+
+function firstEligibleScheduleDateForTicket(ticket, day, requestedDate = "") {
+  if (!ticket || !scheduleDays.includes(day) || !ticketAllowsScheduleDay(ticket, day)) return "";
+  const today = adminLocalDateKey(new Date());
+  const baseDate = [requestedDate, ticketScheduleStartDate(ticket), today]
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  const targetDay = ({ 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 })[day];
+  const candidate = new Date(`${baseDate}T12:00:00`);
+  if (!Number.isFinite(candidate.getTime())) return "";
+  candidate.setDate(candidate.getDate() + ((targetDay - candidate.getDay() + 7) % 7));
+  const candidateDate = adminLocalDateKey(candidate);
+  return candidateDate <= ticketScheduleEndDate(ticket) ? candidateDate : "";
+}
+
+function mapAdminSettlementTicketRows(rows = [], context = {}) {
+  const productsById = new Map((context.products || adminLiveDataState.products || [])
+    .map((product) => [product.id, product]));
+  const usersById = new Map((context.users || adminLiveDataState.users || [])
+    .map((user) => [user.id, user]));
+  const coachIdByRole = context.coachIdByRole instanceof Map
+    ? context.coachIdByRole
+    : new Map(coaches
+      .filter((coach) => coach.serverRoleId)
+      .map((coach) => [coach.serverRoleId, coach.id]));
+  return rows.map((ticket) => {
+    const product = productsById.get(ticket.product_id) || {};
+    return {
+      id: ticket.id,
+      serverTicketId: ticket.id,
+      serverUserId: ticket.user_id,
+      productId: ticket.product_id,
+      branchId: ticket.branch_id,
+      coachRoleId: ticket.coach_role_id,
+      member: usersById.get(ticket.user_id)?.name || "대타 수업",
+      coachId: coachIdByRole.get(ticket.coach_role_id) || "",
+      total: Number(ticket.total_sessions) || 0,
+      used: Number(ticket.used_sessions) || 0,
+      remaining: Number(ticket.remaining_sessions) || 0,
+      durationMinutes: Number(product.lesson_minutes) || 20,
+      status: ticket.status,
+    };
+  });
+}
