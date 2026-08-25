@@ -101,6 +101,7 @@
     revisionWatcher: null,
     absorbingRevisionRefresh: false,
     postSaveRefreshPending: false,
+    policyEditorDirty: false,
     integrityRepairGroups: new Map(),
   };
 
@@ -1881,10 +1882,14 @@
       : '<div class="schedule-v2-empty" style="min-height:90px">미배정 정규권이 없습니다.</div>';
   }
 
-  function renderPolicy() {
+  function renderPolicy({ force = false } = {}) {
     const policy = state.payload?.policy || {};
     const panel = $("#scheduleV2PolicyPanel");
     if (!panel) return;
+    if (!force && state.policyEditorDirty && !panel.hidden) {
+      renderMemberChangePolicyPreview();
+      return;
+    }
     const values = {
       coachSingleAddMode: policy.coach_single_add_mode || "approval",
       coachRegularChangeMode: policy.coach_regular_change_mode || "approval",
@@ -4290,8 +4295,9 @@
         },
       });
       state.payload.policy = Array.isArray(saved) ? saved[0] || {} : saved || {};
+      state.policyEditorDirty = false;
       setStatus("운영 규칙을 저장했습니다.", "success");
-      renderPolicy();
+      renderPolicy({ force: true });
     } catch (error) {
       setStatus(errorMessage(error), "error");
     } finally {
@@ -4616,12 +4622,22 @@
     });
     $("#scheduleV2PolicyButton").addEventListener("click", (event) => {
       const panel = $("#scheduleV2PolicyPanel");
+      const opening = panel.hidden;
       panel.hidden = !panel.hidden;
       event.currentTarget.setAttribute("aria-expanded", String(!panel.hidden));
+      if (opening) {
+        state.policyEditorDirty = false;
+        renderPolicy({ force: true });
+      }
     });
     $("#scheduleV2PolicySaveButton").addEventListener("click", savePolicy);
-    $("#scheduleV2PolicyPanel")?.addEventListener("input", renderMemberChangePolicyPreview);
-    $("#scheduleV2PolicyPanel")?.addEventListener("change", renderMemberChangePolicyPreview);
+    const policyPanel = $("#scheduleV2PolicyPanel");
+    const markPolicyEditorDirty = () => {
+      state.policyEditorDirty = true;
+      renderMemberChangePolicyPreview();
+    };
+    policyPanel?.addEventListener("input", markPolicyEditorDirty);
+    policyPanel?.addEventListener("change", markPolicyEditorDirty);
     $("#scheduleV2ClosureButton")?.addEventListener("click", openClosureEditor);
     $("#scheduleV2ClosureForm")?.addEventListener("submit", saveClosure);
     $("#scheduleV2ClosureForm")?.addEventListener("change", (event) => {

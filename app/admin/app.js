@@ -305,7 +305,7 @@ const members = [
     name: "운동노트 체험회원",
     status: "journal",
     memberKind: "journal_only",
-    statusLabel: "운동노트 회원",
+    statusLabel: "앱가입",
     coach: "미배정",
     regularTime: "상담 전",
     remaining: 0,
@@ -1390,7 +1390,7 @@ function operationsViewAllowed(view) {
 function applyOperationsRolePermissions() {
   const role = operationsRole();
   document.body.dataset.operationsRole = role || "signed-out";
-  if (role === "coach" && state.memberFilter === "inactive") state.memberFilter = "active";
+  if (role === "coach" && ["journal", "deletion", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
   $$(".nav-item[data-view]").forEach((button) => {
     if (!button.dataset.adminLabel) button.dataset.adminLabel = button.textContent.trim();
     const coachLabels = {
@@ -1477,6 +1477,7 @@ const adminLiveDataState = {
   groupTicketLinks: [],
   memberDatabaseRecords: [],
   memberMembershipRecords: [],
+  memberPaymentProjections: [],
   regularScheduleRules: [],
   substituteAssignments: [],
 };
@@ -1542,6 +1543,7 @@ async function writeAdminOperationalCache() {
     billingLogs: billingLogs.slice(0, 100),
     groupAccounts,
     lessonNotes,
+    memberPaymentProjections: adminLiveDataState.memberPaymentProjections || [],
   };
   const database = await openAdminOperationalCache();
   try {
@@ -1595,6 +1597,9 @@ async function restoreAdminOperationalCache() {
       [groupAccounts, snapshot.groupAccounts],
       [lessonNotes, snapshot.lessonNotes],
     ].forEach(([target, source]) => replaceArray(target, Array.isArray(source) ? source : []));
+    adminLiveDataState.memberPaymentProjections = Array.isArray(snapshot.memberPaymentProjections)
+      ? snapshot.memberPaymentProjections
+      : [];
     invalidateMemberSearchIndex();
     Object.assign(state, {
       liveScheduleLoaded: false,
@@ -1796,7 +1801,7 @@ function adminMemberDirectoryCoachRoleId() {
 function adminMemberDirectorySignature() {
   return JSON.stringify({
     branchId: activeOperationBranchId() || null,
-    status: state.memberFilter || "active",
+    status: state.memberFilter === "deletion" ? "active" : state.memberFilter || "active",
     search: String(state.memberSearch || "").trim(),
     coachRoleId: adminMemberDirectoryCoachRoleId(),
     productKind: state.memberTicketFilter === "all" ? null : state.memberTicketFilter,
@@ -1811,6 +1816,18 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
   const existing = sourceMembers.find((member) => String(member.serverUserId || "") === userId);
   if (existing) {
     existing.directoryRow = row;
+    existing.authLinked = Boolean(row.auth_user_id);
+    existing.authRole = row.user_role || existing.authRole || "member";
+    existing.serverStatus = row.user_status || existing.serverStatus || "active";
+    if (row.phone) existing.phone = row.phone;
+    if (String(row.directory_status || "") === "journal") {
+      existing.status = "journal";
+      existing.statusLabel = "앱가입";
+      existing.memberKind = "journal_only";
+      existing.coach = row.coach_name || "미배정";
+      existing.lessonType = row.product_name || "회원권 없음";
+      existing.remaining = Number(row.remaining_sessions) || 0;
+    }
     return existing;
   }
   const nextId = Math.max(1000, ...sourceMembers.map((member) => Number(member.id) || 0)) + 1;
@@ -1819,7 +1836,7 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
     id: nextId,
     name: row.name || "회원",
     status,
-    statusLabel: status === "active" ? "수강중" : status === "pending" ? "가입대기" : status === "journal" ? "운동노트 회원" : status === "inactive" ? "삭제회원" : "만료회원",
+    statusLabel: status === "active" ? "수강중" : status === "pending" ? "가입대기" : status === "journal" ? "앱가입" : status === "inactive" ? "삭제회원" : "만료회원",
     memberKind: status === "journal" ? "journal_only" : status === "pending" ? "lesson_pending" : status === "active" ? "lesson_member" : "former_lesson_member",
     serverStatus: row.user_status || "active",
     serverUserId: userId,
@@ -1941,6 +1958,7 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
       loadAdminDataOnce("member-requests", () => Promise.all([
         loadServerHoldingRequests(),
         loadServerAccountDeletionRequests(),
+        checkAccountDeletionServerReadiness(),
         loadMemberManagementPolicyFromServer(),
         loadMemberEditorModeFromServer(),
       ])),
@@ -3145,7 +3163,7 @@ function normalizeDemoData() {
   if (state.view === "makeup") state.view = "schedule";
   if (state.view === "import" || state.view === "data") state.view = "members";
   if (!["operation", "membership", "notifications", "coach", "layout", "security"].includes(state.settingsTab)) state.settingsTab = "operation";
-  if (!["active", "expiring", "expired", "pending", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
+  if (!["active", "expiring", "expired", "pending", "journal", "deletion", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
   if (!coaches.some((coach) => coach.id === "coach-park")) {
     coaches.push({ id: "coach-park", name: "박창준 코치", role: "주말 레슨", status: "active", account: "박창준", coachMode: "approved", availability: "weekend", photoUrl: "" });
   }
@@ -8994,7 +9012,7 @@ function memberStatusLabel(member) {
   const status = memberListStatus(member);
   if (status === "inactive") return "삭제회원";
   if (status === "pending") return memberRegistrationStage(member)?.label || "가입 대기";
-  if (status === "journal") return "운동노트 회원";
+  if (status === "journal") return "앱가입";
   return status === "expired" ? "만료회원" : "수강중";
 }
 
@@ -9195,10 +9213,17 @@ function memberManagementDayLabel(day) {
 function memberDatabaseRecord(member = null, ticket = null) {
   const records = adminLiveDataState.memberDatabaseRecords || [];
   const membershipRecords = adminLiveDataState.memberMembershipRecords || [];
-  const ticketId = ticket?.serverTicketId || ticket?.id || "";
+  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
+  const userIds = memberServerUserIds(member).map(String);
   if (ticketId) {
-    return membershipRecords.find((record) => record.ticket_id === ticketId)
-      || records.find((record) => record.current_ticket_id === ticketId)
+    return membershipRecords.find((record) => (
+      String(record.ticket_id || "") === ticketId
+      && userIds.includes(String(record.user_id || ""))
+    ))
+      || records.find((record) => (
+        String(record.current_ticket_id || "") === ticketId
+        && userIds.includes(String(record.user_id || ""))
+      ))
       || null;
   }
   if (member?.memberRecord) return member.memberRecord;
@@ -9309,11 +9334,28 @@ function memberUnlinkedVerifiedPayment(member = null) {
       .localeCompare(String(left.verified_at || left.paid_at || left.created_at || "")))[0] || null;
 }
 
-function memberTicketLinkedPayment(ticket = null) {
+function memberPaymentProjectionRow(member = null, ticket = null) {
   const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
-  if (!ticketId) return null;
+  const userIds = memberServerUserIds(member).map(String);
+  if (!ticketId || !userIds.length) return null;
+  return (adminLiveDataState.memberPaymentProjections || [])
+    .filter((projection) => (
+      String(projection.ticket_id || projection.ticketId || "") === ticketId
+      && userIds.includes(String(projection.user_id || projection.userId || ""))
+    ))
+    .sort((left, right) => String(right.projection_updated_at || "")
+      .localeCompare(String(left.projection_updated_at || "")))[0] || null;
+}
+
+function memberTicketLinkedPayment(member = null, ticket = null) {
+  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
+  const userIds = memberServerUserIds(member).map(String);
+  if (!ticketId || !userIds.length) return null;
   return (adminLiveDataState.payments || [])
-    .filter((payment) => String(payment.ticket_id || payment.ticketId || "") === ticketId)
+    .filter((payment) => (
+      String(payment.ticket_id || payment.ticketId || "") === ticketId
+      && userIds.includes(String(payment.user_id || payment.userId || ""))
+    ))
     .sort((left, right) => {
       const statusScore = (payment) => payment.status === "verified" ? 2 : payment.status === "pending" ? 1 : 0;
       const scoreDelta = statusScore(right) - statusScore(left);
@@ -9324,7 +9366,18 @@ function memberTicketLinkedPayment(ticket = null) {
 }
 
 function memberTicketPaymentProjection(member = null, ticket = null) {
-  const payment = memberTicketLinkedPayment(ticket);
+  const serverProjection = memberPaymentProjectionRow(member, ticket);
+  if (serverProjection) {
+    return {
+      ...serverProjection,
+      protected: Boolean(serverProjection.payment_protected),
+      payment: serverProjection.payment_id ? {
+        id: serverProjection.payment_id,
+        status: serverProjection.payment_status || "",
+      } : null,
+    };
+  }
+  const payment = memberTicketLinkedPayment(member, ticket);
   if (payment) {
     return {
       payment,
@@ -10353,6 +10406,109 @@ function accountDeletionDateTime(value) {
 const ACCOUNT_DELETION_STALE_MS = 16 * 60 * 1000;
 const accountDeletionExecutionInFlight = new Set();
 let accountDeletionRetryTimer = 0;
+const accountDeletionRequestState = {
+  loaded: false,
+  loading: false,
+  error: "",
+};
+const accountDeletionServerState = {
+  status: "idle",
+  code: "",
+  contractVersion: "",
+  appleRevokeReady: null,
+  tokenEncryptionReady: null,
+};
+
+function accountDeletionServerReady() {
+  return accountDeletionServerState.status === "ready";
+}
+
+function accountDeletionServerStatusCopy() {
+  const status = accountDeletionServerState.status;
+  if (status === "ready") {
+    const appleReady = accountDeletionServerState.appleRevokeReady !== false
+      && accountDeletionServerState.tokenEncryptionReady !== false;
+    return {
+      title: appleReady ? "삭제 서버 준비됨" : "일반 계정 삭제 준비됨",
+      detail: appleReady
+        ? "서버와 DB 안전 계약을 확인했습니다."
+        : "Apple 로그인 탈퇴는 서버 비밀설정을 추가로 확인해야 합니다.",
+      tone: "is-ready",
+    };
+  }
+  if (status === "checking" || status === "idle") {
+    return { title: "삭제 서버 확인 중", detail: "실행 전에 서버와 DB 안전 계약을 확인합니다.", tone: "is-checking" };
+  }
+  if (status === "unavailable") {
+    return { title: "삭제 서버 미배포", detail: "회원 데이터는 그대로 보존됩니다. 서버 기능을 배포한 뒤 다시 확인해 주세요.", tone: "is-blocked" };
+  }
+  if (status === "misconfigured") {
+    return { title: "삭제 서버 설정 확인 필요", detail: "서버 비밀설정이 준비될 때까지 삭제 실행을 차단했습니다.", tone: "is-blocked" };
+  }
+  if (status === "contract_error") {
+    return { title: "DB 안전 계약 불일치", detail: "운영 DB migration을 확인하기 전에는 삭제할 수 없습니다.", tone: "is-blocked" };
+  }
+  if (status === "unauthorized") {
+    return { title: "관리자 로그인 확인 필요", detail: "관리자 권한을 다시 확인한 뒤 재시도해 주세요.", tone: "is-blocked" };
+  }
+  return { title: "삭제 서버 확인 실패", detail: "네트워크 상태를 확인한 뒤 다시 확인해 주세요.", tone: "is-blocked" };
+}
+
+function renderAccountDeletionServerStatus() {
+  const target = $("#accountDeletionServerStatus");
+  if (!target) return;
+  const copy = accountDeletionServerStatusCopy();
+  target.className = `account-deletion-server-status ${copy.tone}`;
+  target.innerHTML = `
+    <div><strong>${escapeHtml(copy.title)}</strong><span>${escapeHtml(copy.detail)}</span></div>
+    <button class="ghost-button" type="button" data-retry-account-deletion-readiness ${accountDeletionServerState.status === "checking" ? "disabled aria-busy=\"true\"" : ""}>다시 확인</button>`;
+}
+
+async function checkAccountDeletionServerReadiness({ force = false } = {}) {
+  const client = window.TennisNoteDataClient;
+  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
+    Object.assign(accountDeletionServerState, { status: "unauthorized", code: "login_required" });
+    renderAccountDeletionServerStatus();
+    renderAccountDeletionAdminList();
+    return false;
+  }
+  if (!force && accountDeletionServerReady()) return true;
+  if (accountDeletionServerState.status === "checking") return false;
+  Object.assign(accountDeletionServerState, { status: "checking", code: "" });
+  renderAccountDeletionServerStatus();
+  renderAccountDeletionAdminList();
+  try {
+    const payload = await client.invokeFunction("tennisnote-account-deletion", {
+      body: { action: "readiness" },
+    });
+    if (payload?.ok !== true || payload?.code !== "ready") throw new Error("account_deletion_readiness_invalid");
+    Object.assign(accountDeletionServerState, {
+      status: "ready",
+      code: "ready",
+      contractVersion: String(payload.contractVersion || ""),
+      appleRevokeReady: payload.appleRevokeReady !== false,
+      tokenEncryptionReady: payload.tokenEncryptionReady !== false,
+    });
+    return true;
+  } catch (error) {
+    const code = String(error?.payload?.code || error?.message || "").toLowerCase();
+    const status = Number(error?.status) || 0;
+    accountDeletionServerState.code = code || `http_${status || "unknown"}`;
+    accountDeletionServerState.status = status === 404 || code.includes("function_not_found")
+      ? "unavailable"
+      : status === 401 || status === 403 || code.includes("login_required") || code.includes("admin_required")
+        ? "unauthorized"
+        : status === 503 || code.includes("server_config")
+          ? "misconfigured"
+          : code.includes("db_contract")
+            ? "contract_error"
+            : "error";
+    return false;
+  } finally {
+    renderAccountDeletionServerStatus();
+    renderAccountDeletionAdminList();
+  }
+}
 
 function accountDeletionProcessingIsStale(request, now = Date.now()) {
   if (request?.status !== "processing") return false;
@@ -10383,6 +10539,9 @@ function accountDeletionActionButton(request) {
   if (request.status === "pending") {
     return `<button class="small-button" type="button" data-review-account-deletion="reviewing" data-account-deletion-id="${escapeHtml(request.id)}">검토 시작</button>`;
   }
+  if (!accountDeletionServerReady() && ["reviewing", "failed"].includes(request.status)) {
+    return `<button class="small-button danger-button" type="button" disabled title="삭제 서버 상태를 먼저 확인해 주세요">삭제 서버 확인 필요</button>`;
+  }
   if (request.status === "reviewing") {
     return `<button class="small-button danger-button" type="button" data-review-account-deletion="completed" data-account-deletion-id="${escapeHtml(request.id)}">계정 삭제 실행</button>`;
   }
@@ -10399,11 +10558,17 @@ function renderAccountDeletionAdminList() {
   const target = $("#accountDeletionAdminList");
   if (!target) return;
   const requests = state.accountDeletionRequests || [];
+  renderAccountDeletionServerStatus();
+  renderMemberStatusCounts();
   scheduleAccountDeletionRetryRefresh(requests);
   const panel = target.closest("details");
   if (panel && requests.some((request) => ["pending", "reviewing", "processing", "failed"].includes(request.status))) panel.open = true;
-  target.innerHTML = requests.length
-    ? requests.map((request) => `
+  target.innerHTML = accountDeletionRequestState.loading && !accountDeletionRequestState.loaded
+    ? `<p class="empty-text">탈퇴 요청을 확인하고 있습니다.</p>`
+    : accountDeletionRequestState.error && !accountDeletionRequestState.loaded
+      ? `<p class="empty-text">탈퇴 요청을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.</p>`
+      : requests.length
+        ? requests.map((request) => `
       <article class="holding-admin-row ${escapeHtml(request.status || "pending")}">
         <div class="holding-admin-main">
           <strong>${escapeHtml(request.member || "회원")}</strong>
@@ -10417,12 +10582,18 @@ function renderAccountDeletionAdminList() {
           ${accountDeletionActionButton(request)}
         </div>
       </article>`).join("")
-    : `<p class="empty-text">접수된 회원 탈퇴 요청이 없습니다.</p>`;
+        : `<p class="empty-text">접수된 회원 탈퇴 요청이 없습니다.</p>`;
 }
 
 async function loadServerAccountDeletionRequests() {
   const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.selectRows || !client.getSession?.()?.access_token) return false;
+  if (!client?.readiness?.().ready || !client.selectRows || !client.getSession?.()?.access_token) {
+    Object.assign(accountDeletionRequestState, { loading: false, error: "login_required" });
+    renderAccountDeletionAdminList();
+    return false;
+  }
+  Object.assign(accountDeletionRequestState, { loading: true, error: "" });
+  renderAccountDeletionAdminList();
   try {
     const rows = await client.selectRows("tn_account_deletion_requests", {
       select: "*",
@@ -10454,10 +10625,14 @@ async function loadServerAccountDeletionRequests() {
         createdAt: row.created_at || "",
       }))
       .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0));
+    Object.assign(accountDeletionRequestState, { loaded: true, loading: false, error: "" });
     renderAccountDeletionAdminList();
     return true;
-  } catch {
-    state.accountDeletionRequests = [];
+  } catch (error) {
+    Object.assign(accountDeletionRequestState, {
+      loading: false,
+      error: String(error?.message || "account_deletion_requests_load_failed"),
+    });
     renderAccountDeletionAdminList();
     return false;
   }
@@ -10475,6 +10650,10 @@ async function reviewAccountDeletionRequest(requestId, status) {
     && !accountDeletionProcessingIsStale(request)
   ) {
     showToast("현재 삭제 작업이 끝나거나 16분 재시도 시간이 지난 뒤 다시 시도해 주세요");
+    return;
+  }
+  if (status === "completed" && !await checkAccountDeletionServerReadiness()) {
+    showToast("삭제 서버 상태를 먼저 확인해 주세요. 회원 데이터는 변경되지 않았습니다");
     return;
   }
   if (status === "completed" && !window.confirm("이 작업은 회원의 로그인 계정과 개인 이용 데이터를 실제로 삭제하며 되돌릴 수 없습니다. 정산·환불·잔여 수업을 확인한 뒤 실행할까요?")) return;
@@ -10502,6 +10681,8 @@ async function reviewAccountDeletionRequest(requestId, status) {
   } catch (error) {
     const code = String(error?.payload?.code || error?.message || "").toLowerCase();
     if (Number(error?.status) === 404 || code.includes("function failed: 404") || code.includes("function_not_found")) {
+      Object.assign(accountDeletionServerState, { status: "unavailable", code: "function_not_found" });
+      renderAccountDeletionServerStatus();
       showToast("계정 삭제 서버 기능이 아직 배포되지 않았습니다. 서버 배포를 완료한 뒤 다시 실행해 주세요");
       return;
     }
@@ -10562,7 +10743,7 @@ function filteredMembers() {
   const localSearch = String(state.memberSearch || "").trim().toLowerCase();
   const globalSearch = String($("#globalSearch")?.value || "").trim();
   const matchingMembers = operationBranchMembers().filter((member) => {
-    if (memberListStatus(member) === "journal") return false;
+    if (memberListStatus(member) === "journal" && state.memberFilter !== "journal") return false;
     const statusMatch = memberMatchesStatusFilter(member, state.memberFilter);
     const coachMatch = state.memberCoachFilter === "all" || memberCoachNames(member).includes(state.memberCoachFilter);
     const ticketMatch = state.memberTicketFilter === "all" || memberHasTicketKind(member, state.memberTicketFilter);
@@ -10592,7 +10773,9 @@ const memberFilterCopy = {
   active: { summary: "명 수강중", empty: "수강중인 회원이 없습니다." },
   expiring: { summary: "명 만료임박", empty: "잔여 2회 이하 회원이 없습니다." },
   pending: { summary: "명 가입서·결제대기", empty: "가입서·결제 대기 회원이 없습니다." },
+  journal: { summary: "명 앱가입", empty: "로그인만 완료한 앱가입 회원이 없습니다." },
   expired: { summary: "명 만료", empty: "만료된 회원이 없습니다." },
+  deletion: { summary: "건 탈퇴요청", empty: "접수된 탈퇴요청이 없습니다." },
   inactive: { summary: "명 삭제", empty: "삭제 처리된 회원이 없습니다." },
 };
 
@@ -10602,7 +10785,7 @@ function memberStatusCounts() {
     if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
     if (memberIsExpiring(member)) counts.expiring += 1;
     return counts;
-  }, { active: 0, expiring: 0, expired: 0, pending: 0, inactive: 0 });
+  }, { active: 0, expiring: 0, expired: 0, pending: 0, journal: 0, inactive: 0 });
 }
 
 function renderMemberStatusCounts() {
@@ -10625,10 +10808,19 @@ function renderMemberStatusCounts() {
     && !adminMemberDirectoryState.error;
   $$('[data-member-filter-count]').forEach((badge) => {
     const filter = badge.dataset.memberFilterCount;
-    badge.textContent = counts
-      ? `${counts[filter] || 0}명`
-      : waitingForServer ? "…" : "확인 필요";
-    badge.setAttribute("aria-busy", String(waitingForServer));
+    const deletionCount = (state.accountDeletionRequests || [])
+      .filter((request) => ["pending", "reviewing", "processing", "failed"].includes(request.status)).length;
+    const deletionWaiting = accountDeletionRequestState.loading || !accountDeletionRequestState.loaded;
+    badge.textContent = filter === "deletion"
+      ? accountDeletionRequestState.error && !accountDeletionRequestState.loaded
+        ? "확인 필요"
+        : deletionWaiting
+          ? "…"
+          : `${deletionCount}건`
+      : counts
+        ? `${counts[filter] || 0}명`
+        : waitingForServer ? "…" : "확인 필요";
+    badge.setAttribute("aria-busy", String(filter === "deletion" ? deletionWaiting : waitingForServer));
     badge.title = filter === "expired" && !waitingForServer
       ? "과거 DB에서 이관한 만료 회원을 포함합니다."
       : "";
@@ -10638,6 +10830,18 @@ function renderMemberStatusCounts() {
 function renderMemberFilterSections() {
   const filter = state.memberFilter || "active";
   const role = operationsRole();
+  const journalMode = filter === "journal";
+  const membersView = $("#membersView");
+  if (membersView) membersView.dataset.memberFilterView = filter;
+  $$('[data-member-list-filter]').forEach((field) => {
+    field.hidden = journalMode && field.dataset.memberListFilter !== "search";
+  });
+  const memberSearch = $("#memberListSearch");
+  if (memberSearch) {
+    memberSearch.placeholder = journalMode
+      ? "이름 또는 휴대전화 뒤 4자리"
+      : "이름 또는 시간 검색";
+  }
   $$(".segment[data-member-filter]").forEach((button) => {
     const isActive = button.dataset.memberFilter === filter;
     button.classList.toggle("is-active", isActive);
@@ -11793,7 +11997,7 @@ function renderMemberManagementModal() {
       <p class="member-management-rule">주 2회·주 3회는 정규 요일과 시간을 모두 선택하면 회원권과 시간표가 한 번에 저장됩니다. 예외일 때만 ‘시간표는 나중에 설정’을 선택하세요.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "correct") {
     actionFields = operationsRole() === "admin" ? `
-      ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: memberTicketLinkedPayment(ticket), includeTicketStatus: true })}
+      ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: memberTicketLinkedPayment(member, ticket), includeTicketStatus: true })}
       <p class="member-management-rule">레슨 방식·종류·요일·횟수·결제 메모를 한 번에 수정합니다. 기존 결제 증빙은 변경하지 않습니다.</p>` : `
       <div class="member-management-form-grid">
         <label class="form-field"><span>총횟수</span><input name="totalSessions" type="number" min="1" step="1" value="${defaultTotal}" required /></label>
@@ -13063,7 +13267,7 @@ function memberEditorAuditIssues(member, ticket = memberCurrentTicket(member)) {
 function renderMemberEditorModeBar() {
   const bar = $("#memberEditorModeBar");
   if (!bar) return;
-  bar.hidden = operationsRole() !== "admin";
+  bar.hidden = operationsRole() !== "admin" || state.memberFilter === "journal";
   const button = $("#toggleMemberAdminEdit");
   if (button) {
     button.classList.toggle("is-active", memberAdminEditEnabled);
@@ -14361,7 +14565,7 @@ function renderMemberBulkToolbar(visibleMembers = [], filteredSelectionIds = nul
   const selectedMembersAreInactive = selectedMembers.length > 0
     && selectedMembers.every((member) => memberListStatus(member) === "inactive" && member.authRole !== "admin");
   const toolbar = $("#memberBulkToolbar");
-  if (toolbar) toolbar.hidden = operationsRole() !== "admin";
+  if (toolbar) toolbar.hidden = operationsRole() !== "admin" || state.memberFilter === "journal";
   if ($("#memberBulkCount")) $("#memberBulkCount").textContent = String(state.selectedMemberIds.length);
   ["runMemberBulkAction", "deleteSelectedMembers", "clearMemberBulkSelection"].forEach((id) => {
     if ($(`#${id}`)) $(`#${id}`).disabled = !state.selectedMemberIds.length;
@@ -15644,7 +15848,8 @@ function renderMembers(options = {}) {
   let filtered;
   let filteredTotal;
   if (serverDirectoryReady) {
-    const membersByServerUserId = new Map(branchMembers.map((member) => [String(member.serverUserId || ""), member]));
+    const directoryMembers = state.memberFilter === "journal" ? members : branchMembers;
+    const membersByServerUserId = new Map(directoryMembers.map((member) => [String(member.serverUserId || ""), member]));
     filtered = adminMemberDirectoryState.rows
       .map((row) => membersByServerUserId.get(String(row.user_id || "")))
       .filter(Boolean);
@@ -15707,6 +15912,31 @@ function renderMembers(options = {}) {
       const renewalOverlapTicketIds = memberRenewalOverlapTicketIds(editableTickets);
       const selectedIds = selectedMemberIdSet();
       const listStatus = memberListStatus(member);
+      if (listStatus === "journal") {
+        return `<tr class="app-signup-member-row" data-member-id="${member.id}">
+          <td colspan="15">
+            <article class="app-signup-member-card">
+              <button class="app-signup-member-identity" type="button" data-select-member="${member.id}">
+                ${avatarMarkup(member, "small")}
+                <span><strong>${escapeHtml(member.name)}</strong><small>${escapeHtml(maskMemberPhone(member.phone))}</small></span>
+              </button>
+              <div class="app-signup-member-state">
+                ${badge("neutral", "앱가입")}
+                <strong>${member.authLinked ? "로그인 연결됨" : "로그인 연결 확인 필요"}</strong>
+                <span>회원권·수업 없음</span>
+              </div>
+              <div class="app-signup-member-actions">
+                ${operationsRole() === "admin" && member.serverUserId
+                  ? `<button class="small-button primary-button" type="button" data-open-member-management="assign" data-member-management-member-id="${member.id}">수강 등록</button>`
+                  : ""}
+                ${operationsRole() === "admin" && member.serverUserId && member.authLinked
+                  ? `<button class="ghost-button" type="button" data-open-member-management="link_existing" data-member-management-member-id="${member.id}">기존 회원 연결</button>`
+                  : ""}
+              </div>
+            </article>
+          </td>
+        </tr>`;
+      }
       return displayedTickets.map((rowTicket, ticketIndex) => {
         const ticketId = String(rowTicket?.serverTicketId || "");
         const possibleDuplicate = possibleDuplicateTicketIds.has(ticketId);
@@ -15768,7 +15998,10 @@ function renderMembers(options = {}) {
               ? `<button class="small-button primary-button member-row-ticket-extend" type="button" data-open-member-management="extend" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 기간 연장">기간 연장</button>`
               : ""}
             ${operationsRole() === "admin" && rowTicket ? `<button class="small-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="${escapeHtml(ticketId)}">회원권 수정</button>` : ""}
-            ${operationsRole() === "admin" && !rowTicket ? `<button class="small-button primary-button" type="button" data-open-member-management="assign" data-member-management-member-id="${member.id}">회원권 등록</button>` : ""}
+            ${operationsRole() === "admin" && !rowTicket ? `<button class="small-button primary-button" type="button" data-open-member-management="assign" data-member-management-member-id="${member.id}">${listStatus === "journal" ? "수강 등록" : "회원권 등록"}</button>` : ""}
+            ${operationsRole() === "admin" && listStatus === "journal" && member.authLinked
+              ? `<button class="ghost-button" type="button" data-open-member-management="link_existing" data-member-management-member-id="${member.id}">기존 회원 연결</button>`
+              : ""}
             ${operationsRole() === "admin" && rowTicket && rowTicket.status !== "voided"
               ? `<button class="small-button danger-button member-row-ticket-delete" type="button" data-open-member-management="force_delete" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 삭제">회원권 삭제</button>`
               : ""}
@@ -25401,7 +25634,7 @@ async function performAdminLiveDataSync(options = {}) {
     const rosterRows = (key, fallback) => operationalRosterPromise
       .then((payload) => Array.isArray(payload?.[key]) ? payload[key] : fallback());
     const adminSettingsPromise = loadAdminStartupSettingsFromServer();
-    const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments, serverSettlementTickets] = await Promise.all([
+    const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverMemberPaymentProjections, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments, serverSettlementTickets] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       rosterRows("users", () => (client.selectAllRows || client.selectRows)("tn_user_directory_safe", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 })),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_calculation_mode,settlement_effective_from,availability_revision,schedule_lane_order", limit: 100 })
@@ -25478,6 +25711,12 @@ async function performAdminLiveDataSync(options = {}) {
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
       fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at", order: "created_at.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
+      fullAdminAccess ? rosterRows("memberPaymentProjections", () => client.rpc("tn_admin_member_payment_projections", {
+        target_branch_id: activeOperationBranchId() || null,
+      }).then((response) => Array.isArray(response) ? response : []).catch((error) => {
+        console.warn("[Tennis Note] member payment projections unavailable", error?.message || "projection_error");
+        return [];
+      })) : Promise.resolve([]),
       rosterRows("groupAccounts", () => client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => [])),
       rosterRows("groupMembers", () => client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => [])),
       rosterRows("groupTicketLinks", () => (client.selectAllRows || client.selectRows).call(client, "tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", pageSize: 500 }).catch(() => [])),
@@ -25699,7 +25938,7 @@ async function performAdminLiveDataSync(options = {}) {
         nickname: preferredUser.nickname || "",
         status,
         memberKind: currentMemberKind,
-        statusLabel: status === "inactive" ? "삭제회원" : status === "pending" ? "가입서·결제대기" : status === "journal" ? "운동노트 회원" : status === "active" ? "수강중" : "만료회원",
+	        statusLabel: status === "inactive" ? "삭제회원" : status === "pending" ? "가입서·결제대기" : status === "journal" ? "앱가입" : status === "active" ? "수강중" : "만료회원",
         serverStatus,
         coach: displayTicket
           ? getCoachName(displayTicket.coachId)
@@ -26078,6 +26317,7 @@ async function performAdminLiveDataSync(options = {}) {
       journalEntries: serverJournalEntries || [],
       mediaFiles: serverMediaFiles || [],
       payments: serverPayments || [],
+      memberPaymentProjections: serverMemberPaymentProjections || [],
       groupAccounts: serverGroupAccounts || [],
       groupMembers: serverGroupMembers || [],
       groupTicketLinks: serverGroupTicketLinks || [],
@@ -31085,6 +31325,11 @@ function bindEvents() {
       await reviewAccountDeletionRequest(accountDeletionButton.dataset.accountDeletionId, accountDeletionButton.dataset.reviewAccountDeletion);
       return;
     }
+    const accountDeletionReadinessButton = event.target.closest("[data-retry-account-deletion-readiness]");
+    if (accountDeletionReadinessButton) {
+      await checkAccountDeletionServerReadiness({ force: true });
+      return;
+    }
     const evidenceButton = event.target.closest("[data-view-holding-evidence]");
     if (evidenceButton) {
       await viewHoldingEvidence(evidenceButton.dataset.viewHoldingEvidence);
@@ -31991,6 +32236,12 @@ function bindEvents() {
       state.selectedMemberId = null;
       renderMembers();
       void loadAdminMemberDirectoryPage({ force: true });
+      if (state.memberFilter === "deletion" && operationsRole() === "admin") {
+        void Promise.all([
+          loadServerAccountDeletionRequests(),
+          checkAccountDeletionServerReadiness({ force: true }),
+        ]);
+      }
       if (state.memberFilter === "pending" && operationsRole() === "admin" && !adminPendingUsersState.loaded && !adminPendingUsersState.loading) {
         refreshAdminPendingUsers();
       }
