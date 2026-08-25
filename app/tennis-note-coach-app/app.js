@@ -80,6 +80,8 @@ const state = {
   expiredMembers: [],
 };
 
+const coachWebPortalUrl = "https://tennisnote-app.pages.dev/tennis-note-coach-app/";
+const adminWebPortalUrl = "https://tennisnote-admin.pages.dev/";
 let coachSchedulePreferenceTouched = false;
 
 function hasTrustedCoachSchedulePolicySnapshot() {
@@ -2668,7 +2670,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.406",
+    workerUrl: "./service-worker.js?v=1.0.407",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2699,7 +2701,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.406" });
+  const params = new URLSearchParams({ v: "1.0.407" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -2909,6 +2911,41 @@ let nativeCoachBackListenerReady = false;
 
 function nativeCoachAppPlatform() {
   return window.Capacitor?.getPlatform?.() || "web";
+}
+
+async function openCoachExternalPortal(kind = "coach") {
+  const adminRequested = kind === "admin";
+  if (adminRequested && state.coach?.role !== "admin") {
+    showToast("관리자 권한이 있는 계정에서만 열 수 있습니다.");
+    return;
+  }
+  const targetUrl = adminRequested ? adminWebPortalUrl : coachWebPortalUrl;
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(targetUrl);
+  } catch {
+    showToast("웹 화면 주소를 확인하지 못했습니다.");
+    return;
+  }
+  const allowedOrigins = new Set([
+    "https://tennisnote-app.pages.dev",
+    "https://tennisnote-admin.pages.dev",
+  ]);
+  if (!allowedOrigins.has(parsedUrl.origin)) {
+    showToast("허용되지 않은 웹 화면 주소입니다.");
+    return;
+  }
+  try {
+    const browserPlugin = window.Capacitor?.Plugins?.Browser;
+    if (nativeCoachAppPlatform() !== "web" && browserPlugin?.open) {
+      await browserPlugin.open({ url: parsedUrl.href });
+      return;
+    }
+    const opened = window.open(parsedUrl.href, "_blank", "noopener,noreferrer");
+    if (!opened) window.location.assign(parsedUrl.href);
+  } catch {
+    showToast("웹 화면을 열지 못했습니다. 네트워크를 확인해 주세요.");
+  }
 }
 
 function nativeCoachPushPlugin() {
@@ -4158,6 +4195,8 @@ function renderCoachProfile() {
     if ($("#coachAvailableMemo")) $("#coachAvailableMemo").value = profile.availableMemo || "";
     if ($("#coachMemberMessage")) $("#coachMemberMessage").value = profile.memberMessage || "";
   }
+  const adminWebButton = $("#adminWebPortalButton");
+  if (adminWebButton) adminWebButton.hidden = state.coach?.role !== "admin";
   renderCoachSettlement();
 }
 
@@ -8004,6 +8043,8 @@ function bindEvents() {
   $("#refreshButton").addEventListener("click", renderAll);
   $("#userModeButton")?.addEventListener("click", openUserMode);
   $("#userModeLoginButton")?.addEventListener("click", openUserMode);
+  $("#coachWebPortalButton")?.addEventListener("click", () => void openCoachExternalPortal("coach"));
+  $("#adminWebPortalButton")?.addEventListener("click", () => void openCoachExternalPortal("admin"));
   $("#noticeClose")?.addEventListener("click", () => closeNotice(false));
   $("#noticeHideToday")?.addEventListener("click", () => closeNotice(true));
   $("#noticeAction")?.addEventListener("click", () => closeNotice(false));
@@ -8753,7 +8794,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.406",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.407",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

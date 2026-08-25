@@ -4783,6 +4783,8 @@ function billingRowFromServerPayment(row = {}) {
   const amount = Number(row.final_amount || row.finalAmount || row.amount || 0);
   const isTest = paymentEnvironment({
     providerPaymentId,
+    purchaseIntentKey: row.purchase_intent_key || row.purchaseIntentKey || "",
+    purchaseGroupKey: row.purchase_group_key || row.purchaseGroupKey || "",
     item: row.productTitle || row.item || "",
     source: row.source || "",
     serverStatus: row.status,
@@ -4885,7 +4887,7 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     });
     let rows = [];
     try {
-      rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
+      rows = await readPayments("id,branch_id,provider,provider_payment_id,purchase_intent_key,purchase_group_key,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
     } catch (error) {
       try {
         rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
@@ -8221,7 +8223,13 @@ function renderMetrics() {
   $("#metricLessons").textContent = todayLessonCount;
   $("#metricMakeups").textContent = pendingLessonChangeApprovals().length;
   $("#metricNotes").textContent = recordGroups.pending.length + recordGroups.feedback.length + recordGroups.issue.length;
-  $("#metricBilling").textContent = operationBranchBillings().filter(billingNeedsAdminAction).length;
+  const currentBillingMonth = /^\d{4}-\d{2}$/.test(state.billingMonth)
+    ? state.billingMonth
+    : adminLocalDateKey(new Date()).slice(0, 7);
+  const pendingPaymentGroups = groupedBillingAttempts(
+    operationBranchBillings().filter((item) => billingOperationalMonthMatches(item, currentBillingMonth)),
+  ).filter((entry) => ["action", "verifying"].includes(billingFilterGroup(entry.primary)));
+  $("#metricBilling").textContent = pendingPaymentGroups.length;
   if ($("#scheduleMetricToday")) $("#scheduleMetricToday").textContent = `${todayLessonCount}회`;
   if ($("#scheduleMetricPending")) $("#scheduleMetricPending").textContent = `${pendingScheduleCount}건`;
 }
@@ -8727,9 +8735,12 @@ function getAdminTasks() {
   const branchTickets = operationBranchTickets();
   const branchBillings = operationBranchBillings();
   const lowTickets = branchTickets.filter((ticket) => ticket.remaining <= 2);
-  const paymentChecks = branchBillings.filter((item) => item.status === "check" || item.status === "unverified");
-  const draftBillings = branchBillings.filter((item) => item.status === "draft");
-  const paymentDataErrors = branchBillings.filter(paymentRequiresTicketRepair);
+  const paymentAttemptEntries = groupedBillingAttempts(branchBillings);
+  const paymentChecks = paymentAttemptEntries.filter((entry) => (
+    ["check", "unverified"].includes(entry.primary.status) || isStaleReadyPayment(entry.primary)
+  ));
+  const draftBillings = paymentAttemptEntries.filter((entry) => entry.primary.status === "draft");
+  const paymentDataErrors = paymentAttemptEntries.filter((entry) => paymentRequiresTicketRepair(entry.primary));
   const urgentMakeups = operationBranchMakeupRequests()
     .filter((item) => item.status === "coach_required" || item.status === "requested")
     .concat(shared.makeupRequests.filter((item) => item.status === "승인 대기"));
@@ -8737,14 +8748,14 @@ function getAdminTasks() {
   const couponNoBookingTickets = couponTicketsWithoutUpcomingLesson();
 
   const tasks = [
-    ...paymentDataErrors.map((item) => ({
+    ...paymentDataErrors.map((entry) => ({
       type: "결제오류",
-      title: `${item.member} 회원권 연결 누락`,
-      detail: `${item.item} · ${money.format(item.amount)}원 · 서버 결제 확인 필요`,
+      title: `${entry.primary.member} 회원권 연결 누락`,
+      detail: `${entry.primary.item} · ${money.format(entry.primary.amount)}원 · 서버 결제 확인 필요${entry.attemptCount > 1 ? ` · 동일 요청 ${entry.attemptCount}회` : ""}`,
       tone: "danger",
       action: "결제 확인",
       view: "billing",
-      dueAt: item.verifiedAt || item.paidAt || item.requestedAt || "",
+      dueAt: entry.primary.verifiedAt || entry.primary.paidAt || entry.primary.requestedAt || "",
     })),
     ...unassignedTickets.map((ticket) => ({
       type: "긴급",
@@ -8798,23 +8809,23 @@ function getAdminTasks() {
       action: "회원권 확인",
       view: "members",
     })),
-    ...paymentChecks.map((item) => ({
+    ...paymentChecks.map((entry) => ({
       type: "결제확인",
-      title: `${item.member} 결제 확인`,
-      detail: `${item.item} · ${money.format(item.amount)}원`,
+      title: `${entry.primary.member} 결제 확인`,
+      detail: `${entry.primary.item} · ${money.format(entry.primary.amount)}원${entry.attemptCount > 1 ? ` · 동일 요청 ${entry.attemptCount}회` : ""}`,
       tone: "warn",
       action: "결제 확인",
       view: "billing",
-      dueAt: item.requestedAt || "",
+      dueAt: entry.primary.requestedAt || "",
     })),
-    ...draftBillings.map((item) => ({
+    ...draftBillings.map((entry) => ({
       type: "결제요청",
-      title: `${item.member} 결제요청 발송`,
-      detail: `${item.item} · ${money.format(item.amount)}원`,
+      title: `${entry.primary.member} 결제요청 발송`,
+      detail: `${entry.primary.item} · ${money.format(entry.primary.amount)}원${entry.attemptCount > 1 ? ` · 동일 요청 ${entry.attemptCount}회` : ""}`,
       tone: "neutral",
       action: "결제 요청",
       view: "billing",
-      dueAt: item.requestedAt || "",
+      dueAt: entry.primary.requestedAt || "",
     })),
   ];
   const priorityByType = {
@@ -22261,6 +22272,59 @@ function billingMatchesMonth(item, month) {
   return billingIncludedInRevenue(item) && billingEffectiveMonth(item) === month;
 }
 
+function billingOperationalMonthMatches(item, month) {
+  if (!month) return true;
+  return billingEffectiveDate(item).slice(0, 7) === month;
+}
+
+function billingAttemptGroupKey(item = {}) {
+  const groupable = ["draft", "check", "unverified", "failed", "server_ready"].includes(String(item.status || ""));
+  if (!groupable) return item.serverPaymentId || item.providerPaymentId
+    ? `payment:${item.serverPaymentId || item.providerPaymentId}`
+    : item;
+  if (item.purchaseIntentKey) return `intent:${item.purchaseIntentKey}`;
+  const requestedDay = String(item.requestedAt || item.createdAt || "").slice(0, 10) || billingEffectiveDate(item);
+  return [
+    "legacy-attempt",
+    item.serverUserId || item.member || "member",
+    item.productId || item.item || "product",
+    String(item.method || "").toLowerCase(),
+    Number(item.finalAmount || item.amount || 0),
+    requestedDay,
+  ].join("|");
+}
+
+function groupedBillingAttempts(items = []) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const key = billingAttemptGroupKey(item);
+    const attempts = groups.get(key) || [];
+    attempts.push(item);
+    groups.set(key, attempts);
+  });
+  return [...groups.values()]
+    .map((attempts) => {
+      attempts.sort((left, right) => paymentCreatedAtMs(right) - paymentCreatedAtMs(left));
+      return { primary: attempts[0], attempts, attemptCount: attempts.length };
+    })
+    .sort((left, right) => paymentCreatedAtMs(right.primary) - paymentCreatedAtMs(left.primary));
+}
+
+function billingAttemptSummary(entry = {}) {
+  const count = Number(entry.attemptCount || 0);
+  return count > 1 ? `동일 요청 ${count}회 · 최근 상태 표시` : "";
+}
+
+function billingAttemptHistoryMarkup(entry = {}) {
+  if (Number(entry.attemptCount || 0) <= 1) return "";
+  const rows = (entry.attempts || []).map((attempt) => {
+    const display = paymentDisplayStatus(attempt);
+    const date = paymentAuditDateTimeLabel(attempt.requestedAt || attempt.createdAt) || "시각 확인 필요";
+    return `<li>${escapeHtml(date)} · ${escapeHtml(paymentMethodLabel(attempt.method))} · ${escapeHtml(display.label)}</li>`;
+  }).join("");
+  return `<details class="payment-attempt-details"><summary>${escapeHtml(billingAttemptSummary(entry))}</summary><ul>${rows}</ul></details>`;
+}
+
 function billingIncludedInRevenue(item = {}) {
   return String(item.revenueAttributionStatus || item.revenue_attribution_status || "included") === "included";
 }
@@ -22333,12 +22397,13 @@ function renderBilling() {
     ? state.billingMonth
     : adminLocalDateKey(new Date()).slice(0, 7);
   const branchBillings = operationBranchBillings();
-  const monthBillings = branchBillings.filter((item) => billingMatchesMonth(item, state.billingMonth));
-  const pendingRequests = monthBillings.filter((item) => item.status === "draft");
-  const pendingChecks = monthBillings.filter((item) => item.status === "check" || item.status === "unverified");
-  const staleReadyPayments = monthBillings.filter(isStaleReadyPayment);
+  const operationalMonthBillings = branchBillings.filter((item) => billingOperationalMonthMatches(item, state.billingMonth));
+  const revenueMonthBillings = branchBillings.filter((item) => billingMatchesMonth(item, state.billingMonth));
+  const groupedOperationalBillings = groupedBillingAttempts(operationalMonthBillings);
+  const billingGroups = { action: [], verifying: [], done: [], refund: [] };
+  groupedOperationalBillings.forEach((entry) => billingGroups[billingFilterGroup(entry.primary)]?.push(entry));
   const rechargeTargets = operationBranchTickets().filter((ticket) => ticket.remaining <= 1);
-  const monthPaidBillings = monthBillings.filter((item) => item.status === "paid");
+  const monthPaidBillings = revenueMonthBillings.filter((item) => item.status === "paid");
   const monthPaidAmount = monthPaidBillings.reduce((sum, item) => sum + Number(item.finalAmount || item.amount || 0), 0);
   const actualPaidBillings = branchBillings.filter((item) => (
     item.status === "paid"
@@ -22355,8 +22420,8 @@ function renderBilling() {
   ));
   const actualPaidAmount = actualPaidBillings.reduce((sum, item) => sum + Number(item.finalAmount || item.amount || 0), 0);
 
-  $("#billingRequestCount").textContent = `${pendingRequests.length}건`;
-  $("#billingCheckCount").textContent = `${pendingChecks.length + staleReadyPayments.length}\uAC74`;
+  $("#billingRequestCount").textContent = `${billingGroups.action.length}건`;
+  $("#billingCheckCount").textContent = `${billingGroups.verifying.length}건`;
   $("#ticketRechargeCount").textContent = `${rechargeTargets.length}명`;
   if ($("#billingMonthFilter")) $("#billingMonthFilter").value = state.billingMonth;
   if ($("#billingMonthTotalLabel")) $("#billingMonthTotalLabel").textContent = billingMonthLabel(state.billingMonth);
@@ -22371,8 +22436,6 @@ function renderBilling() {
   }
   renderPaymentAdminGateStatus();
   renderPaymentChargeAudit();
-  const billingGroups = { action: [], verifying: [], done: [], refund: [] };
-  monthBillings.forEach((item) => billingGroups[billingFilterGroup(item)]?.push(item));
   $$('[data-billing-count]').forEach((count) => {
     count.textContent = String(billingGroups[count.dataset.billingCount]?.length || 0);
   });
@@ -22395,13 +22458,14 @@ function renderBilling() {
   );
   $("#billingRows").innerHTML = visibleBillings.length ? visibleBillings
     .map(
-      (item) => {
+      (entry) => {
+        const item = entry.primary;
         const index = billings.indexOf(item);
         const displayStatus = paymentDisplayStatus(item);
         return `
         <tr>
           <td>${item.member}<br><small>${paymentEnvironmentBadge(item)}</small></td>
-          <td>${billingMembershipDetail(item)}<details class="payment-source-details"><summary>결제 원본 보기</summary><span>${escapeHtml(item.item || "결제")}${item.providerPaymentId ? ` · ${escapeHtml(item.providerPaymentId)}` : ""}${item.source ? ` · ${escapeHtml(paymentSourceText(item))}` : ""}</span></details></td>
+          <td>${billingMembershipDetail(item)}${billingAttemptHistoryMarkup(entry)}<details class="payment-source-details"><summary>결제 원본 보기</summary><span>${escapeHtml(item.item || "결제")}${item.providerPaymentId ? ` · ${escapeHtml(item.providerPaymentId)}` : ""}${item.source ? ` · ${escapeHtml(paymentSourceText(item))}` : ""}</span></details></td>
           <td>${escapeHtml(billingEffectiveDate(item) || "일자 미입력")}${billingEffectiveMonth(item) ? `<br><small>매출 귀속 ${escapeHtml(billingEffectiveMonth(item))}</small>` : ""}</td>
           <td>${money.format(item.amount)}원${item.discountTitle ? `<br><small>${escapeHtml(item.discountTitle)} · ${money.format(item.discountAmount || 0)}원 할인${item.originalAmount ? ` · 원가 ${money.format(item.originalAmount)}원` : ""}</small>` : ""}</td>
           <td>${paymentMethodLabel(item.method)}</td>
@@ -22434,7 +22498,7 @@ function renderBilling() {
     .join("") : '<tr><td colspan="5" class="empty-text">연장 확인이 필요한 회원권이 없습니다.</td></tr>';
   renderDashboardPager("#rechargePager", rechargeTargets.length, state.rechargePage, "recharge", billingPageSize);
 
-  const serverCancellationLogs = monthBillings
+  const serverCancellationLogs = operationalMonthBillings
     .map(paymentCancellationAuditLog)
     .filter(Boolean);
   $("#billingLog").innerHTML = [...new Set([...serverCancellationLogs, ...billingLogs])]
@@ -22525,11 +22589,12 @@ function chargeStatusForPayment(item = {}) {
 function renderPaymentChargeAudit() {
   const target = $("#paymentChargeAudit");
   if (!target) return;
-  const tracked = billings
-    .filter((item) => item.providerPaymentId || item.source === "Supabase 결제")
+  const tracked = groupedBillingAttempts(billings
+    .filter((item) => item.providerPaymentId || item.source === "Supabase 결제"))
     .slice(0, 6);
   target.innerHTML = tracked.length
-    ? tracked.map((item) => {
+    ? tracked.map((entry) => {
+        const item = entry.primary;
         const status = chargeStatusForPayment(item);
         return `
           <article class="payment-charge-card ${status.tone}">
@@ -22537,6 +22602,7 @@ function renderPaymentChargeAudit() {
               <span>${escapeHtml(item.member)}</span>
               <strong>${escapeHtml(item.item)}</strong>
               <small>${escapeHtml(status.detail)}</small>
+              ${entry.attemptCount > 1 ? `<small class="payment-attempt-summary">${escapeHtml(billingAttemptSummary(entry))}</small>` : ""}
               ${item.ticketId ? `<small>회원권 ${escapeHtml(String(item.ticketId).slice(0, 8))}</small>` : ""}
             </div>
             ${badge(status.tone, status.label)}
