@@ -2004,7 +2004,7 @@ h2 {
 
 #membersView > .toolbar .segmented-control {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   width: 100%;
 }
 
@@ -2392,6 +2392,113 @@ tr.is-selected td {
 
 #membersView .table-panel table {
   min-width: 1080px;
+}
+
+.app-signup-guide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+}
+
+.app-signup-guide[hidden] {
+  display: none;
+}
+
+.app-signup-guide > div,
+.app-signup-guide li {
+  display: grid;
+  gap: 3px;
+}
+
+.app-signup-guide > div span,
+.app-signup-guide li span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.app-signup-guide ol {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-signup-guide li {
+  min-width: 150px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7faf8;
+}
+
+#membersView[data-member-filter-view="journal"] .table-panel > table {
+  min-width: 0;
+}
+
+#membersView[data-member-filter-view="journal"] .table-panel > table > thead,
+#membersView[data-member-filter-view="journal"] #selectVisibleMembers {
+  display: none;
+}
+
+.app-signup-member-row > td {
+  padding: 10px !important;
+}
+
+.app-signup-member-card {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(180px, auto) auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.app-signup-member-identity {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-signup-member-identity > span,
+.app-signup-member-state {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.app-signup-member-identity small,
+.app-signup-member-state span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.app-signup-member-state {
+  grid-template-columns: auto auto;
+  align-items: center;
+}
+
+.app-signup-member-state > span {
+  grid-column: 1 / -1;
+}
+
+.app-signup-member-actions {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.app-signup-member-actions button {
+  min-height: 36px;
+  white-space: nowrap;
 }
 
 #membersView .table-panel {
@@ -12513,6 +12620,38 @@ button .schedule-member-lines > span {
   background: #fff;
 }
 
+.account-deletion-server-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid #cbd9d5;
+  border-radius: 12px;
+  background: #f7faf9;
+}
+
+.account-deletion-server-status > div {
+  display: grid;
+  gap: 3px;
+}
+
+.account-deletion-server-status span {
+  color: #63736e;
+  font-size: 13px;
+}
+
+.account-deletion-server-status.is-ready {
+  border-color: #9dcec0;
+  background: #eff9f6;
+}
+
+.account-deletion-server-status.is-blocked {
+  border-color: #e0b9ad;
+  background: #fff7f4;
+}
+
 .holding-admin-row.approved {
   border-color: #a8d4c7;
   background: #f4faf8;
@@ -12572,6 +12711,37 @@ button .schedule-member-lines > span {
 }
 
 @media (max-width: 760px) {
+  .app-signup-guide,
+  .app-signup-member-card {
+    grid-template-columns: 1fr;
+  }
+
+  .app-signup-guide ol,
+  .app-signup-member-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .app-signup-guide li {
+    min-width: 0;
+  }
+
+  .app-signup-member-state {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .app-signup-member-actions button {
+    width: 100%;
+  }
+
+  .account-deletion-server-status {
+    grid-template-columns: 1fr;
+  }
+
+  .account-deletion-server-status .ghost-button {
+    width: 100%;
+  }
+
   .schedule-member-search {
     grid-template-columns: minmax(0, 1fr) auto;
   }
