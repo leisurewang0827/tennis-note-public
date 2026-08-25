@@ -1983,6 +1983,7 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
       jobs.push(
         loadAdminDataOnce(`membership-policy:${branchKey}`, () => Promise.all([
           loadBranchSalesSettingsFromServer(),
+          loadBranchSalesEffectiveOptionsFromServer(),
           loadBranchPaymentAccountFromServer(),
           loadBankNotificationStatusFromServer(),
           loadServerHoldingPolicy(),
@@ -4286,6 +4287,15 @@ const branchSalesSettingsState = {
   message: "",
 };
 
+const branchSalesEffectiveOptionsState = {
+  status: "idle",
+  branchId: "",
+  settingsVersion: 0,
+  settingsAppliedAt: "",
+  methodAvailability: [],
+  message: "",
+};
+
 function applyBranchSalesSettingsResponse(response = {}) {
   const value = Array.isArray(response) ? response[0] || {} : response || {};
   branchSalesSettingsState.status = "loaded";
@@ -4312,6 +4322,30 @@ async function loadBranchSalesSettingsFromServer() {
   } catch (error) {
     branchSalesSettingsState.status = "failed";
     branchSalesSettingsState.message = error?.payload?.code || error?.message || "server_error";
+    renderBranchSalesSetup();
+    return false;
+  }
+}
+
+async function loadBranchSalesEffectiveOptionsFromServer() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.invokeFunction || !branchId || !adminApprovalReady()) return false;
+  branchSalesEffectiveOptionsState.status = "loading";
+  branchSalesEffectiveOptionsState.branchId = branchId;
+  renderBranchSalesSetup();
+  try {
+    const response = await client.invokeFunction("portone-payment/options", { body: { branchId } });
+    branchSalesEffectiveOptionsState.status = "loaded";
+    branchSalesEffectiveOptionsState.settingsVersion = Math.max(0, Number(response?.settingsVersion) || 0);
+    branchSalesEffectiveOptionsState.settingsAppliedAt = String(response?.settingsAppliedAt || "");
+    branchSalesEffectiveOptionsState.methodAvailability = Array.isArray(response?.methodAvailability) ? response.methodAvailability : [];
+    branchSalesEffectiveOptionsState.message = "";
+    renderBranchSalesSetup();
+    return true;
+  } catch (error) {
+    branchSalesEffectiveOptionsState.status = "failed";
+    branchSalesEffectiveOptionsState.message = String(error?.payload?.code || error?.message || "server_error");
     renderBranchSalesSetup();
     return false;
   }
@@ -4442,6 +4476,7 @@ async function saveBranchPaymentAccount(options = {}) {
       throw new Error("bank_account_write_not_confirmed");
     }
     await loadBranchPaymentAccountFromServer();
+    await loadBranchSalesEffectiveOptionsFromServer();
     await loadBankNotificationStatusFromServer();
     if (!silent) {
       showToast(enabled ? "계좌이체 계좌를 서버에 저장하고 회원 결제에 표시했습니다" : "계좌를 저장하고 회원 결제 노출을 껐습니다");
@@ -29519,6 +29554,36 @@ function bankNotificationStatusMarkup() {
     </div>`;
 }
 
+function branchSalesEffectiveOptionsMarkup() {
+  const status = branchSalesEffectiveOptionsState;
+  if (status.status === "loading" || status.status === "idle") {
+    return '<section class="branch-sales-effective-status is-loading" role="status"><strong>회원앱 실제 노출 확인 중</strong><span>서버 운영 허용과 계좌 준비 상태를 확인합니다.</span></section>';
+  }
+  if (status.status === "failed") {
+    return `<section class="branch-sales-effective-status is-error" role="alert"><strong>회원앱 실제 노출을 확인하지 못했습니다</strong><span>${escapeHtml(status.message || "server_error")}</span></section>`;
+  }
+  const applied = normalizeBranchSalesConfig(branchSalesSettingsState.appliedConfig);
+  const availability = Array.isArray(status.methodAvailability) ? status.methodAvailability : [];
+  const labels = {
+    available: "회원앱 사용 중",
+    branch_disabled: "관리자 설정 꺼짐",
+    server_not_allowed: "서버 운영 미허용",
+    bank_account_not_ready: "입금 계좌 미준비",
+  };
+  const items = availability.map((method) => {
+    const id = String(method.id || "");
+    const title = applied.paymentMethods[id]?.title || id;
+    const reason = String(method.reason || "server_not_allowed");
+    return `<li class="${method.available === true ? "is-ready" : "is-blocked"}"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(labels[reason] || reason)}</span></li>`;
+  }).join("");
+  const appliedAt = status.settingsAppliedAt ? bankNotificationDateTime(status.settingsAppliedAt) : "적용 기록 없음";
+  return `
+    <section class="branch-sales-effective-status" role="status">
+      <div><strong>회원앱 실제 노출</strong><span>서버 설정 v${Number(status.settingsVersion || 0)} · 마지막 적용 ${escapeHtml(appliedAt)}</span></div>
+      ${items ? `<ul>${items}</ul>` : '<span>서버 진단 정보가 아직 적용되지 않았습니다.</span>'}
+    </section>`;
+}
+
 function renderBranchSalesSetup() {
   const target = $("#branchSalesSetupPanel");
   if (!target) return;
@@ -29540,6 +29605,7 @@ function renderBranchSalesSetup() {
       <div><p class="eyebrow">초보자 빠른 설정</p><h2>회원 판매 5단계</h2><span>기존 상품·시간표·쿠폰·결제를 한곳에서 설정합니다.</span></div>
       <span id="branchSalesDraftStatus" class="source-pill">${failed ? "서버 설정 필요" : branchSalesSettingsDirty() ? "적용 전 변경 있음" : "현재 앱과 동일"}</span>
     </div>
+    ${branchSalesEffectiveOptionsMarkup()}
     ${failed ? `<p class="branch-sales-error" role="alert">설정 기능을 불러오지 못했습니다. DB 업데이트와 관리자 권한을 확인한 뒤 다시 시도해 주세요. (${escapeHtml(branchSalesSettingsState.message)})</p>` : ""}
     <div class="branch-sales-steps ${failed ? "is-disabled" : ""}">
       <section class="branch-sales-step"><div class="branch-sales-step-title"><b>1</b><span><strong>상품</strong><small>판매할 종류만 켭니다</small></span></div><div class="branch-sales-toggle-grid">
@@ -29604,6 +29670,7 @@ async function saveBranchSalesSettings(apply = false) {
       target_expected_version: branchSalesSettingsState.version || null,
     });
     applyBranchSalesSettingsResponse(response);
+    if (apply) await loadBranchSalesEffectiveOptionsFromServer();
     renderBranchSalesSetup();
     showToast(apply ? "새 설정을 회원앱에 적용했습니다" : "초안을 저장했습니다. 적용 전까지 회원앱은 바뀌지 않습니다");
     return true;

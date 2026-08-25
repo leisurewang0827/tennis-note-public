@@ -2670,7 +2670,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.407",
+    workerUrl: "./service-worker.js?v=1.0.408",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2701,7 +2701,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.407" });
+  const params = new URLSearchParams({ v: "1.0.408" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -4730,6 +4730,17 @@ function coachQuickAddSlotMarkup({ coach, day, time, className, label, style = "
   return `<button class="${className} coach-add-slot${overrideClass}"${styleAttr} type="button" data-coach-add-lesson data-date="${date}" data-day="${day}" data-time="${time}" data-coach-role-id="${escapeHtml(coach.roleId || coach.id)}" aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${lockedOverride ? "브레이크·상담 시간 수동 등록" : "수업 추가"}">${content}</button>`;
 }
 
+function coachLessonOccupiesSlot(lesson = {}, time = "", slotMinutes = scheduleBlockMinutes) {
+  const status = String(lesson.status || "").trim().toLowerCase();
+  if (["cancel", "cancelled", "canceled", "취소"].includes(status)) return false;
+  const lessonStart = minutesFromTime(lesson.time || lesson.startTime || "");
+  const slotStart = minutesFromTime(time);
+  if (!Number.isFinite(lessonStart) || !Number.isFinite(slotStart)) return false;
+  const lessonEnd = lessonStart + Math.max(1, lessonDuration(lesson));
+  const slotEnd = slotStart + Math.max(1, Number(slotMinutes) || scheduleBlockMinutes);
+  return lessonStart < slotEnd && lessonEnd > slotStart;
+}
+
 function coachMobileScheduleSegments(day, policy, scheduleLessons) {
   const windows = coachOperatingWindows(day, policy);
   const range = "all";
@@ -4816,6 +4827,10 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
           return `
             <div class="coach-mobile-coach-lane">
               ${times.map((time, index) => {
+                const occupied = coachLessons.some((lesson) => coachLessonOccupiesSlot(lesson, time));
+                if (occupied) {
+                  return `<div class="coach-mobile-slot is-occupied" style="grid-row:${index + 1};" aria-hidden="true"></div>`;
+                }
                 const working = isPolicyCoachWorking(coach, day, time, scheduleBlockMinutes);
                 const breakRule = breakRuleForSlot(policy, day, time);
                 const blockedRule = coachBlockedRuleForSlot(coach, day, time);
@@ -8794,7 +8809,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.407",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.408",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

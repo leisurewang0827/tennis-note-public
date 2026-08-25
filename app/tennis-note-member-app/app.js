@@ -66,6 +66,8 @@ const state = {
     bankTransferEnabled: false,
     paymentMethods: [],
     settingsVersion: 0,
+    settingsAppliedAt: "",
+    methodAvailability: [],
     features: { threeMonth: true, oneDay: true, coupons: true },
   },
   discountCoupons: [],
@@ -2381,12 +2383,14 @@ function restoreSnapshot() {
     if (!Array.isArray(state.expiredTickets)) state.expiredTickets = [];
     if (!Array.isArray(state.liveMembershipProducts)) state.liveMembershipProducts = [];
     if (!state.livePaymentOptions || typeof state.livePaymentOptions !== "object") {
-      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
+      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true } };
     }
     state.livePaymentOptions.allowedMethods = paymentMethodIdList(state.livePaymentOptions.allowedMethods || ["tosspay"]);
     state.livePaymentOptions.bankTransferEnabled = state.livePaymentOptions.bankTransferEnabled === true;
     if (!Array.isArray(state.livePaymentOptions.paymentMethods)) state.livePaymentOptions.paymentMethods = [];
     state.livePaymentOptions.settingsVersion = Math.max(0, Number(state.livePaymentOptions.settingsVersion) || 0);
+    state.livePaymentOptions.settingsAppliedAt = String(state.livePaymentOptions.settingsAppliedAt || "");
+    if (!Array.isArray(state.livePaymentOptions.methodAvailability)) state.livePaymentOptions.methodAvailability = [];
     state.livePaymentOptions.features = { threeMonth: true, oneDay: true, coupons: true, ...(state.livePaymentOptions.features || {}) };
     if (!Array.isArray(state.discountCoupons)) state.discountCoupons = [];
     state.membershipPricingQuotes = {};
@@ -2768,7 +2772,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.407",
+    workerUrl: "./service-worker.js?v=1.0.408",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -9061,8 +9065,15 @@ function purchasePaymentMethodOptionsHtml() {
     const amount = purchasePaymentAmount(purchaseFlowProduct() || {}, method.id);
     return `<button class="payment-method-option ${selected ? "is-selected" : ""}" type="button" data-select-payment-method="${method.id}" aria-pressed="${selected}"><strong>${method.label} · ${escapeHtml(formatWon(amount))}</strong><small>${method.detail}</small></button>`;
   }).join("");
+  const bankAvailability = (state.livePaymentOptions?.methodAvailability || [])
+    .find((method) => String(method.id) === "bank_transfer");
+  const bankUnavailableMessages = {
+    branch_disabled: "현재 지점은 계좌이체를 사용하지 않습니다.",
+    server_not_allowed: "계좌이체 운영 설정을 준비하고 있습니다.",
+    bank_account_not_ready: "입금 계좌 설정이 완료되지 않았습니다.",
+  };
   const bankUnavailable = !readyMethods.some((method) => method.id === "bank_transfer")
-    ? '<p class="payment-method-unavailable-note" role="status">현재 계좌이체를 사용할 수 없습니다.</p>'
+    ? `<p class="payment-method-unavailable-note" role="status">${escapeHtml(bankUnavailableMessages[bankAvailability?.reason] || "현재 계좌이체를 사용할 수 없습니다.")}</p>`
     : "";
   if (readyMethods.length) return `${methodOptions}${bankUnavailable}`;
   return '<p class="payment-method-unavailable" role="status">온라인 결제를 준비하고 있습니다. 지금은 센터에 문의해 주세요.</p>';
@@ -9935,12 +9946,14 @@ async function syncMemberPaymentOptionsFromServer(targetBranchId = "") {
       bankTransferEnabled: options?.bankTransferEnabled === true,
       paymentMethods: Array.isArray(options?.paymentMethods) ? options.paymentMethods : [],
       settingsVersion: Math.max(0, Number(options?.settingsVersion) || 0),
+      settingsAppliedAt: String(options?.settingsAppliedAt || ""),
+      methodAvailability: Array.isArray(options?.methodAvailability) ? options.methodAvailability : [],
       features: { threeMonth: true, oneDay: true, coupons: true, ...(options?.features || {}) },
     };
     normalizeSelectedPaymentMethod();
     return true;
   } catch {
-    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
+    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true } };
     normalizeSelectedPaymentMethod();
     return false;
   }
@@ -13341,7 +13354,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.407", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.408", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -14611,7 +14624,7 @@ function activateLiveMemberProfile(profileId) {
   state.lessonLogs = [];
   state.practiceLogs = [];
   state.paymentRequests = [];
-  state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
+  state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true } };
   state.discountCoupons = [];
   state.expiredTickets = [];
   state.ticketHistory = [];
@@ -16551,7 +16564,7 @@ function openLocalCurriculumPreview() {
 
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.407");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.408");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -16634,7 +16647,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.407",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.408",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
