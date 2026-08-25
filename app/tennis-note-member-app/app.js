@@ -411,20 +411,6 @@ function memberChangeBlockedMessage(code = "", snapshot = null) {
   }[code] || "현재 회원 앱에서 이 수업을 변경할 수 없습니다.";
 }
 
-function currentWeekPendingPurchaseSchedules() {
-  const week = activeMemberWeek();
-  return (state.pendingPurchaseSchedules || [])
-    .filter((schedule) => !schedule.lessonDate || (schedule.lessonDate >= week.startDate && schedule.lessonDate <= week.endDate))
-    .sort((left, right) => `${left.lessonDate || ""} ${left.startTime || ""}`.localeCompare(`${right.lessonDate || ""} ${right.startTime || ""}`));
-}
-
-function pendingPurchaseScheduleLabel(schedule = {}) {
-  const date = String(schedule.lessonDate || "");
-  const time = String(schedule.startTime || "").slice(0, 5);
-  const day = date ? `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일` : "선택한 날짜";
-  return `${day} ${time}`.trim();
-}
-
 function latestPreviousMembershipTicket() {
   return [...(state.liveTickets || []), ...(state.expiredTickets || [])]
     .filter((ticket) => ["expired", "cancelled", "canceled", "refunded"].includes(String(ticket.status || "").toLowerCase()))
@@ -1016,69 +1002,6 @@ function refundHeldLiveTickets() {
     .filter((ticket) => Boolean(ticket.refundHoldId))
     .sort((left, right) => String(right.refundHoldAt || right.createdAt || "")
       .localeCompare(String(left.refundHoldAt || left.createdAt || "")));
-}
-
-async function syncMemberPendingPurchaseSchedulesFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.rpc || !state.member?.profileId) {
-    state.pendingPurchaseSchedules = [];
-    return false;
-  }
-  try {
-    const result = await client.rpc("tn_member_pending_purchase_schedules", {});
-    const rows = Array.isArray(result) ? result : Array.isArray(result?.schedules) ? result.schedules : [];
-    state.pendingPurchaseSchedules = rows.map((row) => ({
-      id: String(row.id || ""),
-      paymentId: String(row.paymentId || row.payment_id || ""),
-      providerPaymentId: String(row.providerPaymentId || row.provider_payment_id || ""),
-      paymentStatus: String(row.paymentStatus || row.payment_status || "ready"),
-      paymentMethod: String(row.paymentMethod || row.payment_method || ""),
-      lessonDate: String(row.lessonDate || row.lesson_date || ""),
-      startTime: String(row.startTime || row.start_time || "").slice(0, 5),
-      durationMinutes: Number(row.durationMinutes || row.duration_minutes) || 20,
-      coachName: String(row.coachName || row.coach_name || "담당 코치"),
-      productName: String(row.productName || row.product_name || "회원권"),
-      expiresAt: String(row.expiresAt || row.expires_at || ""),
-      active: row.active !== false,
-    }));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function cancelPendingPurchasePayment(paymentId = "", productTitle = "회원권") {
-  if (!paymentId || pendingPaymentCancelInFlight.has(paymentId)) return;
-  if (!window.confirm(`${productTitle} 계좌이체 신청을 취소할까요?\n보관 중인 시간도 다시 예약 가능 상태로 돌아갑니다.`)) return;
-  const client = window.TennisNoteDataClient;
-  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
-    showToast("로그인 상태를 확인한 뒤 다시 시도해 주세요.");
-    return;
-  }
-  pendingPaymentCancelInFlight.add(paymentId);
-  try {
-    const result = await client.invokeFunction("portone-payment/cancel-pending", {
-      body: { paymentId, reason: "회원 계좌이체 신청 취소" },
-    });
-    if (!result?.ok) throw Object.assign(new Error(result?.code || "pending_payment_cancel_failed"), { payload: result });
-    state.pendingPaymentCheckStatus = { tone: "done", text: "계좌이체 신청과 선택 시간 보관을 취소했습니다." };
-    state.paymentRequests = (state.paymentRequests || []).filter((request) => String(request.paymentId || "") !== String(paymentId));
-    const shared = loadSharedData();
-    shared.paymentRequests = (shared.paymentRequests || []).filter((request) => String(request.paymentId || "") !== String(paymentId));
-    saveSharedData(shared);
-    await Promise.allSettled([
-      syncMemberPendingPurchaseSchedulesFromServer(),
-      syncMemberDiscountCouponsFromServer(),
-      refreshPurchaseScheduleAvailability(),
-    ]);
-    renderAll();
-    showToast("계좌이체 신청을 취소했습니다.");
-  } catch (error) {
-    state.pendingPaymentCheckStatus = { tone: "alert", text: paymentServerErrorMessage(error) };
-    renderAll();
-  } finally {
-    pendingPaymentCancelInFlight.delete(paymentId);
-  }
 }
 
 const journalActivityStatuses = [

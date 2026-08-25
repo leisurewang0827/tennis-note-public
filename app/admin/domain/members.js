@@ -731,3 +731,26 @@ function ticketReviewMember(userId) {
     memberServerUserIds(member).some((memberUserId) => String(memberUserId) === normalizedUserId)
   )) || null;
 }
+
+function manualMemberPartnerLocalEligibility(user) {
+  if (!user || user.role !== "member" || user.status !== "active" || user.merged_into_user_id || user.permanently_deleted_at) {
+    return false;
+  }
+  const activeBranchId = activeOperationBranchId();
+  if (!activeBranchId) return true;
+  const linkedMember = members.find((member) => memberServerUserIds(member).includes(String(user.id || "")));
+  const branchIds = linkedMember ? memberOperationBranchIds(linkedMember) : [];
+  if (branchIds.includes(activeBranchId)) return true;
+  return branchIds.length === 0 && ["journal_only", "lesson_pending"].includes(String(user.member_kind || ""));
+}
+
+function manualMemberPartnerCandidateStatus(candidate = {}) {
+  return {
+    app_signup_without_membership: "앱 가입 · 회원권 없음",
+    branchless_member: "지점 미연결 회원",
+    current_branch: "현재 지점 회원",
+    other_branch: "다른 지점 회원 · 지점 확인 필요",
+    inactive_member: "비활성 회원 · 먼저 복원",
+    staff_account: "직원 계정 · 회원 연결 불가",
+  }[candidate.eligibilityCode] || (candidate.eligible ? "연결 가능" : "연결 확인 필요");
+}

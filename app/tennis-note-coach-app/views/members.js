@@ -183,3 +183,12 @@ function renderMemberDetailModal(member) {
   openCoachModal("memberDetailModal");
   void syncCoachMemberChart(memberUserId, member.displayName || member.name);
 }
+
+function normalizeCoachScheduleMemberName(value, fallback = "회원") {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  if (!/^<span\b/i.test(raw) || !/\bschedule-member-lines\b/i.test(raw)) return raw;
+  const ariaLabel = raw.match(/\baria-label\s*=\s*(["'])(.*?)\1/i)?.[2] || "";
+  const text = ariaLabel || raw.replace(/<[^>]*>/g, " ");
+  return decodeCoachScheduleMemberEntities(text).replace(/\s+/g, " ").trim() || fallback;
+}

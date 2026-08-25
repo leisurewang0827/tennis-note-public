@@ -259,3 +259,61 @@ async function downloadCoachJournalMedia(client, row, displayName) {
     storagePath: row.storage_path,
   };
 }
+
+async function refreshLessonCompletionState({ log = null, lessonId = "" } = {}) {
+  const serverLessonId = log?.serverLessonId || ensureCoachLessonRecord(lessonId)?.serverLessonId || "";
+  if (!serverLessonId) return { ok: false, message: "서버 수업 연결을 확인할 수 없습니다." };
+  const client = window.TennisNoteDataClient;
+  let preflight = null;
+  try {
+    preflight = await client?.rpc?.("tn_schedule_v2_coach_completion_preflight", {
+      target_lesson_id: serverLessonId,
+    });
+  } catch (error) {
+    const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
+    captureLessonCompletionFailure(code, log || ensureCoachLessonRecord(lessonId), true);
+    return { ok: false, message: lessonCompletionErrorMessage(code) };
+  }
+  coachScheduleV2WorkspaceCache = null;
+  const refreshed = await syncCoachScheduleV2({ force: true });
+  if (!refreshed) return { ok: false, message: "최신 수업 정보를 불러오지 못했습니다. 인터넷과 로그인 상태를 확인해 주세요." };
+  const latestLesson = state.liveLessons.find((lesson) => lesson.serverLessonId === serverLessonId);
+  const latestLog = state.lessonLogs.find((item) => item.serverLessonId === serverLessonId) || log;
+  const preflightStatus = String(preflight?.status || "").toLowerCase();
+  if (preflightStatus === "already_completed") {
+    if (latestLog) {
+      latestLog.status = "확인 완료";
+      latestLog.validationMessage = "이미 완료·차감된 수업입니다. 최신 완료 결과를 표시합니다.";
+    }
+    return { ok: true, alreadyFinal: true, lesson: latestLesson, log: latestLog };
+  }
+  if (preflight && (preflight.ok === false || preflightStatus !== "ready")) {
+    const message = coachCompletionPreflightMessage(preflightStatus);
+    if (latestLog) {
+      latestLog.status = "확인 대기";
+      latestLog.validationMessage = message;
+    }
+    return { ok: false, stale: true, status: preflightStatus, message, lesson: latestLesson, log: latestLog };
+  }
+  if (!latestLesson) return { ok: false, message: "최신 시간표에서 수업을 찾지 못했습니다. 관리자 시간표를 확인해 주세요." };
+  if (lessonChartFinalized(latestLesson)) {
+    if (latestLog) {
+      latestLog.status = "확인 완료";
+      latestLog.validationMessage = "다른 화면에서 이미 처리된 수업입니다. 최신 완료 결과를 표시합니다.";
+    }
+    return { ok: true, alreadyFinal: true, lesson: latestLesson, log: latestLog };
+  }
+  if (latestLog) latestLog.validationMessage = "최신 수업·회원권 상태를 확인했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.";
+  return { ok: true, alreadyFinal: false, lesson: latestLesson, log: latestLog };
+}
+
+function captureLessonCompletionFailure(code, lesson, retry = false) {
+  window.TennisNoteIssueReporter?.captureClientError?.({
+    category: "runtime",
+    stage: "coach_lesson_complete",
+    code,
+    message: "coach_lesson_complete_failed",
+    provider: Array.isArray(lesson?.v2Participants) && lesson.v2Participants.length > 1 ? "group" : "personal",
+    status: retry ? 409 : 0,
+  });
+}

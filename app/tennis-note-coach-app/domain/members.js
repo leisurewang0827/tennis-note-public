@@ -277,3 +277,13 @@ function relatedLogsForMember(member) {
   const name = member.groupMemberName || member.displayName || member.name;
   return state.lessonLogs.filter((log) => String(log.member || "").includes(name) || String(log.member || "").includes(member.name)).slice(0, 3);
 }
+
+function decodeCoachScheduleMemberEntities(value = "") {
+  return String(value || "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#(?:39|x27);/gi, "'");
+}

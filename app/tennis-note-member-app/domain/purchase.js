@@ -352,3 +352,17 @@ async function submitMembershipPurchaseFlow() {
     if (purchaseFlowState().open) renderMembershipPurchaseFlow();
   }
 }
+
+function currentWeekPendingPurchaseSchedules() {
+  const week = activeMemberWeek();
+  return (state.pendingPurchaseSchedules || [])
+    .filter((schedule) => !schedule.lessonDate || (schedule.lessonDate >= week.startDate && schedule.lessonDate <= week.endDate))
+    .sort((left, right) => `${left.lessonDate || ""} ${left.startTime || ""}`.localeCompare(`${right.lessonDate || ""} ${right.startTime || ""}`));
+}
+
+function pendingPurchaseScheduleLabel(schedule = {}) {
+  const date = String(schedule.lessonDate || "");
+  const time = String(schedule.startTime || "").slice(0, 5);
+  const day = date ? `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일` : "선택한 날짜";
+  return `${day} ${time}`.trim();
+}

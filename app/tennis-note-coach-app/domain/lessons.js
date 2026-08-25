@@ -263,3 +263,66 @@ function makeupRequestBelongsToCurrentCoach(request = {}) {
   if (state.dataMode === "live" || state.liveProfileId) return false;
   return canonicalCoachName(requestCoach(request)) === currentCoachName();
 }
+
+function lessonGroupDeductionSummary(lesson = {}, participants = []) {
+  if (participants.length < 2 || !lessonChartFinalized(lesson)) return "";
+  const deducted = participants.reduce((total, participant) => (
+    total + (Number(participant.deductedSessions ?? participant.deducted_sessions) || 0)
+  ), 0);
+  return deducted === 1
+    ? `${participants.length}명 완료 · 공유 회원권 1회 차감`
+    : `${participants.length}명 완료 · 회원권 ${deducted}회 차감`;
+}
+
+function normalizedLessonCompletionErrorCode(error) {
+  let code = error?.payload?.message || error?.payload?.code || error?.message || "server_error";
+  if (typeof code === "string" && code.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(code);
+      code = parsed.message || parsed.code || code;
+    } catch {
+      // Keep the provider message when it is not JSON.
+    }
+  }
+  return String(code || "server_error").trim().slice(0, 120);
+}
+
+function lessonCompletionErrorMessage(code, { fromOfflineQueue = false } = {}) {
+  const normalized = String(code || "server_error").toLowerCase();
+  const mappings = [
+    [["lesson_not_ended"], lessonOutcomeGuardMessage()],
+    [["already_processed", "existing_final", "status_invalid", "concurrent_update"], "다른 화면에서 이미 처리됐습니다. 최신 상태를 다시 확인해 주세요."],
+    [["ticket_units_unavailable", "ticket_unavailable", "remaining_sessions"], "차감 가능한 회원권 횟수가 없습니다. 회원권 잔여 횟수를 확인해 주세요."],
+    [["ticket_expired", "ticket_paused", "ticket_inactive"], "만료·중지된 회원권입니다. 사용할 회원권을 먼저 확인해 주세요."],
+    [["participant_ticket_mismatch", "participant_input_missing", "participant_reference_invalid"], "수업 회원과 회원권 연결이 맞지 않습니다. 최신 상태를 확인해 주세요."],
+    [["group", "participant_missing"], "그룹수업 참가자 또는 회원권 연결이 일부 누락됐습니다. 전체 연결을 확인해 주세요."],
+    [["next_curriculum", "curriculum_ref"], "다음 커리큘럼 서버 연결을 확인한 뒤 다시 시도해 주세요."],
+    [["comment_too_short"], "코치 코멘트는 직접 5자 이상 작성해야 합니다."],
+    [["comment_too_generic"], "짧은 칭찬이나 확인 문구만으로는 횟수 차감이 불가합니다."],
+    [["comment_recent_duplicate", "comment_member_duplicate_limit"], "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다."],
+    [["forbidden", "coach_required", "assigned_coach"], "담당 코치 또는 지정된 대타 코치만 처리할 수 있습니다."],
+    [["login_required", "jwt", "session"], "로그인이 만료됐습니다. 다시 로그인한 뒤 작성 내용을 확인해 주세요."],
+  ];
+  const matched = mappings.find(([needles]) => needles.some((needle) => normalized.includes(needle)));
+  if (matched) return matched[1];
+  if (fromOfflineQueue) return "자동 동기화에 실패했습니다. 연결 상태를 확인한 뒤 최신 상태를 다시 확인해 주세요.";
+  return `수업 완료 처리에 실패했습니다. 최신 상태를 다시 확인해 주세요. (오류 ${normalized.replace(/[^a-z0-9_:-]/g, "_").slice(0, 40) || "server_error"})`;
+}
+
+function coachCompletionPreflightMessage(status = "") {
+  return ({
+    superseded: "시간이 변경되어 종료된 이전 수업입니다. 최신 시간표를 다시 불러왔습니다.",
+    prior_ticket: "이전 회원권에 연결된 수업입니다. 현재 회원권 일정에서 처리해 주세요.",
+    session_limit: "회원권 횟수 종료로 닫힌 수업입니다. 현재 회원권을 확인해 주세요.",
+    date_range: "회원권 기간 종료로 닫힌 수업입니다. 현재 회원권을 확인해 주세요.",
+    ticket_status: "사용이 종료된 회원권의 수업입니다. 현재 회원권을 확인해 주세요.",
+    member_absence: "회원 불참으로 종료된 수업입니다. 차감·피드백 처리 대상이 아닙니다.",
+    admin_cancelled: "관리자가 취소한 수업입니다. 관리자 시간표에서 복구한 뒤 처리해 주세요.",
+    cancelled: "취소 또는 변경된 수업입니다. 최신 시간표를 다시 불러왔습니다.",
+    status_invalid: "현재 상태에서는 처리할 수 없는 수업입니다. 최신 시간표를 확인해 주세요.",
+    lesson_not_found: "삭제되거나 교체된 수업입니다. 최신 시간표를 다시 불러왔습니다.",
+    participants_missing: "수업 참가자 연결이 비어 있습니다. 관리자에게 연결 확인을 요청해 주세요.",
+    participant_ticket_mismatch: "회원과 회원권 연결이 일치하지 않습니다. 관리자에게 연결 확인을 요청해 주세요.",
+    ticket_unavailable: "회원권이 만료·중지·소진되어 처리할 수 없습니다.",
+  })[String(status || "").toLowerCase()] || "최신 수업·회원권 상태를 확인하지 못했습니다. 다시 시도해 주세요.";
+}

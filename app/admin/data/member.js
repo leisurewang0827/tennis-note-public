@@ -216,3 +216,83 @@ async function loadMemberManagementPolicyFromServer() {
     return false;
   }
 }
+
+async function searchManualMemberPartnerCandidates(form, options = {}) {
+  if (!form?.elements?.partnerSearch) return [];
+  const query = String(form.elements.partnerSearch.value || "").trim();
+  const normalizedQuery = normalizedMemberLinkSearch(query);
+  const queryDigits = normalizedMemberPhone(query);
+  if (normalizedQuery.length < 2 && queryDigits.length < 4) {
+    manualMemberPartnerSearchState.delete(form);
+    filterManualMemberPartnerOptions(form);
+    return [];
+  }
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || operationsRole() !== "admin") {
+    setManualMemberPartnerStatus(form, "서버 회원 검색을 사용할 수 없습니다. 관리자 로그인 상태를 확인해 주세요.", "danger");
+    return [];
+  }
+  const requestId = createMemberChangeBatchId();
+  const stateValue = {
+    query: query.toLowerCase(),
+    requestId,
+    loading: true,
+    candidates: [],
+  };
+  manualMemberPartnerSearchState.set(form, stateValue);
+  filterManualMemberPartnerOptions(form);
+  try {
+    const response = await client.rpc("tn_admin_search_member_partner_candidates", {
+      target_query: query,
+      target_branch_id: activeOperationBranchId() || null,
+      target_current_user_id: form.querySelector("[data-manual-existing-partner]")?.dataset.currentMemberUserId || null,
+      target_limit: 20,
+    });
+    if (manualMemberPartnerSearchState.get(form)?.requestId !== requestId) return [];
+    const candidates = (Array.isArray(response) ? response : response?.candidates || [])
+      .filter((candidate) => candidate?.id)
+      .map((candidate) => ({
+        ...candidate,
+        id: String(candidate.id),
+        eligible: candidate.eligible === true,
+        eligibilityCode: String(candidate.eligibilityCode || ""),
+      }));
+    manualMemberPartnerSearchState.set(form, {
+      query: query.toLowerCase(),
+      requestId,
+      loading: false,
+      candidates,
+    });
+    const exactEligible = candidates.filter((candidate) => candidate.eligible && candidate.exactPhoneMatch === true);
+    const exactBlocked = candidates.filter((candidate) => !candidate.eligible && candidate.exactPhoneMatch === true);
+    if (options.promoteExactPhone && exactEligible.length === 1) {
+      const existingMode = form.querySelector('input[name="partnerMode"][value="existing"]');
+      if (existingMode) existingMode.checked = true;
+      syncManualMemberPartnerField(form);
+      form.elements.partnerSearch.value = query;
+      setManualMemberPartnerStatus(form, `${exactEligible[0].name || "앱 가입 회원"} 계정을 찾았습니다. 이름을 확인하고 선택해 주세요.`, "good");
+    } else if (options.promoteExactPhone && exactEligible.length > 1) {
+      setManualMemberPartnerStatus(form, "같은 전화번호의 회원 계정이 여러 개입니다. 임의로 연결하지 말고 계정 연결 점검을 진행해 주세요.", "danger", "new");
+    } else if (options.promoteExactPhone && exactBlocked.length) {
+      setManualMemberPartnerStatus(form, manualMemberPartnerCandidateStatus(exactBlocked[0]), "danger", "new");
+    } else if (!candidates.length) {
+      setManualMemberPartnerStatus(form, "일치하는 회원 계정이 없습니다. 신규 회원이면 새 파트너 등록을 계속하세요.");
+    } else {
+      setManualMemberPartnerStatus(form, "검색 결과에서 이름과 전화번호 끝자리를 확인한 뒤 선택해 주세요.");
+    }
+    filterManualMemberPartnerOptions(form);
+    return candidates;
+  } catch (error) {
+    if (manualMemberPartnerSearchState.get(form)?.requestId !== requestId) return [];
+    manualMemberPartnerSearchState.set(form, {
+      query: query.toLowerCase(),
+      requestId,
+      loading: false,
+      candidates: [],
+      error: String(error?.message || error || "partner_search_failed"),
+    });
+    setManualMemberPartnerStatus(form, "회원 계정 검색에 실패했습니다. 네트워크와 서버 기능 적용 여부를 확인한 뒤 다시 검색해 주세요.", "danger");
+    filterManualMemberPartnerOptions(form);
+    return [];
+  }
+}

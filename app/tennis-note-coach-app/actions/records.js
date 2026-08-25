@@ -409,3 +409,15 @@ async function confirmLog(id, options = {}) {
   renderAll();
   return true;
 }
+
+async function refreshLessonCompletionFromUi({ logId = "", lessonId = "" } = {}) {
+  const log = state.lessonLogs.find((item) => item.id === logId) || null;
+  const result = await refreshLessonCompletionState({ log, lessonId });
+  if (log && !result.ok) log.validationMessage = result.message;
+  const lesson = lessonId ? ensureCoachLessonRecord(lessonId) : null;
+  if (lesson && !result.ok) lesson.validationMessage = result.message;
+  saveSnapshot();
+  renderAll();
+  if (state.editingLessonId) renderLessonEditModal();
+  return result;
+}

@@ -516,3 +516,49 @@ function selectedLessonMemberReference() {
   }
   return select?.value || "";
 }
+
+function setManualMemberPartnerStatus(form, text = "", tone = "", target = "existing") {
+  const selector = target === "new" ? "[data-manual-partner-phone-status]" : "[data-manual-existing-partner-status]";
+  const status = form?.querySelector(selector);
+  if (!status) return;
+  status.hidden = !text;
+  status.textContent = text;
+  status.className = `form-message${tone ? ` ${tone}` : ""}`;
+}
+
+function queueManualMemberPartnerSearch(form, options = {}) {
+  if (!form?.elements?.partnerSearch) return;
+  const previous = manualMemberPartnerSearchState.get(form);
+  if (previous?.timer) window.clearTimeout(previous.timer);
+  const query = String(form.elements.partnerSearch.value || "").trim();
+  const timer = window.setTimeout(() => {
+    searchManualMemberPartnerCandidates(form, options);
+  }, options.immediate ? 0 : 250);
+  manualMemberPartnerSearchState.set(form, {
+    ...(previous || {}),
+    query: query.toLowerCase(),
+    timer,
+  });
+}
+
+function syncMemberReenrollSchedule(form, product = null) {
+  const panel = form?.querySelector("[data-member-reenroll-schedule]");
+  if (!panel || !form.elements.reenrollScheduleMode) return;
+  const selectedProduct = product || (adminLiveDataState.products || [])
+    .find((item) => item.id === form.elements.productId?.value);
+  const regularProduct = memberManagementProductSupportsRegularSchedule(selectedProduct);
+  const changeSchedule = regularProduct && form.elements.reenrollScheduleMode.value === "change";
+  syncMemberQuickEditorSchedule(form, selectedProduct);
+  panel.hidden = !regularProduct;
+  const fields = panel.querySelector("[data-member-reenroll-schedule-fields]");
+  if (fields) fields.hidden = !changeSchedule;
+  panel.querySelectorAll("[data-member-schedule-row]").forEach((row) => {
+    if (row.hidden) return;
+    row.querySelectorAll("input[name^='scheduleDay'], select[name^='scheduleTime'], [data-member-schedule-day]")
+      .forEach((control) => { control.disabled = !changeSchedule; });
+  });
+  const note = panel.querySelector("[data-member-reenroll-schedule-note]");
+  if (note) note.textContent = changeSchedule
+    ? `새 회원권의 주 ${memberManagementProductWeeklyFrequency(selectedProduct)}회 요일·시간을 모두 선택해 주세요.`
+    : "기존 회원권의 마지막 정규시간을 새 회원권 기간으로 이어갑니다.";
+}
