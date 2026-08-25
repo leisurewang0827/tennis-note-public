@@ -5,12 +5,14 @@ on:
     paths:
       - "app/**"
       - "scripts/build_cloudflare_pages.py"
+      - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - ".github/workflows/tennisnote-public-ci.yml"
   push:
     branches: [main]
     paths:
       - "app/**"
       - "scripts/build_cloudflare_pages.py"
+      - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - ".github/workflows/tennisnote-public-ci.yml"
 
 permissions:
@@ -42,6 +44,9 @@ jobs:
           node --check app/admin/schedule-v2-admin.js
           node --check app/tennis-note-member-app/app.js
           node --check app/tennis-note-coach-app/app.js
+          node --check scripts/check_tennisnote_coach_scope_runtime.cjs
+      - name: Prevent coach scope and schedule name regressions
+        run: node scripts/check_tennisnote_coach_scope_runtime.cjs
       - name: Build isolated Cloudflare artifacts
         run: |
           python scripts/build_cloudflare_pages.py --target member --output dist/member
