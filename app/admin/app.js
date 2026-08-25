@@ -11163,7 +11163,8 @@ function memberManagementProductSupportsRegularSchedule(product) {
     && !memberManagementProductIsCoupon(product);
 }
 
-function memberCreateScheduleMarkup(product) {
+function memberCreateScheduleMarkup(product, options = {}) {
+  const reenroll = options.reenroll === true;
   const regularProduct = memberManagementProductSupportsRegularSchedule(product);
   const frequency = memberManagementProductWeeklyFrequency(product);
   const scope = memberManagementProductScheduleScope(product);
@@ -11183,10 +11184,14 @@ function memberCreateScheduleMarkup(product) {
       </select>
     </div>`;
   }).join("");
-  return `<section class="member-inline-schedule member-create-schedule" data-member-inline-schedule data-member-create-schedule data-product-kind="${escapeHtml(product?.product_kind || "")}" ${regularProduct ? "" : "hidden"}>
-    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>회원 저장과 동시에 시간표에 생성됩니다.</span></div>
-    ${rows}
-    <label class="member-create-schedule-later"><input name="createScheduleLater" type="checkbox" /> 시간표는 나중에 설정</label>
+  return `<section class="member-inline-schedule member-create-schedule" data-member-inline-schedule ${reenroll ? "data-member-reenroll-schedule" : "data-member-create-schedule"} data-product-kind="${escapeHtml(product?.product_kind || "")}" ${regularProduct ? "" : "hidden"}>
+    <div class="member-inline-schedule-heading"><strong>정규 요일·시간</strong><span>${reenroll ? "기존 시간을 유지하거나 새 시간으로 바꿉니다." : "회원 저장과 동시에 시간표에 생성됩니다."}</span></div>
+    ${reenroll ? `<div class="member-partner-mode" role="radiogroup" aria-label="재등록 정규시간 선택">
+      <label><input name="reenrollScheduleMode" type="radio" value="keep" checked /> 기존 정규시간 유지</label>
+      <label><input name="reenrollScheduleMode" type="radio" value="change" /> 새 요일·시간 선택</label>
+    </div>` : ""}
+    <div ${reenroll ? "data-member-reenroll-schedule-fields hidden" : ""}>${rows}</div>
+    ${reenroll ? '<p class="member-inline-schedule-warning" data-member-reenroll-schedule-note>기존 회원권의 마지막 정규시간을 새 회원권 기간으로 이어갑니다.</p>' : '<label class="member-create-schedule-later"><input name="createScheduleLater" type="checkbox" /> 시간표는 나중에 설정</label>'}
     <p class="member-inline-schedule-warning" data-member-schedule-warning></p>
   </section>`;
 }
@@ -11829,7 +11834,8 @@ function renderMemberManagementModal() {
         <label class="form-field"><span>만료일</span><input name="expiresOn" type="date" value="${defaultExpiresOn}" required /></label>
         <label class="form-field"><span>등록 금액</span><input name="purchasedPrice" type="number" min="0" step="1" value="${Number(product?.cash_price || product?.card_price || ticket?.amount || 0)}" required /></label>
       </div>
-      <p class="member-management-rule">과거 회원권은 그대로 보관하고 새 회원권을 만듭니다. 2대1 파트너도 함께 연결됩니다.</p>` : `<p class="form-message danger">같은 지점·수업형태의 사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
+      ${memberCreateScheduleMarkup(product, { reenroll: true })}
+      <p class="member-management-rule">과거 회원권과 취소 일정은 이력으로 보관하고, 새 회원권과 선택한 정규시간만 활성화합니다. 2대1 파트너 연결도 그대로 보존합니다.</p>` : `<p class="form-message danger">같은 지점·수업형태의 사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "expire") {
     actionFields = `<div class="member-management-warning"><strong>남은 횟수는 이력으로 보존됩니다.</strong><span>앞으로 예정된 수업은 취소되고 회원은 만료회원으로 이동합니다.</span></div>`;
   } else if (action === "close") {
@@ -11851,7 +11857,7 @@ function renderMemberManagementModal() {
       <strong>${memberManagementActionLabel(action)}</strong>
       <small>${ticket ? `${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product)} · ${ticketUsageLabel(ticket)}` : isCreate ? "실서버 회원·회원권 동시 등록" : memberStatusLabel(member)}</small>
     </div>
-    <form id="memberManagementForm" class="member-management-form" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(memberTicketPaymentProjection(member, ticket)))}" ${action === "extend" ? `data-current-expires-on="${escapeHtml(defaultExpiresOn)}"` : ""}>
+    <form id="memberManagementForm" class="member-management-form" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(memberTicketPaymentProjection(member, ticket)))}" ${action === "extend" ? `data-current-expires-on="${escapeHtml(defaultExpiresOn)}"` : ""}>
       ${actionFields}
       <div id="memberManagementMessage" class="form-message danger" role="status">${escapeHtml(memberManagementModalState.message || "")}</div>
       <div class="modal-actions">
@@ -11940,6 +11946,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
   syncMemberCreateSchedule($("#memberManagementForm"));
+  syncMemberReenrollSchedule($("#memberManagementForm"));
   window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   if (action === "app_link") loadMemberLinkCandidates(refreshedMember);
   if (action === "force_delete") loadMemberTicketForceDeletePreview(ticketId);
@@ -11977,6 +11984,7 @@ async function openManualMemberModal() {
   syncMemberManagementScopeFields($("#memberManagementForm"));
   syncManualMemberPartnerField($("#memberManagementForm"));
   syncMemberCreateSchedule($("#memberManagementForm"));
+  syncMemberReenrollSchedule($("#memberManagementForm"));
   setMemberCreateStep(1);
   window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   setTimeout(() => $("#memberManagementForm input[name='memberName']")?.focus(), 0);
@@ -12036,6 +12044,7 @@ function applyMemberManagementProductDefaults(form) {
   syncMemberManagementScopeFields(form);
   syncManualMemberPartnerField(form);
   syncMemberCreateSchedule(form, product);
+  syncMemberReenrollSchedule(form, product);
 }
 
 function syncMemberManagementBalance(form) {
@@ -12185,6 +12194,13 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_assignment_schedule_duplicate")) return "같은 요일과 시간을 중복 선택할 수 없습니다.";
   if (raw.includes("member_assignment_schedule_value_invalid")) return "회원권의 평일·주말 범위에 맞는 시간을 선택해 주세요.";
   if (raw.includes("member_assignment_schedule_blocked_time") || raw.includes("member_assignment_schedule_outside_working_hours")) return "코치 근무시간·브레이크와 겹치지 않는 시간을 선택해 주세요.";
+  if (raw.includes("reenrollment_keep_schedule_product_mismatch")) return "새 회원권의 수업시간·주 횟수·인원이 달라 기존 시간을 유지할 수 없습니다. ‘새 요일·시간 선택’을 사용해 주세요.";
+  if (raw.includes("reenrollment_regular_schedule_missing")) return "기존 정규시간을 확인할 수 없습니다. ‘새 요일·시간 선택’에서 주 횟수만큼 다시 선택해 주세요.";
+  if (raw.includes("reenrollment_schedule_frequency_mismatch")) return "새 회원권의 주 횟수만큼 요일과 시간을 모두 선택해 주세요.";
+  if (raw.includes("reenrollment_schedule_duplicate")) return "재등록 시간에 같은 요일·시간을 중복 선택할 수 없습니다.";
+  if (raw.includes("reenrollment_schedule_value_invalid")) return "회원권의 평일·주말 범위와 시작 시간 규칙에 맞는 시간을 선택해 주세요.";
+  if (raw.includes("reenrollment_schedule_not_supported")) return "쿠폰·원데이는 정규시간 변경 없이 재등록해 주세요.";
+  if (raw.includes("reenrollment_operation_in_progress")) return "같은 재등록 요청을 처리 중입니다. 잠시 후 새로고침해 결과를 확인해 주세요.";
   if (raw.includes("schedule_v2_approved_coach_required")) return "같은 지점의 현재 승인 코치를 선택해 주세요.";
   if (raw.includes("schedule_v2_rule_outside_ticket_window")) return "회원권 사용기간 안에 선택한 정규 요일이 없습니다. 시작일과 만료일을 확인해 주세요.";
   if (raw.includes("payment_product_mismatch")) return "기존 결제에 연결된 회원권과 선택한 회원권이 다릅니다. 결제 회원권을 선택해 주세요.";
@@ -12547,6 +12563,12 @@ async function submitMemberManagementForm(event) {
     normalizeMemberManagementTicketPayload(managementPayload);
   }
   const createRegularSchedules = (isCreate || action === "assign") ? memberInlineScheduleValues(form) : [];
+  const reenrollScheduleMode = action === "reenroll" && form.elements.reenrollScheduleMode
+    ? form.elements.reenrollScheduleMode.value || "keep"
+    : "keep";
+  const reenrollRegularSchedules = action === "reenroll" && reenrollScheduleMode === "change"
+    ? memberInlineScheduleValues(form)
+    : [];
   if (managementPayload && action === "profile") {
     // Profile, note, and partner edits must never recalculate or replace a fixed schedule.
     managementPayload.preserveExistingSchedule = true;
@@ -12620,6 +12642,23 @@ async function submitMemberManagementForm(event) {
       return;
     }
     normalizeMemberManagementPaymentPayload(managementPayload);
+  }
+  if (action === "reenroll" && memberManagementProductSupportsRegularSchedule(selectedManagementProduct) && reenrollScheduleMode === "change") {
+    const requiredScheduleCount = memberManagementProductWeeklyFrequency(selectedManagementProduct);
+    const uniqueScheduleCount = new Set(reenrollRegularSchedules.map((slot) => `${slot.dayOfWeek}:${slot.startTime}`)).size;
+    const scope = memberManagementProductScheduleScope(selectedManagementProduct);
+    if (!memberInlineScheduleIsComplete(form, reenrollRegularSchedules) || reenrollRegularSchedules.length !== requiredScheduleCount) {
+      if (message) message.textContent = `주 ${requiredScheduleCount}회 정규 요일과 시간을 모두 선택해 주세요.`;
+      return;
+    }
+    if (uniqueScheduleCount !== reenrollRegularSchedules.length) {
+      if (message) message.textContent = "같은 요일과 시간을 중복 선택할 수 없습니다.";
+      return;
+    }
+    if (reenrollRegularSchedules.some((slot) => !memberScheduleDayAllowed(scope, slot.dayOfWeek))) {
+      if (message) message.textContent = "회원권의 평일·주말 이용 범위에 맞는 요일을 선택해 주세요.";
+      return;
+    }
   }
 
   if (submit) {
@@ -12759,17 +12798,24 @@ async function submitMemberManagementForm(event) {
       state.memberFilter = "inactive";
       state.selectedMemberId = null;
     } else if (action === "reenroll") {
-      result = await client.rpc("tn_reenroll_member_database_ticket", {
-        target_source_ticket_id: ticket.serverTicketId,
-        target_product_id: form.elements.productId.value,
-        target_coach_role_id: form.elements.coachRoleId.value,
-        target_total_sessions: Number(form.elements.totalSessions.value),
-        target_used_sessions: Number(form.elements.usedSessions.value),
-        target_remaining_sessions: Number(form.elements.remainingSessions.value),
-        target_starts_on: form.elements.startsOn.value,
-        target_expires_on: form.elements.expiresOn.value,
-        target_purchased_price: Number(form.elements.purchasedPrice.value),
-        target_reason: reason,
+      const reenrollOperationKey = form.dataset.reenrollOperationKey || createAdminOperationKey("member-reenroll");
+      form.dataset.reenrollOperationKey = reenrollOperationKey;
+      result = await client.rpc("tn_admin_reenroll_member_ticket_and_regular_schedule", {
+        target_record: {
+          sourceTicketId: ticket.serverTicketId,
+          productId: form.elements.productId.value,
+          coachRoleId: form.elements.coachRoleId.value,
+          totalSessions: Number(form.elements.totalSessions.value),
+          usedSessions: Number(form.elements.usedSessions.value),
+          remainingSessions: Number(form.elements.remainingSessions.value),
+          startsOn: form.elements.startsOn.value,
+          expiresOn: form.elements.expiresOn.value,
+          purchasedPrice: Number(form.elements.purchasedPrice.value),
+          scheduleMode: reenrollScheduleMode,
+          reason,
+        },
+        target_schedules: reenrollRegularSchedules,
+        target_operation_key: reenrollOperationKey,
       });
       state.memberFilter = "active";
     } else if (["deactivate", "restore"].includes(action)) {
@@ -12784,7 +12830,7 @@ async function submitMemberManagementForm(event) {
     window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
     closeMemberManagementModal();
 
-    const requiresFullRefresh = ["create", "assign", "close", "force_delete", "permanent_delete"].includes(action);
+    const requiresFullRefresh = ["create", "assign", "reenroll", "close", "force_delete", "permanent_delete"].includes(action);
     const synced = requiresFullRefresh
       ? await syncAdminLiveData(true)
       : await loadAdminMemberDetail(member, { force: true, renderResult: false });
@@ -13648,7 +13694,7 @@ function memberInlineScheduleMarkup(member, ticket, product) {
 
 function memberInlineScheduleValues(form) {
   const product = (adminLiveDataState.products || []).find((item) => item.id === form?.elements.productId?.value);
-  if (!product || String(product.product_kind || "regular") !== "regular") return [];
+  if (!memberManagementProductSupportsRegularSchedule(product)) return [];
   const ticket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === form?.dataset.ticketId);
   const frequency = memberRegularScheduleFrequency(product, ticket);
   return Array.from({ length: frequency }, (_, offset) => {
@@ -13683,7 +13729,7 @@ function memberInlineCoachChanged(form) {
 
 function memberInlineScheduleIsComplete(form, schedules = memberInlineScheduleValues(form)) {
   const product = (adminLiveDataState.products || []).find((item) => item.id === form?.elements.productId?.value);
-  if (!product || String(product.product_kind || "regular") !== "regular") return false;
+  if (!memberManagementProductSupportsRegularSchedule(product)) return false;
   const ticket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === form?.dataset.ticketId);
   const requiredCount = memberRegularScheduleFrequency(product, ticket);
   return schedules.length === requiredCount
@@ -14837,6 +14883,28 @@ function syncMemberCreateSchedule(form, product = null) {
   });
   const warning = panel.querySelector("[data-member-schedule-warning]");
   if (warning && scheduleLater) warning.textContent = "회원과 회원권만 저장한 뒤 시간표에서 정규시간을 설정합니다.";
+}
+
+function syncMemberReenrollSchedule(form, product = null) {
+  const panel = form?.querySelector("[data-member-reenroll-schedule]");
+  if (!panel || !form.elements.reenrollScheduleMode) return;
+  const selectedProduct = product || (adminLiveDataState.products || [])
+    .find((item) => item.id === form.elements.productId?.value);
+  const regularProduct = memberManagementProductSupportsRegularSchedule(selectedProduct);
+  const changeSchedule = regularProduct && form.elements.reenrollScheduleMode.value === "change";
+  syncMemberQuickEditorSchedule(form, selectedProduct);
+  panel.hidden = !regularProduct;
+  const fields = panel.querySelector("[data-member-reenroll-schedule-fields]");
+  if (fields) fields.hidden = !changeSchedule;
+  panel.querySelectorAll("[data-member-schedule-row]").forEach((row) => {
+    if (row.hidden) return;
+    row.querySelectorAll("input[name^='scheduleDay'], select[name^='scheduleTime'], [data-member-schedule-day]")
+      .forEach((control) => { control.disabled = !changeSchedule; });
+  });
+  const note = panel.querySelector("[data-member-reenroll-schedule-note]");
+  if (note) note.textContent = changeSchedule
+    ? `새 회원권의 주 ${memberManagementProductWeeklyFrequency(selectedProduct)}회 요일·시간을 모두 선택해 주세요.`
+    : "기존 회원권의 마지막 정규시간을 새 회원권 기간으로 이어갑니다.";
 }
 
 function syncMemberInlineProductCancellation(form, options = {}) {
@@ -31941,6 +32009,10 @@ function bindEvents() {
       syncMemberCreateSchedule(event.target.form);
       return;
     }
+    if (event.target.matches("#memberManagementForm input[name='reenrollScheduleMode']")) {
+      syncMemberReenrollSchedule(event.target.form);
+      return;
+    }
   });
 
   document.addEventListener("input", (event) => {
@@ -32101,7 +32173,8 @@ function bindEvents() {
         syncMemberQuickEditorSchedule(form);
         setMemberInlineDirtyState(form);
       } else {
-        syncMemberCreateSchedule(form);
+        if (memberManagementModalState.action === "reenroll") syncMemberReenrollSchedule(form);
+        else syncMemberCreateSchedule(form);
       }
       return;
     }

@@ -501,6 +501,9 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
   const coachesById = new Map((workspace.coaches || []).map((coach) => [coach.roleId, coach]));
   const ticketsById = new Map((workspace.tickets || []).map((ticket) => [ticket.id, ticket]));
   const participants = Array.isArray(lesson.participants) ? lesson.participants : [];
+  const participantNames = participants
+    .map((participant) => normalizeCoachScheduleMemberName(participant.name, ""))
+    .filter(Boolean);
   const primaryTicket = ticketsById.get(participants[0]?.ticketId) || {};
   const laneCoach = coachesById.get(lesson.coachRoleId) || {};
   const substitute = lesson.substitute && lesson.substitute.coachRoleId ? lesson.substitute : null;
@@ -525,14 +528,14 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
     isSubstitute: Boolean(substitute),
     substituteCoachRoleId: substitute?.coachRoleId || "",
     substituteSettlementMode: substitute?.settlementMode || "",
-    member: participants.map((participant) => participant.name).filter(Boolean).join("&") || "회원",
+    member: participantNames.join("&") || "회원",
     memberUserIds: participants.map((participant) => participant.userId).filter(Boolean),
     v2Participants: participants.map((participant) => {
       const ticket = ticketsById.get(participant.ticketId) || {};
       return {
         userId: participant.userId,
         ticketId: participant.ticketId,
-        name: participant.name || "회원",
+        name: normalizeCoachScheduleMemberName(participant.name),
         recordStatus: participant.recordStatus || "",
         outcome: participant.outcome || "",
         deductedSessions: Number(participant.deductedSessions) || 0,
@@ -851,7 +854,7 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
     return {
       id: member.id,
       serverUserId: member.id,
-      name: member.name || "이름 확인 필요",
+      name: normalizeCoachScheduleMemberName(member.name, "이름 확인 필요"),
       photoUrl: member.photoUrl || "",
       coach: coach.name || "담당 코치 미지정",
       ticket: ticket.productName || `${Number(ticket.totalSessions) || 0}회 회원권`,
@@ -1345,7 +1348,10 @@ async function syncLegacyCoachLessonsFromServer() {
     const lessonRows = Array.isArray(scheduleFeedRows) && scheduleFeedRows.length
       ? scheduleFeedRows
       : directLessonRows;
-    const usersById = new Map((userRows || []).map((user) => [user.id, user.name]));
+    const usersById = new Map((userRows || []).map((user) => [
+      user.id,
+      normalizeCoachScheduleMemberName(user.name, ""),
+    ]));
     const coachesById = new Map((coachRows || [])
       .filter((coach) => (
         coach.status === "approved"
@@ -1373,9 +1379,10 @@ async function syncLegacyCoachLessonsFromServer() {
         const feedParticipantIds = Array.isArray(lesson.participant_user_ids) ? lesson.participant_user_ids : [];
         const feedParticipantNames = Array.isArray(lesson.participant_names) ? lesson.participant_names : [];
         const participantIds = feedParticipantIds.length ? feedParticipantIds : (participantIdsByLesson.get(lesson.id) || []);
-        const memberNames = feedParticipantNames.length
+        const memberNames = (feedParticipantNames.length
           ? feedParticipantNames
-          : participantIds.map((userId) => usersById.get(userId)).filter(Boolean);
+          : participantIds.map((userId) => usersById.get(userId)).filter(Boolean)
+        ).map((name) => normalizeCoachScheduleMemberName(name, "")).filter(Boolean);
         const ticket = ticketsById.get(lesson.member_ticket_id) || {};
         const product = productsById.get(ticket.product_id) || {};
         const coach = coachesById.get(lesson.coach_role_id) || {};
@@ -2661,7 +2668,7 @@ function renderPersonAvatar(target, person = {}, size = "small", baseClass = "")
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.403",
+    workerUrl: "./service-worker.js?v=1.0.404",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
@@ -2692,7 +2699,7 @@ function canUseCoachAppProfile(profile, coachRole) {
 }
 
 function memberModeUrl(openProfile = false, memberMode = true) {
-  const params = new URLSearchParams({ v: "1.0.403" });
+  const params = new URLSearchParams({ v: "1.0.404" });
   if (memberMode) params.set("mode", "member");
   if (openProfile) params.set("view", "profileView");
   return `../tennis-note-member-app/index.html?${params.toString()}`;
@@ -4297,6 +4304,16 @@ function lessonChartFinalized(lesson = {}) {
   return ["completed", "no_show", "cancelled"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase());
 }
 
+function lessonGroupDeductionSummary(lesson = {}, participants = []) {
+  if (participants.length < 2 || !lessonChartFinalized(lesson)) return "";
+  const deducted = participants.reduce((total, participant) => (
+    total + (Number(participant.deductedSessions ?? participant.deducted_sessions) || 0)
+  ), 0);
+  return deducted === 1
+    ? `${participants.length}명 완료 · 공유 회원권 1회 차감`
+    : `${participants.length}명 완료 · 회원권 ${deducted}회 차감`;
+}
+
 function renderScheduleEditPanel() {
   const lesson = ensureCoachLessonRecord(state.editingLessonId);
   if (!lesson) {
@@ -4327,7 +4344,7 @@ function renderScheduleEditPanel() {
       return `
         <section class="lesson-participant-completion-card lesson-chart-participant is-final ${feedbackEditing ? "is-feedback-editing" : ""}" data-lesson-participant-panel="${escapeHtml(key)}" data-feedback-revision-row="${escapeHtml(key)}" data-user-id="${escapeHtml(participant.userId)}" data-record-updated-at="${escapeHtml(participant.updatedAt || "")}" ${index === 0 ? "" : "hidden"}>
           ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
-          <div class="lesson-chart-result-line"><b>${escapeHtml(outcomeLabel)}</b><span>${deducted ? `${deducted}회 차감` : "차감 없음"} · 잔여 ${remaining}회</span></div>
+          <div class="lesson-chart-result-line"><b>${escapeHtml(outcomeLabel)}</b><span>${completionParticipants.length > 1 ? `잔여 ${remaining}회` : `${deducted ? `${deducted}회 차감` : "차감 없음"} · 잔여 ${remaining}회`}</span></div>
           ${outcome === "completed" && feedbackEditing ? `
             <label class="lesson-required-field">
               <span>코치 피드백 <small>횟수는 변경되지 않음</small></span>
@@ -4404,9 +4421,10 @@ function renderScheduleEditPanel() {
         <b class="${finalized || canFinalize ? "can-process" : "read-only"}">${finalized ? "완료" : canFinalize ? "처리 필요" : canProcess ? "예정" : "보기 전용"}</b>
       </div>
       ${canFinalize && !finalized && completionParticipants.length === 1 ? `<p class="lesson-chart-deduction-preview wide">완료 시 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회 → ${Math.max(0, (Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0) - 1)}회</p>` : ""}
+      ${lessonGroupDeductionSummary(lesson, completionParticipants) ? `<p class="lesson-chart-deduction-preview wide">${escapeHtml(lessonGroupDeductionSummary(lesson, completionParticipants))}</p>` : ""}
       ${participantTabs}
       <div class="lesson-participant-completion-list wide">${participantCompletionFields}</div>
-      ${lesson.validationMessage ? `<p class="validation-text wide">${lesson.validationMessage}</p>` : ""}
+      ${lesson.validationMessage ? `<div class="wide"><p class="validation-text">${lesson.validationMessage}</p><button class="small-button" type="button" data-refresh-lesson-completion="${escapeHtml(lesson.id)}">최신 상태 다시 확인</button></div>` : ""}
       ${!finalized && (canReschedule || (canProcess && lesson.serverLessonId))
         ? `<details class="lesson-secondary-panel lesson-other-actions wide">
             <summary>다른 처리</summary>
@@ -5020,8 +5038,27 @@ function renderCoachRequestTimeline(scheduleLessons = []) {
   </div>`;
 }
 
+function decodeCoachScheduleMemberEntities(value = "") {
+  return String(value || "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#(?:39|x27);/gi, "'");
+}
+
+function normalizeCoachScheduleMemberName(value, fallback = "회원") {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  if (!/^<span\b/i.test(raw) || !/\bschedule-member-lines\b/i.test(raw)) return raw;
+  const ariaLabel = raw.match(/\baria-label\s*=\s*(["'])(.*?)\1/i)?.[2] || "";
+  const text = ariaLabel || raw.replace(/<[^>]*>/g, " ");
+  return decodeCoachScheduleMemberEntities(text).replace(/\s+/g, " ").trim() || fallback;
+}
+
 function formatScheduleMemberName(name) {
-  const label = String(name || "회원").trim() || "회원";
+  const label = normalizeCoachScheduleMemberName(name);
   const lines = label
     .split(/[&·]/)
     .map((part) => part.trim())
@@ -6895,6 +6932,7 @@ function recordProcessingMarkup() {
               ${participantDraftMarkup}
               ${log.validationMessage ? `<p class="validation-text">${log.validationMessage}</p>` : ""}
               <div class="actions">
+                ${log.validationMessage ? `<button class="small-button" type="button" data-refresh-log-completion="${escapeHtml(log.id)}">최신 상태 다시 확인</button>` : ""}
                 <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" || !participantDraftsReady ? "disabled" : ""}>
                   ${["동기화 대기", "동기화 실패"].includes(log.status) ? "다시 동기화" : "수업 완료·횟수 차감"}
                 </button>
@@ -7492,22 +7530,178 @@ function updateLogCompletionUi(log) {
   if (submit) submit.disabled = log.status === "서버 처리 중" || log.status === "확인 완료" || length < 5 || !log.nextCurriculumId;
 }
 
+function normalizedLessonCompletionErrorCode(error) {
+  let code = error?.payload?.message || error?.payload?.code || error?.message || "server_error";
+  if (typeof code === "string" && code.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(code);
+      code = parsed.message || parsed.code || code;
+    } catch {
+      // Keep the provider message when it is not JSON.
+    }
+  }
+  return String(code || "server_error").trim().slice(0, 120);
+}
+
+function lessonCompletionErrorMessage(code, { fromOfflineQueue = false } = {}) {
+  const normalized = String(code || "server_error").toLowerCase();
+  const mappings = [
+    [["lesson_not_ended"], lessonOutcomeGuardMessage()],
+    [["already_processed", "existing_final", "status_invalid", "concurrent_update"], "다른 화면에서 이미 처리됐습니다. 최신 상태를 다시 확인해 주세요."],
+    [["ticket_units_unavailable", "ticket_unavailable", "remaining_sessions"], "차감 가능한 회원권 횟수가 없습니다. 회원권 잔여 횟수를 확인해 주세요."],
+    [["ticket_expired", "ticket_paused", "ticket_inactive"], "만료·중지된 회원권입니다. 사용할 회원권을 먼저 확인해 주세요."],
+    [["participant_ticket_mismatch", "participant_input_missing", "participant_reference_invalid"], "수업 회원과 회원권 연결이 맞지 않습니다. 최신 상태를 확인해 주세요."],
+    [["group", "participant_missing"], "그룹수업 참가자 또는 회원권 연결이 일부 누락됐습니다. 전체 연결을 확인해 주세요."],
+    [["next_curriculum", "curriculum_ref"], "다음 커리큘럼 서버 연결을 확인한 뒤 다시 시도해 주세요."],
+    [["comment_too_short"], "코치 코멘트는 직접 5자 이상 작성해야 합니다."],
+    [["comment_too_generic"], "짧은 칭찬이나 확인 문구만으로는 횟수 차감이 불가합니다."],
+    [["comment_recent_duplicate", "comment_member_duplicate_limit"], "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다."],
+    [["forbidden", "coach_required", "assigned_coach"], "담당 코치 또는 지정된 대타 코치만 처리할 수 있습니다."],
+    [["login_required", "jwt", "session"], "로그인이 만료됐습니다. 다시 로그인한 뒤 작성 내용을 확인해 주세요."],
+  ];
+  const matched = mappings.find(([needles]) => needles.some((needle) => normalized.includes(needle)));
+  if (matched) return matched[1];
+  if (fromOfflineQueue) return "자동 동기화에 실패했습니다. 연결 상태를 확인한 뒤 최신 상태를 다시 확인해 주세요.";
+  return `수업 완료 처리에 실패했습니다. 최신 상태를 다시 확인해 주세요. (오류 ${normalized.replace(/[^a-z0-9_:-]/g, "_").slice(0, 40) || "server_error"})`;
+}
+
+function captureLessonCompletionFailure(code, lesson, retry = false) {
+  window.TennisNoteIssueReporter?.captureClientError?.({
+    category: "runtime",
+    stage: "coach_lesson_complete",
+    code,
+    message: "coach_lesson_complete_failed",
+    provider: Array.isArray(lesson?.v2Participants) && lesson.v2Participants.length > 1 ? "group" : "personal",
+    status: retry ? 409 : 0,
+  });
+}
+
+function coachCompletionPreflightMessage(status = "") {
+  return ({
+    superseded: "시간이 변경되어 종료된 이전 수업입니다. 최신 시간표를 다시 불러왔습니다.",
+    prior_ticket: "이전 회원권에 연결된 수업입니다. 현재 회원권 일정에서 처리해 주세요.",
+    session_limit: "회원권 횟수 종료로 닫힌 수업입니다. 현재 회원권을 확인해 주세요.",
+    date_range: "회원권 기간 종료로 닫힌 수업입니다. 현재 회원권을 확인해 주세요.",
+    ticket_status: "사용이 종료된 회원권의 수업입니다. 현재 회원권을 확인해 주세요.",
+    member_absence: "회원 불참으로 종료된 수업입니다. 차감·피드백 처리 대상이 아닙니다.",
+    admin_cancelled: "관리자가 취소한 수업입니다. 관리자 시간표에서 복구한 뒤 처리해 주세요.",
+    cancelled: "취소 또는 변경된 수업입니다. 최신 시간표를 다시 불러왔습니다.",
+    status_invalid: "현재 상태에서는 처리할 수 없는 수업입니다. 최신 시간표를 확인해 주세요.",
+    lesson_not_found: "삭제되거나 교체된 수업입니다. 최신 시간표를 다시 불러왔습니다.",
+    participants_missing: "수업 참가자 연결이 비어 있습니다. 관리자에게 연결 확인을 요청해 주세요.",
+    participant_ticket_mismatch: "회원과 회원권 연결이 일치하지 않습니다. 관리자에게 연결 확인을 요청해 주세요.",
+    ticket_unavailable: "회원권이 만료·중지·소진되어 처리할 수 없습니다.",
+  })[String(status || "").toLowerCase()] || "최신 수업·회원권 상태를 확인하지 못했습니다. 다시 시도해 주세요.";
+}
+
+async function refreshLessonCompletionState({ log = null, lessonId = "" } = {}) {
+  const serverLessonId = log?.serverLessonId || ensureCoachLessonRecord(lessonId)?.serverLessonId || "";
+  if (!serverLessonId) return { ok: false, message: "서버 수업 연결을 확인할 수 없습니다." };
+  const client = window.TennisNoteDataClient;
+  let preflight = null;
+  try {
+    preflight = await client?.rpc?.("tn_schedule_v2_coach_completion_preflight", {
+      target_lesson_id: serverLessonId,
+    });
+  } catch (error) {
+    const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
+    captureLessonCompletionFailure(code, log || ensureCoachLessonRecord(lessonId), true);
+    return { ok: false, message: lessonCompletionErrorMessage(code) };
+  }
+  coachScheduleV2WorkspaceCache = null;
+  const refreshed = await syncCoachScheduleV2({ force: true });
+  if (!refreshed) return { ok: false, message: "최신 수업 정보를 불러오지 못했습니다. 인터넷과 로그인 상태를 확인해 주세요." };
+  const latestLesson = state.liveLessons.find((lesson) => lesson.serverLessonId === serverLessonId);
+  const latestLog = state.lessonLogs.find((item) => item.serverLessonId === serverLessonId) || log;
+  const preflightStatus = String(preflight?.status || "").toLowerCase();
+  if (preflightStatus === "already_completed") {
+    if (latestLog) {
+      latestLog.status = "확인 완료";
+      latestLog.validationMessage = "이미 완료·차감된 수업입니다. 최신 완료 결과를 표시합니다.";
+    }
+    return { ok: true, alreadyFinal: true, lesson: latestLesson, log: latestLog };
+  }
+  if (preflight && (preflight.ok === false || preflightStatus !== "ready")) {
+    const message = coachCompletionPreflightMessage(preflightStatus);
+    if (latestLog) {
+      latestLog.status = "확인 대기";
+      latestLog.validationMessage = message;
+    }
+    return { ok: false, stale: true, status: preflightStatus, message, lesson: latestLesson, log: latestLog };
+  }
+  if (!latestLesson) return { ok: false, message: "최신 시간표에서 수업을 찾지 못했습니다. 관리자 시간표를 확인해 주세요." };
+  if (lessonChartFinalized(latestLesson)) {
+    if (latestLog) {
+      latestLog.status = "확인 완료";
+      latestLog.validationMessage = "다른 화면에서 이미 처리된 수업입니다. 최신 완료 결과를 표시합니다.";
+    }
+    return { ok: true, alreadyFinal: true, lesson: latestLesson, log: latestLog };
+  }
+  if (latestLog) latestLog.validationMessage = "최신 수업·회원권 상태를 확인했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.";
+  return { ok: true, alreadyFinal: false, lesson: latestLesson, log: latestLog };
+}
+
+async function refreshLessonCompletionFromUi({ logId = "", lessonId = "" } = {}) {
+  const log = state.lessonLogs.find((item) => item.id === logId) || null;
+  const result = await refreshLessonCompletionState({ log, lessonId });
+  if (log && !result.ok) log.validationMessage = result.message;
+  const lesson = lessonId ? ensureCoachLessonRecord(lessonId) : null;
+  if (lesson && !result.ok) lesson.validationMessage = result.message;
+  saveSnapshot();
+  renderAll();
+  if (state.editingLessonId) renderLessonEditModal();
+  return result;
+}
+
 async function confirmLog(id, options = {}) {
   const log = options.skipDraft
     ? state.lessonLogs.find((item) => item.id === id)
     : updateLogDraft(id);
   if (!log) return false;
   if (log.status === "확인 완료") return true;
-  const linkedScheduleV2Lesson = state.liveLessons.find((item) => (
+  let linkedScheduleV2Lesson = state.liveLessons.find((item) => (
     item.serverLessonId === log.serverLessonId
     && Array.isArray(item.v2Participants)
     && item.v2Participants.length
   ));
-  const linkedLesson = linkedScheduleV2Lesson || lessonForRecord(log);
+  let linkedLesson = linkedScheduleV2Lesson || lessonForRecord(log);
   if (linkedLesson && !lessonOutcomeWindowOpen(linkedLesson)) {
     log.validationMessage = lessonOutcomeGuardMessage();
     renderAll();
     return false;
+  }
+  let completionClient = null;
+  if (log.serverLessonId) {
+    completionClient = window.TennisNoteDataClient;
+    if (!completionClient?.rpc || !completionClient.getSession?.()?.access_token) {
+      log.validationMessage = "서버 로그인 상태를 확인한 뒤 다시 처리해 주세요.";
+      renderAll();
+      return false;
+    }
+    if (completionClient.isOnline?.() === false) {
+      log.status = "동기화 대기";
+      log.validationMessage = "인터넷 연결 후 자동 처리됩니다. 서버 확인 전에는 횟수가 차감되지 않습니다.";
+      saveSnapshot();
+      renderAll();
+      return false;
+    }
+    log.validationMessage = "최신 수업·회원권 상태를 확인하고 있습니다.";
+    renderAll();
+    const preflight = await refreshLessonCompletionState({ log });
+    if (!preflight.ok) {
+      log.status = "확인 대기";
+      log.validationMessage = preflight.message;
+      saveSnapshot();
+      renderAll();
+      return false;
+    }
+    if (preflight.alreadyFinal) {
+      saveSnapshot();
+      renderAll();
+      return true;
+    }
+    linkedScheduleV2Lesson = preflight.lesson;
+    linkedLesson = preflight.lesson || linkedLesson;
   }
   const participantResults = Array.isArray(log.participantResults) && log.participantResults.length
     ? log.participantResults
@@ -7565,19 +7759,7 @@ async function confirmLog(id, options = {}) {
   const nextStep = selectedCurriculum(participantResults[0].nextCurriculumId);
   let serverResult = null;
   if (log.serverLessonId) {
-    const client = window.TennisNoteDataClient;
-    if (!client?.rpc || !client.getSession?.()?.access_token) {
-      log.validationMessage = "서버 로그인 상태를 확인한 뒤 다시 처리해 주세요.";
-      renderAll();
-      return false;
-    }
-    if (client.isOnline?.() === false) {
-      log.status = "동기화 대기";
-      log.validationMessage = "인터넷 연결 후 자동 처리됩니다. 서버 확인 전에는 횟수가 차감되지 않습니다.";
-      saveSnapshot();
-      renderAll();
-      return false;
-    }
+    const client = completionClient;
     log.status = "서버 처리 중";
     renderAll();
     try {
@@ -7641,28 +7823,10 @@ async function confirmLog(id, options = {}) {
         renderAll();
         return false;
       }
-      let code = error?.payload?.message || error?.payload?.code || error?.message || "server_error";
-      if (typeof code === "string" && code.trim().startsWith("{")) {
-        try {
-          const parsed = JSON.parse(code);
-          code = parsed.message || parsed.code || code;
-        } catch {
-          // Keep the original server message when it is not valid JSON.
-        }
-      }
-      const serverMessages = {
-        schedule_v2_outcome_lesson_not_ended: lessonOutcomeGuardMessage(),
-        lesson_complete_lesson_not_ended: lessonOutcomeGuardMessage(),
-        lesson_complete_comment_too_short: "코치 코멘트는 직접 5자 이상 작성해야 합니다.",
-        lesson_complete_comment_too_generic: "짧은 칭찬이나 확인 문구만으로는 횟수 차감이 불가합니다.",
-        lesson_complete_comment_recent_duplicate: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
-        lesson_complete_comment_member_duplicate_limit: "같은 회원에게 동일한 코멘트는 2회까지만 사용할 수 있습니다.",
-      };
+      const code = normalizedLessonCompletionErrorCode(error);
       log.status = options.fromOfflineQueue ? "동기화 실패" : "확인 대기";
-      log.validationMessage = serverMessages[code]
-        || (options.fromOfflineQueue
-          ? "자동 동기화에 실패했습니다. 연결 상태를 확인한 뒤 다시 동기화해 주세요."
-          : "서버 횟수 차감에 실패했습니다. 같은 기록에서 다시 시도해 주세요.");
+      log.validationMessage = lessonCompletionErrorMessage(code, options);
+      captureLessonCompletionFailure(code, linkedLesson, Boolean(options.fromOfflineQueue));
       saveSnapshot();
       renderAll();
       return false;
@@ -8379,6 +8543,12 @@ function bindEvents() {
       confirmLog(logId, { fromOfflineQueue });
     }
 
+    const refreshLogButton = event.target.closest("[data-refresh-log-completion]");
+    if (refreshLogButton) void refreshLessonCompletionFromUi({ logId: refreshLogButton.dataset.refreshLogCompletion });
+
+    const refreshLessonButton = event.target.closest("[data-refresh-lesson-completion]");
+    if (refreshLessonButton) void refreshLessonCompletionFromUi({ lessonId: refreshLessonButton.dataset.refreshLessonCompletion });
+
     const feedbackButton = event.target.closest("[data-confirm-feedback]");
     if (feedbackButton) confirmFeedback(feedbackButton.dataset.confirmFeedback);
   });
@@ -8519,6 +8689,7 @@ function installCoachScheduleRevisionWatcher() {
 
 async function initCoachApp() {
   registerPwaServiceWorker();
+  window.TennisNoteModeTransition?.warm(memberModeUrl(true));
   purgeLegacyDemoStorage();
   restoreSnapshot();
   resetCoachScheduleLaunchView();
@@ -8582,7 +8753,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.403",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.404",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

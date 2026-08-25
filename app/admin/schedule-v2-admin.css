@@ -1411,6 +1411,18 @@
   color: #6f201c !important;
   box-shadow: none !important;
 }
+
+.schedule-v2-lesson.expected-regular-slot {
+  border-color: #d59a2a !important;
+  border-left-color: #9a6500 !important;
+  background: #fff7df !important;
+  color: #6f4700 !important;
+}
+
+.schedule-v2-lesson.expected-regular-slot:hover,
+.schedule-v2-lesson.expected-regular-slot:focus-visible {
+  background: #ffefbd !important;
+}
 .schedule-v2-lesson.record-neutral {
   border-color: #aab5c3 !important;
   border-left-color: #64748b !important;

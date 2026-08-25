@@ -3162,6 +3162,22 @@ tr.is-selected td {
     flex-wrap: wrap;
   }
 
+  .member-inline-schedule.member-create-schedule {
+    min-width: 0;
+  }
+
+  .member-create-schedule .member-inline-schedule-row {
+    grid-template-columns: minmax(0, 1fr) 92px;
+  }
+
+  .member-create-schedule .member-inline-schedule-index {
+    grid-column: 1 / -1;
+  }
+
+  .member-create-schedule .member-inline-day-tabs {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
   .member-inline-schedule-separate {
     margin-left: 0;
   }

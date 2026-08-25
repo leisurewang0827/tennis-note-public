@@ -18,6 +18,7 @@ const runtimeSource = [
   sourceBetween("function requestCoachRoleId(request = {})", "function lessonBelongsToCurrentCoach(lesson = {})"),
   sourceBetween("function lessonBelongsToCurrentCoach(lesson = {})", "function ownTodayLessons()"),
   sourceBetween("function filterFullScheduleLessons(lessons, filter)", "function coachRequestTimelineState(lesson = {})"),
+  sourceBetween("function normalizeCoachScheduleMemberName(value, fallback = \"회원\")", "function formatScheduleMemberName(name)"),
   sourceBetween("function formatScheduleMemberName(name)", "function memberFilter()"),
 ].join("\n");
 
