@@ -6,6 +6,7 @@ on:
       - "app/**"
       - "tests/**"
       - "scripts/build_cloudflare_pages.py"
+      - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - ".github/workflows/tennisnote-public-ci.yml"
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - "app/**"
       - "tests/**"
       - "scripts/build_cloudflare_pages.py"
+      - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - ".github/workflows/tennisnote-public-ci.yml"
 
 permissions:

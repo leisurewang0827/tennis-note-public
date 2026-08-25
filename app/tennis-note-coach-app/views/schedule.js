@@ -253,18 +253,19 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
                 const startIndex = times.indexOf(lesson.time);
                 if (startIndex < 0) return "";
                 const span = Math.max(1, Math.ceil(lessonDuration(lesson) / scheduleBlockMinutes));
-                const memberLabel = formatScheduleMemberName(lesson.member || "회원");
+                const memberName = String(lesson.member || "회원").trim() || "회원";
+                const memberMarkup = formatScheduleMemberName(memberName);
                 const note = coachScheduleExceptionLabel(lesson);
                 const laneCoach = coachFromLesson(lesson, policy);
                 const releasedLabel = lesson.historicalReleasedSlot ? "과거 빈자리" : "예약 가능한 빈자리";
-                const primaryLabel = lesson.releasedMakeupSlot ? releasedLabel : memberLabel;
+                const primaryMarkup = lesson.releasedMakeupSlot ? escapeHtml(releasedLabel) : memberMarkup;
                 const roundOrState = lesson.releasedMakeupSlot
-                  ? `${memberLabel} 불참으로 발생`
+                  ? `${memberName} 불참으로 발생`
                   : coachScheduleRoundLabel(lesson);
                 const cardNote = lesson.releasedMakeupSlot
                   ? (lesson.historicalReleasedSlot ? "차감 없음" : "보강·원데이 가능")
                   : note;
-                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${escapeHtml(primaryLabel)}</strong><span>${escapeHtml(roundOrState)}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote || "-")}</small></button>`;
+                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${primaryMarkup}</strong><span>${escapeHtml(roundOrState)}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote || "-")}</small></button>`;
               }).join("")}
             </div>`;
         }).join("")}

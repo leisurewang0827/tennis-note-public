@@ -443,9 +443,14 @@ function isRegularScheduleTicket(ticket, today = adminLocalDateKey(new Date())) 
 }
 
 function unassignedRegularTickets() {
-  const regularTickets = operationBranchTickets().filter((ticket) => isRegularScheduleTicket(ticket));
+  const ticketById = new Map();
+  [...operationBranchTickets(), ...operationBranchTickets(expiredTickets)].forEach((ticket) => {
+    const ticketId = String(ticket?.id || ticket?.serverTicketId || "");
+    if (ticketId && !ticketById.has(ticketId)) ticketById.set(ticketId, ticket);
+  });
+  const regularTickets = [...ticketById.values()].filter((ticket) => isSchedulableRegularTicket(ticket));
   const candidates = regularTickets
-    .filter((ticket) => ticketNeedsRegularSchedule(ticket))
+    .filter((ticket) => ticketRemainingRegularScheduleCount(ticket) > 0)
     .sort((left, right) => ticketParticipantNames(right).length - ticketParticipantNames(left).length);
   const selected = [];
 
@@ -527,10 +532,21 @@ function beginScheduleTicketAssignment(ticketId, lessonSource = "regular") {
   state.scheduleAssignmentLessonSource = normalizeLessonSource(lessonSource);
   state.scheduleView = "week";
   state.scheduleCoachFilter = "all";
+  const focusDate = [ticketScheduleStartDate(ticket), adminLocalDateKey(new Date())].sort().at(-1);
   state.scheduleOpenSlotMode = false;
   state.selectedScheduleOpenSlots = [];
   state.scheduleOpenSlotAnchorKey = "";
   setView("schedule");
+  state.activeAdminWeekIndex = Math.min(
+    Math.max(adminWeekOffsetForDate(focusDate), adminScheduleMinWeekOffset),
+    adminScheduleMaxWeekOffset,
+  );
+  const focusDay = scheduleDays[(new Date(`${focusDate}T12:00:00`).getDay() + 6) % 7];
+  if (focusDay) state.selectedScheduleDay = focusDay;
+  syncAdminScheduleWeek();
+  renderSchedule();
+  saveSnapshot();
+  void ensureActiveAdminWeekLoaded();
   showToast(`${ticketParticipantNames(ticket).join(" & ") || ticket.member} 회원의 빈 시간을 선택하세요.`);
   return true;
 }
@@ -799,7 +815,7 @@ function getEligibleTickets(memberReference, coachId, lessonDate = lessonTicketE
   const eligibleTickets = sourceTickets.filter((ticket) => adminManualOverrideEnabled() || (
     ticket.coachId === coachId
     && (ticket.remaining > 0 || ticket.id === editingTicketId)
-    && ticketCanBeUsedOnLessonDate(ticket, lessonDate)
+    && lessonTicketCanBeSelected(ticket, lessonDate)
   ));
   // Existing lessons are already bound to a server ticket. Keep that identity
   // while editing instead of rediscovering it from display names or coach lanes.
@@ -814,7 +830,7 @@ function findFirstMemberWithCoachTicket(coachId) {
     .find((item) => (
       item.coachId === coachId
       && item.remaining > 0
-      && ticketCanBeUsedOnLessonDate(item)
+      && lessonTicketCanBeSelected(item)
     ));
   if (!ticket) return "";
   const branchMembers = operationBranchMembers();
@@ -824,12 +840,13 @@ function findFirstMemberWithCoachTicket(coachId) {
 
 function findFirstTicketForMember(memberReference) {
   return allTicketsForMember(memberReference)
-    .find((ticket) => ticket.remaining > 0 && ticketCanBeUsedOnLessonDate(ticket));
+    .find((ticket) => ticket.remaining > 0 && lessonTicketCanBeSelected(ticket));
 }
 
 function getActiveTicketForMember(memberReference) {
   return allTicketsForMember(memberReference)
     .find((ticket) => ticketCanBeUsedOnLessonDate(ticket))
+    || allTicketsForMember(memberReference).find((ticket) => lessonTicketCanBeSelected(ticket))
     || ticketsForMember(memberReference)[0]
     || allTicketsForMember(memberReference)[0];
 }

@@ -596,7 +596,7 @@ async function submitMemberManagementForm(event) {
   if (managementPayload && ["create", "assign", "correct"].includes(action)) {
     normalizeMemberManagementTicketPayload(managementPayload);
   }
-  const createRegularSchedules = isCreate ? memberInlineScheduleValues(form) : [];
+  const createRegularSchedules = (isCreate || action === "assign") ? memberInlineScheduleValues(form) : [];
   if (managementPayload && action === "profile") {
     // Profile, note, and partner edits must never recalculate or replace a fixed schedule.
     managementPayload.preserveExistingSchedule = true;
@@ -621,7 +621,7 @@ async function submitMemberManagementForm(event) {
     const requiredLessonDays = Math.max(1, Number(form.elements.weeklyFrequency?.value) || 1);
     const selectedLessonDays = memberManagementSelectedDays(form);
     const createsWithoutSchedule = form.elements.createWithoutSchedule?.value === "true";
-    if (isCreate && activeRecord && !createsWithoutSchedule && memberManagementProductSupportsRegularSchedule(selectedProduct)) {
+    if ((isCreate || action === "assign") && activeRecord && !createsWithoutSchedule && memberManagementProductSupportsRegularSchedule(selectedProduct)) {
       const completeSchedule = memberInlineScheduleIsComplete(form, createRegularSchedules);
       const uniqueScheduleCount = new Set(createRegularSchedules.map((slot) => `${slot.dayOfWeek}:${slot.startTime}`)).size;
       const scope = memberManagementProductScheduleScope(selectedProduct);
@@ -698,16 +698,11 @@ async function submitMemberManagementForm(event) {
       const assignmentPayload = existingPaymentId
         ? { ...managementPayload, assignmentRequestId, paymentAmount: 0, paymentDate: null, paymentMethod: null }
         : { ...managementPayload, assignmentRequestId };
-      result = await client.rpc("tn_admin_assign_member_database_ticket", {
+      result = await client.rpc("tn_admin_assign_member_ticket_and_regular_schedule", {
         target_record: assignmentPayload,
+        target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
+        target_operation_key: assignmentRequestId,
       });
-      if (existingPaymentId) {
-        const linkedPayment = await client.rpc("tn_admin_link_existing_payment_to_ticket", {
-          target_payment_id: existingPaymentId,
-          target_ticket_id: result?.ticketId || result?.ticket_id,
-        });
-        if (!linkedPayment?.ok) throw new Error(linkedPayment?.code || "existing_payment_link_failed");
-      }
       state.memberFilter = "active";
     } else if (action === "link_existing") {
       linkedTargetMemberUserId = form.elements.targetMembershipUserId?.value || "";

@@ -221,18 +221,23 @@ function activateLiveMemberProfile(profileId) {
 
 async function login(provider) {
   const client = window.TennisNoteDataClient;
-  const status = $("#memberEmailLoginStatus");
+  if (!beginOAuthLogin(provider)) {
+    setEmailAuthStatus(`${oauthLoginInFlightProvider} 로그인을 진행하고 있습니다.`);
+    return;
+  }
   if (client?.readiness?.().ready) {
     try {
-      if (status) status.textContent = `${provider} 로그인 화면을 여는 중입니다.`;
+      setEmailAuthStatus(`${provider} 로그인 화면을 여는 중입니다.`);
       await client.signInWithOAuth(provider);
       return;
     } catch (error) {
-      if (status) status.textContent = `${provider} 로그인을 열지 못했습니다. 잠시 후 다시 시도해주세요.`;
+      finishOAuthLogin();
+      setEmailAuthStatus(oauthLoginErrorMessage(error, provider), "alert");
       return;
     }
   }
-  if (status) status.textContent = "실사용 로그인 연결 설정을 확인해 주세요.";
+  finishOAuthLogin();
+  setEmailAuthStatus("실사용 로그인 연결 설정을 확인해 주세요.", "alert");
 }
 
 async function syncAppleLoginAvailability() {
@@ -251,7 +256,12 @@ async function syncAppleLoginAvailability() {
   }
   buttons.forEach((button) => {
     const label = button.querySelector("[data-apple-login-label]");
-    button.disabled = !ready;
+    if (oauthLoginInFlightProvider && button.dataset.oauthDisabledBefore) {
+      button.dataset.oauthDisabledBefore = ready ? "false" : "true";
+      button.disabled = true;
+    } else {
+      button.disabled = !ready;
+    }
     button.classList.toggle("is-preparing", !ready);
     const buttonLabel = ready ? button.dataset.readyLabel : "Apple 로그인 설정 중";
     if (label) label.textContent = buttonLabel;
@@ -263,18 +273,17 @@ async function loginWithEmail(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const submitButton = form.querySelector('button[type="submit"]');
-  const status = $("#memberEmailLoginStatus");
   submitButton.disabled = true;
-  status.textContent = "로그인 확인 중";
+  setEmailAuthStatus("로그인 확인 중");
   try {
     const client = window.TennisNoteDataClient;
     await client.signInWithPassword($("#memberLoginEmail").value, $("#memberLoginPassword").value);
     const opened = await applySupabaseMemberSession(true);
     if (!opened) throw new Error("profile_bootstrap_failed");
     form.reset();
-    status.textContent = "";
+    setEmailAuthStatus();
   } catch (error) {
-    status.textContent = emailLoginErrorMessage(error);
+    setEmailAuthStatus(emailLoginErrorMessage(error), "alert");
   } finally {
     submitButton.disabled = false;
   }

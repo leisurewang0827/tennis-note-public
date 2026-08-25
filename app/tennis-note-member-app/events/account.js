@@ -8,6 +8,12 @@ function bindAccountEvents() {
     button.addEventListener("click", () => login(button.dataset.loginProvider));
   });
   $("#memberEmailLoginForm")?.addEventListener("submit", loginWithEmail);
+  $("#memberEmailSignupForm")?.addEventListener("submit", signUpWithEmail);
+  $("#memberPasswordResetButton")?.addEventListener("click", requestPasswordReset);
+  $("#memberPasswordRecoveryForm")?.addEventListener("submit", updateRecoveredPassword);
+  $$('[data-email-auth-mode]').forEach((button) => {
+    button.addEventListener("click", () => setEmailAuthMode(button.dataset.emailAuthMode));
+  });
   $$("[data-install-pwa]").forEach((button) => {
     button.addEventListener("click", promptPwaInstall);
   });

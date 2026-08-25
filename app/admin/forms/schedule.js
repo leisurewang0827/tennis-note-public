@@ -543,7 +543,7 @@ function getLessonConflict(candidate) {
   }
   const replacementTicket = !state.editingLessonId
     && normalizeLessonSource(candidate.lessonSource) === "regular"
-    ? tickets.find((ticket) => String(ticket.id) === String(candidate.ticketId) && ticket.productKind === "regular")
+    ? scheduleTicketById(candidate.ticketId)
     : null;
   const allOverlappingBooked = getOverlappingBookedLessons(candidate.day, candidate.time, candidate.durationMinutes)
     .filter((lesson) => (
@@ -857,11 +857,15 @@ function getLessonFormCandidate(overrides = {}) {
   const durationMinutes = Number($("#lessonDuration").value);
   const selectedTicket = getSelectedTicket();
   const participantNames = ticketParticipantNames(selectedTicket);
+  const displayedLessonDate = overrides.lessonDate || adminLessonDateForCandidate(day);
+  const lessonDate = !state.editingLessonId && normalizeLessonSource($("#lessonSource").value) === "regular"
+    ? firstEligibleScheduleDateForTicket(selectedTicket, day, displayedLessonDate) || displayedLessonDate
+    : displayedLessonDate;
   syncLessonTypeFromForm();
   return {
     id: state.editingLessonId || Date.now(),
     day,
-    lessonDate: overrides.lessonDate || adminLessonDateForCandidate(day),
+    lessonDate,
     time: $("#lessonTime").value,
     courtId: $("#lessonCourt").value,
     coachId: $("#lessonCoach").value,
@@ -884,7 +888,7 @@ function clearLessonSaveResultPanel() {
 }
 
 function adminLessonEndTimestamp(candidate = {}) {
-  const lessonDate = adminWeekDateForDay(candidate.day || $("#lessonDay")?.value);
+  const lessonDate = candidate.lessonDate || adminWeekDateForDay(candidate.day || $("#lessonDay")?.value);
   const lessonTime = candidate.time || $("#lessonTime")?.value;
   const durationMinutes = Number(candidate.durationMinutes || $("#lessonDuration")?.value) || 20;
   if (!lessonDate || !lessonTime) return Number.NaN;

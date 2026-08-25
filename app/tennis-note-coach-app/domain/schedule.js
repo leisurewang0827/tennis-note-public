@@ -248,19 +248,18 @@ function fullScheduleFilterLabel(filter) {
 
 function filterFullScheduleLessons(lessons, filter) {
   if (filter === "mine") return lessons.filter((lesson) => (
-    canonicalCoachName(lesson.coach) === currentCoachName()
-    || canonicalCoachName(lesson.originalCoach) === currentCoachName()
+    lessonBelongsToCurrentCoach(lesson)
+    || lessonAssignedToCurrentCoachForTasks(lesson)
   ));
   if (filter === "feedback") return lessons.filter((lesson) => (
     lessonAssignedToCurrentCoachForTasks(lesson)
     && coachLessonCardState(lesson).needsFeedback
   ));
-  if (filter === "makeupChange")
-    return lessons.filter((lesson) =>
-      `${lesson.type || ""} ${lesson.status || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`.includes("보강") ||
-      `${lesson.type || ""} ${lesson.status || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`.includes("변경") ||
-      `${lesson.status || ""}`.includes("승인 대기"),
-    );
+  if (filter === "makeupChange") return lessons.filter((lesson) => {
+    if (!lessonBelongsToCurrentCoach(lesson)) return false;
+    const context = `${lesson.type || ""} ${lesson.status || ""} ${lesson.changeNote || ""} ${lesson.task || ""}`;
+    return context.includes("보강") || context.includes("변경") || context.includes("승인 대기");
+  });
   return lessons;
 }
 

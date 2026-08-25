@@ -45,6 +45,12 @@ for script in "${APP_SCRIPTS[@]}"; do
   echo "  ok  $script"
 done
 
+step "코치 권한 회귀 검사"
+# origin/main 에서 온 검사다. 코치가 남의 수업을 보게 되던 회귀를 막는다.
+# 저쪽은 CI 워크플로에 직접 적었지만, 여기서는 검증 명령을 이 파일 한 곳에만 둔다.
+node --check scripts/check_tennisnote_coach_scope_runtime.cjs
+node scripts/check_tennisnote_coach_scope_runtime.cjs
+
 step "배포본 빌드"
 python3 scripts/build_cloudflare_pages.py --target member --output dist/member
 python3 scripts/build_cloudflare_pages.py --target admin --output dist/admin

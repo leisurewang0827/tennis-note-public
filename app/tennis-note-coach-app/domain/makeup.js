@@ -10,13 +10,13 @@ function pendingMakeupRequests() {
 }
 
 function ownPendingMakeupRequests() {
-  return pendingMakeupRequests().filter((request) => canonicalCoachName(requestCoach(request)) === currentCoachName());
+  return pendingMakeupRequests().filter(makeupRequestBelongsToCurrentCoach);
 }
 
 function ownOpenMakeupEntitlements() {
   return (state.makeupEntitlements || []).filter((item) => (
     item.status === "open"
-    && canonicalCoachName(item.coach) === currentCoachName()
+    && makeupRequestBelongsToCurrentCoach(item)
   ));
 }
 

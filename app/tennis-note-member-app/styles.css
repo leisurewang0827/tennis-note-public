@@ -512,6 +512,31 @@ button {
   font-weight: 800;
 }
 
+.email-auth-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--wash);
+}
+
+.email-auth-tab {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 850;
+}
+
+.email-auth-tab.is-active {
+  color: var(--green);
+  background: white;
+  box-shadow: 0 1px 4px rgba(24, 34, 48, 0.1);
+}
+
 .email-login-form {
   display: grid;
   gap: 10px;
@@ -536,10 +561,65 @@ button {
   background: white;
 }
 
+.email-login-form label small,
+.email-auth-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.email-auth-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.email-auth-link {
+  min-height: 40px;
+  border: 0;
+  padding: 0 4px;
+  color: var(--blue);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.email-login-form .email-auth-consent {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.email-login-form .email-auth-consent input {
+  width: 20px;
+  min-height: 20px;
+  margin: 1px 0 0;
+  padding: 0;
+}
+
+.email-auth-consent a {
+  color: var(--blue);
+}
+
 .login-form-status {
   min-height: 20px;
-  margin: 0;
+  margin: 10px 0 0;
   font-size: 13px;
+  font-weight: 750;
+}
+
+.login-form-status[data-tone="done"] {
+  color: var(--green);
+}
+
+.login-form-status[data-tone="alert"] {
+  color: #b42318;
 }
 
 .app-screen {

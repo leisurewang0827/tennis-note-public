@@ -1011,7 +1011,7 @@ function isPastLessonCorrectionMode(candidate = {}) {
 }
 
 function getPastLessonCorrectionConflict(candidate) {
-  const lessonDate = adminWeekDateForDay(candidate.day);
+  const lessonDate = candidate.lessonDate || adminWeekDateForDay(candidate.day);
   const duplicate = lessons.find((lesson) => (
     lesson.id !== candidate.id
     && String(lesson.ticketId || "") === String(candidate.ticketId || "")

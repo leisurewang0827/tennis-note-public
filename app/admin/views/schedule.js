@@ -959,7 +959,7 @@ function renderLessonPreview() {
   const end = start + candidate.durationMinutes;
   if (isCompletedLessonCorrectionMode()) {
     const editingLesson = getCurrentEditingLesson();
-    const lessonDate = adminWeekDateForDay(candidate.day);
+    const lessonDate = candidate.lessonDate || adminWeekDateForDay(candidate.day);
     const exactDuplicate = getAdminManualExactDuplicate(candidate);
     const warnings = getAdminManualOverrideWarnings(candidate, ticket, false);
     const futureCompletedTime = Number.isFinite(adminLessonEndTimestamp(candidate))
@@ -1017,9 +1017,10 @@ function renderLessonPreview() {
     const sourceInvalid = !state.editingLessonId && candidate.lessonSource === "regular";
     const conflict = getPastLessonCorrectionConflict(candidate);
     const exactDuplicate = getAdminManualExactDuplicate(candidate);
+    const correctionLessonDate = candidate.lessonDate || adminWeekDateForDay(candidate.day);
     const ticketDateMismatch = ticket && (
-      adminWeekDateForDay(candidate.day) < (ticket.purchased || "")
-      || adminWeekDateForDay(candidate.day) > (ticket.expires || "9999-12-31")
+      correctionLessonDate < ticketScheduleStartDate(ticket, "")
+      || correctionLessonDate > ticketScheduleEndDate(ticket)
     );
     const overrideWarnings = getAdminManualOverrideWarnings(candidate, ticket, true);
     const overrideReasonMissing = false;

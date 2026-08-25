@@ -116,6 +116,7 @@ function bindMembersEvents() {
     state.lessonSourceTouched = false;
     alignCoachToSelectedMemberTicket();
     refreshLessonTicketOptions();
+    syncLessonModalWeekToSelectedTicket();
     syncLessonSourceFromTicket(true);
     refreshLessonDayOptions();
     renderLessonExpiredTickets();

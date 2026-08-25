@@ -233,6 +233,15 @@ async function applySupabaseMemberSession(showNotice = false) {
   await client.consumeOAuthRedirect?.();
   const session = await client.ensureSession?.() || client.getSession?.();
   if (!session?.access_token) return false;
+  if (emailPasswordRecoveryPending) {
+    $("#appScreen").hidden = true;
+    $("#loginScreen").hidden = false;
+    setEmailAuthMode("recovery", {
+      message: "이메일 인증이 완료됐습니다. 새 비밀번호를 입력해주세요.",
+      tone: "done",
+    });
+    return false;
+  }
   try {
     const current = await client.selectCurrentProfile();
     if (current?.profileBootstrapError?.code === "auth_profile_mapping_ambiguous") {
@@ -367,25 +376,35 @@ async function applySupabaseMemberSession(showNotice = false) {
 }
 
 async function handleOAuthResult(event) {
-  const status = $("#memberEmailLoginStatus");
   const provider = event?.detail?.provider || "간편";
+  finishOAuthLogin();
   if (event?.detail?.ok) {
     event.preventDefault();
-    if (status) status.textContent = `${provider} 로그인 정보를 확인하고 있습니다.`;
+    if (event?.detail?.callbackType === "recovery") {
+      emailPasswordRecoveryPending = true;
+      $("#appScreen").hidden = true;
+      $("#loginScreen").hidden = false;
+      setMemberSessionRestoring(false);
+      setEmailAuthMode("recovery", {
+        message: "이메일 인증이 완료됐습니다. 새 비밀번호를 입력해주세요.",
+        tone: "done",
+      });
+      return;
+    }
+    setEmailAuthStatus(`${provider} 로그인 정보를 확인하고 있습니다.`);
     setMemberSessionRestoring(true);
     try {
       const opened = await applySupabaseMemberSession(true);
       if (!opened) throw new Error("oauth_profile_bootstrap_failed");
-      if (status) status.textContent = "";
+      setEmailAuthStatus();
     } catch (error) {
-      if (status) status.textContent = `${provider} 로그인 후 회원정보를 열지 못했습니다. 다시 시도해주세요.`;
+      setEmailAuthStatus(`${provider} 로그인 후 회원정보를 열지 못했습니다. 다시 시도해주세요.`, "alert");
     } finally {
       setMemberSessionRestoring(false);
     }
     return;
   }
-  if (!status) return;
-  status.textContent = event?.detail?.cancelled
+  setEmailAuthStatus(event?.detail?.cancelled
     ? `${provider} 로그인이 취소되었습니다.`
-    : `${provider} 로그인을 완료하지 못했습니다. 다시 시도해주세요.`;
+    : oauthLoginErrorMessage({ code: event?.detail?.errorCode }, provider), "alert");
 }

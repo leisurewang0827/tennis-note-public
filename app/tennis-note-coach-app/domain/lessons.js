@@ -60,6 +60,7 @@ function lessonBelongsToCurrentCoach(lesson = {}) {
   const roleId = currentCoachRoleId();
   const lessonRoleId = String(lesson.coachRoleId || lesson.coach_role_id || "").trim();
   if (roleId && lessonRoleId) return roleId === lessonRoleId;
+  if (roleId && (state.dataMode === "live" || state.liveProfileId)) return false;
   return canonicalCoachName(lesson.coach) === currentCoachName();
 }
 
@@ -69,6 +70,8 @@ function lessonAssignedToCurrentCoachForTasks(lesson = {}) {
   const substituteRoleId = String(lesson.substituteCoachRoleId || lesson.substitute_coach_role_id || "").trim();
   if (lesson.isSubstitute || substituteRoleId) {
     if (roleId && substituteRoleId) return roleId === substituteRoleId;
+    if (roleId && lessonRoleId) return roleId === lessonRoleId;
+    if (roleId && (state.dataMode === "live" || state.liveProfileId)) return false;
     return canonicalCoachName(lesson.coach) === currentCoachName();
   }
   if (roleId && lessonRoleId) return roleId === lessonRoleId;

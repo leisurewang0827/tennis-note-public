@@ -42,6 +42,10 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
     jobs.push(loadAdminMemberDirectoryPage());
   }
 
+  if (view === "billing") {
+    jobs.push(loadAdminDataOnce("settlement-support", loadAdminSettlementSupportData));
+  }
+
   if (view === "settings") {
     if (settingsTab === "live") {
       const branchKey = activeOperationBranchId() || "unselected";

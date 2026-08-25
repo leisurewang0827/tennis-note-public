@@ -573,16 +573,60 @@
     return refreshSession();
   }
 
+  function oauthCallbackFailure(params) {
+    const error = params?.get?.("error") || "";
+    const code = params?.get?.("error_code") || error || "oauth_redirect_failed";
+    const description = params?.get?.("error_description") || "";
+    return { error, code, description };
+  }
+
+  function oauthCallbackWasAlreadyConsumed(failure = {}) {
+    return failure.code === "flow_state_already_used"
+      || /state\s+has\s+already\s+been\s+used/iu.test(failure.description || "");
+  }
+
+  function oauthReplaySessionMatchesAttempt(session) {
+    const attemptedProvider = storedProvider();
+    const sessionProvider = session?.provider || "";
+    return Boolean(
+      attemptedProvider
+      && sessionProvider
+      && providerKey(attemptedProvider) === providerKey(sessionProvider),
+    );
+  }
+
+  function clearOAuthCallbackLocation() {
+    const url = new URL(window.location.href);
+    ["code", "error", "error_code", "error_description"].forEach((key) => url.searchParams.delete(key));
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function oauthCallbackError(failure = {}) {
+    return Object.assign(new Error(failure.error || "oauth_redirect_failed"), {
+      code: failure.code || failure.error || "oauth_redirect_failed",
+      description: failure.description || "",
+    });
+  }
+
   async function consumeOAuthRedirect() {
     const query = new URLSearchParams(window.location.search || "");
     if (query.get("error")) {
-      const error = new Error(query.get("error") || "oauth_redirect_failed");
+      const failure = oauthCallbackFailure(query);
+      const session = getSession();
+      clearOAuthCallbackLocation();
+      if (
+        session?.access_token
+        && oauthReplaySessionMatchesAttempt(session)
+        && oauthCallbackWasAlreadyConsumed(failure)
+      ) return session;
+      clearOAuthStorageValue();
+      const error = oauthCallbackError(failure);
       emitClientError("oauth_callback", error);
       throw error;
     }
     if (query.get("code")) {
       const session = await exchangeOAuthCode(query.get("code"));
-      window.history.replaceState({}, document.title, `${window.location.pathname}`);
+      clearOAuthCallbackLocation();
       return session;
     }
     if (!window.location.hash || !window.location.hash.includes("access_token=")) return getSession();
@@ -671,6 +715,14 @@
     return callback.toString();
   }
 
+  function emailAuthRedirect(options = {}) {
+    if (typeof options === "string" && options) return options;
+    if (options?.redirectTo) return options.redirectTo;
+    return isNativeApp()
+      ? nativeOAuthBridgeRedirect()
+      : `${window.location.origin}${window.location.pathname}${window.location.search}`;
+  }
+
   function nativeUrlFingerprint(url) {
     let hash = 2166136261;
     for (let index = 0; index < url.length; index += 1) {
@@ -720,22 +772,37 @@
     const provider = nativeOAuthInFlightProvider || storedProvider() || "간편";
     try {
       const parsed = new URL(url);
-      const error = parsed.searchParams.get("error");
-      if (error) {
+      const failure = oauthCallbackFailure(parsed.searchParams);
+      if (failure.error) {
+        const existingSession = getSession();
+        if (
+          existingSession?.access_token
+          && oauthReplaySessionMatchesAttempt(existingSession)
+          && oauthCallbackWasAlreadyConsumed(failure)
+        ) {
+          nativeOAuthInFlightProvider = "";
+          await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+          emitOAuthResult({ ok: true, provider, replayed: true });
+          return true;
+        }
         clearOAuthStorageValue();
         nativeOAuthInFlightProvider = "";
         await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+        const callbackError = oauthCallbackError(failure);
+        const normalizedError = failure.error.toLowerCase();
         emitOAuthResult({
           ok: false,
           provider,
-          cancelled: ["access_denied", "user_cancelled", "canceled", "cancelled"].includes(error.toLowerCase()),
+          cancelled: ["access_denied", "user_cancelled", "canceled", "cancelled"].includes(normalizedError),
+          errorCode: callbackError.code,
         });
-        if (!["access_denied", "user_cancelled", "canceled", "cancelled"].includes(error.toLowerCase())) {
-          emitClientError("native_oauth_callback", new Error(error), { provider });
+        if (!["access_denied", "user_cancelled", "canceled", "cancelled"].includes(normalizedError)) {
+          emitClientError("native_oauth_callback", callbackError, { provider });
         }
         return true;
       }
       const code = parsed.searchParams.get("code");
+      const callbackType = new URLSearchParams(parsed.hash.replace(/^#/, "")).get("type") || "";
       const session = code
         ? await exchangeOAuthCode(code)
         : saveOAuthSession(parsed.hash);
@@ -743,7 +810,7 @@
       await flushOAuthProviderCredentialCapture();
       nativeOAuthInFlightProvider = "";
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
-      const handledWithoutReload = emitOAuthResult({ ok: true, provider });
+      const handledWithoutReload = emitOAuthResult({ ok: true, provider, callbackType });
       if (!handledWithoutReload) window.location.reload();
       return true;
     } catch (error) {
@@ -1065,33 +1132,72 @@
     return saveSession({ ...payload, provider: "\uc774\uba54\uc77c" });
   }
 
-  async function signUpWithPassword(email, password) {
+  async function signUpWithPassword(email, password, options = {}) {
     if (!readiness().ready) throw new Error("Supabase publishable config is missing. Email signup is unavailable.");
     const normalizedEmail = `${email || ""}`.trim().toLowerCase();
     if (!normalizedEmail || !password) throw new Error("email_credentials_required");
     const config = loadConfig();
-    const response = await fetch(authUrl("signup"), {
+    const redirectTo = emailAuthRedirect(options);
+    const query = new URLSearchParams({ redirect_to: redirectTo });
+    saveProvider("이메일");
+    const response = await fetch(authUrl(`signup?${query.toString()}`), {
       method: "POST",
       headers: { apikey: config.supabasePublishableKey, "Content-Type": "application/json" },
       body: JSON.stringify({ email: normalizedEmail, password }),
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload?.msg || payload?.message || "email_signup_failed");
+    if (!response.ok) {
+      const error = new Error(payload?.msg || payload?.message || "email_signup_failed");
+      error.code = payload?.error_code || payload?.code || "email_signup_failed";
+      error.status = response.status;
+      emitClientError("password_signup", error, { provider: "email" });
+      throw error;
+    }
+    if (payload?.access_token) saveSession({ ...payload, provider: "이메일" });
     return payload;
   }
 
-  async function sendPasswordResetEmail(email, redirectTo = window.location.href) {
+  async function sendPasswordResetEmail(email, options = {}) {
     if (!readiness().ready) throw new Error("Supabase publishable config is missing. Password reset is unavailable.");
     const normalizedEmail = `${email || ""}`.trim().toLowerCase();
     if (!normalizedEmail) throw new Error("email_required");
     const config = loadConfig();
-    const response = await fetch(authUrl("recover"), {
+    const redirectTo = emailAuthRedirect(options);
+    const query = new URLSearchParams({ redirect_to: redirectTo });
+    saveProvider("이메일");
+    const response = await fetch(authUrl(`recover?${query.toString()}`), {
       method: "POST",
       headers: { apikey: config.supabasePublishableKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ email: normalizedEmail, redirect_to: redirectTo }),
+      body: JSON.stringify({ email: normalizedEmail }),
     });
     if (!response.ok) throw new Error("password_reset_failed");
     return true;
+  }
+
+  async function updatePassword(password) {
+    if (!readiness().ready) throw new Error("Supabase publishable config is missing. Password update is unavailable.");
+    if (!password) throw new Error("password_required");
+    const config = loadConfig();
+    const session = await ensureSession();
+    if (!session?.access_token) throw new Error("password_recovery_session_required");
+    const response = await fetch(authUrl("user"), {
+      method: "PUT",
+      headers: {
+        apikey: config.supabasePublishableKey,
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload?.msg || payload?.message || "password_update_failed");
+      error.code = payload?.error_code || payload?.code || "password_update_failed";
+      error.status = response.status;
+      emitClientError("password_update", error, { provider: "email" });
+      throw error;
+    }
+    return payload;
   }
 
   async function getAuthUser() {
@@ -1380,6 +1486,7 @@
     signInWithPassword,
     sendPasswordResetEmail,
     signUpWithPassword,
+    updatePassword,
     providerSlug,
     getAuthUser,
     getAuthSettings,

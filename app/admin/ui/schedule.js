@@ -374,6 +374,7 @@ function openLessonModal(defaults = {}) {
   if (!editingLesson && Array.isArray(defaults.repeatSlots) && defaults.repeatSlots.length > 1) {
     applyLessonRepeatSlotDefaults(defaults.repeatSlots);
   }
+  if (!editingLesson) syncLessonModalWeekToSelectedTicket();
   syncLessonTypeFromForm();
   renderCurrentLessonMembers(editingLesson);
   renderLessonExpiredTickets();

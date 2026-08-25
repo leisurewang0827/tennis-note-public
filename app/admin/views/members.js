@@ -150,6 +150,12 @@ function renderMemberManagementControls(member) {
   const hasClosableTickets = managedTickets.some((ticket) => (
     ["active", "paused", "pending_payment"].includes(ticket.status)
   ));
+  const hasCurrentOrUpcomingTicket = managedTickets.some((ticket) => (
+    ["current", "paused", "upcoming", "pending_payment"].includes(window.TennisNoteTicketState?.derive(ticket) || ticket.status)
+  ));
+  const assignTicketLabel = unlinkedPayment
+    ? "결제 연결·회원권 발급"
+    : hasCurrentOrUpcomingTicket ? "다른 회원권 추가" : "새 회원권 등록";
 
   const ticketRow = (ticket) => {
     const actions = [];
@@ -213,7 +219,7 @@ function renderMemberManagementControls(member) {
       </div>
       ${operationsRole() === "admin"
         ? `<div class="member-management-actions member-ticket-management-footer">
-            <button class="primary-button member-ticket-assign-button" type="button" data-open-member-management="assign">${unlinkedPayment ? "결제 연결·회원권 발급" : "판매중 회원권 등록"}</button>
+            <button class="primary-button member-ticket-assign-button" type="button" data-open-member-management="assign">${assignTicketLabel}</button>
             ${hasClosableTickets ? '<button class="danger-button" type="button" data-open-member-management="close">회원권·미래수업 종료</button>' : ""}
           </div>`
         : ""}
@@ -367,7 +373,9 @@ function renderMemberManagementModal() {
         </select></label>
       </div>
       ${memberManagementDatabaseFields({ member, ticket: null, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: unlinkedPayment, isAssign: true })}
-      <p class="member-management-rule">판매 중인 상품을 선택하면 기간과 회차가 자동 입력됩니다. 저장 후 시간표에서 정규 수업을 등록합니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
+      <input name="createWithoutSchedule" type="hidden" value="${memberManagementProductSupportsRegularSchedule(product) ? "false" : "true"}" />
+      ${memberCreateScheduleMarkup(product)}
+      <p class="member-management-rule">주 2회·주 3회는 정규 요일과 시간을 모두 선택하면 회원권과 시간표가 한 번에 저장됩니다. 예외일 때만 ‘시간표는 나중에 설정’을 선택하세요.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "correct") {
     actionFields = operationsRole() === "admin" ? `
       ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: memberTicketLinkedPayment(ticket), includeTicketStatus: true })}
@@ -766,11 +774,12 @@ function renderMembers(options = {}) {
             ${operationsRole() === "admin" && member.serverUserId && listStatus !== "inactive" && rowTicket && ["active", "paused"].includes(rowTicket.status)
               ? `<button class="small-button primary-button member-row-ticket-extend" type="button" data-open-member-management="extend" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 기간 연장">기간 연장</button>`
               : ""}
-            ${operationsRole() === "admin" ? `<button class="small-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="${escapeHtml(ticketId)}">${rowTicket ? "회원권 수정" : "회원권 등록"}</button>` : ""}
+            ${operationsRole() === "admin" && rowTicket ? `<button class="small-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="${escapeHtml(ticketId)}">회원권 수정</button>` : ""}
+            ${operationsRole() === "admin" && !rowTicket ? `<button class="small-button primary-button" type="button" data-open-member-management="assign" data-member-management-member-id="${member.id}">회원권 등록</button>` : ""}
             ${operationsRole() === "admin" && rowTicket && rowTicket.status !== "voided"
               ? `<button class="small-button danger-button member-row-ticket-delete" type="button" data-open-member-management="force_delete" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 삭제">회원권 삭제</button>`
               : ""}
-            ${operationsRole() === "admin" && ticketIndex === 0 && rowTicket ? `<button class="ghost-button member-add-ticket-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="">+ 회원권</button>` : ""}
+            ${operationsRole() === "admin" && ticketIndex === 0 && rowTicket ? `<button class="ghost-button member-add-ticket-button" type="button" data-open-member-management="assign" data-member-management-member-id="${member.id}">+ 다른 회원권</button>` : ""}
           </div></td>
         </tr>`;
       }).join("");

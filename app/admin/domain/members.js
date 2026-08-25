@@ -274,6 +274,11 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_create_schedule_duplicate")) return "같은 요일과 시간을 중복 선택할 수 없습니다.";
   if (raw.includes("member_create_schedule_value_invalid")) return "회원권의 평일·주말 범위에 맞는 10분 단위 시간을 선택해 주세요.";
   if (raw.includes("member_create_schedule_blocked_time") || raw.includes("member_create_schedule_outside_working_hours")) return "코치 수업 가능 시간과 브레이크 시간을 확인해 다른 시간을 선택해 주세요.";
+  if (raw.includes("member_assignment_schedule_not_created")) return "회원권과 정규시간을 함께 만들지 못해 전체 저장을 취소했습니다. 시작일·만료일·코치 시간을 확인해 주세요.";
+  if (raw.includes("member_assignment_schedule_frequency_mismatch")) return "주 횟수만큼 정규 요일과 시간을 모두 선택해 주세요.";
+  if (raw.includes("member_assignment_schedule_duplicate")) return "같은 요일과 시간을 중복 선택할 수 없습니다.";
+  if (raw.includes("member_assignment_schedule_value_invalid")) return "회원권의 평일·주말 범위에 맞는 시간을 선택해 주세요.";
+  if (raw.includes("member_assignment_schedule_blocked_time") || raw.includes("member_assignment_schedule_outside_working_hours")) return "코치 근무시간·브레이크와 겹치지 않는 시간을 선택해 주세요.";
   if (raw.includes("schedule_v2_approved_coach_required")) return "같은 지점의 현재 승인 코치를 선택해 주세요.";
   if (raw.includes("schedule_v2_rule_outside_ticket_window")) return "회원권 사용기간 안에 선택한 정규 요일이 없습니다. 시작일과 만료일을 확인해 주세요.";
   if (raw.includes("payment_product_mismatch")) return "기존 결제에 연결된 회원권과 선택한 회원권이 다릅니다. 결제 회원권을 선택해 주세요.";
@@ -672,7 +677,7 @@ function getSelectableMembers(search = "") {
   const matchingMembers = members.filter((member) => {
     const status = memberListStatus(member);
     const usableOnSelectedDate = allTicketsForMember(member)
-      .some((ticket) => ticket.remaining > 0 && ticketCanBeUsedOnLessonDate(ticket));
+      .some((ticket) => ticket.remaining > 0 && lessonTicketCanBeSelected(ticket));
     if (!adminManualOverrideEnabled() && status === "inactive") return false;
     if (!adminManualOverrideEnabled() && status === "expired" && !usableOnSelectedDate) return false;
     return !keyword || memberSearchValues(member)

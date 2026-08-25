@@ -899,19 +899,9 @@ async function performAdminLiveDataSync(options = {}) {
         limit: 500,
       }).catch(() => []))),
       rosterRows("makeupEntitlements", () => client.selectRows("tn_makeup_entitlements", { select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at", limit: 500 }).catch(() => [])),
-      // Settlement reconciliation needs the complete record history. The lightweight
-      // operational roster only contains records inside its schedule window, so using
-      // it here silently drops older completed lessons and understates coach totals.
-      (client.selectAllRows || client.selectRows).call(client, "tn_lesson_records", {
-        select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_ticket_id,deducted_sessions,completed_at,tn_lessons(member_ticket_id,duration_minutes)",
-        order: "id.asc",
-        limit: 500,
-        pageSize: 500,
-        maxRows: 20000,
-      }).catch(() => client.selectRows("tn_lesson_records", {
-        select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at",
-        limit: 500,
-      }).catch(() => [])),
+      // The initial screen only needs records inside the operational window. Complete
+      // history is loaded once when the administrator opens 결제/정산.
+      rosterRows("lessonRecords", () => Promise.resolve(adminLiveDataState.lessonRecords || [])),
       Promise.resolve(adminLiveDataState.curriculumRefs || []),
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
@@ -921,25 +911,9 @@ async function performAdminLiveDataSync(options = {}) {
       rosterRows("groupTicketLinks", () => (client.selectAllRows || client.selectRows).call(client, "tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", pageSize: 500 }).catch(() => [])),
       fullAdminAccess ? rosterRows("memberDatabaseRecords", () => Promise.resolve(adminLiveDataState.memberDatabaseRecords || [])) : Promise.resolve([]),
       fullAdminAccess ? rosterRows("memberMembershipRecords", () => Promise.resolve(adminLiveDataState.memberMembershipRecords || [])) : Promise.resolve([]),
-      // Settlement modes must cover the same complete history as lesson records.
-      // The operational roster only carries assignments inside its schedule window.
-      (client.selectAllRows || client.selectRows).call(client, "tn_lesson_substitute_assignments", {
-        select: "id,lesson_id,branch_id,original_coach_role_id,substitute_coach_role_id,settlement_mode,hourly_amount,status,reason,assigned_at,ended_at",
-        order: "assigned_at.desc",
-        limit: 500,
-        pageSize: 500,
-        maxRows: 20000,
-      }).catch(() => []),
-      // The operational roster intentionally omits old inactive tickets. Settlement
-      // records still reference them, so keep a minimal complete ticket index solely
-      // for reconciliation without expanding the visible member-management roster.
-      (client.selectAllRows || client.selectRows).call(client, "tn_member_tickets", {
-        select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price,updated_at",
-        order: "id.asc",
-        limit: 500,
-        pageSize: 500,
-        maxRows: 20000,
-      }).catch(() => []),
+      rosterRows("substituteAssignments", () => Promise.resolve(adminLiveDataState.substituteAssignments || [])),
+      // Complete inactive-ticket history is a settlement-only dependency.
+      Promise.resolve([]),
     ]);
 
     if (options.abortIfDirty && adminHasUnsavedChanges()) {
@@ -1042,26 +1016,16 @@ async function performAdminLiveDataSync(options = {}) {
     });
 
     const activeTickets = mappedTickets.filter((ticket) => isCurrentMemberTicket(ticket));
-    const mappedSettlementTickets = (
-      serverSettlementTickets?.length ? serverSettlementTickets : serverTickets || []
-    ).map((ticket) => {
-      const product = productsById.get(ticket.product_id) || {};
-      return {
-        id: ticket.id,
-        serverTicketId: ticket.id,
-        serverUserId: ticket.user_id,
-        productId: ticket.product_id,
-        branchId: ticket.branch_id,
-        coachRoleId: ticket.coach_role_id,
-        member: usersById.get(ticket.user_id)?.name || "대타 수업",
-        coachId: coachIdByRole.get(ticket.coach_role_id) || "",
-        total: Number(ticket.total_sessions) || 0,
-        used: Number(ticket.used_sessions) || 0,
-        remaining: Number(ticket.remaining_sessions) || 0,
-        durationMinutes: Number(product.lesson_minutes) || 20,
-        status: ticket.status,
-      };
-    });
+    const settlementTicketContext = {
+      products: serverProducts || [],
+      users: serverUsers || [],
+      coachIdByRole,
+    };
+    const mappedSettlementTickets = serverSettlementTickets?.length
+      ? mapAdminSettlementTicketRows(serverSettlementTickets, settlementTicketContext)
+      : adminLiveDataState.settlementTickets?.length
+        ? adminLiveDataState.settlementTickets
+        : mapAdminSettlementTicketRows(serverTickets || [], settlementTicketContext);
     const activeTicketIds = new Set(activeTickets.map((ticket) => ticket.serverTicketId));
     replaceArray(tickets, activeTickets);
     replaceArray(expiredTickets, mappedTickets
@@ -1567,8 +1531,14 @@ async function performAdminLiveDataSync(options = {}) {
     });
     await adminSettingsPromise;
     adminLazyDataState.delete("records-support");
+    adminLazyDataState.delete("settlement-support");
     if (state.view === "notes") {
       await loadAdminDataOnce("records-support", loadAdminRecordsSupportData);
+    }
+    if (state.view === "billing") {
+      void loadAdminDataOnce("settlement-support", loadAdminSettlementSupportData).then((changed) => {
+        if (changed && state.view === "billing") renderAdminView("billing");
+      });
     }
     syncAdminScheduleWeek();
     if (!mappedMembers.some((member) => member.id === state.selectedMemberId)) {

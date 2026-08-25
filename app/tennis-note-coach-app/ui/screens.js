@@ -234,7 +234,7 @@ function openMakeupApprovalModal(id) {
   state.editingLessonId = null;
   state.writingLessonId = null;
   state.viewingCurriculumId = null;
-  state.editingMakeupId = id || ownPendingMakeupRequests()[0]?.id || pendingMakeupRequests()[0]?.id || "__none__";
+  state.editingMakeupId = id || ownPendingMakeupRequests()[0]?.id || "__none__";
   renderLessonEditModal();
   openCoachModal("lessonEditModal");
 }

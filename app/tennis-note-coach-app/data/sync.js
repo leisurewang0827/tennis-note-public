@@ -519,6 +519,7 @@ async function syncLegacyCoachLessonsFromServer() {
           remainingTime: lessonChangeRemainingText(originalDate, originalTime),
           status: requestStatusLabel[request.status] || request.status,
           coach: lesson.coach || "담당 코치",
+          coachRoleId: lesson.coachRoleId || "",
           source: "server",
           canReview: true,
         };

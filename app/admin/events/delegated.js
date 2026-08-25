@@ -188,7 +188,7 @@ function bindDelegatedEvents() {
     const button = event.target.closest("[data-jump]");
     if (!button) return;
     if (button.dataset.scheduleTicketId) {
-      const ticket = tickets.find((item) => String(item.id) === String(button.dataset.scheduleTicketId));
+      const ticket = scheduleTicketById(button.dataset.scheduleTicketId);
       if (!ticket) {
         showToast("회원권 정보를 다시 불러와 주세요");
         return;

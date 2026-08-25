@@ -245,6 +245,7 @@ function bindScheduleEvents() {
     state.pinnedLessonTicketId = $("#lessonTicket").value || "";
     state.lessonSourceTouched = false;
     syncLessonSourceFromTicket(true);
+    syncLessonModalWeekToSelectedTicket();
     refreshLessonDurationOptions();
     refreshLessonTimeOptions($("#lessonTime").value);
     refreshLessonDayOptions();

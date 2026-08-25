@@ -83,10 +83,9 @@ function renderTodayTaskTabs({ lessonCount, makeupCount, recordCount }) {
 
 function renderTodayLessons() {
   const schedulePolicy = loadCoachSchedulePolicy();
-  const pendingMakeups = state.makeupRequests.filter((request) => request.status === "승인 대기");
   const ownLessons = [...ownTodayLessons()].sort(compareTodayLessonsByNearest);
   const transferredLessons = transferredTodayLessons();
-  const ownMakeups = pendingMakeups.filter((request) => canonicalCoachName(requestCoach(request)) === currentCoachName());
+  const ownMakeups = ownPendingMakeupRequests();
   const ownAbsenceMakeups = ownOpenMakeupEntitlements();
   const ownMakeupTasks = [
     ...ownMakeups.map((request) => ({ ...request, taskKind: "approval" })),
