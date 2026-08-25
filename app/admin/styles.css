@@ -7932,6 +7932,60 @@ tr.is-selected td {
   color: #9d2f25;
 }
 
+.branch-sales-effective-status {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #c9ded4;
+  border-radius: 14px;
+  background: #f5fbf8;
+}
+
+.branch-sales-effective-status > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.branch-sales-effective-status span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.branch-sales-effective-status ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.branch-sales-effective-status li {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11px;
+}
+
+.branch-sales-effective-status li.is-ready {
+  color: #176044;
+  box-shadow: inset 0 0 0 1px #b9ddcb;
+}
+
+.branch-sales-effective-status li.is-blocked,
+.branch-sales-effective-status.is-error {
+  color: #8a5a00;
+  border-color: #ead19c;
+  background: #fffaf0;
+}
+
 .branch-sales-steps {
   display: grid;
   gap: 14px;
