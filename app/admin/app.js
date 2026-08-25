@@ -10,6 +10,7 @@ const state = {
   memberSearch: "",
   memberCoachFilter: "all",
   memberTicketFilter: "all",
+  memberTicketGridFilter: "all",
   scheduleFilter: "all",
   scheduleView: "week",
   scheduleCoachFilter: "all",
@@ -1023,6 +1024,71 @@ window.setInterval(() => {
     showToast("15분 동안 사용하지 않아 회원표 편집을 잠갔습니다.");
   }
 }, 30000);
+
+function memberTicketPaymentGrid(member, ticket) {
+  const projection = ticket ? memberTicketPaymentProjection(member, ticket) : null;
+  const stateValue = memberPaymentRecordState(projection);
+  if (!projection || stateValue === "unentered") {
+    return { state: stateValue, date: "-", method: "미입력", amount: "-" };
+  }
+  return {
+    state: stateValue,
+    date: projection.payment_recorded_on ? memberDetailDateLabel(projection.payment_recorded_on) : "미입력",
+    method: stateValue === "transfer_zero" ? "양도" : paymentMethodLabel(projection.payment_method || ""),
+    amount: `${money.format(Number(projection.payment_amount || 0))}원`,
+  };
+}
+
+function memberTicketScheduleScopeLabel(ticket) {
+  const scope = String(ticket?.scheduleScope || "").toLowerCase();
+  if (scope === "weekday") return "평일";
+  if (scope === "weekend") return "주말";
+  if (scope === "mixed") return "혼합";
+  return "연결 확인";
+}
+
+function memberTicketPartnerLabel(member, ticket) {
+  if (!ticket || Number(ticket.groupSize || 1) !== 2) return "-";
+  const partnerId = memberTicketPartnerUserId(ticket, member);
+  return (adminLiveDataState.users || []).find((user) => user.id === partnerId)?.name || "연결 확인";
+}
+
+function memberTicketSettlementGridLabel(ticket) {
+  if (!ticket) return "-";
+  const review = ticket.policySnapshot?.admin_grid_price_review;
+  if (review?.required === true) return "가격 확인";
+  const amount = Number(ticket.settlementBasePrice || 0);
+  return amount > 0 ? `${money.format(amount)}원 기준` : "기존 정산 유지";
+}
+
+function memberTicketGridReviewReasons(member, ticket) {
+  if (!ticket) return ["회원권 없음"];
+  const reasons = [];
+  const payment = memberTicketPaymentGrid(member, ticket);
+  if (!ticket.productId || !ticket.scheduleScope) reasons.push("상품 연결 오류");
+  if (!ticket.serverUserId && !member?.serverUserId) reasons.push("회원 연결 오류");
+  if (payment.state === "incomplete") reasons.push("결제 확인 필요");
+  if (ticket.policySnapshot?.admin_grid_price_review?.required === true) reasons.push("가격 차이 확인");
+  if (Number(ticket.used || 0) + Number(ticket.remaining || 0) !== Number(ticket.total || 0)) reasons.push("횟수 불일치");
+  if (Number(ticket.groupSize || 1) === 2 && !memberTicketPartnerUserId(ticket, member)) reasons.push("파트너 연결 오류");
+  return reasons;
+}
+
+function memberTicketGridMatches(member, ticket) {
+  const filter = String(state.memberTicketGridFilter || "all");
+  if (filter === "all") return true;
+  const stateCode = String(window.TennisNoteTicketState?.derive(ticket) || ticket?.status || "");
+  if (filter === "review") return memberTicketGridReviewReasons(member, ticket).length > 0;
+  if (filter === "active") return stateCode === "current" || ticket?.status === "active";
+  if (filter === "pending_payment") return ticket?.status === "pending_payment" || memberTicketPaymentGrid(member, ticket).state === "incomplete";
+  if (filter === "expiring") {
+    const today = adminLocalDateKey(new Date());
+    const cutoff = addMemberManagementDays(today, 14);
+    return Boolean(ticket?.expires && ticket.expires >= today && ticket.expires <= cutoff);
+  }
+  if (filter === "link_error") return memberTicketGridReviewReasons(member, ticket).some((reason) => reason.includes("연결"));
+  return true;
+}
 
 function adminLessonChangePolicyText(request = {}) {
   const snapshot = request.policySnapshot || request.policy_snapshot || null;

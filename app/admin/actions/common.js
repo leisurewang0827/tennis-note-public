@@ -841,7 +841,7 @@ async function performAdminLiveDataSync(options = {}) {
       client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,group_deduction_policy,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,policy_settings,display_order", limit: 300 })
         .catch(() => client.selectRows("tn_membership_products", { select: "id,branch_id,product_code,name,lesson_minutes,frequency_per_week,total_sessions,group_size,product_kind,is_coupon,is_active,schedule_scope,term_weeks,validity_days,grace_days,card_price,cash_price,settlement_base_price,discount_enabled,coach_discount_allowed,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,policy_settings,display_order", limit: 300 })),
       rosterRows("tickets", () => (client.selectAllRows || client.selectRows)("tn_member_tickets", {
-        select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price,updated_at",
+        select: "id,user_id,product_id,branch_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,purchased_price,settlement_base_price,policy_snapshot,source_payment_id,updated_at",
         order: "id.asc",
         limit: 500,
         pageSize: 500,
@@ -994,6 +994,9 @@ async function performAdminLiveDataSync(options = {}) {
         purchased: ticket.starts_on,
         expires: ticket.expires_on,
         amount: Number(ticket.purchased_price) || 0,
+        settlementBasePrice: Number(ticket.settlement_base_price) || 0,
+        sourcePaymentId: ticket.source_payment_id || null,
+        policySnapshot: ticket.policy_snapshot && typeof ticket.policy_snapshot === "object" ? ticket.policy_snapshot : {},
         lessonKind: product.id
           ? (productGroupSize === 2 ? "2대1" : liveTicketLessonKind(product))
           : memberRecord?.lesson_type === "one_on_two" ? "2대1" : "개인",

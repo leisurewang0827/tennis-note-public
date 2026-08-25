@@ -694,11 +694,11 @@ function memberManagementDatabaseFields({
       <label class="form-field">${memberManagementFieldLabel("레슨강사", true)}<select name="coachRoleId" required>
         ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === coachRoleId ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
       </select></label>
-      ${couponProduct ? `<input name="scheduleScope" type="hidden" value="${escapeHtml(scheduleScope)}" />` : `<label class="form-field">${memberManagementFieldLabel("레슨방식", true)}<select name="scheduleScope" required>
+      <label class="form-field">${memberManagementFieldLabel("평일/주말", true)}<select name="scheduleScope" required>
         <option value="weekday" ${scheduleScope === "weekday" ? "selected" : ""}>평일</option>
         <option value="weekend" ${scheduleScope === "weekend" ? "selected" : ""}>주말</option>
-        <option value="mixed" ${scheduleScope === "mixed" ? "selected" : ""}>혼합</option>
-      </select></label>`}
+        ${couponProduct ? "" : `<option value="mixed" ${scheduleScope === "mixed" ? "selected" : ""}>혼합</option>`}
+      </select><small>${couponProduct ? "범위를 바꾸면 같은 조건의 활성 쿠폰 상품으로 안전하게 연결합니다." : "기존 예약은 별도 선택 없이 자동 변경하지 않습니다."}</small></label>
       ${couponProduct ? '<input name="weeklyFrequency" type="hidden" value="1" />' : `<label class="form-field">${memberManagementFieldLabel("주당 횟수", true)}<select name="weeklyFrequency" required>
         ${[1, 2, 3].map((frequency) => `<option value="${frequency}" ${frequency === weeklyFrequency ? "selected" : ""} ${scheduleScope === "weekend" && frequency === 3 ? "disabled" : ""}>주 ${frequency}회</option>`).join("")}
       </select></label>`}
@@ -865,7 +865,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
          <option value="prefer_not" ${member.gender === "prefer_not" ? "selected" : ""}>응답 안 함</option>
        </select></label>`;
   return `
-        <form class="member-inline-editor member-inline-editor--compact ${embedded && ticket ? "member-inline-editor--ticket-only" : ""}" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(paymentProjection))}">
+        <form class="member-inline-editor member-inline-editor--compact ${embedded && ticket ? "member-inline-editor--ticket-only" : ""}" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-schedule-scope="${escapeHtml(record?.lesson_schedule_scope || ticket?.scheduleScope || memberManagementProductScheduleScope(currentProduct))}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(paymentProjection))}">
           <div class="member-inline-editor-heading" ${embedded ? "hidden" : ""}>
             <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
@@ -874,7 +874,6 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
             <strong>${escapeHtml(ticketContextLabel)}</strong>
             <span>${escapeHtml(ticket ? getTicketDisplayProduct(ticket) || ticket.product || "회원권" : "회원권 미등록")}${ticket ? ` · ${escapeHtml(memberTicketStatusLabel(ticket))}` : ""}</span>
           </div>` : ""}
-          <input name="scheduleScope" type="hidden" value="${escapeHtml(record?.lesson_schedule_scope || ticket?.scheduleScope || "weekday")}" />
           <input name="lessonType" type="hidden" value="${escapeHtml(record?.lesson_type || ticket?.lessonTypeCode || "one_on_one")}" />
           <input name="weeklyFrequency" type="hidden" value="${memberManagementProductWeeklyFrequency(currentProduct, record?.lesson_frequency_per_week ?? ticket?.weeklyCount ?? 1)}" />
           <input name="recordStatus" type="hidden" value="${escapeHtml(record?.record_status || (ticket ? "active" : "pending"))}" />
@@ -898,6 +897,11 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
               </select>
               <span class="member-inline-product-change-note" data-member-product-change-note hidden></span>
             </label>
+            <label class="member-inline-scope"><span>평일/주말</span><select name="scheduleScope" required>
+              <option value="weekday" ${(record?.lesson_schedule_scope || ticket?.scheduleScope || memberManagementProductScheduleScope(currentProduct)) === "weekday" ? "selected" : ""}>평일</option>
+              <option value="weekend" ${(record?.lesson_schedule_scope || ticket?.scheduleScope || memberManagementProductScheduleScope(currentProduct)) === "weekend" ? "selected" : ""}>주말</option>
+              ${memberManagementProductIsCoupon(currentProduct) ? "" : `<option value="mixed" ${(record?.lesson_schedule_scope || ticket?.scheduleScope || memberManagementProductScheduleScope(currentProduct)) === "mixed" ? "selected" : ""}>혼합</option>`}
+            </select><small>쿠폰도 같은 조건의 상품으로 변경</small></label>
             <label class="member-inline-coach"><span>담당 코치</span><select name="coachRoleId">
               <option value="">미배정</option>
               ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === (record?.coach_role_id || ticket?.coachRoleId) ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}

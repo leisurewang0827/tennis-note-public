@@ -1109,7 +1109,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.402",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.403",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

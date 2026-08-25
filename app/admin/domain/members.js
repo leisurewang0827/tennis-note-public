@@ -260,6 +260,14 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_ticket_extension_status_invalid")) return "사용 중 또는 홀딩 중인 회원권만 기간을 연장할 수 있습니다.";
   if (raw.includes("member_ticket_revision_conflict")) return "다른 화면에서 회원권이 먼저 변경됐습니다. 최신 정보를 다시 확인해 주세요.";
   if (raw.includes("member_ticket_expected_updated_at_required")) return "최신 회원권 정보를 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.";
+  if (raw.includes("ticket_grid_equivalent_product_not_found")) return "같은 지점·횟수·수업시간 조건의 평일/주말 대응 상품이 없습니다. 운영 설정에서 대응 상품을 먼저 활성화해 주세요.";
+  if (raw.includes("ticket_grid_equivalent_product_ambiguous")) return "조건이 같은 대응 상품이 여러 개입니다. 운영 설정에서 중복 상품을 정리한 뒤 다시 저장해 주세요.";
+  if (raw.includes("ticket_grid_cross_branch_product_blocked")) return "다른 지점 상품으로는 회원권을 변경할 수 없습니다.";
+  if (raw.includes("ticket_grid_inactive_product_blocked")) return "판매 중지 또는 숨김 상품으로는 회원권을 변경할 수 없습니다.";
+  if (raw.includes("ticket_grid_product_scope_mismatch")) return "선택한 상품의 평일/주말 범위가 요청한 범위와 다릅니다.";
+  if (raw.includes("ticket_grid_future_schedule_scope_conflict")) return "새 평일/주말 범위와 맞지 않는 미래 수업이 있습니다. 기존 예약을 유지할지 미래 일정을 다시 설정할지 먼저 선택해 주세요.";
+  if (raw.includes("ticket_grid_terminal_status_locked")) return "환불 또는 삭제가 끝난 회원권은 사용 중 상태로 되돌릴 수 없습니다.";
+  if (raw.includes("ticket_grid_current_product_missing")) return "이관 회원권의 상품 연결이 없습니다. 먼저 정확한 상품을 연결해 주세요.";
   if (raw.includes("member_management_write_not_confirmed")) return "서버에서 변경 결과를 확인하지 못했습니다. 새로고침 후 다시 확인해 주세요.";
   if (raw.includes("member_schedule_write_not_confirmed")) return "회원권은 저장됐지만 새 시간표를 확인하지 못했습니다. 새로고침 후 시간표를 확인해 주세요.";
   if (raw.includes("regular_schedule_count_mismatch")) return "회원권의 주 횟수만큼 요일과 시간을 선택해 주세요.";

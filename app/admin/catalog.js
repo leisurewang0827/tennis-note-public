@@ -735,6 +735,7 @@ const memberInlineDraftFieldNames = [
   "memberNeighborhood",
   "memberGender",
   "productId",
+  "scheduleScope",
   "coachRoleId",
   "partnerUserId",
   "startsOn",

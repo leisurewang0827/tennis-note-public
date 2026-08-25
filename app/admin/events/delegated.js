@@ -707,6 +707,9 @@ function bindDelegatedEvents() {
     }
     if (event.target.matches("[data-member-inline-form] input, [data-member-inline-form] select")) {
       if (event.target.matches("select[name='productId']")) syncMemberInlineProductCancellation(event.target.form, { restoreActive: true });
+      if (event.target.matches("select[name='scheduleScope']")) {
+        event.target.form.dataset.scheduleScopeTouched = "true";
+      }
       if (event.target.matches("select[name^='scheduleTime']") && event.target.form?.elements.applyToFutureSchedule) {
         event.target.form.elements.applyToFutureSchedule.value = "true";
       }
@@ -719,10 +722,11 @@ function bindDelegatedEvents() {
       setProductInlineDirtyState(event.target.closest("[data-product-inline-form]"));
       return;
     }
-    if (!event.target.matches("[data-member-inline-form] select[name='productId'], [data-member-inline-form] select[name='coachRoleId']")) return;
+    if (!event.target.matches("[data-member-inline-form] select[name='productId'], [data-member-inline-form] select[name='coachRoleId'], [data-member-inline-form] select[name='scheduleScope']")) return;
     const form = event.target.form;
     setMemberInlineDirtyState(form);
     if (event.target.name === "productId") {
+      form.dataset.scheduleScopeTouched = "false";
       syncMemberQuickEditorProduct(form);
       syncMemberInlineProductCancellation(form, { restoreActive: true });
     }

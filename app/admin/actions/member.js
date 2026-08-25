@@ -762,9 +762,16 @@ async function submitMemberManagementForm(event) {
       });
       window.TennisNoteScheduleRevision?.notify?.(ticket.branchId);
     } else if (action === "correct") {
+      managementPayload.paymentChanged = memberInlinePaymentChanged(form);
       result = operationsRole() === "admin"
-        ? await client.rpc("tn_admin_update_member_record_with_payment", {
-          target_record: managementPayload,
+        ? await client.rpc("tn_admin_update_ticket_and_payment_grid", {
+          target_ticket_id: ticket.serverTicketId,
+          target_expected_updated_at: managementPayload.expectedTicketUpdatedAt,
+          target_changes: managementPayload,
+          target_schedule_scope: managementPayload.scheduleScope,
+          target_future_schedule_mode: "preserve",
+          target_schedules: [],
+          target_operation_key: createAdminOperationKey("ticket-grid-detail"),
         })
         : await client.rpc("tn_update_member_ticket_lifecycle", {
           target_ticket_id: ticket.serverTicketId,
@@ -928,6 +935,7 @@ function restoreFailedMemberInlineDrafts(drafts = []) {
       if (name === "productId" || draft.values[name] === undefined || !form.elements[name]) return;
       form.elements[name].value = draft.values[name];
     });
+    if (draft.values.scheduleScope !== undefined) form.dataset.scheduleScopeTouched = "true";
     syncMemberQuickEditorSchedule(form);
     if (form.elements.totalSessions && form.elements.usedSessions) syncMemberManagementBalance(form);
     setMemberInlineDirtyState(form, true);
@@ -1285,7 +1293,7 @@ async function submitMemberInlineEditor(form, options = {}) {
     return false;
   }
   if (scheduleReplacementRequested) {
-    const scheduleScope = memberManagementProductScheduleScope(selectedProduct);
+    const scheduleScope = form.elements.scheduleScope?.value || memberManagementProductScheduleScope(selectedProduct);
     const requiredScheduleCount = memberRegularScheduleFrequency(selectedProduct, ticket);
     const invalidSchedule = regularSchedules.find((slot) => (
       !memberScheduleDayOrder.includes(slot.dayOfWeek)
@@ -1336,8 +1344,8 @@ async function submitMemberInlineEditor(form, options = {}) {
     payload.partnerUserId = selectedGroupSize === 2
       ? form.elements.partnerUserId?.value || null
       : null;
-    const selectedProductScope = memberManagementProductScheduleScope(selectedProduct);
-    payload.scheduleScope = selectedProductScope;
+    const requestedScheduleScope = form.elements.scheduleScope?.value || memberManagementProductScheduleScope(selectedProduct);
+    payload.scheduleScope = requestedScheduleScope;
     payload.weeklyFrequency = memberManagementProductWeeklyFrequency(
       selectedProduct,
       memberRegularScheduleFrequency(selectedProduct, ticket),
@@ -1388,15 +1396,15 @@ async function submitMemberInlineEditor(form, options = {}) {
   let saveResult = null;
   try {
     if (ticket) {
-      saveResult = scheduleReplacementRequested
-        ? await window.TennisNoteDataClient.rpc("tn_admin_update_member_record_and_regular_schedule", {
-          target_record: payload,
-          target_schedules: regularSchedules,
-          target_operation_key: createAdminOperationKey("member-schedule"),
-        })
-        : await window.TennisNoteDataClient.rpc("tn_admin_update_member_record_with_payment", {
-          target_record: payload,
-        });
+      saveResult = await window.TennisNoteDataClient.rpc("tn_admin_update_ticket_and_payment_grid", {
+        target_ticket_id: ticket.serverTicketId,
+        target_expected_updated_at: payload.expectedTicketUpdatedAt,
+        target_changes: payload,
+        target_schedule_scope: payload.scheduleScope,
+        target_future_schedule_mode: scheduleReplacementRequested ? "replace" : "preserve",
+        target_schedules: scheduleReplacementRequested ? regularSchedules : [],
+        target_operation_key: createAdminOperationKey("ticket-grid"),
+      });
     } else if (payload.productId) {
       const product = (adminLiveDataState.products || []).find((item) => item.id === payload.productId);
       if (!product) throw new Error("membership_product_not_found");
@@ -1445,7 +1453,7 @@ async function submitMemberInlineEditor(form, options = {}) {
       return {
         ok: true,
         ticketId: String(saveResult?.ticketId || saveResult?.ticket_id || ticket?.serverTicketId || ""),
-        ticketUpdatedAt: String(saveResult?.ticketUpdatedAt || saveResult?.ticket_updated_at || ""),
+        ticketUpdatedAt: String(saveResult?.ticketUpdatedAt || saveResult?.ticket_updated_at || saveResult?.updatedAt || saveResult?.updated_at || ""),
       };
     }
     const synced = await syncAdminLiveData(true);

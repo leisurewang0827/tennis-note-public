@@ -51,6 +51,7 @@ function bindMembersEvents() {
     state.memberSearch = "";
     state.memberCoachFilter = "all";
     state.memberTicketFilter = "all";
+    state.memberTicketGridFilter = "all";
     state.memberListPage = 0;
     state.selectedMemberId = null;
     renderMembers();
@@ -71,6 +72,13 @@ function bindMembersEvents() {
     state.selectedMemberId = null;
     renderMembers();
     void loadAdminMemberDirectoryPage({ force: true });
+    saveSnapshot();
+  });
+  $("#memberTicketGridFilter")?.addEventListener("change", (event) => {
+    state.memberTicketGridFilter = event.target.value;
+    state.memberListPage = 0;
+    state.selectedMemberId = null;
+    renderMembers();
     saveSnapshot();
   });
   $("#downloadMemberImportTemplateButton")?.addEventListener("click", downloadImportTemplate);

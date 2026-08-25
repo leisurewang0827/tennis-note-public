@@ -551,6 +551,7 @@ function memberInlineChangeSummary(form) {
     memberNeighborhood: "거주동",
     memberGender: "성별",
     productId: "회원권",
+    scheduleScope: "평일/주말",
     coachRoleId: "담당 코치",
     partnerUserId: "파트너",
     startsOn: "시작일",

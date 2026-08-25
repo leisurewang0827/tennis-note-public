@@ -189,7 +189,9 @@ function syncMemberQuickEditorProduct(form) {
   if (!product) return;
   form.elements.lessonType.value = groupProduct ? "one_on_two" : "one_on_one";
   const productScope = memberManagementProductScheduleScope(product);
-  form.elements.scheduleScope.value = productScope;
+  if (form.dataset.scheduleScopeTouched !== "true") form.elements.scheduleScope.value = productScope;
+  const mixedOption = [...(form.elements.scheduleScope?.options || [])].find((option) => option.value === "mixed");
+  if (mixedOption) mixedOption.hidden = memberManagementProductIsCoupon(product);
   form.elements.weeklyFrequency.value = memberManagementProductWeeklyFrequency(product);
 }
 

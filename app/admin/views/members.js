@@ -453,7 +453,7 @@ function renderMemberManagementModal() {
       <strong>${memberManagementActionLabel(action)}</strong>
       <small>${ticket ? `${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product)} · ${ticketUsageLabel(ticket)}` : isCreate ? "실서버 회원·회원권 동시 등록" : memberStatusLabel(member)}</small>
     </div>
-    <form id="memberManagementForm" class="member-management-form" ${action === "extend" ? `data-current-expires-on="${escapeHtml(defaultExpiresOn)}"` : ""}>
+    <form id="memberManagementForm" class="member-management-form" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(memberTicketPaymentProjection(member, ticket)))}" ${action === "extend" ? `data-current-expires-on="${escapeHtml(defaultExpiresOn)}"` : ""}>
       ${actionFields}
       <div id="memberManagementMessage" class="form-message danger" role="status">${escapeHtml(memberManagementModalState.message || "")}</div>
       <div class="modal-actions">
@@ -647,6 +647,7 @@ function renderMembers(options = {}) {
   }
   if ($("#memberListSearch") && $("#memberListSearch").value !== state.memberSearch) $("#memberListSearch").value = state.memberSearch || "";
   if ($("#memberTicketFilter")) $("#memberTicketFilter").value = state.memberTicketFilter || "all";
+  if ($("#memberTicketGridFilter")) $("#memberTicketGridFilter").value = state.memberTicketGridFilter || "all";
 
   const serverDirectoryReady = operationsRole() === "admin"
     && adminMemberDirectoryState.loaded
@@ -683,6 +684,7 @@ function renderMembers(options = {}) {
     String(state.memberSearch || "").trim()
     || state.memberCoachFilter !== "all"
     || state.memberTicketFilter !== "all"
+    || state.memberTicketGridFilter !== "all"
   );
   if ($("#resetMemberFilters")) $("#resetMemberFilters").hidden = !hasMemberListFilter;
   renderMemberStatusCounts();
@@ -711,11 +713,12 @@ function renderMembers(options = {}) {
   const preserveList = options.preserveList === true && memberRows?.children.length;
   if (!preserveList) {
     memberRows.innerHTML = serverDirectoryPending
-      ? '<tr><td colspan="11" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
+      ? '<tr><td colspan="15" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
       : visibleMembers.length ? visibleMembers
       .map((member) => {
       const editableTickets = memberDirectoryTickets(member);
-      const displayedTickets = editableTickets.length ? editableTickets : [null];
+      const displayedTickets = (editableTickets.length ? editableTickets : [null])
+        .filter((ticket) => memberTicketGridMatches(member, ticket));
       const possibleDuplicateTicketIds = memberPossibleDuplicateTicketIds(editableTickets);
       const renewalOverlapTicketIds = memberRenewalOverlapTicketIds(editableTickets);
       const selectedIds = selectedMemberIdSet();
@@ -735,7 +738,7 @@ function renderMembers(options = {}) {
         if (editingThisRow || editingNewTicket) {
           const editorTicket = editingNewTicket ? null : rowTicket;
           return `<tr class="member-inline-editor-row member-inline-sheet-row" data-member-id="${member.id}" data-member-editor-row="${member.id}" data-member-editor-ticket="${escapeHtml(ticketId)}">
-            <td colspan="11">${memberQuickEditorMarkup(member, editorTicket, {
+            <td colspan="15">${memberQuickEditorMarkup(member, editorTicket, {
               embedded: true,
               ticketPosition: editingNewTicket ? editableTickets.length + 1 : ticketIndex + 1,
               ticketCount: editableTickets.length,
@@ -752,24 +755,30 @@ function renderMembers(options = {}) {
         const ticketStatus = rowTicket
           ? `<span class="member-ticket-status status-${escapeHtml(window.TennisNoteTicketState?.derive(rowTicket) || rowTicket.status || "unknown")}">${escapeHtml(memberTicketStatusLabel(rowTicket))}</span>`
           : memberStatusBadge(member);
-        return `<tr class="member-ticket-table-row ${possibleDuplicate || renewalOverlap ? "is-possible-duplicate" : ""} ${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}" data-member-ticket-row="${escapeHtml(ticketId)}">
+        const paymentGrid = memberTicketPaymentGrid(member, rowTicket);
+        const reviewReasons = memberTicketGridReviewReasons(member, rowTicket);
+        return `<tr class="member-ticket-table-row ${possibleDuplicate || renewalOverlap ? "is-possible-duplicate" : ""} ${reviewReasons.length ? "is-review-needed" : ""} ${member.id === state.selectedMemberId ? "is-selected" : ""}" data-member-id="${member.id}" data-member-ticket-row="${escapeHtml(ticketId)}" ${reviewReasons.length ? `title="${escapeHtml(reviewReasons.join(" · "))}"` : ""}>
           <td class="row-select-cell member-select-column">${ticketIndex === 0
             ? `<input type="checkbox" data-select-member-row="${member.id}" aria-label="${escapeHtml(member.name)} 선택" ${selectedIds.has(Number(member.id)) ? "checked" : ""} ${operationsRole() !== "admin" ? "disabled" : ""} />`
             : '<span class="member-secondary-ticket-mark" aria-hidden="true">↳</span>'}</td>
+          <td class="member-status-column"><div class="member-status-actions">${ticketStatus}${reviewReasons.length ? `<small class="member-grid-review-reason">${escapeHtml(reviewReasons[0])}</small>` : ""}${permanentDeleteButton}</div></td>
           <td class="member-name-column">
             <button class="member-link-button ${possibleDuplicate || renewalOverlap ? "is-possible-duplicate" : ""}" type="button" data-select-member="${member.id}" ${ticketId ? `data-member-ticket="${escapeHtml(ticketId)}"` : ""}>
               ${avatarMarkup(member, "small")}
               <span>${escapeHtml(member.name)}</span>
             </button>
           </td>
-          <td class="member-auth-column">${memberAuthStatusMarkup(member)}</td>
-          <td class="member-coach-column">${escapeHtml(memberTicketCoachLabel(member, rowTicket))}</td>
           <td class="member-ticket-column">${memberTicketRowMarkup(member, rowTicket, ticketIndex + 1, editableTickets.length, possibleDuplicate, renewalOverlap)}</td>
-          <td class="member-schedule-column">${escapeHtml(rowTicket ? memberScheduleSummary(member, rowTicket) : "미배정")}</td>
+          <td class="member-scope-column">${escapeHtml(memberTicketScheduleScopeLabel(rowTicket))}</td>
+          <td class="member-coach-column">${escapeHtml(memberTicketCoachLabel(member, rowTicket))}</td>
+          <td class="member-partner-column">${escapeHtml(memberTicketPartnerLabel(member, rowTicket))}</td>
+          <td class="member-date-column">${escapeHtml(rowTicket?.actualLessonStart || rowTicket?.purchased ? memberDetailDateLabel(rowTicket.actualLessonStart || rowTicket.purchased) : "-")}</td>
+          <td class="member-date-column">${escapeHtml(rowTicket?.expires ? memberDetailDateLabel(rowTicket.expires) : "-")}</td>
           <td class="member-usage-column">${rowTicket ? escapeHtml(ticketUsageLabel(rowTicket)) : '<span class="member-table-muted">-</span>'}</td>
-          <td class="member-payment-column">${memberTicketPaymentMarkup(member, rowTicket)}</td>
-          <td class="member-status-column"><div class="member-status-actions">${ticketStatus}${permanentDeleteButton}</div></td>
-          <td class="member-table-note member-note-column">${escapeHtml(memberDatabaseRecord(member, rowTicket)?.admin_note || memberRemarkLabel(member))}</td>
+          <td class="member-payment-date-column">${escapeHtml(paymentGrid.date)}</td>
+          <td class="member-payment-method-column">${escapeHtml(paymentGrid.method)}</td>
+          <td class="member-payment-amount-column">${escapeHtml(paymentGrid.amount)}</td>
+          <td class="member-settlement-column">${escapeHtml(memberTicketSettlementGridLabel(rowTicket))}</td>
           <td class="member-actions-column"><div class="member-row-actions">
             ${operationsRole() === "admin" && member.serverUserId && listStatus !== "inactive" && rowTicket && ["active", "paused"].includes(rowTicket.status)
               ? `<button class="small-button primary-button member-row-ticket-extend" type="button" data-open-member-management="extend" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 기간 연장">기간 연장</button>`
@@ -784,7 +793,10 @@ function renderMembers(options = {}) {
         </tr>`;
       }).join("");
       })
-      .join("") : `<tr><td colspan="11" class="empty-text">${filterCopy.empty}</td></tr>`;
+      .join("") : `<tr><td colspan="15" class="empty-text">${filterCopy.empty}</td></tr>`;
+    if (!memberRows.children.length) {
+      memberRows.innerHTML = '<tr><td colspan="15" class="empty-text">선택한 처리 상태에 해당하는 회원권이 없습니다.</td></tr>';
+    }
   } else {
     memberRows.querySelectorAll("tr[data-member-id]").forEach((row) => {
       row.classList.toggle("is-selected", Number(row.dataset.memberId) === Number(state.selectedMemberId));
