@@ -954,6 +954,30 @@ h2 {
   white-space: nowrap;
 }
 
+.payment-attempt-summary {
+  color: var(--amber) !important;
+}
+
+.payment-attempt-details {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.payment-attempt-details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--green);
+  font-weight: 900;
+}
+
+.payment-attempt-details ul {
+  display: grid;
+  gap: 3px;
+  margin: 7px 0 0;
+  padding-left: 18px;
+}
+
 .metric-card.warning strong {
   color: var(--amber);
 }

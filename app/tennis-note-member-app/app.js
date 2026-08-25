@@ -2768,7 +2768,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.406",
+    workerUrl: "./service-worker.js?v=1.0.407",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -8316,8 +8316,18 @@ function purchaseScheduleAvailabilityState() {
   return "ready";
 }
 
+function purchaseUsesFlexibleCouponSchedule(product = purchaseFlowProduct(), flow = purchaseFlowState()) {
+  return Boolean(
+    product
+    && membershipProductFacet(product, "productKind") === "coupon"
+    && flow.purchasePurpose !== "one_day"
+  );
+}
+
 function purchaseRequiredScheduleCount(product = purchaseFlowProduct()) {
-  if (!product || membershipProductFacet(product, "productKind") === "coupon") return 1;
+  if (!product) return 1;
+  if (purchaseUsesFlexibleCouponSchedule(product)) return 0;
+  if (membershipProductFacet(product, "productKind") === "coupon") return 1;
   return Math.max(1, Number(product.frequencyPerWeek) || 1);
 }
 
@@ -8503,6 +8513,49 @@ function purchaseCoachSelectionHtml(product = purchaseFlowProduct()) {
     return `<button class="purchase-coach-filter ${first ? "" : "is-unavailable"}" type="button"
       data-purchase-coach-filter="${escapeHtml(roleId)}" data-purchase-coach-filter-name="${escapeHtml(coach.name || "담당 코치")}" ${first ? "" : "disabled"}
       aria-pressed="false"><strong>${escapeHtml(memberCoachShortName(coach.name || "담당 코치"))} 코치</strong><small>${first ? `가장 빠른 ${escapeHtml(purchaseDateLabel(first.lessonDate))} ${escapeHtml(first.time)}` : "현재 가능한 시간 없음"}</small></button>`;
+  }).join("")}
+  </div>`;
+}
+
+function purchaseFlexibleCouponCoachIsReady(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  const selectedRoleId = String(flow.coachRoleId || "");
+  if (!selectedRoleId || !purchaseProductAllowsCoach(product, selectedRoleId)) return false;
+  return purchaseCoachOptions().some((coach) => (
+    String(coach.serverRoleId || coach.roleId || coach.id || "") === selectedRoleId
+  ));
+}
+
+function purchaseFlexibleCouponCoachSelectionHtml(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  const status = purchaseScheduleAvailabilityState();
+  if (status === "loading") return '<p class="purchase-availability-state" role="status">담당 코치를 확인하고 있습니다.</p>';
+  if (status === "error" || status === "coach_error") return '<p class="purchase-availability-state is-error" role="status">담당 코치 정보를 불러오지 못했습니다. 다시 확인해 주세요.</p>';
+  const sourceTicket = purchaseFlowSourceTicket();
+  const sourceCoachId = flow.purchasePurpose === "renew_same" ? String(sourceTicket?.coachRoleId || "") : "";
+  const coaches = purchaseCoachOptions().filter((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    return purchaseProductAllowsCoach(product, roleId) && (!sourceCoachId || roleId === sourceCoachId);
+  });
+  const selectedCoach = coaches.find((coach) => (
+    String(coach.serverRoleId || coach.roleId || coach.id || "") === String(flow.coachRoleId || sourceCoachId)
+  ));
+  if (selectedCoach) {
+    const hasWorkSchedule = Array.isArray(selectedCoach.workBlocks) && selectedCoach.workBlocks.length > 0;
+    return `<article class="purchase-selected-coach">
+      <div><span>담당 코치</span><strong>${escapeHtml(memberCoachShortName(selectedCoach.name || flow.coachName || "담당 코치"))} 코치</strong><small>${hasWorkSchedule ? "결제 후 시간표에서 원하는 시간을 예약합니다." : "예약 가능 시간은 코치 시간표가 등록되면 표시됩니다."}</small></div>
+      ${sourceCoachId ? "" : '<button class="small-button" type="button" data-clear-purchase-coach>다시 선택</button>'}
+    </article>`;
+  }
+  if (!coaches.length) {
+    return '<p class="purchase-availability-state is-error" role="status">현재 이 쿠폰을 담당할 수 있는 코치가 없습니다.</p>';
+  }
+  return `<div class="purchase-coach-filter-grid" role="group" aria-label="담당 코치 선택">
+    ${coaches.map((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    const hasWorkSchedule = Array.isArray(coach.workBlocks) && coach.workBlocks.length > 0;
+    return `<button class="purchase-coach-filter" type="button"
+      data-purchase-coach-filter="${escapeHtml(roleId)}" data-purchase-coach-filter-name="${escapeHtml(coach.name || "담당 코치")}" aria-pressed="false"><strong>${escapeHtml(memberCoachShortName(coach.name || "담당 코치"))} 코치</strong><small>${hasWorkSchedule ? "결제 후 자유 예약" : "시간표 등록 대기"}</small></button>`;
   }).join("")}
   </div>`;
 }
@@ -8717,6 +8770,7 @@ function renderPurchaseScheduleSheet() {
   const range = purchaseAvailabilityRange();
   const selectedSchedules = purchaseSelectedSchedules(product);
   const requiredCount = purchaseRequiredScheduleCount(product);
+  const flexibleCoupon = purchaseUsesFlexibleCouponSchedule(product, flow);
   const selectedWeek = purchaseScheduleSelectionWeek(selectedSchedules);
   if (!flow.scheduleWeekStart) flow.scheduleWeekStart = selectedWeek || purchaseWeekStartDate(range.start);
   const weekDates = purchaseWeekDates(flow.scheduleWeekStart);
@@ -8726,15 +8780,23 @@ function renderPurchaseScheduleSheet() {
   nextWeek.setDate(nextWeek.getDate() + 7);
   const previousAllowed = purchaseWeekDates(localDateKey(previousWeek)).some((dateKey) => dateKey >= range.start && dateKey <= range.end);
   const nextAllowed = purchaseWeekDates(localDateKey(nextWeek)).some((dateKey) => dateKey >= range.start && dateKey <= range.end);
-  if ($("#purchaseScheduleSheetCoachOptions")) $("#purchaseScheduleSheetCoachOptions").innerHTML = purchaseCoachSelectionHtml(product);
+  if ($("#purchaseScheduleSheetCoachOptions")) $("#purchaseScheduleSheetCoachOptions").innerHTML = flexibleCoupon
+    ? purchaseFlexibleCouponCoachSelectionHtml(product)
+    : purchaseCoachSelectionHtml(product);
   if ($("#purchaseScheduleSheetTitle")) {
-    $("#purchaseScheduleSheetTitle").textContent = coach || flow.coachName
+    $("#purchaseScheduleSheetTitle").textContent = flexibleCoupon
+      ? "담당 코치 선택"
+      : coach || flow.coachName
       ? `${memberCoachShortName(coach?.name || flow.coachName)} 코치 시간표`
       : "선생님·시간 선택";
   }
+  if ($("#purchaseScheduleSheetProgress")) $("#purchaseScheduleSheetProgress").hidden = flexibleCoupon;
+  const weekbar = sheet.querySelector(".purchase-schedule-weekbar");
+  if (weekbar) weekbar.hidden = flexibleCoupon;
+  if ($("#purchaseScheduleSheetGrid")) $("#purchaseScheduleSheetGrid").hidden = flexibleCoupon;
   if ($("#purchaseScheduleSheetWeek")) $("#purchaseScheduleSheetWeek").textContent = `${purchaseDateLabel(weekDates[0])} - ${purchaseDateLabel(weekDates[6])}`;
-  if ($("#purchaseScheduleSheetProgress")) $("#purchaseScheduleSheetProgress").textContent = `${selectedSchedules.length}/${requiredCount} 선택`;
-  if ($("#purchaseScheduleSheetGrid")) $("#purchaseScheduleSheetGrid").innerHTML = purchaseSchedulePickerGridHtml(product);
+  if ($("#purchaseScheduleSheetProgress")) $("#purchaseScheduleSheetProgress").textContent = flexibleCoupon ? "" : `${selectedSchedules.length}/${requiredCount} 선택`;
+  if ($("#purchaseScheduleSheetGrid")) $("#purchaseScheduleSheetGrid").innerHTML = flexibleCoupon ? "" : purchaseSchedulePickerGridHtml(product);
   if ($("#purchaseSchedulePreviousWeek")) $("#purchaseSchedulePreviousWeek").disabled = !previousAllowed;
   if ($("#purchaseScheduleNextWeek")) $("#purchaseScheduleNextWeek").disabled = !nextAllowed;
   const availableToggle = $("#purchaseScheduleAvailableOnly");
@@ -8743,21 +8805,26 @@ function renderPurchaseScheduleSheet() {
     availableToggle.setAttribute("aria-pressed", String(flow.scheduleAvailableOnly));
   }
   const summary = $("#purchaseScheduleSheetSummary");
-  if (summary) summary.textContent = selectedSchedules.length
+  if (summary) summary.textContent = flexibleCoupon
+    ? flow.coachRoleId ? "결제 후 원하는 시간을 예약합니다." : "담당 코치를 선택해 주세요."
+    : selectedSchedules.length
     ? selectedSchedules.map((schedule) => `${purchaseDateLabel(schedule.lessonDate)} ${schedule.startTime}`).join(" · ")
     : "시간을 선택해 주세요";
   const completeButton = $("#completePurchaseScheduleSelection");
-  if (completeButton) completeButton.disabled = selectedSchedules.length !== requiredCount || !purchaseSchedulesAvailableNow(product);
+  if (completeButton) completeButton.disabled = flexibleCoupon
+    ? !purchaseFlexibleCouponCoachIsReady(product)
+    : selectedSchedules.length !== requiredCount || !purchaseSchedulesAvailableNow(product);
 }
 
 function openPurchaseScheduleSheet() {
   const flow = purchaseFlowState();
+  const product = purchaseFlowProduct();
   const selectedSchedules = purchaseSelectedSchedules();
   const range = purchaseAvailabilityRange();
   flow.scheduleWeekStart = purchaseScheduleSelectionWeek(selectedSchedules) || flow.scheduleWeekStart || purchaseWeekStartDate(range.start);
-  if (alignPurchaseScheduleWeekToAvailability()) saveSnapshot();
+  if (!purchaseUsesFlexibleCouponSchedule(product, flow) && alignPurchaseScheduleWeekToAvailability(product)) saveSnapshot();
   renderPurchaseScheduleSheet();
-  openAppSheet("purchaseScheduleSheet", { initialFocus: "#purchaseScheduleAvailableOnly" });
+  openAppSheet("purchaseScheduleSheet", { initialFocus: purchaseUsesFlexibleCouponSchedule(product, flow) ? "[data-purchase-coach-filter], [data-close-purchase-schedule]" : "#purchaseScheduleAvailableOnly" });
 }
 
 function movePurchaseSchedulePickerWeek(offset = 0) {
@@ -8771,6 +8838,18 @@ function movePurchaseSchedulePickerWeek(offset = 0) {
 
 function completePurchaseScheduleSelection() {
   const product = purchaseFlowProduct();
+  if (purchaseUsesFlexibleCouponSchedule(product)) {
+    if (!purchaseFlexibleCouponCoachIsReady(product)) {
+      showToast("담당 코치를 선택해 주세요.");
+      return;
+    }
+    clearPurchaseSchedules();
+    purchaseFlowState().scheduleMode = "flex";
+    saveSnapshot();
+    closeAppSheet("purchaseScheduleSheet");
+    renderMembershipPurchaseFlow();
+    return;
+  }
   const selectedSchedules = purchaseSelectedSchedules(product);
   const requiredCount = purchaseRequiredScheduleCount(product);
   if (selectedSchedules.length !== requiredCount) {
@@ -8818,7 +8897,9 @@ function purchasePurposeOptionsHtml() {
   const selectedTicket = purchaseFlowSourceTicket() || activeTickets[0] || null;
   const lesson = purchaseTicketLesson(selectedTicket || {});
   const coachName = selectedTicket?.coach || memberScheduleTicketCoachName(selectedTicket || {}) || "담당 코치";
-  const scheduleLabel = lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 정규시간";
+  const scheduleLabel = selectedTicket && membershipProductFamilyId(selectedTicket) === "coupon"
+    ? "결제 후 자유 예약"
+    : lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 정규시간";
   return `
     <section class="purchase-purpose-section" aria-label="구매 목적">
       ${renewing && selectedTicket ? `<article class="purchase-renewal-summary">
@@ -8951,6 +9032,14 @@ function purchaseStepTwoHtml() {
   if (fixedRenewal && flow.scheduleMode === "keep") {
     return "";
   }
+  if (purchaseUsesFlexibleCouponSchedule(product, flow)) {
+    return `
+      <div class="purchase-step-intro"><strong>담당 코치만 선택해 주세요</strong></div>
+      <section class="purchase-choice-section purchase-actual-slots" aria-label="쿠폰 담당 코치">
+        ${purchaseFlexibleCouponCoachSelectionHtml(product)}
+        <p class="purchase-policy-note"><strong>시간 선택 없음</strong> · 결제 후 시간표에서 원하는 날짜와 가능한 시간을 예약합니다.</p>
+      </section>`;
+  }
   const availabilityTitle = fixedRenewal
     ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치`
     : flow.coachRoleId ? `${memberCoachShortName(flow.coachName || "선택한 선생님")} 코치` : "코치 선택";
@@ -9038,6 +9127,7 @@ function purchaseStepCanContinue() {
   const purposeReady = ["renew_same", "add_coach", "new_purchase", "one_day"].includes(flow.purchasePurpose);
   if (!purposeReady || !product || !isPaymentGatewayReady(normalizeSelectedPaymentMethod())) return false;
   if (flow.purchasePurpose === "renew_same" && purchaseFlowSourceTicket() && flow.scheduleMode === "keep") return true;
+  if (purchaseUsesFlexibleCouponSchedule(product, flow)) return purchaseFlexibleCouponCoachIsReady(product);
   const schedules = purchaseSelectedSchedules(product);
   const requiredCount = purchaseRequiredScheduleCount(product);
   const selectedWeeks = new Set(schedules.map((schedule) => purchaseWeekStartDate(schedule.lessonDate)));
@@ -9072,6 +9162,11 @@ function purchaseContinueReason() {
   if (availabilityState === "loading") return "선생님과 가능한 시간을 최신 시간표에서 확인하고 있습니다.";
   if (availabilityState === "error" || availabilityState === "coach_error") return "선생님·시간 정보를 다시 불러온 뒤 결제할 수 있습니다.";
   if (!flow.coachRoleId) return "선생님을 선택해 주세요.";
+  if (purchaseUsesFlexibleCouponSchedule(product, flow)) {
+    return purchaseFlexibleCouponCoachIsReady(product)
+      ? "결제 후 시간표에서 원하는 시간을 예약할 수 있습니다."
+      : "선택한 담당 코치를 다시 확인해 주세요.";
+  }
   const schedules = purchaseSelectedSchedules(product);
   const requiredCount = purchaseRequiredScheduleCount(product);
   if (schedules.length !== requiredCount) return `요일·시간을 ${requiredCount}개 선택해 주세요.`;
@@ -9091,12 +9186,15 @@ function purchaseSinglePageHtml() {
     && flow.scheduleMode === "keep"
     && membershipProductFacet(product, "productKind") !== "coupon"
   );
+  const flexibleCoupon = purchaseUsesFlexibleCouponSchedule(product, flow);
   const lesson = sourceTicket ? purchaseTicketLesson(sourceTicket) : null;
   const selectedSchedules = purchaseSelectedSchedules(product);
   const selectedCoachName = flow.coachName || sourceTicket?.coach || memberScheduleTicketCoachName(sourceTicket || {}) || "";
   const scheduleSummary = keepRenewalSchedule
-    ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치 · ${lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 시간 유지"}`
-    : selectedSchedules.length
+    ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치 · ${lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "현재 시간"} · 기존 시간 유지`
+    : flexibleCoupon
+      ? selectedCoachName ? `${memberCoachShortName(selectedCoachName)} 코치 · 결제 후 자유 예약` : "담당 코치를 선택해 주세요"
+      : selectedSchedules.length
       ? `${memberCoachShortName(selectedCoachName || "선택한 코치")} 코치 · ${selectedSchedules.map((schedule) => `${purchaseDateLabel(schedule.lessonDate)} ${schedule.startTime}`).join(" · ")}`
       : "선생님과 시간을 선택해 주세요";
   return `
@@ -9106,7 +9204,7 @@ function purchaseSinglePageHtml() {
         <span><small>상품</small><strong>${escapeHtml(product ? purchaseProductDisplayTitle(product) : "상품을 선택해 주세요")}</strong></span><em>변경</em>
       </button>
       ${product ? `<button class="purchase-selection-row" type="button" ${keepRenewalSchedule ? "data-edit-purchase-renewal-schedule" : "data-open-purchase-schedule"} aria-haspopup="dialog">
-        <span><small>선생님·시간</small><strong>${escapeHtml(scheduleSummary)}</strong></span><em>변경</em>
+        <span><small>${flexibleCoupon ? "담당 코치" : "선생님·시간"}</small><strong>${escapeHtml(scheduleSummary)}</strong></span><em>변경</em>
       </button>
       <div class="purchase-selection-payment">${purchaseStepThreeHtml()}</div>` : ""}
     </section>`;
@@ -9206,7 +9304,9 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
   flow.productScheduleScope = matchingProduct && ["weekday", "weekend"].includes(membershipProductFacet(matchingProduct, "scheduleScope"))
     ? membershipProductFacet(matchingProduct, "scheduleScope")
     : "weekday";
-  flow.scheduleMode = sourceIsActive && matchingProduct && membershipProductFacet(matchingProduct, "productKind") !== "coupon" ? "keep" : "change";
+  flow.scheduleMode = purchaseUsesFlexibleCouponSchedule(matchingProduct, flow)
+    ? "flex"
+    : sourceIsActive && matchingProduct ? "keep" : "change";
   flow.scheduleWeekStart = purchaseWeekStartDate(lesson?.lessonDate || purchaseEffectiveStartDate());
   flow.scheduleAvailableOnly = true;
   flow.coachRoleId = sourceTicket?.coachRoleId || "";
@@ -9308,6 +9408,7 @@ function selectPurchasePurpose(purpose = "") {
     if (matchingProduct) {
       flow.productId = matchingProduct.id;
       flow.familyId = membershipProductFamilyId(matchingProduct);
+      flow.scheduleMode = purchaseUsesFlexibleCouponSchedule(matchingProduct, flow) ? "flex" : "keep";
       flow.productFrequency = purchaseProductFrequency(matchingProduct);
       if (["weekday", "weekend"].includes(membershipProductFacet(matchingProduct, "scheduleScope"))) {
         flow.productScheduleScope = membershipProductFacet(matchingProduct, "scheduleScope");
@@ -9383,6 +9484,12 @@ function selectPurchaseProduct(productId = "") {
     flow.scheduleMode = "change";
   } else if (flow.purchasePurpose === "one_day") {
     flow.purchasePurpose = currentLiveTickets().length ? "add_coach" : "new_purchase";
+  }
+  if (purchaseUsesFlexibleCouponSchedule(product, flow)) {
+    flow.scheduleMode = "flex";
+    clearPurchaseSchedules();
+  } else if (flow.purchasePurpose !== "renew_same" || !flow.renewalTicketId) {
+    flow.scheduleMode = "change";
   }
   if (productChanged && !flow.renewalTicketId) {
     flow.coachRoleId = "";
@@ -11363,7 +11470,15 @@ function createPaymentRecord(product, overrides = {}) {
     serverPaymentId: overrides.serverPaymentId || "",
     bankTransferAccount: overrides.bankTransferAccount || null,
   };
-  state.paymentRequests.unshift(request);
+  const existingIndex = state.paymentRequests.findIndex((item) => (
+    request.paymentId && String(item.paymentId || "") === String(request.paymentId)
+  ));
+  if (existingIndex >= 0) {
+    const existing = state.paymentRequests.splice(existingIndex, 1)[0];
+    state.paymentRequests.unshift({ ...existing, ...request });
+  } else {
+    state.paymentRequests.unshift(request);
+  }
   pushPaymentRequestToShared(request);
 }
 
@@ -11395,6 +11510,8 @@ function paymentServerErrorMessage(error) {
     discount_coupon_not_stackable_with_first_lesson: "신규 첫 수업 혜택과 할인 쿠폰은 함께 사용할 수 없습니다.",
     discount_coupon_already_reserved: "다른 결제에서 사용 중인 쿠폰입니다. 쿠폰함을 새로고침해 주세요.",
     discount_coupon_zero_amount_not_supported: "전액 할인 쿠폰은 관리자 확인 결제가 필요합니다.",
+    purchase_flexible_coupon_schedule_not_allowed: "쿠폰은 결제할 때 시간을 정하지 않습니다. 담당 코치만 확인한 뒤 다시 결제해 주세요.",
+    purchase_flexible_schedule_mode_invalid: "선택한 상품의 예약 방식을 다시 확인해 주세요.",
     purchase_schedule_count_mismatch: "상품의 주당 횟수만큼 수업 시간을 선택해 주세요.",
     purchase_schedule_single_coach_required: "한 회원권은 같은 선생님의 시간으로 선택해 주세요.",
     purchase_schedule_duplicate: "같은 수업 시간이 중복 선택되었습니다.",
@@ -12079,6 +12196,7 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
   const enforcedMethodId = paymentMethodIdForRequest(methodId);
   if (!isPaymentGatewayReady(enforcedMethodId)) throw new Error("payment_channel_not_ready");
   const purchaseFlow = purchaseFlowState();
+  const flexibleCoupon = purchaseFlow.productId === product.id && purchaseUsesFlexibleCouponSchedule(product, purchaseFlow);
   return client.invokeFunction("portone-payment/prepare", {
     body: {
       paymentId,
@@ -12101,10 +12219,10 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
       method: enforcedMethodId,
       groupAccountId: Number(product.groupSize) === 2 ? state.groupAccount?.id || null : null,
       coachRoleId: purchaseFlow.productId === product.id ? purchaseFlow.coachRoleId || null : null,
-      preferredDate: purchaseFlow.productId === product.id ? purchaseFlow.preferredDate || null : null,
-      preferredDay: purchaseFlow.productId === product.id ? purchaseFlow.preferredDay || null : null,
-      preferredTime: purchaseFlow.productId === product.id ? purchaseFlow.preferredTime || null : null,
-      preferredSchedules: purchaseFlow.productId === product.id
+      preferredDate: purchaseFlow.productId === product.id && !flexibleCoupon ? purchaseFlow.preferredDate || null : null,
+      preferredDay: purchaseFlow.productId === product.id && !flexibleCoupon ? purchaseFlow.preferredDay || null : null,
+      preferredTime: purchaseFlow.productId === product.id && !flexibleCoupon ? purchaseFlow.preferredTime || null : null,
+      preferredSchedules: purchaseFlow.productId === product.id && !flexibleCoupon
         ? purchaseSelectedSchedules(product).map((schedule) => ({
           lessonDate: schedule.lessonDate,
           day: schedule.day,
@@ -12113,7 +12231,7 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
           coachRoleId: schedule.coachRoleId,
         }))
         : [],
-      scheduleMode: purchaseFlow.productId === product.id ? purchaseFlow.scheduleMode || "change" : "change",
+      scheduleMode: purchaseFlow.productId === product.id ? flexibleCoupon ? "flex" : purchaseFlow.scheduleMode || "change" : "change",
       renewalSourceTicketId: purchaseFlow.productId === product.id ? purchaseFlow.renewalTicketId || null : null,
       purchasePurpose: purchaseFlow.productId === product.id ? purchaseFlow.purchasePurpose || "new_purchase" : "new_purchase",
       discountIssueId: purchaseFlow.productId === product.id ? purchaseFlow.discountIssueId || null : null,
@@ -12398,7 +12516,8 @@ function openPaymentConfirmationModal({ product, paymentId, preparedPayment, met
 async function completePreparedPayment() {
   const context = preparedPaymentContext;
   if (!context) return;
-  const { product, paymentId, sdk } = context;
+  const { product, sdk } = context;
+  const requestedPaymentId = context.paymentId;
   const methodId = paymentMethodIdForRequest(context.methodId);
   let preparedPayment = context.preparedPayment || null;
   const method = paymentMethodDefinition(methodId);
@@ -12410,12 +12529,14 @@ async function completePreparedPayment() {
 
   try {
     if (!preparedPayment) {
-      preparedPayment = await prepareServerPayment(product, paymentId, methodId);
+      preparedPayment = await prepareServerPayment(product, requestedPaymentId, methodId);
       context.preparedPayment = preparedPayment;
     }
+    const effectivePaymentId = String(preparedPayment?.paymentId || requestedPaymentId);
+    context.paymentId = effectivePaymentId;
     if (message) message.textContent = "결제창을 여는 중입니다.";
     const response = await sdk.requestPayment(portOnePaymentRequest({
-      paymentId,
+      paymentId: effectivePaymentId,
       productId: product.id,
       orderName: product.title,
       totalAmount: paymentAmount,
@@ -12423,16 +12544,16 @@ async function completePreparedPayment() {
     }));
 
     if (response?.code) {
-      await reconcileRejectedServerPayment(response?.paymentId || paymentId);
+      await reconcileRejectedServerPayment(response?.paymentId || effectivePaymentId);
       await syncMemberTicketsFromServer();
       createPaymentRecord(product, {
-        paymentId,
+        paymentId: effectivePaymentId,
         method: `${method.label} 결제 실패`,
         status: response.message || "결제가 완료되지 않았습니다.",
       });
       state.ticketHistory.unshift({ text: `${product.title} 결제 실패 · 다시 시도 필요`, tone: "alert" });
     } else {
-      const paidPaymentId = response?.paymentId || paymentId;
+      const paidPaymentId = response?.paymentId || effectivePaymentId;
       let verifiedStatus = "결제 완료 · 서버 검증 후 회원권 충전 대기";
       try {
         const verification = await verifyServerPayment(paidPaymentId);
@@ -12458,7 +12579,7 @@ async function completePreparedPayment() {
     }
   } catch (error) {
     if (preparedPayment?.localPaymentId) {
-      await reconcileRejectedServerPayment(paymentId).catch(() => undefined);
+      await reconcileRejectedServerPayment(context.paymentId || requestedPaymentId).catch(() => undefined);
       await syncMemberDiscountCouponsFromServer().catch(() => false);
     }
     const serverCode = error?.payload?.code || error?.message || "server_error";
@@ -12479,7 +12600,7 @@ async function completePreparedPayment() {
     }
     const detail = paymentServerErrorMessage(error);
     createPaymentRecord(product, {
-      paymentId,
+      paymentId: context.paymentId || requestedPaymentId,
       method: "결제창 오류",
       status: `결제창을 열지 못했습니다. ${detail}`,
     });
@@ -12549,15 +12670,21 @@ async function startProductPayment(productId, options = {}) {
     clearPurchasePaymentError();
     try {
       const prepared = await prepareServerPayment(product, paymentId, methodId);
+      const effectivePaymentId = String(prepared?.paymentId || paymentId);
       createPaymentRecord(product, {
-        paymentId,
+        paymentId: effectivePaymentId,
         serverPaymentId: prepared?.localPaymentId || "",
         methodId,
         method: method.label,
         status: "입금 확인 대기",
         bankTransferAccount: prepared?.bankTransferAccount || null,
       });
-      state.pendingPaymentCheckStatus = { tone: "wait", text: "계좌이체 신청이 접수되었습니다. 입금 확인 후 회원권이 발급됩니다." };
+      state.pendingPaymentCheckStatus = {
+        tone: "wait",
+        text: prepared?.reusedPurchaseIntent
+          ? "진행 중인 계좌이체 요청을 다시 열었습니다. 같은 요청은 한 건으로 관리됩니다."
+          : "계좌이체 신청이 접수되었습니다. 입금 확인 후 회원권이 발급됩니다.",
+      };
       state.ticketHistory.unshift({ text: `${product.title} 계좌이체 신청 · 입금 확인 대기`, tone: "wait" });
       completeMembershipPurchaseFlow("계좌이체 신청이 접수되었습니다");
       await Promise.allSettled([syncMemberPendingPurchaseSchedulesFromServer(), syncMemberDiscountCouponsFromServer()]);
@@ -13214,7 +13341,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.406", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.407", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -16424,7 +16551,7 @@ function openLocalCurriculumPreview() {
 
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.406");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.407");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -16507,7 +16634,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.406",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.407",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
