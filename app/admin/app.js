@@ -11145,10 +11145,12 @@ function memberManagementDatabaseFields({
           <label class="form-field">${memberManagementFieldLabel("파트너 휴대전화")}<input name="partnerPhone" type="tel" inputmode="tel" maxlength="20" placeholder="010-0000-0000" /></label>
           <label class="form-field">${memberManagementFieldLabel("파트너 출생연도")}<input name="partnerBirthYear" type="number" min="1900" max="2100" step="1" /></label>
           <label class="form-field">${memberManagementFieldLabel("파트너 성별")}<select name="partnerGender"><option value="">미입력</option><option value="female">여성</option><option value="male">남성</option><option value="other">기타</option><option value="prefer_not">응답 안 함</option></select></label>
+          <p class="form-message span-2" data-manual-partner-phone-status role="status" hidden></p>
         </div>` : ""}
         <div class="member-partner-existing-fields" data-manual-existing-partner data-current-member-user-id="${escapeHtml(member?.serverUserId || "")}" ${isCreate ? "hidden" : ""}>
           <input name="partnerSearch" type="search" autocomplete="off" placeholder="이름 또는 전화번호 검색" data-manual-member-partner-search />
           <div class="member-partner-search-results" data-manual-member-partner-results aria-live="polite"></div>
+          <p class="form-message" data-manual-existing-partner-status role="status">앱 가입만 하고 회원권이 없는 회원도 검색됩니다.</p>
           <select name="partnerUserId" ${lessonType === "one_on_two" && !isCreate ? "required" : "disabled"}>
             <option value="">파트너 선택</option>
             ${partnerOptions.filter((user) => user.id !== member?.serverUserId).map((user) => `<option value="${escapeHtml(user.id)}" ${user.id === partnerUserId ? "selected" : ""}>${escapeHtml(user.name || "회원")}</option>`).join("")}
@@ -11240,10 +11242,12 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
           <label class="form-field">${memberManagementFieldLabel("파트너 휴대전화")}<input name="partnerPhone" type="tel" inputmode="tel" maxlength="20" /></label>
           <input name="partnerBirthYear" type="hidden" value="" />
           <input name="partnerGender" type="hidden" value="" />
+          <p class="form-message span-2" data-manual-partner-phone-status role="status" hidden></p>
         </div>
         <div class="member-partner-existing-fields" data-manual-existing-partner hidden>
-          <input name="partnerSearch" type="search" autocomplete="off" placeholder="파트너 이름 검색" data-manual-member-partner-search />
+          <input name="partnerSearch" type="search" autocomplete="off" placeholder="이름 또는 전화번호 검색" data-manual-member-partner-search />
           <div class="member-partner-search-results" data-manual-member-partner-results aria-live="polite"></div>
+          <p class="form-message" data-manual-existing-partner-status role="status">앱 가입만 하고 회원권이 없는 회원도 검색됩니다.</p>
           <select name="partnerUserId" disabled>
             <option value="">파트너 선택</option>
             ${partnerOptions.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}</option>`).join("")}
@@ -11254,17 +11258,25 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
     ${memberCreateScheduleMarkup(product)}`;
 }
 
-function manualMemberPartnerOptions() {
+const manualMemberPartnerSearchState = new WeakMap();
+
+function manualMemberPartnerLocalEligibility(user) {
+  if (!user || user.role !== "member" || user.status !== "active" || user.merged_into_user_id || user.permanently_deleted_at) {
+    return false;
+  }
   const activeBranchId = activeOperationBranchId();
-  const allowedUserIds = activeBranchId
-    ? new Set(operationBranchMembers().flatMap((member) => memberServerUserIds(member)))
-    : null;
-  return (adminLiveDataState.users || [])
-    .filter((user) => (
-      user.role === "member"
-      && user.status === "active"
-      && (!allowedUserIds || allowedUserIds.has(String(user.id || "")))
-    ))
+  if (!activeBranchId) return true;
+  const linkedMember = members.find((member) => memberServerUserIds(member).includes(String(user.id || "")));
+  const branchIds = linkedMember ? memberOperationBranchIds(linkedMember) : [];
+  if (branchIds.includes(activeBranchId)) return true;
+  return branchIds.length === 0 && ["journal_only", "lesson_pending"].includes(String(user.member_kind || ""));
+}
+
+function manualMemberPartnerOptions(form = null) {
+  const local = (adminLiveDataState.users || []).filter(manualMemberPartnerLocalEligibility);
+  const remoteState = form ? manualMemberPartnerSearchState.get(form) : null;
+  const remote = (remoteState?.candidates || []).filter((candidate) => candidate.eligible === true);
+  return [...new Map([...local, ...remote].map((user) => [String(user.id || ""), user])).values()]
     .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "ko"));
 }
 
@@ -12089,31 +12101,158 @@ function maskMemberPhone(phone) {
   return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
 }
 
+function manualMemberPartnerCandidateStatus(candidate = {}) {
+  return {
+    app_signup_without_membership: "앱 가입 · 회원권 없음",
+    branchless_member: "지점 미연결 회원",
+    current_branch: "현재 지점 회원",
+    other_branch: "다른 지점 회원 · 지점 확인 필요",
+    inactive_member: "비활성 회원 · 먼저 복원",
+    staff_account: "직원 계정 · 회원 연결 불가",
+  }[candidate.eligibilityCode] || (candidate.eligible ? "연결 가능" : "연결 확인 필요");
+}
+
+function setManualMemberPartnerStatus(form, text = "", tone = "", target = "existing") {
+  const selector = target === "new" ? "[data-manual-partner-phone-status]" : "[data-manual-existing-partner-status]";
+  const status = form?.querySelector(selector);
+  if (!status) return;
+  status.hidden = !text;
+  status.textContent = text;
+  status.className = `form-message${tone ? ` ${tone}` : ""}`;
+}
+
 function filterManualMemberPartnerOptions(form) {
   if (!form?.elements?.partnerUserId) return;
   const select = form.elements.partnerUserId;
   const currentValue = select.value;
   const keyword = String(form.elements.partnerSearch?.value || "").trim().toLowerCase();
+  const keywordDigits = normalizedMemberPhone(keyword);
   const currentMemberUserId = form.querySelector("[data-manual-existing-partner]")?.dataset.currentMemberUserId || "";
-  const options = manualMemberPartnerOptions().filter((user) => user.id !== currentMemberUserId && (
+  const remoteState = manualMemberPartnerSearchState.get(form);
+  const remoteMatchesKeyword = remoteState?.query === keyword;
+  const options = manualMemberPartnerOptions(form).filter((user) => String(user.id || "") !== String(currentMemberUserId) && (
     !keyword
-    || [user.name, user.nickname, user.phone].some((value) => String(value || "").toLowerCase().includes(keyword))
+    || [user.name, user.nickname].some((value) => String(value || "").toLowerCase().includes(keyword))
+    || (keywordDigits.length >= 4 && normalizedMemberPhone(user.phone).includes(keywordDigits))
+    || (remoteMatchesKeyword && (remoteState?.candidates || []).some((candidate) => String(candidate.id) === String(user.id)))
   ));
   select.innerHTML = [
     `<option value="">${keyword && !options.length ? "검색 결과 없음" : "파트너 선택"}</option>`,
-    ...options.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}${user.phone ? ` · ${escapeHtml(maskMemberPhone(user.phone))}` : ""}</option>`),
+    ...options.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}${user.phone ? ` · ${escapeHtml(maskMemberPhone(user.phone))}` : ""}${user.eligibilityCode ? ` · ${escapeHtml(manualMemberPartnerCandidateStatus(user))}` : ""}</option>`),
   ].join("");
   if (options.some((user) => String(user.id) === String(currentValue))) select.value = currentValue;
   const results = form.querySelector("[data-manual-member-partner-results]");
   if (results) {
     const visible = keyword ? options.slice(0, 8) : [];
+    const blocked = remoteMatchesKeyword
+      ? (remoteState?.candidates || []).filter((candidate) => candidate.eligible !== true).slice(0, 4)
+      : [];
     results.innerHTML = keyword
-      ? visible.length
-        ? visible.map((user) => `<button type="button" class="member-partner-result-button ${String(user.id) === String(select.value) ? "is-selected" : ""}" data-select-manual-member-partner="${escapeHtml(user.id)}"><strong>${escapeHtml(user.name || "회원")}</strong><span>${escapeHtml(maskMemberPhone(user.phone))}</span></button>`).join("")
-        : '<p class="member-partner-no-result">검색 결과가 없습니다.</p>'
+      ? remoteState?.loading && remoteMatchesKeyword
+        ? '<p class="member-partner-no-result">회원 계정을 확인하고 있습니다.</p>'
+        : [
+          ...visible.map((user) => `<button type="button" class="member-partner-result-button ${String(user.id) === String(select.value) ? "is-selected" : ""}" data-select-manual-member-partner="${escapeHtml(user.id)}"><strong>${escapeHtml(user.name || "회원")}</strong><span>${escapeHtml(maskMemberPhone(user.phone))} · ${escapeHtml(manualMemberPartnerCandidateStatus(user))}</span></button>`),
+          ...blocked.map((user) => `<p class="member-partner-no-result"><strong>${escapeHtml(user.name || "회원")}</strong> · ${escapeHtml(maskMemberPhone(user.phone))}<br />${escapeHtml(manualMemberPartnerCandidateStatus(user))}</p>`),
+          ...(!visible.length && !blocked.length ? ['<p class="member-partner-no-result">검색 결과가 없습니다.</p>'] : []),
+        ].join("")
       : "";
     results.hidden = !keyword;
   }
+}
+
+async function searchManualMemberPartnerCandidates(form, options = {}) {
+  if (!form?.elements?.partnerSearch) return [];
+  const query = String(form.elements.partnerSearch.value || "").trim();
+  const normalizedQuery = normalizedMemberLinkSearch(query);
+  const queryDigits = normalizedMemberPhone(query);
+  if (normalizedQuery.length < 2 && queryDigits.length < 4) {
+    manualMemberPartnerSearchState.delete(form);
+    filterManualMemberPartnerOptions(form);
+    return [];
+  }
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || operationsRole() !== "admin") {
+    setManualMemberPartnerStatus(form, "서버 회원 검색을 사용할 수 없습니다. 관리자 로그인 상태를 확인해 주세요.", "danger");
+    return [];
+  }
+  const requestId = createMemberChangeBatchId();
+  const stateValue = {
+    query: query.toLowerCase(),
+    requestId,
+    loading: true,
+    candidates: [],
+  };
+  manualMemberPartnerSearchState.set(form, stateValue);
+  filterManualMemberPartnerOptions(form);
+  try {
+    const response = await client.rpc("tn_admin_search_member_partner_candidates", {
+      target_query: query,
+      target_branch_id: activeOperationBranchId() || null,
+      target_current_user_id: form.querySelector("[data-manual-existing-partner]")?.dataset.currentMemberUserId || null,
+      target_limit: 20,
+    });
+    if (manualMemberPartnerSearchState.get(form)?.requestId !== requestId) return [];
+    const candidates = (Array.isArray(response) ? response : response?.candidates || [])
+      .filter((candidate) => candidate?.id)
+      .map((candidate) => ({
+        ...candidate,
+        id: String(candidate.id),
+        eligible: candidate.eligible === true,
+        eligibilityCode: String(candidate.eligibilityCode || ""),
+      }));
+    manualMemberPartnerSearchState.set(form, {
+      query: query.toLowerCase(),
+      requestId,
+      loading: false,
+      candidates,
+    });
+    const exactEligible = candidates.filter((candidate) => candidate.eligible && candidate.exactPhoneMatch === true);
+    const exactBlocked = candidates.filter((candidate) => !candidate.eligible && candidate.exactPhoneMatch === true);
+    if (options.promoteExactPhone && exactEligible.length === 1) {
+      const existingMode = form.querySelector('input[name="partnerMode"][value="existing"]');
+      if (existingMode) existingMode.checked = true;
+      syncManualMemberPartnerField(form);
+      form.elements.partnerSearch.value = query;
+      setManualMemberPartnerStatus(form, `${exactEligible[0].name || "앱 가입 회원"} 계정을 찾았습니다. 이름을 확인하고 선택해 주세요.`, "good");
+    } else if (options.promoteExactPhone && exactEligible.length > 1) {
+      setManualMemberPartnerStatus(form, "같은 전화번호의 회원 계정이 여러 개입니다. 임의로 연결하지 말고 계정 연결 점검을 진행해 주세요.", "danger", "new");
+    } else if (options.promoteExactPhone && exactBlocked.length) {
+      setManualMemberPartnerStatus(form, manualMemberPartnerCandidateStatus(exactBlocked[0]), "danger", "new");
+    } else if (!candidates.length) {
+      setManualMemberPartnerStatus(form, "일치하는 회원 계정이 없습니다. 신규 회원이면 새 파트너 등록을 계속하세요.");
+    } else {
+      setManualMemberPartnerStatus(form, "검색 결과에서 이름과 전화번호 끝자리를 확인한 뒤 선택해 주세요.");
+    }
+    filterManualMemberPartnerOptions(form);
+    return candidates;
+  } catch (error) {
+    if (manualMemberPartnerSearchState.get(form)?.requestId !== requestId) return [];
+    manualMemberPartnerSearchState.set(form, {
+      query: query.toLowerCase(),
+      requestId,
+      loading: false,
+      candidates: [],
+      error: String(error?.message || error || "partner_search_failed"),
+    });
+    setManualMemberPartnerStatus(form, "회원 계정 검색에 실패했습니다. 네트워크와 서버 기능 적용 여부를 확인한 뒤 다시 검색해 주세요.", "danger");
+    filterManualMemberPartnerOptions(form);
+    return [];
+  }
+}
+
+function queueManualMemberPartnerSearch(form, options = {}) {
+  if (!form?.elements?.partnerSearch) return;
+  const previous = manualMemberPartnerSearchState.get(form);
+  if (previous?.timer) window.clearTimeout(previous.timer);
+  const query = String(form.elements.partnerSearch.value || "").trim();
+  const timer = window.setTimeout(() => {
+    searchManualMemberPartnerCandidates(form, options);
+  }, options.immediate ? 0 : 250);
+  manualMemberPartnerSearchState.set(form, {
+    ...(previous || {}),
+    query: query.toLowerCase(),
+    timer,
+  });
 }
 
 function syncMemberManagementScopeFields(form) {
@@ -12228,7 +12367,8 @@ function memberManagementErrorText(error) {
   if (raw.includes("group_partner_required")) return "2대1 회원권은 파트너를 선택해야 합니다.";
   if (raw.includes("group_partner_name_required")) return "같이 등록할 파트너 실명을 두 글자 이상 입력해 주세요.";
   if (raw.includes("group_partner_phone_invalid")) return "파트너 휴대전화 번호를 확인해 주세요.";
-  if (raw.includes("group_partner_phone_already_exists")) return "같은 휴대전화 번호의 회원이 이미 있습니다. 기존 회원 연결을 사용해 주세요.";
+  if (raw.includes("group_partner_phone_already_exists")) return "앱 가입 또는 기존 회원 계정이 있습니다. 자동으로 열린 기존 회원 검색에서 이름과 전화번호 끝자리를 확인해 선택해 주세요.";
+  if (raw.includes("partner_search_query_too_short")) return "파트너 이름은 두 글자, 전화번호는 네 자리 이상 입력해 주세요.";
   if (raw.includes("group_partner_birth_year_invalid")) return "파트너 출생연도를 확인해 주세요.";
   if (raw.includes("group_partner_gender_invalid")) return "파트너 성별 값을 다시 선택해 주세요.";
   if (raw.includes("member_phone_already_exists")) return "같은 휴대전화 번호가 회원 또는 직원 계정에 사용 중입니다. 회원 검색에 없으면 운영 설정의 직원 계정과 계정 연결을 확인해 주세요.";
@@ -12879,6 +13019,10 @@ async function submitMemberManagementForm(event) {
       showToast(`${memberManagementActionLabel(action)} 완료`);
     }
   } catch (error) {
+    if (String(error?.message || error || "").includes("group_partner_phone_already_exists") && form.elements.partnerPhone && form.elements.partnerSearch) {
+      form.elements.partnerSearch.value = normalizedMemberPhone(form.elements.partnerPhone.value);
+      await searchManualMemberPartnerCandidates(form, { promoteExactPhone: true });
+    }
     memberManagementModalState.message = memberManagementErrorText(error);
     if (message) message.textContent = memberManagementModalState.message;
     showToast(memberManagementModalState.message);
@@ -32039,6 +32183,17 @@ function bindEvents() {
     }
     if (event.target.matches("[data-manual-member-partner-search]")) {
       filterManualMemberPartnerOptions(event.target.form);
+      queueManualMemberPartnerSearch(event.target.form);
+      return;
+    }
+    if (event.target.matches("#memberManagementForm input[name='partnerPhone']")) {
+      const form = event.target.form;
+      const digits = normalizedMemberPhone(event.target.value);
+      setManualMemberPartnerStatus(form, "", "", "new");
+      if (digits.length >= 9 && form?.elements?.partnerSearch) {
+        form.elements.partnerSearch.value = digits;
+        queueManualMemberPartnerSearch(form, { promoteExactPhone: true });
+      }
       return;
     }
     if (event.target.matches("[data-member-product-search]")) {
