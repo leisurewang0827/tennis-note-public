@@ -12237,7 +12237,13 @@ async function openMemberManagementModal(member, action, ticketId = "") {
     showToast("최신 회원 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
     return;
   }
-  const refreshedMember = members.find((item) => memberServerUserIds(item).includes(targetUserId));
+  let refreshedMember = members.find((item) => memberServerUserIds(item).includes(targetUserId));
+  if (!refreshedMember && operationsRole() === "admin" && state.view === "members") {
+    // The operational roster intentionally excludes branchless app-signup users.
+    // Await the authoritative directory page before deciding that the member vanished.
+    await loadAdminMemberDirectoryPage({ force: true, render: false, preserveList: true });
+    refreshedMember = members.find((item) => memberServerUserIds(item).includes(targetUserId));
+  }
   const refreshedTicket = [...tickets, ...expiredTickets].find((item) => item.serverTicketId === ticketId) || null;
   if (!refreshedMember || !memberManagementActionAllowed(action, refreshedTicket)) {
     showToast("회원 또는 회원권 상태가 변경됐습니다. 회원 목록에서 다시 확인해 주세요.");
