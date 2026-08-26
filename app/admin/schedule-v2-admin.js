@@ -483,11 +483,11 @@
         });
       }
       state.integrityRepairGroups = new Map();
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus(`미래 고정수업 복구 완료 · 회원권 ${ticketCount}개`, "success");
-      await runScheduleV2MemberIntegrityPreview();
+      const refreshed = await refreshWorkspaceAfterWrite(bridge());
+      if (refreshed) {
+        setStatus(`미래 고정수업 복구 완료 · 회원권 ${ticketCount}개`, "success");
+        await runScheduleV2MemberIntegrityPreview();
+      }
       void bridge()?.refresh?.();
     } catch (error) {
       setStatus(errorMessage(error), "error");
@@ -503,6 +503,29 @@
       return;
     }
     const memberLabel = lessonParticipantLabel(slot);
+    const exactRuleId = slot.ruleId || slot.rule_id || "";
+    const exactLessonDate = slot.lessonDate || slot.lesson_date || "";
+    if (exactRuleId && exactLessonDate) {
+      if (!window.confirm(`${memberLabel} ${dateLabel(exactLessonDate)} 고정수업 1건을 복구할까요?`)) {
+        setStatus("일정 복구가 취소됐습니다.");
+        return;
+      }
+      setStatus(`${memberLabel} 고정수업 1건을 복구하는 중입니다.`);
+      try {
+        await bridge().rpc("tn_admin_materialize_expected_regular_slot", {
+          target_ticket_id: slot.ticketId,
+          target_rule_id: exactRuleId,
+          target_lesson_date: exactLessonDate,
+          target_operation_key: operationKey("expected-slot-exact-apply"),
+        });
+        const refreshed = await refreshWorkspaceAfterWrite(bridge());
+        if (refreshed) setStatus(`${memberLabel} ${dateLabel(exactLessonDate)} 고정수업을 복구했습니다.`, "success");
+        void bridge()?.refresh?.();
+      } catch (error) {
+        setStatus(errorMessage(error), "error");
+      }
+      return;
+    }
     setStatus(`${memberLabel} 현재 회원권 일정을 확인하는 중입니다.`);
     try {
       const preview = await bridge().rpc("tn_admin_reconcile_future_regular_schedules", {
@@ -533,10 +556,8 @@
         target_operation_key: operationKey("expected-slot-apply"),
         target_dry_run: false,
       });
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus(`${memberLabel} 현재 회원권 일정 ${createdCount}건을 생성했습니다.`, "success");
+      const refreshed = await refreshWorkspaceAfterWrite(bridge());
+      if (refreshed) setStatus(`${memberLabel} 현재 회원권 일정 ${createdCount}건을 생성했습니다.`, "success");
       void bridge()?.refresh?.();
     } catch (error) {
       setStatus(errorMessage(error), "error");
@@ -3619,6 +3640,10 @@
     const labels = {
       schedule_v2_coach_time_overlap: "같은 코치의 수업 시간이 겹칩니다.",
       schedule_v2_expected_regular_slot_reserved: "누락된 미래 고정수업 자리입니다. 고정수업을 먼저 복구하거나 다른 시간을 선택해 주세요.",
+      schedule_v2_expected_regular_slot_reference_required: "복구할 고정수업 정보를 다시 불러와 주세요.",
+      schedule_v2_expected_regular_slot_ticket_not_found: "회원권을 찾을 수 없습니다. 회원권 상태를 다시 확인해 주세요.",
+      schedule_v2_expected_regular_slot_not_repairable: "이미 배정됐거나 잔여 횟수·기간·겹치는 시간을 다시 확인해야 합니다. 시간표를 새로고침해 주세요.",
+      schedule_v2_expected_regular_slot_concurrent_update: "다른 화면에서 같은 고정수업을 먼저 처리했습니다. 시간표를 새로고침해 주세요.",
       schedule_v2_ticket_unavailable: "사용할 수 있는 회원권이 아닙니다.",
       schedule_v2_duration_ticket_mismatch: "수업 시간과 회원권 단위가 맞지 않습니다.",
       schedule_v2_regular_ticket_required: "정규 회원권을 선택해 주세요.",
@@ -4019,10 +4044,8 @@
       if (history.state?.tennisNoteScheduleV2Editor) history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
       state.deferredRefresh = false;
       actualCloseEditor();
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus(futureScope ? "이후 정규시간 종료 완료 · 과거 기록은 유지했습니다." : "수업 취소 완료", "success");
+      const refreshed = await refreshWorkspaceAfterWrite(api);
+      if (refreshed) setStatus(futureScope ? "이후 정규시간 종료 완료 · 과거 기록은 유지했습니다." : "수업 취소 완료", "success");
       void api.refresh?.();
     } catch (error) {
       setEditorMessage(errorMessage(error));
@@ -4054,10 +4077,8 @@
         target_reason: "관리자 시간표에서 회원 참석 재확인",
         target_cancel_booked_makeup: cancelBookedMakeup,
       });
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus("원래 정규수업 복원 완료", "success");
+      const refreshed = await refreshWorkspaceAfterWrite(bridge());
+      if (refreshed) setStatus("원래 정규수업 복원 완료", "success");
       void bridge()?.refresh?.();
     } catch (error) {
       const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
@@ -4093,10 +4114,8 @@
         target_operation_key: operationKey("admin-cancel-restore"),
         target_reason: "관리자 시간표에서 취소 수업 복구",
       });
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus("취소 수업 복구 완료 · 기존 수업 기록을 그대로 살렸습니다.", "success");
+      const refreshed = await refreshWorkspaceAfterWrite(bridge());
+      if (refreshed) setStatus("취소 수업 복구 완료 · 기존 수업 기록을 그대로 살렸습니다.", "success");
       void bridge()?.refresh?.();
     } catch (error) {
       const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
@@ -4149,11 +4168,20 @@
       if (history.state?.tennisNoteScheduleV2Editor) history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
       state.deferredRefresh = false;
       actualCloseEditor();
-      if (lesson.oneDayBooking) await api.refresh?.({ allowWhileDirty: true });
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus(lesson.oneDayBooking ? "원데이 예약 삭제 완료" : `수업 삭제 완료${restoredSessions ? ` · ${restoredSessions}회 복원` : ""}`, "success");
+      if (lesson.oneDayBooking) {
+        if (state.payload) {
+          const bookingId = String(lesson.oneDayBookingId || lesson.one_day_booking_id || lesson.id || "");
+          state.payload = {
+            ...state.payload,
+            lessons: (state.payload.lessons || []).filter((item) => String(
+              item.oneDayBookingId || item.one_day_booking_id || item.id || "",
+            ) !== bookingId),
+          };
+        }
+        if (api.refresh) await Promise.allSettled([api.refresh({ allowWhileDirty: true })]);
+      }
+      const refreshed = await refreshWorkspaceAfterWrite(api);
+      if (refreshed) setStatus(lesson.oneDayBooking ? "원데이 예약 삭제 완료" : `수업 삭제 완료${restoredSessions ? ` · ${restoredSessions}회 복원` : ""}`, "success");
       if (!lesson.oneDayBooking) void api.refresh?.();
     } catch (error) {
       setEditorMessage(errorMessage(error));
@@ -4313,6 +4341,11 @@
     if (state.refreshTimer) window.clearTimeout(state.refreshTimer);
     state.refreshTimer = window.setTimeout(() => {
       state.refreshTimer = null;
+      if (state.postSaveRefreshPending) return;
+      if (state.editorOpen) {
+        state.deferredRefresh = true;
+        return;
+      }
       state.payload = null;
       invalidateCurrentWorkspaceCache();
       void loadWorkspace({ quiet: true, force: true });
@@ -4320,6 +4353,10 @@
   }
 
   async function refreshWorkspaceAfterWrite(api = bridge(), viewState = captureWorkspaceViewState()) {
+    if (state.refreshTimer) {
+      window.clearTimeout(state.refreshTimer);
+      state.refreshTimer = null;
+    }
     state.deferredRefresh = false;
     state.postSaveRefreshPending = true;
     invalidateCurrentWorkspaceCache();
