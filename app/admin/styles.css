@@ -736,6 +736,120 @@ h2 {
   font-weight: 800;
 }
 
+.billing-approval-guide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 0 0 14px;
+  padding: 13px 15px;
+  border: 1px solid #acd8c8;
+  border-radius: 8px;
+  background: #effaf6;
+}
+
+.billing-approval-guide strong {
+  color: var(--green);
+  font-size: 14px;
+}
+
+.billing-approval-guide span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.billing-secondary-details {
+  margin-bottom: 16px;
+}
+
+.billing-secondary-details > summary,
+.payment-row-more > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.billing-secondary-details > summary {
+  padding: 12px 14px;
+  list-style-position: inside;
+}
+
+.billing-secondary-details[open] > summary {
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.billing-lower-details {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.billing-lower-details .lower-grid {
+  padding: 0 12px 12px;
+}
+
+.payment-sheet-panel {
+  overflow-x: auto;
+}
+
+.payment-sheet-table {
+  min-width: 1040px;
+}
+
+.payment-sheet-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--paper);
+}
+
+.payment-sheet-table .payment-sheet-row.good {
+  box-shadow: inset 4px 0 #2f8f67;
+}
+
+.payment-sheet-table .payment-sheet-row.warn {
+  box-shadow: inset 4px 0 #d69028;
+}
+
+.payment-sheet-table .payment-sheet-row.danger {
+  box-shadow: inset 4px 0 var(--red);
+}
+
+.payment-sheet-approval {
+  min-width: 132px;
+}
+
+.payment-row-more {
+  margin-top: 7px;
+  font-size: 11px;
+}
+
+.payment-row-more > summary {
+  display: inline-block;
+}
+
+.payment-row-more .small-button {
+  margin-top: 6px;
+}
+
+.billing-settlement-cell {
+  min-width: 178px;
+}
+
+.billing-settlement-cell strong {
+  color: var(--blue);
+}
+
+.billing-settlement-cell small,
+.billing-settlement-pending {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
 .global-search-shell .search-box {
   min-width: 0;
   width: 100%;
@@ -8714,6 +8828,20 @@ tr.is-selected td {
     justify-items: start;
   }
 
+  .billing-approval-guide {
+    display: grid;
+    gap: 5px;
+  }
+
+  .payment-sheet-panel {
+    margin-inline: -8px;
+    border-radius: 6px;
+  }
+
+  .payment-sheet-table {
+    min-width: 900px;
+  }
+
   .topbar,
   .topbar-actions,
   .toolbar,
@@ -11102,6 +11230,83 @@ button .schedule-member-lines > span {
 
 .member-management-form-grid .span-2 {
   grid-column: span 2;
+}
+
+.member-payment-derived,
+.member-payment-amount-field {
+  align-content: start;
+}
+
+.member-payment-derived strong {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid #b8d7ce;
+  border-radius: 8px;
+  color: var(--brand-dark);
+  background: #f1faf7;
+}
+
+.member-payment-derived small,
+.member-payment-amount-field small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.member-payment-amount-field .text-button {
+  justify-self: start;
+  padding: 2px 0;
+  border: 0;
+  color: var(--brand-dark);
+  background: transparent;
+  font-weight: 900;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.member-registration-summary {
+  padding: 14px;
+  border: 1px solid #9bc9bc;
+  border-radius: 10px;
+  background: #f3fbf8;
+}
+
+.member-registration-summary > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--brand-dark);
+}
+
+.member-registration-summary dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.member-registration-summary dl > div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.member-registration-summary dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.member-registration-summary dd {
+  min-width: 0;
+  margin: 0;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.member-registration-summary > small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
 }
 
 .member-basic-profile-form {

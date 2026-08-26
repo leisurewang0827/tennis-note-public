@@ -2774,7 +2774,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.412",
+    workerUrl: "./service-worker.js?v=1.0.413",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -11544,6 +11544,12 @@ function paymentServerErrorMessage(error) {
     purchase_slot_outside_adjacent_anchor: "기존 수업과 실제 빈 시간이 40분 이내인 시간을 선택해 주세요.",
     purchase_slot_temporarily_held: "방금 다른 결제에서 선택한 시간입니다. 가능한 시간을 다시 선택해 주세요.",
     purchase_slot_occupied: "이미 예약된 시간입니다. 최신 가능한 시간을 다시 선택해 주세요.",
+    purchase_slot_must_be_future: "지난 날짜는 선택할 수 없습니다. 가능한 시간을 다시 선택해 주세요.",
+    purchase_slot_blocked: "선택한 시간에는 현재 수업을 신청할 수 없습니다.",
+    coach_not_working: "선택한 시간은 담당 코치의 근무시간이 아닙니다.",
+    lesson_time_grid_invalid: "수업은 정각·20분·40분 시작 시간에서 선택해 주세요.",
+    exact_renewal_source_ticket_required: "재등록할 기존 회원권을 다시 확인해 주세요.",
+    renewal_coach_mismatch: "기존 회원권의 담당 코치 정보를 다시 확인해 주세요.",
     payment_hold_expired: "선택 시간의 보관 시간이 끝났습니다. 가능한 시간을 다시 선택해 주세요.",
     purchase_slot_hold_failed: "선택 시간을 안전하게 보관하지 못했습니다. 잠시 후 다시 선택해 주세요.",
   };
@@ -12088,33 +12094,43 @@ async function syncMemberTicketsFromServer(profile = null) {
       });
     }
 
-    const sharedLinks = await client.selectRows("tn_group_ticket_links", {
-      select: "group_account_id,ticket_id,status",
-      filters: { user_id: profileId },
-      limit: 20,
-    }).catch(() => []);
+    const [sharedLinks, participantLinks] = await Promise.all([
+      client.selectRows("tn_group_ticket_links", {
+        select: "group_account_id,ticket_id,status",
+        filters: { user_id: profileId },
+        limit: 20,
+      }).catch(() => []),
+      client.selectRows("tn_ticket_participants", {
+        select: "ticket_id,user_id,participant_order",
+        filters: { user_id: profileId },
+        limit: 50,
+      }).catch(() => []),
+    ]);
     const activeSharedLinks = (sharedLinks || [])
-      .filter((link) => !["pending_payment", "expired", "refunded"].includes(String(link.status || "").toLowerCase()));
-    const sharedTicketIds = new Set(activeSharedLinks
-      .map((link) => link.ticket_id)
-      .filter(Boolean));
+      .filter((link) => !["pending_payment", "expired", "refunded", "cancelled", "canceled", "voided", "deleted"]
+        .includes(String(link.status || "").toLowerCase()));
+    const linkedTicketIds = [...new Set([
+      ...activeSharedLinks.map((link) => link.ticket_id),
+      ...(participantLinks || []).map((link) => link.ticket_id),
+    ].filter(Boolean))];
+    const sharedTicketIds = new Set(linkedTicketIds);
     const sharedAccountIdByTicketId = new Map(activeSharedLinks
       .filter((link) => link.ticket_id && link.group_account_id)
       .map((link) => [link.ticket_id, link.group_account_id]));
     const ownedTicketIds = new Set((rows || []).map((row) => row.id));
-    const sharedTicketRows = await Promise.all(activeSharedLinks
-      .filter((link) => link.ticket_id && !ownedTicketIds.has(link.ticket_id))
-      .map(async (link) => {
+    const sharedTicketRows = await Promise.all(linkedTicketIds
+      .filter((ticketId) => !ownedTicketIds.has(ticketId))
+      .map(async (ticketId) => {
         try {
           return await client.selectRows("tn_member_tickets", {
             select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,refund_hold_refund_id,refund_hold_at,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,frequency_per_week,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,validity_days,grace_days)",
-            filters: { id: link.ticket_id },
+            filters: { id: ticketId },
             limit: 1,
           });
         } catch {
           return client.selectRows("tn_member_tickets", {
             select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at",
-            filters: { id: link.ticket_id },
+            filters: { id: ticketId },
             limit: 1,
           }).catch(() => []);
         }
@@ -12218,6 +12234,9 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
   if (!isPaymentGatewayReady(enforcedMethodId)) throw new Error("payment_channel_not_ready");
   const purchaseFlow = purchaseFlowState();
   const flexibleCoupon = purchaseFlow.productId === product.id && purchaseUsesFlexibleCouponSchedule(product, purchaseFlow);
+  const keepsExistingRenewalSchedule = purchaseFlow.productId === product.id
+    && purchaseFlow.purchasePurpose === "renew_same"
+    && purchaseFlow.scheduleMode === "keep";
   return client.invokeFunction("portone-payment/prepare", {
     body: {
       paymentId,
@@ -12240,10 +12259,10 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
       method: enforcedMethodId,
       groupAccountId: Number(product.groupSize) === 2 ? state.groupAccount?.id || null : null,
       coachRoleId: purchaseFlow.productId === product.id ? purchaseFlow.coachRoleId || null : null,
-      preferredDate: purchaseFlow.productId === product.id && !flexibleCoupon ? purchaseFlow.preferredDate || null : null,
-      preferredDay: purchaseFlow.productId === product.id && !flexibleCoupon ? purchaseFlow.preferredDay || null : null,
-      preferredTime: purchaseFlow.productId === product.id && !flexibleCoupon ? purchaseFlow.preferredTime || null : null,
-      preferredSchedules: purchaseFlow.productId === product.id && !flexibleCoupon
+      preferredDate: purchaseFlow.productId === product.id && !flexibleCoupon && !keepsExistingRenewalSchedule ? purchaseFlow.preferredDate || null : null,
+      preferredDay: purchaseFlow.productId === product.id && !flexibleCoupon && !keepsExistingRenewalSchedule ? purchaseFlow.preferredDay || null : null,
+      preferredTime: purchaseFlow.productId === product.id && !flexibleCoupon && !keepsExistingRenewalSchedule ? purchaseFlow.preferredTime || null : null,
+      preferredSchedules: purchaseFlow.productId === product.id && !flexibleCoupon && !keepsExistingRenewalSchedule
         ? purchaseSelectedSchedules(product).map((schedule) => ({
           lessonDate: schedule.lessonDate,
           day: schedule.day,
@@ -12627,6 +12646,14 @@ async function completePreparedPayment() {
     });
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창을 열지 못했습니다. ${detail}` };
     state.ticketHistory.unshift({ text: `${product.title} 결제창 오류 · ${detail}`, tone: "alert" });
+    context.preparedPayment = null;
+    context.paymentId = createProviderPaymentId(product.id);
+    if (message) message.textContent = `${detail} 선택 내용은 유지됩니다. 다시 시도해 주세요.`;
+    if (button) {
+      button.disabled = false;
+      button.textContent = "다시 시도";
+    }
+    return;
   }
 
   closePaymentConfirmationModal();
@@ -13362,7 +13389,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.412", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.413", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -16642,7 +16669,7 @@ function openLocalCurriculumPreview() {
 
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.412");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.413");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -16725,7 +16752,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.412",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.413",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
