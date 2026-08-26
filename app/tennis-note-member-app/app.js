@@ -43,6 +43,8 @@ const state = {
   selectedMemberScheduleTicketId: "",
   selectedMemberChangeSourceId: "",
   editingChangeRequestId: "",
+  memberLessonChangeOperationKey: "",
+  memberLessonChangeOperationSignature: "",
   memberChangeCompactSelection: false,
   memberScheduleModeTouched: false,
   memberScheduleFullView: false,
@@ -2772,7 +2774,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.408",
+    workerUrl: "./service-worker.js?v=1.0.409",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -4285,12 +4287,22 @@ function memberCouponPeriodSummary(source = {}) {
 }
 
 function memberCandidateEmptyReason(source = null) {
-  if (!source?.couponBooking) {
-    return "담당 코치, 운영시간, 회원권 규칙에 맞는 빈 시간이 없습니다.";
-  }
   const period = memberCouponPeriodInfo(source);
   const week = activeMemberWeek();
   const exclusions = state.serverChangeCandidateExclusions || {};
+  if (!source?.couponBooking) {
+    const reason = [
+      ["ticket_period", "회원권 이용기간 안에서만 변경할 수 있습니다."],
+      ["ticket_scope", "평일권은 평일, 주말권은 주말 시간으로만 변경할 수 있습니다."],
+      ["occupied", "담당 코치의 가능한 시간이 이미 예약되었습니다. 다른 주를 확인해 주세요."],
+      ["pending_request", "다른 회원의 승인 대기 요청이 해당 시간을 먼저 잡고 있습니다."],
+      ["closure", "휴무 또는 운영 중지 시간이라 변경할 수 없습니다."],
+      ["blocked_time", "담당 코치가 수업할 수 없는 시간입니다."],
+      ["break_time", "브레이크 시간이라 변경할 수 없습니다."],
+      ["anchor_required", "담당 코치의 기존 수업과 40분 이내인 빈 시간만 선택할 수 있습니다."],
+    ].find(([code]) => Number(exclusions[code]) > 0)?.[1];
+    return reason || "담당 코치, 운영시간, 회원권 규칙에 맞는 빈 시간이 없습니다.";
+  }
   if (period?.startsOn && week.endDate < period.startsOn) {
     return `이 회원권은 ${memberReadableDate(period.startsOn)}부터 사용할 수 있습니다.`;
   }
@@ -6611,7 +6623,7 @@ function renderAvailableSlots() {
       )
       .join("") || memberEmptyState({
         title: "변경 가능한 시간이 없습니다",
-        reason: "운영시간, 담당 코치, 회원권 조건에 맞는 빈 시간이 아직 없습니다.",
+        reason: memberCandidateEmptyReason(source),
         action: { label: "회원권 확인", homeAction: "shop", primary: false },
         compact: true,
       });
@@ -6645,7 +6657,8 @@ function memberChangeCandidateKey(source = null, week = activeMemberWeek()) {
   const ticketId = source?.member_ticket_id || source?.ticketId || "";
   const sourceId = source?.serverLessonId || (source?.couponBooking && ticketId ? `coupon:${ticketId}` : "");
   const range = memberChangeCandidateRange(source, week);
-  return sourceId ? `${sourceId}:${range.from}:${range.to}` : "";
+  const editKey = state.editingChangeRequestId ? `:edit:${state.editingChangeRequestId}` : "";
+  return sourceId ? `${sourceId}:${range.from}:${range.to}${editKey}` : "";
 }
 
 function memberChangeUsesServerCandidates(source = null) {
@@ -10308,23 +10321,6 @@ async function syncMemberChangeCandidates(source = null) {
     state.serverChangeBlockedReason = "";
     return false;
   }
-  // A pending request keeps its source lesson scheduled. Use the same local
-  // slot preview while editing and let the update RPC perform the final,
-  // locked server validation before it changes the held target.
-  if (state.editingChangeRequestId) {
-    state.serverChangeCandidateStatus = "fallback";
-    state.serverChangeCandidateKey = memberChangeCandidateKey(source);
-    state.serverChangeCandidates = [];
-    state.serverChangeCandidateError = "";
-    state.serverChangeCandidateExclusions = {};
-    state.serverChangeAnchorGapMinutes = 40;
-    state.serverChangePolicySnapshot = null;
-    state.serverChangeBlockedReason = "";
-    renderSelects();
-    renderAvailableSlots();
-    renderSchedule();
-    return false;
-  }
   const week = { ...activeMemberWeek() };
   const range = memberChangeCandidateRange(source, week);
   const key = memberChangeCandidateKey(source, week);
@@ -10368,18 +10364,28 @@ async function syncMemberChangeCandidates(source = null) {
     if (source.couponBooking) {
       result = await client.rpc("tn_member_coupon_candidates", candidateArgs, { timeoutMs: 12_000 });
     } else {
-      try {
-        result = await client.rpc("tn_member_change_candidates_v2", candidateArgs, { timeoutMs: 12_000 });
-      } catch (error) {
-        const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
-        if (!/tn_member_change_candidates_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
-        result = await client.rpc("tn_member_change_candidates", candidateArgs, { timeoutMs: 12_000 });
+      if (state.editingChangeRequestId) {
+        result = await client.rpc("tn_member_change_request_edit_candidates", {
+          target_request_id: state.editingChangeRequestId,
+          target_from: range.from,
+          target_to: range.to,
+        }, { timeoutMs: 12_000 });
+      } else {
+        try {
+          result = await client.rpc("tn_member_change_candidates_v2", candidateArgs, { timeoutMs: 12_000 });
+        } catch (error) {
+          const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
+          if (!/tn_member_change_candidates_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
+          result = await client.rpc("tn_member_change_candidates", candidateArgs, { timeoutMs: 12_000 });
+        }
       }
     }
     if (requestId !== memberChangeCandidateRequestSequence || memberChangeCandidateKey(source) !== key) return false;
     if (!result || !Array.isArray(result.candidates)) {
-      state.serverChangeCandidateStatus = source.couponBooking ? "error" : "fallback";
-      state.serverChangeCandidateError = source.couponBooking
+      state.serverChangeCandidateStatus = source.couponBooking || state.editingChangeRequestId ? "error" : "fallback";
+      state.serverChangeCandidateError = state.editingChangeRequestId
+        ? "승인 대기 요청의 가능한 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요."
+        : source.couponBooking
         ? "쿠폰 예약 가능 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요."
         : "";
       renderSelects();
@@ -10408,9 +10414,11 @@ async function syncMemberChangeCandidates(source = null) {
   } catch (error) {
     if (requestId !== memberChangeCandidateRequestSequence) return false;
     const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
-    if (/tn_member_(change|coupon)_candidates|PGRST202|42883|schema cache/i.test(errorText)) {
-      state.serverChangeCandidateStatus = source.couponBooking ? "error" : "fallback";
-      state.serverChangeCandidateError = source.couponBooking
+    if (/tn_member_(change|coupon)_candidates|tn_member_change_request_edit_candidates|PGRST202|42883|schema cache/i.test(errorText)) {
+      state.serverChangeCandidateStatus = source.couponBooking || state.editingChangeRequestId ? "error" : "fallback";
+      state.serverChangeCandidateError = state.editingChangeRequestId
+        ? "승인 대기 요청의 가능한 시간을 서버에서 확인하지 못했습니다. 잠시 후 다시 확인해 주세요."
+        : source.couponBooking
         ? "쿠폰 예약 가능 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요."
         : "";
       renderSelects();
@@ -13354,7 +13362,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.408", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.409", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -13815,23 +13823,36 @@ function selectAvailableSlot(lessonId) {
   }
   $("#makeupSlot").value = lesson.id;
   renderAvailableSlots();
-  openChangeRequestModal();
+  void openChangeRequestModal(source?.id || "", { editing: Boolean(state.editingChangeRequestId) });
 }
 
 async function cancelMemberScheduleRequest(kind, id) {
   if (!id || !window.TennisNoteDataClient?.rpc) return;
   const label = kind === "makeup" ? "보강 예약" : "수업 변경 요청";
   if (!window.confirm(`${label}을 취소하고 원래 상태로 되돌릴까요?`)) return;
+  let writeCommitted = false;
   try {
     await window.TennisNoteDataClient.rpc(
       kind === "makeup" ? "tn_cancel_my_makeup_booking" : "tn_cancel_my_lesson_change_request",
       kind === "makeup" ? { target_entitlement_id: id } : { target_request_id: id },
     );
-    await syncMemberLessonsFromServer();
-    await syncMemberChangeRequestsFromServer();
+    writeCommitted = true;
+    const refreshResults = await Promise.allSettled([
+      syncMemberLessonsFromServer(),
+      syncMemberChangeRequestsFromServer(),
+    ]);
+    const refreshIncomplete = refreshResults.some((item) => item.status === "rejected" || item.value === false);
     renderAll();
-    showToast(`${label}을 취소했습니다.`);
+    showToast(refreshIncomplete
+      ? `${label}은 취소됐습니다. 최신 시간표를 다시 불러오고 있습니다.`
+      : kind === "makeup"
+        ? "보강 예약을 취소했습니다."
+        : "수업 변경 요청을 취소하고 원래 시간을 복원했습니다.");
   } catch (error) {
+    if (writeCommitted) {
+      showToast(`${label}은 취소됐습니다. 화면을 새로고침해 원래 시간을 확인해 주세요.`);
+      return;
+    }
     const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
     const message = errorText.includes("original_time_occupied")
       ? "원래 수업 시간에 다른 수업이 들어와 자동 복원이 어렵습니다. 카카오채널로 문의해 주세요."
@@ -13989,7 +14010,11 @@ async function prepareChangeRequestSource(preferredLessonId = "") {
 }
 
 async function openChangeRequestModal(preferredLessonId = "", options = {}) {
-  if (!options.editing) state.editingChangeRequestId = "";
+  if (!options.editing) {
+    state.editingChangeRequestId = "";
+    state.memberLessonChangeOperationKey = "";
+    state.memberLessonChangeOperationSignature = "";
+  }
   state.memberChangeCompactSelection = false;
   $("#changeRequestModal")?.classList.remove("is-inline-confirmation");
   const sourceId = await prepareChangeRequestSource(preferredLessonId);
@@ -14065,6 +14090,8 @@ async function openMemberChangeTimetable(preferredLessonId = "") {
 function closeChangeRequestModal() {
   state.regularInitialSelections = [];
   state.regularInitialOperationKey = "";
+  state.memberLessonChangeOperationKey = "";
+  state.memberLessonChangeOperationSignature = "";
   state.memberChangeCompactSelection = false;
   state.editingChangeRequestId = "";
   $("#changeRequestModal")?.classList.remove("is-inline-confirmation");
@@ -14081,7 +14108,11 @@ async function editMemberChangeRequest(requestId) {
     return;
   }
   state.editingChangeRequestId = request.serverRequestId;
-  const source = memberScheduleLessons().find((lesson) => (
+  const source = [
+    ...memberScheduleLessons(),
+    ...loadedFutureScheduledLessonsForChange(),
+    ...(state.liveLessons || []),
+  ].find((lesson) => (
     isOwnMemberScheduleLesson(lesson)
     && String(lesson.serverLessonId || "") === String(request.lessonId || "")
   ));
@@ -15147,14 +15178,31 @@ async function logout() {
   saveSnapshot();
 }
 
+function memberLessonChangeOperationKey({ lessonId = "", lessonDate = "", startTime = "" } = {}) {
+  const signature = `${lessonId}|${lessonDate}|${String(startTime).slice(0, 5)}`;
+  if (state.memberLessonChangeOperationSignature !== signature || !state.memberLessonChangeOperationKey) {
+    state.memberLessonChangeOperationSignature = signature;
+    state.memberLessonChangeOperationKey = `member_change_${globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`}`;
+  }
+  return state.memberLessonChangeOperationKey;
+}
+
 async function submitMemberLessonChange(client, args) {
   try {
-    return await client.rpc("tn_submit_lesson_change_request_v3", args);
+    return await client.rpc("tn_submit_lesson_change_request_v4", args);
+  } catch (error) {
+    const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
+    if (!/tn_submit_lesson_change_request_v4|PGRST202|42883|schema cache/i.test(errorText)) throw error;
+  }
+  const v3Args = { ...args };
+  delete v3Args.target_operation_key;
+  try {
+    return await client.rpc("tn_submit_lesson_change_request_v3", v3Args);
   } catch (error) {
     const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
     if (!/tn_submit_lesson_change_request_v3|PGRST202|42883|schema cache/i.test(errorText)) throw error;
   }
-  const compatibilityArgs = { ...args };
+  const compatibilityArgs = { ...v3Args };
   delete compatibilityArgs.target_policy_revision;
   try {
     return await client.rpc("tn_submit_lesson_change_request_v2", compatibilityArgs);
@@ -15208,6 +15256,8 @@ async function requestMakeup() {
 
   if (liveRequest) {
     const button = $("#requestMakeup");
+    let writeCommitted = false;
+    let refreshIncomplete = false;
     if (button) {
       button.disabled = true;
       button.textContent = isMakeupEntitlement || isCouponBooking ? "예약 중" : "요청 중";
@@ -15269,11 +15319,20 @@ async function requestMakeup() {
             target_lesson_date: targetDate,
             target_start_time: makeup.time,
             target_reason: reason,
-            target_policy_revision: Number(memberChangePolicySnapshot(makeup)?.revision) || 0,
+            target_policy_revision: memberChangePolicySnapshot(makeup)?.revision ?? null,
+            target_operation_key: memberLessonChangeOperationKey({
+              lessonId: absence.serverLessonId,
+              lessonDate: targetDate,
+              startTime: makeup.time,
+            }),
           });
-      await syncMemberLessonsFromServer();
-      if (isPausedResumeBooking) await syncMemberTicketsFromServer();
-      if (!isMakeupEntitlement) await syncMemberChangeRequestsFromServer();
+      writeCommitted = true;
+      const refreshResults = await Promise.allSettled([
+        syncMemberLessonsFromServer(),
+        isPausedResumeBooking ? syncMemberTicketsFromServer() : Promise.resolve(true),
+        !isMakeupEntitlement ? syncMemberChangeRequestsFromServer() : Promise.resolve(true),
+      ]);
+      refreshIncomplete = refreshResults.some((item) => item.status === "rejected" || item.value === false);
       state.ticketHistory.unshift({
         text: isRegularInitialBooking
           ? `${absence.ticketTitle} · ${isPausedResumeBooking ? "휴회 복귀 및 정규시간 설정 완료" : "정규시간 설정 완료"}`
@@ -15289,7 +15348,7 @@ async function requestMakeup() {
       closeChangeRequestModal();
       renderAll();
       saveSnapshot();
-      showToast(isRegularInitialBooking
+      const successMessage = isRegularInitialBooking
         ? isPausedResumeBooking ? "휴회를 마치고 정규 수업시간을 설정했습니다." : "정규 수업시간이 설정되었습니다."
         : isMakeupEntitlement
         ? "보강 예약이 완료되었습니다."
@@ -15301,8 +15360,23 @@ async function requestMakeup() {
             ? "그룹수업 전체 변경 요청을 보냈습니다. 담당 코치 또는 관리자가 승인하기 전까지 기존 수업을 유지합니다."
           : result?.status === "auto_approved"
             ? changeDirection === "advance" ? "수업을 앞당겼습니다." : "수업 시간이 변경되었습니다."
-            : changeDirection === "advance" ? "담당 코치·관리자에게 수업 앞당기기 요청을 보냈습니다." : "담당 코치·관리자에게 변경 요청을 보냈습니다.");
+            : changeDirection === "advance" ? "담당 코치·관리자에게 수업 앞당기기 요청을 보냈습니다." : "담당 코치·관리자에게 변경 요청을 보냈습니다.";
+      showToast(refreshIncomplete
+        ? `${successMessage} 저장은 완료됐으며 최신 시간표를 다시 불러오고 있습니다.`
+        : successMessage);
     } catch (error) {
+      if (writeCommitted) {
+        try {
+          closeChangeRequestModal();
+          renderAll();
+          saveSnapshot();
+        } catch {
+          // The server write is already committed. A rendering failure must not
+          // be reported as a failed or retryable lesson change.
+        }
+        showToast("시간 변경은 저장되었습니다. 화면만 새로고침해 최신 시간표를 확인해 주세요.");
+        return;
+      }
       let code = error?.payload?.message || error?.payload?.code || error?.message || "server_error";
       if (typeof code === "string" && code.trim().startsWith("{")) {
         try {
@@ -15340,6 +15414,8 @@ async function requestMakeup() {
         weekly_session_limit: "이번 주 이용 가능 횟수를 초과합니다.",
         weekly_booking_day_limit: "이번 주 예약 가능 일수를 초과합니다.",
         lesson_change_request_already_pending: "이미 승인 대기 중인 변경 요청이 있습니다. 요청 내역에서 기존 요청을 수정해 주세요.",
+        lesson_change_operation_key_invalid: "변경 요청 준비가 만료되었습니다. 시간을 다시 선택해 주세요.",
+        lesson_change_operation_conflict: "다른 시간으로 바뀐 요청입니다. 최신 시간표에서 다시 선택해 주세요.",
         target_date_outside_ticket: "회원권 사용기간 밖의 날짜입니다.",
         coupon_booking_forbidden: "이 쿠폰을 예약할 권한이 없습니다.",
         coupon_ticket_required: "사용 가능한 쿠폰 회원권을 확인해 주세요.",
@@ -15648,6 +15724,8 @@ function bindEvents() {
   $("#absenceLesson").addEventListener("change", () => {
     state.regularInitialSelections = [];
     state.regularInitialOperationKey = "";
+    state.memberLessonChangeOperationKey = "";
+    state.memberLessonChangeOperationSignature = "";
     state.selectedMemberChangeSourceId = $("#absenceLesson")?.value || "";
     renderSelects();
     renderAvailableSlots();
@@ -16564,7 +16642,7 @@ function openLocalCurriculumPreview() {
 
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.408");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.409");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -16647,7 +16725,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.408",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.409",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
