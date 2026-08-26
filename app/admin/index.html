@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.409" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.410" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-17" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.409" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.410" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
   </head>
   <body>
@@ -125,26 +125,26 @@
         </div>
 
         <section id="dashboardView" class="view is-active" aria-label="운영 대시보드">
-          <div class="metric-grid" data-dashboard-group="metrics">
+          <div class="metric-grid is-loading" data-dashboard-group="metrics" aria-busy="true">
             <article class="metric-card">
               <span>오늘 수업</span>
-              <strong id="metricLessons">0</strong>
-              <small>코치별 시간표 기준</small>
+              <strong id="metricLessons">—</strong>
+              <small>최신 자료를 불러오는 중</small>
             </article>
             <article class="metric-card warning">
               <span>변경 승인</span>
-              <strong id="metricMakeups">0</strong>
-              <small>운영 규칙상 승인 요청</small>
+              <strong id="metricMakeups">—</strong>
+              <small>최신 자료를 불러오는 중</small>
             </article>
             <article class="metric-card accent">
               <span>기록/차감 대기</span>
-              <strong id="metricNotes">0</strong>
-              <small>코치 완료 처리 후 차감</small>
+              <strong id="metricNotes">—</strong>
+              <small>최신 자료를 불러오는 중</small>
             </article>
             <article class="metric-card calm">
               <span>결제 대기</span>
-              <strong id="metricBilling">0</strong>
-              <small>결제/정산 처리 대기</small>
+              <strong id="metricBilling">—</strong>
+              <small>최신 자료를 불러오는 중</small>
             </article>
           </div>
 
@@ -2144,20 +2144,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.409"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.409"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.409"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.410"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.410"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.410"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.409"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.410"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.409"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.409"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.409"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.409"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.409"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.409"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.410"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.410"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.410"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.410"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.410"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.410"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
-    <script src="./app.js?v=1.0.409"></script>
+    <script src="./app.js?v=1.0.410"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-17"></script>
   </body>
 </html>

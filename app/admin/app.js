@@ -8251,22 +8251,39 @@ function dashboardOperationalMembers() {
   });
 }
 
+function dashboardOperationalDataReady() {
+  if (adminDemoMode || state.liveScheduleLoaded) return true;
+  return [coaches, members, lessons, makeupRequests, tickets, expiredTickets, billings, billingLogs, groupAccounts, lessonNotes]
+    .some((items) => Array.isArray(items) && items.length > 0);
+}
+
 function renderMetrics() {
+  const metricsReady = dashboardOperationalDataReady();
+  const metricGrid = $("#dashboardView .metric-grid");
+  metricGrid?.classList.toggle("is-loading", !metricsReady);
+  metricGrid?.setAttribute("aria-busy", String(!metricsReady));
+  const setMetric = (id, value, detail) => {
+    const target = $(id);
+    if (!target) return;
+    target.textContent = metricsReady ? String(value) : "—";
+    const detailTarget = target.parentElement?.querySelector("small");
+    if (detailTarget) detailTarget.textContent = metricsReady ? detail : "최신 자료를 불러오는 중";
+  };
   const recordGroups = adminRecordGroups();
   const todayLessonCount = adminTodayLessonRows().length;
   const pendingScheduleCount = operationBranchLessons().filter((lesson) => isPendingScheduleLesson(lesson)).length;
-  $("#metricLessons").textContent = todayLessonCount;
-  $("#metricMakeups").textContent = pendingLessonChangeApprovals().length;
-  $("#metricNotes").textContent = recordGroups.pending.length + recordGroups.feedback.length + recordGroups.issue.length;
+  setMetric("#metricLessons", todayLessonCount, "코치별 시간표 기준");
+  setMetric("#metricMakeups", pendingLessonChangeApprovals().length, "운영 규칙상 승인 요청");
+  setMetric("#metricNotes", recordGroups.pending.length + recordGroups.feedback.length + recordGroups.issue.length, "코치 완료 처리 후 차감");
   const currentBillingMonth = /^\d{4}-\d{2}$/.test(state.billingMonth)
     ? state.billingMonth
     : adminLocalDateKey(new Date()).slice(0, 7);
   const pendingPaymentGroups = groupedBillingAttempts(
     operationBranchBillings().filter((item) => billingOperationalMonthMatches(item, currentBillingMonth)),
   ).filter((entry) => ["action", "verifying"].includes(billingFilterGroup(entry.primary)));
-  $("#metricBilling").textContent = pendingPaymentGroups.length;
-  if ($("#scheduleMetricToday")) $("#scheduleMetricToday").textContent = `${todayLessonCount}회`;
-  if ($("#scheduleMetricPending")) $("#scheduleMetricPending").textContent = `${pendingScheduleCount}건`;
+  setMetric("#metricBilling", pendingPaymentGroups.length, "결제/정산 처리 대기");
+  if ($("#scheduleMetricToday")) $("#scheduleMetricToday").textContent = metricsReady ? `${todayLessonCount}회` : "확인 중";
+  if ($("#scheduleMetricPending")) $("#scheduleMetricPending").textContent = metricsReady ? `${pendingScheduleCount}건` : "확인 중";
 }
 
 function renderCourtControls() {
@@ -8657,15 +8674,19 @@ function couponTicketsWithoutUpcomingLesson() {
 }
 
 function renderDashboard() {
+  const dashboardReady = dashboardOperationalDataReady();
   const branchMembers = operationBranchMembers();
   const branchCoaches = operationBranchCoaches();
   const branchLessons = operationBranchLessons();
   const branchMakeups = operationBranchMakeupRequests();
   const branchTickets = operationBranchTickets();
   const branchBillings = operationBranchBillings();
-  $("#todayLessons").innerHTML = adminTodayLessonRows()
-    .slice(0, 5)
-    .map(
+  const todayLessonRows = adminTodayLessonRows()
+    .slice(0, 5);
+  $("#todayLessons").innerHTML = !dashboardReady
+    ? '<p class="dashboard-loading-row" role="status">오늘 수업을 불러오는 중입니다.</p>'
+    : todayLessonRows.length
+      ? todayLessonRows.map(
       (lesson) => `
         <article class="lesson-item duration-${durationTone(lesson)}">
           <div class="time-chip">${lesson.time}</div>
@@ -8676,8 +8697,8 @@ function renderDashboard() {
           ${durationBadge(lesson)}
           ${badge(lesson.status, getLessonStatusLabel(lesson))}
         </article>`,
-    )
-    .join("");
+      ).join("")
+      : '<p class="empty-text">오늘 예정된 수업이 없습니다.</p>';
 
   const pendingMakeupCount = branchMakeups.filter((item) => ["pending", "requested", "coach_required"].includes(item.status)).length;
   const lowTicketCount = branchTickets.filter((ticket) => ticket.remaining <= 2).length;
@@ -8687,6 +8708,8 @@ function renderDashboard() {
   const couponNoBookingCount = couponTicketsWithoutUpcomingLesson().length;
   const reportTarget = $("#dashboardReportSummary");
   if (reportTarget) {
+    reportTarget.classList.toggle("is-loading", !dashboardReady);
+    reportTarget.setAttribute("aria-busy", String(!dashboardReady));
     const recordGroups = adminRecordGroups();
     const liveReportMetrics = [
       { label: "활성 회원", value: `${branchMembers.filter((member) => member.status === "active").length}명`, detail: "실서버 회원권 기준", tone: "" },
@@ -8699,8 +8722,8 @@ function renderDashboard() {
         (item) => `
           <article>
             <span>${item.label}</span>
-            <strong>${item.value}</strong>
-            <small>${item.detail}</small>
+            <strong>${dashboardReady ? item.value : "—"}</strong>
+            <small>${dashboardReady ? item.detail : "최신 자료를 불러오는 중"}</small>
           </article>`,
       )
       .join("");
