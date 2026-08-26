@@ -1391,7 +1391,7 @@ function operationsViewAllowed(view) {
 function applyOperationsRolePermissions() {
   const role = operationsRole();
   document.body.dataset.operationsRole = role || "signed-out";
-  if (role === "coach" && ["journal", "deletion", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
+  if (role === "coach" && ["journal", "app_link", "deletion", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
   $$(".nav-item[data-view]").forEach((button) => {
     if (!button.dataset.adminLabel) button.dataset.adminLabel = button.textContent.trim();
     const coachLabels = {
@@ -1648,8 +1648,16 @@ const adminMemberDirectoryState = {
   rows: [],
   total: 0,
   counts: null,
+  baseCounts: null,
   preserveCountsWhileLoading: false,
   requestId: 0,
+};
+const adminMemberIdentityReviewState = {
+  loading: false,
+  loaded: false,
+  error: "",
+  count: null,
+  promise: null,
 };
 const adminMemberDetailCache = new Map();
 let adminUserNameIndex = null;
@@ -1667,7 +1675,15 @@ function invalidateMemberSearchIndex({ preserveDirectory = false } = {}) {
     adminMemberDirectoryState.signature = "";
     adminMemberDirectoryState.rows = [];
     adminMemberDirectoryState.counts = null;
+    adminMemberDirectoryState.baseCounts = null;
     adminMemberDirectoryState.preserveCountsWhileLoading = false;
+    Object.assign(adminMemberIdentityReviewState, {
+      loading: false,
+      loaded: false,
+      error: "",
+      count: null,
+      promise: null,
+    });
   }
   adminMemberDetailCache.clear();
   adminUserNameIndex = null;
@@ -1817,7 +1833,14 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
   const existing = sourceMembers.find((member) => String(member.serverUserId || "") === userId);
   if (existing) {
     existing.directoryRow = row;
-    existing.authLinked = Boolean(row.auth_user_id);
+    existing.authLinked = Boolean(row.auth_linked ?? row.auth_user_id);
+    if (Object.prototype.hasOwnProperty.call(row, "app_link_candidate_count")) {
+      existing.appLinkCandidateCount = Math.max(0, Number(row.app_link_candidate_count) || 0);
+      existing.appLinkReview = String(row.app_link_review || "");
+    } else if (existing.authLinked) {
+      existing.appLinkCandidateCount = 0;
+      existing.appLinkReview = "";
+    }
     existing.authRole = row.user_role || existing.authRole || "member";
     existing.serverStatus = row.user_status || existing.serverStatus || "active";
     if (row.phone) existing.phone = row.phone;
@@ -1849,7 +1872,9 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
     coach: row.coach_name || "미배정",
     lessonType: row.product_name || "회원권 없음",
     remaining: Number(row.remaining_sessions) || 0,
-    authLinked: Boolean(row.auth_user_id),
+    authLinked: Boolean(row.auth_linked ?? row.auth_user_id),
+    appLinkCandidateCount: Math.max(0, Number(row.app_link_candidate_count) || 0),
+    appLinkReview: String(row.app_link_review || ""),
     authRole: row.user_role || "member",
     directoryRow: row,
     source: "Supabase 회원 목록",
@@ -1878,19 +1903,38 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
   }
   try {
     const query = JSON.parse(signature);
-    const response = await window.TennisNoteDataClient.rpc("tn_admin_member_directory_page", {
-      target_branch_id: query.branchId,
-      target_status: query.status,
-      target_search: query.search,
-      target_coach_role_id: query.coachRoleId,
-      target_product_kind: query.productKind,
-      target_page: query.page,
-      target_page_size: query.pageSize,
-    });
+    const identityReviewMode = query.status === "app_link";
+    const response = identityReviewMode
+      ? await window.TennisNoteDataClient.rpc("tn_admin_member_identity_reconciliation_page", {
+        target_branch_id: query.branchId,
+        target_search: query.search,
+        target_page: query.page,
+        target_page_size: query.pageSize,
+      })
+      : await window.TennisNoteDataClient.rpc("tn_admin_member_directory_page", {
+        target_branch_id: query.branchId,
+        target_status: query.status,
+        target_search: query.search,
+        target_coach_role_id: query.coachRoleId,
+        target_product_kind: query.productKind,
+        target_page: query.page,
+        target_page_size: query.pageSize,
+      });
     if (requestId !== adminMemberDirectoryState.requestId) return false;
     const payload = Array.isArray(response) ? response[0] : response;
     const directoryRows = Array.isArray(payload?.rows) ? payload.rows : [];
     directoryRows.forEach((row) => memberFromAdminDirectoryRow(row));
+    const responseCounts = payload?.counts && typeof payload.counts === "object" ? payload.counts : null;
+    if (!identityReviewMode && responseCounts) adminMemberDirectoryState.baseCounts = responseCounts;
+    if (identityReviewMode && responseCounts && Object.prototype.hasOwnProperty.call(responseCounts, "app_link")) {
+      Object.assign(adminMemberIdentityReviewState, {
+        loading: false,
+        loaded: true,
+        error: "",
+        count: Math.max(0, Number(responseCounts.app_link) || 0),
+        promise: null,
+      });
+    }
     Object.assign(adminMemberDirectoryState, {
       loading: false,
       loaded: true,
@@ -1898,15 +1942,18 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
       signature,
       rows: directoryRows,
       total: Number(payload?.total) || 0,
-      counts: payload?.counts && typeof payload.counts === "object"
-        ? payload.counts
-        : adminMemberDirectoryState.counts,
+      counts: {
+        ...(adminMemberDirectoryState.baseCounts || adminMemberDirectoryState.counts || {}),
+        ...(responseCounts || {}),
+        ...(adminMemberIdentityReviewState.loaded ? { app_link: adminMemberIdentityReviewState.count } : {}),
+      },
       preserveCountsWhileLoading: false,
     });
     if (render && state.view === "members") {
       renderMembers();
       rememberAdminViewRender("members");
     }
+    if (!identityReviewMode) void loadAdminMemberIdentityReviewCount();
     return true;
   } catch (error) {
     if (requestId !== adminMemberDirectoryState.requestId) return false;
@@ -1925,6 +1972,50 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
     }
     return false;
   }
+}
+
+async function loadAdminMemberIdentityReviewCount({ force = false } = {}) {
+  if (operationsRole() !== "admin" || !window.TennisNoteDataClient?.rpc) return false;
+  if (!force && adminMemberIdentityReviewState.loaded) return true;
+  if (!force && adminMemberIdentityReviewState.promise) return adminMemberIdentityReviewState.promise;
+  adminMemberIdentityReviewState.loading = true;
+  adminMemberIdentityReviewState.error = "";
+  adminMemberIdentityReviewState.promise = window.TennisNoteDataClient.rpc(
+    "tn_admin_member_identity_reconciliation_page",
+    {
+      target_branch_id: activeOperationBranchId() || null,
+      target_search: "",
+      target_page: 0,
+      target_page_size: 1,
+    },
+  ).then((response) => {
+    const payload = Array.isArray(response) ? response[0] : response;
+    const count = Math.max(0, Number(payload?.counts?.app_link ?? payload?.total) || 0);
+    Object.assign(adminMemberIdentityReviewState, {
+      loading: false,
+      loaded: true,
+      error: "",
+      count,
+      promise: null,
+    });
+    adminMemberDirectoryState.counts = {
+      ...(adminMemberDirectoryState.baseCounts || adminMemberDirectoryState.counts || {}),
+      app_link: count,
+    };
+    if (state.view === "members") renderMemberStatusCounts();
+    return true;
+  }).catch((error) => {
+    Object.assign(adminMemberIdentityReviewState, {
+      loading: false,
+      loaded: false,
+      error: String(error?.message || error || "member_identity_review_failed"),
+      count: null,
+      promise: null,
+    });
+    if (state.view === "members") renderMemberStatusCounts();
+    return false;
+  });
+  return adminMemberIdentityReviewState.promise;
 }
 
 function loadAdminDataOnce(key, loader) {
@@ -3165,7 +3256,7 @@ function normalizeDemoData() {
   if (state.view === "makeup") state.view = "schedule";
   if (state.view === "import" || state.view === "data") state.view = "members";
   if (!["operation", "membership", "notifications", "coach", "layout", "security"].includes(state.settingsTab)) state.settingsTab = "operation";
-  if (!["active", "expiring", "expired", "pending", "journal", "deletion", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
+  if (!["active", "expiring", "expired", "pending", "journal", "app_link", "deletion", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
   if (!coaches.some((coach) => coach.id === "coach-park")) {
     coaches.push({ id: "coach-park", name: "박창준 코치", role: "주말 레슨", status: "active", account: "박창준", coachMode: "approved", availability: "weekend", photoUrl: "" });
   }
@@ -9967,15 +10058,18 @@ function memberAuthConnection(member = {}) {
       && normalizedMemberPhone(candidate.phone) === phone
     ))
     : [];
-  const needsReview = splitCandidates.length > 0;
+  const serverCandidateCount = Math.max(0, Number(member.appLinkCandidateCount) || 0);
+  const candidateCount = Math.max(splitCandidates.length, serverCandidateCount);
+  const needsReview = candidateCount > 0 || Boolean(member.appLinkReview);
   return {
     linked,
     provider: primaryProvider,
     providers: primaryProvider ? [primaryProvider] : [],
     splitCandidates,
+    candidateCount,
     needsReview,
     summary: needsReview
-      ? `분리 앱 계정 ${splitCandidates.length}건`
+      ? `분리 앱 계정 ${candidateCount || 1}건`
       : linked ? (primaryLabel ? `${primaryLabel} 연결` : "로그인 계정 연결됨") : "앱 가입 전",
     detail: needsReview
       ? "같은 휴대전화의 앱 가입 계정이 따로 있습니다. 앱 연결에서 본인 계정을 확인해 하나로 교체하세요."
@@ -10881,6 +10975,8 @@ function memberIsExpiring(member) {
 function memberMatchesStatusFilter(member, filter) {
   return filter === "expiring"
     ? memberIsExpiring(member)
+    : filter === "app_link"
+      ? memberAuthConnection(member).needsReview
     : memberListStatus(member) === filter;
 }
 
@@ -10889,6 +10985,7 @@ const memberFilterCopy = {
   expiring: { summary: "명 만료임박", empty: "잔여 2회 이하 회원이 없습니다." },
   pending: { summary: "명 가입서·결제대기", empty: "가입서·결제 대기 회원이 없습니다." },
   journal: { summary: "명 앱가입", empty: "로그인만 완료한 앱가입 회원이 없습니다." },
+  app_link: { summary: "명 앱 연결 필요", empty: "분리된 앱 계정이 없습니다." },
   expired: { summary: "명 만료", empty: "만료된 회원이 없습니다." },
   deletion: { summary: "건 탈퇴요청", empty: "접수된 탈퇴요청이 없습니다." },
   inactive: { summary: "명 삭제", empty: "삭제 처리된 회원이 없습니다." },
@@ -10899,8 +10996,9 @@ function memberStatusCounts() {
     const status = memberListStatus(member);
     if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
     if (memberIsExpiring(member)) counts.expiring += 1;
+    if (memberAuthConnection(member).needsReview) counts.app_link += 1;
     return counts;
-  }, { active: 0, expiring: 0, expired: 0, pending: 0, journal: 0, inactive: 0 });
+  }, { active: 0, expiring: 0, expired: 0, pending: 0, journal: 0, app_link: 0, inactive: 0 });
 }
 
 function renderMemberStatusCounts() {
@@ -10926,16 +11024,17 @@ function renderMemberStatusCounts() {
     const deletionCount = (state.accountDeletionRequests || [])
       .filter((request) => ["pending", "reviewing", "processing", "failed"].includes(request.status)).length;
     const deletionWaiting = accountDeletionRequestState.loading || !accountDeletionRequestState.loaded;
+    const identityReviewWaiting = filter === "app_link" && adminMemberIdentityReviewState.loading;
     badge.textContent = filter === "deletion"
       ? accountDeletionRequestState.error && !accountDeletionRequestState.loaded
         ? "확인 필요"
         : deletionWaiting
           ? "…"
           : `${deletionCount}건`
-      : counts
-        ? `${counts[filter] || 0}명`
-        : waitingForServer ? "…" : "확인 필요";
-    badge.setAttribute("aria-busy", String(filter === "deletion" ? deletionWaiting : waitingForServer));
+      : counts && Object.prototype.hasOwnProperty.call(counts, filter)
+        ? `${Math.max(0, Number(counts[filter]) || 0)}명`
+        : (waitingForServer || identityReviewWaiting) ? "…" : "확인 필요";
+    badge.setAttribute("aria-busy", String(filter === "deletion" ? deletionWaiting : waitingForServer || identityReviewWaiting));
     badge.title = filter === "expired" && !waitingForServer
       ? "과거 DB에서 이관한 만료 회원을 포함합니다."
       : "";
@@ -10945,7 +11044,7 @@ function renderMemberStatusCounts() {
 function renderMemberFilterSections() {
   const filter = state.memberFilter || "active";
   const role = operationsRole();
-  const journalMode = filter === "journal";
+  const journalMode = ["journal", "app_link"].includes(filter);
   const membersView = $("#membersView");
   if (membersView) membersView.dataset.memberFilterView = filter;
   $$('[data-member-list-filter]').forEach((field) => {
@@ -13495,7 +13594,7 @@ function memberEditorAuditIssues(member, ticket = memberCurrentTicket(member)) {
 function renderMemberEditorModeBar() {
   const bar = $("#memberEditorModeBar");
   if (!bar) return;
-  bar.hidden = operationsRole() !== "admin" || state.memberFilter === "journal";
+  bar.hidden = operationsRole() !== "admin" || ["journal", "app_link"].includes(state.memberFilter);
   const button = $("#toggleMemberAdminEdit");
   if (button) {
     button.classList.toggle("is-active", memberAdminEditEnabled);
@@ -14808,7 +14907,7 @@ function renderMemberBulkToolbar(visibleMembers = [], filteredSelectionIds = nul
   const selectedMembersAreInactive = selectedMembers.length > 0
     && selectedMembers.every((member) => memberListStatus(member) === "inactive" && member.authRole !== "admin");
   const toolbar = $("#memberBulkToolbar");
-  if (toolbar) toolbar.hidden = operationsRole() !== "admin" || state.memberFilter === "journal";
+  if (toolbar) toolbar.hidden = operationsRole() !== "admin" || ["journal", "app_link"].includes(state.memberFilter);
   if ($("#memberBulkCount")) $("#memberBulkCount").textContent = String(state.selectedMemberIds.length);
   ["runMemberBulkAction", "deleteSelectedMembers", "clearMemberBulkSelection"].forEach((id) => {
     if ($(`#${id}`)) $(`#${id}`).disabled = !state.selectedMemberIds.length;
