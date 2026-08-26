@@ -632,6 +632,26 @@ h2 {
   line-height: 1;
 }
 
+.metric-grid.is-loading .metric-card strong,
+.dashboard-report-summary.is-loading strong {
+  color: #8b9892;
+}
+
+.metric-grid.is-loading .metric-card small,
+.dashboard-report-summary.is-loading small,
+.dashboard-loading-row {
+  color: var(--muted);
+}
+
+.dashboard-loading-row {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: #f8faf9;
+  font-weight: 700;
+}
+
 .billing-action-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(160px, 1fr));
