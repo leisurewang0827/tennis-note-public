@@ -379,6 +379,40 @@
     }[reason] || "자동 생성 대상 아님 · 설정 확인 필요";
   }
 
+  function groupedScheduleIntegrityItems(items = []) {
+    const grouped = new Map();
+    items.forEach((item, index) => {
+      const ticketKey = item.ticketId
+        ? `ticket:${String(item.ticketId)}`
+        : `unlinked:${String(item.userId || "unknown")}:${index}`;
+      const entry = grouped.get(ticketKey) || {
+        ...item,
+        memberUserIds: new Set(),
+        issueCodes: new Set(),
+        futureLessonCount: 0,
+      };
+      if (item.userId) entry.memberUserIds.add(item.userId);
+      (Array.isArray(item.issueCodes) ? item.issueCodes : []).forEach((code) => entry.issueCodes.add(code));
+      entry.futureLessonCount = Math.max(
+        Number(entry.futureLessonCount) || 0,
+        Number(item.futureLessonCount) || 0,
+      );
+      grouped.set(ticketKey, entry);
+    });
+    return [...grouped.values()].map((item) => ({
+      ...item,
+      memberUserIds: [...item.memberUserIds],
+      issueCodes: [...item.issueCodes],
+    }));
+  }
+
+  function scheduleIntegrityMemberLabel(item = {}) {
+    const names = (Array.isArray(item.memberUserIds) ? item.memberUserIds : [item.userId])
+      .map((userId) => memberName(userId))
+      .filter(Boolean);
+    return [...new Set(names)].join(" · ") || "이름 확인 필요";
+  }
+
   async function runScheduleV2MemberIntegrityPreview() {
     const button = $("#scheduleV2IntegrityButton");
     const applyButton = $("#scheduleV2IntegrityApplyButton");
@@ -397,6 +431,7 @@
       const response = await bridge().rpc("tn_admin_schedule_v2_member_integrity_preview", {});
       const result = Array.isArray(response) ? response[0] || {} : response || {};
       const items = Array.isArray(result.items) ? result.items : [];
+      const groupedItems = groupedScheduleIntegrityItems(items);
       const affectedMembers = Number(result.affectedMemberCount) || 0;
       const affectedTickets = Number(result.affectedTicketCount) || 0;
       const reconcileByTicket = new Map();
@@ -444,14 +479,14 @@
       summary.textContent = affectedTickets
         ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권 · 자동 생성 가능 ${autoRepairable}권`
         : "문제 없음";
-      list.innerHTML = items.length
-        ? items.map((item) => {
+      list.innerHTML = groupedItems.length
+        ? groupedItems.map((item) => {
           const codes = Array.isArray(item.issueCodes) ? item.issueCodes : [];
           const labels = codes
             .map(scheduleIntegrityIssueLabel)
             .join(" · ");
           const repairLabel = scheduleIntegrityRepairLabel(reconcileByTicket.get(item.ticketId), codes);
-          return `<div><strong>${escapeHtml(memberName(item.userId) || "이름 확인 필요")}</strong><span>${escapeHtml(labels)}</span><small>${escapeHtml(repairLabel)} · 미래 수업 ${Number(item.futureLessonCount) || 0}</small></div>`;
+          return `<div><strong>${escapeHtml(scheduleIntegrityMemberLabel(item))}</strong><span>${escapeHtml(labels)}</span><small>${escapeHtml(repairLabel)} · 미래 수업 ${Number(item.futureLessonCount) || 0}</small></div>`;
         }).join("")
         : '<p class="schedule-v2-integrity-empty">현재 확인된 연결 오류가 없습니다.</p>';
     } catch (error) {
@@ -3752,7 +3787,7 @@
       schedule_v2_no_show_reason_required: "노쇼 사유를 2자 이상 입력해 주세요.",
       schedule_v2_legacy_outcome_already_processed: "기존 방식으로 이미 처리된 수업입니다.",
       schedule_v2_outcome_partial_final_state: "일부 회원만 완료된 비정상 상태입니다. 관리자 점검이 필요합니다.",
-      schedule_v2_series_capacity_unavailable: "남은 횟수가 이 수업 길이보다 부족합니다.",
+      schedule_v2_series_capacity_unavailable: "이미 예정된 미래수업을 제외한 남은 횟수가 부족합니다. 회원권 잔여 횟수와 기존 미래수업을 확인해 주세요.",
       schedule_v2_staff_cancel_no_show_record_required: "노쇼 처리 기록을 확인할 수 없어 관리자 취소를 중단했습니다. 최신 시간표를 다시 불러와 주세요.",
       schedule_v2_staff_cancel_mixed_outcome_review_required: "그룹 참여자의 처리 상태가 서로 달라 자동 취소할 수 없습니다. 수업 기록을 먼저 확인해 주세요.",
       schedule_v2_staff_cancel_journal_review_required: "회원 운동일지와 연결된 수업은 자동 취소할 수 없습니다. 기록 보존 여부를 먼저 확인해 주세요.",
