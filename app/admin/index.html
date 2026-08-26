@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.412" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.413" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-17" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.412" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.413" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
   </head>
   <body>
@@ -876,6 +876,10 @@
             <button id="openProductSettingsButton" class="ghost-button" type="button">상품·할인 설정</button>
           </div>
           <div id="paymentAdminGateStatus" class="payment-admin-gate-status"></div>
+          <div class="billing-approval-guide" aria-label="결제 승인 흐름">
+            <strong>결제 확인 → 승인 → 회원권 연결 → 정산 자동계산</strong>
+            <span>입금 또는 결제사 상태를 확인하고 승인 버튼을 한 번만 누르면 됩니다.</span>
+          </div>
           <section class="panel payment-queue-panel" aria-label="결제 처리 단계">
             <div class="panel-heading">
               <h2>결제 처리 단계</h2>
@@ -887,30 +891,31 @@
               </div>
             </div>
           </section>
-          <section class="panel payment-charge-panel" aria-label="회원권 충전 추적">
+          <details class="panel payment-charge-panel billing-secondary-details" aria-label="회원권 충전 추적">
+            <summary>결제 시도·오류 이력 보기</summary>
             <div class="panel-heading">
               <h2>최근 결제 흐름</h2>
               <span class="source-pill">동일 요청은 한 건으로 묶어 표시</span>
             </div>
             <div id="paymentChargeAudit" class="payment-charge-audit"></div>
-          </section>
+          </details>
           <div class="dashboard-grid">
-            <section class="panel table-panel">
+            <section class="panel table-panel payment-sheet-panel">
               <div class="panel-heading">
-                <h2>결제 목록</h2>
+                <div><h2>결제 확인·승인</h2><span class="source-pill">한 결제당 한 줄</span></div>
                 <button class="ghost-button" type="button" id="syncServerPaymentsButton">서버 결제 새로고침</button>
               </div>
               <div id="serverPaymentSyncStatus" class="payment-sync-status"></div>
-              <table>
+              <table class="payment-sheet-table">
                 <thead>
                   <tr>
-                    <th>회원</th>
-                    <th>항목</th>
-                    <th>결제일</th>
-                    <th>금액</th>
-                    <th>수단</th>
                     <th>상태</th>
-                    <th>처리</th>
+                    <th>회원</th>
+                    <th>상품·회원권</th>
+                    <th>결제</th>
+                    <th>확인</th>
+                    <th>승인</th>
+                    <th>코치·정산</th>
                   </tr>
                 </thead>
                 <tbody id="billingRows"></tbody>
@@ -918,7 +923,9 @@
               <nav id="billingPager" class="dashboard-pager" aria-label="결제 목록 페이지" hidden></nav>
             </section>
           </div>
-          <div class="dashboard-grid lower-grid">
+          <details class="billing-secondary-details billing-lower-details">
+            <summary>월 정산·연장·처리 로그 상세보기</summary>
+            <div class="dashboard-grid lower-grid">
             <section class="panel table-panel">
               <div class="panel-heading">
                 <h2>코치 정산 미리보기</h2>
@@ -964,7 +971,8 @@
               </div>
               <ul id="billingLog" class="billing-log"></ul>
             </section>
-          </div>
+            </div>
+          </details>
         </section>
 
         <section id="notesView" class="view" aria-label="기록·차감 상태">
@@ -2146,20 +2154,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.412"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.412"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.412"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.413"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.413"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.413"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.412"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.413"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.412"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.412"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.412"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.412"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.412"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.412"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.413"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.413"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.413"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.413"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.413"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.413"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
-    <script src="./app.js?v=1.0.412"></script>
+    <script src="./app.js?v=1.0.413"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-17"></script>
   </body>
 </html>

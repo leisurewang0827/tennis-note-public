@@ -4923,15 +4923,15 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     });
     let rows = [];
     try {
-      rows = await readPayments("id,branch_id,provider,provider_payment_id,purchase_intent_key,purchase_group_key,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
+      rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,purchase_intent_key,purchase_group_key,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
     } catch (error) {
       try {
-        rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
+        rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
       } catch (legacyJoinError) {
         try {
-          rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at");
+          rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at");
         } catch (refundSchemaError) {
-          rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at");
+          rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at");
         }
       }
     }
@@ -9342,6 +9342,23 @@ function normalizeMemberPaymentMethod(method = "") {
   return normalized;
 }
 
+function memberManagementPaymentStateFromValues({ paymentDate = "", paymentMethod = "", paymentAmount = 0 } = {}) {
+  const date = String(paymentDate || "").trim();
+  const method = normalizeMemberPaymentMethod(paymentMethod);
+  const amount = Number(paymentAmount) || 0;
+  if (amount === 0 && method === "membershiptransfer") return "transfer_zero";
+  if (amount > 0 && date && method) return "complete";
+  if (amount > 0 || date || method) return "incomplete";
+  return "unentered";
+}
+
+function memberManagementPaymentAmountForMethod(product = null, method = "") {
+  const normalized = normalizeMemberPaymentMethod(method);
+  if (normalized === "card" || normalized === "tosspay") return Math.max(0, Number(product?.card_price) || 0);
+  if (["banktransfer", "cash"].includes(normalized)) return Math.max(0, Number(product?.cash_price) || Number(product?.base_price) || 0);
+  return 0;
+}
+
 function normalizeMemberManagementPaymentPayload(payload = null) {
   if (!payload) return payload;
   const inferredState = memberPaymentRecordState({
@@ -11379,7 +11396,7 @@ function memberManagementDatabaseFields({
   const paymentDate = existingPaymentDate;
   const paymentMethod = paymentProjection?.payment_method || "";
   const paymentAmount = isAssign
-    ? Number(existingPayment?.final_amount ?? existingPayment?.amount ?? product?.cash_price ?? product?.card_price ?? 0)
+    ? Number(existingPayment?.final_amount ?? existingPayment?.amount ?? 0)
     : paymentProjection?.payment_amount ?? (isCreate ? 0 : "");
   const paymentRecordState = isAssign && existingPayment
     ? "complete"
@@ -11425,12 +11442,13 @@ function memberManagementDatabaseFields({
         <option value="expired" ${ticketStatus === "expired" ? "selected" : ""}>만료</option>
       </select></label>` : ""}
       ${paymentProtected ? '<div class="member-management-warning span-2"><strong>확인 완료 결제</strong><span>회원권 정보만 수정할 수 있습니다. 결제 변경·환불은 결제관리에서 진행하세요.</span></div>' : ""}
-      <label class="form-field">${memberManagementFieldLabel("결제 구분")}<select name="paymentRecordState" ${paymentControlState}>${memberPaymentRecordStateOptions({
-        payment_record_state: paymentRecordState,
-        payment_recorded_on: paymentDate,
-        payment_method: paymentMethod,
-        payment_amount: paymentAmount,
-      })}</select></label>
+      ${isAssign ? `<input name="paymentRecordState" type="hidden" value="${escapeHtml(paymentRecordState)}" />
+        <div class="form-field member-payment-derived"><span class="member-field-label">결제 상태<em class="is-optional">자동</em></span><strong data-member-payment-derived-state>${escapeHtml(memberPaymentRecordStateLabel(paymentRecordState))}</strong><small data-member-payment-missing></small></div>` : `<label class="form-field">${memberManagementFieldLabel("결제 구분")}<select name="paymentRecordState" ${paymentControlState}>${memberPaymentRecordStateOptions({
+          payment_record_state: paymentRecordState,
+          payment_recorded_on: paymentDate,
+          payment_method: paymentMethod,
+          payment_amount: paymentAmount,
+        })}</select></label>`}
       <label class="form-field">${memberManagementFieldLabel("결제일자")}<input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" ${paymentControlState} /></label>
       <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod" ${paymentControlState}>
         <option value="" ${paymentMethod ? "" : "selected"}>미입력</option>
@@ -11440,7 +11458,8 @@ function memberManagementDatabaseFields({
         <option value="manual" ${paymentMethod === "manual" ? "selected" : ""}>관리자 입력</option>
         ${paymentMethod && !["card", "bank", "bank_transfer", "transfer", "cash", "manual"].includes(paymentMethod) ? `<option value="${escapeHtml(paymentMethod)}" selected>${escapeHtml(paymentMethodLabel(paymentMethod))}</option>` : ""}
       </select></label>
-      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" ${paymentControlState} /></label>
+      <label class="form-field member-payment-amount-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" ${isAssign && !paymentProtected ? "readonly aria-readonly=\"true\"" : paymentControlState} />${isAssign && !paymentProtected ? '<button class="text-button" type="button" data-enable-payment-override>직접 수정</button><small>결제수단에 맞는 상품 가격이 자동 적용됩니다.</small>' : ""}</label>
+      ${isAssign && !paymentProtected ? `<label class="form-field span-2 member-payment-override-reason" data-payment-override-reason hidden>${memberManagementFieldLabel("금액 수정 사유", true)}<input name="paymentOverrideReason" type="text" minlength="4" maxlength="120" disabled placeholder="할인·추가결제 등 사유" /></label>` : ""}
       <label class="form-field span-2">${memberManagementFieldLabel("비고")}<textarea name="note" rows="3" maxlength="500">${escapeHtml(note)}</textarea></label>
       <div class="form-field span-2 member-partner-editor ${lessonType === "one_on_two" ? "" : "is-disabled"}" data-manual-member-partner-field>
         ${memberManagementFieldLabel("1:2 파트너", lessonType === "one_on_two")}
@@ -11531,14 +11550,17 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
         ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === coachRoleId ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
       </select></label>
       <label class="form-field">${memberManagementFieldLabel("총 횟수", true)}<input name="totalSessions" type="number" min="1" step="1" value="${total}" required /></label>
-      <label class="form-field">${memberManagementFieldLabel("결제일")}<input name="paymentDate" type="date" value="${startsOn}" /></label>
+      <input name="paymentRecordState" type="hidden" value="unentered" />
+      <div class="form-field member-payment-derived"><span class="member-field-label">결제 상태<em class="is-optional">자동</em></span><strong data-member-payment-derived-state>미입력</strong><small data-member-payment-missing></small></div>
+      <label class="form-field">${memberManagementFieldLabel("결제일")}<input name="paymentDate" type="date" value="" /></label>
       <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod">
         <option value="">미입력</option>
         <option value="card">카드</option>
         <option value="bank_transfer">계좌이체</option>
         <option value="cash">현금</option>
       </select></label>
-      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="0" /></label>
+      <label class="form-field member-payment-amount-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="0" readonly aria-readonly="true" /><button class="text-button" type="button" data-enable-payment-override>직접 수정</button><small>결제수단에 맞는 상품 가격이 자동 적용됩니다.</small></label>
+      <label class="form-field span-2 member-payment-override-reason" data-payment-override-reason hidden>${memberManagementFieldLabel("금액 수정 사유", true)}<input name="paymentOverrideReason" type="text" minlength="4" maxlength="120" disabled placeholder="할인·추가결제 등 사유" /></label>
       <div class="form-field span-2 member-partner-editor ${isGroup ? "" : "is-disabled"}" data-manual-member-partner-field ${isGroup ? "" : "hidden"}>
         ${memberManagementFieldLabel("1:2 파트너", isGroup)}
         <div class="member-partner-mode" role="radiogroup" aria-label="파트너 등록 방법">
@@ -12098,6 +12120,7 @@ function renderMemberManagementModal() {
       ${memberManagementDatabaseFields({ member, ticket: null, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: unlinkedPayment, isAssign: true })}
       <input name="createWithoutSchedule" type="hidden" value="${memberManagementProductSupportsRegularSchedule(product) ? "false" : "true"}" />
       ${memberCreateScheduleMarkup(product)}
+      <section class="member-registration-summary" data-member-registration-summary aria-live="polite"></section>
       <p class="member-management-rule">주 2회·주 3회는 정규 요일과 시간을 모두 선택하면 회원권과 시간표가 한 번에 저장됩니다. 예외일 때만 ‘시간표는 나중에 설정’을 선택하세요.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "correct") {
     actionFields = operationsRole() === "admin" ? `
@@ -12273,6 +12296,8 @@ async function openMemberManagementModal(member, action, ticketId = "") {
   syncManualMemberPartnerField($("#memberManagementForm"));
   syncMemberCreateSchedule($("#memberManagementForm"));
   syncMemberReenrollSchedule($("#memberManagementForm"));
+  syncMemberManagementPaymentFields($("#memberManagementForm"), { forcePrice: true });
+  syncMemberRegistrationSummary($("#memberManagementForm"));
   window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   if (action === "app_link") loadMemberLinkCandidates(refreshedMember);
   if (action === "force_delete") loadMemberTicketForceDeletePreview(ticketId);
@@ -12360,7 +12385,9 @@ function applyMemberManagementProductDefaults(form) {
   form.elements.usedSessions.value = 0;
   form.elements.remainingSessions.value = total;
   form.elements.expiresOn.value = addMemberManagementDays(start, validityDays - 1);
-  if (form.elements.paymentAmount) form.elements.paymentAmount.value = Number(product.cash_price || product.card_price || 0);
+  if (form.elements.paymentAmount && form.dataset.paymentAmountOverride !== "true") {
+    form.elements.paymentAmount.value = memberManagementPaymentAmountForMethod(product, form.elements.paymentMethod?.value || "");
+  }
   const productScope = memberManagementProductScheduleScope(product);
   if (form.elements.scheduleScope) {
     form.elements.scheduleScope.value = productScope;
@@ -12371,6 +12398,78 @@ function applyMemberManagementProductDefaults(form) {
   syncManualMemberPartnerField(form);
   syncMemberCreateSchedule(form, product);
   syncMemberReenrollSchedule(form, product);
+  syncMemberManagementPaymentFields(form, { forcePrice: true });
+  syncMemberRegistrationSummary(form);
+}
+
+function syncMemberManagementPaymentFields(form, options = {}) {
+  if (!form?.elements?.paymentRecordState || !form.elements.paymentAmount) return;
+  const product = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+  const method = form.elements.paymentMethod?.value || "";
+  const overridden = form.dataset.paymentAmountOverride === "true";
+  if (options.forcePrice === true && !overridden) {
+    form.elements.paymentAmount.value = memberManagementPaymentAmountForMethod(product, method);
+  }
+  const values = {
+    paymentDate: form.elements.paymentDate?.value || "",
+    paymentMethod: method,
+    paymentAmount: memberManagementNullableNumber(form.elements.paymentAmount) || 0,
+  };
+  const state = memberManagementPaymentStateFromValues(values);
+  form.elements.paymentRecordState.value = state;
+  const stateLabel = form.querySelector("[data-member-payment-derived-state]");
+  if (stateLabel) stateLabel.textContent = memberPaymentRecordStateLabel(state);
+  const missing = [];
+  if (state === "incomplete") {
+    if (!values.paymentDate) missing.push("결제일");
+    if (!values.paymentMethod) missing.push("결제수단");
+    if (values.paymentAmount <= 0) missing.push("결제금액");
+  }
+  const missingLabel = form.querySelector("[data-member-payment-missing]");
+  if (missingLabel) missingLabel.textContent = missing.length ? `${missing.join(" · ")} 입력 필요` : state === "complete" ? "입력 완료 · 결제 완료로 자동 처리" : "세 항목을 모두 비우면 미결제";
+  syncMemberRegistrationSummary(form);
+}
+
+function enableMemberManagementPaymentOverride(form) {
+  if (!form?.elements?.paymentAmount || form.elements.paymentAmount.disabled) return;
+  form.dataset.paymentAmountOverride = "true";
+  form.elements.paymentAmount.readOnly = false;
+  form.elements.paymentAmount.removeAttribute("aria-readonly");
+  const field = form.querySelector("[data-payment-override-reason]");
+  const reason = form.elements.paymentOverrideReason;
+  if (field) field.hidden = false;
+  if (reason) {
+    reason.disabled = false;
+    reason.required = true;
+    reason.focus();
+  }
+}
+
+function syncMemberRegistrationSummary(form) {
+  const summary = form?.querySelector("[data-member-registration-summary]");
+  if (!summary) return;
+  const product = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+  const coach = memberManagementCoachRoles({ branchId: product?.branch_id })
+    .find((item) => item.id === form.elements.coachRoleId?.value);
+  const partnerSelect = form.elements.partnerUserId;
+  const partnerName = partnerSelect && !partnerSelect.disabled ? partnerSelect.selectedOptions?.[0]?.textContent?.trim() : "";
+  const isGroup = Number(product?.group_size || 1) === 2;
+  const schedules = memberInlineScheduleValues(form).map((slot) => `${memberManagementDayLabel(slot.dayOfWeek)} ${slot.startTime}`);
+  const paymentState = memberManagementPaymentStateFromValues({
+    paymentDate: form.elements.paymentDate?.value || "",
+    paymentMethod: form.elements.paymentMethod?.value || "",
+    paymentAmount: memberManagementNullableNumber(form.elements.paymentAmount) || 0,
+  });
+  const primaryName = form.elements.memberName?.value?.trim()
+    || members.find((item) => item.id === memberManagementModalState.memberId)?.name
+    || "회원";
+  summary.innerHTML = `<strong>최종 확인</strong><dl>
+    <div><dt>회원</dt><dd>${escapeHtml(isGroup && partnerName ? `${primaryName} · ${partnerName}` : primaryName)}</dd></div>
+    <div><dt>회원권</dt><dd>${escapeHtml(product?.name || "선택 필요")}${isGroup ? " · 그룹 2명 연결" : ""}</dd></div>
+    <div><dt>코치·일정</dt><dd>${escapeHtml(coach?.display_name || "코치 선택 필요")}${schedules.length ? ` · ${escapeHtml(schedules.join(" / "))}` : " · 시간 선택 필요"}</dd></div>
+    <div><dt>기간</dt><dd>${escapeHtml(form.elements.startsOn?.value || "시작일 필요")} ~ ${escapeHtml(form.elements.expiresOn?.value || "자동 계산")}</dd></div>
+    <div><dt>결제</dt><dd>${escapeHtml(memberPaymentRecordStateLabel(paymentState))}${paymentState === "complete" ? ` · ${escapeHtml(paymentMethodLabel(form.elements.paymentMethod?.value || ""))} ${money.format(Number(form.elements.paymentAmount?.value) || 0)}원` : ""}</dd></div>
+  </dl><small>수정할 항목이 있으면 위 입력칸에서 바로 바꾼 뒤 확정하세요.</small>`;
 }
 
 function syncMemberManagementBalance(form) {
@@ -12598,7 +12697,10 @@ function syncMemberManagementProductForMethod(form) {
     && Number(item.frequency_per_week || 1) === Number(form.elements.weeklyFrequency.value)
     && Number(item.group_size || 1) === groupSize
   ));
-  if (matchingProduct) form.elements.productId.value = matchingProduct.id;
+  if (matchingProduct) {
+    form.elements.productId.value = matchingProduct.id;
+    applyMemberManagementProductDefaults(form);
+  }
 }
 
 function memberManagementSelectedDays(form) {
@@ -12647,6 +12749,15 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_assignment_schedule_duplicate")) return "같은 요일과 시간을 중복 선택할 수 없습니다.";
   if (raw.includes("member_assignment_schedule_value_invalid")) return "회원권의 평일·주말 범위에 맞는 시간을 선택해 주세요.";
   if (raw.includes("member_assignment_schedule_blocked_time") || raw.includes("member_assignment_schedule_outside_working_hours")) return "코치 근무시간·브레이크와 겹치지 않는 시간을 선택해 주세요.";
+  if (raw.includes("group_registration_payment_fields_incomplete")) return "결제일·결제수단·결제금액을 모두 입력하거나 모두 비워 주세요.";
+  if (raw.includes("group_registration_payment_method_invalid")) return "카드·계좌이체·현금 중 실제 결제수단을 선택해 주세요.";
+  if (raw.includes("group_registration_payment_price_mismatch")) return "선택한 결제수단의 상품 가격과 금액이 다릅니다. 직접 수정이 필요하면 사유를 입력해 주세요.";
+  if (raw.includes("group_registration_payment_override_reason_required")) return "상품 가격과 다른 금액을 저장하려면 금액 수정 사유를 네 글자 이상 입력해 주세요.";
+  if (raw.includes("group_registration_ticket_expiry_mismatch")) return "시작일 기준 자동 만료일이 달라졌습니다. 상품을 다시 선택해 기간을 갱신해 주세요.";
+  if (raw.includes("group_registration_schedule_conflict")) {
+    const date = raw.match(/group_registration_schedule_conflict[:_](\d{4}-\d{2}-\d{2})/)?.[1];
+    return date ? `${date} 선택 시간에 기존 수업이 있습니다. 다른 시간을 선택해 주세요.` : "반복 일정 중 기존 수업과 겹치는 날짜가 있어 전체 등록을 취소했습니다.";
+  }
   if (raw.includes("reenrollment_keep_schedule_product_mismatch")) return "새 회원권의 수업시간·주 횟수·인원이 달라 기존 시간을 유지할 수 없습니다. ‘새 요일·시간 선택’을 사용해 주세요.";
   if (raw.includes("reenrollment_regular_schedule_missing")) return "기존 정규시간을 확인할 수 없습니다. ‘새 요일·시간 선택’에서 주 횟수만큼 다시 선택해 주세요.";
   if (raw.includes("reenrollment_schedule_frequency_mismatch")) return "새 회원권의 주 횟수만큼 요일과 시간을 모두 선택해 주세요.";
@@ -12917,6 +13028,8 @@ function memberManagementDatabasePayload(form, member, ticket, reason) {
     paymentRecordState: hasControl("paymentRecordState")
       ? form.elements.paymentRecordState.value || null
       : memberPaymentRecordState(record),
+    paymentPriceOverride: form.dataset.paymentAmountOverride === "true",
+    paymentOverrideReason: hasControl("paymentOverrideReason") ? form.elements.paymentOverrideReason.value.trim() || null : null,
     existingPaymentId: hasControl("existingPaymentId") ? form.elements.existingPaymentId.value || null : null,
     note: hasControl("note") ? form.elements.note.value.trim() || null : record?.admin_note || null,
     partnerUserId: hasControl("partnerUserId")
@@ -12999,6 +13112,7 @@ async function submitMemberManagementForm(event) {
   if (!validateRequiredMemberProfile(form, message)) return;
 
   syncMemberManagementBalance(form);
+  syncMemberManagementPaymentFields(form);
   const reason = action === "close"
     ? String(form.elements.closeReason?.value || "").trim()
     : automaticMemberManagementReason(action);
@@ -13082,17 +13196,18 @@ async function submitMemberManagementForm(event) {
     const paymentAmount = memberManagementNullableNumber(form.elements.paymentAmount) || 0;
     const paymentDate = form.elements.paymentDate?.value || "";
     const paymentMethod = form.elements.paymentMethod?.value || "";
-    const paymentRecordState = form.elements.paymentRecordState?.value || memberPaymentRecordState({
-      payment_recorded_on: paymentDate,
-      payment_method: paymentMethod,
-      payment_amount: paymentAmount,
-    });
+    const paymentRecordState = memberManagementPaymentStateFromValues({ paymentDate, paymentMethod, paymentAmount });
     if (paymentRecordState === "complete" && (paymentAmount <= 0 || !paymentDate || !paymentMethod)) {
       if (message) message.textContent = "결제 완료는 결제일자, 결제수단, 1원 이상의 결제금액을 모두 입력해 주세요.";
       return;
     }
-    if (paymentRecordState === "unentered" && (paymentAmount > 0 || paymentDate || paymentMethod)) {
-      if (message) message.textContent = "결제값을 입력했다면 결제 구분을 결제 완료로 바꿔 주세요.";
+    if (paymentRecordState === "incomplete") {
+      const missing = [!paymentDate && "결제일", !paymentMethod && "결제수단", paymentAmount <= 0 && "결제금액"].filter(Boolean);
+      if (message) message.textContent = `${missing.join(" · ")}을 입력해 주세요.`;
+      return;
+    }
+    if (managementPayload?.paymentPriceOverride && String(managementPayload.paymentOverrideReason || "").trim().length < 4) {
+      if (message) message.textContent = "상품 가격과 다른 금액을 저장하려면 금액 수정 사유를 네 글자 이상 입력해 주세요.";
       return;
     }
     normalizeMemberManagementPaymentPayload(managementPayload);
@@ -13141,7 +13256,10 @@ async function submitMemberManagementForm(event) {
       const assignmentPayload = existingPaymentId
         ? { ...managementPayload, assignmentRequestId, paymentAmount: 0, paymentDate: null, paymentMethod: null }
         : { ...managementPayload, assignmentRequestId };
-      result = await client.rpc("tn_admin_assign_member_ticket_and_regular_schedule", {
+      const assignmentRpc = Number(selectedManagementProduct?.group_size || 1) === 2
+        ? "tn_admin_assign_group_member_ticket_and_regular_schedule"
+        : "tn_admin_assign_member_ticket_and_regular_schedule";
+      result = await client.rpc(assignmentRpc, {
         target_record: assignmentPayload,
         target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
         target_operation_key: assignmentRequestId,
@@ -15686,18 +15804,19 @@ async function submitMemberInlineEditor(form, options = {}) {
   const paymentAmount = memberManagementNullableNumber(form.elements.paymentAmount) || 0;
   const paymentDate = form.elements.paymentDate?.value || "";
   const paymentMethod = form.elements.paymentMethod?.value || "";
-  const paymentRecordState = form.elements.paymentRecordState?.value || memberPaymentRecordState({
-    payment_recorded_on: paymentDate,
-    payment_method: paymentMethod,
-    payment_amount: paymentAmount,
-  });
+  const requestedPaymentState = form.elements.paymentRecordState?.value || "";
+  const paymentRecordState = requestedPaymentState === "transfer_zero"
+    ? "transfer_zero"
+    : memberManagementPaymentStateFromValues({ paymentDate, paymentMethod, paymentAmount });
+  if (form.elements.paymentRecordState) form.elements.paymentRecordState.value = paymentRecordState;
   if (paymentChanged && paymentRecordState === "complete" && (paymentAmount <= 0 || !paymentDate || !paymentMethod)) {
     message.textContent = "결제 완료는 결제일자, 결제수단, 1원 이상의 결제금액을 모두 입력해 주세요.";
     message.classList.add("is-error");
     return false;
   }
-  if (paymentChanged && paymentRecordState === "unentered" && (paymentAmount > 0 || paymentDate || paymentMethod)) {
-    message.textContent = "결제값을 입력했다면 결제 구분을 결제 완료로 바꿔 주세요.";
+  if (paymentChanged && paymentRecordState === "incomplete") {
+    const missing = [!paymentDate && "결제일", !paymentMethod && "결제수단", paymentAmount <= 0 && "결제금액"].filter(Boolean);
+    message.textContent = `${missing.join(" · ")}을 입력해 주세요.`;
     message.classList.add("is-error");
     return false;
   }
@@ -22036,7 +22155,12 @@ function settlementAmountFor(item) {
   const settlementCoach = settlementCoachNameFor(item);
   const rule = settlementRuleFor(settlementCoach);
   const completedLessons = Math.max(0, Number(item.lessonCount) || 0);
-  if (!completedLessons || !rule) return 0;
+  if (!rule) return 0;
+  const baseAmount = Number(rule.cardBase === "paid" ? item.paidAmount : item.settlementBase) || 0;
+  if (rule.method === "ratio" && rule.calculationMode === "monthly_payment") {
+    return Math.round(baseAmount * (Number(rule.ratio) || 0));
+  }
+  if (!completedLessons) return 0;
   if (rule.method === "hourly") {
     const minutes = Math.max(0, Number(item.minutes || item.durationMinutes) || 0);
     const hourlyRate = Math.max(0, Number(rule.hourly) || 0);
@@ -22044,10 +22168,6 @@ function settlementAmountFor(item) {
     return Math.round((minutes / 60) * hourlyRate * completedLessons);
   }
   const totalLessons = Math.max(completedLessons, Number(item.totalLessons) || completedLessons);
-  const baseAmount = Number(rule.cardBase === "paid" ? item.paidAmount : item.settlementBase) || 0;
-  if (rule.calculationMode === "monthly_payment") {
-    return Math.round(baseAmount * (Number(rule.ratio) || 0));
-  }
   const perLessonBase = baseAmount / totalLessons;
   return Math.round(perLessonBase * completedLessons * (Number(rule.ratio) || 0));
 }
@@ -22704,18 +22824,16 @@ function renderBilling() {
       (entry) => {
         const item = entry.primary;
         const index = billings.indexOf(item);
-        const displayStatus = paymentDisplayStatus(item);
+        const approval = paymentApprovalDisplay(item);
         return `
-        <tr>
-          <td>${item.member}<br><small>${paymentEnvironmentBadge(item)}</small></td>
-          <td>${billingMembershipDetail(item)}${billingAttemptHistoryMarkup(entry)}<details class="payment-source-details"><summary>결제 원본 보기</summary><span>${escapeHtml(item.item || "결제")}${item.providerPaymentId ? ` · ${escapeHtml(item.providerPaymentId)}` : ""}${item.source ? ` · ${escapeHtml(paymentSourceText(item))}` : ""}</span></details></td>
-          <td>${escapeHtml(billingEffectiveDate(item) || "일자 미입력")}${billingEffectiveMonth(item) ? `<br><small>매출 귀속 ${escapeHtml(billingEffectiveMonth(item))}</small>` : ""}</td>
-          <td>${money.format(item.amount)}원${item.discountTitle ? `<br><small>${escapeHtml(item.discountTitle)} · ${money.format(item.discountAmount || 0)}원 할인${item.originalAmount ? ` · 원가 ${money.format(item.originalAmount)}원` : ""}</small>` : ""}</td>
-          <td>${paymentMethodLabel(item.method)}</td>
-          <td>${badge(displayStatus.status, displayStatus.label)}${displayStatus.detail ? `<br><small>${escapeHtml(displayStatus.detail)}</small>` : ""}${paymentCancellationAuditDetail(item) ? `<br><small>${escapeHtml(paymentCancellationAuditDetail(item))}</small>` : ""}</td>
-          <td>
-            ${paymentActionFor(item, index)}
-          </td>
+        <tr class="payment-sheet-row ${approval.tone}">
+          <td>${badge(approval.tone, approval.label)}<br><small>${escapeHtml(approval.detail)}</small></td>
+          <td><strong>${escapeHtml(item.member || "회원")}</strong><br><small>${paymentEnvironmentBadge(item)}</small></td>
+          <td>${billingMembershipDetail(item)}${billingAttemptHistoryMarkup(entry)}<details class="payment-source-details"><summary>원본·시도 이력</summary><span>${escapeHtml(item.item || "결제")}${item.providerPaymentId ? ` · ${escapeHtml(item.providerPaymentId)}` : ""}${item.source ? ` · ${escapeHtml(paymentSourceText(item))}` : ""}</span></details></td>
+          <td><strong>${money.format(item.amount)}원</strong><br><small>${escapeHtml(paymentMethodLabel(item.method))} · ${escapeHtml(billingEffectiveDate(item) || "일자 미입력")}</small>${item.discountTitle ? `<br><small>${escapeHtml(item.discountTitle)} · ${money.format(item.discountAmount || 0)}원 할인</small>` : ""}</td>
+          <td>${paymentConfirmationMarkup(item)}${paymentCancellationAuditDetail(item) ? `<br><small>${escapeHtml(paymentCancellationAuditDetail(item))}</small>` : ""}</td>
+          <td class="payment-sheet-approval">${paymentActionFor(item, index)}</td>
+          <td class="billing-settlement-cell">${billingSettlementApprovalMarkup(item)}</td>
         </tr>`;
       },
     )
@@ -22752,19 +22870,21 @@ function renderBilling() {
 
 function paymentActionFor(item, index) {
   const context = (label) => `aria-label="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}" title="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}"`;
+  if (item.approvalPending) return '<button class="small-button" type="button" disabled>승인 처리중</button>';
   if (item.status === "check") return item.providerPaymentId
-    ? `<button class="small-button" type="button" data-review-payment="${index}" ${context("서버 확인")}>서버 확인</button>${paymentCancelButtonFor(index, "대기취소")}`
+    ? `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context("결제 확인 후 승인")}>결제 확인·승인</button>${paymentPendingMoreActions(item, index)}`
     : '<button class="small-button" type="button" disabled>서버 결제번호 없음</button>';
-  if (item.status === "unverified") return `<button class="small-button" type="button" data-review-payment="${index}" ${context("서버 연결 확인")}>서버 연결 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
+  if (item.status === "unverified") return `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context("결제 확인 후 승인")}>결제 확인·승인</button>${paymentPendingMoreActions(item, index)}`;
   if (item.status === "failed") return `<button class="small-button" type="button" data-failed-payment="${index}" ${context("실패 확인")}>실패 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
   if (item.status === "draft") return '<button class="small-button" type="button" disabled>회원 결제 대기</button>';
   if (item.status === "server_ready") {
     const label = String(item.method || "") === "bank_transfer"
-      ? "입금 확인"
+      ? "입금 확인·승인"
       : isStaleReadyPayment(item) ? "상태 확인" : "결제 확인";
-    return `<button class="small-button" type="button" data-server-ready-payment="${index}" ${context(label)}>${label}</button>${paymentCancelButtonFor(index, "대기취소")}`;
+    return `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context(label)}>${label}</button>${paymentPendingMoreActions(item, index)}`;
   }
-  if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}" ${context("결제 완료 상세")}>완료됨</button>${paymentFullCancelButtonFor(item, index)}${paymentRefundButtonFor(item, index)}`;
+  if (item.status === "paid" && paymentRequiresTicketRepair(item)) return `<button class="small-button primary-button" type="button" data-paid-payment="${index}" ${context("회원권 연결 확인")}>회원권 연결 확인</button>${paymentApprovedMoreActions(item, index)}`;
+  if (item.status === "paid") return `<button class="small-button" type="button" disabled>승인 완료</button>${paymentApprovedMoreActions(item, index)}`;
   if (item.status === "refund_manual_pending") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("실제 송금 후 환불 완료 확인")}>송금완료 확인</button>`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;
   if (item.status === "cancel_reconcile") return paymentCancelButtonFor(index, "취소 상태 맞추기");
@@ -22772,6 +22892,70 @@ function paymentActionFor(item, index) {
   if (item.status === "cancelled") return `<button class="small-button" type="button" disabled>취소완료</button>`;
   if (item.status === "refunded") return `<button class="small-button" type="button" disabled>환불완료</button>`;
   return "";
+}
+
+function paymentPendingMoreActions(item, index) {
+  const action = paymentCancelButtonFor(index, "대기취소");
+  return action ? `<details class="payment-row-more"><summary>기타</summary>${action}</details>` : "";
+}
+
+function paymentApprovedMoreActions(item, index) {
+  const actions = `${paymentFullCancelButtonFor(item, index)}${paymentRefundButtonFor(item, index)}`;
+  return actions ? `<details class="payment-row-more"><summary>취소·환불</summary>${actions}</details>` : "";
+}
+
+function paymentApprovalDisplay(item = {}) {
+  const method = String(item.method || "").toLowerCase();
+  if (item.approvalPending) return { tone: "neutral", label: "승인 처리중", detail: "서버에서 결제와 회원권을 다시 확인하고 있습니다." };
+  if (item.status === "paid" && paymentRequiresTicketRepair(item)) {
+    return { tone: "warn", label: "연결 확인", detail: "결제는 확인됐지만 회원권 연결을 확인해야 합니다." };
+  }
+  if (item.status === "paid") {
+    return { tone: "good", label: "승인 완료", detail: item.oneDayBookingId ? "원데이 예약 연결됨" : item.ticketId ? "회원권 연결됨" : "이관 결제 보존" };
+  }
+  if (item.status === "server_ready" && method === "bank_transfer") {
+    return { tone: "warn", label: "입금 확인 필요", detail: "실제 입금액을 확인한 뒤 한 번만 승인하세요." };
+  }
+  if (["check", "unverified"].includes(item.status)) {
+    return { tone: "warn", label: "결제 확인 필요", detail: "결제사 상태를 확인하면 회원권까지 함께 연결됩니다." };
+  }
+  if (item.status === "server_ready") return { tone: "neutral", label: "결제 대기", detail: "회원 결제가 완료됐는지 확인합니다." };
+  if (["cancelled", "refunded"].includes(item.status)) return { tone: "neutral", label: "취소·환불", detail: "현재 회원권 승인 대상이 아닙니다." };
+  if (item.status === "failed") return { tone: "danger", label: "결제 실패", detail: "회원권을 생성하거나 연결하지 않습니다." };
+  return { tone: "neutral", label: "확인 대기", detail: "결제 상태를 먼저 확인해 주세요." };
+}
+
+function paymentConfirmationMarkup(item = {}) {
+  const paidAt = paymentAuditDateTimeLabel(item.verifiedAt || item.paidAt);
+  if (item.status === "paid") return `${badge("good", "결제 확인됨")}${paidAt ? `<br><small>${escapeHtml(paidAt)}</small>` : ""}`;
+  if (item.status === "server_ready" && String(item.method || "").toLowerCase() === "bank_transfer") {
+    const depositor = item.depositorName ? ` · ${escapeHtml(item.depositorName)}` : "";
+    return `${badge("warn", "직접 입금 확인")}${depositor ? `<br><small>${depositor}</small>` : ""}`;
+  }
+  if (["check", "unverified"].includes(item.status)) return badge("warn", "결제사 확인 필요");
+  if (item.status === "server_ready") return badge("neutral", "결제 전");
+  if (item.status === "failed") return badge("danger", "실패");
+  if (["cancelled", "refunded"].includes(item.status)) return badge("neutral", "취소·환불 완료");
+  return badge("neutral", "확인 대기");
+}
+
+function settlementRuleSummary(rule = {}) {
+  if (rule.method === "hourly") return `시간제 ${money.format(Number(rule.hourly) || 0)}원/시간`;
+  const rate = Math.round((Number(rule.ratio) || 0) * 10000) / 100;
+  return rule.calculationMode === "monthly_payment"
+    ? `월 결제금액 × ${rate}%`
+    : `진행 횟수 × ${rate}%`;
+}
+
+function billingSettlementApprovalMarkup(item = {}) {
+  if (item.status !== "paid") return '<span class="billing-settlement-pending">승인 후 자동계산</span>';
+  if (paymentRequiresTicketRepair(item)) return '<span class="payment-link-warning">회원권 연결 후 계산</span>';
+  const rows = settlementRowsForBilling(item);
+  const amount = rows.reduce((sum, row) => sum + settlementAmountFor(row), 0);
+  const coachNames = [...new Set(rows.map((row) => settlementCoachNameFor(row)).filter(Boolean))];
+  const summaries = [...new Set(rows.map((row) => settlementRuleSummary(settlementRuleFor(settlementCoachNameFor(row)))))]
+    .filter(Boolean);
+  return `<strong>${money.format(amount)}원</strong><br><small>${escapeHtml(coachNames.join(" · ") || "코치 확인 필요")}${summaries.length ? ` · ${escapeHtml(summaries.join(" / "))}` : ""}</small>`;
 }
 
 function paymentOwnerHasHistoricalRecord(item = {}) {
@@ -22869,8 +23053,10 @@ async function verifyBillingPaymentItem(item) {
     return;
   }
 
-  item.statusLabel = "서버검증중";
-  billingLogs.unshift(`${item.member} ${item.item} 서버검증 실행: ${item.providerPaymentId}`);
+  if (item.approvalPending) return;
+  item.approvalPending = true;
+  item.statusLabel = "승인처리중";
+  billingLogs.unshift(`${item.member} ${item.item} 결제 확인·승인 실행: ${item.providerPaymentId}`);
   renderAll();
 
   try {
@@ -22882,10 +23068,11 @@ async function verifyBillingPaymentItem(item) {
     if (bankTransfer && !window.confirm(bankPrompt)) {
       item.status = "server_ready";
       item.statusLabel = "입금확인대기";
+      item.approvalPending = false;
       renderAll();
       return;
     }
-    const result = await client.invokeFunction(bankTransfer ? "portone-payment/bank-transfer-confirm" : "portone-payment/verify", {
+    const result = await client.invokeFunction("portone-payment/admin-approve", {
       body: {
         paymentId: item.providerPaymentId,
         ...(bankTransfer ? {
@@ -22896,10 +23083,20 @@ async function verifyBillingPaymentItem(item) {
     });
     if (result?.ok) {
       item.status = result.status === "verified" || result.status === "already_verified" ? "paid" : "check";
-      item.statusLabel = result.chargedTicket ? "검증/충전완료" : "서버검증완료";
-      billingLogs.unshift(`${item.member} ${item.item} 서버검증 완료: ${result.status}`);
-      await loadServerPaymentsIntoBilling({ silent: true });
-      showToast(bankTransfer ? "입금 확인과 회원권 반영이 완료됐습니다" : "서버 결제 검증 완료");
+      item.statusLabel = result.ticketId || result.chargedTicket ? "승인/회원권연결완료" : "승인완료";
+      billingLogs.unshift(`${item.member} ${item.item} 결제 승인 완료: ${result.status}`);
+      await loadServerPaymentsIntoBilling({ silent: true, force: true });
+      const refreshed = billings.find((billing) => (
+        String(billing.serverPaymentId || "") === String(item.serverPaymentId || "")
+        || String(billing.providerPaymentId || "") === String(item.providerPaymentId || "")
+      ));
+      const linked = Boolean(result.ticketId || refreshed?.ticketId || refreshed?.oneDayBookingId);
+      if (!linked && refreshed && paymentRequiresTicketRepair(refreshed)) {
+        billingLogs.unshift(`${item.member} ${item.item} 승인 후 회원권 연결 확인 필요`);
+        showToast("결제는 승인됐지만 회원권 연결을 확인해 주세요");
+      } else {
+        showToast(bankTransfer ? "입금 승인·회원권 연결·정산 반영 완료" : "결제 승인·회원권 연결·정산 반영 완료");
+      }
     } else if (result?.code === "payment_not_paid") {
       item.status = "server_ready";
       item.statusLabel = "결제대기";
@@ -22908,8 +23105,8 @@ async function verifyBillingPaymentItem(item) {
     } else {
       item.status = "check";
       item.statusLabel = "검증확인필요";
-      billingLogs.unshift(`${item.member} ${item.item} 서버검증 확인 필요: ${result?.code || "unknown"}`);
-      showToast("서버 검증 확인 필요");
+      billingLogs.unshift(`${item.member} ${item.item} 결제 승인 확인 필요: ${result?.code || "unknown"}`);
+      showToast("결제 승인 확인 필요");
     }
   } catch (error) {
     const code = error?.payload?.code || error?.message || "server_error";
@@ -22921,11 +23118,28 @@ async function verifyBillingPaymentItem(item) {
     } else {
       item.status = "check";
       item.statusLabel = "검증실패";
-      billingLogs.unshift(`${item.member} ${item.item} 서버검증 실패: ${code}`);
-      showToast("서버 검증 실패");
+      billingLogs.unshift(`${item.member} ${item.item} 결제 승인 실패: ${code}`);
+      showToast("결제 승인 실패");
     }
+  } finally {
+    item.approvalPending = false;
   }
   renderAll();
+}
+
+function openBillingMemberReview(item = {}) {
+  const userId = String(item.serverUserId || "");
+  const member = members.find((candidate) => memberServerUserIds(candidate).includes(userId))
+    || members.find((candidate) => String(candidate.name || "") === String(item.member || ""));
+  if (!member) {
+    showToast("연결할 회원을 회원관리에서 먼저 확인해 주세요");
+    return;
+  }
+  state.selectedMemberId = member.id;
+  setView("members", { skipLock: true });
+  renderMembers();
+  void loadAdminMemberDetail(member, { force: true });
+  showToast(`${member.name} 회원권·결제 연결을 확인해 주세요`);
 }
 
 async function ensureAdminPaymentCancelReady(item = {}) {
@@ -32736,6 +32950,10 @@ function bindEvents() {
       applyMemberManagementProductDefaults(event.target.form);
       return;
     }
+    if (event.target.matches("#memberManagementForm select[name='paymentMethod']")) {
+      syncMemberManagementPaymentFields(event.target.form, { forcePrice: true });
+      return;
+    }
     if (event.target.matches("#memberManagementForm select[name='scheduleScope'], #memberManagementForm select[name='weeklyFrequency'], #memberManagementForm select[name='lessonType']")) {
       syncMemberManagementScopeFields(event.target.form);
       syncManualMemberPartnerField(event.target.form);
@@ -32772,6 +32990,21 @@ function bindEvents() {
     }
     if (event.target.matches("#memberManagementForm input[name='totalSessions'], #memberManagementForm input[name='usedSessions']")) {
       syncMemberManagementBalance(event.target.form);
+      syncMemberRegistrationSummary(event.target.form);
+      return;
+    }
+    if (event.target.matches("#memberManagementForm input[name='startsOn']")) {
+      const product = (adminLiveDataState.products || []).find((item) => item.id === event.target.form?.elements.productId?.value);
+      if (product && event.target.form?.elements.expiresOn) {
+        const validityDays = Math.max(1, Number(product.validity_days || 1) + Number(product.grace_days || 0));
+        event.target.form.elements.expiresOn.value = addMemberManagementDays(event.target.value, validityDays - 1);
+      }
+      syncMemberRegistrationSummary(event.target.form);
+      return;
+    }
+    if (event.target.matches("#memberManagementForm input[name='paymentDate'], #memberManagementForm input[name='paymentAmount'], #memberManagementForm input[name='paymentOverrideReason'], #memberManagementForm select[name^='scheduleTime']")) {
+      syncMemberManagementPaymentFields(event.target.form);
+      syncMemberRegistrationSummary(event.target.form);
       return;
     }
     if (event.target.matches("[data-ticket-partner-search]")) {
@@ -32882,6 +33115,11 @@ function bindEvents() {
 
   document.addEventListener("click", async (event) => {
     if (event.target.matches("[data-select-product-row]")) event.stopPropagation();
+    const paymentOverrideButton = event.target.closest("[data-enable-payment-override]");
+    if (paymentOverrideButton) {
+      enableMemberManagementPaymentOverride(paymentOverrideButton.closest("form"));
+      return;
+    }
     const memberProductDuration = event.target.closest("[data-member-product-duration]");
     if (memberProductDuration) {
       requestMemberInlineProductDuration(
@@ -32927,6 +33165,7 @@ function bindEvents() {
       } else {
         if (memberManagementModalState.action === "reenroll") syncMemberReenrollSchedule(form);
         else syncMemberCreateSchedule(form);
+        syncMemberRegistrationSummary(form);
       }
       return;
     }
@@ -33151,6 +33390,7 @@ function bindEvents() {
         form.elements.partnerUserId.value = manualPartnerButton.dataset.selectManualMemberPartner;
         form.elements.partnerUserId.dispatchEvent(new Event("change", { bubbles: true }));
         filterManualMemberPartnerOptions(form);
+        syncMemberRegistrationSummary(form);
       }
       return;
     }
@@ -33353,6 +33593,13 @@ function bindEvents() {
       return;
     }
 
+    const approvePaymentButton = event.target.closest("[data-approve-payment]");
+    if (approvePaymentButton) {
+      const item = billings[Number(approvePaymentButton.dataset.approvePayment)];
+      await verifyBillingPaymentItem(item);
+      return;
+    }
+
     const serverReadyPaymentButton = event.target.closest("[data-server-ready-payment]");
     if (serverReadyPaymentButton) {
       const item = billings[Number(serverReadyPaymentButton.dataset.serverReadyPayment)];
@@ -33370,7 +33617,9 @@ function bindEvents() {
     const paidPaymentButton = event.target.closest("[data-paid-payment]");
     if (paidPaymentButton) {
       const item = billings[Number(paidPaymentButton.dataset.paidPayment)];
-      showToast(`${item.member} 결제는 이미 완료됐습니다`);
+      if (paymentRequiresTicketRepair(item)) openBillingMemberReview(item);
+      else showToast(`${item.member} 결제는 이미 승인됐고 회원권에 연결됐습니다`);
+      return;
     }
 
     const refundPaymentButton = event.target.closest("[data-refund-payment]");
