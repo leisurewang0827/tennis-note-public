@@ -2950,6 +2950,66 @@ tr.is-selected td {
   min-width: 1540px;
 }
 
+#membersView .member-directory-table.is-simple {
+  min-width: 760px;
+}
+
+#membersView .member-directory-table.is-simple :is(
+  .member-select-column,
+  .member-status-column,
+  .member-scope-column,
+  .member-coach-column,
+  .member-partner-column,
+  .member-date-column,
+  .member-usage-column,
+  .member-payment-date-column,
+  .member-settlement-column
+) {
+  display: none;
+}
+
+#membersView .member-directory-table.is-simple .member-name-column {
+  width: 132px;
+  min-width: 132px;
+}
+
+#membersView .member-directory-table.is-simple .member-auth-column {
+  width: 104px;
+  min-width: 104px;
+  text-align: center;
+}
+
+#membersView .member-directory-table.is-simple .member-ticket-column {
+  min-width: 230px;
+}
+
+#membersView .member-directory-table.is-simple .member-payment-method-column {
+  width: 132px;
+  min-width: 132px;
+}
+
+#membersView .member-directory-table.is-simple .member-payment-amount-column {
+  width: 104px;
+  min-width: 104px;
+  text-align: right;
+}
+
+#membersView .member-directory-table.is-simple .member-row-actions > :not(.member-row-manage),
+#membersView .member-directory-table.is-detail .member-row-manage {
+  display: none;
+}
+
+.member-ticket-simple-context {
+  display: none;
+}
+
+#membersView .member-directory-table.is-simple .member-ticket-simple-context {
+  display: block;
+  margin-top: 2px;
+  color: var(--green);
+  font-weight: 800;
+}
+
 .member-ticket-table-row.is-review-needed td {
   background: #fffaf0;
 }
@@ -4192,6 +4252,55 @@ tr.is-selected td {
 .member-auth-status.is-unlinked {
   color: #68758a;
   background: #eef2f7;
+}
+
+.member-auth-status.is-review {
+  color: #8a4d00;
+  background: #fff0c7;
+}
+
+.member-payment-status {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 92px;
+}
+
+.member-payment-status strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.member-payment-status small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.member-payment-status.is-success strong {
+  color: #08633f;
+}
+
+.member-payment-status.is-warning strong {
+  color: #9a5a08;
+}
+
+.member-payment-status.is-danger strong {
+  color: #a4382f;
+}
+
+.member-payment-status.is-neutral strong {
+  color: #68758a;
+}
+
+.member-simple-admin-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.member-simple-admin-actions button {
+  min-height: 42px;
 }
 
 .member-auth-link-action {
@@ -15805,6 +15914,15 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
   #membersView .table-panel tr.is-selected td.member-select-column,
   #membersView .table-panel tr.is-selected td.member-name-column {
     background: var(--soft-blue);
+  }
+
+  #membersView .member-directory-table.is-simple th.member-name-column,
+  #membersView .member-directory-table.is-simple td.member-name-column {
+    left: 0;
+  }
+
+  #membersView .member-directory-table.is-simple .member-auth-column {
+    display: table-cell;
   }
 
   .schedule-main-toolbar {
