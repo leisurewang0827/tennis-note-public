@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.410" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.411" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-17" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.410" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.411" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
   </head>
   <body>
@@ -263,7 +263,7 @@
           <section class="panel app-signup-guide" data-member-scope="journal" data-member-admin-only hidden aria-label="앱가입 회원 연결 안내">
             <div>
               <strong>앱만 가입한 회원</strong>
-              <span>이름 또는 휴대전화 뒤 4자리로 찾은 뒤 한 가지 작업만 선택하세요.</span>
+              <span>한 회원은 로그인 하나만 사용합니다. 이름 또는 휴대전화 뒤 4자리로 찾아 기존 DB에 연결하거나 신규 수강을 등록하세요.</span>
             </div>
             <ol>
               <li><strong>기존 회원 연결</strong><span>이미 수강 DB에 있던 회원</span></li>
@@ -303,6 +303,7 @@
                 </label>
                 <div class="member-filter-result">
                   <strong id="memberFilterSummary" class="member-filter-summary"></strong>
+                  <button id="toggleMemberTableView" class="ghost-button member-table-view-toggle" type="button" aria-pressed="true">상세 보기</button>
                   <button id="resetMemberFilters" class="ghost-button member-filter-reset" type="button" hidden>검색 초기화</button>
                   <button id="showChangedMemberRows" class="ghost-button" type="button" hidden>변경된 행만</button>
                   <button id="showFailedMemberRows" class="ghost-button" type="button" hidden>저장 실패만</button>
@@ -351,12 +352,13 @@
                 <button id="deleteSelectedMembers" class="small-button danger-button" type="button">선택 삭제</button>
                 <button id="clearMemberBulkSelection" class="ghost-button" type="button">선택 해제</button>
               </div>
-              <table>
+              <table id="memberDirectoryTable" class="member-directory-table is-simple">
                 <thead>
                   <tr>
                     <th class="row-select-cell member-select-column"><input id="selectVisibleMembers" type="checkbox" aria-label="현재 목록 전체 선택" /></th>
                     <th class="member-status-column">상태</th>
                     <th class="member-name-column">회원</th>
+                    <th class="member-auth-column">앱 연결</th>
                     <th class="member-ticket-column">상품</th>
                     <th class="member-scope-column">평일/주말</th>
                     <th class="member-coach-column">코치</th>
@@ -365,7 +367,7 @@
                     <th class="member-date-column">만료일</th>
                     <th class="member-usage-column">총/사용/잔여</th>
                     <th class="member-payment-date-column">결제일</th>
-                    <th class="member-payment-method-column">결제수단</th>
+                    <th class="member-payment-method-column">결제 상태</th>
                     <th class="member-payment-amount-column">결제금액</th>
                     <th class="member-settlement-column">정산</th>
                     <th class="member-actions-column">처리</th>
@@ -2144,20 +2146,20 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.410"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.410"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.410"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.411"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.411"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.411"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-2"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.410"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.411"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.410"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.410"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.410"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.410"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.410"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.410"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.411"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.411"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.411"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.411"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.411"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.411"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
-    <script src="./app.js?v=1.0.410"></script>
+    <script src="./app.js?v=1.0.411"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-17"></script>
   </body>
 </html>

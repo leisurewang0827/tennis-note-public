@@ -26,6 +26,7 @@ const state = {
   memberCoachFilter: "all",
   memberTicketFilter: "all",
   memberTicketGridFilter: "all",
+  memberTableView: "simple",
   scheduleFilter: "all",
   scheduleView: "week",
   scheduleCoachFilter: "all",
@@ -7959,6 +7960,7 @@ function adminViewUiSignature(view) {
       state.memberSearch,
       state.memberCoachFilter,
       state.memberTicketFilter,
+      state.memberTableView,
       state.memberListPage,
       state.inlineMemberId,
       state.inlineMemberTicketId,
@@ -9437,13 +9439,18 @@ function memberTicketLinkedPayment(member = null, ticket = null) {
 function memberTicketPaymentProjection(member = null, ticket = null) {
   const serverProjection = memberPaymentProjectionRow(member, ticket);
   if (serverProjection) {
+    const payment = (adminLiveDataState.payments || []).find((candidate) => (
+      String(candidate.id || candidate.serverPaymentId || "") === String(serverProjection.payment_id || "")
+    )) || memberTicketLinkedPayment(member, ticket);
     return {
       ...serverProjection,
       protected: Boolean(serverProjection.payment_protected),
-      payment: serverProjection.payment_id ? {
+      payment: payment || (serverProjection.payment_id ? {
         id: serverProjection.payment_id,
         status: serverProjection.payment_status || "",
-      } : null,
+      } : null),
+      payment_provider: payment?.provider || "",
+      provider_payment_id: payment?.provider_payment_id || "",
     };
   }
   const payment = memberTicketLinkedPayment(member, ticket);
@@ -9455,6 +9462,8 @@ function memberTicketPaymentProjection(member = null, ticket = null) {
       payment_recorded_on: String(payment.paid_at || payment.verified_at || payment.created_at || "").slice(0, 10),
       payment_method: payment.method || payment.provider || "",
       payment_amount: Number(payment.final_amount ?? payment.amount ?? 0),
+      payment_provider: payment.provider || "",
+      provider_payment_id: payment.provider_payment_id || "",
     };
   }
   const record = memberDatabaseRecord(member, ticket);
@@ -9932,33 +9941,53 @@ function memberAuthConnection(member = {}) {
   const primaryProvider = providers[0] || "";
   const primaryLabel = authProviderLabel(primaryProvider) || primaryProvider;
   const linked = Boolean(member.authLinked);
+  const phone = normalizedMemberPhone(member.phone);
+  const splitCandidates = phone.length >= 10
+    ? members.filter((candidate) => (
+      candidate !== member
+      && candidate.authLinked
+      && memberListStatus(candidate) === "journal"
+      && normalizedMemberPhone(candidate.phone) === phone
+    ))
+    : [];
+  const needsReview = splitCandidates.length > 0;
   return {
     linked,
     provider: primaryProvider,
     providers: primaryProvider ? [primaryProvider] : [],
-    summary: linked ? (primaryLabel ? `${primaryLabel} 연결` : "로그인 계정 연결됨") : "앱 가입 전",
-    detail: linked ? (primaryLabel ? `로그인 수단: ${primaryLabel}` : "로그인 계정은 연결됐으며 수단 정보는 확인 중입니다.") : "로그인 수단 미연결",
+    splitCandidates,
+    needsReview,
+    summary: needsReview
+      ? `분리 앱 계정 ${splitCandidates.length}건`
+      : linked ? (primaryLabel ? `${primaryLabel} 연결` : "로그인 계정 연결됨") : "앱 가입 전",
+    detail: needsReview
+      ? "같은 휴대전화의 앱 가입 계정이 따로 있습니다. 앱 연결에서 본인 계정을 확인해 하나로 교체하세요."
+      : linked ? (primaryLabel ? `로그인 수단: ${primaryLabel}` : "로그인 계정은 연결됐으며 수단 정보는 확인 중입니다.") : "로그인 수단 미연결",
   };
 }
 
 function memberAuthStatusMarkup(member = {}) {
   const connection = memberAuthConnection(member);
-  const label = connection.linked
+  const label = connection.needsReview
+    ? "분리 계정"
+    : connection.linked
     ? (connection.providers.map(authProviderLabel).filter(Boolean).join(" · ") || "연결됨")
-    : "미연결";
-  const detail = connection.linked
+    : "앱 미연결";
+  const detail = connection.needsReview
+    ? connection.detail
+    : connection.linked
     ? `${connection.detail}${member.authLastSignInAt ? ` · 최근 로그인 ${notificationDateTimeLabel(member.authLastSignInAt)}` : ""}`
-    : "회원이 앱에서 로그인하면 자동으로 연결 상태가 표시됩니다.";
+    : "회원이 앱에서 로그인하면 연결 후보가 표시됩니다.";
   if (operationsRole() === "admin" && member.id) {
     return `<button class="member-auth-link-action" type="button"
       data-open-member-management="app_link"
       data-member-management-member-id="${member.id}"
       title="${escapeHtml(detail)}">
-        <span class="member-auth-status ${connection.linked ? "is-linked" : "is-unlinked"}">${escapeHtml(label)}</span>
-        <small>${connection.linked ? "로그인 변경" : "앱 연결"}</small>
+        <span class="member-auth-status ${connection.needsReview ? "is-review" : connection.linked ? "is-linked" : "is-unlinked"}">${escapeHtml(label)}</span>
+        <small>${connection.needsReview ? "하나로 연결" : connection.linked ? "로그인 변경" : "앱 연결"}</small>
       </button>`;
   }
-  return `<span class="member-auth-status ${connection.linked ? "is-linked" : "is-unlinked"}" title="${escapeHtml(detail)}">${escapeHtml(label)}</span>`;
+  return `<span class="member-auth-status ${connection.needsReview ? "is-review" : connection.linked ? "is-linked" : "is-unlinked"}" title="${escapeHtml(detail)}">${escapeHtml(label)}</span>`;
 }
 
 function renderMemberAuthLinkCard(member) {
@@ -11058,10 +11087,16 @@ function memberTicketRowMarkup(member, ticket, position = 1, count = 1, possible
     .filter(Boolean)
     .map(memberDetailDateLabel)
     .join("~");
+  const simpleContext = [
+    memberTicketScheduleScopeLabel(ticket),
+    memberTicketCoachLabel(member, ticket),
+    ticketUsageLabel(ticket),
+  ].filter(Boolean).join(" · ");
   return `<span class="member-ticket-row-summary">
     ${context ? `<small>${escapeHtml(context)}</small>` : ""}
     <strong>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</strong>
     <span>${escapeHtml(memberTicketStatusLabel(ticket))}${period ? ` · ${escapeHtml(period)}` : ""}</span>
+    <small class="member-ticket-simple-context">${escapeHtml(simpleContext)}</small>
   </span>`;
 }
 
@@ -13350,6 +13385,21 @@ function renderMemberEditorModeBar() {
   updateMemberInlineToolbar();
 }
 
+function renderMemberTableViewMode() {
+  const simple = state.memberTableView !== "detail";
+  const table = $("#memberDirectoryTable");
+  table?.classList.toggle("is-simple", simple);
+  table?.classList.toggle("is-detail", !simple);
+  const button = $("#toggleMemberTableView");
+  if (button) {
+    button.textContent = simple ? "상세 보기" : "간단 보기";
+    button.setAttribute("aria-pressed", String(simple));
+    button.title = simple
+      ? "코치·기간·횟수·결제일·정산 열까지 펼칩니다."
+      : "회원·앱 연결·회원권·결제 상태·금액·처리만 표시합니다.";
+  }
+}
+
 async function loadMemberEditorModeFromServer() {
   if (operationsRole() === "admin" && isAdminUnlocked() && !memberAdminEditEnabled) {
     memberAdminEditEnabled = true;
@@ -15035,14 +15085,134 @@ function memberTicketPaymentGrid(member, ticket) {
   const projection = ticket ? memberTicketPaymentProjection(member, ticket) : null;
   const stateValue = memberPaymentRecordState(projection);
   if (!projection || stateValue === "unentered") {
-    return { state: stateValue, date: "-", method: "미입력", amount: "-" };
+    return {
+      state: stateValue,
+      date: "-",
+      method: "미입력",
+      amount: "-",
+      label: "결제 미등록",
+      detail: "연결된 결제 기록이 없습니다.",
+      tone: "neutral",
+      needsReview: false,
+    };
+  }
+  const rawPayment = projection.payment || {};
+  const provider = String(projection.payment_provider || rawPayment.provider || "").toLowerCase();
+  const methodValue = String(projection.payment_method || rawPayment.method || "").toLowerCase();
+  const paymentStatus = String(projection.payment_status || rawPayment.status || "").toLowerCase();
+  const projectionSource = String(projection.projection_source || "");
+  const linkedToTicket = ["exact_ticket_payment", "source_payment"].includes(projectionSource)
+    || String(rawPayment.ticket_id || rawPayment.ticketId || "") === String(ticket?.serverTicketId || ticket?.id || "");
+  const tossPayment = methodValue === "tosspay";
+  const portonePayment = provider === "portone";
+  const bankPayment = provider === "bank_transfer" || ["bank", "bank_transfer", "transfer"].includes(methodValue);
+  let label = stateValue === "transfer_zero" ? "양도 완료" : "결제 완료";
+  let detail = stateValue === "transfer_zero" ? "결제 없이 양도된 회원권입니다." : "결제 기록이 회원권에 연결되어 있습니다.";
+  let tone = stateValue === "incomplete" ? "warning" : "success";
+  let needsReview = stateValue === "incomplete";
+
+  if (tossPayment) {
+    if (paymentStatus === "verified" && linkedToTicket) {
+      label = "토스 완료";
+      detail = "토스 결제가 서버에서 확인됐고 이 회원권에 연결됐습니다.";
+      tone = "success";
+      needsReview = false;
+    } else if (paymentStatus === "verified") {
+      label = "토스 연결 확인";
+      detail = "토스 결제는 확인됐지만 이 회원권 연결을 확인해야 합니다.";
+      tone = "warning";
+      needsReview = true;
+    } else if (["ready", "pending"].includes(paymentStatus)) {
+      label = "토스 결제대기";
+      detail = "결제창은 생성됐지만 토스 결제 완료가 확인되지 않았습니다.";
+      tone = "warning";
+      needsReview = true;
+    } else if (paymentStatus === "failed") {
+      label = "토스 실패";
+      detail = "토스 결제가 완료되지 않았습니다. 새 결제 요청 여부를 확인하세요.";
+      tone = "danger";
+      needsReview = true;
+    } else if (paymentStatus === "cancelled") {
+      label = "토스 취소";
+      detail = "토스 결제가 취소됐습니다.";
+      tone = "neutral";
+      needsReview = false;
+    } else {
+      label = "토스 확인 필요";
+      detail = "토스 결제 상태를 결제관리에서 다시 확인하세요.";
+      tone = "warning";
+      needsReview = true;
+    }
+  } else if (portonePayment) {
+    if (paymentStatus === "verified" && linkedToTicket) {
+      label = "카드 완료";
+      detail = "PG 카드 결제가 서버에서 확인됐고 이 회원권에 연결됐습니다.";
+      tone = "success";
+      needsReview = false;
+    } else if (["ready", "pending"].includes(paymentStatus)) {
+      label = "카드 결제대기";
+      detail = "PG 결제창은 생성됐지만 결제 완료가 확인되지 않았습니다.";
+      tone = "warning";
+      needsReview = true;
+    } else if (paymentStatus === "failed") {
+      label = "카드 실패";
+      detail = "PG 카드 결제가 완료되지 않았습니다.";
+      tone = "danger";
+      needsReview = true;
+    } else if (paymentStatus === "cancelled") {
+      label = "카드 취소";
+      detail = "PG 카드 결제가 취소됐습니다.";
+      tone = "neutral";
+      needsReview = false;
+    } else {
+      label = "카드 확인 필요";
+      detail = "PG 카드 결제 상태 또는 회원권 연결을 확인하세요.";
+      tone = "warning";
+      needsReview = true;
+    }
+  } else if (bankPayment) {
+    if (paymentStatus === "verified" || stateValue === "complete") {
+      label = "입금 확인";
+      detail = "계좌 입금이 확인됐고 회원권에 반영됐습니다.";
+      tone = "success";
+      needsReview = false;
+    } else if (["ready", "pending"].includes(paymentStatus)) {
+      label = "입금 대기";
+      detail = "입금자명과 금액을 확인한 뒤 입금 확인을 진행하세요.";
+      tone = "warning";
+      needsReview = true;
+    }
+  } else if (provider === "google_sheet_history") {
+    label = "이관 결제";
+    detail = "과거 구글시트 결제 근거를 보존한 기록입니다.";
+    tone = "success";
+    needsReview = false;
+  } else if (provider === "admin_manual" && (paymentStatus === "verified" || stateValue === "complete")) {
+    label = "현장 확인";
+    detail = "관리자가 확인해 등록한 결제입니다.";
+    tone = "success";
+    needsReview = false;
+  } else if (stateValue === "incomplete") {
+    label = "결제 확인 필요";
+    detail = "결제일·수단·금액 또는 회원권 연결이 완전하지 않습니다.";
   }
   return {
     state: stateValue,
     date: projection.payment_recorded_on ? memberDetailDateLabel(projection.payment_recorded_on) : "미입력",
     method: stateValue === "transfer_zero" ? "양도" : paymentMethodLabel(projection.payment_method || ""),
     amount: `${money.format(Number(projection.payment_amount || 0))}원`,
+    label,
+    detail,
+    tone,
+    needsReview,
   };
+}
+
+function memberTicketPaymentStatusMarkup(paymentGrid) {
+  return `<span class="member-payment-status is-${escapeHtml(paymentGrid.tone || "neutral")}" title="${escapeHtml(paymentGrid.detail || "")}">
+    <strong>${escapeHtml(paymentGrid.label || "결제 확인")}</strong>
+    <small>${escapeHtml(paymentGrid.method || "미입력")}</small>
+  </span>`;
 }
 
 function memberTicketScheduleScopeLabel(ticket) {
@@ -15073,7 +15243,7 @@ function memberTicketGridReviewReasons(member, ticket) {
   const payment = memberTicketPaymentGrid(member, ticket);
   if (!ticket.productId || !ticket.scheduleScope) reasons.push("상품 연결 오류");
   if (!ticket.serverUserId && !member?.serverUserId) reasons.push("회원 연결 오류");
-  if (payment.state === "incomplete") reasons.push("결제 확인 필요");
+  if (payment.needsReview) reasons.push(payment.label || "결제 확인 필요");
   if (ticket.policySnapshot?.admin_grid_price_review?.required === true) reasons.push("가격 차이 확인");
   if (Number(ticket.used || 0) + Number(ticket.remaining || 0) !== Number(ticket.total || 0)) reasons.push("횟수 불일치");
   if (Number(ticket.groupSize || 1) === 2 && !memberTicketPartnerUserId(ticket, member)) reasons.push("파트너 연결 오류");
@@ -15948,6 +16118,7 @@ function renderMembers(options = {}) {
   renderMemberStatusCounts();
   renderMemberFilterSections();
   renderMemberEditorModeBar();
+  renderMemberTableViewMode();
 
   const selectedIndex = filtered.findIndex((member) => member.id === state.selectedMemberId);
   if (!serverDirectoryReady && selectedIndex >= 0) state.memberListPage = Math.floor(selectedIndex / memberListPageSize);
@@ -15971,7 +16142,7 @@ function renderMembers(options = {}) {
   const preserveList = options.preserveList === true && memberRows?.children.length;
   if (!preserveList) {
     memberRows.innerHTML = serverDirectoryPending
-      ? '<tr><td colspan="15" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
+      ? '<tr><td colspan="16" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
       : visibleMembers.length ? visibleMembers
       .map((member) => {
       const editableTickets = memberDirectoryTickets(member);
@@ -15983,7 +16154,7 @@ function renderMembers(options = {}) {
       const listStatus = memberListStatus(member);
       if (listStatus === "journal") {
         return `<tr class="app-signup-member-row" data-member-id="${member.id}">
-          <td colspan="15">
+          <td colspan="16">
             <article class="app-signup-member-card">
               <button class="app-signup-member-identity" type="button" data-select-member="${member.id}">
                 ${avatarMarkup(member, "small")}
@@ -16021,7 +16192,7 @@ function renderMembers(options = {}) {
         if (editingThisRow || editingNewTicket) {
           const editorTicket = editingNewTicket ? null : rowTicket;
           return `<tr class="member-inline-editor-row member-inline-sheet-row" data-member-id="${member.id}" data-member-editor-row="${member.id}" data-member-editor-ticket="${escapeHtml(ticketId)}">
-            <td colspan="15">${memberQuickEditorMarkup(member, editorTicket, {
+             <td colspan="16">${memberQuickEditorMarkup(member, editorTicket, {
               embedded: true,
               ticketPosition: editingNewTicket ? editableTickets.length + 1 : ticketIndex + 1,
               ticketCount: editableTickets.length,
@@ -16051,6 +16222,7 @@ function renderMembers(options = {}) {
               <span>${escapeHtml(member.name)}</span>
             </button>
           </td>
+          <td class="member-auth-column">${ticketIndex === 0 ? memberAuthStatusMarkup(member) : '<span class="member-table-muted">같은 회원</span>'}</td>
           <td class="member-ticket-column">${memberTicketRowMarkup(member, rowTicket, ticketIndex + 1, editableTickets.length, possibleDuplicate, renewalOverlap)}</td>
           <td class="member-scope-column">${escapeHtml(memberTicketScheduleScopeLabel(rowTicket))}</td>
           <td class="member-coach-column">${escapeHtml(memberTicketCoachLabel(member, rowTicket))}</td>
@@ -16059,10 +16231,11 @@ function renderMembers(options = {}) {
           <td class="member-date-column">${escapeHtml(rowTicket?.expires ? memberDetailDateLabel(rowTicket.expires) : "-")}</td>
           <td class="member-usage-column">${rowTicket ? escapeHtml(ticketUsageLabel(rowTicket)) : '<span class="member-table-muted">-</span>'}</td>
           <td class="member-payment-date-column">${escapeHtml(paymentGrid.date)}</td>
-          <td class="member-payment-method-column">${escapeHtml(paymentGrid.method)}</td>
+          <td class="member-payment-method-column">${memberTicketPaymentStatusMarkup(paymentGrid)}</td>
           <td class="member-payment-amount-column">${escapeHtml(paymentGrid.amount)}</td>
           <td class="member-settlement-column">${escapeHtml(memberTicketSettlementGridLabel(rowTicket))}</td>
           <td class="member-actions-column"><div class="member-row-actions">
+            <button class="small-button primary-button member-row-manage" type="button" data-select-member="${member.id}" ${ticketId ? `data-member-ticket="${escapeHtml(ticketId)}"` : ""}>관리</button>
             ${operationsRole() === "admin" && member.serverUserId && listStatus !== "inactive" && rowTicket && ["active", "paused"].includes(rowTicket.status)
               ? `<button class="small-button primary-button member-row-ticket-extend" type="button" data-open-member-management="extend" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 기간 연장">기간 연장</button>`
               : ""}
@@ -16079,9 +16252,9 @@ function renderMembers(options = {}) {
         </tr>`;
       }).join("");
       })
-      .join("") : `<tr><td colspan="15" class="empty-text">${filterCopy.empty}</td></tr>`;
+      .join("") : `<tr><td colspan="16" class="empty-text">${filterCopy.empty}</td></tr>`;
     if (!memberRows.children.length) {
-      memberRows.innerHTML = '<tr><td colspan="15" class="empty-text">선택한 처리 상태에 해당하는 회원권이 없습니다.</td></tr>';
+      memberRows.innerHTML = '<tr><td colspan="16" class="empty-text">선택한 처리 상태에 해당하는 회원권이 없습니다.</td></tr>';
     }
   } else {
     memberRows.querySelectorAll("tr[data-member-id]").forEach((row) => {
@@ -16140,6 +16313,7 @@ function renderMembers(options = {}) {
       || null;
     const selectedRecord = memberDatabaseRecord(selected, selectedTicket);
     const selectedPayment = memberTicketPaymentProjection(selected, selectedTicket);
+    const selectedPaymentGrid = memberTicketPaymentGrid(selected, selectedTicket);
     const enrollment = selected.enrollment || {};
     const recentPayment = latestMemberPayment(selected);
     const ticketName = selectedTicket
@@ -16231,10 +16405,15 @@ function renderMembers(options = {}) {
       <section class="member-db-section member-db-section--billing">
         <h3>결제·비고</h3>
         <dl class="member-db-grid">
+          <div><dt>결제 상태</dt><dd>${memberTicketPaymentStatusMarkup(selectedPaymentGrid)}</dd></div>
           <div><dt>결제일자</dt><dd>${escapeHtml(paymentDate)}</dd></div>
           <div><dt>결제수단·금액</dt><dd>${escapeHtml(paymentSummary)}</dd></div>
           <div class="wide"><dt>비고</dt><dd>${escapeHtml(selectedRecord ? selectedRecord.admin_note || "없음" : selected.note || "없음")}</dd></div>
         </dl>
+        ${operationsRole() === "admin" ? `<div class="member-simple-admin-actions">
+          ${selectedTicket ? `<button class="primary-button" type="button" data-open-member-inline="${selected.id}" data-member-inline-ticket="${escapeHtml(selectedTicket.serverTicketId || "")}">회원권·결제 수정</button>` : `<button class="primary-button" type="button" data-open-member-management="assign" data-member-management-member-id="${selected.id}">회원권 등록</button>`}
+          <button class="ghost-button" type="button" data-jump="billing">결제·환불 전체보기</button>
+        </div>` : ""}
       </section>
       ${renderMemberApprovalCard(selected)}
       ${renderMemberEnrollmentDetails(selected)}
@@ -31838,6 +32017,11 @@ function bindEvents() {
   });
   $("#addMemberButton").addEventListener("click", openManualMemberModal);
   $("#exportMembersButton")?.addEventListener("click", exportVisibleMembers);
+  $("#toggleMemberTableView")?.addEventListener("click", () => {
+    state.memberTableView = state.memberTableView === "detail" ? "simple" : "detail";
+    renderMemberTableViewMode();
+    saveSnapshot();
+  });
   $("#memberListSearch")?.addEventListener("input", (event) => {
     state.memberSearch = event.target.value;
     state.memberListPage = 0;
