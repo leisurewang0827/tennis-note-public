@@ -3065,7 +3065,7 @@ tr.is-selected td {
 }
 
 #membersView .member-directory-table.is-simple {
-  min-width: 760px;
+  min-width: 900px;
 }
 
 #membersView .member-directory-table.is-simple :is(
@@ -3075,7 +3075,6 @@ tr.is-selected td {
   .member-coach-column,
   .member-partner-column,
   .member-date-column,
-  .member-usage-column,
   .member-payment-date-column,
   .member-settlement-column
 ) {
@@ -3103,9 +3102,87 @@ tr.is-selected td {
 }
 
 #membersView .member-directory-table.is-simple .member-payment-amount-column {
-  width: 104px;
-  min-width: 104px;
+  width: 132px;
+  min-width: 132px;
   text-align: right;
+}
+
+#membersView .member-directory-table.is-simple .member-usage-column {
+  width: 112px;
+  min-width: 112px;
+  text-align: center;
+}
+
+.member-payment-amount-summary {
+  display: grid;
+  gap: 2px;
+}
+
+.member-payment-amount-summary small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.member-payment-workspace-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.member-payment-workspace-tabs button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.member-payment-workspace-tabs button.is-active {
+  background: var(--green);
+  color: #fff;
+}
+
+.member-more-filters {
+  position: relative;
+}
+
+.member-more-filters > summary {
+  list-style: none;
+}
+
+.member-more-filters > summary::-webkit-details-marker {
+  display: none;
+}
+
+.member-more-filter-panel {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  min-width: 210px;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.member-more-filter-panel .segment {
+  justify-content: space-between;
+}
+
+.app-signup-guide #manualCreateMemberButton {
+  align-self: center;
 }
 
 #membersView .member-directory-table.is-simple .member-row-actions > :not(.member-row-manage),

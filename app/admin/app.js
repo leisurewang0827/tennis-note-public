@@ -2456,21 +2456,20 @@ const adminLayoutSettingKey = "tennisnote_admin_layout_v1";
 const adminLayoutLocalKey = "tennis-note-admin-layout-v1";
 const adminMenuDefinitions = [
   { id: "dashboard", label: "대시보드", required: true },
-  { id: "members", label: "회원관리" },
+  { id: "members", label: "회원·결제" },
   { id: "schedule", label: "레슨시간표" },
-  { id: "billing", label: "결제/정산" },
   { id: "reports", label: "경영 리포트" },
   { id: "notes", label: "기록/차감 확인" },
   { id: "issues", label: "개선·오류 접수" },
   { id: "settings", label: "운영 설정", required: true },
 ];
-const adminDefaultMenuOrder = ["dashboard", "schedule", "members", "billing", "reports", "notes", "issues", "settings"];
+const adminDefaultMenuOrder = ["dashboard", "schedule", "members", "reports", "notes", "issues", "settings"];
 const adminDefaultMoreMenus = ["reports", "notes", "issues", "settings"];
 const adminLayoutPresets = {
   owner: {
     label: "대표",
-    detail: "경영 리포트와 결제를 주 메뉴에서 바로 확인합니다.",
-    menuOrder: ["dashboard", "reports", "billing", "schedule", "members", "notes", "issues", "settings"],
+    detail: "경영 리포트와 회원·결제를 주 메뉴에서 바로 확인합니다.",
+    menuOrder: ["dashboard", "reports", "schedule", "members", "notes", "issues", "settings"],
     moreMenus: ["notes", "issues", "settings"],
   },
   operations: {
@@ -2483,7 +2482,7 @@ const adminLayoutPresets = {
     label: "간단 보기",
     detail: "대시보드·시간표·회원만 남겨 처음 쓰는 직원도 쉽게 찾습니다.",
     menuOrder: [...adminDefaultMenuOrder],
-    moreMenus: ["billing", "reports", "notes", "issues", "settings"],
+    moreMenus: ["reports", "notes", "issues", "settings"],
   },
 };
 const adminDashboardGroupDefinitions = [
@@ -8161,9 +8160,9 @@ function setView(view, options = {}) {
   closeAdminMenu();
   const titles = {
     dashboard: "대시보드",
-    members: operationsRole() === "coach" ? "회원 찾기" : "회원관리",
+    members: operationsRole() === "coach" ? "회원 찾기" : "회원·결제",
     schedule: operationsRole() === "coach" ? "레슨표" : "레슨시간표",
-    billing: "결제/정산",
+    billing: "결제 확인·정산",
     reports: "경영 리포트",
     notes: operationsRole() === "coach" ? "수업 완료" : "기록/차감 확인",
     issues: operationsRole() === "coach" ? "오류 접수" : "개선·오류 접수",
@@ -11624,23 +11623,27 @@ function memberCreateScheduleMarkup(product, options = {}) {
   </section>`;
 }
 
-function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions) {
+function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions, options = {}) {
   const total = Number(product?.total_sessions || 1);
   const startsOn = adminLocalDateKey(new Date());
   const validityDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
   const isGroup = Number(product?.group_size || 1) === 2;
   const scheduleScope = memberManagementProductScheduleScope(product);
+  const existingPayment = options.existingPayment || null;
+  const paymentDate = String(existingPayment?.paid_at || existingPayment?.verified_at || existingPayment?.created_at || "").slice(0, 10);
+  const paymentMethod = existingPayment?.method || existingPayment?.provider || "";
+  const paymentAmount = Number(existingPayment?.final_amount ?? existingPayment?.amount ?? 0);
+  const preferExistingPartner = options.preferExistingPartner === true;
   return `
     <input name="createWithoutSchedule" type="hidden" value="${memberManagementProductSupportsRegularSchedule(product) ? "false" : "true"}" />
     <input name="recordStatus" type="hidden" value="active" />
     <input name="scheduleScope" type="hidden" value="${escapeHtml(scheduleScope)}" />
     <input name="weeklyFrequency" type="hidden" value="${memberManagementProductWeeklyFrequency(product)}" />
     <input name="lessonType" type="hidden" value="${isGroup ? "one_on_two" : "one_on_one"}" />
-    <input name="startsOn" type="hidden" value="${escapeHtml(startsOn)}" />
-    <input name="expiresOn" type="hidden" value="${escapeHtml(addMemberManagementDays(startsOn, validityDays - 1))}" />
     <input name="usedSessions" type="hidden" value="0" />
     <input name="remainingSessions" type="hidden" value="${total}" />
     <input name="note" type="hidden" value="" />
+    ${existingPayment ? `<input name="existingPaymentId" type="hidden" value="${escapeHtml(existingPayment.id)}" />` : ""}
     <div class="member-management-form-grid member-simple-ticket-fields">
       <label class="form-field span-2">${memberManagementFieldLabel("회원권", true)}<select name="productId" required>
         ${memberManagementProducts().map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")}</option>`).join("")}
@@ -11649,35 +11652,43 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
         ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === coachRoleId ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
       </select></label>
       <label class="form-field">${memberManagementFieldLabel("총 횟수", true)}<input name="totalSessions" type="number" min="1" step="1" value="${total}" required /></label>
-      <input name="paymentRecordState" type="hidden" value="unentered" />
-      <div class="form-field member-payment-derived"><span class="member-field-label">결제 상태<em class="is-optional">자동</em></span><strong data-member-payment-derived-state>미입력</strong><small data-member-payment-missing></small></div>
-      <label class="form-field">${memberManagementFieldLabel("결제일")}<input name="paymentDate" type="date" value="" /></label>
-      <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod">
-        <option value="">미입력</option>
-        <option value="card">카드</option>
-        <option value="bank_transfer">계좌이체</option>
-        <option value="cash">현금</option>
-      </select></label>
-      <label class="form-field member-payment-amount-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="0" readonly aria-readonly="true" /><button class="text-button" type="button" data-enable-payment-override>직접 수정</button><small>결제수단에 맞는 상품 가격이 자동 적용됩니다.</small></label>
-      <label class="form-field span-2 member-payment-override-reason" data-payment-override-reason hidden>${memberManagementFieldLabel("금액 수정 사유", true)}<input name="paymentOverrideReason" type="text" minlength="4" maxlength="120" disabled placeholder="할인·추가결제 등 사유" /></label>
+      <label class="form-field">${memberManagementFieldLabel("시작일", true)}<input name="startsOn" type="date" value="${escapeHtml(startsOn)}" required /></label>
+      <label class="form-field">${memberManagementFieldLabel("만료일", true)}<input name="expiresOn" type="date" value="${escapeHtml(addMemberManagementDays(startsOn, validityDays - 1))}" readonly aria-readonly="true" required /><small>상품 기간으로 자동 계산</small></label>
+      ${existingPayment ? `
+        <input name="paymentRecordState" type="hidden" value="complete" />
+        <input name="paymentDate" type="hidden" value="${escapeHtml(paymentDate)}" />
+        <input name="paymentMethod" type="hidden" value="${escapeHtml(paymentMethod)}" />
+        <input name="paymentAmount" type="hidden" value="${paymentAmount}" />
+        <div class="member-management-warning span-2"><strong>확인 완료 결제 연결</strong><span>${escapeHtml(paymentDate || "결제일 확인")} · ${escapeHtml(paymentMethodLabel(paymentMethod))} · ${money.format(paymentAmount)}원</span></div>` : `
+        <input name="paymentRecordState" type="hidden" value="unentered" />
+        <div class="form-field member-payment-derived"><span class="member-field-label">결제 상태<em class="is-optional">자동</em></span><strong data-member-payment-derived-state>미입력</strong><small data-member-payment-missing></small></div>
+        <label class="form-field">${memberManagementFieldLabel("결제일", true)}<input name="paymentDate" type="date" value="" /></label>
+        <label class="form-field">${memberManagementFieldLabel("결제수단", true)}<select name="paymentMethod">
+          <option value="">선택</option>
+          <option value="card">카드</option>
+          <option value="bank_transfer">계좌이체</option>
+          <option value="cash">현금</option>
+        </select></label>
+        <label class="form-field member-payment-amount-field">${memberManagementFieldLabel("결제금액", true)}<input name="paymentAmount" type="number" min="0" step="1" value="0" readonly aria-readonly="true" /><button class="text-button" type="button" data-enable-payment-override>직접 수정</button><small>결제수단에 맞는 상품 가격이 자동 적용됩니다.</small></label>
+        <label class="form-field span-2 member-payment-override-reason" data-payment-override-reason hidden>${memberManagementFieldLabel("금액 수정 사유", true)}<input name="paymentOverrideReason" type="text" minlength="4" maxlength="120" disabled placeholder="할인·추가결제 등 사유" /></label>`}
       <div class="form-field span-2 member-partner-editor ${isGroup ? "" : "is-disabled"}" data-manual-member-partner-field ${isGroup ? "" : "hidden"}>
         ${memberManagementFieldLabel("1:2 파트너", isGroup)}
         <div class="member-partner-mode" role="radiogroup" aria-label="파트너 등록 방법">
-          <label><input name="partnerMode" type="radio" value="new" checked /> 새 파트너 같이 등록</label>
-          <label><input name="partnerMode" type="radio" value="existing" /> 기존 회원 연결</label>
+          <label><input name="partnerMode" type="radio" value="new" ${preferExistingPartner ? "" : "checked"} /> 새 파트너 같이 등록</label>
+          <label><input name="partnerMode" type="radio" value="existing" ${preferExistingPartner ? "checked" : ""} /> 기존 회원 연결</label>
         </div>
-        <div class="member-partner-new-fields" data-manual-new-partner>
+        <div class="member-partner-new-fields" data-manual-new-partner ${preferExistingPartner ? "hidden" : ""}>
           <label class="form-field">${memberManagementFieldLabel("파트너 이름", true)}<input name="partnerName" type="text" minlength="2" maxlength="40" /></label>
           <label class="form-field">${memberManagementFieldLabel("파트너 휴대전화")}<input name="partnerPhone" type="tel" inputmode="tel" maxlength="20" /></label>
           <input name="partnerBirthYear" type="hidden" value="" />
           <input name="partnerGender" type="hidden" value="" />
           <p class="form-message span-2" data-manual-partner-phone-status role="status" hidden></p>
         </div>
-        <div class="member-partner-existing-fields" data-manual-existing-partner hidden>
+        <div class="member-partner-existing-fields" data-manual-existing-partner ${preferExistingPartner ? "" : "hidden"}>
           <input name="partnerSearch" type="search" autocomplete="off" placeholder="이름 또는 전화번호 검색" data-manual-member-partner-search />
           <div class="member-partner-search-results" data-manual-member-partner-results aria-live="polite"></div>
           <p class="form-message" data-manual-existing-partner-status role="status">앱 가입만 하고 회원권이 없는 회원도 검색됩니다.</p>
-          <select name="partnerUserId" disabled>
+          <select name="partnerUserId" ${preferExistingPartner ? "" : "disabled"}>
             <option value="">파트너 선택</option>
             ${partnerOptions.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}</option>`).join("")}
           </select>
@@ -12211,16 +12222,13 @@ function renderMemberManagementModal() {
       <p class="member-management-rule">정규권은 선택한 전체 횟수의 요일·시간을 모두 입력해야 저장됩니다. 예외일 때만 ‘시간표는 나중에 설정’을 선택하세요.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "assign") {
     actionFields = products.length && coachRoles.length ? `
-      <div class="member-management-form-grid">
-        <label class="form-field span-2">${memberManagementFieldLabel("판매중 회원권", true)}<select name="productId" required>
-          ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")} · ${memberManagementScheduleScopeLabel(memberManagementProductScheduleScope(item))}</option>`).join("")}
-        </select></label>
-      </div>
-      ${memberManagementDatabaseFields({ member, ticket: null, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: unlinkedPayment, isAssign: true })}
-      <input name="createWithoutSchedule" type="hidden" value="${memberManagementProductSupportsRegularSchedule(product) ? "false" : "true"}" />
-      ${memberCreateScheduleMarkup(product)}
+      <p class="member-create-step-help"><strong>${escapeHtml(member.name)} 회원권 등록</strong> 회원권·코치·시작일·결제만 확인하면 됩니다.</p>
+      ${memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions, {
+        existingPayment: unlinkedPayment,
+        preferExistingPartner: true,
+      })}
       <section class="member-registration-summary" data-member-registration-summary aria-live="polite"></section>
-      <p class="member-management-rule">주 2회·주 3회는 정규 요일과 시간을 모두 선택하면 회원권과 시간표가 한 번에 저장됩니다. 예외일 때만 ‘시간표는 나중에 설정’을 선택하세요.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
+      <p class="member-management-rule">결제 확인 전에는 회원권이 활성화되지 않습니다. 쿠폰은 시간표 없이 등록하고, 정규권은 주 횟수만큼 시간을 선택합니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "correct") {
     actionFields = operationsRole() === "admin" ? `
       ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: memberTicketLinkedPayment(member, ticket), includeTicketStatus: true })}
@@ -12438,6 +12446,31 @@ async function openManualMemberModal() {
   setMemberCreateStep(1);
   window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   setTimeout(() => $("#memberManagementForm input[name='memberName']")?.focus(), 0);
+}
+
+async function openSimpleMemberRegistrationHub() {
+  if (operationsRole() !== "admin" || !operationsAccessReady()) {
+    showToast("관리자 계정으로 로그인해야 회원을 등록할 수 있습니다.");
+    return;
+  }
+  state.memberFilter = "journal";
+  state.memberSearch = "";
+  state.memberCoachFilter = "all";
+  state.memberTicketFilter = "all";
+  state.memberTicketGridFilter = "all";
+  state.memberListPage = 0;
+  setView("members", { skipLock: true });
+  $$('[data-member-filter]').forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.memberFilter === "journal");
+  });
+  await loadAdminMemberDirectoryPage({ force: true, render: true, preserveList: false });
+  const search = $("#memberListSearch");
+  if (search) {
+    search.value = "";
+    search.placeholder = "앱 가입 이름 또는 휴대전화 뒤 4자리";
+    search.focus();
+  }
+  showToast("앱 가입 회원을 먼저 검색하세요. 없을 때만 직접 신규 등록을 사용합니다.");
 }
 
 function closeMemberManagementModal() {
@@ -12817,6 +12850,9 @@ function memberManagementErrorText(error) {
   const raw = `${error?.payload?.code || ""} ${error?.message || ""}`;
   if (raw.includes("server_request_timeout")) return "서버 응답이 지연되었습니다. 중복 저장은 차단되어 있으니 새로고침 후 결과를 확인해 주세요.";
   if (raw.includes("admin_live_refresh_failed_after_write")) return "서버 저장은 요청됐지만 결과를 다시 확인하지 못했습니다. 새로고침 후 상태를 확인해 주세요.";
+  if (raw.includes("manual_enrollment_payment_required")) return "결제 확인 후 회원권을 등록할 수 있습니다. 결제일·결제수단·결제금액을 입력하거나 확인 완료 결제를 선택해 주세요.";
+  if (raw.includes("manual_enrollment_transfer_evidence_required")) return "양도 회원권은 양도일과 양도 근거를 확인해 주세요.";
+  if (raw.includes("member_registration_flow_required")) return "새 회원권은 ‘회원 등록’에서 앱 가입 회원을 먼저 찾은 뒤 결제와 함께 등록해 주세요.";
   if (raw.includes("member_ticket_extension_date_must_increase")) return "현재 만료일보다 늦은 날짜를 선택해 주세요.";
   if (raw.includes("member_ticket_extension_status_invalid")) return "사용 중 또는 홀딩 중인 회원권만 기간을 연장할 수 있습니다.";
   if (raw.includes("member_ticket_revision_conflict")) return "다른 화면에서 회원권이 먼저 변경됐습니다. 최신 정보를 다시 확인해 주세요.";
@@ -13305,6 +13341,10 @@ async function submitMemberManagementForm(event) {
       if (message) message.textContent = `${missing.join(" · ")}을 입력해 주세요.`;
       return;
     }
+    if ((isCreate || action === "assign") && !managementPayload?.existingPaymentId && !["complete", "transfer_zero"].includes(paymentRecordState)) {
+      if (message) message.textContent = "결제 확인 후 회원권을 등록할 수 있습니다. 결제일·결제수단·결제금액을 입력해 주세요.";
+      return;
+    }
     if (managementPayload?.paymentPriceOverride && String(managementPayload.paymentOverrideReason || "").trim().length < 4) {
       if (message) message.textContent = "상품 가격과 다른 금액을 저장하려면 금액 수정 사유를 네 글자 이상 입력해 주세요.";
       return;
@@ -13342,7 +13382,7 @@ async function submitMemberManagementForm(event) {
     if (isCreate) {
       const createOperationKey = form.dataset.createOperationKey || createMemberChangeBatchId();
       form.dataset.createOperationKey = createOperationKey;
-      result = await client.rpc("tn_admin_create_member_and_regular_schedule", {
+      result = await client.rpc("tn_admin_create_paid_member_and_regular_schedule", {
         target_record: managementPayload,
         target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
         target_operation_key: createOperationKey,
@@ -13356,8 +13396,8 @@ async function submitMemberManagementForm(event) {
         ? { ...managementPayload, assignmentRequestId, paymentAmount: 0, paymentDate: null, paymentMethod: null }
         : { ...managementPayload, assignmentRequestId };
       const assignmentRpc = Number(selectedManagementProduct?.group_size || 1) === 2
-        ? "tn_admin_assign_group_member_ticket_and_regular_schedule"
-        : "tn_admin_assign_member_ticket_and_regular_schedule";
+        ? "tn_admin_assign_paid_group_member_ticket_and_regular_schedule"
+        : "tn_admin_assign_paid_member_ticket_and_regular_schedule";
       result = await client.rpc(assignmentRpc, {
         target_record: assignmentPayload,
         target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
@@ -13498,9 +13538,6 @@ async function submitMemberManagementForm(event) {
       state.memberFilter = action === "deactivate" ? "inactive" : "expired";
     }
 
-    window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
-    closeMemberManagementModal();
-
     const requiresFullRefresh = ["create", "assign", "reenroll", "close", "force_delete", "permanent_delete"].includes(action);
     const synced = requiresFullRefresh
       ? await syncAdminLiveData(true)
@@ -13517,6 +13554,8 @@ async function submitMemberManagementForm(event) {
     const verificationError = memberManagementWriteVerification(action, managementPayload, result, statusAction);
     if (verificationError) throw new Error(verificationError);
     const normalizedResult = normalizedRpcResult(result);
+    window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
+    closeMemberManagementModal();
     if (action === "link_existing" && linkedTargetMemberUserId) {
       const linkedMember = members.find((item) => memberServerUserIds(item).includes(linkedTargetMemberUserId));
       state.selectedMemberId = linkedMember?.id || null;
@@ -13550,6 +13589,8 @@ async function submitMemberManagementForm(event) {
       showToast(`${memberManagementActionLabel(action)} 완료`);
     }
   } catch (error) {
+    const requiresReadback = String(error?.message || error || "").includes("admin_live_refresh_failed_after_write")
+      || String(error?.message || error || "").includes("member_management_write_not_confirmed");
     if (String(error?.message || error || "").includes("group_partner_phone_already_exists") && form.elements.partnerPhone && form.elements.partnerSearch) {
       form.elements.partnerSearch.value = normalizedMemberPhone(form.elements.partnerPhone.value);
       await searchManualMemberPartnerCandidates(form, { promoteExactPhone: true });
@@ -13558,12 +13599,14 @@ async function submitMemberManagementForm(event) {
     if (message) message.textContent = memberManagementModalState.message;
     showToast(memberManagementModalState.message);
     if (submit) {
-      submit.disabled = false;
-      submit.textContent = action === "profile"
-        ? "기본정보 저장"
-        : action === "app_link"
-          ? "앱 계정 연결"
-          : `${memberManagementActionLabel(action)} 확정`;
+      submit.disabled = requiresReadback;
+      submit.textContent = requiresReadback
+        ? "저장 결과 확인 필요"
+        : action === "profile"
+          ? "기본정보 저장"
+          : action === "app_link"
+            ? "앱 계정 연결"
+            : `${memberManagementActionLabel(action)} 확정`;
     }
   }
 }
@@ -13618,8 +13661,8 @@ function renderMemberTableViewMode() {
     button.textContent = simple ? "상세 보기" : "간단 보기";
     button.setAttribute("aria-pressed", String(simple));
     button.title = simple
-      ? "코치·기간·횟수·결제일·정산 열까지 펼칩니다."
-      : "회원·앱 연결·회원권·결제 상태·금액·처리만 표시합니다.";
+      ? "코치·기간·결제일 등 운영 상세 열까지 펼칩니다."
+      : "회원·앱 연결·회원권·횟수·결제·정산·처리만 표시합니다.";
   }
 }
 
@@ -16049,24 +16092,7 @@ async function submitMemberInlineEditor(form, options = {}) {
         target_operation_key: createAdminOperationKey("ticket-grid"),
       });
     } else if (payload.productId) {
-      const product = (adminLiveDataState.products || []).find((item) => item.id === payload.productId);
-      if (!product) throw new Error("membership_product_not_found");
-      const startsOn = payload.startsOn || adminLocalDateKey(new Date());
-      const validityDays = Math.max(1, Number(product.validity_days || 1) + Number(product.grace_days || 0));
-      payload.startsOn = startsOn;
-      payload.expiresOn = payload.expiresOn || addMemberManagementDays(startsOn, validityDays - 1);
-      payload.totalSessions = Number(payload.totalSessions) || Number(product.total_sessions) || 1;
-      payload.usedSessions = Number(payload.usedSessions) || 0;
-      payload.remainingSessions = Math.max(0, payload.totalSessions - payload.usedSessions);
-      const productScope = memberManagementProductScheduleScope(product);
-      payload.scheduleScope = productScope;
-      payload.weeklyFrequency = memberManagementProductWeeklyFrequency(product);
-      payload.lessonType = Number(product.group_size || 1) === 2 ? "one_on_two" : "one_on_one";
-      payload.recordStatus = payload.remainingSessions === 0 ? "historical" : "active";
-      payload.ticketStatus = payload.remainingSessions === 0 ? "expired" : "active";
-      saveResult = await window.TennisNoteDataClient.rpc("tn_admin_assign_member_database_ticket_resolving_stale", {
-        target_record: payload,
-      });
+      throw new Error("member_registration_flow_required");
     } else {
       await window.TennisNoteDataClient.rpc("tn_admin_update_member_profile_full", {
         target_user_id: member.serverUserId,
@@ -16456,10 +16482,10 @@ function renderMembers(options = {}) {
           <td class="member-usage-column">${rowTicket ? escapeHtml(ticketUsageLabel(rowTicket)) : '<span class="member-table-muted">-</span>'}</td>
           <td class="member-payment-date-column">${escapeHtml(paymentGrid.date)}</td>
           <td class="member-payment-method-column">${memberTicketPaymentStatusMarkup(paymentGrid)}</td>
-          <td class="member-payment-amount-column">${escapeHtml(paymentGrid.amount)}</td>
+          <td class="member-payment-amount-column"><span class="member-payment-amount-summary"><strong>${escapeHtml(paymentGrid.amount)}</strong><small>${escapeHtml(memberTicketSettlementGridLabel(rowTicket))}</small></span></td>
           <td class="member-settlement-column">${escapeHtml(memberTicketSettlementGridLabel(rowTicket))}</td>
           <td class="member-actions-column"><div class="member-row-actions">
-            <button class="small-button primary-button member-row-manage" type="button" data-select-member="${member.id}" ${ticketId ? `data-member-ticket="${escapeHtml(ticketId)}"` : ""}>관리</button>
+            <button class="small-button primary-button member-row-manage" type="button" data-select-member="${member.id}" ${ticketId ? `data-member-ticket="${escapeHtml(ticketId)}"` : ""}>확인·수정</button>
             ${operationsRole() === "admin" && member.serverUserId && listStatus !== "inactive" && rowTicket && ["active", "paused"].includes(rowTicket.status)
               ? `<button class="small-button primary-button member-row-ticket-extend" type="button" data-open-member-management="extend" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 기간 연장">기간 연장</button>`
               : ""}
@@ -32334,7 +32360,11 @@ function bindEvents() {
     if (results) results.hidden = true;
     $("#globalSearch")?.setAttribute("aria-expanded", "false");
   });
-  $("#addMemberButton").addEventListener("click", openManualMemberModal);
+  $("#addMemberButton").addEventListener("click", openSimpleMemberRegistrationHub);
+  $("#manualCreateMemberButton")?.addEventListener("click", openManualMemberModal);
+  $$('[data-member-payment-view]').forEach((button) => {
+    button.addEventListener("click", () => setView(button.dataset.memberPaymentView));
+  });
   $("#exportMembersButton")?.addEventListener("click", exportVisibleMembers);
   $("#toggleMemberTableView")?.addEventListener("click", () => {
     state.memberTableView = state.memberTableView === "detail" ? "simple" : "detail";
