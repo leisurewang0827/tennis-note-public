@@ -266,7 +266,9 @@
       failed: "수정 작업 확인 필요",
       merged: "수정 반영",
     }[automationStatus] || "수정 상태 확인 필요";
-    const automationAction = ["queued", "running"].includes(automationStatus)
+    const automationAction = row.automation_schema_missing
+      ? `<button type="button" disabled title="관리자에게 서버 업데이트를 요청해 주세요.">검토 기능 준비 필요</button>`
+      : ["queued", "running"].includes(automationStatus)
       ? `<button type="button" disabled>수정 검토 대기</button>`
       : row.automation_url
         ? `<a class="tn-report-link" href="${escapeHtml(row.automation_url)}" target="_blank" rel="noopener">수정안 확인</a>`
@@ -280,6 +282,35 @@
       <div><span>${escapeHtml(row.error_code)} · ${escapeHtml(row.surface)} · ${escapeHtml(labels[row.report_kind])}</span><strong>${escapeHtml(row.title)}</strong><p>${escapeHtml(row.description || row.error_message)}</p>${errorDetails}<small>${new Date(row.last_seen_at).toLocaleString("ko-KR")} · ${row.occurrence_count}회 발생 · v${escapeHtml(row.app_version)}</small><em class="tn-report-automation">${escapeHtml(automationLabel)}${automationMessage ? ` · ${escapeHtml(automationMessage)}` : ""}</em></div>
       <div class="tn-report-controls"><select data-report-priority><option value="urgent" ${row.priority === "urgent" ? "selected" : ""}>긴급</option><option value="high" ${row.priority === "high" ? "selected" : ""}>높음</option><option value="normal" ${row.priority === "normal" ? "selected" : ""}>일반</option></select><select data-report-status><option value="new" ${row.status === "new" ? "selected" : ""}>신규</option><option value="reviewing" ${row.status === "reviewing" ? "selected" : ""}>확인중</option><option value="planned" ${row.status === "planned" ? "selected" : ""}>개선예정</option><option value="resolved" ${row.status === "resolved" ? "selected" : ""}>완료</option><option value="closed" ${row.status === "closed" ? "selected" : ""}>종료</option></select><button type="button" data-save-report>상태 저장</button>${automationAction}<b>${priorityLabel} · ${statusLabel}</b></div>
     </article>`;
+  }
+
+  function missingAutomationColumns(error) {
+    const message = String(error?.message || error || "").toLowerCase();
+    return message.includes("tn_product_reports")
+      && ["automation_status", "automation_message", "automation_url"]
+        .some((column) => message.includes(column))
+      && (message.includes("does not exist") || message.includes("schema cache"));
+  }
+
+  async function selectAdminReports() {
+    const query = {
+      filters: adminReportFilters(),
+      order: "last_seen_at.desc",
+      limit: 100,
+    };
+    try {
+      return await client.selectRows("tn_product_reports", {
+        ...query,
+        select: "id,error_code,surface,report_kind,priority,title,description,error_message,status,occurrence_count,last_seen_at,app_version,admin_note,automation_status,automation_message,automation_url",
+      });
+    } catch (error) {
+      if (!missingAutomationColumns(error)) throw error;
+      const rows = await client.selectRows("tn_product_reports", {
+        ...query,
+        select: "id,error_code,surface,report_kind,priority,title,description,error_message,status,occurrence_count,last_seen_at,app_version,admin_note",
+      });
+      return rows.map((row) => ({ ...row, automation_schema_missing: true }));
+    }
   }
 
   function adminReportFilters() {
@@ -319,12 +350,7 @@
     if (!target || !client?.selectRows) return;
     target.innerHTML = "<p>접수 내역을 불러오는 중입니다.</p>";
     try {
-      const rows = await client.selectRows("tn_product_reports", {
-        select: "id,error_code,surface,report_kind,priority,title,description,error_message,status,occurrence_count,last_seen_at,app_version,admin_note,automation_status,automation_message,automation_url",
-        filters: adminReportFilters(),
-        order: "last_seen_at.desc",
-        limit: 100,
-      });
+      const rows = await selectAdminReports();
       const score = { urgent: 3, high: 2, normal: 1 };
       rows.sort((a, b) => (score[b.priority] - score[a.priority]) || Date.parse(b.last_seen_at) - Date.parse(a.last_seen_at));
       adminReportState.rows = rows;
