@@ -12061,10 +12061,10 @@ async function loadMemberTicketFutureClosePreview(memberUserId) {
 function memberManualRegistrationFields() {
   return `
     <label class="form-field span-2">${memberManagementFieldLabel("이름", true)}<input name="memberName" type="text" minlength="2" maxlength="40" autocomplete="name" required /></label>
-    <label class="form-field">${memberManagementFieldLabel("휴대전화", true)}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" placeholder="010-0000-0000" required /></label>
-    <label class="form-field">${memberManagementFieldLabel("출생연도", true)}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="예: 1990" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("휴대전화")}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" placeholder="선택 · 앱 연결 시 입력 가능" /></label>
+    <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="선택 · 예: 1990" /></label>
     <input name="memberNickname" type="hidden" value="" />
-    <label class="form-field">${memberManagementFieldLabel("거주동", true)}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="예: 군자동" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="선택 · 예: 군자동" /></label>
     <label class="form-field">${memberManagementFieldLabel("성별")}<select name="memberGender">
       <option value="">미입력</option>
       <option value="female">여성</option>
