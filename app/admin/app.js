@@ -12847,8 +12847,10 @@ function memberManagementNullableNumber(input) {
 }
 
 function memberManagementErrorText(error) {
-  const raw = `${error?.payload?.code || ""} ${error?.message || ""}`;
+  const raw = `${error?.payload?.code || ""} ${error?.payload?.message || ""} ${error?.code || ""} ${error?.message || ""}`;
   if (raw.includes("server_request_timeout")) return "서버 응답이 지연되었습니다. 중복 저장은 차단되어 있으니 새로고침 후 결과를 확인해 주세요.";
+  if (raw.includes("server_connection_failed") || raw.includes("Failed to fetch") || raw.includes("NetworkError")) return "서버 연결이 끊겼습니다. 같은 등록을 다시 누르지 말고 새로고침 후 등록 여부를 먼저 확인해 주세요.";
+  if (raw.includes("server_response_invalid")) return "서버 응답을 확인하지 못했습니다. 같은 등록을 다시 누르지 말고 새로고침 후 결과를 확인해 주세요.";
   if (raw.includes("admin_live_refresh_failed_after_write")) return "서버 저장은 요청됐지만 결과를 다시 확인하지 못했습니다. 새로고침 후 상태를 확인해 주세요.";
   if (raw.includes("manual_enrollment_payment_required")) return "결제 확인 후 회원권을 등록할 수 있습니다. 결제일·결제수단·결제금액을 입력하거나 확인 완료 결제를 선택해 주세요.";
   if (raw.includes("manual_enrollment_transfer_evidence_required")) return "양도 회원권은 양도일과 양도 근거를 확인해 주세요.";
@@ -12884,8 +12886,16 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_assignment_schedule_duplicate")) return "같은 요일과 시간을 중복 선택할 수 없습니다.";
   if (raw.includes("member_assignment_schedule_value_invalid")) return "회원권의 평일·주말 범위에 맞는 시간을 선택해 주세요.";
   if (raw.includes("member_assignment_schedule_blocked_time") || raw.includes("member_assignment_schedule_outside_working_hours")) return "코치 근무시간·브레이크와 겹치지 않는 시간을 선택해 주세요.";
+  if (raw.includes("member_assignment_record_invalid") || raw.includes("member_assignment_schedules_invalid")) return "회원·회원권·시간 입력값을 다시 확인해 주세요. 입력 내용은 유지됩니다.";
+  if (raw.includes("member_assignment_participant_mismatch")) return "그룹 회원 두 명의 연결을 확인하지 못해 전체 등록을 취소했습니다. 기존 회원 검색에서 파트너를 다시 선택해 주세요.";
+  if (raw.includes("member_assignment_ticket_not_created")) return "회원권이 생성되지 않아 결제와 시간표 등록도 모두 취소했습니다. 새로고침 후 다시 확인해 주세요.";
+  if (raw.includes("member_assignment_deferred_schedule_must_be_empty")) return "시간표를 나중에 설정하려면 선택된 정규 요일·시간을 모두 해제해 주세요.";
   if (raw.includes("group_registration_payment_fields_incomplete")) return "결제일·결제수단·결제금액을 모두 입력하거나 모두 비워 주세요.";
   if (raw.includes("group_registration_payment_method_invalid")) return "카드·계좌이체·현금 중 실제 결제수단을 선택해 주세요.";
+  if (raw.includes("group_registration_product_required")) return "그룹 2명 상품을 다시 선택해 주세요.";
+  if (raw.includes("group_registration_two_distinct_members_required")) return "서로 다른 기존 회원 두 명을 선택해 주세요.";
+  if (raw.includes("group_registration_member_unavailable")) return "선택한 회원 중 앱 계정 상태가 변경된 회원이 있습니다. 회원 검색에서 두 명을 다시 선택해 주세요.";
+  if (raw.includes("group_registration_product_price_missing")) return "선택한 상품의 카드·현금 가격이 비어 있습니다. 운영 설정에서 가격을 먼저 입력해 주세요.";
   if (raw.includes("group_registration_payment_price_mismatch")) return "선택한 결제수단의 상품 가격과 금액이 다릅니다. 직접 수정이 필요하면 사유를 입력해 주세요.";
   if (raw.includes("group_registration_payment_override_reason_required")) return "상품 가격과 다른 금액을 저장하려면 금액 수정 사유를 네 글자 이상 입력해 주세요.";
   if (raw.includes("group_registration_ticket_expiry_mismatch")) return "시작일 기준 자동 만료일이 달라졌습니다. 상품을 다시 선택해 기간을 갱신해 주세요.";
@@ -12925,6 +12935,9 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_inactive_restore_first")) return "삭제회원은 먼저 회원 복원을 해 주세요.";
   if (raw.includes("group_ticket_requires_two_participants")) return "2대1 회원권의 파트너 연결을 먼저 확인해 주세요.";
   if (raw.includes("group_partner_required")) return "2대1 회원권은 파트너를 선택해야 합니다.";
+  if (raw.includes("partner_must_be_different")) return "본인과 다른 파트너 회원을 선택해 주세요.";
+  if (raw.includes("partner_not_found")) return "선택한 파트너가 삭제되었거나 비활성 상태입니다. 기존 회원 검색에서 다시 선택해 주세요.";
+  if (raw.includes("ticket_owner_not_found")) return "대표 회원 정보를 확인하지 못했습니다. 회원 목록을 새로고침해 주세요.";
   if (raw.includes("group_partner_name_required")) return "같이 등록할 파트너 실명을 두 글자 이상 입력해 주세요.";
   if (raw.includes("group_partner_phone_invalid")) return "파트너 휴대전화 번호를 확인해 주세요.";
   if (raw.includes("group_partner_phone_already_exists")) return "앱 가입 또는 기존 회원 계정이 있습니다. 자동으로 열린 기존 회원 검색에서 이름과 전화번호 끝자리를 확인해 선택해 주세요.";
@@ -12977,7 +12990,7 @@ function memberManagementErrorText(error) {
   if (raw.includes("group_surviving_member_required")) return "1:1로 계속 수강할 회원을 다시 선택해 주세요.";
   if (raw.includes("surviving_member_active_ticket_exists")) return "선택한 회원에게 다른 사용 중 회원권이 있습니다. 기존 회원권을 먼저 확인해 주세요.";
   if (raw.includes("separate_group_structure_requires_team_edit")) return "1:2 팀의 종류·파트너 변경은 팀 설정에서 함께 처리해 주세요.";
-  const safeCode = String(error?.payload?.code || "").trim();
+  const safeCode = String(error?.code || error?.payload?.error_code || error?.payload?.code || "").trim();
   const codeSuffix = /^[A-Za-z0-9_]{3,40}$/.test(safeCode) ? ` (오류 코드: ${safeCode})` : "";
   return `처리에 실패했습니다. 입력값과 서버 적용 상태를 확인해 주세요.${codeSuffix}`;
 }
@@ -13589,8 +13602,14 @@ async function submitMemberManagementForm(event) {
       showToast(`${memberManagementActionLabel(action)} 완료`);
     }
   } catch (error) {
-    const requiresReadback = String(error?.message || error || "").includes("admin_live_refresh_failed_after_write")
-      || String(error?.message || error || "").includes("member_management_write_not_confirmed");
+    const errorText = `${error?.payload?.message || ""} ${error?.code || ""} ${error?.message || error || ""}`;
+    const requiresReadback = [
+      "admin_live_refresh_failed_after_write",
+      "member_management_write_not_confirmed",
+      "server_request_timeout",
+      "server_connection_failed",
+      "server_response_invalid",
+    ].some((code) => errorText.includes(code));
     if (String(error?.message || error || "").includes("group_partner_phone_already_exists") && form.elements.partnerPhone && form.elements.partnerSearch) {
       form.elements.partnerSearch.value = normalizedMemberPhone(form.elements.partnerPhone.value);
       await searchManualMemberPartnerCandidates(form, { promoteExactPhone: true });
@@ -22800,7 +22819,10 @@ function groupedBillingAttempts(items = []) {
 
 function billingAttemptSummary(entry = {}) {
   const count = Number(entry.attemptCount || 0);
-  return count > 1 ? `동일 요청 ${count}회 · 최근 상태 표시` : "";
+  const latest = entry.primary || {};
+  const latestDisplay = paymentDisplayStatus(latest);
+  const latestSummary = `최근 ${paymentMethodLabel(latest.method)} · ${latestDisplay.label || latest.statusLabel || "상태 확인"}`;
+  return count > 1 ? `${latestSummary} · 동일 요청 ${count}회` : latestSummary;
 }
 
 function billingAttemptHistoryMarkup(entry = {}) {
@@ -23130,7 +23152,9 @@ function chargeStatusForPayment(item = {}) {
   if (item.status === "paid" && isHistoricalImportedPayment(item)) return { label: "이관 결제 기록", tone: "neutral", detail: "기존 장부에서 보존한 결제 증빙이며 현재 회원권 자동 연결 대상이 아닙니다." };
   if (item.status === "paid") return { label: "회원권 연결 확인", tone: "warn", detail: "결제는 확인됐지만 연결된 회원권 ID가 없습니다." };
   if (isStaleReadyPayment(item)) return { label: "오래된 결제 대기", tone: "warn", detail: "결제창 생성 후 1시간 이상 완료 확인이 없습니다. PortOne 상태 확인 전에는 취소하거나 회원권을 변경하지 않습니다." };
-  if (item.status === "server_ready") return { label: "결제 전 대기", tone: "neutral", detail: "회원이 Toss 결제를 완료하면 서버검증 후 자동 충전됩니다." };
+  if (item.status === "server_ready") return String(item.method || "").toLowerCase() === "bank_transfer"
+    ? { label: "입금 확인 대기", tone: "neutral", detail: "회원의 계좌이체 신청입니다. 실제 입금 확인 후에만 회원권이 생성됩니다." }
+    : { label: "결제 전 대기", tone: "neutral", detail: "회원이 토스페이를 완료하면 서버검증 후 자동 충전됩니다." };
   if (item.status === "unverified") return { label: "서버검증 대기", tone: "warn", detail: "결제창 완료 후 서버 검증이 필요합니다." };
   if (item.status === "cancelled") return { label: "취소/환불완료", tone: "neutral", detail: "결제가 취소됐고 연결 회원권은 충전되지 않거나 환불 처리됩니다." };
   if (item.status === "refunded") return { label: "환불완료", tone: "neutral", detail: "환불 완료 항목은 현재 이용권으로 보지 않습니다." };

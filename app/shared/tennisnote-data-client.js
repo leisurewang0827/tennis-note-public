@@ -871,6 +871,39 @@
     };
   }
 
+  function responseErrorPayload(rawText = "") {
+    const normalizedText = String(rawText || "").trim();
+    if (!normalizedText) return {};
+    try {
+      const parsed = JSON.parse(normalizedText);
+      return parsed && typeof parsed === "object" ? parsed : { message: normalizedText };
+    } catch (error) {
+      return { message: normalizedText };
+    }
+  }
+
+  function responseRequestError(response, rawText = "", fallback = "Supabase request failed") {
+    const payload = responseErrorPayload(rawText);
+    const message = payload.message
+      || payload.error_description
+      || (typeof payload.error === "string" ? payload.error : "")
+      || `${fallback}: ${response?.status || 0}`;
+    const error = new Error(message);
+    error.status = Number(response?.status || 0);
+    error.code = String(payload.code || payload.error_code || "server_request_failed");
+    error.payload = payload;
+    return error;
+  }
+
+  function transportRequestError(error) {
+    if (error?.code === "offline" || error?.code === "offline_cache_miss") return error;
+    const transportError = new Error("server_connection_failed");
+    transportError.code = "server_connection_failed";
+    transportError.status = 0;
+    transportError.cause = error;
+    return transportError;
+  }
+
   async function request(path, options = {}) {
     if (!readiness().ready) {
       throw new Error("Supabase publishable config is missing. Demo data is still active.");
@@ -913,20 +946,27 @@
         if (cached !== null) return cached;
         throw offlineError("offline_cache_miss");
       }
+      if (transientNetworkError(error)) throw transportRequestError(error);
       throw error;
     } finally {
       window.clearTimeout(timeoutId);
     }
 
     if (!response.ok) {
-      const message = await response.text();
-      const error = new Error(message || `Supabase request failed: ${response.status}`);
-      error.status = response.status;
-      throw error;
+      const rawText = await response.text().catch(() => "");
+      throw responseRequestError(response, rawText);
     }
 
     if (response.status === 204) return null;
-    const payload = await response.json();
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      const responseError = new Error("server_response_invalid");
+      responseError.code = "server_response_invalid";
+      responseError.status = response.status;
+      throw responseError;
+    }
     if (method === "GET") void writeOfflineResponse(path, payload, session);
     return payload;
   }
@@ -977,10 +1017,8 @@
     });
 
     if (!response.ok) {
-      const message = await response.text();
-      const error = new Error(message || `Supabase count failed: ${response.status}`);
-      error.status = response.status;
-      throw error;
+      const rawText = await response.text().catch(() => "");
+      throw responseRequestError(response, rawText, "Supabase count failed");
     }
 
     const range = response.headers.get("content-range") || "";
