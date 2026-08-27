@@ -1030,7 +1030,7 @@ async function performAdminLiveDataSync(options = {}) {
       };
     });
 
-    const activeTickets = mappedTickets.filter((ticket) => isCurrentMemberTicket(ticket));
+    const activeTickets = mappedTickets.filter((ticket) => isOperationalMemberTicket(ticket));
     const settlementTicketContext = {
       products: serverProducts || [],
       users: serverUsers || [],
@@ -1075,7 +1075,7 @@ async function performAdminLiveDataSync(options = {}) {
       .filter((user) => !user.permanently_deleted_at)
       .filter((user) => (
         user.role === "member"
-        || (ticketsByParticipantUserId.get(user.id) || []).some((ticket) => isCurrentMemberTicket(ticket))
+        || (ticketsByParticipantUserId.get(user.id) || []).some((ticket) => isOperationalMemberTicket(ticket))
       ))
       .map((user) => ({
         name: user.name || "이름 확인 필요",
@@ -1090,7 +1090,11 @@ async function performAdminLiveDataSync(options = {}) {
           .flatMap((userId) => ticketsByParticipantUserId.get(userId) || [])
           .map((ticket) => [ticket.id, ticket]),
       ).values()];
-      const activeTicket = memberTickets.find((ticket) => isCurrentMemberTicket(ticket)) || null;
+      const currentTicket = memberTickets.find((ticket) => isCurrentMemberTicket(ticket)) || null;
+      const upcomingTicket = memberTickets.find((ticket) => (
+        window.TennisNoteTicketState?.derive(ticket) === "upcoming"
+      )) || null;
+      const activeTicket = currentTicket || upcomingTicket;
       const pendingTicket = memberTickets.find((ticket) => ticket.status === "pending_payment") || null;
       const memberPayments = userIds.flatMap((userId) => paymentsByUserId.get(userId) || []);
       const unlinkedVerifiedPayments = memberPayments.filter((payment) => (

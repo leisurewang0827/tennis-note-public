@@ -438,16 +438,6 @@ function scheduleAccountDeletionRetryRefresh(requests) {
   }, Math.max(250, nextRetryAt - now + 250));
 }
 
-function memberCreateStepIsValid(step) {
-  const panel = $(`#memberManagementForm [data-member-create-panel="${step}"]`);
-  if (!panel) return true;
-  const controls = [...panel.querySelectorAll("input, select, textarea")].filter((control) => !control.disabled);
-  const invalid = controls.find((control) => !control.checkValidity());
-  if (!invalid) return true;
-  invalid.reportValidity();
-  return false;
-}
-
 function memberManagementSelectedDays(form) {
   return [...form.querySelectorAll('input[name="lessonDays"]:checked:not(:disabled)')]
     .map((input) => Number(input.value))

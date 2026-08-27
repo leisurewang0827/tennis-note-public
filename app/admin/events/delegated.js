@@ -730,6 +730,19 @@ function bindDelegatedEvents() {
       }
       return;
     }
+    if (event.target.matches("#memberManagementForm input[name='memberPhone']") && memberManagementModalState.action === "create") {
+      const digits = normalizedMemberPhone(event.target.value);
+      setManualPrimaryPhoneStatus(
+        event.target.form,
+        !digits
+          ? "신규회원의 휴대전화 번호는 필수입니다."
+          : /^01[0-9]{8,9}$/.test(digits)
+            ? "등록할 때 앱 가입 계정과 자동으로 대조합니다."
+            : "휴대전화 번호를 010-0000-0000 형식으로 입력해 주세요.",
+        digits && !/^01[0-9]{8,9}$/.test(digits) ? "danger" : "",
+      );
+      return;
+    }
     if (event.target.matches("[data-member-product-search]")) {
       filterMemberInlineProductOptions(event.target.form);
       return;
@@ -884,14 +897,6 @@ function bindDelegatedEvents() {
       const memberId = Number(inlineMemberButton.dataset.openMemberInline);
       const ticketId = String(inlineMemberButton.dataset.memberInlineTicket || "");
       requestMemberInlineEditor(memberId, ticketId);
-      return;
-    }
-    if (event.target.closest("[data-member-create-next]")) {
-      if (memberCreateStepIsValid(1)) setMemberCreateStep(2);
-      return;
-    }
-    if (event.target.closest("[data-member-create-previous]")) {
-      setMemberCreateStep(1);
       return;
     }
     if (event.target.closest("[data-close-member-inline]")) {

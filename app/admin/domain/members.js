@@ -239,18 +239,24 @@ function normalizedMemberLinkSearch(value = "") {
 
 function memberManualRegistrationFields() {
   return `
-    <label class="form-field span-2">${memberManagementFieldLabel("이름", true)}<input name="memberName" type="text" minlength="2" maxlength="40" autocomplete="name" required /></label>
-    <label class="form-field">${memberManagementFieldLabel("휴대전화")}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" placeholder="선택 · 앱 연결 시 입력 가능" /></label>
-    <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="선택 · 예: 1990" /></label>
+    <label class="form-field">${memberManagementFieldLabel("이름", true)}<input name="memberName" type="text" minlength="2" maxlength="40" autocomplete="name" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("휴대전화", true)}<input name="memberPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="010-0000-0000" required /><small>앱 가입 계정과 같으면 새 회원을 만들지 않고 자동 연결합니다.</small></label>
+    <p class="form-message span-2" data-manual-primary-phone-status role="status">이름과 휴대전화만 입력하면 신규회원 여부를 자동 확인합니다.</p>
     <input name="memberNickname" type="hidden" value="" />
-    <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="선택 · 예: 군자동" /></label>
-    <label class="form-field">${memberManagementFieldLabel("성별")}<select name="memberGender">
-      <option value="">미입력</option>
-      <option value="female">여성</option>
-      <option value="male">남성</option>
-      <option value="other">기타</option>
-      <option value="prefer_not">응답 안 함</option>
-    </select></label>
+    <details class="member-profile-optional span-2">
+      <summary>추가 정보 <small>선택</small></summary>
+      <div class="member-management-form-grid">
+        <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="예: 1990" /></label>
+        <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="예: 군자동" /></label>
+        <label class="form-field">${memberManagementFieldLabel("성별")}<select name="memberGender">
+          <option value="">미입력</option>
+          <option value="female">여성</option>
+          <option value="male">남성</option>
+          <option value="other">기타</option>
+          <option value="prefer_not">응답 안 함</option>
+        </select></label>
+      </div>
+    </details>
     <input name="memberDominantHand" type="hidden" value="" />
     <input name="memberBackhandStyle" type="hidden" value="" />
     <input name="memberTennisStartedOn" type="hidden" value="" />
@@ -369,7 +375,13 @@ function memberManagementErrorText(error) {
   if (raw.includes("partner_search_query_too_short")) return "파트너 이름은 두 글자, 전화번호는 네 자리 이상 입력해 주세요.";
   if (raw.includes("group_partner_birth_year_invalid")) return "파트너 출생연도를 확인해 주세요.";
   if (raw.includes("group_partner_gender_invalid")) return "파트너 성별 값을 다시 선택해 주세요.";
-  if (raw.includes("member_phone_already_exists")) return "같은 휴대전화 번호가 회원 또는 직원 계정에 사용 중입니다. 회원 검색에 없으면 운영 설정의 직원 계정과 계정 연결을 확인해 주세요.";
+  if (raw.includes("member_registration_phone_multiple_accounts")) return "같은 휴대전화 번호의 계정이 여러 개입니다. 임의 등록하지 말고 앱 연결 필요 목록에서 계정을 먼저 정리해 주세요.";
+  if (raw.includes("member_registration_existing_group_partner_required")) return "이 회원은 이미 앱에 가입했습니다. 1:2 등록은 ‘기존 회원 연결’을 선택하고 파트너도 검색해 주세요.";
+  if (raw.includes("member_registration_existing_member_use_ticket_action")) return "이미 등록된 회원입니다. 회원 목록에서 해당 회원의 ‘회원권 등록’을 사용해 주세요.";
+  if (raw.includes("member_registration_existing_account_unavailable")) return "같은 휴대전화의 계정은 있지만 현재 자동 연결할 수 없습니다. 삭제회원·직원·다른 지점 여부를 확인해 주세요.";
+  if (raw.includes("member_registration_identity_search_unavailable")) return "회원 중복 확인을 할 수 없어 등록을 중단했습니다. 네트워크와 관리자 로그인을 확인해 주세요.";
+  if (raw.includes("member_phone_required")) return "신규회원의 휴대전화 번호는 필수입니다.";
+  if (raw.includes("member_phone_already_exists")) return "같은 휴대전화 번호가 회원 또는 직원 계정에 사용 중입니다. 회원 목록의 회원권 등록 또는 운영 설정의 직원 계정과 계정 연결을 확인해 주세요.";
   if (raw.includes("member_name_required")) return "회원 이름을 두 글자 이상 입력해 주세요.";
   if (raw.includes("invalid_schedule_scope")) return "평일, 주말 또는 혼합을 선택해 주세요.";
   if (raw.includes("invalid_ticket_status")) return "회원권 상태를 다시 선택해 주세요.";
@@ -395,7 +407,7 @@ function memberManagementErrorText(error) {
   if (raw.includes("source_signup_has_operational_data")) return "선택한 가입 계정에 별도 회원권이나 수업이 있어 자동 병합할 수 없습니다. 관리자 검토가 필요합니다.";
   if (raw.includes("nickname_already_taken") || raw.includes("uq_tn_users_normalized_nickname")) return "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해 주세요.";
   if (raw.includes("nickname_length_invalid")) return "닉네임은 2~16자로 입력해 주세요.";
-  if (raw.includes("member_phone_invalid")) return "휴대전화 번호를 확인해 주세요.";
+  if (raw.includes("member_phone_invalid")) return "휴대전화 번호를 010-0000-0000 형식으로 입력해 주세요.";
   if (raw.includes("member_birth_year_invalid")) return "출생연도를 확인해 주세요.";
   if (raw.includes("invalid_weekly_frequency")) return "평일은 주 1~3회, 주말은 주 1~2회로 선택해 주세요.";
   if (raw.includes("invalid_lesson_type")) return "레슨 종류를 1:1 또는 1:2로 선택해 주세요.";

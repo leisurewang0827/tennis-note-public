@@ -410,9 +410,9 @@ function validateRequiredMemberProfile(form, message = null) {
   const neighborhoodValue = String(neighborhood?.value || "").trim();
   let invalidControl = null;
   let errorText = "";
-  if (phone && ((phone.required && !phoneDigits) || (phoneDigits && phoneDigits.length < 8))) {
+  if (phone && ((phone.required && !phoneDigits) || (phoneDigits && !/^01[0-9]{8,9}$/.test(phoneDigits)))) {
     invalidControl = phone;
-    errorText = "휴대전화 번호를 입력해 주세요.";
+    errorText = phoneDigits ? "휴대전화 번호를 010-0000-0000 형식으로 입력해 주세요." : "휴대전화 번호를 입력해 주세요.";
   } else if (birthYear && String(birthYear.value || "").trim() && (!Number.isInteger(birthValue) || birthValue < 1900 || birthValue > currentYear)) {
     invalidControl = birthYear;
     errorText = "출생연도를 네 자리로 입력해 주세요.";

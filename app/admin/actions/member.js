@@ -509,29 +509,6 @@ function applyMemberTicketExtensionPreset(button) {
   syncMemberTicketExtensionPreview(form);
 }
 
-function setMemberCreateStep(step) {
-  const form = $("#memberManagementForm");
-  if (!form || memberManagementModalState.action !== "create") return;
-  const nextStep = step === 2 ? 2 : 1;
-  memberManagementModalState.createStep = nextStep;
-  [...form.querySelectorAll("[data-member-create-panel]")].forEach((panel) => {
-    panel.hidden = Number(panel.dataset.memberCreatePanel) !== nextStep;
-  });
-  [...form.querySelectorAll("[data-member-create-step-indicator]")].forEach((indicator) => {
-    const indicatorStep = Number(indicator.dataset.memberCreateStepIndicator);
-    indicator.classList.toggle("is-active", indicatorStep === nextStep);
-    indicator.classList.toggle("is-done", indicatorStep < nextStep);
-  });
-  const previous = form.querySelector("[data-member-create-previous]");
-  const next = form.querySelector("[data-member-create-next]");
-  const submit = form.querySelector("[data-member-create-submit]");
-  if (previous) previous.hidden = nextStep === 1;
-  if (next) next.hidden = nextStep === 2;
-  if (submit) submit.hidden = nextStep !== 2;
-  const heading = form.querySelector(`[data-member-create-panel="${nextStep}"] input, [data-member-create-panel="${nextStep}"] select`);
-  window.setTimeout(() => heading?.focus(), 0);
-}
-
 function applyMemberManagementProductDefaults(form, allLiveData = adminLiveDataState) {
   const product = (allLiveData.products || []).find((item) => item.id === form?.elements.productId?.value);
   if (!product || !form) return;
@@ -716,14 +693,32 @@ async function submitMemberManagementForm(event) {
     let result = null;
     let linkedSourceSignupUserId = "";
     let linkedTargetMemberUserId = "";
+    let autoLinkedSignupMember = false;
     if (isCreate) {
+      const existingMember = await resolveManualRegistrationMember(form);
       const createOperationKey = form.dataset.createOperationKey || createMemberChangeBatchId();
       form.dataset.createOperationKey = createOperationKey;
-      result = await client.rpc("tn_admin_create_paid_member_and_regular_schedule", {
-        target_record: managementPayload,
-        target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
-        target_operation_key: createOperationKey,
-      });
+      if (existingMember) {
+        autoLinkedSignupMember = true;
+        managementPayload.userId = String(existingMember.id);
+        managementPayload.name = String(existingMember.name || managementPayload.name || "");
+        managementPayload.phone = String(existingMember.phone || managementPayload.phone || "");
+        managementPayload.assignmentRequestId = createOperationKey;
+        const assignmentRpc = Number(selectedManagementProduct?.group_size || 1) === 2
+          ? "tn_admin_assign_paid_group_member_ticket_and_regular_schedule"
+          : "tn_admin_assign_paid_member_ticket_and_regular_schedule";
+        result = await client.rpc(assignmentRpc, {
+          target_record: managementPayload,
+          target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
+          target_operation_key: createOperationKey,
+        });
+      } else {
+        result = await client.rpc("tn_admin_create_paid_member_and_regular_schedule", {
+          target_record: managementPayload,
+          target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
+          target_operation_key: createOperationKey,
+        });
+      }
       state.memberFilter = "active";
     } else if (action === "assign") {
       const existingPaymentId = managementPayload?.existingPaymentId || "";
@@ -913,14 +908,14 @@ async function submitMemberManagementForm(event) {
       const createdTicket = tickets.find((item) => item.serverTicketId === createdTicketId);
       if (normalizedResult.scheduleCreated) {
         state.scheduleEditMode = false;
-        showToast("회원·회원권·정규시간표 등록 완료");
+        showToast(autoLinkedSignupMember ? "앱 가입 계정 연결·회원권·정규시간표 등록 완료" : "회원·회원권·정규시간표 등록 완료");
       } else if (normalizedResult.scheduleDeferred && memberManagementProductSupportsRegularSchedule(selectedManagementProduct)) {
         state.pinnedLessonTicketId = createdTicket?.id || "";
         state.scheduleEditMode = true;
         setView("schedule");
-        showToast("회원권 등록 완료 · 시간표에서 첫 수업을 선택해 주세요.");
+        showToast(`${autoLinkedSignupMember ? "앱 가입 계정 연결 · " : ""}회원권 등록 완료 · 시간표에서 첫 수업을 선택해 주세요.`);
       } else {
-        showToast("회원·회원권 등록 완료");
+        showToast(autoLinkedSignupMember ? "앱 가입 계정 연결·회원권 등록 완료" : "회원·회원권 등록 완료");
       }
     } else {
       showToast(`${memberManagementActionLabel(action)} 완료`);

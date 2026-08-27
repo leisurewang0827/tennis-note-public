@@ -372,20 +372,12 @@ function renderMemberManagementModal() {
       <p class="member-management-rule">새 로그인 성공 전까지 현재 연결은 유지됩니다. 같은 이름만으로 자동 연결하지 않으며, 전화번호가 일치하는 한 명만 전환할 수 있습니다.</p>`;
   } else if (isCreate) {
     actionFields = products.length && coachRoles.length ? `
-      <ol class="member-create-steps" aria-label="회원 추가 단계">
-        <li class="is-active" data-member-create-step-indicator="1"><span>1</span> 기본정보</li>
-        <li data-member-create-step-indicator="2"><span>2</span> 회원권</li>
-      </ol>
-      <div data-member-create-panel="1">
-        <p class="member-create-step-help"><strong>1단계</strong> 현장에서는 이름만 필수입니다. 나머지는 회원이 앱에서 작성한 뒤 연결할 수 있습니다.</p>
-        <div class="member-management-form-grid">
-          ${memberManualRegistrationFields()}
-        </div>
+      <p class="member-create-step-help"><strong>신규 회원 등록</strong> 이름·휴대전화·회원권·코치·결제만 확인하고 한 번에 저장합니다.</p>
+      <div class="member-management-form-grid member-manual-create-identity">
+        ${memberManualRegistrationFields()}
       </div>
-      <div data-member-create-panel="2" hidden>
-        <p class="member-create-step-help"><strong>2단계</strong> 회원권·담당 코치·정규 요일과 시간을 고르면 회원 등록과 시간표 생성이 한 번에 끝납니다.</p>
-        ${memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions)}
-      </div>
+      ${memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions)}
+      <section class="member-registration-summary" data-member-registration-summary aria-live="polite"></section>
       <p class="member-management-rule">정규권은 선택한 전체 횟수의 요일·시간을 모두 입력해야 저장됩니다. 예외일 때만 ‘시간표는 나중에 설정’을 선택하세요.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "assign") {
     actionFields = products.length && coachRoles.length ? `
@@ -479,11 +471,7 @@ function renderMemberManagementModal() {
       <div id="memberManagementMessage" class="form-message danger" role="status">${escapeHtml(memberManagementModalState.message || "")}</div>
       <div class="modal-actions">
         <button class="ghost-button" type="button" data-close-member-management>취소</button>
-        ${isCreate && products.length && coachRoles.length ? `
-          <button class="ghost-button" type="button" data-member-create-previous hidden>이전</button>
-          <button class="primary-button" type="button" data-member-create-next>다음: 회원권</button>
-          <button class="primary-button" type="submit" data-member-create-submit hidden>등록 후 시간표 열기</button>
-        ` : `<button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${((["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length)) || (action === "force_delete" && !memberManagementModalState.forceDeletePreview?.ok) || (action === "close" && !memberManagementModalState.closePreview?.ok) ? "disabled" : ""}>${submitLabel}</button>`}
+        <button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${(((["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length)) || (action === "force_delete" && !memberManagementModalState.forceDeletePreview?.ok) || (action === "close" && !memberManagementModalState.closePreview?.ok)) ? "disabled" : ""}>${isCreate ? "회원 등록 확정" : submitLabel}</button>
       </div>
     </form>`;
 }

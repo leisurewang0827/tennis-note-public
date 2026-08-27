@@ -1,28 +1,28 @@
 {
-  "version": "1.0.418",
-  "releaseId": "2026.08.27.3",
-  "appSurfaceVersion": "1.0.418",
+  "version": "1.0.419",
+  "releaseId": "2026.08.27.4",
+  "appSurfaceVersion": "1.0.419",
   "minimumNativeShellVersion": "1.0.118",
   "nativeUpdateMode": "bundled-shell",
   "nativePlatforms": {
     "android": {
       "minimumVersion": "1.0.245",
       "minimumBuild": 55,
-      "latestVersion": "1.0.394",
-      "latestBuild": 95,
-      "preparedVersion": "1.0.400",
-      "preparedBuild": 97,
+      "latestVersion": "1.0.404",
+      "latestBuild": 98,
+      "preparedVersion": "1.0.419",
+      "preparedBuild": 99,
       "storeUrl": "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote"
     },
     "ios": {
       "minimumVersion": "1.0.260",
       "minimumBuild": 59,
-      "latestVersion": "1.0.418",
+      "latestVersion": "1.0.419",
       "latestBuild": 97,
-      "preparedVersion": "1.0.418",
-      "preparedBuild": 98,
+      "preparedVersion": "1.0.419",
+      "preparedBuild": 99,
       "storeUrl": "https://apps.apple.com/app/id6790994818"
     }
   },
-  "deployedAt": "2026-08-27T13:34:34+09:00"
+  "deployedAt": "2026-08-27T16:51:08+09:00"
 }
