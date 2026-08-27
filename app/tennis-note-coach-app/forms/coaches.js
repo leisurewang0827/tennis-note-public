@@ -183,7 +183,7 @@ function installCoachConnectivitySync() {
   window.addEventListener("offline", () => {
     coachSyncUiState = "idle";
     renderCoachConnectivityStatus();
-    showToast("오프라인 · 최근 자료는 조회할 수 있고 수업기록은 임시 저장됩니다.");
+    showToast("오프라인에서는 최근 자료만 볼 수 있습니다. 수업 완료는 연결 후 진행해 주세요.");
   });
 }
 

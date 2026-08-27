@@ -3218,10 +3218,10 @@
     }));
   }
 
-  async function processLessonOutcome(finalize) {
+  async function processLessonOutcome() {
     const lesson = state.editingLesson;
     if (!lesson) return;
-    const collected = collectOutcomeResults(finalize);
+    const collected = collectOutcomeResults(true);
     if (collected.error) {
       setEditorMessage(collected.error);
       return;
@@ -3231,23 +3231,19 @@
       return;
     }
     if (!requireWritableServer()) return;
-    if (finalize) {
-      const deductionGuide = deductionConfirmationGuide(collected.results);
-      if (!window.confirm(`수업 처리를 완료할까요? ${deductionGuide}`)) return;
-    }
+    const deductionGuide = deductionConfirmationGuide(collected.results);
+    if (!window.confirm(`수업 처리를 완료할까요? ${deductionGuide}`)) return;
     const api = bridge();
-    const draftButton = $("#scheduleV2SaveOutcomeDraftButton");
     const finalizeButton = $("#scheduleV2FinalizeOutcomeButton");
-    draftButton.disabled = true;
     finalizeButton.disabled = true;
-    setEditorMessage(finalize ? "수업 완료와 차감을 저장하는 중입니다." : "피드백 초안을 저장하는 중입니다.", "info");
+    setEditorMessage("수업 완료와 차감을 저장하는 중입니다.", "info");
     try {
       const participantResults = await resolveOutcomeCurriculumRefs(api, collected.results);
       await api.rpc("tn_schedule_v2_process_lesson", {
         target_lesson_id: lesson.id,
         target_participant_results: participantResults,
-        target_finalize: finalize,
-        target_operation_key: operationKey(finalize ? "admin-outcome-final" : "admin-outcome-draft"),
+        target_finalize: true,
+        target_operation_key: operationKey("admin-outcome-final"),
       });
       state.deferredRefresh = false;
       state.payload = null;
@@ -3255,13 +3251,12 @@
       await loadWorkspace({ quiet: true, force: true });
       state.editingLesson = state.payload?.lessons.find((item) => String(item.id) === String(lesson.id)) || lesson;
       renderOutcomeEditor();
-      setEditorMessage(finalize ? "수업 처리와 서버 차감이 완료됐습니다." : "피드백 초안을 서버에 저장했습니다.", "success");
-      setStatus(finalize ? "수업 처리 완료 · 시간표와 회원권을 다시 확인했습니다." : "피드백 초안 저장 완료", "success");
+      setEditorMessage("수업 처리와 서버 차감이 완료됐습니다.", "success");
+      setStatus("수업 처리 완료 · 시간표와 회원권을 다시 확인했습니다.", "success");
       void api.refresh?.();
     } catch (error) {
       setEditorMessage(errorMessage(error));
     } finally {
-      draftButton.disabled = false;
       finalizeButton.disabled = false;
     }
   }
@@ -4732,8 +4727,7 @@
       event.stopPropagation();
       suggestions?.querySelector("[data-v2-curriculum-code]")?.click();
     });
-    $("#scheduleV2SaveOutcomeDraftButton").addEventListener("click", () => processLessonOutcome(false));
-    $("#scheduleV2FinalizeOutcomeButton").addEventListener("click", () => processLessonOutcome(true));
+    $("#scheduleV2FinalizeOutcomeButton").addEventListener("click", () => processLessonOutcome());
     $("#scheduleV2LessonHistoryPanel")?.addEventListener("toggle", loadLessonHistory);
     $("#scheduleV2EditorForm").elements.substituteSettlementMode.addEventListener("change", (event) => {
       $("#scheduleV2SubstituteHourlyField").hidden = event.currentTarget.value !== "hourly";

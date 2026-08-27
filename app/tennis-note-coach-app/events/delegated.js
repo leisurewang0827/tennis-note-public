@@ -472,13 +472,6 @@ function bindDelegatedEvents() {
       saveLessonRecord();
       return;
     }
-    const saveLessonDraftButton = event.target.closest("[data-save-lesson-draft]");
-    if (saveLessonDraftButton) {
-      void saveLessonChartDraft(saveLessonDraftButton.dataset.saveLessonDraft);
-      return;
-    }
-
-
     const completeLessonButton = event.target.closest("[data-complete-lesson-from-modal]");
     if (completeLessonButton) {
       completeLessonFromModal(completeLessonButton.dataset.completeLessonFromModal);

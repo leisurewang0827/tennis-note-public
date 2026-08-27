@@ -193,7 +193,7 @@ function renderCoachConnectivityStatus() {
     status.dataset.tone = "offline";
     message.textContent = pendingCount
       ? `오프라인 · 기록 ${pendingCount}건을 연결 후 처리합니다.`
-      : "오프라인 · 최근 자료 조회와 수업기록 임시 저장만 가능합니다.";
+      : "오프라인 · 최근 자료만 볼 수 있으며 수업 완료는 연결 후 가능합니다.";
     return;
   }
   if (coachSyncUiState === "syncing") {

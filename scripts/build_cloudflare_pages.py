@@ -37,7 +37,17 @@ def env(name: str) -> str:
     return os.environ.get(name, "").strip().lstrip("\ufeff")
 
 
+def deployment_environment() -> str:
+    return "development" if env("TENNISNOTE_ENVIRONMENT").lower() == "development" else "production"
+
+
+def payments_enabled() -> bool:
+    return env("TENNISNOTE_PAYMENTS_ENABLED").lower() != "false"
+
+
 def payment_operating_settings() -> tuple[str, list[str]]:
+    if not payments_enabled():
+        return "disabled", []
     mode = "multi" if env("TENNISNOTE_PAYMENT_MODE").lower() == "multi" else "tosspay_only"
     configured = [
         value.strip().lower()
@@ -63,6 +73,7 @@ def write_browser_config(output: Path) -> None:
         raise ValueError("Missing required deployment settings: " + ", ".join(missing))
 
     app_config = {
+        "environment": deployment_environment(),
         "supabaseUrl": env("TENNISNOTE_SUPABASE_URL"),
         "supabasePublishableKey": env("TENNISNOTE_SUPABASE_PUBLISHABLE_KEY"),
         "authProviderOverrides": {
@@ -82,11 +93,12 @@ def write_browser_config(output: Path) -> None:
         for name, value in configured_channels.items()
         if name in allowed_methods and value
     }
-    if not env("TENNISNOTE_PORTONE_STORE_ID"):
+    if payments_enabled() and not env("TENNISNOTE_PORTONE_STORE_ID"):
         raise ValueError("Missing required deployment setting: TENNISNOTE_PORTONE_STORE_ID")
-    if payment_mode == "tosspay_only" and not channels.get("tosspay"):
+    if payments_enabled() and payment_mode == "tosspay_only" and not channels.get("tosspay"):
         raise ValueError("Missing required deployment setting: TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY")
     payment_config = {
+        "enabled": payments_enabled(),
         "provider": "portone",
         "mode": payment_mode,
         "allowedMethods": allowed_methods,
@@ -109,6 +121,19 @@ def write_browser_config(output: Path) -> None:
         + ";\n",
         encoding="utf-8",
     )
+
+
+def mark_development_build(output: Path) -> None:
+    if deployment_environment() != "development":
+        return
+    banner = """<aside role=\"status\" aria-label=\"개발계 안내\" style=\"position:sticky;top:0;z-index:2147483647;padding:8px 12px;background:#7c2d12;color:#fff;text-align:center;font:700 13px/1.4 system-ui,sans-serif\">개발계 · 실제 결제·푸시 차단</aside>"""
+    for page in output.rglob("*.html"):
+        text = page.read_text(encoding="utf-8")
+        if 'name="robots"' not in text:
+            text = text.replace("</head>", '  <meta name="robots" content="noindex,nofollow" />\n</head>', 1)
+        if "개발계 · 실제 결제·푸시 차단" not in text:
+            text = text.replace("<body>", f"<body>\n    {banner}", 1)
+        page.write_text(text, encoding="utf-8")
 
 
 def write_platform_files(output: Path, target: str) -> None:
@@ -223,6 +248,7 @@ def main() -> int:
     else:
         build_admin(output)
     write_browser_config(output)
+    mark_development_build(output)
     write_platform_files(output, args.target)
     print(f"Built {args.target} Cloudflare Pages artifact: {output.relative_to(ROOT)}")
     return 0

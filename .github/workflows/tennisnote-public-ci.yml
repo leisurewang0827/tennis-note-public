@@ -8,6 +8,7 @@ on:
       - "scripts/build_cloudflare_pages.py"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - ".github/workflows/tennisnote-public-ci.yml"
+      - ".github/workflows/deploy-cloudflare-pages-dev.yml"
   push:
     branches: [dev, main]
     paths:
@@ -16,6 +17,7 @@ on:
       - "scripts/build_cloudflare_pages.py"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - ".github/workflows/tennisnote-public-ci.yml"
+      - ".github/workflows/deploy-cloudflare-pages-dev.yml"
 
 permissions:
   contents: read
