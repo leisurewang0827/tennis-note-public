@@ -8,6 +8,7 @@
 function paymentRequestDisplay(request = {}) {
   const safeStatus = safePaymentHistoryStatus(request.status);
   const text = `${request.method || ""} ${safeStatus}`;
+  const oneDayPurchase = request.purchasePurpose === "one_day";
   if (text.includes("설정")) {
     return {
       period: "결제창 연결 전 요청",
@@ -26,9 +27,9 @@ function paymentRequestDisplay(request = {}) {
   }
   if (text.includes("서버 검증") || text.includes("PortOne 결제창")) {
     return {
-      period: "결제 완료 접수 · 이용권 충전 대기",
+      period: oneDayPurchase ? "결제 완료 접수 · 원데이 예약 확인 중" : "결제 완료 접수 · 이용권 충전 대기",
       status: "검증 대기",
-      note: "관리자 화면에 접수됐고, 서버 검증 후 이용권이 충전됩니다.",
+      note: oneDayPurchase ? "서버 검증 후 선택한 원데이 일정이 예약됩니다." : "관리자 화면에 접수됐고, 서버 검증 후 이용권이 충전됩니다.",
       tone: "wait",
     };
   }
@@ -41,9 +42,9 @@ function paymentRequestDisplay(request = {}) {
     };
   }
   return {
-    period: "관리자 확인 후 이용권 시작",
+    period: oneDayPurchase ? "관리자 확인 후 원데이 예약 확정" : "관리자 확인 후 이용권 시작",
     status: "확인 대기",
-    note: safeStatus || "결제 확인 후 이용권이 충전됩니다.",
+    note: safeStatus || (oneDayPurchase ? "결제 확인 후 원데이 예약이 확정됩니다." : "결제 확인 후 이용권이 충전됩니다."),
     tone: "wait",
   };
 }

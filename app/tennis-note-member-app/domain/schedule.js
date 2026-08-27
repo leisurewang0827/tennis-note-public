@@ -126,8 +126,8 @@ function memberSlotInsideAnchorWindow(scheduleLessons, policy, sourceLesson, day
 function generatedMemberAvailableSlots(scheduleLessons, policy, selectedLesson = null) {
   const result = [];
   const sourceLesson = selectedLesson
-    || scheduleLessons.find((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled" && lesson.serverLessonId)
-    || scheduleLessons.find((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled");
+    || scheduleLessons.find((lesson) => memberLessonCanRequestChange(lesson) && lesson.serverLessonId)
+    || scheduleLessons.find((lesson) => memberLessonCanRequestChange(lesson));
   if (!sourceLesson) return result;
   const sourceCoach = memberLessonCoach(sourceLesson, policy);
   const durationMinutes = lessonDuration(sourceLesson);
@@ -246,6 +246,7 @@ function memberScheduleCardName(lesson, isMine) {
 
 function memberScheduleExceptionLabel(lesson = {}) {
   const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
+  if (lesson.oneDayBooking && ["reserved", "scheduled", "checked_in"].includes(status)) return "원데이 예약";
   const context = `${lesson.lessonSource || ""} ${lesson.type || ""} ${lesson.changeNote || ""}`;
   let detail = "";
   if ((lesson.originalCoachRoleId && lesson.coach_role_id && lesson.originalCoachRoleId !== lesson.coach_role_id) || /대타/.test(context)) detail = "대타";
@@ -540,8 +541,7 @@ function memberLessons() {
 function currentScheduledLessonsForChange() {
   const dueLessons = memberMakeupDueLessons();
   const fromSchedule = memberScheduleLessons().filter((lesson) => (
-    isOwnMemberScheduleLesson(lesson)
-    && lesson.status === "scheduled"
+    memberLessonCanRequestChange(lesson)
     && !memberTicketRefundHeld(memberLessonTicketId(lesson))
   ));
   const futureLessons = loadedFutureScheduledLessonsForChange()
@@ -575,8 +575,7 @@ function currentScheduledLessonsForChange() {
 function loadedFutureScheduledLessonsForChange(today = localDateKey()) {
   return (state.liveLessons || [])
     .filter((lesson) => (
-      isOwnMemberScheduleLesson(lesson)
-      && lesson.status === "scheduled"
+      memberLessonCanRequestChange(lesson)
       && lesson.lessonDate
       && lesson.lessonDate >= today
     ))
@@ -612,7 +611,7 @@ function memberApprovedChangeForLesson(lesson = {}) {
 }
 
 function memberScheduleRoundLabel(lesson, isMine) {
-  if (!isMine) return "";
+  if (!isMine || lesson?.oneDayBooking) return "";
   const total = Math.max(0, Number(lesson.ticketTotalSessions) || 0);
   const used = Math.max(0, Number(lesson.ticketUsedSessions) || 0);
   const completed = ["completed", "no_show"].includes(String(lesson.serverStatus || "").toLowerCase());

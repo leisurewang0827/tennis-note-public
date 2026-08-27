@@ -182,6 +182,20 @@ async function syncMemberChangeCandidates(source = null) {
   }
 }
 
+async function loadMemberOwnOneDayBookingIds(client, profileId) {
+  if (!client?.selectRows || !profileId) return new Set();
+  try {
+    const rows = await client.selectRows("tn_payments", {
+      select: "one_day_booking_id,status",
+      filters: { user_id: profileId, status: "verified" },
+      limit: 50,
+    });
+    return memberOneDayBookingIdsFromPayments(rows);
+  } catch {
+    return new Set();
+  }
+}
+
 async function syncMemberScheduleV2(profile = null, options = {}) {
   const client = window.TennisNoteDataClient;
   const requestId = options.requestId || ++memberScheduleV2RequestSequence;
@@ -194,18 +208,24 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
     const identityIssue = memberScheduleIdentityIssue(cached.workspace, cached.integrity, profileId);
     if (identityIssue) return rejectMemberScheduleIdentity(identityIssue, cached.integrity);
     state.scheduleV2Integrity = cached.integrity || null;
-    const applied = applyScheduleV2MemberWorkspace(cached.workspace, cached.releasedMakeupSlots, cached.oneDaySlots);
+    const applied = applyScheduleV2MemberWorkspace(
+      cached.workspace,
+      cached.releasedMakeupSlots,
+      cached.oneDaySlots,
+      cached.ownOneDayBookingIds,
+    );
     if (applied) state.scheduleV2LoadedKey = cacheKey;
     return applied;
   }
   try {
-    const [workspace, releasedMakeupSlots, oneDaySlots, integrity] = await Promise.all([
+    const [workspace, releasedMakeupSlots, oneDaySlots, ownOneDayBookingIds, integrity] = await Promise.all([
       client.rpc("tn_schedule_v2_member_workspace", {
         target_from: week.startDate,
         target_to: workspaceEndDate,
       }),
       client.rpc("tn_member_released_makeup_slots", {}).catch(() => []),
       client.rpc("tn_member_one_day_schedule_slots", {}).catch(() => []),
+      loadMemberOwnOneDayBookingIds(client, profileId),
       client.rpc("tn_current_member_schedule_integrity", {}).catch(() => null),
     ]);
     if (requestId !== memberScheduleV2RequestSequence) return false;
@@ -229,6 +249,7 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
       workspace,
       releasedMakeupSlots: Array.isArray(releasedMakeupSlots) ? releasedMakeupSlots : [],
       oneDaySlots: Array.isArray(oneDaySlots) ? oneDaySlots : [],
+      ownOneDayBookingIds,
       integrity,
     };
     state.scheduleV2Integrity = integrity || null;
@@ -236,6 +257,7 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
       workspace,
       memberScheduleV2WorkspaceCache.releasedMakeupSlots,
       memberScheduleV2WorkspaceCache.oneDaySlots,
+      memberScheduleV2WorkspaceCache.ownOneDayBookingIds,
     );
     if (applied) state.scheduleV2LoadedKey = cacheKey;
     return applied;
@@ -284,7 +306,7 @@ async function syncLegacyMemberLessonsFromServer(profile = null) {
       limit: 100,
     });
     const ownLessonIds = new Set((participants || []).map((item) => item.lesson_id));
-    const [scheduleRows, coachRoles, makeupEntitlementRows, releasedMakeupSlots, oneDaySlots] = await Promise.all([
+    const [scheduleRows, coachRoles, makeupEntitlementRows, releasedMakeupSlots, oneDaySlots, ownOneDayBookingIds] = await Promise.all([
       client.selectRows("tn_lessons", {
         select: "id,member_ticket_id,coach_role_id,lesson_date,start_time,duration_minutes,status,lesson_source",
         limit: 1000,
@@ -304,6 +326,7 @@ async function syncLegacyMemberLessonsFromServer(profile = null) {
       client.rpc
         ? client.rpc("tn_member_one_day_schedule_slots", {}).catch(() => [])
         : Promise.resolve([]),
+      loadMemberOwnOneDayBookingIds(client, profileId),
     ]);
     const loadedLessonIds = new Set((scheduleRows || []).map((lesson) => lesson.id));
     const missingOwnLessonIds = [...ownLessonIds].filter((lessonId) => !loadedLessonIds.has(lessonId));
@@ -386,26 +409,12 @@ async function syncLegacyMemberLessonsFromServer(profile = null) {
           isOwnLesson,
         };
       });
-    const oneDayOccupancy = (oneDaySlots || []).map((slot) => {
-      const lessonDate = slot.booking_date || "";
-      const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
-      return {
-        id: `one-day-${slot.id}`,
-        oneDayBooking: true,
-        serverOneDayBookingId: slot.id,
-        lessonDate,
-        day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
-        time: String(slot.start_time || "").slice(0, 5),
-        coach: coachNames.get(slot.coach_role_id) || "담당 코치",
-        coach_role_id: slot.coach_role_id,
-        member: "",
-        type: "원데이 예약",
-        lessonSource: "one_day",
-        durationMinutes: Number(slot.duration_minutes) || 20,
-        status: "occupied",
-        isOwnLesson: false,
-      };
-    });
+    const oneDayOccupancy = (oneDaySlots || []).map((slot) => memberOneDayLessonFromSlot(
+      slot,
+      coachNames.get(slot.coach_role_id) || "담당 코치",
+      ownOneDayBookingIds,
+      memberName,
+    ));
     state.liveLessons = [...mappedLessons, ...oneDayOccupancy];
     state.liveLessonsLoaded = true;
     return true;

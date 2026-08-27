@@ -48,6 +48,7 @@ function requestProduct(productId) {
 }
 
 function createPaymentRecord(product, overrides = {}) {
+  const flow = purchaseFlowState();
   const methodId = overrides.methodId || state.selectedPaymentMethod;
   const paymentAmount = purchasePaymentAmount(product, methodId);
   const request = {
@@ -62,6 +63,7 @@ function createPaymentRecord(product, overrides = {}) {
     paymentId: overrides.paymentId || "",
     serverPaymentId: overrides.serverPaymentId || "",
     bankTransferAccount: overrides.bankTransferAccount || null,
+    purchasePurpose: overrides.purchasePurpose || flow.purchasePurpose || "new_purchase",
   };
   const existingIndex = state.paymentRequests.findIndex((item) => (
     request.paymentId && String(item.paymentId || "") === String(request.paymentId)
@@ -93,19 +95,23 @@ async function handlePaymentRedirectResult() {
   }
   try {
     const verification = await verifyServerPayment(paymentId);
+    const oneDayPurchase = purchaseFlowState().purchasePurpose === "one_day";
     state.pendingPaymentCheckStatus = verification?.ok
-      ? { tone: "done", text: "결제 검증이 끝났습니다. 회원권 상태를 확인합니다." }
+      ? { tone: "done", text: oneDayPurchase ? "결제 검증이 끝났습니다. 원데이 예약을 확인합니다." : "결제 검증이 끝났습니다. 회원권 상태를 확인합니다." }
       : { tone: "wait", text: "결제 접수 후 서버 검증을 기다리는 중입니다." };
     state.ticketHistory.unshift({ text: "결제창 복귀 · 서버 검증 완료", tone: verification?.ok ? "done" : "wait" });
     const flow = purchaseFlowState();
     flow.open = true;
     flow.step = 4;
-    flow.completionStatus = verification?.ok ? "결제가 확인되었습니다" : "결제가 접수되었습니다";
+    flow.completionStatus = verification?.ok && oneDayPurchase ? "원데이 예약이 완료되었습니다" : verification?.ok ? "결제가 확인되었습니다" : "결제가 접수되었습니다";
   } catch (error) {
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제 검증 확인 필요 · ${paymentServerErrorMessage(error)}` };
     state.ticketHistory.unshift({ text: "결제창 복귀 · 관리자 검증 확인 필요", tone: "alert" });
   }
-  await syncMemberTicketsFromServer();
+  await Promise.allSettled([
+    syncMemberTicketsFromServer(),
+    syncMemberLessonsFromServer(null, { force: true }),
+  ]);
   renderAll();
   setView("shopView");
   return true;

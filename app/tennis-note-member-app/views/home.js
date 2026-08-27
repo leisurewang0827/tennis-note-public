@@ -120,13 +120,16 @@ function renderTodayActions() {
   const lessonLabel = nextLesson
     ? `${nextLesson.day} ${nextLesson.time} · ${nextLesson.coach}`
     : "예정된 수업 없음";
+  const nextLessonMeta = nextLesson?.oneDayBooking
+    ? "원데이 예약 완료 · 회원권 차감 없음"
+    : nextLesson ? `${nextLesson.type} · 연결 회원권 잔여 ${nextLessonRemaining}회` : "관리자에게 시간표 확인이 필요합니다.";
   const canChangeLesson = currentScheduledLessonsForChange().length > 0 || memberMakeupDueLessons().length > 0;
   target.innerHTML = `
     <article class="today-card primary">
       <div>
         <span>다음 수업</span>
         <strong>${lessonLabel}</strong>
-        <small>${nextLesson ? `${nextLesson.type} · 연결 회원권 잔여 ${nextLessonRemaining}회` : "관리자에게 시간표 확인이 필요합니다."}</small>
+        <small>${escapeHtml(nextLessonMeta)}</small>
         <small>다음 커리큘럼: ${curriculum.title}</small>
       </div>
       <button class="primary-button" type="button" data-home-action="curriculum">커리큘럼 보기</button>

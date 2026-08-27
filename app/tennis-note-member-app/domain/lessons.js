@@ -10,6 +10,60 @@ function isOwnMemberScheduleLesson(lesson = {}) {
   return isCurrentMemberName(lesson.member);
 }
 
+function memberOneDayBookingIdsFromPayments(paymentRows = []) {
+  return new Set((paymentRows || [])
+    .filter((payment) => String(payment.status || "").toLowerCase() === "verified")
+    .map((payment) => String(payment.one_day_booking_id || payment.oneDayBookingId || ""))
+    .filter(Boolean));
+}
+
+function memberOneDayLessonFromSlot(slot = {}, coachName = "담당 코치", ownBookingIds = new Set(), memberName = "") {
+  const bookingId = String(slot.id || "");
+  const isOwnLesson = slot.is_own === true
+    || slot.isOwn === true
+    || Boolean(bookingId && ownBookingIds?.has?.(bookingId));
+  const bookingStatus = String(slot.booking_status || slot.bookingStatus || slot.status || "reserved").toLowerCase();
+  const lessonDate = String(slot.booking_date || slot.bookingDate || "");
+  const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
+  return {
+    id: `one-day-${bookingId}`,
+    oneDayBooking: true,
+    serverOneDayBookingId: bookingId,
+    lessonDate,
+    day: date && !Number.isNaN(date.getTime()) ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
+    time: String(slot.start_time || slot.startTime || "").slice(0, 5),
+    coach: coachName || "담당 코치",
+    coachRoleId: slot.coach_role_id || slot.coachRoleId || "",
+    coach_role_id: slot.coach_role_id || slot.coachRoleId || "",
+    member: isOwnLesson ? memberName : "",
+    type: "원데이 예약",
+    lessonSource: "one_day",
+    durationMinutes: Number(slot.duration_minutes || slot.durationMinutes) || 20,
+    serverStatus: bookingStatus,
+    status: isOwnLesson ? (bookingStatus === "completed" ? "completed" : "scheduled") : "occupied",
+    isOwnLesson,
+  };
+}
+
+function memberUpcomingOneDayBookings(lessons = [], now = new Date()) {
+  const current = now.getTime();
+  return (lessons || [])
+    .filter((lesson) => lesson?.oneDayBooking === true && isOwnMemberScheduleLesson(lesson))
+    .filter((lesson) => !["cancelled", "canceled", "archived"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase()))
+    .filter((lesson) => {
+      const startAt = new Date(`${lesson.lessonDate || ""}T${lesson.time || "00:00"}:00`).getTime();
+      const endAt = startAt + Math.max(1, Number(lesson.durationMinutes) || 20) * 60_000;
+      return Number.isFinite(endAt) && endAt >= current;
+    })
+    .sort((left, right) => `${left.lessonDate || ""}T${left.time || ""}`.localeCompare(`${right.lessonDate || ""}T${right.time || ""}`));
+}
+
+function memberLessonCanRequestChange(lesson = {}) {
+  return isOwnMemberScheduleLesson(lesson)
+    && lesson.oneDayBooking !== true
+    && lesson.status === "scheduled";
+}
+
 function normalizeAdminLessonForMember(lesson, snapshot) {
   const coach = adminCoachNameForLesson(lesson, snapshot);
   const rawText = `${lesson.type || ""} ${lesson.status || ""} ${coach}`;
@@ -86,6 +140,7 @@ function memberLessonColorStyle(lesson, policy) {
 
 function memberLessonTitle(lesson, isMine) {
   if (!isMine) return lesson?.oneDayBooking ? "원데이 예약" : "수업중";
+  if (lesson?.oneDayBooking) return "원데이 예약";
   if (lesson.status === "requested") return "변경요청";
   const kind = memberLessonVisualKind(lesson);
   if (kind === "makeup") return "보강";
@@ -116,6 +171,19 @@ function lessonDetailDateTimeLabel(lesson = {}) {
 
 function lessonDetailStatusInfo(lesson = {}) {
   const status = String(lesson.serverStatus || lesson.status || "scheduled").toLowerCase();
+  if (lesson.oneDayBooking) {
+    return status === "completed"
+      ? {
+          label: "원데이 완료",
+          message: "완료된 원데이 수업입니다.",
+          primaryAction: "",
+        }
+      : {
+          label: "예약 완료",
+          message: "결제가 확인된 원데이 예약입니다.",
+          primaryAction: "",
+        };
+  }
   const kind = memberLessonVisualKind(lesson);
   if (status === "requested" || status === "pending_change") {
     return {

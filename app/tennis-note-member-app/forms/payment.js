@@ -92,12 +92,13 @@ async function completePreparedPayment() {
       return;
     } else {
       const paidPaymentId = response?.paymentId || effectivePaymentId;
-      let verifiedStatus = "결제 완료 · 서버 검증 후 회원권 충전 대기";
+      const oneDayPurchase = purchaseFlowState().purchasePurpose === "one_day";
+      let verifiedStatus = oneDayPurchase ? "결제 완료 · 서버 검증 후 원데이 예약 확인" : "결제 완료 · 서버 검증 후 회원권 충전 대기";
       try {
         const verification = await verifyServerPayment(paidPaymentId);
         if (verification?.ok) {
           verifiedStatus = verification.status === "verified"
-            ? "서버 검증 완료 · 이용권 충전 확인 필요"
+            ? oneDayPurchase ? "서버 검증 완료 · 원데이 예약 확인" : "서버 검증 완료 · 이용권 충전 확인 필요"
             : "서버 검증 확인 · 관리자 확인 필요";
         }
       } catch (error) {
@@ -109,11 +110,11 @@ async function completePreparedPayment() {
         method: method.label,
         status: verifiedStatus,
       });
-      state.ticketHistory.unshift({ text: `${product.title} 결제 완료 접수 · 검증 후 회원권 충전`, tone: "wait" });
+      state.ticketHistory.unshift({ text: oneDayPurchase ? `${product.title} 결제 완료 접수 · 원데이 예약 확인 중` : `${product.title} 결제 완료 접수 · 검증 후 회원권 충전`, tone: "wait" });
       const flow = purchaseFlowState();
       flow.open = true;
       flow.step = 4;
-      flow.completionStatus = "결제가 접수되었습니다";
+      flow.completionStatus = oneDayPurchase ? "원데이 예약이 완료되었습니다" : "결제가 접수되었습니다";
     }
   } catch (error) {
     if (preparedPayment?.localPaymentId) {
@@ -160,7 +161,12 @@ async function completePreparedPayment() {
   }
 
   closePaymentConfirmationModal();
-  await Promise.allSettled([syncMemberTicketsFromServer(), syncMemberPendingPurchaseSchedulesFromServer(), syncMemberDiscountCouponsFromServer()]);
+  await Promise.allSettled([
+    syncMemberTicketsFromServer(),
+    syncMemberLessonsFromServer(null, { force: true }),
+    syncMemberPendingPurchaseSchedulesFromServer(),
+    syncMemberDiscountCouponsFromServer(),
+  ]);
   renderAll();
   setView("shopView");
 }

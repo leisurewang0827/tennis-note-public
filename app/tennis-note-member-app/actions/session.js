@@ -33,7 +33,7 @@ function updatePwaInstallButtons() {
   });
 }
 
-function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = [], oneDaySlots = []) {
+function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = [], oneDaySlots = [], ownOneDayBookingIds = new Set()) {
   if (!workspace?.actorUserId || !Array.isArray(workspace.lessons)) return false;
   state.scheduleOperationDays = Array.isArray(workspace.operationDays) ? workspace.operationDays : [];
   const ticketsById = new Map((workspace.tickets || []).map((ticket) => [ticket.id, ticket]));
@@ -114,27 +114,12 @@ function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = []
     time: String(slot.start_time || "").slice(0, 5),
     durationMinutes: Number(slot.duration_minutes) || 20,
   }));
-  const oneDayOccupancy = (oneDaySlots || []).map((slot) => {
-    const lessonDate = String(slot.booking_date || "");
-    const date = lessonDate ? new Date(`${lessonDate}T00:00:00`) : null;
-    return {
-      id: `one-day-${slot.id}`,
-      oneDayBooking: true,
-      serverOneDayBookingId: slot.id,
-      lessonDate,
-      day: date ? days[date.getDay() === 0 ? 6 : date.getDay() - 1] : "",
-      time: String(slot.start_time || "").slice(0, 5),
-      coach: coachesById.get(slot.coach_role_id)?.name || "담당 코치",
-      coachRoleId: slot.coach_role_id,
-      coach_role_id: slot.coach_role_id,
-      member: "",
-      type: "원데이 예약",
-      lessonSource: "one_day",
-      durationMinutes: Number(slot.duration_minutes) || 20,
-      status: "occupied",
-      isOwnLesson: false,
-    };
-  });
+  const oneDayOccupancy = (oneDaySlots || []).map((slot) => memberOneDayLessonFromSlot(
+    slot,
+    coachesById.get(slot.coach_role_id)?.name || "담당 코치",
+    ownOneDayBookingIds,
+    currentMemberName(),
+  ));
   const retainedLessons = (state.liveLessons || []).filter((lesson) => (
     lesson.lessonDate
     && (lesson.lessonDate < workspace.from || lesson.lessonDate > workspace.to)
