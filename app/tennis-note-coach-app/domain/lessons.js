@@ -326,3 +326,14 @@ function coachCompletionPreflightMessage(status = "") {
     ticket_unavailable: "회원권이 만료·중지·소진되어 처리할 수 없습니다.",
   })[String(status || "").toLowerCase()] || "최신 수업·회원권 상태를 확인하지 못했습니다. 다시 시도해 주세요.";
 }
+
+function coachLessonOccupiesSlot(lesson = {}, time = "", slotMinutes = scheduleBlockMinutes) {
+  const status = String(lesson.status || "").trim().toLowerCase();
+  if (["cancel", "cancelled", "canceled", "취소"].includes(status)) return false;
+  const lessonStart = minutesFromTime(lesson.time || lesson.startTime || "");
+  const slotStart = minutesFromTime(time);
+  if (!Number.isFinite(lessonStart) || !Number.isFinite(slotStart)) return false;
+  const lessonEnd = lessonStart + Math.max(1, lessonDuration(lesson));
+  const slotEnd = slotStart + Math.max(1, Number(slotMinutes) || scheduleBlockMinutes);
+  return lessonStart < slotEnd && lessonEnd > slotStart;
+}

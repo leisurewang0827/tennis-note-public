@@ -328,3 +328,44 @@ function reconcileVerifiedPaymentRequests() {
   }
   return beforeCount !== state.paymentRequests.length;
 }
+
+function paymentServerErrorCode(error) {
+  const payload = error?.payload || {};
+  const nested = payload?.error || {};
+  const raw = [payload.code, nested.code, error?.code, error?.message, nested.message, payload.message]
+    .filter(Boolean)
+    .map(String);
+  const combined = raw.join(" ");
+  if (/RECORD_NOT_FOUND|storeId\s+is\s+not\s+correct|store[_ ]?id.*(incorrect|invalid|not found)/i.test(combined)) {
+    return "portone_store_config_invalid";
+  }
+  if (/channel.*(not found|incorrect|invalid)|CHANNEL_NOT_FOUND/i.test(combined)) {
+    return "portone_channel_config_invalid";
+  }
+  const directCode = raw.find((value) => /^[a-z][a-z0-9_]{2,119}$/i.test(value));
+  return directCode ? directCode.toLowerCase() : "payment_provider_error";
+}
+
+function safePaymentHistoryStatus(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^[{[]|RECORD_NOT_FOUND|storeId\s+is\s+not\s+correct|CHANNEL_NOT_FOUND/i.test(text)) {
+    return paymentServerErrorMessage({ message: text });
+  }
+  return text.slice(0, 240);
+}
+
+function reportPaymentProviderError(error, stage = "payment_provider") {
+  const code = paymentServerErrorCode(error);
+  window.dispatchEvent(new CustomEvent("tennisnote:client-error", {
+    detail: {
+      category: "runtime",
+      stage,
+      code,
+      message: paymentServerErrorMessage({ payload: { code } }),
+      provider: "portone",
+      native: nativeAppPlatform() !== "web",
+    },
+  }));
+  return code;
+}

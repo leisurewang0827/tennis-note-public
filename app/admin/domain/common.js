@@ -2864,3 +2864,44 @@ function scheduleV2AdminBridgeSnapshot() {
     ticketIds: [...branchTicketIds],
   };
 }
+
+function dashboardOperationalDataReady() {
+  if (adminDemoMode || state.liveScheduleLoaded) return true;
+  return [coaches, members, lessons, makeupRequests, tickets, expiredTickets, billings, billingLogs, groupAccounts, lessonNotes]
+    .some((items) => Array.isArray(items) && items.length > 0);
+}
+
+function accountDeletionServerReady() {
+  return accountDeletionServerState.status === "ready";
+}
+
+function accountDeletionServerStatusCopy() {
+  const status = accountDeletionServerState.status;
+  if (status === "ready") {
+    const appleReady = accountDeletionServerState.appleRevokeReady !== false
+      && accountDeletionServerState.tokenEncryptionReady !== false;
+    return {
+      title: appleReady ? "삭제 서버 준비됨" : "일반 계정 삭제 준비됨",
+      detail: appleReady
+        ? "서버와 DB 안전 계약을 확인했습니다."
+        : "Apple 로그인 탈퇴는 서버 비밀설정을 추가로 확인해야 합니다.",
+      tone: "is-ready",
+    };
+  }
+  if (status === "checking" || status === "idle") {
+    return { title: "삭제 서버 확인 중", detail: "실행 전에 서버와 DB 안전 계약을 확인합니다.", tone: "is-checking" };
+  }
+  if (status === "unavailable") {
+    return { title: "삭제 서버 미배포", detail: "회원 데이터는 그대로 보존됩니다. 서버 기능을 배포한 뒤 다시 확인해 주세요.", tone: "is-blocked" };
+  }
+  if (status === "misconfigured") {
+    return { title: "삭제 서버 설정 확인 필요", detail: "서버 비밀설정이 준비될 때까지 삭제 실행을 차단했습니다.", tone: "is-blocked" };
+  }
+  if (status === "contract_error") {
+    return { title: "DB 안전 계약 불일치", detail: "운영 DB migration을 확인하기 전에는 삭제할 수 없습니다.", tone: "is-blocked" };
+  }
+  if (status === "unauthorized") {
+    return { title: "관리자 로그인 확인 필요", detail: "관리자 권한을 다시 확인한 뒤 재시도해 주세요.", tone: "is-blocked" };
+  }
+  return { title: "삭제 서버 확인 실패", detail: "네트워크 상태를 확인한 뒤 다시 확인해 주세요.", tone: "is-blocked" };
+}

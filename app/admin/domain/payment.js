@@ -376,3 +376,108 @@ function chargeStatusForPayment(item = {}) {
   if (item.status === "failed") return { label: "충전 중단", tone: "danger", detail: "결제 실패 항목은 회원권을 충전하지 않습니다." };
   return { label: "확인 필요", tone: "warn", detail: "관리자 확인 후 회원권 상태를 맞춰야 합니다." };
 }
+
+function memberManagementPaymentStateFromValues({ paymentDate = "", paymentMethod = "", paymentAmount = 0 } = {}) {
+  const date = String(paymentDate || "").trim();
+  const method = normalizeMemberPaymentMethod(paymentMethod);
+  const amount = Number(paymentAmount) || 0;
+  if (amount === 0 && method === "membershiptransfer") return "transfer_zero";
+  if (amount > 0 && date && method) return "complete";
+  if (amount > 0 || date || method) return "incomplete";
+  return "unentered";
+}
+
+function memberManagementPaymentAmountForMethod(product = null, method = "") {
+  const normalized = normalizeMemberPaymentMethod(method);
+  if (normalized === "card" || normalized === "tosspay") return Math.max(0, Number(product?.card_price) || 0);
+  if (["banktransfer", "cash"].includes(normalized)) return Math.max(0, Number(product?.cash_price) || Number(product?.base_price) || 0);
+  return 0;
+}
+
+function memberPaymentProjectionRow(member = null, ticket = null) {
+  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
+  const userIds = memberServerUserIds(member).map(String);
+  if (!ticketId || !userIds.length) return null;
+  return (adminLiveDataState.memberPaymentProjections || [])
+    .filter((projection) => (
+      String(projection.ticket_id || projection.ticketId || "") === ticketId
+      && userIds.includes(String(projection.user_id || projection.userId || ""))
+    ))
+    .sort((left, right) => String(right.projection_updated_at || "")
+      .localeCompare(String(left.projection_updated_at || "")))[0] || null;
+}
+
+function billingOperationalMonthMatches(item, month) {
+  if (!month) return true;
+  return billingEffectiveDate(item).slice(0, 7) === month;
+}
+
+function billingAttemptGroupKey(item = {}) {
+  const groupable = ["draft", "check", "unverified", "failed", "server_ready"].includes(String(item.status || ""));
+  if (!groupable) return item.serverPaymentId || item.providerPaymentId
+    ? `payment:${item.serverPaymentId || item.providerPaymentId}`
+    : item;
+  if (item.purchaseIntentKey) return `intent:${item.purchaseIntentKey}`;
+  const requestedDay = String(item.requestedAt || item.createdAt || "").slice(0, 10) || billingEffectiveDate(item);
+  return [
+    "legacy-attempt",
+    item.serverUserId || item.member || "member",
+    item.productId || item.item || "product",
+    String(item.method || "").toLowerCase(),
+    Number(item.finalAmount || item.amount || 0),
+    requestedDay,
+  ].join("|");
+}
+
+function groupedBillingAttempts(items = []) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const key = billingAttemptGroupKey(item);
+    const attempts = groups.get(key) || [];
+    attempts.push(item);
+    groups.set(key, attempts);
+  });
+  return [...groups.values()]
+    .map((attempts) => {
+      attempts.sort((left, right) => paymentCreatedAtMs(right) - paymentCreatedAtMs(left));
+      return { primary: attempts[0], attempts, attemptCount: attempts.length };
+    })
+    .sort((left, right) => paymentCreatedAtMs(right.primary) - paymentCreatedAtMs(left.primary));
+}
+
+function billingAttemptSummary(entry = {}) {
+  const count = Number(entry.attemptCount || 0);
+  const latest = entry.primary || {};
+  const latestDisplay = paymentDisplayStatus(latest);
+  const latestSummary = `최근 ${paymentMethodLabel(latest.method)} · ${latestDisplay.label || latest.statusLabel || "상태 확인"}`;
+  return count > 1 ? `${latestSummary} · 동일 요청 ${count}회` : latestSummary;
+}
+
+function paymentApprovalDisplay(item = {}) {
+  const method = String(item.method || "").toLowerCase();
+  if (item.approvalPending) return { tone: "neutral", label: "승인 처리중", detail: "서버에서 결제와 회원권을 다시 확인하고 있습니다." };
+  if (item.status === "paid" && paymentRequiresTicketRepair(item)) {
+    return { tone: "warn", label: "연결 확인", detail: "결제는 확인됐지만 회원권 연결을 확인해야 합니다." };
+  }
+  if (item.status === "paid") {
+    return { tone: "good", label: "승인 완료", detail: item.oneDayBookingId ? "원데이 예약 연결됨" : item.ticketId ? "회원권 연결됨" : "이관 결제 보존" };
+  }
+  if (item.status === "server_ready" && method === "bank_transfer") {
+    return { tone: "warn", label: "입금 확인 필요", detail: "실제 입금액을 확인한 뒤 한 번만 승인하세요." };
+  }
+  if (["check", "unverified"].includes(item.status)) {
+    return { tone: "warn", label: "결제 확인 필요", detail: "결제사 상태를 확인하면 회원권까지 함께 연결됩니다." };
+  }
+  if (item.status === "server_ready") return { tone: "neutral", label: "결제 대기", detail: "회원 결제가 완료됐는지 확인합니다." };
+  if (["cancelled", "refunded"].includes(item.status)) return { tone: "neutral", label: "취소·환불", detail: "현재 회원권 승인 대상이 아닙니다." };
+  if (item.status === "failed") return { tone: "danger", label: "결제 실패", detail: "회원권을 생성하거나 연결하지 않습니다." };
+  return { tone: "neutral", label: "확인 대기", detail: "결제 상태를 먼저 확인해 주세요." };
+}
+
+function settlementRuleSummary(rule = {}) {
+  if (rule.method === "hourly") return `시간제 ${money.format(Number(rule.hourly) || 0)}원/시간`;
+  const rate = Math.round((Number(rule.ratio) || 0) * 10000) / 100;
+  return rule.calculationMode === "monthly_payment"
+    ? `월 결제금액 × ${rate}%`
+    : `진행 횟수 × ${rate}%`;
+}

@@ -318,3 +318,47 @@ async function searchManualMemberPartnerCandidates(form, options = {}) {
     return [];
   }
 }
+
+async function loadAdminMemberIdentityReviewCount({ force = false } = {}) {
+  if (operationsRole() !== "admin" || !window.TennisNoteDataClient?.rpc) return false;
+  if (!force && adminMemberIdentityReviewState.loaded) return true;
+  if (!force && adminMemberIdentityReviewState.promise) return adminMemberIdentityReviewState.promise;
+  adminMemberIdentityReviewState.loading = true;
+  adminMemberIdentityReviewState.error = "";
+  adminMemberIdentityReviewState.promise = window.TennisNoteDataClient.rpc(
+    "tn_admin_member_identity_reconciliation_page",
+    {
+      target_branch_id: activeOperationBranchId() || null,
+      target_search: "",
+      target_page: 0,
+      target_page_size: 1,
+    },
+  ).then((response) => {
+    const payload = Array.isArray(response) ? response[0] : response;
+    const count = Math.max(0, Number(payload?.counts?.app_link ?? payload?.total) || 0);
+    Object.assign(adminMemberIdentityReviewState, {
+      loading: false,
+      loaded: true,
+      error: "",
+      count,
+      promise: null,
+    });
+    adminMemberDirectoryState.counts = {
+      ...(adminMemberDirectoryState.baseCounts || adminMemberDirectoryState.counts || {}),
+      app_link: count,
+    };
+    if (state.view === "members") renderMemberStatusCounts();
+    return true;
+  }).catch((error) => {
+    Object.assign(adminMemberIdentityReviewState, {
+      loading: false,
+      loaded: false,
+      error: String(error?.message || error || "member_identity_review_failed"),
+      count: null,
+      promise: null,
+    });
+    if (state.view === "members") renderMemberStatusCounts();
+    return false;
+  });
+  return adminMemberIdentityReviewState.promise;
+}

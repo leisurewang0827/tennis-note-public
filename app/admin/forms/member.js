@@ -565,3 +565,88 @@ function syncMemberReenrollSchedule(form, product = null) {
     ? `새 회원권의 주 ${memberManagementProductWeeklyFrequency(selectedProduct)}회 요일·시간을 모두 선택해 주세요.`
     : "기존 회원권의 마지막 정규시간을 새 회원권 기간으로 이어갑니다.";
 }
+
+function syncMemberManagementPaymentFields(form, options = {}) {
+  if (!form?.elements?.paymentRecordState || !form.elements.paymentAmount) return;
+  const product = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+  const method = form.elements.paymentMethod?.value || "";
+  const overridden = form.dataset.paymentAmountOverride === "true";
+  if (options.forcePrice === true && !overridden) {
+    form.elements.paymentAmount.value = memberManagementPaymentAmountForMethod(product, method);
+  }
+  const values = {
+    paymentDate: form.elements.paymentDate?.value || "",
+    paymentMethod: method,
+    paymentAmount: memberManagementNullableNumber(form.elements.paymentAmount) || 0,
+  };
+  const state = memberManagementPaymentStateFromValues(values);
+  form.elements.paymentRecordState.value = state;
+  const stateLabel = form.querySelector("[data-member-payment-derived-state]");
+  if (stateLabel) stateLabel.textContent = memberPaymentRecordStateLabel(state);
+  const missing = [];
+  if (state === "incomplete") {
+    if (!values.paymentDate) missing.push("결제일");
+    if (!values.paymentMethod) missing.push("결제수단");
+    if (values.paymentAmount <= 0) missing.push("결제금액");
+  }
+  const missingLabel = form.querySelector("[data-member-payment-missing]");
+  if (missingLabel) missingLabel.textContent = missing.length ? `${missing.join(" · ")} 입력 필요` : state === "complete" ? "입력 완료 · 결제 완료로 자동 처리" : "세 항목을 모두 비우면 미결제";
+  syncMemberRegistrationSummary(form);
+}
+
+function enableMemberManagementPaymentOverride(form) {
+  if (!form?.elements?.paymentAmount || form.elements.paymentAmount.disabled) return;
+  form.dataset.paymentAmountOverride = "true";
+  form.elements.paymentAmount.readOnly = false;
+  form.elements.paymentAmount.removeAttribute("aria-readonly");
+  const field = form.querySelector("[data-payment-override-reason]");
+  const reason = form.elements.paymentOverrideReason;
+  if (field) field.hidden = false;
+  if (reason) {
+    reason.disabled = false;
+    reason.required = true;
+    reason.focus();
+  }
+}
+
+function syncMemberRegistrationSummary(form) {
+  const summary = form?.querySelector("[data-member-registration-summary]");
+  if (!summary) return;
+  const product = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+  const coach = memberManagementCoachRoles({ branchId: product?.branch_id })
+    .find((item) => item.id === form.elements.coachRoleId?.value);
+  const partnerSelect = form.elements.partnerUserId;
+  const partnerName = partnerSelect && !partnerSelect.disabled ? partnerSelect.selectedOptions?.[0]?.textContent?.trim() : "";
+  const isGroup = Number(product?.group_size || 1) === 2;
+  const schedules = memberInlineScheduleValues(form).map((slot) => `${memberManagementDayLabel(slot.dayOfWeek)} ${slot.startTime}`);
+  const paymentState = memberManagementPaymentStateFromValues({
+    paymentDate: form.elements.paymentDate?.value || "",
+    paymentMethod: form.elements.paymentMethod?.value || "",
+    paymentAmount: memberManagementNullableNumber(form.elements.paymentAmount) || 0,
+  });
+  const primaryName = form.elements.memberName?.value?.trim()
+    || members.find((item) => item.id === memberManagementModalState.memberId)?.name
+    || "회원";
+  summary.innerHTML = `<strong>최종 확인</strong><dl>
+    <div><dt>회원</dt><dd>${escapeHtml(isGroup && partnerName ? `${primaryName} · ${partnerName}` : primaryName)}</dd></div>
+    <div><dt>회원권</dt><dd>${escapeHtml(product?.name || "선택 필요")}${isGroup ? " · 그룹 2명 연결" : ""}</dd></div>
+    <div><dt>코치·일정</dt><dd>${escapeHtml(coach?.display_name || "코치 선택 필요")}${schedules.length ? ` · ${escapeHtml(schedules.join(" / "))}` : " · 시간 선택 필요"}</dd></div>
+    <div><dt>기간</dt><dd>${escapeHtml(form.elements.startsOn?.value || "시작일 필요")} ~ ${escapeHtml(form.elements.expiresOn?.value || "자동 계산")}</dd></div>
+    <div><dt>결제</dt><dd>${escapeHtml(memberPaymentRecordStateLabel(paymentState))}${paymentState === "complete" ? ` · ${escapeHtml(paymentMethodLabel(form.elements.paymentMethod?.value || ""))} ${money.format(Number(form.elements.paymentAmount?.value) || 0)}원` : ""}</dd></div>
+  </dl><small>수정할 항목이 있으면 위 입력칸에서 바로 바꾼 뒤 확정하세요.</small>`;
+}
+
+function renderMemberTableViewMode() {
+  const simple = state.memberTableView !== "detail";
+  const table = $("#memberDirectoryTable");
+  table?.classList.toggle("is-simple", simple);
+  table?.classList.toggle("is-detail", !simple);
+  const button = $("#toggleMemberTableView");
+  if (button) {
+    button.textContent = simple ? "상세 보기" : "간단 보기";
+    button.setAttribute("aria-pressed", String(simple));
+    button.title = simple
+      ? "코치·기간·결제일 등 운영 상세 열까지 펼칩니다."
+      : "회원·앱 연결·회원권·횟수·결제·정산·처리만 표시합니다.";
+  }
+}

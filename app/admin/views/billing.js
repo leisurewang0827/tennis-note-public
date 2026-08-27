@@ -488,3 +488,55 @@ function renderPaymentSetup() {
       </div>
     </article>`;
 }
+
+function billingAttemptHistoryMarkup(entry = {}) {
+  if (Number(entry.attemptCount || 0) <= 1) return "";
+  const rows = (entry.attempts || []).map((attempt) => {
+    const display = paymentDisplayStatus(attempt);
+    const date = paymentAuditDateTimeLabel(attempt.requestedAt || attempt.createdAt) || "시각 확인 필요";
+    return `<li>${escapeHtml(date)} · ${escapeHtml(paymentMethodLabel(attempt.method))} · ${escapeHtml(display.label)}</li>`;
+  }).join("");
+  return `<details class="payment-attempt-details"><summary>${escapeHtml(billingAttemptSummary(entry))}</summary><ul>${rows}</ul></details>`;
+}
+
+function paymentPendingMoreActions(item, index) {
+  const action = paymentCancelButtonFor(index, "대기취소");
+  return action ? `<details class="payment-row-more"><summary>기타</summary>${action}</details>` : "";
+}
+
+function paymentApprovedMoreActions(item, index) {
+  const actions = `${paymentFullCancelButtonFor(item, index)}${paymentRefundButtonFor(item, index)}`;
+  return actions ? `<details class="payment-row-more"><summary>취소·환불</summary>${actions}</details>` : "";
+}
+
+function paymentConfirmationMarkup(item = {}) {
+  const paidAt = paymentAuditDateTimeLabel(item.verifiedAt || item.paidAt);
+  if (item.status === "paid") return `${badge("good", "결제 확인됨")}${paidAt ? `<br><small>${escapeHtml(paidAt)}</small>` : ""}`;
+  if (item.status === "server_ready" && String(item.method || "").toLowerCase() === "bank_transfer") {
+    const depositor = item.depositorName ? ` · ${escapeHtml(item.depositorName)}` : "";
+    return `${badge("warn", "직접 입금 확인")}${depositor ? `<br><small>${depositor}</small>` : ""}`;
+  }
+  if (["check", "unverified"].includes(item.status)) return badge("warn", "결제사 확인 필요");
+  if (item.status === "server_ready") return badge("neutral", "결제 전");
+  if (item.status === "failed") return badge("danger", "실패");
+  if (["cancelled", "refunded"].includes(item.status)) return badge("neutral", "취소·환불 완료");
+  return badge("neutral", "확인 대기");
+}
+
+function billingSettlementApprovalMarkup(item = {}) {
+  if (item.status !== "paid") return '<span class="billing-settlement-pending">승인 후 자동계산</span>';
+  if (paymentRequiresTicketRepair(item)) return '<span class="payment-link-warning">회원권 연결 후 계산</span>';
+  const rows = settlementRowsForBilling(item);
+  const amount = rows.reduce((sum, row) => sum + settlementAmountFor(row), 0);
+  const coachNames = [...new Set(rows.map((row) => settlementCoachNameFor(row)).filter(Boolean))];
+  const summaries = [...new Set(rows.map((row) => settlementRuleSummary(settlementRuleFor(settlementCoachNameFor(row)))))]
+    .filter(Boolean);
+  return `<strong>${money.format(amount)}원</strong><br><small>${escapeHtml(coachNames.join(" · ") || "코치 확인 필요")}${summaries.length ? ` · ${escapeHtml(summaries.join(" / "))}` : ""}</small>`;
+}
+
+function memberTicketPaymentStatusMarkup(paymentGrid) {
+  return `<span class="member-payment-status is-${escapeHtml(paymentGrid.tone || "neutral")}" title="${escapeHtml(paymentGrid.detail || "")}">
+    <strong>${escapeHtml(paymentGrid.label || "결제 확인")}</strong>
+    <small>${escapeHtml(paymentGrid.method || "미입력")}</small>
+  </span>`;
+}

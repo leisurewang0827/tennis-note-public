@@ -183,3 +183,27 @@ async function loadAuthProviderStatus() {
     renderAuthProviderStatus();
   }
 }
+
+async function loadBranchSalesEffectiveOptionsFromServer() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.invokeFunction || !branchId || !adminApprovalReady()) return false;
+  branchSalesEffectiveOptionsState.status = "loading";
+  branchSalesEffectiveOptionsState.branchId = branchId;
+  renderBranchSalesSetup();
+  try {
+    const response = await client.invokeFunction("portone-payment/options", { body: { branchId } });
+    branchSalesEffectiveOptionsState.status = "loaded";
+    branchSalesEffectiveOptionsState.settingsVersion = Math.max(0, Number(response?.settingsVersion) || 0);
+    branchSalesEffectiveOptionsState.settingsAppliedAt = String(response?.settingsAppliedAt || "");
+    branchSalesEffectiveOptionsState.methodAvailability = Array.isArray(response?.methodAvailability) ? response.methodAvailability : [];
+    branchSalesEffectiveOptionsState.message = "";
+    renderBranchSalesSetup();
+    return true;
+  } catch (error) {
+    branchSalesEffectiveOptionsState.status = "failed";
+    branchSalesEffectiveOptionsState.message = String(error?.payload?.code || error?.message || "server_error");
+    renderBranchSalesSetup();
+    return false;
+  }
+}

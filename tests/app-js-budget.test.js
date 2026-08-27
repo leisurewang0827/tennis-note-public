@@ -26,12 +26,9 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ALLOWED = new Set(["bindEvents", "initApp", "initCoachApp"]);
 
 const BUDGET = [
-  // 1.0.418 병합분. 다음 커밋에서 정리한다.
-  { app: "app/admin", label: "관리자", budget: 49 },
-  // 1.0.418 병합분. 다음 커밋에서 정리한다.
-  { app: "app/tennis-note-member-app", label: "회원앱", budget: 57 },
-  // 1.0.418 병합분. 다음 커밋에서 정리한다.
-  { app: "app/tennis-note-coach-app", label: "코치앱", budget: 24 },
+  { app: "app/admin", label: "관리자", budget: 20 },
+  { app: "app/tennis-note-member-app", label: "회원앱", budget: 48 },
+  { app: "app/tennis-note-coach-app", label: "코치앱", budget: 22 },
 ];
 
 /** 최상위 `function` 선언만 센다. 함수 끝은 열 0 의 `}` 로 찾는다. */

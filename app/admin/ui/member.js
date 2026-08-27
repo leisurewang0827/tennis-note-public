@@ -150,3 +150,28 @@ function positionMemberQuickEditPopover() {
     Math.max(margin, rect.top - 12),
   )}px`;
 }
+
+async function openSimpleMemberRegistrationHub() {
+  if (operationsRole() !== "admin" || !operationsAccessReady()) {
+    showToast("관리자 계정으로 로그인해야 회원을 등록할 수 있습니다.");
+    return;
+  }
+  state.memberFilter = "journal";
+  state.memberSearch = "";
+  state.memberCoachFilter = "all";
+  state.memberTicketFilter = "all";
+  state.memberTicketGridFilter = "all";
+  state.memberListPage = 0;
+  setView("members", { skipLock: true });
+  $$('[data-member-filter]').forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.memberFilter === "journal");
+  });
+  await loadAdminMemberDirectoryPage({ force: true, render: true, preserveList: false });
+  const search = $("#memberListSearch");
+  if (search) {
+    search.value = "";
+    search.placeholder = "앱 가입 이름 또는 휴대전화 뒤 4자리";
+    search.focus();
+  }
+  showToast("앱 가입 회원을 먼저 검색하세요. 없을 때만 직접 신규 등록을 사용합니다.");
+}

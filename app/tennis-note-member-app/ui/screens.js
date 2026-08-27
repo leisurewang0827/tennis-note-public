@@ -643,3 +643,61 @@ function openLocalCurriculumPreview() {
 async function openOneDayPurchaseFlow(trigger = null) {
   return openMembershipPurchaseEntry({ purpose: "one_day", trigger });
 }
+
+async function openMembershipPurchaseEntry({ purpose = "new_purchase", productId = "", renewalTicketId = "", trigger = null } = {}) {
+  if (membershipPurchaseEntryInFlight) return false;
+  membershipPurchaseEntryInFlight = true;
+  const button = trigger instanceof HTMLElement ? trigger : null;
+  const originalLabel = button?.textContent || "";
+  if (button) {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.textContent = "회원권 확인 중";
+  }
+  try {
+    setView("shopView", { replaceHistory: true });
+    const ready = await ensureMembershipPurchaseData();
+    const directProducts = membershipProducts().filter(isDirectPurchaseMembershipProduct);
+    if (!ready || !directProducts.length) {
+      const message = !ready
+        ? "회원권 정보를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요."
+        : "현재 구매 가능한 회원권이 없습니다. 관리자에게 문의해 주세요.";
+      state.pendingPaymentCheckStatus = { tone: "alert", text: message };
+      renderProducts();
+      showToast(message);
+      return false;
+    }
+    let selectedProductId = productId;
+    if (purpose === "one_day") {
+      const oneDayProduct = directProducts
+        .filter((product) => membershipProductFamilyId(product) === "one-day")
+        .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999))[0] || null;
+      if (!oneDayProduct) {
+        const message = "현재 예약 가능한 원데이 상품이 없습니다. 관리자에게 문의해 주세요.";
+        state.pendingPaymentCheckStatus = { tone: "alert", text: message };
+        renderProducts();
+        showToast(message);
+        return false;
+      }
+      selectedProductId = oneDayProduct.id;
+    }
+    openMembershipPurchaseFlow(renewalTicketId, selectedProductId, purpose);
+    return true;
+  } catch {
+    const message = "회원권 구매 화면을 열지 못했습니다. 잠시 후 다시 시도해 주세요.";
+    state.pendingPaymentCheckStatus = { tone: "alert", text: message };
+    window.dispatchEvent(new CustomEvent("tennisnote:client-error", {
+      detail: { category: "runtime", stage: "purchase_entry", code: "purchase_entry_failed", message },
+    }));
+    renderProducts();
+    showToast(message);
+    return false;
+  } finally {
+    membershipPurchaseEntryInFlight = false;
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+      button.textContent = originalLabel;
+    }
+  }
+}

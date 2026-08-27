@@ -106,3 +106,12 @@ function memberChangeSubmitLabel(source = null, selected = null) {
   if (memberChangePolicySnapshot(selected)?.isGroup) return "그룹 변경 승인 요청";
   return selected.policy === "coach" ? "승인 요청" : "바로 변경";
 }
+
+function memberLessonChangeOperationKey({ lessonId = "", lessonDate = "", startTime = "" } = {}) {
+  const signature = `${lessonId}|${lessonDate}|${String(startTime).slice(0, 5)}`;
+  if (state.memberLessonChangeOperationSignature !== signature || !state.memberLessonChangeOperationKey) {
+    state.memberLessonChangeOperationSignature = signature;
+    state.memberLessonChangeOperationKey = `member_change_${globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`}`;
+  }
+  return state.memberLessonChangeOperationKey;
+}

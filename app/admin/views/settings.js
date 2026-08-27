@@ -1408,3 +1408,43 @@ function renderActiveSettingsPanel() {
       break;
   }
 }
+
+function renderAccountDeletionServerStatus() {
+  const target = $("#accountDeletionServerStatus");
+  if (!target) return;
+  const copy = accountDeletionServerStatusCopy();
+  target.className = `account-deletion-server-status ${copy.tone}`;
+  target.innerHTML = `
+    <div><strong>${escapeHtml(copy.title)}</strong><span>${escapeHtml(copy.detail)}</span></div>
+    <button class="ghost-button" type="button" data-retry-account-deletion-readiness ${accountDeletionServerState.status === "checking" ? "disabled aria-busy=\"true\"" : ""}>다시 확인</button>`;
+}
+
+function branchSalesEffectiveOptionsMarkup() {
+  const status = branchSalesEffectiveOptionsState;
+  if (status.status === "loading" || status.status === "idle") {
+    return '<section class="branch-sales-effective-status is-loading" role="status"><strong>회원앱 실제 노출 확인 중</strong><span>서버 운영 허용과 계좌 준비 상태를 확인합니다.</span></section>';
+  }
+  if (status.status === "failed") {
+    return `<section class="branch-sales-effective-status is-error" role="alert"><strong>회원앱 실제 노출을 확인하지 못했습니다</strong><span>${escapeHtml(status.message || "server_error")}</span></section>`;
+  }
+  const applied = normalizeBranchSalesConfig(branchSalesSettingsState.appliedConfig);
+  const availability = Array.isArray(status.methodAvailability) ? status.methodAvailability : [];
+  const labels = {
+    available: "회원앱 사용 중",
+    branch_disabled: "관리자 설정 꺼짐",
+    server_not_allowed: "서버 운영 미허용",
+    bank_account_not_ready: "입금 계좌 미준비",
+  };
+  const items = availability.map((method) => {
+    const id = String(method.id || "");
+    const title = applied.paymentMethods[id]?.title || id;
+    const reason = String(method.reason || "server_not_allowed");
+    return `<li class="${method.available === true ? "is-ready" : "is-blocked"}"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(labels[reason] || reason)}</span></li>`;
+  }).join("");
+  const appliedAt = status.settingsAppliedAt ? bankNotificationDateTime(status.settingsAppliedAt) : "적용 기록 없음";
+  return `
+    <section class="branch-sales-effective-status" role="status">
+      <div><strong>회원앱 실제 노출</strong><span>서버 설정 v${Number(status.settingsVersion || 0)} · 마지막 적용 ${escapeHtml(appliedAt)}</span></div>
+      ${items ? `<ul>${items}</ul>` : '<span>서버 진단 정보가 아직 적용되지 않았습니다.</span>'}
+    </section>`;
+}

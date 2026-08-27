@@ -279,3 +279,18 @@ async function confirmPaymentCancelFromModal() {
   }
   await executeBillingPaymentCancellation(item, reason);
 }
+
+function openBillingMemberReview(item = {}) {
+  const userId = String(item.serverUserId || "");
+  const member = members.find((candidate) => memberServerUserIds(candidate).includes(userId))
+    || members.find((candidate) => String(candidate.name || "") === String(item.member || ""));
+  if (!member) {
+    showToast("연결할 회원을 회원관리에서 먼저 확인해 주세요");
+    return;
+  }
+  state.selectedMemberId = member.id;
+  setView("members", { skipLock: true });
+  renderMembers();
+  void loadAdminMemberDetail(member, { force: true });
+  showToast(`${member.name} 회원권·결제 연결을 확인해 주세요`);
+}

@@ -250,3 +250,37 @@ function renderPaymentGatewayStatus() {
       <div class="payment-method-segments" role="group" aria-label="결제수단">${methodButtons}</div>
     </section>`;
 }
+
+function purchaseFlexibleCouponCoachSelectionHtml(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  const status = purchaseScheduleAvailabilityState();
+  if (status === "loading") return '<p class="purchase-availability-state" role="status">담당 코치를 확인하고 있습니다.</p>';
+  if (status === "error" || status === "coach_error") return '<p class="purchase-availability-state is-error" role="status">담당 코치 정보를 불러오지 못했습니다. 다시 확인해 주세요.</p>';
+  const sourceTicket = purchaseFlowSourceTicket();
+  const sourceCoachId = flow.purchasePurpose === "renew_same" ? String(sourceTicket?.coachRoleId || "") : "";
+  const coaches = purchaseCoachOptions().filter((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    return purchaseProductAllowsCoach(product, roleId) && (!sourceCoachId || roleId === sourceCoachId);
+  });
+  const selectedCoach = coaches.find((coach) => (
+    String(coach.serverRoleId || coach.roleId || coach.id || "") === String(flow.coachRoleId || sourceCoachId)
+  ));
+  if (selectedCoach) {
+    const hasWorkSchedule = Array.isArray(selectedCoach.workBlocks) && selectedCoach.workBlocks.length > 0;
+    return `<article class="purchase-selected-coach">
+      <div><span>담당 코치</span><strong>${escapeHtml(memberCoachShortName(selectedCoach.name || flow.coachName || "담당 코치"))} 코치</strong><small>${hasWorkSchedule ? "결제 후 시간표에서 원하는 시간을 예약합니다." : "예약 가능 시간은 코치 시간표가 등록되면 표시됩니다."}</small></div>
+      ${sourceCoachId ? "" : '<button class="small-button" type="button" data-clear-purchase-coach>다시 선택</button>'}
+    </article>`;
+  }
+  if (!coaches.length) {
+    return '<p class="purchase-availability-state is-error" role="status">현재 이 쿠폰을 담당할 수 있는 코치가 없습니다.</p>';
+  }
+  return `<div class="purchase-coach-filter-grid" role="group" aria-label="담당 코치 선택">
+    ${coaches.map((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    const hasWorkSchedule = Array.isArray(coach.workBlocks) && coach.workBlocks.length > 0;
+    return `<button class="purchase-coach-filter" type="button"
+      data-purchase-coach-filter="${escapeHtml(roleId)}" data-purchase-coach-filter-name="${escapeHtml(coach.name || "담당 코치")}" aria-pressed="false"><strong>${escapeHtml(memberCoachShortName(coach.name || "담당 코치"))} 코치</strong><small>${hasWorkSchedule ? "결제 후 자유 예약" : "시간표 등록 대기"}</small></button>`;
+  }).join("")}
+  </div>`;
+}

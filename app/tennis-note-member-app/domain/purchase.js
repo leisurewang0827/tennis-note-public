@@ -379,3 +379,46 @@ function pendingPurchaseScheduleLabel(schedule = {}) {
   const day = date ? `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일` : "선택한 날짜";
   return `${day} ${time}`.trim();
 }
+
+function publicOnboardingVisibleSlots(product = publicOnboardingProduct(), coachRoleId = "", required = 1) {
+  const available = publicOnboardingAvailableSlots(product, coachRoleId);
+  if (required <= 1 || available.length <= 12) return available.slice(0, 12);
+  const weeks = new Map();
+  available.forEach((slot) => {
+    const week = purchaseWeekStartDate(slot.lessonDate);
+    if (!weeks.has(week)) weeks.set(week, []);
+    weeks.get(week).push(slot);
+  });
+  const weekSlots = [...weeks.values()].find((items) => new Set(items.map((item) => item.lessonDate)).size >= required)
+    || [...weeks.values()][0]
+    || [];
+  const dates = new Map();
+  weekSlots.forEach((slot) => {
+    if (!dates.has(slot.lessonDate)) dates.set(slot.lessonDate, []);
+    dates.get(slot.lessonDate).push(slot);
+  });
+  const visible = [];
+  while (visible.length < 12 && [...dates.values()].some((items) => items.length)) {
+    dates.forEach((items) => {
+      if (visible.length < 12 && items.length) visible.push(items.shift());
+    });
+  }
+  return visible;
+}
+
+function purchaseUsesFlexibleCouponSchedule(product = purchaseFlowProduct(), flow = purchaseFlowState()) {
+  return Boolean(
+    product
+    && membershipProductFacet(product, "productKind") === "coupon"
+    && flow.purchasePurpose !== "one_day"
+  );
+}
+
+function purchaseFlexibleCouponCoachIsReady(product = purchaseFlowProduct()) {
+  const flow = purchaseFlowState();
+  const selectedRoleId = String(flow.coachRoleId || "");
+  if (!selectedRoleId || !purchaseProductAllowsCoach(product, selectedRoleId)) return false;
+  return purchaseCoachOptions().some((coach) => (
+    String(coach.serverRoleId || coach.roleId || coach.id || "") === selectedRoleId
+  ));
+}

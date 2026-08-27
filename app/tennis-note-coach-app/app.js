@@ -180,41 +180,6 @@ let activeCoachModalId = "";
 let coachModalReturnFocus = null;
 let nativeCoachBackListenerReady = false;
 
-async function openCoachExternalPortal(kind = "coach") {
-  const adminRequested = kind === "admin";
-  if (adminRequested && state.coach?.role !== "admin") {
-    showToast("관리자 권한이 있는 계정에서만 열 수 있습니다.");
-    return;
-  }
-  const targetUrl = adminRequested ? adminWebPortalUrl : coachWebPortalUrl;
-  let parsedUrl;
-  try {
-    parsedUrl = new URL(targetUrl);
-  } catch {
-    showToast("웹 화면 주소를 확인하지 못했습니다.");
-    return;
-  }
-  const allowedOrigins = new Set([
-    "https://tennisnote-app.pages.dev",
-    "https://tennisnote-admin.pages.dev",
-  ]);
-  if (!allowedOrigins.has(parsedUrl.origin)) {
-    showToast("허용되지 않은 웹 화면 주소입니다.");
-    return;
-  }
-  try {
-    const browserPlugin = window.Capacitor?.Plugins?.Browser;
-    if (nativeCoachAppPlatform() !== "web" && browserPlugin?.open) {
-      await browserPlugin.open({ url: parsedUrl.href });
-      return;
-    }
-    const opened = window.open(parsedUrl.href, "_blank", "noopener,noreferrer");
-    if (!opened) window.location.assign(parsedUrl.href);
-  } catch {
-    showToast("웹 화면을 열지 못했습니다. 네트워크를 확인해 주세요.");
-  }
-}
-
 function coachLessonCardState(lesson = {}, now = new Date()) {
   const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
   const participants = Array.isArray(lesson.v2Participants) ? lesson.v2Participants : [];
@@ -291,17 +256,6 @@ function lessonChartFinalized(lesson = {}) {
   const participants = completionParticipantsForLesson(lesson);
   if (participants.length && participants.every((participant) => String(participant.recordStatus || participant.record_status || "") === "final")) return true;
   return ["completed", "no_show", "cancelled"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase());
-}
-
-function coachLessonOccupiesSlot(lesson = {}, time = "", slotMinutes = scheduleBlockMinutes) {
-  const status = String(lesson.status || "").trim().toLowerCase();
-  if (["cancel", "cancelled", "canceled", "취소"].includes(status)) return false;
-  const lessonStart = minutesFromTime(lesson.time || lesson.startTime || "");
-  const slotStart = minutesFromTime(time);
-  if (!Number.isFinite(lessonStart) || !Number.isFinite(slotStart)) return false;
-  const lessonEnd = lessonStart + Math.max(1, lessonDuration(lesson));
-  const slotEnd = slotStart + Math.max(1, Number(slotMinutes) || scheduleBlockMinutes);
-  return lessonStart < slotEnd && lessonEnd > slotStart;
 }
 
 function renderCoachFeedbackScheduleList(scheduleLessons = []) {

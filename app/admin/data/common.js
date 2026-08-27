@@ -960,3 +960,49 @@ async function uploadNoticeDraftImage(notice) {
     uploadedPath: objectPath,
   };
 }
+
+async function checkAccountDeletionServerReadiness({ force = false } = {}) {
+  const client = window.TennisNoteDataClient;
+  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
+    Object.assign(accountDeletionServerState, { status: "unauthorized", code: "login_required" });
+    renderAccountDeletionServerStatus();
+    renderAccountDeletionAdminList();
+    return false;
+  }
+  if (!force && accountDeletionServerReady()) return true;
+  if (accountDeletionServerState.status === "checking") return false;
+  Object.assign(accountDeletionServerState, { status: "checking", code: "" });
+  renderAccountDeletionServerStatus();
+  renderAccountDeletionAdminList();
+  try {
+    const payload = await client.invokeFunction("tennisnote-account-deletion", {
+      body: { action: "readiness" },
+    });
+    if (payload?.ok !== true || payload?.code !== "ready") throw new Error("account_deletion_readiness_invalid");
+    Object.assign(accountDeletionServerState, {
+      status: "ready",
+      code: "ready",
+      contractVersion: String(payload.contractVersion || ""),
+      appleRevokeReady: payload.appleRevokeReady !== false,
+      tokenEncryptionReady: payload.tokenEncryptionReady !== false,
+    });
+    return true;
+  } catch (error) {
+    const code = String(error?.payload?.code || error?.message || "").toLowerCase();
+    const status = Number(error?.status) || 0;
+    accountDeletionServerState.code = code || `http_${status || "unknown"}`;
+    accountDeletionServerState.status = status === 404 || code.includes("function_not_found")
+      ? "unavailable"
+      : status === 401 || status === 403 || code.includes("login_required") || code.includes("admin_required")
+        ? "unauthorized"
+        : status === 503 || code.includes("server_config")
+          ? "misconfigured"
+          : code.includes("db_contract")
+            ? "contract_error"
+            : "error";
+    return false;
+  } finally {
+    renderAccountDeletionServerStatus();
+    renderAccountDeletionAdminList();
+  }
+}
