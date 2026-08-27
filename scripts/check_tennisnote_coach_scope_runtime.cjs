@@ -4,23 +4,52 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
-const appPath = path.join(root, "app", "tennis-note-coach-app", "app.js");
-const source = fs.readFileSync(appPath, "utf8");
+const coachRoot = path.join(root, "app", "tennis-note-coach-app");
 
-function sourceBetween(startMarker, endMarker) {
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker, start + startMarker.length);
-  assert.ok(start >= 0 && end > start, `missing source block: ${startMarker}`);
-  return source.slice(start, end);
+// 저쪽(origin/main)에서 온 검사다. 원본은 coach-app/app.js 안에서 함수 사이를
+// 문자열로 잘라냈는데, 우리는 그 함수들을 domain/ 으로 옮겨서 그대로는 못 쓴다.
+// 자르는 방식만 "파일을 뒤져 함수 하나를 꺼낸다" 로 바꿨고, 아래 단언은
+// 저쪽 것 그대로다. 저쪽이 단언을 고치면 여기도 같이 고쳐야 한다.
+function coachSources() {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".js") && entry.name !== "schedule-v2-admin.js") out.push(full);
+    }
+  };
+  walk(coachRoot);
+  return out.sort();
+}
+
+const SOURCES = coachSources().map((file) => ({ file, lines: fs.readFileSync(file, "utf8").split("\n") }));
+
+/** 함수 하나를 이름으로 찾아 본문째 꺼낸다. 함수 끝은 열 0 의 `}` 로 찾는다. */
+function functionSource(name) {
+  const head = new RegExp(`^(?:async\\s+)?function ${name}\\s*\\(`);
+  for (const { lines } of SOURCES) {
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!head.test(lines[i])) continue;
+      let end = i + 1;
+      while (end < lines.length && lines[end] !== "}") end += 1;
+      return lines.slice(i, end + 1).join("\n");
+    }
+  }
+  assert.fail(`missing function: ${name} (app/tennis-note-coach-app 어디에도 없습니다)`);
 }
 
 const runtimeSource = [
-  sourceBetween("function requestCoachRoleId(request = {})", "function lessonBelongsToCurrentCoach(lesson = {})"),
-  sourceBetween("function lessonBelongsToCurrentCoach(lesson = {})", "function ownTodayLessons()"),
-  sourceBetween("function filterFullScheduleLessons(lessons, filter)", "function coachRequestTimelineState(lesson = {})"),
-  sourceBetween("function normalizeCoachScheduleMemberName(value, fallback = \"회원\")", "function formatScheduleMemberName(name)"),
-  sourceBetween("function formatScheduleMemberName(name)", "function memberFilter()"),
-].join("\n");
+  "requestCoachRoleId",
+  "makeupRequestBelongsToCurrentCoach",
+  "lessonBelongsToCurrentCoach",
+  "lessonAssignedToCurrentCoachForTasks",
+  "filterFullScheduleLessons",
+  // 1.0.405 에서 저쪽이 추가한 조각. normalize 가 decode 를 부르므로 둘 다 싣는다.
+  "decodeCoachScheduleMemberEntities",
+  "normalizeCoachScheduleMemberName",
+  "formatScheduleMemberName",
+].map(functionSource).join("\n");
 
 const context = {
   state: { dataMode: "live", liveProfileId: "profile-park" },
@@ -80,10 +109,7 @@ assert.match(memberMarkup, /<span>성정은<\/span>/);
 assert.match(memberMarkup, /<span>장유정&lt;script&gt;<\/span>/);
 assert.doesNotMatch(memberMarkup, /<script>/);
 
-const segmentSource = sourceBetween(
-  "function renderCoachMobileSegment(day, segment, policy, scheduleLessons)",
-  "function renderCoachMineEmptyState(policy, scheduleLessons)",
-);
+const segmentSource = functionSource("renderCoachMobileSegment");
 assert.match(segmentSource, /<strong>\$\{primaryMarkup\}<\/strong>/);
 assert.doesNotMatch(segmentSource, /escapeHtml\(primaryLabel\)/);
 

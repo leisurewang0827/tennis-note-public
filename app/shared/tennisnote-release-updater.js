@@ -460,9 +460,39 @@
     return registration;
   }
 
+  function isLocalDevHost() {
+    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
+  }
+
+  async function unregisterLocalServiceWorkers() {
+    if (!("serviceWorker" in navigator)) return;
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys.filter((key) => key.startsWith("tennis-note-")).map((key) => caches.delete(key)),
+        );
+      }
+    } catch (error) {
+      // 로컬 정리 실패는 개발에만 영향을 주므로 조용히 넘어간다.
+    }
+  }
+
   function start(options = {}) {
     if (started) return;
     started = true;
+
+    // 로컬 개발에서는 서비스워커를 등록하지 않는다.
+    // 등록하면 고친 파일이 캐시에 가려 화면이 안 바뀌고, releaseId 가
+    // 달라질 때마다 페이지가 새로고침돼 작업이 끊긴다.
+    // 이미 등록돼 있던 워커와 캐시도 여기서 정리한다.
+    if (isLocalDevHost()) {
+      void unregisterLocalServiceWorkers();
+      return;
+    }
+
     const nativeWebView = isNativeWebView();
     const remoteAppUrl = options.remoteAppUrl || "";
     shouldDeferUpdate = typeof options.shouldDeferUpdate === "function" ? options.shouldDeferUpdate : null;

@@ -21,8 +21,8 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.419" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.419" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.420" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.420" />
     <link rel="stylesheet" href="../shared/tennisnote-bottom-sheet.css?v=bottom-sheet-2" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
   </head>
@@ -451,7 +451,7 @@
           <div class="section-title">
             <div>
               <p class="eyebrow">회원권</p>
-              <h2>회원권</h2>
+              <h2>회원권 구매</h2>
             </div>
             <button class="small-button title-action" type="button" data-view="homeView">홈으로</button>
           </div>
@@ -468,12 +468,27 @@
             <div id="membershipPurchaseStep" class="membership-purchase-step"></div>
           </section>
 
-          <section id="membershipProductBrowser" class="membership-product-browser membership-status-browser" aria-label="내 회원권 상태">
-            <div id="currentTicketPanel" class="membership-overview current-ticket-panel"></div>
+          <section id="membershipProductBrowser" class="membership-product-browser" aria-label="회원권 상품 둘러보기">
+            <div class="membership-browser-heading">
+              <div>
+                <strong>회원권 찾기</strong>
+                <span>상품 전체를 나열하지 않고 수업 형태별로 추천합니다.</span>
+              </div>
+              <button class="primary-button" type="button" data-open-purchase-flow>새 회원권 구매</button>
+            </div>
+            <section class="membership-product-discovery" aria-label="회원권 빠른 선택">
+              <div id="membershipProductPresets" class="membership-product-presets"></div>
+              <details id="membershipProductFilterDetails" class="membership-filter-disclosure">
+                <summary><span>상세 조건</span><small id="membershipProductFilterSummary">조건 열기</small></summary>
+                <section id="membershipProductFilters" class="membership-product-filters" aria-label="회원권 상품 조건"></section>
+              </details>
+            </section>
+            <div class="product-grid" id="productGrid"></div>
           </section>
 
           <details id="currentMembershipDetails" class="membership-details membership-secondary-details membership-current-disclosure">
-            <summary><span>이용 내역</span><small>지난 회원권과 결제 기록 확인</small></summary>
+            <summary><span>현재 회원권·연장</span><small>잔여 횟수와 기간은 홈에서 바로 확인</small></summary>
+            <div id="currentTicketPanel" class="membership-overview current-ticket-panel"></div>
             <details id="membershipHistoryDetails" class="membership-details membership-secondary-details">
               <summary>지난 이용 내역</summary>
               <div id="ticketHistory" class="history-list"></div>
@@ -1027,51 +1042,6 @@
       </article>
     </section>
 
-    <section id="purchaseProductSheet" class="app-bottom-sheet purchase-product-sheet" aria-labelledby="purchaseProductSheetTitle" data-tn-bottom-sheet hidden>
-      <button class="sheet-backdrop" type="button" aria-label="상품 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-product></button>
-      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchaseProductSheetTitle" data-tn-sheet-panel>
-        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
-        <div class="sheet-head" data-tn-sheet-header>
-          <div>
-            <p class="eyebrow">회원권</p>
-            <h3 id="purchaseProductSheetTitle">상품 선택</h3>
-            <span>수업 횟수와 이용기간을 확인해 주세요.</span>
-          </div>
-          <button class="small-button" type="button" data-tn-sheet-close data-close-purchase-product>닫기</button>
-        </div>
-        <div id="purchaseProductSheetOptions" class="sheet-scroll purchase-product-sheet-options" data-tn-sheet-scroll></div>
-      </article>
-    </section>
-
-    <section id="purchaseScheduleSheet" class="app-bottom-sheet purchase-schedule-sheet" aria-labelledby="purchaseScheduleSheetTitle" data-tn-bottom-sheet data-tn-sheet-has-footer="true" hidden>
-      <button class="sheet-backdrop" type="button" aria-label="선생님과 시간 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-schedule></button>
-      <article class="sheet-card purchase-schedule-sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchaseScheduleSheetTitle" data-tn-sheet-panel>
-        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
-        <div class="sheet-head purchase-schedule-sheet-head" data-tn-sheet-header>
-          <div>
-            <p class="eyebrow">회원권 일정</p>
-            <h3 id="purchaseScheduleSheetTitle">선생님·시간 선택</h3>
-            <span id="purchaseScheduleSheetProgress">0/1 선택</span>
-          </div>
-          <button class="small-button" type="button" data-tn-sheet-close data-close-purchase-schedule>닫기</button>
-        </div>
-        <div class="sheet-scroll purchase-schedule-sheet-scroll" data-tn-sheet-scroll>
-          <div id="purchaseScheduleSheetCoachOptions" class="purchase-schedule-sheet-coaches"></div>
-          <div class="purchase-schedule-weekbar">
-            <button id="purchaseSchedulePreviousWeek" type="button" data-purchase-schedule-week="-1" aria-label="이전 주">‹</button>
-            <strong id="purchaseScheduleSheetWeek">이번 주</strong>
-            <button id="purchaseScheduleNextWeek" type="button" data-purchase-schedule-week="1" aria-label="다음 주">›</button>
-            <button id="purchaseScheduleAvailableOnly" type="button" aria-pressed="false">가능만</button>
-          </div>
-          <div id="purchaseScheduleSheetGrid" class="purchase-schedule-grid"></div>
-        </div>
-        <div class="sheet-actions purchase-schedule-sheet-actions" data-tn-sheet-footer>
-          <span id="purchaseScheduleSheetSummary">시간을 선택해 주세요</span>
-          <button id="completePurchaseScheduleSelection" class="primary-button" type="button" disabled>선택 완료</button>
-        </div>
-      </article>
-    </section>
-
     <section id="purchasePaymentMethodSheet" class="app-bottom-sheet purchase-payment-method-sheet" aria-labelledby="purchasePaymentMethodTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" hidden>
       <button class="sheet-backdrop" type="button" aria-label="결제 방법 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-payment-method></button>
       <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchasePaymentMethodTitle" data-tn-sheet-panel>
@@ -1149,7 +1119,7 @@
           <div class="change-step-heading change-slot-heading">2. 새 시간 선택</div>
           <select id="makeupSlot" class="visually-hidden-select" aria-label="선택한 변경 시간"></select>
           <div id="availableSlotList" class="slot-list" aria-label="예약 또는 변경 가능한 시간"></div>
-          <p id="changePolicyNote" class="policy-note">수업 변경 규칙을 확인하고 있습니다.</p>
+          <p id="changePolicyNote" class="policy-note">24시간 이전은 자동 변경, 24시간 이내는 코치 승인 필요</p>
           <label id="changeReasonField">
             <span>3. 이유</span>
             <textarea id="changeReason" rows="2" minlength="2" maxlength="100" required placeholder="간단히 입력해 주세요"></textarea>
@@ -1283,20 +1253,83 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.419"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.419"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.419"></script>
+    <script defer src="../shared/tennisnote-escape-html.js?v=1.0.420"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.420"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.420"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.420"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
     <script defer src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.419"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.419"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.419"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.419"></script>
-    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.419"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.420"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.420"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.420"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.420"></script>
+    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.420"></script>
     <script defer src="../shared/tennisnote-bottom-sheet.js?v=bottom-sheet-2"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.419"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.420"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
+    <script defer src="../shared/tennisnote-app-common.js?v=1.0.420"></script>
+    <script defer src="./settings.js?v=1.0.420"></script>
+    <script defer src="./catalog.js?v=1.0.420"></script>
+    <script defer src="./domain/products.js?v=1.0.420"></script>
+    <script defer src="./domain/identity.js?v=1.0.420"></script>
+    <script defer src="./domain/journal.js?v=1.0.420"></script>
+    <script defer src="./domain/curriculum.js?v=1.0.420"></script>
+    <script defer src="./domain/payment.js?v=1.0.420"></script>
+    <script defer src="./domain/purchase.js?v=1.0.420"></script>
+    <script defer src="./domain/tickets.js?v=1.0.420"></script>
+    <script defer src="./domain/policy.js?v=1.0.420"></script>
+    <script defer src="./domain/lessons.js?v=1.0.420"></script>
+    <script defer src="./domain/changes.js?v=1.0.420"></script>
+    <script defer src="./domain/schedule.js?v=1.0.420"></script>
+    <script defer src="./domain/coaches.js?v=1.0.420"></script>
+    <script defer src="./domain/shared-data.js?v=1.0.420"></script>
+    <script defer src="./domain/notices.js?v=1.0.420"></script>
+    <script defer src="./domain/values.js?v=1.0.420"></script>
+    <script defer src="./domain/onboarding.js?v=1.0.420"></script>
+    <script defer src="./views/home.js?v=1.0.420"></script>
+    <script defer src="./views/schedule.js?v=1.0.420"></script>
+    <script defer src="./views/profile.js?v=1.0.420"></script>
+    <script defer src="./views/tickets.js?v=1.0.420"></script>
+    <script defer src="./views/products.js?v=1.0.420"></script>
+    <script defer src="./views/journal.js?v=1.0.420"></script>
+    <script defer src="./views/curriculum.js?v=1.0.420"></script>
+    <script defer src="./views/requests.js?v=1.0.420"></script>
+    <script defer src="./views/onboarding.js?v=1.0.420"></script>
+    <script defer src="./events/delegated.js?v=1.0.420"></script>
+    <script defer src="./domain/common.js?v=1.0.420"></script>
+    <script defer src="./domain/members.js?v=1.0.420"></script>
+    <script defer src="./views/common.js?v=1.0.420"></script>
+    <script defer src="./forms/common.js?v=1.0.420"></script>
+    <script defer src="./forms/members.js?v=1.0.420"></script>
+    <script defer src="./forms/notices.js?v=1.0.420"></script>
+    <script defer src="./forms/payment.js?v=1.0.420"></script>
+    <script defer src="./forms/schedule.js?v=1.0.420"></script>
+    <script defer src="./forms/tickets.js?v=1.0.420"></script>
+    <script defer src="./ui/common.js?v=1.0.420"></script>
+    <script defer src="./events/account.js?v=1.0.420"></script>
+    <script defer src="./events/makeup.js?v=1.0.420"></script>
+    <script defer src="./events/journal.js?v=1.0.420"></script>
+    <script defer src="./events/profile.js?v=1.0.420"></script>
+    <script defer src="./events/schedule.js?v=1.0.420"></script>
+    <script defer src="./events/home.js?v=1.0.420"></script>
+    <script defer src="./data/auth.js?v=1.0.420"></script>
+    <script defer src="./data/sync.js?v=1.0.420"></script>
+    <script defer src="./data/push.js?v=1.0.420"></script>
+    <script defer src="./data/payment.js?v=1.0.420"></script>
+    <script defer src="./data/journal.js?v=1.0.420"></script>
+    <script defer src="./data/tickets.js?v=1.0.420"></script>
+    <script defer src="./data/onboarding.js?v=1.0.420"></script>
+    <script defer src="./ui/sheet.js?v=1.0.420"></script>
+    <script defer src="./ui/screens.js?v=1.0.420"></script>
+    <script defer src="./storage.js?v=1.0.420"></script>
+    <script defer src="./actions/requests.js?v=1.0.420"></script>
+    <script defer src="./actions/enrollment.js?v=1.0.420"></script>
+    <script defer src="./actions/profile.js?v=1.0.420"></script>
+    <script defer src="./actions/journal.js?v=1.0.420"></script>
+    <script defer src="./actions/payment.js?v=1.0.420"></script>
+    <script defer src="./actions/session.js?v=1.0.420"></script>
+    <script defer src="./actions/onboarding.js?v=1.0.420"></script>
     <script>
       (() => {
         let started = false;
@@ -1314,7 +1347,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.419";
+          appScript.src = "./app.js?v=1.0.420";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -1327,7 +1360,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.419";
+          appScript.src = "./app.js?v=1.0.420";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {
