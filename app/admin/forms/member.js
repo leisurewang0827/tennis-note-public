@@ -650,3 +650,10 @@ function renderMemberTableViewMode() {
       : "회원·앱 연결·회원권·횟수·결제·정산·처리만 표시합니다.";
   }
 }
+
+function setManualPrimaryPhoneStatus(form, text = "", tone = "") {
+  const status = form?.querySelector("[data-manual-primary-phone-status]");
+  if (!status) return;
+  status.textContent = text;
+  status.className = `form-message span-2${tone ? ` ${tone}` : ""}`;
+}

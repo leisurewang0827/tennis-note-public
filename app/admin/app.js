@@ -905,14 +905,6 @@ const branchSalesEffectiveOptionsState = {
 let adminViewRenderRevision = 0;
 const adminViewRenderCache = new Map();
 
-function isOperationalMemberTicket(ticket, today = adminLocalDateKey(new Date())) {
-  const ticketState = window.TennisNoteTicketState?.derive(ticket, today);
-  if (ticketState) return ["current", "paused", "upcoming"].includes(ticketState);
-  if (!ticket || !["active", "paused"].includes(String(ticket.status || "active"))) return false;
-  if (Number(ticket.remaining) <= 0) return false;
-  return !ticket.expires || ticket.expires >= today;
-}
-
 const memberPaymentRecordStates = new Set(["unentered", "complete", "transfer_zero", "incomplete"]);
 
 function memberTicketLinkedPayment(member = null, ticket = null) {
@@ -1068,48 +1060,6 @@ function memberManagementTicketPeriodReview(product, startsOn = "", expiresOn = 
     actualDays,
     isShorter: Boolean(actualDays && actualDays < expectedDays),
   };
-}
-
-function setManualPrimaryPhoneStatus(form, text = "", tone = "") {
-  const status = form?.querySelector("[data-manual-primary-phone-status]");
-  if (!status) return;
-  status.textContent = text;
-  status.className = `form-message span-2${tone ? ` ${tone}` : ""}`;
-}
-
-async function resolveManualRegistrationMember(form) {
-  const phone = normalizedMemberPhone(form?.elements?.memberPhone?.value);
-  if (!/^01[0-9]{8,9}$/.test(phone)) throw new Error("member_phone_invalid");
-  const client = window.TennisNoteDataClient;
-  if (!client?.rpc) throw new Error("member_registration_identity_search_unavailable");
-  setManualPrimaryPhoneStatus(form, "기존 앱 가입 계정 확인 중…");
-  const response = await client.rpc("tn_admin_search_member_partner_candidates", {
-    target_query: phone,
-    target_branch_id: activeOperationBranchId() || null,
-    target_current_user_id: null,
-    target_limit: 20,
-  });
-  const candidates = (Array.isArray(response) ? response : response?.candidates || [])
-    .filter((candidate) => candidate?.id
-      && candidate.exactPhoneMatch === true
-      && normalizedMemberPhone(candidate.phone) === phone);
-  if (!candidates.length) {
-    setManualPrimaryPhoneStatus(form, "신규회원으로 확인됐습니다. 입력한 내용으로 바로 등록합니다.", "good");
-    return null;
-  }
-  if (candidates.length > 1) throw new Error("member_registration_phone_multiple_accounts");
-  const candidate = candidates[0];
-  if (candidate.eligible !== true) {
-    throw new Error(`member_registration_existing_account_unavailable:${candidate.eligibilityCode || "unknown"}`);
-  }
-  if (!["app_signup_without_membership", "branchless_member"].includes(String(candidate.eligibilityCode || ""))) {
-    throw new Error("member_registration_existing_member_use_ticket_action");
-  }
-  if (form.elements.lessonType?.value === "one_on_two" && form.elements.partnerMode?.value === "new") {
-    throw new Error("member_registration_existing_group_partner_required");
-  }
-  setManualPrimaryPhoneStatus(form, `${candidate.name || "앱 가입 회원"} 계정과 자동 연결해 회원권을 등록합니다.`, "good");
-  return candidate;
 }
 
 window.addEventListener("beforeunload", (event) => {

@@ -1314,3 +1314,11 @@ function memberTicketGridMatches(member, ticket) {
   if (filter === "link_error") return memberTicketGridReviewReasons(member, ticket).some((reason) => reason.includes("연결"));
   return true;
 }
+
+function isOperationalMemberTicket(ticket, today = adminLocalDateKey(new Date())) {
+  const ticketState = window.TennisNoteTicketState?.derive(ticket, today);
+  if (ticketState) return ["current", "paused", "upcoming"].includes(ticketState);
+  if (!ticket || !["active", "paused"].includes(String(ticket.status || "active"))) return false;
+  if (Number(ticket.remaining) <= 0) return false;
+  return !ticket.expires || ticket.expires >= today;
+}
