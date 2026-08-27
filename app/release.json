@@ -17,10 +17,10 @@
     "ios": {
       "minimumVersion": "1.0.260",
       "minimumBuild": 59,
-      "latestVersion": "1.0.394",
-      "latestBuild": 94,
-      "preparedVersion": "1.0.400",
-      "preparedBuild": 96,
+      "latestVersion": "1.0.405",
+      "latestBuild": 97,
+      "preparedVersion": "1.0.418",
+      "preparedBuild": 98,
       "storeUrl": "https://apps.apple.com/app/id6790994818"
     }
   },

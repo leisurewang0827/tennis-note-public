@@ -9,14 +9,14 @@
       version: "1.0.400",
       androidVersion: "1.0.400",
       androidBuild: 97,
-      iosVersion: "1.0.400",
-      iosBuild: 96,
+      iosVersion: "1.0.418",
+      iosBuild: 98,
     },
     store: {
       androidVersion: "1.0.394",
       androidBuild: 95,
-      iosVersion: "1.0.394",
-      iosBuild: 94,
+      iosVersion: "1.0.405",
+      iosBuild: 97,
     },
   });
 
