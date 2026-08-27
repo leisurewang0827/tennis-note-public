@@ -8404,6 +8404,14 @@ function isCurrentMemberTicket(ticket, today = adminLocalDateKey(new Date())) {
   return !ticket.expires || ticket.expires >= today;
 }
 
+function isOperationalMemberTicket(ticket, today = adminLocalDateKey(new Date())) {
+  const ticketState = window.TennisNoteTicketState?.derive(ticket, today);
+  if (ticketState) return ["current", "paused", "upcoming"].includes(ticketState);
+  if (!ticket || !["active", "paused"].includes(String(ticket.status || "active"))) return false;
+  if (Number(ticket.remaining) <= 0) return false;
+  return !ticket.expires || ticket.expires >= today;
+}
+
 function ticketScheduleStartDate(ticket, fallback = adminLocalDateKey(new Date())) {
   return String(ticket?.actualLessonStart || ticket?.starts || ticket?.purchased || fallback).slice(0, 10);
 }
@@ -12060,18 +12068,24 @@ async function loadMemberTicketFutureClosePreview(memberUserId) {
 
 function memberManualRegistrationFields() {
   return `
-    <label class="form-field span-2">${memberManagementFieldLabel("이름", true)}<input name="memberName" type="text" minlength="2" maxlength="40" autocomplete="name" required /></label>
-    <label class="form-field">${memberManagementFieldLabel("휴대전화")}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" placeholder="선택 · 앱 연결 시 입력 가능" /></label>
-    <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="선택 · 예: 1990" /></label>
+    <label class="form-field">${memberManagementFieldLabel("이름", true)}<input name="memberName" type="text" minlength="2" maxlength="40" autocomplete="name" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("휴대전화", true)}<input name="memberPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="010-0000-0000" required /><small>앱 가입 계정과 같으면 새 회원을 만들지 않고 자동 연결합니다.</small></label>
+    <p class="form-message span-2" data-manual-primary-phone-status role="status">이름과 휴대전화만 입력하면 신규회원 여부를 자동 확인합니다.</p>
     <input name="memberNickname" type="hidden" value="" />
-    <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="선택 · 예: 군자동" /></label>
-    <label class="form-field">${memberManagementFieldLabel("성별")}<select name="memberGender">
-      <option value="">미입력</option>
-      <option value="female">여성</option>
-      <option value="male">남성</option>
-      <option value="other">기타</option>
-      <option value="prefer_not">응답 안 함</option>
-    </select></label>
+    <details class="member-profile-optional span-2">
+      <summary>추가 정보 <small>선택</small></summary>
+      <div class="member-management-form-grid">
+        <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="예: 1990" /></label>
+        <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="예: 군자동" /></label>
+        <label class="form-field">${memberManagementFieldLabel("성별")}<select name="memberGender">
+          <option value="">미입력</option>
+          <option value="female">여성</option>
+          <option value="male">남성</option>
+          <option value="other">기타</option>
+          <option value="prefer_not">응답 안 함</option>
+        </select></label>
+      </div>
+    </details>
     <input name="memberDominantHand" type="hidden" value="" />
     <input name="memberBackhandStyle" type="hidden" value="" />
     <input name="memberTennisStartedOn" type="hidden" value="" />
@@ -12205,20 +12219,12 @@ function renderMemberManagementModal() {
       <p class="member-management-rule">새 로그인 성공 전까지 현재 연결은 유지됩니다. 같은 이름만으로 자동 연결하지 않으며, 전화번호가 일치하는 한 명만 전환할 수 있습니다.</p>`;
   } else if (isCreate) {
     actionFields = products.length && coachRoles.length ? `
-      <ol class="member-create-steps" aria-label="회원 추가 단계">
-        <li class="is-active" data-member-create-step-indicator="1"><span>1</span> 기본정보</li>
-        <li data-member-create-step-indicator="2"><span>2</span> 회원권</li>
-      </ol>
-      <div data-member-create-panel="1">
-        <p class="member-create-step-help"><strong>1단계</strong> 현장에서는 이름만 필수입니다. 나머지는 회원이 앱에서 작성한 뒤 연결할 수 있습니다.</p>
-        <div class="member-management-form-grid">
-          ${memberManualRegistrationFields()}
-        </div>
+      <p class="member-create-step-help"><strong>신규 회원 등록</strong> 이름·휴대전화·회원권·코치·결제만 확인하고 한 번에 저장합니다.</p>
+      <div class="member-management-form-grid member-manual-create-identity">
+        ${memberManualRegistrationFields()}
       </div>
-      <div data-member-create-panel="2" hidden>
-        <p class="member-create-step-help"><strong>2단계</strong> 회원권·담당 코치·정규 요일과 시간을 고르면 회원 등록과 시간표 생성이 한 번에 끝납니다.</p>
-        ${memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions)}
-      </div>
+      ${memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions)}
+      <section class="member-registration-summary" data-member-registration-summary aria-live="polite"></section>
       <p class="member-management-rule">정규권은 선택한 전체 횟수의 요일·시간을 모두 입력해야 저장됩니다. 예외일 때만 ‘시간표는 나중에 설정’을 선택하세요.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "assign") {
     actionFields = products.length && coachRoles.length ? `
@@ -12312,46 +12318,9 @@ function renderMemberManagementModal() {
       <div id="memberManagementMessage" class="form-message danger" role="status">${escapeHtml(memberManagementModalState.message || "")}</div>
       <div class="modal-actions">
         <button class="ghost-button" type="button" data-close-member-management>취소</button>
-        ${isCreate && products.length && coachRoles.length ? `
-          <button class="ghost-button" type="button" data-member-create-previous hidden>이전</button>
-          <button class="primary-button" type="button" data-member-create-next>다음: 회원권</button>
-          <button class="primary-button" type="submit" data-member-create-submit hidden>등록 후 시간표 열기</button>
-        ` : `<button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${((["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length)) || (action === "force_delete" && !memberManagementModalState.forceDeletePreview?.ok) || (action === "close" && !memberManagementModalState.closePreview?.ok) ? "disabled" : ""}>${submitLabel}</button>`}
+        <button class="${destructive ? "danger-button" : "primary-button"}" type="submit" ${(((["assign", "reenroll"].includes(action) || isCreate) && (!products.length || !coachRoles.length)) || (action === "force_delete" && !memberManagementModalState.forceDeletePreview?.ok) || (action === "close" && !memberManagementModalState.closePreview?.ok)) ? "disabled" : ""}>${isCreate ? "회원 등록 확정" : submitLabel}</button>
       </div>
     </form>`;
-}
-
-function setMemberCreateStep(step) {
-  const form = $("#memberManagementForm");
-  if (!form || memberManagementModalState.action !== "create") return;
-  const nextStep = step === 2 ? 2 : 1;
-  memberManagementModalState.createStep = nextStep;
-  [...form.querySelectorAll("[data-member-create-panel]")].forEach((panel) => {
-    panel.hidden = Number(panel.dataset.memberCreatePanel) !== nextStep;
-  });
-  [...form.querySelectorAll("[data-member-create-step-indicator]")].forEach((indicator) => {
-    const indicatorStep = Number(indicator.dataset.memberCreateStepIndicator);
-    indicator.classList.toggle("is-active", indicatorStep === nextStep);
-    indicator.classList.toggle("is-done", indicatorStep < nextStep);
-  });
-  const previous = form.querySelector("[data-member-create-previous]");
-  const next = form.querySelector("[data-member-create-next]");
-  const submit = form.querySelector("[data-member-create-submit]");
-  if (previous) previous.hidden = nextStep === 1;
-  if (next) next.hidden = nextStep === 2;
-  if (submit) submit.hidden = nextStep !== 2;
-  const heading = form.querySelector(`[data-member-create-panel="${nextStep}"] input, [data-member-create-panel="${nextStep}"] select`);
-  window.setTimeout(() => heading?.focus(), 0);
-}
-
-function memberCreateStepIsValid(step) {
-  const panel = $(`#memberManagementForm [data-member-create-panel="${step}"]`);
-  if (!panel) return true;
-  const controls = [...panel.querySelectorAll("input, select, textarea")].filter((control) => !control.disabled);
-  const invalid = controls.find((control) => !control.checkValidity());
-  if (!invalid) return true;
-  invalid.reportValidity();
-  return false;
 }
 
 async function openMemberManagementModal(member, action, ticketId = "") {
@@ -12443,34 +12412,14 @@ async function openManualMemberModal() {
   syncManualMemberPartnerField($("#memberManagementForm"));
   syncMemberCreateSchedule($("#memberManagementForm"));
   syncMemberReenrollSchedule($("#memberManagementForm"));
-  setMemberCreateStep(1);
+  syncMemberManagementPaymentFields($("#memberManagementForm"), { forcePrice: true });
+  syncMemberRegistrationSummary($("#memberManagementForm"));
   window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   setTimeout(() => $("#memberManagementForm input[name='memberName']")?.focus(), 0);
 }
 
 async function openSimpleMemberRegistrationHub() {
-  if (operationsRole() !== "admin" || !operationsAccessReady()) {
-    showToast("관리자 계정으로 로그인해야 회원을 등록할 수 있습니다.");
-    return;
-  }
-  state.memberFilter = "journal";
-  state.memberSearch = "";
-  state.memberCoachFilter = "all";
-  state.memberTicketFilter = "all";
-  state.memberTicketGridFilter = "all";
-  state.memberListPage = 0;
-  setView("members", { skipLock: true });
-  $$('[data-member-filter]').forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.memberFilter === "journal");
-  });
-  await loadAdminMemberDirectoryPage({ force: true, render: true, preserveList: false });
-  const search = $("#memberListSearch");
-  if (search) {
-    search.value = "";
-    search.placeholder = "앱 가입 이름 또는 휴대전화 뒤 4자리";
-    search.focus();
-  }
-  showToast("앱 가입 회원을 먼저 검색하세요. 없을 때만 직접 신규 등록을 사용합니다.");
+  await openManualMemberModal();
 }
 
 function closeMemberManagementModal() {
@@ -12944,7 +12893,13 @@ function memberManagementErrorText(error) {
   if (raw.includes("partner_search_query_too_short")) return "파트너 이름은 두 글자, 전화번호는 네 자리 이상 입력해 주세요.";
   if (raw.includes("group_partner_birth_year_invalid")) return "파트너 출생연도를 확인해 주세요.";
   if (raw.includes("group_partner_gender_invalid")) return "파트너 성별 값을 다시 선택해 주세요.";
-  if (raw.includes("member_phone_already_exists")) return "같은 휴대전화 번호가 회원 또는 직원 계정에 사용 중입니다. 회원 검색에 없으면 운영 설정의 직원 계정과 계정 연결을 확인해 주세요.";
+  if (raw.includes("member_registration_phone_multiple_accounts")) return "같은 휴대전화 번호의 계정이 여러 개입니다. 임의 등록하지 말고 앱 연결 필요 목록에서 계정을 먼저 정리해 주세요.";
+  if (raw.includes("member_registration_existing_group_partner_required")) return "이 회원은 이미 앱에 가입했습니다. 1:2 등록은 ‘기존 회원 연결’을 선택하고 파트너도 검색해 주세요.";
+  if (raw.includes("member_registration_existing_member_use_ticket_action")) return "이미 등록된 회원입니다. 회원 목록에서 해당 회원의 ‘회원권 등록’을 사용해 주세요.";
+  if (raw.includes("member_registration_existing_account_unavailable")) return "같은 휴대전화의 계정은 있지만 현재 자동 연결할 수 없습니다. 삭제회원·직원·다른 지점 여부를 확인해 주세요.";
+  if (raw.includes("member_registration_identity_search_unavailable")) return "회원 중복 확인을 할 수 없어 등록을 중단했습니다. 네트워크와 관리자 로그인을 확인해 주세요.";
+  if (raw.includes("member_phone_required")) return "신규회원의 휴대전화 번호는 필수입니다.";
+  if (raw.includes("member_phone_already_exists")) return "같은 휴대전화 번호가 회원 또는 직원 계정에 사용 중입니다. 회원 목록의 회원권 등록 또는 운영 설정의 직원 계정과 계정 연결을 확인해 주세요.";
   if (raw.includes("member_name_required")) return "회원 이름을 두 글자 이상 입력해 주세요.";
   if (raw.includes("invalid_schedule_scope")) return "평일, 주말 또는 혼합을 선택해 주세요.";
   if (raw.includes("invalid_ticket_status")) return "회원권 상태를 다시 선택해 주세요.";
@@ -12970,7 +12925,7 @@ function memberManagementErrorText(error) {
   if (raw.includes("source_signup_has_operational_data")) return "선택한 가입 계정에 별도 회원권이나 수업이 있어 자동 병합할 수 없습니다. 관리자 검토가 필요합니다.";
   if (raw.includes("nickname_already_taken") || raw.includes("uq_tn_users_normalized_nickname")) return "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해 주세요.";
   if (raw.includes("nickname_length_invalid")) return "닉네임은 2~16자로 입력해 주세요.";
-  if (raw.includes("member_phone_invalid")) return "휴대전화 번호를 확인해 주세요.";
+  if (raw.includes("member_phone_invalid")) return "휴대전화 번호를 010-0000-0000 형식으로 입력해 주세요.";
   if (raw.includes("member_birth_year_invalid")) return "출생연도를 확인해 주세요.";
   if (raw.includes("invalid_weekly_frequency")) return "평일은 주 1~3회, 주말은 주 1~2회로 선택해 주세요.";
   if (raw.includes("invalid_lesson_type")) return "레슨 종류를 1:1 또는 1:2로 선택해 주세요.";
@@ -12997,6 +12952,48 @@ function memberManagementErrorText(error) {
 
 function normalizedMemberPhone(value = "") {
   return String(value || "").replace(/[^0-9]/g, "");
+}
+
+function setManualPrimaryPhoneStatus(form, text = "", tone = "") {
+  const status = form?.querySelector("[data-manual-primary-phone-status]");
+  if (!status) return;
+  status.textContent = text;
+  status.className = `form-message span-2${tone ? ` ${tone}` : ""}`;
+}
+
+async function resolveManualRegistrationMember(form) {
+  const phone = normalizedMemberPhone(form?.elements?.memberPhone?.value);
+  if (!/^01[0-9]{8,9}$/.test(phone)) throw new Error("member_phone_invalid");
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc) throw new Error("member_registration_identity_search_unavailable");
+  setManualPrimaryPhoneStatus(form, "기존 앱 가입 계정 확인 중…");
+  const response = await client.rpc("tn_admin_search_member_partner_candidates", {
+    target_query: phone,
+    target_branch_id: activeOperationBranchId() || null,
+    target_current_user_id: null,
+    target_limit: 20,
+  });
+  const candidates = (Array.isArray(response) ? response : response?.candidates || [])
+    .filter((candidate) => candidate?.id
+      && candidate.exactPhoneMatch === true
+      && normalizedMemberPhone(candidate.phone) === phone);
+  if (!candidates.length) {
+    setManualPrimaryPhoneStatus(form, "신규회원으로 확인됐습니다. 입력한 내용으로 바로 등록합니다.", "good");
+    return null;
+  }
+  if (candidates.length > 1) throw new Error("member_registration_phone_multiple_accounts");
+  const candidate = candidates[0];
+  if (candidate.eligible !== true) {
+    throw new Error(`member_registration_existing_account_unavailable:${candidate.eligibilityCode || "unknown"}`);
+  }
+  if (!["app_signup_without_membership", "branchless_member"].includes(String(candidate.eligibilityCode || ""))) {
+    throw new Error("member_registration_existing_member_use_ticket_action");
+  }
+  if (form.elements.lessonType?.value === "one_on_two" && form.elements.partnerMode?.value === "new") {
+    throw new Error("member_registration_existing_group_partner_required");
+  }
+  setManualPrimaryPhoneStatus(form, `${candidate.name || "앱 가입 회원"} 계정과 자동 연결해 회원권을 등록합니다.`, "good");
+  return candidate;
 }
 
 function normalizedCoachLinkName(value = "") {
@@ -13216,9 +13213,9 @@ function validateRequiredMemberProfile(form, message = null) {
   const neighborhoodValue = String(neighborhood?.value || "").trim();
   let invalidControl = null;
   let errorText = "";
-  if (phone && ((phone.required && !phoneDigits) || (phoneDigits && phoneDigits.length < 8))) {
+  if (phone && ((phone.required && !phoneDigits) || (phoneDigits && !/^01[0-9]{8,9}$/.test(phoneDigits)))) {
     invalidControl = phone;
-    errorText = "휴대전화 번호를 입력해 주세요.";
+    errorText = phoneDigits ? "휴대전화 번호를 010-0000-0000 형식으로 입력해 주세요." : "휴대전화 번호를 입력해 주세요.";
   } else if (birthYear && String(birthYear.value || "").trim() && (!Number.isInteger(birthValue) || birthValue < 1900 || birthValue > currentYear)) {
     invalidControl = birthYear;
     errorText = "출생연도를 네 자리로 입력해 주세요.";
@@ -13392,14 +13389,32 @@ async function submitMemberManagementForm(event) {
     let result = null;
     let linkedSourceSignupUserId = "";
     let linkedTargetMemberUserId = "";
+    let autoLinkedSignupMember = false;
     if (isCreate) {
+      const existingMember = await resolveManualRegistrationMember(form);
       const createOperationKey = form.dataset.createOperationKey || createMemberChangeBatchId();
       form.dataset.createOperationKey = createOperationKey;
-      result = await client.rpc("tn_admin_create_paid_member_and_regular_schedule", {
-        target_record: managementPayload,
-        target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
-        target_operation_key: createOperationKey,
-      });
+      if (existingMember) {
+        autoLinkedSignupMember = true;
+        managementPayload.userId = String(existingMember.id);
+        managementPayload.name = String(existingMember.name || managementPayload.name || "");
+        managementPayload.phone = String(existingMember.phone || managementPayload.phone || "");
+        managementPayload.assignmentRequestId = createOperationKey;
+        const assignmentRpc = Number(selectedManagementProduct?.group_size || 1) === 2
+          ? "tn_admin_assign_paid_group_member_ticket_and_regular_schedule"
+          : "tn_admin_assign_paid_member_ticket_and_regular_schedule";
+        result = await client.rpc(assignmentRpc, {
+          target_record: managementPayload,
+          target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
+          target_operation_key: createOperationKey,
+        });
+      } else {
+        result = await client.rpc("tn_admin_create_paid_member_and_regular_schedule", {
+          target_record: managementPayload,
+          target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
+          target_operation_key: createOperationKey,
+        });
+      }
       state.memberFilter = "active";
     } else if (action === "assign") {
       const existingPaymentId = managementPayload?.existingPaymentId || "";
@@ -13589,14 +13604,14 @@ async function submitMemberManagementForm(event) {
       const createdTicket = tickets.find((item) => item.serverTicketId === createdTicketId);
       if (normalizedResult.scheduleCreated) {
         state.scheduleEditMode = false;
-        showToast("회원·회원권·정규시간표 등록 완료");
+        showToast(autoLinkedSignupMember ? "앱 가입 계정 연결·회원권·정규시간표 등록 완료" : "회원·회원권·정규시간표 등록 완료");
       } else if (normalizedResult.scheduleDeferred && memberManagementProductSupportsRegularSchedule(selectedManagementProduct)) {
         state.pinnedLessonTicketId = createdTicket?.id || "";
         state.scheduleEditMode = true;
         setView("schedule");
-        showToast("회원권 등록 완료 · 시간표에서 첫 수업을 선택해 주세요.");
+        showToast(`${autoLinkedSignupMember ? "앱 가입 계정 연결 · " : ""}회원권 등록 완료 · 시간표에서 첫 수업을 선택해 주세요.`);
       } else {
-        showToast("회원·회원권 등록 완료");
+        showToast(autoLinkedSignupMember ? "앱 가입 계정 연결·회원권 등록 완료" : "회원·회원권 등록 완료");
       }
     } else {
       showToast(`${memberManagementActionLabel(action)} 완료`);
@@ -26501,7 +26516,7 @@ async function performAdminLiveDataSync(options = {}) {
       };
     });
 
-    const activeTickets = mappedTickets.filter((ticket) => isCurrentMemberTicket(ticket));
+    const activeTickets = mappedTickets.filter((ticket) => isOperationalMemberTicket(ticket));
     const settlementTicketContext = {
       products: serverProducts || [],
       users: serverUsers || [],
@@ -26546,7 +26561,7 @@ async function performAdminLiveDataSync(options = {}) {
       .filter((user) => !user.permanently_deleted_at)
       .filter((user) => (
         user.role === "member"
-        || (ticketsByParticipantUserId.get(user.id) || []).some((ticket) => isCurrentMemberTicket(ticket))
+        || (ticketsByParticipantUserId.get(user.id) || []).some((ticket) => isOperationalMemberTicket(ticket))
       ))
       .map((user) => ({
         name: user.name || "이름 확인 필요",
@@ -26561,7 +26576,11 @@ async function performAdminLiveDataSync(options = {}) {
           .flatMap((userId) => ticketsByParticipantUserId.get(userId) || [])
           .map((ticket) => [ticket.id, ticket]),
       ).values()];
-      const activeTicket = memberTickets.find((ticket) => isCurrentMemberTicket(ticket)) || null;
+      const currentTicket = memberTickets.find((ticket) => isCurrentMemberTicket(ticket)) || null;
+      const upcomingTicket = memberTickets.find((ticket) => (
+        window.TennisNoteTicketState?.derive(ticket) === "upcoming"
+      )) || null;
+      const activeTicket = currentTicket || upcomingTicket;
       const pendingTicket = memberTickets.find((ticket) => ticket.status === "pending_payment") || null;
       const memberPayments = userIds.flatMap((userId) => paymentsByUserId.get(userId) || []);
       const unlinkedVerifiedPayments = memberPayments.filter((payment) => (
@@ -33179,6 +33198,19 @@ function bindEvents() {
       }
       return;
     }
+    if (event.target.matches("#memberManagementForm input[name='memberPhone']") && memberManagementModalState.action === "create") {
+      const digits = normalizedMemberPhone(event.target.value);
+      setManualPrimaryPhoneStatus(
+        event.target.form,
+        !digits
+          ? "신규회원의 휴대전화 번호는 필수입니다."
+          : /^01[0-9]{8,9}$/.test(digits)
+            ? "등록할 때 앱 가입 계정과 자동으로 대조합니다."
+            : "휴대전화 번호를 010-0000-0000 형식으로 입력해 주세요.",
+        digits && !/^01[0-9]{8,9}$/.test(digits) ? "danger" : "",
+      );
+      return;
+    }
     if (event.target.matches("[data-member-product-search]")) {
       filterMemberInlineProductOptions(event.target.form);
       return;
@@ -33336,14 +33368,6 @@ function bindEvents() {
       const memberId = Number(inlineMemberButton.dataset.openMemberInline);
       const ticketId = String(inlineMemberButton.dataset.memberInlineTicket || "");
       requestMemberInlineEditor(memberId, ticketId);
-      return;
-    }
-    if (event.target.closest("[data-member-create-next]")) {
-      if (memberCreateStepIsValid(1)) setMemberCreateStep(2);
-      return;
-    }
-    if (event.target.closest("[data-member-create-previous]")) {
-      setMemberCreateStep(1);
       return;
     }
     if (event.target.closest("[data-close-member-inline]")) {
