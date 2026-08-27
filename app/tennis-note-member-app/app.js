@@ -526,6 +526,32 @@ function publicOnboardingAvailableSlots(product = publicOnboardingProduct(), coa
   return slots.sort((left, right) => `${left.lessonDate} ${left.startTime}`.localeCompare(`${right.lessonDate} ${right.startTime}`));
 }
 
+function publicOnboardingVisibleSlots(product = publicOnboardingProduct(), coachRoleId = "", required = 1) {
+  const available = publicOnboardingAvailableSlots(product, coachRoleId);
+  if (required <= 1 || available.length <= 12) return available.slice(0, 12);
+  const weeks = new Map();
+  available.forEach((slot) => {
+    const week = purchaseWeekStartDate(slot.lessonDate);
+    if (!weeks.has(week)) weeks.set(week, []);
+    weeks.get(week).push(slot);
+  });
+  const weekSlots = [...weeks.values()].find((items) => new Set(items.map((item) => item.lessonDate)).size >= required)
+    || [...weeks.values()][0]
+    || [];
+  const dates = new Map();
+  weekSlots.forEach((slot) => {
+    if (!dates.has(slot.lessonDate)) dates.set(slot.lessonDate, []);
+    dates.get(slot.lessonDate).push(slot);
+  });
+  const visible = [];
+  while (visible.length < 12 && [...dates.values()].some((items) => items.length)) {
+    dates.forEach((items) => {
+      if (visible.length < 12 && items.length) visible.push(items.shift());
+    });
+  }
+  return visible;
+}
+
 function publicOnboardingSummary(intent = storedOnboardingIntent(), product = publicOnboardingProduct(intent)) {
   const scope = intent?.scheduleScope === "weekend" ? "주말" : "평일";
   const lesson = intent?.choiceKind === "one-day" ? "원데이" : `${scope} · 주 ${intent?.frequency || 1}회`;
@@ -570,8 +596,8 @@ function publicOnboardingStageHtml(intent = storedOnboardingIntent()) {
   }
   if (stage === "time") {
     const selectedKeys = new Set((intent.preferredSchedules || []).map((item) => `${item.lessonDate}:${item.startTime}:${item.coachRoleId}`));
-    const slots = publicOnboardingAvailableSlots(product, intent.coachRoleId).slice(0, 12);
     const required = intent.choiceKind === "regular" ? Math.max(1, Number(intent.frequency) || 1) : 1;
+    const slots = publicOnboardingVisibleSlots(product, intent.coachRoleId, required);
     return `${publicOnboardingBackButton(stage)}<div class="public-onboarding-selection-count">요일·시간 ${selectedKeys.size}/${required} 선택</div><div class="public-onboarding-slot-grid">${slots.map((slot) => {
       const key = `${slot.lessonDate}:${slot.startTime}:${slot.coachRoleId}`;
       return `<button type="button" class="${selectedKeys.has(key) ? "is-selected" : ""}" data-public-onboarding-slot="${escapeHtml(key)}" data-slot-date="${escapeHtml(slot.lessonDate)}" data-slot-day="${escapeHtml(slot.day)}" data-slot-time="${escapeHtml(slot.startTime)}" aria-pressed="${selectedKeys.has(key)}"><span>${escapeHtml(purchaseDateLabel(slot.lessonDate))}</span><strong>${escapeHtml(slot.startTime)}</strong></button>`;
@@ -2774,7 +2800,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.416",
+    workerUrl: "./service-worker.js?v=1.0.417",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -9277,14 +9303,66 @@ function renderMembershipPurchaseFlow() {
   if (flow.step !== 4 && normalizeSelectedPaymentMethod() !== "bank_transfer") preloadPortOneSdk();
 }
 
-async function openOneDayPurchaseFlow() {
-  setView("shopView", { replaceHistory: true });
-  await ensureMembershipPurchaseData();
-  const oneDayProduct = membershipProducts()
-    .filter((product) => isDirectPurchaseMembershipProduct(product) && membershipProductFamilyId(product) === "one-day")
-    .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999))[0] || null;
-  openMembershipPurchaseFlow("", oneDayProduct?.id || "", "one_day");
-  return Boolean(oneDayProduct);
+async function openMembershipPurchaseEntry({ purpose = "new_purchase", productId = "", renewalTicketId = "", trigger = null } = {}) {
+  if (membershipPurchaseEntryInFlight) return false;
+  membershipPurchaseEntryInFlight = true;
+  const button = trigger instanceof HTMLElement ? trigger : null;
+  const originalLabel = button?.textContent || "";
+  if (button) {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.textContent = "회원권 확인 중";
+  }
+  try {
+    setView("shopView", { replaceHistory: true });
+    const ready = await ensureMembershipPurchaseData();
+    const directProducts = membershipProducts().filter(isDirectPurchaseMembershipProduct);
+    if (!ready || !directProducts.length) {
+      const message = !ready
+        ? "회원권 정보를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요."
+        : "현재 구매 가능한 회원권이 없습니다. 관리자에게 문의해 주세요.";
+      state.pendingPaymentCheckStatus = { tone: "alert", text: message };
+      renderProducts();
+      showToast(message);
+      return false;
+    }
+    let selectedProductId = productId;
+    if (purpose === "one_day") {
+      const oneDayProduct = directProducts
+        .filter((product) => membershipProductFamilyId(product) === "one-day")
+        .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999))[0] || null;
+      if (!oneDayProduct) {
+        const message = "현재 예약 가능한 원데이 상품이 없습니다. 관리자에게 문의해 주세요.";
+        state.pendingPaymentCheckStatus = { tone: "alert", text: message };
+        renderProducts();
+        showToast(message);
+        return false;
+      }
+      selectedProductId = oneDayProduct.id;
+    }
+    openMembershipPurchaseFlow(renewalTicketId, selectedProductId, purpose);
+    return true;
+  } catch {
+    const message = "회원권 구매 화면을 열지 못했습니다. 잠시 후 다시 시도해 주세요.";
+    state.pendingPaymentCheckStatus = { tone: "alert", text: message };
+    window.dispatchEvent(new CustomEvent("tennisnote:client-error", {
+      detail: { category: "runtime", stage: "purchase_entry", code: "purchase_entry_failed", message },
+    }));
+    renderProducts();
+    showToast(message);
+    return false;
+  } finally {
+    membershipPurchaseEntryInFlight = false;
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+      button.textContent = originalLabel;
+    }
+  }
+}
+
+async function openOneDayPurchaseFlow(trigger = null) {
+  return openMembershipPurchaseEntry({ purpose: "one_day", trigger });
 }
 
 function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", requestedPurpose = "") {
@@ -9798,7 +9876,8 @@ function membershipPassRecords() {
 }
 
 function paymentRequestDisplay(request = {}) {
-  const text = `${request.method || ""} ${request.status || ""}`;
+  const safeStatus = safePaymentHistoryStatus(request.status);
+  const text = `${request.method || ""} ${safeStatus}`;
   if (text.includes("설정")) {
     return {
       period: "결제창 연결 전 요청",
@@ -9811,7 +9890,7 @@ function paymentRequestDisplay(request = {}) {
     return {
       period: "결제 재확인 필요",
       status: "확인 필요",
-      note: request.status || "결제가 끝나지 않아 관리자 확인이 필요합니다.",
+      note: safeStatus || "결제가 끝나지 않아 관리자 확인이 필요합니다.",
       tone: "alert",
     };
   }
@@ -9827,14 +9906,14 @@ function paymentRequestDisplay(request = {}) {
     return {
       period: "상담 후 이용권 확정",
       status: "상담 대기",
-      note: request.status || "관리자가 시간과 코치를 확인합니다.",
+      note: safeStatus || "관리자가 시간과 코치를 확인합니다.",
       tone: "wait",
     };
   }
   return {
     period: "관리자 확인 후 이용권 시작",
     status: "확인 대기",
-    note: request.status || "결제 확인 후 이용권이 충전됩니다.",
+    note: safeStatus || "결제 확인 후 이용권이 충전됩니다.",
     tone: "wait",
   };
 }
@@ -9856,6 +9935,7 @@ const defaultAllowedPaymentMethods = ["tosspay"];
 let portOneSdkPromise = null;
 let preparedPaymentContext = null;
 let membershipPurchasePaymentInFlight = false;
+let membershipPurchaseEntryInFlight = false;
 let bankTransferAccountNumberForCopy = "";
 let bankTransferPaymentIdForCancel = "";
 
@@ -11503,8 +11583,49 @@ function createPaymentRecord(product, overrides = {}) {
   pushPaymentRequestToShared(request);
 }
 
+function paymentServerErrorCode(error) {
+  const payload = error?.payload || {};
+  const nested = payload?.error || {};
+  const raw = [payload.code, nested.code, error?.code, error?.message, nested.message, payload.message]
+    .filter(Boolean)
+    .map(String);
+  const combined = raw.join(" ");
+  if (/RECORD_NOT_FOUND|storeId\s+is\s+not\s+correct|store[_ ]?id.*(incorrect|invalid|not found)/i.test(combined)) {
+    return "portone_store_config_invalid";
+  }
+  if (/channel.*(not found|incorrect|invalid)|CHANNEL_NOT_FOUND/i.test(combined)) {
+    return "portone_channel_config_invalid";
+  }
+  const directCode = raw.find((value) => /^[a-z][a-z0-9_]{2,119}$/i.test(value));
+  return directCode ? directCode.toLowerCase() : "payment_provider_error";
+}
+
+function reportPaymentProviderError(error, stage = "payment_provider") {
+  const code = paymentServerErrorCode(error);
+  window.dispatchEvent(new CustomEvent("tennisnote:client-error", {
+    detail: {
+      category: "runtime",
+      stage,
+      code,
+      message: paymentServerErrorMessage({ payload: { code } }),
+      provider: "portone",
+      native: nativeAppPlatform() !== "web",
+    },
+  }));
+  return code;
+}
+
+function safePaymentHistoryStatus(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^[{[]|RECORD_NOT_FOUND|storeId\s+is\s+not\s+correct|CHANNEL_NOT_FOUND/i.test(text)) {
+    return paymentServerErrorMessage({ message: text });
+  }
+  return text.slice(0, 240);
+}
+
 function paymentServerErrorMessage(error) {
-  const code = error?.payload?.code || error?.message || "server_error";
+  const code = paymentServerErrorCode(error);
   const labels = {
     group_next_payer_required: "이번 결제 담당 회원의 로그인이 필요합니다.",
     group_partner_required: "2대1 동반 회원 정보를 확인해주세요.",
@@ -11552,8 +11673,13 @@ function paymentServerErrorMessage(error) {
     renewal_coach_mismatch: "기존 회원권의 담당 코치 정보를 다시 확인해 주세요.",
     payment_hold_expired: "선택 시간의 보관 시간이 끝났습니다. 가능한 시간을 다시 선택해 주세요.",
     purchase_slot_hold_failed: "선택 시간을 안전하게 보관하지 못했습니다. 잠시 후 다시 선택해 주세요.",
+    payment_channel_not_ready: "현재 결제 연결을 준비 중입니다. 계좌이체를 이용하거나 잠시 후 다시 시도해 주세요.",
+    portone_store_config_invalid: "현재 토스페이 연결을 확인 중입니다. 계좌이체를 이용하거나 잠시 후 다시 시도해 주세요.",
+    portone_channel_config_invalid: "현재 토스페이 채널을 확인 중입니다. 계좌이체를 이용하거나 잠시 후 다시 시도해 주세요.",
+    payment_provider_error: "결제 요청을 처리하지 못했습니다. 계좌이체를 이용하거나 잠시 후 다시 시도해 주세요.",
+    server_error: "결제 서버를 확인 중입니다. 잠시 후 다시 시도해 주세요.",
   };
-  return labels[code] || code;
+  return labels[code] || "결제 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
 function hasLiveMemberSession() {
@@ -12435,7 +12561,10 @@ async function resumePendingTicketPayment(ticketId = "") {
     if (response?.code) {
       await reconcileRejectedServerPayment(response?.paymentId || paymentId);
       await syncMemberTicketsFromServer();
-      state.pendingPaymentCheckStatus = { tone: "alert", text: response.message || "결제가 완료되지 않았습니다." };
+      const providerError = { payload: { code: response.code, message: response.message }, message: response.message };
+      const detail = paymentServerErrorMessage(providerError);
+      reportPaymentProviderError(providerError, "payment_resume_response");
+      state.pendingPaymentCheckStatus = { tone: "alert", text: detail };
       state.ticketHistory.unshift({ text: `${ticket.title} 결제창 종료 · 결제 미완료`, tone: "alert" });
     } else {
       state.pendingPaymentCheckStatus = { tone: "wait", text: "결제창 완료 접수 · 서버 검증을 확인합니다." };
@@ -12444,6 +12573,7 @@ async function resumePendingTicketPayment(ticketId = "") {
     }
   } catch (error) {
     const detail = paymentServerErrorMessage(error);
+    reportPaymentProviderError(error, "payment_resume_open");
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창을 열지 못했습니다. ${detail}` };
     state.ticketHistory.unshift({ text: `${ticket.title} 결제창 열기 실패`, tone: "alert" });
   }
@@ -12546,6 +12676,8 @@ function openPaymentConfirmationModal({ product, paymentId, preparedPayment, met
   $("#paymentConfirmationMethod").textContent = method.label;
   $("#paymentConfirmationMessage").textContent = "결제창에서 결제 정보를 확인한 뒤 최종 결제를 완료합니다.";
   const button = $("#openPreparedPaymentButton");
+  const bankButton = $("#switchPaymentToBankTransferButton");
+  if (bankButton) bankButton.hidden = true;
   if (button) {
     button.disabled = false;
     button.textContent = `${amount.toLocaleString("ko-KR")}원 결제창 열기`;
@@ -12586,12 +12718,28 @@ async function completePreparedPayment() {
     if (response?.code) {
       await reconcileRejectedServerPayment(response?.paymentId || effectivePaymentId);
       await syncMemberTicketsFromServer();
+      const providerError = { payload: { code: response.code, message: response.message }, message: response.message };
+      const detail = paymentServerErrorMessage(providerError);
+      const diagnosticCode = reportPaymentProviderError(providerError, "payment_window_response");
       createPaymentRecord(product, {
         paymentId: effectivePaymentId,
         method: `${method.label} 결제 실패`,
-        status: response.message || "결제가 완료되지 않았습니다.",
+        status: detail,
       });
       state.ticketHistory.unshift({ text: `${product.title} 결제 실패 · 다시 시도 필요`, tone: "alert" });
+      const flow = purchaseFlowState();
+      flow.paymentErrorCode = diagnosticCode;
+      flow.paymentErrorMessage = detail;
+      state.pendingPaymentCheckStatus = { tone: "alert", text: detail };
+      if (message) message.textContent = `${detail} 선택한 상품·시간·쿠폰은 유지됩니다.`;
+      const bankButton = $("#switchPaymentToBankTransferButton");
+      if (bankButton) bankButton.hidden = !isPaymentGatewayReady("bank_transfer");
+      if (button) {
+        button.disabled = false;
+        button.textContent = "다시 시도";
+      }
+      saveSnapshot();
+      return;
     } else {
       const paidPaymentId = response?.paymentId || effectivePaymentId;
       let verifiedStatus = "결제 완료 · 서버 검증 후 회원권 충전 대기";
@@ -12622,7 +12770,7 @@ async function completePreparedPayment() {
       await reconcileRejectedServerPayment(context.paymentId || requestedPaymentId).catch(() => undefined);
       await syncMemberDiscountCouponsFromServer().catch(() => false);
     }
-    const serverCode = error?.payload?.code || error?.message || "server_error";
+    const serverCode = paymentServerErrorCode(error);
     if (["membership_enrollment_required", "group_enrollment_required", "group_partner_required"].includes(serverCode)) {
       closePaymentConfirmationModal();
       await syncMemberEnrollmentFromServer();
@@ -12639,6 +12787,7 @@ async function completePreparedPayment() {
       return;
     }
     const detail = paymentServerErrorMessage(error);
+    const diagnosticCode = reportPaymentProviderError(error, "payment_window_open");
     createPaymentRecord(product, {
       paymentId: context.paymentId || requestedPaymentId,
       method: "결제창 오류",
@@ -12646,6 +12795,10 @@ async function completePreparedPayment() {
     });
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창을 열지 못했습니다. ${detail}` };
     state.ticketHistory.unshift({ text: `${product.title} 결제창 오류 · ${detail}`, tone: "alert" });
+    purchaseFlowState().paymentErrorCode = diagnosticCode;
+    purchaseFlowState().paymentErrorMessage = detail;
+    const bankButton = $("#switchPaymentToBankTransferButton");
+    if (bankButton) bankButton.hidden = !isPaymentGatewayReady("bank_transfer");
     context.preparedPayment = null;
     context.paymentId = createProviderPaymentId(product.id);
     if (message) message.textContent = `${detail} 선택 내용은 유지됩니다. 다시 시도해 주세요.`;
@@ -12769,6 +12922,7 @@ async function startProductPayment(productId, options = {}) {
     openPaymentConfirmationModal({ product, paymentId, preparedPayment: null, methodId, sdk });
   } catch (error) {
     const detail = paymentServerErrorMessage(error);
+    reportPaymentProviderError(error, "payment_sdk_load");
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창 준비에 실패했습니다. ${detail}` };
     state.ticketHistory.unshift({ text: `${product.title} 결제창 준비 실패 · ${detail}`, tone: "alert" });
     renderAll();
@@ -13389,7 +13543,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.416", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.417", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -15843,10 +15997,6 @@ function bindEvents() {
       navigateMemberView("shopView");
       return;
     }
-    if (event.target.closest("[data-start-one-day-purchase]")) {
-      void openOneDayPurchaseFlow();
-      return;
-    }
     if (event.target.closest("[data-open-one-day-inquiry]")) {
       openKakaoInquiryModal("one-day");
       return;
@@ -16008,6 +16158,12 @@ function bindEvents() {
     });
   });
   document.addEventListener("click", (event) => {
+    const oneDayPurchaseButton = event.target.closest("[data-start-one-day-purchase]");
+    if (oneDayPurchaseButton) {
+      event.preventDefault();
+      void openOneDayPurchaseFlow(oneDayPurchaseButton);
+      return;
+    }
     const pendingPurchaseCancelButton = event.target.closest("[data-cancel-pending-purchase]");
     if (pendingPurchaseCancelButton) {
       void cancelPendingPurchasePayment(
@@ -16048,7 +16204,11 @@ function bindEvents() {
     }
     const openPurchaseFlowButton = event.target.closest("[data-open-purchase-flow]");
     if (openPurchaseFlowButton) {
-      openMembershipPurchaseFlow("", "", openPurchaseFlowButton.dataset.openPurchaseFlow || "");
+      event.preventDefault();
+      void openMembershipPurchaseEntry({
+        purpose: openPurchaseFlowButton.dataset.openPurchaseFlow || "new_purchase",
+        trigger: openPurchaseFlowButton,
+      });
       return;
     }
     if (event.target.closest("[data-open-current-membership]")) {
@@ -16309,6 +16469,16 @@ function bindEvents() {
     }
     if (event.target.closest("#openPreparedPaymentButton")) {
       completePreparedPayment();
+      return;
+    }
+    if (event.target.closest("#switchPaymentToBankTransferButton")) {
+      if (!isPaymentGatewayReady("bank_transfer")) {
+        showToast("현재 계좌이체를 사용할 수 없습니다. 관리자에게 문의해 주세요.");
+        return;
+      }
+      closePaymentConfirmationModal();
+      selectPaymentMethod("bank_transfer");
+      showToast("계좌이체로 변경했습니다. 선택 내용을 확인한 뒤 결제해 주세요.");
       return;
     }
     const pageButton = event.target.closest("[data-page-list]");
@@ -16669,7 +16839,7 @@ function openLocalCurriculumPreview() {
 
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.416");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.417");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -16752,7 +16922,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.416",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.417",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
