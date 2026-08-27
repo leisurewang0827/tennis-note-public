@@ -34,7 +34,18 @@ step() { printf "\n\033[1m▶ %s\033[0m\n" "$1"; }
 fail() { printf "\n\033[31m✖ %s\033[0m\n" "$1" >&2; exit 1; }
 
 command -v node >/dev/null || fail "node 가 필요합니다. Node 22 이상을 설치하세요."
-command -v python3 >/dev/null || fail "python3 이 필요합니다."
+
+if [[ -n "${TENNISNOTE_PYTHON:-}" ]]; then
+  PYTHON_BIN="$TENNISNOTE_PYTHON"
+elif command -v python3 >/dev/null && python3 -c "import sys" >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null && python -c "import sys" >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+else
+  fail "Python 3 이 필요합니다. Windows 에서는 python, Linux/macOS 에서는 python3 을 확인하세요."
+fi
+export PYTHONUTF8="${PYTHONUTF8:-1}"
+export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
 
 step "테스트"
 node --test "tests/**/*.test.js"
@@ -62,11 +73,11 @@ node --check scripts/check_tennisnote_coach_scope_runtime.cjs
 node scripts/check_tennisnote_coach_scope_runtime.cjs
 
 step "배포본 빌드"
-python3 scripts/build_cloudflare_pages.py --target member --output dist/member
-python3 scripts/build_cloudflare_pages.py --target admin --output dist/admin
+"$PYTHON_BIN" scripts/build_cloudflare_pages.py --target member --output dist/member
+"$PYTHON_BIN" scripts/build_cloudflare_pages.py --target admin --output dist/admin
 
 step "배포본 검사"
-python3 scripts/check_cloudflare_build.py
+"$PYTHON_BIN" scripts/check_cloudflare_build.py
 
 printf "\n\033[32m✔ 전부 통과했습니다.\033[0m\n"
-printf "  배포본을 띄워보려면: cd dist/member && python3 -m http.server 8000\n"
+printf "  배포본을 띄워보려면: cd dist/member && %s -m http.server 8000\n" "$PYTHON_BIN"

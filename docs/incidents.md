@@ -42,6 +42,13 @@
 | `global-scope` | 병합 중에 `renderCoachSettlementPreview` 가 두 번 선언된 것 |
 | `layer-boundaries` | `domain/` 에서 서버를 부르던 함수 6개 (판정만 하는 곳이 아니었다) |
 
+## 운영체제 때문에 검사가 달라졌던 것
+
+| 사고 | 원인 | 지금 막는 것 |
+|---|---|---|
+| Windows에서 정상 구조 검사 24개가 한꺼번에 실패 | 검사기가 LF만 예상했지만 checkout은 CRLF | `.gitattributes`의 LF 고정 + 검사 입력의 CRLF 정규화 |
+| Windows에서 버전 검사 3개가 실패하거나 한글이 깨짐 | `python3` 별칭과 CP949 출력을 UTF-8로 해석 | OS별 Python 선택 + `PYTHONUTF8`·`PYTHONIOENCODING` 고정 |
+
 ## 검사기가 못 잡아서 시간을 잡아먹은 것
 
 ⚠ 여기 실렸다가 검사기가 생겨 위로 올라간 것도 있습니다. 1.0.405 병합에서

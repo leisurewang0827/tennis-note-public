@@ -9,6 +9,15 @@
 테스트 → 문법 → 배포본 빌드 → 배포본 검사를 순서대로 돕니다.
 **실제 키는 필요 없습니다.** 통과해야 끝난 것입니다. CI 가 돌리는 것과 같습니다.
 
+Windows PowerShell에서는 Git Bash의 경로를 명시해도 됩니다.
+
+```powershell
+& "C:\Program Files\Git\bin\bash.exe" ./scripts/verify.sh
+```
+
+검사는 CRLF/LF 줄바꿈을 같은 소스로 취급하고 Python 출력을 UTF-8로 고정합니다.
+운영체제 때문에 생긴 오탐을 무시하지 말고, Windows와 CI에서 같은 결과인지 확인하세요.
+
 새 검증을 추가할 때는 `scripts/verify.sh` 에만 넣으세요. CI 워크플로에 또 적으면
 로컬과 CI 가 어긋납니다 (`verify-env` 검사가 이걸 막습니다).
 

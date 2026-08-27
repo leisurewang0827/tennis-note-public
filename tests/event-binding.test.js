@@ -29,7 +29,7 @@ function eventFiles(eventsDir) {
   return readdirSync(dir)
     .filter((name) => name.endsWith(".js"))
     .map((name) => {
-      const raw = readFileSync(join(dir, name), "utf8");
+      const raw = readFileSync(join(dir, name), "utf8").replace(/\r\n?/g, "\n");
       const source = raw.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n");
       return { name, source };
     });
@@ -83,7 +83,7 @@ for (const { label, events, app } of APPS) {
   });
 
   test(`${label} — bindEvents 는 화면별 함수를 부르기만 한다`, () => {
-    const source = readFileSync(join(repoRoot, app), "utf8");
+    const source = readFileSync(join(repoRoot, app), "utf8").replace(/\r\n?/g, "\n");
     const match = /^function bindEvents\(\) \{\n([\s\S]*?)\n\}/m.exec(source);
     assert.ok(match, "bindEvents 를 찾지 못했다");
 

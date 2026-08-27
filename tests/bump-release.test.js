@@ -16,9 +16,15 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** bump 스크립트를 --dry-run 으로 돌린다. 파일은 바뀌지 않는다. */
 function dryRun() {
-  return execFileSync("python3", ["scripts/bump_release.py", "--next", "--dry-run"], {
+  const python = process.env.TENNISNOTE_PYTHON || (process.platform === "win32" ? "python" : "python3");
+  return execFileSync(python, ["scripts/bump_release.py", "--next", "--dry-run"], {
     cwd: repoRoot,
     encoding: "utf8",
+    env: {
+      ...process.env,
+      PYTHONUTF8: "1",
+      PYTHONIOENCODING: "utf-8",
+    },
   });
 }
 

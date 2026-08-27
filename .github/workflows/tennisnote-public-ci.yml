@@ -9,7 +9,7 @@ on:
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
       - ".github/workflows/tennisnote-public-ci.yml"
   push:
-    branches: [main]
+    branches: [dev, main]
     paths:
       - "app/**"
       - "tests/**"

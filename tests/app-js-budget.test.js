@@ -48,7 +48,7 @@ function topLevelFunctions(source) {
 
 for (const { app, label, budget } of BUDGET) {
   test(`${label} — app.js 에 폴더로 갔어야 할 함수가 늘지 않는다`, () => {
-    const source = readFileSync(join(repoRoot, app, "app.js"), "utf8");
+    const source = readFileSync(join(repoRoot, app, "app.js"), "utf8").replace(/\r\n?/g, "\n");
     const stray = topLevelFunctions(source).filter((fn) => !ALLOWED.has(fn.name));
 
     if (stray.length > budget) {

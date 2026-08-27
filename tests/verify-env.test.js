@@ -13,7 +13,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** `: "${NAME:=값}"` 형태의 기본값을 모은다. */
 function verifyShellDefaults() {
-  const source = readFileSync(join(repoRoot, "scripts/verify.sh"), "utf8");
+  const source = readFileSync(join(repoRoot, "scripts/verify.sh"), "utf8").replace(/\r\n?/g, "\n");
   const values = new Map();
   for (const match of source.matchAll(/^:\s*"\$\{(TENNISNOTE_[A-Z0-9_]+):=(.*)\}"$/gm)) {
     values.set(match[1], match[2]);
@@ -23,7 +23,7 @@ function verifyShellDefaults() {
 
 /** 워크플로 `env:` 블록의 TENNISNOTE_* 를 모은다. */
 function workflowEnv() {
-  const source = readFileSync(join(repoRoot, ".github/workflows/tennisnote-public-ci.yml"), "utf8");
+  const source = readFileSync(join(repoRoot, ".github/workflows/tennisnote-public-ci.yml"), "utf8").replace(/\r\n?/g, "\n");
   const values = new Map();
   for (const match of source.matchAll(/^\s+(TENNISNOTE_[A-Z0-9_]+):\s*(.+)$/gm)) {
     values.set(match[1], match[2].trim().replace(/^"(.*)"$/, "$1"));
@@ -48,7 +48,7 @@ test("verify.sh 와 CI 워크플로의 환경변수가 같다", () => {
 });
 
 test("verify.sh 가 기본값을 정한 변수를 모두 export 한다", () => {
-  const source = readFileSync(join(repoRoot, "scripts/verify.sh"), "utf8");
+  const source = readFileSync(join(repoRoot, "scripts/verify.sh"), "utf8").replace(/\r\n?/g, "\n");
   const exported = new Set();
   const exportBlock = /^export ((?:.|\\\n)*?)$/m.exec(source.replace(/\\\n\s*/g, " "));
   for (const name of (exportBlock?.[1] || "").split(/\s+/)) if (name) exported.add(name);
