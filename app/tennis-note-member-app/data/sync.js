@@ -66,23 +66,6 @@ async function syncMemberChangeCandidates(source = null) {
     state.serverChangeBlockedReason = "";
     return false;
   }
-  // A pending request keeps its source lesson scheduled. Use the same local
-  // slot preview while editing and let the update RPC perform the final,
-  // locked server validation before it changes the held target.
-  if (state.editingChangeRequestId) {
-    state.serverChangeCandidateStatus = "fallback";
-    state.serverChangeCandidateKey = memberChangeCandidateKey(source);
-    state.serverChangeCandidates = [];
-    state.serverChangeCandidateError = "";
-    state.serverChangeCandidateExclusions = {};
-    state.serverChangeAnchorGapMinutes = 40;
-    state.serverChangePolicySnapshot = null;
-    state.serverChangeBlockedReason = "";
-    renderSelects();
-    renderAvailableSlots();
-    renderSchedule();
-    return false;
-  }
   const week = { ...activeMemberWeek() };
   const range = memberChangeCandidateRange(source, week);
   const key = memberChangeCandidateKey(source, week);
@@ -126,18 +109,28 @@ async function syncMemberChangeCandidates(source = null) {
     if (source.couponBooking) {
       result = await client.rpc("tn_member_coupon_candidates", candidateArgs, { timeoutMs: 12_000 });
     } else {
-      try {
-        result = await client.rpc("tn_member_change_candidates_v2", candidateArgs, { timeoutMs: 12_000 });
-      } catch (error) {
-        const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
-        if (!/tn_member_change_candidates_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
-        result = await client.rpc("tn_member_change_candidates", candidateArgs, { timeoutMs: 12_000 });
+      if (state.editingChangeRequestId) {
+        result = await client.rpc("tn_member_change_request_edit_candidates", {
+          target_request_id: state.editingChangeRequestId,
+          target_from: range.from,
+          target_to: range.to,
+        }, { timeoutMs: 12_000 });
+      } else {
+        try {
+          result = await client.rpc("tn_member_change_candidates_v2", candidateArgs, { timeoutMs: 12_000 });
+        } catch (error) {
+          const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
+          if (!/tn_member_change_candidates_v2|PGRST202|42883|schema cache/i.test(errorText)) throw error;
+          result = await client.rpc("tn_member_change_candidates", candidateArgs, { timeoutMs: 12_000 });
+        }
       }
     }
     if (requestId !== memberChangeCandidateRequestSequence || memberChangeCandidateKey(source) !== key) return false;
     if (!result || !Array.isArray(result.candidates)) {
-      state.serverChangeCandidateStatus = source.couponBooking ? "error" : "fallback";
-      state.serverChangeCandidateError = source.couponBooking
+      state.serverChangeCandidateStatus = source.couponBooking || state.editingChangeRequestId ? "error" : "fallback";
+      state.serverChangeCandidateError = state.editingChangeRequestId
+        ? "승인 대기 요청의 가능한 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요."
+        : source.couponBooking
         ? "쿠폰 예약 가능 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요."
         : "";
       renderSelects();
@@ -166,9 +159,11 @@ async function syncMemberChangeCandidates(source = null) {
   } catch (error) {
     if (requestId !== memberChangeCandidateRequestSequence) return false;
     const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
-    if (/tn_member_(change|coupon)_candidates|PGRST202|42883|schema cache/i.test(errorText)) {
-      state.serverChangeCandidateStatus = source.couponBooking ? "error" : "fallback";
-      state.serverChangeCandidateError = source.couponBooking
+    if (/tn_member_(change|coupon)_candidates|tn_member_change_request_edit_candidates|PGRST202|42883|schema cache/i.test(errorText)) {
+      state.serverChangeCandidateStatus = source.couponBooking || state.editingChangeRequestId ? "error" : "fallback";
+      state.serverChangeCandidateError = state.editingChangeRequestId
+        ? "승인 대기 요청의 가능한 시간을 서버에서 확인하지 못했습니다. 잠시 후 다시 확인해 주세요."
+        : source.couponBooking
         ? "쿠폰 예약 가능 시간을 서버에서 확인하지 못했습니다. 다시 확인해 주세요."
         : "";
       renderSelects();
@@ -681,33 +676,43 @@ async function syncMemberTicketsFromServer(profile = null) {
       });
     }
 
-    const sharedLinks = await client.selectRows("tn_group_ticket_links", {
-      select: "group_account_id,ticket_id,status",
-      filters: { user_id: profileId },
-      limit: 20,
-    }).catch(() => []);
+    const [sharedLinks, participantLinks] = await Promise.all([
+      client.selectRows("tn_group_ticket_links", {
+        select: "group_account_id,ticket_id,status",
+        filters: { user_id: profileId },
+        limit: 20,
+      }).catch(() => []),
+      client.selectRows("tn_ticket_participants", {
+        select: "ticket_id,user_id,participant_order",
+        filters: { user_id: profileId },
+        limit: 50,
+      }).catch(() => []),
+    ]);
     const activeSharedLinks = (sharedLinks || [])
-      .filter((link) => !["pending_payment", "expired", "refunded"].includes(String(link.status || "").toLowerCase()));
-    const sharedTicketIds = new Set(activeSharedLinks
-      .map((link) => link.ticket_id)
-      .filter(Boolean));
+      .filter((link) => !["pending_payment", "expired", "refunded", "cancelled", "canceled", "voided", "deleted"]
+        .includes(String(link.status || "").toLowerCase()));
+    const linkedTicketIds = [...new Set([
+      ...activeSharedLinks.map((link) => link.ticket_id),
+      ...(participantLinks || []).map((link) => link.ticket_id),
+    ].filter(Boolean))];
+    const sharedTicketIds = new Set(linkedTicketIds);
     const sharedAccountIdByTicketId = new Map(activeSharedLinks
       .filter((link) => link.ticket_id && link.group_account_id)
       .map((link) => [link.ticket_id, link.group_account_id]));
     const ownedTicketIds = new Set((rows || []).map((row) => row.id));
-    const sharedTicketRows = await Promise.all(activeSharedLinks
-      .filter((link) => link.ticket_id && !ownedTicketIds.has(link.ticket_id))
-      .map(async (link) => {
+    const sharedTicketRows = await Promise.all(linkedTicketIds
+      .filter((ticketId) => !ownedTicketIds.has(ticketId))
+      .map(async (ticketId) => {
         try {
           return await client.selectRows("tn_member_tickets", {
             select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,refund_hold_refund_id,refund_hold_at,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,frequency_per_week,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,validity_days,grace_days)",
-            filters: { id: link.ticket_id },
+            filters: { id: ticketId },
             limit: 1,
           });
         } catch {
           return client.selectRows("tn_member_tickets", {
             select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at",
-            filters: { id: link.ticket_id },
+            filters: { id: ticketId },
             limit: 1,
           }).catch(() => []);
         }

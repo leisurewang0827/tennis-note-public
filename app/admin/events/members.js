@@ -35,8 +35,17 @@ function bindMembersEvents() {
     if (state.view === "members") renderMembers();
     if (state.view === "schedule") renderSchedule();
   });
-  $("#addMemberButton").addEventListener("click", openManualMemberModal);
+  $("#addMemberButton").addEventListener("click", openSimpleMemberRegistrationHub);
+  $("#manualCreateMemberButton")?.addEventListener("click", openManualMemberModal);
+  $$('[data-member-payment-view]').forEach((button) => {
+    button.addEventListener("click", () => setView(button.dataset.memberPaymentView));
+  });
   $("#exportMembersButton")?.addEventListener("click", exportVisibleMembers);
+  $("#toggleMemberTableView")?.addEventListener("click", () => {
+    state.memberTableView = state.memberTableView === "detail" ? "simple" : "detail";
+    renderMemberTableViewMode();
+    saveSnapshot();
+  });
   $("#memberListSearch")?.addEventListener("input", (event) => {
     state.memberSearch = event.target.value;
     state.memberListPage = 0;
@@ -180,6 +189,12 @@ function bindMembersEvents() {
       state.selectedMemberId = null;
       renderMembers();
       void loadAdminMemberDirectoryPage({ force: true });
+      if (state.memberFilter === "deletion" && operationsRole() === "admin") {
+        void Promise.all([
+          loadServerAccountDeletionRequests(),
+          checkAccountDeletionServerReadiness({ force: true }),
+        ]);
+      }
       if (state.memberFilter === "pending" && operationsRole() === "admin" && !adminPendingUsersState.loaded && !adminPendingUsersState.loading) {
         refreshAdminPendingUsers();
       }

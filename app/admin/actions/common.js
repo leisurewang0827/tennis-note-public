@@ -203,9 +203,9 @@ function setView(view, options = {}) {
   closeAdminMenu();
   const titles = {
     dashboard: "대시보드",
-    members: operationsRole() === "coach" ? "회원 찾기" : "회원관리",
+    members: operationsRole() === "coach" ? "회원 찾기" : "회원·결제",
     schedule: operationsRole() === "coach" ? "레슨표" : "레슨시간표",
-    billing: "결제/정산",
+    billing: "결제 확인·정산",
     reports: "경영 리포트",
     notes: operationsRole() === "coach" ? "수업 완료" : "기록/차감 확인",
     issues: operationsRole() === "coach" ? "오류 접수" : "개선·오류 접수",
@@ -373,6 +373,10 @@ async function reviewAccountDeletionRequest(requestId, status) {
     showToast("현재 삭제 작업이 끝나거나 16분 재시도 시간이 지난 뒤 다시 시도해 주세요");
     return;
   }
+  if (status === "completed" && !await checkAccountDeletionServerReadiness()) {
+    showToast("삭제 서버 상태를 먼저 확인해 주세요. 회원 데이터는 변경되지 않았습니다");
+    return;
+  }
   if (status === "completed" && !window.confirm("이 작업은 회원의 로그인 계정과 개인 이용 데이터를 실제로 삭제하며 되돌릴 수 없습니다. 정산·환불·잔여 수업을 확인한 뒤 실행할까요?")) return;
   accountDeletionExecutionInFlight.add(requestId);
   if (status === "completed") {
@@ -398,6 +402,8 @@ async function reviewAccountDeletionRequest(requestId, status) {
   } catch (error) {
     const code = String(error?.payload?.code || error?.message || "").toLowerCase();
     if (Number(error?.status) === 404 || code.includes("function failed: 404") || code.includes("function_not_found")) {
+      Object.assign(accountDeletionServerState, { status: "unavailable", code: "function_not_found" });
+      renderAccountDeletionServerStatus();
       showToast("계정 삭제 서버 기능이 아직 배포되지 않았습니다. 서버 배포를 완료한 뒤 다시 실행해 주세요");
       return;
     }
@@ -829,7 +835,7 @@ async function performAdminLiveDataSync(options = {}) {
     const rosterRows = (key, fallback) => operationalRosterPromise
       .then((payload) => Array.isArray(payload?.[key]) ? payload[key] : fallback());
     const adminSettingsPromise = loadAdminStartupSettingsFromServer();
-    const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments, serverSettlementTickets] = await Promise.all([
+    const [serverBranches, serverUsers, serverCoachRoles, serverCoachAvailability, serverAuthLinks, serverAuthSwitches, serverSettlementTerms, serverProducts, serverTickets, ticketParticipants, lessonParticipants, serverLessons, serverRegularScheduleRules, serverOneDayBookings, serverEnrollments, serverChangeRequests, serverMakeupEntitlements, serverLessonRecords, serverCurriculumRefs, serverJournalEntries, serverMediaFiles, serverPayments, serverMemberPaymentProjections, serverGroupAccounts, serverGroupMembers, serverGroupTicketLinks, serverMemberDatabaseRecords, serverMemberMembershipRecords, serverSubstituteAssignments, serverSettlementTickets] = await Promise.all([
       client.selectRows("tn_branches", { select: "id,name,status,open_start,open_end", order: "created_at.asc", limit: 100 }).catch(() => []),
       rosterRows("users", () => (client.selectAllRows || client.selectRows)("tn_user_directory_safe", { select: "id,name,nickname,phone,birth_year,neighborhood,gender,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,role,member_kind,status,auth_user_id,merged_into_user_id,merged_at,permanently_deleted_at", order: "created_at.asc", limit: 500, pageSize: 500, maxRows: 10000 })),
       client.selectRows("tn_coach_roles", { select: "id,user_id,branch_id,display_name,bio,color,status,job_title,employment_status,employment_started_on,employment_ended_on,archived_at,deleted_at,settlement_type,settlement_rate,hourly_rate,settlement_basis,settlement_calculation_mode,settlement_effective_from,availability_revision,schedule_lane_order", limit: 100 })
@@ -906,6 +912,12 @@ async function performAdminLiveDataSync(options = {}) {
       Promise.resolve(adminLiveDataState.journalEntries || []),
       Promise.resolve(adminLiveDataState.mediaFiles || []),
       fullAdminAccess ? rosterRows("operationalPayments", () => client.selectRows("tn_payments", { select: "id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at", order: "created_at.desc", limit: 500 }).catch(() => [])) : Promise.resolve([]),
+      fullAdminAccess ? rosterRows("memberPaymentProjections", () => client.rpc("tn_admin_member_payment_projections", {
+        target_branch_id: activeOperationBranchId() || null,
+      }).then((response) => Array.isArray(response) ? response : []).catch((error) => {
+        console.warn("[Tennis Note] member payment projections unavailable", error?.message || "projection_error");
+        return [];
+      })) : Promise.resolve([]),
       rosterRows("groupAccounts", () => client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => [])),
       rosterRows("groupMembers", () => client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => [])),
       rosterRows("groupTicketLinks", () => (client.selectAllRows || client.selectRows).call(client, "tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", pageSize: 500 }).catch(() => [])),
@@ -1127,7 +1139,7 @@ async function performAdminLiveDataSync(options = {}) {
         nickname: preferredUser.nickname || "",
         status,
         memberKind: currentMemberKind,
-        statusLabel: status === "inactive" ? "삭제회원" : status === "pending" ? "가입서·결제대기" : status === "journal" ? "운동노트 회원" : status === "active" ? "수강중" : "만료회원",
+	        statusLabel: status === "inactive" ? "삭제회원" : status === "pending" ? "가입서·결제대기" : status === "journal" ? "앱가입" : status === "active" ? "수강중" : "만료회원",
         serverStatus,
         coach: displayTicket
           ? getCoachName(displayTicket.coachId)
@@ -1506,6 +1518,7 @@ async function performAdminLiveDataSync(options = {}) {
       journalEntries: serverJournalEntries || [],
       mediaFiles: serverMediaFiles || [],
       payments: serverPayments || [],
+      memberPaymentProjections: serverMemberPaymentProjections || [],
       groupAccounts: serverGroupAccounts || [],
       groupMembers: serverGroupMembers || [],
       groupTicketLinks: serverGroupTicketLinks || [],

@@ -63,7 +63,15 @@ function createPaymentRecord(product, overrides = {}) {
     serverPaymentId: overrides.serverPaymentId || "",
     bankTransferAccount: overrides.bankTransferAccount || null,
   };
-  state.paymentRequests.unshift(request);
+  const existingIndex = state.paymentRequests.findIndex((item) => (
+    request.paymentId && String(item.paymentId || "") === String(request.paymentId)
+  ));
+  if (existingIndex >= 0) {
+    const existing = state.paymentRequests.splice(existingIndex, 1)[0];
+    state.paymentRequests.unshift({ ...existing, ...request });
+  } else {
+    state.paymentRequests.unshift(request);
+  }
   pushPaymentRequestToShared(request);
 }
 

@@ -58,6 +58,7 @@ async function saveBranchPaymentAccount(options = {}) {
       throw new Error("bank_account_write_not_confirmed");
     }
     await loadBranchPaymentAccountFromServer();
+    await loadBranchSalesEffectiveOptionsFromServer();
     await loadBankNotificationStatusFromServer();
     if (!silent) {
       showToast(enabled ? "계좌이체 계좌를 서버에 저장하고 회원 결제에 표시했습니다" : "계좌를 저장하고 회원 결제 노출을 껐습니다");

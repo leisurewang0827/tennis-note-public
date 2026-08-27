@@ -376,6 +376,7 @@ async function writeAdminOperationalCache() {
     billingLogs: billingLogs.slice(0, 100),
     groupAccounts,
     lessonNotes,
+    memberPaymentProjections: adminLiveDataState.memberPaymentProjections || [],
   };
   const database = await openAdminOperationalCache();
   try {

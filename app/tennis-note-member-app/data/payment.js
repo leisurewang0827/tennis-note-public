@@ -46,12 +46,14 @@ async function syncMemberPaymentOptionsFromServer(targetBranchId = "") {
       bankTransferEnabled: options?.bankTransferEnabled === true,
       paymentMethods: Array.isArray(options?.paymentMethods) ? options.paymentMethods : [],
       settingsVersion: Math.max(0, Number(options?.settingsVersion) || 0),
+      settingsAppliedAt: String(options?.settingsAppliedAt || ""),
+      methodAvailability: Array.isArray(options?.methodAvailability) ? options.methodAvailability : [],
       features: { threeMonth: true, oneDay: true, coupons: true, ...(options?.features || {}) },
     };
     normalizeSelectedPaymentMethod();
     return true;
   } catch {
-    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
+    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true } };
     normalizeSelectedPaymentMethod();
     return false;
   }
@@ -109,6 +111,10 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
   const enforcedMethodId = paymentMethodIdForRequest(methodId);
   if (!isPaymentGatewayReady(enforcedMethodId)) throw new Error("payment_channel_not_ready");
   const purchaseFlow = purchaseFlowState();
+  const flexibleCoupon = purchaseFlow.productId === product.id && purchaseUsesFlexibleCouponSchedule(product, purchaseFlow);
+  const keepsExistingRenewalSchedule = purchaseFlow.productId === product.id
+    && purchaseFlow.purchasePurpose === "renew_same"
+    && purchaseFlow.scheduleMode === "keep";
   return client.invokeFunction("portone-payment/prepare", {
     body: {
       paymentId,
@@ -131,10 +137,10 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
       method: enforcedMethodId,
       groupAccountId: Number(product.groupSize) === 2 ? state.groupAccount?.id || null : null,
       coachRoleId: purchaseFlow.productId === product.id ? purchaseFlow.coachRoleId || null : null,
-      preferredDate: purchaseFlow.productId === product.id ? purchaseFlow.preferredDate || null : null,
-      preferredDay: purchaseFlow.productId === product.id ? purchaseFlow.preferredDay || null : null,
-      preferredTime: purchaseFlow.productId === product.id ? purchaseFlow.preferredTime || null : null,
-      preferredSchedules: purchaseFlow.productId === product.id
+      preferredDate: purchaseFlow.productId === product.id && !flexibleCoupon && !keepsExistingRenewalSchedule ? purchaseFlow.preferredDate || null : null,
+      preferredDay: purchaseFlow.productId === product.id && !flexibleCoupon && !keepsExistingRenewalSchedule ? purchaseFlow.preferredDay || null : null,
+      preferredTime: purchaseFlow.productId === product.id && !flexibleCoupon && !keepsExistingRenewalSchedule ? purchaseFlow.preferredTime || null : null,
+      preferredSchedules: purchaseFlow.productId === product.id && !flexibleCoupon && !keepsExistingRenewalSchedule
         ? purchaseSelectedSchedules(product).map((schedule) => ({
           lessonDate: schedule.lessonDate,
           day: schedule.day,
@@ -143,7 +149,7 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
           coachRoleId: schedule.coachRoleId,
         }))
         : [],
-      scheduleMode: purchaseFlow.productId === product.id ? purchaseFlow.scheduleMode || "change" : "change",
+      scheduleMode: purchaseFlow.productId === product.id ? flexibleCoupon ? "flex" : purchaseFlow.scheduleMode || "change" : "change",
       renewalSourceTicketId: purchaseFlow.productId === product.id ? purchaseFlow.renewalTicketId || null : null,
       purchasePurpose: purchaseFlow.productId === product.id ? purchaseFlow.purchasePurpose || "new_purchase" : "new_purchase",
       discountIssueId: purchaseFlow.productId === product.id ? purchaseFlow.discountIssueId || null : null,

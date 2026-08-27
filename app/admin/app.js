@@ -11,6 +11,7 @@ const state = {
   memberCoachFilter: "all",
   memberTicketFilter: "all",
   memberTicketGridFilter: "all",
+  memberTableView: "simple",
   scheduleFilter: "all",
   scheduleView: "week",
   scheduleCoachFilter: "all",
@@ -170,7 +171,7 @@ const members = [
     name: "운동노트 체험회원",
     status: "journal",
     memberKind: "journal_only",
-    statusLabel: "운동노트 회원",
+    statusLabel: "앱가입",
     coach: "미배정",
     regularTime: "상담 전",
     remaining: 0,
@@ -685,6 +686,7 @@ const adminLiveDataState = {
   groupTicketLinks: [],
   memberDatabaseRecords: [],
   memberMembershipRecords: [],
+  memberPaymentProjections: [],
   regularScheduleRules: [],
   substituteAssignments: [],
 };
@@ -704,8 +706,16 @@ const adminMemberDirectoryState = {
   rows: [],
   total: 0,
   counts: null,
+  baseCounts: null,
   preserveCountsWhileLoading: false,
   requestId: 0,
+};
+const adminMemberIdentityReviewState = {
+  loading: false,
+  loaded: false,
+  error: "",
+  count: null,
+  promise: null,
 };
 const adminMemberDetailCache = new Map();
 let adminUserNameIndex = null;
@@ -713,6 +723,50 @@ let memberSearchRenderTimer = 0;
 let adminLiveSyncPromise = null;
 let adminInitialLiveSyncHandle = 0;
 let adminInitialLiveSyncKind = "";
+
+async function loadAdminMemberIdentityReviewCount({ force = false } = {}) {
+  if (operationsRole() !== "admin" || !window.TennisNoteDataClient?.rpc) return false;
+  if (!force && adminMemberIdentityReviewState.loaded) return true;
+  if (!force && adminMemberIdentityReviewState.promise) return adminMemberIdentityReviewState.promise;
+  adminMemberIdentityReviewState.loading = true;
+  adminMemberIdentityReviewState.error = "";
+  adminMemberIdentityReviewState.promise = window.TennisNoteDataClient.rpc(
+    "tn_admin_member_identity_reconciliation_page",
+    {
+      target_branch_id: activeOperationBranchId() || null,
+      target_search: "",
+      target_page: 0,
+      target_page_size: 1,
+    },
+  ).then((response) => {
+    const payload = Array.isArray(response) ? response[0] : response;
+    const count = Math.max(0, Number(payload?.counts?.app_link ?? payload?.total) || 0);
+    Object.assign(adminMemberIdentityReviewState, {
+      loading: false,
+      loaded: true,
+      error: "",
+      count,
+      promise: null,
+    });
+    adminMemberDirectoryState.counts = {
+      ...(adminMemberDirectoryState.baseCounts || adminMemberDirectoryState.counts || {}),
+      app_link: count,
+    };
+    if (state.view === "members") renderMemberStatusCounts();
+    return true;
+  }).catch((error) => {
+    Object.assign(adminMemberIdentityReviewState, {
+      loading: false,
+      loaded: false,
+      error: String(error?.message || error || "member_identity_review_failed"),
+      count: null,
+      promise: null,
+    });
+    if (state.view === "members") renderMemberStatusCounts();
+    return false;
+  });
+  return adminMemberIdentityReviewState.promise;
+}
 
 const lessonRecordEditorState = {
   lessonId: "",
@@ -883,16 +937,89 @@ const branchSalesSettingsState = {
   message: "",
 };
 
+const branchSalesEffectiveOptionsState = {
+  status: "idle",
+  branchId: "",
+  settingsVersion: 0,
+  settingsAppliedAt: "",
+  methodAvailability: [],
+  message: "",
+};
+
+async function loadBranchSalesEffectiveOptionsFromServer() {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  if (!client?.invokeFunction || !branchId || !adminApprovalReady()) return false;
+  branchSalesEffectiveOptionsState.status = "loading";
+  branchSalesEffectiveOptionsState.branchId = branchId;
+  renderBranchSalesSetup();
+  try {
+    const response = await client.invokeFunction("portone-payment/options", { body: { branchId } });
+    branchSalesEffectiveOptionsState.status = "loaded";
+    branchSalesEffectiveOptionsState.settingsVersion = Math.max(0, Number(response?.settingsVersion) || 0);
+    branchSalesEffectiveOptionsState.settingsAppliedAt = String(response?.settingsAppliedAt || "");
+    branchSalesEffectiveOptionsState.methodAvailability = Array.isArray(response?.methodAvailability) ? response.methodAvailability : [];
+    branchSalesEffectiveOptionsState.message = "";
+    renderBranchSalesSetup();
+    return true;
+  } catch (error) {
+    branchSalesEffectiveOptionsState.status = "failed";
+    branchSalesEffectiveOptionsState.message = String(error?.payload?.code || error?.message || "server_error");
+    renderBranchSalesSetup();
+    return false;
+  }
+}
+
 let adminViewRenderRevision = 0;
 const adminViewRenderCache = new Map();
 
+function dashboardOperationalDataReady() {
+  if (adminDemoMode || state.liveScheduleLoaded) return true;
+  return [coaches, members, lessons, makeupRequests, tickets, expiredTickets, billings, billingLogs, groupAccounts, lessonNotes]
+    .some((items) => Array.isArray(items) && items.length > 0);
+}
+
 const memberPaymentRecordStates = new Set(["unentered", "complete", "transfer_zero", "incomplete"]);
 
-function memberTicketLinkedPayment(ticket = null) {
+function memberManagementPaymentStateFromValues({ paymentDate = "", paymentMethod = "", paymentAmount = 0 } = {}) {
+  const date = String(paymentDate || "").trim();
+  const method = normalizeMemberPaymentMethod(paymentMethod);
+  const amount = Number(paymentAmount) || 0;
+  if (amount === 0 && method === "membershiptransfer") return "transfer_zero";
+  if (amount > 0 && date && method) return "complete";
+  if (amount > 0 || date || method) return "incomplete";
+  return "unentered";
+}
+
+function memberManagementPaymentAmountForMethod(product = null, method = "") {
+  const normalized = normalizeMemberPaymentMethod(method);
+  if (normalized === "card" || normalized === "tosspay") return Math.max(0, Number(product?.card_price) || 0);
+  if (["banktransfer", "cash"].includes(normalized)) return Math.max(0, Number(product?.cash_price) || Number(product?.base_price) || 0);
+  return 0;
+}
+
+function memberPaymentProjectionRow(member = null, ticket = null) {
   const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
-  if (!ticketId) return null;
+  const userIds = memberServerUserIds(member).map(String);
+  if (!ticketId || !userIds.length) return null;
+  return (adminLiveDataState.memberPaymentProjections || [])
+    .filter((projection) => (
+      String(projection.ticket_id || projection.ticketId || "") === ticketId
+      && userIds.includes(String(projection.user_id || projection.userId || ""))
+    ))
+    .sort((left, right) => String(right.projection_updated_at || "")
+      .localeCompare(String(left.projection_updated_at || "")))[0] || null;
+}
+
+function memberTicketLinkedPayment(member = null, ticket = null) {
+  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
+  const userIds = memberServerUserIds(member).map(String);
+  if (!ticketId || !userIds.length) return null;
   return (adminLiveDataState.payments || [])
-    .filter((payment) => String(payment.ticket_id || payment.ticketId || "") === ticketId)
+    .filter((payment) => (
+      String(payment.ticket_id || payment.ticketId || "") === ticketId
+      && userIds.includes(String(payment.user_id || payment.userId || ""))
+    ))
     .sort((left, right) => {
       const statusScore = (payment) => payment.status === "verified" ? 2 : payment.status === "pending" ? 1 : 0;
       const scoreDelta = statusScore(right) - statusScore(left);
@@ -903,7 +1030,23 @@ function memberTicketLinkedPayment(ticket = null) {
 }
 
 function memberTicketPaymentProjection(member = null, ticket = null) {
-  const payment = memberTicketLinkedPayment(ticket);
+  const serverProjection = memberPaymentProjectionRow(member, ticket);
+  if (serverProjection) {
+    const payment = (adminLiveDataState.payments || []).find((candidate) => (
+      String(candidate.id || candidate.serverPaymentId || "") === String(serverProjection.payment_id || "")
+    )) || memberTicketLinkedPayment(member, ticket);
+    return {
+      ...serverProjection,
+      protected: Boolean(serverProjection.payment_protected),
+      payment: payment || (serverProjection.payment_id ? {
+        id: serverProjection.payment_id,
+        status: serverProjection.payment_status || "",
+      } : null),
+      payment_provider: payment?.provider || "",
+      provider_payment_id: payment?.provider_payment_id || "",
+    };
+  }
+  const payment = memberTicketLinkedPayment(member, ticket);
   if (payment) {
     return {
       payment,
@@ -912,6 +1055,8 @@ function memberTicketPaymentProjection(member = null, ticket = null) {
       payment_recorded_on: String(payment.paid_at || payment.verified_at || payment.created_at || "").slice(0, 10),
       payment_method: payment.method || payment.provider || "",
       payment_amount: Number(payment.final_amount ?? payment.amount ?? 0),
+      payment_provider: payment.provider || "",
+      provider_payment_id: payment.provider_payment_id || "",
     };
   }
   const record = memberDatabaseRecord(member, ticket);
@@ -954,6 +1099,109 @@ function memberInlinePaymentChanged(form) {
 
 const accountDeletionExecutionInFlight = new Set();
 let accountDeletionRetryTimer = 0;
+const accountDeletionRequestState = {
+  loaded: false,
+  loading: false,
+  error: "",
+};
+const accountDeletionServerState = {
+  status: "idle",
+  code: "",
+  contractVersion: "",
+  appleRevokeReady: null,
+  tokenEncryptionReady: null,
+};
+
+function accountDeletionServerReady() {
+  return accountDeletionServerState.status === "ready";
+}
+
+function accountDeletionServerStatusCopy() {
+  const status = accountDeletionServerState.status;
+  if (status === "ready") {
+    const appleReady = accountDeletionServerState.appleRevokeReady !== false
+      && accountDeletionServerState.tokenEncryptionReady !== false;
+    return {
+      title: appleReady ? "삭제 서버 준비됨" : "일반 계정 삭제 준비됨",
+      detail: appleReady
+        ? "서버와 DB 안전 계약을 확인했습니다."
+        : "Apple 로그인 탈퇴는 서버 비밀설정을 추가로 확인해야 합니다.",
+      tone: "is-ready",
+    };
+  }
+  if (status === "checking" || status === "idle") {
+    return { title: "삭제 서버 확인 중", detail: "실행 전에 서버와 DB 안전 계약을 확인합니다.", tone: "is-checking" };
+  }
+  if (status === "unavailable") {
+    return { title: "삭제 서버 미배포", detail: "회원 데이터는 그대로 보존됩니다. 서버 기능을 배포한 뒤 다시 확인해 주세요.", tone: "is-blocked" };
+  }
+  if (status === "misconfigured") {
+    return { title: "삭제 서버 설정 확인 필요", detail: "서버 비밀설정이 준비될 때까지 삭제 실행을 차단했습니다.", tone: "is-blocked" };
+  }
+  if (status === "contract_error") {
+    return { title: "DB 안전 계약 불일치", detail: "운영 DB migration을 확인하기 전에는 삭제할 수 없습니다.", tone: "is-blocked" };
+  }
+  if (status === "unauthorized") {
+    return { title: "관리자 로그인 확인 필요", detail: "관리자 권한을 다시 확인한 뒤 재시도해 주세요.", tone: "is-blocked" };
+  }
+  return { title: "삭제 서버 확인 실패", detail: "네트워크 상태를 확인한 뒤 다시 확인해 주세요.", tone: "is-blocked" };
+}
+
+function renderAccountDeletionServerStatus() {
+  const target = $("#accountDeletionServerStatus");
+  if (!target) return;
+  const copy = accountDeletionServerStatusCopy();
+  target.className = `account-deletion-server-status ${copy.tone}`;
+  target.innerHTML = `
+    <div><strong>${escapeHtml(copy.title)}</strong><span>${escapeHtml(copy.detail)}</span></div>
+    <button class="ghost-button" type="button" data-retry-account-deletion-readiness ${accountDeletionServerState.status === "checking" ? "disabled aria-busy=\"true\"" : ""}>다시 확인</button>`;
+}
+
+async function checkAccountDeletionServerReadiness({ force = false } = {}) {
+  const client = window.TennisNoteDataClient;
+  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
+    Object.assign(accountDeletionServerState, { status: "unauthorized", code: "login_required" });
+    renderAccountDeletionServerStatus();
+    renderAccountDeletionAdminList();
+    return false;
+  }
+  if (!force && accountDeletionServerReady()) return true;
+  if (accountDeletionServerState.status === "checking") return false;
+  Object.assign(accountDeletionServerState, { status: "checking", code: "" });
+  renderAccountDeletionServerStatus();
+  renderAccountDeletionAdminList();
+  try {
+    const payload = await client.invokeFunction("tennisnote-account-deletion", {
+      body: { action: "readiness" },
+    });
+    if (payload?.ok !== true || payload?.code !== "ready") throw new Error("account_deletion_readiness_invalid");
+    Object.assign(accountDeletionServerState, {
+      status: "ready",
+      code: "ready",
+      contractVersion: String(payload.contractVersion || ""),
+      appleRevokeReady: payload.appleRevokeReady !== false,
+      tokenEncryptionReady: payload.tokenEncryptionReady !== false,
+    });
+    return true;
+  } catch (error) {
+    const code = String(error?.payload?.code || error?.message || "").toLowerCase();
+    const status = Number(error?.status) || 0;
+    accountDeletionServerState.code = code || `http_${status || "unknown"}`;
+    accountDeletionServerState.status = status === 404 || code.includes("function_not_found")
+      ? "unavailable"
+      : status === 401 || status === 403 || code.includes("login_required") || code.includes("admin_required")
+        ? "unauthorized"
+        : status === 503 || code.includes("server_config")
+          ? "misconfigured"
+          : code.includes("db_contract")
+            ? "contract_error"
+            : "error";
+    return false;
+  } finally {
+    renderAccountDeletionServerStatus();
+    renderAccountDeletionAdminList();
+  }
+}
 
 const manualMemberPartnerSearchState = new WeakMap();
 
@@ -995,6 +1243,31 @@ async function refreshMemberAuthManagement(member) {
   }
 }
 
+async function openSimpleMemberRegistrationHub() {
+  if (operationsRole() !== "admin" || !operationsAccessReady()) {
+    showToast("관리자 계정으로 로그인해야 회원을 등록할 수 있습니다.");
+    return;
+  }
+  state.memberFilter = "journal";
+  state.memberSearch = "";
+  state.memberCoachFilter = "all";
+  state.memberTicketFilter = "all";
+  state.memberTicketGridFilter = "all";
+  state.memberListPage = 0;
+  setView("members", { skipLock: true });
+  $$('[data-member-filter]').forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.memberFilter === "journal");
+  });
+  await loadAdminMemberDirectoryPage({ force: true, render: true, preserveList: false });
+  const search = $("#memberListSearch");
+  if (search) {
+    search.value = "";
+    search.placeholder = "앱 가입 이름 또는 휴대전화 뒤 4자리";
+    search.focus();
+  }
+  showToast("앱 가입 회원을 먼저 검색하세요. 없을 때만 직접 신규 등록을 사용합니다.");
+}
+
 function memberManagementTicketPeriodReview(product, startsOn = "", expiresOn = "") {
   const expectedDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
   const start = new Date(`${memberManagementDate(startsOn)}T00:00:00`);
@@ -1007,6 +1280,91 @@ function memberManagementTicketPeriodReview(product, startsOn = "", expiresOn = 
     actualDays,
     isShorter: Boolean(actualDays && actualDays < expectedDays),
   };
+}
+
+function syncMemberManagementPaymentFields(form, options = {}) {
+  if (!form?.elements?.paymentRecordState || !form.elements.paymentAmount) return;
+  const product = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+  const method = form.elements.paymentMethod?.value || "";
+  const overridden = form.dataset.paymentAmountOverride === "true";
+  if (options.forcePrice === true && !overridden) {
+    form.elements.paymentAmount.value = memberManagementPaymentAmountForMethod(product, method);
+  }
+  const values = {
+    paymentDate: form.elements.paymentDate?.value || "",
+    paymentMethod: method,
+    paymentAmount: memberManagementNullableNumber(form.elements.paymentAmount) || 0,
+  };
+  const state = memberManagementPaymentStateFromValues(values);
+  form.elements.paymentRecordState.value = state;
+  const stateLabel = form.querySelector("[data-member-payment-derived-state]");
+  if (stateLabel) stateLabel.textContent = memberPaymentRecordStateLabel(state);
+  const missing = [];
+  if (state === "incomplete") {
+    if (!values.paymentDate) missing.push("결제일");
+    if (!values.paymentMethod) missing.push("결제수단");
+    if (values.paymentAmount <= 0) missing.push("결제금액");
+  }
+  const missingLabel = form.querySelector("[data-member-payment-missing]");
+  if (missingLabel) missingLabel.textContent = missing.length ? `${missing.join(" · ")} 입력 필요` : state === "complete" ? "입력 완료 · 결제 완료로 자동 처리" : "세 항목을 모두 비우면 미결제";
+  syncMemberRegistrationSummary(form);
+}
+
+function enableMemberManagementPaymentOverride(form) {
+  if (!form?.elements?.paymentAmount || form.elements.paymentAmount.disabled) return;
+  form.dataset.paymentAmountOverride = "true";
+  form.elements.paymentAmount.readOnly = false;
+  form.elements.paymentAmount.removeAttribute("aria-readonly");
+  const field = form.querySelector("[data-payment-override-reason]");
+  const reason = form.elements.paymentOverrideReason;
+  if (field) field.hidden = false;
+  if (reason) {
+    reason.disabled = false;
+    reason.required = true;
+    reason.focus();
+  }
+}
+
+function syncMemberRegistrationSummary(form) {
+  const summary = form?.querySelector("[data-member-registration-summary]");
+  if (!summary) return;
+  const product = (adminLiveDataState.products || []).find((item) => item.id === form.elements.productId?.value);
+  const coach = memberManagementCoachRoles({ branchId: product?.branch_id })
+    .find((item) => item.id === form.elements.coachRoleId?.value);
+  const partnerSelect = form.elements.partnerUserId;
+  const partnerName = partnerSelect && !partnerSelect.disabled ? partnerSelect.selectedOptions?.[0]?.textContent?.trim() : "";
+  const isGroup = Number(product?.group_size || 1) === 2;
+  const schedules = memberInlineScheduleValues(form).map((slot) => `${memberManagementDayLabel(slot.dayOfWeek)} ${slot.startTime}`);
+  const paymentState = memberManagementPaymentStateFromValues({
+    paymentDate: form.elements.paymentDate?.value || "",
+    paymentMethod: form.elements.paymentMethod?.value || "",
+    paymentAmount: memberManagementNullableNumber(form.elements.paymentAmount) || 0,
+  });
+  const primaryName = form.elements.memberName?.value?.trim()
+    || members.find((item) => item.id === memberManagementModalState.memberId)?.name
+    || "회원";
+  summary.innerHTML = `<strong>최종 확인</strong><dl>
+    <div><dt>회원</dt><dd>${escapeHtml(isGroup && partnerName ? `${primaryName} · ${partnerName}` : primaryName)}</dd></div>
+    <div><dt>회원권</dt><dd>${escapeHtml(product?.name || "선택 필요")}${isGroup ? " · 그룹 2명 연결" : ""}</dd></div>
+    <div><dt>코치·일정</dt><dd>${escapeHtml(coach?.display_name || "코치 선택 필요")}${schedules.length ? ` · ${escapeHtml(schedules.join(" / "))}` : " · 시간 선택 필요"}</dd></div>
+    <div><dt>기간</dt><dd>${escapeHtml(form.elements.startsOn?.value || "시작일 필요")} ~ ${escapeHtml(form.elements.expiresOn?.value || "자동 계산")}</dd></div>
+    <div><dt>결제</dt><dd>${escapeHtml(memberPaymentRecordStateLabel(paymentState))}${paymentState === "complete" ? ` · ${escapeHtml(paymentMethodLabel(form.elements.paymentMethod?.value || ""))} ${money.format(Number(form.elements.paymentAmount?.value) || 0)}원` : ""}</dd></div>
+  </dl><small>수정할 항목이 있으면 위 입력칸에서 바로 바꾼 뒤 확정하세요.</small>`;
+}
+
+function renderMemberTableViewMode() {
+  const simple = state.memberTableView !== "detail";
+  const table = $("#memberDirectoryTable");
+  table?.classList.toggle("is-simple", simple);
+  table?.classList.toggle("is-detail", !simple);
+  const button = $("#toggleMemberTableView");
+  if (button) {
+    button.textContent = simple ? "상세 보기" : "간단 보기";
+    button.setAttribute("aria-pressed", String(simple));
+    button.title = simple
+      ? "코치·기간·결제일 등 운영 상세 열까지 펼칩니다."
+      : "회원·앱 연결·회원권·횟수·결제·정산·처리만 표시합니다.";
+  }
 }
 
 window.addEventListener("beforeunload", (event) => {
@@ -1026,6 +1384,13 @@ window.setInterval(() => {
     showToast("15분 동안 사용하지 않아 회원표 편집을 잠갔습니다.");
   }
 }, 30000);
+
+function memberTicketPaymentStatusMarkup(paymentGrid) {
+  return `<span class="member-payment-status is-${escapeHtml(paymentGrid.tone || "neutral")}" title="${escapeHtml(paymentGrid.detail || "")}">
+    <strong>${escapeHtml(paymentGrid.label || "결제 확인")}</strong>
+    <small>${escapeHtml(paymentGrid.method || "미입력")}</small>
+  </span>`;
+}
 
 function adminLessonChangePolicyText(request = {}) {
   const snapshot = request.policySnapshot || request.policy_snapshot || null;
@@ -1066,6 +1431,126 @@ function isManualCashRefundItem(item = {}) {
   return ["bank_transfer", "cash", "account_transfer", "transfer"].includes(String(item.method || "").trim().toLowerCase());
 }
 
+function billingOperationalMonthMatches(item, month) {
+  if (!month) return true;
+  return billingEffectiveDate(item).slice(0, 7) === month;
+}
+
+function billingAttemptGroupKey(item = {}) {
+  const groupable = ["draft", "check", "unverified", "failed", "server_ready"].includes(String(item.status || ""));
+  if (!groupable) return item.serverPaymentId || item.providerPaymentId
+    ? `payment:${item.serverPaymentId || item.providerPaymentId}`
+    : item;
+  if (item.purchaseIntentKey) return `intent:${item.purchaseIntentKey}`;
+  const requestedDay = String(item.requestedAt || item.createdAt || "").slice(0, 10) || billingEffectiveDate(item);
+  return [
+    "legacy-attempt",
+    item.serverUserId || item.member || "member",
+    item.productId || item.item || "product",
+    String(item.method || "").toLowerCase(),
+    Number(item.finalAmount || item.amount || 0),
+    requestedDay,
+  ].join("|");
+}
+
+function groupedBillingAttempts(items = []) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const key = billingAttemptGroupKey(item);
+    const attempts = groups.get(key) || [];
+    attempts.push(item);
+    groups.set(key, attempts);
+  });
+  return [...groups.values()]
+    .map((attempts) => {
+      attempts.sort((left, right) => paymentCreatedAtMs(right) - paymentCreatedAtMs(left));
+      return { primary: attempts[0], attempts, attemptCount: attempts.length };
+    })
+    .sort((left, right) => paymentCreatedAtMs(right.primary) - paymentCreatedAtMs(left.primary));
+}
+
+function billingAttemptSummary(entry = {}) {
+  const count = Number(entry.attemptCount || 0);
+  const latest = entry.primary || {};
+  const latestDisplay = paymentDisplayStatus(latest);
+  const latestSummary = `최근 ${paymentMethodLabel(latest.method)} · ${latestDisplay.label || latest.statusLabel || "상태 확인"}`;
+  return count > 1 ? `${latestSummary} · 동일 요청 ${count}회` : latestSummary;
+}
+
+function billingAttemptHistoryMarkup(entry = {}) {
+  if (Number(entry.attemptCount || 0) <= 1) return "";
+  const rows = (entry.attempts || []).map((attempt) => {
+    const display = paymentDisplayStatus(attempt);
+    const date = paymentAuditDateTimeLabel(attempt.requestedAt || attempt.createdAt) || "시각 확인 필요";
+    return `<li>${escapeHtml(date)} · ${escapeHtml(paymentMethodLabel(attempt.method))} · ${escapeHtml(display.label)}</li>`;
+  }).join("");
+  return `<details class="payment-attempt-details"><summary>${escapeHtml(billingAttemptSummary(entry))}</summary><ul>${rows}</ul></details>`;
+}
+
+function paymentPendingMoreActions(item, index) {
+  const action = paymentCancelButtonFor(index, "대기취소");
+  return action ? `<details class="payment-row-more"><summary>기타</summary>${action}</details>` : "";
+}
+
+function paymentApprovedMoreActions(item, index) {
+  const actions = `${paymentFullCancelButtonFor(item, index)}${paymentRefundButtonFor(item, index)}`;
+  return actions ? `<details class="payment-row-more"><summary>취소·환불</summary>${actions}</details>` : "";
+}
+
+function paymentApprovalDisplay(item = {}) {
+  const method = String(item.method || "").toLowerCase();
+  if (item.approvalPending) return { tone: "neutral", label: "승인 처리중", detail: "서버에서 결제와 회원권을 다시 확인하고 있습니다." };
+  if (item.status === "paid" && paymentRequiresTicketRepair(item)) {
+    return { tone: "warn", label: "연결 확인", detail: "결제는 확인됐지만 회원권 연결을 확인해야 합니다." };
+  }
+  if (item.status === "paid") {
+    return { tone: "good", label: "승인 완료", detail: item.oneDayBookingId ? "원데이 예약 연결됨" : item.ticketId ? "회원권 연결됨" : "이관 결제 보존" };
+  }
+  if (item.status === "server_ready" && method === "bank_transfer") {
+    return { tone: "warn", label: "입금 확인 필요", detail: "실제 입금액을 확인한 뒤 한 번만 승인하세요." };
+  }
+  if (["check", "unverified"].includes(item.status)) {
+    return { tone: "warn", label: "결제 확인 필요", detail: "결제사 상태를 확인하면 회원권까지 함께 연결됩니다." };
+  }
+  if (item.status === "server_ready") return { tone: "neutral", label: "결제 대기", detail: "회원 결제가 완료됐는지 확인합니다." };
+  if (["cancelled", "refunded"].includes(item.status)) return { tone: "neutral", label: "취소·환불", detail: "현재 회원권 승인 대상이 아닙니다." };
+  if (item.status === "failed") return { tone: "danger", label: "결제 실패", detail: "회원권을 생성하거나 연결하지 않습니다." };
+  return { tone: "neutral", label: "확인 대기", detail: "결제 상태를 먼저 확인해 주세요." };
+}
+
+function paymentConfirmationMarkup(item = {}) {
+  const paidAt = paymentAuditDateTimeLabel(item.verifiedAt || item.paidAt);
+  if (item.status === "paid") return `${badge("good", "결제 확인됨")}${paidAt ? `<br><small>${escapeHtml(paidAt)}</small>` : ""}`;
+  if (item.status === "server_ready" && String(item.method || "").toLowerCase() === "bank_transfer") {
+    const depositor = item.depositorName ? ` · ${escapeHtml(item.depositorName)}` : "";
+    return `${badge("warn", "직접 입금 확인")}${depositor ? `<br><small>${depositor}</small>` : ""}`;
+  }
+  if (["check", "unverified"].includes(item.status)) return badge("warn", "결제사 확인 필요");
+  if (item.status === "server_ready") return badge("neutral", "결제 전");
+  if (item.status === "failed") return badge("danger", "실패");
+  if (["cancelled", "refunded"].includes(item.status)) return badge("neutral", "취소·환불 완료");
+  return badge("neutral", "확인 대기");
+}
+
+function settlementRuleSummary(rule = {}) {
+  if (rule.method === "hourly") return `시간제 ${money.format(Number(rule.hourly) || 0)}원/시간`;
+  const rate = Math.round((Number(rule.ratio) || 0) * 10000) / 100;
+  return rule.calculationMode === "monthly_payment"
+    ? `월 결제금액 × ${rate}%`
+    : `진행 횟수 × ${rate}%`;
+}
+
+function billingSettlementApprovalMarkup(item = {}) {
+  if (item.status !== "paid") return '<span class="billing-settlement-pending">승인 후 자동계산</span>';
+  if (paymentRequiresTicketRepair(item)) return '<span class="payment-link-warning">회원권 연결 후 계산</span>';
+  const rows = settlementRowsForBilling(item);
+  const amount = rows.reduce((sum, row) => sum + settlementAmountFor(row), 0);
+  const coachNames = [...new Set(rows.map((row) => settlementCoachNameFor(row)).filter(Boolean))];
+  const summaries = [...new Set(rows.map((row) => settlementRuleSummary(settlementRuleFor(settlementCoachNameFor(row)))))]
+    .filter(Boolean);
+  return `<strong>${money.format(amount)}원</strong><br><small>${escapeHtml(coachNames.join(" · ") || "코치 확인 필요")}${summaries.length ? ` · ${escapeHtml(summaries.join(" / "))}` : ""}</small>`;
+}
+
 function paymentOwnerHasHistoricalRecord(item = {}) {
   const userId = String(item.serverUserId || "");
   if (!userId) return false;
@@ -1081,6 +1566,21 @@ function paymentRequiresTicketRepair(item = {}) {
     && !item.ticketId
     && !item.oneDayBookingId
     && !isHistoricalImportedPayment(item);
+}
+
+function openBillingMemberReview(item = {}) {
+  const userId = String(item.serverUserId || "");
+  const member = members.find((candidate) => memberServerUserIds(candidate).includes(userId))
+    || members.find((candidate) => String(candidate.name || "") === String(item.member || ""));
+  if (!member) {
+    showToast("연결할 회원을 회원관리에서 먼저 확인해 주세요");
+    return;
+  }
+  state.selectedMemberId = member.id;
+  setView("members", { skipLock: true });
+  renderMembers();
+  void loadAdminMemberDetail(member, { force: true });
+  showToast(`${member.name} 회원권·결제 연결을 확인해 주세요`);
 }
 
 function refundFlowPaymentItem() {
@@ -1204,6 +1704,36 @@ function notificationDeliveryStatusLabel(row = {}) {
   if (status === "failed") return "실제 오류";
   if (status === "cancelled") return "발송 취소";
   return "상태 확인";
+}
+
+function branchSalesEffectiveOptionsMarkup() {
+  const status = branchSalesEffectiveOptionsState;
+  if (status.status === "loading" || status.status === "idle") {
+    return '<section class="branch-sales-effective-status is-loading" role="status"><strong>회원앱 실제 노출 확인 중</strong><span>서버 운영 허용과 계좌 준비 상태를 확인합니다.</span></section>';
+  }
+  if (status.status === "failed") {
+    return `<section class="branch-sales-effective-status is-error" role="alert"><strong>회원앱 실제 노출을 확인하지 못했습니다</strong><span>${escapeHtml(status.message || "server_error")}</span></section>`;
+  }
+  const applied = normalizeBranchSalesConfig(branchSalesSettingsState.appliedConfig);
+  const availability = Array.isArray(status.methodAvailability) ? status.methodAvailability : [];
+  const labels = {
+    available: "회원앱 사용 중",
+    branch_disabled: "관리자 설정 꺼짐",
+    server_not_allowed: "서버 운영 미허용",
+    bank_account_not_ready: "입금 계좌 미준비",
+  };
+  const items = availability.map((method) => {
+    const id = String(method.id || "");
+    const title = applied.paymentMethods[id]?.title || id;
+    const reason = String(method.reason || "server_not_allowed");
+    return `<li class="${method.available === true ? "is-ready" : "is-blocked"}"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(labels[reason] || reason)}</span></li>`;
+  }).join("");
+  const appliedAt = status.settingsAppliedAt ? bankNotificationDateTime(status.settingsAppliedAt) : "적용 기록 없음";
+  return `
+    <section class="branch-sales-effective-status" role="status">
+      <div><strong>회원앱 실제 노출</strong><span>서버 설정 v${Number(status.settingsVersion || 0)} · 마지막 적용 ${escapeHtml(appliedAt)}</span></div>
+      ${items ? `<ul>${items}</ul>` : '<span>서버 진단 정보가 아직 적용되지 않았습니다.</span>'}
+    </section>`;
 }
 
 let adminLiveScheduleRefreshTimer = 0;

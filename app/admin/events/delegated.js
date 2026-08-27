@@ -303,6 +303,11 @@ function bindDelegatedEvents() {
       await reviewAccountDeletionRequest(accountDeletionButton.dataset.accountDeletionId, accountDeletionButton.dataset.reviewAccountDeletion);
       return;
     }
+    const accountDeletionReadinessButton = event.target.closest("[data-retry-account-deletion-readiness]");
+    if (accountDeletionReadinessButton) {
+      await checkAccountDeletionServerReadiness({ force: true });
+      return;
+    }
     const evidenceButton = event.target.closest("[data-view-holding-evidence]");
     if (evidenceButton) {
       await viewHoldingEvidence(evidenceButton.dataset.viewHoldingEvidence);
@@ -650,6 +655,10 @@ function bindDelegatedEvents() {
       applyMemberManagementProductDefaults(event.target.form);
       return;
     }
+    if (event.target.matches("#memberManagementForm select[name='paymentMethod']")) {
+      syncMemberManagementPaymentFields(event.target.form, { forcePrice: true });
+      return;
+    }
     if (event.target.matches("#memberManagementForm select[name='scheduleScope'], #memberManagementForm select[name='weeklyFrequency'], #memberManagementForm select[name='lessonType']")) {
       syncMemberManagementScopeFields(event.target.form);
       syncManualMemberPartnerField(event.target.form);
@@ -685,6 +694,21 @@ function bindDelegatedEvents() {
     }
     if (event.target.matches("#memberManagementForm input[name='totalSessions'], #memberManagementForm input[name='usedSessions']")) {
       syncMemberManagementBalance(event.target.form);
+      syncMemberRegistrationSummary(event.target.form);
+      return;
+    }
+    if (event.target.matches("#memberManagementForm input[name='startsOn']")) {
+      const product = (adminLiveDataState.products || []).find((item) => item.id === event.target.form?.elements.productId?.value);
+      if (product && event.target.form?.elements.expiresOn) {
+        const validityDays = Math.max(1, Number(product.validity_days || 1) + Number(product.grace_days || 0));
+        event.target.form.elements.expiresOn.value = addMemberManagementDays(event.target.value, validityDays - 1);
+      }
+      syncMemberRegistrationSummary(event.target.form);
+      return;
+    }
+    if (event.target.matches("#memberManagementForm input[name='paymentDate'], #memberManagementForm input[name='paymentAmount'], #memberManagementForm input[name='paymentOverrideReason'], #memberManagementForm select[name^='scheduleTime']")) {
+      syncMemberManagementPaymentFields(event.target.form);
+      syncMemberRegistrationSummary(event.target.form);
       return;
     }
     if (event.target.matches("[data-ticket-partner-search]")) {
@@ -792,6 +816,11 @@ function bindDelegatedEvents() {
   });
   document.addEventListener("click", async (event) => {
     if (event.target.matches("[data-select-product-row]")) event.stopPropagation();
+    const paymentOverrideButton = event.target.closest("[data-enable-payment-override]");
+    if (paymentOverrideButton) {
+      enableMemberManagementPaymentOverride(paymentOverrideButton.closest("form"));
+      return;
+    }
     const memberProductDuration = event.target.closest("[data-member-product-duration]");
     if (memberProductDuration) {
       requestMemberInlineProductDuration(
@@ -837,6 +866,7 @@ function bindDelegatedEvents() {
       } else {
         if (memberManagementModalState.action === "reenroll") syncMemberReenrollSchedule(form);
         else syncMemberCreateSchedule(form);
+        syncMemberRegistrationSummary(form);
       }
       return;
     }
@@ -1061,6 +1091,7 @@ function bindDelegatedEvents() {
         form.elements.partnerUserId.value = manualPartnerButton.dataset.selectManualMemberPartner;
         form.elements.partnerUserId.dispatchEvent(new Event("change", { bubbles: true }));
         filterManualMemberPartnerOptions(form);
+        syncMemberRegistrationSummary(form);
       }
       return;
     }
@@ -1262,6 +1293,13 @@ function bindDelegatedEvents() {
       await loadServerPaymentsIntoBilling({ force: true });
       return;
     }
+    const approvePaymentButton = event.target.closest("[data-approve-payment]");
+    if (approvePaymentButton) {
+      const item = billings[Number(approvePaymentButton.dataset.approvePayment)];
+      await verifyBillingPaymentItem(item);
+      return;
+    }
+
 
     const serverReadyPaymentButton = event.target.closest("[data-server-ready-payment]");
     if (serverReadyPaymentButton) {
@@ -1280,7 +1318,9 @@ function bindDelegatedEvents() {
     const paidPaymentButton = event.target.closest("[data-paid-payment]");
     if (paidPaymentButton) {
       const item = billings[Number(paidPaymentButton.dataset.paidPayment)];
-      showToast(`${item.member} 결제는 이미 완료됐습니다`);
+      if (paymentRequiresTicketRepair(item)) openBillingMemberReview(item);
+      else showToast(`${item.member} 결제는 이미 승인됐고 회원권에 연결됐습니다`);
+      return;
     }
 
     const refundPaymentButton = event.target.closest("[data-refund-payment]");

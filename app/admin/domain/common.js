@@ -822,6 +822,25 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
   const existing = sourceMembers.find((member) => String(member.serverUserId || "") === userId);
   if (existing) {
     existing.directoryRow = row;
+    existing.authLinked = Boolean(row.auth_linked ?? row.auth_user_id);
+    if (Object.prototype.hasOwnProperty.call(row, "app_link_candidate_count")) {
+      existing.appLinkCandidateCount = Math.max(0, Number(row.app_link_candidate_count) || 0);
+      existing.appLinkReview = String(row.app_link_review || "");
+    } else if (existing.authLinked) {
+      existing.appLinkCandidateCount = 0;
+      existing.appLinkReview = "";
+    }
+    existing.authRole = row.user_role || existing.authRole || "member";
+    existing.serverStatus = row.user_status || existing.serverStatus || "active";
+    if (row.phone) existing.phone = row.phone;
+    if (String(row.directory_status || "") === "journal") {
+      existing.status = "journal";
+      existing.statusLabel = "앱가입";
+      existing.memberKind = "journal_only";
+      existing.coach = row.coach_name || "미배정";
+      existing.lessonType = row.product_name || "회원권 없음";
+      existing.remaining = Number(row.remaining_sessions) || 0;
+    }
     return existing;
   }
   const nextId = Math.max(1000, ...sourceMembers.map((member) => Number(member.id) || 0)) + 1;
@@ -830,7 +849,7 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
     id: nextId,
     name: row.name || "회원",
     status,
-    statusLabel: status === "active" ? "수강중" : status === "pending" ? "가입대기" : status === "journal" ? "운동노트 회원" : status === "inactive" ? "삭제회원" : "만료회원",
+    statusLabel: status === "active" ? "수강중" : status === "pending" ? "가입대기" : status === "journal" ? "앱가입" : status === "inactive" ? "삭제회원" : "만료회원",
     memberKind: status === "journal" ? "journal_only" : status === "pending" ? "lesson_pending" : status === "active" ? "lesson_member" : "former_lesson_member",
     serverStatus: row.user_status || "active",
     serverUserId: userId,
@@ -842,7 +861,9 @@ function memberFromAdminDirectoryRow(row, sourceMembers = members) {
     coach: row.coach_name || "미배정",
     lessonType: row.product_name || "회원권 없음",
     remaining: Number(row.remaining_sessions) || 0,
-    authLinked: Boolean(row.auth_user_id),
+    authLinked: Boolean(row.auth_linked ?? row.auth_user_id),
+    appLinkCandidateCount: Math.max(0, Number(row.app_link_candidate_count) || 0),
+    appLinkReview: String(row.app_link_review || ""),
     authRole: row.user_role || "member",
     directoryRow: row,
     source: "Supabase 회원 목록",
@@ -968,7 +989,7 @@ function normalizeDemoData() {
   if (state.view === "makeup") state.view = "schedule";
   if (state.view === "import" || state.view === "data") state.view = "members";
   if (!["operation", "membership", "notifications", "coach", "layout", "security"].includes(state.settingsTab)) state.settingsTab = "operation";
-  if (!["active", "expiring", "expired", "pending", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
+  if (!["active", "expiring", "expired", "pending", "journal", "app_link", "deletion", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
   if (!coaches.some((coach) => coach.id === "coach-park")) {
     coaches.push({ id: "coach-park", name: "박창준 코치", role: "주말 레슨", status: "active", account: "박창준", coachMode: "approved", availability: "weekend", photoUrl: "" });
   }
@@ -1301,6 +1322,7 @@ function adminViewUiSignature(view) {
       state.memberSearch,
       state.memberCoachFilter,
       state.memberTicketFilter,
+      state.memberTableView,
       state.memberListPage,
       state.inlineMemberId,
       state.inlineMemberTicketId,
@@ -1495,7 +1517,7 @@ function memberStatusLabel(member) {
   const status = memberListStatus(member);
   if (status === "inactive") return "삭제회원";
   if (status === "pending") return memberRegistrationStage(member)?.label || "가입 대기";
-  if (status === "journal") return "운동노트 회원";
+  if (status === "journal") return "앱가입";
   return status === "expired" ? "만료회원" : "수강중";
 }
 
@@ -1684,6 +1706,8 @@ function memberIsExpiring(member) {
 function memberMatchesStatusFilter(member, filter) {
   return filter === "expiring"
     ? memberIsExpiring(member)
+    : filter === "app_link"
+      ? memberAuthConnection(member).needsReview
     : memberListStatus(member) === filter;
 }
 
@@ -1692,8 +1716,9 @@ function memberStatusCounts() {
     const status = memberListStatus(member);
     if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
     if (memberIsExpiring(member)) counts.expiring += 1;
+    if (memberAuthConnection(member).needsReview) counts.app_link += 1;
     return counts;
-  }, { active: 0, expiring: 0, expired: 0, pending: 0, inactive: 0 });
+  }, { active: 0, expiring: 0, expired: 0, pending: 0, journal: 0, app_link: 0, inactive: 0 });
 }
 
 function memberManagementActionAllowed(action, ticket = null) {
@@ -1996,7 +2021,12 @@ function settlementAmountFor(item) {
   const settlementCoach = settlementCoachNameFor(item);
   const rule = settlementRuleFor(settlementCoach);
   const completedLessons = Math.max(0, Number(item.lessonCount) || 0);
-  if (!completedLessons || !rule) return 0;
+  if (!rule) return 0;
+  const baseAmount = Number(rule.cardBase === "paid" ? item.paidAmount : item.settlementBase) || 0;
+  if (rule.method === "ratio" && rule.calculationMode === "monthly_payment") {
+    return Math.round(baseAmount * (Number(rule.ratio) || 0));
+  }
+  if (!completedLessons) return 0;
   if (rule.method === "hourly") {
     const minutes = Math.max(0, Number(item.minutes || item.durationMinutes) || 0);
     const hourlyRate = Math.max(0, Number(rule.hourly) || 0);
@@ -2004,10 +2034,6 @@ function settlementAmountFor(item) {
     return Math.round((minutes / 60) * hourlyRate * completedLessons);
   }
   const totalLessons = Math.max(completedLessons, Number(item.totalLessons) || completedLessons);
-  const baseAmount = Number(rule.cardBase === "paid" ? item.paidAmount : item.settlementBase) || 0;
-  if (rule.calculationMode === "monthly_payment") {
-    return Math.round(baseAmount * (Number(rule.ratio) || 0));
-  }
   const perLessonBase = baseAmount / totalLessons;
   return Math.round(perLessonBase * completedLessons * (Number(rule.ratio) || 0));
 }

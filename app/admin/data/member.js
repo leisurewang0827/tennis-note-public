@@ -63,19 +63,38 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
   }
   try {
     const query = JSON.parse(signature);
-    const response = await window.TennisNoteDataClient.rpc("tn_admin_member_directory_page", {
-      target_branch_id: query.branchId,
-      target_status: query.status,
-      target_search: query.search,
-      target_coach_role_id: query.coachRoleId,
-      target_product_kind: query.productKind,
-      target_page: query.page,
-      target_page_size: query.pageSize,
-    });
+    const identityReviewMode = query.status === "app_link";
+    const response = identityReviewMode
+      ? await window.TennisNoteDataClient.rpc("tn_admin_member_identity_reconciliation_page", {
+        target_branch_id: query.branchId,
+        target_search: query.search,
+        target_page: query.page,
+        target_page_size: query.pageSize,
+      })
+      : await window.TennisNoteDataClient.rpc("tn_admin_member_directory_page", {
+        target_branch_id: query.branchId,
+        target_status: query.status,
+        target_search: query.search,
+        target_coach_role_id: query.coachRoleId,
+        target_product_kind: query.productKind,
+        target_page: query.page,
+        target_page_size: query.pageSize,
+      });
     if (requestId !== adminMemberDirectoryState.requestId) return false;
     const payload = Array.isArray(response) ? response[0] : response;
     const directoryRows = Array.isArray(payload?.rows) ? payload.rows : [];
     directoryRows.forEach((row) => memberFromAdminDirectoryRow(row));
+    const responseCounts = payload?.counts && typeof payload.counts === "object" ? payload.counts : null;
+    if (!identityReviewMode && responseCounts) adminMemberDirectoryState.baseCounts = responseCounts;
+    if (identityReviewMode && responseCounts && Object.prototype.hasOwnProperty.call(responseCounts, "app_link")) {
+      Object.assign(adminMemberIdentityReviewState, {
+        loading: false,
+        loaded: true,
+        error: "",
+        count: Math.max(0, Number(responseCounts.app_link) || 0),
+        promise: null,
+      });
+    }
     Object.assign(adminMemberDirectoryState, {
       loading: false,
       loaded: true,
@@ -83,15 +102,18 @@ async function loadAdminMemberDirectoryPage({ force = false, render = true, pres
       signature,
       rows: directoryRows,
       total: Number(payload?.total) || 0,
-      counts: payload?.counts && typeof payload.counts === "object"
-        ? payload.counts
-        : adminMemberDirectoryState.counts,
+      counts: {
+        ...(adminMemberDirectoryState.baseCounts || adminMemberDirectoryState.counts || {}),
+        ...(responseCounts || {}),
+        ...(adminMemberIdentityReviewState.loaded ? { app_link: adminMemberIdentityReviewState.count } : {}),
+      },
       preserveCountsWhileLoading: false,
     });
     if (render && state.view === "members") {
       renderMembers();
       rememberAdminViewRender("members");
     }
+    if (!identityReviewMode) void loadAdminMemberIdentityReviewCount();
     return true;
   } catch (error) {
     if (requestId !== adminMemberDirectoryState.requestId) return false;

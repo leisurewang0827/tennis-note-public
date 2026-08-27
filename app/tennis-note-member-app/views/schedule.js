@@ -802,7 +802,7 @@ function renderAvailableSlots() {
       )
       .join("") || memberEmptyState({
         title: "변경 가능한 시간이 없습니다",
-        reason: "운영시간, 담당 코치, 회원권 조건에 맞는 빈 시간이 아직 없습니다.",
+        reason: memberCandidateEmptyReason(source),
         action: { label: "회원권 확인", homeAction: "shop", primary: false },
         compact: true,
       });

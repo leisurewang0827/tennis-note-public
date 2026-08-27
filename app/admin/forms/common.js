@@ -503,6 +503,8 @@ function memberManagementDatabasePayload(form, member, ticket, reason) {
     paymentRecordState: hasControl("paymentRecordState")
       ? form.elements.paymentRecordState.value || null
       : memberPaymentRecordState(record),
+    paymentPriceOverride: form.dataset.paymentAmountOverride === "true",
+    paymentOverrideReason: hasControl("paymentOverrideReason") ? form.elements.paymentOverrideReason.value.trim() || null : null,
     existingPaymentId: hasControl("existingPaymentId") ? form.elements.existingPaymentId.value || null : null,
     note: hasControl("note") ? form.elements.note.value.trim() || null : record?.admin_note || null,
     partnerUserId: hasControl("partnerUserId")

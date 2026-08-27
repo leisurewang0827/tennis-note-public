@@ -116,7 +116,9 @@ function purchaseHasCoachLessonAtDate(scheduleLessons, lessonDate, time, coach, 
 }
 
 function purchaseRequiredScheduleCount(product = purchaseFlowProduct()) {
-  if (!product || membershipProductFacet(product, "productKind") === "coupon") return 1;
+  if (!product) return 1;
+  if (purchaseUsesFlexibleCouponSchedule(product)) return 0;
+  if (membershipProductFacet(product, "productKind") === "coupon") return 1;
   return Math.max(1, Number(product.frequencyPerWeek) || 1);
 }
 
@@ -216,8 +218,15 @@ function purchasePaymentMethodOptionsHtml() {
     const amount = purchasePaymentAmount(purchaseFlowProduct() || {}, method.id);
     return `<button class="payment-method-option ${selected ? "is-selected" : ""}" type="button" data-select-payment-method="${method.id}" aria-pressed="${selected}"><strong>${method.label} · ${escapeHtml(formatWon(amount))}</strong><small>${method.detail}</small></button>`;
   }).join("");
+  const bankAvailability = (state.livePaymentOptions?.methodAvailability || [])
+    .find((method) => String(method.id) === "bank_transfer");
+  const bankUnavailableMessages = {
+    branch_disabled: "현재 지점은 계좌이체를 사용하지 않습니다.",
+    server_not_allowed: "계좌이체 운영 설정을 준비하고 있습니다.",
+    bank_account_not_ready: "입금 계좌 설정이 완료되지 않았습니다.",
+  };
   const bankUnavailable = !readyMethods.some((method) => method.id === "bank_transfer")
-    ? '<p class="payment-method-unavailable-note" role="status">현재 계좌이체를 사용할 수 없습니다.</p>'
+    ? `<p class="payment-method-unavailable-note" role="status">${escapeHtml(bankUnavailableMessages[bankAvailability?.reason] || "현재 계좌이체를 사용할 수 없습니다.")}</p>`
     : "";
   if (readyMethods.length) return `${methodOptions}${bankUnavailable}`;
   return '<p class="payment-method-unavailable" role="status">온라인 결제를 준비하고 있습니다. 지금은 센터에 문의해 주세요.</p>';
@@ -277,6 +286,7 @@ function purchaseStepCanContinue() {
   const purposeReady = ["renew_same", "add_coach", "new_purchase", "one_day"].includes(flow.purchasePurpose);
   if (!purposeReady || !product || !isPaymentGatewayReady(normalizeSelectedPaymentMethod())) return false;
   if (flow.purchasePurpose === "renew_same" && purchaseFlowSourceTicket() && flow.scheduleMode === "keep") return true;
+  if (purchaseUsesFlexibleCouponSchedule(product, flow)) return purchaseFlexibleCouponCoachIsReady(product);
   const schedules = purchaseSelectedSchedules(product);
   const requiredCount = purchaseRequiredScheduleCount(product);
   const selectedWeeks = new Set(schedules.map((schedule) => purchaseWeekStartDate(schedule.lessonDate)));
@@ -305,12 +315,15 @@ function purchaseSinglePageHtml() {
     && flow.scheduleMode === "keep"
     && membershipProductFacet(product, "productKind") !== "coupon"
   );
+  const flexibleCoupon = purchaseUsesFlexibleCouponSchedule(product, flow);
   const lesson = sourceTicket ? purchaseTicketLesson(sourceTicket) : null;
   const selectedSchedules = purchaseSelectedSchedules(product);
   const selectedCoachName = flow.coachName || sourceTicket?.coach || memberScheduleTicketCoachName(sourceTicket || {}) || "";
   const scheduleSummary = keepRenewalSchedule
-    ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치 · ${lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 시간 유지"}`
-    : selectedSchedules.length
+    ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치 · ${lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "현재 시간"} · 기존 시간 유지`
+    : flexibleCoupon
+      ? selectedCoachName ? `${memberCoachShortName(selectedCoachName)} 코치 · 결제 후 자유 예약` : "담당 코치를 선택해 주세요"
+      : selectedSchedules.length
       ? `${memberCoachShortName(selectedCoachName || "선택한 코치")} 코치 · ${selectedSchedules.map((schedule) => `${purchaseDateLabel(schedule.lessonDate)} ${schedule.startTime}`).join(" · ")}`
       : "선생님과 시간을 선택해 주세요";
   return `
@@ -320,7 +333,7 @@ function purchaseSinglePageHtml() {
         <span><small>상품</small><strong>${escapeHtml(product ? purchaseProductDisplayTitle(product) : "상품을 선택해 주세요")}</strong></span><em>변경</em>
       </button>
       ${product ? `<button class="purchase-selection-row" type="button" ${keepRenewalSchedule ? "data-edit-purchase-renewal-schedule" : "data-open-purchase-schedule"} aria-haspopup="dialog">
-        <span><small>선생님·시간</small><strong>${escapeHtml(scheduleSummary)}</strong></span><em>변경</em>
+        <span><small>${flexibleCoupon ? "담당 코치" : "선생님·시간"}</small><strong>${escapeHtml(scheduleSummary)}</strong></span><em>변경</em>
       </button>
       <div class="purchase-selection-payment">${purchaseStepThreeHtml()}</div>` : ""}
     </section>`;

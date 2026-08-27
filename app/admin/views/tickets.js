@@ -67,10 +67,16 @@ function memberTicketRowMarkup(member, ticket, position = 1, count = 1, possible
     .filter(Boolean)
     .map(memberDetailDateLabel)
     .join("~");
+  const simpleContext = [
+    memberTicketScheduleScopeLabel(ticket),
+    memberTicketCoachLabel(member, ticket),
+    ticketUsageLabel(ticket),
+  ].filter(Boolean).join(" · ");
   return `<span class="member-ticket-row-summary">
     ${context ? `<small>${escapeHtml(context)}</small>` : ""}
     <strong>${escapeHtml(getTicketDisplayProduct(ticket) || ticket.product || "회원권")}</strong>
     <span>${escapeHtml(memberTicketStatusLabel(ticket))}${period ? ` · ${escapeHtml(period)}` : ""}</span>
+    <small class="member-ticket-simple-context">${escapeHtml(simpleContext)}</small>
   </span>`;
 }
 
@@ -92,23 +98,27 @@ function memberTicketPaymentMarkup(member, ticket) {
   return `<span class="member-payment-summary-line"><strong>${escapeHtml(date)}</strong><small>${escapeHtml(`${reviewLabel}${method} · ${amount}`)}</small></span>`;
 }
 
-function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions) {
+function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions, options = {}) {
   const total = Number(product?.total_sessions || 1);
   const startsOn = adminLocalDateKey(new Date());
   const validityDays = Math.max(1, Number(product?.validity_days || 1) + Number(product?.grace_days || 0));
   const isGroup = Number(product?.group_size || 1) === 2;
   const scheduleScope = memberManagementProductScheduleScope(product);
+  const existingPayment = options.existingPayment || null;
+  const paymentDate = String(existingPayment?.paid_at || existingPayment?.verified_at || existingPayment?.created_at || "").slice(0, 10);
+  const paymentMethod = existingPayment?.method || existingPayment?.provider || "";
+  const paymentAmount = Number(existingPayment?.final_amount ?? existingPayment?.amount ?? 0);
+  const preferExistingPartner = options.preferExistingPartner === true;
   return `
     <input name="createWithoutSchedule" type="hidden" value="${memberManagementProductSupportsRegularSchedule(product) ? "false" : "true"}" />
     <input name="recordStatus" type="hidden" value="active" />
     <input name="scheduleScope" type="hidden" value="${escapeHtml(scheduleScope)}" />
     <input name="weeklyFrequency" type="hidden" value="${memberManagementProductWeeklyFrequency(product)}" />
     <input name="lessonType" type="hidden" value="${isGroup ? "one_on_two" : "one_on_one"}" />
-    <input name="startsOn" type="hidden" value="${escapeHtml(startsOn)}" />
-    <input name="expiresOn" type="hidden" value="${escapeHtml(addMemberManagementDays(startsOn, validityDays - 1))}" />
     <input name="usedSessions" type="hidden" value="0" />
     <input name="remainingSessions" type="hidden" value="${total}" />
     <input name="note" type="hidden" value="" />
+    ${existingPayment ? `<input name="existingPaymentId" type="hidden" value="${escapeHtml(existingPayment.id)}" />` : ""}
     <div class="member-management-form-grid member-simple-ticket-fields">
       <label class="form-field span-2">${memberManagementFieldLabel("회원권", true)}<select name="productId" required>
         ${memberManagementProducts().map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")}</option>`).join("")}
@@ -117,32 +127,43 @@ function memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptio
         ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === coachRoleId ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
       </select></label>
       <label class="form-field">${memberManagementFieldLabel("총 횟수", true)}<input name="totalSessions" type="number" min="1" step="1" value="${total}" required /></label>
-      <label class="form-field">${memberManagementFieldLabel("결제일")}<input name="paymentDate" type="date" value="${startsOn}" /></label>
-      <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod">
-        <option value="">미입력</option>
-        <option value="card">카드</option>
-        <option value="bank_transfer">계좌이체</option>
-        <option value="cash">현금</option>
-      </select></label>
-      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="0" /></label>
+      <label class="form-field">${memberManagementFieldLabel("시작일", true)}<input name="startsOn" type="date" value="${escapeHtml(startsOn)}" required /></label>
+      <label class="form-field">${memberManagementFieldLabel("만료일", true)}<input name="expiresOn" type="date" value="${escapeHtml(addMemberManagementDays(startsOn, validityDays - 1))}" readonly aria-readonly="true" required /><small>상품 기간으로 자동 계산</small></label>
+      ${existingPayment ? `
+        <input name="paymentRecordState" type="hidden" value="complete" />
+        <input name="paymentDate" type="hidden" value="${escapeHtml(paymentDate)}" />
+        <input name="paymentMethod" type="hidden" value="${escapeHtml(paymentMethod)}" />
+        <input name="paymentAmount" type="hidden" value="${paymentAmount}" />
+        <div class="member-management-warning span-2"><strong>확인 완료 결제 연결</strong><span>${escapeHtml(paymentDate || "결제일 확인")} · ${escapeHtml(paymentMethodLabel(paymentMethod))} · ${money.format(paymentAmount)}원</span></div>` : `
+        <input name="paymentRecordState" type="hidden" value="unentered" />
+        <div class="form-field member-payment-derived"><span class="member-field-label">결제 상태<em class="is-optional">자동</em></span><strong data-member-payment-derived-state>미입력</strong><small data-member-payment-missing></small></div>
+        <label class="form-field">${memberManagementFieldLabel("결제일", true)}<input name="paymentDate" type="date" value="" /></label>
+        <label class="form-field">${memberManagementFieldLabel("결제수단", true)}<select name="paymentMethod">
+          <option value="">선택</option>
+          <option value="card">카드</option>
+          <option value="bank_transfer">계좌이체</option>
+          <option value="cash">현금</option>
+        </select></label>
+        <label class="form-field member-payment-amount-field">${memberManagementFieldLabel("결제금액", true)}<input name="paymentAmount" type="number" min="0" step="1" value="0" readonly aria-readonly="true" /><button class="text-button" type="button" data-enable-payment-override>직접 수정</button><small>결제수단에 맞는 상품 가격이 자동 적용됩니다.</small></label>
+        <label class="form-field span-2 member-payment-override-reason" data-payment-override-reason hidden>${memberManagementFieldLabel("금액 수정 사유", true)}<input name="paymentOverrideReason" type="text" minlength="4" maxlength="120" disabled placeholder="할인·추가결제 등 사유" /></label>`}
       <div class="form-field span-2 member-partner-editor ${isGroup ? "" : "is-disabled"}" data-manual-member-partner-field ${isGroup ? "" : "hidden"}>
         ${memberManagementFieldLabel("1:2 파트너", isGroup)}
         <div class="member-partner-mode" role="radiogroup" aria-label="파트너 등록 방법">
-          <label><input name="partnerMode" type="radio" value="new" checked /> 새 파트너 같이 등록</label>
-          <label><input name="partnerMode" type="radio" value="existing" /> 기존 회원 연결</label>
+          <label><input name="partnerMode" type="radio" value="new" ${preferExistingPartner ? "" : "checked"} /> 새 파트너 같이 등록</label>
+          <label><input name="partnerMode" type="radio" value="existing" ${preferExistingPartner ? "checked" : ""} /> 기존 회원 연결</label>
         </div>
-        <div class="member-partner-new-fields" data-manual-new-partner>
+        <div class="member-partner-new-fields" data-manual-new-partner ${preferExistingPartner ? "hidden" : ""}>
           <label class="form-field">${memberManagementFieldLabel("파트너 이름", true)}<input name="partnerName" type="text" minlength="2" maxlength="40" /></label>
           <label class="form-field">${memberManagementFieldLabel("파트너 휴대전화")}<input name="partnerPhone" type="tel" inputmode="tel" maxlength="20" /></label>
           <input name="partnerBirthYear" type="hidden" value="" />
           <input name="partnerGender" type="hidden" value="" />
           <p class="form-message span-2" data-manual-partner-phone-status role="status" hidden></p>
         </div>
-        <div class="member-partner-existing-fields" data-manual-existing-partner hidden>
+        <div class="member-partner-existing-fields" data-manual-existing-partner ${preferExistingPartner ? "" : "hidden"}>
           <input name="partnerSearch" type="search" autocomplete="off" placeholder="이름 또는 전화번호 검색" data-manual-member-partner-search />
           <div class="member-partner-search-results" data-manual-member-partner-results aria-live="polite"></div>
           <p class="form-message" data-manual-existing-partner-status role="status">앱 가입만 하고 회원권이 없는 회원도 검색됩니다.</p>
-          <select name="partnerUserId" disabled>
+          <select name="partnerUserId" ${preferExistingPartner ? "" : "disabled"}>
             <option value="">파트너 선택</option>
             ${partnerOptions.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || "회원")}</option>`).join("")}
           </select>

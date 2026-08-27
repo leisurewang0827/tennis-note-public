@@ -1141,13 +1141,126 @@ function memberTicketPaymentGrid(member, ticket) {
   const projection = ticket ? memberTicketPaymentProjection(member, ticket) : null;
   const stateValue = memberPaymentRecordState(projection);
   if (!projection || stateValue === "unentered") {
-    return { state: stateValue, date: "-", method: "미입력", amount: "-" };
+    return {
+      state: stateValue,
+      date: "-",
+      method: "미입력",
+      amount: "-",
+      label: "결제 미등록",
+      detail: "연결된 결제 기록이 없습니다.",
+      tone: "neutral",
+      needsReview: false,
+    };
+  }
+  const rawPayment = projection.payment || {};
+  const provider = String(projection.payment_provider || rawPayment.provider || "").toLowerCase();
+  const methodValue = String(projection.payment_method || rawPayment.method || "").toLowerCase();
+  const paymentStatus = String(projection.payment_status || rawPayment.status || "").toLowerCase();
+  const projectionSource = String(projection.projection_source || "");
+  const linkedToTicket = ["exact_ticket_payment", "source_payment"].includes(projectionSource)
+    || String(rawPayment.ticket_id || rawPayment.ticketId || "") === String(ticket?.serverTicketId || ticket?.id || "");
+  const tossPayment = methodValue === "tosspay";
+  const portonePayment = provider === "portone";
+  const bankPayment = provider === "bank_transfer" || ["bank", "bank_transfer", "transfer"].includes(methodValue);
+  let label = stateValue === "transfer_zero" ? "양도 완료" : "결제 완료";
+  let detail = stateValue === "transfer_zero" ? "결제 없이 양도된 회원권입니다." : "결제 기록이 회원권에 연결되어 있습니다.";
+  let tone = stateValue === "incomplete" ? "warning" : "success";
+  let needsReview = stateValue === "incomplete";
+
+  if (tossPayment) {
+    if (paymentStatus === "verified" && linkedToTicket) {
+      label = "토스 완료";
+      detail = "토스 결제가 서버에서 확인됐고 이 회원권에 연결됐습니다.";
+      tone = "success";
+      needsReview = false;
+    } else if (paymentStatus === "verified") {
+      label = "토스 연결 확인";
+      detail = "토스 결제는 확인됐지만 이 회원권 연결을 확인해야 합니다.";
+      tone = "warning";
+      needsReview = true;
+    } else if (["ready", "pending"].includes(paymentStatus)) {
+      label = "토스 결제대기";
+      detail = "결제창은 생성됐지만 토스 결제 완료가 확인되지 않았습니다.";
+      tone = "warning";
+      needsReview = true;
+    } else if (paymentStatus === "failed") {
+      label = "토스 실패";
+      detail = "토스 결제가 완료되지 않았습니다. 새 결제 요청 여부를 확인하세요.";
+      tone = "danger";
+      needsReview = true;
+    } else if (paymentStatus === "cancelled") {
+      label = "토스 취소";
+      detail = "토스 결제가 취소됐습니다.";
+      tone = "neutral";
+      needsReview = false;
+    } else {
+      label = "토스 확인 필요";
+      detail = "토스 결제 상태를 결제관리에서 다시 확인하세요.";
+      tone = "warning";
+      needsReview = true;
+    }
+  } else if (portonePayment) {
+    if (paymentStatus === "verified" && linkedToTicket) {
+      label = "카드 완료";
+      detail = "PG 카드 결제가 서버에서 확인됐고 이 회원권에 연결됐습니다.";
+      tone = "success";
+      needsReview = false;
+    } else if (["ready", "pending"].includes(paymentStatus)) {
+      label = "카드 결제대기";
+      detail = "PG 결제창은 생성됐지만 결제 완료가 확인되지 않았습니다.";
+      tone = "warning";
+      needsReview = true;
+    } else if (paymentStatus === "failed") {
+      label = "카드 실패";
+      detail = "PG 카드 결제가 완료되지 않았습니다.";
+      tone = "danger";
+      needsReview = true;
+    } else if (paymentStatus === "cancelled") {
+      label = "카드 취소";
+      detail = "PG 카드 결제가 취소됐습니다.";
+      tone = "neutral";
+      needsReview = false;
+    } else {
+      label = "카드 확인 필요";
+      detail = "PG 카드 결제 상태 또는 회원권 연결을 확인하세요.";
+      tone = "warning";
+      needsReview = true;
+    }
+  } else if (bankPayment) {
+    if (paymentStatus === "verified" || stateValue === "complete") {
+      label = "입금 확인";
+      detail = "계좌 입금이 확인됐고 회원권에 반영됐습니다.";
+      tone = "success";
+      needsReview = false;
+    } else if (["ready", "pending"].includes(paymentStatus)) {
+      label = "입금 대기";
+      detail = "입금자명과 금액을 확인한 뒤 입금 확인을 진행하세요.";
+      tone = "warning";
+      needsReview = true;
+    }
+  } else if (provider === "google_sheet_history") {
+    label = "이관 결제";
+    detail = "과거 구글시트 결제 근거를 보존한 기록입니다.";
+    tone = "success";
+    needsReview = false;
+  } else if (provider === "admin_manual" && (paymentStatus === "verified" || stateValue === "complete")) {
+    label = "현장 확인";
+    detail = "관리자가 확인해 등록한 결제입니다.";
+    tone = "success";
+    needsReview = false;
+  } else if (stateValue === "incomplete") {
+    label = "결제 확인 필요";
+    detail = "결제일·수단·금액 또는 회원권 연결이 완전하지 않습니다.";
   }
   return {
     state: stateValue,
     date: projection.payment_recorded_on ? memberDetailDateLabel(projection.payment_recorded_on) : "미입력",
     method: stateValue === "transfer_zero" ? "양도" : paymentMethodLabel(projection.payment_method || ""),
     amount: `${money.format(Number(projection.payment_amount || 0))}원`,
+    label,
+    detail,
+    tone,
+    needsReview,
   };
 }
 
@@ -1179,7 +1292,7 @@ function memberTicketGridReviewReasons(member, ticket) {
   const payment = memberTicketPaymentGrid(member, ticket);
   if (!ticket.productId || !ticket.scheduleScope) reasons.push("상품 연결 오류");
   if (!ticket.serverUserId && !member?.serverUserId) reasons.push("회원 연결 오류");
-  if (payment.state === "incomplete") reasons.push("결제 확인 필요");
+  if (payment.needsReview) reasons.push(payment.label || "결제 확인 필요");
   if (ticket.policySnapshot?.admin_grid_price_review?.required === true) reasons.push("가격 차이 확인");
   if (Number(ticket.used || 0) + Number(ticket.remaining || 0) !== Number(ticket.total || 0)) reasons.push("횟수 불일치");
   if (Number(ticket.groupSize || 1) === 2 && !memberTicketPartnerUserId(ticket, member)) reasons.push("파트너 연결 오류");

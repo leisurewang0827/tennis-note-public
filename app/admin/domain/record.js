@@ -12,10 +12,17 @@ function memberRecordsForReference(memberReference, allMembers = members) {
 function memberDatabaseRecord(member = null, ticket = null, allLiveData = adminLiveDataState) {
   const records = allLiveData.memberDatabaseRecords || [];
   const membershipRecords = allLiveData.memberMembershipRecords || [];
-  const ticketId = ticket?.serverTicketId || ticket?.id || "";
+  const ticketId = String(ticket?.serverTicketId || ticket?.id || "");
+  const userIds = memberServerUserIds(member).map(String);
   if (ticketId) {
-    return membershipRecords.find((record) => record.ticket_id === ticketId)
-      || records.find((record) => record.current_ticket_id === ticketId)
+    return membershipRecords.find((record) => (
+      String(record.ticket_id || "") === ticketId
+      && userIds.includes(String(record.user_id || ""))
+    ))
+      || records.find((record) => (
+        String(record.current_ticket_id || "") === ticketId
+        && userIds.includes(String(record.user_id || ""))
+      ))
       || null;
   }
   if (member?.memberRecord) return member.memberRecord;
@@ -191,9 +198,12 @@ function getAdminTasks() {
   const branchTickets = operationBranchTickets();
   const branchBillings = operationBranchBillings();
   const lowTickets = branchTickets.filter((ticket) => ticket.remaining <= 2);
-  const paymentChecks = branchBillings.filter((item) => item.status === "check" || item.status === "unverified");
-  const draftBillings = branchBillings.filter((item) => item.status === "draft");
-  const paymentDataErrors = branchBillings.filter(paymentRequiresTicketRepair);
+  const paymentAttemptEntries = groupedBillingAttempts(branchBillings);
+  const paymentChecks = paymentAttemptEntries.filter((entry) => (
+    ["check", "unverified"].includes(entry.primary.status) || isStaleReadyPayment(entry.primary)
+  ));
+  const draftBillings = paymentAttemptEntries.filter((entry) => entry.primary.status === "draft");
+  const paymentDataErrors = paymentAttemptEntries.filter((entry) => paymentRequiresTicketRepair(entry.primary));
   const urgentMakeups = operationBranchMakeupRequests()
     .filter((item) => item.status === "coach_required" || item.status === "requested")
     .concat(shared.makeupRequests.filter((item) => item.status === "승인 대기"));
@@ -201,14 +211,14 @@ function getAdminTasks() {
   const couponNoBookingTickets = couponTicketsWithoutUpcomingLesson();
 
   const tasks = [
-    ...paymentDataErrors.map((item) => ({
+    ...paymentDataErrors.map((entry) => ({
       type: "결제오류",
-      title: `${item.member} 회원권 연결 누락`,
-      detail: `${item.item} · ${money.format(item.amount)}원 · 서버 결제 확인 필요`,
+      title: `${entry.primary.member} 회원권 연결 누락`,
+      detail: `${entry.primary.item} · ${money.format(entry.primary.amount)}원 · 서버 결제 확인 필요${entry.attemptCount > 1 ? ` · 동일 요청 ${entry.attemptCount}회` : ""}`,
       tone: "danger",
       action: "결제 확인",
       view: "billing",
-      dueAt: item.verifiedAt || item.paidAt || item.requestedAt || "",
+      dueAt: entry.primary.verifiedAt || entry.primary.paidAt || entry.primary.requestedAt || "",
     })),
     ...unassignedTickets.map((ticket) => ({
       type: "긴급",
@@ -262,23 +272,23 @@ function getAdminTasks() {
       action: "회원권 확인",
       view: "members",
     })),
-    ...paymentChecks.map((item) => ({
+    ...paymentChecks.map((entry) => ({
       type: "결제확인",
-      title: `${item.member} 결제 확인`,
-      detail: `${item.item} · ${money.format(item.amount)}원`,
+      title: `${entry.primary.member} 결제 확인`,
+      detail: `${entry.primary.item} · ${money.format(entry.primary.amount)}원${entry.attemptCount > 1 ? ` · 동일 요청 ${entry.attemptCount}회` : ""}`,
       tone: "warn",
       action: "결제 확인",
       view: "billing",
-      dueAt: item.requestedAt || "",
+      dueAt: entry.primary.requestedAt || "",
     })),
-    ...draftBillings.map((item) => ({
+    ...draftBillings.map((entry) => ({
       type: "결제요청",
-      title: `${item.member} 결제요청 발송`,
-      detail: `${item.item} · ${money.format(item.amount)}원`,
+      title: `${entry.primary.member} 결제요청 발송`,
+      detail: `${entry.primary.item} · ${money.format(entry.primary.amount)}원${entry.attemptCount > 1 ? ` · 동일 요청 ${entry.attemptCount}회` : ""}`,
       tone: "neutral",
       action: "결제 요청",
       view: "billing",
-      dueAt: item.requestedAt || "",
+      dueAt: entry.primary.requestedAt || "",
     })),
   ];
   const priorityByType = {

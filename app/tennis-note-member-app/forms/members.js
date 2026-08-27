@@ -124,7 +124,11 @@ async function editMemberChangeRequest(requestId) {
     return;
   }
   state.editingChangeRequestId = request.serverRequestId;
-  const source = memberScheduleLessons().find((lesson) => (
+  const source = [
+    ...memberScheduleLessons(),
+    ...loadedFutureScheduledLessonsForChange(),
+    ...(state.liveLessons || []),
+  ].find((lesson) => (
     isOwnMemberScheduleLesson(lesson)
     && String(lesson.serverLessonId || "") === String(request.lessonId || "")
   ));

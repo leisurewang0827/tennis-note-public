@@ -117,10 +117,20 @@ function renderMemberStatusCounts() {
     && !adminMemberDirectoryState.error;
   $$('[data-member-filter-count]').forEach((badge) => {
     const filter = badge.dataset.memberFilterCount;
-    badge.textContent = counts
-      ? `${counts[filter] || 0}명`
-      : waitingForServer ? "…" : "확인 필요";
-    badge.setAttribute("aria-busy", String(waitingForServer));
+    const deletionCount = (state.accountDeletionRequests || [])
+      .filter((request) => ["pending", "reviewing", "processing", "failed"].includes(request.status)).length;
+    const deletionWaiting = accountDeletionRequestState.loading || !accountDeletionRequestState.loaded;
+    const identityReviewWaiting = filter === "app_link" && adminMemberIdentityReviewState.loading;
+    badge.textContent = filter === "deletion"
+      ? accountDeletionRequestState.error && !accountDeletionRequestState.loaded
+        ? "확인 필요"
+        : deletionWaiting
+          ? "…"
+          : `${deletionCount}건`
+      : counts && Object.prototype.hasOwnProperty.call(counts, filter)
+        ? `${Math.max(0, Number(counts[filter]) || 0)}명`
+        : (waitingForServer || identityReviewWaiting) ? "…" : "확인 필요";
+    badge.setAttribute("aria-busy", String(filter === "deletion" ? deletionWaiting : waitingForServer || identityReviewWaiting));
     badge.title = filter === "expired" && !waitingForServer
       ? "과거 DB에서 이관한 만료 회원을 포함합니다."
       : "";
@@ -130,6 +140,18 @@ function renderMemberStatusCounts() {
 function renderMemberFilterSections() {
   const filter = state.memberFilter || "active";
   const role = operationsRole();
+  const journalMode = ["journal", "app_link"].includes(filter);
+  const membersView = $("#membersView");
+  if (membersView) membersView.dataset.memberFilterView = filter;
+  $$('[data-member-list-filter]').forEach((field) => {
+    field.hidden = journalMode && field.dataset.memberListFilter !== "search";
+  });
+  const memberSearch = $("#memberListSearch");
+  if (memberSearch) {
+    memberSearch.placeholder = journalMode
+      ? "이름 또는 휴대전화 뒤 4자리"
+      : "이름 또는 시간 검색";
+  }
   $$(".segment[data-member-filter]").forEach((button) => {
     const isActive = button.dataset.memberFilter === filter;
     button.classList.toggle("is-active", isActive);
@@ -367,18 +389,16 @@ function renderMemberManagementModal() {
       <p class="member-management-rule">정규권은 선택한 전체 횟수의 요일·시간을 모두 입력해야 저장됩니다. 예외일 때만 ‘시간표는 나중에 설정’을 선택하세요.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "assign") {
     actionFields = products.length && coachRoles.length ? `
-      <div class="member-management-form-grid">
-        <label class="form-field span-2">${memberManagementFieldLabel("판매중 회원권", true)}<select name="productId" required>
-          ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")} · ${memberManagementScheduleScopeLabel(memberManagementProductScheduleScope(item))}</option>`).join("")}
-        </select></label>
-      </div>
-      ${memberManagementDatabaseFields({ member, ticket: null, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: unlinkedPayment, isAssign: true })}
-      <input name="createWithoutSchedule" type="hidden" value="${memberManagementProductSupportsRegularSchedule(product) ? "false" : "true"}" />
-      ${memberCreateScheduleMarkup(product)}
-      <p class="member-management-rule">주 2회·주 3회는 정규 요일과 시간을 모두 선택하면 회원권과 시간표가 한 번에 저장됩니다. 예외일 때만 ‘시간표는 나중에 설정’을 선택하세요.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
+      <p class="member-create-step-help"><strong>${escapeHtml(member.name)} 회원권 등록</strong> 회원권·코치·시작일·결제만 확인하면 됩니다.</p>
+      ${memberSimpleTicketFields(product, coachRoles, coachRoleId, partnerOptions, {
+        existingPayment: unlinkedPayment,
+        preferExistingPartner: true,
+      })}
+      <section class="member-registration-summary" data-member-registration-summary aria-live="polite"></section>
+      <p class="member-management-rule">결제 확인 전에는 회원권이 활성화되지 않습니다. 쿠폰은 시간표 없이 등록하고, 정규권은 주 횟수만큼 시간을 선택합니다.</p>` : `<p class="form-message danger">사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
   } else if (action === "correct") {
     actionFields = operationsRole() === "admin" ? `
-      ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: memberTicketLinkedPayment(ticket), includeTicketStatus: true })}
+      ${memberManagementDatabaseFields({ member, ticket, record, product, coachRoles, coachRoleId, partnerOptions, existingPayment: memberTicketLinkedPayment(member, ticket), includeTicketStatus: true })}
       <p class="member-management-rule">레슨 방식·종류·요일·횟수·결제 메모를 한 번에 수정합니다. 기존 결제 증빙은 변경하지 않습니다.</p>` : `
       <div class="member-management-form-grid">
         <label class="form-field"><span>총횟수</span><input name="totalSessions" type="number" min="1" step="1" value="${defaultTotal}" required /></label>
@@ -471,7 +491,7 @@ function renderMemberManagementModal() {
 function renderMemberEditorModeBar() {
   const bar = $("#memberEditorModeBar");
   if (!bar) return;
-  bar.hidden = operationsRole() !== "admin";
+  bar.hidden = operationsRole() !== "admin" || ["journal", "app_link"].includes(state.memberFilter);
   const button = $("#toggleMemberAdminEdit");
   if (button) {
     button.classList.toggle("is-active", memberAdminEditEnabled);
@@ -581,7 +601,7 @@ function renderMemberBulkToolbar(visibleMembers = [], filteredSelectionIds = nul
   const selectedMembersAreInactive = selectedMembers.length > 0
     && selectedMembers.every((member) => memberListStatus(member) === "inactive" && member.authRole !== "admin");
   const toolbar = $("#memberBulkToolbar");
-  if (toolbar) toolbar.hidden = operationsRole() !== "admin";
+  if (toolbar) toolbar.hidden = operationsRole() !== "admin" || ["journal", "app_link"].includes(state.memberFilter);
   if ($("#memberBulkCount")) $("#memberBulkCount").textContent = String(state.selectedMemberIds.length);
   ["runMemberBulkAction", "deleteSelectedMembers", "clearMemberBulkSelection"].forEach((id) => {
     if ($(`#${id}`)) $(`#${id}`).disabled = !state.selectedMemberIds.length;
@@ -661,7 +681,8 @@ function renderMembers(options = {}) {
   let filtered;
   let filteredTotal;
   if (serverDirectoryReady) {
-    const membersByServerUserId = new Map(branchMembers.map((member) => [String(member.serverUserId || ""), member]));
+    const directoryMembers = state.memberFilter === "journal" ? members : branchMembers;
+    const membersByServerUserId = new Map(directoryMembers.map((member) => [String(member.serverUserId || ""), member]));
     filtered = adminMemberDirectoryState.rows
       .map((row) => membersByServerUserId.get(String(row.user_id || "")))
       .filter(Boolean);
@@ -691,6 +712,7 @@ function renderMembers(options = {}) {
   renderMemberStatusCounts();
   renderMemberFilterSections();
   renderMemberEditorModeBar();
+  renderMemberTableViewMode();
 
   const selectedIndex = filtered.findIndex((member) => member.id === state.selectedMemberId);
   if (!serverDirectoryReady && selectedIndex >= 0) state.memberListPage = Math.floor(selectedIndex / memberListPageSize);
@@ -714,7 +736,7 @@ function renderMembers(options = {}) {
   const preserveList = options.preserveList === true && memberRows?.children.length;
   if (!preserveList) {
     memberRows.innerHTML = serverDirectoryPending
-      ? '<tr><td colspan="15" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
+      ? '<tr><td colspan="16" class="empty-text">서버 회원 목록을 확인하고 있습니다.</td></tr>'
       : visibleMembers.length ? visibleMembers
       .map((member) => {
       const editableTickets = memberDirectoryTickets(member);
@@ -724,6 +746,31 @@ function renderMembers(options = {}) {
       const renewalOverlapTicketIds = memberRenewalOverlapTicketIds(editableTickets);
       const selectedIds = selectedMemberIdSet();
       const listStatus = memberListStatus(member);
+      if (listStatus === "journal") {
+        return `<tr class="app-signup-member-row" data-member-id="${member.id}">
+          <td colspan="16">
+            <article class="app-signup-member-card">
+              <button class="app-signup-member-identity" type="button" data-select-member="${member.id}">
+                ${avatarMarkup(member, "small")}
+                <span><strong>${escapeHtml(member.name)}</strong><small>${escapeHtml(maskMemberPhone(member.phone))}</small></span>
+              </button>
+              <div class="app-signup-member-state">
+                ${badge("neutral", "앱가입")}
+                <strong>${member.authLinked ? "로그인 연결됨" : "로그인 연결 확인 필요"}</strong>
+                <span>회원권·수업 없음</span>
+              </div>
+              <div class="app-signup-member-actions">
+                ${operationsRole() === "admin" && member.serverUserId
+                  ? `<button class="small-button primary-button" type="button" data-open-member-management="assign" data-member-management-member-id="${member.id}">수강 등록</button>`
+                  : ""}
+                ${operationsRole() === "admin" && member.serverUserId && member.authLinked
+                  ? `<button class="ghost-button" type="button" data-open-member-management="link_existing" data-member-management-member-id="${member.id}">기존 회원 연결</button>`
+                  : ""}
+              </div>
+            </article>
+          </td>
+        </tr>`;
+      }
       return displayedTickets.map((rowTicket, ticketIndex) => {
         const ticketId = String(rowTicket?.serverTicketId || "");
         const possibleDuplicate = possibleDuplicateTicketIds.has(ticketId);
@@ -739,7 +786,7 @@ function renderMembers(options = {}) {
         if (editingThisRow || editingNewTicket) {
           const editorTicket = editingNewTicket ? null : rowTicket;
           return `<tr class="member-inline-editor-row member-inline-sheet-row" data-member-id="${member.id}" data-member-editor-row="${member.id}" data-member-editor-ticket="${escapeHtml(ticketId)}">
-            <td colspan="15">${memberQuickEditorMarkup(member, editorTicket, {
+             <td colspan="16">${memberQuickEditorMarkup(member, editorTicket, {
               embedded: true,
               ticketPosition: editingNewTicket ? editableTickets.length + 1 : ticketIndex + 1,
               ticketCount: editableTickets.length,
@@ -769,6 +816,7 @@ function renderMembers(options = {}) {
               <span>${escapeHtml(member.name)}</span>
             </button>
           </td>
+          <td class="member-auth-column">${ticketIndex === 0 ? memberAuthStatusMarkup(member) : '<span class="member-table-muted">같은 회원</span>'}</td>
           <td class="member-ticket-column">${memberTicketRowMarkup(member, rowTicket, ticketIndex + 1, editableTickets.length, possibleDuplicate, renewalOverlap)}</td>
           <td class="member-scope-column">${escapeHtml(memberTicketScheduleScopeLabel(rowTicket))}</td>
           <td class="member-coach-column">${escapeHtml(memberTicketCoachLabel(member, rowTicket))}</td>
@@ -777,15 +825,19 @@ function renderMembers(options = {}) {
           <td class="member-date-column">${escapeHtml(rowTicket?.expires ? memberDetailDateLabel(rowTicket.expires) : "-")}</td>
           <td class="member-usage-column">${rowTicket ? escapeHtml(ticketUsageLabel(rowTicket)) : '<span class="member-table-muted">-</span>'}</td>
           <td class="member-payment-date-column">${escapeHtml(paymentGrid.date)}</td>
-          <td class="member-payment-method-column">${escapeHtml(paymentGrid.method)}</td>
-          <td class="member-payment-amount-column">${escapeHtml(paymentGrid.amount)}</td>
+          <td class="member-payment-method-column">${memberTicketPaymentStatusMarkup(paymentGrid)}</td>
+          <td class="member-payment-amount-column"><span class="member-payment-amount-summary"><strong>${escapeHtml(paymentGrid.amount)}</strong><small>${escapeHtml(memberTicketSettlementGridLabel(rowTicket))}</small></span></td>
           <td class="member-settlement-column">${escapeHtml(memberTicketSettlementGridLabel(rowTicket))}</td>
           <td class="member-actions-column"><div class="member-row-actions">
+            <button class="small-button primary-button member-row-manage" type="button" data-select-member="${member.id}" ${ticketId ? `data-member-ticket="${escapeHtml(ticketId)}"` : ""}>확인·수정</button>
             ${operationsRole() === "admin" && member.serverUserId && listStatus !== "inactive" && rowTicket && ["active", "paused"].includes(rowTicket.status)
               ? `<button class="small-button primary-button member-row-ticket-extend" type="button" data-open-member-management="extend" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 기간 연장">기간 연장</button>`
               : ""}
             ${operationsRole() === "admin" && rowTicket ? `<button class="small-button" type="button" data-open-member-inline="${member.id}" data-member-inline-ticket="${escapeHtml(ticketId)}">회원권 수정</button>` : ""}
-            ${operationsRole() === "admin" && !rowTicket ? `<button class="small-button primary-button" type="button" data-open-member-management="assign" data-member-management-member-id="${member.id}">회원권 등록</button>` : ""}
+            ${operationsRole() === "admin" && !rowTicket ? `<button class="small-button primary-button" type="button" data-open-member-management="assign" data-member-management-member-id="${member.id}">${listStatus === "journal" ? "수강 등록" : "회원권 등록"}</button>` : ""}
+            ${operationsRole() === "admin" && listStatus === "journal" && member.authLinked
+              ? `<button class="ghost-button" type="button" data-open-member-management="link_existing" data-member-management-member-id="${member.id}">기존 회원 연결</button>`
+              : ""}
             ${operationsRole() === "admin" && rowTicket && rowTicket.status !== "voided"
               ? `<button class="small-button danger-button member-row-ticket-delete" type="button" data-open-member-management="force_delete" data-member-management-member-id="${member.id}" data-member-management-ticket="${escapeHtml(ticketId)}" aria-label="${escapeHtml(member.name)} ${escapeHtml(getTicketDisplayProduct(rowTicket) || rowTicket.product || "회원권")} 삭제">회원권 삭제</button>`
               : ""}
@@ -794,9 +846,9 @@ function renderMembers(options = {}) {
         </tr>`;
       }).join("");
       })
-      .join("") : `<tr><td colspan="15" class="empty-text">${filterCopy.empty}</td></tr>`;
+      .join("") : `<tr><td colspan="16" class="empty-text">${filterCopy.empty}</td></tr>`;
     if (!memberRows.children.length) {
-      memberRows.innerHTML = '<tr><td colspan="15" class="empty-text">선택한 처리 상태에 해당하는 회원권이 없습니다.</td></tr>';
+      memberRows.innerHTML = '<tr><td colspan="16" class="empty-text">선택한 처리 상태에 해당하는 회원권이 없습니다.</td></tr>';
     }
   } else {
     memberRows.querySelectorAll("tr[data-member-id]").forEach((row) => {
@@ -855,6 +907,7 @@ function renderMembers(options = {}) {
       || null;
     const selectedRecord = memberDatabaseRecord(selected, selectedTicket);
     const selectedPayment = memberTicketPaymentProjection(selected, selectedTicket);
+    const selectedPaymentGrid = memberTicketPaymentGrid(selected, selectedTicket);
     const enrollment = selected.enrollment || {};
     const recentPayment = latestMemberPayment(selected);
     const ticketName = selectedTicket
@@ -946,10 +999,15 @@ function renderMembers(options = {}) {
       <section class="member-db-section member-db-section--billing">
         <h3>결제·비고</h3>
         <dl class="member-db-grid">
+          <div><dt>결제 상태</dt><dd>${memberTicketPaymentStatusMarkup(selectedPaymentGrid)}</dd></div>
           <div><dt>결제일자</dt><dd>${escapeHtml(paymentDate)}</dd></div>
           <div><dt>결제수단·금액</dt><dd>${escapeHtml(paymentSummary)}</dd></div>
           <div class="wide"><dt>비고</dt><dd>${escapeHtml(selectedRecord ? selectedRecord.admin_note || "없음" : selected.note || "없음")}</dd></div>
         </dl>
+        ${operationsRole() === "admin" ? `<div class="member-simple-admin-actions">
+          ${selectedTicket ? `<button class="primary-button" type="button" data-open-member-inline="${selected.id}" data-member-inline-ticket="${escapeHtml(selectedTicket.serverTicketId || "")}">회원권·결제 수정</button>` : `<button class="primary-button" type="button" data-open-member-management="assign" data-member-management-member-id="${selected.id}">회원권 등록</button>`}
+          <button class="ghost-button" type="button" data-jump="billing">결제·환불 전체보기</button>
+        </div>` : ""}
       </section>
       ${renderMemberApprovalCard(selected)}
       ${renderMemberEnrollmentDetails(selected)}

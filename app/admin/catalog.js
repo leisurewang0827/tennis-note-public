@@ -447,24 +447,23 @@ const coachLaneOrderEditorState = {
 
 const adminMenuDefinitions = [
   { id: "dashboard", label: "대시보드", required: true },
-  { id: "members", label: "회원관리" },
+  { id: "members", label: "회원·결제" },
   { id: "schedule", label: "레슨시간표" },
-  { id: "billing", label: "결제/정산" },
   { id: "reports", label: "경영 리포트" },
   { id: "notes", label: "기록/차감 확인" },
   { id: "issues", label: "개선·오류 접수" },
   { id: "settings", label: "운영 설정", required: true },
 ];
 
-const adminDefaultMenuOrder = ["dashboard", "schedule", "members", "billing", "reports", "notes", "issues", "settings"];
+const adminDefaultMenuOrder = ["dashboard", "schedule", "members", "reports", "notes", "issues", "settings"];
 
 const adminDefaultMoreMenus = ["reports", "notes", "issues", "settings"];
 
 const adminLayoutPresets = {
   owner: {
     label: "대표",
-    detail: "경영 리포트와 결제를 주 메뉴에서 바로 확인합니다.",
-    menuOrder: ["dashboard", "reports", "billing", "schedule", "members", "notes", "issues", "settings"],
+    detail: "경영 리포트와 회원·결제를 주 메뉴에서 바로 확인합니다.",
+    menuOrder: ["dashboard", "reports", "schedule", "members", "notes", "issues", "settings"],
     moreMenus: ["notes", "issues", "settings"],
   },
   operations: {
@@ -477,7 +476,7 @@ const adminLayoutPresets = {
     label: "간단 보기",
     detail: "대시보드·시간표·회원만 남겨 처음 쓰는 직원도 쉽게 찾습니다.",
     menuOrder: [...adminDefaultMenuOrder],
-    moreMenus: ["billing", "reports", "notes", "issues", "settings"],
+    moreMenus: ["reports", "notes", "issues", "settings"],
   },
 };
 
@@ -724,7 +723,10 @@ const memberFilterCopy = {
   active: { summary: "명 수강중", empty: "수강중인 회원이 없습니다." },
   expiring: { summary: "명 만료임박", empty: "잔여 2회 이하 회원이 없습니다." },
   pending: { summary: "명 가입서·결제대기", empty: "가입서·결제 대기 회원이 없습니다." },
+  journal: { summary: "명 앱가입", empty: "로그인만 완료한 앱가입 회원이 없습니다." },
+  app_link: { summary: "명 앱 연결 필요", empty: "분리된 앱 계정이 없습니다." },
   expired: { summary: "명 만료", empty: "만료된 회원이 없습니다." },
+  deletion: { summary: "건 탈퇴요청", empty: "접수된 탈퇴요청이 없습니다." },
   inactive: { summary: "명 삭제", empty: "삭제 처리된 회원이 없습니다." },
 };
 

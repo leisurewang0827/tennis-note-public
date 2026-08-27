@@ -350,7 +350,8 @@ function memberChangeCandidateKey(source = null, week = activeMemberWeek()) {
   const ticketId = source?.member_ticket_id || source?.ticketId || "";
   const sourceId = source?.serverLessonId || (source?.couponBooking && ticketId ? `coupon:${ticketId}` : "");
   const range = memberChangeCandidateRange(source, week);
-  return sourceId ? `${sourceId}:${range.from}:${range.to}` : "";
+  const editKey = state.editingChangeRequestId ? `:edit:${state.editingChangeRequestId}` : "";
+  return sourceId ? `${sourceId}:${range.from}:${range.to}${editKey}` : "";
 }
 
 function memberChangeCandidateUiState(source = null) {

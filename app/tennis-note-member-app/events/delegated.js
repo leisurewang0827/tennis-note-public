@@ -110,6 +110,12 @@ function bindDelegatedEvents() {
     });
   });
   document.addEventListener("click", (event) => {
+    const oneDayPurchaseButton = event.target.closest("[data-start-one-day-purchase]");
+    if (oneDayPurchaseButton) {
+      event.preventDefault();
+      void openOneDayPurchaseFlow(oneDayPurchaseButton);
+      return;
+    }
     const pendingPurchaseCancelButton = event.target.closest("[data-cancel-pending-purchase]");
     if (pendingPurchaseCancelButton) {
       void cancelPendingPurchasePayment(
@@ -150,7 +156,11 @@ function bindDelegatedEvents() {
     }
     const openPurchaseFlowButton = event.target.closest("[data-open-purchase-flow]");
     if (openPurchaseFlowButton) {
-      openMembershipPurchaseFlow("", "", openPurchaseFlowButton.dataset.openPurchaseFlow || "");
+      event.preventDefault();
+      void openMembershipPurchaseEntry({
+        purpose: openPurchaseFlowButton.dataset.openPurchaseFlow || "new_purchase",
+        trigger: openPurchaseFlowButton,
+      });
       return;
     }
     if (event.target.closest("[data-open-current-membership]")) {
@@ -411,6 +421,16 @@ function bindDelegatedEvents() {
     }
     if (event.target.closest("#openPreparedPaymentButton")) {
       completePreparedPayment();
+      return;
+    }
+    if (event.target.closest("#switchPaymentToBankTransferButton")) {
+      if (!isPaymentGatewayReady("bank_transfer")) {
+        showToast("현재 계좌이체를 사용할 수 없습니다. 관리자에게 문의해 주세요.");
+        return;
+      }
+      closePaymentConfirmationModal();
+      selectPaymentMethod("bank_transfer");
+      showToast("계좌이체로 변경했습니다. 선택 내용을 확인한 뒤 결제해 주세요.");
       return;
     }
     const pageButton = event.target.closest("[data-page-list]");

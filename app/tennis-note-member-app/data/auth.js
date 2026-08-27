@@ -197,7 +197,7 @@ function activateLiveMemberProfile(profileId) {
   state.lessonLogs = [];
   state.practiceLogs = [];
   state.paymentRequests = [];
-  state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
+  state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true } };
   state.discountCoupons = [];
   state.expiredTickets = [];
   state.ticketHistory = [];

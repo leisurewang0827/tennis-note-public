@@ -62,12 +62,14 @@ function restoreSnapshot() {
     if (!Array.isArray(state.expiredTickets)) state.expiredTickets = [];
     if (!Array.isArray(state.liveMembershipProducts)) state.liveMembershipProducts = [];
     if (!state.livePaymentOptions || typeof state.livePaymentOptions !== "object") {
-      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, features: { threeMonth: true, oneDay: true, coupons: true } };
+      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true } };
     }
     state.livePaymentOptions.allowedMethods = paymentMethodIdList(state.livePaymentOptions.allowedMethods || ["tosspay"]);
     state.livePaymentOptions.bankTransferEnabled = state.livePaymentOptions.bankTransferEnabled === true;
     if (!Array.isArray(state.livePaymentOptions.paymentMethods)) state.livePaymentOptions.paymentMethods = [];
     state.livePaymentOptions.settingsVersion = Math.max(0, Number(state.livePaymentOptions.settingsVersion) || 0);
+    state.livePaymentOptions.settingsAppliedAt = String(state.livePaymentOptions.settingsAppliedAt || "");
+    if (!Array.isArray(state.livePaymentOptions.methodAvailability)) state.livePaymentOptions.methodAvailability = [];
     state.livePaymentOptions.features = { threeMonth: true, oneDay: true, coupons: true, ...(state.livePaymentOptions.features || {}) };
     if (!Array.isArray(state.discountCoupons)) state.discountCoupons = [];
     state.membershipPricingQuotes = {};

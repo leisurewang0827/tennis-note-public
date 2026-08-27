@@ -542,7 +542,9 @@ function applyMemberManagementProductDefaults(form, allLiveData = adminLiveDataS
   form.elements.usedSessions.value = 0;
   form.elements.remainingSessions.value = total;
   form.elements.expiresOn.value = addMemberManagementDays(start, validityDays - 1);
-  if (form.elements.paymentAmount) form.elements.paymentAmount.value = Number(product.cash_price || product.card_price || 0);
+  if (form.elements.paymentAmount && form.dataset.paymentAmountOverride !== "true") {
+    form.elements.paymentAmount.value = memberManagementPaymentAmountForMethod(product, form.elements.paymentMethod?.value || "");
+  }
   const productScope = memberManagementProductScheduleScope(product);
   if (form.elements.scheduleScope) {
     form.elements.scheduleScope.value = productScope;
@@ -553,6 +555,8 @@ function applyMemberManagementProductDefaults(form, allLiveData = adminLiveDataS
   syncManualMemberPartnerField(form);
   syncMemberCreateSchedule(form, product);
   syncMemberReenrollSchedule(form, product);
+  syncMemberManagementPaymentFields(form, { forcePrice: true });
+  syncMemberRegistrationSummary(form);
 }
 
 async function submitMemberManagementForm(event) {
@@ -580,6 +584,7 @@ async function submitMemberManagementForm(event) {
   if (!validateRequiredMemberProfile(form, message)) return;
 
   syncMemberManagementBalance(form);
+  syncMemberManagementPaymentFields(form);
   const reason = action === "close"
     ? String(form.elements.closeReason?.value || "").trim()
     : automaticMemberManagementReason(action);
@@ -663,17 +668,22 @@ async function submitMemberManagementForm(event) {
     const paymentAmount = memberManagementNullableNumber(form.elements.paymentAmount) || 0;
     const paymentDate = form.elements.paymentDate?.value || "";
     const paymentMethod = form.elements.paymentMethod?.value || "";
-    const paymentRecordState = form.elements.paymentRecordState?.value || memberPaymentRecordState({
-      payment_recorded_on: paymentDate,
-      payment_method: paymentMethod,
-      payment_amount: paymentAmount,
-    });
+    const paymentRecordState = memberManagementPaymentStateFromValues({ paymentDate, paymentMethod, paymentAmount });
     if (paymentRecordState === "complete" && (paymentAmount <= 0 || !paymentDate || !paymentMethod)) {
       if (message) message.textContent = "결제 완료는 결제일자, 결제수단, 1원 이상의 결제금액을 모두 입력해 주세요.";
       return;
     }
-    if (paymentRecordState === "unentered" && (paymentAmount > 0 || paymentDate || paymentMethod)) {
-      if (message) message.textContent = "결제값을 입력했다면 결제 구분을 결제 완료로 바꿔 주세요.";
+    if (paymentRecordState === "incomplete") {
+      const missing = [!paymentDate && "결제일", !paymentMethod && "결제수단", paymentAmount <= 0 && "결제금액"].filter(Boolean);
+      if (message) message.textContent = `${missing.join(" · ")}을 입력해 주세요.`;
+      return;
+    }
+    if ((isCreate || action === "assign") && !managementPayload?.existingPaymentId && !["complete", "transfer_zero"].includes(paymentRecordState)) {
+      if (message) message.textContent = "결제 확인 후 회원권을 등록할 수 있습니다. 결제일·결제수단·결제금액을 입력해 주세요.";
+      return;
+    }
+    if (managementPayload?.paymentPriceOverride && String(managementPayload.paymentOverrideReason || "").trim().length < 4) {
+      if (message) message.textContent = "상품 가격과 다른 금액을 저장하려면 금액 수정 사유를 네 글자 이상 입력해 주세요.";
       return;
     }
     normalizeMemberManagementPaymentPayload(managementPayload);
@@ -709,7 +719,7 @@ async function submitMemberManagementForm(event) {
     if (isCreate) {
       const createOperationKey = form.dataset.createOperationKey || createMemberChangeBatchId();
       form.dataset.createOperationKey = createOperationKey;
-      result = await client.rpc("tn_admin_create_member_and_regular_schedule", {
+      result = await client.rpc("tn_admin_create_paid_member_and_regular_schedule", {
         target_record: managementPayload,
         target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
         target_operation_key: createOperationKey,
@@ -722,7 +732,10 @@ async function submitMemberManagementForm(event) {
       const assignmentPayload = existingPaymentId
         ? { ...managementPayload, assignmentRequestId, paymentAmount: 0, paymentDate: null, paymentMethod: null }
         : { ...managementPayload, assignmentRequestId };
-      result = await client.rpc("tn_admin_assign_member_ticket_and_regular_schedule", {
+      const assignmentRpc = Number(selectedManagementProduct?.group_size || 1) === 2
+        ? "tn_admin_assign_paid_group_member_ticket_and_regular_schedule"
+        : "tn_admin_assign_paid_member_ticket_and_regular_schedule";
+      result = await client.rpc(assignmentRpc, {
         target_record: assignmentPayload,
         target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,
         target_operation_key: assignmentRequestId,
@@ -862,9 +875,6 @@ async function submitMemberManagementForm(event) {
       state.memberFilter = action === "deactivate" ? "inactive" : "expired";
     }
 
-    window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
-    closeMemberManagementModal();
-
     const requiresFullRefresh = ["create", "assign", "reenroll", "close", "force_delete", "permanent_delete"].includes(action);
     const synced = requiresFullRefresh
       ? await syncAdminLiveData(true)
@@ -881,6 +891,8 @@ async function submitMemberManagementForm(event) {
     const verificationError = memberManagementWriteVerification(action, managementPayload, result, statusAction);
     if (verificationError) throw new Error(verificationError);
     const normalizedResult = normalizedRpcResult(result);
+    window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
+    closeMemberManagementModal();
     if (action === "link_existing" && linkedTargetMemberUserId) {
       const linkedMember = members.find((item) => memberServerUserIds(item).includes(linkedTargetMemberUserId));
       state.selectedMemberId = linkedMember?.id || null;
@@ -914,6 +926,14 @@ async function submitMemberManagementForm(event) {
       showToast(`${memberManagementActionLabel(action)} 완료`);
     }
   } catch (error) {
+    const errorText = `${error?.payload?.message || ""} ${error?.code || ""} ${error?.message || error || ""}`;
+    const requiresReadback = [
+      "admin_live_refresh_failed_after_write",
+      "member_management_write_not_confirmed",
+      "server_request_timeout",
+      "server_connection_failed",
+      "server_response_invalid",
+    ].some((code) => errorText.includes(code));
     if (String(error?.message || error || "").includes("group_partner_phone_already_exists") && form.elements.partnerPhone && form.elements.partnerSearch) {
       form.elements.partnerSearch.value = normalizedMemberPhone(form.elements.partnerPhone.value);
       await searchManualMemberPartnerCandidates(form, { promoteExactPhone: true });
@@ -922,12 +942,14 @@ async function submitMemberManagementForm(event) {
     if (message) message.textContent = memberManagementModalState.message;
     showToast(memberManagementModalState.message);
     if (submit) {
-      submit.disabled = false;
-      submit.textContent = action === "profile"
-        ? "기본정보 저장"
-        : action === "app_link"
-          ? "앱 계정 연결"
-          : `${memberManagementActionLabel(action)} 확정`;
+      submit.disabled = requiresReadback;
+      submit.textContent = requiresReadback
+        ? "저장 결과 확인 필요"
+        : action === "profile"
+          ? "기본정보 저장"
+          : action === "app_link"
+            ? "앱 계정 연결"
+            : `${memberManagementActionLabel(action)} 확정`;
     }
   }
 }
@@ -1296,18 +1318,19 @@ async function submitMemberInlineEditor(form, options = {}) {
   const paymentAmount = memberManagementNullableNumber(form.elements.paymentAmount) || 0;
   const paymentDate = form.elements.paymentDate?.value || "";
   const paymentMethod = form.elements.paymentMethod?.value || "";
-  const paymentRecordState = form.elements.paymentRecordState?.value || memberPaymentRecordState({
-    payment_recorded_on: paymentDate,
-    payment_method: paymentMethod,
-    payment_amount: paymentAmount,
-  });
+  const requestedPaymentState = form.elements.paymentRecordState?.value || "";
+  const paymentRecordState = requestedPaymentState === "transfer_zero"
+    ? "transfer_zero"
+    : memberManagementPaymentStateFromValues({ paymentDate, paymentMethod, paymentAmount });
+  if (form.elements.paymentRecordState) form.elements.paymentRecordState.value = paymentRecordState;
   if (paymentChanged && paymentRecordState === "complete" && (paymentAmount <= 0 || !paymentDate || !paymentMethod)) {
     message.textContent = "결제 완료는 결제일자, 결제수단, 1원 이상의 결제금액을 모두 입력해 주세요.";
     message.classList.add("is-error");
     return false;
   }
-  if (paymentChanged && paymentRecordState === "unentered" && (paymentAmount > 0 || paymentDate || paymentMethod)) {
-    message.textContent = "결제값을 입력했다면 결제 구분을 결제 완료로 바꿔 주세요.";
+  if (paymentChanged && paymentRecordState === "incomplete") {
+    const missing = [!paymentDate && "결제일", !paymentMethod && "결제수단", paymentAmount <= 0 && "결제금액"].filter(Boolean);
+    message.textContent = `${missing.join(" · ")}을 입력해 주세요.`;
     message.classList.add("is-error");
     return false;
   }
@@ -1441,24 +1464,7 @@ async function submitMemberInlineEditor(form, options = {}) {
         target_operation_key: createAdminOperationKey("ticket-grid"),
       });
     } else if (payload.productId) {
-      const product = (adminLiveDataState.products || []).find((item) => item.id === payload.productId);
-      if (!product) throw new Error("membership_product_not_found");
-      const startsOn = payload.startsOn || adminLocalDateKey(new Date());
-      const validityDays = Math.max(1, Number(product.validity_days || 1) + Number(product.grace_days || 0));
-      payload.startsOn = startsOn;
-      payload.expiresOn = payload.expiresOn || addMemberManagementDays(startsOn, validityDays - 1);
-      payload.totalSessions = Number(payload.totalSessions) || Number(product.total_sessions) || 1;
-      payload.usedSessions = Number(payload.usedSessions) || 0;
-      payload.remainingSessions = Math.max(0, payload.totalSessions - payload.usedSessions);
-      const productScope = memberManagementProductScheduleScope(product);
-      payload.scheduleScope = productScope;
-      payload.weeklyFrequency = memberManagementProductWeeklyFrequency(product);
-      payload.lessonType = Number(product.group_size || 1) === 2 ? "one_on_two" : "one_on_one";
-      payload.recordStatus = payload.remainingSessions === 0 ? "historical" : "active";
-      payload.ticketStatus = payload.remainingSessions === 0 ? "expired" : "active";
-      saveResult = await window.TennisNoteDataClient.rpc("tn_admin_assign_member_database_ticket_resolving_stale", {
-        target_record: payload,
-      });
+      throw new Error("member_registration_flow_required");
     } else {
       await window.TennisNoteDataClient.rpc("tn_admin_update_member_profile_full", {
         target_user_id: member.serverUserId,

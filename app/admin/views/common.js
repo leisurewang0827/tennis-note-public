@@ -35,15 +35,32 @@ function renderGlobalSearchResults() {
 }
 
 function renderMetrics() {
+  const metricsReady = dashboardOperationalDataReady();
+  const metricGrid = $("#dashboardView .metric-grid");
+  metricGrid?.classList.toggle("is-loading", !metricsReady);
+  metricGrid?.setAttribute("aria-busy", String(!metricsReady));
+  const setMetric = (id, value, detail) => {
+    const target = $(id);
+    if (!target) return;
+    target.textContent = metricsReady ? String(value) : "—";
+    const detailTarget = target.parentElement?.querySelector("small");
+    if (detailTarget) detailTarget.textContent = metricsReady ? detail : "최신 자료를 불러오는 중";
+  };
   const recordGroups = adminRecordGroups();
   const todayLessonCount = adminTodayLessonRows().length;
   const pendingScheduleCount = operationBranchLessons().filter((lesson) => isPendingScheduleLesson(lesson)).length;
-  $("#metricLessons").textContent = todayLessonCount;
-  $("#metricMakeups").textContent = pendingLessonChangeApprovals().length;
-  $("#metricNotes").textContent = recordGroups.pending.length + recordGroups.feedback.length + recordGroups.issue.length;
-  $("#metricBilling").textContent = operationBranchBillings().filter(billingNeedsAdminAction).length;
-  if ($("#scheduleMetricToday")) $("#scheduleMetricToday").textContent = `${todayLessonCount}회`;
-  if ($("#scheduleMetricPending")) $("#scheduleMetricPending").textContent = `${pendingScheduleCount}건`;
+  setMetric("#metricLessons", todayLessonCount, "코치별 시간표 기준");
+  setMetric("#metricMakeups", pendingLessonChangeApprovals().length, "운영 규칙상 승인 요청");
+  setMetric("#metricNotes", recordGroups.pending.length + recordGroups.feedback.length + recordGroups.issue.length, "코치 완료 처리 후 차감");
+  const currentBillingMonth = /^\d{4}-\d{2}$/.test(state.billingMonth)
+    ? state.billingMonth
+    : adminLocalDateKey(new Date()).slice(0, 7);
+  const pendingPaymentGroups = groupedBillingAttempts(
+    operationBranchBillings().filter((item) => billingOperationalMonthMatches(item, currentBillingMonth)),
+  ).filter((entry) => ["action", "verifying"].includes(billingFilterGroup(entry.primary)));
+  setMetric("#metricBilling", pendingPaymentGroups.length, "결제/정산 처리 대기");
+  if ($("#scheduleMetricToday")) $("#scheduleMetricToday").textContent = metricsReady ? `${todayLessonCount}회` : "확인 중";
+  if ($("#scheduleMetricPending")) $("#scheduleMetricPending").textContent = metricsReady ? `${pendingScheduleCount}건` : "확인 중";
 }
 
 function renderModePanel() {
@@ -74,11 +91,17 @@ function renderAccountDeletionAdminList() {
   const target = $("#accountDeletionAdminList");
   if (!target) return;
   const requests = state.accountDeletionRequests || [];
+  renderAccountDeletionServerStatus();
+  renderMemberStatusCounts();
   scheduleAccountDeletionRetryRefresh(requests);
   const panel = target.closest("details");
   if (panel && requests.some((request) => ["pending", "reviewing", "processing", "failed"].includes(request.status))) panel.open = true;
-  target.innerHTML = requests.length
-    ? requests.map((request) => `
+  target.innerHTML = accountDeletionRequestState.loading && !accountDeletionRequestState.loaded
+    ? `<p class="empty-text">탈퇴 요청을 확인하고 있습니다.</p>`
+    : accountDeletionRequestState.error && !accountDeletionRequestState.loaded
+      ? `<p class="empty-text">탈퇴 요청을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.</p>`
+      : requests.length
+        ? requests.map((request) => `
       <article class="holding-admin-row ${escapeHtml(request.status || "pending")}">
         <div class="holding-admin-main">
           <strong>${escapeHtml(request.member || "회원")}</strong>
@@ -92,7 +115,7 @@ function renderAccountDeletionAdminList() {
           ${accountDeletionActionButton(request)}
         </div>
       </article>`).join("")
-    : `<p class="empty-text">접수된 회원 탈퇴 요청이 없습니다.</p>`;
+        : `<p class="empty-text">접수된 회원 탈퇴 요청이 없습니다.</p>`;
 }
 
 function renderSplitSegment(kind, lesson, label, extraClass = "", addSlot = null) {
@@ -568,22 +591,26 @@ function memberPaymentRecordStateOptions(record = null) {
 
 function memberAuthStatusMarkup(member = {}) {
   const connection = memberAuthConnection(member);
-  const label = connection.linked
+  const label = connection.needsReview
+    ? "분리 계정"
+    : connection.linked
     ? (connection.providers.map(authProviderLabel).filter(Boolean).join(" · ") || "연결됨")
-    : "미연결";
-  const detail = connection.linked
+    : "앱 미연결";
+  const detail = connection.needsReview
+    ? connection.detail
+    : connection.linked
     ? `${connection.detail}${member.authLastSignInAt ? ` · 최근 로그인 ${notificationDateTimeLabel(member.authLastSignInAt)}` : ""}`
-    : "회원이 앱에서 로그인하면 자동으로 연결 상태가 표시됩니다.";
+    : "회원이 앱에서 로그인하면 연결 후보가 표시됩니다.";
   if (operationsRole() === "admin" && member.id) {
     return `<button class="member-auth-link-action" type="button"
       data-open-member-management="app_link"
       data-member-management-member-id="${member.id}"
       title="${escapeHtml(detail)}">
-        <span class="member-auth-status ${connection.linked ? "is-linked" : "is-unlinked"}">${escapeHtml(label)}</span>
-        <small>${connection.linked ? "로그인 변경" : "앱 연결"}</small>
+        <span class="member-auth-status ${connection.needsReview ? "is-review" : connection.linked ? "is-linked" : "is-unlinked"}">${escapeHtml(label)}</span>
+        <small>${connection.needsReview ? "하나로 연결" : connection.linked ? "로그인 변경" : "앱 연결"}</small>
       </button>`;
   }
-  return `<span class="member-auth-status ${connection.linked ? "is-linked" : "is-unlinked"}" title="${escapeHtml(detail)}">${escapeHtml(label)}</span>`;
+  return `<span class="member-auth-status ${connection.needsReview ? "is-review" : connection.linked ? "is-linked" : "is-unlinked"}" title="${escapeHtml(detail)}">${escapeHtml(label)}</span>`;
 }
 
 function accountDeletionActionButton(request) {
@@ -592,6 +619,9 @@ function accountDeletionActionButton(request) {
   }
   if (request.status === "pending") {
     return `<button class="small-button" type="button" data-review-account-deletion="reviewing" data-account-deletion-id="${escapeHtml(request.id)}">검토 시작</button>`;
+  }
+  if (!accountDeletionServerReady() && ["reviewing", "failed"].includes(request.status)) {
+    return `<button class="small-button danger-button" type="button" disabled title="삭제 서버 상태를 먼저 확인해 주세요">삭제 서버 확인 필요</button>`;
   }
   if (request.status === "reviewing") {
     return `<button class="small-button danger-button" type="button" data-review-account-deletion="completed" data-account-deletion-id="${escapeHtml(request.id)}">계정 삭제 실행</button>`;
@@ -673,7 +703,7 @@ function memberManagementDatabaseFields({
   const paymentDate = existingPaymentDate;
   const paymentMethod = paymentProjection?.payment_method || "";
   const paymentAmount = isAssign
-    ? Number(existingPayment?.final_amount ?? existingPayment?.amount ?? product?.cash_price ?? product?.card_price ?? 0)
+    ? Number(existingPayment?.final_amount ?? existingPayment?.amount ?? 0)
     : paymentProjection?.payment_amount ?? (isCreate ? 0 : "");
   const paymentRecordState = isAssign && existingPayment
     ? "complete"
@@ -719,12 +749,13 @@ function memberManagementDatabaseFields({
         <option value="expired" ${ticketStatus === "expired" ? "selected" : ""}>만료</option>
       </select></label>` : ""}
       ${paymentProtected ? '<div class="member-management-warning span-2"><strong>확인 완료 결제</strong><span>회원권 정보만 수정할 수 있습니다. 결제 변경·환불은 결제관리에서 진행하세요.</span></div>' : ""}
-      <label class="form-field">${memberManagementFieldLabel("결제 구분")}<select name="paymentRecordState" ${paymentControlState}>${memberPaymentRecordStateOptions({
-        payment_record_state: paymentRecordState,
-        payment_recorded_on: paymentDate,
-        payment_method: paymentMethod,
-        payment_amount: paymentAmount,
-      })}</select></label>
+      ${isAssign ? `<input name="paymentRecordState" type="hidden" value="${escapeHtml(paymentRecordState)}" />
+        <div class="form-field member-payment-derived"><span class="member-field-label">결제 상태<em class="is-optional">자동</em></span><strong data-member-payment-derived-state>${escapeHtml(memberPaymentRecordStateLabel(paymentRecordState))}</strong><small data-member-payment-missing></small></div>` : `<label class="form-field">${memberManagementFieldLabel("결제 구분")}<select name="paymentRecordState" ${paymentControlState}>${memberPaymentRecordStateOptions({
+          payment_record_state: paymentRecordState,
+          payment_recorded_on: paymentDate,
+          payment_method: paymentMethod,
+          payment_amount: paymentAmount,
+        })}</select></label>`}
       <label class="form-field">${memberManagementFieldLabel("결제일자")}<input name="paymentDate" type="date" value="${escapeHtml(paymentDate)}" ${paymentControlState} /></label>
       <label class="form-field">${memberManagementFieldLabel("결제수단")}<select name="paymentMethod" ${paymentControlState}>
         <option value="" ${paymentMethod ? "" : "selected"}>미입력</option>
@@ -734,7 +765,8 @@ function memberManagementDatabaseFields({
         <option value="manual" ${paymentMethod === "manual" ? "selected" : ""}>관리자 입력</option>
         ${paymentMethod && !["card", "bank", "bank_transfer", "transfer", "cash", "manual"].includes(paymentMethod) ? `<option value="${escapeHtml(paymentMethod)}" selected>${escapeHtml(paymentMethodLabel(paymentMethod))}</option>` : ""}
       </select></label>
-      <label class="form-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" ${paymentControlState} /></label>
+      <label class="form-field member-payment-amount-field">${memberManagementFieldLabel("결제금액")}<input name="paymentAmount" type="number" min="0" step="1" value="${escapeHtml(memberManagementValue(paymentAmount))}" ${isAssign && !paymentProtected ? "readonly aria-readonly=\"true\"" : paymentControlState} />${isAssign && !paymentProtected ? '<button class="text-button" type="button" data-enable-payment-override>직접 수정</button><small>결제수단에 맞는 상품 가격이 자동 적용됩니다.</small>' : ""}</label>
+      ${isAssign && !paymentProtected ? `<label class="form-field span-2 member-payment-override-reason" data-payment-override-reason hidden>${memberManagementFieldLabel("금액 수정 사유", true)}<input name="paymentOverrideReason" type="text" minlength="4" maxlength="120" disabled placeholder="할인·추가결제 등 사유" /></label>` : ""}
       <label class="form-field span-2">${memberManagementFieldLabel("비고")}<textarea name="note" rows="3" maxlength="500">${escapeHtml(note)}</textarea></label>
       <div class="form-field span-2 member-partner-editor ${lessonType === "one_on_two" ? "" : "is-disabled"}" data-manual-member-partner-field>
         ${memberManagementFieldLabel("1:2 파트너", lessonType === "one_on_two")}
@@ -1109,19 +1141,21 @@ function paymentRefundButtonFor(item, index) {
 
 function paymentActionFor(item, index) {
   const context = (label) => `aria-label="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}" title="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}"`;
+  if (item.approvalPending) return '<button class="small-button" type="button" disabled>승인 처리중</button>';
   if (item.status === "check") return item.providerPaymentId
-    ? `<button class="small-button" type="button" data-review-payment="${index}" ${context("서버 확인")}>서버 확인</button>${paymentCancelButtonFor(index, "대기취소")}`
+    ? `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context("결제 확인 후 승인")}>결제 확인·승인</button>${paymentPendingMoreActions(item, index)}`
     : '<button class="small-button" type="button" disabled>서버 결제번호 없음</button>';
-  if (item.status === "unverified") return `<button class="small-button" type="button" data-review-payment="${index}" ${context("서버 연결 확인")}>서버 연결 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
+  if (item.status === "unverified") return `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context("결제 확인 후 승인")}>결제 확인·승인</button>${paymentPendingMoreActions(item, index)}`;
   if (item.status === "failed") return `<button class="small-button" type="button" data-failed-payment="${index}" ${context("실패 확인")}>실패 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
   if (item.status === "draft") return '<button class="small-button" type="button" disabled>회원 결제 대기</button>';
   if (item.status === "server_ready") {
     const label = String(item.method || "") === "bank_transfer"
-      ? "입금 확인"
+      ? "입금 확인·승인"
       : isStaleReadyPayment(item) ? "상태 확인" : "결제 확인";
-    return `<button class="small-button" type="button" data-server-ready-payment="${index}" ${context(label)}>${label}</button>${paymentCancelButtonFor(index, "대기취소")}`;
+    return `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context(label)}>${label}</button>${paymentPendingMoreActions(item, index)}`;
   }
-  if (item.status === "paid") return `<button class="small-button" type="button" data-paid-payment="${index}" ${context("결제 완료 상세")}>완료됨</button>${paymentFullCancelButtonFor(item, index)}${paymentRefundButtonFor(item, index)}`;
+  if (item.status === "paid" && paymentRequiresTicketRepair(item)) return `<button class="small-button primary-button" type="button" data-paid-payment="${index}" ${context("회원권 연결 확인")}>회원권 연결 확인</button>${paymentApprovedMoreActions(item, index)}`;
+  if (item.status === "paid") return `<button class="small-button" type="button" disabled>승인 완료</button>${paymentApprovedMoreActions(item, index)}`;
   if (item.status === "refund_manual_pending") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("실제 송금 후 환불 완료 확인")}>송금완료 확인</button>`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;
   if (item.status === "cancel_reconcile") return paymentCancelButtonFor(index, "취소 상태 맞추기");
@@ -1253,6 +1287,7 @@ function renderBranchSalesSetup() {
       <div><p class="eyebrow">초보자 빠른 설정</p><h2>회원 판매 5단계</h2><span>기존 상품·시간표·쿠폰·결제를 한곳에서 설정합니다.</span></div>
       <span id="branchSalesDraftStatus" class="source-pill">${failed ? "서버 설정 필요" : branchSalesSettingsDirty() ? "적용 전 변경 있음" : "현재 앱과 동일"}</span>
     </div>
+    ${branchSalesEffectiveOptionsMarkup()}
     ${failed ? `<p class="branch-sales-error" role="alert">설정 기능을 불러오지 못했습니다. DB 업데이트와 관리자 권한을 확인한 뒤 다시 시도해 주세요. (${escapeHtml(branchSalesSettingsState.message)})</p>` : ""}
     <div class="branch-sales-steps ${failed ? "is-disabled" : ""}">
       <section class="branch-sales-step"><div class="branch-sales-step-title"><b>1</b><span><strong>상품</strong><small>판매할 종류만 켭니다</small></span></div><div class="branch-sales-toggle-grid">

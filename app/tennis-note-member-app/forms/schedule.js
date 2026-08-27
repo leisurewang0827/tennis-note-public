@@ -134,7 +134,7 @@ function selectAvailableSlot(lessonId) {
   }
   $("#makeupSlot").value = lesson.id;
   renderAvailableSlots();
-  openChangeRequestModal();
+  void openChangeRequestModal(source?.id || "", { editing: Boolean(state.editingChangeRequestId) });
 }
 
 async function prepareChangeRequestSource(preferredLessonId = "") {

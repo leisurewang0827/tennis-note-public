@@ -109,7 +109,10 @@ function syncMemberManagementProductForMethod(form, allLiveData = adminLiveDataS
     && Number(item.frequency_per_week || 1) === Number(form.elements.weeklyFrequency.value)
     && Number(item.group_size || 1) === groupSize
   ));
-  if (matchingProduct) form.elements.productId.value = matchingProduct.id;
+  if (matchingProduct) {
+    form.elements.productId.value = matchingProduct.id;
+    applyMemberManagementProductDefaults(form);
+  }
 }
 
 async function loadMemberEditorModeFromServer() {
@@ -381,7 +384,7 @@ function filteredMembers() {
   const localSearch = String(state.memberSearch || "").trim().toLowerCase();
   const globalSearch = String($("#globalSearch")?.value || "").trim();
   const matchingMembers = operationBranchMembers().filter((member) => {
-    if (memberListStatus(member) === "journal") return false;
+    if (memberListStatus(member) === "journal" && state.memberFilter !== "journal") return false;
     const statusMatch = memberMatchesStatusFilter(member, state.memberFilter);
     const coachMatch = state.memberCoachFilter === "all" || memberCoachNames(member).includes(state.memberCoachFilter);
     const ticketMatch = state.memberTicketFilter === "all" || memberHasTicketKind(member, state.memberTicketFilter);

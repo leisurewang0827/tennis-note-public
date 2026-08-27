@@ -6,7 +6,8 @@
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
 function paymentRequestDisplay(request = {}) {
-  const text = `${request.method || ""} ${request.status || ""}`;
+  const safeStatus = safePaymentHistoryStatus(request.status);
+  const text = `${request.method || ""} ${safeStatus}`;
   if (text.includes("설정")) {
     return {
       period: "결제창 연결 전 요청",
@@ -19,7 +20,7 @@ function paymentRequestDisplay(request = {}) {
     return {
       period: "결제 재확인 필요",
       status: "확인 필요",
-      note: request.status || "결제가 끝나지 않아 관리자 확인이 필요합니다.",
+      note: safeStatus || "결제가 끝나지 않아 관리자 확인이 필요합니다.",
       tone: "alert",
     };
   }
@@ -35,14 +36,14 @@ function paymentRequestDisplay(request = {}) {
     return {
       period: "상담 후 이용권 확정",
       status: "상담 대기",
-      note: request.status || "관리자가 시간과 코치를 확인합니다.",
+      note: safeStatus || "관리자가 시간과 코치를 확인합니다.",
       tone: "wait",
     };
   }
   return {
     period: "관리자 확인 후 이용권 시작",
     status: "확인 대기",
-    note: request.status || "결제 확인 후 이용권이 충전됩니다.",
+    note: safeStatus || "결제 확인 후 이용권이 충전됩니다.",
     tone: "wait",
   };
 }
@@ -112,7 +113,7 @@ function createProviderPaymentId(productId = "") {
 }
 
 function paymentServerErrorMessage(error) {
-  const code = error?.payload?.code || error?.message || "server_error";
+  const code = paymentServerErrorCode(error);
   const labels = {
     group_next_payer_required: "이번 결제 담당 회원의 로그인이 필요합니다.",
     group_partner_required: "2대1 동반 회원 정보를 확인해주세요.",
@@ -139,6 +140,8 @@ function paymentServerErrorMessage(error) {
     discount_coupon_not_stackable_with_first_lesson: "신규 첫 수업 혜택과 할인 쿠폰은 함께 사용할 수 없습니다.",
     discount_coupon_already_reserved: "다른 결제에서 사용 중인 쿠폰입니다. 쿠폰함을 새로고침해 주세요.",
     discount_coupon_zero_amount_not_supported: "전액 할인 쿠폰은 관리자 확인 결제가 필요합니다.",
+    purchase_flexible_coupon_schedule_not_allowed: "쿠폰은 결제할 때 시간을 정하지 않습니다. 담당 코치만 확인한 뒤 다시 결제해 주세요.",
+    purchase_flexible_schedule_mode_invalid: "선택한 상품의 예약 방식을 다시 확인해 주세요.",
     purchase_schedule_count_mismatch: "상품의 주당 횟수만큼 수업 시간을 선택해 주세요.",
     purchase_schedule_single_coach_required: "한 회원권은 같은 선생님의 시간으로 선택해 주세요.",
     purchase_schedule_duplicate: "같은 수업 시간이 중복 선택되었습니다.",
@@ -150,10 +153,21 @@ function paymentServerErrorMessage(error) {
     purchase_slot_outside_adjacent_anchor: "기존 수업과 실제 빈 시간이 40분 이내인 시간을 선택해 주세요.",
     purchase_slot_temporarily_held: "방금 다른 결제에서 선택한 시간입니다. 가능한 시간을 다시 선택해 주세요.",
     purchase_slot_occupied: "이미 예약된 시간입니다. 최신 가능한 시간을 다시 선택해 주세요.",
+    purchase_slot_must_be_future: "지난 날짜는 선택할 수 없습니다. 가능한 시간을 다시 선택해 주세요.",
+    purchase_slot_blocked: "선택한 시간에는 현재 수업을 신청할 수 없습니다.",
+    coach_not_working: "선택한 시간은 담당 코치의 근무시간이 아닙니다.",
+    lesson_time_grid_invalid: "수업은 정각·20분·40분 시작 시간에서 선택해 주세요.",
+    exact_renewal_source_ticket_required: "재등록할 기존 회원권을 다시 확인해 주세요.",
+    renewal_coach_mismatch: "기존 회원권의 담당 코치 정보를 다시 확인해 주세요.",
     payment_hold_expired: "선택 시간의 보관 시간이 끝났습니다. 가능한 시간을 다시 선택해 주세요.",
     purchase_slot_hold_failed: "선택 시간을 안전하게 보관하지 못했습니다. 잠시 후 다시 선택해 주세요.",
+    payment_channel_not_ready: "현재 결제 연결을 준비 중입니다. 계좌이체를 이용하거나 잠시 후 다시 시도해 주세요.",
+    portone_store_config_invalid: "현재 토스페이 연결을 확인 중입니다. 계좌이체를 이용하거나 잠시 후 다시 시도해 주세요.",
+    portone_channel_config_invalid: "현재 토스페이 채널을 확인 중입니다. 계좌이체를 이용하거나 잠시 후 다시 시도해 주세요.",
+    payment_provider_error: "결제 요청을 처리하지 못했습니다. 계좌이체를 이용하거나 잠시 후 다시 시도해 주세요.",
+    server_error: "결제 서버를 확인 중입니다. 잠시 후 다시 시도해 주세요.",
   };
-  return labels[code] || code;
+  return labels[code] || "결제 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
 // ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──

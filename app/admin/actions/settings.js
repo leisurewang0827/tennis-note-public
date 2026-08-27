@@ -36,7 +36,7 @@ function operationsProfileCacheStores() {
 function applyOperationsRolePermissions() {
   const role = operationsRole();
   document.body.dataset.operationsRole = role || "signed-out";
-  if (role === "coach" && state.memberFilter === "inactive") state.memberFilter = "active";
+  if (role === "coach" && ["journal", "app_link", "deletion", "inactive"].includes(state.memberFilter)) state.memberFilter = "active";
   $$(".nav-item[data-view]").forEach((button) => {
     if (!button.dataset.adminLabel) button.dataset.adminLabel = button.textContent.trim();
     const coachLabels = {
@@ -78,6 +78,9 @@ async function restoreAdminOperationalCache() {
       [groupAccounts, snapshot.groupAccounts],
       [lessonNotes, snapshot.lessonNotes],
     ].forEach(([target, source]) => replaceArray(target, Array.isArray(source) ? source : []));
+    adminLiveDataState.memberPaymentProjections = Array.isArray(snapshot.memberPaymentProjections)
+      ? snapshot.memberPaymentProjections
+      : [];
     invalidateMemberSearchIndex();
     Object.assign(state, {
       liveScheduleLoaded: false,
@@ -430,6 +433,7 @@ async function saveBranchSalesSettings(apply = false) {
       target_expected_version: branchSalesSettingsState.version || null,
     });
     applyBranchSalesSettingsResponse(response);
+    if (apply) await loadBranchSalesEffectiveOptionsFromServer();
     renderBranchSalesSetup();
     showToast(apply ? "새 설정을 회원앱에 적용했습니다" : "초안을 저장했습니다. 적용 전까지 회원앱은 바뀌지 않습니다");
     return true;

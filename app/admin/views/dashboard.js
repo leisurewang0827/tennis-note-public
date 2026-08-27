@@ -5,15 +5,19 @@
 // DOM 을 만지므로 domain/ 과 달리 단위 테스트 대상은 아니다.
 
 function renderDashboard() {
+  const dashboardReady = dashboardOperationalDataReady();
   const branchMembers = operationBranchMembers();
   const branchCoaches = operationBranchCoaches();
   const branchLessons = operationBranchLessons();
   const branchMakeups = operationBranchMakeupRequests();
   const branchTickets = operationBranchTickets();
   const branchBillings = operationBranchBillings();
-  $("#todayLessons").innerHTML = adminTodayLessonRows()
-    .slice(0, 5)
-    .map(
+  const todayLessonRows = adminTodayLessonRows()
+    .slice(0, 5);
+  $("#todayLessons").innerHTML = !dashboardReady
+    ? '<p class="dashboard-loading-row" role="status">오늘 수업을 불러오는 중입니다.</p>'
+    : todayLessonRows.length
+      ? todayLessonRows.map(
       (lesson) => `
         <article class="lesson-item duration-${durationTone(lesson)}">
           <div class="time-chip">${lesson.time}</div>
@@ -24,8 +28,8 @@ function renderDashboard() {
           ${durationBadge(lesson)}
           ${badge(lesson.status, getLessonStatusLabel(lesson))}
         </article>`,
-    )
-    .join("");
+      ).join("")
+      : '<p class="empty-text">오늘 예정된 수업이 없습니다.</p>';
 
   const pendingMakeupCount = branchMakeups.filter((item) => ["pending", "requested", "coach_required"].includes(item.status)).length;
   const lowTicketCount = branchTickets.filter((ticket) => ticket.remaining <= 2).length;
@@ -35,6 +39,8 @@ function renderDashboard() {
   const couponNoBookingCount = couponTicketsWithoutUpcomingLesson().length;
   const reportTarget = $("#dashboardReportSummary");
   if (reportTarget) {
+    reportTarget.classList.toggle("is-loading", !dashboardReady);
+    reportTarget.setAttribute("aria-busy", String(!dashboardReady));
     const recordGroups = adminRecordGroups();
     const liveReportMetrics = [
       { label: "활성 회원", value: `${branchMembers.filter((member) => member.status === "active").length}명`, detail: "실서버 회원권 기준", tone: "" },
@@ -47,8 +53,8 @@ function renderDashboard() {
         (item) => `
           <article>
             <span>${item.label}</span>
-            <strong>${item.value}</strong>
-            <small>${item.detail}</small>
+            <strong>${dashboardReady ? item.value : "—"}</strong>
+            <small>${dashboardReady ? item.detail : "최신 자료를 불러오는 중"}</small>
           </article>`,
       )
       .join("");

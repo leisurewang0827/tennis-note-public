@@ -39,5 +39,7 @@ function renderCoachProfile() {
     if ($("#coachAvailableMemo")) $("#coachAvailableMemo").value = profile.availableMemo || "";
     if ($("#coachMemberMessage")) $("#coachMemberMessage").value = profile.memberMessage || "";
   }
+  const adminWebButton = $("#adminWebPortalButton");
+  if (adminWebButton) adminWebButton.hidden = state.coach?.role !== "admin";
   renderCoachSettlement();
 }

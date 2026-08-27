@@ -53,17 +53,27 @@ def plan(app, base, texts):
     a, b, ops = hunks(app, base)
     plans = []
     for tag,i1,i2,j1,j2 in ops:
-        for n in (1,2,3,5,8,12,20,30):
-            ctx = [l.strip() for l in a[max(0,i1-n):i1] if l.strip()]
-            if not ctx:
-                if i1-n <= 0: sys.exit(f"{app}: 앞 문맥 없음 ({tag} {i1})")
-                continue
-            hit = find(texts, ctx)
-            if len(hit) == 1: break
-            if len(hit) == 0: sys.exit(f"{app}: 문맥 못 찾음 ({tag} {i1}) — {ctx[-1][:60]}")
-        else: sys.exit(f"{app}: 문맥이 유일하지 않음 ({tag} {i1})")
-        p, at = hit[0]
         remove = [l.strip() for l in a[i1:i2] if l.strip()]
+        hit = None
+        # 지울 줄이 있으면 그 줄들 자체로 찾는 것이 제일 확실하다.
+        # 앞 문맥("});" 같은 것)은 여러 곳에 걸려 엉뚱한 자리를 잡은 적이 있다.
+        if remove:
+            hits = find(texts, remove)
+            if len(hits) == 1:
+                p, end = hits[0]
+                hit = (p, end - len(remove))
+        if hit is None:
+            for n in (1,2,3,5,8,12,20,30):
+                ctx = [l.strip() for l in a[max(0,i1-n):i1] if l.strip()]
+                if not ctx:
+                    if i1-n <= 0: sys.exit(f"{app}: 앞 문맥 없음 ({tag} {i1})")
+                    continue
+                hits = find(texts, ctx)
+                if len(hits) == 1:
+                    hit = hits[0]; break
+                if len(hits) == 0: sys.exit(f"{app}: 문맥 못 찾음 ({tag} {i1}) — {ctx[-1][:60]}")
+            else: sys.exit(f"{app}: 문맥이 유일하지 않음 ({tag} {i1})")
+        p, at = hit
         if remove:
             got = [l.strip() for l in texts[p][at:at+len(a[i1:i2])] if l.strip()]
             if got[:len(remove)] != remove:

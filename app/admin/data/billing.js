@@ -109,15 +109,15 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     });
     let rows = [];
     try {
-      rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
+      rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,purchase_intent_key,purchase_group_key,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
     } catch (error) {
       try {
-        rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
+        rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
       } catch (legacyJoinError) {
         try {
-          rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at");
+          rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at");
         } catch (refundSchemaError) {
-          rows = await readPayments("id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at");
+          rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at");
         }
       }
     }
@@ -226,8 +226,10 @@ async function verifyBillingPaymentItem(item) {
     return;
   }
 
-  item.statusLabel = "서버검증중";
-  billingLogs.unshift(`${item.member} ${item.item} 서버검증 실행: ${item.providerPaymentId}`);
+  if (item.approvalPending) return;
+  item.approvalPending = true;
+  item.statusLabel = "승인처리중";
+  billingLogs.unshift(`${item.member} ${item.item} 결제 확인·승인 실행: ${item.providerPaymentId}`);
   renderAll();
 
   try {
@@ -239,10 +241,11 @@ async function verifyBillingPaymentItem(item) {
     if (bankTransfer && !window.confirm(bankPrompt)) {
       item.status = "server_ready";
       item.statusLabel = "입금확인대기";
+      item.approvalPending = false;
       renderAll();
       return;
     }
-    const result = await client.invokeFunction(bankTransfer ? "portone-payment/bank-transfer-confirm" : "portone-payment/verify", {
+    const result = await client.invokeFunction("portone-payment/admin-approve", {
       body: {
         paymentId: item.providerPaymentId,
         ...(bankTransfer ? {
@@ -253,10 +256,20 @@ async function verifyBillingPaymentItem(item) {
     });
     if (result?.ok) {
       item.status = result.status === "verified" || result.status === "already_verified" ? "paid" : "check";
-      item.statusLabel = result.chargedTicket ? "검증/충전완료" : "서버검증완료";
-      billingLogs.unshift(`${item.member} ${item.item} 서버검증 완료: ${result.status}`);
-      await loadServerPaymentsIntoBilling({ silent: true });
-      showToast(bankTransfer ? "입금 확인과 회원권 반영이 완료됐습니다" : "서버 결제 검증 완료");
+      item.statusLabel = result.ticketId || result.chargedTicket ? "승인/회원권연결완료" : "승인완료";
+      billingLogs.unshift(`${item.member} ${item.item} 결제 승인 완료: ${result.status}`);
+      await loadServerPaymentsIntoBilling({ silent: true, force: true });
+      const refreshed = billings.find((billing) => (
+        String(billing.serverPaymentId || "") === String(item.serverPaymentId || "")
+        || String(billing.providerPaymentId || "") === String(item.providerPaymentId || "")
+      ));
+      const linked = Boolean(result.ticketId || refreshed?.ticketId || refreshed?.oneDayBookingId);
+      if (!linked && refreshed && paymentRequiresTicketRepair(refreshed)) {
+        billingLogs.unshift(`${item.member} ${item.item} 승인 후 회원권 연결 확인 필요`);
+        showToast("결제는 승인됐지만 회원권 연결을 확인해 주세요");
+      } else {
+        showToast(bankTransfer ? "입금 승인·회원권 연결·정산 반영 완료" : "결제 승인·회원권 연결·정산 반영 완료");
+      }
     } else if (result?.code === "payment_not_paid") {
       item.status = "server_ready";
       item.statusLabel = "결제대기";
@@ -265,8 +278,8 @@ async function verifyBillingPaymentItem(item) {
     } else {
       item.status = "check";
       item.statusLabel = "검증확인필요";
-      billingLogs.unshift(`${item.member} ${item.item} 서버검증 확인 필요: ${result?.code || "unknown"}`);
-      showToast("서버 검증 확인 필요");
+      billingLogs.unshift(`${item.member} ${item.item} 결제 승인 확인 필요: ${result?.code || "unknown"}`);
+      showToast("결제 승인 확인 필요");
     }
   } catch (error) {
     const code = error?.payload?.code || error?.message || "server_error";
@@ -278,9 +291,11 @@ async function verifyBillingPaymentItem(item) {
     } else {
       item.status = "check";
       item.statusLabel = "검증실패";
-      billingLogs.unshift(`${item.member} ${item.item} 서버검증 실패: ${code}`);
-      showToast("서버 검증 실패");
+      billingLogs.unshift(`${item.member} ${item.item} 결제 승인 실패: ${code}`);
+      showToast("결제 승인 실패");
     }
+  } finally {
+    item.approvalPending = false;
   }
   renderAll();
 }

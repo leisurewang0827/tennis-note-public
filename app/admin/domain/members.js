@@ -47,12 +47,31 @@ function memberAuthConnection(member = {}) {
   const primaryProvider = providers[0] || "";
   const primaryLabel = authProviderLabel(primaryProvider) || primaryProvider;
   const linked = Boolean(member.authLinked);
+  const phone = normalizedMemberPhone(member.phone);
+  const splitCandidates = phone.length >= 10
+    ? members.filter((candidate) => (
+      candidate !== member
+      && candidate.authLinked
+      && memberListStatus(candidate) === "journal"
+      && normalizedMemberPhone(candidate.phone) === phone
+    ))
+    : [];
+  const serverCandidateCount = Math.max(0, Number(member.appLinkCandidateCount) || 0);
+  const candidateCount = Math.max(splitCandidates.length, serverCandidateCount);
+  const needsReview = candidateCount > 0 || Boolean(member.appLinkReview);
   return {
     linked,
     provider: primaryProvider,
     providers: primaryProvider ? [primaryProvider] : [],
-    summary: linked ? (primaryLabel ? `${primaryLabel} 연결` : "로그인 계정 연결됨") : "앱 가입 전",
-    detail: linked ? (primaryLabel ? `로그인 수단: ${primaryLabel}` : "로그인 계정은 연결됐으며 수단 정보는 확인 중입니다.") : "로그인 수단 미연결",
+    splitCandidates,
+    candidateCount,
+    needsReview,
+    summary: needsReview
+      ? `분리 앱 계정 ${candidateCount || 1}건`
+      : linked ? (primaryLabel ? `${primaryLabel} 연결` : "로그인 계정 연결됨") : "앱 가입 전",
+    detail: needsReview
+      ? "같은 휴대전화의 앱 가입 계정이 따로 있습니다. 앱 연결에서 본인 계정을 확인해 하나로 교체하세요."
+      : linked ? (primaryLabel ? `로그인 수단: ${primaryLabel}` : "로그인 계정은 연결됐으며 수단 정보는 확인 중입니다.") : "로그인 수단 미연결",
   };
 }
 
@@ -221,10 +240,10 @@ function normalizedMemberLinkSearch(value = "") {
 function memberManualRegistrationFields() {
   return `
     <label class="form-field span-2">${memberManagementFieldLabel("이름", true)}<input name="memberName" type="text" minlength="2" maxlength="40" autocomplete="name" required /></label>
-    <label class="form-field">${memberManagementFieldLabel("휴대전화", true)}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" placeholder="010-0000-0000" required /></label>
-    <label class="form-field">${memberManagementFieldLabel("출생연도", true)}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="예: 1990" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("휴대전화")}<input name="memberPhone" type="tel" inputmode="tel" maxlength="20" placeholder="선택 · 앱 연결 시 입력 가능" /></label>
+    <label class="form-field">${memberManagementFieldLabel("출생연도")}<input name="memberBirthYear" type="number" min="1900" max="2100" step="1" placeholder="선택 · 예: 1990" /></label>
     <input name="memberNickname" type="hidden" value="" />
-    <label class="form-field">${memberManagementFieldLabel("거주동", true)}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="예: 군자동" required /></label>
+    <label class="form-field">${memberManagementFieldLabel("거주동")}<input name="memberNeighborhood" type="text" maxlength="40" placeholder="선택 · 예: 군자동" /></label>
     <label class="form-field">${memberManagementFieldLabel("성별")}<select name="memberGender">
       <option value="">미입력</option>
       <option value="female">여성</option>
@@ -253,9 +272,14 @@ function memberManagementNullableNumber(input) {
 }
 
 function memberManagementErrorText(error) {
-  const raw = `${error?.payload?.code || ""} ${error?.message || ""}`;
+  const raw = `${error?.payload?.code || ""} ${error?.payload?.message || ""} ${error?.code || ""} ${error?.message || ""}`;
   if (raw.includes("server_request_timeout")) return "서버 응답이 지연되었습니다. 중복 저장은 차단되어 있으니 새로고침 후 결과를 확인해 주세요.";
+  if (raw.includes("server_connection_failed") || raw.includes("Failed to fetch") || raw.includes("NetworkError")) return "서버 연결이 끊겼습니다. 같은 등록을 다시 누르지 말고 새로고침 후 등록 여부를 먼저 확인해 주세요.";
+  if (raw.includes("server_response_invalid")) return "서버 응답을 확인하지 못했습니다. 같은 등록을 다시 누르지 말고 새로고침 후 결과를 확인해 주세요.";
   if (raw.includes("admin_live_refresh_failed_after_write")) return "서버 저장은 요청됐지만 결과를 다시 확인하지 못했습니다. 새로고침 후 상태를 확인해 주세요.";
+  if (raw.includes("manual_enrollment_payment_required")) return "결제 확인 후 회원권을 등록할 수 있습니다. 결제일·결제수단·결제금액을 입력하거나 확인 완료 결제를 선택해 주세요.";
+  if (raw.includes("manual_enrollment_transfer_evidence_required")) return "양도 회원권은 양도일과 양도 근거를 확인해 주세요.";
+  if (raw.includes("member_registration_flow_required")) return "새 회원권은 ‘회원 등록’에서 앱 가입 회원을 먼저 찾은 뒤 결제와 함께 등록해 주세요.";
   if (raw.includes("member_ticket_extension_date_must_increase")) return "현재 만료일보다 늦은 날짜를 선택해 주세요.";
   if (raw.includes("member_ticket_extension_status_invalid")) return "사용 중 또는 홀딩 중인 회원권만 기간을 연장할 수 있습니다.";
   if (raw.includes("member_ticket_revision_conflict")) return "다른 화면에서 회원권이 먼저 변경됐습니다. 최신 정보를 다시 확인해 주세요.";
@@ -287,6 +311,23 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_assignment_schedule_duplicate")) return "같은 요일과 시간을 중복 선택할 수 없습니다.";
   if (raw.includes("member_assignment_schedule_value_invalid")) return "회원권의 평일·주말 범위에 맞는 시간을 선택해 주세요.";
   if (raw.includes("member_assignment_schedule_blocked_time") || raw.includes("member_assignment_schedule_outside_working_hours")) return "코치 근무시간·브레이크와 겹치지 않는 시간을 선택해 주세요.";
+  if (raw.includes("member_assignment_record_invalid") || raw.includes("member_assignment_schedules_invalid")) return "회원·회원권·시간 입력값을 다시 확인해 주세요. 입력 내용은 유지됩니다.";
+  if (raw.includes("member_assignment_participant_mismatch")) return "그룹 회원 두 명의 연결을 확인하지 못해 전체 등록을 취소했습니다. 기존 회원 검색에서 파트너를 다시 선택해 주세요.";
+  if (raw.includes("member_assignment_ticket_not_created")) return "회원권이 생성되지 않아 결제와 시간표 등록도 모두 취소했습니다. 새로고침 후 다시 확인해 주세요.";
+  if (raw.includes("member_assignment_deferred_schedule_must_be_empty")) return "시간표를 나중에 설정하려면 선택된 정규 요일·시간을 모두 해제해 주세요.";
+  if (raw.includes("group_registration_payment_fields_incomplete")) return "결제일·결제수단·결제금액을 모두 입력하거나 모두 비워 주세요.";
+  if (raw.includes("group_registration_payment_method_invalid")) return "카드·계좌이체·현금 중 실제 결제수단을 선택해 주세요.";
+  if (raw.includes("group_registration_product_required")) return "그룹 2명 상품을 다시 선택해 주세요.";
+  if (raw.includes("group_registration_two_distinct_members_required")) return "서로 다른 기존 회원 두 명을 선택해 주세요.";
+  if (raw.includes("group_registration_member_unavailable")) return "선택한 회원 중 앱 계정 상태가 변경된 회원이 있습니다. 회원 검색에서 두 명을 다시 선택해 주세요.";
+  if (raw.includes("group_registration_product_price_missing")) return "선택한 상품의 카드·현금 가격이 비어 있습니다. 운영 설정에서 가격을 먼저 입력해 주세요.";
+  if (raw.includes("group_registration_payment_price_mismatch")) return "선택한 결제수단의 상품 가격과 금액이 다릅니다. 직접 수정이 필요하면 사유를 입력해 주세요.";
+  if (raw.includes("group_registration_payment_override_reason_required")) return "상품 가격과 다른 금액을 저장하려면 금액 수정 사유를 네 글자 이상 입력해 주세요.";
+  if (raw.includes("group_registration_ticket_expiry_mismatch")) return "시작일 기준 자동 만료일이 달라졌습니다. 상품을 다시 선택해 기간을 갱신해 주세요.";
+  if (raw.includes("group_registration_schedule_conflict")) {
+    const date = raw.match(/group_registration_schedule_conflict[:_](\d{4}-\d{2}-\d{2})/)?.[1];
+    return date ? `${date} 선택 시간에 기존 수업이 있습니다. 다른 시간을 선택해 주세요.` : "반복 일정 중 기존 수업과 겹치는 날짜가 있어 전체 등록을 취소했습니다.";
+  }
   if (raw.includes("reenrollment_keep_schedule_product_mismatch")) return "새 회원권의 수업시간·주 횟수·인원이 달라 기존 시간을 유지할 수 없습니다. ‘새 요일·시간 선택’을 사용해 주세요.";
   if (raw.includes("reenrollment_regular_schedule_missing")) return "기존 정규시간을 확인할 수 없습니다. ‘새 요일·시간 선택’에서 주 횟수만큼 다시 선택해 주세요.";
   if (raw.includes("reenrollment_schedule_frequency_mismatch")) return "새 회원권의 주 횟수만큼 요일과 시간을 모두 선택해 주세요.";
@@ -319,6 +360,9 @@ function memberManagementErrorText(error) {
   if (raw.includes("member_inactive_restore_first")) return "삭제회원은 먼저 회원 복원을 해 주세요.";
   if (raw.includes("group_ticket_requires_two_participants")) return "2대1 회원권의 파트너 연결을 먼저 확인해 주세요.";
   if (raw.includes("group_partner_required")) return "2대1 회원권은 파트너를 선택해야 합니다.";
+  if (raw.includes("partner_must_be_different")) return "본인과 다른 파트너 회원을 선택해 주세요.";
+  if (raw.includes("partner_not_found")) return "선택한 파트너가 삭제되었거나 비활성 상태입니다. 기존 회원 검색에서 다시 선택해 주세요.";
+  if (raw.includes("ticket_owner_not_found")) return "대표 회원 정보를 확인하지 못했습니다. 회원 목록을 새로고침해 주세요.";
   if (raw.includes("group_partner_name_required")) return "같이 등록할 파트너 실명을 두 글자 이상 입력해 주세요.";
   if (raw.includes("group_partner_phone_invalid")) return "파트너 휴대전화 번호를 확인해 주세요.";
   if (raw.includes("group_partner_phone_already_exists")) return "앱 가입 또는 기존 회원 계정이 있습니다. 자동으로 열린 기존 회원 검색에서 이름과 전화번호 끝자리를 확인해 선택해 주세요.";
@@ -371,7 +415,7 @@ function memberManagementErrorText(error) {
   if (raw.includes("group_surviving_member_required")) return "1:1로 계속 수강할 회원을 다시 선택해 주세요.";
   if (raw.includes("surviving_member_active_ticket_exists")) return "선택한 회원에게 다른 사용 중 회원권이 있습니다. 기존 회원권을 먼저 확인해 주세요.";
   if (raw.includes("separate_group_structure_requires_team_edit")) return "1:2 팀의 종류·파트너 변경은 팀 설정에서 함께 처리해 주세요.";
-  const safeCode = String(error?.payload?.code || "").trim();
+  const safeCode = String(error?.code || error?.payload?.error_code || error?.payload?.code || "").trim();
   const codeSuffix = /^[A-Za-z0-9_]{3,40}$/.test(safeCode) ? ` (오류 코드: ${safeCode})` : "";
   return `처리에 실패했습니다. 입력값과 서버 적용 상태를 확인해 주세요.${codeSuffix}`;
 }
@@ -467,7 +511,15 @@ function invalidateMemberSearchIndex({ preserveDirectory = false } = {}) {
     adminMemberDirectoryState.signature = "";
     adminMemberDirectoryState.rows = [];
     adminMemberDirectoryState.counts = null;
+    adminMemberDirectoryState.baseCounts = null;
     adminMemberDirectoryState.preserveCountsWhileLoading = false;
+    Object.assign(adminMemberIdentityReviewState, {
+      loading: false,
+      loaded: false,
+      error: "",
+      count: null,
+      promise: null,
+    });
   }
   adminMemberDetailCache.clear();
   adminUserNameIndex = null;
@@ -486,7 +538,7 @@ function adminMemberDirectoryCoachRoleId() {
 function adminMemberDirectorySignature() {
   return JSON.stringify({
     branchId: activeOperationBranchId() || null,
-    status: state.memberFilter || "active",
+    status: state.memberFilter === "deletion" ? "active" : state.memberFilter || "active",
     search: String(state.memberSearch || "").trim(),
     coachRoleId: adminMemberDirectoryCoachRoleId(),
     productKind: state.memberTicketFilter === "all" ? null : state.memberTicketFilter,

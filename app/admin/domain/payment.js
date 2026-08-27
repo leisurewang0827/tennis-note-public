@@ -75,6 +75,8 @@ function billingRowFromServerPayment(row = {}) {
   const amount = Number(row.final_amount || row.finalAmount || row.amount || 0);
   const isTest = paymentEnvironment({
     providerPaymentId,
+    purchaseIntentKey: row.purchase_intent_key || row.purchaseIntentKey || "",
+    purchaseGroupKey: row.purchase_group_key || row.purchaseGroupKey || "",
     item: row.productTitle || row.item || "",
     source: row.source || "",
     serverStatus: row.status,
@@ -365,7 +367,9 @@ function chargeStatusForPayment(item = {}) {
   if (item.status === "paid" && isHistoricalImportedPayment(item)) return { label: "이관 결제 기록", tone: "neutral", detail: "기존 장부에서 보존한 결제 증빙이며 현재 회원권 자동 연결 대상이 아닙니다." };
   if (item.status === "paid") return { label: "회원권 연결 확인", tone: "warn", detail: "결제는 확인됐지만 연결된 회원권 ID가 없습니다." };
   if (isStaleReadyPayment(item)) return { label: "오래된 결제 대기", tone: "warn", detail: "결제창 생성 후 1시간 이상 완료 확인이 없습니다. PortOne 상태 확인 전에는 취소하거나 회원권을 변경하지 않습니다." };
-  if (item.status === "server_ready") return { label: "결제 전 대기", tone: "neutral", detail: "회원이 Toss 결제를 완료하면 서버검증 후 자동 충전됩니다." };
+  if (item.status === "server_ready") return String(item.method || "").toLowerCase() === "bank_transfer"
+    ? { label: "입금 확인 대기", tone: "neutral", detail: "회원의 계좌이체 신청입니다. 실제 입금 확인 후에만 회원권이 생성됩니다." }
+    : { label: "결제 전 대기", tone: "neutral", detail: "회원이 토스페이를 완료하면 서버검증 후 자동 충전됩니다." };
   if (item.status === "unverified") return { label: "서버검증 대기", tone: "warn", detail: "결제창 완료 후 서버 검증이 필요합니다." };
   if (item.status === "cancelled") return { label: "취소/환불완료", tone: "neutral", detail: "결제가 취소됐고 연결 회원권은 충전되지 않거나 환불 처리됩니다." };
   if (item.status === "refunded") return { label: "환불완료", tone: "neutral", detail: "환불 완료 항목은 현재 이용권으로 보지 않습니다." };

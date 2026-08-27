@@ -36,8 +36,8 @@ function publicOnboardingStageHtml(intent = storedOnboardingIntent()) {
   }
   if (stage === "time") {
     const selectedKeys = new Set((intent.preferredSchedules || []).map((item) => `${item.lessonDate}:${item.startTime}:${item.coachRoleId}`));
-    const slots = publicOnboardingAvailableSlots(product, intent.coachRoleId).slice(0, 12);
     const required = intent.choiceKind === "regular" ? Math.max(1, Number(intent.frequency) || 1) : 1;
+    const slots = publicOnboardingVisibleSlots(product, intent.coachRoleId, required);
     return `${publicOnboardingBackButton(stage)}<div class="public-onboarding-selection-count">요일·시간 ${selectedKeys.size}/${required} 선택</div><div class="public-onboarding-slot-grid">${slots.map((slot) => {
       const key = `${slot.lessonDate}:${slot.startTime}:${slot.coachRoleId}`;
       return `<button type="button" class="${selectedKeys.has(key) ? "is-selected" : ""}" data-public-onboarding-slot="${escapeHtml(key)}" data-slot-date="${escapeHtml(slot.lessonDate)}" data-slot-day="${escapeHtml(slot.day)}" data-slot-time="${escapeHtml(slot.startTime)}" aria-pressed="${selectedKeys.has(key)}"><span>${escapeHtml(purchaseDateLabel(slot.lessonDate))}</span><strong>${escapeHtml(slot.startTime)}</strong></button>`;

@@ -235,6 +235,10 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
           return `
             <div class="coach-mobile-coach-lane">
               ${times.map((time, index) => {
+                const occupied = coachLessons.some((lesson) => coachLessonOccupiesSlot(lesson, time));
+                if (occupied) {
+                  return `<div class="coach-mobile-slot is-occupied" style="grid-row:${index + 1};" aria-hidden="true"></div>`;
+                }
                 const working = isPolicyCoachWorking(coach, day, time, scheduleBlockMinutes);
                 const breakRule = breakRuleForSlot(policy, day, time);
                 const blockedRule = coachBlockedRuleForSlot(coach, day, time);

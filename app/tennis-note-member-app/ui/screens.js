@@ -182,7 +182,9 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
   flow.productScheduleScope = matchingProduct && ["weekday", "weekend"].includes(membershipProductFacet(matchingProduct, "scheduleScope"))
     ? membershipProductFacet(matchingProduct, "scheduleScope")
     : "weekday";
-  flow.scheduleMode = sourceIsActive && matchingProduct && membershipProductFacet(matchingProduct, "productKind") !== "coupon" ? "keep" : "change";
+  flow.scheduleMode = purchaseUsesFlexibleCouponSchedule(matchingProduct, flow)
+    ? "flex"
+    : sourceIsActive && matchingProduct ? "keep" : "change";
   flow.scheduleWeekStart = purchaseWeekStartDate(lesson?.lessonDate || purchaseEffectiveStartDate());
   flow.scheduleAvailableOnly = true;
   flow.coachRoleId = sourceTicket?.coachRoleId || "";
@@ -307,6 +309,8 @@ function openPaymentConfirmationModal({ product, paymentId, preparedPayment, met
   $("#paymentConfirmationMethod").textContent = method.label;
   $("#paymentConfirmationMessage").textContent = "결제창에서 결제 정보를 확인한 뒤 최종 결제를 완료합니다.";
   const button = $("#openPreparedPaymentButton");
+  const bankButton = $("#switchPaymentToBankTransferButton");
+  if (bankButton) bankButton.hidden = true;
   if (button) {
     button.disabled = false;
     button.textContent = `${amount.toLocaleString("ko-KR")}원 결제창 열기`;
@@ -419,7 +423,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.405", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.418", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -510,7 +514,11 @@ function toggleRegularInitialScheduleSlot(lessonId) {
 }
 
 async function openChangeRequestModal(preferredLessonId = "", options = {}) {
-  if (!options.editing) state.editingChangeRequestId = "";
+  if (!options.editing) {
+    state.editingChangeRequestId = "";
+    state.memberLessonChangeOperationKey = "";
+    state.memberLessonChangeOperationSignature = "";
+  }
   state.memberChangeCompactSelection = false;
   $("#changeRequestModal")?.classList.remove("is-inline-confirmation");
   const sourceId = await prepareChangeRequestSource(preferredLessonId);
@@ -556,6 +564,8 @@ async function openMemberChangeTimetable(preferredLessonId = "") {
 function closeChangeRequestModal() {
   state.regularInitialSelections = [];
   state.regularInitialOperationKey = "";
+  state.memberLessonChangeOperationKey = "";
+  state.memberLessonChangeOperationSignature = "";
   state.memberChangeCompactSelection = false;
   state.editingChangeRequestId = "";
   $("#changeRequestModal")?.classList.remove("is-inline-confirmation");
@@ -630,12 +640,6 @@ function openLocalCurriculumPreview() {
   return true;
 }
 
-async function openOneDayPurchaseFlow() {
-  setView("shopView", { replaceHistory: true });
-  await ensureMembershipPurchaseData();
-  const oneDayProduct = membershipProducts()
-    .filter((product) => isDirectPurchaseMembershipProduct(product) && membershipProductFamilyId(product) === "one-day")
-    .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999))[0] || null;
-  openMembershipPurchaseFlow("", oneDayProduct?.id || "", "one_day");
-  return Boolean(oneDayProduct);
+async function openOneDayPurchaseFlow(trigger = null) {
+  return openMembershipPurchaseEntry({ purpose: "one_day", trigger });
 }

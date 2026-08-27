@@ -8,6 +8,8 @@ function bindScheduleEvents() {
   $("#absenceLesson").addEventListener("change", () => {
     state.regularInitialSelections = [];
     state.regularInitialOperationKey = "";
+    state.memberLessonChangeOperationKey = "";
+    state.memberLessonChangeOperationSignature = "";
     state.selectedMemberChangeSourceId = $("#absenceLesson")?.value || "";
     renderSelects();
     renderAvailableSlots();
@@ -85,10 +87,6 @@ function bindScheduleEvents() {
     if (couponProductsButton) {
       state.membershipFilters.productKind = "coupon";
       navigateMemberView("shopView");
-      return;
-    }
-    if (event.target.closest("[data-start-one-day-purchase]")) {
-      void openOneDayPurchaseFlow();
       return;
     }
     if (event.target.closest("[data-open-one-day-inquiry]")) {

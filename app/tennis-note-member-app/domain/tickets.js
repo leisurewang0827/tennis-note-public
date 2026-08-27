@@ -452,6 +452,7 @@ function selectPurchasePurpose(purpose = "") {
     if (matchingProduct) {
       flow.productId = matchingProduct.id;
       flow.familyId = membershipProductFamilyId(matchingProduct);
+      flow.scheduleMode = purchaseUsesFlexibleCouponSchedule(matchingProduct, flow) ? "flex" : "keep";
       flow.productFrequency = purchaseProductFrequency(matchingProduct);
       if (["weekday", "weekend"].includes(membershipProductFacet(matchingProduct, "scheduleScope"))) {
         flow.productScheduleScope = membershipProductFacet(matchingProduct, "scheduleScope");
@@ -521,6 +522,12 @@ function selectPurchaseProduct(productId = "") {
     flow.scheduleMode = "change";
   } else if (flow.purchasePurpose === "one_day") {
     flow.purchasePurpose = currentLiveTickets().length ? "add_coach" : "new_purchase";
+  }
+  if (purchaseUsesFlexibleCouponSchedule(product, flow)) {
+    flow.scheduleMode = "flex";
+    clearPurchaseSchedules();
+  } else if (flow.purchasePurpose !== "renew_same" || !flow.renewalTicketId) {
+    flow.scheduleMode = "change";
   }
   if (productChanged && !flow.renewalTicketId) {
     flow.coachRoleId = "";
@@ -639,7 +646,10 @@ async function resumePendingTicketPayment(ticketId = "") {
     if (response?.code) {
       await reconcileRejectedServerPayment(response?.paymentId || paymentId);
       await syncMemberTicketsFromServer();
-      state.pendingPaymentCheckStatus = { tone: "alert", text: response.message || "결제가 완료되지 않았습니다." };
+      const providerError = { payload: { code: response.code, message: response.message }, message: response.message };
+      const detail = paymentServerErrorMessage(providerError);
+      reportPaymentProviderError(providerError, "payment_resume_response");
+      state.pendingPaymentCheckStatus = { tone: "alert", text: detail };
       state.ticketHistory.unshift({ text: `${ticket.title} 결제창 종료 · 결제 미완료`, tone: "alert" });
     } else {
       state.pendingPaymentCheckStatus = { tone: "wait", text: "결제창 완료 접수 · 서버 검증을 확인합니다." };
@@ -648,6 +658,7 @@ async function resumePendingTicketPayment(ticketId = "") {
     }
   } catch (error) {
     const detail = paymentServerErrorMessage(error);
+    reportPaymentProviderError(error, "payment_resume_open");
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창을 열지 못했습니다. ${detail}` };
     state.ticketHistory.unshift({ text: `${ticket.title} 결제창 열기 실패`, tone: "alert" });
   }
@@ -713,15 +724,21 @@ async function startProductPayment(productId, options = {}) {
     clearPurchasePaymentError();
     try {
       const prepared = await prepareServerPayment(product, paymentId, methodId);
+      const effectivePaymentId = String(prepared?.paymentId || paymentId);
       createPaymentRecord(product, {
-        paymentId,
+        paymentId: effectivePaymentId,
         serverPaymentId: prepared?.localPaymentId || "",
         methodId,
         method: method.label,
         status: "입금 확인 대기",
         bankTransferAccount: prepared?.bankTransferAccount || null,
       });
-      state.pendingPaymentCheckStatus = { tone: "wait", text: "계좌이체 신청이 접수되었습니다. 입금 확인 후 회원권이 발급됩니다." };
+      state.pendingPaymentCheckStatus = {
+        tone: "wait",
+        text: prepared?.reusedPurchaseIntent
+          ? "진행 중인 계좌이체 요청을 다시 열었습니다. 같은 요청은 한 건으로 관리됩니다."
+          : "계좌이체 신청이 접수되었습니다. 입금 확인 후 회원권이 발급됩니다.",
+      };
       state.ticketHistory.unshift({ text: `${product.title} 계좌이체 신청 · 입금 확인 대기`, tone: "wait" });
       completeMembershipPurchaseFlow("계좌이체 신청이 접수되었습니다");
       await Promise.allSettled([syncMemberPendingPurchaseSchedulesFromServer(), syncMemberDiscountCouponsFromServer()]);
@@ -758,6 +775,7 @@ async function startProductPayment(productId, options = {}) {
     openPaymentConfirmationModal({ product, paymentId, preparedPayment: null, methodId, sdk });
   } catch (error) {
     const detail = paymentServerErrorMessage(error);
+    reportPaymentProviderError(error, "payment_sdk_load");
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창 준비에 실패했습니다. ${detail}` };
     state.ticketHistory.unshift({ text: `${product.title} 결제창 준비 실패 · ${detail}`, tone: "alert" });
     renderAll();

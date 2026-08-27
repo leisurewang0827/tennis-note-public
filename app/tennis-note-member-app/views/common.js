@@ -224,7 +224,9 @@ function purchasePurposeOptionsHtml() {
   const selectedTicket = purchaseFlowSourceTicket() || activeTickets[0] || null;
   const lesson = purchaseTicketLesson(selectedTicket || {});
   const coachName = selectedTicket?.coach || memberScheduleTicketCoachName(selectedTicket || {}) || "담당 코치";
-  const scheduleLabel = lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 정규시간";
+  const scheduleLabel = selectedTicket && membershipProductFamilyId(selectedTicket) === "coupon"
+    ? "결제 후 자유 예약"
+    : lesson ? `${lesson.day || ""} ${lesson.time || ""}`.trim() : "기존 정규시간";
   return `
     <section class="purchase-purpose-section" aria-label="구매 목적">
       ${renewing && selectedTicket ? `<article class="purchase-renewal-summary">
@@ -257,6 +259,14 @@ function purchaseStepTwoHtml() {
   const fixedRenewal = Boolean(sourceTicket && !coupon);
   if (fixedRenewal && flow.scheduleMode === "keep") {
     return "";
+  }
+  if (purchaseUsesFlexibleCouponSchedule(product, flow)) {
+    return `
+      <div class="purchase-step-intro"><strong>담당 코치만 선택해 주세요</strong></div>
+      <section class="purchase-choice-section purchase-actual-slots" aria-label="쿠폰 담당 코치">
+        ${purchaseFlexibleCouponCoachSelectionHtml(product)}
+        <p class="purchase-policy-note"><strong>시간 선택 없음</strong> · 결제 후 시간표에서 원하는 날짜와 가능한 시간을 예약합니다.</p>
+      </section>`;
   }
   const availabilityTitle = fixedRenewal
     ? `${memberCoachShortName(selectedCoachName || "담당 코치")} 코치`

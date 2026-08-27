@@ -232,12 +232,22 @@ function setPushNotificationState(permission, status, detail) {
 }
 
 function memberCandidateEmptyReason(source = null) {
-  if (!source?.couponBooking) {
-    return "담당 코치, 운영시간, 회원권 규칙에 맞는 빈 시간이 없습니다.";
-  }
   const period = memberCouponPeriodInfo(source);
   const week = activeMemberWeek();
   const exclusions = state.serverChangeCandidateExclusions || {};
+  if (!source?.couponBooking) {
+    const reason = [
+      ["ticket_period", "회원권 이용기간 안에서만 변경할 수 있습니다."],
+      ["ticket_scope", "평일권은 평일, 주말권은 주말 시간으로만 변경할 수 있습니다."],
+      ["occupied", "담당 코치의 가능한 시간이 이미 예약되었습니다. 다른 주를 확인해 주세요."],
+      ["pending_request", "다른 회원의 승인 대기 요청이 해당 시간을 먼저 잡고 있습니다."],
+      ["closure", "휴무 또는 운영 중지 시간이라 변경할 수 없습니다."],
+      ["blocked_time", "담당 코치가 수업할 수 없는 시간입니다."],
+      ["break_time", "브레이크 시간이라 변경할 수 없습니다."],
+      ["anchor_required", "담당 코치의 기존 수업과 40분 이내인 빈 시간만 선택할 수 있습니다."],
+    ].find(([code]) => Number(exclusions[code]) > 0)?.[1];
+    return reason || "담당 코치, 운영시간, 회원권 규칙에 맞는 빈 시간이 없습니다.";
+  }
   if (period?.startsOn && week.endDate < period.startsOn) {
     return `이 회원권은 ${memberReadableDate(period.startsOn)}부터 사용할 수 있습니다.`;
   }

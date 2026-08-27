@@ -223,16 +223,29 @@ async function cancelMemberScheduleRequest(kind, id) {
   if (!id || !window.TennisNoteDataClient?.rpc) return;
   const label = kind === "makeup" ? "보강 예약" : "수업 변경 요청";
   if (!window.confirm(`${label}을 취소하고 원래 상태로 되돌릴까요?`)) return;
+  let writeCommitted = false;
   try {
     await window.TennisNoteDataClient.rpc(
       kind === "makeup" ? "tn_cancel_my_makeup_booking" : "tn_cancel_my_lesson_change_request",
       kind === "makeup" ? { target_entitlement_id: id } : { target_request_id: id },
     );
-    await syncMemberLessonsFromServer();
-    await syncMemberChangeRequestsFromServer();
+    writeCommitted = true;
+    const refreshResults = await Promise.allSettled([
+      syncMemberLessonsFromServer(),
+      syncMemberChangeRequestsFromServer(),
+    ]);
+    const refreshIncomplete = refreshResults.some((item) => item.status === "rejected" || item.value === false);
     renderAll();
-    showToast(`${label}을 취소했습니다.`);
+    showToast(refreshIncomplete
+      ? `${label}은 취소됐습니다. 최신 시간표를 다시 불러오고 있습니다.`
+      : kind === "makeup"
+        ? "보강 예약을 취소했습니다."
+        : "수업 변경 요청을 취소하고 원래 시간을 복원했습니다.");
   } catch (error) {
+    if (writeCommitted) {
+      showToast(`${label}은 취소됐습니다. 화면을 새로고침해 원래 시간을 확인해 주세요.`);
+      return;
+    }
     const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
     const message = errorText.includes("original_time_occupied")
       ? "원래 수업 시간에 다른 수업이 들어와 자동 복원이 어렵습니다. 카카오채널로 문의해 주세요."
@@ -245,12 +258,20 @@ async function cancelMemberScheduleRequest(kind, id) {
 
 async function submitMemberLessonChange(client, args) {
   try {
-    return await client.rpc("tn_submit_lesson_change_request_v3", args);
+    return await client.rpc("tn_submit_lesson_change_request_v4", args);
+  } catch (error) {
+    const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
+    if (!/tn_submit_lesson_change_request_v4|PGRST202|42883|schema cache/i.test(errorText)) throw error;
+  }
+  const v3Args = { ...args };
+  delete v3Args.target_operation_key;
+  try {
+    return await client.rpc("tn_submit_lesson_change_request_v3", v3Args);
   } catch (error) {
     const errorText = `${error?.payload?.message || ""} ${error?.message || ""}`;
     if (!/tn_submit_lesson_change_request_v3|PGRST202|42883|schema cache/i.test(errorText)) throw error;
   }
-  const compatibilityArgs = { ...args };
+  const compatibilityArgs = { ...v3Args };
   delete compatibilityArgs.target_policy_revision;
   try {
     return await client.rpc("tn_submit_lesson_change_request_v2", compatibilityArgs);
@@ -304,6 +325,8 @@ async function requestMakeup() {
 
   if (liveRequest) {
     const button = $("#requestMakeup");
+    let writeCommitted = false;
+    let refreshIncomplete = false;
     if (button) {
       button.disabled = true;
       button.textContent = isMakeupEntitlement || isCouponBooking ? "예약 중" : "요청 중";
@@ -365,11 +388,20 @@ async function requestMakeup() {
             target_lesson_date: targetDate,
             target_start_time: makeup.time,
             target_reason: reason,
-            target_policy_revision: Number(memberChangePolicySnapshot(makeup)?.revision) || 0,
+            target_policy_revision: memberChangePolicySnapshot(makeup)?.revision ?? null,
+            target_operation_key: memberLessonChangeOperationKey({
+              lessonId: absence.serverLessonId,
+              lessonDate: targetDate,
+              startTime: makeup.time,
+            }),
           });
-      await syncMemberLessonsFromServer();
-      if (isPausedResumeBooking) await syncMemberTicketsFromServer();
-      if (!isMakeupEntitlement) await syncMemberChangeRequestsFromServer();
+      writeCommitted = true;
+      const refreshResults = await Promise.allSettled([
+        syncMemberLessonsFromServer(),
+        isPausedResumeBooking ? syncMemberTicketsFromServer() : Promise.resolve(true),
+        !isMakeupEntitlement ? syncMemberChangeRequestsFromServer() : Promise.resolve(true),
+      ]);
+      refreshIncomplete = refreshResults.some((item) => item.status === "rejected" || item.value === false);
       state.ticketHistory.unshift({
         text: isRegularInitialBooking
           ? `${absence.ticketTitle} · ${isPausedResumeBooking ? "휴회 복귀 및 정규시간 설정 완료" : "정규시간 설정 완료"}`
@@ -385,7 +417,7 @@ async function requestMakeup() {
       closeChangeRequestModal();
       renderAll();
       saveSnapshot();
-      showToast(isRegularInitialBooking
+      const successMessage = isRegularInitialBooking
         ? isPausedResumeBooking ? "휴회를 마치고 정규 수업시간을 설정했습니다." : "정규 수업시간이 설정되었습니다."
         : isMakeupEntitlement
         ? "보강 예약이 완료되었습니다."
@@ -397,8 +429,23 @@ async function requestMakeup() {
             ? "그룹수업 전체 변경 요청을 보냈습니다. 담당 코치 또는 관리자가 승인하기 전까지 기존 수업을 유지합니다."
           : result?.status === "auto_approved"
             ? changeDirection === "advance" ? "수업을 앞당겼습니다." : "수업 시간이 변경되었습니다."
-            : changeDirection === "advance" ? "담당 코치·관리자에게 수업 앞당기기 요청을 보냈습니다." : "담당 코치·관리자에게 변경 요청을 보냈습니다.");
+            : changeDirection === "advance" ? "담당 코치·관리자에게 수업 앞당기기 요청을 보냈습니다." : "담당 코치·관리자에게 변경 요청을 보냈습니다.";
+      showToast(refreshIncomplete
+        ? `${successMessage} 저장은 완료됐으며 최신 시간표를 다시 불러오고 있습니다.`
+        : successMessage);
     } catch (error) {
+      if (writeCommitted) {
+        try {
+          closeChangeRequestModal();
+          renderAll();
+          saveSnapshot();
+        } catch {
+          // The server write is already committed. A rendering failure must not
+          // be reported as a failed or retryable lesson change.
+        }
+        showToast("시간 변경은 저장되었습니다. 화면만 새로고침해 최신 시간표를 확인해 주세요.");
+        return;
+      }
       let code = error?.payload?.message || error?.payload?.code || error?.message || "server_error";
       if (typeof code === "string" && code.trim().startsWith("{")) {
         try {
@@ -436,6 +483,8 @@ async function requestMakeup() {
         weekly_session_limit: "이번 주 이용 가능 횟수를 초과합니다.",
         weekly_booking_day_limit: "이번 주 예약 가능 일수를 초과합니다.",
         lesson_change_request_already_pending: "이미 승인 대기 중인 변경 요청이 있습니다. 요청 내역에서 기존 요청을 수정해 주세요.",
+        lesson_change_operation_key_invalid: "변경 요청 준비가 만료되었습니다. 시간을 다시 선택해 주세요.",
+        lesson_change_operation_conflict: "다른 시간으로 바뀐 요청입니다. 최신 시간표에서 다시 선택해 주세요.",
         target_date_outside_ticket: "회원권 사용기간 밖의 날짜입니다.",
         coupon_booking_forbidden: "이 쿠폰을 예약할 권한이 없습니다.",
         coupon_ticket_required: "사용 가능한 쿠폰 회원권을 확인해 주세요.",

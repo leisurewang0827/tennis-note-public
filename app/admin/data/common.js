@@ -35,6 +35,7 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
       loadAdminDataOnce("member-requests", () => Promise.all([
         loadServerHoldingRequests(),
         loadServerAccountDeletionRequests(),
+        checkAccountDeletionServerReadiness(),
         loadMemberManagementPolicyFromServer(),
         loadMemberEditorModeFromServer(),
       ])),
@@ -59,6 +60,7 @@ function ensureAdminViewData(view = state.view, settingsTab = state.settingsTab)
       jobs.push(
         loadAdminDataOnce(`membership-policy:${branchKey}`, () => Promise.all([
           loadBranchSalesSettingsFromServer(),
+          loadBranchSalesEffectiveOptionsFromServer(),
           loadBranchPaymentAccountFromServer(),
           loadBankNotificationStatusFromServer(),
           loadServerHoldingPolicy(),
@@ -256,7 +258,13 @@ async function loadServerHoldingRequests() {
 
 async function loadServerAccountDeletionRequests() {
   const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.selectRows || !client.getSession?.()?.access_token) return false;
+  if (!client?.readiness?.().ready || !client.selectRows || !client.getSession?.()?.access_token) {
+    Object.assign(accountDeletionRequestState, { loading: false, error: "login_required" });
+    renderAccountDeletionAdminList();
+    return false;
+  }
+  Object.assign(accountDeletionRequestState, { loading: true, error: "" });
+  renderAccountDeletionAdminList();
   try {
     const rows = await client.selectRows("tn_account_deletion_requests", {
       select: "*",
@@ -288,10 +296,14 @@ async function loadServerAccountDeletionRequests() {
         createdAt: row.created_at || "",
       }))
       .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0));
+    Object.assign(accountDeletionRequestState, { loaded: true, loading: false, error: "" });
     renderAccountDeletionAdminList();
     return true;
-  } catch {
-    state.accountDeletionRequests = [];
+  } catch (error) {
+    Object.assign(accountDeletionRequestState, {
+      loading: false,
+      error: String(error?.message || "account_deletion_requests_load_failed"),
+    });
     renderAccountDeletionAdminList();
     return false;
   }

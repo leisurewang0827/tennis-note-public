@@ -101,6 +101,7 @@
     revisionWatcher: null,
     absorbingRevisionRefresh: false,
     postSaveRefreshPending: false,
+    policyEditorDirty: false,
     integrityRepairGroups: new Map(),
   };
 
@@ -378,6 +379,40 @@
     }[reason] || "자동 생성 대상 아님 · 설정 확인 필요";
   }
 
+  function groupedScheduleIntegrityItems(items = []) {
+    const grouped = new Map();
+    items.forEach((item, index) => {
+      const ticketKey = item.ticketId
+        ? `ticket:${String(item.ticketId)}`
+        : `unlinked:${String(item.userId || "unknown")}:${index}`;
+      const entry = grouped.get(ticketKey) || {
+        ...item,
+        memberUserIds: new Set(),
+        issueCodes: new Set(),
+        futureLessonCount: 0,
+      };
+      if (item.userId) entry.memberUserIds.add(item.userId);
+      (Array.isArray(item.issueCodes) ? item.issueCodes : []).forEach((code) => entry.issueCodes.add(code));
+      entry.futureLessonCount = Math.max(
+        Number(entry.futureLessonCount) || 0,
+        Number(item.futureLessonCount) || 0,
+      );
+      grouped.set(ticketKey, entry);
+    });
+    return [...grouped.values()].map((item) => ({
+      ...item,
+      memberUserIds: [...item.memberUserIds],
+      issueCodes: [...item.issueCodes],
+    }));
+  }
+
+  function scheduleIntegrityMemberLabel(item = {}) {
+    const names = (Array.isArray(item.memberUserIds) ? item.memberUserIds : [item.userId])
+      .map((userId) => memberName(userId))
+      .filter(Boolean);
+    return [...new Set(names)].join(" · ") || "이름 확인 필요";
+  }
+
   async function runScheduleV2MemberIntegrityPreview() {
     const button = $("#scheduleV2IntegrityButton");
     const applyButton = $("#scheduleV2IntegrityApplyButton");
@@ -396,6 +431,7 @@
       const response = await bridge().rpc("tn_admin_schedule_v2_member_integrity_preview", {});
       const result = Array.isArray(response) ? response[0] || {} : response || {};
       const items = Array.isArray(result.items) ? result.items : [];
+      const groupedItems = groupedScheduleIntegrityItems(items);
       const affectedMembers = Number(result.affectedMemberCount) || 0;
       const affectedTickets = Number(result.affectedTicketCount) || 0;
       const reconcileByTicket = new Map();
@@ -443,14 +479,14 @@
       summary.textContent = affectedTickets
         ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권 · 자동 생성 가능 ${autoRepairable}권`
         : "문제 없음";
-      list.innerHTML = items.length
-        ? items.map((item) => {
+      list.innerHTML = groupedItems.length
+        ? groupedItems.map((item) => {
           const codes = Array.isArray(item.issueCodes) ? item.issueCodes : [];
           const labels = codes
             .map(scheduleIntegrityIssueLabel)
             .join(" · ");
           const repairLabel = scheduleIntegrityRepairLabel(reconcileByTicket.get(item.ticketId), codes);
-          return `<div><strong>${escapeHtml(memberName(item.userId) || "이름 확인 필요")}</strong><span>${escapeHtml(labels)}</span><small>${escapeHtml(repairLabel)} · 미래 수업 ${Number(item.futureLessonCount) || 0}</small></div>`;
+          return `<div><strong>${escapeHtml(scheduleIntegrityMemberLabel(item))}</strong><span>${escapeHtml(labels)}</span><small>${escapeHtml(repairLabel)} · 미래 수업 ${Number(item.futureLessonCount) || 0}</small></div>`;
         }).join("")
         : '<p class="schedule-v2-integrity-empty">현재 확인된 연결 오류가 없습니다.</p>';
     } catch (error) {
@@ -482,11 +518,11 @@
         });
       }
       state.integrityRepairGroups = new Map();
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus(`미래 고정수업 복구 완료 · 회원권 ${ticketCount}개`, "success");
-      await runScheduleV2MemberIntegrityPreview();
+      const refreshed = await refreshWorkspaceAfterWrite(bridge());
+      if (refreshed) {
+        setStatus(`미래 고정수업 복구 완료 · 회원권 ${ticketCount}개`, "success");
+        await runScheduleV2MemberIntegrityPreview();
+      }
       void bridge()?.refresh?.();
     } catch (error) {
       setStatus(errorMessage(error), "error");
@@ -502,6 +538,59 @@
       return;
     }
     const memberLabel = lessonParticipantLabel(slot);
+    const exactRuleId = slot.ruleId || slot.rule_id || "";
+    const exactLessonDate = slot.lessonDate || slot.lesson_date || "";
+    if (exactRuleId && exactLessonDate) {
+      const exactStartTime = String(slot.startTime || slot.start_time || "").slice(0, 5);
+      const shouldRestore = window.confirm(
+        `${memberLabel} ${dateLabel(exactLessonDate)} ${exactStartTime} 누락 고정수업입니다.\n\n`
+        + "[확인] 이 회차 복구\n[취소] 잘못된 고정시간 정리 선택",
+      );
+      if (!shouldRestore) {
+        const shouldEndWrongTime = window.confirm(
+          `${memberLabel} ${dateLabel(exactLessonDate)} ${exactStartTime} 고정시간을 종료할까요?\n\n`
+          + "이 시간의 미래 수업만 삭제하며, 다른 고정시간과 과거 수업 기록은 보존합니다.",
+        );
+        if (!shouldEndWrongTime) {
+          setStatus("고정수업 복구·정리를 취소했습니다.");
+          return;
+        }
+        setStatus(`${memberLabel} 잘못된 고정시간을 정리하는 중입니다.`);
+        try {
+          const result = await bridge().rpc("tn_admin_end_expected_regular_slot", {
+            target_ticket_id: slot.ticketId,
+            target_rule_id: exactRuleId,
+            target_lesson_date: exactLessonDate,
+            target_reason: `잘못 생성된 미래 고정시간 종료 (${dateLabel(exactLessonDate)} ${exactStartTime})`,
+            target_operation_key: operationKey("expected-slot-end"),
+          });
+          const refreshed = await refreshWorkspaceAfterWrite(bridge());
+          if (refreshed) {
+            const deletedFutureCount = Number(result?.deletedFutureCount ?? result?.deleted_future_count) || 0;
+            setStatus(`${memberLabel} ${exactStartTime} 잘못된 고정시간을 종료했습니다. 미래 수업 ${deletedFutureCount}건 정리`, "success");
+          }
+          void bridge()?.refresh?.();
+        } catch (error) {
+          setStatus(errorMessage(error), "error");
+        }
+        return;
+      }
+      setStatus(`${memberLabel} 고정수업 1건을 복구하는 중입니다.`);
+      try {
+        await bridge().rpc("tn_admin_materialize_expected_regular_slot", {
+          target_ticket_id: slot.ticketId,
+          target_rule_id: exactRuleId,
+          target_lesson_date: exactLessonDate,
+          target_operation_key: operationKey("expected-slot-exact-apply"),
+        });
+        const refreshed = await refreshWorkspaceAfterWrite(bridge());
+        if (refreshed) setStatus(`${memberLabel} ${dateLabel(exactLessonDate)} 고정수업을 복구했습니다.`, "success");
+        void bridge()?.refresh?.();
+      } catch (error) {
+        setStatus(errorMessage(error), "error");
+      }
+      return;
+    }
     setStatus(`${memberLabel} 현재 회원권 일정을 확인하는 중입니다.`);
     try {
       const preview = await bridge().rpc("tn_admin_reconcile_future_regular_schedules", {
@@ -532,10 +621,8 @@
         target_operation_key: operationKey("expected-slot-apply"),
         target_dry_run: false,
       });
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus(`${memberLabel} 현재 회원권 일정 ${createdCount}건을 생성했습니다.`, "success");
+      const refreshed = await refreshWorkspaceAfterWrite(bridge());
+      if (refreshed) setStatus(`${memberLabel} 현재 회원권 일정 ${createdCount}건을 생성했습니다.`, "success");
       void bridge()?.refresh?.();
     } catch (error) {
       setStatus(errorMessage(error), "error");
@@ -1881,10 +1968,14 @@
       : '<div class="schedule-v2-empty" style="min-height:90px">미배정 정규권이 없습니다.</div>';
   }
 
-  function renderPolicy() {
+  function renderPolicy({ force = false } = {}) {
     const policy = state.payload?.policy || {};
     const panel = $("#scheduleV2PolicyPanel");
     if (!panel) return;
+    if (!force && state.policyEditorDirty && !panel.hidden) {
+      renderMemberChangePolicyPreview();
+      return;
+    }
     const values = {
       coachSingleAddMode: policy.coach_single_add_mode || "approval",
       coachRegularChangeMode: policy.coach_regular_change_mode || "approval",
@@ -2031,9 +2122,9 @@
     if (lesson.expectedRegularSlot) {
       return {
         classes: "type-regular record-problem expected-regular-slot",
-        searchText: `${memberLabel} 고정수업 연결 확인 미래 수업 복구`.toLowerCase(),
+        searchText: `${memberLabel} 고정수업 연결 확인 미래 수업 복구 잘못된 시간 종료`.toLowerCase(),
         stateMarkup: '<small class="schedule-v2-card-state">연결 확인</small>',
-        detailMarkup: `<span>고정수업 · ${Number(lesson.durationMinutes || 20)}분</span><small class="schedule-v2-lesson-warning">눌러서 미래 수업 복구</small>`,
+        detailMarkup: `<span>고정수업 · ${Number(lesson.durationMinutes || 20)}분</span><small class="schedule-v2-lesson-warning">눌러서 복구·잘못된 시간 종료</small>`,
         needsFeedback: false,
       };
     }
@@ -2331,6 +2422,15 @@
     );
   }
 
+  function lessonCanBeAdminCancelled(lesson = state.editingLesson) {
+    if (!lesson || lesson.oneDayBooking) return false;
+    return ["scheduled", "pending_change", "no_show"].includes(String(lesson.status || ""));
+  }
+
+  function lessonRequiresPastNoShowCancellation(lesson = state.editingLesson) {
+    return Boolean(lesson && String(lesson.status || "") === "no_show");
+  }
+
   function syncRegularEditScope() {
     const form = $("#scheduleV2EditorForm");
     const scope = $("#scheduleV2RegularEditScope");
@@ -2362,7 +2462,13 @@
     const cancelButton = $("#scheduleV2CancelLessonButton");
     state.cancelConfirmationKey = "";
     delete cancelButton.dataset.confirming;
-    if (!cancelButton.hidden) cancelButton.textContent = future ? "이후 정규시간 종료" : "수업 취소";
+    if (!cancelButton.hidden) {
+      cancelButton.textContent = future
+        ? "이후 정규시간 종료"
+        : lessonRequiresPastNoShowCancellation()
+          ? "관리자 취소 · 차감 없음"
+          : "수업 취소";
+    }
     $("#scheduleV2SaveButton").textContent = state.reopeningLesson
       ? "새 수업으로 저장"
       : future ? "이후 정규일정 저장" : "시간표에 저장";
@@ -3222,7 +3328,7 @@
     state.pendingTicketId = "";
     form.elements.fillSeries.checked = !lesson && kind === "regular" && date >= localDateKey(new Date());
     $("#scheduleV2SeriesOption").hidden = Boolean(lesson) || kind !== "regular";
-    $("#scheduleV2CancelLessonButton").hidden = !lesson || Boolean(lesson.oneDayBooking) || !["scheduled", "pending_change"].includes(lesson.status);
+    $("#scheduleV2CancelLessonButton").hidden = !lessonCanBeAdminCancelled(lesson);
     $("#scheduleV2DeleteLessonButton").hidden = !lesson;
     if (lesson && !reopeningLesson) {
       state.selectedTicketId = [...new Set(state.selectedParticipants.map((participant) => String(participant.ticketId || "")).filter(Boolean))].join(",");
@@ -3614,6 +3720,21 @@
     const labels = {
       schedule_v2_coach_time_overlap: "같은 코치의 수업 시간이 겹칩니다.",
       schedule_v2_expected_regular_slot_reserved: "누락된 미래 고정수업 자리입니다. 고정수업을 먼저 복구하거나 다른 시간을 선택해 주세요.",
+      schedule_v2_expected_regular_slot_reference_required: "복구할 고정수업 정보를 다시 불러와 주세요.",
+      schedule_v2_expected_regular_slot_ticket_not_found: "회원권을 찾을 수 없습니다. 회원권 상태를 다시 확인해 주세요.",
+      schedule_v2_expected_regular_slot_not_repairable: "이미 배정됐거나 잔여 횟수·기간·겹치는 시간을 다시 확인해야 합니다. 시간표를 새로고침해 주세요.",
+      schedule_v2_expected_regular_slot_concurrent_update: "다른 화면에서 같은 고정수업을 먼저 처리했습니다. 시간표를 새로고침해 주세요.",
+      schedule_v2_expected_regular_slot_end_reference_required: "정리할 고정시간 정보를 다시 불러와 주세요.",
+      schedule_v2_expected_regular_slot_end_reason_required: "잘못된 고정시간 정리 사유를 확인해 주세요.",
+      schedule_v2_expected_regular_slot_end_past_forbidden: "과거 고정시간은 이 메뉴에서 정리할 수 없습니다.",
+      schedule_v2_expected_regular_slot_end_ticket_not_found: "연결된 회원권을 찾을 수 없습니다. 회원권을 다시 확인해 주세요.",
+      schedule_v2_expected_regular_slot_end_rule_not_found: "이미 종료되었거나 찾을 수 없는 고정시간입니다. 시간표를 새로고침해 주세요.",
+      schedule_v2_expected_regular_slot_end_not_available: "이 카드는 더 이상 정리 가능한 누락 고정수업이 아닙니다. 시간표를 새로고침해 주세요.",
+      schedule_v2_expected_regular_slot_end_rule_ambiguous: "같은 시간의 고정규칙이 중복되어 자동 정리를 중단했습니다. 회원권 정규시간을 먼저 확인해 주세요.",
+      schedule_v2_expected_regular_slot_end_materialized: "해당 회차가 이미 실제 수업으로 생성됐습니다. 실제 수업 카드에서 변경해 주세요.",
+      schedule_v2_expected_regular_slot_end_mixed_participants: "다른 회원권 참가자가 섞인 미래 수업이 있어 자동 정리를 중단했습니다.",
+      schedule_v2_expected_regular_slot_end_concurrent_update: "다른 화면에서 고정시간을 먼저 변경했습니다. 시간표를 새로고침해 주세요.",
+      schedule_v2_expected_regular_slot_end_delete_failed: "미래 수업 일부를 안전하게 삭제하지 못해 전체 정리를 취소했습니다.",
       schedule_v2_ticket_unavailable: "사용할 수 있는 회원권이 아닙니다.",
       schedule_v2_duration_ticket_mismatch: "수업 시간과 회원권 단위가 맞지 않습니다.",
       schedule_v2_regular_ticket_required: "정규 회원권을 선택해 주세요.",
@@ -3666,7 +3787,13 @@
       schedule_v2_no_show_reason_required: "노쇼 사유를 2자 이상 입력해 주세요.",
       schedule_v2_legacy_outcome_already_processed: "기존 방식으로 이미 처리된 수업입니다.",
       schedule_v2_outcome_partial_final_state: "일부 회원만 완료된 비정상 상태입니다. 관리자 점검이 필요합니다.",
-      schedule_v2_series_capacity_unavailable: "남은 횟수가 이 수업 길이보다 부족합니다.",
+      schedule_v2_series_capacity_unavailable: "이미 예정된 미래수업을 제외한 남은 횟수가 부족합니다. 회원권 잔여 횟수와 기존 미래수업을 확인해 주세요.",
+      schedule_v2_staff_cancel_no_show_record_required: "노쇼 처리 기록을 확인할 수 없어 관리자 취소를 중단했습니다. 최신 시간표를 다시 불러와 주세요.",
+      schedule_v2_staff_cancel_mixed_outcome_review_required: "그룹 참여자의 처리 상태가 서로 달라 자동 취소할 수 없습니다. 수업 기록을 먼저 확인해 주세요.",
+      schedule_v2_staff_cancel_journal_review_required: "회원 운동일지와 연결된 수업은 자동 취소할 수 없습니다. 기록 보존 여부를 먼저 확인해 주세요.",
+      schedule_v2_staff_cancel_makeup_review_required: "이미 보강 권리 또는 보강 예약과 연결된 수업은 자동 취소할 수 없습니다. 보강 상태를 먼저 확인해 주세요.",
+      schedule_v2_staff_cancel_refund_review_required: "환불 처리 중인 회원권과 연결되어 있어 자동 취소할 수 없습니다. 결제·환불 상태를 먼저 확인해 주세요.",
+      schedule_v2_staff_cancel_ticket_count_inconsistent: "노쇼 차감 횟수와 회원권 사용 횟수가 맞지 않아 자동 복원하지 않았습니다. 회원권 기록을 확인해 주세요.",
       schedule_v2_regular_anchor_conflict: "같은 요일·시간의 정규시간이 이미 다른 조건으로 연결되어 있습니다.",
       schedule_v2_regular_anchor_not_found: "이 수업은 새 시간표 정규 기준점과 연결되지 않았습니다. 이번 수업만 변경하거나 시간 미배정 목록에서 다시 연결해 주세요.",
       schedule_v2_regular_end_reference_required: "종료할 정규수업을 다시 선택해 주세요.",
@@ -3976,35 +4103,46 @@
     if (!requireWritableServer()) return;
     const lesson = state.editingLesson;
     const futureScope = regularSeriesEditEligible(lesson) && selectedRegularEditScope() === "future";
+    const pastNoShowCancellation = lessonRequiresPastNoShowCancellation(lesson);
     if (!lesson) return;
     const confirmation = futureScope
       ? "이 회차부터 같은 정규시간을 종료할까요? 지난 수업과 완료 기록은 유지되고, 예정 수업은 취소 이력으로 보존됩니다."
-      : "이 수업을 취소할까요? 회원권 횟수는 차감하지 않습니다.";
+      : pastNoShowCancellation
+        ? "이 과거 노쇼를 관리자 취소로 바꿀까요? 기존 노쇼 차감은 복원되고, 원본 처리 내역과 취소 사유는 이력으로 보존됩니다."
+        : "이 수업을 취소할까요? 회원권 횟수는 차감하지 않습니다.";
     const api = bridge();
     const button = $("#scheduleV2CancelLessonButton");
     const confirmationKey = `${lesson.id}:${lesson.revision}:${futureScope ? "future" : "single"}`;
     if (state.cancelConfirmationKey !== confirmationKey) {
       state.cancelConfirmationKey = confirmationKey;
       button.dataset.confirming = "true";
-      button.textContent = futureScope ? "종료 확인" : "취소 확인";
+      button.textContent = futureScope ? "종료 확인" : pastNoShowCancellation ? "관리자 취소 확인" : "취소 확인";
       setEditorMessage(`${confirmation} 이 버튼을 한 번 더 누르면 적용됩니다.`, "warning");
       return;
     }
     state.cancelConfirmationKey = "";
     delete button.dataset.confirming;
     button.disabled = true;
-    button.textContent = futureScope ? "종료 중..." : "취소 중...";
-    setEditorMessage(futureScope ? "이후 정규시간을 종료하는 중입니다." : "수업을 취소하는 중입니다.", "info");
+    button.textContent = futureScope ? "종료 중..." : pastNoShowCancellation ? "노쇼 차감 복원 중..." : "취소 중...";
+    setEditorMessage(
+      futureScope
+        ? "이후 정규시간을 종료하는 중입니다."
+        : pastNoShowCancellation
+          ? "과거 노쇼 차감을 복원하고 관리자 취소 이력을 저장하는 중입니다."
+          : "수업을 취소하는 중입니다.",
+      "info",
+    );
     try {
+      let cancelResult = null;
       if (futureScope) {
-        await api.rpc("tn_schedule_v2_end_regular_anchor", {
+        cancelResult = await api.rpc("tn_schedule_v2_end_regular_anchor", {
           target_lesson_id: lesson.id,
           target_expected_revision: lesson.revision,
           target_reason: "관리자 시간표에서 이후 정규시간 종료",
           target_operation_key: operationKey("admin-regular-end"),
         });
       } else {
-        await api.rpc("tn_schedule_v2_cancel_lesson", {
+        cancelResult = await api.rpc("tn_schedule_v2_cancel_lesson", {
           target_lesson_id: lesson.id,
           target_expected_revision: lesson.revision,
           target_operation_key: operationKey("admin-cancel"),
@@ -4014,10 +4152,18 @@
       if (history.state?.tennisNoteScheduleV2Editor) history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
       state.deferredRefresh = false;
       actualCloseEditor();
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus(futureScope ? "이후 정규시간 종료 완료 · 과거 기록은 유지했습니다." : "수업 취소 완료", "success");
+      const refreshed = await refreshWorkspaceAfterWrite(api);
+      if (refreshed) {
+        const restoredSessions = Math.max(0, Number(cancelResult?.restoredSessions) || 0);
+        setStatus(
+          futureScope
+            ? "이후 정규시간 종료 완료 · 과거 기록은 유지했습니다."
+            : pastNoShowCancellation
+              ? `관리자 취소 완료 · 노쇼 차감 ${restoredSessions}회 복원 · 원본 이력 보존`
+              : "수업 취소 완료",
+          "success",
+        );
+      }
       void api.refresh?.();
     } catch (error) {
       setEditorMessage(errorMessage(error));
@@ -4049,10 +4195,8 @@
         target_reason: "관리자 시간표에서 회원 참석 재확인",
         target_cancel_booked_makeup: cancelBookedMakeup,
       });
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus("원래 정규수업 복원 완료", "success");
+      const refreshed = await refreshWorkspaceAfterWrite(bridge());
+      if (refreshed) setStatus("원래 정규수업 복원 완료", "success");
       void bridge()?.refresh?.();
     } catch (error) {
       const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
@@ -4088,10 +4232,8 @@
         target_operation_key: operationKey("admin-cancel-restore"),
         target_reason: "관리자 시간표에서 취소 수업 복구",
       });
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus("취소 수업 복구 완료 · 기존 수업 기록을 그대로 살렸습니다.", "success");
+      const refreshed = await refreshWorkspaceAfterWrite(bridge());
+      if (refreshed) setStatus("취소 수업 복구 완료 · 기존 수업 기록을 그대로 살렸습니다.", "success");
       void bridge()?.refresh?.();
     } catch (error) {
       const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
@@ -4144,11 +4286,20 @@
       if (history.state?.tennisNoteScheduleV2Editor) history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
       state.deferredRefresh = false;
       actualCloseEditor();
-      if (lesson.oneDayBooking) await api.refresh?.({ allowWhileDirty: true });
-      state.payload = null;
-      invalidateCurrentWorkspaceCache();
-      await loadWorkspace({ force: true });
-      setStatus(lesson.oneDayBooking ? "원데이 예약 삭제 완료" : `수업 삭제 완료${restoredSessions ? ` · ${restoredSessions}회 복원` : ""}`, "success");
+      if (lesson.oneDayBooking) {
+        if (state.payload) {
+          const bookingId = String(lesson.oneDayBookingId || lesson.one_day_booking_id || lesson.id || "");
+          state.payload = {
+            ...state.payload,
+            lessons: (state.payload.lessons || []).filter((item) => String(
+              item.oneDayBookingId || item.one_day_booking_id || item.id || "",
+            ) !== bookingId),
+          };
+        }
+        if (api.refresh) await Promise.allSettled([api.refresh({ allowWhileDirty: true })]);
+      }
+      const refreshed = await refreshWorkspaceAfterWrite(api);
+      if (refreshed) setStatus(lesson.oneDayBooking ? "원데이 예약 삭제 완료" : `수업 삭제 완료${restoredSessions ? ` · ${restoredSessions}회 복원` : ""}`, "success");
       if (!lesson.oneDayBooking) void api.refresh?.();
     } catch (error) {
       setEditorMessage(errorMessage(error));
@@ -4290,8 +4441,9 @@
         },
       });
       state.payload.policy = Array.isArray(saved) ? saved[0] || {} : saved || {};
+      state.policyEditorDirty = false;
       setStatus("운영 규칙을 저장했습니다.", "success");
-      renderPolicy();
+      renderPolicy({ force: true });
     } catch (error) {
       setStatus(errorMessage(error), "error");
     } finally {
@@ -4307,6 +4459,11 @@
     if (state.refreshTimer) window.clearTimeout(state.refreshTimer);
     state.refreshTimer = window.setTimeout(() => {
       state.refreshTimer = null;
+      if (state.postSaveRefreshPending) return;
+      if (state.editorOpen) {
+        state.deferredRefresh = true;
+        return;
+      }
       state.payload = null;
       invalidateCurrentWorkspaceCache();
       void loadWorkspace({ quiet: true, force: true });
@@ -4314,6 +4471,10 @@
   }
 
   async function refreshWorkspaceAfterWrite(api = bridge(), viewState = captureWorkspaceViewState()) {
+    if (state.refreshTimer) {
+      window.clearTimeout(state.refreshTimer);
+      state.refreshTimer = null;
+    }
     state.deferredRefresh = false;
     state.postSaveRefreshPending = true;
     invalidateCurrentWorkspaceCache();
@@ -4616,12 +4777,22 @@
     });
     $("#scheduleV2PolicyButton").addEventListener("click", (event) => {
       const panel = $("#scheduleV2PolicyPanel");
+      const opening = panel.hidden;
       panel.hidden = !panel.hidden;
       event.currentTarget.setAttribute("aria-expanded", String(!panel.hidden));
+      if (opening) {
+        state.policyEditorDirty = false;
+        renderPolicy({ force: true });
+      }
     });
     $("#scheduleV2PolicySaveButton").addEventListener("click", savePolicy);
-    $("#scheduleV2PolicyPanel")?.addEventListener("input", renderMemberChangePolicyPreview);
-    $("#scheduleV2PolicyPanel")?.addEventListener("change", renderMemberChangePolicyPreview);
+    const policyPanel = $("#scheduleV2PolicyPanel");
+    const markPolicyEditorDirty = () => {
+      state.policyEditorDirty = true;
+      renderMemberChangePolicyPreview();
+    };
+    policyPanel?.addEventListener("input", markPolicyEditorDirty);
+    policyPanel?.addEventListener("change", markPolicyEditorDirty);
     $("#scheduleV2ClosureButton")?.addEventListener("click", openClosureEditor);
     $("#scheduleV2ClosureForm")?.addEventListener("submit", saveClosure);
     $("#scheduleV2ClosureForm")?.addEventListener("change", (event) => {

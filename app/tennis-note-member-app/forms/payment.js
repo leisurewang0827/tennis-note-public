@@ -38,7 +38,8 @@ function clearPaymentRedirectParams() {
 async function completePreparedPayment() {
   const context = preparedPaymentContext;
   if (!context) return;
-  const { product, paymentId, sdk } = context;
+  const { product, sdk } = context;
+  const requestedPaymentId = context.paymentId;
   const methodId = paymentMethodIdForRequest(context.methodId);
   let preparedPayment = context.preparedPayment || null;
   const method = paymentMethodDefinition(methodId);
@@ -50,12 +51,14 @@ async function completePreparedPayment() {
 
   try {
     if (!preparedPayment) {
-      preparedPayment = await prepareServerPayment(product, paymentId, methodId);
+      preparedPayment = await prepareServerPayment(product, requestedPaymentId, methodId);
       context.preparedPayment = preparedPayment;
     }
+    const effectivePaymentId = String(preparedPayment?.paymentId || requestedPaymentId);
+    context.paymentId = effectivePaymentId;
     if (message) message.textContent = "결제창을 여는 중입니다.";
     const response = await sdk.requestPayment(portOnePaymentRequest({
-      paymentId,
+      paymentId: effectivePaymentId,
       productId: product.id,
       orderName: product.title,
       totalAmount: paymentAmount,
@@ -63,16 +66,32 @@ async function completePreparedPayment() {
     }));
 
     if (response?.code) {
-      await reconcileRejectedServerPayment(response?.paymentId || paymentId);
+      await reconcileRejectedServerPayment(response?.paymentId || effectivePaymentId);
       await syncMemberTicketsFromServer();
+      const providerError = { payload: { code: response.code, message: response.message }, message: response.message };
+      const detail = paymentServerErrorMessage(providerError);
+      const diagnosticCode = reportPaymentProviderError(providerError, "payment_window_response");
       createPaymentRecord(product, {
-        paymentId,
+        paymentId: effectivePaymentId,
         method: `${method.label} 결제 실패`,
-        status: response.message || "결제가 완료되지 않았습니다.",
+        status: detail,
       });
       state.ticketHistory.unshift({ text: `${product.title} 결제 실패 · 다시 시도 필요`, tone: "alert" });
+      const flow = purchaseFlowState();
+      flow.paymentErrorCode = diagnosticCode;
+      flow.paymentErrorMessage = detail;
+      state.pendingPaymentCheckStatus = { tone: "alert", text: detail };
+      if (message) message.textContent = `${detail} 선택한 상품·시간·쿠폰은 유지됩니다.`;
+      const bankButton = $("#switchPaymentToBankTransferButton");
+      if (bankButton) bankButton.hidden = !isPaymentGatewayReady("bank_transfer");
+      if (button) {
+        button.disabled = false;
+        button.textContent = "다시 시도";
+      }
+      saveSnapshot();
+      return;
     } else {
-      const paidPaymentId = response?.paymentId || paymentId;
+      const paidPaymentId = response?.paymentId || effectivePaymentId;
       let verifiedStatus = "결제 완료 · 서버 검증 후 회원권 충전 대기";
       try {
         const verification = await verifyServerPayment(paidPaymentId);
@@ -98,10 +117,10 @@ async function completePreparedPayment() {
     }
   } catch (error) {
     if (preparedPayment?.localPaymentId) {
-      await reconcileRejectedServerPayment(paymentId).catch(() => undefined);
+      await reconcileRejectedServerPayment(context.paymentId || requestedPaymentId).catch(() => undefined);
       await syncMemberDiscountCouponsFromServer().catch(() => false);
     }
-    const serverCode = error?.payload?.code || error?.message || "server_error";
+    const serverCode = paymentServerErrorCode(error);
     if (["membership_enrollment_required", "group_enrollment_required", "group_partner_required"].includes(serverCode)) {
       closePaymentConfirmationModal();
       await syncMemberEnrollmentFromServer();
@@ -118,13 +137,26 @@ async function completePreparedPayment() {
       return;
     }
     const detail = paymentServerErrorMessage(error);
+    const diagnosticCode = reportPaymentProviderError(error, "payment_window_open");
     createPaymentRecord(product, {
-      paymentId,
+      paymentId: context.paymentId || requestedPaymentId,
       method: "결제창 오류",
       status: `결제창을 열지 못했습니다. ${detail}`,
     });
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창을 열지 못했습니다. ${detail}` };
     state.ticketHistory.unshift({ text: `${product.title} 결제창 오류 · ${detail}`, tone: "alert" });
+    purchaseFlowState().paymentErrorCode = diagnosticCode;
+    purchaseFlowState().paymentErrorMessage = detail;
+    const bankButton = $("#switchPaymentToBankTransferButton");
+    if (bankButton) bankButton.hidden = !isPaymentGatewayReady("bank_transfer");
+    context.preparedPayment = null;
+    context.paymentId = createProviderPaymentId(product.id);
+    if (message) message.textContent = `${detail} 선택 내용은 유지됩니다. 다시 시도해 주세요.`;
+    if (button) {
+      button.disabled = false;
+      button.textContent = "다시 시도";
+    }
+    return;
   }
 
   closePaymentConfirmationModal();
