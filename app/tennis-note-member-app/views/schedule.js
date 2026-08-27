@@ -699,7 +699,7 @@ function renderSchedule() {
                   const span = Math.max(1, Math.ceil(lessonDuration(lesson) / 10));
                   const coachIndex = Math.max(0, scheduleCoaches.indexOf(lesson.coach));
                   const isMine = isOwnMemberScheduleLesson(lesson);
-                  const title = isMine ? (lesson.status === "requested" ? "변경" : "내수업") : lesson.oneDayBooking ? "원데이 예약" : "수업중";
+                  const title = memberLessonTitle(lesson, isMine);
                   const lessonClass = isMine ? `mine ${lesson.status}` : "occupied";
                   const lessonAction = isMine ? `data-lesson="${lesson.id}"` : "disabled";
                   return `

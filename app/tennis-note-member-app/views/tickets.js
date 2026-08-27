@@ -51,7 +51,24 @@ function renderMemberCouponQuickStart() {
     </section>`;
 }
 
+function renderMemberOneDayReservationPanel() {
+  const target = $("#memberOneDayReservationPanel");
+  if (!target) return;
+  const bookings = memberUpcomingOneDayBookings(state.liveLessons).slice(0, 3);
+  target.hidden = bookings.length === 0;
+  target.innerHTML = bookings.map((lesson) => `
+    <article class="membership-ticket-unit">
+      <div class="membership-primary-card">
+        <div class="membership-primary-head"><span>원데이 예약</span><small>예약 완료</small></div>
+        <strong>${escapeHtml(lessonDetailDateTimeLabel(lesson))}</strong>
+        <small class="membership-period">${escapeHtml(memberCoachShortName(lesson.coach))} 코치 · ${Math.max(1, Number(lesson.durationMinutes) || 20)}분 · 회원권 차감 없음</small>
+        <button class="small-button" type="button" data-home-action="makeup">시간표에서 확인</button>
+      </div>
+    </article>`).join("");
+}
+
 function renderTickets() {
+  renderMemberOneDayReservationPanel();
   const currentTickets = currentLiveTickets();
   const renewalOverlapCount = currentLiveTicketOverlapCount();
   const nextTickets = upcomingLiveTickets();

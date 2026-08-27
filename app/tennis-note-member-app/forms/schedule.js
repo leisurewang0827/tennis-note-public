@@ -7,7 +7,7 @@ function memberScheduleOptions() {
   const scheduleLessons = memberScheduleLessons();
   const selectedId = state.selectedMemberChangeSourceId || $("#absenceLesson")?.value;
   const sourceLessons = memberMakeupDueLessons().concat(
-    scheduleLessons.filter((lesson) => isOwnMemberScheduleLesson(lesson) && lesson.status === "scheduled"),
+    scheduleLessons.filter((lesson) => memberLessonCanRequestChange(lesson)),
     loadedFutureScheduledLessonsForChange(),
     memberBookableCouponTickets(),
     memberBookableRegularTickets(),
