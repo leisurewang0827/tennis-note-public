@@ -6,16 +6,16 @@
     deployedAt: "2026-08-29T02:30:26+09:00",
     minimumNativeShellVersion: "1.0.118",
     nativeShell: {
-      version: "1.0.418",
-      androidVersion: "1.0.418",
-      androidBuild: 99,
-      iosVersion: "1.0.418",
-      iosBuild: 99,
+      version: "1.0.426",
+      androidVersion: "1.0.426",
+      androidBuild: 100,
+      iosVersion: "1.0.426",
+      iosBuild: 100,
     },
     store: {
       androidVersion: "1.0.404",
       androidBuild: 98,
-      iosVersion: "1.0.405",
+      iosVersion: "1.0.418",
       iosBuild: 97,
     },
   });
