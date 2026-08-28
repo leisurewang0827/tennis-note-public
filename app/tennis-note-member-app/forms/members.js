@@ -150,12 +150,44 @@ function setNicknameStatus(targetId, message, tone = "") {
   target.classList.toggle("is-unavailable", tone === "unavailable");
 }
 
+function setIdentityPhoneStatus(message, tone = "") {
+  const target = $("#identityPhoneStatus");
+  if (!target) return;
+  target.textContent = message;
+  target.classList.toggle("is-verified", tone === "verified");
+  target.classList.toggle("is-error", tone === "error");
+}
+
+function resetIdentityPhoneVerification(message = "휴대전화 인증이 필요합니다.") {
+  identityPhoneVerification = { phone: "", status: "unverified", source: "" };
+  if ($("#identityPhoneCode")) $("#identityPhoneCode").value = "";
+  if ($("#identityPhoneCodeRow")) $("#identityPhoneCodeRow").hidden = true;
+  if ($("#identityPhoneSendButton")) $("#identityPhoneSendButton").disabled = false;
+  setIdentityPhoneStatus(message);
+}
+
+function markIdentityPhoneVerified(phone, source = "sms") {
+  const normalizedPhone = normalizeIdentityPhone(phone);
+  identityPhoneVerification = { phone: normalizedPhone, status: "verified", source };
+  if ($("#identityPhone")) $("#identityPhone").value = formatIdentityPhone(normalizedPhone);
+  if ($("#identityPhoneCodeRow")) $("#identityPhoneCodeRow").hidden = true;
+  if ($("#identityPhoneSendButton")) $("#identityPhoneSendButton").disabled = true;
+  setIdentityPhoneStatus(
+    source === "provider"
+      ? "로그인 제공자가 확인한 번호입니다. 기존 회원 DB 연결에 사용합니다."
+      : "휴대전화 인증이 완료되었습니다. 기존 회원 DB 연결에 사용합니다.",
+    "verified",
+  );
+}
+
 function populateIdentitySetup(user = null) {
   const realName = state.profile.name === "가입 확인 중" ? "" : state.profile.name || "";
   const suggestedNickname = state.profile.nickname || state.profile.suggestedNickname || suggestedNicknameFromUser(user);
+  const providerPhone = verifiedPhoneFromAuthUser(user || {});
+  const initialPhone = providerPhone || state.profile.phone || "";
   if ($("#identityRealName")) $("#identityRealName").value = realName;
   if ($("#identityNickname")) $("#identityNickname").value = suggestedNickname;
-  if ($("#identityPhone")) $("#identityPhone").value = formatIdentityPhone(state.profile.phone || "");
+  if ($("#identityPhone")) $("#identityPhone").value = formatIdentityPhone(initialPhone);
   if ($("#identityBirthYear")) $("#identityBirthYear").value = state.profile.birthYear || state.member?.birthYear || "";
   if ($("#identityNeighborhood")) $("#identityNeighborhood").value = state.profile.neighborhood || state.member?.neighborhood || "";
   if ($("#identityGender")) $("#identityGender").value = state.profile.gender || state.member?.gender || "";
@@ -168,7 +200,16 @@ function populateIdentitySetup(user = null) {
   if ($("#identityMarketingPush")) $("#identityMarketingPush").checked = state.profile.marketingPushConsent === true;
   if ($("#identityMarketingSms")) $("#identityMarketingSms").checked = state.profile.marketingSmsConsent === true;
   if ($("#identityMarketingEmail")) $("#identityMarketingEmail").checked = state.profile.marketingEmailConsent === true;
+  const naverPhoneButton = $("#identityNaverPhoneButton");
+  if (naverPhoneButton) {
+    naverPhoneButton.hidden = Boolean(providerPhone) || !authUserHasProvider(user || {}, "custom:naver");
+    naverPhoneButton.disabled = false;
+  }
   setNicknameStatus("identityNicknameStatus", "닉네임은 모든 회원 사이에서 중복될 수 없습니다.");
+  if (providerPhone) markIdentityPhoneVerified(providerPhone, "provider");
+  else if (authUserHasProvider(user || {}, "custom:naver")) {
+    resetIdentityPhoneVerification("네이버 번호를 다시 받거나 문자 인증 후 기존 회원 DB와 연결합니다.");
+  } else resetIdentityPhoneVerification("휴대전화 인증 후 기존 회원 DB와 안전하게 연결합니다.");
   if ($("#identitySetupMessage")) $("#identitySetupMessage").textContent = "";
 }
 

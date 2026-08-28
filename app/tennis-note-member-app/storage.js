@@ -308,6 +308,7 @@ function paymentGatewayConfig() {
   const requestedMode = String(browserConfig.mode || localConfig.mode || defaultPaymentOperatingMode).trim().toLowerCase();
   const mode = requestedMode === "multi" ? "multi" : defaultPaymentOperatingMode;
   return {
+    enabled: browserConfig.enabled !== false,
     provider: "portone",
     mode,
     allowedMethods: paymentMethodIdList(liveOptionsAreAuthoritative

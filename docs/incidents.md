@@ -10,6 +10,8 @@
 | 회원 이름이 관리자 화면에서 코드로 실행됨 | `innerHTML` 에 입력값을 그대로 넣음 | `escapeHtml` (검사기 없음 — **문서와 습관에만 의존**) |
 | 관리자만 옛 커리큘럼 카탈로그를 봄 | 버전 `?v=` 를 한 곳 빠뜨림 | `check_cloudflare_build.py` 버전 일치 검사 |
 | 가입 동의 화면의 약관 링크 404 | 없는 페이지를 링크 | `check_cloudflare_build.py` 링크 검사 (`<a>` 까지 봄) |
+| 스토어에서 받을 수 없는 심사 중 빌드를 업데이트로 안내 | 준비 버전과 실제 다운로드 가능 버전을 구분하지 않음 | `native-update-availability` · `availability=available` 게이트 |
+| 수업 피드백·회원권 등록의 임시 저장이 완료 처리처럼 오해됨 | 로컬 초안과 서버 완료가 같은 화면에 함께 노출됨 | `no-persistent-operational-drafts` · 완료만 저장 |
 
 ## 구조 정리 중에 낸 것 — 브라우저에서만 드러난 것들
 

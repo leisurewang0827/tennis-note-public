@@ -58,7 +58,12 @@
     return `${draftPrefix}${location.pathname}:${root.dataset.tnInputGuard || root.id}`;
   }
 
+  function persistsDraft(root) {
+    return root?.dataset?.tnRestoreDraft === "true";
+  }
+
   function saveDraft(root) {
+    if (!persistsDraft(root)) return false;
     const payload = { savedAt: Date.now(), values: values(root) };
     try {
       sessionStorage.setItem(draftKey(root), JSON.stringify(payload));
@@ -153,7 +158,7 @@
       <div class="tn-unsaved-backdrop"></div>
       <article role="dialog" aria-modal="true" aria-labelledby="tnUnsavedTitle">
         <strong id="tnUnsavedTitle">작성 중인 내용이 있습니다</strong>
-        <p>계속 작성하거나, 이 기기에 임시 저장한 뒤 나갈 수 있습니다.</p>
+        <p data-tn-unsaved-message>계속 작성하거나, 작성 내용을 지우고 나갈 수 있습니다.</p>
         <div>
           <button type="button" class="primary-button" data-tn-unsaved-action="continue">계속 작성</button>
           <button type="button" class="small-button" data-tn-unsaved-action="draft">임시 저장</button>
@@ -186,10 +191,16 @@
   }
 
   function ask(root, onLeave) {
-    saveDraft(root);
     promptRoot = root;
     promptLeave = onLeave;
     const prompt = ensurePrompt();
+    const persist = persistsDraft(root);
+    const message = prompt.querySelector("[data-tn-unsaved-message]");
+    const draftButton = prompt.querySelector('[data-tn-unsaved-action="draft"]');
+    if (message) message.textContent = persist
+      ? "계속 작성하거나, 이 기기에 임시 저장한 뒤 나갈 수 있습니다."
+      : "계속 작성하거나, 작성 내용을 지우고 나갈 수 있습니다.";
+    if (draftButton) draftButton.hidden = !persist;
     prompt.hidden = false;
     document.body.classList.add("tn-unsaved-open");
     prompt.querySelector('[data-tn-unsaved-action="continue"]')?.focus({ preventScroll: true });

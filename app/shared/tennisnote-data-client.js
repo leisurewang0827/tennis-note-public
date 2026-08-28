@@ -1121,8 +1121,12 @@
       code_challenge: pkce.challenge,
       code_challenge_method: "S256",
     });
-    // Naver otherwise reuses the browser's signed-in account without offering an account choice.
-    if (key === "naver") query.set("auth_type", "reauthenticate");
+    // Keep normal Naver sign-in on account reauthentication. When a previously
+    // denied profile field is required, callers can explicitly request the
+    // provider's separate permission reprompt flow.
+    if (key === "naver") {
+      query.set("auth_type", options.authType === "reprompt" ? "reprompt" : "reauthenticate");
+    }
     const authorizeUrl = authUrl(`authorize?${query.toString()}`);
     const browserPlugin = window.Capacitor?.Plugins?.Browser;
     if (isNativeApp() && browserPlugin?.open) {
@@ -1282,6 +1286,54 @@
       throw error;
     }
     return response.json();
+  }
+
+  async function requestPhoneChangeVerification(phone) {
+    if (!readiness().ready) throw new Error("Supabase publishable config is missing. Phone verification is unavailable.");
+    const normalizedPhone = `${phone || ""}`.trim();
+    if (!/^\+[1-9][0-9]{7,14}$/u.test(normalizedPhone)) throw new Error("phone_invalid");
+    const session = await ensureSession();
+    if (!session?.access_token) throw new Error("login_required");
+    const response = await fetch(authUrl("user"), {
+      method: "PUT",
+      headers: authHeaders({}, session),
+      body: JSON.stringify({ phone: normalizedPhone }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload?.msg || payload?.message || payload?.error_description || "phone_verification_request_failed");
+      error.code = payload?.error_code || payload?.code || "phone_verification_request_failed";
+      error.status = response.status;
+      emitClientError("phone_verification_request", error);
+      throw error;
+    }
+    return payload;
+  }
+
+  async function verifyPhoneChange(phone, token) {
+    if (!readiness().ready) throw new Error("Supabase publishable config is missing. Phone verification is unavailable.");
+    const normalizedPhone = `${phone || ""}`.trim();
+    const normalizedToken = `${token || ""}`.replace(/\D/gu, "");
+    if (!/^\+[1-9][0-9]{7,14}$/u.test(normalizedPhone)) throw new Error("phone_invalid");
+    if (!/^[0-9]{6}$/u.test(normalizedToken)) throw new Error("phone_otp_invalid");
+    const session = await ensureSession();
+    if (!session?.access_token) throw new Error("login_required");
+    const response = await fetch(authUrl("verify"), {
+      method: "POST",
+      headers: authHeaders({}, session),
+      body: JSON.stringify({ type: "phone_change", phone: normalizedPhone, token: normalizedToken }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload?.msg || payload?.message || payload?.error_description || "phone_otp_verification_failed");
+      error.code = payload?.error_code || payload?.code || "phone_otp_verification_failed";
+      error.status = response.status;
+      emitClientError("phone_verification_confirm", error);
+      throw error;
+    }
+    const provider = session.provider || storedProvider() || "Supabase";
+    if (payload?.access_token) saveSession({ ...payload, provider });
+    return payload;
   }
 
   async function bootstrapCurrentProfile(options = {}) {
@@ -1525,6 +1577,8 @@
     sendPasswordResetEmail,
     signUpWithPassword,
     updatePassword,
+    requestPhoneChangeVerification,
+    verifyPhoneChange,
     providerSlug,
     getAuthUser,
     getAuthSettings,

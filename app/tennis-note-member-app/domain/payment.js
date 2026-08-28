@@ -77,6 +77,7 @@ function discountCouponValueLabel(coupon = {}) {
 }
 
 function allowedPaymentMethodIds(config = paymentGatewayConfig()) {
+  if (config.enabled === false) return [];
   if (config.mode !== "multi") {
     return config.bankTransfer?.enabled ? [...defaultAllowedPaymentMethods, "bank_transfer"] : [...defaultAllowedPaymentMethods];
   }

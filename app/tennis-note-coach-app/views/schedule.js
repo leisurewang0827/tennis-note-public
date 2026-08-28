@@ -169,9 +169,9 @@ function renderScheduleEditPanel() {
           </details>`
         : ""}
       <div class="actions lesson-completion-actions wide">
-        ${!finalized && canProcess ? canFinalize
+        ${!finalized && canProcess && canFinalize
           ? `<button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>저장하고 완료</button>`
-          : `<button class="approve-button" type="button" data-save-lesson-draft="${lesson.id}">저장</button>` : ""}
+          : ""}
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>
       ${canProcess

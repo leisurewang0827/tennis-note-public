@@ -112,6 +112,23 @@ async function persistConsentPreferences({ marketingPush, marketingSms, marketin
   return result;
 }
 
+async function refreshIdentityPhoneVerification() {
+  const client = window.TennisNoteDataClient;
+  if (!hasLiveMemberSession() || !client?.getAuthUser) return "";
+  const user = await client.getAuthUser();
+  const verifiedPhone = verifiedPhoneFromAuthUser(user || {});
+  if (verifiedPhone) markIdentityPhoneVerified(verifiedPhone, "provider");
+  return verifiedPhone;
+}
+
+async function requireVerifiedIdentityPhone(phone) {
+  const normalizedPhone = normalizeIdentityPhone(phone);
+  if (identityPhoneVerification.status === "verified" && identityPhoneVerification.phone === normalizedPhone) return true;
+  const verifiedPhone = await refreshIdentityPhoneVerification();
+  if (verifiedPhone === normalizedPhone) return true;
+  throw new Error("phone_verification_required");
+}
+
 async function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender }) {
   const normalizedRealName = normalizeIdentityText(realName);
   const normalizedNickname = normalizeIdentityText(nickname);
@@ -124,10 +141,11 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
   if (!/^01[0-9]{8,9}$/u.test(normalizedPhone)) throw new Error("phone_invalid");
   if (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear()) throw new Error("birth_year_invalid");
   if (!["female", "male", "other", "prefer_not"].includes(normalizedGender)) throw new Error("gender_invalid");
+  await requireVerifiedIdentityPhone(normalizedPhone);
 
   const client = window.TennisNoteDataClient;
   if (hasLiveMemberSession() && client?.rpc) {
-    const rawResult = await retryTransientNetwork(() => client.rpc("tn_update_my_identity_profile_v2", {
+    const rawResult = await retryTransientNetwork(() => client.rpc("tn_update_my_identity_profile_v3", {
       target_real_name: normalizedRealName,
       target_nickname: normalizedNickname,
       target_phone: normalizedPhone,

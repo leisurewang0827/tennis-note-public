@@ -137,6 +137,93 @@ function applyConsentPreferences(preferences = {}) {
   state.profile.marketingEmailConsent = preferences.marketingEmail === true;
 }
 
+async function requestIdentityPhoneVerification() {
+  const button = $("#identityPhoneSendButton");
+  const phone = normalizeIdentityPhone($("#identityPhone")?.value || "");
+  const e164Phone = identityPhoneE164(phone);
+  if (!/^01[0-9]{8,9}$/u.test(phone) || !e164Phone) {
+    setIdentityPhoneStatus("휴대전화 번호를 010부터 정확히 입력해 주세요.", "error");
+    $("#identityPhone")?.focus();
+    return false;
+  }
+  const client = window.TennisNoteDataClient;
+  if (!hasLiveMemberSession() || !client?.requestPhoneChangeVerification) {
+    setIdentityPhoneStatus("로그인 상태를 다시 확인해 주세요.", "error");
+    return false;
+  }
+  button.disabled = true;
+  setIdentityPhoneStatus("인증번호를 보내고 있습니다.");
+  try {
+    const currentUser = await client.getAuthUser?.();
+    if (verifiedPhoneFromAuthUser(currentUser || {}) === phone) {
+      markIdentityPhoneVerified(phone, "provider");
+      return true;
+    }
+    await client.requestPhoneChangeVerification(e164Phone);
+    identityPhoneVerification = { phone, status: "pending", source: "sms" };
+    $("#identityPhoneCodeRow").hidden = false;
+    setIdentityPhoneStatus("문자로 받은 인증번호 6자리를 입력해 주세요.");
+    window.setTimeout(() => $("#identityPhoneCode")?.focus(), 40);
+    return true;
+  } catch (error) {
+    resetIdentityPhoneVerification(identityErrorMessage(error));
+    setIdentityPhoneStatus(identityErrorMessage(error), "error");
+    return false;
+  } finally {
+    if (identityPhoneVerification.status !== "verified") button.disabled = false;
+  }
+}
+
+async function requestNaverPhoneConsent() {
+  const button = $("#identityNaverPhoneButton");
+  const client = window.TennisNoteDataClient;
+  if (!button || !hasLiveMemberSession() || !client?.signInWithOAuth) {
+    setIdentityPhoneStatus("로그인 상태를 다시 확인해 주세요.", "error");
+    return false;
+  }
+  button.disabled = true;
+  setIdentityPhoneStatus("네이버에서 휴대전화번호 제공 동의 화면을 여는 중입니다.");
+  try {
+    await client.signInWithOAuth("Naver", { authType: "reprompt" });
+    return true;
+  } catch (error) {
+    button.disabled = false;
+    setIdentityPhoneStatus(oauthLoginErrorMessage(error, "네이버"), "error");
+    return false;
+  }
+}
+
+async function confirmIdentityPhoneVerification() {
+  const button = $("#identityPhoneVerifyButton");
+  const phone = normalizeIdentityPhone($("#identityPhone")?.value || "");
+  const code = normalizeIdentityPhone($("#identityPhoneCode")?.value || "");
+  if (identityPhoneVerification.status !== "pending" || identityPhoneVerification.phone !== phone) {
+    setIdentityPhoneStatus("휴대전화 번호가 바뀌었습니다. 인증번호를 다시 받아 주세요.", "error");
+    return false;
+  }
+  if (!/^[0-9]{6}$/u.test(code)) {
+    setIdentityPhoneStatus("인증번호 6자리를 입력해 주세요.", "error");
+    $("#identityPhoneCode")?.focus();
+    return false;
+  }
+  const client = window.TennisNoteDataClient;
+  button.disabled = true;
+  setIdentityPhoneStatus("인증번호를 확인하고 있습니다.");
+  try {
+    await client.verifyPhoneChange(identityPhoneE164(phone), code);
+    const authUser = await client.getAuthUser?.();
+    const verifiedPhone = verifiedPhoneFromAuthUser(authUser || {});
+    if (verifiedPhone !== phone) throw new Error("phone_verification_not_confirmed");
+    markIdentityPhoneVerified(phone, "sms");
+    return true;
+  } catch (error) {
+    setIdentityPhoneStatus(identityErrorMessage(error), "error");
+    return false;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function submitIdentitySetup(event) {
   event.preventDefault();
   const form = event.currentTarget;

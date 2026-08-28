@@ -226,6 +226,7 @@ function renderPaymentGatewayStatus() {
     .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999));
   const readyCount = readyMethods.length;
   const ready = readyCount > 0;
+  const developmentBlocked = config.enabled === false;
   const methodButtons = readyMethods.map((method) => {
     const selected = method.id === selectedMethodId;
     return `
@@ -237,8 +238,8 @@ function renderPaymentGatewayStatus() {
   target.innerHTML = `
     <article class="payment-status-card ${ready ? "ready" : "setup"}">
       <div>
-        <strong>${ready ? "안전결제 연결됨" : "결제 연결 설정 필요"}</strong>
-        <span>${ready ? `${readyMethods.map((method) => method.label).join("·")} 결제를 사용할 수 있습니다.` : "결제 채널 연결 후 회원권을 구매할 수 있습니다."}</span>
+        <strong>${ready ? "안전결제 연결됨" : developmentBlocked ? "개발계 결제 차단" : "결제 연결 설정 필요"}</strong>
+        <span>${ready ? `${readyMethods.map((method) => method.label).join("·")} 결제를 사용할 수 있습니다.` : developmentBlocked ? "화면 검증만 가능하며 실제 결제는 운영 앱에서 진행합니다." : "결제 채널 연결 후 회원권을 구매할 수 있습니다."}</span>
       </div>
       <b>${ready ? paymentMethodDefinition(selectedMethodId).shortLabel : "설정 대기"}</b>
     </article>
