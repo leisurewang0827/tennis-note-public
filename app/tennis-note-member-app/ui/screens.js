@@ -144,10 +144,14 @@ function closeMemberEnrollmentModal() {
 function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", requestedPurpose = "") {
   const flow = purchaseFlowState();
   const activeTickets = currentLiveTickets();
+  const returningSource = !activeTickets.length && !["add_coach", "one_day"].includes(requestedPurpose)
+    ? latestPreviousMembershipTicket()
+    : null;
   const requestedSource = (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
   const sourceTicket = requestedSource
+    || returningSource
     || (!["add_coach", "new_purchase", "one_day"].includes(requestedPurpose) ? activeTickets[0] || null : null);
-  const sourceIsActive = Boolean(sourceTicket && activeTickets.some((ticket) => String(ticket.id || "") === String(sourceTicket.id || "")));
+  const sourceCanKeepSchedule = membershipTicketCanKeepSchedule(sourceTicket);
   const products = membershipProducts();
   const exactProduct = products.find((product) => (
     String(product.id || "") === String(productId || sourceTicket?.productId || "")
@@ -174,8 +178,8 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
     : requestedPurpose === "one_day" ? "one-day" : activeMembershipPresetId() || "four-week";
   flow.step = 1;
   flow.purchasePurpose = ["renew_same", "add_coach", "new_purchase", "one_day"].includes(requestedPurpose)
-    ? requestedPurpose
-    : sourceIsActive ? "renew_same" : "new_purchase";
+    ? (requestedPurpose === "new_purchase" && returningSource ? "renew_same" : requestedPurpose)
+    : sourceTicket ? "renew_same" : "new_purchase";
   flow.showMoreSlots = false;
   flow.showAllProducts = false;
   flow.productFrequency = matchingProduct ? purchaseProductFrequency(matchingProduct) : 1;
@@ -184,7 +188,7 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
     : "weekday";
   flow.scheduleMode = purchaseUsesFlexibleCouponSchedule(matchingProduct, flow)
     ? "flex"
-    : sourceIsActive && matchingProduct ? "keep" : "change";
+    : sourceCanKeepSchedule && matchingProduct ? "keep" : "change";
   flow.scheduleWeekStart = purchaseWeekStartDate(lesson?.lessonDate || purchaseEffectiveStartDate());
   flow.scheduleAvailableOnly = true;
   flow.coachRoleId = sourceTicket?.coachRoleId || "";
@@ -423,7 +427,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.426", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.427", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",

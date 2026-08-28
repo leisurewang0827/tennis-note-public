@@ -2387,10 +2387,14 @@
     return true;
   }
 
-  function ticketSelectableForLesson(ticket, lessonDate) {
+  function adminMayScheduleWithoutBalance() {
+    return String(bridge()?.snapshot?.().role || "").trim().toLowerCase() === "admin";
+  }
+
+  function ticketSelectableForLesson(ticket, lessonDate, options = {}) {
     const status = String(ticket?.status || "").trim().toLowerCase();
     if (status && status !== "active") return false;
-    if (Number(ticket?.remainingSessions ?? ticket?.remaining_sessions) <= 0) return false;
+    if (Number(ticket?.remainingSessions ?? ticket?.remaining_sessions) <= 0 && options.allowNoBalance !== true) return false;
     const startsOn = ticket?.startsOn || ticket?.starts_on || "";
     const expiresOn = ticket?.expiresOn || ticket?.expires_on || "";
     if (lessonDate && startsOn && lessonDate < startsOn) return false;
@@ -2579,7 +2583,9 @@
     }
     const lessonDate = $("#scheduleV2EditorForm")?.elements?.lessonDate?.value || state.selectedDate;
     const matchingTickets = (state.payload?.tickets || []).filter((ticket) => (
-      ticketMatchesKind(ticket, kind) && ticketSelectableForLesson(ticket, lessonDate)
+      ticketMatchesKind(ticket, kind) && ticketSelectableForLesson(ticket, lessonDate, {
+        allowNoBalance: adminMayScheduleWithoutBalance(),
+      })
     ));
     const candidates = matchingTickets.map((ticket) => ({ ticket, userId: "" }));
     const rows = candidates
@@ -2601,8 +2607,13 @@
         const detail = userId
           ? memberIdentityLabel(userId)
           : `${ticketIdentityLabel(ticket)} · ${ticket.productName || ticket.product_name || "회원권"}`;
-        const result = userId ? (selected ? "선택됨" : "선택") : (selected ? "선택됨" : `잔여 ${remaining}/${total}`);
-        return `<button type="button" class="schedule-v2-member-result ${selected ? "is-selected" : ""}" data-v2-ticket-id="${escapeHtml(ticket.id)}"${userId ? ` data-v2-user-id="${escapeHtml(userId)}"` : ""} aria-pressed="${selected}"><span><strong>${escapeHtml(memberLabel)}</strong><span class="schedule-v2-member-identity">${escapeHtml(detail)}</span></span><small>${result}</small></button>`;
+        const noBalance = remaining <= 0;
+        const result = userId
+          ? (selected ? "선택됨" : "선택")
+          : selected
+            ? "선택됨"
+            : noBalance ? "잔여 0회 · 등록 후 연장 안내" : `잔여 ${remaining}/${total}`;
+        return `<button type="button" class="schedule-v2-member-result ${selected ? "is-selected" : ""} ${noBalance ? "is-balance-warning" : ""}" data-v2-ticket-id="${escapeHtml(ticket.id)}"${userId ? ` data-v2-user-id="${escapeHtml(userId)}"` : ""} aria-pressed="${selected}"><span><strong>${escapeHtml(memberLabel)}</strong><span class="schedule-v2-member-identity">${escapeHtml(detail)}</span></span><small>${result}</small></button>`;
       }).join("")
       : '<div class="schedule-v2-selected-ticket">조건에 맞는 회원권이 없습니다.</div>';
   }
@@ -2691,6 +2702,7 @@
     const target = $("#scheduleV2SelectedTicket");
     const oneDay = selectedKind() === "one_day";
     if (!state.selectedParticipants.length) {
+      target.classList.remove("has-balance-warning");
       const guestName = String($("#scheduleV2MemberSearch")?.value || "").trim();
       target.textContent = oneDay
         ? guestName.length >= 2
@@ -2702,9 +2714,12 @@
       return;
     }
     const ticketIds = [...new Set(state.selectedParticipants.map((participant) => participant.ticketId))];
-    const ticketLabels = ticketIds.map((ticketId) => ticketById(ticketId)).filter(Boolean).map((ticket) => ticket.productName || ticket.product_name || "회원권");
+    const selectedTickets = ticketIds.map((ticketId) => ticketById(ticketId)).filter(Boolean);
+    const ticketLabels = selectedTickets.map((ticket) => ticket.productName || ticket.product_name || "회원권");
+    const hasNoBalance = !oneDay && selectedTickets.some((ticket) => Number(ticket.remainingSessions ?? ticket.remaining_sessions) <= 0);
     const summary = oneDay ? "기존 회원 서비스 원데이 · 회원권 차감 없음" : ticketLabels.join(" · ");
-    target.innerHTML = `<div class="schedule-v2-selected-head"><strong>참여자 ${state.selectedParticipants.length}명</strong><span>${escapeHtml(summary)}</span></div><div class="schedule-v2-selected-members">${state.selectedParticipants.map((participant) => `<span>${escapeHtml(participant.name || memberName(participant.userId))}<small>${escapeHtml(memberIdentityLabel(participant.userId))}</small><button type="button" data-v2-remove-user="${escapeHtml(participant.userId)}" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 선택 해제`)}">×</button></span>`).join("")}</div>`;
+    target.classList.toggle("has-balance-warning", hasNoBalance);
+    target.innerHTML = `<div class="schedule-v2-selected-head"><strong>참여자 ${state.selectedParticipants.length}명</strong><span>${escapeHtml(summary)}</span></div>${hasNoBalance ? '<p class="schedule-v2-balance-warning">잔여 횟수가 부족합니다. 이번 수업은 저장하고 회원권 연장 필요로 표시합니다.</p>' : ""}<div class="schedule-v2-selected-members">${state.selectedParticipants.map((participant) => `<span>${escapeHtml(participant.name || memberName(participant.userId))}<small>${escapeHtml(memberIdentityLabel(participant.userId))}</small><button type="button" data-v2-remove-user="${escapeHtml(participant.userId)}" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 선택 해제`)}">×</button></span>`).join("")}</div>`;
     updateSeriesGuidance();
     syncRegularEditScope();
   }
@@ -3824,7 +3839,9 @@
     if (kind !== "one_day" && groupTicket && state.selectedParticipants.length < 2) return "1:2 회원권은 두 회원 연결이 필요합니다.";
     if (tickets.some((ticket) => !ticketMatchesKind(ticket, kind))) return "선택한 수업 종류와 회원권이 맞지 않습니다.";
     const lessonDate = $("#scheduleV2EditorForm")?.elements?.lessonDate?.value || state.selectedDate;
-    if (tickets.some((ticket) => !ticketSelectableForLesson(ticket, lessonDate))) return "수업일에 사용 가능한 회원권을 선택해 주세요.";
+    if (tickets.some((ticket) => !ticketSelectableForLesson(ticket, lessonDate, {
+      allowNoBalance: adminMayScheduleWithoutBalance(),
+    }))) return "수업일에 사용 가능한 회원권을 선택해 주세요.";
     const mismatchedTickets = tickets.filter((ticket) => (
       duration % Math.max(1, Number(ticket.lessonMinutes ?? ticket.lesson_minutes) || 20) !== 0
     ));
@@ -3888,14 +3905,19 @@
     return true;
   }
 
-  function closeEditorAfterSuccessfulSave(lesson, viewState, message) {
+  function isSeriesCapacityError(error) {
+    return String(error?.message || error?.payload?.message || error || "")
+      .includes("schedule_v2_series_capacity_unavailable");
+  }
+
+  function closeEditorAfterSuccessfulSave(lesson, viewState, message, tone = "success") {
     if (history.state?.tennisNoteScheduleV2Editor) {
       history.replaceState({ ...(history.state || {}), tennisNoteScheduleV2Editor: false }, "");
     }
     state.deferredRefresh = false;
     actualCloseEditor();
     if (!upsertOptimisticLesson(lesson, viewState)) restoreWorkspaceViewState(viewState);
-    setStatus(message, "success");
+    setStatus(message, tone);
   }
 
   async function saveEditor(event) {
@@ -3988,6 +4010,10 @@
       return;
     }
     const participants = state.selectedParticipants.map((participant) => ({ userId: participant.userId, ticketId: participant.ticketId }));
+    const hasInsufficientBalance = [...new Set(participants.map((participant) => participant.ticketId))]
+      .map(ticketById)
+      .filter(Boolean)
+      .some((ticket) => Number(ticket.remainingSessions ?? ticket.remaining_sessions) <= 0);
     const editScope = selectedRegularEditScope();
     if (editScope === "future") {
       if (!regularSeriesEditEligible() || kind !== "regular") {
@@ -4013,6 +4039,8 @@
     }
     let saveResult = null;
     let successMessage = "서버 저장 완료 · 최신 시간표를 다시 확인했습니다.";
+    let successTone = "success";
+    let balanceWarningFallback = false;
     try {
       if (state.editingLesson && editScope === "future") {
         const prepared = regularRuleFromEditor(form, duration, participants);
@@ -4031,27 +4059,48 @@
       } else if (!state.editingLesson && kind === "regular" && form.elements.fillSeries.checked) {
         const prepared = regularRuleFromEditor(form, duration, participants);
         if (prepared.error) throw new Error(prepared.error);
-        saveResult = await api.rpc("tn_schedule_v2_fill_regular_series", {
-          target_branch_id: snapshot.branchId,
-          target_participants: participants,
-          target_rules: [prepared.rule],
-          target_operation_key: operationKey("admin-series"),
-          target_replace_v2_rules: false,
-        });
-        if (singleAnchorNeedsFillVerification(saveResult, prepared, duration)) {
-          const firstResult = Array.isArray(saveResult) ? saveResult[0] || {} : saveResult || {};
-          const verifiedResult = await api.rpc("tn_schedule_v2_fill_regular_series", {
+        try {
+          saveResult = await api.rpc("tn_schedule_v2_fill_regular_series", {
             target_branch_id: snapshot.branchId,
             target_participants: participants,
             target_rules: [prepared.rule],
-            target_operation_key: operationKey("admin-series-verify"),
+            target_operation_key: operationKey("admin-series"),
             target_replace_v2_rules: false,
           });
-          const normalizedVerified = Array.isArray(verifiedResult) ? verifiedResult[0] || {} : verifiedResult || {};
-          saveResult = {
-            ...normalizedVerified,
-            createdCount: Number(firstResult.createdCount || 0) + Number(normalizedVerified.createdCount || 0),
-          };
+          if (singleAnchorNeedsFillVerification(saveResult, prepared, duration)) {
+            const firstResult = Array.isArray(saveResult) ? saveResult[0] || {} : saveResult || {};
+            const verifiedResult = await api.rpc("tn_schedule_v2_fill_regular_series", {
+              target_branch_id: snapshot.branchId,
+              target_participants: participants,
+              target_rules: [prepared.rule],
+              target_operation_key: operationKey("admin-series-verify"),
+              target_replace_v2_rules: false,
+            });
+            const normalizedVerified = Array.isArray(verifiedResult) ? verifiedResult[0] || {} : verifiedResult || {};
+            saveResult = {
+              ...normalizedVerified,
+              createdCount: Number(firstResult.createdCount || 0) + Number(normalizedVerified.createdCount || 0),
+            };
+          }
+        } catch (seriesError) {
+          if (!isSeriesCapacityError(seriesError)) throw seriesError;
+          saveResult = await api.rpc("tn_schedule_v2_save_lesson", {
+            target_branch_id: snapshot.branchId,
+            target_coach_role_id: form.elements.coachRoleId.value,
+            target_lesson_date: form.elements.lessonDate.value,
+            target_start_time: form.elements.startTime.value,
+            target_duration_minutes: duration,
+            target_schedule_kind: kind,
+            target_participants: participants,
+            target_operation_key: operationKey("admin-balance-warning-lesson"),
+            target_lesson_id: null,
+            target_expected_revision: null,
+            target_request_id: null,
+            target_note: form.elements.note.value.trim() || null,
+          });
+          balanceWarningFallback = true;
+          successTone = "warning";
+          successMessage = "이번 수업은 저장됨 · 잔여 횟수가 부족해 반복 일정은 만들지 않았습니다. 회원권을 연장해 주세요.";
         }
       } else {
         saveResult = await api.rpc("tn_schedule_v2_save_lesson", {
@@ -4069,20 +4118,24 @@
           target_note: form.elements.note.value.trim() || null,
         });
       }
+      if (hasInsufficientBalance && !balanceWarningFallback) {
+        successTone = "warning";
+        successMessage = "수업 저장 완료 · 잔여 횟수가 부족합니다. 수업 전 회원권을 연장해 주세요.";
+      }
       const normalizedResult = normalizedSaveResult(saveResult);
-      if (normalizedResult.anchorPending) {
+      if (!balanceWarningFallback && normalizedResult.anchorPending) {
         const missingUnits = Object.values(normalizedResult.missingWeeklyUnitsByTicket || {})
           .map(Number)
           .filter((value) => Number.isFinite(value) && value > 0);
         const missingCount = missingUnits.length ? Math.max(...missingUnits) : 1;
         successMessage = `정규시간 저장 완료 · 시간표에서 ${missingCount}개 시간을 더 선택해 주세요.`;
-      } else if (Number(normalizedResult.createdCount) > 1) {
+      } else if (!balanceWarningFallback && Number(normalizedResult.createdCount) > 1) {
         successMessage = `정규시간 저장 완료 · 미래수업 ${Number(normalizedResult.createdCount)}회가 연결되었습니다.`;
       }
       const optimisticLesson = optimisticLessonFromEditor({ form, duration, kind, participants, result: saveResult });
-      closeEditorAfterSuccessfulSave(optimisticLesson, savedViewState, successMessage);
+      closeEditorAfterSuccessfulSave(optimisticLesson, savedViewState, successMessage, successTone);
       const refreshed = await refreshWorkspaceAfterWrite(api, savedViewState);
-      if (refreshed) setStatus(successMessage, "success");
+      if (refreshed) setStatus(successMessage, successTone);
     } catch (error) {
       setEditorMessage(errorMessage(error));
     } finally {

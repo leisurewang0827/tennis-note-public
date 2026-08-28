@@ -280,12 +280,42 @@ async function confirmPaymentCancelFromModal() {
   await executeBillingPaymentCancellation(item, reason);
 }
 
-function openBillingMemberReview(item = {}) {
-  const userId = String(item.serverUserId || "");
-  const member = members.find((candidate) => memberServerUserIds(candidate).includes(userId))
-    || members.find((candidate) => String(candidate.name || "") === String(item.member || ""));
+function openBillingMemberReview(item = {}, billingIndex = billings.indexOf(item)) {
+  const context = billingMemberTicketContext(item);
+  const member = context.member;
   if (!member) {
     showToast("연결할 회원을 회원관리에서 먼저 확인해 주세요");
+    return;
+  }
+  if (context.ticket) {
+    const openInline = () => {
+      if (!memberAdminEditEnabled) {
+        memberAdminEditEnabled = true;
+        memberAdminEditExpiresAt = Date.now() + memberAdminEditTimeoutMs;
+      }
+      state.billingInlineIndex = state.billingInlineIndex === billingIndex ? null : billingIndex;
+      renderBilling();
+      if (state.billingInlineIndex === billingIndex) {
+        document.querySelector(`[data-billing-inline-index="${billingIndex}"]`)?.scrollIntoView({ block: "nearest" });
+      }
+    };
+    if (memberAdminEditEnabled || isAdminUnlocked()) {
+      openInline();
+      return;
+    }
+    if (adminPinNeedsSetup()) {
+      state.settingsTab = "security";
+      showToast("운영 설정의 보안·잠금에서 관리자 PIN을 먼저 설정해 주세요.");
+      return;
+    }
+    adminLockSession.pendingView = "";
+    adminLockSession.pendingAction = "member_admin_edit";
+    adminLockSession.pendingLabel = "결제·회원권 한 줄 수정";
+    adminLockSession.error = "";
+    adminLockSession.afterUnlock = openInline;
+    renderAdminLockModal();
+    $("#adminLockModal")?.removeAttribute("hidden");
+    setTimeout(() => $("#adminPinInput")?.focus(), 0);
     return;
   }
   state.selectedMemberId = member.id;

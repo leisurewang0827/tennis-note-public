@@ -1725,11 +1725,12 @@ function memberManagementActionAllowed(action, ticket = null) {
   const role = operationsRole();
   if (role === "admin") return true;
   if (role !== "coach" || !ticket?.serverTicketId) return false;
+  if (action === "reenroll") return false;
   const policyAllows = action === "correct"
     ? memberManagementPolicy.coachCanCorrectTicket
     : action === "expire"
       ? memberManagementPolicy.coachCanExpireTicket
-      : action === "reenroll" && memberManagementPolicy.coachCanReenroll;
+      : false;
   return Boolean(policyAllows && currentOperationsCoachRoleIds().has(ticket.coachRoleId));
 }
 
@@ -2217,6 +2218,21 @@ function paymentCancellationAuditLog(item = {}) {
   const detail = paymentCancellationAuditDetail(item);
   if (!detail) return "";
   return `${item.member || "회원"} · ${item.item || "결제"} · ${item.status === "refunded" ? "환불" : "PG 전액취소"} · ${detail}`;
+}
+
+function billingMemberTicketContext(item = {}) {
+  const ticketId = String(item.ticketId || "");
+  const ticket = ticketId
+    ? [...tickets, ...expiredTickets].find((candidate) => (
+      String(candidate.serverTicketId || candidate.id || "") === ticketId
+    ))
+    : null;
+  const participantIds = new Set(ticket ? ticketParticipantUserIds(ticket).map(String) : []);
+  const userId = String(item.serverUserId || "");
+  const member = members.find((candidate) => userId && memberServerUserIds(candidate).includes(userId))
+    || members.find((candidate) => participantIds.size && memberServerUserIds(candidate).some((id) => participantIds.has(String(id))))
+    || members.find((candidate) => String(candidate.name || "") === String(item.member || ""));
+  return { member: member || null, ticket: ticket || null };
 }
 
 function downloadRowsAsCsv(filename, rows) {

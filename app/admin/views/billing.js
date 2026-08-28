@@ -196,6 +196,15 @@ function renderBilling() {
         const item = entry.primary;
         const index = billings.indexOf(item);
         const approval = paymentApprovalDisplay(item);
+        const inlineContext = billingMemberTicketContext(item);
+        const inlineOpen = state.billingInlineIndex === index
+          && Boolean(inlineContext.member && inlineContext.ticket);
+        const inlineTicketCount = inlineContext.member
+          ? memberOperationalTickets(inlineContext.member).length
+          : 0;
+        const inlineActionLabel = inlineContext.ticket
+          ? (inlineOpen ? "수정 닫기" : "한 줄 수정")
+          : "회원권 연결";
         return `
         <tr class="payment-sheet-row ${approval.tone}">
           <td>${badge(approval.tone, approval.label)}<br><small>${escapeHtml(approval.detail)}</small></td>
@@ -203,9 +212,21 @@ function renderBilling() {
           <td>${billingMembershipDetail(item)}${billingAttemptHistoryMarkup(entry)}<details class="payment-source-details"><summary>원본·시도 이력</summary><span>${escapeHtml(item.item || "결제")}${item.providerPaymentId ? ` · ${escapeHtml(item.providerPaymentId)}` : ""}${item.source ? ` · ${escapeHtml(paymentSourceText(item))}` : ""}</span></details></td>
           <td><strong>${money.format(item.amount)}원</strong><br><small>${escapeHtml(paymentMethodLabel(item.method))} · ${escapeHtml(billingEffectiveDate(item) || "일자 미입력")}</small>${item.discountTitle ? `<br><small>${escapeHtml(item.discountTitle)} · ${money.format(item.discountAmount || 0)}원 할인</small>` : ""}</td>
           <td>${paymentConfirmationMarkup(item)}${paymentCancellationAuditDetail(item) ? `<br><small>${escapeHtml(paymentCancellationAuditDetail(item))}</small>` : ""}</td>
-          <td class="payment-sheet-approval">${paymentActionFor(item, index)}</td>
+          <td class="payment-sheet-approval">
+            ${paymentActionFor(item, index)}
+            <button class="small-button billing-inline-open" type="button" data-billing-member-review="${index}" aria-expanded="${inlineOpen ? "true" : "false"}">${inlineActionLabel}</button>
+          </td>
           <td class="billing-settlement-cell">${billingSettlementApprovalMarkup(item)}</td>
-        </tr>`;
+        </tr>
+        ${inlineOpen ? `<tr class="member-inline-editor-row member-inline-sheet-row billing-inline-editor-row" data-billing-inline-index="${index}">
+          <td colspan="7">${memberQuickEditorMarkup(inlineContext.member, inlineContext.ticket, {
+            embedded: true,
+            context: "billing",
+            hideSchedule: true,
+            ticketPosition: 0,
+            ticketCount: inlineTicketCount,
+          })}</td>
+        </tr>` : ""}`;
       },
     )
     .join("") : '<tr><td colspan="7" class="empty-text">선택한 달과 상태의 결제 내역이 없습니다.</td></tr>';

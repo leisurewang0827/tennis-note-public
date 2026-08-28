@@ -817,6 +817,20 @@ h2 {
   box-shadow: inset 4px 0 var(--red);
 }
 
+.payment-sheet-table .billing-inline-editor-row > td {
+  padding: 0 !important;
+  background: #f5faf8;
+}
+
+.billing-inline-editor-row .member-inline-editor {
+  min-width: 1360px;
+  border-top: 1px solid #8ebcaf;
+}
+
+.billing-inline-editor-row .member-inline-profile-hint span::after {
+  content: " · 결제·회원권 장부 안에서 바로 저장합니다.";
+}
+
 .payment-sheet-approval {
   min-width: 132px;
 }

@@ -518,6 +518,7 @@ function applyMemberManagementProductDefaults(form, allLiveData = adminLiveDataS
   form.elements.totalSessions.value = total;
   form.elements.usedSessions.value = 0;
   form.elements.remainingSessions.value = total;
+  if (form.elements.addedSessions) form.elements.addedSessions.value = total;
   form.elements.expiresOn.value = addMemberManagementDays(start, validityDays - 1);
   if (form.elements.paymentAmount && form.dataset.paymentAmountOverride !== "true") {
     form.elements.paymentAmount.value = memberManagementPaymentAmountForMethod(product, form.elements.paymentMethod?.value || "");
@@ -843,21 +844,16 @@ async function submitMemberManagementForm(event) {
     } else if (action === "reenroll") {
       const reenrollOperationKey = form.dataset.reenrollOperationKey || createAdminOperationKey("member-reenroll");
       form.dataset.reenrollOperationKey = reenrollOperationKey;
-      result = await client.rpc("tn_admin_reenroll_member_ticket_and_regular_schedule", {
+      result = await client.rpc("tn_admin_accumulate_member_ticket_entitlement", {
         target_record: {
           sourceTicketId: ticket.serverTicketId,
           productId: form.elements.productId.value,
           coachRoleId: form.elements.coachRoleId.value,
-          totalSessions: Number(form.elements.totalSessions.value),
-          usedSessions: Number(form.elements.usedSessions.value),
-          remainingSessions: Number(form.elements.remainingSessions.value),
-          startsOn: form.elements.startsOn.value,
-          expiresOn: form.elements.expiresOn.value,
+          addedSessions: Number(form.elements.addedSessions.value),
           purchasedPrice: Number(form.elements.purchasedPrice.value),
-          scheduleMode: reenrollScheduleMode,
+          scheduleMode: "keep",
           reason,
         },
-        target_schedules: reenrollRegularSchedules,
         target_operation_key: reenrollOperationKey,
       });
       state.memberFilter = "active";
@@ -1526,7 +1522,12 @@ async function submitMemberInlineEditor(form, options = {}) {
     form.classList.add("is-save-success");
     form.dataset.dirty = "false";
     showToast(`${member.name} 회원권 저장 완료`);
-    renderMembers();
+    if (form.dataset.memberInlineContext === "billing") {
+      state.billingInlineIndex = null;
+      renderBilling();
+    } else {
+      renderMembers();
+    }
     return true;
   } catch (error) {
     const raw = String(error?.message || error?.payload?.message || "");
