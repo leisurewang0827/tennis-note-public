@@ -59,6 +59,17 @@ function verifiedPhoneFromAuthUser(user = {}) {
   return identityPhone.startsWith("82") ? `0${identityPhone.slice(2)}` : identityPhone;
 }
 
+function authUserHasProvider(user = {}, provider = "") {
+  const expected = String(provider || "").trim().toLowerCase();
+  if (!expected) return false;
+  const appMetadata = user?.app_metadata || {};
+  const providers = [appMetadata.provider, ...(Array.isArray(appMetadata.providers) ? appMetadata.providers : [])]
+    .concat(Array.isArray(user?.identities) ? user.identities.map((identity) => identity?.provider) : [])
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+  return providers.includes(expected);
+}
+
 function suggestedNicknameFromUser(user = {}) {
   const metadata = user?.user_metadata || {};
   return normalizeIdentityText(

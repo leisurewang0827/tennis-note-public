@@ -199,9 +199,16 @@ function populateIdentitySetup(user = null) {
   if ($("#identityMarketingPush")) $("#identityMarketingPush").checked = state.profile.marketingPushConsent === true;
   if ($("#identityMarketingSms")) $("#identityMarketingSms").checked = state.profile.marketingSmsConsent === true;
   if ($("#identityMarketingEmail")) $("#identityMarketingEmail").checked = state.profile.marketingEmailConsent === true;
+  const naverPhoneButton = $("#identityNaverPhoneButton");
+  if (naverPhoneButton) {
+    naverPhoneButton.hidden = Boolean(providerPhone) || !authUserHasProvider(user || {}, "custom:naver");
+    naverPhoneButton.disabled = false;
+  }
   setNicknameStatus("identityNicknameStatus", "닉네임은 모든 회원 사이에서 중복될 수 없습니다.");
   if (providerPhone) markIdentityPhoneVerified(providerPhone, "provider");
-  else resetIdentityPhoneVerification("휴대전화 인증 후 기존 회원 DB와 안전하게 연결합니다.");
+  else if (authUserHasProvider(user || {}, "custom:naver")) {
+    resetIdentityPhoneVerification("네이버 번호를 다시 받거나 문자 인증 후 기존 회원 DB와 연결합니다.");
+  } else resetIdentityPhoneVerification("휴대전화 인증 후 기존 회원 DB와 안전하게 연결합니다.");
   if ($("#identitySetupMessage")) $("#identitySetupMessage").textContent = "";
 }
 

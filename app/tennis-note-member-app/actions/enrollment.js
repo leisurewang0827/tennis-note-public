@@ -174,6 +174,25 @@ async function requestIdentityPhoneVerification() {
   }
 }
 
+async function requestNaverPhoneConsent() {
+  const button = $("#identityNaverPhoneButton");
+  const client = window.TennisNoteDataClient;
+  if (!button || !hasLiveMemberSession() || !client?.signInWithOAuth) {
+    setIdentityPhoneStatus("로그인 상태를 다시 확인해 주세요.", "error");
+    return false;
+  }
+  button.disabled = true;
+  setIdentityPhoneStatus("네이버에서 휴대전화번호 제공 동의 화면을 여는 중입니다.");
+  try {
+    await client.signInWithOAuth("Naver", { authType: "reprompt" });
+    return true;
+  } catch (error) {
+    button.disabled = false;
+    setIdentityPhoneStatus(oauthLoginErrorMessage(error, "네이버"), "error");
+    return false;
+  }
+}
+
 async function confirmIdentityPhoneVerification() {
   const button = $("#identityPhoneVerifyButton");
   const phone = normalizeIdentityPhone($("#identityPhone")?.value || "");

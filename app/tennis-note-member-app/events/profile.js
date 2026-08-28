@@ -14,6 +14,7 @@ function bindProfileEvents() {
   });
   $("#identitySetupForm")?.addEventListener("submit", submitIdentitySetup);
   $("#identityPhoneSendButton")?.addEventListener("click", requestIdentityPhoneVerification);
+  $("#identityNaverPhoneButton")?.addEventListener("click", requestNaverPhoneConsent);
   $("#identityPhoneVerifyButton")?.addEventListener("click", confirmIdentityPhoneVerification);
   $("#identityNicknameCheckButton")?.addEventListener("click", () => checkNicknameAvailability("identityNickname", "identityNicknameStatus"));
   $("#identityNickname")?.addEventListener("input", () => setNicknameStatus("identityNicknameStatus", "저장할 때 중복 여부를 다시 확인합니다."));

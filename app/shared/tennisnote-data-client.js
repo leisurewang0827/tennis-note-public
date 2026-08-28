@@ -1121,8 +1121,12 @@
       code_challenge: pkce.challenge,
       code_challenge_method: "S256",
     });
-    // Naver otherwise reuses the browser's signed-in account without offering an account choice.
-    if (key === "naver") query.set("auth_type", "reauthenticate");
+    // Keep normal Naver sign-in on account reauthentication. When a previously
+    // denied profile field is required, callers can explicitly request the
+    // provider's separate permission reprompt flow.
+    if (key === "naver") {
+      query.set("auth_type", options.authType === "reprompt" ? "reprompt" : "reauthenticate");
+    }
     const authorizeUrl = authUrl(`authorize?${query.toString()}`);
     const browserPlugin = window.Capacitor?.Plugins?.Browser;
     if (isNativeApp() && browserPlugin?.open) {
