@@ -50,6 +50,7 @@ test("가입 화면은 전화번호 인증 후 v3 서버 연결을 사용한다"
   assert.match(identityDomain, /function authUserHasProvider/);
   assert.match(actions, /client\.signInWithOAuth\("Naver", \{ authType: "reprompt" \}\)/);
   assert.match(memberForms, /id.*identityNaverPhoneButton|identityNaverPhoneButton/);
+  assert.match(memberForms, /identityPhone.*value\s*=\s*formatIdentityPhone\(normalizedPhone\)/);
   assert.match(profileEvents, /identityNaverPhoneButton.*requestNaverPhoneConsent/);
   assert.match(html, /id="identityNaverPhoneButton"/);
 });

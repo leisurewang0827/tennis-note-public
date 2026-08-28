@@ -169,6 +169,7 @@ function resetIdentityPhoneVerification(message = "휴대전화 인증이 필요
 function markIdentityPhoneVerified(phone, source = "sms") {
   const normalizedPhone = normalizeIdentityPhone(phone);
   identityPhoneVerification = { phone: normalizedPhone, status: "verified", source };
+  if ($("#identityPhone")) $("#identityPhone").value = formatIdentityPhone(normalizedPhone);
   if ($("#identityPhoneCodeRow")) $("#identityPhoneCodeRow").hidden = true;
   if ($("#identityPhoneSendButton")) $("#identityPhoneSendButton").disabled = true;
   setIdentityPhoneStatus(
