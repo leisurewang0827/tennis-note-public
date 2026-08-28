@@ -417,7 +417,7 @@ function memberChangeBlockedMessage(code = "", snapshot = null) {
 
 function latestPreviousMembershipTicket() {
   return [...(state.liveTickets || []), ...(state.expiredTickets || [])]
-    .filter((ticket) => ["expired", "cancelled", "canceled", "refunded"].includes(String(ticket.status || "").toLowerCase()))
+    .filter((ticket) => ["active", "paused", "expired"].includes(String(ticket.status || "").toLowerCase()))
     .sort((left, right) => String(right.expiresOn || right.createdAt || "").localeCompare(String(left.expiresOn || left.createdAt || "")))[0] || null;
 }
 

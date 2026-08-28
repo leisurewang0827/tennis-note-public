@@ -102,7 +102,7 @@ function memberManagementActionLabel(action) {
     close: "회원권·미래수업 종료",
     force_delete: "회원권 강제 삭제",
     permanent_delete: "회원 영구 삭제",
-    reenroll: "다시 수강 등록",
+    reenroll: "현재 회원권 횟수 추가",
     deactivate: "회원 삭제 처리",
     restore: "회원 복원",
   })[action] || "회원 관리";
@@ -362,7 +362,10 @@ function memberManagementErrorText(error) {
   if (raw.includes("management_reason_required")) return "변경 사유를 두 글자 이상 입력해 주세요.";
   if (raw.includes("ticket_balance_invalid")) return "총횟수는 소진횟수와 잔여횟수를 더한 값이어야 합니다.";
   if (raw.includes("ticket_date_range_invalid")) return "시작일과 만료일 순서를 확인해 주세요.";
-  if (raw.includes("source_ticket_still_active") || raw.includes("active_ticket_already_exists")) return "현재 사용 중인 동일 회원권이 있어 재등록할 수 없습니다.";
+  if (raw.includes("source_ticket_still_active") || raw.includes("active_ticket_already_exists")) return "현재 회원권을 새로 만들 수 없습니다. ‘횟수 추가’로 현재 회원권에 충전해 주세요.";
+  if (raw.includes("renewal_same_coach_required")) return "다른 코치 수업은 별도 회원권으로 등록해 주세요. 현재 재등록은 같은 코치 회원권에만 횟수를 추가합니다.";
+  if (raw.includes("membership_schedule_change_separate_required")) return "회원권 횟수를 먼저 추가한 뒤 시간표 화면에서 요일·시간을 변경해 주세요.";
+  if (raw.includes("source_ticket_not_renewable")) return "환불·삭제된 회원권에는 횟수를 추가할 수 없습니다. 별도 회원권 등록을 이용해 주세요.";
   if (raw.includes("member_inactive_restore_first")) return "삭제회원은 먼저 회원 복원을 해 주세요.";
   if (raw.includes("group_ticket_requires_two_participants")) return "2대1 회원권의 파트너 연결을 먼저 확인해 주세요.";
   if (raw.includes("group_partner_required")) return "2대1 회원권은 파트너를 선택해야 합니다.";

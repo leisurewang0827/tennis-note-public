@@ -847,6 +847,8 @@ function memberUsageOverviewMarkup(member) {
 function memberQuickEditorMarkup(member, ticket, options = {}) {
   if (!memberAdminEditEnabled || operationsRole() !== "admin") return "";
   const embedded = options.embedded === true;
+  const inlineContext = String(options.context || "members");
+  const hideSchedule = options.hideSchedule === true;
   const ticketPosition = Number(options.ticketPosition || 0);
   const ticketCount = Number(options.ticketCount || 0);
   const record = memberDatabaseRecord(member, ticket);
@@ -911,7 +913,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
          <option value="prefer_not" ${member.gender === "prefer_not" ? "selected" : ""}>응답 안 함</option>
        </select></label>`;
   return `
-        <form class="member-inline-editor member-inline-editor--compact ${embedded && ticket ? "member-inline-editor--ticket-only" : ""}" data-member-inline-form="${member.id}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-schedule-scope="${escapeHtml(record?.lesson_schedule_scope || ticket?.scheduleScope || memberManagementProductScheduleScope(currentProduct))}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(paymentProjection))}">
+        <form class="member-inline-editor member-inline-editor--compact ${embedded && ticket ? "member-inline-editor--ticket-only" : ""}" data-member-inline-form="${member.id}" data-member-inline-context="${escapeHtml(inlineContext)}" data-ticket-id="${escapeHtml(ticket?.serverTicketId || "")}" data-initial-product-id="${escapeHtml(ticket?.productId || "")}" data-initial-schedule-scope="${escapeHtml(record?.lesson_schedule_scope || ticket?.scheduleScope || memberManagementProductScheduleScope(currentProduct))}" data-initial-coach-role-id="${escapeHtml(record?.coach_role_id || ticket?.coachRoleId || "")}" data-initial-schedule="${escapeHtml(encodeURIComponent(JSON.stringify(initialSchedule)))}" data-initial-payment="${escapeHtml(memberPaymentInitialSnapshot(paymentProjection))}">
           <div class="member-inline-editor-heading" ${embedded ? "hidden" : ""}>
             <div><strong>${escapeHtml(member.name)} 빠른 편집</strong><span>저장하면 서버와 시간표에 바로 반영됩니다.</span></div>
             <button class="icon-button" type="button" data-close-member-inline aria-label="빠른 수정 닫기" title="닫기">×</button>
@@ -1002,7 +1004,7 @@ function memberQuickEditorMarkup(member, ticket, options = {}) {
                 : ""}
             </div>
           </div>
-          ${ticket ? memberInlineScheduleMarkup(member, ticket, currentProduct) : ""}
+          ${ticket && !hideSchedule ? memberInlineScheduleMarkup(member, ticket, currentProduct) : ""}
           <div class="member-inline-editor-actions">
             <p class="member-inline-message" aria-live="polite"></p>
           </div>

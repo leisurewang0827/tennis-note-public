@@ -1942,6 +1942,16 @@
   background: #e8f6f0;
 }
 
+.schedule-v2-member-result.is-balance-warning:not(.is-selected) {
+  border-color: #d7a93d;
+  background: #fffaf0;
+}
+
+.schedule-v2-member-result.is-balance-warning small {
+  color: #8a5c00;
+  font-weight: 800;
+}
+
 .schedule-v2-selected-ticket {
   min-height: 34px;
   margin-top: 5px;
@@ -1951,6 +1961,19 @@
   background: #f5faf8;
   color: #435951;
   font-size: 12px;
+}
+
+.schedule-v2-selected-ticket.has-balance-warning {
+  border-color: #d7a93d;
+  background: #fffaf0;
+}
+
+.schedule-v2-balance-warning {
+  margin: 5px 0 0;
+  color: #7a5100;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .schedule-v2-selected-head {

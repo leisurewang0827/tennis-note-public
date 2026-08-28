@@ -26,6 +26,7 @@ const state = {
   billingMonth: "",
   managementReportMonth: "",
   billingPage: 0,
+  billingInlineIndex: null,
   settlementPage: 0,
   rechargePage: 0,
   discountView: "policies",

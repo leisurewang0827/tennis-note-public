@@ -900,6 +900,12 @@ function bindDelegatedEvents() {
       return;
     }
     if (event.target.closest("[data-close-member-inline]")) {
+      const inlineForm = event.target.closest("[data-member-inline-form]");
+      if (inlineForm?.dataset.memberInlineContext === "billing") {
+        state.billingInlineIndex = null;
+        renderBilling();
+        return;
+      }
       state.inlineMemberId = null;
       state.inlineMemberTicketId = "";
       renderMembers();
@@ -1325,6 +1331,13 @@ function bindDelegatedEvents() {
       const item = billings[Number(paidPaymentButton.dataset.paidPayment)];
       if (paymentRequiresTicketRepair(item)) openBillingMemberReview(item);
       else showToast(`${item.member} 결제는 이미 승인됐고 회원권에 연결됐습니다`);
+      return;
+    }
+
+    const billingMemberReviewButton = event.target.closest("[data-billing-member-review]");
+    if (billingMemberReviewButton) {
+      const itemIndex = Number(billingMemberReviewButton.dataset.billingMemberReview);
+      openBillingMemberReview(billings[itemIndex], itemIndex);
       return;
     }
 

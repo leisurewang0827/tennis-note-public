@@ -192,9 +192,9 @@ function renderMemberManagementControls(member) {
       && memberManagementActionAllowed("expire", ticket)) {
       actions.push({ action: "expire", label: "만료", tone: "ghost-button" });
     }
-    if (status !== "inactive" && ["expired", "refunded"].includes(ticket.status)
+    if (status !== "inactive" && ["active", "paused", "expired"].includes(ticket.status)
       && memberManagementActionAllowed("reenroll", ticket)) {
-      actions.push({ action: "reenroll", label: "재등록", tone: "primary-button" });
+      actions.push({ action: "reenroll", label: "횟수 추가", tone: "primary-button" });
     }
     if (operationsRole() === "admin" && ticket.status !== "voided") {
       actions.push({ action: "force_delete", label: "강제 삭제", tone: "danger-button" });
@@ -430,21 +430,21 @@ function renderMemberManagementModal() {
   } else if (action === "reenroll") {
     actionFields = products.length && coachRoles.length ? `
       <div class="member-management-form-grid">
-        <label class="form-field span-2"><span>새 회원권</span><select name="productId" required>
+        <label class="form-field span-2"><span>추가할 회원권</span><select name="productId" required>
           ${products.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === product?.id ? "selected" : ""}>${escapeHtml(item.name || "회원권")}</option>`).join("")}
         </select></label>
-        <label class="form-field span-2"><span>담당 코치</span><select name="coachRoleId" required>
-          ${coachRoles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === coachRoleId ? "selected" : ""}>${escapeHtml(role.display_name || "코치")}</option>`).join("")}
-        </select></label>
-        <label class="form-field"><span>총횟수</span><input name="totalSessions" type="number" min="1" step="1" value="${defaultTotal}" required /></label>
-        <label class="form-field"><span>소진횟수</span><input name="usedSessions" type="number" min="0" step="1" value="0" required /></label>
-        <label class="form-field"><span>잔여횟수</span><input name="remainingSessions" type="number" min="0" step="1" value="${defaultRemaining}" readonly aria-readonly="true" required /><small>자동 계산</small></label>
-        <label class="form-field"><span>시작일</span><input name="startsOn" type="date" value="${defaultStartsOn}" required /></label>
-        <label class="form-field"><span>만료일</span><input name="expiresOn" type="date" value="${defaultExpiresOn}" required /></label>
+        <div class="member-link-status is-linked span-2"><strong>현재 회원권에 바로 충전</strong><span>현재 총 ${Number(ticket?.total || 0)} / 사용 ${Number(ticket?.used || 0)} / 잔여 ${Number(ticket?.remaining || 0)}회 · 담당 ${escapeHtml(coachRoles.find((role) => role.id === ticket?.coachRoleId)?.display_name || "코치 확인")}</span></div>
+        <input name="coachRoleId" type="hidden" value="${escapeHtml(ticket?.coachRoleId || coachRoleId)}" />
+        <input name="reenrollScheduleMode" type="hidden" value="keep" />
+        <input name="totalSessions" type="hidden" value="${defaultTotal}" />
+        <input name="usedSessions" type="hidden" value="0" />
+        <input name="remainingSessions" type="hidden" value="${defaultRemaining}" />
+        <input name="startsOn" type="hidden" value="${defaultStartsOn}" />
+        <input name="expiresOn" type="hidden" value="${defaultExpiresOn}" />
+        <label class="form-field"><span>추가 횟수</span><input name="addedSessions" type="number" min="1" step="1" value="${defaultTotal}" required /><small>선택 상품 기본 ${defaultTotal}회</small></label>
         <label class="form-field"><span>등록 금액</span><input name="purchasedPrice" type="number" min="0" step="1" value="${Number(product?.cash_price || product?.card_price || ticket?.amount || 0)}" required /></label>
       </div>
-      ${memberCreateScheduleMarkup(product, { reenroll: true })}
-      <p class="member-management-rule">과거 회원권과 취소 일정은 이력으로 보관하고, 새 회원권과 선택한 정규시간만 활성화합니다. 2대1 파트너 연결도 그대로 보존합니다.</p>` : `<p class="form-message danger">같은 지점·수업형태의 사용 가능한 회원권 상품과 승인 코치를 먼저 등록해 주세요.</p>`;
+      <p class="member-management-rule">새 회원권을 따로 만들지 않습니다. 결제·상품 변경 이력은 보존하고, 추가 횟수는 현재 회원권에 즉시 합산됩니다. 시간표 변경은 시간표 화면에서 별도로 처리합니다.</p>` : `<p class="form-message danger">같은 지점의 사용 가능한 회원권 상품을 먼저 등록해 주세요.</p>`;
   } else if (action === "expire") {
     actionFields = `<div class="member-management-warning"><strong>남은 횟수는 이력으로 보존됩니다.</strong><span>앞으로 예정된 수업은 취소되고 회원은 만료회원으로 이동합니다.</span></div>`;
   } else if (action === "close") {

@@ -868,3 +868,7 @@ function liveTicketLessonReferenceCount(ticket = {}) {
   if (!ticketId) return 0;
   return (state.lessons || []).filter((lesson) => memberLessonTicketId(lesson) === ticketId).length;
 }
+function membershipTicketCanKeepSchedule(ticket) {
+  if (!ticket || !["active", "paused"].includes(String(ticket.status || "").toLowerCase())) return false;
+  return !ticket.expiresOn || String(ticket.expiresOn) >= localDateKey();
+}
