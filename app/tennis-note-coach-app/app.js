@@ -424,6 +424,76 @@ function captureLessonChartDraft(id) {
   return participantResults;
 }
 
+async function saveLessonChartDraft(id) {
+  const lesson = ensureCoachLessonRecord(id);
+  if (!lesson || !canProcessLesson(lesson)) return false;
+  const participantResults = captureLessonChartDraft(id);
+  if (!participantResults.length) {
+    lesson.validationMessage = "수업 참여자와 회원권 연결을 확인해 주세요.";
+    renderLessonEditModal();
+    return false;
+  }
+  const exactPairs = participantResults.every((result) => result.userId && result.ticketId);
+  const client = window.TennisNoteDataClient;
+  const canSaveServer = Boolean(lesson.serverLessonId && exactPairs && client?.rpc && client.getSession?.()?.access_token && client.isOnline?.() !== false);
+  if (!canSaveServer) {
+    window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
+    showToast(lesson.serverLessonId ? "이 기기에 임시 저장했습니다. 연결되면 다시 저장해 주세요." : "이 기기에 임시 저장했습니다.");
+    return true;
+  }
+  const button = activeViewField(`[data-save-lesson-draft="${id}"]`);
+  if (button) {
+    button.disabled = true;
+    button.textContent = "저장 중";
+  }
+  try {
+    const serverParticipantResults = await Promise.all(participantResults.map(async (result) => {
+      const nextStep = result.nextCurriculumId ? selectedCurriculum(result.nextCurriculumId) : null;
+      const curriculumRefId = nextStep ? await liveCurriculumRefId(nextStep) : null;
+      return {
+        userId: result.userId,
+        ticketId: result.ticketId,
+        outcome: "completed",
+        deduct: false,
+        technique: "",
+        strength: "",
+        improvement: "",
+        nextGoal: nextStep?.title || "",
+        coachComment: result.coachComment,
+        keywords: [],
+        nextCurriculumRefId: curriculumRefId || null,
+        memberJournalId: null,
+      };
+    }));
+    await client.rpc("tn_schedule_v2_process_lesson", {
+      target_lesson_id: lesson.serverLessonId,
+      target_participant_results: serverParticipantResults,
+      target_finalize: false,
+      target_operation_key: `schedule-v2-coach-draft:${lesson.serverLessonId}:${globalThis.crypto?.randomUUID?.() || Date.now()}`,
+    });
+    const draftsByPair = new Map(participantResults.map((result) => [`${result.userId}:${result.ticketId}`, result]));
+    lesson.v2Participants = (lesson.v2Participants || []).map((participant) => {
+      const draft = draftsByPair.get(`${participant.userId}:${participant.ticketId}`);
+      return draft ? {
+        ...participant,
+        recordStatus: "draft",
+        coachComment: draft.coachComment,
+        nextCurriculumSkillLabel: draft.nextCurriculumId,
+        nextCurriculumTitle: draft.nextCurriculumId ? selectedCurriculum(draft.nextCurriculumId)?.title || "" : "",
+      } : participant;
+    });
+    lesson.validationMessage = "";
+    window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
+    saveSnapshot();
+    showToast("코치 메모를 저장했습니다. 회원에게는 아직 공개되지 않습니다.");
+    return true;
+  } catch (error) {
+    lesson.validationMessage = "메모를 서버에 저장하지 못했습니다. 작성 내용은 이 기기에 보관했습니다.";
+    renderLessonEditModal();
+    return false;
+  }
+}
+
 function exactCoachCurriculum(value = "") {
   const code = canonicalCurriculumId(String(value).trim().split(/\s|·/)[0]);
   return curriculumSteps.find((step) => step.id === code) || null;
