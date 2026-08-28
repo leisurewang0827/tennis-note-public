@@ -33,6 +33,32 @@ function formatIdentityPhone(value = "") {
   return digits;
 }
 
+function identityPhoneE164(value = "") {
+  const digits = normalizeIdentityPhone(value);
+  if (digits.startsWith("82") && digits.length >= 11) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length >= 10) return `+82${digits.slice(1)}`;
+  return "";
+}
+
+function verifiedPhoneFromAuthUser(user = {}) {
+  const directPhone = normalizeIdentityPhone(user?.phone || "");
+  if (directPhone && user?.phone_confirmed_at) return directPhone.startsWith("82") ? `0${directPhone.slice(2)}` : directPhone;
+  const verifiedIdentity = (user?.identities || []).find((identity) => {
+    const provider = String(identity?.provider || "").toLowerCase();
+    const metadata = identity?.identity_data || {};
+    const verified = [
+      metadata.phone_number_verified,
+      metadata.phone_verified,
+      metadata.mobile_verified,
+      metadata.verified_phone,
+    ].some((value) => value === true || value === "true");
+    return ["custom:naver", "custom:kakao"].includes(provider) && verified;
+  });
+  const identityData = verifiedIdentity?.identity_data || {};
+  const identityPhone = normalizeIdentityPhone(identityData.phone_number || identityData.phone || identityData.mobile || "");
+  return identityPhone.startsWith("82") ? `0${identityPhone.slice(2)}` : identityPhone;
+}
+
 function suggestedNicknameFromUser(user = {}) {
   const metadata = user?.user_metadata || {};
   return normalizeIdentityText(
@@ -53,6 +79,12 @@ function identityErrorMessage(error) {
   if (code.includes("nickname_invalid") || code.includes("nickname_length_invalid")) return "닉네임은 공백을 제외하고 2~20자로 입력해 주세요.";
   if (code.includes("real_name_invalid")) return "실명을 확인해 주세요.";
   if (code.includes("phone_invalid")) return "휴대전화 번호를 010부터 정확히 입력해 주세요.";
+  if (code.includes("phone_verification_required")) return "휴대전화 인증을 먼저 완료해 주세요.";
+  if (code.includes("phone_provider") || code.includes("sms_provider") || code.includes("sms_send")) return "문자 인증 설정을 준비 중입니다. 관리자에게 기존 회원 연결을 요청해 주세요.";
+  if (code.includes("over_email_send_rate_limit") || code.includes("rate_limit") || code.includes("too many")) return "인증번호 요청이 많습니다. 잠시 후 다시 시도해 주세요.";
+  if (code.includes("otp_expired") || code.includes("token has expired")) return "인증번호가 만료되었거나 올바르지 않습니다. 새 번호를 받아 다시 입력해 주세요.";
+  if (code.includes("phone_otp_invalid") || code.includes("phone_otp_verification_failed")) return "인증번호 6자리를 확인해 주세요.";
+  if (code.includes("phone_change_conflict") || code.includes("phone already")) return "이미 다른 로그인 계정에서 확인된 번호입니다. 관리자에게 계정 연결을 요청해 주세요.";
   if (code.includes("birth_year_invalid")) return "출생연도를 확인해 주세요.";
   if (code.includes("gender_invalid")) return "성별을 선택해 주세요.";
   if (code.includes("terms_consent")) return "서비스 이용약관 동의가 필요합니다.";
