@@ -137,7 +137,20 @@
     });
   }
 
+  function isExpectedClientRejection(detail = {}) {
+    const category = detail.category === "auth" ? "auth" : "runtime";
+    const stage = safeCode(detail.stage || "");
+    const code = safeCode(detail.code || detail.message);
+    const message = safeCode(detail.message || detail.code);
+    const status = Number(detail.status || 0);
+    if (category !== "auth" || stage !== "password_login" || ![400, 401].includes(status)) return false;
+    return [code, message].some((value) => value === "invalid_credentials" || value.includes("invalid_login_credentials"));
+  }
+
   function captureClientError(detail = {}) {
+    // A rejected password is a user-facing validation result, not a product outage.
+    // Unexpected auth failures (network/5xx/provider errors) must still be reported.
+    if (isExpectedClientRejection(detail)) return false;
     const category = detail.category === "auth" ? "auth" : "runtime";
     const stage = safeCode(detail.stage || (category === "auth" ? "login_unknown" : "runtime_error"));
     const code = safeCode(detail.code || detail.message);
@@ -155,6 +168,7 @@
       column: 0,
       fingerprint: fingerprint(`${category}|${stage}|${code}`, "client-event", 0),
     });
+    return true;
   }
 
   async function sendQueuedDiagnostic(row) {
