@@ -3512,7 +3512,7 @@
     button.disabled = true;
     setClosureMessage(holiday ? "기존 수업을 휴무·차감 없음으로 처리하고 있습니다." : "기존 수업 유지 정책을 저장하고 있습니다.", "info");
     try {
-      const result = await bridge().rpc("tn_schedule_v2_apply_closure_treatment", {
+      const result = await bridge().rpc("tn_schedule_v2_apply_closure_treatment_reversible", {
         target_branch_id: state.payload.branch.id,
         target_closure_id: closureId,
         target_policy: policy,
@@ -3644,7 +3644,7 @@
           target_label: form.elements.closureLabel.value.trim() || "휴무",
           target_closure_id: state.editingClosureId,
         })
-        : await bridge().rpc("tn_schedule_v2_upsert_operation_day", {
+        : await bridge().rpc("tn_schedule_v2_set_operation_day", {
           target_branch_id: state.payload.branch.id,
           target_operation_date: form.elements.closureDate.value,
           target_mode: mode,
@@ -3652,6 +3652,7 @@
           target_end_time: usesTime ? endTime : null,
           target_label: form.elements.closureLabel.value.trim() || operationModeLabel(mode),
           target_operation_id: state.editingOperationDayId || null,
+          target_operation_key: operationKey("admin-operation-day-save"),
         });
       const date = form.elements.closureDate.value;
       state.weekStart = mondayOf(date);
@@ -3665,7 +3666,13 @@
       const preview = closureId ? await previewClosureImpact(closureId) : null;
       const count = Number(preview?.lessonCount || result?.existingLessonCount || result?.existing_lesson_count || 0);
       const oneDayCount = Number(preview?.oneDayCount || 0);
-      if (count + oneDayCount > 0) {
+      const restoredCount = Number(result?.restoration?.restoredLessonCount || 0);
+      const pastCount = Number(result?.restoration?.pastLessonCount || 0);
+      if (restoredCount > 0) {
+        setClosureMessage(`정상 운영으로 변경하고 기존 수업 ${restoredCount}건을 예정 상태로 복구했습니다.${pastCount ? ` 지난 수업 ${pastCount}건은 변경하지 않았습니다.` : ""}`, "success");
+        setStatus(`정상 운영 반영 완료 · 수업 ${restoredCount}건 복구`, "success");
+        closeClosureEditor();
+      } else if (count + oneDayCount > 0) {
         setClosureMessage(mode === "shortened"
           ? `단축 운영시간 밖의 기존 일정 ${count}건은 그대로 유지됩니다. 시간표에서 확인해 주세요.`
           : "휴무와 겹치는 기존 일정의 처리 방법을 선택해 주세요.", "warning");
@@ -3684,20 +3691,24 @@
   async function deleteClosure(closureId) {
     const closure = (state.payload?.closures || []).find((item) => String(item.id) === String(closureId));
     if (!closure || !requireWritableServer()) return;
-    if (!window.confirm(`${closure.label || "휴무"} 지정을 해제할까요? 기존 수업은 변경되지 않습니다.`)) return;
+    if (!window.confirm(`${closure.label || "휴무"} 지정을 해제할까요? 휴무·차감 없음으로 처리된 미래 수업은 예정 상태로 복구됩니다.`)) return;
     setClosureMessage("휴무일을 해제하고 있습니다.", "info");
     try {
-      await bridge().rpc("tn_schedule_v2_cancel_closure", {
+      const result = await bridge().rpc("tn_schedule_v2_clear_closure", {
         target_branch_id: state.payload.branch.id,
         target_closure_id: closure.id,
+        target_operation_key: operationKey("admin-closure-clear"),
       });
       state.editingClosureId = "";
       state.payload = null;
       invalidateCurrentWorkspaceCache();
       await loadWorkspace({ quiet: true, force: true });
       resetClosureForm({ keepDate: true });
-      setClosureMessage("휴무일 해제가 서버와 시간표에 반영됐습니다.", "success");
-      setStatus("휴무일 해제 완료", "success");
+      const restoredCount = Number(result?.restoration?.restoredLessonCount || 0);
+      setClosureMessage(restoredCount
+        ? `휴무일을 해제하고 기존 수업 ${restoredCount}건을 예정 상태로 복구했습니다.`
+        : "휴무일 해제가 서버와 시간표에 반영됐습니다.", "success");
+      setStatus(restoredCount ? `휴무일 해제 완료 · 수업 ${restoredCount}건 복구` : "휴무일 해제 완료", "success");
     } catch (error) {
       setClosureMessage(errorMessage(error));
     }
@@ -3706,20 +3717,24 @@
   async function deleteOperationDay(operationId) {
     const operation = (state.payload?.operationDays || []).find((item) => String(item.id) === String(operationId));
     if (!operation || !requireWritableServer()) return;
-    if (!window.confirm(`${operation.label || operationModeLabel(operation.mode)} 설정을 해제할까요? 기존 수업은 변경되지 않습니다.`)) return;
+    if (!window.confirm(`${operation.label || operationModeLabel(operation.mode)} 설정을 해제할까요? 휴무·차감 없음으로 처리된 미래 수업은 예정 상태로 복구됩니다.`)) return;
     setClosureMessage("운영일 설정을 해제하고 있습니다.", "info");
     try {
-      await bridge().rpc("tn_schedule_v2_cancel_operation_day", {
+      const result = await bridge().rpc("tn_schedule_v2_clear_operation_day", {
         target_branch_id: state.payload.branch.id,
         target_operation_id: operation.id,
+        target_operation_key: operationKey("admin-operation-day-clear"),
       });
       state.editingOperationDayId = "";
       state.payload = null;
       invalidateCurrentWorkspaceCache();
       await loadWorkspace({ quiet: true, force: true });
       resetClosureForm({ keepDate: true });
-      setClosureMessage("운영일 설정 해제가 서버와 시간표에 반영됐습니다.", "success");
-      setStatus("운영일 설정 해제 완료", "success");
+      const restoredCount = Number(result?.restoration?.restoredLessonCount || 0);
+      setClosureMessage(restoredCount
+        ? `운영일 설정을 해제하고 기존 수업 ${restoredCount}건을 예정 상태로 복구했습니다.`
+        : "운영일 설정 해제가 서버와 시간표에 반영됐습니다.", "success");
+      setStatus(restoredCount ? `운영일 설정 해제 완료 · 수업 ${restoredCount}건 복구` : "운영일 설정 해제 완료", "success");
     } catch (error) {
       setClosureMessage(errorMessage(error));
     }
@@ -3750,6 +3765,10 @@
       schedule_v2_regular_ticket_required: "정규 회원권을 선택해 주세요.",
       schedule_v2_coupon_ticket_required: "쿠폰 회원권을 선택해 주세요.",
       schedule_v2_makeup_regular_ticket_required: "보강은 정규 회원권을 선택해 주세요.",
+      schedule_v2_holiday_restore_conflict: "정상 수업으로 복구할 시간에 다른 수업이 이미 있습니다. 겹치는 수업을 먼저 확인해 주세요.",
+      schedule_v2_holiday_restore_makeup_review_required: "휴무 처리된 보강수업은 보강권 연결을 확인한 뒤 복구해야 합니다.",
+      schedule_v2_holiday_restore_record_changed: "휴무 처리 뒤 수업 기록이 변경되어 자동 복구를 중단했습니다. 수업 상세를 확인해 주세요.",
+      schedule_v2_holiday_restore_deduction_changed: "휴무 수업에 횟수 차감 기록이 있어 자동 복구하지 않았습니다. 차감 내역을 먼저 확인해 주세요.",
       schedule_v2_concurrent_update: "다른 화면에서 먼저 수정했습니다. 새로고침 후 다시 확인해 주세요.",
       schedule_v2_workspace_range_invalid: "시간표 조회 기간을 확인해 주세요.",
       schedule_v2_makeup_gap_invalid: "보강 인접 간격은 0~100분으로 설정해 주세요.",
