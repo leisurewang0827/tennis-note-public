@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = readFileSync(join(root, "app/admin/schedule-v2-admin.js"), "utf8");
+const adminHtml = readFileSync(join(root, "app/admin/index.html"), "utf8");
 
 test("휴무 처리와 운영일 저장은 복구 가능한 서버 경로만 사용한다", () => {
   assert.match(source, /tn_schedule_v2_apply_closure_treatment_reversible/);
@@ -27,4 +28,9 @@ test("자동 복구가 중단되는 안전 오류를 관리자에게 설명한�
   assert.match(source, /schedule_v2_holiday_restore_makeup_review_required/);
   assert.match(source, /schedule_v2_holiday_restore_record_changed/);
   assert.match(source, /schedule_v2_holiday_restore_deduction_changed/);
+});
+
+test("휴무 복구 스크립트는 이전 캐시와 분리된 URL로 로드한다", () => {
+  assert.match(adminHtml, /schedule-v2-admin\.js\?v=schedule-v2-19/);
+  assert.doesNotMatch(adminHtml, /schedule-v2-admin\.js\?v=schedule-v2-18/);
 });
