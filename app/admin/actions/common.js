@@ -226,6 +226,9 @@ function setView(view, options = {}) {
   } else if (!reuseRenderedView) {
     renderAdminView(view);
   }
+  window.dispatchEvent(new CustomEvent("tennisnote:admin-view-change", {
+    detail: { view, previousView },
+  }));
   void ensureAdminViewData(view);
   if (
     previousView === "schedule"
@@ -236,7 +239,7 @@ function setView(view, options = {}) {
     void refreshAdminLiveSchedule({ force: true });
   }
   if (view === "billing" && !serverPaymentSyncState.loading) {
-    loadServerPaymentsIntoBilling({ force: !serverPaymentSyncState.directLoaded });
+    loadServerPaymentsIntoBilling({ preferCached: true });
   }
   if (enteringSchedule && state.liveScheduleLoaded && !state.liveScheduleLoading) {
     refreshAdminLiveSchedule().catch(() => false);
@@ -1565,7 +1568,6 @@ async function performAdminLiveDataSync(options = {}) {
       state.selectedMemberId = null;
     }
     renderAll();
-    void adminOperationalRevisionWatcher?.check?.();
     window.dispatchEvent(new CustomEvent("tennisnote:admin-live-data", {
       detail: { source: "server-sync", branchId: activeOperationBranchId() },
     }));

@@ -501,6 +501,13 @@ async function ensureActiveAdminWeekLoaded() {
   return refreshAdminLiveSchedule({ force: true });
 }
 
+function adminScheduleV2IsActive() {
+  const scheduleView = $("#scheduleView");
+  return state.view === "schedule"
+    && scheduleView?.classList.contains("is-active")
+    && scheduleView.dataset.scheduleEngineMode === "v2";
+}
+
 async function refreshAdminLiveSchedule(options = {}) {
   const force = options.force === true;
   if (
@@ -508,6 +515,7 @@ async function refreshAdminLiveSchedule(options = {}) {
     || document.hidden
     || adminHasUnsavedChanges()
     || !adminLiveRefreshViews.has(state.view)
+    || adminScheduleV2IsActive()
     || !operationsAccessReady()
     || !$("#lessonModal")?.hidden
     || !$("#memberManagementModal")?.hidden
