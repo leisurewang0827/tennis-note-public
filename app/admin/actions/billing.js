@@ -291,14 +291,19 @@ async function issueDiscountCoupons() {
     const result = Array.isArray(response) ? response[0] || {} : response || {};
     const issuedCount = Number(result.issuedCount ?? result.issued_count ?? 0);
     const skippedCount = Number(result.skippedCount ?? result.skipped_count ?? 0);
+    const ineligibleCount = Number(result.ineligibleCount ?? result.ineligible_count ?? 0);
     await loadDiscountPoliciesFromServer();
     const policy = discountPolicies.find((item) => String(item.id) === String(policyId));
+    const exclusionSummary = [
+      skippedCount ? `중복 ${skippedCount}명 제외` : "",
+      ineligibleCount ? `신규회원 아님 ${ineligibleCount}명 제외` : "",
+    ].filter(Boolean).join(" · ");
     discountIssueLogs.unshift({
       id: `discount-issue-log-${Date.now()}`,
-      text: `${policy?.title || "할인 쿠폰"} ${issuedCount}명 발급${skippedCount ? ` · 중복 ${skippedCount}명 제외` : ""}`,
+      text: `${policy?.title || "할인 쿠폰"} ${issuedCount}명 발급${exclusionSummary ? ` · ${exclusionSummary}` : ""}`,
       at: new Date().toLocaleDateString("ko-KR"),
     });
-    if (status) status.textContent = `${issuedCount}명 발급 완료${skippedCount ? ` · 이미 보유한 ${skippedCount}명은 제외` : ""}`;
+    if (status) status.textContent = `${issuedCount}명 발급 완료${exclusionSummary ? ` · ${exclusionSummary}` : ""}`;
     showToast(status?.textContent || "할인 쿠폰 발급 완료");
     renderServiceReadiness();
     return true;

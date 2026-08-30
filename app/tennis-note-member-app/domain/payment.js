@@ -135,6 +135,7 @@ function paymentServerErrorMessage(error) {
     bank_transfer_account_not_ready: "센터의 입금 계좌가 아직 준비되지 않았습니다. 관리자에게 문의해 주세요.",
     bank_transfer_account_lookup_failed: "입금 계좌를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     discount_coupon_not_available: "이 쿠폰은 이미 사용되었거나 사용할 수 없습니다.",
+    discount_coupon_member_ineligible: "신규회원 전용 쿠폰 대상이 아닙니다. 쿠폰함을 새로고침해 주세요.",
     discount_coupon_expired: "쿠폰 사용기간이 만료되었습니다.",
     discount_coupon_branch_mismatch: "선택한 지점에서 사용할 수 없는 쿠폰입니다.",
     discount_coupon_product_mismatch: "선택한 상품에는 사용할 수 없는 쿠폰입니다.",
