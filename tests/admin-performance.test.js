@@ -43,3 +43,10 @@ test("revision watcher는 비활성 화면에서 주기 조회하지 않는다",
   assert.match(revision, /\(!force && !isActive\(\)\)/);
   assert.doesNotMatch(actions, /void adminOperationalRevisionWatcher\?\.check\?\.\(\);/);
 });
+
+test("대형 시간표는 화면 밖 셀과 카드를 브라우저 렌더링 대상에서 제외한다", () => {
+  const styles = source("app/admin/schedule-v2-admin.css");
+
+  assert.match(styles, /\.schedule-v2-week-slot,[\s\S]*\.schedule-v2-history-card[\s\S]*content-visibility:\s*auto/);
+  assert.match(styles, /contain-intrinsic-size:\s*auto\s+28px/);
+});

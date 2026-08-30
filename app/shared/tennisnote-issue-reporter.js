@@ -16,9 +16,7 @@
     status: "active",
   };
 
-  function escapeHtml(value) {
-    return String(value || "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
-  }
+  const escapeHtml = window.escapeHtml;
 
   function safeMessage(value) {
     return String(value || "오류 내용 없음")

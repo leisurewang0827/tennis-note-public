@@ -7,11 +7,15 @@
 운영 방침은 확정됐습니다. 구조는 이 브랜치를 채택하고, 모든 개발·검증은 `dev`,
 운영 배포는 승인된 `dev` → `main` PR로만 진행합니다.
 
-원격 전환 전에 남은 일:
+원격 전환 상태:
 
-- 원격 `dev` 브랜치 생성과 CI 확인
-- 저장소 기본 브랜치를 `dev` 로 변경
-- `main` 직접 푸시 금지와 필수 검사 보호 규칙 설정
+- **해결됨:** 원격 `dev` 브랜치가 있고, 개발 사이트 배포와 Public PWA CI가
+  실제 `dev` 푸시에서 통과합니다.
+- 저장소 기본 브랜치는 현재 `main` 입니다. 운영자가 당분간 유지하기로 한
+  결정이므로 자동으로 `dev` 로 바꾸지 않습니다.
+- `main`·`dev` 보호 규칙은 아직 없습니다. 직접 푸시 차단도 당분간 적용하지
+  않기로 한 운영자 결정이므로, 승인된 `dev` → `main` PR 절차를 작업 규칙으로
+  지키되 GitHub 설정 변경은 별도 승인 항목으로 남깁니다.
 - 구조 변경을 `main` 에 처음 반영한 뒤 `docs/merging.md`와 `scripts/merge_*.py` 제거
 - 제거와 함께 `AGENTS.md`·`docs/incidents.md`의 낡은 병합 안내 갱신
 
@@ -45,17 +49,11 @@
 | `numericValue` · `holdingRequestDays` | 회원앱 ↔ 관리자 |
 | `saveSharedData` | 코치앱 ↔ 관리자 |
 
-`escapeHtml` 은 정본(`app/shared/tennisnote-escape-html.js`) 말고도 사본이 **셋**
-더 있습니다 — `app/admin/schedule-v2-admin.js`, `app/shared/tennisnote-ui-language.js`,
-`app/shared/tennisnote-issue-reporter.js`. 넷 다 IIFE 안이라 전역 충돌은 없고 지금은
-같은 다섯 글자(`& < > " '`)를 막지만 **구현이 제각각입니다.**
-**이스케이프를 강화한다면 셋을 같이 고쳐야 합니다.**
+`escapeHtml` 은 `app/shared/tennisnote-escape-html.js` 한 곳을 정본으로 사용합니다.
+관리자 시간표·공용 문구·오류 접수 화면도 정본을 먼저 읽는지 자동 검사합니다.
 
 ## 법무 · 문서
 
-- **`app/tennis-note-legal/terms.html` 이 없습니다.** 가입 동의 화면이 이 파일을
-  링크해 404 입니다. 링크 검사는 `check_cloudflare_build.py` 의
-  `KNOWN_MISSING_PAGES` 로 통과시키고 있습니다. **만들면 거기서 지우세요.**
 - **해결됨:** 앱과 Cloudflare의 개인정보 처리방침은
   `app/tennis-note-legal/privacy.html` 한 문서를 기준으로 사용합니다. 루트 주소는
   GitHub Pages 호환용 안내이며, 서비스 이용약관도 같은 법무 페이지 묶음에 추가했습니다.
