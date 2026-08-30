@@ -76,6 +76,15 @@ async function loadBankNotificationStatusFromServer() {
 async function loadServerPaymentsIntoBilling(options = {}) {
   const silent = Boolean(options.silent);
   const force = Boolean(options.force);
+  const preferCached = Boolean(options.preferCached);
+  if (
+    !force
+    && preferCached
+    && serverPaymentSyncState.loaded
+    && Date.now() - serverPaymentSyncState.lastLoadedAt < SERVER_PAYMENT_REFRESH_STALE_MS
+  ) {
+    return true;
+  }
   if (
     !force
     && serverPaymentSyncState.loaded

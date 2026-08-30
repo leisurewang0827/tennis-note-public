@@ -109,6 +109,12 @@
     return window.TennisNoteAdminScheduleV2Bridge || null;
   }
 
+  function scheduleWorkspaceIsActive() {
+    return root.classList.contains("is-active")
+      && !root.hidden
+      && root.getAttribute("aria-hidden") !== "true";
+  }
+
   function escapeHtml(value = "") {
     return String(value)
       .replaceAll("&", "&amp;")
@@ -2195,7 +2201,7 @@
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", String(active));
     });
-    if (state.engine === "v2" && !state.payload) void loadWorkspace();
+    if (state.engine === "v2" && !state.payload && scheduleWorkspaceIsActive()) void loadWorkspace();
   }
 
   function ticketById(ticketId) {
@@ -4931,10 +4937,15 @@
         first.focus();
       }
     });
+    window.addEventListener("tennisnote:admin-view-change", (event) => {
+      if (event.detail?.view !== "schedule" || state.engine !== "v2" || state.loading || state.payload) return;
+      void loadWorkspace();
+    });
     window.addEventListener("tennisnote:admin-live-data", () => {
       if (state.engine !== "v2" || state.loading) return;
       if (state.postSaveRefreshPending) return;
-      requestLiveRefresh();
+      if (!scheduleWorkspaceIsActive() || state.payload) return;
+      void loadWorkspace({ quiet: true });
     });
     let resizeTimer = null;
     window.addEventListener("resize", () => {

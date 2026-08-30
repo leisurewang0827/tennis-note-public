@@ -38,7 +38,7 @@
       if (stopped || inFlight) return false;
       const branchId = readBranchId();
       const client = global.TennisNoteDataClient;
-      if (!branchId || !client?.rpc || !client.getSession?.()?.access_token || (!force && document.hidden)) {
+      if (!branchId || !client?.rpc || !client.getSession?.()?.access_token || (!force && !isActive())) {
         schedule();
         return false;
       }
@@ -75,16 +75,16 @@
       }
     }
 
-    const onFocus = () => void check(true);
+    const onFocus = () => void check();
     const onVisibility = () => {
-      if (!document.hidden) void check(true);
+      if (!document.hidden) void check();
       else schedule(fallbackIntervalMs);
     };
-    const onOnline = () => void check(true);
+    const onOnline = () => void check();
     const onBroadcast = (event) => {
       if (event?.data?.type !== "schedule_changed") return;
       if (normalizedBranchId(event.data.branchId) !== readBranchId()) return;
-      void check(true);
+      void check();
     };
 
     global.addEventListener("focus", onFocus);
