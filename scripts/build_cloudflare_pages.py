@@ -28,8 +28,10 @@ def copy_directory(source: Path, target: Path) -> None:
 
 
 def copy_public_pages(output: Path) -> None:
-    for name in ("commerce.html", "privacy.html", "support.html", "delete-account.html"):
+    for name in ("commerce.html", "support.html", "delete-account.html"):
         shutil.copy2(ROOT / name, output / name)
+    for name in ("terms.html", "privacy.html"):
+        shutil.copy2(APP_ROOT / "tennis-note-legal" / name, output / name)
     copy_directory(APP_ROOT / "tennis-note-legal", output / "tennis-note-legal")
 
 

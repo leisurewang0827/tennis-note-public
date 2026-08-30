@@ -7,12 +7,7 @@ from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
 
 
-# 아직 만들지 않은 페이지. 만들면 이 목록에서 지운다.
-# 지우지 않으면 링크 검사가 계속 통과하므로, 빚을 여기 눈에 보이게 남겨둔다.
-KNOWN_MISSING_PAGES = {
-    # 가입 동의 화면의 "서비스 이용약관" 링크. 사업자 정보 확정 후 작성 필요.
-    "/tennis-note-legal/terms.html",
-}
+KNOWN_MISSING_PAGES: set[str] = set()
 
 
 class LocalAssetParser(HTMLParser):
