@@ -21,6 +21,18 @@ function bindJournalEvents() {
   $("#journalPrevMonth")?.addEventListener("click", () => changeJournalMonth(-1));
   $("#journalNextMonth")?.addEventListener("click", () => changeJournalMonth(1));
   $("#journalTodayButton")?.addEventListener("click", returnJournalToToday);
+  $("#journalMonthPickerButton")?.addEventListener("click", openJournalMonthPicker);
+  $("#journalMonthPickerApply")?.addEventListener("click", applyJournalMonthPicker);
+  $("#journalMonthPickerSheet")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-journal-month-picker]")) closeJournalMonthPicker();
+  });
+  $("#journalMonthPickerSheet")?.addEventListener("change", () => setJournalMonthPickerStatus());
+  $("#journalMonthPickerSheet")?.addEventListener("tennisnote:sheet-opened", () => {
+    $("#journalMonthPickerButton")?.setAttribute("aria-expanded", "true");
+  });
+  $("#journalMonthPickerSheet")?.addEventListener("tennisnote:sheet-closed", () => {
+    $("#journalMonthPickerButton")?.setAttribute("aria-expanded", "false");
+  });
   $("#journalCalendarDisclosure")?.addEventListener("toggle", (event) => {
     if (event.isTrusted) event.currentTarget.dataset.userToggled = "true";
   });

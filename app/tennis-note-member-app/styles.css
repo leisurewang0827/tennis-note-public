@@ -2663,6 +2663,21 @@ button {
   text-align: center;
 }
 
+.journal-month-picker-trigger {
+  min-width: 0;
+  width: 100%;
+  padding-inline: 8px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.journal-month-picker-trigger strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .journal-month-arrow {
   width: 44px;
   min-width: 44px;
@@ -2674,6 +2689,48 @@ button {
   min-width: 52px;
   min-height: 44px;
   padding-inline: 10px;
+}
+
+.journal-month-picker-sheet .sheet-card {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(100%, 440px);
+  height: auto;
+  max-height: min(var(--tn-sheet-viewport-height, 86dvh), 520px);
+}
+
+.journal-month-picker-form {
+  margin-bottom: 0;
+}
+
+.journal-month-picker-grid,
+.journal-month-picker-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.journal-month-picker-grid label {
+  min-width: 0;
+}
+
+.journal-month-picker-grid select {
+  width: 100%;
+}
+
+.journal-month-picker-status {
+  min-height: 22px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.journal-month-picker-status[data-tone="error"] {
+  color: #b42318;
+}
+
+.journal-month-picker-actions > button {
+  width: 100%;
 }
 
 .journal-calendar-tools {

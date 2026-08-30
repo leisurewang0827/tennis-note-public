@@ -178,7 +178,10 @@ function renderJournalCalendar() {
   const monthLabel = $("#journalMonthLabel");
   if (monthLabel) monthLabel.textContent = `${year}년 ${monthIndex + 1}월`;
   const controlLabel = $("#journalCalendarControlLabel");
-  if (controlLabel) controlLabel.textContent = `${year}년 ${monthIndex + 1}월`;
+  const visibleMonthLabel = `${year}년 ${monthIndex + 1}월`;
+  if (controlLabel) controlLabel.textContent = visibleMonthLabel;
+  const monthPickerButton = $("#journalMonthPickerButton");
+  if (monthPickerButton) monthPickerButton.setAttribute("aria-label", `${visibleMonthLabel}, 연·월 선택`);
   const jumpInput = $("#journalJumpDate");
   if (jumpInput && jumpInput.value !== selectedDate) jumpInput.value = selectedDate;
   const searchInput = $("#journalSearch");
