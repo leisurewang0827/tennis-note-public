@@ -161,7 +161,24 @@ function bindDelegatedEvents() {
     if (event.target.id !== "coachStaffSettlementMethod" || !coachStaffEditorState.draft) return;
     coachStaffEditorState.draft.settlement.method = event.target.value;
     syncCoachStaffSettlementFieldVisibility(event.target.value);
+    readCoachStaffPanel();
+    updateCoachStaffSettlementChangeSummary();
   });
+  document.addEventListener("input", (event) => {
+    if (!event.target.closest("#coachStaffModalContent") || !event.target.id.startsWith("coachStaffSettlement")) return;
+    readCoachStaffPanel();
+    updateCoachStaffSettlementChangeSummary();
+  });
+  document.addEventListener("change", (event) => {
+    if (!event.target.closest("#coachStaffModalContent") || !event.target.id.startsWith("coachStaffSettlement")) return;
+    readCoachStaffPanel();
+    updateCoachStaffSettlementChangeSummary();
+  });
+  document.addEventListener("toggle", (event) => {
+    if (event.target.id === "coachStaffSettlementDetails") {
+      coachStaffEditorState.settlementDetailsOpen = event.target.open;
+    }
+  }, true);
   document.addEventListener("change", (event) => {
     if (event.target.matches("[data-select-schedule-sheet-row]")) {
       toggleScheduleSheetPasteRowSelection(event.target.dataset.selectScheduleSheetRow, event.target.checked);

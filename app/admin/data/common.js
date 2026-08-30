@@ -497,6 +497,7 @@ async function refreshCoachStaffData() {
     serverAuthSwitches,
     serverSettlementTerms,
   });
+  adminLiveDataState.coachSettlementTerms = serverSettlementTerms;
   scheduleAdminOperationalCacheWrite();
   return true;
 }

@@ -348,38 +348,48 @@ function renderCoachStaffSettlementTab(draft) {
   const settlement = draft.settlement;
   const ratio = settlement.method === "ratio";
   return `
-    <div class="coach-staff-form-grid">
+    ${coachSettlementEffectiveMarkup(draft)}
+    <section class="coach-staff-settlement-primary" aria-label="기본 정산 설정">
       <label class="form-field"><span>정산 방식</span>
         <select id="coachStaffSettlementMethod">
           <option value="ratio" ${ratio ? "selected" : ""}>비율</option>
           <option value="hourly" ${!ratio ? "selected" : ""}>시급</option>
         </select>
       </label>
-      <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>코치 비율(%)</span><input id="coachStaffSettlementRatio" type="number" min="0" max="100" step="1" value="${settlement.ratio}" /></label>
-      <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>비율 계산 방법</span>
-        <select id="coachStaffSettlementCalculationMode">
-          <option value="monthly_payment" ${settlement.calculationMode === "monthly_payment" ? "selected" : ""}>결제한 달 전체 금액 × 비율</option>
-          <option value="session_progress" ${settlement.calculationMode !== "monthly_payment" ? "selected" : ""}>진행한 수업 횟수만큼 × 비율</option>
-        </select>
-        <small>월 결제액은 해당 월에 확인 완료된 결제금액 전체를 기준으로 계산합니다.</small>
-      </label>
-      <label class="form-field ${ratio ? "is-hidden" : ""}" data-settlement-mode-field="hourly"><span>시급</span><input id="coachStaffSettlementHourly" type="number" min="0" step="1000" value="${settlement.hourly}" /></label>
-      <label class="form-field"><span>정산 기준</span>
-        <select id="coachStaffSettlementBasis">
-          <option value="cash_ex_vat" ${settlement.basis === "cash_ex_vat" ? "selected" : ""}>현금가·부가세 제외</option>
-          <option value="actual_paid_inc_vat" ${settlement.basis === "actual_paid_inc_vat" ? "selected" : ""}>실제 결제금액</option>
-        </select>
-      </label>
-      <label class="form-field"><span>대타 기준</span>
-        <select id="coachStaffSettlementSubstitute">
-          <option value="actualCoach" ${settlement.substitute === "actualCoach" ? "selected" : ""}>실제 진행 코치</option>
-          <option value="originalCoach" ${settlement.substitute === "originalCoach" ? "selected" : ""}>담당 코치</option>
-          <option value="manual" ${settlement.substitute === "manual" ? "selected" : ""}>관리자 확인</option>
-        </select>
-      </label>
-      <label class="form-field"><span>적용일</span><input id="coachStaffSettlementEffectiveFrom" type="date" value="${escapeHtml(settlement.effectiveFrom)}" required /></label>
-    </div>
-    <p class="coach-staff-inline-note">적용일 이전에 확정된 정산은 바뀌지 않습니다.</p>`;
+      <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>코치 비율(%)</span><input id="coachStaffSettlementRatio" type="number" min="0" max="100" step="0.1" value="${escapeHtml(settlement.ratio)}" /></label>
+      <label class="form-field ${ratio ? "is-hidden" : ""}" data-settlement-mode-field="hourly"><span>시급(원/시간)</span><input id="coachStaffSettlementHourly" type="number" min="1" step="1000" value="${escapeHtml(settlement.hourly)}" /></label>
+    </section>
+    <details id="coachStaffSettlementDetails" class="coach-staff-settlement-details" ${coachStaffEditorState.settlementDetailsOpen ? "open" : ""}>
+      <summary>상세 설정</summary>
+      <div class="coach-staff-form-grid">
+        <label class="form-field ${ratio ? "" : "is-hidden"}" data-settlement-mode-field="ratio"><span>비율 계산 방법</span>
+          <select id="coachStaffSettlementCalculationMode">
+            <option value="monthly_payment" ${settlement.calculationMode === "monthly_payment" ? "selected" : ""}>결제한 달 전체 금액 × 비율</option>
+            <option value="session_progress" ${settlement.calculationMode !== "monthly_payment" ? "selected" : ""}>진행한 수업 횟수만큼 × 비율</option>
+          </select>
+          <small>월 결제액은 해당 월에 확인 완료된 결제금액 전체를 기준으로 계산합니다.</small>
+        </label>
+        <label class="form-field"><span>정산 기준</span>
+          <select id="coachStaffSettlementBasis">
+            <option value="cash_ex_vat" ${settlement.basis === "cash_ex_vat" ? "selected" : ""}>현금가·부가세 제외</option>
+            <option value="actual_paid_inc_vat" ${settlement.basis === "actual_paid_inc_vat" ? "selected" : ""}>실제 결제금액</option>
+          </select>
+        </label>
+        <label class="form-field"><span>대타 기준</span>
+          <select id="coachStaffSettlementSubstitute">
+            <option value="actualCoach" ${settlement.substitute === "actualCoach" ? "selected" : ""}>실제 진행 코치</option>
+            <option value="originalCoach" ${settlement.substitute === "originalCoach" ? "selected" : ""}>담당 코치</option>
+            <option value="manual" ${settlement.substitute === "manual" ? "selected" : ""}>관리자 확인</option>
+          </select>
+        </label>
+        <label class="form-field"><span>적용 시작일</span><input id="coachStaffSettlementEffectiveFrom" type="date" value="${escapeHtml(settlement.effectiveFrom)}" required /></label>
+      </div>
+      <p class="coach-staff-inline-note">이전 적용값과 이미 확정된 과거 정산은 다시 계산하지 않습니다.</p>
+    </details>
+    <div class="coach-staff-settlement-change-summary" role="status" aria-live="polite">
+      <span>저장 전 변경 요약</span>
+      <strong id="coachStaffSettlementChangeSummary">${escapeHtml(coachSettlementChangeSummary(settlement, coachStaffEditorState.settlementBaseline || settlement))}</strong>
+    </div>`;
 }
 
 function coachStaffPayload(draft) {
@@ -753,7 +763,7 @@ function coachSettlementSummary(coach) {
   const rule = coachSettlementRule(coach);
   if (rule.method === "hourly") return `시급 ${money.format(Number(rule.hourly) || 0)}원`;
   const mode = rule.calculationMode === "monthly_payment" ? "월 결제액" : "진행 횟수";
-  return `${mode}의 ${Math.round((Number(rule.ratio) || 0) * 100)}%`;
+  return `${mode}의 ${coachSettlementPercentLabel((Number(rule.ratio) || 0) * 100)}%`;
 }
 
 function coachStaffDraftFrom(coach) {
@@ -779,7 +789,7 @@ function coachStaffDraftFrom(coach) {
     breakBlocks: coach ? normalizeCoachBreakBlocks(source).map((block) => ({ ...block, days: [...block.days] })) : [],
     settlement: {
       method: settlement.method || "ratio",
-      ratio: Math.round((Number(settlement.ratio) || 0) * 100),
+      ratio: Number(((Number(settlement.ratio) || 0) * 100).toFixed(2)),
       hourly: Number(settlement.hourly) || 0,
       basis: settlement.cardBase === "paid" ? "actual_paid_inc_vat" : "cash_ex_vat",
       calculationMode: settlement.calculationMode || "session_progress",
@@ -787,6 +797,119 @@ function coachStaffDraftFrom(coach) {
       effectiveFrom: settlement.effectiveFrom || new Date().toISOString().slice(0, 10),
     },
   };
+}
+
+function coachSettlementPercentLabel(value) {
+  return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(Number(value) || 0);
+}
+
+function coachSettlementValueLabel(settlement = {}) {
+  if (settlement.method === "hourly") {
+    return `시급 ${money.format(Number(settlement.hourly) || 0)}원/시간`;
+  }
+  const mode = settlement.calculationMode === "monthly_payment" ? "월 결제액" : "진행 횟수";
+  return `${mode}의 ${coachSettlementPercentLabel(settlement.ratio)}%`;
+}
+
+function coachSettlementTermDraft(term = {}) {
+  return {
+    method: term.settlement_type || "ratio",
+    ratio: (Number(term.coach_rate) || 0) * 100,
+    hourly: Number(term.hourly_rate) || 0,
+    basis: term.settlement_basis || "cash_ex_vat",
+    calculationMode: term.settlement_calculation_mode || "session_progress",
+    substitute: term.substitute_policy || "actualCoach",
+    effectiveFrom: term.effective_from || "",
+  };
+}
+
+function coachSettlementEffectiveTerms(coachRoleId = "") {
+  return (adminLiveDataState.coachSettlementTerms || [])
+    .filter((term) => (
+      String(term.coach_role_id || "") === String(coachRoleId || "")
+      && !["archived", "cancelled", "deleted"].includes(String(term.status || "").toLowerCase())
+    ))
+    .sort((left, right) => String(left.effective_from || "").localeCompare(String(right.effective_from || "")));
+}
+
+function coachSettlementEffectiveState(draft) {
+  const today = adminLocalDateKey(new Date());
+  const terms = coachSettlementEffectiveTerms(draft.coachRoleId);
+  const current = terms
+    .filter((term) => (
+      String(term.effective_from || "") <= today
+      && (!term.effective_to || String(term.effective_to) >= today)
+    ))
+    .at(-1) || null;
+  const future = terms.find((term) => String(term.effective_from || "") > today) || null;
+  if (current || future) return { current, future, today };
+  const fallback = {
+    settlement_type: draft.settlement.method,
+    coach_rate: Number(draft.settlement.ratio || 0) / 100,
+    hourly_rate: Number(draft.settlement.hourly) || 0,
+    settlement_basis: draft.settlement.basis,
+    settlement_calculation_mode: draft.settlement.calculationMode,
+    substitute_policy: draft.settlement.substitute,
+    effective_from: draft.settlement.effectiveFrom,
+  };
+  return String(draft.settlement.effectiveFrom || "") > today
+    ? { current: null, future: fallback, today }
+    : { current: fallback, future: null, today };
+}
+
+function coachSettlementEffectiveMarkup(draft) {
+  const { current, future } = coachSettlementEffectiveState(draft);
+  const item = (label, term, emptyText) => {
+    if (!term) return `<div class="coach-staff-settlement-status is-empty"><span>${label}</span><strong>${emptyText}</strong></div>`;
+    const settlement = coachSettlementTermDraft(term);
+    const until = term.effective_to ? ` · ${escapeHtml(term.effective_to)}까지` : "";
+    return `<div class="coach-staff-settlement-status"><span>${label}</span><strong>${escapeHtml(coachSettlementValueLabel(settlement))}</strong><small>${escapeHtml(settlement.effectiveFrom || "적용일 미설정")}부터${until}</small></div>`;
+  };
+  return `
+    <section class="coach-staff-settlement-effective" aria-label="정산 적용 상태">
+      ${item("현재 적용", current, "현재 적용값 없음")}
+      ${item("예정 변경", future, "예약된 변경 없음")}
+    </section>`;
+}
+
+function coachSettlementChangeSummary(current = {}, baseline = {}) {
+  const methodLabels = { ratio: "비율", hourly: "시급" };
+  const basisLabels = { cash_ex_vat: "현금가·부가세 제외", actual_paid_inc_vat: "실제 결제금액" };
+  const calculationLabels = { monthly_payment: "월 결제액 기준", session_progress: "진행 횟수 기준" };
+  const substituteLabels = { actualCoach: "실제 진행 코치", originalCoach: "담당 코치", manual: "관리자 확인" };
+  const changes = [];
+  if (current.method !== baseline.method) {
+    changes.push(`방식 ${methodLabels[baseline.method] || baseline.method} → ${methodLabels[current.method] || current.method}`);
+  }
+  if (current.method === "ratio" && Number(current.ratio) !== Number(baseline.ratio)) {
+    changes.push(`비율 ${coachSettlementPercentLabel(baseline.ratio)}% → ${coachSettlementPercentLabel(current.ratio)}%`);
+  }
+  if (current.method === "hourly" && Number(current.hourly) !== Number(baseline.hourly)) {
+    changes.push(`시급 ${money.format(Number(baseline.hourly) || 0)}원 → ${money.format(Number(current.hourly) || 0)}원`);
+  }
+  if (current.calculationMode !== baseline.calculationMode) {
+    changes.push(`계산 ${calculationLabels[baseline.calculationMode] || baseline.calculationMode} → ${calculationLabels[current.calculationMode] || current.calculationMode}`);
+  }
+  if (current.basis !== baseline.basis) {
+    changes.push(`기준 ${basisLabels[baseline.basis] || baseline.basis} → ${basisLabels[current.basis] || current.basis}`);
+  }
+  if (current.substitute !== baseline.substitute) {
+    changes.push(`대타 ${substituteLabels[baseline.substitute] || baseline.substitute} → ${substituteLabels[current.substitute] || current.substitute}`);
+  }
+  if (current.effectiveFrom !== baseline.effectiveFrom) {
+    changes.push(`적용일 ${baseline.effectiveFrom || "미설정"} → ${current.effectiveFrom || "미설정"}`);
+  }
+  return changes.length ? changes.join(" · ") : "변경된 정산 설정이 없습니다.";
+}
+
+function updateCoachStaffSettlementChangeSummary() {
+  const summary = $("#coachStaffSettlementChangeSummary");
+  const draft = coachStaffEditorState.draft;
+  if (!summary || !draft) return;
+  summary.textContent = coachSettlementChangeSummary(
+    draft.settlement,
+    coachStaffEditorState.settlementBaseline || draft.settlement,
+  );
 }
 
 function beginCoachStaffBlockEdit(type, blockId) {
@@ -810,7 +933,7 @@ function coachStaffServerMatches(saved, draft) {
   const settlement = coachSettlementRule(saved);
   if (settlement.method !== draft.settlement.method) return false;
   if ((settlement.effectiveFrom || "") !== (draft.settlement.effectiveFrom || "")) return false;
-  if (draft.settlement.method === "ratio" && Math.round((Number(settlement.ratio) || 0) * 100) !== Number(draft.settlement.ratio)) return false;
+  if (draft.settlement.method === "ratio" && Math.abs(((Number(settlement.ratio) || 0) * 100) - Number(draft.settlement.ratio)) > 0.001) return false;
   if (draft.settlement.method === "ratio" && (settlement.calculationMode || "session_progress") !== draft.settlement.calculationMode) return false;
   if (draft.settlement.method === "hourly" && Number(settlement.hourly) !== Number(draft.settlement.hourly)) return false;
   return true;

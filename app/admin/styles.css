@@ -12716,6 +12716,89 @@ button .schedule-member-lines > span {
   display: none;
 }
 
+.coach-staff-settlement-effective,
+.coach-staff-settlement-primary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.coach-staff-settlement-effective {
+  margin-bottom: 14px;
+}
+
+.coach-staff-settlement-status,
+.coach-staff-settlement-change-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted, #f8fafc);
+}
+
+.coach-staff-settlement-status > span,
+.coach-staff-settlement-change-summary > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.coach-staff-settlement-status > strong,
+.coach-staff-settlement-change-summary > strong {
+  overflow-wrap: anywhere;
+}
+
+.coach-staff-settlement-status > small {
+  color: var(--muted);
+}
+
+.coach-staff-settlement-status.is-empty strong {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.coach-staff-settlement-primary {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--line));
+  border-radius: 9px;
+  background: #f8fffc;
+  background: color-mix(in srgb, var(--primary) 5%, white);
+}
+
+.coach-staff-settlement-details {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: white;
+}
+
+.coach-staff-settlement-details > summary {
+  min-height: 44px;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.coach-staff-settlement-details[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.coach-staff-settlement-details > .coach-staff-form-grid {
+  padding: 14px;
+}
+
+.coach-staff-settlement-details > .coach-staff-inline-note {
+  margin: 0;
+  padding: 0 14px 14px;
+}
+
+.coach-staff-settlement-change-summary {
+  margin-top: 12px;
+}
+
 @media (max-width: 760px) {
   .coach-row {
     grid-template-columns: minmax(0, 1fr) 36px;
@@ -12756,6 +12839,11 @@ button .schedule-member-lines > span {
   }
 
   .coach-staff-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coach-staff-settlement-effective,
+  .coach-staff-settlement-primary {
     grid-template-columns: 1fr;
   }
 
