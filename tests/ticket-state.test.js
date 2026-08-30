@@ -153,12 +153,15 @@ test("label — 회원에게 보이는 문구", () => {
 // 예약을 못 하게 된다.
 //
 // 고칠 때 이 테스트를 반대로 뒤집으면 된다. CLAUDE.md "미리 알아둘 것" 참고.
-test("[알려진 문제] remaining 이 없으면 소진으로 판정된다", () => {
-  assert.equal(TicketState.derive({ status: "active" }, TODAY), "exhausted");
-  assert.equal(TicketState.derive({ remaining: null }, TODAY), "exhausted");
-  assert.equal(TicketState.derive({}, TODAY), "exhausted");
+// 2026-08-30: 위의 과거 오인 설명은 아래 회귀검사로 해결 상태를 고정한다.
+test("remaining 누락을 잔여 0회로 오인하지 않는다", () => {
+  assert.equal(TicketState.derive({ status: "active" }, TODAY), "current");
+  assert.equal(TicketState.derive({ remaining: null }, TODAY), "current");
+  assert.equal(TicketState.derive({}, TODAY), "current");
+  assert.equal(TicketState.derive({ status: "active", total: 8, used: 8 }, TODAY), "exhausted");
+  assert.equal(TicketState.derive({ status: "active", total_sessions: 8, used_sessions: 3 }, TODAY), "current");
 
-  // 반면 종료 상태는 remaining 을 보기 전에 판정되므로 영향을 받지 않는다.
+  // 종료 상태는 잔여 횟수와 관계없이 우선한다.
   assert.equal(TicketState.derive({ status: "refunded" }, TODAY), "refunded");
 });
 

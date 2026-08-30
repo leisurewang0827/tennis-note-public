@@ -8,6 +8,13 @@
     return "";
   }
 
+  function numericValue(ticket, ...keys) {
+    const raw = value(ticket, ...keys);
+    if (raw === "") return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
   function localDateKey(date = new Date()) {
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Asia/Seoul",
@@ -24,14 +31,17 @@
     const status = String(value(ticket, "status") || "").toLowerCase();
     const startsOn = String(value(ticket, "startsOn", "starts_on", "starts", "purchased") || "");
     const expiresOn = String(value(ticket, "expiresOn", "expires_on", "expires") || "");
-    const remaining = Number(value(ticket, "remaining", "remainingSessions", "remaining_sessions"));
+    const explicitRemaining = numericValue(ticket, "remaining", "remainingSessions", "remaining_sessions");
+    const total = numericValue(ticket, "total", "totalSessions", "total_sessions");
+    const used = numericValue(ticket, "used", "usedSessions", "used_sessions");
+    const remaining = explicitRemaining ?? (total !== null && used !== null ? Math.max(0, total - used) : null);
 
     if (["refunded"].includes(status)) return "refunded";
     if (["cancelled", "canceled"].includes(status)) return "cancelled";
     if (status === "voided") return "voided";
     if (status === "pending_payment") return "pending_payment";
     if (expiresOn && expiresOn < today) return "expired";
-    if (Number.isFinite(remaining) && remaining <= 0) return "exhausted";
+    if (remaining !== null && remaining <= 0) return "exhausted";
     if (startsOn && startsOn > today) return "upcoming";
     if (status === "paused") return "paused";
     if (status === "expired") return "expired";
