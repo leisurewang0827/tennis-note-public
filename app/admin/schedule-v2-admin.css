@@ -877,6 +877,19 @@
   isolation: isolate;
 }
 
+/* 대형 시간표는 셀의 격자 위치를 유지하되 화면 밖 내용의 layout/paint를 미룹니다. */
+.schedule-v2-week-slot,
+.schedule-v2-week-time,
+.schedule-v2-week-lesson,
+.schedule-v2-week-history,
+.schedule-v2-slot,
+.schedule-v2-time,
+.schedule-v2-lesson,
+.schedule-v2-history-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 28px;
+}
+
 .schedule-v2-week-corner,
 .schedule-v2-week-day-head,
 .schedule-v2-week-coach-head,
