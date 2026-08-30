@@ -56,9 +56,9 @@
 - **`app/tennis-note-legal/terms.html` 이 없습니다.** 가입 동의 화면이 이 파일을
   링크해 404 입니다. 링크 검사는 `check_cloudflare_build.py` 의
   `KNOWN_MISSING_PAGES` 로 통과시키고 있습니다. **만들면 거기서 지우세요.**
-- **개인정보처리방침이 두 벌입니다.** 루트 `privacy.html` 이 정식본(시행일 7/18,
-  처리자·연락처 있음), `app/tennis-note-legal/privacy.html` 이 옛 초안인데
-  **앱은 초안을 링크합니다.** `support.html`, `index.html` 도 같은 상태입니다.
+- **해결됨:** 앱과 Cloudflare의 개인정보 처리방침은
+  `app/tennis-note-legal/privacy.html` 한 문서를 기준으로 사용합니다. 루트 주소는
+  GitHub Pages 호환용 안내이며, 서비스 이용약관도 같은 법무 페이지 묶음에 추가했습니다.
 
 ## 해결된 버그
 

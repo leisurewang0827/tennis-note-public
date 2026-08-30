@@ -11,6 +11,7 @@ Recommended GitHub Pages URLs after publishing:
 - `https://leisurewang0827.github.io/tennis-note-public/`
 - `https://leisurewang0827.github.io/tennis-note-public/app/`
 - `https://leisurewang0827.github.io/tennis-note-public/commerce.html`
+- `https://leisurewang0827.github.io/tennis-note-public/terms.html`
 - `https://leisurewang0827.github.io/tennis-note-public/privacy.html`
 - `https://leisurewang0827.github.io/tennis-note-public/support.html`
 - `https://leisurewang0827.github.io/tennis-note-public/delete-account.html`
@@ -31,6 +32,7 @@ Files:
 
 - `index.html`
 - `commerce.html`
+- `terms.html`
 - `privacy.html`
 - `support.html`
 - `delete-account.html`
