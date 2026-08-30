@@ -895,6 +895,42 @@
     return error;
   }
 
+  function authorizationFailureNeedsRefresh(error) {
+    const status = Number(error?.status || 0);
+    const code = String(error?.code || error?.payload?.code || "").toLowerCase();
+    const detail = `${code} ${error?.message || ""} ${error?.payload?.message || ""}`.toLowerCase();
+    if (status === 401) return true;
+    if (["pgrst301", "jwt_expired", "invalid_jwt"].includes(code)) return true;
+    return status === 403
+      && code === "42501"
+      && detail.includes("permission denied for function");
+  }
+
+  function expiredRequestSessionError(cause = null) {
+    const error = new Error("admin_session_expired");
+    error.code = "admin_session_expired";
+    error.status = 401;
+    error.cause = cause;
+    return error;
+  }
+
+  async function refreshRejectedRequestSession(error, requestSession, retryAttempted = false) {
+    if (retryAttempted || !authorizationFailureNeedsRefresh(error)) return null;
+    const latestSession = getSession();
+    if (
+      latestSession?.access_token
+      && latestSession.access_token !== requestSession?.access_token
+    ) return latestSession;
+    if (!latestSession?.refresh_token) {
+      removeStoredSession();
+      throw expiredRequestSessionError(error);
+    }
+    if (!isOnline()) throw expiredRequestSessionError(error);
+    const refreshed = await refreshSession();
+    if (!refreshed?.access_token) throw expiredRequestSessionError(error);
+    return refreshed;
+  }
+
   function transportRequestError(error) {
     if (error?.code === "offline" || error?.code === "offline_cache_miss") return error;
     const transportError = new Error("server_connection_failed");
@@ -954,7 +990,16 @@
 
     if (!response.ok) {
       const rawText = await response.text().catch(() => "");
-      throw responseRequestError(response, rawText);
+      const requestError = responseRequestError(response, rawText);
+      const refreshed = await refreshRejectedRequestSession(
+        requestError,
+        session,
+        options._authRetryAttempted === true,
+      );
+      if (refreshed) {
+        return request(path, { ...options, _authRetryAttempted: true });
+      }
+      throw requestError;
     }
 
     if (response.status === 204) return null;
@@ -991,7 +1036,16 @@
     if (!response.ok) {
       const error = new Error(payload.message || payload.code || `Supabase function failed: ${response.status}`);
       error.status = response.status;
+      error.code = String(payload.code || payload.error_code || "server_request_failed");
       error.payload = payload;
+      const refreshed = await refreshRejectedRequestSession(
+        error,
+        session,
+        options._authRetryAttempted === true,
+      );
+      if (refreshed) {
+        return invokeFunction(functionName, { ...options, _authRetryAttempted: true });
+      }
       throw error;
     }
 
@@ -1242,7 +1296,7 @@
     return payload;
   }
 
-  async function getAuthUser() {
+  async function getAuthUser(options = {}) {
     const session = await ensureSession();
     if (!session?.access_token) return null;
     if (!isOnline()) {
@@ -1261,13 +1315,26 @@
       return id ? { id } : null;
     }
     if (!response.ok) {
-      if (response.status === 400 || response.status === 401) {
+      const rawText = await response.text().catch(() => "");
+      const requestError = responseRequestError(response, rawText, "Supabase auth user failed");
+      if (response.status === 401) {
+        try {
+          const refreshed = await refreshRejectedRequestSession(
+            requestError,
+            session,
+            options._authRetryAttempted === true,
+          );
+          if (refreshed) return getAuthUser({ ...options, _authRetryAttempted: true });
+        } catch (error) {
+          if (error?.code === "admin_session_expired") return null;
+          throw error;
+        }
+      }
+      if (response.status === 400) {
         removeStoredSession();
         return null;
       }
-      const error = new Error(await response.text() || `Supabase auth user failed: ${response.status}`);
-      error.status = response.status;
-      throw error;
+      throw requestError;
     }
     return response.json();
   }
