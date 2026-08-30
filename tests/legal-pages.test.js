@@ -34,7 +34,6 @@ test("루트 이용약관 주소는 앱의 정식 문서로 안내한다", () =>
   const rootTerms = read("terms.html");
   assert.match(rootTerms, /url=\.\/app\/tennis-note-legal\/terms\.html/);
 });
-
 test("GitHub Pages 배포에도 루트 이용약관을 포함한다", () => {
   const workflow = read(".github/workflows/deploy-pages.yml");
   assert.match(workflow, /cp index\.html[^\n]*terms\.html[^\n]*_site\//);
