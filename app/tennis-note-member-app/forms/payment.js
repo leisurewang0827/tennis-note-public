@@ -73,9 +73,11 @@ async function completePreparedPayment() {
       const diagnosticCode = reportPaymentProviderError(providerError, "payment_window_response");
       createPaymentRecord(product, {
         paymentId: effectivePaymentId,
+        serverPaymentId: preparedPayment?.localPaymentId || "",
         method: `${method.label} 결제 실패`,
         status: detail,
       });
+      await syncMemberPendingPaymentsFromServer();
       state.ticketHistory.unshift({ text: `${product.title} 결제 실패 · 다시 시도 필요`, tone: "alert" });
       const flow = purchaseFlowState();
       flow.paymentErrorCode = diagnosticCode;
@@ -141,9 +143,11 @@ async function completePreparedPayment() {
     const diagnosticCode = reportPaymentProviderError(error, "payment_window_open");
     createPaymentRecord(product, {
       paymentId: context.paymentId || requestedPaymentId,
+      serverPaymentId: preparedPayment?.localPaymentId || "",
       method: "결제창 오류",
       status: `결제창을 열지 못했습니다. ${detail}`,
     });
+    await syncMemberPendingPaymentsFromServer();
     state.pendingPaymentCheckStatus = { tone: "alert", text: `결제창을 열지 못했습니다. ${detail}` };
     state.ticketHistory.unshift({ text: `${product.title} 결제창 오류 · ${detail}`, tone: "alert" });
     purchaseFlowState().paymentErrorCode = diagnosticCode;
@@ -165,6 +169,7 @@ async function completePreparedPayment() {
     syncMemberTicketsFromServer(),
     syncMemberLessonsFromServer(null, { force: true }),
     syncMemberPendingPurchaseSchedulesFromServer(),
+    syncMemberPendingPaymentsFromServer(),
     syncMemberDiscountCouponsFromServer(),
   ]);
   renderAll();

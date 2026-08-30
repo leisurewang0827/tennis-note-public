@@ -93,7 +93,7 @@ function membershipPassRecords() {
   const groupedRequestIndex = new Map();
   (state.paymentRequests || []).forEach((request) => {
     const display = paymentRequestDisplay(request);
-    const canGroup = display.tone === "alert";
+    const canGroup = display.tone === "alert" && request.cancellable !== true;
     const groupKey = canGroup
       ? `${request.productId || request.productTitle || "결제"}|${display.status}`
       : request.paymentId || request.serverPaymentId || `${request.productTitle}-${groupedRequests.length}`;
@@ -117,6 +117,9 @@ function membershipPassRecords() {
       status: display.status,
       note: `${display.note || ""}${groupedAttemptNote}`,
       tone: display.tone,
+      paymentId: request.paymentId || "",
+      productId: request.productId || "",
+      cancellable: request.cancellable === true && Boolean(request.paymentId),
     };
   });
   const heldPasses = refundHeldLiveTickets().map((ticket) => ({
