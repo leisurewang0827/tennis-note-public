@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p _site
-          cp index.html commerce.html privacy.html support.html delete-account.html export_manifest.json _site/
+          cp index.html terms.html commerce.html privacy.html support.html delete-account.html export_manifest.json _site/
           cp -R assets app _site/
           touch _site/.nojekyll
 
