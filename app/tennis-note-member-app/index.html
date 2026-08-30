@@ -1058,6 +1058,51 @@
       </article>
     </section>
 
+    <section id="purchaseProductSheet" class="app-bottom-sheet purchase-product-sheet" aria-labelledby="purchaseProductSheetTitle" data-tn-bottom-sheet hidden>
+      <button class="sheet-backdrop" type="button" aria-label="상품 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-product></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchaseProductSheetTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">회원권</p>
+            <h3 id="purchaseProductSheetTitle">상품 선택</h3>
+            <span>수업 횟수와 이용기간을 확인해 주세요.</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-purchase-product>닫기</button>
+        </div>
+        <div id="purchaseProductSheetOptions" class="sheet-scroll purchase-product-sheet-options" data-tn-sheet-scroll></div>
+      </article>
+    </section>
+
+    <section id="purchaseScheduleSheet" class="app-bottom-sheet purchase-schedule-sheet" aria-labelledby="purchaseScheduleSheetTitle" data-tn-bottom-sheet data-tn-sheet-has-footer="true" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="선생님과 시간 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-schedule></button>
+      <article class="sheet-card purchase-schedule-sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchaseScheduleSheetTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head purchase-schedule-sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">회원권 일정</p>
+            <h3 id="purchaseScheduleSheetTitle">선생님·시간 선택</h3>
+            <span id="purchaseScheduleSheetProgress">0/1 선택</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-purchase-schedule>닫기</button>
+        </div>
+        <div class="sheet-scroll purchase-schedule-sheet-scroll" data-tn-sheet-scroll>
+          <div id="purchaseScheduleSheetCoachOptions" class="purchase-schedule-sheet-coaches"></div>
+          <div class="purchase-schedule-weekbar">
+            <button id="purchaseSchedulePreviousWeek" type="button" data-purchase-schedule-week="-1" aria-label="이전 주">‹</button>
+            <strong id="purchaseScheduleSheetWeek">이번 주</strong>
+            <button id="purchaseScheduleNextWeek" type="button" data-purchase-schedule-week="1" aria-label="다음 주">›</button>
+            <button id="purchaseScheduleAvailableOnly" type="button" aria-pressed="false">가능만</button>
+          </div>
+          <div id="purchaseScheduleSheetGrid" class="purchase-schedule-grid"></div>
+        </div>
+        <div class="sheet-actions purchase-schedule-sheet-actions" data-tn-sheet-footer>
+          <span id="purchaseScheduleSheetSummary">시간을 선택해 주세요</span>
+          <button id="completePurchaseScheduleSelection" class="primary-button" type="button" disabled>선택 완료</button>
+        </div>
+      </article>
+    </section>
+
     <section id="purchasePaymentMethodSheet" class="app-bottom-sheet purchase-payment-method-sheet" aria-labelledby="purchasePaymentMethodTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" hidden>
       <button class="sheet-backdrop" type="button" aria-label="결제 방법 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-payment-method></button>
       <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchasePaymentMethodTitle" data-tn-sheet-panel>
