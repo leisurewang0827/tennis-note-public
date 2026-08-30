@@ -213,32 +213,80 @@ async function syncMemberPendingPurchaseSchedulesFromServer() {
   }
 }
 
+async function syncMemberPendingPaymentsFromServer() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.invokeFunction || !client.getSession?.()?.access_token || !state.member?.profileId) return false;
+  try {
+    const result = await client.invokeFunction("portone-payment/member-pending", { body: {} });
+    const rows = Array.isArray(result?.payments) ? result.payments : [];
+    const serverRequests = rows
+      .filter((row) => row?.paymentId)
+      .map((row) => {
+        const methodId = String(row.method || "").toLowerCase();
+        const methodLabel = paymentMethodDefinitions.find((method) => method.id === methodId)?.label
+          || (methodId === "bank_transfer" ? "계좌이체" : "결제");
+        const status = String(row.status || "ready").toLowerCase();
+        return {
+          paymentId: String(row.paymentId || ""),
+          serverPaymentId: String(row.localPaymentId || ""),
+          productId: String(row.productId || ""),
+          productTitle: String(row.productTitle || "회원권"),
+          amountLabel: Number(row.amount || 0) > 0 ? `${Number(row.amount).toLocaleString("ko-KR")}원` : "금액 확인",
+          coach: "담당 코치 확인",
+          method: methodLabel,
+          status: status === "failed" ? "결제 실패 · 취소 후 다시 시도" : "결제 미완료 · 대기 취소 가능",
+          serverSynced: true,
+          cancellable: ["ready", "failed"].includes(status),
+          createdAt: String(row.createdAt || ""),
+          depositDueAt: String(row.depositDueAt || ""),
+        };
+      });
+    const pendingIds = new Set(serverRequests.map((request) => request.paymentId));
+    const localRequests = (state.paymentRequests || []).filter((request) => (
+      request.serverSynced !== true && !pendingIds.has(String(request.paymentId || ""))
+    ));
+    state.paymentRequests = [...serverRequests, ...localRequests];
+
+    const shared = loadSharedData();
+    const sharedLocalRequests = (shared.paymentRequests || []).filter((request) => (
+      request.serverSynced !== true && !pendingIds.has(String(request.paymentId || ""))
+    ));
+    shared.paymentRequests = [...serverRequests, ...sharedLocalRequests];
+    saveSharedData(shared);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function cancelPendingPurchasePayment(paymentId = "", productTitle = "회원권") {
   if (!paymentId || pendingPaymentCancelInFlight.has(paymentId)) return;
-  if (!window.confirm(`${productTitle} 계좌이체 신청을 취소할까요?\n보관 중인 시간도 다시 예약 가능 상태로 돌아갑니다.`)) return;
+  if (!window.confirm(`${productTitle} 결제 대기를 취소할까요?\n실제 결제가 완료된 건은 취소되지 않으며, 보관 중인 시간은 다시 예약 가능 상태로 돌아갑니다.`)) return;
   const client = window.TennisNoteDataClient;
   if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
     showToast("로그인 상태를 확인한 뒤 다시 시도해 주세요.");
     return;
   }
   pendingPaymentCancelInFlight.add(paymentId);
+  renderProducts();
   try {
     const result = await client.invokeFunction("portone-payment/cancel-pending", {
-      body: { paymentId, reason: "회원 계좌이체 신청 취소" },
+      body: { paymentId, reason: "회원 결제 대기 취소" },
     });
     if (!result?.ok) throw Object.assign(new Error(result?.code || "pending_payment_cancel_failed"), { payload: result });
-    state.pendingPaymentCheckStatus = { tone: "done", text: "계좌이체 신청과 선택 시간 보관을 취소했습니다." };
+    state.pendingPaymentCheckStatus = { tone: "done", text: "결제 대기와 선택 시간 보관을 취소했습니다. 같은 상품은 다시 결제할 수 있습니다." };
     state.paymentRequests = (state.paymentRequests || []).filter((request) => String(request.paymentId || "") !== String(paymentId));
     const shared = loadSharedData();
     shared.paymentRequests = (shared.paymentRequests || []).filter((request) => String(request.paymentId || "") !== String(paymentId));
     saveSharedData(shared);
     await Promise.allSettled([
       syncMemberPendingPurchaseSchedulesFromServer(),
+      syncMemberPendingPaymentsFromServer(),
       syncMemberDiscountCouponsFromServer(),
       refreshPurchaseScheduleAvailability(),
     ]);
     renderAll();
-    showToast("계좌이체 신청을 취소했습니다.");
+    showToast("결제 대기를 취소했습니다.");
   } catch (error) {
     state.pendingPaymentCheckStatus = { tone: "alert", text: paymentServerErrorMessage(error) };
     renderAll();

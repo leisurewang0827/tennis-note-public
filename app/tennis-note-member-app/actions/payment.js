@@ -64,6 +64,8 @@ function createPaymentRecord(product, overrides = {}) {
     serverPaymentId: overrides.serverPaymentId || "",
     bankTransferAccount: overrides.bankTransferAccount || null,
     purchasePurpose: overrides.purchasePurpose || flow.purchasePurpose || "new_purchase",
+    serverSynced: overrides.serverSynced === true || Boolean(overrides.serverPaymentId),
+    cancellable: overrides.cancellable === true,
   };
   const existingIndex = state.paymentRequests.findIndex((item) => (
     request.paymentId && String(item.paymentId || "") === String(request.paymentId)
@@ -154,7 +156,7 @@ async function cancelPendingTicketPayment(ticketId = "") {
     pendingPaymentCancelInFlight.delete(paymentId);
   }
 
-  await Promise.allSettled([syncMemberTicketsFromServer(), syncMemberPendingPurchaseSchedulesFromServer(), syncMemberDiscountCouponsFromServer()]);
+  await Promise.allSettled([syncMemberTicketsFromServer(), syncMemberPendingPurchaseSchedulesFromServer(), syncMemberPendingPaymentsFromServer(), syncMemberDiscountCouponsFromServer()]);
   renderAll();
   setView("shopView");
 }

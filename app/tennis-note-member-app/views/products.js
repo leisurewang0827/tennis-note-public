@@ -192,6 +192,7 @@ function renderProducts() {
             </div>
             <b>${pass.status}</b>
             ${pass.note ? `<small>${pass.note}</small>` : ""}
+            ${pass.cancellable ? `<button class="small-button danger-button" type="button" data-cancel-pending-purchase="${escapeHtml(pass.paymentId)}" data-pending-purchase-title="${escapeHtml(pass.title || "회원권")}" ${pendingPaymentCancelInFlight.has(pass.paymentId) ? "disabled" : ""}>${pendingPaymentCancelInFlight.has(pass.paymentId) ? "취소 중" : "대기 취소"}</button>` : ""}
           </article>`,
       )
       .join("") || "";
