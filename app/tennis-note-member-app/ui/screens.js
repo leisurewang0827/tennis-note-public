@@ -31,6 +31,10 @@ function openMemberNotificationTarget(data = {}, route = "home") {
   }
   if (["feedback", "journal"].includes(route)) {
     const entry = memberNotificationJournalEntry(data);
+    const requestedDate = normalizeJournalNavigationDate(
+      data.journalDate || data.journal_date || data.lessonDate || data.lesson_date || entry?.dateValue || "",
+    );
+    if (requestedDate) applyJournalNavigationDate(requestedDate);
     if (entry) {
       openJournalDetail(entry.id);
       return true;

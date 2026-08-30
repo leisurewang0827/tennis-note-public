@@ -172,12 +172,48 @@ function selectedJournalEntries() {
   return journalEntries().filter((entry) => entry.dateValue === selectedDate && journalMatchesSearch(entry, query));
 }
 
+function normalizeJournalNavigationDate(dateValue = "") {
+  const value = String(dateValue || "").trim();
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return localDateKey(date) === value ? value : "";
+}
+
+function requestedJournalNavigationDate() {
+  const params = new URLSearchParams(window.location.search || "");
+  return normalizeJournalNavigationDate(params.get("journalDate") || params.get("journal_date") || "");
+}
+
+function applyJournalNavigationDate(dateValue, options = {}) {
+  const normalizedDate = normalizeJournalNavigationDate(dateValue);
+  if (!normalizedDate) return false;
+  const monthValue = normalizedDate.slice(0, 7);
+  const changed = state.selectedJournalDate !== normalizedDate || state.activeJournalMonth !== monthValue;
+  state.selectedJournalDate = normalizedDate;
+  state.activeJournalMonth = monthValue;
+  if (options.render !== false) renderJournalCalendar();
+  if (changed && options.persist !== false) saveSnapshot();
+  return changed;
+}
+
+function initializeJournalNavigationForLaunch() {
+  const requestedDate = requestedJournalNavigationDate();
+  const targetDate = requestedDate || localDateKey();
+  applyJournalNavigationDate(targetDate, { render: false, persist: false });
+  return { date: targetDate, source: requestedDate ? "deep-link" : "cold-launch" };
+}
+
 function selectJournalDate(dateValue) {
-  if (!dateValue) return;
-  state.selectedJournalDate = dateValue;
-  state.activeJournalMonth = dateValue.slice(0, 7);
-  renderJournalCalendar();
-  saveSnapshot();
+  applyJournalNavigationDate(dateValue);
+}
+
+function returnJournalToToday() {
+  const todayValue = localDateKey();
+  const changed = applyJournalNavigationDate(todayValue);
+  if (!changed) renderJournalCalendar();
+  return changed;
 }
 
 function changeJournalMonth(delta) {

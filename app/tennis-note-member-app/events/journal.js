@@ -20,6 +20,7 @@ function bindJournalEvents() {
   });
   $("#journalPrevMonth")?.addEventListener("click", () => changeJournalMonth(-1));
   $("#journalNextMonth")?.addEventListener("click", () => changeJournalMonth(1));
+  $("#journalTodayButton")?.addEventListener("click", returnJournalToToday);
   $("#journalCalendarDisclosure")?.addEventListener("toggle", (event) => {
     if (event.isTrusted) event.currentTarget.dataset.userToggled = "true";
   });

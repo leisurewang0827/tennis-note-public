@@ -2654,7 +2654,7 @@ button {
 
 .journal-calendar-controls {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px auto;
   gap: 8px;
   align-items: center;
 }
@@ -2664,10 +2664,16 @@ button {
 }
 
 .journal-month-arrow {
-  width: 40px;
-  min-width: 40px;
+  width: 44px;
+  min-width: 44px;
   padding: 0;
   font-size: 18px;
+}
+
+.journal-today-button {
+  min-width: 52px;
+  min-height: 44px;
+  padding-inline: 10px;
 }
 
 .journal-calendar-tools {
@@ -9757,7 +9763,7 @@ body.modal-open {
   }
 
   .journal-calendar-controls .small-button {
-    min-height: 38px;
+    min-height: 44px;
     padding-inline: 8px;
   }
 

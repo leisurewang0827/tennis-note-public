@@ -1082,6 +1082,7 @@ async function initApp() {
   purgeLegacyDemoStorage();
   captureOnboardingIntent();
   restoreSnapshot();
+  initializeJournalNavigationForLaunch();
   renderOnboardingEntryIntro();
   renderPublicProductPreview();
   window.TennisNoteModeTransition?.consume("member", { splashSelector: "#brandSplash" });
