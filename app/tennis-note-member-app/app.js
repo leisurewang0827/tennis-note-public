@@ -50,6 +50,7 @@ const state = {
   memberScheduleFullView: false,
   activeJournalMonth: localDateKey().slice(0, 7),
   selectedJournalDate: localDateKey(),
+  journalCalendarViewMode: "month",
   selectedLessonDetailId: "",
   journalSearchQuery: "",
   curriculumQuery: "",

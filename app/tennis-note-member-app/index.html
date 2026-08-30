@@ -323,13 +323,19 @@
           <details id="journalCalendarDisclosure" class="journal-calendar-card journal-calendar-disclosure" aria-label="운동일지 달력">
             <summary><strong>운동 달력</strong><span id="journalMonthLabel">2026년 7월</span></summary>
             <div class="journal-calendar-body">
-            <div class="journal-calendar-controls" aria-label="운동일지 월 이동">
-              <button class="small-button journal-month-arrow" type="button" id="journalPrevMonth" aria-label="이전 달" title="이전 달">&lt;</button>
-              <button class="small-button journal-month-picker-trigger" type="button" id="journalMonthPickerButton" aria-haspopup="dialog" aria-controls="journalMonthPickerSheet" aria-expanded="false">
-                <strong id="journalCalendarControlLabel">2026년 7월</strong>
-              </button>
-              <button class="small-button journal-month-arrow" type="button" id="journalNextMonth" aria-label="다음 달" title="다음 달">&gt;</button>
-              <button class="small-button journal-today-button" type="button" id="journalTodayButton">오늘</button>
+            <div class="journal-calendar-toolbar">
+              <div class="journal-calendar-controls" aria-label="운동일지 기간 이동">
+                <button class="small-button journal-month-arrow" type="button" id="journalPrevMonth" aria-label="이전 달" title="이전 달">&lt;</button>
+                <button class="small-button journal-month-picker-trigger" type="button" id="journalMonthPickerButton" aria-haspopup="dialog" aria-controls="journalMonthPickerSheet" aria-expanded="false">
+                  <strong id="journalCalendarControlLabel">2026년 7월</strong>
+                </button>
+                <button class="small-button journal-month-arrow" type="button" id="journalNextMonth" aria-label="다음 달" title="다음 달">&gt;</button>
+                <button class="small-button journal-today-button" type="button" id="journalTodayButton">오늘</button>
+              </div>
+              <div class="journal-calendar-view-switch" role="group" aria-label="운동일지 달력 보기">
+                <button class="small-button is-active" type="button" data-journal-calendar-view="month" aria-pressed="true">월</button>
+                <button class="small-button" type="button" data-journal-calendar-view="week" aria-pressed="false">주</button>
+              </div>
             </div>
             <details class="journal-tools-disclosure">
               <summary>기록 검색·날짜 이동</summary>

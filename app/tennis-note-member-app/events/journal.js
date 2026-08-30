@@ -18,9 +18,12 @@ function bindJournalEvents() {
   $("#journalComposerSheet")?.addEventListener("click", (event) => {
     if (event.target.closest("[data-close-journal-composer]")) closeAppSheet("journalComposerSheet");
   });
-  $("#journalPrevMonth")?.addEventListener("click", () => changeJournalMonth(-1));
-  $("#journalNextMonth")?.addEventListener("click", () => changeJournalMonth(1));
+  $("#journalPrevMonth")?.addEventListener("click", () => changeJournalCalendarPeriod(-1));
+  $("#journalNextMonth")?.addEventListener("click", () => changeJournalCalendarPeriod(1));
   $("#journalTodayButton")?.addEventListener("click", returnJournalToToday);
+  $$('[data-journal-calendar-view]').forEach((button) => {
+    button.addEventListener("click", () => setJournalCalendarViewMode(button.dataset.journalCalendarView));
+  });
   $("#journalMonthPickerButton")?.addEventListener("click", openJournalMonthPicker);
   $("#journalMonthPickerApply")?.addEventListener("click", applyJournalMonthPicker);
   $("#journalMonthPickerSheet")?.addEventListener("click", (event) => {

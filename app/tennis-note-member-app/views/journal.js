@@ -137,51 +137,81 @@ function renderPracticeLogs() {
   renderListPager("practiceLogsPager", "practice", practicePage, practiceItems.length);
 }
 
+function journalCalendarEntryLabel(dayEntries = [], hasLesson = false) {
+  if (dayEntries.length > 1) return `${dayEntries.length}건`;
+  return dayEntries[0]?.kind || (hasLesson ? "수업" : "");
+}
+
 function renderJournalCalendar() {
   const target = $("#journalCalendar");
   if (!target) return;
   const todayValue = localDateKey();
-  const selectedDate = state.selectedJournalDate || todayValue;
+  const selectedDate = normalizeJournalNavigationDate(state.selectedJournalDate) || todayValue;
   const monthValue = state.activeJournalMonth || selectedDate.slice(0, 7);
+  const viewMode = normalizeJournalCalendarViewMode(state.journalCalendarViewMode);
+  state.journalCalendarViewMode = viewMode;
   const [yearText, monthText] = monthValue.split("-");
   const year = Number(yearText);
   const monthIndex = Number(monthText) - 1;
   const dayCount = new Date(year, monthIndex + 1, 0).getDate();
   const firstWeekday = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
+  const dateValues = viewMode === "week"
+    ? journalWeekDateValues(selectedDate)
+    : Array.from({ length: dayCount }, (_, index) => `${monthValue}-${String(index + 1).padStart(2, "0")}`);
+  const visibleDates = new Set(dateValues);
   const query = (state.journalSearchQuery || "").trim();
   const entries = journalEntries();
-  const lessonDates = new Set(entries.filter((entry) => entry.kind === "레슨" && entry.dateValue?.startsWith(monthValue)).map((entry) => entry.dateValue));
+  const lessonDates = new Set(entries.filter((entry) => entry.kind === "레슨" && visibleDates.has(entry.dateValue)).map((entry) => entry.dateValue));
   const entriesByDate = entries.reduce((map, entry) => {
-    if (!entry.dateValue?.startsWith(monthValue) || !journalMatchesSearch(entry, query)) return map;
+    if (!visibleDates.has(entry.dateValue) || !journalMatchesSearch(entry, query)) return map;
     if (!map.has(entry.dateValue)) map.set(entry.dateValue, []);
     map.get(entry.dateValue).push(entry);
     return map;
   }, new Map());
-  const weekdays = ["월", "화", "수", "목", "금", "토", "일"].map((day) => `<b>${day}</b>`).join("");
-  const emptyMarkup = Array.from({ length: firstWeekday }, () => `<span class="calendar-empty"></span>`).join("");
-  const daysMarkup = Array.from({ length: dayCount }, (_, index) => {
-    const day = index + 1;
-    const dateValue = `${monthValue}-${String(day).padStart(2, "0")}`;
+  const weekdays = journalCalendarWeekdays.map((day) => `<b>${day}</b>`).join("");
+  const emptyMarkup = viewMode === "month"
+    ? Array.from({ length: firstWeekday }, () => `<span class="calendar-empty"></span>`).join("")
+    : "";
+  const daysMarkup = dateValues.map((dateValue) => {
+    const [, dateMonth, dateDay] = dateValue.split("-").map(Number);
     const dayEntries = entriesByDate.get(dateValue) || [];
     const hasRecord = dayEntries.length > 0;
     const hasLesson = lessonDates.has(dateValue);
-    const entry = dayEntries[0];
-    const label = dayEntries.length > 1 ? `${dayEntries.length}건` : entry?.kind || (hasLesson ? "수업" : "");
+    const label = journalCalendarEntryLabel(dayEntries, hasLesson);
     const accessibleLabel = label || "기록 없음";
+    const dayLabel = viewMode === "week" ? `${dateMonth}/${dateDay}` : String(dateDay);
     return `
       <button class="journal-day ${hasRecord ? "has-record" : ""} ${hasLesson ? "has-lesson" : ""} ${selectedDate === dateValue ? "is-selected" : ""} ${query && hasRecord ? "matches-search" : ""}" type="button" data-select-journal-date="${dateValue}" aria-label="${dateValue} ${accessibleLabel}">
-        <strong>${day}</strong>
+        <strong>${dayLabel}</strong>
         ${label ? `<span>${label}</span>` : ""}
       </button>`;
   }).join("");
-  target.innerHTML = `<div class="calendar-weekdays">${weekdays}</div><div class="calendar-days">${emptyMarkup}${daysMarkup}</div>`;
+  target.classList.toggle("is-week-view", viewMode === "week");
+  target.innerHTML = `<div class="calendar-weekdays">${weekdays}</div><div class="calendar-days ${viewMode === "week" ? "is-week-view" : ""}">${emptyMarkup}${daysMarkup}</div>`;
+  const weekLabel = journalWeekRangeLabel(dateValues);
+  const visiblePeriodLabel = viewMode === "week" ? weekLabel : `${year}년 ${monthIndex + 1}월`;
   const monthLabel = $("#journalMonthLabel");
-  if (monthLabel) monthLabel.textContent = `${year}년 ${monthIndex + 1}월`;
+  if (monthLabel) monthLabel.textContent = visiblePeriodLabel;
   const controlLabel = $("#journalCalendarControlLabel");
-  const visibleMonthLabel = `${year}년 ${monthIndex + 1}월`;
-  if (controlLabel) controlLabel.textContent = visibleMonthLabel;
+  if (controlLabel) controlLabel.textContent = visiblePeriodLabel;
   const monthPickerButton = $("#journalMonthPickerButton");
-  if (monthPickerButton) monthPickerButton.setAttribute("aria-label", `${visibleMonthLabel}, 연·월 선택`);
+  if (monthPickerButton) monthPickerButton.setAttribute("aria-label", `${visiblePeriodLabel}, 연·월 선택`);
+  const previousButton = $("#journalPrevMonth");
+  const nextButton = $("#journalNextMonth");
+  const periodUnit = viewMode === "week" ? "주" : "달";
+  if (previousButton) {
+    previousButton.setAttribute("aria-label", `이전 ${periodUnit}`);
+    previousButton.title = `이전 ${periodUnit}`;
+  }
+  if (nextButton) {
+    nextButton.setAttribute("aria-label", `다음 ${periodUnit}`);
+    nextButton.title = `다음 ${periodUnit}`;
+  }
+  $$('[data-journal-calendar-view]').forEach((button) => {
+    const active = button.dataset.journalCalendarView === viewMode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
   const jumpInput = $("#journalJumpDate");
   if (jumpInput && jumpInput.value !== selectedDate) jumpInput.value = selectedDate;
   const searchInput = $("#journalSearch");

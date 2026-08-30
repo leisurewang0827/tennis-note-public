@@ -214,8 +214,9 @@ function applyJournalNavigationDate(dateValue, options = {}) {
 function initializeJournalNavigationForLaunch() {
   const requestedDate = requestedJournalNavigationDate();
   const targetDate = requestedDate || localDateKey();
+  state.journalCalendarViewMode = "month";
   applyJournalNavigationDate(targetDate, { render: false, persist: false });
-  return { date: targetDate, source: requestedDate ? "deep-link" : "cold-launch" };
+  return { date: targetDate, mode: state.journalCalendarViewMode, source: requestedDate ? "deep-link" : "cold-launch" };
 }
 
 function selectJournalDate(dateValue) {
@@ -314,6 +315,58 @@ function changeJournalMonth(delta) {
   const nextMonth = new Date(Number(yearText), Number(monthText) - 1 + delta, 1);
   const nextMonthValue = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}`;
   applyJournalMonthNavigation(nextMonthValue);
+}
+
+const journalCalendarWeekdays = ["월", "화", "수", "목", "금", "토", "일"];
+
+function normalizeJournalCalendarViewMode(mode = "") {
+  return String(mode || "").toLowerCase() === "week" ? "week" : "month";
+}
+
+function journalWeekDateValues(dateValue = "") {
+  const normalizedDate = normalizeJournalNavigationDate(dateValue) || localDateKey();
+  const anchor = new Date(`${normalizedDate}T12:00:00`);
+  const mondayOffset = (anchor.getDay() + 6) % 7;
+  anchor.setDate(anchor.getDate() - mondayOffset);
+  return Array.from({ length: 7 }, (_, index) => {
+    const value = new Date(anchor);
+    value.setDate(anchor.getDate() + index);
+    return localDateKey(value);
+  });
+}
+
+function journalWeekRangeLabel(dateValues = []) {
+  const first = normalizeJournalNavigationDate(dateValues[0]);
+  const last = normalizeJournalNavigationDate(dateValues.at(-1));
+  if (!first || !last) return "";
+  const [firstYear, firstMonth, firstDay] = first.split("-").map(Number);
+  const [lastYear, lastMonth, lastDay] = last.split("-").map(Number);
+  if (firstYear === lastYear && firstMonth === lastMonth) return `${firstYear}년 ${firstMonth}월 ${firstDay}일~${lastDay}일`;
+  if (firstYear === lastYear) return `${firstYear}년 ${firstMonth}월 ${firstDay}일~${lastMonth}월 ${lastDay}일`;
+  return `${firstYear}년 ${firstMonth}월 ${firstDay}일~${lastYear}년 ${lastMonth}월 ${lastDay}일`;
+}
+
+function setJournalCalendarViewMode(mode = "month") {
+  const normalizedMode = normalizeJournalCalendarViewMode(mode);
+  const changed = normalizeJournalCalendarViewMode(state.journalCalendarViewMode) !== normalizedMode;
+  state.journalCalendarViewMode = normalizedMode;
+  renderJournalCalendar();
+  return changed;
+}
+
+function changeJournalWeek(delta) {
+  const selectedDate = normalizeJournalNavigationDate(state.selectedJournalDate) || localDateKey();
+  const nextDate = new Date(`${selectedDate}T12:00:00`);
+  nextDate.setDate(nextDate.getDate() + (Number(delta) || 0) * 7);
+  applyJournalNavigationDate(localDateKey(nextDate));
+}
+
+function changeJournalCalendarPeriod(delta) {
+  if (normalizeJournalCalendarViewMode(state.journalCalendarViewMode) === "week") {
+    changeJournalWeek(delta);
+    return;
+  }
+  changeJournalMonth(delta);
 }
 
 function exportNtrpRequest(survey) {
