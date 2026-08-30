@@ -26,7 +26,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.435",
+    workerUrl: "./service-worker.js?v=1.0.436",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
