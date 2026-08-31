@@ -158,12 +158,70 @@ function setIdentityPhoneStatus(message, tone = "") {
   target.classList.toggle("is-error", tone === "error");
 }
 
+function syncIdentityPhoneCapabilityControl() {
+  const button = $("#identityPhoneSendButton");
+  if (!button || identityPhoneVerification.status === "verified") return;
+  if (identityAuthCapabilities.status === "checking") {
+    button.disabled = true;
+    setIdentityPhoneStatus("문자 인증 가능 여부를 확인하고 있습니다.");
+    return;
+  }
+  if (identityAuthCapabilities.providers.phone === false || identityAuthCapabilities.status === "unavailable") {
+    button.disabled = true;
+    $("#identityPhoneCodeRow")?.setAttribute("hidden", "");
+    setIdentityPhoneStatus(phoneAuthUnavailableMessage(), "error");
+    return;
+  }
+  button.disabled = identityPhoneRequestInFlight;
+  if (identityAuthCapabilities.status === "ready" && identityAuthCapabilities.providers.phone === true) {
+    const currentStatus = $("#identityPhoneStatus")?.textContent || "";
+    if (currentStatus.includes("가능 여부") || currentStatus.includes("설정을 확인하지 못했습니다") || currentStatus.includes("문자 인증을 준비 중")) {
+      const naverRepromptAvailable = !$("#identityNaverPhoneButton")?.hidden;
+      setIdentityPhoneStatus(naverRepromptAvailable
+        ? "네이버 번호를 다시 받거나 문자 인증 후 기존 회원 DB와 연결합니다."
+        : "휴대전화 인증 후 기존 회원 DB와 안전하게 연결합니다.");
+    }
+  }
+  if (identityAuthCapabilities.status === "unknown" && identityAuthCapabilities.errorCode) {
+    setIdentityPhoneStatus("문자 인증 설정을 확인하지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.", "error");
+  }
+}
+
+function syncAuthProviderCapabilityControls() {
+  const providerSelectors = {
+    naver: '[data-login-provider="네이버"]',
+    kakao: '[data-login-provider="카카오"]',
+    apple: '[data-login-provider="Apple"]',
+    google: '[data-login-provider="Google"]',
+  };
+  Object.entries(providerSelectors).forEach(([provider, selector]) => {
+    $$(selector).forEach((button) => {
+      const available = identityAuthCapabilities.providers[provider];
+      if (available === false) {
+        button.hidden = true;
+        button.disabled = true;
+        return;
+      }
+      if (available === true) {
+        button.hidden = false;
+        if (!oauthLoginInFlightProvider) button.disabled = false;
+      }
+    });
+  });
+  const emailPanel = $("#memberEmailAuthPanel");
+  if (emailPanel && identityAuthCapabilities.providers.email !== null) {
+    emailPanel.hidden = identityAuthCapabilities.providers.email === false;
+  }
+  syncIdentityPhoneCapabilityControl();
+}
+
 function resetIdentityPhoneVerification(message = "휴대전화 인증이 필요합니다.") {
   identityPhoneVerification = { phone: "", status: "unverified", source: "" };
   if ($("#identityPhoneCode")) $("#identityPhoneCode").value = "";
   if ($("#identityPhoneCodeRow")) $("#identityPhoneCodeRow").hidden = true;
   if ($("#identityPhoneSendButton")) $("#identityPhoneSendButton").disabled = false;
   setIdentityPhoneStatus(message);
+  syncIdentityPhoneCapabilityControl();
 }
 
 function markIdentityPhoneVerified(phone, source = "sms") {
@@ -210,6 +268,7 @@ function populateIdentitySetup(user = null) {
   else if (authUserHasProvider(user || {}, "custom:naver")) {
     resetIdentityPhoneVerification("네이버 번호를 다시 받거나 문자 인증 후 기존 회원 DB와 연결합니다.");
   } else resetIdentityPhoneVerification("휴대전화 인증 후 기존 회원 DB와 안전하게 연결합니다.");
+  syncIdentityPhoneCapabilityControl();
   if ($("#identitySetupMessage")) $("#identitySetupMessage").textContent = "";
 }
 

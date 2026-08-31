@@ -139,6 +139,7 @@ function applyConsentPreferences(preferences = {}) {
 
 async function requestIdentityPhoneVerification() {
   const button = $("#identityPhoneSendButton");
+  if (!button || identityPhoneRequestInFlight) return false;
   const phone = normalizeIdentityPhone($("#identityPhone")?.value || "");
   const e164Phone = identityPhoneE164(phone);
   if (!/^01[0-9]{8,9}$/u.test(phone) || !e164Phone) {
@@ -151,14 +152,24 @@ async function requestIdentityPhoneVerification() {
     setIdentityPhoneStatus("로그인 상태를 다시 확인해 주세요.", "error");
     return false;
   }
+  identityPhoneRequestInFlight = true;
   button.disabled = true;
-  setIdentityPhoneStatus("인증번호를 보내고 있습니다.");
   try {
     const currentUser = await client.getAuthUser?.();
     if (verifiedPhoneFromAuthUser(currentUser || {}) === phone) {
       markIdentityPhoneVerified(phone, "provider");
       return true;
     }
+    const capabilities = await refreshAuthProviderCapabilities({ force: true });
+    if (capabilities.providers.phone === false || capabilities.status === "unavailable") {
+      setIdentityPhoneStatus(phoneAuthUnavailableMessage(), "error");
+      return false;
+    }
+    if (capabilities.status !== "ready") {
+      setIdentityPhoneStatus("문자 인증 설정을 확인하지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.", "error");
+      return false;
+    }
+    setIdentityPhoneStatus("인증번호를 보내고 있습니다.");
     await client.requestPhoneChangeVerification(e164Phone);
     identityPhoneVerification = { phone, status: "pending", source: "sms" };
     $("#identityPhoneCodeRow").hidden = false;
@@ -170,7 +181,8 @@ async function requestIdentityPhoneVerification() {
     setIdentityPhoneStatus(identityErrorMessage(error), "error");
     return false;
   } finally {
-    if (identityPhoneVerification.status !== "verified") button.disabled = false;
+    identityPhoneRequestInFlight = false;
+    syncIdentityPhoneCapabilityControl();
   }
 }
 

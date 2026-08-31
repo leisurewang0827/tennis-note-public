@@ -1348,9 +1348,8 @@
       headers: authHeaders(),
     });
     if (!response.ok) {
-      const error = new Error(await response.text() || `Supabase auth settings failed: ${response.status}`);
-      error.status = response.status;
-      throw error;
+      const rawText = await response.text().catch(() => "");
+      throw responseRequestError(response, rawText, "Supabase auth settings failed");
     }
     return response.json();
   }

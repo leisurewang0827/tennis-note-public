@@ -260,32 +260,55 @@ async function login(provider) {
 }
 
 async function syncAppleLoginAvailability() {
-  const buttons = $$('[data-login-provider="Apple"]');
-  if (!buttons.length) return;
-  let ready = true;
+  await refreshAuthProviderCapabilities();
+}
+
+async function refreshAuthProviderCapabilities({ force = false } = {}) {
+  const age = Date.now() - Number(identityAuthCapabilities.checkedAt || 0);
+  if (!force && identityAuthCapabilities.status === "ready" && age < 60_000) return identityAuthCapabilities;
+  if (identityAuthCapabilityPromise) return identityAuthCapabilityPromise;
   const client = window.TennisNoteDataClient;
-  if (client?.readiness?.().ready) {
+  if (!client?.readiness?.().ready || !client?.getAuthSettings) {
+    identityAuthCapabilities = {
+      ...identityAuthCapabilities,
+      status: "unavailable",
+      providers: { ...identityAuthCapabilities.providers, phone: false },
+      errorCode: "auth_settings_unavailable",
+      checkedAt: Date.now(),
+    };
+    syncAuthProviderCapabilityControls();
+    return identityAuthCapabilities;
+  }
+  identityAuthCapabilities = { ...identityAuthCapabilities, status: "checking", errorCode: "" };
+  syncAuthProviderCapabilityControls();
+  identityAuthCapabilityPromise = (async () => {
     try {
       const settings = await client.getAuthSettings();
-      ready = Boolean(settings?.external?.apple);
-    } catch {
-      // A temporary settings lookup failure must not hide the compliant login option.
-      ready = true;
+      identityAuthCapabilities = {
+        status: "ready",
+        providers: resolvedAuthCapabilities(settings),
+        errorCode: "",
+        checkedAt: Date.now(),
+      };
+    } catch (error) {
+      const transient = transientAuthCapabilityError(error);
+      identityAuthCapabilities = {
+        ...identityAuthCapabilities,
+        status: transient ? "unknown" : "unavailable",
+        providers: {
+          ...identityAuthCapabilities.providers,
+          phone: transient ? null : false,
+        },
+        errorCode: normalizedIdentityErrorCode(error) || "auth_settings_unavailable",
+        checkedAt: Date.now(),
+      };
+    } finally {
+      identityAuthCapabilityPromise = null;
+      syncAuthProviderCapabilityControls();
     }
-  }
-  buttons.forEach((button) => {
-    const label = button.querySelector("[data-apple-login-label]");
-    if (oauthLoginInFlightProvider && button.dataset.oauthDisabledBefore) {
-      button.dataset.oauthDisabledBefore = ready ? "false" : "true";
-      button.disabled = true;
-    } else {
-      button.disabled = !ready;
-    }
-    button.classList.toggle("is-preparing", !ready);
-    const buttonLabel = ready ? button.dataset.readyLabel : "Apple 로그인 설정 중";
-    if (label) label.textContent = buttonLabel;
-    button.setAttribute("aria-label", buttonLabel);
-  });
+    return identityAuthCapabilities;
+  })();
+  return identityAuthCapabilityPromise;
 }
 
 async function loginWithEmail(event) {
