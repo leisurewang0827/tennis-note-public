@@ -77,6 +77,8 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
         nextCurriculumTitle: participant.nextCurriculumTitle || "",
         finalizedAt: participant.finalizedAt || "",
         updatedAt: participant.updatedAt || "",
+        ticketSessionSnapshot: participant.ticketSessionSnapshot || null,
+        ticketSessionSnapshotAt: participant.ticketSessionSnapshotAt || "",
         ticketName: ticket.productName || `${scheduleV2LessonKindLabel(kind)} 회원권`,
         totalSessions: Number(ticket.totalSessions) || 0,
         usedSessions: Number(ticket.usedSessions) || 0,
@@ -125,6 +127,8 @@ function scheduleV2CoachParticipantResults(lesson = {}) {
     nextCurriculumId: canonicalCurriculumId(participant.nextCurriculumId),
     finalizedAt: participant.finalizedAt || "",
     updatedAt: participant.updatedAt || "",
+    ticketSessionSnapshot: participant.ticketSessionSnapshot || null,
+    ticketSessionSnapshotAt: participant.ticketSessionSnapshotAt || "",
     serverCoachComment: participant.coachComment || "",
     serverNextCurriculumId: canonicalCurriculumId(participant.nextCurriculumId),
   }));

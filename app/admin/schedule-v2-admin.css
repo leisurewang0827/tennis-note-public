@@ -2177,6 +2177,22 @@
   white-space: nowrap;
 }
 
+.schedule-v2-session-snapshot {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 2px;
+  color: #245b4d;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.schedule-v2-session-snapshot span {
+  color: #62756e;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .schedule-v2-outcome-row select,
 .schedule-v2-outcome-row textarea {
   width: 100%;

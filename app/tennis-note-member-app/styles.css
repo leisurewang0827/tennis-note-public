@@ -4841,7 +4841,8 @@ button.purchase-timetable-cell {
 }
 
 .journal-lesson-result {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -4863,7 +4864,15 @@ button.purchase-timetable-cell {
   color: var(--green);
   background: white;
   font-size: 12px;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.journal-lesson-result small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
 }
 
 .journal-feedback-block {

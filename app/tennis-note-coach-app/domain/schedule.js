@@ -135,6 +135,23 @@ function coachScheduleTimes(policy = loadCoachSchedulePolicy()) {
 }
 
 function coachScheduleRoundLabel(lesson = {}) {
+  const finalRecords = (Array.isArray(lesson.v2Participants) ? lesson.v2Participants : [])
+    .filter((record) => String(record.recordStatus || record.record_status || "").toLowerCase() === "final");
+  const sessionStates = finalRecords.map(coachTicketSessionSnapshot).filter((state) => state.confirmed);
+  if (sessionStates.length) {
+    const labels = [...new Set(sessionStates.map((state) => {
+      const snapshot = state.snapshot;
+      const round = snapshot.ticketDeductedSessions > 1
+        ? `${snapshot.usedBefore + 1}~${snapshot.usedAfter}`
+        : `${snapshot.usedAfter}`;
+      return `${round}/${snapshot.totalSessions}회차`;
+    }))];
+    return labels.length === 1 ? `이번 수업 ${labels[0]}` : `회원별 ${labels.join(" · ")}`;
+  }
+  const finalized = finalRecords.length > 0
+    || ["completed", "no_show", "absence", "absent", "cancelled", "holiday"]
+      .includes(String(lesson.serverStatus || "").toLowerCase());
+  if (finalized) return coachTicketSessionSnapshot(lesson).label;
   const ticketTotal = Number(lesson.totalSessions) || Number(String(lesson.ticket || "").match(/(\d+)\s*회/)?.[1]) || 0;
   const used = Math.max(0, Number(lesson.usedSessions) || Math.max(0, ticketTotal - (Number(lesson.remaining) || 0)));
   const completed = Number(lesson.deductedSessions) > 0;

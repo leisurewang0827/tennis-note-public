@@ -117,6 +117,16 @@
 
   const escapeHtml = window.escapeHtml;
 
+  function participantSessionState(participant = {}) {
+    return window.TennisNoteUiLanguage?.ticketSessionSnapshot?.(participant) || {
+      confirmed: false,
+      adjusted: false,
+      label: "기록 당시 회차 미확정",
+      detail: "현재 회원권 횟수와 분리된 과거 기록입니다.",
+      snapshot: null,
+    };
+  }
+
   function curriculumStepFromValue(value = "") {
     const code = String(value).trim().split(/\s|·/)[0].toUpperCase();
     const canonical = String(curriculumCatalog.aliases?.[code] || code).toUpperCase();
@@ -2301,6 +2311,13 @@
 
   function lessonTicketCountsText(lesson) {
     if (String(lesson?.scheduleKind || "") === "one_day") return "";
+    const finalized = (lesson?.participants || [])
+      .filter(outcomeRowFinal)
+      .map(participantSessionState);
+    if (finalized.length) {
+      const labels = [...new Set(finalized.map((sessionState) => sessionState.label))];
+      return labels.join(" · ");
+    }
     const labels = [...new Set((lesson?.participants || []).map((participant) => {
       const ticket = ticketById(participant.ticketId || participant.ticket_id);
       if (!ticket) return "";
@@ -2315,6 +2332,10 @@
   }
 
   function lessonTicketCountsAria(lesson) {
+    const finalized = (lesson?.participants || [])
+      .filter(outcomeRowFinal)
+      .map(participantSessionState);
+    if (finalized.length) return [...new Set(finalized.map((sessionState) => `${sessionState.label}. ${sessionState.detail}`))].join(" · ");
     const labels = [...new Set((lesson?.participants || []).map((participant) => {
       const ticket = ticketById(participant.ticketId || participant.ticket_id);
       if (!ticket) return "";
@@ -3146,7 +3167,11 @@
             ? '<div class="schedule-v2-feedback-revision-actions"><button type="button" data-v2-save-feedback-revision>피드백 저장</button><button type="button" data-v2-cancel-feedback-revision>취소</button><small>회원권 횟수는 변경되지 않습니다.</small></div>'
             : '<button type="button" class="schedule-v2-feedback-revision-open" data-v2-open-feedback-revision>피드백 수정</button>'
           : "";
-        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""} ${feedbackEditing ? "is-feedback-editing" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}" data-v2-record-updated-at="${escapeHtml(participant.updatedAt || participant.updated_at || "")}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${feedbackDisabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}${revisionTools}</div>`;
+        const sessionState = final ? participantSessionState(participant) : null;
+        const sessionMarkup = sessionState
+          ? `<small class="schedule-v2-session-snapshot">${escapeHtml(sessionState.label)}<span>${escapeHtml(sessionState.detail)}</span></small>`
+          : "";
+        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""} ${feedbackEditing ? "is-feedback-editing" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}" data-v2-record-updated-at="${escapeHtml(participant.updatedAt || participant.updated_at || "")}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong>${sessionMarkup}<select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${feedbackDisabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}${revisionTools}</div>`;
       }).join("")
       : '<div class="schedule-v2-selected-ticket">참여자 정보가 없어 수업을 처리할 수 없습니다.</div>';
     renderCurriculumOptions();

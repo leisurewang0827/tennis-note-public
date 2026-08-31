@@ -612,9 +612,12 @@ function memberApprovedChangeForLesson(lesson = {}) {
 
 function memberScheduleRoundLabel(lesson, isMine) {
   if (!isMine || lesson?.oneDayBooking) return "";
+  const completed = ["completed", "no_show", "absence", "absent", "cancelled", "holiday"]
+    .includes(String(lesson.serverStatus || lesson.status || "").toLowerCase())
+    || String(lesson.participantRecord?.recordStatus || "").toLowerCase() === "final";
+  if (completed) return memberTicketSessionSnapshot(lesson.participantRecord || lesson).label;
   const total = Math.max(0, Number(lesson.ticketTotalSessions) || 0);
   const used = Math.max(0, Number(lesson.ticketUsedSessions) || 0);
-  const completed = ["completed", "no_show"].includes(String(lesson.serverStatus || "").toLowerCase());
   const ticketId = memberLessonTicketId(lesson);
   const futureLessons = (state.liveLessons || [])
     .filter((item) => (
@@ -625,7 +628,7 @@ function memberScheduleRoundLabel(lesson, isMine) {
     .sort((left, right) => `${left.lessonDate || ""}T${left.time || ""}`.localeCompare(`${right.lessonDate || ""}T${right.time || ""}`));
   const futureIndex = futureLessons.findIndex((item) => String(item.id) === String(lesson.id));
   const nextRound = used + Math.max(0, futureIndex) + 1;
-  const round = total ? Math.min(total, completed ? Math.max(1, used) : nextRound) : 0;
+  const round = total ? Math.min(total, nextRound) : 0;
   return `${round}/${total}회차`;
 }
 

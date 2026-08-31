@@ -88,11 +88,12 @@ function renderLessonLogs() {
           const deductionLabel = Number(log.deductedSessions) > 0 || log.ticketDeducted
             ? `${Math.max(1, Number(log.deductedSessions) || 1)}회 차감`
             : "차감 없음";
+          const roundLabel = log.sessionRoundLabel || memberTicketSessionSnapshot(log).label;
           return `
             <button class="history-card compact-log summary-log ${log.status === "confirmed" ? "done" : "wait"}" type="button" data-open-journal-detail="${log.id}">
               <span class="summary-log-main">
                 <strong>${lessonReviewTitle(log)}</strong>
-                <small>${dateLabel} · ${log.lessonLabel} · ${outcomeLabel} · ${deductionLabel}</small>
+                <small>${dateLabel} · ${log.lessonLabel} · ${roundLabel} · ${outcomeLabel} · ${deductionLabel}</small>
               </span>
               <span class="summary-log-status">${statusLabel}${log.feedbackRevised ? " · 수정됨" : ""}</span>
             </button>`;

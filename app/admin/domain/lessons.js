@@ -64,6 +64,16 @@ function adminDisplayLessons(lessons = []) {
   return window.TennisNoteUiLanguage?.mergeLessonDisplaySegments?.(lessons) || lessons;
 }
 
+function adminTicketSessionSnapshot(record = {}) {
+  return window.TennisNoteUiLanguage?.ticketSessionSnapshot?.(record) || {
+    confirmed: false,
+    adjusted: false,
+    label: "기록 당시 회차 미확정",
+    detail: "현재 회원권 횟수와 분리된 과거 기록입니다.",
+    snapshot: null,
+  };
+}
+
 function adminDisplaySegmentAttrs(lesson = {}) {
   const ids = Array.isArray(lesson.displaySegmentIds) ? lesson.displaySegmentIds : [];
   return ids.length ? ` data-lesson-segments="${escapeHtml(ids.join(","))}"` : "";
@@ -226,6 +236,7 @@ function participantLessonRecord(record, context) {
   ].filter(Boolean);
   const lessonDate = lesson?.lessonDate || String(record.finalized_at || record.updated_at || "").slice(0, 10) || "날짜 미정";
   const lessonTime = lesson?.time || "";
+  const sessionState = adminTicketSessionSnapshot(record);
   return {
     id: `participant-record-${record.id}`,
     group: actualIssue ? "issue" : processingState.id === "processing_required" ? "feedback" : "done",
@@ -242,7 +253,7 @@ function participantLessonRecord(record, context) {
       ? "피드백만 임시 저장됨 · 회원권 차감 안 됨"
       : missingDeduction
         ? "차감 요청과 실제 차감 결과가 다릅니다. 수업 상세에서 확인해 주세요."
-        : completedLabel,
+        : `${sessionState.label} · ${completedLabel}`,
     statusLabel: processingState.label,
     actionLabel: actualIssue ? "최신 상태 다시 확인" : processingState.actionLabel,
     lessonId,
@@ -260,5 +271,7 @@ function participantLessonRecord(record, context) {
           ? "완료 기록은 있지만 요청된 회원권 차감 결과가 0회입니다."
           : "",
     sortAt: record.finalized_at || record.updated_at || record.created_at || lesson?.lessonDate || "",
+    sessionSnapshot: record.ticket_session_snapshot || null,
+    sessionRoundLabel: sessionState.label,
   };
 }

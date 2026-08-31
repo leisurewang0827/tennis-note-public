@@ -10,7 +10,7 @@ async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace
     const chunks = [];
     for (let index = 0; index < lessonIds.length; index += 75) chunks.push(lessonIds.slice(index, index + 75));
     const rows = (await Promise.all(chunks.map((ids) => client.selectRows("tn_lesson_participant_records_v2", {
-      select: "id,lesson_id,user_id,ticket_id,record_status,outcome,deduction_requested,deducted_sessions,updated_at",
+      select: "id,lesson_id,user_id,ticket_id,record_status,outcome,deduction_requested,deducted_sessions,updated_at,ticket_session_snapshot,ticket_session_snapshot_at",
       filters: { lesson_id: { in: ids } },
       limit: Math.max(100, ids.length * 4),
     })))).flat();
@@ -32,6 +32,8 @@ async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace
           deductedSessions: Number(record.deducted_sessions) || 0,
           recordTicketId: record.ticket_id || "",
           recordTicketKnown: true,
+          ticketSessionSnapshot: record.ticket_session_snapshot || null,
+          ticketSessionSnapshotAt: record.ticket_session_snapshot_at || "",
           updatedAt: record.updated_at || participant.updatedAt || "",
         };
       }),
@@ -225,7 +227,7 @@ async function syncLegacyCoachLessonsFromServer() {
       client.selectRows("tn_coach_roles", { select: "id,display_name,color,status,employment_status,archived_at,deleted_at", limit: 100 }).catch(() => []),
       client.selectRows("tn_member_tickets", { select: "id,user_id,product_id,coach_role_id,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,status,created_at", limit: 1000 }).catch(() => []),
       client.selectRows("tn_membership_products", { select: "id,name,group_size,lesson_minutes", limit: 200 }).catch(() => []),
-      client.selectRows("tn_lesson_records", { select: "lesson_id,deducted_sessions,completed_at", limit: 1000 }).catch(() => []),
+      client.selectRows("tn_lesson_records", { select: "lesson_id,deducted_sessions,completed_at,ticket_session_snapshot,ticket_session_snapshot_at", limit: 1000 }).catch(() => []),
       client.selectRows("tn_lesson_change_requests", {
         select: "id,lesson_id,requester_user_id,requested_lesson_date,requested_start_time,reason,policy_window,policy_snapshot,policy_revision,status,original_lesson_date,original_start_time,reviewed_note,deducted_sessions,decided_at,created_at,updated_at",
         limit: 300,
@@ -356,6 +358,8 @@ async function syncLegacyCoachLessonsFromServer() {
           remaining: Number(lesson.ticket_remaining_sessions ?? ticket.remaining_sessions) || 0,
           deductedSessions: lessonRecord ? Number(lessonRecord.deducted_sessions) || 0 : null,
           completedAt: lessonRecord?.completed_at || "",
+          ticketSessionSnapshot: lessonRecord?.ticket_session_snapshot || null,
+          ticketSessionSnapshotAt: lessonRecord?.ticket_session_snapshot_at || "",
           task: lesson.status === "pending_change" ? "변경 요청 확인" : "수업 후 코멘트/다음 커리큘럼",
         };
       });
@@ -615,7 +619,7 @@ async function syncCoachJournalEntriesFromServer() {
         limit: 100,
       }),
       client.selectRows("tn_lesson_records", {
-        select: "lesson_id,coach_comment,deducted_sessions,completed_at",
+        select: "lesson_id,coach_comment,deducted_sessions,completed_at,ticket_session_snapshot,ticket_session_snapshot_at",
         limit: 100,
       }).catch(() => []),
       client.selectRows("tn_users", {
@@ -652,6 +656,9 @@ async function syncCoachJournalEntriesFromServer() {
         curriculumId: payload.curriculumId || "FH-01",
         nextCurriculumId: payload.nextCurriculumId || payload.curriculumId || "FH-01",
         coachComment: record?.coach_comment || "",
+        sessionSnapshot: record?.ticket_session_snapshot || null,
+        sessionSnapshotAt: record?.ticket_session_snapshot_at || "",
+        sessionRoundLabel: coachTicketSessionSnapshot(record || {}).label,
         validationMessage: "",
         status: record ? "확인 완료" : "확인 대기",
         curriculumRegistered: Boolean(record),

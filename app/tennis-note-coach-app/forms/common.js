@@ -10,6 +10,16 @@ function coachDisplayLessons(lessons = []) {
   return window.TennisNoteUiLanguage?.mergeLessonDisplaySegments?.(lessons) || lessons;
 }
 
+function coachTicketSessionSnapshot(record = {}) {
+  return window.TennisNoteUiLanguage?.ticketSessionSnapshot?.(record) || {
+    confirmed: false,
+    adjusted: false,
+    label: "기록 당시 회차 미확정",
+    detail: "현재 회원권 횟수와 분리된 과거 기록입니다.",
+    snapshot: null,
+  };
+}
+
 function coachDisplaySegmentAttrs(lesson = {}) {
   const ids = Array.isArray(lesson.displaySegmentIds) ? lesson.displaySegmentIds : [];
   return ids.length ? ` data-lesson-segments="${escapeHtml(ids.join(","))}"` : "";

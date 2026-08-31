@@ -141,6 +141,64 @@
     return result("scheduled", "예정", "수업 보기");
   }
 
+  function ticketSessionSnapshot(record = {}) {
+    const raw = record?.ticketSessionSnapshot
+      ?? record?.ticket_session_snapshot
+      ?? record?.sessionSnapshot
+      ?? null;
+    const snapshot = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : null;
+    const legacy = Object.freeze({
+      confirmed: false,
+      adjusted: false,
+      label: "기록 당시 회차 미확정",
+      detail: "현재 회원권 횟수와 분리된 과거 기록입니다.",
+      snapshot: null,
+    });
+    if (!snapshot || Number(snapshot.version) !== 1 || !String(snapshot.ticketId || "").trim()) return legacy;
+    const integer = (key) => {
+      const value = Number(snapshot[key]);
+      return Number.isInteger(value) && value >= 0 ? value : Number.NaN;
+    };
+    const total = integer("totalSessions");
+    const usedBefore = integer("usedBefore");
+    const remainingBefore = integer("remainingBefore");
+    const usedAfter = integer("usedAfter");
+    const remainingAfter = integer("remainingAfter");
+    const participantDeducted = integer("participantDeductedSessions");
+    const ticketDeducted = integer("ticketDeductedSessions");
+    if (
+      ![total, usedBefore, remainingBefore, usedAfter, remainingAfter, participantDeducted, ticketDeducted]
+        .every(Number.isFinite)
+      || usedAfter - usedBefore !== ticketDeducted
+      || remainingBefore - remainingAfter !== ticketDeducted
+      || participantDeducted > ticketDeducted
+      || [usedBefore, remainingBefore, usedAfter, remainingAfter].some((value) => value > total)
+    ) return legacy;
+
+    const currentDeducted = Number(record?.deductedSessions ?? record?.deducted_sessions);
+    const adjusted = Number.isFinite(currentDeducted) && Math.max(0, currentDeducted) !== participantDeducted;
+    const round = ticketDeducted > 1 ? `${usedBefore + 1}~${usedAfter}` : `${usedAfter}`;
+    const label = ticketDeducted > 0
+      ? `이번 수업 ${round}/${total}회차${adjusted ? " · 차감 정정" : ""}`
+      : `수업 당시 ${usedAfter}/${total}회 사용 · 차감 없음${adjusted ? " · 차감 정정" : ""}`;
+    return Object.freeze({
+      confirmed: true,
+      adjusted,
+      label,
+      detail: `수업 전 ${usedBefore}/${total}회 사용 · 잔여 ${remainingBefore}회 → 수업 후 ${usedAfter}/${total}회 사용 · 잔여 ${remainingAfter}회`,
+      snapshot: Object.freeze({
+        ...snapshot,
+        totalSessions: total,
+        usedBefore,
+        remainingBefore,
+        usedAfter,
+        remainingAfter,
+        participantDeductedSessions: participantDeducted,
+        ticketDeductedSessions: ticketDeducted,
+      }),
+    });
+  }
+
   function lessonDisplayMinutes(value = "") {
     const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
     if (!match) return Number.NaN;
@@ -373,6 +431,7 @@
     groups: statusGroups,
     statusLabel,
     lessonProcessingState,
+    ticketSessionSnapshot,
     mergeLessonDisplaySegments,
     emptyState,
   });
