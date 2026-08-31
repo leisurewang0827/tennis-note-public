@@ -100,7 +100,7 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     serverPaymentSyncState.tone = "danger";
     renderBilling();
     if (!silent) showToast("Supabase 연결값 확인 필요");
-    return;
+    return false;
   }
 
   serverPaymentSyncState.loading = true;
@@ -139,6 +139,7 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     billingLogs.unshift(serverPaymentSyncState.message);
     renderAll();
     if (!silent) showToast("서버 결제 기록 불러오기 완료");
+    return true;
   } catch (error) {
     serverPaymentSyncState.loaded = true;
     serverPaymentSyncState.message = `서버 결제 불러오기 실패: ${error?.message || "권한 또는 연결 확인 필요"}`;
@@ -146,11 +147,22 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     billingLogs.unshift(serverPaymentSyncState.message);
     renderAll();
     if (!silent) showToast("서버 결제 기록 확인 필요");
+    return false;
   } finally {
     serverPaymentSyncState.loading = false;
     renderBilling();
     saveSnapshot();
   }
+}
+
+function reportAdminPaymentGuard(stage, code, operationKey = "") {
+  window.TennisNoteIssueReporter?.captureClientError?.({
+    category: "runtime",
+    stage: `admin_payment_${stage}`,
+    code: String(code || "unknown_error"),
+    message: `${String(code || "unknown_error")}${operationKey ? ` operation_key=${operationKey}` : ""}`,
+    provider: "admin_payment",
+  });
 }
 
 async function syncRefundPolicySettingsToServer() {
@@ -221,17 +233,20 @@ async function loadDiscountPoliciesFromServer() {
 }
 
 async function verifyBillingPaymentItem(item) {
+  const ticketRepairRetry = paymentRequiresTicketRepair(item);
   if (!item?.providerPaymentId) {
     billingLogs.unshift(`${item?.member || "회원"} ${item?.item || "결제"} 서버검증 실패: paymentId 없음`);
+    reportAdminPaymentGuard("reconcile_validation", "missing_payment_id");
     renderAll();
-    showToast("paymentId가 없어 서버 검증을 실행할 수 없습니다");
+    showToast("서버 결제번호가 없어 다시 처리할 수 없습니다.");
     return;
   }
   const client = window.TennisNoteDataClient;
   if (!client?.invokeFunction || !client.readiness?.().ready) {
     billingLogs.unshift(`${item.member} ${item.item} 서버검증 실패: Supabase 연결값 없음`);
+    reportAdminPaymentGuard("reconcile_validation", "data_client_not_ready");
     renderAll();
-    showToast("Supabase 연결값 확인 필요");
+    showToast("서버 연결 상태를 확인해 주세요.");
     return;
   }
 
@@ -247,7 +262,7 @@ async function verifyBillingPaymentItem(item) {
     const bankPrompt = lateDeposit
       ? `${item.member} 회원의 입금기한이 지났습니다.\n실제 입금 ${money.format(item.finalAmount || item.amount)}원을 직접 확인한 경우에만 승인하세요.`
       : `${item.member} 회원의 ${money.format(item.finalAmount || item.amount)}원 입금을 확인했습니까?\n확인 후에만 회원권 또는 원데이 예약이 생성됩니다.`;
-    if (bankTransfer && !window.confirm(bankPrompt)) {
+    if (bankTransfer && !ticketRepairRetry && !window.confirm(bankPrompt)) {
       item.status = "server_ready";
       item.statusLabel = "입금확인대기";
       item.approvalPending = false;
@@ -273,9 +288,11 @@ async function verifyBillingPaymentItem(item) {
         || String(billing.providerPaymentId || "") === String(item.providerPaymentId || "")
       ));
       const linked = Boolean(result.ticketId || refreshed?.ticketId || refreshed?.oneDayBookingId);
-      if (!linked && refreshed && paymentRequiresTicketRepair(refreshed)) {
-        billingLogs.unshift(`${item.member} ${item.item} 승인 후 회원권 연결 확인 필요`);
-        showToast("결제는 승인됐지만 회원권 연결을 확인해 주세요");
+      if (!linked && (!refreshed || paymentRequiresTicketRepair(refreshed))) {
+        item.status = "paid";
+        item.statusLabel = "회원권처리실패";
+        billingLogs.unshift(`${item.member} ${item.item} 결제 확인 완료 · 회원권 처리 실패`);
+        showToast("결제는 확인됐지만 회원권 처리가 끝나지 않았습니다. 다시 처리해 주세요.");
       } else {
         showToast(bankTransfer ? "입금 승인·회원권 연결·정산 반영 완료" : "결제 승인·회원권 연결·정산 반영 완료");
       }
@@ -285,10 +302,13 @@ async function verifyBillingPaymentItem(item) {
       billingLogs.unshift(`${item.member} ${item.item} 아직 Toss 결제 완료 전: ${result.portoneStatus || "pending"}`);
       showToast("아직 결제 완료 전입니다");
     } else {
-      item.status = "check";
-      item.statusLabel = "검증확인필요";
-      billingLogs.unshift(`${item.member} ${item.item} 결제 승인 확인 필요: ${result?.code || "unknown"}`);
-      showToast("결제 승인 확인 필요");
+      const rawCode = result?.code || "unknown";
+      const safeCode = ticketRepairRetry ? paymentTicketFinalizeRecoveryCode(rawCode) : rawCode;
+      item.status = ticketRepairRetry ? "paid" : "check";
+      item.statusLabel = ticketRepairRetry ? "회원권처리실패" : "검증확인필요";
+      billingLogs.unshift(`${item.member} ${item.item} ${ticketRepairRetry ? "회원권 재처리" : "결제 승인"} 실패: ${safeCode}`);
+      reportAdminPaymentGuard("reconcile_failed", safeCode);
+      showToast(ticketRepairRetry ? paymentTicketFinalizeRecoveryMessage(rawCode) : "결제 승인 확인이 필요합니다.");
     }
   } catch (error) {
     const code = error?.payload?.code || error?.message || "server_error";
@@ -298,10 +318,12 @@ async function verifyBillingPaymentItem(item) {
       billingLogs.unshift(`${item.member} ${item.item} 아직 Toss 결제 완료 전`);
       showToast("아직 결제 완료 전입니다");
     } else {
-      item.status = "check";
-      item.statusLabel = "검증실패";
-      billingLogs.unshift(`${item.member} ${item.item} 결제 승인 실패: ${code}`);
-      showToast("결제 승인 실패");
+      const safeCode = ticketRepairRetry ? paymentTicketFinalizeRecoveryCode(code) : code;
+      item.status = ticketRepairRetry ? "paid" : "check";
+      item.statusLabel = ticketRepairRetry ? "회원권처리실패" : "검증실패";
+      billingLogs.unshift(`${item.member} ${item.item} ${ticketRepairRetry ? "회원권 재처리" : "결제 승인"} 실패: ${safeCode}`);
+      reportAdminPaymentGuard("reconcile_failed", safeCode);
+      showToast(ticketRepairRetry ? paymentTicketFinalizeRecoveryMessage(code) : "결제 승인에 실패했습니다.");
     }
   } finally {
     item.approvalPending = false;

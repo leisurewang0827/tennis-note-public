@@ -1347,7 +1347,7 @@ function bindDelegatedEvents() {
     const paidPaymentButton = event.target.closest("[data-paid-payment]");
     if (paidPaymentButton) {
       const item = billings[Number(paidPaymentButton.dataset.paidPayment)];
-      if (paymentRequiresTicketRepair(item)) openBillingMemberReview(item);
+      if (paymentRequiresTicketRepair(item)) await verifyBillingPaymentItem(item);
       else showToast(`${item.member} 결제는 이미 승인됐고 회원권에 연결됐습니다`);
       return;
     }

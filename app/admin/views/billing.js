@@ -214,7 +214,7 @@ function renderBilling() {
           <td>${paymentConfirmationMarkup(item)}${paymentCancellationAuditDetail(item) ? `<br><small>${escapeHtml(paymentCancellationAuditDetail(item))}</small>` : ""}</td>
           <td class="payment-sheet-approval">
             ${paymentActionFor(item, index)}
-            <button class="small-button billing-inline-open" type="button" data-billing-member-review="${index}" aria-expanded="${inlineOpen ? "true" : "false"}">${inlineActionLabel}</button>
+            ${paymentRequiresTicketRepair(item) ? "" : `<button class="small-button billing-inline-open" type="button" data-billing-member-review="${index}" aria-expanded="${inlineOpen ? "true" : "false"}">${inlineActionLabel}</button>`}
           </td>
           <td class="billing-settlement-cell">${billingSettlementApprovalMarkup(item)}</td>
         </tr>
