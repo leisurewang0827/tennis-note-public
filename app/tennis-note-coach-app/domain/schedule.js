@@ -236,7 +236,7 @@ function coachLockedTimesForDay(day, policy) {
 function fullScheduleFilterOptions() {
   return [
     { id: "mine", label: "내 수업" },
-    { id: "feedback", label: "피드백 필요" },
+    { id: "feedback", label: "처리 필요" },
     { id: "makeupChange", label: "변경·보강" },
     { id: "all", label: "전체 시간표" },
   ];

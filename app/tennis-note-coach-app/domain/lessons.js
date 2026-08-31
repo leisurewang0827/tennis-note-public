@@ -264,11 +264,33 @@ function makeupRequestBelongsToCurrentCoach(request = {}) {
   return canonicalCoachName(requestCoach(request)) === currentCoachName();
 }
 
+function coachLessonProcessingState(lesson = {}, now = new Date()) {
+  const participants = Array.isArray(lesson.v2Participants) ? lesson.v2Participants : [];
+  const resolver = globalThis.TennisNoteUiLanguage?.lessonProcessingState;
+  if (!resolver) {
+    return lessonOutcomeWindowOpen(lesson, now)
+      ? { id: "processing_required", label: "처리 필요", actionLabel: "피드백 작성", needsFeedback: true, resolved: false }
+      : { id: "scheduled", label: "예정", actionLabel: "수업 보기", needsFeedback: false, resolved: false };
+  }
+  return resolver({
+    lessonStatus: lesson.serverStatus || lesson.status,
+    participantRecords: participants,
+    participantCount: participants.length,
+    hasEnded: lessonOutcomeWindowOpen(lesson, now),
+    released: Boolean(lesson.releasedMakeupSlot || lesson.releasedRegularSlot),
+    hasError: Boolean(lesson.completionNeedsReview),
+    partialFailure: Boolean(lesson.groupPartialFailure),
+  });
+}
+
 function lessonGroupDeductionSummary(lesson = {}, participants = []) {
   if (participants.length < 2 || !lessonChartFinalized(lesson)) return "";
   const deducted = participants.reduce((total, participant) => (
     total + (Number(participant.deductedSessions ?? participant.deducted_sessions) || 0)
   ), 0);
+  const deductionRequested = participants.some((participant) => participant.deductionRequested === true || participant.deduction_requested === true);
+  if (deductionRequested && deducted === 0) return `${participants.length}명 기록 완료 · 차감 확인 필요`;
+  if (!deductionRequested && deducted === 0) return `${participants.length}명 완료 · 차감 없음`;
   return deducted === 1
     ? `${participants.length}명 완료 · 공유 회원권 1회 차감`
     : `${participants.length}명 완료 · 회원권 ${deducted}회 차감`;

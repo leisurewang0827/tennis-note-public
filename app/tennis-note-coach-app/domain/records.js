@@ -149,9 +149,22 @@ function feedbackBelongsToCurrentCoach(request = {}) {
   return canonicalCoachName(requestCoach(request)) === currentCoachName();
 }
 
+function coachRecordProcessingState(record = {}) {
+  const lesson = lessonForRecord(record);
+  if (lesson) return coachLessonProcessingState(lesson);
+  const status = String(record.status || "").toLowerCase();
+  if (status === "확인 완료" || record.serverDeducted === true || record.ticketDeducted === true) {
+    return { id: "completed", label: "완료", actionLabel: "기록 보기", needsFeedback: false, resolved: true };
+  }
+  if (["동기화 대기", "동기화 실패"].includes(record.status)) {
+    return { id: "processing_required", label: "처리 필요", actionLabel: "다시 동기화", needsFeedback: true, resolved: false };
+  }
+  return { id: "processing_required", label: "처리 필요", actionLabel: "피드백 작성", needsFeedback: true, resolved: false };
+}
+
 function ownPendingLessonLogs() {
   return state.lessonLogs.filter((log) => {
-    if (log.status === "확인 완료" || !recordBelongsToCurrentCoach(log)) return false;
+    if (coachRecordProcessingState(log).resolved || !recordBelongsToCurrentCoach(log)) return false;
     const lesson = lessonForRecord(log);
     return lesson ? lessonOutcomeWindowOpen(lesson) : !(state.dataMode === "live" || state.liveProfileId);
   });
@@ -180,7 +193,7 @@ function completedFeedbackVisibleForOneDay(item = {}, now = Date.now()) {
 
 function ownCompletedLessonLogs() {
   return state.lessonLogs.filter((log) => (
-    log.status === "확인 완료"
+    coachRecordProcessingState(log).resolved
     && recordBelongsToCurrentCoach(log)
     && completedFeedbackVisibleForOneDay(log)
   ));
@@ -250,8 +263,8 @@ function recordProcessingMarkup() {
   const recordFilter = coachRecordStatusFilter();
   const recordTabs = `
     <div class="record-status-tabs" role="tablist" aria-label="피드백 작성 상태">
-      <button type="button" role="tab" aria-selected="${recordFilter === "pending"}" class="${recordFilter === "pending" ? "is-active" : ""}" data-record-status-filter="pending">작성 필요 <b>${pendingLogs.length + pendingFeedback.length}</b></button>
-      <button type="button" role="tab" aria-selected="${recordFilter === "completed"}" class="${recordFilter === "completed" ? "is-active" : ""}" data-record-status-filter="completed">작성 완료 <b>${completedLogs.length + completedFeedback.length}</b></button>
+      <button type="button" role="tab" aria-selected="${recordFilter === "pending"}" class="${recordFilter === "pending" ? "is-active" : ""}" data-record-status-filter="pending">처리 필요 <b>${pendingLogs.length + pendingFeedback.length}</b></button>
+      <button type="button" role="tab" aria-selected="${recordFilter === "completed"}" class="${recordFilter === "completed" ? "is-active" : ""}" data-record-status-filter="completed">완료 <b>${completedLogs.length + completedFeedback.length}</b></button>
     </div>`;
   if (recordFilter === "completed") {
     const completedItems = [
@@ -272,14 +285,14 @@ function recordProcessingMarkup() {
     ].slice(0, 12);
     return `${recordTabs}
       <section class="record-section">
-        <div class="record-section-title"><strong>작성 완료</strong><small>최근 완료한 피드백을 확인합니다.</small></div>
+        <div class="record-section-title"><strong>완료</strong><small>피드백 저장과 회원권 처리가 끝난 기록을 확인합니다.</small></div>
         <div class="completed-record-list">
           ${completedItems.length ? completedItems.map((item) => `
             <article class="completed-record-row">
               <div><strong>${escapeHtml(item.member || "회원")}</strong><span>${item.kind}</span></div>
               ${item.meta}
               <p>${escapeHtml(item.detail)}</p>
-            </article>`).join("") : coachEmptyState({ title: "작성 완료된 피드백이 없습니다", reason: "완료 처리한 피드백이 여기에 표시됩니다.", compact: true })}
+            </article>`).join("") : coachEmptyState({ title: "완료된 피드백이 없습니다", reason: "피드백 저장과 회원권 처리가 끝난 기록이 여기에 표시됩니다.", compact: true })}
         </div>
       </section>`;
   }
@@ -291,7 +304,10 @@ function recordProcessingMarkup() {
     visibleLogs
       .map((log) => {
         const nextStep = selectedCurriculum(log.nextCurriculumId || log.curriculumId);
-        const confirmed = log.status === "확인 완료";
+        const processingState = coachRecordProcessingState(log);
+        const sourceLesson = lessonForRecord(log);
+        const confirmed = sourceLesson ? lessonChartFinalized(sourceLesson) : log.status === "확인 완료";
+        const needsStateRefresh = processingState.id === "confirmation_needed";
         const participantResults = completionDraftResultsForLog(log);
         const hasParticipantDrafts = Array.isArray(log.participantResults) && log.participantResults.length > 0;
         const participantDraftsRequirePairs = participantResults.some((result) => result.userId || result.ticketId)
@@ -361,7 +377,7 @@ function recordProcessingMarkup() {
             <div class="log-main">
               <div class="lesson-completion-card-head">
                 <strong>${escapeHtml(log.member)}</strong>
-                <b>${escapeHtml(coachStatusLabel("coachRecord", log.serverDeducted || log.ticketDeducted ? "deducted" : log.status, log.status))}</b>
+                <b>${escapeHtml(processingState.label)}</b>
               </div>
               ${coachRecordLessonMetaMarkup(log)}
               ${confirmed ? `<p class="coach-comment-view">코치 코멘트: ${log.coachComment}</p>` : ""}
@@ -374,12 +390,11 @@ function recordProcessingMarkup() {
             </div>
             <div class="coach-confirm-panel">
               ${participantDraftMarkup}
-              ${log.validationMessage ? `<p class="validation-text">${log.validationMessage}</p>` : ""}
+              ${log.validationMessage || needsStateRefresh ? `<p class="validation-text">${escapeHtml(log.validationMessage || "피드백 기록과 회원권 차감 결과가 일치하지 않습니다.")}</p>` : ""}
               <div class="actions">
-                ${log.validationMessage ? `<button class="small-button" type="button" data-refresh-log-completion="${escapeHtml(log.id)}">최신 상태 다시 확인</button>` : ""}
-                <button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" || !participantDraftsReady ? "disabled" : ""}>
-                  ${["동기화 대기", "동기화 실패"].includes(log.status) ? "다시 동기화" : "수업 완료·횟수 차감"}
-                </button>
+                ${needsStateRefresh
+                  ? `<button class="small-button" type="button" data-refresh-log-completion="${escapeHtml(log.id)}">${escapeHtml(processingState.actionLabel)}</button>`
+                  : `<button class="approve-button" type="button" data-confirm-log="${log.id}" ${confirmed || log.status === "서버 처리 중" || !participantDraftsReady ? "disabled" : ""}>${escapeHtml(["동기화 대기", "동기화 실패"].includes(log.status) ? "다시 동기화" : processingState.actionLabel)}</button>`}
               </div>
             </div>
           </article>`;
@@ -425,8 +440,8 @@ function recordProcessingMarkup() {
   return `${recordTabs}
     <section class="record-section">
       <div class="record-section-title">
-        <strong>수업 완료</strong>
-        <small>코멘트와 다음 커리큘럼을 등록하면 횟수가 차감됩니다.</small>
+        <strong>수업 처리</strong>
+        <small>피드백 저장과 회원권 처리가 모두 끝나면 완료됩니다.</small>
       </div>
       ${lessonMarkup}
     </section>

@@ -3,6 +3,45 @@
 // 서버(Supabase)에 붙는다. 권한은 여기가 아니라 RLS 정책이 책임진다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
+async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace = {}) {
+  const lessonIds = [...new Set((workspace.lessons || []).map((lesson) => String(lesson.id || "")).filter(Boolean))];
+  if (!lessonIds.length || !client?.selectRows) return workspace;
+  try {
+    const chunks = [];
+    for (let index = 0; index < lessonIds.length; index += 75) chunks.push(lessonIds.slice(index, index + 75));
+    const rows = (await Promise.all(chunks.map((ids) => client.selectRows("tn_lesson_participant_records_v2", {
+      select: "id,lesson_id,user_id,ticket_id,record_status,outcome,deduction_requested,deducted_sessions,updated_at",
+      filters: { lesson_id: { in: ids } },
+      limit: Math.max(100, ids.length * 4),
+    })))).flat();
+    const recordsByLessonAndUser = new Map(rows.map((record) => [
+      `${record.lesson_id}:${record.user_id}`,
+      record,
+    ]));
+    workspace.lessons = (workspace.lessons || []).map((lesson) => ({
+      ...lesson,
+      participants: (lesson.participants || []).map((participant) => {
+        const record = recordsByLessonAndUser.get(`${lesson.id}:${participant.userId}`);
+        if (!record) return participant;
+        return {
+          ...participant,
+          recordStatus: record.record_status || participant.recordStatus || "",
+          outcome: record.outcome || participant.outcome || "",
+          deductionRequested: record.deduction_requested === true,
+          deductionRequestedKnown: true,
+          deductedSessions: Number(record.deducted_sessions) || 0,
+          recordTicketId: record.ticket_id || "",
+          recordTicketKnown: true,
+          updatedAt: record.updated_at || participant.updatedAt || "",
+        };
+      }),
+    }));
+  } catch (error) {
+    console.warn("Tennis Note coach participant processing state read failed; keeping the confirmed workspace state.", error);
+  }
+  return workspace;
+}
+
 async function syncCoachScheduleV2(options = {}) {
   const client = window.TennisNoteDataClient;
   const requestId = ++coachScheduleV2RequestSequence;
@@ -45,6 +84,8 @@ async function syncCoachScheduleV2(options = {}) {
     ]);
     if (requestId !== coachScheduleV2RequestSequence) return false;
     if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
+    await hydrateCoachWorkspaceParticipantProcessingState(client, workspace);
+    if (requestId !== coachScheduleV2RequestSequence) return false;
     workspace.operationDays = Array.isArray(operationDays) ? operationDays : [];
     coachScheduleV2WorkspaceCache = {
       key: cacheKey,

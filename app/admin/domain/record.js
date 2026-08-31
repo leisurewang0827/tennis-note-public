@@ -56,8 +56,8 @@ function legacyNoteRecord(note) {
     title: note.lesson,
     detail: note.reflection,
     subDetail: note.next,
-    statusLabel: done ? "차감 확인됨" : "작성 필요",
-    actionLabel: done ? "완료" : "피드백 작성",
+    statusLabel: done ? "완료" : "처리 필요",
+    actionLabel: done ? "기록 보기" : "피드백 작성",
     lessonId: note.serverLessonId || "",
     actionable: !done && Boolean(note.serverLessonId),
   };
@@ -66,6 +66,7 @@ function legacyNoteRecord(note) {
 function pendingLessonRecord(lesson, participant = null) {
   const endedAt = lessonEndTimestamp(lesson);
   const writingDelayed = endedAt > 0 && Date.now() - endedAt > 24 * 60 * 60 * 1000;
+  const processingState = adminLessonProcessingState(lesson, []);
   return {
     id: `pending-lesson-${lesson.serverLessonId}-${participant?.userId || "all"}`,
     group: "feedback",
@@ -74,8 +75,8 @@ function pendingLessonRecord(lesson, participant = null) {
     title: `${lesson.lessonDate || "수업일"} ${lesson.time || ""} · ${getCoachName(lesson.coachId)}`.trim(),
     detail: `${lesson.type || "수업"} ${lesson.durationMinutes || 20}분 · ${writingDelayed ? "수업 종료 후 24시간 초과" : "정상 작성 대기"}`,
     subDetail: "최종 저장 전까지 회원권 차감은 실행되지 않습니다.",
-    statusLabel: writingDelayed ? "작성 지연" : "작성 필요",
-    actionLabel: "피드백 작성",
+    statusLabel: processingState.label,
+    actionLabel: processingState.actionLabel,
     lessonId: lesson.serverLessonId,
     actionable: true,
     priority: writingDelayed ? "high" : "normal",
@@ -124,8 +125,8 @@ function lessonLogRecord(log) {
     title: log.lessonLabel || log.lesson || `${log.date || ""} 수업`,
     detail: log.content || log.selfMemo || "회원 운동일지 또는 코치 완료 처리 확인",
     subDetail: log.coachComment ? `코치 코멘트: ${log.coachComment}` : "코치 코멘트 미등록",
-    statusLabel: hasIssue ? "기록 보완 필요" : done ? "차감 완료" : "작성 필요",
-    actionLabel: hasIssue ? "관리자 확인" : done ? "완료" : "코치앱 작성",
+    statusLabel: hasIssue ? "확인 필요" : done ? "완료" : "처리 필요",
+    actionLabel: hasIssue ? "최신 상태 다시 확인" : done ? "기록 보기" : "피드백 작성",
     priority: hasIssue ? "urgent" : !done ? "high" : "normal",
     urgentReason: hasIssue ? "코멘트 또는 다음 커리큘럼 누락을 확인해야 합니다." : "",
     sortAt: log.completedAt || log.submittedAt || log.updatedAt || log.date || "",

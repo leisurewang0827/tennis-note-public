@@ -181,35 +181,31 @@ let coachModalReturnFocus = null;
 let nativeCoachBackListenerReady = false;
 
 function coachLessonCardState(lesson = {}, now = new Date()) {
-  const status = String(lesson.serverStatus || lesson.status || "").toLowerCase();
   const participants = Array.isArray(lesson.v2Participants) ? lesson.v2Participants : [];
-  const finalParticipants = participants.filter((participant) => String(participant.recordStatus || "") === "final");
-  const incompleteCount = Math.max(0, participants.length - finalParticipants.length);
-  const outcomes = finalParticipants.map((participant) => String(participant.outcome || "completed").toLowerCase());
+  const processing = coachLessonProcessingState(lesson, now);
   const deducted = Number(lesson.deductedSessions) > 0
-    || finalParticipants.some((participant) => Number(participant.deductedSessions) > 0);
-  if (lesson.releasedMakeupSlot || lesson.releasedRegularSlot || status === "available") {
-    return { id: "released", label: "차감 없음 · 예약 가능", className: "record-neutral", needsFeedback: false };
-  }
-  if (/pending_change|변경 요청/.test(status)) {
-    return { id: "approval", label: "승인 대기", className: "record-approval", needsFeedback: false };
-  }
-  if (outcomes.includes("no_show") || status === "no_show" || status === "노쇼") {
-    return { id: "no_show", label: `노쇼 · ${deducted ? "1회 차감" : "차감 없음"}`, className: "record-problem outcome-no-show", needsFeedback: false };
-  }
-  if (outcomes.includes("absence") || status === "absent" || status === "불참") {
-    return { id: "absence", label: `불참 · ${deducted ? "1회 차감" : "차감 없음"}`, className: "record-neutral outcome-absence", needsFeedback: false };
-  }
-  if (lessonOutcomeWindowOpen(lesson, now) && ((!participants.length && !["cancelled", "취소"].includes(status)) || incompleteCount > 0)) {
-    const label = participants.length > 1
-      ? `${participants.length}명 중 ${incompleteCount}명 미작성`
-      : "피드백 필요";
-    return { id: "feedback_pending", label, className: "record-problem", needsFeedback: true };
-  }
-  if (participants.length && finalParticipants.length === participants.length) {
-    return { id: "feedback_complete", label: "피드백 완료", className: "record-complete", needsFeedback: false };
-  }
-  return { id: "scheduled", label: "예정", className: "record-planned", needsFeedback: false };
+    || participants.some((participant) => Number(participant.deductedSessions) > 0);
+  const className = {
+    released: "record-neutral",
+    approval: "record-approval",
+    processing_required: "record-problem",
+    confirmation_needed: "record-problem",
+    completed: "record-complete",
+    no_show: "record-problem outcome-no-show",
+    absence: "record-neutral outcome-absence",
+    cancelled: "record-neutral",
+    holiday: "record-neutral",
+  }[processing.id] || "record-planned";
+  const label = processing.id === "released"
+    ? "차감 없음 · 예약 가능"
+    : processing.id === "no_show"
+      ? `노쇼 · ${deducted ? "1회 차감" : "차감 없음"}`
+      : processing.id === "absence"
+        ? `불참 · ${deducted ? "1회 차감" : "차감 없음"}`
+        : processing.contextLabel
+          ? `${processing.contextLabel} · ${processing.label}`
+          : processing.label;
+  return { ...processing, label, className };
 }
 
 function setCoachProfileEditOpen(open) {

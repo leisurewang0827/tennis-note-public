@@ -63,6 +63,84 @@
     return fallback || String(value || "");
   }
 
+  function lessonProcessingState(options = {}) {
+    const rawLessonStatus = String(options.lessonStatus || options.status || "scheduled").trim().toLowerCase();
+    const lessonStatus = ({
+      "예정": "scheduled",
+      "확정": "scheduled",
+      "완료": "completed",
+      "취소": "cancelled",
+      "노쇼": "no_show",
+      "불참": "absent",
+      "휴무": "holiday",
+      "보강 가능": "available",
+      "변경 요청": "pending_change",
+      "승인 대기": "pending_change",
+      confirmed: "scheduled",
+    })[rawLessonStatus] || rawLessonStatus;
+    const records = Array.isArray(options.participantRecords) ? options.participantRecords : [];
+    const participantCount = Math.max(0, Number(options.participantCount) || records.length);
+    const finalRecords = records.filter((record) => (
+      String(record?.recordStatus || record?.record_status || "").toLowerCase() === "final"
+    ));
+    const finalCount = Math.max(0, Number.isFinite(Number(options.finalCount))
+      ? Number(options.finalCount)
+      : finalRecords.length);
+    const outcomes = (Array.isArray(options.outcomes) ? options.outcomes : finalRecords.map((record) => record?.outcome))
+      .map((value) => String(value || "completed").toLowerCase())
+      .filter(Boolean);
+    const deductionIssue = options.deductionIssue === true || finalRecords.some((record) => {
+      const hasRequestedValue = Object.prototype.hasOwnProperty.call(record || {}, "deductionRequested")
+        || Object.prototype.hasOwnProperty.call(record || {}, "deduction_requested");
+      const requested = record?.deductionRequested === true || record?.deduction_requested === true;
+      if (!hasRequestedValue || !requested) return false;
+      const deducted = Math.max(0, Number(record?.deductedSessions ?? record?.deducted_sessions) || 0);
+      const ticketKnown = record?.recordTicketKnown === true
+        || Object.prototype.hasOwnProperty.call(record || {}, "recordTicketId")
+        || Object.prototype.hasOwnProperty.call(record || {}, "ticket_id");
+      const ticketId = record?.recordTicketId ?? record?.ticket_id ?? record?.ticketId ?? "";
+      return deducted === 0 || (ticketKnown && !ticketId);
+    });
+    const hasExplicitError = options.hasError === true || options.partialFailure === true;
+    const allFinal = participantCount > 0 && finalCount >= participantCount;
+    const someFinal = finalCount > 0;
+    const incomplete = participantCount > 0 && finalCount < participantCount;
+    const ended = options.hasEnded === true;
+    const released = options.released === true || lessonStatus === "available";
+    const approval = ["pending", "pending_change", "requested"].includes(lessonStatus);
+    const cancelled = ["cancelled", "canceled"].includes(lessonStatus);
+    const holiday = lessonStatus === "holiday" || outcomes.length > 0 && outcomes.every((outcome) => outcome === "holiday");
+    const noShow = lessonStatus === "no_show" || outcomes.includes("no_show");
+    const absence = lessonStatus === "absent" || outcomes.length > 0 && outcomes.every((outcome) => outcome === "absence");
+    const finalizedStatus = ["completed", "no_show"].includes(lessonStatus);
+
+    const result = (id, label, actionLabel, extra = {}) => Object.freeze({
+      id,
+      label,
+      actionLabel,
+      needsFeedback: id === "processing_required",
+      resolved: ["completed", "cancelled", "holiday", "absence", "no_show", "released"].includes(id),
+      ...extra,
+    });
+
+    if (released) return result("released", "보강 가능", "예약 가능");
+    if (approval) return result("approval", "승인 대기", "요청 확인");
+    if (cancelled) return result("cancelled", "취소", "기록 보기");
+    if (holiday) return result("holiday", "휴무", "기록 보기");
+    if (hasExplicitError || deductionIssue || (someFinal && incomplete) || (finalizedStatus && !allFinal)) {
+      return result("confirmation_needed", "확인 필요", "최신 상태 다시 확인", {
+        contextLabel: noShow ? "노쇼" : absence ? "불참" : "",
+      });
+    }
+    if (allFinal) {
+      if (noShow) return result("no_show", "노쇼", "기록 보기");
+      if (absence) return result("absence", "불참", "기록 보기");
+      return result("completed", "완료", "기록 보기");
+    }
+    if (ended) return result("processing_required", "처리 필요", "피드백 작성");
+    return result("scheduled", "예정", "수업 보기");
+  }
+
   function actionAttributes(action = {}) {
     if (action.view) return `data-view="${escapeHtml(action.view)}"`;
     if (action.jump) return `data-jump="${escapeHtml(action.jump)}"`;
@@ -93,6 +171,7 @@
   window.TennisNoteUiLanguage = Object.freeze({
     groups: statusGroups,
     statusLabel,
+    lessonProcessingState,
     emptyState,
   });
 })();

@@ -13,6 +13,8 @@ function renderScheduleEditPanel() {
   const canFinalize = canProcess && lessonOutcomeWindowOpen(lesson);
   const canReschedule = canRescheduleLesson(lesson);
   const finalized = lessonChartFinalized(lesson);
+  const processingState = coachLessonCardState(lesson);
+  const needsStateRefresh = processingState.id === "confirmation_needed";
   const completionParticipants = completionParticipantsForLesson(lesson);
   const participantTabs = completionParticipants.length > 1
     ? `<div class="lesson-chart-member-tabs" role="tablist" aria-label="그룹 회원 선택">${completionParticipants.map((participant, index) => `<button type="button" role="tab" class="${index === 0 ? "is-active" : ""}" aria-selected="${index === 0}" data-lesson-participant-tab="${escapeHtml(lessonChartParticipantKey(participant, index))}">${escapeHtml(participant.name || `회원 ${index + 1}`)}</button>`).join("")}</div>`
@@ -108,13 +110,13 @@ function renderScheduleEditPanel() {
           <strong>${lesson.member}</strong>
           <span>${lesson.day} ${lesson.time} · ${lessonDuration(lesson)}분${completionParticipants.length === 1 ? ` · 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회` : ""}</span>
         </div>
-        <b class="${finalized || canFinalize ? "can-process" : "read-only"}">${finalized ? "완료" : canFinalize ? "처리 필요" : canProcess ? "예정" : "보기 전용"}</b>
+        <b class="${processingState.id === "confirmation_needed" ? "read-only" : finalized || canFinalize ? "can-process" : "read-only"}">${canProcess ? escapeHtml(processingState.label) : "보기 전용"}</b>
       </div>
       ${canFinalize && !finalized && completionParticipants.length === 1 ? `<p class="lesson-chart-deduction-preview wide">완료 시 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회 → ${Math.max(0, (Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0) - 1)}회</p>` : ""}
       ${lessonGroupDeductionSummary(lesson, completionParticipants) ? `<p class="lesson-chart-deduction-preview wide">${escapeHtml(lessonGroupDeductionSummary(lesson, completionParticipants))}</p>` : ""}
       ${participantTabs}
       <div class="lesson-participant-completion-list wide">${participantCompletionFields}</div>
-      ${lesson.validationMessage ? `<div class="wide"><p class="validation-text">${lesson.validationMessage}</p><button class="small-button" type="button" data-refresh-lesson-completion="${escapeHtml(lesson.id)}">최신 상태 다시 확인</button></div>` : ""}
+      ${lesson.validationMessage || needsStateRefresh ? `<div class="wide"><p class="validation-text">${escapeHtml(lesson.validationMessage || "피드백 기록과 회원권 차감 결과가 일치하지 않습니다.")}</p><button class="small-button" type="button" data-refresh-lesson-completion="${escapeHtml(lesson.id)}">${escapeHtml(processingState.actionLabel || "최신 상태 다시 확인")}</button></div>` : ""}
       ${!finalized && (canReschedule || (canProcess && lesson.serverLessonId))
         ? `<details class="lesson-secondary-panel lesson-other-actions wide">
             <summary>다른 처리</summary>
