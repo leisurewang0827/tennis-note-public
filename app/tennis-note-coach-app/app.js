@@ -538,7 +538,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.442",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.443",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
