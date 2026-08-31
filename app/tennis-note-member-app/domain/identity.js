@@ -81,9 +81,64 @@ function suggestedNicknameFromUser(user = {}) {
   ).slice(0, 20);
 }
 
+function normalizedIdentityErrorCode(error) {
+  const values = [
+    error?.code,
+    error?.error_code,
+    error?.message,
+    error?.payload?.code,
+    error?.payload?.error_code,
+    error?.payload?.message,
+    error?.payload?.error_description,
+    typeof error === "string" ? error : "",
+  ];
+  return values
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/[\s-]+/gu, "_");
+}
+
+function transientAuthCapabilityError(error) {
+  const code = normalizedIdentityErrorCode(error);
+  return ["failed_to_fetch", "networkerror", "load_failed", "temporarily_unavailable", "request_timeout"]
+    .some((marker) => code.includes(marker));
+}
+
+function authProviderCapability(settings = {}, provider = "") {
+  const external = settings?.external;
+  if (!external || typeof external !== "object") return null;
+  const aliases = {
+    phone: ["phone"],
+    email: ["email"],
+    apple: ["apple"],
+    kakao: ["custom:kakao", "kakao"],
+    naver: ["custom:naver", "naver"],
+    google: ["google"],
+  }[provider] || [provider];
+  const configured = aliases.filter((key) => Object.prototype.hasOwnProperty.call(external, key));
+  if (!configured.length) return null;
+  return configured.some((key) => external[key] === true);
+}
+
+function resolvedAuthCapabilities(settings = {}) {
+  return {
+    phone: authProviderCapability(settings, "phone"),
+    email: authProviderCapability(settings, "email"),
+    apple: authProviderCapability(settings, "apple"),
+    kakao: authProviderCapability(settings, "kakao"),
+    naver: authProviderCapability(settings, "naver"),
+    google: authProviderCapability(settings, "google") === true,
+  };
+}
+
+function phoneAuthUnavailableMessage() {
+  return "문자 인증을 준비 중입니다. 네이버 번호 다시 받기 또는 관리자 연결을 이용해 주세요.";
+}
+
 function identityErrorMessage(error) {
-  const code = String(error?.message || error || "").toLowerCase();
-  if (code.includes("failed to fetch") || code.includes("networkerror") || code.includes("load failed") || code.includes("temporarily_unavailable")) {
+  const code = normalizedIdentityErrorCode(error);
+  if (code.includes("failed_to_fetch") || code.includes("networkerror") || code.includes("load_failed") || code.includes("temporarily_unavailable")) {
     return "인터넷 연결이 불안정합니다. 입력 내용은 유지되니 잠시 후 다시 저장해 주세요.";
   }
   if (code.includes("nickname_already_taken")) return "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해 주세요.";
@@ -91,8 +146,8 @@ function identityErrorMessage(error) {
   if (code.includes("real_name_invalid")) return "실명을 확인해 주세요.";
   if (code.includes("phone_invalid")) return "휴대전화 번호를 010부터 정확히 입력해 주세요.";
   if (code.includes("phone_verification_required")) return "휴대전화 인증을 먼저 완료해 주세요.";
-  if (code.includes("phone_provider") || code.includes("sms_provider") || code.includes("sms_send")) return "문자 인증 설정을 준비 중입니다. 관리자에게 기존 회원 연결을 요청해 주세요.";
   if (code.includes("over_email_send_rate_limit") || code.includes("rate_limit") || code.includes("too many")) return "인증번호 요청이 많습니다. 잠시 후 다시 시도해 주세요.";
+  if (code.includes("phone_provider") || code.includes("sms_provider") || code.includes("sms_send")) return phoneAuthUnavailableMessage();
   if (code.includes("otp_expired") || code.includes("token has expired")) return "인증번호가 만료되었거나 올바르지 않습니다. 새 번호를 받아 다시 입력해 주세요.";
   if (code.includes("phone_otp_invalid") || code.includes("phone_otp_verification_failed")) return "인증번호 6자리를 확인해 주세요.";
   if (code.includes("phone_change_conflict") || code.includes("phone already")) return "이미 다른 로그인 계정에서 확인된 번호입니다. 관리자에게 계정 연결을 요청해 주세요.";

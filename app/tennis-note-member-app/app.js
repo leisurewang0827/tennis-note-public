@@ -334,6 +334,26 @@ let coachModeNavigationStarted = false;
 let oauthLoginInFlightProvider = "";
 let emailAuthMode = "login";
 let emailPasswordRecoveryPending = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("type") === "recovery";
+let identityPhoneVerification = {
+  phone: "",
+  status: "unverified",
+  source: "",
+};
+let identityAuthCapabilities = {
+  status: "unknown",
+  providers: {
+    phone: null,
+    email: null,
+    apple: null,
+    kakao: null,
+    naver: null,
+    google: false,
+  },
+  errorCode: "",
+  checkedAt: 0,
+};
+let identityAuthCapabilityPromise = null;
+let identityPhoneRequestInFlight = false;
 
 const notionCurriculumGuideUrl = curriculumCatalog.sources?.memberGuide || "https://app.notion.com/p/94544cb6f3d546e991db21dbab5fb163";
 const notionCurriculumDetailUrl = curriculumCatalog.sources?.detailedGuide || "https://app.notion.com/p/312b107df48080e282cbe84b95cff64b";
@@ -1076,7 +1096,7 @@ let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.437");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.438");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -1159,7 +1179,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.437",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.438",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
