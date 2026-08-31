@@ -141,6 +141,207 @@
     return result("scheduled", "예정", "수업 보기");
   }
 
+  function lessonDisplayMinutes(value = "") {
+    const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return Number.NaN;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return Number.NaN;
+    return hour * 60 + minute;
+  }
+
+  function lessonDisplayTime(minutes = 0) {
+    const safe = Math.max(0, Math.min(24 * 60, Number(minutes) || 0));
+    return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+  }
+
+  function lessonDisplayList(value) {
+    return [...new Set((Array.isArray(value) ? value : [])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean))].sort();
+  }
+
+  function lessonDisplayArray(value) {
+    if (Array.isArray(value)) return value;
+    return value === undefined || value === null || value === "" ? [] : [value];
+  }
+
+  function lessonDisplayParticipantKey(lesson = {}) {
+    const participants = Array.isArray(lesson.v2Participants) ? lesson.v2Participants : [];
+    const ids = lessonDisplayList([
+      ...lessonDisplayArray(lesson.memberUserIds),
+      ...lessonDisplayArray(lesson.participantUserIds),
+      ...lessonDisplayArray(lesson.serverParticipantUserIds),
+      ...participants.map((participant) => participant?.userId || participant?.user_id),
+    ]);
+    const tickets = lessonDisplayList([
+      lesson.ticketId,
+      lesson.ticket_id,
+      lesson.memberTicketId,
+      lesson.member_ticket_id,
+      ...participants.map((participant) => participant?.ticketId || participant?.ticket_id),
+    ]);
+    const group = String(lesson.groupId || lesson.group_id || lesson.groupAccountId || lesson.group_account_id || "").trim();
+    const memberFallback = String(lesson.member || lesson.memberName || lesson.member_name || "")
+      .split(/[&,·]/)
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
+      .sort()
+      .join("|");
+    return JSON.stringify({ ids, tickets, group, memberFallback: ids.length ? "" : memberFallback });
+  }
+
+  function lessonDisplayRecordKey(lesson = {}) {
+    const records = Array.isArray(lesson.v2Participants)
+      ? lesson.v2Participants
+      : Array.isArray(lesson.participantRecords) ? lesson.participantRecords : lesson.participantRecord ? [lesson.participantRecord] : [];
+    return JSON.stringify(records.map((record) => ({
+      userId: String(record?.userId || record?.user_id || ""),
+      ticketId: String(record?.ticketId || record?.ticket_id || record?.recordTicketId || ""),
+      status: String(record?.recordStatus || record?.record_status || ""),
+      outcome: String(record?.outcome || ""),
+      requested: record?.deductionRequested === true || record?.deduction_requested === true,
+      deducted: Math.max(0, Number(record?.deductedSessions ?? record?.deducted_sessions) || 0),
+    })).sort((left, right) => `${left.userId}|${left.ticketId}`.localeCompare(`${right.userId}|${right.ticketId}`)));
+  }
+
+  function lessonDisplayIdentity(lesson = {}) {
+    const logicalLessonId = String(
+      lesson.serverLessonId || lesson.server_lesson_id || lesson.lessonId || lesson.lesson_id || lesson.id || "",
+    ).trim();
+    const coach = String(
+      lesson.substituteCoachRoleId || lesson.substitute_coach_role_id
+      || lesson.coachRoleId || lesson.coach_role_id || lesson.coachId || lesson.coach_id || lesson.coach || "",
+    ).trim().toLowerCase();
+    const originalCoach = String(
+      lesson.originalCoachRoleId || lesson.original_coach_role_id || lesson.originalCoachId || lesson.original_coach_id || "",
+    ).trim().toLowerCase();
+    const lessonDate = String(lesson.lessonDate || lesson.lesson_date || lesson.date || lesson.day || "").trim();
+    const serverStatus = String(lesson.serverStatus || lesson.server_status || "").trim().toLowerCase();
+    const status = String(lesson.status || serverStatus || "scheduled").trim().toLowerCase();
+    const lessonSource = String(lesson.lessonSource || lesson.lesson_source || "").trim().toLowerCase();
+    const scheduleKind = String(lesson.scheduleKind || lesson.schedule_kind || lesson.scheduleV2Kind || "").trim().toLowerCase();
+    const outcome = String(lesson.outcome || lesson.participantRecord?.outcome || "").trim().toLowerCase();
+    const substitute = Boolean(lesson.isSubstitute || lesson.is_substitute || originalCoach);
+    return {
+      logicalLessonId,
+      key: JSON.stringify({
+        logicalLessonId,
+        lessonDate,
+        coach,
+        originalCoach,
+        serverStatus,
+        status,
+        lessonSource,
+        scheduleKind,
+        outcome,
+        substitute,
+        flags: {
+          released: Boolean(lesson.releasedMakeupSlot || lesson.releasedRegularSlot),
+          oneDay: Boolean(lesson.oneDayBooking),
+          makeup: Boolean(lesson.makeup),
+          groupPartialFailure: Boolean(lesson.groupPartialFailure),
+          completionNeedsReview: Boolean(lesson.completionNeedsReview),
+          feedbackSaved: Boolean(lesson.feedbackSaved || lesson.hasFeedback || lesson.feedbackWritten),
+          deductionRequested: Boolean(lesson.deductionRequested || lesson.deduction_requested),
+        },
+        recordStatus: String(lesson.recordStatus || lesson.record_status || "").trim().toLowerCase(),
+        feedbackStatus: String(lesson.feedbackStatus || lesson.feedback_status || "").trim().toLowerCase(),
+        deductionStatus: String(lesson.deductionStatus || lesson.deduction_status || "").trim().toLowerCase(),
+        participant: lessonDisplayParticipantKey(lesson),
+        records: lessonDisplayRecordKey(lesson),
+        ticketTotal: Number(lesson.ticketTotalSessions ?? lesson.totalSessions) || 0,
+        ticketUsed: Number(lesson.ticketUsedSessions ?? lesson.usedSessions) || 0,
+        ticketRemaining: Number(lesson.ticketRemainingSessions ?? lesson.remaining) || 0,
+        deducted: Math.max(0, Number(lesson.deductedSessions) || 0),
+      }),
+    };
+  }
+
+  function lessonDisplaySegmentId(lesson = {}, logicalLessonId = "") {
+    return String(lesson.segmentId || lesson.segment_id || lesson.displaySegmentId || lesson.id || logicalLessonId || "").trim();
+  }
+
+  function mergeLessonDisplaySegments(lessons = []) {
+    if (!Array.isArray(lessons) || lessons.length < 2) return Array.isArray(lessons) ? lessons : [];
+    const entries = lessons.map((lesson, index) => {
+      const identity = lessonDisplayIdentity(lesson);
+      const start = lessonDisplayMinutes(lesson.time || lesson.startTime || lesson.start_time);
+      const duration = Math.max(0, Number(lesson.durationMinutes ?? lesson.duration_minutes) || 0);
+      return {
+        lesson,
+        index,
+        ...identity,
+        segmentId: lessonDisplaySegmentId(lesson, identity.logicalLessonId),
+        start,
+        duration,
+        end: Number.isFinite(start) ? start + duration : Number.NaN,
+      };
+    });
+    const groups = new Map();
+    entries.forEach((entry) => {
+      if (!entry.logicalLessonId || !entry.segmentId || !Number.isFinite(entry.start) || entry.duration !== 20) return;
+      const group = groups.get(entry.key) || [];
+      group.push(entry);
+      groups.set(entry.key, group);
+    });
+    const runByIndex = new Map();
+    groups.forEach((group) => {
+      const ordered = [...group].sort((left, right) => left.start - right.start || left.index - right.index);
+      let run = [];
+      const register = () => {
+        if (run.length < 2) return;
+        const uniqueSegments = new Set(run.map((entry) => entry.segmentId));
+        if (uniqueSegments.size !== run.length) return;
+        const descriptor = { entries: [...run], firstIndex: Math.min(...run.map((entry) => entry.index)) };
+        run.forEach((entry) => runByIndex.set(entry.index, descriptor));
+      };
+      ordered.forEach((entry) => {
+        if (!run.length || run.at(-1).end === entry.start) {
+          run.push(entry);
+          return;
+        }
+        register();
+        run = [entry];
+      });
+      register();
+    });
+
+    const emitted = new Set();
+    return entries.flatMap((entry) => {
+      const run = runByIndex.get(entry.index);
+      if (!run) return [entry.lesson];
+      if (emitted.has(run)) return [];
+      emitted.add(run);
+      const ordered = [...run.entries].sort((left, right) => left.start - right.start || left.index - right.index);
+      const first = ordered[0];
+      const totalMinutes = ordered.reduce((sum, item) => sum + item.duration, 0);
+      const startTime = lessonDisplayTime(first.start);
+      const endTime = lessonDisplayTime(first.start + totalMinutes);
+      const segmentIds = ordered.map((item) => item.segmentId);
+      const lessonIds = lessonDisplayList(ordered.map((item) => item.logicalLessonId));
+      const type = String(first.lesson.type || "").replace(/\d+\s*분/, `${totalMinutes}분`);
+      return [{
+        ...first.lesson,
+        ...(type ? { type } : {}),
+        time: startTime,
+        startTime,
+        start_time: startTime,
+        durationMinutes: totalMinutes,
+        duration_minutes: totalMinutes,
+        displayMerged: true,
+        displayStartTime: startTime,
+        displayEndTime: endTime,
+        displayDurationMinutes: totalMinutes,
+        displayTimeRange: `${startTime}~${endTime}`,
+        displaySegmentIds: segmentIds,
+        displayLessonIds: lessonIds,
+        displaySegments: ordered.map((item) => item.lesson),
+        displayPrimarySegmentId: first.segmentId,
+      }];
+    });
+  }
+
   function actionAttributes(action = {}) {
     if (action.view) return `data-view="${escapeHtml(action.view)}"`;
     if (action.jump) return `data-jump="${escapeHtml(action.jump)}"`;
@@ -172,6 +373,7 @@
     groups: statusGroups,
     statusLabel,
     lessonProcessingState,
+    mergeLessonDisplaySegments,
     emptyState,
   });
 })();

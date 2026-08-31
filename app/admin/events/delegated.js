@@ -517,6 +517,7 @@ function bindDelegatedEvents() {
     }
     const lessonButton = event.target.closest("[data-edit-lesson-id]");
     if (!lessonButton) return;
+    state.editingLessonSegmentIds = String(lessonButton.dataset.lessonSegments || "").split(",").filter(Boolean);
     openEditLessonModal(lessonButton.dataset.editLessonId);
   });
   document.addEventListener("click", (event) => {

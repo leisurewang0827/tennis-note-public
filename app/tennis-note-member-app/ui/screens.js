@@ -476,12 +476,15 @@ function closeKakaoInquiryModal() {
   $("#openKakaoInquiryButton")?.focus();
 }
 
-function openLessonDetailSheet(lessonId) {
-  const lesson = memberScheduleOptions().find((item) => item.id === lessonId)
-    || memberMakeupDueLessons().find((item) => item.id === lessonId)
-    || (state.liveLessons || []).find((item) => item.id === lessonId);
+function openLessonDetailSheet(lessonId, segmentIds = []) {
+  const lesson = memberDisplayLessons(memberScheduleOptions()).find((item) => item.id === lessonId || item.displaySegmentIds?.includes(lessonId))
+    || memberDisplayLessons(memberMakeupDueLessons()).find((item) => item.id === lessonId || item.displaySegmentIds?.includes(lessonId))
+    || memberDisplayLessons(state.liveLessons || []).find((item) => item.id === lessonId || item.displaySegmentIds?.includes(lessonId));
   if (!lesson || !isOwnMemberScheduleLesson(lesson)) return;
   state.selectedLessonDetailId = lesson.id;
+  state.selectedLessonDetailSegmentIds = Array.isArray(segmentIds) && segmentIds.length
+    ? [...segmentIds]
+    : [...(lesson.displaySegmentIds || [lesson.id])];
   renderLessonDetailSheet(lesson);
   openAppSheet("lessonDetailSheet");
 }

@@ -272,7 +272,7 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
                 const cardNote = lesson.releasedMakeupSlot
                   ? (lesson.historicalReleasedSlot ? "차감 없음" : "보강·원데이 가능")
                   : note;
-                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${primaryMarkup}</strong><span>${escapeHtml(roundOrState)}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote || "-")}</small></button>`;
+                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${primaryMarkup}</strong><span>${escapeHtml([lesson.displayTimeRange, roundOrState].filter(Boolean).join(" · "))}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote || "-")}</small></button>`;
               }).join("")}
             </div>`;
         }).join("")}
@@ -355,7 +355,8 @@ function renderFullSchedule() {
   const policy = loadCoachSchedulePolicy();
   const weekIndex = activeWeekIndex();
   const week = activeScheduleWeek();
-  const lessonsForWeek = filterFullScheduleLessons(weekLessons(), scheduleFilter);
+  const rawLessonsForWeek = filterFullScheduleLessons(weekLessons(), scheduleFilter);
+  const lessonsForWeek = scheduleFilter === "makeupChange" ? rawLessonsForWeek : coachDisplayLessons(rawLessonsForWeek);
   const scheduleContent = scheduleFilter === "makeupChange"
     ? renderCoachRequestTimeline(lessonsForWeek)
     : scheduleFilter === "feedback"

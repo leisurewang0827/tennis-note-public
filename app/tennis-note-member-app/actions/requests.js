@@ -171,11 +171,11 @@ async function submitHoldingRequest(event) {
   renderCurrentTicketPanel();
 }
 
-function handleScheduleClick(lessonId) {
-  const lesson = memberScheduleOptions().find((item) => item.id === lessonId);
+function handleScheduleClick(lessonId, segmentIds = []) {
+  const lesson = memberDisplayLessons(memberScheduleOptions()).find((item) => item.id === lessonId || item.displaySegmentIds?.includes(lessonId));
   if (!lesson) return;
   if (isOwnMemberScheduleLesson(lesson)) {
-    openLessonDetailSheet(lesson.id);
+    openLessonDetailSheet(lesson.id, segmentIds);
     return;
   }
   if (lesson.status === "available") {

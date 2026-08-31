@@ -777,8 +777,8 @@ function liveLessonForJournal(log = {}) {
 }
 
 function selectedLessonDetail() {
-  return memberScheduleOptions().find((lesson) => lesson.id === state.selectedLessonDetailId)
-    || memberMakeupDueLessons().find((lesson) => lesson.id === state.selectedLessonDetailId)
-    || (state.liveLessons || []).find((lesson) => lesson.id === state.selectedLessonDetailId)
+  return memberDisplayLessons(memberScheduleOptions()).find((lesson) => lesson.id === state.selectedLessonDetailId)
+    || memberDisplayLessons(memberMakeupDueLessons()).find((lesson) => lesson.id === state.selectedLessonDetailId)
+    || memberDisplayLessons(state.liveLessons || []).find((lesson) => lesson.id === state.selectedLessonDetailId)
     || null;
 }

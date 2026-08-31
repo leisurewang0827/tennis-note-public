@@ -60,6 +60,15 @@ function adminParticipantRecordsForLesson(lessonId = "") {
   return adminParticipantProcessingByLessonId.get(String(lessonId || "")) || [];
 }
 
+function adminDisplayLessons(lessons = []) {
+  return window.TennisNoteUiLanguage?.mergeLessonDisplaySegments?.(lessons) || lessons;
+}
+
+function adminDisplaySegmentAttrs(lesson = {}) {
+  const ids = Array.isArray(lesson.displaySegmentIds) ? lesson.displaySegmentIds : [];
+  return ids.length ? ` data-lesson-segments="${escapeHtml(ids.join(","))}"` : "";
+}
+
 function adminLessonProcessingState(lesson = {}, participantRecords = null) {
   const hasExplicitRecords = Array.isArray(participantRecords);
   const records = hasExplicitRecords

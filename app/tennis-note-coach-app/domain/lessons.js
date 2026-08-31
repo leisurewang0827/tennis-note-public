@@ -205,6 +205,7 @@ function coachLessonVisualKind(lesson = {}) {
 }
 
 function coachScheduleLessonActionAttrs(lesson = {}) {
+  const segmentAttrs = coachDisplaySegmentAttrs(lesson);
   if (lesson.oneDayBooking) {
     return `disabled aria-label="${lesson.member || "원데이"} 원데이 예약"`;
   }
@@ -217,7 +218,7 @@ function coachScheduleLessonActionAttrs(lesson = {}) {
     }
     return `data-restore-absence-id="${lesson.entitlementId || ""}" aria-label="${lesson.member || "회원"} 정규수업 복원"`;
   }
-  return `data-edit-lesson-id="${lesson.id}"`;
+  return `data-edit-lesson-id="${lesson.id}"${segmentAttrs}`;
 }
 
 function coachLessonColorStyle(lesson, policy) {

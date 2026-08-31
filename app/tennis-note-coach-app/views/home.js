@@ -83,7 +83,7 @@ function renderTodayTaskTabs({ lessonCount, makeupCount, recordCount }) {
 
 function renderTodayLessons() {
   const schedulePolicy = loadCoachSchedulePolicy();
-  const ownLessons = [...ownTodayLessons()].sort(compareTodayLessonsByNearest);
+  const ownLessons = coachDisplayLessons([...ownTodayLessons()]).sort(compareTodayLessonsByNearest);
   const transferredLessons = transferredTodayLessons();
   const ownMakeups = ownPendingMakeupRequests();
   const ownAbsenceMakeups = ownOpenMakeupEntitlements();
@@ -114,9 +114,9 @@ function renderTodayLessons() {
                             ${lessons
                               .map(
                                 (lesson) => `
-                                  <button class="board-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${coachColorClass(lesson.coach)} ${coachLessonStateClass(lesson)} ${lesson.remaining <= 2 ? "needs-renewal" : ""}" style="${coachLessonColorStyle(lesson, schedulePolicy)}" type="button" data-edit-lesson-id="${lesson.id}">
+                                  <button class="board-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${coachColorClass(lesson.coach)} ${coachLessonStateClass(lesson)} ${lesson.remaining <= 2 ? "needs-renewal" : ""}" style="${coachLessonColorStyle(lesson, schedulePolicy)}" type="button" ${coachScheduleLessonActionAttrs(lesson)}>
                                     <strong>${lesson.member}</strong>
-                                    <span>${recentLogForLesson(lesson)?.nextCurriculumId ? `오늘 목표 · ${escapeHtml(selectedCurriculum(recentLogForLesson(lesson).nextCurriculumId).title)}` : `${lesson.type} · ${lessonDurationUsageLabel(lesson)}`}${lesson.isSubstitute ? ` · 대타 · 원 담당 ${lesson.originalCoach || "확인"}` : ""}</span>
+                                    <span>${lesson.displayTimeRange ? `${escapeHtml(lesson.displayTimeRange)} · ` : ""}${recentLogForLesson(lesson)?.nextCurriculumId ? `오늘 목표 · ${escapeHtml(selectedCurriculum(recentLogForLesson(lesson).nextCurriculumId).title)}` : `${lesson.type} · ${lessonDurationUsageLabel(lesson)}`}${lesson.isSubstitute ? ` · 대타 · 원 담당 ${lesson.originalCoach || "확인"}` : ""}</span>
                                     <small class="schedule-card-note">${escapeHtml(coachLessonCardState(lesson).label)}</small>
                                   </button>`,
                               )

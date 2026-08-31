@@ -255,7 +255,7 @@ function lessonChartFinalized(lesson = {}) {
 }
 
 function renderCoachFeedbackScheduleList(scheduleLessons = []) {
-  const items = [...scheduleLessons].sort((left, right) => {
+  const items = coachDisplayLessons(scheduleLessons).sort((left, right) => {
     const leftKey = `${coachRequestTimelineDate(left)} ${left.time || ""}`;
     const rightKey = `${coachRequestTimelineDate(right)} ${right.time || ""}`;
     return leftKey.localeCompare(rightKey, "ko");
@@ -274,7 +274,7 @@ function renderCoachFeedbackScheduleList(scheduleLessons = []) {
     const cardState = coachLessonCardState(lesson);
     const round = coachScheduleRoundLabel(lesson);
     return `<button class="coach-feedback-row" type="button" ${coachScheduleLessonActionAttrs(lesson)}>
-          <time>${escapeHtml(date || lesson.day || "날짜 확인")} · ${escapeHtml(lesson.time || "시간 확인")}</time>
+          <time>${escapeHtml(date || lesson.day || "날짜 확인")} · ${escapeHtml(lesson.displayTimeRange || lesson.time || "시간 확인")}</time>
           <strong>${escapeHtml(lesson.member || "회원")}</strong>
           <span>${escapeHtml(lesson.coach || "담당 코치")} · ${escapeHtml(round === "0/0회차" ? "회차 미연결" : round)}</span>
           <b>${escapeHtml(cardState.label)}</b>

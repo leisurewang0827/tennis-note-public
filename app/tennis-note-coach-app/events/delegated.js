@@ -430,6 +430,7 @@ function bindDelegatedEvents() {
 
     const editLessonButton = event.target.closest("[data-edit-lesson-id]");
     if (editLessonButton) {
+      state.activeLessonDisplaySegmentIds = String(editLessonButton.dataset.lessonSegments || "").split(",").filter(Boolean);
       openLessonEditor(editLessonButton.dataset.editLessonId);
       return;
     }

@@ -33,7 +33,7 @@ function bindScheduleEvents() {
   });
   $("#scheduleGrid").addEventListener("click", (event) => {
     const button = event.target.closest("[data-lesson]");
-    if (button) handleScheduleClick(button.dataset.lesson);
+    if (button) handleScheduleClick(button.dataset.lesson, String(button.dataset.lessonSegments || "").split(",").filter(Boolean));
   });
   $("#memberWeekSwitcher")?.addEventListener("click", (event) => {
     const quickButton = event.target.closest("[data-select-member-week]");

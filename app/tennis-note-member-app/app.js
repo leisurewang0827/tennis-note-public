@@ -52,6 +52,7 @@ const state = {
   selectedJournalDate: localDateKey(),
   journalCalendarViewMode: "month",
   selectedLessonDetailId: "",
+  selectedLessonDetailSegmentIds: [],
   journalSearchQuery: "",
   curriculumQuery: "",
   curriculumFilter: "all",

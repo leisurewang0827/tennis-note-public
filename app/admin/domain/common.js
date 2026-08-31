@@ -1889,6 +1889,7 @@ function memberRemarkLabel(member) {
 }
 
 function lessonActionAttrs(lesson) {
+  const segmentAttrs = adminDisplaySegmentAttrs(lesson);
   if (lesson?.oneDayBooking) {
     return `data-edit-one-day-booking-id="${lesson.serverOneDayBookingId || lesson.id}"`;
   }
@@ -1904,9 +1905,9 @@ function lessonActionAttrs(lesson) {
   }
   if (state.scheduleBulkMode && scheduleBulkEligible(lesson)) {
     const selected = selectedScheduleLessonIdSet().has(String(lesson.serverLessonId));
-    return `data-select-schedule-lesson="${lesson.serverLessonId}" aria-pressed="${selected}"`;
+    return `data-select-schedule-lesson="${lesson.serverLessonId}" aria-pressed="${selected}"${segmentAttrs}`;
   }
-  return `data-edit-lesson-id="${lesson.id}"`;
+  return `data-edit-lesson-id="${lesson.id}"${segmentAttrs}`;
 }
 
 function scheduleBulkPreviewText(selected = []) {

@@ -155,6 +155,7 @@ function memberLessonStateClass(lesson = {}) {
 }
 
 function lessonDetailDateTimeLabel(lesson = {}) {
+  const timeLabel = lesson.displayTimeRange || lesson.time || "시간 확인";
   if (lesson.lessonDate) {
     const date = new Date(`${lesson.lessonDate}T12:00:00`);
     if (!Number.isNaN(date.getTime())) {
@@ -163,10 +164,10 @@ function lessonDetailDateTimeLabel(lesson = {}) {
         day: "numeric",
         weekday: "short",
       });
-      return `${dateLabel} · ${lesson.time || "시간 확인"}`;
+      return `${dateLabel} · ${timeLabel}`;
     }
   }
-  return `${lesson.day ? `${lesson.day}요일` : "날짜 확인"} · ${lesson.time || "시간 확인"}`;
+  return `${lesson.day ? `${lesson.day}요일` : "날짜 확인"} · ${timeLabel}`;
 }
 
 function lessonDetailStatusInfo(lesson = {}) {

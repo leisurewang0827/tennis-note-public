@@ -6,6 +6,15 @@ function memberStatusLabel(group, value, fallback = "") {
   return window.TennisNoteUiLanguage?.statusLabel?.(group, value, fallback) || fallback || String(value || "");
 }
 
+function memberDisplayLessons(lessons = []) {
+  return window.TennisNoteUiLanguage?.mergeLessonDisplaySegments?.(lessons) || lessons;
+}
+
+function memberDisplaySegmentAttrs(lesson = {}) {
+  const ids = Array.isArray(lesson.displaySegmentIds) ? lesson.displaySegmentIds : [];
+  return ids.length ? ` data-lesson-segments="${escapeHtml(ids.join(","))}"` : "";
+}
+
 function isStandalonePwa() {
   return window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }

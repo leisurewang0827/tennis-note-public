@@ -76,7 +76,7 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
   const times = makeMemberStartTimes(segment.start, segment.end);
   const segmentStart = segment.startMinutes;
   const segmentEnd = segment.endMinutes;
-  const dayLessons = scheduleLessons.filter((lesson) => lesson.day === day);
+  const dayLessons = memberDisplayLessons(scheduleLessons.filter((lesson) => lesson.day === day));
   const coaches = memberDayCoaches(day, policy, baseLessons).filter((coach) => {
     const worksHere = (coach.workBlocks || []).some((block) => block.days.includes(day)
       && minutesFromTime(block.start) < segmentEnd
@@ -123,7 +123,7 @@ function renderMemberMobileSegment(day, segment, policy, baseLessons, scheduleLe
                 const isMine = isOwnMemberScheduleLesson(lesson);
                 const note = memberScheduleExceptionLabel(lesson);
                 const roundLabel = memberScheduleRoundLabel(lesson, isMine);
-                return `<button class="member-mobile-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${isMine ? `mine ${lesson.status}` : "occupied"} ${memberCoachColorClass(lesson.coach)} ${memberLessonStateClass(lesson)}" type="button" ${isMine ? `data-lesson="${lesson.id}"` : "disabled"} style="${memberLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${escapeHtml(memberScheduleCardName(lesson, isMine))}</strong><span class="schedule-card-round ${roundLabel ? "" : "is-empty"}">${escapeHtml(roundLabel || "-")}</span><span>${escapeHtml(memberCoachShortName(lesson.coach))}</span><small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small></button>`;
+                return `<button class="member-mobile-lesson lesson-source lesson-kind-${memberLessonVisualKind(lesson)} ${isMine ? `mine ${lesson.status}` : "occupied"} ${memberCoachColorClass(lesson.coach)} ${memberLessonStateClass(lesson)}" type="button" ${isMine ? `data-lesson="${lesson.id}"${memberDisplaySegmentAttrs(lesson)}` : "disabled"} style="${memberLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${escapeHtml(memberScheduleCardName(lesson, isMine))}</strong><span class="schedule-card-round ${roundLabel ? "" : "is-empty"}">${escapeHtml(roundLabel || "-")}</span><span>${escapeHtml(memberCoachShortName(lesson.coach))}</span><small class="schedule-card-note ${note ? "" : "is-empty"}">${escapeHtml(note || "-")}</small></button>`;
               }).join("")}
             </div>`;
         }).join("")}
@@ -207,7 +207,7 @@ function renderMemberMobileSchedule(policy, baseLessons, scheduleLessons) {
 }
 
 function renderMemberOwnSchedule() {
-  const ownLessons = currentWeekMemberLessons();
+  const ownLessons = memberDisplayLessons(currentWeekMemberLessons());
   const pendingSchedules = currentWeekPendingPurchaseSchedules();
   return `
     <section class="member-own-schedule" aria-label="이번 주 내 일정">
@@ -221,7 +221,7 @@ function renderMemberOwnSchedule() {
               const change = memberLessonChangeContext(lesson);
               const round = memberScheduleRoundLabel(lesson, true);
               return `
-              <button class="member-own-lesson" type="button" data-lesson="${lesson.id}">
+              <button class="member-own-lesson" type="button" data-lesson="${lesson.id}"${memberDisplaySegmentAttrs(lesson)}>
                 <span class="member-own-lesson-date">${escapeHtml(lessonDateTimeLabel(lesson))}</span>
                 <span class="member-own-lesson-detail">
                   <strong>${escapeHtml([round, memberCoachShortName(lesson.coach)].filter(Boolean).join(" · "))}</strong>
@@ -484,6 +484,7 @@ function renderDynamicMemberSchedule() {
   const scheduleTimeList = memberScheduleTimes(policy);
   const baseLessons = memberScheduleLessons();
   const scheduleLessons = memberScheduleOptions();
+  const displayScheduleLessons = memberDisplayLessons(scheduleLessons);
   const dayCoachMap = new Map(days.map((day) => [day, memberDayCoaches(day, policy, baseLessons)]));
   const dayColumnTracks = days
     .map((day) => {
@@ -515,7 +516,7 @@ function renderDynamicMemberSchedule() {
   $("#scheduleGrid").innerHTML = `
     ${renderRegularInitialScheduleBar()}
     ${inlineChangeBar}
-    ${renderMemberMobileSchedule(policy, baseLessons, scheduleLessons)}
+    ${renderMemberMobileSchedule(policy, baseLessons, displayScheduleLessons)}
     <div class="member-full-schedule-action">
       <button class="small-button" type="button" data-toggle-full-member-schedule aria-expanded="${state.memberScheduleFullView}">
         ${state.memberScheduleFullView ? "가능한 시간만 보기" : "전체 시간표 보기"}
@@ -546,7 +547,7 @@ function renderDynamicMemberSchedule() {
         .map((day) => {
           const dayCoaches = dayCoachMap.get(day) || [];
           const displayCoaches = dayCoaches.length ? dayCoaches : [{ id: `closed-${day}`, name: "운영없음", workBlocks: [] }];
-          const dayLessons = scheduleLessons.filter((lesson) => lesson.day === day);
+          const dayLessons = displayScheduleLessons.filter((lesson) => lesson.day === day);
           const visibleLessons = dayLessons.filter((lesson) => lesson.status !== "available" && memberScheduleVisibleLesson(lesson, policy));
           const availableLessons = dayLessons.filter((lesson) => lesson.status === "available");
           return `
@@ -590,7 +591,7 @@ function renderDynamicMemberSchedule() {
                   if (coachIndex < 0) return "";
                   const isMine = isOwnMemberScheduleLesson(lesson);
                   const lessonClass = isMine ? `mine ${lesson.status}` : "occupied";
-                  const lessonAction = isMine ? `data-lesson="${lesson.id}"` : "disabled";
+                  const lessonAction = isMine ? `data-lesson="${lesson.id}"${memberDisplaySegmentAttrs(lesson)}` : "disabled";
                   const note = memberScheduleExceptionLabel(lesson);
                   const roundLabel = memberScheduleRoundLabel(lesson, isMine);
                   return `
@@ -618,7 +619,7 @@ function renderDynamicMemberSchedule() {
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      handleScheduleClick(button.dataset.lesson);
+      handleScheduleClick(button.dataset.lesson, String(button.dataset.lessonSegments || "").split(",").filter(Boolean));
     });
   });
 }
