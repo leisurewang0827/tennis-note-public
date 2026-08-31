@@ -453,6 +453,7 @@ function updateOnsitePaymentAmount() {
 
 async function submitOnsitePayment(event) {
   event.preventDefault();
+  const form = event.currentTarget || $("#onsitePaymentForm");
   const userId = $("#onsitePaymentMember")?.value || "";
   const sourceTicketId = $("#onsitePaymentSourceTicket")?.value || "";
   const productId = $("#onsitePaymentProduct")?.value || "";
@@ -462,8 +463,26 @@ async function submitOnsitePayment(event) {
   const paymentAmount = Number($("#onsitePaymentAmount")?.value);
   if (!userId || !productId || !coachRoleId || !paymentDate || !Number.isInteger(paymentAmount) || paymentAmount <= 0) {
     $("#onsitePaymentMessage").textContent = "회원, 회원권 상품, 담당 코치, 결제일, 실제 결제금액을 확인해 주세요.";
+    reportAdminPaymentGuard("onsite_validation", "onsite_payment_required_fields");
     return;
   }
+  const requestFingerprint = JSON.stringify([
+    userId,
+    sourceTicketId || null,
+    productId,
+    coachRoleId,
+    paymentMethod,
+    paymentDate,
+    paymentAmount,
+    $("#onsitePaymentStartDate")?.value || null,
+    Boolean($("#onsitePaymentKeepSchedule")?.checked),
+  ]);
+  if (form?.dataset.onsitePaymentRequestFingerprint !== requestFingerprint) {
+    form.dataset.onsitePaymentRequestFingerprint = requestFingerprint;
+    form.dataset.onsitePaymentOperationKey = createAdminOperationKey("onsite-payment");
+  }
+  const operationKey = form?.dataset.onsitePaymentOperationKey || createAdminOperationKey("onsite-payment");
+  if (form) form.dataset.onsitePaymentOperationKey = operationKey;
   const submit = event.submitter || $("#onsitePaymentForm button[type='submit']");
   submit.disabled = true;
   $("#onsitePaymentMessage").textContent = "현장결제와 회원권을 서버에 저장하고 있습니다.";
@@ -478,17 +497,30 @@ async function submitOnsitePayment(event) {
       target_payment_amount: paymentAmount,
       target_starts_on: $("#onsitePaymentStartDate")?.value || null,
       target_keep_schedule: Boolean($("#onsitePaymentKeepSchedule")?.checked),
-      target_operation_key: createAdminOperationKey("onsite-payment"),
+      target_operation_key: operationKey,
     });
     if (!result?.ok) throw new Error(result?.error || "onsite_payment_not_saved");
-    await syncAdminLiveData(true);
-    await loadServerPaymentsIntoBilling({ silent: true });
+    if (String(result.operationKey || "") !== operationKey) throw new Error("onsite_payment_operation_key_not_confirmed");
+    const synced = await syncAdminLiveData(true);
+    const paymentsLoaded = await loadServerPaymentsIntoBilling({ silent: true, force: true });
+    const savedTicketId = String(result.ticketId || result.ticket_id || "");
+    const savedPaymentId = String(result.paymentId || result.payment_id || "");
+    const savedTicket = [...tickets, ...expiredTickets].find((ticket) => String(ticket.serverTicketId || "") === savedTicketId);
+    const savedPayment = billings.find((payment) => String(payment.serverPaymentId || "") === savedPaymentId);
+    if (!synced || !paymentsLoaded || !savedTicket || !savedPayment || String(savedPayment.ticketId || "") !== savedTicketId || savedPayment.status !== "paid") {
+      throw new Error("onsite_payment_write_not_confirmed");
+    }
+    delete form.dataset.onsitePaymentOperationKey;
+    delete form.dataset.onsitePaymentRequestFingerprint;
     closeOnsitePaymentModal();
     renderBilling();
     showToast("현장결제 기록과 회원권 발급이 저장됐습니다.");
   } catch (error) {
     const raw = String(error?.message || error?.payload?.message || "");
-    $("#onsitePaymentMessage").textContent = raw.includes("source_ticket_not_found")
+    reportAdminPaymentGuard("onsite_save", raw || "onsite_payment_not_saved", operationKey);
+    $("#onsitePaymentMessage").textContent = raw.includes("onsite_payment_write_not_confirmed")
+      ? "저장 요청은 전송됐지만 결과를 다시 확인하지 못했습니다. 입력값을 유지했으니 같은 내용으로 다시 시도해 주세요."
+      : raw.includes("source_ticket_not_found")
       ? "선택한 기존 회원권을 찾지 못했습니다. 첫 회원권 등록 또는 다른 회원권을 선택해 주세요."
       : raw.includes("onsite_payment_group_partner_required")
         ? "2대1 첫 등록은 파트너 연결이 필요합니다. 회원관리에서 파트너를 먼저 연결해 주세요."

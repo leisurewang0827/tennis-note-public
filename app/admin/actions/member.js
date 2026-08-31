@@ -575,6 +575,7 @@ async function submitMemberManagementForm(event) {
     : ["create", "assign", "profile", "correct"].includes(action)
       ? memberManagementDatabasePayload(form, isCreate ? null : member, ticket, reason)
       : null;
+  let reenrollVerificationPayload = null;
   const selectedManagementProduct = (adminLiveDataState.products || [])
     .find((item) => item.id === form.elements.productId?.value);
   if (managementPayload && ["create", "assign", "correct"].includes(action)) {
@@ -844,12 +845,21 @@ async function submitMemberManagementForm(event) {
     } else if (action === "reenroll") {
       const reenrollOperationKey = form.dataset.reenrollOperationKey || createAdminOperationKey("member-reenroll");
       form.dataset.reenrollOperationKey = reenrollOperationKey;
+      const addedSessions = Number(form.elements.addedSessions.value);
+      reenrollVerificationPayload = {
+        userId: member.serverUserId,
+        ticketId: ticket.serverTicketId,
+        operationKey: reenrollOperationKey,
+        addedSessions,
+        totalBefore: Number(ticket.total),
+        remainingBefore: Number(ticket.remaining),
+      };
       result = await client.rpc("tn_admin_accumulate_member_ticket_entitlement", {
         target_record: {
           sourceTicketId: ticket.serverTicketId,
           productId: form.elements.productId.value,
           coachRoleId: form.elements.coachRoleId.value,
-          addedSessions: Number(form.elements.addedSessions.value),
+          addedSessions,
           purchasedPrice: Number(form.elements.purchasedPrice.value),
           scheduleMode: "keep",
           reason,
@@ -871,6 +881,17 @@ async function submitMemberManagementForm(event) {
       ? await syncAdminLiveData(true)
       : await loadAdminMemberDetail(member, { force: true, renderResult: false });
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
+    if (action === "reenroll" && reenrollVerificationPayload) {
+      const entitlementEvents = await client.selectRows("tn_ticket_entitlement_events", {
+        select: "ticket_id,operation_key,event_source,added_sessions,total_after,remaining_after,status",
+        filters: {
+          ticket_id: reenrollVerificationPayload.ticketId,
+          operation_key: reenrollVerificationPayload.operationKey,
+        },
+        limit: 2,
+      });
+      reenrollVerificationPayload.entitlementEvent = Array.isArray(entitlementEvents) ? entitlementEvents[0] || null : null;
+    }
     if (linkedSourceSignupUserId) {
       const linkedMember = members.find((item) => memberServerUserIds(item).includes(member.serverUserId));
       if (!linkedMember?.authLinked) throw new Error("member_login_link_not_confirmed");
@@ -879,7 +900,7 @@ async function submitMemberManagementForm(event) {
       const linkedMember = members.find((item) => memberServerUserIds(item).includes(linkedTargetMemberUserId));
       if (!linkedMember?.authLinked) throw new Error("member_login_link_not_confirmed");
     }
-    const verificationError = memberManagementWriteVerification(action, managementPayload, result, statusAction);
+    const verificationError = memberManagementWriteVerification(action, action === "reenroll" ? reenrollVerificationPayload : managementPayload, result, statusAction);
     if (verificationError) throw new Error(verificationError);
     const normalizedResult = normalizedRpcResult(result);
     window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");

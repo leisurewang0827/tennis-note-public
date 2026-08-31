@@ -457,7 +457,7 @@ function paymentApprovalDisplay(item = {}) {
   const method = String(item.method || "").toLowerCase();
   if (item.approvalPending) return { tone: "neutral", label: "승인 처리중", detail: "서버에서 결제와 회원권을 다시 확인하고 있습니다." };
   if (item.status === "paid" && paymentRequiresTicketRepair(item)) {
-    return { tone: "warn", label: "연결 확인", detail: "결제는 확인됐지만 회원권 연결을 확인해야 합니다." };
+    return { tone: "danger", label: "회원권 처리 실패", detail: "결제는 확인됐지만 회원권 처리가 끝나지 않았습니다. 다시 처리해 주세요." };
   }
   if (item.status === "paid") {
     return { tone: "good", label: "승인 완료", detail: item.oneDayBookingId ? "원데이 예약 연결됨" : item.ticketId ? "회원권 연결됨" : "이관 결제 보존" };
@@ -472,6 +472,30 @@ function paymentApprovalDisplay(item = {}) {
   if (["cancelled", "refunded"].includes(item.status)) return { tone: "neutral", label: "취소·환불", detail: "현재 회원권 승인 대상이 아닙니다." };
   if (item.status === "failed") return { tone: "danger", label: "결제 실패", detail: "회원권을 생성하거나 연결하지 않습니다." };
   return { tone: "neutral", label: "확인 대기", detail: "결제 상태를 먼저 확인해 주세요." };
+}
+
+function paymentTicketFinalizeRecoveryCode(value = "") {
+  const code = String(value || "").toLowerCase();
+  if (code.includes("payment_purchase_context_missing")) return "payment_purchase_context_missing";
+  if (code.includes("renewal_source") || code.includes("source_ticket_not_found") || code.includes("exact_source")) return "renewal_source_ticket_missing";
+  if (code.includes("product_mismatch") || code.includes("active_product_required") || code.includes("renewal_product")) return "payment_product_mismatch";
+  if (code.includes("ticket_already_linked") || code.includes("ticket_conflict") || code.includes("payment_already_linked")) return "payment_ticket_link_conflict";
+  if (code.includes("lesson_minutes") || code.includes("42703")) return "ticket_projection_contract_error";
+  if (code.includes("login") || code.includes("admin_role_required") || code.includes("permission")) return "admin_session_or_permission_required";
+  if (code.includes("timeout") || code.includes("network") || code.includes("fetch")) return "payment_reconcile_network_error";
+  return "verified_payment_ticket_finalize_unknown";
+}
+
+function paymentTicketFinalizeRecoveryMessage(value = "") {
+  const code = paymentTicketFinalizeRecoveryCode(value);
+  if (code === "payment_purchase_context_missing") return "결제 준비 정보가 없어 자동 처리할 수 없습니다. 회원권 연결 대상을 확인해 주세요.";
+  if (code === "renewal_source_ticket_missing") return "연장할 기존 회원권을 찾지 못했습니다. 회원과 기존 회원권을 확인해 주세요.";
+  if (code === "payment_product_mismatch") return "결제 상품과 회원권 상품이 일치하지 않습니다. 상품을 확인해 주세요.";
+  if (code === "payment_ticket_link_conflict") return "다른 결제 또는 회원권 연결과 충돌했습니다. 이력에서 기존 연결을 확인해 주세요.";
+  if (code === "ticket_projection_contract_error") return "회원권 처리 규칙을 서버에서 다시 확인해야 합니다. 같은 오류가 계속되면 오류접수를 남겨 주세요.";
+  if (code === "admin_session_or_permission_required") return "관리자 로그인이 만료됐거나 권한이 없습니다. 다시 로그인해 주세요.";
+  if (code === "payment_reconcile_network_error") return "서버 응답을 확인하지 못했습니다. 같은 결제에서 다시 처리해 주세요.";
+  return "회원권 처리를 완료하지 못했습니다. 결제는 유지되며 같은 항목에서 다시 시도할 수 있습니다.";
 }
 
 function settlementRuleSummary(rule = {}) {
