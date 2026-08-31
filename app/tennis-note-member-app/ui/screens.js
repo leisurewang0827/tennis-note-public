@@ -597,6 +597,7 @@ function syncIdentitySetupModal(user = null) {
   populateIdentitySetup(user);
   modal.hidden = false;
   document.body.classList.add("identity-setup-required");
+  void refreshAuthProviderCapabilities();
   window.setTimeout(() => $("#identityRealName")?.focus(), 40);
 }
 
