@@ -8406,6 +8406,65 @@ body.notice-open {
   min-height: 48px;
 }
 
+.lesson-detail-absence-action {
+  border-color: #d59a32;
+  background: #fff8e8;
+  color: #7a4d00;
+}
+
+.same-day-absence-sheet .sheet-card {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(100%, 520px);
+  height: auto;
+  max-height: min(78dvh, 620px);
+}
+
+.same-day-absence-sheet-scroll,
+.same-day-absence-reason-field {
+  display: grid;
+  gap: 10px;
+}
+
+.same-day-absence-policy-summary {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #efd49e;
+  border-radius: 10px;
+  background: #fff8e8;
+  color: #6d4600;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.same-day-absence-reason-field > span {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.same-day-absence-reason-field small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.same-day-absence-reason-field textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.same-day-absence-sheet .sheet-actions {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 8px;
+}
+
+.same-day-absence-sheet .sheet-actions > button {
+  min-height: 48px;
+}
+
 @media (max-width: 480px) {
   .lesson-detail-facts {
     grid-template-columns: 1fr;

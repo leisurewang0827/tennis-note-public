@@ -182,6 +182,19 @@ let nativeCoachBackListenerReady = false;
 
 function coachLessonCardState(lesson = {}, now = new Date()) {
   const participants = Array.isArray(lesson.v2Participants) ? lesson.v2Participants : [];
+  const sameDayAbsences = Array.isArray(lesson.memberSameDayAbsences) ? lesson.memberSameDayAbsences : [];
+  const pendingAbsences = sameDayAbsences.filter((request) => request.status === "pending_approval");
+  const announcedAbsences = sameDayAbsences.filter((request) => request.status === "announced");
+  if (pendingAbsences.length) {
+    return {
+      id: "same_day_absence_pending",
+      label: `${pendingAbsences.length}명 불참 승인 대기`,
+      actionLabel: "승인 확인",
+      needsFeedback: false,
+      resolved: false,
+      className: "record-approval outcome-absence",
+    };
+  }
   const processing = coachLessonProcessingState(lesson, now);
   const deducted = Number(lesson.deductedSessions) > 0
     || participants.some((participant) => Number(participant.deductedSessions) > 0);
@@ -205,7 +218,13 @@ function coachLessonCardState(lesson = {}, now = new Date()) {
         : processing.contextLabel
           ? `${processing.contextLabel} · ${processing.label}`
           : processing.label;
-  return { ...processing, label, className };
+  return {
+    ...processing,
+    label: announcedAbsences.length
+      ? `${announcedAbsences.length}명 불참 예정${processing.id === "completed" || processing.id === "absence" ? "" : ` · ${label}`}`
+      : label,
+    className: announcedAbsences.length && processing.id === "absence" ? "record-neutral outcome-absence" : className,
+  };
 }
 
 function setCoachProfileEditOpen(open) {

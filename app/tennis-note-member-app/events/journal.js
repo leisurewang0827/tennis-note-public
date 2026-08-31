@@ -15,6 +15,10 @@ function bindJournalEvents() {
     const actionButton = event.target.closest("[data-lesson-detail-action]");
     if (actionButton) handleLessonDetailAction(actionButton.dataset.lessonDetailAction);
   });
+  $("#sameDayAbsenceSheet")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-same-day-absence]")) closeAppSheet("sameDayAbsenceSheet");
+  });
+  $("#submitSameDayAbsenceButton")?.addEventListener("click", () => void submitSameDayAbsence());
   $("#journalComposerSheet")?.addEventListener("click", (event) => {
     if (event.target.closest("[data-close-journal-composer]")) closeAppSheet("journalComposerSheet");
   });

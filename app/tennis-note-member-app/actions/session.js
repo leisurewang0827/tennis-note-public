@@ -38,6 +38,12 @@ function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = []
   state.scheduleOperationDays = Array.isArray(workspace.operationDays) ? workspace.operationDays : [];
   const ticketsById = new Map((workspace.tickets || []).map((ticket) => [ticket.id, ticket]));
   const coachesById = new Map((workspace.coaches || []).map((coach) => [coach.roleId, coach]));
+  state.memberSameDayAbsences = Array.isArray(workspace.memberSameDayAbsences)
+    ? workspace.memberSameDayAbsences
+    : [];
+  const sameDayAbsenceByLessonId = new Map(state.memberSameDayAbsences
+    .filter((request) => ["pending_approval", "announced"].includes(String(request.status || "")))
+    .map((request) => [String(request.lessonId || ""), request]));
   const mappedLessons = workspace.lessons.map((lesson) => {
     const isOwnLesson = lesson.isOwnLesson === true;
     const ticket = ticketsById.get(lesson.memberTicketId) || {};
@@ -50,6 +56,7 @@ function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = []
       ? lesson.participantRecord
       : null;
     const ownStatus = scheduleV2MemberOutcomeStatus(participantRecord, lesson.status);
+    const sameDayAbsence = isOwnLesson ? sameDayAbsenceByLessonId.get(String(lesson.id || "")) || null : null;
     return {
       ...lesson,
       serverStatus: isOwnLesson ? ownStatus : lesson.status,
@@ -78,6 +85,7 @@ function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = []
       outcome: participantRecord?.outcome || "",
       deductedSessions: Number(participantRecord?.deductedSessions) || 0,
       coachComment: participantRecord?.coachComment || "",
+      sameDayAbsence,
       status: isOwnLesson
         ? ownStatus === "pending_change" ? "requested" : ownStatus
         : "occupied",

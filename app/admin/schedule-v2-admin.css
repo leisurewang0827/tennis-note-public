@@ -733,6 +733,25 @@
   white-space: pre-line;
 }
 
+.schedule-v2-policy-details {
+  border-top: 1px solid #d8e6e1;
+  padding-top: 8px;
+}
+
+.schedule-v2-policy-details > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: #245b4d;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.schedule-v2-policy-details[open] > summary {
+  margin-bottom: 8px;
+}
+
 .schedule-v2-layout {
   display: flex;
   flex-direction: column;
@@ -2197,6 +2216,35 @@
 .schedule-v2-outcome-row textarea {
   width: 100%;
   box-sizing: border-box;
+}
+
+.schedule-v2-outcome-row.is-same-day-absence {
+  grid-template-columns: minmax(0, 1fr);
+  background: #fff8e8;
+  border-color: #efd49e;
+}
+
+.schedule-v2-outcome-row.is-same-day-absence > strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.schedule-v2-outcome-row.is-same-day-absence > p {
+  margin: 0;
+  color: #6d4600;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.schedule-v2-same-day-absence-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.schedule-v2-same-day-absence-actions > button {
+  min-height: 44px;
 }
 
 .schedule-v2-outcome-deduct {

@@ -481,6 +481,28 @@
                 </details>
                 <button id="scheduleV2PolicyButton" class="ghost-button schedule-v2-policy-open" type="button" aria-expanded="false">운영 규칙 열기</button>
                 <div id="scheduleV2PolicyPanel" class="schedule-v2-policy-panel" hidden>
+                  <section class="schedule-v2-member-change-policy schedule-v2-same-day-absence-policy" aria-labelledby="scheduleV2SameDayAbsencePolicyTitle">
+                    <header>
+                      <div><small>회원 앱</small><strong id="scheduleV2SameDayAbsencePolicyTitle">당일 불참·다시 참석</strong></div>
+                      <span>신청 당시 규칙 보존</span>
+                    </header>
+                    <div class="schedule-v2-member-change-policy-fields">
+                      <label><span>오늘 못 가요</span><select name="memberSameDayAbsenceEnabled"><option value="true">사용</option><option value="false">사용 안 함</option></select></label>
+                      <label><span>회원권 차감</span><select name="memberSameDayAbsenceDeductEnabled"><option value="true">1회 차감</option><option value="false">차감 안 함</option></select></label>
+                    </div>
+                    <details class="schedule-v2-policy-details">
+                      <summary>상세 설정</summary>
+                      <div class="schedule-v2-member-change-policy-fields">
+                        <label><span>불참 사유</span><select name="memberSameDayAbsenceReasonMode"><option value="none">받지 않음</option><option value="optional">선택</option><option value="required">필수</option></select></label>
+                        <label><span>코치 승인</span><select name="memberSameDayAbsenceRequiresCoachApproval"><option value="false">필요 없음</option><option value="true">승인 필요</option></select></label>
+                        <label><span>다시 참석</span><select name="memberSameDayRestoreEnabled"><option value="true">사용</option><option value="false">사용 안 함</option></select></label>
+                        <label><span>복귀 마감</span><span class="schedule-v2-policy-number"><input name="memberSameDayRestoreCutoffMinutes" type="number" min="0" max="1440" step="10" value="0" inputmode="numeric" /><em>분 전</em></span></label>
+                        <label><span>보강</span><select name="memberSameDayAbsenceMakeupEnabled"><option value="false">발생 안 함</option><option value="true">발생</option></select></label>
+                        <label><span>그룹수업</span><select name="memberSameDayAbsenceGroupMode"><option value="individual">신청 회원만 처리</option><option value="blocked">앱 신청 불가</option></select></label>
+                      </div>
+                    </details>
+                    <p id="scheduleV2SameDayAbsencePolicyPreview" class="schedule-v2-member-change-policy-preview" aria-live="polite"></p>
+                  </section>
                   <label><span>코치 수업 추가</span><select name="coachSingleAddMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
                   <label><span>코치 정규시간 변경</span><select name="coachRegularChangeMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
                   <label><span>다른 코치 회원 수정</span><select name="allowCrossCoachMemberEdit"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>

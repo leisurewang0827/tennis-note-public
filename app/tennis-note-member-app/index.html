@@ -1094,8 +1094,36 @@
           <p id="lessonDetailMessage" class="lesson-detail-message"></p>
           <div class="lesson-detail-actions">
             <button id="lessonDetailPrimaryAction" class="primary-button" type="button" hidden></button>
+            <button id="lessonDetailAbsenceAction" class="small-button lesson-detail-absence-action" type="button" hidden></button>
             <button id="lessonDetailJournalAction" class="small-button" type="button" hidden>운동기록 작성</button>
           </div>
+        </div>
+      </article>
+    </section>
+
+    <section id="sameDayAbsenceSheet" class="app-bottom-sheet same-day-absence-sheet" aria-labelledby="sameDayAbsenceTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" data-tn-sheet-has-footer="true" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="당일 불참 신청 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-same-day-absence></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sameDayAbsenceTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <div class="sheet-head" data-tn-sheet-header>
+          <div>
+            <p class="eyebrow">오늘 수업</p>
+            <h3 id="sameDayAbsenceTitle">오늘 수업에 못 가시나요?</h3>
+            <span id="sameDayAbsenceLessonLabel">수업 시간을 확인하고 있습니다.</span>
+          </div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-same-day-absence>닫기</button>
+        </div>
+        <div class="sheet-scroll same-day-absence-sheet-scroll" data-tn-sheet-scroll>
+          <p id="sameDayAbsencePolicySummary" class="same-day-absence-policy-summary">회원권 1회가 차감되며 보강은 발생하지 않습니다.</p>
+          <label id="sameDayAbsenceReasonField" class="same-day-absence-reason-field">
+            <span>불참 사유 <small id="sameDayAbsenceReasonModeLabel">선택</small></span>
+            <textarea id="sameDayAbsenceReason" rows="3" maxlength="200" placeholder="담당 코치에게 전달할 사유를 적어 주세요."></textarea>
+          </label>
+          <p id="sameDayAbsenceMessage" class="lesson-detail-message" role="status" aria-live="polite"></p>
+        </div>
+        <div class="sheet-actions" data-tn-sheet-footer>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-same-day-absence>돌아가기</button>
+          <button id="submitSameDayAbsenceButton" class="primary-button" type="button">불참 신청</button>
         </div>
       </article>
     </section>

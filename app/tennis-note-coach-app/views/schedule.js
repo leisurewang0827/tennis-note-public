@@ -28,6 +28,28 @@ function renderScheduleEditPanel() {
     const finalComment = participant.coachComment || participant.coach_comment || "";
     const finalCurriculumId = participant.nextCurriculumId || participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "";
     const finalCurriculumTitle = participant.nextCurriculumTitle || participant.next_curriculum_title || (finalCurriculumId ? selectedCurriculum(finalCurriculumId)?.title : "");
+    const sameDayAbsence = participant.sameDayAbsence || null;
+    if (sameDayAbsence?.status === "pending_approval") {
+      return `
+        <section class="lesson-participant-completion-card lesson-chart-participant is-same-day-absence" data-lesson-participant-panel="${escapeHtml(key)}" ${index === 0 ? "" : "hidden"}>
+          ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
+          <div class="lesson-chart-result-line"><b>불참 승인 대기</b><span>승인 전 수업·횟수 유지</span></div>
+          <p class="lesson-chart-readonly">${escapeHtml(sameDayAbsence.reason || "사유 없음")}</p>
+          <div class="actions lesson-same-day-absence-actions">
+            <button class="small-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-approve="false">거절</button>
+            <button class="approve-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-approve="true">불참 승인</button>
+          </div>
+        </section>`;
+    }
+    if (sameDayAbsence?.status === "announced") {
+      const absenceDeducted = Math.max(0, Number(sameDayAbsence.deductedSessions) || 0);
+      return `
+        <section class="lesson-participant-completion-card lesson-chart-participant is-final is-same-day-absence" data-lesson-participant-panel="${escapeHtml(key)}" ${index === 0 ? "" : "hidden"}>
+          ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
+          <div class="lesson-chart-result-line"><b>불참 예정</b><span>${absenceDeducted ? `${absenceDeducted}회 차감` : "차감 없음"}</span></div>
+          <p class="lesson-chart-readonly">회원이 앱에서 당일 불참을 알렸습니다. 피드백 작성 대상에서 제외됩니다.</p>
+        </section>`;
+    }
     if (finalized) {
       const outcome = String(participant.outcome || "completed").toLowerCase();
       const outcomeLabel = outcome === "no_show" ? "노쇼" : outcome === "absence" ? "불참" : "완료";

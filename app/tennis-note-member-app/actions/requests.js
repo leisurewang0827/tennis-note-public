@@ -570,9 +570,182 @@ function confirmLatestLesson() {
   renderAll();
 }
 
+function memberSameDayAbsenceOperationKey(prefix, targetId) {
+  const signature = `${prefix}:${targetId}`;
+  if (!state.sameDayAbsenceOperationKey.startsWith(`${signature}:`)) {
+    state.sameDayAbsenceOperationKey = `${signature}:${globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`}`;
+  }
+  return state.sameDayAbsenceOperationKey;
+}
+
+function memberSameDayAbsenceErrorMessage(error) {
+  let code = error?.payload?.message || error?.payload?.code || error?.code || error?.message || "same_day_absence_unknown";
+  if (typeof code === "string" && code.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(code);
+      code = parsed.message || parsed.code || code;
+    } catch {
+      // Keep the safe server code when the payload is not valid JSON.
+    }
+  }
+  const messages = {
+    same_day_absence_disabled: "회원 앱의 당일 불참 신청이 현재 꺼져 있습니다. 담당 코치에게 문의해 주세요.",
+    same_day_absence_today_only: "오늘 수업만 불참 신청할 수 있습니다.",
+    same_day_absence_lesson_started: "이미 시작한 수업은 앱에서 불참 처리할 수 없습니다.",
+    same_day_absence_lesson_not_scheduled: "수업 상태가 변경되었습니다. 최신 시간표를 다시 확인해 주세요.",
+    same_day_absence_group_blocked: "그룹수업 불참 신청은 담당 코치에게 문의해 주세요.",
+    same_day_absence_reason_required: "불참 사유를 2자 이상 입력해 주세요.",
+    same_day_absence_reason_too_long: "불참 사유는 200자 이내로 입력해 주세요.",
+    same_day_absence_policy_changed: "운영 규칙이 변경되었습니다. 안내를 다시 확인해 주세요.",
+    same_day_absence_participant_ticket_required: "수업과 회원권 연결을 확인할 수 없습니다. 담당 코치에게 문의해 주세요.",
+    same_day_absence_ticket_not_found: "연결된 회원권을 찾을 수 없습니다. 담당 코치에게 문의해 주세요.",
+    same_day_absence_ticket_units_unavailable: "회원권 잔여 횟수가 부족해 불참 신청을 완료할 수 없습니다.",
+    same_day_absence_already_processed: "이미 처리된 수업입니다. 최신 상태를 다시 확인해 주세요.",
+    same_day_absence_restore_disabled: "앱에서 다시 참석으로 바꿀 수 없습니다. 담당 코치에게 문의해 주세요.",
+    same_day_absence_restore_cutoff_passed: "다시 참석으로 바꿀 수 있는 시간이 지났습니다.",
+    same_day_absence_restore_branch_closed: "센터 휴무가 적용되어 다시 참석으로 바꿀 수 없습니다.",
+    same_day_absence_restore_coach_unavailable: "담당 코치 일정이 변경되어 다시 참석으로 바꿀 수 없습니다.",
+    same_day_absence_restore_participant_changed: "수업 참여 정보가 변경되었습니다. 담당 코치에게 문의해 주세요.",
+    same_day_absence_restore_lesson_changed: "수업 시간 또는 담당 코치가 변경되었습니다. 최신 시간표를 확인해 주세요.",
+    same_day_absence_restore_ticket_conflict: "회원권 횟수가 달라져 자동 복구할 수 없습니다. 담당 코치에게 문의해 주세요.",
+    same_day_absence_restore_not_available: "현재 상태에서는 다시 참석으로 바꿀 수 없습니다.",
+    operation_key_reused_with_different_payload: "요청 내용이 변경되었습니다. 화면을 닫고 다시 시도해 주세요.",
+  };
+  return messages[String(code)] || "요청을 처리하지 못했습니다. 최신 상태를 확인한 뒤 다시 시도해 주세요.";
+}
+
+function sameDayAbsencePolicySummary(policy = {}) {
+  const deductionText = policy.deductEnabled === false ? "회원권은 차감되지 않습니다" : "회원권 1회가 차감됩니다";
+  const makeupText = policy.makeupEnabled === true ? "보강이 발생합니다" : "보강은 발생하지 않습니다";
+  const approvalText = policy.requiresCoachApproval === true ? "담당 코치 승인 후 처리됩니다" : "신청 즉시 담당 코치에게 전달됩니다";
+  return `${deductionText}. ${makeupText}. ${approvalText}.`;
+}
+
+async function openSameDayAbsenceSheet(lesson) {
+  if (!lesson?.serverLessonId || !window.TennisNoteDataClient?.rpc) {
+    showToast("수업 연결을 다시 확인한 뒤 신청해 주세요.");
+    return;
+  }
+  closeLessonDetailForAction();
+  const previousLessonId = state.selectedSameDayAbsenceLessonId;
+  state.selectedSameDayAbsenceLessonId = lesson.id;
+  state.sameDayAbsencePolicy = null;
+  state.sameDayAbsenceSubmitting = false;
+  if (previousLessonId !== lesson.id) {
+    state.sameDayAbsenceOperationKey = "";
+    if ($("#sameDayAbsenceReason")) $("#sameDayAbsenceReason").value = "";
+  }
+  $("#sameDayAbsenceLessonLabel").textContent = `${String(lesson.time || "").slice(0, 5)} 수업에 불참합니다.`;
+  $("#sameDayAbsencePolicySummary").textContent = "운영 규칙을 확인하고 있습니다.";
+  $("#sameDayAbsenceMessage").textContent = "";
+  const submitButton = $("#submitSameDayAbsenceButton");
+  submitButton.disabled = true;
+  submitButton.textContent = "확인 중";
+  openAppSheet("sameDayAbsenceSheet");
+  try {
+    const policy = await window.TennisNoteDataClient.rpc("tn_member_same_day_absence_policy", {
+      target_lesson_id: lesson.serverLessonId,
+    });
+    if (state.selectedSameDayAbsenceLessonId !== lesson.id) return;
+    state.sameDayAbsencePolicy = policy || {};
+    const reasonMode = String(policy?.reasonMode || "optional");
+    const reasonField = $("#sameDayAbsenceReasonField");
+    const reasonInput = $("#sameDayAbsenceReason");
+    reasonField.hidden = reasonMode === "none";
+    reasonInput.required = reasonMode === "required";
+    $("#sameDayAbsenceReasonModeLabel").textContent = reasonMode === "required" ? "필수" : "선택";
+    $("#sameDayAbsencePolicySummary").textContent = sameDayAbsencePolicySummary(policy);
+    submitButton.disabled = policy?.enabled !== true;
+    submitButton.textContent = policy?.requiresCoachApproval === true ? "불참 승인 요청" : "불참 신청";
+    if (policy?.enabled !== true) $("#sameDayAbsenceMessage").textContent = memberSameDayAbsenceErrorMessage({ message: policy?.blockedReason });
+  } catch (error) {
+    $("#sameDayAbsenceMessage").textContent = memberSameDayAbsenceErrorMessage(error);
+    submitButton.disabled = false;
+    submitButton.textContent = "다시 확인";
+  }
+}
+
+async function submitSameDayAbsence() {
+  const lesson = selectedLessonDetail();
+  const policy = state.sameDayAbsencePolicy;
+  const button = $("#submitSameDayAbsenceButton");
+  if (!lesson?.serverLessonId || !policy?.enabled || state.sameDayAbsenceSubmitting) {
+    if (!policy?.enabled && lesson) await openSameDayAbsenceSheet(lesson);
+    return;
+  }
+  const reason = $("#sameDayAbsenceReason")?.value.trim() || "";
+  if (policy.reasonMode === "required" && reason.length < 2) {
+    $("#sameDayAbsenceMessage").textContent = "불참 사유를 2자 이상 입력해 주세요.";
+    $("#sameDayAbsenceReason")?.focus?.({ preventScroll: true });
+    return;
+  }
+  state.sameDayAbsenceSubmitting = true;
+  button.disabled = true;
+  button.textContent = "신청 중";
+  try {
+    const result = await window.TennisNoteDataClient.rpc("tn_submit_member_same_day_absence", {
+      target_lesson_id: lesson.serverLessonId,
+      target_reason: policy.reasonMode === "none" ? "" : reason,
+      target_policy_revision: Number(policy.revision) || 0,
+      target_operation_key: memberSameDayAbsenceOperationKey("submit", lesson.serverLessonId),
+    });
+    memberScheduleV2WorkspaceCache = null;
+    await syncMemberLessonsFromServer(null, { force: true });
+    closeAppSheet("sameDayAbsenceSheet");
+    renderAll();
+    saveSnapshot();
+    state.sameDayAbsenceOperationKey = "";
+    showToast(result?.status === "pending_approval"
+      ? "담당 코치에게 불참 승인 요청을 보냈습니다. 승인 전에는 기존 수업이 유지됩니다."
+      : "불참 신청이 완료되어 담당 코치에게 전달되었습니다.");
+  } catch (error) {
+    $("#sameDayAbsenceMessage").textContent = memberSameDayAbsenceErrorMessage(error);
+  } finally {
+    state.sameDayAbsenceSubmitting = false;
+    button.disabled = false;
+    button.textContent = policy?.requiresCoachApproval === true ? "불참 승인 요청" : "불참 신청";
+  }
+}
+
+async function restoreSameDayAbsence(lesson) {
+  const request = lesson?.sameDayAbsence;
+  const button = $("#lessonDetailAbsenceAction");
+  if (!request?.id || state.sameDayAbsenceSubmitting) return;
+  state.sameDayAbsenceSubmitting = true;
+  button.disabled = true;
+  button.textContent = "확인 중";
+  try {
+    await window.TennisNoteDataClient.rpc("tn_restore_member_same_day_absence", {
+      target_request_id: request.id,
+      target_operation_key: memberSameDayAbsenceOperationKey("restore", request.id),
+    });
+    memberScheduleV2WorkspaceCache = null;
+    await syncMemberLessonsFromServer(null, { force: true });
+    closeAppSheet("lessonDetailSheet");
+    renderAll();
+    saveSnapshot();
+    state.sameDayAbsenceOperationKey = "";
+    showToast("다시 참석으로 변경했습니다. 원래 수업과 회원권 횟수가 복원되었습니다.");
+  } catch (error) {
+    $("#lessonDetailMessage").textContent = memberSameDayAbsenceErrorMessage(error);
+    button.disabled = false;
+    button.textContent = "다시 참석할게요";
+  } finally {
+    state.sameDayAbsenceSubmitting = false;
+  }
+}
+
 function handleLessonDetailAction(action) {
   const lesson = selectedLessonDetail();
   if (!lesson) return;
+  if (action === "absence") {
+    void openSameDayAbsenceSheet(lesson);
+    return;
+  }
+  if (action === "restore-absence") {
+    void restoreSameDayAbsence(lesson);
+    return;
+  }
   closeLessonDetailForAction();
   if (action === "journal") {
     openJournalComposer(lesson.lessonDate || localDateKey());

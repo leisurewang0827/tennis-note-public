@@ -98,6 +98,16 @@ function bindDelegatedEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const sameDayAbsenceReviewButton = event.target.closest("[data-review-same-day-absence]");
+    if (sameDayAbsenceReviewButton) {
+      void reviewMemberSameDayAbsence(
+        sameDayAbsenceReviewButton.dataset.reviewSameDayAbsence,
+        sameDayAbsenceReviewButton.dataset.approve === "true",
+        sameDayAbsenceReviewButton,
+      );
+      return;
+    }
+
     const closeSettlementButton = event.target.closest("[data-close-coach-settlement]");
     if (closeSettlementButton) {
       closeCoachSettlementModal();
