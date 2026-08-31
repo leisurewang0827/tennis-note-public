@@ -119,6 +119,7 @@ async function completePreparedPayment() {
       flow.completionStatus = oneDayPurchase ? "원데이 예약이 완료되었습니다" : "결제가 접수되었습니다";
     }
   } catch (error) {
+    await applyPaymentPreparationFailure(error);
     if (preparedPayment?.localPaymentId) {
       await reconcileRejectedServerPayment(context.paymentId || requestedPaymentId).catch(() => undefined);
       await syncMemberDiscountCouponsFromServer().catch(() => false);

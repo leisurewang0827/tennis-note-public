@@ -345,6 +345,143 @@ function selectPurchaseRenewalTicket(ticketId = "") {
   selectPurchasePurpose("renew_same");
 }
 
+function restorePurchaseDataAfterFailedRefresh(previous = {}) {
+  state.liveMembershipProducts = previous.products || [];
+  state.livePaymentOptions = previous.paymentOptions || state.livePaymentOptions;
+  state.discountCoupons = previous.discountCoupons || [];
+  state.memberEnrollment = previous.memberEnrollment ?? state.memberEnrollment;
+  state.membershipPricingQuotes = previous.pricingQuotes || {};
+  memberPurchaseDataLoaded = previous.loaded === true;
+}
+
+async function revalidatePurchaseBeforePrepare(productId = "") {
+  const flow = purchaseFlowState();
+  const previousProduct = purchaseFlowProduct();
+  const previousMethodId = normalizeSelectedPaymentMethod();
+  const previousAmount = previousProduct ? purchasePaymentAmount(previousProduct, previousMethodId) : 0;
+  const previousCouponId = String(flow.discountIssueId || "");
+  const previousScheduleKeys = new Set(purchaseSelectedSchedules(previousProduct).map(purchaseScheduleKey));
+  const previousData = {
+    products: state.liveMembershipProducts,
+    paymentOptions: state.livePaymentOptions,
+    discountCoupons: state.discountCoupons,
+    memberEnrollment: state.memberEnrollment,
+    pricingQuotes: state.membershipPricingQuotes,
+    loaded: memberPurchaseDataLoaded,
+  };
+  const dataReady = await ensureMembershipPurchaseData({ force: true });
+  if (!dataReady) {
+    restorePurchaseDataAfterFailedRefresh(previousData);
+    setPurchaseRevalidationNotice("purchase_revalidation_network_failed", "상품과 가격을 다시 확인하지 못했습니다. 선택은 보존했으며 연결 후 다시 시도할 수 있습니다.");
+    return false;
+  }
+
+  const currentProduct = membershipProducts().find((product) => (
+    String(product.id || "") === String(productId || "")
+    && isDirectPurchaseMembershipProduct(product)
+  )) || null;
+  if (!currentProduct) {
+    flow.productId = "";
+    flow.coachRoleId = "";
+    flow.coachName = "";
+    flow.discountIssueId = "";
+    clearPurchaseSchedules();
+    setPurchaseRevalidationNotice("active_product_not_found", "선택한 상품의 판매가 종료되었습니다. 상품만 다시 선택해 주세요.");
+    return false;
+  }
+
+  const currentMethodId = normalizeSelectedPaymentMethod();
+  if (currentMethodId !== previousMethodId) {
+    flow.discountIssueId = "";
+    flow.discountSelectionMode = "auto";
+    setPurchaseRevalidationNotice("payment_method_not_available", "선택한 결제 방법을 현재 사용할 수 없습니다. 결제 방법만 다시 확인해 주세요.");
+    return false;
+  }
+
+  if (previousCouponId && !purchaseDiscountCoupons(currentProduct, currentMethodId).some((coupon) => String(coupon.id || "") === previousCouponId)) {
+    flow.discountIssueId = "";
+    flow.discountSelectionMode = "manual";
+    setPurchaseRevalidationNotice("discount_coupon_not_available", "선택한 쿠폰을 더 이상 사용할 수 없습니다. 쿠폰만 해제했으며 나머지 선택은 유지했습니다.");
+    return false;
+  }
+
+  const currentAmount = purchasePaymentAmount(currentProduct, currentMethodId);
+  if (Number(previousAmount) > 0 && Number(currentAmount) !== Number(previousAmount)) {
+    setPurchaseRevalidationNotice("product_price_mismatch", `상품 가격 또는 할인이 변경되었습니다. 새 결제금액 ${formatWon(currentAmount)}을 확인한 뒤 다시 결제해 주세요.`);
+    return false;
+  }
+
+  const directoryReady = await refreshPurchaseScheduleAvailability({ force: true });
+  if (!directoryReady) {
+    setPurchaseRevalidationNotice("purchase_directory_refresh_failed", "선생님과 시간을 다시 확인하지 못했습니다. 선택은 보존했으며 연결 후 다시 시도할 수 있습니다.");
+    return false;
+  }
+  const sourceTicket = purchaseFlowSourceTicket();
+  const keepsExistingSchedule = flow.purchasePurpose === "renew_same" && sourceTicket && flow.scheduleMode === "keep";
+  const coachStillAvailable = keepsExistingSchedule || purchaseCoachOptions().some((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    return roleId === String(flow.coachRoleId || "") && purchaseProductAllowsCoach(currentProduct, roleId);
+  });
+  if (!coachStillAvailable) {
+    flow.coachRoleId = "";
+    flow.coachName = "";
+    clearPurchaseSchedules();
+    setPurchaseRevalidationNotice("approved_branch_coach_required", "선택한 코치의 예약이 중지되었습니다. 다른 코치의 시간만 다시 선택해 주세요.");
+    return false;
+  }
+
+  if (!keepsExistingSchedule && !purchaseUsesFlexibleCouponSchedule(currentProduct, flow)) {
+    const currentScheduleKeys = new Set(purchaseSelectedSchedules(currentProduct).map(purchaseScheduleKey));
+    const removedSchedule = [...previousScheduleKeys].some((key) => !currentScheduleKeys.has(key));
+    if (removedSchedule || !purchaseSchedulesAvailableNow(currentProduct)) {
+      setPurchaseRevalidationNotice("purchase_slot_occupied", "선택한 시간 중 마감된 시간이 있습니다. 선택한 시간만 다시 골라 주세요.");
+      return false;
+    }
+  }
+  clearPurchasePaymentError();
+  saveSnapshot();
+  renderMembershipPurchaseFlow();
+  return true;
+}
+
+async function applyPaymentPreparationFailure(error) {
+  const code = paymentServerErrorCode(error);
+  const flow = purchaseFlowState();
+  const scheduleCodes = new Set([
+    "purchase_slot_temporarily_held",
+    "purchase_slot_outside_adjacent_anchor",
+    "purchase_slot_outside_anchor_window",
+    "purchase_slot_anchor_required",
+    "purchase_slot_occupied",
+    "purchase_slot_must_be_future",
+    "purchase_slot_blocked",
+    "coach_not_working",
+    "lesson_time_grid_invalid",
+    "purchase_slot_hold_failed",
+  ]);
+  if (["approved_branch_coach_required", "product_coach_sale_disabled", "purchase_coach_required"].includes(code)) {
+    flow.coachRoleId = "";
+    flow.coachName = "";
+    clearPurchaseSchedules();
+  } else if (scheduleCodes.has(code)) {
+    clearPurchaseSchedules();
+    await refreshPurchaseScheduleAvailability({ force: true }).catch(() => false);
+  } else if (["active_product_not_found", "product_sale_feature_disabled", "product_price_not_ready"].includes(code)) {
+    flow.productId = "";
+    flow.coachRoleId = "";
+    flow.coachName = "";
+    flow.discountIssueId = "";
+    clearPurchaseSchedules();
+  } else if (code === "product_price_mismatch") {
+    await ensureMembershipPurchaseData({ force: true }).catch(() => false);
+  } else if (code.startsWith("discount_coupon_")) {
+    flow.discountIssueId = "";
+    flow.discountSelectionMode = "manual";
+  }
+  saveSnapshot();
+  return code;
+}
+
 async function submitMembershipPurchaseFlow() {
   if (membershipPurchasePaymentInFlight) return;
   const product = purchaseFlowProduct();
@@ -353,9 +490,9 @@ async function submitMembershipPurchaseFlow() {
   renderMembershipPurchaseFlow();
   try {
     if (state.dataMode === "live") {
-      const ready = await refreshPurchaseScheduleAvailability();
+      const ready = await revalidatePurchaseBeforePrepare(product.id);
       if (!ready || !purchaseStepCanContinue()) {
-        showToast("최신 시간표에서 가능한 시간을 다시 확인해 주세요.");
+        if (!purchaseFlowState().paymentErrorMessage) showToast("결제 전 최신 선택 내용을 다시 확인해 주세요.");
         return;
       }
     }

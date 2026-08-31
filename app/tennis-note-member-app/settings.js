@@ -60,5 +60,8 @@ const defaultAllowedPaymentMethods = ["tosspay"];
 
 const MEMBER_LIVE_REFRESH_STALE_MS = 20_000;
 
-// 비회원이 들어올 때 담아두는 의도. sessionStorage 라 탭을 닫으면 사라진다.
+// 비회원이 들어올 때 담아두는 의도. 외부 OAuth가 앱을 다시 띄워도
+// 최소 선택만 짧게 복원하고, 가격이나 개인정보는 저장하지 않는다.
 const onboardingIntentStorageKey = "tennis-note-onboarding-intent-v1";
+const onboardingIntentResumeStorageKey = "tennis-note-onboarding-intent-resume-v1";
+const onboardingIntentResumeTtlMs = 30 * 60 * 1000;

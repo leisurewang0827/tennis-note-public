@@ -337,51 +337,70 @@ function memberModeOverrideActive() {
   return requestedMode === "member" || sessionStorage.getItem(appModePreferenceKey) === "member";
 }
 
+function normalizedStoredOnboardingIntent(parsed = null) {
+  if (!parsed || !normalizeOnboardingStart(parsed.start)) return null;
+  const preferredSchedules = Array.isArray(parsed.preferredSchedules)
+    ? parsed.preferredSchedules.map((schedule) => ({
+      lessonDate: String(schedule?.lessonDate || ""),
+      day: String(schedule?.day || ""),
+      startTime: String(schedule?.startTime || "").slice(0, 5),
+      coachRoleId: String(schedule?.coachRoleId || ""),
+      coachName: String(schedule?.coachName || ""),
+      durationMinutes: Math.max(10, Number(schedule?.durationMinutes) || 20),
+    })).filter((schedule) => schedule.lessonDate && schedule.startTime && schedule.coachRoleId)
+    : [];
+  return {
+    start: normalizeOnboardingStart(parsed.start),
+    source: normalizeOnboardingSource(parsed.source) || "direct",
+    choiceKind: ["one-day", "regular"].includes(parsed.choiceKind) ? parsed.choiceKind : "",
+    scheduleScope: ["weekday", "weekend"].includes(parsed.scheduleScope) ? parsed.scheduleScope : "",
+    frequency: Math.max(0, Math.min(3, Number(parsed.frequency) || 0)),
+    familyId: String(parsed.familyId || ""),
+    productId: String(parsed.productId || ""),
+    coachRoleId: String(parsed.coachRoleId || ""),
+    coachName: String(parsed.coachName || ""),
+    preferredSchedules,
+    capturedAt: String(parsed.capturedAt || ""),
+    applied: parsed.applied === true,
+  };
+}
+
 function storedOnboardingIntent() {
   try {
-    const parsed = JSON.parse(sessionStorage.getItem(onboardingIntentStorageKey) || "null");
-    if (!parsed || !normalizeOnboardingStart(parsed.start)) return null;
-    const preferredSchedules = Array.isArray(parsed.preferredSchedules)
-      ? parsed.preferredSchedules.map((schedule) => ({
-        lessonDate: String(schedule?.lessonDate || ""),
-        day: String(schedule?.day || ""),
-        startTime: String(schedule?.startTime || "").slice(0, 5),
-        coachRoleId: String(schedule?.coachRoleId || ""),
-        coachName: String(schedule?.coachName || ""),
-        durationMinutes: Math.max(10, Number(schedule?.durationMinutes) || 20),
-      })).filter((schedule) => schedule.lessonDate && schedule.startTime && schedule.coachRoleId)
-      : [];
-    return {
-      start: normalizeOnboardingStart(parsed.start),
-      source: normalizeOnboardingSource(parsed.source) || "direct",
-      choiceKind: ["one-day", "regular"].includes(parsed.choiceKind) ? parsed.choiceKind : "",
-      scheduleScope: ["weekday", "weekend"].includes(parsed.scheduleScope) ? parsed.scheduleScope : "",
-      frequency: Math.max(0, Math.min(3, Number(parsed.frequency) || 0)),
-      familyId: String(parsed.familyId || ""),
-      productId: String(parsed.productId || ""),
-      coachRoleId: String(parsed.coachRoleId || ""),
-      coachName: String(parsed.coachName || ""),
-      preferredSchedules,
-      capturedAt: String(parsed.capturedAt || ""),
-      applied: parsed.applied === true,
-    };
+    const sessionIntent = normalizedStoredOnboardingIntent(JSON.parse(sessionStorage.getItem(onboardingIntentStorageKey) || "null"));
+    if (sessionIntent) return sessionIntent;
+    const resumeIntent = normalizedStoredOnboardingIntent(JSON.parse(localStorage.getItem(onboardingIntentResumeStorageKey) || "null"));
+    const capturedAt = new Date(resumeIntent?.capturedAt || "").getTime();
+    if (!resumeIntent || resumeIntent.applied || !Number.isFinite(capturedAt) || Date.now() - capturedAt > onboardingIntentResumeTtlMs) {
+      localStorage.removeItem(onboardingIntentResumeStorageKey);
+      return null;
+    }
+    sessionStorage.setItem(onboardingIntentStorageKey, JSON.stringify(resumeIntent));
+    return resumeIntent;
   } catch {
     sessionStorage.removeItem(onboardingIntentStorageKey);
+    localStorage.removeItem(onboardingIntentResumeStorageKey);
     return null;
   }
 }
 
-function saveOnboardingIntent(intent = null) {
+function saveOnboardingIntent(intent = null, options = {}) {
   if (!intent) {
     sessionStorage.removeItem(onboardingIntentStorageKey);
+    localStorage.removeItem(onboardingIntentResumeStorageKey);
     return;
   }
   sessionStorage.setItem(onboardingIntentStorageKey, JSON.stringify(intent));
+  if (options.sessionOnly === true || intent.applied === true) {
+    localStorage.removeItem(onboardingIntentResumeStorageKey);
+    return;
+  }
+  localStorage.setItem(onboardingIntentResumeStorageKey, JSON.stringify(intent));
 }
 
 function markOnboardingIntentApplied(intent = storedOnboardingIntent()) {
   if (!intent) return;
-  saveOnboardingIntent({ ...intent, applied: true });
+  saveOnboardingIntent({ ...intent, applied: true }, { sessionOnly: true });
 }
 
 function captureOnboardingIntent() {

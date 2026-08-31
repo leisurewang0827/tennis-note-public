@@ -145,10 +145,12 @@ function closeMemberEnrollmentModal() {
   if (modal) modal.hidden = true;
 }
 
-function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", requestedPurpose = "") {
+function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", requestedPurpose = "", options = {}) {
   const flow = purchaseFlowState();
   const activeTickets = currentLiveTickets();
-  const returningSource = !activeTickets.length && !["add_coach", "one_day"].includes(requestedPurpose)
+  const returningSource = !activeTickets.length
+    && !["add_coach", "one_day"].includes(requestedPurpose)
+    && !(requestedPurpose === "new_purchase" && options.preserveExplicitPurpose === true)
     ? latestPreviousMembershipTicket()
     : null;
   const requestedSource = (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
