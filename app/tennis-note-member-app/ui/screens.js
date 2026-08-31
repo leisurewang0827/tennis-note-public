@@ -427,7 +427,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.437", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.438", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
