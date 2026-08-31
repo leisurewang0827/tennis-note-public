@@ -138,6 +138,7 @@ body {
   border-radius: 6px;
   background: var(--paper);
   color: var(--ink);
+  font-size: 16px;
 }
 
 body[data-operations-role="coach"] .member-technical-details {
