@@ -1078,7 +1078,7 @@ let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.443");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.444");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -1162,7 +1162,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.443",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.444",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(
