@@ -1144,6 +1144,7 @@ function paymentRefundButtonFor(item, index) {
 function paymentActionFor(item, index) {
   const context = (label) => `aria-label="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}" title="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}"`;
   if (item.approvalPending) return '<button class="small-button" type="button" disabled>승인 처리중</button>';
+  if (item.bankTransferState === "confirming") return '<button class="small-button" type="button" disabled>입금·회원권 처리중</button>';
   if (item.status === "check") return item.providerPaymentId
     ? `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context("결제 확인 후 승인")}>결제 확인·승인</button>${paymentPendingMoreActions(item, index)}`
     : '<button class="small-button" type="button" disabled>서버 결제번호 없음</button>';

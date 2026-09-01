@@ -13,6 +13,10 @@ function bindDelegatedEvents() {
       closeAdminMenu();
       return;
     }
+    if (!$("#paymentCancelModal")?.hidden) {
+      closePaymentCancelModal({ fromHistory: true });
+      return;
+    }
     if (!$("#onsitePaymentModal")?.hidden) {
       closeOnsitePaymentModal();
       return;

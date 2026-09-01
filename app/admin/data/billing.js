@@ -118,7 +118,7 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     });
     let rows = [];
     try {
-      rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,purchase_intent_key,purchase_group_key,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
+      rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,purchase_intent_key,purchase_group_key,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,bank_transfer_state,bank_transfer_error_code,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
     } catch (error) {
       try {
         rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
@@ -308,7 +308,9 @@ async function verifyBillingPaymentItem(item) {
       item.statusLabel = ticketRepairRetry ? "회원권처리실패" : "검증확인필요";
       billingLogs.unshift(`${item.member} ${item.item} ${ticketRepairRetry ? "회원권 재처리" : "결제 승인"} 실패: ${safeCode}`);
       reportAdminPaymentGuard("reconcile_failed", safeCode);
-      showToast(ticketRepairRetry ? paymentTicketFinalizeRecoveryMessage(rawCode) : "결제 승인 확인이 필요합니다.");
+      showToast(ticketRepairRetry
+        ? paymentTicketFinalizeRecoveryMessage(rawCode)
+        : bankTransfer ? bankTransferConfirmationMessage(rawCode) : "결제 승인 확인이 필요합니다.");
     }
   } catch (error) {
     const code = error?.payload?.code || error?.message || "server_error";
@@ -323,7 +325,9 @@ async function verifyBillingPaymentItem(item) {
       item.statusLabel = ticketRepairRetry ? "회원권처리실패" : "검증실패";
       billingLogs.unshift(`${item.member} ${item.item} ${ticketRepairRetry ? "회원권 재처리" : "결제 승인"} 실패: ${safeCode}`);
       reportAdminPaymentGuard("reconcile_failed", safeCode);
-      showToast(ticketRepairRetry ? paymentTicketFinalizeRecoveryMessage(code) : "결제 승인에 실패했습니다.");
+      showToast(ticketRepairRetry
+        ? paymentTicketFinalizeRecoveryMessage(code)
+        : String(item.method || "") === "bank_transfer" ? bankTransferConfirmationMessage(code) : "결제 승인에 실패했습니다.");
     }
   } finally {
     item.approvalPending = false;

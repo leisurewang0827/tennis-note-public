@@ -221,8 +221,23 @@ async function reconcileRefundFromModal() {
   }
 }
 
-function closePaymentCancelModal() {
+function pushPaymentCancelModalHistoryState() {
+  const historyState = typeof history.state === "object" && history.state ? history.state : {};
+  if (historyState.tennisNoteAdminModal === "paymentCancelModal") return;
+  history.pushState({ ...historyState, tennisNoteAdminModal: "paymentCancelModal" }, "", window.location.href);
+}
+
+function clearPaymentCancelModalHistoryState() {
+  const historyState = typeof history.state === "object" && history.state ? { ...history.state } : {};
+  if (historyState.tennisNoteAdminModal !== "paymentCancelModal") return;
+  delete historyState.tennisNoteAdminModal;
+  history.replaceState(historyState, "", window.location.href);
+}
+
+function closePaymentCancelModal(options = {}) {
   if (paymentCancelFlowState.submitting) return;
+  const fromHistory = options?.fromHistory === true;
+  const clearHistory = options?.clearHistory === true;
   $("#paymentCancelModal")?.setAttribute("hidden", "");
   $("#paymentCancelForm")?.reset();
   Object.assign(paymentCancelFlowState, {
@@ -232,6 +247,11 @@ function closePaymentCancelModal() {
     message: "",
     tone: "neutral",
   });
+  if (clearHistory) {
+    clearPaymentCancelModalHistoryState();
+  } else if (!fromHistory && history.state?.tennisNoteAdminModal === "paymentCancelModal") {
+    history.back();
+  }
 }
 
 async function openPaymentCancelModal(item, itemIndex = billings.indexOf(item)) {
@@ -260,6 +280,7 @@ async function openPaymentCancelModal(item, itemIndex = billings.indexOf(item)) 
     if ($("#paymentCancelReason")) $("#paymentCancelReason").value = "결제 전 대기건 정리";
   }
   $("#paymentCancelModal")?.removeAttribute("hidden");
+  pushPaymentCancelModalHistoryState();
   renderPaymentCancelModal();
   $("#paymentCancelReason")?.focus();
 }

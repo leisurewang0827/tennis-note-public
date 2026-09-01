@@ -23,6 +23,7 @@ function billingStatusFromSharedPayment(request = {}) {
 
 function billingStatusFromServerPayment(row = {}) {
   const status = String(row.status || "").toLowerCase();
+  const bankState = String(row.bank_transfer_state || row.bankTransferState || "").toLowerCase();
   const refundStatus = String(row.refund_status || "").toLowerCase();
   const refundMode = String(row.refund_breakdown?.mode || "").toLowerCase();
   if (refundStatus === "processing" && refundMode === "manual_bank_transfer_pending") {
@@ -32,6 +33,11 @@ function billingStatusFromServerPayment(row = {}) {
   if (refundStatus === "reconcile_required" && refundMode === "full_pg_cancel") return { status: "cancel_reconcile", statusLabel: "취소동기화필요" };
   if (refundStatus === "reconcile_required") return { status: "refund_reconcile", statusLabel: "환불동기화필요" };
   if (refundStatus === "failed" && status === "verified") return { status: "paid", statusLabel: "환불재확인" };
+  if (bankState === "confirming") return { status: "unverified", statusLabel: "입금처리중" };
+  if (bankState === "confirmation_failed") return { status: "paid", statusLabel: "회원권처리실패" };
+  if (bankState === "confirmed") return { status: "paid", statusLabel: "입금확인완료" };
+  if (bankState === "expired") return { status: "failed", statusLabel: "입금기한만료" };
+  if (bankState === "cancelled") return { status: "cancelled", statusLabel: "입금신청취소" };
   if (status === "ready") return { status: "server_ready", statusLabel: "결제준비" };
   if (status === "paid_unverified") return { status: "unverified", statusLabel: "서버검증대기" };
   if (status === "verified") return { status: "paid", statusLabel: "검증완료" };
@@ -111,6 +117,8 @@ function billingRowFromServerPayment(row = {}) {
     depositDueAt: row.deposit_due_at || row.depositDueAt || "",
     depositorName: row.depositor_name_snapshot || row.depositorName || "",
     bankAccountSnapshot: row.bank_account_snapshot || row.bankAccountSnapshot || {},
+    bankTransferState: row.bank_transfer_state || row.bankTransferState || "",
+    bankTransferErrorCode: row.bank_transfer_error_code || row.bankTransferErrorCode || "",
     refundedAmount: Number(row.refunded_amount || row.refundedAmount || 0),
     refundStatus: row.refund_status || row.refundStatus || "none",
     refundReason: row.refund_reason || row.refundReason || "",
@@ -259,6 +267,9 @@ function refundErrorText(code = "") {
     provider_amount_mismatch: "PG 결제금액과 서버 결제금액이 달라 환불을 중단했습니다.",
     provider_cancel_failed: "PG 환불 요청에 실패했습니다. 결제 상태를 확인해 주세요.",
     bank_transfer_use_refund_flow: "계좌이체는 PG 취소가 아니라 환불 계산에서 처리해 주세요.",
+    bank_transfer_deposit_late_confirmation_required: "입금기한이 지났습니다. 취소 대신 실제 입금 여부를 확인해 주세요.",
+    payment_already_processed: "이미 입금 확인 또는 취소 처리가 시작된 결제입니다. 최신 상태를 다시 확인해 주세요.",
+    pending_payment_cancel_failed: "입금 대기 취소 상태를 저장하지 못했습니다. 최신 상태를 확인한 뒤 다시 시도해 주세요.",
     linked_one_day_booking_not_found: "결제와 연결된 원데이 예약을 찾지 못했습니다.",
     nothing_to_refund: "계산된 환불액이 0원이라 자동 환불할 수 없습니다.",
   };
@@ -455,12 +466,19 @@ function billingAttemptSummary(entry = {}) {
 
 function paymentApprovalDisplay(item = {}) {
   const method = String(item.method || "").toLowerCase();
+  const depositDueAt = Date.parse(String(item.depositDueAt || ""));
+  const bankDepositExpired = method === "bank_transfer" && Number.isFinite(depositDueAt) && Date.now() > depositDueAt;
   if (item.approvalPending) return { tone: "neutral", label: "승인 처리중", detail: "서버에서 결제와 회원권을 다시 확인하고 있습니다." };
+  if (item.bankTransferState === "confirming") return { tone: "warn", label: "입금 처리중", detail: "서버에서 입금과 회원권을 한 번만 처리하고 있습니다. 잠시 후 새로고침해 주세요." };
+  if (item.bankTransferState === "confirmation_failed") return { tone: "danger", label: "회원권 처리 실패", detail: "입금은 확인됐지만 회원권 처리가 끝나지 않았습니다. 같은 결제에서 다시 처리해 주세요." };
   if (item.status === "paid" && paymentRequiresTicketRepair(item)) {
     return { tone: "danger", label: "회원권 처리 실패", detail: "결제는 확인됐지만 회원권 처리가 끝나지 않았습니다. 다시 처리해 주세요." };
   }
   if (item.status === "paid") {
     return { tone: "good", label: "승인 완료", detail: item.oneDayBookingId ? "원데이 예약 연결됨" : item.ticketId ? "회원권 연결됨" : "이관 결제 보존" };
+  }
+  if (item.status === "server_ready" && bankDepositExpired) {
+    return { tone: "danger", label: "입금기한 지남", detail: "입금 여부를 직접 확인하세요. 확인 전에는 회원권을 만들지 않습니다." };
   }
   if (item.status === "server_ready" && method === "bank_transfer") {
     return { tone: "warn", label: "입금 확인 필요", detail: "실제 입금액을 확인한 뒤 한 번만 승인하세요." };
@@ -496,6 +514,16 @@ function paymentTicketFinalizeRecoveryMessage(value = "") {
   if (code === "admin_session_or_permission_required") return "관리자 로그인이 만료됐거나 권한이 없습니다. 다시 로그인해 주세요.";
   if (code === "payment_reconcile_network_error") return "서버 응답을 확인하지 못했습니다. 같은 결제에서 다시 처리해 주세요.";
   return "회원권 처리를 완료하지 못했습니다. 결제는 유지되며 같은 항목에서 다시 시도할 수 있습니다.";
+}
+
+function bankTransferConfirmationMessage(value = "") {
+  const code = String(value || "").toLowerCase();
+  if (code.includes("bank_transfer_confirmation_in_progress")) return "다른 화면에서 입금과 회원권을 처리 중입니다. 잠시 후 새로고침해 주세요.";
+  if (code.includes("bank_transfer_amount_mismatch")) return "신청 금액과 확인 금액이 다릅니다. 실제 입금액을 다시 확인해 주세요.";
+  if (code.includes("bank_transfer_deposit_late_confirmation_required")) return "입금기한이 지났습니다. 실제 입금을 직접 확인한 뒤 다시 승인해 주세요.";
+  if (code.includes("bank_transfer_source_event_conflict")) return "입금 알림과 결제 신청이 일치하지 않습니다. 관리자 확인 항목에서 비교해 주세요.";
+  if (code.includes("payment_id_terminal") || code.includes("payment_already_processed")) return "이미 취소되었거나 처리된 결제입니다. 최신 상태를 다시 확인해 주세요.";
+  return "입금 승인 상태를 확인하지 못했습니다. 회원권은 추가되지 않았으며 같은 결제에서 다시 확인할 수 있습니다.";
 }
 
 function settlementRuleSummary(rule = {}) {

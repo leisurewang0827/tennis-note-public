@@ -532,7 +532,12 @@ function paymentApprovedMoreActions(item, index) {
 
 function paymentConfirmationMarkup(item = {}) {
   const paidAt = paymentAuditDateTimeLabel(item.verifiedAt || item.paidAt);
+  const depositDueAt = Date.parse(String(item.depositDueAt || ""));
+  const bankDepositExpired = String(item.method || "").toLowerCase() === "bank_transfer" && Number.isFinite(depositDueAt) && Date.now() > depositDueAt;
+  if (item.bankTransferState === "confirming") return badge("warn", "입금·회원권 처리중");
+  if (item.bankTransferState === "confirmation_failed") return badge("danger", "입금 확인 · 회원권 재처리");
   if (item.status === "paid") return `${badge("good", "결제 확인됨")}${paidAt ? `<br><small>${escapeHtml(paidAt)}</small>` : ""}`;
+  if (item.status === "server_ready" && bankDepositExpired) return badge("danger", "입금기한 지남 · 확인 필요");
   if (item.status === "server_ready" && String(item.method || "").toLowerCase() === "bank_transfer") {
     const depositor = item.depositorName ? ` · ${escapeHtml(item.depositorName)}` : "";
     return `${badge("warn", "직접 입금 확인")}${depositor ? `<br><small>${depositor}</small>` : ""}`;

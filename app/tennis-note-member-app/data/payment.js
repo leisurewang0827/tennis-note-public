@@ -226,6 +226,9 @@ async function syncMemberPendingPaymentsFromServer() {
         const methodLabel = paymentMethodDefinitions.find((method) => method.id === methodId)?.label
           || (methodId === "bank_transfer" ? "계좌이체" : "결제");
         const status = String(row.status || "ready").toLowerCase();
+        const bankState = String(row.bankTransferState || "").toLowerCase();
+        const dueAtMillis = Date.parse(String(row.depositDueAt || ""));
+        const expired = methodId === "bank_transfer" && Number.isFinite(dueAtMillis) && Date.now() > dueAtMillis;
         return {
           paymentId: String(row.paymentId || ""),
           serverPaymentId: String(row.localPaymentId || ""),
@@ -234,9 +237,17 @@ async function syncMemberPendingPaymentsFromServer() {
           amountLabel: Number(row.amount || 0) > 0 ? `${Number(row.amount).toLocaleString("ko-KR")}원` : "금액 확인",
           coach: "담당 코치 확인",
           method: methodLabel,
-          status: status === "failed" ? "결제 실패 · 취소 후 다시 시도" : "결제 미완료 · 대기 취소 가능",
+          status: bankState === "confirmation_failed"
+            ? "입금 확인 · 회원권 처리 확인 필요"
+            : bankState === "confirming"
+              ? "입금·회원권 처리 중"
+              : status === "verified"
+                ? "결제 확인 · 회원권 처리 확인 필요"
+                : expired
+                  ? "입금기한 지남 · 입금했다면 관리자 문의"
+                  : status === "failed" ? "결제 실패 · 취소 후 다시 시도" : "입금 확인 대기 · 취소 가능",
           serverSynced: true,
-          cancellable: ["ready", "failed"].includes(status),
+          cancellable: ["ready", "failed"].includes(status) && !["confirming", "confirmed", "confirmation_failed"].includes(bankState),
           createdAt: String(row.createdAt || ""),
           depositDueAt: String(row.depositDueAt || ""),
         };
