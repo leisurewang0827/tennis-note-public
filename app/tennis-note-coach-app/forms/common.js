@@ -9,7 +9,7 @@ function coachStatusLabel(group, value, fallback = "") {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.438",
+    workerUrl: "./service-worker.js?v=1.0.439",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
