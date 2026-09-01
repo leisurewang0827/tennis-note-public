@@ -503,3 +503,41 @@ function lessonChangeReviewErrorMessage(error, action = "처리") {
 function coachPendingSyncLogs() {
   return state.lessonLogs.filter((log) => ["동기화 대기", "동기화 실패"].includes(log.status) && log.serverLessonId);
 }
+
+function lessonGroupFeedbackCommonDraft(lesson = {}) {
+  return state.lessonChartDrafts?.[lesson.id]?.__groupCommon || null;
+}
+
+function lessonGroupFeedbackParticipantUsesException(lesson = {}, participant = {}, index = 0) {
+  const draft = lessonChartDraftFor(lesson, participant, index);
+  if (typeof draft?.usesException === "boolean") return draft.usesException;
+  const serverDraft = String(participant.recordStatus || participant.record_status || "") === "draft" ? participant : null;
+  return Boolean(serverDraft?.coachComment || serverDraft?.coach_comment || serverDraft?.nextCurriculumSkillLabel || serverDraft?.next_curriculum_skill_label);
+}
+
+function lessonParticipantNeedsFeedback(participant = {}) {
+  const recordStatus = String(participant.recordStatus || participant.record_status || "").toLowerCase();
+  const absenceStatus = String(participant.sameDayAbsence?.status || "").toLowerCase();
+  return recordStatus !== "final" && !["announced", "pending_approval"].includes(absenceStatus);
+}
+
+function lessonChartDraftResults(lesson = {}) {
+  return completionParticipantsForLesson(lesson)
+    .map((participant, index) => ({ participant, index }))
+    .filter(({ participant }) => lessonParticipantNeedsFeedback(participant))
+    .map(({ participant, index }) => {
+    const draft = lessonChartDraftFor(lesson, participant, index) || {};
+    return {
+      userId: participant.userId || "",
+      ticketId: participant.ticketId || "",
+      name: participant.name || `회원 ${index + 1}`,
+      ticketName: participant.ticketName || lesson.ticket || "회원권",
+      totalSessions: Number(participant.totalSessions) || Number(lesson.totalSessions) || 0,
+      usedSessions: Number(participant.usedSessions) || 0,
+      remainingSessions: Number(participant.remainingSessions) || Number(lesson.remaining) || 0,
+      coachComment: draft.coachComment || "",
+      nextCurriculumId: draft.nextCurriculumId || "",
+      usesException: Boolean(draft.usesException),
+    };
+  });
+}

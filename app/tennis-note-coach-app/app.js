@@ -42,6 +42,7 @@ const state = {
   ntrpRequests: [],
   lessonLogs: [],
   lessonChartDrafts: {},
+  groupFeedbackReviewLessonId: "",
   members: [],
   branchPermissions: {
     branch: "어린이대공원점",
@@ -414,6 +415,9 @@ function captureLessonChartDraft(id) {
   const lesson = ensureCoachLessonRecord(id);
   if (!lesson) return [];
   const rows = $$('[data-modal-participant-row]').filter((row) => row.dataset.modalParticipantRow === id);
+  if (!rows.length && state.groupFeedbackReviewLessonId === id) return lessonChartDraftResults(lesson);
+  const commonComment = activeViewField(`[data-group-feedback-common-comment="${id}"]`)?.value.trim() || "";
+  const commonCurriculumId = activeViewField(`[data-group-feedback-common-curriculum="${id}"]`)?.value || "";
   const participantResults = rows.map((row) => ({
     userId: row.dataset.userId || "",
     ticketId: row.dataset.ticketId || "",
@@ -422,14 +426,30 @@ function captureLessonChartDraft(id) {
     totalSessions: Number(row.dataset.totalSessions) || 0,
     usedSessions: Number(row.dataset.usedSessions) || 0,
     remainingSessions: Number(row.dataset.remainingSessions) || 0,
-    coachComment: row.querySelector("[data-modal-coach-comment]")?.value.trim() || "",
-    nextCurriculumId: row.querySelector("[data-modal-next-curriculum]")?.value || "",
+    coachComment: row.querySelector("[data-group-feedback-exception]")?.checked
+      ? row.querySelector("[data-modal-coach-comment]")?.value.trim() || ""
+      : commonComment || row.querySelector("[data-modal-coach-comment]")?.value.trim() || "",
+    nextCurriculumId: row.querySelector("[data-group-feedback-exception]")?.checked
+      ? row.querySelector("[data-modal-next-curriculum]")?.value || ""
+      : commonCurriculumId || row.querySelector("[data-modal-next-curriculum]")?.value || "",
+    usesException: Boolean(row.querySelector("[data-group-feedback-exception]")?.checked),
   }));
-  const drafts = {};
+  const drafts = commonComment || commonCurriculumId ? {
+    __groupCommon: {
+      coachComment: commonComment,
+      nextCurriculumId: commonCurriculumId,
+      savedAt: Date.now(),
+    },
+  } : {};
   participantResults.forEach((result, index) => {
-    drafts[lessonChartParticipantKey(result, index)] = {
+    const sourceIndex = completionParticipantsForLesson(lesson).findIndex((participant) => (
+      String(participant.userId || "") === String(result.userId)
+      && String(participant.ticketId || "") === String(result.ticketId)
+    ));
+    drafts[lessonChartParticipantKey(result, sourceIndex >= 0 ? sourceIndex : index)] = {
       coachComment: result.coachComment,
       nextCurriculumId: result.nextCurriculumId,
+      usesException: result.usesException,
       savedAt: Date.now(),
     };
   });

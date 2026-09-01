@@ -16,7 +16,41 @@ function renderScheduleEditPanel() {
   const processingState = coachLessonCardState(lesson);
   const needsStateRefresh = processingState.id === "confirmation_needed";
   const completionParticipants = completionParticipantsForLesson(lesson);
-  const participantTabs = completionParticipants.length > 1
+  const groupFeedbackParticipants = completionParticipants.filter(lessonParticipantNeedsFeedback);
+  const groupFeedback = groupFeedbackParticipants.length > 1 && !finalized;
+  const groupFeedbackReview = groupFeedback && state.groupFeedbackReviewLessonId === lesson.id;
+  const commonDraft = lessonGroupFeedbackCommonDraft(lesson) || {};
+  const commonCurriculumId = commonDraft.nextCurriculumId || "";
+  const commonCurriculumTitle = commonCurriculumId ? selectedCurriculum(commonCurriculumId)?.title || "" : "";
+  const groupCommonFields = groupFeedback && !groupFeedbackReview ? `
+    <section class="lesson-group-feedback-common wide">
+      <div class="lesson-group-feedback-heading">
+        <div><strong>전원 공통 피드백</strong><span>한 번 작성하면 예외가 없는 ${groupFeedbackParticipants.length}명에게 적용됩니다.</span></div>
+        <b>${groupFeedbackParticipants.length}명</b>
+      </div>
+      <label class="lesson-required-field">
+        <span>공통 메모 <small>완료 시 회원에게 공개</small></span>
+        <textarea data-group-feedback-common-comment="${escapeHtml(lesson.id)}" rows="5" placeholder="오늘 수업의 공통 내용과 다음 연습 포인트를 입력하세요" ${canProcess ? "" : "disabled"}>${escapeHtml(commonDraft.coachComment || "")}</textarea>
+        <details class="lesson-ai-draft">
+          <summary>AI</summary>
+          <div class="tn-comment-draft-tools">
+            <input data-group-feedback-common-keywords="${escapeHtml(lesson.id)}" type="text" maxlength="160" placeholder="허리 회전, 타점, 리듬" ${canProcess ? "" : "disabled"} />
+            <button type="button" data-generate-group-common-comment="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>초안 만들기</button>
+          </div>
+        </details>
+        <small class="lesson-comment-count" data-group-feedback-common-count="${escapeHtml(lesson.id)}">${String(commonDraft.coachComment || "").length}/5자</small>
+      </label>
+      <label class="lesson-required-field">
+        <span>공통 다음 목표 <small>필수</small></span>
+        <input data-curriculum-option-search type="search" value="${escapeHtml(commonCurriculumId && commonCurriculumTitle ? `${commonCurriculumId} · ${commonCurriculumTitle}` : "")}" placeholder="동작·증상·목표·코드 검색" aria-label="그룹 공통 다음 목표 검색" ${canProcess ? "" : "disabled"} />
+        <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
+        <select data-group-feedback-common-curriculum="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>
+          <option value="">검색·선택</option>
+          ${curriculumOptions(commonCurriculumId)}
+        </select>
+      </label>
+    </section>` : "";
+  const participantTabs = completionParticipants.length > 1 && !groupFeedback
     ? `<div class="lesson-chart-member-tabs" role="tablist" aria-label="그룹 회원 선택">${completionParticipants.map((participant, index) => `<button type="button" role="tab" class="${index === 0 ? "is-active" : ""}" aria-selected="${index === 0}" data-lesson-participant-tab="${escapeHtml(lessonChartParticipantKey(participant, index))}">${escapeHtml(participant.name || `회원 ${index + 1}`)}</button>`).join("")}</div>`
     : "";
   const participantCompletionFields = completionParticipants.map((participant, index) => {
@@ -80,9 +114,21 @@ function renderScheduleEditPanel() {
           <div class="lesson-chart-history" data-lesson-history-panel="${escapeHtml(key)}" hidden>${participant.userId ? coachMemberChartPanelMarkup(participant.userId, participant.name || "회원", 5) : '<p class="member-chart-state">연결된 회원 기록이 없습니다.</p>'}</div>
         </section>`;
     }
-    return `
-      <section class="lesson-participant-completion-card lesson-chart-participant" data-modal-participant-row="${escapeHtml(lesson.id)}" data-lesson-participant-panel="${escapeHtml(key)}" data-user-id="${escapeHtml(participant.userId)}" data-ticket-id="${escapeHtml(participant.ticketId)}" data-participant-name="${escapeHtml(participant.name || "회원")}" data-ticket-name="${escapeHtml(participant.ticketName || lesson.ticket || "회원권")}" data-total-sessions="${total}" data-used-sessions="${used}" data-remaining-sessions="${remaining}" ${index === 0 ? "" : "hidden"}>
+    const usesException = groupFeedback && lessonGroupFeedbackParticipantUsesException(lesson, participant, index);
+    if (groupFeedbackReview) {
+      const reviewDraft = lessonChartDraftFor(lesson, participant, index) || {};
+      const reviewCurriculum = reviewDraft.nextCurriculumId ? selectedCurriculum(reviewDraft.nextCurriculumId) : null;
+      return `
+        <article class="lesson-participant-completion-card lesson-group-feedback-review-card" data-lesson-participant-panel="${escapeHtml(key)}">
+          <div class="lesson-group-feedback-review-head"><strong>${escapeHtml(participant.name || `회원 ${index + 1}`)}</strong><span>${reviewDraft.usesException ? "회원별 예외" : "공통 적용"}</span></div>
+          <p>${escapeHtml(reviewDraft.coachComment || "입력 없음")}</p>
+          <small>다음 목표 · ${escapeHtml(reviewCurriculum?.title || "선택 안 됨")}</small>
+        </article>`;
+    }
+    const participantMarkup = `
+      <section class="lesson-participant-completion-card lesson-chart-participant ${groupFeedback ? "is-group-exception" : ""}" data-modal-participant-row="${escapeHtml(lesson.id)}" data-lesson-participant-panel="${escapeHtml(key)}" data-user-id="${escapeHtml(participant.userId)}" data-ticket-id="${escapeHtml(participant.ticketId)}" data-participant-name="${escapeHtml(participant.name || "회원")}" data-ticket-name="${escapeHtml(participant.ticketName || lesson.ticket || "회원권")}" data-total-sessions="${total}" data-used-sessions="${used}" data-remaining-sessions="${remaining}" ${!groupFeedback && index > 0 ? "hidden" : ""}>
         ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
+        ${groupFeedback ? `<label class="lesson-group-feedback-exception-toggle"><input type="checkbox" data-group-feedback-exception="${escapeHtml(lesson.id)}" ${usesException ? "checked" : ""} /><span>이 회원만 다르게 작성</span><small>${usesException ? "예외 적용" : "공통 적용"}</small></label><fieldset data-group-feedback-exception-fields ${usesException ? "" : "disabled"}>` : ""}
         <div class="lesson-chart-goal"><span>오늘 목표</span><strong>${escapeHtml(defaults.todayGoal)}</strong></div>
         <button class="small-button lesson-chart-history-toggle" type="button" data-toggle-lesson-history="${escapeHtml(key)}">지난 기록 보기</button>
         <div class="lesson-chart-history" data-lesson-history-panel="${escapeHtml(key)}" hidden>${participant.userId ? coachMemberChartPanelMarkup(participant.userId, participant.name || "회원", 5) : '<p class="member-chart-state">연결된 회원 기록이 없습니다.</p>'}</div>
@@ -107,7 +153,11 @@ function renderScheduleEditPanel() {
             ${curriculumOptions(defaults.nextCurriculumId)}
           </select>
         </label>
+        ${groupFeedback ? "</fieldset>" : ""}
       </section>`;
+    return groupFeedback
+      ? `<details class="lesson-group-feedback-exception" ${usesException ? "open" : ""}><summary><span>${escapeHtml(participant.name || `회원 ${index + 1}`)}</span><small>${usesException ? "회원별 예외 작성 중" : "공통 피드백 적용"}</small></summary>${participantMarkup}</details>`
+      : participantMarkup;
   }).join("");
   const scheduleEditDraft = lesson.scheduleEditDraft || {};
   const selectedEditDay = scheduleEditDraft.day || lesson.day;
@@ -136,6 +186,7 @@ function renderScheduleEditPanel() {
       </div>
       ${canFinalize && !finalized && completionParticipants.length === 1 ? `<p class="lesson-chart-deduction-preview wide">완료 시 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회 → ${Math.max(0, (Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0) - 1)}회</p>` : ""}
       ${lessonGroupDeductionSummary(lesson, completionParticipants) ? `<p class="lesson-chart-deduction-preview wide">${escapeHtml(lessonGroupDeductionSummary(lesson, completionParticipants))}</p>` : ""}
+      ${groupFeedbackReview ? `<section class="lesson-group-feedback-review wide"><strong>전원 저장 전 확인</strong><p>${groupFeedbackParticipants.length}명의 피드백과 회원권 차감을 한 번에 처리합니다. 한 명이라도 서버 검증에 실패하면 전부 저장되지 않습니다.</p></section>` : groupCommonFields}
       ${participantTabs}
       <div class="lesson-participant-completion-list wide">${participantCompletionFields}</div>
       ${lesson.validationMessage || needsStateRefresh ? `<div class="wide"><p class="validation-text">${escapeHtml(lesson.validationMessage || "피드백 기록과 회원권 차감 결과가 일치하지 않습니다.")}</p><button class="small-button" type="button" data-refresh-lesson-completion="${escapeHtml(lesson.id)}">${escapeHtml(processingState.actionLabel || "최신 상태 다시 확인")}</button></div>` : ""}
@@ -194,7 +245,9 @@ function renderScheduleEditPanel() {
         : ""}
       <div class="actions lesson-completion-actions wide">
         ${!finalized && canProcess && canFinalize
-          ? `<button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>저장하고 완료</button>`
+          ? groupFeedback
+            ? `${groupFeedbackReview ? `<button class="small-button" type="button" data-edit-group-feedback-review="${lesson.id}">수정하기</button><button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}">전원 저장하고 완료</button>` : `<button class="approve-button" type="button" data-review-group-feedback="${lesson.id}" disabled>전원 저장 내용 확인</button>`}`
+            : `<button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>저장하고 완료</button>`
           : ""}
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>

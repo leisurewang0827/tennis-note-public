@@ -7,9 +7,22 @@ function updateLessonCompletionUi(id) {
   const lesson = ensureCoachLessonRecord(id);
   const participantRows = $$('[data-modal-participant-row]').filter((row) => row.dataset.modalParticipantRow === id);
   const submit = activeViewField(`[data-complete-lesson-from-modal="${id}"]`);
+  const review = activeViewField(`[data-review-group-feedback="${id}"]`);
+  const commonComment = activeViewField(`[data-group-feedback-common-comment="${id}"]`)?.value.trim() || "";
+  const commonCurriculumId = activeViewField(`[data-group-feedback-common-curriculum="${id}"]`)?.value || "";
+  const commonCount = activeViewField(`[data-group-feedback-common-count="${id}"]`);
+  if (commonCount) {
+    commonCount.textContent = `${commonComment.length}/5자`;
+    commonCount.classList.toggle("is-ready", commonComment.length >= 5);
+  }
   const rowsReady = participantRows.length > 0 && participantRows.every((row) => {
-    const comment = row.querySelector("[data-modal-coach-comment]")?.value.trim() || "";
-    const curriculumId = row.querySelector("[data-modal-next-curriculum]")?.value || "";
+    const usesException = Boolean(row.querySelector("[data-group-feedback-exception]")?.checked);
+    const comment = usesException
+      ? row.querySelector("[data-modal-coach-comment]")?.value.trim() || ""
+      : commonComment || row.querySelector("[data-modal-coach-comment]")?.value.trim() || "";
+    const curriculumId = usesException
+      ? row.querySelector("[data-modal-next-curriculum]")?.value || ""
+      : commonCurriculumId || row.querySelector("[data-modal-next-curriculum]")?.value || "";
     const count = row.querySelector("[data-modal-comment-count]");
     if (count) {
       count.textContent = `${comment.length}/5자`;
@@ -20,6 +33,43 @@ function updateLessonCompletionUi(id) {
   });
   const ready = Boolean(lesson && canProcessLesson(lesson) && lessonOutcomeWindowOpen(lesson) && rowsReady);
   if (submit) submit.disabled = !ready;
+  if (review) review.disabled = !ready;
+}
+
+function reviewGroupLessonFeedback(id) {
+  const lesson = ensureCoachLessonRecord(id);
+  if (!lesson || lesson.completionSubmitting) return false;
+  const participantResults = captureLessonChartDraft(id);
+  const missingParticipant = participantResults.find((result) => !result.coachComment || !result.nextCurriculumId || !result.userId || !result.ticketId);
+  if (!participantResults.length || missingParticipant) {
+    lesson.validationMessage = missingParticipant
+      ? `${missingParticipant.name} 회원의 피드백·다음 목표·회원권 연결을 확인해 주세요.`
+      : "처리할 그룹 회원을 다시 확인해 주세요.";
+    renderLessonEditModal();
+    return false;
+  }
+  const invalidParticipant = participantResults.find((result) => coachCommentValidationMessage({
+    id: `group-feedback-review:${lesson.serverLessonId}:${result.userId}:${result.ticketId}`,
+    member: result.name,
+    coachComment: result.coachComment,
+  }));
+  if (invalidParticipant) {
+    lesson.validationMessage = `${invalidParticipant.name} 회원의 피드백을 구체적으로 작성해 주세요.`;
+    renderLessonEditModal();
+    return false;
+  }
+  lesson.validationMessage = "";
+  state.groupFeedbackReviewLessonId = id;
+  saveSnapshot();
+  renderLessonEditModal();
+  return true;
+}
+
+function editGroupLessonFeedback(id) {
+  if (state.groupFeedbackReviewLessonId !== id) return;
+  state.groupFeedbackReviewLessonId = "";
+  saveSnapshot();
+  renderLessonEditModal();
 }
 
 function saveLessonRecord() {
@@ -291,8 +341,8 @@ async function confirmLog(id, options = {}) {
         && Array.isArray(item.v2Participants)
         && item.v2Participants.length
       ));
-      const scheduleV2Participants = scheduleV2Lesson?.v2Participants?.length
-        ? scheduleV2Lesson.v2Participants
+        const scheduleV2Participants = scheduleV2Lesson?.v2Participants?.length
+          ? scheduleV2Lesson.v2Participants.filter(lessonParticipantNeedsFeedback)
         : participantResultsHaveExactPairs
           ? participantResults
           : null;

@@ -35,6 +35,21 @@ function bindDelegatedEvents() {
     const modalCurriculum = event.target.closest("[data-modal-next-curriculum]");
     if (modalCurriculum) updateLessonCompletionUi(modalCurriculum.dataset.modalNextCurriculum);
 
+    const groupCommonCurriculum = event.target.closest("[data-group-feedback-common-curriculum]");
+    if (groupCommonCurriculum) updateLessonCompletionUi(groupCommonCurriculum.dataset.groupFeedbackCommonCurriculum);
+
+    const groupException = event.target.closest("[data-group-feedback-exception]");
+    if (groupException) {
+      const row = groupException.closest("[data-modal-participant-row]");
+      const fields = row?.querySelector("[data-group-feedback-exception-fields]");
+      if (fields) fields.disabled = !groupException.checked;
+      const status = groupException.closest(".lesson-group-feedback-exception")?.querySelector("summary small");
+      if (status) status.textContent = groupException.checked ? "회원별 예외 작성 중" : "공통 피드백 적용";
+      const toggleStatus = groupException.closest("label")?.querySelector("small");
+      if (toggleStatus) toggleStatus.textContent = groupException.checked ? "예외 적용" : "공통 적용";
+      updateLessonCompletionUi(groupException.dataset.groupFeedbackException);
+    }
+
     if (event.target.closest("#recordLessonSelect")) {
       state.writingLessonId = event.target.value;
     }
@@ -46,6 +61,9 @@ function bindDelegatedEvents() {
   document.addEventListener("input", (event) => {
     const modalComment = event.target.closest("[data-modal-coach-comment]");
     if (modalComment) updateLessonCompletionUi(modalComment.dataset.modalCoachComment);
+
+    const groupCommonComment = event.target.closest("[data-group-feedback-common-comment]");
+    if (groupCommonComment) updateLessonCompletionUi(groupCommonComment.dataset.groupFeedbackCommonComment);
 
     const commentInput = event.target.closest("[data-coach-comment]");
     if (commentInput) updateLogDraft(commentInput.dataset.coachComment);
@@ -180,6 +198,17 @@ function bindDelegatedEvents() {
         participantRow?.querySelector("[data-modal-comment-keywords]"),
         participantRow?.querySelector("[data-modal-coach-comment]"),
       );
+      return;
+    }
+
+    const groupCommonDraftButton = event.target.closest("[data-generate-group-common-comment]");
+    if (groupCommonDraftButton) {
+      const id = groupCommonDraftButton.dataset.generateGroupCommonComment;
+      applyCoachCommentDraft(
+        activeViewField(`[data-group-feedback-common-keywords="${id}"]`),
+        activeViewField(`[data-group-feedback-common-comment="${id}"]`),
+      );
+      updateLessonCompletionUi(id);
       return;
     }
 
@@ -489,6 +518,18 @@ function bindDelegatedEvents() {
       return;
     }
 
+    const reviewGroupFeedbackButton = event.target.closest("[data-review-group-feedback]");
+    if (reviewGroupFeedbackButton) {
+      reviewGroupLessonFeedback(reviewGroupFeedbackButton.dataset.reviewGroupFeedback);
+      return;
+    }
+
+    const editGroupFeedbackButton = event.target.closest("[data-edit-group-feedback-review]");
+    if (editGroupFeedbackButton) {
+      editGroupLessonFeedback(editGroupFeedbackButton.dataset.editGroupFeedbackReview);
+      return;
+    }
+
     if (event.target.closest("[data-cancel-schedule-edit]")) {
       closeLessonEditor();
       return;
@@ -557,7 +598,8 @@ function bindDelegatedEvents() {
     }
     if (event.key === "Escape" && activeCoachModalId) {
       event.preventDefault();
-      closeCoachModal(activeCoachModalId);
+      if (activeCoachModalId === "lessonEditModal") closeLessonEditor();
+      else closeCoachModal(activeCoachModalId);
       return;
     }
     if (event.key === "Escape" && !$("#noticeDialog")?.hidden) {
@@ -587,7 +629,8 @@ function bindDelegatedEvents() {
   });
   window.addEventListener("popstate", (event) => {
     if (activeCoachModalId) {
-      closeCoachModal(activeCoachModalId, true);
+      if (activeCoachModalId === "lessonEditModal") closeLessonEditor(true);
+      else closeCoachModal(activeCoachModalId, true);
       return;
     }
     const targetView = event.state?.tennisNoteView;

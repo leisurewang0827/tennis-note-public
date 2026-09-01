@@ -1398,6 +1398,145 @@ a {
   border-color: color-mix(in srgb, var(--green) 48%, var(--line));
 }
 
+.lesson-group-feedback-common,
+.lesson-group-feedback-review {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--green) 38%, var(--line));
+  border-radius: 10px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--soft-green) 54%, var(--paper));
+}
+
+.lesson-group-feedback-heading,
+.lesson-group-feedback-review-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.lesson-group-feedback-heading > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.lesson-group-feedback-heading strong,
+.lesson-group-feedback-review > strong,
+.lesson-group-feedback-review-head strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.lesson-group-feedback-heading span,
+.lesson-group-feedback-review p,
+.lesson-group-feedback-review-card p,
+.lesson-group-feedback-review-card small {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.lesson-group-feedback-heading b,
+.lesson-group-feedback-review-head span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--green);
+  background: var(--soft-green);
+  font-size: 12px;
+}
+
+.lesson-action-panel .lesson-group-feedback-common :is(input, select, textarea),
+.lesson-action-panel .lesson-group-feedback-exception :is(input:not([type="checkbox"]), select, textarea) {
+  font-size: 16px;
+}
+
+.lesson-group-feedback-exception {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  overflow: clip;
+}
+
+.lesson-group-feedback-exception > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  color: var(--ink);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lesson-group-feedback-exception > summary span,
+.lesson-group-feedback-exception > summary small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lesson-group-feedback-exception > summary small {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.lesson-group-feedback-exception[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.lesson-participant-completion-card.is-group-exception {
+  border: 0;
+  border-radius: 0;
+}
+
+.lesson-participant-completion-card.is-group-exception fieldset {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.lesson-participant-completion-card.is-group-exception fieldset:disabled {
+  display: none;
+}
+
+.lesson-group-feedback-exception-toggle {
+  display: grid;
+  min-height: 44px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  color: var(--ink);
+  font-weight: 850;
+}
+
+.lesson-group-feedback-exception-toggle input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--green);
+}
+
+.lesson-group-feedback-exception-toggle small {
+  color: var(--green);
+  font-size: 11px;
+}
+
+.lesson-group-feedback-review-card {
+  background: color-mix(in srgb, var(--soft-green) 24%, var(--paper));
+}
+
 .lesson-chart-member-tabs {
   display: flex;
   grid-column: 1 / -1;

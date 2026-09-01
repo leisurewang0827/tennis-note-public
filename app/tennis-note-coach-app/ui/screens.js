@@ -182,6 +182,7 @@ function openLessonEditor(id) {
   state.editingMakeupId = null;
   state.writingLessonId = null;
   state.viewingCurriculumId = null;
+  state.groupFeedbackReviewLessonId = "";
   renderLessonEditModal();
   openCoachModal("lessonEditModal");
   (completionParticipantsForLesson(lesson) || []).forEach((participant) => {
@@ -189,15 +190,19 @@ function openLessonEditor(id) {
   });
 }
 
-function closeLessonEditor() {
+function closeLessonEditor(fromHistory = false) {
   const lesson = state.editingLessonId ? ensureCoachLessonRecord(state.editingLessonId) : null;
-  if (lesson) delete lesson.scheduleEditDraft;
+  if (lesson) {
+    if (!lessonChartFinalized(lesson) && !lesson.completionSubmitting) captureLessonChartDraft(lesson.id);
+    delete lesson.scheduleEditDraft;
+  }
+  state.groupFeedbackReviewLessonId = "";
   state.editingLessonId = null;
   state.coachQuickAdd = null;
   state.editingMakeupId = null;
   state.writingLessonId = null;
   state.viewingCurriculumId = null;
-  closeCoachModal("lessonEditModal");
+  closeCoachModal("lessonEditModal", fromHistory);
 }
 
 function openCoachQuickAdd(button) {
@@ -252,6 +257,11 @@ function openLessonRecordWriter(id) {
 async function completeLessonFromModal(id) {
   const lesson = ensureCoachLessonRecord(id);
   if (!lesson || !canProcessLesson(lesson) || lesson.completionSubmitting) return;
+  const feedbackParticipantCount = completionParticipantsForLesson(lesson).filter(lessonParticipantNeedsFeedback).length;
+  if (feedbackParticipantCount > 1 && state.groupFeedbackReviewLessonId !== id) {
+    reviewGroupLessonFeedback(id);
+    return;
+  }
   if (!lessonOutcomeWindowOpen(lesson)) {
     lesson.validationMessage = lessonOutcomeGuardMessage();
     renderLessonEditModal();
@@ -331,6 +341,7 @@ async function completeLessonFromModal(id) {
     return;
   }
   delete state.lessonChartDrafts?.[id];
+  state.groupFeedbackReviewLessonId = "";
   saveSnapshot();
   window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
   state.todayTaskTab = "lessons";
