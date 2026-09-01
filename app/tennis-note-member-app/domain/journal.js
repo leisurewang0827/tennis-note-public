@@ -172,12 +172,140 @@ function selectedJournalEntries() {
   return journalEntries().filter((entry) => entry.dateValue === selectedDate && journalMatchesSearch(entry, query));
 }
 
+function normalizeJournalNavigationDate(dateValue = "") {
+  const value = String(dateValue || "").trim();
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return localDateKey(date) === value ? value : "";
+}
+
+const journalMonthPickerMinYear = 2000;
+const journalMonthPickerMaxYear = 2100;
+
+function normalizeJournalMonthValue(monthValue = "") {
+  const value = String(monthValue || "").trim();
+  const match = value.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return "";
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (year < journalMonthPickerMinYear || year > journalMonthPickerMaxYear || month < 1 || month > 12) return "";
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+}
+
+function requestedJournalNavigationDate() {
+  const params = new URLSearchParams(window.location.search || "");
+  return normalizeJournalNavigationDate(params.get("journalDate") || params.get("journal_date") || "");
+}
+
+function applyJournalNavigationDate(dateValue, options = {}) {
+  const normalizedDate = normalizeJournalNavigationDate(dateValue);
+  if (!normalizedDate) return false;
+  const monthValue = normalizedDate.slice(0, 7);
+  const changed = state.selectedJournalDate !== normalizedDate || state.activeJournalMonth !== monthValue;
+  state.selectedJournalDate = normalizedDate;
+  state.activeJournalMonth = monthValue;
+  if (options.render !== false) renderJournalCalendar();
+  if (changed && options.persist !== false) saveSnapshot();
+  return changed;
+}
+
+function initializeJournalNavigationForLaunch() {
+  const requestedDate = requestedJournalNavigationDate();
+  const targetDate = requestedDate || localDateKey();
+  state.journalCalendarViewMode = "month";
+  applyJournalNavigationDate(targetDate, { render: false, persist: false });
+  return { date: targetDate, mode: state.journalCalendarViewMode, source: requestedDate ? "deep-link" : "cold-launch" };
+}
+
 function selectJournalDate(dateValue) {
-  if (!dateValue) return;
-  state.selectedJournalDate = dateValue;
-  state.activeJournalMonth = dateValue.slice(0, 7);
-  renderJournalCalendar();
-  saveSnapshot();
+  applyJournalNavigationDate(dateValue);
+}
+
+function returnJournalToToday() {
+  const todayValue = localDateKey();
+  const changed = applyJournalNavigationDate(todayValue);
+  if (!changed) renderJournalCalendar();
+  return changed;
+}
+
+function applyJournalMonthNavigation(monthValue, options = {}) {
+  const normalizedMonth = normalizeJournalMonthValue(monthValue);
+  if (!normalizedMonth) return false;
+  const selectedDate = normalizeJournalNavigationDate(state.selectedJournalDate) || localDateKey();
+  const nextDate = selectedDate.startsWith(normalizedMonth) ? selectedDate : `${normalizedMonth}-01`;
+  const changed = state.activeJournalMonth !== normalizedMonth || state.selectedJournalDate !== nextDate;
+  state.activeJournalMonth = normalizedMonth;
+  state.selectedJournalDate = nextDate;
+  if (options.render !== false) renderJournalCalendar();
+  if (changed && options.persist !== false) saveSnapshot();
+  return changed;
+}
+
+function setJournalMonthPickerStatus(message = "", tone = "") {
+  const status = $("#journalMonthPickerStatus");
+  if (!status) return;
+  status.textContent = String(message || "");
+  if (tone) status.dataset.tone = tone;
+  else delete status.dataset.tone;
+}
+
+function prepareJournalMonthPicker(monthValue = "") {
+  const normalizedMonth = normalizeJournalMonthValue(monthValue)
+    || normalizeJournalMonthValue(state.activeJournalMonth)
+    || localDateKey().slice(0, 7);
+  const [yearValue, monthNumber] = normalizedMonth.split("-");
+  const yearSelect = $("#journalMonthPickerYear");
+  const monthSelect = $("#journalMonthPickerMonth");
+  if (!yearSelect || !monthSelect) return normalizedMonth;
+  if (!yearSelect.options.length) {
+    yearSelect.innerHTML = Array.from(
+      { length: journalMonthPickerMaxYear - journalMonthPickerMinYear + 1 },
+      (_, index) => {
+        const year = journalMonthPickerMinYear + index;
+        return `<option value="${year}">${year}년</option>`;
+      },
+    ).join("");
+  }
+  if (!monthSelect.options.length) {
+    monthSelect.innerHTML = Array.from({ length: 12 }, (_, index) => {
+      const month = String(index + 1).padStart(2, "0");
+      return `<option value="${month}">${index + 1}월</option>`;
+    }).join("");
+  }
+  yearSelect.value = yearValue;
+  monthSelect.value = monthNumber;
+  setJournalMonthPickerStatus();
+  return normalizedMonth;
+}
+
+function openJournalMonthPicker() {
+  const sheet = $("#journalMonthPickerSheet");
+  if (!sheet || (!sheet.hidden && activeAppSheetId === sheet.id)) return false;
+  prepareJournalMonthPicker();
+  $("#journalMonthPickerButton")?.setAttribute("aria-expanded", "true");
+  openAppSheet(sheet.id, { initialFocus: "#journalMonthPickerYear" });
+  return true;
+}
+
+function closeJournalMonthPicker(fromHistory = false) {
+  $("#journalMonthPickerButton")?.setAttribute("aria-expanded", "false");
+  return closeAppSheet("journalMonthPickerSheet", fromHistory);
+}
+
+function applyJournalMonthPicker() {
+  const yearValue = $("#journalMonthPickerYear")?.value || "";
+  const monthValue = $("#journalMonthPickerMonth")?.value || "";
+  const normalizedMonth = normalizeJournalMonthValue(`${yearValue}-${monthValue}`);
+  if (!normalizedMonth) {
+    setJournalMonthPickerStatus("선택한 연·월을 다시 확인해 주세요.", "error");
+    $("#journalMonthPickerYear")?.focus({ preventScroll: true });
+    return false;
+  }
+  const changed = applyJournalMonthNavigation(normalizedMonth);
+  closeJournalMonthPicker();
+  return changed;
 }
 
 function changeJournalMonth(delta) {
@@ -186,10 +314,59 @@ function changeJournalMonth(delta) {
   const [yearText, monthText] = monthValue.split("-");
   const nextMonth = new Date(Number(yearText), Number(monthText) - 1 + delta, 1);
   const nextMonthValue = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}`;
-  state.activeJournalMonth = nextMonthValue;
-  if (!selectedDate.startsWith(nextMonthValue)) state.selectedJournalDate = `${nextMonthValue}-01`;
+  applyJournalMonthNavigation(nextMonthValue);
+}
+
+const journalCalendarWeekdays = ["월", "화", "수", "목", "금", "토", "일"];
+
+function normalizeJournalCalendarViewMode(mode = "") {
+  return String(mode || "").toLowerCase() === "week" ? "week" : "month";
+}
+
+function journalWeekDateValues(dateValue = "") {
+  const normalizedDate = normalizeJournalNavigationDate(dateValue) || localDateKey();
+  const anchor = new Date(`${normalizedDate}T12:00:00`);
+  const mondayOffset = (anchor.getDay() + 6) % 7;
+  anchor.setDate(anchor.getDate() - mondayOffset);
+  return Array.from({ length: 7 }, (_, index) => {
+    const value = new Date(anchor);
+    value.setDate(anchor.getDate() + index);
+    return localDateKey(value);
+  });
+}
+
+function journalWeekRangeLabel(dateValues = []) {
+  const first = normalizeJournalNavigationDate(dateValues[0]);
+  const last = normalizeJournalNavigationDate(dateValues.at(-1));
+  if (!first || !last) return "";
+  const [firstYear, firstMonth, firstDay] = first.split("-").map(Number);
+  const [lastYear, lastMonth, lastDay] = last.split("-").map(Number);
+  if (firstYear === lastYear && firstMonth === lastMonth) return `${firstYear}년 ${firstMonth}월 ${firstDay}일~${lastDay}일`;
+  if (firstYear === lastYear) return `${firstYear}년 ${firstMonth}월 ${firstDay}일~${lastMonth}월 ${lastDay}일`;
+  return `${firstYear}년 ${firstMonth}월 ${firstDay}일~${lastYear}년 ${lastMonth}월 ${lastDay}일`;
+}
+
+function setJournalCalendarViewMode(mode = "month") {
+  const normalizedMode = normalizeJournalCalendarViewMode(mode);
+  const changed = normalizeJournalCalendarViewMode(state.journalCalendarViewMode) !== normalizedMode;
+  state.journalCalendarViewMode = normalizedMode;
   renderJournalCalendar();
-  saveSnapshot();
+  return changed;
+}
+
+function changeJournalWeek(delta) {
+  const selectedDate = normalizeJournalNavigationDate(state.selectedJournalDate) || localDateKey();
+  const nextDate = new Date(`${selectedDate}T12:00:00`);
+  nextDate.setDate(nextDate.getDate() + (Number(delta) || 0) * 7);
+  applyJournalNavigationDate(localDateKey(nextDate));
+}
+
+function changeJournalCalendarPeriod(delta) {
+  if (normalizeJournalCalendarViewMode(state.journalCalendarViewMode) === "week") {
+    changeJournalWeek(delta);
+    return;
+  }
+  changeJournalMonth(delta);
 }
 
 function exportNtrpRequest(survey) {

@@ -139,13 +139,16 @@ function renderMemberRecordPanel() {
   target.hidden = false;
   const logRows = pendingLogs
     .map(
-      (log) => `
+      (log) => {
+        const processingState = coachRecordProcessingState(log);
+        return `
         <article class="member-record-row ${state.focusedLogId === log.id ? "is-focused" : ""}">
           <strong>${escapeHtml(log.member)}</strong>
           ${coachRecordLessonMetaMarkup(log)}
-          <small>${escapeHtml(coachStatusLabel("coachRecord", log.status, log.status))}</small>
-          <button class="small-button" type="button" data-focus-record="${log.id}">처리</button>
-        </article>`,
+          <small>${escapeHtml(processingState.label)}</small>
+          <button class="small-button" type="button" data-focus-record="${log.id}">${escapeHtml(processingState.actionLabel)}</button>
+        </article>`;
+      },
     )
     .join("");
   const feedbackRows = pendingFeedback

@@ -135,8 +135,11 @@ function lessonCssStatusClass(lesson = {}) {
 }
 
 function getLessonStateClass(lesson) {
-  if (lessonStatusValue(lesson) === "completed") return Number(lesson.deductedSessions) > 0 ? "status-completed status-deducted" : "status-completed status-not-deducted";
-  if (lessonStatusValue(lesson) === "no_show") return Number(lesson.deductedSessions) > 0 ? "status-no-show status-deducted" : "status-no-show status-not-deducted";
+  const processingState = adminLessonProcessingState(lesson);
+  if (processingState.id === "confirmation_needed") return "status-completed status-not-deducted status-needs-review";
+  if (processingState.id === "processing_required") return "status-not-deducted status-needs-processing";
+  if (processingState.id === "completed") return Number(lesson.deductedSessions) > 0 ? "status-completed status-deducted" : "status-completed status-not-deducted";
+  if (processingState.id === "no_show") return Number(lesson.deductedSessions) > 0 ? "status-no-show status-deducted" : "status-no-show status-not-deducted";
   if (isReleasedRegularMakeupSlot(lesson)) return "status-released-makeup";
   if (isMakeupLesson(lesson) && isLessonPendingChange(lesson)) return "status-makeup-pending";
   if (isMakeupLesson(lesson)) return "status-makeup";
@@ -1907,6 +1910,7 @@ function memberRemarkLabel(member) {
 }
 
 function lessonActionAttrs(lesson) {
+  const segmentAttrs = adminDisplaySegmentAttrs(lesson);
   if (lesson?.oneDayBooking) {
     return `data-edit-one-day-booking-id="${lesson.serverOneDayBookingId || lesson.id}"`;
   }
@@ -1922,9 +1926,9 @@ function lessonActionAttrs(lesson) {
   }
   if (state.scheduleBulkMode && scheduleBulkEligible(lesson)) {
     const selected = selectedScheduleLessonIdSet().has(String(lesson.serverLessonId));
-    return `data-select-schedule-lesson="${lesson.serverLessonId}" aria-pressed="${selected}"`;
+    return `data-select-schedule-lesson="${lesson.serverLessonId}" aria-pressed="${selected}"${segmentAttrs}`;
   }
-  return `data-edit-lesson-id="${lesson.id}"`;
+  return `data-edit-lesson-id="${lesson.id}"${segmentAttrs}`;
 }
 
 function scheduleBulkPreviewText(selected = []) {

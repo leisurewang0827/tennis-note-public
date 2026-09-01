@@ -8,7 +8,7 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
   const profileId = profile?.id || state.member?.profileId || "";
   if (!client?.selectRows || !client.downloadObject || !profileId) return false;
   try {
-    const [journalRows, mediaRows, recordRows, curriculumRows, lessonChartRows] = await Promise.all([
+    const [journalRows, mediaRows, recordRows, participantRecordRows, curriculumRows, lessonChartRows] = await Promise.all([
       client.selectRows("tn_journal_entries", {
         select: "id,user_id,lesson_id,entry_date,entry_type,body,created_at,updated_at",
         filters: { user_id: profileId },
@@ -20,7 +20,12 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
         limit: 200,
       }),
       client.selectRows("tn_lesson_records", {
-        select: "lesson_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at",
+        select: "lesson_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at,ticket_session_snapshot,ticket_session_snapshot_at",
+        limit: 100,
+      }).catch(() => []),
+      client.selectRows("tn_lesson_participant_records_v2", {
+        select: "lesson_id,user_id,ticket_id,record_status,outcome,deducted_sessions,coach_comment,next_curriculum_ref_id,finalized_at,updated_at,ticket_session_snapshot,ticket_session_snapshot_at",
+        filters: { user_id: profileId },
         limit: 100,
       }).catch(() => []),
       client.selectRows("tn_curriculum_refs", {
@@ -36,9 +41,13 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
         : Promise.resolve([]),
     ]);
     const ownLessonIds = new Set(state.liveLessons.filter((lesson) => lesson.isOwnLesson).map((lesson) => lesson.id));
-    const recordsByLesson = new Map((recordRows || [])
+    const legacyRecordsByLesson = new Map((recordRows || [])
       .filter((record) => ownLessonIds.has(record.lesson_id))
       .map((record) => [record.lesson_id, record]));
+    const participantRecordsByLesson = new Map((participantRecordRows || [])
+      .filter((record) => ownLessonIds.has(record.lesson_id))
+      .map((record) => [record.lesson_id, record]));
+    const recordForLesson = (lessonId) => participantRecordsByLesson.get(lessonId) || legacyRecordsByLesson.get(lessonId);
     const curriculaById = new Map((curriculumRows || []).map((curriculum) => [curriculum.id, curriculum]));
 
     for (const row of (journalRows || []).sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))) {
@@ -50,7 +59,7 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
       const mediaItems = await Promise.all(rowsForJournal.map((media, index) => (
         downloadServerMediaItem(client, media, payload.mediaNames?.[index] || `첨부 ${index + 1}`)
       )));
-      const record = recordsByLesson.get(row.lesson_id);
+      const record = recordForLesson(row.lesson_id);
       const recordCurriculum = curriculaById.get(record?.next_curriculum_ref_id);
       const nextCurriculumId = recordCurriculum?.skill_label || payload.nextCurriculumId || payload.curriculumId;
       const curriculum = curriculumById(nextCurriculumId, curriculumSteps[0]);
@@ -72,6 +81,9 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
         coachComment: record?.coach_comment || "",
         memberVisibleSummary: record ? `다음 수업 등록 완료: ${curriculum.id} · ${curriculum.title}` : "",
         ticketDeducted: Boolean(record && Number(record.deducted_sessions) > 0),
+        sessionSnapshot: record?.ticket_session_snapshot || null,
+        sessionSnapshotAt: record?.ticket_session_snapshot_at || "",
+        sessionRoundLabel: memberTicketSessionSnapshot(record || {}).label,
         submittedAt: payload.submittedAt || row.created_at,
       };
       const existingIndex = state.lessonLogs.findIndex((item) => (
@@ -106,7 +118,8 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
           serverLessonId: record.lessonId,
           lessonId: `server-${record.lessonId}`,
           lessonLabel: `${record.startTime || ""} · ${record.coachName || "담당 코치"} · ${lessonType}`.replace(/^ · /, ""),
-          round: Math.max(1, (Array.isArray(lessonChartRows) ? lessonChartRows.length : 1) - index),
+          round: memberTicketSessionSnapshot(participantRecordsByLesson.get(record.lessonId) || {}).snapshot?.usedAfter
+            || Math.max(1, (Array.isArray(lessonChartRows) ? lessonChartRows.length : 1) - index),
           journalDate: record.lessonDate || String(record.finalizedAt || record.updatedAt || "").slice(0, 10),
           content: [record.technique, record.strength, record.improvement].filter(Boolean).join(" · ") || outcomeLabel,
           selfMemo: "회원 운동일지 미작성",
@@ -123,6 +136,9 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
               : "",
           ticketDeducted: Number(record.deductedSessions) > 0,
           deductedSessions: Number(record.deductedSessions) || 0,
+          sessionSnapshot: participantRecordsByLesson.get(record.lessonId)?.ticket_session_snapshot || null,
+          sessionSnapshotAt: participantRecordsByLesson.get(record.lessonId)?.ticket_session_snapshot_at || "",
+          sessionRoundLabel: memberTicketSessionSnapshot(participantRecordsByLesson.get(record.lessonId) || {}).label,
           participantOutcome: record.outcome || "completed",
           feedbackFinalizedAt: record.finalizedAt || "",
           feedbackUpdatedAt: record.updatedAt || record.finalizedAt || "",
@@ -135,7 +151,11 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
     const existingRecordLessonIds = new Set(state.lessonLogs
       .map((item) => item.serverLessonId)
       .filter(Boolean));
-    const recordOnlyLogs = (recordRows || [])
+    const recordOnlySource = [...new Map([
+      ...(recordRows || []).map((record) => [String(record.lesson_id || ""), record]),
+      ...(participantRecordRows || []).map((record) => [String(record.lesson_id || ""), record]),
+    ]).values()];
+    const recordOnlyLogs = recordOnlySource
       .filter((record) => ownLessonIds.has(record.lesson_id))
       .sort((left, right) => String(left.completed_at || "").localeCompare(String(right.completed_at || "")))
       .map((record, index) => ({ record, round: index + 1 }))
@@ -152,6 +172,9 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
           lessonId: lesson.id || `server-${record.lesson_id}`,
           lessonLabel: `${lesson.day || lesson.lessonDate || "수업"} ${lesson.time || ""} · ${lesson.type || "레슨"}`.trim(),
           round,
+          sessionSnapshot: record.ticket_session_snapshot || null,
+          sessionSnapshotAt: record.ticket_session_snapshot_at || "",
+          sessionRoundLabel: memberTicketSessionSnapshot(record).label,
           journalDate: lesson.lessonDate || String(record.completed_at || "").slice(0, 10),
           content: "회원 운동일지 미작성 · 코치 수업기록",
           selfMemo: "운동일지 미작성",

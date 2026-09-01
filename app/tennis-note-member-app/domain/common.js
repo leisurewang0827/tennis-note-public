@@ -454,6 +454,8 @@ function journalEntries() {
       next: log.memberVisibleSummary || selectedNextText(log),
       outcome: log.participantOutcome || "",
       deductedSessions: Number(log.deductedSessions) || (log.ticketDeducted ? 1 : 0),
+      sessionSnapshot: log.sessionSnapshot || null,
+      sessionRoundLabel: log.sessionRoundLabel || memberTicketSessionSnapshot(log).label,
       curriculumStep: curriculumById(log.nextCurriculumId || log.curriculum?.id, log.curriculum),
       mediaNames: log.mediaNames || [],
       mediaItems: normalizeMediaItems(log),

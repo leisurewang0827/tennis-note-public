@@ -218,11 +218,13 @@ function purchasePurposeOptionsHtml() {
   if (!activeTickets.length) {
     const returningTicket = latestPreviousMembershipTicket();
     const returning = Boolean(returningTicket);
-    flow.purchasePurpose = membershipProductFamilyId(purchaseFlowProduct() || {}) === "one-day"
-      ? "one_day"
-      : returning ? "renew_same" : "new_purchase";
-    if (returning && !flow.renewalTicketId) flow.renewalTicketId = returningTicket.id || "";
-    return `<input type="hidden" value="${returning ? "renew_same" : "new_purchase"}" /><p class="purchase-policy-note"><strong>${returning ? "재등록" : "등록"}</strong> · ${returning ? "이전 이용 기록은 보존하고, 결제가 확인되면 같은 회원권에 횟수가 바로 추가됩니다." : "모든 활성 코치의 실제 가능한 시간을 확인할 수 있습니다."}</p>`;
+    const oneDay = membershipProductFamilyId(purchaseFlowProduct() || {}) === "one-day";
+    const explicitNewPurchase = flow.purchasePurpose === "new_purchase";
+    flow.purchasePurpose = oneDay ? "one_day" : explicitNewPurchase ? "new_purchase" : returning ? "renew_same" : "new_purchase";
+    if (returning && flow.purchasePurpose === "renew_same" && !flow.renewalTicketId) flow.renewalTicketId = returningTicket.id || "";
+    const renewal = returning && flow.purchasePurpose === "renew_same";
+    const returningLabel = returning ? "재등록" : "등록";
+    return `<input type="hidden" value="${escapeHtml(flow.purchasePurpose)}" /><p class="purchase-policy-note"><strong>${renewal ? returningLabel : oneDay ? "원데이" : returning ? "새 회원권 추가" : "등록"}</strong> · ${renewal ? "이전 이용 기록은 보존하고, 결제가 확인되면 같은 회원권에 횟수가 바로 추가됩니다." : returning ? "기존 이용 기록은 그대로 두고 선택한 상품을 새로 추가합니다." : "모든 활성 코치의 실제 가능한 시간을 확인할 수 있습니다."}</p>`;
   }
   const renewing = flow.purchasePurpose === "renew_same";
   const selectedTicket = purchaseFlowSourceTicket() || activeTickets[0] || null;

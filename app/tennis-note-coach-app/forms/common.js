@@ -6,10 +6,29 @@ function coachStatusLabel(group, value, fallback = "") {
   return window.TennisNoteUiLanguage?.statusLabel?.(group, value, fallback) || fallback || value || "";
 }
 
+function coachDisplayLessons(lessons = []) {
+  return window.TennisNoteUiLanguage?.mergeLessonDisplaySegments?.(lessons) || lessons;
+}
+
+function coachTicketSessionSnapshot(record = {}) {
+  return window.TennisNoteUiLanguage?.ticketSessionSnapshot?.(record) || {
+    confirmed: false,
+    adjusted: false,
+    label: "기록 당시 회차 미확정",
+    detail: "현재 회원권 횟수와 분리된 과거 기록입니다.",
+    snapshot: null,
+  };
+}
+
+function coachDisplaySegmentAttrs(lesson = {}) {
+  const ids = Array.isArray(lesson.displaySegmentIds) ? lesson.displaySegmentIds : [];
+  return ids.length ? ` data-lesson-segments="${escapeHtml(ids.join(","))}"` : "";
+}
+
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.440",
+    workerUrl: "./service-worker.js?v=1.0.452",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }

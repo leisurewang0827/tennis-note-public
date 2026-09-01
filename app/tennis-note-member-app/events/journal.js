@@ -15,11 +15,31 @@ function bindJournalEvents() {
     const actionButton = event.target.closest("[data-lesson-detail-action]");
     if (actionButton) handleLessonDetailAction(actionButton.dataset.lessonDetailAction);
   });
+  $("#sameDayAbsenceSheet")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-same-day-absence]")) closeAppSheet("sameDayAbsenceSheet");
+  });
+  $("#submitSameDayAbsenceButton")?.addEventListener("click", () => void submitSameDayAbsence());
   $("#journalComposerSheet")?.addEventListener("click", (event) => {
     if (event.target.closest("[data-close-journal-composer]")) closeAppSheet("journalComposerSheet");
   });
-  $("#journalPrevMonth")?.addEventListener("click", () => changeJournalMonth(-1));
-  $("#journalNextMonth")?.addEventListener("click", () => changeJournalMonth(1));
+  $("#journalPrevMonth")?.addEventListener("click", () => changeJournalCalendarPeriod(-1));
+  $("#journalNextMonth")?.addEventListener("click", () => changeJournalCalendarPeriod(1));
+  $("#journalTodayButton")?.addEventListener("click", returnJournalToToday);
+  $$('[data-journal-calendar-view]').forEach((button) => {
+    button.addEventListener("click", () => setJournalCalendarViewMode(button.dataset.journalCalendarView));
+  });
+  $("#journalMonthPickerButton")?.addEventListener("click", openJournalMonthPicker);
+  $("#journalMonthPickerApply")?.addEventListener("click", applyJournalMonthPicker);
+  $("#journalMonthPickerSheet")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-close-journal-month-picker]")) closeJournalMonthPicker();
+  });
+  $("#journalMonthPickerSheet")?.addEventListener("change", () => setJournalMonthPickerStatus());
+  $("#journalMonthPickerSheet")?.addEventListener("tennisnote:sheet-opened", () => {
+    $("#journalMonthPickerButton")?.setAttribute("aria-expanded", "true");
+  });
+  $("#journalMonthPickerSheet")?.addEventListener("tennisnote:sheet-closed", () => {
+    $("#journalMonthPickerButton")?.setAttribute("aria-expanded", "false");
+  });
   $("#journalCalendarDisclosure")?.addEventListener("toggle", (event) => {
     if (event.isTrusted) event.currentTarget.dataset.userToggled = "true";
   });

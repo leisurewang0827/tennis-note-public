@@ -17,9 +17,9 @@
     </script>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.440" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.452" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-18" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.440" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.452" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
   </head>
   <body>
@@ -481,6 +481,28 @@
                 </details>
                 <button id="scheduleV2PolicyButton" class="ghost-button schedule-v2-policy-open" type="button" aria-expanded="false">운영 규칙 열기</button>
                 <div id="scheduleV2PolicyPanel" class="schedule-v2-policy-panel" hidden>
+                  <section class="schedule-v2-member-change-policy schedule-v2-same-day-absence-policy" aria-labelledby="scheduleV2SameDayAbsencePolicyTitle">
+                    <header>
+                      <div><small>회원 앱</small><strong id="scheduleV2SameDayAbsencePolicyTitle">당일 불참·다시 참석</strong></div>
+                      <span>신청 당시 규칙 보존</span>
+                    </header>
+                    <div class="schedule-v2-member-change-policy-fields">
+                      <label><span>오늘 못 가요</span><select name="memberSameDayAbsenceEnabled"><option value="true">사용</option><option value="false">사용 안 함</option></select></label>
+                      <label><span>회원권 차감</span><select name="memberSameDayAbsenceDeductEnabled"><option value="true">1회 차감</option><option value="false">차감 안 함</option></select></label>
+                    </div>
+                    <details class="schedule-v2-policy-details">
+                      <summary>상세 설정</summary>
+                      <div class="schedule-v2-member-change-policy-fields">
+                        <label><span>불참 사유</span><select name="memberSameDayAbsenceReasonMode"><option value="none">받지 않음</option><option value="optional">선택</option><option value="required">필수</option></select></label>
+                        <label><span>코치 승인</span><select name="memberSameDayAbsenceRequiresCoachApproval"><option value="false">필요 없음</option><option value="true">승인 필요</option></select></label>
+                        <label><span>다시 참석</span><select name="memberSameDayRestoreEnabled"><option value="true">사용</option><option value="false">사용 안 함</option></select></label>
+                        <label><span>복귀 마감</span><span class="schedule-v2-policy-number"><input name="memberSameDayRestoreCutoffMinutes" type="number" min="0" max="1440" step="10" value="0" inputmode="numeric" /><em>분 전</em></span></label>
+                        <label><span>보강</span><select name="memberSameDayAbsenceMakeupEnabled"><option value="false">발생 안 함</option><option value="true">발생</option></select></label>
+                        <label><span>그룹수업</span><select name="memberSameDayAbsenceGroupMode"><option value="individual">신청 회원만 처리</option><option value="blocked">앱 신청 불가</option></select></label>
+                      </div>
+                    </details>
+                    <p id="scheduleV2SameDayAbsencePolicyPreview" class="schedule-v2-member-change-policy-preview" aria-live="polite"></p>
+                  </section>
                   <label><span>코치 수업 추가</span><select name="coachSingleAddMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
                   <label><span>코치 정규시간 변경</span><select name="coachRegularChangeMode"><option value="approval">관리자 승인</option><option value="immediate">바로 반영</option><option value="blocked">사용 안 함</option></select></label>
                   <label><span>다른 코치 회원 수정</span><select name="allowCrossCoachMemberEdit"><option value="false">허용 안 함</option><option value="true">허용</option></select></label>
@@ -2163,79 +2185,79 @@
     </div>
 
     <script src="../shared/config.local.js?v=local"></script>
-    <script src="../shared/tennisnote-escape-html.js?v=1.0.440"></script>
-    <script src="../shared/tennisnote-data-client.js?v=1.0.440"></script>
-    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.440"></script>
-    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.440"></script>
+    <script src="../shared/tennisnote-escape-html.js?v=1.0.452"></script>
+    <script src="../shared/tennisnote-data-client.js?v=1.0.452"></script>
+    <script src="../shared/tennisnote-schedule-revision.js?v=1.0.452"></script>
+    <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.452"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
-    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.440"></script>
+    <script src="../shared/tennisnote-curriculum-search.js?v=1.0.452"></script>
     <script src="../shared/tennisnote-product-catalog.js?v=policy-catalog-2"></script>
-    <script src="../shared/tennisnote-release.js?v=1.0.440"></script>
-    <script src="../shared/tennisnote-release-updater.js?v=1.0.440"></script>
-    <script src="../shared/tennisnote-ui-language.js?v=1.0.440"></script>
-    <script src="../shared/tennisnote-ticket-state.js?v=1.0.440"></script>
-    <script src="../shared/tennisnote-comment-draft.js?v=1.0.440"></script>
-    <script src="../shared/tennisnote-input-guard.js?v=1.0.440"></script>
+    <script src="../shared/tennisnote-release.js?v=1.0.452"></script>
+    <script src="../shared/tennisnote-release-updater.js?v=1.0.452"></script>
+    <script src="../shared/tennisnote-ui-language.js?v=1.0.452"></script>
+    <script src="../shared/tennisnote-ticket-state.js?v=1.0.452"></script>
+    <script src="../shared/tennisnote-comment-draft.js?v=1.0.452"></script>
+    <script src="../shared/tennisnote-input-guard.js?v=1.0.452"></script>
     <script src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
-    <script src="./catalog.js?v=1.0.440"></script>
-    <script src="./settings.js?v=1.0.440"></script>
-    <script src="./domain/values.js?v=1.0.440"></script>
-    <script src="./domain/lessons.js?v=1.0.440"></script>
-    <script src="./domain/billing.js?v=1.0.440"></script>
-    <script src="./domain/tickets.js?v=1.0.440"></script>
-    <script src="./domain/coaches.js?v=1.0.440"></script>
-    <script src="./domain/schedule.js?v=1.0.440"></script>
-    <script src="./domain/payment.js?v=1.0.440"></script>
-    <script src="./domain/policy.js?v=1.0.440"></script>
-    <script src="./domain/record.js?v=1.0.440"></script>
-    <script src="./domain/members.js?v=1.0.440"></script>
-    <script src="./domain/common.js?v=1.0.440"></script>
-    <script src="./events/billing.js?v=1.0.440"></script>
-    <script src="./events/common.js?v=1.0.440"></script>
-    <script src="./events/data.js?v=1.0.440"></script>
-    <script src="./events/delegated.js?v=1.0.440"></script>
-    <script src="./events/members.js?v=1.0.440"></script>
-    <script src="./events/notes.js?v=1.0.440"></script>
-    <script src="./events/reports.js?v=1.0.440"></script>
-    <script src="./events/schedule.js?v=1.0.440"></script>
-    <script src="./events/settings.js?v=1.0.440"></script>
-    <script src="./views/billing.js?v=1.0.440"></script>
-    <script src="./views/common.js?v=1.0.440"></script>
-    <script src="./views/dashboard.js?v=1.0.440"></script>
-    <script src="./views/data.js?v=1.0.440"></script>
-    <script src="./views/makeup.js?v=1.0.440"></script>
-    <script src="./views/members.js?v=1.0.440"></script>
-    <script src="./views/notes.js?v=1.0.440"></script>
-    <script src="./views/reports.js?v=1.0.440"></script>
-    <script src="./views/schedule.js?v=1.0.440"></script>
-    <script src="./views/settings.js?v=1.0.440"></script>
-    <script src="./data/billing.js?v=1.0.440"></script>
-    <script src="./data/common.js?v=1.0.440"></script>
-    <script src="./data/member.js?v=1.0.440"></script>
-    <script src="./data/schedule.js?v=1.0.440"></script>
-    <script src="./data/settings.js?v=1.0.440"></script>
-    <script src="./forms/coach.js?v=1.0.440"></script>
-    <script src="./forms/common.js?v=1.0.440"></script>
-    <script src="./forms/member.js?v=1.0.440"></script>
-    <script src="./forms/schedule.js?v=1.0.440"></script>
-    <script src="./actions/billing.js?v=1.0.440"></script>
-    <script src="./actions/coach.js?v=1.0.440"></script>
-    <script src="./actions/common.js?v=1.0.440"></script>
-    <script src="./actions/member.js?v=1.0.440"></script>
-    <script src="./actions/notice.js?v=1.0.440"></script>
-    <script src="./actions/report.js?v=1.0.440"></script>
-    <script src="./actions/schedule.js?v=1.0.440"></script>
-    <script src="./actions/settings.js?v=1.0.440"></script>
-    <script src="./ui/billing.js?v=1.0.440"></script>
-    <script src="./ui/common.js?v=1.0.440"></script>
-    <script src="./ui/member.js?v=1.0.440"></script>
-    <script src="./ui/schedule.js?v=1.0.440"></script>
-    <script src="./ui/settings.js?v=1.0.440"></script>
-    <script src="./storage.js?v=1.0.440"></script>
-    <script src="./views/tickets.js?v=1.0.440"></script>
-    <script src="./forms/policy.js?v=1.0.440"></script>
-    <script src="./forms/tickets.js?v=1.0.440"></script>
-    <script src="./app.js?v=1.0.440"></script>
+    <script src="./catalog.js?v=1.0.452"></script>
+    <script src="./settings.js?v=1.0.452"></script>
+    <script src="./domain/values.js?v=1.0.452"></script>
+    <script src="./domain/lessons.js?v=1.0.452"></script>
+    <script src="./domain/billing.js?v=1.0.452"></script>
+    <script src="./domain/tickets.js?v=1.0.452"></script>
+    <script src="./domain/coaches.js?v=1.0.452"></script>
+    <script src="./domain/schedule.js?v=1.0.452"></script>
+    <script src="./domain/payment.js?v=1.0.452"></script>
+    <script src="./domain/policy.js?v=1.0.452"></script>
+    <script src="./domain/record.js?v=1.0.452"></script>
+    <script src="./domain/members.js?v=1.0.452"></script>
+    <script src="./domain/common.js?v=1.0.452"></script>
+    <script src="./events/billing.js?v=1.0.452"></script>
+    <script src="./events/common.js?v=1.0.452"></script>
+    <script src="./events/data.js?v=1.0.452"></script>
+    <script src="./events/delegated.js?v=1.0.452"></script>
+    <script src="./events/members.js?v=1.0.452"></script>
+    <script src="./events/notes.js?v=1.0.452"></script>
+    <script src="./events/reports.js?v=1.0.452"></script>
+    <script src="./events/schedule.js?v=1.0.452"></script>
+    <script src="./events/settings.js?v=1.0.452"></script>
+    <script src="./views/billing.js?v=1.0.452"></script>
+    <script src="./views/common.js?v=1.0.452"></script>
+    <script src="./views/dashboard.js?v=1.0.452"></script>
+    <script src="./views/data.js?v=1.0.452"></script>
+    <script src="./views/makeup.js?v=1.0.452"></script>
+    <script src="./views/members.js?v=1.0.452"></script>
+    <script src="./views/notes.js?v=1.0.452"></script>
+    <script src="./views/reports.js?v=1.0.452"></script>
+    <script src="./views/schedule.js?v=1.0.452"></script>
+    <script src="./views/settings.js?v=1.0.452"></script>
+    <script src="./data/billing.js?v=1.0.452"></script>
+    <script src="./data/common.js?v=1.0.452"></script>
+    <script src="./data/member.js?v=1.0.452"></script>
+    <script src="./data/schedule.js?v=1.0.452"></script>
+    <script src="./data/settings.js?v=1.0.452"></script>
+    <script src="./forms/coach.js?v=1.0.452"></script>
+    <script src="./forms/common.js?v=1.0.452"></script>
+    <script src="./forms/member.js?v=1.0.452"></script>
+    <script src="./forms/schedule.js?v=1.0.452"></script>
+    <script src="./actions/billing.js?v=1.0.452"></script>
+    <script src="./actions/coach.js?v=1.0.452"></script>
+    <script src="./actions/common.js?v=1.0.452"></script>
+    <script src="./actions/member.js?v=1.0.452"></script>
+    <script src="./actions/notice.js?v=1.0.452"></script>
+    <script src="./actions/report.js?v=1.0.452"></script>
+    <script src="./actions/schedule.js?v=1.0.452"></script>
+    <script src="./actions/settings.js?v=1.0.452"></script>
+    <script src="./ui/billing.js?v=1.0.452"></script>
+    <script src="./ui/common.js?v=1.0.452"></script>
+    <script src="./ui/member.js?v=1.0.452"></script>
+    <script src="./ui/schedule.js?v=1.0.452"></script>
+    <script src="./ui/settings.js?v=1.0.452"></script>
+    <script src="./storage.js?v=1.0.452"></script>
+    <script src="./views/tickets.js?v=1.0.452"></script>
+    <script src="./forms/policy.js?v=1.0.452"></script>
+    <script src="./forms/tickets.js?v=1.0.452"></script>
+    <script src="./app.js?v=1.0.452"></script>
     <script src="./schedule-v2-admin.js?v=schedule-v2-19"></script>
   </body>
 </html>

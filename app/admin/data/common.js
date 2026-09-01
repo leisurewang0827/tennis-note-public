@@ -128,12 +128,12 @@ async function loadAdminRecordsSupportData() {
       limit: 1000,
     }).catch(() => []),
     client.selectRows("tn_lesson_records", {
-      select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at",
+      select: "id,lesson_id,coach_role_id,coach_comment,next_curriculum_ref_id,deducted_sessions,completed_at,ticket_session_snapshot,ticket_session_snapshot_at",
       order: "completed_at.desc",
       limit: 500,
     }).catch(() => adminLiveDataState.lessonRecords || []),
     client.selectRows("tn_lesson_participant_records_v2", {
-      select: "id,lesson_id,user_id,ticket_id,coach_role_id,outcome,record_status,deduction_requested,deducted_sessions,technique,strength,improvement,next_goal,coach_comment,feedback_keywords,next_curriculum_ref_id,member_journal_id,warning_codes,revision,finalized_at,created_at,updated_at",
+      select: "id,lesson_id,user_id,ticket_id,coach_role_id,outcome,record_status,deduction_requested,deducted_sessions,technique,strength,improvement,next_goal,coach_comment,feedback_keywords,next_curriculum_ref_id,member_journal_id,warning_codes,revision,finalized_at,created_at,updated_at,ticket_session_snapshot,ticket_session_snapshot_at",
       order: "updated_at.desc",
       limit: 2000,
     }).catch(() => adminLiveDataState.participantRecords || []),
@@ -148,6 +148,12 @@ async function loadAdminRecordsSupportData() {
   const loadedLessonById = new Map(
     lessons.filter((lesson) => lesson.serverLessonId).map((lesson) => [lesson.serverLessonId, lesson]),
   );
+  (lessonRecords || []).forEach((record) => {
+    const lesson = loadedLessonById.get(record.lesson_id);
+    if (!lesson) return;
+    lesson.ticketSessionSnapshot = record.ticket_session_snapshot || null;
+    lesson.ticketSessionSnapshotAt = record.ticket_session_snapshot_at || "";
+  });
   replaceArray(lessonNotes, (lessonRecords || []).map((record) => {
     const lesson = loadedLessonById.get(record.lesson_id);
     const coachName = lesson?.coachId
@@ -170,6 +176,8 @@ async function loadAdminRecordsSupportData() {
       status: "confirmed",
       statusLabel: "확인완료",
       deductedSessions: Number(record.deducted_sessions) || 0,
+      ticketSessionSnapshot: record.ticket_session_snapshot || null,
+      ticketSessionSnapshotAt: record.ticket_session_snapshot_at || "",
     };
   }));
   return true;
@@ -497,6 +505,7 @@ async function refreshCoachStaffData() {
     serverAuthSwitches,
     serverSettlementTerms,
   });
+  adminLiveDataState.coachSettlementTerms = serverSettlementTerms;
   scheduleAdminOperationalCacheWrite();
   return true;
 }

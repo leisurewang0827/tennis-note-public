@@ -421,3 +421,39 @@ async function refreshLessonCompletionFromUi({ logId = "", lessonId = "" } = {})
   if (state.editingLessonId) renderLessonEditModal();
   return result;
 }
+
+async function reviewMemberSameDayAbsence(requestId, approve, button) {
+  if (!requestId || !window.TennisNoteDataClient?.rpc || button?.disabled) return;
+  const originalLabel = button?.textContent || "처리";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "처리 중";
+  }
+  try {
+    await window.TennisNoteDataClient.rpc("tn_review_member_same_day_absence", {
+      target_request_id: requestId,
+      target_approve: approve === true,
+      target_note: "",
+      target_operation_key: `coach_absence_review:${requestId}:${approve ? "approve" : "reject"}`,
+    });
+    coachScheduleV2WorkspaceCache = null;
+    await syncCoachLessonsFromServer();
+    renderAll();
+    saveSnapshot();
+    showToast(approve ? "회원 불참 신청을 승인했습니다." : "회원 불참 신청을 거절했습니다.");
+  } catch (error) {
+    const code = String(error?.payload?.message || error?.payload?.code || error?.message || "");
+    const messages = {
+      same_day_absence_review_forbidden: "이 수업의 담당 코치 또는 관리자만 처리할 수 있습니다.",
+      same_day_absence_request_not_actionable: "이미 다른 기기에서 처리된 요청입니다. 최신 상태를 다시 확인해 주세요.",
+      same_day_absence_lesson_started: "이미 시작한 수업은 불참 승인으로 처리할 수 없습니다.",
+      same_day_absence_ticket_units_unavailable: "회원권 잔여 횟수가 부족합니다. 관리자에게 확인해 주세요.",
+    };
+    showToast(messages[code] || "불참 요청을 처리하지 못했습니다. 최신 상태를 다시 확인해 주세요.");
+  } finally {
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+}

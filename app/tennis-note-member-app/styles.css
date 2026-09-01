@@ -2652,9 +2652,16 @@ button {
   align-items: center;
 }
 
+.journal-calendar-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .journal-calendar-controls {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px auto;
   gap: 8px;
   align-items: center;
 }
@@ -2663,11 +2670,99 @@ button {
   text-align: center;
 }
 
+.journal-month-picker-trigger {
+  min-width: 0;
+  width: 100%;
+  padding-inline: 8px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.journal-month-picker-trigger strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .journal-month-arrow {
-  width: 40px;
-  min-width: 40px;
+  width: 44px;
+  min-width: 44px;
   padding: 0;
   font-size: 18px;
+}
+
+.journal-today-button {
+  min-width: 52px;
+  min-height: 44px;
+  padding-inline: 10px;
+}
+
+.journal-calendar-view-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  width: 116px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f1f5f9;
+}
+
+.journal-calendar-view-switch .small-button {
+  min-width: 0;
+  min-height: 44px;
+  padding-inline: 8px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.journal-calendar-view-switch .small-button.is-active {
+  border-color: #8ac7ad;
+  color: var(--green);
+  background: var(--soft-green);
+}
+
+.journal-month-picker-sheet .sheet-card {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(100%, 440px);
+  height: auto;
+  max-height: min(var(--tn-sheet-viewport-height, 86dvh), 520px);
+}
+
+.journal-month-picker-form {
+  margin-bottom: 0;
+}
+
+.journal-month-picker-grid,
+.journal-month-picker-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.journal-month-picker-grid label {
+  min-width: 0;
+}
+
+.journal-month-picker-grid select {
+  width: 100%;
+}
+
+.journal-month-picker-status {
+  min-height: 22px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.journal-month-picker-status[data-tone="error"] {
+  color: #b42318;
+}
+
+.journal-month-picker-actions > button {
+  width: 100%;
 }
 
 .journal-calendar-tools {
@@ -2761,6 +2856,21 @@ button {
 
 .journal-day.matches-search {
   outline: 2px solid rgba(37, 99, 235, 0.2);
+}
+
+.journal-calendar.is-week-view .journal-day {
+  min-height: 68px;
+  align-content: start;
+}
+
+.journal-calendar.is-week-view .journal-day strong {
+  white-space: nowrap;
+}
+
+.journal-calendar.is-week-view .journal-day span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .journal-selected-panel {
@@ -4731,7 +4841,8 @@ button.purchase-timetable-cell {
 }
 
 .journal-lesson-result {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -4753,7 +4864,15 @@ button.purchase-timetable-cell {
   color: var(--green);
   background: white;
   font-size: 12px;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.journal-lesson-result small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
 }
 
 .journal-feedback-block {
@@ -8303,6 +8422,65 @@ body.notice-open {
   min-height: 48px;
 }
 
+.lesson-detail-absence-action {
+  border-color: #d59a32;
+  background: #fff8e8;
+  color: #7a4d00;
+}
+
+.same-day-absence-sheet .sheet-card {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(100%, 520px);
+  height: auto;
+  max-height: min(78dvh, 620px);
+}
+
+.same-day-absence-sheet-scroll,
+.same-day-absence-reason-field {
+  display: grid;
+  gap: 10px;
+}
+
+.same-day-absence-policy-summary {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #efd49e;
+  border-radius: 10px;
+  background: #fff8e8;
+  color: #6d4600;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.same-day-absence-reason-field > span {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.same-day-absence-reason-field small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.same-day-absence-reason-field textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.same-day-absence-sheet .sheet-actions {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 8px;
+}
+
+.same-day-absence-sheet .sheet-actions > button {
+  min-height: 48px;
+}
+
 @media (max-width: 480px) {
   .lesson-detail-facts {
     grid-template-columns: 1fr;
@@ -9772,8 +9950,16 @@ body.modal-open {
     gap: 4px;
   }
 
+  .journal-calendar-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .journal-calendar-view-switch {
+    width: 100%;
+  }
+
   .journal-calendar-controls .small-button {
-    min-height: 38px;
+    min-height: 44px;
     padding-inline: 8px;
   }
 

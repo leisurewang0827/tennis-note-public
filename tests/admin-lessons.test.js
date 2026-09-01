@@ -34,9 +34,9 @@ test("isMakeupLesson — 네 가지 경로 중 하나만 맞아도 보강", () =
 
 test("getLessonStatusLabel — 회원·코치에게 보이는 문구", () => {
   assert.equal(L.getLessonStatusLabel({ status: "completed", deductedSessions: 1 }), "완료 · 차감");
-  assert.equal(L.getLessonStatusLabel({ status: "completed", deductedSessions: 0 }), "완료 · 미차감");
+  assert.equal(L.getLessonStatusLabel({ status: "completed", deductedSessions: 0 }), "완료 · 차감 없음");
   assert.equal(L.getLessonStatusLabel({ status: "no_show", deductedSessions: 1 }), "노쇼 · 차감");
-  assert.equal(L.getLessonStatusLabel({ status: "no_show" }), "노쇼 · 미차감");
+  assert.equal(L.getLessonStatusLabel({ status: "no_show" }), "노쇼 · 차감 없음");
   assert.equal(L.getLessonStatusLabel({ status: "cancelled" }), "취소");
   assert.equal(L.getLessonStatusLabel({ status: "available" }), "보강 가능");
   assert.equal(L.getLessonStatusLabel({ status: "confirmed" }), "확정");
@@ -89,7 +89,7 @@ test("scheduleLessonExceptionLabel — 예외 상황 문구", () => {
   assert.equal(L.scheduleLessonExceptionLabel({}), "", "특별한 일이 없으면 빈 문자열");
   assert.equal(L.scheduleLessonExceptionLabel({ releasedOriginLabel: "직접 지정" }), "직접 지정");
   assert.equal(L.scheduleLessonExceptionLabel({ status: "completed", deductedSessions: 1 }), "완료 · 차감");
-  assert.equal(L.scheduleLessonExceptionLabel({ status: "no_show" }), "노쇼 · 미차감");
+  assert.equal(L.scheduleLessonExceptionLabel({ status: "no_show" }), "노쇼 · 차감 없음");
   assert.equal(L.scheduleLessonExceptionLabel({ type: "대타 수업" }), "대타");
   assert.equal(L.scheduleLessonExceptionLabel({ changeNote: "코치 변경" }), "코치 변경");
   assert.equal(L.scheduleLessonExceptionLabel({ changeNote: "시간 변경" }), "시간 변경");

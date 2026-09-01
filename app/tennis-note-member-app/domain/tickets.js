@@ -747,6 +747,7 @@ async function startProductPayment(productId, options = {}) {
       setView("shopView");
       openBankTransferInstructions(prepared, product, paymentAmount);
     } catch (error) {
+      await applyPaymentPreparationFailure(error);
       const flow = purchaseFlowState();
       const serverCode = String(error?.payload?.code || error?.message || "bank_transfer_request_failed");
       const detail = paymentServerErrorMessage(error);

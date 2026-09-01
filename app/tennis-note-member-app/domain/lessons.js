@@ -155,6 +155,7 @@ function memberLessonStateClass(lesson = {}) {
 }
 
 function lessonDetailDateTimeLabel(lesson = {}) {
+  const timeLabel = lesson.displayTimeRange || lesson.time || "시간 확인";
   if (lesson.lessonDate) {
     const date = new Date(`${lesson.lessonDate}T12:00:00`);
     if (!Number.isNaN(date.getTime())) {
@@ -163,13 +164,36 @@ function lessonDetailDateTimeLabel(lesson = {}) {
         day: "numeric",
         weekday: "short",
       });
-      return `${dateLabel} · ${lesson.time || "시간 확인"}`;
+      return `${dateLabel} · ${timeLabel}`;
     }
   }
-  return `${lesson.day ? `${lesson.day}요일` : "날짜 확인"} · ${lesson.time || "시간 확인"}`;
+  return `${lesson.day ? `${lesson.day}요일` : "날짜 확인"} · ${timeLabel}`;
 }
 
 function lessonDetailStatusInfo(lesson = {}) {
+  const sameDayAbsence = lesson.sameDayAbsence || null;
+  const absenceStatus = String(sameDayAbsence?.status || "");
+  if (absenceStatus === "pending_approval") {
+    return {
+      label: "불참 승인 대기",
+      message: "담당 코치가 확인하기 전까지 수업과 회원권 횟수는 그대로 유지됩니다.",
+      primaryAction: "",
+      absenceAction: "restore-absence",
+      absenceActionLabel: "다시 참석할게요",
+    };
+  }
+  if (absenceStatus === "announced") {
+    const deductedSessions = Math.max(0, Number(sameDayAbsence?.deductedSessions) || 0);
+    return {
+      label: "불참 신청됨",
+      message: deductedSessions > 0
+        ? `${deductedSessions}회 차감 · 담당 코치에게 전달됨`
+        : "담당 코치에게 전달됨 · 회원권 차감 없음",
+      primaryAction: "",
+      absenceAction: "restore-absence",
+      absenceActionLabel: "다시 참석할게요",
+    };
+  }
   const status = String(lesson.serverStatus || lesson.status || "scheduled").toLowerCase();
   if (lesson.oneDayBooking) {
     return status === "completed"
@@ -233,5 +257,7 @@ function lessonDetailStatusInfo(lesson = {}) {
       : memberStatusLabel("lesson", "scheduled", "예정"),
     message: "수업 변경 가능 시간은 센터 운영 규칙에 따라 표시됩니다.",
     primaryAction: "change",
+    absenceAction: lesson.lessonDate === localDateKey() ? "absence" : "",
+    absenceActionLabel: "오늘 못 가요",
   };
 }

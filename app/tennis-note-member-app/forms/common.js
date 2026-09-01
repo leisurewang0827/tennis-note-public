@@ -6,6 +6,25 @@ function memberStatusLabel(group, value, fallback = "") {
   return window.TennisNoteUiLanguage?.statusLabel?.(group, value, fallback) || fallback || String(value || "");
 }
 
+function memberDisplayLessons(lessons = []) {
+  return window.TennisNoteUiLanguage?.mergeLessonDisplaySegments?.(lessons) || lessons;
+}
+
+function memberTicketSessionSnapshot(record = {}) {
+  return window.TennisNoteUiLanguage?.ticketSessionSnapshot?.(record) || {
+    confirmed: false,
+    adjusted: false,
+    label: "기록 당시 회차 미확정",
+    detail: "현재 회원권 횟수와 분리된 과거 기록입니다.",
+    snapshot: null,
+  };
+}
+
+function memberDisplaySegmentAttrs(lesson = {}) {
+  const ids = Array.isArray(lesson.displaySegmentIds) ? lesson.displaySegmentIds : [];
+  return ids.length ? ` data-lesson-segments="${escapeHtml(ids.join(","))}"` : "";
+}
+
 function isStandalonePwa() {
   return window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }
@@ -26,7 +45,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.440",
+    workerUrl: "./service-worker.js?v=1.0.452",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }

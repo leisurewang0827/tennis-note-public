@@ -21,7 +21,9 @@ html.tn-sheet-system-surface-active body {
   height: var(--tn-visual-viewport-height, 100dvh);
   max-height: var(--tn-visual-viewport-height, 100dvh);
   overflow: hidden;
+  padding-right: var(--tn-safe-area-right, env(safe-area-inset-right, 0px));
   padding-bottom: var(--tn-sheet-keyboard-offset, 0px);
+  padding-left: var(--tn-safe-area-left, env(safe-area-inset-left, 0px));
   overscroll-behavior: none;
   touch-action: pan-y;
 }
@@ -54,6 +56,7 @@ html.tn-sheet-system-surface-active body {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   width: min(100%, var(--tn-sheet-max-width, 680px));
+  min-width: 0;
   height: min(var(--tn-sheet-viewport-height, 86dvh), var(--tn-sheet-max-height, 760px));
   max-height: min(var(--tn-sheet-viewport-height, 86dvh), var(--tn-sheet-max-height, 760px));
   overflow: hidden;
@@ -127,7 +130,13 @@ html.tn-sheet-system-surface-active body {
 [data-tn-sheet-footer] {
   position: relative;
   z-index: 2;
-  padding-bottom: max(0px, env(safe-area-inset-bottom));
+  padding-bottom: max(0px, var(--tn-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+}
+
+[data-tn-sheet-panel] :is(h1, h2, h3, strong, span, small, p, label, button) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 [data-tn-bottom-sheet][data-tn-sheet-has-footer="true"] [data-tn-sheet-panel] {

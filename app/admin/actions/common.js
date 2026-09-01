@@ -1256,6 +1256,8 @@ async function performAdminLiveDataSync(options = {}) {
           scheduleV2Kind: lesson.schedule_v2_kind || "",
           deductedSessions: lessonRecord ? Number(lessonRecord.deducted_sessions) || 0 : null,
           completedAt: lessonRecord?.completed_at || "",
+          ticketSessionSnapshot: lessonRecord?.ticket_session_snapshot || null,
+          ticketSessionSnapshotAt: lessonRecord?.ticket_session_snapshot_at || "",
         };
       })
       .sort((left, right) => left.lessonDate.localeCompare(right.lessonDate) || timeToMinutes(left.time) - timeToMinutes(right.time));
@@ -1444,6 +1446,8 @@ async function performAdminLiveDataSync(options = {}) {
         status: "confirmed",
         statusLabel: "확인완료",
         deductedSessions: Number(record.deducted_sessions) || 0,
+        sessionSnapshot: record.ticket_session_snapshot || null,
+        sessionRoundLabel: adminTicketSessionSnapshot(record).label,
       };
     });
     replaceArray(lessonNotes, mappedLessonNotes);

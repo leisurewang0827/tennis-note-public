@@ -196,6 +196,47 @@ async function loadMemberOwnOneDayBookingIds(client, profileId) {
   }
 }
 
+async function hydrateMemberWorkspaceSessionSnapshots(client, workspace = {}, profileId = "") {
+  const lessonIds = [...new Set((workspace.lessons || [])
+    .filter((lesson) => lesson.isOwnLesson === true)
+    .map((lesson) => String(lesson.id || ""))
+    .filter(Boolean))];
+  if (!lessonIds.length || !profileId || !client?.selectRows) return workspace;
+  try {
+    const chunks = [];
+    for (let index = 0; index < lessonIds.length; index += 75) chunks.push(lessonIds.slice(index, index + 75));
+    const rows = (await Promise.all(chunks.map((ids) => client.selectRows("tn_lesson_participant_records_v2", {
+      select: "lesson_id,user_id,ticket_id,record_status,outcome,deduction_requested,deducted_sessions,coach_comment,next_goal,next_curriculum_ref_id,finalized_at,updated_at,ticket_session_snapshot,ticket_session_snapshot_at",
+      filters: { lesson_id: { in: ids }, user_id: profileId },
+      limit: ids.length,
+    })))).flat();
+    const recordsByLessonId = new Map(rows.map((record) => [String(record.lesson_id || ""), record]));
+    workspace.lessons = (workspace.lessons || []).map((lesson) => {
+      const record = recordsByLessonId.get(String(lesson.id || ""));
+      if (!record) return lesson;
+      return {
+        ...lesson,
+        participantRecord: {
+          ...(lesson.participantRecord || {}),
+          recordStatus: record.record_status || lesson.participantRecord?.recordStatus || "",
+          outcome: record.outcome || lesson.participantRecord?.outcome || "",
+          deductedSessions: Number(record.deducted_sessions) || 0,
+          coachComment: record.coach_comment || lesson.participantRecord?.coachComment || "",
+          nextGoal: record.next_goal || lesson.participantRecord?.nextGoal || "",
+          nextCurriculumRefId: record.next_curriculum_ref_id || lesson.participantRecord?.nextCurriculumRefId || "",
+          finalizedAt: record.finalized_at || lesson.participantRecord?.finalizedAt || "",
+          updatedAt: record.updated_at || lesson.participantRecord?.updatedAt || "",
+          ticketSessionSnapshot: record.ticket_session_snapshot || null,
+          ticketSessionSnapshotAt: record.ticket_session_snapshot_at || "",
+        },
+      };
+    });
+  } catch (error) {
+    console.warn("Tennis Note member session snapshot read failed; keeping the confirmed workspace state.", error);
+  }
+  return workspace;
+}
+
 async function syncMemberScheduleV2(profile = null, options = {}) {
   const client = window.TennisNoteDataClient;
   const requestId = options.requestId || ++memberScheduleV2RequestSequence;
@@ -230,6 +271,8 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
     ]);
     if (requestId !== memberScheduleV2RequestSequence) return false;
     if (!workspace?.actorUserId || !Array.isArray(workspace.lessons)) return false;
+    await hydrateMemberWorkspaceSessionSnapshots(client, workspace, profileId);
+    if (requestId !== memberScheduleV2RequestSequence) return false;
     const branchIds = [...new Set((workspace.branches || []).map((branch) => branch.id).filter(Boolean))];
     const operationDays = (await Promise.all(branchIds.map((branchId) => (
       client.rpc("tn_schedule_v2_operation_days_between", {
