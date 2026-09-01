@@ -80,3 +80,12 @@ test("Auth provider capability와 전화 인증 오류를 안전하게 구분한
   assert.match(identity.identityErrorMessage({ code: "over_sms_send_rate_limit" }), /잠시 후/);
   assert.equal(identity.normalizedIdentityErrorCode({ code: "Phone Provider-Disabled" }), "phone_provider_disabled");
 });
+
+test("이메일 인증 입력은 iOS 포커스 자동확대를 일으키지 않는다", () => {
+  const styles = readFileSync(join(root, "app/tennis-note-member-app/styles.css"), "utf8");
+  assert.match(styles, /\.email-login-panel \.email-login-form :is\(/);
+  assert.match(styles, /input\[type="email"\]/);
+  assert.match(styles, /input\[type="password"\]/);
+  assert.match(styles, /min-height:\s*44px/);
+  assert.match(styles, /font-size:\s*16px/);
+});
