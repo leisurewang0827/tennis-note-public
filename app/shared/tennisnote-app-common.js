@@ -30,6 +30,7 @@ function minutesFromTime(time) {
 }
 
 function lessonDuration(lesson) {
+  if (Number(lesson?.durationMinutes) > 0) return Number(lesson.durationMinutes);
   const text = `${lesson.type || ""} ${lesson.ticket || ""}`;
   const matched = text.match(/(\d+)\s*분/);
   return matched ? Number(matched[1]) : 20;

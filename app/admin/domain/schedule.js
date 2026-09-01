@@ -413,6 +413,23 @@ function getLessonRoundLabel(lesson) {
   if (lesson?.oneDayBooking) return "원데이";
   if (isReleasedRegularMakeupSlot(lesson)) return "정규 · 불참";
   if (!isBookedLesson(lesson)) return "";
+  const participantStates = adminParticipantRecordsForLesson(lesson.serverLessonId || lesson.id)
+    .filter((record) => String(record.record_status || record.recordStatus || "").toLowerCase() === "final")
+    .map(adminTicketSessionSnapshot)
+    .filter((sessionState) => sessionState.confirmed);
+  if (participantStates.length) {
+    const labels = [...new Set(participantStates.map((sessionState) => {
+      const snapshot = sessionState.snapshot;
+      const round = snapshot.ticketDeductedSessions > 1
+        ? `${snapshot.usedBefore + 1}~${snapshot.usedAfter}`
+        : `${snapshot.usedAfter}`;
+      return `${round}/${snapshot.totalSessions}회차`;
+    }))];
+    return labels.length === 1 ? `이번 수업 ${labels[0]}` : `회원별 ${labels.join(" · ")}`;
+  }
+  const finalStatus = ["completed", "no_show", "absence", "absent", "cancelled", "holiday"]
+    .includes(String(lesson.serverStatus || lesson.status || "").toLowerCase());
+  if (finalStatus) return adminTicketSessionSnapshot(lesson).label;
   const ticket = getTicketByLesson(lesson);
   if (!ticket) return "회차 확인";
   const range = lessonRoundRange(lesson, ticket);

@@ -117,6 +117,90 @@ async function handlePublicOnboardingAction(target) {
   return false;
 }
 
+function setPurchaseRevalidationNotice(code = "", message = "") {
+  const flow = purchaseFlowState();
+  flow.paymentErrorCode = String(code || "purchase_revalidation_required");
+  flow.paymentErrorMessage = String(message || "선택 내용을 다시 확인해 주세요.");
+  state.pendingPaymentCheckStatus = { tone: "alert", text: flow.paymentErrorMessage };
+  saveSnapshot();
+  renderMembershipPurchaseFlow();
+}
+
+async function restoreOnboardingPurchaseSelection(intent = {}, purpose = "new_purchase") {
+  const ready = await ensureMembershipPurchaseData({ force: true });
+  const selectedProduct = ready ? membershipProducts().find((product) => (
+    String(product.id || "") === String(intent.productId || "")
+    && isDirectPurchaseMembershipProduct(product)
+    && (purpose !== "one_day" || isOneDayMembershipProduct(product))
+  )) || null : null;
+  setView("shopView", { replaceHistory: true });
+  openMembershipPurchaseFlow("", selectedProduct?.id || "", purpose, { preserveExplicitPurpose: true });
+  const flow = purchaseFlowState();
+  if (!ready) {
+    flow.productId = String(intent.productId || "");
+    flow.coachRoleId = String(intent.coachRoleId || "");
+    flow.coachName = String(intent.coachName || "");
+    flow.preferredSchedules = (intent.preferredSchedules || []).map((schedule) => ({ ...schedule }));
+    syncLegacyPurchaseScheduleFields();
+    setPurchaseRevalidationNotice("purchase_revalidation_network_failed", "상품 정보를 다시 확인하지 못했습니다. 선택은 보존했으며 연결 후 다시 시도할 수 있습니다.");
+    return false;
+  }
+  if (!selectedProduct) {
+    flow.productId = "";
+    flow.coachRoleId = "";
+    flow.coachName = "";
+    clearPurchaseSchedules();
+    flow.discountIssueId = "";
+    setPurchaseRevalidationNotice("active_product_not_found", "선택한 상품의 판매가 종료되었습니다. 상품만 다시 선택해 주세요.");
+    return true;
+  }
+
+  flow.productFrequency = Math.max(1, Number(intent.frequency) || purchaseProductFrequency(selectedProduct));
+  flow.productScheduleScope = intent.scheduleScope || membershipProductFacet(selectedProduct, "scheduleScope");
+  flow.coachRoleId = String(intent.coachRoleId || "");
+  flow.coachName = String(intent.coachName || "");
+  flow.preferredSchedules = (intent.preferredSchedules || []).map((schedule) => ({ ...schedule }));
+  syncLegacyPurchaseScheduleFields();
+  if (state.dataMode !== "live") {
+    clearPurchasePaymentError();
+    saveSnapshot();
+    renderMembershipPurchaseFlow();
+    return true;
+  }
+  const selectedScheduleKeys = new Set(flow.preferredSchedules.map(purchaseScheduleKey));
+  const directoryReady = await refreshPurchaseScheduleAvailability({ force: true });
+  if (!directoryReady) {
+    setPurchaseRevalidationNotice("purchase_directory_refresh_failed", "선생님과 시간을 다시 확인하지 못했습니다. 선택은 보존했으며 연결 후 다시 시도할 수 있습니다.");
+    return false;
+  }
+  const coachStillAvailable = purchaseCoachOptions().some((coach) => {
+    const roleId = String(coach.serverRoleId || coach.roleId || coach.id || "");
+    return roleId === flow.coachRoleId && purchaseProductAllowsCoach(selectedProduct, roleId);
+  });
+  if (!coachStillAvailable) {
+    flow.coachRoleId = "";
+    flow.coachName = "";
+    clearPurchaseSchedules();
+    setPurchaseRevalidationNotice("approved_branch_coach_required", "선택한 코치의 예약이 중지되었습니다. 다른 코치의 시간만 다시 선택해 주세요.");
+    return true;
+  }
+  const currentScheduleKeys = new Set(flow.preferredSchedules.map(purchaseScheduleKey));
+  const removedSchedule = [...selectedScheduleKeys].some((key) => !currentScheduleKeys.has(key));
+  if (removedSchedule || !purchaseSchedulesAvailableNow(selectedProduct)) {
+    setPurchaseRevalidationNotice("purchase_slot_occupied", "선택한 시간 중 마감된 시간이 있습니다. 선택한 시간만 다시 골라 주세요.");
+    return true;
+  }
+  if ([...currentLiveTickets(), ...(state.expiredTickets || [])].length) {
+    const purposeLabel = purpose === "one_day" ? "원데이" : "새 회원권 추가";
+    setPurchaseRevalidationNotice("purchase_purpose_confirmation", `기존 이용 기록이 확인되었습니다. 자동 연장하지 않고 ${purposeLabel} 선택을 유지했습니다. 결제 전 목적을 확인해 주세요.`);
+    return true;
+  }
+  clearPurchasePaymentError();
+  saveSnapshot();
+  renderMembershipPurchaseFlow();
+  return true;
+}
+
 async function applyPendingOnboardingIntent() {
   const intent = storedOnboardingIntent();
   renderOnboardingEntryIntro();
@@ -129,51 +213,19 @@ async function applyPendingOnboardingIntent() {
   }
   onboardingIntentApplying = true;
   try {
+    let applied = true;
     if (intent.start === "one-day") {
-      await ensureMembershipPurchaseData();
-      const selectedProduct = membershipProducts().find((product) => (
-        String(product.id || "") === String(intent.productId || "")
-        && isOneDayMembershipProduct(product)
-      ));
-      if (selectedProduct) {
-        setView("shopView", { replaceHistory: true });
-        openMembershipPurchaseFlow("", selectedProduct.id, "one_day");
-        const flow = purchaseFlowState();
-        flow.coachRoleId = intent.coachRoleId || "";
-        flow.coachName = intent.coachName || "";
-        flow.preferredSchedules = (intent.preferredSchedules || []).map((schedule) => ({ ...schedule }));
-        syncLegacyPurchaseScheduleFields();
-        saveSnapshot();
-        renderMembershipPurchaseFlow();
-      }
-      else await openOneDayPurchaseFlow();
+      applied = await restoreOnboardingPurchaseSelection(intent, "one_day");
     } else if (intent.start === "membership") {
-      setView("shopView", { replaceHistory: true });
-      await ensureMembershipPurchaseData();
-      const selectedProduct = membershipProducts().find((product) => (
-        String(product.id || "") === String(intent.productId || "")
-        && isDirectPurchaseMembershipProduct(product)
-      ));
-      openMembershipPurchaseFlow("", selectedProduct?.id || "", "new_purchase");
-      if (selectedProduct) {
-        const flow = purchaseFlowState();
-        flow.productFrequency = Math.max(1, Number(intent.frequency) || purchaseProductFrequency(selectedProduct));
-        flow.productScheduleScope = intent.scheduleScope || membershipProductFacet(selectedProduct, "scheduleScope");
-        flow.coachRoleId = intent.coachRoleId || "";
-        flow.coachName = intent.coachName || "";
-        flow.preferredSchedules = (intent.preferredSchedules || []).map((schedule) => ({ ...schedule }));
-        syncLegacyPurchaseScheduleFields();
-        saveSnapshot();
-        renderMembershipPurchaseFlow();
-      }
+      applied = await restoreOnboardingPurchaseSelection(intent, "new_purchase");
     } else if (intent.start === "renew") {
       setView("shopView", { replaceHistory: true });
       openMembershipPurchaseFlow(currentLiveTickets()[0]?.id || "", "", "renew_same");
     } else {
       setView("homeView", { replaceHistory: true });
     }
-    markOnboardingIntentApplied(intent);
-    return true;
+    if (applied) markOnboardingIntentApplied(intent);
+    return applied;
   } finally {
     onboardingIntentApplying = false;
   }

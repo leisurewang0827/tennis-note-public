@@ -37,10 +37,11 @@ function syncSubstituteSettlementFields() {
 }
 
 function syncCoachStaffSettlementFieldVisibility(method) {
-  $$('[data-settlement-mode-field="ratio"]').forEach((element) => {
+  const root = $("#coachStaffModalContent") || document;
+  [...root.querySelectorAll('[data-settlement-mode-field="ratio"]')].forEach((element) => {
     element.classList.toggle("is-hidden", method !== "ratio");
   });
-  $$('[data-settlement-mode-field="hourly"]').forEach((element) => {
+  [...root.querySelectorAll('[data-settlement-mode-field="hourly"]')].forEach((element) => {
     element.classList.toggle("is-hidden", method !== "hourly");
   });
 }

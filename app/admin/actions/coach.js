@@ -195,6 +195,7 @@ function removeCoachStaffBlock(type, blockId, allCoachStaffEditorState = coachSt
 }
 
 async function saveCoachStaff() {
+  if (coachStaffEditorState.saving) return;
   readCoachStaffPanel();
   const draft = coachStaffEditorState.draft;
   const client = window.TennisNoteDataClient;
@@ -224,7 +225,14 @@ async function saveCoachStaff() {
     renderCoachStaffModal();
     return;
   }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.settlement.effectiveFrom || "")) {
+    coachStaffEditorState.message = "정산 적용 시작일을 확인해주세요.";
+    coachStaffEditorState.settlementDetailsOpen = true;
+    renderCoachStaffModal();
+    return;
+  }
   const button = $("#saveCoachStaffButton");
+  coachStaffEditorState.saving = true;
   if (button) { button.disabled = true; button.textContent = "저장 중"; }
   try {
     const result = await client.rpc("tn_admin_save_coach_staff_v2", {
@@ -264,6 +272,7 @@ async function saveCoachStaff() {
         : `저장 실패: ${error?.payload?.code || error?.message || "server_error"}`;
     renderCoachStaffModal();
   } finally {
+    coachStaffEditorState.saving = false;
     const current = $("#saveCoachStaffButton");
     if (current) { current.disabled = false; current.textContent = "저장"; }
   }

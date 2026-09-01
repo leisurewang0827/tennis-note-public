@@ -29,6 +29,11 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
   const coachesById = new Map((workspace.coaches || []).map((coach) => [coach.roleId, coach]));
   const ticketsById = new Map((workspace.tickets || []).map((ticket) => [ticket.id, ticket]));
   const participants = Array.isArray(lesson.participants) ? lesson.participants : [];
+  const activeAbsences = (workspace.memberSameDayAbsences || []).filter((request) => (
+    String(request.lessonId || "") === String(lesson.id || "")
+    && ["pending_approval", "announced"].includes(String(request.status || ""))
+  ));
+  const absencesByUserId = new Map(activeAbsences.map((request) => [String(request.userId || ""), request]));
   const participantNames = participants
     .map((participant) => normalizeCoachScheduleMemberName(participant.name, ""))
     .filter(Boolean);
@@ -60,19 +65,28 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
     memberUserIds: participants.map((participant) => participant.userId).filter(Boolean),
     v2Participants: participants.map((participant) => {
       const ticket = ticketsById.get(participant.ticketId) || {};
+      const sameDayAbsence = absencesByUserId.get(String(participant.userId || "")) || null;
+      const absenceAnnounced = sameDayAbsence?.status === "announced";
       return {
         userId: participant.userId,
         ticketId: participant.ticketId,
         name: normalizeCoachScheduleMemberName(participant.name),
-        recordStatus: participant.recordStatus || "",
-        outcome: participant.outcome || "",
-        deductedSessions: Number(participant.deductedSessions) || 0,
+        recordStatus: absenceAnnounced ? "final" : participant.recordStatus || "",
+        outcome: absenceAnnounced ? "absence" : participant.outcome || "",
+        deductionRequested: absenceAnnounced ? Number(sameDayAbsence.deductedSessions) > 0 : participant.deductionRequested === true,
+        deductionRequestedKnown: absenceAnnounced ? true : participant.deductionRequestedKnown === true,
+        deductedSessions: absenceAnnounced ? Number(sameDayAbsence.deductedSessions) || 0 : Number(participant.deductedSessions) || 0,
+        recordTicketId: participant.recordTicketId || "",
+        recordTicketKnown: participant.recordTicketKnown === true,
         coachComment: participant.coachComment || "",
         nextCurriculumRefId: participant.nextCurriculumRefId || "",
         nextCurriculumId: participant.nextCurriculumSkillLabel || "",
         nextCurriculumTitle: participant.nextCurriculumTitle || "",
         finalizedAt: participant.finalizedAt || "",
         updatedAt: participant.updatedAt || "",
+        ticketSessionSnapshot: participant.ticketSessionSnapshot || null,
+        ticketSessionSnapshotAt: participant.ticketSessionSnapshotAt || "",
+        sameDayAbsence,
         ticketName: ticket.productName || `${scheduleV2LessonKindLabel(kind)} 회원권`,
         totalSessions: Number(ticket.totalSessions) || 0,
         usedSessions: Number(ticket.usedSessions) || 0,
@@ -97,7 +111,10 @@ function scheduleV2CoachLesson(lesson = {}, workspace = {}) {
     serverStatus: lesson.status,
     remaining: Number(primaryTicket.remainingSessions) || 0,
     deductedSessions,
-    task: lesson.status === "pending_change" ? "변경 요청 확인" : "수업 후 코멘트/다음 커리큘럼",
+    memberSameDayAbsences: activeAbsences,
+    task: activeAbsences.some((request) => request.status === "pending_approval")
+      ? "회원 불참 승인 확인"
+      : activeAbsences.length ? "회원 불참 예정" : lesson.status === "pending_change" ? "변경 요청 확인" : "수업 후 코멘트/다음 커리큘럼",
   };
 }
 
@@ -111,10 +128,18 @@ function scheduleV2CoachParticipantResults(lesson = {}) {
     usedSessions: participant.usedSessions,
     remainingSessions: participant.remainingSessions,
     recordStatus: participant.recordStatus || "",
+    outcome: participant.outcome || "",
+    deductionRequested: participant.deductionRequested === true,
+    deductionRequestedKnown: participant.deductionRequestedKnown === true,
+    deductedSessions: Number(participant.deductedSessions) || 0,
+    recordTicketId: participant.recordTicketId || "",
+    recordTicketKnown: participant.recordTicketKnown === true,
     coachComment: participant.coachComment || "",
     nextCurriculumId: canonicalCurriculumId(participant.nextCurriculumId),
     finalizedAt: participant.finalizedAt || "",
     updatedAt: participant.updatedAt || "",
+    ticketSessionSnapshot: participant.ticketSessionSnapshot || null,
+    ticketSessionSnapshotAt: participant.ticketSessionSnapshotAt || "",
     serverCoachComment: participant.coachComment || "",
     serverNextCurriculumId: canonicalCurriculumId(participant.nextCurriculumId),
   }));

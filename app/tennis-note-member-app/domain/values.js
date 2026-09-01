@@ -67,7 +67,7 @@ function compactLessonDateLabel(dateValue = "", fallbackDay = "") {
 
 function lessonDateTimeLabel(lesson = {}, fallback = "수업") {
   const date = compactLessonDateLabel(lesson.lessonDate || lesson.journalDate, lesson.day);
-  const time = String(lesson.time || "").trim();
+  const time = String(lesson.displayTimeRange || lesson.time || "").trim();
   return [date || fallback, time].filter(Boolean).join(" ");
 }
 

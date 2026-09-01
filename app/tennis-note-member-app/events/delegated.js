@@ -16,7 +16,7 @@ function bindDelegatedEvents() {
       if (!button) return;
       event.preventDefault();
       event.stopPropagation();
-      handleScheduleClick(button.dataset.lesson);
+      handleScheduleClick(button.dataset.lesson, String(button.dataset.lessonSegments || "").split(",").filter(Boolean));
     },
     true,
   );

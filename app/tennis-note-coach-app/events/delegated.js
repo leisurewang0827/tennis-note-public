@@ -98,6 +98,16 @@ function bindDelegatedEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const sameDayAbsenceReviewButton = event.target.closest("[data-review-same-day-absence]");
+    if (sameDayAbsenceReviewButton) {
+      void reviewMemberSameDayAbsence(
+        sameDayAbsenceReviewButton.dataset.reviewSameDayAbsence,
+        sameDayAbsenceReviewButton.dataset.approve === "true",
+        sameDayAbsenceReviewButton,
+      );
+      return;
+    }
+
     const closeSettlementButton = event.target.closest("[data-close-coach-settlement]");
     if (closeSettlementButton) {
       closeCoachSettlementModal();
@@ -430,6 +440,7 @@ function bindDelegatedEvents() {
 
     const editLessonButton = event.target.closest("[data-edit-lesson-id]");
     if (editLessonButton) {
+      state.activeLessonDisplaySegmentIds = String(editLessonButton.dataset.lessonSegments || "").split(",").filter(Boolean);
       openLessonEditor(editLessonButton.dataset.editLessonId);
       return;
     }

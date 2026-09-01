@@ -38,13 +38,105 @@ function isLessonAvailable(lesson = {}) {
   return lessonStatusValue(lesson) === "available";
 }
 
+let adminParticipantProcessingCacheSource = null;
+let adminParticipantProcessingCacheLength = -1;
+let adminParticipantProcessingByLessonId = new Map();
+
+function adminParticipantRecordsForLesson(lessonId = "") {
+  const liveData = typeof adminLiveDataState !== "undefined" ? adminLiveDataState : null;
+  const source = Array.isArray(liveData?.participantRecords) ? liveData.participantRecords : [];
+  if (adminParticipantProcessingCacheSource !== source || adminParticipantProcessingCacheLength !== source.length) {
+    adminParticipantProcessingCacheSource = source;
+    adminParticipantProcessingCacheLength = source.length;
+    adminParticipantProcessingByLessonId = new Map();
+    source.forEach((record) => {
+      const key = String(record.lesson_id || "");
+      if (!key) return;
+      const current = adminParticipantProcessingByLessonId.get(key) || [];
+      current.push(record);
+      adminParticipantProcessingByLessonId.set(key, current);
+    });
+  }
+  return adminParticipantProcessingByLessonId.get(String(lessonId || "")) || [];
+}
+
+function adminDisplayLessons(lessons = []) {
+  return window.TennisNoteUiLanguage?.mergeLessonDisplaySegments?.(lessons) || lessons;
+}
+
+function adminTicketSessionSnapshot(record = {}) {
+  return window.TennisNoteUiLanguage?.ticketSessionSnapshot?.(record) || {
+    confirmed: false,
+    adjusted: false,
+    label: "기록 당시 회차 미확정",
+    detail: "현재 회원권 횟수와 분리된 과거 기록입니다.",
+    snapshot: null,
+  };
+}
+
+function adminDisplaySegmentAttrs(lesson = {}) {
+  const ids = Array.isArray(lesson.displaySegmentIds) ? lesson.displaySegmentIds : [];
+  return ids.length ? ` data-lesson-segments="${escapeHtml(ids.join(","))}"` : "";
+}
+
+function adminLessonProcessingState(lesson = {}, participantRecords = null) {
+  const hasExplicitRecords = Array.isArray(participantRecords);
+  const records = hasExplicitRecords
+    ? participantRecords
+    : adminParticipantRecordsForLesson(lesson.serverLessonId || lesson.id);
+  const participantCount = Math.max(
+    Array.isArray(lesson.serverParticipantUserIds) ? lesson.serverParticipantUserIds.length : 0,
+    Array.isArray(lesson.participantUserIds) ? lesson.participantUserIds.length : 0,
+    records.length,
+  );
+  const rawStatus = String(lesson.serverStatus || lesson.status || "").toLowerCase();
+  const resolver = globalThis.TennisNoteUiLanguage?.lessonProcessingState;
+  if (!resolver) {
+    if (["completed", "no_show", "absent", "cancelled", "available", "holiday"].includes(rawStatus)) {
+      const fallbackState = {
+        completed: ["completed", "완료", "기록 보기"],
+        no_show: ["no_show", "노쇼", "기록 보기"],
+        absent: ["absence", "불참", "기록 보기"],
+        cancelled: ["cancelled", "취소", "기록 보기"],
+        available: ["released", "보강 가능", "예약 가능"],
+        holiday: ["holiday", "휴무", "기록 보기"],
+      }[rawStatus];
+      return { id: fallbackState[0], label: fallbackState[1], actionLabel: fallbackState[2], needsFeedback: false, resolved: true };
+    }
+    if (["pending", "pending_change", "requested"].includes(rawStatus)) {
+      return { id: "approval", label: "승인 대기", actionLabel: "요청 확인", needsFeedback: false, resolved: false };
+    }
+    return lessonEndTimestamp(lesson) > 0 && lessonEndTimestamp(lesson) <= Date.now()
+      ? { id: "processing_required", label: "처리 필요", actionLabel: "피드백 작성", needsFeedback: true, resolved: false }
+      : { id: "scheduled", label: "예정", actionLabel: "수업 보기", needsFeedback: false, resolved: false };
+  }
+  if (!hasExplicitRecords && !records.length && ["completed", "no_show"].includes(rawStatus)) {
+    return resolver({
+      lessonStatus: rawStatus,
+      participantRecords: [{ recordStatus: "final", outcome: rawStatus === "no_show" ? "no_show" : "completed" }],
+      participantCount: 1,
+      hasEnded: true,
+    });
+  }
+  return resolver({
+    lessonStatus: lesson.serverStatus || lesson.status,
+    participantRecords: records,
+    participantCount,
+    hasEnded: lessonEndTimestamp(lesson) > 0 && lessonEndTimestamp(lesson) <= Date.now(),
+    released: isReleasedRegularMakeupSlot(lesson),
+  });
+}
+
 function scheduleLessonExceptionLabel(lesson = {}) {
   if (lesson.releasedOriginLabel) return lesson.releasedOriginLabel;
   if (isReleasedRegularMakeupSlot(lesson)) {
     return lesson.historicalReleasedSlot ? "차감 없음" : "차감 없음 · 보강·원데이 가능";
   }
-  if (lessonStatusValue(lesson) === "completed") return Number(lesson.deductedSessions) > 0 ? "완료 · 차감" : "완료 · 미차감";
-  if (lessonStatusValue(lesson) === "no_show") return Number(lesson.deductedSessions) > 0 ? "노쇼 · 차감" : "노쇼 · 미차감";
+  const processingState = adminLessonProcessingState(lesson);
+  if (processingState.id === "confirmation_needed") return processingState.contextLabel ? `${processingState.contextLabel} · 확인 필요` : "확인 필요";
+  if (processingState.id === "completed") return Number(lesson.deductedSessions) > 0 ? "완료 · 차감" : "완료 · 차감 없음";
+  if (processingState.id === "no_show") return Number(lesson.deductedSessions) > 0 ? "노쇼 · 차감" : "노쇼 · 차감 없음";
+  if (processingState.id === "absence") return Number(lesson.deductedSessions) > 0 ? "불참 · 차감" : "불참 · 차감 없음";
   const context = `${lesson.type || ""} ${lessonSourceValue(lesson)} ${lesson.changeNote || ""} ${lesson.task || ""}`;
   if ((lesson.originalCoachRoleId && lesson.coachRoleId && lesson.originalCoachRoleId !== lesson.coachRoleId) || /대타/.test(context)) return "대타";
   if (/코치\s*변경/.test(context)) return "코치 변경";
@@ -67,8 +159,12 @@ function getLessonStatusLabel(lesson) {
   if (isReleasedRegularMakeupSlot(lesson)) {
     return lesson.historicalReleasedSlot ? "정규 · 불참 기록" : "정규자리 · 보강 가능";
   }
-  if (status === "completed") return Number(lesson.deductedSessions) > 0 ? "완료 · 차감" : "완료 · 미차감";
-  if (status === "no_show") return Number(lesson.deductedSessions) > 0 ? "노쇼 · 차감" : "노쇼 · 미차감";
+  const processingState = adminLessonProcessingState(lesson);
+  if (processingState.id === "confirmation_needed") return processingState.contextLabel ? `${processingState.contextLabel} · 확인 필요` : "확인 필요";
+  if (processingState.id === "processing_required") return "처리 필요";
+  if (processingState.id === "completed") return Number(lesson.deductedSessions) > 0 ? "완료 · 차감" : "완료 · 차감 없음";
+  if (processingState.id === "no_show") return Number(lesson.deductedSessions) > 0 ? "노쇼 · 차감" : "노쇼 · 차감 없음";
+  if (processingState.id === "absence") return Number(lesson.deductedSessions) > 0 ? "불참 · 차감" : "불참 · 차감 없음";
   if (status === "cancelled") return "취소";
   if (status === "available") return "보강 가능";
   if (isMakeupLesson(lesson) && isLessonPendingChange(lesson)) return "보강접수중";
@@ -119,7 +215,17 @@ function participantLessonRecord(record, context) {
     && deductionOutcome;
   const missingTicket = !isDraft && deductionRequested && deductionOutcome && !record.ticket_id;
   const finalizedLessonWithDraft = isDraft && ["completed", "no_show"].includes(String(lesson?.serverStatus || ""));
-  const actualIssue = missingDeduction || missingTicket || finalizedLessonWithDraft;
+  const processingState = adminLessonProcessingState(lesson ? {
+    ...lesson,
+    serverParticipantUserIds: [record.user_id].filter(Boolean),
+    participantUserIds: [record.user_id].filter(Boolean),
+  } : {
+    serverLessonId: lessonId,
+    serverStatus: isDraft ? "scheduled" : "completed",
+    lessonDate: String(record.finalized_at || record.updated_at || "").slice(0, 10),
+    time: "00:00",
+  }, [record]);
+  const actualIssue = processingState.id === "confirmation_needed" || missingDeduction || missingTicket || finalizedLessonWithDraft;
   const outcomeLabel = participantOutcomeLabel(record.outcome);
   const completedLabel = deductedSessions > 0
     ? `완료 · ${deductedSessions}회 차감`
@@ -130,9 +236,10 @@ function participantLessonRecord(record, context) {
   ].filter(Boolean);
   const lessonDate = lesson?.lessonDate || String(record.finalized_at || record.updated_at || "").slice(0, 10) || "날짜 미정";
   const lessonTime = lesson?.time || "";
+  const sessionState = adminTicketSessionSnapshot(record);
   return {
     id: `participant-record-${record.id}`,
-    group: actualIssue ? "issue" : isDraft ? "feedback" : "done",
+    group: actualIssue ? "issue" : processingState.id === "processing_required" ? "feedback" : "done",
     source: "수업 피드백",
     branchId: lesson?.branchId || "",
     member: memberName,
@@ -146,17 +253,9 @@ function participantLessonRecord(record, context) {
       ? "피드백만 임시 저장됨 · 회원권 차감 안 됨"
       : missingDeduction
         ? "차감 요청과 실제 차감 결과가 다릅니다. 수업 상세에서 확인해 주세요."
-        : completedLabel,
-    statusLabel: finalizedLessonWithDraft
-      ? "완료 상태·초안"
-      : missingTicket
-        ? "회원권 연결 확인"
-        : isDraft
-          ? "초안 · 미차감"
-          : missingDeduction
-            ? "차감 확인 필요"
-            : completedLabel,
-    actionLabel: actualIssue ? "기록 확인" : isDraft ? "이어 작성" : "처리 완료",
+        : `${sessionState.label} · ${completedLabel}`,
+    statusLabel: processingState.label,
+    actionLabel: actualIssue ? "최신 상태 다시 확인" : processingState.actionLabel,
     lessonId,
     serverLessonId: lessonId,
     ticketId: record.ticket_id || "",
@@ -172,5 +271,7 @@ function participantLessonRecord(record, context) {
           ? "완료 기록은 있지만 요청된 회원권 차감 결과가 0회입니다."
           : "",
     sortAt: record.finalized_at || record.updated_at || record.created_at || lesson?.lessonDate || "",
+    sessionSnapshot: record.ticket_session_snapshot || null,
+    sessionRoundLabel: sessionState.label,
   };
 }

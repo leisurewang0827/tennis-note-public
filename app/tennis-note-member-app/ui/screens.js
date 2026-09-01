@@ -31,6 +31,10 @@ function openMemberNotificationTarget(data = {}, route = "home") {
   }
   if (["feedback", "journal"].includes(route)) {
     const entry = memberNotificationJournalEntry(data);
+    const requestedDate = normalizeJournalNavigationDate(
+      data.journalDate || data.journal_date || data.lessonDate || data.lesson_date || entry?.dateValue || "",
+    );
+    if (requestedDate) applyJournalNavigationDate(requestedDate);
     if (entry) {
       openJournalDetail(entry.id);
       return true;
@@ -141,10 +145,12 @@ function closeMemberEnrollmentModal() {
   if (modal) modal.hidden = true;
 }
 
-function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", requestedPurpose = "") {
+function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", requestedPurpose = "", options = {}) {
   const flow = purchaseFlowState();
   const activeTickets = currentLiveTickets();
-  const returningSource = !activeTickets.length && !["add_coach", "one_day"].includes(requestedPurpose)
+  const returningSource = !activeTickets.length
+    && !["add_coach", "one_day"].includes(requestedPurpose)
+    && !(requestedPurpose === "new_purchase" && options.preserveExplicitPurpose === true)
     ? latestPreviousMembershipTicket()
     : null;
   const requestedSource = (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
@@ -363,7 +369,7 @@ function openJournalDetail(id) {
       absence: "불참",
       cancelled: "취소",
       holiday: "휴무",
-    }[String(entry.outcome || "").toLowerCase()] || "수업 기록"}</span><strong>${Number(entry.deductedSessions) > 0 ? `${Number(entry.deductedSessions)}회 차감` : "차감 없음"}</strong></div>`
+    }[String(entry.outcome || "").toLowerCase()] || "수업 기록"}</span><strong>${entry.sessionRoundLabel || "기록 당시 회차 미확정"}</strong><small>${Number(entry.deductedSessions) > 0 ? `${Number(entry.deductedSessions)}회 차감` : "차감 없음"}</small></div>`
     : "";
   $("#journalDetailContent").innerHTML = `
     <div class="section-title compact-title">
@@ -472,12 +478,15 @@ function closeKakaoInquiryModal() {
   $("#openKakaoInquiryButton")?.focus();
 }
 
-function openLessonDetailSheet(lessonId) {
-  const lesson = memberScheduleOptions().find((item) => item.id === lessonId)
-    || memberMakeupDueLessons().find((item) => item.id === lessonId)
-    || (state.liveLessons || []).find((item) => item.id === lessonId);
+function openLessonDetailSheet(lessonId, segmentIds = []) {
+  const lesson = memberDisplayLessons(memberScheduleOptions()).find((item) => item.id === lessonId || item.displaySegmentIds?.includes(lessonId))
+    || memberDisplayLessons(memberMakeupDueLessons()).find((item) => item.id === lessonId || item.displaySegmentIds?.includes(lessonId))
+    || memberDisplayLessons(state.liveLessons || []).find((item) => item.id === lessonId || item.displaySegmentIds?.includes(lessonId));
   if (!lesson || !isOwnMemberScheduleLesson(lesson)) return;
   state.selectedLessonDetailId = lesson.id;
+  state.selectedLessonDetailSegmentIds = Array.isArray(segmentIds) && segmentIds.length
+    ? [...segmentIds]
+    : [...(lesson.displaySegmentIds || [lesson.id])];
   renderLessonDetailSheet(lesson);
   openAppSheet("lessonDetailSheet");
 }

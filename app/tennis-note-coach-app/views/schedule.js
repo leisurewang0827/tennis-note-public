@@ -13,6 +13,8 @@ function renderScheduleEditPanel() {
   const canFinalize = canProcess && lessonOutcomeWindowOpen(lesson);
   const canReschedule = canRescheduleLesson(lesson);
   const finalized = lessonChartFinalized(lesson);
+  const processingState = coachLessonCardState(lesson);
+  const needsStateRefresh = processingState.id === "confirmation_needed";
   const completionParticipants = completionParticipantsForLesson(lesson);
   const participantTabs = completionParticipants.length > 1
     ? `<div class="lesson-chart-member-tabs" role="tablist" aria-label="그룹 회원 선택">${completionParticipants.map((participant, index) => `<button type="button" role="tab" class="${index === 0 ? "is-active" : ""}" aria-selected="${index === 0}" data-lesson-participant-tab="${escapeHtml(lessonChartParticipantKey(participant, index))}">${escapeHtml(participant.name || `회원 ${index + 1}`)}</button>`).join("")}</div>`
@@ -26,6 +28,28 @@ function renderScheduleEditPanel() {
     const finalComment = participant.coachComment || participant.coach_comment || "";
     const finalCurriculumId = participant.nextCurriculumId || participant.nextCurriculumSkillLabel || participant.next_curriculum_skill_label || "";
     const finalCurriculumTitle = participant.nextCurriculumTitle || participant.next_curriculum_title || (finalCurriculumId ? selectedCurriculum(finalCurriculumId)?.title : "");
+    const sameDayAbsence = participant.sameDayAbsence || null;
+    if (sameDayAbsence?.status === "pending_approval") {
+      return `
+        <section class="lesson-participant-completion-card lesson-chart-participant is-same-day-absence" data-lesson-participant-panel="${escapeHtml(key)}" ${index === 0 ? "" : "hidden"}>
+          ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
+          <div class="lesson-chart-result-line"><b>불참 승인 대기</b><span>승인 전 수업·횟수 유지</span></div>
+          <p class="lesson-chart-readonly">${escapeHtml(sameDayAbsence.reason || "사유 없음")}</p>
+          <div class="actions lesson-same-day-absence-actions">
+            <button class="small-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-approve="false">거절</button>
+            <button class="approve-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-approve="true">불참 승인</button>
+          </div>
+        </section>`;
+    }
+    if (sameDayAbsence?.status === "announced") {
+      const absenceDeducted = Math.max(0, Number(sameDayAbsence.deductedSessions) || 0);
+      return `
+        <section class="lesson-participant-completion-card lesson-chart-participant is-final is-same-day-absence" data-lesson-participant-panel="${escapeHtml(key)}" ${index === 0 ? "" : "hidden"}>
+          ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
+          <div class="lesson-chart-result-line"><b>불참 예정</b><span>${absenceDeducted ? `${absenceDeducted}회 차감` : "차감 없음"}</span></div>
+          <p class="lesson-chart-readonly">회원이 앱에서 당일 불참을 알렸습니다. 피드백 작성 대상에서 제외됩니다.</p>
+        </section>`;
+    }
     if (finalized) {
       const outcome = String(participant.outcome || "completed").toLowerCase();
       const outcomeLabel = outcome === "no_show" ? "노쇼" : outcome === "absence" ? "불참" : "완료";
@@ -108,13 +132,13 @@ function renderScheduleEditPanel() {
           <strong>${lesson.member}</strong>
           <span>${lesson.day} ${lesson.time} · ${lessonDuration(lesson)}분${completionParticipants.length === 1 ? ` · 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회` : ""}</span>
         </div>
-        <b class="${finalized || canFinalize ? "can-process" : "read-only"}">${finalized ? "완료" : canFinalize ? "처리 필요" : canProcess ? "예정" : "보기 전용"}</b>
+        <b class="${processingState.id === "confirmation_needed" ? "read-only" : finalized || canFinalize ? "can-process" : "read-only"}">${canProcess ? escapeHtml(processingState.label) : "보기 전용"}</b>
       </div>
       ${canFinalize && !finalized && completionParticipants.length === 1 ? `<p class="lesson-chart-deduction-preview wide">완료 시 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회 → ${Math.max(0, (Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0) - 1)}회</p>` : ""}
       ${lessonGroupDeductionSummary(lesson, completionParticipants) ? `<p class="lesson-chart-deduction-preview wide">${escapeHtml(lessonGroupDeductionSummary(lesson, completionParticipants))}</p>` : ""}
       ${participantTabs}
       <div class="lesson-participant-completion-list wide">${participantCompletionFields}</div>
-      ${lesson.validationMessage ? `<div class="wide"><p class="validation-text">${lesson.validationMessage}</p><button class="small-button" type="button" data-refresh-lesson-completion="${escapeHtml(lesson.id)}">최신 상태 다시 확인</button></div>` : ""}
+      ${lesson.validationMessage || needsStateRefresh ? `<div class="wide"><p class="validation-text">${escapeHtml(lesson.validationMessage || "피드백 기록과 회원권 차감 결과가 일치하지 않습니다.")}</p><button class="small-button" type="button" data-refresh-lesson-completion="${escapeHtml(lesson.id)}">${escapeHtml(processingState.actionLabel || "최신 상태 다시 확인")}</button></div>` : ""}
       ${!finalized && (canReschedule || (canProcess && lesson.serverLessonId))
         ? `<details class="lesson-secondary-panel lesson-other-actions wide">
             <summary>다른 처리</summary>
@@ -270,7 +294,7 @@ function renderCoachMobileSegment(day, segment, policy, scheduleLessons) {
                 const cardNote = lesson.releasedMakeupSlot
                   ? (lesson.historicalReleasedSlot ? "차감 없음" : "보강·원데이 가능")
                   : note;
-                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${primaryMarkup}</strong><span>${escapeHtml(roundOrState)}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote || "-")}</small></button>`;
+                return `<button class="coach-mobile-lesson lesson-source lesson-kind-${coachLessonVisualKind(lesson)} ${lesson.releasedMakeupSlot ? "released-makeup-slot" : ""} ${coachColorClass(laneCoach.name)} ${coachLessonStateClass(lesson)}" type="button" ${coachScheduleLessonActionAttrs(lesson)} style="${coachLessonColorStyle(lesson, policy)};grid-row:${startIndex + 1} / span ${span};"><strong>${primaryMarkup}</strong><span>${escapeHtml([lesson.displayTimeRange, roundOrState].filter(Boolean).join(" · "))}</span><small class="schedule-card-note ${cardNote ? "" : "is-empty"}">${escapeHtml(cardNote || "-")}</small></button>`;
               }).join("")}
             </div>`;
         }).join("")}
@@ -353,7 +377,8 @@ function renderFullSchedule() {
   const policy = loadCoachSchedulePolicy();
   const weekIndex = activeWeekIndex();
   const week = activeScheduleWeek();
-  const lessonsForWeek = filterFullScheduleLessons(weekLessons(), scheduleFilter);
+  const rawLessonsForWeek = filterFullScheduleLessons(weekLessons(), scheduleFilter);
+  const lessonsForWeek = scheduleFilter === "makeupChange" ? rawLessonsForWeek : coachDisplayLessons(rawLessonsForWeek);
   const scheduleContent = scheduleFilter === "makeupChange"
     ? renderCoachRequestTimeline(lessonsForWeek)
     : scheduleFilter === "feedback"

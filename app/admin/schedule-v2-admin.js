@@ -117,6 +117,16 @@
 
   const escapeHtml = window.escapeHtml;
 
+  function participantSessionState(participant = {}) {
+    return window.TennisNoteUiLanguage?.ticketSessionSnapshot?.(participant) || {
+      confirmed: false,
+      adjusted: false,
+      label: "기록 당시 회차 미확정",
+      detail: "현재 회원권 횟수와 분리된 과거 기록입니다.",
+      snapshot: null,
+    };
+  }
+
   function curriculumStepFromValue(value = "") {
     const code = String(value).trim().split(/\s|·/)[0].toUpperCase();
     const canonical = String(curriculumCatalog.aliases?.[code] || code).toUpperCase();
@@ -688,7 +698,35 @@
         ...(member.userIds || []),
       ].filter(Boolean).map(String).some((id) => responseMemberIds.has(id))),
     ];
-    const responseLessons = Array.isArray(response.lessons) ? response.lessons : [];
+    const memberSameDayAbsences = Array.isArray(response.memberSameDayAbsences)
+      ? response.memberSameDayAbsences
+      : [];
+    const activeAbsencesByParticipant = new Map(memberSameDayAbsences
+      .filter((request) => ["pending_approval", "announced"].includes(String(request.status || "")))
+      .map((request) => [`${request.lessonId}:${request.userId}`, request]));
+    const responseLessons = (Array.isArray(response.lessons) ? response.lessons : []).map((lesson) => {
+      const lessonAbsences = memberSameDayAbsences.filter((request) => (
+        String(request.lessonId || "") === String(lesson.id || "")
+        && ["pending_approval", "announced"].includes(String(request.status || ""))
+      ));
+      return {
+        ...lesson,
+        memberSameDayAbsences: lessonAbsences,
+        participants: (lesson.participants || []).map((participant) => {
+          const sameDayAbsence = activeAbsencesByParticipant.get(`${lesson.id}:${participant.userId}`) || null;
+          if (sameDayAbsence?.status !== "announced") return { ...participant, sameDayAbsence };
+          return {
+            ...participant,
+            sameDayAbsence,
+            recordStatus: "final",
+            outcome: "absence",
+            deductionRequested: Number(sameDayAbsence.deductedSessions) > 0,
+            deductionRequestedKnown: true,
+            deductedSessions: Number(sameDayAbsence.deductedSessions) || 0,
+          };
+        }),
+      };
+    });
     const responseOneDayIds = new Set(responseLessons.flatMap((lesson) => [
       lesson.oneDayBookingId,
       lesson.one_day_booking_id,
@@ -714,6 +752,7 @@
       lessons: [...responseLessons, ...fallbackOneDayLessons],
       expectedRegularSlots: Array.isArray(response.expectedRegularSlots) ? response.expectedRegularSlots : [],
       unassigned: Array.isArray(response.unassigned) ? response.unassigned : [],
+      memberSameDayAbsences,
     };
   }
 
@@ -1973,6 +2012,7 @@
     if (!panel) return;
     if (!force && state.policyEditorDirty && !panel.hidden) {
       renderMemberChangePolicyPreview();
+      renderSameDayAbsencePolicyPreview();
       return;
     }
     const values = {
@@ -1989,12 +2029,21 @@
       memberAutoReasonMode: policy.member_auto_reason_mode || "none",
       memberApprovalReasonMode: policy.member_approval_reason_mode || "required",
       groupMemberChangeMode: policy.group_member_change_mode || "coach_approval",
+      memberSameDayAbsenceEnabled: String(policy.member_same_day_absence_enabled !== false),
+      memberSameDayAbsenceReasonMode: policy.member_same_day_absence_reason_mode || "optional",
+      memberSameDayAbsenceRequiresCoachApproval: String(policy.member_same_day_absence_requires_coach_approval === true),
+      memberSameDayRestoreEnabled: String(policy.member_same_day_restore_enabled !== false),
+      memberSameDayRestoreCutoffMinutes: String(Math.min(1440, Math.max(0, Number(policy.member_same_day_restore_cutoff_minutes ?? 0) || 0))),
+      memberSameDayAbsenceDeductEnabled: String(policy.member_same_day_absence_deduct_enabled !== false),
+      memberSameDayAbsenceMakeupEnabled: String(policy.member_same_day_absence_makeup_enabled === true),
+      memberSameDayAbsenceGroupMode: policy.member_same_day_absence_group_mode || "individual",
     };
     Object.entries(values).forEach(([name, value]) => {
       const input = panel.querySelector(`[name="${name}"]`);
       if (input) input.value = value;
     });
     renderMemberChangePolicyPreview();
+    renderSameDayAbsencePolicyPreview();
   }
 
   function renderMemberChangePolicyPreview() {
@@ -2082,11 +2131,23 @@
   function lessonCardState(lesson = {}, now = new Date()) {
     const status = String(lesson.status || "scheduled").toLowerCase();
     const participants = Array.isArray(lesson.participants) ? lesson.participants : [];
+    const sameDayAbsences = Array.isArray(lesson.memberSameDayAbsences) ? lesson.memberSameDayAbsences : [];
+    const pendingAbsences = sameDayAbsences.filter((request) => request.status === "pending_approval");
+    const announcedAbsences = sameDayAbsences.filter((request) => request.status === "announced");
     const finalParticipants = participants.filter(outcomeRowFinal);
     const incompleteCount = participants.filter((participant) => !participantFeedbackComplete(participant)).length;
     const finalizedOutcomes = finalParticipants.map((participant) => String(participant.outcome || "completed").toLowerCase());
     const deducted = finalParticipants.some((participant) => Number(participant.deductedSessions ?? participant.deducted_sessions) > 0);
     const ended = lessonEndPassed(lesson, now);
+
+    if (pendingAbsences.length) {
+      return {
+        id: "same_day_absence_pending",
+        label: `${pendingAbsences.length}명 불참 승인 대기`,
+        className: "record-approval outcome-absence",
+        needsFeedback: false,
+      };
+    }
 
     if (status === "pending_change") {
       return { id: "approval", label: "승인 대기", className: "record-approval", needsFeedback: false };
@@ -2098,7 +2159,12 @@
       return { id: "no_show", label: `노쇼 · ${deducted ? "1회 차감" : "차감 없음"}`, className: "record-problem outcome-no-show", needsFeedback: false };
     }
     if (finalizedOutcomes.includes("absence") || status === "absent") {
-      return { id: "absence", label: `불참 · ${deducted ? "1회 차감" : "차감 없음"}`, className: "record-neutral outcome-absence", needsFeedback: false };
+      return {
+        id: "absence",
+        label: `${announcedAbsences.length ? "불참 예정" : "불참"} · ${deducted ? "1회 차감" : "차감 없음"}`,
+        className: "record-neutral outcome-absence",
+        needsFeedback: false,
+      };
     }
     if (participants.length && incompleteCount > 0 && ended) {
       const label = participants.length > 1
@@ -2301,6 +2367,13 @@
 
   function lessonTicketCountsText(lesson) {
     if (String(lesson?.scheduleKind || "") === "one_day") return "";
+    const finalized = (lesson?.participants || [])
+      .filter(outcomeRowFinal)
+      .map(participantSessionState);
+    if (finalized.length) {
+      const labels = [...new Set(finalized.map((sessionState) => sessionState.label))];
+      return labels.join(" · ");
+    }
     const labels = [...new Set((lesson?.participants || []).map((participant) => {
       const ticket = ticketById(participant.ticketId || participant.ticket_id);
       if (!ticket) return "";
@@ -2315,6 +2388,10 @@
   }
 
   function lessonTicketCountsAria(lesson) {
+    const finalized = (lesson?.participants || [])
+      .filter(outcomeRowFinal)
+      .map(participantSessionState);
+    if (finalized.length) return [...new Set(finalized.map((sessionState) => `${sessionState.label}. ${sessionState.detail}`))].join(" · ");
     const labels = [...new Set((lesson?.participants || []).map((participant) => {
       const ticket = ticketById(participant.ticketId || participant.ticket_id);
       if (!ticket) return "";
@@ -3108,7 +3185,11 @@
       return;
     }
     const participants = lesson.participants || [];
-    const anyFinal = participants.some(outcomeRowFinal);
+    const pendingAbsenceCount = participants.filter((participant) => participant.sameDayAbsence?.status === "pending_approval").length;
+    const processableParticipants = participants.filter((participant) => !["pending_approval", "announced"].includes(participant.sameDayAbsence?.status));
+    const anyFinal = participants.some((participant) => (
+      participant.sameDayAbsence?.status !== "announced" && outcomeRowFinal(participant)
+    ));
     const allFinal = participants.length > 0 && participants.every(outcomeRowFinal);
     const allFeedbackComplete = participants.length > 0 && participants.every(participantFeedbackComplete);
     const hasCompletedOutcome = participants.some((participant) => String(participant.outcome || "completed").toLowerCase() === "completed");
@@ -3122,7 +3203,7 @@
       : editable
         ? "처리 전"
         : statusLabels[lesson.status] || "수정 불가";
-    actions.hidden = !editable;
+    actions.hidden = !editable || processableParticipants.length === 0;
     list.innerHTML = participants.length
       ? participants.map((participant) => {
         const final = outcomeRowFinal(participant);
@@ -3146,7 +3227,19 @@
             ? '<div class="schedule-v2-feedback-revision-actions"><button type="button" data-v2-save-feedback-revision>피드백 저장</button><button type="button" data-v2-cancel-feedback-revision>취소</button><small>회원권 횟수는 변경되지 않습니다.</small></div>'
             : '<button type="button" class="schedule-v2-feedback-revision-open" data-v2-open-feedback-revision>피드백 수정</button>'
           : "";
-        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""} ${feedbackEditing ? "is-feedback-editing" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}" data-v2-record-updated-at="${escapeHtml(participant.updatedAt || participant.updated_at || "")}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${feedbackDisabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}${revisionTools}</div>`;
+        const sessionState = final ? participantSessionState(participant) : null;
+        const sessionMarkup = sessionState
+          ? `<small class="schedule-v2-session-snapshot">${escapeHtml(sessionState.label)}<span>${escapeHtml(sessionState.detail)}</span></small>`
+          : "";
+        if (participant.sameDayAbsence?.status === "pending_approval") {
+          const request = participant.sameDayAbsence;
+          return `<div class="schedule-v2-outcome-row is-same-day-absence" data-v2-same-day-absence-request="${escapeHtml(request.id)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><small class="schedule-v2-session-snapshot">불참 승인 대기<span>승인 전 수업·회원권 유지</span></small><p>${escapeHtml(request.reason || "사유 없음")}</p><div class="schedule-v2-same-day-absence-actions"><button type="button" data-v2-review-same-day-absence="false">거절</button><button class="primary-button" type="button" data-v2-review-same-day-absence="true">불참 승인</button></div></div>`;
+        }
+        if (participant.sameDayAbsence?.status === "announced") {
+          const deductedSessions = Math.max(0, Number(participant.sameDayAbsence.deductedSessions) || 0);
+          return `<div class="schedule-v2-outcome-row is-final is-same-day-absence"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><small class="schedule-v2-session-snapshot">불참 예정<span>${deductedSessions ? `${deductedSessions}회 차감` : "차감 없음"} · 피드백 대상 제외</span></small><p>회원이 앱에서 당일 불참을 알렸습니다.</p></div>`;
+        }
+        return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""} ${feedbackEditing ? "is-feedback-editing" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}" data-v2-record-updated-at="${escapeHtml(participant.updatedAt || participant.updated_at || "")}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong>${sessionMarkup}<select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${feedbackDisabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}${revisionTools}</div>`;
       }).join("")
       : '<div class="schedule-v2-selected-ticket">참여자 정보가 없어 수업을 처리할 수 없습니다.</div>';
     renderCurriculumOptions();
@@ -3158,6 +3251,58 @@
       updateV2CurriculumDetailLink(row.querySelector("[data-v2-curriculum]"));
     });
     $$(".schedule-v2-outcome-row", list).forEach((row) => syncOutcomeRow(row));
+    if (pendingAbsenceCount && processableParticipants.length === 0) {
+      $("#scheduleV2OutcomeSummary").textContent = "회원 불참 승인 대기";
+    }
+  }
+
+  function renderSameDayAbsencePolicyPreview() {
+    const panel = $("#scheduleV2PolicyPanel");
+    const preview = $("#scheduleV2SameDayAbsencePolicyPreview");
+    if (!panel || !preview) return;
+    const enabled = panel.querySelector('[name="memberSameDayAbsenceEnabled"]')?.value !== "false";
+    const deduct = panel.querySelector('[name="memberSameDayAbsenceDeductEnabled"]')?.value !== "false";
+    const approval = panel.querySelector('[name="memberSameDayAbsenceRequiresCoachApproval"]')?.value === "true";
+    const restore = panel.querySelector('[name="memberSameDayRestoreEnabled"]')?.value !== "false";
+    const cutoff = Math.min(1440, Math.max(0, Number(panel.querySelector('[name="memberSameDayRestoreCutoffMinutes"]')?.value) || 0));
+    if (!enabled) {
+      preview.textContent = "회원 앱에서 당일 불참을 신청할 수 없습니다. 담당 코치에게 문의하도록 안내합니다.";
+      return;
+    }
+    preview.textContent = `회원이 오늘 수업 불참을 ${approval ? "요청하면 코치 승인 후" : "알리면 즉시"} ${deduct ? "1회 차감" : "차감 없이"} 처리합니다. ${restore ? `수업 ${cutoff}분 전까지 원래 자리로 복귀할 수 있습니다.` : "앱에서 다시 참석으로 바꿀 수 없습니다."}`;
+  }
+
+  async function reviewMemberSameDayAbsence(requestId, approve, button) {
+    const api = bridge();
+    if (!requestId || !api?.rpc || button?.disabled || !requireWritableServer("editor")) return;
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = "처리 중";
+    try {
+      await api.rpc("tn_review_member_same_day_absence", {
+        target_request_id: requestId,
+        target_approve: approve === true,
+        target_note: "",
+        target_operation_key: `admin_absence_review:${requestId}:${approve ? "approve" : "reject"}`,
+      });
+      const editedLessonId = state.editingLesson?.id || "";
+      const viewState = captureWorkspaceViewState();
+      state.payload = null;
+      invalidateCurrentWorkspaceCache();
+      await loadWorkspace({ force: true, quiet: true, preserveViewState: viewState });
+      if (editedLessonId) {
+        state.editingLesson = (state.payload?.lessons || []).find((lesson) => lesson.id === editedLessonId) || null;
+        renderOutcomeEditor();
+      }
+      setEditorMessage(approve ? "불참 신청을 승인했습니다." : "불참 신청을 거절했습니다.");
+    } catch (error) {
+      setEditorMessage(errorMessage(error));
+    } finally {
+      if (button.isConnected) {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
   }
 
   function collectOutcomeResults(finalize) {
@@ -4484,6 +4629,13 @@
       autoHoursInput?.focus();
       return;
     }
+    const restoreCutoffInput = panel.querySelector('[name="memberSameDayRestoreCutoffMinutes"]');
+    const memberSameDayRestoreCutoffMinutes = Number(restoreCutoffInput?.value);
+    if (!Number.isInteger(memberSameDayRestoreCutoffMinutes) || memberSameDayRestoreCutoffMinutes < 0 || memberSameDayRestoreCutoffMinutes > 1440) {
+      setStatus("다시 참석 마감은 0~1440분으로 설정해 주세요.", "error");
+      restoreCutoffInput?.focus();
+      return;
+    }
     button.disabled = true;
     setStatus("운영 규칙을 저장하는 중입니다.");
     try {
@@ -4504,6 +4656,14 @@
           member_auto_reason_mode: panelValue("memberAutoReasonMode", "none"),
           member_approval_reason_mode: panelValue("memberApprovalReasonMode", "required"),
           group_member_change_mode: panelValue("groupMemberChangeMode", "coach_approval"),
+          member_same_day_absence_enabled: panelValue("memberSameDayAbsenceEnabled", "true") === "true",
+          member_same_day_absence_reason_mode: panelValue("memberSameDayAbsenceReasonMode", "optional"),
+          member_same_day_absence_requires_coach_approval: panelValue("memberSameDayAbsenceRequiresCoachApproval", "false") === "true",
+          member_same_day_restore_enabled: panelValue("memberSameDayRestoreEnabled", "true") === "true",
+          member_same_day_restore_cutoff_minutes: memberSameDayRestoreCutoffMinutes,
+          member_same_day_absence_deduct_enabled: panelValue("memberSameDayAbsenceDeductEnabled", "true") === "true",
+          member_same_day_absence_makeup_enabled: panelValue("memberSameDayAbsenceMakeupEnabled", "false") === "true",
+          member_same_day_absence_group_mode: panelValue("memberSameDayAbsenceGroupMode", "individual"),
         },
       });
       state.payload.policy = Array.isArray(saved) ? saved[0] || {} : saved || {};
@@ -4738,6 +4898,16 @@
       syncOutcomeRow(event.target.closest("[data-v2-outcome-user]"), { setDefault: true });
     });
     $("#scheduleV2OutcomeList").addEventListener("click", (event) => {
+      const absenceReviewButton = event.target.closest("[data-v2-review-same-day-absence]");
+      if (absenceReviewButton) {
+        const requestId = absenceReviewButton.closest("[data-v2-same-day-absence-request]")?.dataset.v2SameDayAbsenceRequest || "";
+        void reviewMemberSameDayAbsence(
+          requestId,
+          absenceReviewButton.dataset.v2ReviewSameDayAbsence === "true",
+          absenceReviewButton,
+        );
+        return;
+      }
       const curriculumButton = event.target.closest("[data-v2-curriculum-code]");
       if (curriculumButton) {
         selectV2CurriculumSuggestion(curriculumButton);
@@ -4855,6 +5025,7 @@
     const markPolicyEditorDirty = () => {
       state.policyEditorDirty = true;
       renderMemberChangePolicyPreview();
+      renderSameDayAbsencePolicyPreview();
     };
     policyPanel?.addEventListener("input", markPolicyEditorDirty);
     policyPanel?.addEventListener("change", markPolicyEditorDirty);

@@ -855,13 +855,20 @@ function readCoachStaffPanel() {
     draft.employmentStartedOn = $("#coachStaffEmploymentStartedOn")?.value || "";
   }
   if (coachStaffEditorState.tab === "settlement") {
-    draft.settlement.method = $("#coachStaffSettlementMethod")?.value || "ratio";
-    draft.settlement.ratio = numericValue($("#coachStaffSettlementRatio")?.value, draft.settlement.ratio);
-    draft.settlement.hourly = numericValue($("#coachStaffSettlementHourly")?.value, draft.settlement.hourly);
-    draft.settlement.basis = $("#coachStaffSettlementBasis")?.value || "cash_ex_vat";
-    draft.settlement.calculationMode = $("#coachStaffSettlementCalculationMode")?.value || "session_progress";
-    draft.settlement.substitute = $("#coachStaffSettlementSubstitute")?.value || "actualCoach";
-    draft.settlement.effectiveFrom = $("#coachStaffSettlementEffectiveFrom")?.value || new Date().toISOString().slice(0, 10);
+    const method = $("#coachStaffSettlementMethod");
+    const ratio = $("#coachStaffSettlementRatio");
+    const hourly = $("#coachStaffSettlementHourly");
+    const basis = $("#coachStaffSettlementBasis");
+    const calculationMode = $("#coachStaffSettlementCalculationMode");
+    const substitute = $("#coachStaffSettlementSubstitute");
+    const effectiveFrom = $("#coachStaffSettlementEffectiveFrom");
+    if (method) draft.settlement.method = method.value;
+    if (ratio) draft.settlement.ratio = numericValue(ratio.value, draft.settlement.ratio);
+    if (hourly) draft.settlement.hourly = numericValue(hourly.value, draft.settlement.hourly);
+    if (basis) draft.settlement.basis = basis.value;
+    if (calculationMode) draft.settlement.calculationMode = calculationMode.value;
+    if (substitute) draft.settlement.substitute = substitute.value;
+    if (effectiveFrom) draft.settlement.effectiveFrom = effectiveFrom.value;
   }
 }
 

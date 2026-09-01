@@ -647,7 +647,8 @@ function renderCoachDaySchedule(day) {
     const minor = timeToMinutes(time) % 20 !== 0;
     return `<div class="coach-day-time ${minor ? "is-minor" : ""}" style="grid-row:${row};grid-column:1;">${time}</div>${visibleCoaches.map((coach, coachIndex) => renderCoachDayBaseCell(day, time, coach, row, coachIndex + 2)).join("")}`;
   }).join("");
-  const lessonCards = visibleCoaches.map((coach, coachIndex) => operationBranchLessons()
+  const displayLessons = adminDisplayLessons(operationBranchLessons());
+  const lessonCards = visibleCoaches.map((coach, coachIndex) => displayLessons
     .filter((lesson) => lesson.day === day && lessonScheduleCoachId(lesson) === coach.id && !isLessonCancelled(lesson) && lessonMatchesActiveScheduleWeek(lesson, day))
     .map((lesson) => renderCoachDayLessonCard(lesson, visibleTimes, coachIndex + 2))
     .join("")).join("");
@@ -685,6 +686,7 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     laneLessonIndex.get(`${lesson.day}|${lessonScheduleCoachId(lesson)}`)?.push(lesson);
   });
   const laneLessons = lanes.map(({ day, coach }) => laneLessonIndex.get(`${day}|${coach.id}`) || []);
+  const displayLaneLessons = laneLessons.map((items) => adminDisplayLessons(items));
   const slotStateIndex = buildAdminDurationSlotStateIndex(
     displayDays,
     visibleTimes,
@@ -726,18 +728,19 @@ function renderAdminDurationSchedule(displayDays, visibleTimes, dayCoachMap) {
     return `<div class="admin-duration-slot ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} ${slotState.className}${addableClass}${assignmentClass}" ${addableAttrs} style="grid-row:${row};grid-column:${column};">${canAddForAssignment ? addButtonContent : ""}</div>`;
   }).join("")).join("");
 
-  const lessonCards = lanes.map((lane, laneIndex) => laneLessons[laneIndex]
+  const lessonCards = lanes.map((lane, laneIndex) => displayLaneLessons[laneIndex]
     .map((lesson) => {
       const startIndex = visibleTimeIndexes.get(lesson.time) ?? -1;
       if (startIndex < 0) return "";
       const span = Math.max(1, Math.ceil((Number(lesson.durationMinutes) || 20) / 10));
       const isDimmed = !scheduleFilterMatches(lesson) || !scheduleLessonMatches(lesson);
+      const displayNote = [lesson.displayTimeRange, scheduleLessonExceptionLabel(lesson)].filter(Boolean).join(" · ");
       return `
         <button class="admin-duration-lesson ${dayStartLaneIndexes.has(laneIndex) ? "admin-duration-day-start" : ""} lesson-kind-${lessonVisualKind(lesson)} ${lessonCssStatusClass(lesson)} ${getLessonStateClass(lesson)} ${isDimmed ? "is-dimmed" : ""}" type="button" data-schedule-lesson-id="${escapeHtml(String(lesson.id || ""))}" ${lessonActionAttrs(lesson)} style="${lessonColorStyle(lesson)};grid-row:${startIndex + 3} / span ${span};grid-column:${laneIndex + 2};">
           <strong class="schedule-lesson-name">${getLessonMembersMarkup(lesson)}</strong>
           <span class="schedule-lesson-round">${escapeHtml(getLessonRoundLabel(lesson) || "회차 확인")}</span>
           <span class="schedule-lesson-coach">${escapeHtml(lessonScheduleCoachLabel(lesson))}</span>
-          <span class="schedule-lesson-note ${scheduleLessonExceptionLabel(lesson) ? "" : "is-empty"}">${escapeHtml(scheduleLessonExceptionLabel(lesson) || "-")}</span>
+          <span class="schedule-lesson-note ${displayNote ? "" : "is-empty"}">${escapeHtml(displayNote || "-")}</span>
         </button>`;
     }).join("")).join("");
 

@@ -50,7 +50,14 @@ const state = {
   memberScheduleFullView: false,
   activeJournalMonth: localDateKey().slice(0, 7),
   selectedJournalDate: localDateKey(),
+  journalCalendarViewMode: "month",
   selectedLessonDetailId: "",
+  selectedLessonDetailSegmentIds: [],
+  memberSameDayAbsences: [],
+  selectedSameDayAbsenceLessonId: "",
+  sameDayAbsencePolicy: null,
+  sameDayAbsenceOperationKey: "",
+  sameDayAbsenceSubmitting: false,
   journalSearchQuery: "",
   curriculumQuery: "",
   curriculumFilter: "all",
@@ -1102,6 +1109,7 @@ async function initApp() {
   purgeLegacyDemoStorage();
   captureOnboardingIntent();
   restoreSnapshot();
+  initializeJournalNavigationForLaunch();
   renderOnboardingEntryIntro();
   renderPublicProductPreview();
   window.TennisNoteModeTransition?.consume("member", { splashSelector: "#brandSplash" });

@@ -62,6 +62,7 @@ function renderLessonDetailSheet(lesson) {
   const roundLabel = memberScheduleRoundLabel(lesson, true);
   const duration = Number(lesson.durationMinutes) || lessonDuration(lesson);
   const primaryButton = $("#lessonDetailPrimaryAction");
+  const absenceButton = $("#lessonDetailAbsenceAction");
   const journalButton = $("#lessonDetailJournalAction");
   const isPastOrToday = Boolean(lesson.lessonDate && lesson.lessonDate <= localDateKey());
   const canWriteJournal = isPastOrToday || ["completed", "no_show"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase());
@@ -76,6 +77,10 @@ function renderLessonDetailSheet(lesson) {
   primaryButton.hidden = !info.primaryAction;
   primaryButton.dataset.lessonDetailAction = info.primaryAction;
   primaryButton.textContent = info.primaryAction === "makeup" ? "보강 시간 선택" : "수업 변경 요청";
+  absenceButton.hidden = !info.absenceAction;
+  absenceButton.disabled = false;
+  absenceButton.dataset.lessonDetailAction = info.absenceAction || "";
+  absenceButton.textContent = info.absenceActionLabel || "오늘 못 가요";
   journalButton.hidden = !canWriteJournal;
   journalButton.dataset.lessonDetailAction = "journal";
 }

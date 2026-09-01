@@ -189,6 +189,7 @@ function mergeScheduleV2MemberRecords(mappedLessons = []) {
       const nextCurriculumId = record.nextCurriculumSkillLabel || existing.nextCurriculumId || "FH-01";
       const curriculum = curriculumById(nextCurriculumId, existing.curriculum || curriculumSteps[0]);
       const outcomeText = record.outcome === "no_show" ? "노쇼 처리" : "코치 수업기록";
+      const sessionState = memberTicketSessionSnapshot(record);
       const log = {
         ...existing,
         id: existing.id || `schedule-v2-record-${lesson.serverLessonId}`,
@@ -196,7 +197,9 @@ function mergeScheduleV2MemberRecords(mappedLessons = []) {
         serverLessonId: lesson.serverLessonId,
         lessonId: existing.lessonId || lesson.id,
         lessonLabel: existing.lessonLabel || `${lesson.day} ${lesson.time} · ${lesson.coach}`,
-        round: Number(existing.round) || Math.max(1, Number(lesson.ticketUsedSessions) || lessonRound()),
+        round: sessionState.snapshot?.usedAfter
+          || Number(existing.round)
+          || Math.max(1, Number(lesson.ticketUsedSessions) || lessonRound()),
         journalDate: existing.journalDate || lesson.lessonDate,
         content: existing.content || `회원 운동일지 미작성 · ${outcomeText}`,
         selfMemo: existing.selfMemo || "회원 운동일지 미작성",
@@ -212,6 +215,9 @@ function mergeScheduleV2MemberRecords(mappedLessons = []) {
             ? `다음 수업: ${record.nextCurriculumTitle}`
             : existing.memberVisibleSummary || "",
         ticketDeducted: Number(record.deductedSessions) > 0,
+        sessionSnapshot: record.ticketSessionSnapshot || null,
+        sessionSnapshotAt: record.ticketSessionSnapshotAt || "",
+        sessionRoundLabel: sessionState.label,
         participantOutcome: record.outcome,
         feedbackFinalizedAt: record.finalizedAt || "",
         feedbackUpdatedAt: record.updatedAt || record.finalizedAt || "",
