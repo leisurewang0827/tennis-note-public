@@ -3982,6 +3982,7 @@ textarea {
 .purchase-schedule-sheet-card {
   height: min(var(--tn-sheet-viewport-height, 94dvh), 920px);
   max-height: min(var(--tn-sheet-viewport-height, 94dvh), 920px);
+  max-width: 100%;
 }
 
 .purchase-schedule-sheet-head {
@@ -4148,6 +4149,10 @@ button.purchase-timetable-cell {
   padding: 12px 18px max(14px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   background: var(--paper);
+}
+
+.purchase-schedule-sheet-actions .primary-button {
+  min-height: 44px;
 }
 
 .purchase-schedule-sheet-actions span {

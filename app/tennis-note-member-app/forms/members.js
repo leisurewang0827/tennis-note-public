@@ -3,10 +3,15 @@
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
 function syncMemberVisualViewport() {
+  if (window.TennisNoteBottomSheet?.syncViewport) {
+    return window.TennisNoteBottomSheet.syncViewport();
+  }
   const { height, offsetTop } = memberViewportGeometry();
   document.documentElement.style.setProperty("--tn-visual-viewport-height", `${height}px`);
   document.documentElement.style.setProperty("--tn-visual-viewport-offset-top", `${offsetTop}px`);
+  document.documentElement.style.setProperty("--tn-usable-viewport-height", `${height}px`);
   document.documentElement.style.setProperty("--tn-sheet-viewport-height", `${Math.round(height * 0.86)}px`);
+  return { height, offsetTop, usableHeight: height, systemBottomInset: 0, keyboardOffset: 0 };
 }
 
 async function refreshMemberRuntimeDiagnostics() {

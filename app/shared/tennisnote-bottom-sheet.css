@@ -18,8 +18,8 @@ html.tn-sheet-system-surface-active body {
   display: grid;
   align-items: end;
   justify-items: center;
-  height: var(--tn-visual-viewport-height, 100dvh);
-  max-height: var(--tn-visual-viewport-height, 100dvh);
+  height: var(--tn-usable-viewport-height, var(--tn-visual-viewport-height, 100dvh));
+  max-height: var(--tn-usable-viewport-height, var(--tn-visual-viewport-height, 100dvh));
   overflow: hidden;
   padding-right: var(--tn-safe-area-right, env(safe-area-inset-right, 0px));
   padding-bottom: var(--tn-sheet-keyboard-offset, 0px);

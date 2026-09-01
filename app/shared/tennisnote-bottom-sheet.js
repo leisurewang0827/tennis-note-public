@@ -22,6 +22,23 @@
   let systemSurfaceState = null;
   let accessoryBarQueue = Promise.resolve();
 
+  function isAndroidViewport() {
+    const capacitorPlatform = String(
+      window.Capacitor?.getPlatform?.()
+      || window.Capacitor?.platform
+      || "",
+    ).toLowerCase();
+    return capacitorPlatform === "android" || /android/i.test(navigator.userAgent || "");
+  }
+
+  function androidSystemBottomInset({ height, offsetTop, width }) {
+    if (!isAndroidViewport()) return 0;
+    const screenHeight = Math.max(0, Math.round(Number(window.screen?.height) || 0));
+    const measuredGap = Math.max(0, screenHeight - Math.round(offsetTop + height));
+    const conservativeFloor = width > height ? 24 : 40;
+    return Math.min(48, Math.max(conservativeFloor, measuredGap));
+  }
+
   function viewportGeometry() {
     const viewport = window.visualViewport;
     const layoutHeight = Math.max(1, Math.round(window.innerHeight || viewport?.height || 1));
@@ -31,7 +48,16 @@
     const height = Math.max(1, Math.min(rawHeight, layoutHeight - offsetTop));
     const layoutWidth = Math.max(1, Math.round(window.innerWidth || viewport?.width || 1));
     const width = Math.max(1, Math.min(Math.round(viewport?.width || layoutWidth), layoutWidth));
-    return { height, offsetTop, width, visibleBottom: offsetTop + height };
+    const systemBottomInset = androidSystemBottomInset({ height, offsetTop, width });
+    const usableHeight = Math.max(1, height - systemBottomInset);
+    return {
+      height,
+      offsetTop,
+      width,
+      visibleBottom: offsetTop + height,
+      systemBottomInset,
+      usableHeight,
+    };
   }
 
   function resolveSheet(target) {
@@ -66,7 +92,14 @@
   }
 
   function syncViewport() {
-    const { height, offsetTop, width, visibleBottom } = viewportGeometry();
+    const {
+      height,
+      offsetTop,
+      width,
+      visibleBottom,
+      systemBottomInset,
+      usableHeight,
+    } = viewportGeometry();
     const activeElement = document.activeElement;
     const focusedEditor = Boolean(
       activeSheet
@@ -77,16 +110,25 @@
     if (!stableViewportBottom || Math.abs(stableViewportWidth - width) > 60) resetViewportBaseline();
     const keyboardThreshold = Math.max(140, Math.round(stableViewportBottom * 0.18));
     const occludedBottom = Math.max(0, Math.round(stableViewportBottom - visibleBottom));
-    const keyboardOffset = focusedEditor && occludedBottom > keyboardThreshold ? occludedBottom : 0;
-    if (keyboardOffset > 0) keyboardWasVisible = true;
+    const viewportAlreadyExcludesKeyboard = occludedBottom > keyboardThreshold
+      && height + offsetTop <= stableViewportBottom - keyboardThreshold;
+    const keyboardOffset = focusedEditor
+      && occludedBottom > keyboardThreshold
+      && !viewportAlreadyExcludesKeyboard
+      ? occludedBottom
+      : 0;
+    if (occludedBottom > keyboardThreshold) keyboardWasVisible = true;
     if (!focusedEditor && keyboardWasVisible && visibleBottom >= stableViewportBottom - keyboardThreshold) {
       keyboardWasVisible = false;
     }
     document.documentElement.style.setProperty("--tn-visual-viewport-height", `${height}px`);
     document.documentElement.style.setProperty("--tn-visual-viewport-offset-top", `${offsetTop}px`);
-    document.documentElement.style.setProperty("--tn-sheet-viewport-height", `${Math.round(height * 0.86)}px`);
+    document.documentElement.style.setProperty("--tn-system-bottom-inset", `${systemBottomInset}px`);
+    document.documentElement.style.setProperty("--tn-usable-viewport-height", `${usableHeight}px`);
+    document.documentElement.style.setProperty("--tn-sheet-viewport-height", `${Math.round(usableHeight * 0.86)}px`);
     document.documentElement.style.setProperty("--tn-sheet-keyboard-offset", `${keyboardOffset}px`);
     if (focusedEditor) scheduleFieldVisibility(activeSheet, activeElement);
+    return { height, offsetTop, width, systemBottomInset, usableHeight, keyboardOffset };
   }
 
   function stabilizeViewport() {
@@ -450,6 +492,7 @@
       return true;
     },
     trapFocus,
+    viewportGeometry,
     syncViewport,
   });
 })();
