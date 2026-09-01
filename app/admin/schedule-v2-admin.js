@@ -363,6 +363,16 @@
     }[code] || "연결 확인 필요";
   }
 
+  function scheduleIntegrityHasGeneratedPlan(result = {}) {
+    return Number(result.createdCount) >= 1;
+  }
+
+  function scheduleIntegrityCanSafelyApply(result = {}) {
+    return scheduleIntegrityHasGeneratedPlan(result)
+      && Number(result.remainingUnassignedUnits) === 0
+      && Number(result.conflictCount) === 0;
+  }
+
   function scheduleIntegrityRepairLabel(result, issueCodes = []) {
     if (!issueCodes.includes("active_regular_ticket_without_future_lessons")) {
       return issueCodes.includes("ticket_coach_missing") ? "담당 코치를 먼저 선택하세요" : "수동 확인 필요";
@@ -372,8 +382,9 @@
     const remaining = Number(result.remainingUnassignedUnits) || 0;
     const conflicts = Number(result.conflictCount) || 0;
     const reason = String(result.reason || "");
-    if (created > 0 && remaining === 0) return `자동 생성 가능 ${created}회`;
-    if (created > 0) return `${created}회 생성 가능 · ${remaining}회는 수동 확인`;
+    if (scheduleIntegrityCanSafelyApply(result)) return `안전 실행 가능 ${created}회`;
+    if (created > 0 && conflicts > 0) return `생성안 ${created}회 · 시간 충돌 ${conflicts}건`;
+    if (created > 0) return `생성안 ${created}회 · ${remaining}회는 수동 확인`;
     if (conflicts > 0) return `코치 시간 충돌 ${conflicts}건 · 시간표에서 조정`;
     return {
       regular_schedule_rule_missing: "정규 요일·시간 설정 필요",
@@ -466,13 +477,10 @@
           console.warn("Schedule V2 integrity reconciliation preview failed", error);
         }
       }));
-      const autoRepairable = [...reconcileByTicket.values()].filter((row) => Number(row.createdCount) > 0).length;
+      const generatedPlanCount = [...reconcileByTicket.values()].filter(scheduleIntegrityHasGeneratedPlan).length;
       reconcileByTicket.forEach((row, ticketId) => {
-        const created = Number(row.createdCount) || 0;
-        const remaining = Number(row.remainingUnassignedUnits) || 0;
-        const conflicts = Number(row.conflictCount) || 0;
         const item = items.find((candidate) => String(candidate.ticketId) === String(ticketId));
-        if (!item?.branchId || created < 1 || remaining > 0 || conflicts > 0) return;
+        if (!item?.branchId || !scheduleIntegrityCanSafelyApply(row)) return;
         const ticketIds = state.integrityRepairGroups.get(item.branchId) || new Set();
         ticketIds.add(ticketId);
         state.integrityRepairGroups.set(item.branchId, ticketIds);
@@ -482,11 +490,11 @@
       if (applyButton) {
         applyButton.disabled = repairableTicketCount === 0;
         applyButton.textContent = repairableTicketCount
-          ? `확정 가능한 ${repairableTicketCount}권 일정 생성`
-          : "확정 가능한 일정 없음";
+          ? `안전 실행 가능한 ${repairableTicketCount}개 회원권 일정 생성`
+          : "안전 실행 가능한 일정 없음";
       }
       summary.textContent = affectedTickets
-        ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권 · 자동 생성 가능 ${autoRepairable}권`
+        ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}개 회원권 · 생성안 있음 ${generatedPlanCount}개 · 안전 실행 가능 ${repairableTicketCount}개`
         : "문제 없음";
       list.innerHTML = groupedItems.length
         ? groupedItems.map((item) => {
@@ -1294,7 +1302,7 @@
   function renderEmpty(message) {
     $("#scheduleV2Grid").innerHTML = `<div class="schedule-v2-empty">${escapeHtml(message)}</div>`;
     $("#scheduleV2QueueList").innerHTML = "";
-    $("#scheduleV2QueueCount").textContent = "0명";
+    $("#scheduleV2QueueCount").textContent = "0개 회원권";
   }
 
   function renderDayTabs() {
@@ -2000,7 +2008,7 @@
       missingSessions: Number(item.missing_sessions ?? item.missingSessions) || 0,
       status: item.assignment_status || item.assignmentStatus || "unassigned",
     })).filter((item) => item.missingSessions > 0);
-    $("#scheduleV2QueueCount").textContent = `${items.length}명`;
+    $("#scheduleV2QueueCount").textContent = `${items.length}개 회원권`;
     $("#scheduleV2QueueList").innerHTML = items.length
       ? items.map((item) => `<button class="schedule-v2-queue-item" type="button" data-v2-queue-ticket="${escapeHtml(item.ticketId)}"><strong>${escapeHtml(item.memberName)}</strong><span>${escapeHtml(item.productName)} · ${item.missingSessions}회 미배정</span></button>`).join("")
       : '<div class="schedule-v2-empty" style="min-height:90px">미배정 정규권이 없습니다.</div>';

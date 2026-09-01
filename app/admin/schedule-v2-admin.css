@@ -405,9 +405,20 @@
 .schedule-v2-integrity-panel > summary {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   cursor: pointer;
   font-weight: 800;
+}
+
+.schedule-v2-integrity-panel > summary > :is(span, strong) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.schedule-v2-integrity-panel > summary > strong {
+  margin-left: auto;
+  text-align: right;
 }
 
 .schedule-v2-integrity-panel > p,
@@ -1556,6 +1567,7 @@
   font-size: 12px;
   font-weight: 800;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .schedule-v2-queue > p {
@@ -1588,6 +1600,7 @@
 .schedule-v2-queue-item strong,
 .schedule-v2-queue-item span {
   display: block;
+  overflow-wrap: anywhere;
 }
 
 .schedule-v2-queue-item span {
