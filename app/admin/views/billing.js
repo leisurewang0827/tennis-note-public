@@ -28,7 +28,7 @@ function renderCoachSettlementPreview() {
     });
     const recordProgressByTicket = settlementRecordProgressByTicket({ ticketById, assignmentByLesson });
     const monthBillings = billings
-      .filter((billing) => billing.status === "paid" && billingMatchesMonth(billing, state.billingMonth));
+      .filter((billing) => billingIncludedInCoachSettlement(billing) && billingMatchesMonth(billing, state.billingMonth));
     const settlementIndexes = {
         ticketById,
         completedLessonsByTicket,
@@ -91,8 +91,8 @@ function renderCoachSettlementPreview() {
           <tr>
             <td><strong>${item.member}</strong><br><small>${item.lessonCount}/${item.totalLessons || item.lessonCount}회 완료</small></td>
             <td class="${item.linkedTicket === false ? "payment-link-warning" : ""}">${item.coach}${item.linkedTicket === false ? "<br><small>회원권 연결 후 정산 가능</small>" : transferred ? `<br><small>대타 ${item.actualCoach} · 정산 ${settlementCoach}</small>` : "<br><small>담당 코치 진행</small>"}</td>
-            <td>${money.format(item.paidAmount)}원<br><small>${item.paymentMethod} · ${item.discount}</small></td>
-            <td><strong>${money.format(item.settlementBase)}원</strong><br><small>${item.paymentMethod === "카드" ? "부가세 제외 현금가" : "실결제 기준"}</small></td>
+            <td>${money.format(item.paidAmount)}원<br><small>${item.refundAdjusted ? `원결제 ${money.format(item.grossPaidAmount)}원 · 환불 ${money.format(item.refundedAmount)}원` : `${item.paymentMethod} · ${item.discount}`}</small></td>
+            <td><strong>${money.format(item.settlementBase)}원</strong><br><small>${item.refundAdjusted ? "환불 후 정산 기준" : item.paymentMethod === "카드" ? "부가세 제외 현금가" : "실결제 기준"}</small></td>
             <td>${ruleLabel}<br><small>${transferred ? "대타 이관 적용" : "기본 정산"}</small></td>
             <td><strong>${money.format(settlementAmountFor(item))}원</strong></td>
           </tr>`;

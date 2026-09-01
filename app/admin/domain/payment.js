@@ -217,6 +217,30 @@ function settlementBaseAmountForBilling(billing = {}) {
   return method.includes("card") ? vatExclusiveSettlementAmount(paidAmount) : paidAmount;
 }
 
+function settlementAdjustedPaymentForBilling(billing = {}) {
+  const adjustment = window.TennisNoteSettlementAdjustment;
+  const source = {
+    ...billing,
+    settlementBaseAmount: settlementBaseAmountForBilling(billing),
+  };
+  if (adjustment?.paymentAmounts) return adjustment.paymentAmounts(source);
+  const grossAmount = Math.max(0, Number(billing.finalAmount || billing.amount) || 0);
+  return {
+    grossAmount,
+    refundedAmount: 0,
+    netAmount: grossAmount,
+    originalSettlementBase: settlementBaseAmountForBilling(billing),
+    settlementBase: settlementBaseAmountForBilling(billing),
+    refundAdjusted: false,
+  };
+}
+
+function billingIncludedInCoachSettlement(billing = {}) {
+  const adjustment = window.TennisNoteSettlementAdjustment;
+  if (adjustment?.isIncluded) return adjustment.isIncluded(billing);
+  return billing.status === "paid";
+}
+
 function paymentFullCancelAmount(item = {}) {
   return Math.max(0, Number(item.finalAmount || item.amount || 0));
 }

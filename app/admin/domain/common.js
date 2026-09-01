@@ -2072,13 +2072,18 @@ function settlementRowsForBilling(billing, indexes = {}) {
   const oneDayBooking = oneDayBookingForBilling(billing);
   const oneDayLinked = Boolean(billing.oneDayBookingId);
   const oneDayCoach = oneDayBooking ? getCoachName(oneDayBooking.coachId || "") : "원데이 예약";
+  const paymentAdjustment = settlementAdjustedPaymentForBilling(billing);
   const base = {
     member: billing.member,
     coach: ticketId ? getCoachName(ticket.coachId || "") : oneDayLinked ? oneDayCoach : "회원권 미연결",
     linkedTicket: Boolean(ticketId || oneDayLinked),
     oneDayLinked,
-    paidAmount: Number(billing.finalAmount || billing.amount) || 0,
-    settlementBase: settlementBaseAmountForBilling(billing),
+    paidAmount: paymentAdjustment.netAmount,
+    grossPaidAmount: paymentAdjustment.grossAmount,
+    refundedAmount: paymentAdjustment.refundedAmount,
+    refundAdjusted: paymentAdjustment.refundAdjusted,
+    settlementBase: paymentAdjustment.settlementBase,
+    originalSettlementBase: paymentAdjustment.originalSettlementBase,
     paymentMethod: String(billing.method || "").toLowerCase().includes("card") ? "카드" : "현금",
     discount: Number(billing.discountAmount) > 0 ? `할인 ${money.format(billing.discountAmount)}원` : "할인 없음",
     totalLessons: oneDayLinked ? 1 : Number(ticket.total) || 0,
