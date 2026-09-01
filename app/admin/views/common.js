@@ -1156,7 +1156,7 @@ function paymentActionFor(item, index) {
       : isStaleReadyPayment(item) ? "상태 확인" : "결제 확인";
     return `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context(label)}>${label}</button>${paymentPendingMoreActions(item, index)}`;
   }
-  if (item.status === "paid" && paymentRequiresTicketRepair(item)) return `<button class="small-button primary-button" type="button" data-paid-payment="${index}" ${context("회원권 연결 확인")}>회원권 연결 확인</button>${paymentApprovedMoreActions(item, index)}`;
+  if (item.status === "paid" && paymentRequiresTicketRepair(item)) return `<button class="small-button primary-button" type="button" data-paid-payment="${index}" ${context("회원권 연결 다시 처리")}>회원권 연결 다시 처리</button>${paymentApprovedMoreActions(item, index)}`;
   if (item.status === "paid") return `<button class="small-button" type="button" disabled>승인 완료</button>${paymentApprovedMoreActions(item, index)}`;
   if (item.status === "refund_manual_pending") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("실제 송금 후 환불 완료 확인")}>송금완료 확인</button>`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;

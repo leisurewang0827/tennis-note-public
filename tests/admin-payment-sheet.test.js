@@ -40,7 +40,11 @@ test("재등록은 새 회원권 화면 대신 기존 ticket 횟수 누적 RPC�
 
   assert.match(memberAction, /tn_admin_accumulate_member_ticket_entitlement/);
   assert.match(memberAction, /sourceTicketId:\s*ticket\.serverTicketId/);
-  assert.match(memberAction, /addedSessions:\s*Number\(form\.elements\.addedSessions\.value\)/);
+  assert.match(memberAction, /const addedSessions = Number\(form\.elements\.addedSessions\.value\)/);
+  assert.match(memberAction, /addedSessions,/);
+  assert.match(memberAction, /tn_ticket_entitlement_events/);
+  assert.match(memberAction, /operation_key:\s*reenrollVerificationPayload\.operationKey/);
+  assert.match(memberAction, /memberManagementWriteVerification\(action, action === "reenroll" \? reenrollVerificationPayload/);
   assert.match(memberView, /횟수 추가/);
   assert.match(memberScreen, /membershipTicketCanKeepSchedule/);
 });

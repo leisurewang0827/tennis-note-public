@@ -1831,7 +1831,28 @@ function memberManagementWriteVerification(action, payload, result, statusAction
   }
   if (action === "force_delete") return serverTicket ? "member_management_write_not_confirmed:force_delete" : "";
   if (action === "permanent_delete") return !serverUser || serverUser.permanently_deleted_at ? "" : "member_management_write_not_confirmed:permanent_delete";
-  if (action === "reenroll") return serverTicket && ["active", "paused"].includes(serverTicket.status) ? "" : "member_management_write_not_confirmed:reenroll";
+  if (action === "reenroll") {
+    const normalizedResult = normalizedRpcResult(result);
+    const addedSessions = Number(payload?.addedSessions);
+    const expectedTotal = Number(payload?.totalBefore) + addedSessions;
+    const expectedRemaining = Number(payload?.remainingBefore) + addedSessions;
+    const event = payload?.entitlementEvent || null;
+    if (!serverTicket || !["active", "paused"].includes(serverTicket.status)) return "member_management_write_not_confirmed:reenroll";
+    if (String(serverTicket.serverTicketId || "") !== String(payload?.ticketId || "")) return "member_management_write_not_confirmed:reenroll_ticket";
+    if (Number(serverTicket.total) !== expectedTotal || Number(serverTicket.remaining) !== expectedRemaining) return "member_management_write_not_confirmed:reenroll_sessions";
+    if (Number(normalizedResult.addedSessions) !== addedSessions || Number(normalizedResult.totalSessions) !== expectedTotal || Number(normalizedResult.remainingSessions) !== expectedRemaining) {
+      return "member_management_write_not_confirmed:reenroll_result";
+    }
+    if (!event
+      || String(event.ticket_id || "") !== String(payload?.ticketId || "")
+      || String(event.operation_key || "") !== String(payload?.operationKey || "")
+      || Number(event.added_sessions) !== addedSessions
+      || Number(event.total_after) !== expectedTotal
+      || Number(event.remaining_after) !== expectedRemaining) {
+      return "member_management_write_not_confirmed:reenroll_event";
+    }
+    return "";
+  }
   if (action === "deactivate") return serverUser?.status === "inactive" ? "" : "member_management_write_not_confirmed:deactivate";
   if (action === "restore") return serverUser?.status === "active" ? "" : "member_management_write_not_confirmed:restore";
   return "";

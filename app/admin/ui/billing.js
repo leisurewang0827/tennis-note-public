@@ -27,6 +27,11 @@ function openOnsitePaymentModal() {
   $("#onsitePaymentDate").value = adminLocalDateKey(new Date());
   $("#onsitePaymentStartDate").value = "";
   $("#onsitePaymentMessage").textContent = "";
+  const form = $("#onsitePaymentForm");
+  if (form) {
+    delete form.dataset.onsitePaymentOperationKey;
+    delete form.dataset.onsitePaymentRequestFingerprint;
+  }
   syncOnsitePaymentSourceTickets();
   $("#onsitePaymentModal")?.removeAttribute("hidden");
   window.setTimeout(() => memberSelect?.focus(), 0);
