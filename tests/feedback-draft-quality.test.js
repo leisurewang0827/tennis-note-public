@@ -24,6 +24,30 @@ test("키워드 순서와 명시 사실만 보존한 중립 초안을 만든다"
   assert.match(observed.comment, /방향 좋아짐/);
   assert.match(observed.comment, /준비 늦음/);
   assert.doesNotMatch(observed.comment, /\d|세트|반복|랠리|성공 기준|저속|낮은 속도/);
+
+  const natural = draft.generate("포핸드 타점이 좋아졌습니다.");
+  assert.equal(natural.comment, "포핸드 타점이 좋아졌습니다.");
+  assert.doesNotMatch(natural.comment, /이라는 관찰/);
+
+  const five = draft.generate("방향 좋아짐, 준비 늦음, 라켓면 열림, 스윙 짧음, 리듬 흔들림");
+  assert.equal(five.ok, true);
+  assert.equal(five.quality.adjacentRepetition, false);
+  assert.ok(five.quality.sentenceCount <= 3);
+  assert.deepEqual(Array.from(five.keywords), ["방향 좋아짐", "준비 늦음", "라켓면 열림", "스윙 짧음", "리듬 흔들림"]);
+  five.keywords.forEach((keyword) => assert.match(five.comment, new RegExp(keyword)));
+  assert.doesNotMatch(five.comment, /함께 살펴봤습니다/);
+
+  for (const input of ["포핸드. 백핸드? 서브!", "포핸드; 백핸드\n서브!", "포핸드。백핸드？서브！"]) {
+    const separated = draft.generate(input);
+    assert.deepEqual(Array.from(separated.keywords), ["포핸드", "백핸드", "서브"], input);
+    assert.match(separated.comment, /포핸드·백핸드·서브/, input);
+  }
+
+  const sameEnding = draft.generate("포핸드가 좋아졌습니다. 백핸드가 좋아졌습니다. 서브가 좋아졌습니다.");
+  assert.equal(sameEnding.quality.adjacentRepetition, false);
+  sameEnding.keywords.forEach((keyword) => assert.match(sameEnding.comment, new RegExp(keyword)));
+  assert.equal(draft.hasAdjacentRepetition(["포핸드를 확인했습니다.", "백핸드를 확인했습니다."]), true);
+  assert.equal(draft.hasAdjacentRepetition(["포핸드를 확인했어요.", "백핸드를 확인했습니다."]), true);
 });
 
 test("공백과 문장부호만 다른 중복을 제거하고 가혹 표현은 차단한다", () => {

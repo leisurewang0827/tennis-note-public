@@ -3,12 +3,12 @@
   const harshExpressionSuffixes = Object.freeze(["최악", "못함", "형편없음", "형편없다", "엉망", "바보", "답답함", "답답하다", "끔찍함", "끔찍하다"]);
   const zeroWidthPattern = /[\u200B-\u200D\u2060\uFEFF]/gu;
   const observedPhrasePattern = /(?:좋아짐|나아짐|개선됨|안정됨|성공함|유지됨|연결됨|늦음|빨라짐|밀림|흔들림|부족함|약함|강함|짧음|길어짐|어려움|놓침|됨|함|임|었음|았음)$/;
-  const sentenceEndings = ["확인했습니다", "기록했습니다", "남겼습니다", "살펴봤습니다"];
+  const completeObservationPattern = /(?:습니다|합니다|입니다|됐어요|되었어요|했어요|해요|이에요|예요)$/u;
 
   function normalizedKeywordSource(value) {
     return String(value || "")
       .normalize("NFC")
-      .replace(/[、/|;]+/g, ",")
+      .replace(/[、/|;.!?。！？]+/g, ",")
       .replace(/\r\n?/g, "\n");
   }
 
@@ -88,27 +88,43 @@
     return `‘${String(value || "").replace(/[‘’]/g, "").trim()}’`;
   }
 
+  function completeObservationSentence(value) {
+    const text = String(value || "").trim();
+    return completeObservationPattern.test(text) ? `${text}.` : "";
+  }
+
   function topicSentence(values) {
     if (!values.length) return "";
     const topic = values.map((value) => String(value || "").trim()).filter(Boolean).join("·");
     return topic ? `오늘 수업에서는 ${topic}${objectParticle(topic)} 중심으로 확인했습니다.` : "";
   }
 
-  function observedSentence(value, index) {
-    const fact = quoted(value);
-    if (index === 0) return `${fact}이라는 관찰을 기록했습니다.`;
-    if (index === 1) return `추가로 ${fact}도 수업 메모에 남겼습니다.`;
-    return `${fact} 부분을 함께 살펴봤습니다.`;
+  function observationListSentence(values) {
+    const facts = values.map((value) => String(value || "").trim()).filter(Boolean);
+    return facts.length ? `관찰 내용: ${facts.join(" · ")}.` : "";
+  }
+
+  function draftSentences(keywords) {
+    if (!keywords.length) return [];
+    if (keywords.every((keyword) => !isObservedPhrase(keyword))) return [topicSentence(keywords)];
+    if (keywords.length === 1) {
+      const complete = completeObservationSentence(keywords[0]);
+      return [complete || observationListSentence(keywords)];
+    }
+    return [observationListSentence(keywords)];
   }
 
   function sentenceSignature(value) {
     const text = String(value || "").trim();
     const start = canonicalKeyword(text.split(/\s+/)[0] || "");
-    const ending = sentenceEndings.find((item) => text.endsWith(`${item}.`)) || "";
+    const words = text.replace(/[.!?。！？]+$/u, "").match(/[\p{L}\p{N}]+/gu) || [];
+    const ending = canonicalKeyword(words.at(-1) || "");
+    const verbMatch = (words.at(-1) || "").match(/^(.+?)(?:했습니다|했어요|합니다|해요|됐습니다|되었어요|됐어요|됩니다|었습니다|았습니다|어요|아요|습니다)$/u);
+    const coreVerb = canonicalKeyword(verbMatch?.[1] || "");
     const nouns = [...text.matchAll(/[가-힣A-Za-z]{2,}/g)]
       .map((match) => canonicalKeyword(match[0]))
       .filter((token) => token && !["오늘수업에서는", "이라는", "관찰을", "추가로", "수업메모에", "부분을", "함께", "중심으로"].includes(token));
-    return { start, ending, nouns: new Set(nouns) };
+    return { start, ending, coreVerb, nouns: new Set(nouns) };
   }
 
   function hasAdjacentRepetition(sentences) {
@@ -118,6 +134,7 @@
       const current = sentenceSignature(sentence);
       if (before.start && before.start === current.start) return true;
       if (before.ending && before.ending === current.ending) return true;
+      if (before.coreVerb && before.coreVerb === current.coreVerb) return true;
       const shared = [...current.nouns].filter((token) => before.nouns.has(token));
       return shared.length >= 2;
     });
@@ -157,11 +174,18 @@
       };
     }
 
-    const nounOnly = keywords.filter((keyword) => !isObservedPhrase(keyword));
-    const observed = keywords.filter(isObservedPhrase);
-    const sentences = [];
-    if (nounOnly.length) sentences.push(topicSentence(nounOnly));
-    observed.forEach((keyword, index) => sentences.push(observedSentence(keyword, index)));
+    const sentences = draftSentences(keywords);
+    const adjacentRepetition = hasAdjacentRepetition(sentences);
+    if (adjacentRepetition) {
+      return {
+        ok: false,
+        code: "draft_quality_retry_required",
+        message: "같은 표현이 반복되지 않도록 키워드를 조금 나눠 다시 시도해 주세요.",
+        keywords,
+        sections: [],
+        comment: "",
+      };
+    }
     const comment = fitWholeSentences(sentences);
     const curriculum = curriculumContext(context.curriculum);
 
@@ -175,7 +199,7 @@
       comment,
       quality: Object.freeze({
         inputFactsOnly: keywords.every((keyword) => comment.includes(keyword)),
-        adjacentRepetition: hasAdjacentRepetition(sentences),
+        adjacentRepetition,
         sentenceCount: sentences.length,
       }),
     };
