@@ -98,8 +98,16 @@ html[data-tennisnote-surface] body {
 .brand-splash.is-mode-transition .tn-mode-transition-card {
   position: absolute;
   top: calc(env(safe-area-inset-top, 0px) + 18px);
-  left: 50%;
-  transform: translateX(-50%);
+  right: max(16px, env(safe-area-inset-right, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  width: auto;
+  max-width: 520px;
+  margin-inline: auto;
+  transform: none;
+}
+
+.brand-splash.is-mode-transition.is-hidden .tn-mode-transition-card {
+  display: none;
 }
 
 @keyframes tn-mode-transition-spin {
