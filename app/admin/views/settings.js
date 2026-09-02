@@ -485,8 +485,12 @@ function renderCoaches() {
     .map(
       (coach) => {
         const breakCount = normalizeCoachBreakBlocks(coach).length;
+        const editKey = coachStaffEditKey(coach, branchCoaches);
+        const editAttributes = editKey
+          ? `data-edit-coach-staff="${escapeHtml(editKey)}"`
+          : 'disabled aria-disabled="true"';
         return `
-        <article class="coach-row" data-coach-row="${coach.id}">
+        <article class="coach-row" data-coach-row="${escapeHtml(editKey)}">
           <div class="coach-identity">
             ${avatarMarkup(coach, "large")}
             <div><strong>${escapeHtml(coach.name)}</strong><span>${escapeHtml(coach.role || "레슨")} · ${coachEmploymentLabel(coach)}</span></div>
@@ -495,13 +499,13 @@ function renderCoaches() {
             <div class="coach-auth-badges">
               ${badge(coachSignupTone(coach), coachSignupLabel(coach))}
               ${badge(coachApprovalTone(coach), coachApprovalLabel(coach))}
-              ${operationsRole() === "admin" && coach.loginCandidateUserId ? `<button class="small-button" type="button" data-reconcile-coach-login="${escapeHtml(coach.id)}">가입 계정 연결</button>` : ""}
+              ${operationsRole() === "admin" && coach.loginCandidateUserId && editKey ? `<button class="small-button" type="button" data-reconcile-coach-login="${escapeHtml(editKey)}">가입 계정 연결</button>` : ""}
               ${operationsRole() === "admin" && !coach.accountLinked && coach.loginCandidateCount > 1 ? badge("warn", "연결 후보 확인 필요") : ""}
             </div>
             <span>${escapeHtml(getCoachAvailabilitySummary(coach.id))}${breakCount ? ` · 브레이크 ${breakCount}개` : ""}</span>
             <span>${operationsRole() === "admin" ? coachSettlementSummary(coach) : "정산 정보 비공개"}</span>
           </div>
-          <button class="icon-button coach-row-edit" type="button" aria-label="${escapeHtml(coach.name)} 편집" title="편집" data-edit-coach-staff="${coach.id}">···</button>
+          <button class="icon-button coach-row-edit" type="button" aria-label="${escapeHtml(coach.name)} 편집" title="${editKey ? "편집" : "코치 정보를 다시 불러와 주세요"}" ${editAttributes}>···</button>
         </article>`;
       },
     )

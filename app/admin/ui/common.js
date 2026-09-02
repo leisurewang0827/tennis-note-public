@@ -154,12 +154,17 @@ async function openJournalMedia(journalId) {
   }
 }
 
-function openCoachStaffModal(coachId = "") {
+function openCoachStaffModal(coachKey = "") {
   if (operationsRole() !== "admin") {
     showToast("관리자만 코치·직원 정보를 수정할 수 있습니다.");
     return;
   }
-  const coach = operationBranchCoaches().find((item) => item.id === coachId) || null;
+  const coach = coachKey ? coachForStaffEditKey(coachKey) : null;
+  if (coachKey && !coach) {
+    closeCoachStaffModal();
+    showToast("코치 정보를 정확히 식별하지 못했습니다. 목록을 새로고침한 뒤 다시 확인해주세요.");
+    return;
+  }
   coachStaffEditorState.coachId = coach?.id || "";
   coachStaffEditorState.mode = coach ? "edit" : "create";
   coachStaffEditorState.tab = "basic";

@@ -34,7 +34,7 @@ async function setCoachApproval(coachId, nextStatus, button) {
   }, button, disabling ? "코치 승인을 해제했습니다." : "코치 승인을 다시 완료했습니다.");
   if (result && !disabling) {
     const refreshedCoach = coaches.find((item) => item.serverRoleId === coach.serverRoleId);
-    if (refreshedCoach) openCoachStaffModal(refreshedCoach.id);
+    if (refreshedCoach) openCoachStaffModal(coachStaffEditKey(refreshedCoach));
   }
 }
 
@@ -398,10 +398,13 @@ async function saveCoachLaneOrder() {
   }
 }
 
-async function reconcileCoachLogin(coachId) {
-  const coach = coaches.find((item) => item.id === coachId);
+async function reconcileCoachLogin(coachKey) {
+  const coach = coachForStaffEditKey(coachKey);
   const client = window.TennisNoteDataClient;
-  if (!coach?.serverRoleId || !coach.loginCandidateUserId || !client?.rpc || operationsRole() !== "admin") return;
+  if (!coach?.serverRoleId || !coach.loginCandidateUserId || !client?.rpc || operationsRole() !== "admin") {
+    showToast("코치 계정을 정확히 식별하지 못했습니다. 목록을 새로고침한 뒤 다시 확인해주세요.");
+    return;
+  }
   if (!window.confirm(`${coach.name} 코치의 가입 계정을 연결할까요?`)) return;
   try {
     await client.rpc("tn_admin_reconcile_coach_login", {

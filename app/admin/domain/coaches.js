@@ -161,11 +161,35 @@ function preferredLocalCoachId(displayName = "") {
   return "";
 }
 
+function uniqueServerCoachLocalId(role, index, currentCoach = null, allCoaches = coaches) {
+  const preferredId = preferredLocalCoachId(role?.display_name || "");
+  const baseId = preferredId || `coach-live-${index + 1}`;
+  const roleId = String(role?.id || "");
+  let candidate = baseId;
+  let suffix = 2;
+  while (allCoaches.some((item) => (
+    item !== currentCoach
+    && String(item.id || "") === candidate
+    && String(item.serverRoleId || "") !== roleId
+  ))) {
+    candidate = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
 function mergeServerCoachRole(role, index, allCoaches = coaches) {
   const preferredId = preferredLocalCoachId(role.display_name || "");
   let coach = allCoaches.find((item) => item.serverRoleId === role.id)
-    || allCoaches.find((item) => preferredId && item.id === preferredId)
-    || allCoaches.find((item) => item.name === role.display_name);
+    || allCoaches.find((item) => (
+      preferredId
+      && item.id === preferredId
+      && (!item.serverRoleId || item.serverRoleId === role.id)
+    ))
+    || allCoaches.find((item) => (
+      item.name === role.display_name
+      && (!item.serverRoleId || item.serverRoleId === role.id)
+    ));
   if (!coach) {
     const availabilityByCoach = {
       "coach-no": "split",
@@ -174,7 +198,7 @@ function mergeServerCoachRole(role, index, allCoaches = coaches) {
       "coach-park": "weekend",
     };
     coach = {
-      id: preferredId || `coach-live-${index + 1}`,
+      id: uniqueServerCoachLocalId(role, index, null, allCoaches),
       name: role.display_name || `코치 ${index + 1}`,
       role: "레슨",
       status: "active",
@@ -184,6 +208,12 @@ function mergeServerCoachRole(role, index, allCoaches = coaches) {
       photoUrl: "",
     };
     allCoaches.push(coach);
+  } else if (allCoaches.some((item) => (
+    item !== coach
+    && String(item.id || "") === String(coach.id || "")
+    && String(item.serverRoleId || "") !== String(role.id || "")
+  ))) {
+    coach.id = uniqueServerCoachLocalId(role, index, coach, allCoaches);
   }
   Object.assign(coach, {
     serverRoleId: role.id,
@@ -199,6 +229,36 @@ function mergeServerCoachRole(role, index, allCoaches = coaches) {
     scheduleLaneOrder: Number.isFinite(Number(role.schedule_lane_order)) ? Number(role.schedule_lane_order) : 1000 + index,
   });
   return coach;
+}
+
+function coachStaffEditKey(coach, source = operationBranchCoaches()) {
+  const roleId = String(coach?.serverRoleId || "").trim();
+  if (roleId) {
+    return source.filter((item) => String(item.serverRoleId || "").trim() === roleId).length === 1
+      ? `role:${roleId}`
+      : "";
+  }
+  const localId = String(coach?.id || "").trim();
+  if (!localId || (adminLiveDataState.coachRoles || []).length) return "";
+  return source.filter((item) => (
+    !String(item.serverRoleId || "").trim()
+    && String(item.id || "").trim() === localId
+  )).length === 1 ? `local:${localId}` : "";
+}
+
+function coachForStaffEditKey(editKey = "") {
+  const key = String(editKey || "").trim();
+  if (!key) return null;
+  const source = operationBranchCoaches();
+  const isRoleKey = key.startsWith("role:");
+  const isLocalKey = key.startsWith("local:");
+  const roleId = isRoleKey ? key.slice(5).trim() : "";
+  const localId = isLocalKey ? key.slice(6).trim() : (!isRoleKey ? key : "");
+  if ((isRoleKey && !roleId) || (!localId && !roleId)) return null;
+  const matches = isRoleKey
+    ? source.filter((item) => String(item.serverRoleId || "").trim() === roleId)
+    : source.filter((item) => String(item.id || "").trim() === localId);
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function knownCoachNamesForImport(allCoaches = coaches) {
