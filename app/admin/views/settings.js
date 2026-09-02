@@ -395,6 +395,9 @@ function renderCoachStaffModal() {
     : coachStaffEditorState.tab === "settlement"
       ? renderCoachStaffSettlementTab(draft)
       : renderCoachStaffBasicTab(draft);
+  if (coachStaffEditorState.tab === "settlement") {
+    syncCoachStaffSettlementFieldVisibility(draft.settlement.method);
+  }
   const actions = $("#coachStaffMoreActions");
   if (actions) {
     const existing = Boolean(draft.coachRoleId);
