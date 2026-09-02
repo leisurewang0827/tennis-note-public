@@ -51,6 +51,17 @@ test("키워드 순서와 명시 사실만 보존한 중립 초안을 만든다"
 });
 
 test("공백과 문장부호만 다른 중복을 제거하고 가혹 표현은 차단한다", () => {
+  for (const value of ["", "   ", ".?!;", "。！？"]) {
+    assert.equal(draft.generate(value).code, "keyword_required", value);
+  }
+
+  for (const value of ["최.악", "못!함", "엉;망", "형편。없음", "최\u200B악", "못！함", "엉；망"]) {
+    const blocked = draft.generate(value);
+    assert.equal(blocked.ok, false, value);
+    assert.equal(blocked.code, "neutral_wording_required", value);
+    assert.equal(blocked.comment, "", value);
+  }
+
   const deduped = draft.generate("포핸드, 포핸드!,  포핸드。\n방향 좋아짐");
   assert.deepEqual(Array.from(deduped.keywords), ["포핸드", "방향 좋아짐"]);
 

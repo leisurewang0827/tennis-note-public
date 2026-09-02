@@ -152,23 +152,24 @@
   }
 
   function generate(value, context = {}) {
+    const moderationBlocked = hasHarshExpression(value);
     const keywords = keywordsFrom(value);
+    if (moderationBlocked) {
+      return {
+        ok: false,
+        code: "neutral_wording_required",
+        message: "회원에게 공개하기 어려운 표현이 있습니다. 관찰한 동작을 중립적인 키워드로 바꿔 주세요.",
+        keywords,
+        sections: [],
+        comment: "",
+      };
+    }
     if (!keywords.length) {
       return {
         ok: false,
         code: "keyword_required",
         message: "수업 키워드를 하나 이상 입력해 주세요.",
         keywords: [],
-        sections: [],
-        comment: "",
-      };
-    }
-    if (hasHarshExpression(value)) {
-      return {
-        ok: false,
-        code: "neutral_wording_required",
-        message: "회원에게 공개하기 어려운 표현이 있습니다. 관찰한 동작을 중립적인 키워드로 바꿔 주세요.",
-        keywords,
         sections: [],
         comment: "",
       };
