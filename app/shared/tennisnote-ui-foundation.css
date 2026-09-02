@@ -457,7 +457,7 @@ body.modal-open .tennisnote-release-check-notice {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 10px;
   border: 1px solid #d6e2dd;
   border-radius: 6px;
@@ -467,7 +467,7 @@ body.modal-open .tennisnote-release-check-notice {
 }
 
 .tn-comment-draft-tools button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 12px;
   border: 1px solid #a9cabe;
   border-radius: 6px;

@@ -1630,6 +1630,9 @@ a {
 }
 
 .lesson-ai-draft summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   width: fit-content;
   border: 1px solid var(--line);
   border-radius: 999px;
