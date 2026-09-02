@@ -89,11 +89,11 @@ function renderCoachSettlementPreview() {
           : rule.method === "hourly" ? `시급 ${money.format(rule.hourly)}원` : `${Math.round(rule.ratio * 10)}:${10 - Math.round(rule.ratio * 10)}`;
         return `
           <tr>
-            <td><strong>${item.member}</strong><br><small>${item.lessonCount}/${item.totalLessons || item.lessonCount}회 완료</small></td>
-            <td class="${item.linkedTicket === false ? "payment-link-warning" : ""}">${item.coach}${item.linkedTicket === false ? "<br><small>회원권 연결 후 정산 가능</small>" : transferred ? `<br><small>대타 ${item.actualCoach} · 정산 ${settlementCoach}</small>` : "<br><small>담당 코치 진행</small>"}</td>
-            <td>${money.format(item.paidAmount)}원<br><small>${item.refundAdjusted ? `원결제 ${money.format(item.grossPaidAmount)}원 · 환불 ${money.format(item.refundedAmount)}원` : `${item.paymentMethod} · ${item.discount}`}</small></td>
+            <td><strong>${escapeHtml(item.member)}</strong><br><small>${Number(item.lessonCount) || 0}/${Number(item.totalLessons || item.lessonCount) || 0}회 완료</small></td>
+            <td class="${item.linkedTicket === false ? "payment-link-warning" : ""}">${escapeHtml(item.coach)}${item.linkedTicket === false ? "<br><small>회원권 연결 후 정산 가능</small>" : transferred ? `<br><small>대타 ${escapeHtml(item.actualCoach)} · 정산 ${escapeHtml(settlementCoach)}</small>` : "<br><small>담당 코치 진행</small>"}</td>
+            <td>${money.format(item.paidAmount)}원<br><small>${item.refundAdjusted ? `원결제 ${money.format(item.grossPaidAmount)}원 · 환불 ${money.format(item.refundedAmount)}원` : `${escapeHtml(item.paymentMethod)} · ${escapeHtml(item.discount)}`}</small></td>
             <td><strong>${money.format(item.settlementBase)}원</strong><br><small>${item.refundAdjusted ? "환불 후 정산 기준" : item.paymentMethod === "카드" ? "부가세 제외 현금가" : "실결제 기준"}</small></td>
-            <td>${ruleLabel}<br><small>${transferred ? "대타 이관 적용" : "기본 정산"}</small></td>
+            <td>${escapeHtml(ruleLabel)}<br><small>${transferred ? "대타 이관 적용" : "기본 정산"}</small></td>
             <td><strong>${money.format(settlementAmountFor(item))}원</strong></td>
           </tr>`;
       })
@@ -113,15 +113,71 @@ function renderPaymentAdminGateStatus() {
   const target = $("#paymentAdminGateStatus");
   if (!target) return;
   const ready = adminPaymentCancelReady();
+  const pinSetupRequired = adminPinNeedsSetup();
   const tone = ready ? "good" : adminImportAuthState.loading ? "neutral" : "warn";
   target.innerHTML = `
     <article class="payment-admin-gate-card ${tone}">
       <div>
-        <strong>${ready ? "결제취소·환불 가능" : "결제취소·환불 잠금"}</strong>
+        <strong>${ready ? "결제취소·환불 가능" : pinSetupRequired ? "위험 작업 잠금 · PIN 설정 필요" : "결제취소·환불 잠금"}</strong>
         <span>${escapeHtml(ready ? "관리자 로그인과 권한이 확인되어 결제취소와 환불 계산을 진행할 수 있습니다." : adminPaymentCancelBlockedMessage())}</span>
+        ${pinSetupRequired ? '<button class="ghost-button small-button" type="button" data-jump="settings" data-settings-tab="security">보안 설정 열기</button>' : ""}
       </div>
-      ${badge(tone, ready ? "관리자 확인됨" : "관리자 확인 필요")}
+      ${badge(tone, ready ? "관리자 확인됨" : pinSetupRequired ? "PIN 설정 필요" : "관리자 확인 필요")}
     </article>`;
+}
+
+function billingSafeUiTone(value = "", fallback = "neutral") {
+  const tone = String(value || "").toLowerCase();
+  return ["good", "ready", "warn", "danger", "neutral", "pending", "setup"].includes(tone) ? tone : fallback;
+}
+
+function billingCoachLabel(item = {}) {
+  if (item.oneDayBookingId) {
+    const booking = oneDayBookingForBilling(item);
+    return getCoachName(booking?.coachId || "") || "코치 확인 필요";
+  }
+  const ticket = linkedTicketForBilling(item);
+  return getCoachName(ticket?.coachId || "") || "코치 미지정";
+}
+
+function billingNeedsProcessingDetail(item = {}) {
+  return item.status !== "paid"
+    || paymentRequiresTicketRepair(item)
+    || ["confirming", "confirmation_failed"].includes(String(item.bankTransferState || ""));
+}
+
+function billingDangerActionsMarkup(item, index) {
+  if (["check", "unverified", "failed", "server_ready"].includes(item.status)) return paymentPendingMoreActions(item, index);
+  if (item.status === "paid") return paymentApprovedMoreActions(item, index);
+  return "";
+}
+
+function billingInlineReviewMarkup(item, index, inlineContext, inlineOpen) {
+  if (paymentRequiresTicketRepair(item)) return "";
+  if (adminPinNeedsSetup()) {
+    return `<div class="billing-pin-lock" role="note">
+      ${badge("warn", "잠금 · PIN 설정 필요")}
+      <span>회원권 수정 전에 운영 PIN을 설정해 주세요.</span>
+      <button class="ghost-button small-button" type="button" data-jump="settings" data-settings-tab="security">보안 설정 열기</button>
+    </div>`;
+  }
+  const label = inlineContext.ticket ? (inlineOpen ? "수정 닫기" : "회원권 확인·수정") : "회원권 연결";
+  return `<button class="small-button ghost-button billing-inline-open" type="button" data-billing-member-review="${index}" aria-expanded="${inlineOpen ? "true" : "false"}">${label}</button>`;
+}
+
+function billingRowDetailMarkup(item, index, entry, inlineContext, inlineOpen) {
+  const approval = paymentApprovalDisplay(item);
+  const processing = billingNeedsProcessingDetail(item);
+  const sourceDetail = `${escapeHtml(item.item || "결제")}${item.providerPaymentId ? ` · ${escapeHtml(item.providerPaymentId)}` : ""}${item.source ? ` · ${escapeHtml(paymentSourceText(item))}` : ""}`;
+  const review = billingInlineReviewMarkup(item, index, inlineContext, inlineOpen);
+  const danger = billingDangerActionsMarkup(item, index);
+  return `<details class="payment-row-detail ${processing ? "is-processing" : "is-complete"}">
+    <summary>${processing ? "처리 상세" : "상세·위험 작업"}</summary>
+    ${approval.detail ? `<p>${escapeHtml(approval.detail)}</p>` : ""}
+    ${review}
+    ${danger}
+    <details class="payment-source-details"><summary>원본·시도 이력</summary><span>${sourceDetail}</span>${billingAttemptHistoryMarkup(entry)}</details>
+  </details>`;
 }
 
 function renderBilling() {
@@ -156,7 +212,7 @@ function renderBilling() {
 
   $("#billingRequestCount").textContent = `${billingGroups.action.length}건`;
   $("#billingCheckCount").textContent = `${billingGroups.verifying.length}건`;
-  $("#ticketRechargeCount").textContent = `${rechargeTargets.length}명`;
+  $("#ticketRechargeCount").textContent = `${rechargeTargets.length}개 회원권`;
   if ($("#billingMonthFilter")) $("#billingMonthFilter").value = state.billingMonth;
   if ($("#billingMonthTotalLabel")) $("#billingMonthTotalLabel").textContent = billingMonthLabel(state.billingMonth);
   if ($("#billingMonthPaidAmount")) $("#billingMonthPaidAmount").textContent = `${money.format(monthPaidAmount)}원`;
@@ -177,10 +233,11 @@ function renderBilling() {
 
   const syncTarget = $("#serverPaymentSyncStatus");
   if (syncTarget) {
+    const syncTone = billingSafeUiTone(serverPaymentSyncState.tone);
     syncTarget.innerHTML = `
-      <div class="payment-sync-card ${serverPaymentSyncState.tone}">
-        <span>${serverPaymentSyncState.message}</span>
-        ${badge(serverPaymentSyncState.tone, serverPaymentSyncState.loading ? "불러오는 중" : serverPaymentSyncState.loaded ? "확인됨" : "대기")}
+      <div class="payment-sync-card ${syncTone}">
+        <span>${escapeHtml(serverPaymentSyncState.message)}</span>
+        ${badge(syncTone, serverPaymentSyncState.loading ? "불러오는 중" : serverPaymentSyncState.loaded ? "확인됨" : "대기")}
       </div>`;
   }
 
@@ -202,21 +259,15 @@ function renderBilling() {
         const inlineTicketCount = inlineContext.member
           ? memberOperationalTickets(inlineContext.member).length
           : 0;
-        const inlineActionLabel = inlineContext.ticket
-          ? (inlineOpen ? "수정 닫기" : "한 줄 수정")
-          : "회원권 연결";
         return `
-        <tr class="payment-sheet-row ${approval.tone}">
-          <td>${badge(approval.tone, approval.label)}<br><small>${escapeHtml(approval.detail)}</small></td>
+        <tr class="payment-sheet-row ${billingSafeUiTone(approval.tone)}">
+          <td>${badge(billingSafeUiTone(approval.tone), approval.label)}${approval.detail && billingNeedsProcessingDetail(item) ? `<br><small>${escapeHtml(approval.detail)}</small>` : ""}</td>
           <td><strong>${escapeHtml(item.member || "회원")}</strong><br><small>${paymentEnvironmentBadge(item)}</small></td>
-          <td>${billingMembershipDetail(item)}${billingAttemptHistoryMarkup(entry)}<details class="payment-source-details"><summary>원본·시도 이력</summary><span>${escapeHtml(item.item || "결제")}${item.providerPaymentId ? ` · ${escapeHtml(item.providerPaymentId)}` : ""}${item.source ? ` · ${escapeHtml(paymentSourceText(item))}` : ""}</span></details></td>
-          <td><strong>${money.format(item.amount)}원</strong><br><small>${escapeHtml(paymentMethodLabel(item.method))} · ${escapeHtml(billingEffectiveDate(item) || "일자 미입력")}</small>${item.discountTitle ? `<br><small>${escapeHtml(item.discountTitle)} · ${money.format(item.discountAmount || 0)}원 할인</small>` : ""}</td>
+          <td>${billingMembershipDetail(item)}${entry.attemptCount > 1 ? `<br><small>${escapeHtml(billingAttemptSummary(entry))}</small>` : ""}</td>
+          <td><strong>${money.format(Number(item.amount) || 0)}원</strong><br><small>${escapeHtml(paymentMethodLabel(item.method))} · ${escapeHtml(billingEffectiveDate(item) || "일자 미입력")}</small>${item.discountTitle ? `<br><small>${escapeHtml(item.discountTitle)} · ${money.format(Number(item.discountAmount) || 0)}원 할인</small>` : ""}</td>
           <td>${paymentConfirmationMarkup(item)}${paymentCancellationAuditDetail(item) ? `<br><small>${escapeHtml(paymentCancellationAuditDetail(item))}</small>` : ""}</td>
-          <td class="payment-sheet-approval">
-            ${paymentActionFor(item, index)}
-            ${paymentRequiresTicketRepair(item) ? "" : `<button class="small-button billing-inline-open" type="button" data-billing-member-review="${index}" aria-expanded="${inlineOpen ? "true" : "false"}">${inlineActionLabel}</button>`}
-          </td>
-          <td class="billing-settlement-cell">${billingSettlementApprovalMarkup(item)}</td>
+          <td class="payment-sheet-approval">${paymentActionFor(item, index)}${billingRowDetailMarkup(item, index, entry, inlineContext, inlineOpen)}</td>
+          <td class="billing-settlement-cell"><strong>${escapeHtml(billingCoachLabel(item))}</strong><br>${billingSettlementApprovalMarkup(item)}</td>
         </tr>
         ${inlineOpen ? `<tr class="member-inline-editor-row member-inline-sheet-row billing-inline-editor-row" data-billing-inline-index="${index}">
           <td colspan="7">${memberQuickEditorMarkup(inlineContext.member, inlineContext.ticket, {
@@ -241,9 +292,9 @@ function renderBilling() {
     .map(
       (ticket, index) => `
         <tr>
-          <td>${ticket.member}</td>
-          <td>${ticket.product}</td>
-          <td><strong>${ticket.remaining}회</strong></td>
+          <td>${escapeHtml(ticket.member)}</td>
+          <td>${escapeHtml(ticket.product)}</td>
+          <td><strong>${Number(ticket.remaining) || 0}회</strong></td>
           <td>${ticket.remaining === 0 ? "즉시 충전 필요" : "다음 수업 전 안내"}</td>
           <td><button class="small-button" type="button" data-renew-ticket="${escapeHtml(ticket.serverTicketId || "")}" data-renew-member="${escapeHtml(ticket.member)}">연장 등록</button></td>
         </tr>`,

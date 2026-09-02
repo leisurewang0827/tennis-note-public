@@ -499,7 +499,9 @@ function paymentApprovalDisplay(item = {}) {
     return { tone: "danger", label: "회원권 처리 실패", detail: "결제는 확인됐지만 회원권 처리가 끝나지 않았습니다. 다시 처리해 주세요." };
   }
   if (item.status === "paid") {
-    return { tone: "good", label: "승인 완료", detail: item.oneDayBookingId ? "원데이 예약 연결됨" : item.ticketId ? "회원권 연결됨" : "이관 결제 보존" };
+    if (item.oneDayBookingId) return { tone: "good", label: "결제·예약 연결 완료", detail: "" };
+    if (item.ticketId) return { tone: "good", label: "결제·회원권 연결 완료", detail: "" };
+    return { tone: "neutral", label: "이관 결제 기록", detail: "기존 결제 근거를 보존하며 현재 회원권 자동 연결 대상이 아닙니다." };
   }
   if (item.status === "server_ready" && bankDepositExpired) {
     return { tone: "danger", label: "입금기한 지남", detail: "입금 여부를 직접 확인하세요. 확인 전에는 회원권을 만들지 않습니다." };
