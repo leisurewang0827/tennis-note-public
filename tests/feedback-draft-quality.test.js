@@ -34,6 +34,38 @@ test("공백과 문장부호만 다른 중복을 제거하고 가혹 표현은 �
   assert.equal(harsh.ok, false);
   assert.equal(harsh.code, "neutral_wording_required");
   assert.equal(harsh.comment, "");
+
+  [
+    "포핸드, 못 함",
+    "포핸드, 최 악",
+    "포핸드, 형편 없음",
+    "포핸드, 엉 망",
+    "포핸드, 못\t함",
+    "포핸드, 최\n악",
+    "포핸드, 형편.없음",
+    "포핸드, 엉/망",
+    "포핸드, 못\u200B함",
+    "포핸드, 최\u200D악",
+    "포핸드, 형편\u2060없음",
+    "포핸드, 엉\uFEFF망",
+  ].forEach((value) => {
+    const blocked = draft.generate(value);
+    assert.equal(blocked.ok, false, value);
+    assert.equal(blocked.code, "neutral_wording_required", value);
+    assert.equal(blocked.comment, "", value);
+  });
+
+  [
+    "못 함께한 준비",
+    "최적 악력",
+    "형편이 없음",
+    "엉킨 망 정리",
+    "답답하게 느껴진 구간",
+  ].forEach((value) => {
+    const allowed = draft.generate(value);
+    assert.equal(allowed.ok, true, value);
+    assert.match(allowed.comment, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), value);
+  });
 });
 
 test("코치 화면은 키워드 한 칸과 회원별 기존 예외만 유지하고 수동 문장을 보호한다", () => {

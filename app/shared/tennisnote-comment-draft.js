@@ -1,5 +1,7 @@
 (function () {
-  const harshExpressionPattern = /(최악|못함|형편없(?:음|다)?|엉망|바보|답답(?:함|하다)?|끔찍(?:함|하다)?)/i;
+  const harshExpressionPattern = /^(?:최악|못함|형편없(?:음|다)?|엉망|바보|답답(?:함|하다)?|끔찍(?:함|하다)?)$/iu;
+  const harshExpressionSuffixes = Object.freeze(["최악", "못함", "형편없음", "형편없다", "엉망", "바보", "답답함", "답답하다", "끔찍함", "끔찍하다"]);
+  const zeroWidthPattern = /[\u200B-\u200D\u2060\uFEFF]/gu;
   const observedPhrasePattern = /(?:좋아짐|나아짐|개선됨|안정됨|성공함|유지됨|연결됨|늦음|빨라짐|밀림|흔들림|부족함|약함|강함|짧음|길어짐|어려움|놓침|됨|함|임|었음|았음)$/;
   const sentenceEndings = ["확인했습니다", "기록했습니다", "남겼습니다", "살펴봤습니다"];
 
@@ -8,6 +10,26 @@
       .normalize("NFC")
       .replace(/[、/|;]+/g, ",")
       .replace(/\r\n?/g, "\n");
+  }
+
+  function harshScanForm(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .toLocaleLowerCase("ko-KR")
+      .replace(zeroWidthPattern, "")
+      .match(/[\p{L}\p{N}]+/gu) || [];
+  }
+
+  function hasHarshExpression(value) {
+    const tokens = harshScanForm(value);
+    return tokens.some((token, start) => {
+      let candidate = "";
+      for (let end = start; end < Math.min(tokens.length, start + 4); end += 1) {
+        candidate += tokens[end];
+        if (harshExpressionPattern.test(candidate)) return true;
+      }
+      return harshExpressionSuffixes.some((phrase) => token.length > phrase.length && token.endsWith(phrase));
+    });
   }
 
   function canonicalKeyword(value) {
@@ -124,7 +146,7 @@
         comment: "",
       };
     }
-    if (keywords.some((keyword) => harshExpressionPattern.test(keyword))) {
+    if (hasHarshExpression(value)) {
       return {
         ok: false,
         code: "neutral_wording_required",
