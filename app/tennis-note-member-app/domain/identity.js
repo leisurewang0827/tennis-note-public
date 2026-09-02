@@ -105,9 +105,20 @@ function transientAuthCapabilityError(error) {
     .some((marker) => code.includes(marker));
 }
 
+function customOAuthProviderCapability(provider = "") {
+  const client = globalThis.window?.TennisNoteDataClient || globalThis.TennisNoteDataClient;
+  const fallbackSlug = {
+    kakao: "custom:kakao",
+    naver: "custom:naver",
+  }[String(provider || "").toLowerCase()] || "";
+  const slug = String(client?.providerSlug?.(provider) || fallbackSlug).toLowerCase();
+  return slug.startsWith("custom:") ? slug : "";
+}
+
 function authProviderCapability(settings = {}, provider = "") {
   const external = settings?.external;
-  if (!external || typeof external !== "object") return null;
+  const customSlug = customOAuthProviderCapability(provider);
+  if (!external || typeof external !== "object") return customSlug ? true : null;
   const aliases = {
     phone: ["phone"],
     email: ["email"],
@@ -117,8 +128,10 @@ function authProviderCapability(settings = {}, provider = "") {
     google: ["google"],
   }[provider] || [provider];
   const configured = aliases.filter((key) => Object.prototype.hasOwnProperty.call(external, key));
-  if (!configured.length) return null;
-  return configured.some((key) => external[key] === true);
+  if (configured.some((key) => external[key] === true)) return true;
+  if (customSlug && !Object.prototype.hasOwnProperty.call(external, customSlug)) return true;
+  if (configured.length) return false;
+  return customSlug ? true : null;
 }
 
 function resolvedAuthCapabilities(settings = {}) {

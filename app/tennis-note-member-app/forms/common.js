@@ -45,7 +45,7 @@ function registerPwaInstallPrompt() {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.457",
+    workerUrl: "./service-worker.js?v=1.0.458",
     remoteAppUrl: "https://tennisnote-app.pages.dev/",
   });
 }
@@ -281,6 +281,7 @@ function finishOAuthLogin() {
     delete button.dataset.oauthDisabledBefore;
     button.removeAttribute("aria-busy");
   });
+  syncAuthProviderCapabilityControls();
 }
 
 function setEmailAuthStatus(message = "", tone = "") {

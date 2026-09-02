@@ -496,6 +496,19 @@ button {
   opacity: 0.64;
 }
 
+.provider[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+.provider-availability-note {
+  margin: 6px 2px 2px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .provider.is-preparing {
   border: 1px dashed rgba(25, 25, 25, 0.2);
 }
