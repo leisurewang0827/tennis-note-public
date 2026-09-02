@@ -28,7 +28,7 @@ function coachDisplaySegmentAttrs(lesson = {}) {
 function registerPwaServiceWorker() {
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.464",
+    workerUrl: "./service-worker.js?v=1.0.465",
     remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
   });
 }
