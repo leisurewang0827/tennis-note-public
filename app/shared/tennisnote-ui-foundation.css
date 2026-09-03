@@ -101,9 +101,23 @@ html[data-tennisnote-surface] body {
   right: max(16px, env(safe-area-inset-right, 0px));
   left: max(16px, env(safe-area-inset-left, 0px));
   width: auto;
+  min-inline-size: min(280px, calc(100% - 32px));
   max-width: 520px;
   margin-inline: auto;
+  box-sizing: border-box;
   transform: none;
+}
+
+/* The splash accessibility label hides every span. Keep the transition mark
+   in the grid so the text column cannot collapse during the first paint. */
+.brand-splash.is-mode-transition .tn-mode-transition-mark {
+  position: static;
+  width: 42px;
+  height: 42px;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  white-space: normal;
 }
 
 .brand-splash.is-mode-transition.is-hidden .tn-mode-transition-card {

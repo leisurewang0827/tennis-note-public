@@ -295,6 +295,7 @@ async function applySupabaseMemberSession(showNotice = false) {
       gender: profile?.gender || "",
       coachApproved: coachRole?.status === "approved",
     };
+    rememberRecentLoginProvider(state.member.provider);
     state.coachModeAllowed = state.member.coachApproved;
     if (shouldOpenCoachModeByDefault()) {
       openCoachMode();
