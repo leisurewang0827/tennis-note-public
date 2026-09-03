@@ -3,6 +3,47 @@
 // 코치가 누른 것을 처리한다. 화면을 읽고 서버를 부르고 상태를 바꾼다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
+function mergeLegacyCoachMakeupEntitlements(workspace = {}, roster = null, legacyRows = []) {
+  const branchId = String(workspace.branchId || "");
+  const membersById = new Map((roster?.members || workspace.members || []).map((member) => [
+    String(member.id || ""),
+    member.name || "회원",
+  ]));
+  const ticketsById = new Map((roster?.tickets || workspace.tickets || []).map((ticket) => [String(ticket.id || ""), ticket]));
+  const scheduleV2Rows = (workspace.makeupEntitlements || []).map((entitlement) => ({
+    ...entitlement,
+    bookingContract: entitlement.bookingContract || "schedule_v2_read_only",
+  }));
+  const seenIds = new Set(scheduleV2Rows.map((entitlement) => String(entitlement.id || "")).filter(Boolean));
+  const legacyEntitlements = (legacyRows || []).flatMap((row) => {
+    const id = String(row.id || "");
+    const rowBranchId = String(row.branch_id || "");
+    if (!id || seenIds.has(id) || !branchId || rowBranchId !== branchId) return [];
+    const ticket = ticketsById.get(String(row.ticket_id || "")) || {};
+    const participantIds = (ticket.participantUserIds || [ticket.ownerUserId]).map(String).filter(Boolean);
+    const memberNames = participantIds.map((userId) => membersById.get(userId)).filter(Boolean);
+    seenIds.add(id);
+    return [{
+      id,
+      sourceLessonId: row.source_lesson_id,
+      bookedLessonId: row.booked_lesson_id || "",
+      userId: participantIds[0] || "",
+      memberName: memberNames.join(" · ") || "회원",
+      ticketId: row.ticket_id,
+      branchId: row.branch_id,
+      coachRoleId: row.coach_role_id,
+      durationMinutes: Number(row.duration_minutes) || 20,
+      status: row.status,
+      reason: row.reason || "회원 사전 불참",
+      markedAt: row.marked_at || "",
+      bookedAt: row.booked_at || "",
+      updatedAt: row.updated_at || "",
+      bookingContract: "legacy_exact",
+    }];
+  });
+  return [...scheduleV2Rows, ...legacyEntitlements];
+}
+
 function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster = null, legacyChangeRequests = []) {
   if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
   const cancelledLessonIds = new Set(
@@ -54,6 +95,7 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       sourceLessonId: entitlement.sourceLessonId,
       bookedLessonId: entitlement.bookedLessonId || "",
       ticketId: entitlement.ticketId,
+      branchId: entitlement.branchId || workspace.branchId || "",
       coachRoleId: entitlement.coachRoleId,
       coach: coachesByRoleId.get(entitlement.coachRoleId)?.name || "담당 코치",
       member: entitlement.memberName || "회원",
@@ -65,6 +107,8 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       original: `${sourceLesson.lessonDate || "기존일"} ${String(sourceLesson.startTime || "").slice(0, 5)}`.trim(),
       bookedDate: bookedLesson.lessonDate || "",
       bookedTime: String(bookedLesson.startTime || "").slice(0, 5),
+      updatedAt: entitlement.updatedAt || entitlement.bookedAt || entitlement.markedAt || "",
+      bookingContract: entitlement.bookingContract || "schedule_v2_read_only",
     };
   });
   const todayIso = localDateKey();
@@ -381,8 +425,145 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
   return true;
 }
 
+function clearCoachMakeupBooking() {
+  state.bookingMakeupEntitlementId = "";
+  state.bookingMakeupSnapshot = "";
+  state.bookingMakeupOperationKey = "";
+}
+
+async function beginCoachMakeupBooking(entitlementId) {
+  const synced = await syncCoachScheduleV2({ force: true });
+  const entitlement = (state.makeupEntitlements || []).find((item) => String(item.id || "") === String(entitlementId || ""));
+  const guard = synced ? coachMakeupEntitlementBookingGuard(entitlement) : { ok: false, message: "최신 보강권 상태를 불러오지 못했습니다." };
+  if (!guard.ok) {
+    showToast(guard.message);
+    return false;
+  }
+  state.bookingMakeupEntitlementId = entitlement.id;
+  state.bookingMakeupSnapshot = guard.snapshot;
+  state.bookingMakeupOperationKey ||= coachQuickAddOperationKey(`coach-makeup-${entitlement.id}`);
+  state.scheduleFilter = "mine";
+  state.selectedFullScheduleDay = currentCoachScheduleDay();
+  renderAll();
+  navigateCoachView("fullScheduleView");
+  showToast("레슨표에서 보강할 빈 시간을 선택해 주세요.");
+  return true;
+}
+
+function coachMakeupBookingMatchesTarget(entitlement, draft) {
+  return Boolean(
+    entitlement?.status === "booked"
+    && entitlement.bookedLessonId
+    && String(entitlement.bookedDate || "") === String(draft?.date || "")
+    && String(entitlement.bookedTime || "").slice(0, 5) === String(draft?.time || "").slice(0, 5)
+  );
+}
+
+function coachMakeupBookingErrorMessage(error) {
+  const raw = String(error?.payload?.message || error?.payload?.code || error?.message || "");
+  const messages = {
+    makeup_entitlement_not_found: "보강권을 찾을 수 없습니다. 최신 목록에서 다시 선택해 주세요.",
+    makeup_entitlement_not_open: "이미 예약되었거나 종료된 보강권입니다.",
+    makeup_source_lesson_invalid: "원래 수업 상태가 변경되어 예약할 수 없습니다.",
+    makeup_booking_forbidden: "현재 코치에게 이 보강권 예약 권한이 없습니다.",
+    target_time_must_be_future: "지난 시간에는 보강을 예약할 수 없습니다.",
+    active_ticket_required: "연결 회원권의 상태와 잔여 횟수를 확인해 주세요.",
+    target_date_outside_ticket: "회원권 이용기간 안의 날짜를 선택해 주세요.",
+    schedule_scope_mismatch: "회원권의 이용 요일 범위와 맞지 않습니다.",
+    coach_not_working: "담당 코치의 근무시간 안에서 선택해 주세요.",
+    target_time_blocked: "휴무·브레이크로 잠긴 시간입니다.",
+    target_time_occupied: "선택한 시간에 다른 수업이 있습니다.",
+    no_nearby_coach_lesson: "보강 예약 정책에 맞는 시간을 선택해 주세요.",
+    daily_session_limit: "회원의 하루 수업 가능 횟수를 초과합니다.",
+    weekly_session_limit: "회원의 주간 수업 가능 횟수를 초과합니다.",
+    weekly_booking_day_limit: "회원의 주간 예약 가능 일수를 초과합니다.",
+    lesson_time_grid_invalid: "회원권 수업 단위에 맞는 시간을 선택해 주세요.",
+  };
+  const key = Object.keys(messages).find((code) => raw.includes(code));
+  return messages[key] || "보강 예약을 완료하지 못했습니다. 상태를 새로 확인한 뒤 다시 시도해 주세요.";
+}
+
+function coachMakeupSlotHasLocalConflict(draft) {
+  const targetStart = minutesFromTime(draft?.time || "");
+  const targetDuration = Number(draft?.durationMinutes) || scheduleBlockMinutes;
+  return (state.liveLessons || []).some((lesson) => (
+    String(lesson.coachRoleId || "") === String(draft?.coachRoleId || "")
+    && String(lesson.lessonDate || "") === String(draft?.date || "")
+    && !lesson.releasedMakeupSlot
+    && !["cancel", "cancelled", "canceled", "취소"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase())
+    && targetStart < minutesFromTime(lesson.time) + lessonDuration(lesson)
+    && minutesFromTime(lesson.time) < targetStart + targetDuration
+  ));
+}
+
+function finishCoachMakeupBooking(draft, idempotent = false) {
+  state.coachQuickAdd = null;
+  clearCoachMakeupBooking();
+  closeCoachModal("lessonEditModal");
+  renderAll();
+  showToast(idempotent ? "이미 완료된 보강 예약을 확인했습니다." : `${draft.date} ${draft.time} 보강 예약을 완료했습니다.`);
+}
+
+async function saveCoachMakeupEntitlementBooking(draft) {
+  if (!draft || draft.submitting) return false;
+  const client = window.TennisNoteDataClient;
+  if (!client?.rpc || !client.getSession?.()?.access_token) {
+    draft.validationMessage = "서버 로그인 상태를 확인해 주세요.";
+    renderLessonEditModal();
+    return false;
+  }
+  if (!draft.operationKey || draft.operationKey !== state.bookingMakeupOperationKey) {
+    draft.validationMessage = "예약 요청 상태가 변경되었습니다. 보강권을 다시 선택해 주세요.";
+    renderLessonEditModal();
+    return false;
+  }
+  draft.submitting = true;
+  draft.validationMessage = "보강권과 빈 시간을 서버에서 다시 확인하고 있습니다.";
+  renderLessonEditModal();
+  try {
+    if (!(await syncCoachScheduleV2({ force: true }))) throw new Error("makeup_workspace_refresh_failed");
+    let current = activeCoachMakeupBookingEntitlement();
+    if (coachMakeupBookingMatchesTarget(current, draft)) {
+      finishCoachMakeupBooking(draft, true);
+      return true;
+    }
+    const guard = coachMakeupEntitlementBookingGuard(current, draft.makeupSnapshot);
+    if (!guard.ok) throw new Error(guard.code === "stale" ? "makeup_booking_stale" : guard.code);
+    if (coachMakeupSlotHasLocalConflict(draft)) throw new Error("target_time_occupied");
+    const result = await client.rpc("tn_book_makeup_entitlement", {
+      target_entitlement_id: current.id,
+      target_lesson_date: draft.date,
+      target_start_time: draft.time,
+      target_reason: draft.note || "코치 보강권 예약",
+    });
+    const normalized = Array.isArray(result) ? result[0] || {} : result || {};
+    if (!normalized.ok || String(normalized.entitlementId || "") !== String(current.id)) {
+      throw new Error("makeup_booking_response_invalid");
+    }
+    if (!(await syncCoachScheduleV2({ force: true }))) throw new Error("makeup_booking_readback_failed");
+    current = activeCoachMakeupBookingEntitlement();
+    if (!coachMakeupBookingMatchesTarget(current, draft)) throw new Error("makeup_booking_readback_mismatch");
+    finishCoachMakeupBooking(draft, Boolean(normalized.idempotent));
+    return true;
+  } catch (error) {
+    const refreshed = await syncCoachScheduleV2({ force: true }).catch(() => false);
+    const current = refreshed ? activeCoachMakeupBookingEntitlement() : null;
+    if (coachMakeupBookingMatchesTarget(current, draft)) {
+      finishCoachMakeupBooking(draft, true);
+      return true;
+    }
+    draft.submitting = false;
+    draft.validationMessage = String(error?.message || "").includes("makeup_booking_stale")
+      ? "보강권 상태가 변경되었습니다. 최신 목록에서 다시 선택해 주세요."
+      : coachMakeupBookingErrorMessage(error);
+    renderLessonEditModal();
+    return false;
+  }
+}
+
 async function saveCoachQuickAdd() {
   const draft = state.coachQuickAdd;
+  if (draft?.makeupEntitlementId) return saveCoachMakeupEntitlementBooking(draft);
   const workspace = scheduleV2CoachWorkspace();
   const ticketId = $("#coachQuickAddTicket")?.value || "";
   const ticket = (workspace?.tickets || []).find((item) => item.id === ticketId);

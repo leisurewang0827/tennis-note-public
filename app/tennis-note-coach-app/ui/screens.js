@@ -208,11 +208,38 @@ function closeLessonEditor(fromHistory = false) {
 function openCoachQuickAdd(button) {
   const policy = loadCoachSchedulePolicy();
   const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(button.dataset.coachRoleId || ""));
-  const access = coach ? coachSlotAccess(coach, button.dataset.day, button.dataset.time, scheduleBlockMinutes, policy) : { allowed: false };
-  if (!coach || !access.allowed) {
+  const bookingEntitlement = activeCoachMakeupBookingEntitlement();
+  const bookingGuard = bookingEntitlement
+    ? coachMakeupEntitlementBookingGuard(bookingEntitlement, state.bookingMakeupSnapshot)
+    : { ok: true };
+  if (!bookingGuard.ok) {
+    showToast(bookingGuard.message);
+    clearCoachMakeupBooking();
+    renderAll();
+    return;
+  }
+  const targetDuration = bookingEntitlement ? Number(bookingEntitlement.durationMinutes) || scheduleBlockMinutes : scheduleBlockMinutes;
+  const access = coach ? coachSlotAccess(coach, button.dataset.day, button.dataset.time, targetDuration, policy) : { allowed: false };
+  const exactBookingCoach = !bookingEntitlement || String(bookingEntitlement.coachRoleId || "") === String(button.dataset.coachRoleId || "");
+  const targetStart = minutesFromTime(button.dataset.time);
+  const localConflict = bookingEntitlement && (state.liveLessons || []).some((lesson) => (
+    String(lesson.coachRoleId || "") === String(button.dataset.coachRoleId || "")
+    && String(lesson.lessonDate || "") === String(button.dataset.date || "")
+    && !lesson.releasedMakeupSlot
+    && !["cancel", "cancelled", "canceled", "취소"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase())
+    && targetStart < minutesFromTime(lesson.time) + lessonDuration(lesson)
+    && minutesFromTime(lesson.time) < targetStart + targetDuration
+  ));
+  if (localConflict) {
+    showToast("선택한 시간에 다른 수업이 있습니다. 다른 빈 시간을 선택해 주세요.");
+    return;
+  }
+  if (!coach || !access.allowed || !exactBookingCoach) {
     showToast(access.reason === "holiday_locked"
       ? "휴무일에는 관리자만 수업을 등록할 수 있습니다."
-      : "본인 수업 시간 또는 허용된 브레이크·상담 시간만 등록할 수 있습니다.");
+      : bookingEntitlement
+        ? "이 보강권의 담당 코치 근무시간에서 선택해 주세요."
+        : "본인 수업 시간 또는 허용된 브레이크·상담 시간만 등록할 수 있습니다.");
     return;
   }
   state.editingLessonId = null;
@@ -225,9 +252,13 @@ function openCoachQuickAdd(button) {
     time: button.dataset.time,
     coachRoleId: button.dataset.coachRoleId,
     coachName: coach.name,
-    kind: "regular",
-    durationMinutes: 20,
-    ticketId: "",
+    kind: bookingEntitlement ? "makeup" : "regular",
+    durationMinutes: bookingEntitlement ? targetDuration : 20,
+    ticketId: bookingEntitlement?.ticketId || "",
+    makeupEntitlementId: bookingEntitlement?.id || "",
+    makeupSnapshot: bookingEntitlement ? state.bookingMakeupSnapshot : "",
+    operationKey: bookingEntitlement ? state.bookingMakeupOperationKey : "",
+    submitting: false,
     note: "",
     validationMessage: "",
   };

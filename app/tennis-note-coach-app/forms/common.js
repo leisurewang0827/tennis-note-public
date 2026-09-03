@@ -35,6 +35,10 @@ function registerPwaServiceWorker() {
 
 function setView(viewId, options = {}) {
   if (!viewId || !$("#" + viewId)) return;
+  if (viewId !== "fullScheduleView" && state.bookingMakeupEntitlementId) {
+    if (state.coachQuickAdd?.makeupEntitlementId) state.coachQuickAdd = null;
+    clearCoachMakeupBooking();
+  }
   $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === viewId));
   $$(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.view === viewId));
   const profileButton = $("#coachProfileButton");

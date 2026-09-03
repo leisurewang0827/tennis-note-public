@@ -221,15 +221,20 @@ function coachCanAddToSlot(coach, day, time, durationMinutes = scheduleBlockMinu
 }
 
 function coachQuickAddSlotMarkup({ coach, day, time, className, label, style = "", policy = loadCoachSchedulePolicy() }) {
-  const access = coachSlotAccess(coach, day, time, scheduleBlockMinutes, policy);
-  const canAdd = access.allowed;
+  const bookingEntitlement = activeCoachMakeupBookingEntitlement();
+  const targetDuration = bookingEntitlement ? Number(bookingEntitlement.durationMinutes) || scheduleBlockMinutes : scheduleBlockMinutes;
+  const access = coachSlotAccess(coach, day, time, targetDuration, policy);
+  const exactBookingCoach = !bookingEntitlement || String(bookingEntitlement.coachRoleId || "") === String(coach.roleId || coach.id || "");
+  const canAdd = access.allowed && exactBookingCoach;
   const lockedOverride = access.reason === "locked_time_override";
   const date = coachWeekDateForDay(day);
   const overrideClass = canAdd && lockedOverride ? " locked-override" : "";
-  const content = canAdd ? `<span aria-hidden="true">+</span><small>${lockedOverride ? "수동" : ""}</small>` : (label ? `<span>${escapeHtml(label)}</span>` : "");
+  const content = canAdd
+    ? `<span aria-hidden="true">+</span><small>${bookingEntitlement ? "보강" : lockedOverride ? "수동" : ""}</small>`
+    : (label ? `<span>${escapeHtml(label)}</span>` : "");
   const styleAttr = style ? ` style="${style}"` : "";
   if (!canAdd) return `<div class="${className}${overrideClass}"${styleAttr} aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${label || "빈 시간"}">${content}</div>`;
-  return `<button class="${className} coach-add-slot${overrideClass}"${styleAttr} type="button" data-coach-add-lesson data-date="${date}" data-day="${day}" data-time="${time}" data-coach-role-id="${escapeHtml(coach.roleId || coach.id)}" aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${lockedOverride ? "브레이크·상담 시간 수동 등록" : "수업 추가"}">${content}</button>`;
+  return `<button class="${className} coach-add-slot${overrideClass}"${styleAttr} type="button" data-coach-add-lesson data-date="${date}" data-day="${day}" data-time="${time}" data-coach-role-id="${escapeHtml(coach.roleId || coach.id)}" aria-label="${day}요일 ${time} ${escapeHtml(shortCoachName(coach.name))} ${bookingEntitlement ? "보강 시간 선택" : lockedOverride ? "브레이크·상담 시간 수동 등록" : "수업 추가"}">${content}</button>`;
 }
 
 function coachLockedTimesForDay(day, policy) {

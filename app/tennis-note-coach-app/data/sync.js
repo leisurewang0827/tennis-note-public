@@ -57,7 +57,7 @@ async function syncCoachScheduleV2(options = {}) {
     return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster, cached.legacyChangeRequests);
   }
   try {
-    const [workspace, oneDayRows, roster, operationDays, legacyChangeRequests] = await Promise.all([
+    const [workspace, oneDayRows, roster, operationDays, legacyChangeRequests, legacyMakeupEntitlements] = await Promise.all([
       client.rpc("tn_schedule_v2_coach_workspace", {
         target_branch_id: branchId,
         target_from: syncRange.startDate,
@@ -83,9 +83,14 @@ async function syncCoachScheduleV2(options = {}) {
         order: "created_at.desc",
         limit: 300,
       }).catch(() => [])),
+      client.selectRows("tn_makeup_entitlements", {
+        select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at,updated_at",
+        limit: 300,
+      }).catch(() => []),
     ]);
     if (requestId !== coachScheduleV2RequestSequence) return false;
     if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
+    workspace.makeupEntitlements = mergeLegacyCoachMakeupEntitlements(workspace, roster, legacyMakeupEntitlements);
     await hydrateCoachWorkspaceParticipantProcessingState(client, workspace);
     if (requestId !== coachScheduleV2RequestSequence) return false;
     workspace.operationDays = Array.isArray(operationDays) ? operationDays : [];
@@ -233,7 +238,7 @@ async function syncLegacyCoachLessonsFromServer() {
         limit: 300,
       }).catch(() => []),
       client.selectRows("tn_makeup_entitlements", {
-        select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at",
+        select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at,updated_at",
         limit: 300,
       }).catch(() => []),
       client.rpc
@@ -412,6 +417,7 @@ async function syncLegacyCoachLessonsFromServer() {
         sourceLessonId: entitlement.source_lesson_id,
         bookedLessonId: entitlement.booked_lesson_id || "",
         ticketId: entitlement.ticket_id,
+        branchId: entitlement.branch_id || state.coach?.branchId || "",
         coachRoleId: entitlement.coach_role_id,
         coach: coach.display_name || "담당 코치",
         member: memberNames.join("&") || "회원",
@@ -423,6 +429,8 @@ async function syncLegacyCoachLessonsFromServer() {
         original: `${sourceLesson.lesson_date || "기존일"} ${String(sourceLesson.start_time || "").slice(0, 5)}`.trim(),
         bookedDate: bookedLesson.lesson_date || "",
         bookedTime: String(bookedLesson.start_time || "").slice(0, 5),
+        updatedAt: entitlement.updated_at || entitlement.booked_at || entitlement.marked_at || "",
+        bookingContract: "legacy_exact",
       };
     });
     const todayIso = new Date().toISOString().slice(0, 10);

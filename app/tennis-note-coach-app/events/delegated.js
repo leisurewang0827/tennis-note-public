@@ -518,6 +518,20 @@ function bindDelegatedEvents() {
       return;
     }
 
+    const makeupBookingButton = event.target.closest("[data-open-coach-makeup-booking]");
+    if (makeupBookingButton) {
+      void beginCoachMakeupBooking(makeupBookingButton.dataset.openCoachMakeupBooking);
+      return;
+    }
+
+    if (event.target.closest("[data-cancel-coach-makeup-booking]")) {
+      clearCoachMakeupBooking();
+      state.coachQuickAdd = null;
+      renderAll();
+      showToast("보강 시간 선택을 취소했습니다.");
+      return;
+    }
+
     const reviewGroupFeedbackButton = event.target.closest("[data-review-group-feedback]");
     if (reviewGroupFeedbackButton) {
       reviewGroupLessonFeedback(reviewGroupFeedbackButton.dataset.reviewGroupFeedback);

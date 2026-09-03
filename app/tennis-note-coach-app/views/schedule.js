@@ -400,6 +400,22 @@ function renderCoachMobileSchedule(policy, scheduleLessons) {
     </div>`;
 }
 
+function renderCoachMakeupBookingGuide() {
+  const entitlement = activeCoachMakeupBookingEntitlement();
+  if (!entitlement) return "";
+  const guard = coachMakeupEntitlementBookingGuard(entitlement, state.bookingMakeupSnapshot);
+  if (!guard.ok) {
+    return `<section class="tn-empty-state" role="alert"><strong>보강권을 다시 확인해 주세요</strong><p>${escapeHtml(guard.message)}</p><button class="small-button" type="button" data-cancel-coach-makeup-booking>선택 취소</button></section>`;
+  }
+  const ticketUnit = Math.max(1, Number(guard.ticket.lessonMinutes) || Number(entitlement.durationMinutes) || 20);
+  const completionUnits = Math.max(1, Math.ceil(Number(entitlement.durationMinutes) / ticketUnit));
+  return `<section class="coach-operation-notice is-normal" role="status" aria-live="polite">
+    <strong>${escapeHtml(entitlement.member)} 보강 시간 선택</strong>
+    <span>${escapeHtml(`${Number(entitlement.durationMinutes) || 20}분 · 예약 시 차감 0회 · 수업 완료 시 ${completionUnits}회 차감`)}</span>
+    <button class="small-button" type="button" data-cancel-coach-makeup-booking>선택 취소</button>
+  </section>`;
+}
+
 function renderFullSchedule() {
   if (!$("#fullScheduleBoard")) return;
   if (state.scheduleV2SyncError && !state.scheduleV2WorkspaceLoaded) {
@@ -464,6 +480,7 @@ function renderFullSchedule() {
       </div>
     </div>
     <p class="coach-day-schedule-guide">${scheduleGuide}</p>
+    ${renderCoachMakeupBookingGuide()}
     ${scheduleContent}`;
 }
 
@@ -533,6 +550,13 @@ function renderLessonEditModal() {
 function renderCoachQuickAddPanel() {
   const draft = state.coachQuickAdd;
   if (!draft) return "";
+  const entitlement = draft.makeupEntitlementId
+    ? (state.makeupEntitlements || []).find((item) => String(item.id || "") === String(draft.makeupEntitlementId || ""))
+    : null;
+  const entitlementGuard = draft.makeupEntitlementId
+    ? coachMakeupEntitlementBookingGuard(entitlement, draft.makeupSnapshot)
+    : { ok: true };
+  const isEntitlementBooking = Boolean(draft.makeupEntitlementId);
   const policy = loadCoachSchedulePolicy();
   const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(draft.coachRoleId || ""));
   const access = coach ? coachSlotAccess(coach, draft.day, draft.time, scheduleBlockMinutes, policy) : { reason: "available" };
@@ -549,13 +573,20 @@ function renderCoachQuickAddPanel() {
       ? "현재 운영 설정에서 코치 수업 추가가 꺼져 있습니다."
       : "저장하면 관리자 승인 대기로 접수됩니다.";
   const durationOptions = [20, 30, 40, 60].map((minutes) => `<button type="button" class="${Number(draft.durationMinutes) === minutes ? "is-active" : ""}" data-coach-add-duration="${minutes}">${minutes}분</button>`).join("");
+  const ticketUnit = Math.max(1, Number(entitlementGuard.ticket?.lessonMinutes) || Number(draft.durationMinutes) || 20);
+  const completionUnits = Math.max(1, Math.ceil((Number(draft.durationMinutes) || 20) / ticketUnit));
+  const saveEnabled = isEntitlementBooking ? entitlementGuard.ok && !draft.submitting : tickets.length > 0;
   return `
     <form class="schedule-edit-panel coach-quick-add-panel" data-coach-quick-add-form>
       <div class="wide lesson-modal-head">
-        <div><strong>수업 추가</strong><span>${draft.date} · ${draft.time} · ${escapeHtml(shortCoachName(draft.coachName))}</span></div>
-        <b class="can-process">${lockedOverride ? "브레이크·상담 수동 등록" : "빈 시간"}</b>
+        <div><strong>${isEntitlementBooking ? "보강권 예약" : "수업 추가"}</strong><span>${draft.date} · ${draft.time} · ${escapeHtml(shortCoachName(draft.coachName))}</span></div>
+        <b class="can-process">${isEntitlementBooking ? "exact 보강권" : lockedOverride ? "브레이크·상담 수동 등록" : "빈 시간"}</b>
       </div>
-      <div class="wide coach-quick-kind" role="group" aria-label="수업 종류">
+      ${isEntitlementBooking ? `<article class="modal-info-card wide">
+        <span>예약 대상</span>
+        <strong>${escapeHtml(entitlement?.member || "회원")} · ${Number(draft.durationMinutes) || 20}분</strong>
+        <small>${escapeHtml(`원래 수업 ${entitlement?.original || "확인 필요"} · 예약 시 차감 0회 · 완료 시 ${completionUnits}회 차감`)}</small>
+      </article><input id="coachQuickAddTicket" type="hidden" value="${escapeHtml(draft.ticketId || "")}" />` : `<div class="wide coach-quick-kind" role="group" aria-label="수업 종류">
         <button type="button" class="${draft.kind === "regular" ? "is-active" : ""}" data-coach-add-kind="regular">정규</button>
         <button type="button" class="${draft.kind === "makeup" ? "is-active" : ""}" data-coach-add-kind="makeup">보강</button>
       </div>
@@ -565,17 +596,18 @@ function renderCoachQuickAddPanel() {
           <option value="">회원을 선택해 주세요</option>
           ${ticketOptions}
         </select>
-      </label>
-      <div class="wide coach-quick-duration" role="group" aria-label="수업 시간">${durationOptions}</div>
+      </label>`}
+      ${isEntitlementBooking ? "" : `<div class="wide coach-quick-duration" role="group" aria-label="수업 시간">${durationOptions}</div>`}
       <label class="wide">
         <span>메모 <small>선택</small></span>
         <input id="coachQuickAddNote" type="text" maxlength="200" value="${escapeHtml(draft.note || "")}" placeholder="예: 브레이크 시간 협의 등록" />
       </label>
       ${draft.validationMessage ? `<p class="validation-text wide">${escapeHtml(draft.validationMessage)}</p>` : ""}
-      ${ticketChoices.length ? "" : '<p class="validation-text wide">담당 회원권이 없습니다. 관리자에게 회원권 상태와 담당 코치를 확인해 주세요.</p>'}
-      <p class="permission-note wide">회원에게는 브레이크 시간이 열리지 않습니다. ${writeModeLabel}</p>
+      ${isEntitlementBooking && !entitlementGuard.ok ? `<p class="validation-text wide">${escapeHtml(entitlementGuard.message)}</p>` : ""}
+      ${isEntitlementBooking || ticketChoices.length ? "" : '<p class="validation-text wide">담당 회원권이 없습니다. 관리자에게 회원권 상태와 담당 코치를 확인해 주세요.</p>'}
+      <p class="permission-note wide">${isEntitlementBooking ? "이 보강권과 선택한 시간을 서버에서 다시 확인한 뒤 한 번만 예약합니다." : `회원에게는 브레이크 시간이 열리지 않습니다. ${writeModeLabel}`}</p>
       <div class="actions wide">
-        <button class="approve-button" type="button" data-save-coach-quick-add ${tickets.length ? "" : "disabled"}>시간표에 등록</button>
+        <button class="approve-button" type="button" data-save-coach-quick-add ${saveEnabled ? "" : "disabled"}>${draft.submitting ? "서버 확인 중" : isEntitlementBooking ? "보강 예약" : "시간표에 등록"}</button>
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>
     </form>`;

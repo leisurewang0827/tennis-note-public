@@ -153,11 +153,17 @@ function renderTodayLessons() {
                 ? visibleMakeups
                     .map(
                       (request) => request.taskKind === "absence"
-                        ? `<article class="makeup-alert-card makeup-awaiting-slot">
-                            <b>${request.member}</b>
-                            <span>${request.original} 불참 처리</span>
-                            <small>회원 시간 선택 대기</small>
-                          </article>`
+                        ? request.bookingContract === "legacy_exact"
+                          ? `<button class="makeup-alert-card makeup-awaiting-slot" type="button" data-open-coach-makeup-booking="${escapeHtml(request.id)}">
+                              <b>${escapeHtml(request.member)}</b>
+                              <span>${escapeHtml(request.original)} 불참 처리</span>
+                              <small>보강 시간 선택</small>
+                            </button>`
+                          : `<article class="makeup-alert-card makeup-awaiting-slot">
+                              <b>${escapeHtml(request.member)}</b>
+                              <span>${escapeHtml(request.original)} 불참 처리</span>
+                              <small>회원 시간 선택 대기</small>
+                            </article>`
                         : `<button class="makeup-alert-card" type="button" data-open-makeup-detail="${request.id}">
                             <b>${request.member}</b>
                             <span>${request.original} → ${request.requested}</span>
