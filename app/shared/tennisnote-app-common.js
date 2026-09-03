@@ -210,9 +210,19 @@ function setNoticeDialogOpen(open) {
   noticePreviousFocus = null;
 }
 
+function noticeAcknowledgementIdentity(notice = {}) {
+  return window.TennisNoteRuntimeEnvironment?.noticeAcknowledgementKey?.(notice) || notice.id || "notice";
+}
+
 function closeNotice(hideToday = false) {
   const noticeId = $("#noticeDialog")?.dataset.noticeId || "";
-  if (noticeId) noticeSessionSeenIds.add(noticeId);
+  if (noticeId) {
+    const notice = activeNoticesForApp().find((item) => item.id === noticeId);
+    if (notice) {
+      noticeSessionSeenIds.add(noticeAcknowledgementIdentity(notice));
+      window.TennisNoteRuntimeEnvironment?.acknowledgeNotice?.(notice);
+    }
+  }
   if (hideToday) {
     const today = localDateKey();
     const previousIds = state.noticeHiddenDate === today && Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : [];

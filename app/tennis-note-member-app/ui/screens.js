@@ -275,7 +275,11 @@ function showNoticeIfNeeded() {
   const hiddenToday = new Set(state.noticeHiddenDate === today
     ? [...(Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : []), state.noticeHiddenId].filter(Boolean)
     : []);
-  const notice = activeNotices.find((item) => !noticeSessionSeenIds.has(item.id) && !(item.showOncePerDay && hiddenToday.has(item.id)));
+  const notice = activeNotices.find((item) => (
+    !noticeSessionSeenIds.has(noticeAcknowledgementIdentity(item))
+    && !window.TennisNoteRuntimeEnvironment?.hasNoticeAcknowledgement?.(item, "member")
+    && !(item.showOncePerDay && hiddenToday.has(item.id))
+  ));
   if (!notice) {
     setNoticeDialogOpen(false);
     return;
@@ -433,7 +437,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.452", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.472", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",

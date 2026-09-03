@@ -28,7 +28,11 @@ function showNoticeIfNeeded() {
   const hiddenToday = new Set(state.noticeHiddenDate === today
     ? [...(Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : []), state.noticeHiddenId].filter(Boolean)
     : []);
-  const notice = activeNotices.find((item) => !noticeSessionSeenIds.has(item.id) && !(item.showOncePerDay && hiddenToday.has(item.id)));
+  const notice = activeNotices.find((item) => (
+    !noticeSessionSeenIds.has(noticeAcknowledgementIdentity(item))
+    && !window.TennisNoteRuntimeEnvironment?.hasNoticeAcknowledgement?.(item, "coach")
+    && !(item.showOncePerDay && hiddenToday.has(item.id))
+  ));
   if (!notice) {
     setNoticeDialogOpen(false);
     return;
@@ -374,22 +378,12 @@ async function openCoachExternalPortal(kind = "coach") {
     showToast("관리자 권한이 있는 계정에서만 열 수 있습니다.");
     return;
   }
-  const targetUrl = adminRequested ? adminWebPortalUrl : coachWebPortalUrl;
-  let parsedUrl;
-  try {
-    parsedUrl = new URL(targetUrl);
-  } catch {
-    showToast("웹 화면 주소를 확인하지 못했습니다.");
+  const target = window.TennisNoteRuntimeEnvironment?.resolvePortal?.(adminRequested ? "admin" : "coach");
+  if (!target?.ok || !target.url) {
+    showToast("개발·운영 환경을 확인하지 못해 웹 화면을 열지 않았습니다.");
     return;
   }
-  const allowedOrigins = new Set([
-    "https://tennisnote-app.pages.dev",
-    "https://tennisnote-admin.pages.dev",
-  ]);
-  if (!allowedOrigins.has(parsedUrl.origin)) {
-    showToast("허용되지 않은 웹 화면 주소입니다.");
-    return;
-  }
+  const parsedUrl = new URL(target.url);
   try {
     const browserPlugin = window.Capacitor?.Plugins?.Browser;
     if (nativeCoachAppPlatform() !== "web" && browserPlugin?.open) {

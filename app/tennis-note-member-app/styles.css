@@ -157,6 +157,15 @@ button {
   font-size: 32px;
 }
 
+.login-brand-guidance {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .brand span,
 .section-title span,
 .login-card p,
@@ -430,6 +439,29 @@ button {
   gap: 10px;
 }
 
+.public-onboarding-login-actions h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.recent-login-badge {
+  justify-self: start;
+  border: 1px solid #cfe1d9;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #356555;
+  background: #f2faf6;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.recent-login-badge[hidden] {
+  display: none !important;
+}
+
 .public-onboarding-login-actions[hidden] {
   display: none !important;
 }
@@ -494,6 +526,19 @@ button {
 .provider.is-preparing {
   cursor: not-allowed;
   opacity: 0.64;
+}
+
+.provider[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+.provider-availability-note {
+  margin: 6px 2px 2px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .provider.is-preparing {
@@ -4148,6 +4193,15 @@ button.purchase-timetable-cell {
   padding: 12px 18px max(14px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   background: var(--paper);
+}
+
+.purchase-schedule-sheet-actions .primary-button:disabled,
+.purchase-schedule-sheet-actions .primary-button[aria-disabled="true"] {
+  border: 1px solid #d0d9d4;
+  color: #7a8780;
+  background: #e9eeeb;
+  box-shadow: none;
+  opacity: 1;
 }
 
 .purchase-schedule-sheet-actions span {

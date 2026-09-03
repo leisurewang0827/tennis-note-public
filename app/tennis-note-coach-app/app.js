@@ -80,8 +80,6 @@ const state = {
   expiredMembers: [],
 };
 
-const coachWebPortalUrl = "https://tennisnote-app.pages.dev/tennis-note-coach-app/";
-const adminWebPortalUrl = "https://tennisnote-admin.pages.dev/";
 let coachSchedulePreferenceTouched = false;
 
 function hasTrustedCoachSchedulePolicySnapshot() {
@@ -557,7 +555,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.452",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.472",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

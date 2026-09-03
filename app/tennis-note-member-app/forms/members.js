@@ -197,17 +197,35 @@ function syncAuthProviderCapabilityControls() {
   Object.entries(providerSelectors).forEach(([provider, selector]) => {
     $$(selector).forEach((button) => {
       const available = identityAuthCapabilities.providers[provider];
+      if (provider === "apple") {
+        button.hidden = false;
+        button.disabled = available !== true || Boolean(oauthLoginInFlightProvider);
+        button.toggleAttribute("aria-disabled", available !== true);
+        if (available === true) button.removeAttribute("aria-describedby");
+        else button.setAttribute("aria-describedby", "appleLoginAvailabilityNote");
+        return;
+      }
       if (available === false) {
         button.hidden = true;
         button.disabled = true;
+        button.setAttribute("aria-disabled", "true");
         return;
       }
       if (available === true) {
         button.hidden = false;
+        button.removeAttribute("aria-disabled");
         if (!oauthLoginInFlightProvider) button.disabled = false;
       }
     });
   });
+  const appleNote = $("#appleLoginAvailabilityNote");
+  if (appleNote) {
+    const appleCapability = identityAuthCapabilities.providers.apple;
+    appleNote.hidden = appleCapability === true;
+    appleNote.textContent = appleCapability === false
+      ? "Apple 로그인은 개발 환경에서 사용할 수 없습니다. 네이버·카카오·이메일 로그인을 이용해 주세요."
+      : "Apple 로그인 가능 여부를 확인하지 못했습니다. 네이버·카카오·이메일 로그인을 이용해 주세요.";
+  }
   const emailPanel = $("#memberEmailAuthPanel");
   if (emailPanel && identityAuthCapabilities.providers.email !== null) {
     emailPanel.hidden = identityAuthCapabilities.providers.email === false;

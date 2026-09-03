@@ -43,10 +43,11 @@ function registerPwaInstallPrompt() {
 }
 
 function registerPwaServiceWorker() {
+  const memberPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("member");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.452",
-    remoteAppUrl: "https://tennisnote-app.pages.dev/",
+    workerUrl: "./service-worker.js?v=1.0.472",
+    remoteAppUrl: memberPortal?.ok ? memberPortal.url : "",
   });
 }
 
@@ -281,6 +282,7 @@ function finishOAuthLogin() {
     delete button.dataset.oauthDisabledBefore;
     button.removeAttribute("aria-busy");
   });
+  syncAuthProviderCapabilityControls();
 }
 
 function setEmailAuthStatus(message = "", tone = "") {
