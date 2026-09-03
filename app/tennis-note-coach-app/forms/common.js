@@ -29,7 +29,7 @@ function registerPwaServiceWorker() {
   const coachPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("coach");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.470",
+    workerUrl: "./service-worker.js?v=1.0.471",
     remoteAppUrl: coachPortal?.ok ? coachPortal.url : "",
   });
 }
