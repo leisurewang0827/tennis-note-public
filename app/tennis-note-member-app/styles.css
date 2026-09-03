@@ -157,6 +157,15 @@ button {
   font-size: 32px;
 }
 
+.login-brand-guidance {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .brand span,
 .section-title span,
 .login-card p,
@@ -428,6 +437,29 @@ button {
 .public-onboarding-login-actions {
   display: grid;
   gap: 10px;
+}
+
+.public-onboarding-login-actions h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.recent-login-badge {
+  justify-self: start;
+  border: 1px solid #cfe1d9;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #356555;
+  background: #f2faf6;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.recent-login-badge[hidden] {
+  display: none !important;
 }
 
 .public-onboarding-login-actions[hidden] {
@@ -4166,6 +4198,15 @@ button.purchase-timetable-cell {
 
 .purchase-schedule-sheet-actions .primary-button {
   min-height: 44px;
+}
+
+.purchase-schedule-sheet-actions .primary-button:disabled,
+.purchase-schedule-sheet-actions .primary-button[aria-disabled="true"] {
+  border: 1px solid #d0d9d4;
+  color: #7a8780;
+  background: #e9eeeb;
+  box-shadow: none;
+  opacity: 1;
 }
 
 .purchase-schedule-sheet-actions span {
