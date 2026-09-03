@@ -26,10 +26,11 @@ function coachDisplaySegmentAttrs(lesson = {}) {
 }
 
 function registerPwaServiceWorker() {
+  const coachPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("coach");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
     workerUrl: "./service-worker.js?v=1.0.468",
-    remoteAppUrl: "https://tennisnote-app.pages.dev/tennis-note-coach-app/",
+    remoteAppUrl: coachPortal?.ok ? coachPortal.url : "",
   });
 }
 

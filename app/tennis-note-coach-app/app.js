@@ -84,8 +84,6 @@ const state = {
   expiredMembers: [],
 };
 
-const coachWebPortalUrl = "https://tennisnote-app.pages.dev/tennis-note-coach-app/";
-const adminWebPortalUrl = "https://tennisnote-admin.pages.dev/";
 let coachSchedulePreferenceTouched = false;
 
 function hasTrustedCoachSchedulePolicySnapshot() {

@@ -7,7 +7,7 @@
 
 function normalizeAppNotice(notice = {}) {
   const normalizedStatus = ["active", "disabled", "archived"].includes(notice.status) ? notice.status : "active";
-  return {
+  const normalized = {
     id: notice.id || `notice-${Date.now()}`,
     title: notice.title || notices[0]?.title || "공지사항",
     body: notice.body || notices[0]?.body || "",
@@ -24,6 +24,7 @@ function normalizeAppNotice(notice = {}) {
     actionUrl: String(notice.actionUrl || notice.action_url || "").trim(),
     updatedAt: notice.updatedAt || "",
   };
+  return window.TennisNoteRuntimeEnvironment?.localizeSyntheticNotice?.(normalized) || normalized;
 }
 
 function activeNoticesForApp(audience = "member") {

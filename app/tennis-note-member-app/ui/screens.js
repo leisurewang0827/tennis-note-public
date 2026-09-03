@@ -275,7 +275,11 @@ function showNoticeIfNeeded() {
   const hiddenToday = new Set(state.noticeHiddenDate === today
     ? [...(Array.isArray(state.noticeHiddenIds) ? state.noticeHiddenIds : []), state.noticeHiddenId].filter(Boolean)
     : []);
-  const notice = activeNotices.find((item) => !noticeSessionSeenIds.has(item.id) && !(item.showOncePerDay && hiddenToday.has(item.id)));
+  const notice = activeNotices.find((item) => (
+    !noticeSessionSeenIds.has(noticeAcknowledgementIdentity(item))
+    && !window.TennisNoteRuntimeEnvironment?.hasNoticeAcknowledgement?.(item, "member")
+    && !(item.showOncePerDay && hiddenToday.has(item.id))
+  ));
   if (!notice) {
     setNoticeDialogOpen(false);
     return;
