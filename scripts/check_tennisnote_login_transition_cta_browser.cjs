@@ -67,8 +67,9 @@ async function launch(browserType) {
             const errors = [];
             page.on("pageerror", (error) => errors.push(error.message));
             await page.goto(`${base}/app/tennis-note-member-app/`, { waitUntil: "domcontentloaded" });
-            await page.waitForFunction(() => Boolean(window.TennisNoteModeTransition));
+            await page.waitForFunction(() => Boolean(window.TennisNoteModeTransition) && typeof window.renderRecentLoginBadge === "function");
             const result = await page.evaluate(() => {
+              window.renderRecentLoginBadge();
               const splash = document.querySelector("#brandSplash");
               splash.hidden = false;
               splash.classList.remove("is-hidden");
