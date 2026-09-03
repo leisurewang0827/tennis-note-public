@@ -610,18 +610,37 @@ function memberSameDayAbsenceErrorMessage(error) {
     same_day_absence_restore_ticket_conflict: "회원권 횟수가 달라져 자동 복구할 수 없습니다. 담당 코치에게 문의해 주세요.",
     same_day_absence_restore_not_available: "현재 상태에서는 다시 참석으로 바꿀 수 없습니다.",
     operation_key_reused_with_different_payload: "요청 내용이 변경되었습니다. 화면을 닫고 다시 시도해 주세요.",
+    future_absence_rollout_disabled: "회원 불참 알리기가 아직 열리지 않았습니다. 담당 코치에게 문의해 주세요.",
+    future_absence_future_only: "미래 수업만 미리 불참을 알릴 수 있습니다.",
+    future_absence_group_participant_required: "1:2 그룹수업의 내 참여 건만 불참을 알릴 수 있습니다.",
+    future_absence_occurrence_ambiguous: "연속 수업 구성을 안전하게 확인할 수 없습니다. 담당 코치에게 문의해 주세요.",
+    future_absence_change_request_conflict: "처리 중인 시간 변경 요청이 있어 불참을 알릴 수 없습니다.",
+    future_absence_coach_ambiguous: "담당 코치 정보가 구간마다 달라 불참을 알릴 수 없습니다. 관리자에게 문의해 주세요.",
+    future_absence_lesson_not_scheduled: "수업 상태가 변경되었습니다. 최신 시간표를 다시 확인해 주세요.",
+    future_absence_policy_changed: "운영 규칙이 변경되었습니다. 안내를 다시 확인해 주세요.",
+    future_absence_reason_required: "불참 사유를 2자 이상 입력해 주세요.",
+    future_absence_reason_too_long: "불참 사유는 200자 이내로 입력해 주세요.",
+    future_absence_ticket_units_unavailable: "회원권 잔여 횟수가 부족해 불참 알림을 완료할 수 없습니다.",
+    future_absence_restore_makeup_already_booked: "이미 보강을 예약해 앱에서 다시 참석으로 바꿀 수 없습니다.",
+    future_absence_restore_cutoff_passed: "다시 참석으로 바꿀 수 있는 시간이 지났습니다.",
+    future_absence_restore_lesson_changed: "수업 시간 또는 담당 코치가 변경되었습니다. 최신 시간표를 확인해 주세요.",
+    future_absence_restore_ticket_conflict: "회원권 횟수가 달라져 자동 복구할 수 없습니다. 담당 코치에게 문의해 주세요.",
   };
   return messages[String(code)] || "요청을 처리하지 못했습니다. 최신 상태를 확인한 뒤 다시 시도해 주세요.";
 }
 
 function sameDayAbsencePolicySummary(policy = {}) {
-  const deductionText = policy.deductEnabled === false ? "회원권은 차감되지 않습니다" : "회원권 1회가 차감됩니다";
+  const deductionUnits = Math.max(0, Number(policy.deductionUnits) || 1);
+  const deductionText = policy.deductEnabled === false ? "회원권은 차감되지 않습니다" : `회원권 ${deductionUnits}회가 차감됩니다`;
   const makeupText = policy.makeupEnabled === true ? "보강이 발생합니다" : "보강은 발생하지 않습니다";
   const approvalText = policy.requiresCoachApproval === true ? "담당 코치 승인 후 처리됩니다" : "신청 즉시 담당 코치에게 전달됩니다";
-  return `${deductionText}. ${makeupText}. ${approvalText}.`;
+  const segmentText = policy.operationKind === "future_group"
+    ? `내 참여 ${Math.max(1, Number(policy.segmentCount) || 1)}개 구간만 처리하고 파트너 수업은 유지합니다.`
+    : "";
+  return [deductionText, makeupText, approvalText, segmentText].filter(Boolean).map((item) => `${item}.`).join(" ");
 }
 
-async function openSameDayAbsenceSheet(lesson) {
+async function openSameDayAbsenceSheet(lesson, operationKind = "same_day") {
   if (!lesson?.serverLessonId || !window.TennisNoteDataClient?.rpc) {
     showToast("수업 연결을 다시 확인한 뒤 신청해 주세요.");
     return;
@@ -635,7 +654,9 @@ async function openSameDayAbsenceSheet(lesson) {
     state.sameDayAbsenceOperationKey = "";
     if ($("#sameDayAbsenceReason")) $("#sameDayAbsenceReason").value = "";
   }
-  $("#sameDayAbsenceLessonLabel").textContent = `${String(lesson.time || "").slice(0, 5)} 수업에 불참합니다.`;
+  const futureGroup = operationKind === "future_group";
+  $("#sameDayAbsenceTitle").textContent = futureGroup ? "미리 불참을 알릴까요?" : "오늘 수업에 못 가시나요?";
+  $("#sameDayAbsenceLessonLabel").textContent = `${lessonDetailDateTimeLabel(lesson)} 수업에 불참합니다.`;
   $("#sameDayAbsencePolicySummary").textContent = "운영 규칙을 확인하고 있습니다.";
   $("#sameDayAbsenceMessage").textContent = "";
   const submitButton = $("#submitSameDayAbsenceButton");
@@ -643,7 +664,9 @@ async function openSameDayAbsenceSheet(lesson) {
   submitButton.textContent = "확인 중";
   openAppSheet("sameDayAbsenceSheet");
   try {
-    const policy = await window.TennisNoteDataClient.rpc("tn_member_same_day_absence_policy", {
+    const policy = await window.TennisNoteDataClient.rpc(futureGroup
+      ? "tn_member_future_group_absence_policy"
+      : "tn_member_same_day_absence_policy", {
       target_lesson_id: lesson.serverLessonId,
     });
     if (state.selectedSameDayAbsenceLessonId !== lesson.id) return;
@@ -656,7 +679,9 @@ async function openSameDayAbsenceSheet(lesson) {
     $("#sameDayAbsenceReasonModeLabel").textContent = reasonMode === "required" ? "필수" : "선택";
     $("#sameDayAbsencePolicySummary").textContent = sameDayAbsencePolicySummary(policy);
     submitButton.disabled = policy?.enabled !== true;
-    submitButton.textContent = policy?.requiresCoachApproval === true ? "불참 승인 요청" : "불참 신청";
+    submitButton.textContent = policy?.requiresCoachApproval === true
+      ? "불참 승인 요청"
+      : futureGroup ? "불참 알리기" : "불참 신청";
     if (policy?.enabled !== true) $("#sameDayAbsenceMessage").textContent = memberSameDayAbsenceErrorMessage({ message: policy?.blockedReason });
   } catch (error) {
     $("#sameDayAbsenceMessage").textContent = memberSameDayAbsenceErrorMessage(error);
@@ -683,11 +708,14 @@ async function submitSameDayAbsence() {
   button.disabled = true;
   button.textContent = "신청 중";
   try {
-    const result = await window.TennisNoteDataClient.rpc("tn_submit_member_same_day_absence", {
+    const futureGroup = policy.operationKind === "future_group";
+    const result = await window.TennisNoteDataClient.rpc(futureGroup
+      ? "tn_submit_member_future_group_absence"
+      : "tn_submit_member_same_day_absence", {
       target_lesson_id: lesson.serverLessonId,
       target_reason: policy.reasonMode === "none" ? "" : reason,
       target_policy_revision: Number(policy.revision) || 0,
-      target_operation_key: memberSameDayAbsenceOperationKey("submit", lesson.serverLessonId),
+      target_operation_key: memberSameDayAbsenceOperationKey(futureGroup ? "future-submit" : "submit", lesson.serverLessonId),
     });
     memberScheduleV2WorkspaceCache = null;
     await syncMemberLessonsFromServer(null, { force: true });
@@ -697,13 +725,17 @@ async function submitSameDayAbsence() {
     state.sameDayAbsenceOperationKey = "";
     showToast(result?.status === "pending_approval"
       ? "담당 코치에게 불참 승인 요청을 보냈습니다. 승인 전에는 기존 수업이 유지됩니다."
-      : "불참 신청이 완료되어 담당 코치에게 전달되었습니다.");
+      : futureGroup
+        ? "불참 알림이 완료되었습니다. 파트너 수업은 그대로 유지됩니다."
+        : "불참 신청이 완료되어 담당 코치에게 전달되었습니다.");
   } catch (error) {
     $("#sameDayAbsenceMessage").textContent = memberSameDayAbsenceErrorMessage(error);
   } finally {
     state.sameDayAbsenceSubmitting = false;
     button.disabled = false;
-    button.textContent = policy?.requiresCoachApproval === true ? "불참 승인 요청" : "불참 신청";
+    button.textContent = policy?.requiresCoachApproval === true
+      ? "불참 승인 요청"
+      : policy?.operationKind === "future_group" ? "불참 알리기" : "불참 신청";
   }
 }
 
@@ -715,7 +747,9 @@ async function restoreSameDayAbsence(lesson) {
   button.disabled = true;
   button.textContent = "확인 중";
   try {
-    await window.TennisNoteDataClient.rpc("tn_restore_member_same_day_absence", {
+    await window.TennisNoteDataClient.rpc(request.operationKind === "future_group"
+      ? "tn_restore_member_future_group_absence"
+      : "tn_restore_member_same_day_absence", {
       target_request_id: request.id,
       target_operation_key: memberSameDayAbsenceOperationKey("restore", request.id),
     });
@@ -740,6 +774,10 @@ function handleLessonDetailAction(action) {
   if (!lesson) return;
   if (action === "absence") {
     void openSameDayAbsenceSheet(lesson);
+    return;
+  }
+  if (action === "future-absence") {
+    void openSameDayAbsenceSheet(lesson, "future_group");
     return;
   }
   if (action === "restore-absence") {

@@ -122,6 +122,7 @@ function bindDelegatedEvents() {
         sameDayAbsenceReviewButton.dataset.reviewSameDayAbsence,
         sameDayAbsenceReviewButton.dataset.approve === "true",
         sameDayAbsenceReviewButton,
+        sameDayAbsenceReviewButton.dataset.absenceOperationKind || "same_day",
       );
       return;
     }

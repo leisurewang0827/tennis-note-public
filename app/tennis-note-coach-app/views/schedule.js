@@ -67,11 +67,11 @@ function renderScheduleEditPanel() {
       return `
         <section class="lesson-participant-completion-card lesson-chart-participant is-same-day-absence" data-lesson-participant-panel="${escapeHtml(key)}" ${index === 0 ? "" : "hidden"}>
           ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
-          <div class="lesson-chart-result-line"><b>불참 승인 대기</b><span>승인 전 수업·횟수 유지</span></div>
+          <div class="lesson-chart-result-line"><b>${sameDayAbsence.operationKind === "future_group" ? "미래 불참 승인 대기" : "불참 승인 대기"}</b><span>승인 전 수업·횟수 유지</span></div>
           <p class="lesson-chart-readonly">${escapeHtml(sameDayAbsence.reason || "사유 없음")}</p>
           <div class="actions lesson-same-day-absence-actions">
-            <button class="small-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-approve="false">거절</button>
-            <button class="approve-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-approve="true">불참 승인</button>
+            <button class="small-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-absence-operation-kind="${escapeHtml(sameDayAbsence.operationKind || "same_day")}" data-approve="false">거절</button>
+            <button class="approve-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-absence-operation-kind="${escapeHtml(sameDayAbsence.operationKind || "same_day")}" data-approve="true">불참 승인</button>
           </div>
         </section>`;
     }
@@ -81,7 +81,7 @@ function renderScheduleEditPanel() {
         <section class="lesson-participant-completion-card lesson-chart-participant is-final is-same-day-absence" data-lesson-participant-panel="${escapeHtml(key)}" ${index === 0 ? "" : "hidden"}>
           ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
           <div class="lesson-chart-result-line"><b>불참 예정</b><span>${absenceDeducted ? `${absenceDeducted}회 차감` : "차감 없음"}</span></div>
-          <p class="lesson-chart-readonly">회원이 앱에서 당일 불참을 알렸습니다. 피드백 작성 대상에서 제외됩니다.</p>
+          <p class="lesson-chart-readonly">회원이 앱에서 ${sameDayAbsence.operationKind === "future_group" ? "미래 불참을 미리" : "당일 불참을"} 알렸습니다. 피드백 작성 대상에서 제외됩니다.</p>
         </section>`;
     }
     if (finalized) {

@@ -156,7 +156,10 @@ function canRescheduleLesson(lesson) {
 }
 
 function canMarkRegularLessonAbsent(lesson) {
-  return canRescheduleLesson(lesson) && String(lesson.lessonSource || lesson.lesson_source || "regular") === "regular";
+  return canRescheduleLesson(lesson)
+    && String(lesson.lessonSource || lesson.lesson_source || "regular") === "regular"
+    && !lesson.groupAccountId
+    && completionParticipantsForLesson(lesson).length <= 1;
 }
 
 function todayLessonPriority(lesson = {}, now = new Date()) {

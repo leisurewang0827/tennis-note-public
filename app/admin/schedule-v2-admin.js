@@ -3241,11 +3241,11 @@
           : "";
         if (participant.sameDayAbsence?.status === "pending_approval") {
           const request = participant.sameDayAbsence;
-          return `<div class="schedule-v2-outcome-row is-same-day-absence" data-v2-same-day-absence-request="${escapeHtml(request.id)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><small class="schedule-v2-session-snapshot">불참 승인 대기<span>승인 전 수업·회원권 유지</span></small><p>${escapeHtml(request.reason || "사유 없음")}</p><div class="schedule-v2-same-day-absence-actions"><button type="button" data-v2-review-same-day-absence="false">거절</button><button class="primary-button" type="button" data-v2-review-same-day-absence="true">불참 승인</button></div></div>`;
+          return `<div class="schedule-v2-outcome-row is-same-day-absence" data-v2-same-day-absence-request="${escapeHtml(request.id)}" data-v2-absence-operation-kind="${escapeHtml(request.operationKind || "same_day")}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><small class="schedule-v2-session-snapshot">${request.operationKind === "future_group" ? "미래 불참 승인 대기" : "불참 승인 대기"}<span>승인 전 수업·회원권 유지</span></small><p>${escapeHtml(request.reason || "사유 없음")}</p><div class="schedule-v2-same-day-absence-actions"><button type="button" data-v2-review-same-day-absence="false">거절</button><button class="primary-button" type="button" data-v2-review-same-day-absence="true">불참 승인</button></div></div>`;
         }
         if (participant.sameDayAbsence?.status === "announced") {
           const deductedSessions = Math.max(0, Number(participant.sameDayAbsence.deductedSessions) || 0);
-          return `<div class="schedule-v2-outcome-row is-final is-same-day-absence"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><small class="schedule-v2-session-snapshot">불참 예정<span>${deductedSessions ? `${deductedSessions}회 차감` : "차감 없음"} · 피드백 대상 제외</span></small><p>회원이 앱에서 당일 불참을 알렸습니다.</p></div>`;
+          return `<div class="schedule-v2-outcome-row is-final is-same-day-absence"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><small class="schedule-v2-session-snapshot">불참 예정<span>${deductedSessions ? `${deductedSessions}회 차감` : "차감 없음"} · 피드백 대상 제외</span></small><p>회원이 앱에서 ${participant.sameDayAbsence.operationKind === "future_group" ? "미래 불참을 미리" : "당일 불참을"} 알렸습니다.</p></div>`;
         }
         return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""} ${feedbackEditing ? "is-feedback-editing" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}" data-v2-record-updated-at="${escapeHtml(participant.updatedAt || participant.updated_at || "")}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong>${sessionMarkup}<select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${feedbackDisabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}${revisionTools}</div>`;
       }).join("")
@@ -3280,18 +3280,20 @@
     preview.textContent = `회원이 오늘 수업 불참을 ${approval ? "요청하면 코치 승인 후" : "알리면 즉시"} ${deduct ? "1회 차감" : "차감 없이"} 처리합니다. ${restore ? `수업 ${cutoff}분 전까지 원래 자리로 복귀할 수 있습니다.` : "앱에서 다시 참석으로 바꿀 수 없습니다."}`;
   }
 
-  async function reviewMemberSameDayAbsence(requestId, approve, button) {
+  async function reviewMemberSameDayAbsence(requestId, approve, button, operationKind = "same_day") {
     const api = bridge();
     if (!requestId || !api?.rpc || button?.disabled || !requireWritableServer("editor")) return;
     const originalLabel = button.textContent;
     button.disabled = true;
     button.textContent = "처리 중";
     try {
-      await api.rpc("tn_review_member_same_day_absence", {
+      await api.rpc(operationKind === "future_group"
+        ? "tn_review_member_future_group_absence"
+        : "tn_review_member_same_day_absence", {
         target_request_id: requestId,
         target_approve: approve === true,
         target_note: "",
-        target_operation_key: `admin_absence_review:${requestId}:${approve ? "approve" : "reject"}`,
+        target_operation_key: `admin_absence_review:${operationKind}:${requestId}:${approve ? "approve" : "reject"}`,
       });
       const editedLessonId = state.editingLesson?.id || "";
       const viewState = captureWorkspaceViewState();
@@ -4909,10 +4911,12 @@
       const absenceReviewButton = event.target.closest("[data-v2-review-same-day-absence]");
       if (absenceReviewButton) {
         const requestId = absenceReviewButton.closest("[data-v2-same-day-absence-request]")?.dataset.v2SameDayAbsenceRequest || "";
+        const operationKind = absenceReviewButton.closest("[data-v2-same-day-absence-request]")?.dataset.v2AbsenceOperationKind || "same_day";
         void reviewMemberSameDayAbsence(
           requestId,
           absenceReviewButton.dataset.v2ReviewSameDayAbsence === "true",
           absenceReviewButton,
+          operationKind,
         );
         return;
       }

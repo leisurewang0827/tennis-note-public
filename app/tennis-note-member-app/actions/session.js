@@ -86,6 +86,9 @@ function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = []
       deductedSessions: Number(participantRecord?.deductedSessions) || 0,
       coachComment: participantRecord?.coachComment || "",
       sameDayAbsence,
+      participantCount: Number(lesson.participantCount) || 0,
+      groupAccountId: lesson.groupAccountId || "",
+      isGroup: lesson.isGroup === true,
       status: isOwnLesson
         ? ownStatus === "pending_change" ? "requested" : ownStatus
         : "occupied",

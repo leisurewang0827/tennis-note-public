@@ -482,7 +482,7 @@ async function refreshLessonCompletionFromUi({ logId = "", lessonId = "" } = {})
   return result;
 }
 
-async function reviewMemberSameDayAbsence(requestId, approve, button) {
+async function reviewMemberSameDayAbsence(requestId, approve, button, operationKind = "same_day") {
   if (!requestId || !window.TennisNoteDataClient?.rpc || button?.disabled) return;
   const originalLabel = button?.textContent || "처리";
   if (button) {
@@ -490,11 +490,13 @@ async function reviewMemberSameDayAbsence(requestId, approve, button) {
     button.textContent = "처리 중";
   }
   try {
-    await window.TennisNoteDataClient.rpc("tn_review_member_same_day_absence", {
+    await window.TennisNoteDataClient.rpc(operationKind === "future_group"
+      ? "tn_review_member_future_group_absence"
+      : "tn_review_member_same_day_absence", {
       target_request_id: requestId,
       target_approve: approve === true,
       target_note: "",
-      target_operation_key: `coach_absence_review:${requestId}:${approve ? "approve" : "reject"}`,
+      target_operation_key: `coach_absence_review:${operationKind}:${requestId}:${approve ? "approve" : "reject"}`,
     });
     coachScheduleV2WorkspaceCache = null;
     await syncCoachLessonsFromServer();

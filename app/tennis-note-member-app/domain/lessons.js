@@ -173,9 +173,10 @@ function lessonDetailDateTimeLabel(lesson = {}) {
 function lessonDetailStatusInfo(lesson = {}) {
   const sameDayAbsence = lesson.sameDayAbsence || null;
   const absenceStatus = String(sameDayAbsence?.status || "");
+  const futureGroupAbsence = sameDayAbsence?.operationKind === "future_group";
   if (absenceStatus === "pending_approval") {
     return {
-      label: "불참 승인 대기",
+      label: futureGroupAbsence ? "불참 알림 승인 대기" : "불참 승인 대기",
       message: "담당 코치가 확인하기 전까지 수업과 회원권 횟수는 그대로 유지됩니다.",
       primaryAction: "",
       absenceAction: "restore-absence",
@@ -185,7 +186,7 @@ function lessonDetailStatusInfo(lesson = {}) {
   if (absenceStatus === "announced") {
     const deductedSessions = Math.max(0, Number(sameDayAbsence?.deductedSessions) || 0);
     return {
-      label: "불참 신청됨",
+      label: futureGroupAbsence ? "불참 알림됨" : "불참 신청됨",
       message: deductedSessions > 0
         ? `${deductedSessions}회 차감 · 담당 코치에게 전달됨`
         : "담당 코치에게 전달됨 · 회원권 차감 없음",
@@ -257,7 +258,11 @@ function lessonDetailStatusInfo(lesson = {}) {
       : memberStatusLabel("lesson", "scheduled", "예정"),
     message: "수업 변경 가능 시간은 센터 운영 규칙에 따라 표시됩니다.",
     primaryAction: "change",
-    absenceAction: lesson.lessonDate === localDateKey() ? "absence" : "",
-    absenceActionLabel: "오늘 못 가요",
+    absenceAction: lesson.lessonDate === localDateKey()
+      ? "absence"
+      : lesson.lessonDate > localDateKey() && lesson.isGroup === true && Number(lesson.participantCount) === 2
+        ? "future-absence"
+        : "",
+    absenceActionLabel: lesson.lessonDate > localDateKey() ? "불참 알리기" : "오늘 못 가요",
   };
 }
