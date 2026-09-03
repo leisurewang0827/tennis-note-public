@@ -98,8 +98,30 @@ html[data-tennisnote-surface] body {
 .brand-splash.is-mode-transition .tn-mode-transition-card {
   position: absolute;
   top: calc(env(safe-area-inset-top, 0px) + 18px);
-  left: 50%;
-  transform: translateX(-50%);
+  right: max(16px, env(safe-area-inset-right, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  width: auto;
+  min-inline-size: min(280px, calc(100% - 32px));
+  max-width: 520px;
+  margin-inline: auto;
+  box-sizing: border-box;
+  transform: none;
+}
+
+/* The splash accessibility label hides every span. Keep the transition mark
+   in the grid so the text column cannot collapse during the first paint. */
+.brand-splash.is-mode-transition .tn-mode-transition-mark {
+  position: static;
+  width: 42px;
+  height: 42px;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  white-space: normal;
+}
+
+.brand-splash.is-mode-transition.is-hidden .tn-mode-transition-card {
+  display: none;
 }
 
 @keyframes tn-mode-transition-spin {
@@ -457,7 +479,7 @@ body.modal-open .tennisnote-release-check-notice {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 10px;
   border: 1px solid #d6e2dd;
   border-radius: 6px;
@@ -467,7 +489,7 @@ body.modal-open .tennisnote-release-check-notice {
 }
 
 .tn-comment-draft-tools button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 12px;
   border: 1px solid #a9cabe;
   border-radius: 6px;

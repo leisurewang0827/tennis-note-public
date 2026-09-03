@@ -7,7 +7,7 @@
 
 function normalizeAppNotice(notice = {}) {
   const normalizedStatus = ["active", "disabled", "archived"].includes(notice.status) ? notice.status : "active";
-  return {
+  const normalized = {
     ...defaultCoachNotice,
     ...notice,
     id: notice.id || defaultCoachNotice.id,
@@ -26,6 +26,7 @@ function normalizeAppNotice(notice = {}) {
     actionUrl: String(notice.actionUrl || notice.action_url || "").trim(),
     updatedAt: notice.updatedAt || "",
   };
+  return window.TennisNoteRuntimeEnvironment?.localizeSyntheticNotice?.(normalized) || normalized;
 }
 
 function activeNoticesForApp(audience = "coach") {

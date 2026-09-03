@@ -536,11 +536,17 @@ async function submitOnsitePayment(event) {
 
 function adminPaymentCancelReady() {
   const client = window.TennisNoteDataClient;
-  return Boolean(client?.readiness?.().ready && client.getSession?.()?.access_token && adminImportAuthState.profile?.role === "admin");
+  return Boolean(
+    !adminPinNeedsSetup()
+    && client?.readiness?.().ready
+    && client.getSession?.()?.access_token
+    && adminImportAuthState.profile?.role === "admin"
+  );
 }
 
 function adminPaymentCancelBlockedMessage() {
   const client = window.TennisNoteDataClient;
+  if (adminPinNeedsSetup()) return "운영 PIN을 먼저 설정해야 결제취소·환불 위험 작업을 사용할 수 있습니다.";
   if (!client?.readiness?.().ready) return "Supabase 연결값 설정 후 결제취소를 사용할 수 있습니다.";
   if (!client.getSession?.()?.access_token) return "관리자 로그인 후 결제취소할 수 있습니다.";
   if (adminImportAuthState.loading) return "관리자 권한을 확인하는 중입니다.";

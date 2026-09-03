@@ -1145,19 +1145,19 @@ function paymentActionFor(item, index) {
   const context = (label) => `aria-label="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}" title="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}"`;
   if (item.approvalPending) return '<button class="small-button" type="button" disabled>승인 처리중</button>';
   if (item.status === "check") return item.providerPaymentId
-    ? `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context("결제 확인 후 승인")}>결제 확인·승인</button>${paymentPendingMoreActions(item, index)}`
+    ? `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context("결제 확인 후 승인")}>결제 확인·승인</button>`
     : '<button class="small-button" type="button" disabled>서버 결제번호 없음</button>';
-  if (item.status === "unverified") return `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context("결제 확인 후 승인")}>결제 확인·승인</button>${paymentPendingMoreActions(item, index)}`;
-  if (item.status === "failed") return `<button class="small-button" type="button" data-failed-payment="${index}" ${context("실패 확인")}>실패 확인</button>${paymentCancelButtonFor(index, "대기취소")}`;
+  if (item.status === "unverified") return `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context("결제 확인 후 승인")}>결제 확인·승인</button>`;
+  if (item.status === "failed") return `<button class="small-button" type="button" data-failed-payment="${index}" ${context("실패 확인")}>실패 확인</button>`;
   if (item.status === "draft") return '<button class="small-button" type="button" disabled>회원 결제 대기</button>';
   if (item.status === "server_ready") {
     const label = String(item.method || "") === "bank_transfer"
       ? "입금 확인·승인"
       : isStaleReadyPayment(item) ? "상태 확인" : "결제 확인";
-    return `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context(label)}>${label}</button>${paymentPendingMoreActions(item, index)}`;
+    return `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context(label)}>${label}</button>`;
   }
-  if (item.status === "paid" && paymentRequiresTicketRepair(item)) return `<button class="small-button primary-button" type="button" data-paid-payment="${index}" ${context("회원권 연결 다시 처리")}>회원권 연결 다시 처리</button>${paymentApprovedMoreActions(item, index)}`;
-  if (item.status === "paid") return `<button class="small-button" type="button" disabled>승인 완료</button>${paymentApprovedMoreActions(item, index)}`;
+  if (item.status === "paid" && paymentRequiresTicketRepair(item)) return `<button class="small-button primary-button" type="button" data-paid-payment="${index}" ${context("회원권 연결 다시 처리")}>회원권 연결 다시 처리</button>`;
+  if (item.status === "paid") return '<span class="payment-row-complete">처리 완료</span>';
   if (item.status === "refund_manual_pending") return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" ${context("실제 송금 후 환불 완료 확인")}>송금완료 확인</button>`;
   if (item.status === "refund_processing") return `<button class="small-button" type="button" disabled>환불처리중</button>`;
   if (item.status === "cancel_reconcile") return paymentCancelButtonFor(index, "취소 상태 맞추기");

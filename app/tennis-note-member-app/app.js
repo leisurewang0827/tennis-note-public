@@ -821,16 +821,21 @@ function renderPurchaseScheduleSheet() {
     availableToggle.classList.toggle("is-selected", flow.scheduleAvailableOnly);
     availableToggle.setAttribute("aria-pressed", String(flow.scheduleAvailableOnly));
   }
+  const scheduleReady = flexibleCoupon
+    ? purchaseFlexibleCouponCoachIsReady(product)
+    : selectedSchedules.length === requiredCount && purchaseSchedulesAvailableNow(product);
   const summary = $("#purchaseScheduleSheetSummary");
   if (summary) summary.textContent = flexibleCoupon
-    ? flow.coachRoleId ? "결제 후 원하는 시간을 예약합니다." : "담당 코치를 선택해 주세요."
+    ? scheduleReady ? "결제 후 원하는 시간을 예약합니다." : "담당 코치를 선택하면 완료할 수 있어요."
     : selectedSchedules.length
     ? selectedSchedules.map((schedule) => `${purchaseDateLabel(schedule.lessonDate)} ${schedule.startTime}`).join(" · ")
-    : "시간을 선택해 주세요";
+    : "담당 코치와 시간을 선택하면 완료할 수 있어요.";
   const completeButton = $("#completePurchaseScheduleSelection");
-  if (completeButton) completeButton.disabled = flexibleCoupon
-    ? !purchaseFlexibleCouponCoachIsReady(product)
-    : selectedSchedules.length !== requiredCount || !purchaseSchedulesAvailableNow(product);
+  if (completeButton) {
+    completeButton.disabled = !scheduleReady;
+    completeButton.setAttribute("aria-disabled", String(!scheduleReady));
+    completeButton.setAttribute("aria-describedby", "purchaseScheduleSheetSummary");
+  }
 }
 
 function openPurchaseScheduleSheet() {
@@ -1103,7 +1108,7 @@ let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.452");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.472");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -1112,6 +1117,7 @@ async function initApp() {
   initializeJournalNavigationForLaunch();
   renderOnboardingEntryIntro();
   renderPublicProductPreview();
+  renderRecentLoginBadge();
   window.TennisNoteModeTransition?.consume("member", { splashSelector: "#brandSplash" });
   bindEvents();
   installOAuthReturnStatusReset();
@@ -1187,7 +1193,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.452",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.472",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

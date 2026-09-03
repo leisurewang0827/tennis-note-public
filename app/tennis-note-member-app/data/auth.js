@@ -14,9 +14,12 @@ function installOAuthReturnStatusReset() {
         || window.location.hash.includes("access_token=")
         || window.TennisNoteDataClient?.getSession?.()?.access_token
       ) return;
-      status.textContent = "로그인이 취소되었습니다. 다시 로그인 수단을 선택해주세요.";
+      const provider = oauthLoginInFlightProvider || "간편";
+      finishOAuthLogin();
+      setEmailAuthStatus(`${provider} 로그인이 취소되었습니다. 다시 로그인 수단을 선택해 주세요.`);
     }, 500);
   };
+  window.addEventListener("pageshow", reset);
   window.addEventListener("focus", reset);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) reset();
@@ -272,7 +275,13 @@ async function refreshAuthProviderCapabilities({ force = false } = {}) {
     identityAuthCapabilities = {
       ...identityAuthCapabilities,
       status: "unavailable",
-      providers: { ...identityAuthCapabilities.providers, phone: false },
+      providers: {
+        ...identityAuthCapabilities.providers,
+        phone: false,
+        apple: null,
+        kakao: authProviderCapability({}, "kakao"),
+        naver: authProviderCapability({}, "naver"),
+      },
       errorCode: "auth_settings_unavailable",
       checkedAt: Date.now(),
     };
@@ -298,6 +307,9 @@ async function refreshAuthProviderCapabilities({ force = false } = {}) {
         providers: {
           ...identityAuthCapabilities.providers,
           phone: transient ? null : false,
+          apple: null,
+          kakao: authProviderCapability({}, "kakao"),
+          naver: authProviderCapability({}, "naver"),
         },
         errorCode: normalizedIdentityErrorCode(error) || "auth_settings_unavailable",
         checkedAt: Date.now(),

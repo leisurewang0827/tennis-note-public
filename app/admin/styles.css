@@ -737,6 +737,40 @@ h2 {
   font-weight: 800;
 }
 
+.payment-row-detail {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.payment-row-detail > summary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.payment-row-detail > p {
+  margin: 4px 0 8px;
+  line-height: 1.45;
+}
+
+.billing-pin-lock {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid #e6bd75;
+  border-radius: 7px;
+  background: #fff8e8;
+}
+
+.payment-row-complete {
+  color: var(--green);
+  font-weight: 900;
+}
+
 .billing-approval-guide {
   display: flex;
   flex-wrap: wrap;

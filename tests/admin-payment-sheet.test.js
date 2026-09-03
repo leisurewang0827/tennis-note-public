@@ -58,3 +58,36 @@ test("시간표 잔여횟수 부족은 등록 차단이 아니라 경고 후 저
   assert.match(schedule, /admin-balance-warning-lesson/);
   assert.match(schedule, /수업 저장 완료 · 잔여 횟수가 부족합니다/);
 });
+
+test("관리자 결제 장부는 사용자 값을 이스케이프하고 7열·한 주행동만 기본 노출한다", () => {
+  const billingView = source("app/admin/views/billing.js");
+  const billingActions = source("app/admin/views/common.js");
+  const billingDomain = source("app/admin/domain/payment.js");
+  const billingHtml = source("app/admin/index.html");
+  const billingCss = source("app/admin/styles.css");
+  const paymentTable = billingHtml.match(/<table class="payment-sheet-table">[\s\S]*?<\/table>/)?.[0] || "";
+
+  for (const marker of [
+    "escapeHtml(item.member)",
+    "escapeHtml(item.coach)",
+    "escapeHtml(item.actualCoach)",
+    "escapeHtml(settlementCoach)",
+    "escapeHtml(item.paymentMethod)",
+    "escapeHtml(item.discount)",
+    "escapeHtml(serverPaymentSyncState.message)",
+    "escapeHtml(ticket.member)",
+    "escapeHtml(ticket.product)",
+  ]) assert.match(billingView, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+
+  assert.doesNotMatch(billingView, /\son(?:click|error|load|mouseover|focus)\s*=/i);
+  assert.match(billingView, /billingSafeUiTone/);
+  assert.match(billingView, /처리 상세/);
+  assert.match(billingView, /상세·위험 작업/);
+  assert.match(billingView, /잠금 · PIN 설정 필요/);
+  assert.match(billingActions, /if \(item\.status === "paid"\) return '<span class="payment-row-complete">처리 완료<\/span>'/);
+  assert.doesNotMatch(billingActions.match(/function paymentActionFor[\s\S]*?\n}/)?.[0] || "", /payment(?:Pending|Approved)MoreActions/);
+  assert.match(billingDomain, /결제·회원권 연결 완료/);
+  assert.match(billingHtml, /0개 회원권/);
+  assert.equal((paymentTable.match(/<th>/g) || []).length, 7);
+  assert.match(billingCss, /\.payment-row-detail > summary[\s\S]*min-height:\s*44px/);
+});

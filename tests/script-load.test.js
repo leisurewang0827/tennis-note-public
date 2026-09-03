@@ -94,6 +94,7 @@ const PAGES = [
     label: "회원앱",
     pathname: "/app/tennis-note-member-app/",
     scripts: [
+      "app/shared/tennisnote-runtime-environment.js",
       "app/shared/tennisnote-release.js",
       "app/shared/tennisnote-escape-html.js",
       "app/shared/tennisnote-app-common.js",
@@ -140,6 +141,7 @@ const PAGES = [
       "app/tennis-note-member-app/data/onboarding.js",
       "app/tennis-note-member-app/ui/sheet.js",
       "app/tennis-note-member-app/ui/screens.js",
+      "app/tennis-note-member-app/ui/login-entry.js",
       "app/tennis-note-member-app/storage.js",
       "app/tennis-note-member-app/actions/requests.js",
       "app/tennis-note-member-app/actions/enrollment.js",
@@ -165,6 +167,7 @@ const PAGES = [
     label: "코치앱",
     pathname: "/app/tennis-note-coach-app/",
     scripts: [
+      "app/shared/tennisnote-runtime-environment.js",
       "app/shared/tennisnote-release.js",
       "app/shared/tennisnote-escape-html.js",
       "app/shared/tennisnote-app-common.js",

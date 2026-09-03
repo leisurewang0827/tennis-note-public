@@ -74,10 +74,20 @@ function applyCoachCommentDraft(keywordSource, commentSource) {
     keywordInput.focus();
     return;
   }
+  const currentComment = String(commentInput.value || "").trim();
+  if (currentComment && currentComment !== result.comment) {
+    const replaceConfirmed = window.confirm("작성 중인 내용을 새 초안으로 바꿀까요? 현재 문장은 자동으로 저장되지 않습니다.");
+    if (!replaceConfirmed) {
+      showToast("작성 중인 내용을 유지했습니다.");
+      commentInput.focus();
+      return;
+    }
+  }
   commentInput.value = result.comment;
+  commentInput.dataset.generatedCommentDraft = result.comment;
   commentInput.dispatchEvent(new Event("input", { bubbles: true }));
   commentInput.focus();
-  showToast("세부 코멘트 초안을 만들었습니다. 내용을 확인한 뒤 저장해 주세요.");
+  showToast("문장 초안을 만들었습니다. 직접 확인하고 수정한 뒤 저장해 주세요.");
 }
 
 function updateFeedbackDraft(id) {
