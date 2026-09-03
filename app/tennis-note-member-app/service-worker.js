@@ -74,6 +74,7 @@ const APP_SHELL = [
   "./assets/brand/launch-splash.png",
   "./assets/brand/tennis-note-share-1.0.152.png",
   "../release.json",
+  "../shared/tennisnote-runtime-environment.js?v=1.0.468",
   "../shared/tennisnote-escape-html.js?v=1.0.468",
   "../shared/tennisnote-data-client.js?v=1.0.468",
   "../shared/tennisnote-schedule-revision.js?v=1.0.468",

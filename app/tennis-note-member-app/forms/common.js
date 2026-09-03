@@ -43,10 +43,11 @@ function registerPwaInstallPrompt() {
 }
 
 function registerPwaServiceWorker() {
+  const memberPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("member");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
     workerUrl: "./service-worker.js?v=1.0.468",
-    remoteAppUrl: "https://tennisnote-app.pages.dev/",
+    remoteAppUrl: memberPortal?.ok ? memberPortal.url : "",
   });
 }
 
