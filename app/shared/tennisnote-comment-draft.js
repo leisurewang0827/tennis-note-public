@@ -4,6 +4,7 @@
   const zeroWidthPattern = /[\u200B-\u200D\u2060\uFEFF]/gu;
   const observedPhrasePattern = /(?:좋아짐|나아짐|개선됨|안정됨|성공함|유지됨|연결됨|늦음|빨라짐|밀림|흔들림|부족함|약함|강함|짧음|길어짐|어려움|놓침|됨|함|임|었음|았음)$/;
   const completeObservationPattern = /(?:습니다|합니다|입니다|됐어요|되었어요|했어요|해요|이에요|예요)$/u;
+  const minimumVisibleFeedbackLength = 20;
 
   function normalizedKeywordSource(value) {
     return String(value || "")
@@ -45,6 +46,23 @@
       .replace(/^[\s•·\-–—]+|[\s.!?。！？,;:•·\-–—]+$/g, "")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  function feedbackVisibleText(value) {
+    return String(value || "")
+      .normalize("NFC")
+      .replace(/<[^>]*>/gu, "")
+      .replace(/[\p{Cf}\p{Cc}]/gu, "")
+      .replace(/\s+/gu, " ")
+      .trim();
+  }
+
+  function feedbackVisibleLength(value) {
+    const text = feedbackVisibleText(value);
+    if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+      return [...new Intl.Segmenter("ko-KR", { granularity: "grapheme" }).segment(text)].length;
+    }
+    return [...text].filter((character) => !/\p{M}/u.test(character)).length;
   }
 
   function keywordsFrom(value) {
@@ -114,6 +132,16 @@
     return [observationListSentence(keywords)];
   }
 
+  function minimumVisibleDraftSentences(keywords, sentences) {
+    const current = fitWholeSentences(sentences);
+    if (feedbackVisibleLength(current) >= minimumVisibleFeedbackLength) return sentences;
+    if (keywords.length === 1 && completeObservationSentence(keywords[0])) {
+      return [`오늘 수업 관찰 기록: ${completeObservationSentence(keywords[0])}`];
+    }
+    const facts = keywords.map((keyword) => String(keyword || "").trim()).filter(Boolean).join(" · ");
+    return facts ? [`오늘 수업에서 확인한 관찰 내용: ${facts}.`] : [];
+  }
+
   function sentenceSignature(value) {
     const text = String(value || "").trim();
     const start = canonicalKeyword(text.split(/\s+/)[0] || "");
@@ -175,7 +203,7 @@
       };
     }
 
-    const sentences = draftSentences(keywords);
+    const sentences = minimumVisibleDraftSentences(keywords, draftSentences(keywords));
     const adjacentRepetition = hasAdjacentRepetition(sentences);
     if (adjacentRepetition) {
       return {
@@ -188,6 +216,18 @@
       };
     }
     const comment = fitWholeSentences(sentences);
+    const visibleLength = feedbackVisibleLength(comment);
+    const inputFactsOnly = keywords.every((keyword) => comment.includes(keyword));
+    if (!inputFactsOnly || visibleLength < minimumVisibleFeedbackLength) {
+      return {
+        ok: false,
+        code: "feedback_detail_required",
+        message: "20자 이상의 자연스러운 피드백을 만들 수 있도록 관찰 키워드를 조금 더 입력해 주세요.",
+        keywords,
+        sections: [],
+        comment: "",
+      };
+    }
     const curriculum = curriculumContext(context.curriculum);
 
     return {
@@ -199,9 +239,10 @@
       curriculumId: curriculum.id,
       comment,
       quality: Object.freeze({
-        inputFactsOnly: keywords.every((keyword) => comment.includes(keyword)),
+        inputFactsOnly,
         adjacentRepetition,
         sentenceCount: sentences.length,
+        visibleLength,
       }),
     };
   }
@@ -209,6 +250,8 @@
   window.TennisNoteCommentDraft = Object.freeze({
     keywordsFrom,
     generate,
+    feedbackVisibleLength,
+    feedbackVisibleText,
     hasAdjacentRepetition,
   });
 })();

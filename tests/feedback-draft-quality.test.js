@@ -10,10 +10,21 @@ const source = (path) => readFileSync(join(root, path), "utf8");
 const context = { window: {} };
 vm.runInNewContext(source("app/shared/tennisnote-comment-draft.js"), context);
 const draft = context.window.TennisNoteCommentDraft;
+const minimumVisibleLength = 20;
+
+test("표시 길이는 HTML·zero-width·공백 패딩 없이 grapheme 기준으로 센다", () => {
+  assert.equal(draft.feedbackVisibleLength("가".repeat(19)), 19);
+  assert.equal(draft.feedbackVisibleLength("가".repeat(20)), 20);
+  assert.equal(draft.feedbackVisibleLength("가".repeat(21)), 21);
+  assert.equal(draft.feedbackVisibleLength(`${"가".repeat(19)}<span data-padding></span>\u200B \n\t`), 19);
+  assert.equal(draft.feedbackVisibleLength("e\u0301"), 1);
+});
 
 test("키워드 순서와 명시 사실만 보존한 중립 초안을 만든다", () => {
   assert.equal(draft.generate("").code, "keyword_required");
-  assert.equal(draft.generate("포핸드 타점").comment, "오늘 수업에서는 포핸드 타점을 중심으로 확인했습니다.");
+  const single = draft.generate("포핸드 타점");
+  assert.equal(single.comment, "오늘 수업에서는 포핸드 타점을 중심으로 확인했습니다.");
+  assert.ok(draft.feedbackVisibleLength(single.comment) >= minimumVisibleLength);
 
   const observed = draft.generate("포핸드, 방향 좋아짐, 준비 늦음");
   assert.equal(observed.ok, true);
@@ -26,8 +37,14 @@ test("키워드 순서와 명시 사실만 보존한 중립 초안을 만든다"
   assert.doesNotMatch(observed.comment, /\d|세트|반복|랠리|성공 기준|저속|낮은 속도/);
 
   const natural = draft.generate("포핸드 타점이 좋아졌습니다.");
-  assert.equal(natural.comment, "포핸드 타점이 좋아졌습니다.");
+  assert.match(natural.comment, /포핸드 타점이 좋아졌습니다\./);
+  assert.ok(draft.feedbackVisibleLength(natural.comment) >= minimumVisibleLength);
   assert.doesNotMatch(natural.comment, /이라는 관찰/);
+
+  const shortObservation = draft.generate("방향 좋아짐");
+  assert.equal(shortObservation.ok, true);
+  assert.match(shortObservation.comment, /방향 좋아짐/);
+  assert.ok(draft.feedbackVisibleLength(shortObservation.comment) >= minimumVisibleLength);
 
   const five = draft.generate("방향 좋아짐, 준비 늦음, 라켓면 열림, 스윙 짧음, 리듬 흔들림");
   assert.equal(five.ok, true);
@@ -36,6 +53,7 @@ test("키워드 순서와 명시 사실만 보존한 중립 초안을 만든다"
   assert.deepEqual(Array.from(five.keywords), ["방향 좋아짐", "준비 늦음", "라켓면 열림", "스윙 짧음", "리듬 흔들림"]);
   five.keywords.forEach((keyword) => assert.match(five.comment, new RegExp(keyword)));
   assert.doesNotMatch(five.comment, /함께 살펴봤습니다/);
+  assert.ok(draft.feedbackVisibleLength(five.comment) >= minimumVisibleLength);
 
   for (const input of ["포핸드. 백핸드? 서브!", "포핸드; 백핸드\n서브!", "포핸드。백핸드？서브！"]) {
     const separated = draft.generate(input);
