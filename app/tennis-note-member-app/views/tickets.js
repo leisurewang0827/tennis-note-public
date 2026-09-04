@@ -70,15 +70,12 @@ function renderMemberOneDayReservationPanel() {
 function renderTickets() {
   renderMemberOneDayReservationPanel();
   const currentTickets = currentLiveTickets();
-  const renewalOverlapCount = currentLiveTicketOverlapCount();
   const nextTickets = upcomingLiveTickets();
   const liveTicket = currentTickets[0] || nextTickets[0] || null;
   const summary = liveTicketAggregate(currentTickets.length ? currentTickets : liveTicket ? [liveTicket] : []);
   const { total, remaining, used } = summary;
   const ticketTitle = currentTickets.length > 1 ? `현재 회원권 ${currentTickets.length}개` : liveTicket?.title || "현재 이용권 없음";
-  const ticketStatus = renewalOverlapCount > 0
-    ? `재등록 회원권 ${renewalOverlapCount}건 연결 확인 중`
-    : currentTickets.length > 1
+  const ticketStatus = currentTickets.length > 1
     ? `사용 중 ${currentTickets.length}개 · 회원권별 개별 차감`
     : liveTicket?.statusLabel || state.ticketSyncStatus?.text || "로그인 후 회원권 확인";
   const earliestExpiry = currentTickets.map((ticket) => ticket.expiresOn).filter(Boolean).sort()[0] || "";
@@ -174,7 +171,6 @@ function renderCurrentTicketPanel() {
   const target = $("#currentTicketPanel");
   if (!target) return;
   const currentTickets = currentLiveTickets();
-  const renewalOverlapCount = currentLiveTicketOverlapCount();
   const upcomingTickets = upcomingLiveTickets();
   const refundHeldTickets = refundHeldLiveTickets();
   const demoTicket = !currentTickets.length && !upcomingTickets.length && !refundHeldTickets.length ? currentHoldingTicket() : null;
@@ -229,7 +225,6 @@ function renderCurrentTicketPanel() {
       </details>
     </div>
     ${otherTicketList}
-    ${renewalOverlapCount > 0 ? `<p class="membership-multiple-note">같은 코치·같은 회원권의 겹친 재등록 ${renewalOverlapCount}건은 합산하지 않았습니다. 관리자가 만료·시작일 연결을 확인하고 있습니다.</p>` : ""}
     ${currentTickets.length > 1 ? `<p class="membership-multiple-note">현재 회원권 ${currentTickets.length}개가 모두 적용되어 있습니다. 수업에 연결된 회원권에서만 횟수가 차감됩니다.</p>` : ""}`;
 }
 

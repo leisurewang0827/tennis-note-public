@@ -491,6 +491,58 @@ function bindDelegatedEvents() {
       return;
     }
 
+    const detailTabButton = event.target.closest("[data-lesson-detail-tab]");
+    if (detailTabButton) {
+      const lesson = ensureCoachLessonRecord(detailTabButton.dataset.lessonId);
+      if (!lesson || lesson.attendanceInFlight || lesson.completionSubmitting || lesson.scheduleEditInFlight) return;
+      captureLessonTabInputs(lesson);
+      lesson.detailTab = detailTabButton.dataset.lessonDetailTab;
+      lesson.validationMessage = "";
+      renderLessonEditModal();
+      return;
+    }
+    const attendanceChoiceButton = event.target.closest("[data-attendance-choice]");
+    if (attendanceChoiceButton) {
+      void selectCoachAttendanceChoice(attendanceChoiceButton.dataset.lessonId, attendanceChoiceButton.dataset.attendanceChoice, attendanceChoiceButton.dataset.choiceValue);
+      return;
+    }
+
+    const lessonActionButton = event.target.closest("[data-select-lesson-action]");
+    if (lessonActionButton) {
+      const lesson = ensureCoachLessonRecord(lessonActionButton.dataset.lessonId);
+      if (!lesson) return;
+      captureLessonTabInputs(lesson);
+      lesson.selectedSecondaryAction = lessonActionButton.dataset.selectLessonAction || "";
+      lesson.validationMessage = "";
+      renderLessonEditModal();
+      if (lesson.selectedSecondaryAction === "attendance") void selectCoachAttendanceChoice(lesson.id, "contract");
+      return;
+    }
+
+    const backLessonActionsButton = event.target.closest("[data-back-lesson-actions]");
+    if (backLessonActionsButton) {
+      const lesson = ensureCoachLessonRecord(backLessonActionsButton.dataset.backLessonActions);
+      if (!lesson) return;
+      captureLessonTabInputs(lesson);
+      if (lesson.selectedSecondaryAction === "schedule") {
+        lesson.scheduleEditDraft = {
+          day: $("#editLessonDay")?.value || lesson.day,
+          time: $("#editLessonTime")?.value || lesson.time,
+          reason: $("#editLessonReason")?.value || "",
+        };
+      } else if (lesson.selectedSecondaryAction) {
+        const selector = lesson.selectedSecondaryAction === "absence" ? "#coachAbsenceReason" : "#coachNoShowReason";
+        lesson.attendanceReasonDraft = {
+          ...(lesson.attendanceReasonDraft || {}),
+          [lesson.selectedSecondaryAction]: $(selector)?.value || "",
+        };
+      }
+      lesson.selectedSecondaryAction = "";
+      lesson.validationMessage = "";
+      renderLessonEditModal();
+      return;
+    }
+
     const noShowButton = event.target.closest("[data-process-no-show]");
     if (noShowButton) {
       processCoachNoShow(noShowButton.dataset.processNoShow, noShowButton.dataset.deduct === "true");
