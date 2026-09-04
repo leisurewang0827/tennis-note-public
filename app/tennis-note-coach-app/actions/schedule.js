@@ -462,6 +462,7 @@ async function saveCoachQuickAdd() {
 async function saveLessonEdit(id) {
   const lesson = ensureCoachLessonRecord(id);
   if (!lesson) return;
+  if (lesson.scheduleEditInFlight) return;
   if (!canRescheduleLesson(lesson)) return;
   const targetDay = $("#editLessonDay")?.value || lesson.day;
   const targetTime = $("#editLessonTime")?.value || lesson.time;
@@ -490,6 +491,7 @@ async function saveLessonEdit(id) {
       renderLessonEditModal();
       return;
     }
+    lesson.scheduleEditInFlight = true;
     lesson.validationMessage = "서버에서 일정과 정책을 확인하고 있습니다.";
     renderLessonEditModal();
     try {
@@ -524,6 +526,7 @@ async function saveLessonEdit(id) {
         weekly_booking_day_limit: "회원권의 주간 예약 가능 일수를 초과합니다.",
       };
       lesson.validationMessage = serverMessages[code] || "일정 변경에 실패했습니다. 시간표와 회원권 상태를 확인해 주세요.";
+      lesson.scheduleEditInFlight = false;
       renderLessonEditModal();
       return;
     }
@@ -536,6 +539,7 @@ async function saveLessonEdit(id) {
     source: "coach_change",
     task: "변경된 일정 수업 후 기록",
     validationMessage: "",
+    scheduleEditInFlight: false,
   };
   delete lesson.scheduleEditDraft;
   Object.assign(lesson, lessonUpdates);
@@ -544,4 +548,16 @@ async function saveLessonEdit(id) {
   window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
   closeLessonEditor();
   renderAll();
+}
+
+function captureLessonTabInputs(lesson) {
+  const panel = $('#lessonEditModalContent [data-lesson-tab-panel="feedback"]');
+  if (panel && !panel.hidden) {
+    lesson.feedbackTabInputs = [...panel.querySelectorAll("input,textarea,select")].map((node) => ({ value: node.value, checked: node.checked }));
+    if (!lessonChartFinalized(lesson)) captureLessonChartDraft(lesson.id);
+  }
+  if (lesson.selectedSecondaryAction === "schedule" && $("#editLessonDay")) {
+    lesson.scheduleEditDraft = { day: $("#editLessonDay").value, time: $("#editLessonTime").value, reason: $("#editLessonReason").value };
+  }
+  if ($("#coachAttendanceReason")) lesson.attendanceChoice = { ...(lesson.attendanceChoice || {}), reason: $("#coachAttendanceReason").value };
 }

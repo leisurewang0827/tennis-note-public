@@ -136,8 +136,7 @@ function membershipPassRecords() {
     note: "송금 완료 또는 접수취소 전까지 이용권 사용이 잠시 정지됩니다.",
     tone: "alert",
   }));
-  const refundedPasses = (state.liveTickets || [])
-    .filter((ticket) => ["refunded", "cancelled", "canceled"].includes(String(ticket.status || "").toLowerCase()))
+  const historicalPasses = historicalLiveTickets()
     .map((ticket) => {
       const breakdown = ticket.refundBreakdown || {};
       const refundAmount = Number(ticket.refundedAmount || breakdown.refundAmount || 0);
@@ -149,21 +148,21 @@ function membershipPassRecords() {
       if (penaltyAmount) detailParts.push(`위약금 ${penaltyAmount.toLocaleString("ko-KR")}원`);
       if (ticket.refundReason) detailParts.push(`사유 ${ticket.refundReason}`);
       return {
-        id: `refunded-${ticket.id}`,
-        title: ticket.title || "환불된 이용권",
-        period: ticket.refundedAt ? `${formatDateTimeLabel(ticket.refundedAt)} 환불 완료` : ticket.expiresOn ? `${ticket.startsOn || "시작일 확인"} ~ ${ticket.expiresOn}` : "서버 환불 처리 완료",
+        id: `history-${ticket.id}`,
+        title: ticket.title || "이전 회원권",
+        period: ticket.refundedAt ? `${formatDateTimeLabel(ticket.refundedAt)} 환불 완료` : ticket.expiresOn ? `${ticket.startsOn || "시작일 확인"} ~ ${ticket.expiresOn}` : "기간 정보 없음 · 이용 종료",
         total: ticket.total || 0,
         used: ticket.used || 0,
         remaining: 0,
         unavailable: true,
-        coach: state.profile.mainCoach || "담당 코치",
+        coach: ticket.coach || "담당 코치 확인",
         paid: ticket.paymentAmount ? `결제 ${ticket.paymentAmount.toLocaleString("ko-KR")}원` : "결제금액 확인",
-        status: ticket.status === "refunded" ? "환불완료" : "취소완료",
-        note: detailParts.join(" · ") || "결제취소 후 이용권 비활성화",
+        status: window.TennisNoteTicketState?.label?.(ticket) || ticket.statusLabel || "이용 종료",
+        note: detailParts.join(" · ") || "원본 회원권 이력 보존",
         tone: "alert",
       };
     });
-  return [...pendingPasses, ...heldPasses, ...refundedPasses, ...(state.expiredTickets || [])];
+  return [...pendingPasses, ...heldPasses, ...historicalPasses];
 }
 
 function selectedJournalEntries() {

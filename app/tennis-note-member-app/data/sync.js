@@ -715,34 +715,32 @@ async function syncMemberTicketsFromServer(profile = null) {
   try {
     let rows;
     try {
-      rows = await client.selectRows("tn_member_tickets", {
+      rows = await selectAllMemberTicketRows(client, "tn_member_tickets", {
         select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,refund_hold_refund_id,refund_hold_at,created_at,tn_membership_products(product_code,name,lesson_minutes,product_kind,total_sessions,frequency_per_week,group_size,schedule_scope,max_sessions_per_day,max_sessions_per_week,max_booking_days_per_week,makeup_anchor_minutes,validity_days,grace_days)",
         filters: { user_id: profileId },
-        limit: 20,
+        paginationKey: "id",
       });
     } catch {
-      rows = await client.selectRows("tn_member_tickets", {
+      rows = await selectAllMemberTicketRows(client, "tn_member_tickets", {
         select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at",
         filters: { user_id: profileId },
-        limit: 20,
+        paginationKey: "id",
       });
     }
 
     const [sharedLinks, participantLinks] = await Promise.all([
-      client.selectRows("tn_group_ticket_links", {
+      selectAllMemberTicketRows(client, "tn_group_ticket_links", {
         select: "group_account_id,ticket_id,status",
         filters: { user_id: profileId },
-        limit: 20,
-      }).catch(() => []),
-      client.selectRows("tn_ticket_participants", {
+        paginationKey: "ticket_id",
+      }),
+      selectAllMemberTicketRows(client, "tn_ticket_participants", {
         select: "ticket_id,user_id,participant_order",
         filters: { user_id: profileId },
-        limit: 50,
-      }).catch(() => []),
+        paginationKey: "ticket_id",
+      }),
     ]);
-    const activeSharedLinks = (sharedLinks || [])
-      .filter((link) => !["pending_payment", "expired", "refunded", "cancelled", "canceled", "voided", "deleted"]
-        .includes(String(link.status || "").toLowerCase()));
+    const activeSharedLinks = sharedLinks || [];
     const linkedTicketIds = [...new Set([
       ...activeSharedLinks.map((link) => link.ticket_id),
       ...(participantLinks || []).map((link) => link.ticket_id),
@@ -766,10 +764,15 @@ async function syncMemberTicketsFromServer(profile = null) {
             select: "id,branch_id,user_id,product_id,coach_role_id,status,total_sessions,used_sessions,remaining_sessions,starts_on,expires_on,source_payment_id,created_at",
             filters: { id: ticketId },
             limit: 1,
-          }).catch(() => []);
+          });
         }
       }));
-    rows = [...(rows || []), ...sharedTicketRows.flat()]
+    const allTicketRows = distinctTicketsByExactId([...(rows || []), ...sharedTicketRows.flat()]);
+    const resolvedTicketIds = new Set(allTicketRows.map((row) => String(row.id || "")));
+    if (linkedTicketIds.some((ticketId) => !resolvedTicketIds.has(String(ticketId)))) {
+      throw new Error("member_ticket_link_unresolved");
+    }
+    rows = allTicketRows
       .filter((row) => String(row.status || "").toLowerCase() !== "pending_payment")
       .map((row) => ({
         ...row,
@@ -791,7 +794,6 @@ async function syncMemberTicketsFromServer(profile = null) {
     }
 
     const aggregate = liveTicketAggregate(currentTickets.length ? currentTickets : [ticket]);
-    const renewalOverlapCount = currentLiveTicketOverlapCount();
     state.remaining = aggregate.remaining;
     state.profile.ticket = currentTickets.length > 1
       ? `현재 회원권 ${aggregate.count}개 · 총 ${aggregate.total}회`
@@ -799,10 +801,8 @@ async function syncMemberTicketsFromServer(profile = null) {
     if (currentTickets.length && state.member) state.member.memberKind = "lesson_member";
     const derivedStatusLabel = window.TennisNoteTicketState?.label?.(ticket) || ticket.statusLabel;
     state.ticketSyncStatus = {
-      tone: renewalOverlapCount > 0 ? "alert" : ticket.tone,
-      text: renewalOverlapCount > 0
-        ? `재등록 회원권 ${renewalOverlapCount}건 연결 확인 중 · 현재 연결권 잔여 ${aggregate.remaining}`
-        : currentTickets.length > 1
+      tone: ticket.tone,
+      text: currentTickets.length > 1
         ? `회원권 ${aggregate.count}개 적용 · 총 ${aggregate.total} / 소진 ${aggregate.used} / 잔여 ${aggregate.remaining}`
         : `${derivedStatusLabel} · 총 ${ticket.total || 0} / 소진 ${ticket.used || 0} / 잔여 ${ticket.remaining || 0}`,
     };
@@ -870,4 +870,33 @@ async function refreshMemberLiveSchedule(options = {}) {
       });
     }
   }
+}
+
+async function selectAllMemberTicketRows(client, table, options) {
+  const pageSize = 200;
+  const maxRows = 20000;
+  const paginationKey = String(options?.paginationKey || "id");
+  const queryOptions = { ...(options || {}) };
+  delete queryOptions.paginationKey;
+  const rows = [];
+  let previousPageSignature = "";
+  for (let offset = 0; offset < maxRows; offset += pageSize) {
+    const page = await client.selectRows(table, {
+      ...queryOptions,
+      order: queryOptions.order || `${paginationKey}.asc`,
+      offset,
+      limit: pageSize,
+    });
+    if (!Array.isArray(page) || page.length > pageSize || page.some((row) => !row?.[paginationKey])) {
+      throw new Error("member_ticket_pagination_invalid_page");
+    }
+    const pageSignature = page.map((row) => String(row?.[paginationKey] || "")).join("\u001f");
+    if (page.length && pageSignature === previousPageSignature) {
+      throw new Error("member_ticket_pagination_repeated_page");
+    }
+    previousPageSignature = pageSignature;
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+  throw new Error("member_ticket_pagination_limit_exceeded");
 }

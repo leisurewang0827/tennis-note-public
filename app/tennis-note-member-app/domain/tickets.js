@@ -807,16 +807,7 @@ function rawCurrentLiveTickets() {
 }
 
 function canonicalCurrentLiveTickets(ticketList = []) {
-  return ticketList.reduce((result, ticket) => {
-    const planKey = liveTicketRenewalPlanKey(ticket);
-    const existingIndex = planKey ? result.findIndex((candidate) => (
-      liveTicketRenewalPlanKey(candidate) === planKey
-      && liveTicketDateRangesOverlap(candidate, ticket)
-    )) : -1;
-    if (existingIndex < 0) result.push(ticket);
-    else result[existingIndex] = preferredRenewalOverlapTicket(result[existingIndex], ticket);
-    return result;
-  }, []);
+  return distinctTicketsByExactId(ticketList);
 }
 
 function liveTicketAggregate(ticketList = currentLiveTickets()) {
@@ -829,34 +820,15 @@ function liveTicketAggregate(ticketList = currentLiveTickets()) {
   }), { count: 0, total: 0, used: 0, remaining: 0 });
 }
 
-function liveTicketRenewalPlanKey(ticket = {}) {
-  const productId = String(ticket.productId || "");
-  const coachRoleId = String(ticket.coachRoleId || "");
-  if (!productId || !coachRoleId) return "";
-  return [productId, coachRoleId, String(ticket.groupAccountId || "")].join("|");
-}
 
-function liveTicketDateRangesOverlap(left = {}, right = {}) {
-  if (!left.startsOn || !left.expiresOn || !right.startsOn || !right.expiresOn) return false;
-  return left.startsOn <= right.expiresOn && right.startsOn <= left.expiresOn;
-}
+
+
 
 function currentLiveTicketOverlapCount() {
-  const rawTickets = rawCurrentLiveTickets();
-  return Math.max(0, rawTickets.length - canonicalCurrentLiveTickets(rawTickets).length);
+  return 0;
 }
 
-function preferredRenewalOverlapTicket(left = {}, right = {}) {
-  const leftReferences = liveTicketLessonReferenceCount(left);
-  const rightReferences = liveTicketLessonReferenceCount(right);
-  if (leftReferences !== rightReferences) return leftReferences > rightReferences ? left : right;
-  const leftUsed = Math.max(0, Number(left.used) || 0);
-  const rightUsed = Math.max(0, Number(right.used) || 0);
-  if (leftUsed !== rightUsed) return leftUsed > rightUsed ? left : right;
-  const startOrder = String(left.startsOn || "").localeCompare(String(right.startsOn || ""));
-  if (startOrder) return startOrder < 0 ? left : right;
-  return String(left.createdAt || "").localeCompare(String(right.createdAt || "")) <= 0 ? left : right;
-}
+
 
 function liveTicketForLesson(lesson = null) {
   const ticketId = lesson ? memberLessonTicketId(lesson) : "";
@@ -864,12 +836,19 @@ function liveTicketForLesson(lesson = null) {
   return (state.liveTickets || []).find((ticket) => String(ticket.id || "") === ticketId) || null;
 }
 
-function liveTicketLessonReferenceCount(ticket = {}) {
-  const ticketId = String(ticket.id || "");
-  if (!ticketId) return 0;
-  return (state.lessons || []).filter((lesson) => memberLessonTicketId(lesson) === ticketId).length;
-}
+
 function membershipTicketCanKeepSchedule(ticket) {
   if (!ticket || !["active", "paused"].includes(String(ticket.status || "").toLowerCase())) return false;
   return !ticket.expiresOn || String(ticket.expiresOn) >= localDateKey();
+}
+
+function distinctTicketsByExactId(ticketList = []) {
+  const seen = new Set();
+  return ticketList.filter((ticket) => {
+    const ticketId = String(ticket?.id || "");
+    if (!ticketId) return true;
+    if (seen.has(ticketId)) return false;
+    seen.add(ticketId);
+    return true;
+  });
 }

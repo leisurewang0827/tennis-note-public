@@ -68,7 +68,9 @@ function applyCoachCommentDraft(keywordSource, commentSource) {
     || exactCoachCurriculum(curriculumSelect?.value || "")
     || coachCurriculumSearchResults(curriculumSearch?.value || keywordInput.value)[0]
     || null;
-  const result = generator.generate(keywordInput.value, { curriculum });
+  const result = generator.generateSectioned
+    ? generator.generateSectioned(keywordInput.value, { curriculum })
+    : generator.generate(keywordInput.value, { curriculum });
   if (!result.ok) {
     showToast(result.message);
     keywordInput.focus();
@@ -85,9 +87,12 @@ function applyCoachCommentDraft(keywordSource, commentSource) {
   }
   commentInput.value = result.comment;
   commentInput.dataset.generatedCommentDraft = result.comment;
+  commentInput.dataset.feedbackDraftIncomplete = result.complete === false ? "true" : "false";
   commentInput.dispatchEvent(new Event("input", { bubbles: true }));
   commentInput.focus();
-  showToast("문장 초안을 만들었습니다. 직접 확인하고 수정한 뒤 저장해 주세요.");
+  showToast(result.complete === false
+    ? "입력한 사실만 반영했습니다. ‘입력 필요’ 구획을 보완한 뒤 저장해 주세요."
+    : "문장 초안을 만들었습니다. 직접 확인하고 수정한 뒤 저장해 주세요.");
 }
 
 function updateFeedbackDraft(id) {
