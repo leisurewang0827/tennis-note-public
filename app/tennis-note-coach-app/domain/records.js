@@ -338,7 +338,7 @@ function recordProcessingMarkup() {
                     <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
                     <textarea data-log-participant-comment="${escapeHtml(log.id)}" rows="3" ${confirmed ? "disabled" : ""}>${escapeHtml(result.coachComment || "")}</textarea>
                     <div class="tn-comment-draft-tools">
-                      <input data-log-participant-keywords="${escapeHtml(log.id)}" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" ${confirmed ? "disabled" : ""} />
+                      <input data-log-participant-keywords="${escapeHtml(log.id)}" type="text" maxlength="240" placeholder="잘된 점: …; 더 연습할 점: …; 개인 연습: …" ${confirmed ? "disabled" : ""} />
                       <button type="button" data-generate-log-participant-comment="${escapeHtml(log.id)}" ${confirmed ? "disabled" : ""}>초안 만들기</button>
                     </div>
                     <small class="lesson-comment-count ${resultCommentLength >= 5 ? "is-ready" : ""}" data-log-participant-comment-count="${escapeHtml(log.id)}">${resultCommentLength}/5자</small>
@@ -360,7 +360,7 @@ function recordProcessingMarkup() {
               <span>코치 코멘트 <small>필수 · 5자 이상</small></span>
               <textarea data-coach-comment="${log.id}" rows="3" ${confirmed ? "disabled" : ""}>${escapeHtml(log.coachComment || "")}</textarea>
               <div class="tn-comment-draft-tools">
-                <input data-log-comment-keywords="${log.id}" type="text" maxlength="160" placeholder="키워드 입력 · Enter로 초안 만들기" ${confirmed ? "disabled" : ""} />
+                <input data-log-comment-keywords="${log.id}" type="text" maxlength="240" placeholder="잘된 점: …; 더 연습할 점: …; 개인 연습: …" ${confirmed ? "disabled" : ""} />
                 <button type="button" data-generate-log-comment="${log.id}" ${confirmed ? "disabled" : ""}>초안 만들기</button>
               </div>
               <small class="lesson-comment-count ${String(log.coachComment || "").trim().length >= 5 ? "is-ready" : ""}" data-log-comment-count="${log.id}">${String(log.coachComment || "").trim().length}/5자</small>
@@ -470,6 +470,7 @@ function coachCommentValidationMessage(log) {
   const normalized = normalizeCoachComment(comment);
   const weakPhrases = ["수고했습니다", "잘했습니다", "좋아요", "확인완료", "다음에이어", "다음시간에이어", "고생했습니다", "괜찮습니다"];
   if (normalized.length < 5) return "코치 코멘트는 직접 5자 이상 작성해야 합니다.";
+  if (comment.includes("[입력 필요]")) return "초안의 ‘입력 필요’ 구획을 직접 보완한 뒤 저장해 주세요.";
   if (weakPhrases.some((phrase) => {
     const normalizedPhrase = normalizeCoachComment(phrase);
     return normalized.includes(normalizedPhrase) && normalized.length <= normalizedPhrase.length + 4;
@@ -540,4 +541,16 @@ function lessonChartDraftResults(lesson = {}) {
       usesException: Boolean(draft.usesException),
     };
   });
+}
+
+function coachAttendancePreviewMatches(lesson) {
+  const draft = lesson.attendanceChoice || {};
+  const preview = draft.preview;
+  const expected = completionParticipantsForLesson(lesson).map((p) => `${p.userId}:${p.ticketId}`).sort();
+  const actual = (preview?.participants || []).map((p) => `${p.userId}:${p.ticketId}`).sort();
+  return preview?.contractVersion === 1 && preview.lessonId === lesson.serverLessonId
+    && preview.outcome === draft.outcome && preview.deduct === draft.deduct
+    && typeof preview.revision === "string" && Boolean(preview.revision)
+    && expected.length > 0 && new Set(actual).size === actual.length
+    && JSON.stringify(expected) === JSON.stringify(actual);
 }
