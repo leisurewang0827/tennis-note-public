@@ -3957,6 +3957,8 @@
       schedule_v2_correction_ticket_mismatch: "완료 기록과 선택한 회원권이 일치하지 않습니다.",
       schedule_v2_correction_ticket_balance_insufficient: "회원권 잔여 횟수가 부족해 누락 차감을 반영할 수 없습니다.",
       schedule_v2_correction_ticket_count_inconsistent: "회원권 사용 횟수가 기록과 달라 자동 복구할 수 없습니다.",
+      attendance_choice_correction_makeup_conflict: "이 출결에 연결된 대기·예약 보강권이 있어 차감만 바꿀 수 없습니다. 기존 보강 내역을 먼저 확인해 주세요.",
+      attendance_choice_correction_makeup_policy_required: "불참 차감을 복구하려면 보강권 처리도 함께 확인해야 합니다. 차감만 자동으로 복구하지 않았습니다.",
       schedule_v2_no_show_reason_required: "노쇼 사유를 2자 이상 입력해 주세요.",
       schedule_v2_legacy_outcome_already_processed: "기존 방식으로 이미 처리된 수업입니다.",
       schedule_v2_outcome_partial_final_state: "일부 회원만 완료된 비정상 상태입니다. 관리자 점검이 필요합니다.",

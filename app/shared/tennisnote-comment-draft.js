@@ -179,6 +179,132 @@
     return selected.join(" ");
   }
 
+  const sectionDefinitions = Object.freeze([
+    { key: "strength", label: "잘된 점", aliases: ["잘된 점", "잘된점"] },
+    { key: "practice", label: "더 연습할 점", aliases: ["더 연습할 점", "더 연습해야 할 점", "연습할 점"] },
+    { key: "personal", label: "개인 연습 중점", aliases: ["개인 연습", "개인 연습 중점", "개인연습"] },
+  ]);
+
+  function sectionFactsFrom(value) {
+    const facts = Object.fromEntries(sectionDefinitions.map((section) => [section.key, ""]));
+    const unassigned = [];
+    const parts = String(value || "")
+      .normalize("NFC")
+      .replace(/\r\n?/g, "\n")
+      .split(/[;\n]+/u)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    let explicitlySectioned = false;
+    parts.forEach((part) => {
+        const separator = part.indexOf(":");
+        if (separator < 0) {
+          unassigned.push(...keywordsFrom(part));
+          return;
+        }
+        const heading = canonicalKeyword(part.slice(0, separator));
+        const definition = sectionDefinitions.find((section) => section.aliases.some((alias) => canonicalKeyword(alias) === heading));
+        if (!definition) {
+          unassigned.push(...keywordsFrom(part));
+          return;
+        }
+        explicitlySectioned = true;
+        const fact = keywordsFrom(part.slice(separator + 1)).join(" · ");
+        if (fact) facts[definition.key] = fact;
+      });
+    if (!explicitlySectioned) {
+      const observed = unassigned.filter((fact) => isObservedPhrase(fact)
+        && /(?:좋아짐|나아짐|개선됨|안정됨|성공함|좋아졌|나아졌|개선되|안정되|성공했)/u.test(fact));
+      if (observed.length) facts.strength = observed.join(" · ");
+    }
+    const classified = new Set(Object.values(facts).flatMap((fact) => fact.split(" · ")).map(canonicalKeyword));
+    return {
+      facts,
+      unassigned: unassigned.filter((fact) => !classified.has(canonicalKeyword(fact))),
+    };
+  }
+
+  function sectionSentence(section, fact) {
+    if (fact && section.key === "strength") return `수업에서 확인한 잘된 점: ${fact}.`;
+    if (fact && section.key === "practice") return `더 연습하며 확인할 점: ${fact}.`;
+    if (fact) return `개인 연습에서 중점적으로 확인할 내용: ${fact}.`;
+    if (section.key === "strength") return "[입력 필요] 코치가 관찰한 잘된 점을 추가로 입력해 주세요.";
+    if (section.key === "practice") return "[입력 필요] 코치가 관찰한 연습 필요 내용을 입력해 주세요.";
+    return "[입력 필요] 코치가 확인한 개인 연습 중점을 입력해 주세요.";
+  }
+
+  function generateSectioned(value, context = {}) {
+    if (hasHarshExpression(value)) {
+      return {
+        ok: false,
+        code: "neutral_wording_required",
+        message: "회원에게 공개하기 어려운 표현이 있습니다. 관찰한 동작을 중립적인 키워드로 바꿔 주세요.",
+        keywords: keywordsFrom(value),
+        sections: [],
+        comment: "",
+      };
+    }
+    const parsed = sectionFactsFrom(value);
+    const facts = parsed.facts;
+    const acceptedFacts = [...Object.values(facts).filter(Boolean), ...parsed.unassigned];
+    if (!acceptedFacts.length) {
+      return {
+        ok: false,
+        code: "keyword_required",
+        message: "피드백에 반영할 키워드를 입력해 주세요.",
+        keywords: keywordsFrom(value),
+        sections: [],
+        comment: "",
+      };
+    }
+    const missing = sectionDefinitions.filter((section) => !facts[section.key]);
+    const sections = sectionDefinitions.map((section) => ({
+      label: section.label,
+      text: sectionSentence(section, facts[section.key]),
+    }));
+    if (parsed.unassigned.length) {
+      sections[0].text += ` 함께 입력한 미분류 키워드: ${parsed.unassigned.join("·")}.`;
+    }
+    if (sections.some((section) => feedbackVisibleLength(section.text) < minimumVisibleFeedbackLength)) {
+      return {
+        ok: false,
+        code: "feedback_detail_required",
+        message: "각 구획을 20자 이상의 자연스러운 피드백으로 만들 수 있도록 관찰 키워드를 조금 더 입력해 주세요.",
+        keywords: Object.values(facts),
+        sections: [],
+        comment: "",
+      };
+    }
+    const comment = sections.map((section) => `${section.label}\n${section.text}`).join("\n\n");
+    const inputFactsOnly = acceptedFacts.every((fact) => comment.includes(fact));
+    const complete = missing.length === 0;
+    const adjacentRepetition = hasAdjacentRepetition(sections
+      .filter((section) => !section.text.includes("[입력 필요]"))
+      .map((section) => section.text));
+    if (adjacentRepetition) {
+      return { ok: false, code: "feedback_detail_required", message: "구획 사이에 같은 관찰이 반복됩니다. 키워드를 확인해 주세요.", keywords: acceptedFacts, sections: [], comment: "" };
+    }
+    const curriculum = curriculumContext(context.curriculum);
+    return {
+      ok: inputFactsOnly,
+      complete,
+      code: inputFactsOnly ? (complete ? "" : "feedback_sections_incomplete") : "feedback_detail_required",
+      message: inputFactsOnly
+        ? (complete ? "" : `${missing.map((section) => section.label).join(" · ")} 내용을 확인해 주세요.`)
+        : "입력한 관찰 사실을 모두 보존할 수 없어 키워드를 다시 확인해 주세요.",
+      keywords: acceptedFacts,
+      sections,
+      curriculumId: curriculum.id,
+      comment,
+      quality: Object.freeze({
+        inputFactsOnly,
+        complete,
+        adjacentRepetition,
+        sentenceCount: sections.length,
+        visibleLength: feedbackVisibleLength(comment),
+      }),
+    };
+  }
+
   function generate(value, context = {}) {
     const moderationBlocked = hasHarshExpression(value);
     const keywords = keywordsFrom(value);
@@ -250,6 +376,7 @@
   window.TennisNoteCommentDraft = Object.freeze({
     keywordsFrom,
     generate,
+    generateSectioned,
     feedbackVisibleLength,
     feedbackVisibleText,
     hasAdjacentRepetition,

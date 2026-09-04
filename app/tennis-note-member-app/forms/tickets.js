@@ -94,12 +94,21 @@ function liveTicketPriority(ticket = {}) {
 }
 
 function currentLiveTickets() {
-  return canonicalCurrentLiveTickets(rawCurrentLiveTickets());
+  const usableTickets = rawCurrentLiveTickets();
+  return distinctTicketsByExactId(usableTickets);
 }
 
 function upcomingLiveTickets() {
   if (!Array.isArray(state.liveTickets) || !state.liveTickets.length) return [];
-  return window.TennisNoteTicketState?.split
+  const upcoming = window.TennisNoteTicketState?.split
     ? window.TennisNoteTicketState.split(state.liveTickets).upcoming
     : state.liveTickets.filter((ticket) => ticket.status === "pending_payment");
+  return distinctTicketsByExactId(upcoming);
+}
+
+function historicalLiveTickets() {
+  const allTickets = distinctTicketsByExactId([...(state.liveTickets || []), ...(state.expiredTickets || [])]);
+  return window.TennisNoteTicketState?.split
+    ? window.TennisNoteTicketState.split(allTickets).history
+    : allTickets.filter((ticket) => ["expired", "refunded", "cancelled", "canceled", "voided"].includes(String(ticket.status || "").toLowerCase()));
 }

@@ -1574,6 +1574,18 @@ a {
   margin-bottom: 8px;
 }
 
+.lesson-action-choice-list {
+  display: grid;
+  gap: 8px;
+}
+
+.lesson-action-choice-list .small-button {
+  min-height: 44px;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .lesson-reference-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6051,3 +6063,14 @@ body.modal-open {
     max-height: min(88vh, 760px);
   }
 }
+
+:root .lesson-detail-tabs,
+:root .lesson-attendance-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+:root .lesson-detail-tabs button,
+:root .lesson-attendance-options button { min-height: 44px; min-width: 0; white-space: normal; font-size: 16px; background: var(--paper, #fff); color: var(--ink, #173b2f); border: 1px solid var(--line, #ccd8d2); border-radius: 10px; }
+:root .lesson-detail-tabs [aria-selected="true"],
+:root .lesson-attendance-options [aria-pressed="true"] { background: var(--soft-green, #eaf7f1); color: var(--green, #087b5b); border-color: currentColor; }
+:root .lesson-detail-tab-panel { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 12px; }
+:root .lesson-detail-tab-panel[hidden] { display: none !important; }
+:root .lesson-attendance-preview { padding: 12px; border-radius: 12px; background: var(--soft-green, #eaf7f1); overflow-wrap: anywhere; }
+:root #coachAttendanceReason { min-height: 44px; font-size: 16px; width: 100%; }

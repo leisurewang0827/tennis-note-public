@@ -5,9 +5,17 @@
 
 async function processCoachAttendance(lessonId, outcome, deduct) {
   const lesson = ensureCoachLessonRecord(lessonId);
+  if (lesson?.attendanceInFlight) return;
   const isAbsence = outcome === "absence";
-  const inputSelector = isAbsence ? "#coachAbsenceReason" : "#coachNoShowReason";
+  if (!lesson || lesson.detailTab !== "processing" || lesson.attendanceChoice?.contractReady !== true || !coachAttendancePreviewMatches(lesson)
+    || lesson.attendanceChoice.outcome !== outcome || lesson.attendanceChoice.deduct !== deduct) {
+    if (lesson) lesson.validationMessage = "처리 결과를 서버에서 먼저 확인해 주세요.";
+    renderLessonEditModal();
+    return;
+  }
+  const inputSelector = "#coachAttendanceReason";
   const reason = $(inputSelector)?.value.trim() || "";
+  lesson.attendanceChoice.reason = reason;
   const label = isAbsence ? "불참" : "노쇼";
   if (!lesson?.serverLessonId || reason.length < 2) {
     if (lesson) lesson.validationMessage = `${label} 사유를 2자 이상 입력해 주세요.`;
@@ -21,24 +29,30 @@ async function processCoachAttendance(lessonId, outcome, deduct) {
     renderLessonEditModal();
     return;
   }
-  const consequence = isAbsence && !deduct
-    ? "횟수는 차감하지 않고 보강 가능 상태로 전환합니다."
-    : `${deduct ? "회원권 횟수를 차감합니다." : "회원권 횟수는 차감하지 않습니다."}`;
-  if (!window.confirm(`${lesson.member} 수업을 ${label} · ${deduct ? "차감" : "차감 없음"}으로 처리할까요?\n\n${consequence}`)) return;
   const client = window.TennisNoteDataClient;
   if (!client?.rpc || !client.getSession?.()?.access_token) {
     lesson.validationMessage = "서버 로그인 상태를 확인한 뒤 다시 처리해 주세요.";
     renderLessonEditModal();
     return;
   }
+  const operationSignature = `${outcome}:${deduct}:${reason}:${lesson.attendanceChoice.preview.revision}`;
+  if (!lesson.attendanceOperation || lesson.attendanceOperation.signature !== operationSignature) {
+    lesson.attendanceOperation = {
+      signature: operationSignature,
+      key: `schedule-v2-coach-${outcome}:${lesson.serverLessonId}:${globalThis.crypto?.randomUUID?.() || Date.now()}`,
+    };
+  }
+  lesson.attendanceInFlight = true;
   lesson.validationMessage = `${label} 처리와 회원권 상태를 확인하고 있습니다.`;
   renderLessonEditModal();
   try {
-    await client.rpc("tn_schedule_v2_process_lesson", {
+    await client.rpc("tn_apply_coach_attendance_choice", {
       target_lesson_id: lesson.serverLessonId,
-      target_participant_results: participantResults,
-      target_finalize: true,
-      target_operation_key: `schedule-v2-coach-${outcome}:${lesson.serverLessonId}:${globalThis.crypto?.randomUUID?.() || Date.now()}`,
+      target_outcome: outcome,
+      target_deduct: deduct,
+      target_reason: reason,
+      target_expected_revision: lesson.attendanceChoice.preview.revision,
+      target_operation_key: lesson.attendanceOperation.key,
     });
     window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
     closeLessonEditor();
@@ -54,9 +68,13 @@ async function processCoachAttendance(lessonId, outcome, deduct) {
         ? "이미 처리된 수업입니다. 시간표를 새로고침해 주세요."
         : code.includes("forbidden")
           ? "본인이 담당하는 수업만 처리할 수 있습니다."
+          : code.includes("stale_preview")
+            ? "수업 또는 회원권이 변경되었습니다. 처리 결과를 다시 확인해 주세요."
           : code.includes("status_invalid")
             ? "현재 상태에서는 처리할 수 없습니다. 새로고침 후 다시 확인해 주세요."
             : `${label} 처리에 실패했습니다. 수업과 회원권 연결을 다시 확인해 주세요.`;
+    lesson.attendanceInFlight = false;
+    if (code.includes("stale_preview")) lesson.attendanceChoice.preview = null;
     renderLessonEditModal();
   }
 }
@@ -316,4 +334,58 @@ function captureLessonCompletionFailure(code, lesson, retry = false) {
     provider: Array.isArray(lesson?.v2Participants) && lesson.v2Participants.length > 1 ? "group" : "personal",
     status: retry ? 409 : 0,
   });
+}
+
+async function selectCoachAttendanceChoice(lessonId, field, value) {
+  const lesson = ensureCoachLessonRecord(lessonId);
+  if (!lesson || lesson.attendanceInFlight || !["outcome", "deduct", "contract"].includes(field)) return;
+  const probing = field === "contract";
+  if (!probing && lesson.attendanceChoice?.contractReady !== true) return;
+  captureLessonTabInputs(lesson);
+  const draft = lesson.attendanceChoice ||= {};
+  if (probing) draft.contractReady = false;
+  else draft[field] = field === "deduct" ? value === "true" : value;
+  // Changing the outcome never silently changes the independently chosen deduction.
+  draft.preview = null;
+  draft.error = "";
+  const sequence = draft.sequence = (draft.sequence || 0) + 1;
+  draft.loading = probing || (["absence", "no_show"].includes(draft.outcome) && typeof draft.deduct === "boolean");
+  renderLessonEditModal();
+  if (!draft.loading) return;
+  try {
+    const client = window.TennisNoteDataClient;
+    if (!client?.rpc || !client.getSession?.()?.access_token) throw new Error("login_required");
+    const preview = await client.rpc("tn_preview_coach_attendance_choice", {
+      target_lesson_id: lesson.serverLessonId,
+      target_outcome: probing ? "absence" : draft.outcome,
+      target_deduct: probing ? false : draft.deduct,
+    });
+    if (sequence !== draft.sequence) return;
+    const candidate = { ...lesson, attendanceChoice: { ...draft, preview,
+      outcome: probing ? "absence" : draft.outcome, deduct: probing ? false : draft.deduct } };
+    if (!coachAttendancePreviewMatches(candidate)) throw new Error("exact_preview_mismatch");
+    draft.contractReady = true;
+    // A read-only capability probe must not select an attendance policy for the coach.
+    draft.preview = probing ? null : preview;
+  } catch (error) {
+    if (sequence !== draft.sequence) return;
+    draft.preview = null;
+    draft.contractReady = false;
+    const code = String(error?.payload?.message || error?.payload?.code || error?.message || "server_error");
+    draft.error = code.includes("existing_member_request")
+      ? "회원이 이미 불참 요청을 보냈습니다. 요청 내역에서 먼저 확인해 주세요."
+      : code.includes("already_processed")
+        ? "이미 처리되었거나 확정 중인 수업입니다. 최신 상태를 확인해 주세요."
+        : code.includes("group_policy_unknown")
+          ? "그룹 회원권의 차감 정책을 확인할 수 없어 처리할 수 없습니다. 관리자에게 문의해 주세요."
+          : code.includes("ticket_") || code.includes("exact_ticket")
+            ? "이 수업의 정확한 회원권 또는 차감 가능 횟수를 확인할 수 없습니다."
+            : code.includes("forbidden")
+              ? "본인이 담당하는 수업만 처리할 수 있습니다."
+              : "서버의 출결 선택 계약 또는 최신 수업·회원권 상태를 확인할 수 없습니다. 새로고침 후 다시 선택해 주세요.";
+  }
+  if (sequence === draft.sequence) {
+    draft.loading = false;
+    if (state.editingLessonId === lesson.id) { captureLessonTabInputs(lesson); renderLessonEditModal(); }
+  }
 }
