@@ -1263,6 +1263,103 @@ a {
 
 .lesson-action-panel {
   align-items: stretch;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: inherit;
+  overflow: hidden;
+}
+
+.lesson-detail-sheet-header {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  min-height: 56px;
+  margin: -12px -12px 0;
+  border-bottom: 1px solid var(--line);
+  padding: 14px 8px 8px 12px;
+  background: var(--paper);
+}
+
+.lesson-editor-modal-card {
+  overflow: hidden;
+}
+
+#lessonEditModalContent {
+  max-height: inherit;
+  overflow-y: auto;
+}
+
+#lessonEditModalContent > .lesson-action-panel {
+  max-height: inherit;
+}
+
+.lesson-detail-scroll-region {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.lesson-detail-scroll-region > .wide {
+  grid-column: 1 / -1;
+}
+
+.lesson-detail-sheet-header::before {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  content: "";
+  transform: translateX(-50%);
+}
+
+.lesson-detail-sheet-header > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lesson-detail-sheet-close {
+  display: inline-grid;
+  flex: 0 0 44px;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  color: var(--ink);
+  font: inherit;
+  font-size: 26px;
+  line-height: 1;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.lesson-detail-sheet-close:hover {
+  background: var(--soft-green);
+}
+
+.lesson-detail-sheet-close:focus-visible {
+  outline: 3px solid rgba(8, 123, 91, 0.3);
+  outline-offset: 1px;
 }
 
 .lesson-modal-head {
@@ -1740,13 +1837,27 @@ a {
   position: sticky;
   bottom: -12px;
   z-index: 4;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex-wrap: nowrap;
+  align-items: stretch;
   border-top: 1px solid var(--line);
   padding: 10px 0 12px;
   background: var(--paper);
 }
 
-.lesson-completion-actions .approve-button {
-  flex: 1 1 220px;
+.lesson-completion-actions.is-close-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lesson-completion-actions :is(.lesson-completion-close, .approve-button) {
+  min-width: 0;
+  min-height: 44px;
+}
+
+.lesson-completion-actions .lesson-completion-close {
+  color: var(--ink);
+  background: #eef2f1;
 }
 
 .lesson-edit-mini {

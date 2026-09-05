@@ -209,6 +209,17 @@ function closeLessonEditor(fromHistory = false) {
   closeCoachModal("lessonEditModal", fromHistory);
 }
 
+function requestCloseLessonEditor() {
+  const modal = $("#lessonEditModal");
+  if (!modal || modal.hidden) return false;
+  const closeTrigger = $("#lessonEditModal .lesson-completion-actions [data-cancel-schedule-edit]")
+    || $("#lessonEditModal .lesson-detail-sheet-close")
+    || $("#lessonEditModal [data-close-lesson-modal]");
+  if (!closeTrigger?.isConnected) return false;
+  closeTrigger.click();
+  return true;
+}
+
 function openCoachQuickAdd(button) {
   const policy = loadCoachSchedulePolicy();
   const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(button.dataset.coachRoleId || ""));

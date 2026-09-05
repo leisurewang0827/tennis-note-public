@@ -179,7 +179,10 @@ function lessonChangeRemainingText(originalDate = "", originalTime = "") {
 // Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
 // Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
 let activeCoachModalId = "";
-let coachModalReturnFocus = null;
+let coachModalReturnContext = null;
+let pendingCoachModalReturnContext = null;
+let pendingCoachModalHistoryCloseId = "";
+let queuedCoachModalOpenId = "";
 let nativeCoachBackListenerReady = false;
 
 function coachLessonCardState(lesson = {}, now = new Date()) {
