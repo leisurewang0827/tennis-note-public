@@ -6,6 +6,8 @@ const http = require("node:http");
 const { createHash } = require("node:crypto");
 const { chromium, webkit } = require("playwright");
 const { packet, expected, workbookBytes } = require("./check_tennisnote_single_sheet_preview.cjs");
+const parser = require("../app/shared/tennisnote-single-sheet-import.js");
+const XLSX = require("../app/shared/vendor/xlsx.full.min.js");
 const root = path.resolve(__dirname, "..");
 let assertions = 0;
 const check = (ok, code) => { assertions++; if (!ok) throw Error(code); };
@@ -199,7 +201,7 @@ async function main() {
     const executablePath = engine === "chromium" ? [process.env.CHROME_PATH, chromium.executablePath(), "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"].find(p => p && fs.existsSync(p)) : undefined;
     const browser = await (engine === "webkit" ? webkit : chromium).launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
     try {
-      const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block", acceptDownloads: true });
       const page = await context.newPage();
       const pageErrors = [], relevantConsole = []; let writeRequests = 0, externalRequests = 0;
       page.on("pageerror", () => pageErrors.push("PAGE_ERROR"));
@@ -254,6 +256,16 @@ async function main() {
         && await modal.locator("[data-excel-apply]:disabled").count() === 1
         && await modal.locator("[data-excel-reverse]:visible").count() === 0, "ONE_INPUT_DISABLED_APPLY");
       check((await status.textContent()).includes("파일을 선택"), "EMPTY_STATE");
+      const [templateDownload] = await Promise.all([
+        page.waitForEvent("download"),
+        modal.locator("[data-excel-template]").click(),
+      ]);
+      const templatePath = await templateDownload.path();
+      const templateBytes = new Uint8Array(fs.readFileSync(templatePath));
+      const templateResult = await parser.readFile(templateBytes, XLSX);
+      check(templateDownload.suggestedFilename() === parser.TEMPLATE_FILE_NAME, "TEMPLATE_DOWNLOAD_NAME");
+      check(templateBytes.byteLength > 0 && templateResult.errors.length === 1 && templateResult.errors[0] === "EMPTY_DATA" && templateResult.rows.length === 0, "TEMPLATE_DOWNLOAD_ROUNDTRIP");
+      check((await status.textContent()).includes("앞자리 0"), "TEMPLATE_PHONE_GUIDANCE");
       await select("valid"); await waitResult();
       check((await status.textContent()).includes("보류") && (await modal.innerText()).includes("미확정"), "ACTUAL_ROSTER_HOLD");
       check(await page.evaluate(() => !window.__previewProbe.unsafeResult), "REAL_WORKER_SAFE_MESSAGE");
