@@ -179,7 +179,10 @@ function lessonChangeRemainingText(originalDate = "", originalTime = "") {
 // Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
 // Kept temporarily for rollback diagnostics. Runtime schedule reads use V2 only.
 let activeCoachModalId = "";
-let coachModalReturnFocus = null;
+let coachModalReturnContext = null;
+let pendingCoachModalReturnContext = null;
+let pendingCoachModalHistoryCloseId = "";
+let queuedCoachModalOpenId = "";
 let nativeCoachBackListenerReady = false;
 
 function coachLessonCardState(lesson = {}, now = new Date()) {
@@ -578,7 +581,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.473",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.475",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

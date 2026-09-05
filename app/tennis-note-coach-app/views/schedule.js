@@ -177,8 +177,20 @@ function renderScheduleEditPanel() {
     .join("");
   const selectedLessonAction = String(lesson.selectedSecondaryAction || "");
   const activeLessonTab = lesson.detailTab === "processing" ? "processing" : "feedback";
+  const feedbackPrimaryAction = !finalized && canProcess ? canFinalize
+    ? groupFeedback
+      ? groupFeedbackReview
+        ? `<button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}">전원 저장하고 완료</button>`
+        : `<button class="approve-button" type="button" data-review-group-feedback="${lesson.id}" disabled>전원 저장 내용 확인</button>`
+      : `<button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>저장하고 완료</button>`
+    : "" : "";
   return `
     <section class="schedule-edit-panel lesson-action-panel">
+      <header class="wide lesson-detail-sheet-header" data-tn-feedback-exit-contract="lesson-editor-v1">
+        <strong id="lessonDetailSheetTitle">수업 상세</strong>
+        <button class="lesson-detail-sheet-close" type="button" data-close-lesson-modal aria-label="수업 상세 닫기"><span aria-hidden="true">×</span></button>
+      </header>
+      <div class="wide lesson-detail-scroll-region">
       <div class="wide lesson-modal-head">
         <div>
           <strong>${lesson.member}</strong>
@@ -192,16 +204,9 @@ function renderScheduleEditPanel() {
       <fieldset class="lesson-detail-tab-panel wide" data-lesson-tab-panel="feedback" ${activeLessonTab === "feedback" ? "" : "hidden disabled"}>
       ${canFinalize && !finalized && completionParticipants.length === 1 ? `<p class="lesson-chart-deduction-preview wide">완료 시 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회 → ${Math.max(0, (Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0) - 1)}회</p>` : ""}
       ${lessonGroupDeductionSummary(lesson, completionParticipants) ? `<p class="lesson-chart-deduction-preview wide">${escapeHtml(lessonGroupDeductionSummary(lesson, completionParticipants))}</p>` : ""}
-      ${groupFeedbackReview ? `<section class="lesson-group-feedback-review wide"><strong>전원 저장 전 확인</strong><p>${groupFeedbackParticipants.length}명의 피드백과 회원권 차감을 한 번에 처리합니다. 한 명이라도 서버 검증에 실패하면 전부 저장되지 않습니다.</p></section>` : groupCommonFields}
+      ${groupFeedbackReview ? `<section class="lesson-group-feedback-review wide"><div class="lesson-group-feedback-review-head"><strong>전원 저장 전 확인</strong><button class="small-button" type="button" data-edit-group-feedback-review="${lesson.id}">수정하기</button></div><p>${groupFeedbackParticipants.length}명의 피드백과 회원권 차감을 한 번에 처리합니다. 한 명이라도 서버 검증에 실패하면 전부 저장되지 않습니다.</p></section>` : groupCommonFields}
       ${participantTabs}
       <div class="lesson-participant-completion-list wide">${participantCompletionFields}</div>
-      <div class="actions lesson-completion-actions wide">
-        ${!finalized && canProcess && canFinalize
-          ? groupFeedback
-            ? `${groupFeedbackReview ? `<button class="small-button" type="button" data-edit-group-feedback-review="${lesson.id}">수정하기</button><button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}">전원 저장하고 완료</button>` : `<button class="approve-button" type="button" data-review-group-feedback="${lesson.id}" disabled>전원 저장 내용 확인</button>`}`
-            : `<button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>저장하고 완료</button>`
-          : ""}
-      </div>
       </fieldset>
       ${lesson.validationMessage || needsStateRefresh ? `<div class="wide"><p class="validation-text">${escapeHtml(lesson.validationMessage || "피드백 기록과 회원권 차감 결과가 일치하지 않습니다.")}</p><button class="small-button" type="button" data-refresh-lesson-completion="${escapeHtml(lesson.id)}">최신 상태 다시 확인</button></div>` : ""}
       <fieldset class="lesson-detail-tab-panel wide" data-lesson-tab-panel="processing" ${activeLessonTab === "processing" ? "" : "hidden disabled"}>
@@ -237,12 +242,14 @@ function renderScheduleEditPanel() {
           </section>`
         : '<p class="permission-note">완료된 수업의 출결 정정은 기존 관리자 경로에서 확인해 주세요. 피드백 수정은 횟수를 다시 차감하지 않습니다.</p>'}
       </fieldset>
-      <div class="actions wide">
-        <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
-      </div>
       ${canProcess
         ? canFinalize ? "" : `<p class="permission-note wide">${lessonOutcomeGuardMessage()}</p>`
         : `<p class="permission-note wide">${lessonPermissionText(lesson)}</p>`}
+      </div>
+      <div class="actions lesson-completion-actions wide${activeLessonTab === "feedback" && feedbackPrimaryAction ? "" : " is-close-only"}" data-tn-feedback-footer-contract="v1-0-428-pair">
+        <button class="small-button lesson-completion-close" type="button" data-cancel-schedule-edit>닫기</button>
+        ${activeLessonTab === "feedback" ? feedbackPrimaryAction : ""}
+      </div>
     </section>`;
 }
 

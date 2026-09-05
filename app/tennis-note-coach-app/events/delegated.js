@@ -665,7 +665,7 @@ function bindDelegatedEvents() {
     }
     if (event.key === "Escape" && activeCoachModalId) {
       event.preventDefault();
-      if (activeCoachModalId === "lessonEditModal") closeLessonEditor();
+      if (activeCoachModalId === "lessonEditModal") requestCloseLessonEditor();
       else closeCoachModal(activeCoachModalId);
       return;
     }
@@ -702,5 +702,6 @@ function bindDelegatedEvents() {
     }
     const targetView = event.state?.tennisNoteView;
     if (targetView && $(`#${targetView}`)) setView(targetView);
+    restorePendingCoachModalReturnContext();
   });
 }
