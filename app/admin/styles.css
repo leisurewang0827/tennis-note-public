@@ -16486,3 +16486,43 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
     font-size: 16px;
   }
 }
+
+/* Scoped to the single-sheet Excel preview and apply surface. */
+#singleSheetPreviewModal { padding: 12px; z-index: 120; }
+#singleSheetPreviewModal[hidden] { display: none !important; }
+#singleSheetPreviewModal .tn-excel-panel {
+  width: min(760px, 100%); max-height: calc(100dvh - 24px); overflow: auto;
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  overflow-wrap: anywhere; box-sizing: border-box;
+  background: var(--excel-paper, #ffffff); color: var(--excel-ink, #172033);
+}
+#singleSheetPreviewModal input { background: var(--excel-field, #f8fcfb); color: inherit; border-color: var(--excel-border, #cdd8d2); }
+#singleSheetPreviewModal .ghost-button { background: var(--excel-button, #edf6fb); color: var(--excel-link, #0872b1); }
+#singleSheetPreviewModal h2 { font-size: 20px; margin: 0; }
+#singleSheetPreviewModal input { max-width: 100%; min-width: 0; width: 100%; font-size: 16px; min-height: 44px; }
+#singleSheetPreviewModal button, #openSingleSheetPreviewButton { min-height: 44px; }
+#singleSheetPreviewModal .modal-actions { flex-wrap: wrap; gap: 8px; }
+#singleSheetPreviewModal .tn-excel-disabled { background: #e5e7eb; color: #4b5563; border: 1px solid #9ca3af; border-radius: 10px; padding: 10px 14px; cursor: not-allowed; opacity: 1; }
+#singleSheetPreviewModal .tn-excel-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+#singleSheetPreviewModal .tn-excel-summary div { min-width: 0; border-bottom: 1px solid #a0afa8; padding: 8px 0; }
+#singleSheetPreviewModal dd { margin: 4px 0 0; font-weight: 700; }
+#singleSheetPreviewModal .tn-excel-rows { padding-left: 24px; }
+#singleSheetPreviewModal .tn-excel-rows li { padding-block: 8px; }
+#singleSheetPreviewModal .tn-excel-rows p { margin: 4px 0; }
+html[data-theme="dark"] #singleSheetPreviewModal .tn-excel-disabled { background: #374151; color: #e5e7eb; border-color: #6b7280; }
+html[data-theme="dark"] #singleSheetPreviewModal {
+  --excel-paper: #172033; --excel-ink: #eef3f8; --excel-field: #202d42;
+  --excel-border: #75849a; --excel-button: #263b54; --excel-link: #b1ddff;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) #singleSheetPreviewModal {
+    --excel-paper: #172033; --excel-ink: #eef3f8; --excel-field: #202d42;
+    --excel-border: #75849a; --excel-button: #263b54; --excel-link: #b1ddff;
+  }
+  html:not([data-theme="light"]) #singleSheetPreviewModal .tn-excel-disabled { background: #374151; color: #e5e7eb; border-color: #6b7280; }
+}
+@media (max-width: 600px) {
+  #singleSheetPreviewModal .tn-excel-panel { padding-inline: 14px; }
+  #singleSheetPreviewModal .tn-excel-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #singleSheetPreviewModal .modal-actions > button { width: 100%; }
+}

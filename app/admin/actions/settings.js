@@ -55,7 +55,7 @@ function applyOperationsRolePermissions() {
   $$('[data-admin-only-member-filter]').forEach((button) => {
     button.hidden = role === "coach";
   });
-  ["openDataToolsButton", "exportMembersButton", "addMemberButton", "adminPendingUsersPanel"].forEach((id) => {
+  ["openDataToolsButton", "exportMembersButton", "addMemberButton", "openSingleSheetPreviewButton", "adminPendingUsersPanel"].forEach((id) => {
     const element = $(`#${id}`);
     if (element) element.hidden = role === "coach";
   });

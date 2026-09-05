@@ -20,7 +20,8 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 // app/shared/ 의 공용 모듈은 타이머·감시자를 걸어서 이 얕은 스텁으로는
 // 끝까지 실행되지 않는다(무한 대기). 그쪽은 우리가 리팩터링하는 대상도
 // 아니므로 범위 밖에 둔다. tennisnote-release.js 만 예외로 넣는데,
-// app.js 최상위에서 버전을 읽기 때문이다.
+// app.js 최상위에서 버전을 읽기 때문이다. 한 장 엑셀의 네 진입 모듈은
+// 부작용 없이 로드되고 순서 자체가 안전 계약이므로 함께 확인한다.
 const PAGES = [
   {
     label: "관리자",
@@ -28,6 +29,10 @@ const PAGES = [
     scripts: [
       "app/shared/tennisnote-release.js",
       "app/shared/tennisnote-escape-html.js",
+      "app/shared/tennisnote-single-sheet-snapshot.js",
+      "app/shared/tennisnote-single-sheet-batch.js",
+      "app/shared/tennisnote-single-sheet-transport.js",
+      "app/shared/tennisnote-single-sheet-preview-ui.js",
       "app/admin/catalog.js",
       "app/admin/settings.js",
       "app/admin/domain/values.js",
