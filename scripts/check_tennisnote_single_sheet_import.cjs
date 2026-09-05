@@ -75,6 +75,18 @@ async function main() {
     const missingOptional = workbook([row()], api.HEADERS.slice(0, 7)); missingOptional.Sheets[api.SHEET].H2 = { t: "s", v: "월" };
     check((await parse(missingOptional)).rows[0].reasons.includes("UNHEADED_CELL"), "UNHEADED_DATA");
   });
+  await test("authoritative-blank-template", async () => {
+    const template = api.buildTemplateWorkbook(XLSX);
+    check(api.TEMPLATE_FILE_NAME.endsWith(".xlsx"), "TEMPLATE_XLSX_NAME");
+    check(template.SheetNames.length === 1 && template.SheetNames[0] === api.SHEET && Object.keys(template.Sheets).length === 1, "TEMPLATE_SINGLE_SHEET");
+    const sheet = template.Sheets[api.SHEET];
+    check(api.HEADERS.every((header, index) => sheet[XLSX.utils.encode_cell({ r: 0, c: index })]?.v === header), "TEMPLATE_EXACT_HEADERS");
+    check(sheet.B2?.t === "s" && sheet.B2?.v === "" && sheet.B2?.z === "@" && sheet.B501?.z === "@", "TEMPLATE_PHONE_TEXT_COLUMN");
+    check(!Object.entries(sheet).some(([key, cell]) => /^[A-Z]+\d+$/.test(key) && (cell?.f != null || cell?.F != null || cell?.l != null || cell?.t === "e")), "TEMPLATE_FORMULA_LINK_ERROR_ZERO");
+    const bytes = XLSX.write(template, { type: "buffer", bookType: "xlsx", compression: true });
+    const parsed = await api.readFile(new Uint8Array(bytes), XLSX);
+    check(parsed.errors.length === 1 && parsed.errors[0] === "EMPTY_DATA" && parsed.rows.length === 0, "TEMPLATE_SERIALIZED_EMPTY_ACCEPTED");
+  });
   await test("bounds-500-and-501", async () => {
     const rows = Array.from({ length: 500 }, (_, i) => row({ "연락처": syntheticPhone(i + 1) }));
     check((await parse(workbook(rows))).rows.length === 500, "MAX_ROWS_ACCEPTED");

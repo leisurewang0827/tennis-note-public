@@ -3,6 +3,7 @@
   const scriptURL = document.currentScript.src;
   const MAX_BYTES = 5 * 1024 * 1024;
   const DEADLINE = 10000;
+  let templateDependenciesPromise = null;
   const reasons = {
     ADMIN_SNAPSHOT_REQUIRED: "관리자 조회 정보가 필요합니다. 관리자 화면에서 다시 확인해 주세요.",
     SHEET_IMPORT_ENVIRONMENT_BLOCKED: "현재 관리자 주소와 연결 환경이 일치하지 않아 서버 요청을 보내지 않았습니다.",
@@ -63,6 +64,27 @@
   const explain = code => reasons[code] || "자동 판정을 보류했습니다. 입력과 서버 정책을 확인해 주세요.";
   const safeBatchText = value => reasons[value] || (/^[A-Z0-9_]+$/.test(String(value || "")) ? explain(value) : String(value || ""));
   const safeFailureCode = error => reasons[String(error?.code || error?.message || "")] ? String(error?.code || error?.message) : "SHEET_IMPORT_PREVIEW_FAILED";
+  function loadTemplateDependency(relative, ready) {
+    if (ready()) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = new URL(relative, scriptURL).href;
+      script.async = true;
+      script.dataset.tennisnoteOptionalModule = "single-sheet-template";
+      script.onload = () => ready() ? resolve() : reject(new Error("TEMPLATE_DEPENDENCY_INVALID"));
+      script.onerror = () => reject(new Error("TEMPLATE_DEPENDENCY_LOAD_FAILED"));
+      document.head.append(script);
+    });
+  }
+  function ensureTemplateDependencies() {
+    if (root.TennisNoteSingleSheetImport?.buildTemplateWorkbook && typeof root.XLSX?.writeFile === "function") return Promise.resolve();
+    if (templateDependenciesPromise) return templateDependenciesPromise;
+    templateDependenciesPromise = (async () => {
+      await loadTemplateDependency("./tennisnote-single-sheet-import.js", () => Boolean(root.TennisNoteSingleSheetImport?.buildTemplateWorkbook));
+      await loadTemplateDependency("./vendor/xlsx.full.min.js?v=0.18.5", () => typeof root.XLSX?.writeFile === "function");
+    })().catch(error => { templateDependenciesPromise = null; throw error; });
+    return templateDependenciesPromise;
+  }
   function bind(options) {
     const trigger = options.button;
     if (!trigger || trigger.dataset.excelBound) return;
@@ -76,13 +98,13 @@
       <p class="tn-excel-status" data-excel-status role="status" aria-live="polite">파일을 선택하면 등록 전에 내용을 확인합니다.</p>
       <div data-excel-results></div>
       <p data-excel-boundary>현재는 읽기 전용입니다. 서버의 최종 판정·원자 적용 기능이 연결되기 전에는 등록할 수 없습니다.</p>
-      <div class="modal-actions"><button type="button" class="ghost-button" data-excel-retry hidden>다시 확인</button><button type="button" class="ghost-button" data-excel-cancel hidden>파일 확인 취소</button><button type="button" class="ghost-button" data-excel-reverse hidden disabled aria-disabled="true">방금 등록 원복</button><button type="button" class="tn-excel-disabled" data-excel-apply disabled aria-disabled="true">등록 적용 불가 · 읽기 전용</button></div>
+      <div class="modal-actions"><button type="button" class="ghost-button" data-excel-template>양식 받기</button><button type="button" class="ghost-button" data-excel-retry hidden>다시 확인</button><button type="button" class="ghost-button" data-excel-cancel hidden>파일 확인 취소</button><button type="button" class="ghost-button" data-excel-reverse hidden disabled aria-disabled="true">방금 등록 원복</button><button type="button" class="tn-excel-disabled" data-excel-apply disabled aria-disabled="true">등록 적용 불가 · 읽기 전용</button></div>
     </section>`;
     document.body.append(backdrop);
     const input = backdrop.querySelector("[data-excel-file]"), status = backdrop.querySelector("[data-excel-status]"), results = backdrop.querySelector("[data-excel-results]");
-    const retry = backdrop.querySelector("[data-excel-retry]"), cancel = backdrop.querySelector("[data-excel-cancel]");
+    const template = backdrop.querySelector("[data-excel-template]"), retry = backdrop.querySelector("[data-excel-retry]"), cancel = backdrop.querySelector("[data-excel-cancel]");
     const apply = backdrop.querySelector("[data-excel-apply]"), reverse = backdrop.querySelector("[data-excel-reverse]"), boundary = backdrop.querySelector("[data-excel-boundary]");
-    let batch = null, confirming = false, requestBusy = false;
+    let batch = null, confirming = false, requestBusy = false, templateBusy = false;
     let generation = 0, worker = null, timer = null, expires = null, opener = null;
     function stop() { generation++; requestBusy = false; input.disabled = false; worker?.terminate(); worker = null; clearTimeout(timer); clearTimeout(expires); timer = null; cancel.hidden = true; }
     function reset() {
@@ -104,6 +126,22 @@
       opener = trigger; reset(); backdrop.hidden = false;
       if (batch) renderBatch(batch.view());
       history.pushState({ ...(history.state || {}), tnExcelPreview: true }, ""); input.focus();
+    }
+    async function downloadTemplate() {
+      if (templateBusy) return;
+      templateBusy = true; template.disabled = true; template.setAttribute("aria-disabled", "true");
+      status.textContent = "한 장 엑셀 양식을 준비하고 있습니다…";
+      try {
+        await ensureTemplateDependencies();
+        const api = root.TennisNoteSingleSheetImport;
+        const workbook = api.buildTemplateWorkbook(root.XLSX);
+        root.XLSX.writeFile(workbook, api.TEMPLATE_FILE_NAME, { bookType: "xlsx", compression: true });
+        status.textContent = "빈 양식 다운로드 완료 · 연락처는 앞자리 0이 유지되는 텍스트 형식입니다.";
+      } catch {
+        status.textContent = "엑셀 양식을 만들지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.";
+      } finally {
+        templateBusy = false; template.disabled = false; template.removeAttribute("aria-disabled");
+      }
     }
     const line = (parent, tag, value) => { const el = document.createElement(tag); el.textContent = value; parent.append(el); return el; };
     function renderBatch(v) {
@@ -257,6 +295,7 @@
       } catch { if (id === generation) error("SNAPSHOT_READ_FAILED"); }
     }
     trigger.addEventListener("click", open);
+    template.addEventListener("click", () => void downloadTemplate());
     input.addEventListener("change", () => void run(input.files[0]));
     retry.addEventListener("click", () => void run(input.files[0]));
     apply.addEventListener("click", () => {

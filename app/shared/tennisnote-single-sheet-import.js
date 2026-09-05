@@ -9,6 +9,7 @@
   const VERSION = "single-sheet-preview/1";
   const SHEET = "회원등록";
   const HEADERS = Object.freeze(["회원명", "연락처", "코치", "회원권", "시작일", "총횟수", "사용횟수", "요일1", "시간1", "요일2", "시간2", "요일3", "시간3", "그룹코드"]);
+  const TEMPLATE_FILE_NAME = "tennis-note-member-ticket-schedule-import.xlsx";
   const LIMITS = Object.freeze({ rows: 500, physicalRows: 5001, bytes: 5 * 1024 * 1024, cells: 70014, sessions: 1000, horizonDays: 1096 });
   const DAY = 86400000;
   const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -63,6 +64,18 @@
   }
   const unsafeCell = cell => cell && (cell.f != null || cell.F != null || cell.l != null || cell.t === "e");
   const occupied = cell => Boolean(cell && (unsafeCell(cell) || text(cell.v) !== ""));
+  function buildTemplateWorkbook(xlsx) {
+    if (typeof xlsx?.utils?.book_new !== "function" || typeof xlsx?.utils?.aoa_to_sheet !== "function" || typeof xlsx?.utils?.book_append_sheet !== "function") fail("XLSX_WRITER_REQUIRED");
+    const workbook = xlsx.utils.book_new();
+    const sheet = xlsx.utils.aoa_to_sheet([HEADERS]);
+    // Keep the contact column as text for the full supported row budget so
+    // Excel does not discard a leading zero before the parser sees the file.
+    for (let row = 2; row <= LIMITS.rows + 1; row += 1) sheet[`B${row}`] = { t: "s", v: "", z: "@" };
+    sheet["!ref"] = `A1:N${LIMITS.rows + 1}`;
+    sheet["!cols"] = HEADERS.map((header, index) => ({ wch: index === 1 ? 18 : index === 3 ? 22 : index === 13 ? 18 : header.includes("시간") || header.includes("요일") ? 10 : 14 }));
+    xlsx.utils.book_append_sheet(workbook, sheet, SHEET);
+    return workbook;
+  }
   function normalizeRow(values, epoch1904) {
     const problems = [];
     const problem = code => { if (!problems.includes(code)) problems.push(code); };
@@ -336,5 +349,5 @@
     }
     return { protocol: "local-synthetic/1", fileHash: parsed.fileHash, units, held };
   }
-  return Object.freeze({ VERSION, SHEET, HEADERS, LIMITS, readFile, parseWorkbook, buildPreview, checkFresh, safeSummary, serverUnits });
+  return Object.freeze({ VERSION, SHEET, HEADERS, LIMITS, TEMPLATE_FILE_NAME, buildTemplateWorkbook, readFile, parseWorkbook, buildPreview, checkFresh, safeSummary, serverUnits });
 });
