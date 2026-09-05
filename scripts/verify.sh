@@ -72,6 +72,9 @@ step "코치 권한 회귀 검사"
 node --check scripts/check_tennisnote_coach_scope_runtime.cjs
 node scripts/check_tennisnote_coach_scope_runtime.cjs
 
+step "한 장 엑셀 등록 계약 검사"
+"$PYTHON_BIN" scripts/check_tennisnote_single_sheet_preview.py
+
 step "배포본 빌드"
 "$PYTHON_BIN" scripts/build_cloudflare_pages.py --target member --output dist/member
 "$PYTHON_BIN" scripts/build_cloudflare_pages.py --target admin --output dist/admin
