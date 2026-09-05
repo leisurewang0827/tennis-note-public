@@ -46,7 +46,7 @@ function registerPwaServiceWorker() {
   const memberPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("member");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.474",
+    workerUrl: "./service-worker.js?v=1.0.475",
     remoteAppUrl: memberPortal?.ok ? memberPortal.url : "",
   });
 }
