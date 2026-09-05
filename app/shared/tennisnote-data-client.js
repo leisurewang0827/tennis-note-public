@@ -57,6 +57,10 @@
       supabaseUrl: supabase.supabaseUrl || supabase.url || "",
       supabasePublishableKey: supabase.supabasePublishableKey || supabase.publishableKey || supabase.anonKey || "",
       authProviderOverrides,
+      environment: supabase.environment || source?.environment || "",
+      projectFingerprint: supabase.projectFingerprint || source?.projectFingerprint || "",
+      singleSheetImportMode: supabase.singleSheetImportMode || source?.singleSheetImportMode || "off",
+      singleSheetImportReverseEnabled: supabase.singleSheetImportReverseEnabled === true || source?.singleSheetImportReverseEnabled === true,
     };
   }
 
@@ -72,6 +76,10 @@
         ...(storedConfig.authProviderOverrides || {}),
         ...(fileConfig.authProviderOverrides || {}),
       },
+      environment: fileConfig.environment,
+      projectFingerprint: fileConfig.projectFingerprint,
+      singleSheetImportMode: fileConfig.singleSheetImportMode,
+      singleSheetImportReverseEnabled: fileConfig.singleSheetImportReverseEnabled,
     };
   }
 
@@ -947,7 +955,8 @@
 
     const method = `${options.method || "GET"}`.toUpperCase();
     if (!isOnline() && method !== "GET") throw offlineError();
-    const session = await ensureSession();
+    const session = options.requireCurrentSession === true ? getSession() : await ensureSession();
+    if (options.requireCurrentSession === true && !session?.access_token) throw expiredRequestSessionError();
     if (!isOnline() && method === "GET") {
       const cached = await readOfflineResponse(path, session);
       if (cached !== null) return cached;
@@ -991,7 +1000,7 @@
     if (!response.ok) {
       const rawText = await response.text().catch(() => "");
       const requestError = responseRequestError(response, rawText);
-      const refreshed = await refreshRejectedRequestSession(
+      const refreshed = options.retryAuth === false ? null : await refreshRejectedRequestSession(
         requestError,
         session,
         options._authRetryAttempted === true,
@@ -1429,6 +1438,8 @@
       body: parameters,
       prefer: "return=representation",
       timeoutMs: options.timeoutMs,
+      requireCurrentSession: options.requireCurrentSession,
+      retryAuth: options.retryAuth,
     });
   }
 

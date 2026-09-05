@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -27,6 +28,8 @@ test("개발계 빌드는 운영 결제 비밀 없이 생성되고 화면에 개
       TENNISNOTE_PORTONE_STORE_ID: "",
       TENNISNOTE_PORTONE_TOSSPAY_CHANNEL_KEY: "",
       TENNISNOTE_BANK_TRANSFER_ENABLED: "false",
+      TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: "apply",
+      TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "true",
     },
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -34,6 +37,9 @@ test("개발계 빌드는 운영 결제 비밀 없이 생성되고 화면에 개
   const config = readFileSync(join(output, "shared/config.local.js"), "utf8");
   const html = readFileSync(join(output, "index.html"), "utf8");
   assert.match(config, /"environment": "development"/);
+  assert.match(config, new RegExp(`"projectFingerprint": "${createHash("sha256").update("dev-example").digest("hex")}"`));
+  assert.match(config, /"singleSheetImportMode": "apply"/);
+  assert.match(config, /"singleSheetImportReverseEnabled": true/);
   assert.match(config, /"enabled": false/);
   assert.match(config, /"allowedMethods": \[\]/);
   assert.doesNotMatch(config, /test-store-id|test-tosspay-channel/);
@@ -54,6 +60,8 @@ test("개발계 배포는 dev 브랜치와 별도 Cloudflare 프로젝트만 사
   assert.match(workflow, /branches:\s*\[dev\]/);
   assert.match(workflow, /environment:\s*development/);
   assert.match(workflow, /TENNISNOTE_PAYMENTS_ENABLED:\s*"false"/);
+  assert.match(workflow, /TENNISNOTE_SINGLE_SHEET_IMPORT_MODE:\s*apply/);
+  assert.match(workflow, /TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED:\s*"true"/);
   assert.match(workflow, /DEV_TENNISNOTE_SUPABASE_URL/);
   assert.match(workflow, /project-name=tennisnote-app-dev --branch=dev/);
   assert.match(workflow, /project-name=tennisnote-admin-dev --branch=dev/);

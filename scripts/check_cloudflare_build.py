@@ -146,6 +146,13 @@ def payment_config(path: Path) -> dict:
     return json.loads(match.group(1))
 
 
+def browser_config(path: Path) -> dict:
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r"window\.TENNISNOTE_CONFIG\s*=\s*(\{[\s\S]*?\});", text)
+    assert match, f"Browser configuration is missing: {path}"
+    return json.loads(match.group(1))
+
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -212,11 +219,24 @@ for config in (
     text = config.read_text(encoding="utf-8")
     assert "service_role" not in text
     assert "PORTONE_API_SECRET" not in text
+    browser = browser_config(config)
+    assert browser["environment"] == "production"
+    assert re.fullmatch(r"[0-9a-f]{64}", browser["projectFingerprint"])
+    assert browser["singleSheetImportMode"] == "off"
+    assert browser["singleSheetImportReverseEnabled"] is False
     payment = payment_config(config)
     assert payment["mode"] == "multi"
     assert payment["allowedMethods"] == ["tosspay", "bank_transfer"]
     assert payment["bankTransfer"] == {"enabled": True}
     assert set(payment["channels"]) == {"tosspay"}
     assert payment["channels"]["tosspay"]
+
+for relative in (
+    "shared/tennisnote-single-sheet-import.js",
+    "shared/tennisnote-single-sheet-worker.js",
+    "shared/vendor/xlsx.full.min.js",
+    "shared/vendor/xlsx.LICENSE",
+):
+    assert (ROOT / "dist" / "admin" / relative).is_file(), f"Missing Excel worker asset: {relative}"
 
 print(f"Public PWA CI passed for {source['version']} / {source['releaseId']}")

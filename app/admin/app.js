@@ -692,6 +692,9 @@ const adminLiveDataState = {
   substituteAssignments: [],
 };
 
+// Read-only server rows projected for the current page lifetime only.
+let adminSingleSheetReadSnapshot = null;
+
 let adminOperationalCacheWriteHandle = 0;
 let adminOperationalCacheWriteQueued = false;
 
