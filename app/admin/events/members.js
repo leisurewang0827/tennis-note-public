@@ -36,6 +36,7 @@ function bindMembersEvents() {
     if (state.view === "schedule") renderSchedule();
   });
   $("#addMemberButton").addEventListener("click", openSimpleMemberRegistrationHub);
+  bindSingleSheetPreviewEntry();
   $("#manualCreateMemberButton")?.addEventListener("click", openManualMemberModal);
   $$('[data-member-payment-view]').forEach((button) => {
     button.addEventListener("click", () => setView(button.dataset.memberPaymentView));

@@ -802,6 +802,41 @@ function importServerIssueMessage(issue = {}) {
   return `${rowLabel}${fieldLabel}: ${importServerIssueLabels[issue.code] || issue.code || "확인 필요"}`;
 }
 
+function singleSheetPreviewSnapshot() {
+  const config = window.TennisNoteDataClient?.loadConfig?.() || {};
+  return window.TennisNoteSingleSheetSnapshot.adapt(adminSingleSheetReadSnapshot, {
+    authorized: operationsRole() === "admin" && operationsAccessReady(),
+    branchId: activeOperationBranchId(),
+    environment: config.environment || "",
+    projectFingerprint: config.projectFingerprint || "",
+  }, new Date().toISOString());
+}
+
+async function singleSheetRemotePreviewTransport() {
+  const api = window.TennisNoteSingleSheetRemotePreview;
+  const client = window.TennisNoteDataClient;
+  if (!api || !client || !Object.values(api.ORIGINS || {}).includes(window.location.origin)) return null;
+  return api.create({
+    client,
+    getBranchId: activeOperationBranchId,
+    canOpen: () => operationsRole() === "admin" && operationsAccessReady(),
+  });
+}
+
+function bindSingleSheetPreviewEntry() {
+  window.TennisNoteExcelPreviewUI?.bind({
+    button: $("#openSingleSheetPreviewButton"),
+    canOpen: () => operationsRole() === "admin" && operationsAccessReady(),
+    getSnapshot: singleSheetPreviewSnapshot,
+    getPreviewTransport: singleSheetRemotePreviewTransport,
+    // Hosted apply/reverse requires explicit config plus the server-side actor scope.
+    // Loopback stays reserved for the isolated synthetic transport harness.
+    getLocalTransport: () => ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)
+      ? window.TennisNoteSingleSheetLocalTransport
+      : null,
+  });
+}
+
 async function performAdminLiveDataSync(options = {}) {
   if (adminLocalPreviewMode) return false;
   const client = window.TennisNoteDataClient;
@@ -938,6 +973,21 @@ async function performAdminLiveDataSync(options = {}) {
       });
       return false;
     }
+
+    adminSingleSheetReadSnapshot = window.TennisNoteSingleSheetSnapshot?.captureExisting({
+      users: serverUsers,
+      memberRecords: serverMemberDatabaseRecords,
+      coaches: serverCoachRoles,
+      availability: serverCoachAvailability,
+      products: serverProducts,
+      tickets: serverTickets,
+      lessons: serverLessons,
+      participants: lessonParticipants,
+    }, {
+      branchId: activeOperationBranchId(),
+      environment: client.loadConfig?.().environment || "",
+    }) || null;
+    window.dispatchEvent(new Event("tennisnote:excel-snapshot-changed"));
 
     const usersById = new Map((serverUsers || []).map((user) => [user.id, user]));
     const authLinksByUserId = new Map();

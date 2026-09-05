@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -43,6 +44,14 @@ def deployment_environment() -> str:
     return "development" if env("TENNISNOTE_ENVIRONMENT").lower() == "development" else "production"
 
 
+def project_fingerprint(supabase_url: str) -> str:
+    clean_url = supabase_url.strip().lower().rstrip("/")
+    project_ref = clean_url.removeprefix("https://").removesuffix(".supabase.co")
+    if not project_ref or "." in project_ref or "/" in project_ref:
+        return ""
+    return hashlib.sha256(project_ref.encode("utf-8")).hexdigest()
+
+
 def payments_enabled() -> bool:
     return env("TENNISNOTE_PAYMENTS_ENABLED").lower() != "false"
 
@@ -74,10 +83,19 @@ def write_browser_config(output: Path) -> None:
     if missing:
         raise ValueError("Missing required deployment settings: " + ", ".join(missing))
 
+    requested_sheet_mode = env("TENNISNOTE_SINGLE_SHEET_IMPORT_MODE").lower()
+    single_sheet_import_mode = requested_sheet_mode if requested_sheet_mode in {"preview", "apply"} else "off"
+    single_sheet_import_reverse_enabled = (
+        single_sheet_import_mode == "apply"
+        and env("TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED").lower() == "true"
+    )
     app_config = {
         "environment": deployment_environment(),
         "supabaseUrl": env("TENNISNOTE_SUPABASE_URL"),
         "supabasePublishableKey": env("TENNISNOTE_SUPABASE_PUBLISHABLE_KEY"),
+        "projectFingerprint": project_fingerprint(env("TENNISNOTE_SUPABASE_URL")),
+        "singleSheetImportMode": single_sheet_import_mode,
+        "singleSheetImportReverseEnabled": single_sheet_import_reverse_enabled,
         "authProviderOverrides": {
             "kakao": "custom:kakao",
             "naver": "custom:naver",
