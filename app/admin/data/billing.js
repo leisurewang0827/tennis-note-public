@@ -396,3 +396,96 @@ async function loadAdminSettlementSupportData() {
   });
   return true;
 }
+
+async function readMonthlySettlementConfirmation(scope, expectedSourceFingerprint = "") {
+  return window.TennisNoteDataClient.rpc("tn_admin_monthly_settlement_scope_state", {
+    target_branch_id: scope.branchId,
+    target_coach_role_id: scope.coachRoleId,
+    target_month: scope.settlementMonth,
+    expected_source_fingerprint: expectedSourceFingerprint,
+  });
+}
+
+async function refreshMonthlySettlementConfirmation({ force = false } = {}) {
+  const current = monthlySettlementConfirmationState;
+  const scope = monthlySettlementScope();
+  const signature = monthlySettlementScopeSignature(scope);
+  if (!scope.branchId || !scope.coachRoleId || !scope.settlementMonth) {
+    current.status = "EMPTY";
+    current.tone = "neutral";
+    current.message = scope.branchId ? "코치를 선택해 주세요." : "현재 지점을 먼저 선택해 주세요.";
+    renderMonthlySettlementConfirmation();
+    return;
+  }
+  if (operationsRole() !== "admin" || !adminApprovalReady() || !window.TennisNoteDataClient?.rpc) {
+    current.status = "ERROR";
+    current.tone = "danger";
+    current.message = "관리자 로그인과 서버 연결을 확인해 주세요.";
+    current.errorCode = "settlement_confirmation_forbidden";
+    current.loadedSignature = signature;
+    renderMonthlySettlementConfirmation();
+    return;
+  }
+  if (!force && (current.loading || current.loadedSignature === signature)) return;
+
+  const requestId = ++current.requestId;
+  current.loading = true;
+  current.status = "LOADING";
+  current.tone = "neutral";
+  current.message = "정산 계산 결과를 불러오는 중입니다.";
+  current.errorCode = "";
+  renderMonthlySettlementConfirmation();
+  try {
+    const preview = await window.TennisNoteDataClient.rpc("tn_admin_preview_monthly_settlement_snapshot", {
+      target_branch_id: scope.branchId,
+      target_coach_role_id: scope.coachRoleId,
+      target_month: scope.settlementMonth,
+    });
+    if (requestId !== current.requestId || signature !== monthlySettlementScopeSignature()) return;
+    const scopeState = await readMonthlySettlementConfirmation(scope, preview?.sourceFingerprint || "");
+    if (requestId !== current.requestId || signature !== monthlySettlementScopeSignature()) return;
+    if (!monthlySettlementScopeMatches(preview, scope) || !monthlySettlementScopeMatches(scopeState, scope)) {
+      throw new Error("settlement_confirmation_scope_mismatch");
+    }
+    current.preview = preview;
+    current.scopeState = scopeState;
+    current.loadedSignature = signature;
+    const snapshot = monthlySettlementSnapshotFrom(scopeState);
+    if (String(scopeState?.state || "").toUpperCase() === "CONFIRMED" && snapshot && scopeState?.confirmation) {
+      if (String(snapshot.sourceFingerprint || "") !== String(preview.sourceFingerprint || "")) {
+        current.status = "STALE";
+        current.tone = "warn";
+        current.message = "확인 이후 원천 기록이 변경되었습니다. 기존 확인 기록은 보존되며 추가 확인은 차단됩니다.";
+        current.errorCode = "settlement_source_changed_after_confirmation";
+      } else {
+        current.status = "CONFIRMED";
+        current.tone = "good";
+        current.message = "이 월의 서버 계산본을 확인했습니다. 확인 당시 원천과 합계는 변경되지 않습니다.";
+      }
+    } else if (!monthlySettlementPreviewHasSources(preview)) {
+      current.status = "EMPTY";
+      current.tone = "neutral";
+      current.message = "선택한 월에는 확인할 정산 원천이 없습니다.";
+    } else if (snapshot && !monthlySettlementSnapshotMatchesPreview(snapshot, preview, scope)) {
+      current.status = "STALE";
+      current.tone = "warn";
+      current.message = "저장된 계산본 뒤에 원천 기록이 변경되었습니다. 최신 상태를 다시 계산해 확인해 주세요.";
+    } else {
+      current.status = "READY";
+      current.tone = "ready";
+      current.message = snapshot
+        ? "저장된 서버 계산본과 현재 원천이 일치합니다. 합계를 확인한 뒤 확정해 주세요."
+        : "서버 계산 결과입니다. 확인하면 이 원천과 합계가 불변 기록으로 남습니다.";
+      monthlySettlementEnsureOperationKeys(scope, preview);
+    }
+  } catch (error) {
+    if (requestId !== current.requestId) return;
+    Object.assign(current, monthlySettlementErrorContract(error));
+    current.loadedSignature = signature;
+  } finally {
+    if (requestId === current.requestId) {
+      current.loading = false;
+      renderMonthlySettlementConfirmation();
+    }
+  }
+}

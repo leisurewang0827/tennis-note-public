@@ -651,3 +651,115 @@ async function revokeBankNotificationDevice(deviceId = "") {
     return false;
   }
 }
+
+function resetMonthlySettlementConfirmation({ preserveCoach = true } = {}) {
+  const current = monthlySettlementConfirmationState;
+  current.requestId += 1;
+  current.loadedSignature = "";
+  current.keySignature = "";
+  current.snapshotOperationKey = "";
+  current.confirmationOperationKey = "";
+  current.loading = false;
+  current.submitting = false;
+  current.status = "EMPTY";
+  current.tone = "neutral";
+  current.message = preserveCoach && current.coachRoleId
+    ? "서버 계산 결과를 불러올 준비가 되었습니다."
+    : "코치를 선택하면 서버 계산 결과를 확인합니다.";
+  current.preview = null;
+  current.scopeState = null;
+  current.errorCode = "";
+  if (!preserveCoach) current.coachRoleId = "";
+}
+
+function monthlySettlementEnsureOperationKeys(scope, preview) {
+  const keySignature = `${monthlySettlementScopeSignature(scope)}:${preview?.sourceFingerprint || ""}`;
+  if (monthlySettlementConfirmationState.keySignature !== keySignature) {
+    monthlySettlementConfirmationState.keySignature = keySignature;
+    monthlySettlementConfirmationState.snapshotOperationKey = createAdminOperationKey("settlement-snapshot");
+    monthlySettlementConfirmationState.confirmationOperationKey = createAdminOperationKey("settlement-confirm");
+  }
+  return {
+    snapshot: monthlySettlementConfirmationState.snapshotOperationKey,
+    confirmation: monthlySettlementConfirmationState.confirmationOperationKey,
+  };
+}
+
+async function confirmMonthlySettlementSnapshot() {
+  const current = monthlySettlementConfirmationState;
+  if (current.submitting || current.loading || current.status !== "READY") return;
+  const scope = monthlySettlementScope();
+  const signature = monthlySettlementScopeSignature(scope);
+  const preview = current.preview;
+  if (!preview || !monthlySettlementScopeMatches(preview, scope) || !monthlySettlementPreviewHasSources(preview)) return;
+  const keys = monthlySettlementEnsureOperationKeys(scope, preview);
+  current.submitting = true;
+  current.message = "서버 계산본을 잠그고 현재 원천을 다시 확인하는 중입니다.";
+  renderMonthlySettlementConfirmation();
+
+  let expectedSnapshot = null;
+  try {
+    const savedSnapshot = monthlySettlementSnapshotFrom(current.scopeState);
+    expectedSnapshot = monthlySettlementSnapshotMatchesPreview(savedSnapshot, preview, scope)
+      ? savedSnapshot
+      : await window.TennisNoteDataClient.rpc("tn_admin_create_monthly_settlement_snapshot", {
+        target_branch_id: scope.branchId,
+        target_coach_role_id: scope.coachRoleId,
+        target_month: scope.settlementMonth,
+        target_operation_key: keys.snapshot,
+        expected_source_fingerprint: preview.sourceFingerprint,
+      });
+    if (!monthlySettlementSnapshotMatchesPreview(expectedSnapshot, preview, scope)) {
+      throw new Error("settlement_snapshot_readback_mismatch");
+    }
+
+    const confirmation = await window.TennisNoteDataClient.rpc("tn_admin_confirm_monthly_settlement_snapshot", {
+      target_snapshot_id: expectedSnapshot.snapshotId,
+      target_branch_id: scope.branchId,
+      target_coach_role_id: scope.coachRoleId,
+      target_month: scope.settlementMonth,
+      expected_snapshot_revision: Number(expectedSnapshot.revision),
+      expected_source_fingerprint: expectedSnapshot.sourceFingerprint,
+      target_operation_key: keys.confirmation,
+    });
+    if (!monthlySettlementConfirmedReadbackMatches(confirmation, expectedSnapshot, scope)) {
+      throw new Error("settlement_confirmation_response_mismatch");
+    }
+    const readback = await readMonthlySettlementConfirmation(scope, expectedSnapshot.sourceFingerprint);
+    if (!monthlySettlementConfirmedReadbackMatches(readback, expectedSnapshot, scope)) {
+      throw new Error("settlement_confirmation_readback_mismatch");
+    }
+    if (signature !== monthlySettlementScopeSignature()) return;
+    current.scopeState = readback;
+    current.loadedSignature = signature;
+    current.status = "CONFIRMED";
+    current.tone = "good";
+    current.message = "월 정산 확인이 완료됐습니다. 확인 당시 원천과 합계를 보존했습니다.";
+    current.errorCode = "";
+  } catch (error) {
+    if (signature !== monthlySettlementScopeSignature()) return;
+    let recovered = null;
+    try {
+      recovered = await readMonthlySettlementConfirmation(
+        scope,
+        expectedSnapshot?.sourceFingerprint || preview.sourceFingerprint,
+      );
+    } catch (_) {
+      recovered = null;
+    }
+    if (expectedSnapshot && recovered && monthlySettlementConfirmedReadbackMatches(recovered, expectedSnapshot, scope)) {
+      current.scopeState = recovered;
+      current.loadedSignature = signature;
+      current.status = "CONFIRMED";
+      current.tone = "good";
+      current.message = "응답이 끊겼지만 서버 확인 기록을 다시 읽어 완료 상태를 확인했습니다.";
+      current.errorCode = "";
+    } else {
+      Object.assign(current, monthlySettlementErrorContract(error));
+      current.loadedSignature = signature;
+    }
+  } finally {
+    current.submitting = false;
+    renderMonthlySettlementConfirmation();
+  }
+}

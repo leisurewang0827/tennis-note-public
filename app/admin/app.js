@@ -692,6 +692,23 @@ const adminLiveDataState = {
   substituteAssignments: [],
 };
 
+const monthlySettlementConfirmationState = {
+  coachRoleId: "",
+  loadedSignature: "",
+  keySignature: "",
+  snapshotOperationKey: "",
+  confirmationOperationKey: "",
+  requestId: 0,
+  loading: false,
+  submitting: false,
+  status: "EMPTY",
+  tone: "neutral",
+  message: "코치를 선택하면 서버 계산 결과를 확인합니다.",
+  preview: null,
+  scopeState: null,
+  errorCode: "",
+};
+
 // Read-only server rows projected for the current page lifetime only.
 let adminSingleSheetReadSnapshot = null;
 
