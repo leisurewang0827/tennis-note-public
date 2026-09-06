@@ -11,7 +11,7 @@ for (const file of modulePaths) assert(html.includes(file), `actual entry missin
 const app = modulePaths.map(file=>fs.readFileSync(path.join(coachRoot,file),"utf8")).join("\n");
 const css = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map(m=>fs.readFileSync(path.resolve(coachRoot,m[1].split('?')[0]),"utf8")).join("\n");
 const modalHtml = html.slice(html.indexOf('    <section id="lessonEditModal"'),html.indexOf('    <section id="memberDetailModal"')).replace(' hidden>','>');
-assert(modalHtml.includes('class="modal-card"'),"actual scroll container required");
+assert(/class="modal-card(?:\s|\")/.test(modalHtml),"actual scroll container required");
 function source(name) {
   const match = new RegExp(`(?:async )?function ${name}\\(`).exec(app);
   assert(match, `${name} missing`);

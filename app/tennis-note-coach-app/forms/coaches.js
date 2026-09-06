@@ -120,13 +120,15 @@ async function installNativeCoachBackNavigation() {
   if (!appPlugin?.addListener) return;
   nativeCoachBackListenerReady = true;
   await appPlugin.addListener("backButton", async () => {
+    if (pendingCoachModalHistoryCloseId) return;
     if (blurActiveCoachFormControl()) return;
     if (!$("#noticeDialog")?.hidden) {
       closeNotice(false);
       return;
     }
     if (activeCoachModalId) {
-      closeCoachModal(activeCoachModalId);
+      if (activeCoachModalId === "lessonEditModal") requestCloseLessonEditor();
+      else closeCoachModal(activeCoachModalId);
       return;
     }
     const activeView = $(".view.is-active")?.id || "todayView";

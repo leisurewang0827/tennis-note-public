@@ -193,7 +193,7 @@ function openLessonEditor(id) {
   });
 }
 
-function closeLessonEditor() {
+function closeLessonEditor(fromHistory = false) {
   const lesson = state.editingLessonId ? ensureCoachLessonRecord(state.editingLessonId) : null;
   if (lesson) delete lesson.scheduleEditDraft;
   state.editingLessonId = null;
@@ -201,7 +201,18 @@ function closeLessonEditor() {
   state.editingMakeupId = null;
   state.writingLessonId = null;
   state.viewingCurriculumId = null;
-  closeCoachModal("lessonEditModal");
+  closeCoachModal("lessonEditModal", fromHistory);
+}
+
+function requestCloseLessonEditor() {
+  const modal = $("#lessonEditModal");
+  if (!modal || modal.hidden) return false;
+  const closeTrigger = $("#lessonEditModal .lesson-completion-actions [data-cancel-schedule-edit]")
+    || $("#lessonEditModal .lesson-detail-sheet-close")
+    || $("#lessonEditModal [data-close-lesson-modal]");
+  if (!closeTrigger?.isConnected) return false;
+  closeTrigger.click();
+  return true;
 }
 
 function openCoachQuickAdd(button) {
