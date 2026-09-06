@@ -21,12 +21,31 @@ function bindBillingEvents() {
   $("#onsitePaymentMethod")?.addEventListener("change", updateOnsitePaymentAmount);
   $("#onsitePaymentForm")?.addEventListener("submit", submitOnsitePayment);
   $("#billingMonthFilter")?.addEventListener("change", (event) => {
+    if (monthlySettlementConfirmationState.submitting) {
+      event.target.value = state.billingMonth;
+      showToast("정산 확인이 끝난 뒤 월을 변경해 주세요.");
+      return;
+    }
     state.billingMonth = event.target.value || adminLocalDateKey(new Date()).slice(0, 7);
     state.billingPage = 0;
     state.settlementPage = 0;
+    resetMonthlySettlementConfirmation({ preserveCoach: true });
     renderBilling();
     renderCoachSettlementPreview();
     saveSnapshot();
+  });
+  $("#monthlySettlementCoachRole")?.addEventListener("change", (event) => {
+    monthlySettlementConfirmationState.coachRoleId = event.target.value || "";
+    resetMonthlySettlementConfirmation({ preserveCoach: true });
+    renderMonthlySettlementConfirmation();
+  });
+  $("#monthlySettlementRetry")?.addEventListener("click", () => {
+    if (monthlySettlementConfirmationState.loading || monthlySettlementConfirmationState.submitting) return;
+    monthlySettlementConfirmationState.loadedSignature = "";
+    void refreshMonthlySettlementConfirmation({ force: true });
+  });
+  $("#monthlySettlementPrimaryAction")?.addEventListener("click", () => {
+    void confirmMonthlySettlementSnapshot();
   });
   $("#refundForm")?.addEventListener("submit", (event) => {
     event.preventDefault();

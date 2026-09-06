@@ -4,6 +4,111 @@
 // renderAll() 도 그대로 이 함수들을 부른다.
 // DOM 을 만지므로 domain/ 과 달리 단위 테스트 대상은 아니다.
 
+function renderMonthlySettlementConfirmation() {
+  const section = $("#monthlySettlementConfirmation");
+  if (!section) return;
+  const current = monthlySettlementConfirmationState;
+  const eligibleCoaches = monthlySettlementEligibleCoaches();
+  const eligibleIds = new Set(eligibleCoaches.map((coach) => String(coach.serverRoleId)));
+  if (current.coachRoleId && !eligibleIds.has(String(current.coachRoleId))) {
+    resetMonthlySettlementConfirmation({ preserveCoach: false });
+  }
+  if (!current.coachRoleId && eligibleCoaches.length === 1) {
+    current.coachRoleId = String(eligibleCoaches[0].serverRoleId);
+  }
+
+  const scope = monthlySettlementScope();
+  const signature = monthlySettlementScopeSignature(scope);
+  const coachSelect = $("#monthlySettlementCoachRole");
+  if (coachSelect) {
+    coachSelect.innerHTML = [
+      '<option value="">코치를 선택해 주세요</option>',
+      ...eligibleCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name || "코치")}</option>`),
+    ].join("");
+    coachSelect.value = current.coachRoleId;
+    coachSelect.disabled = current.loading || current.submitting;
+  }
+  const branchLabel = $("#monthlySettlementBranchLabel");
+  if (branchLabel) branchLabel.textContent = scope.branchId ? activeOperationBranchName() : "지점을 먼저 선택해 주세요";
+
+  section.dataset.state = current.status;
+  section.setAttribute("aria-busy", String(current.loading || current.submitting));
+  const status = $("#monthlySettlementState");
+  if (status) {
+    status.dataset.tone = current.tone;
+    status.textContent = current.message;
+  }
+  const badgeTarget = $("#monthlySettlementStateBadge");
+  if (badgeTarget) {
+    const badgeTone = current.status === "CONFIRMED"
+      ? "good"
+      : ["STALE", "CONFLICT"].includes(current.status) ? "warn" : current.status === "ERROR" ? "danger" : "neutral";
+    badgeTarget.className = `badge ${badgeTone}`;
+    badgeTarget.textContent = monthlySettlementStateLabel();
+  }
+
+  const loadedScopeIsCurrent = current.loadedSignature === signature;
+  const snapshot = loadedScopeIsCurrent ? monthlySettlementSnapshotFrom(current.scopeState) : null;
+  const aggregate = loadedScopeIsCurrent
+    ? (current.scopeState?.confirmation && snapshot ? snapshot : current.preview)
+    : null;
+  const totals = aggregate?.totals || {};
+  const summary = $("#monthlySettlementSummary");
+  if (summary) {
+    summary.innerHTML = aggregate ? `
+      <article><span>정산 월</span><strong>${escapeHtml(billingMonthLabel(state.billingMonth))}</strong><small>현재 지점 · 선택 코치</small></article>
+      <article><span>계산 원천</span><strong>${Math.max(0, Number(totals.paymentCount || 0))}건</strong><small>회원권 ${Math.max(0, Number(totals.ticketCount || 0))}개 · 수업 ${Math.max(0, Number(totals.lessonCount || 0))}개</small></article>
+      <article><span>${current.status === "CONFIRMED" ? "확인 정산액" : "예상 정산액"}</span><strong>${money.format(Math.max(0, Number(totals.totalSettlementAmount || 0)))}원</strong><small>${Math.max(0, Number(totals.settledSessions || 0))}회 · ${Math.max(0, Number(totals.settledMinutes || 0))}분</small></article>
+    ` : "";
+  }
+
+  const details = $("#monthlySettlementDetails");
+  const evidence = $("#monthlySettlementEvidence");
+  if (details) details.hidden = !aggregate;
+  if (evidence) {
+    const fingerprint = String(aggregate?.sourceFingerprint || "");
+    evidence.innerHTML = aggregate ? `
+      <dl>
+        <dt>계산 버전</dt><dd>${escapeHtml(aggregate.calculationVersion || "서버 계산")}</dd>
+        <dt>계산본</dt><dd>${snapshot?.revision ? `${Number(snapshot.revision)}차` : "확인 전 미리보기"}</dd>
+        <dt>원천 검증</dt><dd>${fingerprint ? `${escapeHtml(fingerprint.slice(0, 8))}…` : "확인 중"}</dd>
+        <dt>상태</dt><dd>${escapeHtml(monthlySettlementStateLabel())}</dd>
+      </dl>
+    ` : "";
+  }
+
+  const retry = $("#monthlySettlementRetry");
+  if (retry) {
+    retry.hidden = !["STALE", "CONFLICT", "ERROR"].includes(current.status);
+    retry.disabled = current.loading || current.submitting;
+  }
+  const primary = $("#monthlySettlementPrimaryAction");
+  if (primary) {
+    primary.textContent = current.submitting
+      ? "확인 처리 중"
+      : current.status === "CONFIRMED" ? "확인 완료" : "정산 확인";
+    primary.disabled = current.status !== "READY"
+      || !loadedScopeIsCurrent
+      || current.loading
+      || current.submitting
+      || operationsRole() !== "admin"
+      || !adminApprovalReady();
+  }
+  const monthFilter = $("#billingMonthFilter");
+  if (monthFilter) monthFilter.disabled = current.submitting;
+
+  if (
+    scope.branchId
+    && scope.coachRoleId
+    && scope.settlementMonth
+    && current.loadedSignature !== signature
+    && !current.loading
+    && !current.submitting
+  ) {
+    void refreshMonthlySettlementConfirmation();
+  }
+}
+
 function renderCoachSettlementPreview() {
   if (!["billing", "settings"].includes(state.view)) return;
   const previewRows = $("#coachSettlementPreviewRows");
@@ -106,7 +211,7 @@ function renderCoachSettlementPreview() {
       billingPageSize,
     );
   }
-
+  renderMonthlySettlementConfirmation();
 }
 
 function renderPaymentAdminGateStatus() {

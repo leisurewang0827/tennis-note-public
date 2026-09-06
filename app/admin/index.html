@@ -963,6 +963,37 @@
                 <h2>코치 정산 미리보기</h2>
                 <span class="source-pill">실결제 기준 · 카드 결제는 현금가 정산</span>
               </div>
+              <section id="monthlySettlementConfirmation" class="monthly-settlement-confirmation" aria-labelledby="monthlySettlementConfirmationTitle">
+                <div class="monthly-settlement-confirmation-heading">
+                  <div>
+                    <h3 id="monthlySettlementConfirmationTitle">월 정산 확인</h3>
+                    <p>서버 계산본의 원천과 합계를 확인한 뒤 현재 월을 한 번만 확인합니다.</p>
+                  </div>
+                  <span id="monthlySettlementStateBadge" class="badge neutral">선택 필요</span>
+                </div>
+                <div class="monthly-settlement-confirmation-controls">
+                  <label>
+                    <span>현재 지점</span>
+                    <output id="monthlySettlementBranchLabel">지점 확인 중</output>
+                  </label>
+                  <label for="monthlySettlementCoachRole">
+                    <span>코치</span>
+                    <select id="monthlySettlementCoachRole">
+                      <option value="">코치를 선택해 주세요</option>
+                    </select>
+                  </label>
+                </div>
+                <div id="monthlySettlementState" class="monthly-settlement-state" role="status" aria-live="polite"></div>
+                <div id="monthlySettlementSummary" class="monthly-settlement-server-summary"></div>
+                <details id="monthlySettlementDetails" class="monthly-settlement-evidence" hidden>
+                  <summary>계산 근거 보기</summary>
+                  <div id="monthlySettlementEvidence"></div>
+                </details>
+                <div class="monthly-settlement-confirmation-actions">
+                  <button id="monthlySettlementRetry" class="ghost-button" type="button" hidden>다시 불러오기</button>
+                  <button id="monthlySettlementPrimaryAction" class="primary-button" type="button" disabled>정산 확인</button>
+                </div>
+              </section>
               <div id="coachSettlementSummary" class="coach-settlement-summary" aria-live="polite"></div>
               <table>
                 <thead>
@@ -972,7 +1003,7 @@
                     <th>실결제</th>
                     <th>정산 기준</th>
                     <th>방식</th>
-                    <th>최종 정산</th>
+                    <th>예상 정산</th>
                   </tr>
                 </thead>
                 <tbody id="coachSettlementPreviewRows"></tbody>

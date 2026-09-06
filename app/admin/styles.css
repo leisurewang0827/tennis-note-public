@@ -692,6 +692,162 @@ h2 {
   font-weight: 800;
 }
 
+.monthly-settlement-confirmation {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.monthly-settlement-confirmation-heading,
+.monthly-settlement-confirmation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.monthly-settlement-confirmation-heading h3,
+.monthly-settlement-confirmation-heading p {
+  margin: 0;
+}
+
+.monthly-settlement-confirmation-heading p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.monthly-settlement-confirmation-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 1fr);
+  gap: 12px;
+}
+
+.monthly-settlement-confirmation-controls label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.monthly-settlement-confirmation-controls output,
+.monthly-settlement-confirmation-controls select {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.monthly-settlement-state {
+  min-height: 22px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.monthly-settlement-state[data-tone="danger"] {
+  color: var(--red);
+}
+
+.monthly-settlement-state[data-tone="warn"] {
+  color: var(--amber);
+}
+
+.monthly-settlement-server-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.monthly-settlement-server-summary article {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.monthly-settlement-server-summary span,
+.monthly-settlement-server-summary small,
+.monthly-settlement-evidence {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.monthly-settlement-server-summary strong {
+  overflow-wrap: anywhere;
+  font-size: 17px;
+}
+
+.monthly-settlement-evidence summary {
+  min-height: 44px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.monthly-settlement-evidence dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.monthly-settlement-evidence dt,
+.monthly-settlement-evidence dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.monthly-settlement-confirmation-actions {
+  justify-content: flex-end;
+}
+
+.monthly-settlement-confirmation-actions button {
+  min-height: 44px;
+}
+
+.monthly-settlement-confirmation-actions .primary-button:disabled {
+  cursor: default;
+  color: var(--muted);
+  background: var(--line);
+}
+
+@media (max-width: 620px) {
+  .monthly-settlement-confirmation-heading,
+  .monthly-settlement-confirmation-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .monthly-settlement-confirmation-controls,
+  .monthly-settlement-server-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .monthly-settlement-confirmation-actions button {
+    width: 100%;
+  }
+}
+
 .coach-settlement-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
