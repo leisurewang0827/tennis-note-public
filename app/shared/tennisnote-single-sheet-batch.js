@@ -19,7 +19,8 @@
     && transport?.protocol === "local-synthetic/1" && transport.scope?.environment === "local";
   const hostedTransport = (host, transport) => transport?.protocol === "scoped-postgrest-import/2"
     && transport.host === host && ["development", "production"].includes(transport.scope?.environment)
-    && transport.canApply === true && transport.canReverse === true && typeof transport.reverse === "function"
+    && transport.canApply === true && typeof transport.apply === "function"
+    && (transport.canReverse === false || (transport.canReverse === true && typeof transport.reverse === "function"))
     && typeof transport.isReady === "function" && transport.isReady() === true;
   function allowed(host, transport) {
     return (localTransport(host, transport) || hostedTransport(host, transport)) &&

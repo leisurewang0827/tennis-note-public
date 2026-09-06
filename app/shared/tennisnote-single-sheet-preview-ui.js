@@ -148,7 +148,7 @@
       results.replaceChildren(); input.disabled = v.busy; retry.hidden = !v.expired || v.busy;
       clearTimeout(expires);
       if (!v.busy && Date.parse(v.expiresAt) > Date.now()) expires = setTimeout(() => { if (batch && !backdrop.hidden) renderBatch(batch.view()); }, Date.parse(v.expiresAt) - Date.now() + 1);
-      boundary.textContent = "서버가 회원·회원권·시간표를 한 단위로 처리합니다. 결제는 만들지 않으며 원복은 같은 관리자와 허용 범위에서만 가능합니다.";
+      boundary.textContent = "서버가 회원·회원권·시간표를 한 단위로 처리합니다. 결제는 만들지 않으며 원복은 별도 승인된 절차에서만 가능합니다.";
       status.textContent = v.message ? safeBatchText(v.message) : ({ previewing: "서버 판정을 확인하고 있습니다…", ready: "미리보기 완료 · 안전 단위를 한 번 확인하고 등록합니다.", applying: "등록 처리 중 · 이미 완료된 항목은 유지됩니다.", reversing: "원복 처리 중 · 서버 이력을 다시 확인합니다.", paused: "전송 중단 · 처리 이력을 먼저 다시 확인해 주세요.", done: "등록 결과 재조회 완료", reversed: "원복 결과 재조회 완료", blocked: "서버 확인이 필요합니다." }[v.phase] || "파일을 선택해 주세요.");
       if (confirming === "apply") status.textContent = "확인: 안전 항목만 등록하며 보류 항목은 건너뜁니다. 결제는 생성하지 않습니다.";
       if (confirming === "reverse") status.textContent = "확인: 이 파일로 방금 등록한 단위만 원복합니다. 후속 사용 이력이 있으면 서버가 중단합니다.";
@@ -250,7 +250,7 @@
           ? previewTransport.reason || "SHEET_IMPORT_SCOPE_DISABLED"
           : "";
         const remoteEnabled = remote && !remoteDisabledReason;
-        const executable = remoteEnabled && previewTransport.canApply === true && previewTransport.canReverse === true
+        const executable = remoteEnabled && previewTransport.canApply === true
           && root.TennisNoteSingleSheetBatch?.allowed(location.hostname, previewTransport);
         const snapshot = local || remote ? null : await options.getSnapshot();
         if (id !== generation || backdrop.hidden) return;

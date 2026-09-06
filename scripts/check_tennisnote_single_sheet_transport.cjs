@@ -10,6 +10,8 @@ const snapshotApi = require("../app/shared/tennisnote-single-sheet-snapshot.js")
 const ROOT = path.resolve(__dirname, "..");
 const TRANSPORT = fs.readFileSync(path.join(ROOT, "app/shared/tennisnote-single-sheet-transport.js"), "utf8");
 const DATA_CLIENT = fs.readFileSync(path.join(ROOT, "app/shared/tennisnote-data-client.js"), "utf8");
+const PRODUCTION_DEPLOY = fs.readFileSync(path.join(ROOT, ".github/workflows/deploy-cloudflare-pages.yml"), "utf8");
+const PUBLIC_CI = fs.readFileSync(path.join(ROOT, ".github/workflows/tennisnote-public-ci.yml"), "utf8");
 const REF = "syntheticprojectref";
 const URL_VALUE = `https://${REF}.supabase.co`;
 const FINGERPRINT = createHash("sha256").update(REF).digest("hex");
@@ -56,6 +58,11 @@ function loadDataClient(fetchImpl, immediateTimeout = false) {
 }
 
 async function main() {
+  check(/TENNISNOTE_SINGLE_SHEET_IMPORT_MODE:\s*apply/.test(PRODUCTION_DEPLOY)
+    && /TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED:\s*"false"/.test(PRODUCTION_DEPLOY)
+    && /python scripts\/check_cloudflare_build\.py/.test(PRODUCTION_DEPLOY), "PRODUCTION_APPLY_REVERSE_OFF_GUARDED");
+  check(PUBLIC_CI.includes('"scripts/check_cloudflare_build.py"')
+    && PUBLIC_CI.includes('".github/workflows/deploy-cloudflare-pages.yml"'), "PRODUCTION_CONFIG_PATHS_TRIGGER_CI");
   const api = loadTransport();
   let config = { supabaseUrl: URL_VALUE, environment: "development", projectFingerprint: FINGERPRINT, singleSheetImportMode: "preview" };
   let branch = BRANCH, allowed = true, session = { access_token: token() }, calls = [];
@@ -140,6 +147,13 @@ async function main() {
   config = { supabaseUrl: URL_VALUE, environment: "production", projectFingerprint: FINGERPRINT, singleSheetImportMode: "preview", singleSheetImportReverseEnabled: false };
   const productionPreview = await productionApi.create({ client, getBranchId: () => BRANCH, canOpen: () => true });
   check(productionPreview.enabled && !productionPreview.canApply, "EXACT_PRODUCTION_ORIGIN_PREVIEW");
+  config = { ...config, singleSheetImportMode: "apply" };
+  calls = [];
+  const productionApply = await productionApi.create({ client, getBranchId: () => BRANCH, canOpen: () => true });
+  check(productionApply.enabled && productionApply.canApply && !productionApply.canReverse
+    && typeof productionApply.apply === "function" && typeof productionApply.reverse === "undefined", "EXACT_PRODUCTION_ORIGIN_APPLY_ONLY");
+  await productionApply.apply(productionApply.scope, UNIT, "a".repeat(64), "b".repeat(64), expiresAt, "c".repeat(64), "e".repeat(64));
+  check(calls.length === 1 && calls[0][0] === "tn_apply_single_sheet_import_unit", "PRODUCTION_APPLY_ONLY_RPC_ONCE");
 
   // A receipt applied before this in-memory confirmation is read-only history.
   // Only the READY unit applied by this batch instance may be reversed.
@@ -187,6 +201,17 @@ async function main() {
   await batch.reverse();
   check(reversedOperations.length === 1 && reversedOperations[0] === operationKeys[1], "ONLY_CURRENT_BATCH_UNIT_REVERSED");
   check(batch.view().applied === 1 && batch.view().reversed === 1 && batch.view().canReverse === false, "HISTORICAL_APPLIED_PRESERVED");
+  states[1] = "READY"; appliedOperations.length = 0; reversedOperations.length = 0;
+  const applyOnlyTransport = { ...batchTransport, canReverse: false };
+  delete applyOnlyTransport.reverse;
+  const applyOnlyBatch = batchApi.create({ host: applyOnlyTransport.host, transport: applyOnlyTransport, adapter: snapshotApi, canOpen: () => true });
+  await applyOnlyBatch.load({ protocol: applyOnlyTransport.protocol, fileHash: "9".repeat(64), held: [], units: sourceUnits.map((unit, index) => ({
+    unit, rowNumbers: [index + 2], operationKey: operationKeys[index],
+  })) });
+  await applyOnlyBatch.confirm();
+  check(appliedOperations.length === 1 && appliedOperations[0] === operationKeys[1]
+    && applyOnlyBatch.view().applied === 2 && applyOnlyBatch.view().canReverse === false, "APPLY_ONLY_BATCH_EXACTLY_ONCE");
+  check(await applyOnlyBatch.reverse() === false && reversedOperations.length === 0, "APPLY_ONLY_BATCH_REVERSE_ZERO");
   process.stdout.write(`Single sheet scoped transport: ${assertions} assertions PASS\n`);
 }
 
