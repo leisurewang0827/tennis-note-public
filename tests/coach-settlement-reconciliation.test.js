@@ -7,6 +7,7 @@ import vm from "node:vm";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (file) => readFileSync(join(root, file), "utf8");
+const releaseVersion = JSON.parse(source("app/release.json")).version;
 const scope = {
   branchId: "fixture-branch",
   coachRoleId: "fixture-coach-role",
@@ -251,8 +252,8 @@ test("public modular path는 read/respond/read-back, draft privacy, 단일 CTA�
   assert.match(app, /coachSettlementReconciliationRequestId:\s*0/);
   assert.equal((html.match(/id="coachSettlementReconciliation"/g) || []).length, 1);
   assert.equal((html.match(/id="coachSettlementReconciliationSubmit"/g) || []).length, 1);
-  assert.match(html, /actions\/settlement\.js\?v=1\.0\.478/);
-  assert.match(worker, /actions\/settlement\.js\?v=1\.0\.478/);
+  assert.ok(html.includes(`actions/settlement.js?v=${releaseVersion}`));
+  assert.ok(worker.includes(`actions/settlement.js?v=${releaseVersion}`));
   assert.match(css, /#coachSettlementReconciliationSubmit[\s\S]*min-height:\s*44px/);
   assert.match(css, /coach-settlement-reconciliation-reason textarea[\s\S]*font-size:\s*16px/);
   const reconciliationSection = html.match(/id="coachSettlementReconciliation"[\s\S]*?<\/section>/)?.[0] || "";
