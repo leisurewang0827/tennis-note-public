@@ -427,6 +427,226 @@ a {
   line-height: 1.55;
 }
 
+.coach-settlement-reconciliation {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid #cfded8;
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--paper);
+}
+
+.coach-settlement-reconciliation[data-state="PENDING"] {
+  border-color: #96cdb9;
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.coach-settlement-reconciliation[data-state="ACKNOWLEDGED"] {
+  border-color: #96cdb9;
+  background: var(--soft-green);
+}
+
+.coach-settlement-reconciliation[data-state="DISPUTED"],
+.coach-settlement-reconciliation[data-state="STALE"],
+.coach-settlement-reconciliation[data-state="CONFLICT"] {
+  border-color: #edc77c;
+  background: var(--soft-amber);
+}
+
+.coach-settlement-reconciliation[data-state="ERROR"] {
+  border-color: #efb0aa;
+  background: var(--soft-red);
+}
+
+.coach-settlement-reconciliation-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.coach-settlement-reconciliation-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.coach-settlement-reconciliation-head strong,
+.coach-settlement-reconciliation-head small,
+.coach-settlement-reconciliation-message,
+.coach-settlement-reconciliation-summary,
+.coach-settlement-reconciliation-form {
+  overflow-wrap: anywhere;
+}
+
+.coach-settlement-reconciliation-head small,
+.coach-settlement-reconciliation-message,
+.coach-settlement-reconciliation-form small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.coach-settlement-reconciliation-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--muted);
+  background: var(--wash);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.coach-settlement-reconciliation[data-state="PENDING"] .coach-settlement-reconciliation-badge,
+.coach-settlement-reconciliation[data-state="ACKNOWLEDGED"] .coach-settlement-reconciliation-badge {
+  color: #075b45;
+  background: var(--soft-green);
+}
+
+.coach-settlement-reconciliation[data-state="DISPUTED"] .coach-settlement-reconciliation-badge,
+.coach-settlement-reconciliation[data-state="STALE"] .coach-settlement-reconciliation-badge,
+.coach-settlement-reconciliation[data-state="CONFLICT"] .coach-settlement-reconciliation-badge {
+  color: var(--amber);
+  background: #fff4d8;
+}
+
+.coach-settlement-reconciliation[data-state="ERROR"] .coach-settlement-reconciliation-badge {
+  color: var(--red);
+  background: var(--soft-red);
+}
+
+.coach-settlement-reconciliation-message {
+  margin: 0;
+}
+
+.coach-settlement-reconciliation-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.coach-settlement-reconciliation-summary > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border-radius: 9px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--paper) 90%, var(--soft-green));
+}
+
+.coach-settlement-reconciliation-summary span,
+.coach-settlement-reconciliation-summary small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.coach-settlement-reconciliation-summary strong {
+  color: #075b45;
+  font-size: 16px;
+}
+
+.coach-settlement-reconciliation-form {
+  display: grid;
+  gap: 12px;
+}
+
+.coach-settlement-reconciliation-form fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.coach-settlement-reconciliation-form legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.coach-settlement-reconciliation-form fieldset label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.coach-settlement-reconciliation-form fieldset label:has(input:checked) {
+  border-color: var(--green);
+  background: var(--soft-green);
+}
+
+.coach-settlement-reconciliation-form input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--green);
+}
+
+.coach-settlement-reconciliation-form fieldset span,
+.coach-settlement-reconciliation-reason {
+  display: grid;
+  gap: 3px;
+}
+
+.coach-settlement-reconciliation-reason textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 11px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.coach-settlement-reconciliation-validation {
+  margin: 0;
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.coach-settlement-reconciliation-submit,
+#coachSettlementReconciliationSubmit,
+.coach-settlement-reconciliation-retry {
+  min-height: 44px;
+}
+
+#coachSettlementReconciliationSubmit {
+  width: 100%;
+}
+
+#coachSettlementReconciliationSubmit:disabled {
+  border-color: var(--line);
+  color: var(--muted);
+  background: var(--wash);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.coach-settlement-reconciliation-retry {
+  justify-self: end;
+}
+
 .coach-settlement-details {
   border-top: 1px solid #dbe9e4;
   padding-top: 12px;
@@ -5784,6 +6004,11 @@ body.modal-open {
 
   .coach-settlement-summary article small {
     grid-column: 1 / -1;
+  }
+
+  .coach-settlement-reconciliation-summary,
+  .coach-settlement-reconciliation-form fieldset {
+    grid-template-columns: 1fr;
   }
 
   .coach-settlement-rows article {

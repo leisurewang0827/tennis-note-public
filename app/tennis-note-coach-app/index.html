@@ -8,8 +8,8 @@
     <title>테니스노트 코치 모드</title>
     <link rel="icon" href="../tennis-note-member-app/assets/brand/app-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
-    <link rel="stylesheet" href="./styles.css?v=1.0.478" />
-    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.478" />
+    <link rel="stylesheet" href="./styles.css?v=1.0.479" />
+    <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.479" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
   </head>
   <body>
@@ -332,6 +332,38 @@
             </article>
           </div>
           <p class="coach-settlement-note">카드 결제는 설정된 정산 기준을 적용하며, 환불·대타·시급 이관을 반영한 예상 금액입니다. 최종 확정은 관리자 정산을 기준으로 합니다.</p>
+          <section id="coachSettlementReconciliation" class="coach-settlement-reconciliation" data-state="EMPTY" aria-labelledby="coachSettlementReconciliationTitle" aria-busy="false">
+            <div class="coach-settlement-reconciliation-head">
+              <div>
+                <strong id="coachSettlementReconciliationTitle">관리자 확정 정산</strong>
+                <small>확정된 계산본만 확인하거나 이의를 남길 수 있습니다.</small>
+              </div>
+              <span id="coachSettlementReconciliationStateBadge" class="coach-settlement-reconciliation-badge">확정 대기</span>
+            </div>
+            <p id="coachSettlementReconciliationMessage" class="coach-settlement-reconciliation-message" role="status" aria-live="polite">관리자가 확정한 월 정산을 확인하고 있습니다.</p>
+            <div id="coachSettlementReconciliationSummary" class="coach-settlement-reconciliation-summary" hidden></div>
+            <form id="coachSettlementReconciliationForm" class="coach-settlement-reconciliation-form" hidden novalidate>
+              <fieldset>
+                <legend>확정 정산 응답</legend>
+                <label>
+                  <input type="radio" name="coachSettlementReconciliationChoice" value="acknowledged" />
+                  <span><strong>확인했습니다</strong><small>표시된 월·횟수·정산액을 확인했습니다.</small></span>
+                </label>
+                <label>
+                  <input type="radio" name="coachSettlementReconciliationChoice" value="disputed" />
+                  <span><strong>이의가 있습니다</strong><small>관리자가 확인할 짧은 사유를 남깁니다.</small></span>
+                </label>
+              </fieldset>
+              <label id="coachSettlementReconciliationReasonField" class="coach-settlement-reconciliation-reason" hidden>
+                <span>이의 사유 <small>2~240자</small></span>
+                <textarea id="coachSettlementReconciliationReason" rows="3" minlength="2" maxlength="240" placeholder="확인이 필요한 항목만 간단히 적어 주세요."></textarea>
+                <small>이름·전화번호 등 개인정보는 적지 마세요.</small>
+              </label>
+              <p id="coachSettlementReconciliationValidation" class="coach-settlement-reconciliation-validation" role="alert" hidden></p>
+              <button id="coachSettlementReconciliationSubmit" class="primary-button" type="submit" disabled>응답 저장</button>
+            </form>
+            <button id="coachSettlementReconciliationRetry" class="small-button coach-settlement-reconciliation-retry" type="button" hidden>다시 확인</button>
+          </section>
           <details class="coach-settlement-details">
             <summary>회원별 내역 보기</summary>
             <div id="coachSettlementRows" class="coach-settlement-rows"></div>
@@ -360,64 +392,65 @@
     </section>
 
     <script defer src="../shared/config.local.js?v=local"></script>
-    <script defer src="../shared/tennisnote-runtime-environment.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-escape-html.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-data-client.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.478"></script>
+    <script defer src="../shared/tennisnote-runtime-environment.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-escape-html.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-data-client.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.479"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>
     <script defer src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
-    <script defer src="../shared/tennisnote-curriculum-search.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-release.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.478"></script>
-    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.478"></script>
+    <script defer src="../shared/tennisnote-curriculum-search.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-release.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-release-updater.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-ui-language.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-ticket-state.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-mode-transition.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-comment-draft.js?v=1.0.479"></script>
+    <script defer src="../shared/tennisnote-input-guard.js?v=1.0.479"></script>
     <script defer src="../shared/tennisnote-issue-reporter.js?v=issue-reporter-4"></script>
-    <script defer src="../shared/tennisnote-app-common.js?v=1.0.478"></script>
-    <script defer src="./settings.js?v=1.0.478"></script>
-    <script defer src="./catalog.js?v=1.0.478"></script>
-    <script defer src="./domain/values.js?v=1.0.478"></script>
-    <script defer src="./domain/schedule.js?v=1.0.478"></script>
-    <script defer src="./domain/policy.js?v=1.0.478"></script>
-    <script defer src="./domain/coaches.js?v=1.0.478"></script>
-    <script defer src="./domain/lessons.js?v=1.0.478"></script>
-    <script defer src="./domain/records.js?v=1.0.478"></script>
-    <script defer src="./domain/members.js?v=1.0.478"></script>
-    <script defer src="./domain/schedule-v2.js?v=1.0.478"></script>
-    <script defer src="./domain/notices.js?v=1.0.478"></script>
-    <script defer src="./domain/curriculum.js?v=1.0.478"></script>
-    <script defer src="./domain/settlement.js?v=1.0.478"></script>
-    <script defer src="./domain/makeup.js?v=1.0.478"></script>
-    <script defer src="./domain/shared-data.js?v=1.0.478"></script>
-    <script defer src="./domain/tasks.js?v=1.0.478"></script>
-    <script defer src="./views/home.js?v=1.0.478"></script>
-    <script defer src="./views/schedule.js?v=1.0.478"></script>
-    <script defer src="./views/members.js?v=1.0.478"></script>
-    <script defer src="./views/records.js?v=1.0.478"></script>
-    <script defer src="./views/curriculum.js?v=1.0.478"></script>
-    <script defer src="./views/settlement.js?v=1.0.478"></script>
-    <script defer src="./views/profile.js?v=1.0.478"></script>
-    <script defer src="./events/account.js?v=1.0.478"></script>
-    <script defer src="./events/delegated.js?v=1.0.478"></script>
-    <script defer src="./domain/common.js?v=1.0.478"></script>
-    <script defer src="./views/common.js?v=1.0.478"></script>
-    <script defer src="./forms/coaches.js?v=1.0.478"></script>
-    <script defer src="./forms/common.js?v=1.0.478"></script>
-    <script defer src="./ui/common.js?v=1.0.478"></script>
-    <script defer src="./data/auth.js?v=1.0.478"></script>
-    <script defer src="./data/sync.js?v=1.0.478"></script>
-    <script defer src="./data/push.js?v=1.0.478"></script>
-    <script defer src="./data/records.js?v=1.0.478"></script>
-    <script defer src="./ui/sheet.js?v=1.0.478"></script>
-    <script defer src="./ui/screens.js?v=1.0.478"></script>
-    <script defer src="./actions/records.js?v=1.0.478"></script>
-    <script defer src="./actions/schedule.js?v=1.0.478"></script>
-    <script defer src="./actions/profile.js?v=1.0.478"></script>
-    <script defer src="./actions/session.js?v=1.0.478"></script>
-    <script defer src="./storage.js?v=1.0.478"></script>
+    <script defer src="../shared/tennisnote-app-common.js?v=1.0.479"></script>
+    <script defer src="./settings.js?v=1.0.479"></script>
+    <script defer src="./catalog.js?v=1.0.479"></script>
+    <script defer src="./domain/values.js?v=1.0.479"></script>
+    <script defer src="./domain/schedule.js?v=1.0.479"></script>
+    <script defer src="./domain/policy.js?v=1.0.479"></script>
+    <script defer src="./domain/coaches.js?v=1.0.479"></script>
+    <script defer src="./domain/lessons.js?v=1.0.479"></script>
+    <script defer src="./domain/records.js?v=1.0.479"></script>
+    <script defer src="./domain/members.js?v=1.0.479"></script>
+    <script defer src="./domain/schedule-v2.js?v=1.0.479"></script>
+    <script defer src="./domain/notices.js?v=1.0.479"></script>
+    <script defer src="./domain/curriculum.js?v=1.0.479"></script>
+    <script defer src="./domain/settlement.js?v=1.0.479"></script>
+    <script defer src="./domain/makeup.js?v=1.0.479"></script>
+    <script defer src="./domain/shared-data.js?v=1.0.479"></script>
+    <script defer src="./domain/tasks.js?v=1.0.479"></script>
+    <script defer src="./views/home.js?v=1.0.479"></script>
+    <script defer src="./views/schedule.js?v=1.0.479"></script>
+    <script defer src="./views/members.js?v=1.0.479"></script>
+    <script defer src="./views/records.js?v=1.0.479"></script>
+    <script defer src="./views/curriculum.js?v=1.0.479"></script>
+    <script defer src="./views/settlement.js?v=1.0.479"></script>
+    <script defer src="./views/profile.js?v=1.0.479"></script>
+    <script defer src="./events/account.js?v=1.0.479"></script>
+    <script defer src="./events/delegated.js?v=1.0.479"></script>
+    <script defer src="./domain/common.js?v=1.0.479"></script>
+    <script defer src="./views/common.js?v=1.0.479"></script>
+    <script defer src="./forms/coaches.js?v=1.0.479"></script>
+    <script defer src="./forms/common.js?v=1.0.479"></script>
+    <script defer src="./ui/common.js?v=1.0.479"></script>
+    <script defer src="./data/auth.js?v=1.0.479"></script>
+    <script defer src="./data/sync.js?v=1.0.479"></script>
+    <script defer src="./data/push.js?v=1.0.479"></script>
+    <script defer src="./data/records.js?v=1.0.479"></script>
+    <script defer src="./ui/sheet.js?v=1.0.479"></script>
+    <script defer src="./ui/screens.js?v=1.0.479"></script>
+    <script defer src="./actions/records.js?v=1.0.479"></script>
+    <script defer src="./actions/schedule.js?v=1.0.479"></script>
+    <script defer src="./actions/profile.js?v=1.0.479"></script>
+    <script defer src="./actions/settlement.js?v=1.0.479"></script>
+    <script defer src="./actions/session.js?v=1.0.479"></script>
+    <script defer src="./storage.js?v=1.0.479"></script>
     <script>
       (() => {
         let started = false;
@@ -435,7 +468,7 @@
           };
           const appScript = document.createElement("script");
           appScript.type = "module";
-          appScript.src = "./app.js?v=1.0.478";
+          appScript.src = "./app.js?v=1.0.479";
           appScript.addEventListener("error", fallback, { once: true });
           document.body.appendChild(appScript);
           window.setTimeout(fallback, 12_000);
@@ -448,7 +481,7 @@
             return;
           }
           const appScript = document.createElement("script");
-          appScript.src = "./app.js?v=1.0.478";
+          appScript.src = "./app.js?v=1.0.479";
           document.body.appendChild(appScript);
         };
         if (document.readyState === "loading") {

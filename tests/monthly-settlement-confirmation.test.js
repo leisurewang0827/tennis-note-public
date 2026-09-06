@@ -75,6 +75,10 @@ test("월 정산 확인 public modular 경로가 preview→snapshot→confirm→
   assert.match(views, /const loadedScopeIsCurrent = current\.loadedSignature === signature/);
   assert.match(views, /const aggregate = loadedScopeIsCurrent/);
   assert.match(views, /primary\.disabled = current\.status !== "READY"[\s\S]*\|\| !loadedScopeIsCurrent/);
+  assert.match(views, /monthlySettlementCoachReconciliationEvidence\(current\.scopeState\?\.reconciliation\)/);
+  assert.match(views, /escapeHtml\(reason\)/);
+  assert.match(views, /confirmedRefresh \? "코치 응답 다시 확인" : "다시 불러오기"/);
+  assert.match(views, /\["STALE", "CONFLICT", "CONFIRMED", "ERROR"\]/);
   assert.equal((html.match(/id="monthlySettlementPrimaryAction"/g) || []).length, 1);
   assert.match(html, /<th>예상 정산<\/th>/);
   assert.doesNotMatch(html.match(/id="monthlySettlementConfirmation"[\s\S]*?<\/section>/)?.[0] || "", /지급일|지급 방법|송금|첨부|재조정/);

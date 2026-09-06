@@ -733,6 +733,71 @@ async function syncCoachSettlementFromServer() {
   }
 }
 
+async function readCoachSettlementReconciliation(scope = coachSettlementReconciliationScope()) {
+  return window.TennisNoteDataClient.rpc("tn_coach_monthly_settlement_reconciliation_state", {
+    target_branch_id: scope.branchId,
+    target_coach_role_id: scope.coachRoleId,
+    target_month: scope.settlementMonth,
+  });
+}
+
+async function syncCoachSettlementReconciliationFromServer() {
+  const client = window.TennisNoteDataClient;
+  const scope = coachSettlementReconciliationScope();
+  if (state.coachSettlementReconciliationSubmitting) return false;
+  if (!scope.branchId || !scope.coachRoleId || !client?.rpc || !client.getSession?.()?.access_token) {
+    state.coachSettlementReconciliationUiState = "ERROR";
+    state.coachSettlementReconciliationMessage = "현재 담당 코치 권한과 지점을 확인한 뒤 다시 시도해 주세요.";
+    state.coachSettlementReconciliationValidation = "";
+    renderCoachSettlementReconciliation();
+    return false;
+  }
+  const requestId = ++state.coachSettlementReconciliationRequestId;
+  const previousScope = state.coachSettlementReconciliation?.scope || {};
+  const previousSignature = [previousScope.branchId, previousScope.coachRoleId, String(previousScope.settlementMonth || "").slice(0, 10)].join(":");
+  const nextSignature = coachSettlementReconciliationScopeSignature(scope);
+  state.coachSettlementReconciliationLoading = true;
+  state.coachSettlementReconciliationUiState = "LOADING";
+  state.coachSettlementReconciliationMessage = "";
+  state.coachSettlementReconciliationValidation = "";
+  renderCoachSettlementReconciliation();
+  try {
+    const raw = await readCoachSettlementReconciliation(scope);
+    const result = Array.isArray(raw) ? raw[0] || null : raw;
+    if (requestId !== state.coachSettlementReconciliationRequestId) return false;
+    if (!coachSettlementReconciliationPayloadIsExact(result, scope)) throw new Error("settlement_reconciliation_scope_mismatch");
+    const remoteState = String(result.state || "").toUpperCase();
+    if (previousSignature && previousSignature !== nextSignature) {
+      state.coachSettlementReconciliationChoice = "";
+      state.coachSettlementReconciliationReason = "";
+      state.coachSettlementReconciliationOperation = null;
+    }
+    state.coachSettlementReconciliation = result;
+    state.coachSettlementReconciliationUiState = remoteState;
+    state.coachSettlementReconciliationMessage = "";
+    if (["ACKNOWLEDGED", "DISPUTED"].includes(remoteState)) {
+      state.coachSettlementReconciliationChoice = "";
+      state.coachSettlementReconciliationReason = "";
+      state.coachSettlementReconciliationOperation = null;
+    }
+    return true;
+  } catch (error) {
+    if (requestId !== state.coachSettlementReconciliationRequestId) return false;
+    const contract = coachSettlementReconciliationErrorContract(error);
+    state.coachSettlementReconciliation = null;
+    state.coachSettlementReconciliationUiState = contract.state;
+    state.coachSettlementReconciliationMessage = contract.message;
+    state.coachSettlementReconciliationValidation = contract.validation;
+    return false;
+  } finally {
+    if (requestId === state.coachSettlementReconciliationRequestId) {
+      state.coachSettlementReconciliationLoading = false;
+      renderCoachSettlementReconciliation();
+      saveSnapshot();
+    }
+  }
+}
+
 async function syncCoachMemberChart(userId = "", memberName = "", force = false) {
   const normalizedId = String(userId || "");
   if (!normalizedId) return false;
