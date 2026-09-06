@@ -39,6 +39,7 @@ const APP_SHELL = [
   "./actions/records.js?v=1.0.478",
   "./actions/schedule.js?v=1.0.478",
   "./actions/profile.js?v=1.0.478",
+  "./actions/settlement.js?v=1.0.478",
   "./actions/session.js?v=1.0.478",
   "./storage.js?v=1.0.478",
   "./domain/common.js?v=1.0.478",

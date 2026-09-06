@@ -210,6 +210,7 @@ const PAGES = [
       "app/tennis-note-coach-app/actions/records.js",
       "app/tennis-note-coach-app/actions/schedule.js",
       "app/tennis-note-coach-app/actions/profile.js",
+      "app/tennis-note-coach-app/actions/settlement.js",
       "app/tennis-note-coach-app/actions/session.js",
       "app/tennis-note-coach-app/storage.js",
       "app/tennis-note-coach-app/domain/common.js",

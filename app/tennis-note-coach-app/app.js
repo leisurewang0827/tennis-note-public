@@ -58,6 +58,16 @@ const state = {
   coachSettlement: null,
   coachSettlementLoading: false,
   coachSettlementError: "",
+  coachSettlementReconciliation: null,
+  coachSettlementReconciliationUiState: "EMPTY",
+  coachSettlementReconciliationLoading: false,
+  coachSettlementReconciliationSubmitting: false,
+  coachSettlementReconciliationMessage: "",
+  coachSettlementReconciliationValidation: "",
+  coachSettlementReconciliationChoice: "",
+  coachSettlementReconciliationReason: "",
+  coachSettlementReconciliationOperation: null,
+  coachSettlementReconciliationRequestId: 0,
   coachProfiles: {
     "노 코치": {
       intro: "입문 회원이 테니스를 어렵게 느끼지 않도록 기본 자세와 랠리 연결을 차근차근 잡아드립니다.",

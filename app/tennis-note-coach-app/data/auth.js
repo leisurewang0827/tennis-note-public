@@ -23,6 +23,16 @@ function activateLiveCoachProfile(profileId) {
   state.coachSettlement = null;
   state.coachSettlementError = "";
   state.coachSettlementLoading = false;
+  state.coachSettlementReconciliation = null;
+  state.coachSettlementReconciliationUiState = "EMPTY";
+  state.coachSettlementReconciliationLoading = false;
+  state.coachSettlementReconciliationSubmitting = false;
+  state.coachSettlementReconciliationMessage = "";
+  state.coachSettlementReconciliationValidation = "";
+  state.coachSettlementReconciliationChoice = "";
+  state.coachSettlementReconciliationReason = "";
+  state.coachSettlementReconciliationOperation = null;
+  state.coachSettlementReconciliationRequestId += 1;
   state.liveLessons = [];
   state.releasedMakeupSlots = [];
   state.scheduleOperationDays = [];
@@ -77,6 +87,7 @@ async function applySupabaseCoachSession(showFromLogin = false) {
         syncCoachLessonsFromServer(),
         syncCoachJournalEntriesFromServer(),
         syncCoachSettlementFromServer(),
+        syncCoachSettlementReconciliationFromServer(),
         syncNativeCoachPushRegistration(profile),
       ]);
       renderAll();

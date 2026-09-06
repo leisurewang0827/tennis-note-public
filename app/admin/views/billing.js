@@ -4,6 +4,32 @@
 // renderAll() 도 그대로 이 함수들을 부른다.
 // DOM 을 만지므로 domain/ 과 달리 단위 테스트 대상은 아니다.
 
+function monthlySettlementCoachReconciliationEvidence(reconciliation = null) {
+  if (!reconciliation || typeof reconciliation !== "object") {
+    return "<dt>코치 응답</dt><dd>응답 대기</dd>";
+  }
+  const status = String(reconciliation.status || "").toLowerCase();
+  const responseLabel = status === "acknowledged"
+    ? "확인했습니다"
+    : status === "disputed" ? "이의가 있습니다" : "상태 확인 필요";
+  const respondedAt = new Date(reconciliation.respondedAt || "");
+  const respondedAtLabel = Number.isNaN(respondedAt.getTime())
+    ? "시각 확인 필요"
+    : new Intl.DateTimeFormat("ko-KR", {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(respondedAt);
+  const reason = status === "disputed" ? String(reconciliation.reason || "").trim() : "";
+  return [
+    `<dt>코치 응답</dt><dd>${escapeHtml(responseLabel)}</dd>`,
+    `<dt>코치 응답 시각</dt><dd>${escapeHtml(respondedAtLabel)}</dd>`,
+    reason ? `<dt>코치 이의 사유</dt><dd>${escapeHtml(reason)}</dd>` : "",
+  ].filter(Boolean).join("");
+}
+
 function renderMonthlySettlementConfirmation() {
   const section = $("#monthlySettlementConfirmation");
   if (!section) return;
@@ -73,13 +99,16 @@ function renderMonthlySettlementConfirmation() {
         <dt>계산본</dt><dd>${snapshot?.revision ? `${Number(snapshot.revision)}차` : "확인 전 미리보기"}</dd>
         <dt>원천 검증</dt><dd>${fingerprint ? `${escapeHtml(fingerprint.slice(0, 8))}…` : "확인 중"}</dd>
         <dt>상태</dt><dd>${escapeHtml(monthlySettlementStateLabel())}</dd>
+        ${snapshot && current.scopeState?.confirmation ? monthlySettlementCoachReconciliationEvidence(current.scopeState?.reconciliation) : ""}
       </dl>
     ` : "";
   }
 
   const retry = $("#monthlySettlementRetry");
   if (retry) {
-    retry.hidden = !["STALE", "CONFLICT", "ERROR"].includes(current.status);
+    const confirmedRefresh = current.status === "CONFIRMED";
+    retry.hidden = !["STALE", "CONFLICT", "CONFIRMED", "ERROR"].includes(current.status);
+    retry.textContent = confirmedRefresh ? "코치 응답 다시 확인" : "다시 불러오기";
     retry.disabled = current.loading || current.submitting;
   }
   const primary = $("#monthlySettlementPrimaryAction");

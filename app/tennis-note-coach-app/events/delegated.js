@@ -5,11 +5,26 @@
 
 function bindDelegatedEvents() {
   document.addEventListener("change", (event) => {
+    const reconciliationChoice = event.target.closest('input[name="coachSettlementReconciliationChoice"]');
+    if (reconciliationChoice) {
+      state.coachSettlementReconciliationChoice = reconciliationChoice.value;
+      state.coachSettlementReconciliationValidation = "";
+      renderCoachSettlementReconciliation();
+      if (reconciliationChoice.value === "disputed") {
+        requestAnimationFrame(() => $("#coachSettlementReconciliationReason")?.focus({ preventScroll: true }));
+      }
+      return;
+    }
+
     const settlementMonth = event.target.closest("#coachSettlementMonth");
     if (settlementMonth) {
       state.settlementMonth = /^\d{4}-\d{2}$/.test(settlementMonth.value) ? settlementMonth.value : localDateKey().slice(0, 7);
       state.coachSettlement = null;
-      void syncCoachSettlementFromServer();
+      resetCoachSettlementReconciliation();
+      void Promise.allSettled([
+        syncCoachSettlementFromServer(),
+        syncCoachSettlementReconciliationFromServer(),
+      ]);
       return;
     }
 
@@ -59,6 +74,14 @@ function bindDelegatedEvents() {
   });
 
   document.addEventListener("input", (event) => {
+    const reconciliationReason = event.target.closest("#coachSettlementReconciliationReason");
+    if (reconciliationReason) {
+      state.coachSettlementReconciliationReason = reconciliationReason.value;
+      state.coachSettlementReconciliationValidation = "";
+      renderCoachSettlementReconciliation();
+      return;
+    }
+
     const modalComment = event.target.closest("[data-modal-coach-comment]");
     if (modalComment) updateLessonCompletionUi(modalComment.dataset.modalCoachComment);
 
@@ -137,6 +160,9 @@ function bindDelegatedEvents() {
     if (openSettlementButton) {
       openCoachSettlement();
       if (!state.coachSettlement || state.coachSettlementError) void syncCoachSettlementFromServer();
+      if (!state.coachSettlementReconciliationLoading && !state.coachSettlementReconciliationSubmitting) {
+        void syncCoachSettlementReconciliationFromServer();
+      }
       return;
     }
 
