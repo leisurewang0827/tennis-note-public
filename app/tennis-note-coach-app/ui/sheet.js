@@ -28,11 +28,57 @@ function refreshCoachModalState() {
   }
 }
 
+function captureCoachModalReturnContext() {
+  const activeElement = document.activeElement;
+  return {
+    focusTarget: activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null,
+    viewId: document.body.dataset.activeView || $(".view.is-active")?.id || "",
+    lessonId: String(state.editingLessonId || ""),
+    scrollX: Number(window.scrollX || document.documentElement.scrollLeft || 0),
+    scrollY: Number(window.scrollY || document.documentElement.scrollTop || 0),
+  };
+}
+
+function coachModalReturnFocusTarget(context) {
+  if (context?.focusTarget?.isConnected) return context.focusTarget;
+  if (context?.lessonId) {
+    const lessonTrigger = $$('[data-edit-lesson-id]')
+      .find((element) => String(element.dataset.editLessonId || "") === context.lessonId);
+    if (lessonTrigger) return lessonTrigger;
+  }
+  return context?.viewId ? $(`#${context.viewId} .view-title, #${context.viewId} h1, #${context.viewId} h2`) : null;
+}
+
+function restoreCoachModalReturnContext(context) {
+  if (!context) return;
+  if (context.viewId && document.body.dataset.activeView !== context.viewId && $(`#${context.viewId}`)) {
+    setView(context.viewId, { replaceHistory: true });
+  }
+  window.requestAnimationFrame(() => {
+    window.scrollTo(Number(context.scrollX) || 0, Number(context.scrollY) || 0);
+    coachModalReturnFocusTarget(context)?.focus?.({ preventScroll: true });
+  });
+}
+
+function restorePendingCoachModalReturnContext() {
+  const context = pendingCoachModalReturnContext;
+  const queuedModalId = queuedCoachModalOpenId;
+  pendingCoachModalReturnContext = null;
+  pendingCoachModalHistoryCloseId = "";
+  queuedCoachModalOpenId = "";
+  restoreCoachModalReturnContext(context);
+  if (queuedModalId) window.requestAnimationFrame(() => openCoachModal(queuedModalId));
+}
+
 function openCoachModal(modalId) {
   const modal = $(`#${modalId}`);
   if (!modal) return;
+  if (pendingCoachModalHistoryCloseId) {
+    queuedCoachModalOpenId = modalId;
+    return;
+  }
   if (activeCoachModalId && activeCoachModalId !== modalId) closeCoachModal(activeCoachModalId, true);
-  coachModalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  coachModalReturnContext = captureCoachModalReturnContext();
   modal.hidden = false;
   activeCoachModalId = modalId;
   refreshCoachModalState();
@@ -45,14 +91,17 @@ function openCoachModal(modalId) {
 
 function closeCoachModal(modalId, fromHistory = false) {
   const modal = $(`#${modalId}`);
-  if (!modal) return;
+  if (!modal || modal.hidden || activeCoachModalId !== modalId || pendingCoachModalHistoryCloseId) return;
+  const returnContext = coachModalReturnContext;
+  coachModalReturnContext = null;
   modal.hidden = true;
   if (activeCoachModalId === modalId) activeCoachModalId = "";
   refreshCoachModalState();
   if (!fromHistory && history.state?.tennisNoteModal === modalId) {
+    pendingCoachModalReturnContext = returnContext;
+    pendingCoachModalHistoryCloseId = modalId;
     history.back();
     return;
   }
-  coachModalReturnFocus?.focus?.({ preventScroll: true });
-  coachModalReturnFocus = null;
+  restoreCoachModalReturnContext(returnContext);
 }

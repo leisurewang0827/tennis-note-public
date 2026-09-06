@@ -609,7 +609,8 @@ function bindDelegatedEvents() {
     }
     if (event.key === "Escape" && activeCoachModalId) {
       event.preventDefault();
-      closeCoachModal(activeCoachModalId);
+      if (activeCoachModalId === "lessonEditModal") requestCloseLessonEditor();
+      else closeCoachModal(activeCoachModalId);
       return;
     }
     if (event.key === "Escape" && !$("#noticeDialog")?.hidden) {
@@ -639,10 +640,13 @@ function bindDelegatedEvents() {
   });
   window.addEventListener("popstate", (event) => {
     if (activeCoachModalId) {
-      closeCoachModal(activeCoachModalId, true);
+      if (activeCoachModalId === "lessonEditModal") closeLessonEditor(true);
+      else closeCoachModal(activeCoachModalId, true);
+      restorePendingCoachModalReturnContext();
       return;
     }
     const targetView = event.state?.tennisNoteView;
     if (targetView && $(`#${targetView}`)) setView(targetView);
+    restorePendingCoachModalReturnContext();
   });
 }
