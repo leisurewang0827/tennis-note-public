@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from html.parser import HTMLParser
 from pathlib import Path
@@ -156,6 +157,16 @@ def browser_config(path: Path) -> dict:
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def expected_single_sheet_config() -> tuple[str, bool]:
+    requested = os.environ.get("TENNISNOTE_SINGLE_SHEET_IMPORT_MODE", "").strip().lower()
+    mode = requested if requested in {"preview", "apply"} else "off"
+    reverse_enabled = (
+        mode == "apply"
+        and os.environ.get("TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED", "").strip().lower() == "true"
+    )
+    return mode, reverse_enabled
+
+
 def require_build(root: Path) -> None:
     """빌드 결과물을 검사하는 스크립트이므로 dist/ 가 먼저 있어야 한다.
 
@@ -183,6 +194,7 @@ def require_build(root: Path) -> None:
 
 
 require_build(ROOT)
+expected_sheet_mode, expected_sheet_reverse = expected_single_sheet_config()
 source = json.loads((ROOT / "app" / "release.json").read_text(encoding="utf-8"))
 member = json.loads((ROOT / "dist" / "member" / "release.json").read_text(encoding="utf-8"))
 admin = json.loads((ROOT / "dist" / "admin" / "release.json").read_text(encoding="utf-8"))
@@ -222,8 +234,8 @@ for config in (
     browser = browser_config(config)
     assert browser["environment"] == "production"
     assert re.fullmatch(r"[0-9a-f]{64}", browser["projectFingerprint"])
-    assert browser["singleSheetImportMode"] == "off"
-    assert browser["singleSheetImportReverseEnabled"] is False
+    assert browser["singleSheetImportMode"] == expected_sheet_mode
+    assert browser["singleSheetImportReverseEnabled"] is expected_sheet_reverse
     payment = payment_config(config)
     assert payment["mode"] == "multi"
     assert payment["allowedMethods"] == ["tosspay", "bank_transfer"]

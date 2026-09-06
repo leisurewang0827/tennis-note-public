@@ -28,6 +28,8 @@ jobs:
       TENNISNOTE_PAYMENT_MODE: multi
       TENNISNOTE_ALLOWED_PAYMENT_METHODS: tosspay
       TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
+      TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
+      TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "false"
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
@@ -38,6 +40,9 @@ jobs:
         run: |
           python scripts/build_cloudflare_pages.py --target member --output dist/member
           python scripts/build_cloudflare_pages.py --target admin --output dist/admin
+
+      - name: Verify production deployment configuration
+        run: python scripts/check_cloudflare_build.py
 
       - name: Deploy member PWA
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
