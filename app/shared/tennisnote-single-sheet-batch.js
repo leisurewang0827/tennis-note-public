@@ -11,6 +11,14 @@
     const code = String(error?.code || error?.message || "");
     return /^(SHEET_IMPORT_(?:APPLY_FAILED|REVERSE_FAILED|REVERSE_HOLD|RECEIPT_REQUIRED|OPERATION_CONFLICT|SESSION_REQUIRED|SCOPE_DISABLED|TIMEOUT)|TARGET_OR_REVISION_MISMATCH|STALE_PREVIEW)$/.test(code) ? code : "";
   };
+  // Only fixed presentation codes may leave the preview catch. Never retain
+  // database messages/details, source rows, or an inferred scope failure cause.
+  const safePreviewCode = error => {
+    const code = String(error?.code || error?.message || "");
+    if (code === "LOCAL_RESPONSE_TIMEOUT") return "SHEET_IMPORT_TIMEOUT";
+    return /^(SHEET_IMPORT_(?:ENVIRONMENT_BLOCKED|SESSION_REQUIRED|SCOPE_DISABLED|TIMEOUT|PREVIEW_FAILED|TRANSPORT_UNAVAILABLE)|SHEET_WORK_(?:RUNTIME_UNAVAILABLE|ENVIRONMENT_MISMATCH|BRANCH_UNAVAILABLE|SESSION_REVOKED|SESSION_EXPIRED|SESSION_SUPERSEDED)|TARGET_(?:OR_REVISION_MISMATCH|UNVERIFIED)|STALE_PREVIEW|SNAPSHOT_INCOMPLETE|SERVER_(?:CONTRACT_REQUIRED|UNITS_INVALID|COUNTS_INVALID|PREVIEW_INVALID)|READBACK_UNVERIFIED)$/.test(code)
+      ? code : "SHEET_IMPORT_PREVIEW_FAILED";
+  };
   function bounded(call) {
     let timer;
     return Promise.race([Promise.resolve().then(call), new Promise((_, reject) => { timer = setTimeout(() => reject(Error("LOCAL_RESPONSE_TIMEOUT")), 11000); })]).finally(() => clearTimeout(timer));
@@ -32,9 +40,9 @@
     if (!allowed(host, transport) || canOpen() !== true) throw Error("SHEET_APPLY_DISABLED");
     const scope = clone(transport.scope);
     let entries = [], held = [], fileHash = "", busy = false, stop = false, disposed = false, confirmed = false;
-    let phase = "empty", expiresAt = "", message = "";
+    let phase = "empty", expiresAt = "", message = "", failureCode = "";
     const access = () => !disposed && globalThis.navigator?.onLine !== false && allowed(host, transport) && sameScope(scope, transport.currentScope()) && canOpen() === true;
-    const view = () => ({ phase, busy, confirmed, expiresAt,
+    const view = () => ({ phase, busy, confirmed, expiresAt, failureCode,
       expired: Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY"].includes(e.state)),
       message: Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY"].includes(e.state)) ? "미리보기가 만료됐습니다. 다시 확인해 주세요. 성공분은 유지됩니다." : message,
       pending: entries.filter(e => ["READY", "RETRY", "UNKNOWN"].includes(e.state)).length,
@@ -50,21 +58,23 @@
     const packet = async units => {
       if (!access()) throw Error("SHEET_APPLY_DISABLED");
       const result = adapter.adaptServer(await bounded(() => transport.preview(clone(scope), clone(units))), { ...scope, authorized: true }, new Date().toISOString());
-      if (!access() || !result.serverPreview || result.serverPreview.units.length !== units.length) throw Error("SERVER_PREVIEW_INVALID");
+      if (!access()) throw Error("TARGET_OR_REVISION_MISMATCH");
+      if (!result.serverPreview || result.serverPreview.units.length !== units.length) throw Error(safePreviewCode({ code: result.errors?.[0] || "SERVER_PREVIEW_INVALID" }));
       return result.serverPreview;
     };
     async function load(payload) {
       if (busy || disposed) return false;
       if (!access() || payload?.protocol !== transport.protocol || !digest(payload.fileHash) || !Array.isArray(payload.units) || payload.units.length > 500 || !Array.isArray(payload.held)) throw Error("SHEET_INPUT_INVALID");
       if (payload.units.some(e => !digest(e.operationKey) || !Array.isArray(e.unit?.rows) || e.unit.rows.length < 1 || e.unit.rows.length > 2 || !Array.isArray(e.rowNumbers) || e.rowNumbers.length !== e.unit.rows.length || e.rowNumbers.some(n => !Number.isInteger(n) || n < 2))) throw Error("SHEET_INPUT_INVALID");
-      busy = true; phase = "previewing"; confirmed = false; entries = []; held = clone(payload.held); fileHash = payload.fileHash; message = ""; emit();
+      busy = true; phase = "previewing"; confirmed = false; entries = []; held = clone(payload.held); fileHash = payload.fileHash; expiresAt = ""; message = ""; failureCode = ""; emit();
       try {
         if (!payload.units.length) { phase = "ready"; return true; }
-        const p = await packet(payload.units.map(e => e.unit)); expiresAt = p.expiresAt;
+        const p = await packet(payload.units.map(e => e.unit));
+        expiresAt = new Date(Math.min(Date.parse(p.expiresAt), Date.parse(transport.workSessionExpiresAt?.() || p.expiresAt))).toISOString();
         entries = payload.units.map((e, i) => ({ ...clone(e), plan: p.units[i], state: p.units[i].status, reason: p.units[i].reason, appliedHere: false }));
         if (entries.some(e => ["APPLIED", "REVERSED"].includes(e.state) && !e.plan.verified)) throw Error("READBACK_UNVERIFIED");
         phase = "ready"; return true;
-      } catch { phase = "blocked"; entries = []; message = "서버 판정을 확인하지 못했습니다. 파일을 다시 확인해 주세요."; return false; }
+      } catch (error) { phase = "blocked"; entries = []; failureCode = safePreviewCode(error); message = failureCode; return false; }
       finally { busy = false; emit(); }
     }
     async function reconcile(e) {

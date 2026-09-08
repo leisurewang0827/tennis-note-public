@@ -7,12 +7,26 @@
   const reasons = {
     ADMIN_SNAPSHOT_REQUIRED: "관리자 조회 정보가 필요합니다. 관리자 화면에서 다시 확인해 주세요.",
     SHEET_IMPORT_ENVIRONMENT_BLOCKED: "현재 관리자 주소와 연결 환경이 일치하지 않아 서버 요청을 보내지 않았습니다.",
-    SHEET_IMPORT_SESSION_REQUIRED: "관리자 로그인이 만료됐습니다. 다시 로그인한 뒤 확인해 주세요.",
-    SHEET_IMPORT_SCOPE_DISABLED: "이 관리자·지점의 등록 범위가 비활성화되어 서버 요청을 보내지 않았습니다.",
+    SHEET_IMPORT_SESSION_REQUIRED: "관리자 로그인·접근 권한을 확인할 수 없습니다. 관리자 화면의 로그인 상태를 확인해 주세요.",
+    SHEET_IMPORT_SCOPE_DISABLED: "이 관리자·지점의 Excel 사용 범위를 확인할 수 없습니다. 운영 담당자에게 허용 상태·기간·연결 환경 확인을 요청해 주세요. 파일은 수정하지 않아도 됩니다.",
     SHEET_IMPORT_APPLY_DISABLED: "등록 적용 권한이 비활성화되어 서버 요청을 보내지 않았습니다.",
     SHEET_IMPORT_REVERSE_DISABLED: "원복 권한이 비활성화되어 서버 요청을 보내지 않았습니다.",
-    SHEET_IMPORT_TIMEOUT: "서버 미리보기 시간이 초과됐습니다. 지점과 로그인 상태를 확인한 뒤 다시 시도해 주세요.",
-    SHEET_IMPORT_PREVIEW_FAILED: "서버 미리보기를 확인하지 못했습니다. 지점과 로그인 상태를 확인해 주세요.",
+    SHEET_IMPORT_TIMEOUT: "서버 미리보기 응답 시간이 초과됐습니다. 연결 상태를 확인한 뒤 같은 파일로 다시 확인해 주세요. 자동 재시도하지 않습니다.",
+    SHEET_IMPORT_PREVIEW_FAILED: "서버 미리보기 결과를 확인하지 못했습니다. 연결 상태를 확인한 뒤 다시 확인해 주세요. 파일 오류로 확정된 것은 아닙니다.",
+    SHEET_IMPORT_TRANSPORT_UNAVAILABLE: "서버 확인 연결을 준비하지 못했습니다. 관리자 화면의 연결 상태를 확인해 주세요.",
+    SERVER_CONTRACT_REQUIRED: "서버 미리보기 응답 형식이 맞지 않아 등록을 보류합니다. 운영 담당자에게 연결 버전 확인을 요청해 주세요.",
+    SERVER_UNITS_INVALID: "서버 등록 단위를 검증하지 못해 보류합니다. 운영 담당자에게 확인을 요청해 주세요.",
+    SERVER_COUNTS_INVALID: "서버의 등록 예정 수를 검증하지 못해 보류합니다. 운영 담당자에게 확인을 요청해 주세요.",
+    SERVER_PREVIEW_INVALID: "서버 미리보기 근거를 검증하지 못해 등록을 보류합니다. 다시 확인해 주세요.",
+    READBACK_UNVERIFIED: "기존 처리 이력을 확정하지 못해 등록을 보류합니다. 같은 파일로 이력을 다시 확인해 주세요.",
+    SHEET_WORK_RUNTIME_UNAVAILABLE: "Excel 작업 세션의 서버 환경 설정이 준비되지 않았습니다. 운영 담당자에게 배포 설정 확인을 요청해 주세요.",
+    SHEET_WORK_ENVIRONMENT_MISMATCH: "Excel 작업 세션의 서버 환경이 현재 연결과 일치하지 않습니다. 등록하지 않고 중단합니다.",
+    SHEET_WORK_BRANCH_UNAVAILABLE: "현재 지점에서 Excel 작업을 준비할 수 없습니다. 지점의 운영 상태와 관리자 권한을 확인해 주세요.",
+    SHEET_WORK_SESSION_REVOKED: "Excel 작업 세션이 비활성화되거나 철회됐습니다. 등록을 중단하고 운영 담당자에게 확인해 주세요.",
+    SHEET_WORK_SESSION_EXPIRED: "Excel 작업 세션이 만료됐습니다. 같은 파일로 다시 확인하면 현재 관리자 권한을 재검사해 준비합니다.",
+    SHEET_WORK_SESSION_SUPERSEDED: "다른 작업으로 Excel 세션이 바뀌었습니다. 같은 파일로 다시 확인해 주세요.",
+    SHEET_WORK_SESSION_INVALID: "Excel 작업 세션 응답을 검증하지 못했습니다. 등록하지 않고 중단합니다.",
+    SHEET_WORK_SESSION_FAILED: "Excel 작업 세션의 준비 결과를 확인하지 못했습니다. 같은 파일로 다시 확인해 주세요. 자동 등록·재시도는 하지 않습니다.",
     SHEET_IMPORT_APPLY_FAILED: "등록 결과를 확정하지 못했습니다. 같은 파일로 처리 이력을 먼저 다시 확인해 주세요.",
     SHEET_IMPORT_REVERSE_FAILED: "원복 결과를 확정하지 못했습니다. 같은 파일로 처리 이력을 먼저 다시 확인해 주세요.",
     SHEET_IMPORT_REVERSE_HOLD: "등록 뒤 사용 이력이 있어 자동 원복할 수 없습니다. 처리 상세를 확인해 주세요.",
@@ -34,7 +48,7 @@
     LESSON_STATE_UNSUPPORTED: "기존 수업 상태를 확정할 수 없어 충돌 판정을 보류합니다.",
     CLOSURE_POLICY_UNCONFIRMED: "시간 단위 휴무 정책을 확정할 수 없습니다. 휴무 범위를 먼저 확인해 주세요.",
     SNAPSHOT_AMBIGUOUS: "조회된 식별키가 중복됩니다. 기존 연결을 확인해 주세요.", SNAPSHOT_INVALID: "서버 조회 정보의 날짜·시간·연결 값이 올바르지 않습니다. 기존 자료를 확인해 주세요.",
-    STALE_PREVIEW: "미리보기 정보가 오래됐습니다. 파일을 다시 선택해 확인해 주세요.",
+    STALE_PREVIEW: "미리보기 정보가 오래됐거나 만료됐습니다. 같은 파일로 다시 확인해 주세요.",
     EMPTY_DATA: "입력된 행이 없습니다. 빈 양식에 회원권 정보를 입력해 주세요.",
     SINGLE_SHEET_REQUIRED: "회원등록 시트 하나만 사용해 주세요.",
     HEADER_MISSING: "필수 7개 열을 확인해 주세요.", HEADER_UNKNOWN: "양식에 없는 열을 제거해 주세요.", HEADER_DUPLICATE: "같은 제목의 열을 하나로 정리해 주세요.",
@@ -97,8 +111,8 @@
       <label class="form-field">XLSX 파일 선택<input type="file" accept=".xlsx" data-excel-file /></label>
       <p class="tn-excel-status" data-excel-status role="status" aria-live="polite">파일을 선택하면 등록 전에 내용을 확인합니다.</p>
       <div data-excel-results></div>
-      <p data-excel-boundary>현재는 읽기 전용입니다. 서버의 최종 판정·원자 적용 기능이 연결되기 전에는 등록할 수 없습니다.</p>
-      <div class="modal-actions"><button type="button" class="ghost-button" data-excel-template>양식 받기</button><button type="button" class="ghost-button" data-excel-retry hidden>다시 확인</button><button type="button" class="ghost-button" data-excel-cancel hidden>파일 확인 취소</button><button type="button" class="ghost-button" data-excel-reverse hidden disabled aria-disabled="true">방금 등록 원복</button><button type="button" class="tn-excel-disabled" data-excel-apply disabled aria-disabled="true">등록 적용 불가 · 읽기 전용</button></div>
+      <p data-excel-boundary>파일 선택 후 서버 미리보기에서 사용 범위와 등록 계획을 확인합니다. 직접 확인하기 전에는 등록하지 않습니다.</p>
+      <div class="modal-actions"><button type="button" class="ghost-button" data-excel-template>양식 받기</button><button type="button" class="ghost-button" data-excel-retry hidden>다시 확인</button><button type="button" class="ghost-button" data-excel-cancel hidden>파일 확인 취소</button><button type="button" class="ghost-button" data-excel-reverse hidden disabled aria-disabled="true">방금 등록 원복</button><button type="button" class="tn-excel-disabled" data-excel-apply disabled aria-disabled="true">파일 선택 후 확인</button></div>
     </section>`;
     document.body.append(backdrop);
     const input = backdrop.querySelector("[data-excel-file]"), status = backdrop.querySelector("[data-excel-status]"), results = backdrop.querySelector("[data-excel-results]");
@@ -106,11 +120,33 @@
     const apply = backdrop.querySelector("[data-excel-apply]"), reverse = backdrop.querySelector("[data-excel-reverse]"), boundary = backdrop.querySelector("[data-excel-boundary]");
     let batch = null, confirming = false, requestBusy = false, templateBusy = false;
     let generation = 0, worker = null, timer = null, expires = null, opener = null;
+    let workPreparation = null;
+    const setReadiness = (state, text) => { backdrop.dataset.excelReadiness = state; boundary.textContent = text; };
     function stop() { generation++; requestBusy = false; input.disabled = false; worker?.terminate(); worker = null; clearTimeout(timer); clearTimeout(expires); timer = null; cancel.hidden = true; }
     function reset() {
       results.replaceChildren(); status.textContent = "파일을 선택하면 등록 전에 내용을 확인합니다."; retry.hidden = true;
+      delete backdrop.dataset.batchPhase; delete backdrop.dataset.excelFailureCode;
+      setReadiness("unverified", "파일 선택 후 서버 미리보기에서 사용 범위와 등록 계획을 확인합니다. 직접 확인하기 전에는 등록하지 않습니다.");
       apply.disabled = true; apply.setAttribute("aria-disabled", "true"); apply.className = "tn-excel-disabled"; apply.textContent = "등록할 안전 항목 없음";
       reverse.hidden = true; reverse.disabled = true; reverse.setAttribute("aria-disabled", "true");
+    }
+    async function inspectReadiness() {
+      const id = generation;
+      setReadiness("checking", "관리자·지점·연결 환경을 점검하고 있습니다. 서버 사용 허용 여부는 아직 미확인입니다.");
+      try {
+        // The existing factory inspects local config/session only; no new RPC,
+        // scope grant, or automatic preview is performed when opening the modal.
+        const transport = await options.getPreviewTransport?.();
+        if (id !== generation || backdrop.hidden || batch || requestBusy) return;
+        if (navigator.onLine === false) { setReadiness("blocked", explain("SNAPSHOT_OFFLINE")); return; }
+        if (root.TennisNoteSingleSheetRemotePreview?.recognized(transport)) {
+          if (!transport.enabled || !transport.isReady()) { setReadiness("blocked", explain(transport.reason || "TARGET_UNVERIFIED")); return; }
+          const executable = transport.canApply && transport.canReverse;
+          setReadiness(executable ? "awaiting-preview" : "preview-only", executable
+            ? "연결 점검 완료 · 서버 사용 범위는 미확인입니다. 파일 선택 시 현재 관리자 권한으로 최대 15분 작업 세션을 준비하고 미리보기합니다. 자동 등록하지 않습니다."
+            : "현재 연결은 미리보기 전용입니다. 등록·원복 허용 여부는 운영 담당자의 설정 확인이 필요합니다.");
+        } else setReadiness("unverified", "파일 선택 후 조회 근거를 확인합니다. 서버 사용 범위·등록 가능 여부는 아직 미확인입니다.");
+      } catch { if (id === generation && !backdrop.hidden && !batch && !requestBusy) setReadiness("unverified", explain("SHEET_IMPORT_TRANSPORT_UNAVAILABLE")); }
     }
     function close(fromHistory = false) {
       if (backdrop.hidden) return;
@@ -124,7 +160,7 @@
       // Safari may not focus a clicked button; restore the authoritative entry,
       // not whichever unrelated control happened to have keyboard focus.
       opener = trigger; reset(); backdrop.hidden = false;
-      if (batch) renderBatch(batch.view());
+      if (batch) renderBatch(batch.view()); else void inspectReadiness();
       history.pushState({ ...(history.state || {}), tnExcelPreview: true }, ""); input.focus();
     }
     async function downloadTemplate() {
@@ -145,19 +181,25 @@
     }
     const line = (parent, tag, value) => { const el = document.createElement(tag); el.textContent = value; parent.append(el); return el; };
     function renderBatch(v) {
-      results.replaceChildren(); input.disabled = v.busy; retry.hidden = !v.expired || v.busy;
+      results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.busy || !(v.expired || v.phase === "blocked") || !input.files.length;
+      if (confirming === "apply" && !v.canConfirm) confirming = false;
+      backdrop.dataset.excelFailureCode = v.failureCode || "";
       clearTimeout(expires);
       if (!v.busy && Date.parse(v.expiresAt) > Date.now()) expires = setTimeout(() => { if (batch && !backdrop.hidden) renderBatch(batch.view()); }, Date.parse(v.expiresAt) - Date.now() + 1);
-      boundary.textContent = "서버가 회원·회원권·시간표를 한 단위로 처리합니다. 결제는 만들지 않으며 원복은 같은 관리자와 허용 범위에서만 가능합니다.";
+      setReadiness(v.expired ? "expired" : v.phase === "blocked" ? "blocked" : v.phase === "previewing" ? "checking" : v.canConfirm ? "ready" : v.phase,
+        v.expired || v.phase === "blocked" ? "사용 준비가 완료되지 않아 새 등록은 차단합니다. 파일을 보존한 채 원인을 확인하고 다시 확인해 주세요."
+          : "서버가 회원·회원권·시간표를 한 단위로 처리합니다. 결제는 만들지 않으며 적용·원복 때에도 같은 관리자와 허용 범위·기간을 다시 검사합니다.");
       status.textContent = v.message ? safeBatchText(v.message) : ({ previewing: "서버 판정을 확인하고 있습니다…", ready: "미리보기 완료 · 안전 단위를 한 번 확인하고 등록합니다.", applying: "등록 처리 중 · 이미 완료된 항목은 유지됩니다.", reversing: "원복 처리 중 · 서버 이력을 다시 확인합니다.", paused: "전송 중단 · 처리 이력을 먼저 다시 확인해 주세요.", done: "등록 결과 재조회 완료", reversed: "원복 결과 재조회 완료", blocked: "서버 확인이 필요합니다." }[v.phase] || "파일을 선택해 주세요.");
       if (confirming === "apply") status.textContent = "확인: 안전 항목만 등록하며 보류 항목은 건너뜁니다. 결제는 생성하지 않습니다.";
       if (confirming === "reverse") status.textContent = "확인: 이 파일로 방금 등록한 단위만 원복합니다. 후속 사용 이력이 있으면 서버가 중단합니다.";
-      const totals = document.createElement("dl"); totals.className = "tn-excel-summary"; results.append(totals);
+      const totals = document.createElement("dl"); totals.className = "tn-excel-summary";
+      if (!["blocked", "previewing"].includes(v.phase)) results.append(totals);
       for (const [label, value] of [["등록 완료 단위", v.applied], ["원복 완료 단위", v.reversed], ["미처리 단위", v.pending], ["신규 회원권 계획", v.rows.reduce((n,r)=>n+r.newTickets,0)], ["예정 수업", v.rows.reduce((n,r)=>n+r.newLessons,0)]]) {
         const pair = document.createElement("div"); line(pair,"dt",label); line(pair,"dd",String(value)); totals.append(pair);
       }
       const list = document.createElement("ol"); list.className = "tn-excel-rows"; results.append(list);
       const labels = { READY:"등록 가능", HOLD:"보류", APPLIED:"등록 완료", REVERSED:"원복 완료", PROCESSING:"처리 중", REVERSING:"원복 처리 중", UNKNOWN:"결과 미확정", RETRY:"미처리 확인" };
+      if (v.expired) { labels.READY = "미리보기 만료 · 다시 확인"; labels.RETRY = "미리보기 만료 · 다시 확인"; }
       for (const row of v.rows) { const li = document.createElement("li"); list.append(li); line(li,"strong",`${row.rowNumbers.join("·")}행 · ${labels[row.state] || "확인 필요"}`); if(row.reason) line(li,"p",safeBatchText(row.reason)); }
       apply.disabled = !(v.canConfirm || v.canResume); apply.setAttribute("aria-disabled", String(apply.disabled));
       apply.className = apply.disabled ? "tn-excel-disabled" : "primary-button";
@@ -189,7 +231,7 @@
     }
     function renderRemote(result, payload) {
       results.replaceChildren();
-      boundary.textContent = "개발계 서버 미리보기 전용 · 등록·원복은 비활성입니다.";
+      setReadiness("preview-only", "서버 미리보기 전용 · 등록·원복은 비활성입니다.");
       reverse.hidden = true; reverse.disabled = true; reverse.setAttribute("aria-disabled", "true");
       apply.disabled = true; apply.setAttribute("aria-disabled", "true"); apply.className = "tn-excel-disabled"; apply.textContent = "등록 적용 불가 · 미리보기 전용";
       const preview = result.serverPreview;
@@ -233,7 +275,7 @@
       apply.disabled = true; apply.setAttribute("aria-disabled", "true"); apply.className = "tn-excel-disabled"; apply.textContent = "등록 적용 불가 · 읽기 전용";
       stop(); reset(); if (!file) return;
       const id = generation;
-      const error = code => { stop(); results.replaceChildren(); status.textContent = explain(code); retry.hidden = false; };
+      const error = code => { stop(); results.replaceChildren(); backdrop.dataset.excelFailureCode = safeFailureCode({code}); status.textContent = explain(code); retry.hidden = false; setReadiness("blocked", "등록은 실행하지 않았습니다. 안내에 따라 확인한 뒤 같은 파일로 다시 확인할 수 있습니다."); };
       if (navigator.onLine === false) { error("SNAPSHOT_OFFLINE"); return; }
       if (!/\.xlsx$/i.test(file.name)) { error("XLSX_REQUIRED"); return; }
       if (!file.size || file.size > MAX_BYTES) { error("FILE_SIZE_INVALID"); return; }
@@ -271,6 +313,24 @@
             if (!remote || event.data.payload?.protocol !== previewTransport.protocol) { error("SNAPSHOT_READ_FAILED"); return; }
             try {
               const payload = event.data.payload;
+              clearTimeout(timer); timer = null; worker?.terminate(); worker = null;
+              if (payload.units.length) {
+                const scopeKey = JSON.stringify(previewTransport.scope);
+                if (!workPreparation || workPreparation.scopeKey !== scopeKey || (workPreparation.expiresAt && Date.parse(workPreparation.expiresAt) <= Date.now())) {
+                  workPreparation = { scopeKey, key: root.TennisNoteSingleSheetRemotePreview.newWorkSessionKey(), expiresAt: "" };
+                }
+                status.textContent = "현재 관리자·지점의 작업 세션을 준비하고 있습니다…";
+                setReadiness("preparing", "최대 15분 작업 세션을 준비합니다. 회원·회원권 등록은 아직 실행하지 않습니다.");
+                const preparing = workPreparation;
+                try {
+                  const prepared = await previewTransport.prepareSession(preparing.key);
+                  if (workPreparation === preparing) preparing.expiresAt = prepared.expiresAt;
+                } catch (prepareError) {
+                  if (workPreparation === preparing && ["SHEET_WORK_SESSION_EXPIRED", "SHEET_WORK_SESSION_SUPERSEDED"].includes(prepareError?.code)) workPreparation = null;
+                  throw prepareError;
+                }
+                if (id !== generation || backdrop.hidden || options.canOpen?.() !== true) return;
+              }
               if (executable) {
                 stop();
                 batch = root.TennisNoteSingleSheetBatch.create({ host: location.hostname, transport: previewTransport, adapter: root.TennisNoteSingleSheetSnapshot, canOpen: options.canOpen, changed: renderBatch });

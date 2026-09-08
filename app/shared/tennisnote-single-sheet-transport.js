@@ -94,6 +94,9 @@
 
   function mapFailure(error, fallback) {
     const raw = `${error?.code || ""} ${error?.message || ""}`.toUpperCase();
+    for (const code of ["SHEET_WORK_RUNTIME_UNAVAILABLE", "SHEET_WORK_ENVIRONMENT_MISMATCH", "SHEET_WORK_BRANCH_UNAVAILABLE", "SHEET_WORK_SESSION_REVOKED", "SHEET_WORK_SESSION_EXPIRED", "SHEET_WORK_SESSION_SUPERSEDED"]) {
+      if (raw.split(/[^A-Z_]+/).includes(code)) return code;
+    }
     if (error?.status === 401 || raw.includes("ADMIN_SESSION_EXPIRED")) return "SHEET_IMPORT_SESSION_REQUIRED";
     if (error?.status === 403 && (raw.includes("42501") || raw.includes("SHEET_SCOPE_OFF_OR_MISMATCH") || raw.includes("SHEET_ADMIN_REQUIRED"))) return "SHEET_IMPORT_SCOPE_DISABLED";
     if (raw.includes("SERVER_REQUEST_TIMEOUT") || raw.includes("ABORTERROR")) return "SHEET_IMPORT_TIMEOUT";
@@ -107,6 +110,7 @@
 
   async function create({ client, getBranchId, canOpen } = {}) {
     const initial = await inspect(client, getBranchId, canOpen);
+    let workSessionExpiry = "";
     const initialUrl = String(initial.config.supabaseUrl || "").trim().toLowerCase().replace(/\/$/, "");
     const requireCurrent = async capability => {
       const current = await inspect(client, getBranchId, canOpen);
@@ -124,10 +128,22 @@
         await requireCurrent(capability);
         return clone(response);
       } catch (error) {
-        if (/^(SHEET_IMPORT_|TARGET_|STALE_PREVIEW)/.test(String(error?.code || ""))) throw error;
+        if (/^(SHEET_IMPORT_|SHEET_WORK_|TARGET_|STALE_PREVIEW)/.test(String(error?.code || ""))) throw error;
         fail(mapFailure(error, fallback));
       }
     };
+    async function prepareSession(operationKey) {
+      if (!digest(operationKey)) fail("SHEET_PAYLOAD_INVALID");
+      let response;
+      try { response = await call("preview", "tn_prepare_single_sheet_work_session", current => ({ scope: clone(current.scope), operation_key: operationKey }), "SHEET_WORK_SESSION_FAILED"); }
+      catch (error) { if (error?.code === "SHEET_IMPORT_TIMEOUT") fail("SHEET_WORK_SESSION_FAILED"); throw error; }
+      const prepared = Date.parse(response?.preparedAt), expires = Date.parse(response?.expiresAt);
+      if (response?.contract !== "single-sheet-work-session/1" || !sameScope(response.scope, initial.scope)
+        || typeof response.replay !== "boolean" || !Number.isFinite(prepared) || !Number.isFinite(expires)
+        || expires <= Date.now() || expires <= prepared || expires - prepared > 900000 || prepared > Date.now() + 30000) fail("SHEET_WORK_SESSION_INVALID");
+      workSessionExpiry = response.expiresAt;
+      return { expiresAt: workSessionExpiry, replay: response.replay };
+    }
     async function preview(requestScope, units) {
       if (initial.reason) fail(initial.reason);
       if (!sameScope(requestScope, initial.scope)) fail("TARGET_OR_REVISION_MISMATCH");
@@ -168,10 +184,17 @@
       cleanupContinuityRequired: true,
       currentScope,
       isReady,
+      prepareSession,
+      workSessionExpiresAt: () => workSessionExpiry,
       preview,
       ...(canApply ? { apply } : {}),
       ...(canReverse ? { reverse } : {}),
     });
+  }
+
+  function newWorkSessionKey() {
+    if (typeof root.crypto?.getRandomValues !== "function") fail("SHEET_WORK_SESSION_FAILED");
+    return Array.from(root.crypto.getRandomValues(new Uint8Array(32)), value => value.toString(16).padStart(2, "0")).join("");
   }
 
   function recognized(transport) {
@@ -180,5 +203,5 @@
       && typeof transport.canApply === "boolean" && typeof transport.canReverse === "boolean";
   }
 
-  return Object.freeze({ PROTOCOL, TIMEOUT_MS, DEVELOPMENT_ORIGIN, PRODUCTION_ORIGIN, ORIGINS, fingerprintFor, recognized, create });
+  return Object.freeze({ PROTOCOL, TIMEOUT_MS, DEVELOPMENT_ORIGIN, PRODUCTION_ORIGIN, ORIGINS, fingerprintFor, recognized, newWorkSessionKey, create });
 });
