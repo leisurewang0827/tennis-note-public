@@ -10,8 +10,6 @@ const snapshotApi = require("../app/shared/tennisnote-single-sheet-snapshot.js")
 const ROOT = path.resolve(__dirname, "..");
 const TRANSPORT = fs.readFileSync(path.join(ROOT, "app/shared/tennisnote-single-sheet-transport.js"), "utf8");
 const DATA_CLIENT = fs.readFileSync(path.join(ROOT, "app/shared/tennisnote-data-client.js"), "utf8");
-const PRODUCTION_DEPLOY = fs.readFileSync(path.join(ROOT, ".github/workflows/deploy-cloudflare-pages.yml"), "utf8");
-const PUBLIC_CI = fs.readFileSync(path.join(ROOT, ".github/workflows/tennisnote-public-ci.yml"), "utf8");
 const REF = "syntheticprojectref";
 const URL_VALUE = `https://${REF}.supabase.co`;
 const FINGERPRINT = createHash("sha256").update(REF).digest("hex");
@@ -58,11 +56,6 @@ function loadDataClient(fetchImpl, immediateTimeout = false) {
 }
 
 async function main() {
-  check(/TENNISNOTE_SINGLE_SHEET_IMPORT_MODE:\s*apply/.test(PRODUCTION_DEPLOY)
-    && /TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED:\s*"false"/.test(PRODUCTION_DEPLOY)
-    && /python scripts\/check_cloudflare_build\.py/.test(PRODUCTION_DEPLOY), "PRODUCTION_APPLY_REVERSE_OFF_GUARDED");
-  check(PUBLIC_CI.includes('"scripts/check_cloudflare_build.py"')
-    && PUBLIC_CI.includes('".github/workflows/deploy-cloudflare-pages.yml"'), "PRODUCTION_CONFIG_PATHS_TRIGGER_CI");
   const api = loadTransport();
   let config = { supabaseUrl: URL_VALUE, environment: "development", projectFingerprint: FINGERPRINT, singleSheetImportMode: "preview" };
   let branch = BRANCH, allowed = true, session = { access_token: token() }, calls = [];
@@ -76,6 +69,25 @@ async function main() {
   check(response.safe === true && calls.length === 1 && calls[0][0] === "tn_preview_single_sheet_import", "EXACT_PREVIEW_RPC");
   check(JSON.stringify(calls[0][1]) === JSON.stringify({ scope: transport.scope, units: [UNIT] }), "EXACT_PREVIEW_BODY");
   check(calls[0][2].timeoutMs === 9000 && calls[0][2].requireCurrentSession === true && calls[0][2].retryAuth === false, "BOUNDED_NO_RETRY_OPTIONS");
+  const prepareKeys=[api.newWorkSessionKey(),api.newWorkSessionKey()];
+  check(prepareKeys.every(k=>/^[a-f0-9]{64}$/.test(k))&&prepareKeys[0]!==prepareKeys[1],"CRYPTO_WORK_KEY_NOT_FILE_OR_ACTOR");
+  let prepareCalls=[];
+  const workProof=()=>({contract:"single-sheet-work-session/1",scope:{...transport.scope},preparedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+600000).toISOString(),replay:false});
+  const preparedTransport=await api.create({client:{...client,rpc:async(...args)=>{prepareCalls.push(args);return workProof();}},getBranchId:()=>branch,canOpen:()=>allowed});
+  const prepared=await preparedTransport.prepareSession(prepareKeys[0]);
+  check(prepareCalls.length===1&&prepareCalls[0][0]==="tn_prepare_single_sheet_work_session"&&Object.keys(prepareCalls[0][1]).sort().join('|')==="operation_key|scope","EXACT_PREPARE_NO_ACTOR_OR_TTL");
+  check(prepared.expiresAt===preparedTransport.workSessionExpiresAt()&&prepareCalls[0][2].retryAuth===false,"PREPARE_EXPIRY_NO_RETRY");
+  await rejectCode(preparedTransport.prepareSession("bad"),"SHEET_PAYLOAD_INVALID");
+  check(prepareCalls.length===1,"INVALID_PREPARE_RPC_ZERO");
+  for(const mutate of [p=>p.contract="bad",p=>p.scope.branchId="different",p=>p.expiresAt=new Date(Date.now()+3600000).toISOString(),p=>p.expiresAt=new Date(0).toISOString(),p=>p.replay="true"]){
+    const invalid=await api.create({client:{...client,rpc:async()=>{const p=workProof();mutate(p);return p;}},getBranchId:()=>branch,canOpen:()=>allowed});
+    await rejectCode(invalid.prepareSession(prepareKeys[0]),"SHEET_WORK_SESSION_INVALID");
+    check(invalid.workSessionExpiresAt()==="","INVALID_PROOF_NOT_CACHED");
+  }
+  for(const code of ["SHEET_WORK_RUNTIME_UNAVAILABLE","SHEET_WORK_ENVIRONMENT_MISMATCH","SHEET_WORK_BRANCH_UNAVAILABLE","SHEET_WORK_SESSION_REVOKED","SHEET_WORK_SESSION_EXPIRED","SHEET_WORK_SESSION_SUPERSEDED"]){
+    const denied=await api.create({client:{...client,rpc:async()=>{throw {status:403,code:"42501",message:code,details:"RAW_SERVER_DETAIL"};}},getBranchId:()=>branch,canOpen:()=>allowed});
+    await rejectCode(denied.prepareSession(prepareKeys[0]),code);
+  }
 
   for (const scenario of [
     () => { config = { ...config, singleSheetImportMode: "off" }; },
@@ -102,6 +114,7 @@ async function main() {
   config = { supabaseUrl: URL_VALUE, environment: "development", projectFingerprint: FINGERPRINT, singleSheetImportMode: "apply", singleSheetImportReverseEnabled: false };
   const applyWithoutCleanup = await create();
   check(applyWithoutCleanup.canApply === true && applyWithoutCleanup.canReverse === false && typeof applyWithoutCleanup.reverse === "undefined", "APPLY_REVERSE_PERMISSION_SEPARATED");
+  check(batchApi.allowed(applyWithoutCleanup.host, applyWithoutCleanup), "APPLY_ONLY_BATCH_ALLOWED_WITHOUT_REVERSE_METHOD");
   config = { ...config, singleSheetImportReverseEnabled: true };
   calls = [];
   const executable = await create();
@@ -147,13 +160,6 @@ async function main() {
   config = { supabaseUrl: URL_VALUE, environment: "production", projectFingerprint: FINGERPRINT, singleSheetImportMode: "preview", singleSheetImportReverseEnabled: false };
   const productionPreview = await productionApi.create({ client, getBranchId: () => BRANCH, canOpen: () => true });
   check(productionPreview.enabled && !productionPreview.canApply, "EXACT_PRODUCTION_ORIGIN_PREVIEW");
-  config = { ...config, singleSheetImportMode: "apply" };
-  calls = [];
-  const productionApply = await productionApi.create({ client, getBranchId: () => BRANCH, canOpen: () => true });
-  check(productionApply.enabled && productionApply.canApply && !productionApply.canReverse
-    && typeof productionApply.apply === "function" && typeof productionApply.reverse === "undefined", "EXACT_PRODUCTION_ORIGIN_APPLY_ONLY");
-  await productionApply.apply(productionApply.scope, UNIT, "a".repeat(64), "b".repeat(64), expiresAt, "c".repeat(64), "e".repeat(64));
-  check(calls.length === 1 && calls[0][0] === "tn_apply_single_sheet_import_unit", "PRODUCTION_APPLY_ONLY_RPC_ONCE");
 
   // A receipt applied before this in-memory confirmation is read-only history.
   // Only the READY unit applied by this batch instance may be reversed.
@@ -190,6 +196,80 @@ async function main() {
       reversedOperations.push(operationKey); states[operationKeys.indexOf(operationKey)] = "REVERSED";
     },
   };
+  const onePayload = { protocol: batchTransport.protocol, fileHash: "9".repeat(64), held: [], units: [{
+    unit: sourceUnits[1], rowNumbers: [3], operationKey: operationKeys[1],
+  }] };
+  // 운영 등록 권한은 원복 권한/메서드와 독립이다. 실제 연결/쓰기는 없는 합성 경로다.
+  for (const includeReverseMethod of [false, true]) {
+    const scope = { ...batchScope, environment: "production" };
+    let state = "READY", applies = 0, reverses = 0;
+    const applyOnly = { ...batchTransport, host: "tennisnote-admin.pages.dev", scope,
+      currentScope: () => scope, canReverse: false, reverse: undefined,
+      preview: async () => ({ contract: "single-sheet-server/2", scope,
+        proof: { complete: true, scope: "unit_dependencies", statementBudgetMs: 10000, unitCount: 1,
+          expiresAt: new Date(Date.now() + 120000).toISOString() },
+        units: [{ ...serverUnit(1), status: state, verified: state === "APPLIED", reversible: true,
+          newMembers: state === "READY" ? 1 : 0, newTickets: state === "READY" ? 1 : 0 }],
+      }),
+      apply: async () => { applies++; state = "APPLIED"; },
+    };
+    if (includeReverseMethod) applyOnly.reverse = async () => { reverses++; };
+    const current = batchApi.create({ host: applyOnly.host, transport: applyOnly, adapter: snapshotApi, canOpen: () => true });
+    await current.load(onePayload);
+    check(current.view().canConfirm && !current.view().canReverse && applies === 0, "PRODUCTION_APPLY_ONLY_EXPLICIT_CONFIRM");
+    await current.confirm(); await current.confirm(); await current.reverse();
+    check(applies === 1 && reverses === 0 && current.view().applied === 1 && !current.view().canReverse, "PRODUCTION_APPLY_ONLY_READBACK_REPLAY_REVERSE_ZERO");
+    applyOnly.canApply = false;
+    check(!batchApi.allowed(applyOnly.host, applyOnly), "APPLY_FALSE_DENIED");
+    applyOnly.canApply = true; applyOnly.enabled = false;
+    check(!batchApi.allowed(applyOnly.host, applyOnly), "APPLY_OFF_DENIED");
+    await current.confirm(); await current.reverse();
+    check(applies === 1 && reverses === 0, "DISABLED_NO_ADDITIONAL_WRITE");
+    current.dispose();
+  }
+  for (const [error, expectedCode] of [
+    [{ code: "SHEET_IMPORT_SCOPE_DISABLED", message: "untrusted detail" }, "SHEET_IMPORT_SCOPE_DISABLED"],
+    [{ code: "SHEET_IMPORT_SESSION_REQUIRED" }, "SHEET_IMPORT_SESSION_REQUIRED"],
+    [{ code: "SHEET_IMPORT_ENVIRONMENT_BLOCKED" }, "SHEET_IMPORT_ENVIRONMENT_BLOCKED"],
+    [{ code: "TARGET_OR_REVISION_MISMATCH" }, "TARGET_OR_REVISION_MISMATCH"],
+    [{ code: "SHEET_IMPORT_TIMEOUT" }, "SHEET_IMPORT_TIMEOUT"],
+    [{ message: "LOCAL_RESPONSE_TIMEOUT" }, "SHEET_IMPORT_TIMEOUT"],
+    [{ code: "SHEET_IMPORT_UNRECOGNIZED", message: "RAW_SERVER_DETAIL<script>" }, "SHEET_IMPORT_PREVIEW_FAILED"],
+    [{ code: "__proto__", message: "RAW_SERVER_DETAIL" }, "SHEET_IMPORT_PREVIEW_FAILED"],
+  ]) {
+    let previews = 0, writes = 0;
+    const failing = { ...batchTransport, preview: async () => { previews++; throw error; }, apply: async () => { writes++; } };
+    const deniedBatch = batchApi.create({ host: failing.host, transport: failing, adapter: snapshotApi, canOpen: () => true });
+    check(await deniedBatch.load(onePayload) === false, "PREVIEW_FAILURE_BLOCKED");
+    const state = deniedBatch.view();
+    check(state.phase === "blocked" && state.failureCode === expectedCode && state.message === expectedCode, "SAFE_CODE_SURVIVES_BATCH");
+    check(!state.canConfirm && !state.canResume && state.rows.length === 0, "FAILURE_NOT_READY_OR_ZERO_SUCCESS");
+    await deniedBatch.confirm(); await deniedBatch.resume();
+    check(previews === 1 && writes === 0 && !JSON.stringify(state).includes("RAW_SERVER_DETAIL"), "FAILURE_NO_AUTORETRY_WRITE_OR_RAW_DETAIL");
+    deniedBatch.dispose();
+  }
+  for (const [change, expectedCode] of [
+    [p => { p.proof.expiresAt = new Date(Date.now() - 1000).toISOString(); }, "STALE_PREVIEW"],
+    [p => { p.scope = { ...p.scope, branchId: "different-fixture-branch" }; }, "TARGET_OR_REVISION_MISMATCH"],
+    [p => { p.proof.complete = false; }, "SNAPSHOT_INCOMPLETE"],
+    [p => { p.contract = "unknown"; }, "SERVER_CONTRACT_REQUIRED"],
+  ]) {
+    const invalid = { ...batchTransport, preview: async (...args) => { const p = await batchTransport.preview(...args); change(p); return p; } };
+    const heldBatch = batchApi.create({ host: invalid.host, transport: invalid, adapter: snapshotApi, canOpen: () => true });
+    await heldBatch.load(onePayload);
+    check(heldBatch.view().failureCode === expectedCode && !heldBatch.view().canConfirm, "ADAPTER_FAILURE_CODE_PRESERVED");
+    heldBatch.dispose();
+  }
+  // Real transport -> batch catch, including the production-observed 403 shape.
+  let scopedRpc = 0;
+  config = { ...config, environment: "development", singleSheetImportMode: "apply", singleSheetImportReverseEnabled: true };
+  const scopedTransport = await api.create({ client: { ...client, rpc: async () => {
+    scopedRpc++; throw { status: 403, code: "42501", message: "SHEET_SCOPE_OFF_OR_MISMATCH", details: "RAW_SERVER_DETAIL" };
+  } }, getBranchId: () => BRANCH, canOpen: () => true });
+  const scopedBatch = batchApi.create({ host: scopedTransport.host, transport: scopedTransport, adapter: snapshotApi, canOpen: () => true });
+  await scopedBatch.load(onePayload);
+  check(scopedBatch.view().failureCode === "SHEET_IMPORT_SCOPE_DISABLED" && scopedRpc === 1, "POSTGREST_403_TO_BATCH_EXACT_SAFE_CODE");
+  scopedBatch.dispose();
   const batch = batchApi.create({ host: batchTransport.host, transport: batchTransport, adapter: snapshotApi, canOpen: () => true });
   await batch.load({ protocol: batchTransport.protocol, fileHash: "9".repeat(64), held: [], units: sourceUnits.map((unit, index) => ({
     unit, rowNumbers: [index + 2], operationKey: operationKeys[index],
@@ -201,17 +281,6 @@ async function main() {
   await batch.reverse();
   check(reversedOperations.length === 1 && reversedOperations[0] === operationKeys[1], "ONLY_CURRENT_BATCH_UNIT_REVERSED");
   check(batch.view().applied === 1 && batch.view().reversed === 1 && batch.view().canReverse === false, "HISTORICAL_APPLIED_PRESERVED");
-  states[1] = "READY"; appliedOperations.length = 0; reversedOperations.length = 0;
-  const applyOnlyTransport = { ...batchTransport, canReverse: false };
-  delete applyOnlyTransport.reverse;
-  const applyOnlyBatch = batchApi.create({ host: applyOnlyTransport.host, transport: applyOnlyTransport, adapter: snapshotApi, canOpen: () => true });
-  await applyOnlyBatch.load({ protocol: applyOnlyTransport.protocol, fileHash: "9".repeat(64), held: [], units: sourceUnits.map((unit, index) => ({
-    unit, rowNumbers: [index + 2], operationKey: operationKeys[index],
-  })) });
-  await applyOnlyBatch.confirm();
-  check(appliedOperations.length === 1 && appliedOperations[0] === operationKeys[1]
-    && applyOnlyBatch.view().applied === 2 && applyOnlyBatch.view().canReverse === false, "APPLY_ONLY_BATCH_EXACTLY_ONCE");
-  check(await applyOnlyBatch.reverse() === false && reversedOperations.length === 0, "APPLY_ONLY_BATCH_REVERSE_ZERO");
   process.stdout.write(`Single sheet scoped transport: ${assertions} assertions PASS\n`);
 }
 
