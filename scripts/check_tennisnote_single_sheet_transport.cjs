@@ -114,6 +114,7 @@ async function main() {
   config = { supabaseUrl: URL_VALUE, environment: "development", projectFingerprint: FINGERPRINT, singleSheetImportMode: "apply", singleSheetImportReverseEnabled: false };
   const applyWithoutCleanup = await create();
   check(applyWithoutCleanup.canApply === true && applyWithoutCleanup.canReverse === false && typeof applyWithoutCleanup.reverse === "undefined", "APPLY_REVERSE_PERMISSION_SEPARATED");
+  check(batchApi.allowed(applyWithoutCleanup.host, applyWithoutCleanup), "APPLY_ONLY_BATCH_ALLOWED_WITHOUT_REVERSE_METHOD");
   config = { ...config, singleSheetImportReverseEnabled: true };
   calls = [];
   const executable = await create();
@@ -198,6 +199,34 @@ async function main() {
   const onePayload = { protocol: batchTransport.protocol, fileHash: "9".repeat(64), held: [], units: [{
     unit: sourceUnits[1], rowNumbers: [3], operationKey: operationKeys[1],
   }] };
+  // 운영 등록 권한은 원복 권한/메서드와 독립이다. 실제 연결/쓰기는 없는 합성 경로다.
+  for (const includeReverseMethod of [false, true]) {
+    const scope = { ...batchScope, environment: "production" };
+    let state = "READY", applies = 0, reverses = 0;
+    const applyOnly = { ...batchTransport, host: "tennisnote-admin.pages.dev", scope,
+      currentScope: () => scope, canReverse: false, reverse: undefined,
+      preview: async () => ({ contract: "single-sheet-server/2", scope,
+        proof: { complete: true, scope: "unit_dependencies", statementBudgetMs: 10000, unitCount: 1,
+          expiresAt: new Date(Date.now() + 120000).toISOString() },
+        units: [{ ...serverUnit(1), status: state, verified: state === "APPLIED", reversible: true,
+          newMembers: state === "READY" ? 1 : 0, newTickets: state === "READY" ? 1 : 0 }],
+      }),
+      apply: async () => { applies++; state = "APPLIED"; },
+    };
+    if (includeReverseMethod) applyOnly.reverse = async () => { reverses++; };
+    const current = batchApi.create({ host: applyOnly.host, transport: applyOnly, adapter: snapshotApi, canOpen: () => true });
+    await current.load(onePayload);
+    check(current.view().canConfirm && !current.view().canReverse && applies === 0, "PRODUCTION_APPLY_ONLY_EXPLICIT_CONFIRM");
+    await current.confirm(); await current.confirm(); await current.reverse();
+    check(applies === 1 && reverses === 0 && current.view().applied === 1 && !current.view().canReverse, "PRODUCTION_APPLY_ONLY_READBACK_REPLAY_REVERSE_ZERO");
+    applyOnly.canApply = false;
+    check(!batchApi.allowed(applyOnly.host, applyOnly), "APPLY_FALSE_DENIED");
+    applyOnly.canApply = true; applyOnly.enabled = false;
+    check(!batchApi.allowed(applyOnly.host, applyOnly), "APPLY_OFF_DENIED");
+    await current.confirm(); await current.reverse();
+    check(applies === 1 && reverses === 0, "DISABLED_NO_ADDITIONAL_WRITE");
+    current.dispose();
+  }
   for (const [error, expectedCode] of [
     [{ code: "SHEET_IMPORT_SCOPE_DISABLED", message: "untrusted detail" }, "SHEET_IMPORT_SCOPE_DISABLED"],
     [{ code: "SHEET_IMPORT_SESSION_REQUIRED" }, "SHEET_IMPORT_SESSION_REQUIRED"],

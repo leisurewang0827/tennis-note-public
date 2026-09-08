@@ -95,8 +95,9 @@ async function remotePreviewScenario(browser, engine) {
     process.stdout.write(`PASS ${engine} development PostgREST preview UI; rpc=1; writes=0; scope-off-rpc=0; presentation-pii=0\n`);
   } finally { await context.close(); }
 }
-async function remoteExecutionScenario(browser, engine) {
-  const devOrigin = "https://tennisnote-admin-dev.pages.dev";
+async function remoteExecutionScenario(browser, engine, reverseEnabled = true) {
+  const environment = reverseEnabled ? "development" : "production";
+  const devOrigin = reverseEnabled ? "https://tennisnote-admin-dev.pages.dev" : "https://tennisnote-admin.pages.dev";
   const projectRef = "syntheticprojectref";
   const fingerprint = createHash("sha256").update(projectRef).digest("hex");
   const branchId = "11111111-1111-4111-8111-111111111111";
@@ -109,8 +110,8 @@ async function remoteExecutionScenario(browser, engine) {
     if (requestUrl.origin !== devOrigin) { await route.abort(); return; }
     if (requestUrl.pathname.endsWith("config.local.js")) {
       await route.fulfill({ status: 200, contentType: "text/javascript", body: `window.TENNISNOTE_CONFIG=${JSON.stringify({
-        supabaseUrl: `https://${projectRef}.supabase.co`, supabasePublishableKey: "fixture-publishable", environment: "development",
-        projectFingerprint: fingerprint, singleSheetImportMode: "apply", singleSheetImportReverseEnabled: true,
+        supabaseUrl: `https://${projectRef}.supabase.co`, supabasePublishableKey: "fixture-publishable", environment,
+        projectFingerprint: fingerprint, singleSheetImportMode: "apply", singleSheetImportReverseEnabled: reverseEnabled,
       })};` });
       return;
     }
@@ -183,6 +184,7 @@ async function remoteExecutionScenario(browser, engine) {
     check((await modal.locator("[data-excel-boundary]").innerText()).includes("서버 사용 범위는 미확인"), "INITIAL_LOCAL_READY_NOT_SERVER_PERMISSION");
     check(!/기능이 연결되기 전|현재는 읽기 전용/.test(await modal.innerText()) && await modal.locator("[data-excel-apply]").isDisabled(), "NO_STALE_INITIAL_READONLY_CLAIM");
     check(await page.evaluate(() => window.__sheetExecution.args.length) === 0, "OPEN_READINESS_RPC_ZERO");
+    check((await modal.locator("[data-excel-boundary]").innerText()).includes("원복은 비활성") === !reverseEnabled, "READINESS_RESPECTS_REVERSE_CAPABILITY");
     await page.evaluate(()=>{window.__sheetExecution.prepareFailure=true;});
     await fileInput.setInputFiles({ name: "synthetic.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: workbookBytes("valid") });
     await page.waitForFunction(()=>document.querySelector("#singleSheetPreviewModal")?.dataset.excelFailureCode==="SHEET_WORK_RUNTIME_UNAVAILABLE");
@@ -259,7 +261,26 @@ async function remoteExecutionScenario(browser, engine) {
     check(await page.evaluate(() => window.__sheetExecution.applies) === 0 && (await modal.innerText()).includes("확인:"), "APPLY_CONFIRM_BEFORE_WRITE");
     await page.evaluate(() => { const button = document.querySelector("[data-excel-apply]"); button.click(); button.click(); });
     await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal")?.dataset.batchPhase === "done");
-    check(await page.evaluate(() => window.__sheetExecution.applies) === 1 && !(await reverse.isHidden()), "APPLY_EXACTLY_ONCE_READBACK");
+    check(await page.evaluate(() => window.__sheetExecution.applies) === 1 && (await reverse.isHidden()) === !reverseEnabled, "APPLY_EXACTLY_ONCE_READBACK");
+    if (!reverseEnabled) {
+      check(await reverse.isDisabled(), "PRODUCTION_REVERSE_HIDDEN_DISABLED");
+      await page.evaluate(() => { document.querySelector("[data-excel-reverse]").click(); document.querySelector("[data-excel-apply]").click(); });
+      check(await page.evaluate(() => window.__sheetExecution.applies === 1 && window.__sheetExecution.reverses === 0 && window.__sheetExecution.state === "APPLIED"), "PRODUCTION_DUPLICATE_REVERSE_RPC_ZERO");
+      check((await modal.locator("[data-excel-boundary]").innerText()).includes("원복은 비활성"), "APPLIED_CAPABILITY_TEXT_PRESERVED");
+      await page.keyboard.press("Escape"); await modal.waitFor({ state: "hidden" });
+      for (const mode of ["preview", "off"]) {
+        await page.evaluate(mode => { window.TENNISNOTE_CONFIG.singleSheetImportMode = mode; }, mode);
+        await page.locator("#openSingleSheetPreviewButton").click();
+        await fileInput.setInputFiles({ name: "synthetic.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: workbookBytes("valid") });
+        await page.waitForFunction(() => ["preview-only", "blocked"].includes(document.querySelector("#singleSheetPreviewModal")?.dataset.excelReadiness));
+        check(await apply.isDisabled() && await reverse.isHidden(), "PRODUCTION_PREVIEW_OFF_MUTATIONS_DISABLED");
+        check(await page.evaluate(() => window.__sheetExecution.applies === 1 && window.__sheetExecution.reverses === 0), "PRODUCTION_PREVIEW_OFF_WRITE_ZERO");
+        await page.keyboard.press("Escape"); await modal.waitFor({ state: "hidden" });
+      }
+      check(errors.length === 0, "PRODUCTION_APPLY_ONLY_PAGE_ERRORS_ZERO");
+      process.stdout.write(`PASS ${engine} production-like apply-only actual entry; mock apply=1; reverse=0; duplicate=0; real network=0\n`);
+      return;
+    }
     await reverse.click();
     check(await page.evaluate(() => window.__sheetExecution.reverses) === 0 && (await modal.innerText()).includes("후속 사용 이력"), "REVERSE_SEPARATE_CONFIRM");
     await page.evaluate(() => { const button = document.querySelector("[data-excel-reverse]"); button.click(); button.click(); });
@@ -282,7 +303,7 @@ async function main() {
     const executablePath = engine === "chromium" ? [process.env.CHROME_PATH, chromium.executablePath(), "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"].find(p => p && fs.existsSync(p)) : undefined;
     const browser = await (engine === "webkit" ? webkit : chromium).launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
     try {
-      if (process.env.TENNISNOTE_EXCEL_READINESS_ONLY === "1") { await remoteExecutionScenario(browser, engine); continue; }
+      if (process.env.TENNISNOTE_EXCEL_READINESS_ONLY === "1") { await remoteExecutionScenario(browser, engine); await remoteExecutionScenario(browser, engine, false); continue; }
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block", acceptDownloads: true });
       const page = await context.newPage();
       const pageErrors = [], relevantConsole = []; let writeRequests = 0, externalRequests = 0;
@@ -437,6 +458,7 @@ async function main() {
       await context.close();
       await remotePreviewScenario(browser, engine);
       await remoteExecutionScenario(browser, engine);
+      await remoteExecutionScenario(browser, engine, false);
     } finally { await browser.close(); }
   }
   process.stdout.write(`Single sheet preview browser: ${assertions} assertions PASS\n`);

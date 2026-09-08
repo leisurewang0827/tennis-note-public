@@ -141,10 +141,10 @@
         if (navigator.onLine === false) { setReadiness("blocked", explain("SNAPSHOT_OFFLINE")); return; }
         if (root.TennisNoteSingleSheetRemotePreview?.recognized(transport)) {
           if (!transport.enabled || !transport.isReady()) { setReadiness("blocked", explain(transport.reason || "TARGET_UNVERIFIED")); return; }
-          const executable = transport.canApply && transport.canReverse;
+          const executable = transport.canApply === true;
           setReadiness(executable ? "awaiting-preview" : "preview-only", executable
-            ? "연결 점검 완료 · 서버 사용 범위는 미확인입니다. 파일 선택 시 현재 관리자 권한으로 최대 15분 작업 세션을 준비하고 미리보기합니다. 자동 등록하지 않습니다."
-            : "현재 연결은 미리보기 전용입니다. 등록·원복 허용 여부는 운영 담당자의 설정 확인이 필요합니다.");
+            ? "연결 점검 완료 · 서버 사용 범위는 미확인입니다. 파일 선택 시 현재 관리자 권한으로 최대 15분 작업 세션을 준비하고 미리보기합니다. 자동 등록하지 않습니다." + (transport.canReverse === true ? "" : " 원복은 비활성입니다.")
+            : "현재 연결은 미리보기 전용입니다. 등록은 비활성이며 운영 담당자의 설정 확인이 필요합니다.");
         } else setReadiness("unverified", "파일 선택 후 조회 근거를 확인합니다. 서버 사용 범위·등록 가능 여부는 아직 미확인입니다.");
       } catch { if (id === generation && !backdrop.hidden && !batch && !requestBusy) setReadiness("unverified", explain("SHEET_IMPORT_TRANSPORT_UNAVAILABLE")); }
     }
@@ -188,7 +188,7 @@
       if (!v.busy && Date.parse(v.expiresAt) > Date.now()) expires = setTimeout(() => { if (batch && !backdrop.hidden) renderBatch(batch.view()); }, Date.parse(v.expiresAt) - Date.now() + 1);
       setReadiness(v.expired ? "expired" : v.phase === "blocked" ? "blocked" : v.phase === "previewing" ? "checking" : v.canConfirm ? "ready" : v.phase,
         v.expired || v.phase === "blocked" ? "사용 준비가 완료되지 않아 새 등록은 차단합니다. 파일을 보존한 채 원인을 확인하고 다시 확인해 주세요."
-          : "서버가 회원·회원권·시간표를 한 단위로 처리합니다. 결제는 만들지 않으며 적용·원복 때에도 같은 관리자와 허용 범위·기간을 다시 검사합니다.");
+          : "서버가 회원·회원권·시간표를 한 단위로 처리합니다. 결제는 만들지 않으며 등록 때에도 같은 관리자와 허용 범위·기간을 다시 검사합니다." + (v.reverseEnabled ? " 원복도 같은 권한과 처리 이력을 검사합니다." : " 원복은 비활성입니다."));
       status.textContent = v.message ? safeBatchText(v.message) : ({ previewing: "서버 판정을 확인하고 있습니다…", ready: "미리보기 완료 · 안전 단위를 한 번 확인하고 등록합니다.", applying: "등록 처리 중 · 이미 완료된 항목은 유지됩니다.", reversing: "원복 처리 중 · 서버 이력을 다시 확인합니다.", paused: "전송 중단 · 처리 이력을 먼저 다시 확인해 주세요.", done: "등록 결과 재조회 완료", reversed: "원복 결과 재조회 완료", blocked: "서버 확인이 필요합니다." }[v.phase] || "파일을 선택해 주세요.");
       if (confirming === "apply") status.textContent = "확인: 안전 항목만 등록하며 보류 항목은 건너뜁니다. 결제는 생성하지 않습니다.";
       if (confirming === "reverse") status.textContent = "확인: 이 파일로 방금 등록한 단위만 원복합니다. 후속 사용 이력이 있으면 서버가 중단합니다.";
@@ -288,7 +288,7 @@
         const local = root.TennisNoteSingleSheetBatch?.allowed(location.hostname, transport) && options.canOpen?.() === true;
         const previewTransport = local ? null : await options.getPreviewTransport?.();
         const remote = !local && root.TennisNoteSingleSheetRemotePreview?.recognized(previewTransport) && options.canOpen?.() === true;
-        const executable = remote && previewTransport.canApply === true && previewTransport.canReverse === true
+        const executable = remote && previewTransport.canApply === true
           && root.TennisNoteSingleSheetBatch?.allowed(location.hostname, previewTransport);
         if (remote && previewTransport.enabled !== true) { error(previewTransport.reason || "SHEET_IMPORT_SCOPE_DISABLED"); return; }
         const snapshot = local || remote ? null : await options.getSnapshot();
