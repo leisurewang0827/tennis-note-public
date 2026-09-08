@@ -69,6 +69,25 @@ async function main() {
   check(response.safe === true && calls.length === 1 && calls[0][0] === "tn_preview_single_sheet_import", "EXACT_PREVIEW_RPC");
   check(JSON.stringify(calls[0][1]) === JSON.stringify({ scope: transport.scope, units: [UNIT] }), "EXACT_PREVIEW_BODY");
   check(calls[0][2].timeoutMs === 9000 && calls[0][2].requireCurrentSession === true && calls[0][2].retryAuth === false, "BOUNDED_NO_RETRY_OPTIONS");
+  const prepareKeys=[api.newWorkSessionKey(),api.newWorkSessionKey()];
+  check(prepareKeys.every(k=>/^[a-f0-9]{64}$/.test(k))&&prepareKeys[0]!==prepareKeys[1],"CRYPTO_WORK_KEY_NOT_FILE_OR_ACTOR");
+  let prepareCalls=[];
+  const workProof=()=>({contract:"single-sheet-work-session/1",scope:{...transport.scope},preparedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+600000).toISOString(),replay:false});
+  const preparedTransport=await api.create({client:{...client,rpc:async(...args)=>{prepareCalls.push(args);return workProof();}},getBranchId:()=>branch,canOpen:()=>allowed});
+  const prepared=await preparedTransport.prepareSession(prepareKeys[0]);
+  check(prepareCalls.length===1&&prepareCalls[0][0]==="tn_prepare_single_sheet_work_session"&&Object.keys(prepareCalls[0][1]).sort().join('|')==="operation_key|scope","EXACT_PREPARE_NO_ACTOR_OR_TTL");
+  check(prepared.expiresAt===preparedTransport.workSessionExpiresAt()&&prepareCalls[0][2].retryAuth===false,"PREPARE_EXPIRY_NO_RETRY");
+  await rejectCode(preparedTransport.prepareSession("bad"),"SHEET_PAYLOAD_INVALID");
+  check(prepareCalls.length===1,"INVALID_PREPARE_RPC_ZERO");
+  for(const mutate of [p=>p.contract="bad",p=>p.scope.branchId="different",p=>p.expiresAt=new Date(Date.now()+3600000).toISOString(),p=>p.expiresAt=new Date(0).toISOString(),p=>p.replay="true"]){
+    const invalid=await api.create({client:{...client,rpc:async()=>{const p=workProof();mutate(p);return p;}},getBranchId:()=>branch,canOpen:()=>allowed});
+    await rejectCode(invalid.prepareSession(prepareKeys[0]),"SHEET_WORK_SESSION_INVALID");
+    check(invalid.workSessionExpiresAt()==="","INVALID_PROOF_NOT_CACHED");
+  }
+  for(const code of ["SHEET_WORK_RUNTIME_UNAVAILABLE","SHEET_WORK_ENVIRONMENT_MISMATCH","SHEET_WORK_BRANCH_UNAVAILABLE","SHEET_WORK_SESSION_REVOKED","SHEET_WORK_SESSION_EXPIRED","SHEET_WORK_SESSION_SUPERSEDED"]){
+    const denied=await api.create({client:{...client,rpc:async()=>{throw {status:403,code:"42501",message:code,details:"RAW_SERVER_DETAIL"};}},getBranchId:()=>branch,canOpen:()=>allowed});
+    await rejectCode(denied.prepareSession(prepareKeys[0]),code);
+  }
 
   for (const scenario of [
     () => { config = { ...config, singleSheetImportMode: "off" }; },
@@ -176,6 +195,52 @@ async function main() {
       reversedOperations.push(operationKey); states[operationKeys.indexOf(operationKey)] = "REVERSED";
     },
   };
+  const onePayload = { protocol: batchTransport.protocol, fileHash: "9".repeat(64), held: [], units: [{
+    unit: sourceUnits[1], rowNumbers: [3], operationKey: operationKeys[1],
+  }] };
+  for (const [error, expectedCode] of [
+    [{ code: "SHEET_IMPORT_SCOPE_DISABLED", message: "untrusted detail" }, "SHEET_IMPORT_SCOPE_DISABLED"],
+    [{ code: "SHEET_IMPORT_SESSION_REQUIRED" }, "SHEET_IMPORT_SESSION_REQUIRED"],
+    [{ code: "SHEET_IMPORT_ENVIRONMENT_BLOCKED" }, "SHEET_IMPORT_ENVIRONMENT_BLOCKED"],
+    [{ code: "TARGET_OR_REVISION_MISMATCH" }, "TARGET_OR_REVISION_MISMATCH"],
+    [{ code: "SHEET_IMPORT_TIMEOUT" }, "SHEET_IMPORT_TIMEOUT"],
+    [{ message: "LOCAL_RESPONSE_TIMEOUT" }, "SHEET_IMPORT_TIMEOUT"],
+    [{ code: "SHEET_IMPORT_UNRECOGNIZED", message: "RAW_SERVER_DETAIL<script>" }, "SHEET_IMPORT_PREVIEW_FAILED"],
+    [{ code: "__proto__", message: "RAW_SERVER_DETAIL" }, "SHEET_IMPORT_PREVIEW_FAILED"],
+  ]) {
+    let previews = 0, writes = 0;
+    const failing = { ...batchTransport, preview: async () => { previews++; throw error; }, apply: async () => { writes++; } };
+    const deniedBatch = batchApi.create({ host: failing.host, transport: failing, adapter: snapshotApi, canOpen: () => true });
+    check(await deniedBatch.load(onePayload) === false, "PREVIEW_FAILURE_BLOCKED");
+    const state = deniedBatch.view();
+    check(state.phase === "blocked" && state.failureCode === expectedCode && state.message === expectedCode, "SAFE_CODE_SURVIVES_BATCH");
+    check(!state.canConfirm && !state.canResume && state.rows.length === 0, "FAILURE_NOT_READY_OR_ZERO_SUCCESS");
+    await deniedBatch.confirm(); await deniedBatch.resume();
+    check(previews === 1 && writes === 0 && !JSON.stringify(state).includes("RAW_SERVER_DETAIL"), "FAILURE_NO_AUTORETRY_WRITE_OR_RAW_DETAIL");
+    deniedBatch.dispose();
+  }
+  for (const [change, expectedCode] of [
+    [p => { p.proof.expiresAt = new Date(Date.now() - 1000).toISOString(); }, "STALE_PREVIEW"],
+    [p => { p.scope = { ...p.scope, branchId: "different-fixture-branch" }; }, "TARGET_OR_REVISION_MISMATCH"],
+    [p => { p.proof.complete = false; }, "SNAPSHOT_INCOMPLETE"],
+    [p => { p.contract = "unknown"; }, "SERVER_CONTRACT_REQUIRED"],
+  ]) {
+    const invalid = { ...batchTransport, preview: async (...args) => { const p = await batchTransport.preview(...args); change(p); return p; } };
+    const heldBatch = batchApi.create({ host: invalid.host, transport: invalid, adapter: snapshotApi, canOpen: () => true });
+    await heldBatch.load(onePayload);
+    check(heldBatch.view().failureCode === expectedCode && !heldBatch.view().canConfirm, "ADAPTER_FAILURE_CODE_PRESERVED");
+    heldBatch.dispose();
+  }
+  // Real transport -> batch catch, including the production-observed 403 shape.
+  let scopedRpc = 0;
+  config = { ...config, environment: "development", singleSheetImportMode: "apply", singleSheetImportReverseEnabled: true };
+  const scopedTransport = await api.create({ client: { ...client, rpc: async () => {
+    scopedRpc++; throw { status: 403, code: "42501", message: "SHEET_SCOPE_OFF_OR_MISMATCH", details: "RAW_SERVER_DETAIL" };
+  } }, getBranchId: () => BRANCH, canOpen: () => true });
+  const scopedBatch = batchApi.create({ host: scopedTransport.host, transport: scopedTransport, adapter: snapshotApi, canOpen: () => true });
+  await scopedBatch.load(onePayload);
+  check(scopedBatch.view().failureCode === "SHEET_IMPORT_SCOPE_DISABLED" && scopedRpc === 1, "POSTGREST_403_TO_BATCH_EXACT_SAFE_CODE");
+  scopedBatch.dispose();
   const batch = batchApi.create({ host: batchTransport.host, transport: batchTransport, adapter: snapshotApi, canOpen: () => true });
   await batch.load({ protocol: batchTransport.protocol, fileHash: "9".repeat(64), held: [], units: sourceUnits.map((unit, index) => ({
     unit, rowNumbers: [index + 2], operationKey: operationKeys[index],
