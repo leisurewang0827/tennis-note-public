@@ -27,7 +27,7 @@
     && transport?.protocol === "local-synthetic/1" && transport.scope?.environment === "local";
   const hostedTransport = (host, transport) => transport?.protocol === "scoped-postgrest-import/2"
     && transport.host === host && ["development", "production"].includes(transport.scope?.environment)
-    && transport.canApply === true && transport.canReverse === true && typeof transport.reverse === "function"
+    && transport.canApply === true
     && typeof transport.isReady === "function" && transport.isReady() === true;
   function allowed(host, transport) {
     return (localTransport(host, transport) || hostedTransport(host, transport)) &&
@@ -43,6 +43,7 @@
     let phase = "empty", expiresAt = "", message = "", failureCode = "";
     const access = () => !disposed && globalThis.navigator?.onLine !== false && allowed(host, transport) && sameScope(scope, transport.currentScope()) && canOpen() === true;
     const view = () => ({ phase, busy, confirmed, expiresAt, failureCode,
+      reverseEnabled: transport.canReverse !== false && typeof transport.reverse === "function",
       expired: Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY"].includes(e.state)),
       message: Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY"].includes(e.state)) ? "미리보기가 만료됐습니다. 다시 확인해 주세요. 성공분은 유지됩니다." : message,
       pending: entries.filter(e => ["READY", "RETRY", "UNKNOWN"].includes(e.state)).length,
