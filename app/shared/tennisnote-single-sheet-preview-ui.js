@@ -150,7 +150,7 @@
     }
     function close(fromHistory = false) {
       if (backdrop.hidden) return;
-      if (batch?.view().confirmed === true) batch.cancel();
+      if (batch?.view().confirmed === true) { if (batch.view().busy || !["done", "reversed"].includes(batch.view().phase)) batch.cancel(); }
       else { batch?.dispose(); batch = null; }
       confirming = false; stop(); backdrop.hidden = true; input.value = ""; reset(); opener?.focus();
       if (!fromHistory && history.state?.tnExcelPreview === true) history.back();
@@ -185,7 +185,7 @@
     const rowPlanText = row => [["새 회원", row.newMembers], ["회원권", row.newTickets], ["수업", row.newLessons]]
       .map(([label, value]) => `${label} ${Number.isInteger(value) && value >= 0 ? value : "미확정"}`).join(" · ");
     function renderBatch(v) {
-      results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.busy || !(v.expired || v.phase === "blocked" || (v.phase === "paused" && !v.confirmed)) || !input.files.length;
+      results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.busy || !(v.expired || v.phase === "blocked" || (v.phase === "paused" && (!v.confirmed || v.invalidated))) || !input.files.length;
       if (confirming === "apply" && !v.canConfirm) confirming = false;
       backdrop.dataset.excelFailureCode = v.failureCode || "";
       clearTimeout(expires);
@@ -210,6 +210,7 @@
       const list = document.createElement("ol"); list.className = "tn-excel-rows"; results.append(list);
       const labels = { READY:"등록 가능", HOLD:"보류", APPLIED:"등록 완료", REVERSED:"원복 완료", PROCESSING:"처리 중", REVERSING:"원복 처리 중", UNKNOWN:"결과 미확정", RETRY:"미처리 확인" };
       if (v.expired) { labels.READY = "미리보기 만료 · 다시 확인"; labels.RETRY = "미리보기 만료 · 다시 확인"; }
+      else if (v.invalidated) { labels.READY = "조회 정보 변경 · 다시 확인"; labels.RETRY = "조회 정보 변경 · 다시 확인"; }
       for (const row of v.rows) { const li = document.createElement("li"); list.append(li); line(li,"strong",`${row.rowNumbers.join("·")}행 · ${labels[row.state] || "확인 필요"}`); line(li,"p",`추가 생성 계획 · ${rowPlanText(row)}`); if(row.reason) line(li,"p",safeBatchText(row.reason)); }
       apply.disabled = !(v.canConfirm || v.canResume); apply.setAttribute("aria-disabled", String(apply.disabled));
       apply.className = apply.disabled ? "tn-excel-disabled" : "primary-button";
@@ -402,7 +403,11 @@
     root.addEventListener("popstate", () => close(true));
     root.addEventListener("pagehide", () => { close(true); batch?.dispose(); batch = null; });
     root.addEventListener("offline", () => { if (!backdrop.hidden) { if (batch) { batch.cancel(); return; } stop(); results.replaceChildren(); status.textContent = explain("SNAPSHOT_OFFLINE"); retry.hidden = false; } });
-    root.addEventListener("tennisnote:excel-snapshot-changed", () => { if (!backdrop.hidden) { if (batch) { batch.cancel(); return; } stop(); results.replaceChildren(); status.textContent = explain("STALE_PREVIEW"); retry.hidden = false; } });
+    root.addEventListener("tennisnote:excel-snapshot-changed", () => {
+      workPreparation = null; confirming = false;
+      if (batch) { batch.invalidate(); return; }
+      if (!backdrop.hidden) { stop(); results.replaceChildren(); status.textContent = explain("STALE_PREVIEW"); retry.hidden = false; }
+    });
     return Object.freeze({ close });
   }
   root.TennisNoteExcelPreviewUI = Object.freeze({ bind });
