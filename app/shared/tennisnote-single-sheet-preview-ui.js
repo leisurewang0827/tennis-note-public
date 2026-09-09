@@ -180,8 +180,12 @@
       }
     }
     const line = (parent, tag, value) => { const el = document.createElement(tag); el.textContent = value; parent.append(el); return el; };
+    const planText = plan => !plan.unknownUnits ? String(plan.value) : plan.knownUnits
+      ? `확정 ${plan.known} · ${plan.unknownUnits}단위 미확정` : `미확정 (${plan.unknownUnits}단위)`;
+    const rowPlanText = row => [["새 회원", row.newMembers], ["회원권", row.newTickets], ["수업", row.newLessons]]
+      .map(([label, value]) => `${label} ${Number.isInteger(value) && value >= 0 ? value : "미확정"}`).join(" · ");
     function renderBatch(v) {
-      results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.busy || !(v.expired || v.phase === "blocked") || !input.files.length;
+      results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.busy || !(v.expired || v.phase === "blocked" || (v.phase === "paused" && !v.confirmed)) || !input.files.length;
       if (confirming === "apply" && !v.canConfirm) confirming = false;
       backdrop.dataset.excelFailureCode = v.failureCode || "";
       clearTimeout(expires);
@@ -189,18 +193,24 @@
       setReadiness(v.expired ? "expired" : v.phase === "blocked" ? "blocked" : v.phase === "previewing" ? "checking" : v.canConfirm ? "ready" : v.phase,
         v.expired || v.phase === "blocked" ? "사용 준비가 완료되지 않아 새 등록은 차단합니다. 파일을 보존한 채 원인을 확인하고 다시 확인해 주세요."
           : "서버가 회원·회원권·시간표를 한 단위로 처리합니다. 결제는 만들지 않으며 등록 때에도 같은 관리자와 허용 범위·기간을 다시 검사합니다." + (v.reverseEnabled ? " 원복도 같은 권한과 처리 이력을 검사합니다." : " 원복은 비활성입니다."));
-      status.textContent = v.message ? safeBatchText(v.message) : ({ previewing: "서버 판정을 확인하고 있습니다…", ready: "미리보기 완료 · 안전 단위를 한 번 확인하고 등록합니다.", applying: "등록 처리 중 · 이미 완료된 항목은 유지됩니다.", reversing: "원복 처리 중 · 서버 이력을 다시 확인합니다.", paused: "전송 중단 · 처리 이력을 먼저 다시 확인해 주세요.", done: "등록 결과 재조회 완료", reversed: "원복 결과 재조회 완료", blocked: "서버 확인이 필요합니다." }[v.phase] || "파일을 선택해 주세요.");
+      status.textContent = v.message ? safeBatchText(v.message) : ({ previewing: "서버 판정을 확인하고 있습니다…", ready: "미리보기 완료 · 안전 단위를 한 번 확인하고 등록합니다.", applying: "등록 처리 중 · 결과는 서버 이력 조회로 확인합니다.", reversing: "원복 처리 중 · 서버 이력을 다시 확인합니다.", paused: "전송 중단 · 처리 이력을 먼저 다시 확인해 주세요.", done: "등록 결과 재조회 완료", reversed: "원복 결과 재조회 완료", blocked: "서버 확인이 필요합니다." }[v.phase] || "파일을 선택해 주세요.");
+      if (!v.message && v.phase === "ready" && v.rows.length && v.rows.every(row => row.state === "HOLD")) status.textContent = "등록할 안전 항목이 없습니다. 보류 사유를 확인해 주세요.";
+      if (v.unconfirmed) status.textContent += " 처리 중·결과 미확정 항목이 있어 등록·원복 완료 여부를 단정할 수 없습니다.";
       if (confirming === "apply") status.textContent = "확인: 안전 항목만 등록하며 보류 항목은 건너뜁니다. 결제는 생성하지 않습니다.";
       if (confirming === "reverse") status.textContent = "확인: 이 파일로 방금 등록한 단위만 원복합니다. 후속 사용 이력이 있으면 서버가 중단합니다.";
       const totals = document.createElement("dl"); totals.className = "tn-excel-summary";
       if (!["blocked", "previewing"].includes(v.phase)) results.append(totals);
-      for (const [label, value] of [["등록 완료 단위", v.applied], ["원복 완료 단위", v.reversed], ["미처리 단위", v.pending], ["신규 회원권 계획", v.rows.reduce((n,r)=>n+r.newTickets,0)], ["예정 수업", v.rows.reduce((n,r)=>n+r.newLessons,0)]]) {
+      const plans = root.TennisNoteSingleSheetSnapshot.summarizePlans(v.rows);
+      const totalsList = [["확인된 등록 완료 단위", v.applied], ["확인된 원복 완료 단위", v.reversed], ["미처리 단위", v.pending],
+        ["신규 회원 계획", planText(plans.newMembers)], ["신규 회원권 계획", planText(plans.newTickets)], ["예정 수업", planText(plans.newLessons)]];
+      if (v.unconfirmed) totalsList.push(["처리 중·결과 미확정 단위", v.unconfirmed]);
+      for (const [label, value] of totalsList) {
         const pair = document.createElement("div"); line(pair,"dt",label); line(pair,"dd",String(value)); totals.append(pair);
       }
       const list = document.createElement("ol"); list.className = "tn-excel-rows"; results.append(list);
       const labels = { READY:"등록 가능", HOLD:"보류", APPLIED:"등록 완료", REVERSED:"원복 완료", PROCESSING:"처리 중", REVERSING:"원복 처리 중", UNKNOWN:"결과 미확정", RETRY:"미처리 확인" };
       if (v.expired) { labels.READY = "미리보기 만료 · 다시 확인"; labels.RETRY = "미리보기 만료 · 다시 확인"; }
-      for (const row of v.rows) { const li = document.createElement("li"); list.append(li); line(li,"strong",`${row.rowNumbers.join("·")}행 · ${labels[row.state] || "확인 필요"}`); if(row.reason) line(li,"p",safeBatchText(row.reason)); }
+      for (const row of v.rows) { const li = document.createElement("li"); list.append(li); line(li,"strong",`${row.rowNumbers.join("·")}행 · ${labels[row.state] || "확인 필요"}`); line(li,"p",`추가 생성 계획 · ${rowPlanText(row)}`); if(row.reason) line(li,"p",safeBatchText(row.reason)); }
       apply.disabled = !(v.canConfirm || v.canResume); apply.setAttribute("aria-disabled", String(apply.disabled));
       apply.className = apply.disabled ? "tn-excel-disabled" : "primary-button";
       apply.textContent = v.busy ? "처리 중…" : v.canResume ? "미처리분 재조회·재개" : confirming === "apply" ? "확인하고 등록" : v.canConfirm ? "안전 항목 등록" : v.applied ? "처리 완료 · 새 파일 선택" : "등록할 안전 항목 없음";
@@ -248,11 +258,12 @@
       for (const code of errors) line(results, "p", explain(code));
       const summary = document.createElement("dl"); summary.className = "tn-excel-summary"; results.append(summary);
       const totalRows = held.length + Number(preview?.rowCount || 0);
+      const plans = root.TennisNoteSingleSheetSnapshot.summarizePlans(rows);
       for (const [label, value] of [
         ["전체 행", totalRows],
-        ["새 회원", serverRows.reduce((n, row) => n + Number(row.newMembers || 0), 0)],
-        ["신규 회원권", Number(preview?.newTickets || 0)],
-        ["예정 수업", Number(preview?.newLessons || 0)],
+        ["새 회원", planText(plans.newMembers)],
+        ["신규 회원권", planText(plans.newTickets)],
+        ["예정 수업", planText(plans.newLessons)],
         ["보류 행", rows.filter(row => row.status === "HOLD").reduce((n, row) => n + Math.max(1, row.rowNumbers.length), 0)],
       ]) { const pair = document.createElement("div"); line(pair, "dt", label); line(pair, "dd", String(value)); summary.append(pair); }
       const list = document.createElement("ol"); list.className = "tn-excel-rows"; results.append(list);
@@ -260,6 +271,7 @@
       for (const row of rows) {
         const item = document.createElement("li"); list.append(item);
         line(item, "strong", `${row.rowNumbers.join("·")}행 · ${labels[row.status] || "확인 필요"}`);
+        line(item, "p", `추가 생성 계획 · ${rowPlanText(row)}`);
         if (row.reason) line(item, "p", row.reason);
         for (const code of row.reasons || []) line(item, "p", explain(code));
       }

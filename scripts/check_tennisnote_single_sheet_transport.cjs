@@ -281,6 +281,98 @@ async function main() {
   await batch.reverse();
   check(reversedOperations.length === 1 && reversedOperations[0] === operationKeys[1], "ONLY_CURRENT_BATCH_UNIT_REVERSED");
   check(batch.view().applied === 1 && batch.view().reversed === 1 && batch.view().canReverse === false, "HISTORICAL_APPLIED_PRESERVED");
+  // Presentation must distinguish unknown plans/outcomes from verified zero.
+  // All responses below are synthetic in-memory; no database/client is used.
+  function uxFixture(initial) {
+    const uxStates = initial.slice(), calls = { preview: 0, apply: [], reverse: [] };
+    const options = { readbackFails: false, responseLost: false, changedPlan: false, blockedIndex: -1, release: null, holdPreview: false, releasePreview: null };
+    const uxTransport = { ...batchTransport,
+      preview: async (_scope, units) => {
+        calls.preview++;
+        if (options.holdPreview) await new Promise(resolve => { options.releasePreview = resolve; });
+        if (options.readbackFails && calls.apply.length) throw Error("READBACK_UNAVAILABLE");
+        return { contract: "single-sheet-server/2", scope: batchScope,
+          proof: { complete: true, scope: "unit_dependencies", statementBudgetMs: 10000, unitCount: units.length, expiresAt: new Date(Date.now() + 120000).toISOString() },
+          units: units.map(unit => {
+            const i = sourceUnits.findIndex(candidate => candidate.rows[0].phone === unit.rows[0].phone), state = uxStates[i];
+            return { ...serverUnit(i), status: state, verified: ["APPLIED", "REVERSED"].includes(state), reversible: state === "APPLIED",
+              planHash: options.changedPlan ? "d".repeat(64) : planHashes[i],
+              newMembers: state === "HOLD" ? null : state === "READY" ? 1 : 0,
+              newTickets: state === "HOLD" ? null : state === "READY" ? 1 : 0,
+              newLessons: state === "HOLD" ? null : 0, reason: state === "HOLD" ? "SHEET_COACH_AMBIGUOUS" : "" };
+          }) };
+      },
+      apply: async (_scope, unit, revision, planHash, _expires, _file, key) => {
+        const i = sourceUnits.findIndex(candidate => candidate.rows[0].phone === unit.rows[0].phone);
+        calls.apply.push({ key, revision, planHash });
+        if (options.blockedIndex === i) await new Promise(resolve => { options.release = resolve; });
+        if (!options.changedPlan) uxStates[i] = "APPLIED";
+        if (options.responseLost) throw Error("RESPONSE_LOST");
+      },
+      reverse: async (_scope, key) => { calls.reverse.push(key); uxStates[operationKeys.indexOf(key)] = "REVERSED"; },
+    };
+    const controller = batchApi.create({ host: uxTransport.host, transport: uxTransport, adapter: snapshotApi, canOpen: () => true });
+    const payload = { ...onePayload, units: initial.map((_, i) => ({ unit: sourceUnits[i], rowNumbers: [i + 2], operationKey: operationKeys[i] })) };
+    return { controller, calls, options, payload };
+  }
+  for (const initial of [["HOLD"], ["READY", "HOLD"]]) {
+    const f = uxFixture(initial); await f.controller.load(f.payload);
+    const v = f.controller.view(), plans = snapshotApi.summarizePlans(v.rows);
+    check(v.rows.at(-1).newMembers === null && v.rows.at(-1).newTickets === null && v.rows.at(-1).newLessons === null, "BATCH_HOLD_NULL_PRESERVED");
+    check(plans.newTickets.value === null && plans.newTickets.known === (initial.length - 1) && plans.newTickets.unknownUnits === 1, "BATCH_MIXED_KNOWN_UNKNOWN_SEPARATE");
+    f.controller.cancel(); await f.controller.confirm(); await f.controller.reverse();
+    check(!f.controller.view().canConfirm && !f.controller.view().canResume && f.calls.apply.length === 0 && f.calls.reverse.length === 0, "PRE_APPLY_CANCEL_WRITES_ZERO");
+    check(f.controller.view().message.includes("등록은 실행하지 않았습니다") && !f.controller.view().message.includes("성공"), "PRE_APPLY_CANCEL_NO_FAKE_SUCCESS");
+    const originalNow = Date.now; Date.now = () => originalNow() + 180000;
+    try { check(f.controller.view().expired && f.controller.view().message.includes("만료") && f.controller.view().message.includes("실행하지"), "ALL_HOLD_AND_MIXED_EXPIRY_TRUTHFUL"); }
+    finally { Date.now = originalNow; }
+    await f.controller.load(f.payload);
+    check(f.calls.apply.length === 0 && f.calls.preview === 2, "CANCEL_EXPLICIT_RECHECK_ONLY");
+    f.controller.dispose();
+  }
+  const loading = uxFixture(["READY"]); loading.options.holdPreview = true;
+  const loadingResult = loading.controller.load(loading.payload);
+  for (let i = 0; i < 100 && !loading.options.releasePreview; i++) await new Promise(resolve => setImmediate(resolve));
+  check(typeof loading.options.releasePreview === "function", "PREVIEW_INFLIGHT_SYNTHETIC");
+  loading.controller.cancel(); loading.options.releasePreview(); await loadingResult;
+  check(!loading.controller.view().canConfirm && loading.controller.view().phase === "paused" && loading.calls.apply.length === 0, "CANCEL_BEFORE_PREVIEW_RESPONSE_STAYS_PAUSED");
+  loading.options.holdPreview = false; await loading.controller.load(loading.payload);
+  check(loading.controller.view().canConfirm && loading.calls.apply.length === 0, "EXPLICIT_RECHECK_RESETS_CANCEL_NO_AUTO_APPLY");
+  loading.controller.dispose();
+  const lost = uxFixture(["READY"]); await lost.controller.load(lost.payload);
+  lost.options.responseLost = true; lost.options.readbackFails = true;
+  await lost.controller.confirm(); lost.controller.cancel();
+  check(lost.controller.view().unconfirmed === 1 && lost.controller.view().applied === 0 && lost.controller.view().message.includes("미확정"), "RESPONSE_LOSS_UNCONFIRMED_NOT_ZERO_SUCCESS");
+  check(!/실행하지|성공|원복 이력이 확인/.test(lost.controller.view().message) && lost.calls.apply.length === 1, "UNKNOWN_CANCEL_NO_NO_WRITE_OR_ROLLBACK_CLAIM");
+  lost.options.readbackFails = false;
+  await lost.controller.resume(); await lost.controller.confirm();
+  check(lost.controller.view().applied === 1 && lost.calls.apply.length === 1 && lost.calls.apply[0].key === operationKeys[0], "REPLAY_READBACK_NO_DUPLICATE_OPERATION");
+  lost.controller.cancel();
+  check(lost.controller.view().message.includes("확인된 등록 1단위"), "CONFIRMED_APPLIED_CANCEL_PRESERVED");
+  await lost.controller.reverse();
+  check(lost.calls.reverse.length === 0 && !lost.controller.view().message.includes("원복 이력이 확인"), "UNPROVEN_CURRENT_BATCH_REVERSE_STILL_DISABLED");
+  lost.controller.dispose();
+  const reversible = uxFixture(["READY"]); await reversible.controller.load(reversible.payload);
+  await reversible.controller.confirm(); await reversible.controller.reverse(); reversible.controller.cancel();
+  check(reversible.controller.view().reversed === 1 && reversible.controller.view().message.includes("원복 이력이 확인된 항목은 1단위"), "REVERSED_NOTICE_ONLY_AFTER_READBACK");
+  reversible.controller.dispose();
+  const partial = uxFixture(["READY", "READY"]); await partial.controller.load(partial.payload);
+  partial.options.blockedIndex = 1;
+  const running = partial.controller.confirm();
+  for (let i = 0; i < 100 && !partial.options.release; i++) await new Promise(resolve => setImmediate(resolve));
+  check(typeof partial.options.release === "function", "PARTIAL_SYNTHETIC_WRITE_PENDING");
+  partial.controller.cancel();
+  check(partial.controller.view().unconfirmed === 1 && partial.controller.view().message.includes("미확정") && partial.controller.view().message.includes("확인된 등록 1단위"), "PROCESSING_CANCEL_KNOWN_AND_UNKNOWN_SEPARATE");
+  await partial.controller.confirm();
+  check(partial.calls.apply.length === 2, "BUSY_DUPLICATE_CLICK_ZERO");
+  partial.options.release(); await running;
+  check(partial.controller.view().applied === 2 && partial.controller.view().unconfirmed === 0, "INFLIGHT_CANCEL_READBACK_COMPLETES_NOT_ROLLED_BACK");
+  partial.controller.dispose();
+  const changedPlan = uxFixture(["READY"]); await changedPlan.controller.load(changedPlan.payload); changedPlan.options.changedPlan = true;
+  await changedPlan.controller.confirm();
+  check(changedPlan.controller.view().rows[0].state === "HOLD" && changedPlan.controller.view().rows[0].newTickets === null && !changedPlan.controller.view().canResume, "CHANGED_UNAPPROVED_PLAN_UNKNOWN_NO_AUTO_RETRY");
+  check(changedPlan.calls.apply[0].planHash === planHashes[0] && changedPlan.calls.apply[0].revision === revisions[0], "ORIGINAL_APPROVED_HASH_REVISION_PRESERVED");
+  changedPlan.controller.dispose();
   process.stdout.write(`Single sheet scoped transport: ${assertions} assertions PASS\n`);
 }
 
