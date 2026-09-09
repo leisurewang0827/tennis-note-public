@@ -40,12 +40,23 @@
     if (!allowed(host, transport) || canOpen() !== true) throw Error("SHEET_APPLY_DISABLED");
     const scope = clone(transport.scope);
     let entries = [], held = [], fileHash = "", busy = false, stop = false, disposed = false, confirmed = false;
-    let phase = "empty", expiresAt = "", message = "", failureCode = "";
+    let phase = "empty", expiresAt = "", message = "", failureCode = "", noticePrefix = "", mutationAttempted = false;
     const access = () => !disposed && globalThis.navigator?.onLine !== false && allowed(host, transport) && sameScope(scope, transport.currentScope()) && canOpen() === true;
+    const outcomeNotice = () => {
+      const applied = entries.filter(e => e.state === "APPLIED").length;
+      const reversed = entries.filter(e => e.state === "REVERSED").length;
+      const unresolved = entries.some(e => ["UNKNOWN", "PROCESSING", "REVERSING"].includes(e.state));
+      if (unresolved) return "처리 중이거나 결과가 미확정인 항목은 이력을 먼저 확인해 주세요." + (applied ? ` 확인된 등록 ${applied}단위는 유지됩니다.` : "");
+      if (applied) return `확인된 등록 ${applied}단위는 유지됩니다. 나머지는 다시 확인해 주세요.`;
+      if (reversed) return `원복 이력이 확인된 항목은 ${reversed}단위입니다. 나머지는 다시 확인해 주세요.`;
+      return mutationAttempted ? "처리 이력을 먼저 확인한 뒤 미처리 항목을 재개해 주세요." : "등록은 실행하지 않았습니다.";
+    };
     const view = () => ({ phase, busy, confirmed, expiresAt, failureCode,
       reverseEnabled: transport.canReverse !== false && typeof transport.reverse === "function",
-      expired: Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY"].includes(e.state)),
-      message: Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY"].includes(e.state)) ? "미리보기가 만료됐습니다. 다시 확인해 주세요. 성공분은 유지됩니다." : message,
+      expired: Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY", "HOLD"].includes(e.state)),
+      message: Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY", "HOLD"].includes(e.state))
+        ? `미리보기가 만료됐습니다. 다시 확인해 주세요. ${outcomeNotice()}` : noticePrefix ? `${noticePrefix} ${outcomeNotice()}` : message,
+      unconfirmed: entries.filter(e => ["UNKNOWN", "PROCESSING", "REVERSING"].includes(e.state)).length,
       pending: entries.filter(e => ["READY", "RETRY", "UNKNOWN"].includes(e.state)).length,
       applied: entries.filter(e => e.state === "APPLIED").length,
       reversed: entries.filter(e => e.state === "REVERSED").length,
@@ -53,8 +64,8 @@
       canResume: access() && !busy && confirmed && entries.some(e => e.state === "UNKNOWN" || (Date.now() < Date.parse(expiresAt) && ["READY", "RETRY"].includes(e.state))),
       canReverse: access() && !busy && transport.canReverse !== false && typeof transport.reverse === "function"
         && entries.some(e => e.state === "APPLIED" && e.appliedHere === true && e.plan.reversible === true),
-      rows: [...held.map(h => ({ rowNumbers: [h.rowNumber], state: "HOLD", reason: "입력값 또는 그룹을 확인해 주세요.", newTickets: 0, newLessons: 0 })),
-        ...entries.map(e => ({ rowNumbers: e.rowNumbers.slice(), state: e.state, reason: e.reason || "", newTickets: e.plan.newTickets, newLessons: e.plan.newLessons }))] });
+      rows: [...held.map(h => ({ rowNumbers: [h.rowNumber], state: "HOLD", reason: "입력값 또는 그룹을 확인해 주세요.", newMembers: null, newTickets: null, newLessons: null })),
+        ...entries.map(e => ({ rowNumbers: e.rowNumbers.slice(), state: e.state, reason: e.reason || "", newMembers: e.plan.newMembers, newTickets: e.plan.newTickets, newLessons: e.plan.newLessons }))] });
     const emit = () => { if (!disposed) changed(view()); };
     const packet = async units => {
       if (!access()) throw Error("SHEET_APPLY_DISABLED");
@@ -67,14 +78,14 @@
       if (busy || disposed) return false;
       if (!access() || payload?.protocol !== transport.protocol || !digest(payload.fileHash) || !Array.isArray(payload.units) || payload.units.length > 500 || !Array.isArray(payload.held)) throw Error("SHEET_INPUT_INVALID");
       if (payload.units.some(e => !digest(e.operationKey) || !Array.isArray(e.unit?.rows) || e.unit.rows.length < 1 || e.unit.rows.length > 2 || !Array.isArray(e.rowNumbers) || e.rowNumbers.length !== e.unit.rows.length || e.rowNumbers.some(n => !Number.isInteger(n) || n < 2))) throw Error("SHEET_INPUT_INVALID");
-      busy = true; phase = "previewing"; confirmed = false; entries = []; held = clone(payload.held); fileHash = payload.fileHash; expiresAt = ""; message = ""; failureCode = ""; emit();
+      busy = true; stop = false; phase = "previewing"; confirmed = false; entries = []; held = clone(payload.held); fileHash = payload.fileHash; expiresAt = ""; message = ""; failureCode = ""; noticePrefix = ""; mutationAttempted = false; emit();
       try {
         if (!payload.units.length) { phase = "ready"; return true; }
         const p = await packet(payload.units.map(e => e.unit));
         expiresAt = new Date(Math.min(Date.parse(p.expiresAt), Date.parse(transport.workSessionExpiresAt?.() || p.expiresAt))).toISOString();
         entries = payload.units.map((e, i) => ({ ...clone(e), plan: p.units[i], state: p.units[i].status, reason: p.units[i].reason, appliedHere: false }));
         if (entries.some(e => ["APPLIED", "REVERSED"].includes(e.state) && !e.plan.verified)) throw Error("READBACK_UNVERIFIED");
-        phase = "ready"; return true;
+        phase = stop ? "paused" : "ready"; return !stop;
       } catch (error) { phase = "blocked"; entries = []; failureCode = safePreviewCode(error); message = failureCode; return false; }
       finally { busy = false; emit(); }
     }
@@ -86,14 +97,18 @@
         e.plan = now; e.state = now.status; e.reason = "처리 이력을 재조회했습니다."; return;
       }
       if (now.status !== "READY" || now.planHash !== e.plan.planHash || now.revision !== e.plan.revision) {
-        e.state = "HOLD"; e.reason = now.reason || "계획이 달라졌습니다. 새 미리보기로 확인해 주세요."; return;
+        e.state = "HOLD"; e.plan = { ...e.plan,
+          newMembers: now.status === "HOLD" ? now.newMembers : null,
+          newTickets: now.status === "HOLD" ? now.newTickets : null,
+          newLessons: now.status === "HOLD" ? now.newLessons : null };
+        e.reason = now.reason || "계획이 달라졌습니다. 새 미리보기로 확인해 주세요."; return;
       }
       // Keep the original approved plan and expiry; never accept a new plan silently.
       e.state = "RETRY"; e.reason = "미처리 확인 · 같은 승인 범위로 재개할 수 있습니다.";
     }
     async function run(first) {
       if (busy || !access() || (first ? !view().canConfirm : !view().canResume)) return false;
-      confirmed = true; busy = true; stop = false; phase = "applying"; message = ""; emit();
+      confirmed = true; busy = true; stop = false; phase = "applying"; message = ""; noticePrefix = ""; emit();
       try {
         for (const e of entries) {
           if (stop) break;
@@ -103,6 +118,7 @@
           if (Date.now() >= Date.parse(expiresAt)) { e.state = "HOLD"; e.reason = "미리보기가 만료됐습니다. 다시 확인해 주세요."; stop = true; break; }
           e.state = "PROCESSING"; emit();
           try {
+            mutationAttempted = true;
             await bounded(() => transport.apply(clone(scope), clone(e.unit), e.plan.revision, e.plan.planHash, expiresAt, fileHash, e.operationKey));
             e.state = "UNKNOWN";
             await reconcile(e);
@@ -120,19 +136,19 @@
               }
             } catch { e.reason = safeMutationCode(error) || "결과 미확정 · 다시 조회 후 재개해 주세요."; }
             message = safeMutationCode(error) || (stop
-              ? "전송을 중단했습니다. 성공분은 유지하며 미처리분만 재개합니다."
+              ? "전송을 중단했습니다. 처리 이력을 먼저 확인해 주세요."
               : "응답이 끊겼지만 서버 처리 이력을 확인했습니다.");
           }
           emit();
         }
         phase = stop ? "paused" : "done";
-      } catch { phase = "paused"; message = "권한·환경 또는 조회 상태가 달라져 중단했습니다. 성공분은 유지됩니다."; }
+      } catch { phase = "paused"; noticePrefix = "권한·환경 또는 조회 상태가 달라져 중단했습니다."; }
       finally { busy = false; if (disposed) { entries = []; held = []; fileHash = ""; } emit(); }
       return true;
     }
     async function reverse() {
       if (busy || !access() || !view().canReverse) return false;
-      busy = true; stop = false; phase = "reversing"; message = ""; emit();
+      busy = true; stop = false; phase = "reversing"; message = ""; noticePrefix = ""; emit();
       try {
         for (const e of [...entries].reverse()) {
           if (stop) break;
@@ -140,6 +156,7 @@
           if (!access()) throw Error("SHEET_APPLY_DISABLED");
           e.state = "REVERSING"; emit();
           try {
+            mutationAttempted = true;
             await bounded(() => transport.reverse(clone(scope), e.operationKey));
             e.state = "UNKNOWN";
             await reconcile(e);
@@ -163,7 +180,7 @@
     }
     return Object.freeze({ load, view, confirm: () => run(true), resume: () => run(false),
       reverse,
-      cancel: () => { stop = true; if (!busy && confirmed) phase = "paused"; message = "미전송분을 중단합니다. 이미 등록된 항목은 유지됩니다."; emit(); },
+      cancel: () => { stop = true; if (!busy) phase = "paused"; noticePrefix = "미전송분을 중단합니다."; emit(); },
       dispose: () => { stop = true; disposed = true; if (!busy) { entries = []; held = []; fileHash = ""; } } });
   }
   return Object.freeze({ allowed, create });
