@@ -95,7 +95,8 @@
     SHEET_PREVIEW_STALE: "미리보기 유효 시간이 지났습니다. 다시 확인해 주세요.",
     SHEET_UNEXPECTED_SIDE_EFFECT: "허용되지 않은 영향이 감지되어 이 단위를 전부 취소했습니다.",
     SHEET_DIRECTORY_SIDE_EFFECT: "기존 회원 기록 보존 조건이 맞지 않아 등록하지 않았습니다.",
-    SHEET_EXISTING_TICKET_REVIEW: "기존 회원권 갱신 대상 확인이 필요합니다.",
+    SHEET_COACH_AMBIGUOUS: "선택 지점에서 코치를 한 명으로 확정할 수 없습니다. 관리자에 등록된 코치 표시명을 확인해 주세요.",
+    SHEET_EXISTING_TICKET_REVIEW: "연결된 기존 회원권이 있어 보류했습니다. 기존권 유지·갱신·별도 신규 중 등록 목적과 대상을 확인해 주세요. 자동 변경하지 않습니다.",
     SHEET_EXISTING_PROJECTION_REVIEW: "기존 회원 기록을 보존하려면 관리자 검토가 필요합니다.",
     SHEET_IDENTITY_AMBIGUOUS: "연락처에 여러 회원이 연결되어 보류했습니다.",
     SHEET_IDENTITY_CONFLICT: "기존 회원 정보와 일치하지 않아 보류했습니다.",
@@ -111,6 +112,14 @@
     SHEET_LATER_ACTIVITY_REVIEW: "등록 이후 변경이 있어 자동 원복하지 않았습니다.",
   });
   function serverReason(code) { return SERVER_REASONS[code] || "서버 등록 조건을 확인한 뒤 다시 미리보기해 주세요."; }
+  // 미확정은 유효한 0과 다르다. 혼합 단위의 확정 부분도 별도로 보존한다.
+  function summarizePlans(units) {
+    return Object.freeze(Object.fromEntries(["newMembers", "newTickets", "newLessons"].map(key => {
+      const values = units.map(unit => unit[key]).filter(value => Number.isInteger(value) && value >= 0);
+      const known = values.reduce((sum, value) => sum + value, 0), unknownUnits = units.length - values.length;
+      return [key, Object.freeze({ value: unknownUnits ? null : known, known, knownUnits: values.length, unknownUnits })];
+    })));
+  }
   // This is a server-result adapter, not a fabricated roster completeness proof.
   // It never supplies legacy context or enables the current UI/live apply path.
   function adaptServer(packet, expected, now) {
@@ -138,15 +147,20 @@
         if (unit.rowCount < 1 || !Number.isInteger(unit.newMembers) || unit.newMembers < 0 || unit.newMembers > unit.rowCount ||
           unit.newTickets !== (replay ? 0 : 1) || !Number.isInteger(unit.newLessons) || unit.newLessons < 0 || unit.newLessons > 1000 ||
           (replay && (unit.newMembers !== 0 || unit.newLessons !== 0 || typeof unit.verified !== "boolean"))) return held("SERVER_COUNTS_INVALID");
-      } else if (!/^SHEET_[A-Z_]+$/.test(unit.reason || "")) return held("SERVER_UNITS_INVALID");
+      } else {
+        if (!/^SHEET_[A-Z_]+$/.test(unit.reason || "")) return held("SERVER_UNITS_INVALID");
+        if ([["newMembers", unit.rowCount], ["newTickets", 1], ["newLessons", 1000]].some(([key, max]) =>
+          unit[key] != null && (!Number.isInteger(unit[key]) || unit[key] < 0 || unit[key] > max))) return held("SERVER_COUNTS_INVALID");
+      }
       units.push(Object.freeze({ status: unit.status, unitHash: unit.unitHash, planHash: unit.planHash, revision: unit.revision, verified: unit.verified === true, rowCount: unit.rowCount,
-        newMembers: unit.newMembers || 0, newTickets: unit.newTickets || 0, newLessons: unit.newLessons || 0,
+        newMembers: unit.newMembers ?? null, newTickets: unit.newTickets ?? null, newLessons: unit.newLessons ?? null,
         reversible: unit.status === "APPLIED" && unit.reversible === true,
         reason: unit.status === "HOLD" ? serverReason(unit.reason) : "" }));
     }
+    const plans = summarizePlans(units);
     return { context: null, canApply: false, errors, serverPreview: Object.freeze({ expiresAt: p.expiresAt,
       units: Object.freeze(units), rowCount: units.reduce((n, u) => n + u.rowCount, 0),
-      newTickets: units.reduce((n, u) => n + u.newTickets, 0), newLessons: units.reduce((n, u) => n + u.newLessons, 0) }) };
+      plans, newMembers: plans.newMembers.value, newTickets: plans.newTickets.value, newLessons: plans.newLessons.value }) };
   }
-  return Object.freeze({ SOURCES, captureExisting, adapt, adaptServer, serverReason });
+  return Object.freeze({ SOURCES, captureExisting, adapt, adaptServer, serverReason, summarizePlans });
 });
