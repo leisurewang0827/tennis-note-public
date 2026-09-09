@@ -8,7 +8,9 @@ module.exports = async ({page,modal,engine,check,workbookBytes,XLSX,parser}) => 
       const p=window.__initial;
       if(name==="tn_prepare_single_sheet_work_session")return real(name,args,options);
       if(name==="tn_apply_single_sheet_import_unit") {
-        p.applies++;p.state="APPLIED";
+        p.applies++;
+        if(p.storageConflict)throw Object.assign(Error("SYNTHETIC_PRIVATE_CONSTRAINT"),{code:"23505",status:409});
+        p.state="APPLIED";
         if(p.responseLoss)throw Error("SYNTHETIC_RESPONSE_LOSS");
         return {status:"applied"};
       }
@@ -29,7 +31,7 @@ module.exports = async ({page,modal,engine,check,workbookBytes,XLSX,parser}) => 
   const apply=modal.locator("[data-excel-apply]"),input=modal.locator("[data-excel-file]");
   const start=async(kind,state="READY")=>{
     if(await modal.isVisible()) {await modal.locator("[data-excel-close]").click();await modal.waitFor({state:"hidden"});await page.waitForFunction(()=>!history.state?.tnExcelPreview);}
-    await page.evaluate(({kind,state})=>Object.assign(window.__initial,{kind,state,applies:0,reverses:0,responseLoss:false}),{kind,state});
+    await page.evaluate(({kind,state})=>Object.assign(window.__initial,{kind,state,applies:0,reverses:0,responseLoss:false,storageConflict:false}),{kind,state});
     await page.locator("#openSingleSheetPreviewButton").click();
     await input.setInputFiles({name:"synthetic-initial.xlsx",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:bytes});
     await page.waitForFunction(()=>document.querySelector("#singleSheetPreviewModal")?.dataset.batchPhase==="ready");
@@ -70,5 +72,16 @@ module.exports = async ({page,modal,engine,check,workbookBytes,XLSX,parser}) => 
   const reverse=modal.locator("[data-excel-reverse]");await reverse.click();await reverse.click();
   await page.waitForFunction(()=>document.querySelector("#singleSheetPreviewModal")?.dataset.batchPhase==="reversed");
   check(await page.evaluate(()=>window.__initial.reverses===1),"ONE_OWNED_REVERSE");
+  await start("TOPUP_EXISTING");await page.evaluate(()=>window.__initial.storageConflict=true);
+  // Existing two-click contract: confirmation screen first, mutation second.
+  await apply.click();
+  check(await page.evaluate(()=>window.__initial.applies===0),"CONFLICT_CONFIRMATION_WRITE_ZERO");
+  await apply.click();
+  await page.waitForFunction(()=>document.querySelector("#singleSheetPreviewModal")?.dataset.excelFailureCode==="SHEET_IMPORT_STORAGE_CONFLICT",null,{timeout:5000});
+  await page.evaluate(()=>window.dispatchEvent(new Event("tennisnote:excel-snapshot-changed")));
+  const conflictText=await modal.innerText();
+  check(conflictText.includes("저장 충돌")&&conflictText.includes("반복 등록하지")&&!conflictText.includes("SYNTHETIC_PRIVATE_CONSTRAINT"),"CONFLICT_SAFE_ACTUAL_UI");
+  check(!conflictText.includes("조회 정보 변경 · 다시 확인"),"CONFLICT_NOT_STALE_UI");
+  check(await apply.isDisabled()&&await page.evaluate(()=>window.__initial.applies===1),"CONFLICT_ONE_APPLY_NO_REPEAT");
   process.stdout.write(`PASS ${engine} initial envelope actual admin/worker/transport/batch/UI; 8 layouts; synthetic write only\n`);
 };

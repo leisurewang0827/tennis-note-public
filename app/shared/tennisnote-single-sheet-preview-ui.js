@@ -5,6 +5,7 @@
   const DEADLINE = 10000;
   let templateDependenciesPromise = null;
   const reasons = {
+    SHEET_IMPORT_STORAGE_CONFLICT: "저장 충돌로 처리를 중단했습니다. 해당 요청의 변경은 취소됐습니다. 반복 등록하지 말고 운영 담당자에게 처리 이력 확인을 요청해 주세요. 앞서 완료된 항목은 유지됩니다.",
     ADMIN_SNAPSHOT_REQUIRED: "관리자 조회 정보가 필요합니다. 관리자 화면에서 다시 확인해 주세요.",
     SHEET_IMPORT_ENVIRONMENT_BLOCKED: "현재 관리자 주소와 연결 환경이 일치하지 않아 서버 요청을 보내지 않았습니다.",
     SHEET_IMPORT_SESSION_REQUIRED: "관리자 로그인·접근 권한을 확인할 수 없습니다. 관리자 화면의 로그인 상태를 확인해 주세요.",
@@ -192,7 +193,7 @@
       return `${label} · 잔여 ${d.remainingBefore}회 + 추가 ${d.addedSessions}회 = ${d.remainingAfter}회 · 만료 ${d.expiresOn} · 기존 수업 ${d.preservedLessons}개 보존 · ${d.manualAssignment ? "시간 수동 배정" : `새 수업 ${row.newLessons}개`}`;
     };
     function renderBatch(v) {
-      results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.busy || !(v.expired || v.phase === "blocked" || (v.phase === "paused" && (!v.confirmed || v.invalidated))) || !input.files.length;
+      results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.failureCode === "SHEET_IMPORT_STORAGE_CONFLICT" || v.busy || !(v.expired || v.phase === "blocked" || (v.phase === "paused" && (!v.confirmed || v.invalidated))) || !input.files.length;
       if (confirming === "apply" && !v.canConfirm) confirming = false;
       backdrop.dataset.excelFailureCode = v.failureCode || "";
       clearTimeout(expires);
