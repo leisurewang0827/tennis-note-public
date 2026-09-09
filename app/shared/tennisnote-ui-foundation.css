@@ -1,8 +1,8 @@
 html[data-tennisnote-surface] {
-  --tn-safe-area-top: env(safe-area-inset-top, 0px);
-  --tn-safe-area-right: env(safe-area-inset-right, 0px);
-  --tn-safe-area-bottom: env(safe-area-inset-bottom, 0px);
-  --tn-safe-area-left: env(safe-area-inset-left, 0px);
+  --tn-safe-area-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --tn-safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --tn-safe-area-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --tn-safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   min-height: 100%;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -11,6 +11,16 @@ html[data-tennisnote-surface] {
 html[data-tennisnote-surface] body {
   min-height: 100dvh;
   overflow-wrap: break-word;
+}
+
+/* NFR-04: Capacitor SystemBars가 제공하는 native 여백을 기존 shell에서 한 번만
+   확보한다. bridge 값이 없으면 iOS/PWA의 기존 여백 담당과 화면 구조를 유지한다. */
+html[data-tennisnote-surface="member"] body > .app-shell,
+html[data-tennisnote-surface="coach"] body > .coach-shell {
+  box-sizing: border-box;
+  padding-top: var(--safe-area-inset-top, 0px);
+  padding-right: var(--safe-area-inset-right, 0px);
+  padding-left: var(--safe-area-inset-left, 0px);
 }
 
 .tn-mode-transition-overlay {
