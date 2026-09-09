@@ -9,7 +9,7 @@
   const sameScope = (a, b) => ["environment", "projectFingerprint", "branchId"].every(k => a?.[k] && a[k] === b?.[k]);
   const safeMutationCode = error => {
     const code = String(error?.code || error?.message || "");
-    return /^(SHEET_IMPORT_(?:APPLY_FAILED|REVERSE_FAILED|REVERSE_HOLD|RECEIPT_REQUIRED|OPERATION_CONFLICT|SESSION_REQUIRED|SCOPE_DISABLED|TIMEOUT)|TARGET_OR_REVISION_MISMATCH|STALE_PREVIEW)$/.test(code) ? code : "";
+    return /^(SHEET_IMPORT_(?:STORAGE_CONFLICT|APPLY_FAILED|REVERSE_FAILED|REVERSE_HOLD|RECEIPT_REQUIRED|OPERATION_CONFLICT|SESSION_REQUIRED|SCOPE_DISABLED|TIMEOUT)|TARGET_OR_REVISION_MISMATCH|STALE_PREVIEW)$/.test(code) ? code : "";
   };
   // Only fixed presentation codes may leave the preview catch. Never retain
   // database messages/details, source rows, or an inferred scope failure cause.
@@ -65,14 +65,14 @@
     const view = () => ({ phase, busy, confirmed, expiresAt, failureCode, invalidated,
       reverseEnabled: transport.canReverse !== false && typeof transport.reverse === "function",
       expired: Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY", "HOLD"].includes(e.state)),
-      message: Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY", "HOLD"].includes(e.state))
+      message: failureCode === "SHEET_IMPORT_STORAGE_CONFLICT" ? failureCode : Date.now() >= Date.parse(expiresAt) && entries.some(e => ["READY", "RETRY", "HOLD"].includes(e.state))
         ? `미리보기가 만료됐습니다. 다시 확인해 주세요. ${outcomeNotice()}` : noticePrefix ? `${noticePrefix} ${outcomeNotice()}` : message,
       unconfirmed: entries.filter(e => ["UNKNOWN", "PROCESSING", "REVERSING"].includes(e.state)).length,
       pending: entries.filter(e => ["READY", "RETRY", "UNKNOWN"].includes(e.state)).length,
       applied: entries.filter(e => e.state === "APPLIED").length,
       reversed: entries.filter(e => e.state === "REVERSED").length,
       canConfirm: access() && !busy && !invalidated && phase === "ready" && Date.now() < Date.parse(expiresAt) && entries.some(e => e.state === "READY"),
-      canResume: access() && !busy && confirmed && entries.some(e => e.state === "UNKNOWN" || (!invalidated && Date.now() < Date.parse(expiresAt) && ["READY", "RETRY"].includes(e.state))),
+      canResume: failureCode !== "SHEET_IMPORT_STORAGE_CONFLICT" && access() && !busy && confirmed && entries.some(e => e.state === "UNKNOWN" || (!invalidated && Date.now() < Date.parse(expiresAt) && ["READY", "RETRY"].includes(e.state))),
       canReverse: access() && !busy && transport.canReverse !== false && typeof transport.reverse === "function"
         && entries.some(e => e.state === "APPLIED" && e.appliedHere === true && e.plan.reversible === true),
       rows: [...held.map(h => ({ rowNumbers: [h.rowNumber], state: "HOLD", reason: "입력값 또는 그룹을 확인해 주세요.", newMembers: null, newTickets: null, newLessons: null })),
@@ -147,6 +147,13 @@
                 stop = cancelled || invalidated || entries.some(candidate => ["READY", "RETRY", "UNKNOWN"].includes(candidate.state));
               }
             } catch { e.reason = safeMutationCode(error) || "결과 미확정 · 다시 조회 후 재개해 주세요."; }
+            if (safeMutationCode(error) === "SHEET_IMPORT_STORAGE_CONFLICT") {
+              failureCode = "SHEET_IMPORT_STORAGE_CONFLICT"; stop = true;
+              e.reason = failureCode;
+              // Keep verified APPLIED or unresolved UNKNOWN evidence intact.
+              // A collision is never an invitation to retry the mutation.
+              if (["READY", "RETRY"].includes(e.state)) e.state = "HOLD";
+            }
             message = safeMutationCode(error) || (stop
               ? "전송을 중단했습니다. 처리 이력을 먼저 확인해 주세요."
               : "응답이 끊겼지만 서버 처리 이력을 확인했습니다.");

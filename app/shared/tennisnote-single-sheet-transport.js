@@ -94,6 +94,7 @@
 
   function mapFailure(error, fallback) {
     const raw = `${error?.code || ""} ${error?.message || ""}`.toUpperCase();
+    if (String(error?.code || "") === "23505") return "SHEET_IMPORT_STORAGE_CONFLICT";
     for (const code of ["SHEET_WORK_RUNTIME_UNAVAILABLE", "SHEET_WORK_ENVIRONMENT_MISMATCH", "SHEET_WORK_BRANCH_UNAVAILABLE", "SHEET_WORK_SESSION_REVOKED", "SHEET_WORK_SESSION_EXPIRED", "SHEET_WORK_SESSION_SUPERSEDED"]) {
       if (raw.split(/[^A-Z_]+/).includes(code)) return code;
     }
