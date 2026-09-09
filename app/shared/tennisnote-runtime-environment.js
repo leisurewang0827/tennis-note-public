@@ -114,13 +114,25 @@
   document.documentElement.dataset.tennisnoteEnvironment = environment;
   if (environment !== "development") return;
 
+  // The Pages builder also emits an environment banner before JavaScript loads.
+  // Adopt that exact banner instead of stacking another over modal controls.
+  if (window.__tennisnoteDevelopmentBanner) {
+    window.__tennisnoteDevelopmentBanner();
+    return;
+  }
   const render = () => {
-    if (document.querySelector("[data-tennisnote-internal-qa-banner]")) return;
-    const banner = document.createElement("aside");
+    const banners = [...document.querySelectorAll(
+      '[data-tennisnote-internal-qa-banner], body > aside[role="status"][aria-label="개발계 안내"]',
+    )].filter((node) => node.hasAttribute("data-tennisnote-internal-qa-banner")
+      || node.textContent.trim() === "개발계 · 실제 결제·푸시 차단");
+    const banner = banners.find((node) => node.hasAttribute("data-tennisnote-internal-qa-banner"))
+      || banners[0] || document.createElement("aside");
+    banners.filter((node) => node !== banner).forEach((duplicate) => duplicate.remove());
     banner.dataset.tennisnoteInternalQaBanner = "true";
     banner.setAttribute("role", "status");
     banner.setAttribute("aria-label", "서울 개발 내부 QA 안내");
-    banner.textContent = "서울 개발 · 내부 QA · 실제 결제·푸시 차단";
+    const copy = "서울 개발 · 내부 QA · 실제 결제·푸시 차단";
+    if (banner.textContent !== copy) banner.textContent = copy;
     Object.assign(banner.style, {
       position: "sticky",
       top: "0",
@@ -131,8 +143,45 @@
       textAlign: "center",
       font: "700 13px/1.4 system-ui, sans-serif",
     });
-    document.body.prepend(banner);
+    if (document.body.firstElementChild !== banner) document.body.prepend(banner);
+    const measure = () => {
+      if (banner.isConnected) document.documentElement.style.setProperty(
+        "--tn-dev-qa-banner-height", `${Math.ceil(banner.getBoundingClientRect().height)}px`,
+      );
+    };
+    measure();
+    if (!banner.dataset.tennisnoteQaMeasured) {
+      banner.dataset.tennisnoteQaMeasured = "true";
+      if (typeof ResizeObserver === "function") new ResizeObserver(measure).observe(banner);
+      else window.addEventListener("resize", measure);
+    }
   };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", render, { once: true });
-  else render();
+  const mount = () => {
+    if (!document.querySelector("[data-tennisnote-dev-qa-layout]")) {
+      const style = document.createElement("style");
+      style.dataset.tennisnoteDevQaLayout = "single-banner-modal-safe-v1";
+      // Development only. The banner owns its top safe-area; a modal reserves
+      // its measured height once. Production/native fallback CSS is unchanged.
+      style.textContent = `
+        html[data-tennisnote-environment="development"] .lesson-edit-modal {
+          top: var(--tn-dev-qa-banner-height, 0px);
+          padding-top: 12px;
+        }
+        html[data-tennisnote-environment="development"] .lesson-edit-modal > .modal-card {
+          max-height: min(92vh, 760px, calc(100dvh - var(--tn-dev-qa-banner-height, 0px) - 12px - max(12px, env(safe-area-inset-bottom))));
+        }
+        @media (max-width: 1024px) {
+          html[data-tennisnote-environment="development"] .lesson-edit-modal > .modal-card {
+            max-height: calc(100dvh - var(--tn-dev-qa-banner-height, 0px) - 12px - max(12px, env(safe-area-inset-bottom)));
+          }
+        }
+      `;
+      document.head.append(style);
+    }
+    render();
+    new MutationObserver(render).observe(document.body, { childList: true });
+  };
+  window.__tennisnoteDevelopmentBanner = () => { if (document.body) render(); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
+  else mount();
 })();
