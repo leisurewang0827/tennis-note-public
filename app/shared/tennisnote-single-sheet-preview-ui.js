@@ -107,7 +107,7 @@
     backdrop.className = "modal-backdrop"; backdrop.id = "singleSheetPreviewModal"; backdrop.hidden = true;
     backdrop.innerHTML = `<section class="modal-panel tn-excel-panel" role="dialog" aria-modal="true" aria-labelledby="singleSheetPreviewTitle" tabindex="-1">
       <div class="modal-heading"><h2 id="singleSheetPreviewTitle">엑셀 등록 미리보기</h2><button type="button" class="ghost-button" data-excel-close>닫기</button></div>
-      <p>회원등록 시트 · 회원권 1개당 1행 · 최대 500행</p>
+      <p>회원등록 시트 · 회원권 1개당 1행 · 최대 500행 · 사용횟수 공란은 0회</p>
       <label class="form-field">XLSX 파일 선택<input type="file" accept=".xlsx" data-excel-file /></label>
       <p class="tn-excel-status" data-excel-status role="status" aria-live="polite">파일을 선택하면 등록 전에 내용을 확인합니다.</p>
       <div data-excel-results></div>
@@ -184,6 +184,13 @@
       ? `확정 ${plan.known} · ${plan.unknownUnits}단위 미확정` : `미확정 (${plan.unknownUnits}단위)`;
     const rowPlanText = row => [["새 회원", row.newMembers], ["회원권", row.newTickets], ["수업", row.newLessons]]
       .map(([label, value]) => `${label} ${Number.isInteger(value) && value >= 0 ? value : "미확정"}`).join(" · ");
+    const initialText = row => {
+      const d = row.initial;
+      if (!d) return row.state === "NO_OP" || row.status === "NO_OP" ? "이미 처리된 원본 · 추가 등록 없음. 현재 잔여는 회원권에서 확인해 주세요." : "";
+      const label = { NEW_TICKET: "새 회원권 등록", ADD_TICKET: "다른 코치 회원권 추가 · 기존권 보존", TOPUP_EXISTING: "기존 회원권 횟수 추가" }[d.kind];
+      if (d.historicalReceipt) return `${label} 이력 · 추가 등록 없음. 현재 잔여는 회원권에서 다시 확인해 주세요.`;
+      return `${label} · 잔여 ${d.remainingBefore}회 + 추가 ${d.addedSessions}회 = ${d.remainingAfter}회 · 만료 ${d.expiresOn} · 기존 수업 ${d.preservedLessons}개 보존 · ${d.manualAssignment ? "시간 수동 배정" : `새 수업 ${row.newLessons}개`}`;
+    };
     function renderBatch(v) {
       results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.busy || !(v.expired || v.phase === "blocked" || (v.phase === "paused" && (!v.confirmed || v.invalidated))) || !input.files.length;
       if (confirming === "apply" && !v.canConfirm) confirming = false;
@@ -208,10 +215,10 @@
         const pair = document.createElement("div"); line(pair,"dt",label); line(pair,"dd",String(value)); totals.append(pair);
       }
       const list = document.createElement("ol"); list.className = "tn-excel-rows"; results.append(list);
-      const labels = { READY:"등록 가능", HOLD:"보류", APPLIED:"등록 완료", REVERSED:"원복 완료", PROCESSING:"처리 중", REVERSING:"원복 처리 중", UNKNOWN:"결과 미확정", RETRY:"미처리 확인" };
+      const labels = { READY:"등록 가능", HOLD:"보류", APPLIED:"등록 완료", NO_OP:"이미 처리됨 · 추가 없음", REVERSED:"원복 완료", PROCESSING:"처리 중", REVERSING:"원복 처리 중", UNKNOWN:"결과 미확정", RETRY:"미처리 확인" };
       if (v.expired) { labels.READY = "미리보기 만료 · 다시 확인"; labels.RETRY = "미리보기 만료 · 다시 확인"; }
       else if (v.invalidated) { labels.READY = "조회 정보 변경 · 다시 확인"; labels.RETRY = "조회 정보 변경 · 다시 확인"; }
-      for (const row of v.rows) { const li = document.createElement("li"); list.append(li); line(li,"strong",`${row.rowNumbers.join("·")}행 · ${labels[row.state] || "확인 필요"}`); line(li,"p",`추가 생성 계획 · ${rowPlanText(row)}`); if(row.reason) line(li,"p",safeBatchText(row.reason)); }
+      for (const row of v.rows) { const li = document.createElement("li"); list.append(li); line(li,"strong",`${row.rowNumbers.join("·")}행 · ${labels[row.state] || "확인 필요"}`); if(initialText(row)) line(li,"p",initialText(row)); line(li,"p",`추가 생성 계획 · ${rowPlanText(row)}`); if(row.reason) line(li,"p",safeBatchText(row.reason)); }
       apply.disabled = !(v.canConfirm || v.canResume); apply.setAttribute("aria-disabled", String(apply.disabled));
       apply.className = apply.disabled ? "tn-excel-disabled" : "primary-button";
       apply.textContent = v.busy ? "처리 중…" : v.canResume ? "미처리분 재조회·재개" : confirming === "apply" ? "확인하고 등록" : v.canConfirm ? "안전 항목 등록" : v.applied ? "처리 완료 · 새 파일 선택" : "등록할 안전 항목 없음";
@@ -268,11 +275,12 @@
         ["보류 행", rows.filter(row => row.status === "HOLD").reduce((n, row) => n + Math.max(1, row.rowNumbers.length), 0)],
       ]) { const pair = document.createElement("div"); line(pair, "dt", label); line(pair, "dd", String(value)); summary.append(pair); }
       const list = document.createElement("ol"); list.className = "tn-excel-rows"; results.append(list);
-      const labels = { READY: "서버 판정 완료", HOLD: "확인 필요", APPLIED: "기존 처리 이력", REVERSED: "기존 원복 이력" };
+      const labels = { READY: "서버 판정 완료", HOLD: "확인 필요", APPLIED: "기존 처리 이력", NO_OP: "이미 처리됨 · 추가 없음", REVERSED: "기존 원복 이력" };
       for (const row of rows) {
         const item = document.createElement("li"); list.append(item);
         line(item, "strong", `${row.rowNumbers.join("·")}행 · ${labels[row.status] || "확인 필요"}`);
         line(item, "p", `추가 생성 계획 · ${rowPlanText(row)}`);
+        if (initialText(row)) line(item, "p", initialText(row));
         if (row.reason) line(item, "p", row.reason);
         for (const code of row.reasons || []) line(item, "p", explain(code));
       }
