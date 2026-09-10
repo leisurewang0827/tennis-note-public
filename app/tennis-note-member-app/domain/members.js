@@ -342,7 +342,8 @@ function identityProfileComplete() {
     name
       && name !== "가입 확인 중"
       && nickname.length >= 2
-      && phone.length >= 10
+      // Completed identity comes from the server. Candidate contact is not
+      // canonical phone and must not become a membership-authority condition.
       && birthYear >= 1900
       && birthYear <= new Date().getFullYear()
       && ["female", "male", "other", "prefer_not"].includes(gender)

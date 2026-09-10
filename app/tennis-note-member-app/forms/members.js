@@ -164,6 +164,13 @@ function setIdentityPhoneStatus(message, tone = "") {
 }
 
 function syncIdentityPhoneCapabilityControl() {
+  if (!signupSmsEnabled) {
+    $("#identityPhoneVerification")?.setAttribute("hidden", "");
+    ["identityPhoneSendButton", "identityPhoneVerifyButton", "identityNaverPhoneButton"].forEach((id) => {
+      if ($(`#${id}`)) $(`#${id}`).disabled = true;
+    });
+    return;
+  }
   const button = $("#identityPhoneSendButton");
   if (!button || identityPhoneVerification.status === "verified") return;
   if (identityAuthCapabilities.status === "checking") {
@@ -264,7 +271,10 @@ function markIdentityPhoneVerified(phone, source = "sms") {
 function populateIdentitySetup(user = null) {
   const realName = state.profile.name === "가입 확인 중" ? "" : state.profile.name || "";
   const suggestedNickname = state.profile.nickname || state.profile.suggestedNickname || suggestedNicknameFromUser(user);
-  const providerPhone = verifiedPhoneFromAuthUser(user || {});
+  // Contact is prefill only, even if historical provider flags say verified.
+  const metadata = user?.user_metadata || {};
+  const providerDigits = normalizeIdentityPhone(metadata.phone_number || metadata.phone || metadata.mobile || "");
+  const providerPhone = /^821[0-9]{8,9}$/u.test(providerDigits) ? `0${providerDigits.slice(2)}` : providerDigits;
   const initialPhone = providerPhone || state.profile.phone || "";
   if ($("#identityRealName")) $("#identityRealName").value = realName;
   if ($("#identityNickname")) $("#identityNickname").value = suggestedNickname;
@@ -287,10 +297,7 @@ function populateIdentitySetup(user = null) {
     naverPhoneButton.disabled = false;
   }
   setNicknameStatus("identityNicknameStatus", "닉네임은 모든 회원 사이에서 중복될 수 없습니다.");
-  if (providerPhone) markIdentityPhoneVerified(providerPhone, "provider");
-  else if (authUserHasProvider(user || {}, "custom:naver")) {
-    resetIdentityPhoneVerification("네이버 번호를 다시 받거나 문자 인증 후 기존 회원 DB와 연결합니다.");
-  } else resetIdentityPhoneVerification("휴대전화 인증 후 기존 회원 DB와 안전하게 연결합니다.");
+  resetIdentityPhoneVerification("입력 번호는 연결 검토에만 사용하며 인증된 번호로 처리하지 않습니다.");
   syncIdentityPhoneCapabilityControl();
   if ($("#identitySetupMessage")) $("#identitySetupMessage").textContent = "";
 }

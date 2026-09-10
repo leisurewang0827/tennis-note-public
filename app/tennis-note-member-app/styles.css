@@ -5755,6 +5755,10 @@ button.purchase-timetable-cell {
   gap: 12px;
 }
 
+#identitySetupForm :is(input, select, textarea) {
+  font-size: 16px;
+}
+
 .identity-setup-form label > span {
   color: var(--ink);
 }

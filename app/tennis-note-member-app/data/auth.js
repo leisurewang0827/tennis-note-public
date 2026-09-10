@@ -116,6 +116,7 @@ async function persistConsentPreferences({ marketingPush, marketingSms, marketin
 }
 
 async function refreshIdentityPhoneVerification() {
+  if (!signupSmsEnabled) return "";
   const client = window.TennisNoteDataClient;
   if (!hasLiveMemberSession() || !client?.getAuthUser) return "";
   const user = await client.getAuthUser();
@@ -144,18 +145,22 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
   if (!/^01[0-9]{8,9}$/u.test(normalizedPhone)) throw new Error("phone_invalid");
   if (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear()) throw new Error("birth_year_invalid");
   if (!["female", "male", "other", "prefer_not"].includes(normalizedGender)) throw new Error("gender_invalid");
-  await requireVerifiedIdentityPhone(normalizedPhone);
-
   const client = window.TennisNoteDataClient;
   if (hasLiveMemberSession() && client?.rpc) {
-    const rawResult = await retryTransientNetwork(() => client.rpc("tn_update_my_identity_profile_v3", {
-      target_real_name: normalizedRealName,
-      target_nickname: normalizedNickname,
-      target_phone: normalizedPhone,
-      target_birth_year: normalizedBirthYear,
-      target_neighborhood: normalizedNeighborhood,
-      target_gender: normalizedGender,
-      target_privacy_version: identityPrivacyVersion,
+    const targetProfile = {
+      name: normalizedRealName, nickname: normalizedNickname, phoneCandidate: normalizedPhone,
+      birthYear: normalizedBirthYear, neighborhood: normalizedNeighborhood,
+      gender: normalizedGender, privacyVersion: identityPrivacyVersion,
+    };
+    // Memory-only draft/key: a lost response retries the same operation. Raw
+    // contact is never written to console, URL, analytics or a new storage key.
+    const fingerprint = JSON.stringify(targetProfile);
+    if (signupProfileOperation.fingerprint !== fingerprint) {
+      signupProfileOperation = { fingerprint, key: crypto.randomUUID() };
+    }
+    const rawResult = await retryTransientNetwork(() => client.rpc("tn_save_my_signup_profile", {
+      target_profile: targetProfile,
+      target_operation_key: signupProfileOperation.key,
     }));
     const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
     if (!result?.ok || !result?.profile) throw new Error("identity_profile_update_not_confirmed");
