@@ -341,6 +341,11 @@ let coachModeNavigationStarted = false;
 let oauthLoginInFlightProvider = "";
 let emailAuthMode = "login";
 let emailPasswordRecoveryPending = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("type") === "recovery";
+// 가입 SMS는 비활성 상태이며 검토용 연락처와 인증된 연락처를 구분합니다.
+const signupSmsEnabled = false;
+let signupProfileOperation = { fingerprint: "", key: "" };
+let signupProfileSubmitting = false;
+
 let identityPhoneVerification = {
   phone: "",
   status: "unverified",

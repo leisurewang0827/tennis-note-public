@@ -30,7 +30,7 @@ test("확인된 auth phone 또는 provider identity만 자동 연결 번호로 �
   }), "01012345678");
 });
 
-test("가입 화면은 전화번호 인증 후 v3 서버 연결을 사용한다", () => {
+test("가입은 검토용 번호를 저장하고 기존 전화 인증 구현은 별도로 보존한다", () => {
   const dataClient = readFileSync(join(root, "app/shared/tennisnote-data-client.js"), "utf8");
   const identityDomain = readFileSync(join(root, "app/tennis-note-member-app/domain/identity.js"), "utf8");
   const auth = readFileSync(join(root, "app/tennis-note-member-app/data/auth.js"), "utf8");
@@ -42,8 +42,11 @@ test("가입 화면은 전화번호 인증 후 v3 서버 연결을 사용한다"
   assert.match(dataClient, /requestPhoneChangeVerification/);
   assert.match(dataClient, /verifyPhoneChange/);
   assert.match(dataClient, /responseRequestError\(response, rawText, "Supabase auth settings failed"\)/);
-  assert.match(auth, /await requireVerifiedIdentityPhone\(normalizedPhone\)/);
-  assert.match(auth, /tn_update_my_identity_profile_v3/);
+  assert.doesNotMatch(auth, /await requireVerifiedIdentityPhone\(normalizedPhone\)/);
+  assert.match(auth, /tn_save_my_signup_profile/);
+  assert.match(auth, /target_operation_key: signupProfileOperation.key/);
+  assert.match(actions, /if \(!signupSmsEnabled\) return false;/);
+  assert.match(html, /id="identityPhoneVerification" hidden/);
   assert.match(actions, /identityPhoneVerification = \{ phone, status: "pending", source: "sms" \}/);
   assert.match(actions, /refreshAuthProviderCapabilities\(\{ force: true \}\)/);
   assert.match(actions, /identityPhoneRequestInFlight/);

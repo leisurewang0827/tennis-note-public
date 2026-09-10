@@ -147,6 +147,14 @@ async function loadMemberLinkCandidates(member, query = memberManagementModalSta
     window.TennisNoteInputGuard?.markSaved?.("#memberManagementModal");
   }
   try {
+    const selectedBranch = activeOperationBranchId();
+    if (!selectedBranch) throw new Error("exact_branch_member_required");
+    const pending = await window.TennisNoteDataClient.rpc("tn_admin_signup_link_requests", {
+      target_branch_id: selectedBranch, target_member_id: member.serverUserId,
+    });
+    if (memberManagementModalState.memberId !== member.id || memberManagementModalState.action !== "app_link"
+      || activeOperationBranchId() !== selectedBranch) return;
+    memberManagementModalState.signupLinkRequests = Array.isArray(pending?.requests) ? pending.requests : [];
     const result = await window.TennisNoteDataClient.rpc("tn_admin_member_link_candidates", {
       target_user_id: member.serverUserId,
       target_query: memberManagementModalState.linkQuery || null,
@@ -156,6 +164,7 @@ async function loadMemberLinkCandidates(member, query = memberManagementModalSta
   } catch (error) {
     memberManagementModalState.message = memberManagementErrorText(error);
     memberManagementModalState.linkCandidates = [];
+    memberManagementModalState.signupLinkRequests = [];
   } finally {
     memberManagementModalState.linkCandidatesLoading = false;
     if (memberManagementModalState.memberId === member.id && memberManagementModalState.action === "app_link") {

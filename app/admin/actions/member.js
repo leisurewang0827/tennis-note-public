@@ -537,6 +537,47 @@ function applyMemberManagementProductDefaults(form, allLiveData = adminLiveDataS
   syncMemberRegistrationSummary(form);
 }
 
+async function submitSignupLinkApproval(form, member) {
+  const modalState = memberManagementModalState;
+  if (modalState.signupLinkReviewBusy) return;
+  const message = $("#memberManagementMessage");
+  const branch = activeOperationBranchId();
+  const request = (modalState.signupLinkRequests || []).find((item) => item.id === form.elements.signupLinkRequest?.value);
+  const decision = form.elements.signupLinkDecision?.value;
+  if (operationsRole() !== "admin" || !branch || !request || request.branchId !== branch
+    || request.targetUserId !== member.serverUserId || request.status !== "pending"
+    || !Number.isInteger(request.revision) || !["approve", "reject"].includes(decision)
+    || !form.elements.signupLinkBranchConfirmed?.checked) {
+    if (message) message.textContent = "현재 지점·대상 회원·연결 요청을 다시 확인해 주세요.";
+    return;
+  }
+  const payload = { target_request_id: request.id, target_branch_id: branch,
+    target_member_id: member.serverUserId, target_revision: request.revision, target_decision: decision };
+  const signature = JSON.stringify(payload);
+  modalState.signupLinkReviewOperations ||= {};
+  const operationKey = modalState.signupLinkReviewOperations[signature] ||= createAdminOperationKey("signup-link-review");
+  const button = form.querySelector('button[type="submit"]');
+  modalState.signupLinkReviewBusy = true;
+  if (button) button.disabled = true;
+  try {
+    const result = await window.TennisNoteDataClient.rpc("tn_admin_review_signup_link", {
+      ...payload, target_operation_key: operationKey,
+    });
+    if (!result?.ok || result.requestId !== request.id || result.branchId !== branch
+      || result.targetUserId !== member.serverUserId
+      || result.status !== (decision === "approve" ? "approved" : "rejected")) throw new Error("approval_readback_failed");
+    if (activeOperationBranchId() !== branch || modalState.memberId !== member.id) return;
+    await loadMemberLinkCandidates(member);
+    await refreshMemberAuthManagement(member);
+    if (message?.isConnected) message.textContent = "연결 요청 처리가 완료되었습니다.";
+  } catch (_error) {
+    if (message?.isConnected) message.textContent = "처리를 확인하지 못했습니다. 지점과 요청 상태를 확인한 뒤 다시 시도해 주세요. 같은 요청은 중복 처리되지 않습니다.";
+  } finally {
+    modalState.signupLinkReviewBusy = false;
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
 async function submitMemberManagementForm(event) {
   event.preventDefault();
   const form = event.target;
@@ -549,6 +590,10 @@ async function submitMemberManagementForm(event) {
   const submit = form.querySelector("button[type='submit']");
   if ((!isCreate && !member?.serverUserId) || !client?.rpc || !memberManagementActionAllowed(action, ticket)) {
     if (message) message.textContent = "현재 계정에는 이 작업 권한이 없습니다.";
+    return;
+  }
+  if (action === "app_link" && form.elements.signupLinkRequest) {
+    await submitSignupLinkApproval(form, member);
     return;
   }
   if (action === "force_delete" && !memberManagementModalState.forceDeletePreview?.ok) {

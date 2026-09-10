@@ -41,6 +41,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
     memberId: refreshedMember.id,
     action,
     ticketId,
+    signupLinkRequests: [],
     message: "",
     linkCandidates: [],
     linkCandidatesLoading: false,

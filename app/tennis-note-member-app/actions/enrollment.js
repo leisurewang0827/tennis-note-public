@@ -91,7 +91,8 @@ async function submitMemberEnrollment(event) {
       if (state.member) state.member.memberKind = "lesson_pending";
     }
     state.profile.name = payload.target_applicant_name;
-    state.profile.phone = payload.target_phone;
+    // An enrollment answer does not verify or replace canonical identity contact.
+    if (!hasLiveMemberSession()) state.profile.phone = payload.target_phone;
     state.ticketHistory.unshift({ text: `${product.title} 수강 가입서 제출 완료`, tone: "done" });
     saveSnapshot();
     renderAll();
@@ -114,7 +115,7 @@ async function submitMemberEnrollment(event) {
 function applySavedIdentity(profile = {}) {
   state.profile.name = normalizeIdentityText(profile.name || state.profile.name);
   state.profile.nickname = normalizeIdentityText(profile.nickname || state.profile.nickname);
-  state.profile.phone = normalizeIdentityPhone(profile.phone || state.profile.phone);
+  state.profile.phone = normalizeIdentityPhone(Object.prototype.hasOwnProperty.call(profile, "phone") ? profile.phone || "" : state.profile.phone);
   state.profile.birthYear = profile.birth_year || state.profile.birthYear || "";
   state.profile.neighborhood = normalizeIdentityText(profile.neighborhood || state.profile.neighborhood || "");
   state.profile.gender = profile.gender || state.profile.gender || "";
@@ -138,6 +139,7 @@ function applyConsentPreferences(preferences = {}) {
 }
 
 async function requestIdentityPhoneVerification() {
+  if (!signupSmsEnabled) return false;
   const button = $("#identityPhoneSendButton");
   if (!button || identityPhoneRequestInFlight) return false;
   const phone = normalizeIdentityPhone($("#identityPhone")?.value || "");
@@ -187,6 +189,7 @@ async function requestIdentityPhoneVerification() {
 }
 
 async function requestNaverPhoneConsent() {
+  if (!signupSmsEnabled) return false;
   const button = $("#identityNaverPhoneButton");
   const client = window.TennisNoteDataClient;
   if (!button || !hasLiveMemberSession() || !client?.signInWithOAuth) {
@@ -206,6 +209,7 @@ async function requestNaverPhoneConsent() {
 }
 
 async function confirmIdentityPhoneVerification() {
+  if (!signupSmsEnabled) return false;
   const button = $("#identityPhoneVerifyButton");
   const phone = normalizeIdentityPhone($("#identityPhone")?.value || "");
   const code = normalizeIdentityPhone($("#identityPhoneCode")?.value || "");
@@ -238,6 +242,7 @@ async function confirmIdentityPhoneVerification() {
 
 async function submitIdentitySetup(event) {
   event.preventDefault();
+  if (signupProfileSubmitting) return;
   const form = event.currentTarget;
   const button = form.querySelector('button[type="submit"]');
   const message = $("#identitySetupMessage");
@@ -249,6 +254,7 @@ async function submitIdentitySetup(event) {
     if (message) message.textContent = "개인정보 처리방침 동의가 필요합니다.";
     return;
   }
+  signupProfileSubmitting = true;
   button.disabled = true;
   if (message) message.textContent = "가입 정보를 안전하게 저장하고 있습니다.";
   try {
@@ -267,26 +273,16 @@ async function submitIdentitySetup(event) {
     });
     $("#identitySetupModal").hidden = true;
     document.body.classList.remove("identity-setup-required");
-    if (result?.linkStatus === "linked") {
-      const restored = await applySupabaseMemberSession(false);
-      if (!restored) throw new Error("auto_link_session_refresh_failed");
-      showToast("가입 완료 · 기존 회원권과 앱 계정이 바로 연결되었습니다.");
-      return;
-    }
     renderAll();
     saveSnapshot();
-    if (result?.linkStatus === "admin_review_required") {
-      showToast("가입 완료. 기존 회원 정보는 관리자 확인 후 연결됩니다.");
-      await applyPendingOnboardingIntent();
-      return;
-    }
-    showToast("가입 정보가 저장되었습니다.");
+    showToast("가입 완료. 회원 정보 연결은 관리자 확인 후 처리됩니다.");
     await applyPendingOnboardingIntent();
   } catch (error) {
     const errorMessage = identityErrorMessage(error);
     if (message) message.textContent = errorMessage;
     setNicknameStatus("identityNicknameStatus", errorMessage, "unavailable");
   } finally {
+    signupProfileSubmitting = false;
     button.disabled = false;
   }
 }
