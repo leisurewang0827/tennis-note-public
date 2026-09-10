@@ -79,11 +79,11 @@
   function normalizeRow(values, epoch1904) {
     const problems = [];
     const problem = code => { if (!problems.includes(code)) problems.push(code); };
-    HEADERS.slice(0, 7).forEach(key => { if (text(values[key]) === "") problem("REQUIRED_VALUE_MISSING"); });
+    HEADERS.slice(0, 6).forEach(key => { if (text(values[key]) === "") problem("REQUIRED_VALUE_MISSING"); });
     const row = {
       name: text(values["회원명"]), phone: phone(values["연락처"]), coach: text(values["코치"]),
       product: text(values["회원권"]), startDate: date(values["시작일"], epoch1904),
-      total: count(values["총횟수"]), used: count(values["사용횟수"]), group: text(values["그룹코드"]), slots: [],
+      total: count(values["총횟수"]), used: text(values["사용횟수"]) === "" ? 0 : count(values["사용횟수"]), group: text(values["그룹코드"]), slots: [],
     };
     if (!row.phone) problem(typeof values["연락처"] === "number" ? "PHONE_TEXT_REQUIRED" : "PHONE_INVALID");
     if (!row.startDate) problem("DATE_INVALID");

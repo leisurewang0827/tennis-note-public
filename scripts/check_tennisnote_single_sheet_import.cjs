@@ -115,7 +115,14 @@ async function main() {
     check(a.rows[0].rowHash === b.rows[0].rowHash, "NORMALIZED_HASH");
     const wb = workbook([withSlot({ "시작일": serial - 1462 })]); wb.Workbook.WBProps.date1904 = true;
     check((await parse(wb)).rows[0].rowHash === a.rows[0].rowHash, "EPOCH_1904");
-    for (const [changes, reason] of [[{ "연락처": 1000000001 }, "PHONE_TEXT_REQUIRED"], [{ "연락처": "1e10" }, "PHONE_INVALID"], [{ "시작일": "2030-02-30" }, "DATE_INVALID"], [{ "시작일": 60 }, "DATE_INVALID"], [{ "시작일": "01/07/2030" }, "DATE_INVALID"], [{ "시간1": "24:00" }, "SLOT_INVALID"], [{ "시간1": "10:00:30" }, "SLOT_INVALID"], [{ "총횟수": -1 }, "SESSION_COUNTS_INVALID"], [{ "총횟수": 2.5 }, "SESSION_COUNTS_INVALID"], [{ "사용횟수": 6 }, "SESSION_COUNTS_INVALID"], [{ "사용횟수": "" }, "REQUIRED_VALUE_MISSING"], [{ "회원명": "<synthetic>" }, "TEXT_UNSAFE"]]) {
+    for (const blank of ["", "   ", undefined]) {
+      const parsed = await parse(workbook([withSlot({ "사용횟수": blank })]));
+      check(parsed.errors.length === 0 && parsed.rows[0].rowHash === a.rows[0].rowHash, "BLANK_USED_NORMALIZES_TO_ZERO");
+      const result = await preview([withSlot({ "사용횟수": blank })]);
+      check(result.rows[0].remaining === 5 && result.plans.length === 5, "BLANK_USED_FIVE_REMAINING");
+    }
+    check((await parse(workbook([row()], api.HEADERS.filter(h => h !== "사용횟수")))).errors.includes("HEADER_MISSING"), "USED_HEADER_STILL_REQUIRED");
+    for (const [changes, reason] of [[{ "연락처": 1000000001 }, "PHONE_TEXT_REQUIRED"], [{ "연락처": "1e10" }, "PHONE_INVALID"], [{ "시작일": "2030-02-30" }, "DATE_INVALID"], [{ "시작일": 60 }, "DATE_INVALID"], [{ "시작일": "01/07/2030" }, "DATE_INVALID"], [{ "시간1": "24:00" }, "SLOT_INVALID"], [{ "시간1": "10:00:30" }, "SLOT_INVALID"], [{ "총횟수": -1 }, "SESSION_COUNTS_INVALID"], [{ "총횟수": 2.5 }, "SESSION_COUNTS_INVALID"], [{ "사용횟수": 6 }, "SESSION_COUNTS_INVALID"], [{ "회원명": "" }, "REQUIRED_VALUE_MISSING"], [{ "회원명": "<synthetic>" }, "TEXT_UNSAFE"]]) {
       check(hasReason(await preview([withSlot(changes)]), reason), "NORMALIZATION_REJECT");
     }
   });

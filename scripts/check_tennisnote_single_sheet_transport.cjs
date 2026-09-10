@@ -63,6 +63,8 @@ async function main() {
   const create = () => api.create({ client, getBranchId: () => branch, canOpen: () => allowed });
 
   const transport = await create();
+  const collisionTransport = await api.create({ client: { ...client, rpc: async () => { throw { code: "23505", message: "PRIVATE_DATABASE_DETAIL" }; } }, getBranchId: () => branch, canOpen: () => allowed });
+  await rejectCode(collisionTransport.preview(collisionTransport.scope, [UNIT]), "SHEET_IMPORT_STORAGE_CONFLICT");
   check(api.recognized(transport) && transport.enabled && transport.canApply === false && transport.canReverse === false, "PREVIEW_ONLY_TRANSPORT");
   check(typeof transport.apply === "undefined" && typeof transport.reverse === "undefined" && transport.cleanupContinuityRequired, "NO_MUTATION_METHODS");
   const response = await transport.preview(transport.scope, [UNIT]);
@@ -306,6 +308,7 @@ async function main() {
         const i = sourceUnits.findIndex(candidate => candidate.rows[0].phone === unit.rows[0].phone);
         calls.apply.push({ key, revision, planHash });
         if (options.blockedIndex === i) await new Promise(resolve => { options.release = resolve; });
+        if (options.storageConflict) throw Error("SHEET_IMPORT_STORAGE_CONFLICT");
         if (!options.changedPlan) uxStates[i] = "APPLIED";
         if (options.responseLost) throw Error("RESPONSE_LOST");
       },
@@ -373,6 +376,17 @@ async function main() {
   check(changedPlan.controller.view().rows[0].state === "HOLD" && changedPlan.controller.view().rows[0].newTickets === null && !changedPlan.controller.view().canResume, "CHANGED_UNAPPROVED_PLAN_UNKNOWN_NO_AUTO_RETRY");
   check(changedPlan.calls.apply[0].planHash === planHashes[0] && changedPlan.calls.apply[0].revision === revisions[0], "ORIGINAL_APPROVED_HASH_REVISION_PRESERVED");
   changedPlan.controller.dispose();
+  for (const readbackFails of [false, true]) {
+    const conflict = uxFixture(["READY"]); await conflict.controller.load(conflict.payload);
+    conflict.options.storageConflict = true; conflict.options.readbackFails = readbackFails;
+    await conflict.controller.confirm(); conflict.controller.invalidate();
+    check(conflict.controller.view().message === "SHEET_IMPORT_STORAGE_CONFLICT", "CONFLICT_NOT_MASKED_BY_STALE");
+    check(!conflict.controller.view().canResume && conflict.controller.view().applied === 0, "CONFLICT_NO_RETRY_OR_FALSE_SUCCESS");
+    await conflict.controller.resume(); await conflict.controller.confirm();
+    check(conflict.calls.apply.length === 1, "CONFLICT_SINGLE_MUTATION");
+    check(readbackFails ? conflict.controller.view().unconfirmed === 1 : conflict.controller.view().rows[0].state === "HOLD", "CONFLICT_READBACK_CERTAINTY_PRESERVED");
+    conflict.controller.dispose();
+  }
   process.stdout.write(`Single sheet scoped transport: ${assertions} assertions PASS\n`);
 }
 
