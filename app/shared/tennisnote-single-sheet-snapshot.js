@@ -90,6 +90,13 @@
       members, coaches, products, tickets, reservations, availability, closures, receipts: packet.receipts } };
   }
   const SERVER_REASONS = Object.freeze({
+    SHEET_INITIAL_IMPORT_OFF: "초기 등록·횟수 추가 사용 범위가 아직 허용되지 않았습니다.",
+    SHEET_NEW_SOURCE_EVIDENCE_REQUIRED: "기존 횟수 추가 이력이 있습니다. 새 등록 근거를 확인하기 전에는 다시 추가하지 않습니다.",
+    SHEET_SOURCE_PROVENANCE_REVIEW: "기존 등록 근거와 겹칠 수 있어 추가하지 않습니다. 원본 이력을 확인해 주세요.",
+    SHEET_RECEIPT_STATE_CHANGED: "등록 이력은 있지만 현재 회원권 상태가 달라졌습니다. 현재 회원권을 다시 조회해 주세요. 재등록하지 않습니다.",
+    SHEET_TICKET_EFFECTIVE_STATE_REVIEW: "시작 전·만료·종료 회원권은 자동 추가하지 않습니다. 상태를 확인해 주세요.",
+    SHEET_HOLD_REQUEST_REVIEW: "홀딩 신청 이력이 있어 회원권 상태를 먼저 확인해 주세요.",
+    SHEET_REFUND_REVIEW: "환불 처리 이력이 있어 추가를 보류합니다.",
     SHEET_REQUEST_BUDGET_REQUIRED: "서버 실행 시간 제한이 설정되지 않았습니다. 등록을 중단했습니다.",
     SHEET_PLAN_CHANGED: "미리보기 이후 계획이 달라졌습니다. 다시 확인해 주세요.",
     SHEET_PREVIEW_STALE: "미리보기 유효 시간이 지났습니다. 다시 확인해 주세요.",
@@ -128,6 +135,8 @@
     const digest = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
     if (expected?.authorized !== true) return held("ADMIN_SNAPSHOT_REQUIRED");
     if (packet?.contract !== "single-sheet-server/2") return held("SERVER_CONTRACT_REQUIRED");
+    if (packet.initialContract != null && packet.initialContract !== "initial-import/1") return held("SERVER_CONTRACT_REQUIRED");
+    const initialEnabled = packet.initialContract === "initial-import/1";
     for (const key of ["environment", "projectFingerprint", "branchId"]) {
       if (!expected[key] || packet.scope?.[key] !== expected[key]) return held("TARGET_OR_REVISION_MISMATCH");
     }
@@ -139,13 +148,28 @@
     const seen = new Set();
     const units = [];
     for (const unit of packet.units) {
-      if (!digest(unit.unitHash) || !digest(unit.planHash) || !digest(unit.revision) || seen.has(unit.unitHash) || !["READY", "HOLD", "APPLIED", "REVERSED"].includes(unit.status)) return held("SERVER_UNITS_INVALID");
+      if (!digest(unit.unitHash) || !digest(unit.planHash) || !digest(unit.revision) || seen.has(unit.unitHash) || !["READY", "HOLD", "APPLIED", "REVERSED", ...(initialEnabled ? ["NO_OP"] : [])].includes(unit.status)) return held("SERVER_UNITS_INVALID");
       seen.add(unit.unitHash);
       if (!Number.isInteger(unit.rowCount) || unit.rowCount < 0 || unit.rowCount > 2) return held("SERVER_UNITS_INVALID");
-      const replay = ["APPLIED", "REVERSED"].includes(unit.status);
+      let initial = null;
+      if (unit.initial != null) {
+        const d = unit.initial, keys = ["kind", "historicalReceipt"];
+        if (!initialEnabled || !d || typeof d !== "object" || !["NEW_TICKET", "ADD_TICKET", "TOPUP_EXISTING"].includes(d.kind) || typeof d.historicalReceipt !== "boolean") return held("SERVER_UNITS_INVALID");
+        if (!d.historicalReceipt) {
+          keys.push("remainingBefore", "addedSessions", "remainingAfter", "expiresOn", "preservedLessons", "reservedUnits", "manualAssignment");
+          if (unit.status !== "READY" || ["remainingBefore", "addedSessions", "remainingAfter", "preservedLessons", "reservedUnits"].some(k => !Number.isSafeInteger(d[k]) || d[k] < 0 || d[k] > 100000) ||
+            d.remainingBefore + d.addedSessions !== d.remainingAfter || typeof d.manualAssignment !== "boolean" ||
+            typeof d.expiresOn !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d.expiresOn) || !Number.isFinite(Date.parse(d.expiresOn)) ||
+            (d.kind !== "TOPUP_EXISTING" && d.remainingBefore !== 0)) return held("SERVER_COUNTS_INVALID");
+        } else if (unit.status === "READY") return held("SERVER_UNITS_INVALID");
+        if (Object.keys(d).some(k => !keys.includes(k)) || keys.some(k => !(k in d))) return held("SERVER_UNITS_INVALID");
+        initial = Object.freeze(Object.fromEntries(keys.map(k => [k, d[k]])));
+      }
+      if (initialEnabled && unit.status === "READY" && !initial) return held("SERVER_UNITS_INVALID");
+      const replay = ["APPLIED", "REVERSED", "NO_OP"].includes(unit.status);
       if (unit.status === "READY" || replay) {
         if (unit.rowCount < 1 || !Number.isInteger(unit.newMembers) || unit.newMembers < 0 || unit.newMembers > unit.rowCount ||
-          unit.newTickets !== (replay ? 0 : 1) || !Number.isInteger(unit.newLessons) || unit.newLessons < 0 || unit.newLessons > 1000 ||
+          unit.newTickets !== (replay || initial?.kind === "TOPUP_EXISTING" ? 0 : 1) || !Number.isInteger(unit.newLessons) || unit.newLessons < 0 || unit.newLessons > 1000 ||
           (replay && (unit.newMembers !== 0 || unit.newLessons !== 0 || typeof unit.verified !== "boolean"))) return held("SERVER_COUNTS_INVALID");
       } else {
         if (!/^SHEET_[A-Z_]+$/.test(unit.reason || "")) return held("SERVER_UNITS_INVALID");
@@ -153,7 +177,7 @@
           unit[key] != null && (!Number.isInteger(unit[key]) || unit[key] < 0 || unit[key] > max))) return held("SERVER_COUNTS_INVALID");
       }
       units.push(Object.freeze({ status: unit.status, unitHash: unit.unitHash, planHash: unit.planHash, revision: unit.revision, verified: unit.verified === true, rowCount: unit.rowCount,
-        newMembers: unit.newMembers ?? null, newTickets: unit.newTickets ?? null, newLessons: unit.newLessons ?? null,
+        newMembers: unit.newMembers ?? null, newTickets: unit.newTickets ?? null, newLessons: unit.newLessons ?? null, initial,
         reversible: unit.status === "APPLIED" && unit.reversible === true,
         reason: unit.status === "HOLD" ? serverReason(unit.reason) : "" }));
     }

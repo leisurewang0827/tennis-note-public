@@ -10,9 +10,27 @@ const parser = require("../app/shared/tennisnote-single-sheet-import.js");
 const XLSX = require("../app/shared/vendor/xlsx.full.min.js");
 const root = path.resolve(__dirname, "..");
 let assertions = 0;
+const completedScenarios = new Map();
+const scenarioPassed = (engine, name) => completedScenarios.get(engine).push(name);
 const check = (ok, code) => { assertions++; if (!ok) throw Object.assign(Error(code), { testCode: code }); };
-let diagnostic = { engine: "not-started", scenario: "BOOT", phase: "START" };
-const diagnosticStep = (engine, scenario, phase) => { diagnostic = { engine: ["chromium", "webkit"].includes(engine) ? engine : "not-started", scenario, phase }; };
+const observationStart = Date.now();
+let observationCount = 0;
+function heartbeat(phase = diagnostic.phase) {
+  if (observationCount++ >= 256) return;
+  process.stdout.write(`TN_EXCEL_OBS ${JSON.stringify({ engine: diagnostic.engine, scenario: diagnostic.scenario, phase,
+    caseLabel: ["failed", "unknown", "all-hold"].includes(diagnostic.caseLabel) ? diagnostic.caseLabel : "other",
+    elapsedMs: Math.max(0, Math.min(3600000, Date.now() - observationStart)) })}\n`);
+}
+const observed = state => new Proxy(state, { set(target, key, value) {
+  const changed = target[key] !== value; target[key] = value;
+  if (changed && ["phase", "caseLabel"].includes(key)) heartbeat();
+  return true;
+} });
+let diagnostic = observed({ engine: "not-started", scenario: "BOOT", phase: "START" });
+const diagnosticStep = (engine, scenario, phase) => {
+  diagnostic = observed({ engine: ["chromium", "webkit"].includes(engine) ? engine : "not-started", scenario, phase });
+  heartbeat();
+};
 function safeFailureDiagnostic(error) {
   const names = ["Error", "TimeoutError", "TypeError", "RangeError", "ReferenceError", "SyntaxError"];
   const callsites = String(error.stack || "").split("\n").filter(line => /^\s+at /.test(line) && line.includes(__filename + ":"))
@@ -21,12 +39,19 @@ function safeFailureDiagnostic(error) {
   return { ...diagnostic, errorName: names.includes(error.name) ? error.name : "OTHER_ERROR", callsites };
 }
 const types = { ".js": "text/javascript", ".css": "text/css", ".html": "text/html", ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml" };
+// Immutable source bytes are shared; browser contexts, sessions and all fixture
+// state remain fresh. No HTTP cache or service worker can hide a stale response.
+const sourceBytes = new Map();
+function assetBytes(target) {
+  if (!sourceBytes.has(target)) sourceBytes.set(target, fs.readFileSync(target));
+  return sourceBytes.get(target);
+}
 const server = http.createServer((req, res) => {
   const pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
   if (pathname.endsWith("config.local.js")) { res.writeHead(200, { "Content-Type": "text/javascript" }); res.end("window.TENNISNOTE_CONFIG={};"); return; }
   const target = path.resolve(root, "." + pathname);
   if (!target.startsWith(root + path.sep) || !fs.existsSync(target) || !fs.statSync(target).isFile()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { "Content-Type": types[path.extname(target)] || "application/octet-stream", "Cache-Control": "no-store" }); fs.createReadStream(target).pipe(res);
+  res.writeHead(200, { "Content-Type": types[path.extname(target)] || "application/octet-stream", "Cache-Control": "no-store" }); res.end(assetBytes(target));
 });
 async function remotePreviewScenario(browser, engine) {
   diagnosticStep(engine, "REMOTE_PREVIEW", "INITIAL");
@@ -48,7 +73,7 @@ async function remotePreviewScenario(browser, engine) {
     }
     const target = path.resolve(root, "." + decodeURIComponent(requestUrl.pathname));
     if (!target.startsWith(root + path.sep) || !fs.existsSync(target) || !fs.statSync(target).isFile()) { await route.fulfill({ status: 404, body: "" }); return; }
-    await route.fulfill({ status: 200, contentType: types[path.extname(target)] || "application/octet-stream", path: target, headers: { "Cache-Control": "no-store" } });
+    await route.fulfill({ status: 200, contentType: types[path.extname(target)] || "application/octet-stream", body: assetBytes(target), headers: { "Cache-Control": "no-store" } });
   });
   try {
     await page.goto(`${devOrigin}/app/admin/index.html?demoAdmin=1`, { waitUntil: "load" });
@@ -105,7 +130,7 @@ async function remotePreviewScenario(browser, engine) {
     process.stdout.write(`PASS ${engine} development PostgREST preview UI; rpc=1; writes=0; scope-off-rpc=0; presentation-pii=0\n`);
   } finally { await context.close(); }
 }
-async function remoteExecutionScenario(browser, engine, reverseEnabled = true, completionOnly = process.env.TENNISNOTE_EXCEL_COMPLETION_ONLY === "1") {
+async function remoteExecutionScenario(browser, engine, reverseEnabled = true, completionOnly = process.env.TENNISNOTE_EXCEL_COMPLETION_ONLY === "1", initialOnly = process.env.TENNISNOTE_EXCEL_INITIAL_ONLY === "1") {
   diagnosticStep(engine, completionOnly ? "COMPLETION" : reverseEnabled ? "REMOTE_EXECUTION" : "PRODUCTION_APPLY_ONLY", "INITIAL_CONTEXT");
   const environment = reverseEnabled ? "development" : "production";
   const devOrigin = reverseEnabled ? "https://tennisnote-admin-dev.pages.dev" : "https://tennisnote-admin.pages.dev";
@@ -128,7 +153,7 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
     }
     const target = path.resolve(root, "." + decodeURIComponent(requestUrl.pathname));
     if (!target.startsWith(root + path.sep) || !fs.existsSync(target) || !fs.statSync(target).isFile()) { await route.fulfill({ status: 404, body: "" }); return; }
-    await route.fulfill({ status: 200, contentType: types[path.extname(target)] || "application/octet-stream", path: target, headers: { "Cache-Control": "no-store" } });
+    await route.fulfill({ status: 200, contentType: types[path.extname(target)] || "application/octet-stream", body: assetBytes(target), headers: { "Cache-Control": "no-store" } });
   });
   try {
     diagnostic.phase = "INITIAL_LOAD";
@@ -196,6 +221,11 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
       setView("members", { skipLock: true });
     }, { branchId });
     const modal = page.locator("#singleSheetPreviewModal");
+    if (initialOnly) {
+      await require("./tennisnote_single_sheet_initial_ui_cases.cjs")({ page, modal, engine, check, workbookBytes, XLSX, parser });
+      check(errors.length === 0, "INITIAL_PAGE_ERRORS_ZERO");
+      return;
+    }
     if (completionOnly) {
       diagnostic.phase = "COMPLETION_REFRESH";
       await completionRefreshScenario(page, modal, engine);
@@ -446,7 +476,22 @@ async function completionRefreshScenario(page, modal, engine) {
     await configure({ trace: [], states: {}, indices: {}, operations: {}, applies: 0, reverses: 0, previews: 0, hold: "", failedWrite: false, readbackFailure: false, ...values });
     await page.locator("#openSingleSheetPreviewButton").click();
     await select(buffer);
-    if (values.hold !== "preview") await page.waitForFunction(() => window.__sheetExecution.controller?.view().phase === "ready");
+    if (values.hold !== "preview") {
+      heartbeat("READY_WAIT");
+      try { await page.waitForFunction(() => window.__sheetExecution.controller?.view().phase === "ready"); heartbeat("READY_PASS"); }
+      catch (error) {
+        heartbeat("READY_FAIL");
+        const state = await page.evaluate(() => {
+          const p = window.__sheetExecution, v = p.controller?.view();
+          const phases = ["idle", "previewing", "ready", "paused", "done", "reversed", "failed", "error"];
+          return { controllerExists: Boolean(p.controller), phase: phases.includes(v?.phase) ? v.phase : "OTHER",
+            busy: Boolean(v?.busy), previewCount: Number.isSafeInteger(p.previews) ? p.previews : -1,
+            failureCode: ["READBACK_UNVERIFIED", "SHEET_INPUT_INVALID", "SHEET_EXISTING_TICKET_REVIEW"].includes(v?.failureCode) ? v.failureCode : v?.failureCode ? "OTHER_SAFE_CODE" : "NONE" };
+        });
+        process.stderr.write(`COMPLETION_READY_DIAGNOSTIC ${JSON.stringify({ caseLabel: diagnostic.caseLabel || "other", ...state })}\n`);
+        throw error;
+      }
+    }
   };
   const confirm = async control => { await control.click(); await control.click(); };
   await start(); await confirm(apply); await idle();
@@ -550,6 +595,7 @@ async function completionRefreshScenario(page, modal, engine) {
     } else check(result.message.includes("미전송분을 중단"), "USER_CANCEL_REMAINS_EXPLICIT");
   }
   for (const failure of ["failed", "unknown", "all-hold"]) {
+    diagnostic.caseLabel = failure;
     await start(failure === "all-hold" ? { states: { 1: "HOLD" } } : {});
     if (failure !== "all-hold") {
       await configure({ failedWrite: failure === "failed", readbackFailure: failure === "unknown" });
@@ -672,18 +718,22 @@ async function holdPlanUiScenario(page, modal, engine) {
   check(await page.evaluate(() => window.__sheetExecution.applies === 0), "INFLIGHT_CANCEL_MANUAL_RECHECK_NO_AUTO_APPLY");
   await page.setViewportSize({ width: 390, height: 844 });
   process.stdout.write(`PASS ${engine} HOLD null/zero/mixed/cancel/expiry actual-entry UI; ${layouts} layouts; mock apply/reverse=0\n`);
+  scenarioPassed(engine, "HOLD");
 }
 async function main() {
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   const engines = process.env.TENNISNOTE_BROWSER ? [process.env.TENNISNOTE_BROWSER] : ["chromium", "webkit"];
   for (const engine of engines) {
+    const engineStartAssertions = assertions;
+    completedScenarios.set(engine, []);
     diagnosticStep(engine, "ACTUAL_ENTRY", "INITIAL");
     check(["chromium", "webkit"].includes(engine), "SUPPORTED_ENGINE");
     const executablePath = engine === "chromium" ? [process.env.CHROME_PATH, chromium.executablePath(), "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"].find(p => p && fs.existsSync(p)) : undefined;
     const browser = await (engine === "webkit" ? webkit : chromium).launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
     try {
       if (process.env.TENNISNOTE_EXCEL_COMPLETION_ONLY === "1") { await remoteExecutionScenario(browser, engine); continue; }
+      if (process.env.TENNISNOTE_EXCEL_INITIAL_ONLY === "1") { await remoteExecutionScenario(browser, engine); continue; }
       if (process.env.TENNISNOTE_EXCEL_READINESS_ONLY === "1") { await remoteExecutionScenario(browser, engine); await remoteExecutionScenario(browser, engine, false); continue; }
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block", acceptDownloads: true });
       const page = await context.newPage();
@@ -837,11 +887,19 @@ async function main() {
       check(pageErrors.length === 0 && relevantConsole.length === 0, "PAGE_PREVIEW_ERRORS_ZERO");
       process.stdout.write(`PASS ${engine} actual-entry/worker/states; ${metrics.length} viewport-theme cases; minTouch=${Math.min(...metrics.map(m => m.minTouch))}; minVisibleCTA=${Math.min(...metrics.map(m => m.visibleHeight))}; writes=0; external=0; pageErrors=0\n`);
       await context.close();
+      scenarioPassed(engine, "ACTUAL_ENTRY");
       await remotePreviewScenario(browser, engine);
+      scenarioPassed(engine, "REMOTE_PREVIEW");
       await remoteExecutionScenario(browser, engine);
+      scenarioPassed(engine, "REMOTE_EXECUTION");
       await remoteExecutionScenario(browser, engine, false);
+      scenarioPassed(engine, "PRODUCTION_APPLY_ONLY");
       await remoteExecutionScenario(browser, engine, true, true);
+      scenarioPassed(engine, "COMPLETION");
+      await remoteExecutionScenario(browser, engine, true, false, true);
+      scenarioPassed(engine, "INITIAL_ENVELOPE");
     } finally { await browser.close(); }
+    process.stdout.write(`TN_EXCEL_ENGINE_RESULT ${JSON.stringify({engine, assertions: assertions-engineStartAssertions, scenarios: completedScenarios.get(engine)})}\n`);
   }
   process.stdout.write(`Single sheet preview browser: ${assertions} assertions PASS\n`);
 }
