@@ -895,8 +895,7 @@ function purchaseMatchingProducts(products = membershipProducts(), sourceTicket 
     return !weekendOnlyThirtyMinute
       || (flow.purchasePurpose === "renew_same" && flow.scheduleMode === "keep");
   });
-  const renewing = flow.purchasePurpose === "renew_same" && Boolean(sourceTicket);
-  if (renewing || ["coupon", "one-day"].includes(flow.familyId)) return familyProducts;
+  if (["coupon", "one-day"].includes(flow.familyId)) return familyProducts;
   return familyProducts.filter((product) => {
     const scope = membershipProductFacet(product, "scheduleScope");
     return purchaseProductFrequency(product) === flow.productFrequency
@@ -906,8 +905,7 @@ function purchaseMatchingProducts(products = membershipProducts(), sourceTicket 
 
 function purchaseSimpleProductFiltersHtml() {
   const flow = purchaseFlowState();
-  if (["coupon", "one-day"].includes(flow.familyId)
-    || (flow.purchasePurpose === "renew_same" && purchaseFlowSourceTicket())) return "";
+  if (["coupon", "one-day"].includes(flow.familyId)) return "";
   const products = distinctMembershipProductsForFamily(flow.familyId, membershipProducts());
   const frequencyAvailable = (frequency) => products.some((product) => purchaseProductFrequency(product) === frequency);
   const scopeAvailable = (scope) => products.some((product) => {
