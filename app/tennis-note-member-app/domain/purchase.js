@@ -195,7 +195,7 @@ function purchaseStepOneHtml() {
     <div class="purchase-family-grid" role="group" aria-label="수업 형태">${purchaseFamilyOptionsHtml(products, flow.familyId)}</div>
     ${purchaseSimpleProductFiltersHtml()}
     <div class="purchase-product-options">
-      <div><strong>${renewing ? "연장 기간" : "상품"}</strong><span>${visibleProducts.length}개</span></div>
+      <div><strong>${renewing ? "조건 일치 상품" : "상품"}</strong><span>${visibleProducts.length}개</span></div>
       ${visibleProducts.length
     ? visibleProducts.map((product) => purchaseProductCard(product, String(product.id) === String(flow.productId))).join("")
     : distinctMembershipProductsForFamily(flow.familyId, products).length
