@@ -55,24 +55,28 @@ const membershipPresetDefinitions = [
   {
     id: "four-week",
     label: "4주",
+    pickerLabel: "한달 (4주)",
     description: "가볍게 시작·재등록",
     filters: { scheduleScope: "all", productKind: "regular", groupSize: "all", lessonMinutes: "all" },
   },
   {
     id: "three-month",
     label: "3개월",
+    pickerLabel: "3개월 (10% 할인)",
     description: "12주 등록·보강 21일",
     filters: { scheduleScope: "all", productKind: "regular", groupSize: "all", lessonMinutes: "all" },
   },
   {
     id: "coupon",
     label: "쿠폰 레슨",
+    pickerLabel: "쿠폰 레슨",
     description: "담당 코치의 빈 시간 예약",
     filters: { scheduleScope: "all", productKind: "coupon", groupSize: "1", lessonMinutes: "all" },
   },
   {
     id: "one-day",
     label: "원데이 1회",
+    pickerLabel: "원데이 1회",
     description: "한 번 체험·단회 레슨",
     filters: { scheduleScope: "mixed", productKind: "coupon", groupSize: "1", lessonMinutes: "all" },
   },
