@@ -160,6 +160,8 @@ function bindDelegatedEvents() {
       void openMembershipPurchaseEntry({
         purpose: openPurchaseFlowButton.dataset.openPurchaseFlow || "new_purchase",
         trigger: openPurchaseFlowButton,
+        preserveExplicitPurpose: openPurchaseFlowButton.hasAttribute("data-purchase-explicit"),
+        openProductSheet: openPurchaseFlowButton.hasAttribute("data-open-purchase-product-on-entry"),
       });
       return;
     }

@@ -437,7 +437,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.490", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.491", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -662,7 +662,7 @@ async function openOneDayPurchaseFlow(trigger = null) {
   return openMembershipPurchaseEntry({ purpose: "one_day", trigger });
 }
 
-async function openMembershipPurchaseEntry({ purpose = "new_purchase", productId = "", renewalTicketId = "", trigger = null } = {}) {
+async function openMembershipPurchaseEntry({ purpose = "new_purchase", productId = "", renewalTicketId = "", trigger = null, preserveExplicitPurpose = false, openProductSheet = false } = {}) {
   if (membershipPurchaseEntryInFlight) return false;
   membershipPurchaseEntryInFlight = true;
   const button = trigger instanceof HTMLElement ? trigger : null;
@@ -699,7 +699,8 @@ async function openMembershipPurchaseEntry({ purpose = "new_purchase", productId
       }
       selectedProductId = oneDayProduct.id;
     }
-    openMembershipPurchaseFlow(renewalTicketId, selectedProductId, purpose);
+    openMembershipPurchaseFlow(renewalTicketId, selectedProductId, purpose, { preserveExplicitPurpose });
+    if (openProductSheet) openPurchaseProductSheet();
     return true;
   } catch {
     const message = "회원권 구매 화면을 열지 못했습니다. 잠시 후 다시 시도해 주세요.";
