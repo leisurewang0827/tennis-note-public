@@ -218,7 +218,7 @@ function purchasePurposeOptionsHtml() {
   if (!activeTickets.length) {
     const returningTicket = latestPreviousMembershipTicket();
     const returning = Boolean(returningTicket);
-    const oneDay = membershipProductFamilyId(purchaseFlowProduct() || {}) === "one-day";
+    const oneDay = flow.familyId === "one-day" || membershipProductFamilyId(purchaseFlowProduct() || {}) === "one-day";
     const explicitNewPurchase = flow.purchasePurpose === "new_purchase";
     flow.purchasePurpose = oneDay ? "one_day" : explicitNewPurchase ? "new_purchase" : returning ? "renew_same" : "new_purchase";
     if (returning && flow.purchasePurpose === "renew_same" && !flow.renewalTicketId) flow.renewalTicketId = returningTicket.id || "";
