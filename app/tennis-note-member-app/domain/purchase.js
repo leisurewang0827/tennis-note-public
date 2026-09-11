@@ -189,10 +189,7 @@ function purchaseStepOneHtml() {
   const matchingProducts = purchaseMatchingProducts(products, sourceTicket)
     .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999)
       || purchaseProductDisplayTitle(left).localeCompare(purchaseProductDisplayTitle(right), "ko"));
-  const selectedProduct = matchingProducts.find((product) => String(product.id) === String(flow.productId));
-  const visibleProducts = selectedProduct
-    ? [selectedProduct, ...matchingProducts.filter((product) => String(product.id) !== String(selectedProduct.id))].slice(0, 3)
-    : matchingProducts.slice(0, 3);
+  const visibleProducts = matchingProducts;
   const renewing = flow.purchasePurpose === "renew_same" && Boolean(sourceTicket);
   return `
     <div class="purchase-family-grid" role="group" aria-label="수업 형태">${purchaseFamilyOptionsHtml(products, flow.familyId)}</div>
