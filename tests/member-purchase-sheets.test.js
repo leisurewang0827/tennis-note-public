@@ -11,6 +11,8 @@ test("회원권 구매 변경 버튼에 필요한 바텀시트가 공개 HTML에
   const html = source("app/tennis-note-member-app/index.html");
   const events = source("app/tennis-note-member-app/events/delegated.js");
   const memberApp = source("app/tennis-note-member-app/app.js");
+  const catalog = source("app/tennis-note-member-app/catalog.js");
+  const purchase = source("app/tennis-note-member-app/domain/purchase.js");
   const styles = source("app/tennis-note-member-app/styles.css");
 
   assert.match(html, /id="purchaseProductSheet"/);
@@ -20,6 +22,10 @@ test("회원권 구매 변경 버튼에 필요한 바텀시트가 공개 HTML에
   assert.match(html, /id="purchaseScheduleSheetGrid"/);
   assert.match(html, /id="completePurchaseScheduleSelection"/);
   assert.match(events, /data-open-purchase-product/);
+  assert.match(catalog, /pickerLabel: "한달 \(4주\)"/);
+  assert.match(catalog, /pickerLabel: "3개월 \(10% 할인\)"/);
+  assert.match(purchase, /<em>다시 선택<\/em>/);
+  assert.match(styles, /\.purchase-family-grid\s*\{[^}]*grid-template-columns: repeat\(2,/s);
   assert.match(events, /data-open-purchase-schedule/);
   assert.match(memberApp, /const scheduleReady = flexibleCoupon/);
   assert.match(memberApp, /completeButton\.setAttribute\("aria-disabled", String\(!scheduleReady\)\)/);
