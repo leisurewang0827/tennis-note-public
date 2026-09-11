@@ -174,10 +174,9 @@ function purchaseFamilyOptionsHtml(products = membershipProducts(), selectedFami
   return visibleFamilies.map((family) => {
     const count = distinctMembershipProductsForFamily(family.id, products).length;
     const selected = family.id === selectedFamilyId;
-    const readyLabel = family.id === "three-month" ? "10% 할인" : `${count}개`;
     return `
       <button class="purchase-family-option ${selected ? "is-selected" : ""} ${count ? "" : "is-unavailable"}" type="button" data-purchase-family="${family.id}" aria-pressed="${selected}" ${count ? "" : 'disabled aria-disabled="true" title="현재 판매 가능한 상품이 없습니다"'}>
-        <strong>${family.label}</strong><b>${count ? readyLabel : "준비 중"}</b>
+        <strong>${family.pickerLabel || family.label}</strong><b>${count ? `${count}개` : "준비 중"}</b>
       </button>`;
   }).join("");
 }
@@ -327,7 +326,7 @@ function purchaseSinglePageHtml() {
     ${purchasePurposeOptionsHtml()}
     <section class="purchase-selection-summary" aria-label="결제 선택 내용">
       <button class="purchase-selection-row" type="button" data-open-purchase-product aria-haspopup="dialog">
-        <span><small>상품</small><strong>${escapeHtml(product ? purchaseProductDisplayTitle(product) : "상품을 선택해 주세요")}</strong></span><em>변경</em>
+        <span><small>상품</small><strong>${escapeHtml(product ? purchaseProductDisplayTitle(product) : "상품을 선택해 주세요")}</strong></span><em>다시 선택</em>
       </button>
       ${product ? `<button class="purchase-selection-row" type="button" ${keepRenewalSchedule ? "data-edit-purchase-renewal-schedule" : "data-open-purchase-schedule"} aria-haspopup="dialog">
         <span><small>${flexibleCoupon ? "담당 코치" : "선생님·시간"}</small><strong>${escapeHtml(scheduleSummary)}</strong></span><em>변경</em>
