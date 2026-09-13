@@ -15,7 +15,7 @@ function renderMembershipProductPresets() {
       ${membershipPresetDefinitions.map((preset) => `
         <button class="membership-preset-chip ${preset.id === activePresetId ? "is-selected" : ""}" type="button"
           data-membership-preset="${preset.id}" aria-pressed="${preset.id === activePresetId}">
-          <strong>${preset.label}</strong><small>${preset.description}</small><b>${distinctMembershipProductsForFamily(preset.id, products).length}개</b>
+          <strong>${escapeHtml(membershipProductFamilyDisplayLabel(preset.id))}</strong><small>${preset.description}</small><b>${distinctMembershipProductsForFamily(preset.id, products).length}개</b>
         </button>`).join("")}
     </div>`;
 }

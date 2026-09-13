@@ -155,7 +155,7 @@ function purchaseProductCard(product = {}, selected = false) {
   const lessonFormat = Number(product.groupSize || 1) > 1 ? `${Number(product.groupSize)}대1` : "1대1";
   return `
     <button class="purchase-product-option ${selected ? "is-selected" : ""}" type="button" data-purchase-product="${escapeHtml(product.id || "")}" aria-pressed="${selected}">
-      <span>${escapeHtml(family.label)} · ${escapeHtml(lessonFormat)} · ${escapeHtml(product.badge || `${product.tickets || 0}회`)}</span>
+      <span>${escapeHtml(membershipProductFamilyDisplayLabel(family.id))} · ${escapeHtml(lessonFormat)} · ${escapeHtml(product.badge || `${product.tickets || 0}회`)}</span>
       <strong>${escapeHtml(purchaseProductDisplayTitle(product))}</strong>
       ${validityLabel ? `<small>${escapeHtml(validityLabel)}</small>` : ""}
       <b>${escapeHtml(paymentMethod.shortLabel)} ${escapeHtml(formatWon(amount))}</b>
@@ -176,7 +176,7 @@ function purchaseFamilyOptionsHtml(products = membershipProducts(), selectedFami
     const selected = family.id === selectedFamilyId;
     return `
       <button class="purchase-family-option ${selected ? "is-selected" : ""} ${count ? "" : "is-unavailable"}" type="button" data-purchase-family="${family.id}" aria-pressed="${selected}" ${count ? "" : 'disabled aria-disabled="true" title="현재 판매 가능한 상품이 없습니다"'}>
-        <strong>${family.pickerLabel || family.label}</strong><b>${count ? `${count}개` : "준비 중"}</b>
+        <strong>${escapeHtml(membershipProductFamilyDisplayLabel(family.id))}</strong><b>${count ? `${count}개` : "준비 중"}</b>
       </button>`;
   }).join("");
 }

@@ -164,6 +164,21 @@ function membershipProductFamilyDefinition(productOrId = "") {
   return membershipPresetDefinitions.find((family) => family.id === familyId) || membershipPresetDefinitions[0];
 }
 
+function normalizeMembershipProductFamilyLabels(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  return Object.fromEntries(Object.entries(defaultMembershipProductFamilyLabels).map(([key, fallback]) => {
+    const candidate = typeof source[key] === "string" ? source[key].trim().replace(/\s+/g, " ") : "";
+    return [key, candidate && [...candidate].length <= 40 ? candidate : fallback];
+  }));
+}
+
+function membershipProductFamilyDisplayLabel(productOrId = "") {
+  const family = membershipProductFamilyDefinition(productOrId);
+  const key = membershipProductFamilyLabelKeys[family.id];
+  const labels = normalizeMembershipProductFamilyLabels(state.livePaymentOptions?.productFamilyLabels);
+  return labels[key] || family.pickerLabel || family.label;
+}
+
 function membershipProductsForFamily(familyId, products = membershipProducts()) {
   return products.filter((product) => membershipProductFamilyId(product) === familyId);
 }

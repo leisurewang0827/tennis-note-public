@@ -147,6 +147,7 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
   if (!["female", "male", "other", "prefer_not"].includes(normalizedGender)) throw new Error("gender_invalid");
   const client = window.TennisNoteDataClient;
   if (hasLiveMemberSession() && client?.rpc) {
+    await requireVerifiedIdentityPhone(normalizedPhone);
     const targetProfile = {
       name: normalizedRealName, nickname: normalizedNickname, phoneCandidate: normalizedPhone,
       birthYear: normalizedBirthYear, neighborhood: normalizedNeighborhood,
@@ -223,7 +224,7 @@ function activateLiveMemberProfile(profileId) {
   state.lessonLogs = [];
   state.practiceLogs = [];
   state.paymentRequests = [];
-  state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true } };
+  state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true }, productFamilyLabels: { ...defaultMembershipProductFamilyLabels } };
   state.discountCoupons = [];
   state.expiredTickets = [];
   state.ticketHistory = [];
@@ -405,7 +406,8 @@ async function signUpWithEmail(event) {
   try {
     const client = window.TennisNoteDataClient;
     const result = await client.signUpWithPassword(email, password);
-    if (result?.access_token) {
+    const responseKind = emailSignupResponseKind(result);
+    if (responseKind === "authenticated") {
       const opened = await applySupabaseMemberSession(true);
       if (!opened) throw new Error("profile_bootstrap_failed");
       form.reset();
@@ -415,8 +417,10 @@ async function signUpWithEmail(event) {
     $("#memberLoginEmail").value = email;
     form.reset();
     setEmailAuthMode("login", {
-      message: "인증 메일을 보냈습니다. 메일에서 인증한 뒤 이메일로 로그인해주세요.",
-      tone: "done",
+      message: responseKind === "confirmation_sent"
+        ? "인증 메일을 보냈습니다. 메일에서 인증한 뒤 이메일로 로그인해주세요."
+        : "가입 요청 결과를 확정할 수 없습니다. 이메일로 로그인하거나 비밀번호 찾기를 이용해주세요.",
+      tone: responseKind === "confirmation_sent" ? "done" : "",
       focus: false,
     });
   } catch (error) {

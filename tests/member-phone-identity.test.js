@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const identitySource = readFileSync(join(root, "app/tennis-note-member-app/domain/identity.js"), "utf8");
-const identity = new Function(`${identitySource}\nreturn { identityPhoneE164, verifiedPhoneFromAuthUser, normalizedIdentityErrorCode, resolvedAuthCapabilities, identityErrorMessage };`)();
+const identity = new Function(`${identitySource}\nreturn { identityPhoneE164, verifiedPhoneFromAuthUser, normalizedIdentityErrorCode, resolvedAuthCapabilities, identityErrorMessage, emailSignupResponseKind };`)();
 
 test("국내 휴대전화 번호를 Supabase 전화 인증 형식으로 바꾼다", () => {
   assert.equal(identity.identityPhoneE164("010-1234-5678"), "+821012345678");
@@ -30,7 +30,8 @@ test("확인된 auth phone 또는 provider identity만 자동 연결 번호로 �
   }), "01012345678");
 });
 
-test("가입은 검토용 번호를 저장하고 기존 전화 인증 구현은 별도로 보존한다", () => {
+test("가입은 Auth capability를 확인한 문자 인증 완료 번호만 저장한다", () => {
+  const memberApp = readFileSync(join(root, "app/tennis-note-member-app/app.js"), "utf8");
   const dataClient = readFileSync(join(root, "app/shared/tennisnote-data-client.js"), "utf8");
   const identityDomain = readFileSync(join(root, "app/tennis-note-member-app/domain/identity.js"), "utf8");
   const auth = readFileSync(join(root, "app/tennis-note-member-app/data/auth.js"), "utf8");
@@ -42,7 +43,8 @@ test("가입은 검토용 번호를 저장하고 기존 전화 인증 구현은 
   assert.match(dataClient, /requestPhoneChangeVerification/);
   assert.match(dataClient, /verifyPhoneChange/);
   assert.match(dataClient, /responseRequestError\(response, rawText, "Supabase auth settings failed"\)/);
-  assert.doesNotMatch(auth, /await requireVerifiedIdentityPhone\(normalizedPhone\)/);
+  assert.match(memberApp, /const signupSmsEnabled = true;/);
+  assert.match(auth, /await requireVerifiedIdentityPhone\(normalizedPhone\)/);
   assert.match(auth, /tn_save_my_signup_profile/);
   assert.match(auth, /target_operation_key: signupProfileOperation.key/);
   assert.match(actions, /if \(!signupSmsEnabled\) return false;/);
@@ -57,8 +59,18 @@ test("가입은 검토용 번호를 저장하고 기존 전화 인증 구현은 
   assert.match(actions, /client\.signInWithOAuth\("Naver", \{ authType: "reprompt" \}\)/);
   assert.match(memberForms, /id.*identityNaverPhoneButton|identityNaverPhoneButton/);
   assert.match(memberForms, /identityPhone.*value\s*=\s*formatIdentityPhone\(normalizedPhone\)/);
+  assert.match(memberForms, /identityPhoneVerification.*removeAttribute\("hidden"\)/s);
   assert.match(profileEvents, /identityNaverPhoneButton.*requestNaverPhoneConsent/);
   assert.match(html, /id="identityNaverPhoneButton"/);
+});
+
+test("이메일 가입의 난독화 응답은 성공으로 단정하지 않는다", () => {
+  const auth = readFileSync(join(root, "app/tennis-note-member-app/data/auth.js"), "utf8");
+  assert.equal(identity.emailSignupResponseKind({ access_token: "fixture" }), "authenticated");
+  assert.equal(identity.emailSignupResponseKind({ user: { identities: [{ provider: "email" }] } }), "confirmation_sent");
+  assert.equal(identity.emailSignupResponseKind({ user: { identities: [] } }), "indeterminate");
+  assert.match(auth, /가입 요청 결과를 확정할 수 없습니다/);
+  assert.match(auth, /responseKind === "confirmation_sent"/);
 });
 
 test("Auth provider capability와 전화 인증 오류를 안전하게 구분한다", () => {

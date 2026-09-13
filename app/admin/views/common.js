@@ -1180,11 +1180,15 @@ function branchSalesPreviewMarkup() {
     .filter((product) => config.features.threeMonth || Number(product.termWeeks) < 12)
     .slice(0, 3);
   const benefit = Object.values(config.benefits).find((item) => item.enabled === true);
+  const familyLabels = config.productFamilyLabels;
   return `
     <div class="branch-sales-phone" aria-label="회원앱 390픽셀 미리보기">
       <div class="branch-sales-phone-head"><small>회원권</small><strong>${escapeHtml(activeOperationBranchName())}</strong></div>
       <div class="branch-sales-phone-body">
         <strong>${products[0] ? "원하는 수업을 선택하세요" : "판매 상품을 준비 중입니다"}</strong>
+        <div class="branch-sales-preview-families" role="group" aria-label="회원권 분류 미리보기">
+          ${[["fourWeek", 16], ["threeMonth", 16], ["coupon", 4], ["oneDay", 1]].map(([key, count]) => `<span><strong>${escapeHtml(familyLabels[key])}</strong><b>${count}개</b></span>`).join("")}
+        </div>
         ${products.map((product, index) => `<button type="button" tabindex="-1" class="branch-sales-preview-product ${index === 0 ? "is-selected" : ""}"><span>${escapeHtml(product.title)}</span><b>${money.format(Number(product.cashAmount || product.cardAmount || 0))}원~</b></button>`).join("")}
         ${benefit ? `<span class="branch-sales-preview-benefit">${escapeHtml(benefit.title)} · ${Number(benefit.discountValue || 0)}% 자동 확인</span>` : ""}
         <div class="branch-sales-preview-methods">${methods.map(([, method], index) => `<span class="${index === 0 ? "is-selected" : ""}">${escapeHtml(method.title)}</span>`).join("") || "<span>결제수단 준비 중</span>"}</div>
@@ -1211,6 +1215,20 @@ function branchSalesPaymentMethodMarkup(id, method) {
         <label class="branch-sales-check"><input type="checkbox" data-sales-payment-method="${id}" data-sales-field="couponAllowed" ${method.couponAllowed !== false ? "checked" : ""} /> 쿠폰 허용</label>
       </div>
     </article>`;
+}
+
+function branchSalesFamilyLabelsMarkup(labels = {}) {
+  const fields = [
+    ["fourWeek", "한달"],
+    ["threeMonth", "3개월"],
+    ["coupon", "쿠폰"],
+    ["oneDay", "원데이"],
+  ];
+  return `
+    <div class="branch-sales-family-labels">
+      ${fields.map(([key, label]) => `<label><span>${label} 표시명</span><input type="text" maxlength="40" required value="${escapeHtml(labels[key] || "")}" data-sales-family-label="${key}" /></label>`).join("")}
+    </div>
+    <button id="resetBranchSalesFamilyLabelsButton" class="ghost-button" type="button">분류명 기본값 복원</button>`;
 }
 
 function branchSalesBenefitMarkup(id, benefit) {
@@ -1293,7 +1311,7 @@ function renderBranchSalesSetup() {
     ${branchSalesEffectiveOptionsMarkup()}
     ${failed ? `<p class="branch-sales-error" role="alert">설정 기능을 불러오지 못했습니다. DB 업데이트와 관리자 권한을 확인한 뒤 다시 시도해 주세요. (${escapeHtml(branchSalesSettingsState.message)})</p>` : ""}
     <div class="branch-sales-steps ${failed ? "is-disabled" : ""}">
-      <section class="branch-sales-step"><div class="branch-sales-step-title"><b>1</b><span><strong>상품</strong><small>판매할 종류만 켭니다</small></span></div><div class="branch-sales-toggle-grid">
+      <section class="branch-sales-step"><div class="branch-sales-step-title"><b>1</b><span><strong>상품</strong><small>판매할 종류와 회원앱 표시명을 정합니다</small></span></div>${branchSalesFamilyLabelsMarkup(config.productFamilyLabels)}<div class="branch-sales-toggle-grid">
         <label><input type="checkbox" data-sales-feature="threeMonth" ${config.features.threeMonth ? "checked" : ""} /> 3개월</label>
         <label><input type="checkbox" data-sales-feature="oneDay" ${config.features.oneDay ? "checked" : ""} /> 원데이</label>
         <label><input type="checkbox" data-sales-feature="coupons" ${config.features.coupons ? "checked" : ""} /> 쿠폰</label>
