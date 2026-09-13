@@ -927,6 +927,9 @@ function branchSalesConfigFromForm() {
   panel.querySelectorAll("[data-sales-feature]").forEach((input) => {
     next.features[input.dataset.salesFeature] = input.checked === true;
   });
+  panel.querySelectorAll("[data-sales-family-label]").forEach((input) => {
+    next.productFamilyLabels[input.dataset.salesFamilyLabel] = input.value.trim().replace(/\s+/g, " ");
+  });
   panel.querySelectorAll("[data-sales-payment-method][data-sales-field]").forEach((input) => {
     const method = next.paymentMethods[input.dataset.salesPaymentMethod];
     if (!method) return;

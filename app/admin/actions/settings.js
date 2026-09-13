@@ -401,6 +401,16 @@ async function saveBranchSalesSettings(apply = false) {
     showToast("관리자 로그인과 판매 설정 서버를 확인해 주세요");
     return false;
   }
+  const familyLabelInputs = [...$("#branchSalesSetupPanel").querySelectorAll("[data-sales-family-label]")];
+  const invalidFamilyLabel = familyLabelInputs.find((input) => {
+    const value = input.value.trim().replace(/\s+/g, " ");
+    return !value || [...value].length > 40;
+  });
+  if (invalidFamilyLabel) {
+    invalidFamilyLabel.focus();
+    showToast("회원권 분류명은 1~40자로 입력해 주세요");
+    return false;
+  }
   const config = branchSalesConfigFromForm();
   const enabledMemberMethods = Object.entries(config.paymentMethods).filter(([id, method]) => id !== "onsite_cash" && method.enabled === true);
   if (!enabledMemberMethods.length) {

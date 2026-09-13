@@ -201,6 +201,13 @@ function emailSignupErrorMessage(error) {
   return "회원가입을 완료하지 못했습니다. 잠시 후 다시 시도해주세요.";
 }
 
+function emailSignupResponseKind(result) {
+  if (result?.access_token) return "authenticated";
+  const identities = result?.user?.identities;
+  if (Array.isArray(identities) && identities.length > 0) return "confirmation_sent";
+  return "indeterminate";
+}
+
 function passwordUpdateErrorMessage(error) {
   const code = `${error?.code || error?.message || ""}`.toLowerCase();
   if (code.includes("same_password")) return "기존 비밀번호와 다른 비밀번호를 입력해주세요.";

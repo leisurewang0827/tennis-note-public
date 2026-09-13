@@ -593,11 +593,11 @@ function bindDelegatedEvents() {
   });
   document.addEventListener("input", (event) => {
     if (!event.target.closest("#branchSalesSetupPanel")) return;
-    if (!event.target.matches("[data-sales-payment-method], [data-sales-benefit], [data-sales-feature]")) return;
+    if (!event.target.matches("[data-sales-payment-method], [data-sales-benefit], [data-sales-feature], [data-sales-family-label]")) return;
     syncBranchSalesDraftFromForm();
   });
   document.addEventListener("change", (event) => {
-    if (event.target.closest("#branchSalesSetupPanel") && event.target.matches("[data-sales-payment-method], [data-sales-benefit], [data-sales-feature]")) {
+    if (event.target.closest("#branchSalesSetupPanel") && event.target.matches("[data-sales-payment-method], [data-sales-benefit], [data-sales-feature], [data-sales-family-label]")) {
       syncBranchSalesDraftFromForm();
       return;
     }
@@ -1543,6 +1543,15 @@ function bindDelegatedEvents() {
     }
     if (event.target.closest("#applyBranchSalesSettingsButton")) {
       await saveBranchSalesSettings(true);
+      return;
+    }
+    if (event.target.closest("#resetBranchSalesFamilyLabelsButton")) {
+      branchSalesSettingsState.draftConfig = {
+        ...normalizeBranchSalesConfig(branchSalesSettingsState.draftConfig),
+        productFamilyLabels: { ...defaultBranchSalesConfig().productFamilyLabels },
+      };
+      renderBranchSalesSetup();
+      showToast("회원권 분류명을 기본값으로 되돌렸습니다");
       return;
     }
 

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const identitySource = readFileSync(join(root, "app/tennis-note-member-app/domain/identity.js"), "utf8");
-const identity = new Function(`${identitySource}\nreturn { identityPhoneE164, verifiedPhoneFromAuthUser, normalizedIdentityErrorCode, resolvedAuthCapabilities, identityErrorMessage };`)();
+const identity = new Function(`${identitySource}\nreturn { identityPhoneE164, verifiedPhoneFromAuthUser, normalizedIdentityErrorCode, resolvedAuthCapabilities, identityErrorMessage, emailSignupResponseKind };`)();
 
 test("국내 휴대전화 번호를 Supabase 전화 인증 형식으로 바꾼다", () => {
   assert.equal(identity.identityPhoneE164("010-1234-5678"), "+821012345678");
@@ -54,8 +54,18 @@ test("가입 화면은 전화번호 인증 후 v3 서버 연결을 사용한다"
   assert.match(actions, /client\.signInWithOAuth\("Naver", \{ authType: "reprompt" \}\)/);
   assert.match(memberForms, /id.*identityNaverPhoneButton|identityNaverPhoneButton/);
   assert.match(memberForms, /identityPhone.*value\s*=\s*formatIdentityPhone\(normalizedPhone\)/);
+  assert.match(memberForms, /identityPhoneVerification.*removeAttribute\("hidden"\)/s);
   assert.match(profileEvents, /identityNaverPhoneButton.*requestNaverPhoneConsent/);
   assert.match(html, /id="identityNaverPhoneButton"/);
+});
+
+test("이메일 가입의 난독화 응답은 성공으로 단정하지 않는다", () => {
+  const auth = readFileSync(join(root, "app/tennis-note-member-app/data/auth.js"), "utf8");
+  assert.equal(identity.emailSignupResponseKind({ access_token: "fixture" }), "authenticated");
+  assert.equal(identity.emailSignupResponseKind({ user: { identities: [{ provider: "email" }] } }), "confirmation_sent");
+  assert.equal(identity.emailSignupResponseKind({ user: { identities: [] } }), "indeterminate");
+  assert.match(auth, /가입 요청 결과를 확정할 수 없습니다/);
+  assert.match(auth, /responseKind === "confirmation_sent"/);
 });
 
 test("Auth provider capability와 전화 인증 오류를 안전하게 구분한다", () => {

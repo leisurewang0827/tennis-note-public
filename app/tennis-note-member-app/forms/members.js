@@ -159,6 +159,7 @@ function setIdentityPhoneStatus(message, tone = "") {
 }
 
 function syncIdentityPhoneCapabilityControl() {
+  $("#identityPhoneVerification")?.removeAttribute("hidden");
   const button = $("#identityPhoneSendButton");
   if (!button || identityPhoneVerification.status === "verified") return;
   if (identityAuthCapabilities.status === "checking") {

@@ -82,6 +82,20 @@ const membershipPresetDefinitions = [
   },
 ];
 
+const defaultMembershipProductFamilyLabels = Object.freeze({
+  fourWeek: "한달 (4주)",
+  threeMonth: "3개월 (10% 할인)",
+  coupon: "쿠폰 레슨",
+  oneDay: "원데이 1회",
+});
+
+const membershipProductFamilyLabelKeys = Object.freeze({
+  "four-week": "fourWeek",
+  "three-month": "threeMonth",
+  coupon: "coupon",
+  "one-day": "oneDay",
+});
+
 const registrationFlows = [
   { title: "운동노트 회원", detail: "간편 로그인만 하면 회원권 없이도 운동 기록을 바로 남길 수 있습니다.", steps: ["간편 로그인", "운동 기록", "사진·영상", "계속 이용"] },
   { title: "첫 회원권 구매", detail: "이름·연락처·출생연도만 확인하고 결제로 이어집니다.", steps: ["회원권 선택", "기본정보 확인", "결제", "수강 시작"] },
