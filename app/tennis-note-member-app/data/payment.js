@@ -49,11 +49,12 @@ async function syncMemberPaymentOptionsFromServer(targetBranchId = "") {
       settingsAppliedAt: String(options?.settingsAppliedAt || ""),
       methodAvailability: Array.isArray(options?.methodAvailability) ? options.methodAvailability : [],
       features: { threeMonth: true, oneDay: true, coupons: true, ...(options?.features || {}) },
+      productFamilyLabels: normalizeMembershipProductFamilyLabels(options?.productFamilyLabels),
     };
     normalizeSelectedPaymentMethod();
     return true;
   } catch {
-    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true } };
+    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true }, productFamilyLabels: { ...defaultMembershipProductFamilyLabels } };
     normalizeSelectedPaymentMethod();
     return false;
   }
