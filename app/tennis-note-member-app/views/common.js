@@ -252,7 +252,7 @@ function purchaseEmptyFamilyHtml(familyId = "") {
         <button class="small-button" type="button" data-open-one-day-inquiry>원데이 문의</button>
       </div>`;
   }
-  return memberEmptyState({ title: `${family.label} 판매 준비 중`, reason: "상품이 등록되면 이 화면에서 바로 선택할 수 있습니다.", compact: true });
+  return memberEmptyState({ title: `${membershipProductFamilyDisplayLabel(family.id)} 판매 준비 중`, reason: "상품이 등록되면 이 화면에서 바로 선택할 수 있습니다.", compact: true });
 }
 
 function purchaseStepTwoHtml() {

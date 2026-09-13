@@ -592,6 +592,12 @@ function memberOperationBranchIds(member = {}) {
 
 function defaultBranchSalesConfig() {
   return {
+    productFamilyLabels: {
+      fourWeek: "한달 (4주)",
+      threeMonth: "3개월 (10% 할인)",
+      coupon: "쿠폰 레슨",
+      oneDay: "원데이 1회",
+    },
     features: {
       threeMonth: true,
       oneDay: true,
@@ -631,10 +637,16 @@ function normalizeBranchSalesConfig(value = {}) {
     id,
     { ...benefit, ...(source.benefits?.[id] || {}) },
   ]));
+  const productFamilyLabels = Object.fromEntries(Object.entries(defaults.productFamilyLabels).map(([key, fallback]) => {
+    const candidate = typeof source.productFamilyLabels?.[key] === "string"
+      ? source.productFamilyLabels[key].trim().replace(/\s+/g, " ")
+      : "";
+    return [key, candidate && [...candidate].length <= 40 ? candidate : fallback];
+  }));
   features.newMemberBenefit = benefits.newMember.enabled === true;
   features.returningMemberBenefit = benefits.returningMember.enabled === true;
   features.referralBenefit = benefits.referral.enabled === true;
-  return { features, paymentMethods, benefits };
+  return { productFamilyLabels, features, paymentMethods, benefits };
 }
 
 function refundPolicyEstimate(settings = refundPolicySettings) {

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-// 비공개 권위 source e9a9c48ecfb5701cce1e7ad5e9b57a5a18e04094와 동일한 함수 계약입니다.
+// 비공개 권위 source 0cc2864b4e053a8d5d13c88e37d5ee51229002c4와 동일한 함수 계약입니다.
 const contracts = [
   {
     "name": "submitMemberEnrollment",
@@ -12,7 +12,7 @@ const contracts = [
   {
     "name": "syncIdentityPhoneCapabilityControl",
     "file": "app/tennis-note-member-app/forms/members.js",
-    "sha256": "6bbd86651f484a2c26ba582834241d6d9f458ad7c508cf262e0941733eb9d4d8"
+    "sha256": "4025f4c347aa38b2c0ff2dc700994337300991ccc19a07ff43f40424dfb5ede4"
   },
   {
     "name": "identityProfileComplete",
@@ -47,7 +47,7 @@ const contracts = [
   {
     "name": "persistIdentityProfile",
     "file": "app/tennis-note-member-app/data/auth.js",
-    "sha256": "e5ee34156aa29e3a0b8d171946642d854ef1725834f6f8aba7ebac0c308cafdf"
+    "sha256": "959b235e1c1e1fe3ea871460a8d48590fb7d775eca10fe4036bdf843ffe4c6cf"
   },
   {
     "name": "populateIdentitySetup",

@@ -78,6 +78,12 @@ const state = {
     settingsAppliedAt: "",
     methodAvailability: [],
     features: { threeMonth: true, oneDay: true, coupons: true },
+    productFamilyLabels: {
+      fourWeek: "한달 (4주)",
+      threeMonth: "3개월 (10% 할인)",
+      coupon: "쿠폰 레슨",
+      oneDay: "원데이 1회",
+    },
   },
   discountCoupons: [],
   purchaseFlow: {
@@ -341,8 +347,9 @@ let coachModeNavigationStarted = false;
 let oauthLoginInFlightProvider = "";
 let emailAuthMode = "login";
 let emailPasswordRecoveryPending = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("type") === "recovery";
-// 가입 SMS는 비활성 상태이며 검토용 연락처와 인증된 연락처를 구분합니다.
-const signupSmsEnabled = false;
+// 가입은 확인된 휴대전화 번호를 필수로 사용하며, 실제 OTP 요청 가능 여부는
+// 서버 Auth capability를 다시 확인한 뒤 결정합니다.
+const signupSmsEnabled = true;
 let signupProfileOperation = { fingerprint: "", key: "" };
 let signupProfileSubmitting = false;
 
@@ -1113,7 +1120,7 @@ let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.493");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.494");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -1198,7 +1205,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.493",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.494",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

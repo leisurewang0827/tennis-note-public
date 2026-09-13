@@ -8550,12 +8550,51 @@ tr.is-selected td {
 }
 
 .branch-sales-toggle-grid,
+.branch-sales-family-labels,
 .branch-sales-method-grid,
 .branch-sales-benefit-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.branch-sales-family-labels {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.branch-sales-family-labels label {
+  display: grid;
+  gap: 4px;
+}
+
+.branch-sales-family-labels label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.branch-sales-preview-families {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.branch-sales-preview-families > span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.branch-sales-preview-families strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .branch-sales-toggle-grid label,
@@ -8730,6 +8769,7 @@ tr.is-selected td {
 
 @media (max-width: 640px) {
   .branch-sales-toggle-grid,
+  .branch-sales-family-labels,
   .branch-sales-method-grid,
   .branch-sales-benefit-grid,
   .branch-sales-bank-grid {

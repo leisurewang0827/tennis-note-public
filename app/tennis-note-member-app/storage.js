@@ -62,7 +62,7 @@ function restoreSnapshot() {
     if (!Array.isArray(state.expiredTickets)) state.expiredTickets = [];
     if (!Array.isArray(state.liveMembershipProducts)) state.liveMembershipProducts = [];
     if (!state.livePaymentOptions || typeof state.livePaymentOptions !== "object") {
-      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true } };
+      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true }, productFamilyLabels: { ...defaultMembershipProductFamilyLabels } };
     }
     state.livePaymentOptions.allowedMethods = paymentMethodIdList(state.livePaymentOptions.allowedMethods || ["tosspay"]);
     state.livePaymentOptions.bankTransferEnabled = state.livePaymentOptions.bankTransferEnabled === true;
@@ -71,6 +71,7 @@ function restoreSnapshot() {
     state.livePaymentOptions.settingsAppliedAt = String(state.livePaymentOptions.settingsAppliedAt || "");
     if (!Array.isArray(state.livePaymentOptions.methodAvailability)) state.livePaymentOptions.methodAvailability = [];
     state.livePaymentOptions.features = { threeMonth: true, oneDay: true, coupons: true, ...(state.livePaymentOptions.features || {}) };
+    state.livePaymentOptions.productFamilyLabels = normalizeMembershipProductFamilyLabels(state.livePaymentOptions.productFamilyLabels);
     if (!Array.isArray(state.discountCoupons)) state.discountCoupons = [];
     state.membershipPricingQuotes = {};
     if (!Array.isArray(state.liveTickets)) state.liveTickets = [];
