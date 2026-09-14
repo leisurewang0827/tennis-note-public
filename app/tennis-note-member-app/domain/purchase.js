@@ -209,11 +209,11 @@ function purchasePaymentMethodOptionsHtml() {
     .map((method) => paymentMethodDefinition(method.id))
     .filter((method) => isPaymentGatewayReady(method.id))
     .sort((left, right) => Number(left.displayOrder || 999) - Number(right.displayOrder || 999));
-  const methodOptions = readyMethods.map((method) => {
+  const methodOptionHtml = (method) => {
     const selected = method.id === selectedMethodId;
     const amount = purchasePaymentAmount(purchaseFlowProduct() || {}, method.id);
-    return `<button class="payment-method-option ${selected ? "is-selected" : ""}" type="button" data-select-payment-method="${method.id}" aria-pressed="${selected}"><strong>${method.label} · ${escapeHtml(formatWon(amount))}</strong><small>${method.detail}</small></button>`;
-  }).join("");
+    return `<button class="payment-method-option ${selected ? "is-selected" : ""}" type="button" data-select-payment-method="${method.id}" aria-pressed="${selected}"><span class="payment-method-choice-marker" aria-hidden="true"></span><span class="payment-method-option-copy"><strong>${escapeHtml(method.label)}</strong><small>${escapeHtml(method.detail)}</small></span><b class="payment-method-option-price">${escapeHtml(formatWon(amount))}</b></button>`;
+  };
   const bankAvailability = (state.livePaymentOptions?.methodAvailability || [])
     .find((method) => String(method.id) === "bank_transfer");
   const bankUnavailableMessages = {
@@ -224,7 +224,28 @@ function purchasePaymentMethodOptionsHtml() {
   const bankUnavailable = !readyMethods.some((method) => method.id === "bank_transfer")
     ? `<p class="payment-method-unavailable-note" role="status">${escapeHtml(bankUnavailableMessages[bankAvailability?.reason] || "현재 계좌이체를 사용할 수 없습니다.")}</p>`
     : "";
-  if (readyMethods.length) return `${methodOptions}${bankUnavailable}`;
+  if (readyMethods.length) {
+    const groupDefinitions = [
+      { id: "easy_pay", label: "간편결제", methodIds: ["kakaopay", "tosspay", "naverpay"] },
+      { id: "bank_transfer", label: "계좌이체", methodIds: ["bank_transfer"] },
+      { id: "card", label: "카드 결제", methodIds: ["card"] },
+    ];
+    const groupedIds = new Set(groupDefinitions.flatMap((group) => group.methodIds));
+    const groups = groupDefinitions.map((group) => ({
+      ...group,
+      methods: readyMethods.filter((method) => group.methodIds.includes(method.id)),
+    }));
+    const otherMethods = readyMethods.filter((method) => !groupedIds.has(method.id));
+    if (otherMethods.length) groups.push({ id: "other", label: "기타 결제", methods: otherMethods });
+    return groups
+      .filter((group) => group.methods.length || (group.id === "bank_transfer" && bankUnavailable))
+      .map((group) => `
+        <section class="payment-method-group" data-payment-method-group="${group.id}" aria-labelledby="paymentMethodGroup-${group.id}">
+          <h4 class="payment-method-group-title" id="paymentMethodGroup-${group.id}">${group.label}</h4>
+          <div class="payment-method-group-options">${group.methods.map(methodOptionHtml).join("")}${group.id === "bank_transfer" ? bankUnavailable : ""}</div>
+        </section>`)
+      .join("");
+  }
   return '<p class="payment-method-unavailable" role="status">온라인 결제를 준비하고 있습니다. 지금은 센터에 문의해 주세요.</p>';
 }
 

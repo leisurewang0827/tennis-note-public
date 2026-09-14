@@ -34,6 +34,12 @@ test("회원권 구매 변경 버튼에 필요한 바텀시트가 공개 HTML에
   assert.match(memberApp, /completeButton\.setAttribute\("aria-describedby", "purchaseScheduleSheetSummary"\)/);
   assert.match(styles, /\.purchase-schedule-sheet-actions \.primary-button:disabled/);
   assert.match(styles, /background: #e9eeeb/);
+  assert.match(purchase, /label: "간편결제"/);
+  assert.match(purchase, /methodIds: \["kakaopay", "tosspay", "naverpay"\]/);
+  assert.match(purchase, /data-payment-method-group="\$\{group\.id\}"/);
+  assert.match(purchase, /payment-method-option-price/);
+  assert.match(styles, /\.payment-method-group-title/);
+  assert.match(styles, /grid-template-columns: 20px minmax\(0, 1fr\) auto/);
 });
 
 test("구매 상품은 선택 조건에 맞는 판매 가능 목록을 세 개로 제한하지 않는다", () => {
