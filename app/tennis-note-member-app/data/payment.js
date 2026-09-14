@@ -151,7 +151,9 @@ async function prepareServerPayment(product, paymentId, methodId = state.selecte
         }))
         : [],
       scheduleMode: purchaseFlow.productId === product.id ? flexibleCoupon ? "flex" : purchaseFlow.scheduleMode || "change" : "change",
-      renewalSourceTicketId: purchaseFlow.productId === product.id ? purchaseFlow.renewalTicketId || null : null,
+      renewalSourceTicketId: purchaseFlow.productId === product.id && purchaseFlow.purchasePurpose === "renew_same"
+        ? purchaseFlow.renewalTicketId || null
+        : null,
       purchasePurpose: purchaseFlow.productId === product.id ? purchaseFlow.purchasePurpose || "new_purchase" : "new_purchase",
       discountIssueId: purchaseFlow.productId === product.id ? purchaseFlow.discountIssueId || null : null,
     },

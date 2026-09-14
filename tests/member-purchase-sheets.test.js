@@ -49,3 +49,19 @@ test("구매 상품은 선택 조건에 맞는 판매 가능 목록을 세 개�
   assert.doesNotMatch(memberApp, /if \(renewing \|\| \["coupon", "one-day"\]\.includes\(flow\.familyId\)\)/);
   assert.doesNotMatch(memberApp, /\(flow\.purchasePurpose === "renew_same" && purchaseFlowSourceTicket\(\)\)\) return ""/);
 });
+
+test("과거 주당 횟수 충돌은 신규 구매와 원데이를 연장으로 바꾸지 않는다", () => {
+  const screens = source("app/tennis-note-member-app/ui/screens.js");
+  const payment = source("app/tennis-note-member-app/data/payment.js");
+
+  assert.match(screens, /requestedPurpose === "renew_same"\s*&& sourceTicket/);
+  assert.match(
+    screens,
+    /flow\.purchasePurpose = \["renew_same", "add_coach", "new_purchase", "one_day"\]\.includes\(requestedPurpose\)\s*\? requestedPurpose/,
+  );
+  assert.doesNotMatch(screens, /requestedPurpose === "new_purchase" && returningSource \? "renew_same"/);
+  assert.match(
+    payment,
+    /purchaseFlow\.productId === product\.id && purchaseFlow\.purchasePurpose === "renew_same"\s*\? purchaseFlow\.renewalTicketId \|\| null\s*: null/,
+  );
+});
