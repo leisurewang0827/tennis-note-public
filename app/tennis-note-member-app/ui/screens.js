@@ -157,6 +157,14 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
   const sourceTicket = requestedSource
     || returningSource
     || (!["add_coach", "new_purchase", "one_day"].includes(requestedPurpose) ? activeTickets[0] || null : null);
+  if (
+    sourceTicket
+    && String(sourceTicket.productKind || "regular").toLowerCase() === "regular"
+    && !["snapshot_exact", "ticket_exact"].includes(String(sourceTicket.weeklyFrequencyStatus || ""))
+  ) {
+    showToast("기존 회원권의 주당 횟수 기록이 일치하지 않아 연장할 수 없습니다. 관리자 확인 후 다시 시도해 주세요.");
+    return false;
+  }
   const sourceCanKeepSchedule = membershipTicketCanKeepSchedule(sourceTicket);
   const products = membershipProducts();
   const exactProduct = products.find((product) => (
