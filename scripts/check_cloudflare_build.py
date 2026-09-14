@@ -238,10 +238,11 @@ for config in (
     assert browser["singleSheetImportReverseEnabled"] is expected_sheet_reverse
     payment = payment_config(config)
     assert payment["mode"] == "multi"
-    assert payment["allowedMethods"] == ["tosspay", "bank_transfer"]
+    assert payment["allowedMethods"] == ["tosspay", "kakaopay", "bank_transfer"]
     assert payment["bankTransfer"] == {"enabled": True}
-    assert set(payment["channels"]) == {"tosspay"}
+    assert set(payment["channels"]) == {"tosspay", "kakaopay"}
     assert payment["channels"]["tosspay"]
+    assert payment["channels"]["kakaopay"]
 
 for relative in (
     "shared/tennisnote-single-sheet-import.js",
