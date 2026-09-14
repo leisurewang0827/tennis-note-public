@@ -158,7 +158,8 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
     || returningSource
     || (!["add_coach", "new_purchase", "one_day"].includes(requestedPurpose) ? activeTickets[0] || null : null);
   if (
-    sourceTicket
+    requestedPurpose === "renew_same"
+    && sourceTicket
     && String(sourceTicket.productKind || "regular").toLowerCase() === "regular"
     && !["snapshot_exact", "ticket_exact"].includes(String(sourceTicket.weeklyFrequencyStatus || ""))
   ) {
@@ -192,7 +193,7 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
     : requestedPurpose === "one_day" ? "one-day" : activeMembershipPresetId() || "four-week";
   flow.step = 1;
   flow.purchasePurpose = ["renew_same", "add_coach", "new_purchase", "one_day"].includes(requestedPurpose)
-    ? (requestedPurpose === "new_purchase" && returningSource ? "renew_same" : requestedPurpose)
+    ? requestedPurpose
     : sourceTicket ? "renew_same" : "new_purchase";
   flow.showMoreSlots = false;
   flow.showAllProducts = false;
@@ -445,7 +446,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.496", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.497", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
