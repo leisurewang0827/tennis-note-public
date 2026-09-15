@@ -847,7 +847,7 @@ async function refreshMemberLiveSchedule(options = {}) {
 
   memberLiveScheduleRefreshInFlight = true;
   try {
-    await Promise.all([syncMemberTicketsFromServer(), syncMemberPendingPurchaseSchedulesFromServer()]);
+    await Promise.all([syncMemberTicketsFromServer(), syncMemberRefundRequests(), syncMemberPendingPurchaseSchedulesFromServer()]);
     const [lessonsSynced, requestsSynced, notificationResult] = await Promise.all([
       syncMemberLessonsFromServer(null, { force }),
       syncMemberChangeRequestsFromServer(),

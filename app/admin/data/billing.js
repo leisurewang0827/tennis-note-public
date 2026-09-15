@@ -73,6 +73,28 @@ async function loadBankNotificationStatusFromServer() {
   }
 }
 
+async function loadAdminMemberRefundRequests() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.invokeFunction || !client.getSession?.()?.access_token || adminImportAuthState.profile?.role !== "admin") {
+    adminMemberRefundRequests = [];
+    return false;
+  }
+  try {
+    const result = await client.invokeFunction("portone-payment/refund-request-admin-list", { body: {} });
+    adminMemberRefundRequests = Array.isArray(result?.requests) ? result.requests : [];
+    return true;
+  } catch {
+    adminMemberRefundRequests = [];
+    return false;
+  }
+}
+
+function memberRefundRequestForBilling(item = {}) {
+  return adminMemberRefundRequests.find((request) => (
+    String(request.providerPaymentId || "") === String(item.providerPaymentId || "")
+  )) || null;
+}
+
 async function loadServerPaymentsIntoBilling(options = {}) {
   const silent = Boolean(options.silent);
   const force = Boolean(options.force);
@@ -130,6 +152,7 @@ async function loadServerPaymentsIntoBilling(options = {}) {
         }
       }
     }
+    await loadAdminMemberRefundRequests();
     const { added, updated, removed } = replaceServerPaymentRows(Array.isArray(rows) ? rows : []);
     serverPaymentSyncState.loaded = true;
     serverPaymentSyncState.directLoaded = true;

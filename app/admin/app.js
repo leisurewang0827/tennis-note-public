@@ -342,6 +342,7 @@ const serverPaymentSyncState = {
   tone: "neutral",
 };
 const paymentCancelInFlight = new Set();
+let adminMemberRefundRequests = [];
 
 const paymentCancelFlowState = {
   itemIndex: -1,
@@ -349,6 +350,7 @@ const paymentCancelFlowState = {
   idempotencyKey: "",
   message: "",
   tone: "neutral",
+  memberRequest: null,
 };
 
 const refundFlowState = {
@@ -1181,7 +1183,7 @@ async function cancelManualRefundRequestFromModal() {
     if (result?.ok) {
       billingLogs.unshift(`${item.member} 현금 환불 접수 취소 · 결제와 이용권 유지`);
       closeRefundModal();
-      await loadServerPaymentsIntoBilling({ silent: true });
+      await loadServerPaymentsIntoBilling({ silent: true, force: true });
       showToast("환불 접수 취소됨 · 결제와 이용권은 유지됩니다");
       return;
     }

@@ -1131,12 +1131,13 @@ function paymentFullCancelButtonFor(item, index) {
 }
 
 function paymentRefundButtonFor(item, index) {
+  const memberRequest = memberRefundRequestForBilling(item);
   const context = `${item?.member || "회원"} · ${item?.item || "결제"} · 환불 계산`;
   if (!item?.providerPaymentId) {
     return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="서버 결제번호가 필요합니다.">환불 계산</button>`;
   }
   if (adminPaymentCancelReady()) {
-    return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" aria-label="${escapeHtml(context)}" title="${escapeHtml(context)}">환불 계산</button>`;
+    return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" aria-label="${escapeHtml(context)}" title="${escapeHtml(context)}">${memberRequest && ["submitted", "reviewing", "approved"].includes(memberRequest.status) ? "회원 요청 확인" : "환불 계산"}</button>`;
   }
   return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="${escapeHtml(adminPaymentCancelBlockedMessage())}">관리자 로그인 필요</button>`;
 }

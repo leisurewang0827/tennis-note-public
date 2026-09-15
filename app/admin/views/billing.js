@@ -171,10 +171,12 @@ function billingRowDetailMarkup(item, index, entry, inlineContext, inlineOpen) {
   const sourceDetail = `${escapeHtml(item.item || "결제")}${item.providerPaymentId ? ` · ${escapeHtml(item.providerPaymentId)}` : ""}${item.source ? ` · ${escapeHtml(paymentSourceText(item))}` : ""}`;
   const review = billingInlineReviewMarkup(item, index, inlineContext, inlineOpen);
   const danger = billingDangerActionsMarkup(item, index);
+  const memberRefundRequest = memberRefundRequestForBilling(item);
   return `<details class="payment-row-detail ${processing ? "is-processing" : "is-complete"}">
     <summary>${processing ? "처리 상세" : "상세·위험 작업"}</summary>
     ${approval.detail ? `<p>${escapeHtml(approval.detail)}</p>` : ""}
     ${review}
+    ${memberRefundRequest ? `<p class="billing-member-refund-request"><strong>회원 환불 요청 · ${escapeHtml(memberRefundRequest.status || "submitted")}</strong><span>${escapeHtml(memberRefundRequest.reason || "사유 확인")}</span></p>` : ""}
     ${danger}
     <details class="payment-source-details"><summary>원본·시도 이력</summary><span>${sourceDetail}</span>${billingAttemptHistoryMarkup(entry)}</details>
   </details>`;
@@ -345,6 +347,7 @@ function renderRefundModal() {
   const cancelManualRequestButton = $("#cancelManualRefundRequest");
   const reasonField = $("#refundReasonField");
   const transferReferenceField = $("#refundTransferReferenceField");
+  const rejectMemberRequestButton = $("#rejectMemberRefundRequest");
   const item = refundFlowPaymentItem() || {};
   const manualCashRefund = isManualCashRefundItem(item);
   if (!target) return;
@@ -356,6 +359,7 @@ function renderRefundModal() {
     const preview = refundFlowState.preview;
     const policySource = preview.policySnapshotSource === "current_policy_fallback" ? "현재 정책 기준" : "구매 당시 정책";
     target.innerHTML = `
+      ${refundFlowState.memberRequest ? `<div class="refund-fallback-confirmation"><strong>회원 환불 요청</strong><span>${escapeHtml(refundFlowState.memberRequest.reason || "요청 사유 확인")}</span><small>접수 당시 예상 ${money.format(numericValue(refundFlowState.memberRequest.expectedRefundAmount))}원 · 현재 서버 계산과 다시 비교합니다.</small></div>` : ""}
       <div class="refund-target-summary">
         <div>
           <strong>${escapeHtml(preview.memberName || "회원")} · ${escapeHtml(preview.productName || "회원권")}</strong>
@@ -405,6 +409,10 @@ function renderRefundModal() {
   }
   if (reasonField) reasonField.hidden = refundFlowState.manualTransferPending;
   if (transferReferenceField) transferReferenceField.hidden = !refundFlowState.manualTransferPending;
+  if (rejectMemberRequestButton) {
+    rejectMemberRequestButton.hidden = !refundFlowState.memberRequest || !["submitted", "reviewing", "approved"].includes(refundFlowState.memberRequest.status);
+    rejectMemberRequestButton.disabled = refundFlowState.submitting;
+  }
 }
 
 function renderPaymentCancelModal() {
