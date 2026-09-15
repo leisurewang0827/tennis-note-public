@@ -44,6 +44,7 @@ function bindBillingEvents() {
   $("#closeRefundModal")?.addEventListener("click", closeRefundModal);
   $("#cancelRefundModal")?.addEventListener("click", closeRefundModal);
   $("#cancelManualRefundRequest")?.addEventListener("click", cancelManualRefundRequestFromModal);
+  $("#rejectMemberRefundRequest")?.addEventListener("click", rejectMemberRefundRequestFromModal);
   $("#retryRefundReconcile")?.addEventListener("click", reconcileRefundFromModal);
   $("#refundModal")?.addEventListener("click", (event) => {
     if (event.target.id === "refundModal") closeRefundModal();

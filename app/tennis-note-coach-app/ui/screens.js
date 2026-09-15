@@ -382,28 +382,3 @@ function toggleCurriculumFavorite(id) {
   renderCurriculums();
   saveSnapshot();
 }
-
-async function openCoachExternalPortal(kind = "coach") {
-  const adminRequested = kind === "admin";
-  if (adminRequested && state.coach?.role !== "admin") {
-    showToast("관리자 권한이 있는 계정에서만 열 수 있습니다.");
-    return;
-  }
-  const target = window.TennisNoteRuntimeEnvironment?.resolvePortal?.(adminRequested ? "admin" : "coach");
-  if (!target?.ok || !target.url) {
-    showToast("개발·운영 환경을 확인하지 못해 웹 화면을 열지 않았습니다.");
-    return;
-  }
-  const parsedUrl = new URL(target.url);
-  try {
-    const browserPlugin = window.Capacitor?.Plugins?.Browser;
-    if (nativeCoachAppPlatform() !== "web" && browserPlugin?.open) {
-      await browserPlugin.open({ url: parsedUrl.href });
-      return;
-    }
-    const opened = window.open(parsedUrl.href, "_blank", "noopener,noreferrer");
-    if (!opened) window.location.assign(parsedUrl.href);
-  } catch {
-    showToast("웹 화면을 열지 못했습니다. 네트워크를 확인해 주세요.");
-  }
-}

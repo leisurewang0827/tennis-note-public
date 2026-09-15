@@ -261,6 +261,12 @@ function refundErrorText(code = "") {
     bank_transfer_use_refund_flow: "계좌이체는 PG 취소가 아니라 환불 계산에서 처리해 주세요.",
     linked_one_day_booking_not_found: "결제와 연결된 원데이 예약을 찾지 못했습니다.",
     nothing_to_refund: "계산된 환불액이 0원이라 자동 환불할 수 없습니다.",
+    invalid_refund_request: "회원 환불 요청 정보가 올바르지 않습니다. 목록을 새로고침해 주세요.",
+    refund_request_stale: "회원 환불 요청이 다른 화면에서 변경됐습니다. 목록을 새로고침해 주세요.",
+    refund_request_target_changed: "요청 이후 결제 또는 회원권 상태가 바뀌어 처리를 중단했습니다.",
+    refund_request_claim_failed: "회원 환불 요청을 안전하게 잠그지 못했습니다. 상태를 다시 확인해 주세요.",
+    refund_request_review_failed: "회원 환불 요청 상태를 저장하지 못했습니다. 상태를 다시 확인해 주세요.",
+    refund_request_executing: "회원 환불 요청이 이미 처리 중입니다.",
   };
   return labels[code] || "환불 처리 상태를 확인해 주세요.";
 }

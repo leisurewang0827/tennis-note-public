@@ -69,6 +69,7 @@ const state = {
   lessonLogs: [],
   practiceLogs: [],
   paymentRequests: [],
+  refundRequests: [],
   selectedPaymentMethod: "tosspay",
   livePaymentOptions: {
     allowedMethods: ["tosspay"],

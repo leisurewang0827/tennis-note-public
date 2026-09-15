@@ -1118,6 +1118,28 @@
       </article>
     </section>
 
+    <section id="memberRefundRequestSheet" class="app-bottom-sheet member-refund-request-sheet" aria-labelledby="memberRefundRequestTitle" data-tn-bottom-sheet data-tn-sheet-size="compact" data-tn-sheet-has-footer="true" data-tn-input-guard="member-refund-request" data-tn-restore-draft="true" hidden>
+      <button class="sheet-backdrop" type="button" aria-label="환불 요청 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-member-refund-request></button>
+      <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="memberRefundRequestTitle" data-tn-sheet-panel>
+        <div class="sheet-handle" aria-hidden="true" data-tn-sheet-handle></div>
+        <header class="sheet-head" data-tn-sheet-header>
+          <div><p class="eyebrow">회원권·결제</p><h2 id="memberRefundRequestTitle">환불 요청</h2></div>
+          <button class="small-button" type="button" data-tn-sheet-close data-close-member-refund-request>닫기</button>
+        </header>
+        <form id="memberRefundRequestForm" class="member-refund-request-form sheet-scroll" data-tn-sheet-scroll>
+          <div id="memberRefundRequestContent" aria-live="polite"></div>
+          <label><span>요청 사유</span><textarea id="memberRefundRequestReason" rows="3" maxlength="500" placeholder="관리자가 확인할 환불 요청 사유를 입력해 주세요." required></textarea></label>
+          <label class="member-refund-fallback" hidden><input id="memberRefundPolicyFallback" type="checkbox" /><span>구매 당시 정책 자료가 없어 현재 환불 정책으로 계산한 예상액임을 확인했습니다.</span></label>
+          <a class="member-refund-policy-link" href="../tennis-note-legal/commerce.html">결제·환불 정책 보기</a>
+          <div id="memberRefundRequestMessage" class="form-message" role="status"></div>
+          <div class="sheet-actions" data-tn-sheet-footer>
+            <button class="small-button" type="button" data-close-member-refund-request>닫기</button>
+            <button id="submitMemberRefundRequest" class="primary-button" type="submit">환불 요청 접수</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
     <section id="purchaseProductSheet" class="app-bottom-sheet purchase-product-sheet" aria-labelledby="purchaseProductSheetTitle" data-tn-bottom-sheet hidden>
       <button class="sheet-backdrop" type="button" aria-label="상품 선택 닫기" data-tn-sheet-backdrop data-tn-sheet-close data-close-purchase-product></button>
       <article class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="purchaseProductSheetTitle" data-tn-sheet-panel>
@@ -1452,6 +1474,7 @@
     <script defer src="./actions/profile.js?v=1.0.499"></script>
     <script defer src="./actions/journal.js?v=1.0.499"></script>
     <script defer src="./actions/payment.js?v=1.0.499"></script>
+    <script defer src="./actions/refunds.js?v=1.0.499"></script>
     <script defer src="./actions/session.js?v=1.0.499"></script>
     <script defer src="./actions/onboarding.js?v=1.0.499"></script>
     <script>

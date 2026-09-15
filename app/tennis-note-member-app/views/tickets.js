@@ -178,6 +178,7 @@ function renderCurrentTicketPanel() {
   if (demoTicket) visibleTickets.push(demoTicket);
   const currentTicketIds = new Set(currentTickets.map((ticket) => String(ticket.id || "")));
   const primaryTicket = visibleTickets[0] || null;
+  const primaryRefundRequest = primaryTicket ? memberRefundRequestForTicket(primaryTicket.id) : null;
   const lifecycle = memberPurchaseLifecycle();
   const previousTicket = lifecycle === "returning" ? latestPreviousMembershipTicket() : null;
   const otherTickets = visibleTickets.slice(1);
@@ -221,6 +222,9 @@ function renderCurrentTicketPanel() {
         <div>
           <button class="small-button" type="button" data-open-discount-coupon-wallet>쿠폰함</button>
           <button class="small-button" type="button" data-open-membership-history>이용 내역</button>
+          ${primaryTicket?.providerPaymentId && primaryTicket.paymentStatus === "verified" && !primaryTicket.refundHoldId
+            ? `<button class="small-button" type="button" data-open-member-refund-request="${escapeHtml(primaryTicket.id || "")}">${primaryRefundRequest ? `환불 요청 · ${escapeHtml(memberRefundRequestStatus(primaryRefundRequest.status).label)}` : "환불 요청"}</button>`
+            : ""}
         </div>
       </details>
     </div>

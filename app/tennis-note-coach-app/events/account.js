@@ -14,7 +14,6 @@ function bindAccountEvents() {
   $("#refreshButton").addEventListener("click", renderAll);
   $("#userModeButton")?.addEventListener("click", openUserMode);
   $("#userModeLoginButton")?.addEventListener("click", openUserMode);
-  $("#adminWebPortalButton")?.addEventListener("click", () => void openCoachExternalPortal("admin"));
   $("#noticeClose")?.addEventListener("click", () => closeNotice(false));
   $("#noticeHideToday")?.addEventListener("click", () => closeNotice(true));
   $("#noticeAction")?.addEventListener("click", () => closeNotice(false));
