@@ -169,6 +169,11 @@ async function updateMembershipProductSetting(productId, options = {}) {
     showToast("주간 예약 가능 일수는 주간 최대 사용 회차보다 클 수 없습니다.");
     return;
   }
+  const frequencyConsistencyIssue = membershipProductFrequencyConsistencyIssue(nextProduct);
+  if (frequencyConsistencyIssue) {
+    showToast(frequencyConsistencyIssue);
+    return;
+  }
   if (nextProduct.firstLessonOfferEnabled === true
     && (!Number(nextProduct.firstLessonOfferPrice)
       || Number(nextProduct.firstLessonOfferPrice) >= Number(nextProduct.cardAmount))) {
@@ -235,6 +240,7 @@ async function updateMembershipProductSetting(productId, options = {}) {
       || Number(saved.total_sessions) !== Number(nextProduct.tickets)
       || Number(saved.lesson_minutes) !== Number(nextProduct.lessonMinutes)
       || Number(saved.group_size) !== Number(nextProduct.groupSize)
+      || Number(saved.frequency_per_week) !== Number(nextProduct.frequencyPerWeek)
       || Number(saved.max_sessions_per_day || 0) !== Number(nextProduct.maxSessionsPerDay || 0)
       || Number(saved.max_sessions_per_week || 0) !== Number(nextProduct.maxSessionsPerWeek || 0)
       || Number(saved.max_booking_days_per_week || 0) !== Number(nextProduct.maxBookingDaysPerWeek || 0)
