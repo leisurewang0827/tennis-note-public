@@ -18,10 +18,13 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.501"
-EXPECTED_RELEASE_ID = "2026.09.16.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v540"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v513"
+EXPECTED_VERSION = "1.0.502"
+EXPECTED_RELEASE_ID = "2026.09.16.02"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v541"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v514"
+
+SELECTED_NET_NEW_FEATURE_IDS = ("FEEDBACK-ADMIN-NOTE-PRESERVATION",)
+SELECTED_NET_NEW_PATHS = {"app/shared/tennisnote-issue-reporter.js"}
 
 DEV_WORKFLOW = ".github/workflows/deploy-cloudflare-pages-dev.yml"
 DEV_WORKFLOW_LINES = (
@@ -232,14 +235,20 @@ def generate() -> None:
             "the exact four development deployment workflow lines",
         ],
         "production_authority_feature_ids": list(PRODUCTION_AUTHORITY_FEATURE_IDS),
-        "selected_net_new_dev_feature_ids": [],
-        "selection_note": "No dev-only feature passed every production/data/device gate beyond behavior already present in the production authority tree.",
+        "selected_net_new_dev_feature_ids": list(SELECTED_NET_NEW_FEATURE_IDS),
+        "selection_note": "Only the verified feedback admin-note preservation hotfix is added beyond the production authority tree.",
         "dev_ahead_commits": classify_commits(),
     }
     paths = authority_paths("app")
     placeholder = dict(manifest)
     hashes = {
-        path: sha256(normalize_product_bytes(path, authority_bytes(path), placeholder))
+        path: sha256(
+            normalize_product_bytes(
+                path,
+                (ROOT / path).read_bytes() if path in SELECTED_NET_NEW_PATHS else authority_bytes(path),
+                placeholder,
+            )
+        )
         for path in paths
     }
     manifest["product_tree"] = {

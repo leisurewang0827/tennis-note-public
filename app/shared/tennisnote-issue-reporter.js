@@ -410,11 +410,15 @@
       const row = button.closest("[data-report-id]");
       button.disabled = true;
       try {
+        const currentReport = adminReportState.rows.find(
+          (report) => String(report.id || "") === String(row.dataset.reportId || ""),
+        );
+        if (!currentReport) throw new Error("피드백 최신 정보를 다시 불러온 뒤 저장해 주세요.");
         await client.rpc("tn_admin_update_product_report", {
           target_report_id: row.dataset.reportId,
           target_status: row.querySelector("[data-report-status]").value,
           target_priority: row.querySelector("[data-report-priority]").value,
-          target_admin_note: "",
+          target_admin_note: String(currentReport.admin_note || ""),
         });
         await loadAdminReports();
       } catch (error) {

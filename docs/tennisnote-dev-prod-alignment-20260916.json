@@ -13,11 +13,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.501",
-    "release_id": "2026.09.16.01",
-    "deployed_at": "2026-09-16T12:37:53+09:00",
-    "member_cache": "tennis-note-member-pwa-v540",
-    "coach_cache": "tennis-note-coach-mode-v513"
+    "version": "1.0.502",
+    "release_id": "2026.09.16.02",
+    "deployed_at": "2026-09-16T14:56:38+09:00",
+    "member_cache": "tennis-note-member-pwa-v541",
+    "coach_cache": "tennis-note-coach-mode-v514"
   },
   "allowed_differences": [
     "app version literals",
@@ -45,8 +45,10 @@
     "MEMBERSHIP-WEEKLY-FREQUENCY",
     "MEMBER-REFUND-REQUEST"
   ],
-  "selected_net_new_dev_feature_ids": [],
-  "selection_note": "No dev-only feature passed every production/data/device gate beyond behavior already present in the production authority tree.",
+  "selected_net_new_dev_feature_ids": [
+    "FEEDBACK-ADMIN-NOTE-PRESERVATION"
+  ],
+  "selection_note": "Only the verified feedback admin-note preservation hotfix is added beyond the production authority tree.",
   "dev_ahead_commits": [
     {
       "sha": "1ae65617725a7c1fe4eab6516d8785ab93708529",
@@ -872,7 +874,7 @@
       "app/shared/tennisnote-escape-html.js": "897169658594ce7abebf4a1c632b78ef4bbca02975bf94dbc885ed7e899f6ecb",
       "app/shared/tennisnote-input-guard.js": "783cd553002585897fa7146da1d1462fdcf4e070cd527a71e72ea4ce1db3e3b1",
       "app/shared/tennisnote-issue-reporter.css": "de8537c82a5fc50de0ce71dbef8623183d9be8aae67967f3baffd4467286dbba",
-      "app/shared/tennisnote-issue-reporter.js": "73652f3638c1d98ebe398fb1bca35d9661043d37b13e6f0eae5f73632b1606bd",
+      "app/shared/tennisnote-issue-reporter.js": "c6b4531e91d1d4260f1c721ed16757425e46ccef70a869e3891012fdefe72a85",
       "app/shared/tennisnote-mode-transition.js": "af3e963d9050fc0176bea07f96d5dbdfaa80cbaad3bd9e093ccc6c9f118972e7",
       "app/shared/tennisnote-native-push.js": "9533fc1567f7df6ce49b8902fee2a489dc53799fed2269ba513f3ba41235bd3b",
       "app/shared/tennisnote-product-catalog.js": "758af3df9ade3da8f84b1b88e0de8e39a3e6983c1a9ea1bf7d7d7f8ae3a1f135",
