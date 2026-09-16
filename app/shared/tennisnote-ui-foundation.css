@@ -13,9 +13,8 @@ html[data-tennisnote-surface] body {
   overflow-wrap: break-word;
 }
 
-/* NFR-04: Capacitor SystemBars supplies these variables on Android. Reserve
-   each native inset once at the app shell, not again on every child header.
-   Missing bridge variables retain the existing iOS/PWA layout and inset owner. */
+/* NFR-04: Capacitor SystemBars가 제공하는 native 여백을 기존 shell에서 한 번만
+   확보한다. bridge 값이 없으면 iOS/PWA의 기존 여백 담당과 화면 구조를 유지한다. */
 html[data-tennisnote-surface="member"] body > .app-shell,
 html[data-tennisnote-surface="coach"] body > .coach-shell {
   box-sizing: border-box;

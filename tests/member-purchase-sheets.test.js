@@ -34,4 +34,40 @@ test("회원권 구매 변경 버튼에 필요한 바텀시트가 공개 HTML에
   assert.match(memberApp, /completeButton\.setAttribute\("aria-describedby", "purchaseScheduleSheetSummary"\)/);
   assert.match(styles, /\.purchase-schedule-sheet-actions \.primary-button:disabled/);
   assert.match(styles, /background: #e9eeeb/);
+  assert.match(purchase, /label: "간편결제"/);
+  assert.match(purchase, /methodIds: \["kakaopay", "tosspay", "naverpay"\]/);
+  assert.match(purchase, /data-payment-method-group="\$\{group\.id\}"/);
+  assert.match(purchase, /payment-method-option-price/);
+  assert.match(styles, /\.payment-method-group-title/);
+  assert.match(styles, /grid-template-columns: 20px minmax\(0, 1fr\) auto/);
+});
+
+test("구매 상품은 선택 조건에 맞는 판매 가능 목록을 세 개로 제한하지 않는다", () => {
+  const purchase = source("app/tennis-note-member-app/domain/purchase.js");
+  const memberApp = source("app/tennis-note-member-app/app.js");
+
+  assert.match(purchase, /const visibleProducts = matchingProducts;/);
+  assert.doesNotMatch(purchase, /matchingProducts\.slice\(0, 3\)/);
+  assert.match(purchase, /visibleProducts\.map\(\(product\) => purchaseProductCard\(product, String\(product\.id\) === String\(flow\.productId\)\)\)/);
+  assert.match(purchase, /renewing \? "조건 일치 상품" : "상품"/);
+  assert.match(memberApp, /if \(\["coupon", "one-day"\]\.includes\(flow\.familyId\)\) return familyProducts;/);
+  assert.match(memberApp, /if \(\["coupon", "one-day"\]\.includes\(flow\.familyId\)\) return "";/);
+  assert.doesNotMatch(memberApp, /if \(renewing \|\| \["coupon", "one-day"\]\.includes\(flow\.familyId\)\)/);
+  assert.doesNotMatch(memberApp, /\(flow\.purchasePurpose === "renew_same" && purchaseFlowSourceTicket\(\)\)\) return ""/);
+});
+
+test("과거 주당 횟수 충돌은 신규 구매와 원데이를 연장으로 바꾸지 않는다", () => {
+  const screens = source("app/tennis-note-member-app/ui/screens.js");
+  const payment = source("app/tennis-note-member-app/data/payment.js");
+
+  assert.match(screens, /requestedPurpose === "renew_same"\s*&& sourceTicket/);
+  assert.match(
+    screens,
+    /flow\.purchasePurpose = \["renew_same", "add_coach", "new_purchase", "one_day"\]\.includes\(requestedPurpose\)\s*\? requestedPurpose/,
+  );
+  assert.doesNotMatch(screens, /requestedPurpose === "new_purchase" && returningSource \? "renew_same"/);
+  assert.match(
+    payment,
+    /purchaseFlow\.productId === product\.id && purchaseFlow\.purchasePurpose === "renew_same"\s*\? purchaseFlow\.renewalTicketId \|\| null\s*: null/,
+  );
 });

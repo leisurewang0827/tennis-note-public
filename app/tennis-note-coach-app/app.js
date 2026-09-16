@@ -7,9 +7,6 @@ const state = {
   dashboardVersion: 5,
   editingMakeupId: null,
   coachQuickAdd: null,
-  bookingMakeupEntitlementId: "",
-  bookingMakeupSnapshot: "",
-  bookingMakeupOperationKey: "",
   writingLessonId: null,
   memberFilter: "all",
   memberQuery: "",
@@ -45,7 +42,6 @@ const state = {
   ntrpRequests: [],
   lessonLogs: [],
   lessonChartDrafts: {},
-  groupFeedbackReviewLessonId: "",
   members: [],
   branchPermissions: {
     branch: "어린이대공원점",
@@ -58,16 +54,6 @@ const state = {
   coachSettlement: null,
   coachSettlementLoading: false,
   coachSettlementError: "",
-  coachSettlementReconciliation: null,
-  coachSettlementReconciliationUiState: "EMPTY",
-  coachSettlementReconciliationLoading: false,
-  coachSettlementReconciliationSubmitting: false,
-  coachSettlementReconciliationMessage: "",
-  coachSettlementReconciliationValidation: "",
-  coachSettlementReconciliationChoice: "",
-  coachSettlementReconciliationReason: "",
-  coachSettlementReconciliationOperation: null,
-  coachSettlementReconciliationRequestId: 0,
   coachProfiles: {
     "노 코치": {
       intro: "입문 회원이 테니스를 어렵게 느끼지 않도록 기본 자세와 랠리 연결을 차근차근 잡아드립니다.",
@@ -429,9 +415,6 @@ function captureLessonChartDraft(id) {
   const lesson = ensureCoachLessonRecord(id);
   if (!lesson) return [];
   const rows = $$('[data-modal-participant-row]').filter((row) => row.dataset.modalParticipantRow === id);
-  if (!rows.length && state.groupFeedbackReviewLessonId === id) return lessonChartDraftResults(lesson);
-  const commonComment = activeViewField(`[data-group-feedback-common-comment="${id}"]`)?.value.trim() || "";
-  const commonCurriculumId = activeViewField(`[data-group-feedback-common-curriculum="${id}"]`)?.value || "";
   const participantResults = rows.map((row) => ({
     userId: row.dataset.userId || "",
     ticketId: row.dataset.ticketId || "",
@@ -440,30 +423,14 @@ function captureLessonChartDraft(id) {
     totalSessions: Number(row.dataset.totalSessions) || 0,
     usedSessions: Number(row.dataset.usedSessions) || 0,
     remainingSessions: Number(row.dataset.remainingSessions) || 0,
-    coachComment: row.querySelector("[data-group-feedback-exception]")?.checked
-      ? row.querySelector("[data-modal-coach-comment]")?.value.trim() || ""
-      : commonComment || row.querySelector("[data-modal-coach-comment]")?.value.trim() || "",
-    nextCurriculumId: row.querySelector("[data-group-feedback-exception]")?.checked
-      ? row.querySelector("[data-modal-next-curriculum]")?.value || ""
-      : commonCurriculumId || row.querySelector("[data-modal-next-curriculum]")?.value || "",
-    usesException: Boolean(row.querySelector("[data-group-feedback-exception]")?.checked),
+    coachComment: row.querySelector("[data-modal-coach-comment]")?.value.trim() || "",
+    nextCurriculumId: row.querySelector("[data-modal-next-curriculum]")?.value || "",
   }));
-  const drafts = commonComment || commonCurriculumId ? {
-    __groupCommon: {
-      coachComment: commonComment,
-      nextCurriculumId: commonCurriculumId,
-      savedAt: Date.now(),
-    },
-  } : {};
+  const drafts = {};
   participantResults.forEach((result, index) => {
-    const sourceIndex = completionParticipantsForLesson(lesson).findIndex((participant) => (
-      String(participant.userId || "") === String(result.userId)
-      && String(participant.ticketId || "") === String(result.ticketId)
-    ));
-    drafts[lessonChartParticipantKey(result, sourceIndex >= 0 ? sourceIndex : index)] = {
+    drafts[lessonChartParticipantKey(result, index)] = {
       coachComment: result.coachComment,
       nextCurriculumId: result.nextCurriculumId,
-      usesException: result.usesException,
       savedAt: Date.now(),
     };
   });
@@ -591,7 +558,7 @@ async function initCoachApp() {
 }
 
 window.__TENNIS_NOTE_COACH_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.494",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.500",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

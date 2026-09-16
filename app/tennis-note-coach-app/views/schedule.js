@@ -16,41 +16,7 @@ function renderScheduleEditPanel() {
   const processingState = coachLessonCardState(lesson);
   const needsStateRefresh = processingState.id === "confirmation_needed";
   const completionParticipants = completionParticipantsForLesson(lesson);
-  const groupFeedbackParticipants = completionParticipants.filter(lessonParticipantNeedsFeedback);
-  const groupFeedback = groupFeedbackParticipants.length > 1 && !finalized;
-  const groupFeedbackReview = groupFeedback && state.groupFeedbackReviewLessonId === lesson.id;
-  const commonDraft = lessonGroupFeedbackCommonDraft(lesson) || {};
-  const commonCurriculumId = commonDraft.nextCurriculumId || "";
-  const commonCurriculumTitle = commonCurriculumId ? selectedCurriculum(commonCurriculumId)?.title || "" : "";
-  const groupCommonFields = groupFeedback && !groupFeedbackReview ? `
-    <section class="lesson-group-feedback-common wide">
-      <div class="lesson-group-feedback-heading">
-        <div><strong>전원 공통 피드백</strong><span>한 번 작성하면 예외가 없는 ${groupFeedbackParticipants.length}명에게 적용됩니다.</span></div>
-        <b>${groupFeedbackParticipants.length}명</b>
-      </div>
-      <label class="lesson-required-field">
-        <span>공통 메모 <small>완료 시 회원에게 공개</small></span>
-        <textarea data-group-feedback-common-comment="${escapeHtml(lesson.id)}" rows="5" placeholder="오늘 수업의 공통 내용과 다음 연습 포인트를 입력하세요" ${canProcess ? "" : "disabled"}>${escapeHtml(commonDraft.coachComment || "")}</textarea>
-        <details class="lesson-ai-draft">
-          <summary>초안 도우미</summary>
-          <div class="tn-comment-draft-tools">
-            <input data-group-feedback-common-keywords="${escapeHtml(lesson.id)}" type="text" maxlength="240" placeholder="잘된 점: …; 더 연습할 점: …; 개인 연습: …" ${canProcess ? "" : "disabled"} />
-            <button type="button" data-generate-group-common-comment="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>초안 만들기</button>
-          </div>
-        </details>
-        <small class="lesson-comment-count" data-group-feedback-common-count="${escapeHtml(lesson.id)}">${String(commonDraft.coachComment || "").length}/5자</small>
-      </label>
-      <label class="lesson-required-field">
-        <span>공통 다음 목표 <small>필수</small></span>
-        <input data-curriculum-option-search type="search" value="${escapeHtml(commonCurriculumId && commonCurriculumTitle ? `${commonCurriculumId} · ${commonCurriculumTitle}` : "")}" placeholder="동작·증상·목표·코드 검색" aria-label="그룹 공통 다음 목표 검색" ${canProcess ? "" : "disabled"} />
-        <div class="tn-curriculum-suggestions" data-curriculum-option-suggestions role="listbox" hidden></div>
-        <select data-group-feedback-common-curriculum="${escapeHtml(lesson.id)}" ${canProcess ? "" : "disabled"}>
-          <option value="">검색·선택</option>
-          ${curriculumOptions(commonCurriculumId)}
-        </select>
-      </label>
-    </section>` : "";
-  const participantTabs = completionParticipants.length > 1 && !groupFeedback
+  const participantTabs = completionParticipants.length > 1
     ? `<div class="lesson-chart-member-tabs" role="tablist" aria-label="그룹 회원 선택">${completionParticipants.map((participant, index) => `<button type="button" role="tab" class="${index === 0 ? "is-active" : ""}" aria-selected="${index === 0}" data-lesson-participant-tab="${escapeHtml(lessonChartParticipantKey(participant, index))}">${escapeHtml(participant.name || `회원 ${index + 1}`)}</button>`).join("")}</div>`
     : "";
   const participantCompletionFields = completionParticipants.map((participant, index) => {
@@ -67,11 +33,11 @@ function renderScheduleEditPanel() {
       return `
         <section class="lesson-participant-completion-card lesson-chart-participant is-same-day-absence" data-lesson-participant-panel="${escapeHtml(key)}" ${index === 0 ? "" : "hidden"}>
           ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
-          <div class="lesson-chart-result-line"><b>${sameDayAbsence.operationKind === "future_group" ? "미래 불참 승인 대기" : "불참 승인 대기"}</b><span>승인 전 수업·횟수 유지</span></div>
+          <div class="lesson-chart-result-line"><b>불참 승인 대기</b><span>승인 전 수업·횟수 유지</span></div>
           <p class="lesson-chart-readonly">${escapeHtml(sameDayAbsence.reason || "사유 없음")}</p>
           <div class="actions lesson-same-day-absence-actions">
-            <button class="small-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-absence-operation-kind="${escapeHtml(sameDayAbsence.operationKind || "same_day")}" data-approve="false">거절</button>
-            <button class="approve-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-absence-operation-kind="${escapeHtml(sameDayAbsence.operationKind || "same_day")}" data-approve="true">불참 승인</button>
+            <button class="small-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-approve="false">거절</button>
+            <button class="approve-button" type="button" data-review-same-day-absence="${escapeHtml(sameDayAbsence.id)}" data-approve="true">불참 승인</button>
           </div>
         </section>`;
     }
@@ -81,7 +47,7 @@ function renderScheduleEditPanel() {
         <section class="lesson-participant-completion-card lesson-chart-participant is-final is-same-day-absence" data-lesson-participant-panel="${escapeHtml(key)}" ${index === 0 ? "" : "hidden"}>
           ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
           <div class="lesson-chart-result-line"><b>불참 예정</b><span>${absenceDeducted ? `${absenceDeducted}회 차감` : "차감 없음"}</span></div>
-          <p class="lesson-chart-readonly">회원이 앱에서 ${sameDayAbsence.operationKind === "future_group" ? "미래 불참을 미리" : "당일 불참을"} 알렸습니다. 피드백 작성 대상에서 제외됩니다.</p>
+          <p class="lesson-chart-readonly">회원이 앱에서 당일 불참을 알렸습니다. 피드백 작성 대상에서 제외됩니다.</p>
         </section>`;
     }
     if (finalized) {
@@ -114,21 +80,9 @@ function renderScheduleEditPanel() {
           <div class="lesson-chart-history" data-lesson-history-panel="${escapeHtml(key)}" hidden>${participant.userId ? coachMemberChartPanelMarkup(participant.userId, participant.name || "회원", 5) : '<p class="member-chart-state">연결된 회원 기록이 없습니다.</p>'}</div>
         </section>`;
     }
-    const usesException = groupFeedback && lessonGroupFeedbackParticipantUsesException(lesson, participant, index);
-    if (groupFeedbackReview) {
-      const reviewDraft = lessonChartDraftFor(lesson, participant, index) || {};
-      const reviewCurriculum = reviewDraft.nextCurriculumId ? selectedCurriculum(reviewDraft.nextCurriculumId) : null;
-      return `
-        <article class="lesson-participant-completion-card lesson-group-feedback-review-card" data-lesson-participant-panel="${escapeHtml(key)}">
-          <div class="lesson-group-feedback-review-head"><strong>${escapeHtml(participant.name || `회원 ${index + 1}`)}</strong><span>${reviewDraft.usesException ? "회원별 예외" : "공통 적용"}</span></div>
-          <p>${escapeHtml(reviewDraft.coachComment || "입력 없음")}</p>
-          <small>다음 목표 · ${escapeHtml(reviewCurriculum?.title || "선택 안 됨")}</small>
-        </article>`;
-    }
-    const participantMarkup = `
-      <section class="lesson-participant-completion-card lesson-chart-participant ${groupFeedback ? "is-group-exception" : ""}" data-modal-participant-row="${escapeHtml(lesson.id)}" data-lesson-participant-panel="${escapeHtml(key)}" data-user-id="${escapeHtml(participant.userId)}" data-ticket-id="${escapeHtml(participant.ticketId)}" data-participant-name="${escapeHtml(participant.name || "회원")}" data-ticket-name="${escapeHtml(participant.ticketName || lesson.ticket || "회원권")}" data-total-sessions="${total}" data-used-sessions="${used}" data-remaining-sessions="${remaining}" ${!groupFeedback && index > 0 ? "hidden" : ""}>
+    return `
+      <section class="lesson-participant-completion-card lesson-chart-participant" data-modal-participant-row="${escapeHtml(lesson.id)}" data-lesson-participant-panel="${escapeHtml(key)}" data-user-id="${escapeHtml(participant.userId)}" data-ticket-id="${escapeHtml(participant.ticketId)}" data-participant-name="${escapeHtml(participant.name || "회원")}" data-ticket-name="${escapeHtml(participant.ticketName || lesson.ticket || "회원권")}" data-total-sessions="${total}" data-used-sessions="${used}" data-remaining-sessions="${remaining}" ${index === 0 ? "" : "hidden"}>
         ${completionParticipants.length > 1 ? `<strong class="lesson-chart-participant-name">${escapeHtml(participant.name || "회원")}</strong>` : ""}
-        ${groupFeedback ? `<label class="lesson-group-feedback-exception-toggle"><input type="checkbox" data-group-feedback-exception="${escapeHtml(lesson.id)}" ${usesException ? "checked" : ""} /><span>이 회원만 다르게 작성</span><small>${usesException ? "예외 적용" : "공통 적용"}</small></label><fieldset data-group-feedback-exception-fields ${usesException ? "" : "disabled"}>` : ""}
         <div class="lesson-chart-goal"><span>오늘 목표</span><strong>${escapeHtml(defaults.todayGoal)}</strong></div>
         <button class="small-button lesson-chart-history-toggle" type="button" data-toggle-lesson-history="${escapeHtml(key)}">지난 기록 보기</button>
         <div class="lesson-chart-history" data-lesson-history-panel="${escapeHtml(key)}" hidden>${participant.userId ? coachMemberChartPanelMarkup(participant.userId, participant.name || "회원", 5) : '<p class="member-chart-state">연결된 회원 기록이 없습니다.</p>'}</div>
@@ -153,11 +107,7 @@ function renderScheduleEditPanel() {
             ${curriculumOptions(defaults.nextCurriculumId)}
           </select>
         </label>
-        ${groupFeedback ? "</fieldset>" : ""}
       </section>`;
-    return groupFeedback
-      ? `<details class="lesson-group-feedback-exception" ${usesException ? "open" : ""}><summary><span>${escapeHtml(participant.name || `회원 ${index + 1}`)}</span><small>${usesException ? "회원별 예외 작성 중" : "공통 피드백 적용"}</small></summary>${participantMarkup}</details>`
-      : participantMarkup;
   }).join("");
   const scheduleEditDraft = lesson.scheduleEditDraft || {};
   const selectedEditDay = scheduleEditDraft.day || lesson.day;
@@ -177,13 +127,9 @@ function renderScheduleEditPanel() {
     .join("");
   const selectedLessonAction = String(lesson.selectedSecondaryAction || "");
   const activeLessonTab = lesson.detailTab === "processing" ? "processing" : "feedback";
-  const feedbackPrimaryAction = !finalized && canProcess ? canFinalize
-    ? groupFeedback
-      ? groupFeedbackReview
-        ? `<button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}">전원 저장하고 완료</button>`
-        : `<button class="approve-button" type="button" data-review-group-feedback="${lesson.id}" disabled>전원 저장 내용 확인</button>`
-      : `<button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>저장하고 완료</button>`
-    : "" : "";
+  const feedbackPrimaryAction = !finalized && canProcess && canFinalize
+    ? `<button class="approve-button" type="button" data-complete-lesson-from-modal="${lesson.id}" disabled>저장하고 완료</button>`
+    : "";
   return `
     <section class="schedule-edit-panel lesson-action-panel">
       <header class="wide lesson-detail-sheet-header" data-tn-feedback-exit-contract="lesson-editor-v1">
@@ -204,7 +150,6 @@ function renderScheduleEditPanel() {
       <fieldset class="lesson-detail-tab-panel wide" data-lesson-tab-panel="feedback" ${activeLessonTab === "feedback" ? "" : "hidden disabled"}>
       ${canFinalize && !finalized && completionParticipants.length === 1 ? `<p class="lesson-chart-deduction-preview wide">완료 시 잔여 ${Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0}회 → ${Math.max(0, (Number(completionParticipants[0]?.remainingSessions) || Number(lesson.remaining) || 0) - 1)}회</p>` : ""}
       ${lessonGroupDeductionSummary(lesson, completionParticipants) ? `<p class="lesson-chart-deduction-preview wide">${escapeHtml(lessonGroupDeductionSummary(lesson, completionParticipants))}</p>` : ""}
-      ${groupFeedbackReview ? `<section class="lesson-group-feedback-review wide"><div class="lesson-group-feedback-review-head"><strong>전원 저장 전 확인</strong><button class="small-button" type="button" data-edit-group-feedback-review="${lesson.id}">수정하기</button></div><p>${groupFeedbackParticipants.length}명의 피드백과 회원권 차감을 한 번에 처리합니다. 한 명이라도 서버 검증에 실패하면 전부 저장되지 않습니다.</p></section>` : groupCommonFields}
       ${participantTabs}
       <div class="lesson-participant-completion-list wide">${participantCompletionFields}</div>
       </fieldset>
@@ -396,22 +341,6 @@ function renderCoachMobileSchedule(policy, scheduleLessons) {
     </div>`;
 }
 
-function renderCoachMakeupBookingGuide() {
-  const entitlement = activeCoachMakeupBookingEntitlement();
-  if (!entitlement) return "";
-  const guard = coachMakeupEntitlementBookingGuard(entitlement, state.bookingMakeupSnapshot);
-  if (!guard.ok) {
-    return `<section class="tn-empty-state" role="alert"><strong>보강권을 다시 확인해 주세요</strong><p>${escapeHtml(guard.message)}</p><button class="small-button" type="button" data-cancel-coach-makeup-booking>선택 취소</button></section>`;
-  }
-  const ticketUnit = Math.max(1, Number(guard.ticket.lessonMinutes) || Number(entitlement.durationMinutes) || 20);
-  const completionUnits = Math.max(1, Math.ceil(Number(entitlement.durationMinutes) / ticketUnit));
-  return `<section class="coach-operation-notice is-normal" role="status" aria-live="polite">
-    <strong>${escapeHtml(entitlement.member)} 보강 시간 선택</strong>
-    <span>${escapeHtml(`${Number(entitlement.durationMinutes) || 20}분 · 예약 시 차감 0회 · 수업 완료 시 ${completionUnits}회 차감`)}</span>
-    <button class="small-button" type="button" data-cancel-coach-makeup-booking>선택 취소</button>
-  </section>`;
-}
-
 function renderFullSchedule() {
   if (!$("#fullScheduleBoard")) return;
   if (state.scheduleV2SyncError && !state.scheduleV2WorkspaceLoaded) {
@@ -476,7 +405,6 @@ function renderFullSchedule() {
       </div>
     </div>
     <p class="coach-day-schedule-guide">${scheduleGuide}</p>
-    ${renderCoachMakeupBookingGuide()}
     ${scheduleContent}`;
 }
 
@@ -553,13 +481,6 @@ function renderLessonEditModal() {
 function renderCoachQuickAddPanel() {
   const draft = state.coachQuickAdd;
   if (!draft) return "";
-  const entitlement = draft.makeupEntitlementId
-    ? (state.makeupEntitlements || []).find((item) => String(item.id || "") === String(draft.makeupEntitlementId || ""))
-    : null;
-  const entitlementGuard = draft.makeupEntitlementId
-    ? coachMakeupEntitlementBookingGuard(entitlement, draft.makeupSnapshot)
-    : { ok: true };
-  const isEntitlementBooking = Boolean(draft.makeupEntitlementId);
   const policy = loadCoachSchedulePolicy();
   const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(draft.coachRoleId || ""));
   const access = coach ? coachSlotAccess(coach, draft.day, draft.time, scheduleBlockMinutes, policy) : { reason: "available" };
@@ -576,20 +497,13 @@ function renderCoachQuickAddPanel() {
       ? "현재 운영 설정에서 코치 수업 추가가 꺼져 있습니다."
       : "저장하면 관리자 승인 대기로 접수됩니다.";
   const durationOptions = [20, 30, 40, 60].map((minutes) => `<button type="button" class="${Number(draft.durationMinutes) === minutes ? "is-active" : ""}" data-coach-add-duration="${minutes}">${minutes}분</button>`).join("");
-  const ticketUnit = Math.max(1, Number(entitlementGuard.ticket?.lessonMinutes) || Number(draft.durationMinutes) || 20);
-  const completionUnits = Math.max(1, Math.ceil((Number(draft.durationMinutes) || 20) / ticketUnit));
-  const saveEnabled = isEntitlementBooking ? entitlementGuard.ok && !draft.submitting : tickets.length > 0;
   return `
     <form class="schedule-edit-panel coach-quick-add-panel" data-coach-quick-add-form>
       <div class="wide lesson-modal-head">
-        <div><strong>${isEntitlementBooking ? "보강권 예약" : "수업 추가"}</strong><span>${draft.date} · ${draft.time} · ${escapeHtml(shortCoachName(draft.coachName))}</span></div>
-        <b class="can-process">${isEntitlementBooking ? "exact 보강권" : lockedOverride ? "브레이크·상담 수동 등록" : "빈 시간"}</b>
+        <div><strong>수업 추가</strong><span>${draft.date} · ${draft.time} · ${escapeHtml(shortCoachName(draft.coachName))}</span></div>
+        <b class="can-process">${lockedOverride ? "브레이크·상담 수동 등록" : "빈 시간"}</b>
       </div>
-      ${isEntitlementBooking ? `<article class="modal-info-card wide">
-        <span>예약 대상</span>
-        <strong>${escapeHtml(entitlement?.member || "회원")} · ${Number(draft.durationMinutes) || 20}분</strong>
-        <small>${escapeHtml(`원래 수업 ${entitlement?.original || "확인 필요"} · 예약 시 차감 0회 · 완료 시 ${completionUnits}회 차감`)}</small>
-      </article><input id="coachQuickAddTicket" type="hidden" value="${escapeHtml(draft.ticketId || "")}" />` : `<div class="wide coach-quick-kind" role="group" aria-label="수업 종류">
+      <div class="wide coach-quick-kind" role="group" aria-label="수업 종류">
         <button type="button" class="${draft.kind === "regular" ? "is-active" : ""}" data-coach-add-kind="regular">정규</button>
         <button type="button" class="${draft.kind === "makeup" ? "is-active" : ""}" data-coach-add-kind="makeup">보강</button>
       </div>
@@ -599,18 +513,17 @@ function renderCoachQuickAddPanel() {
           <option value="">회원을 선택해 주세요</option>
           ${ticketOptions}
         </select>
-      </label>`}
-      ${isEntitlementBooking ? "" : `<div class="wide coach-quick-duration" role="group" aria-label="수업 시간">${durationOptions}</div>`}
+      </label>
+      <div class="wide coach-quick-duration" role="group" aria-label="수업 시간">${durationOptions}</div>
       <label class="wide">
         <span>메모 <small>선택</small></span>
         <input id="coachQuickAddNote" type="text" maxlength="200" value="${escapeHtml(draft.note || "")}" placeholder="예: 브레이크 시간 협의 등록" />
       </label>
       ${draft.validationMessage ? `<p class="validation-text wide">${escapeHtml(draft.validationMessage)}</p>` : ""}
-      ${isEntitlementBooking && !entitlementGuard.ok ? `<p class="validation-text wide">${escapeHtml(entitlementGuard.message)}</p>` : ""}
-      ${isEntitlementBooking || ticketChoices.length ? "" : '<p class="validation-text wide">담당 회원권이 없습니다. 관리자에게 회원권 상태와 담당 코치를 확인해 주세요.</p>'}
-      <p class="permission-note wide">${isEntitlementBooking ? "이 보강권과 선택한 시간을 서버에서 다시 확인한 뒤 한 번만 예약합니다." : `회원에게는 브레이크 시간이 열리지 않습니다. ${writeModeLabel}`}</p>
+      ${ticketChoices.length ? "" : '<p class="validation-text wide">담당 회원권이 없습니다. 관리자에게 회원권 상태와 담당 코치를 확인해 주세요.</p>'}
+      <p class="permission-note wide">회원에게는 브레이크 시간이 열리지 않습니다. ${writeModeLabel}</p>
       <div class="actions wide">
-        <button class="approve-button" type="button" data-save-coach-quick-add ${saveEnabled ? "" : "disabled"}>${draft.submitting ? "서버 확인 중" : isEntitlementBooking ? "보강 예약" : "시간표에 등록"}</button>
+        <button class="approve-button" type="button" data-save-coach-quick-add ${tickets.length ? "" : "disabled"}>시간표에 등록</button>
         <button class="small-button" type="button" data-cancel-schedule-edit>닫기</button>
       </div>
     </form>`;

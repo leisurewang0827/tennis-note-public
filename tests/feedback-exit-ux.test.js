@@ -23,7 +23,7 @@ test("수업 상세는 첫 화면 하단에 닫기와 저장 주행동을 한 �
   assert.match(footer, /class="small-button lesson-completion-close"[^>]*data-cancel-schedule-edit>닫기<\/button>/);
   assert.match(footer, /feedbackPrimaryAction/);
   assert.ok(footer.indexOf("lesson-completion-close") < footer.indexOf("feedbackPrimaryAction"));
-  assert.ok(render.indexOf("data-edit-group-feedback-review") < render.indexOf("data-tn-feedback-footer-contract"));
+  assert.ok(render.indexOf("lesson-participant-completion-list") < render.indexOf("data-tn-feedback-footer-contract"));
 });
 
 test("수업 상세는 header/body/footer 경계와 44px 종료 동작을 고정한다", () => {
@@ -62,15 +62,16 @@ test("닫기·X·ESC·Android back은 같은 draft guard 경로를 사용한다"
   assert.match(sheet, /modal\.hidden \|\| activeCoachModalId !== modalId \|\| pendingCoachModalHistoryCloseId/);
   assert.match(sheet, /restoreCoachModalReturnContext\(context\)/);
   assert.match(sheet, /openCoachModal\(queuedModalId\)/);
+  assert.match(delegated, /activeCoachModalId === "lessonEditModal"\) closeLessonEditor\(true\)/);
   assert.match(delegated, /restorePendingCoachModalReturnContext\(\)/);
 });
 
-test("공개 운영 초안 비영속 계약과 저장 RPC 경계를 유지한다", () => {
+test("공개 운영 단일 저장 계약과 초안 비영속 경계를 유지한다", () => {
   const html = source("app/tennis-note-coach-app/index.html");
   const schedule = source("app/tennis-note-coach-app/views/schedule.js");
 
   assert.doesNotMatch(html, /id="lessonEditModal"[^>]*data-tn-restore-draft/);
   assert.doesNotMatch(schedule, /data-save-lesson-draft/);
-  assert.equal((schedule.match(/data-complete-lesson-from-modal/g) || []).length, 2);
-  assert.equal((schedule.match(/data-review-group-feedback/g) || []).length, 1);
+  assert.equal((schedule.match(/data-complete-lesson-from-modal/g) || []).length, 1);
+  assert.equal((schedule.match(/data-review-group-feedback/g) || []).length, 0);
 });

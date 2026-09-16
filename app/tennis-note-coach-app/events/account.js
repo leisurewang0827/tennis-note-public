@@ -10,14 +10,10 @@ function bindAccountEvents() {
   $("#coachSettlementSummaryButton")?.addEventListener("click", () => {
     openCoachSettlement();
     if (!state.coachSettlement || state.coachSettlementError) void syncCoachSettlementFromServer();
-    if (!state.coachSettlementReconciliationLoading && !state.coachSettlementReconciliationSubmitting) {
-      void syncCoachSettlementReconciliationFromServer();
-    }
   });
   $("#refreshButton").addEventListener("click", renderAll);
   $("#userModeButton")?.addEventListener("click", openUserMode);
   $("#userModeLoginButton")?.addEventListener("click", openUserMode);
-  $("#adminWebPortalButton")?.addEventListener("click", () => void openCoachExternalPortal("admin"));
   $("#noticeClose")?.addEventListener("click", () => closeNotice(false));
   $("#noticeHideToday")?.addEventListener("click", () => closeNotice(true));
   $("#noticeAction")?.addEventListener("click", () => closeNotice(false));
@@ -26,11 +22,6 @@ function bindAccountEvents() {
     setCoachProfileEditOpen($("#coachProfileFormCard")?.hidden !== false);
   });
   $("#refreshCoachSettlement")?.addEventListener("click", () => void syncCoachSettlementFromServer());
-  $("#coachSettlementReconciliationRetry")?.addEventListener("click", () => void syncCoachSettlementReconciliationFromServer());
-  $("#coachSettlementReconciliationForm")?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    void submitCoachSettlementReconciliation();
-  });
   $("#coachPushNotificationButton")?.addEventListener("click", () => void toggleNativeCoachPush());
   $("#enableCoachPushFromPrimer")?.addEventListener("click", () => void enableNativeCoachPush());
   $("#coachPushPrimerModal")?.addEventListener("click", (event) => {

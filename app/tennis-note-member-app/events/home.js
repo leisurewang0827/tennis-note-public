@@ -6,6 +6,11 @@
 function bindHomeEvents() {
   $("#openChangeHistory")?.addEventListener("click", openChangeHistoryModal);
   $("#currentTicketPanel")?.addEventListener("click", (event) => {
+    const refundRequestButton = event.target.closest("[data-open-member-refund-request]");
+    if (refundRequestButton) {
+      void openMemberRefundRequest(refundRequestButton.dataset.openMemberRefundRequest);
+      return;
+    }
     const membershipPurchaseButton = event.target.closest("[data-open-membership-products]");
     if (membershipPurchaseButton) {
       openMembershipDetails("membershipPurchaseDetails");
@@ -34,6 +39,11 @@ function bindHomeEvents() {
     const button = event.target.closest("[data-check-pending-ticket]");
     if (button) checkPendingTicketPayment(button.dataset.checkPendingTicket);
   });
+  $("#memberRefundRequestForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void submitMemberRefundRequest();
+  });
+  $$("[data-close-member-refund-request]").forEach((button) => button.addEventListener("click", () => closeAppSheet("memberRefundRequestSheet")));
   $("#todayActionCards")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-home-action]");
     if (button) handleHomeAction(button.dataset.homeAction);

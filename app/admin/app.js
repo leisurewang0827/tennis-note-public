@@ -342,6 +342,7 @@ const serverPaymentSyncState = {
   tone: "neutral",
 };
 const paymentCancelInFlight = new Set();
+let adminMemberRefundRequests = [];
 
 const paymentCancelFlowState = {
   itemIndex: -1,
@@ -349,6 +350,7 @@ const paymentCancelFlowState = {
   idempotencyKey: "",
   message: "",
   tone: "neutral",
+  memberRequest: null,
 };
 
 const refundFlowState = {
@@ -692,23 +694,6 @@ const adminLiveDataState = {
   substituteAssignments: [],
 };
 
-const monthlySettlementConfirmationState = {
-  coachRoleId: "",
-  loadedSignature: "",
-  keySignature: "",
-  snapshotOperationKey: "",
-  confirmationOperationKey: "",
-  requestId: 0,
-  loading: false,
-  submitting: false,
-  status: "EMPTY",
-  tone: "neutral",
-  message: "코치를 선택하면 서버 계산 결과를 확인합니다.",
-  preview: null,
-  scopeState: null,
-  errorCode: "",
-};
-
 // Read-only server rows projected for the current page lifetime only.
 let adminSingleSheetReadSnapshot = null;
 
@@ -830,9 +815,6 @@ const memberManagementModalState = {
   createStep: 1,
   message: "",
   linkCandidates: [],
-  signupLinkRequests: [],
-  signupLinkReviewBusy: false,
-  signupLinkReviewOperations: {},
   linkCandidatesLoading: false,
   linkCandidatesLoadedFor: "",
   linkQuery: "",
@@ -1201,7 +1183,7 @@ async function cancelManualRefundRequestFromModal() {
     if (result?.ok) {
       billingLogs.unshift(`${item.member} 현금 환불 접수 취소 · 결제와 이용권 유지`);
       closeRefundModal();
-      await loadServerPaymentsIntoBilling({ silent: true });
+      await loadServerPaymentsIntoBilling({ silent: true, force: true });
       showToast("환불 접수 취소됨 · 결제와 이용권은 유지됩니다");
       return;
     }

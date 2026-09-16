@@ -5,26 +5,11 @@
 
 function bindDelegatedEvents() {
   document.addEventListener("change", (event) => {
-    const reconciliationChoice = event.target.closest('input[name="coachSettlementReconciliationChoice"]');
-    if (reconciliationChoice) {
-      state.coachSettlementReconciliationChoice = reconciliationChoice.value;
-      state.coachSettlementReconciliationValidation = "";
-      renderCoachSettlementReconciliation();
-      if (reconciliationChoice.value === "disputed") {
-        requestAnimationFrame(() => $("#coachSettlementReconciliationReason")?.focus({ preventScroll: true }));
-      }
-      return;
-    }
-
     const settlementMonth = event.target.closest("#coachSettlementMonth");
     if (settlementMonth) {
       state.settlementMonth = /^\d{4}-\d{2}$/.test(settlementMonth.value) ? settlementMonth.value : localDateKey().slice(0, 7);
       state.coachSettlement = null;
-      resetCoachSettlementReconciliation();
-      void Promise.allSettled([
-        syncCoachSettlementFromServer(),
-        syncCoachSettlementReconciliationFromServer(),
-      ]);
+      void syncCoachSettlementFromServer();
       return;
     }
 
@@ -50,21 +35,6 @@ function bindDelegatedEvents() {
     const modalCurriculum = event.target.closest("[data-modal-next-curriculum]");
     if (modalCurriculum) updateLessonCompletionUi(modalCurriculum.dataset.modalNextCurriculum);
 
-    const groupCommonCurriculum = event.target.closest("[data-group-feedback-common-curriculum]");
-    if (groupCommonCurriculum) updateLessonCompletionUi(groupCommonCurriculum.dataset.groupFeedbackCommonCurriculum);
-
-    const groupException = event.target.closest("[data-group-feedback-exception]");
-    if (groupException) {
-      const row = groupException.closest("[data-modal-participant-row]");
-      const fields = row?.querySelector("[data-group-feedback-exception-fields]");
-      if (fields) fields.disabled = !groupException.checked;
-      const status = groupException.closest(".lesson-group-feedback-exception")?.querySelector("summary small");
-      if (status) status.textContent = groupException.checked ? "회원별 예외 작성 중" : "공통 피드백 적용";
-      const toggleStatus = groupException.closest("label")?.querySelector("small");
-      if (toggleStatus) toggleStatus.textContent = groupException.checked ? "예외 적용" : "공통 적용";
-      updateLessonCompletionUi(groupException.dataset.groupFeedbackException);
-    }
-
     if (event.target.closest("#recordLessonSelect")) {
       state.writingLessonId = event.target.value;
     }
@@ -74,19 +44,8 @@ function bindDelegatedEvents() {
   });
 
   document.addEventListener("input", (event) => {
-    const reconciliationReason = event.target.closest("#coachSettlementReconciliationReason");
-    if (reconciliationReason) {
-      state.coachSettlementReconciliationReason = reconciliationReason.value;
-      state.coachSettlementReconciliationValidation = "";
-      renderCoachSettlementReconciliation();
-      return;
-    }
-
     const modalComment = event.target.closest("[data-modal-coach-comment]");
     if (modalComment) updateLessonCompletionUi(modalComment.dataset.modalCoachComment);
-
-    const groupCommonComment = event.target.closest("[data-group-feedback-common-comment]");
-    if (groupCommonComment) updateLessonCompletionUi(groupCommonComment.dataset.groupFeedbackCommonComment);
 
     const commentInput = event.target.closest("[data-coach-comment]");
     if (commentInput) updateLogDraft(commentInput.dataset.coachComment);
@@ -145,7 +104,6 @@ function bindDelegatedEvents() {
         sameDayAbsenceReviewButton.dataset.reviewSameDayAbsence,
         sameDayAbsenceReviewButton.dataset.approve === "true",
         sameDayAbsenceReviewButton,
-        sameDayAbsenceReviewButton.dataset.absenceOperationKind || "same_day",
       );
       return;
     }
@@ -160,9 +118,6 @@ function bindDelegatedEvents() {
     if (openSettlementButton) {
       openCoachSettlement();
       if (!state.coachSettlement || state.coachSettlementError) void syncCoachSettlementFromServer();
-      if (!state.coachSettlementReconciliationLoading && !state.coachSettlementReconciliationSubmitting) {
-        void syncCoachSettlementReconciliationFromServer();
-      }
       return;
     }
 
@@ -225,17 +180,6 @@ function bindDelegatedEvents() {
         participantRow?.querySelector("[data-modal-comment-keywords]"),
         participantRow?.querySelector("[data-modal-coach-comment]"),
       );
-      return;
-    }
-
-    const groupCommonDraftButton = event.target.closest("[data-generate-group-common-comment]");
-    if (groupCommonDraftButton) {
-      const id = groupCommonDraftButton.dataset.generateGroupCommonComment;
-      applyCoachCommentDraft(
-        activeViewField(`[data-group-feedback-common-keywords="${id}"]`),
-        activeViewField(`[data-group-feedback-common-comment="${id}"]`),
-      );
-      updateLessonCompletionUi(id);
       return;
     }
 
@@ -597,32 +541,6 @@ function bindDelegatedEvents() {
       return;
     }
 
-    const makeupBookingButton = event.target.closest("[data-open-coach-makeup-booking]");
-    if (makeupBookingButton) {
-      void beginCoachMakeupBooking(makeupBookingButton.dataset.openCoachMakeupBooking);
-      return;
-    }
-
-    if (event.target.closest("[data-cancel-coach-makeup-booking]")) {
-      clearCoachMakeupBooking();
-      state.coachQuickAdd = null;
-      renderAll();
-      showToast("보강 시간 선택을 취소했습니다.");
-      return;
-    }
-
-    const reviewGroupFeedbackButton = event.target.closest("[data-review-group-feedback]");
-    if (reviewGroupFeedbackButton) {
-      reviewGroupLessonFeedback(reviewGroupFeedbackButton.dataset.reviewGroupFeedback);
-      return;
-    }
-
-    const editGroupFeedbackButton = event.target.closest("[data-edit-group-feedback-review]");
-    if (editGroupFeedbackButton) {
-      editGroupLessonFeedback(editGroupFeedbackButton.dataset.editGroupFeedbackReview);
-      return;
-    }
-
     if (event.target.closest("[data-cancel-schedule-edit]")) {
       closeLessonEditor();
       return;
@@ -724,6 +642,7 @@ function bindDelegatedEvents() {
     if (activeCoachModalId) {
       if (activeCoachModalId === "lessonEditModal") closeLessonEditor(true);
       else closeCoachModal(activeCoachModalId, true);
+      restorePendingCoachModalReturnContext();
       return;
     }
     const targetView = event.state?.tennisNoteView;

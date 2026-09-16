@@ -4,140 +4,6 @@
 // renderAll() 도 그대로 이 함수들을 부른다.
 // DOM 을 만지므로 domain/ 과 달리 단위 테스트 대상은 아니다.
 
-function monthlySettlementCoachReconciliationEvidence(reconciliation = null) {
-  if (!reconciliation || typeof reconciliation !== "object") {
-    return "<dt>코치 응답</dt><dd>응답 대기</dd>";
-  }
-  const status = String(reconciliation.status || "").toLowerCase();
-  const responseLabel = status === "acknowledged"
-    ? "확인했습니다"
-    : status === "disputed" ? "이의가 있습니다" : "상태 확인 필요";
-  const respondedAt = new Date(reconciliation.respondedAt || "");
-  const respondedAtLabel = Number.isNaN(respondedAt.getTime())
-    ? "시각 확인 필요"
-    : new Intl.DateTimeFormat("ko-KR", {
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(respondedAt);
-  const reason = status === "disputed" ? String(reconciliation.reason || "").trim() : "";
-  return [
-    `<dt>코치 응답</dt><dd>${escapeHtml(responseLabel)}</dd>`,
-    `<dt>코치 응답 시각</dt><dd>${escapeHtml(respondedAtLabel)}</dd>`,
-    reason ? `<dt>코치 이의 사유</dt><dd>${escapeHtml(reason)}</dd>` : "",
-  ].filter(Boolean).join("");
-}
-
-function renderMonthlySettlementConfirmation() {
-  const section = $("#monthlySettlementConfirmation");
-  if (!section) return;
-  const current = monthlySettlementConfirmationState;
-  const eligibleCoaches = monthlySettlementEligibleCoaches();
-  const eligibleIds = new Set(eligibleCoaches.map((coach) => String(coach.serverRoleId)));
-  if (current.coachRoleId && !eligibleIds.has(String(current.coachRoleId))) {
-    resetMonthlySettlementConfirmation({ preserveCoach: false });
-  }
-  if (!current.coachRoleId && eligibleCoaches.length === 1) {
-    current.coachRoleId = String(eligibleCoaches[0].serverRoleId);
-  }
-
-  const scope = monthlySettlementScope();
-  const signature = monthlySettlementScopeSignature(scope);
-  const coachSelect = $("#monthlySettlementCoachRole");
-  if (coachSelect) {
-    coachSelect.innerHTML = [
-      '<option value="">코치를 선택해 주세요</option>',
-      ...eligibleCoaches.map((coach) => `<option value="${escapeHtml(coach.serverRoleId)}">${escapeHtml(coach.name || "코치")}</option>`),
-    ].join("");
-    coachSelect.value = current.coachRoleId;
-    coachSelect.disabled = current.loading || current.submitting;
-  }
-  const branchLabel = $("#monthlySettlementBranchLabel");
-  if (branchLabel) branchLabel.textContent = scope.branchId ? activeOperationBranchName() : "지점을 먼저 선택해 주세요";
-
-  section.dataset.state = current.status;
-  section.setAttribute("aria-busy", String(current.loading || current.submitting));
-  const status = $("#monthlySettlementState");
-  if (status) {
-    status.dataset.tone = current.tone;
-    status.textContent = current.message;
-  }
-  const badgeTarget = $("#monthlySettlementStateBadge");
-  if (badgeTarget) {
-    const badgeTone = current.status === "CONFIRMED"
-      ? "good"
-      : ["STALE", "CONFLICT"].includes(current.status) ? "warn" : current.status === "ERROR" ? "danger" : "neutral";
-    badgeTarget.className = `badge ${badgeTone}`;
-    badgeTarget.textContent = monthlySettlementStateLabel();
-  }
-
-  const loadedScopeIsCurrent = current.loadedSignature === signature;
-  const snapshot = loadedScopeIsCurrent ? monthlySettlementSnapshotFrom(current.scopeState) : null;
-  const aggregate = loadedScopeIsCurrent
-    ? (current.scopeState?.confirmation && snapshot ? snapshot : current.preview)
-    : null;
-  const totals = aggregate?.totals || {};
-  const summary = $("#monthlySettlementSummary");
-  if (summary) {
-    summary.innerHTML = aggregate ? `
-      <article><span>정산 월</span><strong>${escapeHtml(billingMonthLabel(state.billingMonth))}</strong><small>현재 지점 · 선택 코치</small></article>
-      <article><span>계산 원천</span><strong>${Math.max(0, Number(totals.paymentCount || 0))}건</strong><small>회원권 ${Math.max(0, Number(totals.ticketCount || 0))}개 · 수업 ${Math.max(0, Number(totals.lessonCount || 0))}개</small></article>
-      <article><span>${current.status === "CONFIRMED" ? "확인 정산액" : "예상 정산액"}</span><strong>${money.format(Math.max(0, Number(totals.totalSettlementAmount || 0)))}원</strong><small>${Math.max(0, Number(totals.settledSessions || 0))}회 · ${Math.max(0, Number(totals.settledMinutes || 0))}분</small></article>
-    ` : "";
-  }
-
-  const details = $("#monthlySettlementDetails");
-  const evidence = $("#monthlySettlementEvidence");
-  if (details) details.hidden = !aggregate;
-  if (evidence) {
-    const fingerprint = String(aggregate?.sourceFingerprint || "");
-    evidence.innerHTML = aggregate ? `
-      <dl>
-        <dt>계산 버전</dt><dd>${escapeHtml(aggregate.calculationVersion || "서버 계산")}</dd>
-        <dt>계산본</dt><dd>${snapshot?.revision ? `${Number(snapshot.revision)}차` : "확인 전 미리보기"}</dd>
-        <dt>원천 검증</dt><dd>${fingerprint ? `${escapeHtml(fingerprint.slice(0, 8))}…` : "확인 중"}</dd>
-        <dt>상태</dt><dd>${escapeHtml(monthlySettlementStateLabel())}</dd>
-        ${snapshot && current.scopeState?.confirmation ? monthlySettlementCoachReconciliationEvidence(current.scopeState?.reconciliation) : ""}
-      </dl>
-    ` : "";
-  }
-
-  const retry = $("#monthlySettlementRetry");
-  if (retry) {
-    const confirmedRefresh = current.status === "CONFIRMED";
-    retry.hidden = !["STALE", "CONFLICT", "CONFIRMED", "ERROR"].includes(current.status);
-    retry.textContent = confirmedRefresh ? "코치 응답 다시 확인" : "다시 불러오기";
-    retry.disabled = current.loading || current.submitting;
-  }
-  const primary = $("#monthlySettlementPrimaryAction");
-  if (primary) {
-    primary.textContent = current.submitting
-      ? "확인 처리 중"
-      : current.status === "CONFIRMED" ? "확인 완료" : "정산 확인";
-    primary.disabled = current.status !== "READY"
-      || !loadedScopeIsCurrent
-      || current.loading
-      || current.submitting
-      || operationsRole() !== "admin"
-      || !adminApprovalReady();
-  }
-  const monthFilter = $("#billingMonthFilter");
-  if (monthFilter) monthFilter.disabled = current.submitting;
-
-  if (
-    scope.branchId
-    && scope.coachRoleId
-    && scope.settlementMonth
-    && current.loadedSignature !== signature
-    && !current.loading
-    && !current.submitting
-  ) {
-    void refreshMonthlySettlementConfirmation();
-  }
-}
-
 function renderCoachSettlementPreview() {
   if (!["billing", "settings"].includes(state.view)) return;
   const previewRows = $("#coachSettlementPreviewRows");
@@ -162,7 +28,7 @@ function renderCoachSettlementPreview() {
     });
     const recordProgressByTicket = settlementRecordProgressByTicket({ ticketById, assignmentByLesson });
     const monthBillings = billings
-      .filter((billing) => billingIncludedInCoachSettlement(billing) && billingMatchesMonth(billing, state.billingMonth));
+      .filter((billing) => billing.status === "paid" && billingMatchesMonth(billing, state.billingMonth));
     const settlementIndexes = {
         ticketById,
         completedLessonsByTicket,
@@ -225,8 +91,8 @@ function renderCoachSettlementPreview() {
           <tr>
             <td><strong>${escapeHtml(item.member)}</strong><br><small>${Number(item.lessonCount) || 0}/${Number(item.totalLessons || item.lessonCount) || 0}회 완료</small></td>
             <td class="${item.linkedTicket === false ? "payment-link-warning" : ""}">${escapeHtml(item.coach)}${item.linkedTicket === false ? "<br><small>회원권 연결 후 정산 가능</small>" : transferred ? `<br><small>대타 ${escapeHtml(item.actualCoach)} · 정산 ${escapeHtml(settlementCoach)}</small>` : "<br><small>담당 코치 진행</small>"}</td>
-            <td>${money.format(item.paidAmount)}원<br><small>${item.refundAdjusted ? `원결제 ${money.format(item.grossPaidAmount)}원 · 환불 ${money.format(item.refundedAmount)}원` : `${escapeHtml(item.paymentMethod)} · ${escapeHtml(item.discount)}`}</small></td>
-            <td><strong>${money.format(item.settlementBase)}원</strong><br><small>${item.refundAdjusted ? "환불 후 정산 기준" : item.paymentMethod === "카드" ? "부가세 제외 현금가" : "실결제 기준"}</small></td>
+            <td>${money.format(item.paidAmount)}원<br><small>${escapeHtml(item.paymentMethod)} · ${escapeHtml(item.discount)}</small></td>
+            <td><strong>${money.format(item.settlementBase)}원</strong><br><small>${item.paymentMethod === "카드" ? "부가세 제외 현금가" : "실결제 기준"}</small></td>
             <td>${escapeHtml(ruleLabel)}<br><small>${transferred ? "대타 이관 적용" : "기본 정산"}</small></td>
             <td><strong>${money.format(settlementAmountFor(item))}원</strong></td>
           </tr>`;
@@ -240,7 +106,7 @@ function renderCoachSettlementPreview() {
       billingPageSize,
     );
   }
-  renderMonthlySettlementConfirmation();
+
 }
 
 function renderPaymentAdminGateStatus() {
@@ -305,10 +171,12 @@ function billingRowDetailMarkup(item, index, entry, inlineContext, inlineOpen) {
   const sourceDetail = `${escapeHtml(item.item || "결제")}${item.providerPaymentId ? ` · ${escapeHtml(item.providerPaymentId)}` : ""}${item.source ? ` · ${escapeHtml(paymentSourceText(item))}` : ""}`;
   const review = billingInlineReviewMarkup(item, index, inlineContext, inlineOpen);
   const danger = billingDangerActionsMarkup(item, index);
+  const memberRefundRequest = memberRefundRequestForBilling(item);
   return `<details class="payment-row-detail ${processing ? "is-processing" : "is-complete"}">
     <summary>${processing ? "처리 상세" : "상세·위험 작업"}</summary>
     ${approval.detail ? `<p>${escapeHtml(approval.detail)}</p>` : ""}
     ${review}
+    ${memberRefundRequest ? `<p class="billing-member-refund-request"><strong>회원 환불 요청 · ${escapeHtml(memberRefundRequest.status || "submitted")}</strong><span>${escapeHtml(memberRefundRequest.reason || "사유 확인")}</span></p>` : ""}
     ${danger}
     <details class="payment-source-details"><summary>원본·시도 이력</summary><span>${sourceDetail}</span>${billingAttemptHistoryMarkup(entry)}</details>
   </details>`;
@@ -479,6 +347,7 @@ function renderRefundModal() {
   const cancelManualRequestButton = $("#cancelManualRefundRequest");
   const reasonField = $("#refundReasonField");
   const transferReferenceField = $("#refundTransferReferenceField");
+  const rejectMemberRequestButton = $("#rejectMemberRefundRequest");
   const item = refundFlowPaymentItem() || {};
   const manualCashRefund = isManualCashRefundItem(item);
   if (!target) return;
@@ -490,6 +359,7 @@ function renderRefundModal() {
     const preview = refundFlowState.preview;
     const policySource = preview.policySnapshotSource === "current_policy_fallback" ? "현재 정책 기준" : "구매 당시 정책";
     target.innerHTML = `
+      ${refundFlowState.memberRequest ? `<div class="refund-fallback-confirmation"><strong>회원 환불 요청</strong><span>${escapeHtml(refundFlowState.memberRequest.reason || "요청 사유 확인")}</span><small>접수 당시 예상 ${money.format(numericValue(refundFlowState.memberRequest.expectedRefundAmount))}원 · 현재 서버 계산과 다시 비교합니다.</small></div>` : ""}
       <div class="refund-target-summary">
         <div>
           <strong>${escapeHtml(preview.memberName || "회원")} · ${escapeHtml(preview.productName || "회원권")}</strong>
@@ -539,6 +409,10 @@ function renderRefundModal() {
   }
   if (reasonField) reasonField.hidden = refundFlowState.manualTransferPending;
   if (transferReferenceField) transferReferenceField.hidden = !refundFlowState.manualTransferPending;
+  if (rejectMemberRequestButton) {
+    rejectMemberRequestButton.hidden = !refundFlowState.memberRequest || !["submitted", "reviewing", "approved"].includes(refundFlowState.memberRequest.status);
+    rejectMemberRequestButton.disabled = refundFlowState.submitting;
+  }
 }
 
 function renderPaymentCancelModal() {
@@ -717,12 +591,7 @@ function paymentApprovedMoreActions(item, index) {
 
 function paymentConfirmationMarkup(item = {}) {
   const paidAt = paymentAuditDateTimeLabel(item.verifiedAt || item.paidAt);
-  const depositDueAt = Date.parse(String(item.depositDueAt || ""));
-  const bankDepositExpired = String(item.method || "").toLowerCase() === "bank_transfer" && Number.isFinite(depositDueAt) && Date.now() > depositDueAt;
-  if (item.bankTransferState === "confirming") return badge("warn", "입금·회원권 처리중");
-  if (item.bankTransferState === "confirmation_failed") return badge("danger", "입금 확인 · 회원권 재처리");
   if (item.status === "paid") return `${badge("good", "결제 확인됨")}${paidAt ? `<br><small>${escapeHtml(paidAt)}</small>` : ""}`;
-  if (item.status === "server_ready" && bankDepositExpired) return badge("danger", "입금기한 지남 · 확인 필요");
   if (item.status === "server_ready" && String(item.method || "").toLowerCase() === "bank_transfer") {
     const depositor = item.depositorName ? ` · ${escapeHtml(item.depositorName)}` : "";
     return `${badge("warn", "직접 입금 확인")}${depositor ? `<br><small>${depositor}</small>` : ""}`;

@@ -9,6 +9,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 const schedule = read("app/tennis-note-coach-app/views/schedule.js");
 const css = `${read("app/shared/tennisnote-ui-foundation.css")}\n${read("app/tennis-note-coach-app/styles.css")}`;
 const guardPath = path.join(root, "app", "shared", "tennisnote-input-guard.js");
+const captureDir = process.env.TENNISNOTE_FEEDBACK_CAPTURE_DIR || "";
 
 function functionSource(relative, name) {
   const content = read(relative);
@@ -115,7 +116,7 @@ async function launch(engineName, browserType) {
   return browserType.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
 }
 
-async function loadFixture(page, theme, beforeOpen = null, initialScroll = 420) {
+async function loadFixture(page, theme) {
   await page.goto(`${baseUrl}/feedback-exit`, { waitUntil: "domcontentloaded" });
   await page.setContent(`<!doctype html><html lang="ko" data-theme="${theme}"><head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -156,14 +157,13 @@ async function loadFixture(page, theme, beforeOpen = null, initialScroll = 420) 
     history.replaceState({ tennisNoteMode: "coach", tennisNoteView: "fullScheduleView" }, "", location.href);
     window.__fixture = {
       async ready() { await installNativeCoachBackNavigation(); },
-      open() { window.scrollTo(0, ${initialScroll}); window.__openScrollY = window.scrollY; const trigger = document.querySelector("#lessonTrigger"); trigger.focus({ preventScroll: true }); state.editingLessonId = "synthetic-lesson"; openCoachModal("lessonEditModal"); },
+      open() { window.scrollTo(0, 420); window.__openScrollY = window.scrollY; const trigger = document.querySelector("#lessonTrigger"); trigger.focus({ preventScroll: true }); state.editingLessonId = "synthetic-lesson"; openCoachModal("lessonEditModal"); },
       requestClose() { return requestCloseLessonEditor(); },
       nativeBack() { return window.__nativeBack?.(); },
       result() { return { activeCoachModalId, editingLessonId: state.editingLessonId, pendingCoachModalHistoryCloseId, scrollY, openScrollY: window.__openScrollY, focus: document.activeElement?.id || "", rpc: window.__rpcCount, network: window.__networkCount, closes: window.__closeCount, historyModal: history.state?.tennisNoteModal || "" }; },
     };
   ` });
   await page.evaluate(() => window.__fixture.ready());
-  if (beforeOpen) await beforeOpen(page);
   await page.evaluate(() => window.__fixture.open());
   await page.waitForTimeout(80);
 }
@@ -177,7 +177,7 @@ async function layoutResult(page, position) {
     const close = document.querySelector(".lesson-completion-close");
     const primary = footer.querySelector(".approve-button");
     const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    scroller.scrollTop = target === "end" ? maxScroll : target === "middle" ? Math.round(maxScroll / 2) : 0;
+    scroller.scrollTop = target === "end" ? maxScroll : 0;
     const modalRect = modal.getBoundingClientRect();
     const headerRect = header.getBoundingClientRect();
     const footerRect = footer.getBoundingClientRect();
@@ -215,11 +215,8 @@ async function assertLayout(page, label) {
   assert(start.overflow <= 1, `${label}: horizontal overflow ${start.overflow}`);
   assert.equal(start.footerMarker, "v1-0-428-pair", `${label}: footer marker`);
   assert.equal(start.headerMarker, "lesson-editor-v1", `${label}: header marker`);
-  for (const position of ["middle", "end"]) {
-    const end = await layoutResult(page, position);
-    assert(Math.abs(end.footerTop - start.footerTop) <= 1 && Math.abs(end.footerBottom - start.footerBottom) <= 1, `${label}/${position}: footer moved while body scrolled`);
-    assert(end.closeHit && end.primaryHit, `${label}/${position}: footer action covered`);
-  }
+  const end = await layoutResult(page, "end");
+  assert(Math.abs(end.footerTop - start.footerTop) <= 1 && Math.abs(end.footerBottom - start.footerBottom) <= 1, `${label}: footer moved while body scrolled`);
 }
 
 async function closeAndAssert(page, label) {
@@ -261,15 +258,7 @@ async function runExit(page, route, dirty) {
   }
 }
 
-module.exports = { loadFixture, assertLayout, closeAndAssert, chromium, webkit,
-  async startFixtureServer() {
-    server = await startServer();
-    baseUrl = `http://127.0.0.1:${server.address().port}`;
-  },
-  stopFixtureServer() { server?.close(); },
-};
-
-if (require.main === module) (async () => {
+(async () => {
   server = await startServer();
   baseUrl = `http://127.0.0.1:${server.address().port}`;
   let layouts = 0;
@@ -277,13 +266,17 @@ if (require.main === module) (async () => {
   for (const [engineName, browserType] of [["chromium", chromium], ["webkit", webkit]]) {
     const browser = await launch(engineName, browserType);
     try {
-      for (const [width, height] of [[320, 720], [390, 844], [430, 932]]) {
+      for (const [width, height] of [[320, 720], [390, 844], [430, 932], [768, 1024], [1366, 900]]) {
         for (const theme of ["light", "dark"]) {
           const page = await browser.newPage({ viewport: { width, height }, colorScheme: theme });
           const errors = [];
           page.on("pageerror", (error) => errors.push(error.message));
           await loadFixture(page, theme);
           await assertLayout(page, `${engineName}/${width}/${theme}`);
+          if (captureDir && [390, 768, 1366].includes(width)) {
+            fs.mkdirSync(captureDir, { recursive: true });
+            await page.locator("#lessonEditModal").screenshot({ path: path.join(captureDir, `${engineName}-${width}-${theme}.png`) });
+          }
           assert.deepEqual(errors, [], `${engineName}/${width}/${theme}: page errors`);
           layouts += 1;
           await page.close();

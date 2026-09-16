@@ -53,6 +53,7 @@ function closeRefundModal() {
     idempotencyKey: "",
     message: "",
     tone: "neutral",
+    memberRequest: null,
   });
 }
 
@@ -75,6 +76,7 @@ async function openRefundModal(item) {
     idempotencyKey: newRefundIdempotencyKey(),
     message: "",
     tone: "neutral",
+    memberRequest: memberRefundRequestForBilling(item),
   });
   $("#refundModal")?.removeAttribute("hidden");
   renderRefundModal();
@@ -84,7 +86,7 @@ async function openRefundModal(item) {
     });
     if (result?.status === "already_refunded") {
       billingLogs.unshift(`${item.member} 환불은 이미 완료된 결제입니다.`);
-      await loadServerPaymentsIntoBilling({ silent: true });
+      await loadServerPaymentsIntoBilling({ silent: true, force: true });
       closeRefundModal();
       showToast("이미 환불 완료된 결제입니다");
       return;
@@ -149,6 +151,8 @@ async function confirmRefundFromModal() {
             confirmation: "환불",
             acceptPolicyFallback: Boolean($("#acceptRefundPolicyFallback")?.checked),
             idempotencyKey: refundFlowState.idempotencyKey,
+            memberRefundRequestId: refundFlowState.memberRequest?.requestId || undefined,
+            memberRefundRequestRevision: refundFlowState.memberRequest?.revision || undefined,
           },
         });
     if (result?.ok) {
@@ -157,7 +161,7 @@ async function confirmRefundFromModal() {
         ? `${item.member} 현금 환불 접수: ${money.format(numericValue(result.refundAmount || preview.refundAmount))}원 · 실제 송금 대기`
         : `${item.member} 환불 완료: ${money.format(numericValue(result.refundAmount || preview.refundAmount))}원`);
       closeRefundModal();
-      await loadServerPaymentsIntoBilling({ silent: true });
+      await loadServerPaymentsIntoBilling({ silent: true, force: true });
       showToast(manualPending
         ? "환불 접수됨 · 실제 송금 후 송금완료를 확인하세요"
         : manualCashRefund
@@ -206,7 +210,7 @@ async function reconcileRefundFromModal() {
     if (result?.ok) {
       billingLogs.unshift(`${item.member} 환불 상태 동기화 완료`);
       closeRefundModal();
-      await loadServerPaymentsIntoBilling({ silent: true });
+      await loadServerPaymentsIntoBilling({ silent: true, force: true });
       showToast("환불 상태 동기화 완료");
       return;
     }
@@ -221,23 +225,41 @@ async function reconcileRefundFromModal() {
   }
 }
 
-function pushPaymentCancelModalHistoryState() {
-  const historyState = typeof history.state === "object" && history.state ? history.state : {};
-  if (historyState.tennisNoteAdminModal === "paymentCancelModal") return;
-  history.pushState({ ...historyState, tennisNoteAdminModal: "paymentCancelModal" }, "", window.location.href);
+async function rejectMemberRefundRequestFromModal() {
+  const request = refundFlowState.memberRequest;
+  const reason = $("#refundReason")?.value.trim() || "";
+  if (!request || refundFlowState.submitting) return;
+  if (reason.length < 2) {
+    refundFlowState.message = "회원에게 안내할 반려 사유를 2자 이상 입력해 주세요.";
+    refundFlowState.tone = "danger";
+    renderRefundModal();
+    return;
+  }
+  refundFlowState.submitting = true;
+  refundFlowState.message = "환불 요청 반려 상태를 저장하고 있습니다.";
+  refundFlowState.tone = "neutral";
+  renderRefundModal();
+  try {
+    const result = await window.TennisNoteDataClient.invokeFunction("portone-payment/refund-request-review", {
+      body: { requestId: request.requestId, expectedRevision: request.revision, decision: "rejected", reason },
+    });
+    adminMemberRefundRequests = adminMemberRefundRequests.map((item) => item.requestId === request.requestId
+      ? { ...item, ...result.request, reason: item.reason, rejectionReason: reason }
+      : item);
+    closeRefundModal();
+    renderBilling();
+    showToast("회원 환불 요청을 반려했습니다.");
+  } catch (error) {
+    refundFlowState.message = refundErrorText(error?.payload?.code || "refund_request_review_failed");
+    refundFlowState.tone = "danger";
+  } finally {
+    refundFlowState.submitting = false;
+    renderRefundModal();
+  }
 }
 
-function clearPaymentCancelModalHistoryState() {
-  const historyState = typeof history.state === "object" && history.state ? { ...history.state } : {};
-  if (historyState.tennisNoteAdminModal !== "paymentCancelModal") return;
-  delete historyState.tennisNoteAdminModal;
-  history.replaceState(historyState, "", window.location.href);
-}
-
-function closePaymentCancelModal(options = {}) {
+function closePaymentCancelModal() {
   if (paymentCancelFlowState.submitting) return;
-  const fromHistory = options?.fromHistory === true;
-  const clearHistory = options?.clearHistory === true;
   $("#paymentCancelModal")?.setAttribute("hidden", "");
   $("#paymentCancelForm")?.reset();
   Object.assign(paymentCancelFlowState, {
@@ -247,11 +269,6 @@ function closePaymentCancelModal(options = {}) {
     message: "",
     tone: "neutral",
   });
-  if (clearHistory) {
-    clearPaymentCancelModalHistoryState();
-  } else if (!fromHistory && history.state?.tennisNoteAdminModal === "paymentCancelModal") {
-    history.back();
-  }
 }
 
 async function openPaymentCancelModal(item, itemIndex = billings.indexOf(item)) {
@@ -280,7 +297,6 @@ async function openPaymentCancelModal(item, itemIndex = billings.indexOf(item)) 
     if ($("#paymentCancelReason")) $("#paymentCancelReason").value = "결제 전 대기건 정리";
   }
   $("#paymentCancelModal")?.removeAttribute("hidden");
-  pushPaymentCancelModalHistoryState();
   renderPaymentCancelModal();
   $("#paymentCancelReason")?.focus();
 }
