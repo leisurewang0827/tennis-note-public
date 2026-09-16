@@ -2,6 +2,12 @@
   const storageKey = "tennis-note-supabase-config";
   const authStorageKey = "tennis-note-supabase-session";
   const authPersistenceKey = "tennis-note-auth-persistence";
+  const authContinuityDiagnosticStages = new Set([
+    "PERSISTENCE_LOCAL", "PERSISTENCE_SESSION", "SESSION_LOCAL", "SESSION_SESSION",
+    "REFRESH_SUCCESS", "REFRESH_REJECTED", "REFRESH_TRANSIENT",
+    "REFRESH_NO_TOKEN", "REFRESH_NOT_READY",
+  ]);
+  let authContinuityDiagnosticCount = 0;
   const oauthCodeVerifierKey = "tennis-note-oauth-code-verifier";
   const oauthAttemptKey = "tennis-note-oauth-attempt";
   const oauthCallbackFingerprintKey = "tennis-note-oauth-callback-fingerprint";
@@ -347,6 +353,33 @@
     return window.localStorage.getItem(authPersistenceKey) === "session" ? "session" : "local";
   }
 
+  function recordAuthContinuityDiagnostic(stage, present = true) {
+    const plugin = window.Capacitor?.Plugins?.AuthDiagnostics;
+    if (!plugin?.record || !authContinuityDiagnosticStages.has(stage) || authContinuityDiagnosticCount >= 32) return;
+    authContinuityDiagnosticCount += 1;
+    try {
+      Promise.resolve(plugin.record({ stage, present: present === true, status: 0 })).catch(() => {});
+    } catch (error) {
+      // Internal QA observation must never alter authentication.
+    }
+  }
+
+  function storageHas(storage, key) {
+    try {
+      return Boolean(storage.getItem(key));
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function recordAuthSessionStartup() {
+    const persistence = sessionPersistence();
+    recordAuthContinuityDiagnostic("PERSISTENCE_LOCAL", persistence === "local");
+    recordAuthContinuityDiagnostic("PERSISTENCE_SESSION", persistence === "session");
+    recordAuthContinuityDiagnostic("SESSION_LOCAL", storageHas(window.localStorage, authStorageKey));
+    recordAuthContinuityDiagnostic("SESSION_SESSION", storageHas(window.sessionStorage, authStorageKey));
+  }
+
   function authSessionStores() {
     return sessionPersistence() === "session"
       ? [window.sessionStorage]
@@ -364,6 +397,11 @@
     window.localStorage.removeItem(authStorageKey);
     window.localStorage.removeItem(`${authStorageKey}-provider`);
     return "session";
+  }
+
+  function ensureNativePersistentAuthSession() {
+    if (!isNativeApp()) return sessionPersistence();
+    return setSessionPersistence(true);
   }
 
   function writeStoredSession(session) {
@@ -586,7 +624,14 @@
 
   async function performRefreshSession() {
     const session = getSession();
-    if (!session?.refresh_token || !readiness().ready) return null;
+    if (!session?.refresh_token) {
+      recordAuthContinuityDiagnostic("REFRESH_NO_TOKEN");
+      return null;
+    }
+    if (!readiness().ready) {
+      recordAuthContinuityDiagnostic("REFRESH_NOT_READY");
+      return null;
+    }
     const config = loadConfig();
     let response = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -601,24 +646,31 @@
         });
         if (response.ok || response.status < 500) break;
       } catch (error) {
-        if (!transientNetworkError(error) || attempt === 1) throw error;
+        if (!transientNetworkError(error) || attempt === 1) {
+          recordAuthContinuityDiagnostic("REFRESH_TRANSIENT");
+          throw error;
+        }
       }
       await wait(500 * (attempt + 1));
     }
     if (!response) {
+      recordAuthContinuityDiagnostic("REFRESH_TRANSIENT");
       const error = new Error("session_refresh_temporarily_unavailable");
       emitClientError("session_refresh", error);
       throw error;
     }
     if (!response.ok) {
       if (response.status === 400 || response.status === 401) {
+        recordAuthContinuityDiagnostic("REFRESH_REJECTED");
         removeStoredSession();
         return null;
       }
+      recordAuthContinuityDiagnostic("REFRESH_TRANSIENT");
       const error = new Error("session_refresh_temporarily_unavailable");
       emitClientError("session_refresh", error);
       throw error;
     }
+    recordAuthContinuityDiagnostic("REFRESH_SUCCESS");
     const payload = await response.json();
     return saveSession({ ...payload, provider: session.provider });
   }
@@ -869,6 +921,7 @@
 
   async function handleNativeOAuthUrl(url) {
     if (!url || !url.startsWith("com.tennisclubhouse.tennisnote://oauth/")) return false;
+    ensureNativePersistentAuthSession();
     clearNativeOAuthCancelTimer();
     clearNativeOAuthLoadTimer();
     nativeOAuthCallbackInFlight = true;
@@ -1287,6 +1340,7 @@
     }
     const key = providerKey(provider);
     const slug = providerSlug(provider);
+    ensureNativePersistentAuthSession();
     const pkce = await createOAuthPkcePair(key);
     const redirectTo = options.redirectTo || (isNativeApp()
       ? nativeOAuthBridgeRedirect()
@@ -1752,6 +1806,8 @@
     });
     if (identity) await clearOfflineResponses(identity);
   }
+
+  recordAuthSessionStartup();
 
   window.TennisNoteDataClient = {
     storageKey,
