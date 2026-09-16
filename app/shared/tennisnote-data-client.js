@@ -19,7 +19,63 @@
   let nativeOAuthInFlightProvider = "";
   let nativeOAuthCallbackInFlight = false;
   let nativeOAuthCancelTimer = null;
+  let nativeOAuthLoadTimer = null;
+  let nativeOAuthInitialPageLoaded = false;
+  let nativeOAuthLoadTimedOut = false;
+  let nativeOAuthAttemptStartedAt = 0;
+  const nativeOAuthObservations = [];
   let oauthCodeExchangePromise = null;
+
+  function nativeOAuthHost(url) {
+    try {
+      const parsed = new URL(String(url || ""));
+      return parsed.hostname || parsed.protocol.replace(/:$/, "");
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function recordNativeOAuthObservation(stage, options = {}) {
+    const allowedStages = new Set([
+      "authorize_started", "browser_opened", "browser_initial_page_loaded",
+      "browser_initial_load_timeout", "browser_finished", "app_foreground",
+      "app_url_open", "callback_started", "callback_succeeded", "callback_failed",
+    ]);
+    if (!allowedStages.has(stage)) return;
+    const elapsedMs = nativeOAuthAttemptStartedAt
+      ? Math.max(0, Math.min(Date.now() - nativeOAuthAttemptStartedAt, 10 * 60 * 1000))
+      : 0;
+    nativeOAuthObservations.push({
+      stage,
+      provider: providerKey(options.provider || nativeOAuthInFlightProvider || storedProvider() || ""),
+      host: nativeOAuthHost(options.url),
+      elapsedMs,
+    });
+    if (nativeOAuthObservations.length > 32) nativeOAuthObservations.splice(0, nativeOAuthObservations.length - 32);
+    window.dispatchEvent(new CustomEvent("tennisnote:native-oauth-observation", {
+      detail: { ...nativeOAuthObservations[nativeOAuthObservations.length - 1] },
+    }));
+  }
+
+  function clearNativeOAuthLoadTimer() {
+    if (nativeOAuthLoadTimer === null) return;
+    window.clearTimeout(nativeOAuthLoadTimer);
+    nativeOAuthLoadTimer = null;
+  }
+
+  function startNativeOAuthObservation(provider, authorizeUrl) {
+    clearNativeOAuthLoadTimer();
+    nativeOAuthAttemptStartedAt = Date.now();
+    nativeOAuthInitialPageLoaded = false;
+    nativeOAuthLoadTimedOut = false;
+    recordNativeOAuthObservation("authorize_started", { provider, url: authorizeUrl });
+    nativeOAuthLoadTimer = window.setTimeout(() => {
+      nativeOAuthLoadTimer = null;
+      if (!nativeOAuthInFlightProvider || nativeOAuthCallbackInFlight || nativeOAuthInitialPageLoaded) return;
+      nativeOAuthLoadTimedOut = true;
+      recordNativeOAuthObservation("browser_initial_load_timeout", { provider });
+    }, 15_000);
+  }
 
   function emitClientError(stage, error, context = {}) {
     const value = error || new Error(stage || "client_error");
@@ -707,7 +763,14 @@
       ) return;
       nativeOAuthInFlightProvider = "";
       clearOAuthStorageValue();
-      emitOAuthResult({ ok: false, provider, cancelled: true });
+      const loadIncomplete = nativeOAuthLoadTimedOut || !nativeOAuthInitialPageLoaded;
+      emitOAuthResult({
+        ok: false,
+        provider,
+        cancelled: !loadIncomplete,
+        errorCode: loadIncomplete ? "native_oauth_browser_load_incomplete" : "native_oauth_cancelled",
+        retryable: true,
+      });
     }, 800);
   }
 
@@ -807,8 +870,10 @@
   async function handleNativeOAuthUrl(url) {
     if (!url || !url.startsWith("com.tennisclubhouse.tennisnote://oauth/")) return false;
     clearNativeOAuthCancelTimer();
+    clearNativeOAuthLoadTimer();
     nativeOAuthCallbackInFlight = true;
     const provider = nativeOAuthInFlightProvider || storedProvider() || "간편";
+    recordNativeOAuthObservation("callback_started", { provider, url });
     try {
       const parsed = new URL(url);
       const failure = oauthCallbackFailure(parsed.searchParams);
@@ -821,12 +886,14 @@
         ) {
           nativeOAuthInFlightProvider = "";
           await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+          recordNativeOAuthObservation("callback_succeeded", { provider, url });
           emitOAuthResult({ ok: true, provider, replayed: true });
           return true;
         }
         clearOAuthStorageValue();
         nativeOAuthInFlightProvider = "";
         await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+        recordNativeOAuthObservation("callback_failed", { provider, url });
         const callbackError = oauthCallbackError(failure);
         const normalizedError = failure.error.toLowerCase();
         emitOAuthResult({
@@ -849,6 +916,7 @@
       await flushOAuthProviderCredentialCapture();
       nativeOAuthInFlightProvider = "";
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+      recordNativeOAuthObservation("callback_succeeded", { provider, url });
       const handledWithoutReload = emitOAuthResult({ ok: true, provider, callbackType });
       if (!handledWithoutReload) window.location.reload();
       return true;
@@ -856,6 +924,7 @@
       nativeOAuthInFlightProvider = "";
       clearOAuthStorageValue();
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+      recordNativeOAuthObservation("callback_failed", { provider, url });
       emitOAuthResult({ ok: false, provider, cancelled: false });
       emitClientError("native_oauth_callback", error, { provider });
       return true;
@@ -883,6 +952,7 @@
 
   async function handleNativeAppUrl(url) {
     if (!url || recentlyHandledNativeUrl(url)) return Boolean(url);
+    recordNativeOAuthObservation("app_url_open", { url });
     rememberNativeUrl(url);
     const handled = await handleNativeOAuthUrl(url) || handleNativePaymentUrl(url);
     if (!handled) forgetNativeUrl();
@@ -893,8 +963,21 @@
     const appPlugin = window.Capacitor?.Plugins?.App;
     if (!isNativeApp() || !appPlugin?.addListener) return;
     appPlugin.addListener("appUrlOpen", ({ url }) => void handleNativeAppUrl(url));
+    appPlugin.addListener("appStateChange", ({ isActive }) => {
+      if (isActive && nativeOAuthInFlightProvider) {
+        recordNativeOAuthObservation("app_foreground", { provider: nativeOAuthInFlightProvider });
+      }
+    });
     appPlugin.getLaunchUrl?.().then((result) => handleNativeAppUrl(result?.url)).catch(() => {});
+    window.Capacitor?.Plugins?.Browser?.addListener?.("browserPageLoaded", () => {
+      clearNativeOAuthLoadTimer();
+      nativeOAuthInitialPageLoaded = true;
+      nativeOAuthLoadTimedOut = false;
+      recordNativeOAuthObservation("browser_initial_page_loaded");
+    });
     window.Capacitor?.Plugins?.Browser?.addListener?.("browserFinished", () => {
+      clearNativeOAuthLoadTimer();
+      recordNativeOAuthObservation("browser_finished");
       scheduleNativeOAuthCancellation();
     });
   }
@@ -1226,12 +1309,15 @@
     if (isNativeApp() && browserPlugin?.open) {
       clearNativeOAuthCancelTimer();
       nativeOAuthInFlightProvider = provider || slug;
+      startNativeOAuthObservation(nativeOAuthInFlightProvider, authorizeUrl);
       try {
         await browserPlugin.open({
           url: authorizeUrl,
           presentationStyle: "popover",
         });
+        recordNativeOAuthObservation("browser_opened", { provider: nativeOAuthInFlightProvider, url: authorizeUrl });
       } catch (error) {
+        clearNativeOAuthLoadTimer();
         nativeOAuthInFlightProvider = "";
         clearOAuthStorageValue();
         emitClientError("oauth_browser_open", error, { provider });
@@ -1680,6 +1766,7 @@
     ensureSession,
     consumeOAuthRedirect,
     flushOAuthProviderCredentialCapture,
+    getNativeOAuthObservations: () => nativeOAuthObservations.map((item) => ({ ...item })),
     signInWithOAuth,
     signInWithPassword,
     sendPasswordResetEmail,
