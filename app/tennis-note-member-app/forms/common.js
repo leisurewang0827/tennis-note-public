@@ -294,6 +294,16 @@ function setEmailAuthStatus(message = "", tone = "") {
 }
 
 function setEmailAuthMode(mode = "login", options = {}) {
+  if (!emailPasswordAuthUiEnabled()) {
+    const panel = $("#memberEmailAuthPanel");
+    if (panel) {
+      panel.hidden = true;
+      panel.inert = true;
+      panel.setAttribute("aria-hidden", "true");
+    }
+    setEmailAuthStatus(emailAuthUiUnavailableMessage, "alert");
+    return false;
+  }
   const nextMode = ["login", "signup", "recovery"].includes(mode) ? mode : "login";
   emailAuthMode = nextMode;
   const panel = $("#memberEmailAuthPanel");

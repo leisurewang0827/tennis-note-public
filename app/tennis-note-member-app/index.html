@@ -104,7 +104,7 @@
               <span data-apple-login-label>Apple로 계속</span>
             </button>
             <p id="appleLoginAvailabilityNote" class="provider-availability-note" hidden aria-live="polite"></p>
-            <details id="memberEmailAuthPanel" class="email-login-panel">
+            <details id="memberEmailAuthPanel" class="email-login-panel" data-feature-gate="emailPasswordAuthUi" hidden inert aria-hidden="true">
               <summary id="memberEmailAuthSummary">이메일 로그인·가입</summary>
               <div id="memberEmailAuthTabs" class="email-auth-tabs" role="tablist" aria-label="이메일 계정 선택">
                 <button id="memberEmailLoginTab" class="email-auth-tab is-active" type="button" role="tab" aria-selected="true" data-email-auth-mode="login">로그인</button>
@@ -158,8 +158,8 @@
                 </label>
                 <button class="small-button" type="submit">비밀번호 변경</button>
               </form>
-              <p id="memberEmailLoginStatus" class="login-form-status" role="status" aria-live="polite"></p>
             </details>
+            <p id="memberEmailLoginStatus" class="login-form-status" role="status" aria-live="polite"></p>
           </div>
           <button class="small-button install-button" type="button" data-install-pwa hidden>앱 설치</button>
           <div class="legal-links" aria-label="정책 안내">
