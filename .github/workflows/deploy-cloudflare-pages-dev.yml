@@ -24,6 +24,8 @@ jobs:
       TENNISNOTE_PAYMENT_MODE: disabled
       TENNISNOTE_ALLOWED_PAYMENT_METHODS: ""
       TENNISNOTE_BANK_TRANSFER_ENABLED: "false"
+      TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply
+      TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "true"
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
@@ -44,6 +46,8 @@ jobs:
         run: |
           grep -q '"environment": "development"' dist/member-dev/shared/config.local.js
           grep -q '"enabled": false' dist/member-dev/shared/config.local.js
+          grep -q '"singleSheetImportMode": "apply"' dist/admin-dev/shared/config.local.js
+          grep -q '"singleSheetImportReverseEnabled": true' dist/admin-dev/shared/config.local.js
           grep -q '개발계 · 실제 결제·푸시 차단' dist/member-dev/index.html
           grep -q '개발계 · 실제 결제·푸시 차단' dist/admin-dev/index.html
 
