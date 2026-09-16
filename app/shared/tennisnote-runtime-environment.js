@@ -3,6 +3,10 @@
   const configuredEnvironment = String(config.environment || "production").trim().toLowerCase();
   const supportedEnvironments = new Set(["development", "production"]);
   const environment = supportedEnvironments.has(configuredEnvironment) ? configuredEnvironment : "unsupported";
+  const features = Object.freeze({
+    // 이메일 인증 백엔드는 보존하되, 명시적으로 다시 켜기 전에는 UI를 노출하지 않는다.
+    emailPasswordAuthUi: config.featureFlags?.emailPasswordAuthUi === true,
+  });
   const portalContracts = Object.freeze({
     development: Object.freeze({
       member: "https://tennisnote-app-dev.pages.dev/",
@@ -105,6 +109,7 @@
 
   window.TennisNoteRuntimeEnvironment = Object.freeze({
     environment,
+    features,
     resolvePortal,
     noticeAcknowledgementKey,
     hasNoticeAcknowledgement,

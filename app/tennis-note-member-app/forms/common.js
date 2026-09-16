@@ -46,7 +46,7 @@ function registerPwaServiceWorker() {
   const memberPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("member");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.503",
+    workerUrl: "./service-worker.js?v=1.0.504",
     remoteAppUrl: memberPortal?.ok ? memberPortal.url : "",
   });
 }
@@ -293,7 +293,21 @@ function setEmailAuthStatus(message = "", tone = "") {
   else delete status.dataset.tone;
 }
 
+function emailPasswordAuthUiEnabled() {
+  return window.TennisNoteRuntimeEnvironment?.features?.emailPasswordAuthUi === true;
+}
+
 function setEmailAuthMode(mode = "login", options = {}) {
+  if (!emailPasswordAuthUiEnabled()) {
+    const panel = $("#memberEmailAuthPanel");
+    if (panel) {
+      panel.hidden = true;
+      panel.inert = true;
+      panel.setAttribute("aria-hidden", "true");
+    }
+    setEmailAuthStatus(emailAuthUiUnavailableMessage, "alert");
+    return false;
+  }
   const nextMode = ["login", "signup", "recovery"].includes(mode) ? mode : "login";
   emailAuthMode = nextMode;
   const panel = $("#memberEmailAuthPanel");
