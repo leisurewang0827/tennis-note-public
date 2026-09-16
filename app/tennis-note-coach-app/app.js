@@ -41,6 +41,8 @@ const state = {
   feedbackRequests: [],
   ntrpRequests: [],
   lessonLogs: [],
+  pendingLessonAuthority: null,
+  pendingAuthorityCacheVersion: 0,
   lessonChartDrafts: {},
   members: [],
   branchPermissions: {

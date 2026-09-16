@@ -163,6 +163,15 @@ function coachRecordProcessingState(record = {}) {
 }
 
 function ownPendingLessonLogs() {
+  const authoritativeIds = coachAuthoritativePendingLessonIds();
+  if (authoritativeIds) {
+    return state.lessonLogs.filter((log) => (
+      authoritativeIds.has(String(log.serverLessonId || ""))
+      && !coachRecordProcessingState(log).resolved
+      && recordBelongsToCurrentCoach(log)
+    ));
+  }
+  if (state.dataMode === "live" || state.liveProfileId) return [];
   return state.lessonLogs.filter((log) => {
     if (coachRecordProcessingState(log).resolved || !recordBelongsToCurrentCoach(log)) return false;
     const lesson = lessonForRecord(log);
@@ -170,8 +179,22 @@ function ownPendingLessonLogs() {
   });
 }
 
-function ownPendingFeedbackRequests() {
+function ownDeviceOnlyPendingLessonDrafts() {
+  const authoritativeIds = coachAuthoritativePendingLessonIds() || new Set();
+  return state.lessonLogs.filter((log) => (
+    coachLessonLogHasUnsyncedDraft(log)
+    && recordBelongsToCurrentCoach(log)
+    && !authoritativeIds.has(String(log.serverLessonId || ""))
+  ));
+}
+
+function deviceLocalPendingFeedbackRequests() {
   return state.feedbackRequests.filter((request) => request.status !== "코치 답변 완료" && feedbackBelongsToCurrentCoach(request));
+}
+
+function ownPendingFeedbackRequests() {
+  if (state.dataMode === "live" || state.liveProfileId) return [];
+  return deviceLocalPendingFeedbackRequests();
 }
 
 function completedFeedbackTimestamp(item = {}) {
@@ -260,6 +283,12 @@ function recordProcessingMarkup() {
   const pendingFeedback = ownPendingFeedbackRequests();
   const completedLogs = ownCompletedLessonLogs();
   const completedFeedback = ownCompletedFeedbackRequests();
+  const deviceDraftCount = ownDeviceOnlyPendingLessonDrafts().length;
+  const deviceFeedbackCount = deviceLocalPendingFeedbackRequests().length;
+  const pendingAuthorityLoading = (state.dataMode === "live" || state.liveProfileId) && !coachPendingAuthorityReady();
+  const localProtectionMarkup = (state.dataMode === "live" || state.liveProfileId) && (deviceDraftCount || deviceFeedbackCount)
+    ? `<p class="validation-text">이 기기에만 저장된 미전송 초안 ${deviceDraftCount + deviceFeedbackCount}건은 보존했으며 서버 미처리 수에는 포함하지 않습니다.</p>`
+    : "";
   const recordFilter = coachRecordStatusFilter();
   const recordTabs = `
     <div class="record-status-tabs" role="tablist" aria-label="피드백 작성 상태">
@@ -438,6 +467,8 @@ function recordProcessingMarkup() {
         compact: true,
       });
   return `${recordTabs}
+    ${pendingAuthorityLoading ? '<p class="validation-text">서버에서 현재 미처리 수업을 확인하고 있습니다.</p>' : ""}
+    ${localProtectionMarkup}
     <section class="record-section">
       <div class="record-section-title">
         <strong>수업 처리</strong>

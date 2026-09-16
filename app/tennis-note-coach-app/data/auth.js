@@ -17,6 +17,8 @@ function activateLiveCoachProfile(profileId) {
   state.feedbackRequests = [];
   state.ntrpRequests = [];
   state.lessonLogs = [];
+  state.pendingLessonAuthority = null;
+  state.pendingAuthorityCacheVersion = 0;
   state.members = [];
   state.expiredMembers = [];
   state.proxySettlements = [];
