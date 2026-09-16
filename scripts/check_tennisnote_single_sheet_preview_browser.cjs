@@ -659,6 +659,7 @@ async function holdPlanUiScenario(page, modal, engine) {
     if (kind === "mixed") units[0] = { status: "READY", verified: false, newMembers: 1, newTickets: 1, newLessons: 0 };
     if (kind === "zero") for (const unit of units) Object.assign(unit, { newMembers: 0, newTickets: 0, newLessons: 0 });
     await page.evaluate(units => { window.__sheetExecution.failure = ""; window.__sheetExecution.uxUnits = units; }, units);
+    await modal.locator("[data-excel-file]").setInputFiles([]);
     await modal.locator("[data-excel-file]").setInputFiles(file);
     await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal")?.dataset.batchPhase === "ready");
     const totals = await summary(), text = await modal.locator(".tn-excel-rows").innerText();
