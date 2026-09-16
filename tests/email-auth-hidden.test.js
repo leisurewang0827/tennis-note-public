@@ -16,7 +16,8 @@ test("회원 앱은 이메일 인증 UI를 명시적 opt-in 전까지 노출하�
 
   assert.match(html, /data-feature-gate="emailPasswordAuthUi" hidden inert aria-hidden="true"/);
   assert.match(runtime, /emailPasswordAuthUi:\s*config\.featureFlags\?\.emailPasswordAuthUi === true/);
-  assert.match(app, /function emailPasswordAuthUiEnabled\(\)/);
+  assert.doesNotMatch(app, /function emailPasswordAuthUiEnabled\(\)/);
+  assert.match(common, /function emailPasswordAuthUiEnabled\(\)/);
   assert.match(members, /emailPanel\.inert = !emailUiAvailable/);
   assert.match(common, /if \(!emailPasswordAuthUiEnabled\(\)\)/);
   assert.ok(html.indexOf('id="memberEmailLoginStatus"') > html.indexOf("</details>"));

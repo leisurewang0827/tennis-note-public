@@ -293,6 +293,10 @@ function setEmailAuthStatus(message = "", tone = "") {
   else delete status.dataset.tone;
 }
 
+function emailPasswordAuthUiEnabled() {
+  return window.TennisNoteRuntimeEnvironment?.features?.emailPasswordAuthUi === true;
+}
+
 function setEmailAuthMode(mode = "login", options = {}) {
   if (!emailPasswordAuthUiEnabled()) {
     const panel = $("#memberEmailAuthPanel");
