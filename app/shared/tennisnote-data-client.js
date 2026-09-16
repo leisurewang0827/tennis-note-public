@@ -61,6 +61,7 @@
       projectFingerprint: supabase.projectFingerprint || source?.projectFingerprint || "",
       singleSheetImportMode: supabase.singleSheetImportMode || source?.singleSheetImportMode || "off",
       singleSheetImportReverseEnabled: supabase.singleSheetImportReverseEnabled === true || source?.singleSheetImportReverseEnabled === true,
+      nativeOAuthCallbackUrl: supabase.nativeOAuthCallbackUrl || source?.nativeOAuthCallbackUrl || "",
     };
   }
 
@@ -80,6 +81,7 @@
       projectFingerprint: fileConfig.projectFingerprint,
       singleSheetImportMode: fileConfig.singleSheetImportMode,
       singleSheetImportReverseEnabled: fileConfig.singleSheetImportReverseEnabled,
+      nativeOAuthCallbackUrl: fileConfig.nativeOAuthCallbackUrl,
     };
   }
 
@@ -716,9 +718,38 @@
 
   function nativeOAuthBridgeRedirect() {
     const target = window.location.pathname.includes("coach") ? "coach" : "member";
-    const configuredUrl = loadConfig().nativeOAuthCallbackUrl
-      || "https://tennisnote-app.pages.dev/native-oauth-callback.html";
-    const callback = new URL(configuredUrl);
+    const config = loadConfig();
+    const environment = `${config.environment || ""}`.trim().toLowerCase();
+    const configuredUrl = `${config.nativeOAuthCallbackUrl || ""}`.trim();
+    const expectedOrigins = {
+      development: "https://tennisnote-app-dev.pages.dev",
+      production: "https://tennisnote-app.pages.dev",
+    };
+    const fail = (code) => {
+      const error = new Error(code);
+      error.code = code;
+      throw error;
+    };
+    if (!configuredUrl || !expectedOrigins[environment]) {
+      fail("native_oauth_callback_unconfigured");
+    }
+    let callback;
+    try {
+      callback = new URL(configuredUrl);
+    } catch (error) {
+      fail("native_oauth_callback_invalid");
+    }
+    if (
+      callback.protocol !== "https:"
+      || callback.origin !== expectedOrigins[environment]
+      || callback.pathname !== "/native-oauth-callback.html"
+      || callback.username
+      || callback.password
+      || callback.search
+      || callback.hash
+    ) {
+      fail("native_oauth_callback_environment_mismatch");
+    }
     callback.searchParams.set("target", target);
     return callback.toString();
   }

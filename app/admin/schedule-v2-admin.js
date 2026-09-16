@@ -363,16 +363,6 @@
     }[code] || "연결 확인 필요";
   }
 
-  function scheduleIntegrityHasGeneratedPlan(result = {}) {
-    return Number(result.createdCount) >= 1;
-  }
-
-  function scheduleIntegrityCanSafelyApply(result = {}) {
-    return scheduleIntegrityHasGeneratedPlan(result)
-      && Number(result.remainingUnassignedUnits) === 0
-      && Number(result.conflictCount) === 0;
-  }
-
   function scheduleIntegrityRepairLabel(result, issueCodes = []) {
     if (!issueCodes.includes("active_regular_ticket_without_future_lessons")) {
       return issueCodes.includes("ticket_coach_missing") ? "담당 코치를 먼저 선택하세요" : "수동 확인 필요";
@@ -382,9 +372,8 @@
     const remaining = Number(result.remainingUnassignedUnits) || 0;
     const conflicts = Number(result.conflictCount) || 0;
     const reason = String(result.reason || "");
-    if (scheduleIntegrityCanSafelyApply(result)) return `안전 실행 가능 ${created}회`;
-    if (created > 0 && conflicts > 0) return `생성안 ${created}회 · 시간 충돌 ${conflicts}건`;
-    if (created > 0) return `생성안 ${created}회 · ${remaining}회는 수동 확인`;
+    if (created > 0 && remaining === 0) return `자동 생성 가능 ${created}회`;
+    if (created > 0) return `${created}회 생성 가능 · ${remaining}회는 수동 확인`;
     if (conflicts > 0) return `코치 시간 충돌 ${conflicts}건 · 시간표에서 조정`;
     return {
       regular_schedule_rule_missing: "정규 요일·시간 설정 필요",
@@ -477,10 +466,13 @@
           console.warn("Schedule V2 integrity reconciliation preview failed", error);
         }
       }));
-      const generatedPlanCount = [...reconcileByTicket.values()].filter(scheduleIntegrityHasGeneratedPlan).length;
+      const autoRepairable = [...reconcileByTicket.values()].filter((row) => Number(row.createdCount) > 0).length;
       reconcileByTicket.forEach((row, ticketId) => {
+        const created = Number(row.createdCount) || 0;
+        const remaining = Number(row.remainingUnassignedUnits) || 0;
+        const conflicts = Number(row.conflictCount) || 0;
         const item = items.find((candidate) => String(candidate.ticketId) === String(ticketId));
-        if (!item?.branchId || !scheduleIntegrityCanSafelyApply(row)) return;
+        if (!item?.branchId || created < 1 || remaining > 0 || conflicts > 0) return;
         const ticketIds = state.integrityRepairGroups.get(item.branchId) || new Set();
         ticketIds.add(ticketId);
         state.integrityRepairGroups.set(item.branchId, ticketIds);
@@ -490,11 +482,11 @@
       if (applyButton) {
         applyButton.disabled = repairableTicketCount === 0;
         applyButton.textContent = repairableTicketCount
-          ? `안전 실행 가능한 ${repairableTicketCount}개 회원권 일정 생성`
-          : "안전 실행 가능한 일정 없음";
+          ? `확정 가능한 ${repairableTicketCount}권 일정 생성`
+          : "확정 가능한 일정 없음";
       }
       summary.textContent = affectedTickets
-        ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}개 회원권 · 생성안 있음 ${generatedPlanCount}개 · 안전 실행 가능 ${repairableTicketCount}개`
+        ? `확인 필요 ${affectedMembers}명 · ${affectedTickets}권 · 자동 생성 가능 ${autoRepairable}권`
         : "문제 없음";
       list.innerHTML = groupedItems.length
         ? groupedItems.map((item) => {
@@ -1302,7 +1294,7 @@
   function renderEmpty(message) {
     $("#scheduleV2Grid").innerHTML = `<div class="schedule-v2-empty">${escapeHtml(message)}</div>`;
     $("#scheduleV2QueueList").innerHTML = "";
-    $("#scheduleV2QueueCount").textContent = "0개 회원권";
+    $("#scheduleV2QueueCount").textContent = "0명";
   }
 
   function renderDayTabs() {
@@ -2008,7 +2000,7 @@
       missingSessions: Number(item.missing_sessions ?? item.missingSessions) || 0,
       status: item.assignment_status || item.assignmentStatus || "unassigned",
     })).filter((item) => item.missingSessions > 0);
-    $("#scheduleV2QueueCount").textContent = `${items.length}개 회원권`;
+    $("#scheduleV2QueueCount").textContent = `${items.length}명`;
     $("#scheduleV2QueueList").innerHTML = items.length
       ? items.map((item) => `<button class="schedule-v2-queue-item" type="button" data-v2-queue-ticket="${escapeHtml(item.ticketId)}"><strong>${escapeHtml(item.memberName)}</strong><span>${escapeHtml(item.productName)} · ${item.missingSessions}회 미배정</span></button>`).join("")
       : '<div class="schedule-v2-empty" style="min-height:90px">미배정 정규권이 없습니다.</div>';
@@ -3241,11 +3233,11 @@
           : "";
         if (participant.sameDayAbsence?.status === "pending_approval") {
           const request = participant.sameDayAbsence;
-          return `<div class="schedule-v2-outcome-row is-same-day-absence" data-v2-same-day-absence-request="${escapeHtml(request.id)}" data-v2-absence-operation-kind="${escapeHtml(request.operationKind || "same_day")}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><small class="schedule-v2-session-snapshot">${request.operationKind === "future_group" ? "미래 불참 승인 대기" : "불참 승인 대기"}<span>승인 전 수업·회원권 유지</span></small><p>${escapeHtml(request.reason || "사유 없음")}</p><div class="schedule-v2-same-day-absence-actions"><button type="button" data-v2-review-same-day-absence="false">거절</button><button class="primary-button" type="button" data-v2-review-same-day-absence="true">불참 승인</button></div></div>`;
+          return `<div class="schedule-v2-outcome-row is-same-day-absence" data-v2-same-day-absence-request="${escapeHtml(request.id)}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><small class="schedule-v2-session-snapshot">불참 승인 대기<span>승인 전 수업·회원권 유지</span></small><p>${escapeHtml(request.reason || "사유 없음")}</p><div class="schedule-v2-same-day-absence-actions"><button type="button" data-v2-review-same-day-absence="false">거절</button><button class="primary-button" type="button" data-v2-review-same-day-absence="true">불참 승인</button></div></div>`;
         }
         if (participant.sameDayAbsence?.status === "announced") {
           const deductedSessions = Math.max(0, Number(participant.sameDayAbsence.deductedSessions) || 0);
-          return `<div class="schedule-v2-outcome-row is-final is-same-day-absence"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><small class="schedule-v2-session-snapshot">불참 예정<span>${deductedSessions ? `${deductedSessions}회 차감` : "차감 없음"} · 피드백 대상 제외</span></small><p>회원이 앱에서 ${participant.sameDayAbsence.operationKind === "future_group" ? "미래 불참을 미리" : "당일 불참을"} 알렸습니다.</p></div>`;
+          return `<div class="schedule-v2-outcome-row is-final is-same-day-absence"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong><small class="schedule-v2-session-snapshot">불참 예정<span>${deductedSessions ? `${deductedSessions}회 차감` : "차감 없음"} · 피드백 대상 제외</span></small><p>회원이 앱에서 당일 불참을 알렸습니다.</p></div>`;
         }
         return `<div class="schedule-v2-outcome-row ${final ? "is-final" : ""} ${feedbackEditing ? "is-feedback-editing" : ""}" data-v2-outcome-user="${escapeHtml(participant.userId)}" data-v2-ticket-id="${escapeHtml(participant.ticketId)}" data-v2-record-updated-at="${escapeHtml(participant.updatedAt || participant.updated_at || "")}"><strong>${escapeHtml(participant.name || memberName(participant.userId))}</strong>${sessionMarkup}<select data-v2-outcome aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 수업 상태`)}"${disabled}>${outcomeOptions}</select><label class="schedule-v2-outcome-deduct"><input type="checkbox" data-v2-deduct ${deductChecked ? "checked" : ""}${deductDisabled} /><span>${oneDay ? "차감 없음" : "차감"}</span></label><textarea data-v2-comment maxlength="500" aria-label="${escapeHtml(`${participant.name || memberName(participant.userId)} 피드백`)}"${feedbackDisabled}>${escapeHtml(participant.coachComment || participant.coach_comment || "")}</textarea>${draftTools}${correctionTools}${revisionTools}</div>`;
       }).join("")
@@ -3280,20 +3272,18 @@
     preview.textContent = `회원이 오늘 수업 불참을 ${approval ? "요청하면 코치 승인 후" : "알리면 즉시"} ${deduct ? "1회 차감" : "차감 없이"} 처리합니다. ${restore ? `수업 ${cutoff}분 전까지 원래 자리로 복귀할 수 있습니다.` : "앱에서 다시 참석으로 바꿀 수 없습니다."}`;
   }
 
-  async function reviewMemberSameDayAbsence(requestId, approve, button, operationKind = "same_day") {
+  async function reviewMemberSameDayAbsence(requestId, approve, button) {
     const api = bridge();
     if (!requestId || !api?.rpc || button?.disabled || !requireWritableServer("editor")) return;
     const originalLabel = button.textContent;
     button.disabled = true;
     button.textContent = "처리 중";
     try {
-      await api.rpc(operationKind === "future_group"
-        ? "tn_review_member_future_group_absence"
-        : "tn_review_member_same_day_absence", {
+      await api.rpc("tn_review_member_same_day_absence", {
         target_request_id: requestId,
         target_approve: approve === true,
         target_note: "",
-        target_operation_key: `admin_absence_review:${operationKind}:${requestId}:${approve ? "approve" : "reject"}`,
+        target_operation_key: `admin_absence_review:${requestId}:${approve ? "approve" : "reject"}`,
       });
       const editedLessonId = state.editingLesson?.id || "";
       const viewState = captureWorkspaceViewState();
@@ -4913,12 +4903,10 @@
       const absenceReviewButton = event.target.closest("[data-v2-review-same-day-absence]");
       if (absenceReviewButton) {
         const requestId = absenceReviewButton.closest("[data-v2-same-day-absence-request]")?.dataset.v2SameDayAbsenceRequest || "";
-        const operationKind = absenceReviewButton.closest("[data-v2-same-day-absence-request]")?.dataset.v2AbsenceOperationKind || "same_day";
         void reviewMemberSameDayAbsence(
           requestId,
           absenceReviewButton.dataset.v2ReviewSameDayAbsence === "true",
           absenceReviewButton,
-          operationKind,
         );
         return;
       }

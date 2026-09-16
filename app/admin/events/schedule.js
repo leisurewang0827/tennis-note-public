@@ -91,6 +91,8 @@ function bindScheduleEvents() {
   $("#deleteLessonButton").addEventListener("click", deleteEditingLesson);
   $("#markLessonAbsentButton")?.addEventListener("click", markEditingLessonAbsentForMakeup);
   $("#restoreAbsentLessonButton")?.addEventListener("click", restoreAbsentLessonFromModal);
+  $("#scheduleV2IntegrityButton")?.addEventListener("click", previewScheduleV2Integrity);
+  $("#scheduleV2IntegrityApplyButton")?.addEventListener("click", applyScheduleV2IntegrityPreview);
   $("#applyBreakRuleButton").addEventListener("click", async () => {
     const selectedDays = $$("[data-break-day]:checked").map((input) => input.value);
     const availableCoachRoleIds = memberManagementCoachRoles().map((role) => role.id);

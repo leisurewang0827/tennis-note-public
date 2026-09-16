@@ -72,8 +72,11 @@ async function waitForEntry(page, app) {
     && typeof window.normalizeAppNotice === "function"
     && typeof window.closeNotice === "function"
     && (targetApp === "member"
+      ? Boolean(window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__)
+      : Boolean(window.__TENNIS_NOTE_COACH_APP_RUNTIME__))
+    && (targetApp === "member"
       ? typeof window.showNoticeIfNeeded === "function"
-      : typeof window.openCoachExternalPortal === "function")
+      : typeof window.showNoticeIfNeeded === "function")
   ), app);
 }
 
@@ -148,7 +151,7 @@ async function coachEntryChecks(page) {
     window.TennisNoteReleaseUpdater = { start(options) { calls.updaterUrl = options.remoteAppUrl; } };
     window.open = (url) => { calls.openedUrl = url; return {}; };
     window.registerPwaServiceWorker();
-    await window.openCoachExternalPortal("coach");
+    const resolved = window.TennisNoteRuntimeEnvironment.resolvePortal("coach");
     const notice = original.localizeSyntheticNotice({
       id: "synthetic-modular-entry",
       title: "Synthetic notice",
@@ -157,6 +160,7 @@ async function coachEntryChecks(page) {
     });
     return {
       calls,
+      resolvedUrl: resolved?.ok ? resolved.url : "",
       roleSwitchAcknowledged: original.hasNoticeAcknowledgement(notice, "coach"),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       banner: document.body.textContent.includes("서울 개발 · 내부 QA"),
@@ -196,7 +200,8 @@ async function coachEntryChecks(page) {
             const coach = await coachEntryChecks(page);
             assert(coach.calls.resolver === 2, `${engine} ${width} ${theme}: coach resolver entries not executed`);
             assert(coach.calls.updaterUrl === "https://tennisnote-app-dev.pages.dev/tennis-note-coach-app/", `${engine} ${width} ${theme}: coach updater used wrong portal`);
-            assert(coach.calls.openedUrl === "https://tennisnote-app-dev.pages.dev/tennis-note-coach-app/", `${engine} ${width} ${theme}: coach portal used wrong target`);
+            assert(coach.resolvedUrl === "https://tennisnote-app-dev.pages.dev/tennis-note-coach-app/", `${engine} ${width} ${theme}: coach portal used wrong target`);
+            assert(coach.calls.openedUrl === "", `${engine} ${width} ${theme}: removed external coach portal was opened`);
             assert(coach.roleSwitchAcknowledged, `${engine} ${width} ${theme}: role switch repeated acknowledged notice`);
             assert(coach.banner && coach.overflow <= 1 && errors.length === 0, `${engine} ${width} ${theme}: coach presentation or page error failed`);
 

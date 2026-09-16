@@ -57,7 +57,7 @@ async function syncCoachScheduleV2(options = {}) {
     return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster, cached.legacyChangeRequests);
   }
   try {
-    const [workspace, oneDayRows, roster, operationDays, legacyChangeRequests, legacyMakeupEntitlements] = await Promise.all([
+    const [workspace, oneDayRows, roster, operationDays, legacyChangeRequests] = await Promise.all([
       client.rpc("tn_schedule_v2_coach_workspace", {
         target_branch_id: branchId,
         target_from: syncRange.startDate,
@@ -83,14 +83,9 @@ async function syncCoachScheduleV2(options = {}) {
         order: "created_at.desc",
         limit: 300,
       }).catch(() => [])),
-      client.selectRows("tn_makeup_entitlements", {
-        select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at,updated_at",
-        limit: 300,
-      }).catch(() => []),
     ]);
     if (requestId !== coachScheduleV2RequestSequence) return false;
     if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
-    workspace.makeupEntitlements = mergeLegacyCoachMakeupEntitlements(workspace, roster, legacyMakeupEntitlements);
     await hydrateCoachWorkspaceParticipantProcessingState(client, workspace);
     if (requestId !== coachScheduleV2RequestSequence) return false;
     workspace.operationDays = Array.isArray(operationDays) ? operationDays : [];
@@ -238,7 +233,7 @@ async function syncLegacyCoachLessonsFromServer() {
         limit: 300,
       }).catch(() => []),
       client.selectRows("tn_makeup_entitlements", {
-        select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at,updated_at",
+        select: "id,source_lesson_id,ticket_id,branch_id,coach_role_id,duration_minutes,status,reason,marked_at,booked_lesson_id,booked_at",
         limit: 300,
       }).catch(() => []),
       client.rpc
@@ -417,7 +412,6 @@ async function syncLegacyCoachLessonsFromServer() {
         sourceLessonId: entitlement.source_lesson_id,
         bookedLessonId: entitlement.booked_lesson_id || "",
         ticketId: entitlement.ticket_id,
-        branchId: entitlement.branch_id || state.coach?.branchId || "",
         coachRoleId: entitlement.coach_role_id,
         coach: coach.display_name || "담당 코치",
         member: memberNames.join("&") || "회원",
@@ -429,8 +423,6 @@ async function syncLegacyCoachLessonsFromServer() {
         original: `${sourceLesson.lesson_date || "기존일"} ${String(sourceLesson.start_time || "").slice(0, 5)}`.trim(),
         bookedDate: bookedLesson.lesson_date || "",
         bookedTime: String(bookedLesson.start_time || "").slice(0, 5),
-        updatedAt: entitlement.updated_at || entitlement.booked_at || entitlement.marked_at || "",
-        bookingContract: "legacy_exact",
       };
     });
     const todayIso = new Date().toISOString().slice(0, 10);
@@ -730,71 +722,6 @@ async function syncCoachSettlementFromServer() {
     state.coachSettlementLoading = false;
     renderCoachSettlement();
     saveSnapshot();
-  }
-}
-
-async function readCoachSettlementReconciliation(scope = coachSettlementReconciliationScope()) {
-  return window.TennisNoteDataClient.rpc("tn_coach_monthly_settlement_reconciliation_state", {
-    target_branch_id: scope.branchId,
-    target_coach_role_id: scope.coachRoleId,
-    target_month: scope.settlementMonth,
-  });
-}
-
-async function syncCoachSettlementReconciliationFromServer() {
-  const client = window.TennisNoteDataClient;
-  const scope = coachSettlementReconciliationScope();
-  if (state.coachSettlementReconciliationSubmitting) return false;
-  if (!scope.branchId || !scope.coachRoleId || !client?.rpc || !client.getSession?.()?.access_token) {
-    state.coachSettlementReconciliationUiState = "ERROR";
-    state.coachSettlementReconciliationMessage = "현재 담당 코치 권한과 지점을 확인한 뒤 다시 시도해 주세요.";
-    state.coachSettlementReconciliationValidation = "";
-    renderCoachSettlementReconciliation();
-    return false;
-  }
-  const requestId = ++state.coachSettlementReconciliationRequestId;
-  const previousScope = state.coachSettlementReconciliation?.scope || {};
-  const previousSignature = [previousScope.branchId, previousScope.coachRoleId, String(previousScope.settlementMonth || "").slice(0, 10)].join(":");
-  const nextSignature = coachSettlementReconciliationScopeSignature(scope);
-  state.coachSettlementReconciliationLoading = true;
-  state.coachSettlementReconciliationUiState = "LOADING";
-  state.coachSettlementReconciliationMessage = "";
-  state.coachSettlementReconciliationValidation = "";
-  renderCoachSettlementReconciliation();
-  try {
-    const raw = await readCoachSettlementReconciliation(scope);
-    const result = Array.isArray(raw) ? raw[0] || null : raw;
-    if (requestId !== state.coachSettlementReconciliationRequestId) return false;
-    if (!coachSettlementReconciliationPayloadIsExact(result, scope)) throw new Error("settlement_reconciliation_scope_mismatch");
-    const remoteState = String(result.state || "").toUpperCase();
-    if (previousSignature && previousSignature !== nextSignature) {
-      state.coachSettlementReconciliationChoice = "";
-      state.coachSettlementReconciliationReason = "";
-      state.coachSettlementReconciliationOperation = null;
-    }
-    state.coachSettlementReconciliation = result;
-    state.coachSettlementReconciliationUiState = remoteState;
-    state.coachSettlementReconciliationMessage = "";
-    if (["ACKNOWLEDGED", "DISPUTED"].includes(remoteState)) {
-      state.coachSettlementReconciliationChoice = "";
-      state.coachSettlementReconciliationReason = "";
-      state.coachSettlementReconciliationOperation = null;
-    }
-    return true;
-  } catch (error) {
-    if (requestId !== state.coachSettlementReconciliationRequestId) return false;
-    const contract = coachSettlementReconciliationErrorContract(error);
-    state.coachSettlementReconciliation = null;
-    state.coachSettlementReconciliationUiState = contract.state;
-    state.coachSettlementReconciliationMessage = contract.message;
-    state.coachSettlementReconciliationValidation = contract.validation;
-    return false;
-  } finally {
-    if (requestId === state.coachSettlementReconciliationRequestId) {
-      state.coachSettlementReconciliationLoading = false;
-      renderCoachSettlementReconciliation();
-      saveSnapshot();
-    }
   }
 }
 

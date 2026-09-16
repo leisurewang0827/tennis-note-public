@@ -82,6 +82,10 @@ function membershipProductBulkSavePayload(product) {
     || Number(nextProduct.maxBookingDaysPerWeek) > Number(nextProduct.maxSessionsPerWeek)) {
     throw new Error(`membership_product_invalid:${nextProduct.title || product.title || "회원권"}`);
   }
+  const frequencyConsistencyIssue = membershipProductFrequencyConsistencyIssue(nextProduct);
+  if (frequencyConsistencyIssue) {
+    throw new Error(`membership_product_invalid:${nextProduct.title}:weekly_frequency_mismatch`);
+  }
   const saleIssue = couponProductSaleIssue(nextProduct);
   if (saleIssue && nextProduct.status === "sale") {
     throw new Error(`membership_product_invalid:${nextProduct.title}:${saleIssue}`);

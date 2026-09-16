@@ -91,6 +91,7 @@ test("modular 권위 함수들이 runtime resolver와 공지 acknowledgment를 �
   assert.match(coachForm, /resolvePortal\?\.\("coach"\)/);
   assert.match(memberUi, /hasNoticeAcknowledgement\?\.\(item, "member"\)/);
   assert.match(coachUi, /hasNoticeAcknowledgement\?\.\(item, "coach"\)/);
-  assert.match(coachUi, /resolvePortal\?\.\(adminRequested \? "admin" : "coach"\)/);
+  assert.doesNotMatch(coachUi, /openCoachExternalPortal|resolvePortal\?\.\(adminRequested/);
+  assert.doesNotMatch(coachApp + coachUi, /adminWebPortalButton|관리자 웹 열기/);
   assert.doesNotMatch(coachApp + coachUi, /const (?:coach|admin)WebPortalUrl/);
 });

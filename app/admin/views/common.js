@@ -1131,12 +1131,13 @@ function paymentFullCancelButtonFor(item, index) {
 }
 
 function paymentRefundButtonFor(item, index) {
+  const memberRequest = memberRefundRequestForBilling(item);
   const context = `${item?.member || "회원"} · ${item?.item || "결제"} · 환불 계산`;
   if (!item?.providerPaymentId) {
     return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="서버 결제번호가 필요합니다.">환불 계산</button>`;
   }
   if (adminPaymentCancelReady()) {
-    return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" aria-label="${escapeHtml(context)}" title="${escapeHtml(context)}">환불 계산</button>`;
+    return `<button class="small-button danger-action" type="button" data-refund-payment="${index}" aria-label="${escapeHtml(context)}" title="${escapeHtml(context)}">${memberRequest && ["submitted", "reviewing", "approved"].includes(memberRequest.status) ? "회원 요청 확인" : "환불 계산"}</button>`;
   }
   return `<button class="small-button danger-action" type="button" disabled aria-label="${escapeHtml(context)}" title="${escapeHtml(adminPaymentCancelBlockedMessage())}">관리자 로그인 필요</button>`;
 }
@@ -1144,7 +1145,6 @@ function paymentRefundButtonFor(item, index) {
 function paymentActionFor(item, index) {
   const context = (label) => `aria-label="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}" title="${escapeHtml(`${item.member || "회원"} · ${item.item || "결제"} · ${label}`)}"`;
   if (item.approvalPending) return '<button class="small-button" type="button" disabled>승인 처리중</button>';
-  if (item.bankTransferState === "confirming") return '<button class="small-button" type="button" disabled>입금·회원권 처리중</button>';
   if (item.status === "check") return item.providerPaymentId
     ? `<button class="small-button primary-button" type="button" data-approve-payment="${index}" ${context("결제 확인 후 승인")}>결제 확인·승인</button>`
     : '<button class="small-button" type="button" disabled>서버 결제번호 없음</button>';

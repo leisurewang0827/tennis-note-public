@@ -29,17 +29,13 @@ function registerPwaServiceWorker() {
   const coachPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("coach");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.494",
+    workerUrl: "./service-worker.js?v=1.0.501",
     remoteAppUrl: coachPortal?.ok ? coachPortal.url : "",
   });
 }
 
 function setView(viewId, options = {}) {
   if (!viewId || !$("#" + viewId)) return;
-  if (viewId !== "fullScheduleView" && state.bookingMakeupEntitlementId) {
-    if (state.coachQuickAdd?.makeupEntitlementId) state.coachQuickAdd = null;
-    clearCoachMakeupBooking();
-  }
   $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === viewId));
   $$(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.view === viewId));
   const profileButton = $("#coachProfileButton");

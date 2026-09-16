@@ -186,7 +186,6 @@ function openLessonEditor(id) {
   state.editingMakeupId = null;
   state.writingLessonId = null;
   state.viewingCurriculumId = null;
-  state.groupFeedbackReviewLessonId = "";
   renderLessonEditModal();
   openCoachModal("lessonEditModal");
   (completionParticipantsForLesson(lesson) || []).forEach((participant) => {
@@ -196,11 +195,7 @@ function openLessonEditor(id) {
 
 function closeLessonEditor(fromHistory = false) {
   const lesson = state.editingLessonId ? ensureCoachLessonRecord(state.editingLessonId) : null;
-  if (lesson) {
-    if (!lessonChartFinalized(lesson) && !lesson.completionSubmitting) captureLessonChartDraft(lesson.id);
-    delete lesson.scheduleEditDraft;
-  }
-  state.groupFeedbackReviewLessonId = "";
+  if (lesson) delete lesson.scheduleEditDraft;
   state.editingLessonId = null;
   state.coachQuickAdd = null;
   state.editingMakeupId = null;
@@ -223,38 +218,11 @@ function requestCloseLessonEditor() {
 function openCoachQuickAdd(button) {
   const policy = loadCoachSchedulePolicy();
   const coach = policy.coaches.find((item) => String(item.roleId || item.id) === String(button.dataset.coachRoleId || ""));
-  const bookingEntitlement = activeCoachMakeupBookingEntitlement();
-  const bookingGuard = bookingEntitlement
-    ? coachMakeupEntitlementBookingGuard(bookingEntitlement, state.bookingMakeupSnapshot)
-    : { ok: true };
-  if (!bookingGuard.ok) {
-    showToast(bookingGuard.message);
-    clearCoachMakeupBooking();
-    renderAll();
-    return;
-  }
-  const targetDuration = bookingEntitlement ? Number(bookingEntitlement.durationMinutes) || scheduleBlockMinutes : scheduleBlockMinutes;
-  const access = coach ? coachSlotAccess(coach, button.dataset.day, button.dataset.time, targetDuration, policy) : { allowed: false };
-  const exactBookingCoach = !bookingEntitlement || String(bookingEntitlement.coachRoleId || "") === String(button.dataset.coachRoleId || "");
-  const targetStart = minutesFromTime(button.dataset.time);
-  const localConflict = bookingEntitlement && (state.liveLessons || []).some((lesson) => (
-    String(lesson.coachRoleId || "") === String(button.dataset.coachRoleId || "")
-    && String(lesson.lessonDate || "") === String(button.dataset.date || "")
-    && !lesson.releasedMakeupSlot
-    && !["cancel", "cancelled", "canceled", "취소"].includes(String(lesson.serverStatus || lesson.status || "").toLowerCase())
-    && targetStart < minutesFromTime(lesson.time) + lessonDuration(lesson)
-    && minutesFromTime(lesson.time) < targetStart + targetDuration
-  ));
-  if (localConflict) {
-    showToast("선택한 시간에 다른 수업이 있습니다. 다른 빈 시간을 선택해 주세요.");
-    return;
-  }
-  if (!coach || !access.allowed || !exactBookingCoach) {
+  const access = coach ? coachSlotAccess(coach, button.dataset.day, button.dataset.time, scheduleBlockMinutes, policy) : { allowed: false };
+  if (!coach || !access.allowed) {
     showToast(access.reason === "holiday_locked"
       ? "휴무일에는 관리자만 수업을 등록할 수 있습니다."
-      : bookingEntitlement
-        ? "이 보강권의 담당 코치 근무시간에서 선택해 주세요."
-        : "본인 수업 시간 또는 허용된 브레이크·상담 시간만 등록할 수 있습니다.");
+      : "본인 수업 시간 또는 허용된 브레이크·상담 시간만 등록할 수 있습니다.");
     return;
   }
   state.editingLessonId = null;
@@ -267,13 +235,9 @@ function openCoachQuickAdd(button) {
     time: button.dataset.time,
     coachRoleId: button.dataset.coachRoleId,
     coachName: coach.name,
-    kind: bookingEntitlement ? "makeup" : "regular",
-    durationMinutes: bookingEntitlement ? targetDuration : 20,
-    ticketId: bookingEntitlement?.ticketId || "",
-    makeupEntitlementId: bookingEntitlement?.id || "",
-    makeupSnapshot: bookingEntitlement ? state.bookingMakeupSnapshot : "",
-    operationKey: bookingEntitlement ? state.bookingMakeupOperationKey : "",
-    submitting: false,
+    kind: "regular",
+    durationMinutes: 20,
+    ticketId: "",
     note: "",
     validationMessage: "",
   };
@@ -303,11 +267,6 @@ function openLessonRecordWriter(id) {
 async function completeLessonFromModal(id) {
   const lesson = ensureCoachLessonRecord(id);
   if (!lesson || !canProcessLesson(lesson) || lesson.completionSubmitting) return;
-  const feedbackParticipantCount = completionParticipantsForLesson(lesson).filter(lessonParticipantNeedsFeedback).length;
-  if (feedbackParticipantCount > 1 && state.groupFeedbackReviewLessonId !== id) {
-    reviewGroupLessonFeedback(id);
-    return;
-  }
   if (!lessonOutcomeWindowOpen(lesson)) {
     lesson.validationMessage = lessonOutcomeGuardMessage();
     renderLessonEditModal();
@@ -387,7 +346,6 @@ async function completeLessonFromModal(id) {
     return;
   }
   delete state.lessonChartDrafts?.[id];
-  state.groupFeedbackReviewLessonId = "";
   saveSnapshot();
   window.TennisNoteInputGuard?.markSaved?.("#lessonEditModal");
   state.todayTaskTab = "lessons";
@@ -423,29 +381,4 @@ function toggleCurriculumFavorite(id) {
   state.favoriteCurriculums = [...favorites];
   renderCurriculums();
   saveSnapshot();
-}
-
-async function openCoachExternalPortal(kind = "coach") {
-  const adminRequested = kind === "admin";
-  if (adminRequested && state.coach?.role !== "admin") {
-    showToast("관리자 권한이 있는 계정에서만 열 수 있습니다.");
-    return;
-  }
-  const target = window.TennisNoteRuntimeEnvironment?.resolvePortal?.(adminRequested ? "admin" : "coach");
-  if (!target?.ok || !target.url) {
-    showToast("개발·운영 환경을 확인하지 못해 웹 화면을 열지 않았습니다.");
-    return;
-  }
-  const parsedUrl = new URL(target.url);
-  try {
-    const browserPlugin = window.Capacitor?.Plugins?.Browser;
-    if (nativeCoachAppPlatform() !== "web" && browserPlugin?.open) {
-      await browserPlugin.open({ url: parsedUrl.href });
-      return;
-    }
-    const opened = window.open(parsedUrl.href, "_blank", "noopener,noreferrer");
-    if (!opened) window.location.assign(parsedUrl.href);
-  } catch {
-    showToast("웹 화면을 열지 못했습니다. 네트워크를 확인해 주세요.");
-  }
 }

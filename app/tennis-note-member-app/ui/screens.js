@@ -157,6 +157,15 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
   const sourceTicket = requestedSource
     || returningSource
     || (!["add_coach", "new_purchase", "one_day"].includes(requestedPurpose) ? activeTickets[0] || null : null);
+  if (
+    requestedPurpose === "renew_same"
+    && sourceTicket
+    && String(sourceTicket.productKind || "regular").toLowerCase() === "regular"
+    && !["snapshot_exact", "ticket_exact"].includes(String(sourceTicket.weeklyFrequencyStatus || ""))
+  ) {
+    showToast("기존 회원권의 주당 횟수 기록이 일치하지 않아 연장할 수 없습니다. 관리자 확인 후 다시 시도해 주세요.");
+    return false;
+  }
   const sourceCanKeepSchedule = membershipTicketCanKeepSchedule(sourceTicket);
   const products = membershipProducts();
   const exactProduct = products.find((product) => (
@@ -184,7 +193,7 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
     : requestedPurpose === "one_day" ? "one-day" : activeMembershipPresetId() || "four-week";
   flow.step = 1;
   flow.purchasePurpose = ["renew_same", "add_coach", "new_purchase", "one_day"].includes(requestedPurpose)
-    ? (requestedPurpose === "new_purchase" && returningSource ? "renew_same" : requestedPurpose)
+    ? requestedPurpose
     : sourceTicket ? "renew_same" : "new_purchase";
   flow.showMoreSlots = false;
   flow.showAllProducts = false;
@@ -437,7 +446,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.494", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.501", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",

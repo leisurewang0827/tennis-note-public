@@ -19,13 +19,30 @@ function couponProductSaleIssue(product = {}) {
   return "";
 }
 
+function membershipProductTitleFrequencyPerWeek(product = {}) {
+  if (product.productKind === "coupon" || product.mode === "pass" || product.mode === "coupon") return null;
+  const title = String(product.title || product.name || "").normalize("NFKC");
+  const explicitWeekly = title.match(/주\s*([1-7])\s*회/u);
+  if (explicitWeekly) return Number(explicitWeekly[1]);
+  const compactSchedule = title.match(/(?:평일|주말|혼합)\s*([1-7])\s*회\s*\(\s*(?:20|30|40)\s*분\s*\)/u);
+  return compactSchedule ? Number(compactSchedule[1]) : null;
+}
+
+function membershipProductFrequencyConsistencyIssue(product = {}) {
+  const titleFrequency = membershipProductTitleFrequencyPerWeek(product);
+  const configuredFrequency = Number(product.frequencyPerWeek);
+  if (!titleFrequency || !Number.isInteger(configuredFrequency) || configuredFrequency <= 0) return "";
+  if (titleFrequency === configuredFrequency) return "";
+  return `상품명은 주 ${titleFrequency}회인데 주 횟수는 ${configuredFrequency}회입니다. 두 값을 같게 설정해 주세요.`;
+}
+
 function membershipProductWithOperationalLimits(product = {}) {
-  const titleFrequency = String(product.title || product.name || "").match(/주\s*(\d+)\s*회/);
+  const titleFrequency = membershipProductTitleFrequencyPerWeek(product);
   const inferredFrequency = Math.max(
     1,
     Math.min(
       7,
-      Number(titleFrequency?.[1])
+      Number(titleFrequency)
         || (product.productKind === "coupon"
           ? Math.min(2, Number(product.tickets) || 1)
           : Math.ceil((Number(product.tickets) || 4) / 4)),

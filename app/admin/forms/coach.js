@@ -38,14 +38,11 @@ function syncSubstituteSettlementFields() {
 
 function syncCoachStaffSettlementFieldVisibility(method) {
   const root = $("#coachStaffModalContent") || document;
-  ["ratio", "hourly"].forEach((settlementMethod) => {
-    const active = method === settlementMethod;
-    [...root.querySelectorAll(`[data-settlement-mode-field="${settlementMethod}"]`)].forEach((element) => {
-      element.classList.toggle("is-hidden", !active);
-      [...element.querySelectorAll("input, select, textarea")].forEach((control) => {
-        control.disabled = !active;
-      });
-    });
+  [...root.querySelectorAll('[data-settlement-mode-field="ratio"]')].forEach((element) => {
+    element.classList.toggle("is-hidden", method !== "ratio");
+  });
+  [...root.querySelectorAll('[data-settlement-mode-field="hourly"]')].forEach((element) => {
+    element.classList.toggle("is-hidden", method !== "hourly");
   });
 }
 

@@ -89,9 +89,15 @@ function normalizeLiveTicket(row = {}) {
   const remainingValue = row.remaining_sessions ?? Math.max(0, total - used);
   const remaining = Math.max(0, Number(remainingValue));
   const refundHoldId = row.refund_hold_refund_id || "";
-  const statusInfo = refundHoldId
-    ? { label: "환불 접수 · 송금 대기", tone: "alert" }
-    : liveTicketStatusInfo(row.status);
+  const frequencyEvidence = window.TennisNoteTicketPolicyHistory?.resolveWeeklyFrequency?.(row, product)
+    || { value: null, status: "snapshot_missing", sources: [] };
+  const frequencyUsable = window.TennisNoteTicketPolicyHistory?.isUsable?.(frequencyEvidence) === true;
+  const regularTicket = String(row.product_kind || product.product_kind || "").toLowerCase() === "regular";
+  const statusInfo = regularTicket && !frequencyUsable
+    ? { label: "주당 횟수 확인 필요", tone: "alert" }
+    : refundHoldId
+      ? { label: "환불 접수 · 송금 대기", tone: "alert" }
+      : liveTicketStatusInfo(row.status);
   const configuredAnchorMinutes = row.makeup_anchor_minutes !== undefined
     ? row.makeup_anchor_minutes
     : product.makeup_anchor_minutes;
@@ -103,7 +109,9 @@ function normalizeLiveTicket(row = {}) {
     productId: row.product_id || product.id || "",
     productKind: row.product_kind || product.product_kind || "",
     lessonMinutes: Number(row.lesson_minutes || product.lesson_minutes || 20),
-    frequencyPerWeek: Math.max(1, Number(row.frequency_per_week || product.frequency_per_week || 1)),
+    frequencyPerWeek: frequencyUsable ? Number(frequencyEvidence.value) : 0,
+    weeklyFrequencyStatus: frequencyEvidence.status,
+    weeklyFrequencySources: frequencyEvidence.sources,
     groupSize: Number(row.group_size || product.group_size || 1),
     scheduleScope: liveTicketScheduleScope(row, product),
     maxSessionsPerDay: Number(row.max_sessions_per_day || product.max_sessions_per_day || 0),
@@ -271,7 +279,11 @@ function memberBookableCouponTickets() {
 function memberBookableRegularTickets() {
   const policy = loadAdminSchedulePolicy();
   return (state.liveTickets || [])
-    .filter((ticket) => isActiveRegularLiveTicket(ticket) && !liveTicketHasUpcomingLesson(ticket))
+    .filter((ticket) => (
+      isActiveRegularLiveTicket(ticket)
+      && ["snapshot_exact", "ticket_exact"].includes(ticket.weeklyFrequencyStatus)
+      && !liveTicketHasUpcomingLesson(ticket)
+    ))
     .map((ticket) => {
       const coach = policy.coaches.find((item) => (
         String(item.serverRoleId || item.id) === String(ticket.coachRoleId)
@@ -304,7 +316,10 @@ function memberBookableRegularTickets() {
 function memberBookablePausedTickets() {
   const policy = loadAdminSchedulePolicy();
   return (state.liveTickets || [])
-    .filter((ticket) => isPausedRegularLiveTicket(ticket))
+    .filter((ticket) => (
+      isPausedRegularLiveTicket(ticket)
+      && ["snapshot_exact", "ticket_exact"].includes(ticket.weeklyFrequencyStatus)
+    ))
     .map((ticket) => {
       const coach = policy.coaches.find((item) => (
         String(item.serverRoleId || item.id) === String(ticket.coachRoleId)

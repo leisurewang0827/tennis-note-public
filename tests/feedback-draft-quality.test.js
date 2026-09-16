@@ -121,14 +121,15 @@ test("공백과 문장부호만 다른 중복을 제거하고 가혹 표현은 �
   });
 });
 
-test("코치 화면은 키워드 한 칸과 회원별 기존 예외만 유지하고 수동 문장을 보호한다", () => {
+test("운영 후보의 코치 화면은 개인 피드백 키워드 한 칸만 유지하고 수동 문장을 보호한다", () => {
   const schedule = source("app/tennis-note-coach-app/views/schedule.js");
   const actions = source("app/tennis-note-coach-app/actions/records.js");
   const foundation = source("app/shared/tennisnote-ui-foundation.css");
   const coachStyles = source("app/tennis-note-coach-app/styles.css");
 
-  assert.equal((schedule.match(/data-group-feedback-common-keywords=/g) || []).length, 1);
-  assert.match(schedule, /data-group-feedback-exception=/);
+  assert.equal((schedule.match(/data-modal-comment-keywords=/g) || []).length, 1);
+  assert.equal((schedule.match(/data-group-feedback-common-keywords=/g) || []).length, 0);
+  assert.equal((schedule.match(/data-group-feedback-exception=/g) || []).length, 0);
   assert.match(schedule, /<summary>초안 도우미<\/summary>/);
   assert.doesNotMatch(schedule, /<summary>AI<\/summary>/);
   assert.match(actions, /window\.confirm\("작성 중인 내용을 새 초안으로 바꿀까요\?/);

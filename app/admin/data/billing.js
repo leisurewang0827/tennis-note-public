@@ -73,6 +73,28 @@ async function loadBankNotificationStatusFromServer() {
   }
 }
 
+async function loadAdminMemberRefundRequests() {
+  const client = window.TennisNoteDataClient;
+  if (!client?.invokeFunction || !client.getSession?.()?.access_token || adminImportAuthState.profile?.role !== "admin") {
+    adminMemberRefundRequests = [];
+    return false;
+  }
+  try {
+    const result = await client.invokeFunction("portone-payment/refund-request-admin-list", { body: {} });
+    adminMemberRefundRequests = Array.isArray(result?.requests) ? result.requests : [];
+    return true;
+  } catch {
+    adminMemberRefundRequests = [];
+    return false;
+  }
+}
+
+function memberRefundRequestForBilling(item = {}) {
+  return adminMemberRefundRequests.find((request) => (
+    String(request.providerPaymentId || "") === String(item.providerPaymentId || "")
+  )) || null;
+}
+
 async function loadServerPaymentsIntoBilling(options = {}) {
   const silent = Boolean(options.silent);
   const force = Boolean(options.force);
@@ -118,7 +140,7 @@ async function loadServerPaymentsIntoBilling(options = {}) {
     });
     let rows = [];
     try {
-      rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,purchase_intent_key,purchase_group_key,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,bank_transfer_state,bank_transfer_error_code,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
+      rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,purchase_intent_key,purchase_group_key,product_id,ticket_id,one_day_booking_id,revenue_month,revenue_month_source,revenue_attribution_status,revenue_exclusion_reason,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
     } catch (error) {
       try {
         rows = await readPayments("id,user_id,branch_id,provider,provider_payment_id,product_id,ticket_id,amount,original_amount,settlement_base_amount,discount_amount,final_amount,method,status,created_at,paid_at,verified_at,bank_account_snapshot,depositor_name_snapshot,deposit_due_at,refunded_amount,refund_status,refund_reason,refund_breakdown,refunded_at,tn_users(name)");
@@ -130,6 +152,7 @@ async function loadServerPaymentsIntoBilling(options = {}) {
         }
       }
     }
+    await loadAdminMemberRefundRequests();
     const { added, updated, removed } = replaceServerPaymentRows(Array.isArray(rows) ? rows : []);
     serverPaymentSyncState.loaded = true;
     serverPaymentSyncState.directLoaded = true;
@@ -308,9 +331,7 @@ async function verifyBillingPaymentItem(item) {
       item.statusLabel = ticketRepairRetry ? "회원권처리실패" : "검증확인필요";
       billingLogs.unshift(`${item.member} ${item.item} ${ticketRepairRetry ? "회원권 재처리" : "결제 승인"} 실패: ${safeCode}`);
       reportAdminPaymentGuard("reconcile_failed", safeCode);
-      showToast(ticketRepairRetry
-        ? paymentTicketFinalizeRecoveryMessage(rawCode)
-        : bankTransfer ? bankTransferConfirmationMessage(rawCode) : "결제 승인 확인이 필요합니다.");
+      showToast(ticketRepairRetry ? paymentTicketFinalizeRecoveryMessage(rawCode) : "결제 승인 확인이 필요합니다.");
     }
   } catch (error) {
     const code = error?.payload?.code || error?.message || "server_error";
@@ -325,9 +346,7 @@ async function verifyBillingPaymentItem(item) {
       item.statusLabel = ticketRepairRetry ? "회원권처리실패" : "검증실패";
       billingLogs.unshift(`${item.member} ${item.item} ${ticketRepairRetry ? "회원권 재처리" : "결제 승인"} 실패: ${safeCode}`);
       reportAdminPaymentGuard("reconcile_failed", safeCode);
-      showToast(ticketRepairRetry
-        ? paymentTicketFinalizeRecoveryMessage(code)
-        : String(item.method || "") === "bank_transfer" ? bankTransferConfirmationMessage(code) : "결제 승인에 실패했습니다.");
+      showToast(ticketRepairRetry ? paymentTicketFinalizeRecoveryMessage(code) : "결제 승인에 실패했습니다.");
     }
   } finally {
     item.approvalPending = false;
@@ -395,97 +414,4 @@ async function loadAdminSettlementSupportData() {
       : adminLiveDataState.settlementTickets || [],
   });
   return true;
-}
-
-async function readMonthlySettlementConfirmation(scope, expectedSourceFingerprint = "") {
-  return window.TennisNoteDataClient.rpc("tn_admin_monthly_settlement_scope_state", {
-    target_branch_id: scope.branchId,
-    target_coach_role_id: scope.coachRoleId,
-    target_month: scope.settlementMonth,
-    expected_source_fingerprint: expectedSourceFingerprint,
-  });
-}
-
-async function refreshMonthlySettlementConfirmation({ force = false } = {}) {
-  const current = monthlySettlementConfirmationState;
-  const scope = monthlySettlementScope();
-  const signature = monthlySettlementScopeSignature(scope);
-  if (!scope.branchId || !scope.coachRoleId || !scope.settlementMonth) {
-    current.status = "EMPTY";
-    current.tone = "neutral";
-    current.message = scope.branchId ? "코치를 선택해 주세요." : "현재 지점을 먼저 선택해 주세요.";
-    renderMonthlySettlementConfirmation();
-    return;
-  }
-  if (operationsRole() !== "admin" || !adminApprovalReady() || !window.TennisNoteDataClient?.rpc) {
-    current.status = "ERROR";
-    current.tone = "danger";
-    current.message = "관리자 로그인과 서버 연결을 확인해 주세요.";
-    current.errorCode = "settlement_confirmation_forbidden";
-    current.loadedSignature = signature;
-    renderMonthlySettlementConfirmation();
-    return;
-  }
-  if (!force && (current.loading || current.loadedSignature === signature)) return;
-
-  const requestId = ++current.requestId;
-  current.loading = true;
-  current.status = "LOADING";
-  current.tone = "neutral";
-  current.message = "정산 계산 결과를 불러오는 중입니다.";
-  current.errorCode = "";
-  renderMonthlySettlementConfirmation();
-  try {
-    const preview = await window.TennisNoteDataClient.rpc("tn_admin_preview_monthly_settlement_snapshot", {
-      target_branch_id: scope.branchId,
-      target_coach_role_id: scope.coachRoleId,
-      target_month: scope.settlementMonth,
-    });
-    if (requestId !== current.requestId || signature !== monthlySettlementScopeSignature()) return;
-    const scopeState = await readMonthlySettlementConfirmation(scope, preview?.sourceFingerprint || "");
-    if (requestId !== current.requestId || signature !== monthlySettlementScopeSignature()) return;
-    if (!monthlySettlementScopeMatches(preview, scope) || !monthlySettlementScopeMatches(scopeState, scope)) {
-      throw new Error("settlement_confirmation_scope_mismatch");
-    }
-    current.preview = preview;
-    current.scopeState = scopeState;
-    current.loadedSignature = signature;
-    const snapshot = monthlySettlementSnapshotFrom(scopeState);
-    if (String(scopeState?.state || "").toUpperCase() === "CONFIRMED" && snapshot && scopeState?.confirmation) {
-      if (String(snapshot.sourceFingerprint || "") !== String(preview.sourceFingerprint || "")) {
-        current.status = "STALE";
-        current.tone = "warn";
-        current.message = "확인 이후 원천 기록이 변경되었습니다. 기존 확인 기록은 보존되며 추가 확인은 차단됩니다.";
-        current.errorCode = "settlement_source_changed_after_confirmation";
-      } else {
-        current.status = "CONFIRMED";
-        current.tone = "good";
-        current.message = "이 월의 서버 계산본을 확인했습니다. 확인 당시 원천과 합계는 변경되지 않습니다.";
-      }
-    } else if (!monthlySettlementPreviewHasSources(preview)) {
-      current.status = "EMPTY";
-      current.tone = "neutral";
-      current.message = "선택한 월에는 확인할 정산 원천이 없습니다.";
-    } else if (snapshot && !monthlySettlementSnapshotMatchesPreview(snapshot, preview, scope)) {
-      current.status = "STALE";
-      current.tone = "warn";
-      current.message = "저장된 계산본 뒤에 원천 기록이 변경되었습니다. 최신 상태를 다시 계산해 확인해 주세요.";
-    } else {
-      current.status = "READY";
-      current.tone = "ready";
-      current.message = snapshot
-        ? "저장된 서버 계산본과 현재 원천이 일치합니다. 합계를 확인한 뒤 확정해 주세요."
-        : "서버 계산 결과입니다. 확인하면 이 원천과 합계가 불변 기록으로 남습니다.";
-      monthlySettlementEnsureOperationKeys(scope, preview);
-    }
-  } catch (error) {
-    if (requestId !== current.requestId) return;
-    Object.assign(current, monthlySettlementErrorContract(error));
-    current.loadedSignature = signature;
-  } finally {
-    if (requestId === current.requestId) {
-      current.loading = false;
-      renderMonthlySettlementConfirmation();
-    }
-  }
 }
