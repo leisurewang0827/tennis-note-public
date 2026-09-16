@@ -17,20 +17,25 @@ function renderSummary() {
   const pendingFeedback = ownPendingFeedbackRequests().length;
   const pendingRecordTotal = pendingLessonLogs + pendingFeedback;
   const pendingSyncCount = coachPendingSyncLogs().length;
+  const pendingAuthorityLoading = (state.dataMode === "live" || state.liveProfileId) && !coachPendingAuthorityReady();
   $("#todayLessonCount").textContent = `${ownLessons.length}개`;
   if ($("#todayLessonSummaryNote")) $("#todayLessonSummaryNote").textContent = ownLessons.length ? `정규 ${regularCount} · 보강 ${makeupLessonCount}` : "오늘 수업 없음";
   $("#makeupPendingCount").textContent = `${makeupPendingCount}건`;
   if ($("#makeupSummaryNote")) $("#makeupSummaryNote").textContent = makeupPendingCount ? `처리 대기 ${makeupPendingCount}건` : "대기 없음";
   $("#logPendingCount").textContent = `${pendingRecordTotal}건`;
   if ($("#recordSummaryNote")) {
-    $("#recordSummaryNote").textContent = pendingSyncCount
+    $("#recordSummaryNote").textContent = pendingAuthorityLoading
+      ? "서버 미처리 확인 중"
+      : pendingSyncCount
       ? `동기화 대기 ${pendingSyncCount}건`
       : pendingRecordTotal
         ? `완료 처리 ${pendingRecordTotal}건`
         : "처리 없음";
   }
   if ($("#recordRequiredNote")) {
-    $("#recordRequiredNote").textContent = pendingRecordTotal
+    $("#recordRequiredNote").textContent = pendingAuthorityLoading
+      ? "서버에서 현재 미처리 수업을 확인하고 있습니다."
+      : pendingRecordTotal
       ? `미처리 ${pendingRecordTotal}건 · 완료할 수업을 선택해 처리하세요.`
       : "오늘 처리할 기록이 없습니다.";
   }
