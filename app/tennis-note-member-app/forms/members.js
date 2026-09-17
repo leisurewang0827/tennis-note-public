@@ -33,7 +33,7 @@ function mergeMemberScheduleWindows(windows) {
     .filter((window) => window.startMinutes < window.endMinutes)
     .sort((left, right) => left.startMinutes - right.startMinutes)
     .reduce((merged, window) => {
-      const previous = merged.at(-1);
+      const previous = merged[merged.length - 1];
       if (!previous || window.startMinutes > previous.endMinutes) {
         merged.push({ ...window });
       } else {

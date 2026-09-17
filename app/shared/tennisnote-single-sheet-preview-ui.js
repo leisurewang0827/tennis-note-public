@@ -405,8 +405,8 @@
       if (event.key === "Tab") {
         const targets = [...backdrop.querySelectorAll("button:not(:disabled),input")].filter(el => !el.hidden && el.getClientRects().length);
         if (!backdrop.contains(document.activeElement)) { event.preventDefault(); targets[0]?.focus(); return; }
-        if (event.shiftKey && document.activeElement === targets[0]) { event.preventDefault(); targets.at(-1).focus(); }
-        if (!event.shiftKey && document.activeElement === targets.at(-1)) { event.preventDefault(); targets[0].focus(); }
+        if (event.shiftKey && document.activeElement === targets[0]) { event.preventDefault(); targets[targets.length - 1].focus(); }
+        if (!event.shiftKey && document.activeElement === targets[targets.length - 1]) { event.preventDefault(); targets[0].focus(); }
       }
     }, true);
     root.addEventListener("popstate", () => close(true));

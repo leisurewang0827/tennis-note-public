@@ -532,7 +532,7 @@ function beginScheduleTicketAssignment(ticketId, lessonSource = "regular") {
   state.scheduleAssignmentLessonSource = normalizeLessonSource(lessonSource);
   state.scheduleView = "week";
   state.scheduleCoachFilter = "all";
-  const focusDate = [ticketScheduleStartDate(ticket), adminLocalDateKey(new Date())].sort().at(-1);
+  const focusDate = [ticketScheduleStartDate(ticket), adminLocalDateKey(new Date())].sort().slice(-1)[0];
   state.scheduleOpenSlotMode = false;
   state.selectedScheduleOpenSlots = [];
   state.scheduleOpenSlotAnchorKey = "";
@@ -1098,7 +1098,7 @@ function firstEligibleScheduleDateForTicket(ticket, day, requestedDate = "") {
   const baseDate = [requestedDate, ticketScheduleStartDate(ticket), today]
     .filter(Boolean)
     .sort()
-    .at(-1);
+    .slice(-1)[0];
   const targetDay = ({ 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 })[day];
   const candidate = new Date(`${baseDate}T12:00:00`);
   if (!Number.isFinite(candidate.getTime())) return "";

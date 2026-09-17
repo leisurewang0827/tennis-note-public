@@ -352,7 +352,7 @@ function purchaseFlowState() {
 function purchaseAvailabilityRange() {
   const today = purchaseEffectiveStartDate();
   const workspace = purchaseDirectoryForCurrentProduct() || memberScheduleV2WorkspaceCache?.workspace || {};
-  const start = [today, String(workspace.from || "")].filter(Boolean).sort().at(-1) || today;
+  const start = [today, String(workspace.from || "")].filter(Boolean).sort().slice(-1)[0] || today;
   const defaultEndDate = new Date(`${start}T12:00:00`);
   defaultEndDate.setDate(defaultEndDate.getDate() + 20);
   const defaultEnd = localDateKey(defaultEndDate);
