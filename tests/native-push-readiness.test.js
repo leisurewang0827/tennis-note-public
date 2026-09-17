@@ -12,7 +12,12 @@ test("Android Firebase 준비 전 push register는 공급자 호출 없이 중�
   let registerCalls = 0;
   const plugins = {
     PushNotifications: { register: async () => { registerCalls += 1; } },
-    TennisNoteNativeRuntime: { getPushReadiness: async () => ({ ready: false, reason: "firebase_not_ready" }) },
+    TennisNoteNativeRuntime: { getPushReadiness: async () => ({
+      ready: false,
+      reason: "firebase_not_ready",
+      notificationsEnabled: true,
+      runtimePermissionRequired: false,
+    }) },
   };
   const context = vm.createContext({
     window: {
@@ -39,7 +44,11 @@ test("Android Firebase 준비 완료 뒤에만 push register를 호출한다", a
   let registerCalls = 0;
   const plugins = {
     PushNotifications: { register: async () => { registerCalls += 1; return { ok: true }; } },
-    TennisNoteNativeRuntime: { getPushReadiness: async () => ({ ready: true }) },
+    TennisNoteNativeRuntime: { getPushReadiness: async () => ({
+      ready: true,
+      notificationsEnabled: true,
+      runtimePermissionRequired: false,
+    }) },
   };
   const context = vm.createContext({
     window: {
