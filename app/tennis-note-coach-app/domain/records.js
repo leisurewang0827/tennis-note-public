@@ -283,12 +283,7 @@ function recordProcessingMarkup() {
   const pendingFeedback = ownPendingFeedbackRequests();
   const completedLogs = ownCompletedLessonLogs();
   const completedFeedback = ownCompletedFeedbackRequests();
-  const deviceDraftCount = ownDeviceOnlyPendingLessonDrafts().length;
-  const deviceFeedbackCount = deviceLocalPendingFeedbackRequests().length;
   const pendingAuthorityLoading = (state.dataMode === "live" || state.liveProfileId) && !coachPendingAuthorityReady();
-  const localProtectionMarkup = (state.dataMode === "live" || state.liveProfileId) && (deviceDraftCount || deviceFeedbackCount)
-    ? `<p class="validation-text">이 기기에만 저장된 미전송 초안 ${deviceDraftCount + deviceFeedbackCount}건은 보존했으며 서버 미처리 수에는 포함하지 않습니다.</p>`
-    : "";
   const recordFilter = coachRecordStatusFilter();
   const recordTabs = `
     <div class="record-status-tabs" role="tablist" aria-label="피드백 작성 상태">
@@ -468,7 +463,6 @@ function recordProcessingMarkup() {
       });
   return `${recordTabs}
     ${pendingAuthorityLoading ? '<p class="validation-text">서버에서 현재 미처리 수업을 확인하고 있습니다.</p>' : ""}
-    ${localProtectionMarkup}
     <section class="record-section">
       <div class="record-section-title">
         <strong>수업 처리</strong>

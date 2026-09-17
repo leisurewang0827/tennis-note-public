@@ -106,5 +106,5 @@ test("코치 미처리 수는 서버 read-back을 권위로 사용하고 로컬 
   assert.equal(context.pendingLogs().length, 0);
 
   assert.match(home, /서버 미처리 확인 중/);
-  assert.match(records, /서버 미처리 수에는 포함하지 않습니다/);
+  assert.doesNotMatch(records, /서버 미처리 수에는 포함하지 않습니다/);
 });

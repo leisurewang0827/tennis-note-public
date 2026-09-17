@@ -13,11 +13,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.504",
-    "release_id": "2026.09.16.04",
-    "deployed_at": "2026-09-16T23:55:33+09:00",
-    "member_cache": "tennis-note-member-pwa-v543",
-    "coach_cache": "tennis-note-coach-mode-v516"
+    "version": "1.0.505",
+    "release_id": "2026.09.17.01",
+    "deployed_at": "2026-09-17T10:22:38+09:00",
+    "member_cache": "tennis-note-member-pwa-v544",
+    "coach_cache": "tennis-note-coach-mode-v517"
   },
   "allowed_differences": [
     "app version literals",
@@ -49,7 +49,8 @@
     "FEEDBACK-ADMIN-NOTE-PRESERVATION",
     "COACH-SERVER-FEEDBACK-PENDING-AUTHORITY",
     "AUTH-NATIVE-SESSION-CONTINUITY",
-    "AUTH-EMAIL-UI-HIDDEN"
+    "AUTH-EMAIL-UI-HIDDEN",
+    "NATIVE-PUSH-FIREBASE-FAIL-CLOSED"
   ],
   "selection_note": "Only the verified feedback fixes, native authentication session continuity, and hidden email authentication entry points are added beyond the production authority tree.",
   "dev_ahead_commits": [
@@ -879,7 +880,7 @@
       "app/shared/tennisnote-issue-reporter.css": "de8537c82a5fc50de0ce71dbef8623183d9be8aae67967f3baffd4467286dbba",
       "app/shared/tennisnote-issue-reporter.js": "c6b4531e91d1d4260f1c721ed16757425e46ccef70a869e3891012fdefe72a85",
       "app/shared/tennisnote-mode-transition.js": "af3e963d9050fc0176bea07f96d5dbdfaa80cbaad3bd9e093ccc6c9f118972e7",
-      "app/shared/tennisnote-native-push.js": "9533fc1567f7df6ce49b8902fee2a489dc53799fed2269ba513f3ba41235bd3b",
+      "app/shared/tennisnote-native-push.js": "2abcf6e13de7abf2ad13abb71c3dceaefca0216018b0e1c8cf9089258324e012",
       "app/shared/tennisnote-product-catalog.js": "758af3df9ade3da8f84b1b88e0de8e39a3e6983c1a9ea1bf7d7d7f8ae3a1f135",
       "app/shared/tennisnote-release-updater.js": "cd6ac91ba23ecb73d79c4fe2467d643239a5809bf1ce6ce9cfe7a0d808ad12e1",
       "app/shared/tennisnote-release.js": "3da9096051181e6731291e992fd902e1846b8e253d9ab71a599ff8814daca7d5",
@@ -906,7 +907,7 @@
       "app/tennis-note-coach-app/assets/app-icon.svg": "7e4e7fe8571bdf85436c1252bdd4b5ea3ce17d524bcfee7f4f363d8028b05bdd",
       "app/tennis-note-coach-app/catalog.js": "8b201a542d2f555910e63296444b4ae0c0fd8d5d0496201810aaa4d80b88e3a7",
       "app/tennis-note-coach-app/data/auth.js": "294cf71003fbcf434356c3443187b84add2191fa73e3d5af7a8729f447ed633b",
-      "app/tennis-note-coach-app/data/push.js": "a703a2a7f1482d6a8c876d0f037f5877a1f1d694f44f399812e66e5d40f95e9a",
+      "app/tennis-note-coach-app/data/push.js": "be65fd0b85c1724e5a20498291cba7f87f439f9e5bdb68c94070ba99f9430b76",
       "app/tennis-note-coach-app/data/records.js": "81fbe5015ff428846647fc2294fb98f948028b2b8ced09ad3cc6f57265bee4ef",
       "app/tennis-note-coach-app/data/sync.js": "0b54631ef0ae04df5b3240e06054a164128b5e8f13006c5e461c53a84184aeac",
       "app/tennis-note-coach-app/domain/coaches.js": "7417426af9119b92edf73bbaa18874ece3e3fa9d0cd4a324e269ef8bb7bdea1d",
@@ -917,7 +918,7 @@
       "app/tennis-note-coach-app/domain/members.js": "e3d19d5a597aa30d53df4ce367883a8c8a3557cb3ddfbc0e865876b9b85c74f7",
       "app/tennis-note-coach-app/domain/notices.js": "1c20401ac498edb16a1fd1fc24092e84ffb015bbda1f3a27a5ab770a9d928ed9",
       "app/tennis-note-coach-app/domain/policy.js": "4ae7da99f822e0f7fd72044241ff75293d01326e16e354839112795a1e8814fc",
-      "app/tennis-note-coach-app/domain/records.js": "28fa31b67e70d788915c87053dd4a637b9f3d5237a3574c0e94f1910448fe417",
+      "app/tennis-note-coach-app/domain/records.js": "7a37139ef7c3b7632e4d673c5d8e263747a2495b1badf9e1f029315601cf8beb",
       "app/tennis-note-coach-app/domain/schedule-v2.js": "b377e2e55b71cc7a110a9fc8c5d913495872c0ff50cecc64f08957a27cd04bc3",
       "app/tennis-note-coach-app/domain/schedule.js": "426a0d29260f5c6f4c89a7fe4aeaad5d8e871a74ccaf978cc8a729e55b448e5e",
       "app/tennis-note-coach-app/domain/settlement.js": "6f4837992190380f1ddafc1db989812d768cb65865a68b7a7f0aa2d0d127d1f0",
@@ -1005,7 +1006,7 @@
       "app/tennis-note-member-app/data/journal.js": "fe045bed9814c3ce73bcb8af69cee7f3ebf02f7fcfd31337464af500c26a58d3",
       "app/tennis-note-member-app/data/onboarding.js": "7da6e76b62ed91e1eb5aa1b1ef5cca6bade451276fc92a75fc47d49838cb63aa",
       "app/tennis-note-member-app/data/payment.js": "ede60b3d06539bf0eb6a5bd20ca84fee2aa913c8a6b06914e5aa62819ecbfb3a",
-      "app/tennis-note-member-app/data/push.js": "80b379e715e1b510a8fb6ce10283226aef51aa0cfab952424c2fc9e8c2fa7d5a",
+      "app/tennis-note-member-app/data/push.js": "28b66132e4c49b472636c109f5a1bfc954cdc34304f57d03677e15972fe34c31",
       "app/tennis-note-member-app/data/sync.js": "3adfb7f11185cf1dffd9da16cd114d716a29af8a7d3a2ed4bc1312843cb11c85",
       "app/tennis-note-member-app/data/tickets.js": "db387e25d353c20184663bba9170b931ed1ded0d1c9266c4016cc19f6566c19b",
       "app/tennis-note-member-app/domain/changes.js": "d1980538f8731c6f6ca2f0412119ff3b5df303573e8e25095020f062f9b63857",
