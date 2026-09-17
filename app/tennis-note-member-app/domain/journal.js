@@ -336,7 +336,7 @@ function journalWeekDateValues(dateValue = "") {
 
 function journalWeekRangeLabel(dateValues = []) {
   const first = normalizeJournalNavigationDate(dateValues[0]);
-  const last = normalizeJournalNavigationDate(dateValues.at(-1));
+  const last = normalizeJournalNavigationDate(dateValues[dateValues.length - 1]);
   if (!first || !last) return "";
   const [firstYear, firstMonth, firstDay] = first.split("-").map(Number);
   const [lastYear, lastMonth, lastDay] = last.split("-").map(Number);

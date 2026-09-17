@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.505"
-EXPECTED_RELEASE_ID = "2026.09.17.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v544"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v517"
+EXPECTED_VERSION = "1.0.506"
+EXPECTED_RELEASE_ID = "2026.09.17.02"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v545"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v518"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "FEEDBACK-ADMIN-NOTE-PRESERVATION",
@@ -29,26 +29,43 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "AUTH-NATIVE-SESSION-CONTINUITY",
     "AUTH-EMAIL-UI-HIDDEN",
     "NATIVE-PUSH-FIREBASE-FAIL-CLOSED",
+    "LEGACY-ARRAY-AT-COMPATIBILITY",
 )
 SELECTED_NET_NEW_PATHS = {
+    "app/admin/actions/coach.js",
+    "app/admin/actions/common.js",
+    "app/admin/app.js",
+    "app/admin/domain/coaches.js",
+    "app/admin/domain/tickets.js",
+    "app/admin/schedule-v2-admin.js",
+    "app/shared/tennisnote-comment-draft.js",
     "app/shared/tennisnote-data-client.js",
+    "app/shared/tennisnote-single-sheet-preview-ui.js",
     "app/shared/tennisnote-native-push.js",
     "app/shared/tennisnote-issue-reporter.js",
     "app/shared/tennisnote-runtime-environment.js",
+    "app/shared/tennisnote-ui-language.js",
     "app/tennis-note-coach-app/actions/schedule.js",
     "app/tennis-note-coach-app/app.js",
     "app/tennis-note-coach-app/data/auth.js",
     "app/tennis-note-coach-app/data/push.js",
     "app/tennis-note-coach-app/domain/records.js",
+    "app/tennis-note-coach-app/forms/coaches.js",
+    "app/tennis-note-coach-app/forms/common.js",
     "app/tennis-note-coach-app/settings.js",
     "app/tennis-note-coach-app/views/home.js",
     "app/tennis-note-member-app/actions/session.js",
     "app/tennis-note-member-app/app.js",
     "app/tennis-note-member-app/data/auth.js",
     "app/tennis-note-member-app/data/push.js",
+    "app/tennis-note-member-app/domain/common.js",
     "app/tennis-note-member-app/domain/identity.js",
+    "app/tennis-note-member-app/domain/journal.js",
+    "app/tennis-note-member-app/domain/purchase.js",
+    "app/tennis-note-member-app/domain/schedule.js",
     "app/tennis-note-member-app/forms/common.js",
     "app/tennis-note-member-app/forms/members.js",
+    "app/tennis-note-member-app/forms/schedule.js",
     "app/tennis-note-member-app/index.html",
 }
 
@@ -263,8 +280,9 @@ def generate() -> None:
         "production_authority_feature_ids": list(PRODUCTION_AUTHORITY_FEATURE_IDS),
         "selected_net_new_dev_feature_ids": list(SELECTED_NET_NEW_FEATURE_IDS),
         "selection_note": (
-            "Only the verified feedback fixes, native authentication session continuity, and "
-            "hidden email authentication entry points are added beyond the production authority tree."
+            "Only the verified feedback fixes, native authentication session continuity, hidden "
+            "email authentication entry points, push fail-closed behavior, and legacy Array "
+            "compatibility are added beyond the production authority tree."
         ),
         "dev_ahead_commits": classify_commits(),
     }

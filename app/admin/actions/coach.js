@@ -113,7 +113,7 @@ function applyServerCoachSnapshot({
     coach.deletedAt = role.deleted_at || "";
     coach.authProviders = authProvidersFromLinks(authLinks);
     coach.authSwitch = pendingAuthSwitchByUserId.get(role.user_id) || null;
-    coach.lastSignInAt = authLinks.map((link) => link.last_sign_in_at).filter(Boolean).sort().at(-1) || "";
+    coach.lastSignInAt = authLinks.map((link) => link.last_sign_in_at).filter(Boolean).sort().slice(-1)[0] || "";
     coach.approvalStatus = role.status || "pending";
     const availabilityRows = availabilityByRoleId.get(role.id) || [];
     coach.workBlocks = coachBlocksFromAvailability(availabilityRows, "available");

@@ -1797,7 +1797,7 @@
           const stateName = !coach ? "unavailable" : occupied ? "occupied" : history ? "history" : locked ? "manual_override" : "available";
           const closureLabel = closure?.label || "";
           const runKey = [roleId, stateName, closureLabel].join("|");
-          const previousRun = runs.at(-1);
+          const previousRun = runs[runs.length - 1];
           if (previousRun && previousRun.key === runKey && !shiftStart) {
             previousRun.slotCount += 1;
           } else {
@@ -1844,7 +1844,7 @@
               durationMinutes: defaultAddDurationMinutes,
               allowLockedTimeOverride: true,
             });
-            const previousSegment = startSegments.at(-1);
+            const previousSegment = startSegments[startSegments.length - 1];
             if (previousSegment?.valid === valid) previousSegment.slotCount += 1;
             else startSegments.push({ valid, startOffset: offset, slotCount: 1 });
           }
@@ -1895,7 +1895,7 @@
       });
     });
 
-    return `<section class="schedule-v2-week"><div class="schedule-v2-week-title"><strong>주간 전체</strong><span>${times[0]}~${minutesTime(timeMinutes(times.at(-1)) + 10)} · 날짜별 동시 근무 열</span></div><div class="schedule-v2-week-scroll" role="region" tabindex="0" aria-label="${escapeHtml(`${dateLabel(dates[0])}부터 ${dateLabel(dates[6])}까지 주간 레슨시간표, 가로와 세로로 이동 가능`)}"><div class="schedule-v2-week-sheet" style="grid-template-columns:${templateColumns};grid-template-rows:34px 46px repeat(${times.length}, var(--v2-week-row-height));min-width:calc(56px + ${totalLanes} * 96px)"><div class="schedule-v2-week-corner" style="grid-row:1 / span 2;grid-column:1">시간</div>${headerCells}${timeCells}${bodyCells.join("")}${lessonCards.join("")}</div></div></section>`;
+    return `<section class="schedule-v2-week"><div class="schedule-v2-week-title"><strong>주간 전체</strong><span>${times[0]}~${minutesTime(timeMinutes(times[times.length - 1]) + 10)} · 날짜별 동시 근무 열</span></div><div class="schedule-v2-week-scroll" role="region" tabindex="0" aria-label="${escapeHtml(`${dateLabel(dates[0])}부터 ${dateLabel(dates[6])}까지 주간 레슨시간표, 가로와 세로로 이동 가능`)}"><div class="schedule-v2-week-sheet" style="grid-template-columns:${templateColumns};grid-template-rows:34px 46px repeat(${times.length}, var(--v2-week-row-height));min-width:calc(56px + ${totalLanes} * 96px)"><div class="schedule-v2-week-corner" style="grid-row:1 / span 2;grid-column:1">시간</div>${headerCells}${timeCells}${bodyCells.join("")}${lessonCards.join("")}</div></div></section>`;
   }
 
   function renderPeriod(period, periodIndex) {
@@ -1988,7 +1988,7 @@
       const filtered = search && !searchText.includes(search);
       return `<div class="schedule-v2-history-card ${filtered ? "is-filtered" : ""}" data-v2-search-text="${escapeHtml(searchText)}" style="grid-row:${rowIndex + 2} / span ${span};grid-column:${laneIndex + 2}"><button type="button" class="schedule-v2-history-open" data-v2-lesson-id="${escapeHtml(lesson.id)}" aria-label="${escapeHtml(`${historyLabel} 기록 확인`)}"><strong>${escapeHtml(memberLabel)}</strong><span>${escapeHtml(historyLabel.replace(`${memberLabel} `, ""))}</span></button>${lessonHistoryActions(lesson)}</div>`;
     }).join("");
-    const endTime = minutesTime(timeMinutes(period.times.at(-1)) + 10);
+    const endTime = minutesTime(timeMinutes(period.times[period.times.length - 1]) + 10);
     return `<section class="schedule-v2-period"><div class="schedule-v2-period-title"><strong>${period.times[0]}~${endTime}</strong><span>${escapeHtml(period.coaches.map((coach) => coach.name.replace(/\s*코치$/, "")).join(" · "))}</span></div><div class="schedule-v2-period-scroll"><div class="schedule-v2-period-grid" style="--v2-coach-count:${period.coaches.length}" data-v2-period="${periodIndex}"><div class="schedule-v2-corner" style="grid-row:1;grid-column:1">시간</div>${period.coaches.map((coach, index) => `<div class="schedule-v2-coach-head" style="grid-row:1;grid-column:${index + 2};--coach-tone:${escapeHtml(coach.color || "#08795a")}">${escapeHtml(coach.name.replace(/\s*코치$/, ""))}</div>`).join("")}${timeCells}${slots}${historyCards}${lessonCards}</div></div></section>`;
   }
 
@@ -2564,7 +2564,7 @@
       .map((ticket) => ticket.startsOn || ticket.starts_on)
       .filter(Boolean)
       .sort()
-      .at(-1) || selectedDate;
+      .slice(-1)[0] || selectedDate;
     const earliestEnd = selectedTickets
       .map((ticket) => ticket.expiresOn || ticket.expires_on)
       .filter(Boolean)
@@ -5094,7 +5094,7 @@
         .filter((element) => !element.hidden && element.getClientRects().length > 0);
       if (!focusable.length) return;
       const first = focusable[0];
-      const last = focusable.at(-1);
+      const last = focusable[focusable.length - 1];
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
