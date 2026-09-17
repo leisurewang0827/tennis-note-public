@@ -183,6 +183,14 @@ async function syncNativePushRegistration(profile = null, requestPermission = fa
     return false;
   }
 
+  if (platform === "android") {
+    const readiness = await window.TennisNoteNativePushReadiness?.().catch(() => null);
+    if (readiness?.ready !== true) {
+      setPushNotificationState("unavailable", "앱 알림 준비 필요", "앱 알림 구성에 문제가 있어 수업 기능만 안전하게 계속 사용합니다.");
+      return false;
+    }
+  }
+
   await bindNativePushListeners(plugin);
   if (platform === "android") {
     await plugin.createChannel({
