@@ -62,20 +62,17 @@
     const explicit = candidate?.nativePlatforms?.[platform] || {};
     const current = currentRelease().nativeShell || {};
     const platformVersion = platform === "ios" ? current.iosVersion : current.androidVersion;
-    const platformBuild = platform === "ios" ? current.iosBuild : current.androidBuild;
     const availability = String(explicit.availability || "unknown").trim().toLowerCase();
-    const storeAvailable = availability === "available";
+    const availableVersion = explicit.availableVersion || explicit.latestVersion;
+    // Store evidence, never the bundled/PWA/prepared version, authorizes an update.
+    const storeAvailable = availability === "available" && /^\d+\.\d+\.\d+$/.test(String(availableVersion || ""));
     return {
       availability,
       storeAvailable,
       minimumVersion: explicit.minimumVersion || candidate?.minimumNativeShellVersion || platformVersion || "0",
       minimumBuild: normalizeBuild(explicit.minimumBuild),
-      latestVersion: storeAvailable
-        ? explicit.availableVersion || explicit.latestVersion || platformVersion || "0"
-        : platformVersion || "0",
-      latestBuild: storeAvailable
-        ? normalizeBuild(explicit.availableBuild || explicit.latestBuild || platformBuild)
-        : normalizeBuild(platformBuild),
+      latestVersion: storeAvailable ? availableVersion : "0",
+      latestBuild: storeAvailable ? normalizeBuild(explicit.availableBuild ?? explicit.latestBuild) : 0,
       storeUrl: explicit.storeUrl || (platform === "ios"
         ? "https://apps.apple.com/app/id6790994818"
         : "https://play.google.com/store/apps/details?id=com.tennisclubhouse.tennisnote"),
@@ -88,17 +85,14 @@
     const policy = nativePlatformPolicy(candidate, platform);
     const installedBuild = normalizeBuild(installed.build);
     if (!policy.storeAvailable) {
-      return {
-        status: "current",
-        platform,
-        policy,
-        installed: { ...installed, build: installedBuild },
-      };
+      return { status: "current", platform, policy, installed: { ...installed, build: installedBuild } };
     }
     const belowMinimumVersion = compareVersions(installed.version, policy.minimumVersion) < 0;
-    const belowMinimumBuild = policy.minimumBuild > 0 && installedBuild > 0 && installedBuild < policy.minimumBuild;
+    const belowMinimumBuild = compareVersions(installed.version, policy.minimumVersion) === 0
+      && policy.minimumBuild > 0 && installedBuild > 0 && installedBuild < policy.minimumBuild;
     const belowLatestVersion = compareVersions(installed.version, policy.latestVersion) < 0;
-    const belowLatestBuild = policy.latestBuild > 0 && installedBuild > 0 && installedBuild < policy.latestBuild;
+    const belowLatestBuild = compareVersions(installed.version, policy.latestVersion) === 0
+      && policy.latestBuild > 0 && installedBuild > 0 && installedBuild < policy.latestBuild;
     return {
       status: belowMinimumVersion || belowMinimumBuild
         ? "required"

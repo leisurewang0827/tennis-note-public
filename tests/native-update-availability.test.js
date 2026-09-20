@@ -47,8 +47,9 @@ test("운영 후보는 공개 Android 103만 구버전에 선택 업데이트로
   assert.equal(android.availability, "available");
   assert.equal(android.latestVersion, "1.0.474");
   assert.equal(android.latestBuild, 103);
-  assert.equal(android.preparedVersion, "1.0.474");
-  assert.equal(android.preparedBuild, 103);
+  assert.equal(android.preparedVersion, null);
+  assert.equal(android.preparedBuild, null);
+  assert.equal(android.preparedAvailability, "not_verified");
   const result = updater().evaluateNativeUpdate(productionCandidate, {
     platform: "android", version: "1.0.428", build: 101,
   });
@@ -75,15 +76,26 @@ test("공개 상태가 미확인으로 바뀌면 Android store 안내는 fail cl
   }
 });
 
-test("iOS 공개 101과 기존 안내 정책은 그대로 보존한다", () => {
+test("iOS 공개 버전은 확인값을 사용하고 빌드 번호는 추정하지 않는다", () => {
   assert.deepEqual(productionCandidate.nativePlatforms.ios, {
     minimumVersion: "1.0.260", minimumBuild: 59,
-    latestVersion: "1.0.428", latestBuild: 101,
-    preparedVersion: "1.0.428", preparedBuild: 101,
+    latestVersion: "1.0.474", latestBuild: null,
+    availability: "available", latestBuildVerification: "not_verified",
+    preparedVersion: null, preparedBuild: null, preparedAvailability: "not_verified",
     storeUrl: "https://apps.apple.com/app/id6790994818",
   });
-  for (const app of [{ version: "1.0.428", build: 101 }, { version: "1.0.474", build: 106 }]) {
+  assert.equal(updater().evaluateNativeUpdate(productionCandidate, { platform: "ios", version: "1.0.428", build: 101 }).status, "optional");
+  for (const app of [{ version: "1.0.474", build: 101 }, { version: "1.0.507", build: 1 }]) {
     assert.equal(updater().evaluateNativeUpdate(productionCandidate, { platform: "ios", ...app }).status, "current");
+  }
+});
+
+test("공개 버전이 없거나 준비본만 있으면 설치 셸 값으로 추정하지 않는다", () => {
+  for (const platform of ["android", "ios"]) {
+    const candidate = structuredClone(productionCandidate);
+    delete candidate.nativePlatforms[platform].latestVersion;
+    Object.assign(candidate.nativePlatforms[platform], { preparedVersion: "9.9.999", preparedBuild: 9999 });
+    assert.equal(updater().evaluateNativeUpdate(candidate, { platform, version: "1.0.1", build: 1 }).status, "current");
   }
 });
 
