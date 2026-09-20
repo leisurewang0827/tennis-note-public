@@ -325,6 +325,10 @@ async function refreshAuthProviderCapabilities({ force = false } = {}) {
 
 async function loginWithEmail(event) {
   event.preventDefault();
+  if (!emailPasswordAuthUiEnabled()) {
+    setEmailAuthStatus(emailAuthUiUnavailableMessage, "alert");
+    return;
+  }
   const form = event.currentTarget;
   const submitButton = form.querySelector('button[type="submit"]');
   submitButton.disabled = true;
@@ -375,6 +379,10 @@ async function logout() {
 
 async function signUpWithEmail(event) {
   event.preventDefault();
+  if (!emailPasswordAuthUiEnabled()) {
+    setEmailAuthStatus(emailAuthUiUnavailableMessage, "alert");
+    return;
+  }
   const form = event.currentTarget;
   const submitButton = form.querySelector('button[type="submit"]');
   const email = $("#memberSignupEmail").value.trim().toLowerCase();
@@ -425,6 +433,10 @@ async function signUpWithEmail(event) {
 }
 
 async function requestPasswordReset() {
+  if (!emailPasswordAuthUiEnabled()) {
+    setEmailAuthStatus(emailAuthUiUnavailableMessage, "alert");
+    return;
+  }
   const emailInput = $("#memberLoginEmail");
   const button = $("#memberPasswordResetButton");
   const email = emailInput?.value.trim().toLowerCase() || "";
@@ -447,6 +459,10 @@ async function requestPasswordReset() {
 
 async function updateRecoveredPassword(event) {
   event.preventDefault();
+  if (!emailPasswordAuthUiEnabled()) {
+    setEmailAuthStatus(emailAuthUiUnavailableMessage, "alert");
+    return;
+  }
   const form = event.currentTarget;
   const submitButton = form.querySelector('button[type="submit"]');
   const password = $("#memberRecoveryPassword").value;

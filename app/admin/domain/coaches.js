@@ -840,7 +840,7 @@ function coachSettlementEffectiveState(draft) {
       String(term.effective_from || "") <= today
       && (!term.effective_to || String(term.effective_to) >= today)
     ))
-    .at(-1) || null;
+    .slice(-1)[0] || null;
   const future = terms.find((term) => String(term.effective_from || "") > today) || null;
   if (current || future) return { current, future, today };
   const fallback = {

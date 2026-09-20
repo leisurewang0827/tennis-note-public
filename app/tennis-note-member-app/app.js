@@ -346,8 +346,10 @@ const curriculumSkillTracks = curriculumCatalog.tracks?.length
 
 let coachModeNavigationStarted = false;
 let oauthLoginInFlightProvider = "";
+const emailAuthUiUnavailableMessage = "이메일 로그인·가입·비밀번호 변경은 현재 앱에서 제공하지 않습니다. 네이버·카카오·Apple 로그인 또는 고객지원을 이용해 주세요.";
 let emailAuthMode = "login";
-let emailPasswordRecoveryPending = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("type") === "recovery";
+let emailPasswordRecoveryPending = emailPasswordAuthUiEnabled()
+  && new URLSearchParams(window.location.hash.replace(/^#/, "")).get("type") === "recovery";
 let identityPhoneVerification = {
   phone: "",
   status: "unverified",
@@ -1113,7 +1115,7 @@ let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.501");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.508");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -1198,7 +1200,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.501",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.508",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

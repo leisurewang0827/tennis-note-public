@@ -227,6 +227,14 @@ async function applySupabaseMemberSession(showNotice = false) {
   const session = await client.ensureSession?.() || client.getSession?.();
   if (!session?.access_token) return false;
   if (emailPasswordRecoveryPending) {
+    if (!emailPasswordAuthUiEnabled()) {
+      emailPasswordRecoveryPending = false;
+      await client.signOut?.().catch(() => {});
+      $("#appScreen").hidden = true;
+      $("#loginScreen").hidden = false;
+      setEmailAuthStatus(emailAuthUiUnavailableMessage, "alert");
+      return false;
+    }
     $("#appScreen").hidden = true;
     $("#loginScreen").hidden = false;
     setEmailAuthMode("recovery", {
@@ -378,6 +386,15 @@ async function handleOAuthResult(event) {
   if (event?.detail?.ok) {
     event.preventDefault();
     if (event?.detail?.callbackType === "recovery") {
+      if (!emailPasswordAuthUiEnabled()) {
+        emailPasswordRecoveryPending = false;
+        await window.TennisNoteDataClient?.signOut?.().catch(() => {});
+        $("#appScreen").hidden = true;
+        $("#loginScreen").hidden = false;
+        setMemberSessionRestoring(false);
+        setEmailAuthStatus(emailAuthUiUnavailableMessage, "alert");
+        return;
+      }
       emailPasswordRecoveryPending = true;
       $("#appScreen").hidden = true;
       $("#loginScreen").hidden = false;

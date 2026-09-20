@@ -188,6 +188,9 @@ function oauthLoginErrorMessage(error, provider = "간편") {
   if (code.includes("server_error") || code.includes("unexpected_failure") || code.includes("request_timeout")) {
     return `${provider} 로그인 서버 응답이 늦어졌습니다. 잠시 후 다시 시도해 주세요.`;
   }
+  if (code.includes("native_oauth_browser_load_incomplete")) {
+    return `${provider} 인증 화면을 불러오지 못했습니다. 네트워크를 확인한 뒤 한 번만 다시 시도해 주세요.`;
+  }
   return `${provider} 로그인을 완료하지 못했습니다. 다시 시도해 주세요.`;
 }
 

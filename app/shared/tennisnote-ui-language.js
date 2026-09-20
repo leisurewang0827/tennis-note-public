@@ -355,7 +355,7 @@
         run.forEach((entry) => runByIndex.set(entry.index, descriptor));
       };
       ordered.forEach((entry) => {
-        if (!run.length || run.at(-1).end === entry.start) {
+        if (!run.length || run[run.length - 1].end === entry.start) {
           run.push(entry);
           return;
         }

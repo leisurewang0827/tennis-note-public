@@ -30,6 +30,17 @@ async function syncNativeCoachPushRegistration(profile = null, requestPermission
     setCoachPushNotificationState("disabled", "앱 알림 꺼짐", "이 기기에서는 알림을 보내지 않습니다. 알림 켜기를 누르면 다시 받을 수 있습니다.");
     return false;
   }
+  if (platform === "android") {
+    const readiness = await window.TennisNoteNativePushReadiness?.().catch(() => null);
+    if (readiness?.notificationsEnabled === false && readiness?.runtimePermissionRequired !== true) {
+      setCoachPushNotificationState("denied", "휴대폰 알림이 꺼져 있음", "휴대폰 설정에서 Tennis Note 알림을 허용해 주세요.");
+      return false;
+    }
+    if (readiness?.ready !== true) {
+      setCoachPushNotificationState("unavailable", "앱 알림 준비 필요", "앱 알림 구성에 문제가 있어 코치 업무는 안전하게 계속 사용할 수 있습니다.");
+      return false;
+    }
+  }
   await bindNativeCoachPushListeners(plugin);
   if (platform === "android") {
     await plugin.createChannel?.({

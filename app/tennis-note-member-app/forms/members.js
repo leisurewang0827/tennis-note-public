@@ -33,7 +33,7 @@ function mergeMemberScheduleWindows(windows) {
     .filter((window) => window.startMinutes < window.endMinutes)
     .sort((left, right) => left.startMinutes - right.startMinutes)
     .reduce((merged, window) => {
-      const previous = merged.at(-1);
+      const previous = merged[merged.length - 1];
       if (!previous || window.startMinutes > previous.endMinutes) {
         merged.push({ ...window });
       } else {
@@ -224,12 +224,16 @@ function syncAuthProviderCapabilityControls() {
     const appleCapability = identityAuthCapabilities.providers.apple;
     appleNote.hidden = appleCapability === true;
     appleNote.textContent = appleCapability === false
-      ? "Apple 로그인은 개발 환경에서 사용할 수 없습니다. 네이버·카카오·이메일 로그인을 이용해 주세요."
-      : "Apple 로그인 가능 여부를 확인하지 못했습니다. 네이버·카카오·이메일 로그인을 이용해 주세요.";
+      ? "Apple 로그인은 개발 환경에서 사용할 수 없습니다. 네이버·카카오 로그인을 이용해 주세요."
+      : "Apple 로그인 가능 여부를 확인하지 못했습니다. 네이버·카카오 로그인을 이용해 주세요.";
   }
   const emailPanel = $("#memberEmailAuthPanel");
-  if (emailPanel && identityAuthCapabilities.providers.email !== null) {
-    emailPanel.hidden = identityAuthCapabilities.providers.email === false;
+  if (emailPanel) {
+    const emailUiAvailable = emailPasswordAuthUiEnabled()
+      && identityAuthCapabilities.providers.email !== false;
+    emailPanel.hidden = !emailUiAvailable;
+    emailPanel.inert = !emailUiAvailable;
+    emailPanel.setAttribute("aria-hidden", String(!emailUiAvailable));
   }
   syncIdentityPhoneCapabilityControl();
 }

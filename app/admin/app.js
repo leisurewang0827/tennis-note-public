@@ -1044,7 +1044,7 @@ async function refreshMemberAuthManagement(member) {
       .map((link) => link.last_sign_in_at)
       .filter(Boolean)
       .sort()
-      .at(-1) || "";
+      .slice(-1)[0] || "";
     member.authManagementLoadFailed = false;
     return true;
   } catch (error) {
