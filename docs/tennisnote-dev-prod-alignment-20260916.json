@@ -13,11 +13,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.508",
-    "release_id": "2026.09.20.01",
-    "deployed_at": "2026-09-20T16:47:56+09:00",
-    "member_cache": "tennis-note-member-pwa-v547",
-    "coach_cache": "tennis-note-coach-mode-v520"
+    "version": "1.0.509",
+    "release_id": "2026.09.20.02",
+    "deployed_at": "2026-09-20T20:47:02+09:00",
+    "member_cache": "tennis-note-member-pwa-v548",
+    "coach_cache": "tennis-note-coach-mode-v521"
   },
   "allowed_differences": [
     "app version literals",
@@ -52,9 +52,11 @@
     "AUTH-EMAIL-UI-HIDDEN",
     "NATIVE-PUSH-FIREBASE-FAIL-CLOSED",
     "LEGACY-ARRAY-AT-COMPATIBILITY",
-    "MEMBERSHIP-EFFECTIVE-STATE-PRIVATE-A7AA949C"
+    "MEMBERSHIP-EFFECTIVE-STATE-PRIVATE-A7AA949C",
+    "PUBLIC-STORE-AVAILABILITY-PRIVATE-EDFFC240",
+    "SHARED-44PX-TARGETS-PRIVATE-EDFFC240"
   ],
-  "selection_note": "Only the verified feedback fixes, native authentication session continuity, hidden email authentication entry points, push fail-closed behavior, and legacy Array compatibility plus the strictly source-verified membership effective-state change from private a7aa949c2db64edd1fbfb665b8a8cf03690e8160 are added beyond the production authority tree. The production hotfix base is 3d215f7da47fc6f002e77d420f1682c848c93e40; existing hash assertions remain exact.",
+  "selection_note": "Only the verified feedback fixes, native authentication session continuity, hidden email authentication entry points, push fail-closed behavior, and legacy Array compatibility plus the strictly source-verified membership effective-state change from private a7aa949c2db64edd1fbfb665b8a8cf03690e8160 are added beyond the production authority tree. The production hotfix base is 3d215f7da47fc6f002e77d420f1682c848c93e40. Development 1.0.509 adds only source-verified store availability and shared 44px contracts from private edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact.",
   "dev_ahead_commits": [
     {
       "sha": "1ae65617725a7c1fe4eab6516d8785ab93708529",
@@ -869,7 +871,7 @@
       "app/admin/views/settings.js": "ff6616195c4771d9113ae1c79cbaf91daafe67964737dca4706e134e90a8c1ee",
       "app/admin/views/tickets.js": "2c496d5ddab4c5cdacbbd0259abfb53755449279839179f20a8da0f0c0f3ef32",
       "app/index.html": "55abd59b38768e1f487549e52a003d212777c53ae04cbdc28c694a1f88cb28aa",
-      "app/release.json": "3dd4941637c9f69f856c866d984a2fa01ee1f555f9b9fb7f227d9150932c7fb3",
+      "app/release.json": "08387f6e23b44990341a19c27bb10e366ae0a9e06d13292ee51f579f98152f33",
       "app/shared/tennisnote-app-common.js": "8fb546c9886105dd9c883d4f6224fdb9cca2b02a13de9ff5b5617f3bc0f52393",
       "app/shared/tennisnote-bottom-sheet.css": "402009576f6b34b8cd9d3b13e83115526492a99c4fd362c512727edf95ef8f68",
       "app/shared/tennisnote-bottom-sheet.js": "2ab8c6e5aec90f19e884e35ac4f7dfc283ede16965c5d73fc0651a0828db77fa",
@@ -884,8 +886,8 @@
       "app/shared/tennisnote-mode-transition.js": "af3e963d9050fc0176bea07f96d5dbdfaa80cbaad3bd9e093ccc6c9f118972e7",
       "app/shared/tennisnote-native-push.js": "a9375d6bbb3a1bad75a8c4d854191763d85529bbbeec4a1cfe86be8fc6139968",
       "app/shared/tennisnote-product-catalog.js": "758af3df9ade3da8f84b1b88e0de8e39a3e6983c1a9ea1bf7d7d7f8ae3a1f135",
-      "app/shared/tennisnote-release-updater.js": "cd6ac91ba23ecb73d79c4fe2467d643239a5809bf1ce6ce9cfe7a0d808ad12e1",
-      "app/shared/tennisnote-release.js": "3da9096051181e6731291e992fd902e1846b8e253d9ab71a599ff8814daca7d5",
+      "app/shared/tennisnote-release-updater.js": "4e622f94b097f923ac62f8b5f56d8ed6508cb67e3625562782cc22d761814763",
+      "app/shared/tennisnote-release.js": "95636d1ff4e5c8be518e16b29b70217f8aae30ec2b3ecd5d5ddbf49f7697292d",
       "app/shared/tennisnote-runtime-environment.js": "13cbdecefccc49838a8607aa63fa3fc7a5fca2c7ec23999d2b180ea4891c5f6d",
       "app/shared/tennisnote-schedule-lanes.js": "84a6a25297c2f6a199b726a981ccedb9174df2c06588c1cabf15734a1651ee91",
       "app/shared/tennisnote-schedule-revision.js": "bf21215aa4205943b2bf63f44cfaa8c99e4efd2319db3eef5a45d8fc7134e93f",
@@ -897,7 +899,7 @@
       "app/shared/tennisnote-single-sheet-worker.js": "915d6efce29990ee34f7677048d741d815abcad70fbd43ad692bf99c5adbfb9c",
       "app/shared/tennisnote-ticket-policy-history.js": "20b38f9a0bb0e1109c5b87bb17799b323860f7c0f7f8a69d32d24c22d4d10e96",
       "app/shared/tennisnote-ticket-state.js": "09ba7b7d5f238f080daadde1ac31d1298c2abc5ced20df5c2eabaa3ca177b2e4",
-      "app/shared/tennisnote-ui-foundation.css": "a008e68dd26582e9af39adcd0c4aa5e9422c9d8985fc6fd7c4472cfbe5a8386c",
+      "app/shared/tennisnote-ui-foundation.css": "b058ef464555b0ed4d3726a575956068e86b681a4a8ee0b198e4f056cd63e41b",
       "app/shared/tennisnote-ui-language.js": "e0ddd7da6ec90bc5f0211fd19508156657f2c7842c48f266f5b9cd263fbd0867",
       "app/shared/vendor/xlsx.LICENSE": "4d2a38ac35cda06a555c84074a819d413339cd3691b822cae50f8f322fe01f64",
       "app/shared/vendor/xlsx.full.min.js": "c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99",
