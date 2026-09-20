@@ -80,7 +80,7 @@ function purchaseEffectiveStartDate() {
   const nextDate = new Date(`${sourceTicket.expiresOn}T12:00:00`);
   if (Number.isNaN(nextDate.getTime())) return localDateKey();
   nextDate.setDate(nextDate.getDate() + 1);
-  return [localDateKey(), localDateKey(nextDate)].sort().at(-1) || localDateKey();
+  return [localDateKey(), localDateKey(nextDate)].sort().slice(-1)[0] || localDateKey();
 }
 
 function purchaseScheduleWeek() {

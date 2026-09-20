@@ -651,7 +651,7 @@ function memberDesktopScheduleBackgroundRuns(policy, day, coach, scheduleTimeLis
     const isWorking = !breakRule && isMemberCoachWorking(coach, day, time, 10);
     const state = breakRule ? "blocked" : isWorking ? "base" : "off";
     const label = breakRule ? (breakRule.label || "브레이크") : state === "off" ? "근무외" : "";
-    const previous = runs.at(-1);
+    const previous = runs[runs.length - 1];
     if (previous && previous.state === state && previous.label === label) {
       previous.span += 1;
       return runs;

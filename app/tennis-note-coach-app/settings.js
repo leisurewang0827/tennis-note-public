@@ -10,6 +10,8 @@ const storageKey = "tennis-note-coach-live-v1";
 
 const sharedStorageKey = "tennis-note-shared-live-v1";
 
+const coachPendingAuthorityVersion = 1;
+
 const appModePreferenceKey = "tennis-note-app-mode";
 
 const coachPushDeviceStorageKey = "tennis-note-push-device-id";

@@ -92,7 +92,7 @@ function memberMobileScheduleSegments(day, policy, baseLessons, scheduleLessons 
   if (range === "all") return windows;
   const focusLesson = baseLessons.find((lesson) => lesson.day === day && isOwnMemberScheduleLesson(lesson))
     || baseLessons.find((lesson) => lesson.day === day && lesson.status === "available");
-  const fallbackWindow = windows.length ? (days.indexOf(day) < 5 ? windows.at(-1) : windows[0]) : null;
+  const fallbackWindow = windows.length ? (days.indexOf(day) < 5 ? windows[windows.length - 1] : windows[0]) : null;
   const focusMinutes = focusLesson ? minutesFromTime(focusLesson.time) : fallbackWindow?.startMinutes;
   const matching = windows.find((window) => focusMinutes >= window.startMinutes && focusMinutes < window.endMinutes) || fallbackWindow;
   if (!matching) return [];

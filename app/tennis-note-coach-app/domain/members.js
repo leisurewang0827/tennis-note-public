@@ -6,14 +6,11 @@
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
 function coachRosterTicketState(ticket = {}, today = localDateKey()) {
-  const status = String(ticket.status || "").toLowerCase();
-  const startsOn = String(ticket.startsOn || "");
-  const expiresOn = String(ticket.expiresOn || "");
-  const remaining = Number(ticket.remainingSessions || 0);
-  if (["refunded", "cancelled", "voided"].includes(status)) return "expired";
-  if (status === "pending_payment" || (startsOn && startsOn > today)) return "paused_pending";
-  if (status === "paused") return "paused_pending";
-  if (status === "expired" || remaining <= 0 || (expiresOn && expiresOn < today)) return "expired";
+  const effective = window.TennisNoteTicketState?.classify(ticket, today);
+  if (["expired", "exhausted", "refunded", "cancelled", "voided"].includes(effective?.state)) return "expired";
+  if (["pending_payment", "upcoming", "paused"].includes(effective?.state)) return "paused_pending";
+  if (effective?.canUse !== true) return "attention";
+  const { expiresOn, remaining } = effective;
   const expiringBoundary = new Date(`${today}T12:00:00`);
   expiringBoundary.setDate(expiringBoundary.getDate() + 14);
   const expiringOn = localDateKey(expiringBoundary);

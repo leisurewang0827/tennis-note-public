@@ -3,8 +3,90 @@
 // 코치가 누른 것을 처리한다. 화면을 읽고 서버를 부르고 상태를 바꾼다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
+function coachLessonLogHasUnsyncedDraft(log = {}) {
+  const participantDraftDirty = (Array.isArray(log.participantResults) ? log.participantResults : []).some((result) => (
+    result?.localCoachCommentDirty === true
+    || result?.localNextCurriculumDirty === true
+  ));
+  return ["동기화 대기", "동기화 실패"].includes(log.status)
+    || log.localCoachCommentDirty === true
+    || log.localNextCurriculumDirty === true
+    || participantDraftDirty;
+}
+
+function coachPendingAuthorityReady() {
+  const authority = state.pendingLessonAuthority;
+  if (!authority || Number(authority.version) !== coachPendingAuthorityVersion) return false;
+  if (String(authority.profileId || "") !== String(state.liveProfileId || "")) return false;
+  if (String(authority.coachRoleId || "") !== currentCoachRoleId()) return false;
+  if (String(authority.branchId || "") !== String(state.coach?.branchId || "")) return false;
+  return Array.isArray(authority.lessonIds);
+}
+
+function coachAuthoritativePendingLessonIds() {
+  if (!coachPendingAuthorityReady()) return null;
+  return new Set(state.pendingLessonAuthority.lessonIds.map((id) => String(id || "")).filter(Boolean));
+}
+
+function coachPendingAuthorityWindow(workspace = {}, today = new Date()) {
+  const todayKey = localDateKey(today);
+  const cutoffDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+  const cutoffKey = localDateKey(cutoffDate);
+  const from = String(workspace.from || "");
+  const to = String(workspace.to || "");
+  return {
+    ready: Boolean(from && to && from <= cutoffKey && to >= todayKey),
+    from: cutoffKey,
+    to: todayKey,
+  };
+}
+
+function reconcileCoachPendingCacheAfterServerReadback(workspace = {}, mappedLessons = [], previousLiveLessonsById = new Map()) {
+  const window = coachPendingAuthorityWindow(workspace);
+  if (!window.ready || !state.liveProfileId || !currentCoachRoleId() || !state.coach?.branchId) return false;
+  const lessonsById = new Map(mappedLessons.map((lesson) => [String(lesson.serverLessonId || ""), lesson]));
+  const pendingLessonIds = mappedLessons
+    .filter((lesson) => (
+      lesson.serverStatus === "scheduled"
+      && lesson.lessonDate >= window.from
+      && lesson.lessonDate <= window.to
+      && lesson.v2Permissions?.canProcess === true
+      && Array.isArray(lesson.v2Participants)
+      && lesson.v2Participants.length > 0
+      && !lesson.v2Participants.every((participant) => participant.recordStatus === "final")
+    ))
+    .map((lesson) => String(lesson.serverLessonId || ""))
+    .filter(Boolean);
+
+  state.pendingLessonAuthority = {
+    version: coachPendingAuthorityVersion,
+    profileId: String(state.liveProfileId || ""),
+    coachRoleId: currentCoachRoleId(),
+    branchId: String(state.coach.branchId || ""),
+    from: window.from,
+    to: window.to,
+    lessonIds: [...new Set(pendingLessonIds)],
+    syncedAt: new Date().toISOString(),
+  };
+
+  if (Number(state.pendingAuthorityCacheVersion) >= coachPendingAuthorityVersion) return true;
+  state.lessonLogs = state.lessonLogs.filter((log) => {
+    const serverLessonId = String(log.serverLessonId || "");
+    if (!serverLessonId || coachLessonLogHasUnsyncedDraft(log)) return true;
+    const currentLesson = lessonsById.get(serverLessonId);
+    if (currentLesson) return true;
+    const previousLesson = previousLiveLessonsById.get(serverLessonId);
+    const previousDate = String(previousLesson?.lessonDate || log.lessonDate || "");
+    if (!previousDate || previousDate < String(workspace.from || "") || previousDate > String(workspace.to || "")) return true;
+    return false;
+  });
+  state.pendingAuthorityCacheVersion = coachPendingAuthorityVersion;
+  return true;
+}
+
 function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster = null, legacyChangeRequests = []) {
   if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
+  const previousLiveLessonsById = new Map((state.liveLessons || []).map((lesson) => [String(lesson.serverLessonId || ""), lesson]));
   const cancelledLessonIds = new Set(
     workspace.lessons
       .filter((lesson) => String(lesson.status || "").toLowerCase() === "cancelled")
@@ -12,7 +94,10 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       .filter(Boolean),
   );
   if (cancelledLessonIds.size) {
-    state.lessonLogs = state.lessonLogs.filter((log) => !cancelledLessonIds.has(String(log.serverLessonId || "")));
+    state.lessonLogs = state.lessonLogs.filter((log) => (
+      !cancelledLessonIds.has(String(log.serverLessonId || ""))
+      || coachLessonLogHasUnsyncedDraft(log)
+    ));
   }
   state.scheduleOperationDays = Array.isArray(workspace.operationDays) ? workspace.operationDays : [];
   const tickets = Array.isArray(roster?.tickets)
@@ -43,6 +128,7 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
   ));
   state.liveLessons = [...retainedLessons, ...mappedLessons, ...mappedOneDay]
     .filter((lesson, index, items) => items.findIndex((candidate) => candidate.id === lesson.id) === index);
+  reconcileCoachPendingCacheAfterServerReadback(workspace, mappedLessons, previousLiveLessonsById);
 
   const rawLessonsById = new Map((workspace.lessons || []).map((lesson) => [lesson.id, lesson]));
   const coachesByRoleId = new Map((workspace.coaches || []).map((coach) => [coach.roleId, coach]));
@@ -129,7 +215,8 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       active: "수강중",
       expiring: "만료 임박",
       paused_pending: ticket.status === "paused" ? "휴회" : ticket.status === "pending_payment" ? "결제 대기" : "시작 예정",
-      expired: "만료",
+      expired: window.TennisNoteTicketState?.label(ticket, todayIso) || "상태 확인 필요",
+      attention: "상태 확인 필요",
     }[statusCategory] || "확인 필요";
     return {
       id: member.id,

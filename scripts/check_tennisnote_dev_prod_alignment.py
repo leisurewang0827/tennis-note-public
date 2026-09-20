@@ -18,10 +18,61 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.501"
-EXPECTED_RELEASE_ID = "2026.09.16.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v540"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v513"
+EXPECTED_VERSION = "1.0.508"
+EXPECTED_RELEASE_ID = "2026.09.20.01"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v547"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v520"
+
+SELECTED_NET_NEW_FEATURE_IDS = (
+    "FEEDBACK-ADMIN-NOTE-PRESERVATION",
+    "COACH-SERVER-FEEDBACK-PENDING-AUTHORITY",
+    "AUTH-NATIVE-SESSION-CONTINUITY",
+    "AUTH-EMAIL-UI-HIDDEN",
+    "NATIVE-PUSH-FIREBASE-FAIL-CLOSED",
+    "LEGACY-ARRAY-AT-COMPATIBILITY",
+    "MEMBERSHIP-EFFECTIVE-STATE-PRIVATE-A7AA949C",
+)
+SELECTED_NET_NEW_PATHS = {
+    "app/admin/actions/coach.js",
+    "app/admin/actions/common.js",
+    "app/admin/app.js",
+    "app/admin/domain/coaches.js",
+    "app/admin/domain/tickets.js",
+    "app/admin/forms/schedule.js",
+    "app/admin/schedule-v2-admin.js",
+    "app/shared/tennisnote-comment-draft.js",
+    "app/shared/tennisnote-data-client.js",
+    "app/shared/tennisnote-single-sheet-preview-ui.js",
+    "app/shared/tennisnote-native-push.js",
+    "app/shared/tennisnote-issue-reporter.js",
+    "app/shared/tennisnote-runtime-environment.js",
+    "app/shared/tennisnote-ui-language.js",
+    "app/shared/tennisnote-ticket-state.js",
+    "app/tennis-note-coach-app/actions/schedule.js",
+    "app/tennis-note-coach-app/app.js",
+    "app/tennis-note-coach-app/data/auth.js",
+    "app/tennis-note-coach-app/data/push.js",
+    "app/tennis-note-coach-app/domain/records.js",
+    "app/tennis-note-coach-app/domain/members.js",
+    "app/tennis-note-coach-app/forms/coaches.js",
+    "app/tennis-note-coach-app/forms/common.js",
+    "app/tennis-note-coach-app/settings.js",
+    "app/tennis-note-coach-app/views/home.js",
+    "app/tennis-note-member-app/actions/session.js",
+    "app/tennis-note-member-app/app.js",
+    "app/tennis-note-member-app/data/auth.js",
+    "app/tennis-note-member-app/data/push.js",
+    "app/tennis-note-member-app/domain/common.js",
+    "app/tennis-note-member-app/domain/identity.js",
+    "app/tennis-note-member-app/domain/journal.js",
+    "app/tennis-note-member-app/domain/purchase.js",
+    "app/tennis-note-member-app/domain/schedule.js",
+    "app/tennis-note-member-app/domain/tickets.js",
+    "app/tennis-note-member-app/forms/common.js",
+    "app/tennis-note-member-app/forms/members.js",
+    "app/tennis-note-member-app/forms/schedule.js",
+    "app/tennis-note-member-app/index.html",
+}
 
 DEV_WORKFLOW = ".github/workflows/deploy-cloudflare-pages-dev.yml"
 DEV_WORKFLOW_LINES = (
@@ -232,14 +283,27 @@ def generate() -> None:
             "the exact four development deployment workflow lines",
         ],
         "production_authority_feature_ids": list(PRODUCTION_AUTHORITY_FEATURE_IDS),
-        "selected_net_new_dev_feature_ids": [],
-        "selection_note": "No dev-only feature passed every production/data/device gate beyond behavior already present in the production authority tree.",
+        "selected_net_new_dev_feature_ids": list(SELECTED_NET_NEW_FEATURE_IDS),
+        "selection_note": (
+            "Only the verified feedback fixes, native authentication session continuity, hidden "
+            "email authentication entry points, push fail-closed behavior, and legacy Array "
+            "compatibility plus the strictly source-verified membership effective-state change "
+            "from private a7aa949c2db64edd1fbfb665b8a8cf03690e8160 are added beyond the "
+            "production authority tree. The production hotfix base is "
+            "3d215f7da47fc6f002e77d420f1682c848c93e40; existing hash assertions remain exact."
+        ),
         "dev_ahead_commits": classify_commits(),
     }
     paths = authority_paths("app")
     placeholder = dict(manifest)
     hashes = {
-        path: sha256(normalize_product_bytes(path, authority_bytes(path), placeholder))
+        path: sha256(
+            normalize_product_bytes(
+                path,
+                (ROOT / path).read_bytes() if path in SELECTED_NET_NEW_PATHS else authority_bytes(path),
+                placeholder,
+            )
+        )
         for path in paths
     }
     manifest["product_tree"] = {

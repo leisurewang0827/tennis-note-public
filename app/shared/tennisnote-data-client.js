@@ -2,6 +2,12 @@
   const storageKey = "tennis-note-supabase-config";
   const authStorageKey = "tennis-note-supabase-session";
   const authPersistenceKey = "tennis-note-auth-persistence";
+  const authContinuityDiagnosticStages = new Set([
+    "PERSISTENCE_LOCAL", "PERSISTENCE_SESSION", "SESSION_LOCAL", "SESSION_SESSION",
+    "REFRESH_SUCCESS", "REFRESH_REJECTED", "REFRESH_TRANSIENT",
+    "REFRESH_NO_TOKEN", "REFRESH_NOT_READY",
+  ]);
+  let authContinuityDiagnosticCount = 0;
   const oauthCodeVerifierKey = "tennis-note-oauth-code-verifier";
   const oauthAttemptKey = "tennis-note-oauth-attempt";
   const oauthCallbackFingerprintKey = "tennis-note-oauth-callback-fingerprint";
@@ -19,7 +25,63 @@
   let nativeOAuthInFlightProvider = "";
   let nativeOAuthCallbackInFlight = false;
   let nativeOAuthCancelTimer = null;
+  let nativeOAuthLoadTimer = null;
+  let nativeOAuthInitialPageLoaded = false;
+  let nativeOAuthLoadTimedOut = false;
+  let nativeOAuthAttemptStartedAt = 0;
+  const nativeOAuthObservations = [];
   let oauthCodeExchangePromise = null;
+
+  function nativeOAuthHost(url) {
+    try {
+      const parsed = new URL(String(url || ""));
+      return parsed.hostname || parsed.protocol.replace(/:$/, "");
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function recordNativeOAuthObservation(stage, options = {}) {
+    const allowedStages = new Set([
+      "authorize_started", "browser_opened", "browser_initial_page_loaded",
+      "browser_initial_load_timeout", "browser_finished", "app_foreground",
+      "app_url_open", "callback_started", "callback_succeeded", "callback_failed",
+    ]);
+    if (!allowedStages.has(stage)) return;
+    const elapsedMs = nativeOAuthAttemptStartedAt
+      ? Math.max(0, Math.min(Date.now() - nativeOAuthAttemptStartedAt, 10 * 60 * 1000))
+      : 0;
+    nativeOAuthObservations.push({
+      stage,
+      provider: providerKey(options.provider || nativeOAuthInFlightProvider || storedProvider() || ""),
+      host: nativeOAuthHost(options.url),
+      elapsedMs,
+    });
+    if (nativeOAuthObservations.length > 32) nativeOAuthObservations.splice(0, nativeOAuthObservations.length - 32);
+    window.dispatchEvent(new CustomEvent("tennisnote:native-oauth-observation", {
+      detail: { ...nativeOAuthObservations[nativeOAuthObservations.length - 1] },
+    }));
+  }
+
+  function clearNativeOAuthLoadTimer() {
+    if (nativeOAuthLoadTimer === null) return;
+    window.clearTimeout(nativeOAuthLoadTimer);
+    nativeOAuthLoadTimer = null;
+  }
+
+  function startNativeOAuthObservation(provider, authorizeUrl) {
+    clearNativeOAuthLoadTimer();
+    nativeOAuthAttemptStartedAt = Date.now();
+    nativeOAuthInitialPageLoaded = false;
+    nativeOAuthLoadTimedOut = false;
+    recordNativeOAuthObservation("authorize_started", { provider, url: authorizeUrl });
+    nativeOAuthLoadTimer = window.setTimeout(() => {
+      nativeOAuthLoadTimer = null;
+      if (!nativeOAuthInFlightProvider || nativeOAuthCallbackInFlight || nativeOAuthInitialPageLoaded) return;
+      nativeOAuthLoadTimedOut = true;
+      recordNativeOAuthObservation("browser_initial_load_timeout", { provider });
+    }, 15_000);
+  }
 
   function emitClientError(stage, error, context = {}) {
     const value = error || new Error(stage || "client_error");
@@ -291,6 +353,33 @@
     return window.localStorage.getItem(authPersistenceKey) === "session" ? "session" : "local";
   }
 
+  function recordAuthContinuityDiagnostic(stage, present = true) {
+    const plugin = window.Capacitor?.Plugins?.AuthDiagnostics;
+    if (!plugin?.record || !authContinuityDiagnosticStages.has(stage) || authContinuityDiagnosticCount >= 32) return;
+    authContinuityDiagnosticCount += 1;
+    try {
+      Promise.resolve(plugin.record({ stage, present: present === true, status: 0 })).catch(() => {});
+    } catch (error) {
+      // Internal QA observation must never alter authentication.
+    }
+  }
+
+  function storageHas(storage, key) {
+    try {
+      return Boolean(storage.getItem(key));
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function recordAuthSessionStartup() {
+    const persistence = sessionPersistence();
+    recordAuthContinuityDiagnostic("PERSISTENCE_LOCAL", persistence === "local");
+    recordAuthContinuityDiagnostic("PERSISTENCE_SESSION", persistence === "session");
+    recordAuthContinuityDiagnostic("SESSION_LOCAL", storageHas(window.localStorage, authStorageKey));
+    recordAuthContinuityDiagnostic("SESSION_SESSION", storageHas(window.sessionStorage, authStorageKey));
+  }
+
   function authSessionStores() {
     return sessionPersistence() === "session"
       ? [window.sessionStorage]
@@ -308,6 +397,11 @@
     window.localStorage.removeItem(authStorageKey);
     window.localStorage.removeItem(`${authStorageKey}-provider`);
     return "session";
+  }
+
+  function ensureNativePersistentAuthSession() {
+    if (!isNativeApp()) return sessionPersistence();
+    return setSessionPersistence(true);
   }
 
   function writeStoredSession(session) {
@@ -530,7 +624,14 @@
 
   async function performRefreshSession() {
     const session = getSession();
-    if (!session?.refresh_token || !readiness().ready) return null;
+    if (!session?.refresh_token) {
+      recordAuthContinuityDiagnostic("REFRESH_NO_TOKEN");
+      return null;
+    }
+    if (!readiness().ready) {
+      recordAuthContinuityDiagnostic("REFRESH_NOT_READY");
+      return null;
+    }
     const config = loadConfig();
     let response = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -545,24 +646,31 @@
         });
         if (response.ok || response.status < 500) break;
       } catch (error) {
-        if (!transientNetworkError(error) || attempt === 1) throw error;
+        if (!transientNetworkError(error) || attempt === 1) {
+          recordAuthContinuityDiagnostic("REFRESH_TRANSIENT");
+          throw error;
+        }
       }
       await wait(500 * (attempt + 1));
     }
     if (!response) {
+      recordAuthContinuityDiagnostic("REFRESH_TRANSIENT");
       const error = new Error("session_refresh_temporarily_unavailable");
       emitClientError("session_refresh", error);
       throw error;
     }
     if (!response.ok) {
       if (response.status === 400 || response.status === 401) {
+        recordAuthContinuityDiagnostic("REFRESH_REJECTED");
         removeStoredSession();
         return null;
       }
+      recordAuthContinuityDiagnostic("REFRESH_TRANSIENT");
       const error = new Error("session_refresh_temporarily_unavailable");
       emitClientError("session_refresh", error);
       throw error;
     }
+    recordAuthContinuityDiagnostic("REFRESH_SUCCESS");
     const payload = await response.json();
     return saveSession({ ...payload, provider: session.provider });
   }
@@ -707,7 +815,14 @@
       ) return;
       nativeOAuthInFlightProvider = "";
       clearOAuthStorageValue();
-      emitOAuthResult({ ok: false, provider, cancelled: true });
+      const loadIncomplete = nativeOAuthLoadTimedOut || !nativeOAuthInitialPageLoaded;
+      emitOAuthResult({
+        ok: false,
+        provider,
+        cancelled: !loadIncomplete,
+        errorCode: loadIncomplete ? "native_oauth_browser_load_incomplete" : "native_oauth_cancelled",
+        retryable: true,
+      });
     }, 800);
   }
 
@@ -806,9 +921,12 @@
 
   async function handleNativeOAuthUrl(url) {
     if (!url || !url.startsWith("com.tennisclubhouse.tennisnote://oauth/")) return false;
+    ensureNativePersistentAuthSession();
     clearNativeOAuthCancelTimer();
+    clearNativeOAuthLoadTimer();
     nativeOAuthCallbackInFlight = true;
     const provider = nativeOAuthInFlightProvider || storedProvider() || "간편";
+    recordNativeOAuthObservation("callback_started", { provider, url });
     try {
       const parsed = new URL(url);
       const failure = oauthCallbackFailure(parsed.searchParams);
@@ -821,12 +939,14 @@
         ) {
           nativeOAuthInFlightProvider = "";
           await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+          recordNativeOAuthObservation("callback_succeeded", { provider, url });
           emitOAuthResult({ ok: true, provider, replayed: true });
           return true;
         }
         clearOAuthStorageValue();
         nativeOAuthInFlightProvider = "";
         await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+        recordNativeOAuthObservation("callback_failed", { provider, url });
         const callbackError = oauthCallbackError(failure);
         const normalizedError = failure.error.toLowerCase();
         emitOAuthResult({
@@ -849,6 +969,7 @@
       await flushOAuthProviderCredentialCapture();
       nativeOAuthInFlightProvider = "";
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+      recordNativeOAuthObservation("callback_succeeded", { provider, url });
       const handledWithoutReload = emitOAuthResult({ ok: true, provider, callbackType });
       if (!handledWithoutReload) window.location.reload();
       return true;
@@ -856,6 +977,7 @@
       nativeOAuthInFlightProvider = "";
       clearOAuthStorageValue();
       await window.Capacitor?.Plugins?.Browser?.close?.().catch?.(() => {});
+      recordNativeOAuthObservation("callback_failed", { provider, url });
       emitOAuthResult({ ok: false, provider, cancelled: false });
       emitClientError("native_oauth_callback", error, { provider });
       return true;
@@ -883,6 +1005,7 @@
 
   async function handleNativeAppUrl(url) {
     if (!url || recentlyHandledNativeUrl(url)) return Boolean(url);
+    recordNativeOAuthObservation("app_url_open", { url });
     rememberNativeUrl(url);
     const handled = await handleNativeOAuthUrl(url) || handleNativePaymentUrl(url);
     if (!handled) forgetNativeUrl();
@@ -893,8 +1016,21 @@
     const appPlugin = window.Capacitor?.Plugins?.App;
     if (!isNativeApp() || !appPlugin?.addListener) return;
     appPlugin.addListener("appUrlOpen", ({ url }) => void handleNativeAppUrl(url));
+    appPlugin.addListener("appStateChange", ({ isActive }) => {
+      if (isActive && nativeOAuthInFlightProvider) {
+        recordNativeOAuthObservation("app_foreground", { provider: nativeOAuthInFlightProvider });
+      }
+    });
     appPlugin.getLaunchUrl?.().then((result) => handleNativeAppUrl(result?.url)).catch(() => {});
+    window.Capacitor?.Plugins?.Browser?.addListener?.("browserPageLoaded", () => {
+      clearNativeOAuthLoadTimer();
+      nativeOAuthInitialPageLoaded = true;
+      nativeOAuthLoadTimedOut = false;
+      recordNativeOAuthObservation("browser_initial_page_loaded");
+    });
     window.Capacitor?.Plugins?.Browser?.addListener?.("browserFinished", () => {
+      clearNativeOAuthLoadTimer();
+      recordNativeOAuthObservation("browser_finished");
       scheduleNativeOAuthCancellation();
     });
   }
@@ -1204,6 +1340,7 @@
     }
     const key = providerKey(provider);
     const slug = providerSlug(provider);
+    ensureNativePersistentAuthSession();
     const pkce = await createOAuthPkcePair(key);
     const redirectTo = options.redirectTo || (isNativeApp()
       ? nativeOAuthBridgeRedirect()
@@ -1226,12 +1363,15 @@
     if (isNativeApp() && browserPlugin?.open) {
       clearNativeOAuthCancelTimer();
       nativeOAuthInFlightProvider = provider || slug;
+      startNativeOAuthObservation(nativeOAuthInFlightProvider, authorizeUrl);
       try {
         await browserPlugin.open({
           url: authorizeUrl,
           presentationStyle: "popover",
         });
+        recordNativeOAuthObservation("browser_opened", { provider: nativeOAuthInFlightProvider, url: authorizeUrl });
       } catch (error) {
+        clearNativeOAuthLoadTimer();
         nativeOAuthInFlightProvider = "";
         clearOAuthStorageValue();
         emitClientError("oauth_browser_open", error, { provider });
@@ -1667,6 +1807,8 @@
     if (identity) await clearOfflineResponses(identity);
   }
 
+  recordAuthSessionStartup();
+
   window.TennisNoteDataClient = {
     storageKey,
     authStorageKey,
@@ -1680,6 +1822,7 @@
     ensureSession,
     consumeOAuthRedirect,
     flushOAuthProviderCredentialCapture,
+    getNativeOAuthObservations: () => nativeOAuthObservations.map((item) => ({ ...item })),
     signInWithOAuth,
     signInWithPassword,
     sendPasswordResetEmail,

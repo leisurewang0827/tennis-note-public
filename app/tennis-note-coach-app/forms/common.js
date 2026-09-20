@@ -29,7 +29,7 @@ function registerPwaServiceWorker() {
   const coachPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("coach");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.501",
+    workerUrl: "./service-worker.js?v=1.0.508",
     remoteAppUrl: coachPortal?.ok ? coachPortal.url : "",
   });
 }
@@ -69,7 +69,7 @@ function coachMobileScheduleSegments(day, policy, scheduleLessons) {
   if (range === "all") return windows;
   const focusLesson = scheduleLessons.find((lesson) => lesson.day === day && canonicalCoachName(lesson.coach) === currentCoachName())
     || scheduleLessons.find((lesson) => lesson.day === day);
-  const fallbackWindow = windows.length ? (scheduleDays.indexOf(day) < 5 ? windows.at(-1) : windows[0]) : null;
+  const fallbackWindow = windows.length ? (scheduleDays.indexOf(day) < 5 ? windows[windows.length - 1] : windows[0]) : null;
   const focusMinutes = focusLesson ? minutesFromTime(focusLesson.time) : fallbackWindow?.startMinutes;
   const matching = windows.find((window) => focusMinutes >= window.startMinutes && focusMinutes < window.endMinutes) || fallbackWindow;
   if (!matching) return [];

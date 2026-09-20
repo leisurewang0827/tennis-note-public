@@ -1220,7 +1220,7 @@ async function performAdminLiveDataSync(options = {}) {
         authProviders,
         authLinks,
         authSwitch,
-        authLastSignInAt: authLinks.map((link) => link.last_sign_in_at).filter(Boolean).sort().at(-1) || "",
+        authLastSignInAt: authLinks.map((link) => link.last_sign_in_at).filter(Boolean).sort().slice(-1)[0] || "",
         serverUserId: preferredUser.id,
         serverUserIds: userIds,
         branchId: memberRecord?.branch_id || displayTicket?.branchId || enrollmentBranchId || paymentBranchId || "",

@@ -146,8 +146,9 @@
     const text = String(value || "").trim();
     const start = canonicalKeyword(text.split(/\s+/)[0] || "");
     const words = text.replace(/[.!?。！？]+$/u, "").match(/[\p{L}\p{N}]+/gu) || [];
-    const ending = canonicalKeyword(words.at(-1) || "");
-    const verbMatch = (words.at(-1) || "").match(/^(.+?)(?:했습니다|했어요|합니다|해요|됐습니다|되었어요|됐어요|됩니다|었습니다|았습니다|어요|아요|습니다)$/u);
+    const lastWord = words[words.length - 1] || "";
+    const ending = canonicalKeyword(lastWord);
+    const verbMatch = lastWord.match(/^(.+?)(?:했습니다|했어요|합니다|해요|됐습니다|되었어요|됐어요|됩니다|었습니다|았습니다|어요|아요|습니다)$/u);
     const coreVerb = canonicalKeyword(verbMatch?.[1] || "");
     const nouns = [...text.matchAll(/[가-힣A-Za-z]{2,}/g)]
       .map((match) => canonicalKeyword(match[0]))
