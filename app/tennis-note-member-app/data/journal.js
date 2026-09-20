@@ -7,6 +7,7 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
   const client = window.TennisNoteDataClient;
   const profileId = profile?.id || state.member?.profileId || "";
   if (!client?.selectRows || !client.downloadObject || !profileId) return false;
+  await syncPersonalJournalFromServer().catch(() => false);
   try {
     const [journalRows, mediaRows, recordRows, participantRecordRows, curriculumRows, lessonChartRows] = await Promise.all([
       client.selectRows("tn_journal_entries", {
@@ -51,6 +52,7 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
     const curriculaById = new Map((curriculumRows || []).map((curriculum) => [curriculum.id, curriculum]));
 
     for (const row of (journalRows || []).sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))) {
+      if (row.entry_type === "practice") continue;
       const payload = parseServerJournalBody(row.body);
       if (!payload) continue;
       const rowsForJournal = (mediaRows || [])
@@ -248,4 +250,18 @@ async function downloadServerMediaItem(client, row, displayName = "첨부파일"
     storagePath: row.storage_path,
     serverMediaId: row.id,
   };
+}
+
+async function syncPersonalJournalFromServer() {
+  const api = window.TennisNotePersonalJournal;
+  if (!state.member?.profileId || !api) return false;
+  const owner = state.member.profileId;
+  const loaded = await api.load();
+  if (state.member?.profileId !== owner) { api.release(loaded.logs); return false; }
+  const keys = new Set(loaded.logs.map((log) => log.personalClientKey).filter(Boolean));
+  const local = state.practiceLogs.filter((log) => !log.serverJournalId && !keys.has(log.personalClientKey));
+  api.release(state.practiceLogs.filter((log) => log.serverJournalId));
+  state.practiceLogs = [...loaded.logs.map((log) => ({ ...log, personalOwnerId: owner })), ...local];
+  saveSnapshot();
+  return true;
 }

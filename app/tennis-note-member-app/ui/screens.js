@@ -341,7 +341,9 @@ function openPaymentConfirmationModal({ product, paymentId, preparedPayment, met
   openAppSheet("paymentConfirmationModal", { initialFocus: "#openPreparedPaymentButton" });
 }
 
-function openJournalComposer(dateValue = "") {
+function openJournalComposer(dateValue = "", options = {}) {
+  if (!options.edit) state.personalEditingId = null;
+  personalJournalStatus();
   const selectedDate = dateValue || state.selectedJournalDate || $("#journalDate")?.value || localDateKey();
   selectJournalDate(selectedDate);
   if ($("#journalDate")) $("#journalDate").value = selectedDate;
@@ -386,22 +388,23 @@ function openJournalDetail(id) {
     : "";
   $("#journalDetailContent").innerHTML = `
     <div class="section-title compact-title">
-      <h2>${entry.title}</h2>
-      <span>${entry.subtitle || entry.dateLabel}</span>
+      <h2>${escapeHtml(entry.title)}</h2>
+      <span>${escapeHtml(entry.subtitle || entry.dateLabel)}</span>
     </div>
     <article class="journal-detail-card">
       ${attendanceBlock}
       <section class="journal-feedback-block member-note">
         <strong>내 기록</strong>
-        <p>${entry.body || "작성한 기록이 없습니다."}</p>
+        <p>${escapeHtml(entry.body || "작성한 기록이 없습니다.")}</p>
       </section>
       ${entry.mediaItems?.length ? `<strong>첨부</strong>${renderMediaPreview(entry.mediaItems)}` : ""}
       <section class="journal-feedback-block coach-note">
         <strong>코치 피드백</strong>
-        <p>${entry.note || "코치 피드백을 기다리고 있습니다."}</p>
+        <p>${escapeHtml(entry.note || "코치 피드백을 기다리고 있습니다.")}</p>
       </section>
-      ${entry.next ? `<section class="journal-feedback-block next-note"><strong>다음 수업</strong><p>${entry.next}</p></section>` : ""}
+      ${entry.next ? `<section class="journal-feedback-block next-note"><strong>다음 수업</strong><p>${escapeHtml(entry.next)}</p></section>` : ""}
       ${curriculumBlock}
+      ${entry.kind === "개인운동" ? personalJournalActionsMarkup(id) : ""}
     </article>`;
   $("#journalDetailModal").hidden = false;
 }
@@ -446,7 +449,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.509", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.510", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -728,4 +731,9 @@ async function openMembershipPurchaseEntry({ purpose = "new_purchase", productId
       button.textContent = originalLabel;
     }
   }
+}
+
+function personalJournalStatus(message = "") {
+  const node = $("#personalJournalStatus");
+  if (node) { node.textContent = message; node.hidden = !message; }
 }

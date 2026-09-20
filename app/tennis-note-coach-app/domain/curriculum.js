@@ -69,7 +69,7 @@ function curriculumLibraryMarkup() {
             ${group.steps
               .map(
                 (step) => `
-                  <article class="curriculum-card" data-open-curriculum-detail="${step.id}">
+                  <article class="curriculum-card">
                     <div class="curriculum-card-head">
                       <strong>${escapeHtml(step.title)}</strong>
                       <button class="favorite-button ${(state.favoriteCurriculums || []).includes(step.id) ? "is-active" : ""}" type="button" data-toggle-curriculum-favorite="${step.id}" aria-label="즐겨찾기">★</button>
@@ -82,8 +82,9 @@ function curriculumLibraryMarkup() {
                     <span>${escapeHtml(step.focus)}</span>
                     ${step.environmentNote ? `<p class="curriculum-environment-note">${escapeHtml(step.environmentNote)}</p>` : `<p>${escapeHtml(step.checklist || step.guide)}</p>`}
                     <div class="actions">
-                      <button class="small-button" type="button" data-open-curriculum-detail="${step.id}">상세 보기</button>
-                      <a class="small-button" href="${curriculumNotionUrl(step)}" target="_blank" rel="noreferrer">자료</a>
+                      ${/^https:\/\/(?:(?:www\.)?notion\.(?:so|site)|app\.notion\.com)\//.test(step.notionUrl || "")
+                        ? `<a class="small-button" href="${escapeHtml(step.notionUrl)}" target="_blank" rel="noopener noreferrer">자세히 보기</a>`
+                        : '<button class="small-button" type="button" disabled>자료 준비 중</button>'}
                     </div>
                   </article>`,
               )

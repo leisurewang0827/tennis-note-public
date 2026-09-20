@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.509"
-EXPECTED_RELEASE_ID = "2026.09.20.02"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v548"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v521"
+EXPECTED_VERSION = "1.0.510"
+EXPECTED_RELEASE_ID = "2026.09.21.01"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v549"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v522"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "FEEDBACK-ADMIN-NOTE-PRESERVATION",
@@ -33,8 +33,17 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "MEMBERSHIP-EFFECTIVE-STATE-PRIVATE-A7AA949C",
     "PUBLIC-STORE-AVAILABILITY-PRIVATE-EDFFC240",
     "SHARED-44PX-TARGETS-PRIVATE-EDFFC240",
+    "PERSONAL-JOURNAL-MEDIA-CURRICULUM-PRIVATE-1A2019FA",
 )
 SELECTED_NET_NEW_PATHS = {
+    "app/shared/tennisnote-personal-journal.js",
+    "app/tennis-note-member-app/actions/journal.js",
+    "app/tennis-note-member-app/data/journal.js",
+    "app/tennis-note-member-app/views/journal.js",
+    "app/tennis-note-member-app/ui/screens.js",
+    "app/tennis-note-member-app/events/schedule.js",
+    "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-coach-app/domain/curriculum.js",
     "app/release.json",
     "app/shared/tennisnote-release.js",
     "app/shared/tennisnote-release-updater.js",
@@ -298,11 +307,13 @@ def generate() -> None:
             "production authority tree. The production hotfix base is "
             "3d215f7da47fc6f002e77d420f1682c848c93e40. Development 1.0.509 adds only "
             "source-verified store availability and shared 44px contracts from private "
-            "edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact."
+            "edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact. "
+            "Personal journal and curriculum changes match private "
+            "1a2019fade5048794668159957463aa4a08ad7c2 through a separate exact-function/shared hash manifest."
         ),
         "dev_ahead_commits": classify_commits(),
     }
-    paths = authority_paths("app")
+    paths = sorted(set(authority_paths("app")) | {"app/shared/tennisnote-personal-journal.js"})
     placeholder = dict(manifest)
     hashes = {
         path: sha256(
