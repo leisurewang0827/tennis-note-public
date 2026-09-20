@@ -78,6 +78,7 @@ const APP_SHELL = [
   "../shared/tennisnote-runtime-environment.js?v=1.0.509",
   "../shared/tennisnote-escape-html.js?v=1.0.509",
   "../shared/tennisnote-data-client.js?v=1.0.509",
+  "../shared/tennisnote-personal-journal.js?v=1.0.509",
   "../shared/tennisnote-schedule-revision.js?v=1.0.509",
   "../shared/tennisnote-schedule-lanes.js?v=1.0.509",
   "../shared/tennisnote-product-catalog.js?v=policy-catalog-2",

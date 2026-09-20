@@ -441,6 +441,7 @@
             <label>
               <span>사진/동영상 첨부</span>
               <input id="practiceMedia" type="file" accept="image/*,video/*" multiple />
+              <small>사진 JPEG·PNG·WEBP / 영상 MP4·MOV·WebM · 파일당 100MB 이하. 기존 첨부는 수정해도 유지됩니다.</small>
             </label>
             <label class="check-row">
               <input id="requestCoachFeedback" type="checkbox" />
@@ -454,6 +455,7 @@
           </div>
               </div>
               <div class="sheet-actions journal-composer-actions" data-tn-sheet-footer>
+                <p id="personalJournalStatus" role="status" aria-live="polite" hidden></p>
                 <button class="primary-button" type="button" id="saveJournal">운동일지 저장</button>
               </div>
             </article>
@@ -1399,6 +1401,7 @@
     <script defer src="../shared/tennisnote-runtime-environment.js?v=1.0.509"></script>
     <script defer src="../shared/tennisnote-escape-html.js?v=1.0.509"></script>
     <script defer src="../shared/tennisnote-data-client.js?v=1.0.509"></script>
+    <script defer src="../shared/tennisnote-personal-journal.js?v=1.0.509"></script>
     <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.509"></script>
     <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.509"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>

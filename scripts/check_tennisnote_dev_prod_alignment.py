@@ -33,8 +33,17 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "MEMBERSHIP-EFFECTIVE-STATE-PRIVATE-A7AA949C",
     "PUBLIC-STORE-AVAILABILITY-PRIVATE-EDFFC240",
     "SHARED-44PX-TARGETS-PRIVATE-EDFFC240",
+    "PERSONAL-JOURNAL-MEDIA-CURRICULUM-PRIVATE-1A2019FA",
 )
 SELECTED_NET_NEW_PATHS = {
+    "app/shared/tennisnote-personal-journal.js",
+    "app/tennis-note-member-app/actions/journal.js",
+    "app/tennis-note-member-app/data/journal.js",
+    "app/tennis-note-member-app/views/journal.js",
+    "app/tennis-note-member-app/ui/screens.js",
+    "app/tennis-note-member-app/events/schedule.js",
+    "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-coach-app/domain/curriculum.js",
     "app/release.json",
     "app/shared/tennisnote-release.js",
     "app/shared/tennisnote-release-updater.js",
@@ -298,11 +307,13 @@ def generate() -> None:
             "production authority tree. The production hotfix base is "
             "3d215f7da47fc6f002e77d420f1682c848c93e40. Development 1.0.509 adds only "
             "source-verified store availability and shared 44px contracts from private "
-            "edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact."
+            "edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact. "
+            "Personal journal and curriculum changes match private "
+            "1a2019fade5048794668159957463aa4a08ad7c2 through a separate exact-function/shared hash manifest."
         ),
         "dev_ahead_commits": classify_commits(),
     }
-    paths = authority_paths("app")
+    paths = sorted(set(authority_paths("app")) | {"app/shared/tennisnote-personal-journal.js"})
     placeholder = dict(manifest)
     hashes = {
         path: sha256(

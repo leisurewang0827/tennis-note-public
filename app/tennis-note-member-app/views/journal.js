@@ -10,23 +10,24 @@ function renderMediaPreview(mediaItems = [], compact = false) {
     <div class="journal-media-grid ${compact ? "compact" : ""}">
       ${mediaItems
         .map((item) => {
+          if (item.error) return `<p role="status">${escapeHtml(item.error)}</p>`;
           const isVideo = item.type?.startsWith("video") || /\.(mp4|mov|webm|m4v)$/i.test(item.name || "");
           const isImage = item.type?.startsWith("image") || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.name || "");
           if (item.url && isVideo) {
             return `
               <figure class="journal-media-item video">
-                <video src="${item.url}" controls playsinline preload="metadata"></video>
-                <figcaption>${item.name}</figcaption>
+                <video src="${escapeHtml(item.url)}" controls playsinline preload="metadata"></video>
+                <figcaption>${escapeHtml(item.name)}</figcaption>
               </figure>`;
           }
           if (item.url && isImage) {
             return `
               <figure class="journal-media-item image">
-                <img src="${item.url}" alt="${item.name}" loading="lazy" />
-                <figcaption>${item.name}</figcaption>
+                <img src="${escapeHtml(item.url)}" alt="${escapeHtml(item.name)}" loading="lazy" />
+                <figcaption>${escapeHtml(item.name)}</figcaption>
               </figure>`;
           }
-          return `<b class="media-chip">${item.name}</b>`;
+          return `<b class="media-chip">${escapeHtml(item.name)}</b>`;
         })
         .join("")}
     </div>`;
@@ -121,10 +122,10 @@ function renderPracticeLogs() {
         const dateLabel = log.journalDate || log.date;
         const statusLabel = log.coachFeedback ? "코치 코멘트 있음" : log.feedbackStatus || "개인 기록";
         return `
-          <button class="history-card compact-log summary-log done" type="button" data-open-journal-detail="${log.id}">
+          <button class="history-card compact-log summary-log done" type="button" data-open-journal-detail="${escapeHtml(log.id)}">
             <span class="summary-log-main">
-              <strong>${log.type}</strong>
-              <small>${dateLabel} · ${statusLabel}${mediaCount ? ` · 첨부 ${mediaCount}개` : ""}</small>
+              <strong>${escapeHtml(log.type)}</strong>
+              <small>${escapeHtml(dateLabel)} · ${escapeHtml(statusLabel)}${mediaCount ? ` · 첨부 ${mediaCount}개` : ""}</small>
             </span>
             <span class="summary-log-status">상세 보기</span>
           </button>`;
@@ -240,12 +241,12 @@ function renderSelectedJournalCard(entry) {
     <article class="journal-selected-card ${entry.kind === "레슨" ? "lesson" : "practice"}">
       <div class="journal-selected-card-head">
         <span>${entry.kind}</span>
-        <strong>${entry.title}</strong>
-        <small>${entry.subtitle || entry.dateLabel}</small>
+        <strong>${escapeHtml(entry.title)}</strong>
+        <small>${escapeHtml(entry.subtitle || entry.dateLabel)}</small>
       </div>
       <div class="journal-selected-card-action">
-        <span>${statusText}${entry.mediaNames?.length ? ` · 첨부 ${entry.mediaNames.length}개` : ""}</span>
-        <button class="small-button" type="button" data-open-journal-detail="${entry.id}">내용 보기</button>
+        <span>${escapeHtml(statusText)}${entry.mediaNames?.length ? ` · 첨부 ${entry.mediaNames.length}개` : ""}</span>
+        <button class="small-button" type="button" data-open-journal-detail="${escapeHtml(entry.id)}">내용 보기</button>
       </div>
     </article>`;
 }
@@ -272,4 +273,11 @@ function renderSelectedJournalDayPanel() {
         compact: true,
       })}
     </div>`;
+}
+
+function personalJournalActionsMarkup(id) {
+  const log = state.practiceLogs.find((item) => item.id === id);
+  const owned = log?.personalOwnerVerified && log.personalOwnerId === state.member?.profileId;
+  return owned ? `<div class="actions"><button type="button" class="small-button" data-edit-personal-journal="${escapeHtml(id)}">수정</button><button type="button" class="small-button" data-delete-personal-journal="${escapeHtml(id)}">삭제</button></div>${log.mediaPending ? '<p>첨부 업로드가 완료되지 않았습니다. 수정에서 같은 파일을 다시 선택해 주세요.</p>' : ''}`
+    : '<p>이 기기에만 남아 있는 기록입니다. 내용을 복사해 새 기록으로 저장하고, 첨부는 다시 선택해 주세요.</p>';
 }

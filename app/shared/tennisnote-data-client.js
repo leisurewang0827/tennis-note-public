@@ -1646,9 +1646,12 @@
     if (!isOnline()) throw offlineError();
     const session = await ensureSession();
     if (!readiness().ready || !session?.access_token) throw new Error("Login is required for private deletion.");
+    const headers = authHeaders({}, session);
+    // 본문 없는 DELETE에 JSON 헤더를 보내면 Storage가 빈 JSON 오류로 거부한다.
+    delete headers["Content-Type"];
     const response = await fetch(storageObjectUrl(bucketName, objectPath), {
       method: "DELETE",
-      headers: authHeaders({}, session),
+      headers,
     });
     if (!response.ok) throw new Error(await response.text() || `Storage deletion failed: ${response.status}`);
     return true;

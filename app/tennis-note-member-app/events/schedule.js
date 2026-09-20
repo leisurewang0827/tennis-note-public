@@ -156,6 +156,10 @@ function bindScheduleEvents() {
   });
   $("#journalDetailModal").addEventListener("click", (event) => {
     if (event.target.closest("[data-close-journal-modal]")) closeJournalDetail();
+    const edit = event.target.closest("[data-edit-personal-journal]");
+    if (edit) editPersonalJournal(edit.dataset.editPersonalJournal);
+    const remove = event.target.closest("[data-delete-personal-journal]");
+    if (remove) void deletePersonalJournal(remove.dataset.deletePersonalJournal, remove);
   });
   $("#ntrpReferenceModal")?.addEventListener("click", (event) => {
     if (event.target.closest("[data-close-ntrp-modal]")) closeNtrpReference();
