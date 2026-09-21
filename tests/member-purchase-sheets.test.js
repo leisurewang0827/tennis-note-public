@@ -24,7 +24,7 @@ test("회원권 구매 변경 버튼에 필요한 바텀시트가 공개 HTML에
   assert.match(html, /id="completePurchaseScheduleSelection"/);
   assert.match(events, /data-open-purchase-product/);
   assert.match(catalog, /pickerLabel: "한달 \(4주\)"/);
-  assert.match(catalog, /pickerLabel: "3개월 \(10% 할인\)"/);
+  assert.match(catalog, /pickerLabel: "3개월"/);
   assert.match(purchase, /<em>다시 선택<\/em>/);
   assert.match(commonViews, /const oneDay = flow\.familyId === "one-day" \|\| membershipProductFamilyId\(purchaseFlowProduct\(\) \|\| \{\}\) === "one-day"/);
   assert.match(styles, /\.purchase-family-grid\s*\{[^}]*grid-template-columns: repeat\(2,/s);

@@ -96,7 +96,7 @@
       coach: "선택한 담당 코치 전용",
       flow: "가능 시간 선택 → 담당 코치 확정 → 결제",
       mode: "fixed",
-      discount: isThreeMonth ? "4주권 3회 금액에서 10% 할인" : "카드가/계좌이체가 분리",
+      discount: "카드가/계좌이체가 분리",
       badge: isThreeMonth ? "3개월" : `주${frequency}회`,
       status: "sale",
     };

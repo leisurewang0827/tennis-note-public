@@ -81,7 +81,7 @@ const state = {
     features: { threeMonth: true, oneDay: true, coupons: true },
     productFamilyLabels: {
       fourWeek: "한달 (4주)",
-      threeMonth: "3개월 (10% 할인)",
+      threeMonth: "3개월",
       coupon: "쿠폰 레슨",
       oneDay: "원데이 1회",
     },

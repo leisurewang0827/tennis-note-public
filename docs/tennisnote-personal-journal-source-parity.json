@@ -40,7 +40,8 @@
     {
       "path": "app/tennis-note-member-app/views/journal.js",
       "name": "renderMediaPreview",
-      "sha256": "87ae2693f1a535796edc92472b56e12f737c8176d0663737a86679873d25694a"
+      "privateSourceSha": "060ece0e4aff969c1d57c4246e9785c7bd40abc5",
+      "sha256": "e36cc3ec917b2f3b2f30f151b90d0f574ab62511b7acb76a39de51e30731f909"
     },
     {
       "path": "app/tennis-note-member-app/views/journal.js",

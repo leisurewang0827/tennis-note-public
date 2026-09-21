@@ -11,23 +11,24 @@ function renderMediaPreview(mediaItems = [], compact = false) {
       ${mediaItems
         .map((item) => {
           if (item.error) return `<p role="status">${escapeHtml(item.error)}</p>`;
+          const url = journalMediaPreviewUrl(item.url);
           const isVideo = item.type?.startsWith("video") || /\.(mp4|mov|webm|m4v)$/i.test(item.name || "");
           const isImage = item.type?.startsWith("image") || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.name || "");
-          if (item.url && isVideo) {
+          if (url && isVideo) {
             return `
               <figure class="journal-media-item video">
-                <video src="${escapeHtml(item.url)}" controls playsinline preload="metadata"></video>
+                <video data-journal-media-preview src="${escapeHtml(url)}" controls playsinline preload="metadata"></video>
                 <figcaption>${escapeHtml(item.name)}</figcaption>
               </figure>`;
           }
-          if (item.url && isImage) {
+          if (url && isImage) {
             return `
               <figure class="journal-media-item image">
-                <img src="${escapeHtml(item.url)}" alt="${escapeHtml(item.name)}" loading="lazy" />
+                <img data-journal-media-preview src="${escapeHtml(url)}" alt="${escapeHtml(item.name)}" loading="lazy" />
                 <figcaption>${escapeHtml(item.name)}</figcaption>
               </figure>`;
           }
-          return `<b class="media-chip">${escapeHtml(item.name)}</b>`;
+          return `<div class="journal-media-item"><b class="media-chip">${escapeHtml(item.name)}</b><p role="status">${journalMediaUnavailableMessage()}</p></div>`;
         })
         .join("")}
     </div>`;

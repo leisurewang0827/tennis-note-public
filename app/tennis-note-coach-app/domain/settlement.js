@@ -5,9 +5,27 @@
 // 동작에는 문제가 없다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
+// Session-only choice: never restored from a persisted coach snapshot.
+let coachSettlementSelection = null;
+
+function coachSettlementCurrentMonth(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" }).formatToParts(now);
+  return `${parts.find((part) => part.type === "year").value}-${parts.find((part) => part.type === "month").value}`;
+}
+
+function selectCoachSettlementMonth(value) {
+  const currentMonth = coachSettlementCurrentMonth();
+  coachSettlementSelection = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value || ""))
+    ? { month: value, currentMonth, coachRoleId: state.coach?.coachRoleId || "" }
+    : null;
+  return coachSettlementMonth();
+}
+
 function coachSettlementMonth() {
-  const fallback = localDateKey().slice(0, 7);
-  if (!/^\d{4}-\d{2}$/.test(String(state.settlementMonth || ""))) state.settlementMonth = fallback;
+  const currentMonth = coachSettlementCurrentMonth();
+  const choice = coachSettlementSelection;
+  if (choice && (choice.currentMonth !== currentMonth || choice.coachRoleId !== (state.coach?.coachRoleId || ""))) coachSettlementSelection = null;
+  state.settlementMonth = coachSettlementSelection?.month || currentMonth;
   return state.settlementMonth;
 }
 

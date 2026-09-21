@@ -24,6 +24,7 @@ EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v551"
 EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v524"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
+    "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
     "FEEDBACK-ADMIN-NOTE-PRESERVATION",
     "COACH-SERVER-FEEDBACK-PENDING-AUTHORITY",
     "AUTH-NATIVE-SESSION-CONTINUITY",
@@ -38,6 +39,13 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "AUTH-PHONE-EXISTS-GUIDANCE-PRIVATE-92C72E4C",
 )
 SELECTED_NET_NEW_PATHS = {
+    "app/shared/tennisnote-product-catalog.js",
+    "app/tennis-note-coach-app/domain/settlement.js",
+    "app/tennis-note-coach-app/events/delegated.js",
+    "app/tennis-note-member-app/catalog.js",
+    "app/tennis-note-member-app/domain/products.js",
+    "app/tennis-note-member-app/events/delegated.js",
+    "app/tennis-note-member-app/ui/common.js",
     "app/shared/tennisnote-personal-journal.js",
     "app/tennis-note-member-app/actions/journal.js",
     "app/tennis-note-member-app/data/journal.js",
@@ -316,7 +324,9 @@ def generate() -> None:
             "read-preservation correction matches private d3cf3a8f64d18feb00492dd06c9aad5df1ec4368 "
             "through the separate exact-function/shared hash manifest. The phone_exists guidance "
             "matches private 92c72e4c0d7da3c7893cfa03148ceb56f1966556 and changes only client "
-            "error presentation."
+            "error presentation. Settlement month, legacy media guidance, and neutral product labels "
+            "match private 060ece0e4aff969c1d57c4246e9785c7bd40abc5 through the exact-function/shared "
+            "hash manifest month-media-label-source-parity-20260922.json. No R3 or backend change."
         ),
         "dev_ahead_commits": classify_commits(),
     }
