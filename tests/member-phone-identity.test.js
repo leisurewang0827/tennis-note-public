@@ -88,6 +88,9 @@ test("Auth provider capability와 전화 인증 오류를 안전하게 구분한
   assert.match(identity.identityErrorMessage({ message: "Phone provider is disabled" }), /네이버 번호 다시 받기/);
   assert.match(identity.identityErrorMessage({ payload: { error_code: "sms_send_failed" } }), /관리자 연결/);
   assert.match(identity.identityErrorMessage({ code: "over_sms_send_rate_limit" }), /잠시 후/);
+  const phoneExistsMessage = "이미 다른 계정에 연결된 휴대전화입니다. 기존 계정으로 로그인하거나 다른 번호를 사용해 주세요.";
+  assert.equal(identity.identityErrorMessage({ status: 422, code: "phone_exists", message: "Request failed" }), phoneExistsMessage);
+  assert.equal(identity.identityErrorMessage({ status: 422, payload: { error_code: "phone_exists" } }), phoneExistsMessage);
   assert.equal(identity.normalizedIdentityErrorCode({ code: "Phone Provider-Disabled" }), "phone_provider_disabled");
 });
 

@@ -13,11 +13,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.511",
-    "release_id": "2026.09.21.02",
-    "deployed_at": "2026-09-21T21:25:06+09:00",
-    "member_cache": "tennis-note-member-pwa-v550",
-    "coach_cache": "tennis-note-coach-mode-v523"
+    "version": "1.0.512",
+    "release_id": "2026.09.21.03",
+    "deployed_at": "2026-09-21T22:07:18+09:00",
+    "member_cache": "tennis-note-member-pwa-v551",
+    "coach_cache": "tennis-note-coach-mode-v524"
   },
   "allowed_differences": [
     "app version literals",
@@ -56,9 +56,10 @@
     "PUBLIC-STORE-AVAILABILITY-PRIVATE-EDFFC240",
     "SHARED-44PX-TARGETS-PRIVATE-EDFFC240",
     "PERSONAL-JOURNAL-MEDIA-CURRICULUM-PRIVATE-1A2019FA",
-    "PERSONAL-JOURNAL-OWN-PROFILE-PRIVATE-D3CF3A8F"
+    "PERSONAL-JOURNAL-OWN-PROFILE-PRIVATE-D3CF3A8F",
+    "AUTH-PHONE-EXISTS-GUIDANCE-PRIVATE-92C72E4C"
   ],
-  "selection_note": "Only the verified feedback fixes, native authentication session continuity, hidden email authentication entry points, push fail-closed behavior, and legacy Array compatibility plus the strictly source-verified membership effective-state change from private a7aa949c2db64edd1fbfb665b8a8cf03690e8160 are added beyond the production authority tree. The production hotfix base is 3d215f7da47fc6f002e77d420f1682c848c93e40. Development 1.0.509 adds only source-verified store availability and shared 44px contracts from private edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact. Personal journal and curriculum changes match private 1a2019fade5048794668159957463aa4a08ad7c2; the own-profile authorization and read-preservation correction matches private d3cf3a8f64d18feb00492dd06c9aad5df1ec4368 through the separate exact-function/shared hash manifest.",
+  "selection_note": "Only the verified feedback fixes, native authentication session continuity, hidden email authentication entry points, push fail-closed behavior, and legacy Array compatibility plus the strictly source-verified membership effective-state change from private a7aa949c2db64edd1fbfb665b8a8cf03690e8160 are added beyond the production authority tree. The production hotfix base is 3d215f7da47fc6f002e77d420f1682c848c93e40. Development 1.0.509 adds only source-verified store availability and shared 44px contracts from private edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact. Personal journal and curriculum changes match private 1a2019fade5048794668159957463aa4a08ad7c2; the own-profile authorization and read-preservation correction matches private d3cf3a8f64d18feb00492dd06c9aad5df1ec4368 through the separate exact-function/shared hash manifest. The phone_exists guidance matches private 92c72e4c0d7da3c7893cfa03148ceb56f1966556 and changes only client error presentation.",
   "dev_ahead_commits": [
     {
       "sha": "1ae65617725a7c1fe4eab6516d8785ab93708529",
@@ -1020,7 +1021,7 @@
       "app/tennis-note-member-app/domain/coaches.js": "ca2e562864b5c30fa4020ee7d3c0922e69606ccf7048a7139f4368a74244d4a1",
       "app/tennis-note-member-app/domain/common.js": "1f204ecc92c6e499a73baaf109820755d01f12a8cf79df2912afc5bb551bdd12",
       "app/tennis-note-member-app/domain/curriculum.js": "f49d8efe32f13953bee127f896a5b9c599ee304c637ac316ac39966da91c2420",
-      "app/tennis-note-member-app/domain/identity.js": "dc80920a5625c517e4eb413fb3dbef1c841c44ca722647ed40c2f31fd1652215",
+      "app/tennis-note-member-app/domain/identity.js": "59febdff7e7d4c2b314607342c65e4fe44dd6a9ab15e7ac833b77f8e8a16b1e5",
       "app/tennis-note-member-app/domain/journal.js": "9adac0ba9e3362cb74dbbd4a83c98dd85bcc23056b5b5fa21ad03cf0cd666356",
       "app/tennis-note-member-app/domain/lessons.js": "644f592e0a15e07a08e917c597b6002e6c59d6e2cae07d6d1ddd033817628d3c",
       "app/tennis-note-member-app/domain/members.js": "0a0ccd89d8c0651b2cac80b7d125fb8f5a69dcdbdb513b2bfa85813cf24bcc19",
