@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.510"
-EXPECTED_RELEASE_ID = "2026.09.21.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v549"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v522"
+EXPECTED_VERSION = "1.0.511"
+EXPECTED_RELEASE_ID = "2026.09.21.02"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v550"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v523"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "FEEDBACK-ADMIN-NOTE-PRESERVATION",
@@ -34,6 +34,7 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "PUBLIC-STORE-AVAILABILITY-PRIVATE-EDFFC240",
     "SHARED-44PX-TARGETS-PRIVATE-EDFFC240",
     "PERSONAL-JOURNAL-MEDIA-CURRICULUM-PRIVATE-1A2019FA",
+    "PERSONAL-JOURNAL-OWN-PROFILE-PRIVATE-D3CF3A8F",
 )
 SELECTED_NET_NEW_PATHS = {
     "app/shared/tennisnote-personal-journal.js",
@@ -43,6 +44,7 @@ SELECTED_NET_NEW_PATHS = {
     "app/tennis-note-member-app/ui/screens.js",
     "app/tennis-note-member-app/events/schedule.js",
     "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-member-app/settings.js",
     "app/tennis-note-coach-app/domain/curriculum.js",
     "app/release.json",
     "app/shared/tennisnote-release.js",
@@ -309,7 +311,9 @@ def generate() -> None:
             "source-verified store availability and shared 44px contracts from private "
             "edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact. "
             "Personal journal and curriculum changes match private "
-            "1a2019fade5048794668159957463aa4a08ad7c2 through a separate exact-function/shared hash manifest."
+            "1a2019fade5048794668159957463aa4a08ad7c2; the own-profile authorization and "
+            "read-preservation correction matches private d3cf3a8f64d18feb00492dd06c9aad5df1ec4368 "
+            "through the separate exact-function/shared hash manifest."
         ),
         "dev_ahead_commits": classify_commits(),
     }

@@ -7,8 +7,8 @@ const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 const manifest = JSON.parse(read("docs/tennisnote-personal-journal-source-parity.json"));
 test("개인운동 모듈은 검증된 private 함수 및 공용 파일과 정확히 동일", () => {
-  assert.equal(manifest.privateSourceSha, "1a2019fade5048794668159957463aa4a08ad7c2");
-  assert.equal(manifest.functions.length, 14);
+  assert.equal(manifest.privateSourceSha, "d3cf3a8f64d18feb00492dd06c9aad5df1ec4368");
+  assert.equal(manifest.functions.length, 17);
   for (const entry of manifest.functions) {
     const matches = [...read(entry.path).matchAll(new RegExp("^(?:async )?function " + entry.name + "\\([^]*?^}", "gm"))];
     assert.equal(matches.length, 1, entry.name);

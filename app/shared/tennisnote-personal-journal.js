@@ -12,11 +12,13 @@
     return value;
   };
   const call = (action, payload = {}) => client().rpc("tn_personal_journal", { target_action: action, payload });
-  function errorMessage(error) {
-    const message = String(error?.message || "");
+  function errorMessage(error, action = "save") {
+    const message = [error?.code, error?.message, error?.status, error?.statusCode].filter(Boolean).join(" ").toLowerCase().replace(/\s+/g, "_");
     if (/stale_revision|existing_revision/.test(message)) return "다른 화면에서 변경된 기록입니다. 다시 불러온 뒤 수정해 주세요. 입력 내용은 유지됩니다.";
     if (/invalid_media/.test(message)) return "사진은 JPEG·PNG·WEBP, 영상은 MP4·MOV·WebM, 파일당 100MB 이하만 첨부할 수 있습니다.";
-    if (/login_required|owner_required|not_owned/.test(message)) return "로그인한 본인의 개인운동만 변경할 수 있습니다. 다시 로그인해 주세요.";
+    if (/owner_required|not_owned|auth_profile_mapping_ambiguous|42501|403/.test(message)) return "개인운동 기록의 접근 권한을 확인하지 못했습니다. 본인 기록만 이용할 수 있습니다. 기존 기록과 입력은 유지됩니다. 문제가 계속되면 관리자에게 문의해 주세요.";
+    if (/login_required/.test(message)) return "로그인이 필요합니다. 입력 내용은 유지됩니다.";
+    if (action === "list") return "개인운동 기록을 불러오지 못했습니다. 기존 기록과 입력은 유지됩니다. 연결을 확인한 뒤 다시 열어 주세요.";
     return "서버 저장을 완료하지 못했습니다. 입력은 유지됩니다. 연결을 확인한 뒤 다시 저장해 주세요.";
   }
   function validateFiles(files) {
@@ -93,6 +95,7 @@
   }
   async function load() {
     const data = await call("list");
+    if (!Array.isArray(data?.entries) || !Array.isArray(data?.media)) throw new Error("personal_journal_invalid_list");
     const cleanupPending = await cleanup(data);
     const logs = [];
     const tombstones = new Set();

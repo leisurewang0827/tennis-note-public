@@ -1,5 +1,5 @@
 {
-  "privateSourceSha": "1a2019fade5048794668159957463aa4a08ad7c2",
+  "privateSourceSha": "d3cf3a8f64d18feb00492dd06c9aad5df1ec4368",
   "transport": {
     "privateSourceSha": "bab72f668b394330227cf8f67250c971cde876c5",
     "path": "app/shared/tennisnote-data-client.js",
@@ -30,12 +30,12 @@
     {
       "path": "app/tennis-note-member-app/data/journal.js",
       "name": "syncMemberJournalEntriesFromServer",
-      "sha256": "f67e02ccd26f915cd7fed4189a5edbc2e5c3d8bb68e569d77fbc527026f8de0d"
+      "sha256": "81a9057cc0e585479dead6fb8bf996f77fb119fada0d9e2b474b643fa4675126"
     },
     {
       "path": "app/tennis-note-member-app/data/journal.js",
       "name": "syncPersonalJournalFromServer",
-      "sha256": "aac658c9df1bc8c06fbab578b6150d07409c788743b1f623ccd4621ca2d5231b"
+      "sha256": "cbd44c9300450b7afe34d75754493c2719b377df37ef9b3367350078849cd830"
     },
     {
       "path": "app/tennis-note-member-app/views/journal.js",
@@ -45,12 +45,27 @@
     {
       "path": "app/tennis-note-member-app/views/journal.js",
       "name": "renderPracticeLogs",
-      "sha256": "101d83007cc217e1bf8da87b53da918e3e852690d554af02348f3bd2ab90ca6b"
+      "sha256": "9e141fa56678a308cc6c8ffed0bebf0f080596cc79986a2c594848ef9af686a1"
     },
     {
       "path": "app/tennis-note-member-app/views/journal.js",
       "name": "renderSelectedJournalCard",
       "sha256": "ce7f9602c05222925218fd99f1f1db7ef681146c73100096a36ab2ffb4cef549"
+    },
+    {
+      "path": "app/tennis-note-member-app/views/journal.js",
+      "name": "personalJournalListErrorMarkup",
+      "sha256": "fc5260ead5025f2aaafa098b4c60570e655362f7726ee3f707c9670687e7de9e"
+    },
+    {
+      "path": "app/tennis-note-member-app/views/journal.js",
+      "name": "renderPersonalJournalReadStatus",
+      "sha256": "9297ec537e35039b7affbceadc78b59117f91e0d87d5b3fc9af2f1275b6a0aee"
+    },
+    {
+      "path": "app/tennis-note-member-app/views/journal.js",
+      "name": "renderSelectedJournalDayPanel",
+      "sha256": "136cac84f109d33f0157f0a9e5e192cc27900b2c3672ade626a0df521812f91d"
     },
     {
       "path": "app/tennis-note-member-app/views/journal.js",
@@ -80,7 +95,7 @@
   ],
   "shared": {
     "path": "app/shared/tennisnote-personal-journal.js",
-    "sha256": "4bef1f6c1b4737ed65c69f10d47b2aa90cb205190e07d856db3798cdcb28454b"
+    "sha256": "c00d8b55acc2eb4c07c110dd60d15497ba4d5700ffd6382aaba460385acf9d3c"
   },
   "scope": "development only; no lesson/ticket/feedback writes"
 }

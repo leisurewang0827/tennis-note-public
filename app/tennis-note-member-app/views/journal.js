@@ -115,7 +115,8 @@ function renderPracticeLogs() {
   const practiceItems = state.practiceLogs;
   const practicePage = normalizePage("practice", practiceItems.length);
   const visiblePracticeItems = paginateItems(practiceItems, practicePage);
-  $("#practiceLogs").innerHTML =
+  const readError = personalJournalListErrorMarkup();
+  $("#practiceLogs").innerHTML = readError + (
     visiblePracticeItems
       .map((log) => {
         const mediaCount = normalizeMediaItems(log).length;
@@ -130,12 +131,12 @@ function renderPracticeLogs() {
             <span class="summary-log-status">상세 보기</span>
           </button>`;
       })
-      .join("") || memberEmptyState({
+      .join("") || (readError ? "" : memberEmptyState({
         title: "개인 운동일지가 없습니다",
         reason: "운동한 날짜를 선택해 첫 기록을 남겨 보세요.",
         action: { label: "운동일지 작성", openJournal: state.selectedJournalDate || localDateKey() },
         compact: true,
-      });
+      })));
   renderListPager("practiceLogsPager", "practice", practicePage, practiceItems.length);
 }
 
@@ -251,13 +252,39 @@ function renderSelectedJournalCard(entry) {
     </article>`;
 }
 
+function personalJournalListErrorMarkup() {
+  const owner = state.member?.profileId;
+  if (!owner || !personalJournalReadError || personalJournalReadError.owner !== owner) return "";
+  return `<p class="form-hint" role="alert" data-personal-journal-read-error>${escapeHtml(personalJournalReadError.message)}</p>`;
+}
+
+function renderPersonalJournalReadStatus() {
+  const calendar = $("#journalCalendarDisclosure");
+  if (!calendar) return;
+  let node = $("#personalJournalReadStatus");
+  if (!node) {
+    node = document.createElement("p");
+    node.id = "personalJournalReadStatus";
+    node.className = "form-hint";
+    node.setAttribute("role", "alert");
+    calendar.before(node);
+  }
+  const owner = state.member?.profileId;
+  const message = owner && personalJournalReadError && personalJournalReadError.owner === owner
+    ? personalJournalReadError.message : "";
+  node.textContent = message;
+  node.hidden = !message;
+}
+
 function renderSelectedJournalDayPanel() {
   const target = $("#journalSelectedDayPanel");
   if (!target) return;
+  renderPersonalJournalReadStatus();
   const selectedDate = state.selectedJournalDate || localDateKey();
   const dateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
   const query = (state.journalSearchQuery || "").trim();
   const entries = selectedJournalEntries();
+  const readError = personalJournalListErrorMarkup();
   target.innerHTML = `
     <div class="journal-selected-heading">
       <div>
@@ -267,7 +294,7 @@ function renderSelectedJournalDayPanel() {
       <button class="small-button" type="button" data-journal-write-date="${selectedDate}">이 날짜에 기록</button>
     </div>
     <div class="journal-selected-list">
-      ${entries.length ? entries.map(renderSelectedJournalCard).join("") : memberEmptyState({
+      ${entries.length ? entries.map(renderSelectedJournalCard).join("") : readError ? "" : memberEmptyState({
         title: "이 날짜의 운동 기록이 없습니다",
         reason: "레슨 또는 개인운동 내용을 사진·영상과 함께 남길 수 있습니다.",
         compact: true,

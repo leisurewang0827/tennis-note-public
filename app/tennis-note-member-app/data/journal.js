@@ -7,7 +7,7 @@ async function syncMemberJournalEntriesFromServer(profile = null) {
   const client = window.TennisNoteDataClient;
   const profileId = profile?.id || state.member?.profileId || "";
   if (!client?.selectRows || !client.downloadObject || !profileId) return false;
-  await syncPersonalJournalFromServer().catch(() => false);
+  await syncPersonalJournalFromServer();
   try {
     const [journalRows, mediaRows, recordRows, participantRecordRows, curriculumRows, lessonChartRows] = await Promise.all([
       client.selectRows("tn_journal_entries", {
@@ -256,12 +256,24 @@ async function syncPersonalJournalFromServer() {
   const api = window.TennisNotePersonalJournal;
   if (!state.member?.profileId || !api) return false;
   const owner = state.member.profileId;
-  const loaded = await api.load();
+  let loaded;
+  try {
+    loaded = await api.load();
+  } catch (error) {
+    if (state.member?.profileId !== owner) return false;
+    personalJournalReadError = { owner, message: api.errorMessage(error, "list") };
+    renderPracticeLogs();
+    renderSelectedJournalDayPanel();
+    return false;
+  }
   if (state.member?.profileId !== owner) { api.release(loaded.logs); return false; }
+  personalJournalReadError = null;
   const keys = new Set(loaded.logs.map((log) => log.personalClientKey).filter(Boolean));
   const local = state.practiceLogs.filter((log) => !log.serverJournalId && !keys.has(log.personalClientKey));
   api.release(state.practiceLogs.filter((log) => log.serverJournalId));
   state.practiceLogs = [...loaded.logs.map((log) => ({ ...log, personalOwnerId: owner })), ...local];
   saveSnapshot();
+  renderPracticeLogs();
+  renderSelectedJournalDayPanel();
   return true;
 }
