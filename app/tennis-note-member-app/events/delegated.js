@@ -4,6 +4,7 @@
 // 이 함수들을 순서대로 부른다.
 
 function bindDelegatedEvents() {
+  document.addEventListener("error", handleJournalMediaPreviewError, true);
   window.addEventListener("tennisnote:oauth-result", handleOAuthResult);
   $("#publicProductPreviewList")?.addEventListener("click", (event) => {
     void handlePublicOnboardingAction(event.target);
