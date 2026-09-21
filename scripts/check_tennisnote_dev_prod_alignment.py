@@ -34,6 +34,7 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "PUBLIC-STORE-AVAILABILITY-PRIVATE-EDFFC240",
     "SHARED-44PX-TARGETS-PRIVATE-EDFFC240",
     "PERSONAL-JOURNAL-MEDIA-CURRICULUM-PRIVATE-1A2019FA",
+    "PERSONAL-JOURNAL-OWN-PROFILE-PRIVATE-D3CF3A8F",
 )
 SELECTED_NET_NEW_PATHS = {
     "app/shared/tennisnote-personal-journal.js",
@@ -43,6 +44,7 @@ SELECTED_NET_NEW_PATHS = {
     "app/tennis-note-member-app/ui/screens.js",
     "app/tennis-note-member-app/events/schedule.js",
     "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-member-app/settings.js",
     "app/tennis-note-coach-app/domain/curriculum.js",
     "app/release.json",
     "app/shared/tennisnote-release.js",
@@ -309,7 +311,9 @@ def generate() -> None:
             "source-verified store availability and shared 44px contracts from private "
             "edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact. "
             "Personal journal and curriculum changes match private "
-            "1a2019fade5048794668159957463aa4a08ad7c2 through a separate exact-function/shared hash manifest."
+            "1a2019fade5048794668159957463aa4a08ad7c2; the own-profile authorization and "
+            "read-preservation correction matches private d3cf3a8f64d18feb00492dd06c9aad5df1ec4368 "
+            "through the separate exact-function/shared hash manifest."
         ),
         "dev_ahead_commits": classify_commits(),
     }
