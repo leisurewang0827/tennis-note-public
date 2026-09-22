@@ -13,11 +13,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.513",
-    "release_id": "2026.09.22.01",
-    "deployed_at": "2026-09-22T01:16:27+09:00",
-    "member_cache": "tennis-note-member-pwa-v552",
-    "coach_cache": "tennis-note-coach-mode-v525"
+    "version": "1.0.514",
+    "release_id": "2026.09.22.02",
+    "deployed_at": "2026-09-22T23:54:05+09:00",
+    "member_cache": "tennis-note-member-pwa-v553",
+    "coach_cache": "tennis-note-coach-mode-v526"
   },
   "allowed_differences": [
     "app version literals",
@@ -969,7 +969,7 @@
       "app/tennis-note-member-app/actions/refunds.js": "3c497299ad6f970c4c8ee158441d0d80e49a745d709952547f81ca05824988b8",
       "app/tennis-note-member-app/actions/requests.js": "2ad010567c80f7b9cc0e0e9ae3094a9814cdf13f72ee0790e9597cd705367c6a",
       "app/tennis-note-member-app/actions/session.js": "58be2fe44d3471f9fdab5f451510cbb0d66d958414ba257670611ad62beded40",
-      "app/tennis-note-member-app/app.js": "d649cab7f0b51bfec50d397c65f833c4d8d934dc32ee575052e0d7b3dfdd2ccf",
+      "app/tennis-note-member-app/app.js": "91b44223bb917b9ac39f169c41644419b6cdab8bb48991b1a7e41a85c2ea7242",
       "app/tennis-note-member-app/assets/app-icon.svg": "95a3104a4fc10f5b1b27bc2af817046df5172387fe5e3e2b8b20a48ccdd56428",
       "app/tennis-note-member-app/assets/brand/app-icon-180.png": "b5ca1e0b8a8b5aaf0fe93b5b3bf11bb7d1934b7c7a7a1024f09f44437c3fe2d8",
       "app/tennis-note-member-app/assets/brand/app-icon-192.png": "67e7973b634e8215342ae61931592f81084910c4d9e5a7bca36dfa829cd23dcd",
@@ -1010,7 +1010,7 @@
       "app/tennis-note-member-app/assets/brand/tennis-note-share-1.0.151.png": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2",
       "app/tennis-note-member-app/assets/brand/tennis-note-share-1.0.152.png": "9560b03a4889a0338d90570b8154d945356a5d51d838c0d035e653b1c93438d2",
       "app/tennis-note-member-app/assets/ntrp-poster.jpg": "b1d5276d74028e8fadaaa1317c5a4624e55971fd2718872c85be693d5b326bef",
-      "app/tennis-note-member-app/catalog.js": "15745e779cac7fb01641a968d42d61b109f5e89c7325efd4028d495d868af3ec",
+      "app/tennis-note-member-app/catalog.js": "d0f7ce52eb214b085903b5f51cdcd459dcfa625ff1c85f71b09595e43d3dd400",
       "app/tennis-note-member-app/data/auth.js": "c6c42bd42ed4d5361e180362bef0156eaa1be66218152f190a4c202fc5d78ec7",
       "app/tennis-note-member-app/data/journal.js": "94d07f937593a55309a3d10cb43738c0b71bffa45578db9b2d049e4f5e193106",
       "app/tennis-note-member-app/data/onboarding.js": "7da6e76b62ed91e1eb5aa1b1ef5cca6bade451276fc92a75fc47d49838cb63aa",
@@ -1030,7 +1030,7 @@
       "app/tennis-note-member-app/domain/onboarding.js": "27cf0200d0d2db3301eb452c99ba41611e71b07f357833cba6d934a4eb84608d",
       "app/tennis-note-member-app/domain/payment.js": "72c1fce06ebacaa0e1faf8c7a6c00f8d9f27014c8781123d369de53a734d2230",
       "app/tennis-note-member-app/domain/policy.js": "6ba859a46045d6409fd04775d521a6af14d620a9b6e770173bbcb8bc904e2b72",
-      "app/tennis-note-member-app/domain/products.js": "940a912275f7c209c914d54288dbda118f075aee6c4d584477d684af362434b9",
+      "app/tennis-note-member-app/domain/products.js": "b5147979e418512b18d80963be81dfb355326c3f441ffc6f8b728682941c96f0",
       "app/tennis-note-member-app/domain/purchase.js": "b17b0fd4b97cbbff31ca2dea19c61f0bc589403e5c09fd01ebf718fb4833ec83",
       "app/tennis-note-member-app/domain/schedule.js": "462759f1de859ca746110d4068b73adbc4674251f91bfee83a2368552cc6fcb8",
       "app/tennis-note-member-app/domain/shared-data.js": "3d44bdc32bb695522c87d7a8ef7f7bf61081aa3d1b0ea3e901e6112e41fa02bf",

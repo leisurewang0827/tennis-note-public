@@ -42,7 +42,7 @@ test("회원 화면은 서버 표시명을 정규화해 모든 구매 분류 위
   assert.match(app, /productFamilyLabels/);
   assert.match(catalog, /defaultMembershipProductFamilyLabels/);
   assert.match(products, /function membershipProductFamilyDisplayLabel/);
-  assert.match(products, /candidate && !\/할인\|discount\/i\.test\(candidate\) && \[\.\.\.candidate\]\.length <= 40/);
+  assert.match(products, /candidate && \[\.\.\.candidate\]\.length <= 40/);
   assert.match(payment, /options\?\.productFamilyLabels/);
   assert.match(storage, /normalizeMembershipProductFamilyLabels/);
   assert.match(productViews, /escapeHtml\(membershipProductFamilyDisplayLabel\(preset\.id\)\)/);
