@@ -182,6 +182,7 @@ function purchaseFamilyOptionsHtml(products = membershipProducts(), selectedFami
 }
 
 function purchaseStepOneHtml() {
+  if (!membershipProductFamilyLabelsReady()) return membershipProductFamilyLabelsUnavailableHtml();
   const flow = purchaseFlowState();
   const products = membershipProducts();
   const sourceTicket = purchaseFlowSourceTicket();

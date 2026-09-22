@@ -93,12 +93,18 @@ async function updateMembershipProductSetting(productId, options = {}) {
     ? readField("coachSaleMode")
     : product.coachSaleMode;
   if (selectedCoachSaleMode !== "selected") coachSaleAvailability = {};
+  const titleValue = readField("title");
+  if (!titleValue) {
+    fieldElement("title")?.focus();
+    showToast("상품명을 입력해 주세요.");
+    return;
+  }
   const ticketValue = numericValue(readField("tickets"), product.tickets);
   const cashAmount = numericValue(readField("cashAmount"), product.cashAmount);
   const nextProduct = membershipProductWithOperationalLimits(normalizeMembershipProduct({
     ...product,
-    title: readField("title") || product.title,
-    name: readField("title") || product.name,
+    title: titleValue,
+    name: titleValue,
     sessions: readField("sessions") || (fieldElement("tickets") ? `${ticketValue}회` : product.sessions),
     settlementBase: undefined,
     tickets: ticketValue,

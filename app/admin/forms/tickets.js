@@ -41,12 +41,14 @@ function membershipProductBulkSavePayload(product) {
   if (!card || !serverProduct?.id) throw new Error("membership_product_visible_mapping_required");
   const fieldElement = (field) => card.querySelector(`[data-product-field="${field}"]`);
   const readField = (field) => fieldElement(field)?.value.trim() || "";
+  const titleValue = readField("title");
+  if (!titleValue) throw new Error("membership_product_name_required");
   const ticketValue = numericValue(readField("tickets"), product.tickets);
   const cashAmount = numericValue(readField("cashAmount"), product.cashAmount);
   const nextProduct = membershipProductWithOperationalLimits(normalizeMembershipProduct({
     ...product,
-    title: readField("title") || product.title,
-    name: readField("title") || product.name,
+    title: titleValue,
+    name: titleValue,
     sessions: readField("sessions") || `${ticketValue}회`,
     tickets: ticketValue,
     cardAmount: Math.round(cashAmount * 1.1),

@@ -654,11 +654,11 @@ function normalizeBranchSalesConfig(value = {}) {
     id,
     { ...benefit, ...(source.benefits?.[id] || {}) },
   ]));
-  const productFamilyLabels = Object.fromEntries(Object.entries(defaults.productFamilyLabels).map(([key, fallback]) => {
+  const productFamilyLabels = Object.fromEntries(Object.keys(defaults.productFamilyLabels).map((key) => {
     const candidate = typeof source.productFamilyLabels?.[key] === "string"
       ? source.productFamilyLabels[key].trim().replace(/\s+/g, " ")
       : "";
-    return [key, candidate && [...candidate].length <= 40 ? candidate : fallback];
+    return [key, candidate && [...candidate].length <= 40 ? candidate : ""];
   }));
   features.newMemberBenefit = benefits.newMember.enabled === true;
   features.returningMemberBenefit = benefits.returningMember.enabled === true;
