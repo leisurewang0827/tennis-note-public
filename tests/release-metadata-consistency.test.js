@@ -1,54 +1,41 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import vm from "node:vm";
 
 const releaseJson = JSON.parse(fs.readFileSync(new URL("../app/release.json", import.meta.url), "utf8"));
 const releaseScript = fs.readFileSync(new URL("../app/shared/tennisnote-release.js", import.meta.url), "utf8");
 
-function block(name) {
-  const match = releaseScript.match(new RegExp(`${name}: \\{([\\s\\S]*?)\\n    \\},`));
-  assert.ok(match, `${name} block must exist`);
-  return match[1];
-}
-
-function textValue(source, name) {
-  const match = source.match(new RegExp(`${name}: "([^"]+)"`));
-  assert.ok(match, `${name} must exist`);
-  return match[1];
-}
-
-function numberValue(source, name) {
-  const match = source.match(new RegExp(`${name}: (\\d+)`));
-  assert.ok(match, `${name} must exist`);
-  return Number(match[1]);
-}
-
-test("native prepared and store-available metadata stay consistent", () => {
-  const nativeShell = block("nativeShell");
-  const store = block("store");
+test("공개 스토어 정보와 준비본 미확인 상태를 셸 선언과 분리한다", () => {
+  const window = {};
+  vm.runInNewContext(releaseScript, { window, document: { readyState: "loading", addEventListener() {} } });
+  const { store, prepared } = window.TENNIS_NOTE_RELEASE;
+  assert.equal(prepared.availability, "not_verified");
 
   for (const platform of ["android", "ios"]) {
     const platformVersion = `${platform}Version`;
     const platformBuild = `${platform}Build`;
     assert.equal(
       releaseJson.nativePlatforms[platform].preparedVersion,
-      textValue(nativeShell, platformVersion),
+      null,
       `${platform} prepared version`,
     );
     assert.equal(
       releaseJson.nativePlatforms[platform].preparedBuild,
-      numberValue(nativeShell, platformBuild),
+      null,
       `${platform} prepared build`,
     );
     assert.equal(
       releaseJson.nativePlatforms[platform].latestVersion,
-      textValue(store, platformVersion),
+      store[platformVersion],
       `${platform} store version`,
     );
     assert.equal(
       releaseJson.nativePlatforms[platform].latestBuild,
-      numberValue(store, platformBuild),
+      store[platformBuild],
       `${platform} store build`,
     );
+    assert.equal(releaseJson.nativePlatforms[platform].availability, store[`${platform}Availability`]);
+    assert.equal(releaseJson.nativePlatforms[platform].preparedAvailability, prepared.availability);
   }
 });

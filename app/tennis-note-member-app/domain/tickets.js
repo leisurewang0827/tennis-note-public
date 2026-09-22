@@ -6,16 +6,13 @@
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
 function isActiveRegularLiveTicket(ticket, today = localDateKey()) {
-  if (!ticket || ticket.refundHoldId || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
-  if (ticket.startsOn && ticket.startsOn > today) return false;
-  if (ticket.expiresOn && ticket.expiresOn < today) return false;
+  if (window.TennisNoteTicketState?.classify(ticket, today).canUse !== true) return false;
   return String(ticket.productKind || "").toLowerCase() === "regular";
 }
 
 function isPausedRegularLiveTicket(ticket, today = localDateKey()) {
-  if (!ticket || ticket.refundHoldId || ticket.status !== "paused" || Number(ticket.remaining) <= 0) return false;
-  if (ticket.startsOn && ticket.startsOn > today) return false;
-  if (ticket.expiresOn && ticket.expiresOn < today) return false;
+  // 휴회 복귀 후보는 일반 신규 사용과 구분한다.
+  if (window.TennisNoteTicketState?.classify(ticket, today).state !== "paused") return false;
   return String(ticket.productKind || "").toLowerCase() === "regular";
 }
 
@@ -30,20 +27,18 @@ function ticketCountFromTitle(title = "") {
 }
 
 function isActiveCouponLiveTicket(ticket, today = localDateKey()) {
-  if (!ticket || ticket.refundHoldId || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
-  if (ticket.startsOn && ticket.startsOn > today) return false;
-  if (ticket.expiresOn && ticket.expiresOn < today) return false;
+  if (window.TennisNoteTicketState?.classify(ticket, today).canUse !== true) return false;
   return String(ticket.productKind || "").toLowerCase() === "coupon" || String(ticket.title || "").includes("쿠폰");
 }
 
-function liveTicketStatusInfo(status = "") {
-  const key = String(status || "").toLowerCase();
-  if (key === "active") return { label: "정상 이용중", tone: "done" };
+function liveTicketStatusInfo(ticket = {}, today = localDateKey()) {
+  const key = window.TennisNoteTicketState?.derive(ticket, today) || "unknown";
+  if (key === "current") return { label: "정상 이용중", tone: "done" };
   if (key === "paused") return { label: "휴회 · 복귀 시간 선택 가능", tone: "wait" };
   if (key === "pending_payment") return { label: "결제 확인 대기", tone: "wait" };
-  if (key === "expired") return { label: "만료", tone: "wait" };
+  if (["expired", "exhausted"].includes(key)) return { label: "회원권 만료", tone: "wait" };
   if (["cancelled", "canceled", "refunded"].includes(key)) return { label: "취소", tone: "alert" };
-  return { label: key || "상태 확인중", tone: "wait" };
+  return { label: window.TennisNoteTicketState?.label(ticket, today) || "상태 확인 필요", tone: "wait" };
 }
 
 function liveTicketProductTitle(row = {}) {
@@ -86,18 +81,20 @@ function normalizeLiveTicket(row = {}) {
     : row.tn_payments || {};
   const total = Math.max(0, Number(row.total_sessions ?? product.total_sessions ?? 0));
   const used = Math.max(0, Number(row.used_sessions ?? 0));
-  const remainingValue = row.remaining_sessions ?? Math.max(0, total - used);
-  const remaining = Math.max(0, Number(remainingValue));
+  const effectiveState = window.TennisNoteTicketState?.classify(row);
+  const remaining = effectiveState?.remaining ?? null;
   const refundHoldId = row.refund_hold_refund_id || "";
   const frequencyEvidence = window.TennisNoteTicketPolicyHistory?.resolveWeeklyFrequency?.(row, product)
     || { value: null, status: "snapshot_missing", sources: [] };
   const frequencyUsable = window.TennisNoteTicketPolicyHistory?.isUsable?.(frequencyEvidence) === true;
   const regularTicket = String(row.product_kind || product.product_kind || "").toLowerCase() === "regular";
-  const statusInfo = regularTicket && !frequencyUsable
+  const statusInfo = ["expired", "exhausted", "refunded", "cancelled", "voided", "unknown"].includes(effectiveState?.state)
+    ? liveTicketStatusInfo(row)
+    : regularTicket && !frequencyUsable
     ? { label: "주당 횟수 확인 필요", tone: "alert" }
     : refundHoldId
       ? { label: "환불 접수 · 송금 대기", tone: "alert" }
-      : liveTicketStatusInfo(row.status);
+    : liveTicketStatusInfo(row);
   const configuredAnchorMinutes = row.makeup_anchor_minutes !== undefined
     ? row.makeup_anchor_minutes
     : product.makeup_anchor_minutes;
@@ -352,9 +349,7 @@ function memberBookablePausedTickets() {
 
 function memberHasActiveLiveTicket() {
   return (state.liveTickets || []).some((ticket) =>
-    !ticket.refundHoldId
-    && String(ticket.status || "").toLowerCase() === "active"
-    && Number(ticket.remaining) > 0);
+    window.TennisNoteTicketState?.classify(ticket, localDateKey()).canUse === true);
 }
 
 function memberScheduleTicketOptions() {
@@ -809,7 +804,7 @@ function rawCurrentLiveTickets() {
   if (!Array.isArray(state.liveTickets) || !state.liveTickets.length) return [];
   const usableTickets = window.TennisNoteTicketState?.split
     ? window.TennisNoteTicketState.split(state.liveTickets).current
-    : state.liveTickets.filter((ticket) => ["active", "paused"].includes(String(ticket.status || "").toLowerCase()));
+    : [];
   if (!usableTickets.length) return [];
   return [...usableTickets].filter((ticket) => !ticket.refundHoldId).sort((a, b) => {
     const priority = liveTicketPriority(a) - liveTicketPriority(b);

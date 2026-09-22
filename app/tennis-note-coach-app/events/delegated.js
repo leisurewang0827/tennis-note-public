@@ -7,7 +7,7 @@ function bindDelegatedEvents() {
   document.addEventListener("change", (event) => {
     const settlementMonth = event.target.closest("#coachSettlementMonth");
     if (settlementMonth) {
-      state.settlementMonth = /^\d{4}-\d{2}$/.test(settlementMonth.value) ? settlementMonth.value : localDateKey().slice(0, 7);
+      selectCoachSettlementMonth(settlementMonth.value);
       state.coachSettlement = null;
       void syncCoachSettlementFromServer();
       return;

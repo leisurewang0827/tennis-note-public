@@ -3,35 +3,72 @@
 // 사용자가 누른 것을 처리한다. 화면을 읽고 서버를 부르고 상태를 바꾼다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-function savePracticeLog() {
+async function savePracticeLog() {
+  const existing = state.practiceLogs.find((log) => log.id === (state.personalEditingId || state.personalDraftId));
   const mediaItems = mediaItemsFromInput($("#practiceMedia"));
   const mediaNames = mediaItems.map((file) => file.name);
   const requestFeedback = $("#requestCoachFeedback")?.checked;
   const journalDate = $("#journalDate")?.value || localDateKey();
   const log = {
-    id: `practice-${Date.now()}`,
+    ...(existing || {}),
+    id: existing?.id || state.personalDraftId || window.TennisNotePersonalJournal.key(),
     date: new Date(`${journalDate}T00:00:00`).toLocaleDateString("ko-KR"),
     journalDate,
     type: $("#practiceType").value,
-    memo: $("#practiceMemo").value.trim() || "운동 기록 미입력",
-    next: $("#practiceNext").value.trim() || "다음 연습 계획 미입력",
-    mediaNames,
-    mediaItems,
+    memo: $("#practiceMemo").value.trim(),
+    next: $("#practiceNext").value.trim(),
+    mediaNames: [...(existing?.mediaNames || []), ...mediaNames],
+    mediaItems: [...(existing?.mediaItems || []), ...mediaItems],
     feedbackQuestion: $("#feedbackQuestion")?.value.trim() || "",
     feedbackStatus: requestFeedback ? "코치 피드백 요청" : "개인 기록",
     coachFeedback: "",
-    submittedAt: new Date().toISOString(),
+    submittedAt: existing?.submittedAt || new Date().toISOString(),
   };
-  state.practiceLogs.unshift(log);
+  state.personalDraftId = log.id;
+  const hasLiveSession = Boolean(state.member?.profileId && window.TennisNoteDataClient?.getSession?.()?.access_token);
+  if (!hasLiveSession && state.dataMode === "live") {
+    personalJournalStatus("로그인이 필요합니다. 입력 내용은 유지됩니다.");
+    return false;
+  }
+  if (hasLiveSession) {
+    if (existing?.personalOwnerId && existing.personalOwnerId !== state.member.profileId) {
+      personalJournalStatus("다른 계정의 기록은 변경할 수 없습니다."); return false;
+    }
+    log.personalOwnerId = state.member.profileId;
+    log.personalClientKey ||= log.id;
+    const checkpoint = (pendingLog) => {
+      const index = state.practiceLogs.findIndex((item) => item.id === pendingLog.id);
+      if (index < 0) state.practiceLogs.unshift(pendingLog);
+      else state.practiceLogs[index] = pendingLog;
+      state.personalEditingId = pendingLog.id;
+      saveSnapshot();
+    };
+    try {
+      await window.TennisNotePersonalJournal.save(log, [...($("#practiceMedia")?.files || [])], checkpoint);
+      await syncPersonalJournalFromServer();
+    } catch (error) {
+      personalJournalStatus(window.TennisNotePersonalJournal.errorMessage(error));
+      return false;
+    }
+  } else {
+    const index = state.practiceLogs.findIndex((item) => item.id === log.id);
+    if (index < 0) state.practiceLogs.unshift(log); else state.practiceLogs[index] = log;
+    if (requestFeedback) pushPracticeFeedbackToShared(log);
+  }
   state.selectedJournalDate = journalDate;
   state.activeJournalMonth = journalDate.slice(0, 7);
-  if (requestFeedback) pushPracticeFeedbackToShared(log);
-  renderAll();
+  state.personalEditingId = null;
+  state.personalDraftId = null;
+  if ($("#practiceMedia")) $("#practiceMedia").value = "";
+  personalJournalStatus();
+  renderJournalCalendar();
+  saveSnapshot();
+  return true;
 }
 
 async function saveJournal() {
   const button = $("#saveJournal");
-  if (button?.disabled) return;
+  if (button?.disabled || button?.dataset.personalSaving === "true") return;
   if (button) {
     button.disabled = true;
     button.textContent = "서버에 저장 중";
@@ -50,11 +87,17 @@ async function saveJournal() {
     }
     return;
   }
-  savePracticeLog();
-  if (button) button.disabled = false;
-  renderJournalMode();
-  window.TennisNoteInputGuard?.markSaved?.("#journalComposerSheet");
-  closeAppSheet("journalComposerSheet");
+  let saved = false;
+  if (button) button.dataset.personalSaving = "true";
+  try { saved = await savePracticeLog(); }
+  finally {
+    if (button) { button.disabled = false; delete button.dataset.personalSaving; }
+    renderJournalMode();
+  }
+  if (saved) {
+    window.TennisNoteInputGuard?.markSaved?.("#journalComposerSheet");
+    closeAppSheet("journalComposerSheet");
+  }
 }
 
 async function submitLessonLog() {
@@ -113,4 +156,36 @@ async function submitLessonLog() {
 
 function prepareJournalWriteDate(dateValue) {
   openJournalComposer(dateValue);
+}
+
+function editPersonalJournal(id) {
+  const log = state.practiceLogs.find((item) => item.id === id);
+  if (!log || !log.personalOwnerVerified || log.personalOwnerId !== state.member?.profileId) {
+    showToast("서버에서 확인된 본인의 개인운동만 수정할 수 있습니다."); return;
+  }
+  closeJournalDetail();
+  state.personalEditingId = log.id;
+  $("#journalMode").value = "practice";
+  $("#practiceType").value = log.type;
+  $("#practiceMemo").value = log.memo;
+  $("#practiceNext").value = log.next;
+  $("#feedbackQuestion").value = log.feedbackQuestion || "";
+  $("#requestCoachFeedback").checked = false;
+  $("#practiceMedia").value = "";
+  openJournalComposer(log.journalDate, { edit: true });
+}
+
+async function deletePersonalJournal(id, button) {
+  const log = state.practiceLogs.find((item) => item.id === id);
+  if (!log || !log.personalOwnerVerified || log.personalOwnerId !== state.member?.profileId || button?.disabled) return;
+  if (!window.confirm("이 개인운동과 첨부만 삭제합니다. 수업 결과·회차·코치 피드백은 바뀌지 않습니다.")) return;
+  if (button) button.disabled = true;
+  try {
+    const removed = await window.TennisNotePersonalJournal.remove(log);
+    await syncPersonalJournalFromServer();
+    closeJournalDetail();
+    renderJournalCalendar();
+    if (removed.cleanupPending) showToast("기록은 삭제됐습니다. 첨부 정리는 연결 복구 후 다시 확인합니다.");
+  } catch (error) { showToast(window.TennisNotePersonalJournal.errorMessage(error)); }
+  finally { if (button) button.disabled = false; }
 }

@@ -10,23 +10,25 @@ function renderMediaPreview(mediaItems = [], compact = false) {
     <div class="journal-media-grid ${compact ? "compact" : ""}">
       ${mediaItems
         .map((item) => {
+          if (item.error) return `<p role="status">${escapeHtml(item.error)}</p>`;
+          const url = journalMediaPreviewUrl(item.url);
           const isVideo = item.type?.startsWith("video") || /\.(mp4|mov|webm|m4v)$/i.test(item.name || "");
           const isImage = item.type?.startsWith("image") || /\.(jpg|jpeg|png|gif|webp)$/i.test(item.name || "");
-          if (item.url && isVideo) {
+          if (url && isVideo) {
             return `
               <figure class="journal-media-item video">
-                <video src="${item.url}" controls playsinline preload="metadata"></video>
-                <figcaption>${item.name}</figcaption>
+                <video data-journal-media-preview src="${escapeHtml(url)}" controls playsinline preload="metadata"></video>
+                <figcaption>${escapeHtml(item.name)}</figcaption>
               </figure>`;
           }
-          if (item.url && isImage) {
+          if (url && isImage) {
             return `
               <figure class="journal-media-item image">
-                <img src="${item.url}" alt="${item.name}" loading="lazy" />
-                <figcaption>${item.name}</figcaption>
+                <img data-journal-media-preview src="${escapeHtml(url)}" alt="${escapeHtml(item.name)}" loading="lazy" />
+                <figcaption>${escapeHtml(item.name)}</figcaption>
               </figure>`;
           }
-          return `<b class="media-chip">${item.name}</b>`;
+          return `<div class="journal-media-item"><b class="media-chip">${escapeHtml(item.name)}</b><p role="status">${journalMediaUnavailableMessage()}</p></div>`;
         })
         .join("")}
     </div>`;
@@ -114,27 +116,28 @@ function renderPracticeLogs() {
   const practiceItems = state.practiceLogs;
   const practicePage = normalizePage("practice", practiceItems.length);
   const visiblePracticeItems = paginateItems(practiceItems, practicePage);
-  $("#practiceLogs").innerHTML =
+  const readError = personalJournalListErrorMarkup();
+  $("#practiceLogs").innerHTML = readError + (
     visiblePracticeItems
       .map((log) => {
         const mediaCount = normalizeMediaItems(log).length;
         const dateLabel = log.journalDate || log.date;
         const statusLabel = log.coachFeedback ? "코치 코멘트 있음" : log.feedbackStatus || "개인 기록";
         return `
-          <button class="history-card compact-log summary-log done" type="button" data-open-journal-detail="${log.id}">
+          <button class="history-card compact-log summary-log done" type="button" data-open-journal-detail="${escapeHtml(log.id)}">
             <span class="summary-log-main">
-              <strong>${log.type}</strong>
-              <small>${dateLabel} · ${statusLabel}${mediaCount ? ` · 첨부 ${mediaCount}개` : ""}</small>
+              <strong>${escapeHtml(log.type)}</strong>
+              <small>${escapeHtml(dateLabel)} · ${escapeHtml(statusLabel)}${mediaCount ? ` · 첨부 ${mediaCount}개` : ""}</small>
             </span>
             <span class="summary-log-status">상세 보기</span>
           </button>`;
       })
-      .join("") || memberEmptyState({
+      .join("") || (readError ? "" : memberEmptyState({
         title: "개인 운동일지가 없습니다",
         reason: "운동한 날짜를 선택해 첫 기록을 남겨 보세요.",
         action: { label: "운동일지 작성", openJournal: state.selectedJournalDate || localDateKey() },
         compact: true,
-      });
+      })));
   renderListPager("practiceLogsPager", "practice", practicePage, practiceItems.length);
 }
 
@@ -240,23 +243,49 @@ function renderSelectedJournalCard(entry) {
     <article class="journal-selected-card ${entry.kind === "레슨" ? "lesson" : "practice"}">
       <div class="journal-selected-card-head">
         <span>${entry.kind}</span>
-        <strong>${entry.title}</strong>
-        <small>${entry.subtitle || entry.dateLabel}</small>
+        <strong>${escapeHtml(entry.title)}</strong>
+        <small>${escapeHtml(entry.subtitle || entry.dateLabel)}</small>
       </div>
       <div class="journal-selected-card-action">
-        <span>${statusText}${entry.mediaNames?.length ? ` · 첨부 ${entry.mediaNames.length}개` : ""}</span>
-        <button class="small-button" type="button" data-open-journal-detail="${entry.id}">내용 보기</button>
+        <span>${escapeHtml(statusText)}${entry.mediaNames?.length ? ` · 첨부 ${entry.mediaNames.length}개` : ""}</span>
+        <button class="small-button" type="button" data-open-journal-detail="${escapeHtml(entry.id)}">내용 보기</button>
       </div>
     </article>`;
+}
+
+function personalJournalListErrorMarkup() {
+  const owner = state.member?.profileId;
+  if (!owner || !personalJournalReadError || personalJournalReadError.owner !== owner) return "";
+  return `<p class="form-hint" role="alert" data-personal-journal-read-error>${escapeHtml(personalJournalReadError.message)}</p>`;
+}
+
+function renderPersonalJournalReadStatus() {
+  const calendar = $("#journalCalendarDisclosure");
+  if (!calendar) return;
+  let node = $("#personalJournalReadStatus");
+  if (!node) {
+    node = document.createElement("p");
+    node.id = "personalJournalReadStatus";
+    node.className = "form-hint";
+    node.setAttribute("role", "alert");
+    calendar.before(node);
+  }
+  const owner = state.member?.profileId;
+  const message = owner && personalJournalReadError && personalJournalReadError.owner === owner
+    ? personalJournalReadError.message : "";
+  node.textContent = message;
+  node.hidden = !message;
 }
 
 function renderSelectedJournalDayPanel() {
   const target = $("#journalSelectedDayPanel");
   if (!target) return;
+  renderPersonalJournalReadStatus();
   const selectedDate = state.selectedJournalDate || localDateKey();
   const dateLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
   const query = (state.journalSearchQuery || "").trim();
   const entries = selectedJournalEntries();
+  const readError = personalJournalListErrorMarkup();
   target.innerHTML = `
     <div class="journal-selected-heading">
       <div>
@@ -266,10 +295,17 @@ function renderSelectedJournalDayPanel() {
       <button class="small-button" type="button" data-journal-write-date="${selectedDate}">이 날짜에 기록</button>
     </div>
     <div class="journal-selected-list">
-      ${entries.length ? entries.map(renderSelectedJournalCard).join("") : memberEmptyState({
+      ${entries.length ? entries.map(renderSelectedJournalCard).join("") : readError ? "" : memberEmptyState({
         title: "이 날짜의 운동 기록이 없습니다",
         reason: "레슨 또는 개인운동 내용을 사진·영상과 함께 남길 수 있습니다.",
         compact: true,
       })}
     </div>`;
+}
+
+function personalJournalActionsMarkup(id) {
+  const log = state.practiceLogs.find((item) => item.id === id);
+  const owned = log?.personalOwnerVerified && log.personalOwnerId === state.member?.profileId;
+  return owned ? `<div class="actions"><button type="button" class="small-button" data-edit-personal-journal="${escapeHtml(id)}">수정</button><button type="button" class="small-button" data-delete-personal-journal="${escapeHtml(id)}">삭제</button></div>${log.mediaPending ? '<p>첨부 업로드가 완료되지 않았습니다. 수정에서 같은 파일을 다시 선택해 주세요.</p>' : ''}`
+    : '<p>이 기기에만 남아 있는 기록입니다. 내용을 복사해 새 기록으로 저장하고, 첨부는 다시 선택해 주세요.</p>';
 }
