@@ -168,8 +168,7 @@ function normalizeMembershipProductFamilyLabels(value = {}) {
   const source = value && typeof value === "object" ? value : {};
   return Object.fromEntries(Object.entries(defaultMembershipProductFamilyLabels).map(([key, fallback]) => {
     const candidate = typeof source[key] === "string" ? source[key].trim().replace(/\s+/g, " ") : "";
-    // Display only: legacy promotional labels must not imply a price contract.
-    return [key, candidate && !/할인|discount/i.test(candidate) && [...candidate].length <= 40 ? candidate : fallback];
+    return [key, candidate && [...candidate].length <= 40 ? candidate : fallback];
   }));
 }
 

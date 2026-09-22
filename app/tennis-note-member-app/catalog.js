@@ -62,7 +62,7 @@ const membershipPresetDefinitions = [
   {
     id: "three-month",
     label: "3개월",
-    pickerLabel: "3개월",
+    pickerLabel: "3개월 (10% 할인)",
     description: "12주 등록·보강 21일",
     filters: { scheduleScope: "all", productKind: "regular", groupSize: "all", lessonMinutes: "all" },
   },
@@ -84,7 +84,7 @@ const membershipPresetDefinitions = [
 
 const defaultMembershipProductFamilyLabels = Object.freeze({
   fourWeek: "한달 (4주)",
-  threeMonth: "3개월",
+  threeMonth: "3개월 (10% 할인)",
   coupon: "쿠폰 레슨",
   oneDay: "원데이 1회",
 });

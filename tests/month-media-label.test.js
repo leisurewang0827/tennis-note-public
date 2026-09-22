@@ -19,7 +19,7 @@ const member = "app/tennis-note-member-app/";
 
 test("정산·첨부·표시명은 병합된 private 권위 함수 9개와 공용 자산이 exact 일치한다", () => {
   const manifest = JSON.parse(read("docs/month-media-label-source-parity-20260922.json"));
-  assert.equal(manifest.privateMainSha, "060ece0e4aff969c1d57c4246e9785c7bd40abc5");
+  assert.equal(manifest.privateMainSha, "5b82fe62186bb7288d367a90f41f0579978d54e6");
   assert.equal(manifest.functions.length, 9);
   for (const item of manifest.functions) {
     assert.equal(hash(extract(read(item.publicModule), item.function)), item.sha256, item.function);
@@ -81,13 +81,14 @@ test("legacy 첨부는 URL·권한·형식에 맞게 표시하며 오류 안내�
   assert.equal(context.media.dataset.previewFailed, "true");
 });
 
-test("3개월 표시명만 중립화하고 live 할인 문구도 가격 주장으로 사용하지 않는다", () => {
-  const context = vm.createContext({ defaultMembershipProductFamilyLabels: { threeMonth: "3개월", fourWeek: "한달 (4주)" } });
+test("관리자에서 정한 3개월 할인 표시명을 회원 화면에 그대로 보존한다", () => {
+  const context = vm.createContext({ defaultMembershipProductFamilyLabels: { threeMonth: "3개월 (10% 할인)", fourWeek: "한달 (4주)" } });
   vm.runInContext(extract(read(member + "domain/products.js"), "normalizeMembershipProductFamilyLabels"), context);
-  for (const label of ["3개월 (10% 할인)", "3 months discount", "3개월", ""]) {
+  for (const label of ["3개월 (10% 할인)", "3 months discount", "3개월"]) {
     context.label = label;
-    assert.equal(vm.runInContext("normalizeMembershipProductFamilyLabels({threeMonth:label}).threeMonth", context), "3개월");
+    assert.equal(vm.runInContext("normalizeMembershipProductFamilyLabels({threeMonth:label}).threeMonth", context), label);
   }
-  assert.doesNotMatch(read(member + "catalog.js") + read(member + "app.js"), /3개월 \(10% 할인\)/);
+  assert.equal(vm.runInContext("normalizeMembershipProductFamilyLabels({threeMonth:''}).threeMonth", context), "3개월 (10% 할인)");
+  assert.match(read(member + "catalog.js") + read(member + "app.js"), /3개월 \(10% 할인\)/);
   assert.doesNotMatch(read("app/shared/tennisnote-product-catalog.js"), /4주권 3회 금액에서 10% 할인/);
 });

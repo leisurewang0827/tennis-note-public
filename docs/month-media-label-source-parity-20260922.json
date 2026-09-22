@@ -1,6 +1,6 @@
 {
-  "privateMainSha": "060ece0e4aff969c1d57c4246e9785c7bd40abc5",
-  "publicBaseSha": "07c43bbba875f8d9ad5174a6893ba62875ccfdce",
+  "privateMainSha": "5b82fe62186bb7288d367a90f41f0579978d54e6",
+  "publicBaseSha": "6a5e63ed7d8339b491af24262f201c3c99c6f4a8",
   "functions": [
     {
       "function": "coachSettlementCurrentMonth",
@@ -30,7 +30,7 @@
       "function": "normalizeMembershipProductFamilyLabels",
       "privateSource": "90-Dashboard/tennis-note-member-app/app.js",
       "publicModule": "app/tennis-note-member-app/domain/products.js",
-      "sha256": "8c42184e1dc07d88d4d9d6310a04339c2f314e3c0fb0a710ad684bb0db2b3745"
+      "sha256": "0d11168e4ad54ee88571223e7c7d5644037e8f9c71aaf49fbb49cb81257fcc02"
     },
     {
       "function": "journalMediaPreviewUrl",
