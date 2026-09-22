@@ -166,17 +166,31 @@ function membershipProductFamilyDefinition(productOrId = "") {
 
 function normalizeMembershipProductFamilyLabels(value = {}) {
   const source = value && typeof value === "object" ? value : {};
-  return Object.fromEntries(Object.entries(defaultMembershipProductFamilyLabels).map(([key, fallback]) => {
+  const keys = ["fourWeek", "threeMonth", "coupon", "oneDay"];
+  return Object.fromEntries(keys.map((key) => {
     const candidate = typeof source[key] === "string" ? source[key].trim().replace(/\s+/g, " ") : "";
-    return [key, candidate && [...candidate].length <= 40 ? candidate : fallback];
+    return [key, candidate && [...candidate].length <= 40 ? candidate : ""];
   }));
+}
+
+function membershipProductFamilyLabelsReady(value = state.livePaymentOptions?.productFamilyLabels) {
+  const labels = normalizeMembershipProductFamilyLabels(value);
+  return membershipProductFamilyLabelKeysInOrder.every((key) => Boolean(labels[key]));
+}
+
+function membershipProductFamilyLabelsUnavailableHtml() {
+  return memberEmptyState({
+    title: "회원권 표시 설정을 불러오지 못했습니다",
+    reason: "관리자에게 문의해 주세요. 설정이 정상화되기 전에는 회원권을 선택하거나 결제할 수 없습니다.",
+    compact: true,
+  });
 }
 
 function membershipProductFamilyDisplayLabel(productOrId = "") {
   const family = membershipProductFamilyDefinition(productOrId);
   const key = membershipProductFamilyLabelKeys[family.id];
   const labels = normalizeMembershipProductFamilyLabels(state.livePaymentOptions?.productFamilyLabels);
-  return labels[key] || family.pickerLabel || family.label;
+  return labels[key] || "";
 }
 
 function membershipProductsForFamily(familyId, products = membershipProducts()) {

@@ -7,6 +7,10 @@
 function renderMembershipProductPresets() {
   const target = $("#membershipProductPresets");
   if (!target) return;
+  if (!membershipProductFamilyLabelsReady()) {
+    target.innerHTML = membershipProductFamilyLabelsUnavailableHtml();
+    return;
+  }
   const activePresetId = activeMembershipPresetId();
   const products = membershipProducts();
   target.innerHTML = `

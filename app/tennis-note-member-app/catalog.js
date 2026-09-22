@@ -82,12 +82,7 @@ const membershipPresetDefinitions = [
   },
 ];
 
-const defaultMembershipProductFamilyLabels = Object.freeze({
-  fourWeek: "한달 (4주)",
-  threeMonth: "3개월 (10% 할인)",
-  coupon: "쿠폰 레슨",
-  oneDay: "원데이 1회",
-});
+const membershipProductFamilyLabelKeysInOrder = Object.freeze(["fourWeek", "threeMonth", "coupon", "oneDay"]);
 
 const membershipProductFamilyLabelKeys = Object.freeze({
   "four-week": "fourWeek",
