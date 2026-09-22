@@ -54,7 +54,7 @@ async function syncMemberPaymentOptionsFromServer(targetBranchId = "") {
     normalizeSelectedPaymentMethod();
     return true;
   } catch {
-    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true }, productFamilyLabels: { ...defaultMembershipProductFamilyLabels } };
+    state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true }, productFamilyLabels: {} };
     normalizeSelectedPaymentMethod();
     return false;
   }
