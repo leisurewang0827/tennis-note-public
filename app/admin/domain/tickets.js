@@ -204,10 +204,7 @@ function liveTicketLessonKind(product = {}) {
 }
 
 function managementReportTicketIsActive(ticket = {}, today = adminLocalDateKey(new Date())) {
-  if (["expired", "cancelled", "inactive"].includes(String(ticket.status || "").toLowerCase())) return false;
-  if (Number(ticket.remaining) <= 0) return false;
-  if (ticket.starts && ticket.starts > today) return false;
-  return !ticket.expires || ticket.expires >= today;
+  return window.TennisNoteTicketState?.classify(ticket, today).canUse === true;
 }
 
 // ── 아래는 2차 정리에서 app.js 에서 더 옮겨온 것들 ──
@@ -432,11 +429,7 @@ function getTicketByLesson(lesson) {
 }
 
 function isRegularScheduleTicket(ticket, today = adminLocalDateKey(new Date())) {
-  if (!ticket || Number(ticket.remaining) <= 0) return false;
-  if (ticket.status && ticket.status !== "active") return false;
-  const startsOn = ticket.starts || ticket.purchased || "";
-  if (startsOn && startsOn > today) return false;
-  if (ticket.expires && ticket.expires < today) return false;
+  if (window.TennisNoteTicketState?.classify(ticket, today).canUse !== true) return false;
   const productKind = ticket.productKind || membershipProductForTicket(ticket).productKind;
   if (["pass", "coupon"].includes(String(productKind).toLowerCase()) || String(ticket.product || "").includes("쿠폰")) return false;
   return true;
@@ -552,10 +545,7 @@ function beginScheduleTicketAssignment(ticketId, lessonSource = "regular") {
 }
 
 function isActiveCouponTicket(ticket, today = adminLocalDateKey(new Date())) {
-  if (!ticket || ticket.status !== "active" || Number(ticket.remaining) <= 0) return false;
-  const startsOn = ticket.starts || ticket.purchased || "";
-  if (startsOn && startsOn > today) return false;
-  if (ticket.expires && ticket.expires < today) return false;
+  if (window.TennisNoteTicketState?.classify(ticket, today).canUse !== true) return false;
   const productKind = String(ticket.productKind || membershipProductForTicket(ticket).productKind || "").toLowerCase();
   return productKind === "pass" || productKind === "coupon" || String(ticket.product || "").includes("쿠폰");
 }

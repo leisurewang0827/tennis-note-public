@@ -30,6 +30,18 @@ function normalizeMediaItems(log) {
   return mediaItemsFromNames(log.mediaNames || []);
 }
 
+function journalMediaPreviewUrl(value = "") {
+  if (!value) return "";
+  try {
+    const url = new URL(value, window.location.href);
+    return ["https:", "blob:"].includes(url.protocol) ? url.href : "";
+  } catch { return ""; }
+}
+
+function journalMediaUnavailableMessage() {
+  return "첨부 원본을 표시할 수 없습니다. 파일을 다시 첨부해 주세요.";
+}
+
 function journalMediaType(file = {}) {
   if (String(file.type || "").startsWith("video/")) return "video";
   return "image";

@@ -215,7 +215,8 @@ function applyScheduleV2CoachWorkspace(workspace = {}, oneDayRows = [], roster =
       active: "수강중",
       expiring: "만료 임박",
       paused_pending: ticket.status === "paused" ? "휴회" : ticket.status === "pending_payment" ? "결제 대기" : "시작 예정",
-      expired: "만료",
+      expired: window.TennisNoteTicketState?.label(ticket, todayIso) || "상태 확인 필요",
+      attention: "상태 확인 필요",
     }[statusCategory] || "확인 필요";
     return {
       id: member.id,

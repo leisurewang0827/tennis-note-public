@@ -14,6 +14,9 @@ const memberScheduleCoachLaneWidth = 64;
 
 const journalMediaBucket = "tennisnote-journal-media";
 
+// 일시적인 본인 기록 조회 오류이며 저장된 draft/snapshot을 덮어쓰지 않는다.
+let personalJournalReadError = null;
+
 const serverJournalSchema = "tennisnote-mobile-journal-v1";
 
 const memberEnrollmentFormVersion = "2026-07-15-v1";

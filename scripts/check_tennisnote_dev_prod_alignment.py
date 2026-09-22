@@ -18,25 +18,53 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.507"
-EXPECTED_RELEASE_ID = "2026.09.18.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v546"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v519"
+EXPECTED_VERSION = "1.0.514"
+EXPECTED_RELEASE_ID = "2026.09.22.02"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v553"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v526"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
+    "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
     "FEEDBACK-ADMIN-NOTE-PRESERVATION",
     "COACH-SERVER-FEEDBACK-PENDING-AUTHORITY",
     "AUTH-NATIVE-SESSION-CONTINUITY",
     "AUTH-EMAIL-UI-HIDDEN",
     "NATIVE-PUSH-FIREBASE-FAIL-CLOSED",
     "LEGACY-ARRAY-AT-COMPATIBILITY",
+    "MEMBERSHIP-EFFECTIVE-STATE-PRIVATE-A7AA949C",
+    "PUBLIC-STORE-AVAILABILITY-PRIVATE-EDFFC240",
+    "SHARED-44PX-TARGETS-PRIVATE-EDFFC240",
+    "PERSONAL-JOURNAL-MEDIA-CURRICULUM-PRIVATE-1A2019FA",
+    "PERSONAL-JOURNAL-OWN-PROFILE-PRIVATE-D3CF3A8F",
+    "AUTH-PHONE-EXISTS-GUIDANCE-PRIVATE-92C72E4C",
 )
 SELECTED_NET_NEW_PATHS = {
+    "app/shared/tennisnote-product-catalog.js",
+    "app/tennis-note-coach-app/domain/settlement.js",
+    "app/tennis-note-coach-app/events/delegated.js",
+    "app/tennis-note-member-app/catalog.js",
+    "app/tennis-note-member-app/domain/products.js",
+    "app/tennis-note-member-app/events/delegated.js",
+    "app/tennis-note-member-app/ui/common.js",
+    "app/shared/tennisnote-personal-journal.js",
+    "app/tennis-note-member-app/actions/journal.js",
+    "app/tennis-note-member-app/data/journal.js",
+    "app/tennis-note-member-app/views/journal.js",
+    "app/tennis-note-member-app/ui/screens.js",
+    "app/tennis-note-member-app/events/schedule.js",
+    "app/tennis-note-member-app/service-worker.js",
+    "app/tennis-note-member-app/settings.js",
+    "app/tennis-note-coach-app/domain/curriculum.js",
+    "app/release.json",
+    "app/shared/tennisnote-release.js",
+    "app/shared/tennisnote-release-updater.js",
+    "app/shared/tennisnote-ui-foundation.css",
     "app/admin/actions/coach.js",
     "app/admin/actions/common.js",
     "app/admin/app.js",
     "app/admin/domain/coaches.js",
     "app/admin/domain/tickets.js",
+    "app/admin/forms/schedule.js",
     "app/admin/schedule-v2-admin.js",
     "app/shared/tennisnote-comment-draft.js",
     "app/shared/tennisnote-data-client.js",
@@ -45,11 +73,13 @@ SELECTED_NET_NEW_PATHS = {
     "app/shared/tennisnote-issue-reporter.js",
     "app/shared/tennisnote-runtime-environment.js",
     "app/shared/tennisnote-ui-language.js",
+    "app/shared/tennisnote-ticket-state.js",
     "app/tennis-note-coach-app/actions/schedule.js",
     "app/tennis-note-coach-app/app.js",
     "app/tennis-note-coach-app/data/auth.js",
     "app/tennis-note-coach-app/data/push.js",
     "app/tennis-note-coach-app/domain/records.js",
+    "app/tennis-note-coach-app/domain/members.js",
     "app/tennis-note-coach-app/forms/coaches.js",
     "app/tennis-note-coach-app/forms/common.js",
     "app/tennis-note-coach-app/settings.js",
@@ -63,6 +93,7 @@ SELECTED_NET_NEW_PATHS = {
     "app/tennis-note-member-app/domain/journal.js",
     "app/tennis-note-member-app/domain/purchase.js",
     "app/tennis-note-member-app/domain/schedule.js",
+    "app/tennis-note-member-app/domain/tickets.js",
     "app/tennis-note-member-app/forms/common.js",
     "app/tennis-note-member-app/forms/members.js",
     "app/tennis-note-member-app/forms/schedule.js",
@@ -282,11 +313,24 @@ def generate() -> None:
         "selection_note": (
             "Only the verified feedback fixes, native authentication session continuity, hidden "
             "email authentication entry points, push fail-closed behavior, and legacy Array "
-            "compatibility are added beyond the production authority tree."
+            "compatibility plus the strictly source-verified membership effective-state change "
+            "from private a7aa949c2db64edd1fbfb665b8a8cf03690e8160 are added beyond the "
+            "production authority tree. The production hotfix base is "
+            "3d215f7da47fc6f002e77d420f1682c848c93e40. Development 1.0.509 adds only "
+            "source-verified store availability and shared 44px contracts from private "
+            "edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact. "
+            "Personal journal and curriculum changes match private "
+            "1a2019fade5048794668159957463aa4a08ad7c2; the own-profile authorization and "
+            "read-preservation correction matches private d3cf3a8f64d18feb00492dd06c9aad5df1ec4368 "
+            "through the separate exact-function/shared hash manifest. The phone_exists guidance "
+            "matches private 92c72e4c0d7da3c7893cfa03148ceb56f1966556 and changes only client "
+            "error presentation. Settlement month, legacy media guidance, and neutral product labels "
+            "match private 060ece0e4aff969c1d57c4246e9785c7bd40abc5 through the exact-function/shared "
+            "hash manifest month-media-label-source-parity-20260922.json. No R3 or backend change."
         ),
         "dev_ahead_commits": classify_commits(),
     }
-    paths = authority_paths("app")
+    paths = sorted(set(authority_paths("app")) | {"app/shared/tennisnote-personal-journal.js"})
     placeholder = dict(manifest)
     hashes = {
         path: sha256(

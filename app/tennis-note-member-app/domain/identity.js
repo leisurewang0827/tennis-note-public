@@ -163,6 +163,7 @@ function identityErrorMessage(error) {
   if (code.includes("phone_provider") || code.includes("sms_provider") || code.includes("sms_send")) return phoneAuthUnavailableMessage();
   if (code.includes("otp_expired") || code.includes("token has expired")) return "인증번호가 만료되었거나 올바르지 않습니다. 새 번호를 받아 다시 입력해 주세요.";
   if (code.includes("phone_otp_invalid") || code.includes("phone_otp_verification_failed")) return "인증번호 6자리를 확인해 주세요.";
+  if (code.includes("phone_exists")) return "이미 다른 계정에 연결된 휴대전화입니다. 기존 계정으로 로그인하거나 다른 번호를 사용해 주세요.";
   if (code.includes("phone_change_conflict") || code.includes("phone already")) return "이미 다른 로그인 계정에서 확인된 번호입니다. 관리자에게 계정 연결을 요청해 주세요.";
   if (code.includes("birth_year_invalid")) return "출생연도를 확인해 주세요.";
   if (code.includes("gender_invalid")) return "성별을 선택해 주세요.";

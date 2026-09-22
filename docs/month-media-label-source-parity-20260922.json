@@ -1,0 +1,66 @@
+{
+  "privateMainSha": "5b82fe62186bb7288d367a90f41f0579978d54e6",
+  "publicBaseSha": "6a5e63ed7d8339b491af24262f201c3c99c6f4a8",
+  "functions": [
+    {
+      "function": "coachSettlementCurrentMonth",
+      "privateSource": "90-Dashboard/tennis-note-coach-app/app.js",
+      "publicModule": "app/tennis-note-coach-app/domain/settlement.js",
+      "sha256": "3c304eb4fd1ec68e949fdd6c9677d33e8eee43c1bb8cc5604c214d236f05f15d"
+    },
+    {
+      "function": "selectCoachSettlementMonth",
+      "privateSource": "90-Dashboard/tennis-note-coach-app/app.js",
+      "publicModule": "app/tennis-note-coach-app/domain/settlement.js",
+      "sha256": "e503f1240cfbb4cfcaa2d001e13540da7900637f2b2a1dee424e97ab20642143"
+    },
+    {
+      "function": "coachSettlementMonth",
+      "privateSource": "90-Dashboard/tennis-note-coach-app/app.js",
+      "publicModule": "app/tennis-note-coach-app/domain/settlement.js",
+      "sha256": "f5f1e4ebbcbc1f4272506b08f49cdcddfe02298459a7faf89f32697eb8d3380b"
+    },
+    {
+      "function": "logoutCoach",
+      "privateSource": "90-Dashboard/tennis-note-coach-app/app.js",
+      "publicModule": "app/tennis-note-coach-app/data/auth.js",
+      "sha256": "09f4aaf55812c8e8ffdcd4bf348503c6062c1eb9d8bdec4819b1482e660213aa"
+    },
+    {
+      "function": "normalizeMembershipProductFamilyLabels",
+      "privateSource": "90-Dashboard/tennis-note-member-app/app.js",
+      "publicModule": "app/tennis-note-member-app/domain/products.js",
+      "sha256": "0d11168e4ad54ee88571223e7c7d5644037e8f9c71aaf49fbb49cb81257fcc02"
+    },
+    {
+      "function": "journalMediaPreviewUrl",
+      "privateSource": "90-Dashboard/tennis-note-member-app/app.js",
+      "publicModule": "app/tennis-note-member-app/domain/journal.js",
+      "sha256": "38e770b07158d456631190dacc4b65c382c2a97c22a5d2c4f1e6daf4d1aa268a"
+    },
+    {
+      "function": "journalMediaUnavailableMessage",
+      "privateSource": "90-Dashboard/tennis-note-member-app/app.js",
+      "publicModule": "app/tennis-note-member-app/domain/journal.js",
+      "sha256": "9ba6f2aa12de2da7e9c68c0e23fd06f5e86cd95c1dfb46fc4e6852bd1959cfef"
+    },
+    {
+      "function": "handleJournalMediaPreviewError",
+      "privateSource": "90-Dashboard/tennis-note-member-app/app.js",
+      "publicModule": "app/tennis-note-member-app/ui/common.js",
+      "sha256": "ea83f3a054aa199ecf43806edc976eedcee5eb476a18785b07c072f7ac3027f4"
+    },
+    {
+      "function": "renderMediaPreview",
+      "privateSource": "90-Dashboard/tennis-note-member-app/app.js",
+      "publicModule": "app/tennis-note-member-app/views/journal.js",
+      "sha256": "e36cc3ec917b2f3b2f30f151b90d0f574ab62511b7acb76a39de51e30731f909"
+    }
+  ],
+  "sharedFiles": [
+    {
+      "publicModule": "app/shared/tennisnote-product-catalog.js",
+      "sha256": "2b522f463e2f87c26ea50824d56429e489f8fffe21c173cb63af02b6d7e5cf12"
+    }
+  ]
+}

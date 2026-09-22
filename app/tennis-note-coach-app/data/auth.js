@@ -91,6 +91,7 @@ async function applySupabaseCoachSession(showFromLogin = false) {
 }
 
 async function logoutCoach() {
+  coachSettlementSelection = null;
   await disableNativeCoachPushForLogout();
   await window.TennisNoteDataClient?.signOut?.();
   returnToMemberEntry(false, false);

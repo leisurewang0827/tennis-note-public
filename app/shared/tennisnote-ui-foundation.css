@@ -478,6 +478,21 @@ body.modal-open .tennisnote-release-check-notice {
   }
 }
 
+/* NFR-04: shared minimum hit area, including desktop tabs; no new controls. */
+:root .coach-profile-shortcut,
+:root .tabbar .tab,
+:root [role="tablist"] button,
+:root .record-status-tabs button,
+:root .member-filter-tabs button,
+:root .member-payment-workspace-tabs button,
+:root .settings-tabs button,
+:root .coach-staff-tabs button,
+:root .operations-password-login-form button,
+:root .operations-password-login-form input:not([type="checkbox"]):not([type="hidden"]) {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .tn-comment-draft-tools {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

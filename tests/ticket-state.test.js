@@ -1,183 +1,125 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadSharedScript } from "./helpers/load-browser-script.js";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import { test } from "node:test";
 
-const { TennisNoteTicketState: TicketState } = loadSharedScript(
-  "app/shared/tennisnote-ticket-state.js",
-);
-
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const isPrivate = fs.existsSync(path.join(root, "90-Dashboard/shared/tennisnote-ticket-state.js"));
+const app = path.join(root, isPrivate ? "90-Dashboard" : "app");
+const context = vm.createContext({ window: {}, Date, Intl });
+vm.runInContext(fs.readFileSync(path.join(app, "shared/tennisnote-ticket-state.js"), "utf8"), context);
+const TicketState = context.window.TennisNoteTicketState;
 const TODAY = "2026-08-18";
-
-// 이용권 상태는 회원이 예약할 수 있는지, 관리자 화면에 어떻게 뜨는지,
-// 코치가 수업을 잡을 수 있는지를 전부 결정한다. 세 앱이 이 파일 하나를 공유한다.
-
-test("상태 판정 — 기본", async (t) => {
-  await t.test("이용권이 없으면 none", () => {
-    assert.equal(TicketState.derive(null, TODAY), "none");
+const BASE = Object.freeze({ status: "active", startsOn: "2026-08-01", expiresOn: TODAY, remaining: 1 });
+const cases = [
+  ["종료일 당일", {}, "current", "usable", true],
+  ["종료 다음날", { expiresOn: "2026-08-17" }, "expired", "date_expired", false],
+  ["잔여 0", { remaining: 0 }, "exhausted", "uses_exhausted", false],
+  ["잔여 음수", { remaining: -1 }, "exhausted", "uses_exhausted", false],
+  ["null 추정 금지", { remaining: null, total: 8, used: 0 }, "unknown", "remaining_unknown", false],
+  ["문자 잔여", { remaining: " 1 " }, "current", "usable", true],
+  ["비숫자", { remaining: "NaN" }, "unknown", "remaining_unknown", false],
+  ["빈 문자열", { remaining: "" }, "unknown", "remaining_unknown", false],
+  ["공백", { remaining: " " }, "unknown", "remaining_unknown", false],
+  ["boolean", { remaining: true }, "unknown", "remaining_unknown", false],
+  ["미래", { startsOn: "2026-08-19", expiresOn: "2026-09-01" }, "upcoming", "upcoming", false],
+  ["휴회", { status: "paused" }, "paused", "paused", false],
+  ["휴회 지난기간", { status: "paused", expiresOn: "2026-08-17" }, "expired", "date_expired", false],
+  ["미래 잔여0", { startsOn: "2026-08-19", remaining: 0 }, "exhausted", "uses_exhausted", false],
+  ["삭제", { status: "voided", remaining: 0 }, "voided", "voided", false],
+  ["환불", { status: "refunded", expiresOn: "2026-08-17" }, "refunded", "refunded", false],
+  ["취소", { status: "canceled", remaining: 0 }, "cancelled", "cancelled", false],
+  ["입금대기", { status: "pending_payment", remaining: 0 }, "pending_payment", "pending_payment", false],
+  ["환불보류", { refundHoldId: "synthetic-hold" }, "held", "held", false],
+  ["기존 만료", { status: "expired" }, "expired", "explicit_expired", false],
+  ["불명 상태", { status: "unexpected" }, "unknown", "status_unknown", false],
+  ["날짜 누락", { expiresOn: "" }, "unknown", "date_unknown", false],
+  ["날짜 오류", { startsOn: "2026-02-30" }, "unknown", "date_unknown", false],
+];
+for (const [name, overrides, state, reason, canUse] of cases) {
+  test(name, () => {
+    const ticket = Object.freeze({ ...BASE, ...overrides });
+    const before = JSON.stringify(ticket);
+    const actual = TicketState.classify(ticket, TODAY);
+    assert.equal(actual.state, state);
+    assert.equal(actual.reason, reason);
+    assert.equal(actual.canUse, canUse);
+    assert.equal(TicketState.derive(ticket, TODAY), state);
+    assert.equal(JSON.stringify(ticket), before, "원본 횟수/상태 변경 0");
+    if (["date_expired", "uses_exhausted"].includes(reason)) assert.equal(TicketState.label(ticket, TODAY), "회원권 만료");
   });
-
-  await t.test("상태가 비어 있으면 사용 중으로 본다", () => {
-    assert.equal(TicketState.derive({ remaining: 4 }, TODAY), "current");
-  });
-
-  await t.test("만료일이 지나면 expired", () => {
-    assert.equal(TicketState.derive({ expiresOn: "2026-08-17", remaining: 4 }, TODAY), "expired");
-  });
-
-  await t.test("만료일 당일은 아직 만료가 아니다", () => {
-    assert.equal(TicketState.derive({ expiresOn: TODAY, remaining: 4 }, TODAY), "current");
-  });
-
-  await t.test("잔여 0회면 exhausted", () => {
-    assert.equal(TicketState.derive({ remaining: 0 }, TODAY), "exhausted");
-  });
-
-  await t.test("시작일이 미래면 upcoming", () => {
-    assert.equal(TicketState.derive({ startsOn: "2026-09-01", remaining: 4 }, TODAY), "upcoming");
-  });
-
-  await t.test("일시정지는 paused", () => {
-    assert.equal(TicketState.derive({ status: "paused", remaining: 4 }, TODAY), "paused");
-  });
+}
+test("별칭·누락·KST 자정·포괄 기간", () => {
+  for (const ticket of [
+    { starts_on: BASE.startsOn, expires_on: TODAY, remaining_sessions: 1 },
+    { starts: BASE.startsOn, expires: TODAY, remainingSessions: 1 },
+    { start_date: BASE.startsOn, end_date: TODAY, remaining: 1 },
+  ]) assert.equal(TicketState.classify(ticket, TODAY).canUse, true);
+  for (const remaining of [undefined, null, Infinity, [], {}]) {
+    assert.equal(TicketState.classify({ ...BASE, remaining, remainingSessions: 8 }, TODAY).reason, "remaining_unknown");
+  }
+  assert.equal(TicketState.classify({ total: 8, used: 0 }, TODAY).reason, "remaining_unknown");
+  assert.equal(TicketState.derive(null, TODAY), "none");
+  assert.equal(TicketState.classify(BASE, "bad-date").canUse, false);
+  assert.equal(TicketState.localDateKey(new Date("2026-08-18T14:59:59Z")), TODAY);
+  assert.equal(TicketState.localDateKey(new Date("2026-08-18T15:00:00Z")), "2026-08-19");
+  assert.equal(TicketState.classify(BASE, TicketState.localDateKey(new Date("2026-08-18T15:00:00Z"))).reason, "date_expired");
 });
-
-// 여러 조건이 겹칠 때 무엇이 이기는지. 이 순서가 바뀌면
-// 환불한 이용권이 "만료"로 보이는 식의 사고가 난다.
-test("상태 판정 — 우선순위", async (t) => {
-  await t.test("환불이 만료보다 우선한다", () => {
-    const ticket = { status: "refunded", expiresOn: "2026-01-01", remaining: 0 };
-    assert.equal(TicketState.derive(ticket, TODAY), "refunded");
-  });
-
-  await t.test("결제 취소가 소진보다 우선한다", () => {
-    assert.equal(TicketState.derive({ status: "cancelled", remaining: 0 }, TODAY), "cancelled");
-  });
-
-  await t.test("결제 대기가 시작 예정보다 우선한다", () => {
-    const ticket = { status: "pending_payment", startsOn: "2026-09-01" };
-    assert.equal(TicketState.derive(ticket, TODAY), "pending_payment");
-  });
-
-  await t.test("만료가 소진보다 우선한다", () => {
-    const ticket = { expiresOn: "2026-01-01", remaining: 0 };
-    assert.equal(TicketState.derive(ticket, TODAY), "expired");
-  });
-
-  await t.test("소진이 시작 예정보다 우선한다", () => {
-    const ticket = { remaining: 0, startsOn: "2026-09-01" };
-    assert.equal(TicketState.derive(ticket, TODAY), "exhausted");
-  });
-
-  await t.test("시작 예정이 일시정지보다 우선한다", () => {
-    const ticket = { status: "paused", startsOn: "2026-09-01", remaining: 4 };
-    assert.equal(TicketState.derive(ticket, TODAY), "upcoming");
-  });
-});
-
-// 서버는 snake_case, 클라이언트는 camelCase 를 쓴다.
-// 별칭 처리가 깨지면 이용권이 통째로 "사용 중"으로 잘못 뜬다.
-test("서버 필드명(snake_case)도 똑같이 읽는다", async (t) => {
-  await t.test("expires_on", () => {
-    assert.equal(TicketState.derive({ expires_on: "2026-08-17", remaining: 4 }, TODAY), "expired");
-  });
-
-  await t.test("remaining_sessions", () => {
-    assert.equal(TicketState.derive({ remaining_sessions: 0 }, TODAY), "exhausted");
-  });
-
-  await t.test("starts_on", () => {
-    assert.equal(TicketState.derive({ starts_on: "2026-09-01", remaining: 4 }, TODAY), "upcoming");
-  });
-
-  await t.test("camelCase 와 결과가 같다", () => {
-    const snake = TicketState.derive({ expires_on: "2026-08-17", remaining_sessions: 2 }, TODAY);
-    const camel = TicketState.derive({ expiresOn: "2026-08-17", remaining: 2 }, TODAY);
-    assert.equal(snake, camel);
-  });
-});
-
-test("split — 회원 화면의 세 묶음", () => {
-  const tickets = [
-    { id: "a", remaining: 4 },
-    { id: "b", status: "paused", remaining: 4 },
-    { id: "c", startsOn: "2026-09-01", remaining: 4 },
-    { id: "d", status: "pending_payment" },
-    { id: "e", expiresOn: "2026-01-01", remaining: 4 },
-    { id: "f", remaining: 0 },
-    { id: "g", status: "refunded" },
-  ];
+test("split/sort 원본 보존, 휴회 보유 != 일반 신규 사용", () => {
+  const tickets = [{ ...BASE, id: "current" }, { ...BASE, id: "paused", status: "paused" }, { ...BASE, id: "future", startsOn: "2026-08-19", expiresOn: "2026-09-01" }, { ...BASE, id: "history", remaining: 0 }];
+  const before = JSON.stringify(tickets);
   const groups = TicketState.split(tickets, TODAY);
-
-  assert.deepEqual(groups.current.map((t) => t.id), ["a", "b"]);
-  assert.deepEqual(groups.upcoming.map((t) => t.id), ["c", "d"]);
-  assert.deepEqual(groups.history.map((t) => t.id).sort(), ["e", "f", "g"]);
-
-  const total = groups.current.length + groups.upcoming.length + groups.history.length;
-  assert.equal(total, tickets.length, "이용권이 어느 묶음에도 안 들어가면 화면에서 사라진다");
+  assert.deepEqual(Array.from(groups.current, t => t.id), ["current", "paused"]);
+  assert.deepEqual(Array.from(groups.upcoming, t => t.id), ["future"]);
+  assert.deepEqual(Array.from(groups.history, t => t.id), ["history"]);
+  assert.equal(TicketState.classify(tickets[1], TODAY).canUse, false);
+  assert.equal(JSON.stringify(tickets), before);
 });
 
-test("sort — 사용 중인 것이 먼저, 같은 상태면 최신 시작일이 먼저", () => {
-  const tickets = [
-    { id: "expired", expiresOn: "2026-01-01" },
-    { id: "old", remaining: 4, startsOn: "2026-01-01" },
-    { id: "new", remaining: 4, startsOn: "2026-08-01" },
-  ];
-  assert.deepEqual(
-    TicketState.sort(tickets, TODAY).map((t) => t.id),
-    ["new", "old", "expired"],
-  );
+function extract(relativePath, name) {
+  const text = fs.readFileSync(path.join(app, relativePath), "utf8");
+  const match = text.match(new RegExp("^function " + name + "\\([\\s\\S]*?^}", "m"));
+  assert.ok(match, name + " 실제 entry 함수 누락");
+  return match[0];
+}
+const memberFile = "tennis-note-member-app/" + (isPrivate ? "app.js" : "domain/tickets.js");
+const coachFile = "tennis-note-coach-app/" + (isPrivate ? "app.js" : "domain/members.js");
+const adminFile = isPrivate ? "tennis-note-prototype/app.js" : "admin/domain/tickets.js";
+const scheduleFile = isPrivate ? adminFile : "admin/forms/schedule.js";
+const roles = vm.createContext({
+  window: context.window, Date, Intl, state: { liveTickets: [] },
+  localDateKey: () => TODAY, adminLocalDateKey: () => TODAY,
+  membershipProductForTicket: () => ({ productKind: "regular" }),
 });
+for (const [file, names] of [
+  [memberFile, ["isActiveRegularLiveTicket", "isActiveCouponLiveTicket", "isPausedRegularLiveTicket", "memberHasActiveLiveTicket", "liveTicketStatusInfo"]],
+  [coachFile, ["coachRosterTicketState"]],
+  [adminFile, ["managementReportTicketIsActive", "isRegularScheduleTicket", "isActiveCouponTicket"]],
+  [scheduleFile, ["ticketCanBeUsedOnLessonDate"]],
+]) for (const name of names) vm.runInContext(extract(file, name), roles);
 
-test("sort 와 split 은 원본 배열을 건드리지 않는다", () => {
-  const tickets = [{ id: "a", remaining: 0 }, { id: "b", remaining: 4 }];
-  const snapshot = tickets.map((t) => t.id);
-  TicketState.sort(tickets, TODAY);
-  TicketState.split(tickets, TODAY);
-  assert.deepEqual(tickets.map((t) => t.id), snapshot);
-});
-
-test("label — 회원에게 보이는 문구", () => {
-  assert.equal(TicketState.label({ remaining: 4 }, TODAY), "사용 중");
-  assert.equal(TicketState.label({ remaining: 0 }, TODAY), "소진");
-  assert.equal(TicketState.label({ expiresOn: "2026-01-01" }, TODAY), "만료");
-  assert.equal(TicketState.label({ status: "refunded" }, TODAY), "환불 완료");
-  assert.equal(TicketState.label({ status: "paused", remaining: 4 }, TODAY), "일시정지");
-});
-
-// ⚠ 현재 동작을 그대로 기록해둔 것이지, 이게 옳다는 뜻은 아니다.
-//
-// value() 가 없는 필드에 ""를 돌려주고 Number("") 는 0 이라서,
-// remaining 이 없거나 null 이면 "잔여 0회"와 구분되지 않는다.
-// 지금은 모든 조회 쿼리가 remaining_sessions 를 포함하므로 터지지 않지만,
-// DB 컬럼이 NULL 인 행이 하나라도 있으면 그 회원은 이용권이 "소진"으로 보이고
-// 예약을 못 하게 된다.
-//
-// 고칠 때 이 테스트를 반대로 뒤집으면 된다. CLAUDE.md "미리 알아둘 것" 참고.
-// 2026-08-30: 위의 과거 오인 설명은 아래 회귀검사로 해결 상태를 고정한다.
-test("remaining 누락을 잔여 0회로 오인하지 않는다", () => {
-  assert.equal(TicketState.derive({ status: "active" }, TODAY), "current");
-  assert.equal(TicketState.derive({ remaining: null }, TODAY), "current");
-  assert.equal(TicketState.derive({}, TODAY), "current");
-  assert.equal(TicketState.derive({ status: "active", total: 8, used: 8 }, TODAY), "exhausted");
-  assert.equal(TicketState.derive({ status: "active", total_sessions: 8, used_sessions: 3 }, TODAY), "current");
-
-  // 종료 상태는 잔여 횟수와 관계없이 우선한다.
-  assert.equal(TicketState.derive({ status: "refunded" }, TODAY), "refunded");
-});
-
-test("localDateKey — 한국 시간 기준", async (t) => {
-  await t.test("YYYY-MM-DD 형식", () => {
-    assert.match(TicketState.localDateKey(), /^\d{4}-\d{2}-\d{2}$/);
-  });
-
-  await t.test("UTC 로 전날 밤이어도 한국은 다음 날로 센다", () => {
-    // 2026-08-17T16:00:00Z = 한국시간 2026-08-18 01:00
-    // 여기가 UTC 기준으로 계산되면 회원의 이용권이 하루 일찍 만료된다.
-    assert.equal(TicketState.localDateKey(new Date("2026-08-17T16:00:00Z")), "2026-08-18");
-  });
-
-  await t.test("한국시간 자정 직전은 아직 같은 날", () => {
-    // 2026-08-17T14:59:00Z = 한국시간 2026-08-17 23:59
-    assert.equal(TicketState.localDateKey(new Date("2026-08-17T14:59:00Z")), "2026-08-17");
-  });
+test("실제 member/coach/admin helper parity 및 helper 누락 fail-closed", () => {
+  for (const [name, overrides, state, reason, canUse] of cases) {
+    const ticket = Object.freeze({ ...BASE, productKind: "regular", ...overrides });
+    const before = JSON.stringify(ticket);
+    roles.state.liveTickets = [ticket];
+    for (const fn of ["isActiveRegularLiveTicket", "managementReportTicketIsActive", "isRegularScheduleTicket", "ticketCanBeUsedOnLessonDate"]) {
+      assert.equal(roles[fn](ticket, TODAY), canUse, fn + ": " + name);
+    }
+    assert.equal(roles.memberHasActiveLiveTicket(), canUse, "member active: " + name);
+    assert.equal(["active", "expiring"].includes(roles.coachRosterTicketState(ticket, TODAY)), canUse, "coach: " + name);
+    if (["date_expired", "uses_exhausted"].includes(reason)) assert.equal(roles.liveTicketStatusInfo(ticket, TODAY).label, "회원권 만료");
+    assert.equal(JSON.stringify(ticket), before);
+  }
+  assert.equal(roles.isPausedRegularLiveTicket({ ...BASE, productKind: "regular", status: "paused" }, TODAY), true);
+  assert.equal(roles.isActiveCouponLiveTicket({ ...BASE, productKind: "coupon" }, TODAY), true);
+  assert.equal(roles.isActiveCouponTicket({ ...BASE, productKind: "coupon" }, TODAY), true);
+  const saved = roles.window.TennisNoteTicketState;
+  roles.window.TennisNoteTicketState = undefined;
+  assert.equal(roles.isActiveRegularLiveTicket(BASE, TODAY), false);
+  assert.equal(roles.managementReportTicketIsActive(BASE, TODAY), false);
+  assert.equal(roles.ticketCanBeUsedOnLessonDate(BASE, TODAY), false);
+  roles.window.TennisNoteTicketState = saved;
 });

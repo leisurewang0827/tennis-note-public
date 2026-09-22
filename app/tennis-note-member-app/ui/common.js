@@ -2,6 +2,18 @@
 //
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
+function handleJournalMediaPreviewError(event) {
+  const media = event.target;
+  if (!media?.matches?.("[data-journal-media-preview]") || media.dataset.previewFailed) return;
+  // Keep the failed node for decoder diagnostics, but never show broken media.
+  media.dataset.previewFailed = "true";
+  media.hidden = true;
+  const notice = document.createElement("p");
+  notice.setAttribute("role", "status");
+  notice.textContent = journalMediaUnavailableMessage();
+  media.after(notice);
+}
+
 function focusJournalActivity(status) {
   const today = localDateKey();
   const matches = journalActivityItems()

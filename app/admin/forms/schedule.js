@@ -778,9 +778,8 @@ function getTimeOptionsForLessonSlot(day) {
 }
 
 function ticketCanBeUsedOnLessonDate(ticket, lessonDate = lessonTicketEligibilityDate()) {
-  const ticketState = window.TennisNoteTicketState?.derive(ticket, lessonDate) || "";
-  if (ticketState) return ["current", "paused"].includes(ticketState);
-  return isCurrentMemberTicket(ticket, lessonDate);
+  // 과거 관리자 정정/휴회 복귀의 별도 명시 경로는 이 신규 사용 판정과 분리한다.
+  return window.TennisNoteTicketState?.classify(ticket, lessonDate).canUse === true;
 }
 
 async function moveSameDayRegularLessonToSelectedSlot() {
