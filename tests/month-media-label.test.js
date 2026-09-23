@@ -19,7 +19,7 @@ const member = "app/tennis-note-member-app/";
 
 test("정산·첨부·표시명은 병합된 private 권위 함수 9개와 공용 자산이 exact 일치한다", () => {
   const manifest = JSON.parse(read("docs/month-media-label-source-parity-20260922.json"));
-  assert.equal(manifest.privateMainSha, "5b82fe62186bb7288d367a90f41f0579978d54e6");
+  assert.equal(manifest.privateMainSha, "6fdbacae737a7f1bfcf4fcf9e1d1168c5ed6dc4a");
   assert.equal(manifest.functions.length, 9);
   for (const item of manifest.functions) {
     assert.equal(hash(extract(read(item.publicModule), item.function)), item.sha256, item.function);
@@ -82,13 +82,13 @@ test("legacy 첨부는 URL·권한·형식에 맞게 표시하며 오류 안내�
 });
 
 test("관리자에서 정한 3개월 할인 표시명을 회원 화면에 그대로 보존한다", () => {
-  const context = vm.createContext({ defaultMembershipProductFamilyLabels: { threeMonth: "3개월 (10% 할인)", fourWeek: "한달 (4주)" } });
+  const context = vm.createContext({});
   vm.runInContext(extract(read(member + "domain/products.js"), "normalizeMembershipProductFamilyLabels"), context);
   for (const label of ["3개월 (10% 할인)", "3 months discount", "3개월"]) {
     context.label = label;
     assert.equal(vm.runInContext("normalizeMembershipProductFamilyLabels({threeMonth:label}).threeMonth", context), label);
   }
-  assert.equal(vm.runInContext("normalizeMembershipProductFamilyLabels({threeMonth:''}).threeMonth", context), "3개월 (10% 할인)");
+  assert.equal(vm.runInContext("normalizeMembershipProductFamilyLabels({threeMonth:''}).threeMonth", context), "");
   assert.match(read(member + "catalog.js") + read(member + "app.js"), /3개월 \(10% 할인\)/);
   assert.doesNotMatch(read("app/shared/tennisnote-product-catalog.js"), /4주권 3회 금액에서 10% 할인/);
 });

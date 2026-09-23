@@ -62,7 +62,7 @@ function restoreSnapshot() {
     if (!Array.isArray(state.expiredTickets)) state.expiredTickets = [];
     if (!Array.isArray(state.liveMembershipProducts)) state.liveMembershipProducts = [];
     if (!state.livePaymentOptions || typeof state.livePaymentOptions !== "object") {
-      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true }, productFamilyLabels: { ...defaultMembershipProductFamilyLabels } };
+      state.livePaymentOptions = { allowedMethods: ["tosspay"], bankTransferEnabled: false, paymentMethods: [], settingsVersion: 0, settingsAppliedAt: "", methodAvailability: [], features: { threeMonth: true, oneDay: true, coupons: true }, productFamilyLabels: {} };
     }
     state.livePaymentOptions.allowedMethods = paymentMethodIdList(state.livePaymentOptions.allowedMethods || ["tosspay"]);
     state.livePaymentOptions.bankTransferEnabled = state.livePaymentOptions.bankTransferEnabled === true;

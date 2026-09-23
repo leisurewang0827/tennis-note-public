@@ -408,7 +408,7 @@ async function saveBranchSalesSettings(apply = false) {
   });
   if (invalidFamilyLabel) {
     invalidFamilyLabel.focus();
-    showToast("회원권 분류명은 1~40자로 입력해 주세요");
+    showToast("한달·3개월·쿠폰·원데이 표시명을 모두 1~40자로 입력해 주세요");
     return false;
   }
   const config = branchSalesConfigFromForm();
@@ -450,7 +450,12 @@ async function saveBranchSalesSettings(apply = false) {
   } catch (error) {
     const code = error?.payload?.code || error?.message || "server_error";
     if (String(code).includes("revision_conflict")) await loadBranchSalesSettingsFromServer();
-    showToast(String(code).includes("revision_conflict") ? "다른 화면에서 변경되어 최신 설정을 다시 불렀습니다" : `판매 설정 저장 실패: ${code}`);
+    const familyLabelError = String(code).includes("branch_product_family_label");
+    showToast(String(code).includes("revision_conflict")
+      ? "다른 화면에서 변경되어 최신 설정을 다시 불렀습니다"
+      : familyLabelError
+        ? "한달·3개월·쿠폰·원데이 표시명을 모두 입력해 주세요"
+        : `판매 설정 저장 실패: ${code}`);
     return false;
   } finally {
     if (button?.isConnected) button.disabled = false;

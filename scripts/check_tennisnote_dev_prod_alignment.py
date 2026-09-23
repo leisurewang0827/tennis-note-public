@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.514"
-EXPECTED_RELEASE_ID = "2026.09.22.02"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v553"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v526"
+EXPECTED_VERSION = "1.0.515"
+EXPECTED_RELEASE_ID = "2026.09.23.01"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v554"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v527"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -37,8 +37,13 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "PERSONAL-JOURNAL-MEDIA-CURRICULUM-PRIVATE-1A2019FA",
     "PERSONAL-JOURNAL-OWN-PROFILE-PRIVATE-D3CF3A8F",
     "AUTH-PHONE-EXISTS-GUIDANCE-PRIVATE-92C72E4C",
+    "REQUIRED-PRODUCT-FAMILY-LABELS-PRIVATE-6FDBACAE",
 )
 SELECTED_NET_NEW_PATHS = {
+    "app/admin/actions/member.js",
+    "app/admin/actions/settings.js",
+    "app/admin/domain/policy.js",
+    "app/admin/forms/tickets.js",
     "app/shared/tennisnote-product-catalog.js",
     "app/tennis-note-coach-app/domain/settlement.js",
     "app/tennis-note-coach-app/events/delegated.js",
@@ -87,6 +92,7 @@ SELECTED_NET_NEW_PATHS = {
     "app/tennis-note-member-app/actions/session.js",
     "app/tennis-note-member-app/app.js",
     "app/tennis-note-member-app/data/auth.js",
+    "app/tennis-note-member-app/data/payment.js",
     "app/tennis-note-member-app/data/push.js",
     "app/tennis-note-member-app/domain/common.js",
     "app/tennis-note-member-app/domain/identity.js",
@@ -98,6 +104,8 @@ SELECTED_NET_NEW_PATHS = {
     "app/tennis-note-member-app/forms/members.js",
     "app/tennis-note-member-app/forms/schedule.js",
     "app/tennis-note-member-app/index.html",
+    "app/tennis-note-member-app/storage.js",
+    "app/tennis-note-member-app/views/products.js",
 }
 
 DEV_WORKFLOW = ".github/workflows/deploy-cloudflare-pages-dev.yml"
@@ -326,7 +334,10 @@ def generate() -> None:
             "matches private 92c72e4c0d7da3c7893cfa03148ceb56f1966556 and changes only client "
             "error presentation. Settlement month, legacy media guidance, and neutral product labels "
             "match private 060ece0e4aff969c1d57c4246e9785c7bd40abc5 through the exact-function/shared "
-            "hash manifest month-media-label-source-parity-20260922.json. No R3 or backend change."
+            "hash manifest month-media-label-source-parity-20260922.json. Required product-family "
+            "labels and blank product-name rejection match private "
+            "6fdbacae737a7f1bfcf4fcf9e1d1168c5ed6dc4a; its additive settings validation migration is "
+            "tracked in the private source and is not duplicated in this public product tree. No R3 change."
         ),
         "dev_ahead_commits": classify_commits(),
     }
