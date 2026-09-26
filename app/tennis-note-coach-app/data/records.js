@@ -269,6 +269,14 @@ function flushCoachOfflineLessonDrafts() {
 }
 
 async function downloadCoachJournalMedia(client, row, displayName) {
+  if (row.media_type === "video" && client.createSignedObjectUrl) {
+    return {
+      name: displayName || "첨부파일",
+      type: row.mime_type || "video/mp4",
+      url: await client.createSignedObjectUrl(journalMediaBucket, row.storage_path),
+      storagePath: row.storage_path,
+    };
+  }
   const blob = await client.downloadObject(journalMediaBucket, row.storage_path);
   return {
     name: displayName || "첨부파일",

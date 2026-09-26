@@ -5,6 +5,10 @@
 
 function bindDelegatedEvents() {
   document.addEventListener("error", handleJournalMediaPreviewError, true);
+  window.addEventListener("tennisnote:personal-journal-upload-progress", (event) => {
+    const percent = Math.max(0, Math.min(100, Number(event.detail?.percent) || 0));
+    personalJournalStatus(`첨부 업로드 중 ${percent}% · 완료될 때까지 앱을 닫지 마세요.`);
+  });
   window.addEventListener("tennisnote:oauth-result", handleOAuthResult);
   $("#publicProductPreviewList")?.addEventListener("click", (event) => {
     void handlePublicOnboardingAction(event.target);
