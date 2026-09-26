@@ -10,7 +10,8 @@
     {
       "path": "app/tennis-note-member-app/actions/journal.js",
       "name": "savePracticeLog",
-      "sha256": "37ae2fc6fa93be1c02bca23c5ea9dc82b9a4de53f91c44498f6664b0644cab02"
+      "privateSourceSha": "c94b6dcb0a047d0fae9af1e55db3669bae98d831",
+      "sha256": "9f73c876aa7981fee39c8a38cc151bb71b9f088e6aa1843b4220135a6b2fa7cc"
     },
     {
       "path": "app/tennis-note-member-app/actions/journal.js",
@@ -20,7 +21,14 @@
     {
       "path": "app/tennis-note-member-app/actions/journal.js",
       "name": "editPersonalJournal",
-      "sha256": "3be35927a9cdf4bd76d82970a425e73cf4d555aad6dc09fa9632e8b56f7075a4"
+      "privateSourceSha": "c94b6dcb0a047d0fae9af1e55db3669bae98d831",
+      "sha256": "df3d9b3b6bbba4a5a416bc17eec3d50f537796f5f13f4c6c00239ffbb421eb31"
+    },
+    {
+      "path": "app/tennis-note-member-app/actions/journal.js",
+      "name": "recoverLocalPersonalJournal",
+      "privateSourceSha": "c94b6dcb0a047d0fae9af1e55db3669bae98d831",
+      "sha256": "efd80f0648cbe39971c619d4d38916d6f711a893268771bddab11746ea9aad5d"
     },
     {
       "path": "app/tennis-note-member-app/actions/journal.js",
@@ -71,12 +79,14 @@
     {
       "path": "app/tennis-note-member-app/views/journal.js",
       "name": "personalJournalActionsMarkup",
-      "sha256": "973c10714c623c8b497a98f78e34602a8efca28003e033fa53fb3867c6f9559d"
+      "privateSourceSha": "c94b6dcb0a047d0fae9af1e55db3669bae98d831",
+      "sha256": "5e0e0e439536e36dfbafd2fd48e3eadc01a5ee43bd0c025bad64bc59093d4b59"
     },
     {
       "path": "app/tennis-note-member-app/ui/screens.js",
       "name": "openJournalComposer",
-      "sha256": "7155f619d2b05f6150f4a04ddfda53fd7144960d70951bd763fdbcd3e8f359b3"
+      "privateSourceSha": "c94b6dcb0a047d0fae9af1e55db3669bae98d831",
+      "sha256": "af2632cca2d7853cb24be1025e31c126e1f4a4e7cb37c3ca30e274a4580a5315"
     },
     {
       "path": "app/tennis-note-member-app/ui/screens.js",

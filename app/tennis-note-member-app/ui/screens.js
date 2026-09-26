@@ -342,7 +342,10 @@ function openPaymentConfirmationModal({ product, paymentId, preparedPayment, met
 }
 
 function openJournalComposer(dateValue = "", options = {}) {
-  if (!options.edit) state.personalEditingId = null;
+  if (!options.edit) {
+    state.personalEditingId = null;
+    state.personalRecoverySourceId = null;
+  }
   personalJournalStatus();
   const selectedDate = dateValue || state.selectedJournalDate || $("#journalDate")?.value || localDateKey();
   selectJournalDate(selectedDate);
