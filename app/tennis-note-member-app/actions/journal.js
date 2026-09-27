@@ -5,6 +5,7 @@
 
 async function savePracticeLog() {
   const existing = state.practiceLogs.find((log) => log.id === (state.personalEditingId || state.personalDraftId));
+  const recoverySourceId = state.personalRecoverySourceId || "";
   const mediaItems = mediaItemsFromInput($("#practiceMedia"));
   const mediaNames = mediaItems.map((file) => file.name);
   const requestFeedback = $("#requestCoachFeedback")?.checked;
@@ -45,6 +46,9 @@ async function savePracticeLog() {
     };
     try {
       await window.TennisNotePersonalJournal.save(log, [...($("#practiceMedia")?.files || [])], checkpoint);
+      if (recoverySourceId) {
+        state.practiceLogs = state.practiceLogs.filter((item) => item.id !== recoverySourceId);
+      }
       await syncPersonalJournalFromServer();
     } catch (error) {
       personalJournalStatus(window.TennisNotePersonalJournal.errorMessage(error));
@@ -59,6 +63,7 @@ async function savePracticeLog() {
   state.activeJournalMonth = journalDate.slice(0, 7);
   state.personalEditingId = null;
   state.personalDraftId = null;
+  state.personalRecoverySourceId = null;
   if ($("#practiceMedia")) $("#practiceMedia").value = "";
   personalJournalStatus();
   renderJournalCalendar();
@@ -164,6 +169,7 @@ function editPersonalJournal(id) {
     showToast("서버에서 확인된 본인의 개인운동만 수정할 수 있습니다."); return;
   }
   closeJournalDetail();
+  state.personalRecoverySourceId = null;
   state.personalEditingId = log.id;
   $("#journalMode").value = "practice";
   $("#practiceType").value = log.type;
@@ -173,6 +179,29 @@ function editPersonalJournal(id) {
   $("#requestCoachFeedback").checked = false;
   $("#practiceMedia").value = "";
   openJournalComposer(log.journalDate, { edit: true });
+}
+
+function recoverLocalPersonalJournal(id) {
+  const log = state.practiceLogs.find((item) => item.id === id);
+  const api = window.TennisNotePersonalJournal;
+  const hasLiveSession = Boolean(state.member?.profileId && window.TennisNoteDataClient?.getSession?.()?.access_token);
+  if (!log || log.serverJournalId || !api || !hasLiveSession) {
+    showToast("로그인 후 이 기기의 기록을 복구할 수 있습니다.");
+    return;
+  }
+  closeJournalDetail();
+  state.personalEditingId = null;
+  state.personalDraftId = api.key();
+  state.personalRecoverySourceId = log.id;
+  $("#journalMode").value = "practice";
+  $("#practiceType").value = log.type || "기타";
+  $("#practiceMemo").value = log.memo || "";
+  $("#practiceNext").value = log.next || "";
+  $("#feedbackQuestion").value = log.feedbackQuestion || "";
+  $("#requestCoachFeedback").checked = false;
+  $("#practiceMedia").value = "";
+  openJournalComposer(log.journalDate || log.date || localDateKey(), { edit: true, recovery: true });
+  personalJournalStatus("기존 글과 날짜를 불러왔습니다. 사진·영상만 다시 선택한 뒤 저장해 주세요.");
 }
 
 async function deletePersonalJournal(id, button) {

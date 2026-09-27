@@ -8,10 +8,13 @@ const digest = (value) => createHash("sha256").update(value).digest("hex");
 const manifest = JSON.parse(read("docs/tennisnote-personal-journal-source-parity.json"));
 test("개인운동 모듈은 검증된 private 함수 및 공용 파일과 정확히 동일", () => {
   assert.equal(manifest.privateSourceSha, "d3cf3a8f64d18feb00492dd06c9aad5df1ec4368");
-  assert.equal(manifest.functions.length, 17);
+  assert.equal(manifest.functions.length, 18);
   const revised = manifest.functions.filter((entry) => entry.privateSourceSha);
-  assert.deepEqual(revised.map((entry) => entry.name), ["renderMediaPreview"]);
-  assert.equal(revised[0].privateSourceSha, "060ece0e4aff969c1d57c4246e9785c7bd40abc5");
+  assert.deepEqual(revised.map((entry) => entry.name), ["savePracticeLog", "editPersonalJournal", "recoverLocalPersonalJournal", "renderMediaPreview", "personalJournalActionsMarkup", "openJournalComposer"]);
+  for (const entry of revised) {
+    assert.equal(entry.privateSourceSha, entry.name === "renderMediaPreview"
+      ? "060ece0e4aff969c1d57c4246e9785c7bd40abc5" : "c94b6dcb0a047d0fae9af1e55db3669bae98d831");
+  }
   for (const entry of manifest.functions) {
     const matches = [...read(entry.path).matchAll(new RegExp("^(?:async )?function " + entry.name + "\\([^]*?^}", "gm"))];
     assert.equal(matches.length, 1, entry.name);
@@ -28,5 +31,6 @@ test("개인운동 실제 entry·캐시·상세 이벤트 등록은 한 번", ()
   }
   const events = read("app/tennis-note-member-app/events/schedule.js");
   assert.match(events, /editPersonalJournal\(edit.dataset.editPersonalJournal\)/);
+  assert.match(events, /recoverLocalPersonalJournal\(recover.dataset.recoverPersonalJournal\)/);
   assert.match(events, /deletePersonalJournal\(remove.dataset.deletePersonalJournal, remove\)/);
 });

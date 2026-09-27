@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.515"
-EXPECTED_RELEASE_ID = "2026.09.23.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v554"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v527"
+EXPECTED_VERSION = "1.0.516"
+EXPECTED_RELEASE_ID = "2026.09.26.01"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v555"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v528"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -38,14 +38,17 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "PERSONAL-JOURNAL-OWN-PROFILE-PRIVATE-D3CF3A8F",
     "AUTH-PHONE-EXISTS-GUIDANCE-PRIVATE-92C72E4C",
     "REQUIRED-PRODUCT-FAMILY-LABELS-PRIVATE-6FDBACAE",
+    "PERSONAL-JOURNAL-LONG-VIDEO-PRIVATE-C5884FAB",
 )
 SELECTED_NET_NEW_PATHS = {
     "app/admin/actions/member.js",
     "app/admin/actions/settings.js",
     "app/admin/domain/policy.js",
     "app/admin/forms/tickets.js",
+    "app/admin/ui/common.js",
     "app/shared/tennisnote-product-catalog.js",
     "app/tennis-note-coach-app/domain/settlement.js",
+    "app/tennis-note-coach-app/data/records.js",
     "app/tennis-note-coach-app/events/delegated.js",
     "app/tennis-note-member-app/catalog.js",
     "app/tennis-note-member-app/domain/products.js",
@@ -337,7 +340,10 @@ def generate() -> None:
             "hash manifest month-media-label-source-parity-20260922.json. Required product-family "
             "labels and blank product-name rejection match private "
             "6fdbacae737a7f1bfcf4fcf9e1d1168c5ed6dc4a; its additive settings validation migration is "
-            "tracked in the private source and is not duplicated in this public product tree. No R3 change."
+            "tracked in the private source and is not duplicated in this public product tree. Personal-journal "
+            "video uploads up to 1 GiB, resumable transport, progress presentation, and signed private-video "
+            "playback match the private c5884fab authority plus the current additive migration; database rollout "
+            "remains a separate gate. No R3 change."
         ),
         "dev_ahead_commits": classify_commits(),
     }
