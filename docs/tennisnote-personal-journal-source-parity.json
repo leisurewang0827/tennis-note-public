@@ -106,7 +106,7 @@
   ],
   "shared": {
     "path": "app/shared/tennisnote-personal-journal.js",
-    "sha256": "c00d8b55acc2eb4c07c110dd60d15497ba4d5700ffd6382aaba460385acf9d3c"
+    "sha256": "31355b72c293cac836794916960fd13a06c18ac9a1e22b0f856388e7bb45a6cf"
   },
   "scope": "development only; no lesson/ticket/feedback writes"
 }

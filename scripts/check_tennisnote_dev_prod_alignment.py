@@ -38,14 +38,17 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "PERSONAL-JOURNAL-OWN-PROFILE-PRIVATE-D3CF3A8F",
     "AUTH-PHONE-EXISTS-GUIDANCE-PRIVATE-92C72E4C",
     "REQUIRED-PRODUCT-FAMILY-LABELS-PRIVATE-6FDBACAE",
+    "PERSONAL-JOURNAL-LONG-VIDEO-PRIVATE-C5884FAB",
 )
 SELECTED_NET_NEW_PATHS = {
     "app/admin/actions/member.js",
     "app/admin/actions/settings.js",
     "app/admin/domain/policy.js",
     "app/admin/forms/tickets.js",
+    "app/admin/ui/common.js",
     "app/shared/tennisnote-product-catalog.js",
     "app/tennis-note-coach-app/domain/settlement.js",
+    "app/tennis-note-coach-app/data/records.js",
     "app/tennis-note-coach-app/events/delegated.js",
     "app/tennis-note-member-app/catalog.js",
     "app/tennis-note-member-app/domain/products.js",
@@ -337,7 +340,10 @@ def generate() -> None:
             "hash manifest month-media-label-source-parity-20260922.json. Required product-family "
             "labels and blank product-name rejection match private "
             "6fdbacae737a7f1bfcf4fcf9e1d1168c5ed6dc4a; its additive settings validation migration is "
-            "tracked in the private source and is not duplicated in this public product tree. No R3 change."
+            "tracked in the private source and is not duplicated in this public product tree. Personal-journal "
+            "video uploads up to 1 GiB, resumable transport, progress presentation, and signed private-video "
+            "playback match the private c5884fab authority plus the current additive migration; database rollout "
+            "remains a separate gate. No R3 change."
         ),
         "dev_ahead_commits": classify_commits(),
     }

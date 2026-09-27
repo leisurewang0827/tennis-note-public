@@ -17,6 +17,9 @@
   const offlineDatabaseVersion = 1;
   const offlineResponseStore = "responses";
   const offlineCacheMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
+  const resumableUploadChunkBytes = 6 * 1024 * 1024;
+  const resumableUploadThresholdBytes = 6 * 1024 * 1024;
+  const resumableUploadStatePrefix = "tennis-note-resumable-upload-v1:";
   const placeholderMarkers = ["your_", "_here", "publishable_key"];
   let sessionRefreshPromise = null;
   let currentProfilePromise = null;
@@ -184,6 +187,137 @@
     const config = loadConfig();
     const encodedPath = `${objectPath || ""}`.split("/").map(encodeURIComponent).join("/");
     return `${config.supabaseUrl.replace(/\/$/, "")}/storage/v1/object/${encodeURIComponent(bucketName)}/${encodedPath}`;
+  }
+
+  function storageResumableUrl() {
+    const config = loadConfig();
+    const url = new URL(config.supabaseUrl.replace(/\/$/, ""));
+    if (url.hostname.endsWith(".supabase.co")) {
+      url.hostname = url.hostname.replace(/\.supabase\.co$/, ".storage.supabase.co");
+    }
+    url.pathname = "/storage/v1/upload/resumable";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  }
+
+  function storageMetadataValue(value) {
+    const bytes = new TextEncoder().encode(String(value || ""));
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }
+
+  function resumableUploadStateKey(bucketName, objectPath, file) {
+    return `${resumableUploadStatePrefix}${bucketName}:${objectPath}:${file.size}:${file.lastModified || 0}`;
+  }
+
+  function readResumableUploadUrl(key) {
+    try { return localStorage.getItem(key) || ""; } catch { return ""; }
+  }
+
+  function writeResumableUploadUrl(key, value) {
+    try {
+      if (value) localStorage.setItem(key, value);
+      else localStorage.removeItem(key);
+    } catch { /* 재개 정보 저장 실패가 실제 업로드를 막지 않는다. */ }
+  }
+
+  async function resumableRequest(url, options, allowRefresh = true) {
+    let response = await fetch(url, options);
+    if (response.status === 401 && allowRefresh) {
+      const session = await refreshSession().catch(() => null);
+      if (session?.access_token) {
+        response = await fetch(url, {
+          ...options,
+          headers: { ...authHeaders({}, session), ...options.headers, Authorization: `Bearer ${session.access_token}` },
+        });
+      }
+    }
+    return response;
+  }
+
+  async function resumableUploadOffset(uploadUrl) {
+    const session = await ensureSession();
+    const response = await resumableRequest(uploadUrl, {
+      method: "HEAD",
+      headers: authHeaders({ "Tus-Resumable": "1.0.0" }, session),
+    });
+    if (response.status === 404 || response.status === 410) return null;
+    if (!response.ok) throw new Error(`Storage resumable status failed: ${response.status}`);
+    const offset = Number(response.headers.get("Upload-Offset"));
+    return Number.isFinite(offset) && offset >= 0 ? offset : 0;
+  }
+
+  async function createResumableUpload(bucketName, objectPath, file) {
+    const session = await ensureSession();
+    const response = await resumableRequest(storageResumableUrl(), {
+      method: "POST",
+      headers: authHeaders({
+        "Tus-Resumable": "1.0.0",
+        "Upload-Length": String(file.size),
+        "Upload-Metadata": [
+          `bucketName ${storageMetadataValue(bucketName)}`,
+          `objectName ${storageMetadataValue(objectPath)}`,
+          `contentType ${storageMetadataValue(file.type || "application/octet-stream")}`,
+          `cacheControl ${storageMetadataValue("3600")}`,
+        ].join(","),
+        "x-upsert": "false",
+      }, session),
+    });
+    if (!response.ok) throw new Error(await response.text() || `Storage resumable create failed: ${response.status}`);
+    const location = response.headers.get("Location");
+    if (!location) throw new Error("Storage resumable location missing.");
+    return new URL(location, storageResumableUrl()).toString();
+  }
+
+  async function uploadObjectResumable(bucketName, objectPath, file, options = {}) {
+    if (!isOnline()) throw offlineError();
+    const stateKey = resumableUploadStateKey(bucketName, objectPath, file);
+    let uploadUrl = readResumableUploadUrl(stateKey);
+    let offset = uploadUrl ? await resumableUploadOffset(uploadUrl).catch(() => null) : null;
+    if (offset === null) {
+      writeResumableUploadUrl(stateKey, "");
+      uploadUrl = await createResumableUpload(bucketName, objectPath, file);
+      writeResumableUploadUrl(stateKey, uploadUrl);
+      offset = 0;
+    }
+    options.onProgress?.(offset, file.size);
+    while (offset < file.size) {
+      const end = Math.min(offset + resumableUploadChunkBytes, file.size);
+      const chunk = file.slice(offset, end);
+      let response = null;
+      let lastError = null;
+      let offsetResynced = false;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const session = await ensureSession();
+          response = await resumableRequest(uploadUrl, {
+            method: "PATCH",
+            headers: authHeaders({
+              "Tus-Resumable": "1.0.0",
+              "Upload-Offset": String(offset),
+              "Content-Type": "application/offset+octet-stream",
+            }, session),
+            body: chunk,
+          });
+          if (response.ok) break;
+          if (response.status === 409) {
+            const serverOffset = await resumableUploadOffset(uploadUrl);
+            if (serverOffset !== null) { offset = serverOffset; response = null; offsetResynced = true; break; }
+          }
+          lastError = new Error(await response.text() || `Storage resumable upload failed: ${response.status}`);
+        } catch (error) { lastError = error; }
+        if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 1000 * (2 ** attempt)));
+      }
+      if (offsetResynced) continue;
+      if (!response?.ok) throw lastError || new Error("Storage resumable upload incomplete.");
+      const nextOffset = Number(response.headers.get("Upload-Offset"));
+      offset = Number.isFinite(nextOffset) && nextOffset > offset ? nextOffset : end;
+      options.onProgress?.(offset, file.size);
+    }
+    writeResumableUploadUrl(stateKey, "");
+    return { path: objectPath, resumable: true };
   }
 
   function getSession() {
@@ -1614,8 +1748,11 @@
     });
   }
 
-  async function uploadObject(bucketName, objectPath, file) {
+  async function uploadObject(bucketName, objectPath, file, options = {}) {
     if (!isOnline()) throw offlineError();
+    if (options.resumable === true || Number(file?.size || 0) > resumableUploadThresholdBytes) {
+      return uploadObjectResumable(bucketName, objectPath, file, options);
+    }
     const session = await ensureSession();
     if (!readiness().ready || !session?.access_token) throw new Error("Login is required for private upload.");
     const response = await fetch(storageObjectUrl(bucketName, objectPath), {
@@ -1628,6 +1765,27 @@
     });
     if (!response.ok) throw new Error(await response.text() || `Storage upload failed: ${response.status}`);
     return response.json().catch(() => ({ path: objectPath }));
+  }
+
+  async function createSignedObjectUrl(bucketName, objectPath, expiresIn = 21600) {
+    if (!isOnline()) throw offlineError();
+    const session = await ensureSession();
+    if (!readiness().ready || !session?.access_token) throw new Error("Login is required for private streaming.");
+    const config = loadConfig();
+    const encodedPath = `${objectPath || ""}`.split("/").map(encodeURIComponent).join("/");
+    const response = await fetch(`${config.supabaseUrl.replace(/\/$/, "")}/storage/v1/object/sign/${encodeURIComponent(bucketName)}/${encodedPath}`, {
+      method: "POST",
+      headers: authHeaders({}, session),
+      body: JSON.stringify({ expiresIn: Math.max(60, Math.min(Number(expiresIn) || 21600, 86400)) }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.message || `Storage signing failed: ${response.status}`);
+    const signedPath = payload.signedURL || payload.signedUrl || "";
+    if (!signedPath) throw new Error("Storage signed URL missing.");
+    if (/^https?:\/\//i.test(signedPath)) return signedPath;
+    const base = config.supabaseUrl.replace(/\/$/, "");
+    if (signedPath.startsWith("/storage/v1/")) return `${base}${signedPath}`;
+    return `${base}/storage/v1/${signedPath.replace(/^\//, "")}`;
   }
 
   async function downloadObject(bucketName, objectPath) {
@@ -1851,6 +2009,7 @@
     deleteRows,
     rpc,
     uploadObject,
+    createSignedObjectUrl,
     downloadObject,
     deleteObject,
     invokeFunction,
