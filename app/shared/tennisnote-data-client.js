@@ -230,7 +230,7 @@
       if (session?.access_token) {
         response = await fetch(url, {
           ...options,
-          headers: { ...authHeaders({}, session), ...options.headers, Authorization: `Bearer ${session.access_token}` },
+          headers: { ...storageAuthHeaders(options.headers || {}, session), Authorization: `Bearer ${session.access_token}` },
         });
       }
     }
@@ -241,7 +241,7 @@
     const session = await ensureSession();
     const response = await resumableRequest(uploadUrl, {
       method: "HEAD",
-      headers: authHeaders({ "Tus-Resumable": "1.0.0" }, session),
+      headers: storageAuthHeaders({ "Tus-Resumable": "1.0.0" }, session),
     });
     if (response.status === 404 || response.status === 410) return null;
     if (!response.ok) throw new Error(`Storage resumable status failed: ${response.status}`);
@@ -253,7 +253,7 @@
     const session = await ensureSession();
     const response = await resumableRequest(storageResumableUrl(), {
       method: "POST",
-      headers: authHeaders({
+      headers: storageAuthHeaders({
         "Tus-Resumable": "1.0.0",
         "Upload-Length": String(file.size),
         "Upload-Metadata": [
@@ -294,7 +294,7 @@
           const session = await ensureSession();
           response = await resumableRequest(uploadUrl, {
             method: "PATCH",
-            headers: authHeaders({
+            headers: storageAuthHeaders({
               "Tus-Resumable": "1.0.0",
               "Upload-Offset": String(offset),
               "Content-Type": "application/offset+octet-stream",
@@ -1178,6 +1178,14 @@
       "Content-Type": "application/json",
       ...extraHeaders,
     };
+  }
+
+  function storageAuthHeaders(extraHeaders = {}, sessionOverride = undefined) {
+    const headers = authHeaders(extraHeaders, sessionOverride);
+    const hasExplicitContentType = Object.keys(extraHeaders)
+      .some((name) => String(name).toLowerCase() === "content-type");
+    if (!hasExplicitContentType) delete headers["Content-Type"];
+    return headers;
   }
 
   function responseErrorPayload(rawText = "") {
