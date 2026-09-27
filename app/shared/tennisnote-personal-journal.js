@@ -16,6 +16,7 @@
   const call = (action, payload = {}) => client().rpc("tn_personal_journal", { target_action: action, payload });
   function errorMessage(error, action = "save") {
     const message = [error?.code, error?.message, error?.status, error?.statusCode].filter(Boolean).join(" ").toLowerCase().replace(/\s+/g, "_");
+    if (/personal_journal_invalid_content/.test(message)) return "오늘 운동 기록을 입력해 주세요.";
     if (/stale_revision|existing_revision/.test(message)) return "다른 화면에서 변경된 기록입니다. 다시 불러온 뒤 수정해 주세요. 입력 내용은 유지됩니다.";
     if (/invalid_media/.test(message)) return "사진은 파일당 100MB, 영상은 파일당 1GB 이하의 MP4·MOV·WebM만 첨부할 수 있습니다.";
     if (/owner_required|not_owned|auth_profile_mapping_ambiguous|42501|403/.test(message)) return "개인운동 기록의 접근 권한을 확인하지 못했습니다. 본인 기록만 이용할 수 있습니다. 기존 기록과 입력은 유지됩니다. 문제가 계속되면 관리자에게 문의해 주세요.";
@@ -146,5 +147,15 @@
       if (media.serverMediaId && String(media.url).startsWith("blob:")) URL.revokeObjectURL(media.url);
     }
   }
-  root.TennisNotePersonalJournal = Object.freeze({ key, save, remove, load, cleanup, release, errorMessage, validateFiles });
+  // 상세 DOM을 숨기거나 교체하기 전에 정지한다. 다시 열 때 재생 위치는 보존한다.
+  function pauseDetailMedia() {
+    for (const media of root.document?.querySelectorAll?.("#journalDetailContent video, #journalDetailContent audio") || []) {
+      try { media.pause(); } catch { /* 분리 중인 요소도 나머지 정지를 막지 않는다. */ }
+    }
+  }
+  root.document?.addEventListener?.("visibilitychange", () => {
+    if (root.document.hidden) pauseDetailMedia();
+  });
+  root.addEventListener?.("pagehide", pauseDetailMedia);
+  root.TennisNotePersonalJournal = Object.freeze({ key, save, remove, load, cleanup, release, errorMessage, validateFiles, pauseDetailMedia });
 })(typeof window === "undefined" ? globalThis : window);
