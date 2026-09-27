@@ -143,8 +143,9 @@ async function openJournalMedia(journalId) {
   }
   const preview = window.open("", "_blank");
   try {
-    const blob = await window.TennisNoteDataClient.downloadObject("tennisnote-journal-media", files[0].storage_path);
-    const url = URL.createObjectURL(blob);
+    const url = window.TennisNoteDataClient.createSignedObjectUrl
+      ? await window.TennisNoteDataClient.createSignedObjectUrl("tennisnote-journal-media", files[0].storage_path)
+      : URL.createObjectURL(await window.TennisNoteDataClient.downloadObject("tennisnote-journal-media", files[0].storage_path));
     if (preview) preview.location.href = url;
     else window.open(url, "_blank");
     if (files.length > 1) showToast(`첫 첨부를 열었습니다. 전체 ${files.length}개입니다.`);

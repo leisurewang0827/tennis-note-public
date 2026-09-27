@@ -307,5 +307,5 @@ function personalJournalActionsMarkup(id) {
   const log = state.practiceLogs.find((item) => item.id === id);
   const owned = log?.personalOwnerVerified && log.personalOwnerId === state.member?.profileId;
   return owned ? `<div class="actions"><button type="button" class="small-button" data-edit-personal-journal="${escapeHtml(id)}">수정</button><button type="button" class="small-button" data-delete-personal-journal="${escapeHtml(id)}">삭제</button></div>${log.mediaPending ? '<p>첨부 업로드가 완료되지 않았습니다. 수정에서 같은 파일을 다시 선택해 주세요.</p>' : ''}`
-    : '<p>이 기기에만 남아 있는 기록입니다. 내용을 복사해 새 기록으로 저장하고, 첨부는 다시 선택해 주세요.</p>';
+    : `<p>이전 앱에서 이 기기에만 저장된 기록입니다. 글과 날짜는 그대로 복구되며, 사진·영상 원본만 다시 선택해야 합니다.</p><div class="actions"><button type="button" class="small-button" data-recover-personal-journal="${escapeHtml(id)}">기록 복구</button></div>`;
 }
