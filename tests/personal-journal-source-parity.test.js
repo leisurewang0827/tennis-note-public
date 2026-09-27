@@ -8,10 +8,14 @@ const digest = (value) => createHash("sha256").update(value).digest("hex");
 const manifest = JSON.parse(read("docs/tennisnote-personal-journal-source-parity.json"));
 test("개인운동 모듈은 검증된 private 함수 및 공용 파일과 정확히 동일", () => {
   assert.equal(manifest.privateSourceSha, "d3cf3a8f64d18feb00492dd06c9aad5df1ec4368");
-  assert.equal(manifest.functions.length, 18);
+  assert.equal(manifest.functions.length, 20);
   const revised = manifest.functions.filter((entry) => entry.privateSourceSha);
-  assert.deepEqual(revised.map((entry) => entry.name), ["savePracticeLog", "editPersonalJournal", "recoverLocalPersonalJournal", "renderMediaPreview", "personalJournalActionsMarkup", "openJournalComposer"]);
+  assert.deepEqual(revised.map((entry) => entry.name), ["savePracticeLog", "editPersonalJournal", "recoverLocalPersonalJournal", "renderMediaPreview", "personalJournalActionsMarkup", "openJournalComposer", "openJournalDetail", "openJournalDay", "closeJournalDetail"]);
   for (const entry of revised) {
+    if (["savePracticeLog", "openJournalDetail", "openJournalDay", "closeJournalDetail"].includes(entry.name)) {
+      assert.equal(entry.privateSourceSha, "e2333baeae753393d005b16a4757f4d4af65064a");
+      continue;
+    }
     assert.equal(entry.privateSourceSha, entry.name === "renderMediaPreview"
       ? "060ece0e4aff969c1d57c4246e9785c7bd40abc5" : "c94b6dcb0a047d0fae9af1e55db3669bae98d831");
   }
@@ -21,6 +25,7 @@ test("개인운동 모듈은 검증된 private 함수 및 공용 파일과 정�
     assert.equal(digest(matches[0][0]), entry.sha256, entry.name);
   }
   assert.equal(digest(read(manifest.shared.path)), manifest.shared.sha256);
+  assert.equal(manifest.shared.privateSourceSha, "e2333baeae753393d005b16a4757f4d4af65064a");
   const transport = read(manifest.transport.path).match(/^  async function deleteObject\([^]*?^  }/m);
   assert.equal(manifest.transport.privateSourceSha, "bab72f668b394330227cf8f67250c971cde876c5");
   assert.equal(digest(transport[0]), manifest.transport.sha256);
