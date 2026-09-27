@@ -46,7 +46,7 @@ function registerPwaServiceWorker() {
   const memberPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("member");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.516",
+    workerUrl: "./service-worker.js?v=1.0.517",
     remoteAppUrl: memberPortal?.ok ? memberPortal.url : "",
   });
 }
@@ -194,6 +194,7 @@ function paymentRedirectUrl() {
 
 function setView(viewId, options = {}) {
   if (!viewId || !$(`#${viewId}`)) return;
+  if (document.body.dataset.activeMemberView !== viewId) closeJournalDetail();
   if (viewId === "scheduleView" && !state.memberScheduleModeTouched) {
     state.memberScheduleMode = "mine";
     state.memberScheduleFullView = false;
