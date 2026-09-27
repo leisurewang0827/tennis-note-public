@@ -10,8 +10,8 @@
     {
       "path": "app/tennis-note-member-app/actions/journal.js",
       "name": "savePracticeLog",
-      "privateSourceSha": "c94b6dcb0a047d0fae9af1e55db3669bae98d831",
-      "sha256": "9f73c876aa7981fee39c8a38cc151bb71b9f088e6aa1843b4220135a6b2fa7cc"
+      "privateSourceSha": "e2333baeae753393d005b16a4757f4d4af65064a",
+      "sha256": "7a7e60d5a761ed7eddaa2c2aab555c2650f8bba3f2a88c849b3890b4cba72d36"
     },
     {
       "path": "app/tennis-note-member-app/actions/journal.js",
@@ -91,7 +91,8 @@
     {
       "path": "app/tennis-note-member-app/ui/screens.js",
       "name": "openJournalDetail",
-      "sha256": "e22119b5e3d092e6d9bdc36bbddf88f3693cf07db5d60846d84ec1d51f407be6"
+      "sha256": "27a31344691a9557a97b5dbc85b587396904eceb5c7425ad948f6bed59806aea",
+      "privateSourceSha": "e2333baeae753393d005b16a4757f4d4af65064a"
     },
     {
       "path": "app/tennis-note-member-app/ui/screens.js",
@@ -102,11 +103,24 @@
       "path": "app/tennis-note-coach-app/domain/curriculum.js",
       "name": "curriculumLibraryMarkup",
       "sha256": "7b6ff89b33cdda7648817ac054c689de85367f20de3735b244c388b1d2802a61"
+    },
+    {
+      "path": "app/tennis-note-member-app/ui/screens.js",
+      "name": "openJournalDay",
+      "privateSourceSha": "e2333baeae753393d005b16a4757f4d4af65064a",
+      "sha256": "cdf97040d1575da327311232c7f3a392989f9797043291a8fb9d9d4442159959"
+    },
+    {
+      "path": "app/tennis-note-member-app/ui/screens.js",
+      "name": "closeJournalDetail",
+      "privateSourceSha": "e2333baeae753393d005b16a4757f4d4af65064a",
+      "sha256": "d68671813296624acbd25a4ed006d8e8388596e424719aa36d9a2112bec42291"
     }
   ],
   "shared": {
     "path": "app/shared/tennisnote-personal-journal.js",
-    "sha256": "31355b72c293cac836794916960fd13a06c18ac9a1e22b0f856388e7bb45a6cf"
+    "sha256": "4fe84c967790557468a98d4dd8ef65a130d09f69cb5eb5c9c5d4ea7cbb7fde9c",
+    "privateSourceSha": "e2333baeae753393d005b16a4757f4d4af65064a"
   },
   "scope": "development only; no lesson/ticket/feedback writes"
 }

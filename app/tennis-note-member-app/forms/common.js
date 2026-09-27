@@ -194,6 +194,7 @@ function paymentRedirectUrl() {
 
 function setView(viewId, options = {}) {
   if (!viewId || !$(`#${viewId}`)) return;
+  if (document.body.dataset.activeMemberView !== viewId) closeJournalDetail();
   if (viewId === "scheduleView" && !state.memberScheduleModeTouched) {
     state.memberScheduleMode = "mine";
     state.memberScheduleFullView = false;

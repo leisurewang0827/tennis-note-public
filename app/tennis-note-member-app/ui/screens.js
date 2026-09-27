@@ -371,6 +371,7 @@ function openMembershipDetails(detailsId) {
 function openJournalDetail(id) {
   const entry = journalEntries().find((item) => item.id === id);
   if (!entry) return;
+  window.TennisNotePersonalJournal?.pauseDetailMedia();
   const curriculumBlock = entry.curriculumStep
     ? `
       <section class="journal-curriculum-card">
@@ -417,6 +418,7 @@ function openJournalDay(day) {
   const dateValue = `${monthValue}-${String(day).padStart(2, "0")}`;
   const entries = journalEntries().filter((item) => item.dateValue === dateValue);
   if (!entries.length) return;
+  window.TennisNotePersonalJournal?.pauseDetailMedia();
   if (entries.length === 1) {
     openJournalDetail(entries[0].id);
     return;
@@ -442,11 +444,13 @@ function openJournalDay(day) {
 }
 
 function closeJournalDetail() {
+  window.TennisNotePersonalJournal?.pauseDetailMedia();
   $("#journalDetailModal").hidden = true;
 }
 
 function openCoachMode() {
   if (!canUseCoachMode()) return;
+  closeJournalDetail();
   coachModeNavigationStarted = true;
   sessionStorage.setItem(appModePreferenceKey, "coach");
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");

@@ -4,6 +4,16 @@
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
 async function savePracticeLog() {
+  const memoInput = $("#practiceMemo");
+  if (!memoInput.value.trim()) {
+    personalJournalStatus("오늘 운동 기록을 입력해 주세요.");
+    memoInput.setAttribute("aria-invalid", "true");
+    memoInput.setAttribute("aria-describedby", "personalJournalStatus");
+    memoInput.focus({ preventScroll: true });
+    memoInput.scrollIntoView({ block: "center", behavior: "smooth" });
+    return false;
+  }
+  memoInput.removeAttribute("aria-invalid");
   const existing = state.practiceLogs.find((log) => log.id === (state.personalEditingId || state.personalDraftId));
   const recoverySourceId = state.personalRecoverySourceId || "";
   const mediaItems = mediaItemsFromInput($("#practiceMedia"));
