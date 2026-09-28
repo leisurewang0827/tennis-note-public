@@ -9,7 +9,7 @@ function renderMediaPreview(mediaItems = [], compact = false) {
   return `
     <div class="journal-media-grid ${compact ? "compact" : ""}">
       ${mediaItems
-        .map((item) => {
+        .map((item, index) => {
           if (item.error) return `<p role="status">${escapeHtml(item.error)}</p>`;
           const url = journalMediaPreviewUrl(item.url);
           const isVideo = item.type?.startsWith("video") || /\.(mp4|mov|webm|m4v)$/i.test(item.name || "");
@@ -17,18 +17,18 @@ function renderMediaPreview(mediaItems = [], compact = false) {
           if (url && isVideo) {
             return `
               <figure class="journal-media-item video">
-                <video data-journal-media-preview src="${escapeHtml(url)}" controls playsinline preload="metadata"></video>
+                <video data-journal-media-preview data-journal-media-index="${index}" src="${escapeHtml(url)}" controls playsinline preload="metadata"></video>
                 <figcaption>${escapeHtml(item.name)}</figcaption>
               </figure>`;
           }
           if (url && isImage) {
             return `
               <figure class="journal-media-item image">
-                <img data-journal-media-preview src="${escapeHtml(url)}" alt="${escapeHtml(item.name)}" loading="lazy" />
+                <img data-journal-media-preview data-journal-media-index="${index}" src="${escapeHtml(url)}" alt="${escapeHtml(item.name)}" loading="lazy" />
                 <figcaption>${escapeHtml(item.name)}</figcaption>
               </figure>`;
           }
-          return `<div class="journal-media-item"><b class="media-chip">${escapeHtml(item.name)}</b><p role="status">${journalMediaUnavailableMessage()}</p></div>`;
+          return `<div class="journal-media-item"><b class="media-chip">${escapeHtml(item.name)}</b><p role="status">${item.serverMediaId ? "저장된 첨부를 다시 확인하는 중입니다." : journalMediaUnavailableMessage()}</p></div>`;
         })
         .join("")}
     </div>`;

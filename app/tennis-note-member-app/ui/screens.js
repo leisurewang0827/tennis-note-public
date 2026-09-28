@@ -368,10 +368,14 @@ function openMembershipDetails(detailsId) {
   window.setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
 }
 
-function openJournalDetail(id) {
+function openJournalDetail(id, options = {}) {
   const entry = journalEntries().find((item) => item.id === id);
   if (!entry) return;
   window.TennisNotePersonalJournal?.pauseDetailMedia();
+  const detail = $("#journalDetailContent");
+  const mediaEpoch = String((Number(detail.dataset.mediaEpoch) || 0) + 1);
+  detail.dataset.mediaEpoch = mediaEpoch;
+  detail.dataset.journalEntryId = id;
   const curriculumBlock = entry.curriculumStep
     ? `
       <section class="journal-curriculum-card">
@@ -390,7 +394,7 @@ function openJournalDetail(id) {
       holiday: "휴무",
     }[String(entry.outcome || "").toLowerCase()] || "수업 기록"}</span><strong>${entry.sessionRoundLabel || "기록 당시 회차 미확정"}</strong><small>${Number(entry.deductedSessions) > 0 ? `${Number(entry.deductedSessions)}회 차감` : "차감 없음"}</small></div>`
     : "";
-  $("#journalDetailContent").innerHTML = `
+  detail.innerHTML = `
     <div class="section-title compact-title">
       <h2>${escapeHtml(entry.title)}</h2>
       <span>${escapeHtml(entry.subtitle || entry.dateLabel)}</span>
@@ -410,7 +414,23 @@ function openJournalDetail(id) {
       ${curriculumBlock}
       ${entry.kind === "개인운동" ? personalJournalActionsMarkup(id) : ""}
     </article>`;
+  for (const media of detail.querySelectorAll("video[data-journal-media-index]")) {
+    window.TennisNotePersonalJournal?.restorePlaybackPosition(media);
+  }
   $("#journalDetailModal").hidden = false;
+  const missingServerMedia = entry.kind === "개인운동" && !options.skipMediaRefresh
+    ? (entry.mediaItems || []).filter((item) => item.serverMediaId && item.storagePath && (!item.url || item.error))
+    : [];
+  if (missingServerMedia.length) {
+    Promise.allSettled(missingServerMedia.map(async (item) => {
+      try { await window.TennisNotePersonalJournal.refreshMediaUrl(item); }
+      catch { item.error = "저장된 첨부를 불러오지 못했습니다. 기존 첨부는 보존됩니다. 다시 열어 주세요."; }
+    })).then(() => {
+      if (!$("#journalDetailModal").hidden && detail.dataset.journalEntryId === id && detail.dataset.mediaEpoch === mediaEpoch) {
+        openJournalDetail(id, { skipMediaRefresh: true });
+      }
+    });
+  }
 }
 
 function openJournalDay(day) {
@@ -446,6 +466,11 @@ function openJournalDay(day) {
 function closeJournalDetail() {
   window.TennisNotePersonalJournal?.pauseDetailMedia();
   $("#journalDetailModal").hidden = true;
+  const detail = $("#journalDetailContent");
+  if (detail) {
+    delete detail.dataset.journalEntryId;
+    detail.dataset.mediaEpoch = String((Number(detail.dataset.mediaEpoch) || 0) + 1);
+  }
 }
 
 function openCoachMode() {

@@ -270,8 +270,13 @@ async function syncPersonalJournalFromServer() {
   personalJournalReadError = null;
   const keys = new Set(loaded.logs.map((log) => log.personalClientKey).filter(Boolean));
   const local = state.practiceLogs.filter((log) => !log.serverJournalId && !keys.has(log.personalClientKey));
+  const completedSelections = new Map(state.practiceLogs.flatMap((log) => (log.mediaItems || [])
+    .filter((item) => item.serverMediaId && item.uploadSelectionKey)
+    .map((item) => [item.serverMediaId, item.uploadSelectionKey])));
   api.release(state.practiceLogs.filter((log) => log.serverJournalId));
-  state.practiceLogs = [...loaded.logs.map((log) => ({ ...log, personalOwnerId: owner })), ...local];
+  state.practiceLogs = [...loaded.logs.map((log) => ({ ...log, personalOwnerId: owner,
+    mediaItems: (log.mediaItems || []).map((item) => ({ ...item,
+      ...(completedSelections.has(item.serverMediaId) ? { uploadSelectionKey: completedSelections.get(item.serverMediaId) } : {}) })) })), ...local];
   saveSnapshot();
   renderPracticeLogs();
   renderSelectedJournalDayPanel();
