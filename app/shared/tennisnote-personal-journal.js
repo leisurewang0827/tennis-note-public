@@ -19,6 +19,7 @@
     if (/personal_journal_invalid_content/.test(message)) return "오늘 운동 기록을 입력해 주세요.";
     if (/stale_revision|existing_revision/.test(message)) return "다른 화면에서 변경된 기록입니다. 다시 불러온 뒤 수정해 주세요. 입력 내용은 유지됩니다.";
     if (/invalid_media/.test(message)) return "사진은 파일당 100MB, 영상은 파일당 1GB 이하의 MP4·MOV·WebM만 첨부할 수 있습니다.";
+    if (/mp4_prepare_failed/.test(message)) return "이 영상은 재생용 준비를 안전하게 완료하지 못했습니다. 원본 파일과 입력은 유지됩니다. 다른 MP4로 다시 시도해 주세요.";
     if (/owner_required|not_owned|auth_profile_mapping_ambiguous|42501|403/.test(message)) return "개인운동 기록의 접근 권한을 확인하지 못했습니다. 본인 기록만 이용할 수 있습니다. 기존 기록과 입력은 유지됩니다. 문제가 계속되면 관리자에게 문의해 주세요.";
     if (/login_required/.test(message)) return "로그인이 필요합니다. 입력 내용은 유지됩니다.";
     if (action === "list") return "개인운동 기록을 불러오지 못했습니다. 기존 기록과 입력은 유지됩니다. 연결을 확인한 뒤 다시 열어 주세요.";
@@ -45,6 +46,20 @@
   async function save(log, files = [], checkpoint = () => {}) {
     validateFiles(files);
     if (!String(log.memo || "").trim()) throw new Error("personal_journal_invalid_content");
+    // 서버 기록/예약보다 먼저 MP4 구조를 확인한다. 실패하면 draft와 선택 파일을 그대로 둔다.
+    const preparedFiles = [];
+    for (const original of files) {
+      if (original.type === "video/mp4") {
+        if (root.dispatchEvent && root.CustomEvent) root.dispatchEvent(new root.CustomEvent("tennisnote:personal-journal-prepare-progress"));
+        if (!root.TennisNoteMp4Faststart?.prepare) throw new Error("personal_journal_mp4_prepare_failed");
+        let upload;
+        try { upload = await root.TennisNoteMp4Faststart.prepare(original); }
+        catch { throw new Error("personal_journal_mp4_prepare_failed"); }
+        if (!upload || upload.size !== original.size || upload.type !== original.type || upload.name !== original.name ||
+          upload.lastModified !== original.lastModified) throw new Error("personal_journal_mp4_prepare_failed");
+        preparedFiles.push({ original, upload });
+      } else preparedFiles.push({ original, upload: original });
+    }
     log.personalClientKey ||= key();
     // 응답을 잃은 요청은 동일 payload/key로 먼저 확인한다. 변경된 draft를 덮어쓰지 않는다.
     const desired = JSON.stringify({ entryDate: log.journalDate, practiceType: types[log.type] || "other", body: body(log) });
@@ -62,8 +77,8 @@
     checkpoint(log);
     const pendingBody = JSON.stringify({ entryDate: pending.entryDate, practiceType: pending.practiceType, body: pending.body });
     if (pendingBody !== desired) return save(log, files, checkpoint);
-    for (const file of files) {
-      const fingerprint = fileFingerprint(file);
+    for (const { original, upload: file } of preparedFiles) {
+      const fingerprint = fileFingerprint(original);
       log.personalPendingMedia ||= {};
       const uploadKey = log.personalPendingMedia[fingerprint] || key();
       log.personalPendingMedia[fingerprint] = uploadKey;

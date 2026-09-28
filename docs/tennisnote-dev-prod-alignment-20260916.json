@@ -13,11 +13,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.517",
-    "release_id": "2026.09.28.01",
-    "deployed_at": "2026-09-28T00:04:02+09:00",
-    "member_cache": "tennis-note-member-pwa-v556",
-    "coach_cache": "tennis-note-coach-mode-v529"
+    "version": "1.0.518",
+    "release_id": "2026.09.28.02",
+    "deployed_at": "2026-09-28T14:59:09+09:00",
+    "member_cache": "tennis-note-member-pwa-v557",
+    "coach_cache": "tennis-note-coach-mode-v530"
   },
   "allowed_differences": [
     "app version literals",
@@ -61,9 +61,10 @@
     "AUTH-PHONE-EXISTS-GUIDANCE-PRIVATE-92C72E4C",
     "REQUIRED-PRODUCT-FAMILY-LABELS-PRIVATE-6FDBACAE",
     "PERSONAL-JOURNAL-LONG-VIDEO-PRIVATE-C5884FAB",
-    "PERSONAL-JOURNAL-VALIDATION-MEDIA-EXIT-PRIVATE-E2333BAE"
+    "PERSONAL-JOURNAL-VALIDATION-MEDIA-EXIT-PRIVATE-E2333BAE",
+    "PERSONAL-JOURNAL-HEVC-FASTSTART-PRIVATE-4F615940"
   ],
-  "selection_note": "Only the verified feedback fixes, native authentication session continuity, hidden email authentication entry points, push fail-closed behavior, and legacy Array compatibility plus the strictly source-verified membership effective-state change from private a7aa949c2db64edd1fbfb665b8a8cf03690e8160 are added beyond the production authority tree. The production hotfix base is 3d215f7da47fc6f002e77d420f1682c848c93e40. Development 1.0.509 adds only source-verified store availability and shared 44px contracts from private edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact. Personal journal and curriculum changes match private 1a2019fade5048794668159957463aa4a08ad7c2; the own-profile authorization and read-preservation correction matches private d3cf3a8f64d18feb00492dd06c9aad5df1ec4368 through the separate exact-function/shared hash manifest. The phone_exists guidance matches private 92c72e4c0d7da3c7893cfa03148ceb56f1966556 and changes only client error presentation. Settlement month, legacy media guidance, and neutral product labels match private 060ece0e4aff969c1d57c4246e9785c7bd40abc5 through the exact-function/shared hash manifest month-media-label-source-parity-20260922.json. Required product-family labels and blank product-name rejection match private 6fdbacae737a7f1bfcf4fcf9e1d1168c5ed6dc4a; its additive settings validation migration is tracked in the private source and is not duplicated in this public product tree. Personal-journal video uploads up to 1 GiB, resumable transport, progress presentation, and signed private-video playback match the private c5884fab authority plus the current additive migration; database rollout remains a separate gate. No R3 change.",
+  "selection_note": "Only the verified feedback fixes, native authentication session continuity, hidden email authentication entry points, push fail-closed behavior, and legacy Array compatibility plus the strictly source-verified membership effective-state change from private a7aa949c2db64edd1fbfb665b8a8cf03690e8160 are added beyond the production authority tree. The production hotfix base is 3d215f7da47fc6f002e77d420f1682c848c93e40. Development 1.0.509 adds only source-verified store availability and shared 44px contracts from private edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact. Personal journal and curriculum changes match private 1a2019fade5048794668159957463aa4a08ad7c2; the own-profile authorization and read-preservation correction matches private d3cf3a8f64d18feb00492dd06c9aad5df1ec4368 through the separate exact-function/shared hash manifest. The phone_exists guidance matches private 92c72e4c0d7da3c7893cfa03148ceb56f1966556 and changes only client error presentation. Settlement month, legacy media guidance, and neutral product labels match private 060ece0e4aff969c1d57c4246e9785c7bd40abc5 through the exact-function/shared hash manifest month-media-label-source-parity-20260922.json. Required product-family labels and blank product-name rejection match private 6fdbacae737a7f1bfcf4fcf9e1d1168c5ed6dc4a; its additive settings validation migration is tracked in the private source and is not duplicated in this public product tree. Personal-journal video uploads up to 1 GiB, resumable transport, progress presentation, and signed private-video playback match the private c5884fab authority plus the current additive migration; database rollout remains a separate gate. The HEVC MP4 faststart preparation and signed-playback progress guidance match private 4f61594058a83f7a0be9afd5ef9163cfc486fa46; the iPhone playback still requires a separate actual-device gate. No R3 change.",
   "dev_ahead_commits": [
     {
       "sha": "1ae65617725a7c1fe4eab6516d8785ab93708529",
@@ -811,7 +812,7 @@
     }
   ],
   "product_tree": {
-    "file_count": 260,
+    "file_count": 261,
     "normalized_sha256_by_path": {
       "app/admin/actions/billing.js": "59f88f633a290e7f4c9713567bf046e31d35114b69b762f03839d75c71036b6f",
       "app/admin/actions/coach.js": "812454fa198ef90c38f02471573449f3263d3dcf4f1992658cf3f3fc1a9e8d49",
@@ -891,8 +892,9 @@
       "app/shared/tennisnote-issue-reporter.css": "de8537c82a5fc50de0ce71dbef8623183d9be8aae67967f3baffd4467286dbba",
       "app/shared/tennisnote-issue-reporter.js": "c6b4531e91d1d4260f1c721ed16757425e46ccef70a869e3891012fdefe72a85",
       "app/shared/tennisnote-mode-transition.js": "af3e963d9050fc0176bea07f96d5dbdfaa80cbaad3bd9e093ccc6c9f118972e7",
+      "app/shared/tennisnote-mp4-faststart.js": "cdc245b0ead6e32c5dfba3d5e87396644a42796863451cfa99558ee2ae0f660b",
       "app/shared/tennisnote-native-push.js": "a9375d6bbb3a1bad75a8c4d854191763d85529bbbeec4a1cfe86be8fc6139968",
-      "app/shared/tennisnote-personal-journal.js": "4fe84c967790557468a98d4dd8ef65a130d09f69cb5eb5c9c5d4ea7cbb7fde9c",
+      "app/shared/tennisnote-personal-journal.js": "19b9d9efe6b6369113fe27405d614715da4c5bb536bc891bd0a107154860ad55",
       "app/shared/tennisnote-product-catalog.js": "2b522f463e2f87c26ea50824d56429e489f8fffe21c173cb63af02b6d7e5cf12",
       "app/shared/tennisnote-release-updater.js": "4e622f94b097f923ac62f8b5f56d8ed6508cb67e3625562782cc22d761814763",
       "app/shared/tennisnote-release.js": "95636d1ff4e5c8be518e16b29b70217f8aae30ec2b3ecd5d5ddbf49f7697292d",
@@ -1040,7 +1042,7 @@
       "app/tennis-note-member-app/domain/tickets.js": "2c862024818b6b145a621d7d42e2f93a7d63e465816a3401f19be10195b61053",
       "app/tennis-note-member-app/domain/values.js": "1d97ccc8dd59e33395a09d400dce5f424527a0bbebd56727507c114691135ff9",
       "app/tennis-note-member-app/events/account.js": "c64ff958a5f4c5ab0ee344536049ffd437bb51a35100346baed44a3feee12b50",
-      "app/tennis-note-member-app/events/delegated.js": "770185a182a33c05ff1ec480da609686413d9cdbaa2751270527fa9cc176edc8",
+      "app/tennis-note-member-app/events/delegated.js": "ec02cbf4db7495ef58526bfc7e05f1a34138a8f27f0565d5b76191fb9e2dccaf",
       "app/tennis-note-member-app/events/home.js": "261674c18934777c3c64a4751aebcbffd1651817752723161b3643acdff39c16",
       "app/tennis-note-member-app/events/journal.js": "e622d4dea191968bc739d782720385a5df9f9b00ec27e20e92112fa5620773aa",
       "app/tennis-note-member-app/events/makeup.js": "c10a8ccc599783ad726aba89fbb5064d85f6a8719b0c69278f6215703e53002e",
@@ -1052,10 +1054,10 @@
       "app/tennis-note-member-app/forms/payment.js": "4c0f36d815dca219d83c96b148c4385ff02ac898d08c030f0e67f1d1f1ed9c68",
       "app/tennis-note-member-app/forms/schedule.js": "eafad0e85bd8269836343427ad97b1c51da820c088fd7b869b944a1d09e63198",
       "app/tennis-note-member-app/forms/tickets.js": "2386134839d40b2359b23263ca8e8d84f34a302760371eff08fa0959dae6c019",
-      "app/tennis-note-member-app/index.html": "c33bc2aad328f406fd45fa41a6840e2f3cc67b029e6b9f789fb740958393873c",
+      "app/tennis-note-member-app/index.html": "b7224a93e682a67897569b5d6577f3a62a9dc7d5ac49fb39cea0239f1943cedf",
       "app/tennis-note-member-app/manifest.webmanifest": "6cdfe35247ba08350851b3916f9349aee7e9f009b099a46c8c406cfc7af21172",
       "app/tennis-note-member-app/native-oauth-callback.html": "aa5c7344fc020657f8449706899fa59091b8876d08242dcb8e6abfad3ccd37d3",
-      "app/tennis-note-member-app/service-worker.js": "6a1cb63ef38b62d984ac613b6352d977a6b3d0467bc92ba2886b6b73ed8ef23a",
+      "app/tennis-note-member-app/service-worker.js": "2ed9a30c20bd80d0df6f2e0cc0886e7dc36f642457b7524ed53d403e4152cb1b",
       "app/tennis-note-member-app/settings.js": "19e26a6331373bdb2b9d3e9ada2c7be0e5851233957e11c576a742104bf3fc1a",
       "app/tennis-note-member-app/storage.js": "ff33a62149dd1005c39f43a0a29828e2f35738cb842be39b1eaae2b56e2256da",
       "app/tennis-note-member-app/styles.css": "f89f120f26f6d44644e5857e513f8d19a4cc9fc980323f90dc874e7a1395b100",
