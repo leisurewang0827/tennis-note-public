@@ -17,9 +17,9 @@ const hash = (text) => crypto.createHash("sha256").update(text).digest("hex");
 const coach = "app/tennis-note-coach-app/";
 const member = "app/tennis-note-member-app/";
 
-test("정산·첨부·표시명은 병합된 private 권위 함수 9개와 공용 자산이 exact 일치한다", () => {
+test("정산·첨부·표시명은 최신 private 권위 함수 9개와 공용 자산이 exact 일치한다", () => {
   const manifest = JSON.parse(read("docs/month-media-label-source-parity-20260922.json"));
-  assert.equal(manifest.privateMainSha, "6fdbacae737a7f1bfcf4fcf9e1d1168c5ed6dc4a");
+  assert.equal(manifest.privateMainSha, "f408dae5c6918139c4d95067808b221439eb14da");
   assert.equal(manifest.functions.length, 9);
   for (const item of manifest.functions) {
     assert.equal(hash(extract(read(item.publicModule), item.function)), item.sha256, item.function);
@@ -61,10 +61,11 @@ test("실제 modular entry는 월 선택·logout·error capture를 연결하고 
   }
 });
 
-test("legacy 첨부는 URL·권한·형식에 맞게 표시하며 오류 안내는 한 번만 추가한다", () => {
+test("legacy 첨부는 URL·권한·형식에 맞게 표시하며 오류 안내는 한 번만 추가한다", async () => {
   const escapeHtml = (value) => String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
   let notices = 0;
-  const context = vm.createContext({ URL, window: { location: { href: "https://synthetic.invalid/" } }, escapeHtml,
+  const context = vm.createContext({ URL, window: { location: { href: "https://synthetic.invalid/" } },
+    state: { practiceLogs: [] }, escapeHtml,
     document: { createElement: () => ({ setAttribute() {}, textContent: "" }) } });
   vm.runInContext(read(member + "domain/journal.js") + "\n" + read(member + "views/journal.js") + "\n" + read(member + "ui/common.js"), context);
   const render = (items) => { context.items = items; return vm.runInContext("renderMediaPreview(items)", context); };
@@ -74,8 +75,10 @@ test("legacy 첨부는 URL·권한·형식에 맞게 표시하며 오류 안내�
   assert.doesNotMatch(render([{ name: "synthetic.png", url: "javascript:alert(1)" }]), /<img/);
   assert.match(render([{ name: "synthetic.mp4", error: "첨부 접근 권한 없음" }]), /접근 권한 없음/);
   assert.equal(vm.runInContext('normalizeMediaItems({mediaNames:["synthetic.png"]})[0].url', context), "");
-  context.media = { matches: () => true, dataset: {}, hidden: false, after: () => { notices += 1; } };
-  vm.runInContext("handleJournalMediaPreviewError({target:media}); handleJournalMediaPreviewError({target:media})", context);
+  context.media = { matches: () => true, closest: () => null, isConnected: true,
+    dataset: {}, hidden: false, after: () => { notices += 1; } };
+  await vm.runInContext("handleJournalMediaPreviewError({target:media})", context);
+  await vm.runInContext("handleJournalMediaPreviewError({target:media})", context);
   assert.equal(notices, 1);
   assert.equal(context.media.hidden, true);
   assert.equal(context.media.dataset.previewFailed, "true");
