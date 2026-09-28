@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.517"
-EXPECTED_RELEASE_ID = "2026.09.28.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v556"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v529"
+EXPECTED_VERSION = "1.0.519"
+EXPECTED_RELEASE_ID = "2026.09.28.03"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v558"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v531"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -40,6 +40,8 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "REQUIRED-PRODUCT-FAMILY-LABELS-PRIVATE-6FDBACAE",
     "PERSONAL-JOURNAL-LONG-VIDEO-PRIVATE-C5884FAB",
     "PERSONAL-JOURNAL-VALIDATION-MEDIA-EXIT-PRIVATE-E2333BAE",
+    "PERSONAL-JOURNAL-HEVC-FASTSTART-PRIVATE-4F615940",
+    "AUTH-PROFILE-COMPLETION-SERVER-AUTHORITY-PRIVATE-46CC06FF",
 )
 SELECTED_NET_NEW_PATHS = {
     "app/admin/actions/member.js",
@@ -56,6 +58,7 @@ SELECTED_NET_NEW_PATHS = {
     "app/tennis-note-member-app/events/delegated.js",
     "app/tennis-note-member-app/ui/common.js",
     "app/shared/tennisnote-personal-journal.js",
+    "app/shared/tennisnote-mp4-faststart.js",
     "app/tennis-note-member-app/actions/journal.js",
     "app/tennis-note-member-app/data/journal.js",
     "app/tennis-note-member-app/views/journal.js",
@@ -101,6 +104,7 @@ SELECTED_NET_NEW_PATHS = {
     "app/tennis-note-member-app/domain/common.js",
     "app/tennis-note-member-app/domain/identity.js",
     "app/tennis-note-member-app/domain/journal.js",
+    "app/tennis-note-member-app/domain/members.js",
     "app/tennis-note-member-app/domain/purchase.js",
     "app/tennis-note-member-app/domain/schedule.js",
     "app/tennis-note-member-app/domain/tickets.js",
@@ -344,11 +348,21 @@ def generate() -> None:
             "tracked in the private source and is not duplicated in this public product tree. Personal-journal "
             "video uploads up to 1 GiB, resumable transport, progress presentation, and signed private-video "
             "playback match the private c5884fab authority plus the current additive migration; database rollout "
-            "remains a separate gate. No R3 change."
+            "remains a separate gate. The HEVC MP4 faststart preparation and signed-playback "
+            "progress guidance match private 4f61594058a83f7a0be9afd5ef9163cfc486fa46; the "
+            "iPhone playback still requires a separate actual-device gate. The member profile completion "
+            "decision matches the exact private main function in 46cc06ff3c97b4ec6496d890b64956ca57bc0b32 "
+            "and trusts server-confirmed completion even when a synthetic QA profile has no phone. No R3 change."
         ),
         "dev_ahead_commits": classify_commits(),
     }
-    paths = sorted(set(authority_paths("app")) | {"app/shared/tennisnote-personal-journal.js"})
+    paths = sorted(
+        set(authority_paths("app"))
+        | {
+            "app/shared/tennisnote-personal-journal.js",
+            "app/shared/tennisnote-mp4-faststart.js",
+        }
+    )
     placeholder = dict(manifest)
     hashes = {
         path: sha256(
