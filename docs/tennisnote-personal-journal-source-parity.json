@@ -119,8 +119,13 @@
   ],
   "shared": {
     "path": "app/shared/tennisnote-personal-journal.js",
-    "sha256": "4fe84c967790557468a98d4dd8ef65a130d09f69cb5eb5c9c5d4ea7cbb7fde9c",
-    "privateSourceSha": "e2333baeae753393d005b16a4757f4d4af65064a"
+    "sha256": "19b9d9efe6b6369113fe27405d614715da4c5bb536bc891bd0a107154860ad55",
+    "privateSourceSha": "4f61594058a83f7a0be9afd5ef9163cfc486fa46"
+  },
+  "faststart": {
+    "path": "app/shared/tennisnote-mp4-faststart.js",
+    "sha256": "cdc245b0ead6e32c5dfba3d5e87396644a42796863451cfa99558ee2ae0f660b",
+    "privateSourceSha": "4f61594058a83f7a0be9afd5ef9163cfc486fa46"
   },
   "scope": "development only; no lesson/ticket/feedback writes"
 }

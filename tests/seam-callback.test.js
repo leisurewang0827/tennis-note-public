@@ -94,6 +94,7 @@ const SOURCES = [
   "app/shared/tennisnote-escape-html.js",
   "app/shared/tennisnote-app-common.js",
   "app/tennis-note-member-app/settings.js",
+  "app/shared/tennisnote-mp4-faststart.js",
   "app/shared/tennisnote-personal-journal.js",
   "app/tennis-note-member-app/catalog.js",
   "app/tennis-note-member-app/domain/products.js",
