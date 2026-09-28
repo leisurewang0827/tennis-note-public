@@ -8,6 +8,31 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const identitySource = readFileSync(join(root, "app/tennis-note-member-app/domain/identity.js"), "utf8");
 const identity = new Function(`${identitySource}\nreturn { identityPhoneE164, verifiedPhoneFromAuthUser, normalizedIdentityErrorCode, resolvedAuthCapabilities, identityErrorMessage, emailSignupResponseKind };`)();
 
+test("서버가 완료한 합성 회원 프로필은 전화번호가 비어 있어도 완료 상태로 판정한다", () => {
+  const source = readFileSync(join(root, "app/tennis-note-member-app/domain/members.js"), "utf8");
+  const implementation = source.match(/function identityProfileComplete\(\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(implementation);
+  assert.match(implementation, /Candidate contact is not/);
+  assert.doesNotMatch(implementation, /phone\.length/);
+  const evaluate = new Function(
+    "state", "identityPrivacyVersion", "normalizeIdentityText", "normalizeIdentityPhone",
+    `${implementation}\nreturn identityProfileComplete();`,
+  );
+  const profile = {
+    name: "합성 QA 회원", nickname: "검증회원", phone: "", birthYear: 1990,
+    gender: "prefer_not", profileCompletedAt: "2026-09-28T00:00:00Z",
+    privacyConsentVersion: "qa-v1",
+  };
+  const isComplete = (value) => evaluate(
+    { profile: value }, "qa-v1", (text) => String(text || "").trim(),
+    (phone) => String(phone || "").replace(/\D/g, ""),
+  );
+  assert.equal(isComplete(profile), true);
+  assert.equal(isComplete({ ...profile, privacyConsentVersion: "" }), false);
+  assert.equal(isComplete({ ...profile, profileCompletedAt: "" }), false);
+  assert.equal(isComplete({ ...profile, nickname: "" }), false);
+});
+
 test("국내 휴대전화 번호를 Supabase 전화 인증 형식으로 바꾼다", () => {
   assert.equal(identity.identityPhoneE164("010-1234-5678"), "+821012345678");
   assert.equal(identity.identityPhoneE164("821012345678"), "+821012345678");
