@@ -557,6 +557,7 @@
   }
 
   function removeStoredSession() {
+    window.dispatchEvent(new Event("tennisnote:auth-session-cleared"));
     authSessionStores().forEach((storage) => {
       try {
         storage.removeItem(authStorageKey);
@@ -1953,6 +1954,8 @@
   }
 
   async function signOut() {
+    // Consumers clear protected DOM/player copies before the potentially slow remote logout.
+    window.dispatchEvent(new Event("tennisnote:auth-session-cleared"));
     const session = getSession();
     const identity = sessionSubject(session);
     if (session?.access_token && readiness().ready) {

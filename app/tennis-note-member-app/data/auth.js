@@ -182,6 +182,7 @@ function activateLiveMemberProfile(profileId) {
   const nextProfileId = String(profileId || "");
   const previousProfileId = String(state.liveProfileId || state.member?.profileId || "");
   const sameProfile = Boolean(nextProfileId && previousProfileId === nextProfileId);
+  if (!sameProfile) memberCurriculumUI.clear();
 
   state.dataMode = "live";
   state.liveProfileId = nextProfileId;
@@ -348,6 +349,8 @@ async function loginWithEmail(event) {
 }
 
 async function logout() {
+  curriculumSessionAttempt++;
+  memberCurriculumUI.clear();
   await disableNativePushForLogout();
   try {
     await window.TennisNoteDataClient?.signOut?.();

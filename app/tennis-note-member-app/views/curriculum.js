@@ -4,7 +4,10 @@
 // 일어나므로 이름은 호출 시점에 해석된다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-function renderMemberCurriculumLibrary(active = activeCurriculumStep()) {
+function renderMemberCurriculumLibrary(active = activeMemberCurriculumStep()) {
+  if (!memberCurriculumUI.authorized()) return;
+  // Search/filter is an explicit navigation action. Never replace the separately opened current lesson.
+  if (curriculumPlayer?.frame.closest("#memberCurriculumLibrary")) closeCurriculumPlayer();
   const target = $("#memberCurriculumLibrary");
   if (target) target.innerHTML = memberCurriculumLibraryMarkup(active);
   const count = filteredMemberCurriculumTracks().reduce((sum, track) => sum + track.steps.length, 0);
@@ -12,19 +15,26 @@ function renderMemberCurriculumLibrary(active = activeCurriculumStep()) {
 }
 
 function renderCurriculum() {
+  if (!memberCurriculumUI.authorized()) return;
+  const activity = memberCurriculumActivity();
+  memberCurriculumUI.activity(activity);
+  if (activity.lessonOpen || activity.videoPlaying) return;
   const latest = latestCurriculumLog();
-  const active = activeCurriculumStep();
-  const activeTrack = curriculumSkillTracks.find((track) => track.steps.some((step) => step.id === active.id));
+  const active = activeMemberCurriculumStep();
+  if (!active) {
+    $("#curriculumGuide")?.replaceChildren(); $("#curriculumFullList")?.replaceChildren();
+    return;
+  }
+  const activeTrack = memberCurriculumTracks.find((track) => track.steps.some((step) => step.id === active.id));
   const activeIndex = activeTrack?.steps.findIndex((step) => step.id === active.id) ?? -1;
-  const nextStage = curriculumStageCards().find(({ tone }) => tone === "next")?.step;
+  const nextStage = memberCurriculumSteps.find(step => step.id === active.nextLessonId);
   const guideMarkup = `
     <div class="curriculum-summary">
-      <span>다음 수업</span>
+      <span>${latest?.nextCurriculumId || latest?.curriculum?.id ? "지금 수업" : "아직 지정된 수업이 없습니다 · 수업 둘러보기"}</span>
       <strong>${escapeHtml(active.id)} · ${escapeHtml(active.title)}</strong>
-      <small>${activeTrack ? `${escapeHtml(activeTrack.title)} ${activeIndex + 1}/${activeTrack.steps.length}` : "코치 지정 단계"} · ${escapeHtml(latest?.lessonLabel || "최근 등록 기준")}</small>
-      <p>${escapeHtml(active.goal || active.guide || active.next || active.focus)}</p>
+      <p class="curriculum-current-goal">${escapeHtml(active.goal || active.guide || active.next || active.focus)}</p>
       <details class="curriculum-action-details">
-        <summary class="primary-button">3단계 시작</summary>
+        <summary class="primary-button">오늘 수업 시작</summary>
         ${curriculumThreeStepsMarkup(active)}
         ${curriculumSupportMarkup(active)}
         ${curriculumResourceLinks(active)}
@@ -32,9 +42,8 @@ function renderCurriculum() {
     </div>
     ${nextStage ? `
       <div class="curriculum-next-preview">
-        <span>그다음 단계</span>
+        <span>다음 수업</span>
         <strong>${escapeHtml(nextStage.title)}</strong>
-        <small>${escapeHtml(nextStage.focus)}</small>
       </div>` : ""}`;
   const miniGuideMarkup = `
     <button class="curriculum-compact-card" type="button" data-open-curriculum-view>
@@ -44,30 +53,22 @@ function renderCurriculum() {
       <b>상세 보기</b>
     </button>`;
   if ($("#curriculumMiniGuide")) $("#curriculumMiniGuide").innerHTML = miniGuideMarkup;
-  if ($("#curriculumGuide")) $("#curriculumGuide").innerHTML = `
-    <section class="curriculum-hero">
-      <div>
-        <span>내 커리큘럼</span>
-        <strong>${escapeHtml(activeTrack?.title || active.title)}</strong>
-        <p>현재 단계와 다음 수업만 간단히 확인하세요.</p>
-      </div>
-    </section>
-    ${guideMarkup}`;
+  if ($("#curriculumGuide")) $("#curriculumGuide").innerHTML = guideMarkup;
   if ($("#curriculumFullList")) {
     $("#curriculumFullList").innerHTML = `
       <details class="curriculum-library-disclosure">
-        <summary>다른 기술 찾아보기</summary>
+        <summary>다른 기술 찾기</summary>
         <div class="curriculum-library-body">
           <section class="member-curriculum-toolbar" aria-label="커리큘럼 검색과 필터">
             <div class="member-curriculum-search-row">
-              <input id="memberCurriculumSearch" type="search" value="${escapeHtml(state.curriculumQuery || "")}" placeholder="기술 검색" />
+              <input id="memberCurriculumSearch" type="search" value="${escapeHtml(state.curriculumQuery || "")}" placeholder="기술 검색" aria-label="커리큘럼 기술 검색" />
               <b id="memberCurriculumCount"></b>
             </div>
             <div class="curriculum-filter-row">
               ${memberCurriculumFilterOptions()
                 .map(
                   (filter) => `
-                    <button class="curriculum-filter ${state.curriculumFilter === filter.id ? "is-active" : ""}" type="button" data-member-curriculum-filter="${filter.id}">${filter.label}</button>`,
+                    <button class="curriculum-filter ${state.curriculumFilter === filter.id ? "is-active" : ""}" aria-pressed="${state.curriculumFilter === filter.id}" type="button" data-member-curriculum-filter="${filter.id}">${filter.label}</button>`,
                 )
                 .join("")}
             </div>

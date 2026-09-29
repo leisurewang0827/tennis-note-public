@@ -9,13 +9,16 @@ const manifest = JSON.parse(read("docs/tennisnote-personal-journal-source-parity
 test("개인운동 모듈은 검증된 private 함수 및 공용 파일과 정확히 동일", () => {
   const latestSource = "f408dae5c6918139c4d95067808b221439eb14da";
   assert.equal(manifest.privateSourceSha, latestSource);
-  assert.equal(manifest.functions.length, 22);
+  assert.equal(manifest.functions.length, 23);
   const latestFunctions = ["mediaItemsFromInput", "handleJournalMediaPreviewError", "savePracticeLog",
     "syncPersonalJournalFromServer", "renderMediaPreview", "openJournalDetail", "closeJournalDetail"];
   assert.deepEqual(manifest.functions.filter((entry) => entry.privateSourceSha === latestSource).map((entry) => entry.name), latestFunctions);
-  for (const name of ["editPersonalJournal", "recoverLocalPersonalJournal", "personalJournalActionsMarkup", "openJournalComposer"]) {
+  for (const name of ["editPersonalJournal", "recoverLocalPersonalJournal", "openJournalComposer"]) {
     assert.equal(manifest.functions.find((entry) => entry.name === name)?.privateSourceSha,
       "c94b6dcb0a047d0fae9af1e55db3669bae98d831");
+  }
+  for (const name of ["personalJournalActionsMarkup", "sharePersonalJournal"]) {
+    assert.equal(manifest.functions.find((entry) => entry.name === name)?.privateSourceSha, "LOCAL_WORKTREE");
   }
   assert.equal(manifest.functions.find((entry) => entry.name === "openJournalDay")?.privateSourceSha,
     "e2333baeae753393d005b16a4757f4d4af65064a");
@@ -25,7 +28,8 @@ test("개인운동 모듈은 검증된 private 함수 및 공용 파일과 정�
     assert.equal(digest(matches[0][0]), entry.sha256, entry.name);
   }
   assert.equal(digest(read(manifest.shared.path)), manifest.shared.sha256);
-  assert.equal(manifest.shared.privateSourceSha, latestSource);
+  assert.equal(manifest.shared.privateSourceSha, "LOCAL_WORKTREE");
+  assert.equal(manifest.shared.sourceContentSha256, manifest.shared.sha256);
   assert.equal(digest(read(manifest.faststart.path)), manifest.faststart.sha256);
   assert.equal(manifest.faststart.privateSourceSha, "4f61594058a83f7a0be9afd5ef9163cfc486fa46");
   const transport = read(manifest.transport.path).match(/^  async function deleteObject\([^]*?^  }/m);
@@ -40,6 +44,7 @@ test("개인운동 실제 entry·캐시·상세 이벤트 등록은 한 번", ()
   assert.match(read("app/tennis-note-member-app/events/delegated.js"), /personal-journal-prepare-progress/);
   const events = read("app/tennis-note-member-app/events/schedule.js");
   assert.match(events, /editPersonalJournal\(edit.dataset.editPersonalJournal\)/);
+  assert.match(events, /sharePersonalJournal\(share.dataset.sharePersonalJournal, share\)/);
   assert.match(events, /recoverLocalPersonalJournal\(recover.dataset.recoverPersonalJournal\)/);
   assert.match(events, /deletePersonalJournal\(remove.dataset.deletePersonalJournal, remove\)/);
 });

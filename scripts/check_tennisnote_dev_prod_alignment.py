@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.520"
-EXPECTED_RELEASE_ID = "2026.09.29.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v559"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v532"
+EXPECTED_VERSION = "1.0.521"
+EXPECTED_RELEASE_ID = "2026.09.29.02"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v560"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v533"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -43,8 +43,18 @@ SELECTED_NET_NEW_FEATURE_IDS = (
     "PERSONAL-JOURNAL-HEVC-FASTSTART-PRIVATE-4F615940",
     "PERSONAL-JOURNAL-MEDIA-REENTRY-PRIVATE-F408DAE5",
     "AUTH-PROFILE-COMPLETION-SERVER-AUTHORITY-PRIVATE-46CC06FF",
+    "CUR02-05-BRIEFING2-LOCAL-OVERLAY",
+    "PERSONAL-JOURNAL-OS-TEXT-SHARE",
 )
 SELECTED_NET_NEW_PATHS = {
+    "app/shared/tennisnote-curriculum-contract.js",
+    "app/shared/tennisnote-curriculum-reader.js",
+    "app/shared/tennisnote-curriculum-search.js",
+    "app/shared/tennisnote-curriculum-ui.js",
+    "app/tennis-note-member-app/domain/curriculum.js",
+    "app/tennis-note-member-app/styles.css",
+    "app/tennis-note-member-app/views/common.js",
+    "app/tennis-note-member-app/views/curriculum.js",
     "app/admin/actions/member.js",
     "app/admin/actions/settings.js",
     "app/admin/domain/policy.js",
@@ -356,7 +366,7 @@ def generate() -> None:
             "f408dae5c6918139c4d95067808b221439eb14da through the exact-function/shared hash manifest; "
             "actual iPhone decoding and audio remain a separate gate. The member profile completion "
             "decision matches the exact private main function in 46cc06ff3c97b4ec6496d890b64956ca57bc0b32 "
-            "and trusts server-confirmed completion even when a synthetic QA profile has no phone. No R3 change."
+            "and trusts server-confirmed completion even when a synthetic QA profile has no phone. No R3 change. Local briefing-2 CUR02-05 keeps the remote reader off and actual content on hold; personal-journal OS sharing exposes only the controlled practice kind."
         ),
         "dev_ahead_commits": classify_commits(),
     }
@@ -365,6 +375,9 @@ def generate() -> None:
         | {
             "app/shared/tennisnote-personal-journal.js",
             "app/shared/tennisnote-mp4-faststart.js",
+            "app/shared/tennisnote-curriculum-contract.js",
+            "app/shared/tennisnote-curriculum-reader.js",
+            "app/shared/tennisnote-curriculum-ui.js",
         }
     )
     placeholder = dict(manifest)

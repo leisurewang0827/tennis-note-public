@@ -339,6 +339,33 @@ const curriculumSkillTracks = curriculumCatalog.tracks?.length
     ]
   : legacyCurriculumSkillTracks;
 
+const bundledMemberCurriculum = curriculumCatalog;
+let memberCurriculumCatalog = bundledMemberCurriculum;
+let memberCurriculumSteps = curriculumSteps;
+let memberCurriculumTracks = curriculumSkillTracks;
+let curriculumPlayer = null;
+let curriculumSessionAttempt = 0;
+const memberCurriculumUI = window.TennisNoteCurriculumUI.create({
+  catalog: bundledMemberCurriculum,
+  // Publishing/access policy is not approved. Do not discover URLs or enable this from query/localStorage.
+  readerOptions: { enabled: false },
+  activity: memberCurriculumActivity,
+  onCatalog(catalog) {
+    memberCurriculumCatalog = catalog;
+    memberCurriculumSteps = catalog.steps;
+    memberCurriculumTracks = window.TennisNoteCurriculumUI.tracks(catalog);
+    if (document.body.dataset.activeMemberView === "curriculumView") renderCurriculum();
+  },
+  onClear() {
+    closeCurriculumPlayer();
+    memberCurriculumCatalog = bundledMemberCurriculum;
+    memberCurriculumSteps = bundledMemberCurriculum.steps;
+    memberCurriculumTracks = window.TennisNoteCurriculumUI.tracks(bundledMemberCurriculum);
+    ["#curriculumGuide", "#curriculumFullList", "#curriculumMiniGuide"].forEach(selector => $(selector)?.replaceChildren());
+  },
+});
+
+
 let coachModeNavigationStarted = false;
 let oauthLoginInFlightProvider = "";
 const emailAuthUiUnavailableMessage = "이메일 로그인·가입·비밀번호 변경은 현재 앱에서 제공하지 않습니다. 네이버·카카오·Apple 로그인 또는 고객지원을 이용해 주세요.";
@@ -1110,7 +1137,7 @@ let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.520");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.521");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -1195,7 +1222,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.520",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.521",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

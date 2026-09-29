@@ -221,12 +221,17 @@ function handleSummaryAction(action) {
 }
 
 async function applySupabaseMemberSession(showNotice = false) {
+  const curriculumAttempt = ++curriculumSessionAttempt;
   const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready) return false;
-  await client.consumeOAuthRedirect?.();
-  const session = await client.ensureSession?.() || client.getSession?.();
-  if (!session?.access_token) return false;
+  if (!client?.readiness?.().ready) { memberCurriculumUI.clear(); return false; }
+  let session;
+  try {
+    await client.consumeOAuthRedirect?.();
+    session = await client.ensureSession?.() || client.getSession?.();
+  } catch (error) { memberCurriculumUI.clear(); throw error; }
+  if (!session?.access_token) { memberCurriculumUI.clear(); return false; }
   if (emailPasswordRecoveryPending) {
+    memberCurriculumUI.clear();
     if (!emailPasswordAuthUiEnabled()) {
       emailPasswordRecoveryPending = false;
       await client.signOut?.().catch(() => {});
@@ -245,6 +250,8 @@ async function applySupabaseMemberSession(showNotice = false) {
   }
   try {
     const current = await client.selectCurrentProfile();
+    if (curriculumAttempt !== curriculumSessionAttempt) return false;
+    if (current?.profileBootstrapError) memberCurriculumUI.clear();
     if (current?.profileBootstrapError?.code === "auth_profile_mapping_ambiguous") {
       const status = $("#memberEmailLoginStatus");
       if (status) status.textContent = "로그인 계정이 여러 회원 정보에 연결되어 있습니다. 관리자에게 회원 연결 확인을 요청해 주세요.";
@@ -303,9 +310,12 @@ async function applySupabaseMemberSession(showNotice = false) {
     rememberRecentLoginProvider(state.member.provider);
     state.coachModeAllowed = state.member.coachApproved;
     if (shouldOpenCoachModeByDefault()) {
+      memberCurriculumUI.clear();
       openCoachMode();
       return true;
     }
+    await memberCurriculumUI.bindVerifiedProfile(current, session);
+    if (curriculumAttempt !== curriculumSessionAttempt) return false;
     state.profile.name = profile?.name || "가입 확인 중";
     state.profile.nickname = profile?.nickname || "";
     state.profile.phone = profile?.phone || "";
@@ -370,6 +380,7 @@ async function applySupabaseMemberSession(showNotice = false) {
     return true;
   } catch (error) {
     const status = $("#memberEmailLoginStatus");
+    memberCurriculumUI.clear();
     const code = error?.payload?.code || error?.message || "";
     if (status && code === "verified_phone_member_ambiguous") {
       status.textContent = "같은 휴대전화 정보의 회원 DB가 여러 개입니다. 관리자에게 계정 연결을 요청해 주세요.";

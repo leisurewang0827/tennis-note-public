@@ -240,3 +240,19 @@ async function deletePersonalJournal(id, button) {
   } catch (error) { showToast(window.TennisNotePersonalJournal.errorMessage(error)); }
   finally { if (button) button.disabled = false; }
 }
+
+async function sharePersonalJournal(id, button) {
+  const log = state.practiceLogs.find((item) => item.id === id);
+  if (!log?.serverJournalId || !log.personalOwnerVerified || log.personalOwnerId !== state.member?.profileId || button?.disabled) return;
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  try {
+    const result = await window.TennisNotePersonalJournal?.shareText(log);
+    if (result === "unsupported") showToast("이 기기는 공유 기능을 지원하지 않습니다.");
+    else if (result === "failed") showToast("공유를 열지 못했습니다. 다시 확인해 주세요.");
+    // OS 공유 취소는 정상 동작이며 오류 안내를 띄우지 않는다.
+  } finally {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+  }
+}
