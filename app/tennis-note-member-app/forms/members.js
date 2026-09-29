@@ -308,7 +308,10 @@ function activeMemberViewId() {
 function installMemberLiveScheduleRefresh() {
   if (memberLiveScheduleRefreshTimer) return;
   const refresh = () => refreshMemberLiveSchedule().catch(() => false);
-  const forceRefresh = () => refreshMemberLiveSchedule({ force: true }).catch(() => false);
+  const forceRefresh = () => {
+    enterMemberCurriculum();
+    return refreshMemberLiveSchedule({ force: true }).catch(() => false);
+  };
   window.addEventListener("focus", forceRefresh);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) forceRefresh();

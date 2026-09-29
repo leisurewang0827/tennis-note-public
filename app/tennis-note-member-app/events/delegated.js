@@ -4,6 +4,35 @@
 // 이 함수들을 순서대로 부른다.
 
 function bindDelegatedEvents() {
+  window.addEventListener("tennisnote:auth-session-cleared", () => {
+    curriculumSessionAttempt++; memberCurriculumUI.clear();
+  });
+  window.addEventListener("storage", event => {
+    if (event.key === null || event.key === "tennis-note-supabase-session") {
+      curriculumSessionAttempt++; memberCurriculumUI.clear();
+    }
+  });
+  document.addEventListener("toggle", event => {
+    if (!event.target.closest?.("#curriculumView")) return;
+    if (!event.target.open && curriculumPlayer && event.target.contains(curriculumPlayer.frame)) closeCurriculumPlayer();
+    memberCurriculumUI.activity(memberCurriculumActivity());
+  }, true);
+  document.addEventListener("fullscreenchange", () => memberCurriculumUI.activity(memberCurriculumActivity()));
+  window.addEventListener("message", event => {
+    if (!curriculumPlayer || event.source !== curriculumPlayer.frame.contentWindow || event.origin !== "https://www.youtube-nocookie.com") return;
+    let value; try { value = typeof event.data === "string" ? JSON.parse(event.data) : event.data; } catch { return; }
+    if (value?.event !== "onStateChange" || ![0, 1, 2].includes(value.info)) return;
+    curriculumPlayer.status.textContent = value.info === 0 ? "영상이 끝났습니다." : value.info === 1 ? "영상을 재생 중입니다." : "영상이 일시 정지됐습니다.";
+    memberCurriculumUI.activity(memberCurriculumActivity());
+  });
+  document.addEventListener("error", handleJournalMediaPreviewError, true);
+  window.addEventListener("tennisnote:personal-journal-prepare-progress", () => {
+    personalJournalStatus("영상 재생 준비 중 · 완료될 때까지 앱을 닫지 마세요.");
+  });
+  window.addEventListener("tennisnote:personal-journal-upload-progress", (event) => {
+    const percent = Math.max(0, Math.min(100, Number(event.detail?.percent) || 0));
+    personalJournalStatus(`첨부 업로드 중 ${percent}% · 완료될 때까지 앱을 닫지 마세요.`);
+  });
   document.addEventListener("error", handleJournalMediaPreviewError, true);
   window.addEventListener("tennisnote:personal-journal-prepare-progress", () => {
     personalJournalStatus("영상 재생 준비 중 · 완료될 때까지 앱을 닫지 마세요.");
@@ -460,13 +489,18 @@ function bindDelegatedEvents() {
     }
     const curriculumFilterButton = event.target.closest("[data-member-curriculum-filter]");
     if (curriculumFilterButton) {
-      state.curriculumFilter = curriculumFilterButton.dataset.memberCurriculumFilter;
-      renderCurriculum();
+      const selected = curriculumFilterButton.dataset.memberCurriculumFilter;
+      state.curriculumFilter = state.curriculumFilter === selected ? "all" : selected;
+      $$("[data-member-curriculum-filter]").forEach(button => {
+        const pressed = button.dataset.memberCurriculumFilter === state.curriculumFilter;
+        button.classList.toggle("is-active", pressed); button.setAttribute("aria-pressed", String(pressed));
+      });
+      renderMemberCurriculumLibrary();
       saveSnapshot();
       return;
     }
     const curriculumButton = event.target.closest("[data-open-curriculum-view]");
-    if (curriculumButton) setView("curriculumView");
+    if (curriculumButton) navigateMemberView("curriculumView");
   });
   document.addEventListener("pointerdown", (event) => {
     if (event.target.closest("[data-buy-product], [data-purchase-pay]")) preloadPortOneSdk();

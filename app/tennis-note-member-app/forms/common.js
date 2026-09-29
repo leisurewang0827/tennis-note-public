@@ -46,7 +46,7 @@ function registerPwaServiceWorker() {
   const memberPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("member");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.520",
+    workerUrl: "./service-worker.js?v=1.0.521",
     remoteAppUrl: memberPortal?.ok ? memberPortal.url : "",
   });
 }
@@ -163,14 +163,22 @@ function curriculumYoutubeVideoId(value = "") {
 }
 
 function playCurriculumVideo(button) {
+  if (!memberCurriculumUI.authorized()) return;
   const videoId = String(button?.dataset?.playCurriculumVideo || "");
   if (!/^[A-Za-z0-9_-]{11}$/u.test(videoId)) return;
   const item = button.closest(".curriculum-video-item");
   if (!item) return;
+  closeCurriculumPlayer();
   const title = String(button.dataset.curriculumVideoTitle || "커리큘럼 영상");
   const iframe = document.createElement("iframe");
   iframe.className = "curriculum-video-frame";
-  iframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0`;
+  const url = new URL(`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0`);
+  for (const key of ["start", "end"]) {
+    const value = button.dataset[key === "start" ? "videoStart" : "videoEnd"];
+    if (/^\d+(?:\.\d+)?$/.test(value || "")) url.searchParams.set(key, value);
+  }
+  url.searchParams.set("enablejsapi", "1");
+  iframe.src = url.href;
   iframe.title = title;
   iframe.loading = "lazy";
   iframe.referrerPolicy = "strict-origin-when-cross-origin";
@@ -179,10 +187,35 @@ function playCurriculumVideo(button) {
   const fallback = document.createElement("a");
   fallback.className = "curriculum-video-fallback";
   fallback.href = `https://www.youtube.com/watch?v=${videoId}`;
+  if (url.searchParams.has("start")) fallback.href += `&t=${url.searchParams.get("start")}`;
+  if (url.searchParams.has("end")) fallback.href += `&end=${url.searchParams.get("end")}`;
   fallback.target = "_blank";
   fallback.rel = "noreferrer";
   fallback.textContent = "YouTube에서 보기";
-  item.replaceChildren(iframe, fallback);
+  const box = document.createElement("div");
+  box.className = "curriculum-player";
+  const status = document.createElement("p");
+  status.className = "curriculum-player-status";
+  status.setAttribute("role", "status");
+  status.textContent = navigator.onLine ? "영상을 불러오는 중입니다." : "온라인 연결 후 다시 재생해 주세요.";
+  const close = document.createElement("button");
+  close.type = "button"; close.className = "small-button"; close.textContent = "영상 닫기";
+  close.dataset.closeCurriculumVideo = "true";
+  close.addEventListener("click", () => { closeCurriculumPlayer(); memberCurriculumUI.activity(memberCurriculumActivity()); button.focus(); });
+  const timer = setTimeout(() => {
+    if (curriculumPlayer?.frame === iframe) status.textContent = "영상을 확인하지 못했습니다. 닫고 다시 시도하거나 원본에서 확인해 주세요.";
+  }, 12000);
+  curriculumPlayer = { frame: iframe, box, button, timer, status };
+  iframe.addEventListener("load", () => {
+    if (curriculumPlayer?.frame !== iframe) return;
+    clearTimeout(timer); status.textContent = "영상 창이 열렸습니다. 재생이 안 되면 원본에서 확인해 주세요.";
+  });
+  iframe.addEventListener("error", () => {
+    if (curriculumPlayer?.frame !== iframe) return;
+    clearTimeout(timer); status.textContent = "영상을 불러오지 못했습니다. 닫고 다시 시도해 주세요.";
+  });
+  button.hidden = true; box.append(status, iframe, close, fallback); item.append(box);
+  memberCurriculumUI.activity(memberCurriculumActivity());
 }
 
 function paymentRedirectUrl() {
@@ -194,6 +227,7 @@ function paymentRedirectUrl() {
 
 function setView(viewId, options = {}) {
   if (!viewId || !$(`#${viewId}`)) return;
+  if (document.body.dataset.activeMemberView === "curriculumView" && viewId !== "curriculumView") leaveMemberCurriculum();
   if (document.body.dataset.activeMemberView !== viewId) closeJournalDetail();
   if (viewId === "scheduleView" && !state.memberScheduleModeTouched) {
     state.memberScheduleMode = "mine";
@@ -216,6 +250,7 @@ function setView(viewId, options = {}) {
   };
   if ($("#memberScreenTitle")) $("#memberScreenTitle").textContent = screenTitles[viewId] || "Tennis Note";
   renderActiveMemberView(viewId);
+  if (viewId === "curriculumView") enterMemberCurriculum();
   jumpToTop();
   const historyState = typeof history.state === "object" && history.state ? history.state : {};
   const nextState = { ...historyState, tennisNoteMode: "member", tennisNoteView: viewId };
@@ -338,4 +373,31 @@ function setEmailAuthMode(mode = "login", options = {}) {
   if (options.focus === false) return;
   const focusTarget = forms[nextMode]?.querySelector("input:not([type=checkbox])");
   window.requestAnimationFrame(() => focusTarget?.focus());
+}
+
+function memberCurriculumActivity() {
+  return {
+    lessonOpen: Boolean($("#curriculumView details.curriculum-action-details[open], #curriculumView details.curriculum-step[open], #curriculumView details.curriculum-library-disclosure[open]")),
+    // Loading, paused and fullscreen frames also retain their document until explicitly closed.
+    videoPlaying: Boolean(curriculumPlayer?.frame?.isConnected),
+  };
+}
+
+function leaveMemberCurriculum() {
+  closeCurriculumPlayer();
+  $$("#curriculumView details[open]").forEach(details => { details.open = false; });
+  memberCurriculumUI.activity({ lessonOpen: false, videoPlaying: false });
+}
+
+function enterMemberCurriculum() {
+  if (document.body.dataset.activeMemberView === "curriculumView" && !document.hidden) void memberCurriculumUI.enter();
+}
+
+function closeCurriculumPlayer() {
+  if (!curriculumPlayer) return;
+  const { frame, box, button, timer } = curriculumPlayer;
+  clearTimeout(timer);
+  if (document.fullscreenElement === frame) void document.exitFullscreen?.().catch(() => {});
+  frame.remove(); box.remove(); button.hidden = false;
+  curriculumPlayer = null;
 }

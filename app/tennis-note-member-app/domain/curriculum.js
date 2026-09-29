@@ -30,46 +30,39 @@ function curriculumStageCards() {
 }
 
 function memberCurriculumFilterOptions() {
-  return [
-    { id: "all", label: "전체" },
-    { id: "stroke", label: "스트로크" },
-    { id: "net", label: "네트" },
-    { id: "tactics", label: "전술" },
-    { id: "foundation", label: "풋워크·서브" },
-  ];
+  return window.TennisNoteCurriculumUI.groups;
 }
 
 function memberCurriculumMatchesFilter(filter, category) {
   if (filter === "all") return true;
-  if (filter === "stroke") return ["포핸드", "백핸드"].includes(category);
-  if (filter === "net") return category === "네트플레이";
-  if (filter === "tactics") return category === "전술전환";
-  if (filter === "foundation") return ["풋워크", "서브"].includes(category);
-  return false;
+  return memberCurriculumFilterOptions().find(group => group.id === filter)?.categories.includes(category) || false;
 }
 
 function curriculumResourceLinks(step = {}) {
-  const resources = Array.isArray(step.resources) ? step.resources : [];
-  if (!resources.length) return "";
+  const resources = window.TennisNoteCurriculumUI.resources(step);
+  if (!resources.length) return '<p class="curriculum-resource-empty">이 수업에 등록된 자료가 없습니다.</p>';
   return `
+    <details class="curriculum-resources"><summary>수업 자료 · ${resources.length}개</summary>
+    <p class="curriculum-online-note">영상은 온라인에서 재생됩니다. 외부 재생이 제한되면 원본에서 확인해 주세요.</p>
     <div class="curriculum-resource-links" aria-label="수업 자료">
       ${resources
         .map((resource, index) => {
           const url = String(resource.url || "");
           const videoId = curriculumYoutubeVideoId(url);
-          if (!videoId) {
-            return `<a class="small-button" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">자료 ${index + 1} 보기</a>`;
-          }
           const title = String(resource.title || `커리큘럼 영상 ${index + 1}`);
+          const interval = resource.start !== null || resource.end !== null
+            ? `구간 ${resource.start ?? 0}초부터${resource.end !== null ? ` ${resource.end}초까지` : ""}` : "";
           return `
-            <div class="curriculum-video-item">
-              <button class="small-button" type="button" data-play-curriculum-video="${videoId}" data-curriculum-video-title="${escapeHtml(title)}">
-                영상 ${index + 1} 재생
-              </button>
+            <div class="curriculum-video-item" data-curriculum-resource-index="${index}">
+              <strong>${escapeHtml(title)}</strong>
+              ${resource.observation ? `<p>${escapeHtml(resource.observation)}</p>` : ""}
+              ${interval ? `<small>${escapeHtml(interval)}</small>` : ""}
+              ${videoId ? `<button class="small-button" type="button" data-play-curriculum-video="${videoId}" data-curriculum-video-title="${escapeHtml(title)}" data-video-start="${resource.start ?? ""}" data-video-end="${resource.end ?? ""}">영상 재생</button>`
+                : `<a class="small-button" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">자료 보기</a>`}
             </div>`;
         })
         .join("")}
-    </div>`;
+    </div></details>`;
 }
 
 function curriculumThreeStepsMarkup(step = {}) {
@@ -83,11 +76,17 @@ function curriculumThreeStepsMarkup(step = {}) {
 
 function curriculumSupportMarkup(step = {}) {
   const checks = Array.isArray(step.selfChecks) ? step.selfChecks : [];
-  if (!checks.length && !step.personalPractice) return "";
+  const practice = Array.isArray(step.personalPractice) ? step.personalPractice : [step.personalPractice].filter(Boolean);
+  if (!checks.length && !practice.length) return "";
   return `
     <details class="curriculum-support-details">
       <summary>자가 체크·개인 연습</summary>
       ${checks.length ? `<ul>${checks.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
-      ${step.personalPractice ? `<p><b>개인 연습</b>${escapeHtml(step.personalPractice)}</p>` : ""}
+      ${practice.length ? `<p><b>개인 연습</b></p><ul>${practice.map(text => `<li>${escapeHtml(text)}</li>`).join("")}</ul>` : ""}
     </details>`;
+}
+
+function activeMemberCurriculumStep() {
+  const legacy = activeCurriculumStep();
+  return memberCurriculumSteps.find(step => step.id === legacy?.id) || memberCurriculumSteps[0];
 }

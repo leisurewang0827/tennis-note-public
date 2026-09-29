@@ -50,11 +50,11 @@ function memberCurriculumLibraryMarkup(active) {
   if (!tracks.length) return "<p class='empty-text curriculum-empty'>조건에 맞는 커리큘럼이 없습니다.</p>";
   return tracks
     .map((track) => {
-      const activeIndex = track.steps.findIndex((step) => step.id === active.id);
+      const activeIndex = track.steps.findIndex((step) => step.id === active?.id);
       const activeInTrack = activeIndex >= 0;
       const progressLabel = activeInTrack ? `${activeIndex + 1}/${track.steps.length}` : `${track.steps.length}단계`;
       return `
-        <details class="curriculum-category curriculum-track" ${activeInTrack || query ? "open" : ""}>
+        <details class="curriculum-category curriculum-track" data-curriculum-track-id="${escapeHtml(track.id)}" ${query ? "open" : ""}>
           <summary class="curriculum-category-heading">
             <div>
               <strong>${escapeHtml(track.title)}</strong>
@@ -68,7 +68,7 @@ function memberCurriculumLibraryMarkup(active) {
             ${track.steps
               .map(
                 (step) => `
-                  <details class="curriculum-step ${step.id === active.id ? "is-current" : ""}">
+                  <details class="curriculum-step ${step.id === active?.id ? "is-current" : ""}" data-curriculum-step-id="${escapeHtml(step.id)}">
                     <summary>
                       <span>${escapeHtml(step.stageLabel || step.level || "단계")} · ${escapeHtml(step.id)}</span>
                       <strong>${escapeHtml(step.title)}</strong>

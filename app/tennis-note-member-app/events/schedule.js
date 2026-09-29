@@ -158,6 +158,8 @@ function bindScheduleEvents() {
     if (event.target.closest("[data-close-journal-modal]")) closeJournalDetail();
     const edit = event.target.closest("[data-edit-personal-journal]");
     if (edit) editPersonalJournal(edit.dataset.editPersonalJournal);
+    const share = event.target.closest("[data-share-personal-journal]");
+    if (share) void sharePersonalJournal(share.dataset.sharePersonalJournal, share);
     const recover = event.target.closest("[data-recover-personal-journal]");
     if (recover) recoverLocalPersonalJournal(recover.dataset.recoverPersonalJournal);
     const remove = event.target.closest("[data-delete-personal-journal]");

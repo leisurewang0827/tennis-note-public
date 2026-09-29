@@ -11062,3 +11062,277 @@ body.modal-open {
     font-size: 9px;
   }
 }
+
+/* CUR05: one current-lesson action, existing view/tabbar and safe-area owner retained. */
+#curriculumView { --cur-paper: #fff; --cur-ink: #1c302a; --cur-muted: #52675e; --cur-line: #d2ded8; }
+#curriculumView .curriculum-main-card { display: block; padding: 0; background: transparent; box-shadow: none; border: 0; }
+#curriculumView .curriculum-summary,
+#curriculumView .curriculum-next-preview,
+#curriculumView .curriculum-library-disclosure,
+#curriculumView .curriculum-category,
+#curriculumView .curriculum-step,
+#curriculumView .curriculum-step-details { background: var(--cur-paper); color: var(--cur-ink); border-color: var(--cur-line); min-width: 0; }
+#curriculumView .curriculum-summary { padding: 18px; border: 1px solid var(--cur-line); border-radius: 14px; }
+#curriculumView .curriculum-summary > strong { font-size: 21px; line-height: 1.45; }
+#curriculumView .curriculum-current-goal { margin: 12px 0 16px; font-size: 16px; line-height: 1.65; }
+#curriculumView .curriculum-summary > strong,
+#curriculumView .curriculum-current-goal,
+#curriculumView .curriculum-library-disclosure > summary,
+#curriculumView .curriculum-category-heading strong,
+#curriculumView .curriculum-step > summary strong,
+#curriculumView .curriculum-step-details p,
+#curriculumView .curriculum-three-steps li span,
+#curriculumView .curriculum-video-item strong { color: var(--cur-ink); }
+#curriculumView .curriculum-action-details > summary { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 48px; padding: 10px 14px; box-sizing: border-box; font-size: 16px; }
+#curriculumView summary { cursor: pointer; overflow-wrap: anywhere; }
+#curriculumView details > summary,
+#curriculumView button,
+#curriculumView .small-button,
+#curriculumView .curriculum-source-link { min-height: 44px; box-sizing: border-box; }
+#curriculumView .curriculum-filter-row { display: flex; flex-wrap: wrap; gap: 6px; }
+#curriculumView .curriculum-filter { flex: 1 1 100px; font-size: 14px; padding: 9px; color: var(--cur-ink); background: var(--cur-paper); border: 1px solid var(--cur-line); }
+#curriculumView .curriculum-filter.is-active { color: var(--cur-ink); background: var(--cur-paper); box-shadow: inset 0 0 0 2px #478975; }
+#curriculumView .member-curriculum-search-row { grid-template-columns: minmax(0, 1fr) auto; }
+#curriculumView input { font-size: 16px; min-height: 44px; min-width: 0; width: 100%; box-sizing: border-box; color: var(--cur-ink); background: var(--cur-paper); }
+#curriculumView .curriculum-three-steps { padding: 0; list-style: none; }
+#curriculumView .curriculum-three-steps li { align-items: start; font-size: 16px; line-height: 1.6; color: var(--cur-ink); }
+#curriculumView .curriculum-three-steps li b { color: #215e4a; background: #eaf4ee; }
+#curriculumView .curriculum-support-details summary,
+#curriculumView .curriculum-resources > summary { display: flex; align-items: center; font-size: 15px; color: var(--cur-ink); }
+#curriculumView .curriculum-support-details p,
+#curriculumView .curriculum-support-details li { font-size: 15px; color: var(--cur-ink); line-height: 1.6; }
+#curriculumView .curriculum-resource-links { display: grid !important; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+#curriculumView .curriculum-video-item { min-width: 0; display: grid; gap: 8px; border-top: 1px solid var(--cur-line); padding-top: 12px; overflow-wrap: anywhere; }
+#curriculumView .curriculum-video-item strong { font-size: 15px; line-height: 1.5; }
+#curriculumView .curriculum-video-item p,
+#curriculumView .curriculum-online-note,
+#curriculumView .curriculum-resource-empty { font-size: 14px; line-height: 1.6; color: var(--cur-muted); }
+#curriculumView .curriculum-player { display: grid; gap: 8px; min-width: 0; }
+#curriculumView .curriculum-video-frame { display: block; width: 100%; aspect-ratio: 16 / 9; height: auto; min-height: 0; border: 0; }
+#curriculumView .curriculum-video-item .small-button,
+#curriculumView .curriculum-video-fallback,
+#curriculumView .curriculum-source-link { display: flex; align-items: center; justify-content: center; padding: 10px; font-size: 14px; min-height: 44px; }
+#curriculumView .curriculum-video-item button[hidden] { display: none; }
+#curriculumView .curriculum-next-preview { margin: 14px 0; padding: 14px; border: 1px solid var(--cur-line); border-radius: 12px; }
+#curriculumView .curriculum-next-preview span,
+#curriculumView .curriculum-summary > span,
+#curriculumView .curriculum-track-actions span { color: var(--cur-muted); }
+#curriculumView .curriculum-library-body { padding: 12px; }
+@media (prefers-color-scheme: dark) {
+  #curriculumView { --cur-paper: #192a24; --cur-ink: #edf5f0; --cur-muted: #bfd0c6; --cur-line: #456254; }
+}
+
+/* Final navigation override: keep membership directly reachable as the fifth primary tab. */
+.tabbar {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .tabbar {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.membership-product-presets-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.purchase-family-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.membership-preset-chip {
+  min-height: 76px;
+}
+
+@media (max-width: 720px) {
+  .membership-product-presets-grid,
+  .purchase-family-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .membership-product-presets-grid > :last-child,
+  .purchase-family-grid > :last-child {
+    grid-column: auto;
+  }
+}
+
+.purchase-family-option.is-unavailable:not(.is-selected) {
+  border-style: dashed;
+  background: #f8faf9;
+}
+
+.purchase-family-option.is-unavailable b {
+  color: #8a6a24;
+}
+
+.purchase-family-empty {
+  gap: 8px;
+}
+
+.purchase-family-empty .small-button {
+  justify-self: start;
+  min-height: 44px;
+}
+
+/* Member checkout chrome: keep primary navigation reachable on phones and tablets. */
+@media (max-width: 1024px) {
+  :root {
+    --tn-bottom-nav-height: 66px;
+  }
+
+  .app-screen {
+    padding-bottom: calc(var(--tn-bottom-nav-height) + max(22px, env(safe-area-inset-bottom)));
+    animation: none;
+    transform: none;
+  }
+
+  .tabbar,
+  body[data-active-member-view="shopView"].purchase-flow-open .tabbar {
+    position: fixed;
+    z-index: 80;
+    right: auto;
+    left: 50%;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    display: grid;
+    width: min(calc(100% - 20px), 760px);
+    max-width: none;
+    box-sizing: border-box;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    transform: translateX(-50%);
+    -webkit-transform: translateX(-50%);
+    margin: 0;
+    border: 1px solid #dbe6e0;
+    border-radius: 8px;
+    padding: 4px;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(18, 35, 31, 0.16);
+  }
+
+  .tabbar .tab,
+  .tabbar .tab.is-active {
+    min-width: 0;
+    min-height: 48px;
+    padding: 4px 2px;
+    font-size: 10px;
+    line-height: 1.15;
+    white-space: normal;
+    word-break: keep-all;
+  }
+
+  .purchase-step-actions,
+  body[data-active-member-view="shopView"].purchase-flow-open .purchase-step-actions {
+    bottom: calc(var(--tn-bottom-nav-height) + max(14px, env(safe-area-inset-bottom)));
+  }
+}
+
+@media (max-width: 560px), (max-height: 520px) and (orientation: landscape) {
+  .tabbar,
+  body[data-active-member-view="shopView"].purchase-flow-open .tabbar {
+    width: calc(100% - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)));
+    gap: 1px;
+    padding: 3px;
+  }
+
+  .tabbar .tab,
+  .tabbar .tab.is-active {
+    min-height: 46px;
+    padding-inline: 1px;
+    font-size: 9px;
+  }
+}
+
+.member-refund-request-form {
+  display: grid;
+  gap: 14px;
+  padding-bottom: calc(92px + env(safe-area-inset-bottom));
+}
+
+.member-refund-request-form > label:not(.member-refund-fallback) {
+  display: grid;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.member-refund-request-form textarea {
+  width: 100%;
+  min-height: 92px;
+  box-sizing: border-box;
+  resize: vertical;
+  font-size: max(16px, 1rem);
+}
+
+.member-refund-preview,
+.member-refund-status-card,
+.member-refund-loading {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line, #dbe6e0);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  overflow-wrap: anywhere;
+}
+
+.member-refund-preview > div,
+.member-refund-status-card {
+  align-items: start;
+}
+
+.member-refund-preview > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-refund-preview dl,
+.member-refund-preview dl > div {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.member-refund-preview dl > div {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.member-refund-preview dt,
+.member-refund-preview dd,
+.member-refund-preview p,
+.member-refund-status-card p,
+.member-refund-status-card small {
+  margin: 0;
+}
+
+.member-refund-fallback {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.member-refund-policy-link {
+  color: var(--accent, #117a55);
+  font-weight: 700;
+}
+
+.member-refund-request-sheet .sheet-actions {
+  grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
+}
+
+.member-refund-request-sheet .sheet-actions button {
+  min-height: 44px;
+}
+
+.member-refund-status-card .is-danger,
+.member-refund-loading.is-danger {
+  color: var(--danger, #b42318);
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .member-refund-request-form {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+}

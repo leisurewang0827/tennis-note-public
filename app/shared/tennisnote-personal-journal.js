@@ -13,6 +13,26 @@
   const pausedSources = new WeakMap();
   const pausedPositions = new WeakMap();
   const playbackPositions = new Map();
+  let shareInFlight = false;
+  function safeSharePayload(log) {
+    // Only the controlled practice kind is shared. Free-form journal text and
+    // private media may contain identifying information and stay in the app.
+    const practiceType = Object.prototype.hasOwnProperty.call(types, log?.type) ? log.type : "기타";
+    return { title: "테니스노트 개인운동", text: `테니스노트에 ${practiceType} 기록을 남겼습니다.` };
+  }
+  async function shareText(log) {
+    if (shareInFlight) return "busy";
+    if (typeof root.navigator?.share !== "function") return "unsupported";
+    shareInFlight = true;
+    try {
+      await root.navigator.share(safeSharePayload(log));
+      return "shared";
+    } catch (error) {
+      return error?.name === "AbortError" ? "cancelled" : "failed";
+    } finally {
+      shareInFlight = false;
+    }
+  }
   function selectionKey(file) {
     if (!file || typeof file !== "object") throw new Error("personal_journal_invalid_media");
     if (!fileSelections.has(file)) fileSelections.set(file, key());
@@ -268,5 +288,5 @@
   });
   root.addEventListener?.("pagehide", () => pauseDetailMedia({ resumeOnVisible: true }));
   root.addEventListener?.("pageshow", resumeDetailMedia);
-  root.TennisNotePersonalJournal = Object.freeze({ key, selectionKey, completedReceipt, save, remove, load, cleanup, release, refreshMediaUrl, errorMessage, validateFiles, pauseDetailMedia, restorePlaybackPosition });
+  root.TennisNotePersonalJournal = Object.freeze({ key, selectionKey, completedReceipt, save, remove, load, cleanup, release, refreshMediaUrl, errorMessage, validateFiles, pauseDetailMedia, restorePlaybackPosition, safeSharePayload, shareText });
 })(typeof window === "undefined" ? globalThis : window);

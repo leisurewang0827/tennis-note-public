@@ -481,7 +481,7 @@ function openCoachMode() {
   sessionStorage.setItem("tennis-note-coach-mode-entry", "member-profile");
   saveSnapshot();
   const target = window.TennisNoteModeTransition?.saved("coach", "todayView") || { view: "todayView" };
-  const params = new URLSearchParams({ v: "1.0.520", view: target.view || "todayView" });
+  const params = new URLSearchParams({ v: "1.0.521", view: target.view || "todayView" });
   const url = `../tennis-note-coach-app/index.html?${params.toString()}`;
   if (!window.TennisNoteModeTransition?.navigate(url, {
     from: "member",
@@ -696,9 +696,13 @@ function openLocalCurriculumPreview() {
     ticket: "커리큘럼 화면 검증",
   };
   ensureDemoPresentation();
-  renderAll();
-  openAppFromSession(false);
-  setView("curriculumView");
+  // Existing loopback-only preview, never a token/role bypass on published hosts.
+  void memberCurriculumUI.bindVerifiedProfile({ user: { id: "local-preview-auth" },
+    profile: { id: "local-preview-profile", role: "member", status: "active" } },
+    { expires_at: Date.now() + 3600000 }).then(allowed => {
+      if (!allowed) return;
+      renderAll(); openAppFromSession(false); setView("curriculumView", { replaceHistory: true });
+    });
   return true;
 }
 

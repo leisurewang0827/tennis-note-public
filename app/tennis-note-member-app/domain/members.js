@@ -80,15 +80,14 @@ function selectedMemberScheduleDay() {
 }
 
 function filteredMemberCurriculumTracks() {
-  const query = String(state.curriculumQuery || "").trim().toLowerCase();
-  const filter = state.curriculumFilter || "all";
-  return curriculumSkillTracks
+  const query = String(state.curriculumQuery || "").trim();
+  const filter = memberCurriculumFilterOptions().some(group => group.id === state.curriculumFilter) ? state.curriculumFilter : "all";
+  const matches = window.TennisNoteCurriculumUI.searchIds(memberCurriculumCatalog, query);
+  return memberCurriculumTracks
     .map((track) => {
-      const matchesTrack = !query || `${track.id || ""} ${track.title} ${track.category || ""} ${track.summary || ""}`.toLowerCase().includes(query);
       const steps = track.steps.filter((step) => {
         const matchesFilter = memberCurriculumMatchesFilter(filter, step.category || track.category);
-        const text = `${step.id} ${step.title} ${step.level || ""} ${step.focus || ""} ${step.guide || ""}`.toLowerCase();
-        return matchesFilter && (matchesTrack || !query || text.includes(query));
+        return matchesFilter && matches.has(step.id);
       });
       return { ...track, steps };
     })
