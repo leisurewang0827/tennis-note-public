@@ -15,7 +15,28 @@ function renderMemberCurriculumLibrary(active = activeMemberCurriculumStep()) {
 }
 
 function renderCurriculum() {
-  if (!memberCurriculumUI.authorized()) return;
+  if (!memberCurriculumUI.authorized()) {
+    const guide = $("#curriculumGuide");
+    if (guide) {
+      const status = document.createElement("div");
+      status.className = "curriculum-summary";
+      status.setAttribute("role", "status");
+      const title = document.createElement("strong");
+      const description = document.createElement("p");
+      if (state.member?.role === "member") {
+        title.textContent = "회원 커리큘럼 권한을 확인하지 못했습니다";
+        description.textContent = "로그인 상태를 확인한 뒤 다시 열어주세요. 계속되면 관리자에게 문의해 주세요.";
+      } else {
+        title.textContent = "회원 커리큘럼 이용 안내";
+        description.textContent = "커리큘럼은 인증된 회원 계정에서 볼 수 있습니다. 회원 계정으로 로그인해 주세요.";
+      }
+      status.append(title, description);
+      guide.replaceChildren(status);
+    }
+    $("#curriculumFullList")?.replaceChildren();
+    $("#curriculumMiniGuide")?.replaceChildren();
+    return;
+  }
   const activity = memberCurriculumActivity();
   memberCurriculumUI.activity(activity);
   if (activity.lessonOpen || activity.videoPlaying) return;

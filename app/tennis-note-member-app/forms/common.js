@@ -390,7 +390,10 @@ function leaveMemberCurriculum() {
 }
 
 function enterMemberCurriculum() {
-  if (document.body.dataset.activeMemberView === "curriculumView" && !document.hidden) void memberCurriculumUI.enter();
+  if (document.body.dataset.activeMemberView === "curriculumView" && !document.hidden) {
+    renderCurriculum();
+    void memberCurriculumUI.enter();
+  }
 }
 
 function closeCurriculumPlayer() {
