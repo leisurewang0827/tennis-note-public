@@ -9,6 +9,9 @@ function mediaItemsFromInput(input) {
   return [...(input?.files || [])].map((file) => ({
     name: file.name,
     type: file.type || "",
+    byteSize: file.size,
+    lastModified: file.lastModified,
+    uploadSelectionKey: window.TennisNotePersonalJournal?.selectionKey(file) || "",
     url: URL.createObjectURL(file),
   }));
 }
