@@ -36,8 +36,15 @@ test("실제 modular 저장 함수는 빈 입력·파일을 보존하고 메모�
 });
 
 test("상세 media 정지는 video/audio 공통이며 hidden/pagehide만으로도 호출", () => {
-  let pauses = 0;
-  const media = [{ currentTime: 12, pause() { pauses++; } }, { currentTime: 24, pause() { pauses++; } }];
+  let pauses = 0, plays = 0;
+  const media = [12, 24].map((currentTime, index) => ({ currentTime, duration: 40, readyState: 1,
+    isConnected: true, dataset: { journalMediaIndex: String(index) },
+    attributes: { src: `blob:synthetic-${index}` },
+    closest: () => ({ dataset: { journalEntryId: "synthetic-entry" } }),
+    getAttribute(name) { return this.attributes[name] || null; },
+    setAttribute(name, value) { this.attributes[name] = value; },
+    removeAttribute(name) { delete this.attributes[name]; },
+    load() {}, pause() { pauses++; }, play() { plays++; } }));
   const listeners = {};
   const window = { document: { hidden: false, querySelectorAll: selector => {
     assert.equal(selector, "#journalDetailContent video, #journalDetailContent audio"); return media;
@@ -46,8 +53,13 @@ test("상세 media 정지는 video/audio 공통이며 hidden/pagehide만으로�
   vm.runInNewContext(read("app/shared/tennisnote-personal-journal.js"), { window });
   listeners.visibilitychange(); assert.equal(pauses, 0);
   window.document.hidden = true; listeners.visibilitychange(); assert.equal(pauses, 2);
+  assert.deepEqual(media.map(m => m.getAttribute("src")), [null, null]);
+  window.document.hidden = false; listeners.visibilitychange();
+  assert.deepEqual(media.map(m => m.getAttribute("src")), ["blob:synthetic-0", "blob:synthetic-1"]);
+  assert.equal(plays, 0);
   listeners.pagehide(); assert.equal(pauses, 4);
   window.TennisNotePersonalJournal.pauseDetailMedia(); assert.equal(pauses, 6);
+  assert.deepEqual(media.map(m => m.getAttribute("src")), [null, null]);
   assert.deepEqual(media.map(m => m.currentTime), [12, 24]);
   const ui = read("app/tennis-note-member-app/ui/screens.js");
   for (const name of ["openJournalDetail", "openJournalDay", "closeJournalDetail"]) {

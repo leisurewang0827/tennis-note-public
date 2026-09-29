@@ -15,9 +15,19 @@ async function savePracticeLog() {
   }
   memoInput.removeAttribute("aria-invalid");
   const existing = state.practiceLogs.find((log) => log.id === (state.personalEditingId || state.personalDraftId));
+  const selectedFiles = [...($("#practiceMedia")?.files || [])];
   const recoverySourceId = state.personalRecoverySourceId || "";
-  const mediaItems = mediaItemsFromInput($("#practiceMedia"));
-  const mediaNames = mediaItems.map((file) => file.name);
+  const priorMedia = existing?.mediaItems || [];
+  const sameSelection = (item, file) => {
+    if (item.uploadSelectionKey && item.uploadSelectionKey === window.TennisNotePersonalJournal.selectionKey(file)) return true;
+    const receipt = window.TennisNotePersonalJournal.completedReceipt(file, existing?.serverJournalId);
+    return Boolean(receipt && item.serverMediaId === receipt.mediaId && item.storagePath === receipt.storagePath);
+  };
+  const mediaItems = selectedFiles.map((file) => {
+    const prior = priorMedia.find((item) => sameSelection(item, file));
+    return prior || mediaItemsFromInput({ files: [file] })[0];
+  });
+  const combinedMedia = [...priorMedia.filter((item) => !selectedFiles.some((file) => sameSelection(item, file))), ...mediaItems];
   const requestFeedback = $("#requestCoachFeedback")?.checked;
   const journalDate = $("#journalDate")?.value || localDateKey();
   const log = {
@@ -28,8 +38,8 @@ async function savePracticeLog() {
     type: $("#practiceType").value,
     memo: $("#practiceMemo").value.trim(),
     next: $("#practiceNext").value.trim(),
-    mediaNames: [...(existing?.mediaNames || []), ...mediaNames],
-    mediaItems: [...(existing?.mediaItems || []), ...mediaItems],
+    mediaNames: combinedMedia.map((item) => item.name),
+    mediaItems: combinedMedia,
     feedbackQuestion: $("#feedbackQuestion")?.value.trim() || "",
     feedbackStatus: requestFeedback ? "코치 피드백 요청" : "개인 기록",
     coachFeedback: "",
@@ -55,11 +65,13 @@ async function savePracticeLog() {
       saveSnapshot();
     };
     try {
-      await window.TennisNotePersonalJournal.save(log, [...($("#practiceMedia")?.files || [])], checkpoint);
+      await window.TennisNotePersonalJournal.save(log, selectedFiles, checkpoint);
       if (recoverySourceId) {
         state.practiceLogs = state.practiceLogs.filter((item) => item.id !== recoverySourceId);
       }
-      await syncPersonalJournalFromServer();
+      if (!await syncPersonalJournalFromServer()) {
+        showToast("기록과 첨부는 서버에 저장됐습니다. 목록 확인이 지연되어 다시 열 때 확인합니다.");
+      }
     } catch (error) {
       personalJournalStatus(window.TennisNotePersonalJournal.errorMessage(error));
       return false;
