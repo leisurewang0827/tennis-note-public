@@ -46,7 +46,7 @@ function registerPwaServiceWorker() {
   const memberPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("member");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.521",
+    workerUrl: "./service-worker.js?v=1.0.522",
     remoteAppUrl: memberPortal?.ok ? memberPortal.url : "",
   });
 }
@@ -390,7 +390,10 @@ function leaveMemberCurriculum() {
 }
 
 function enterMemberCurriculum() {
-  if (document.body.dataset.activeMemberView === "curriculumView" && !document.hidden) void memberCurriculumUI.enter();
+  if (document.body.dataset.activeMemberView === "curriculumView" && !document.hidden) {
+    renderCurriculum();
+    void memberCurriculumUI.enter();
+  }
 }
 
 function closeCurriculumPlayer() {

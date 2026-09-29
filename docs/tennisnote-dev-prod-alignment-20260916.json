@@ -13,11 +13,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.521",
-    "release_id": "2026.09.29.02",
-    "deployed_at": "2026-09-29T21:37:36+09:00",
-    "member_cache": "tennis-note-member-pwa-v560",
-    "coach_cache": "tennis-note-coach-mode-v533"
+    "version": "1.0.522",
+    "release_id": "2026.09.29.03",
+    "deployed_at": "2026-09-29T23:10:34+09:00",
+    "member_cache": "tennis-note-member-pwa-v561",
+    "coach_cache": "tennis-note-coach-mode-v534"
   },
   "allowed_differences": [
     "app version literals",
@@ -1055,7 +1055,7 @@
       "app/tennis-note-member-app/events/makeup.js": "c10a8ccc599783ad726aba89fbb5064d85f6a8719b0c69278f6215703e53002e",
       "app/tennis-note-member-app/events/profile.js": "e7a93ee244d4412f2bf411f1483ff1ad08245c5f38c1464e09bbbe1e26624aeb",
       "app/tennis-note-member-app/events/schedule.js": "cabcee292cc570636ebcefa99aeaa896b6e1d20bccee457c6a1af87ab6e839dd",
-      "app/tennis-note-member-app/forms/common.js": "103e1e19a1278561979d35e24f41e578b40f0cb9314c1242c0ccf7010d8180c9",
+      "app/tennis-note-member-app/forms/common.js": "49bb9a82c677ab5a500e2886945d0b8ddbdc3780715d6b4fde160b5cf76bb002",
       "app/tennis-note-member-app/forms/members.js": "1e7a138f71ae7010563b0694880b0d02eb5c0b0b722953c65a104266f1a79259",
       "app/tennis-note-member-app/forms/notices.js": "3fe8ee1544b7f41152546527c40090a2105b5a40d43d037a2675ea61c15ed2dd",
       "app/tennis-note-member-app/forms/payment.js": "4c0f36d815dca219d83c96b148c4385ff02ac898d08c030f0e67f1d1f1ed9c68",
@@ -1073,7 +1073,7 @@
       "app/tennis-note-member-app/ui/screens.js": "e6baf9d131ee3494195e30733334a48636a153515ca5c129c5da884c7d8b10ba",
       "app/tennis-note-member-app/ui/sheet.js": "d606dd36d141a19a124b8be7c7fdf86aae86065612967fd4dda258cb56711d48",
       "app/tennis-note-member-app/views/common.js": "ac8683523cecc298b2d24cfb830115a1ab0ec98ac8d32afff003461edabe8726",
-      "app/tennis-note-member-app/views/curriculum.js": "d26eeb81ee31c935aa893a2213fc8d661461107427872b482565971676b9d6c5",
+      "app/tennis-note-member-app/views/curriculum.js": "9e5a998d29caf8e494beaaeaaaa9016881006ecf6a5c05d2cb69f44dc0b55ae8",
       "app/tennis-note-member-app/views/home.js": "b3b453045237db2ceb456a15c53084a2efbdc44b1b20c4e48e90a728cc4bd079",
       "app/tennis-note-member-app/views/journal.js": "ae7a4d5fa364d0414b3d623150a91c1f4caff00885eb28e54196a14bb8d1d881",
       "app/tennis-note-member-app/views/onboarding.js": "fd3d698f2464bbdf1a131f93690f3dc095756dd050165538ec4a699b41c018ea",
