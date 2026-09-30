@@ -722,6 +722,11 @@ async function holdPlanUiScenario(page, modal, engine) {
   scenarioPassed(engine, "HOLD");
 }
 async function main() {
+  const templateOnly = process.env.TENNISNOTE_EXCEL_TEMPLATE_ONLY === "1";
+  if (!templateOnly) {
+    const catalogAssertions = await require("./check_tennisnote_single_sheet_products_browser.cjs").run();
+    process.stdout.write(`PRODUCT_CATALOG_BROWSER_PASS assertions=${catalogAssertions}\n`);
+  }
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   const engines = process.env.TENNISNOTE_BROWSER ? [process.env.TENNISNOTE_BROWSER] : ["chromium", "webkit"];
@@ -791,6 +796,17 @@ async function main() {
         && await modal.locator("[data-excel-apply]:disabled").count() === 1
         && await modal.locator("[data-excel-reverse]:visible").count() === 0, "ONE_INPUT_DISABLED_APPLY");
       check((await status.textContent()).includes("파일을 선택"), "EMPTY_STATE");
+      // Only the template catalog read is synthetic; exercise the actual admin
+      // entry/binding/download/parser and restore its normal transport afterward.
+      await page.evaluate(catalog => {
+        window.__templateOriginalTransport = window.TennisNoteSingleSheetRemotePreview;
+        window.__templateCatalogReads = 0;
+        window.TennisNoteSingleSheetRemotePreview = {
+          ORIGINS: { development: location.origin },
+          create: async () => ({ enabled: true, isReady: () => true,
+            templateProducts: async () => { window.__templateCatalogReads++; return catalog; } }),
+        };
+      }, require("./check_tennisnote_single_sheet_products.cjs").snapshot());
       const [templateDownload] = await Promise.all([
         page.waitForEvent("download"),
         modal.locator("[data-excel-template]").click(),
@@ -801,6 +817,20 @@ async function main() {
       check(templateDownload.suggestedFilename() === parser.TEMPLATE_FILE_NAME, "TEMPLATE_DOWNLOAD_NAME");
       check(templateBytes.byteLength > 0 && templateResult.errors.length === 1 && templateResult.errors[0] === "EMPTY_DATA" && templateResult.rows.length === 0, "TEMPLATE_DOWNLOAD_ROUNDTRIP");
       check((await status.textContent()).includes("앞자리 0"), "TEMPLATE_PHONE_GUIDANCE");
+      check(await page.evaluate(() => window.__templateCatalogReads === 1), "TEMPLATE_CATALOG_READ_ONCE");
+      check(XLSX.read(templateBytes, { type: "array" }).SheetNames.join("|") === "회원등록|상품목록", "TEMPLATE_V2_SHEETS");
+      await page.evaluate(() => {
+        window.TennisNoteSingleSheetRemotePreview = window.__templateOriginalTransport;
+        delete window.__templateOriginalTransport;
+      });
+      if (templateOnly) {
+        check(pageErrors.length === 0 && relevantConsole.length === 0, "TEMPLATE_ENTRY_ERRORS_ZERO");
+        check(writeRequests === 0 && externalRequests === 0, "TEMPLATE_ENTRY_NETWORK_ZERO");
+        await close();
+        await context.close();
+        process.stdout.write(`PASS ${engine} TEMPLATE_ONLY actual-entry download/reimport; catalogRead=1; writes=0; external=0; errors=0\n`);
+        continue;
+      }
       await select("valid"); await waitResult();
       check((await status.textContent()).includes("보류") && (await modal.innerText()).includes("미확정"), "ACTUAL_ROSTER_HOLD");
       check(await page.evaluate(() => !window.__previewProbe.unsafeResult), "REAL_WORKER_SAFE_MESSAGE");
@@ -902,7 +932,7 @@ async function main() {
     } finally { await browser.close(); }
     process.stdout.write(`TN_EXCEL_ENGINE_RESULT ${JSON.stringify({engine, assertions: assertions-engineStartAssertions, scenarios: completedScenarios.get(engine)})}\n`);
   }
-  process.stdout.write(`Single sheet preview browser: ${assertions} assertions PASS\n`);
+  process.stdout.write(`Single sheet preview browser${templateOnly ? " TEMPLATE_ONLY" : ""}: ${assertions} assertions PASS\n`);
 }
 main().catch(error => {
   process.stderr.write(`FAIL code=${/^[A-Z_0-9]+$/.test(error.testCode || "") ? error.testCode : "BROWSER_OPERATION_FAILED"}\n`);

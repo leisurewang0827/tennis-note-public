@@ -5,6 +5,11 @@
   const DEADLINE = 10000;
   let templateDependenciesPromise = null;
   const reasons = {
+    PRODUCT_CATALOG_UNSAFE: "상품목록 또는 드롭다운 참조가 기본 양식과 다릅니다. 양식을 다시 받아 주세요.",
+    TEMPLATE_PRODUCTS_AMBIGUOUS: "현재 지점에 같은 이름의 활성 상품이 여러 개 있어 양식을 만들지 않았습니다. 상품명을 구분한 뒤 다시 받아 주세요.",
+    TEMPLATE_PRODUCTS_REQUIRED: "현재 지점의 활성 상품 목록을 확인할 수 없습니다. 관리자 로그인·지점을 확인해 주세요.",
+    TEMPLATE_PRODUCTS_INVALID: "활성 상품 목록이 올바르지 않아 양식을 만들지 않았습니다. 상품 설정을 확인해 주세요.",
+    TEMPLATE_PRODUCTS_LIMIT: "상품 목록이 양식의 안전 한도를 초과해 다운로드하지 않았습니다.",
     SHEET_IMPORT_STORAGE_CONFLICT: "저장 충돌로 처리를 중단했습니다. 해당 요청의 변경은 취소됐습니다. 반복 등록하지 말고 운영 담당자에게 처리 이력 확인을 요청해 주세요. 앞서 완료된 항목은 유지됩니다.",
     ADMIN_SNAPSHOT_REQUIRED: "관리자 조회 정보가 필요합니다. 관리자 화면에서 다시 확인해 주세요.",
     SHEET_IMPORT_ENVIRONMENT_BLOCKED: "현재 관리자 주소와 연결 환경이 일치하지 않아 서버 요청을 보내지 않았습니다.",
@@ -92,11 +97,11 @@
     });
   }
   function ensureTemplateDependencies() {
-    if (root.TennisNoteSingleSheetImport?.buildTemplateWorkbook && typeof root.XLSX?.writeFile === "function") return Promise.resolve();
+    if (root.TennisNoteSingleSheetImport?.buildProductTemplateBytes && typeof root.XLSX?.write === "function") return Promise.resolve();
     if (templateDependenciesPromise) return templateDependenciesPromise;
     templateDependenciesPromise = (async () => {
-      await loadTemplateDependency("./tennisnote-single-sheet-import.js", () => Boolean(root.TennisNoteSingleSheetImport?.buildTemplateWorkbook));
-      await loadTemplateDependency("./vendor/xlsx.full.min.js?v=0.18.5", () => typeof root.XLSX?.writeFile === "function");
+      await loadTemplateDependency("./tennisnote-single-sheet-import.js", () => Boolean(root.TennisNoteSingleSheetImport?.buildProductTemplateBytes));
+      await loadTemplateDependency("./vendor/xlsx.full.min.js?v=0.18.5", () => typeof root.XLSX?.write === "function");
     })().catch(error => { templateDependenciesPromise = null; throw error; });
     return templateDependenciesPromise;
   }
@@ -165,17 +170,29 @@
       history.pushState({ ...(history.state || {}), tnExcelPreview: true }, ""); input.focus();
     }
     async function downloadTemplate() {
-      if (templateBusy) return;
+      if (templateBusy || options.canOpen?.() !== true || backdrop.hidden) return;
+      const id = generation;
       templateBusy = true; template.disabled = true; template.setAttribute("aria-disabled", "true");
       status.textContent = "한 장 엑셀 양식을 준비하고 있습니다…";
       try {
         await ensureTemplateDependencies();
+        const transport = await options.getPreviewTransport?.();
+        if (!transport?.enabled || !transport.isReady?.() || typeof transport.templateProducts !== "function") throw new Error("TEMPLATE_PRODUCTS_REQUIRED");
+        const snapshot = await transport.templateProducts();
+        if (id !== generation || backdrop.hidden || options.canOpen?.() !== true) return;
+        if (!transport.isReady()) throw new Error("TARGET_OR_REVISION_MISMATCH");
         const api = root.TennisNoteSingleSheetImport;
-        const workbook = api.buildTemplateWorkbook(root.XLSX);
-        root.XLSX.writeFile(workbook, api.TEMPLATE_FILE_NAME, { bookType: "xlsx", compression: true });
-        status.textContent = "빈 양식 다운로드 완료 · 연락처는 앞자리 0이 유지되는 텍스트 형식입니다.";
-      } catch {
-        status.textContent = "엑셀 양식을 만들지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.";
+        const bytes = api.buildProductTemplateBytes(root.XLSX, snapshot);
+        const proof = await api.readFile(bytes, root.XLSX);
+        if (proof.errors.length !== 1 || proof.errors[0] !== "EMPTY_DATA" || proof.rows.length) throw new Error("PRODUCT_CATALOG_UNSAFE");
+        if (id !== generation || backdrop.hidden || options.canOpen?.() !== true || !transport.isReady()) return;
+        const url = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+        const link = document.createElement("a"); link.href = url; link.download = api.TEMPLATE_FILE_NAME;
+        document.body.append(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        status.textContent = "양식 다운로드 완료 · 회원등록의 회원권 칸에서 상품을 선택하세요. 상품목록은 참조용이며 연락처는 앞자리 0을 보존하는 텍스트 형식입니다.";
+      } catch (error) {
+        if (id === generation && !backdrop.hidden) status.textContent = reasons[error?.message] || "엑셀 양식을 만들지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.";
       } finally {
         templateBusy = false; template.disabled = false; template.removeAttribute("aria-disabled");
       }
