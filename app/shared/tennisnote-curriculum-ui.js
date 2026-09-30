@@ -106,7 +106,7 @@
       const { profile, user } = current || {};
       const expiresAt = Number(session?.expires_at);
       // Called only after selectCurrentProfile; token presence and client fallback roles are insufficient.
-      if (current?.profileBootstrapError || !user?.id || !profile?.id || profile.role !== "member"
+      if (current?.profileBootstrapError || !user?.id || !profile?.id || !["member", "coach", "admin"].includes(profile.role)
         || profile.status !== "active" || !Number.isFinite(expiresAt) || expiresAt <= clock()) { clear(); return false; }
       // No previous owner's copy may remain while asynchronous scoping is in progress.
       clear();
