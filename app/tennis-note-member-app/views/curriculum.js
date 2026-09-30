@@ -23,7 +23,7 @@ function renderCurriculum() {
       status.setAttribute("role", "status");
       const title = document.createElement("strong");
       const description = document.createElement("p");
-      if (state.member?.role === "member") {
+      if (["member", "coach", "admin"].includes(state.member?.role)) {
         title.textContent = "회원 커리큘럼 권한을 확인하지 못했습니다";
         description.textContent = "로그인 상태를 확인한 뒤 다시 열어주세요. 계속되면 관리자에게 문의해 주세요.";
       } else {

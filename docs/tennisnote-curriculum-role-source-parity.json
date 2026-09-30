@@ -1,0 +1,17 @@
+{
+  "privateSourceSha": "b557bf3d91629c24a58e65567cd6245fbf77d120",
+  "publicBaselineSha": "8058eed27ae39b56788d1a36e8c2176c6546f500",
+  "readerEnabled": false,
+  "actualContent": "HOLD",
+  "shared": {
+    "path": "app/shared/tennisnote-curriculum-ui.js",
+    "sha256": "9373dcd83841d3990116a927712552d035cea886b7f31ae2353689c572d1a434"
+  },
+  "functions": [
+    {
+      "name": "renderCurriculum",
+      "path": "app/tennis-note-member-app/views/curriculum.js",
+      "sha256": "4fc0b743fcce0c4cf2e4b04c2d0d6639a7c4c620ce1bd2e299d3e9a1be048c5b"
+    }
+  ]
+}
