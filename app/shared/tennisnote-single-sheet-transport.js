@@ -173,6 +173,31 @@
     };
     const canApply = initial.reason === "" && initial.mode === "apply";
     const canReverse = canApply && initial.reverseEnabled === true;
+    async function templateProducts() {
+      // Read only; never use the capped roster, local product drafts, or a
+      // catch-to-empty fallback as an authoritative complete catalog.
+      const products = [], ids = new Set();
+      if (!isReady() || initial.reason || typeof client.selectRows !== "function") fail("TEMPLATE_PRODUCTS_REQUIRED");
+      for (let offset = 0; offset <= 500; offset += 100) {
+        if (!isReady()) fail("TARGET_OR_REVISION_MISMATCH");
+        const page = await client.selectRows("tn_membership_products", {
+          select: "id,branch_id,name,is_active,product_kind", filters: { branch_id: initial.scope.branchId, is_active: true }, order: "id.asc", limit: 100, offset,
+        });
+        if (!isReady()) fail("TARGET_OR_REVISION_MISMATCH");
+        if (!Array.isArray(page) || page.length > 100) fail("TEMPLATE_PRODUCTS_INVALID");
+        for (const p of page) {
+          if (!p || p.branch_id !== initial.scope.branchId || p.is_active !== true || !p.id || ids.has(p.id) || typeof p.product_kind !== "string" || !p.product_kind) fail("TEMPLATE_PRODUCTS_INVALID");
+          ids.add(p.id);
+          // Match tn_sheet_plan's kind gate, never infer eligibility from names.
+          // Validate/count every raw row before filtering so excluded products
+          // cannot hide duplicate IDs, scope drift, or an incomplete snapshot.
+          if (p.product_kind === "regular" || p.product_kind === "group") products.push(p);
+        }
+        if (ids.size > 500) fail("TEMPLATE_PRODUCTS_LIMIT");
+        if (page.length < 100) return { branchId: initial.scope.branchId, complete: true, products };
+      }
+      fail("TEMPLATE_PRODUCTS_LIMIT");
+    }
     return Object.freeze({
       protocol: PROTOCOL,
       enabled: initial.reason === "",
@@ -185,6 +210,7 @@
       cleanupContinuityRequired: true,
       currentScope,
       isReady,
+      templateProducts,
       prepareSession,
       workSessionExpiresAt: () => workSessionExpiry,
       preview,

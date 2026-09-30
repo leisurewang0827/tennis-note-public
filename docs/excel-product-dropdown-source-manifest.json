@@ -1,0 +1,42 @@
+{
+  "contract": "excel-product-dropdown-source/1",
+  "privateRepo": "leisurewang0827/app-automation-vault",
+  "privateMerge": "161b58485ece9b1da2e04d569f8f22ccf1383e7f",
+  "privateFeature": "74a4b9f401d85f2bd2d6c1cf7b9694f58ace0cb8",
+  "privatePR": 563,
+  "privateCIRuns": [
+    36688878829,
+    36689212332
+  ],
+  "publicBase": "2670a522b8e884a42cff5d566272689e983112e3",
+  "verifiedDevelopmentMerge": "1a8064e8cee69e78b19cf8dcd02c7d3eb9b12eff",
+  "promotionScope": "Excel-only product blobs; no development branch merge, database migration, Auth, media or native release changes.",
+  "allowedProductKinds": [
+    "regular",
+    "group"
+  ],
+  "files": [
+    {
+      "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-import.js",
+      "publicPath": "app/shared/tennisnote-single-sheet-import.js",
+      "gitBlob": "811ea6c1102ea09d289278f797541df7464cf3e8"
+    },
+    {
+      "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-preview-ui.js",
+      "publicPath": "app/shared/tennisnote-single-sheet-preview-ui.js",
+      "gitBlob": "09fbfc57bcebee33c9cd6e12e8f3bf5c76aaa180"
+    },
+    {
+      "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-transport.js",
+      "publicPath": "app/shared/tennisnote-single-sheet-transport.js",
+      "gitBlob": "16a6b25fd03e8bddf4a2bd7c60c0b355b5aa2d6b"
+    }
+  ],
+  "testAdaptation": "Public filesystem paths only; server SQL kind assertion is bound to this private-CI-verified contract instead of copying private migrations. Other namespace, parser, scope, pagination and browser assertions are preserved.",
+  "boundaries": {
+    "dbWrite": false,
+    "authChange": false,
+    "mediaChange": false,
+    "nativeStoreChange": false
+  }
+}
