@@ -31,6 +31,46 @@ const diagnosticStep = (engine, scenario, phase) => {
   diagnostic = observed({ engine: ["chromium", "webkit"].includes(engine) ? engine : "not-started", scenario, phase });
   heartbeat();
 };
+// 파일/서버 원문 대신 허용된 상태와 횟수만 수집한다.
+async function preparationState(page) {
+  return page.evaluate(() => {
+    const modal = document.querySelector("#singleSheetPreviewModal"), input = modal?.querySelector("[data-excel-file]");
+    const p = window.__sheetExecution, v = p?.controller?.view();
+    const phases = ["idle", "previewing", "ready", "paused", "done", "reversed", "blocked", "failed", "error"];
+    const readiness = ["unverified", "checking", "awaiting-preview", "ready", "blocked", "expired", ...phases];
+    const code = value => /^[A-Z_]{1,48}$/.test(value || "") ? value : value ? "OTHER" : "NONE";
+    return { probe: window.__completionProbe || null, controllerExists: Boolean(p?.controller),
+      controllerPhase: phases.includes(v?.phase) ? v.phase : "NONE",
+      domPhase: phases.includes(modal?.dataset.batchPhase) ? modal.dataset.batchPhase : "NONE",
+      readiness: readiness.includes(modal?.dataset.excelReadiness) ? modal.dataset.excelReadiness : "OTHER",
+      domFailure: code(modal?.dataset.excelFailureCode), controllerFailure: code(v?.failureCode),
+      modalHidden: Boolean(modal?.hidden), fileCount: input?.files.length || 0, fileDisabled: Boolean(input?.disabled),
+      busy: Boolean(v?.busy), historyPreview: history.state?.tnExcelPreview === true,
+      prepares: p?.prepareCalls || 0, previews: p?.previews || 0, applies: p?.applies || 0, reverses: p?.reverses || 0 };
+  });
+}
+async function selectPreparationFile(page, input, file) {
+  const before = await preparationState(page);
+  process.stdout.write(`PREPARATION_FILE_BEFORE ${JSON.stringify(before)}\n`);
+  await input.setInputFiles(file);
+  const after = await preparationState(page);
+  process.stdout.write(`PREPARATION_FILE_AFTER ${JSON.stringify(after)}\n`);
+  check(after.probe.changes === before.probe.changes + 1, "PREPARATION_FILE_CHANGE_EXACTLY_ONCE");
+}
+async function waitPreparationReady(page, controller = false) {
+  // 기존 기본 timeout을 유지한다. 차단/취소는 성공으로 치환하지 않고 즉시 실패시킨다.
+  const handle = await page.waitForFunction(controller => {
+    const modal = document.querySelector("#singleSheetPreviewModal");
+    const phase = controller ? window.__sheetExecution?.controller?.view().phase : modal?.dataset.batchPhase;
+    if (phase === "ready") return "READY";
+    if (modal?.hidden || ["blocked", "expired", "paused", "failed", "error"].includes(modal?.dataset.excelReadiness)
+      || modal?.dataset.excelFailureCode) return "TERMINAL";
+    return false;
+  }, controller);
+  const result = await handle.jsonValue(); await handle.dispose();
+  process.stdout.write(`PREPARATION_READY_RESULT ${JSON.stringify({ result, ...await preparationState(page) })}\n`);
+  check(result === "READY", "PREPARATION_TERMINAL_NOT_READY");
+}
 function safeFailureDiagnostic(error) {
   const names = ["Error", "TimeoutError", "TypeError", "RangeError", "ReferenceError", "SyntaxError"];
   const callsites = String(error.stack || "").split("\n").filter(line => /^\s+at /.test(line) && line.includes(__filename + ":"))
@@ -141,6 +181,38 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", () => errors.push("PAGE_ERROR"));
+  await page.addInitScript(() => {
+    // 합성 페이지의 단계/횟수만 관측한다. 파일 내용·키·서버값은 수집하지 않는다.
+    const p = window.__completionProbe = { changes: 0, clicks: 0, popstates: 0, workers: 0,
+      workerPosts: 0, workerMessages: 0, workerErrors: 0, terminated: 0, pageErrors: 0,
+      snapshots: 0, pageHides: 0, rejections: 0, events: [],
+      lastType: "NONE", lastCode: "NONE", lastStage: "NONE" };
+    const token = value => typeof value === "string" && /^[A-Z_]{1,48}$/.test(value) ? value : "OTHER";
+    const record = event => { if (p.events.length === 64) p.events.shift(); p.events.push(event); };
+    addEventListener("error", () => { p.pageErrors++; record("PAGE_ERROR"); });
+    addEventListener("unhandledrejection", () => { p.rejections++; record("REJECTION"); });
+    addEventListener("popstate", () => { p.popstates++; record("POPSTATE"); });
+    addEventListener("pagehide", () => { p.pageHides++; record("PAGEHIDE"); });
+    addEventListener("tennisnote:excel-snapshot-changed", () => { p.snapshots++; record("SNAPSHOT"); });
+    addEventListener("change", e => { if (e.target?.matches?.("[data-excel-file]")) { p.changes++; record("FILE_CHANGE"); } }, true);
+    addEventListener("click", e => { if (e.target?.closest?.("#openSingleSheetPreviewButton")) p.clicks++; }, true);
+    const W = window.Worker;
+    window.Worker = class extends W {
+      constructor(...args) {
+        super(...args); p.workers++; record("WORKER_CREATE");
+        this.addEventListener("error", () => { p.workerErrors++; record("WORKER_ERROR"); });
+        this.addEventListener("message", e => {
+          p.workerMessages++;
+          p.lastType = ["result", "error", "remote-preview-units", "ephemeral-units"].includes(e.data?.type) ? e.data.type : "OTHER";
+          p.lastCode = e.data?.code ? token(e.data.code) : "NONE";
+          p.lastStage = e.data?.stage ? token(e.data.stage) : "NONE";
+          record("WORKER_MESSAGE");
+        });
+      }
+      postMessage(...args) { p.workerPosts++; record("WORKER_POST"); return super.postMessage(...args); }
+      terminate() { p.terminated++; record("WORKER_TERMINATE"); return super.terminate(); }
+    };
+  });
   await context.route("**/*", async route => {
     const requestUrl = new URL(route.request().url());
     if (requestUrl.origin !== devOrigin) { await route.abort(); return; }
@@ -230,6 +302,12 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
       diagnostic.phase = "COMPLETION_REFRESH";
       await completionRefreshScenario(page, modal, engine);
       check(errors.length === 0, "COMPLETION_PAGE_ERRORS_ZERO");
+      return;
+    }
+    if (process.env.TENNISNOTE_EXCEL_PREPARATION_ONLY === "1") {
+      await page.locator("#openSingleSheetPreviewButton").click();
+      await holdPlanUiScenario(page, modal, engine);
+      check(errors.length === 0, "HOLD_PREPARATION_PAGE_ERRORS_ZERO");
       return;
     }
     diagnostic.phase = "INITIAL_OPEN";
@@ -375,6 +453,10 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
     check(await page.evaluate(() => window.__sheetExecution.applies === 1) && (await modal.locator(".tn-excel-rows").innerText()).includes("등록 완료"), "UNKNOWN_UI_MANUAL_READBACK_ONLY_NO_DUPLICATE");
     check(errors.length === 0, "HOLD_UNKNOWN_UI_PAGE_ERRORS_ZERO");
     process.stdout.write(`PASS ${engine} unresolved response-loss UI; mock apply=1; duplicate=0; real network=0\n`);
+  } catch (error) {
+    const state = await preparationState(page).catch(() => ({ observationUnavailable: true }));
+    process.stderr.write(`PREPARATION_FAILURE_DIAGNOSTIC ${JSON.stringify({ ...state, pageErrorCount: errors.length })}\n`);
+    throw error;
   } finally { await context.close(); }
 }
 async function completionRefreshScenario(page, modal, engine) {
@@ -454,7 +536,7 @@ async function completionRefreshScenario(page, modal, engine) {
   rows.push([...rows[1]]); rows[2][1] = "01000000002";
   wb.Sheets[parser.SHEET] = XLSX.utils.aoa_to_sheet(rows);
   const double = Buffer.from(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
-  const select = buffer => input.setInputFiles({ name: "synthetic-completion.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer });
+  const select = buffer => selectPreparationFile(page, input, { name: "synthetic-completion.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer });
   const read = () => page.evaluate(() => {
     const p = window.__sheetExecution, v = p.controller.view();
     return { phase: v.phase, pending: v.pending, applied: v.applied, reversed: v.reversed, unconfirmed: v.unconfirmed,
@@ -478,7 +560,7 @@ async function completionRefreshScenario(page, modal, engine) {
     await select(buffer);
     if (values.hold !== "preview") {
       heartbeat("READY_WAIT");
-      try { await page.waitForFunction(() => window.__sheetExecution.controller?.view().phase === "ready"); heartbeat("READY_PASS"); }
+      try { await waitPreparationReady(page, true); heartbeat("READY_PASS"); }
       catch (error) {
         heartbeat("READY_FAIL");
         const state = await page.evaluate(() => {
@@ -486,7 +568,16 @@ async function completionRefreshScenario(page, modal, engine) {
           const phases = ["idle", "previewing", "ready", "paused", "done", "reversed", "failed", "error"];
           return { controllerExists: Boolean(p.controller), phase: phases.includes(v?.phase) ? v.phase : "OTHER",
             busy: Boolean(v?.busy), previewCount: Number.isSafeInteger(p.previews) ? p.previews : -1,
-            failureCode: ["READBACK_UNVERIFIED", "SHEET_INPUT_INVALID", "SHEET_EXISTING_TICKET_REVIEW"].includes(v?.failureCode) ? v.failureCode : v?.failureCode ? "OTHER_SAFE_CODE" : "NONE" };
+            failureCode: ["READBACK_UNVERIFIED", "SHEET_INPUT_INVALID", "SHEET_EXISTING_TICKET_REVIEW"].includes(v?.failureCode) ? v.failureCode : v?.failureCode ? "OTHER_SAFE_CODE" : "NONE",
+            probe: window.__completionProbe || null,
+            readiness: document.querySelector("#singleSheetPreviewModal")?.dataset.excelReadiness || "NONE",
+            domFailure: /^[A-Z_]{1,48}$/.test(document.querySelector("#singleSheetPreviewModal")?.dataset.excelFailureCode || "") ? document.querySelector("#singleSheetPreviewModal").dataset.excelFailureCode : "NONE",
+            modalHidden: document.querySelector("#singleSheetPreviewModal")?.hidden,
+            fileCount: document.querySelector("[data-excel-file]")?.files.length,
+            fileDisabled: document.querySelector("[data-excel-file]")?.disabled,
+            historyPreview: history.state?.tnExcelPreview === true,
+            prepareCount: p.prepareCalls,
+            pageReady: document.readyState };
         });
         process.stderr.write(`COMPLETION_READY_DIAGNOSTIC ${JSON.stringify({ caseLabel: diagnostic.caseLabel || "other", ...state })}\n`);
         throw error;
@@ -494,6 +585,12 @@ async function completionRefreshScenario(page, modal, engine) {
     }
   };
   const confirm = async control => { await control.click(); await control.click(); };
+  if (process.env.TENNISNOTE_EXCEL_PREPARATION_ONLY === "1") {
+    await start();
+    check(await page.evaluate(() => window.__sheetExecution.previews === 1 && window.__sheetExecution.applies === 0 && window.__sheetExecution.reverses === 0), "COMPLETION_PREPARATION_PREVIEW_ONCE_WRITE_ZERO");
+    process.stdout.write(`PASS ${engine} completion preparation; mock apply/reverse=0; real network=0\n`);
+    return;
+  }
   await start(); await confirm(apply); await idle();
   const before = await read(); await refresh(); const after = await read();
   if (process.env.TENNISNOTE_EXCEL_COMPLETION_REPRO === "1") {
@@ -659,9 +756,9 @@ async function holdPlanUiScenario(page, modal, engine) {
     if (kind === "mixed") units[0] = { status: "READY", verified: false, newMembers: 1, newTickets: 1, newLessons: 0 };
     if (kind === "zero") for (const unit of units) Object.assign(unit, { newMembers: 0, newTickets: 0, newLessons: 0 });
     await page.evaluate(units => { window.__sheetExecution.failure = ""; window.__sheetExecution.uxUnits = units; }, units);
-    await modal.locator("[data-excel-file]").setInputFiles([]);
-    await modal.locator("[data-excel-file]").setInputFiles(file);
-    await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal")?.dataset.batchPhase === "ready");
+    await selectPreparationFile(page, modal.locator("[data-excel-file]"), []);
+    await selectPreparationFile(page, modal.locator("[data-excel-file]"), file);
+    await waitPreparationReady(page);
     const totals = await summary(), text = await modal.locator(".tn-excel-rows").innerText();
     const expected = kind === "hold" ? "미확정 (2단위)" : kind === "mixed" ? "확정 1 · 1단위 미확정" : "0";
     check(totals["신규 회원 계획"] === expected && totals["신규 회원권 계획"] === expected, "HOLD_UI_NULL_ZERO_MIXED_SUMMARY");
@@ -722,6 +819,11 @@ async function holdPlanUiScenario(page, modal, engine) {
   scenarioPassed(engine, "HOLD");
 }
 async function main() {
+  const templateOnly = process.env.TENNISNOTE_EXCEL_TEMPLATE_ONLY === "1";
+  if (!templateOnly && process.env.TENNISNOTE_EXCEL_COMPLETION_ONLY !== "1" && process.env.TENNISNOTE_EXCEL_PREPARATION_ONLY !== "1") {
+    const catalogAssertions = await require("./check_tennisnote_single_sheet_products_browser.cjs").run();
+    process.stdout.write(`PRODUCT_CATALOG_BROWSER_PASS assertions=${catalogAssertions}\n`);
+  }
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   const engines = process.env.TENNISNOTE_BROWSER ? [process.env.TENNISNOTE_BROWSER] : ["chromium", "webkit"];
@@ -733,6 +835,13 @@ async function main() {
     const executablePath = engine === "chromium" ? [process.env.CHROME_PATH, chromium.executablePath(), "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"].find(p => p && fs.existsSync(p)) : undefined;
     const browser = await (engine === "webkit" ? webkit : chromium).launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
     try {
+      if (process.env.TENNISNOTE_EXCEL_PREPARATION_ONLY === "1") {
+        await remoteExecutionScenario(browser, engine, true, false, false);
+        await remoteExecutionScenario(browser, engine, true, true, false);
+        scenarioPassed(engine, "COMPLETION_PREPARATION");
+        process.stdout.write(`TN_EXCEL_ENGINE_RESULT ${JSON.stringify({ engine, assertions: assertions-engineStartAssertions, scenarios: completedScenarios.get(engine) })}\n`);
+        continue;
+      }
       if (process.env.TENNISNOTE_EXCEL_COMPLETION_ONLY === "1") { await remoteExecutionScenario(browser, engine); continue; }
       if (process.env.TENNISNOTE_EXCEL_INITIAL_ONLY === "1") { await remoteExecutionScenario(browser, engine); continue; }
       if (process.env.TENNISNOTE_EXCEL_READINESS_ONLY === "1") { await remoteExecutionScenario(browser, engine); await remoteExecutionScenario(browser, engine, false); continue; }
@@ -791,6 +900,17 @@ async function main() {
         && await modal.locator("[data-excel-apply]:disabled").count() === 1
         && await modal.locator("[data-excel-reverse]:visible").count() === 0, "ONE_INPUT_DISABLED_APPLY");
       check((await status.textContent()).includes("파일을 선택"), "EMPTY_STATE");
+      // Only the template catalog read is synthetic; exercise the actual admin
+      // entry/binding/download/parser and restore its normal transport afterward.
+      await page.evaluate(catalog => {
+        window.__templateOriginalTransport = window.TennisNoteSingleSheetRemotePreview;
+        window.__templateCatalogReads = 0;
+        window.TennisNoteSingleSheetRemotePreview = {
+          ORIGINS: { development: location.origin },
+          create: async () => ({ enabled: true, isReady: () => true,
+            templateProducts: async () => { window.__templateCatalogReads++; return catalog; } }),
+        };
+      }, require("./check_tennisnote_single_sheet_products.cjs").snapshot());
       const [templateDownload] = await Promise.all([
         page.waitForEvent("download"),
         modal.locator("[data-excel-template]").click(),
@@ -801,6 +921,20 @@ async function main() {
       check(templateDownload.suggestedFilename() === parser.TEMPLATE_FILE_NAME, "TEMPLATE_DOWNLOAD_NAME");
       check(templateBytes.byteLength > 0 && templateResult.errors.length === 1 && templateResult.errors[0] === "EMPTY_DATA" && templateResult.rows.length === 0, "TEMPLATE_DOWNLOAD_ROUNDTRIP");
       check((await status.textContent()).includes("앞자리 0"), "TEMPLATE_PHONE_GUIDANCE");
+      check(await page.evaluate(() => window.__templateCatalogReads === 1), "TEMPLATE_CATALOG_READ_ONCE");
+      check(XLSX.read(templateBytes, { type: "array" }).SheetNames.join("|") === "회원등록|상품목록", "TEMPLATE_V2_SHEETS");
+      await page.evaluate(() => {
+        window.TennisNoteSingleSheetRemotePreview = window.__templateOriginalTransport;
+        delete window.__templateOriginalTransport;
+      });
+      if (templateOnly) {
+        check(pageErrors.length === 0 && relevantConsole.length === 0, "TEMPLATE_ENTRY_ERRORS_ZERO");
+        check(writeRequests === 0 && externalRequests === 0, "TEMPLATE_ENTRY_NETWORK_ZERO");
+        await close();
+        await context.close();
+        process.stdout.write(`PASS ${engine} TEMPLATE_ONLY actual-entry download/reimport; catalogRead=1; writes=0; external=0; errors=0\n`);
+        continue;
+      }
       await select("valid"); await waitResult();
       check((await status.textContent()).includes("보류") && (await modal.innerText()).includes("미확정"), "ACTUAL_ROSTER_HOLD");
       check(await page.evaluate(() => !window.__previewProbe.unsafeResult), "REAL_WORKER_SAFE_MESSAGE");
@@ -902,7 +1036,7 @@ async function main() {
     } finally { await browser.close(); }
     process.stdout.write(`TN_EXCEL_ENGINE_RESULT ${JSON.stringify({engine, assertions: assertions-engineStartAssertions, scenarios: completedScenarios.get(engine)})}\n`);
   }
-  process.stdout.write(`Single sheet preview browser: ${assertions} assertions PASS\n`);
+  process.stdout.write(`Single sheet preview browser${templateOnly ? " TEMPLATE_ONLY" : ""}: ${assertions} assertions PASS\n`);
 }
 main().catch(error => {
   process.stderr.write(`FAIL code=${/^[A-Z_0-9]+$/.test(error.testCode || "") ? error.testCode : "BROWSER_OPERATION_FAILED"}\n`);

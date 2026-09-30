@@ -290,5 +290,7 @@ async function main() {
     check(parsed.rows.length === 0, "TEMPLATE_STILL_BLANK");
   });
   process.stdout.write(`SINGLE_SHEET_PREVIEW_PASS scenarios=${scenarios} assertions=${assertions} database=0 network=0 apply=0\n`);
+  const catalogAssertions = await require("./check_tennisnote_single_sheet_products.cjs").run();
+  process.stdout.write(`PRODUCT_DROPDOWN_PASS assertions=${catalogAssertions} database=0 network=0 apply=0\n`);
 }
 main().catch(() => { process.exitCode = 1; });
