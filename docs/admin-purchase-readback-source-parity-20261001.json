@@ -1,0 +1,19 @@
+{
+  "contractVersion": 1,
+  "privateAuthority": "96d191a9de86d336171268d13cb9fff82ffa21d4",
+  "publicBase": "2d1807c1b543f5cabfffde8da9f23fb214f74b3c",
+  "scope": "Exact member post-save readback only; no writes, RPC/schema, UI or role changes",
+  "helperExecutableSha256": "0192ff388761d4c852c81c4c5cd37f1367a0ba958a1a98d97bc361973e24f58a",
+  "products": [
+    {
+      "path": "app/admin/actions/member.js",
+      "baseSha256": "d66869cb73ca6586fbb73dfa62d13cfb442e62af29d987d0b3cc4fef2a149f70",
+      "candidateSha256": "0242928680455c2e86d0e508667ee05a50cbdec1eb44000545698d9beaa1d71e"
+    },
+    {
+      "path": "app/admin/actions/common.js",
+      "baseSha256": "5867e1a138e0949812bd1f9c74b675352c7531b44f6e14a0d2205ff14baf3869",
+      "candidateSha256": "c405418b0ba608baa219d847e6eccba095b34b65794421f9a39182e84dc1aecd"
+    }
+  ]
+}

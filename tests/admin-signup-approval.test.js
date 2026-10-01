@@ -29,7 +29,10 @@ function withoutApproval(path, source) {
 
 for (const row of manifest.products) {
   test(`only approved hunks changed: ${row.path}`, () => {
-    const source = read(row.path);
+    // PR565의 별도 해시·역변환 검사가 보장하는 조회 보완만 제거하여 기존 승인 계약을 그대로 검증한다.
+    const source = read(row.path)
+      .replace(/    const memberWriteReadbackUserId = \["create", "assign", "reenroll"\][\s\S]*?      : "";\n/, "")
+      .replace("syncAdminLiveData(true, { memberWriteReadbackUserId })", "syncAdminLiveData(true)");
     assert.equal(sha(source), row.candidateSha256);
     assert.equal(sha(withoutApproval(row.path, source)), row.baseSha256);
     assert.ok(read("app/admin/index.html").includes(row.path.replace("app/admin/", "")));
