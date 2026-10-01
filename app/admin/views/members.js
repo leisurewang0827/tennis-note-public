@@ -296,7 +296,7 @@ function renderMemberManagementModal() {
   const submitLabel = action === "profile"
     ? "기본정보 저장"
     : action === "app_link"
-      ? (memberAuthConnection(member).linked ? "선택 계정으로 교체" : "앱 계정 연결")
+      ? ((memberManagementModalState.signupLinkRequests || []).length ? "선택한 요청 처리" : memberAuthConnection(member).linked ? "선택 계정으로 교체" : "앱 계정 연결")
       : `${memberManagementActionLabel(action)} 확정`;
   let actionFields = "";
 
@@ -370,6 +370,20 @@ function renderMemberManagementModal() {
     actionFields = `
       <div class="member-management-form-grid">${existingConnectionNotice}${providerSwitchControl}${directReplacementControl}</div>
       <p class="member-management-rule">새 로그인 성공 전까지 현재 연결은 유지됩니다. 같은 이름만으로 자동 연결하지 않으며, 전화번호가 일치하는 한 명만 전환할 수 있습니다.</p>`;
+    const pendingRequests = memberManagementModalState.signupLinkRequests || [];
+    if (pendingRequests.length) {
+      actionFields = `<div class="member-management-form-grid">
+        <p class="member-management-rule span-2">전화번호는 본인 확인 증거가 아닙니다. 신청자와 선택된 지점의 기존 회원이 같은 본인인지 별도로 확인한 뒤 승인하세요. 회원권·수업은 새로 만들지 않습니다.</p>
+        <label class="form-field"><span>연결 승인 대기</span><select name="signupLinkRequest" required>
+          <option value="">신청을 선택하세요</option>
+          ${pendingRequests.map((request, index) => `<option value="${escapeHtml(request.id)}">신청 ${index + 1} · ${escapeHtml(request.sourceName || "가입 정보 확인")}</option>`).join("")}
+        </select></label>
+        <label class="form-field"><span>처리</span><select name="signupLinkDecision" required>
+          <option value="">선택하세요</option><option value="approve">연결 승인</option><option value="reject">연결 거절</option>
+        </select></label>
+        <label class="span-2"><input type="checkbox" name="signupLinkBranchConfirmed" required /> 현재 선택 지점과 이 회원의 연결 요청을 확인했습니다.</label>
+      </div>`;
+    }
   } else if (isCreate) {
     actionFields = products.length && coachRoles.length ? `
       <p class="member-create-step-help"><strong>신규 회원 등록</strong> 이름·휴대전화·회원권·코치·결제만 확인하고 한 번에 저장합니다.</p>

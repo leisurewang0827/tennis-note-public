@@ -1,0 +1,47 @@
+{
+  "contractVersion": 1,
+  "privateAuthority": "972f0586c8e52dc341e03f1862105a859b518470",
+  "privateSource": "90-Dashboard/tennis-note-prototype/app.js",
+  "publicBase": "8b6480d8509120e94cc7f166b8d1ef06131df4b7",
+  "helperSha256": "4e99e568f5c02a7c1d7fa04ffd922c984eb84d106154e6d552731344e425f81a",
+  "scope": "Existing app_link modal only; no signup, registration, payment, ticket, schema, release or cache changes",
+  "featureIds": [
+    "AUTH-04",
+    "AUTH-07",
+    "BRANCH-01",
+    "NFR-02"
+  ],
+  "accessibilityCorrection": {
+    "path": "app/admin/styles.css",
+    "scope": "Public-only 44px and disabled appearance for existing signup approval modal buttons; no global button changes",
+    "baseSha256": "f418ebb8784c2ba28d9a7972be0bd5a77e38a87d8a3f65eceb82044716a8c72a",
+    "candidateSha256": "59a4fe9d01120058da76dff155b77a72144e80dac7f347adba5bc33042362e7f"
+  },
+  "products": [
+    {
+      "path": "app/admin/app.js",
+      "baseSha256": "084fdecbdbeb17d9881505301919ea9bd426c4c7e507ea4ac2bda143391b0a45",
+      "candidateSha256": "5c2e3675b16332e69bf94005cc3120a12e55287c24b1f342ed89786035cbceb1"
+    },
+    {
+      "path": "app/admin/data/member.js",
+      "baseSha256": "44edc7d76a4f2b5e875a18292894fa3853c3152e802116ec327de60b7b84026a",
+      "candidateSha256": "d71b26ede730cf0c9d102b28cfe278ef0bf76f8bc2600a7d60ba1bd316cb34c1"
+    },
+    {
+      "path": "app/admin/views/members.js",
+      "baseSha256": "9918597a18ee5438c8118a4f274975306f723b38b1262d391d06c47ca533fe1a",
+      "candidateSha256": "6bc6e6f441617e16cdb16a92ad63a73992e5f606c3c7ead71169049899a0a496"
+    },
+    {
+      "path": "app/admin/ui/member.js",
+      "baseSha256": "62a241b3cab7f346e4a976e6e3102364cf533278a3b52bfec687d5beb4bd5da7",
+      "candidateSha256": "eec614db2eddd70326e6659c40355df1b9c6d3b019565d2e93ad53dced3337fb"
+    },
+    {
+      "path": "app/admin/actions/member.js",
+      "baseSha256": "6c7e247ce99743cb71bc839b4d86829e78fd3138f33f83236e04ef7a6fa396d5",
+      "candidateSha256": "d66869cb73ca6586fbb73dfa62d13cfb442e62af29d987d0b3cc4fef2a149f70"
+    }
+  ]
+}
