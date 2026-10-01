@@ -150,6 +150,9 @@ function phoneAuthUnavailableMessage() {
 }
 
 function identityErrorMessage(error) {
+  if (String(error?.code || error?.message || "").includes("signup_link_readback_unconfirmed")) {
+    return "가입 정보는 저장됐지만 회원권 조회를 확인하지 못했습니다. 입력을 유지한 채 다시 확인해 주세요.";
+  }
   const code = normalizedIdentityErrorCode(error);
   if (code.includes("failed_to_fetch") || code.includes("networkerror") || code.includes("load_failed") || code.includes("temporarily_unavailable")) {
     return "인터넷 연결이 불안정합니다. 입력 내용은 유지되니 잠시 후 다시 저장해 주세요.";

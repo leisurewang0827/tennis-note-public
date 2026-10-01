@@ -21,7 +21,7 @@ module.exports = async ({page,modal,engine,check,workbookBytes,XLSX,parser}) => 
         proof:{complete:true,scope:"unit_dependencies",statementBudgetMs:10000,unitCount:args.units.length,expiresAt:new Date(Date.now()+300000).toISOString()},
         units:args.units.map((u,i)=>({status:p.state,unitHash:String(i+1).repeat(64),planHash:"b".repeat(64),revision:"b".repeat(64),rowCount:u.rows.length,
           newMembers:held?null:ready&&p.kind==="NEW_TICKET"?1:0,newTickets:held?null:ready&&p.kind!=="TOPUP_EXISTING"?1:0,newLessons:held?null:0,
-          verified:!held&&!ready,reversible:p.state==="APPLIED",reason:held?"SHEET_NEW_SOURCE_EVIDENCE_REQUIRED":"",
+          verified:!held&&!ready,reversible:p.state==="APPLIED",reason:held?(p.holdReason||"SHEET_NEW_SOURCE_EVIDENCE_REQUIRED"):"",
           initial:held||p.state==="NO_OP"?null:ready?{kind:p.kind,historicalReceipt:false,remainingBefore:p.kind==="TOPUP_EXISTING"?1:0,addedSessions:8,remainingAfter:p.kind==="TOPUP_EXISTING"?9:8,expiresOn:"2099-12-31",preservedLessons:0,reservedUnits:0,manualAssignment:true}:{kind:p.kind,historicalReceipt:true}}))};
     };
   });
@@ -29,9 +29,9 @@ module.exports = async ({page,modal,engine,check,workbookBytes,XLSX,parser}) => 
   wb.Sheets[parser.SHEET].G2={t:"s",v:""};
   const bytes=Buffer.from(XLSX.write(wb,{type:"buffer",bookType:"xlsx"}));
   const apply=modal.locator("[data-excel-apply]"),input=modal.locator("[data-excel-file]");
-  const start=async(kind,state="READY")=>{
+  const start=async(kind,state="READY",holdReason="")=>{
     if(await modal.isVisible()) {await modal.locator("[data-excel-close]").click();await modal.waitFor({state:"hidden"});await page.waitForFunction(()=>!history.state?.tnExcelPreview);}
-    await page.evaluate(({kind,state})=>Object.assign(window.__initial,{kind,state,applies:0,reverses:0,responseLoss:false,storageConflict:false}),{kind,state});
+    await page.evaluate(({kind,state,holdReason})=>Object.assign(window.__initial,{kind,state,holdReason,applies:0,reverses:0,responseLoss:false,storageConflict:false}),{kind,state,holdReason});
     await page.locator("#openSingleSheetPreviewButton").click();
     await input.setInputFiles({name:"synthetic-initial.xlsx",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:bytes});
     await page.waitForFunction(()=>document.querySelector("#singleSheetPreviewModal")?.dataset.batchPhase==="ready");
@@ -59,8 +59,11 @@ module.exports = async ({page,modal,engine,check,workbookBytes,XLSX,parser}) => 
   // Back discards selection; no write and no accidental reactivation.
   await page.goBack();await modal.waitFor({state:"hidden"});
   check(await page.evaluate(()=>window.__initial.applies===0),"BACK_WRITE_ZERO");
-  for(const kind of ["NEW_TICKET","ADD_TICKET"]){await start(kind);check((await modal.innerText()).includes(kind==="NEW_TICKET"?"새 회원권 등록":"다른 코치 회원권 추가"),"INITIAL_KIND_LABEL");}
+  for(const kind of ["NEW_TICKET","ADD_TICKET"]){await start(kind);check((await modal.innerText()).includes(kind==="NEW_TICKET"?"새 회원권 등록":"기존 회원에 새 회원권 추가"),"INITIAL_KIND_LABEL");}
   await start("TOPUP_EXISTING","HOLD");check(await apply.isDisabled()&&(await modal.innerText()).includes("새 등록 근거"),"SOURCE_HOLD_NO_APPLY");
+  await start("ADD_TICKET","HOLD","SHEET_SAME_PLAN_PERIOD_OVERLAP");
+  check(await apply.isDisabled()&&(await modal.innerText()).includes("잔여 회원권과 기간이 겹쳐")&&(await modal.innerText()).includes("기존 회원권은 유지"),"OVERLAP_HOLD_KOREAN_NO_APPLY");
+  check(await page.evaluate(()=>window.__initial.applies===0),"OVERLAP_HOLD_RPC_ZERO");
   await start("TOPUP_EXISTING","NO_OP");check(await apply.isDisabled()&&(await modal.innerText()).includes("이미 처리"),"NOOP_NO_APPLY");
   await start("TOPUP_EXISTING");await page.evaluate(()=>window.__initial.responseLoss=true);
   await apply.click();await apply.click();

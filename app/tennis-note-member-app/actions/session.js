@@ -220,7 +220,7 @@ function handleSummaryAction(action) {
   }
 }
 
-async function applySupabaseMemberSession(showNotice = false) {
+async function applySupabaseMemberSession(showNotice = false, options = {}) {
   const curriculumAttempt = ++curriculumSessionAttempt;
   const client = window.TennisNoteDataClient;
   if (!client?.readiness?.().ready) { memberCurriculumUI.clear(); return false; }
@@ -251,6 +251,13 @@ async function applySupabaseMemberSession(showNotice = false) {
   try {
     const current = await client.selectCurrentProfile();
     if (curriculumAttempt !== curriculumSessionAttempt) return false;
+    if (options.requireSignupReadback && (
+      !options.expectedAuthUserId || !options.expectedProfileId
+      || current?.user?.id !== options.expectedAuthUserId
+      || current?.profile?.id !== options.expectedProfileId
+      || current?.profile?.role !== "member" || current?.profile?.status !== "active"
+      || current?.profileBootstrapError
+    )) throw new Error("signup_link_readback_unconfirmed");
     if (current?.profileBootstrapError) memberCurriculumUI.clear();
     if (current?.profileBootstrapError?.code === "auth_profile_mapping_ambiguous") {
       const status = $("#memberEmailLoginStatus");
@@ -353,7 +360,7 @@ async function applySupabaseMemberSession(showNotice = false) {
     setMemberSessionRestoring(false);
 
     memberPurchaseDataLoaded = false;
-    await Promise.allSettled([
+    const initialReadback = await Promise.allSettled([
       syncMemberTicketsFromServer(profile),
       syncMemberRefundRequests(),
       syncMemberPendingPurchaseSchedulesFromServer(),
@@ -361,6 +368,9 @@ async function applySupabaseMemberSession(showNotice = false) {
       syncMemberLessonsFromServer(profile),
       syncMemberAccountDeletionRequestFromServer(profile),
     ]);
+    if (options.requireSignupReadback && [0, 4].some(index =>
+      initialReadback[index].status !== "fulfilled" || initialReadback[index].value !== true
+    )) throw new Error("signup_link_readback_unconfirmed");
     await syncLiveSchedulePolicy(currentLiveTicket()?.branchId || "");
     renderAll();
     saveSnapshot();

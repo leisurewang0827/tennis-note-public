@@ -132,6 +132,9 @@ async function requireVerifiedIdentityPhone(phone) {
   throw new Error("phone_verification_required");
 }
 
+// 메모리에서만 재시도 키를 유지한다. 개인정보를 별도 저장소에 기록하지 않는다.
+let signupProfileOperation = { fingerprint: "", key: "" };
+
 async function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender }) {
   const normalizedRealName = normalizeIdentityText(realName);
   const normalizedNickname = normalizeIdentityText(nickname);
@@ -144,22 +147,35 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
   if (!/^01[0-9]{8,9}$/u.test(normalizedPhone)) throw new Error("phone_invalid");
   if (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear()) throw new Error("birth_year_invalid");
   if (!["female", "male", "other", "prefer_not"].includes(normalizedGender)) throw new Error("gender_invalid");
-  await requireVerifiedIdentityPhone(normalizedPhone);
-
   const client = window.TennisNoteDataClient;
   if (hasLiveMemberSession() && client?.rpc) {
-    const rawResult = await retryTransientNetwork(() => client.rpc("tn_update_my_identity_profile_v3", {
-      target_real_name: normalizedRealName,
-      target_nickname: normalizedNickname,
-      target_phone: normalizedPhone,
-      target_birth_year: normalizedBirthYear,
-      target_neighborhood: normalizedNeighborhood,
-      target_gender: normalizedGender,
-      target_privacy_version: identityPrivacyVersion,
+    await requireVerifiedIdentityPhone(normalizedPhone);
+    const targetProfile = {
+      name: normalizedRealName, nickname: normalizedNickname, phoneCandidate: normalizedPhone,
+      birthYear: normalizedBirthYear, neighborhood: normalizedNeighborhood,
+      gender: normalizedGender, privacyVersion: identityPrivacyVersion,
+    };
+    // Memory-only draft/key: a lost response retries the same operation. Raw
+    // contact is never written to console, URL, analytics or a new storage key.
+    const fingerprint = JSON.stringify(targetProfile);
+    if (signupProfileOperation.fingerprint !== fingerprint) {
+      signupProfileOperation = { fingerprint, key: crypto.randomUUID() };
+    }
+    const signupAuthUserId = String(state.member?.authUserId || "");
+    const rawResult = await retryTransientNetwork(() => client.rpc("tn_save_my_signup_profile", {
+      target_profile: targetProfile,
+      target_operation_key: signupProfileOperation.key,
     }));
     const result = Array.isArray(rawResult) ? rawResult[0] : rawResult;
     if (!result?.ok || !result?.profile) throw new Error("identity_profile_update_not_confirmed");
-    applySavedIdentity(result.profile);
+    if (result.linkStatus === "linked") {
+      const restored = await applySupabaseMemberSession(false, {
+        expectedProfileId: result.profile.id,
+        expectedAuthUserId: signupAuthUserId,
+        requireSignupReadback: true,
+      });
+      if (!restored) throw new Error("signup_link_readback_unconfirmed");
+    } else applySavedIdentity(result.profile);
     return result;
   }
 

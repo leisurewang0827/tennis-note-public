@@ -236,8 +236,11 @@ async function confirmIdentityPhoneVerification() {
   }
 }
 
+let signupProfileSubmitting = false;
+
 async function submitIdentitySetup(event) {
   event.preventDefault();
+  if (signupProfileSubmitting) return;
   const form = event.currentTarget;
   const button = form.querySelector('button[type="submit"]');
   const message = $("#identitySetupMessage");
@@ -249,6 +252,7 @@ async function submitIdentitySetup(event) {
     if (message) message.textContent = "개인정보 처리방침 동의가 필요합니다.";
     return;
   }
+  signupProfileSubmitting = true;
   button.disabled = true;
   if (message) message.textContent = "가입 정보를 안전하게 저장하고 있습니다.";
   try {
@@ -267,26 +271,21 @@ async function submitIdentitySetup(event) {
     });
     $("#identitySetupModal").hidden = true;
     document.body.classList.remove("identity-setup-required");
-    if (result?.linkStatus === "linked") {
-      const restored = await applySupabaseMemberSession(false);
-      if (!restored) throw new Error("auto_link_session_refresh_failed");
-      showToast("가입 완료 · 기존 회원권과 앱 계정이 바로 연결되었습니다.");
-      return;
-    }
     renderAll();
     saveSnapshot();
-    if (result?.linkStatus === "admin_review_required") {
-      showToast("가입 완료. 기존 회원 정보는 관리자 확인 후 연결됩니다.");
-      await applyPendingOnboardingIntent();
-      return;
-    }
-    showToast("가입 정보가 저장되었습니다.");
+    showToast(result.linkStatus === "linked"
+      ? "가입 완료. 연결된 회원권과 수업 정보를 확인했습니다."
+      : "가입 완료. 회원 정보 연결은 관리자 확인 후 처리됩니다.");
     await applyPendingOnboardingIntent();
   } catch (error) {
     const errorMessage = identityErrorMessage(error);
+    if (String(error?.message || "").includes("signup_link_readback_unconfirmed")) {
+      $("#identitySetupModal").hidden = false;
+    }
     if (message) message.textContent = errorMessage;
     setNicknameStatus("identityNicknameStatus", errorMessage, "unavailable");
   } finally {
+    signupProfileSubmitting = false;
     button.disabled = false;
   }
 }
