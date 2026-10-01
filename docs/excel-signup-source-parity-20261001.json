@@ -1,0 +1,43 @@
+{
+  "contractVersion": 1,
+  "privateSource": "972f0586c8e52dc341e03f1862105a859b518470",
+  "publicBase": "1a8064e8cee69e78b19cf8dcd02c7d3eb9b12eff",
+  "scope": "local only; no release/cache change; signup admin-review UI not ported",
+  "normalization": "CRLF to LF. Functions include signature and closing brace. Session retains public ordering of rememberRecentLoginProvider before coachModeAllowed; only signup readback hunks ported.",
+  "functions": [
+    {
+      "name": "persistIdentityProfile",
+      "path": "app/tennis-note-member-app/data/auth.js",
+      "sha256": "3e87bf747977506e8c5a9dc2524e1bec8cb75e0b4a41c4bc6cb85ad1491d05cb"
+    },
+    {
+      "name": "submitIdentitySetup",
+      "path": "app/tennis-note-member-app/actions/enrollment.js",
+      "sha256": "279bf40ff8a92302dbe2734ec2229b440c9af9ab602027cdab4d2b576fad3b67"
+    },
+    {
+      "name": "identityErrorMessage",
+      "path": "app/tennis-note-member-app/domain/identity.js",
+      "sha256": "94e4189e7b9dd7abc34274472b22d99e711e4ef80a5eaf350cf88f23bab3721d"
+    },
+    {
+      "name": "applySupabaseMemberSession",
+      "path": "app/tennis-note-member-app/actions/session.js",
+      "sha256": "b5153f5e981f228b082118c723869c1ff3874f43dc44910369117a2a7c5d0288"
+    }
+  ],
+  "shared": [
+    {
+      "path": "app/shared/tennisnote-single-sheet-worker.js",
+      "sha256": "285bec097f28aa7ce732fda58237ce64407185f224b620cce4f9ca361a278ab9"
+    },
+    {
+      "path": "app/shared/tennisnote-single-sheet-preview-ui.js",
+      "sha256": "32468622b17f0c46e958005140beea9b850a92d9e55c87a3d904b6d1e95b2251"
+    },
+    {
+      "path": "app/shared/tennisnote-single-sheet-snapshot.js",
+      "sha256": "bddc11bf0d1b13fec023d2e56de1c276403ebf5b19b19d23c632bbfd03a8aa72"
+    }
+  ]
+}

@@ -119,7 +119,8 @@
       }
       // WeakMap parse/plan identity stays in this Worker. Only safe presentation is cloned.
       if (parsed.errors.length || !snapshot?.context) {
-        root.postMessage({ id, type: "result", result: { canApply: false, errors: parsed.errors, snapshotErrors: snapshot?.errors || ["SNAPSHOT_INCOMPLETE"],
+        // 파일 오류로 서버 조회 전 중단된 경우 조회 실패를 만들지 않는다. 실제 조회 오류는 보존한다.
+        root.postMessage({ id, type: "result", result: { canApply: false, errors: parsed.errors, snapshotErrors: snapshot?.errors || (parsed.errors.length ? [] : ["SNAPSHOT_INCOMPLETE"]),
           rows: parsed.rows.map(r => ({ rowNumber: r.rowNumber, status: "HOLD", reasons: r.reasons })), plans: [], summary: null } });
       } else {
         stage = "PREVIEW_PLAN";

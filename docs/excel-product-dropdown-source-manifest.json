@@ -22,7 +22,9 @@
     {
       "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-preview-ui.js",
       "publicPath": "app/shared/tennisnote-single-sheet-preview-ui.js",
-      "gitBlob": "09fbfc57bcebee33c9cd6e12e8f3bf5c76aaa180"
+      "gitBlob": "c78dd256f0724cbeae52238250694103291034aa",
+      "privateMerge": "972f0586c8e52dc341e03f1862105a859b518470",
+      "change": "새 회원권 안내 문구만 갱신. 상품목록 생성·검증 계약은 기존 원본 그대로 보존."
     },
     {
       "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-transport.js",

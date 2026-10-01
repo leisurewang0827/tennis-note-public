@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
+const vm = require("node:vm");
 const snapshot = require("../app/shared/tennisnote-single-sheet-snapshot.js");
 const zipGuard = require("../app/shared/tennisnote-single-sheet-worker.js");
 const parser = require("../app/shared/tennisnote-single-sheet-import.js");
@@ -50,6 +51,32 @@ async function main() {
   const run = async (name, fn) => { await fn(); scenarios++; process.stdout.write(`PASS ${name}\n`); };
   const reject = async (bytes, code) => { let result; try { await zipGuard.boundedZip(bytes); } catch (e) { result = e.message; } check(result === code, "ZIP_REJECTION"); };
   const now = new Date().toISOString();
+  await run("worker-parse-error-versus-coverage-proof", async () => {
+    const source = fs.readFileSync(path.join(__dirname, "../app/shared/tennisnote-single-sheet-worker.js"), "utf8");
+    const execute = async (kind, inputSnapshot, serverProtocol) => {
+      const messages = [];
+      const worker = vm.createContext({ Uint8Array, DataView, TextDecoder, ReadableStream, DecompressionStream,
+        crypto: require("node:crypto").webcrypto, location: { origin: "https://tennisnote-admin.pages.dev", hostname: "tennisnote-admin.pages.dev" },
+        importScripts() {}, XLSX, TennisNoteSingleSheetImport: parser,
+        postMessage(message) { messages.push(message); }, close() {} });
+      vm.runInContext(source, worker);
+      await worker.onmessage({ data: { id: 1, bytes: workbookBytes(kind), snapshot: inputSnapshot, serverProtocol, now } });
+      check(messages.length === 1, "WORKER_ONE_RESULT");
+      return messages[0];
+    };
+    const blank = await execute("empty", null, "scoped-postgrest-import/2");
+    check(blank.type === "result" && blank.result.errors.join() === "EMPTY_DATA" && !blank.result.canApply, "REMOTE_EMPTY_BLOCKED");
+    check(blank.result.snapshotErrors.length === 0, "REMOTE_EMPTY_NO_FABRICATED_COVERAGE");
+    const valid = await execute("valid", null, "scoped-postgrest-import/2");
+    check(valid.type === "remote-preview-units" && valid.payload.units.length === 1, "REMOTE_VALID_AUTHORITY_UNCHANGED");
+    const missing = await execute("valid", null);
+    check(missing.type === "result" && missing.result.snapshotErrors.includes("SNAPSHOT_INCOMPLETE") && !missing.result.canApply, "LEGACY_MISSING_COVERAGE_BLOCKED");
+    const incomplete = snapshot.adapt({ ...packet(), reads: {} }, expected, now);
+    const held = await execute("valid", incomplete);
+    check(held.result.snapshotErrors.includes("SNAPSHOT_INCOMPLETE") && !held.result.canApply, "LEGACY_ACTUAL_INCOMPLETE_BLOCKED");
+    const invalidAndIncomplete = await execute("empty", incomplete);
+    check(invalidAndIncomplete.result.errors.includes("EMPTY_DATA") && invalidAndIncomplete.result.snapshotErrors.includes("SNAPSHOT_INCOMPLETE"), "EXPLICIT_COVERAGE_FAILURE_PRESERVED");
+  });
   await run("snapshot-explicit-proof-and-sql-map", async () => {
     const p = packet(), good = snapshot.adapt(p, expected, now);
     check(good.errors.length === 0 && good.context && good.canApply === false, "COMPLETE_ENVELOPE");

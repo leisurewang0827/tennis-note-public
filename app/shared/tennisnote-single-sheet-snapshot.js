@@ -90,6 +90,7 @@
       members, coaches, products, tickets, reservations, availability, closures, receipts: packet.receipts } };
   }
   const SERVER_REASONS = Object.freeze({
+    SHEET_SAME_PLAN_PERIOD_OVERLAP: "같은 상품·코치의 잔여 회원권과 기간이 겹쳐 등록을 보류했습니다. 기존 회원권은 유지됩니다. 시작일과 기존 만료일을 확인해 주세요.",
     SHEET_INITIAL_IMPORT_OFF: "초기 등록·횟수 추가 사용 범위가 아직 허용되지 않았습니다.",
     SHEET_NEW_SOURCE_EVIDENCE_REQUIRED: "기존 횟수 추가 이력이 있습니다. 새 등록 근거를 확인하기 전에는 다시 추가하지 않습니다.",
     SHEET_SOURCE_PROVENANCE_REVIEW: "기존 등록 근거와 겹칠 수 있어 추가하지 않습니다. 원본 이력을 확인해 주세요.",

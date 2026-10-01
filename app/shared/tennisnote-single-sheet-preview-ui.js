@@ -205,7 +205,7 @@
     const initialText = row => {
       const d = row.initial;
       if (!d) return row.state === "NO_OP" || row.status === "NO_OP" ? "이미 처리된 원본 · 추가 등록 없음. 현재 잔여는 회원권에서 확인해 주세요." : "";
-      const label = { NEW_TICKET: "새 회원권 등록", ADD_TICKET: "다른 코치 회원권 추가 · 기존권 보존", TOPUP_EXISTING: "기존 회원권 횟수 추가" }[d.kind];
+      const label = { NEW_TICKET: "새 회원권 등록", ADD_TICKET: "기존 회원에 새 회원권 추가 · 기존권 보존", TOPUP_EXISTING: "기존 회원권 횟수 추가" }[d.kind];
       if (d.historicalReceipt) return `${label} 이력 · 추가 등록 없음. 현재 잔여는 회원권에서 다시 확인해 주세요.`;
       return `${label} · 잔여 ${d.remainingBefore}회 + 추가 ${d.addedSessions}회 = ${d.remainingAfter}회 · 만료 ${d.expiresOn} · 기존 수업 ${d.preservedLessons}개 보존 · ${d.manualAssignment ? "시간 수동 배정" : `새 수업 ${row.newLessons}개`}`;
     };
