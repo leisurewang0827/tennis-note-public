@@ -13,11 +13,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.524",
-    "release_id": "2026.09.30.02",
-    "deployed_at": "2026-09-30T17:35:57+09:00",
-    "member_cache": "tennis-note-member-pwa-v563",
-    "coach_cache": "tennis-note-coach-mode-v536"
+    "version": "1.0.525",
+    "release_id": "2026.10.01.01",
+    "deployed_at": "2026-10-01T23:43:13+09:00",
+    "member_cache": "tennis-note-member-pwa-v564",
+    "coach_cache": "tennis-note-coach-mode-v537"
   },
   "allowed_differences": [
     "app version literals",
