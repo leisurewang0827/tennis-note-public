@@ -934,8 +934,11 @@ async function submitMemberManagementForm(event) {
     }
 
     const requiresFullRefresh = ["create", "assign", "reenroll", "close", "force_delete", "permanent_delete"].includes(action);
+    const memberWriteReadbackUserId = ["create", "assign", "reenroll"].includes(action)
+      ? String(normalizedRpcResult(result).userId || managementPayload?.userId || member?.serverUserId || "")
+      : "";
     const synced = requiresFullRefresh
-      ? await syncAdminLiveData(true)
+      ? await syncAdminLiveData(true, { memberWriteReadbackUserId })
       : await loadAdminMemberDetail(member, { force: true, renderResult: false });
     if (!synced) throw new Error("admin_live_refresh_failed_after_write");
     if (action === "reenroll" && reenrollVerificationPayload) {
