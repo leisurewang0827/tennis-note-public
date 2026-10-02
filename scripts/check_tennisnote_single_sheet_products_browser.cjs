@@ -31,6 +31,7 @@ async function run({ diagnosticOnly = false } = {}) {
         URL.createObjectURL = blob => { state.downloads++; blob.arrayBuffer().then(b => { state.bytes = new Uint8Array(b); }); return original(blob); };
         window.TennisNoteExcelPreviewUI.bind({ button: document.getElementById("open"), canOpen: () => state.allowed, getPreviewTransport: async () => ({
           enabled: true, isReady: () => state.ready, templateProducts: async () => { state.reads++; if (state.mode === "error") throw Error("RAW_PRIVATE_ERROR"); if (state.mode === "hold") await new Promise(resolve => { state.held = resolve; }); return state.s; },
+          templateCoaches: async () => { const coach = { id: "synthetic-coach", branch_id: state.s.branchId, display_name: "합성 코치", status: "approved", employment_status: "active", archived_at: null, deleted_at: null }; return { complete: true, branchId: state.mode === "coachBranch" ? "other" : state.s.branchId, coaches: state.mode === "coachMissing" ? [] : state.mode === "coachDuplicate" ? [coach, { ...coach, id: "second" }] : [coach] }; },
         }) });
       }, snapshot());
       if (diagnosticOnly) await page.evaluate(() => {
@@ -51,6 +52,13 @@ async function run({ diagnosticOnly = false } = {}) {
       }
       await page.waitForFunction(() => window.__catalog.bytes && document.querySelector("[data-excel-status]").textContent.includes("다운로드 완료"));
       check(await page.evaluate(async () => { const r = await TennisNoteSingleSheetImport.readFile(__catalog.bytes, XLSX); return r.errors.join() === "EMPTY_DATA" && __catalog.downloads === 1 && __catalog.reads === 1; }), "REAL_BROWSER_XLSX_REIMPORT");
+      check(await page.evaluate(() => { const w = XLSX.read(__catalog.bytes, { type: "array" }); return w.Workbook.Names.some(n => n.Name === "TN_CoachOptions") && w.Workbook.Names.some(n => n.Name === "TN_ProductOptions"); }), "REAL_BROWSER_BOTH_DROPDOWNS");
+      for (const mode of ["coachMissing", "coachDuplicate", "coachBranch"]) {
+        await page.evaluate(mode => { __catalog.mode = mode; }, mode);
+        await button.click(); await page.waitForFunction(() => !document.querySelector("[data-excel-template]").disabled);
+        check(await page.evaluate(() => __catalog.downloads === 1 && !document.querySelector("[data-excel-status]").textContent.includes("다운로드 완료")), "COACH_UNAVAILABLE_NO_DOWNLOAD");
+      }
+      await page.evaluate(() => { __catalog.mode = "ok"; });
       await page.evaluate(() => { __catalog.s.products.push({ ...__catalog.s.products[0], id: "duplicate" }); });
       await button.click(); await page.waitForFunction(() => !document.querySelector("[data-excel-template]").disabled);
       check(await page.evaluate(() => __catalog.downloads === 1 && document.querySelector("[data-excel-status]").textContent.includes("같은 이름")), "DUPLICATE_NO_DOWNLOAD");

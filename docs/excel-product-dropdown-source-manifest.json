@@ -1,14 +1,15 @@
 {
   "contract": "excel-product-dropdown-source/1",
   "privateRepo": "leisurewang0827/app-automation-vault",
-  "privateMerge": "161b58485ece9b1da2e04d569f8f22ccf1383e7f",
-  "privateFeature": "74a4b9f401d85f2bd2d6c1cf7b9694f58ace0cb8",
-  "privatePR": 563,
+  "privateMerge": "4723066ef761815c3d6020e3eac530cf7fc649a9",
+  "privateFeature": "795f33054e7d3253aadc155c739e73f1a35c69dc",
+  "privatePR": 567,
   "privateCIRuns": [
-    36688878829,
-    36689212332
+    36983168385,
+    36983168399,
+    36986618164
   ],
-  "publicBase": "ec27b039807aab61a609aaf8f114aa0223089513",
+  "publicBase": "e6980f1d6815d43396d2714a2a55151cb7dcf8e0",
   "allowedProductKinds": [
     "regular",
     "group"
@@ -17,19 +18,19 @@
     {
       "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-import.js",
       "publicPath": "app/shared/tennisnote-single-sheet-import.js",
-      "gitBlob": "811ea6c1102ea09d289278f797541df7464cf3e8"
+      "gitBlob": "372e23eddcea4926997f7c29deb6c3593a242897"
     },
     {
       "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-preview-ui.js",
       "publicPath": "app/shared/tennisnote-single-sheet-preview-ui.js",
-      "gitBlob": "c78dd256f0724cbeae52238250694103291034aa",
-      "privateMerge": "972f0586c8e52dc341e03f1862105a859b518470",
-      "change": "새 회원권 안내 문구만 갱신. 상품목록 생성·검증 계약은 기존 원본 그대로 보존."
+      "gitBlob": "73bb13f75e1679a00213ee4ed4e599da9936d861",
+      "privateMerge": "4723066ef761815c3d6020e3eac530cf7fc649a9",
+      "change": "승인된 상품·코치 양식 및 안전 안내 전체 source 일치."
     },
     {
       "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-transport.js",
       "publicPath": "app/shared/tennisnote-single-sheet-transport.js",
-      "gitBlob": "16a6b25fd03e8bddf4a2bd7c60c0b355b5aa2d6b"
+      "gitBlob": "fd8b38e7b0b8ae68a898ead3f6bd3d5ec4dfa3bc"
     }
   ],
   "testAdaptation": "Public filesystem paths only; server SQL kind assertion is bound to this private-CI-verified contract instead of copying private migrations. Other namespace, parser, scope, pagination and browser assertions are preserved.",

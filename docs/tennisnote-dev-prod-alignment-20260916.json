@@ -13,11 +13,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.525",
-    "release_id": "2026.10.01.01",
-    "deployed_at": "2026-10-01T23:43:13+09:00",
-    "member_cache": "tennis-note-member-pwa-v564",
-    "coach_cache": "tennis-note-coach-mode-v537"
+    "version": "1.0.526",
+    "release_id": "2026.10.02.01",
+    "deployed_at": "2026-10-02T18:08:16+09:00",
+    "member_cache": "tennis-note-member-pwa-v565",
+    "coach_cache": "tennis-note-coach-mode-v538"
   },
   "allowed_differences": [
     "app version literals",
@@ -909,10 +909,10 @@
       "app/shared/tennisnote-schedule-lanes.js": "84a6a25297c2f6a199b726a981ccedb9174df2c06588c1cabf15734a1651ee91",
       "app/shared/tennisnote-schedule-revision.js": "bf21215aa4205943b2bf63f44cfaa8c99e4efd2319db3eef5a45d8fc7134e93f",
       "app/shared/tennisnote-single-sheet-batch.js": "9997fe2d37a7a6533b02eed8bfeb944d2993b0808b3af1cee9f437aedb7ce8c7",
-      "app/shared/tennisnote-single-sheet-import.js": "c6decc66b0a837c7a1e96a34fd62527afa6498f2b444be4388a872767550792d",
-      "app/shared/tennisnote-single-sheet-preview-ui.js": "32468622b17f0c46e958005140beea9b850a92d9e55c87a3d904b6d1e95b2251",
+      "app/shared/tennisnote-single-sheet-import.js": "fcb3381a30a9fd0aa69f14edf1c4615daeda69225066fcfaa7e6489b1dc078f8",
+      "app/shared/tennisnote-single-sheet-preview-ui.js": "d3e0485856a845e790e4804b5f74390989c9559e3784fde111b9359b6d80e4b5",
       "app/shared/tennisnote-single-sheet-snapshot.js": "bddc11bf0d1b13fec023d2e56de1c276403ebf5b19b19d23c632bbfd03a8aa72",
-      "app/shared/tennisnote-single-sheet-transport.js": "6d1d5dbd534154437b5a5395dbe74d41d6d62fe21d1f9558abd30e4ef5bf19bf",
+      "app/shared/tennisnote-single-sheet-transport.js": "dceb20df58d1c10c15ce47947e54468ee625895cd977820c32f3d2dc04187b78",
       "app/shared/tennisnote-single-sheet-worker.js": "285bec097f28aa7ce732fda58237ce64407185f224b620cce4f9ca361a278ab9",
       "app/shared/tennisnote-ticket-policy-history.js": "20b38f9a0bb0e1109c5b87bb17799b323860f7c0f7f8a69d32d24c22d4d10e96",
       "app/shared/tennisnote-ticket-state.js": "09ba7b7d5f238f080daadde1ac31d1298c2abc5ced20df5c2eabaa3ca177b2e4",

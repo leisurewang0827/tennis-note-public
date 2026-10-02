@@ -33,7 +33,9 @@
     },
     {
       "path": "app/shared/tennisnote-single-sheet-preview-ui.js",
-      "sha256": "32468622b17f0c46e958005140beea9b850a92d9e55c87a3d904b6d1e95b2251"
+      "sha256": "d3e0485856a845e790e4804b5f74390989c9559e3784fde111b9359b6d80e4b5",
+      "privateSource": "4723066ef761815c3d6020e3eac530cf7fc649a9",
+      "supersededBy": "excel-onboarding-a-source-parity-20261002.json"
     },
     {
       "path": "app/shared/tennisnote-single-sheet-snapshot.js",

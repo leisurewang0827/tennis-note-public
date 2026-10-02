@@ -5,6 +5,11 @@
   const DEADLINE = 10000;
   let templateDependenciesPromise = null;
   const reasons = {
+    SHEET_PRODUCT_SESSION_MISMATCH: "새 회원권의 총횟수가 선택한 상품의 기본 횟수와 다릅니다. 맞는 상품을 선택해 주세요. 기존권 증회·별도 이관은 이 양식으로 자동 처리하지 않습니다.",
+    TEMPLATE_COACHES_REQUIRED: "현재 지점에 등록 가능한 코치를 확인할 수 없습니다. 코치 승인·재직 상태를 확인해 주세요.",
+    TEMPLATE_COACHES_INVALID: "현재 지점의 코치 목록을 확인하지 못해 양식을 만들지 않았습니다.",
+    TEMPLATE_COACHES_AMBIGUOUS: "현재 지점에 같은 표시명의 코치가 여러 명입니다. 관리자 코치 설정에서 구분한 뒤 양식을 받아 주세요.",
+    TEMPLATE_COACHES_LIMIT: "코치 목록이 양식의 안전 한도를 초과해 다운로드하지 않았습니다.",
     PRODUCT_CATALOG_UNSAFE: "상품목록 또는 드롭다운 참조가 기본 양식과 다릅니다. 양식을 다시 받아 주세요.",
     TEMPLATE_PRODUCTS_AMBIGUOUS: "현재 지점에 같은 이름의 활성 상품이 여러 개 있어 양식을 만들지 않았습니다. 상품명을 구분한 뒤 다시 받아 주세요.",
     TEMPLATE_PRODUCTS_REQUIRED: "현재 지점의 활성 상품 목록을 확인할 수 없습니다. 관리자 로그인·지점을 확인해 주세요.",
@@ -178,7 +183,11 @@
         await ensureTemplateDependencies();
         const transport = await options.getPreviewTransport?.();
         if (!transport?.enabled || !transport.isReady?.() || typeof transport.templateProducts !== "function") throw new Error("TEMPLATE_PRODUCTS_REQUIRED");
+        if (typeof transport.templateCoaches !== "function") throw new Error("TEMPLATE_COACHES_REQUIRED");
         const snapshot = await transport.templateProducts();
+        const coachSnapshot = await transport.templateCoaches();
+        if (!coachSnapshot?.complete || coachSnapshot.branchId !== snapshot.branchId) throw new Error("TARGET_OR_REVISION_MISMATCH");
+        snapshot.coaches = coachSnapshot.coaches;
         if (id !== generation || backdrop.hidden || options.canOpen?.() !== true) return;
         if (!transport.isReady()) throw new Error("TARGET_OR_REVISION_MISMATCH");
         const api = root.TennisNoteSingleSheetImport;
@@ -190,7 +199,7 @@
         const link = document.createElement("a"); link.href = url; link.download = api.TEMPLATE_FILE_NAME;
         document.body.append(link); link.click(); link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        status.textContent = "양식 다운로드 완료 · 회원등록의 회원권 칸에서 상품을 선택하세요. 상품목록은 참조용이며 연락처는 앞자리 0을 보존하는 텍스트 형식입니다.";
+        status.textContent = "양식 다운로드 완료 · 회원등록의 코치·회원권 칸에서 현재 지점 목록을 선택하세요. 목록은 다운로드 시점 기준이며 등록 전 서버가 다시 확인합니다. 연락처는 앞자리 0을 보존하는 텍스트 형식입니다.";
       } catch (error) {
         if (id === generation && !backdrop.hidden) status.textContent = reasons[error?.message] || "엑셀 양식을 만들지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.";
       } finally {
