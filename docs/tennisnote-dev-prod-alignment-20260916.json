@@ -13,11 +13,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.521",
-    "release_id": "2026.09.30.01",
-    "deployed_at": "2026-09-30T21:44:59+09:00",
-    "member_cache": "tennis-note-member-pwa-v560",
-    "coach_cache": "tennis-note-coach-mode-v533"
+    "version": "1.0.522",
+    "release_id": "2026.10.02.01",
+    "deployed_at": "2026-10-02T01:38:14+09:00",
+    "member_cache": "tennis-note-member-pwa-v561",
+    "coach_cache": "tennis-note-coach-mode-v534"
   },
   "allowed_differences": [
     "app version literals",
@@ -818,8 +818,8 @@
     "normalized_sha256_by_path": {
       "app/admin/actions/billing.js": "59f88f633a290e7f4c9713567bf046e31d35114b69b762f03839d75c71036b6f",
       "app/admin/actions/coach.js": "812454fa198ef90c38f02471573449f3263d3dcf4f1992658cf3f3fc1a9e8d49",
-      "app/admin/actions/common.js": "5867e1a138e0949812bd1f9c74b675352c7531b44f6e14a0d2205ff14baf3869",
-      "app/admin/actions/member.js": "6c7e247ce99743cb71bc839b4d86829e78fd3138f33f83236e04ef7a6fa396d5",
+      "app/admin/actions/common.js": "c405418b0ba608baa219d847e6eccba095b34b65794421f9a39182e84dc1aecd",
+      "app/admin/actions/member.js": "74bf94c3a0726bd932ff5dfb4580d44b0d6f72b03d7e5adace24a99a511ef391",
       "app/admin/actions/notice.js": "2ee953be508a2686b983fc611e69875333afd495411cbca868e0de3229ac86bc",
       "app/admin/actions/report.js": "25ecce951e4dd8a1d56cd67d288defd7572bfa1a3b6f96d0c459550250112eee",
       "app/admin/actions/schedule.js": "28171b96e0d6d3ebff1ed1c0f1b4bc71b7b53dee1210af8630dbd484cbae9c97",
