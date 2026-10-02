@@ -11,6 +11,7 @@
   const HEADERS = Object.freeze(["회원명", "연락처", "코치", "회원권", "시작일", "총횟수", "사용횟수", "요일1", "시간1", "요일2", "시간2", "요일3", "시간3", "그룹코드"]);
   const TEMPLATE_FILE_NAME = "tennis-note-member-ticket-schedule-import.xlsx";
   const PRODUCT_SHEET = "상품목록", PRODUCT_NAME = "TN_ProductOptions", PRODUCT_LIMIT = 500;
+  const COACH_NAME = "TN_CoachOptions";
   const LIMITS = Object.freeze({ rows: 500, physicalRows: 5001, bytes: 5 * 1024 * 1024, cells: 70014, sessions: 1000, horizonDays: 1096 });
   const DAY = 86400000;
   const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -77,6 +78,18 @@
     }
     return names;
   }
+  function coachNames(snapshot) {
+    if (!snapshot?.complete || !snapshot.branchId || !Array.isArray(snapshot.coaches) || !snapshot.coaches.length || snapshot.coaches.length > PRODUCT_LIMIT) fail("TEMPLATE_COACHES_REQUIRED");
+    const names = [], ids = new Set();
+    for (const c of snapshot.coaches) {
+      if (!c || c.branch_id !== snapshot.branchId || c.status !== "approved" || c.employment_status !== "active" || c.archived_at != null || c.deleted_at != null || typeof c.id !== "string" || !c.id || ids.has(c.id)) fail("TEMPLATE_COACHES_INVALID");
+      const name = typeof c.display_name === "string" ? text(c.display_name) : "";
+      if (!name || name.length > 160 || /[\p{Cc}\p{Cf}<>]/u.test(name) || /^[=+@]/.test(name)) fail("TEMPLATE_COACHES_INVALID");
+      if (names.includes(name)) fail("TEMPLATE_COACHES_AMBIGUOUS");
+      ids.add(c.id); names.push(name);
+    }
+    return names;
+  }
   function buildTemplateWorkbook(xlsx, snapshot) {
     if (typeof xlsx?.utils?.book_new !== "function" || typeof xlsx?.utils?.aoa_to_sheet !== "function" || typeof xlsx?.utils?.book_append_sheet !== "function") fail("XLSX_WRITER_REQUIRED");
     const workbook = xlsx.utils.book_new();
@@ -89,10 +102,13 @@
     xlsx.utils.book_append_sheet(workbook, sheet, SHEET);
     if (snapshot !== undefined) {
       const names = productNames(snapshot);
-      const catalog = xlsx.utils.aoa_to_sheet([["회원권"], ...names.map(name => [name])]);
-      catalog["!cols"] = [{ wch: 48 }];
+      const coaches = snapshot.coaches === undefined ? null : coachNames(snapshot);
+      const catalogRows = coaches ? [["회원권", "코치"], ...Array.from({ length: Math.max(names.length, coaches.length) }, (_, i) => [names[i] ?? null, coaches[i] ?? null])] : [["회원권"], ...names.map(name => [name])];
+      const catalog = xlsx.utils.aoa_to_sheet(catalogRows);
+      catalog["!cols"] = coaches ? [{ wch: 48 }, { wch: 24 }] : [{ wch: 48 }];
       xlsx.utils.book_append_sheet(workbook, catalog, PRODUCT_SHEET);
       workbook.Workbook = { Names: [{ Name: PRODUCT_NAME, Ref: `'${PRODUCT_SHEET}'!$A$2:$A$${names.length + 1}` }] };
+      if (coaches) workbook.Workbook.Names.push({ Name: COACH_NAME, Ref: `'${PRODUCT_SHEET}'!$B$2:$B$${coaches.length + 1}` });
     }
     return workbook;
   }
@@ -107,7 +123,8 @@
     if (!entry) fail("TEMPLATE_STRUCTURE_INVALID");
     const source = new TextDecoder("utf-8", { fatal: true }).decode(entry.content);
     if (!source.endsWith("</worksheet>") || source.split("</sheetData>").length !== 2 || /dataValidation/.test(source)) fail("TEMPLATE_STRUCTURE_INVALID");
-    const validation = `<dataValidations count="1"><dataValidation type="list" allowBlank="1" showErrorMessage="1" errorStyle="stop" sqref="D2:D501"><formula1>${PRODUCT_NAME}</formula1></dataValidation></dataValidations>`;
+    const coachValidation = snapshot.coaches === undefined ? "" : `<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorStyle="stop" sqref="C2:C501"><formula1>${COACH_NAME}</formula1></dataValidation>`;
+    const validation = `<dataValidations count="${coachValidation ? 2 : 1}"><dataValidation type="list" allowBlank="1" showErrorMessage="1" errorStyle="stop" sqref="D2:D501"><formula1>${PRODUCT_NAME}</formula1></dataValidation>${coachValidation}</dataValidations>`;
     // OOXML order: validation precedes ignoredErrors/page options, not last.
     xlsx.CFB.utils.cfb_add(archive, "Root Entry/xl/worksheets/sheet1.xml", new TextEncoder().encode(source.replace("</sheetData>", "</sheetData>" + validation)));
     return new Uint8Array(xlsx.CFB.write(archive, { type: "array", fileType: "zip", compression: false }));
@@ -174,23 +191,36 @@
       const catalog = workbook.Sheets[PRODUCT_SHEET];
       if (!catalog || catalog["!merges"]?.length || catalog["!rows"]?.some(r => r?.hidden) || catalog["!cols"]?.some(c => c?.hidden)) return false;
       const cells = Object.keys(catalog).filter(k => !k.startsWith("!"));
-      if (cells.length < 2 || cells.length > PRODUCT_LIMIT + 1) return false;
-      const names = [];
-      for (let i = 0; i < cells.length; i++) {
-        const cell = catalog[`A${i + 1}`];
-        if (!cell || cell.t !== "s" || unsafeCell(cell) || typeof cell.v !== "string" || cell.v !== text(cell.v) || !cell.v || cell.v.length > 160 || /[\p{Cc}\p{Cf}<>]/u.test(cell.v) || /^[=+@]/.test(cell.v)) return false;
-        if (i === 0) { if (cell.v !== "회원권") return false; }
-        else { if (names.includes(cell.v)) return false; names.push(cell.v); }
-      }
       const defined = workbook.Workbook?.Names;
-      if (defined?.length !== 1 || defined[0].Name !== PRODUCT_NAME || defined[0].Ref !== `'${PRODUCT_SHEET}'!$A$2:$A$${names.length + 1}` || Object.keys(defined[0]).some(k => !["Name", "Ref"].includes(k))) return false;
+      if (!Array.isArray(defined) || ![1, 2].includes(defined.length)) return false;
+      const columns = [{ column: "A", header: "회원권", name: PRODUCT_NAME, input: "D2:D501" }];
+      if (defined.length === 2) columns.push({ column: "B", header: "코치", name: COACH_NAME, input: "C2:C501" });
+      if (cells.length < columns.length * 2 || cells.length > columns.length * (PRODUCT_LIMIT + 1) || cells.some(k => !columns.some(c => new RegExp(`^${c.column}[1-9]\\d*$`).test(k)))) return false;
+      for (let n = 0; n < columns.length; n++) {
+        const c = columns[n], columnCells = cells.filter(k => k.startsWith(c.column));
+        if (columnCells.length < 2 || columnCells.length > PRODUCT_LIMIT + 1) return false;
+        const names = [];
+        for (let i = 0; i < columnCells.length; i++) {
+          const cell = catalog[`${c.column}${i + 1}`];
+          if (!cell || cell.t !== "s" || unsafeCell(cell) || typeof cell.v !== "string" || cell.v !== text(cell.v) || !cell.v || cell.v.length > 160 || /[\p{Cc}\p{Cf}<>]/u.test(cell.v) || /^[=+@]/.test(cell.v)) return false;
+          if (i === 0) { if (cell.v !== c.header) return false; }
+          else { if (names.includes(cell.v)) return false; names.push(cell.v); }
+        }
+        if (defined[n].Name !== c.name || defined[n].Ref !== `'${PRODUCT_SHEET}'!$${c.column}$2:$${c.column}$${names.length + 1}` || Object.keys(defined[n]).some(k => !["Name", "Ref"].includes(k))) return false;
+      }
       if (!HEADERS.every((h, i) => { const c = workbook.Sheets[SHEET][`${String.fromCharCode(65 + i)}1`]; return c && !unsafeCell(c) && text(c.v).replace(/\s*\*$/, "") === h; })) return false;
       // Require raw package proof: the reader drops validation/extension XML.
       const sheetNS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
       const book = packageXml(xmlText(workbook, "xl/workbook.xml"), "workbook", sheetNS);
       const rels = packageXml(xmlText(workbook, "xl/_rels/workbook.xml.rels"), "Relationships", "http://schemas.openxmlformats.org/package/2006/relationships");
       const rawNames = [...book.matchAll(/<definedName\s+([^<>]*)>([^<>]*)<\/definedName>/g)];
-      if (rawNames.length !== 1 || JSON.stringify(xmlAttrs(rawNames[0][1])) !== `{"name":"${PRODUCT_NAME}"}` || rawNames[0][2].replace(/&apos;/g, "'") !== defined[0].Ref || /<definedName\b/.test(book.replace(rawNames[0][0], ""))) return false;
+      if (rawNames.length !== columns.length) return false;
+      let bookWithoutNames = book;
+      for (let i = 0; i < rawNames.length; i++) {
+        if (JSON.stringify(xmlAttrs(rawNames[i][1])) !== `{"name":"${columns[i].name}"}` || rawNames[i][2].replace(/&apos;/g, "'") !== defined[i].Ref) return false;
+        bookWithoutNames = bookWithoutNames.replace(rawNames[i][0], "");
+      }
+      if (/<definedName\b/.test(bookWithoutNames)) return false;
       const sheets = [...book.matchAll(/<sheet\s+([^<>]*?)\/?\s*>/g)].map(m => xmlAttrs(m[1]));
       if (sheets.length !== 2 || sheets[0].name !== SHEET || sheets[1].name !== PRODUCT_SHEET) return false;
       const relationships = [...rels.matchAll(/<Relationship\s+([^<>]*?)\/?\s*>/g)].map(m => xmlAttrs(m[1]));
@@ -208,11 +238,16 @@
       const catalogXml = packageXml(xmlText(workbook, paths[1]), "worksheet", sheetNS);
       if (/<(?:\w+:)?(?:extLst|AlternateContent|drawing|legacyDrawing|oleObjects|controls|hyperlinks|tableParts)\b/i.test(inputXml + catalogXml) || /dataValidation/i.test(catalogXml)) return false;
       const blocks = [...inputXml.matchAll(/<dataValidations\s+([^<>]*)>([\s\S]*?)<\/dataValidations>/g)];
-      if (blocks.length !== 1 || JSON.stringify(xmlAttrs(blocks[0][1])) !== '{"count":"1"}') return false;
-      const validation = /^\s*<dataValidation\s+([^<>]*)>\s*<formula1>\s*TN_ProductOptions\s*<\/formula1>\s*<\/dataValidation>\s*$/.exec(blocks[0][2]);
-      if (!validation) return false;
-      const attrs = xmlAttrs(validation[1]);
-      if (attrs.type !== "list" || attrs.sqref !== "D2:D501" || attrs.showErrorMessage !== "1" || (attrs.errorStyle && attrs.errorStyle !== "stop") || (attrs.showDropDown && attrs.showDropDown !== "0") || ["allowBlank", "showInputMessage"].some(k => k in attrs && !["0", "1"].includes(attrs[k])) || Object.keys(attrs).some(k => !["type", "sqref", "allowBlank", "showErrorMessage", "showInputMessage", "showDropDown", "errorStyle"].includes(k))) return false;
+      if (blocks.length !== 1 || JSON.stringify(xmlAttrs(blocks[0][1])) !== `{"count":"${columns.length}"}`) return false;
+      const validations = [...blocks[0][2].matchAll(/<dataValidation\s+([^<>]*)>\s*<formula1>\s*(TN_ProductOptions|TN_CoachOptions)\s*<\/formula1>\s*<\/dataValidation>/g)];
+      if (validations.length !== columns.length) return false;
+      let remainder = blocks[0][2];
+      for (let i = 0; i < validations.length; i++) {
+        const v = validations[i], attrs = xmlAttrs(v[1]);
+        if (v[2] !== columns[i].name || attrs.type !== "list" || attrs.sqref !== columns[i].input || attrs.showErrorMessage !== "1" || (attrs.errorStyle && attrs.errorStyle !== "stop") || (attrs.showDropDown && attrs.showDropDown !== "0") || ["allowBlank", "showInputMessage"].some(k => k in attrs && !["0", "1"].includes(attrs[k])) || Object.keys(attrs).some(k => !["type", "sqref", "allowBlank", "showErrorMessage", "showInputMessage", "showDropDown", "errorStyle"].includes(k))) return false;
+        remainder = remainder.replace(v[0], "");
+      }
+      if (remainder.trim()) return false;
       if (/dataValidation/i.test(inputXml.replace(blocks[0][0], ""))) return false;
       return true;
     } catch { return false; }
@@ -492,5 +527,5 @@
     }
     return { protocol: "local-synthetic/1", fileHash: parsed.fileHash, units, held };
   }
-  return Object.freeze({ VERSION, SHEET, HEADERS, LIMITS, TEMPLATE_FILE_NAME, buildTemplateWorkbook, buildProductTemplateBytes, productNames, readFile, parseWorkbook, buildPreview, checkFresh, safeSummary, serverUnits });
+  return Object.freeze({ VERSION, SHEET, HEADERS, LIMITS, TEMPLATE_FILE_NAME, buildTemplateWorkbook, buildProductTemplateBytes, productNames, coachNames, readFile, parseWorkbook, buildPreview, checkFresh, safeSummary, serverUnits });
 });

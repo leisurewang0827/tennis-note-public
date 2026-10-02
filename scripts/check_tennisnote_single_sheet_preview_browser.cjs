@@ -851,7 +851,8 @@ async function main() {
         window.TennisNoteSingleSheetRemotePreview = {
           ORIGINS: { development: location.origin },
           create: async () => ({ enabled: true, isReady: () => true,
-            templateProducts: async () => { window.__templateCatalogReads++; return catalog; } }),
+            templateProducts: async () => { window.__templateCatalogReads++; return catalog; },
+            templateCoaches: async () => ({ complete: true, branchId: catalog.branchId, coaches: [{ id: "synthetic-coach", branch_id: catalog.branchId, display_name: "합성 코치", status: "approved", employment_status: "active", archived_at: null, deleted_at: null }] }) }),
         };
       }, require("./check_tennisnote_single_sheet_products.cjs").snapshot());
       const [templateDownload] = await Promise.all([

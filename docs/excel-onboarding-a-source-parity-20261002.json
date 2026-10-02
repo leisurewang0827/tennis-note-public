@@ -1,0 +1,14 @@
+{
+  "privateSource": "4723066ef761815c3d6020e3eac530cf7fc649a9",
+  "privateTree": "aa40354e3efd9d95a208a0915871ce036b7cb3ec",
+  "publicBase": "e6980f1d6815d43396d2714a2a55151cb7dcf8e0",
+  "scope": "development-only exact shared asset port; no database, native, or production deployment",
+  "normalization": "CRLF to LF; complete file SHA256; no source rewriting",
+  "shared": [
+    {"path":"app/shared/tennisnote-single-sheet-import.js","sha256":"fcb3381a30a9fd0aa69f14edf1c4615daeda69225066fcfaa7e6489b1dc078f8"},
+    {"path":"app/shared/tennisnote-single-sheet-preview-ui.js","sha256":"d3e0485856a845e790e4804b5f74390989c9559e3784fde111b9359b6d80e4b5"},
+    {"path":"app/shared/tennisnote-single-sheet-transport.js","sha256":"dceb20df58d1c10c15ce47947e54468ee625895cd977820c32f3d2dc04187b78"}
+  ],
+  "traceability": "BRANCH-03 / existing single-sheet work order and V6 gate / V3 image58; existing admin Excel preview only, no new menu",
+  "serverPrerequisite": "20261002003000_tennisnote_sheet_new_ticket_session_guard.sql; production application not authorized"
+}

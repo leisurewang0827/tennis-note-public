@@ -198,6 +198,27 @@
       }
       fail("TEMPLATE_PRODUCTS_LIMIT");
     }
+    async function templateCoaches() {
+      const coaches = [], ids = new Set();
+      if (!isReady() || initial.reason || typeof client.selectRows !== "function") fail("TEMPLATE_COACHES_REQUIRED");
+      for (let offset = 0; offset <= 500; offset += 100) {
+        if (!isReady()) fail("TARGET_OR_REVISION_MISMATCH");
+        const page = await client.selectRows("tn_coach_roles", {
+          select: "id,branch_id,display_name,status,employment_status,archived_at,deleted_at",
+          filters: { branch_id: initial.scope.branchId, status: "approved", employment_status: "active", archived_at: { is: null }, deleted_at: { is: null } },
+          order: "id.asc", limit: 100, offset,
+        });
+        if (!isReady()) fail("TARGET_OR_REVISION_MISMATCH");
+        if (!Array.isArray(page) || page.length > 100) fail("TEMPLATE_COACHES_INVALID");
+        for (const c of page) {
+          if (!c || c.branch_id !== initial.scope.branchId || c.status !== "approved" || c.employment_status !== "active" || c.archived_at != null || c.deleted_at != null || !c.id || ids.has(c.id)) fail("TEMPLATE_COACHES_INVALID");
+          ids.add(c.id); coaches.push(c);
+        }
+        if (ids.size > 500) fail("TEMPLATE_COACHES_LIMIT");
+        if (page.length < 100) return { branchId: initial.scope.branchId, complete: true, coaches };
+      }
+      fail("TEMPLATE_COACHES_LIMIT");
+    }
     return Object.freeze({
       protocol: PROTOCOL,
       enabled: initial.reason === "",
@@ -211,6 +232,7 @@
       currentScope,
       isReady,
       templateProducts,
+      templateCoaches,
       prepareSession,
       workSessionExpiresAt: () => workSessionExpiry,
       preview,
