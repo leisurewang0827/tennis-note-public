@@ -837,6 +837,25 @@ function bindSingleSheetPreviewEntry() {
   });
 }
 
+async function loadAdminPostWriteMemberRows(client, userId, key, table, fallback) {
+  if (!userId) return fallback();
+  // 기본 목록은 상세 기록을 생략하므로 저장 뒤 해당 회원만 새로 조회한다.
+  const read = client.selectAllRows || client.selectRows;
+  const rows = await read.call(client, table, {
+    select: "*",
+    filters: { user_id: userId },
+    order: "id.asc",
+    pageSize: 500,
+    limit: 500,
+    maxRows: 20000,
+  });
+  if (!Array.isArray(rows) || rows.some((row) => String(row?.user_id || "") !== String(userId))) {
+    throw new Error("member_management_readback_scope_mismatch");
+  }
+  // 빈 최신 결과도 대상 회원의 오래된 기록을 지우며 다른 회원은 보존한다.
+  return [...(adminLiveDataState[key] || []).filter((row) => String(row.user_id) !== String(userId)), ...rows];
+}
+
 async function performAdminLiveDataSync(options = {}) {
   if (adminLocalPreviewMode) return false;
   const client = window.TennisNoteDataClient;
@@ -959,8 +978,8 @@ async function performAdminLiveDataSync(options = {}) {
       rosterRows("groupAccounts", () => client.selectRows("tn_group_accounts", { select: "id,branch_id,coach_role_id,display_name,status,payment_mode,next_payer_user_id,schedule_sync_required", limit: 200 }).catch(() => [])),
       rosterRows("groupMembers", () => client.selectRows("tn_group_account_members", { select: "group_account_id,user_id,display_name,participant_order,app_status,can_manage_schedule,can_pay", limit: 500 }).catch(() => [])),
       rosterRows("groupTicketLinks", () => (client.selectAllRows || client.selectRows).call(client, "tn_group_ticket_links", { select: "group_account_id,user_id,ticket_id,status", pageSize: 500 }).catch(() => [])),
-      fullAdminAccess ? rosterRows("memberDatabaseRecords", () => Promise.resolve(adminLiveDataState.memberDatabaseRecords || [])) : Promise.resolve([]),
-      fullAdminAccess ? rosterRows("memberMembershipRecords", () => Promise.resolve(adminLiveDataState.memberMembershipRecords || [])) : Promise.resolve([]),
+      fullAdminAccess ? loadAdminPostWriteMemberRows(client, options.memberWriteReadbackUserId, "memberDatabaseRecords", "tn_member_database_records", () => rosterRows("memberDatabaseRecords", () => Promise.resolve(adminLiveDataState.memberDatabaseRecords || []))) : Promise.resolve([]),
+      fullAdminAccess ? loadAdminPostWriteMemberRows(client, options.memberWriteReadbackUserId, "memberMembershipRecords", "tn_member_membership_records", () => rosterRows("memberMembershipRecords", () => Promise.resolve(adminLiveDataState.memberMembershipRecords || []))) : Promise.resolve([]),
       rosterRows("substituteAssignments", () => Promise.resolve(adminLiveDataState.substituteAssignments || [])),
       // Complete inactive-ticket history is a settlement-only dependency.
       Promise.resolve([]),
