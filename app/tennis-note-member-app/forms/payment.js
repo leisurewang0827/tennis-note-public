@@ -39,6 +39,8 @@ async function completePreparedPayment() {
   const context = preparedPaymentContext;
   if (!context) return;
   const { product, sdk } = context;
+  const renewalIssue = purchaseRenewalPaymentIssue(product);
+  if (renewalIssue) return blockPurchaseRenewal(renewalIssue);
   const requestedPaymentId = context.paymentId;
   const methodId = paymentMethodIdForRequest(context.methodId);
   let preparedPayment = context.preparedPayment || null;

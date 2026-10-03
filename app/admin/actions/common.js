@@ -1521,7 +1521,8 @@ async function performAdminLiveDataSync(options = {}) {
     });
     replaceArray(lessonNotes, mappedLessonNotes);
 
-    const mappedPayments = (serverPayments || []).map((payment) => billingRowFromServerPayment({
+    const paymentRowsWithHolds = await loadAdminPaymentHoldReasons(serverPayments || []);
+    const mappedPayments = paymentRowsWithHolds.map((payment) => billingRowFromServerPayment({
       ...payment,
       member: usersById.get(payment.user_id)?.name || "회원 확인 필요",
     }));
