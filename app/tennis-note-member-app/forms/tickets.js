@@ -12,7 +12,9 @@ function membershipProductFromServer(row = {}) {
   const group = productKind === "coupon" ? "쿠폰제" : groupSize === 2 ? "2대1 정기권" : "정기권";
   const couponValidityWeeks = window.TennisNoteProductCatalog?.policy?.coupon?.validityWeeksBySessions || {};
   const oneDay = isOneDayMembershipProduct(row);
-  const savedStatus = row.policy_settings?.adminSaleStatus;
+  const savedStatus = row.policy_settings?.importOnly === true
+    || row.policy_settings?.memberCheckoutVisible === false
+    ? "hidden" : row.policy_settings?.adminSaleStatus;
   const status = ["sale", "consult", "hidden"].includes(savedStatus)
     ? savedStatus
     : productKind === "coupon" && !oneDay && ![5, 10, 15, 20].includes(sessions)

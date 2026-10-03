@@ -104,6 +104,11 @@ async function syncMembershipPricingQuotesFromServer(products = state.liveMember
 }
 
 async function prepareServerPayment(product, paymentId, methodId = state.selectedPaymentMethod) {
+  const renewalIssue = purchaseRenewalPaymentIssue(product);
+  if (renewalIssue) {
+    blockPurchaseRenewal(renewalIssue);
+    throw new Error(renewalIssue.code);
+  }
   const client = window.TennisNoteDataClient;
   if (!client?.invokeFunction || !client.getSession?.()?.access_token) {
     throw new Error("login_required");

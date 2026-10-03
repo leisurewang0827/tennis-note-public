@@ -56,3 +56,40 @@ test("verify.sh 가 기본값을 정한 변수를 모두 export 한다", () => {
   const missing = [...verifyShellDefaults().keys()].filter((name) => !exported.has(name));
   assert.deepEqual(missing, [], "기본값만 정하고 export 하지 않으면 python3 자식 프로세스에 전달되지 않는다:\n  " + missing.join("\n  "));
 });
+
+test("연장 HOLD 브라우저 16조합은 verify/PR 경로에서 정확히 한 번 필수 실행된다", () => {
+  const read = file => readFileSync(join(repoRoot,file),"utf8").replace(/\r\n/g,"\n");
+  const verify=read("scripts/verify.sh"), workflow=read(".github/workflows/tennisnote-public-ci.yml");
+  const runner=read("scripts/check_tennisnote_renewal_hold_browser.cjs");
+  assert.equal((verify.match(/^node scripts\/check_tennisnote_renewal_hold_browser\.cjs$/gm)||[]).length,1);
+  assert.match(verify,/set -euo pipefail/);
+  assert.equal((workflow.match(/run: \.\/scripts\/verify\.sh/g)||[]).length,1);
+  assert.equal((workflow.match(/- "scripts\/check_tennisnote_renewal_hold_browser\.cjs"/g)||[]).length,2);
+  assert.equal((workflow.match(/- "scripts\/check_tennisnote_renewal_hold_member\.cjs"/g)||[]).length,2);
+  assert(!/node scripts\/check_tennisnote_renewal_hold_browser/.test(workflow),"workflow에서 검사 중복 실행 금지");
+  assert(workflow.indexOf("Prepare browser test dependencies")<workflow.indexOf("- name: Verify"));
+  assert.match(workflow,/playwright@1\.62\.1/);
+  assert.match(workflow,/- uses: actions\/checkout@v7\n\s+with:\n\s+fetch-depth: 0(?:\n|$)/,"exact base git show에 필요한 전체 이력 확보");
+  assert.match(workflow,/install --with-deps chromium webkit/);
+  assert.match(workflow,/NODE_PATH=\$RUNNER_TEMP\/tennisnote-browser\/node_modules/);
+  assert.match(workflow,/timeout-minutes: 10/);
+  assert.match(workflow,/- name: Verify\n\s+timeout-minutes: 4/);
+  assert(!workflow.includes("continue-on-error"));
+  assert.match(runner,/Object\.entries\(\{chromium,webkit\}\)/);
+  assert.match(runner,/\[\[390,844\],\[844,390\]\]/);
+  assert.match(runner,/\["light","dark"\]/);
+  assert.match(runner,/\["tennis-note-member-app","admin"\]/);
+  assert.match(runner,/assert\.equal\(combinations,16,/);
+  assert.match(runner,/process\.exit\(124\);\},120000\)/);
+});
+
+test("alignment 검사 변경은 PR와 push 각각 한 번 경로 필터에 포함된다", () => {
+  const workflow=readFileSync(join(repoRoot,".github/workflows/tennisnote-public-ci.yml"),"utf8").replace(/\r\n/g,"\n");
+  const entry=/^      - "scripts\/check_tennisnote_dev_prod_alignment\.py"$/gm;
+  for(const event of ["pull_request","push"]) {
+    const block=new RegExp(`^  ${event}:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^\\S)`,"m").exec(workflow)?.[1];
+    assert.ok(block,`${event} 이벤트 필터 필요`);
+    assert.equal((block.match(entry)||[]).length,1,`${event}: alignment 경로 exactly once`);
+  }
+  assert.equal((workflow.match(entry)||[]).length,2,"두 이벤트 합계 exactly two");
+});

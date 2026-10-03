@@ -424,7 +424,58 @@ function memberEnrollmentAllowsProduct(product = {}) {
 
 function purchaseFlowSourceTicket() {
   const flow = purchaseFlowState();
-  return (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(flow.renewalTicketId || "")) || null;
+  return [...(state.liveTickets || []), ...(state.expiredTickets || [])]
+    .find((ticket) => String(ticket.id || "") === String(flow.renewalTicketId || "")) || null;
+}
+
+function renewalProductIsForSale(product) {
+  if (!product || product.status !== "sale" || !isDirectPurchaseMembershipProduct(product)) return false;
+  const policies = [product, product.policySettings || {}, product.policy_settings || {}];
+  return product.is_active !== false && product.isActive !== false
+    && policies.every((policy) => policy.importOnly !== true && policy.memberCheckoutVisible !== false);
+}
+
+function purchaseRenewalSourceIssue(flow = purchaseFlowState()) {
+  if (flow.purchasePurpose !== "renew_same") return null;
+  const sourceId = String(flow.renewalTicketId || "");
+  const source = sourceId && [...(state.liveTickets || []), ...(state.expiredTickets || [])]
+    .find((ticket) => String(ticket.id || "") === sourceId);
+  if (!source || source.refundHoldId || !["active", "paused", "expired"].includes(String(source.status || "").toLowerCase())) {
+    return { code: "exact_renewal_source_ticket_required", message: "연장할 기존 회원권을 정확히 다시 선택해 주세요. 다른 회원권으로 자동 변경하지 않습니다." };
+  }
+  const sourceProduct = membershipProducts().find((product) => (
+    String(product.id || "") === String(source.productId || "")
+  ));
+  if (!renewalProductIsForSale(sourceProduct)) {
+    return { code: "renewal_source_checkout_unavailable", message: "기존 회원권의 상품은 현재 온라인 연장이 불가합니다. 이용 기록과 잔여 횟수는 유지되며, 관리자에게 문의해 주세요." };
+  }
+  // Explicit sale-product changes (including four-week/three-month) remain a
+  // separate existing choice. Never infer one when the source is unavailable.
+  return null;
+}
+
+function blockPurchaseRenewal(issue) {
+  const flow = purchaseFlowState();
+  flow.productId = "";
+  flow.discountIssueId = "";
+  flow.step = 1;
+  flow.completionStatus = "";
+  preparedPaymentContext = null;
+  setPurchaseRevalidationNotice(issue.code, issue.message);
+  showToast(issue.message);
+  return false;
+}
+
+function purchaseRenewalPaymentIssue(product) {
+  const flow = purchaseFlowState();
+  const sourceIssue = purchaseRenewalSourceIssue(flow);
+  if (sourceIssue || flow.purchasePurpose !== "renew_same") return sourceIssue;
+  if (!renewalProductIsForSale(product)
+    || String(flow.productId || "") !== String(product?.id || "")
+    || !membershipProducts().some((item) => String(item.id) === String(product.id) && renewalProductIsForSale(item))) {
+    return { code: "renewal_source_checkout_unavailable", message: "연장할 상품의 판매 상태가 바뀌었습니다. 상품을 다시 확인해 주세요." };
+  }
+  return null;
 }
 
 function purchaseTicketLesson(ticket = {}) {
@@ -443,10 +494,11 @@ function selectPurchasePurpose(purpose = "") {
   const flow = purchaseFlowState();
   flow.showMoreSlots = false;
   flow.showAllProducts = false;
-  const activeTickets = currentLiveTickets();
   if (purpose === "renew_same") {
-    const sourceTicket = activeTickets.find((ticket) => String(ticket.id) === String(flow.renewalTicketId)) || activeTickets[0] || null;
-    if (!sourceTicket) return;
+    flow.purchasePurpose = "renew_same";
+    const renewalIssue = purchaseRenewalSourceIssue();
+    if (renewalIssue) return blockPurchaseRenewal(renewalIssue);
+    const sourceTicket = purchaseFlowSourceTicket();
     const lesson = purchaseTicketLesson(sourceTicket);
     flow.purchasePurpose = "renew_same";
     flow.renewalTicketId = sourceTicket.id || "";
@@ -457,8 +509,7 @@ function selectPurchasePurpose(purpose = "") {
     flow.preferredDay = lesson?.day || "";
     flow.preferredTime = lesson?.time || "";
     flow.preferredSchedules = [];
-    const matchingProduct = membershipProducts().find((product) => String(product.id) === String(sourceTicket.productId || ""))
-      || recommendedMembershipProducts(membershipProducts(), membershipProductFamilyId(sourceTicket), sourceTicket)[0];
+    const matchingProduct = membershipProducts().find((product) => String(product.id) === String(sourceTicket.productId || ""));
     if (matchingProduct) {
       flow.productId = matchingProduct.id;
       flow.familyId = membershipProductFamilyId(matchingProduct);
@@ -679,6 +730,8 @@ async function resumePendingTicketPayment(ticketId = "") {
 }
 
 async function startProductPayment(productId, options = {}) {
+  const renewalIssue = purchaseRenewalSourceIssue();
+  if (renewalIssue) return blockPurchaseRenewal(renewalIssue);
   const product = membershipProducts().find((item) => item.id === productId);
   if (!product) return;
   const methodId = normalizeSelectedPaymentMethod();

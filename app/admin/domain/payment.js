@@ -111,6 +111,8 @@ function billingRowFromServerPayment(row = {}) {
     depositDueAt: row.deposit_due_at || row.depositDueAt || "",
     depositorName: row.depositor_name_snapshot || row.depositorName || "",
     bankAccountSnapshot: row.bank_account_snapshot || row.bankAccountSnapshot || {},
+    finalizeHoldCode: row.finalizeHoldCode === "renewal_source_checkout_unavailable" ? row.finalizeHoldCode : "",
+    finalizeHoldAt: row.finalizeHoldAt || "",
     refundedAmount: Number(row.refunded_amount || row.refundedAmount || 0),
     refundStatus: row.refund_status || row.refundStatus || "none",
     refundReason: row.refund_reason || row.refundReason || "",
@@ -365,6 +367,7 @@ function isStaleReadyPayment(item = {}) {
 }
 
 function chargeStatusForPayment(item = {}) {
+  if (item.status === "paid" && !item.ticketId && !item.oneDayBookingId && item.finalizeHoldCode === "renewal_source_checkout_unavailable") return { label: "회원권 적용 보류", tone: "warn", detail: paymentTicketFinalizeRecoveryMessage(item.finalizeHoldCode) };
   if (item.status === "refund_manual_pending") return { label: "환불 송금 대기", tone: "warn", detail: "현금 환불이 접수됐습니다. 실제 송금 확인 전까지 이용권 사용과 원데이 예약이 잠시 정지됩니다." };
   if (item.status === "refund_processing") return { label: "환불 처리중", tone: "warn", detail: "PortOne 취소와 내부 회원권 반영이 진행 중입니다." };
   if (item.status === "refund_reconcile") return { label: "동기화 필요", tone: "danger", detail: "PG 취소 결과와 내부 결제·회원권 상태를 다시 맞춰야 합니다." };
@@ -484,6 +487,7 @@ function paymentApprovalDisplay(item = {}) {
 
 function paymentTicketFinalizeRecoveryCode(value = "") {
   const code = String(value || "").toLowerCase();
+  if (code.includes("renewal_source_checkout_unavailable")) return "renewal_source_checkout_unavailable";
   if (code.includes("payment_purchase_context_missing")) return "payment_purchase_context_missing";
   if (code.includes("renewal_source") || code.includes("source_ticket_not_found") || code.includes("exact_source")) return "renewal_source_ticket_missing";
   if (code.includes("product_mismatch") || code.includes("active_product_required") || code.includes("renewal_product")) return "payment_product_mismatch";
@@ -496,6 +500,7 @@ function paymentTicketFinalizeRecoveryCode(value = "") {
 
 function paymentTicketFinalizeRecoveryMessage(value = "") {
   const code = paymentTicketFinalizeRecoveryCode(value);
+  if (code === "renewal_source_checkout_unavailable") return "결제·입금은 확인됐지만 기존 상품의 판매 정책으로 회원권 적용이 보류됐습니다. 재결제하지 말고 상품 정책과 연결 대상을 확인해 주세요.";
   if (code === "payment_purchase_context_missing") return "결제 준비 정보가 없어 자동 처리할 수 없습니다. 회원권 연결 대상을 확인해 주세요.";
   if (code === "renewal_source_ticket_missing") return "연장할 기존 회원권을 찾지 못했습니다. 회원과 기존 회원권을 확인해 주세요.";
   if (code === "payment_product_mismatch") return "결제 상품과 회원권 상품이 일치하지 않습니다. 상품을 확인해 주세요.";

@@ -153,10 +153,17 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
     && !(requestedPurpose === "new_purchase" && options.preserveExplicitPurpose === true)
     ? latestPreviousMembershipTicket()
     : null;
-  const requestedSource = (state.liveTickets || []).find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
+  const requestedSource = [...(state.liveTickets || []), ...(state.expiredTickets || [])]
+    .find((ticket) => String(ticket.id || "") === String(renewalTicketId || "")) || null;
   const sourceTicket = requestedSource
-    || returningSource
-    || (!["add_coach", "new_purchase", "one_day"].includes(requestedPurpose) ? activeTickets[0] || null : null);
+    || (renewalTicketId || requestedPurpose === "renew_same" ? null : returningSource
+      || (!["add_coach", "new_purchase", "one_day"].includes(requestedPurpose) ? activeTickets[0] || null : null));
+  if ((renewalTicketId && !requestedSource) || requestedPurpose === "renew_same" || (sourceTicket && !requestedPurpose)) {
+    flow.purchasePurpose = "renew_same";
+    flow.renewalTicketId = String(renewalTicketId || sourceTicket?.id || "");
+    const renewalIssue = purchaseRenewalSourceIssue();
+    if (renewalIssue) return blockPurchaseRenewal(renewalIssue);
+  }
   if (
     requestedPurpose === "renew_same"
     && sourceTicket
@@ -172,18 +179,7 @@ function openMembershipPurchaseFlow(renewalTicketId = "", productId = "", reques
     String(product.id || "") === String(productId || sourceTicket?.productId || "")
     && isDirectPurchaseMembershipProduct(product)
   )) || null;
-  const inferredSourceFamilyId = sourceTicket ? membershipProductFamilyId({
-    title: sourceTicket.title || "",
-    group: sourceTicket.group || "",
-    productKind: sourceTicket.productKind || "regular",
-    mode: sourceTicket.productKind === "coupon" ? "pass" : "fixed",
-    groupSize: sourceTicket.groupSize || 1,
-    lessonMinutes: sourceTicket.lessonMinutes || 20,
-    scheduleScope: sourceTicket.scheduleScope || (/주말/.test(sourceTicket.title || "") ? "weekend" : "weekday"),
-  }) : "";
-  const matchingProduct = exactProduct
-    || (sourceTicket ? recommendedMembershipProducts(products, inferredSourceFamilyId, sourceTicket)[0] : null)
-    || null;
+  const matchingProduct = exactProduct || null;
   const lesson = sourceTicket ? purchaseTicketLesson(sourceTicket) : null;
   flow.open = true;
   flow.renewalTicketId = sourceTicket?.id || "";
@@ -743,7 +739,7 @@ async function openMembershipPurchaseEntry({ purpose = "new_purchase", productId
       }
       selectedProductId = oneDayProduct.id;
     }
-    openMembershipPurchaseFlow(renewalTicketId, selectedProductId, purpose, { preserveExplicitPurpose });
+    if (openMembershipPurchaseFlow(renewalTicketId, selectedProductId, purpose, { preserveExplicitPurpose }) === false) return false;
     if (openProductSheet) openPurchaseProductSheet();
     return true;
   } catch {

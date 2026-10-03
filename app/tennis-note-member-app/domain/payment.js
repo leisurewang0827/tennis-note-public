@@ -116,6 +116,10 @@ function createProviderPaymentId(productId = "") {
 
 function paymentServerErrorMessage(error) {
   const code = paymentServerErrorCode(error);
+  if (code === "renewal_source_checkout_unavailable" && error?.payload?.paymentStatus === "verified"
+    && error?.payload?.entitlementStatus === "hold") {
+    return "결제·입금은 확인되었으나 기존 상품의 판매 정책으로 회원권 적용이 보류되었습니다. 다시 결제하지 말고 관리자에게 문의해 주세요.";
+  }
   const labels = {
     group_next_payer_required: "이번 결제 담당 회원의 로그인이 필요합니다.",
     group_partner_required: "2대1 동반 회원 정보를 확인해주세요.",
@@ -161,6 +165,7 @@ function paymentServerErrorMessage(error) {
     coach_not_working: "선택한 시간은 담당 코치의 근무시간이 아닙니다.",
     lesson_time_grid_invalid: "수업은 정각·20분·40분 시작 시간에서 선택해 주세요.",
     exact_renewal_source_ticket_required: "재등록할 기존 회원권을 다시 확인해 주세요.",
+    renewal_source_checkout_unavailable: "기존 회원권 또는 선택한 상품은 현재 온라인 연장이 불가합니다. 이용 기록과 잔여 횟수는 유지되며, 관리자에게 문의해 주세요.",
     renewal_coach_mismatch: "기존 회원권의 담당 코치 정보를 다시 확인해 주세요.",
     payment_hold_expired: "선택 시간의 보관 시간이 끝났습니다. 가능한 시간을 다시 선택해 주세요.",
     purchase_slot_hold_failed: "선택 시간을 안전하게 보관하지 못했습니다. 잠시 후 다시 선택해 주세요.",
