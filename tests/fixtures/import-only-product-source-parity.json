@@ -1,0 +1,11 @@
+{
+  "privateMergedSHA": "d83f2f9f6b28d1f29c095df9600d919761cb8178",
+  "privateFeatureSHA": "8e2279e232e1b0fb1e77426a4df7a271b053d7d8",
+  "source": "90-Dashboard/tennis-note-member-app/app.js",
+  "target": "app/tennis-note-member-app/forms/tickets.js",
+  "function": "membershipProductFromServer",
+  "normalization": "LF, trim function, remove standalone line comments only",
+  "mapperWithoutCommentsSha256": "32874ea40a30b5657034db722cd7869a2be2d04d66738029ebf43ae9c649efc8",
+  "hunkSha256": "77b7ccadb7d05a96ec529ff695ceadb0b876ce75ba365a48c3bcd9e7f0c2e70f",
+  "hunk": "  const savedStatus = row.policy_settings?.importOnly === true\n    || row.policy_settings?.memberCheckoutVisible === false\n    ? \"hidden\" : row.policy_settings?.adminSaleStatus;"
+}

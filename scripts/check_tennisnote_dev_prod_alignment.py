@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.527"
-EXPECTED_RELEASE_ID = "2026.10.03.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v566"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v539"
+EXPECTED_VERSION = "1.0.528"
+EXPECTED_RELEASE_ID = "2026.10.04.01"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v567"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v540"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -453,8 +453,20 @@ def verify() -> None:
         match = re.search(r"(?:async )?function " + re.escape(item["name"]) + r"\([\s\S]*?\n\}", source)
         if not match or sha256(match.group().encode("utf-8")) != item["sha256"]:
             raise RuntimeError("purchase identity authority hash drift")
+    # 승인된 import-only mapper만 역변환하고 나머지 golden은 보존한다.
+    import_policy = json.loads((ROOT / "tests/fixtures/import-only-product-source-parity.json").read_text(encoding="utf-8"))
+    import_source = (ROOT / import_policy["target"]).read_text(encoding="utf-8").replace("\r\n", "\n")
+    import_match = re.search(r"function membershipProductFromServer\([\s\S]*?\n\}", import_source)
+    if not import_match or sha256(re.sub(r"^\s*//.*\n", "", import_match.group(), flags=re.M).encode("utf-8")) != import_policy["mapperWithoutCommentsSha256"]:
+        raise RuntimeError("import-only mapper authority hash drift")
+    if import_source.count(import_policy["hunk"]) != 1:
+        raise RuntimeError("import-only mapper hunk missing or duplicated")
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
+        if path == import_policy["target"]:
+            data = data.decode("utf-8").replace("\r\n", "\n").replace(
+                import_policy["hunk"], "  const savedStatus = row.policy_settings?.adminSaleStatus;"
+            ).encode("utf-8")
         if path in identity["inverseHunks"]:
             text = data.decode("utf-8").replace("\r\n", "\n")
             text = restore_purchase_identity_source(path, text, identity)
