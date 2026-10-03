@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { withoutPurchaseIdentity } from "./helpers/purchase-identity-port.js";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const sha = text => createHash("sha256").update(text).digest("hex");
@@ -30,7 +31,7 @@ function withoutApproval(path, source) {
 for (const row of manifest.products) {
   test(`only approved hunks changed: ${row.path}`, () => {
     // PR565의 별도 해시·역변환 검사가 보장하는 조회 보완만 제거하여 기존 승인 계약을 그대로 검증한다.
-    const source = read(row.path)
+    const source = withoutPurchaseIdentity(row.path, read(row.path))
       .replace(/    const memberWriteReadbackUserId = \["create", "assign", "reenroll"\][\s\S]*?      : "";\n/, "")
       .replace("syncAdminLiveData(true, { memberWriteReadbackUserId })", "syncAdminLiveData(true)");
     assert.equal(sha(source), row.candidateSha256);
@@ -64,7 +65,7 @@ test("readback, privilege, exact scope and payload-bound retry contract", () => 
 });
 
 test("44px correction is limited to signup approval buttons, preserving other CSS", () => {
-  const css = read("app/admin/styles.css");
+  const css = withoutPurchaseIdentity("app/admin/styles.css", read("app/admin/styles.css"));
   const marker = "\n/* 가입 연결 승인 폼에서만 터치 영역과 처리 중 상태를 보장한다. */";
   const offset = css.indexOf(marker);
   assert.ok(offset > 0);

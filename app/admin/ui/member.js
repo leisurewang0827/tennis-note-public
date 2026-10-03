@@ -39,6 +39,7 @@ async function openMemberManagementModal(member, action, ticketId = "") {
   if (action === "app_link") await refreshMemberAuthManagement(refreshedMember);
   Object.assign(memberManagementModalState, {
     memberId: refreshedMember.id,
+    purchaseTargetUserId: targetUserId,
     action,
     ticketId,
     signupLinkRequests: [],
