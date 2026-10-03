@@ -4773,6 +4773,24 @@ tr.is-selected td {
   min-height: 42px;
 }
 
+/* 체크박스의 기본 바깥 여백이 폼 너비를 넘지 않게 하고 라벨 전체를 터치 영역으로 둔다. */
+.onsite-payment-form .onsite-payment-schedule {
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  min-height: 44px;
+}
+
+.onsite-payment-form input[type="checkbox"] {
+  width: 20px;
+  min-height: 20px;
+  margin: 0;
+}
+
+.onsite-payment-form .modal-actions button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .onsite-payment-amount {
   display: grid;
   gap: 6px;

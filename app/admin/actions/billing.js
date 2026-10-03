@@ -454,6 +454,7 @@ function updateOnsitePaymentAmount() {
 async function submitOnsitePayment(event) {
   event.preventDefault();
   const form = event.currentTarget || $("#onsitePaymentForm");
+  if (!form || form.dataset.purchaseSubmitting === "true") return;
   const userId = $("#onsitePaymentMember")?.value || "";
   const sourceTicketId = $("#onsitePaymentSourceTicket")?.value || "";
   const productId = $("#onsitePaymentProduct")?.value || "";
@@ -484,19 +485,22 @@ async function submitOnsitePayment(event) {
   const operationKey = form?.dataset.onsitePaymentOperationKey || createAdminOperationKey("onsite-payment");
   if (form) form.dataset.onsitePaymentOperationKey = operationKey;
   const submit = event.submitter || $("#onsitePaymentForm button[type='submit']");
+  form.dataset.purchaseSubmitting = "true";
   submit.disabled = true;
   $("#onsitePaymentMessage").textContent = "현장결제와 회원권을 서버에 저장하고 있습니다.";
   try {
-    const result = await window.TennisNoteDataClient.rpc("tn_admin_record_onsite_payment_v3", {
-      target_user_id: userId,
-      target_source_ticket_id: sourceTicketId || null,
-      target_product_id: productId,
-      target_coach_role_id: coachRoleId,
-      target_payment_method: paymentMethod,
-      target_payment_date: paymentDate,
-      target_payment_amount: paymentAmount,
-      target_starts_on: $("#onsitePaymentStartDate")?.value || null,
-      target_keep_schedule: Boolean($("#onsitePaymentKeepSchedule")?.checked),
+    const purchaseFormValues = onsitePurchaseIdentitySnapshot(form);
+    const exactMembers = members.filter((item) => item.serverUserId === userId);
+    if (exactMembers.length !== 1) throw new Error("purchase_identity_selection_changed");
+    const targetRecord = {
+      userId, name: exactMembers[0].name, phone: exactMembers[0].phone,
+      branchId: activeOperationBranchId(), sourceTicketId: sourceTicketId || null,
+      productId, coachRoleId, paymentMethod, paymentDate, paymentAmount,
+      startsOn: $("#onsitePaymentStartDate")?.value || null,
+      keepSchedule: Boolean($("#onsitePaymentKeepSchedule")?.checked),
+    };
+    const result = await window.TennisNoteDataClient.rpc("tn_admin_record_onsite_payment_with_identity", {
+      target_record: await confirmMemberPurchaseIdentity(form, targetRecord, [], operationKey, "onsite", purchaseFormValues),
       target_operation_key: operationKey,
     });
     if (!result?.ok) throw new Error(result?.error || "onsite_payment_not_saved");
@@ -520,6 +524,7 @@ async function submitOnsitePayment(event) {
     reportAdminPaymentGuard("onsite_save", raw || "onsite_payment_not_saved", operationKey);
     $("#onsitePaymentMessage").textContent = raw.includes("onsite_payment_write_not_confirmed")
       ? "저장 요청은 전송됐지만 결과를 다시 확인하지 못했습니다. 입력값을 유지했으니 같은 내용으로 다시 시도해 주세요."
+      : raw.includes("purchase_identity_") ? memberManagementErrorText(error)
       : raw.includes("source_ticket_not_found")
       ? "선택한 기존 회원권을 찾지 못했습니다. 첫 회원권 등록 또는 다른 회원권을 선택해 주세요."
       : raw.includes("onsite_payment_group_partner_required")
@@ -530,6 +535,7 @@ async function submitOnsitePayment(event) {
         ? "저장 내용이 변경됐습니다. 결제창을 닫았다가 다시 열어 주세요."
       : "저장하지 못했습니다. 회원·상품·권한을 확인해 주세요.";
   } finally {
+    delete form.dataset.purchaseSubmitting;
     if (submit?.isConnected) submit.disabled = false;
   }
 }

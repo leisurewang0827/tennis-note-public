@@ -279,6 +279,10 @@ function memberManagementNullableNumber(input) {
 
 function memberManagementErrorText(error) {
   const raw = `${error?.payload?.code || ""} ${error?.payload?.message || ""} ${error?.code || ""} ${error?.message || ""}`;
+  if (raw.includes("purchase_identity_confirmation_cancelled")) return "계정 확인을 취소했습니다. 입력값은 유지했습니다.";
+  if (/purchase_identity_(client_update_required|proof_required)/.test(raw)) return "관리자 화면 업데이트가 필요합니다. 새로고침한 뒤 계정을 확인해 주세요. 저장하지 않았습니다.";
+  if (raw.includes("purchase_identity_legacy_operation_review_required")) return "이전 저장 요청의 처리 내역을 먼저 확인해 주세요. 회원권이나 결제를 다시 만들지 않았습니다.";
+  if (raw.includes("purchase_identity_")) return "회원권을 받을 로그인 계정 또는 지점 정보가 바뀌었거나 모호합니다. 회원 목록에서 정확한 계정을 다시 선택해 주세요. 저장하지 않았습니다.";
   if (raw.includes("server_request_timeout")) return "서버 응답이 지연되었습니다. 중복 저장은 차단되어 있으니 새로고침 후 결과를 확인해 주세요.";
   if (raw.includes("server_connection_failed") || raw.includes("Failed to fetch") || raw.includes("NetworkError")) return "서버 연결이 끊겼습니다. 같은 등록을 다시 누르지 말고 새로고침 후 등록 여부를 먼저 확인해 주세요.";
   if (raw.includes("server_response_invalid")) return "서버 응답을 확인하지 못했습니다. 같은 등록을 다시 누르지 말고 새로고침 후 결과를 확인해 주세요.";

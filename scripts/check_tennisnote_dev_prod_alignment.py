@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.526"
-EXPECTED_RELEASE_ID = "2026.10.02.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v565"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v538"
+EXPECTED_VERSION = "1.0.527"
+EXPECTED_RELEASE_ID = "2026.10.03.01"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v566"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v539"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -405,6 +405,20 @@ def generate() -> None:
     print(f"wrote {MANIFEST_PATH.relative_to(ROOT)} with {len(paths)} product files and 93 commit classifications")
 
 
+def restore_purchase_identity_source(path: str, source: str, identity: dict) -> str:
+    # 새 CSS 블록은 독립 해시와 단일 출현을 확인한 뒤에만 승인 hunk를 되돌린다.
+    for style in identity["styleHunks"]:
+        if style["file"] == path:
+            block = style["text"]
+            if source.count(block) != 1 or sha256(block.encode("utf-8")) != style["sha256"]:
+                raise RuntimeError("purchase identity style authority hash drift")
+    for hunk in identity["inverseHunks"].get(path, []):
+        if source.count(hunk["after"]) != 1:
+            raise RuntimeError("purchase identity hunk drift")
+        source = source.replace(hunk["after"], hunk["before"], 1)
+    return source
+
+
 def verify() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     candidate = manifest["candidate_release"]
@@ -432,8 +446,19 @@ def verify() -> None:
         extra = sorted(set(actual_paths) - set(expected_hashes))
         raise RuntimeError(f"product path drift: missing={missing[:5]} extra={extra[:5]}")
     mismatches = []
+    # 승인 identity 이식만 역변환한다. 기존 제품 golden hash는 그대로 유지한다.
+    identity = json.loads((ROOT / "tests/fixtures/purchase-identity-source-parity.json").read_text(encoding="utf-8"))
+    for item in identity["functions"]:
+        source = (ROOT / item["file"]).read_text(encoding="utf-8").replace("\r\n", "\n")
+        match = re.search(r"(?:async )?function " + re.escape(item["name"]) + r"\([\s\S]*?\n\}", source)
+        if not match or sha256(match.group().encode("utf-8")) != item["sha256"]:
+            raise RuntimeError("purchase identity authority hash drift")
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
+        if path in identity["inverseHunks"]:
+            text = data.decode("utf-8").replace("\r\n", "\n")
+            text = restore_purchase_identity_source(path, text, identity)
+            data = text.encode("utf-8")
         current_hash = sha256(normalize_product_bytes(path, data, manifest))
         if current_hash != expected_hashes[path]:
             mismatches.append(path)

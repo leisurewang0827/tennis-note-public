@@ -1,0 +1,103 @@
+{
+  "privateMergedSHA": "4dc9d630ca17dd3948ba015306659c3002ace8e3",
+  "privateFeatureSHA": "c64f0bb059c2486533a13d368fb190b0de82a220",
+  "parity": "Exact function body, LF normalized; existing public error mappings preserved",
+  "serverMigrationRequired": "20261002004000",
+  "functions": [
+    {
+      "name": "openMemberManagementModal",
+      "file": "app/admin/ui/member.js",
+      "sha256": "c7f7bfc55f1cba994ddbd5667c10b66594c1f2fd6e56be1617187392bfcce0ad"
+    },
+    {
+      "name": "submitMemberManagementForm",
+      "file": "app/admin/actions/member.js",
+      "sha256": "a2c6f546c867d9255615f42125b1fac9017a71de8cf32fd90621efe6e6598ae9"
+    },
+    {
+      "name": "confirmMemberPurchaseIdentity",
+      "file": "app/admin/actions/member.js",
+      "sha256": "6a62ebb8996e7073005f7630af35a7ae9cb879a7b5713fe19322eb852ba8e718"
+    },
+    {
+      "name": "submitOnsitePayment",
+      "file": "app/admin/actions/billing.js",
+      "sha256": "0de90d6a82d7a90e94e764b95aebd5b6a651e0719104359a03f14e0b7fd544cc"
+    },
+    {
+      "name": "onsitePurchaseIdentitySnapshot",
+      "file": "app/admin/actions/member.js",
+      "sha256": "082ea225ece85ae276ee6dc64437e50a30ac90f6033744dc67705917bd8e2a05"
+    }
+  ],
+  "localCorrection": "Authoritative private onsite DOM snapshot fix merged in PR #569; public deployment remains gated by migration 20261002004000",
+  "styleHunks": [
+    {
+      "file": "app/admin/styles.css",
+      "privateSourcePath": "90-Dashboard/tennis-note-prototype/styles.css",
+      "authority": "exact private CSS hunk merged in 4dc9d630ca17dd3948ba015306659c3002ace8e3 via PR #569",
+      "text": "/* 체크박스의 기본 바깥 여백이 폼 너비를 넘지 않게 하고 라벨 전체를 터치 영역으로 둔다. */\n.onsite-payment-form .onsite-payment-schedule {\n  grid-template-columns: 20px minmax(0, 1fr);\n  align-items: center;\n  min-height: 44px;\n}\n\n.onsite-payment-form input[type=\"checkbox\"] {\n  width: 20px;\n  min-height: 20px;\n  margin: 0;\n}\n\n.onsite-payment-form .modal-actions button {\n  min-width: 44px;\n  min-height: 44px;\n}\n\n",
+      "sha256": "baf321bf2607ad9f223ec39162e254f92e04d23391053963bf9b230be7e6af25"
+    }
+  ],
+  "inverseHunks": {
+    "app/admin/styles.css": [
+      {
+        "before": "  min-height: 42px;\n}\n\n.onsite-payment-amount {\n  display: grid;\n  gap: 6px;\n",
+        "after": "  min-height: 42px;\n}\n\n/* 체크박스의 기본 바깥 여백이 폼 너비를 넘지 않게 하고 라벨 전체를 터치 영역으로 둔다. */\n.onsite-payment-form .onsite-payment-schedule {\n  grid-template-columns: 20px minmax(0, 1fr);\n  align-items: center;\n  min-height: 44px;\n}\n\n.onsite-payment-form input[type=\"checkbox\"] {\n  width: 20px;\n  min-height: 20px;\n  margin: 0;\n}\n\n.onsite-payment-form .modal-actions button {\n  min-width: 44px;\n  min-height: 44px;\n}\n\n.onsite-payment-amount {\n  display: grid;\n  gap: 6px;\n"
+      }
+    ],
+    "app/admin/ui/member.js": [
+      {
+        "before": "  if (action === \"app_link\") await refreshMemberAuthManagement(refreshedMember);\n  Object.assign(memberManagementModalState, {\n    memberId: refreshedMember.id,\n    action,\n    ticketId,\n    signupLinkRequests: [],\n",
+        "after": "  if (action === \"app_link\") await refreshMemberAuthManagement(refreshedMember);\n  Object.assign(memberManagementModalState, {\n    memberId: refreshedMember.id,\n    purchaseTargetUserId: targetUserId,\n    action,\n    ticketId,\n    signupLinkRequests: [],\n"
+      }
+    ],
+    "app/admin/domain/members.js": [
+      {
+        "before": "\nfunction memberManagementErrorText(error) {\n  const raw = `${error?.payload?.code || \"\"} ${error?.payload?.message || \"\"} ${error?.code || \"\"} ${error?.message || \"\"}`;\n  if (raw.includes(\"server_request_timeout\")) return \"서버 응답이 지연되었습니다. 중복 저장은 차단되어 있으니 새로고침 후 결과를 확인해 주세요.\";\n  if (raw.includes(\"server_connection_failed\") || raw.includes(\"Failed to fetch\") || raw.includes(\"NetworkError\")) return \"서버 연결이 끊겼습니다. 같은 등록을 다시 누르지 말고 새로고침 후 등록 여부를 먼저 확인해 주세요.\";\n  if (raw.includes(\"server_response_invalid\")) return \"서버 응답을 확인하지 못했습니다. 같은 등록을 다시 누르지 말고 새로고침 후 결과를 확인해 주세요.\";\n",
+        "after": "\nfunction memberManagementErrorText(error) {\n  const raw = `${error?.payload?.code || \"\"} ${error?.payload?.message || \"\"} ${error?.code || \"\"} ${error?.message || \"\"}`;\n  if (raw.includes(\"purchase_identity_confirmation_cancelled\")) return \"계정 확인을 취소했습니다. 입력값은 유지했습니다.\";\n  if (/purchase_identity_(client_update_required|proof_required)/.test(raw)) return \"관리자 화면 업데이트가 필요합니다. 새로고침한 뒤 계정을 확인해 주세요. 저장하지 않았습니다.\";\n  if (raw.includes(\"purchase_identity_legacy_operation_review_required\")) return \"이전 저장 요청의 처리 내역을 먼저 확인해 주세요. 회원권이나 결제를 다시 만들지 않았습니다.\";\n  if (raw.includes(\"purchase_identity_\")) return \"회원권을 받을 로그인 계정 또는 지점 정보가 바뀌었거나 모호합니다. 회원 목록에서 정확한 계정을 다시 선택해 주세요. 저장하지 않았습니다.\";\n  if (raw.includes(\"server_request_timeout\")) return \"서버 응답이 지연되었습니다. 중복 저장은 차단되어 있으니 새로고침 후 결과를 확인해 주세요.\";\n  if (raw.includes(\"server_connection_failed\") || raw.includes(\"Failed to fetch\") || raw.includes(\"NetworkError\")) return \"서버 연결이 끊겼습니다. 같은 등록을 다시 누르지 말고 새로고침 후 등록 여부를 먼저 확인해 주세요.\";\n  if (raw.includes(\"server_response_invalid\")) return \"서버 응답을 확인하지 못했습니다. 같은 등록을 다시 누르지 말고 새로고침 후 결과를 확인해 주세요.\";\n"
+      }
+    ],
+    "app/admin/actions/member.js": [
+      {
+        "before": "  }\n}\n\nasync function submitMemberManagementForm(event) {\n  event.preventDefault();\n  const form = event.target;\n  const member = members.find((item) => item.id === memberManagementModalState.memberId);\n  const action = memberManagementModalState.action;\n  const isCreate = action === \"create\";\n",
+        "after": "  }\n}\n\n// 계정 확인 증명은 현재 폼에서만 사용하며 저장소·로그에 보관하지 않습니다.\nfunction onsitePurchaseIdentitySnapshot(form) {\n  if (!form?.isConnected || $(\"#onsitePaymentForm\") !== form) throw new Error(\"purchase_identity_selection_changed\");\n  const control = (id) => {\n    const element = form.querySelector(`#${id}`);\n    if (!element) throw new Error(\"purchase_identity_selection_changed\");\n    return element;\n  };\n  return JSON.stringify([\n    activeOperationBranchId(),\n    control(\"onsitePaymentMember\").value,\n    control(\"onsitePaymentSourceTicket\").value,\n    control(\"onsitePaymentProduct\").value,\n    control(\"onsitePaymentCoach\").value,\n    control(\"onsitePaymentMethod\").value,\n    control(\"onsitePaymentDate\").value,\n    control(\"onsitePaymentAmount\").value,\n    control(\"onsitePaymentStartDate\").value,\n    Boolean(control(\"onsitePaymentKeepSchedule\").checked),\n  ]);\n}\n\nasync function confirmMemberPurchaseIdentity(form, record, schedules, operationKey, kind, expectedFormValues = null) {\n  const client = window.TennisNoteDataClient;\n  const branchId = activeOperationBranchId();\n  if (!branchId || record.branchId !== branchId) throw new Error(\"purchase_identity_branch_mismatch\");\n  const onsite = kind === \"onsite\";\n  const action = onsite ? \"onsite\" : memberManagementModalState.action;\n  const selectedId = onsite ? record.userId : memberManagementModalState.purchaseTargetUserId;\n  const request = JSON.stringify({ record, schedules, operationKey, kind });\n  const currentFormValues = () => onsite ? onsitePurchaseIdentitySnapshot(form) : JSON.stringify([...new FormData(form).entries()]);\n  const formValues = currentFormValues();\n  if (expectedFormValues !== null && formValues !== expectedFormValues) throw new Error(\"purchase_identity_selection_changed\");\n  const stillExact = () => form.isConnected && $(onsite ? \"#onsitePaymentForm\" : \"#memberManagementForm\") === form\n    && (onsite ? !$(\"#onsitePaymentModal\")?.hidden : memberManagementModalState.action === action)\n    && activeOperationBranchId() === branchId\n    && currentFormValues() === formValues\n    && (onsite ? $(\"#onsitePaymentMember\")?.value === selectedId\n      && members.filter((item) => item.serverUserId === selectedId).length === 1\n      : action === \"create\" || (selectedId === record.userId\n      && memberManagementModalState.purchaseTargetUserId === selectedId\n      && members.filter((item) => item.id === memberManagementModalState.memberId).length === 1\n      && members.find((item) => item.id === memberManagementModalState.memberId)?.serverUserId === selectedId))\n    && JSON.stringify({ record, schedules, operationKey, kind }) === request;\n  if (!stillExact()) throw new Error(\"purchase_identity_selection_changed\");\n  const proof = normalizedRpcResult(await client.rpc(\"tn_admin_preview_purchase_identity\", {\n    target_record: record, target_schedules: schedules,\n    target_operation_key: operationKey, target_kind: kind,\n  }));\n  if (!stillExact() || !/^[a-f0-9]{64}$/.test(proof.revision || \"\")\n    || proof.branchId !== branchId || (proof.userId || null) !== (record.userId || null)\n    || !Array.isArray(proof.people) || !proof.people.length) {\n    throw new Error(\"purchase_identity_selection_changed\");\n  }\n  const providerLabels = { email: \"이메일\", \"custom:naver\": \"네이버\", \"custom:kakao\": \"카카오\", kakao: \"카카오\", apple: \"Apple\", google: \"Google\" };\n  const lines = proof.people.map((person, index) => {\n    const providers = (person.providers || []).map((p) => providerLabels[p] || \"기타 로그인\").join(\"·\") || \"앱 로그인 미연결\";\n    const contact = /^\\*{3}-\\*{4}-[0-9]{4}$/.test(person.phoneMasked || \"\") ? person.phoneMasked : \"연락처 미등록\";\n    const mark = /^[a-f0-9]{8}$/.test(person.identityTag || \"\") ? person.identityTag : \"신규\";\n    return `${index ? \"파트너\" : \"대상\"}: ${providers} / ${contact} / 전화 인증 ${person.phoneVerified ? \"확인\" : \"미확인\"} / 구분 ${mark}`;\n  });\n  if (!window.confirm(`회원권을 받을 계정을 확인해 주세요. 이름이 같아도 다른 로그인 계정일 수 있습니다.\\n${lines.join(\"\\n\")}\\n현재 선택 지점에 등록합니다. 이 계정이 맞습니까?`)) {\n    throw new Error(\"purchase_identity_confirmation_cancelled\");\n  }\n  if (!stillExact()) throw new Error(\"purchase_identity_selection_changed\");\n  return { ...record, identityProof: proof.revision };\n}\n\nasync function submitMemberManagementForm(event) {\n  event.preventDefault();\n  const form = event.target;\n  if (form.dataset.purchaseSubmitting === \"true\") return;\n  const member = members.find((item) => item.id === memberManagementModalState.memberId);\n  const action = memberManagementModalState.action;\n  const isCreate = action === \"create\";\n"
+      },
+      {
+        "before": "  }\n  if (message) message.textContent = \"\";\n\n  try {\n    let result = null;\n    let linkedSourceSignupUserId = \"\";\n",
+        "after": "  }\n  if (message) message.textContent = \"\";\n\n  form.dataset.purchaseSubmitting = \"true\";\n  const purchaseFormValues = JSON.stringify([...new FormData(form).entries()]);\n\n  try {\n    let result = null;\n    let linkedSourceSignupUserId = \"\";\n"
+      },
+      {
+        "before": "          ? \"tn_admin_assign_paid_group_member_ticket_and_regular_schedule\"\n          : \"tn_admin_assign_paid_member_ticket_and_regular_schedule\";\n        result = await client.rpc(assignmentRpc, {\n          target_record: managementPayload,\n          target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,\n          target_operation_key: createOperationKey,\n        });\n      } else {\n        result = await client.rpc(\"tn_admin_create_paid_member_and_regular_schedule\", {\n          target_record: managementPayload,\n          target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,\n          target_operation_key: createOperationKey,\n        });\n",
+        "after": "          ? \"tn_admin_assign_paid_group_member_ticket_and_regular_schedule\"\n          : \"tn_admin_assign_paid_member_ticket_and_regular_schedule\";\n        result = await client.rpc(assignmentRpc, {\n          target_record: await confirmMemberPurchaseIdentity(form, managementPayload,\n            managementPayload.createWithoutSchedule ? [] : createRegularSchedules, createOperationKey,\n            Number(selectedManagementProduct?.group_size || 1) === 2 ? \"group\" : \"assign\", purchaseFormValues),\n          target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,\n          target_operation_key: createOperationKey,\n        });\n      } else {\n        result = await client.rpc(\"tn_admin_create_paid_member_and_regular_schedule\", {\n          target_record: await confirmMemberPurchaseIdentity(form, managementPayload,\n            managementPayload.createWithoutSchedule ? [] : createRegularSchedules, createOperationKey, \"create\", purchaseFormValues),\n          target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,\n          target_operation_key: createOperationKey,\n        });\n"
+      },
+      {
+        "before": "        ? \"tn_admin_assign_paid_group_member_ticket_and_regular_schedule\"\n        : \"tn_admin_assign_paid_member_ticket_and_regular_schedule\";\n      result = await client.rpc(assignmentRpc, {\n        target_record: assignmentPayload,\n        target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,\n        target_operation_key: assignmentRequestId,\n      });\n",
+        "after": "        ? \"tn_admin_assign_paid_group_member_ticket_and_regular_schedule\"\n        : \"tn_admin_assign_paid_member_ticket_and_regular_schedule\";\n      result = await client.rpc(assignmentRpc, {\n        target_record: await confirmMemberPurchaseIdentity(form, assignmentPayload,\n          managementPayload.createWithoutSchedule ? [] : createRegularSchedules, assignmentRequestId,\n          Number(selectedManagementProduct?.group_size || 1) === 2 ? \"group\" : \"assign\", purchaseFormValues),\n        target_schedules: managementPayload.createWithoutSchedule ? [] : createRegularSchedules,\n        target_operation_key: assignmentRequestId,\n      });\n"
+      },
+      {
+        "before": "            ? \"앱 계정 연결\"\n            : `${memberManagementActionLabel(action)} 확정`;\n    }\n  }\n}\n\n",
+        "after": "            ? \"앱 계정 연결\"\n            : `${memberManagementActionLabel(action)} 확정`;\n    }\n  } finally {\n    delete form.dataset.purchaseSubmitting;\n  }\n}\n\n"
+      }
+    ],
+    "app/admin/actions/billing.js": [
+      {
+        "before": "async function submitOnsitePayment(event) {\n  event.preventDefault();\n  const form = event.currentTarget || $(\"#onsitePaymentForm\");\n  const userId = $(\"#onsitePaymentMember\")?.value || \"\";\n  const sourceTicketId = $(\"#onsitePaymentSourceTicket\")?.value || \"\";\n  const productId = $(\"#onsitePaymentProduct\")?.value || \"\";\n",
+        "after": "async function submitOnsitePayment(event) {\n  event.preventDefault();\n  const form = event.currentTarget || $(\"#onsitePaymentForm\");\n  if (!form || form.dataset.purchaseSubmitting === \"true\") return;\n  const userId = $(\"#onsitePaymentMember\")?.value || \"\";\n  const sourceTicketId = $(\"#onsitePaymentSourceTicket\")?.value || \"\";\n  const productId = $(\"#onsitePaymentProduct\")?.value || \"\";\n"
+      },
+      {
+        "before": "  const operationKey = form?.dataset.onsitePaymentOperationKey || createAdminOperationKey(\"onsite-payment\");\n  if (form) form.dataset.onsitePaymentOperationKey = operationKey;\n  const submit = event.submitter || $(\"#onsitePaymentForm button[type='submit']\");\n  submit.disabled = true;\n  $(\"#onsitePaymentMessage\").textContent = \"현장결제와 회원권을 서버에 저장하고 있습니다.\";\n  try {\n    const result = await window.TennisNoteDataClient.rpc(\"tn_admin_record_onsite_payment_v3\", {\n      target_user_id: userId,\n      target_source_ticket_id: sourceTicketId || null,\n      target_product_id: productId,\n      target_coach_role_id: coachRoleId,\n      target_payment_method: paymentMethod,\n      target_payment_date: paymentDate,\n      target_payment_amount: paymentAmount,\n      target_starts_on: $(\"#onsitePaymentStartDate\")?.value || null,\n      target_keep_schedule: Boolean($(\"#onsitePaymentKeepSchedule\")?.checked),\n      target_operation_key: operationKey,\n    });\n    if (!result?.ok) throw new Error(result?.error || \"onsite_payment_not_saved\");\n",
+        "after": "  const operationKey = form?.dataset.onsitePaymentOperationKey || createAdminOperationKey(\"onsite-payment\");\n  if (form) form.dataset.onsitePaymentOperationKey = operationKey;\n  const submit = event.submitter || $(\"#onsitePaymentForm button[type='submit']\");\n  form.dataset.purchaseSubmitting = \"true\";\n  submit.disabled = true;\n  $(\"#onsitePaymentMessage\").textContent = \"현장결제와 회원권을 서버에 저장하고 있습니다.\";\n  try {\n    const purchaseFormValues = onsitePurchaseIdentitySnapshot(form);\n    const exactMembers = members.filter((item) => item.serverUserId === userId);\n    if (exactMembers.length !== 1) throw new Error(\"purchase_identity_selection_changed\");\n    const targetRecord = {\n      userId, name: exactMembers[0].name, phone: exactMembers[0].phone,\n      branchId: activeOperationBranchId(), sourceTicketId: sourceTicketId || null,\n      productId, coachRoleId, paymentMethod, paymentDate, paymentAmount,\n      startsOn: $(\"#onsitePaymentStartDate\")?.value || null,\n      keepSchedule: Boolean($(\"#onsitePaymentKeepSchedule\")?.checked),\n    };\n    const result = await window.TennisNoteDataClient.rpc(\"tn_admin_record_onsite_payment_with_identity\", {\n      target_record: await confirmMemberPurchaseIdentity(form, targetRecord, [], operationKey, \"onsite\", purchaseFormValues),\n      target_operation_key: operationKey,\n    });\n    if (!result?.ok) throw new Error(result?.error || \"onsite_payment_not_saved\");\n"
+      },
+      {
+        "before": "    reportAdminPaymentGuard(\"onsite_save\", raw || \"onsite_payment_not_saved\", operationKey);\n    $(\"#onsitePaymentMessage\").textContent = raw.includes(\"onsite_payment_write_not_confirmed\")\n      ? \"저장 요청은 전송됐지만 결과를 다시 확인하지 못했습니다. 입력값을 유지했으니 같은 내용으로 다시 시도해 주세요.\"\n      : raw.includes(\"source_ticket_not_found\")\n      ? \"선택한 기존 회원권을 찾지 못했습니다. 첫 회원권 등록 또는 다른 회원권을 선택해 주세요.\"\n      : raw.includes(\"onsite_payment_group_partner_required\")\n",
+        "after": "    reportAdminPaymentGuard(\"onsite_save\", raw || \"onsite_payment_not_saved\", operationKey);\n    $(\"#onsitePaymentMessage\").textContent = raw.includes(\"onsite_payment_write_not_confirmed\")\n      ? \"저장 요청은 전송됐지만 결과를 다시 확인하지 못했습니다. 입력값을 유지했으니 같은 내용으로 다시 시도해 주세요.\"\n      : raw.includes(\"purchase_identity_\") ? memberManagementErrorText(error)\n      : raw.includes(\"source_ticket_not_found\")\n      ? \"선택한 기존 회원권을 찾지 못했습니다. 첫 회원권 등록 또는 다른 회원권을 선택해 주세요.\"\n      : raw.includes(\"onsite_payment_group_partner_required\")\n"
+      },
+      {
+        "before": "        ? \"저장 내용이 변경됐습니다. 결제창을 닫았다가 다시 열어 주세요.\"\n      : \"저장하지 못했습니다. 회원·상품·권한을 확인해 주세요.\";\n  } finally {\n    if (submit?.isConnected) submit.disabled = false;\n  }\n}\n",
+        "after": "        ? \"저장 내용이 변경됐습니다. 결제창을 닫았다가 다시 열어 주세요.\"\n      : \"저장하지 못했습니다. 회원·상품·권한을 확인해 주세요.\";\n  } finally {\n    delete form.dataset.purchaseSubmitting;\n    if (submit?.isConnected) submit.disabled = false;\n  }\n}\n"
+      }
+    ]
+  }
+}
