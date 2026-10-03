@@ -453,8 +453,20 @@ def verify() -> None:
         match = re.search(r"(?:async )?function " + re.escape(item["name"]) + r"\([\s\S]*?\n\}", source)
         if not match or sha256(match.group().encode("utf-8")) != item["sha256"]:
             raise RuntimeError("purchase identity authority hash drift")
+    # 승인된 import-only mapper만 역변환하고 나머지 golden은 보존한다.
+    import_policy = json.loads((ROOT / "tests/fixtures/import-only-product-source-parity.json").read_text(encoding="utf-8"))
+    import_source = (ROOT / import_policy["target"]).read_text(encoding="utf-8").replace("\r\n", "\n")
+    import_match = re.search(r"function membershipProductFromServer\([\s\S]*?\n\}", import_source)
+    if not import_match or sha256(re.sub(r"^\s*//.*\n", "", import_match.group(), flags=re.M).encode("utf-8")) != import_policy["mapperWithoutCommentsSha256"]:
+        raise RuntimeError("import-only mapper authority hash drift")
+    if import_source.count(import_policy["hunk"]) != 1:
+        raise RuntimeError("import-only mapper hunk missing or duplicated")
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
+        if path == import_policy["target"]:
+            data = data.decode("utf-8").replace("\r\n", "\n").replace(
+                import_policy["hunk"], "  const savedStatus = row.policy_settings?.adminSaleStatus;"
+            ).encode("utf-8")
         if path in identity["inverseHunks"]:
             text = data.decode("utf-8").replace("\r\n", "\n")
             text = restore_purchase_identity_source(path, text, identity)
