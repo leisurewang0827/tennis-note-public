@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.528"
-EXPECTED_RELEASE_ID = "2026.10.04.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v567"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v540"
+EXPECTED_VERSION = "1.0.529"
+EXPECTED_RELEASE_ID = "2026.10.04.02"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v568"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v541"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -211,6 +211,22 @@ def release_metadata(path: Path) -> dict[str, str]:
         "release_id": str(data["releaseId"]),
         "deployed_at": str(data["deployedAt"]),
     }
+
+
+def restore_renewal_hold_base(path: str, text: str) -> str:
+    """승인된 exact hunk만 역변환하며 기존 제품 golden은 바꾸지 않는다."""
+    port = json.loads((ROOT / "tests/fixtures/renewal-hold-source-parity.json").read_text(encoding="utf-8"))
+    row = next((item for item in port["files"] if item["path"] == path), None)
+    if not row or hashlib.sha256(text.encode()).hexdigest() != row["candidateSha256"]:
+        return text  # 다른 소스는 기존 golden 검사가 그대로 거부한다.
+    for hunk in row["hunks"]:
+        if text.count(hunk["after"]) != 1:
+            raise ValueError(f"renewal hold ambiguous hunk: {path}")
+        text = text.replace(hunk["after"], hunk["before"], 1)
+    if hashlib.sha256(text.encode()).hexdigest() != row["baseSha256"]:
+        raise ValueError(f"renewal hold base drift: {path}")
+    # exact 역변환 hash 검증 뒤 버전 literal만 현재 release로 되돌린다.
+    return text.replace(port["baseVersion"], port["releaseVersion"])
 
 
 def normalize_product_bytes(path: str, data: bytes, manifest: dict[str, object]) -> bytes:
@@ -463,6 +479,10 @@ def verify() -> None:
         raise RuntimeError("import-only mapper hunk missing or duplicated")
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
+        try:
+            data = restore_renewal_hold_base(path, data.decode("utf-8").replace("\r\n", "\n")).encode("utf-8")
+        except UnicodeDecodeError:
+            pass
         if path == import_policy["target"]:
             data = data.decode("utf-8").replace("\r\n", "\n").replace(
                 import_policy["hunk"], "  const savedStatus = row.policy_settings?.adminSaleStatus;"

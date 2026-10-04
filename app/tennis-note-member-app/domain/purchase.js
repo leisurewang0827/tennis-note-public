@@ -301,6 +301,7 @@ function purchaseStepFourHtml() {
 function purchaseStepCanContinue() {
   const flow = purchaseFlowState();
   const product = purchaseFlowProduct();
+  if (purchaseRenewalPaymentIssue(product)) return false;
   const purposeReady = ["renew_same", "add_coach", "new_purchase", "one_day"].includes(flow.purchasePurpose);
   if (!purposeReady || !product || !isPaymentGatewayReady(normalizeSelectedPaymentMethod())) return false;
   if (flow.purchasePurpose === "renew_same" && purchaseFlowSourceTicket() && flow.scheduleMode === "keep") return true;
@@ -394,6 +395,8 @@ async function revalidatePurchaseBeforePrepare(productId = "") {
     return false;
   }
 
+  const renewalIssue = purchaseRenewalSourceIssue();
+  if (renewalIssue) return blockPurchaseRenewal(renewalIssue);
   const currentProduct = membershipProducts().find((product) => (
     String(product.id || "") === String(productId || "")
     && isDirectPurchaseMembershipProduct(product)
