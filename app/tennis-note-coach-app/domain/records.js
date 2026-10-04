@@ -100,7 +100,9 @@ function coachRecordLessonMeta(record = {}) {
   const dateLabel = month && day
     ? `${Number(month)}/${Number(day)}(${lesson.day || ""})`
     : lesson.day || "날짜 확인";
-  const round = coachScheduleRoundLabel(lesson);
+  // 시간표는 불확실한 미래 회차를 생략하지만, 처리 대기 문맥은 확인 상태를 표시한다.
+  // 첫 참가자의 현재 소진 수로 그룹 전체의 수업 회차를 추측하지 않는다.
+  const round = coachScheduleRoundLabel(lesson) || "회차 확인 필요";
   return {
     schedule: `${dateLabel} ${lesson.time || "시간 확인"}`.trim(),
     round: round === "0/0회차" ? "회차 미연결" : round,

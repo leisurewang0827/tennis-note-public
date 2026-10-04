@@ -229,6 +229,23 @@ def restore_renewal_hold_base(path: str, text: str) -> str:
     return text.replace(port["baseVersion"], port["releaseVersion"])
 
 
+def restore_coach_round_base(path: str, text: str) -> str:
+    """승인된 회차 블록만 역변환하며 기존 golden hash는 유지한다."""
+    port = json.loads((ROOT / "tests/fixtures/coach-round-source-parity.json").read_text(encoding="utf-8"))
+    row = next((item for item in port["files"] if item["path"] == path), None)
+    if row is None:
+        return text
+    if sha256(text.encode("utf-8")) != row["candidateSha256"]:
+        raise RuntimeError(f"coach round candidate drift: {path}")
+    for hunk in row["hunks"]:
+        if text.count(hunk["after"]) != 1 or sha256(hunk["after"].encode("utf-8")) != row["authorityBlockSha256"]:
+            raise RuntimeError(f"coach round authority drift: {path}")
+        text = text.replace(hunk["after"], hunk["before"], 1)
+    if sha256(text.encode("utf-8")) != row["baseSha256"]:
+        raise RuntimeError(f"coach round base drift: {path}")
+    return text
+
+
 def normalize_product_bytes(path: str, data: bytes, manifest: dict[str, object]) -> bytes:
     try:
         text = data.decode("utf-8").replace("\r\n", "\n")
@@ -480,7 +497,8 @@ def verify() -> None:
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
         try:
-            data = restore_renewal_hold_base(path, data.decode("utf-8").replace("\r\n", "\n")).encode("utf-8")
+            text = restore_coach_round_base(path, data.decode("utf-8").replace("\r\n", "\n"))
+            data = restore_renewal_hold_base(path, text).encode("utf-8")
         except UnicodeDecodeError:
             pass
         if path == import_policy["target"]:
