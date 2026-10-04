@@ -113,7 +113,7 @@
     {
       "path": "app/tennis-note-member-app/app.js",
       "baseSha256": "fb25e7d7e50244ebd9de078b38e919d12d93637d3829044b86060607ff533205",
-      "candidateSha256": "96d8d512497b4c2d655aa5113d1baac184db730e83c8fde2d86ad8d61e640e8d",
+      "candidateSha256": "65d025c56f28a0c8837f15409baf0f1ea6257da33b7b7228d3481291375d3b3e",
       "hunks": [
         {
           "before": "  const flow = purchaseFlowState();\n  const product = purchaseFlowProduct();\n  if (membershipPurchasePaymentInFlight) return \"중복 주문 없이 결제 상태를 확인하고 있습니다.\";\n  if (![\"renew_same\", \"add_coach\", \"new_purchase\", \"one_day\"].includes(flow.purchasePurpose)) {",
@@ -121,18 +121,18 @@
         },
         {
           "before": "async function initApp() {\n  registerPwaServiceWorker();\n  window.TennisNoteModeTransition?.warm(\"../tennis-note-coach-app/index.html?v=1.0.528\");\n  void refreshMemberRuntimeDiagnostics();\n  registerPwaInstallPrompt();\n",
-          "after": "async function initApp() {\n  registerPwaServiceWorker();\n  window.TennisNoteModeTransition?.warm(\"../tennis-note-coach-app/index.html?v=1.0.529\");\n  void refreshMemberRuntimeDiagnostics();\n  registerPwaInstallPrompt();\n"
+          "after": "async function initApp() {\n  registerPwaServiceWorker();\n  window.TennisNoteModeTransition?.warm(\"../tennis-note-coach-app/index.html?v=1.0.530\");\n  void refreshMemberRuntimeDiagnostics();\n  registerPwaInstallPrompt();\n"
         },
         {
           "before": "\nwindow.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({\n  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.528\",\n  loadedAt: new Date().toISOString(),\n});\n",
-          "after": "\nwindow.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({\n  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.529\",\n  loadedAt: new Date().toISOString(),\n});\n"
+          "after": "\nwindow.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({\n  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.530\",\n  loadedAt: new Date().toISOString(),\n});\n"
         }
       ]
     },
     {
       "path": "app/tennis-note-member-app/ui/screens.js",
       "baseSha256": "c906f1fe5c70d520342535d53056888925b529aa0ed19261f65c9bd48d24b4a6",
-      "candidateSha256": "b2c6e58e7a25fabd8c54f4db94b992335962c5d30c20fef34f128b192c3470fd",
+      "candidateSha256": "b30ecb3edee5bb001b9a669b77e440ae84426c31483facf951ad619352b7a6b7",
       "hunks": [
         {
           "before": "      selectedProductId = oneDayProduct.id;\n    }\n    openMembershipPurchaseFlow(renewalTicketId, selectedProductId, purpose, { preserveExplicitPurpose });\n    if (openProductSheet) openPurchaseProductSheet();\n    return true;",
@@ -148,7 +148,7 @@
         },
         {
           "before": "  saveSnapshot();\n  const target = window.TennisNoteModeTransition?.saved(\"coach\", \"todayView\") || { view: \"todayView\" };\n  const params = new URLSearchParams({ v: \"1.0.528\", view: target.view || \"todayView\" });\n  const url = `../tennis-note-coach-app/index.html?${params.toString()}`;\n  if (!window.TennisNoteModeTransition?.navigate(url, {\n",
-          "after": "  saveSnapshot();\n  const target = window.TennisNoteModeTransition?.saved(\"coach\", \"todayView\") || { view: \"todayView\" };\n  const params = new URLSearchParams({ v: \"1.0.529\", view: target.view || \"todayView\" });\n  const url = `../tennis-note-coach-app/index.html?${params.toString()}`;\n  if (!window.TennisNoteModeTransition?.navigate(url, {\n"
+          "after": "  saveSnapshot();\n  const target = window.TennisNoteModeTransition?.saved(\"coach\", \"todayView\") || { view: \"todayView\" };\n  const params = new URLSearchParams({ v: \"1.0.530\", view: target.view || \"todayView\" });\n  const url = `../tennis-note-coach-app/index.html?${params.toString()}`;\n  if (!window.TennisNoteModeTransition?.navigate(url, {\n"
         }
       ]
     },
@@ -252,7 +252,7 @@
   "baseVersion": "1.0.528",
   "upstreamPublicHead": "bf564f7908b4e59e141de0618b8845c34eb06a1c",
   "upstreamPublicBase": "648ac3387f11ad65e7631ad32e4a9a06b511d49c",
-  "releaseVersion": "1.0.529",
+  "releaseVersion": "1.0.530",
   "releaseOnlyPaths": [
     "app/tennis-note-member-app/app.js",
     "app/tennis-note-member-app/ui/screens.js"
