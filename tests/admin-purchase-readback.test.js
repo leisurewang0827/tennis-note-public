@@ -4,9 +4,10 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { withoutPurchaseIdentity } from "./helpers/purchase-identity-port.js";
+import renewalPort from "./helpers/renewal-hold-port.cjs";
 
 const root = new URL("../", import.meta.url);
-const read = path => readFileSync(new URL(path, root), "utf8").replace(/\r\n/g, "\n");
+const read = path => renewalPort.restoreBase(path, readFileSync(new URL(path, root), "utf8").replace(/\r\n/g, "\n"));
 const sha = value => createHash("sha256").update(value).digest("hex");
 const manifest = JSON.parse(read("docs/admin-purchase-readback-source-parity-20261001.json"));
 

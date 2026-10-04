@@ -213,6 +213,21 @@ def release_metadata(path: Path) -> dict[str, str]:
     }
 
 
+def restore_renewal_hold_base(path: str, text: str) -> str:
+    """승인된 exact hunk만 역변환하며 기존 제품 golden은 바꾸지 않는다."""
+    port = json.loads((ROOT / "tests/fixtures/renewal-hold-source-parity.json").read_text(encoding="utf-8"))
+    row = next((item for item in port["files"] if item["path"] == path), None)
+    if not row or hashlib.sha256(text.encode()).hexdigest() != row["candidateSha256"]:
+        return text  # 다른 소스는 기존 golden 검사가 그대로 거부한다.
+    for hunk in row["hunks"]:
+        if text.count(hunk["after"]) != 1:
+            raise ValueError(f"renewal hold ambiguous hunk: {path}")
+        text = text.replace(hunk["after"], hunk["before"], 1)
+    if hashlib.sha256(text.encode()).hexdigest() != row["baseSha256"]:
+        raise ValueError(f"renewal hold base drift: {path}")
+    return text
+
+
 def normalize_product_bytes(path: str, data: bytes, manifest: dict[str, object]) -> bytes:
     try:
         text = data.decode("utf-8").replace("\r\n", "\n")
@@ -463,6 +478,10 @@ def verify() -> None:
         raise RuntimeError("import-only mapper hunk missing or duplicated")
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
+        try:
+            data = restore_renewal_hold_base(path, data.decode("utf-8").replace("\r\n", "\n")).encode("utf-8")
+        except UnicodeDecodeError:
+            pass
         if path == import_policy["target"]:
             data = data.decode("utf-8").replace("\r\n", "\n").replace(
                 import_policy["hunk"], "  const savedStatus = row.policy_settings?.adminSaleStatus;"

@@ -95,6 +95,39 @@ function memberRefundRequestForBilling(item = {}) {
   )) || null;
 }
 
+async function loadAdminPaymentHoldReasons(rows = []) {
+  const client = window.TennisNoteDataClient;
+  const branchId = activeOperationBranchId();
+  // Never carry a cached reason forward without a fresh authorized projection.
+  const clean = rows.map((row) => ({ ...row, finalizeHoldCode: "", finalizeHoldAt: "" }));
+  if (operationsRole() !== "admin" || !branchId || !client?.rpc) return clean;
+  if (clean.length > 5000) throw new Error("payment_hold_batch_invalid");
+  const eligible = clean.filter((row) => row.branch_id === branchId && row.status === "verified"
+    && !row.ticket_id && !row.one_day_booking_id && row.method !== "bank_transfer" && row.provider !== "bank_transfer");
+  const ids = [...new Set(eligible.map((row) => row.id))];
+  const reasons = new Map();
+  // At most ten bounded page-sized RPCs, never one query per payment/event.
+  for (let offset = 0; offset < ids.length; offset += 500) {
+    const batch = ids.slice(offset, offset + 500);
+    const result = await client.rpc("tn_admin_payment_hold_reasons", {
+      target_branch_id: branchId, target_payment_ids: batch,
+    });
+    if (!Array.isArray(result) || result.length > batch.length) throw new Error("payment_hold_projection_invalid");
+    for (const row of result) {
+      if (!batch.includes(row.payment_id) || reasons.has(row.payment_id)
+        || row.reason_code !== "renewal_source_checkout_unavailable" || !Number.isFinite(Date.parse(row.failed_at))) {
+        throw new Error("payment_hold_projection_invalid");
+      }
+      reasons.set(row.payment_id, row);
+    }
+  }
+  if (activeOperationBranchId() !== branchId || operationsRole() !== "admin") throw new Error("payment_hold_scope_changed");
+  return clean.map((row) => {
+    const reason = row.branch_id === branchId ? reasons.get(row.id) : null;
+    return reason ? { ...row, finalizeHoldCode: reason.reason_code, finalizeHoldAt: reason.failed_at } : row;
+  });
+}
+
 async function loadServerPaymentsIntoBilling(options = {}) {
   const silent = Boolean(options.silent);
   const force = Boolean(options.force);
@@ -152,6 +185,7 @@ async function loadServerPaymentsIntoBilling(options = {}) {
         }
       }
     }
+    rows = await loadAdminPaymentHoldReasons(Array.isArray(rows) ? rows : []);
     await loadAdminMemberRefundRequests();
     const { added, updated, removed } = replaceServerPaymentRows(Array.isArray(rows) ? rows : []);
     serverPaymentSyncState.loaded = true;
@@ -335,7 +369,14 @@ async function verifyBillingPaymentItem(item) {
     }
   } catch (error) {
     const code = error?.payload?.code || error?.message || "server_error";
-    if (code === "payment_not_paid") {
+    if (code === "renewal_source_checkout_unavailable" && error?.payload?.paymentStatus === "verified"
+      && error?.payload?.entitlementStatus === "hold") {
+      item.status = "paid";
+      item.statusLabel = "회원권 적용 보류";
+      billingLogs.unshift(`${item.member} ${item.item} 회원권 적용 보류: ${code}`);
+      reportAdminPaymentGuard("reconcile_hold", code);
+      showToast(paymentTicketFinalizeRecoveryMessage(code));
+    } else if (code === "payment_not_paid") {
       item.status = "server_ready";
       item.statusLabel = "결제대기";
       billingLogs.unshift(`${item.member} ${item.item} 아직 Toss 결제 완료 전`);

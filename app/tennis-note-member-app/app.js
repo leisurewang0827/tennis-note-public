@@ -973,6 +973,8 @@ function openPurchaseProductSheet() {
 function purchaseContinueReason() {
   const flow = purchaseFlowState();
   const product = purchaseFlowProduct();
+  const renewalIssue = purchaseRenewalPaymentIssue(product);
+  if (renewalIssue) return renewalIssue.message;
   if (membershipPurchasePaymentInFlight) return "중복 주문 없이 결제 상태를 확인하고 있습니다.";
   if (!["renew_same", "add_coach", "new_purchase", "one_day"].includes(flow.purchasePurpose)) {
     return "연장 또는 새 이용권을 선택해 주세요.";

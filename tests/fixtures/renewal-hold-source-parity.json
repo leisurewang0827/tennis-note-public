@@ -1,0 +1,243 @@
+{
+  "contractVersion": 1,
+  "base": "25adfafb0375c70b2b00eec0c527b238de95049d",
+  "privateHead": "8e2279e232e1b0fb1e77426a4df7a271b053d7d8",
+  "privateSources": [
+    {
+      "path": "90-Dashboard/tennis-note-member-app/app.js",
+      "sha256": "0335110369a961f618ffae622404350fc50c875b9fbe485fa73eef53feb6017c"
+    },
+    {
+      "path": "90-Dashboard/tennis-note-prototype/app.js",
+      "sha256": "b4e89902309cf12e13ac7e0073306babb64f6d286d9379b4c36af8c795fbe7ae"
+    }
+  ],
+  "parity": [
+    {
+      "name": "membershipProductFromServer",
+      "path": "app/tennis-note-member-app/forms/tickets.js",
+      "privateExecutableSha256": "32874ea40a30b5657034db722cd7869a2be2d04d66738029ebf43ae9c649efc8",
+      "excludedExactComment": "  // Import eligibility is independent of member checkout visibility. Owned\n  // ticket history still maps this product; purchase lists exclude hidden rows.\n"
+    },
+    {
+      "name": "purchaseFlowSourceTicket",
+      "path": "app/tennis-note-member-app/domain/tickets.js",
+      "privateExecutableSha256": "c180f0a72f0170c6a25f40e6fed2066ba63579ded4e09fc7a9269fc5f778a6ba",
+      "excludedExactComment": ""
+    },
+    {
+      "name": "renewalProductIsForSale",
+      "path": "app/tennis-note-member-app/domain/tickets.js",
+      "privateExecutableSha256": "68bf2333d0b1251458c17ddc8119d1831fee379c58167d1f9c211aeb5c15a66f",
+      "excludedExactComment": ""
+    },
+    {
+      "name": "purchaseRenewalSourceIssue",
+      "path": "app/tennis-note-member-app/domain/tickets.js",
+      "privateExecutableSha256": "49dd116f8067c93c0159f49f9c5587506d4dfe25ffe62b4c903c9f32ba85b25c",
+      "excludedExactComment": ""
+    },
+    {
+      "name": "blockPurchaseRenewal",
+      "path": "app/tennis-note-member-app/domain/tickets.js",
+      "privateExecutableSha256": "4043491c825e07ec291a56509ebf223b49c09238f9e14b58d3a01ac5269bd7e3",
+      "excludedExactComment": ""
+    },
+    {
+      "name": "purchaseRenewalPaymentIssue",
+      "path": "app/tennis-note-member-app/domain/tickets.js",
+      "privateExecutableSha256": "70b12c4dd0dd844c4e0a5e421f7829a88b9570ad1bacf4f3598da9fc87c134a9",
+      "excludedExactComment": ""
+    },
+    {
+      "name": "loadAdminPaymentHoldReasons",
+      "path": "app/admin/data/billing.js",
+      "privateExecutableSha256": "a5aa6716e8680246e3ac1bad01a9c033274a77058671411cb3572fafc574fb28",
+      "excludedExactComment": ""
+    }
+  ],
+  "files": [
+    {
+      "path": "app/tennis-note-member-app/domain/tickets.js",
+      "baseSha256": "2c862024818b6b145a621d7d42e2f93a7d63e465816a3401f19be10195b61053",
+      "candidateSha256": "92fb7f0e7f2c837d0d2bc83eb3414ac4a64b38dda3c497739b4c9d34e9959988",
+      "hunks": [
+        {
+          "before": "\nasync function startProductPayment(productId, options = {}) {\n  const product = membershipProducts().find((item) => item.id === productId);\n  if (!product) return;",
+          "after": "\nasync function startProductPayment(productId, options = {}) {\n  const renewalIssue = purchaseRenewalSourceIssue();\n  if (renewalIssue) return blockPurchaseRenewal(renewalIssue);\n  const product = membershipProducts().find((item) => item.id === productId);\n  if (!product) return;"
+        },
+        {
+          "before": "    flow.preferredTime = lesson?.time || \"\";\n    flow.preferredSchedules = [];\n    const matchingProduct = membershipProducts().find((product) => String(product.id) === String(sourceTicket.productId || \"\"))\n      || recommendedMembershipProducts(membershipProducts(), membershipProductFamilyId(sourceTicket), sourceTicket)[0];\n    if (matchingProduct) {\n      flow.productId = matchingProduct.id;",
+          "after": "    flow.preferredTime = lesson?.time || \"\";\n    flow.preferredSchedules = [];\n    const matchingProduct = membershipProducts().find((product) => String(product.id) === String(sourceTicket.productId || \"\"));\n    if (matchingProduct) {\n      flow.productId = matchingProduct.id;"
+        },
+        {
+          "before": "  flow.showMoreSlots = false;\n  flow.showAllProducts = false;\n  const activeTickets = currentLiveTickets();\n  if (purpose === \"renew_same\") {\n    const sourceTicket = activeTickets.find((ticket) => String(ticket.id) === String(flow.renewalTicketId)) || activeTickets[0] || null;\n    if (!sourceTicket) return;\n    const lesson = purchaseTicketLesson(sourceTicket);\n    flow.purchasePurpose = \"renew_same\";",
+          "after": "  flow.showMoreSlots = false;\n  flow.showAllProducts = false;\n  if (purpose === \"renew_same\") {\n    flow.purchasePurpose = \"renew_same\";\n    const renewalIssue = purchaseRenewalSourceIssue();\n    if (renewalIssue) return blockPurchaseRenewal(renewalIssue);\n    const sourceTicket = purchaseFlowSourceTicket();\n    const lesson = purchaseTicketLesson(sourceTicket);\n    flow.purchasePurpose = \"renew_same\";"
+        },
+        {
+          "before": "function purchaseFlowSourceTicket() {\n  const flow = purchaseFlowState();\n  return (state.liveTickets || []).find((ticket) => String(ticket.id || \"\") === String(flow.renewalTicketId || \"\")) || null;\n}",
+          "after": "function purchaseFlowSourceTicket() {\n  const flow = purchaseFlowState();\n  return [...(state.liveTickets || []), ...(state.expiredTickets || [])]\n    .find((ticket) => String(ticket.id || \"\") === String(flow.renewalTicketId || \"\")) || null;\n}\n\nfunction renewalProductIsForSale(product) {\n  if (!product || product.status !== \"sale\" || !isDirectPurchaseMembershipProduct(product)) return false;\n  const policies = [product, product.policySettings || {}, product.policy_settings || {}];\n  return product.is_active !== false && product.isActive !== false\n    && policies.every((policy) => policy.importOnly !== true && policy.memberCheckoutVisible !== false);\n}\n\nfunction purchaseRenewalSourceIssue(flow = purchaseFlowState()) {\n  if (flow.purchasePurpose !== \"renew_same\") return null;\n  const sourceId = String(flow.renewalTicketId || \"\");\n  const source = sourceId && [...(state.liveTickets || []), ...(state.expiredTickets || [])]\n    .find((ticket) => String(ticket.id || \"\") === sourceId);\n  if (!source || source.refundHoldId || ![\"active\", \"paused\", \"expired\"].includes(String(source.status || \"\").toLowerCase())) {\n    return { code: \"exact_renewal_source_ticket_required\", message: \"연장할 기존 회원권을 정확히 다시 선택해 주세요. 다른 회원권으로 자동 변경하지 않습니다.\" };\n  }\n  const sourceProduct = membershipProducts().find((product) => (\n    String(product.id || \"\") === String(source.productId || \"\")\n  ));\n  if (!renewalProductIsForSale(sourceProduct)) {\n    return { code: \"renewal_source_checkout_unavailable\", message: \"기존 회원권의 상품은 현재 온라인 연장이 불가합니다. 이용 기록과 잔여 횟수는 유지되며, 관리자에게 문의해 주세요.\" };\n  }\n  // Explicit sale-product changes (including four-week/three-month) remain a\n  // separate existing choice. Never infer one when the source is unavailable.\n  return null;\n}\n\nfunction blockPurchaseRenewal(issue) {\n  const flow = purchaseFlowState();\n  flow.productId = \"\";\n  flow.discountIssueId = \"\";\n  flow.step = 1;\n  flow.completionStatus = \"\";\n  preparedPaymentContext = null;\n  setPurchaseRevalidationNotice(issue.code, issue.message);\n  showToast(issue.message);\n  return false;\n}\n\nfunction purchaseRenewalPaymentIssue(product) {\n  const flow = purchaseFlowState();\n  const sourceIssue = purchaseRenewalSourceIssue(flow);\n  if (sourceIssue || flow.purchasePurpose !== \"renew_same\") return sourceIssue;\n  if (!renewalProductIsForSale(product)\n    || String(flow.productId || \"\") !== String(product?.id || \"\")\n    || !membershipProducts().some((item) => String(item.id) === String(product.id) && renewalProductIsForSale(item))) {\n    return { code: \"renewal_source_checkout_unavailable\", message: \"연장할 상품의 판매 상태가 바뀌었습니다. 상품을 다시 확인해 주세요.\" };\n  }\n  return null;\n}"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/views/common.js",
+      "baseSha256": "ac8683523cecc298b2d24cfb830115a1ab0ec98ac8d32afff003461edabe8726",
+      "candidateSha256": "5f1df1be36ef4d589cac63b84d3728032dfef2200c7beceb8a21864d1d41b388",
+      "hunks": [
+        {
+          "before": "  }\n  const renewing = flow.purchasePurpose === \"renew_same\";\n  const selectedTicket = purchaseFlowSourceTicket() || activeTickets[0] || null;\n  const lesson = purchaseTicketLesson(selectedTicket || {});\n  const coachName = selectedTicket?.coach || memberScheduleTicketCoachName(selectedTicket || {}) || \"담당 코치\";",
+          "after": "  }\n  const renewing = flow.purchasePurpose === \"renew_same\";\n  const selectedTicket = purchaseFlowSourceTicket() || (!renewing ? activeTickets[0] || null : null);\n  const lesson = purchaseTicketLesson(selectedTicket || {});\n  const coachName = selectedTicket?.coach || memberScheduleTicketCoachName(selectedTicket || {}) || \"담당 코치\";"
+        },
+        {
+          "before": "    const explicitNewPurchase = flow.purchasePurpose === \"new_purchase\";\n    flow.purchasePurpose = oneDay ? \"one_day\" : explicitNewPurchase ? \"new_purchase\" : returning ? \"renew_same\" : \"new_purchase\";\n    if (returning && flow.purchasePurpose === \"renew_same\" && !flow.renewalTicketId) flow.renewalTicketId = returningTicket.id || \"\";\n    const renewal = returning && flow.purchasePurpose === \"renew_same\";\n    const returningLabel = returning ? \"재등록\" : \"등록\";",
+          "after": "    const explicitNewPurchase = flow.purchasePurpose === \"new_purchase\";\n    flow.purchasePurpose = oneDay ? \"one_day\" : explicitNewPurchase ? \"new_purchase\" : returning ? \"renew_same\" : \"new_purchase\";\n    const renewal = returning && flow.purchasePurpose === \"renew_same\";\n    const returningLabel = returning ? \"재등록\" : \"등록\";"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/domain/purchase.js",
+      "baseSha256": "923e279f150d2f2aa7cbd5d27006696f7074c4f37e6f5141e5b9d327f6c8c18f",
+      "candidateSha256": "b8f863b9b760b68454f9f77df68f4a0b2fd55d5d442c70702a2b7a31cf329733",
+      "hunks": [
+        {
+          "before": "  }\n\n  const currentProduct = membershipProducts().find((product) => (\n    String(product.id || \"\") === String(productId || \"\")",
+          "after": "  }\n\n  const renewalIssue = purchaseRenewalSourceIssue();\n  if (renewalIssue) return blockPurchaseRenewal(renewalIssue);\n  const currentProduct = membershipProducts().find((product) => (\n    String(product.id || \"\") === String(productId || \"\")"
+        },
+        {
+          "before": "  const flow = purchaseFlowState();\n  const product = purchaseFlowProduct();\n  const purposeReady = [\"renew_same\", \"add_coach\", \"new_purchase\", \"one_day\"].includes(flow.purchasePurpose);\n  if (!purposeReady || !product || !isPaymentGatewayReady(normalizeSelectedPaymentMethod())) return false;",
+          "after": "  const flow = purchaseFlowState();\n  const product = purchaseFlowProduct();\n  if (purchaseRenewalPaymentIssue(product)) return false;\n  const purposeReady = [\"renew_same\", \"add_coach\", \"new_purchase\", \"one_day\"].includes(flow.purchasePurpose);\n  if (!purposeReady || !product || !isPaymentGatewayReady(normalizeSelectedPaymentMethod())) return false;"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/app.js",
+      "baseSha256": "fb25e7d7e50244ebd9de078b38e919d12d93637d3829044b86060607ff533205",
+      "candidateSha256": "c7e5d01b96c20d0680174bd690831436780c6da1ce6ae50e1f103785ca1af5b2",
+      "hunks": [
+        {
+          "before": "  const flow = purchaseFlowState();\n  const product = purchaseFlowProduct();\n  if (membershipPurchasePaymentInFlight) return \"중복 주문 없이 결제 상태를 확인하고 있습니다.\";\n  if (![\"renew_same\", \"add_coach\", \"new_purchase\", \"one_day\"].includes(flow.purchasePurpose)) {",
+          "after": "  const flow = purchaseFlowState();\n  const product = purchaseFlowProduct();\n  const renewalIssue = purchaseRenewalPaymentIssue(product);\n  if (renewalIssue) return renewalIssue.message;\n  if (membershipPurchasePaymentInFlight) return \"중복 주문 없이 결제 상태를 확인하고 있습니다.\";\n  if (![\"renew_same\", \"add_coach\", \"new_purchase\", \"one_day\"].includes(flow.purchasePurpose)) {"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/ui/screens.js",
+      "baseSha256": "c906f1fe5c70d520342535d53056888925b529aa0ed19261f65c9bd48d24b4a6",
+      "candidateSha256": "461e6acdfe379bd3d7a474252433a0fd912856551e3ea8e60af9894785f6ad70",
+      "hunks": [
+        {
+          "before": "      selectedProductId = oneDayProduct.id;\n    }\n    openMembershipPurchaseFlow(renewalTicketId, selectedProductId, purpose, { preserveExplicitPurpose });\n    if (openProductSheet) openPurchaseProductSheet();\n    return true;",
+          "after": "      selectedProductId = oneDayProduct.id;\n    }\n    if (openMembershipPurchaseFlow(renewalTicketId, selectedProductId, purpose, { preserveExplicitPurpose }) === false) return false;\n    if (openProductSheet) openPurchaseProductSheet();\n    return true;"
+        },
+        {
+          "before": "    && isDirectPurchaseMembershipProduct(product)\n  )) || null;\n  const inferredSourceFamilyId = sourceTicket ? membershipProductFamilyId({\n    title: sourceTicket.title || \"\",\n    group: sourceTicket.group || \"\",\n    productKind: sourceTicket.productKind || \"regular\",\n    mode: sourceTicket.productKind === \"coupon\" ? \"pass\" : \"fixed\",\n    groupSize: sourceTicket.groupSize || 1,\n    lessonMinutes: sourceTicket.lessonMinutes || 20,\n    scheduleScope: sourceTicket.scheduleScope || (/주말/.test(sourceTicket.title || \"\") ? \"weekend\" : \"weekday\"),\n  }) : \"\";\n  const matchingProduct = exactProduct\n    || (sourceTicket ? recommendedMembershipProducts(products, inferredSourceFamilyId, sourceTicket)[0] : null)\n    || null;\n  const lesson = sourceTicket ? purchaseTicketLesson(sourceTicket) : null;\n  flow.open = true;",
+          "after": "    && isDirectPurchaseMembershipProduct(product)\n  )) || null;\n  const matchingProduct = exactProduct || null;\n  const lesson = sourceTicket ? purchaseTicketLesson(sourceTicket) : null;\n  flow.open = true;"
+        },
+        {
+          "before": "    ? latestPreviousMembershipTicket()\n    : null;\n  const requestedSource = (state.liveTickets || []).find((ticket) => String(ticket.id || \"\") === String(renewalTicketId || \"\")) || null;\n  const sourceTicket = requestedSource\n    || returningSource\n    || (![\"add_coach\", \"new_purchase\", \"one_day\"].includes(requestedPurpose) ? activeTickets[0] || null : null);\n  if (\n    requestedPurpose === \"renew_same\"",
+          "after": "    ? latestPreviousMembershipTicket()\n    : null;\n  const requestedSource = [...(state.liveTickets || []), ...(state.expiredTickets || [])]\n    .find((ticket) => String(ticket.id || \"\") === String(renewalTicketId || \"\")) || null;\n  const sourceTicket = requestedSource\n    || (renewalTicketId || requestedPurpose === \"renew_same\" ? null : returningSource\n      || (![\"add_coach\", \"new_purchase\", \"one_day\"].includes(requestedPurpose) ? activeTickets[0] || null : null));\n  if ((renewalTicketId && !requestedSource) || requestedPurpose === \"renew_same\" || (sourceTicket && !requestedPurpose)) {\n    flow.purchasePurpose = \"renew_same\";\n    flow.renewalTicketId = String(renewalTicketId || sourceTicket?.id || \"\");\n    const renewalIssue = purchaseRenewalSourceIssue();\n    if (renewalIssue) return blockPurchaseRenewal(renewalIssue);\n  }\n  if (\n    requestedPurpose === \"renew_same\""
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/domain/payment.js",
+      "baseSha256": "72c1fce06ebacaa0e1faf8c7a6c00f8d9f27014c8781123d369de53a734d2230",
+      "candidateSha256": "b55761ad2086ff3133a874f0656e7c8add3deb4791a878adfa9b648fc4257765",
+      "hunks": [
+        {
+          "before": "    lesson_time_grid_invalid: \"수업은 정각·20분·40분 시작 시간에서 선택해 주세요.\",\n    exact_renewal_source_ticket_required: \"재등록할 기존 회원권을 다시 확인해 주세요.\",\n    renewal_coach_mismatch: \"기존 회원권의 담당 코치 정보를 다시 확인해 주세요.\",\n    payment_hold_expired: \"선택 시간의 보관 시간이 끝났습니다. 가능한 시간을 다시 선택해 주세요.\",",
+          "after": "    lesson_time_grid_invalid: \"수업은 정각·20분·40분 시작 시간에서 선택해 주세요.\",\n    exact_renewal_source_ticket_required: \"재등록할 기존 회원권을 다시 확인해 주세요.\",\n    renewal_source_checkout_unavailable: \"기존 회원권 또는 선택한 상품은 현재 온라인 연장이 불가합니다. 이용 기록과 잔여 횟수는 유지되며, 관리자에게 문의해 주세요.\",\n    renewal_coach_mismatch: \"기존 회원권의 담당 코치 정보를 다시 확인해 주세요.\",\n    payment_hold_expired: \"선택 시간의 보관 시간이 끝났습니다. 가능한 시간을 다시 선택해 주세요.\","
+        },
+        {
+          "before": "function paymentServerErrorMessage(error) {\n  const code = paymentServerErrorCode(error);\n  const labels = {\n    group_next_payer_required: \"이번 결제 담당 회원의 로그인이 필요합니다.\",",
+          "after": "function paymentServerErrorMessage(error) {\n  const code = paymentServerErrorCode(error);\n  if (code === \"renewal_source_checkout_unavailable\" && error?.payload?.paymentStatus === \"verified\"\n    && error?.payload?.entitlementStatus === \"hold\") {\n    return \"결제·입금은 확인되었으나 기존 상품의 판매 정책으로 회원권 적용이 보류되었습니다. 다시 결제하지 말고 관리자에게 문의해 주세요.\";\n  }\n  const labels = {\n    group_next_payer_required: \"이번 결제 담당 회원의 로그인이 필요합니다.\","
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/data/payment.js",
+      "baseSha256": "8ba82ba14d57ee43ba5ab27fe61560549de39dd65da762e878cc2dd68879783f",
+      "candidateSha256": "8caf5b52a7ef6c2f9e677738993cec87ae98709e7a067f307df0a838ba15a751",
+      "hunks": [
+        {
+          "before": "\nasync function prepareServerPayment(product, paymentId, methodId = state.selectedPaymentMethod) {\n  const client = window.TennisNoteDataClient;\n  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {",
+          "after": "\nasync function prepareServerPayment(product, paymentId, methodId = state.selectedPaymentMethod) {\n  const renewalIssue = purchaseRenewalPaymentIssue(product);\n  if (renewalIssue) {\n    blockPurchaseRenewal(renewalIssue);\n    throw new Error(renewalIssue.code);\n  }\n  const client = window.TennisNoteDataClient;\n  if (!client?.invokeFunction || !client.getSession?.()?.access_token) {"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/payment.js",
+      "baseSha256": "4c0f36d815dca219d83c96b148c4385ff02ac898d08c030f0e67f1d1f1ed9c68",
+      "candidateSha256": "52ccdd19f18f9aa0d981e4bd21fb9d485d9bb6bd5c580a48ef040788552bdfee",
+      "hunks": [
+        {
+          "before": "  if (!context) return;\n  const { product, sdk } = context;\n  const requestedPaymentId = context.paymentId;\n  const methodId = paymentMethodIdForRequest(context.methodId);",
+          "after": "  if (!context) return;\n  const { product, sdk } = context;\n  const renewalIssue = purchaseRenewalPaymentIssue(product);\n  if (renewalIssue) return blockPurchaseRenewal(renewalIssue);\n  const requestedPaymentId = context.paymentId;\n  const methodId = paymentMethodIdForRequest(context.methodId);"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/data/billing.js",
+      "baseSha256": "89697b7d972133ee4608aa10bd0b84caf4f5bb866cef8cc24927a7e12de9781c",
+      "candidateSha256": "b197d7935014450958c361b17e2c052fb9a37b58e4fbe3e172b9fe4f15ea7ec5",
+      "hunks": [
+        {
+          "before": "  } catch (error) {\n    const code = error?.payload?.code || error?.message || \"server_error\";\n    if (code === \"payment_not_paid\") {\n      item.status = \"server_ready\";\n      item.statusLabel = \"결제대기\";",
+          "after": "  } catch (error) {\n    const code = error?.payload?.code || error?.message || \"server_error\";\n    if (code === \"renewal_source_checkout_unavailable\" && error?.payload?.paymentStatus === \"verified\"\n      && error?.payload?.entitlementStatus === \"hold\") {\n      item.status = \"paid\";\n      item.statusLabel = \"회원권 적용 보류\";\n      billingLogs.unshift(`${item.member} ${item.item} 회원권 적용 보류: ${code}`);\n      reportAdminPaymentGuard(\"reconcile_hold\", code);\n      showToast(paymentTicketFinalizeRecoveryMessage(code));\n    } else if (code === \"payment_not_paid\") {\n      item.status = \"server_ready\";\n      item.statusLabel = \"결제대기\";"
+        },
+        {
+          "before": "      }\n    }\n    await loadAdminMemberRefundRequests();\n    const { added, updated, removed } = replaceServerPaymentRows(Array.isArray(rows) ? rows : []);",
+          "after": "      }\n    }\n    rows = await loadAdminPaymentHoldReasons(Array.isArray(rows) ? rows : []);\n    await loadAdminMemberRefundRequests();\n    const { added, updated, removed } = replaceServerPaymentRows(Array.isArray(rows) ? rows : []);"
+        },
+        {
+          "before": "async function loadServerPaymentsIntoBilling(options = {}) {",
+          "after": "async function loadAdminPaymentHoldReasons(rows = []) {\n  const client = window.TennisNoteDataClient;\n  const branchId = activeOperationBranchId();\n  // Never carry a cached reason forward without a fresh authorized projection.\n  const clean = rows.map((row) => ({ ...row, finalizeHoldCode: \"\", finalizeHoldAt: \"\" }));\n  if (operationsRole() !== \"admin\" || !branchId || !client?.rpc) return clean;\n  if (clean.length > 5000) throw new Error(\"payment_hold_batch_invalid\");\n  const eligible = clean.filter((row) => row.branch_id === branchId && row.status === \"verified\"\n    && !row.ticket_id && !row.one_day_booking_id && row.method !== \"bank_transfer\" && row.provider !== \"bank_transfer\");\n  const ids = [...new Set(eligible.map((row) => row.id))];\n  const reasons = new Map();\n  // At most ten bounded page-sized RPCs, never one query per payment/event.\n  for (let offset = 0; offset < ids.length; offset += 500) {\n    const batch = ids.slice(offset, offset + 500);\n    const result = await client.rpc(\"tn_admin_payment_hold_reasons\", {\n      target_branch_id: branchId, target_payment_ids: batch,\n    });\n    if (!Array.isArray(result) || result.length > batch.length) throw new Error(\"payment_hold_projection_invalid\");\n    for (const row of result) {\n      if (!batch.includes(row.payment_id) || reasons.has(row.payment_id)\n        || row.reason_code !== \"renewal_source_checkout_unavailable\" || !Number.isFinite(Date.parse(row.failed_at))) {\n        throw new Error(\"payment_hold_projection_invalid\");\n      }\n      reasons.set(row.payment_id, row);\n    }\n  }\n  if (activeOperationBranchId() !== branchId || operationsRole() !== \"admin\") throw new Error(\"payment_hold_scope_changed\");\n  return clean.map((row) => {\n    const reason = row.branch_id === branchId ? reasons.get(row.id) : null;\n    return reason ? { ...row, finalizeHoldCode: reason.reason_code, finalizeHoldAt: reason.failed_at } : row;\n  });\n}\n\nasync function loadServerPaymentsIntoBilling(options = {}) {"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/domain/payment.js",
+      "baseSha256": "91ef84165ca44fe31f7e2715bb371dedf12fe2e773df7e4f9df5fb3184e6048f",
+      "candidateSha256": "faec5da328ebd90d0f1fc55c9156b6bbf0744cdf96f2b3e8e206b393e9062686",
+      "hunks": [
+        {
+          "before": "function paymentTicketFinalizeRecoveryMessage(value = \"\") {\n  const code = paymentTicketFinalizeRecoveryCode(value);\n  if (code === \"payment_purchase_context_missing\") return \"결제 준비 정보가 없어 자동 처리할 수 없습니다. 회원권 연결 대상을 확인해 주세요.\";\n  if (code === \"renewal_source_ticket_missing\") return \"연장할 기존 회원권을 찾지 못했습니다. 회원과 기존 회원권을 확인해 주세요.\";",
+          "after": "function paymentTicketFinalizeRecoveryMessage(value = \"\") {\n  const code = paymentTicketFinalizeRecoveryCode(value);\n  if (code === \"renewal_source_checkout_unavailable\") return \"결제·입금은 확인됐지만 기존 상품의 판매 정책으로 회원권 적용이 보류됐습니다. 재결제하지 말고 상품 정책과 연결 대상을 확인해 주세요.\";\n  if (code === \"payment_purchase_context_missing\") return \"결제 준비 정보가 없어 자동 처리할 수 없습니다. 회원권 연결 대상을 확인해 주세요.\";\n  if (code === \"renewal_source_ticket_missing\") return \"연장할 기존 회원권을 찾지 못했습니다. 회원과 기존 회원권을 확인해 주세요.\";"
+        },
+        {
+          "before": "function paymentTicketFinalizeRecoveryCode(value = \"\") {\n  const code = String(value || \"\").toLowerCase();\n  if (code.includes(\"payment_purchase_context_missing\")) return \"payment_purchase_context_missing\";\n  if (code.includes(\"renewal_source\") || code.includes(\"source_ticket_not_found\") || code.includes(\"exact_source\")) return \"renewal_source_ticket_missing\";",
+          "after": "function paymentTicketFinalizeRecoveryCode(value = \"\") {\n  const code = String(value || \"\").toLowerCase();\n  if (code.includes(\"renewal_source_checkout_unavailable\")) return \"renewal_source_checkout_unavailable\";\n  if (code.includes(\"payment_purchase_context_missing\")) return \"payment_purchase_context_missing\";\n  if (code.includes(\"renewal_source\") || code.includes(\"source_ticket_not_found\") || code.includes(\"exact_source\")) return \"renewal_source_ticket_missing\";"
+        },
+        {
+          "before": "\nfunction chargeStatusForPayment(item = {}) {\n  if (item.status === \"refund_manual_pending\") return { label: \"환불 송금 대기\", tone: \"warn\", detail: \"현금 환불이 접수됐습니다. 실제 송금 확인 전까지 이용권 사용과 원데이 예약이 잠시 정지됩니다.\" };\n  if (item.status === \"refund_processing\") return { label: \"환불 처리중\", tone: \"warn\", detail: \"PortOne 취소와 내부 회원권 반영이 진행 중입니다.\" };",
+          "after": "\nfunction chargeStatusForPayment(item = {}) {\n  if (item.status === \"paid\" && !item.ticketId && !item.oneDayBookingId && item.finalizeHoldCode === \"renewal_source_checkout_unavailable\") return { label: \"회원권 적용 보류\", tone: \"warn\", detail: paymentTicketFinalizeRecoveryMessage(item.finalizeHoldCode) };\n  if (item.status === \"refund_manual_pending\") return { label: \"환불 송금 대기\", tone: \"warn\", detail: \"현금 환불이 접수됐습니다. 실제 송금 확인 전까지 이용권 사용과 원데이 예약이 잠시 정지됩니다.\" };\n  if (item.status === \"refund_processing\") return { label: \"환불 처리중\", tone: \"warn\", detail: \"PortOne 취소와 내부 회원권 반영이 진행 중입니다.\" };"
+        },
+        {
+          "before": "    bankAccountSnapshot: row.bank_account_snapshot || row.bankAccountSnapshot || {},",
+          "after": "    bankAccountSnapshot: row.bank_account_snapshot || row.bankAccountSnapshot || {},\n    finalizeHoldCode: row.finalizeHoldCode === \"renewal_source_checkout_unavailable\" ? row.finalizeHoldCode : \"\",\n    finalizeHoldAt: row.finalizeHoldAt || \"\","
+        }
+      ]
+    },
+    {
+      "path": "app/admin/actions/common.js",
+      "baseSha256": "c405418b0ba608baa219d847e6eccba095b34b65794421f9a39182e84dc1aecd",
+      "candidateSha256": "87545abc02a807e21ea57e945ac96255e0edeafbfad8241df2a16b333f70794c",
+      "hunks": [
+        {
+          "before": "    replaceArray(lessonNotes, mappedLessonNotes);\n\n    const mappedPayments = (serverPayments || []).map((payment) => billingRowFromServerPayment({\n      ...payment,\n      member: usersById.get(payment.user_id)?.name || \"회원 확인 필요\",",
+          "after": "    replaceArray(lessonNotes, mappedLessonNotes);\n\n    const paymentRowsWithHolds = await loadAdminPaymentHoldReasons(serverPayments || []);\n    const mappedPayments = paymentRowsWithHolds.map((payment) => billingRowFromServerPayment({\n      ...payment,\n      member: usersById.get(payment.user_id)?.name || \"회원 확인 필요\","
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/tickets.js",
+      "baseSha256": "93cb1064e3707046463d372afb76096c3021859362e3d42fea8067d4caf78a4e",
+      "candidateSha256": "93cb1064e3707046463d372afb76096c3021859362e3d42fea8067d4caf78a4e",
+      "hunks": []
+    }
+  ],
+  "baseVersion": "1.0.528",
+  "upstreamPublicHead": "bf564f7908b4e59e141de0618b8845c34eb06a1c",
+  "upstreamPublicBase": "648ac3387f11ad65e7631ad32e4a9a06b511d49c"
+}

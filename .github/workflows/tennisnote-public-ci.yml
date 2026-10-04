@@ -7,8 +7,11 @@ on:
       - "tests/**"
       - "scripts/build_cloudflare_pages.py"
       - "scripts/check_cloudflare_build.py"
+      - "scripts/check_tennisnote_dev_prod_alignment.py"
       - "scripts/verify.sh"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
+      - "scripts/check_tennisnote_renewal_hold_browser.cjs"
+      - "scripts/check_tennisnote_renewal_hold_member.cjs"
       - ".github/workflows/tennisnote-public-ci.yml"
       - ".github/workflows/deploy-cloudflare-pages.yml"
       - ".github/workflows/deploy-pages.yml"
@@ -20,8 +23,11 @@ on:
       - "tests/**"
       - "scripts/build_cloudflare_pages.py"
       - "scripts/check_cloudflare_build.py"
+      - "scripts/check_tennisnote_dev_prod_alignment.py"
       - "scripts/verify.sh"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
+      - "scripts/check_tennisnote_renewal_hold_browser.cjs"
+      - "scripts/check_tennisnote_renewal_hold_member.cjs"
       - ".github/workflows/tennisnote-public-ci.yml"
       - ".github/workflows/deploy-cloudflare-pages.yml"
       - ".github/workflows/deploy-pages.yml"
@@ -45,13 +51,24 @@ jobs:
       TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
+      # 제품 빌드 도구를 추가하지 않고 runner 임시 폴더에 검사 의존성만 준비한다.
+      - name: Prepare browser test dependencies
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/tennisnote-browser" --no-save --package-lock=false --ignore-scripts playwright@1.62.1
+          node "$RUNNER_TEMP/tennisnote-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit
+          echo "NODE_PATH=$RUNNER_TEMP/tennisnote-browser/node_modules" >> "$GITHUB_ENV"
       # 검증 명령은 scripts/verify.sh 한 곳에만 둔다.
       # 여기에 또 적으면 로컬과 CI 가 서로 어긋난다.
       - name: Verify
+        timeout-minutes: 4
         run: ./scripts/verify.sh

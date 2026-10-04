@@ -80,6 +80,9 @@ step "한 장 엑셀 등록 계약 검사"
 step "개발·운영 제품 정렬 검사"
 "$PYTHON_BIN" scripts/check_tennisnote_dev_prod_alignment.py
 
+step "회원·관리자 연장 HOLD 브라우저 검사 (Chromium/WebKit 16조합)"
+node scripts/check_tennisnote_renewal_hold_browser.cjs
+
 step "배포본 빌드"
 "$PYTHON_BIN" scripts/build_cloudflare_pages.py --target member --output dist/member
 "$PYTHON_BIN" scripts/build_cloudflare_pages.py --target admin --output dist/admin
