@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.528"
-EXPECTED_RELEASE_ID = "2026.10.04.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v567"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v540"
+EXPECTED_VERSION = "1.0.529"
+EXPECTED_RELEASE_ID = "2026.10.04.02"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v568"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v541"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -225,7 +225,8 @@ def restore_renewal_hold_base(path: str, text: str) -> str:
         text = text.replace(hunk["after"], hunk["before"], 1)
     if hashlib.sha256(text.encode()).hexdigest() != row["baseSha256"]:
         raise ValueError(f"renewal hold base drift: {path}")
-    return text
+    # exact 역변환 hash 검증 뒤 버전 literal만 현재 release로 되돌린다.
+    return text.replace(port["baseVersion"], port["releaseVersion"])
 
 
 def normalize_product_bytes(path: str, data: bytes, manifest: dict[str, object]) -> bytes:

@@ -113,18 +113,26 @@
     {
       "path": "app/tennis-note-member-app/app.js",
       "baseSha256": "fb25e7d7e50244ebd9de078b38e919d12d93637d3829044b86060607ff533205",
-      "candidateSha256": "c7e5d01b96c20d0680174bd690831436780c6da1ce6ae50e1f103785ca1af5b2",
+      "candidateSha256": "96d8d512497b4c2d655aa5113d1baac184db730e83c8fde2d86ad8d61e640e8d",
       "hunks": [
         {
           "before": "  const flow = purchaseFlowState();\n  const product = purchaseFlowProduct();\n  if (membershipPurchasePaymentInFlight) return \"중복 주문 없이 결제 상태를 확인하고 있습니다.\";\n  if (![\"renew_same\", \"add_coach\", \"new_purchase\", \"one_day\"].includes(flow.purchasePurpose)) {",
           "after": "  const flow = purchaseFlowState();\n  const product = purchaseFlowProduct();\n  const renewalIssue = purchaseRenewalPaymentIssue(product);\n  if (renewalIssue) return renewalIssue.message;\n  if (membershipPurchasePaymentInFlight) return \"중복 주문 없이 결제 상태를 확인하고 있습니다.\";\n  if (![\"renew_same\", \"add_coach\", \"new_purchase\", \"one_day\"].includes(flow.purchasePurpose)) {"
+        },
+        {
+          "before": "async function initApp() {\n  registerPwaServiceWorker();\n  window.TennisNoteModeTransition?.warm(\"../tennis-note-coach-app/index.html?v=1.0.528\");\n  void refreshMemberRuntimeDiagnostics();\n  registerPwaInstallPrompt();\n",
+          "after": "async function initApp() {\n  registerPwaServiceWorker();\n  window.TennisNoteModeTransition?.warm(\"../tennis-note-coach-app/index.html?v=1.0.529\");\n  void refreshMemberRuntimeDiagnostics();\n  registerPwaInstallPrompt();\n"
+        },
+        {
+          "before": "\nwindow.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({\n  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.528\",\n  loadedAt: new Date().toISOString(),\n});\n",
+          "after": "\nwindow.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({\n  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.529\",\n  loadedAt: new Date().toISOString(),\n});\n"
         }
       ]
     },
     {
       "path": "app/tennis-note-member-app/ui/screens.js",
       "baseSha256": "c906f1fe5c70d520342535d53056888925b529aa0ed19261f65c9bd48d24b4a6",
-      "candidateSha256": "461e6acdfe379bd3d7a474252433a0fd912856551e3ea8e60af9894785f6ad70",
+      "candidateSha256": "b2c6e58e7a25fabd8c54f4db94b992335962c5d30c20fef34f128b192c3470fd",
       "hunks": [
         {
           "before": "      selectedProductId = oneDayProduct.id;\n    }\n    openMembershipPurchaseFlow(renewalTicketId, selectedProductId, purpose, { preserveExplicitPurpose });\n    if (openProductSheet) openPurchaseProductSheet();\n    return true;",
@@ -137,6 +145,10 @@
         {
           "before": "    ? latestPreviousMembershipTicket()\n    : null;\n  const requestedSource = (state.liveTickets || []).find((ticket) => String(ticket.id || \"\") === String(renewalTicketId || \"\")) || null;\n  const sourceTicket = requestedSource\n    || returningSource\n    || (![\"add_coach\", \"new_purchase\", \"one_day\"].includes(requestedPurpose) ? activeTickets[0] || null : null);\n  if (\n    requestedPurpose === \"renew_same\"",
           "after": "    ? latestPreviousMembershipTicket()\n    : null;\n  const requestedSource = [...(state.liveTickets || []), ...(state.expiredTickets || [])]\n    .find((ticket) => String(ticket.id || \"\") === String(renewalTicketId || \"\")) || null;\n  const sourceTicket = requestedSource\n    || (renewalTicketId || requestedPurpose === \"renew_same\" ? null : returningSource\n      || (![\"add_coach\", \"new_purchase\", \"one_day\"].includes(requestedPurpose) ? activeTickets[0] || null : null));\n  if ((renewalTicketId && !requestedSource) || requestedPurpose === \"renew_same\" || (sourceTicket && !requestedPurpose)) {\n    flow.purchasePurpose = \"renew_same\";\n    flow.renewalTicketId = String(renewalTicketId || sourceTicket?.id || \"\");\n    const renewalIssue = purchaseRenewalSourceIssue();\n    if (renewalIssue) return blockPurchaseRenewal(renewalIssue);\n  }\n  if (\n    requestedPurpose === \"renew_same\""
+        },
+        {
+          "before": "  saveSnapshot();\n  const target = window.TennisNoteModeTransition?.saved(\"coach\", \"todayView\") || { view: \"todayView\" };\n  const params = new URLSearchParams({ v: \"1.0.528\", view: target.view || \"todayView\" });\n  const url = `../tennis-note-coach-app/index.html?${params.toString()}`;\n  if (!window.TennisNoteModeTransition?.navigate(url, {\n",
+          "after": "  saveSnapshot();\n  const target = window.TennisNoteModeTransition?.saved(\"coach\", \"todayView\") || { view: \"todayView\" };\n  const params = new URLSearchParams({ v: \"1.0.529\", view: target.view || \"todayView\" });\n  const url = `../tennis-note-coach-app/index.html?${params.toString()}`;\n  if (!window.TennisNoteModeTransition?.navigate(url, {\n"
         }
       ]
     },
@@ -239,5 +251,10 @@
   ],
   "baseVersion": "1.0.528",
   "upstreamPublicHead": "bf564f7908b4e59e141de0618b8845c34eb06a1c",
-  "upstreamPublicBase": "648ac3387f11ad65e7631ad32e4a9a06b511d49c"
+  "upstreamPublicBase": "648ac3387f11ad65e7631ad32e4a9a06b511d49c",
+  "releaseVersion": "1.0.529",
+  "releaseOnlyPaths": [
+    "app/tennis-note-member-app/app.js",
+    "app/tennis-note-member-app/ui/screens.js"
+  ]
 }
