@@ -14,7 +14,7 @@ module.exports = async ({page,modal,engine,check,workbookBytes,XLSX,parser}) => 
         if(p.responseLoss)throw Error("SYNTHETIC_RESPONSE_LOSS");
         return {status:"applied"};
       }
-      if(name==="tn_reverse_single_sheet_import_unit") {p.reverses++;p.state="REVERSED";return {status:"reversed"};}
+      if(name==="tn_reverse_single_sheet_import_unit") {p.reverses++;p.reverseKey=args.operation_key;p.state="REVERSED";return {status:"reversed"};}
       if(name!=="tn_preview_single_sheet_import")throw Error("UNEXPECTED_RPC");
       const held=p.state==="HOLD",ready=p.state==="READY";
       return {contract:"single-sheet-server/2",initialContract:"initial-import/1",scope:args.scope,
@@ -86,5 +86,28 @@ module.exports = async ({page,modal,engine,check,workbookBytes,XLSX,parser}) => 
   check(conflictText.includes("저장 충돌")&&conflictText.includes("반복 등록하지")&&!conflictText.includes("SYNTHETIC_PRIVATE_CONSTRAINT"),"CONFLICT_SAFE_ACTUAL_UI");
   check(!conflictText.includes("조회 정보 변경 · 다시 확인"),"CONFLICT_NOT_STALE_UI");
   check(await apply.isDisabled()&&await page.evaluate(()=>window.__initial.applies===1),"CONFLICT_ONE_APPLY_NO_REPEAT");
+  await start("ADD_TICKET","APPLIED");
+  check(await reverse.isVisible()&&await reverse.isEnabled()&&await apply.isDisabled(),"HISTORICAL_RECOVERY_VISIBLE_NO_APPLY");
+  check((await reverse.innerText())==="등록 이력 원복","HISTORICAL_NOT_JUST_APPLIED_LABEL");
+  const {createHash}=require("node:crypto");
+  const parsed=await parser.parseWorkbook(XLSX.read(bytes,{type:"buffer"}),createHash("sha256").update(bytes).digest("hex"));
+  const expectedKey=(await parser.serverUnits(parsed)).units[0].operationKey;
+  await reverse.click();
+  check(await page.evaluate(()=>window.__initial.reverses===0&&window.__initial.applies===0),"HISTORICAL_CONFIRMATION_WRITE_ZERO");
+  check((await modal.innerText()).includes("등록 1단위를 원복 요청")&&(await modal.innerText()).includes("원본 대조용"),"HISTORICAL_COUNT_ROW_DATE_CONFIRMATION");
+  for(const [width,height]of layouts)for(const theme of ["light","dark"]){
+    await page.setViewportSize({width,height});await page.emulateMedia({colorScheme:theme});
+    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    await reverse.scrollIntoViewIfNeeded();
+    const rect=await reverse.evaluate(e=>{const r=e.getBoundingClientRect(),p=e.closest(".tn-excel-panel");return {h:r.height,w:r.width,visible:Math.min(r.bottom,innerHeight)-Math.max(r.top,0),overflow:p.scrollWidth>p.clientWidth+1};});
+    check(rect.h>=44&&rect.w>=44&&rect.visible>=44&&!rect.overflow,"RECOVERY_CONFIRM_LAYOUT");
+    if(process.env.TENNISNOTE_EXCEL_CAPTURE_DIR){
+      const path=require("node:path");await modal.locator(".tn-excel-panel").screenshot({path:path.join(process.env.TENNISNOTE_EXCEL_CAPTURE_DIR,`${engine}-recovery-${width}-${theme}.png`)});
+    }
+  }
+  await reverse.click();
+  await page.waitForFunction(()=>document.querySelector("#singleSheetPreviewModal")?.dataset.batchPhase==="reversed");
+  check(await page.evaluate(key=>window.__initial.reverses===1&&window.__initial.applies===0&&window.__initial.reverseKey===key,expectedKey),"HISTORICAL_UI_TO_EXISTING_RPC_EXACT_KEY_ONCE");
+  check(await reverse.isHidden(),"HISTORICAL_AFTER_REVERSE_NO_REPEAT");
   process.stdout.write(`PASS ${engine} initial envelope actual admin/worker/transport/batch/UI; 8 layouts; synthetic write only\n`);
 };
