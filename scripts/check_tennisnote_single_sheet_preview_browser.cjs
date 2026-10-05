@@ -358,7 +358,8 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
     }
     diagnostic.phase = "EXECUTION_REVERSE";
     await reverse.click();
-    check(await page.evaluate(() => window.__sheetExecution.reverses) === 0 && (await modal.innerText()).includes("후속 사용 이력"), "REVERSE_SEPARATE_CONFIRM");
+    const reverseConfirmation = await modal.innerText();
+    check(await page.evaluate(() => window.__sheetExecution.reverses) === 0 && ["현재 관리자·지점·후속 변경", "서버가 다시 확인", "불일치하면 원복하지 않습니다"].every(text => reverseConfirmation.includes(text)), "REVERSE_SEPARATE_CONFIRM");
     await page.evaluate(() => { const button = document.querySelector("[data-excel-reverse]"); button.click(); button.click(); });
     await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal")?.dataset.batchPhase === "reversed");
     const result = await page.evaluate(() => window.__sheetExecution);

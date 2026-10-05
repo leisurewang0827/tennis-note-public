@@ -43,6 +43,12 @@
     let phase = "empty", expiresAt = "", message = "", failureCode = "", noticePrefix = "", mutationAttempted = false;
     let invalidated = false, cancelled = false;
     const access = () => !disposed && globalThis.navigator?.onLine !== false && allowed(host, transport) && sameScope(scope, transport.currentScope()) && canOpen() === true;
+    // 재조회 이력은 새 등록으로 가장하지 않는다. 파일에서 산출한 원래 key만
+    // 전송하고, 최종 actor/branch/key/owned-state 권한은 기존 서버가 재검증한다.
+    const historicalPlan = plan => plan.status === "APPLIED" && plan.verified === true
+      && plan.reversible === true && plan.initial?.historicalReceipt === true;
+    const reverseEligible = e => e.state === "APPLIED" && e.plan.verified === true && e.plan.reversible === true
+      && (e.appliedHere === true || (e.historicalRecovery === true && !invalidated && !cancelled && Date.now() < Date.parse(expiresAt)));
     // 미처리 0은 성공 근거가 아니다. 같은 batch의 exact readback만 완료로 인정한다.
     const receiptPhase = () => mutationAttempted && entries.length > 0 && held.length === 0
       ? entries.some(e => e.state === "APPLIED") && entries.every(e => ["APPLIED", "NO_OP"].includes(e.state) && e.plan.verified === true) ? "done"
@@ -71,12 +77,15 @@
       pending: entries.filter(e => ["READY", "RETRY", "UNKNOWN"].includes(e.state)).length,
       applied: entries.filter(e => e.state === "APPLIED").length,
       reversed: entries.filter(e => e.state === "REVERSED").length,
+      reverseCount: entries.filter(reverseEligible).length,
+      historicalRecoveryCount: entries.filter(e => reverseEligible(e) && e.historicalRecovery).length,
       canConfirm: access() && !busy && !invalidated && phase === "ready" && Date.now() < Date.parse(expiresAt) && entries.some(e => e.state === "READY"),
       canResume: failureCode !== "SHEET_IMPORT_STORAGE_CONFLICT" && access() && !busy && confirmed && entries.some(e => e.state === "UNKNOWN" || (!invalidated && Date.now() < Date.parse(expiresAt) && ["READY", "RETRY"].includes(e.state))),
       canReverse: access() && !busy && transport.canReverse !== false && typeof transport.reverse === "function"
-        && entries.some(e => e.state === "APPLIED" && e.appliedHere === true && e.plan.reversible === true),
+        && entries.some(reverseEligible),
       rows: [...held.map(h => ({ rowNumbers: [h.rowNumber], state: "HOLD", reason: "입력값 또는 그룹을 확인해 주세요.", newMembers: null, newTickets: null, newLessons: null })),
-        ...entries.map(e => ({ rowNumbers: e.rowNumbers.slice(), state: e.state, reason: e.reason || "", newMembers: e.plan.newMembers, newTickets: e.plan.newTickets, newLessons: e.plan.newLessons, initial: !invalidated || e.plan.initial?.historicalReceipt ? e.plan.initial || null : null }))] });
+        ...entries.map(e => ({ rowNumbers: e.rowNumbers.slice(), state: e.state, reason: e.reason || "", newMembers: e.plan.newMembers, newTickets: e.plan.newTickets, newLessons: e.plan.newLessons, initial: !invalidated || e.plan.initial?.historicalReceipt ? e.plan.initial || null : null,
+          recoveryStartDates: reverseEligible(e) && e.historicalRecovery ? [...new Set(e.unit.rows.map(r => r.startDate).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d || "")))] : [] }))] });
     const emit = () => { if (!disposed) changed(view()); };
     const packet = async units => {
       if (!access()) throw Error("SHEET_APPLY_DISABLED");
@@ -94,7 +103,8 @@
         if (!payload.units.length) { phase = "ready"; return true; }
         const p = await packet(payload.units.map(e => e.unit));
         expiresAt = new Date(Math.min(Date.parse(p.expiresAt), Date.parse(transport.workSessionExpiresAt?.() || p.expiresAt))).toISOString();
-        entries = payload.units.map((e, i) => ({ ...clone(e), plan: p.units[i], state: p.units[i].status, reason: p.units[i].reason, appliedHere: false }));
+        entries = payload.units.map((e, i) => ({ ...clone(e), plan: p.units[i], state: p.units[i].status, reason: p.units[i].reason, appliedHere: false,
+          historicalRecovery: historicalPlan(p.units[i]) }));
         if (entries.some(e => ["APPLIED", "REVERSED", "NO_OP"].includes(e.state) && !e.plan.verified)) throw Error("READBACK_UNVERIFIED");
         phase = stop ? "paused" : "ready"; return !stop;
       } catch (error) { phase = stop ? "paused" : "blocked"; entries = []; failureCode = safePreviewCode(error); message = failureCode; return false; }
@@ -171,8 +181,14 @@
       try {
         for (const e of [...entries].reverse()) {
           if (stop) break;
-          if (e.state !== "APPLIED" || e.appliedHere !== true || e.plan.reversible !== true) continue;
+          if (!reverseEligible(e)) continue;
           if (!access()) throw Error("SHEET_APPLY_DISABLED");
+          if (e.historicalRecovery) {
+            // 확인 화면 이후 바뀐 대상은 쓰기 전에 다시 보류한다. 미리보기는
+            // file/key 증명이 아니므로 key를 추정/교체하거나 apply로 복구하지 않는다.
+            await reconcile(e);
+            if (!historicalPlan(e.plan) || !reverseEligible(e)) { e.historicalRecovery = false; stop = true; emit(); break; }
+          }
           e.state = "REVERSING"; emit();
           try {
             mutationAttempted = true;
@@ -184,16 +200,18 @@
             e.state = "UNKNOWN"; stop = true;
             try {
               await reconcile(e);
-              if (e.state === "REVERSED") stop = cancelled || invalidated || entries.some(candidate => candidate.appliedHere === true && candidate.state === "APPLIED");
+              if (e.state === "REVERSED") stop = cancelled || invalidated || entries.some(reverseEligible);
             } catch { e.reason = safeMutationCode(error) || "원복 결과 미확정 · 같은 파일로 다시 조회해 주세요."; }
             message = safeMutationCode(error) || (stop
               ? "원복 전송을 중단했습니다. 처리 이력을 다시 조회해 주세요."
               : "응답이 끊겼지만 서버 원복 이력을 확인했습니다.");
           }
+          // 서버 거절/응답 유실 뒤 같은 버튼을 자동/연속 재전송하지 않는다.
+          e.historicalRecovery = false;
           emit();
         }
         settle("reversed");
-      } catch { phase = "paused"; message = "권한·환경 또는 원복 상태가 달라져 중단했습니다."; }
+      } catch { for (const e of entries) e.historicalRecovery = false; phase = "paused"; message = "권한·환경 또는 원복 상태가 달라져 중단했습니다."; }
       finally { busy = false; emit(); }
       return true;
     }

@@ -221,6 +221,7 @@
     function renderBatch(v) {
       results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.failureCode === "SHEET_IMPORT_STORAGE_CONFLICT" || v.busy || !(v.expired || v.phase === "blocked" || (v.phase === "paused" && (!v.confirmed || v.invalidated))) || !input.files.length;
       if (confirming === "apply" && !v.canConfirm) confirming = false;
+      if (confirming === "reverse" && !v.canReverse && !v.busy) confirming = false;
       backdrop.dataset.excelFailureCode = v.failureCode || "";
       clearTimeout(expires);
       if (!v.busy && Date.parse(v.expiresAt) > Date.now()) expires = setTimeout(() => { if (batch && !backdrop.hidden) renderBatch(batch.view()); }, Date.parse(v.expiresAt) - Date.now() + 1);
@@ -231,7 +232,7 @@
       if (!v.message && v.phase === "ready" && v.rows.length && v.rows.every(row => row.state === "HOLD")) status.textContent = "등록할 안전 항목이 없습니다. 보류 사유를 확인해 주세요.";
       if (v.unconfirmed) status.textContent += " 처리 중·결과 미확정 항목이 있어 등록·원복 완료 여부를 단정할 수 없습니다.";
       if (confirming === "apply") status.textContent = "확인: 안전 항목만 등록하며 보류 항목은 건너뜁니다. 결제는 생성하지 않습니다.";
-      if (confirming === "reverse") status.textContent = "확인: 이 파일로 방금 등록한 단위만 원복합니다. 후속 사용 이력이 있으면 서버가 중단합니다.";
+      if (confirming === "reverse") status.textContent = `확인: 아래 행의 등록 ${v.reverseCount}단위를 원복 요청합니다. 선택한 원본 파일의 처리 키와 현재 관리자·지점·후속 변경을 서버가 다시 확인하며, 불일치하면 원복하지 않습니다.`;
       const totals = document.createElement("dl"); totals.className = "tn-excel-summary";
       if (!["blocked", "previewing"].includes(v.phase)) results.append(totals);
       const plans = root.TennisNoteSingleSheetSnapshot.summarizePlans(v.rows);
@@ -246,13 +247,16 @@
       if (v.expired) { labels.READY = "미리보기 만료 · 다시 확인"; labels.RETRY = "미리보기 만료 · 다시 확인"; }
       else if (v.invalidated) { labels.READY = "조회 정보 변경 · 다시 확인"; labels.RETRY = "조회 정보 변경 · 다시 확인"; }
       for (const row of v.rows) { const li = document.createElement("li"); list.append(li); line(li,"strong",`${row.rowNumbers.join("·")}행 · ${labels[row.state] || "확인 필요"}`); if(initialText(row)) line(li,"p",initialText(row)); line(li,"p",`추가 생성 계획 · ${rowPlanText(row)}`); if(row.reason) line(li,"p",safeBatchText(row.reason)); }
+      if (confirming === "reverse") for (const row of v.rows) {
+        if (row.recoveryStartDates?.length) line(results,"p",`${row.rowNumbers.join("·")}행 · 선택 파일 시작일 ${row.recoveryStartDates.join(" · ")} · 현재 수업일/잔여 표시가 아닌 원본 대조용입니다.`);
+      }
       apply.disabled = !(v.canConfirm || v.canResume); apply.setAttribute("aria-disabled", String(apply.disabled));
       apply.className = apply.disabled ? "tn-excel-disabled" : "primary-button";
       apply.textContent = v.busy ? "처리 중…" : v.canResume ? "미처리분 재조회·재개" : confirming === "apply" ? "확인하고 등록" : v.canConfirm ? "안전 항목 등록" : v.applied ? "처리 완료 · 새 파일 선택" : "등록할 안전 항목 없음";
       reverse.hidden = !(v.canReverse || confirming === "reverse");
       reverse.disabled = v.busy || !v.canReverse;
       reverse.setAttribute("aria-disabled", String(reverse.disabled));
-      reverse.textContent = confirming === "reverse" ? "확인하고 원복" : "방금 등록 원복";
+      reverse.textContent = confirming === "reverse" ? "확인하고 원복" : v.historicalRecoveryCount ? "등록 이력 원복" : "방금 등록 원복";
       cancel.hidden = !v.busy; cancel.textContent = "미전송분 중단";
       backdrop.dataset.batchPhase = v.phase;
     }
