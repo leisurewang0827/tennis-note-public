@@ -229,6 +229,22 @@ def restore_renewal_hold_base(path: str, text: str) -> str:
     return text.replace(port["baseVersion"], port["releaseVersion"])
 
 
+def restore_member_home_base(path: str, text: str, port: dict) -> str:
+    """승인된 홈 블록만 exact hash로 역변환. 기존 HOLD/코치/golden은 그대로 둔다."""
+    row = next((item for item in port["files"] if item["path"] == path), None)
+    if row is None:
+        return text
+    if sha256(text.encode("utf-8")) != row["candidateSha256"]:
+        raise RuntimeError(f"member home candidate drift: {path}")
+    for hunk in reversed(row["hunks"]):
+        if text.count(hunk["after"]) != 1:
+            raise RuntimeError(f"member home authority drift: {path}")
+        text = text.replace(hunk["after"], hunk["before"], 1)
+    if sha256(text.encode("utf-8")) != row["baseSha256"]:
+        raise RuntimeError(f"member home base drift: {path}")
+    return text
+
+
 def restore_coach_round_base(path: str, text: str) -> str:
     """승인된 회차 블록만 역변환하며 기존 golden hash는 유지한다."""
     port = json.loads((ROOT / "tests/fixtures/coach-round-source-parity.json").read_text(encoding="utf-8"))
@@ -494,11 +510,14 @@ def verify() -> None:
         raise RuntimeError("import-only mapper authority hash drift")
     if import_source.count(import_policy["hunk"]) != 1:
         raise RuntimeError("import-only mapper hunk missing or duplicated")
+    home = json.loads((ROOT / "tests/fixtures/member-home-source-parity.json").read_text(encoding="utf-8"))
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
         try:
-            text = restore_coach_round_base(path, data.decode("utf-8").replace("\r\n", "\n"))
-            data = restore_renewal_hold_base(path, text).encode("utf-8")
+            text = data.decode("utf-8").replace("\r\n", "\n").replace(EXPECTED_VERSION, home["publicVersion"])
+            text = restore_member_home_base(path, text, home)
+            text = restore_coach_round_base(path, text)
+            data = restore_renewal_hold_base(path, text).replace(home["publicVersion"], EXPECTED_VERSION).encode("utf-8")
         except UnicodeDecodeError:
             pass
         if path == import_policy["target"]:

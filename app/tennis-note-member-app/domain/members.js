@@ -39,7 +39,7 @@ function upcomingMemberLessons(limit = 2, ticketId = "") {
   if (state.dataMode === "live" || state.liveLessonsLoaded) {
     const today = localDateKey();
     const now = new Date();
-    return (state.liveLessons || [])
+    return (state.dataMode === "live" ? memberHomeScheduleLessons() : state.liveLessons || [])
       .filter((lesson) => {
         const isMine = isOwnMemberScheduleLesson(lesson);
         return isMine

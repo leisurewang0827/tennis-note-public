@@ -74,6 +74,9 @@ step "코치 권한 회귀 검사"
 node --check scripts/check_tennisnote_coach_scope_runtime.cjs
 node scripts/check_tennisnote_coach_scope_runtime.cjs
 
+step "회원 홈 권위 범위·실제 modular entry 브라우저 검사 (Chromium/WebKit)"
+TENNISNOTE_HOME_BROWSER=true node --test --test-name-pattern="Chromium/WebKit|실제 modular entry" tests/member-home-source.test.js tests/member-home-entry.test.js
+
 step "한 장 엑셀 등록 계약 검사"
 "$PYTHON_BIN" scripts/check_tennisnote_single_sheet_preview.py
 

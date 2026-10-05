@@ -244,6 +244,7 @@ function activateLiveMemberProfile(profileId) {
   state.pendingPurchaseSchedules = [];
   memberScheduleV2WorkspaceCache = null;
   state.liveLessons = [];
+  invalidateMemberHomeSchedule();
   state.liveLessonsLoaded = false;
   state.groupAccount = null;
   state.liveNotifications = [];
@@ -374,6 +375,7 @@ async function logout() {
     state.ticketHistory.unshift({ text: "외부 로그인 해제 확인 필요 · 앱에서는 로그아웃 처리", tone: "wait" });
   }
   state.member = null;
+  invalidateMemberHomeSchedule();
   state.memberEnrollment = null;
   state.pendingPurchaseProductId = "";
   state.liveTickets = [];

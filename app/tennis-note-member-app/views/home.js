@@ -19,9 +19,11 @@ function renderMemberHomeOverview() {
   const hasNewFeedback = Boolean(latestFeedback && latestFeedback.id !== state.lastReadFeedbackId);
   const paymentPending = !currentTickets.length && nextTickets.some((item) => item.status === "pending_payment");
   const ticketRefreshing = state.dataMode === "live" && state.member && /확인 중/.test(state.ticketSyncStatus?.text || "");
-  const lessonRefreshing = state.dataMode === "live" && state.member && !state.liveLessonsLoaded;
+  const lessonSyncFailed = state.dataMode === "live" && !memberHomeScheduleAuthority() && Boolean(state.scheduleV2SyncErrorCode);
+  const lessonRefreshing = state.dataMode === "live" && state.member && !lessonSyncFailed && !memberHomeScheduleAuthority();
   const refreshing = Boolean(ticketRefreshing || lessonRefreshing);
-  const syncFailed = state.ticketSyncStatus?.tone === "alert";
+  const ticketSyncFailed = state.ticketSyncStatus?.tone === "alert";
+  const syncFailed = ticketSyncFailed || lessonSyncFailed;
   const empty = !refreshing && !syncFailed && !ticket && !upcoming.length && !latestFeedback && !pendingFeedback;
 
   grid.hidden = empty;
@@ -34,7 +36,7 @@ function renderMemberHomeOverview() {
   const lessonCard = $("#homeNextLessonCard");
   const ticketCard = $("#homeTicketCard");
   const feedbackCard = $("#homeFeedbackCard");
-  const showLessonCard = refreshing || Boolean(ticket) || upcoming.length > 0;
+  const showLessonCard = refreshing || lessonSyncFailed || Boolean(ticket) || upcoming.length > 0;
   const showFeedbackCard = hasNewFeedback || Boolean(pendingFeedback);
 
   lessonCard.hidden = !showLessonCard;
@@ -42,9 +44,13 @@ function renderMemberHomeOverview() {
   feedbackCard.hidden = !showFeedbackCard;
   grid.dataset.cardCount = String([lessonCard, ticketCard, feedbackCard].filter((card) => !card.hidden).length);
 
-  if (refreshing) {
+  if (lessonRefreshing) {
     $("#nextLessonDate").textContent = "일정 확인 중";
     $("#followingLessonDate").textContent = "서버에서 최신 수업을 불러오고 있습니다.";
+    $("#homeScheduleAction").textContent = "시간표";
+  } else if (lessonSyncFailed) {
+    $("#nextLessonDate").textContent = "일정을 불러오지 못했어요";
+    $("#followingLessonDate").textContent = "시간표에서 다시 확인해 주세요.";
     $("#homeScheduleAction").textContent = "시간표";
   } else if (upcoming.length) {
     $("#nextLessonDate").textContent = scheduleSummaryText(upcoming[0], "예정 없음");
@@ -71,12 +77,12 @@ function renderMemberHomeOverview() {
       : `${ticket.title} · ${ticket.statusLabel}`;
     $("#homeTicketAction").textContent = hasLowTicket ? "연장하기" : "회원권";
     ticketCard.classList.toggle("alert", hasLowTicket);
-  } else if (refreshing) {
+  } else if (ticketRefreshing) {
     $("#remainingCount").textContent = "확인 중";
     $("#ticketStatus").textContent = "서버에서 최신 회원권을 불러오고 있습니다.";
     $("#homeTicketAction").textContent = "회원권";
     ticketCard.classList.remove("alert");
-  } else if (syncFailed) {
+  } else if (ticketSyncFailed) {
     $("#remainingCount").textContent = "확인 필요";
     $("#ticketStatus").textContent = "회원권 정보를 불러오지 못했습니다.";
     $("#homeTicketAction").textContent = "다시 확인";
