@@ -1132,14 +1132,17 @@ function bindEvents() {
 // Keep the first paint and background refresh focused on the screen the member
 // can actually see. The remaining screens are rendered when their menu opens.
 let memberLiveScheduleRefreshTimer = 0;
-let memberLiveScheduleRefreshInFlight = false;
-let memberLiveScheduleRefreshQueued = false;
+let memberLiveScheduleRefreshInFlight = null;
+let memberLiveScheduleLastRefreshKey = "";
+let memberHomeScheduleSnapshot = null;
+let memberHomeScheduleInFlight = null;
+let memberHomeScheduleEpoch = 0;
 let memberLiveScheduleLastRefreshAt = 0;
 let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.530");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.531");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -1224,7 +1227,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.530",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.531",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

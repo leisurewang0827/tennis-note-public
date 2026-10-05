@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.530"
-EXPECTED_RELEASE_ID = "2026.10.04.03"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v569"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v542"
+EXPECTED_VERSION = "1.0.531"
+EXPECTED_RELEASE_ID = "2026.10.05.01"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v570"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v543"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -227,6 +227,22 @@ def restore_renewal_hold_base(path: str, text: str) -> str:
         raise ValueError(f"renewal hold base drift: {path}")
     # exact 역변환 hash 검증 뒤 버전 literal만 현재 release로 되돌린다.
     return text.replace(port["baseVersion"], port["releaseVersion"])
+
+
+def restore_member_home_base(path: str, text: str, port: dict) -> str:
+    """승인된 홈 블록만 exact hash로 역변환. 기존 HOLD/코치/golden은 그대로 둔다."""
+    row = next((item for item in port["files"] if item["path"] == path), None)
+    if row is None:
+        return text
+    if sha256(text.encode("utf-8")) != row["candidateSha256"]:
+        raise RuntimeError(f"member home candidate drift: {path}")
+    for hunk in reversed(row["hunks"]):
+        if text.count(hunk["after"]) != 1:
+            raise RuntimeError(f"member home authority drift: {path}")
+        text = text.replace(hunk["after"], hunk["before"], 1)
+    if sha256(text.encode("utf-8")) != row["baseSha256"]:
+        raise RuntimeError(f"member home base drift: {path}")
+    return text
 
 
 def restore_coach_round_base(path: str, text: str) -> str:
@@ -494,11 +510,14 @@ def verify() -> None:
         raise RuntimeError("import-only mapper authority hash drift")
     if import_source.count(import_policy["hunk"]) != 1:
         raise RuntimeError("import-only mapper hunk missing or duplicated")
+    home = json.loads((ROOT / "tests/fixtures/member-home-source-parity.json").read_text(encoding="utf-8"))
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
         try:
-            text = restore_coach_round_base(path, data.decode("utf-8").replace("\r\n", "\n"))
-            data = restore_renewal_hold_base(path, text).encode("utf-8")
+            text = data.decode("utf-8").replace("\r\n", "\n").replace(EXPECTED_VERSION, home["publicVersion"])
+            text = restore_member_home_base(path, text, home)
+            text = restore_coach_round_base(path, text)
+            data = restore_renewal_hold_base(path, text).replace(home["publicVersion"], EXPECTED_VERSION).encode("utf-8")
         except UnicodeDecodeError:
             pass
         if path == import_policy["target"]:

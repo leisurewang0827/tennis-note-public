@@ -132,7 +132,7 @@ function applyScheduleV2MemberWorkspace(workspace = {}, releasedMakeupSlots = []
     lesson.lessonDate
     && (lesson.lessonDate < workspace.from || lesson.lessonDate > workspace.to)
   ));
-  state.liveLessons = [...retainedLessons, ...mappedLessons, ...oneDayOccupancy]
+  state.liveLessons = [...mappedLessons, ...oneDayOccupancy, ...retainedLessons]
     .filter((lesson, index, items) => items.findIndex((candidate) => candidate.id === lesson.id) === index);
   mergeScheduleV2MemberRecords(mappedLessons);
   state.liveLessonsLoaded = true;

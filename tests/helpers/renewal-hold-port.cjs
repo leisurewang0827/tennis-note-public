@@ -10,6 +10,19 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\
 function restoreBase(file, source) {
   const row = manifest.files.find(item => item.path === file);
   if (!row) return source;
+  // 후속 홈 포트와 릴리스 치환만 exact hash로 검증·역변환한다. HOLD golden은 변경하지 않는다.
+  const home = JSON.parse(read("tests/fixtures/member-home-source-parity.json"));
+  const version = JSON.parse(read("app/release.json")).version;
+  source = source.replaceAll(version, home.publicVersion);
+  const projection = home.files.find(item => item.path === file);
+  if (projection) {
+    assert.equal(sha(source), projection.candidateSha256, `candidate drift: ${file}`);
+    for (const hunk of [...projection.hunks].reverse()) {
+      assert.equal(source.split(hunk.after).length, 2, `ambiguous home hunk: ${file}`);
+      source = source.replace(hunk.after, () => hunk.before);
+    }
+    assert.equal(sha(source), projection.baseSha256, `home base drift: ${file}`);
+  }
   assert.equal(sha(source), row.candidateSha256, `candidate drift: ${file}`);
   for (const hunk of row.hunks) {
     assert.equal(source.split(hunk.after).length, 2, `ambiguous hunk: ${file}`);
