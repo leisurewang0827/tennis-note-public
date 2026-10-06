@@ -134,6 +134,71 @@ function coachScheduleTimes(policy = loadCoachSchedulePolicy()) {
   return makeCoachTimeRange(startText, endText);
 }
 
+function coachFutureRoundLabel(lesson = {}) {
+  // 주간 일부 조회만으로 첫 회차를 만들지 않는다. 남은 전체 차감 단위가
+  // exact 회원/회원권별로 맞는 경우에만 미래 순서를 표시한다.
+  if (!state.liveLessonsLoaded || lesson.serverStatus !== "scheduled" || lesson.lessonSource !== "regular") return "";
+  const identity = (row) => String(row.serverLessonId || "");
+  const records = (row) => Array.isArray(row.v2Participants) ? row.v2Participants : [];
+  const pending = (record) => !record.recordStatus || record.recordStatus === "draft";
+  const validCounts = (record) => [record.totalSessions, record.usedSessions, record.remainingSessions]
+    .every((value) => Number.isSafeInteger(value) && value >= 0)
+    && record.totalSessions > 0 && record.remainingSessions > 0
+    && record.totalSessions === record.usedSessions + record.remainingSessions;
+  const sameCounts = (left, right) => ["totalSessions", "usedSessions", "remainingSessions"]
+    .every((key) => left[key] === right[key]);
+  const targetRecords = records(lesson);
+  if (!identity(lesson) || !targetRecords.length || targetRecords.some((record) => (
+    !record.userId || !record.ticketId || !pending(record) || !validCounts(record)
+  )) || new Set(targetRecords.map((record) => record.userId)).size !== targetRecords.length) return "";
+  const workspace = scheduleV2CoachWorkspace();
+  const labels = [];
+  for (const participant of targetRecords) {
+    const matching = (row) => records(row).filter((record) => record.userId === participant.userId && record.ticketId === participant.ticketId);
+    const rows = (state.liveLessons || []).filter((row) => row.serverStatus === "scheduled" && matching(row).length);
+    if (!rows.length || rows.some((row) => matching(row).length !== 1
+      || !pending(matching(row)[0]) || !sameCounts(matching(row)[0], participant)
+      || row.lessonSource !== "regular" || !identity(row))) return "";
+    const tickets = (workspace?.tickets || []).filter((ticket) => ticket.id === participant.ticketId);
+    if (tickets.length > 1 || (tickets.length === 1 && !sameCounts(tickets[0], participant))) return "";
+    // 타 회원권의 분 단위를 첫 참가자 회원권에서 빌려오지 않는다.
+    const unit = tickets.length === 1 ? tickets[0].lessonMinutes
+      : lesson.ticketId === participant.ticketId ? lesson.ticketLessonMinutes : 0;
+    if (!Number.isSafeInteger(unit) || unit <= 0) return "";
+    const occurrences = coachDisplayLessons(rows);
+    const ids = new Set();
+    const entries = [];
+    for (const row of occurrences) {
+      const id = identity(row);
+      const duration = Number(row.durationMinutes);
+      const time = String(row.time || "");
+      const date = String(row.lessonDate || "");
+      if (ids.has(id) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)
+        || !Number.isSafeInteger(duration) || duration <= 0 || !row.coachRoleId
+        || (row.ticketId === participant.ticketId && row.ticketLessonMinutes !== unit)) return "";
+      ids.add(id);
+      const start = Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+      entries.push({ id, date, start, end: start + duration, units: Math.ceil(duration / unit), row });
+    }
+    entries.sort((left, right) => left.date.localeCompare(right.date) || left.start - right.start || left.id.localeCompare(right.id));
+    if (entries.some((entry, index) => entry.end > 1440 || (index > 0
+      && entries[index - 1].date === entry.date && entries[index - 1].end > entry.start))) return "";
+    if (entries.reduce((sum, entry) => sum + entry.units, 0) !== participant.remainingSessions) return "";
+    const index = entries.findIndex((entry) => entry.id === identity(lesson));
+    if (index < 0) return "";
+    const current = entries[index];
+    const sourceSegments = current.row.displaySegments || [current.row];
+    if (!sourceSegments.some((row) => row.id === lesson.id && row.lessonDate === lesson.lessonDate
+      && row.time === lesson.time && row.serverRevision === lesson.serverRevision
+      && row.coachRoleId === lesson.coachRoleId)) return "";
+    const first = participant.usedSessions + entries.slice(0, index).reduce((sum, entry) => sum + entry.units, 0) + 1;
+    const last = first + current.units - 1;
+    labels.push(`${first === last ? first : `${first}~${last}`}/${participant.totalSessions}회차`);
+  }
+  const uniqueLabels = [...new Set(labels)];
+  return uniqueLabels.length === 1 ? uniqueLabels[0] : `회원별 ${uniqueLabels.join(" · ")}`;
+}
+
 function coachScheduleRoundLabel(lesson = {}) {
   const finalRecords = (Array.isArray(lesson.v2Participants) ? lesson.v2Participants : [])
     .filter((record) => String(record.recordStatus || record.record_status || "").toLowerCase() === "final");
@@ -152,11 +217,7 @@ function coachScheduleRoundLabel(lesson = {}) {
     || ["completed", "no_show", "absence", "absent", "cancelled", "holiday"]
       .includes(String(lesson.serverStatus || "").toLowerCase());
   if (finalized) return coachTicketSessionSnapshot(lesson).label;
-  const ticketTotal = Number(lesson.totalSessions) || Number(String(lesson.ticket || "").match(/(\d+)\s*회/)?.[1]) || 0;
-  const used = Math.max(0, Number(lesson.usedSessions) || Math.max(0, ticketTotal - (Number(lesson.remaining) || 0)));
-  const completed = Number(lesson.deductedSessions) > 0;
-  const round = ticketTotal ? Math.min(ticketTotal, completed ? Math.max(1, used) : used + 1) : 0;
-  return `${round}/${ticketTotal}회차`;
+  return coachFutureRoundLabel(lesson);
 }
 
 function coachScheduleExceptionLabel(lesson = {}) {

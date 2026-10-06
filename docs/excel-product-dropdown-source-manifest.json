@@ -24,7 +24,9 @@
     {
       "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-preview-ui.js",
       "publicPath": "app/shared/tennisnote-single-sheet-preview-ui.js",
-      "gitBlob": "09fbfc57bcebee33c9cd6e12e8f3bf5c76aaa180"
+      "gitBlob": "3a2c5a11f46f6584b3c40c70ac785a3c3c4a0927",
+      "isolationAuthority": "6bb80ee9bc136d8fbac74592a30e840b0e7e35bf",
+      "isolationParity": "Historical reverse hunks only; production preimage and unrelated dropdown code preserved by tests/fixtures/production-isolation-source.json. Not a whole private-file replacement."
     },
     {
       "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-transport.js",

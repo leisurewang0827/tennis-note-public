@@ -46,7 +46,7 @@ function registerPwaServiceWorker() {
   const memberPortal = window.TennisNoteRuntimeEnvironment?.resolvePortal?.("member");
   window.TennisNoteReleaseUpdater?.start({
     manifestUrl: "../release.json",
-    workerUrl: "./service-worker.js?v=1.0.522",
+    workerUrl: "./service-worker.js?v=1.0.533",
     remoteAppUrl: memberPortal?.ok ? memberPortal.url : "",
   });
 }
@@ -199,6 +199,7 @@ function setView(viewId, options = {}) {
     state.memberScheduleMode = "mine";
     state.memberScheduleFullView = false;
   }
+  const enteringHome = viewId === "homeView" && document.body.dataset.activeMemberView !== viewId;
   document.body.dataset.activeMemberView = viewId;
   document.body.classList.toggle(
     "purchase-flow-open",
@@ -216,6 +217,7 @@ function setView(viewId, options = {}) {
   };
   if ($("#memberScreenTitle")) $("#memberScreenTitle").textContent = screenTitles[viewId] || "Tennis Note";
   renderActiveMemberView(viewId);
+  if (enteringHome && state.dataMode === "live") void refreshMemberLiveSchedule();
   jumpToTop();
   const historyState = typeof history.state === "object" && history.state ? history.state : {};
   const nextState = { ...historyState, tennisNoteMode: "member", tennisNoteView: viewId };

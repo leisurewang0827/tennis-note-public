@@ -8,6 +8,7 @@ const { chromium, webkit } = require("playwright");
 const { packet, expected, workbookBytes } = require("./check_tennisnote_single_sheet_preview.cjs");
 const parser = require("../app/shared/tennisnote-single-sheet-import.js");
 const XLSX = require("../app/shared/vendor/xlsx.full.min.js");
+const initialDiagnostic = require("./tennisnote_single_sheet_await_diagnostic.cjs");
 const root = path.resolve(__dirname, "..");
 let assertions = 0;
 const completedScenarios = new Map();
@@ -46,7 +47,9 @@ async function preparationState(page) {
       domFailure: code(modal?.dataset.excelFailureCode), controllerFailure: code(v?.failureCode),
       modalHidden: Boolean(modal?.hidden), fileCount: input?.files.length || 0, fileDisabled: Boolean(input?.disabled),
       busy: Boolean(v?.busy), historyPreview: history.state?.tnExcelPreview === true,
-      prepares: p?.prepareCalls || 0, previews: p?.previews || 0, applies: p?.applies || 0, reverses: p?.reverses || 0 };
+      prepares: p?.prepareCalls || 0, previews: p?.previews || 0, applies: p?.applies || 0, reverses: p?.reverses || 0,
+      initialPreviews: window.__initial?.previews || 0, initialApplies: window.__initial?.applies || 0,
+      initialReverses: window.__initial?.reverses || 0 };
   });
 }
 async function selectPreparationFile(page, input, file) {
@@ -186,7 +189,7 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
     const p = window.__completionProbe = { changes: 0, clicks: 0, popstates: 0, workers: 0,
       workerPosts: 0, workerMessages: 0, workerErrors: 0, terminated: 0, pageErrors: 0,
       snapshots: 0, pageHides: 0, rejections: 0, events: [],
-      lastType: "NONE", lastCode: "NONE", lastStage: "NONE" };
+      lastType: "NONE", lastCode: "NONE", lastStage: "NONE", sentGeneration: null, receivedGeneration: null };
     const token = value => typeof value === "string" && /^[A-Z_]{1,48}$/.test(value) ? value : "OTHER";
     const record = event => { if (p.events.length === 64) p.events.shift(); p.events.push(event); };
     addEventListener("error", () => { p.pageErrors++; record("PAGE_ERROR"); });
@@ -203,13 +206,14 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
         this.addEventListener("error", () => { p.workerErrors++; record("WORKER_ERROR"); });
         this.addEventListener("message", e => {
           p.workerMessages++;
+          p.receivedGeneration = Number.isSafeInteger(e.data?.id) && e.data.id >= 0 ? e.data.id : null;
           p.lastType = ["result", "error", "remote-preview-units", "ephemeral-units"].includes(e.data?.type) ? e.data.type : "OTHER";
           p.lastCode = e.data?.code ? token(e.data.code) : "NONE";
           p.lastStage = e.data?.stage ? token(e.data.stage) : "NONE";
           record("WORKER_MESSAGE");
         });
       }
-      postMessage(...args) { p.workerPosts++; record("WORKER_POST"); return super.postMessage(...args); }
+      postMessage(...args) { p.workerPosts++; p.sentGeneration = Number.isSafeInteger(args[0]?.id) && args[0].id >= 0 ? args[0].id : null; record("WORKER_POST"); return super.postMessage(...args); }
       terminate() { p.terminated++; record("WORKER_TERMINATE"); return super.terminate(); }
     };
   });
@@ -294,7 +298,17 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
     }, { branchId });
     const modal = page.locator("#singleSheetPreviewModal");
     if (initialOnly) {
-      await require("./tennisnote_single_sheet_initial_ui_cases.cjs")({ page, modal, engine, check, workbookBytes, XLSX, parser });
+      let step = { method: "HELPER_ENTER", callsites: [] }, sequence = 0;
+      const notify = value => { step = { ...value, sequence: ++sequence }; diagnostic.phase = `HELPER_${step.callsites[0]?.line || 0}_${step.method}`; };
+      try {
+        await require("./tennisnote_single_sheet_initial_ui_cases.cjs")({ page: initialDiagnostic.traceApi(page, notify), modal: initialDiagnostic.traceApi(modal, notify), engine, check, workbookBytes, XLSX, parser });
+      } catch (error) {
+        // context.close 이전에 저장한다. 원래 timeout/오류를 그대로 재전달한다.
+        const state = await preparationState(page).catch(() => ({ unavailable: true }));
+        const record = initialDiagnostic.failureRecord(step, error, state);
+        fs.writeSync(2, `INITIAL_HELPER_FAILURE ${JSON.stringify(record)}\n`);
+        throw error;
+      }
       check(errors.length === 0, "INITIAL_PAGE_ERRORS_ZERO");
       return;
     }

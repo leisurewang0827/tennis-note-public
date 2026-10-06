@@ -1,3 +1,85 @@
+async function loadMemberHomeScheduleWorkspace(client, context, isCurrent) {
+  const read = async (from, to) => {
+    const value = await client.rpc("tn_schedule_v2_member_workspace", { target_from: from, target_to: to });
+    if (!isCurrent()) throw new Error("member_home_request_superseded");
+    if (String(value?.actorUserId || "") !== String(context.profileId)
+      || value.from !== from || value.to !== to || !Array.isArray(value.lessons) || !Array.isArray(value.tickets)) {
+      throw new Error("member_home_scope_mismatch");
+    }
+    return value;
+  };
+  const first = await read(context.week.startDate, context.workspaceEndDate);
+  const key = memberHomeScheduleTicketKey(first.tickets);
+  const dateKey = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))
+    && localDateKey(new Date(`${value}T12:00:00`)) === value ? String(value) : "";
+  const eligible = first.tickets.filter((ticket) => ["active", "paused"].includes(ticket.status));
+  let from = context.week.startDate;
+  let to = context.workspaceEndDate;
+  const completeTicketIds = [];
+  eligible.forEach((ticket) => {
+    const start = dateKey(ticket.startsOn);
+    const end = dateKey(ticket.expiresOn);
+    if (!start || !end || end < start) return;
+    from = start < from ? start : from;
+    to = end > to ? end : to;
+    completeTicketIds.push(String(ticket.id));
+  });
+  const addDays = (key, count) => {
+    const day = new Date(`${key}T12:00:00`);
+    day.setDate(day.getDate() + count);
+    return localDateKey(day);
+  };
+  // RPC는 양끝 포함 최대 32일. 전체 768일, discovery 포함 최대 25회.
+  if (to > addDays(from, 767)) throw new Error("member_home_range_unconfirmed");
+  const pages = [first];
+  const missing = [[from, addDays(first.from, -1)], [addDays(first.to, 1), to]];
+  for (const [begin, last] of missing) for (let start = begin; start <= last;) {
+    if (pages.length >= 25) throw new Error("member_home_range_unconfirmed");
+    const end = addDays(start, 31) < last ? addDays(start, 31) : last;
+    const page = await read(start, end);
+    if (memberHomeScheduleTicketKey(page.tickets) !== key) throw new Error("member_home_ticket_changed");
+    pages.push(page);
+    start = addDays(end, 1);
+  }
+  const workspace = { ...first, from, to };
+  for (const field of ["lessons", "memberSameDayAbsences", "makeupEntitlements"]) {
+    const rows = new Map();
+    for (const page of pages) for (const row of page[field] || []) {
+      if (!row.id) throw new Error("member_home_row_identity_missing");
+      const old = rows.get(String(row.id));
+      if (old && JSON.stringify(old) !== JSON.stringify(row)) throw new Error("member_home_row_changed");
+      rows.set(String(row.id), row);
+    }
+    workspace[field] = [...rows.values()];
+  }
+  return { workspace, completeTicketIds };
+}
+
+async function readMemberLessonsFromServer(profile = null, options = {}) {
+  const client = window.TennisNoteDataClient;
+  const profileId = profile?.id || state.member?.profileId || "";
+  if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
+  const requestId = options.requestId || ++memberScheduleV2RequestSequence;
+  if (await syncMemberScheduleV2(profile, { ...options, requestId })) return true;
+  if (requestId !== memberScheduleV2RequestSequence
+    || (options.homeReadKey && options.homeReadKey !== memberHomeScheduleReadKey(profileId))) return false;
+  if (state.scheduleV2SyncErrorCode && state.scheduleV2SyncErrorCode !== "member_schedule_load_failed") {
+    state.liveLessonsLoaded = true;
+    renderMemberRuntimeDiagnostics();
+    return false;
+  }
+  if (!state.scheduleV2WorkspaceLoaded) {
+    state.liveLessons = [];
+    state.liveMakeupEntitlements = [];
+    state.liveReleasedMakeupSlots = [];
+  }
+  state.liveLessonsLoaded = true;
+  state.scheduleV2SyncError = "시간표를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.";
+  state.scheduleV2SyncErrorCode = "member_schedule_load_failed";
+  renderMemberRuntimeDiagnostics();
+  return false;
+}
+
 // 서버에서 회원 데이터를 불러와 화면 상태에 채우는 함수들.
 //
 // 서버(Supabase)에 붙는다. 권한은 여기가 아니라 RLS 정책이 책임진다.
@@ -240,10 +322,13 @@ async function hydrateMemberWorkspaceSessionSnapshots(client, workspace = {}, pr
 async function syncMemberScheduleV2(profile = null, options = {}) {
   const client = window.TennisNoteDataClient;
   const requestId = options.requestId || ++memberScheduleV2RequestSequence;
-  const context = memberScheduleV2Context(profile, options.week || activeMemberWeek());
+  const home = !options.week && activeMemberViewId() === "homeView";
+  const context = memberScheduleV2Context(profile, home ? { startDate: localDateKey() } : options.week || activeMemberWeek());
+  context.home = home;
+  if (home) context.key = `home:${context.key}`;
   const { profileId, week, workspaceEndDate, key: cacheKey } = context;
   if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
-  const cached = memberScheduleV2WorkspaceCache;
+  const cached = home ? null : memberScheduleV2WorkspaceCache;
   if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
     if (requestId !== memberScheduleV2RequestSequence) return false;
     const identityIssue = memberScheduleIdentityIssue(cached.workspace, cached.integrity, profileId);
@@ -258,9 +343,17 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
     if (applied) state.scheduleV2LoadedKey = cacheKey;
     return applied;
   }
+  if (home) {
+    memberHomeScheduleSnapshot = null;
+    state.scheduleV2SyncErrorCode = "";
+  }
   try {
+    let homeResult = null;
     const [workspace, releasedMakeupSlots, oneDaySlots, ownOneDayBookingIds, integrity] = await Promise.all([
-      client.rpc("tn_schedule_v2_member_workspace", {
+      home ? loadMemberHomeScheduleWorkspace(client, context, () => requestId === memberScheduleV2RequestSequence
+        && String(state.member?.profileId || "") === String(profileId)
+        && (!options.homeReadKey || options.homeReadKey === memberHomeScheduleReadKey(profileId)))
+        .then((result) => { homeResult = result; return result.workspace; }) : client.rpc("tn_schedule_v2_member_workspace", {
         target_from: week.startDate,
         target_to: workspaceEndDate,
       }),
@@ -283,10 +376,23 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
     )))).flat();
     if (requestId !== memberScheduleV2RequestSequence) return false;
     workspace.operationDays = operationDays;
+    if (home && options.homeReadKey && options.homeReadKey !== memberHomeScheduleReadKey(profileId)) return false;
     state.scheduleOperationDays = operationDays;
     const identityIssue = memberScheduleIdentityIssue(workspace, integrity, profileId);
     if (identityIssue) return rejectMemberScheduleIdentity(identityIssue, integrity);
-    memberScheduleV2WorkspaceCache = {
+    if (!home && memberHomeScheduleSnapshot) {
+      const currentRows = new Map(workspace.lessons.map((lesson) => [String(lesson.id), lesson]));
+      const changed = memberHomeScheduleSnapshot.ticketKey !== memberHomeScheduleTicketKey(workspace.tickets)
+        || workspace.lessons.some((row) => row.isOwnLesson === true
+          && !memberHomeScheduleSnapshot.lessons.some((lesson) => String(lesson.id) === String(row.id)))
+        || memberHomeScheduleSnapshot.lessons.some((lesson) => {
+          if (lesson.lessonDate < workspace.from || lesson.lessonDate > workspace.to) return false;
+          const row = currentRows.get(String(lesson.id));
+          return !row || row.status !== lesson.serverStatus || Number(row.revision || 0) !== Number(lesson.serverRevision || 0);
+        });
+      if (changed) memberHomeScheduleSnapshot = null;
+    }
+    const confirmed = {
       key: cacheKey,
       loadedAt: Date.now(),
       workspace,
@@ -298,11 +404,15 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
     state.scheduleV2Integrity = integrity || null;
     const applied = applyScheduleV2MemberWorkspace(
       workspace,
-      memberScheduleV2WorkspaceCache.releasedMakeupSlots,
-      memberScheduleV2WorkspaceCache.oneDaySlots,
-      memberScheduleV2WorkspaceCache.ownOneDayBookingIds,
+      confirmed.releasedMakeupSlots,
+      confirmed.oneDaySlots,
+      confirmed.ownOneDayBookingIds,
     );
-    if (applied) state.scheduleV2LoadedKey = cacheKey;
+    if (applied && home) captureMemberHomeSchedule(workspace, context, homeResult.completeTicketIds);
+    if (applied && !home) {
+      memberScheduleV2WorkspaceCache = confirmed;
+      state.scheduleV2LoadedKey = cacheKey;
+    }
     return applied;
   } catch (error) {
     const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
@@ -314,27 +424,21 @@ async function syncMemberScheduleV2(profile = null, options = {}) {
 }
 
 async function syncMemberLessonsFromServer(profile = null, options = {}) {
-  const client = window.TennisNoteDataClient;
-  const profileId = profile?.id || state.member?.profileId || "";
-  if (!client?.rpc || !client.getSession?.()?.access_token || !profileId) return false;
+  const home = !options.week && activeMemberViewId() === "homeView";
+  if (!home) {
+    return readMemberLessonsFromServer(profile, options);
+  }
+  const key = memberHomeScheduleReadKey(profile?.id || state.member?.profileId);
+  const pending = memberHomeScheduleInFlight;
+  if (pending?.key === key && pending.requestId === memberScheduleV2RequestSequence) return pending.promise;
+  if (!options.force && memberHomeScheduleAuthority()) return true;
+  memberHomeScheduleSnapshot = null;
   const requestId = options.requestId || ++memberScheduleV2RequestSequence;
-  if (await syncMemberScheduleV2(profile, { ...options, requestId })) return true;
-  if (requestId !== memberScheduleV2RequestSequence) return false;
-  if (state.scheduleV2SyncErrorCode && state.scheduleV2SyncErrorCode !== "member_schedule_load_failed") {
-    state.liveLessonsLoaded = true;
-    renderMemberRuntimeDiagnostics();
-    return false;
-  }
-  if (!state.scheduleV2WorkspaceLoaded) {
-    state.liveLessons = [];
-    state.liveMakeupEntitlements = [];
-    state.liveReleasedMakeupSlots = [];
-  }
-  state.liveLessonsLoaded = true;
-  state.scheduleV2SyncError = "시간표를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.";
-  state.scheduleV2SyncErrorCode = "member_schedule_load_failed";
-  renderMemberRuntimeDiagnostics();
-  return false;
+  const flight = { key, requestId, promise: null };
+  memberHomeScheduleInFlight = flight;
+  flight.promise = readMemberLessonsFromServer(profile, { ...options, requestId, homeReadKey: key });
+  try { return await flight.promise; }
+  finally { if (memberHomeScheduleInFlight === flight) memberHomeScheduleInFlight = null; }
 }
 
 async function syncLegacyMemberLessonsFromServer(profile = null) {
@@ -832,22 +936,33 @@ async function syncMemberTicketsFromServer(profile = null) {
 async function refreshMemberLiveSchedule(options = {}) {
   const client = window.TennisNoteDataClient;
   const force = options.force === true;
-  if (memberLiveScheduleRefreshInFlight) {
-    if (force) memberLiveScheduleRefreshQueued = true;
-    return false;
-  }
+  const home = activeMemberViewId() === "homeView";
+  const profileId = String(state.member?.profileId || "");
+  const epoch = memberHomeScheduleEpoch;
+  const key = `${memberHomeScheduleReadKey()}:${home ? "home" : memberScheduleV2Context().key}`;
   if (
     document.hidden
     || state.dataMode !== "live"
     || !state.member?.profileId
     || !client?.readiness?.().ready
     || !client?.getSession?.()?.access_token
-    || (!force && Date.now() - memberLiveScheduleLastRefreshAt < MEMBER_LIVE_REFRESH_STALE_MS)
   ) return false;
-
-  memberLiveScheduleRefreshInFlight = true;
-  try {
+  const pending = memberLiveScheduleRefreshInFlight;
+  if (pending) {
+    if (pending.key === key) return pending.promise;
+    // A changed actor/day/ticket/revision waits, then starts exactly one new read.
+    await pending.promise.catch(() => false);
+    return refreshMemberLiveSchedule(options);
+  }
+  if (!force && (home ? Boolean(memberHomeScheduleAuthority())
+    : key === memberLiveScheduleLastRefreshKey && Date.now() - memberLiveScheduleLastRefreshAt < MEMBER_LIVE_REFRESH_STALE_MS)) return true;
+  if (force) memberHomeScheduleSnapshot = null;
+  const flight = { key, promise: null };
+  memberLiveScheduleRefreshInFlight = flight;
+  flight.promise = (async () => {
     await Promise.all([syncMemberTicketsFromServer(), syncMemberRefundRequests(), syncMemberPendingPurchaseSchedulesFromServer()]);
+    if (String(state.member?.profileId || "") !== profileId || memberHomeScheduleEpoch !== epoch) return false;
+    flight.key = `${memberHomeScheduleReadKey()}:${home ? "home" : memberScheduleV2Context().key}`;
     const [lessonsSynced, requestsSynced, notificationResult] = await Promise.all([
       syncMemberLessonsFromServer(null, { force }),
       syncMemberChangeRequestsFromServer(),
@@ -855,20 +970,18 @@ async function refreshMemberLiveSchedule(options = {}) {
       syncMemberPaymentOptionsFromServer(),
       syncMemberDiscountCouponsFromServer(),
     ]);
+    if (String(state.member?.profileId || "") !== profileId || memberHomeScheduleEpoch !== epoch) return false;
     if (options.render !== false) renderActiveMemberView();
     if (notificationResult?.newNotification) {
       showToast(`${notificationResult.newNotification.title} · 시간표에서 확인해 주세요.`);
     }
     memberLiveScheduleLastRefreshAt = Date.now();
+    memberLiveScheduleLastRefreshKey = key;
     return Boolean(lessonsSynced || requestsSynced || notificationResult?.ok);
-  } finally {
-    memberLiveScheduleRefreshInFlight = false;
-    if (memberLiveScheduleRefreshQueued) {
-      memberLiveScheduleRefreshQueued = false;
-      queueMicrotask(() => {
-        void refreshMemberLiveSchedule({ force: true, render: options.render !== false });
-      });
-    }
+  })();
+  try { return await flight.promise; }
+  finally {
+    if (memberLiveScheduleRefreshInFlight === flight) memberLiveScheduleRefreshInFlight = null;
   }
 }
 

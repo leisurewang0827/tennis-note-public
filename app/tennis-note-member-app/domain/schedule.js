@@ -1,3 +1,45 @@
+function invalidateMemberHomeSchedule() {
+  memberHomeScheduleSnapshot = null;
+  memberHomeScheduleEpoch += 1;
+}
+
+function memberHomeScheduleReadKey(profileId = state.member?.profileId) {
+  return JSON.stringify([String(profileId || ""), localDateKey(), memberScheduleWorkspaceDays,
+    memberHomeScheduleEpoch, memberHomeScheduleTicketKey(state.liveTickets || [])]);
+}
+
+function memberHomeScheduleAuthority() {
+  const snapshot = memberHomeScheduleSnapshot;
+  return snapshot && snapshot.profileId === String(state.member?.profileId || "")
+    && snapshot.readKey === memberHomeScheduleReadKey()
+    && Date.now() - snapshot.loadedAt < 10_000 ? snapshot : null;
+}
+
+function memberHomeScheduleLessons() {
+  return memberHomeScheduleAuthority()?.lessons || [];
+}
+
+function memberHomeScheduleTicketKey(tickets = []) {
+  return JSON.stringify(tickets.map((ticket) => [ticket.id, ticket.status, ticket.totalSessions ?? ticket.total,
+    ticket.usedSessions ?? ticket.used, ticket.remainingSessions ?? ticket.remaining, ticket.startsOn, ticket.expiresOn])
+    .sort((left, right) => String(left[0]).localeCompare(String(right[0]))));
+}
+
+function captureMemberHomeSchedule(workspace, context, completeTicketIds) {
+  const eligible = new Set((workspace.tickets || []).filter((ticket) => ticket.status === "active").map((ticket) => String(ticket.id)));
+  const ownIds = new Set((workspace.lessons || []).filter((lesson) => lesson.isOwnLesson === true
+    && eligible.has(String(lesson.memberTicketId))).map((lesson) => String(lesson.id)));
+  memberHomeScheduleSnapshot = {
+    profileId: String(context.profileId), day: localDateKey(), completeTicketIds,
+    loadedAt: Date.now(), readKey: memberHomeScheduleReadKey(context.profileId),
+    ticketKey: memberHomeScheduleTicketKey(workspace.tickets),
+    lessons: (state.liveLessons || []).filter((lesson) => isOwnMemberScheduleLesson(lesson) && (
+      (ownIds.has(String(lesson.id)) && eligible.has(memberLessonTicketId(lesson)))
+      || (lesson.oneDayBooking && lesson.lessonDate >= workspace.from && lesson.lessonDate <= workspace.to)
+    )),
+  };
+}
+
 // 시간표의 주차·요일·시간대를 계산하는 함수들.
 //
 // 화면(DOM)을 직접 만지지 않고 서버도 부르지 않는다. 값을 받아 판정해 돌려준다.
@@ -616,10 +658,13 @@ function memberScheduleRoundLabel(lesson, isMine) {
     .includes(String(lesson.serverStatus || lesson.status || "").toLowerCase())
     || String(lesson.participantRecord?.recordStatus || "").toLowerCase() === "final";
   if (completed) return memberTicketSessionSnapshot(lesson.participantRecord || lesson).label;
+  // 캘린더의 일부 주간 자료로 전체 회원권 회차를 추정하지 않는다.
+  const authority = memberHomeScheduleAuthority();
+  if (state.dataMode === "live" && (!authority || !authority.completeTicketIds.includes(memberLessonTicketId(lesson)))) return "";
   const total = Math.max(0, Number(lesson.ticketTotalSessions) || 0);
   const used = Math.max(0, Number(lesson.ticketUsedSessions) || 0);
   const ticketId = memberLessonTicketId(lesson);
-  const futureLessons = (state.liveLessons || [])
+  const futureLessons = (state.dataMode === "live" ? authority.lessons : state.liveLessons || [])
     .filter((item) => (
       isOwnMemberScheduleLesson(item)
       && item.status === "scheduled"
@@ -627,7 +672,8 @@ function memberScheduleRoundLabel(lesson, isMine) {
     ))
     .sort((left, right) => `${left.lessonDate || ""}T${left.time || ""}`.localeCompare(`${right.lessonDate || ""}T${right.time || ""}`));
   const futureIndex = futureLessons.findIndex((item) => String(item.id) === String(lesson.id));
-  const nextRound = used + Math.max(0, futureIndex) + 1;
+  if (futureIndex < 0) return "";
+  const nextRound = used + futureIndex + 1;
   const round = total ? Math.min(total, nextRound) : 0;
   return `${round}/${total}회차`;
 }
