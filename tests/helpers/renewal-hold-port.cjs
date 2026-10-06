@@ -10,6 +10,17 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\
 function restoreBase(file, source) {
   const row = manifest.files.find(item => item.path === file);
   if (!row) return source;
+  // 승인된 Excel 증분만 먼저 exact hash로 역변환한다. 기존 HOLD golden은 보존한다.
+  const excel = JSON.parse(read("tests/fixtures/excel-retry-source-parity.json"));
+  const refresh = excel.files.find(item => item.path === file);
+  if (refresh) {
+    assert.equal(sha(source), refresh.candidateSha256, `candidate drift: ${file}`);
+    for (const hunk of [...refresh.hunks].reverse()) {
+      assert.equal(source.split(hunk.after).length, 2, `ambiguous Excel hunk: ${file}`);
+      source = source.replace(hunk.after, () => hunk.before);
+    }
+    assert.equal(sha(source), refresh.baseSha256, `Excel base drift: ${file}`);
+  }
   // 후속 홈 포트와 릴리스 치환만 exact hash로 검증·역변환한다. HOLD golden은 변경하지 않는다.
   const home = JSON.parse(read("tests/fixtures/member-home-source-parity.json"));
   const version = JSON.parse(read("app/release.json")).version;

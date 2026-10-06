@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.534"
-EXPECTED_RELEASE_ID = "2026.10.06.02"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v572"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v545"
+EXPECTED_VERSION = "1.0.535"
+EXPECTED_RELEASE_ID = "2026.10.06.03"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v573"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v546"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -469,7 +469,7 @@ def restore_purchase_identity_source(path: str, source: str, identity: dict) -> 
 
 
 def restore_excel_retry_base(path: str, text: str) -> str:
-    """비공개 원본과 일치하는 재시도 수정만 역변환하며 기존 golden을 보존한다."""
+    """원본과 일치하는 retry/refresh 증분만 역변환하며 기존 golden을 보존한다."""
     port = json.loads((ROOT / "tests/fixtures/excel-retry-source-parity.json").read_text(encoding="utf-8"))
     row = next((item for item in port["files"] if item["path"] == path), None)
     if row is None:
