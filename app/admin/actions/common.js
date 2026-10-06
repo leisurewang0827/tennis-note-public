@@ -802,6 +802,26 @@ function importServerIssueMessage(issue = {}) {
   return `${rowLabel}${fieldLabel}: ${importServerIssueLabels[issue.code] || issue.code || "확인 필요"}`;
 }
 
+// Local identity/scope fence only; never an import dependency revision or grant.
+function singleSheetPreviewAccessScope() {
+  const client = window.TennisNoteDataClient;
+  const config = client?.loadConfig?.() || {};
+  const session = client?.getSession?.();
+  let actorId = "";
+  try {
+    const part = String(session?.access_token || "").split(".")[1] || "";
+    const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
+    const subject = JSON.parse(window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")))?.sub;
+    if (typeof subject === "string" && subject && (!session.user?.id || session.user.id === subject)) actorId = subject;
+  } catch { /* Missing/mismatched identity must not reuse the last profile. */ }
+  return {
+    actorId,
+    branchId: activeOperationBranchId(),
+    environment: config.environment || "",
+    projectFingerprint: config.projectFingerprint || "",
+  };
+}
+
 function singleSheetPreviewSnapshot() {
   const config = window.TennisNoteDataClient?.loadConfig?.() || {};
   return window.TennisNoteSingleSheetSnapshot.adapt(adminSingleSheetReadSnapshot, {
@@ -829,6 +849,7 @@ function bindSingleSheetPreviewEntry() {
     canOpen: () => operationsRole() === "admin" && operationsAccessReady(),
     getSnapshot: singleSheetPreviewSnapshot,
     getPreviewTransport: singleSheetRemotePreviewTransport,
+    getAccessScope: adminLocalPreviewMode ? undefined : singleSheetPreviewAccessScope,
     // Hosted apply/reverse requires explicit config plus the server-side actor scope.
     // Loopback stays reserved for the isolated synthetic transport harness.
     getLocalTransport: () => ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)
@@ -993,21 +1014,20 @@ async function performAdminLiveDataSync(options = {}) {
       return false;
     }
 
+    const previousSingleSheetReadSnapshot = adminSingleSheetReadSnapshot;
     adminSingleSheetReadSnapshot = window.TennisNoteSingleSheetSnapshot?.captureExisting({
-      users: serverUsers,
-      memberRecords: serverMemberDatabaseRecords,
-      coaches: serverCoachRoles,
-      availability: serverCoachAvailability,
-      products: serverProducts,
-      tickets: serverTickets,
-      lessons: serverLessons,
-      participants: lessonParticipants,
-    }, {
-      branchId: activeOperationBranchId(),
-      environment: client.loadConfig?.().environment || "",
-    }) || null;
-    window.dispatchEvent(new Event("tennisnote:excel-snapshot-changed"));
-
+      users: serverUsers, memberRecords: serverMemberDatabaseRecords, coaches: serverCoachRoles,
+      availability: serverCoachAvailability, products: serverProducts, tickets: serverTickets,
+      lessons: serverLessons, participants: lessonParticipants,
+    }, { branchId: activeOperationBranchId(), environment: client.loadConfig?.().environment || "" }) || null;
+    // Roster refresh is not an authoritative import revision. Equality only
+    // suppresses an informational interruption; server preview/apply still
+    // verify full dependencies. Missing/changed projections stay conservative.
+    window.dispatchEvent(new CustomEvent("tennisnote:excel-snapshot-changed", { detail: {
+      kind: "roster-refresh",
+      projectionChanged: !previousSingleSheetReadSnapshot || !adminSingleSheetReadSnapshot
+        || JSON.stringify(previousSingleSheetReadSnapshot) !== JSON.stringify(adminSingleSheetReadSnapshot),
+    } }));
     const usersById = new Map((serverUsers || []).map((user) => [user.id, user]));
     const authLinksByUserId = new Map();
     (serverAuthLinks || []).forEach((link) => {
