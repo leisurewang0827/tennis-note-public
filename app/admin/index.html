@@ -978,6 +978,16 @@
                 <tbody id="coachSettlementPreviewRows"></tbody>
               </table>
               <nav id="coachSettlementPreviewPager" class="dashboard-pager" aria-label="코치 정산 목록 페이지" hidden></nav>
+              <section id="adminSettlementHistory" class="admin-settlement-history" aria-label="월 정산 확정 이력" aria-busy="false">
+                <h3>확정 이력 조회</h3>
+                <div class="admin-settlement-history-controls">
+                  <label for="adminSettlementHistoryCoach">대상 코치</label>
+                  <select id="adminSettlementHistoryCoach"><option value="">코치 선택</option></select>
+                  <button id="adminSettlementHistoryRead" type="button" class="ghost-button" disabled>확정 이력 조회</button>
+                </div>
+                <p id="adminSettlementHistoryMessage" role="status">코치를 선택한 뒤 확정 이력을 조회해 주세요.</p>
+                <dl id="adminSettlementHistoryDetails" hidden></dl>
+              </section>
             </section>
             <section class="panel table-panel">
               <div class="panel-heading">

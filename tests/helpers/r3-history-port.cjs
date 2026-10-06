@@ -5,6 +5,7 @@ const root=path.resolve(__dirname,"../..");
 const manifest=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/r3-coach-history-source-parity.json"),"utf8"));
 const sha=text=>crypto.createHash("sha256").update(text).digest("hex");
 function restore(file,text,inputVersion=JSON.parse(fs.readFileSync(path.join(root,"app/release.json"),"utf8")).version){
+  text=require("./r3-admin-history-port.cjs").restore(file,text,inputVersion);
   const entry=manifest.files.find(e=>e.path===file);
   if(!entry)return text;
   text=text.replaceAll(inputVersion,manifest.publicVersion);

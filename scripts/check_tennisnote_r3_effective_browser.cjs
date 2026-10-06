@@ -10,7 +10,7 @@ function fixtureConfig(coach) {
   return `window.TennisNoteConfig={}; window.__r3Rpc=[];
   const fixtureClient={readiness:()=>({ready:${coach}}),getSession:()=>(${coach}?{access_token:"synthetic-only"}:null),ensureSession:async()=>({access_token:"synthetic-only"}),consumeOAuthRedirect:async()=>{},isOnline:()=>false,
     selectCurrentProfile:async()=>({user:{id:"synthetic-auth"},profile:{id:"synthetic-profile",name:"합성 코치",role:"coach",status:"active"},coachRole:{id:"synthetic-role",branch_id:"synthetic-branch",status:"approved"}}),
-    selectRows:async()=>[],rpc:async(name,args)=>{window.__r3Rpc.push({name,args}); if(name==="tn_coach_settlement_scope_v2")return window.__r3Payload(args);if(name==="tn_coach_monthly_settlement_reconciliation_state")return window.__r3History(args);return []},
+    selectRows:async()=>[],rpc:async(name,args)=>{window.__r3Rpc.push({name,args}); if(name==="tn_coach_settlement_scope_v2")return window.__r3Payload(args);if(name==="tn_coach_monthly_settlement_reconciliation_state")return window.__r3History(args);if(name==="tn_admin_monthly_settlement_scope_state")return window.__r3AdminHistory(args);return []},
     invokeFunction:async()=>{throw Error("fixture write forbidden")}};
   window.__r3Payload=args=>({ok:true,calculationVersion:"r3_effective_settlement_v2",scope:{branchId:args.target_branch_id,coachRoleId:args.target_coach_role_id,settlementMonth:args.target_month},sourceFingerprint:"a".repeat(64),confirmationReady:false,
     totals:{totalSettlementAmount:50,revenueAmount:100,settledSessions:1,settledMinutes:40,paymentCount:1},sourceManifest:{tickets:[{id:"synthetic-ticket",userId:"synthetic-user"}]},
@@ -24,6 +24,12 @@ async function runFixture(page,surface){
       window.activeOperationBranchId=()=>"synthetic-branch";
       window.operationBranchCoaches=()=>[{name:'합성 코치 <img src=x onerror="throw 1">',branchId:"synthetic-branch",serverRoleId:"synthetic-role"}];
       window.adminApprovalReady=()=>true;
+      window.isAdminViewLocked=()=>false;
+      window.isAdminUnlocked=()=>false;
+      window.adminPinNeedsSetup=()=>false;
+      adminImportAuthState.profile={id:"synthetic-admin",role:"admin"};
+      window.TennisNoteDataClient.getSession=()=>({access_token:"synthetic-only"});
+      window.__r3AdminHistory=args=>({ok:true,state:"CONFIRMED",scope:{branchId:args.target_branch_id,coachRoleId:args.target_coach_role_id,settlementMonth:args.target_month},snapshot:{snapshotId:"synthetic-snapshot",revision:1,status:"calculated",calculationVersion:"r3_monthly_settlement_v1",sourceFingerprint:"b".repeat(64),totals:{settledSessions:1,settledMinutes:40,totalSettlementAmount:37}},confirmation:{confirmationId:"synthetic-confirmation",status:"confirmed",confirmationVersion:"r3_monthly_settlement_confirmation_v1",confirmedAt:"2099-01-01T00:00:00Z"},reconciliation:null});
       state.view="billing";state.billingMonth="2099-01";state.settlementPage=0;
       // 합성 transport 권한은 실제 로그인 증거가 아니다. 실제 shell만 fixture에서 연다.
       document.querySelector("#operationsLoginGate").hidden=true;
@@ -50,6 +56,22 @@ async function runFixture(page,surface){
       await refreshEffectiveSettlementPreview(signature);
       check(document.querySelector("#coachSettlementSummary").textContent.includes("확인 필요"),"admin HOLD not zero");
       client.rpc=old;await refreshEffectiveSettlementPreview(signature);
+      const select=document.querySelector("#adminSettlementHistoryCoach"),button=document.querySelector("#adminSettlementHistoryRead"),details=document.querySelector("#adminSettlementHistoryDetails");
+      select.value="synthetic-role";select.dispatchEvent(new Event("change",{bubbles:true}));
+      check(!button.disabled,"actual binding selects exact role");
+      const before=window.__r3Rpc.filter(row=>row.name==="tn_admin_monthly_settlement_scope_state").length;
+      button.click();button.click();await new Promise(resolve=>setTimeout(resolve,0));
+      check(window.__r3Rpc.filter(row=>row.name==="tn_admin_monthly_settlement_scope_state").length===before+1,"one read through actual button/listener; duplicate zero");
+      check(details.textContent.includes("37원")&&details.textContent.includes("기존 v1"),"admin immutable history same as coach fixture");
+      check(effectiveSettlementPreview.results[0].value.estimatedSettlement===50,"confirmed history never overwrites estimate");
+      const adminHistory=window.__r3AdminHistory;
+      window.__r3AdminHistory=args=>({...adminHistory(args),reconciliation:{reconciliationId:"synthetic-response",status:"DISPUTED",reason:"적용기간 확인 요청 ".repeat(12).trim(),responseVersion:"r3_monthly_settlement_coach_reconciliation_v1",respondedAt:"2099-01-01T00:01:00Z"}});
+      check(await refreshAdminSettlementHistory(),"prior coach dispute readback");
+      check(details.textContent.includes("이의 접수")&&!details.querySelector("img,script"),"read-only reason safe DOM");
+      window.isAdminViewLocked=()=>true;renderAdminSettlementHistory();
+      check(button.disabled&&details.hidden&&details.childElementCount===0,"PIN lock erases history and disables read");
+      window.isAdminViewLocked=()=>false;renderAdminSettlementHistory();
+      check(await refreshAdminSettlementHistory(),"synthetic unlock recovery");
     }else{
       check(Boolean(window.__TENNIS_NOTE_COACH_APP_RUNTIME__),"actual coach entry boot");
       window.__r3History=args=>({scope:{branchId:args.target_branch_id,coachRoleId:args.target_coach_role_id,settlementMonth:args.target_month},state:"PENDING",
@@ -112,12 +134,28 @@ async function runFixture(page,surface){
           await page.goto(base+`/app/${surface==="admin"?"admin":"tennis-note-coach-app"}/`,{waitUntil:"domcontentloaded"});
           await page.waitForFunction(surface=>surface==="admin"?typeof renderCoachSettlementPreview==="function"&&typeof state==="object":Boolean(window.__TENNIS_NOTE_COACH_APP_RUNTIME__)&&state.coach?.coachRoleId==="synthetic-role",surface);
           const receipt=await runFixture(page,surface);checks+=receipt.checks;
-          const target=page.locator(surface==="admin"?"#coachSettlementSummary":"#coachSettlementModal");
+          const target=page.locator(surface==="admin"?"#adminSettlementHistory":"#coachSettlementModal");
           for(const [width,height] of widths){
             await page.setViewportSize({width,height});await target.scrollIntoViewIfNeeded();
             const geometry=await target.evaluate(el=>({visible:!!el.getClientRects().length,width:el.getBoundingClientRect().width,documentOverflow:document.documentElement.scrollWidth-innerWidth}));
             assert(geometry.visible&&geometry.width>100&&geometry.width<=width+1,"actual settlement target visible viewport width");
             assert(geometry.documentOverflow<=1,"page overflow zero");assert.deepEqual(errors,[],"page error zero");
+            if(surface==="admin") {
+              await page.locator("#adminSettlementHistory").scrollIntoViewIfNeeded();
+              const historyGeometry=await page.locator("#adminSettlementHistory").evaluate(el=>{
+                const bounds=el.getBoundingClientRect();
+                const visible=Array.from(el.querySelectorAll("*")).map(node=>node.getBoundingClientRect()).filter(rect=>rect.width>0&&rect.height>0);
+                // WebKit native select의 익명 popup은 부모 scrollWidth에 포함될 수 있습니다.
+                // 가시 DOM 경계·본문 scroll·문서 overflow를 모두 검사하고 원시 값도 남깁니다.
+                return {overflow:Math.max(0,...visible.map(rect=>Math.max(rect.right-bounds.right,bounds.left-rect.left))),
+                  textOverflow:Math.max(0,...Array.from(el.querySelectorAll("p,dl,dd")).map(node=>node.scrollWidth-node.clientWidth)),
+                  nativeControlScrollOverflow:el.querySelector(".admin-settlement-history-controls").scrollWidth-el.querySelector(".admin-settlement-history-controls").clientWidth,
+                  font:parseFloat(getComputedStyle(el.querySelector("select")).fontSize),touch:el.querySelector("button").getBoundingClientRect().height,visible:!!el.querySelector("dl").getClientRects().length};
+              });
+              assert(historyGeometry.visible&&historyGeometry.overflow<=1&&historyGeometry.textOverflow<=1,"admin history visible/no overflow "+JSON.stringify({engine,colorScheme,width,height,...historyGeometry}));
+              if(historyGeometry.nativeControlScrollOverflow>1) console.log(JSON.stringify({diagnostic:"native-select-intrinsic-scroll",engine,colorScheme,width,height,...historyGeometry}));
+              assert(historyGeometry.font>=16&&historyGeometry.touch>=44,"admin history focus/touch contract");checks+=2;
+            }
             if(surface==="coach") {
               await page.locator("#coachSettlementReconciliationSummary").scrollIntoViewIfNeeded();
               const historyGeometry=await page.locator("#coachSettlementReconciliationSummary").evaluate(el=>{

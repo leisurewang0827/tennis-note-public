@@ -488,6 +488,19 @@ def restore_excel_retry_base(path: str, text: str) -> str:
 def restore_r3_effective_base(path: str, text: str) -> str | None:
     """승인된 원본 projection만 exact hash/offset으로 역변환. 기존 golden은 불변."""
     port = json.loads((ROOT / "tests/fixtures/r3-effective-source-parity.json").read_text(encoding="utf-8"))
+    admin_history = json.loads((ROOT / "tests/fixtures/r3-admin-history-source-parity.json").read_text(encoding="utf-8"))
+    admin_entry = next((item for item in admin_history["files"] if item["path"] == path), None)
+    if admin_entry is not None:
+        text = text.replace(port["publicVersion"], admin_history["publicVersion"])
+        if sha256(text.encode("utf-8")) != admin_entry["candidateSha256"]:
+            raise RuntimeError("R3 admin history candidate hash drift")
+        for hunk in reversed(admin_entry["hunks"]):
+            if text[hunk["start"]:hunk["end"]] != hunk["after"]:
+                raise RuntimeError("R3 admin history inverse hunk drift")
+            text = text[:hunk["start"]] + hunk["before"] + text[hunk["end"]:]
+        if sha256(text.encode("utf-8")) != admin_entry["baseSha256"]:
+            raise RuntimeError("R3 admin history baseline drift")
+        text = text.replace(admin_history["publicVersion"], port["publicVersion"])
     history = json.loads((ROOT / "tests/fixtures/r3-coach-history-source-parity.json").read_text(encoding="utf-8"))
     history_entry = next((item for item in history["files"] if item["path"] == path), None)
     if history_entry is not None:

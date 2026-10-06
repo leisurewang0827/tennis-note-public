@@ -7,6 +7,12 @@
 //  원래 순서 그대로 유지한다. stopImmediatePropagation 은 쓰이지 않는다.)
 
 function bindBillingEvents() {
+  $("#adminSettlementHistoryCoach")?.addEventListener("change", (event) => {
+    resetAdminSettlementHistory();
+    adminSettlementHistory.coachRoleId = event.target.value;
+    renderAdminSettlementHistory();
+  });
+  $("#adminSettlementHistoryRead")?.addEventListener("click", () => void refreshAdminSettlementHistory());
   $("#openOnsitePaymentButton")?.addEventListener("click", openOnsitePaymentModal);
   $$("[data-close-onsite-payment]").forEach((button) => button.addEventListener("click", closeOnsitePaymentModal));
   $("#onsitePaymentModal")?.addEventListener("click", (event) => {
@@ -22,6 +28,7 @@ function bindBillingEvents() {
   $("#onsitePaymentForm")?.addEventListener("submit", submitOnsitePayment);
   $("#billingMonthFilter")?.addEventListener("change", (event) => {
     state.billingMonth = event.target.value || adminLocalDateKey(new Date()).slice(0, 7);
+    resetAdminSettlementHistory();
     state.billingPage = 0;
     state.settlementPage = 0;
     renderBilling();
