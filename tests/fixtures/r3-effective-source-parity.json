@@ -1,0 +1,362 @@
+{
+  "contract": "r3-effective-public-projection-v1",
+  "sourceSha": "ddb549c413c5e820c974bdaed73b351d9afb6981",
+  "publicBaseSha": "5f6ce6c45dbe31aed2555de39c8a550beaa3883a",
+  "mode": "read-only-preview-no-confirmation-ui",
+  "functions": [
+    {
+      "source": "90-Dashboard/tennis-note-prototype/app.js",
+      "name": "effectiveSettlementPreviewSignature",
+      "target": "app/admin/domain/common.js",
+      "sourceSha256": "5d53d404feec77dd7456e49b6c9bfde26481bca3336920724d801f03f2e3c3bf",
+      "projectedSha256": "5d53d404feec77dd7456e49b6c9bfde26481bca3336920724d801f03f2e3c3bf",
+      "adaptations": []
+    },
+    {
+      "source": "90-Dashboard/tennis-note-prototype/app.js",
+      "name": "refreshEffectiveSettlementPreview",
+      "target": "app/admin/data/billing.js",
+      "sourceSha256": "fda6464730844e864e8db7cc8721e04bd20d94dba6f61e6853e97c651f9d8eeb",
+      "projectedSha256": "fda6464730844e864e8db7cc8721e04bd20d94dba6f61e6853e97c651f9d8eeb",
+      "adaptations": []
+    },
+    {
+      "source": "90-Dashboard/tennis-note-prototype/app.js",
+      "name": "renderEffectiveSettlementPreview",
+      "target": "app/admin/views/billing.js",
+      "sourceSha256": "f316124b1509af07849de12dfeb918d1e0ed2fe6849cc372921350baf3a36339",
+      "projectedSha256": "0ea74e72aa09d86e7e82067f426b8e1991051a5b683138757d45fc82568e470e",
+      "adaptations": [
+        {
+          "before": "escapeHtmlText",
+          "after": "escapeHtml"
+        }
+      ]
+    },
+    {
+      "source": "90-Dashboard/tennis-note-prototype/app.js",
+      "name": "billingSettlementApprovalMarkup",
+      "target": "app/admin/views/billing.js",
+      "sourceSha256": "3aa083db626f06ae73d905bbafd51e33051061c793808b48ed6c5abd6538c104",
+      "projectedSha256": "3aa083db626f06ae73d905bbafd51e33051061c793808b48ed6c5abd6538c104",
+      "adaptations": []
+    },
+    {
+      "source": "90-Dashboard/tennis-note-coach-app/app.js",
+      "name": "coachSettlementRuleLabel",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "sourceSha256": "0b109428c03b23192586e1fa43d451f28e107ab15fea600346632d237a2d3aa9",
+      "projectedSha256": "0b109428c03b23192586e1fa43d451f28e107ab15fea600346632d237a2d3aa9",
+      "adaptations": []
+    },
+    {
+      "source": "90-Dashboard/tennis-note-coach-app/app.js",
+      "name": "coachSettlementRowsForMember",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "sourceSha256": "05f8c862231590965f7a761516a60961e64d7ba163d12b866953316d290932fe",
+      "projectedSha256": "05f8c862231590965f7a761516a60961e64d7ba163d12b866953316d290932fe",
+      "adaptations": []
+    },
+    {
+      "source": "90-Dashboard/tennis-note-coach-app/app.js",
+      "name": "coachSettlementReconciliationScope",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "sourceSha256": "70f2f0ed22b87e0830e3dbc498945e5d8ef65cd7070978f152b39ba42ef67c34",
+      "projectedSha256": "70f2f0ed22b87e0830e3dbc498945e5d8ef65cd7070978f152b39ba42ef67c34",
+      "adaptations": []
+    },
+    {
+      "source": "90-Dashboard/tennis-note-coach-app/app.js",
+      "name": "coachSettlementReconciliationScopeSignature",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "sourceSha256": "1907f2b87eeed34258ed5c7294db7d526e84a99eeac5e7cf8c13413a7fac3163",
+      "projectedSha256": "1907f2b87eeed34258ed5c7294db7d526e84a99eeac5e7cf8c13413a7fac3163",
+      "adaptations": []
+    },
+    {
+      "source": "90-Dashboard/tennis-note-coach-app/app.js",
+      "name": "renderCoachSettlement",
+      "target": "app/tennis-note-coach-app/views/settlement.js",
+      "sourceSha256": "eb5b12cf64b91c8007d6683c3fa3a0994770b82442240e008b859345d6fa41dc",
+      "projectedSha256": "4f41c159b060d8d06fd1e75ab428260d84d042c8600f0637de385b9b1042bc83",
+      "adaptations": [
+        {
+          "before": "  renderCoachSettlementReconciliation();\n",
+          "after": ""
+        }
+      ]
+    },
+    {
+      "source": "90-Dashboard/tennis-note-coach-app/app.js",
+      "name": "syncCoachSettlementFromServer",
+      "target": "app/tennis-note-coach-app/data/sync.js",
+      "sourceSha256": "f525532488903d1c90d4c9c46461548357904b2b7e6d064d0948f65d6d4db855",
+      "projectedSha256": "f525532488903d1c90d4c9c46461548357904b2b7e6d064d0948f65d6d4db855",
+      "adaptations": []
+    }
+  ],
+  "files": [
+    {
+      "path": "app/admin/data/billing.js",
+      "baseSha256": "b197d7935014450958c361b17e2c052fb9a37b58e4fbe3e172b9fe4f15ea7ec5",
+      "candidateSha256": "a079920443e13321e6fce5b5b496baccff0121ee96bd59adbb45538211275b96",
+      "new": false,
+      "hunks": [
+        {
+          "before": "",
+          "after": "\nconst effectiveSettlementPreview = { signature: \"\", loading: false, results: [] };\n\nasync function refreshEffectiveSettlementPreview(signature) {\n  const branchId = activeOperationBranchId();\n  const settlementMonth = `${state.billingMonth}-01`;\n  const client = window.TennisNoteDataClient;\n  const entries = operationBranchCoaches().filter((coach) => coach.serverRoleId && coach.branchId === branchId);\n  effectiveSettlementPreview.signature = signature;\n  effectiveSettlementPreview.loading = true;\n  renderEffectiveSettlementPreview();\n  const results = await Promise.all(entries.map(async (coach) => {\n    try {\n      if (!adminApprovalReady() || !client?.rpc) throw new Error(\"authentication_required\");\n      const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };\n      const result = await client.rpc(\"tn_coach_settlement_scope_v2\", {\n        target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,\n      });\n      return { coach, value: window.TennisNoteSettlementAdjustment.effectiveProjection(result, scope) };\n    } catch (error) {\n      return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error) };\n    }\n  }));\n  if (effectiveSettlementPreview.signature !== signature || effectiveSettlementPreviewSignature() !== signature) return;\n  effectiveSettlementPreview.results = results;\n  effectiveSettlementPreview.loading = false;\n  renderEffectiveSettlementPreview();\n}\n",
+          "start": 20570,
+          "end": 22043
+        }
+      ]
+    },
+    {
+      "path": "app/admin/domain/common.js",
+      "baseSha256": "5a62d842260e63a155ef33376adf4397d92fce4c225bd79978c5e24eee0c8ab9",
+      "candidateSha256": "42f59735bab983e21cc62ac612af5453e68297cb091d3d53903a5cc2d5c2c32f",
+      "new": false,
+      "hunks": [
+        {
+          "before": "",
+          "after": "\nfunction effectiveSettlementPreviewSignature() {\n  return JSON.stringify([activeOperationBranchId(), state.billingMonth,\n    serverPaymentSyncState.lastLoadedAt, operationBranchCoaches().map((coach) => coach.serverRoleId), coachSettlementRules]);\n}\n",
+          "start": 125006,
+          "end": 125256
+        }
+      ]
+    },
+    {
+      "path": "app/admin/index.html",
+      "baseSha256": "8adb9ef39e4910b542acd51a6242a30911a94489ce219780bac17366f7a0af39",
+      "candidateSha256": "e10739ea387c70b6bc49e8ca09df3334f28af553505768e927eac19387d8fd91",
+      "new": false,
+      "hunks": [
+        {
+          "before": "                <span class=\"source-pill\">실결제 기준 · 카드 결제는 현금가 정산</span>\n",
+          "after": "                <span class=\"source-pill\">구매·수업·적용기간 근거</span>\n",
+          "start": 63103,
+          "end": 63166
+        },
+        {
+          "before": "                    <th>최종 정산</th>\n",
+          "after": "                    <th>예상 정산</th>\n",
+          "start": 63532,
+          "end": 63567
+        },
+        {
+          "before": "",
+          "after": "    <script src=\"../shared/tennisnote-settlement-adjustment.js?v=1.0.535\"></script>\n",
+          "start": 128940,
+          "end": 129024
+        }
+      ]
+    },
+    {
+      "path": "app/admin/views/billing.js",
+      "baseSha256": "dddeac9488b8e6e24d1bc2a6a2d42b0c474f5085268dbb96a46b8dc07bf270d4",
+      "candidateSha256": "3e94a84a4fd276fc70852c35a1912234ada746d0104f5ed3a2bbd7f4fa92e1cc",
+      "new": false,
+      "hunks": [
+        {
+          "before": "",
+          "after": "  if (!adminDemoMode) {\n    const signature = effectiveSettlementPreviewSignature();\n    if (effectiveSettlementPreview.signature !== signature) void refreshEffectiveSettlementPreview(signature);\n    else renderEffectiveSettlementPreview();\n    return;\n  }\n",
+          "start": 251,
+          "end": 508
+        },
+        {
+          "before": "",
+          "after": "  // A payment-row total cannot stand in for lesson-month settlement. Keep the\n  // existing monthly preview as authority instead of a second name-based sum.\n  if (!adminDemoMode) return '<span class=\"billing-settlement-pending\">월 정산에서 적용일별 계산 확인</span>';\n",
+          "start": 35156,
+          "end": 35412
+        },
+        {
+          "before": "",
+          "after": "\nfunction renderEffectiveSettlementPreview() {\n  const rows = $(\"#coachSettlementPreviewRows\");\n  const summary = $(\"#coachSettlementSummary\");\n  if (!rows) return;\n  const current = effectiveSettlementPreview;\n  if (current.loading) {\n    rows.innerHTML = '<tr><td colspan=\"6\">적용일별 서버 계산을 확인하고 있습니다.</td></tr>';\n    if (summary) summary.textContent = \"정산 확인 중\";\n    return;\n  }\n  if (summary) summary.innerHTML = current.results.map((entry) => `<article>\n    <span>${escapeHtml(entry.coach.name)}</span>\n    <strong>${entry.error ? \"확인 필요\" : `${money.format(entry.value.estimatedSettlement)}원`}</strong>\n    <small>${escapeHtml(entry.error || `실제 진행 ${entry.value.settledMinutes}분 · 결제 ${entry.value.paymentCount}건${entry.value.confirmationReady ? \"\" : \" · 새 계산 미리보기 / 기존 확정 내역 유지\"}`)}</small>\n  </article>`).join(\"\") || \"계산할 코치가 없습니다.\";\n  const items = current.results.flatMap((entry) => entry.error ? [{ ...entry, row: null }]\n    : entry.value.rows.map((row) => ({ ...entry, row })));\n  state.settlementPage = normalizeDashboardPage(items.length, state.settlementPage, billingPageSize);\n  rows.innerHTML = items.slice(state.settlementPage * billingPageSize, (state.settlementPage + 1) * billingPageSize)\n    .map(({ coach, row, error }) => {\n      if (error) return `<tr><td colspan=\"6\">${escapeHtml(coach.name)} · ${escapeHtml(error)}</td></tr>`;\n      const exactTicket = [...tickets, ...expiredTickets, ...(adminLiveDataState.settlementTickets || [])]\n        .find((ticket) => String(ticket.serverTicketId || ticket.id) === row.ticketId);\n      return `<tr><td>${escapeHtml(exactTicket?.member || \"회원권 근거 확인\")}</td>\n        <td>${escapeHtml(coach.name)}</td><td>${money.format(row.amount)}원</td>\n        <td>구매·진행 당시 근거<br><small>${Number(row.settledSessions)}회 · 실제 ${Number(row.settledMinutes)}분</small></td>\n        <td>날짜별 조건 · 월 최종 반올림</td><td>${money.format(row.estimatedSettlement)}원</td></tr>`;\n    }).join(\"\") || '<tr><td colspan=\"6\">선택한 달의 계산 근거가 없습니다.</td></tr>';\n  renderDashboardPager(\"#coachSettlementPreviewPager\", items.length, state.settlementPage, \"settlement\", billingPageSize);\n}\n",
+          "start": 36317,
+          "end": 38425
+        }
+      ]
+    },
+    {
+      "path": "app/shared/tennisnote-settlement-adjustment.js",
+      "baseSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "candidateSha256": "53523a187b1148d47f0853a852247c12452694d2262e9406d786489a98778c34",
+      "new": true,
+      "hunks": [
+        {
+          "before": "",
+          "after": "(function attachTennisNoteSettlementAdjustment(global) {\n  \"use strict\";\n\n  function money(value) {\n    const parsed = Number(value);\n    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;\n  }\n\n  function normalized(value) {\n    return String(value || \"\").trim().toLowerCase();\n  }\n\n  function paymentAmounts(payment = {}) {\n    const grossAmount = money(payment.finalAmount ?? payment.final_amount ?? payment.amount);\n    const refundedAmount = Math.min(\n      grossAmount,\n      money(payment.refundedAmount ?? payment.refunded_amount),\n    );\n    const netAmount = Math.max(0, grossAmount - refundedAmount);\n    const originalSettlementBase = money(\n      payment.settlementBaseAmount\n        ?? payment.settlement_base_amount\n        ?? payment.settlementBase\n        ?? grossAmount,\n    );\n    const settlementBase = grossAmount > 0\n      ? Math.round(originalSettlementBase * netAmount / grossAmount)\n      : 0;\n    return {\n      grossAmount,\n      refundedAmount,\n      netAmount,\n      originalSettlementBase,\n      settlementBase,\n      refundAdjusted: refundedAmount > 0,\n    };\n  }\n\n  function isIncluded(payment = {}) {\n    const status = normalized(payment.serverStatus || payment.status);\n    const refundStatus = normalized(payment.refundStatus || payment.refund_status);\n    if ([\"processing\", \"reconcile_required\"].includes(refundStatus)) return false;\n    const amounts = paymentAmounts(payment);\n    return [\"paid\", \"verified\", \"refunded\"].includes(status) && amounts.netAmount > 0;\n  }\n\n  // Projection only: formulas and rounding belong to the server calculator.\n  function effectiveProjection(value, scope) {\n    if (!value?.ok || value.calculationVersion !== \"r3_effective_settlement_v2\"\n      || value.scope?.branchId !== scope.branchId || value.scope?.coachRoleId !== scope.coachRoleId\n      || value.scope?.settlementMonth !== scope.settlementMonth\n      || !/^[0-9a-f]{64}$/.test(value.sourceFingerprint || \"\")\n      || !Array.isArray(value.lines) || !Array.isArray(value.sourceManifest?.tickets)) {\n      throw new Error(\"settlement_scope_or_version_mismatch\");\n    }\n    for (const key of [\"totalSettlementAmount\", \"revenueAmount\", \"settledSessions\", \"settledMinutes\", \"paymentCount\"]) {\n      if (!Number.isSafeInteger(value.totals?.[key]) || value.totals[key] < 0) throw new Error(\"settlement_total_invalid\");\n    }\n    if (value.lines.reduce((sum, line) => sum + Number(line.settlementAmount), 0) !== value.totals.totalSettlementAmount) {\n      throw new Error(\"settlement_line_total_mismatch\");\n    }\n    const ticketById = new Map(value.sourceManifest.tickets.map((ticket) => [ticket.id, ticket]));\n    return {\n      ...value, coachRoleId: scope.coachRoleId, branchId: scope.branchId,\n      confirmationReady: value.confirmationReady === true,\n      month: scope.settlementMonth.slice(0, 7), ruleType: \"effective_periods\",\n      estimatedSettlement: value.totals.totalSettlementAmount,\n      revenueAmount: value.totals.revenueAmount, settledSessions: value.totals.settledSessions,\n      paymentCount: value.totals.paymentCount, settledMinutes: value.totals.settledMinutes,\n      rows: value.lines.map((line) => {\n        const ticket = ticketById.get(line.sourceTicketId);\n        if (!ticket || !Number.isSafeInteger(line.settlementAmount) || line.settlementAmount < 0) {\n          throw new Error(\"settlement_line_scope_mismatch\");\n        }\n        return { ticketId: ticket.id, userId: ticket.userId, coachRoleId: scope.coachRoleId,\n          estimatedSettlement: line.settlementAmount, settledSessions: line.settledSessions,\n          settledMinutes: line.settledMinutes, totalSessions: line.totalSessions,\n          amount: line.netAmount, memberName: \"회원권별 계산 근거\", productName: \"적용일별 정산\",\n          method: line.sourcePaymentId ? \"결제 근거 보존\" : \"미입금 포함 · 시간제\",\n          calculationComponents: line.calculationComponents };\n      }),\n    };\n  }\n\n  function effectiveError(error) {\n    const code = String(error?.payload?.message || error?.message || \"\");\n    if (/lock timeout|lock_not_available|55P03/.test(code)) return \"정산 근거가 변경 중입니다. 잠시 후 다시 확인해 주세요. 이번 계산은 확정하지 않았습니다.\";\n    if (code.includes(\"settlement_hold_\")) return \"확인 필요: 구매·수업·적용기간 또는 환불 조정 근거를 확인해 주세요. 임의 금액은 계산하지 않았습니다.\";\n    if (/scope|forbidden|authentication/.test(code)) return \"현재 지점과 코치 권한을 다시 확인해 주세요.\";\n    return \"정산 자료를 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.\";\n  }\n\n  global.TennisNoteSettlementAdjustment = Object.freeze({\n    paymentAmounts,\n    isIncluded,\n    effectiveProjection,\n    effectiveError,\n  });\n})(window);\n",
+          "start": 0,
+          "end": 4541
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/data/sync.js",
+      "baseSha256": "0b54631ef0ae04df5b3240e06054a164128b5e8f13006c5e461c53a84184aeac",
+      "candidateSha256": "cc9a2bdba459d01c942a4929323d661017b7c3bd499b1377a9981222006e2759",
+      "new": false,
+      "hunks": [
+        {
+          "before": "",
+          "after": "let coachSettlementRequestSequence = 0;\n",
+          "start": 35685,
+          "end": 35725
+        },
+        {
+          "before": "",
+          "after": "  const requestSequence = ++coachSettlementRequestSequence;\n",
+          "start": 35923,
+          "end": 35983
+        },
+        {
+          "before": "",
+          "after": "  const scope = coachSettlementReconciliationScope();\n  const stillCurrent = () => requestSequence === coachSettlementRequestSequence && coachSettlementReconciliationScopeSignature(scope)\n    === coachSettlementReconciliationScopeSignature();\n",
+          "start": 36084,
+          "end": 36327
+        },
+        {
+          "before": "    const result = await client.rpc(\"tn_coach_own_settlement\", {\n      target_month: `${coachSettlementMonth()}-01`,\n",
+          "after": "    const result = await client.rpc(\"tn_coach_settlement_scope_v2\", {\n      target_branch_id: scope.branchId,\n      target_coach_role_id: scope.coachRoleId,\n      target_month: scope.settlementMonth,\n",
+          "start": 36335,
+          "end": 36535
+        },
+        {
+          "before": "    if (!result || typeof result !== \"object\" || Array.isArray(result)) throw new Error(\"coach_settlement_payload_invalid\");\n    state.coachSettlement = result;\n",
+          "after": "    if (!stillCurrent()) return false;\n    state.coachSettlement = window.TennisNoteSettlementAdjustment.effectiveProjection(result, scope);\n",
+          "start": 36543,
+          "end": 36684
+        },
+        {
+          "before": "    const raw = `${error?.payload?.message || \"\"} ${error?.message || \"\"}`;\n    state.coachSettlementError = raw.includes(\"tn_coach_own_settlement\") || raw.includes(\"PGRST202\")\n      ? \"코치 정산 기능을 업데이트하는 중입니다. 잠시 후 다시 확인해 주세요.\"\n      : \"정산 자료를 불러오지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.\";\n",
+          "after": "    if (!stillCurrent()) return false;\n    state.coachSettlement = null;\n    state.coachSettlementError = window.TennisNoteSettlementAdjustment.effectiveError(error);\n",
+          "start": 36721,
+          "end": 36888
+        },
+        {
+          "before": "    state.coachSettlementLoading = false;\n    renderCoachSettlement();\n    saveSnapshot();\n",
+          "after": "    if (stillCurrent()) {\n      state.coachSettlementLoading = false;\n      renderCoachSettlement();\n      saveSnapshot();\n    }\n",
+          "start": 36920,
+          "end": 37049
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/domain/settlement.js",
+      "baseSha256": "364b0e4271fe38f6f2b31b15434300c96624091032f325a9be68917f23341dcc",
+      "candidateSha256": "7edb8b9a99553a3f39dfec2cd401f694126d7036cf38aaa293ce520f0756ea73",
+      "new": false,
+      "hunks": [
+        {
+          "before": "",
+          "after": "  if (settlement.ruleType === \"effective_periods\") return \"수업·결제 기준일별 조건 · 월 합계에서 원 단위 반올림\" + (settlement.confirmationReady ? \"\" : \" · 새 계산은 미리보기이며 기존 확정 내역은 유지됩니다\");\n",
+          "start": 1362,
+          "end": 1529
+        },
+        {
+          "before": "",
+          "after": "  if (state.coachSettlement?.calculationVersion === \"r3_effective_settlement_v2\") {\n    const exactUserId = String(member.serverUserId || member.userId || \"\");\n    return exactUserId ? settlementRows.filter((row) => row.userId === exactUserId) : [];\n  }\n",
+          "start": 2214,
+          "end": 2468
+        },
+        {
+          "before": "",
+          "after": "\nfunction coachSettlementReconciliationScope() {\n  return {\n    branchId: String(state.coach?.branchId || \"\").trim(),\n    coachRoleId: String(state.coach?.coachRoleId || \"\").trim(),\n    settlementMonth: `${coachSettlementMonth()}-01`,\n  };\n}\n\nfunction coachSettlementReconciliationScopeSignature(scope = coachSettlementReconciliationScope()) {\n  return [scope.branchId, scope.coachRoleId, scope.settlementMonth].join(\":\");\n}\n",
+          "start": 3448,
+          "end": 3873
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/index.html",
+      "baseSha256": "f62153ab9670b6e7b9439710896f3d76eb8a47c150b20eb5e39921ee3d869e85",
+      "candidateSha256": "652bf4f964c5539180bbe8dd13d2d6f2b3be354a5b731b47e8098b58c1d4f4ab",
+      "new": false,
+      "hunks": [
+        {
+          "before": "",
+          "after": "    <script defer src=\"../shared/tennisnote-settlement-adjustment.js?v=1.0.535\"></script>\n",
+          "start": 18485,
+          "end": 18575
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/service-worker.js",
+      "baseSha256": "9e5afb8006f4973da7d8202060e6ecfe7b67f5838d6864f2fe7b021b63ac6559",
+      "candidateSha256": "956f0c4d25806cba6f08112aef18205bfc8d555d20f8c422fe72605ca32c838b",
+      "new": false,
+      "hunks": [
+        {
+          "before": "",
+          "after": "  \"../shared/tennisnote-settlement-adjustment.js?v=1.0.535\",\n",
+          "start": 1795,
+          "end": 1856
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/views/settlement.js",
+      "baseSha256": "4db6f63e742670f5573b105c972ae0dbcd6ec53c3cfc4e05bfbda869dacc3143",
+      "candidateSha256": "472ed09496a86c30ad5756a341f579d26b0cab6e73a78b07bd30164aadfe19a3",
+      "new": false,
+      "hunks": [
+        {
+          "before": "  if ($(\"#coachRevenueAmount\")) $(\"#coachRevenueAmount\").textContent = formatCoachWon(settlement.revenueAmount);\n  if ($(\"#coachRevenueCount\")) $(\"#coachRevenueCount\").textContent = `결제 ${Number(settlement.paymentCount) || 0}건`;\n  if ($(\"#coachSettledSessions\")) $(\"#coachSettledSessions\").textContent = `${Number(settlement.settledSessions) || 0}회`;\n  if ($(\"#coachEstimatedSettlement\")) $(\"#coachEstimatedSettlement\").textContent = formatCoachWon(settlement.estimatedSettlement);\n",
+          "after": "  const unavailable = state.coachSettlementLoading || state.coachSettlementError || !state.coachSettlement;\n  if ($(\"#coachRevenueAmount\")) $(\"#coachRevenueAmount\").textContent = unavailable ? \"—\" : formatCoachWon(settlement.revenueAmount);\n  if ($(\"#coachRevenueCount\")) {\n    const refundedAmount = Number(settlement.refundedAmount) || 0;\n    $(\"#coachRevenueCount\").textContent = `결제 ${Number(settlement.paymentCount) || 0}건${refundedAmount ? ` · 환불 조정 ${formatCoachWon(refundedAmount)}` : \"\"}`;\n  }\n  if ($(\"#coachSettledSessions\")) $(\"#coachSettledSessions\").textContent = unavailable ? \"확인 필요\" : `${Number(settlement.settledSessions) || 0}회`;\n  if ($(\"#coachEstimatedSettlement\")) $(\"#coachEstimatedSettlement\").textContent = unavailable ? \"—\" : formatCoachWon(settlement.estimatedSettlement);\n",
+          "start": 1258,
+          "end": 2058
+        },
+        {
+          "before": "        : `결제 ${Number(settlement.paymentCount) || 0}건 · 수업 ${Number(settlement.settledSessions) || 0}회`;\n",
+          "after": "        : `결제 ${Number(settlement.paymentCount) || 0}건 · 수업 ${Number(settlement.settledSessions) || 0}회${Number(settlement.refundedAmount) ? ` · 환불 ${formatCoachWon(settlement.refundedAmount)}` : \"\"}`;\n",
+          "start": 2878,
+          "end": 3080
+        },
+        {
+          "before": "            <span>${escapeHtml(row.productName || \"회원권\")} · ${escapeHtml(String(row.method || \"결제수단 미입력\"))}</span>\n",
+          "after": "            <span>${escapeHtml(row.productName || \"회원권\")} · ${escapeHtml(String(row.method || \"결제수단 미입력\"))}${Number(row.refundedAmount) ? ` · 환불 ${formatCoachWon(row.refundedAmount)} 조정` : \"\"}</span>\n",
+          "start": 3390,
+          "end": 3590
+        },
+        {
+          "before": "            <small>매출 ${formatCoachWon(row.amount)} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회</small>\n",
+          "after": "            <small>매출 ${formatCoachWon(row.amount)}${Number(row.grossAmount) > Number(row.amount) ? ` (원결제 ${formatCoachWon(row.grossAmount)})` : \"\"} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회</small>\n",
+          "start": 3685,
+          "end": 3919
+        },
+        {
+          "before": "        title: state.coachSettlementLoading ? \"정산 자료를 확인하고 있습니다.\" : \"선택한 달의 내 담당 결제가 없습니다.\",\n        description: \"관리자 결제 귀속과 회원권 담당 코치를 확인해 주세요.\",\n",
+          "after": "        title: state.coachSettlementLoading ? \"정산 자료를 확인하고 있습니다.\" : state.coachSettlementError ? \"계산 근거 확인이 필요합니다.\" : \"선택한 달의 정산 대상이 없습니다.\",\n        description: state.coachSettlementError || \"관리자 결제 귀속과 수업 완료·적용기간을 확인해 주세요.\",\n",
+          "start": 3992,
+          "end": 4219
+        }
+      ]
+    },
+    {
+      "path": "tests/script-load.test.js",
+      "baseSha256": "074f8b36381604c72eadaea0cc79e345bc5847ae809d58284acd1aafa1c5c2be",
+      "candidateSha256": "fcfdbea463313ba721141c67e3f50e324bf1a531199dbdb6fa0797564d16be45",
+      "new": false,
+      "hunks": [
+        {
+          "before": "",
+          "after": "      \"app/shared/tennisnote-settlement-adjustment.js\",\n",
+          "start": 967,
+          "end": 1023
+        },
+        {
+          "before": "",
+          "after": "      \"app/shared/tennisnote-settlement-adjustment.js\",\n",
+          "start": 7609,
+          "end": 7665
+        }
+      ]
+    }
+  ],
+  "notPorted": [
+    "renderMonthlySettlementConfirmation",
+    "renderCoachSettlementReconciliation"
+  ],
+  "sharedCanonicalSha256": "53523a187b1148d47f0853a852247c12452694d2262e9406d786489a98778c34",
+  "publicVersion": "1.0.535"
+}

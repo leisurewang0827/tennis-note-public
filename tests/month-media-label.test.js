@@ -48,10 +48,13 @@ test("정산 월은 KST 현재 월과 실행 중 명시 선택을 구분한다",
   assert.equal(run("coachSettlementMonth()"), "2031-01");
 });
 
-test("실제 modular entry는 월 선택·logout·error capture를 연결하고 기존 RPC를 유지한다", () => {
+test("실제 modular entry는 월 선택·logout·error capture와 exact R3 scope RPC를 연결한다", () => {
   assert.match(read(coach + "events/delegated.js"), /selectCoachSettlementMonth\(settlementMonth.value\)/);
   assert.match(extract(read(coach + "data/auth.js"), "logoutCoach"), /coachSettlementSelection = null/);
-  assert.ok(read(coach + "data/sync.js").includes('target_month: `${coachSettlementMonth()}-01`'));
+  assert.match(extract(read(coach + "domain/settlement.js"), "coachSettlementReconciliationScope"), /settlementMonth: `\$\{coachSettlementMonth\(\)\}-01`/);
+  const sync = extract(read(coach + "data/sync.js"), "syncCoachSettlementFromServer");
+  assert.match(sync, /client\.rpc\("tn_coach_settlement_scope_v2"/);
+  for (const field of ["branch_id: scope.branchId", "coach_role_id: scope.coachRoleId", "month: scope.settlementMonth"]) assert(sync.includes("target_" + field));
   assert.match(read(member + "events/delegated.js"), /document.addEventListener\("error", handleJournalMediaPreviewError, true\)/);
   for (const [surface, modules] of [[coach, ["domain/settlement.js", "data/auth.js", "events/delegated.js"]], [member, ["domain/journal.js", "views/journal.js", "ui/common.js", "events/delegated.js"]]]) {
     for (const module of modules) {

@@ -64,6 +64,7 @@ Tennis Note 공개 저장소입니다. 회원앱·코치앱·관리자 세 개�
 | 검사가 실패했을 때 | [docs/verification.md](docs/verification.md) |
 | "왜 이 규칙이 있나" | [docs/incidents.md](docs/incidents.md) |
 | 아직 안 된 것 확인 | [docs/unfinished.md](docs/unfinished.md) |
+| R3 적용일별 정산 미리보기 원본·공개 모듈 연결 | [docs/tennisnote-r3-effective-public-preview.md](docs/tennisnote-r3-effective-public-preview.md) |
 
 ## 브랜치와 배포 — 확정된 운영 방식
 

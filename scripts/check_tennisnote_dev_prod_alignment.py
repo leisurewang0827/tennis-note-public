@@ -485,6 +485,25 @@ def restore_excel_retry_base(path: str, text: str) -> str:
     return text
 
 
+def restore_r3_effective_base(path: str, text: str) -> str | None:
+    """승인된 원본 projection만 exact hash/offset으로 역변환. 기존 golden은 불변."""
+    port = json.loads((ROOT / "tests/fixtures/r3-effective-source-parity.json").read_text(encoding="utf-8"))
+    entry = next((item for item in port["files"] if item["path"] == path), None)
+    if entry is None:
+        return text
+    if sha256(text.encode("utf-8")) != entry["candidateSha256"]:
+        raise RuntimeError("R3 projection candidate hash drift")
+    if entry["new"]:
+        return None
+    for hunk in reversed(entry["hunks"]):
+        if text[hunk["start"]:hunk["end"]] != hunk["after"]:
+            raise RuntimeError("R3 projection hunk drift")
+        text = text[:hunk["start"]] + hunk["before"] + text[hunk["end"]:]
+    if sha256(text.encode("utf-8")) != entry["baseSha256"]:
+        raise RuntimeError("R3 projection baseline drift")
+    return text
+
+
 def verify() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     candidate = manifest["candidate_release"]
@@ -507,6 +526,13 @@ def verify() -> None:
         for path in (ROOT / "app").rglob("*")
         if path.is_file() and path.name != "config.local.js"
     )
+    r3_port = json.loads((ROOT / "tests/fixtures/r3-effective-source-parity.json").read_text(encoding="utf-8"))
+    for entry in r3_port["files"]:
+        if entry["new"] and entry["path"].startswith("app/"):
+            source = (ROOT / entry["path"]).read_text(encoding="utf-8").replace("\r\n", "\n")
+            if restore_r3_effective_base(entry["path"], source) is not None:
+                raise RuntimeError("R3 new-module baseline drift")
+            actual_paths.remove(entry["path"])
     if actual_paths != sorted(expected_hashes):
         missing = sorted(set(expected_hashes) - set(actual_paths))
         extra = sorted(set(actual_paths) - set(expected_hashes))
@@ -531,7 +557,9 @@ def verify() -> None:
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
         try:
-            text = data.decode("utf-8").replace("\r\n", "\n").replace(EXPECTED_VERSION, home["publicVersion"])
+            text = data.decode("utf-8").replace("\r\n", "\n").replace(EXPECTED_VERSION, r3_port["publicVersion"])
+            text = restore_r3_effective_base(path, text)
+            text = text.replace(r3_port["publicVersion"], home["publicVersion"])
             text = restore_excel_retry_base(path, text)
             text = restore_member_home_base(path, text, home)
             text = restore_coach_round_base(path, text)

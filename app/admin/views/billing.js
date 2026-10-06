@@ -6,6 +6,12 @@
 
 function renderCoachSettlementPreview() {
   if (!["billing", "settings"].includes(state.view)) return;
+  if (!adminDemoMode) {
+    const signature = effectiveSettlementPreviewSignature();
+    if (effectiveSettlementPreview.signature !== signature) void refreshEffectiveSettlementPreview(signature);
+    else renderEffectiveSettlementPreview();
+    return;
+  }
   const previewRows = $("#coachSettlementPreviewRows");
   if (previewRows) {
     const ticketById = new Map();
@@ -606,6 +612,9 @@ function paymentConfirmationMarkup(item = {}) {
 function billingSettlementApprovalMarkup(item = {}) {
   if (item.status !== "paid") return '<span class="billing-settlement-pending">승인 후 자동계산</span>';
   if (paymentRequiresTicketRepair(item)) return '<span class="payment-link-warning">회원권 연결 후 계산</span>';
+  // A payment-row total cannot stand in for lesson-month settlement. Keep the
+  // existing monthly preview as authority instead of a second name-based sum.
+  if (!adminDemoMode) return '<span class="billing-settlement-pending">월 정산에서 적용일별 계산 확인</span>';
   const rows = settlementRowsForBilling(item);
   const amount = rows.reduce((sum, row) => sum + settlementAmountFor(row), 0);
   const coachNames = [...new Set(rows.map((row) => settlementCoachNameFor(row)).filter(Boolean))];
@@ -619,4 +628,35 @@ function memberTicketPaymentStatusMarkup(paymentGrid) {
     <strong>${escapeHtml(paymentGrid.label || "결제 확인")}</strong>
     <small>${escapeHtml(paymentGrid.method || "미입력")}</small>
   </span>`;
+}
+
+function renderEffectiveSettlementPreview() {
+  const rows = $("#coachSettlementPreviewRows");
+  const summary = $("#coachSettlementSummary");
+  if (!rows) return;
+  const current = effectiveSettlementPreview;
+  if (current.loading) {
+    rows.innerHTML = '<tr><td colspan="6">적용일별 서버 계산을 확인하고 있습니다.</td></tr>';
+    if (summary) summary.textContent = "정산 확인 중";
+    return;
+  }
+  if (summary) summary.innerHTML = current.results.map((entry) => `<article>
+    <span>${escapeHtml(entry.coach.name)}</span>
+    <strong>${entry.error ? "확인 필요" : `${money.format(entry.value.estimatedSettlement)}원`}</strong>
+    <small>${escapeHtml(entry.error || `실제 진행 ${entry.value.settledMinutes}분 · 결제 ${entry.value.paymentCount}건${entry.value.confirmationReady ? "" : " · 새 계산 미리보기 / 기존 확정 내역 유지"}`)}</small>
+  </article>`).join("") || "계산할 코치가 없습니다.";
+  const items = current.results.flatMap((entry) => entry.error ? [{ ...entry, row: null }]
+    : entry.value.rows.map((row) => ({ ...entry, row })));
+  state.settlementPage = normalizeDashboardPage(items.length, state.settlementPage, billingPageSize);
+  rows.innerHTML = items.slice(state.settlementPage * billingPageSize, (state.settlementPage + 1) * billingPageSize)
+    .map(({ coach, row, error }) => {
+      if (error) return `<tr><td colspan="6">${escapeHtml(coach.name)} · ${escapeHtml(error)}</td></tr>`;
+      const exactTicket = [...tickets, ...expiredTickets, ...(adminLiveDataState.settlementTickets || [])]
+        .find((ticket) => String(ticket.serverTicketId || ticket.id) === row.ticketId);
+      return `<tr><td>${escapeHtml(exactTicket?.member || "회원권 근거 확인")}</td>
+        <td>${escapeHtml(coach.name)}</td><td>${money.format(row.amount)}원</td>
+        <td>구매·진행 당시 근거<br><small>${Number(row.settledSessions)}회 · 실제 ${Number(row.settledMinutes)}분</small></td>
+        <td>날짜별 조건 · 월 최종 반올림</td><td>${money.format(row.estimatedSettlement)}원</td></tr>`;
+    }).join("") || '<tr><td colspan="6">선택한 달의 계산 근거가 없습니다.</td></tr>';
+  renderDashboardPager("#coachSettlementPreviewPager", items.length, state.settlementPage, "settlement", billingPageSize);
 }
