@@ -17,6 +17,10 @@ Verify 최대 4분, job 최대 10분이며 브라우저 runner 자체는 120초�
 브라우저 미설치나 시간 초과를 PASS/skip으로 처리하지 않습니다. 외부 요청은 차단하고
 합성 상태만 사용하므로 이 검사는 실제 로그인·서버 저장·실기기 검증을 대체하지 않습니다.
 
+R3 실제 관리자/코치 modular 정산 화면도 같은 verify에서 한 번 실행한다.
+Chromium/WebKit, 320~1366 및 가로, light/dark 104 layout가 필수이며 외부 요청은 차단된다.
+원본 금액 projection·exact scope·HOLD·stale 응답·104 layout는 실제 signed 역할/기기 검증을 대체하지 않는다.
+
 Windows PowerShell에서는 Git Bash의 경로를 명시해도 됩니다.
 
 ```powershell

@@ -456,3 +456,31 @@ async function loadAdminSettlementSupportData() {
   });
   return true;
 }
+
+const effectiveSettlementPreview = { signature: "", loading: false, results: [] };
+
+async function refreshEffectiveSettlementPreview(signature) {
+  const branchId = activeOperationBranchId();
+  const settlementMonth = `${state.billingMonth}-01`;
+  const client = window.TennisNoteDataClient;
+  const entries = operationBranchCoaches().filter((coach) => coach.serverRoleId && coach.branchId === branchId);
+  effectiveSettlementPreview.signature = signature;
+  effectiveSettlementPreview.loading = true;
+  renderEffectiveSettlementPreview();
+  const results = await Promise.all(entries.map(async (coach) => {
+    try {
+      if (!adminApprovalReady() || !client?.rpc) throw new Error("authentication_required");
+      const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };
+      const result = await client.rpc("tn_coach_settlement_scope_v2", {
+        target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,
+      });
+      return { coach, value: window.TennisNoteSettlementAdjustment.effectiveProjection(result, scope) };
+    } catch (error) {
+      return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error) };
+    }
+  }));
+  if (effectiveSettlementPreview.signature !== signature || effectiveSettlementPreviewSignature() !== signature) return;
+  effectiveSettlementPreview.results = results;
+  effectiveSettlementPreview.loading = false;
+  renderEffectiveSettlementPreview();
+}

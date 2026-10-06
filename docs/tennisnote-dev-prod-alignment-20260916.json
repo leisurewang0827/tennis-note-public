@@ -19,11 +19,11 @@
     "coach_cache": "tennis-note-coach-mode-v485"
   },
   "candidate_release": {
-    "version": "1.0.535",
-    "release_id": "2026.10.06.03",
-    "deployed_at": "2026-10-06T20:07:44+09:00",
-    "member_cache": "tennis-note-member-pwa-v573",
-    "coach_cache": "tennis-note-coach-mode-v546"
+    "version": "1.0.537",
+    "release_id": "2026.10.07.01",
+    "deployed_at": "2026-10-07T01:34:02+09:00",
+    "member_cache": "tennis-note-member-pwa-v574",
+    "coach_cache": "tennis-note-coach-mode-v547"
   },
   "allowed_differences": [
     "app version literals",
@@ -1099,5 +1099,13 @@
       "          grep -q '\"singleSheetImportMode\": \"apply\"' dist/admin-dev/shared/config.local.js",
       "          grep -q '\"singleSheetImportReverseEnabled\": true' dist/admin-dev/shared/config.local.js"
     ]
+  },
+  "r3_preview_source": {
+    "private_feature": "ddb549c413c5e820c974bdaed73b351d9afb6981",
+    "private_merge": "6baedc13ebfaa13f8c68cea6a8bd95e1e4c65860",
+    "public_base": "5f6ce6c45dbe31aed2555de39c8a550beaa3883a",
+    "parity_fixture": "tests/fixtures/r3-effective-source-parity.json",
+    "mode": "preview-only-confirmation-OFF",
+    "old_product_golden_preserved": true
   }
 }

@@ -26,10 +26,14 @@ function renderCoachSettlement() {
   }
   const retryButton = $("#refreshCoachSettlement");
   if (retryButton) retryButton.hidden = !state.coachSettlementError;
-  if ($("#coachRevenueAmount")) $("#coachRevenueAmount").textContent = formatCoachWon(settlement.revenueAmount);
-  if ($("#coachRevenueCount")) $("#coachRevenueCount").textContent = `결제 ${Number(settlement.paymentCount) || 0}건`;
-  if ($("#coachSettledSessions")) $("#coachSettledSessions").textContent = `${Number(settlement.settledSessions) || 0}회`;
-  if ($("#coachEstimatedSettlement")) $("#coachEstimatedSettlement").textContent = formatCoachWon(settlement.estimatedSettlement);
+  const unavailable = state.coachSettlementLoading || state.coachSettlementError || !state.coachSettlement;
+  if ($("#coachRevenueAmount")) $("#coachRevenueAmount").textContent = unavailable ? "—" : formatCoachWon(settlement.revenueAmount);
+  if ($("#coachRevenueCount")) {
+    const refundedAmount = Number(settlement.refundedAmount) || 0;
+    $("#coachRevenueCount").textContent = `결제 ${Number(settlement.paymentCount) || 0}건${refundedAmount ? ` · 환불 조정 ${formatCoachWon(refundedAmount)}` : ""}`;
+  }
+  if ($("#coachSettledSessions")) $("#coachSettledSessions").textContent = unavailable ? "확인 필요" : `${Number(settlement.settledSessions) || 0}회`;
+  if ($("#coachEstimatedSettlement")) $("#coachEstimatedSettlement").textContent = unavailable ? "—" : formatCoachWon(settlement.estimatedSettlement);
   if ($("#coachSettlementRule")) {
     const substitute = Number(settlement.substituteSettlement) || 0;
     $("#coachSettlementRule").textContent = settlement.ruleType
@@ -50,7 +54,7 @@ function renderCoachSettlement() {
       ? "정산 자료를 불러오지 못했습니다. 눌러서 다시 시도하세요."
       : state.coachSettlementLoading
         ? "정산 자료를 불러오는 중입니다."
-        : `결제 ${Number(settlement.paymentCount) || 0}건 · 수업 ${Number(settlement.settledSessions) || 0}회`;
+        : `결제 ${Number(settlement.paymentCount) || 0}건 · 수업 ${Number(settlement.settledSessions) || 0}회${Number(settlement.refundedAmount) ? ` · 환불 ${formatCoachWon(settlement.refundedAmount)}` : ""}`;
   }
   const rows = Array.isArray(settlement.rows) ? settlement.rows : [];
   const rowsTarget = $("#coachSettlementRows");
@@ -60,16 +64,16 @@ function renderCoachSettlement() {
         <article>
           <div>
             <strong>${escapeHtml(row.memberName || "회원")}</strong>
-            <span>${escapeHtml(row.productName || "회원권")} · ${escapeHtml(String(row.method || "결제수단 미입력"))}</span>
+            <span>${escapeHtml(row.productName || "회원권")} · ${escapeHtml(String(row.method || "결제수단 미입력"))}${Number(row.refundedAmount) ? ` · 환불 ${formatCoachWon(row.refundedAmount)} 조정` : ""}</span>
           </div>
           <div>
             <b>${formatCoachWon(row.estimatedSettlement)}</b>
-            <small>매출 ${formatCoachWon(row.amount)} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회</small>
+            <small>매출 ${formatCoachWon(row.amount)}${Number(row.grossAmount) > Number(row.amount) ? ` (원결제 ${formatCoachWon(row.grossAmount)})` : ""} · 정산 ${Number(row.settledSessions) || 0}/${Number(row.totalSessions) || 0}회</small>
           </div>
         </article>`).join("")
       : coachEmptyState({
-        title: state.coachSettlementLoading ? "정산 자료를 확인하고 있습니다." : "선택한 달의 내 담당 결제가 없습니다.",
-        description: "관리자 결제 귀속과 회원권 담당 코치를 확인해 주세요.",
+        title: state.coachSettlementLoading ? "정산 자료를 확인하고 있습니다." : state.coachSettlementError ? "계산 근거 확인이 필요합니다." : "선택한 달의 정산 대상이 없습니다.",
+        description: state.coachSettlementError || "관리자 결제 귀속과 수업 완료·적용기간을 확인해 주세요.",
       });
   }
   renderVisibleMemberSettlement();

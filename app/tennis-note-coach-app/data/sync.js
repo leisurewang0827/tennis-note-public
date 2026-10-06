@@ -699,29 +699,37 @@ async function liveCurriculumRefId(step = {}) {
   }
 }
 
+let coachSettlementRequestSequence = 0;
 async function syncCoachSettlementFromServer() {
   const client = window.TennisNoteDataClient;
   if (!state.coach?.coachRoleId || !client?.rpc || !client.getSession?.()?.access_token) return false;
+  const requestSequence = ++coachSettlementRequestSequence;
   state.coachSettlementLoading = true;
   state.coachSettlementError = "";
   renderCoachSettlement();
+  const scope = coachSettlementReconciliationScope();
+  const stillCurrent = () => requestSequence === coachSettlementRequestSequence && coachSettlementReconciliationScopeSignature(scope)
+    === coachSettlementReconciliationScopeSignature();
   try {
-    const result = await client.rpc("tn_coach_own_settlement", {
-      target_month: `${coachSettlementMonth()}-01`,
+    const result = await client.rpc("tn_coach_settlement_scope_v2", {
+      target_branch_id: scope.branchId,
+      target_coach_role_id: scope.coachRoleId,
+      target_month: scope.settlementMonth,
     });
-    if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("coach_settlement_payload_invalid");
-    state.coachSettlement = result;
+    if (!stillCurrent()) return false;
+    state.coachSettlement = window.TennisNoteSettlementAdjustment.effectiveProjection(result, scope);
     return true;
   } catch (error) {
-    const raw = `${error?.payload?.message || ""} ${error?.message || ""}`;
-    state.coachSettlementError = raw.includes("tn_coach_own_settlement") || raw.includes("PGRST202")
-      ? "코치 정산 기능을 업데이트하는 중입니다. 잠시 후 다시 확인해 주세요."
-      : "정산 자료를 불러오지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.";
+    if (!stillCurrent()) return false;
+    state.coachSettlement = null;
+    state.coachSettlementError = window.TennisNoteSettlementAdjustment.effectiveError(error);
     return false;
   } finally {
-    state.coachSettlementLoading = false;
-    renderCoachSettlement();
-    saveSnapshot();
+    if (stillCurrent()) {
+      state.coachSettlementLoading = false;
+      renderCoachSettlement();
+      saveSnapshot();
+    }
   }
 }
 
