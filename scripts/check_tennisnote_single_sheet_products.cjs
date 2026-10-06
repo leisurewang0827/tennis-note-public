@@ -117,7 +117,20 @@ async function run() {
   const contract = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/excel-product-dropdown-source-manifest.json"), "utf8"));
   check(contract.allowedProductKinds.join("|") === "regular|group", "SERVER_KIND_GATE_PARITY");
   for (const entry of contract.files) {
-    const source = Buffer.from(fs.readFileSync(path.join(ROOT, entry.publicPath), "utf8").replace(/\r\n/g, "\n"));
+    let text = fs.readFileSync(path.join(ROOT, entry.publicPath), "utf8").replace(/\r\n/g, "\n");
+    // Keep the original dropdown blob proof after exact, separately-authorized
+    // refresh/retry hunks. Never accept arbitrary edits or replace the old hash.
+    const isolation = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/production-excel-refresh-source.json"), "utf8"));
+    const patch = isolation.products.find(p => p.path === entry.publicPath);
+    if (patch) {
+      check(createHash("sha256").update(text).digest("hex") === patch.candidateSha256, "REFRESH_CANDIDATE_EXACT");
+      for (const h of [...patch.hunks].reverse()) {
+        check(text.split(h.after).length === 2, "REFRESH_INVERSE_HUNK_EXACT");
+        text = text.replace(h.after, () => h.before);
+      }
+      check(createHash("sha256").update(text).digest("hex") === patch.baseSha256, "REFRESH_PREIMAGE_EXACT");
+    }
+    const source = Buffer.from(text);
     const blob = createHash("sha1").update(`blob ${source.length}\0`).update(source).digest("hex");
     check(blob === entry.gitBlob, "PRIVATE_PUBLIC_PRODUCT_BLOB_PARITY");
   }

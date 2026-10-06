@@ -5,8 +5,22 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
 const root = new URL("../", import.meta.url);
-const read = path => readFileSync(new URL(path, root), "utf8").replace(/\r\n/g, "\n");
+const current = path => readFileSync(new URL(path, root), "utf8").replace(/\r\n/g, "\n");
 const sha = value => createHash("sha256").update(value).digest("hex");
+// 기존 PR565 계약은 refresh-only hunk를 exact 역이식한 원본에서 검증한다.
+const refresh = JSON.parse(current("tests/fixtures/production-excel-refresh-source.json"));
+function read(path) {
+  let text = current(path);
+  const patch = refresh.products.find(row => row.path === path);
+  if (!patch) return text;
+  assert.equal(sha(text), patch.candidateSha256, path);
+  for (const h of [...patch.hunks].reverse()) {
+    assert.equal(text.split(h.after).length, 2, path);
+    text = text.replace(h.after, () => h.before);
+  }
+  assert.equal(sha(text), patch.baseSha256, path);
+  return text;
+}
 const manifest = JSON.parse(read("docs/admin-purchase-readback-source-parity-20261001.json"));
 
 test("저장 후 대상 조회와 기존 결제 검증 VM 계약", () => {

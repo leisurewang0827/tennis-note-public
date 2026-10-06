@@ -78,6 +78,8 @@ node scripts/check_tennisnote_coach_scope_runtime.cjs
 
 step "한 장 엑셀 등록 계약 검사"
 "$PYTHON_BIN" scripts/check_tennisnote_single_sheet_preview.py
+TENNISNOTE_EXCEL_REFRESH_RACE_ONLY=1 node scripts/check_tennisnote_single_sheet_preview_browser.cjs
+TENNISNOTE_EXCEL_RETRY_FIX_ONLY=1 node scripts/check_tennisnote_single_sheet_preview_browser.cjs
 
 step "개발·운영 제품 정렬 검사"
 "$PYTHON_BIN" scripts/check_tennisnote_dev_prod_alignment.py

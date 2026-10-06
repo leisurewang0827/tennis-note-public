@@ -14,6 +14,266 @@ let assertions = 0;
 const completedScenarios = new Map();
 const scenarioPassed = (engine, name) => completedScenarios.get(engine).push(name);
 const check = (ok, code) => { assertions++; if (!ok) throw Object.assign(Error(code), { testCode: code }); };
+async function retryHitTargetRegression(page, modal, engine) {
+  const startAssertions=assertions, records=[];
+  await page.evaluate(()=>{
+    window.__retryFixClicks={retry:0,cancel:0,untrusted:0};
+    document.addEventListener('click',event=>{
+      for(const name of ['retry','cancel'])if(event.target.closest?.('[data-excel-'+name+']')){
+        window.__retryFixClicks[name]++;if(!event.isTrusted)window.__retryFixClicks.untrusted++;
+      }
+    },true);
+    const rpc=window.TennisNoteDataClient.rpc;
+    window.TennisNoteDataClient.rpc=async(name,...args)=>{
+      if(['tn_apply_single_sheet_import_unit','tn_reverse_single_sheet_import_unit'].includes(name)){
+        window.__retryFixWriteAttempt=true;throw Error('RETRY_TEST_WRITE_FORBIDDEN');
+      }
+      return rpc(name,...args);
+    };
+  });
+  const file=()=>({name:'synthetic.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbookBytes('valid')});
+  const geometry=()=>modal.evaluate(el=>{
+    const panel=el.querySelector('.tn-excel-panel'),r=el.querySelector('[data-excel-retry]').getBoundingClientRect(),c=el.querySelector('[data-excel-cancel]').getBoundingClientRect();
+    return {retry:[r.x,r.y,r.width,r.height],cancel:[c.x,c.y,c.width,c.height],overflow:panel.scrollWidth>panel.clientWidth+1,font:parseFloat(getComputedStyle(el.querySelector('input')).fontSize),cancelVisibleHeight:Math.min(c.bottom,innerHeight,panel.getBoundingClientRect().bottom)-Math.max(c.top,0,panel.getBoundingClientRect().top)};
+  });
+  const capture=async(width,theme,phase)=>{
+    if(!process.env.TENNISNOTE_EXCEL_CAPTURE_DIR)return;
+    const dir=path.resolve(process.env.TENNISNOTE_EXCEL_CAPTURE_DIR);fs.mkdirSync(dir,{recursive:true});
+    await modal.locator('.tn-excel-panel').screenshot({path:path.join(dir,`${engine}-retry-${width}-${theme}-${phase}.png`)});
+  };
+  for(const [width,height] of [[390,844],[768,1024],[1366,900]])for(const theme of ['light','dark']){
+    diagnostic.phase='RETRY_HIT_TARGET_REGRESSION';
+    await page.setViewportSize({width,height});await page.emulateMedia({colorScheme:theme});
+    await page.evaluate(theme=>{
+      document.documentElement.dataset.theme=theme;
+      Object.assign(window.__sheetExecution,{state:'READY',previews:0,applies:0,reverses:0,args:[],prepareCalls:0,prepareProofs:{},prepareReplay:0,prepareFailure:true,prepareResponseLost:false,holdPreview:false,releasePreview:null});
+    },theme);
+    await page.locator('#openSingleSheetPreviewButton').click();
+    await page.waitForFunction(()=>document.querySelector('#singleSheetPreviewModal').dataset.excelReadiness==='awaiting-preview');
+    const input=modal.locator('[data-excel-file]'),retry=modal.locator('[data-excel-retry]'),cancel=modal.locator('[data-excel-cancel]');
+    await input.setInputFiles(file());
+    await page.waitForFunction(()=>document.querySelector('#singleSheetPreviewModal').dataset.excelFailureCode==='SHEET_WORK_RUNTIME_UNAVAILABLE');
+    check(await page.evaluate(()=>__sheetExecution.prepareCalls===1&&__sheetExecution.previews===0),'RETRY_RUNTIME_ERROR_NO_PREVIEW');
+    await page.evaluate(()=>{__sheetExecution.prepareFailure=false;__sheetExecution.prepareResponseLost=true;});
+    await retry.click();
+    await page.waitForFunction(()=>document.querySelector('#singleSheetPreviewModal').dataset.excelFailureCode==='SHEET_WORK_SESSION_FAILED');
+    await retry.scrollIntoViewIfNeeded();
+    const before=await geometry();await capture(width,theme,'error');
+    await page.evaluate(()=>{__sheetExecution.holdPreview=true;__sheetExecution.releasePreview=null;__retryFixClicks={retry:0,cancel:0,untrusted:0};});
+    await retry.dblclick();
+    await page.waitForFunction(()=>typeof __sheetExecution.releasePreview==='function');
+    check(await page.evaluate(()=>__sheetExecution.prepareCalls===3&&__sheetExecution.prepareReplay===1&&__sheetExecution.previews===1&&Object.keys(__sheetExecution.prepareProofs).length===1),'RETRY_TRUSTED_DOUBLE_PREPARE3_REPLAY1_PREVIEW1');
+    check(await page.evaluate(()=>__retryFixClicks.retry===1&&__retryFixClicks.cancel===0&&__retryFixClicks.untrusted===0),'RETRY_NO_ACCIDENTAL_CANCEL_TRUSTED_ONLY');
+    check(await retry.isVisible()&&await retry.isDisabled()&&await retry.getAttribute('aria-disabled')==='true','RETRY_BUSY_VISIBLE_DISABLED');
+    const busy=await geometry();
+    const drift=Math.max(...before.retry.map((n,i)=>Math.abs(n-busy.retry[i])));
+    check(drift<=1,'RETRY_EXACT_RECT_PRESERVED');
+    check(busy.retry[2]>=44&&busy.retry[3]>=44&&busy.cancel[2]>=44&&busy.cancelVisibleHeight>=44&&busy.retry[0]+busy.retry[2]<=busy.cancel[0]&&!busy.overflow&&busy.font>=16,'RETRY_CANCEL_INDEPENDENT_VISIBLE_TOUCH_FOCUS');
+    await capture(width,theme,'busy');
+    await page.evaluate(()=>{__sheetExecution.releasePreview();__sheetExecution.releasePreview=null;});
+    await page.waitForFunction(()=>document.querySelector('#singleSheetPreviewModal').dataset.excelReadiness==='ready');
+    check(await page.evaluate(()=>__sheetExecution.prepareCalls===3&&__sheetExecution.prepareReplay===1&&__sheetExecution.previews===1),'RETRY_READY_COUNTS_UNCHANGED');
+    check(await retry.isHidden()&&await modal.locator('[data-excel-apply]').isEnabled(),'RETRY_READY_NOT_AUTO_APPLIED');
+    check(await page.evaluate(()=>__sheetExecution.args.filter(c=>c.name==='tn_prepare_single_sheet_work_session').every(c=>c.keys.join('|')==='operation_key|scope')),'RETRY_SAME_KEY_NO_CLIENT_AUTHORITY');
+    await capture(width,theme,'ready');
+    // New read-only preview held at its real asynchronous response, not a delay.
+    await input.setInputFiles([]);
+    await page.evaluate(()=>{__sheetExecution.holdPreview=true;__sheetExecution.releasePreview=null;});
+    await input.setInputFiles(file());
+    await page.waitForFunction(()=>typeof __sheetExecution.releasePreview==='function');
+    await cancel.click();
+    check(await input.evaluate(el=>el.files.length===1)&&await modal.locator('[data-excel-apply]').isDisabled(),'RETRY_EXPLICIT_CANCEL_INFLIGHT_NO_APPLY');
+    await page.evaluate(async()=>{__sheetExecution.releasePreview();__sheetExecution.releasePreview=null;await new Promise(requestAnimationFrame);});
+    await page.waitForFunction(()=>document.querySelector('#singleSheetPreviewModal').dataset.batchPhase==='paused');
+    check(await input.evaluate(el=>!el.disabled&&el.files.length===1)&&await retry.isEnabled()&&await cancel.isHidden(),'RETRY_EXPLICIT_CANCEL_PRESERVES_FILE');
+    check(await modal.getAttribute('data-excel-readiness')==='paused'&&await modal.locator('[data-excel-apply]').isDisabled(),'RETRY_CANCEL_LATE_RESPONSE_CANNOT_READY');
+    await page.evaluate(()=>{__sheetExecution.holdPreview=true;});
+    await retry.focus();await page.keyboard.press('Enter');
+    await page.waitForFunction(()=>typeof __sheetExecution.releasePreview==='function');
+    await page.keyboard.press('Escape');await modal.waitFor({state:'hidden'});
+    await page.evaluate(async()=>{__sheetExecution.releasePreview();__sheetExecution.releasePreview=null;await new Promise(requestAnimationFrame);});
+    await page.waitForFunction(()=>!history.state?.tnExcelPreview);
+    check(await page.evaluate(()=>document.activeElement?.id==='openSingleSheetPreviewButton'&&!history.state?.tnExcelPreview),'RETRY_KEYBOARD_ESCAPE_FOCUS_HISTORY');
+    await page.locator('#openSingleSheetPreviewButton').click();await modal.waitFor({state:'visible'});
+    await page.goBack();await modal.waitFor({state:'hidden'});
+    check(await input.evaluate(el=>el.files.length===0),'RETRY_BACK_CLEARS_CLOSED_FILE');
+    check(await page.evaluate(()=>!window.__retryFixWriteAttempt&&__sheetExecution.applies===0&&__sheetExecution.reverses===0),'RETRY_ALL_APPLY_REVERSE_ZERO');
+    records.push({width,height,theme,retryRectDrift:drift,minTouch:Math.min(busy.retry[3],busy.cancelVisibleHeight),prepareReplayPreview:[3,1,1],accidentalCancel:0});
+  }
+  process.stdout.write(`RETRY_HIT_TARGET_FIX_RESULT ${JSON.stringify({engine,layouts:records,assertions:assertions-startAssertions,apply:0,reverse:0})}\n`);
+}
+// Exact production refresh sender + actual admin entry/Worker/transport/batch.
+// All transport calls below are synthetic mocks; no remote requests or writes.
+async function refreshRaceRegression(page, modal, engine, branchId) {
+  const startAssertions = assertions, records = [];
+  const source = fs.readFileSync(path.join(root, "app/admin/actions/common.js"), "utf8");
+  const start = source.indexOf("    const previousSingleSheetReadSnapshot = adminSingleSheetReadSnapshot;");
+  const end = source.indexOf("    const usersById =", start);
+  check(start >= 0 && end > start, "REFRESH_EXACT_SENDER_FOUND");
+  const sender = source.slice(start, end);
+  check(sender.includes('kind: "roster-refresh"') && sender.includes("projectionChanged:")
+    && !sender.includes("proof =") && !sender.includes("revision ="), "REFRESH_NOT_SERVER_PROOF");
+  await page.evaluate(({ sender, branchId }) => {
+    const config = { ...window.TENNISNOTE_CONFIG };
+    const s = window.__sheetExecution;
+    const session = window.TennisNoteDataClient.getSession();
+    const rpc = window.TennisNoteDataClient.rpc;
+    const arrayBuffer = File.prototype.arrayBuffer;
+    window.__refreshRace = { branch: branchId, actor: "synthetic-admin", config, events: 0 };
+    activeOperationBranchId = () => window.__refreshRace.branch;
+    window.TennisNoteDataClient.getSession = () => {
+      const r = window.__refreshRace;
+      const payload = { role: "authenticated", exp: Math.floor(Date.now() / 1000) + 3600, ...(r.missingSubject ? {} : { sub: r.actor }) };
+      const jwt = `x.${btoa(JSON.stringify(payload)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_")}.x`;
+      return { ...session, access_token: jwt, ...(r.mismatchedUser ? { user: { id: "synthetic-mismatched" } } : {}) };
+    };
+    const send = new Function("client", "serverUsers", "serverMemberDatabaseRecords", "serverCoachRoles",
+      "serverCoachAvailability", "serverProducts", "serverTickets", "serverLessons", "lessonParticipants", sender);
+    window.__refreshRace.refresh = changed => send(window.TennisNoteDataClient, [], [], [], [], [], [{ id: "synthetic-ticket", status: changed ? "expired" : "active" }], [], []);
+    addEventListener("tennisnote:excel-snapshot-changed", () => window.__refreshRace.events++);
+    File.prototype.arrayBuffer = async function () {
+      const bytes = await arrayBuffer.call(this);
+      if (s.holdFile) { s.holdFile = false; await new Promise(resolve => { s.releaseFile = resolve; }); }
+      return bytes;
+    };
+    const W = window.Worker;
+    window.Worker = class extends W {
+      set onmessage(handler) {
+        super.onmessage = event => {
+          if (s.holdWorker) { s.holdWorker = false; s.releaseWorker = () => handler(event); }
+          else handler(event);
+        };
+      }
+    };
+    window.TennisNoteDataClient.rpc = async (name, parameters, options) => {
+      if (["tn_apply_single_sheet_import_unit", "tn_reverse_single_sheet_import_unit"].includes(name)) {
+        s.writeAttempts = (s.writeAttempts || 0) + 1; throw Error("REFRESH_TEST_WRITE_FORBIDDEN");
+      }
+      const response = await rpc(name, parameters, options);
+      if (name === "tn_prepare_single_sheet_work_session" && s.holdPrepare) {
+        s.holdPrepare = false; await new Promise(resolve => { s.releasePrepare = resolve; });
+      }
+      return response;
+    };
+  }, { sender, branchId });
+  const file = () => ({ name: "synthetic.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: workbookBytes("valid") });
+  const input = modal.locator("[data-excel-file]");
+  const begin = async stage => {
+    diagnosticStep(engine, "REFRESH_RACE", stage.toUpperCase());
+    await page.evaluate(stage => {
+      const r = window.__refreshRace, s = window.__sheetExecution;
+      r.actor = "synthetic-admin"; r.branch = r.config.environment ? "11111111-1111-4111-8111-111111111111" : "";
+      r.missingSubject = false; r.mismatchedUser = false;
+      Object.assign(window.TENNISNOTE_CONFIG, r.config);
+      operationsAccessReady = () => true;
+      Object.assign(s, { state: "READY", previews: 0, applies: 0, reverses: 0, args: [], prepareCalls: 0, prepareProofs: {}, prepareReplay: 0,
+        failure: "", applyResponseLost: false, reverseResponseLost: false, writeAttempts: 0,
+        holdFile: stage === "file", holdWorker: stage === "worker", holdPrepare: stage === "prepare", holdPreview: stage === "preview",
+        releaseFile: null, releaseWorker: null, releasePrepare: null, releasePreview: null });
+      r.refresh(false); // Seed original projection before opening; not a server proof.
+    }, stage);
+    await page.locator("#openSingleSheetPreviewButton").click();
+    await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal").dataset.excelReadiness === "awaiting-preview");
+    await input.setInputFiles(file());
+    if (stage === "ready") await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal").dataset.excelReadiness === "ready");
+    else await page.waitForFunction(stage => typeof __sheetExecution[{ file: "releaseFile", worker: "releaseWorker", prepare: "releasePrepare", preview: "releasePreview" }[stage]] === "function", stage);
+  };
+  const release = async stage => page.evaluate(async stage => {
+    const key = { file: "releaseFile", worker: "releaseWorker", prepare: "releasePrepare", preview: "releasePreview" }[stage];
+    if (key && typeof __sheetExecution[key] === "function") { __sheetExecution[key](); __sheetExecution[key] = null; }
+    await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame);
+  }, stage);
+  const close = async () => {
+    await modal.locator("[data-excel-close]").click();
+    await page.waitForFunction(() => !history.state?.tnExcelPreview);
+  };
+  const refresh = async (kind = "same") => page.evaluate(kind => {
+    if (kind === "actor") __refreshRace.actor = "synthetic-other-admin";
+    if (kind === "identity-missing") __refreshRace.missingSubject = true;
+    if (kind === "identity-mismatch") __refreshRace.mismatchedUser = true;
+    if (kind === "branch") __refreshRace.branch = "22222222-2222-4222-8222-222222222222";
+    if (kind === "environment") TENNISNOTE_CONFIG.environment = __refreshRace.config.environment === "production" ? "development" : "production";
+    if (kind === "project") TENNISNOTE_CONFIG.projectFingerprint = "c".repeat(64);
+    if (kind === "access") operationsAccessReady = () => false;
+    if (kind === "offline") { dispatchEvent(new Event("offline")); return; }
+    if (kind === "authoritative") { dispatchEvent(new CustomEvent("tennisnote:excel-snapshot-changed", { detail: { kind: "dependency-revision" } })); return; }
+    if (kind === "unknown") { dispatchEvent(new Event("tennisnote:excel-snapshot-changed")); return; }
+    __refreshRace.refresh(kind === "changed");
+  }, kind);
+  const noWrite = async code => check(await page.evaluate(() => !__sheetExecution.writeAttempts && __sheetExecution.applies === 0 && __sheetExecution.reverses === 0), code);
+
+  for (const stage of ["file", "worker", "prepare", "preview", "ready"]) {
+    await begin(stage);
+    const before = await page.evaluate(() => ({ terminated: __holdPhaseProbe.terminated, calls: __sheetExecution.prepareCalls,
+      key: __sheetExecution.args.find(c => c.name === "tn_prepare_single_sheet_work_session") ? Object.keys(__sheetExecution.prepareProofs)[0] : null }));
+    await refresh();
+    check(!(await modal.locator("[data-excel-status]").textContent()).includes("오래됐거나"), "SAME_REFRESH_NO_FALSE_STALE_" + stage);
+    check(await page.evaluate(n => __holdPhaseProbe.terminated === n, before.terminated), "SAME_REFRESH_NO_WORKER_ABORT_" + stage);
+    await release(stage);
+    await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal").dataset.excelReadiness === "ready");
+    check(await page.evaluate(() => __sheetExecution.prepareCalls === 1 && __sheetExecution.previews === 1), "SAME_REFRESH_PREPARE_PREVIEW_ONCE_" + stage);
+    check(await page.evaluate(() => Object.keys(__sheetExecution.prepareProofs).length === 1), "SAME_REFRESH_OPERATION_ONE_" + stage);
+    check(await modal.locator("[data-excel-apply]").isEnabled(), "SAME_REFRESH_SERVER_PROOF_READY_" + stage);
+    await noWrite("SAME_REFRESH_WRITE_ZERO_" + stage);
+    records.push({ stage, kind: "same", ready: true, prepare: 1, preview: 1 });
+    await close();
+  }
+  for (const [stage, kind] of [["worker", "changed"], ["prepare", "changed"], ["ready", "changed"], ["preview", "authoritative"],
+    ["worker", "unknown"], ["worker", "actor"], ["worker", "identity-missing"], ["prepare", "identity-mismatch"], ["prepare", "branch"], ["prepare", "environment"], ["worker", "project"], ["prepare", "access"], ["worker", "offline"]]) {
+    await begin(stage); await refresh(kind); await release(stage);
+    check(await modal.locator("[data-excel-apply]").isDisabled(), "INVALIDATION_APPLY_DISABLED_" + kind + stage);
+    check(await page.evaluate(() => document.querySelector("#singleSheetPreviewModal").dataset.excelReadiness !== "ready"), "INVALIDATION_LATE_RESPONSE_NOT_READY_" + kind + stage);
+    if (["worker", "prepare"].includes(stage)) check(await page.evaluate(() => __sheetExecution.previews === 0), "INVALIDATION_PREVIEW_ZERO_" + kind + stage);
+    await noWrite("INVALIDATION_WRITE_ZERO_" + kind + stage);
+    records.push({ stage, kind, blocked: true });
+    await close();
+  }
+  // Cancel while preparing; informational refresh must not resurrect a response.
+  await begin("prepare");
+  await modal.locator("[data-excel-cancel]").click(); await refresh(); await release("prepare");
+  check((await modal.locator("[data-excel-status]").textContent()).includes("취소"), "REFRESH_CANCEL_STATUS_PRESERVED");
+  check(await page.evaluate(() => __sheetExecution.previews === 0), "REFRESH_CANCEL_LATE_PREVIEW_ZERO");
+  await modal.locator("[data-excel-retry]").dblclick();
+  await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal").dataset.excelReadiness === "ready");
+  check(await page.evaluate(() => __sheetExecution.prepareCalls === 2 && __sheetExecution.prepareReplay === 1 && __sheetExecution.previews === 1
+    && Object.keys(__sheetExecution.prepareProofs).length === 1), "REFRESH_CANCEL_RETRY_SAME_KEY_ONCE");
+  await noWrite("REFRESH_CANCEL_RETRY_WRITE_ZERO"); await close();
+
+  // Closing/reopening under another actor must not replay the old preparation.
+  const oldKey = await page.evaluate(() => Object.keys(__sheetExecution.prepareProofs)[0]);
+  await page.evaluate(() => { __refreshRace.actor = "synthetic-reopened-admin"; });
+  await page.locator("#openSingleSheetPreviewButton").click();
+  await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal").dataset.excelReadiness === "awaiting-preview");
+  await input.setInputFiles(file());
+  await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal").dataset.excelReadiness === "ready");
+  check(await page.evaluate(old => Object.keys(__sheetExecution.prepareProofs).length === 2
+    && __sheetExecution.args.filter(c => c.name === "tn_prepare_single_sheet_work_session").length === 3
+    && Object.keys(__sheetExecution.prepareProofs).some(key => key !== old), oldKey), "REOPEN_ACTOR_NEW_PREPARATION_NOT_OLD_REPLAY");
+  await noWrite("REOPEN_ACTOR_WRITE_ZERO"); await close();
+
+  // Scope fencing also applies without a refresh event, before delayed response.
+  await begin("prepare");
+  await page.evaluate(() => { __refreshRace.actor = "synthetic-other-admin"; });
+  await release("prepare");
+  await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal").dataset.excelFailureCode === "TARGET_OR_REVISION_MISMATCH");
+  check(await page.evaluate(() => __sheetExecution.previews === 0), "ACTOR_CHANGED_NO_EVENT_PREVIEW_ZERO");
+  await noWrite("ACTOR_CHANGED_NO_EVENT_WRITE_ZERO"); await close();
+
+  // Authoritative server stale/TTL remain gates, not roster equality bypasses.
+  await begin("worker"); await page.evaluate(() => { __sheetExecution.failure = "stale"; }); await refresh(); await release("worker");
+  await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal").dataset.batchPhase === "blocked");
+  check(await modal.locator("[data-excel-apply]").isDisabled(), "SERVER_STALE_NOT_BYPASSED_BY_EQUALITY");
+  await noWrite("SERVER_STALE_WRITE_ZERO"); await close();
+  await begin("worker"); await page.evaluate(() => { __sheetExecution.failure = "expires"; }); await release("worker");
+  await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal").dataset.excelReadiness === "ready");
+  await refresh();
+  await page.waitForFunction(() => document.querySelector("#singleSheetPreviewModal").dataset.excelReadiness === "expired");
+  check(await modal.locator("[data-excel-apply]").isDisabled(), "SERVER_TTL_NOT_RESET_BY_REFRESH");
+  await noWrite("SERVER_TTL_WRITE_ZERO"); await close();
+  check(await page.evaluate(() => adminSingleSheetReadSnapshot.proof === null
+    && Object.values(adminSingleSheetReadSnapshot.reads).every(r => r.complete === false)), "ROSTER_EQUALITY_NEVER_AUTHORITY");
+  process.stdout.write(`REFRESH_RACE_FIX_RESULT ${JSON.stringify({ engine, assertions: assertions - startAssertions, cases: records, cancelRetry: true, actorWithoutEvent: true, serverStale: true, ttl: true, apply: 0, reverse: 0, network: "intercepted-only" })}\n`);
+}
 const observationStart = Date.now();
 let observationCount = 0;
 function heartbeat(phase = diagnostic.phase) {
@@ -122,7 +382,7 @@ async function remotePreviewScenario(browser, engine) {
     await page.goto(`${devOrigin}/app/admin/index.html?demoAdmin=1`, { waitUntil: "load" });
     await page.waitForFunction(() => document.querySelector("#openSingleSheetPreviewButton")?.dataset.excelBound === "true");
     await page.evaluate(({ branchId }) => {
-      const payload = { role: "authenticated", exp: Math.floor(Date.now() / 1000) + 3600 };
+      const payload = { role: "authenticated", sub: "synthetic-admin", exp: Math.floor(Date.now() / 1000) + 3600 };
       const jwt = `x.${btoa(JSON.stringify(payload)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_")}.x`;
       window.__remotePreview = { calls: 0, writes: 0, options: null };
       activeOperationBranchId = () => branchId;
@@ -190,6 +450,8 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
       workerPosts: 0, workerMessages: 0, workerErrors: 0, terminated: 0, pageErrors: 0,
       snapshots: 0, pageHides: 0, rejections: 0, events: [],
       lastType: "NONE", lastCode: "NONE", lastStage: "NONE", sentGeneration: null, receivedGeneration: null };
+    // Same actual Worker counter; the imported race assertions must not inspect a second probe.
+    window.__holdPhaseProbe = p;
     const token = value => typeof value === "string" && /^[A-Z_]{1,48}$/.test(value) ? value : "OTHER";
     const record = event => { if (p.events.length === 64) p.events.shift(); p.events.push(event); };
     addEventListener("error", () => { p.pageErrors++; record("PAGE_ERROR"); });
@@ -236,7 +498,7 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
     await page.goto(`${devOrigin}/app/admin/index.html?demoAdmin=1`, { waitUntil: "load" });
     await page.waitForFunction(() => document.querySelector("#openSingleSheetPreviewButton")?.dataset.excelBound === "true");
     await page.evaluate(({ branchId }) => {
-      const payload = { role: "authenticated", exp: Math.floor(Date.now() / 1000) + 3600 };
+      const payload = { role: "authenticated", sub: "synthetic-admin", exp: Math.floor(Date.now() / 1000) + 3600 };
       const jwt = `x.${btoa(JSON.stringify(payload)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_")}.x`;
       const unitHash = "a".repeat(64), planHash = "b".repeat(64), revision = "b".repeat(64);
       window.__sheetExecution = { state: "READY", previews: 0, applies: 0, reverses: 0, args: [], applyResponseLost: true, reverseResponseLost: true,prepareCalls:0,prepareProofs:{},prepareReplay:0 };
@@ -251,7 +513,7 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
           if(s.prepareFailure)throw {status:403,code:"42501",message:"SHEET_WORK_RUNTIME_UNAVAILABLE"};
           let proof=s.prepareProofs[parameters.operation_key];
           const replay=!!proof;
-          if(!proof)proof=s.prepareProofs[parameters.operation_key]={contract:"single-sheet-work-session/1",scope:parameters.scope,preparedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+900000).toISOString()};
+          if(!proof){const now=Date.now();proof=s.prepareProofs[parameters.operation_key]={contract:"single-sheet-work-session/1",scope:parameters.scope,preparedAt:new Date(now).toISOString(),expiresAt:new Date(now+900000).toISOString()};}
           if(s.prepareResponseLost){s.prepareResponseLost=false;throw {code:"server_request_timeout"};}
           if(replay)s.prepareReplay++;
           return {...proof,replay};
@@ -297,6 +559,14 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
       setView("members", { skipLock: true });
     }, { branchId });
     const modal = page.locator("#singleSheetPreviewModal");
+    if (process.env.TENNISNOTE_EXCEL_REFRESH_RACE_ONLY === "1") {
+      await refreshRaceRegression(page, modal, engine, branchId);
+      check(errors.length === 0, "REFRESH_RACE_PAGE_ERRORS_ZERO"); return;
+    }
+    if (process.env.TENNISNOTE_EXCEL_RETRY_FIX_ONLY === "1") {
+      await retryHitTargetRegression(page, modal, engine);
+      check(errors.length === 0, "RETRY_PAGE_ERRORS_ZERO"); return;
+    }
     if (initialOnly) {
       let step = { method: "HELPER_ENTER", callsites: [] }, sequence = 0;
       const notify = value => { step = { ...value, sequence: ++sequence }; diagnostic.phase = `HELPER_${step.callsites[0]?.line || 0}_${step.method}`; };
@@ -834,7 +1104,7 @@ async function holdPlanUiScenario(page, modal, engine) {
 }
 async function main() {
   const templateOnly = process.env.TENNISNOTE_EXCEL_TEMPLATE_ONLY === "1";
-  if (!templateOnly && process.env.TENNISNOTE_EXCEL_COMPLETION_ONLY !== "1" && process.env.TENNISNOTE_EXCEL_PREPARATION_ONLY !== "1") {
+  if (!templateOnly && !process.env.TENNISNOTE_EXCEL_REFRESH_RACE_ONLY && !process.env.TENNISNOTE_EXCEL_RETRY_FIX_ONLY && process.env.TENNISNOTE_EXCEL_COMPLETION_ONLY !== "1" && process.env.TENNISNOTE_EXCEL_PREPARATION_ONLY !== "1") {
     const catalogAssertions = await require("./check_tennisnote_single_sheet_products_browser.cjs").run();
     process.stdout.write(`PRODUCT_CATALOG_BROWSER_PASS assertions=${catalogAssertions}\n`);
   }
@@ -849,6 +1119,11 @@ async function main() {
     const executablePath = engine === "chromium" ? [process.env.CHROME_PATH, chromium.executablePath(), "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"].find(p => p && fs.existsSync(p)) : undefined;
     const browser = await (engine === "webkit" ? webkit : chromium).launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
     try {
+      if (process.env.TENNISNOTE_EXCEL_REFRESH_RACE_ONLY === "1" || process.env.TENNISNOTE_EXCEL_RETRY_FIX_ONLY === "1") {
+        await remoteExecutionScenario(browser, engine, false, false, false);
+        process.stdout.write(`TN_EXCEL_ENGINE_RESULT ${JSON.stringify({engine, assertions: assertions-engineStartAssertions})}\n`);
+        continue;
+      }
       if (process.env.TENNISNOTE_EXCEL_PREPARATION_ONLY === "1") {
         await remoteExecutionScenario(browser, engine, true, false, false);
         await remoteExecutionScenario(browser, engine, true, true, false);
