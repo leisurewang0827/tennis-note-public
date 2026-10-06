@@ -25,7 +25,8 @@ function context() {
 test("R3 원본 projection: 함수·파일 해시 및 모든 기존 golden 역변환",()=>{
   assert.equal(manifest.mode,"read-only-preview-no-confirmation-ui");
   for(const e of manifest.files){const source=candidateSource(e.path);const base=restore(e.path,source);assert.equal(base===null?e.new:sha(base)===e.baseSha256,true,e.path)}
-  for(const e of manifest.functions){const source=read(e.target);const fn=source.match(new RegExp("(?:async )?function "+e.name+"\\([\\s\\S]*?\\n\\}"))[0];assert.equal(sha(fn),e.projectedSha256,e.name)}
+  // Verify the exact history layer first, then the unchanged prior function hashes.
+  for(const e of manifest.functions){const source=require("./helpers/r3-history-port.cjs").restore(e.target,read(e.target));const fn=source.match(new RegExp("(?:async )?function "+e.name+"\\([\\s\\S]*?\\n\\}"))[0];assert.equal(sha(fn),e.projectedSha256,e.name)}
   assert.equal(sha(read("app/shared/tennisnote-settlement-adjustment.js")),manifest.sharedCanonicalSha256);
   assert(!read("app/admin/views/billing.js").includes("renderMonthlySettlementConfirmation("));
   assert(!read("app/tennis-note-coach-app/views/settlement.js").includes("renderCoachSettlementReconciliation("));

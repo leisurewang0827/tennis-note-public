@@ -11,6 +11,8 @@ function activateLiveCoachProfile(profileId) {
   state.liveProfileId = nextProfileId;
   if (!profileChanged) return;
 
+  resetCoachSettlementHistory();
+
   state.coach = null;
   state.todayLessons = [];
   state.makeupRequests = [];
@@ -43,10 +45,16 @@ async function applySupabaseCoachSession(showFromLogin = false) {
   if (!client?.readiness?.().ready) return false;
   await client.consumeOAuthRedirect?.();
   const session = await client.ensureSession?.() || client.getSession?.();
-  if (!session?.access_token) return false;
+  if (!session?.access_token) {
+    resetCoachSettlementHistory();
+    renderCoachSettlementHistory();
+    return false;
+  }
   try {
     const { user, profile, coachRole } = await client.selectCurrentProfile();
     if (!profile || !canUseCoachAppProfile(profile, coachRole)) {
+      resetCoachSettlementHistory();
+      renderCoachSettlementHistory();
       state.coach = null;
       $("#coachAppScreen").hidden = true;
       $("#coachLoginScreen").hidden = false;
@@ -91,6 +99,8 @@ async function applySupabaseCoachSession(showFromLogin = false) {
 }
 
 async function logoutCoach() {
+  resetCoachSettlementHistory();
+  renderCoachSettlementHistory();
   coachSettlementSelection = null;
   await disableNativeCoachPushForLogout();
   await window.TennisNoteDataClient?.signOut?.();

@@ -4,12 +4,19 @@
 // 이 함수들을 순서대로 부른다.
 
 function bindDelegatedEvents() {
+  const refreshVisibleHistory = () => {
+    if (!document.hidden && $("#coachSettlementModal")?.hidden === false) void syncCoachSettlementHistoryFromServer();
+  };
+  window.addEventListener("focus", refreshVisibleHistory);
+  document.addEventListener("visibilitychange", refreshVisibleHistory);
   document.addEventListener("change", (event) => {
     const settlementMonth = event.target.closest("#coachSettlementMonth");
     if (settlementMonth) {
+      resetCoachSettlementHistory();
       selectCoachSettlementMonth(settlementMonth.value);
       state.coachSettlement = null;
       void syncCoachSettlementFromServer();
+      void syncCoachSettlementHistoryFromServer();
       return;
     }
 

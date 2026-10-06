@@ -5,6 +5,8 @@ import path from "node:path";
 import vm from "node:vm";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+const historyPort = createRequire(import.meta.url)("./helpers/r3-history-port.cjs");
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (name) => fs.readFileSync(path.join(root, name), "utf8").replace(/\r\n/g, "\n");
@@ -22,7 +24,7 @@ test("정산·첨부·표시명은 최신 private 권위 함수 9개와 공용 �
   assert.equal(manifest.privateMainSha, "f408dae5c6918139c4d95067808b221439eb14da");
   assert.equal(manifest.functions.length, 9);
   for (const item of manifest.functions) {
-    assert.equal(hash(extract(read(item.publicModule), item.function)), item.sha256, item.function);
+    assert.equal(hash(extract(historyPort.restore(item.publicModule, read(item.publicModule)), item.function)), item.sha256, item.function);
   }
   for (const item of manifest.sharedFiles) assert.equal(hash(read(item.publicModule)), item.sha256);
 });

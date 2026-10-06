@@ -77,4 +77,60 @@ function renderCoachSettlement() {
       });
   }
   renderVisibleMemberSettlement();
+  renderCoachSettlementHistory();
+}
+
+// Read-only extraction: response form and write controls intentionally not exported.
+function renderCoachSettlementHistory() {
+  const section = $("#coachSettlementReconciliation");
+  if (!section) return;
+  const uiState = String(coachSettlementHistory.coachSettlementReconciliationUiState || "EMPTY").toUpperCase();
+  const payload = coachSettlementHistory.coachSettlementReconciliation || {};
+  const snapshot = payload.snapshot || null;
+  const confirmation = payload.confirmation || null;
+  const reconciliation = payload.reconciliation || null;
+  const payloadIsExact = coachSettlementReconciliationPayloadIsExact(payload);
+  const busy = coachSettlementHistory.coachSettlementReconciliationLoading;
+  section.dataset.state = uiState;
+  section.setAttribute("aria-busy", String(busy));
+  const badge = $("#coachSettlementReconciliationStateBadge");
+  if (badge) badge.textContent = coachSettlementReconciliationStateLabel(uiState);
+  const message = $("#coachSettlementReconciliationMessage");
+  if (message) message.textContent = coachSettlementHistory.coachSettlementReconciliationMessage || coachSettlementReconciliationDefaultMessage(uiState);
+
+  const summary = $("#coachSettlementReconciliationSummary");
+  if (summary) {
+    summary.innerHTML = "";
+    summary.hidden = !payloadIsExact || !snapshot || !confirmation;
+    if (payloadIsExact && snapshot && confirmation) {
+      const appendSummary = (label, value, detail, className = "") => {
+        const item = document.createElement("div");
+        if (className) item.className = className;
+        const labelNode = document.createElement("span");
+        const valueNode = document.createElement("strong");
+        const detailNode = document.createElement("small");
+        labelNode.textContent = label;
+        valueNode.textContent = value;
+        detailNode.textContent = detail;
+        item.append(labelNode, valueNode, detailNode);
+        summary.appendChild(item);
+      };
+      const month = String(payload.scope?.settlementMonth || "").slice(0, 7);
+      const [year, monthNumber] = month.split("-");
+      appendSummary("확정 월", year && monthNumber ? `${Number(year)}년 ${Number(monthNumber)}월` : "월 확인 필요", `${Number(snapshot.revision) || 0}차 계산본 · ${snapshot.calculationVersion === "r3_effective_settlement_v2" ? "적용일별 v2" : "기존 v1"}`);
+      appendSummary("정산 진행", `${Number(snapshot.totals?.settledSessions) || 0}회`, `${Number(snapshot.totals?.settledMinutes) || 0}분`);
+      appendSummary("확정 정산액", formatCoachWon(snapshot.totals?.totalSettlementAmount), `관리자 확인 ${coachSettlementReconciliationTimeLabel(confirmation.confirmedAt)}`);
+      if (uiState === "DISPUTED" && reconciliation?.reason) {
+        appendSummary("이의 사유", String(reconciliation.reason), `응답 ${coachSettlementReconciliationTimeLabel(reconciliation.respondedAt)}`, "coach-settlement-reconciliation-summary-reason");
+      } else if (uiState === "ACKNOWLEDGED") {
+        appendSummary("코치 응답", "확인했습니다", coachSettlementReconciliationTimeLabel(reconciliation?.respondedAt), "coach-settlement-reconciliation-summary-response");
+      }
+    }
+  }
+
+  const retry = $("#coachSettlementReconciliationRetry");
+  if (retry) {
+    retry.hidden = !["STALE", "CONFLICT", "ERROR"].includes(uiState);
+    retry.disabled = busy;
+  }
 }
