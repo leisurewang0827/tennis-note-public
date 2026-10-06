@@ -11,7 +11,10 @@ function restoreBase(file, source) {
   // R3 후속 후보는 먼저 exact 해시/offset으로 역변환한다. 기존 HOLD 근거는 그대로 검사한다.
   const r3 = require("./r3-effective-port.cjs");
   const currentVersion = JSON.parse(read("app/release.json")).version;
-  source = r3.restore(file, source.replaceAll(currentVersion, r3.manifest.publicVersion));
+  if (r3.manifest.files.some(item => item.path === file)) {
+    source = r3.restore(file, r3.canonicalRelease(file, source, currentVersion));
+    source = source.replaceAll(r3.manifest.publicVersion, currentVersion);
+  }
   const row = manifest.files.find(item => item.path === file);
   if (!row) return source;
   // 승인된 Excel 증분만 먼저 exact hash로 역변환한다. 기존 HOLD golden은 보존한다.

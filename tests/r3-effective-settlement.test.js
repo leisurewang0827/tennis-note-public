@@ -5,9 +5,9 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const {root, manifest, sha, normalize, restore} = require("./helpers/r3-effective-port.cjs");
+const {root, manifest, sha, normalize, canonicalRelease, restore} = require("./helpers/r3-effective-port.cjs");
 const read = file => normalize(fs.readFileSync(path.join(root, file), "utf8"));
-const candidateSource = file => read(file).replaceAll(JSON.parse(read("app/release.json")).version,manifest.publicVersion);
+const candidateSource = file => canonicalRelease(file,read(file),JSON.parse(read("app/release.json")).version);
 const scope = {branchId:"synthetic-branch",coachRoleId:"synthetic-role",settlementMonth:"2099-01-01"};
 const payload = () => ({ok:true,calculationVersion:"r3_effective_settlement_v2",scope:{...scope},sourceFingerprint:"a".repeat(64),confirmationReady:false,
   totals:{totalSettlementAmount:50,revenueAmount:100,settledSessions:1,settledMinutes:40,paymentCount:1},

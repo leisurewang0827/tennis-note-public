@@ -6,6 +6,15 @@ const root = path.resolve(__dirname, "../..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-effective-source-parity.json"), "utf8"));
 const sha = text => crypto.createHash("sha256").update(text).digest("hex");
 function normalize(text) { return text.replace(/\r\n/g, "\n"); }
+function canonicalRelease(file, text, version) {
+  text = text.replaceAll(version, manifest.publicVersion);
+  if (file === "app/tennis-note-coach-app/service-worker.js") {
+    const cache = /^const CACHE_NAME = "([^"]+)";/m.exec(text);
+    if (!cache) throw Error("R3 coach cache metadata missing");
+    text = text.replace(cache[1], manifest.publicCoachCache);
+  }
+  return text;
+}
 function restore(file, text) {
   const entry = manifest.files.find(item => item.path === file);
   if (!entry) return text;
@@ -19,4 +28,4 @@ function restore(file, text) {
   if (sha(text) !== entry.baseSha256) throw Error("R3 projection baseline drift: " + file);
   return text;
 }
-module.exports = { root, manifest, sha, normalize, restore };
+module.exports = { root, manifest, sha, normalize, canonicalRelease, restore };

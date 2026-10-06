@@ -491,6 +491,8 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
     entry = next((item for item in port["files"] if item["path"] == path), None)
     if entry is None:
         return text
+    if path == "app/tennis-note-coach-app/service-worker.js":
+        text = text.replace(EXPECTED_COACH_CACHE, port["publicCoachCache"])
     if sha256(text.encode("utf-8")) != entry["candidateSha256"]:
         raise RuntimeError("R3 projection candidate hash drift")
     if entry["new"]:
@@ -501,6 +503,8 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
         text = text[:hunk["start"]] + hunk["before"] + text[hunk["end"]:]
     if sha256(text.encode("utf-8")) != entry["baseSha256"]:
         raise RuntimeError("R3 projection baseline drift")
+    if path == "app/tennis-note-coach-app/service-worker.js":
+        text = text.replace(port["publicCoachCache"], EXPECTED_COACH_CACHE)
     return text
 
 

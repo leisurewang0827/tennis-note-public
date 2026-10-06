@@ -358,5 +358,6 @@
     "renderCoachSettlementReconciliation"
   ],
   "sharedCanonicalSha256": "53523a187b1148d47f0853a852247c12452694d2262e9406d786489a98778c34",
-  "publicVersion": "1.0.535"
+  "publicVersion": "1.0.535",
+  "publicCoachCache": "tennis-note-coach-mode-v546"
 }
