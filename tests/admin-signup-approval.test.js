@@ -65,7 +65,16 @@ test("readback, privilege, exact scope and payload-bound retry contract", () => 
 });
 
 test("44px correction is limited to signup approval buttons, preserving other CSS", () => {
-  const css = withoutPurchaseIdentity("app/admin/styles.css", read("app/admin/styles.css"));
+  // 이번 재시도 블록만 exact hash/역변환으로 제거하고 기존 가입 승인 golden은 보존한다.
+  const retry = JSON.parse(read("tests/fixtures/excel-retry-source-parity.json")).files.find(row => row.path === "app/admin/styles.css");
+  let source = read("app/admin/styles.css");
+  assert.equal(sha(source), retry.candidateSha256);
+  for (const hunk of [...retry.hunks].reverse()) {
+    assert.equal(source.split(hunk.after).length, 2);
+    source = source.replace(hunk.after, hunk.before);
+  }
+  assert.equal(sha(source), retry.baseSha256);
+  const css = withoutPurchaseIdentity("app/admin/styles.css", source);
   const marker = "\n/* 가입 연결 승인 폼에서만 터치 영역과 처리 중 상태를 보장한다. */";
   const offset = css.indexOf(marker);
   assert.ok(offset > 0);

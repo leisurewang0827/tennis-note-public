@@ -52,7 +52,7 @@ css = (a.ROOT/path).read_text(encoding='utf-8')
 restore = lambda value: a.restore_purchase_identity_source(path, value, m)
 hash_of = lambda value: a.sha256(a.normalize_product_bytes(path, value.encode('utf-8'), baseline))
 expected = baseline['product_tree']['normalized_sha256_by_path'][path]
-assert hash_of(restore(css)) == expected
+assert hash_of(restore(a.restore_excel_retry_base(path, css))) == expected
 for changed in (css.replace(block, block.replace('44px', '40px')), css.replace(block, ''), css.replace(block, block+block)):
     try:
         restore(changed)

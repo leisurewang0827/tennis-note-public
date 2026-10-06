@@ -16560,6 +16560,11 @@ body[data-operations-role="coach"] #membersView .member-db-section--billing {
 #singleSheetPreviewModal input { max-width: 100%; min-width: 0; width: 100%; font-size: 16px; min-height: 44px; }
 #singleSheetPreviewModal button, #openSingleSheetPreviewButton { min-height: 44px; }
 #singleSheetPreviewModal .modal-actions { flex-wrap: wrap; gap: 8px; }
+/* Separate stable hit slots; hidden cancel must never replace a busy retry. */
+#singleSheetPreviewModal .tn-excel-retry-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+#singleSheetPreviewModal .tn-excel-retry-actions > button { width: 100%; min-width: 0; min-height: 44px; }
+#singleSheetPreviewModal .tn-excel-retry-actions > button[hidden] { display: block !important; visibility: hidden; pointer-events: none; }
+#singleSheetPreviewModal [data-excel-retry]:disabled { cursor: not-allowed; opacity: .55; }
 #singleSheetPreviewModal .tn-excel-disabled { background: #e5e7eb; color: #4b5563; border: 1px solid #9ca3af; border-radius: 10px; padding: 10px 14px; cursor: not-allowed; opacity: 1; }
 #singleSheetPreviewModal .tn-excel-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 #singleSheetPreviewModal .tn-excel-summary div { min-width: 0; border-bottom: 1px solid #a0afa8; padding: 8px 0; }

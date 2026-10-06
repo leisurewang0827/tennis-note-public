@@ -120,10 +120,11 @@
       <div class="modal-heading"><h2 id="singleSheetPreviewTitle">엑셀 등록 미리보기</h2><button type="button" class="ghost-button" data-excel-close>닫기</button></div>
       <p>회원등록 시트 · 회원권 1개당 1행 · 최대 500행 · 사용횟수 공란은 0회</p>
       <label class="form-field">XLSX 파일 선택<input type="file" accept=".xlsx" data-excel-file /></label>
+      <div class="tn-excel-retry-actions"><button type="button" class="ghost-button" data-excel-retry hidden>다시 확인</button><button type="button" class="ghost-button" data-excel-cancel hidden>파일 확인 취소</button></div>
       <p class="tn-excel-status" data-excel-status role="status" aria-live="polite">파일을 선택하면 등록 전에 내용을 확인합니다.</p>
       <div data-excel-results></div>
       <p data-excel-boundary>파일 선택 후 서버 미리보기에서 사용 범위와 등록 계획을 확인합니다. 직접 확인하기 전에는 등록하지 않습니다.</p>
-      <div class="modal-actions"><button type="button" class="ghost-button" data-excel-template>양식 받기</button><button type="button" class="ghost-button" data-excel-retry hidden>다시 확인</button><button type="button" class="ghost-button" data-excel-cancel hidden>파일 확인 취소</button><button type="button" class="ghost-button" data-excel-reverse hidden disabled aria-disabled="true">방금 등록 원복</button><button type="button" class="tn-excel-disabled" data-excel-apply disabled aria-disabled="true">파일 선택 후 확인</button></div>
+      <div class="modal-actions"><button type="button" class="ghost-button" data-excel-template>양식 받기</button><button type="button" class="ghost-button" data-excel-reverse hidden disabled aria-disabled="true">방금 등록 원복</button><button type="button" class="tn-excel-disabled" data-excel-apply disabled aria-disabled="true">파일 선택 후 확인</button></div>
     </section>`;
     document.body.append(backdrop);
     const input = backdrop.querySelector("[data-excel-file]"), status = backdrop.querySelector("[data-excel-status]"), results = backdrop.querySelector("[data-excel-results]");
@@ -133,7 +134,7 @@
     let generation = 0, worker = null, timer = null, expires = null, opener = null;
     let workPreparation = null;
     const setReadiness = (state, text) => { backdrop.dataset.excelReadiness = state; boundary.textContent = text; };
-    function stop() { generation++; requestBusy = false; input.disabled = false; worker?.terminate(); worker = null; clearTimeout(timer); clearTimeout(expires); timer = null; cancel.hidden = true; }
+    function stop() { generation++; requestBusy = false; input.disabled = false; retry.disabled = false; retry.setAttribute("aria-disabled", "false"); worker?.terminate(); worker = null; clearTimeout(timer); clearTimeout(expires); timer = null; cancel.hidden = true; }
     function reset() {
       results.replaceChildren(); status.textContent = "파일을 선택하면 등록 전에 내용을 확인합니다."; retry.hidden = true;
       delete backdrop.dataset.batchPhase; delete backdrop.dataset.excelFailureCode;
@@ -219,7 +220,8 @@
       return `${label} · 잔여 ${d.remainingBefore}회 + 추가 ${d.addedSessions}회 = ${d.remainingAfter}회 · 만료 ${d.expiresOn} · 기존 수업 ${d.preservedLessons}개 보존 · ${d.manualAssignment ? "시간 수동 배정" : `새 수업 ${row.newLessons}개`}`;
     };
     function renderBatch(v) {
-      results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.failureCode === "SHEET_IMPORT_STORAGE_CONFLICT" || v.busy || !(v.expired || v.phase === "blocked" || (v.phase === "paused" && (!v.confirmed || v.invalidated))) || !input.files.length;
+      results.replaceChildren(); input.disabled = v.busy; retry.hidden = v.failureCode === "SHEET_IMPORT_STORAGE_CONFLICT" || !(v.busy || v.expired || v.phase === "blocked" || (v.phase === "paused" && (!v.confirmed || v.invalidated))) || !input.files.length;
+      retry.disabled = v.busy; retry.setAttribute("aria-disabled", String(v.busy));
       if (confirming === "apply" && !v.canConfirm) confirming = false;
       if (confirming === "reverse" && !v.canReverse && !v.busy) confirming = false;
       backdrop.dataset.excelFailureCode = v.failureCode || "";
@@ -333,7 +335,9 @@
       if (!file.size || file.size > MAX_BYTES) { error("FILE_SIZE_INVALID"); return; }
       if (typeof Worker !== "function") { error("WORKER_UNAVAILABLE"); return; }
       requestBusy = true; input.disabled = true;
-      status.textContent = "파일과 조회 근거를 확인하고 있습니다…"; cancel.hidden = false;
+      // Keep retry in its own slot: a second physical click must not become cancel.
+      retry.hidden = false; retry.disabled = true; retry.setAttribute("aria-disabled", "true");
+      status.textContent = "파일과 조회 근거를 확인하고 있습니다…"; cancel.textContent = "파일 확인 취소"; cancel.hidden = false;
       timer = setTimeout(() => error("PARSING_TIMEOUT"), DEADLINE);
       try {
         const transport = options.getLocalTransport?.();

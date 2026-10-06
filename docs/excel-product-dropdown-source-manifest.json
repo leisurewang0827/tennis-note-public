@@ -23,9 +23,9 @@
     {
       "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-preview-ui.js",
       "publicPath": "app/shared/tennisnote-single-sheet-preview-ui.js",
-      "gitBlob": "69c270c6eb1b98d5ca2f0265babdbf888f757ad2",
-      "privateMerge": "6bb80ee9bc136d8fbac74592a30e840b0e7e35bf",
-      "change": "승인된 상품·코치 양식과 등록 이력 원복 안내 전체 source 일치."
+      "gitBlob": "5886f4d39bb6516430109a02679b70433d7bc42b",
+      "privateMerge": "3891c44713fa96eff5f368cf37f0b2136d227746",
+      "change": "상품·코치 양식과 원복 계약 보존, PR578 재시도·취소 hit target 수정 전체 source 일치."
     },
     {
       "privatePath": "90-Dashboard/shared/tennisnote-single-sheet-transport.js",

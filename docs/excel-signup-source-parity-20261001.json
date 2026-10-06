@@ -33,9 +33,9 @@
     },
     {
       "path": "app/shared/tennisnote-single-sheet-preview-ui.js",
-      "sha256": "b9212d8da9db62b182dbd14428be6d2c58adc1f008f445d85110e2eebe164db4",
-      "privateSource": "6bb80ee9bc136d8fbac74592a30e840b0e7e35bf",
-      "supersededBy": "excel-onboarding-a-source-parity-20261002.json"
+      "sha256": "c89a03ff9226ab6b24f0b7d2c199b8fbb0f3fa72e22d5d35d17ca3dfbb1ea96a",
+      "privateSource": "4238abf216250e429885174dda0011c18f2928dc",
+      "supersededBy": "../tests/fixtures/excel-retry-source-parity.json"
     },
     {
       "path": "app/shared/tennisnote-single-sheet-snapshot.js",

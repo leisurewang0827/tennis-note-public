@@ -468,6 +468,23 @@ def restore_purchase_identity_source(path: str, source: str, identity: dict) -> 
     return source
 
 
+def restore_excel_retry_base(path: str, text: str) -> str:
+    """비공개 원본과 일치하는 재시도 수정만 역변환하며 기존 golden을 보존한다."""
+    port = json.loads((ROOT / "tests/fixtures/excel-retry-source-parity.json").read_text(encoding="utf-8"))
+    row = next((item for item in port["files"] if item["path"] == path), None)
+    if row is None:
+        return text
+    if sha256(text.encode("utf-8")) != row["candidateSha256"]:
+        raise RuntimeError("Excel retry candidate hash drift")
+    for hunk in reversed(row["hunks"]):
+        if text.count(hunk["after"]) != 1:
+            raise RuntimeError("Excel retry hunk drift")
+        text = text.replace(hunk["after"], hunk["before"], 1)
+    if sha256(text.encode("utf-8")) != row["baseSha256"]:
+        raise RuntimeError("Excel retry baseline drift")
+    return text
+
+
 def verify() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     candidate = manifest["candidate_release"]
@@ -515,6 +532,7 @@ def verify() -> None:
         data = (ROOT / path).read_bytes()
         try:
             text = data.decode("utf-8").replace("\r\n", "\n").replace(EXPECTED_VERSION, home["publicVersion"])
+            text = restore_excel_retry_base(path, text)
             text = restore_member_home_base(path, text, home)
             text = restore_coach_round_base(path, text)
             data = restore_renewal_hold_base(path, text).replace(home["publicVersion"], EXPECTED_VERSION).encode("utf-8")

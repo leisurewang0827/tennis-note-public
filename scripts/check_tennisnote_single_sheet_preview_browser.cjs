@@ -13,6 +13,94 @@ let assertions = 0;
 const completedScenarios = new Map();
 const scenarioPassed = (engine, name) => completedScenarios.get(engine).push(name);
 const check = (ok, code) => { assertions++; if (!ok) throw Object.assign(Error(code), { testCode: code }); };
+async function retryHitTargetRegression(page, modal, engine) {
+  const startAssertions=assertions, records=[];
+  await page.evaluate(()=>{
+    window.__retryFixClicks={retry:0,cancel:0,untrusted:0};
+    document.addEventListener('click',event=>{
+      for(const name of ['retry','cancel'])if(event.target.closest?.('[data-excel-'+name+']')){
+        window.__retryFixClicks[name]++;if(!event.isTrusted)window.__retryFixClicks.untrusted++;
+      }
+    },true);
+    const rpc=window.TennisNoteDataClient.rpc;
+    window.TennisNoteDataClient.rpc=async(name,...args)=>{
+      if(['tn_apply_single_sheet_import_unit','tn_reverse_single_sheet_import_unit'].includes(name)){
+        window.__retryFixWriteAttempt=true;throw Error('RETRY_TEST_WRITE_FORBIDDEN');
+      }
+      return rpc(name,...args);
+    };
+  });
+  const file=()=>({name:'synthetic.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbookBytes('valid')});
+  const geometry=()=>modal.evaluate(el=>{
+    const panel=el.querySelector('.tn-excel-panel'),r=el.querySelector('[data-excel-retry]').getBoundingClientRect(),c=el.querySelector('[data-excel-cancel]').getBoundingClientRect();
+    return {retry:[r.x,r.y,r.width,r.height],cancel:[c.x,c.y,c.width,c.height],overflow:panel.scrollWidth>panel.clientWidth+1,font:parseFloat(getComputedStyle(el.querySelector('input')).fontSize),cancelVisibleHeight:Math.min(c.bottom,innerHeight,panel.getBoundingClientRect().bottom)-Math.max(c.top,0,panel.getBoundingClientRect().top)};
+  });
+  const capture=async(width,theme,phase)=>{
+    if(!process.env.TENNISNOTE_EXCEL_CAPTURE_DIR)return;
+    const dir=path.resolve(process.env.TENNISNOTE_EXCEL_CAPTURE_DIR);fs.mkdirSync(dir,{recursive:true});
+    await modal.locator('.tn-excel-panel').screenshot({path:path.join(dir,`${engine}-retry-${width}-${theme}-${phase}.png`)});
+  };
+  for(const [width,height] of [[390,844],[768,1024],[1366,900]])for(const theme of ['light','dark']){
+    diagnostic.phase='RETRY_HIT_TARGET_REGRESSION';
+    await page.setViewportSize({width,height});await page.emulateMedia({colorScheme:theme});
+    await page.evaluate(theme=>{
+      document.documentElement.dataset.theme=theme;
+      Object.assign(window.__sheetExecution,{state:'READY',previews:0,applies:0,reverses:0,args:[],prepareCalls:0,prepareProofs:{},prepareReplay:0,prepareFailure:true,prepareResponseLost:false,holdPreview:false,releasePreview:null});
+    },theme);
+    await page.locator('#openSingleSheetPreviewButton').click();
+    await page.waitForFunction(()=>document.querySelector('#singleSheetPreviewModal').dataset.excelReadiness==='awaiting-preview');
+    const input=modal.locator('[data-excel-file]'),retry=modal.locator('[data-excel-retry]'),cancel=modal.locator('[data-excel-cancel]');
+    await input.setInputFiles(file());
+    await page.waitForFunction(()=>document.querySelector('#singleSheetPreviewModal').dataset.excelFailureCode==='SHEET_WORK_RUNTIME_UNAVAILABLE');
+    check(await page.evaluate(()=>__sheetExecution.prepareCalls===1&&__sheetExecution.previews===0),'RETRY_RUNTIME_ERROR_NO_PREVIEW');
+    await page.evaluate(()=>{__sheetExecution.prepareFailure=false;__sheetExecution.prepareResponseLost=true;});
+    await retry.click();
+    await page.waitForFunction(()=>document.querySelector('#singleSheetPreviewModal').dataset.excelFailureCode==='SHEET_WORK_SESSION_FAILED');
+    await retry.scrollIntoViewIfNeeded();
+    const before=await geometry();await capture(width,theme,'error');
+    await page.evaluate(()=>{__sheetExecution.holdPreview=true;__sheetExecution.releasePreview=null;__retryFixClicks={retry:0,cancel:0,untrusted:0};});
+    await retry.dblclick();
+    await page.waitForFunction(()=>typeof __sheetExecution.releasePreview==='function');
+    check(await page.evaluate(()=>__sheetExecution.prepareCalls===3&&__sheetExecution.prepareReplay===1&&__sheetExecution.previews===1&&Object.keys(__sheetExecution.prepareProofs).length===1),'RETRY_TRUSTED_DOUBLE_PREPARE3_REPLAY1_PREVIEW1');
+    check(await page.evaluate(()=>__retryFixClicks.retry===1&&__retryFixClicks.cancel===0&&__retryFixClicks.untrusted===0),'RETRY_NO_ACCIDENTAL_CANCEL_TRUSTED_ONLY');
+    check(await retry.isVisible()&&await retry.isDisabled()&&await retry.getAttribute('aria-disabled')==='true','RETRY_BUSY_VISIBLE_DISABLED');
+    const busy=await geometry();
+    const drift=Math.max(...before.retry.map((n,i)=>Math.abs(n-busy.retry[i])));
+    check(drift<=1,'RETRY_EXACT_RECT_PRESERVED');
+    check(busy.retry[2]>=44&&busy.retry[3]>=44&&busy.cancel[2]>=44&&busy.cancelVisibleHeight>=44&&busy.retry[0]+busy.retry[2]<=busy.cancel[0]&&!busy.overflow&&busy.font>=16,'RETRY_CANCEL_INDEPENDENT_VISIBLE_TOUCH_FOCUS');
+    await capture(width,theme,'busy');
+    await page.evaluate(()=>{__sheetExecution.releasePreview();__sheetExecution.releasePreview=null;});
+    await page.waitForFunction(()=>document.querySelector('#singleSheetPreviewModal').dataset.excelReadiness==='ready');
+    check(await page.evaluate(()=>__sheetExecution.prepareCalls===3&&__sheetExecution.prepareReplay===1&&__sheetExecution.previews===1),'RETRY_READY_COUNTS_UNCHANGED');
+    check(await retry.isHidden()&&await modal.locator('[data-excel-apply]').isEnabled(),'RETRY_READY_NOT_AUTO_APPLIED');
+    check(await page.evaluate(()=>__sheetExecution.args.filter(c=>c.name==='tn_prepare_single_sheet_work_session').every(c=>c.keys.join('|')==='operation_key|scope')),'RETRY_SAME_KEY_NO_CLIENT_AUTHORITY');
+    await capture(width,theme,'ready');
+    // New read-only preview held at its real asynchronous response, not a delay.
+    await input.setInputFiles([]);
+    await page.evaluate(()=>{__sheetExecution.holdPreview=true;__sheetExecution.releasePreview=null;});
+    await input.setInputFiles(file());
+    await page.waitForFunction(()=>typeof __sheetExecution.releasePreview==='function');
+    await cancel.click();
+    check(await input.evaluate(el=>el.files.length===1)&&await modal.locator('[data-excel-apply]').isDisabled(),'RETRY_EXPLICIT_CANCEL_INFLIGHT_NO_APPLY');
+    await page.evaluate(async()=>{__sheetExecution.releasePreview();__sheetExecution.releasePreview=null;await new Promise(requestAnimationFrame);});
+    await page.waitForFunction(()=>document.querySelector('#singleSheetPreviewModal').dataset.batchPhase==='paused');
+    check(await input.evaluate(el=>!el.disabled&&el.files.length===1)&&await retry.isEnabled()&&await cancel.isHidden(),'RETRY_EXPLICIT_CANCEL_PRESERVES_FILE');
+    check(await modal.getAttribute('data-excel-readiness')==='paused'&&await modal.locator('[data-excel-apply]').isDisabled(),'RETRY_CANCEL_LATE_RESPONSE_CANNOT_READY');
+    await page.evaluate(()=>{__sheetExecution.holdPreview=true;});
+    await retry.focus();await page.keyboard.press('Enter');
+    await page.waitForFunction(()=>typeof __sheetExecution.releasePreview==='function');
+    await page.keyboard.press('Escape');await modal.waitFor({state:'hidden'});
+    await page.evaluate(async()=>{__sheetExecution.releasePreview();__sheetExecution.releasePreview=null;await new Promise(requestAnimationFrame);});
+    await page.waitForFunction(()=>!history.state?.tnExcelPreview);
+    check(await page.evaluate(()=>document.activeElement?.id==='openSingleSheetPreviewButton'&&!history.state?.tnExcelPreview),'RETRY_KEYBOARD_ESCAPE_FOCUS_HISTORY');
+    await page.locator('#openSingleSheetPreviewButton').click();await modal.waitFor({state:'visible'});
+    await page.goBack();await modal.waitFor({state:'hidden'});
+    check(await input.evaluate(el=>el.files.length===0),'RETRY_BACK_CLEARS_CLOSED_FILE');
+    check(await page.evaluate(()=>!window.__retryFixWriteAttempt&&__sheetExecution.applies===0&&__sheetExecution.reverses===0),'RETRY_ALL_APPLY_REVERSE_ZERO');
+    records.push({width,height,theme,retryRectDrift:drift,minTouch:Math.min(busy.retry[3],busy.cancelVisibleHeight),prepareReplayPreview:[3,1,1],accidentalCancel:0});
+  }
+  process.stdout.write(`RETRY_HIT_TARGET_FIX_RESULT ${JSON.stringify({engine,layouts:records,assertions:assertions-startAssertions,apply:0,reverse:0})}\n`);
+}
 const observationStart = Date.now();
 let observationCount = 0;
 function heartbeat(phase = diagnostic.phase) {
@@ -187,7 +275,7 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
           if(s.prepareFailure)throw {status:403,code:"42501",message:"SHEET_WORK_RUNTIME_UNAVAILABLE"};
           let proof=s.prepareProofs[parameters.operation_key];
           const replay=!!proof;
-          if(!proof)proof=s.prepareProofs[parameters.operation_key]={contract:"single-sheet-work-session/1",scope:parameters.scope,preparedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+900000).toISOString()};
+          if(!proof){const now=Date.now();proof=s.prepareProofs[parameters.operation_key]={contract:"single-sheet-work-session/1",scope:parameters.scope,preparedAt:new Date(now).toISOString(),expiresAt:new Date(now+900000).toISOString()};}
           if(s.prepareResponseLost){s.prepareResponseLost=false;throw {code:"server_request_timeout"};}
           if(replay)s.prepareReplay++;
           return {...proof,replay};
@@ -233,6 +321,10 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
       setView("members", { skipLock: true });
     }, { branchId });
     const modal = page.locator("#singleSheetPreviewModal");
+    if(process.env.TENNISNOTE_EXCEL_RETRY_FIX_ONLY==='1') {
+      await retryHitTargetRegression(page,modal,engine);
+      check(errors.length===0,'RETRY_PAGE_ERRORS_ZERO');return;
+    }
     if (initialOnly) {
       await require("./tennisnote_single_sheet_initial_ui_cases.cjs")({ page, modal, engine, check, workbookBytes, XLSX, parser });
       check(errors.length === 0, "INITIAL_PAGE_ERRORS_ZERO");
@@ -263,7 +355,8 @@ async function remoteExecutionScenario(browser, engine, reverseEnabled = true, c
     await page.waitForFunction(()=>document.querySelector("#singleSheetPreviewModal")?.dataset.excelFailureCode==="SHEET_WORK_SESSION_FAILED");
     check(await page.evaluate(()=>Object.keys(window.__sheetExecution.prepareProofs).length===1&&window.__sheetExecution.previews===0),"PREPARE_RESPONSE_LOSS_NO_AUTO_PREVIEW_OR_RETRY");
     diagnostic.phase = "READINESS_PREPARE_REPLAY";
-    await page.evaluate(()=>{const button=document.querySelector("[data-excel-retry]");button.click();button.click();});
+    check(await modal.locator('[data-excel-retry]').isVisible(),'PREPARE_RETRY_VISIBLE');
+    await modal.locator('[data-excel-retry]').dblclick();
     await page.waitForFunction(()=>document.querySelector("#singleSheetPreviewModal")?.dataset.excelReadiness==="ready");
     check(await page.evaluate(()=>window.__sheetExecution.prepareCalls===3&&window.__sheetExecution.prepareReplay===1&&Object.keys(window.__sheetExecution.prepareProofs).length===1),"MANUAL_PREPARE_REPLAY_ONE_SESSION_DOUBLE_CLICK_ZERO");
     check(await page.evaluate(()=>window.__sheetExecution.args.filter(c=>c.name==="tn_prepare_single_sheet_work_session").every(c=>c.keys.join('|')==="operation_key|scope")),"UI_NO_ACTOR_TTL_SELF_GRANT_PAYLOAD");
@@ -765,7 +858,8 @@ async function holdPlanUiScenario(page, modal, engine) {
 async function main() {
   const emptyWarningOnly = process.env.TENNISNOTE_EXCEL_EMPTY_WARNING_ONLY === "1";
   const templateOnly = process.env.TENNISNOTE_EXCEL_TEMPLATE_ONLY === "1";
-  if (!templateOnly && !emptyWarningOnly) {
+  const retryFixOnly=process.env.TENNISNOTE_EXCEL_RETRY_FIX_ONLY==='1';
+  if (!templateOnly && !emptyWarningOnly && !retryFixOnly) {
     const catalogAssertions = await require("./check_tennisnote_single_sheet_products_browser.cjs").run();
     process.stdout.write(`PRODUCT_CATALOG_BROWSER_PASS assertions=${catalogAssertions}\n`);
   }
@@ -780,6 +874,7 @@ async function main() {
     const executablePath = engine === "chromium" ? [process.env.CHROME_PATH, chromium.executablePath(), "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"].find(p => p && fs.existsSync(p)) : undefined;
     const browser = await (engine === "webkit" ? webkit : chromium).launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
     try {
+      if(retryFixOnly){await remoteExecutionScenario(browser,engine);continue;}
       if (emptyWarningOnly) {
         await remotePreviewScenario(browser, engine);
         await remotePreviewScenario(browser, engine, "production");
