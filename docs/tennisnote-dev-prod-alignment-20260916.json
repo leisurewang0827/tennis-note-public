@@ -1,5 +1,11 @@
 {
   "contract_version": 1,
+  "excel_refresh_source": {
+    "private_merge": "dc89f2ebd17af38c96e84087f2df99221d69075f",
+    "private_shared_ui_blob": "b0fbe165f8dd4af479a17ed948879a053575abde",
+    "parity_fixture": "tests/fixtures/excel-retry-source-parity.json",
+    "authority_boundary": "projection equality suppresses informational interruption only; server dependency proof remains required"
+  },
   "authority": {
     "production_sha": "10489623686b29a133ed8e64e76f0587e78c9faf",
     "development_sha": "14c2901f8c4278810d49c222d4adc09aaaa06ae2",

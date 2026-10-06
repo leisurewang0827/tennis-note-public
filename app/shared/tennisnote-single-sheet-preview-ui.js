@@ -133,6 +133,17 @@
     let batch = null, confirming = false, requestBusy = false, templateBusy = false;
     let generation = 0, worker = null, timer = null, expires = null, opener = null;
     let workPreparation = null;
+    let accessScope = null, remoteTransport = null;
+    const readAccessScope = () => {
+      try {
+        const scope = options.getAccessScope?.();
+        const keys = ["actorId", "branchId", "environment", "projectFingerprint"];
+        return scope && keys.every(key => typeof scope[key] === "string" && scope[key])
+          ? JSON.stringify(keys.map(key => scope[key])) : null;
+      } catch { return null; }
+    };
+    const currentAccess = () => options.canOpen?.() === true && navigator.onLine !== false
+      && (typeof options.getAccessScope !== "function" || (accessScope !== null && readAccessScope() === accessScope));
     const setReadiness = (state, text) => { backdrop.dataset.excelReadiness = state; boundary.textContent = text; };
     function stop() { generation++; requestBusy = false; input.disabled = false; retry.disabled = false; retry.setAttribute("aria-disabled", "false"); worker?.terminate(); worker = null; clearTimeout(timer); clearTimeout(expires); timer = null; cancel.hidden = true; }
     function reset() {
@@ -171,6 +182,13 @@
       if (options.canOpen?.() !== true || !backdrop.hidden) return;
       // Safari may not focus a clicked button; restore the authoritative entry,
       // not whichever unrelated control happened to have keyboard focus.
+      // Retained receipt/batch work stays bound to its original actor. A new
+      // unconfirmed opening must not carry preparation into a different scope.
+      if (!batch) {
+        const nextAccessScope = readAccessScope();
+        if (nextAccessScope !== accessScope) workPreparation = null;
+        accessScope = nextAccessScope;
+      }
       opener = trigger; reset(); backdrop.hidden = false;
       if (batch) renderBatch(batch.view()); else void inspectReadiness();
       history.pushState({ ...(history.state || {}), tnExcelPreview: true }, ""); input.focus();
@@ -328,9 +346,13 @@
       batch?.dispose(); batch = null; confirming = false;
       apply.disabled = true; apply.setAttribute("aria-disabled", "true"); apply.className = "tn-excel-disabled"; apply.textContent = "등록 적용 불가 · 읽기 전용";
       stop(); reset(); if (!file) return;
+      const nextAccessScope = readAccessScope();
+      if (nextAccessScope !== accessScope) workPreparation = null;
+      accessScope = nextAccessScope; remoteTransport = null;
       const id = generation;
       const error = code => { stop(); results.replaceChildren(); backdrop.dataset.excelFailureCode = safeFailureCode({code}); status.textContent = explain(code); retry.hidden = false; setReadiness("blocked", "등록은 실행하지 않았습니다. 안내에 따라 확인한 뒤 같은 파일로 다시 확인할 수 있습니다."); };
       if (navigator.onLine === false) { error("SNAPSHOT_OFFLINE"); return; }
+      if (!currentAccess()) { error("SHEET_IMPORT_SESSION_REQUIRED"); return; }
       if (!/\.xlsx$/i.test(file.name)) { error("XLSX_REQUIRED"); return; }
       if (!file.size || file.size > MAX_BYTES) { error("FILE_SIZE_INVALID"); return; }
       if (typeof Worker !== "function") { error("WORKER_UNAVAILABLE"); return; }
@@ -344,23 +366,27 @@
         const local = root.TennisNoteSingleSheetBatch?.allowed(location.hostname, transport) && options.canOpen?.() === true;
         const previewTransport = local ? null : await options.getPreviewTransport?.();
         const remote = !local && root.TennisNoteSingleSheetRemotePreview?.recognized(previewTransport) && options.canOpen?.() === true;
+        remoteTransport = remote ? previewTransport : null;
         const executable = remote && previewTransport.canApply === true
           && root.TennisNoteSingleSheetBatch?.allowed(location.hostname, previewTransport);
         if (remote && previewTransport.enabled !== true) { error(previewTransport.reason || "SHEET_IMPORT_SCOPE_DISABLED"); return; }
         const snapshot = local || remote ? null : await options.getSnapshot();
         if (id !== generation || backdrop.hidden) return;
+        if (!currentAccess() || (remote && !previewTransport.isReady())) { error("TARGET_OR_REVISION_MISMATCH"); return; }
         const bytes = await file.arrayBuffer();
         if (id !== generation || backdrop.hidden) return;
+        if (!currentAccess() || (remote && !previewTransport.isReady())) { error("TARGET_OR_REVISION_MISMATCH"); return; }
         worker = new Worker(new URL("./tennisnote-single-sheet-worker.js", scriptURL));
         worker.onerror = event => { event.preventDefault(); if (id === generation) error("XLSX_PARSE_FAILED"); };
         worker.onmessage = async event => {
           if (id !== generation || event.data?.id !== id) return;
+          if (!currentAccess() || (remote && !previewTransport.isReady())) { error("TARGET_OR_REVISION_MISMATCH"); return; }
           if (event.data.type === "error") { error(event.data.code); return; }
           if (event.data.type === "ephemeral-units") {
             if (!local) { error("SNAPSHOT_READ_FAILED"); return; }
             stop();
             try {
-              batch = root.TennisNoteSingleSheetBatch.create({ host: location.hostname, transport, adapter: root.TennisNoteSingleSheetSnapshot, canOpen: options.canOpen, changed: renderBatch });
+              batch = root.TennisNoteSingleSheetBatch.create({ host: location.hostname, transport, adapter: root.TennisNoteSingleSheetSnapshot, canOpen: currentAccess, changed: renderBatch });
               await batch.load(event.data.payload);
             } catch { error("SNAPSHOT_READ_FAILED"); }
             return;
@@ -385,17 +411,19 @@
                   if (workPreparation === preparing && ["SHEET_WORK_SESSION_EXPIRED", "SHEET_WORK_SESSION_SUPERSEDED"].includes(prepareError?.code)) workPreparation = null;
                   throw prepareError;
                 }
-                if (id !== generation || backdrop.hidden || options.canOpen?.() !== true) return;
+                if (id !== generation || backdrop.hidden) return;
+                if (!currentAccess() || !previewTransport.isReady()) { error("TARGET_OR_REVISION_MISMATCH"); return; }
               }
               if (executable) {
                 stop();
-                batch = root.TennisNoteSingleSheetBatch.create({ host: location.hostname, transport: previewTransport, adapter: root.TennisNoteSingleSheetSnapshot, canOpen: options.canOpen, changed: renderBatch });
+                batch = root.TennisNoteSingleSheetBatch.create({ host: location.hostname, transport: previewTransport, adapter: root.TennisNoteSingleSheetSnapshot, canOpen: currentAccess, changed: renderBatch });
                 await batch.load(payload);
                 return;
               }
               if (!payload.units.length) { stop(); renderRemote({ errors: [], serverPreview: null }, payload); return; }
               const packet = await previewTransport.preview(previewTransport.scope, payload.units.map(entry => entry.unit));
-              if (id !== generation || backdrop.hidden || options.canOpen?.() !== true) return;
+              if (id !== generation || backdrop.hidden) return;
+              if (!currentAccess() || !previewTransport.isReady()) { error("TARGET_OR_REVISION_MISMATCH"); return; }
               const adapted = root.TennisNoteSingleSheetSnapshot.adaptServer(packet, { ...previewTransport.scope, authorized: true }, new Date().toISOString());
               stop(); renderRemote(adapted, payload);
             } catch (previewError) { if (id === generation) error(safeFailureCode(previewError)); }
@@ -446,7 +474,12 @@
     root.addEventListener("popstate", () => close(true));
     root.addEventListener("pagehide", () => { close(true); batch?.dispose(); batch = null; });
     root.addEventListener("offline", () => { if (!backdrop.hidden) { if (batch) { batch.cancel(); return; } stop(); results.replaceChildren(); status.textContent = explain("SNAPSHOT_OFFLINE"); retry.hidden = false; } });
-    root.addEventListener("tennisnote:excel-snapshot-changed", () => {
+    root.addEventListener("tennisnote:excel-snapshot-changed", event => {
+      // Only a same-scope informational roster refresh may leave remote work
+      // running. UI equality is NOT server proof; all authoritative/unknown
+      // invalidations still discard old generations and invalidate the batch.
+      if (event.detail?.kind === "roster-refresh" && event.detail.projectionChanged === false
+        && accessScope !== null && currentAccess() && remoteTransport?.isReady?.() === true) return;
       workPreparation = null; confirming = false;
       if (batch) { batch.invalidate(); return; }
       if (!backdrop.hidden) { stop(); results.replaceChildren(); status.textContent = explain("STALE_PREVIEW"); retry.hidden = false; }

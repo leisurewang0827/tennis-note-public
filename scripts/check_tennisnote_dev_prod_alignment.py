@@ -469,7 +469,7 @@ def restore_purchase_identity_source(path: str, source: str, identity: dict) -> 
 
 
 def restore_excel_retry_base(path: str, text: str) -> str:
-    """비공개 원본과 일치하는 재시도 수정만 역변환하며 기존 golden을 보존한다."""
+    """원본과 일치하는 retry/refresh 증분만 역변환하며 기존 golden을 보존한다."""
     port = json.loads((ROOT / "tests/fixtures/excel-retry-source-parity.json").read_text(encoding="utf-8"))
     row = next((item for item in port["files"] if item["path"] == path), None)
     if row is None:
