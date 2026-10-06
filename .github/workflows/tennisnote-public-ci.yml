@@ -9,6 +9,8 @@ on:
       - "scripts/check_cloudflare_build.py"
       - "scripts/verify.sh"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
+      - "scripts/check_tennisnote_dev_prod_alignment.py"
+      - "docs/tennisnote-dev-prod-alignment-20260916.json"
       - ".github/workflows/tennisnote-public-ci.yml"
       - ".github/workflows/deploy-cloudflare-pages.yml"
       - ".github/workflows/deploy-pages.yml"
@@ -22,6 +24,8 @@ on:
       - "scripts/check_cloudflare_build.py"
       - "scripts/verify.sh"
       - "scripts/check_tennisnote_coach_scope_runtime.cjs"
+      - "scripts/check_tennisnote_dev_prod_alignment.py"
+      - "docs/tennisnote-dev-prod-alignment-20260916.json"
       - ".github/workflows/tennisnote-public-ci.yml"
       - ".github/workflows/deploy-cloudflare-pages.yml"
       - ".github/workflows/deploy-pages.yml"
@@ -45,12 +49,20 @@ jobs:
       TENNISNOTE_BANK_TRANSFER_ENABLED: "true"
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
+      # 고정 운영 기준 blob과 로컬 검사에 쓰인 동일 브라우저 런타임을 준비한다.
+      - name: Prepare pinned browser runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/tennisnote-browser" --no-save --package-lock=false playwright@1.62.1
+          echo "NODE_PATH=$RUNNER_TEMP/tennisnote-browser/node_modules" >> "$GITHUB_ENV"
+          node "$RUNNER_TEMP/tennisnote-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit
       # 검증 명령은 scripts/verify.sh 한 곳에만 둔다.
       # 여기에 또 적으면 로컬과 CI 가 서로 어긋난다.
       - name: Verify

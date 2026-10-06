@@ -1103,8 +1103,11 @@ function bindEvents() {
 // Keep the first paint and background refresh focused on the screen the member
 // can actually see. The remaining screens are rendered when their menu opens.
 let memberLiveScheduleRefreshTimer = 0;
-let memberLiveScheduleRefreshInFlight = false;
-let memberLiveScheduleRefreshQueued = false;
+let memberLiveScheduleRefreshInFlight = null;
+let memberLiveScheduleLastRefreshKey = "";
+let memberHomeScheduleSnapshot = null;
+let memberHomeScheduleInFlight = null;
+let memberHomeScheduleEpoch = 0;
 let memberLiveScheduleLastRefreshAt = 0;
 let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;

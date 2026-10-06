@@ -322,6 +322,7 @@ function installMemberScheduleRevisionWatcher() {
     branchId: memberRevisionBranchId,
     active: () => !$("#appScreen")?.hidden,
     onChange: async () => {
+      invalidateMemberHomeSchedule();
       memberScheduleV2WorkspaceCache = null;
       memberLiveScheduleLastRefreshAt = 0;
       await refreshMemberLiveSchedule({ force: true, render: true });
@@ -333,6 +334,7 @@ function installMemberConnectivityStatus() {
   renderMemberConnectivityStatus(false);
   window.addEventListener("offline", () => renderMemberConnectivityStatus(false));
   window.addEventListener("online", () => {
+    invalidateMemberHomeSchedule();
     memberScheduleV2WorkspaceCache = null;
     memberLiveScheduleLastRefreshAt = 0;
     void refreshMemberLiveSchedule({ force: true, render: true }).finally(() => {
