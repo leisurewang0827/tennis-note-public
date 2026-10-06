@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
+import releaseGuard from "./helpers/production-excel-release.cjs";
 const norm = s => s.replace(/\r\n/g, "\n");
-const read = p => norm(fs.readFileSync(p, "utf8"));
+const read = p => releaseGuard.readBeforeRelease(p);
 const hash = s => crypto.createHash("sha256").update(s).digest("hex");
 const manifest = JSON.parse(read("tests/fixtures/production-excel-refresh-source.json"));
 const show = (revision, p) => norm(execFileSync("git", ["show", `${revision}:${p}`], { encoding: "utf8", maxBuffer: 8e6 }));
@@ -17,7 +18,7 @@ test("Excel 최소 조립: 운영 exact base·개발 authority·두 경로·10 h
   assert.deepEqual(manifest.products.map(p => p.path), paths);
   assert.deepEqual(manifest.products.map(p => p.hunks.length), [3,7]);
   const changed = execFileSync("git", ["diff", "--name-only", manifest.base, "--", "app"], { encoding: "utf8" }).trim().split("\n").sort();
-  assert.deepEqual(changed, paths.slice().sort());
+  assert.deepEqual(changed, [...new Set([...paths, ...releaseGuard.releasePaths])].sort());
   for (const p of manifest.products) {
     let source = show(manifest.base, p.path);
     assert.equal(hash(source), p.baseSha256);
@@ -49,4 +50,12 @@ test("Excel 최소 조립: 신규 RPC·template/onboarding/payment HOLD 없음·
   for (const path of ["app/release.json", "app/shared/tennisnote-release.js", "app/shared/tennisnote-data-client.js", "app/shared/tennisnote-single-sheet-batch.js", "app/shared/tennisnote-single-sheet-snapshot.js", "app/shared/tennisnote-single-sheet-transport.js", "app/shared/tennisnote-single-sheet-import.js", "app/shared/tennisnote-single-sheet-worker.js", "app/tennis-note-member-app/service-worker.js", "app/tennis-note-coach-app/service-worker.js", ".github/workflows/deploy-cloudflare-pages.yml", ".github/workflows/deploy-cloudflare-pages-dev.yml", "scripts/bump_release.py"]) assert.equal(read(path), show(manifest.base, path), path);
   assert.equal(JSON.parse(read("app/release.json")).version, "1.0.533");
   assert.equal(manifest.releaseUnchanged, true);
+});
+test("Excel 릴리스: 기능 checkpoint 이후 정확히 기존 script 371치환·13경로·native 불변", () => {
+  assert.equal(releaseGuard.releasePaths.length, 13);
+  assert.equal(releaseGuard.contract.version, "1.0.536");
+  assert.equal(releaseGuard.contract.memberCache, "tennis-note-member-pwa-v563");
+  assert.equal(releaseGuard.contract.coachCache, "tennis-note-coach-mode-v536");
+  assert.deepEqual(JSON.parse(norm(fs.readFileSync("app/release.json","utf8"))).nativePlatforms,
+    JSON.parse(show(manifest.base, "app/release.json")).nativePlatforms);
 });
