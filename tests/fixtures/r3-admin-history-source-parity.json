@@ -1,0 +1,211 @@
+{
+  "contract": "r3-admin-confirmed-history-projection-v1",
+  "mode": "admin-confirmed-history-read-only",
+  "privateSourceCommit": "ddb549c413c5e820c974bdaed73b351d9afb6981",
+  "publicBase": "25e81665eddfd0a9c85af70ee3bd4546c97fc08b",
+  "publicVersion": "1.0.538",
+  "files": [
+    {
+      "path": "app/admin/domain/billing.js",
+      "baseSha256": "5f03926fa787a6a42a77b7c234b7dc59889213506fe23e16c2b2a051c166ff26",
+      "candidateSha256": "c6e9157e9865ff07d05668382f4f2ed5557826272ad6d767b54ac56188817868",
+      "hunks": [
+        {
+          "start": 1210,
+          "end": 5953,
+          "before": "",
+          "after": "// 비공개 원본의 확정 이력 검증기. 금액 재계산·확정·응답·지급은 하지 않습니다.\nfunction adminHistoryScopeMatches(value, scope = adminSettlementHistoryScope()) {\n  const received = value?.scope || {};\n  return String(received.branchId || \"\") === scope.branchId\n    && String(received.coachRoleId || \"\") === scope.coachRoleId\n    && String(received.settlementMonth || \"\").slice(0, 10) === scope.settlementMonth;\n}\n\nfunction adminHistoryPayloadIsExact(value, scope = adminSettlementHistoryScope()) {\n  if (!value || typeof value !== \"object\" || Array.isArray(value) || !adminHistoryScopeMatches(value, scope)) return false;\n  const remoteState = String(value.state || \"\").toUpperCase();\n  if (remoteState === \"EMPTY\") {\n    return value.snapshot == null && value.confirmation == null && value.reconciliation == null;\n  }\n  if (![\"PENDING\", \"ACKNOWLEDGED\", \"DISPUTED\"].includes(remoteState)) return false;\n  const snapshot = value.snapshot || {};\n  const confirmation = value.confirmation || {};\n  const reconciliation = value.reconciliation;\n  const totals = snapshot.totals || {};\n  const displayedTotalsAreExact = [\n    totals.settledSessions,\n    totals.settledMinutes,\n    totals.totalSettlementAmount,\n  ].every((item) => typeof item === \"number\" && Number.isFinite(item) && item >= 0);\n  const exactSnapshot = Boolean(\n    snapshot.snapshotId\n    && Number.isInteger(snapshot.revision)\n    && snapshot.revision > 0\n    && String(snapshot.status || \"\").toLowerCase() === \"calculated\"\n    && [\"r3_monthly_settlement_v1\", \"r3_effective_settlement_v2\"].includes(String(snapshot.calculationVersion || \"\"))\n    && /^[0-9a-f]{64}$/i.test(String(snapshot.sourceFingerprint || \"\"))\n    && displayedTotalsAreExact\n    && confirmation.confirmationId\n    && String(confirmation.status || \"\").toLowerCase() === \"confirmed\"\n    && String(confirmation.confirmationVersion || \"\") === \"r3_monthly_settlement_confirmation_v1\"\n    && !Number.isNaN(Date.parse(String(confirmation.confirmedAt || \"\")))\n  );\n  if (!exactSnapshot) return false;\n  if (remoteState === \"PENDING\") return reconciliation == null;\n  const responseReason = normalizeAdminHistoryReason(reconciliation?.reason || \"\");\n  const responseIsExact = remoteState === \"ACKNOWLEDGED\"\n    ? !responseReason\n    : !adminHistoryReasonError(responseReason);\n  return Boolean(\n    reconciliation?.reconciliationId\n    && String(reconciliation.status || \"\").toUpperCase() === remoteState\n    && String(reconciliation.responseVersion || \"\") === \"r3_monthly_settlement_coach_reconciliation_v1\"\n    && !Number.isNaN(Date.parse(String(reconciliation.respondedAt || \"\")))\n    && responseIsExact\n  );\n}\n\nfunction adminHistoryReasonError(value = \"\") {\n  const reason = normalizeAdminHistoryReason(value);\n  const length = Array.from(reason).length;\n  if (length < 2 || length > 240) return \"이의 사유를 2~240자로 입력해 주세요.\";\n  if (\n    /[<>\\u0000-\\u001F\\u007F]/.test(reason)\n    || reason.includes(\"@\")\n    || /(?:https?:\\/\\/|www\\.|javascript:|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.test(reason)\n    || /\\d(?:[\\s().+\\-]*\\d){6,}/.test(reason)\n  ) return \"개인정보나 연락처·링크를 제외하고 확인할 항목만 적어 주세요.\";\n  return \"\";\n}\n\nfunction normalizeAdminHistoryReason(value = \"\") {\n  return String(value || \"\")\n    .normalize(\"NFKC\")\n    .replace(/[\\u200B-\\u200F\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]/g, \"\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nfunction adminSettlementHistoryScope() {\n  return { branchId: String(activeOperationBranchId() || \"\"), coachRoleId: String(adminSettlementHistory.coachRoleId || \"\"), settlementMonth: `${state.billingMonth}-01` };\n}\n\nfunction adminSettlementHistoryCoaches() {\n  const branchId = activeOperationBranchId();\n  const entries = operationBranchCoaches().filter((coach) => coach.serverRoleId && coach.branchId === branchId && coach.status !== \"inactive\");\n  if (new Set(entries.map((coach) => String(coach.serverRoleId))).size !== entries.length) return [];\n  return entries;\n}\n\nfunction adminSettlementHistoryScopeKey(scope = adminSettlementHistoryScope()) {\n  return [scope.branchId, scope.coachRoleId, scope.settlementMonth].join(\":\");\n}\n\nfunction adminSettlementHistoryPayloadIsExact(value, scope) {\n  if (value?.ok !== true || !adminHistoryScopeMatches(value, scope)) return false;\n  if (value.state === \"EMPTY\") return value.snapshot == null && value.confirmation == null && value.reconciliation == null;\n  // 계산만 된 스냅샷은 확정 이력으로 표시하지 않습니다.\n  if (value.state === \"CALCULATED\") return value.confirmation == null && value.reconciliation == null;\n  if (value.state !== \"CONFIRMED\") return false;\n  const responseState = value.reconciliation == null ? \"PENDING\" : String(value.reconciliation.status || \"\").toUpperCase();\n  return adminHistoryPayloadIsExact({ ...value, state: responseState }, scope);\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/data/billing.js",
+      "baseSha256": "a079920443e13321e6fce5b5b496baccff0121ee96bd59adbb45538211275b96",
+      "candidateSha256": "0507df1baf8060e141a73d7cd7bb3bafb243f265d1ef7d5eb0b016cf42ad87d3",
+      "hunks": [
+        {
+          "start": 22043,
+          "end": 25707,
+          "before": "",
+          "after": "// 확정 이력은 메모리에만 보관합니다. 미리보기와 저장 상태를 공유하지 않습니다.\nconst adminSettlementHistory = { coachRoleId: \"\", key: \"\", request: 0, loading: false, value: null, message: \"코치를 선택한 뒤 확정 이력을 조회해 주세요.\", sessionToken: \"\", profileId: \"\" };\n\nfunction resetAdminSettlementHistory() {\n  adminSettlementHistory.request += 1;\n  adminSettlementHistory.loading = false;\n  adminSettlementHistory.value = null;\n  adminSettlementHistory.key = \"\";\n  adminSettlementHistory.sessionToken = \"\";\n  adminSettlementHistory.profileId = \"\";\n  adminSettlementHistory.message = \"코치를 선택한 뒤 확정 이력을 조회해 주세요.\";\n}\n\nfunction adminSettlementHistoryAccessReady() {\n  return operationsRole() === \"admin\" && operationsAccessReady() && adminApprovalReady() && !adminPinNeedsSetup() && (!isAdminViewLocked(\"billing\") || isAdminUnlocked()) && !adminDemoMode;\n}\n\nasync function readMonthlySettlementConfirmation(scope, expectedSourceFingerprint = \"\") {\n  return window.TennisNoteDataClient.rpc(\"tn_admin_monthly_settlement_scope_state\", {\n    target_branch_id: scope.branchId,\n    target_coach_role_id: scope.coachRoleId,\n    target_month: scope.settlementMonth,\n    expected_source_fingerprint: expectedSourceFingerprint,\n  });\n}\n\nasync function refreshAdminSettlementHistory() {\n  const scope = adminSettlementHistoryScope();\n  const client = window.TennisNoteDataClient;\n  const token = client?.getSession?.()?.access_token || \"\";\n  const profileId = String(adminImportAuthState.profile?.id || \"\");\n  const eligible = adminSettlementHistoryCoaches().filter((coach) => String(coach.serverRoleId) === scope.coachRoleId);\n  if (!adminSettlementHistoryAccessReady() || !profileId || !token || !client?.rpc || eligible.length !== 1 || !/^\\d{4}-(0[1-9]|1[0-2])-01$/.test(scope.settlementMonth)) {\n    resetAdminSettlementHistory();\n    adminSettlementHistory.message = \"관리자 권한·잠금·지점과 정확한 코치를 먼저 확인해 주세요.\";\n    renderAdminSettlementHistory();\n    return false;\n  }\n  const key = adminSettlementHistoryScopeKey(scope);\n  if (adminSettlementHistory.loading && adminSettlementHistory.key === key && adminSettlementHistory.sessionToken === token && adminSettlementHistory.profileId === profileId) return false;\n  const request = ++adminSettlementHistory.request;\n  Object.assign(adminSettlementHistory, { key, loading: true, value: null, message: \"확정 이력을 확인하고 있습니다.\", sessionToken: token, profileId });\n  renderAdminSettlementHistory();\n  const current = () => request === adminSettlementHistory.request && key === adminSettlementHistoryScopeKey() && token === client.getSession?.()?.access_token && profileId === String(adminImportAuthState.profile?.id || \"\") && adminSettlementHistoryAccessReady() && adminSettlementHistoryCoaches().filter((coach) => String(coach.serverRoleId) === scope.coachRoleId).length === 1;\n  try {\n    const value = await readMonthlySettlementConfirmation(scope);\n    if (!current()) return false;\n    if (!adminSettlementHistoryPayloadIsExact(value, scope)) throw Error(\"history_scope_invalid\");\n    adminSettlementHistory.value = value.state === \"CONFIRMED\" ? value : null;\n    adminSettlementHistory.message = value.state === \"CONFIRMED\" ? \"확정 당시 계산본입니다. 현재 예상 정산과 구분되며 이 화면에서 확정·지급하지 않습니다.\" : value.state === \"CALCULATED\" ? \"계산본은 있으나 아직 확정되지 않았습니다.\" : \"선택한 월의 확정 이력이 없습니다.\";\n    return true;\n  } catch (error) {\n    if (current()) { adminSettlementHistory.value = null; adminSettlementHistory.message = \"확정 이력을 불러오지 못했습니다. 권한·네트워크와 대상 범위를 확인한 뒤 다시 조회해 주세요.\"; }\n    return false;\n  } finally {\n    if (request === adminSettlementHistory.request) {\n      if (!current()) resetAdminSettlementHistory();\n      adminSettlementHistory.loading = false;\n      renderAdminSettlementHistory();\n    }\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/views/billing.js",
+      "baseSha256": "3e94a84a4fd276fc70852c35a1912234ada746d0104f5ed3a2bbd7f4fa92e1cc",
+      "candidateSha256": "ac789b6fa0e27b201ace119b8dea85da53ff1269c4827cb6cbcc7e73ff732d85",
+      "hunks": [
+        {
+          "start": 190,
+          "end": 224,
+          "before": "",
+          "after": "  renderAdminSettlementHistory();\n"
+        },
+        {
+          "start": 38459,
+          "end": 41603,
+          "before": "",
+          "after": "function renderAdminSettlementHistory() {\n  const section = $(\"#adminSettlementHistory\");\n  if (!section) return;\n  const scope = adminSettlementHistoryScope();\n  const token = window.TennisNoteDataClient?.getSession?.()?.access_token || \"\";\n  const eligible = adminSettlementHistoryCoaches();\n  const ready = adminSettlementHistoryAccessReady() && Boolean(token) && Boolean(adminImportAuthState.profile?.id);\n  if (!ready || (adminSettlementHistory.key && (adminSettlementHistory.key !== adminSettlementHistoryScopeKey(scope) || adminSettlementHistory.sessionToken !== token || adminSettlementHistory.profileId !== String(adminImportAuthState.profile?.id || \"\"))) || (scope.coachRoleId && eligible.filter((coach) => String(coach.serverRoleId) === scope.coachRoleId).length !== 1)) resetAdminSettlementHistory();\n  const select = $(\"#adminSettlementHistoryCoach\");\n  const options = [{ serverRoleId: \"\", name: eligible.length ? \"코치 선택\" : \"조회 가능한 코치 없음\" }, ...eligible];\n  const optionKey = JSON.stringify(options.map((coach) => [String(coach.serverRoleId), String(coach.name || \"코치\")]));\n  if (select.dataset.options !== optionKey) {\n    select.replaceChildren(...options.map((coach) => {\n      const option = document.createElement(\"option\"); option.value = String(coach.serverRoleId); option.textContent = String(coach.name || \"코치\"); return option;\n    }));\n    select.dataset.options = optionKey;\n  }\n  select.value = scope.coachRoleId;\n  select.disabled = !ready || adminSettlementHistory.loading;\n  const button = $(\"#adminSettlementHistoryRead\");\n  button.disabled = !ready || !select.value || adminSettlementHistory.loading;\n  button.textContent = adminSettlementHistory.loading ? \"조회 중\" : \"확정 이력 조회\";\n  section.setAttribute(\"aria-busy\", String(adminSettlementHistory.loading));\n  $(\"#adminSettlementHistoryMessage\").textContent = !ready ? \"관리자 로그인과 잠금 해제 후 조회할 수 있습니다.\" : adminSettlementHistory.message;\n  const details = $(\"#adminSettlementHistoryDetails\");\n  details.replaceChildren();\n  const value = adminSettlementHistory.value;\n  details.hidden = !value;\n  if (!value) return;\n  const snapshot = value.snapshot;\n  const totals = snapshot.totals;\n  const rows = [\n    [\"확정 정산\", `${money.format(totals.totalSettlementAmount)}원`],\n    [\"진행 수업\", `${totals.settledSessions}회 · ${totals.settledMinutes}분`],\n    [\"계산 계약\", snapshot.calculationVersion === \"r3_monthly_settlement_v1\" ? \"기존 v1 계산본\" : \"적용일별 v2 계산본\"],\n    [\"계산본\", `revision ${snapshot.revision} · ${snapshot.sourceFingerprint.slice(0, 8)}`],\n    [\"확정 시각\", new Intl.DateTimeFormat(\"ko-KR\", { dateStyle: \"short\", timeStyle: \"short\", timeZone: \"Asia/Seoul\" }).format(new Date(value.confirmation.confirmedAt))],\n    [\"코치 응답\", value.reconciliation?.status === \"ACKNOWLEDGED\" ? \"확인 완료\" : value.reconciliation?.status === \"DISPUTED\" ? \"이의 접수\" : \"응답 대기\"],\n  ];\n  if (value.reconciliation?.reason) rows.push([\"이의 사유\", normalizeAdminHistoryReason(value.reconciliation.reason)]);\n  for (const [label, content] of rows) {\n    const dt = document.createElement(\"dt\"); const dd = document.createElement(\"dd\"); dt.textContent = label; dd.textContent = content; details.append(dt, dd);\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/events/billing.js",
+      "baseSha256": "f19f73fc1aa2d7820733edf446a9deb5b7f56f50d2f13dcad48b6354b1297703",
+      "candidateSha256": "d4edcd0e1947ec53ed7f2c3e99c12510a0f58f6ea11bf7ae224f5f90070cc182",
+      "hunks": [
+        {
+          "start": 292,
+          "end": 614,
+          "before": "",
+          "after": "  $(\"#adminSettlementHistoryCoach\")?.addEventListener(\"change\", (event) => {\n    resetAdminSettlementHistory();\n    adminSettlementHistory.coachRoleId = event.target.value;\n    renderAdminSettlementHistory();\n  });\n  $(\"#adminSettlementHistoryRead\")?.addEventListener(\"click\", () => void refreshAdminSettlementHistory());\n"
+        },
+        {
+          "start": 1579,
+          "end": 1614,
+          "before": "",
+          "after": "    resetAdminSettlementHistory();\n"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/index.html",
+      "baseSha256": "a076c2bf3eb8411bbb47471f711571c3d58bcb9eb330a6dbb4c7d1e300167001",
+      "candidateSha256": "ba1830be63462436ecd9017557986d71d5624111880bdaa20fc38ba4050fa3bf",
+      "hunks": [
+        {
+          "start": 63819,
+          "end": 64551,
+          "before": "",
+          "after": "              <section id=\"adminSettlementHistory\" class=\"admin-settlement-history\" aria-label=\"월 정산 확정 이력\" aria-busy=\"false\">\n                <h3>확정 이력 조회</h3>\n                <div class=\"admin-settlement-history-controls\">\n                  <label for=\"adminSettlementHistoryCoach\">대상 코치</label>\n                  <select id=\"adminSettlementHistoryCoach\"><option value=\"\">코치 선택</option></select>\n                  <button id=\"adminSettlementHistoryRead\" type=\"button\" class=\"ghost-button\" disabled>확정 이력 조회</button>\n                </div>\n                <p id=\"adminSettlementHistoryMessage\" role=\"status\">코치를 선택한 뒤 확정 이력을 조회해 주세요.</p>\n                <dl id=\"adminSettlementHistoryDetails\" hidden></dl>\n              </section>\n"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/styles.css",
+      "baseSha256": "1b2864003e36217f45a5a799cf6e97bc391ddb30b07d9f7b9d46eb965e2e6af7",
+      "candidateSha256": "31261d3e0beaf32905c8828938d24bebc4e5fc49eb2c5a540410a2769c4ec5d3",
+      "hunks": [
+        {
+          "start": 302163,
+          "end": 303146,
+          "before": "",
+          "after": "/* 기존 월 정산 상세 안의 읽기 전용 이력. 별도 메뉴·금융 행동 없음. */\n.admin-settlement-history { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line, #ddd); min-width: 0; }\n.admin-settlement-history-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }\n.admin-settlement-history-controls label { grid-column: 1 / -1; }\n.admin-settlement-history-controls select { width: 100%; min-height: 44px; font-size: 16px; min-width: 0; max-width: 100%; }\n.admin-settlement-history-controls button { min-height: 44px; white-space: normal; }\n.admin-settlement-history p, .admin-settlement-history dd { overflow-wrap: anywhere; }\n.admin-settlement-history dl { display: grid; grid-template-columns: minmax(70px, 1fr) minmax(0, 2fr); gap: 8px; }\n.admin-settlement-history dl[hidden] { display: none; }\n.admin-settlement-history dd { margin: 0; }\n@media (max-width: 600px) { .admin-settlement-history-controls { grid-template-columns: minmax(0, 1fr); } }\n"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/actions/report.js",
+      "baseSha256": "25ecce951e4dd8a1d56cd67d288defd7572bfa1a3b6f96d0c459550250112eee",
+      "candidateSha256": "91bff9799c2129112408ec8f3f5072e191cb5fbb7f71cfd2822dc6e926323810",
+      "hunks": [
+        {
+          "start": 4219,
+          "end": 4286,
+          "before": "",
+          "after": "  resetAdminSettlementHistory();\n  renderAdminSettlementHistory();\n"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "coachSettlementReconciliationScopeMatches",
+      "sourcePath": "90-Dashboard/tennis-note-coach-app/app.js",
+      "privateSha256": "925de90f77c9d6699e9d1205b43153b8b0dad5b5c02fead133184fda4311ccd4",
+      "privateSource": "function coachSettlementReconciliationScopeMatches(value, scope = coachSettlementReconciliationScope()) {\n  const received = value?.scope || {};\n  return String(received.branchId || \"\") === scope.branchId\n    && String(received.coachRoleId || \"\") === scope.coachRoleId\n    && String(received.settlementMonth || \"\").slice(0, 10) === scope.settlementMonth;\n}",
+      "transforms": [
+        [
+          "coachSettlementReconciliationScope()",
+          "adminSettlementHistoryScope()"
+        ],
+        [
+          "coachSettlementReconciliation",
+          "adminHistory"
+        ],
+        [
+          "normalizeCoachSettlementReconciliationReason",
+          "normalizeAdminHistoryReason"
+        ]
+      ],
+      "target": "app/admin/domain/billing.js",
+      "projectedSha256": "f53143ddd6fbf465949a918da6145207e9137d333643d1449655da6a37c414aa"
+    },
+    {
+      "name": "normalizeCoachSettlementReconciliationReason",
+      "sourcePath": "90-Dashboard/tennis-note-coach-app/app.js",
+      "privateSha256": "41d0dbdc7a4ace35f0b11329705b87d18ee1dc300981500f23ab705372be9064",
+      "privateSource": "function normalizeCoachSettlementReconciliationReason(value = \"\") {\n  return String(value || \"\")\n    .normalize(\"NFKC\")\n    .replace(/[\\u200B-\\u200F\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]/g, \"\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}",
+      "transforms": [
+        [
+          "coachSettlementReconciliationScope()",
+          "adminSettlementHistoryScope()"
+        ],
+        [
+          "coachSettlementReconciliation",
+          "adminHistory"
+        ],
+        [
+          "normalizeCoachSettlementReconciliationReason",
+          "normalizeAdminHistoryReason"
+        ]
+      ],
+      "target": "app/admin/domain/billing.js",
+      "projectedSha256": "0fb671602924515e3bed07fc32dc2b08063b744db5c6268ab4a311353ea5f679"
+    },
+    {
+      "name": "coachSettlementReconciliationReasonError",
+      "sourcePath": "90-Dashboard/tennis-note-coach-app/app.js",
+      "privateSha256": "7391c026932cba6458ef4f39e430c06bba199e92e1dd42034cc655721ed0542d",
+      "privateSource": "function coachSettlementReconciliationReasonError(value = \"\") {\n  const reason = normalizeCoachSettlementReconciliationReason(value);\n  const length = Array.from(reason).length;\n  if (length < 2 || length > 240) return \"이의 사유를 2~240자로 입력해 주세요.\";\n  if (\n    /[<>\\u0000-\\u001F\\u007F]/.test(reason)\n    || reason.includes(\"@\")\n    || /(?:https?:\\/\\/|www\\.|javascript:|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.test(reason)\n    || /\\d(?:[\\s().+\\-]*\\d){6,}/.test(reason)\n  ) return \"개인정보나 연락처·링크를 제외하고 확인할 항목만 적어 주세요.\";\n  return \"\";\n}",
+      "transforms": [
+        [
+          "coachSettlementReconciliationScope()",
+          "adminSettlementHistoryScope()"
+        ],
+        [
+          "coachSettlementReconciliation",
+          "adminHistory"
+        ],
+        [
+          "normalizeCoachSettlementReconciliationReason",
+          "normalizeAdminHistoryReason"
+        ]
+      ],
+      "target": "app/admin/domain/billing.js",
+      "projectedSha256": "7e0bf3c762db154dccedc54d8ecc9baaaba971f30caa32276b3dabac3d61ffa8"
+    },
+    {
+      "name": "coachSettlementReconciliationPayloadIsExact",
+      "sourcePath": "90-Dashboard/tennis-note-coach-app/app.js",
+      "privateSha256": "3b001d095dce4a1415b7487af796673d73b5245246e76b5bdbebf311f2117bb7",
+      "privateSource": "function coachSettlementReconciliationPayloadIsExact(value, scope = coachSettlementReconciliationScope()) {\n  if (!value || typeof value !== \"object\" || Array.isArray(value) || !coachSettlementReconciliationScopeMatches(value, scope)) return false;\n  const remoteState = String(value.state || \"\").toUpperCase();\n  if (remoteState === \"EMPTY\") {\n    return value.snapshot == null && value.confirmation == null && value.reconciliation == null;\n  }\n  if (![\"PENDING\", \"ACKNOWLEDGED\", \"DISPUTED\"].includes(remoteState)) return false;\n  const snapshot = value.snapshot || {};\n  const confirmation = value.confirmation || {};\n  const reconciliation = value.reconciliation;\n  const totals = snapshot.totals || {};\n  const displayedTotalsAreExact = [\n    totals.settledSessions,\n    totals.settledMinutes,\n    totals.totalSettlementAmount,\n  ].every((item) => typeof item === \"number\" && Number.isFinite(item) && item >= 0);\n  const exactSnapshot = Boolean(\n    snapshot.snapshotId\n    && Number.isInteger(snapshot.revision)\n    && snapshot.revision > 0\n    && String(snapshot.status || \"\").toLowerCase() === \"calculated\"\n    && [\"r3_monthly_settlement_v1\", \"r3_effective_settlement_v2\"].includes(String(snapshot.calculationVersion || \"\"))\n    && /^[0-9a-f]{64}$/i.test(String(snapshot.sourceFingerprint || \"\"))\n    && displayedTotalsAreExact\n    && confirmation.confirmationId\n    && String(confirmation.status || \"\").toLowerCase() === \"confirmed\"\n    && String(confirmation.confirmationVersion || \"\") === \"r3_monthly_settlement_confirmation_v1\"\n    && !Number.isNaN(Date.parse(String(confirmation.confirmedAt || \"\")))\n  );\n  if (!exactSnapshot) return false;\n  if (remoteState === \"PENDING\") return reconciliation == null;\n  const responseReason = normalizeCoachSettlementReconciliationReason(reconciliation?.reason || \"\");\n  const responseIsExact = remoteState === \"ACKNOWLEDGED\"\n    ? !responseReason\n    : !coachSettlementReconciliationReasonError(responseReason);\n  return Boolean(\n    reconciliation?.reconciliationId\n    && String(reconciliation.status || \"\").toUpperCase() === remoteState\n    && String(reconciliation.responseVersion || \"\") === \"r3_monthly_settlement_coach_reconciliation_v1\"\n    && !Number.isNaN(Date.parse(String(reconciliation.respondedAt || \"\")))\n    && responseIsExact\n  );\n}",
+      "transforms": [
+        [
+          "coachSettlementReconciliationScope()",
+          "adminSettlementHistoryScope()"
+        ],
+        [
+          "coachSettlementReconciliation",
+          "adminHistory"
+        ],
+        [
+          "normalizeCoachSettlementReconciliationReason",
+          "normalizeAdminHistoryReason"
+        ]
+      ],
+      "target": "app/admin/domain/billing.js",
+      "projectedSha256": "10138354a5361729ccbfe776064df5aef908f1e283a74dbcb1b3a6ed7157a841"
+    },
+    {
+      "name": "readMonthlySettlementConfirmation",
+      "sourcePath": "90-Dashboard/tennis-note-prototype/app.js",
+      "privateSha256": "8bfd6cdff7fabaf1ade8a3383181b3a5711719370baef5513637d73805835829",
+      "privateSource": "async function readMonthlySettlementConfirmation(scope, expectedSourceFingerprint = \"\") {\n  return window.TennisNoteDataClient.rpc(\"tn_admin_monthly_settlement_scope_state\", {\n    target_branch_id: scope.branchId,\n    target_coach_role_id: scope.coachRoleId,\n    target_month: scope.settlementMonth,\n    expected_source_fingerprint: expectedSourceFingerprint,\n  });\n}",
+      "transforms": [],
+      "target": "app/admin/data/billing.js",
+      "projectedSha256": "8bfd6cdff7fabaf1ade8a3383181b3a5711719370baef5513637d73805835829"
+    }
+  ]
+}

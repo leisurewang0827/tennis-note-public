@@ -131,6 +131,8 @@ async function signOutAdminImport() {
     profile: null,
     message: "로그아웃되었습니다. 서버 검증은 관리자 로그인 후 가능합니다.",
   });
+  resetAdminSettlementHistory();
+  renderAdminSettlementHistory();
   localStorage.removeItem(storageKey);
   renderOperationsLoginGate();
   renderDataTools();

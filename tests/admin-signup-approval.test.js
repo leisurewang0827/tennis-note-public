@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { withoutPurchaseIdentity } from "./helpers/purchase-identity-port.js";
+import adminHistoryPort from "./helpers/r3-admin-history-port.cjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const sha = text => createHash("sha256").update(text).digest("hex");
@@ -67,7 +68,7 @@ test("readback, privilege, exact scope and payload-bound retry contract", () => 
 test("44px correction is limited to signup approval buttons, preserving other CSS", () => {
   // 이번 재시도 블록만 exact hash/역변환으로 제거하고 기존 가입 승인 golden은 보존한다.
   const retry = JSON.parse(read("tests/fixtures/excel-retry-source-parity.json")).files.find(row => row.path === "app/admin/styles.css");
-  let source = read("app/admin/styles.css");
+  let source = adminHistoryPort.restore("app/admin/styles.css", read("app/admin/styles.css"));
   assert.equal(sha(source), retry.candidateSha256);
   for (const hunk of [...retry.hunks].reverse()) {
     assert.equal(source.split(hunk.after).length, 2);

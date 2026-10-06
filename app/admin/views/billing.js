@@ -5,6 +5,7 @@
 // DOM 을 만지므로 domain/ 과 달리 단위 테스트 대상은 아니다.
 
 function renderCoachSettlementPreview() {
+  renderAdminSettlementHistory();
   if (!["billing", "settings"].includes(state.view)) return;
   if (!adminDemoMode) {
     const signature = effectiveSettlementPreviewSignature();
@@ -659,4 +660,48 @@ function renderEffectiveSettlementPreview() {
         <td>날짜별 조건 · 월 최종 반올림</td><td>${money.format(row.estimatedSettlement)}원</td></tr>`;
     }).join("") || '<tr><td colspan="6">선택한 달의 계산 근거가 없습니다.</td></tr>';
   renderDashboardPager("#coachSettlementPreviewPager", items.length, state.settlementPage, "settlement", billingPageSize);
+}
+function renderAdminSettlementHistory() {
+  const section = $("#adminSettlementHistory");
+  if (!section) return;
+  const scope = adminSettlementHistoryScope();
+  const token = window.TennisNoteDataClient?.getSession?.()?.access_token || "";
+  const eligible = adminSettlementHistoryCoaches();
+  const ready = adminSettlementHistoryAccessReady() && Boolean(token) && Boolean(adminImportAuthState.profile?.id);
+  if (!ready || (adminSettlementHistory.key && (adminSettlementHistory.key !== adminSettlementHistoryScopeKey(scope) || adminSettlementHistory.sessionToken !== token || adminSettlementHistory.profileId !== String(adminImportAuthState.profile?.id || ""))) || (scope.coachRoleId && eligible.filter((coach) => String(coach.serverRoleId) === scope.coachRoleId).length !== 1)) resetAdminSettlementHistory();
+  const select = $("#adminSettlementHistoryCoach");
+  const options = [{ serverRoleId: "", name: eligible.length ? "코치 선택" : "조회 가능한 코치 없음" }, ...eligible];
+  const optionKey = JSON.stringify(options.map((coach) => [String(coach.serverRoleId), String(coach.name || "코치")]));
+  if (select.dataset.options !== optionKey) {
+    select.replaceChildren(...options.map((coach) => {
+      const option = document.createElement("option"); option.value = String(coach.serverRoleId); option.textContent = String(coach.name || "코치"); return option;
+    }));
+    select.dataset.options = optionKey;
+  }
+  select.value = scope.coachRoleId;
+  select.disabled = !ready || adminSettlementHistory.loading;
+  const button = $("#adminSettlementHistoryRead");
+  button.disabled = !ready || !select.value || adminSettlementHistory.loading;
+  button.textContent = adminSettlementHistory.loading ? "조회 중" : "확정 이력 조회";
+  section.setAttribute("aria-busy", String(adminSettlementHistory.loading));
+  $("#adminSettlementHistoryMessage").textContent = !ready ? "관리자 로그인과 잠금 해제 후 조회할 수 있습니다." : adminSettlementHistory.message;
+  const details = $("#adminSettlementHistoryDetails");
+  details.replaceChildren();
+  const value = adminSettlementHistory.value;
+  details.hidden = !value;
+  if (!value) return;
+  const snapshot = value.snapshot;
+  const totals = snapshot.totals;
+  const rows = [
+    ["확정 정산", `${money.format(totals.totalSettlementAmount)}원`],
+    ["진행 수업", `${totals.settledSessions}회 · ${totals.settledMinutes}분`],
+    ["계산 계약", snapshot.calculationVersion === "r3_monthly_settlement_v1" ? "기존 v1 계산본" : "적용일별 v2 계산본"],
+    ["계산본", `revision ${snapshot.revision} · ${snapshot.sourceFingerprint.slice(0, 8)}`],
+    ["확정 시각", new Intl.DateTimeFormat("ko-KR", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value.confirmation.confirmedAt))],
+    ["코치 응답", value.reconciliation?.status === "ACKNOWLEDGED" ? "확인 완료" : value.reconciliation?.status === "DISPUTED" ? "이의 접수" : "응답 대기"],
+  ];
+  if (value.reconciliation?.reason) rows.push(["이의 사유", normalizeAdminHistoryReason(value.reconciliation.reason)]);
+  for (const [label, content] of rows) {
+    const dt = document.createElement("dt"); const dd = document.createElement("dd"); dt.textContent = label; dd.textContent = content; details.append(dt, dd);
+  }
 }

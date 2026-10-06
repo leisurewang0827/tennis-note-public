@@ -66,3 +66,22 @@ private 동일 SHA의 exact payload validator·안전한 textContent 렌더를 �
 의도된 현실화: 새 정산 메뉴·확정/응답 단계·독립 지급 카드를 만들지 않고 기존 sheet 안에 확정 이력만 배치한다.
 자동 browser는 합성 transport만 사용한다. Android/iPhone·signed 관리자 및 nonempty 실제 코치 화면은 별도 NOT VERIFIED.
 개발 게시 승인 범위와 운영 실사용 GO는 다르다. 환불 재분배 HOLD·owner gate OFF를 유지한다.
+# 관리자 확정 이력 읽기 전용 연결 (2026-10-07)
+
+기존 회원·결제의 월 정산 상세 안에서 정확한 코치 역할과 선택 월을 조회한다.
+`tn_admin_monthly_settlement_scope_state`만 호출하며 계산본 생성·확정·응답·지급은
+노출하지 않는다. EMPTY와 CALCULATED는 금액 0인 확정 이력으로 꾸미지 않는다.
+확정 당시 금액은 현재 미리보기와 분리한다. 잠금·로그아웃·세션/프로필/지점/월
+변경과 역할 중복 시 기존 이력을 지우고 응답을 폐기한다.
+
+private `ddb549c4`의 코치 검증기 4개와 관리자 읽기 함수 1개를 이름/기본 scope만
+명시적으로 변환한다. `tests/fixtures/r3-admin-history-source-parity.json`은 해당
+원본 함수 및 공개 7자산의 exact 해시와 inverse hunk를 고정한다. 기존 코치 이력과
+미리보기/golden 앞에 새 inverse를 적용하며 과거 기대 해시는 바꾸지 않는다.
+
+추적: SETTLE-01(V6 immutable snapshot), BRANCH-02(이미지 58, 정확한 지점과
+적용기간), NFR-01/02/04/06/07(이미지 66). 이미지 59는 플랫폼 기능 atlas이며
+관리자 월 정산 화면의 픽셀 설계로 주장하지 않는다. 별도 메뉴/주 행동/단계표 없음.
+`tests/r3-admin-history.test.js`와 기존 R3 실제 modular browser harness가
+관리자·코치 동일 확정본, PIN/권한, 중복 조회, 늦은 응답, 안전 DOM 및 전체 폭을 검사한다.
+합성 browser PASS는 실제 관리자 PIN/계정, 실제 기기, 실제 운영 정산 완료가 아니다.

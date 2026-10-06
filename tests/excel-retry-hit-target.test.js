@@ -10,7 +10,7 @@ test("엑셀 재시도 제품 두 파일은 승인된 원본 및 역변환 hash�
   assert.equal(port.privateSource, "4238abf216250e429885174dda0011c18f2928dc");
   assert.equal(port.files.length, 3);
   for (const row of port.files) {
-    let text = read(row.path);
+    let text = require("./helpers/r3-admin-history-port.cjs").restore(row.path, read(row.path));
     assert.equal(hash(text), row.candidateSha256);
     for (const hunk of [...row.hunks].reverse()) {
       assert.equal(text.split(hunk.after).length, 2);

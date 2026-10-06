@@ -16602,3 +16602,14 @@ html[data-theme="dark"] #singleSheetPreviewModal {
   opacity: 1;
   cursor: not-allowed;
 }
+/* 기존 월 정산 상세 안의 읽기 전용 이력. 별도 메뉴·금융 행동 없음. */
+.admin-settlement-history { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line, #ddd); min-width: 0; }
+.admin-settlement-history-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.admin-settlement-history-controls label { grid-column: 1 / -1; }
+.admin-settlement-history-controls select { width: 100%; min-height: 44px; font-size: 16px; min-width: 0; max-width: 100%; }
+.admin-settlement-history-controls button { min-height: 44px; white-space: normal; }
+.admin-settlement-history p, .admin-settlement-history dd { overflow-wrap: anywhere; }
+.admin-settlement-history dl { display: grid; grid-template-columns: minmax(70px, 1fr) minmax(0, 2fr); gap: 8px; }
+.admin-settlement-history dl[hidden] { display: none; }
+.admin-settlement-history dd { margin: 0; }
+@media (max-width: 600px) { .admin-settlement-history-controls { grid-template-columns: minmax(0, 1fr); } }
