@@ -22,7 +22,8 @@ function context() {
   return c;
 }
 test("admin history exact canonical validators/read RPC and baseline inverse",()=>{
-  for(const entry of manifest.files) { const current=read(entry.path);assert.equal(sha(restore(entry.path,current)),entry.baseSha256);assert.throws(()=>restore(entry.path,current+"// drift")); }
+  const version=JSON.parse(read("app/release.json")).version;
+  for(const entry of manifest.files) { const current=read(entry.path);assert.equal(sha(restore(entry.path,current).replaceAll(version,manifest.publicVersion)),entry.baseSha256);assert.throws(()=>restore(entry.path,current+"// drift")); }
   for(const entry of manifest.functions) {
     assert.equal(sha(entry.privateSource),entry.privateSha256);
     let projected=entry.privateSource;for(const [before,after] of entry.transforms) projected=projected.replaceAll(before,after);
