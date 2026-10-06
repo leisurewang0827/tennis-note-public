@@ -1,0 +1,289 @@
+{
+  "contract": "r3-coach-history-projection-v1",
+  "mode": "coach-confirmed-history-read-only",
+  "privateSourceCommit": "ddb549c413c5e820c974bdaed73b351d9afb6981",
+  "privateSourcePath": "90-Dashboard/tennis-note-coach-app/app.js",
+  "publicBase": "e982f9aca9fd85e0965252cfbf5f4fbe954032d0",
+  "publicVersion": "1.0.537",
+  "files": [
+    {
+      "path": "app/tennis-note-coach-app/data/auth.js",
+      "baseSha256": "a5324c42c593f8bf2a98346ae7394df2d05dd3a1666ef754e312b15398c87d18",
+      "candidateSha256": "2107f87e20881427ca9923550d65ecb28eb76cfa93d25fbb7932dbe5fdf120c4",
+      "hunks": [
+        {
+          "start": 393,
+          "end": 427,
+          "before": "",
+          "after": "\n  resetCoachSettlementHistory();\n"
+        },
+        {
+          "start": 1528,
+          "end": 1653,
+          "before": "  if (!session?.access_token) return false;\n",
+          "after": "  if (!session?.access_token) {\n    resetCoachSettlementHistory();\n    renderCoachSettlementHistory();\n    return false;\n  }\n"
+        },
+        {
+          "start": 1805,
+          "end": 1880,
+          "before": "",
+          "after": "      resetCoachSettlementHistory();\n      renderCoachSettlementHistory();\n"
+        },
+        {
+          "start": 3380,
+          "end": 3447,
+          "before": "",
+          "after": "  resetCoachSettlementHistory();\n  renderCoachSettlementHistory();\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/data/sync.js",
+      "baseSha256": "cc9a2bdba459d01c942a4929323d661017b7c3bd499b1377a9981222006e2759",
+      "candidateSha256": "4138443747f310b7a49eb2c43a072fd1d91831ae9df5a62b916a7a24ecee637d",
+      "hunks": [
+        {
+          "start": 39067,
+          "end": 43363,
+          "before": "",
+          "after": "// Never persisted: historical ledger state is authoritative only for this live session/scope.\nconst coachSettlementHistory = {\n  coachSettlementReconciliationRequestId: 0,\n  coachSettlementReconciliation: null,\n  coachSettlementReconciliationUiState: \"EMPTY\",\n  coachSettlementReconciliationLoading: false,\n  coachSettlementReconciliationMessage: \"\",\n};\nlet coachSettlementHistoryPending = null;\n\nfunction resetCoachSettlementHistory() {\n  coachSettlementHistory.coachSettlementReconciliationRequestId += 1;\n  coachSettlementHistory.coachSettlementReconciliation = null;\n  coachSettlementHistory.coachSettlementReconciliationUiState = \"EMPTY\";\n  coachSettlementHistory.coachSettlementReconciliationLoading = false;\n  coachSettlementHistory.coachSettlementReconciliationMessage = \"\";\n  coachSettlementHistoryPending = null;\n}\n\nasync function readCoachSettlementHistory(scope = coachSettlementReconciliationScope()) {\n  return window.TennisNoteDataClient.rpc(\"tn_coach_monthly_settlement_reconciliation_state\", {\n    target_branch_id: scope.branchId,\n    target_coach_role_id: scope.coachRoleId,\n    target_month: scope.settlementMonth,\n  });\n}\n\nasync function syncCoachSettlementHistoryFromServer() {\n  const client = window.TennisNoteDataClient;\n  const scope = coachSettlementReconciliationScope();\n  const profileId = String(state.liveProfileId || \"\");\n  const session = client?.getSession?.()?.access_token;\n  const signature = coachSettlementReconciliationScopeSignature(scope);\n  // Token stays in memory and is never logged, serialized or attached to a receipt.\n  const isCurrent = () => profileId === String(state.liveProfileId || \"\")\n    && signature === coachSettlementReconciliationScopeSignature()\n    && session === client?.getSession?.()?.access_token;\n  if (!profileId || !scope.branchId || !scope.coachRoleId || !client?.rpc || !session) {\n    resetCoachSettlementHistory();\n    coachSettlementHistory.coachSettlementReconciliationUiState = \"ERROR\";\n    coachSettlementHistory.coachSettlementReconciliationMessage = \"현재 담당 코치 권한과 지점을 확인한 뒤 다시 시도해 주세요.\";\n    renderCoachSettlementHistory();\n    return false;\n  }\n  if (coachSettlementHistoryPending?.signature === signature\n    && coachSettlementHistoryPending.profileId === profileId\n    && coachSettlementHistoryPending.session === session) return coachSettlementHistoryPending.promise;\n  const requestId = ++coachSettlementHistory.coachSettlementReconciliationRequestId;\n  coachSettlementHistory.coachSettlementReconciliation = null;\n  coachSettlementHistory.coachSettlementReconciliationLoading = true;\n  coachSettlementHistory.coachSettlementReconciliationUiState = \"LOADING\";\n  coachSettlementHistory.coachSettlementReconciliationMessage = \"\";\n  renderCoachSettlementHistory();\n  const promise = (async () => {\n    try {\n      const raw = await readCoachSettlementHistory(scope);\n      const result = Array.isArray(raw) ? raw[0] || null : raw;\n      if (requestId !== coachSettlementHistory.coachSettlementReconciliationRequestId || !isCurrent()) return false;\n      if (!coachSettlementReconciliationPayloadIsExact(result, scope)) throw Error(\"settlement_reconciliation_scope_mismatch\");\n      coachSettlementHistory.coachSettlementReconciliation = result;\n      coachSettlementHistory.coachSettlementReconciliationUiState = String(result.state).toUpperCase();\n      return true;\n    } catch (error) {\n      if (requestId !== coachSettlementHistory.coachSettlementReconciliationRequestId || !isCurrent()) return false;\n      const contract = coachSettlementReconciliationErrorContract(error);\n      coachSettlementHistory.coachSettlementReconciliation = null;\n      coachSettlementHistory.coachSettlementReconciliationUiState = contract.state;\n      coachSettlementHistory.coachSettlementReconciliationMessage = contract.message;\n      return false;\n    } finally {\n      if (requestId === coachSettlementHistory.coachSettlementReconciliationRequestId) {\n        if (!isCurrent()) resetCoachSettlementHistory();\n        else {\n          coachSettlementHistory.coachSettlementReconciliationLoading = false;\n          coachSettlementHistoryPending = null;\n        }\n        renderCoachSettlementHistory();\n      }\n    }\n  })();\n  coachSettlementHistoryPending = { signature, profileId, session, promise };\n  return promise;\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/domain/settlement.js",
+      "baseSha256": "7edb8b9a99553a3f39dfec2cd401f694126d7036cf38aaa293ce520f0756ea73",
+      "candidateSha256": "e4edf9e539a92bf7db2c3308b9c76f56eb81dde884901d8973bfb5d65a6006fd",
+      "hunks": [
+        {
+          "start": 3873,
+          "end": 10315,
+          "before": "",
+          "after": "\n// Private canonical validators: immutable confirmed history, no client calculation.\nfunction coachSettlementReconciliationScopeMatches(value, scope = coachSettlementReconciliationScope()) {\n  const received = value?.scope || {};\n  return String(received.branchId || \"\") === scope.branchId\n    && String(received.coachRoleId || \"\") === scope.coachRoleId\n    && String(received.settlementMonth || \"\").slice(0, 10) === scope.settlementMonth;\n}\n\nfunction normalizeCoachSettlementReconciliationReason(value = \"\") {\n  return String(value || \"\")\n    .normalize(\"NFKC\")\n    .replace(/[\\u200B-\\u200F\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]/g, \"\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nfunction coachSettlementReconciliationReasonError(value = \"\") {\n  const reason = normalizeCoachSettlementReconciliationReason(value);\n  const length = Array.from(reason).length;\n  if (length < 2 || length > 240) return \"이의 사유를 2~240자로 입력해 주세요.\";\n  if (\n    /[<>\\u0000-\\u001F\\u007F]/.test(reason)\n    || reason.includes(\"@\")\n    || /(?:https?:\\/\\/|www\\.|javascript:|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.test(reason)\n    || /\\d(?:[\\s().+\\-]*\\d){6,}/.test(reason)\n  ) return \"개인정보나 연락처·링크를 제외하고 확인할 항목만 적어 주세요.\";\n  return \"\";\n}\n\nfunction coachSettlementReconciliationPayloadIsExact(value, scope = coachSettlementReconciliationScope()) {\n  if (!value || typeof value !== \"object\" || Array.isArray(value) || !coachSettlementReconciliationScopeMatches(value, scope)) return false;\n  const remoteState = String(value.state || \"\").toUpperCase();\n  if (remoteState === \"EMPTY\") {\n    return value.snapshot == null && value.confirmation == null && value.reconciliation == null;\n  }\n  if (![\"PENDING\", \"ACKNOWLEDGED\", \"DISPUTED\"].includes(remoteState)) return false;\n  const snapshot = value.snapshot || {};\n  const confirmation = value.confirmation || {};\n  const reconciliation = value.reconciliation;\n  const totals = snapshot.totals || {};\n  const displayedTotalsAreExact = [\n    totals.settledSessions,\n    totals.settledMinutes,\n    totals.totalSettlementAmount,\n  ].every((item) => typeof item === \"number\" && Number.isFinite(item) && item >= 0);\n  const exactSnapshot = Boolean(\n    snapshot.snapshotId\n    && Number.isInteger(snapshot.revision)\n    && snapshot.revision > 0\n    && String(snapshot.status || \"\").toLowerCase() === \"calculated\"\n    && [\"r3_monthly_settlement_v1\", \"r3_effective_settlement_v2\"].includes(String(snapshot.calculationVersion || \"\"))\n    && /^[0-9a-f]{64}$/i.test(String(snapshot.sourceFingerprint || \"\"))\n    && displayedTotalsAreExact\n    && confirmation.confirmationId\n    && String(confirmation.status || \"\").toLowerCase() === \"confirmed\"\n    && String(confirmation.confirmationVersion || \"\") === \"r3_monthly_settlement_confirmation_v1\"\n    && !Number.isNaN(Date.parse(String(confirmation.confirmedAt || \"\")))\n  );\n  if (!exactSnapshot) return false;\n  if (remoteState === \"PENDING\") return reconciliation == null;\n  const responseReason = normalizeCoachSettlementReconciliationReason(reconciliation?.reason || \"\");\n  const responseIsExact = remoteState === \"ACKNOWLEDGED\"\n    ? !responseReason\n    : !coachSettlementReconciliationReasonError(responseReason);\n  return Boolean(\n    reconciliation?.reconciliationId\n    && String(reconciliation.status || \"\").toUpperCase() === remoteState\n    && String(reconciliation.responseVersion || \"\") === \"r3_monthly_settlement_coach_reconciliation_v1\"\n    && !Number.isNaN(Date.parse(String(reconciliation.respondedAt || \"\")))\n    && responseIsExact\n  );\n}\n\nfunction coachSettlementReconciliationErrorContract(error) {\n  const raw = String(error?.payload?.message || error?.payload?.code || error?.message || \"\").toLowerCase();\n  if (raw.includes(\"reason_length\") || raw.includes(\"reason_sensitive\") || raw.includes(\"acknowledgement_reason\")) {\n    return {\n      state: \"PENDING\",\n      message: \"이의 사유를 안전한 내용으로 수정한 뒤 다시 저장해 주세요.\",\n      validation: raw.includes(\"reason_sensitive\")\n        ? \"개인정보나 연락처·링크를 제외하고 확인할 항목만 적어 주세요.\"\n        : \"이의 사유를 2~240자로 입력해 주세요.\",\n    };\n  }\n  if (raw.includes(\"stale\") || raw.includes(\"revision\") || raw.includes(\"source_mismatch\") || raw.includes(\"source_fingerprint\")) {\n    return {\n      state: \"STALE\",\n      message: \"관리자 확정 계산본이 변경되었습니다. 최신 상태를 다시 확인해 주세요.\",\n      validation: \"\",\n    };\n  }\n  if (\n    raw.includes(\"conflict\")\n    || raw.includes(\"operation_key_reused\")\n    || raw.includes(\"scope_mismatch\")\n    || raw.includes(\"already\")\n  ) {\n    return {\n      state: \"CONFLICT\",\n      message: \"다른 화면의 응답과 상태가 겹쳤습니다. 서버 상태를 다시 확인해 주세요.\",\n      validation: \"\",\n    };\n  }\n  if (raw.includes(\"approved_coach_scope_required\") || raw.includes(\"authentication_required\") || raw.includes(\"forbidden\")) {\n    return {\n      state: \"ERROR\",\n      message: \"현재 담당 코치 권한과 지점을 확인할 수 없습니다. 다시 로그인한 뒤 확인해 주세요.\",\n      validation: \"\",\n    };\n  }\n  if (raw.includes(\"pgrst202\") || raw.includes(\"tn_coach_monthly_settlement_reconciliation\")) {\n    return {\n      state: \"ERROR\",\n      message: \"코치 정산 확인 기능을 업데이트하는 중입니다. 잠시 후 다시 확인해 주세요.\",\n      validation: \"\",\n    };\n  }\n  return {\n    state: \"ERROR\",\n    message: \"확정 정산 상태를 불러오지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.\",\n    validation: \"\",\n  };\n}\n\nfunction coachSettlementReconciliationStateLabel(value = coachSettlementHistory.coachSettlementReconciliationUiState) {\n  return ({\n    EMPTY: \"확정 대기\",\n    LOADING: \"확인 중\",\n    PENDING: \"응답 대기\",\n    ACKNOWLEDGED: \"확인 완료\",\n    DISPUTED: \"이의 접수\",\n    STALE: \"다시 확인 필요\",\n    CONFLICT: \"상태 확인 필요\",\n    ERROR: \"불러오기 실패\",\n  })[String(value || \"\").toUpperCase()] || \"확정 대기\";\n}\n\nfunction coachSettlementReconciliationTimeLabel(value = \"\") {\n  const parsed = new Date(value);\n  return Number.isNaN(parsed.getTime())\n    ? \"시각 확인 필요\"\n    : new Intl.DateTimeFormat(\"ko-KR\", {\n      year: \"numeric\",\n      month: \"numeric\",\n      day: \"numeric\",\n      hour: \"2-digit\",\n      minute: \"2-digit\",\n    }).format(parsed);\n}\n\nfunction coachSettlementReconciliationDefaultMessage(uiState) {\n  return ({\n    EMPTY: \"선택한 월의 관리자 확정 내역이 없습니다. 예상 정산과는 별도입니다.\",\n    LOADING: \"관리자가 확정한 월 정산을 확인하고 있습니다.\",\n    PENDING: \"관리자가 확정한 계산본입니다. 이 화면은 이력 조회만 제공하며 응답·확정·지급은 하지 않습니다.\",\n    ACKNOWLEDGED: \"관리자 확정 정산을 확인했다고 응답했습니다.\",\n    DISPUTED: \"이의 사유를 관리자에게 전달했습니다.\",\n    STALE: \"관리자 확정 계산본이 변경되었습니다. 최신 상태를 다시 확인해 주세요.\",\n    CONFLICT: \"다른 화면의 응답과 상태가 겹쳤습니다. 서버 상태를 다시 확인해 주세요.\",\n    ERROR: \"확정 정산 상태를 불러오지 못했습니다. 다시 확인해 주세요.\",\n  })[uiState] || \"관리자 확정 정산을 확인하고 있습니다.\";\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/events/account.js",
+      "baseSha256": "23467afa3d35e40b8641de2a6623fc78cc666f60340cbc9a4a870c3fe8a5de10",
+      "candidateSha256": "c534031384838287248c1a8ee14155b2fb0d633cf16d7731b2d93ff6afb92bee",
+      "hunks": [
+        {
+          "start": 1369,
+          "end": 1491,
+          "before": "",
+          "after": "  $(\"#coachSettlementReconciliationRetry\")?.addEventListener(\"click\", () => void syncCoachSettlementHistoryFromServer());\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/events/delegated.js",
+      "baseSha256": "75889b9fe503c27ac5e72d0b8814533a587a87132e60b954024bd3779f00a0b5",
+      "candidateSha256": "86f42195c5cb68d0e40a6cadb4b1af55353c94dc0416cdac5fbcdb89fc23e26e",
+      "hunks": [
+        {
+          "start": 173,
+          "end": 468,
+          "before": "",
+          "after": "  const refreshVisibleHistory = () => {\n    if (!document.hidden && $(\"#coachSettlementModal\")?.hidden === false) void syncCoachSettlementHistoryFromServer();\n  };\n  window.addEventListener(\"focus\", refreshVisibleHistory);\n  document.addEventListener(\"visibilitychange\", refreshVisibleHistory);\n"
+        },
+        {
+          "start": 621,
+          "end": 658,
+          "before": "",
+          "after": "      resetCoachSettlementHistory();\n"
+        },
+        {
+          "start": 795,
+          "end": 846,
+          "before": "",
+          "after": "      void syncCoachSettlementHistoryFromServer();\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/index.html",
+      "baseSha256": "7e972f87032fcac340f48e5b6453bd2f621b779d2d0182457f9c01ce7799c80b",
+      "candidateSha256": "56c5615d0a5ff4655910bf57b8cdf9aecb2482baffc4a79a594bb4fb03054cb1",
+      "hunks": [
+        {
+          "start": 17245,
+          "end": 17973,
+          "before": "",
+          "after": "          <section id=\"coachSettlementReconciliation\" class=\"coach-settlement-history\" aria-label=\"관리자 확정 정산 이력\">\n            <div class=\"coach-settlement-history-head\">\n              <strong>관리자 확정 내역</strong>\n              <span id=\"coachSettlementReconciliationStateBadge\">확정 대기</span>\n            </div>\n            <p>현재 예상액과 별도인 확정 계산본입니다. 조건 변경은 과거 확정액을 바꾸지 않습니다.</p>\n            <p id=\"coachSettlementReconciliationMessage\" role=\"status\" aria-live=\"polite\"></p>\n            <div id=\"coachSettlementReconciliationSummary\" class=\"coach-settlement-history-summary\" hidden></div>\n            <button id=\"coachSettlementReconciliationRetry\" class=\"small-button\" type=\"button\" hidden>확정 내역 다시 확인</button>\n          </section>\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/styles.css",
+      "baseSha256": "754d95f61fb0ad31ea752424c91c862bc7d2c06c9eca47959bf84c9e3d7dc058",
+      "candidateSha256": "0e2d8663b0ddee797f58210a5197cd90000125627015d9c66e5b8bbae41a8232",
+      "hunks": [
+        {
+          "start": 112731,
+          "end": 114503,
+          "before": "",
+          "after": "\n/* Existing settlement sheet: confirmed history is separate from the effective preview. */\n.coach-settlement-history { display: grid; gap: 8px; border-top: 1px solid var(--line); margin-top: 16px; padding-top: 16px; min-width: 0; overflow-wrap: anywhere; }\n.coach-settlement-history-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }\n.coach-settlement-history-head span { border-radius: 999px; padding: 5px 9px; color: var(--muted); background: var(--wash); font-size: 12px; font-weight: 900; }\n.coach-settlement-history p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }\n.coach-settlement-history-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }\n.coach-settlement-history-summary[hidden] { display: none; }\n.coach-settlement-history-summary > div { display: grid; gap: 4px; min-width: 0; border-radius: 9px; padding: 10px; background: color-mix(in srgb, var(--paper) 90%, var(--soft-green)); }\n.coach-settlement-history-summary span, .coach-settlement-history-summary small { color: var(--muted); font-size: 12px; }\n.coach-settlement-history-summary strong { color: var(--ink); font-size: 16px; }\n.coach-settlement-history-summary-reason, .coach-settlement-reconciliation-summary-reason, .coach-settlement-reconciliation-summary-response { grid-column: 1 / -1; }\n.coach-settlement-history button { min-height: 44px; font-size: 16px; white-space: normal; }\n#coachSettlementModal button[data-close-coach-settlement] { min-height: 44px; font-size: 16px; }\n#coachSettlementModal #coachSettlementMonth { min-height: 44px; font-size: 16px; }\n@media (max-width: 430px) { .coach-settlement-history-summary { grid-template-columns: minmax(0, 1fr); } }\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/ui/screens.js",
+      "baseSha256": "07a6fe08865e1037781c624f1053ea5c15fb8b44f42cacb1424048cb5a735548",
+      "candidateSha256": "429524325fed95538cfbfa73eda73312433432aa7fcf248673b964f1440f21c9",
+      "hunks": [
+        {
+          "start": 5186,
+          "end": 5233,
+          "before": "",
+          "after": "  void syncCoachSettlementHistoryFromServer();\n"
+        },
+        {
+          "start": 5275,
+          "end": 5342,
+          "before": "",
+          "after": "  resetCoachSettlementHistory();\n  renderCoachSettlementHistory();\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-coach-app/views/settlement.js",
+      "baseSha256": "472ed09496a86c30ad5756a341f579d26b0cab6e73a78b07bd30164aadfe19a3",
+      "candidateSha256": "f1591a08460b848188af0245704a892e30f6f5e46a19f840e412fd24f40d3de6",
+      "hunks": [
+        {
+          "start": 4268,
+          "end": 4302,
+          "before": "",
+          "after": "  renderCoachSettlementHistory();\n"
+        },
+        {
+          "start": 4304,
+          "end": 7584,
+          "before": "",
+          "after": "\n// Read-only extraction: response form and write controls intentionally not exported.\nfunction renderCoachSettlementHistory() {\n  const section = $(\"#coachSettlementReconciliation\");\n  if (!section) return;\n  const uiState = String(coachSettlementHistory.coachSettlementReconciliationUiState || \"EMPTY\").toUpperCase();\n  const payload = coachSettlementHistory.coachSettlementReconciliation || {};\n  const snapshot = payload.snapshot || null;\n  const confirmation = payload.confirmation || null;\n  const reconciliation = payload.reconciliation || null;\n  const payloadIsExact = coachSettlementReconciliationPayloadIsExact(payload);\n  const busy = coachSettlementHistory.coachSettlementReconciliationLoading;\n  section.dataset.state = uiState;\n  section.setAttribute(\"aria-busy\", String(busy));\n  const badge = $(\"#coachSettlementReconciliationStateBadge\");\n  if (badge) badge.textContent = coachSettlementReconciliationStateLabel(uiState);\n  const message = $(\"#coachSettlementReconciliationMessage\");\n  if (message) message.textContent = coachSettlementHistory.coachSettlementReconciliationMessage || coachSettlementReconciliationDefaultMessage(uiState);\n\n  const summary = $(\"#coachSettlementReconciliationSummary\");\n  if (summary) {\n    summary.innerHTML = \"\";\n    summary.hidden = !payloadIsExact || !snapshot || !confirmation;\n    if (payloadIsExact && snapshot && confirmation) {\n      const appendSummary = (label, value, detail, className = \"\") => {\n        const item = document.createElement(\"div\");\n        if (className) item.className = className;\n        const labelNode = document.createElement(\"span\");\n        const valueNode = document.createElement(\"strong\");\n        const detailNode = document.createElement(\"small\");\n        labelNode.textContent = label;\n        valueNode.textContent = value;\n        detailNode.textContent = detail;\n        item.append(labelNode, valueNode, detailNode);\n        summary.appendChild(item);\n      };\n      const month = String(payload.scope?.settlementMonth || \"\").slice(0, 7);\n      const [year, monthNumber] = month.split(\"-\");\n      appendSummary(\"확정 월\", year && monthNumber ? `${Number(year)}년 ${Number(monthNumber)}월` : \"월 확인 필요\", `${Number(snapshot.revision) || 0}차 계산본 · ${snapshot.calculationVersion === \"r3_effective_settlement_v2\" ? \"적용일별 v2\" : \"기존 v1\"}`);\n      appendSummary(\"정산 진행\", `${Number(snapshot.totals?.settledSessions) || 0}회`, `${Number(snapshot.totals?.settledMinutes) || 0}분`);\n      appendSummary(\"확정 정산액\", formatCoachWon(snapshot.totals?.totalSettlementAmount), `관리자 확인 ${coachSettlementReconciliationTimeLabel(confirmation.confirmedAt)}`);\n      if (uiState === \"DISPUTED\" && reconciliation?.reason) {\n        appendSummary(\"이의 사유\", String(reconciliation.reason), `응답 ${coachSettlementReconciliationTimeLabel(reconciliation.respondedAt)}`, \"coach-settlement-reconciliation-summary-reason\");\n      } else if (uiState === \"ACKNOWLEDGED\") {\n        appendSummary(\"코치 응답\", \"확인했습니다\", coachSettlementReconciliationTimeLabel(reconciliation?.respondedAt), \"coach-settlement-reconciliation-summary-response\");\n      }\n    }\n  }\n\n  const retry = $(\"#coachSettlementReconciliationRetry\");\n  if (retry) {\n    retry.hidden = ![\"STALE\", \"CONFLICT\", \"ERROR\"].includes(uiState);\n    retry.disabled = busy;\n  }\n}\n"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "coachSettlementReconciliationScopeMatches",
+      "privateName": "coachSettlementReconciliationScopeMatches",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "privateSha256": "925de90f77c9d6699e9d1205b43153b8b0dad5b5c02fead133184fda4311ccd4",
+      "privateSource": "function coachSettlementReconciliationScopeMatches(value, scope = coachSettlementReconciliationScope()) {\n  const received = value?.scope || {};\n  return String(received.branchId || \"\") === scope.branchId\n    && String(received.coachRoleId || \"\") === scope.coachRoleId\n    && String(received.settlementMonth || \"\").slice(0, 10) === scope.settlementMonth;\n}",
+      "projectedSha256": "925de90f77c9d6699e9d1205b43153b8b0dad5b5c02fead133184fda4311ccd4",
+      "transforms": []
+    },
+    {
+      "name": "normalizeCoachSettlementReconciliationReason",
+      "privateName": "normalizeCoachSettlementReconciliationReason",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "privateSha256": "41d0dbdc7a4ace35f0b11329705b87d18ee1dc300981500f23ab705372be9064",
+      "privateSource": "function normalizeCoachSettlementReconciliationReason(value = \"\") {\n  return String(value || \"\")\n    .normalize(\"NFKC\")\n    .replace(/[\\u200B-\\u200F\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]/g, \"\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}",
+      "projectedSha256": "41d0dbdc7a4ace35f0b11329705b87d18ee1dc300981500f23ab705372be9064",
+      "transforms": []
+    },
+    {
+      "name": "coachSettlementReconciliationReasonError",
+      "privateName": "coachSettlementReconciliationReasonError",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "privateSha256": "7391c026932cba6458ef4f39e430c06bba199e92e1dd42034cc655721ed0542d",
+      "privateSource": "function coachSettlementReconciliationReasonError(value = \"\") {\n  const reason = normalizeCoachSettlementReconciliationReason(value);\n  const length = Array.from(reason).length;\n  if (length < 2 || length > 240) return \"이의 사유를 2~240자로 입력해 주세요.\";\n  if (\n    /[<>\\u0000-\\u001F\\u007F]/.test(reason)\n    || reason.includes(\"@\")\n    || /(?:https?:\\/\\/|www\\.|javascript:|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.test(reason)\n    || /\\d(?:[\\s().+\\-]*\\d){6,}/.test(reason)\n  ) return \"개인정보나 연락처·링크를 제외하고 확인할 항목만 적어 주세요.\";\n  return \"\";\n}",
+      "projectedSha256": "7391c026932cba6458ef4f39e430c06bba199e92e1dd42034cc655721ed0542d",
+      "transforms": []
+    },
+    {
+      "name": "coachSettlementReconciliationPayloadIsExact",
+      "privateName": "coachSettlementReconciliationPayloadIsExact",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "privateSha256": "3b001d095dce4a1415b7487af796673d73b5245246e76b5bdbebf311f2117bb7",
+      "privateSource": "function coachSettlementReconciliationPayloadIsExact(value, scope = coachSettlementReconciliationScope()) {\n  if (!value || typeof value !== \"object\" || Array.isArray(value) || !coachSettlementReconciliationScopeMatches(value, scope)) return false;\n  const remoteState = String(value.state || \"\").toUpperCase();\n  if (remoteState === \"EMPTY\") {\n    return value.snapshot == null && value.confirmation == null && value.reconciliation == null;\n  }\n  if (![\"PENDING\", \"ACKNOWLEDGED\", \"DISPUTED\"].includes(remoteState)) return false;\n  const snapshot = value.snapshot || {};\n  const confirmation = value.confirmation || {};\n  const reconciliation = value.reconciliation;\n  const totals = snapshot.totals || {};\n  const displayedTotalsAreExact = [\n    totals.settledSessions,\n    totals.settledMinutes,\n    totals.totalSettlementAmount,\n  ].every((item) => typeof item === \"number\" && Number.isFinite(item) && item >= 0);\n  const exactSnapshot = Boolean(\n    snapshot.snapshotId\n    && Number.isInteger(snapshot.revision)\n    && snapshot.revision > 0\n    && String(snapshot.status || \"\").toLowerCase() === \"calculated\"\n    && [\"r3_monthly_settlement_v1\", \"r3_effective_settlement_v2\"].includes(String(snapshot.calculationVersion || \"\"))\n    && /^[0-9a-f]{64}$/i.test(String(snapshot.sourceFingerprint || \"\"))\n    && displayedTotalsAreExact\n    && confirmation.confirmationId\n    && String(confirmation.status || \"\").toLowerCase() === \"confirmed\"\n    && String(confirmation.confirmationVersion || \"\") === \"r3_monthly_settlement_confirmation_v1\"\n    && !Number.isNaN(Date.parse(String(confirmation.confirmedAt || \"\")))\n  );\n  if (!exactSnapshot) return false;\n  if (remoteState === \"PENDING\") return reconciliation == null;\n  const responseReason = normalizeCoachSettlementReconciliationReason(reconciliation?.reason || \"\");\n  const responseIsExact = remoteState === \"ACKNOWLEDGED\"\n    ? !responseReason\n    : !coachSettlementReconciliationReasonError(responseReason);\n  return Boolean(\n    reconciliation?.reconciliationId\n    && String(reconciliation.status || \"\").toUpperCase() === remoteState\n    && String(reconciliation.responseVersion || \"\") === \"r3_monthly_settlement_coach_reconciliation_v1\"\n    && !Number.isNaN(Date.parse(String(reconciliation.respondedAt || \"\")))\n    && responseIsExact\n  );\n}",
+      "projectedSha256": "3b001d095dce4a1415b7487af796673d73b5245246e76b5bdbebf311f2117bb7",
+      "transforms": []
+    },
+    {
+      "name": "coachSettlementReconciliationErrorContract",
+      "privateName": "coachSettlementReconciliationErrorContract",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "privateSha256": "1edbed766c622e7b1a9ca9f3a641a418d2b2ad16750d372867dd1e190de7afbd",
+      "privateSource": "function coachSettlementReconciliationErrorContract(error) {\n  const raw = String(error?.payload?.message || error?.payload?.code || error?.message || \"\").toLowerCase();\n  if (raw.includes(\"reason_length\") || raw.includes(\"reason_sensitive\") || raw.includes(\"acknowledgement_reason\")) {\n    return {\n      state: \"PENDING\",\n      message: \"이의 사유를 안전한 내용으로 수정한 뒤 다시 저장해 주세요.\",\n      validation: raw.includes(\"reason_sensitive\")\n        ? \"개인정보나 연락처·링크를 제외하고 확인할 항목만 적어 주세요.\"\n        : \"이의 사유를 2~240자로 입력해 주세요.\",\n    };\n  }\n  if (raw.includes(\"stale\") || raw.includes(\"revision\") || raw.includes(\"source_mismatch\") || raw.includes(\"source_fingerprint\")) {\n    return {\n      state: \"STALE\",\n      message: \"관리자 확정 계산본이 변경되었습니다. 최신 상태를 다시 확인해 주세요.\",\n      validation: \"\",\n    };\n  }\n  if (\n    raw.includes(\"conflict\")\n    || raw.includes(\"operation_key_reused\")\n    || raw.includes(\"scope_mismatch\")\n    || raw.includes(\"already\")\n  ) {\n    return {\n      state: \"CONFLICT\",\n      message: \"다른 화면의 응답과 상태가 겹쳤습니다. 서버 상태를 다시 확인해 주세요.\",\n      validation: \"\",\n    };\n  }\n  if (raw.includes(\"approved_coach_scope_required\") || raw.includes(\"authentication_required\") || raw.includes(\"forbidden\")) {\n    return {\n      state: \"ERROR\",\n      message: \"현재 담당 코치 권한과 지점을 확인할 수 없습니다. 다시 로그인한 뒤 확인해 주세요.\",\n      validation: \"\",\n    };\n  }\n  if (raw.includes(\"pgrst202\") || raw.includes(\"tn_coach_monthly_settlement_reconciliation\")) {\n    return {\n      state: \"ERROR\",\n      message: \"코치 정산 확인 기능을 업데이트하는 중입니다. 잠시 후 다시 확인해 주세요.\",\n      validation: \"\",\n    };\n  }\n  return {\n    state: \"ERROR\",\n    message: \"확정 정산 상태를 불러오지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.\",\n    validation: \"\",\n  };\n}",
+      "projectedSha256": "1edbed766c622e7b1a9ca9f3a641a418d2b2ad16750d372867dd1e190de7afbd",
+      "transforms": []
+    },
+    {
+      "name": "coachSettlementReconciliationStateLabel",
+      "privateName": "coachSettlementReconciliationStateLabel",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "privateSha256": "c0961ae3c69f5a4d201b1d82ce1a794758d2d63046101a2343f62588f616919b",
+      "privateSource": "function coachSettlementReconciliationStateLabel(value = state.coachSettlementReconciliationUiState) {\n  return ({\n    EMPTY: \"확정 대기\",\n    LOADING: \"확인 중\",\n    PENDING: \"응답 대기\",\n    ACKNOWLEDGED: \"확인 완료\",\n    DISPUTED: \"이의 접수\",\n    STALE: \"다시 확인 필요\",\n    CONFLICT: \"상태 확인 필요\",\n    ERROR: \"불러오기 실패\",\n  })[String(value || \"\").toUpperCase()] || \"확정 대기\";\n}",
+      "projectedSha256": "dd62fef5343c6980396056fabea9e8d5486f9f379a1218f6390b9f8808eb1902",
+      "transforms": [
+        {
+          "before": "function coachSettlementReconciliationStateLabel(value = state.coachSettlementReconciliationUiState) {\n  return ({\n    EMPTY: \"확정 대기\",\n    LOADING: \"확인 중\",\n    PENDING: \"응답 대기\",\n    ACKNOWLEDGED: \"확인 완료\",\n    DISPUTED: \"이의 접수\",\n    STALE: \"다시 확인 필요\",\n    CONFLICT: \"상태 확인 필요\",\n    ERROR: \"불러오기 실패\",\n  })[String(value || \"\").toUpperCase()] || \"확정 대기\";\n}",
+          "after": "function coachSettlementReconciliationStateLabel(value = coachSettlementHistory.coachSettlementReconciliationUiState) {\n  return ({\n    EMPTY: \"확정 대기\",\n    LOADING: \"확인 중\",\n    PENDING: \"응답 대기\",\n    ACKNOWLEDGED: \"확인 완료\",\n    DISPUTED: \"이의 접수\",\n    STALE: \"다시 확인 필요\",\n    CONFLICT: \"상태 확인 필요\",\n    ERROR: \"불러오기 실패\",\n  })[String(value || \"\").toUpperCase()] || \"확정 대기\";\n}",
+          "reason": "memory-only state alias; read-only wording; render removes form/submit/month lock, adds version label; read function rename only"
+        }
+      ]
+    },
+    {
+      "name": "coachSettlementReconciliationTimeLabel",
+      "privateName": "coachSettlementReconciliationTimeLabel",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "privateSha256": "996f5069ae6184ec4bc4af23bc5bd32989b7948f30b34c164d27395feca5f025",
+      "privateSource": "function coachSettlementReconciliationTimeLabel(value = \"\") {\n  const parsed = new Date(value);\n  return Number.isNaN(parsed.getTime())\n    ? \"시각 확인 필요\"\n    : new Intl.DateTimeFormat(\"ko-KR\", {\n      year: \"numeric\",\n      month: \"numeric\",\n      day: \"numeric\",\n      hour: \"2-digit\",\n      minute: \"2-digit\",\n    }).format(parsed);\n}",
+      "projectedSha256": "996f5069ae6184ec4bc4af23bc5bd32989b7948f30b34c164d27395feca5f025",
+      "transforms": []
+    },
+    {
+      "name": "coachSettlementReconciliationDefaultMessage",
+      "privateName": "coachSettlementReconciliationDefaultMessage",
+      "target": "app/tennis-note-coach-app/domain/settlement.js",
+      "privateSha256": "31bd798bf2170b7424bd69830c886639a107e6fe7154df0ef610c977e459d3e4",
+      "privateSource": "function coachSettlementReconciliationDefaultMessage(uiState) {\n  return ({\n    EMPTY: \"관리자가 이 월의 정산을 확정하면 여기에서 응답할 수 있습니다.\",\n    LOADING: \"관리자가 확정한 월 정산을 확인하고 있습니다.\",\n    PENDING: \"관리자 확정 계산본입니다. 월·횟수·정산액을 확인한 뒤 한 번만 응답해 주세요.\",\n    ACKNOWLEDGED: \"관리자 확정 정산을 확인했다고 응답했습니다.\",\n    DISPUTED: \"이의 사유를 관리자에게 전달했습니다.\",\n    STALE: \"관리자 확정 계산본이 변경되었습니다. 최신 상태를 다시 확인해 주세요.\",\n    CONFLICT: \"다른 화면의 응답과 상태가 겹쳤습니다. 서버 상태를 다시 확인해 주세요.\",\n    ERROR: \"확정 정산 상태를 불러오지 못했습니다. 다시 확인해 주세요.\",\n  })[uiState] || \"관리자 확정 정산을 확인하고 있습니다.\";\n}",
+      "projectedSha256": "2faa977e07660bd872b23e57edbec19cb985bb484f6a7647db6e457f2ad6117e",
+      "transforms": [
+        {
+          "before": "function coachSettlementReconciliationDefaultMessage(uiState) {\n  return ({\n    EMPTY: \"관리자가 이 월의 정산을 확정하면 여기에서 응답할 수 있습니다.\",\n    LOADING: \"관리자가 확정한 월 정산을 확인하고 있습니다.\",\n    PENDING: \"관리자 확정 계산본입니다. 월·횟수·정산액을 확인한 뒤 한 번만 응답해 주세요.\",\n    ACKNOWLEDGED: \"관리자 확정 정산을 확인했다고 응답했습니다.\",\n    DISPUTED: \"이의 사유를 관리자에게 전달했습니다.\",\n    STALE: \"관리자 확정 계산본이 변경되었습니다. 최신 상태를 다시 확인해 주세요.\",\n    CONFLICT: \"다른 화면의 응답과 상태가 겹쳤습니다. 서버 상태를 다시 확인해 주세요.\",\n    ERROR: \"확정 정산 상태를 불러오지 못했습니다. 다시 확인해 주세요.\",\n  })[uiState] || \"관리자 확정 정산을 확인하고 있습니다.\";\n}",
+          "after": "function coachSettlementReconciliationDefaultMessage(uiState) {\n  return ({\n    EMPTY: \"선택한 월의 관리자 확정 내역이 없습니다. 예상 정산과는 별도입니다.\",\n    LOADING: \"관리자가 확정한 월 정산을 확인하고 있습니다.\",\n    PENDING: \"관리자가 확정한 계산본입니다. 이 화면은 이력 조회만 제공하며 응답·확정·지급은 하지 않습니다.\",\n    ACKNOWLEDGED: \"관리자 확정 정산을 확인했다고 응답했습니다.\",\n    DISPUTED: \"이의 사유를 관리자에게 전달했습니다.\",\n    STALE: \"관리자 확정 계산본이 변경되었습니다. 최신 상태를 다시 확인해 주세요.\",\n    CONFLICT: \"다른 화면의 응답과 상태가 겹쳤습니다. 서버 상태를 다시 확인해 주세요.\",\n    ERROR: \"확정 정산 상태를 불러오지 못했습니다. 다시 확인해 주세요.\",\n  })[uiState] || \"관리자 확정 정산을 확인하고 있습니다.\";\n}",
+          "reason": "memory-only state alias; read-only wording; render removes form/submit/month lock, adds version label; read function rename only"
+        }
+      ]
+    },
+    {
+      "name": "renderCoachSettlementHistory",
+      "privateName": "renderCoachSettlementReconciliation",
+      "target": "app/tennis-note-coach-app/views/settlement.js",
+      "privateSha256": "5fb13deb518d866a20cbcece2274cb023c239d409f923b796013803b9ddfd78c",
+      "privateSource": "function renderCoachSettlementReconciliation() {\n  const section = $(\"#coachSettlementReconciliation\");\n  if (!section) return;\n  const uiState = String(state.coachSettlementReconciliationUiState || \"EMPTY\").toUpperCase();\n  const payload = state.coachSettlementReconciliation || {};\n  const snapshot = payload.snapshot || null;\n  const confirmation = payload.confirmation || null;\n  const reconciliation = payload.reconciliation || null;\n  const payloadIsExact = coachSettlementReconciliationPayloadIsExact(payload);\n  const busy = state.coachSettlementReconciliationLoading || state.coachSettlementReconciliationSubmitting;\n  const monthInput = $(\"#coachSettlementMonth\");\n  if (monthInput) monthInput.disabled = busy;\n  section.dataset.state = uiState;\n  section.setAttribute(\"aria-busy\", String(busy));\n  const badge = $(\"#coachSettlementReconciliationStateBadge\");\n  if (badge) badge.textContent = coachSettlementReconciliationStateLabel(uiState);\n  const message = $(\"#coachSettlementReconciliationMessage\");\n  if (message) message.textContent = state.coachSettlementReconciliationMessage || coachSettlementReconciliationDefaultMessage(uiState);\n\n  const summary = $(\"#coachSettlementReconciliationSummary\");\n  if (summary) {\n    summary.innerHTML = \"\";\n    summary.hidden = !payloadIsExact || !snapshot || !confirmation;\n    if (payloadIsExact && snapshot && confirmation) {\n      const appendSummary = (label, value, detail, className = \"\") => {\n        const item = document.createElement(\"div\");\n        if (className) item.className = className;\n        const labelNode = document.createElement(\"span\");\n        const valueNode = document.createElement(\"strong\");\n        const detailNode = document.createElement(\"small\");\n        labelNode.textContent = label;\n        valueNode.textContent = value;\n        detailNode.textContent = detail;\n        item.append(labelNode, valueNode, detailNode);\n        summary.appendChild(item);\n      };\n      const month = String(payload.scope?.settlementMonth || \"\").slice(0, 7);\n      const [year, monthNumber] = month.split(\"-\");\n      appendSummary(\"확정 월\", year && monthNumber ? `${Number(year)}년 ${Number(monthNumber)}월` : \"월 확인 필요\", `${Number(snapshot.revision) || 0}차 계산본`);\n      appendSummary(\"정산 진행\", `${Number(snapshot.totals?.settledSessions) || 0}회`, `${Number(snapshot.totals?.settledMinutes) || 0}분`);\n      appendSummary(\"확정 정산액\", formatCoachWon(snapshot.totals?.totalSettlementAmount), `관리자 확인 ${coachSettlementReconciliationTimeLabel(confirmation.confirmedAt)}`);\n      if (uiState === \"DISPUTED\" && reconciliation?.reason) {\n        appendSummary(\"이의 사유\", String(reconciliation.reason), `응답 ${coachSettlementReconciliationTimeLabel(reconciliation.respondedAt)}`, \"coach-settlement-reconciliation-summary-reason\");\n      } else if (uiState === \"ACKNOWLEDGED\") {\n        appendSummary(\"코치 응답\", \"확인했습니다\", coachSettlementReconciliationTimeLabel(reconciliation?.respondedAt), \"coach-settlement-reconciliation-summary-response\");\n      }\n    }\n  }\n\n  const form = $(\"#coachSettlementReconciliationForm\");\n  const canRespond = uiState === \"PENDING\"\n    && payloadIsExact\n    && !payload.reconciliation;\n  if (form) {\n    form.hidden = !canRespond;\n    form.querySelectorAll('input[name=\"coachSettlementReconciliationChoice\"]').forEach((input) => {\n      input.checked = input.value === state.coachSettlementReconciliationChoice;\n      input.disabled = busy;\n    });\n  }\n  const reasonField = $(\"#coachSettlementReconciliationReasonField\");\n  if (reasonField) reasonField.hidden = !canRespond || state.coachSettlementReconciliationChoice !== \"disputed\";\n  const reasonInput = $(\"#coachSettlementReconciliationReason\");\n  if (reasonInput) {\n    if (reasonInput.value !== state.coachSettlementReconciliationReason) reasonInput.value = state.coachSettlementReconciliationReason;\n    reasonInput.disabled = busy;\n  }\n  const validation = $(\"#coachSettlementReconciliationValidation\");\n  if (validation) {\n    validation.hidden = !state.coachSettlementReconciliationValidation;\n    validation.textContent = state.coachSettlementReconciliationValidation;\n  }\n  const submit = $(\"#coachSettlementReconciliationSubmit\");\n  if (submit) {\n    const reasonError = state.coachSettlementReconciliationChoice === \"disputed\"\n      ? coachSettlementReconciliationReasonError(state.coachSettlementReconciliationReason)\n      : \"\";\n    submit.textContent = state.coachSettlementReconciliationSubmitting ? \"응답 저장 중\" : \"응답 저장\";\n    submit.disabled = !canRespond\n      || busy\n      || ![\"acknowledged\", \"disputed\"].includes(state.coachSettlementReconciliationChoice)\n      || Boolean(reasonError);\n  }\n  const retry = $(\"#coachSettlementReconciliationRetry\");\n  if (retry) {\n    retry.hidden = ![\"STALE\", \"CONFLICT\", \"ERROR\"].includes(uiState);\n    retry.disabled = busy;\n  }\n}",
+      "projectedSha256": "8bf91593b90b011f7356bc5f959329af9f711cbd7b12c179ce6cf4918f1c2341",
+      "transforms": [
+        {
+          "before": "function renderCoachSettlementReconciliation() {\n  const section = $(\"#coachSettlementReconciliation\");\n  if (!section) return;\n  const uiState = String(state.coachSettlementReconciliationUiState || \"EMPTY\").toUpperCase();\n  const payload = state.coachSettlementReconciliation || {};\n  const snapshot = payload.snapshot || null;\n  const confirmation = payload.confirmation || null;\n  const reconciliation = payload.reconciliation || null;\n  const payloadIsExact = coachSettlementReconciliationPayloadIsExact(payload);\n  const busy = state.coachSettlementReconciliationLoading || state.coachSettlementReconciliationSubmitting;\n  const monthInput = $(\"#coachSettlementMonth\");\n  if (monthInput) monthInput.disabled = busy;\n  section.dataset.state = uiState;\n  section.setAttribute(\"aria-busy\", String(busy));\n  const badge = $(\"#coachSettlementReconciliationStateBadge\");\n  if (badge) badge.textContent = coachSettlementReconciliationStateLabel(uiState);\n  const message = $(\"#coachSettlementReconciliationMessage\");\n  if (message) message.textContent = state.coachSettlementReconciliationMessage || coachSettlementReconciliationDefaultMessage(uiState);\n\n  const summary = $(\"#coachSettlementReconciliationSummary\");\n  if (summary) {\n    summary.innerHTML = \"\";\n    summary.hidden = !payloadIsExact || !snapshot || !confirmation;\n    if (payloadIsExact && snapshot && confirmation) {\n      const appendSummary = (label, value, detail, className = \"\") => {\n        const item = document.createElement(\"div\");\n        if (className) item.className = className;\n        const labelNode = document.createElement(\"span\");\n        const valueNode = document.createElement(\"strong\");\n        const detailNode = document.createElement(\"small\");\n        labelNode.textContent = label;\n        valueNode.textContent = value;\n        detailNode.textContent = detail;\n        item.append(labelNode, valueNode, detailNode);\n        summary.appendChild(item);\n      };\n      const month = String(payload.scope?.settlementMonth || \"\").slice(0, 7);\n      const [year, monthNumber] = month.split(\"-\");\n      appendSummary(\"확정 월\", year && monthNumber ? `${Number(year)}년 ${Number(monthNumber)}월` : \"월 확인 필요\", `${Number(snapshot.revision) || 0}차 계산본`);\n      appendSummary(\"정산 진행\", `${Number(snapshot.totals?.settledSessions) || 0}회`, `${Number(snapshot.totals?.settledMinutes) || 0}분`);\n      appendSummary(\"확정 정산액\", formatCoachWon(snapshot.totals?.totalSettlementAmount), `관리자 확인 ${coachSettlementReconciliationTimeLabel(confirmation.confirmedAt)}`);\n      if (uiState === \"DISPUTED\" && reconciliation?.reason) {\n        appendSummary(\"이의 사유\", String(reconciliation.reason), `응답 ${coachSettlementReconciliationTimeLabel(reconciliation.respondedAt)}`, \"coach-settlement-reconciliation-summary-reason\");\n      } else if (uiState === \"ACKNOWLEDGED\") {\n        appendSummary(\"코치 응답\", \"확인했습니다\", coachSettlementReconciliationTimeLabel(reconciliation?.respondedAt), \"coach-settlement-reconciliation-summary-response\");\n      }\n    }\n  }\n\n  const form = $(\"#coachSettlementReconciliationForm\");\n  const canRespond = uiState === \"PENDING\"\n    && payloadIsExact\n    && !payload.reconciliation;\n  if (form) {\n    form.hidden = !canRespond;\n    form.querySelectorAll('input[name=\"coachSettlementReconciliationChoice\"]').forEach((input) => {\n      input.checked = input.value === state.coachSettlementReconciliationChoice;\n      input.disabled = busy;\n    });\n  }\n  const reasonField = $(\"#coachSettlementReconciliationReasonField\");\n  if (reasonField) reasonField.hidden = !canRespond || state.coachSettlementReconciliationChoice !== \"disputed\";\n  const reasonInput = $(\"#coachSettlementReconciliationReason\");\n  if (reasonInput) {\n    if (reasonInput.value !== state.coachSettlementReconciliationReason) reasonInput.value = state.coachSettlementReconciliationReason;\n    reasonInput.disabled = busy;\n  }\n  const validation = $(\"#coachSettlementReconciliationValidation\");\n  if (validation) {\n    validation.hidden = !state.coachSettlementReconciliationValidation;\n    validation.textContent = state.coachSettlementReconciliationValidation;\n  }\n  const submit = $(\"#coachSettlementReconciliationSubmit\");\n  if (submit) {\n    const reasonError = state.coachSettlementReconciliationChoice === \"disputed\"\n      ? coachSettlementReconciliationReasonError(state.coachSettlementReconciliationReason)\n      : \"\";\n    submit.textContent = state.coachSettlementReconciliationSubmitting ? \"응답 저장 중\" : \"응답 저장\";\n    submit.disabled = !canRespond\n      || busy\n      || ![\"acknowledged\", \"disputed\"].includes(state.coachSettlementReconciliationChoice)\n      || Boolean(reasonError);\n  }\n  const retry = $(\"#coachSettlementReconciliationRetry\");\n  if (retry) {\n    retry.hidden = ![\"STALE\", \"CONFLICT\", \"ERROR\"].includes(uiState);\n    retry.disabled = busy;\n  }\n}",
+          "after": "function renderCoachSettlementHistory() {\n  const section = $(\"#coachSettlementReconciliation\");\n  if (!section) return;\n  const uiState = String(coachSettlementHistory.coachSettlementReconciliationUiState || \"EMPTY\").toUpperCase();\n  const payload = coachSettlementHistory.coachSettlementReconciliation || {};\n  const snapshot = payload.snapshot || null;\n  const confirmation = payload.confirmation || null;\n  const reconciliation = payload.reconciliation || null;\n  const payloadIsExact = coachSettlementReconciliationPayloadIsExact(payload);\n  const busy = coachSettlementHistory.coachSettlementReconciliationLoading;\n  section.dataset.state = uiState;\n  section.setAttribute(\"aria-busy\", String(busy));\n  const badge = $(\"#coachSettlementReconciliationStateBadge\");\n  if (badge) badge.textContent = coachSettlementReconciliationStateLabel(uiState);\n  const message = $(\"#coachSettlementReconciliationMessage\");\n  if (message) message.textContent = coachSettlementHistory.coachSettlementReconciliationMessage || coachSettlementReconciliationDefaultMessage(uiState);\n\n  const summary = $(\"#coachSettlementReconciliationSummary\");\n  if (summary) {\n    summary.innerHTML = \"\";\n    summary.hidden = !payloadIsExact || !snapshot || !confirmation;\n    if (payloadIsExact && snapshot && confirmation) {\n      const appendSummary = (label, value, detail, className = \"\") => {\n        const item = document.createElement(\"div\");\n        if (className) item.className = className;\n        const labelNode = document.createElement(\"span\");\n        const valueNode = document.createElement(\"strong\");\n        const detailNode = document.createElement(\"small\");\n        labelNode.textContent = label;\n        valueNode.textContent = value;\n        detailNode.textContent = detail;\n        item.append(labelNode, valueNode, detailNode);\n        summary.appendChild(item);\n      };\n      const month = String(payload.scope?.settlementMonth || \"\").slice(0, 7);\n      const [year, monthNumber] = month.split(\"-\");\n      appendSummary(\"확정 월\", year && monthNumber ? `${Number(year)}년 ${Number(monthNumber)}월` : \"월 확인 필요\", `${Number(snapshot.revision) || 0}차 계산본 · ${snapshot.calculationVersion === \"r3_effective_settlement_v2\" ? \"적용일별 v2\" : \"기존 v1\"}`);\n      appendSummary(\"정산 진행\", `${Number(snapshot.totals?.settledSessions) || 0}회`, `${Number(snapshot.totals?.settledMinutes) || 0}분`);\n      appendSummary(\"확정 정산액\", formatCoachWon(snapshot.totals?.totalSettlementAmount), `관리자 확인 ${coachSettlementReconciliationTimeLabel(confirmation.confirmedAt)}`);\n      if (uiState === \"DISPUTED\" && reconciliation?.reason) {\n        appendSummary(\"이의 사유\", String(reconciliation.reason), `응답 ${coachSettlementReconciliationTimeLabel(reconciliation.respondedAt)}`, \"coach-settlement-reconciliation-summary-reason\");\n      } else if (uiState === \"ACKNOWLEDGED\") {\n        appendSummary(\"코치 응답\", \"확인했습니다\", coachSettlementReconciliationTimeLabel(reconciliation?.respondedAt), \"coach-settlement-reconciliation-summary-response\");\n      }\n    }\n  }\n\n  const retry = $(\"#coachSettlementReconciliationRetry\");\n  if (retry) {\n    retry.hidden = ![\"STALE\", \"CONFLICT\", \"ERROR\"].includes(uiState);\n    retry.disabled = busy;\n  }\n}",
+          "reason": "memory-only state alias; read-only wording; render removes form/submit/month lock, adds version label; read function rename only"
+        }
+      ]
+    },
+    {
+      "name": "readCoachSettlementHistory",
+      "privateName": "readCoachSettlementReconciliation",
+      "target": "app/tennis-note-coach-app/data/sync.js",
+      "privateSha256": "11c117fd5cae217b1d063ed445b2dcb74bac37b1e6d532ab21853cf97fa2c3fe",
+      "privateSource": "async function readCoachSettlementReconciliation(scope = coachSettlementReconciliationScope()) {\n  return window.TennisNoteDataClient.rpc(\"tn_coach_monthly_settlement_reconciliation_state\", {\n    target_branch_id: scope.branchId,\n    target_coach_role_id: scope.coachRoleId,\n    target_month: scope.settlementMonth,\n  });\n}",
+      "projectedSha256": "21593be0ec57b1d0fcbe56e51b67fec27048cb10f1339a8cc60ba40ea8a8bb0e",
+      "transforms": [
+        {
+          "before": "async function readCoachSettlementReconciliation(scope = coachSettlementReconciliationScope()) {\n  return window.TennisNoteDataClient.rpc(\"tn_coach_monthly_settlement_reconciliation_state\", {\n    target_branch_id: scope.branchId,\n    target_coach_role_id: scope.coachRoleId,\n    target_month: scope.settlementMonth,\n  });\n}",
+          "after": "async function readCoachSettlementHistory(scope = coachSettlementReconciliationScope()) {\n  return window.TennisNoteDataClient.rpc(\"tn_coach_monthly_settlement_reconciliation_state\", {\n    target_branch_id: scope.branchId,\n    target_coach_role_id: scope.coachRoleId,\n    target_month: scope.settlementMonth,\n  });\n}",
+          "reason": "memory-only state alias; read-only wording; render removes form/submit/month lock, adds version label; read function rename only"
+        }
+      ]
+    }
+  ],
+  "writeRPCs": [],
+  "readRPCs": [
+    "tn_coach_monthly_settlement_reconciliation_state"
+  ]
+}

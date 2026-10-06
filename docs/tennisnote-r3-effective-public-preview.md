@@ -1,6 +1,6 @@
 # R3 적용일별 정산 공개 모듈 연결
 
-범위는 기존 관리자 `회원·결제 > 월 정산 상세`와 코치 `내 정산`의 읽기 전용 미리보기다.
+범위는 기존 관리자 `회원·결제 > 월 정산 상세`와 코치 `내 정산`의 읽기 전용 미리보기 및 코치 확정 이력 조회다.
 새 메뉴·역할·확정·지급·송금 동작은 추가하지 않는다. 자동 송금/환불은 이 변경의 기능이 아니다.
 
 원본 feature `ddb549c413c5e820c974bdaed73b351d9afb6981`, PR #580 squash main
@@ -22,7 +22,7 @@
 - 오류/HOLD는 확인 필요이며 금액 0원을 만들어 보여주지 않는다.
 - owner gate OFF의 `confirmationReady=false`는 새 계산 미리보기/기존 확정 보존 안내를 유지한다.
 
-공개에 없던 snapshot 확정/코치 이의 UI는 포팅하지 않았다.
+첫 미리보기 체크포인트에서는 공개에 없던 snapshot 확정/코치 이의 UI를 포팅하지 않았다.
 `renderMonthlySettlementConfirmation`과 `renderCoachSettlementReconciliation`을 stub으로 가장하지 않았다.
 기존 v1 DB 함수/구앱/기록을 변경하지 않으며 v2 확정 gate를 이 코드에서 켤 수 없다.
 실제 signed PostgREST, 구앱 v1-v2 reader, 실제 역할 로그인, Android/iPhone, 운영 부하는 별도 게이트다.
@@ -41,3 +41,28 @@ V3 atlas를 새 화면으로 재구현하지 않는다. 기존 월 선택·상�
 빌드/배포는 이 문서 작성으로 실행되지 않는다. 개발 DB에 단일 R3 additive migration이 준비됐지만
 운영 DB는 별도 적용/권한/호환 검증 전 이 PWA를 승격하면 안 된다.
 롤백은 이전 public dev artifact로 복귀, owner gate OFF 유지다. additive DB down/delete는 하지 않는다.
+
+## 후속: 코치 확정 이력만 연결
+
+`tn_coach_monthly_settlement_reconciliation_state` 읽기 RPC만 기존 내 정산 sheet에서 호출한다.
+private 동일 SHA의 exact payload validator·안전한 textContent 렌더를 추출하며 별도 계산식은 없다.
+`tests/fixtures/r3-coach-history-source-parity.json`은 원본 함수 10개와 명시적 read-only 변환,
+9개 제품 파일의 exact 후보/이전 파일 hash·inverse hunk를 고정한다.
+새 레이어를 먼저 exact 역변환한 뒤 이전 preview·logout·정렬 golden을 그대로 검사한다.
+
+- 예상액은 현재 조건 미리보기, 확정액은 v1/v2 불변 계산본으로 구분한다. 서로 덮어쓰지 않는다.
+- 기존 코치 확인/이의 응답은 이력만 표시한다. 응답 form/submit·관리자 확정·지급 호출은 없다.
+- EMPTY·권한·범위 오류는 확정 없음/확인 필요로 표시한다. 잘못된 확정액을 0원으로 만들지 않는다.
+- 내역은 메모리에만 유지한다. 월/프로필/지점/코치 역할/세션 변경·logout·닫기 후 늦은 응답은 폐기한다.
+- 같은 범위 동시 조회는 한 요청으로 합친다. 열기/월 변경/재시도/활성 sheet focus만 조회한다.
+- owner v2 gate OFF는 전체 v1 쓰기 차단이 아니다. 이 slice의 안전 근거는 쓰기 entry/control/RPC가 없다는 것이다.
+
+| 기능 ID | 계획/작업지시 | 기준 이미지 | 구현 파일 | 검사/화면 |
+|---|---|---|---|---|
+| SETTLE-01/COACH-02 | V6 정산·운동일지 및 야간 실행계획 | V3 56, 59는 기능 atlas만 | 기존 coach domain/views/data settlement | 합성 v1/v2 확정·현재 예상액 분리; 실제 역할 아님 |
+| BRANCH-02/NFR-04 | exact 지점/코치/월, 불변 원천 | V3 58, V6 gate | data/sync/auth·메모리 상태 | scope·session fence, 원본·PII 보호 |
+| NFR-01/02/06/07 | 빈 상태/오류/권한/재시도/서버 context | V3 66 | 기존 sheet/events/screens/CSS | 실제 modular entry spy, responsive 및 write RPC 0 |
+
+의도된 현실화: 새 정산 메뉴·확정/응답 단계·독립 지급 카드를 만들지 않고 기존 sheet 안에 확정 이력만 배치한다.
+자동 browser는 합성 transport만 사용한다. Android/iPhone·signed 관리자 및 nonempty 실제 코치 화면은 별도 NOT VERIFIED.
+개발 게시 승인 범위와 운영 실사용 GO는 다르다. 환불 재분배 HOLD·owner gate OFF를 유지한다.

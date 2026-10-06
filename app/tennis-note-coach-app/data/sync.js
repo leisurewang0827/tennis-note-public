@@ -789,3 +789,86 @@ async function refreshCoachLiveSchedule(options = {}) {
     coachLiveScheduleRefreshInFlight = false;
   }
 }
+// Never persisted: historical ledger state is authoritative only for this live session/scope.
+const coachSettlementHistory = {
+  coachSettlementReconciliationRequestId: 0,
+  coachSettlementReconciliation: null,
+  coachSettlementReconciliationUiState: "EMPTY",
+  coachSettlementReconciliationLoading: false,
+  coachSettlementReconciliationMessage: "",
+};
+let coachSettlementHistoryPending = null;
+
+function resetCoachSettlementHistory() {
+  coachSettlementHistory.coachSettlementReconciliationRequestId += 1;
+  coachSettlementHistory.coachSettlementReconciliation = null;
+  coachSettlementHistory.coachSettlementReconciliationUiState = "EMPTY";
+  coachSettlementHistory.coachSettlementReconciliationLoading = false;
+  coachSettlementHistory.coachSettlementReconciliationMessage = "";
+  coachSettlementHistoryPending = null;
+}
+
+async function readCoachSettlementHistory(scope = coachSettlementReconciliationScope()) {
+  return window.TennisNoteDataClient.rpc("tn_coach_monthly_settlement_reconciliation_state", {
+    target_branch_id: scope.branchId,
+    target_coach_role_id: scope.coachRoleId,
+    target_month: scope.settlementMonth,
+  });
+}
+
+async function syncCoachSettlementHistoryFromServer() {
+  const client = window.TennisNoteDataClient;
+  const scope = coachSettlementReconciliationScope();
+  const profileId = String(state.liveProfileId || "");
+  const session = client?.getSession?.()?.access_token;
+  const signature = coachSettlementReconciliationScopeSignature(scope);
+  // Token stays in memory and is never logged, serialized or attached to a receipt.
+  const isCurrent = () => profileId === String(state.liveProfileId || "")
+    && signature === coachSettlementReconciliationScopeSignature()
+    && session === client?.getSession?.()?.access_token;
+  if (!profileId || !scope.branchId || !scope.coachRoleId || !client?.rpc || !session) {
+    resetCoachSettlementHistory();
+    coachSettlementHistory.coachSettlementReconciliationUiState = "ERROR";
+    coachSettlementHistory.coachSettlementReconciliationMessage = "현재 담당 코치 권한과 지점을 확인한 뒤 다시 시도해 주세요.";
+    renderCoachSettlementHistory();
+    return false;
+  }
+  if (coachSettlementHistoryPending?.signature === signature
+    && coachSettlementHistoryPending.profileId === profileId
+    && coachSettlementHistoryPending.session === session) return coachSettlementHistoryPending.promise;
+  const requestId = ++coachSettlementHistory.coachSettlementReconciliationRequestId;
+  coachSettlementHistory.coachSettlementReconciliation = null;
+  coachSettlementHistory.coachSettlementReconciliationLoading = true;
+  coachSettlementHistory.coachSettlementReconciliationUiState = "LOADING";
+  coachSettlementHistory.coachSettlementReconciliationMessage = "";
+  renderCoachSettlementHistory();
+  const promise = (async () => {
+    try {
+      const raw = await readCoachSettlementHistory(scope);
+      const result = Array.isArray(raw) ? raw[0] || null : raw;
+      if (requestId !== coachSettlementHistory.coachSettlementReconciliationRequestId || !isCurrent()) return false;
+      if (!coachSettlementReconciliationPayloadIsExact(result, scope)) throw Error("settlement_reconciliation_scope_mismatch");
+      coachSettlementHistory.coachSettlementReconciliation = result;
+      coachSettlementHistory.coachSettlementReconciliationUiState = String(result.state).toUpperCase();
+      return true;
+    } catch (error) {
+      if (requestId !== coachSettlementHistory.coachSettlementReconciliationRequestId || !isCurrent()) return false;
+      const contract = coachSettlementReconciliationErrorContract(error);
+      coachSettlementHistory.coachSettlementReconciliation = null;
+      coachSettlementHistory.coachSettlementReconciliationUiState = contract.state;
+      coachSettlementHistory.coachSettlementReconciliationMessage = contract.message;
+      return false;
+    } finally {
+      if (requestId === coachSettlementHistory.coachSettlementReconciliationRequestId) {
+        if (!isCurrent()) resetCoachSettlementHistory();
+        else {
+          coachSettlementHistory.coachSettlementReconciliationLoading = false;
+          coachSettlementHistoryPending = null;
+        }
+        renderCoachSettlementHistory();
+      }
+    }
+  })();
+  coachSettlementHistoryPending = { signature, profileId, session, promise };
+  return promise;
+}

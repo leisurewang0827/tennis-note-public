@@ -16,6 +16,8 @@ function canonicalRelease(file, text, version) {
   return text;
 }
 function restore(file, text) {
+  // Exact new-layer inverse first; old preview/golden hashes are not changed.
+  text = require("./r3-history-port.cjs").restore(file, text, manifest.publicVersion);
   const entry = manifest.files.find(item => item.path === file);
   if (!entry) return text;
   if (sha(text) !== entry.candidateSha256) throw Error("candidate drift (R3 projection exact hash): " + file);

@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.537"
-EXPECTED_RELEASE_ID = "2026.10.07.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v574"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v547"
+EXPECTED_VERSION = "1.0.538"
+EXPECTED_RELEASE_ID = "2026.10.07.02"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v575"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v548"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -487,6 +487,20 @@ def restore_excel_retry_base(path: str, text: str) -> str:
 
 def restore_r3_effective_base(path: str, text: str) -> str | None:
     """승인된 원본 projection만 exact hash/offset으로 역변환. 기존 golden은 불변."""
+    port = json.loads((ROOT / "tests/fixtures/r3-effective-source-parity.json").read_text(encoding="utf-8"))
+    history = json.loads((ROOT / "tests/fixtures/r3-coach-history-source-parity.json").read_text(encoding="utf-8"))
+    history_entry = next((item for item in history["files"] if item["path"] == path), None)
+    if history_entry is not None:
+        text = text.replace(port["publicVersion"], history["publicVersion"])
+        if sha256(text.encode("utf-8")) != history_entry["candidateSha256"]:
+            raise RuntimeError("R3 history candidate hash drift")
+        for hunk in reversed(history_entry["hunks"]):
+            if text[hunk["start"]:hunk["end"]] != hunk["after"]:
+                raise RuntimeError("R3 history inverse hunk drift")
+            text = text[:hunk["start"]] + hunk["before"] + text[hunk["end"]:]
+        if sha256(text.encode("utf-8")) != history_entry["baseSha256"]:
+            raise RuntimeError("R3 history baseline drift")
+        text = text.replace(history["publicVersion"], port["publicVersion"])
     port = json.loads((ROOT / "tests/fixtures/r3-effective-source-parity.json").read_text(encoding="utf-8"))
     entry = next((item for item in port["files"] if item["path"] == path), None)
     if entry is None:

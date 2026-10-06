@@ -6185,3 +6185,19 @@ body.modal-open {
 :root .lesson-detail-tab-panel[hidden] { display: none !important; }
 :root .lesson-attendance-preview { padding: 12px; border-radius: 12px; background: var(--soft-green, #eaf7f1); overflow-wrap: anywhere; }
 :root #coachAttendanceReason { min-height: 44px; font-size: 16px; width: 100%; }
+
+/* Existing settlement sheet: confirmed history is separate from the effective preview. */
+.coach-settlement-history { display: grid; gap: 8px; border-top: 1px solid var(--line); margin-top: 16px; padding-top: 16px; min-width: 0; overflow-wrap: anywhere; }
+.coach-settlement-history-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.coach-settlement-history-head span { border-radius: 999px; padding: 5px 9px; color: var(--muted); background: var(--wash); font-size: 12px; font-weight: 900; }
+.coach-settlement-history p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.coach-settlement-history-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.coach-settlement-history-summary[hidden] { display: none; }
+.coach-settlement-history-summary > div { display: grid; gap: 4px; min-width: 0; border-radius: 9px; padding: 10px; background: color-mix(in srgb, var(--paper) 90%, var(--soft-green)); }
+.coach-settlement-history-summary span, .coach-settlement-history-summary small { color: var(--muted); font-size: 12px; }
+.coach-settlement-history-summary strong { color: var(--ink); font-size: 16px; }
+.coach-settlement-history-summary-reason, .coach-settlement-reconciliation-summary-reason, .coach-settlement-reconciliation-summary-response { grid-column: 1 / -1; }
+.coach-settlement-history button { min-height: 44px; font-size: 16px; white-space: normal; }
+#coachSettlementModal button[data-close-coach-settlement] { min-height: 44px; font-size: 16px; }
+#coachSettlementModal #coachSettlementMonth { min-height: 44px; font-size: 16px; }
+@media (max-width: 430px) { .coach-settlement-history-summary { grid-template-columns: minmax(0, 1fr); } }
