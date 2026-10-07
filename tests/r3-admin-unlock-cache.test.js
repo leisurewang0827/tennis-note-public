@@ -207,3 +207,55 @@ test("renewal and purchase caller restores its original golden even outside the 
     assert.throws(() => renewal.restoreBase(entry.path, drift), /candidate drift/);
   }
 });
+
+test("actual Python alignment chain preserves golden and rejects unlock or metadata drift", () => {
+  const code = `
+import copy, json, subprocess, sys
+sys.path.insert(0, 'scripts')
+import check_tennisnote_dev_prod_alignment as a
+port = json.loads((a.ROOT/'tests/fixtures/r3-admin-unlock-source-parity.json').read_text(encoding='utf-8'))
+entry = port['files'][0]
+path = entry['path']
+source = (a.ROOT/path).read_text(encoding='utf-8')
+baseline = subprocess.check_output(['git', 'show', port['publicBase']+':'+path], cwd=a.ROOT).decode('utf-8').replace('\\r\\n', '\\n')
+assert a.restore_r3_unlock_base(path, source) == baseline
+assert a.restore_r3_effective_base(path, source) == baseline
+assert a.restore_r3_unlock_base('synthetic-unrelated.js', 'unchanged') == 'unchanged'
+def rejected(callback, reason):
+    try:
+        callback()
+    except RuntimeError as error:
+        assert reason in str(error), str(error)
+    else:
+        raise AssertionError('unexpected drift accepted')
+for changed in (source+'\\n', source+entry['hunks'][0]['after'], source.replace('refresh: false', 'refresh: true')):
+    rejected(lambda: a.restore_r3_effective_base(path, changed), 'candidate hash drift')
+bad = copy.deepcopy(port)
+bad['files'][0]['hunks'][0]['after'] += 'synthetic-invalid-inverse'
+rejected(lambda: a.restore_r3_unlock_base(path, source, bad), 'inverse hunk drift')
+bad = copy.deepcopy(port)
+bad['files'][0]['hunks'].pop()
+rejected(lambda: a.restore_r3_unlock_base(path, source, bad), 'hunk count drift')
+bad = copy.deepcopy(port)
+bad['files'][0]['baseSha256'] = '0'*64
+rejected(lambda: a.restore_r3_unlock_base(path, source, bad), 'baseline hash drift')
+a.verify()
+saved = a.release_metadata
+try:
+    for field in ('version', 'release_id', 'deployed_at'):
+        a.release_metadata = lambda path: {**saved(path), field: 'synthetic-stale'}
+        rejected(a.verify, 'current release metadata differs')
+finally:
+    a.release_metadata = saved
+saved_cache = a.candidate_cache
+try:
+    a.candidate_cache = lambda path: 'synthetic-stale-cache'
+    rejected(a.verify, 'member cache is not the approved')
+finally:
+    a.candidate_cache = saved_cache
+print('PYTHON_UNLOCK_ALIGNMENT_GUARD_PASS')
+`;
+  const result = execFileSync(process.env.TENNISNOTE_TEST_PYTHON || "python", ["-B", "-c", code], { cwd: root, encoding: "utf8" });
+  assert.match(result, /alignment PASS:/);
+  assert.match(result, /PYTHON_UNLOCK_ALIGNMENT_GUARD_PASS/);
+});
