@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.540"
-EXPECTED_RELEASE_ID = "2026.10.07.04"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v577"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v550"
+EXPECTED_VERSION = "1.0.541"
+EXPECTED_RELEASE_ID = "2026.10.07.05"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v578"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v551"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -129,6 +129,9 @@ SELECTED_NET_NEW_PATHS = {
 
 DEV_WORKFLOW = ".github/workflows/deploy-cloudflare-pages-dev.yml"
 DEV_WORKFLOW_LINES = (
+    '      TENNISNOTE_DEVELOPMENT_EMAIL_SIGNIN_ENABLED: "true"',
+    '          grep -q \'"developmentEmailSignIn": true\' dist/member-dev/shared/config.local.js',
+    '          grep -q \'"emailPasswordAuthUi": false\' dist/member-dev/shared/config.local.js',
     "      TENNISNOTE_SINGLE_SHEET_IMPORT_MODE: apply",
     '      TENNISNOTE_SINGLE_SHEET_IMPORT_REVERSE_ENABLED: "true"',
     "          grep -q '\"singleSheetImportMode\": \"apply\"' dist/admin-dev/shared/config.local.js",
@@ -259,6 +262,22 @@ def restore_coach_round_base(path: str, text: str) -> str:
         text = text.replace(hunk["after"], hunk["before"], 1)
     if sha256(text.encode("utf-8")) != row["baseSha256"]:
         raise RuntimeError(f"coach round base drift: {path}")
+    return text
+
+
+def restore_development_signin_base(path: str, text: str) -> str:
+    port = json.loads((ROOT / "tests/fixtures/development-signin-source-parity.json").read_text(encoding="utf-8"))
+    row = next((item for item in port["files"] if item["path"] == path), None)
+    if row is None:
+        return text
+    if sha256(text.encode("utf-8")) != row["candidateSha256"]:
+        raise RuntimeError(f"development signin candidate drift: {path}")
+    for hunk in reversed(row["hunks"]):
+        if text.count(hunk["after"]) != 1:
+            raise RuntimeError(f"development signin authority drift: {path}")
+        text = text.replace(hunk["after"], hunk["before"], 1)
+    if sha256(text.encode("utf-8")) != row["baseSha256"]:
+        raise RuntimeError(f"development signin base drift: {path}")
     return text
 
 
@@ -609,7 +628,10 @@ def verify() -> None:
     for path in actual_paths:
         data = (ROOT / path).read_bytes()
         try:
-            text = data.decode("utf-8").replace("\r\n", "\n").replace(EXPECTED_VERSION, r3_port["publicVersion"])
+            signin_port = json.loads((ROOT / "tests/fixtures/development-signin-source-parity.json").read_text(encoding="utf-8"))
+            text = data.decode("utf-8").replace("\r\n", "\n").replace(EXPECTED_VERSION, signin_port["publicVersion"])
+            text = restore_development_signin_base(path, text)
+            text = text.replace(signin_port["publicVersion"], r3_port["publicVersion"])
             text = restore_r3_effective_base(path, text)
             text = text.replace(r3_port["publicVersion"], home["publicVersion"])
             text = restore_excel_retry_base(path, text)

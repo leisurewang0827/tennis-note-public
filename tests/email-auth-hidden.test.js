@@ -15,11 +15,11 @@ test("회원 앱은 이메일 인증 UI를 명시적 opt-in 전까지 노출하�
   const common = read("app/tennis-note-member-app/forms/common.js");
 
   assert.match(html, /data-feature-gate="emailPasswordAuthUi" hidden inert aria-hidden="true"/);
-  assert.match(runtime, /emailPasswordAuthUi:\s*config\.featureFlags\?\.emailPasswordAuthUi === true/);
+  assert.match(runtime, /emailPasswordAuthUi:\s*false/);
   assert.doesNotMatch(app, /function emailPasswordAuthUiEnabled\(\)/);
   assert.match(common, /function emailPasswordAuthUiEnabled\(\)/);
   assert.match(members, /emailPanel\.inert = !emailUiAvailable/);
-  assert.match(common, /if \(!emailPasswordAuthUiEnabled\(\)\)/);
+  assert.match(common, /if \(!emailPasswordSignInUiEnabled\(\)\)/);
   assert.ok(html.indexOf('id="memberEmailLoginStatus"') > html.indexOf("</details>"));
 });
 
@@ -30,7 +30,8 @@ test("숨겨진 이메일 흐름은 서버 호출 전에 fail-closed하고 백�
 
   for (const handler of ["loginWithEmail", "signUpWithEmail", "requestPasswordReset", "updateRecoveredPassword"]) {
     const start = auth.indexOf(`function ${handler}`);
-    const guard = auth.indexOf("if (!emailPasswordAuthUiEnabled())", start);
+    const expectedGate = handler === "loginWithEmail" ? "emailPasswordSignInUiEnabled" : "emailPasswordAuthUiEnabled";
+    const guard = auth.indexOf(`if (!${expectedGate}())`, start);
     assert.ok(start >= 0 && guard > start && guard - start < 220, `${handler} 이메일 UI gate가 서버 호출보다 먼저 있어야 합니다`);
   }
   assert.match(session, /callbackType === "recovery"[\s\S]{0,180}if \(!emailPasswordAuthUiEnabled\(\)\)/);

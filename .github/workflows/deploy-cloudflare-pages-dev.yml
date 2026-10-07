@@ -19,6 +19,7 @@ jobs:
     env:
       TENNISNOTE_ENVIRONMENT: development
       TENNISNOTE_PAYMENTS_ENABLED: "false"
+      TENNISNOTE_DEVELOPMENT_EMAIL_SIGNIN_ENABLED: "true"
       TENNISNOTE_SUPABASE_URL: ${{ secrets.DEV_TENNISNOTE_SUPABASE_URL }}
       TENNISNOTE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.DEV_TENNISNOTE_SUPABASE_PUBLISHABLE_KEY }}
       TENNISNOTE_PAYMENT_MODE: disabled
@@ -46,6 +47,8 @@ jobs:
         run: |
           grep -q '"environment": "development"' dist/member-dev/shared/config.local.js
           grep -q '"enabled": false' dist/member-dev/shared/config.local.js
+          grep -q '"developmentEmailSignIn": true' dist/member-dev/shared/config.local.js
+          grep -q '"emailPasswordAuthUi": false' dist/member-dev/shared/config.local.js
           grep -q '"singleSheetImportMode": "apply"' dist/admin-dev/shared/config.local.js
           grep -q '"singleSheetImportReverseEnabled": true' dist/admin-dev/shared/config.local.js
           grep -q '개발계 · 실제 결제·푸시 차단' dist/member-dev/index.html
