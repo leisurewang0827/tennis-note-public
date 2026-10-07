@@ -17,6 +17,86 @@ function fixtureConfig(coach) {
     lines:[{sourceTicketId:"synthetic-ticket",sourcePaymentId:"synthetic-payment",settlementAmount:50,settledSessions:1,settledMinutes:40,totalSessions:5,netAmount:100,calculationComponents:[]}]});
   Object.defineProperty(window,"TennisNoteDataClient",{get:()=>fixtureClient,set:()=>{},configurable:true});`;
 }
+async function assertAdminUnlockCache(page) {
+  return page.evaluate(async () => {
+    let checks = 0, renders = 0;
+    const check = (value, reason) => { if (!value) throw Error("unlock cache: " + reason); checks++; };
+    const client = window.TennisNoteDataClient, calls = [], expiry = [];
+    const saved = { render: renderAdminView, ensure: ensureAdminViewData, payments: loadServerPaymentsIntoBilling,
+      branch: activeOperationBranchId, coaches: operationBranchCoaches, timeout: window.setTimeout,
+      rpc: client.rpc, session: client.getSession, readiness: client.readiness };
+    let token = "synthetic-session", ready = true, validPin = true;
+    try {
+      client.readiness = () => ({ ready }); client.getSession = () => token ? { access_token: token } : null;
+      client.rpc = async name => { calls.push(name); if (name !== "tn_admin_verify_security_pin") throw Error("automatic RPC forbidden"); return validPin; };
+      window.activeOperationBranchId = () => "synthetic-branch";
+      window.operationBranchCoaches = () => [{ name: "합성 코치", serverRoleId: "synthetic-role", branchId: "synthetic-branch", status: "active" }];
+      window.ensureAdminViewData = async () => false;
+      window.loadServerPaymentsIntoBilling = () => true;
+      window.renderAdminView = view => { renders++; renderAdminSettlementHistory(); rememberAdminViewRender(view); };
+      window.setTimeout = (fn, delay, ...args) => {
+        if (fn === reconcileAdminBillingLockUi) { expiry.push(fn); return 0; }
+        return saved.timeout.call(window, fn, delay, ...args);
+      };
+      const select = document.querySelector("#adminSettlementHistoryCoach"), button = document.querySelector("#adminSettlementHistoryRead");
+      const reset = () => {
+        calls.length = 0; renders = 0; expiry.length = 0; token = "synthetic-session"; ready = true; validPin = true;
+        adminImportAuthState.profile = { id: "synthetic-admin", role: "admin" }; adminImportAuthState.user = { id: "synthetic-auth" };
+        Object.assign(adminLockSettings, { enabled: true, pinHash: "", legacyPin: "", pinConfigured: true, timeoutMinutes: 10, lockedViews: ["billing"] });
+        Object.assign(adminLockSession, { unlockedUntil: 0, pendingView: "billing", pendingAction: "", afterUnlock: null });
+        resetAdminSettlementHistory(); adminSettlementHistory.coachRoleId = "synthetic-role";
+        state.billingMonth = "2099-01"; state.view = "dashboard"; adminViewRenderCache.clear();
+        document.querySelector("#adminPinInput").value = "synthetic-pin";
+      };
+      const onlyPin = () => calls.length === 1 && calls[0] === "tn_admin_verify_security_pin";
+      reset(); renderAdminSettlementHistory(); rememberAdminViewRender("billing");
+      check(select.disabled, "pre-unlock locked"); await confirmAdminUnlock();
+      check(isAdminUnlocked() && !select.disabled && !button.disabled, "cached unlock controls enabled");
+      check(renders === 0 && onlyPin(), "cached normal PIN one; auto-read/full-render zero");
+      check(expiry.length === 1, "one expiration reconciliation scheduled");
+      adminLockSession.unlockedUntil = 0; expiry[0]();
+      check(select.disabled && button.disabled && onlyPin(), "expiration fails closed without read");
+      reset(); await confirmAdminUnlock();
+      check(renders === 1 && !button.disabled && onlyPin(), "cold cache unchanged single render");
+      reset(); state.view = "billing"; adminLockSession.pendingView = "";
+      let callbacks = 0; adminLockSession.afterUnlock = () => { callbacks++; };
+      renderAdminSettlementHistory(); await confirmAdminUnlock();
+      check(callbacks === 1 && renders === 0 && !button.disabled && onlyPin(), "same-view callback reconciled once");
+      for (const denied of ["logout", "role", "profile", "readiness", "loading"]) {
+        reset(); state.view = "billing"; adminLockSession.unlockedUntil = Date.now() + 600000;
+        renderAdminSettlementHistory(); rememberAdminViewRender("billing");
+        if (denied === "logout") token = "";
+        if (denied === "role") adminImportAuthState.profile.role = "member";
+        if (denied === "profile") adminImportAuthState.profile = null;
+        if (denied === "readiness") ready = false;
+        if (denied === "loading") adminSettlementHistory.loading = true;
+        setView("billing", { skipLock: true });
+        check(select.disabled && button.disabled && calls.length === 0, denied + " cached navigation fail-closed " + JSON.stringify({selectDisabled:select.disabled,readDisabled:button.disabled,rpcNames:calls}));
+      }
+      // 코치의 별도 시간표 진입은 기존 workspace 조회를 시작합니다.
+      // 여기서는 실제 코치 권한 판정의 정산 영역 재조정 자체를 격리 검사합니다.
+      reset(); state.view = "billing"; adminLockSession.unlockedUntil = Date.now() + 600000;
+      adminImportAuthState.profile.role = "coach"; reconcileAdminBillingLockUi();
+      check(select.disabled && button.disabled && calls.length === 0, "coach history reconciliation RPC zero");
+      reset(); validPin = false; await confirmAdminUnlock();
+      check(!isAdminUnlocked() && expiry.length === 0 && onlyPin(), "failed PIN no unlock/replay");
+      reset(); state.view = "billing"; adminLockSession.unlockedUntil = Date.now() + 600000;
+      adminSettlementHistory.coachRoleId = ""; reconcileAdminBillingLockUi();
+      check(!select.disabled && button.disabled && calls.length === 0, "no exact coach read remains disabled");
+      check(!document.querySelector("#monthlySettlementPrimaryAction,#monthlySettlementConfirmation"), "new write controls zero");
+      setView("billing", { skipLock: true });
+      renderOperationsLoginGate();
+      document.querySelectorAll("#billingView details").forEach(details => { details.open = true; });
+      return { checks, actualModularEntry: true, historyAutoRpc: 0, writes: 0 };
+    } finally {
+      window.renderAdminView = saved.render; window.ensureAdminViewData = saved.ensure;
+      window.loadServerPaymentsIntoBilling = saved.payments; window.activeOperationBranchId = saved.branch;
+      window.operationBranchCoaches = saved.coaches; window.setTimeout = saved.timeout;
+      client.rpc = saved.rpc; client.getSession = saved.session; client.readiness = saved.readiness;
+    }
+  });
+}
+
 async function runFixture(page,surface){
   return page.evaluate(async surface=>{
     let checks=0;const check=(value,reason)=>{if(!value)throw Error(reason);checks++};
@@ -116,11 +196,12 @@ async function runFixture(page,surface){
 }
 (async()=>{
   const deadline=setTimeout(()=>{console.error("R3 browser deadline");process.exit(124)},180000);deadline.unref();
-  let layouts=0,checks=0;const widths=[[320,740],[360,800],[375,812],[390,844],[393,852],[402,874],[412,915],[430,932],[768,1024],[1366,900],[667,375],[844,390],[932,430]];
+  const unlockOnly = process.env.TENNISNOTE_R3_UNLOCK_FOCUSED === "1";
+  let layouts=0,checks=0;const widths=unlockOnly?[[390,844],[768,1024],[1366,900]]:[[320,740],[360,800],[375,812],[390,844],[393,852],[402,874],[412,915],[430,932],[768,1024],[1366,900],[667,375],[844,390],[932,430]];
   try{
     for(const [engine,type] of Object.entries({chromium,webkit})){
-      const browser=await type.launch({headless:true});
-      try{for(const colorScheme of ["light","dark"])for(const surface of (process.env.TENNISNOTE_R3_HISTORY_LAYOUT_ONLY === "1" ? ["coach"] : ["admin","coach"])){
+      const browser=await type.launch({headless:true,...(engine==="chromium"&&process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
+      try{for(const colorScheme of ["light","dark"])for(const surface of (unlockOnly?["admin"]:(process.env.TENNISNOTE_R3_HISTORY_LAYOUT_ONLY === "1" ? ["coach"] : ["admin","coach"]))){
         const context=await browser.newContext({viewport:{width:390,height:844},colorScheme,serviceWorkers:"block"});
         let external=0;await context.route("**/*",route=>{
           const url=new URL(route.request().url());if(url.origin!==base){external++;return route.abort()}
@@ -133,6 +214,18 @@ async function runFixture(page,surface){
           const page=await context.newPage(),errors=[];page.on("pageerror",error=>errors.push(error.message));
           await page.goto(base+`/app/${surface==="admin"?"admin":"tennis-note-coach-app"}/`,{waitUntil:"domcontentloaded"});
           await page.waitForFunction(surface=>surface==="admin"?typeof renderCoachSettlementPreview==="function"&&typeof state==="object":Boolean(window.__TENNIS_NOTE_COACH_APP_RUNTIME__)&&state.coach?.coachRoleId==="synthetic-role",surface);
+          const unlockReceipt=surface==="admin"?await assertAdminUnlockCache(page):null;
+          if(unlockReceipt) checks+=unlockReceipt.checks;
+          if(unlockOnly){
+            for(const [width,height]of widths){
+              await page.setViewportSize({width,height});
+              const geometry=await page.locator("#adminSettlementHistory").evaluate(el=>({width:el.getBoundingClientRect().width,font:parseFloat(getComputedStyle(el.querySelector("select")).fontSize),touch:el.querySelector("button").getBoundingClientRect().height,overflow:document.documentElement.scrollWidth-innerWidth}));
+              assert(geometry.width>100&&geometry.width<=width+1&&geometry.font>=16&&geometry.touch>=44&&geometry.overflow<=1,"unlock focused existing layout "+JSON.stringify({engine,colorScheme,width,height,...geometry}));layouts++;
+            }
+            assert.deepEqual(errors,[],"unlock focused page errors zero");
+            console.log(JSON.stringify({result:"PASS",engine,colorScheme,...unlockReceipt,layouts:widths.length,hostedRequests:0,pageErrors:errors.length}));
+            continue;
+          }
           const receipt=await runFixture(page,surface);checks+=receipt.checks;
           const target=page.locator(surface==="admin"?"#adminSettlementHistory":"#coachSettlementModal");
           for(const [width,height] of widths){
@@ -178,6 +271,6 @@ async function runFixture(page,surface){
         }finally{await context.close()}
       }}finally{await browser.close()}
     }
-    assert.equal(layouts,process.env.TENNISNOTE_R3_HISTORY_LAYOUT_ONLY === "1"?52:104);console.log(JSON.stringify({result:"PASS",layouts,checks,actualRoles:"synthetic only",actualDevices:"NOT VERIFIED",themeEvidence:"OS light/dark preference; existing coach light palette unchanged",hostedRequests:0,hostedWrites:0}));
+    assert.equal(layouts,unlockOnly?12:(process.env.TENNISNOTE_R3_HISTORY_LAYOUT_ONLY === "1"?52:104));console.log(JSON.stringify({result:"PASS",layouts,checks,scope:unlockOnly?"unlock focused":"existing R3",actualRoles:"synthetic only",actualDevices:"NOT VERIFIED",themeEvidence:"OS light/dark preference; existing coach light palette unchanged",hostedRequests:0,hostedWrites:0}));
   }finally{clearTimeout(deadline)}
 })().catch(error=>{console.error("R3 browser FAIL",error.message);process.exitCode=1});
