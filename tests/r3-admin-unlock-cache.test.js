@@ -4,6 +4,11 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
+
+const require = createRequire(import.meta.url);
+const parity = require("./helpers/r3-admin-history-port.cjs");
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
@@ -139,4 +144,66 @@ test("NFR-02 reconciliation is render-only; no new confirmation controls or writ
   const html = read("app/admin/index.html");
   assert(!html.includes('id="monthlySettlementPrimaryAction"'));
   assert(!html.includes('id="monthlySettlementConfirmation"'));
+});
+
+test("unlock inverse restores exact approved baseline before every historical parity layer", () => {
+  assert.equal(parity.unlockManifest.contractVersion, "r3_admin_unlock_source_inverse_v1");
+  assert.equal(parity.unlockManifest.privateSource, "d28165e7a8e53c66824d6795c06c3040f425a528");
+  assert.equal(parity.unlockManifest.files.length, 1);
+  const entry = parity.unlockManifest.files[0];
+  const source = read(entry.path).replace(/\r\n/g, "\n");
+  const baseline = execFileSync("git", ["show", `${parity.unlockManifest.publicBase}:${entry.path}`], { cwd: root, encoding: "utf8" }).replace(/\r\n/g, "\n");
+  assert.equal(parity.sha(source), entry.candidateSha256);
+  assert.equal(parity.sha(baseline), entry.baseSha256);
+  assert.equal(parity.restoreUnlock(entry.path, source), baseline);
+  // common.js는 기존 history manifest의 대상 밖이어도 먼저 역변환되어야 한다.
+  assert(!parity.manifest.files.some(item => item.path === entry.path));
+  assert.equal(parity.restore(entry.path, source), baseline);
+  assert.equal(parity.restoreUnlock("synthetic-unrelated.js", "unchanged"), "unchanged");
+});
+
+test("unlock exact hunks are unique and unexpected source or inverse drift is rejected", () => {
+  const entry = parity.unlockManifest.files[0];
+  const source = read(entry.path).replace(/\r\n/g, "\n");
+  assert.equal(entry.hunks.length, 5);
+  for (const hunk of entry.hunks) {
+    assert(hunk.after.length > 0);
+    assert.equal(source.split(hunk.after).length, 2);
+    assert.throws(() => parity.restore(entry.path, source.replace(hunk.after, hunk.before)), /candidate drift/);
+  }
+  for (const drift of [source + "\n", source + entry.hunks[0].after, source.replace("refresh: false", "refresh: true")]) {
+    assert.throws(() => parity.restore(entry.path, drift), /candidate drift/);
+  }
+  const hunk = entry.hunks[0], original = hunk.after;
+  try {
+    hunk.after += "synthetic-invalid-inverse";
+    assert.throws(() => parity.restore(entry.path, source), /inverse hunk drift/);
+  } finally { hunk.after = original; }
+});
+
+test("unlock helper and confirm retain canonical private executable hashes", () => {
+  assert.equal(parity.unlockManifest.functions.length, 2);
+  for (const entry of parity.unlockManifest.functions) {
+    let source = extract("app/admin/actions/common.js", entry.name).replace(/\r\n/g, "\n");
+    assert.equal(parity.sha(source), entry.projectedSha256);
+    for (const [projected, canonical] of entry.inverseTransforms) {
+      assert.equal(source.split(projected).length, 2);
+      source = source.replace(projected, canonical);
+    }
+    assert.equal(parity.sha(source), entry.privateSha256);
+  }
+});
+
+test("renewal and purchase caller restores its original golden even outside the R3 manifest", () => {
+  const renewal = require("./helpers/renewal-hold-port.cjs");
+  const r3 = require("./helpers/r3-effective-port.cjs");
+  const entry = parity.unlockManifest.files[0];
+  const source = read(entry.path).replace(/\r\n/g, "\n");
+  const original = execFileSync("git", ["show", `${renewal.manifest.base}:${entry.path}`], { cwd: root, encoding: "utf8" }).replace(/\r\n/g, "\n");
+  assert(!r3.manifest.files.some(item => item.path === entry.path));
+  assert.equal(renewal.restoreBase(entry.path, source), original);
+  assert.equal(renewal.sha(original), renewal.manifest.files.find(item => item.path === entry.path).baseSha256);
+  for (const drift of [source + "\n", source + entry.hunks[0].after, source.replace("refresh: false", "refresh: true")]) {
+    assert.throws(() => renewal.restoreBase(entry.path, drift), /candidate drift/);
+  }
 });
