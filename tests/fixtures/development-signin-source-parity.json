@@ -1,0 +1,102 @@
+{
+  "contract": "development-existing-sign-in/1",
+  "publicVersion": "1.0.540",
+  "files": [
+    {
+      "path": "app/tennis-note-member-app/forms/common.js",
+      "baseSha256": "b5fe10104b72821dbe04630923711a02d9f8035e12cc0e08c28e7661aa7d57c0",
+      "candidateSha256": "2ec7ffa7385417832cc1765ceff21cb36affe19f0209deb1653c68cb1cd89068",
+      "hunks": [
+        {
+          "before": "\n",
+          "after": "\nfunction emailPasswordSignInUiEnabled() {\n  return window.TennisNoteRuntimeEnvironment?.canSignInWithEmail?.() === true\n    && identityAuthCapabilities.providers.email !== false;\n}\n\n"
+        },
+        {
+          "before": "function setEmailAuthMode(mode = \"login\", options = {}) {\n  if (!emailPasswordAuthUiEnabled()) {\n",
+          "after": "function setEmailAuthMode(mode = \"login\", options = {}) {\n  if (!emailPasswordSignInUiEnabled()) {\n"
+        },
+        {
+          "before": "  }\n  const nextMode = [\"login\", \"signup\", \"recovery\"].includes(mode) ? mode : \"login\";\n",
+          "after": "  }\n  if (mode !== \"login\") {\n    setEmailAuthStatus(\"개발 검증에서는 기존 계정 로그인만 제공합니다. 가입·비밀번호 변경은 사용할 수 없습니다.\", \"alert\");\n    return false;\n  }\n  const nextMode = \"login\";\n"
+        },
+        {
+          "before": "  };\n  if (panel) panel.open = true;\n  if (tabs) tabs.hidden = nextMode === \"recovery\";\n  if (summary) summary.textContent = nextMode === \"recovery\" ? \"새 비밀번호 설정\" : \"이메일 로그인·가입\";\n",
+          "after": "  };\n  if (panel) { panel.hidden = false; panel.inert = false; panel.setAttribute(\"aria-hidden\", \"false\"); }\n  if (tabs) { tabs.hidden = true; tabs.inert = true; }\n  const reset = $(\"#memberPasswordResetButton\");\n  if (reset) { reset.hidden = true; reset.disabled = true; }\n  if (summary) summary.textContent = \"개발 검증용 기존 계정 로그인\";\n"
+        },
+        {
+          "before": "  Object.entries(forms).forEach(([key, form]) => {\n    if (form) form.hidden = key !== nextMode;\n",
+          "after": "  Object.entries(forms).forEach(([key, form]) => {\n    if (form) {\n      form.hidden = key !== nextMode;\n      form.inert = key !== nextMode;\n      form.querySelectorAll(\"input,button\").forEach((control) => { control.disabled = key !== nextMode || control.id === \"memberPasswordResetButton\"; });\n    }\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "baseSha256": "752267cfd12b9e30f4f5c57550d4c51ebb908b04910f03855b68f663749d56f6",
+      "candidateSha256": "6b14b9734074a367156768396c85f01f19315435a395424f0810eab970d22deb",
+      "hunks": [
+        {
+          "before": "  if (emailPanel) {\n    const emailUiAvailable = emailPasswordAuthUiEnabled()\n      && identityAuthCapabilities.providers.email !== false;\n",
+          "after": "  if (emailPanel) {\n    const emailUiAvailable = emailPasswordSignInUiEnabled();\n"
+        },
+        {
+          "before": "    emailPanel.setAttribute(\"aria-hidden\", String(!emailUiAvailable));\n",
+          "after": "    emailPanel.setAttribute(\"aria-hidden\", String(!emailUiAvailable));\n    if (emailUiAvailable) setEmailAuthMode(\"login\", { focus: false, clearStatus: false });\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/data/auth.js",
+      "baseSha256": "9847312152cb64451004165873350ff2d53cbb8210866e18aa0ecb94a781f9a9",
+      "candidateSha256": "f408402daadb55f00ece2e51a4144023dcb39d871fcfdee7541c6bc26e1cc790",
+      "hunks": [
+        {
+          "before": "  event.preventDefault();\n  if (!emailPasswordAuthUiEnabled()) {\n",
+          "after": "  event.preventDefault();\n  if (!emailPasswordSignInUiEnabled()) {\n"
+        },
+        {
+          "before": "  const submitButton = form.querySelector('button[type=\"submit\"]');\n",
+          "after": "  const submitButton = form.querySelector('button[type=\"submit\"]');\n  if (submitButton.disabled) return;\n"
+        }
+      ]
+    },
+    {
+      "path": "app/shared/tennisnote-runtime-environment.js",
+      "baseSha256": "13cbdecefccc49838a8607aa63fa3fc7a5fca2c7ec23999d2b180ea4891c5f6d",
+      "candidateSha256": "a7b60ca766df0de3f7d1f7e9ae108325b2e105e955d60c65bd6946c242e6483d",
+      "hunks": [
+        {
+          "before": "  const environment = supportedEnvironments.has(configuredEnvironment) ? configuredEnvironment : \"unsupported\";\n",
+          "after": "  const environment = supportedEnvironments.has(configuredEnvironment) ? configuredEnvironment : \"unsupported\";\n  const developmentProjectFingerprint = \"63350140ffe50d07136f3e5a27f66a20266c84ebf02987f536949c9a400ebcba\";\n  function developmentEmailSignInAllowed() {\n    const manifest = config.developmentEmailSignInManifest;\n    try {\n      const source = new URL(config.supabaseUrl);\n      const origin = String(window.location?.origin || \"\");\n      const publicOriginAllowed = /^http:\\/\\/(127\\.0\\.0\\.1|localhost)(:\\d+)?$/.test(origin)\n        || origin === \"https://tennisnote-app-dev.pages.dev\"\n        || origin === \"https://tennisnote-admin-dev.pages.dev\";\n      return publicOriginAllowed && environment === \"development\"\n        && String(config.environment || \"\").trim().toLowerCase() === \"development\"\n        && config.featureFlags?.developmentEmailSignIn === true\n        && config.projectFingerprint === developmentProjectFingerprint\n        && manifest?.contractVersion === \"development-existing-sign-in/1\"\n        && manifest.environment === \"development\"\n        && manifest.projectFingerprint === developmentProjectFingerprint\n        && source.protocol === \"https:\" && !source.username && !source.password\n        && source.hostname.endsWith(\".supabase.co\") && !source.port && source.pathname === \"/\"\n        && !source.search && !source.hash\n        && manifest.supabaseOrigin === source.origin;\n    } catch {\n      return false;\n    }\n  }\n"
+        },
+        {
+          "before": "  const features = Object.freeze({\n    // 이메일 인증 백엔드는 보존하되, 명시적으로 다시 켜기 전에는 UI를 노출하지 않는다.\n    emailPasswordAuthUi: config.featureFlags?.emailPasswordAuthUi === true,\n",
+          "after": "  const features = Object.freeze({\n    // 가입·재설정은 기존 백엔드만 보존하며 모든 공개 UI에서 계속 차단한다.\n    emailPasswordAuthUi: false,\n    developmentEmailSignIn: developmentEmailSignInAllowed(),\n"
+        },
+        {
+          "before": "  window.TennisNoteRuntimeEnvironment = Object.freeze({\n",
+          "after": "  window.TennisNoteRuntimeEnvironment = Object.freeze({\n    canSignInWithEmail: developmentEmailSignInAllowed,\n"
+        },
+        {
+          "before": "\n",
+          "after": "\n  // The Pages builder also emits an environment banner before JavaScript loads.\n  // Adopt that exact banner instead of stacking another over modal controls.\n  if (window.__tennisnoteDevelopmentBanner) {\n    window.__tennisnoteDevelopmentBanner();\n    return;\n  }\n"
+        },
+        {
+          "before": "  const render = () => {\n    if (document.querySelector(\"[data-tennisnote-internal-qa-banner]\")) return;\n    const banner = document.createElement(\"aside\");\n",
+          "after": "  const render = () => {\n    const banners = [...document.querySelectorAll(\n      '[data-tennisnote-internal-qa-banner], body > aside[role=\"status\"][aria-label=\"개발계 안내\"]',\n    )].filter((node) => node.hasAttribute(\"data-tennisnote-internal-qa-banner\")\n      || node.textContent.trim() === \"개발계 · 실제 결제·푸시 차단\");\n    const banner = banners.find((node) => node.hasAttribute(\"data-tennisnote-internal-qa-banner\"))\n      || banners[0] || document.createElement(\"aside\");\n    banners.filter((node) => node !== banner).forEach((duplicate) => duplicate.remove());\n"
+        },
+        {
+          "before": "    banner.setAttribute(\"aria-label\", \"서울 개발 내부 QA 안내\");\n    banner.textContent = \"서울 개발 · 내부 QA · 실제 결제·푸시 차단\";\n",
+          "after": "    banner.setAttribute(\"aria-label\", \"서울 개발 내부 QA 안내\");\n    const copy = \"서울 개발 · 내부 QA · 실제 결제·푸시 차단\";\n    if (banner.textContent !== copy) banner.textContent = copy;\n"
+        },
+        {
+          "before": "    });\n    document.body.prepend(banner);\n",
+          "after": "    });\n    if (document.body.firstElementChild !== banner) document.body.prepend(banner);\n    const measure = () => {\n      if (banner.isConnected) document.documentElement.style.setProperty(\n        \"--tn-dev-qa-banner-height\", `${Math.ceil(banner.getBoundingClientRect().height)}px`,\n      );\n    };\n    measure();\n    if (!banner.dataset.tennisnoteQaMeasured) {\n      banner.dataset.tennisnoteQaMeasured = \"true\";\n      if (typeof ResizeObserver === \"function\") new ResizeObserver(measure).observe(banner);\n      else window.addEventListener(\"resize\", measure);\n    }\n"
+        },
+        {
+          "before": "  };\n  if (document.readyState === \"loading\") document.addEventListener(\"DOMContentLoaded\", render, { once: true });\n  else render();\n",
+          "after": "  };\n  const mount = () => {\n    if (!document.querySelector(\"[data-tennisnote-dev-qa-layout]\")) {\n      const style = document.createElement(\"style\");\n      style.dataset.tennisnoteDevQaLayout = \"single-banner-modal-safe-v1\";\n      // Development only. The banner owns its top safe-area; a modal reserves\n      // its measured height once. Production/native fallback CSS is unchanged.\n      style.textContent = `\n        html[data-tennisnote-environment=\"development\"] .lesson-edit-modal {\n          top: var(--tn-dev-qa-banner-height, 0px);\n          padding-top: 12px;\n        }\n        html[data-tennisnote-environment=\"development\"] .lesson-edit-modal > .modal-card {\n          max-height: min(92vh, 760px, calc(100dvh - var(--tn-dev-qa-banner-height, 0px) - 12px - max(12px, env(safe-area-inset-bottom))));\n        }\n        @media (max-width: 1024px) {\n          html[data-tennisnote-environment=\"development\"] .lesson-edit-modal > .modal-card {\n            max-height: calc(100dvh - var(--tn-dev-qa-banner-height, 0px) - 12px - max(12px, env(safe-area-inset-bottom)));\n          }\n        }\n      `;\n      document.head.append(style);\n    }\n    render();\n    new MutationObserver(render).observe(document.body, { childList: true });\n  };\n  window.__tennisnoteDevelopmentBanner = () => { if (document.body) render(); };\n  if (document.readyState === \"loading\") document.addEventListener(\"DOMContentLoaded\", mount, { once: true });\n  else mount();\n"
+        }
+      ]
+    }
+  ]
+}

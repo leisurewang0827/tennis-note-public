@@ -14,7 +14,22 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\
 const hash = text => crypto.createHash("sha256").update(text).digest("hex");
 const manifest = JSON.parse(read("tests/fixtures/member-home-source-parity.json"));
 const version = JSON.parse(read("app/release.json")).version;
-const normalized = text => text.replaceAll(version, manifest.publicVersion);
+const signinProjection = JSON.parse(read("tests/fixtures/development-signin-source-parity.json"));
+// 승인된 로그인 증분만 exact 역변환하고 기존 홈 golden은 그대로 검사한다.
+const restoreSignin = (file, text) => {
+  const row = signinProjection.files.find(item => item.path === file);
+  if (!row) return text;
+  text = text.replaceAll(version, signinProjection.publicVersion);
+  assert.equal(hash(text), row.candidateSha256, `signin candidate drift: ${file}`);
+  for (const hunk of [...row.hunks].reverse()) {
+    assert(hunk.after, `empty signin hunk: ${file}`);
+    assert.equal(text.split(hunk.after).length, 2, `exact signin hunk: ${file}`);
+    text = text.replace(hunk.after, () => hunk.before);
+  }
+  assert.equal(hash(text), row.baseSha256, `signin base drift: ${file}`);
+  return text.replaceAll(signinProjection.publicVersion, version);
+};
+const normalized = (file, text) => restoreSignin(file, text).replaceAll(version, manifest.publicVersion);
 const extract = (source, name) => {
   const matches = [...source.matchAll(new RegExp(`^(?:async )?function ${name}\\([^\\n]*\\)[^{]*\\{[\\s\\S]*?^}`, "gm"))];
   assert.equal(matches.length, 1, `exact function ${name}`);
@@ -31,7 +46,7 @@ test("회원 홈: private source SHA, 9모듈 전체 preimage/parity, 실제 ent
   const index = read("app/tennis-note-member-app/index.html");
   const sw = read("app/tennis-note-member-app/service-worker.js");
   for (const row of manifest.files) {
-    let current = normalized(read(row.path));
+    let current = normalized(row.path, read(row.path));
     assert.equal(hash(current), row.candidateSha256, row.path);
     for (const hunk of [...row.hunks].reverse()) {
       assert.equal(current.split(hunk.after).length, 2, `exact hunk ${row.path}`);
@@ -43,9 +58,26 @@ test("회원 홈: private source SHA, 9모듈 전체 preimage/parity, 실제 ent
     assert(sw.includes(`${short}?`) || sw.includes(`"${short}"`), `cache entry ${short}`);
   }
   for (const block of manifest.blocks) {
-    assert.equal(hash(extract(normalized(read(block.path)), block.name)), block.publicSha256, block.name);
+    assert.equal(hash(extract(normalized(block.path, read(block.path)), block.name)), block.publicSha256, block.name);
     if (block.adaptation === "none") assert.equal(block.privateSha256, block.publicSha256, block.name);
   }
+});
+
+test("회원 홈: 로그인 projection의 추가·중복·누락 drift는 golden 비교 전에 차단", () => {
+  assert.equal(signinProjection.contract, "development-existing-sign-in/1");
+  assert.equal(signinProjection.files.length, 4);
+  for (const row of signinProjection.files) {
+    const source = read(row.path).replaceAll(version, signinProjection.publicVersion);
+    const restored = restoreSignin(row.path, source).replaceAll(version, signinProjection.publicVersion);
+    assert.equal(hash(restored), row.baseSha256, row.path);
+    const after = row.hunks[0].after;
+    assert.equal(source.split(after).length, 2, `mutation fixture ${row.path}`);
+    for (const drift of [source + "\n", source.replace(after, () => after + after), source.replace(after, "")]) {
+      assert.throws(() => restoreSignin(row.path, drift), /signin candidate drift/);
+    }
+  }
+  const unrelated = "app/tennis-note-member-app/domain/lessons.js";
+  assert.equal(restoreSignin(unrelated, read(unrelated)), read(unrelated));
 });
 
 test("회원 홈: public 원데이/권한/조회 계층과 홈 진입·로그아웃 계약 유지", () => {

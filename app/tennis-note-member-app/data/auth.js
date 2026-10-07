@@ -343,12 +343,13 @@ async function refreshAuthProviderCapabilities({ force = false } = {}) {
 
 async function loginWithEmail(event) {
   event.preventDefault();
-  if (!emailPasswordAuthUiEnabled()) {
+  if (!emailPasswordSignInUiEnabled()) {
     setEmailAuthStatus(emailAuthUiUnavailableMessage, "alert");
     return;
   }
   const form = event.currentTarget;
   const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton.disabled) return;
   submitButton.disabled = true;
   setEmailAuthStatus("로그인 확인 중");
   try {

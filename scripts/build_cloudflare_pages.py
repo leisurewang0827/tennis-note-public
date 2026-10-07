@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import shutil
+from tennisnote_development_email_signin import development_signin_config
 from pathlib import Path
 
 
@@ -101,6 +102,10 @@ def write_browser_config(output: Path) -> None:
             "naver": "custom:naver",
         },
     }
+    app_config.update(development_signin_config(
+        app_config["environment"], app_config["supabaseUrl"],
+        env("TENNISNOTE_DEVELOPMENT_EMAIL_SIGNIN_ENABLED").lower() == "true",
+    ))
     payment_mode, allowed_methods = payment_operating_settings()
     configured_channels = {
         "card": env("TENNISNOTE_PORTONE_CHANNEL_KEY"),

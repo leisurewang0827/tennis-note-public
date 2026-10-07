@@ -229,11 +229,11 @@ function syncAuthProviderCapabilityControls() {
   }
   const emailPanel = $("#memberEmailAuthPanel");
   if (emailPanel) {
-    const emailUiAvailable = emailPasswordAuthUiEnabled()
-      && identityAuthCapabilities.providers.email !== false;
+    const emailUiAvailable = emailPasswordSignInUiEnabled();
     emailPanel.hidden = !emailUiAvailable;
     emailPanel.inert = !emailUiAvailable;
     emailPanel.setAttribute("aria-hidden", String(!emailUiAvailable));
+    if (emailUiAvailable) setEmailAuthMode("login", { focus: false, clearStatus: false });
   }
   syncIdentityPhoneCapabilityControl();
 }

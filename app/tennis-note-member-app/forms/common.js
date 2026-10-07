@@ -335,8 +335,13 @@ function emailPasswordAuthUiEnabled() {
   return window.TennisNoteRuntimeEnvironment?.features?.emailPasswordAuthUi === true;
 }
 
+function emailPasswordSignInUiEnabled() {
+  return window.TennisNoteRuntimeEnvironment?.canSignInWithEmail?.() === true
+    && identityAuthCapabilities.providers.email !== false;
+}
+
 function setEmailAuthMode(mode = "login", options = {}) {
-  if (!emailPasswordAuthUiEnabled()) {
+  if (!emailPasswordSignInUiEnabled()) {
     const panel = $("#memberEmailAuthPanel");
     if (panel) {
       panel.hidden = true;
@@ -346,7 +351,11 @@ function setEmailAuthMode(mode = "login", options = {}) {
     setEmailAuthStatus(emailAuthUiUnavailableMessage, "alert");
     return false;
   }
-  const nextMode = ["login", "signup", "recovery"].includes(mode) ? mode : "login";
+  if (mode !== "login") {
+    setEmailAuthStatus("개발 검증에서는 기존 계정 로그인만 제공합니다. 가입·비밀번호 변경은 사용할 수 없습니다.", "alert");
+    return false;
+  }
+  const nextMode = "login";
   emailAuthMode = nextMode;
   const panel = $("#memberEmailAuthPanel");
   const tabs = $("#memberEmailAuthTabs");
@@ -356,11 +365,17 @@ function setEmailAuthMode(mode = "login", options = {}) {
     signup: $("#memberEmailSignupForm"),
     recovery: $("#memberPasswordRecoveryForm"),
   };
-  if (panel) panel.open = true;
-  if (tabs) tabs.hidden = nextMode === "recovery";
-  if (summary) summary.textContent = nextMode === "recovery" ? "새 비밀번호 설정" : "이메일 로그인·가입";
+  if (panel) { panel.hidden = false; panel.inert = false; panel.setAttribute("aria-hidden", "false"); }
+  if (tabs) { tabs.hidden = true; tabs.inert = true; }
+  const reset = $("#memberPasswordResetButton");
+  if (reset) { reset.hidden = true; reset.disabled = true; }
+  if (summary) summary.textContent = "개발 검증용 기존 계정 로그인";
   Object.entries(forms).forEach(([key, form]) => {
-    if (form) form.hidden = key !== nextMode;
+    if (form) {
+      form.hidden = key !== nextMode;
+      form.inert = key !== nextMode;
+      form.querySelectorAll("input,button").forEach((control) => { control.disabled = key !== nextMode || control.id === "memberPasswordResetButton"; });
+    }
   });
   $$('[data-email-auth-mode]').forEach((button) => {
     const selected = button.dataset.emailAuthMode === nextMode;
