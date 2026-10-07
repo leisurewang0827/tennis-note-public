@@ -1,0 +1,50 @@
+{
+  "contractVersion": "r3_admin_unlock_source_inverse_v1",
+  "privateSource": "d28165e7a8e53c66824d6795c06c3040f425a528",
+  "privateFeature": "f478c99d7a86aa25ad54af04e6f78858329a7660",
+  "publicBase": "45b083ee43267bc6ff0edcbaf208f002bbd3bd82",
+  "publicFeature": "2e6c229be12c965e81bd3aa308c71a27e03ede47",
+  "files": [
+    {
+      "path": "app/admin/actions/common.js",
+      "baseSha256": "1d5708a33aadd1b87fef1c44ed96115d7438da92b01bb4d4edc0fda6fc5a6454",
+      "candidateSha256": "ce514b0b51ee0e96b00082e928b78419f078fccaf63a45c0d0f1f3d7c6ff6369",
+      "hunks": [
+        {
+          "before": "",
+          "after": "function reconcileAdminBillingLockUi() {\n  if (state.view !== \"billing\") return;\n  // 잠금 상태만 다시 판정합니다. 자동 조회나 전체 화면 재렌더는 하지 않습니다.\n  renderAdminSettlementHistory({ refresh: false });\n}\n\n"
+        },
+        {
+          "before": "    adminLockSession.unlockedUntil = Date.now() + adminLockSettings.timeoutMinutes * 60000;\n",
+          "after": "    adminLockSession.unlockedUntil = Date.now() + adminLockSettings.timeoutMinutes * 60000;\n    window.setTimeout(reconcileAdminBillingLockUi, adminLockSettings.timeoutMinutes * 60000 + 1);\n"
+        },
+        {
+          "before": "  else if (targetView) setView(targetView, { skipLock: true });\n}",
+          "after": "  else if (targetView) setView(targetView, { skipLock: true });\n  reconcileAdminBillingLockUi();\n}"
+        },
+        {
+          "before": "function setView(view, options = {}) {\n",
+          "after": "function setView(view, options = {}) {\n  reconcileAdminBillingLockUi();\n"
+        },
+        {
+          "before": "  } else if (!reuseRenderedView) {\n    renderAdminView(view);\n  }\n",
+          "after": "  } else if (!reuseRenderedView) {\n    renderAdminView(view);\n  } else if (view === \"billing\") {\n    reconcileAdminBillingLockUi();\n  }\n"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "reconcileAdminBillingLockUi",
+      "projectedSha256": "e7ff032ca7cb0519dfbea6eea52999a1341538131a03ebfa1a5c9eb51c186bcc",
+      "privateSha256": "9e4d1c90c186e95394b89c5a92e8355248518b9c9dd4ecb672548548ec33f90d",
+      "inverseTransforms": [["renderAdminSettlementHistory", "renderMonthlySettlementConfirmation"]]
+    },
+    {
+      "name": "confirmAdminUnlock",
+      "projectedSha256": "f02b128e7a988b82fed4174d0d5f4a5fca0353d7b2ff7525b471e0f8c58b83f6",
+      "privateSha256": "f02b128e7a988b82fed4174d0d5f4a5fca0353d7b2ff7525b471e0f8c58b83f6",
+      "inverseTransforms": []
+    }
+  ]
+}
