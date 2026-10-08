@@ -143,7 +143,7 @@ async function requireVerifiedIdentityPhone(phone, surface = "signup") {
 // 메모리에서만 재시도 키를 유지한다. 개인정보를 별도 저장소에 기록하지 않는다.
 let signupProfileOperation = { fingerprint: "", key: "" };
 
-async function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender, profileEditor = false }) {
+async function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender, profileEditor = false, profileStyle = null }) {
   const normalizedRealName = normalizeIdentityText(realName);
   const normalizedNickname = normalizeIdentityText(nickname);
   const normalizedPhone = normalizeIdentityPhone(phone);
@@ -164,6 +164,12 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
       if (normalizedPhone !== profilePhoneExpectedPhone) await requireVerifiedIdentityPhone(normalizedPhone, "profile");
       if (!phoneVerificationRequestCurrent(owner, normalizedPhone, "profile")) throw new Error("profile_phone_context_changed");
       const targetProfile = { name: normalizedRealName, nickname: normalizedNickname, phone: normalizedPhone };
+      if (profileStyle !== null) {
+        const saved = await updateMemberProfileOnServer(profileStyle, targetProfile);
+        if (!saved.ok) throw saved.error;
+        if (saved.phoneVerified === true) markIdentityPhoneVerified(normalizedPhone, "server", "profile");
+        return saved;
+      }
       const fingerprint = JSON.stringify([owner.authId, owner.profileId, profilePhoneExpectedPhone, targetProfile]);
       if (profilePhoneSaveOperation.fingerprint !== fingerprint) profilePhoneSaveOperation = { fingerprint, key: crypto.randomUUID() };
       const resultRaw = await client.rpc("tn_save_my_verified_profile_phone", {

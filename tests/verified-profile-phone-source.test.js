@@ -19,6 +19,16 @@ test("본인 번호 exact private authority와 공개 metadata 방어 보존",()
   const fn=source.match(/function verifiedPhoneFromAuthUser\([\s\S]*?\n}/)[0];
   assert(!fn.includes("user_metadata"));assert(fn.includes("if (strict)"));
 });
+
+test("OTP 확인 줄바꿈 최소 CSS는 canonical private 블록과 exact hash parity",()=>{
+  const item=port.otpConfirmStyle;
+  const css=fs.readFileSync(path.join(root,item.publicPath),"utf8").replace(/\r\n/g,"\n");
+  const block=css.match(/\/\* OTP input is the flexible column;[\s\S]*?#profilePhoneVerifyButton \{[\s\S]*?\n\}/)[0];
+  assert.equal(hash(block),item.blockSha256);
+  assert(block.includes("minmax(0, 1fr) auto"));assert(block.includes("min-width: 64px"));
+  assert(block.includes("white-space: nowrap"));assert(block.includes("font-size: 16px"));
+  assert.equal(item.adapter,"exact_private_css_block");
+});
 test("승인 번호 이식 inverse가 기존 golden 파일을 정확히 복구",()=>{
   for(const row of port.files){
     let source=fs.readFileSync(path.join(root,row.path),"utf8").replace(/\r\n/g,"\n").split(version).join(port.publicVersion);
@@ -35,7 +45,7 @@ test("전화번호 projection 추가·중복·누락 drift는 기존 golden 이�
     const source=fs.readFileSync(path.join(root,row.path),"utf8").replace(/\r\n/g,"\n");
     const restored=restorePhone(row.path,source).split(version).join(port.publicVersion);
     assert.equal(hash(restored),row.baseSha256,row.path);
-    const after=row.hunks[0].after;
+    const after=row.hunks.at(-1).after;
     assert.equal(source.split(after).length,2,row.path);
     for(const drift of [source+"\n",source.replace(after,()=>after+after),source.replace(after,"")]){
       assert.throws(()=>restorePhone(row.path,drift),/phone candidate drift/);

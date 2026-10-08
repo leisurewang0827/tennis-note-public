@@ -121,6 +121,7 @@ function applySavedIdentity(profile = {}, { preserveCompletion = false } = {}) {
   state.profile.profileCompletedAt = preserveCompletion ? profile.profile_completed_at || "" : profile.profile_completed_at || state.profile.profileCompletedAt || new Date().toISOString();
   state.profile.privacyConsentVersion = preserveCompletion ? profile.privacy_consent_version || "" : profile.privacy_consent_version || state.profile.privacyConsentVersion || identityPrivacyVersion;
   state.profile.privacyConsentedAt = preserveCompletion ? profile.privacy_consented_at || "" : profile.privacy_consented_at || state.profile.privacyConsentedAt || new Date().toISOString();
+  if (profile.updated_at) state.profile.serverRevision = profile.updated_at;
   if (state.member) {
     state.member.name = state.profile.name;
     state.member.nickname = state.profile.nickname;

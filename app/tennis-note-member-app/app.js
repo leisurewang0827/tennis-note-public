@@ -398,6 +398,8 @@ let profilePhoneExpectedPhone = "";
 let profilePhoneEditorOwner = null;
 let profilePhoneSaveOperation = { fingerprint: "", key: "" };
 let profileInfoSaving = false;
+let ntrpCheckSaving = false;
+let selfProfileStyleOperation = { fingerprint: "", key: "", parameters: null };
 // 공개 앱도 서버 capability를 확인한 뒤에만 SMS를 요청한다.
 const signupSmsEnabled = true;
 

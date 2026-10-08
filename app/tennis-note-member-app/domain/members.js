@@ -230,7 +230,7 @@ function mergeScheduleV2MemberRecords(mappedLessons = []) {
 
 function openProfileEditor(focusNtrp = false) {
   profilePhoneExpectedPhone = normalizeIdentityPhone(state.profile?.phone || "");
-  profilePhoneEditorOwner = phoneVerificationOwner();
+  profilePhoneEditorOwner = { ...phoneVerificationOwner(), revision: state.profile.serverRevision || "" };
   const owner = profilePhoneEditorOwner;
   resetIdentityPhoneVerification("기존 번호를 유지하거나 새 번호를 인증한 후 저장하세요.", "profile");
   openAppSheet("profileEditorSheet");
