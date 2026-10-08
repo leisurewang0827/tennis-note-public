@@ -73,7 +73,10 @@ test("가입 화면은 전화번호 인증 후 멱등 가입 RPC와 정확한 �
   assert.match(auth, /expectedProfileId: result.profile.id/);
   assert.match(auth, /expectedAuthUserId: signupAuthUserId/);
   assert.match(auth, /requireSignupReadback: true/);
-  assert.match(actions, /identityPhoneVerification = \{ phone, status: "pending", source: "sms" \}/);
+  assert.match(actions, /const verification = \{ phone, status: "pending", source: "sms", owner \}/);
+  assert.match(actions, /if \(surface === "profile"\) profilePhoneVerification = verification;\s*else identityPhoneVerification = verification;/);
+  assert.match(actions, /phoneVerificationRequestCurrent\(owner, phone, surface\)/);
+  assert.match(actions, /phoneVerificationOwnerCurrent\(verification\.owner\)/);
   assert.match(actions, /refreshAuthProviderCapabilities\(\{ force: true \}\)/);
   assert.match(actions, /identityPhoneRequestInFlight/);
   assert.match(html, /id="identityPhoneSendButton"/);
@@ -82,8 +85,12 @@ test("가입 화면은 전화번호 인증 후 멱등 가입 RPC와 정확한 �
   assert.match(identityDomain, /function authUserHasProvider/);
   assert.match(actions, /client\.signInWithOAuth\("Naver", \{ authType: "reprompt" \}\)/);
   assert.match(memberForms, /id.*identityNaverPhoneButton|identityNaverPhoneButton/);
-  assert.match(memberForms, /identityPhone.*value\s*=\s*formatIdentityPhone\(normalizedPhone\)/);
-  assert.match(memberForms, /identityPhoneVerification.*removeAttribute\("hidden"\)/s);
+  assert.match(memberForms, /if \(controls\.input && surface === "signup"\) controls\.input\.value = formatIdentityPhone\(normalizedPhone\)/);
+  assert.match(memberForms, /syncPhoneVerificationControl\("signup"\);\s*syncPhoneVerificationControl\("profile"\);/);
+  assert.match(memberForms, /controls\.block\?\.removeAttribute\("hidden"\)/);
+  assert.match(memberForms, /owner\.client === current\.client/);
+  assert.match(memberForms, /owner\.authId === current\.authId && owner\.profileId === current\.profileId/);
+  assert.match(memberForms, /identityAuthCapabilities\.providers\.phone === false \|\| identityAuthCapabilities\.status === "unavailable"/);
   assert.match(profileEvents, /identityNaverPhoneButton.*requestNaverPhoneConsent/);
   assert.match(html, /id="identityNaverPhoneButton"/);
 });

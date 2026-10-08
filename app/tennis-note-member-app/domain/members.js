@@ -229,7 +229,15 @@ function mergeScheduleV2MemberRecords(mappedLessons = []) {
 }
 
 function openProfileEditor(focusNtrp = false) {
+  profilePhoneExpectedPhone = normalizeIdentityPhone(state.profile?.phone || "");
+  profilePhoneEditorOwner = phoneVerificationOwner();
+  const owner = profilePhoneEditorOwner;
+  resetIdentityPhoneVerification("기존 번호를 유지하거나 새 번호를 인증한 후 저장하세요.", "profile");
   openAppSheet("profileEditorSheet");
+  void refreshIdentityPhoneVerification("profile").catch(() => {
+    if (phoneVerificationOwnerCurrent(owner)) setIdentityPhoneStatus("인증 상태를 확인하지 못했습니다. 입력을 유지한 채 다시 확인해 주세요.", "error", "profile");
+  });
+  void refreshAuthProviderCapabilities();
   if (!focusNtrp) return;
   // Keep the opening tap on the sheet itself. Focusing the select during the
   // same pointer sequence makes iOS open the native picker as a second layer.

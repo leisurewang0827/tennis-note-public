@@ -5900,6 +5900,13 @@ button.purchase-timetable-cell {
   margin: 0;
 }
 
+/* The profile OTP surface also works in a desktop-width/native landscape
+   viewport; do not rely only on the foundation's mobile media query. */
+#profileEditorSheet :is(#profilePhoneInput, #profilePhoneCode) {
+  min-height: 44px;
+  font-size: 16px;
+}
+
 @media (max-width: 420px) {
   .identity-demographics-grid {
     grid-template-columns: 1fr;

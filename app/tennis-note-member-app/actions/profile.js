@@ -87,6 +87,49 @@ async function updateMemberProfileOnServer(values = {}) {
 }
 
 async function saveProfileInfo() {
+  if (profileInfoSaving) return false;
+  profileInfoSaving = true;
+  const button = $("#saveProfileInfo");
+  if (button) button.disabled = true;
+  const identityFields = ["#profileRealNameInput", "#profileNicknameInput", "#profilePhoneInput"]
+    .map((selector) => $(selector)).filter(Boolean).map((field) => ({ field, readOnly: field.readOnly }));
+  // readonly keeps values in the ordinary draft/input-guard snapshot. Disabled
+  // fields disappear from that snapshot and cause a false unsaved prompt.
+  identityFields.forEach(({ field }) => { field.readOnly = true; });
+  try { return await saveProfileInfoOnce(); }
+  finally {
+    identityFields.forEach(({ field, readOnly }) => { field.readOnly = readOnly; });
+    profileInfoSaving = false;
+    if (button) button.disabled = false;
+  }
+}
+
+async function requestNtrpCheck() {
+  const survey = collectNtrpSurvey();
+  state.profile.ntrpCheckRequested = true;
+  state.profile.ntrpSurvey = survey.answers;
+  state.profile.selfNtrp = survey.level;
+  if ($("#profileSelfNtrp")) $("#profileSelfNtrp").value = survey.level;
+  const requestedAt = new Date().toISOString();
+  const serverResult = await updateMemberProfileOnServer({
+    self_ntrp: Number(survey.level),
+    ntrp_survey: survey.answers,
+    ntrp_requested_at: requestedAt,
+    tennis_goal: state.profile.goal || null,
+    play_style_memo: state.profile.styleMemo || null,
+  });
+  exportNtrpRequest(survey);
+  state.ticketHistory.unshift({
+    text: serverResult.ok === false ? "수준 확인 요청 전송 실패 · 다시 시도 필요" : "코치에게 수준 확인 요청 완료",
+    tone: serverResult.ok === false ? "alert" : "wait",
+  });
+  renderProfile();
+  renderTickets();
+  saveSnapshot();
+}
+
+
+async function saveProfileInfoOnce() {
   try {
     await persistIdentityProfile({
       realName: $("#profileRealNameInput")?.value,
@@ -95,6 +138,7 @@ async function saveProfileInfo() {
       birthYear: state.profile.birthYear || state.member?.birthYear,
       neighborhood: state.profile.neighborhood || state.member?.neighborhood,
       gender: state.profile.gender || state.member?.gender,
+      profileEditor: true,
     });
     setNicknameStatus("profileNicknameStatus", "실명과 닉네임을 확인했습니다.", "available");
   } catch (error) {
@@ -134,28 +178,4 @@ async function saveProfileInfo() {
   saveSnapshot();
   window.TennisNoteInputGuard?.markSaved?.("#profileEditorSheet");
   closeAppSheet("profileEditorSheet");
-}
-
-async function requestNtrpCheck() {
-  const survey = collectNtrpSurvey();
-  state.profile.ntrpCheckRequested = true;
-  state.profile.ntrpSurvey = survey.answers;
-  state.profile.selfNtrp = survey.level;
-  if ($("#profileSelfNtrp")) $("#profileSelfNtrp").value = survey.level;
-  const requestedAt = new Date().toISOString();
-  const serverResult = await updateMemberProfileOnServer({
-    self_ntrp: Number(survey.level),
-    ntrp_survey: survey.answers,
-    ntrp_requested_at: requestedAt,
-    tennis_goal: state.profile.goal || null,
-    play_style_memo: state.profile.styleMemo || null,
-  });
-  exportNtrpRequest(survey);
-  state.ticketHistory.unshift({
-    text: serverResult.ok === false ? "수준 확인 요청 전송 실패 · 다시 시도 필요" : "코치에게 수준 확인 요청 완료",
-    tone: serverResult.ok === false ? "alert" : "wait",
-  });
-  renderProfile();
-  renderTickets();
-  saveSnapshot();
 }

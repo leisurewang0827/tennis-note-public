@@ -89,6 +89,9 @@ TENNISNOTE_EXCEL_REFRESH_RACE_ONLY=1 node scripts/check_tennisnote_single_sheet_
 step "개발 기존 계정 로그인·가입/재설정 차단 (Chromium/WebKit)"
 node scripts/check_tennisnote_development_signin_browser.cjs
 
+step "본인 번호 인증·저장 실제 modular entry (Chromium/WebKit)"
+node scripts/check_tennisnote_verified_profile_phone_browser.cjs
+
 step "개발·운영 제품 정렬 검사"
 "$PYTHON_BIN" scripts/check_tennisnote_dev_prod_alignment.py
 
