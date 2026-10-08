@@ -348,6 +348,82 @@ async function profileContracts(page) {
     return checks;
   });
 }
+// 실제 modular entry의 기본 10개 설문을 빈 선택값과 함께 전송한다.
+// SQL/RPC 자체 증명은 private PG rollback acceptance가 별도로 담당한다.
+async function optionalProfileContracts(page) {
+  return page.evaluate(async () => {
+    const checks = {}, check = (name, ok) => { checks[name] = Boolean(ok); };
+    const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+    const phone = "01" + "0".repeat(7) + "81";
+    const profileId = id(781), authId = id(881);
+    const keys = ["rally", "forehand", "backhand", "serve", "return", "net", "game", "movement", "control", "doubles"];
+    let server = { id: profileId, name: "합성 회원", nickname: "합성테니스", phone,
+      profile_photo_url: null, dominant_hand: "오른손", backhand_style: "투핸드 백핸드",
+      tennis_started_on: null, tennis_goal: null, play_style_memo: null, self_ntrp: null,
+      ntrp_survey: {}, updated_at: "2026-01-01T00:00:00.000Z" };
+    let sms = 0, patches = 0, commits = 0, calls = 0;
+    const receipts = new Map();
+    const client = window.TennisNoteDataClient;
+    client.getSession = () => ({ access_token: "synthetic-only", user: { id: authId } });
+    client.getAuthUser = async () => ({ id: authId, phone: "82" + phone.slice(1), phone_confirmed_at: "2026-01-01T00:00:00Z" });
+    client.getAuthSettings = async () => ({ external: { phone: true } });
+    client.requestPhoneChangeVerification = async () => { sms++; throw new Error("unexpected_sms"); };
+    client.updateRows = async () => { patches++; throw new Error("unexpected_patch"); };
+    client.rpc = async (name, parameters) => {
+      calls++;
+      if (name !== "tn_save_my_verified_profile_phone") throw new Error("unexpected_rpc");
+      const payload = parameters.target_profile;
+      if (Object.keys(payload.ntrp_survey).some(key => !keys.includes(key))
+        || Object.values(payload.ntrp_survey).some(value => ![1.5, 2, 2.5, 3, 3.5, 4].includes(value)))
+        throw new Error("profile_style_input_invalid");
+      check("actual_ten_survey_keys", JSON.stringify(Object.keys(payload.ntrp_survey)) === JSON.stringify(keys));
+      check("empty_optionals_are_null_not_invalid_empty_date", ["profile_photo_url", "tennis_started_on", "tennis_goal", "play_style_memo", "self_ntrp"].every(key => payload[key] === null));
+      check("existing_verified_identity_and_revision", parameters.target_profile_id === profileId
+        && parameters.target_expected_phone === phone && payload.phone === phone
+        && payload.expected_revision === "2026-01-01T00:00:00.000Z");
+      if (receipts.has(parameters.target_operation_key)) return receipts.get(parameters.target_operation_key);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      const { expected_revision, ...values } = payload;
+      server = { ...server, ...values, updated_at: "2026-01-01T00:00:01.000Z" };
+      const reply = { ok: true, phoneVerified: true, phoneChanged: false, styleSaved: true,
+        profileContract: "atomic-self-profile/1", profile: { ...server } };
+      receipts.set(parameters.target_operation_key, reply); commits++;
+      return reply;
+    };
+    state.member = { ...state.member, id: profileId, profileId, authUserId: authId };
+    state.liveProfileId = profileId;
+    Object.assign(state.profile, { name: server.name, nickname: server.nickname, phone, hand: server.dominant_hand,
+      backhand: server.backhand_style, goal: "", styleMemo: "", startedAt: "", photoDataUrl: "", selfNtrp: "", ntrpSurvey: {}, serverRevision: server.updated_at });
+    document.querySelector("#identitySetupModal").hidden = true;
+    document.querySelector("#loginScreen").hidden = true;
+    document.querySelector("#appScreen").hidden = false;
+    document.body.dataset.screen = "app";
+    renderProfile(); navigateMemberView("profileView"); openProfileEditor();
+    // 미선택/비숫자 placeholder는 새 rating을 주지 않고 null로 직렬화한다.
+    document.querySelector("#profileSelfNtrp").value = "";
+    const before = ["profileRealNameInput", "profileNicknameInput", "profilePhoneInput", "profileHand", "profileBackhand"]
+      .map(key => document.getElementById(key).value);
+    const settled = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("optional_save_close_not_settled")), 3000);
+      document.getElementById("profileEditorSheet").addEventListener("tennisnote:sheet-closed", () => {
+        clearTimeout(timer); resolve();
+      }, { once: true });
+    });
+    document.getElementById("saveProfileInfo").click();
+    await settled;
+    check("real_bound_click_rpc_once_and_closed", calls === 1 && commits === 1 && document.getElementById("profileEditorSheet").hidden);
+    check("saved_empty_values_and_rating_not_fabricated", server.tennis_goal === null && server.play_style_memo === null
+      && server.tennis_started_on === null && server.self_ntrp === null && state.profile.selfNtrp === "");
+    openProfileEditor();
+    check("reopen_existing_fields_unchanged", JSON.stringify(before) === JSON.stringify(
+      ["profileRealNameInput", "profileNicknameInput", "profilePhoneInput", "profileHand", "profileBackhand"].map(key => document.getElementById(key).value)));
+    check("reopen_optional_empty_and_full_survey_readback", ["profileStartedAt", "profileGoal", "profileStyleMemo"].every(key => document.getElementById(key).value === "")
+      && JSON.stringify(state.profile.ntrpSurvey) === JSON.stringify(server.ntrp_survey));
+    check("sms_and_direct_patch_zero", sms === 0 && patches === 0);
+    return checks;
+  });
+}
+
 async function main() {
   const server=http.createServer((req,res)=>{
     const pathname=new URL(req.url,"http://127.0.0.1").pathname;
@@ -363,19 +439,22 @@ async function main() {
   const origin=`http://127.0.0.1:${server.address().port}`;
   const captureDir=process.env.TENNISNOTE_PROFILE_CAPTURE_DIR;
   const captureOnly=process.env.TENNISNOTE_PROFILE_CAPTURE_ONLY==="true";
+  const optionalOnly=process.env.TENNISNOTE_PROFILE_OPTIONAL_ONLY==="true";
   assert(!captureOnly || captureDir,"capture_only_requires_private_output_directory");
   if(captureDir)fs.mkdirSync(captureDir,{recursive:true});
   let contexts=0,predicates=0;
   try {
     for(const selected of ["chromium","webkit"]){
       if(process.env.TENNISNOTE_BROWSER_ENGINE && process.env.TENNISNOTE_BROWSER_ENGINE!==selected)continue;
-      const browser=await (selected==="webkit"?webkit:chromium).launch({headless:true});
+      const browser=await (selected==="webkit"?webkit:chromium).launch({headless:true,
+        ...(selected==="chromium" && process.env.TENNISNOTE_CHROMIUM_EXECUTABLE ? {executablePath:process.env.TENNISNOTE_CHROMIUM_EXECUTABLE} : {})});
       try {
         for(const colorScheme of colorSchemes) for(const viewport of viewports){
           if(captureOnly && ![390,768,1366].includes(viewport.width))continue;
-          const context=await browser.newContext({viewport,colorScheme,serviceWorkers:"block"});
+          if(optionalOnly && ![390,768,1366].includes(viewport.width))continue;
+          let context=await browser.newContext({viewport,colorScheme,serviceWorkers:"block"});
           await context.route("**/*",r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
-          const page=await context.newPage(),errors=[];page.on("pageerror",e=>errors.push(e.message));
+          let page=await context.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));
           await page.goto(`${origin}/app/tennis-note-member-app/index.html`,{waitUntil:"load"});
           await page.waitForFunction(()=>typeof saveProfileInfoOnce==="function");
           await page.evaluate(()=>{
@@ -383,7 +462,23 @@ async function main() {
             window.TennisNoteDataClient.readiness=()=>({ready:true});
             bindProfileEvents();identityAuthCapabilities={status:"ready",providers:{phone:true},checkedAt:Date.now()};
           });
-          const result=await profileContracts(page);
+          const legacyResult=optionalOnly ? {} : await profileContracts(page);
+          if(!optionalOnly){
+            // Reload alone retains the legacy snapshot and its editor draft.
+            // Isolate the second contract in a genuinely empty browser context.
+            await context.close();
+            context=await browser.newContext({viewport,colorScheme,serviceWorkers:"block"});
+            await context.route("**/*",r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
+            page=await context.newPage();page.on("pageerror",e=>errors.push(e.message));
+            await page.goto(`${origin}/app/tennis-note-member-app/index.html`,{waitUntil:"load"});
+            await page.waitForFunction(()=>typeof saveProfileInfoOnce==="function");
+            await page.evaluate(()=>{
+              window.__tennisNoteBootReady?.();document.querySelector("#brandSplash").style.display="none";
+              window.TennisNoteDataClient.readiness=()=>({ready:true});
+              bindProfileEvents();identityAuthCapabilities={status:"ready",providers:{phone:true},checkedAt:Date.now()};
+            });
+          }
+          const result={...legacyResult,...await optionalProfileContracts(page)};
           for(const [name,ok] of Object.entries(result))assert(ok,`${selected}/${viewport.width}/${colorScheme}: ${name}`);
           assert(errors.length===0,`page_errors:${errors.join("|")}`);
           if(captureDir && [390,768,1366].includes(viewport.width)){
@@ -400,7 +495,7 @@ async function main() {
         }
       } finally {await browser.close();}
     }
-    console.log(JSON.stringify({status:"PASS",modularEntry:true,contexts,predicates,captureOnly,externalWrites:0,actualDevice:"NOT VERIFIED"}));
+    console.log(JSON.stringify({status:"PASS",modularEntry:true,contexts,predicates,captureOnly,optionalOnly,externalWrites:0,actualDevice:"NOT VERIFIED"}));
   } finally {await new Promise(resolve=>server.close(resolve));}
 }
 main().catch(e=>{console.error("FAIL "+e.message);process.exitCode=1;});
