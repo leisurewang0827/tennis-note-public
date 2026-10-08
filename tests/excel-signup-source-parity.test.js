@@ -7,11 +7,12 @@ const root = path.resolve(__dirname, '..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
 const manifest = JSON.parse(read('docs/excel-signup-source-parity-20261001.json'));
 const hash = s => createHash('sha256').update(s).digest('hex');
+const { restorePhone } = require('./helpers/verified-profile-phone-port.cjs');
 for (const item of manifest.shared) test(`Excel private source parity: ${item.path}`, () => {
   assert.equal(hash(read(item.path)), item.sha256);
 });
 for (const item of manifest.functions) test(`Signup modular authority: ${item.name}`, () => {
-  const body = read(item.path).match(new RegExp('^(?:async )?function ' + item.name + '\\([^]*?^}', 'm'))?.[0];
+  const body = restorePhone(item.path, read(item.path)).match(new RegExp('^(?:async )?function ' + item.name + '\\([^]*?^}', 'm'))?.[0];
   assert.ok(body);
   assert.equal(hash(body), item.sha256);
   const relative = item.path.replace('app/tennis-note-member-app/', '');

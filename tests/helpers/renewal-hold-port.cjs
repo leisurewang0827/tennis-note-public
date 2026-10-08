@@ -8,6 +8,7 @@ const sha = value => crypto.createHash("sha256").update(value).digest("hex");
 const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 // 승인된 후보 전체 hash와 각 hunk의 유일성을 확인한 뒤 기존 golden 검사를 그대로 사용한다.
 function restoreBase(file, source) {
+  source = require("./verified-profile-phone-port.cjs").restorePhone(file, source);
   // 기존 R3 manifest 밖의 잠금 수정도 먼저 검증·역변환하여 이전 golden을 보존한다.
   source = require("./r3-admin-history-port.cjs").restoreUnlock(file, source);
   // R3 후속 후보는 먼저 exact 해시/offset으로 역변환한다. 기존 HOLD 근거는 그대로 검사한다.
