@@ -70,27 +70,83 @@ function removeProfilePhoto() {
   saveSnapshot();
 }
 
-async function updateMemberProfileOnServer(values = {}) {
+async function updateMemberProfileOnServer(values = {}, identity = null) {
   const client = window.TennisNoteDataClient;
-  const profileId = state.member?.profileId || "";
-  if (!client?.readiness?.().ready || !client.updateRows || !profileId) return { skipped: true };
+  const owner = identity ? profilePhoneEditorOwner : phoneVerificationOwner();
   try {
-    const rows = await client.updateRows("tn_users", { id: profileId }, {
-      ...values,
-      updated_at: new Date().toISOString(),
-    });
-    if (!Array.isArray(rows) || !rows[0]?.id) throw new Error("profile_update_not_confirmed");
-    return { ok: true, profile: rows[0] };
+    if (!hasLiveMemberSession() || !client?.rpc || !owner?.profileId || !phoneVerificationOwnerCurrent(owner)) throw new Error("login_required");
+    const allowed = ["profile_photo_url", "dominant_hand", "backhand_style", "tennis_started_on", "tennis_goal", "play_style_memo", "self_ntrp", "ntrp_survey", "ntrp_requested"];
+    if (!Object.keys(values).length || Object.keys(values).some((key) => !allowed.includes(key))) throw new Error("profile_style_input_invalid");
+    const expectedPhone = identity ? profilePhoneExpectedPhone : normalizeIdentityPhone(state.profile.phone || "");
+    const expectedRevision = identity ? owner.revision : state.profile.serverRevision;
+    const targetProfile = { ...(identity || { name: state.profile.name, nickname: state.profile.nickname, phone: expectedPhone }), ...values };
+    if (!expectedRevision) throw new Error("profile_revision_required");
+    if (identity && !phoneVerificationRequestCurrent(owner, targetProfile.phone, "profile")) throw new Error("profile_phone_context_changed");
+    // Keep exact request/revision in memory for response-loss replay. Never
+    // infer a successful PATCH or create a new key merely because time passed.
+    const fingerprint = JSON.stringify([owner.authId, owner.profileId, expectedPhone, expectedRevision, targetProfile]);
+    if (selfProfileStyleOperation.fingerprint !== fingerprint) selfProfileStyleOperation = {
+      fingerprint, key: crypto.randomUUID(), parameters: null,
+    };
+    selfProfileStyleOperation.parameters ||= {
+      target_profile_id: owner.profileId, target_profile: { ...targetProfile, expected_revision: expectedRevision },
+      target_expected_phone: expectedPhone, target_operation_key: selfProfileStyleOperation.key,
+    };
+    const raw = await client.rpc("tn_save_my_verified_profile_phone", selfProfileStyleOperation.parameters);
+    if (!phoneVerificationOwnerCurrent(owner) || (identity && !phoneVerificationRequestCurrent(owner, targetProfile.phone, "profile"))) throw new Error("profile_phone_context_changed");
+    const saved = Array.isArray(raw) ? raw[0] : raw;
+    if (!saved?.ok || saved.profileContract !== "atomic-self-profile/1" || saved.styleSaved !== true
+      || saved.profile?.id !== owner.profileId || !saved.profile.updated_at
+      || normalizeIdentityPhone(saved.profile.phone || "") !== normalizeIdentityPhone(targetProfile.phone)
+      || normalizeIdentityText(saved.profile.name) !== normalizeIdentityText(targetProfile.name)
+      || normalizeIdentityText(saved.profile.nickname) !== normalizeIdentityText(targetProfile.nickname)
+      || (targetProfile.phone !== expectedPhone && saved.phoneVerified !== true)
+      || Object.keys(values).some((key) => key === "ntrp_requested" ? !saved.profile.ntrp_requested_at
+        : key === "ntrp_survey" ? JSON.stringify(Object.entries(saved.profile[key] || {}).sort()) !== JSON.stringify(Object.entries(values[key]).sort())
+          : saved.profile[key] !== values[key])) throw new Error("profile_atomic_readback_unconfirmed");
+    applySavedIdentity(saved.profile, { preserveCompletion: true });
+    const profile = saved.profile;
+    const savedValues = {
+      profile_photo_url: ["photoDataUrl", profile.profile_photo_url || ""],
+      dominant_hand: ["hand", profile.dominant_hand || ""], backhand_style: ["backhand", profile.backhand_style || ""],
+      tennis_started_on: ["startedAt", profile.tennis_started_on || ""],
+      tennis_goal: ["goal", profile.tennis_goal || ""], play_style_memo: ["styleMemo", profile.play_style_memo || ""],
+      self_ntrp: ["selfNtrp", profile.self_ntrp == null ? "" : String(profile.self_ntrp)],
+      ntrp_survey: ["ntrpSurvey", profile.ntrp_survey || {}],
+      ntrp_requested: ["ntrpCheckRequested", Boolean(profile.ntrp_requested_at)],
+    };
+    // NTRP처럼 일부 항목만 저장할 때 관련 없는 로컬 사진·스타일 초안은 유지한다.
+    Object.keys(values).forEach((key) => { const [field, value] = savedValues[key]; state.profile[field] = value; });
+    return saved;
   } catch (error) {
     return { ok: false, error };
   }
 }
 
+function profileSaveErrorMessage(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "");
+  if (/readback_unconfirmed|context_changed|Failed to fetch|NetworkError|timeout/i.test(message)
+    || code === "server_connection_failed" || [408, 502, 503, 504].includes(Number(error?.status)) || error instanceof TypeError)
+    return "저장 결과를 확인하지 못했습니다. 입력은 유지됩니다. 연결을 확인한 후 같은 내용으로 다시 확인해 주세요.";
+  if (/profile_revision|profile_operation_superseded/.test(message)) return "서버 정보가 바뀌었거나 확인되지 않았습니다. 입력을 유지한 채 최신 정보를 확인해 주세요.";
+  if (/profile_style_input_invalid/.test(message)) return "운동정보의 항목과 길이를 확인해 주세요. 변경 내용은 저장되지 않았습니다.";
+  if (code === "42501" || /permission denied/.test(message)) return "저장 권한을 확인하지 못했습니다. 입력은 유지됩니다. 관리자에게 문의해 주세요.";
+  if (/profile_phone_input_invalid|PGRST202/.test(message + code)) return "서버 저장 계약이 아직 준비되지 않았습니다. 입력은 유지됩니다.";
+  return identityErrorMessage(error);
+}
+
+function lockProfileMutationControls() {
+  const controls = ["#saveProfileInfo", "#requestNtrpCheck"].map((selector) => $(selector)).filter(Boolean)
+    .map((field) => ({ field, disabled: field.disabled }));
+  controls.forEach(({ field }) => { field.disabled = true; });
+  return () => controls.forEach(({ field, disabled }) => { field.disabled = disabled; });
+}
+
 async function saveProfileInfo() {
-  if (profileInfoSaving) return false;
+  if (profileInfoSaving || ntrpCheckSaving) return false;
   profileInfoSaving = true;
-  const button = $("#saveProfileInfo");
-  if (button) button.disabled = true;
+  const unlockControls = lockProfileMutationControls();
   const identityFields = ["#profileRealNameInput", "#profileNicknameInput", "#profilePhoneInput"]
     .map((selector) => $(selector)).filter(Boolean).map((field) => ({ field, readOnly: field.readOnly }));
   // readonly keeps values in the ordinary draft/input-guard snapshot. Disabled
@@ -100,36 +156,52 @@ async function saveProfileInfo() {
   finally {
     identityFields.forEach(({ field, readOnly }) => { field.readOnly = readOnly; });
     profileInfoSaving = false;
-    if (button) button.disabled = false;
+    unlockControls();
   }
 }
 
 async function requestNtrpCheck() {
+  if (profileInfoSaving || ntrpCheckSaving) return false;
+  ntrpCheckSaving = true;
+  const unlockControls = lockProfileMutationControls();
+  const preserveEditorDraft = Boolean($("#profileEditorSheet") && !$("#profileEditorSheet").hidden);
+  try {
   const survey = collectNtrpSurvey();
-  state.profile.ntrpCheckRequested = true;
-  state.profile.ntrpSurvey = survey.answers;
-  state.profile.selfNtrp = survey.level;
-  if ($("#profileSelfNtrp")) $("#profileSelfNtrp").value = survey.level;
-  const requestedAt = new Date().toISOString();
   const serverResult = await updateMemberProfileOnServer({
     self_ntrp: Number(survey.level),
     ntrp_survey: survey.answers,
-    ntrp_requested_at: requestedAt,
-    tennis_goal: state.profile.goal || null,
-    play_style_memo: state.profile.styleMemo || null,
+    ntrp_requested: true,
   });
+  if (!serverResult.ok) { showToast(profileSaveErrorMessage(serverResult.error)); return false; }
+  if (preserveEditorDraft && phoneVerificationOwnerCurrent(profilePhoneEditorOwner)) {
+    profilePhoneEditorOwner = { ...profilePhoneEditorOwner, revision: state.profile.serverRevision };
+  }
+  if ($("#profileSelfNtrp")) $("#profileSelfNtrp").value = survey.level;
   exportNtrpRequest(survey);
   state.ticketHistory.unshift({
-    text: serverResult.ok === false ? "수준 확인 요청 전송 실패 · 다시 시도 필요" : "코치에게 수준 확인 요청 완료",
-    tone: serverResult.ok === false ? "alert" : "wait",
+    text: "코치에게 수준 확인 요청 완료",
+    tone: "wait",
   });
-  renderProfile();
+  // 수준 확인은 열린 실명/번호/스타일 초안을 저장하거나 다시 그리지 않는다.
+  if (!preserveEditorDraft) renderProfile();
   renderTickets();
   saveSnapshot();
+  return true;
+  } finally { ntrpCheckSaving = false; unlockControls(); }
 }
 
 
 async function saveProfileInfoOnce() {
+  const profileStyle = {
+    profile_photo_url: state.profile.photoDataUrl || null,
+    dominant_hand: $("#profileHand")?.value || null,
+    backhand_style: $("#profileBackhand")?.value || null,
+    tennis_started_on: $("#profileStartedAt")?.value || null,
+    tennis_goal: $("#profileGoal")?.value.trim() || null,
+    play_style_memo: $("#profileStyleMemo")?.value.trim() || null,
+    self_ntrp: Number($("#profileSelfNtrp")?.value) || null,
+    ntrp_survey: collectNtrpSurvey().answers,
+  };
   try {
     await persistIdentityProfile({
       realName: $("#profileRealNameInput")?.value,
@@ -139,38 +211,14 @@ async function saveProfileInfoOnce() {
       neighborhood: state.profile.neighborhood || state.member?.neighborhood,
       gender: state.profile.gender || state.member?.gender,
       profileEditor: true,
+      profileStyle,
     });
     setNicknameStatus("profileNicknameStatus", "실명과 닉네임을 확인했습니다.", "available");
   } catch (error) {
-    const errorMessage = identityErrorMessage(error);
+    const errorMessage = profileSaveErrorMessage(error);
     setNicknameStatus("profileNicknameStatus", errorMessage, "unavailable");
     showToast(errorMessage);
-    return;
-  }
-  state.profile.hand = $("#profileHand")?.value || state.profile.hand;
-  state.profile.backhand = $("#profileBackhand")?.value || state.profile.backhand;
-  state.profile.startedAt = $("#profileStartedAt")?.value || "";
-  state.profile.goal = $("#profileGoal")?.value.trim() || "";
-  state.profile.styleMemo = $("#profileStyleMemo")?.value.trim() || "";
-  state.profile.selfNtrp = $("#profileSelfNtrp")?.value || state.profile.selfNtrp;
-  state.profile.ntrpSurvey = collectNtrpSurvey().answers;
-  const serverResult = await updateMemberProfileOnServer({
-    profile_photo_url: state.profile.photoDataUrl || null,
-    dominant_hand: state.profile.hand || null,
-    backhand_style: state.profile.backhand || null,
-    tennis_started_on: state.profile.startedAt || null,
-    tennis_goal: state.profile.goal || null,
-    play_style_memo: state.profile.styleMemo || null,
-    self_ntrp: Number(state.profile.selfNtrp) || null,
-    ntrp_survey: state.profile.ntrpSurvey || {},
-  });
-  if (serverResult.ok === false) {
-    state.ticketHistory.unshift({ text: "내 정보 서버 저장 실패 · 연결 확인 필요", tone: "alert" });
-    renderProfile();
-    renderTickets();
-    saveSnapshot();
-    showToast("서버 저장에 실패했습니다. 다시 시도해주세요.");
-    return;
+    return false;
   }
   state.ticketHistory.unshift({ text: "내 정보와 테니스 스타일 저장 완료", tone: "done" });
   renderProfile();
@@ -178,4 +226,5 @@ async function saveProfileInfoOnce() {
   saveSnapshot();
   window.TennisNoteInputGuard?.markSaved?.("#profileEditorSheet");
   closeAppSheet("profileEditorSheet");
+  return true;
 }

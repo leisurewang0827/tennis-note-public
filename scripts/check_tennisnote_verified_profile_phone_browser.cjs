@@ -32,7 +32,8 @@ async function profileContracts(page) {
     const profileId = id(1), authId = id(101);
     let currentAuthId = authId;
     let authUser = { id: authId, user_metadata: {} };
-    let sends = 0, verifies = 0;
+    let sends = 0, verifies = 0, patches = 0;
+    const revision = "2026-01-01T00:00:00.000Z";
     const rpcCalls = [];
     const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
     client.getSession = () => ({ access_token: "synthetic-session", user: { id: currentAuthId } });
@@ -45,12 +46,18 @@ async function profileContracts(page) {
       return { ok: true };
     };
     const reply = (parameters) => ({ ok: true, phoneVerified: parameters.target_profile.phone !== oldPhone,
-      profile: { id: profileId, ...parameters.target_profile } });
+      styleSaved: Boolean(parameters.target_profile.expected_revision), profileContract: "atomic-self-profile/1",
+      profile: { id: profileId, profile_photo_url: null, dominant_hand: "오른손", backhand_style: "투핸드 백핸드",
+        tennis_started_on: null, tennis_goal: null, play_style_memo: null, self_ntrp: 2.5, ntrp_survey: {},
+        ntrp_requested_at: parameters.target_profile.ntrp_requested ? revision : null,
+        ...parameters.target_profile, updated_at: revision } });
     client.rpc = async (name, parameters) => { rpcCalls.push({ name, parameters }); return reply(parameters); };
-    client.updateRows = async (_table, filter) => [{ id: filter.id }];
+    // Hosted-like failure, not the old unrestricted test double.
+    client.updateRows = async () => { patches += 1; throw Object.assign(new Error("permission denied"), { code: "42501" }); };
     state.member = { ...state.member, id: profileId, profileId, authUserId: authId };
     state.liveProfileId = profileId;
     state.profile.name = "합성 회원"; state.profile.nickname = "합성별명"; state.profile.phone = oldPhone;
+    state.profile.serverRevision = revision;
     document.querySelector("#identitySetupModal").hidden = true;
     document.querySelector("#brandSplash").hidden = true;
     // Auth is synthetic; expose the approved app surface instead of measuring
@@ -161,6 +168,7 @@ async function profileContracts(page) {
     };
     setPhone(nextPhone); // unchanged baseline: saving must not require another OTP.
     const beforeSave = rpcCalls.length;
+    document.querySelector("#profileGoal").value = "합성 새 목표";
     const saveBackSettled = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("profile_save_back_not_settled")), 2000);
       window.addEventListener("popstate", () => { clearTimeout(timer); resolve(); }, { once: true });
@@ -168,6 +176,119 @@ async function profileContracts(page) {
     await Promise.all([saveProfileInfo(), saveProfileInfo()]);
     await saveBackSettled; // Finish the real close/history lifecycle before reopening.
     check("save_click_lock_rpc_one", rpcCalls.length === beforeSave + 1 && !profileInfoSaving && frozenDuringSave && !input.readOnly);
+    check("atomic_style_save_no_direct_patch", patches === 0 && state.profile.goal === "합성 새 목표"
+      && rpcCalls.at(-1).parameters.target_profile.tennis_goal === "합성 새 목표");
+    openProfileEditor(); await tick();
+    const savedGoal = state.profile.goal;
+    document.querySelector("#profileGoal").value = "합성 보존할 초안";
+    const beforeFailure = rpcCalls.length;
+    client.rpc = async (name, parameters) => { rpcCalls.push({name,parameters}); throw Object.assign(new Error("permission denied"), {code:"42501"}); };
+    check("permission_failure_not_success_draft_preserved", await saveProfileInfo() === false
+      && state.profile.goal === savedGoal && document.querySelector("#profileGoal").value === "합성 보존할 초안"
+      && !document.querySelector("#profileEditorSheet").hidden && rpcCalls.length === beforeFailure + 1 && patches === 0);
+    check("permission_failure_no_retry_advice", profileSaveErrorMessage({code:"42501"}).includes("관리자"));
+    const lossKeys = [];
+    client.rpc = async (name, parameters) => { lossKeys.push(parameters.target_operation_key); throw new TypeError("Failed to fetch"); };
+    await saveProfileInfo();
+    check("unknown_result_not_all_failed", profileSaveErrorMessage(new TypeError("Failed to fetch")).includes("결과를 확인하지 못했습니다")
+      && state.profile.goal === savedGoal && !document.querySelector("#profileEditorSheet").hidden);
+    client.rpc = async (name, parameters) => { lossKeys.push(parameters.target_operation_key); return reply(parameters); };
+    const settleReplay = new Promise(resolve=>window.addEventListener("popstate",resolve,{once:true}));
+    check("response_loss_atomic_replay_success", await saveProfileInfo() === true);
+    await settleReplay;
+    check("response_loss_same_key_no_patch", lossKeys.length === 2 && lossKeys[0] === lossKeys[1] && patches === 0);
+    const priorRequested = state.profile.ntrpCheckRequested;
+    client.rpc = async () => { throw new Error("profile_revision_stale"); };
+    check("ntrp_failed_no_local_export_success", await requestNtrpCheck() === false && state.profile.ntrpCheckRequested === priorRequested);
+    let ntrpCalls = 0;
+    client.rpc = async (name, parameters) => { ntrpCalls++; await tick(); return reply(parameters); };
+    const ntrpResults = await Promise.all([requestNtrpCheck(),requestNtrpCheck()]);
+    check("ntrp_self_rpc_once_no_otp_no_coach_rating", ntrpResults[0] && !ntrpResults[1] && ntrpCalls === 1
+      && patches === 0 && state.profile.ntrpCheckRequested);
+    const savedRevision = state.profile.serverRevision;
+    state.profile.serverRevision = "";
+    check("no_revision_fail_closed_no_rpc", await requestNtrpCheck() === false && ntrpCalls === 1);
+    state.profile.serverRevision = savedRevision;
+    check("unknown_fields_fail_closed", !(await updateMemberProfileOnServer({coach_ntrp:4})).ok && ntrpCalls === 1);
+    client.rpc = async (_name,parameters)=>({...reply(parameters),styleSaved:false});
+    check("old_server_cannot_fake_style_success", !(await updateMemberProfileOnServer({tennis_goal:"합성 서버 계약"})).ok);
+    client.rpc = async (_name,parameters)=>reply(parameters);
+    // Independent review regressions use the actual UI functions and DOM. No
+    // external Auth/SMS/DB calls or raw values leave this page-memory fixture.
+    openProfileEditor(); await tick();
+    const draftIds = ["profileRealNameInput", "profileNicknameInput", "profilePhoneInput",
+      "profileHand", "profileBackhand", "profileStartedAt", "profileGoal", "profileStyleMemo"];
+    const draftSnapshot = () => JSON.stringify(draftIds.map(id => document.getElementById(id).value));
+    document.querySelector("#profileRealNameInput").value = "합성 초안 이름";
+    document.querySelector("#profileNicknameInput").value = "합성새별명";
+    setPhone(otherPhone);
+    document.querySelector("#profileGoal").value = "저장하지 않은 합성 목표";
+    document.querySelector("#profileStyleMemo").value = "저장하지 않은 합성 메모";
+    state.profile.photoDataUrl = "https://fixture.invalid/unsaved-photo.png";
+    const unsavedDraft = draftSnapshot(), unsavedPhoto = state.profile.photoDataUrl;
+    const previousSavedGoal = state.profile.goal, previousSavedMemo = state.profile.styleMemo;
+    const reviewCalls = [];
+    const revisedReply = (parameters, nextRevision) => {
+      const result = reply(parameters);
+      return { ...result, profile: { ...result.profile, updated_at: nextRevision } };
+    };
+    client.rpc = async (name, parameters) => { reviewCalls.push({name,parameters}); throw Object.assign(new Error("permission denied"), {code:"42501"}); };
+    check("review_ntrp_failure_preserves_open_draft", await requestNtrpCheck() === false
+      && draftSnapshot() === unsavedDraft && state.profile.photoDataUrl === unsavedPhoto
+      && !document.querySelector("#profileEditorSheet").hidden);
+    client.rpc = async (name, parameters) => { reviewCalls.push({name,parameters}); return revisedReply(parameters,"2026-01-01T00:00:02.000Z"); };
+    check("review_ntrp_success_preserves_open_draft", await requestNtrpCheck() === true
+      && draftSnapshot() === unsavedDraft && state.profile.photoDataUrl === unsavedPhoto
+      && !document.querySelector("#profileEditorSheet").hidden
+      && state.profile.goal === previousSavedGoal && state.profile.styleMemo === previousSavedMemo);
+    check("review_ntrp_only_explicit_fields_and_revision_readback", reviewCalls.every(({parameters}) =>
+      !Object.hasOwn(parameters.target_profile,"tennis_goal") && !Object.hasOwn(parameters.target_profile,"play_style_memo")
+      && parameters.target_profile.phone === nextPhone)
+      && profilePhoneEditorOwner.revision === state.profile.serverRevision);
+
+    const replayCalls = [];
+    client.rpc = async (name, parameters) => { replayCalls.push({name,parameters}); throw new TypeError("Failed to fetch"); };
+    check("review_atomic_loss_fail_closed", !(await updateMemberProfileOnServer({tennis_goal:"합성 재확인 목표"})).ok);
+    client.rpc = async (name, parameters) => { replayCalls.push({name,parameters}); return revisedReply(parameters,state.profile.serverRevision); };
+    check("review_atomic_loss_same_revision_exact_replay", (await updateMemberProfileOnServer({tennis_goal:"합성 재확인 목표"})).ok
+      && JSON.stringify(replayCalls[0].parameters) === JSON.stringify(replayCalls[1].parameters));
+    client.rpc = async (name, parameters) => { replayCalls.push({name,parameters}); throw new Error("profile_revision_stale"); };
+    check("review_stale_no_auto_retry", !(await updateMemberProfileOnServer({tennis_goal:"합성 재확인 목표"})).ok && replayCalls.length === 3);
+    state.profile.serverRevision = "2026-01-01T00:00:03.000Z"; // authoritative refresh, not automatic retry
+    client.rpc = async (name, parameters) => { replayCalls.push({name,parameters}); return revisedReply(parameters,state.profile.serverRevision); };
+    check("review_fresh_revision_rotates_key_and_payload", (await updateMemberProfileOnServer({tennis_goal:"합성 재확인 목표"})).ok
+      && replayCalls.length === 4 && replayCalls[2].parameters.target_operation_key !== replayCalls[3].parameters.target_operation_key
+      && replayCalls[3].parameters.target_profile.expected_revision === state.profile.serverRevision);
+    profilePhoneEditorOwner = {...profilePhoneEditorOwner,revision:state.profile.serverRevision};
+
+    for (const first of ["ntrp","save"]) {
+      setPhone(nextPhone); // this case tests the mutation lock, not new-phone proof
+      const currentDraft = draftSnapshot(); let releaseMutation;
+      const interleaved = [];
+      client.rpc = async (name, parameters) => {
+        interleaved.push({name,parameters}); await new Promise(resolve=>{releaseMutation=resolve;});
+        return revisedReply(parameters,state.profile.serverRevision);
+      };
+      const pending = first === "ntrp" ? requestNtrpCheck() : saveProfileInfo();
+      while (!releaseMutation) await tick();
+      check(`review_${first}_both_controls_busy`, document.querySelector("#saveProfileInfo").disabled
+        && document.querySelector("#requestNtrpCheck").disabled);
+      const blocked = await Promise.all([requestNtrpCheck(),saveProfileInfo()]);
+      check(`review_${first}_interleaving_rpc_one`, blocked.every(value=>value===false) && interleaved.length === 1);
+      let settled = Promise.resolve();
+      if (first === "save") settled = new Promise((resolve,reject)=>{
+        const timer=setTimeout(()=>reject(new Error("review_save_back_not_settled")),2000);
+        window.addEventListener("popstate",()=>{clearTimeout(timer);resolve();},{once:true});
+      });
+      releaseMutation(); const completed = await pending; await settled;
+      check(`review_${first}_completion_restores_controls`, completed && interleaved.length === 1
+        && !profileInfoSaving && !ntrpCheckSaving
+        && !document.querySelector("#saveProfileInfo").disabled && !document.querySelector("#requestNtrpCheck").disabled);
+      if (first === "ntrp") check("review_ntrp_no_rerender_close", draftSnapshot() === currentDraft
+        && !document.querySelector("#profileEditorSheet").hidden);
+      else { openProfileEditor(); await tick(); }
+    }
+    check("review_all_direct_patches_zero", patches === 0);
     openProfileEditor(); await tick(); setPhone(phone(6));
     await requestIdentityPhoneVerification("profile");
     code.focus();
@@ -205,6 +326,14 @@ async function profileContracts(page) {
     check("phone_controls_inside_viewport", controlGeometry.every(({ left, right }) => left >= -1 && right <= innerWidth + 1));
     if (!checks.controls_16px_44px) throw new Error(JSON.stringify({ code: "profile_control_geometry_diagnosis", controls: controlGeometry }));
     const verifyRect = document.querySelector("#profilePhoneVerifyButton").getBoundingClientRect();
+    const verifyButton = document.querySelector("#profilePhoneVerifyButton");
+    const verifyStyle = getComputedStyle(verifyButton);
+    const verifyText = document.createRange(); verifyText.selectNodeContents(verifyButton);
+    const verifyLines = [...verifyText.getClientRects()].filter(rect => rect.width > 0 && rect.height > 0);
+    const verifyInnerWidth = verifyRect.width - parseFloat(verifyStyle.paddingLeft) - parseFloat(verifyStyle.paddingRight)
+      - parseFloat(verifyStyle.borderLeftWidth) - parseFloat(verifyStyle.borderRightWidth);
+    check("otp_confirm_one_line_and_44px_width", verifyRect.width >= 44 && verifyStyle.whiteSpace === "nowrap"
+      && verifyLines.length === 1 && verifyLines[0].width <= verifyInnerWidth + 1);
     const hit = document.elementFromPoint(verifyRect.left + verifyRect.width / 2, verifyRect.top + verifyRect.height / 2);
     check("scroll_to_verify_button_hit_target", verifyRect.top >= 0 && verifyRect.bottom <= innerHeight
       && Boolean(hit?.closest("#profilePhoneVerifyButton")));
@@ -232,6 +361,10 @@ async function main() {
   });
   await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
   const origin=`http://127.0.0.1:${server.address().port}`;
+  const captureDir=process.env.TENNISNOTE_PROFILE_CAPTURE_DIR;
+  const captureOnly=process.env.TENNISNOTE_PROFILE_CAPTURE_ONLY==="true";
+  assert(!captureOnly || captureDir,"capture_only_requires_private_output_directory");
+  if(captureDir)fs.mkdirSync(captureDir,{recursive:true});
   let contexts=0,predicates=0;
   try {
     for(const selected of ["chromium","webkit"]){
@@ -239,6 +372,7 @@ async function main() {
       const browser=await (selected==="webkit"?webkit:chromium).launch({headless:true});
       try {
         for(const colorScheme of colorSchemes) for(const viewport of viewports){
+          if(captureOnly && ![390,768,1366].includes(viewport.width))continue;
           const context=await browser.newContext({viewport,colorScheme,serviceWorkers:"block"});
           await context.route("**/*",r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
           const page=await context.newPage(),errors=[];page.on("pageerror",e=>errors.push(e.message));
@@ -252,12 +386,21 @@ async function main() {
           const result=await profileContracts(page);
           for(const [name,ok] of Object.entries(result))assert(ok,`${selected}/${viewport.width}/${colorScheme}: ${name}`);
           assert(errors.length===0,`page_errors:${errors.join("|")}`);
+          if(captureDir && [390,768,1366].includes(viewport.width)){
+            await page.evaluate(()=>{
+              // All Auth/RPC data are synthetic. Clear even synthetic contact
+              // and OTP fields from private QA screenshots; keep OTP row open.
+              document.querySelector("#profilePhoneInput").value="";
+              document.querySelector("#profilePhoneCode").value="";
+            });
+            await page.screenshot({path:path.join(captureDir,`atomic-profile-${selected}-${viewport.width}-${colorScheme}.png`)});
+          }
           predicates+=Object.keys(result).length;contexts++;
           await context.close();
         }
       } finally {await browser.close();}
     }
-    console.log(JSON.stringify({status:"PASS",modularEntry:true,contexts,predicates,externalWrites:0,actualDevice:"NOT VERIFIED"}));
+    console.log(JSON.stringify({status:"PASS",modularEntry:true,contexts,predicates,captureOnly,externalWrites:0,actualDevice:"NOT VERIFIED"}));
   } finally {await new Promise(resolve=>server.close(resolve));}
 }
 main().catch(e=>{console.error("FAIL "+e.message);process.exitCode=1;});
