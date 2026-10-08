@@ -115,19 +115,27 @@ async function persistConsentPreferences({ marketingPush, marketingSms, marketin
   return result;
 }
 
-async function refreshIdentityPhoneVerification() {
+async function refreshIdentityPhoneVerification(surface = "signup") {
+  if (!signupSmsEnabled) return "";
   const client = window.TennisNoteDataClient;
   if (!hasLiveMemberSession() || !client?.getAuthUser) return "";
+  const owner = phoneVerificationOwner();
+  const inputPhone = normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || "");
   const user = await client.getAuthUser();
-  const verifiedPhone = verifiedPhoneFromAuthUser(user || {});
-  if (verifiedPhone) markIdentityPhoneVerified(verifiedPhone, "provider");
+  if (!phoneVerificationOwnerCurrent(owner) || (owner.authId && user?.id && user.id !== owner.authId)) return "";
+  const verifiedPhone = verifiedPhoneFromAuthUser(user || {}, surface === "profile");
+  if (verifiedPhone && ((!inputPhone && surface === "signup") || inputPhone === verifiedPhone)
+    && normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || "") === inputPhone) {
+    markIdentityPhoneVerified(verifiedPhone, "provider", surface);
+  }
   return verifiedPhone;
 }
 
-async function requireVerifiedIdentityPhone(phone) {
+async function requireVerifiedIdentityPhone(phone, surface = "signup") {
   const normalizedPhone = normalizeIdentityPhone(phone);
-  if (identityPhoneVerification.status === "verified" && identityPhoneVerification.phone === normalizedPhone) return true;
-  const verifiedPhone = await refreshIdentityPhoneVerification();
+  const verification = phoneVerificationState(surface);
+  if (verification.status === "verified" && verification.phone === normalizedPhone && phoneVerificationOwnerCurrent(verification.owner)) return true;
+  const verifiedPhone = await refreshIdentityPhoneVerification(surface);
   if (verifiedPhone === normalizedPhone) return true;
   throw new Error("phone_verification_required");
 }
@@ -135,7 +143,7 @@ async function requireVerifiedIdentityPhone(phone) {
 // 메모리에서만 재시도 키를 유지한다. 개인정보를 별도 저장소에 기록하지 않는다.
 let signupProfileOperation = { fingerprint: "", key: "" };
 
-async function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender }) {
+async function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender, profileEditor = false }) {
   const normalizedRealName = normalizeIdentityText(realName);
   const normalizedNickname = normalizeIdentityText(nickname);
   const normalizedPhone = normalizeIdentityPhone(phone);
@@ -144,11 +152,36 @@ async function persistIdentityProfile({ realName, nickname, phone, birthYear, ne
   const normalizedGender = String(gender || "");
   if (!normalizedRealName || normalizedRealName.length > 40) throw new Error("real_name_invalid");
   if (normalizedNickname.length < 2 || normalizedNickname.length > 20) throw new Error("nickname_invalid");
-  if (!/^01[0-9]{8,9}$/u.test(normalizedPhone)) throw new Error("phone_invalid");
-  if (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear()) throw new Error("birth_year_invalid");
-  if (!["female", "male", "other", "prefer_not"].includes(normalizedGender)) throw new Error("gender_invalid");
+  if (!/^01[0-9]{8,9}$/u.test(normalizedPhone) && !(profileEditor && normalizedPhone === profilePhoneExpectedPhone)) throw new Error("phone_invalid");
+  if (!profileEditor && (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear())) throw new Error("birth_year_invalid");
+  if (!profileEditor && !["female", "male", "other", "prefer_not"].includes(normalizedGender)) throw new Error("gender_invalid");
   const client = window.TennisNoteDataClient;
+  if (profileEditor && (!hasLiveMemberSession() || !client?.rpc)) throw new Error("login_required");
   if (hasLiveMemberSession() && client?.rpc) {
+    if (profileEditor) {
+      const owner = profilePhoneEditorOwner;
+      if (!owner?.profileId || !owner.authId || !phoneVerificationRequestCurrent(owner, normalizedPhone, "profile")) throw new Error("profile_phone_context_changed");
+      if (normalizedPhone !== profilePhoneExpectedPhone) await requireVerifiedIdentityPhone(normalizedPhone, "profile");
+      if (!phoneVerificationRequestCurrent(owner, normalizedPhone, "profile")) throw new Error("profile_phone_context_changed");
+      const targetProfile = { name: normalizedRealName, nickname: normalizedNickname, phone: normalizedPhone };
+      const fingerprint = JSON.stringify([owner.authId, owner.profileId, profilePhoneExpectedPhone, targetProfile]);
+      if (profilePhoneSaveOperation.fingerprint !== fingerprint) profilePhoneSaveOperation = { fingerprint, key: crypto.randomUUID() };
+      const resultRaw = await client.rpc("tn_save_my_verified_profile_phone", {
+        target_profile_id: owner.profileId, target_profile: targetProfile,
+        target_expected_phone: profilePhoneExpectedPhone, target_operation_key: profilePhoneSaveOperation.key,
+      });
+      if (!phoneVerificationOwnerCurrent(owner)) throw new Error("profile_phone_context_changed");
+      const result = Array.isArray(resultRaw) ? resultRaw[0] : resultRaw;
+      if (!result?.ok || result.profile?.id !== owner.profileId
+        || normalizeIdentityPhone(result.profile?.phone || "") !== normalizedPhone
+        || (normalizedPhone !== profilePhoneExpectedPhone && result.phoneVerified !== true)) {
+        throw new Error("profile_phone_readback_unconfirmed");
+      }
+      applySavedIdentity(result.profile, { preserveCompletion: true });
+      if (result.phoneVerified === true) markIdentityPhoneVerified(normalizedPhone, "server", "profile");
+      else setIdentityPhoneStatus("저장된 번호를 그대로 유지했습니다. 새 번호로 바꾸려면 인증해 주세요.", "", "profile");
+      return result;
+    }
     await requireVerifiedIdentityPhone(normalizedPhone);
     const targetProfile = {
       name: normalizedRealName, nickname: normalizedNickname, phoneCandidate: normalizedPhone,

@@ -10,6 +10,7 @@ import { createRequire } from "node:module";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const { names, bootstrap, runCases, runRefreshEventCases } = require("./fixtures/member-home-cases.cjs");
+const { restorePhone } = require("./helpers/verified-profile-phone-port.cjs");
 const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const hash = text => crypto.createHash("sha256").update(text).digest("hex");
 const manifest = JSON.parse(read("tests/fixtures/member-home-source-parity.json"));
@@ -29,7 +30,7 @@ const restoreSignin = (file, text) => {
   assert.equal(hash(text), row.baseSha256, `signin base drift: ${file}`);
   return text.replaceAll(signinProjection.publicVersion, version);
 };
-const normalized = (file, text) => restoreSignin(file, text).replaceAll(version, manifest.publicVersion);
+const normalized = (file, text) => restoreSignin(file, restorePhone(file, text)).replaceAll(version, manifest.publicVersion);
 const extract = (source, name) => {
   const matches = [...source.matchAll(new RegExp(`^(?:async )?function ${name}\\([^\\n]*\\)[^{]*\\{[\\s\\S]*?^}`, "gm"))];
   assert.equal(matches.length, 1, `exact function ${name}`);
@@ -67,7 +68,7 @@ test("회원 홈: 로그인 projection의 추가·중복·누락 drift는 golden
   assert.equal(signinProjection.contract, "development-existing-sign-in/1");
   assert.equal(signinProjection.files.length, 4);
   for (const row of signinProjection.files) {
-    const source = read(row.path).replaceAll(version, signinProjection.publicVersion);
+    const source = restorePhone(row.path, read(row.path)).replaceAll(version, signinProjection.publicVersion);
     const restored = restoreSignin(row.path, source).replaceAll(version, signinProjection.publicVersion);
     assert.equal(hash(restored), row.baseSha256, row.path);
     const after = row.hunks[0].after;

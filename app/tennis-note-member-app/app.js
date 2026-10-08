@@ -392,6 +392,14 @@ let identityAuthCapabilities = {
 };
 let identityAuthCapabilityPromise = null;
 let identityPhoneRequestInFlight = false;
+let identityPhoneConfirmInFlight = false;
+let profilePhoneVerification = { phone: "", status: "unverified", source: "" };
+let profilePhoneExpectedPhone = "";
+let profilePhoneEditorOwner = null;
+let profilePhoneSaveOperation = { fingerprint: "", key: "" };
+let profileInfoSaving = false;
+// 공개 앱도 서버 capability를 확인한 뒤에만 SMS를 요청한다.
+const signupSmsEnabled = true;
 
 const notionCurriculumGuideUrl = curriculumCatalog.sources?.memberGuide || "https://app.notion.com/p/94544cb6f3d546e991db21dbab5fb163";
 const notionCurriculumDetailUrl = curriculumCatalog.sources?.detailedGuide || "https://app.notion.com/p/312b107df48080e282cbe84b95cff64b";
@@ -1142,7 +1150,7 @@ let memberConnectivityHideTimer = 0;
 let memberScheduleRevisionWatcher = null;
 async function initApp() {
   registerPwaServiceWorker();
-  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.541");
+  window.TennisNoteModeTransition?.warm("../tennis-note-coach-app/index.html?v=1.0.542");
   void refreshMemberRuntimeDiagnostics();
   registerPwaInstallPrompt();
   purgeLegacyDemoStorage();
@@ -1227,7 +1235,7 @@ async function initApp() {
 }
 
 window.__TENNIS_NOTE_MEMBER_APP_RUNTIME__ = Object.freeze({
-  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.541",
+  version: window.TENNIS_NOTE_RELEASE?.version || "1.0.542",
   loadedAt: new Date().toISOString(),
 });
 sessionStorage.setItem(

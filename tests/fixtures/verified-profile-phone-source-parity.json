@@ -1,0 +1,326 @@
+{
+  "contract": "verified-own-profile-phone/1",
+  "sourceFeature": "17e8bd8b836ce0d5aa33bdd30f443db2634f8260",
+  "sourceMerged": "a08a096ded1e838ccec40aa0fe514d50270125ab",
+  "publicBase": "e3af7cc5f9220dcd50b6eb2e579ea4a6fe0cc5c7",
+  "publicVersion": "1.0.541",
+  "functions": [
+    {
+      "path": "app/tennis-note-member-app/domain/identity.js",
+      "name": "verifiedPhoneFromAuthUser",
+      "privateSha256": "8f90b1e6e6e10ed4ae4befef407df471b02527ce338f219df588dae9bae8bf61",
+      "publicSha256": "8b12d98f017fb8f040419514ec16b40b43c2e84d14beff78b34233b88a15fffa",
+      "adapter": "strict_private_prefix_plus_existing_provider_owned_fallback"
+    },
+    {
+      "path": "app/tennis-note-member-app/domain/identity.js",
+      "name": "identityErrorMessage",
+      "privateSha256": "4340651cf3e0c9b98a1b17986c3d59f3d131dc9a3444a4267336798083ab979d",
+      "publicSha256": "4340651cf3e0c9b98a1b17986c3d59f3d131dc9a3444a4267336798083ab979d",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "name": "setIdentityPhoneStatus",
+      "privateSha256": "b794c6b4ed6b026d0a18cac568fc18e193e57208f99d71c96af3439fc810f9db",
+      "publicSha256": "b794c6b4ed6b026d0a18cac568fc18e193e57208f99d71c96af3439fc810f9db",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "name": "syncIdentityPhoneCapabilityControl",
+      "privateSha256": "48c0f11415d9cd477fe7b4a383c6cf796add585fde6d7903f20fb4beb1cd4ee5",
+      "publicSha256": "48c0f11415d9cd477fe7b4a383c6cf796add585fde6d7903f20fb4beb1cd4ee5",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "name": "resetIdentityPhoneVerification",
+      "privateSha256": "e939c84b94ff8d506b0df2eb228cd5ef9d3241c1c33797838a64fdafa09c2754",
+      "publicSha256": "e939c84b94ff8d506b0df2eb228cd5ef9d3241c1c33797838a64fdafa09c2754",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "name": "markIdentityPhoneVerified",
+      "privateSha256": "0af30995d329def3c995478a25e7405ad56a45835b40e6789a04926fd32d2f71",
+      "publicSha256": "0af30995d329def3c995478a25e7405ad56a45835b40e6789a04926fd32d2f71",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "name": "phoneVerificationControls",
+      "privateSha256": "39c2ec1e3fde322401e388f80c45edcf5d6a9719ed702bd4fea35553bf3fde6c",
+      "publicSha256": "39c2ec1e3fde322401e388f80c45edcf5d6a9719ed702bd4fea35553bf3fde6c",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "name": "phoneVerificationState",
+      "privateSha256": "5993c99d999f3a9b5f19ad63560055c632bcd8cc9cba49d84b4652551c494868",
+      "publicSha256": "5993c99d999f3a9b5f19ad63560055c632bcd8cc9cba49d84b4652551c494868",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "name": "phoneVerificationOwner",
+      "privateSha256": "34ac7482ae881ae1a62f55014eb6bab625be89fb918913048da21712c30d3800",
+      "publicSha256": "34ac7482ae881ae1a62f55014eb6bab625be89fb918913048da21712c30d3800",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "name": "phoneVerificationOwnerCurrent",
+      "privateSha256": "52a898a27764fe3130e677ee0152bc01593ec6d5aa2ef1e303f25b9f77542dc3",
+      "publicSha256": "52a898a27764fe3130e677ee0152bc01593ec6d5aa2ef1e303f25b9f77542dc3",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "name": "phoneVerificationRequestCurrent",
+      "privateSha256": "757a50797a85c587136a1abe98bb5b0abf21520e53b66a0dce22b3d5cb557a96",
+      "publicSha256": "757a50797a85c587136a1abe98bb5b0abf21520e53b66a0dce22b3d5cb557a96",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "name": "syncPhoneVerificationControl",
+      "privateSha256": "b44f95fe1bd2d5943073e7c15202e7791cfd4af2b06512339f15980fb7e6e6df",
+      "publicSha256": "b44f95fe1bd2d5943073e7c15202e7791cfd4af2b06512339f15980fb7e6e6df",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/data/auth.js",
+      "name": "refreshIdentityPhoneVerification",
+      "privateSha256": "0f6819af730658a5e2f9235561f8053dbd0f94d0f138e022961767ed067e0ae8",
+      "publicSha256": "0f6819af730658a5e2f9235561f8053dbd0f94d0f138e022961767ed067e0ae8",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/data/auth.js",
+      "name": "requireVerifiedIdentityPhone",
+      "privateSha256": "68489d8e75ac728d4db6708cb62717cd70f36606ccf6f2cbbd5d06a008cdba4c",
+      "publicSha256": "68489d8e75ac728d4db6708cb62717cd70f36606ccf6f2cbbd5d06a008cdba4c",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/data/auth.js",
+      "name": "persistIdentityProfile",
+      "privateSha256": "ff159225af411a2358a419351a4d3b08690d6c2a0b2f96cbf6a325ae8bba2fb9",
+      "publicSha256": "ff159225af411a2358a419351a4d3b08690d6c2a0b2f96cbf6a325ae8bba2fb9",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/actions/enrollment.js",
+      "name": "applySavedIdentity",
+      "privateSha256": "c569d85ca4ea86df994718db44454b88e6c848583ee9699a6406d6f61f8e8721",
+      "publicSha256": "c569d85ca4ea86df994718db44454b88e6c848583ee9699a6406d6f61f8e8721",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/actions/enrollment.js",
+      "name": "requestIdentityPhoneVerification",
+      "privateSha256": "f867800932a95f6b1f72c2b846f5225634f284b7c08426991d6ec1b1f800ca9f",
+      "publicSha256": "f867800932a95f6b1f72c2b846f5225634f284b7c08426991d6ec1b1f800ca9f",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/actions/enrollment.js",
+      "name": "confirmIdentityPhoneVerification",
+      "privateSha256": "01fcd0902504d0c05f59a87833db2ae9774cc06263371befde2de912a6911499",
+      "publicSha256": "01fcd0902504d0c05f59a87833db2ae9774cc06263371befde2de912a6911499",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/actions/profile.js",
+      "name": "saveProfileInfo",
+      "privateSha256": "19c21eddbe98379c1afa93ccdcab4a2758e89e1c3116c703bae65f1457a71640",
+      "publicSha256": "19c21eddbe98379c1afa93ccdcab4a2758e89e1c3116c703bae65f1457a71640",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/actions/profile.js",
+      "name": "saveProfileInfoOnce",
+      "privateSha256": "b42e6dcf9bd4b10a4b2d5f21266e0f612ff685d8377836cf1b7b1f3b0e953211",
+      "publicSha256": "b42e6dcf9bd4b10a4b2d5f21266e0f612ff685d8377836cf1b7b1f3b0e953211",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/domain/members.js",
+      "name": "openProfileEditor",
+      "privateSha256": "0161064444b64293d8a0c44e5d72356dcfe5f90713bd2fa7e271b984077b6fbf",
+      "publicSha256": "0161064444b64293d8a0c44e5d72356dcfe5f90713bd2fa7e271b984077b6fbf",
+      "adapter": "exact_private_function"
+    },
+    {
+      "path": "app/tennis-note-member-app/views/profile.js",
+      "name": "renderProfile",
+      "privateSha256": "e7ec1fcc59dcdd15a034334855a15ba13ae4b3d36d9f4912dea519507f4b0712",
+      "publicSha256": "e7ec1fcc59dcdd15a034334855a15ba13ae4b3d36d9f4912dea519507f4b0712",
+      "adapter": "exact_private_function"
+    }
+  ],
+  "files": [
+    {
+      "path": "app/tennis-note-member-app/domain/identity.js",
+      "baseSha256": "ad135ce43d376bf22c03a5d971c7e0cad9a3240924b11464050035df84df1cc2",
+      "candidateSha256": "5dcfea397a205e2d1161144d079bc429a79a87e868b87fa6f4719d27ce846fd1",
+      "hunks": [
+        {
+          "before": "  return \"\";\n}\n\nfunction verifiedPhoneFromAuthUser(user = {}) {\n  const directPhone = normalizeIdentityPhone(user?.phone || \"\");\n  if (directPhone && user?.phone_confirmed_at) return directPhone.startsWith(\"82\") ? `0${directPhone.slice(2)}` : directPhone;\n  const verifiedIdentity = (user?.identities || []).find((identity) => {\n    const provider = String(identity?.provider || \"\").toLowerCase();\n    const metadata = identity?.identity_data || {};\n",
+          "after": "  return \"\";\n}\n\nfunction verifiedPhoneFromAuthUser(user = {}, strict = false) {\n  const directPhone = normalizeIdentityPhone(user?.phone || \"\");\n  const canonicalDirect = directPhone.startsWith(\"82\") ? `0${directPhone.slice(2)}` : directPhone;\n  const confirmedAt = Date.parse(user?.phone_confirmed_at || \"\");\n  if (directPhone && user?.phone_confirmed_at && (!strict || (/^01[0-9]{8,9}$/u.test(canonicalDirect)\n    && Number.isFinite(confirmedAt) && confirmedAt <= Date.now()))) return canonicalDirect;\n  if (strict) {\n    const phones = [...new Set((Array.isArray(user.identities) ? user.identities : [])\n      .filter((identity) => [\"custom:naver\", \"custom:kakao\"].includes(identity.provider))\n      .map((identity) => identity.identity_data || {})\n      .filter((data) => [data.phone_number_verified, data.phone_verified, data.mobile_verified, data.verified_phone]\n        .some((value) => value === true || value === \"true\" || value === \"1\"))\n      .map((data) => normalizeIdentityPhone(data.phone_number || data.phone || data.mobile || \"\"))\n      .map((phone) => phone.startsWith(\"82\") ? `0${phone.slice(2)}` : phone)\n      .filter((phone) => /^01[0-9]{8,9}$/u.test(phone)))];\n    return phones.length === 1 ? phones[0] : \"\";\n  }\n  const verifiedIdentity = (user?.identities || []).find((identity) => {\n    const provider = String(identity?.provider || \"\").toLowerCase();\n    const metadata = identity?.identity_data || {};\n"
+        },
+        {
+          "before": "  if (code.includes(\"real_name_invalid\")) return \"실명을 확인해 주세요.\";\n  if (code.includes(\"phone_invalid\")) return \"휴대전화 번호를 010부터 정확히 입력해 주세요.\";\n  if (code.includes(\"phone_verification_required\")) return \"휴대전화 인증을 먼저 완료해 주세요.\";\n  if (code.includes(\"over_email_send_rate_limit\") || code.includes(\"rate_limit\") || code.includes(\"too many\")) return \"인증번호 요청이 많습니다. 잠시 후 다시 시도해 주세요.\";\n  if (code.includes(\"phone_provider\") || code.includes(\"sms_provider\") || code.includes(\"sms_send\")) return phoneAuthUnavailableMessage();\n  if (code.includes(\"otp_expired\") || code.includes(\"token has expired\")) return \"인증번호가 만료되었거나 올바르지 않습니다. 새 번호를 받아 다시 입력해 주세요.\";\n",
+          "after": "  if (code.includes(\"real_name_invalid\")) return \"실명을 확인해 주세요.\";\n  if (code.includes(\"phone_invalid\")) return \"휴대전화 번호를 010부터 정확히 입력해 주세요.\";\n  if (code.includes(\"phone_verification_required\")) return \"휴대전화 인증을 먼저 완료해 주세요.\";\n  if (code.includes(\"profile_phone_stale\") || code.includes(\"phone_operation_superseded\")) return \"저장된 번호가 변경되었습니다. 내 정보를 다시 열어 확인해 주세요.\";\n  if (code.includes(\"profile_phone_identity_mismatch\") || code.includes(\"profile_phone_context_changed\")) return \"로그인 정보가 변경되었습니다. 본인 계정으로 다시 확인해 주세요.\";\n  if (code.includes(\"profile_phone_readback_unconfirmed\")) return \"번호 저장 결과를 확인하지 못했습니다. 입력을 유지한 채 다시 확인해 주세요.\";\n  if (code.includes(\"over_email_send_rate_limit\") || code.includes(\"rate_limit\") || code.includes(\"too many\")) return \"인증번호 요청이 많습니다. 잠시 후 다시 시도해 주세요.\";\n  if (code.includes(\"phone_provider\") || code.includes(\"sms_provider\") || code.includes(\"sms_send\")) return phoneAuthUnavailableMessage();\n  if (code.includes(\"otp_expired\") || code.includes(\"token has expired\")) return \"인증번호가 만료되었거나 올바르지 않습니다. 새 번호를 받아 다시 입력해 주세요.\";\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/forms/members.js",
+      "baseSha256": "6b14b9734074a367156768396c85f01f19315435a395424f0810eab970d22deb",
+      "candidateSha256": "c08d269ee4f22f99d53dda49236287330a3e1dc086c35fcf890030466eaf3c13",
+      "hunks": [
+        {
+          "before": "  target.classList.toggle(\"is-unavailable\", tone === \"unavailable\");\n}\n\nfunction setIdentityPhoneStatus(message, tone = \"\") {\n  const target = $(\"#identityPhoneStatus\");\n  if (!target) return;\n  target.textContent = message;\n  target.classList.toggle(\"is-verified\", tone === \"verified\");\n",
+          "after": "  target.classList.toggle(\"is-unavailable\", tone === \"unavailable\");\n}\n\nfunction setIdentityPhoneStatus(message, tone = \"\", surface = \"signup\") {\n  const target = phoneVerificationControls(surface).status;\n  if (!target) return;\n  target.textContent = message;\n  target.classList.toggle(\"is-verified\", tone === \"verified\");\n"
+        },
+        {
+          "before": "}\n\nfunction syncIdentityPhoneCapabilityControl() {\n  $(\"#identityPhoneVerification\")?.removeAttribute(\"hidden\");\n  const button = $(\"#identityPhoneSendButton\");\n  if (!button || identityPhoneVerification.status === \"verified\") return;\n  if (identityAuthCapabilities.status === \"checking\") {\n    button.disabled = true;\n    setIdentityPhoneStatus(\"문자 인증 가능 여부를 확인하고 있습니다.\");\n    return;\n  }\n  if (identityAuthCapabilities.providers.phone === false || identityAuthCapabilities.status === \"unavailable\") {\n    button.disabled = true;\n    $(\"#identityPhoneCodeRow\")?.setAttribute(\"hidden\", \"\");\n    setIdentityPhoneStatus(phoneAuthUnavailableMessage(), \"error\");\n    return;\n  }\n  button.disabled = identityPhoneRequestInFlight;\n  if (identityAuthCapabilities.status === \"ready\" && identityAuthCapabilities.providers.phone === true) {\n    const currentStatus = $(\"#identityPhoneStatus\")?.textContent || \"\";\n    if (currentStatus.includes(\"가능 여부\") || currentStatus.includes(\"설정을 확인하지 못했습니다\") || currentStatus.includes(\"문자 인증을 준비 중\")) {\n      const naverRepromptAvailable = !$(\"#identityNaverPhoneButton\")?.hidden;\n      setIdentityPhoneStatus(naverRepromptAvailable\n        ? \"네이버 번호를 다시 받거나 문자 인증 후 기존 회원 DB와 연결합니다.\"\n        : \"휴대전화 인증 후 기존 회원 DB와 안전하게 연결합니다.\");\n    }\n  }\n  if (identityAuthCapabilities.status === \"unknown\" && identityAuthCapabilities.errorCode) {\n    setIdentityPhoneStatus(\"문자 인증 설정을 확인하지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.\", \"error\");\n  }\n}\n\nfunction syncAuthProviderCapabilityControls() {\n",
+          "after": "}\n\nfunction syncIdentityPhoneCapabilityControl() {\n  syncPhoneVerificationControl(\"signup\");\n  syncPhoneVerificationControl(\"profile\");\n}\n\nfunction syncAuthProviderCapabilityControls() {\n"
+        },
+        {
+          "before": "  syncIdentityPhoneCapabilityControl();\n}\n\nfunction resetIdentityPhoneVerification(message = \"휴대전화 인증이 필요합니다.\") {\n  identityPhoneVerification = { phone: \"\", status: \"unverified\", source: \"\" };\n  if ($(\"#identityPhoneCode\")) $(\"#identityPhoneCode\").value = \"\";\n  if ($(\"#identityPhoneCodeRow\")) $(\"#identityPhoneCodeRow\").hidden = true;\n  if ($(\"#identityPhoneSendButton\")) $(\"#identityPhoneSendButton\").disabled = false;\n  setIdentityPhoneStatus(message);\n  syncIdentityPhoneCapabilityControl();\n}\n\nfunction markIdentityPhoneVerified(phone, source = \"sms\") {\n  const normalizedPhone = normalizeIdentityPhone(phone);\n  identityPhoneVerification = { phone: normalizedPhone, status: \"verified\", source };\n  if ($(\"#identityPhone\")) $(\"#identityPhone\").value = formatIdentityPhone(normalizedPhone);\n  if ($(\"#identityPhoneCodeRow\")) $(\"#identityPhoneCodeRow\").hidden = true;\n  if ($(\"#identityPhoneSendButton\")) $(\"#identityPhoneSendButton\").disabled = true;\n  setIdentityPhoneStatus(\n    source === \"provider\"\n      ? \"로그인 제공자가 확인한 번호입니다. 기존 회원 DB 연결에 사용합니다.\"\n      : \"휴대전화 인증이 완료되었습니다. 기존 회원 DB 연결에 사용합니다.\",\n    \"verified\",\n  );\n}\n\n",
+          "after": "  syncIdentityPhoneCapabilityControl();\n}\n\nfunction resetIdentityPhoneVerification(message = \"휴대전화 인증이 필요합니다.\", surface = \"signup\") {\n  const verification = { phone: \"\", status: \"unverified\", source: \"\" };\n  if (surface === \"profile\") profilePhoneVerification = verification;\n  else identityPhoneVerification = verification;\n  const controls = phoneVerificationControls(surface);\n  if (controls.code) controls.code.value = \"\";\n  if (controls.row) controls.row.hidden = true;\n  if (controls.send) controls.send.disabled = false;\n  setIdentityPhoneStatus(message, \"\", surface);\n  syncIdentityPhoneCapabilityControl();\n}\n\nfunction markIdentityPhoneVerified(phone, source = \"sms\", surface = \"signup\") {\n  const normalizedPhone = normalizeIdentityPhone(phone);\n  if (surface === \"profile\" && normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || \"\") !== normalizedPhone) {\n    resetIdentityPhoneVerification(\"입력 번호가 바뀌었습니다. 현재 번호를 인증한 후 저장하세요.\", surface);\n    return false;\n  }\n  const verification = { phone: normalizedPhone, status: \"verified\", source, owner: phoneVerificationOwner() };\n  if (surface === \"profile\") profilePhoneVerification = verification;\n  else identityPhoneVerification = verification;\n  const controls = phoneVerificationControls(surface);\n  if (controls.input && surface === \"signup\") controls.input.value = formatIdentityPhone(normalizedPhone);\n  if (controls.row) controls.row.hidden = true;\n  if (controls.send) controls.send.disabled = true;\n  setIdentityPhoneStatus(\n    surface === \"profile\" ? \"휴대전화 인증이 완료되었습니다. 저장하면 본인 프로필에 반영됩니다.\" : source === \"provider\"\n      ? \"로그인 제공자가 확인한 번호입니다. 기존 회원 DB 연결에 사용합니다.\"\n      : \"휴대전화 인증이 완료되었습니다. 기존 회원 DB 연결에 사용합니다.\",\n    \"verified\", surface,\n  );\n}\n\n"
+        },
+        {
+          "before": "    });\n  });\n}\n",
+          "after": "    });\n  });\n}\n\n\nfunction phoneVerificationControls(surface = \"signup\") {\n  const prefix = surface === \"profile\" ? \"profilePhone\" : \"identityPhone\";\n  return { input: $(surface === \"profile\" ? \"#profilePhoneInput\" : \"#identityPhone\"),\n    send: $(`#${prefix}SendButton`), verify: $(`#${prefix}VerifyButton`), code: $(`#${prefix}Code`),\n    row: $(`#${prefix}CodeRow`), status: $(`#${prefix}Status`), block: $(`#${prefix}Verification`) };\n}\n\nfunction phoneVerificationState(surface = \"signup\") {\n  return surface === \"profile\" ? profilePhoneVerification : identityPhoneVerification;\n}\n\nfunction phoneVerificationOwner() {\n  const client = window.TennisNoteDataClient;\n  return { client, authId: String(client?.getSession?.()?.user?.id || state.member?.authUserId || \"\"),\n    profileId: String(state.liveProfileId || state.member?.profileId || state.member?.id || \"\") };\n}\n\nfunction phoneVerificationOwnerCurrent(owner) {\n  const current = phoneVerificationOwner();\n  return Boolean(owner && hasLiveMemberSession() && owner.client === current.client\n    && owner.authId === current.authId && owner.profileId === current.profileId);\n}\n\nfunction phoneVerificationRequestCurrent(owner, phone, surface) {\n  return phoneVerificationOwnerCurrent(owner)\n    && normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || \"\") === phone;\n}\n\nfunction syncPhoneVerificationControl(surface) {\n  const controls = phoneVerificationControls(surface);\n  if (!signupSmsEnabled) {\n    controls.block?.setAttribute(\"hidden\", \"\");\n    if (controls.send) controls.send.disabled = true;\n    if (controls.verify) controls.verify.disabled = true;\n    if (surface === \"signup\" && $(\"#identityNaverPhoneButton\")) $(\"#identityNaverPhoneButton\").disabled = true;\n    return;\n  }\n  controls.block?.removeAttribute(\"hidden\");\n  const button = controls.send;\n  const verification = phoneVerificationState(surface);\n  if (!button) return;\n  const exactVerified = verification.status === \"verified\" && phoneVerificationOwnerCurrent(verification.owner)\n    && verification.phone === normalizeIdentityPhone(controls.input?.value || \"\");\n  button.textContent = verification.status === \"pending\" ? \"인증번호 다시 받기\" : \"인증번호 받기\";\n  button.disabled = exactVerified || identityPhoneRequestInFlight || identityPhoneConfirmInFlight;\n  if (controls.verify) controls.verify.disabled = identityPhoneConfirmInFlight || identityPhoneRequestInFlight;\n  if (exactVerified) return;\n  if (identityAuthCapabilities.status === \"checking\") {\n    button.disabled = true;\n    setIdentityPhoneStatus(\"문자 인증 가능 여부를 확인하고 있습니다.\", \"\", surface);\n    return;\n  }\n  if (identityAuthCapabilities.providers.phone === false || identityAuthCapabilities.status === \"unavailable\") {\n    button.disabled = true;\n    controls.row?.setAttribute(\"hidden\", \"\");\n    setIdentityPhoneStatus(phoneAuthUnavailableMessage(), \"error\", surface);\n    return;\n  }\n  button.disabled = identityPhoneRequestInFlight || identityPhoneConfirmInFlight;\n  if (identityAuthCapabilities.status === \"ready\" && identityAuthCapabilities.providers.phone === true) {\n    const currentStatus = controls.status?.textContent || \"\";\n    if (currentStatus.includes(\"가능 여부\") || currentStatus.includes(\"설정을 확인하지 못했습니다\") || currentStatus.includes(\"문자 인증을 준비 중\")) {\n      const naverRepromptAvailable = !$(\"#identityNaverPhoneButton\")?.hidden;\n      setIdentityPhoneStatus(surface === \"profile\" ? \"새 번호를 인증한 후 본인 프로필에 저장하세요.\" : naverRepromptAvailable\n        ? \"네이버 번호를 다시 받거나 문자 인증 후 기존 회원 DB와 연결합니다.\"\n        : \"휴대전화 인증 후 기존 회원 DB와 안전하게 연결합니다.\", \"\", surface);\n    }\n  }\n  if (identityAuthCapabilities.status === \"unknown\" && identityAuthCapabilities.errorCode) {\n    setIdentityPhoneStatus(\"문자 인증 설정을 확인하지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.\", \"error\", surface);\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/data/auth.js",
+      "baseSha256": "f408402daadb55f00ece2e51a4144023dcb39d871fcfdee7541c6bc26e1cc790",
+      "candidateSha256": "1816deac2dc81ad1719580fd3f85c100228bdbabd2bdd508602a279440dbb39d",
+      "hunks": [
+        {
+          "before": "  return result;\n}\n\nasync function refreshIdentityPhoneVerification() {\n  const client = window.TennisNoteDataClient;\n  if (!hasLiveMemberSession() || !client?.getAuthUser) return \"\";\n  const user = await client.getAuthUser();\n  const verifiedPhone = verifiedPhoneFromAuthUser(user || {});\n  if (verifiedPhone) markIdentityPhoneVerified(verifiedPhone, \"provider\");\n  return verifiedPhone;\n}\n\nasync function requireVerifiedIdentityPhone(phone) {\n  const normalizedPhone = normalizeIdentityPhone(phone);\n  if (identityPhoneVerification.status === \"verified\" && identityPhoneVerification.phone === normalizedPhone) return true;\n  const verifiedPhone = await refreshIdentityPhoneVerification();\n  if (verifiedPhone === normalizedPhone) return true;\n  throw new Error(\"phone_verification_required\");\n}\n",
+          "after": "  return result;\n}\n\nasync function refreshIdentityPhoneVerification(surface = \"signup\") {\n  if (!signupSmsEnabled) return \"\";\n  const client = window.TennisNoteDataClient;\n  if (!hasLiveMemberSession() || !client?.getAuthUser) return \"\";\n  const owner = phoneVerificationOwner();\n  const inputPhone = normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || \"\");\n  const user = await client.getAuthUser();\n  if (!phoneVerificationOwnerCurrent(owner) || (owner.authId && user?.id && user.id !== owner.authId)) return \"\";\n  const verifiedPhone = verifiedPhoneFromAuthUser(user || {}, surface === \"profile\");\n  if (verifiedPhone && ((!inputPhone && surface === \"signup\") || inputPhone === verifiedPhone)\n    && normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || \"\") === inputPhone) {\n    markIdentityPhoneVerified(verifiedPhone, \"provider\", surface);\n  }\n  return verifiedPhone;\n}\n\nasync function requireVerifiedIdentityPhone(phone, surface = \"signup\") {\n  const normalizedPhone = normalizeIdentityPhone(phone);\n  const verification = phoneVerificationState(surface);\n  if (verification.status === \"verified\" && verification.phone === normalizedPhone && phoneVerificationOwnerCurrent(verification.owner)) return true;\n  const verifiedPhone = await refreshIdentityPhoneVerification(surface);\n  if (verifiedPhone === normalizedPhone) return true;\n  throw new Error(\"phone_verification_required\");\n}\n"
+        },
+        {
+          "before": "// 메모리에서만 재시도 키를 유지한다. 개인정보를 별도 저장소에 기록하지 않는다.\nlet signupProfileOperation = { fingerprint: \"\", key: \"\" };\n\nasync function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender }) {\n  const normalizedRealName = normalizeIdentityText(realName);\n  const normalizedNickname = normalizeIdentityText(nickname);\n  const normalizedPhone = normalizeIdentityPhone(phone);\n",
+          "after": "// 메모리에서만 재시도 키를 유지한다. 개인정보를 별도 저장소에 기록하지 않는다.\nlet signupProfileOperation = { fingerprint: \"\", key: \"\" };\n\nasync function persistIdentityProfile({ realName, nickname, phone, birthYear, neighborhood, gender, profileEditor = false }) {\n  const normalizedRealName = normalizeIdentityText(realName);\n  const normalizedNickname = normalizeIdentityText(nickname);\n  const normalizedPhone = normalizeIdentityPhone(phone);\n"
+        },
+        {
+          "before": "  const normalizedGender = String(gender || \"\");\n  if (!normalizedRealName || normalizedRealName.length > 40) throw new Error(\"real_name_invalid\");\n  if (normalizedNickname.length < 2 || normalizedNickname.length > 20) throw new Error(\"nickname_invalid\");\n  if (!/^01[0-9]{8,9}$/u.test(normalizedPhone)) throw new Error(\"phone_invalid\");\n  if (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear()) throw new Error(\"birth_year_invalid\");\n  if (![\"female\", \"male\", \"other\", \"prefer_not\"].includes(normalizedGender)) throw new Error(\"gender_invalid\");\n  const client = window.TennisNoteDataClient;\n  if (hasLiveMemberSession() && client?.rpc) {\n    await requireVerifiedIdentityPhone(normalizedPhone);\n    const targetProfile = {\n      name: normalizedRealName, nickname: normalizedNickname, phoneCandidate: normalizedPhone,\n",
+          "after": "  const normalizedGender = String(gender || \"\");\n  if (!normalizedRealName || normalizedRealName.length > 40) throw new Error(\"real_name_invalid\");\n  if (normalizedNickname.length < 2 || normalizedNickname.length > 20) throw new Error(\"nickname_invalid\");\n  if (!/^01[0-9]{8,9}$/u.test(normalizedPhone) && !(profileEditor && normalizedPhone === profilePhoneExpectedPhone)) throw new Error(\"phone_invalid\");\n  if (!profileEditor && (normalizedBirthYear < 1900 || normalizedBirthYear > new Date().getFullYear())) throw new Error(\"birth_year_invalid\");\n  if (!profileEditor && ![\"female\", \"male\", \"other\", \"prefer_not\"].includes(normalizedGender)) throw new Error(\"gender_invalid\");\n  const client = window.TennisNoteDataClient;\n  if (profileEditor && (!hasLiveMemberSession() || !client?.rpc)) throw new Error(\"login_required\");\n  if (hasLiveMemberSession() && client?.rpc) {\n    if (profileEditor) {\n      const owner = profilePhoneEditorOwner;\n      if (!owner?.profileId || !owner.authId || !phoneVerificationRequestCurrent(owner, normalizedPhone, \"profile\")) throw new Error(\"profile_phone_context_changed\");\n      if (normalizedPhone !== profilePhoneExpectedPhone) await requireVerifiedIdentityPhone(normalizedPhone, \"profile\");\n      if (!phoneVerificationRequestCurrent(owner, normalizedPhone, \"profile\")) throw new Error(\"profile_phone_context_changed\");\n      const targetProfile = { name: normalizedRealName, nickname: normalizedNickname, phone: normalizedPhone };\n      const fingerprint = JSON.stringify([owner.authId, owner.profileId, profilePhoneExpectedPhone, targetProfile]);\n      if (profilePhoneSaveOperation.fingerprint !== fingerprint) profilePhoneSaveOperation = { fingerprint, key: crypto.randomUUID() };\n      const resultRaw = await client.rpc(\"tn_save_my_verified_profile_phone\", {\n        target_profile_id: owner.profileId, target_profile: targetProfile,\n        target_expected_phone: profilePhoneExpectedPhone, target_operation_key: profilePhoneSaveOperation.key,\n      });\n      if (!phoneVerificationOwnerCurrent(owner)) throw new Error(\"profile_phone_context_changed\");\n      const result = Array.isArray(resultRaw) ? resultRaw[0] : resultRaw;\n      if (!result?.ok || result.profile?.id !== owner.profileId\n        || normalizeIdentityPhone(result.profile?.phone || \"\") !== normalizedPhone\n        || (normalizedPhone !== profilePhoneExpectedPhone && result.phoneVerified !== true)) {\n        throw new Error(\"profile_phone_readback_unconfirmed\");\n      }\n      applySavedIdentity(result.profile, { preserveCompletion: true });\n      if (result.phoneVerified === true) markIdentityPhoneVerified(normalizedPhone, \"server\", \"profile\");\n      else setIdentityPhoneStatus(\"저장된 번호를 그대로 유지했습니다. 새 번호로 바꾸려면 인증해 주세요.\", \"\", \"profile\");\n      return result;\n    }\n    await requireVerifiedIdentityPhone(normalizedPhone);\n    const targetProfile = {\n      name: normalizedRealName, nickname: normalizedNickname, phoneCandidate: normalizedPhone,\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/actions/enrollment.js",
+      "baseSha256": "bdc70d3502cfb48ddcc82ced1a2fb3f3161f4cf27f3aacba238d9e8227d32ffd",
+      "candidateSha256": "71d24ae6f9c0e4abe9bcd29fe02e1c4a895a484f02ef6a982d9913112fe9045e",
+      "hunks": [
+        {
+          "before": "  }\n}\n\nfunction applySavedIdentity(profile = {}) {\n  state.profile.name = normalizeIdentityText(profile.name || state.profile.name);\n  state.profile.nickname = normalizeIdentityText(profile.nickname || state.profile.nickname);\n  state.profile.phone = normalizeIdentityPhone(profile.phone || state.profile.phone);\n  state.profile.birthYear = profile.birth_year || state.profile.birthYear || \"\";\n  state.profile.neighborhood = normalizeIdentityText(profile.neighborhood || state.profile.neighborhood || \"\");\n  state.profile.gender = profile.gender || state.profile.gender || \"\";\n  state.profile.profileCompletedAt = profile.profile_completed_at || state.profile.profileCompletedAt || new Date().toISOString();\n  state.profile.privacyConsentVersion = profile.privacy_consent_version || state.profile.privacyConsentVersion || identityPrivacyVersion;\n  state.profile.privacyConsentedAt = profile.privacy_consented_at || state.profile.privacyConsentedAt || new Date().toISOString();\n  if (state.member) {\n    state.member.name = state.profile.name;\n    state.member.nickname = state.profile.nickname;\n",
+          "after": "  }\n}\n\nfunction applySavedIdentity(profile = {}, { preserveCompletion = false } = {}) {\n  state.profile.name = normalizeIdentityText(profile.name || state.profile.name);\n  state.profile.nickname = normalizeIdentityText(profile.nickname || state.profile.nickname);\n  state.profile.phone = normalizeIdentityPhone(Object.prototype.hasOwnProperty.call(profile, \"phone\") ? profile.phone || \"\" : state.profile.phone);\n  state.profile.birthYear = profile.birth_year || state.profile.birthYear || \"\";\n  state.profile.neighborhood = normalizeIdentityText(profile.neighborhood || state.profile.neighborhood || \"\");\n  state.profile.gender = profile.gender || state.profile.gender || \"\";\n  state.profile.profileCompletedAt = preserveCompletion ? profile.profile_completed_at || \"\" : profile.profile_completed_at || state.profile.profileCompletedAt || new Date().toISOString();\n  state.profile.privacyConsentVersion = preserveCompletion ? profile.privacy_consent_version || \"\" : profile.privacy_consent_version || state.profile.privacyConsentVersion || identityPrivacyVersion;\n  state.profile.privacyConsentedAt = preserveCompletion ? profile.privacy_consented_at || \"\" : profile.privacy_consented_at || state.profile.privacyConsentedAt || new Date().toISOString();\n  if (state.member) {\n    state.member.name = state.profile.name;\n    state.member.nickname = state.profile.nickname;\n"
+        },
+        {
+          "before": "  state.profile.marketingEmailConsent = preferences.marketingEmail === true;\n}\n\nasync function requestIdentityPhoneVerification() {\n  const button = $(\"#identityPhoneSendButton\");\n  if (!button || identityPhoneRequestInFlight) return false;\n  const phone = normalizeIdentityPhone($(\"#identityPhone\")?.value || \"\");\n  const e164Phone = identityPhoneE164(phone);\n  if (!/^01[0-9]{8,9}$/u.test(phone) || !e164Phone) {\n    setIdentityPhoneStatus(\"휴대전화 번호를 010부터 정확히 입력해 주세요.\", \"error\");\n    $(\"#identityPhone\")?.focus();\n    return false;\n  }\n  const client = window.TennisNoteDataClient;\n  if (!hasLiveMemberSession() || !client?.requestPhoneChangeVerification) {\n    setIdentityPhoneStatus(\"로그인 상태를 다시 확인해 주세요.\", \"error\");\n    return false;\n  }\n  identityPhoneRequestInFlight = true;\n  button.disabled = true;\n  try {\n    const currentUser = await client.getAuthUser?.();\n    if (verifiedPhoneFromAuthUser(currentUser || {}) === phone) {\n      markIdentityPhoneVerified(phone, \"provider\");\n      return true;\n    }\n    const capabilities = await refreshAuthProviderCapabilities({ force: true });\n    if (capabilities.providers.phone === false || capabilities.status === \"unavailable\") {\n      setIdentityPhoneStatus(phoneAuthUnavailableMessage(), \"error\");\n      return false;\n    }\n    if (capabilities.status !== \"ready\") {\n      setIdentityPhoneStatus(\"문자 인증 설정을 확인하지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.\", \"error\");\n      return false;\n    }\n    setIdentityPhoneStatus(\"인증번호를 보내고 있습니다.\");\n    await client.requestPhoneChangeVerification(e164Phone);\n    identityPhoneVerification = { phone, status: \"pending\", source: \"sms\" };\n    $(\"#identityPhoneCodeRow\").hidden = false;\n    setIdentityPhoneStatus(\"문자로 받은 인증번호 6자리를 입력해 주세요.\");\n    window.setTimeout(() => $(\"#identityPhoneCode\")?.focus(), 40);\n    return true;\n  } catch (error) {\n    resetIdentityPhoneVerification(identityErrorMessage(error));\n    setIdentityPhoneStatus(identityErrorMessage(error), \"error\");\n    return false;\n  } finally {\n    identityPhoneRequestInFlight = false;\n",
+          "after": "  state.profile.marketingEmailConsent = preferences.marketingEmail === true;\n}\n\nasync function requestIdentityPhoneVerification(surface = \"signup\") {\n  if (!signupSmsEnabled) return false;\n  const controls = phoneVerificationControls(surface);\n  const button = controls.send;\n  if (!button || identityPhoneRequestInFlight || identityPhoneConfirmInFlight) return false;\n  const phone = normalizeIdentityPhone(controls.input?.value || \"\");\n  const e164Phone = identityPhoneE164(phone);\n  if (!/^01[0-9]{8,9}$/u.test(phone) || !e164Phone) {\n    setIdentityPhoneStatus(\"휴대전화 번호를 010부터 정확히 입력해 주세요.\", \"error\", surface);\n    controls.input?.focus();\n    return false;\n  }\n  const client = window.TennisNoteDataClient;\n  if (!hasLiveMemberSession() || !client?.requestPhoneChangeVerification) {\n    setIdentityPhoneStatus(\"로그인 상태를 다시 확인해 주세요.\", \"error\", surface);\n    return false;\n  }\n  identityPhoneRequestInFlight = true;\n  button.disabled = true;\n  const owner = phoneVerificationOwner();\n  try {\n    const currentUser = await client.getAuthUser?.();\n    if (!phoneVerificationRequestCurrent(owner, phone, surface)\n      || (owner.authId && currentUser?.id && currentUser.id !== owner.authId)) return false;\n    if (verifiedPhoneFromAuthUser(currentUser || {}, surface === \"profile\") === phone) {\n      markIdentityPhoneVerified(phone, \"provider\", surface);\n      return true;\n    }\n    const capabilities = await refreshAuthProviderCapabilities({ force: true });\n    if (!phoneVerificationRequestCurrent(owner, phone, surface)) return false;\n    if (capabilities.providers.phone === false || capabilities.status === \"unavailable\") {\n      setIdentityPhoneStatus(phoneAuthUnavailableMessage(), \"error\", surface);\n      return false;\n    }\n    if (capabilities.status !== \"ready\") {\n      setIdentityPhoneStatus(\"문자 인증 설정을 확인하지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.\", \"error\", surface);\n      return false;\n    }\n    setIdentityPhoneStatus(\"인증번호를 보내고 있습니다.\", \"\", surface);\n    await client.requestPhoneChangeVerification(e164Phone);\n    if (!phoneVerificationRequestCurrent(owner, phone, surface)) return false;\n    const verification = { phone, status: \"pending\", source: \"sms\", owner };\n    if (surface === \"profile\") profilePhoneVerification = verification;\n    else identityPhoneVerification = verification;\n    if (controls.code) controls.code.value = \"\";\n    if (controls.row) controls.row.hidden = false;\n    setIdentityPhoneStatus(\"문자로 받은 인증번호 6자리를 입력해 주세요.\", \"\", surface);\n    window.setTimeout(() => { if (phoneVerificationRequestCurrent(owner, phone, surface)) controls.code?.focus(); }, 40);\n    return true;\n  } catch (error) {\n    if (phoneVerificationRequestCurrent(owner, phone, surface)) {\n      resetIdentityPhoneVerification(identityErrorMessage(error), surface);\n      setIdentityPhoneStatus(identityErrorMessage(error), \"error\", surface);\n    }\n    return false;\n  } finally {\n    identityPhoneRequestInFlight = false;\n"
+        },
+        {
+          "before": "  }\n}\n\nasync function confirmIdentityPhoneVerification() {\n  const button = $(\"#identityPhoneVerifyButton\");\n  const phone = normalizeIdentityPhone($(\"#identityPhone\")?.value || \"\");\n  const code = normalizeIdentityPhone($(\"#identityPhoneCode\")?.value || \"\");\n  if (identityPhoneVerification.status !== \"pending\" || identityPhoneVerification.phone !== phone) {\n    setIdentityPhoneStatus(\"휴대전화 번호가 바뀌었습니다. 인증번호를 다시 받아 주세요.\", \"error\");\n    return false;\n  }\n  if (!/^[0-9]{6}$/u.test(code)) {\n    setIdentityPhoneStatus(\"인증번호 6자리를 입력해 주세요.\", \"error\");\n    $(\"#identityPhoneCode\")?.focus();\n    return false;\n  }\n  const client = window.TennisNoteDataClient;\n  button.disabled = true;\n  setIdentityPhoneStatus(\"인증번호를 확인하고 있습니다.\");\n  try {\n    await client.verifyPhoneChange(identityPhoneE164(phone), code);\n    const authUser = await client.getAuthUser?.();\n    const verifiedPhone = verifiedPhoneFromAuthUser(authUser || {});\n    if (verifiedPhone !== phone) throw new Error(\"phone_verification_not_confirmed\");\n    markIdentityPhoneVerified(phone, \"sms\");\n    return true;\n  } catch (error) {\n    setIdentityPhoneStatus(identityErrorMessage(error), \"error\");\n    return false;\n  } finally {\n    button.disabled = false;\n  }\n}\n\n",
+          "after": "  }\n}\n\nasync function confirmIdentityPhoneVerification(surface = \"signup\") {\n  if (!signupSmsEnabled) return false;\n  const controls = phoneVerificationControls(surface);\n  const button = controls.verify;\n  if (!button || identityPhoneConfirmInFlight || identityPhoneRequestInFlight) return false;\n  const phone = normalizeIdentityPhone(controls.input?.value || \"\");\n  const code = normalizeIdentityPhone(controls.code?.value || \"\");\n  const verification = phoneVerificationState(surface);\n  if (verification.status !== \"pending\" || verification.phone !== phone || !phoneVerificationOwnerCurrent(verification.owner)) {\n    setIdentityPhoneStatus(\"휴대전화 번호가 바뀌었습니다. 인증번호를 다시 받아 주세요.\", \"error\", surface);\n    return false;\n  }\n  if (!/^[0-9]{6}$/u.test(code)) {\n    setIdentityPhoneStatus(\"인증번호 6자리를 입력해 주세요.\", \"error\", surface);\n    controls.code?.focus();\n    return false;\n  }\n  const client = window.TennisNoteDataClient;\n  const owner = phoneVerificationOwner();\n  identityPhoneConfirmInFlight = true;\n  button.disabled = true;\n  setIdentityPhoneStatus(\"인증번호를 확인하고 있습니다.\", \"\", surface);\n  try {\n    await client.verifyPhoneChange(identityPhoneE164(phone), code);\n    if (!phoneVerificationRequestCurrent(owner, phone, surface)) return false;\n    const authUser = await client.getAuthUser?.();\n    if (!phoneVerificationRequestCurrent(owner, phone, surface)\n      || (owner.authId && authUser?.id && authUser.id !== owner.authId)) return false;\n    const verifiedPhone = verifiedPhoneFromAuthUser(authUser || {}, surface === \"profile\");\n    if (verifiedPhone !== phone) throw new Error(\"phone_verification_not_confirmed\");\n    markIdentityPhoneVerified(phone, \"sms\", surface);\n    return true;\n  } catch (error) {\n    if (phoneVerificationRequestCurrent(owner, phone, surface)) {\n      if (normalizedIdentityErrorCode(error).includes(\"otp_expired\")) resetIdentityPhoneVerification(identityErrorMessage(error), surface);\n      setIdentityPhoneStatus(identityErrorMessage(error), \"error\", surface);\n    }\n    return false;\n  } finally {\n    identityPhoneConfirmInFlight = false;\n    syncIdentityPhoneCapabilityControl();\n  }\n}\n\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/actions/profile.js",
+      "baseSha256": "821992ec31052b165f8e815e320ef5d9432d6c9afdd77f0ddc0b885c4bdee0df",
+      "candidateSha256": "483941557080529d70c5d0902cbe16123d71745225eb31905773a87a3d4010f4",
+      "hunks": [
+        {
+          "before": "}\n\nasync function saveProfileInfo() {\n  try {\n    await persistIdentityProfile({\n      realName: $(\"#profileRealNameInput\")?.value,\n",
+          "after": "}\n\nasync function saveProfileInfo() {\n  if (profileInfoSaving) return false;\n  profileInfoSaving = true;\n  const button = $(\"#saveProfileInfo\");\n  if (button) button.disabled = true;\n  const identityFields = [\"#profileRealNameInput\", \"#profileNicknameInput\", \"#profilePhoneInput\"]\n    .map((selector) => $(selector)).filter(Boolean).map((field) => ({ field, readOnly: field.readOnly }));\n  // readonly keeps values in the ordinary draft/input-guard snapshot. Disabled\n  // fields disappear from that snapshot and cause a false unsaved prompt.\n  identityFields.forEach(({ field }) => { field.readOnly = true; });\n  try { return await saveProfileInfoOnce(); }\n  finally {\n    identityFields.forEach(({ field, readOnly }) => { field.readOnly = readOnly; });\n    profileInfoSaving = false;\n    if (button) button.disabled = false;\n  }\n}\n\nasync function requestNtrpCheck() {\n  const survey = collectNtrpSurvey();\n  state.profile.ntrpCheckRequested = true;\n  state.profile.ntrpSurvey = survey.answers;\n  state.profile.selfNtrp = survey.level;\n  if ($(\"#profileSelfNtrp\")) $(\"#profileSelfNtrp\").value = survey.level;\n  const requestedAt = new Date().toISOString();\n  const serverResult = await updateMemberProfileOnServer({\n    self_ntrp: Number(survey.level),\n    ntrp_survey: survey.answers,\n    ntrp_requested_at: requestedAt,\n    tennis_goal: state.profile.goal || null,\n    play_style_memo: state.profile.styleMemo || null,\n  });\n  exportNtrpRequest(survey);\n  state.ticketHistory.unshift({\n    text: serverResult.ok === false ? \"수준 확인 요청 전송 실패 · 다시 시도 필요\" : \"코치에게 수준 확인 요청 완료\",\n    tone: serverResult.ok === false ? \"alert\" : \"wait\",\n  });\n  renderProfile();\n  renderTickets();\n  saveSnapshot();\n}\n\n\nasync function saveProfileInfoOnce() {\n  try {\n    await persistIdentityProfile({\n      realName: $(\"#profileRealNameInput\")?.value,\n"
+        },
+        {
+          "before": "      birthYear: state.profile.birthYear || state.member?.birthYear,\n      neighborhood: state.profile.neighborhood || state.member?.neighborhood,\n      gender: state.profile.gender || state.member?.gender,\n    });\n    setNicknameStatus(\"profileNicknameStatus\", \"실명과 닉네임을 확인했습니다.\", \"available\");\n  } catch (error) {\n",
+          "after": "      birthYear: state.profile.birthYear || state.member?.birthYear,\n      neighborhood: state.profile.neighborhood || state.member?.neighborhood,\n      gender: state.profile.gender || state.member?.gender,\n      profileEditor: true,\n    });\n    setNicknameStatus(\"profileNicknameStatus\", \"실명과 닉네임을 확인했습니다.\", \"available\");\n  } catch (error) {\n"
+        },
+        {
+          "before": "  window.TennisNoteInputGuard?.markSaved?.(\"#profileEditorSheet\");\n  closeAppSheet(\"profileEditorSheet\");\n}\n\nasync function requestNtrpCheck() {\n  const survey = collectNtrpSurvey();\n  state.profile.ntrpCheckRequested = true;\n  state.profile.ntrpSurvey = survey.answers;\n  state.profile.selfNtrp = survey.level;\n  if ($(\"#profileSelfNtrp\")) $(\"#profileSelfNtrp\").value = survey.level;\n  const requestedAt = new Date().toISOString();\n  const serverResult = await updateMemberProfileOnServer({\n    self_ntrp: Number(survey.level),\n    ntrp_survey: survey.answers,\n    ntrp_requested_at: requestedAt,\n    tennis_goal: state.profile.goal || null,\n    play_style_memo: state.profile.styleMemo || null,\n  });\n  exportNtrpRequest(survey);\n  state.ticketHistory.unshift({\n    text: serverResult.ok === false ? \"수준 확인 요청 전송 실패 · 다시 시도 필요\" : \"코치에게 수준 확인 요청 완료\",\n    tone: serverResult.ok === false ? \"alert\" : \"wait\",\n  });\n  renderProfile();\n  renderTickets();\n  saveSnapshot();\n}\n",
+          "after": "  window.TennisNoteInputGuard?.markSaved?.(\"#profileEditorSheet\");\n  closeAppSheet(\"profileEditorSheet\");\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/domain/members.js",
+      "baseSha256": "ce167fa9ddbdf4521c7d8df677f3f9816340cf02b9620eeed06006d49e5d16df",
+      "candidateSha256": "4b4c1105a5a6119606b16c751dc4d60e2975651ec05ec65dff0b70b41768f998",
+      "hunks": [
+        {
+          "before": "}\n\nfunction openProfileEditor(focusNtrp = false) {\n  openAppSheet(\"profileEditorSheet\");\n  if (!focusNtrp) return;\n  // Keep the opening tap on the sheet itself. Focusing the select during the\n  // same pointer sequence makes iOS open the native picker as a second layer.\n",
+          "after": "}\n\nfunction openProfileEditor(focusNtrp = false) {\n  profilePhoneExpectedPhone = normalizeIdentityPhone(state.profile?.phone || \"\");\n  profilePhoneEditorOwner = phoneVerificationOwner();\n  const owner = profilePhoneEditorOwner;\n  resetIdentityPhoneVerification(\"기존 번호를 유지하거나 새 번호를 인증한 후 저장하세요.\", \"profile\");\n  openAppSheet(\"profileEditorSheet\");\n  void refreshIdentityPhoneVerification(\"profile\").catch(() => {\n    if (phoneVerificationOwnerCurrent(owner)) setIdentityPhoneStatus(\"인증 상태를 확인하지 못했습니다. 입력을 유지한 채 다시 확인해 주세요.\", \"error\", \"profile\");\n  });\n  void refreshAuthProviderCapabilities();\n  if (!focusNtrp) return;\n  // Keep the opening tap on the sheet itself. Focusing the select during the\n  // same pointer sequence makes iOS open the native picker as a second layer.\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/views/profile.js",
+      "baseSha256": "fd4d020b913fd8c806828bc8c243f6c93d87ade4b989ebd14e64d83d60f8c298",
+      "candidateSha256": "486bd5119ff513f078b5b0cc591abb8bc296e570c32b916a50395ce30fa6c8de",
+      "hunks": [
+        {
+          "before": "  // what the member is typing with the last server value during that refresh.\n  const setProfileFieldValue = (selector, value) => {\n    const field = $(selector);\n    if (field && document.activeElement !== field) field.value = value;\n  };\n  setProfileFieldValue(\"#profileRealNameInput\", realName === \"가입 확인 중\" ? \"\" : realName);\n",
+          "after": "  // what the member is typing with the last server value during that refresh.\n  const setProfileFieldValue = (selector, value) => {\n    const field = $(selector);\n    if ($(\"#profileEditorSheet\") && !$(\"#profileEditorSheet\").hidden) return;\n    if (field && document.activeElement !== field) field.value = value;\n  };\n  setProfileFieldValue(\"#profileRealNameInput\", realName === \"가입 확인 중\" ? \"\" : realName);\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/app.js",
+      "baseSha256": "63cb7df47a9b1beca442304394f1c7981860a5ea2bf67a8cd65e9863c25afe2f",
+      "candidateSha256": "19aeb3cdc0dba0b267503cf22eb20cddf468a81038cf8a80b492f0a198723030",
+      "hunks": [
+        {
+          "before": "};\nlet identityAuthCapabilityPromise = null;\nlet identityPhoneRequestInFlight = false;\n\nconst notionCurriculumGuideUrl = curriculumCatalog.sources?.memberGuide || \"https://app.notion.com/p/94544cb6f3d546e991db21dbab5fb163\";\nconst notionCurriculumDetailUrl = curriculumCatalog.sources?.detailedGuide || \"https://app.notion.com/p/312b107df48080e282cbe84b95cff64b\";\n",
+          "after": "};\nlet identityAuthCapabilityPromise = null;\nlet identityPhoneRequestInFlight = false;\nlet identityPhoneConfirmInFlight = false;\nlet profilePhoneVerification = { phone: \"\", status: \"unverified\", source: \"\" };\nlet profilePhoneExpectedPhone = \"\";\nlet profilePhoneEditorOwner = null;\nlet profilePhoneSaveOperation = { fingerprint: \"\", key: \"\" };\nlet profileInfoSaving = false;\n// 공개 앱도 서버 capability를 확인한 뒤에만 SMS를 요청한다.\nconst signupSmsEnabled = true;\n\nconst notionCurriculumGuideUrl = curriculumCatalog.sources?.memberGuide || \"https://app.notion.com/p/94544cb6f3d546e991db21dbab5fb163\";\nconst notionCurriculumDetailUrl = curriculumCatalog.sources?.detailedGuide || \"https://app.notion.com/p/312b107df48080e282cbe84b95cff64b\";\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/events/profile.js",
+      "baseSha256": "e7a93ee244d4412f2bf411f1483ff1ad08245c5f38c1464e09bbbe1e26624aeb",
+      "candidateSha256": "c40c0ab68b483d435423a5d28cbd7181eadb4ff973bc77bc456533a5ad1e2654",
+      "hunks": [
+        {
+          "before": "  $(\"#profileNicknameInput\")?.addEventListener(\"input\", () => setNicknameStatus(\"profileNicknameStatus\", \"저장할 때 중복 여부를 다시 확인합니다.\"));\n  $(\"#profilePhoneInput\")?.addEventListener(\"input\", (event) => {\n    event.target.value = formatIdentityPhone(event.target.value);\n  });\n  $(\"#identitySetupForm\")?.addEventListener(\"submit\", submitIdentitySetup);\n  $(\"#identityPhoneSendButton\")?.addEventListener(\"click\", requestIdentityPhoneVerification);\n  $(\"#identityNaverPhoneButton\")?.addEventListener(\"click\", requestNaverPhoneConsent);\n  $(\"#identityPhoneVerifyButton\")?.addEventListener(\"click\", confirmIdentityPhoneVerification);\n  $(\"#identityNicknameCheckButton\")?.addEventListener(\"click\", () => checkNicknameAvailability(\"identityNickname\", \"identityNicknameStatus\"));\n  $(\"#identityNickname\")?.addEventListener(\"input\", () => setNicknameStatus(\"identityNicknameStatus\", \"저장할 때 중복 여부를 다시 확인합니다.\"));\n  $(\"#identityPhone\")?.addEventListener(\"input\", (event) => {\n",
+          "after": "  $(\"#profileNicknameInput\")?.addEventListener(\"input\", () => setNicknameStatus(\"profileNicknameStatus\", \"저장할 때 중복 여부를 다시 확인합니다.\"));\n  $(\"#profilePhoneInput\")?.addEventListener(\"input\", (event) => {\n    event.target.value = formatIdentityPhone(event.target.value);\n    if (profilePhoneVerification.phone !== normalizeIdentityPhone(event.target.value)) {\n      resetIdentityPhoneVerification(\"휴대전화 번호가 바뀌었습니다. 새 번호를 인증한 후 저장하세요.\", \"profile\");\n    }\n  });\n  $(\"#profilePhoneSendButton\")?.addEventListener(\"click\", () => requestIdentityPhoneVerification(\"profile\"));\n  $(\"#profilePhoneVerifyButton\")?.addEventListener(\"click\", () => confirmIdentityPhoneVerification(\"profile\"));\n  $(\"#profilePhoneCode\")?.addEventListener(\"input\", (event) => {\n    event.target.value = normalizeIdentityPhone(event.target.value).slice(0, 6);\n  });\n  $(\"#identitySetupForm\")?.addEventListener(\"submit\", submitIdentitySetup);\n  $(\"#identityPhoneSendButton\")?.addEventListener(\"click\", () => requestIdentityPhoneVerification());\n  $(\"#identityNaverPhoneButton\")?.addEventListener(\"click\", requestNaverPhoneConsent);\n  $(\"#identityPhoneVerifyButton\")?.addEventListener(\"click\", () => confirmIdentityPhoneVerification());\n  $(\"#identityNicknameCheckButton\")?.addEventListener(\"click\", () => checkNicknameAvailability(\"identityNickname\", \"identityNicknameStatus\"));\n  $(\"#identityNickname\")?.addEventListener(\"input\", () => setNicknameStatus(\"identityNicknameStatus\", \"저장할 때 중복 여부를 다시 확인합니다.\"));\n  $(\"#identityPhone\")?.addEventListener(\"input\", (event) => {\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/index.html",
+      "baseSha256": "f941ff2e10def90ef60407ffbf33b83c1ba8005e1468f11c143e62714dd53248",
+      "candidateSha256": "2457f248fbbce95529940905ddbdff97312385e5d676860a16b63afbd10eafbb",
+      "hunks": [
+        {
+          "before": "              </label>\n              <label>\n                <span>휴대전화</span>\n                <input id=\"profilePhoneInput\" type=\"tel\" inputmode=\"numeric\" maxlength=\"13\" autocomplete=\"tel\" />\n              </label>\n              <div class=\"nickname-check-panel\">\n                <button class=\"small-button\" type=\"button\" id=\"profileNicknameCheckButton\">닉네임 중복 확인</button>\n                <small id=\"profileNicknameStatus\">2~20자로 입력하세요.</small>\n",
+          "after": "              </label>\n              <label>\n                <span>휴대전화</span>\n                <input id=\"profilePhoneInput\" type=\"tel\" inputmode=\"numeric\" maxlength=\"13\" autocomplete=\"tel\" aria-describedby=\"profilePhoneStatus\" />\n              </label>\n              <div class=\"identity-phone-verification\" id=\"profilePhoneVerification\">\n                <div class=\"identity-phone-actions\">\n                  <button class=\"small-button\" type=\"button\" id=\"profilePhoneSendButton\">인증번호 받기</button>\n                  <small id=\"profilePhoneStatus\" role=\"status\" aria-live=\"polite\">기존 번호를 유지하거나 새 번호를 인증한 후 저장하세요.</small>\n                </div>\n                <div class=\"identity-phone-code-row\" id=\"profilePhoneCodeRow\" hidden>\n                  <label>\n                    <span>인증번호</span>\n                    <input id=\"profilePhoneCode\" type=\"text\" inputmode=\"numeric\" autocomplete=\"one-time-code\" maxlength=\"6\" placeholder=\"6자리\" />\n                  </label>\n                  <button class=\"small-button\" type=\"button\" id=\"profilePhoneVerifyButton\">확인</button>\n                </div>\n              </div>\n              <div class=\"nickname-check-panel\">\n                <button class=\"small-button\" type=\"button\" id=\"profileNicknameCheckButton\">닉네임 중복 확인</button>\n                <small id=\"profileNicknameStatus\">2~20자로 입력하세요.</small>\n"
+        }
+      ]
+    },
+    {
+      "path": "app/tennis-note-member-app/styles.css",
+      "baseSha256": "ed475c3ad0fb62ec51ea1296b6433bb9235d13490c4535db6a823e8b6173537d",
+      "candidateSha256": "6e9ffb4359c6328f1a08df9c4e7485ed167e139cd4b2e484dd9a9613e5c7d6f4",
+      "hunks": [
+        {
+          "before": "  margin: 0;\n}\n\n@media (max-width: 420px) {\n  .identity-demographics-grid {\n    grid-template-columns: 1fr;\n",
+          "after": "  margin: 0;\n}\n\n/* The profile OTP surface also works in a desktop-width/native landscape\n   viewport; do not rely only on the foundation's mobile media query. */\n#profileEditorSheet :is(#profilePhoneInput, #profilePhoneCode) {\n  min-height: 44px;\n  font-size: 16px;\n}\n\n@media (max-width: 420px) {\n  .identity-demographics-grid {\n    grid-template-columns: 1fr;\n"
+        }
+      ]
+    }
+  ]
+}

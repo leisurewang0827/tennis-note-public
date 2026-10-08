@@ -222,6 +222,7 @@ function renderProfile() {
   // what the member is typing with the last server value during that refresh.
   const setProfileFieldValue = (selector, value) => {
     const field = $(selector);
+    if ($("#profileEditorSheet") && !$("#profileEditorSheet").hidden) return;
     if (field && document.activeElement !== field) field.value = value;
   };
   setProfileFieldValue("#profileRealNameInput", realName === "가입 확인 중" ? "" : realName);

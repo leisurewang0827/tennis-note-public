@@ -40,9 +40,23 @@ function identityPhoneE164(value = "") {
   return "";
 }
 
-function verifiedPhoneFromAuthUser(user = {}) {
+function verifiedPhoneFromAuthUser(user = {}, strict = false) {
   const directPhone = normalizeIdentityPhone(user?.phone || "");
-  if (directPhone && user?.phone_confirmed_at) return directPhone.startsWith("82") ? `0${directPhone.slice(2)}` : directPhone;
+  const canonicalDirect = directPhone.startsWith("82") ? `0${directPhone.slice(2)}` : directPhone;
+  const confirmedAt = Date.parse(user?.phone_confirmed_at || "");
+  if (directPhone && user?.phone_confirmed_at && (!strict || (/^01[0-9]{8,9}$/u.test(canonicalDirect)
+    && Number.isFinite(confirmedAt) && confirmedAt <= Date.now()))) return canonicalDirect;
+  if (strict) {
+    const phones = [...new Set((Array.isArray(user.identities) ? user.identities : [])
+      .filter((identity) => ["custom:naver", "custom:kakao"].includes(identity.provider))
+      .map((identity) => identity.identity_data || {})
+      .filter((data) => [data.phone_number_verified, data.phone_verified, data.mobile_verified, data.verified_phone]
+        .some((value) => value === true || value === "true" || value === "1"))
+      .map((data) => normalizeIdentityPhone(data.phone_number || data.phone || data.mobile || ""))
+      .map((phone) => phone.startsWith("82") ? `0${phone.slice(2)}` : phone)
+      .filter((phone) => /^01[0-9]{8,9}$/u.test(phone)))];
+    return phones.length === 1 ? phones[0] : "";
+  }
   const verifiedIdentity = (user?.identities || []).find((identity) => {
     const provider = String(identity?.provider || "").toLowerCase();
     const metadata = identity?.identity_data || {};
@@ -162,6 +176,9 @@ function identityErrorMessage(error) {
   if (code.includes("real_name_invalid")) return "실명을 확인해 주세요.";
   if (code.includes("phone_invalid")) return "휴대전화 번호를 010부터 정확히 입력해 주세요.";
   if (code.includes("phone_verification_required")) return "휴대전화 인증을 먼저 완료해 주세요.";
+  if (code.includes("profile_phone_stale") || code.includes("phone_operation_superseded")) return "저장된 번호가 변경되었습니다. 내 정보를 다시 열어 확인해 주세요.";
+  if (code.includes("profile_phone_identity_mismatch") || code.includes("profile_phone_context_changed")) return "로그인 정보가 변경되었습니다. 본인 계정으로 다시 확인해 주세요.";
+  if (code.includes("profile_phone_readback_unconfirmed")) return "번호 저장 결과를 확인하지 못했습니다. 입력을 유지한 채 다시 확인해 주세요.";
   if (code.includes("over_email_send_rate_limit") || code.includes("rate_limit") || code.includes("too many")) return "인증번호 요청이 많습니다. 잠시 후 다시 시도해 주세요.";
   if (code.includes("phone_provider") || code.includes("sms_provider") || code.includes("sms_send")) return phoneAuthUnavailableMessage();
   if (code.includes("otp_expired") || code.includes("token has expired")) return "인증번호가 만료되었거나 올바르지 않습니다. 새 번호를 받아 다시 입력해 주세요.";

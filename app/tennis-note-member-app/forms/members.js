@@ -150,8 +150,8 @@ function setNicknameStatus(targetId, message, tone = "") {
   target.classList.toggle("is-unavailable", tone === "unavailable");
 }
 
-function setIdentityPhoneStatus(message, tone = "") {
-  const target = $("#identityPhoneStatus");
+function setIdentityPhoneStatus(message, tone = "", surface = "signup") {
+  const target = phoneVerificationControls(surface).status;
   if (!target) return;
   target.textContent = message;
   target.classList.toggle("is-verified", tone === "verified");
@@ -159,33 +159,8 @@ function setIdentityPhoneStatus(message, tone = "") {
 }
 
 function syncIdentityPhoneCapabilityControl() {
-  $("#identityPhoneVerification")?.removeAttribute("hidden");
-  const button = $("#identityPhoneSendButton");
-  if (!button || identityPhoneVerification.status === "verified") return;
-  if (identityAuthCapabilities.status === "checking") {
-    button.disabled = true;
-    setIdentityPhoneStatus("문자 인증 가능 여부를 확인하고 있습니다.");
-    return;
-  }
-  if (identityAuthCapabilities.providers.phone === false || identityAuthCapabilities.status === "unavailable") {
-    button.disabled = true;
-    $("#identityPhoneCodeRow")?.setAttribute("hidden", "");
-    setIdentityPhoneStatus(phoneAuthUnavailableMessage(), "error");
-    return;
-  }
-  button.disabled = identityPhoneRequestInFlight;
-  if (identityAuthCapabilities.status === "ready" && identityAuthCapabilities.providers.phone === true) {
-    const currentStatus = $("#identityPhoneStatus")?.textContent || "";
-    if (currentStatus.includes("가능 여부") || currentStatus.includes("설정을 확인하지 못했습니다") || currentStatus.includes("문자 인증을 준비 중")) {
-      const naverRepromptAvailable = !$("#identityNaverPhoneButton")?.hidden;
-      setIdentityPhoneStatus(naverRepromptAvailable
-        ? "네이버 번호를 다시 받거나 문자 인증 후 기존 회원 DB와 연결합니다."
-        : "휴대전화 인증 후 기존 회원 DB와 안전하게 연결합니다.");
-    }
-  }
-  if (identityAuthCapabilities.status === "unknown" && identityAuthCapabilities.errorCode) {
-    setIdentityPhoneStatus("문자 인증 설정을 확인하지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.", "error");
-  }
+  syncPhoneVerificationControl("signup");
+  syncPhoneVerificationControl("profile");
 }
 
 function syncAuthProviderCapabilityControls() {
@@ -238,26 +213,36 @@ function syncAuthProviderCapabilityControls() {
   syncIdentityPhoneCapabilityControl();
 }
 
-function resetIdentityPhoneVerification(message = "휴대전화 인증이 필요합니다.") {
-  identityPhoneVerification = { phone: "", status: "unverified", source: "" };
-  if ($("#identityPhoneCode")) $("#identityPhoneCode").value = "";
-  if ($("#identityPhoneCodeRow")) $("#identityPhoneCodeRow").hidden = true;
-  if ($("#identityPhoneSendButton")) $("#identityPhoneSendButton").disabled = false;
-  setIdentityPhoneStatus(message);
+function resetIdentityPhoneVerification(message = "휴대전화 인증이 필요합니다.", surface = "signup") {
+  const verification = { phone: "", status: "unverified", source: "" };
+  if (surface === "profile") profilePhoneVerification = verification;
+  else identityPhoneVerification = verification;
+  const controls = phoneVerificationControls(surface);
+  if (controls.code) controls.code.value = "";
+  if (controls.row) controls.row.hidden = true;
+  if (controls.send) controls.send.disabled = false;
+  setIdentityPhoneStatus(message, "", surface);
   syncIdentityPhoneCapabilityControl();
 }
 
-function markIdentityPhoneVerified(phone, source = "sms") {
+function markIdentityPhoneVerified(phone, source = "sms", surface = "signup") {
   const normalizedPhone = normalizeIdentityPhone(phone);
-  identityPhoneVerification = { phone: normalizedPhone, status: "verified", source };
-  if ($("#identityPhone")) $("#identityPhone").value = formatIdentityPhone(normalizedPhone);
-  if ($("#identityPhoneCodeRow")) $("#identityPhoneCodeRow").hidden = true;
-  if ($("#identityPhoneSendButton")) $("#identityPhoneSendButton").disabled = true;
+  if (surface === "profile" && normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || "") !== normalizedPhone) {
+    resetIdentityPhoneVerification("입력 번호가 바뀌었습니다. 현재 번호를 인증한 후 저장하세요.", surface);
+    return false;
+  }
+  const verification = { phone: normalizedPhone, status: "verified", source, owner: phoneVerificationOwner() };
+  if (surface === "profile") profilePhoneVerification = verification;
+  else identityPhoneVerification = verification;
+  const controls = phoneVerificationControls(surface);
+  if (controls.input && surface === "signup") controls.input.value = formatIdentityPhone(normalizedPhone);
+  if (controls.row) controls.row.hidden = true;
+  if (controls.send) controls.send.disabled = true;
   setIdentityPhoneStatus(
-    source === "provider"
+    surface === "profile" ? "휴대전화 인증이 완료되었습니다. 저장하면 본인 프로필에 반영됩니다." : source === "provider"
       ? "로그인 제공자가 확인한 번호입니다. 기존 회원 DB 연결에 사용합니다."
       : "휴대전화 인증이 완료되었습니다. 기존 회원 DB 연결에 사용합니다.",
-    "verified",
+    "verified", surface,
   );
 }
 
@@ -344,4 +329,78 @@ function installMemberConnectivityStatus() {
       renderMemberConnectivityStatus(true);
     });
   });
+}
+
+
+function phoneVerificationControls(surface = "signup") {
+  const prefix = surface === "profile" ? "profilePhone" : "identityPhone";
+  return { input: $(surface === "profile" ? "#profilePhoneInput" : "#identityPhone"),
+    send: $(`#${prefix}SendButton`), verify: $(`#${prefix}VerifyButton`), code: $(`#${prefix}Code`),
+    row: $(`#${prefix}CodeRow`), status: $(`#${prefix}Status`), block: $(`#${prefix}Verification`) };
+}
+
+function phoneVerificationState(surface = "signup") {
+  return surface === "profile" ? profilePhoneVerification : identityPhoneVerification;
+}
+
+function phoneVerificationOwner() {
+  const client = window.TennisNoteDataClient;
+  return { client, authId: String(client?.getSession?.()?.user?.id || state.member?.authUserId || ""),
+    profileId: String(state.liveProfileId || state.member?.profileId || state.member?.id || "") };
+}
+
+function phoneVerificationOwnerCurrent(owner) {
+  const current = phoneVerificationOwner();
+  return Boolean(owner && hasLiveMemberSession() && owner.client === current.client
+    && owner.authId === current.authId && owner.profileId === current.profileId);
+}
+
+function phoneVerificationRequestCurrent(owner, phone, surface) {
+  return phoneVerificationOwnerCurrent(owner)
+    && normalizeIdentityPhone(phoneVerificationControls(surface).input?.value || "") === phone;
+}
+
+function syncPhoneVerificationControl(surface) {
+  const controls = phoneVerificationControls(surface);
+  if (!signupSmsEnabled) {
+    controls.block?.setAttribute("hidden", "");
+    if (controls.send) controls.send.disabled = true;
+    if (controls.verify) controls.verify.disabled = true;
+    if (surface === "signup" && $("#identityNaverPhoneButton")) $("#identityNaverPhoneButton").disabled = true;
+    return;
+  }
+  controls.block?.removeAttribute("hidden");
+  const button = controls.send;
+  const verification = phoneVerificationState(surface);
+  if (!button) return;
+  const exactVerified = verification.status === "verified" && phoneVerificationOwnerCurrent(verification.owner)
+    && verification.phone === normalizeIdentityPhone(controls.input?.value || "");
+  button.textContent = verification.status === "pending" ? "인증번호 다시 받기" : "인증번호 받기";
+  button.disabled = exactVerified || identityPhoneRequestInFlight || identityPhoneConfirmInFlight;
+  if (controls.verify) controls.verify.disabled = identityPhoneConfirmInFlight || identityPhoneRequestInFlight;
+  if (exactVerified) return;
+  if (identityAuthCapabilities.status === "checking") {
+    button.disabled = true;
+    setIdentityPhoneStatus("문자 인증 가능 여부를 확인하고 있습니다.", "", surface);
+    return;
+  }
+  if (identityAuthCapabilities.providers.phone === false || identityAuthCapabilities.status === "unavailable") {
+    button.disabled = true;
+    controls.row?.setAttribute("hidden", "");
+    setIdentityPhoneStatus(phoneAuthUnavailableMessage(), "error", surface);
+    return;
+  }
+  button.disabled = identityPhoneRequestInFlight || identityPhoneConfirmInFlight;
+  if (identityAuthCapabilities.status === "ready" && identityAuthCapabilities.providers.phone === true) {
+    const currentStatus = controls.status?.textContent || "";
+    if (currentStatus.includes("가능 여부") || currentStatus.includes("설정을 확인하지 못했습니다") || currentStatus.includes("문자 인증을 준비 중")) {
+      const naverRepromptAvailable = !$("#identityNaverPhoneButton")?.hidden;
+      setIdentityPhoneStatus(surface === "profile" ? "새 번호를 인증한 후 본인 프로필에 저장하세요." : naverRepromptAvailable
+        ? "네이버 번호를 다시 받거나 문자 인증 후 기존 회원 DB와 연결합니다."
+        : "휴대전화 인증 후 기존 회원 DB와 안전하게 연결합니다.", "", surface);
+    }
+  }
+  if (identityAuthCapabilities.status === "unknown" && identityAuthCapabilities.errorCode) {
+    setIdentityPhoneStatus("문자 인증 설정을 확인하지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.", "error", surface);
+  }
 }
