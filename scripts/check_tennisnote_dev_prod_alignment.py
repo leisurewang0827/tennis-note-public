@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.543"
-EXPECTED_RELEASE_ID = "2026.10.08.02"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v580"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v553"
+EXPECTED_VERSION = "1.0.544"
+EXPECTED_RELEASE_ID = "2026.10.09.01"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v581"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v554"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -265,8 +265,27 @@ def restore_coach_round_base(path: str, text: str) -> str:
     return text
 
 
+def restore_exact_outer_base(path: str, text: str, fixture: str, input_version: str) -> str:
+    """최신 증분을 단 한 번 exact 역변환하고 기존 내부 golden은 보존한다."""
+    port = json.loads((ROOT / "tests/fixtures" / fixture).read_text(encoding="utf-8"))
+    row = next((item for item in port["files"] if item["path"] == path), None)
+    if row is None:
+        return text
+    text = text.replace(input_version, port["publicVersion"])
+    if sha256(text.encode("utf-8")) != row["candidateSha256"]:
+        raise RuntimeError(f"{fixture} candidate hash drift: {path}")
+    for hunk in reversed(row["hunks"]):
+        if not hunk["after"] or text.count(hunk["after"]) != 1:
+            raise RuntimeError(f"{fixture} inverse hunk drift: {path}")
+        text = text.replace(hunk["after"], hunk["before"], 1)
+    if sha256(text.encode("utf-8")) != row["baseSha256"]:
+        raise RuntimeError(f"{fixture} baseline hash drift: {path}")
+    return text.replace(port["publicVersion"], input_version)
+
+
 def restore_verified_profile_phone_base(path: str, text: str) -> str:
     port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
+    text = restore_exact_outer_base(path, text, "profile-operation-status-source-parity.json", port["publicVersion"])
     row = next((item for item in port["files"] if item["path"] == path), None)
     if row is None:
         return text
@@ -542,8 +561,9 @@ def restore_r3_unlock_base(path: str, text: str, port: dict | None = None) -> st
 
 def restore_r3_effective_base(path: str, text: str) -> str | None:
     """승인된 원본 projection만 exact hash/offset으로 역변환. 기존 golden은 불변."""
-    text = restore_r3_unlock_base(path, text)
     port = json.loads((ROOT / "tests/fixtures/r3-effective-source-parity.json").read_text(encoding="utf-8"))
+    text = restore_exact_outer_base(path, text, "r3-preview-identity-fence-source-parity.json", port["publicVersion"])
+    text = restore_r3_unlock_base(path, text)
     admin_history = json.loads((ROOT / "tests/fixtures/r3-admin-history-source-parity.json").read_text(encoding="utf-8"))
     admin_entry = next((item for item in admin_history["files"] if item["path"] == path), None)
     if admin_entry is not None:

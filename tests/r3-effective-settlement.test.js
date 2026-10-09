@@ -13,6 +13,104 @@ const payload = () => ({ok:true,calculationVersion:"r3_effective_settlement_v2",
   totals:{totalSettlementAmount:50,revenueAmount:100,settledSessions:1,settledMinutes:40,paymentCount:1},
   sourceManifest:{tickets:[{id:"synthetic-ticket",userId:"synthetic-user"}]},
   lines:[{sourceTicketId:"synthetic-ticket",sourcePaymentId:"synthetic-payment",settlementAmount:50,settledSessions:1,settledMinutes:40,totalSessions:5,netAmount:100,calculationComponents:[]}]});
+const fencePort = require("./helpers/r3-admin-history-port.cjs");
+function previewContext() {
+  const pending = [], dom = new Map();
+  const c = vm.createContext({window:{},state:{view:"billing",billingMonth:"2099-01",settlementPage:0},adminDemoMode:false,
+    renderAdminSettlementHistory(){},
+    adminImportAuthState:{profile:{id:"synthetic-admin",role:"admin"},user:{id:"synthetic-auth"}},
+    token:"synthetic-session",admitted:true,branch:scope.branchId,
+    activeOperationBranchId:()=>c.branch,operationBranchCoaches:()=>[{serverRoleId:scope.coachRoleId,branchId:c.branch,name:"합성 코치"}],
+    effectiveSettlementPreviewSignature:()=>JSON.stringify([c.branch,c.state.billingMonth]),
+    operationsRole:()=>c.adminImportAuthState.profile?.role,adminApprovalReady:()=>c.admitted,
+    $:selector=>{if(!dom.has(selector))dom.set(selector,{innerHTML:"",textContent:""});return dom.get(selector);},
+    money:{format:n=>String(n)},tickets:[],expiredTickets:[],adminLiveDataState:{settlementTickets:[]},
+    billingPageSize:10,normalizeDashboardPage:()=>0,renderDashboardPager(){},escapeHtml:s=>String(s)});
+  c.window.TennisNoteDataClient={getSession:()=>c.token?{access_token:c.token}:null,rpc:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))};
+  vm.runInContext(read("app/shared/tennisnote-settlement-adjustment.js"),c);
+  const source=read("app/admin/data/billing.js");
+  vm.runInContext(source.match(/^const effectiveSettlementPreview = .*;$/m)[0],c);
+  for(const e of fencePort.previewFenceManifest.functions){
+    const fn=read(e.target).match(new RegExp("^(?:async )?function "+e.name+"\\([\\s\\S]*?^}","m"))[0];vm.runInContext(fn,c);
+  }
+  vm.runInContext(read("app/admin/views/billing.js").match(/^function renderCoachSettlementPreview\([\s\S]*?^}/m)[0],c);
+  return {c,pending,preview:()=>vm.runInContext("effectiveSettlementPreview",c)};
+}
+
+test("같은 범위 신원 복구는 exactly-one 재조회, 일반 오류 자동 루프0",async()=>{
+  const tick=()=>new Promise(resolve=>setImmediate(resolve));
+  for(const kind of ["session","profile","auth","role","admission","client"]){
+    const s=previewContext(),c=s.c,client=c.window.TennisNoteDataClient;
+    const profile=c.adminImportAuthState.profile,user=c.adminImportAuthState.user;
+    if(kind==="session")c.token="";
+    if(kind==="profile")c.adminImportAuthState.profile=null;
+    if(kind==="auth")c.adminImportAuthState.user=null;
+    if(kind==="role")profile.role="member";
+    if(kind==="admission")c.admitted=false;
+    if(kind==="client")c.window.TennisNoteDataClient=null;
+    c.renderCoachSettlementPreview();await tick();assert.equal(s.pending.length,0);assert(s.preview().error);
+    c.token="synthetic-session";profile.role="admin";c.adminImportAuthState.profile=profile;
+    c.adminImportAuthState.user=user;c.admitted=true;c.window.TennisNoteDataClient=client;
+    c.renderCoachSettlementPreview();c.renderCoachSettlementPreview();c.renderCoachSettlementPreview();
+    assert.equal(s.pending.length,1,kind);assert.equal(s.preview().loading,true);assert.equal(s.preview().error,"");
+    s.pending[0].resolve(payload());await tick();assert.equal(s.preview().results[0].value.estimatedSettlement,50);
+    c.renderCoachSettlementPreview();assert.equal(s.pending.length,1);
+    const ordinary=c.refreshEffectiveSettlementPreview(c.effectiveSettlementPreviewSignature());
+    s.pending[1].reject(Error("synthetic server unavailable"));await ordinary;
+    c.renderCoachSettlementPreview();c.renderCoachSettlementPreview();assert.equal(s.pending.length,2);
+    assert.equal(s.preview().results.length,1);assert(s.preview().results[0].error);
+  }
+});
+
+test("복구 재조회 중 범위 변경·응답 역순에도 새 결과 소유권 유지",async()=>{
+  const tick=()=>new Promise(resolve=>setImmediate(resolve));
+  for(const failure of [false,true]){
+    const s=previewContext(),c=s.c;c.token="";c.renderCoachSettlementPreview();await tick();
+    c.token="synthetic-session";c.renderCoachSettlementPreview();const old=s.pending[0];
+    c.state.billingMonth="2099-02";c.renderCoachSettlementPreview();assert.equal(s.pending.length,2);
+    const newer=payload();newer.scope.settlementMonth="2099-02-01";s.pending[1].resolve(newer);await tick();
+    if(failure)old.reject(Error("synthetic obsolete error"));else old.resolve(payload());await tick();
+    assert.equal(s.preview().loading,false);assert.equal(s.preview().error,"");
+    assert.equal(s.preview().results[0].value.estimatedSettlement,50);c.renderCoachSettlementPreview();assert.equal(s.pending.length,2);
+  }
+});
+test("공개 계정 보호 exact source/outer inverse, 기존 golden/hash는 그대로",()=>{
+  for(const item of fencePort.previewFenceManifest.functions){
+    const fn=read(item.target).match(new RegExp("^(?:async )?function "+item.name+"\\([\\s\\S]*?^}","m"))[0];
+    assert.equal(sha(fn),item.projectedSha256,item.name);
+    assert.equal(sha(fn.replaceAll("escapeHtml(","escapeHtmlText(")),item.privateSha256,item.name);
+  }
+  for(const entry of fencePort.previewFenceManifest.files){
+    const source=read(entry.path);assert.equal(sha(fencePort.restorePreviewIdentityFence(entry.path,source)),entry.baseSha256);
+    for(const drift of [source+"\n",source.replace(entry.hunks[0].after,""),source.replace(entry.hunks[0].after,()=>entry.hunks[0].after+entry.hunks[0].after)]){
+      assert.throws(()=>fencePort.restorePreviewIdentityFence(entry.path,drift),/candidate drift/);
+    }
+  }
+  assert.equal(fencePort.previewFenceManifest.preservedCall,"renderAdminSettlementHistory");
+  assert(read("app/admin/views/billing.js").includes("renderAdminSettlementHistory();"));
+});
+test("공개 미리보기 actor/session/client/scope 변경 후 성공·오류 응답은 폐기",async()=>{
+  const changes=[c=>c.adminImportAuthState.profile.role="member",c=>c.adminImportAuthState.profile.id="other-profile",
+    c=>c.adminImportAuthState.user.id="other-auth",c=>c.token="",c=>c.token="other-session",
+    c=>c.window.TennisNoteDataClient={...c.window.TennisNoteDataClient},c=>c.admitted=false,
+    c=>c.branch="other-branch",c=>c.state.billingMonth="2099-02"];
+  for(const change of changes)for(const error of [false,true]){
+    const s=previewContext(),p=s.c.refreshEffectiveSettlementPreview(s.c.effectiveSettlementPreviewSignature());change(s.c);
+    if(error)s.pending[0].reject(Error("synthetic old error"));else s.pending[0].resolve(payload());await p;
+    assert.equal(s.preview().results.length,0);assert.equal(s.preview().loading,false);assert(s.preview().error);
+  }
+});
+test("initial identity 없음 RPC0, 역순·다른 계정 소유권·cache 재검사",async()=>{
+  for(const change of [c=>c.token="",c=>c.adminImportAuthState.profile=null,c=>c.adminImportAuthState.user=null,c=>c.admitted=false]){
+    const s=previewContext();change(s.c);await s.c.refreshEffectiveSettlementPreview(s.c.effectiveSettlementPreviewSignature());assert.equal(s.pending.length,0);
+  }
+  const s=previewContext(),a=s.c.refreshEffectiveSettlementPreview(s.c.effectiveSettlementPreviewSignature());
+  const b=s.c.refreshEffectiveSettlementPreview(s.c.effectiveSettlementPreviewSignature());
+  s.pending[1].resolve(payload());await b;s.pending[0].reject(Error("synthetic obsolete"));await a;
+  assert.equal(s.preview().results[0].value.estimatedSettlement,50);assert.equal(s.preview().error,"");
+  s.c.token="new-session";s.c.renderEffectiveSettlementPreview();assert.equal(s.preview().results.length,0);
+  assert(!s.preview().signature.includes(s.c.token));
+});
 function context() {
   const c = vm.createContext({window:{},state:{coach:{branchId:scope.branchId,coachRoleId:scope.coachRoleId}},Date,Intl,
     renderCoachSettlement(){},saveSnapshot(){},formatCoachWon:value=>String(value)});

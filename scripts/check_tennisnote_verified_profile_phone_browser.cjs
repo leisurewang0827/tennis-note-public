@@ -424,11 +424,144 @@ async function optionalProfileContracts(page) {
   });
 }
 
+// 실제 저장 버튼과 원본 함수만 실행한다. transport는 합성 메모리 경계다.
+async function profileOperationStatusContracts(page, ownershipOnly = false) {
+  return page.evaluate(async ownershipOnly => {
+    const checks = {}, check = (name, ok) => { checks[name] = Boolean(ok); };
+    const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+    const until = async (predicate, label) => {
+      for (let i = 0; i < 100; i++) { if (predicate()) return; await tick(); }
+      throw new Error("operation_status_" + label);
+    };
+    const sheet = document.getElementById("profileEditorSheet");
+    let toast;
+    const button = document.getElementById("saveProfileInfo");
+    const originalPersist = persistIdentityProfile;
+    const client = window.TennisNoteDataClient;
+    let calls = 0, externalCalls = 0, outcome = "failure", release;
+    for (const method of ["rpc", "updateRows", "requestPhoneChangeVerification", "verifyPhoneChange"]) {
+      client[method] = async () => { externalCalls++; throw new Error("unexpected_external_call"); };
+    }
+    client.getSession = () => null;
+    client.getAuthUser = async () => null;
+    client.getAuthSettings = async () => ({ external: { phone: true } });
+    client.readiness = () => ({ ready: true });
+    state.member = { ...state.member, role: "coach", id: "synthetic-profile" };
+    Object.assign(state.profile, { name: "합성 코치", nickname: "합성테니스", phone: "",
+      goal: "", styleMemo: "", startedAt: "", photoDataUrl: "", serverRevision: "synthetic-revision" });
+    document.getElementById("identitySetupModal").hidden = true;
+    document.getElementById("loginScreen").hidden = true;
+    document.getElementById("appScreen").hidden = false;
+    document.body.dataset.screen = "app";
+    renderProfile(); navigateMemberView("profileView"); openProfileEditor(); await tick();
+    document.getElementById("profileGoal").value = "합성 미저장 목표";
+    const draftFields = ["profileRealNameInput", "profileNicknameInput", "profilePhoneInput",
+      "profileGoal", "profileStyleMemo", "profileHand", "profileBackhand"];
+    const draft = () => JSON.stringify(draftFields.map(id => document.getElementById(id).value));
+    const before = draft(), verification = JSON.stringify(profilePhoneVerification);
+    persistIdentityProfile = async values => {
+      calls++;
+      if (outcome === "failure") throw new Error("profile_style_input_invalid");
+      await new Promise(resolve => { release = resolve; });
+      // 합성 권위 readback 완료 뒤에만 성공한다. 실제 RPC/DB는 호출하지 않는다.
+      state.profile.goal = values.profileStyle.tennis_goal || "";
+      state.profile.styleMemo = values.profileStyle.play_style_memo || "";
+      return { ok: true };
+    };
+    try {
+      if (ownershipOnly) {
+        for (const kind of ["owned", "different", "same", "missing"]) {
+          if (sheet.hidden) { await tick(); openProfileEditor(); await tick(); }
+          const expectedCalls = calls + 2;
+          outcome = "failure"; release = null; button.click();
+          await until(() => calls === expectedCalls - 1 && !profileInfoSaving, kind + "_failure");
+          toast = document.getElementById("appToast");
+          const failureText = toast.textContent, ownedNode = toast.firstChild;
+          check(kind + "_failure_current_draft", !sheet.hidden && draft() === before
+            && toast.classList.contains("is-visible") && failureText.includes("저장되지")
+            && document.getElementById("profileNicknameStatus").textContent === failureText);
+          if (kind === "same") showToast(failureText);
+          if (kind === "different") showToast("다른 작업 안내");
+          if (kind === "missing") toast.remove();
+          const currentNode = toast.firstChild, currentText = toast.textContent;
+          if (kind === "same" || kind === "different") check(kind + "_actual_producer_new_text_node",
+            currentNode !== ownedNode && currentNode.nodeType === Node.TEXT_NODE);
+          outcome = "success"; release = null; button.click();
+          await until(() => calls === expectedCalls && typeof release === "function", kind + "_pending");
+          if (kind === "owned") check("owned_exact_node_is_cleared", toast.textContent === "" && !toast.classList.contains("is-visible"));
+          if (kind === "same" || kind === "different") check(kind + "_other_notice_preserved",
+            toast.firstChild === currentNode && toast.textContent === currentText && toast.classList.contains("is-visible"));
+          if (kind === "missing") check("missing_toast_fail_safe", !document.getElementById("appToast") && !sheet.hidden);
+          check(kind + "_pending_draft_and_lock", !sheet.hidden && draft() === before && button.disabled
+            && document.getElementById("requestNtrpCheck").disabled && draftFields.slice(0,3).every(id=>document.getElementById(id).readOnly));
+          button.click(); check(kind + "_duplicate_ntrp_zero", await saveProfileInfo() === false
+            && await requestNtrpCheck() === false && calls === expectedCalls);
+          const closed = new Promise((resolve,reject)=>{
+            const timer=setTimeout(()=>reject(Error("ownership_close")),3000);
+            sheet.addEventListener("tennisnote:sheet-closed",()=>{clearTimeout(timer);resolve();},{once:true});
+          });
+          release(); await closed; await until(()=>!profileInfoSaving,kind+"_unlock");
+          check(kind + "_success_after_readback", sheet.hidden
+            && document.getElementById("appToast").textContent === "내 정보와 테니스 스타일을 저장했습니다."
+            && state.member.role === "coach" && JSON.stringify(profilePhoneVerification) === verification
+            && calls === expectedCalls && externalCalls === 0);
+        }
+        return checks;
+      }
+      button.click();
+      await until(() => calls === 1 && !profileInfoSaving, "first_failure");
+      toast = document.getElementById("appToast");
+      const failureText = toast.textContent;
+      check("bound_failure_once_current_error_draft_open", calls === 1 && !sheet.hidden
+        && toast.classList.contains("is-visible") && failureText.includes("저장되지")
+        && draft() === before && document.getElementById("profileNicknameStatus").textContent === failureText);
+      outcome = "success"; button.click();
+      await until(() => calls === 2 && typeof release === "function", "pending");
+      check("owned_previous_error_cleared_while_pending", toast.textContent === ""
+        && !toast.classList.contains("is-visible") && !sheet.hidden && draft() === before);
+      check("pending_controls_and_identity_readonly", button.disabled
+        && document.getElementById("requestNtrpCheck").disabled
+        && draftFields.slice(0, 3).every(id => document.getElementById(id).readOnly));
+      button.click();
+      const duplicate = await saveProfileInfo(), ntrp = await requestNtrpCheck();
+      check("duplicate_and_ntrp_mutation_zero", duplicate === false && ntrp === false && calls === 2);
+      const closed = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("operation_status_close")), 3000);
+        sheet.addEventListener("tennisnote:sheet-closed", () => { clearTimeout(timer); resolve(); }, { once: true });
+      });
+      release(); await closed; await until(() => !profileInfoSaving, "success_unlock");
+      check("success_only_after_readback_replaces_previous_error", sheet.hidden
+        && toast.textContent === "내 정보와 테니스 스타일을 저장했습니다."
+        && toast.classList.contains("is-visible") && !toast.textContent.includes(failureText));
+      check("success_unlock_role_verification_preserved", !button.disabled
+        && !document.getElementById("requestNtrpCheck").disabled
+        && draftFields.slice(0, 3).every(id => !document.getElementById(id).readOnly)
+        && state.member.role === "coach" && JSON.stringify(profilePhoneVerification) === verification);
+      await tick(); openProfileEditor(); await tick();
+      check("saved_readback_reopen_keeps_draft_values", draft() === before && !sheet.hidden);
+      outcome = "failure"; button.click();
+      await until(() => calls === 3 && !profileInfoSaving, "second_failure");
+      check("new_failure_is_current_not_success", toast.textContent === failureText && !sheet.hidden && draft() === before);
+      showToast("다른 작업 안내"); outcome = "success"; release = null; button.click();
+      await until(() => calls === 4 && typeof release === "function", "unrelated_pending");
+      check("pending_does_not_erase_other_operation_notice", toast.textContent === "다른 작업 안내"
+        && toast.classList.contains("is-visible") && draft() === before);
+      release(); await until(() => !profileInfoSaving, "second_success");
+      await until(() => sheet.hidden, "second_close");
+      check("four_explicit_attempts_no_automatic_retry", calls === 4 && externalCalls === 0);
+      check("success_current_operation_and_no_false_role_change", toast.textContent === "내 정보와 테니스 스타일을 저장했습니다."
+        && state.member.role === "coach" && JSON.stringify(profilePhoneVerification) === verification);
+      return checks;
+    } finally { persistIdentityProfile = originalPersist; }
+  }, ownershipOnly);
+}
+
 async function main() {
   const server=http.createServer((req,res)=>{
     const pathname=new URL(req.url,"http://127.0.0.1").pathname;
     const file=path.resolve(root,"."+decodeURIComponent(pathname));
     if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
+    if(pathname.endsWith("config.local.js")){res.writeHead(200,{"content-type":"text/javascript","cache-control":"no-store"}).end("window.TENNIS_NOTE_SUPABASE_CONFIG = {};");return;}
     try {
       let data=fs.readFileSync(file);
       if(pathname.endsWith("/app.js")) data=Buffer.from(data.toString().replace("void initApp();","// 합성 검사: 실제 이벤트는 직접 바인딩"));
@@ -440,6 +573,8 @@ async function main() {
   const captureDir=process.env.TENNISNOTE_PROFILE_CAPTURE_DIR;
   const captureOnly=process.env.TENNISNOTE_PROFILE_CAPTURE_ONLY==="true";
   const optionalOnly=process.env.TENNISNOTE_PROFILE_OPTIONAL_ONLY==="true";
+  const statusOnly=process.env.TENNISNOTE_PROFILE_STATUS_FOCUSED==="1";
+  const ownershipOnly=process.env.TENNISNOTE_PROFILE_OWNERSHIP_FOCUSED==="1";
   assert(!captureOnly || captureDir,"capture_only_requires_private_output_directory");
   if(captureDir)fs.mkdirSync(captureDir,{recursive:true});
   let contexts=0,predicates=0;
@@ -450,6 +585,8 @@ async function main() {
         ...(selected==="chromium" && process.env.TENNISNOTE_CHROMIUM_EXECUTABLE ? {executablePath:process.env.TENNISNOTE_CHROMIUM_EXECUTABLE} : {})});
       try {
         for(const colorScheme of colorSchemes) for(const viewport of viewports){
+          if(ownershipOnly && viewport.width!==390)continue;
+          if(statusOnly && ![390,768,1366,844].includes(viewport.width))continue;
           if(captureOnly && ![390,768,1366].includes(viewport.width))continue;
           if(optionalOnly && ![390,768,1366].includes(viewport.width))continue;
           let context=await browser.newContext({viewport,colorScheme,serviceWorkers:"block"});
@@ -462,8 +599,8 @@ async function main() {
             window.TennisNoteDataClient.readiness=()=>({ready:true});
             bindProfileEvents();identityAuthCapabilities={status:"ready",providers:{phone:true},checkedAt:Date.now()};
           });
-          const legacyResult=optionalOnly ? {} : await profileContracts(page);
-          if(!optionalOnly){
+          const legacyResult=optionalOnly || statusOnly || ownershipOnly ? {} : await profileContracts(page);
+          if(!optionalOnly && !statusOnly && !ownershipOnly){
             // Reload alone retains the legacy snapshot and its editor draft.
             // Isolate the second contract in a genuinely empty browser context.
             await context.close();
@@ -478,7 +615,8 @@ async function main() {
               bindProfileEvents();identityAuthCapabilities={status:"ready",providers:{phone:true},checkedAt:Date.now()};
             });
           }
-          const result={...legacyResult,...await optionalProfileContracts(page)};
+          const result=ownershipOnly ? await profileOperationStatusContracts(page,true) : statusOnly ? await profileOperationStatusContracts(page) : {...legacyResult,...await optionalProfileContracts(page)};
+          if(!statusOnly && !captureOnly && !ownershipOnly) Object.assign(result, await profileOperationStatusContracts(page));
           for(const [name,ok] of Object.entries(result))assert(ok,`${selected}/${viewport.width}/${colorScheme}: ${name}`);
           assert(errors.length===0,`page_errors:${errors.join("|")}`);
           if(captureDir && [390,768,1366].includes(viewport.width)){
@@ -495,7 +633,7 @@ async function main() {
         }
       } finally {await browser.close();}
     }
-    console.log(JSON.stringify({status:"PASS",modularEntry:true,contexts,predicates,captureOnly,optionalOnly,externalWrites:0,actualDevice:"NOT VERIFIED"}));
+    console.log(JSON.stringify({status:"PASS",modularEntry:true,contexts,predicates,captureOnly,optionalOnly,statusOnly,ownershipOnly,externalWrites:0,actualDevice:"NOT VERIFIED"}));
   } finally {await new Promise(resolve=>server.close(resolve));}
 }
 main().catch(e=>{console.error("FAIL "+e.message);process.exitCode=1;});

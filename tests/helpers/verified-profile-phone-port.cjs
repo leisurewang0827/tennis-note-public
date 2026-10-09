@@ -5,8 +5,23 @@ const crypto = require("node:crypto");
 const assert = require("node:assert/strict");
 const root = path.resolve(__dirname, "../..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/verified-profile-phone-source-parity.json"), "utf8"));
+const operationStatusManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/profile-operation-status-source-parity.json"), "utf8"));
 const sha = text => crypto.createHash("sha256").update(text).digest("hex");
+function restoreOperationStatus(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
+  const row = operationStatusManifest.files.find(item => item.path === file);
+  if (!row) return text;
+  text = text.replaceAll(inputVersion, operationStatusManifest.publicVersion);
+  assert.equal(sha(text), row.candidateSha256, `phone candidate drift (operation status): ${file}`);
+  for (const hunk of [...row.hunks].reverse()) {
+    assert(hunk.after && text.split(hunk.after).length === 2, `operation status inverse drift: ${file}`);
+    text = text.replace(hunk.after, () => hunk.before);
+  }
+  assert.equal(sha(text), row.baseSha256, `operation status baseline drift: ${file}`);
+  return text.replaceAll(operationStatusManifest.publicVersion, inputVersion);
+}
 function restorePhone(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
+  // 기존 저장 계약을 바꾸지 않고 최신 안내 수정만 먼저 정확히 역변환합니다.
+  text = restoreOperationStatus(file, text, inputVersion);
   const row = manifest.files.find(item => item.path === file);
   if (!row) return text;
   text = text.replaceAll(inputVersion, manifest.publicVersion);
@@ -19,4 +34,4 @@ function restorePhone(file, text, inputVersion = JSON.parse(fs.readFileSync(path
   assert.equal(sha(text), row.baseSha256, `phone base drift: ${file}`);
   return text.replaceAll(manifest.publicVersion, inputVersion);
 }
-module.exports = { restorePhone, manifest };
+module.exports = { restorePhone, restoreOperationStatus, operationStatusManifest, manifest };

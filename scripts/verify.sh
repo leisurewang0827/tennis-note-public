@@ -90,7 +90,18 @@ step "개발 기존 계정 로그인·가입/재설정 차단 (Chromium/WebKit)"
 node scripts/check_tennisnote_development_signin_browser.cjs
 
 step "본인 번호 인증·저장 실제 modular entry (Chromium/WebKit)"
-node scripts/check_tennisnote_verified_profile_phone_browser.cjs
+# 독립적인 localhost fixture를 병렬 실행하되 기존 검사·상한·실패 판정은 유지한다.
+# 뒤 단계가 실패하면 이 실행의 정확한 child PID만 정리한다.
+profile_pid=""
+cleanup_profile() {
+  if [[ -n "$profile_pid" ]]; then
+    kill "$profile_pid" 2>/dev/null || true
+    wait "$profile_pid" 2>/dev/null || true
+  fi
+}
+trap cleanup_profile EXIT
+node scripts/check_tennisnote_verified_profile_phone_browser.cjs &
+profile_pid=$!
 
 step "개발·운영 제품 정렬 검사"
 "$PYTHON_BIN" scripts/check_tennisnote_dev_prod_alignment.py
@@ -100,6 +111,11 @@ node scripts/check_tennisnote_renewal_hold_browser.cjs
 
 step "R3 적용일별 정산 실제 modular 관리자·코치 화면 (Chromium/WebKit)"
 node scripts/check_tennisnote_r3_effective_browser.cjs
+
+# 단 한 번 실행한 profile 검사가 성공해야만 배포본 빌드로 넘어간다.
+wait "$profile_pid"
+profile_pid=""
+trap - EXIT
 
 step "배포본 빌드"
 "$PYTHON_BIN" scripts/build_cloudflare_pages.py --target member --output dist/member

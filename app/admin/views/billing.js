@@ -9,7 +9,16 @@ function renderCoachSettlementPreview() {
   if (!["billing", "settings"].includes(state.view)) return;
   if (!adminDemoMode) {
     const signature = effectiveSettlementPreviewSignature();
-    if (effectiveSettlementPreview.signature !== signature) void refreshEffectiveSettlementPreview(signature);
+    if (effectiveSettlementPreview.context && !effectiveSettlementPreviewContextIsCurrent(effectiveSettlementPreview.context, false)) {
+      invalidateEffectiveSettlementPreview();
+      renderEffectiveSettlementPreview();
+      return;
+    }
+    // 원본 신원 검증을 재사용합니다. 일반 서버 오류는 context가 있어 자동 재조회하지 않습니다.
+    const identityRecovered = !effectiveSettlementPreview.loading && effectiveSettlementPreview.context === null
+      && Boolean(effectiveSettlementPreview.error)
+      && effectiveSettlementPreviewContextIsCurrent(effectiveSettlementPreviewContext(signature));
+    if (effectiveSettlementPreview.signature !== signature || identityRecovered) void refreshEffectiveSettlementPreview(signature);
     else renderEffectiveSettlementPreview();
     return;
   }
@@ -636,6 +645,15 @@ function renderEffectiveSettlementPreview() {
   const summary = $("#coachSettlementSummary");
   if (!rows) return;
   const current = effectiveSettlementPreview;
+  if ((current.context || current.results.length) && !effectiveSettlementPreviewContextIsCurrent(current.context)) {
+    invalidateEffectiveSettlementPreview();
+  }
+  if (current.error) {
+    rows.innerHTML = `<tr><td colspan="6">${escapeHtml(current.error)}</td></tr>`;
+    if (summary) summary.textContent = "정산 조회 권한과 범위를 다시 확인해 주세요.";
+    renderDashboardPager("#coachSettlementPreviewPager", 0, 0, "settlement", billingPageSize);
+    return;
+  }
   if (current.loading) {
     rows.innerHTML = '<tr><td colspan="6">적용일별 서버 계산을 확인하고 있습니다.</td></tr>';
     if (summary) summary.textContent = "정산 확인 중";
