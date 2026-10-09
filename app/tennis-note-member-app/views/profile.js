@@ -222,18 +222,19 @@ function renderProfile() {
   // what the member is typing with the last server value during that refresh.
   const setProfileFieldValue = (selector, value) => {
     const field = $(selector);
+    if ($("#profileEditorSheet") && !$("#profileEditorSheet").hidden) return;
     if (field && document.activeElement !== field) field.value = value;
   };
   setProfileFieldValue("#profileRealNameInput", realName === "가입 확인 중" ? "" : realName);
   setProfileFieldValue("#profileNicknameInput", state.profile.nickname || "");
   setProfileFieldValue("#profilePhoneInput", formatIdentityPhone(state.profile.phone || ""));
-  if ($("#profileHand")) $("#profileHand").value = state.profile.hand || "오른손";
-  if ($("#profileBackhand")) $("#profileBackhand").value = state.profile.backhand || "투핸드 백핸드";
-  if ($("#profileStartedAt")) $("#profileStartedAt").value = state.profile.startedAt || "";
-  if ($("#profileGoal")) $("#profileGoal").value = state.profile.goal || "";
-  if ($("#profileStyleMemo")) $("#profileStyleMemo").value = state.profile.styleMemo || "";
-  if ($("#profileSelfNtrp")) $("#profileSelfNtrp").value = state.profile.selfNtrp || "2.5";
-  if ($("#profileCoachNtrp")) $("#profileCoachNtrp").value = state.profile.coachNtrp || "측정 전";
+  setProfileFieldValue("#profileHand", state.profile.hand || "오른손");
+  setProfileFieldValue("#profileBackhand", state.profile.backhand || "투핸드 백핸드");
+  setProfileFieldValue("#profileStartedAt", state.profile.startedAt || "");
+  setProfileFieldValue("#profileGoal", state.profile.goal || "");
+  setProfileFieldValue("#profileStyleMemo", state.profile.styleMemo || "");
+  setProfileFieldValue("#profileSelfNtrp", state.profile.selfNtrp || "2.5");
+  setProfileFieldValue("#profileCoachNtrp", state.profile.coachNtrp || "측정 전");
   if ($("#ntrpPanel")) {
     $("#ntrpPanel").innerHTML = `
       <article>
@@ -287,7 +288,7 @@ function renderNtrpSurvey() {
         )
         .join("")}
     </section>`;
-  if ($("#ntrpSurveyQuestions")) {
+  if ($("#ntrpSurveyQuestions") && (!$("#profileEditorSheet") || $("#profileEditorSheet").hidden)) {
     $("#ntrpSurveyQuestions").innerHTML =
       quickGuide +
       ntrpSurveyQuestions

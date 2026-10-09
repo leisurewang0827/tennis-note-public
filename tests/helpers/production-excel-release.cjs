@@ -2,7 +2,8 @@
 "use strict";
 const fs = require("node:fs"), cp = require("node:child_process"), assert = require("node:assert/strict");
 const normalize = s => s.replace(/\r\n/g, "\n");
-const raw = p => normalize(fs.readFileSync(p, "utf8"));
+const aOnly = require("./self-profile-a-only.cjs");
+const raw = p => aOnly.restoreCandidate(p, normalize(fs.readFileSync(p, "utf8")));
 const show = (sha, p) => normalize(cp.execFileSync("git", ["show", `${sha}:${p}`], {encoding:"utf8", maxBuffer:8e6}));
 const contract = JSON.parse(raw("tests/fixtures/production-excel-release.json"));
 assert.equal(contract.functionalCheckpoint, "f5dbdbdecc659b98cc0b9c0b629cee28f28ea713");

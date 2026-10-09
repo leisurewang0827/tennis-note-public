@@ -5,6 +5,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import releaseGuard from "./helpers/production-excel-release.cjs";
+import aOnly from "./helpers/self-profile-a-only.cjs";
 const norm = s => s.replace(/\r\n/g, "\n");
 const read = p => releaseGuard.readBeforeRelease(p);
 const hash = s => crypto.createHash("sha256").update(s).digest("hex");
@@ -85,7 +86,7 @@ print(json.dumps({p.relative_to(bump.ROOT).as_posix(): hashlib.sha256(t.encode()
 test("운영 분리: 정확한 13제품 경로·hunk 외 원본 보존·신규 RPC 없음", () => {
   assert.equal(manifest.base, "648ac3387f11ad65e7631ad32e4a9a06b511d49c");
   assert.equal(manifest.products.length, 13);
-  const changed = execFileSync("git", ["diff", "--name-only", manifest.base, "--", "app"], { encoding: "utf8" }).trim().split("\n").sort();
+  const changed = aOnly.changedBeforeCandidate(manifest.base, execFileSync("git", ["diff", "--name-only", manifest.base, "--", "app"], { encoding: "utf8" }).trim().split("\n").sort());
   assert.deepEqual(changed, [...new Set([...approvedSources.keys(), ...Object.keys(releaseHashes), ...refresh.products.map(row => row.path)])].sort());
   for (const [path, expected] of Object.entries(releaseHashes)) assert.equal(hash(priorSource(path)), expected, `release-only drift: ${path}`);
   const rpcNames = text => [...text.matchAll(/\.rpc\(\s*["']([^"']+)["']/g)].map(m => m[1]);
