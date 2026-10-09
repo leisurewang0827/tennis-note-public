@@ -18,10 +18,10 @@ AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
 MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
 
-EXPECTED_VERSION = "1.0.544"
-EXPECTED_RELEASE_ID = "2026.10.09.01"
-EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v581"
-EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v554"
+EXPECTED_VERSION = "1.0.545"
+EXPECTED_RELEASE_ID = "2026.10.09.02"
+EXPECTED_MEMBER_CACHE = "tennis-note-member-pwa-v582"
+EXPECTED_COACH_CACHE = "tennis-note-coach-mode-v555"
 
 SELECTED_NET_NEW_FEATURE_IDS = (
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -285,6 +285,7 @@ def restore_exact_outer_base(path: str, text: str, fixture: str, input_version: 
 
 def restore_verified_profile_phone_base(path: str, text: str) -> str:
     port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
+    text = restore_exact_outer_base(path, text, "profile-durable-readback-source-parity.json", port["publicVersion"])
     text = restore_exact_outer_base(path, text, "profile-operation-status-source-parity.json", port["publicVersion"])
     row = next((item for item in port["files"] if item["path"] == path), None)
     if row is None:

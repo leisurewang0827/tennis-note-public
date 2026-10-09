@@ -114,7 +114,7 @@ function profileRuntime() {
   Object.assign(fields.profileStartedAt,{value:'2026-01-01'});Object.assign(fields.profileGoal,{value:'합성 새 목표'});
   Object.assign(fields.profileStyleMemo,{value:'합성 새 메모'});Object.assign(fields.profileSelfNtrp,{value:'3'});
   const calls=[], exports=[];
-  const c={state:{profile:{name:'합성 저장 이름',nickname:'합성 저장 별명',phone:'synthetic-saved-phone',
+  const c={state:{member:{role:'member',status:'active'},profile:{name:'합성 저장 이름',nickname:'합성 저장 별명',phone:'synthetic-saved-phone',
     serverRevision:'2026-01-01T00:00:00Z',photoDataUrl:'https://fixture.invalid/draft.png',goal:'저장 목표',styleMemo:'저장 메모',
     selfNtrp:'2.5',ntrpSurvey:{},coachNtrp:'',ntrpCheckRequested:false},ticketHistory:[]},
     $:selector=>fields[selector.slice(1)],fields,calls,exports,
@@ -131,17 +131,27 @@ function profileRuntime() {
     exportNtrpRequest:s=>exports.push(s),renderProfile:()=>{fields.profileGoal.value=c.state.profile.goal;
       fields.profileStyleMemo.value=c.state.profile.styleMemo;},closeAppSheet:()=>{fields.profileEditorSheet.hidden=true;},
     window:{TennisNoteInputGuard:{markSaved:()=>{}}}};
-  c.reply = parameters=>({ok:true,styleSaved:true,profileContract:'atomic-self-profile/1',
-    profile:{id:'synthetic-profile',name:c.state.profile.name,nickname:c.state.profile.nickname,phone:c.state.profile.phone,
+  c.reply = parameters=>{
+    const result={ok:true,styleSaved:true,profileContract:'atomic-self-profile/1',
+    profile:{id:'synthetic-profile',role:c.state.member.role,status:c.state.member.status,
+      name:c.state.profile.name,nickname:c.state.profile.nickname,phone:c.state.profile.phone,
       updated_at:c.state.profile.serverRevision,profile_photo_url:'https://fixture.invalid/saved.png',
       tennis_goal:c.state.profile.goal,play_style_memo:c.state.profile.styleMemo,
-      ...parameters.target_profile,ntrp_requested_at:'2026-01-01T00:00:01Z'}});
-  c.window.TennisNoteDataClient={rpc:async(name,parameters)=>{calls.push({name,parameters:JSON.parse(JSON.stringify(parameters))});return c.reply(parameters);}};
+      ...parameters.target_profile,ntrp_requested_at:'2026-01-01T00:00:01Z'}};
+    c.savedProfileRow=JSON.parse(JSON.stringify(result.profile));return result;
+  };
+  c.window.TennisNoteDataClient={getSession:()=>({access_token:'synthetic-session'}),
+    selectRows:async(table,options)=>{
+      assert.equal(table,'tn_users');assert.equal(options.filters.id,'synthetic-profile');
+      assert.equal(Object.keys(options.filters).length,1);assert.equal(options.limit,2);
+      assert.equal(options.requireFresh,true);assert.equal(options.requireCurrentSession,true);assert.equal(options.retryAuth,false);
+      return c.savedProfileRow?[JSON.parse(JSON.stringify(c.savedProfileRow))]:[];
+    },rpc:async(name,parameters)=>{calls.push({name,parameters:JSON.parse(JSON.stringify(parameters))});return c.reply(parameters);}};
   c.persistIdentityProfile=async p=>{const result=await c.updateMemberProfileOnServer(p.profileStyle,
     {name:p.realName,nickname:p.nickname,phone:p.phone});if(!result.ok)throw result.error;return result;};
   vm.createContext(c);
   vm.runInContext("let profileSaveErrorToast = null;", c);
-  for(const name of ['updateMemberProfileOnServer','profileSaveErrorMessage','lockProfileMutationControls',
+  for(const name of ['readSavedSelfProfileExactly','updateMemberProfileOnServer','profileSaveErrorMessage','lockProfileMutationControls',
     'saveProfileInfo','saveProfileInfoOnce','requestNtrpCheck']){
     const found=source.match(new RegExp('^(?:async )?function '+name+'\\([\\s\\S]*?^}', 'm'));
     assert(found,name);vm.runInContext(found[0],c);

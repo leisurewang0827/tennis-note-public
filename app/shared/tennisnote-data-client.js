@@ -1267,6 +1267,7 @@
     if (!isOnline() && method !== "GET") throw offlineError();
     const session = options.requireCurrentSession === true ? getSession() : await ensureSession();
     if (options.requireCurrentSession === true && !session?.access_token) throw expiredRequestSessionError();
+    if (options.requireFresh === true && !isOnline()) throw offlineError("fresh_read_required");
     if (!isOnline() && method === "GET") {
       const cached = await readOfflineResponse(path, session);
       if (cached !== null) return cached;
@@ -1282,6 +1283,7 @@
     try {
       response = await fetch(apiUrl(path), {
         method,
+        ...(options.requireFresh === true ? { cache: "no-store" } : {}),
         headers: {
           ...authHeaders({}, session),
           Prefer: options.prefer || "return=representation",
@@ -1296,7 +1298,7 @@
         timeoutError.code = "server_request_timeout";
         throw timeoutError;
       }
-      if (method === "GET" && transientNetworkError(error)) {
+      if (method === "GET" && options.requireFresh !== true && transientNetworkError(error)) {
         const cached = await readOfflineResponse(path, session);
         if (cached !== null) return cached;
         throw offlineError("offline_cache_miss");
@@ -1418,7 +1420,9 @@
       }
       query.set(key, `eq.${value}`);
     });
-    return request(`${tableName}?${query.toString()}`, { prefer: "return=representation" });
+    return request(`${tableName}?${query.toString()}`, { prefer: "return=representation",
+      requireFresh: options.requireFresh === true, requireCurrentSession: options.requireCurrentSession,
+      retryAuth: options.retryAuth });
   }
 
   async function selectAllRows(tableName, options = {}) {
