@@ -26,7 +26,7 @@ test("스타일·설문 렌더는 승인 원본 두 함수와 exact hash, 기존
 test("새 외부 역변환은 변경·누락·중복을 차단하고 실제 정렬 검사에 먼저 등록", () => {
   const row = editorDraftManifest.files[0], source = read(viewFile), hunk = row.hunks[0];
   for (const drift of [source + "\n", source.replace(hunk.after, ""), source.replace(hunk.after, () => hunk.after + hunk.after)])
-    assert.throws(() => restorePhone(viewFile, drift), /profile editor candidate drift/);
+    assert.throws(() => restorePhone(viewFile, drift), /phone candidate drift \(profile editor\)/);
   const helper = read("tests/helpers/verified-profile-phone-port.cjs");
   assert(helper.includes("text = restoreEditorDraft(file, text, inputVersion)"));
   const alignment = read("scripts/check_tennisnote_dev_prod_alignment.py");

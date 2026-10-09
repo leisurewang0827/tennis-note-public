@@ -13,7 +13,7 @@ function restoreEditorDraft(file, text, inputVersion = JSON.parse(fs.readFileSyn
   const row = editorDraftManifest.files.find(item => item.path === file);
   if (!row) return text;
   text = text.replace(/\r\n/g, "\n").replaceAll(inputVersion, editorDraftManifest.publicVersion);
-  assert.equal(sha(text), row.candidateSha256, `profile editor candidate drift: ${file}`);
+  assert.equal(sha(text), row.candidateSha256, `phone candidate drift (profile editor): ${file}`);
   for (const hunk of [...row.hunks].reverse()) {
     assert(hunk.after && text.split(hunk.after).length === 2, `profile editor inverse drift: ${file}`);
     text = text.replace(hunk.after, () => hunk.before);
