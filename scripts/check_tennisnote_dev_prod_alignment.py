@@ -285,6 +285,7 @@ def restore_exact_outer_base(path: str, text: str, fixture: str, input_version: 
 
 def restore_verified_profile_phone_base(path: str, text: str) -> str:
     port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
+    text = restore_exact_outer_base(path, text, "profile-editor-draft-source-parity.json", port["publicVersion"])
     text = restore_exact_outer_base(path, text, "profile-durable-readback-source-parity.json", port["publicVersion"])
     text = restore_exact_outer_base(path, text, "profile-operation-status-source-parity.json", port["publicVersion"])
     row = next((item for item in port["files"] if item["path"] == path), None)
