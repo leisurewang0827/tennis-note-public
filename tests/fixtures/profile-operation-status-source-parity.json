@@ -1,0 +1,46 @@
+{
+  "contract": "profile-operation-status/1",
+  "publicVersion": "1.0.543",
+  "privateHead": "4c088851026d152c2abc1d44e524af68c2d47078",
+  "privateSource": "90-Dashboard/tennis-note-member-app/app.js",
+  "publicBase": "8357f88b8aa32723804c3a3b0edd7a1e376ba38d",
+  "atomicPersistUnchanged": true,
+  "functions": [
+    {
+      "name": "saveProfileInfo",
+      "sha256": "90a6c0bf462e16f67f102c28f927e1c7a87e06df4b2967d2f2facf34259d5969"
+    },
+    {
+      "name": "saveProfileInfoOnce",
+      "sha256": "58e4018f40a1b87d0bf25e7ffbb555eb4b99d06c41455479e23b2c92f3e7387c"
+    }
+  ],
+  "files": [
+    {
+      "path": "app/tennis-note-member-app/actions/profile.js",
+      "baseSha256": "767be604d4b05a0b54c59bbe7fd73156647baffbe5c4f366ce8106322481dc7e",
+      "candidateSha256": "d52afd62b3cf013f4071f4293dfa99a8172e538a9ff68a7ade3be90c2e0e73c3",
+      "hunks": [
+        {
+          "before": "async function saveProfileInfo() {",
+          "after": "let profileSaveErrorToast = null;\n\nasync function saveProfileInfo() {"
+        },
+        {
+          "before": "async function saveProfileInfo() {\n  if (profileInfoSaving || ntrpCheckSaving) return false;\n  profileInfoSaving = true;\n  const unlockControls = lockProfileMutationControls();\n  const identityFields = [\"#profileRealNameInput\", \"#profileNicknameInput\", \"#profilePhoneInput\"]\n    .map((selector) => $(selector)).filter(Boolean).map((field) => ({ field, readOnly: field.readOnly }));\n  // readonly keeps values in the ordinary draft/input-guard snapshot. Disabled\n  // fields disappear from that snapshot and cause a false unsaved prompt.\n  identityFields.forEach(({ field }) => { field.readOnly = true; });\n  try { return await saveProfileInfoOnce(); }\n  finally {\n    identityFields.forEach(({ field, readOnly }) => { field.readOnly = readOnly; });\n    profileInfoSaving = false;\n    unlockControls();\n  }\n}",
+          "after": "async function saveProfileInfo() {\n  if (profileInfoSaving || ntrpCheckSaving) return false;\n  // showToast는 같은 문구라도 새 Text 노드를 만듭니다. 그 노드가 유지된 오류만 이 작업 소유입니다.\n  if (profileSaveErrorToast && profileSaveErrorToast.element === $(\"#appToast\")\n    && profileSaveErrorToast.textNode && profileSaveErrorToast.element?.firstChild === profileSaveErrorToast.textNode\n    && profileSaveErrorToast.element.childNodes.length === 1\n    && profileSaveErrorToast.element?.textContent === profileSaveErrorToast.message) {\n    profileSaveErrorToast.element.classList.remove(\"is-visible\");\n    profileSaveErrorToast.element.textContent = \"\";\n  }\n  profileSaveErrorToast = null;\n  profileInfoSaving = true;\n  const unlockControls = lockProfileMutationControls();\n  const identityFields = [\"#profileRealNameInput\", \"#profileNicknameInput\", \"#profilePhoneInput\"]\n    .map((selector) => $(selector)).filter(Boolean).map((field) => ({ field, readOnly: field.readOnly }));\n  // readonly keeps values in the ordinary draft/input-guard snapshot. Disabled\n  // fields disappear from that snapshot and cause a false unsaved prompt.\n  identityFields.forEach(({ field }) => { field.readOnly = true; });\n  try { return await saveProfileInfoOnce(); }\n  finally {\n    identityFields.forEach(({ field, readOnly }) => { field.readOnly = readOnly; });\n    profileInfoSaving = false;\n    unlockControls();\n  }\n}"
+        },
+        {
+          "before": "async function saveProfileInfoOnce() {\n  const profileStyle = {\n    profile_photo_url: state.profile.photoDataUrl || null,\n    dominant_hand: $(\"#profileHand\")?.value || null,\n    backhand_style: $(\"#profileBackhand\")?.value || null,\n    tennis_started_on: $(\"#profileStartedAt\")?.value || null,\n    tennis_goal: $(\"#profileGoal\")?.value.trim() || null,\n    play_style_memo: $(\"#profileStyleMemo\")?.value.trim() || null,\n    self_ntrp: Number($(\"#profileSelfNtrp\")?.value) || null,\n    ntrp_survey: collectNtrpSurvey().answers,\n  };\n  try {\n    await persistIdentityProfile({\n      realName: $(\"#profileRealNameInput\")?.value,\n      nickname: $(\"#profileNicknameInput\")?.value,\n      phone: $(\"#profilePhoneInput\")?.value,\n      birthYear: state.profile.birthYear || state.member?.birthYear,\n      neighborhood: state.profile.neighborhood || state.member?.neighborhood,\n      gender: state.profile.gender || state.member?.gender,\n      profileEditor: true,\n      profileStyle,\n    });\n    setNicknameStatus(\"profileNicknameStatus\", \"실명과 닉네임을 확인했습니다.\", \"available\");\n  } catch (error) {\n    const errorMessage = profileSaveErrorMessage(error);\n    setNicknameStatus(\"profileNicknameStatus\", errorMessage, \"unavailable\");\n    showToast(errorMessage);\n    return false;\n  }\n  state.ticketHistory.unshift({ text: \"내 정보와 테니스 스타일 저장 완료\", tone: \"done\" });\n  renderProfile();\n  renderTickets();\n  saveSnapshot();\n  window.TennisNoteInputGuard?.markSaved?.(\"#profileEditorSheet\");\n  closeAppSheet(\"profileEditorSheet\");\n  return true;\n}",
+          "after": "async function saveProfileInfoOnce() {\n  const profileStyle = {\n    profile_photo_url: state.profile.photoDataUrl || null,\n    dominant_hand: $(\"#profileHand\")?.value || null,\n    backhand_style: $(\"#profileBackhand\")?.value || null,\n    tennis_started_on: $(\"#profileStartedAt\")?.value || null,\n    tennis_goal: $(\"#profileGoal\")?.value.trim() || null,\n    play_style_memo: $(\"#profileStyleMemo\")?.value.trim() || null,\n    self_ntrp: Number($(\"#profileSelfNtrp\")?.value) || null,\n    ntrp_survey: collectNtrpSurvey().answers,\n  };\n  try {\n    await persistIdentityProfile({\n      realName: $(\"#profileRealNameInput\")?.value,\n      nickname: $(\"#profileNicknameInput\")?.value,\n      phone: $(\"#profilePhoneInput\")?.value,\n      birthYear: state.profile.birthYear || state.member?.birthYear,\n      neighborhood: state.profile.neighborhood || state.member?.neighborhood,\n      gender: state.profile.gender || state.member?.gender,\n      profileEditor: true,\n      profileStyle,\n    });\n    setNicknameStatus(\"profileNicknameStatus\", \"실명과 닉네임을 확인했습니다.\", \"available\");\n  } catch (error) {\n    const errorMessage = profileSaveErrorMessage(error);\n    setNicknameStatus(\"profileNicknameStatus\", errorMessage, \"unavailable\");\n    showToast(errorMessage);\n    const element = $(\"#appToast\");\n    profileSaveErrorToast = { element, textNode: element?.firstChild, message: errorMessage };\n    return false;\n  }\n  state.ticketHistory.unshift({ text: \"내 정보와 테니스 스타일 저장 완료\", tone: \"done\" });\n  renderProfile();\n  renderTickets();\n  saveSnapshot();\n  window.TennisNoteInputGuard?.markSaved?.(\"#profileEditorSheet\");\n  closeAppSheet(\"profileEditorSheet\");\n  profileSaveErrorToast = null;\n  showToast(\"내 정보와 테니스 스타일을 저장했습니다.\");\n  return true;\n}"
+        }
+      ]
+    }
+  ],
+  "toastOwnership": {
+    "producerPath": "app/shared/tennisnote-app-common.js",
+    "producerContract": "synchronous textContent replacement creates a new Text node on each showToast call",
+    "sameTextIdentity": "exact captured firstChild with single child plus unchanged element/message",
+    "observer": false,
+    "sharedProducerEdited": false
+  }
+}

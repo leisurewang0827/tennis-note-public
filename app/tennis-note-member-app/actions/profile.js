@@ -143,8 +143,19 @@ function lockProfileMutationControls() {
   return () => controls.forEach(({ field, disabled }) => { field.disabled = disabled; });
 }
 
+let profileSaveErrorToast = null;
+
 async function saveProfileInfo() {
   if (profileInfoSaving || ntrpCheckSaving) return false;
+  // showToast는 같은 문구라도 새 Text 노드를 만듭니다. 그 노드가 유지된 오류만 이 작업 소유입니다.
+  if (profileSaveErrorToast && profileSaveErrorToast.element === $("#appToast")
+    && profileSaveErrorToast.textNode && profileSaveErrorToast.element?.firstChild === profileSaveErrorToast.textNode
+    && profileSaveErrorToast.element.childNodes.length === 1
+    && profileSaveErrorToast.element?.textContent === profileSaveErrorToast.message) {
+    profileSaveErrorToast.element.classList.remove("is-visible");
+    profileSaveErrorToast.element.textContent = "";
+  }
+  profileSaveErrorToast = null;
   profileInfoSaving = true;
   const unlockControls = lockProfileMutationControls();
   const identityFields = ["#profileRealNameInput", "#profileNicknameInput", "#profilePhoneInput"]
@@ -218,6 +229,8 @@ async function saveProfileInfoOnce() {
     const errorMessage = profileSaveErrorMessage(error);
     setNicknameStatus("profileNicknameStatus", errorMessage, "unavailable");
     showToast(errorMessage);
+    const element = $("#appToast");
+    profileSaveErrorToast = { element, textNode: element?.firstChild, message: errorMessage };
     return false;
   }
   state.ticketHistory.unshift({ text: "내 정보와 테니스 스타일 저장 완료", tone: "done" });
@@ -226,5 +239,7 @@ async function saveProfileInfoOnce() {
   saveSnapshot();
   window.TennisNoteInputGuard?.markSaved?.("#profileEditorSheet");
   closeAppSheet("profileEditorSheet");
+  profileSaveErrorToast = null;
+  showToast("내 정보와 테니스 스타일을 저장했습니다.");
   return true;
 }

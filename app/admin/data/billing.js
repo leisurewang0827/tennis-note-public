@@ -457,30 +457,80 @@ async function loadAdminSettlementSupportData() {
   return true;
 }
 
-const effectiveSettlementPreview = { signature: "", loading: false, results: [] };
+const effectiveSettlementPreview = { signature: "", loading: false, results: [], requestId: 0, context: null, error: "" };
+
+function effectiveSettlementPreviewContext(signature = effectiveSettlementPreviewSignature()) {
+  const client = window.TennisNoteDataClient;
+  // Credential comparison is memory-only, never part of a serialized signature.
+  return {
+    signature,
+    client,
+    sessionToken: client?.getSession?.()?.access_token || "",
+    profileId: String(adminImportAuthState.profile?.id || ""),
+    authUserId: String(adminImportAuthState.user?.id || ""),
+  };
+}
+
+function effectiveSettlementPreviewContextIsCurrent(context, includeScope = true) {
+  return Boolean(context?.client?.rpc && context.sessionToken && context.profileId && context.authUserId
+    && (!includeScope || context.signature === effectiveSettlementPreviewSignature())
+    && context.client === window.TennisNoteDataClient
+    && context.sessionToken === (context.client.getSession?.()?.access_token || "")
+    && context.profileId === String(adminImportAuthState.profile?.id || "")
+    && context.authUserId === String(adminImportAuthState.user?.id || "")
+    && operationsRole() === "admin" && adminApprovalReady());
+}
+
+function invalidateEffectiveSettlementPreview(message = "로그인 또는 조회 범위가 변경되었습니다. 현재 권한으로 다시 불러와 주세요.") {
+  effectiveSettlementPreview.requestId += 1;
+  effectiveSettlementPreview.signature = effectiveSettlementPreviewSignature();
+  effectiveSettlementPreview.loading = false;
+  effectiveSettlementPreview.results = [];
+  effectiveSettlementPreview.context = null;
+  effectiveSettlementPreview.error = message;
+}
 
 async function refreshEffectiveSettlementPreview(signature) {
   const branchId = activeOperationBranchId();
   const settlementMonth = `${state.billingMonth}-01`;
   const client = window.TennisNoteDataClient;
   const entries = operationBranchCoaches().filter((coach) => coach.serverRoleId && coach.branchId === branchId);
+  const context = effectiveSettlementPreviewContext(signature);
   effectiveSettlementPreview.signature = signature;
+  if (!effectiveSettlementPreviewContextIsCurrent(context)) {
+    invalidateEffectiveSettlementPreview("관리자 로그인과 서버 연결을 확인한 뒤 다시 불러와 주세요.");
+    renderEffectiveSettlementPreview();
+    return;
+  }
+  const requestId = ++effectiveSettlementPreview.requestId;
+  const requestIsCurrent = () => requestId === effectiveSettlementPreview.requestId
+    && effectiveSettlementPreviewContextIsCurrent(context);
+  effectiveSettlementPreview.context = context;
+  effectiveSettlementPreview.results = [];
+  effectiveSettlementPreview.error = "";
   effectiveSettlementPreview.loading = true;
   renderEffectiveSettlementPreview();
   const results = await Promise.all(entries.map(async (coach) => {
     try {
-      if (!adminApprovalReady() || !client?.rpc) throw new Error("authentication_required");
+      if (!requestIsCurrent()) return null;
       const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };
       const result = await client.rpc("tn_coach_settlement_scope_v2", {
         target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,
       });
+      if (!requestIsCurrent()) return null;
       return { coach, value: window.TennisNoteSettlementAdjustment.effectiveProjection(result, scope) };
     } catch (error) {
+      if (!requestIsCurrent()) return null;
       return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error) };
     }
   }));
-  if (effectiveSettlementPreview.signature !== signature || effectiveSettlementPreviewSignature() !== signature) return;
-  effectiveSettlementPreview.results = results;
+  if (requestId !== effectiveSettlementPreview.requestId) return;
+  if (!requestIsCurrent()) {
+    invalidateEffectiveSettlementPreview();
+    renderEffectiveSettlementPreview();
+    return;
+  }
+  effectiveSettlementPreview.results = results.filter(Boolean);
   effectiveSettlementPreview.loading = false;
   renderEffectiveSettlementPreview();
 }

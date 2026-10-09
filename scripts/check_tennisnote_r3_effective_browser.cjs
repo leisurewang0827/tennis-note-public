@@ -96,11 +96,161 @@ async function assertAdminUnlockCache(page) {
     }
   });
 }
+async function assertAdminPreviewIdentityFence(page) {
+  return page.evaluate(async () => {
+    let checks=0,cases=0,calls=[],pending=[],token="",role="admin",admitted=true,branch="";
+    const check=(value,name)=>{if(!value)throw Error("preview identity: "+name);checks++;};
+    const original={descriptor:Object.getOwnPropertyDescriptor(window,"TennisNoteDataClient"),branch:activeOperationBranchId,
+      coaches:operationBranchCoaches,approval:adminApprovalReady,role:operationsRole};
+    let client;
+    const coach={name:"합성 코치",serverRoleId:"synthetic-role",branchId:"synthetic-branch"};
+    const reset=()=>{
+      calls=[];pending=[];token="synthetic-session-A";role="admin";admitted=true;branch="synthetic-branch";
+      state.view="billing";state.billingMonth="2099-01";state.settlementPage=0;
+      adminImportAuthState.profile={id:"synthetic-admin",role:"admin"};adminImportAuthState.user={id:"synthetic-auth"};
+      coach.branchId=branch;
+      client={getSession:()=>token?{access_token:token}:null,rpc:(name,args)=>{
+        check(name==="tn_coach_settlement_scope_v2","read RPC only");calls.push(args);
+        return new Promise((resolve,reject)=>pending.push({resolve,reject,args}));
+      }};
+      Object.assign(effectiveSettlementPreview,{signature:"",loading:false,results:[],context:null,error:""});
+      effectiveSettlementPreview.requestId++;
+    };
+    const change=kind=>{
+      if(kind==="role")role="member";
+      if(kind==="profile")adminImportAuthState.profile.id="other-profile";
+      if(kind==="authUser")adminImportAuthState.user.id="other-auth";
+      if(kind==="logout")token="";
+      if(kind==="session")token="synthetic-session-B";
+      if(kind==="client")client={...client};
+      if(kind==="admission")admitted=false;
+      if(kind==="branch")branch="other-branch";
+      if(kind==="month")state.billingMonth="2099-02";
+    };
+    const start=()=>refreshEffectiveSettlementPreview(effectiveSettlementPreviewSignature());
+    const resolve=item=>item.resolve(window.__r3Payload(item.args));
+    try {
+      Object.defineProperty(window,"TennisNoteDataClient",{get:()=>client,configurable:true});
+      window.activeOperationBranchId=()=>branch;window.operationBranchCoaches=()=>[coach];
+      window.operationsRole=()=>role;window.adminApprovalReady=()=>admitted&&role==="admin";
+      document.querySelector("#operationsLoginGate").hidden=true;document.querySelector("#adminAppShell").hidden=false;
+      document.querySelector("#adminBrandSplash").hidden=true;document.querySelector("#billingView").hidden=false;
+      document.querySelectorAll(".view").forEach(el=>el.classList.toggle("is-active",el.id==="billingView"));
+      document.querySelector("#coachSettlementSummary").closest("details").open=true;
+      for(const kind of ["role","profile","authUser","logout","session","client","admission","branch","month"]){
+        for(const error of [false,true]){
+          reset();const request=start();change(kind);
+          if(error)pending[0].reject(Error("synthetic obsolete error"));else resolve(pending[0]);await request;
+          check(calls.length===1&&effectiveSettlementPreview.results.length===0&&!effectiveSettlementPreview.loading,
+            "stale response cleared, no retry "+kind);check(Boolean(effectiveSettlementPreview.error),"stale safe error");cases++;
+          // 이전 응답 자체는 재시도하지 않습니다. 다음 명시적 render의 복구 조회는 별도 계약입니다.
+          renderCoachSettlementPreview();
+          if(calls.length===2){resolve(pending[1]);await new Promise(done=>setTimeout(done,0));}
+        }
+      }
+      for(const kind of ["role","profile","authUser","logout","session","client","admission"]){
+        reset();const request=start();resolve(pending[0]);await request;change(kind);renderCoachSettlementPreview();
+        check(calls.length===1&&effectiveSettlementPreview.results.length===0,"cache context "+kind);cases++;
+      }
+      for(const kind of ["role","logout","admission","missingProfile","missingAuth"]){
+        reset();if(kind==="missingProfile")adminImportAuthState.profile=null;else if(kind==="missingAuth")adminImportAuthState.user=null;else change(kind);
+        await start();check(calls.length===0&&effectiveSettlementPreview.results.length===0,"preflight RPC0 "+kind);cases++;
+      }
+      for(const olderError of [false,true]){
+        reset();const older=start(),newer=start();const first=pending[0],second=pending[1];
+        if(olderError)first.reject(Error("synthetic older"));else resolve(first);await older;
+        check(effectiveSettlementPreview.loading&&effectiveSettlementPreview.results.length===0,"old cannot clear new loading");
+        resolve(second);await newer;check(effectiveSettlementPreview.results[0].value.estimatedSettlement===50&&!effectiveSettlementPreview.error,"newer owns result");cases++;
+        reset();const prior=start();change("profile");change("authUser");const current=start();
+        resolve(pending[1]);await current;if(olderError)pending[0].reject(Error("synthetic old actor"));else resolve(pending[0]);await prior;
+        check(effectiveSettlementPreview.results.length===1&&!effectiveSettlementPreview.error,"new actor owns result");cases++;
+      }
+      reset();const stable=start();resolve(pending[0]);await stable;renderCoachSettlementPreview();
+      check(calls.length===1&&effectiveSettlementPreview.results[0].value.estimatedSettlement===50,"stable cache preserved");
+      check(!effectiveSettlementPreview.signature.includes(token)&&!document.body.textContent.includes(token),"credential memory only");cases++;
+      check(!document.querySelector("#coachSettlementSummary img, #coachSettlementPreviewRows script"),"safe markup");
+      return {checks,identityCases:cases,actualModularFunctions:true,writeRpc:0};
+    } finally {
+      Object.defineProperty(window,"TennisNoteDataClient",original.descriptor);
+      window.activeOperationBranchId=original.branch;window.operationBranchCoaches=original.coaches;
+      window.adminApprovalReady=original.approval;window.operationsRole=original.role;
+    }
+  });
+}
+
+async function assertAdminPreviewRecovery(page) {
+  return page.evaluate(async () => {
+    let checks=0,cases=0,calls=[],pending=[],token,role,admitted,branch,client;
+    const check=(ok,label)=>{if(!ok)throw Error("preview recovery: "+label);checks++;};
+    const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+    const original={descriptor:Object.getOwnPropertyDescriptor(window,"TennisNoteDataClient"),
+      branch:activeOperationBranchId,coaches:operationBranchCoaches,approval:adminApprovalReady,role:operationsRole};
+    const reset=()=>{
+      calls=[];pending=[];token="synthetic-session";role="admin";admitted=true;branch="synthetic-branch";
+      state.view="billing";state.billingMonth="2099-01";
+      adminImportAuthState.profile={id:"synthetic-admin",role:"admin"};adminImportAuthState.user={id:"synthetic-auth"};
+      client={getSession:()=>token?{access_token:token}:null,rpc:(name,args)=>{
+        check(name==="tn_coach_settlement_scope_v2","existing read RPC only");calls.push(args);
+        return new Promise((resolve,reject)=>pending.push({resolve,reject,args}));}};
+      Object.assign(effectiveSettlementPreview,{signature:"",context:null,error:"",results:[],loading:false});
+      effectiveSettlementPreview.requestId++;
+    };
+    const resolve=item=>item.resolve(window.__r3Payload(item.args));
+    try {
+      Object.defineProperty(window,"TennisNoteDataClient",{get:()=>client,configurable:true});
+      window.activeOperationBranchId=()=>branch;
+      window.operationBranchCoaches=()=>[{name:"합성 코치",serverRoleId:"synthetic-role",branchId:branch}];
+      window.operationsRole=()=>role;window.adminApprovalReady=()=>admitted&&role==="admin";
+      document.querySelector("#operationsLoginGate").hidden=true;document.querySelector("#adminAppShell").hidden=false;
+      document.querySelector("#adminBrandSplash").hidden=true;document.querySelector("#billingView").hidden=false;
+      document.querySelectorAll(".view").forEach(el=>el.classList.toggle("is-active",el.id==="billingView"));
+      document.querySelector("#coachSettlementSummary").closest("details").open=true;
+      for(const kind of ["session","profile","auth","role","admission","client"]){
+        reset();const originalClient=client;
+        if(kind==="session")token="";if(kind==="profile")adminImportAuthState.profile=null;
+        if(kind==="auth")adminImportAuthState.user=null;if(kind==="role")role="member";
+        if(kind==="admission")admitted=false;if(kind==="client")client=null;
+        renderCoachSettlementPreview();await tick();
+        check(calls.length===0&&effectiveSettlementPreview.context===null&&!!effectiveSettlementPreview.error,"invalid RPC0 "+kind);
+        token="synthetic-session";role="admin";admitted=true;client=originalClient;
+        adminImportAuthState.profile={id:"synthetic-admin",role:"admin"};adminImportAuthState.user={id:"synthetic-auth"};
+        renderCoachSettlementPreview();renderCoachSettlementPreview();renderCoachSettlementPreview();
+        check(calls.length===1&&effectiveSettlementPreview.loading&&!effectiveSettlementPreview.error,"recovery one request "+kind);
+        resolve(pending[0]);await tick();
+        check(effectiveSettlementPreview.results[0]?.value.estimatedSettlement===50&&!effectiveSettlementPreview.loading,"current result "+kind);
+        check(document.querySelector("#coachSettlementSummary").textContent.includes("50"),"actual current summary "+kind);
+        renderCoachSettlementPreview();renderCoachSettlementPreview();check(calls.length===1,"cache no loop "+kind);cases++;
+      }
+      reset();renderCoachSettlementPreview();pending[0].reject(Error("synthetic server error"));await tick();
+      renderCoachSettlementPreview();renderCoachSettlementPreview();renderCoachSettlementPreview();
+      check(calls.length===1&&effectiveSettlementPreview.results[0]?.error&&!!effectiveSettlementPreview.context,"ordinary server error no loop");cases++;
+      for(const olderError of [false,true]){
+        reset();token="";renderCoachSettlementPreview();await tick();token="synthetic-session";renderCoachSettlementPreview();
+        const old=pending[0];state.billingMonth="2099-02";renderCoachSettlementPreview();
+        check(calls.length===2&&effectiveSettlementPreview.loading,"new scope owns request");resolve(pending[1]);await tick();
+        if(olderError)old.reject(Error("synthetic obsolete"));else resolve(old);await tick();
+        check(effectiveSettlementPreview.results[0]?.value.estimatedSettlement===50&&!effectiveSettlementPreview.error
+          &&!effectiveSettlementPreview.loading,"old success/error discarded");
+        renderCoachSettlementPreview();check(calls.length===2,"recovery replay query zero");cases++;
+      }
+      check(!document.body.textContent.includes(token)&&!effectiveSettlementPreview.signature.includes(token),"credential memory only");
+      return {checks,identityCases:cases,actualModularRecovery:true,writeRpc:0};
+    } finally {
+      Object.defineProperty(window,"TennisNoteDataClient",original.descriptor);
+      window.activeOperationBranchId=original.branch;window.operationBranchCoaches=original.coaches;
+      window.adminApprovalReady=original.approval;window.operationsRole=original.role;
+    }
+  });
+}
 
 async function runFixture(page,surface){
   return page.evaluate(async surface=>{
     let checks=0;const check=(value,reason)=>{if(!value)throw Error(reason);checks++};
     if(surface==="admin"){
+      // 앞선 신원/복구 시나리오의 캐시는 이 독립 entry 검사의 입력이 아닙니다.
+      // 원래의 RPC 1회 및 금액·권한 단언은 그대로 유지합니다.
+      Object.assign(effectiveSettlementPreview,{signature:"",loading:false,results:[],context:null,error:""});
+      effectiveSettlementPreview.requestId++;
       window.activeOperationBranchId=()=>"synthetic-branch";
       window.operationBranchCoaches=()=>[{name:'합성 코치 <img src=x onerror="throw 1">',branchId:"synthetic-branch",serverRoleId:"synthetic-role"}];
       window.adminApprovalReady=()=>true;
@@ -108,6 +258,7 @@ async function runFixture(page,surface){
       window.isAdminUnlocked=()=>false;
       window.adminPinNeedsSetup=()=>false;
       adminImportAuthState.profile={id:"synthetic-admin",role:"admin"};
+      adminImportAuthState.user={id:"synthetic-auth"};
       window.TennisNoteDataClient.getSession=()=>({access_token:"synthetic-only"});
       window.__r3AdminHistory=args=>({ok:true,state:"CONFIRMED",scope:{branchId:args.target_branch_id,coachRoleId:args.target_coach_role_id,settlementMonth:args.target_month},snapshot:{snapshotId:"synthetic-snapshot",revision:1,status:"calculated",calculationVersion:"r3_monthly_settlement_v1",sourceFingerprint:"b".repeat(64),totals:{settledSessions:1,settledMinutes:40,totalSettlementAmount:37}},confirmation:{confirmationId:"synthetic-confirmation",status:"confirmed",confirmationVersion:"r3_monthly_settlement_confirmation_v1",confirmedAt:"2099-01-01T00:00:00Z"},reconciliation:null});
       state.view="billing";state.billingMonth="2099-01";state.settlementPage=0;
@@ -197,11 +348,13 @@ async function runFixture(page,surface){
 (async()=>{
   const deadline=setTimeout(()=>{console.error("R3 browser deadline");process.exit(124)},180000);deadline.unref();
   const unlockOnly = process.env.TENNISNOTE_R3_UNLOCK_FOCUSED === "1";
-  let layouts=0,checks=0;const widths=unlockOnly?[[390,844],[768,1024],[1366,900]]:[[320,740],[360,800],[375,812],[390,844],[393,852],[402,874],[412,915],[430,932],[768,1024],[1366,900],[667,375],[844,390],[932,430]];
+  const fenceOnly = process.env.TENNISNOTE_R3_IDENTITY_FOCUSED === "1";
+  const recoveryOnly = process.env.TENNISNOTE_R3_RECOVERY_FOCUSED === "1";
+  let layouts=0,checks=0,identityCases=0;const widths=recoveryOnly?[[390,844],[844,390]]:fenceOnly?[[390,844],[844,390],[768,1024],[1366,900]]:unlockOnly?[[390,844],[768,1024],[1366,900]]:[[320,740],[360,800],[375,812],[390,844],[393,852],[402,874],[412,915],[430,932],[768,1024],[1366,900],[667,375],[844,390],[932,430]];
   try{
     for(const [engine,type] of Object.entries({chromium,webkit})){
       const browser=await type.launch({headless:true,...(engine==="chromium"&&process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
-      try{for(const colorScheme of ["light","dark"])for(const surface of (unlockOnly?["admin"]:(process.env.TENNISNOTE_R3_HISTORY_LAYOUT_ONLY === "1" ? ["coach"] : ["admin","coach"]))){
+      try{for(const colorScheme of ["light","dark"])for(const surface of ((unlockOnly||fenceOnly||recoveryOnly)?["admin"]:(process.env.TENNISNOTE_R3_HISTORY_LAYOUT_ONLY === "1" ? ["coach"] : ["admin","coach"]))){
         const context=await browser.newContext({viewport:{width:390,height:844},colorScheme,serviceWorkers:"block"});
         let external=0;await context.route("**/*",route=>{
           const url=new URL(route.request().url());if(url.origin!==base){external++;return route.abort()}
@@ -214,6 +367,21 @@ async function runFixture(page,surface){
           const page=await context.newPage(),errors=[];page.on("pageerror",error=>errors.push(error.message));
           await page.goto(base+`/app/${surface==="admin"?"admin":"tennis-note-coach-app"}/`,{waitUntil:"domcontentloaded"});
           await page.waitForFunction(surface=>surface==="admin"?typeof renderCoachSettlementPreview==="function"&&typeof state==="object":Boolean(window.__TENNIS_NOTE_COACH_APP_RUNTIME__)&&state.coach?.coachRoleId==="synthetic-role",surface);
+          const identityReceipt=recoveryOnly?await assertAdminPreviewRecovery(page):surface==="admin"&&!unlockOnly?await assertAdminPreviewIdentityFence(page):null;
+          if(identityReceipt){checks+=identityReceipt.checks;identityCases+=identityReceipt.identityCases;}
+          if(fenceOnly||recoveryOnly){
+            for(const [width,height]of widths){
+              await page.setViewportSize({width,height});
+              const geometry=await page.locator("#coachSettlementSummary").evaluate(el=>({visible:!!el.getClientRects().length,width:el.getBoundingClientRect().width,overflow:document.documentElement.scrollWidth-innerWidth}));
+              assert(geometry.visible&&geometry.width>100&&geometry.width<=width+1&&geometry.overflow<=1,"preview focused visible/no overflow");
+              if(process.env.TENNISNOTE_R3_SCREENSHOT_DIR&&[390,768,1366].includes(width)){
+                fs.mkdirSync(process.env.TENNISNOTE_R3_SCREENSHOT_DIR,{recursive:true});await page.locator("#coachSettlementSummary").screenshot({path:path.join(process.env.TENNISNOTE_R3_SCREENSHOT_DIR,`preview-${engine}-${width}-${colorScheme}.png`)});
+              }
+              layouts++;checks++;
+            }
+            assert.deepEqual(errors,[],"preview page errors zero");assert.equal(external,0,"preview external requests zero");
+            console.log(JSON.stringify({result:"PASS",engine,colorScheme,...identityReceipt,layouts:widths.length,hostedRequests:0,pageErrors:errors.length}));continue;
+          }
           const unlockReceipt=surface==="admin"?await assertAdminUnlockCache(page):null;
           if(unlockReceipt) checks+=unlockReceipt.checks;
           if(unlockOnly){
@@ -271,6 +439,6 @@ async function runFixture(page,surface){
         }finally{await context.close()}
       }}finally{await browser.close()}
     }
-    assert.equal(layouts,unlockOnly?12:(process.env.TENNISNOTE_R3_HISTORY_LAYOUT_ONLY === "1"?52:104));console.log(JSON.stringify({result:"PASS",layouts,checks,scope:unlockOnly?"unlock focused":"existing R3",actualRoles:"synthetic only",actualDevices:"NOT VERIFIED",themeEvidence:"OS light/dark preference; existing coach light palette unchanged",hostedRequests:0,hostedWrites:0}));
+    assert.equal(layouts,recoveryOnly?8:fenceOnly?16:unlockOnly?12:(process.env.TENNISNOTE_R3_HISTORY_LAYOUT_ONLY === "1"?52:104));console.log(JSON.stringify({result:"PASS",layouts,checks,identityCases,scope:recoveryOnly?"same-scope recovery focused":fenceOnly?"preview identity focused":unlockOnly?"unlock focused":"existing R3",actualRoles:"synthetic only",actualDevices:"NOT VERIFIED",themeEvidence:"OS light/dark preference; existing coach light palette unchanged",hostedRequests:0,hostedWrites:0}));
   }finally{clearTimeout(deadline)}
 })().catch(error=>{console.error("R3 browser FAIL",error.message);process.exitCode=1});

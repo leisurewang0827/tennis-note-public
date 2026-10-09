@@ -85,3 +85,30 @@ private `ddb549c4`의 코치 검증기 4개와 관리자 읽기 함수 1개를 �
 `tests/r3-admin-history.test.js`와 기존 R3 실제 modular browser harness가
 관리자·코치 동일 확정본, PIN/권한, 중복 조회, 늦은 응답, 안전 DOM 및 전체 폭을 검사한다.
 합성 browser PASS는 실제 관리자 PIN/계정, 실제 기기, 실제 운영 정산 완료가 아니다.
+
+## 관리자 미리보기 identity/generation/cache fence (로컬 후보)
+
+기존 private 미리보기의 검증된 fence를 actual public `views/billing →
+data/billing → tn_coach_settlement_scope_v2 → shared projection` 경로에
+정확히 연결한다. 새 계산식·메뉴·확정/지급 쓰기를 추가하지 않는다.
+`renderAdminSettlementHistory` 호출은 보존하며 private-only 확정 UI 호출은
+가져오지 않는다. `escapeHtmlText → escapeHtml`만 명시 alias다.
+
+- 요청 시작과 응답 적용 전 세션/token, Auth user, profile, 역할, 승인 상태,
+  client 객체 및 지점/코치/월 scope를 재검사한다. 초기 identity 없음은 RPC 0이다.
+- 성공뿐 아니라 오류도 generation과 identity가 현재일 때만 적용한다.
+  역순 응답은 최신 요청의 loading/error/results를 덮어쓰지 않는다.
+- cache도 같은 context로만 재사용하며 identity가 소실되면 즉시 비운다.
+  credential은 메모리에만 비교하고 signature/DOM/fixture 로그로 내보내지 않는다.
+- `r3-preview-identity-fence-source-parity.json`의 exact 함수/파일 해시와
+  unique inverse hunk를 통과한 뒤 이전 golden을 그대로 검사한다. 기대 해시를
+  새 코드에 맞춰 무조건 바꾸거나 assertion을 줄이지 않는다.
+
+추적: SETTLE-01, BRANCH-02, NFR-01/02/04/06/07 → V6 정산·릴리스 gate →
+V3 58/66의 scope/권한/오류 상태 → billing 2제품 파일 → 전용 단위 및
+`TENNISNOTE_R3_IDENTITY_FOCUSED=1` 실제 modular browser 검사.
+기존 월 상세의 정보 순서와 주 행동을 유지한다. 합성 Chromium/WebKit
+390/768/1366 및 landscape, light/dark 검사와 actual signed role/기기는 구분한다.
+
+이 후보는 LOCAL ONLY다. commit/push/CI/PWA 게시·DB/Auth/Edge write·금융은
+실행되지 않았으며, R3 원장 전체나 운영 실사용 완료를 뜻하지 않는다.

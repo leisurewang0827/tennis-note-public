@@ -1,0 +1,87 @@
+{
+  "contract": "r3-preview-identity-fence/1",
+  "publicVersion": "1.0.543",
+  "privateHead": "4c088851026d152c2abc1d44e524af68c2d47078",
+  "privateSource": "90-Dashboard/tennis-note-prototype/app.js",
+  "privateSourceState": "protected-existing-local-fence",
+  "publicBase": "8357f88b8aa32723804c3a3b0edd7a1e376ba38d",
+  "aliases": {
+    "escapeHtmlText": "escapeHtml"
+  },
+  "preservedCall": "renderAdminSettlementHistory",
+  "excludedCall": "renderMonthlySettlementConfirmation",
+  "functions": [
+    {
+      "name": "effectiveSettlementPreviewContext",
+      "target": "app/admin/data/billing.js",
+      "privateSha256": "71eaba18d9f482131176b3ea61ea0f1e51c93cb1847e09c3964db16cd3350549",
+      "projectedSha256": "71eaba18d9f482131176b3ea61ea0f1e51c93cb1847e09c3964db16cd3350549"
+    },
+    {
+      "name": "effectiveSettlementPreviewContextIsCurrent",
+      "target": "app/admin/data/billing.js",
+      "privateSha256": "70788b3448841e34d073f26572390f617c6a6fda0106c75039016b37335ee38a",
+      "projectedSha256": "70788b3448841e34d073f26572390f617c6a6fda0106c75039016b37335ee38a"
+    },
+    {
+      "name": "invalidateEffectiveSettlementPreview",
+      "target": "app/admin/data/billing.js",
+      "privateSha256": "9f6ff7eaebf0ef73d48d87c2fb0c96124bf0b31757a7319ee27c8c628e0b793f",
+      "projectedSha256": "9f6ff7eaebf0ef73d48d87c2fb0c96124bf0b31757a7319ee27c8c628e0b793f"
+    },
+    {
+      "name": "refreshEffectiveSettlementPreview",
+      "target": "app/admin/data/billing.js",
+      "privateSha256": "25d08467db125020bbf49da9e579965369012efecd4eb27b5872148893b8680c",
+      "projectedSha256": "25d08467db125020bbf49da9e579965369012efecd4eb27b5872148893b8680c"
+    },
+    {
+      "name": "renderEffectiveSettlementPreview",
+      "target": "app/admin/views/billing.js",
+      "privateSha256": "9ba747715885a5e69fa8125b2578669bf465820d9175ac88b9d95a6d25392424",
+      "projectedSha256": "61a980d46ab6bda4080ea429f1bf00b78cd104e0597241a44b7575e49dd22134"
+    }
+  ],
+  "files": [
+    {
+      "path": "app/admin/data/billing.js",
+      "baseSha256": "0507df1baf8060e141a73d7cd7bb3bafb243f265d1ef7d5eb0b016cf42ad87d3",
+      "candidateSha256": "f8b59665ab8837f35db09d0ac22657e2f1aa4e99057810730b37f4fc8efa33b1",
+      "hunks": [
+        {
+          "before": "const effectiveSettlementPreview = { signature: \"\", loading: false, results: [] };",
+          "after": "const effectiveSettlementPreview = { signature: \"\", loading: false, results: [], requestId: 0, context: null, error: \"\" };"
+        },
+        {
+          "before": "async function refreshEffectiveSettlementPreview(signature) {\n  const branchId = activeOperationBranchId();\n  const settlementMonth = `${state.billingMonth}-01`;\n  const client = window.TennisNoteDataClient;\n  const entries = operationBranchCoaches().filter((coach) => coach.serverRoleId && coach.branchId === branchId);\n  effectiveSettlementPreview.signature = signature;\n  effectiveSettlementPreview.loading = true;\n  renderEffectiveSettlementPreview();\n  const results = await Promise.all(entries.map(async (coach) => {\n    try {\n      if (!adminApprovalReady() || !client?.rpc) throw new Error(\"authentication_required\");\n      const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };\n      const result = await client.rpc(\"tn_coach_settlement_scope_v2\", {\n        target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,\n      });\n      return { coach, value: window.TennisNoteSettlementAdjustment.effectiveProjection(result, scope) };\n    } catch (error) {\n      return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error) };\n    }\n  }));\n  if (effectiveSettlementPreview.signature !== signature || effectiveSettlementPreviewSignature() !== signature) return;\n  effectiveSettlementPreview.results = results;\n  effectiveSettlementPreview.loading = false;\n  renderEffectiveSettlementPreview();\n}",
+          "after": "function effectiveSettlementPreviewContext(signature = effectiveSettlementPreviewSignature()) {\n  const client = window.TennisNoteDataClient;\n  // Credential comparison is memory-only, never part of a serialized signature.\n  return {\n    signature,\n    client,\n    sessionToken: client?.getSession?.()?.access_token || \"\",\n    profileId: String(adminImportAuthState.profile?.id || \"\"),\n    authUserId: String(adminImportAuthState.user?.id || \"\"),\n  };\n}\n\nfunction effectiveSettlementPreviewContextIsCurrent(context, includeScope = true) {\n  return Boolean(context?.client?.rpc && context.sessionToken && context.profileId && context.authUserId\n    && (!includeScope || context.signature === effectiveSettlementPreviewSignature())\n    && context.client === window.TennisNoteDataClient\n    && context.sessionToken === (context.client.getSession?.()?.access_token || \"\")\n    && context.profileId === String(adminImportAuthState.profile?.id || \"\")\n    && context.authUserId === String(adminImportAuthState.user?.id || \"\")\n    && operationsRole() === \"admin\" && adminApprovalReady());\n}\n\nfunction invalidateEffectiveSettlementPreview(message = \"로그인 또는 조회 범위가 변경되었습니다. 현재 권한으로 다시 불러와 주세요.\") {\n  effectiveSettlementPreview.requestId += 1;\n  effectiveSettlementPreview.signature = effectiveSettlementPreviewSignature();\n  effectiveSettlementPreview.loading = false;\n  effectiveSettlementPreview.results = [];\n  effectiveSettlementPreview.context = null;\n  effectiveSettlementPreview.error = message;\n}\n\nasync function refreshEffectiveSettlementPreview(signature) {\n  const branchId = activeOperationBranchId();\n  const settlementMonth = `${state.billingMonth}-01`;\n  const client = window.TennisNoteDataClient;\n  const entries = operationBranchCoaches().filter((coach) => coach.serverRoleId && coach.branchId === branchId);\n  const context = effectiveSettlementPreviewContext(signature);\n  effectiveSettlementPreview.signature = signature;\n  if (!effectiveSettlementPreviewContextIsCurrent(context)) {\n    invalidateEffectiveSettlementPreview(\"관리자 로그인과 서버 연결을 확인한 뒤 다시 불러와 주세요.\");\n    renderEffectiveSettlementPreview();\n    return;\n  }\n  const requestId = ++effectiveSettlementPreview.requestId;\n  const requestIsCurrent = () => requestId === effectiveSettlementPreview.requestId\n    && effectiveSettlementPreviewContextIsCurrent(context);\n  effectiveSettlementPreview.context = context;\n  effectiveSettlementPreview.results = [];\n  effectiveSettlementPreview.error = \"\";\n  effectiveSettlementPreview.loading = true;\n  renderEffectiveSettlementPreview();\n  const results = await Promise.all(entries.map(async (coach) => {\n    try {\n      if (!requestIsCurrent()) return null;\n      const scope = { branchId, coachRoleId: coach.serverRoleId, settlementMonth };\n      const result = await client.rpc(\"tn_coach_settlement_scope_v2\", {\n        target_branch_id: branchId, target_coach_role_id: coach.serverRoleId, target_month: settlementMonth,\n      });\n      if (!requestIsCurrent()) return null;\n      return { coach, value: window.TennisNoteSettlementAdjustment.effectiveProjection(result, scope) };\n    } catch (error) {\n      if (!requestIsCurrent()) return null;\n      return { coach, error: window.TennisNoteSettlementAdjustment.effectiveError(error) };\n    }\n  }));\n  if (requestId !== effectiveSettlementPreview.requestId) return;\n  if (!requestIsCurrent()) {\n    invalidateEffectiveSettlementPreview();\n    renderEffectiveSettlementPreview();\n    return;\n  }\n  effectiveSettlementPreview.results = results.filter(Boolean);\n  effectiveSettlementPreview.loading = false;\n  renderEffectiveSettlementPreview();\n}"
+        }
+      ]
+    },
+    {
+      "path": "app/admin/views/billing.js",
+      "baseSha256": "ac789b6fa0e27b201ace119b8dea85da53ff1269c4827cb6cbcc7e73ff732d85",
+      "candidateSha256": "626d2cce244287a5b61a50fd9369b24854e13f102cce9f12924ffb97a0adea09",
+      "hunks": [
+        {
+          "before": "    const signature = effectiveSettlementPreviewSignature();\n    if (effectiveSettlementPreview.signature !== signature) void refreshEffectiveSettlementPreview(signature);",
+          "after": "    const signature = effectiveSettlementPreviewSignature();\n    if (effectiveSettlementPreview.context && !effectiveSettlementPreviewContextIsCurrent(effectiveSettlementPreview.context, false)) {\n      invalidateEffectiveSettlementPreview();\n      renderEffectiveSettlementPreview();\n      return;\n    }\n    // 원본 신원 검증을 재사용합니다. 일반 서버 오류는 context가 있어 자동 재조회하지 않습니다.\n    const identityRecovered = !effectiveSettlementPreview.loading && effectiveSettlementPreview.context === null\n      && Boolean(effectiveSettlementPreview.error)\n      && effectiveSettlementPreviewContextIsCurrent(effectiveSettlementPreviewContext(signature));\n    if (effectiveSettlementPreview.signature !== signature || identityRecovered) void refreshEffectiveSettlementPreview(signature);"
+        },
+        {
+          "before": "function renderEffectiveSettlementPreview() {\n  const rows = $(\"#coachSettlementPreviewRows\");\n  const summary = $(\"#coachSettlementSummary\");\n  if (!rows) return;\n  const current = effectiveSettlementPreview;\n  if (current.loading) {\n    rows.innerHTML = '<tr><td colspan=\"6\">적용일별 서버 계산을 확인하고 있습니다.</td></tr>';\n    if (summary) summary.textContent = \"정산 확인 중\";\n    return;\n  }\n  if (summary) summary.innerHTML = current.results.map((entry) => `<article>\n    <span>${escapeHtml(entry.coach.name)}</span>\n    <strong>${entry.error ? \"확인 필요\" : `${money.format(entry.value.estimatedSettlement)}원`}</strong>\n    <small>${escapeHtml(entry.error || `실제 진행 ${entry.value.settledMinutes}분 · 결제 ${entry.value.paymentCount}건${entry.value.confirmationReady ? \"\" : \" · 새 계산 미리보기 / 기존 확정 내역 유지\"}`)}</small>\n  </article>`).join(\"\") || \"계산할 코치가 없습니다.\";\n  const items = current.results.flatMap((entry) => entry.error ? [{ ...entry, row: null }]\n    : entry.value.rows.map((row) => ({ ...entry, row })));\n  state.settlementPage = normalizeDashboardPage(items.length, state.settlementPage, billingPageSize);\n  rows.innerHTML = items.slice(state.settlementPage * billingPageSize, (state.settlementPage + 1) * billingPageSize)\n    .map(({ coach, row, error }) => {\n      if (error) return `<tr><td colspan=\"6\">${escapeHtml(coach.name)} · ${escapeHtml(error)}</td></tr>`;\n      const exactTicket = [...tickets, ...expiredTickets, ...(adminLiveDataState.settlementTickets || [])]\n        .find((ticket) => String(ticket.serverTicketId || ticket.id) === row.ticketId);\n      return `<tr><td>${escapeHtml(exactTicket?.member || \"회원권 근거 확인\")}</td>\n        <td>${escapeHtml(coach.name)}</td><td>${money.format(row.amount)}원</td>\n        <td>구매·진행 당시 근거<br><small>${Number(row.settledSessions)}회 · 실제 ${Number(row.settledMinutes)}분</small></td>\n        <td>날짜별 조건 · 월 최종 반올림</td><td>${money.format(row.estimatedSettlement)}원</td></tr>`;\n    }).join(\"\") || '<tr><td colspan=\"6\">선택한 달의 계산 근거가 없습니다.</td></tr>';\n  renderDashboardPager(\"#coachSettlementPreviewPager\", items.length, state.settlementPage, \"settlement\", billingPageSize);\n}",
+          "after": "function renderEffectiveSettlementPreview() {\n  const rows = $(\"#coachSettlementPreviewRows\");\n  const summary = $(\"#coachSettlementSummary\");\n  if (!rows) return;\n  const current = effectiveSettlementPreview;\n  if ((current.context || current.results.length) && !effectiveSettlementPreviewContextIsCurrent(current.context)) {\n    invalidateEffectiveSettlementPreview();\n  }\n  if (current.error) {\n    rows.innerHTML = `<tr><td colspan=\"6\">${escapeHtml(current.error)}</td></tr>`;\n    if (summary) summary.textContent = \"정산 조회 권한과 범위를 다시 확인해 주세요.\";\n    renderDashboardPager(\"#coachSettlementPreviewPager\", 0, 0, \"settlement\", billingPageSize);\n    return;\n  }\n  if (current.loading) {\n    rows.innerHTML = '<tr><td colspan=\"6\">적용일별 서버 계산을 확인하고 있습니다.</td></tr>';\n    if (summary) summary.textContent = \"정산 확인 중\";\n    return;\n  }\n  if (summary) summary.innerHTML = current.results.map((entry) => `<article>\n    <span>${escapeHtml(entry.coach.name)}</span>\n    <strong>${entry.error ? \"확인 필요\" : `${money.format(entry.value.estimatedSettlement)}원`}</strong>\n    <small>${escapeHtml(entry.error || `실제 진행 ${entry.value.settledMinutes}분 · 결제 ${entry.value.paymentCount}건${entry.value.confirmationReady ? \"\" : \" · 새 계산 미리보기 / 기존 확정 내역 유지\"}`)}</small>\n  </article>`).join(\"\") || \"계산할 코치가 없습니다.\";\n  const items = current.results.flatMap((entry) => entry.error ? [{ ...entry, row: null }]\n    : entry.value.rows.map((row) => ({ ...entry, row })));\n  state.settlementPage = normalizeDashboardPage(items.length, state.settlementPage, billingPageSize);\n  rows.innerHTML = items.slice(state.settlementPage * billingPageSize, (state.settlementPage + 1) * billingPageSize)\n    .map(({ coach, row, error }) => {\n      if (error) return `<tr><td colspan=\"6\">${escapeHtml(coach.name)} · ${escapeHtml(error)}</td></tr>`;\n      const exactTicket = [...tickets, ...expiredTickets, ...(adminLiveDataState.settlementTickets || [])]\n        .find((ticket) => String(ticket.serverTicketId || ticket.id) === row.ticketId);\n      return `<tr><td>${escapeHtml(exactTicket?.member || \"회원권 근거 확인\")}</td>\n        <td>${escapeHtml(coach.name)}</td><td>${money.format(row.amount)}원</td>\n        <td>구매·진행 당시 근거<br><small>${Number(row.settledSessions)}회 · 실제 ${Number(row.settledMinutes)}분</small></td>\n        <td>날짜별 조건 · 월 최종 반올림</td><td>${money.format(row.estimatedSettlement)}원</td></tr>`;\n    }).join(\"\") || '<tr><td colspan=\"6\">선택한 달의 계산 근거가 없습니다.</td></tr>';\n  renderDashboardPager(\"#coachSettlementPreviewPager\", items.length, state.settlementPage, \"settlement\", billingPageSize);\n}"
+        }
+      ]
+    }
+  ],
+  "recoveryAdapter": {
+    "kind": "public_modular_call_site",
+    "validationAuthority": [
+      "effectiveSettlementPreviewContext",
+      "effectiveSettlementPreviewContextIsCurrent"
+    ],
+    "snippetSha256": "2fd4ae97a805875a2896a77c75d09c159038d9a3400e53b8435a7f18cfb4bc67",
+    "serverErrorAutoRetry": false,
+    "privateRenderer": "PROTECTED_AWAITING_ONE_PATH_AUTHORIZATION"
+  }
+}

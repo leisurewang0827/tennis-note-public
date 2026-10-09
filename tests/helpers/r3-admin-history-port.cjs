@@ -4,8 +4,23 @@ const crypto = require("node:crypto");
 const root = path.resolve(__dirname, "../..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-admin-history-source-parity.json"), "utf8"));
 const unlockManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-admin-unlock-source-parity.json"), "utf8"));
+const previewFenceManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/r3-preview-identity-fence-source-parity.json"), "utf8"));
 const sha = text => crypto.createHash("sha256").update(text).digest("hex");
-function restoreUnlock(file, text) {
+function restorePreviewIdentityFence(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
+  const entry = previewFenceManifest.files.find(item => item.path === file);
+  if (!entry) return text;
+  text = text.replaceAll(inputVersion, previewFenceManifest.publicVersion);
+  if (sha(text) !== entry.candidateSha256) throw Error("R3 preview identity candidate drift: " + file);
+  for (const hunk of [...entry.hunks].reverse()) {
+    if (!hunk.after || text.split(hunk.after).length !== 2) throw Error("R3 preview identity inverse drift: " + file);
+    text = text.replace(hunk.after, () => hunk.before);
+  }
+  if (sha(text) !== entry.baseSha256) throw Error("R3 preview identity baseline drift: " + file);
+  return text.replaceAll(previewFenceManifest.publicVersion, inputVersion);
+}
+function restoreUnlock(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
+  // 최신 계정 보호를 먼저 역변환한 뒤 기존 잠금·이력 golden을 그대로 검사합니다.
+  text = restorePreviewIdentityFence(file, text, inputVersion);
   const entry = unlockManifest.files.find(item => item.path === file);
   if (!entry) return text;
   // 최신 잠금 UI 수정만 정확히 역변환하고 이전 엑셀·연장·결제 golden은 보존한다.
@@ -18,7 +33,7 @@ function restoreUnlock(file, text) {
   return text;
 }
 function restore(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
-  text = restoreUnlock(file, text);
+  text = restoreUnlock(file, text, inputVersion);
   const entry = manifest.files.find(item => item.path === file);
   if (!entry) return text;
   text = text.replaceAll(inputVersion, manifest.publicVersion);
@@ -31,4 +46,4 @@ function restore(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join
   if (sha(text) !== entry.baseSha256) throw Error("R3 admin history baseline drift: " + file);
   return text.replaceAll(manifest.publicVersion, inputVersion);
 }
-module.exports = {root, manifest, unlockManifest, sha, restoreUnlock, restore};
+module.exports = {root, manifest, unlockManifest, previewFenceManifest, sha, restorePreviewIdentityFence, restoreUnlock, restore};

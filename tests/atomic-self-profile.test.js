@@ -6,6 +6,46 @@ const vm=require('node:vm');
 const root=path.resolve(__dirname,'..');
 const source=fs.readFileSync(path.join(root,'app/tennis-note-member-app/actions/profile.js'),'utf8');
 const fn=source.match(/^function profileSaveErrorMessage\([\s\S]*?^}/m)[0];
+const statusPort=require("./helpers/verified-profile-phone-port.cjs");
+test("profile 안내 exact authority/outer inverse는 기존 전화·저장 golden을 보존",()=>{
+  const normalized=source.replace(/\r\n/g,"\n"),sha=text=>require("node:crypto").createHash("sha256").update(text).digest("hex");
+  for(const entry of statusPort.operationStatusManifest.functions){
+    const actual=normalized.match(new RegExp("^async function "+entry.name+"\\([\\s\\S]*?^}","m"))[0];assert.equal(sha(actual),entry.sha256);
+  }
+  const entry=statusPort.operationStatusManifest.files[0];
+  assert.equal(sha(statusPort.restoreOperationStatus(entry.path,normalized)),entry.baseSha256);
+  for(const drift of [normalized+"\n",normalized.replace(entry.hunks[0].after,""),normalized.replace(entry.hunks[0].after,()=>entry.hunks[0].after+entry.hunks[0].after)]){
+    assert.throws(()=>statusPort.restoreOperationStatus(entry.path,drift),/candidate drift/);
+  }
+});
+test("이 저장의 이전 오류만 pending에서 정리, 동일 문구 소유권·draft·중복 계약",async()=>{
+  const toast={childNodes:[],visible:false,classList:{remove(){toast.visible=false;},add(){toast.visible=true;}}};
+  Object.defineProperties(toast,{textContent:{get(){return this.childNodes[0]?.data||"";},set(value){this.childNodes=value?[{data:String(value)}]:[];}},
+    firstChild:{get(){return this.childNodes[0]||null;}}});
+  let persistCalls=0,release,outcome="failure",closed=0;
+  const c=vm.createContext({state:{profile:{},member:{role:"coach"},ticketHistory:[]},window:{clearTimeout(){},setTimeout(){return 0;}},
+    document:{querySelector:()=>toast},
+    $:selector=>selector==="#appToast"?toast:null,collectNtrpSurvey:()=>({answers:{}}),lockProfileMutationControls:()=>()=>{},
+    persistIdentityProfile:async()=>{persistCalls++;if(outcome==="failure")throw Error("synthetic");await new Promise(r=>{release=r;});},
+    profileSaveErrorMessage:()=>"현재 저장 오류",setNicknameStatus(){},renderProfile(){},renderTickets(){},saveSnapshot(){},
+    closeAppSheet:()=>closed++});
+  vm.runInContext("let appToastTimer=0,profileSaveErrorToast=null,profileInfoSaving=false,ntrpCheckSaving=false;",c);
+  const producer=fs.readFileSync(path.join(root,"app/shared/tennisnote-app-common.js"),"utf8").match(/^function showToast\([\s\S]*?^}/m)[0];
+  vm.runInContext(producer,c);
+  for(const name of ["saveProfileInfo","saveProfileInfoOnce"])vm.runInContext(source.match(new RegExp("^async function "+name+"\\([\\s\\S]*?^}","m"))[0],c);
+  assert.equal(await c.saveProfileInfo(),false);assert.equal(toast.textContent,"현재 저장 오류");assert.equal(closed,0);
+  outcome="success";const pending=c.saveProfileInfo();assert.equal(toast.textContent,"");assert.equal(toast.visible,false);
+  assert.equal(await c.saveProfileInfo(),false);assert.equal(persistCalls,2);release();assert.equal(await pending,true);
+  assert.equal(toast.textContent,"내 정보와 테니스 스타일을 저장했습니다.");assert.equal(closed,1);assert.equal(c.state.member.role,"coach");
+  outcome="failure";assert.equal(await c.saveProfileInfo(),false);assert.equal(toast.textContent,"현재 저장 오류");
+  c.showToast("다른 작업 안내");outcome="success";const unrelated=c.saveProfileInfo();assert.equal(toast.textContent,"다른 작업 안내");
+  release();await unrelated;assert.equal(closed,2);assert.equal(persistCalls,4);
+  outcome="failure";assert.equal(await c.saveProfileInfo(),false);const ownedNode=toast.firstChild;
+  c.showToast("현재 저장 오류");assert.notEqual(toast.firstChild,ownedNode);const otherNode=toast.firstChild;
+  outcome="success";const sameText=c.saveProfileInfo();assert.equal(toast.textContent,"현재 저장 오류");
+  assert.equal(toast.firstChild,otherNode);assert.equal(toast.visible,true);assert.equal(await c.saveProfileInfo(),false);
+  assert.equal(persistCalls,6);release();assert.equal(await sameText,true);assert.equal(closed,3);
+});
 const sandbox={identityErrorMessage:()=> '기존 인증 오류'};
 vm.createContext(sandbox);vm.runInContext(fn,sandbox);
 
@@ -100,6 +140,7 @@ function profileRuntime() {
   c.persistIdentityProfile=async p=>{const result=await c.updateMemberProfileOnServer(p.profileStyle,
     {name:p.realName,nickname:p.nickname,phone:p.phone});if(!result.ok)throw result.error;return result;};
   vm.createContext(c);
+  vm.runInContext("let profileSaveErrorToast = null;", c);
   for(const name of ['updateMemberProfileOnServer','profileSaveErrorMessage','lockProfileMutationControls',
     'saveProfileInfo','saveProfileInfoOnce','requestNtrpCheck']){
     const found=source.match(new RegExp('^(?:async )?function '+name+'\\([\\s\\S]*?^}', 'm'));
