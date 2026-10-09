@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync as originalReadFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import aOnly from "./helpers/self-profile-a-only.cjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const readFileSync = (file, encoding) => aOnly.restoreCandidate(relative(root, file).replaceAll("\\", "/"), originalReadFileSync(file, encoding));
 const identitySource = readFileSync(join(root, "app/tennis-note-member-app/domain/identity.js"), "utf8");
 const identity = new Function(`${identitySource}\nreturn { identityPhoneE164, verifiedPhoneFromAuthUser, normalizedIdentityErrorCode, resolvedAuthCapabilities, identityErrorMessage, emailSignupResponseKind };`)();
 

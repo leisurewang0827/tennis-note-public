@@ -11,11 +11,19 @@ function bindProfileEvents() {
   $("#profileNicknameInput")?.addEventListener("input", () => setNicknameStatus("profileNicknameStatus", "저장할 때 중복 여부를 다시 확인합니다."));
   $("#profilePhoneInput")?.addEventListener("input", (event) => {
     event.target.value = formatIdentityPhone(event.target.value);
+    if (profilePhoneVerification.phone !== normalizeIdentityPhone(event.target.value)) {
+      resetIdentityPhoneVerification("휴대전화 번호가 바뀌었습니다. 새 번호를 인증한 후 저장하세요.", "profile");
+    }
+  });
+  $("#profilePhoneSendButton")?.addEventListener("click", () => requestIdentityPhoneVerification("profile"));
+  $("#profilePhoneVerifyButton")?.addEventListener("click", () => confirmIdentityPhoneVerification("profile"));
+  $("#profilePhoneCode")?.addEventListener("input", (event) => {
+    event.target.value = normalizeIdentityPhone(event.target.value).slice(0, 6);
   });
   $("#identitySetupForm")?.addEventListener("submit", submitIdentitySetup);
-  $("#identityPhoneSendButton")?.addEventListener("click", requestIdentityPhoneVerification);
+  $("#identityPhoneSendButton")?.addEventListener("click", () => requestIdentityPhoneVerification());
   $("#identityNaverPhoneButton")?.addEventListener("click", requestNaverPhoneConsent);
-  $("#identityPhoneVerifyButton")?.addEventListener("click", confirmIdentityPhoneVerification);
+  $("#identityPhoneVerifyButton")?.addEventListener("click", () => confirmIdentityPhoneVerification());
   $("#identityNicknameCheckButton")?.addEventListener("click", () => checkNicknameAvailability("identityNickname", "identityNicknameStatus"));
   $("#identityNickname")?.addEventListener("input", () => setNicknameStatus("identityNicknameStatus", "저장할 때 중복 여부를 다시 확인합니다."));
   $("#identityPhone")?.addEventListener("input", (event) => {

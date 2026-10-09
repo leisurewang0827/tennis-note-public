@@ -53,6 +53,7 @@ step "테스트"
 node --test "tests/**/*.test.js"
 TENNISNOTE_HOME_BROWSER=true node --test --test-name-pattern="Chromium/WebKit|실제 modular entry" tests/member-home-source.test.js tests/member-home-entry.test.js
 TENNISNOTE_ROUND_BROWSER=true node --test --test-name-pattern="modular Chromium/WebKit" tests/coach-future-round.test.js
+node scripts/check_tennisnote_self_profile_a_only_browser.cjs
 
 step "충돌 마커 검사"
 # 병합 충돌을 9곳 세고 8곳만 푼 적이 있다. 남은 마커가 커밋까지 갔고,

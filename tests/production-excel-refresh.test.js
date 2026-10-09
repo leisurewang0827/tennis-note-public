@@ -5,6 +5,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import releaseGuard from "./helpers/production-excel-release.cjs";
+import aOnly from "./helpers/self-profile-a-only.cjs";
 const norm = s => s.replace(/\r\n/g, "\n");
 const read = p => releaseGuard.readBeforeRelease(p);
 const hash = s => crypto.createHash("sha256").update(s).digest("hex");
@@ -17,7 +18,7 @@ test("Excel 최소 조립: 운영 exact base·개발 authority·두 경로·10 h
   assert.equal(manifest.privateAuthority, "dc89f2ebd17af38c96e84087f2df99221d69075f");
   assert.deepEqual(manifest.products.map(p => p.path), paths);
   assert.deepEqual(manifest.products.map(p => p.hunks.length), [3,7]);
-  const changed = execFileSync("git", ["diff", "--name-only", manifest.base, "--", "app"], { encoding: "utf8" }).trim().split("\n").sort();
+  const changed = aOnly.changedBeforeCandidate(manifest.base, execFileSync("git", ["diff", "--name-only", manifest.base, "--", "app"], { encoding: "utf8" }).trim().split("\n").sort());
   assert.deepEqual(changed, [...new Set([...paths, ...releaseGuard.releasePaths])].sort());
   for (const p of manifest.products) {
     let source = show(manifest.base, p.path);

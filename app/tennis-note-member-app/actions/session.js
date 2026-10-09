@@ -322,6 +322,7 @@ async function applySupabaseMemberSession(showNotice = false) {
     state.profile.marketingEmailConsent = false;
     state.profile.suggestedNickname = suggestedNicknameFromUser(user);
     if (profile?.profile_photo_url) state.profile.photoDataUrl = profile.profile_photo_url;
+    state.profile.serverRevision = profile?.updated_at || "";
     if (profile?.dominant_hand) state.profile.hand = profile.dominant_hand;
     if (profile?.backhand_style) state.profile.backhand = profile.backhand_style;
     if (profile?.tennis_started_on) state.profile.startedAt = profile.tennis_started_on;

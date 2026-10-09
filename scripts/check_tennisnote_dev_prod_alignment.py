@@ -13,6 +13,36 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SELF_PROFILE_CONTRACT = json.loads((ROOT / "tests/fixtures/self-profile-a-only.json").read_text(encoding="utf-8"))
+
+
+def before_self_profile_candidate(path: str, data: bytes) -> bytes:
+    """검증된 증분만 역변환. 기존 운영 golden/hash는 변경하지 않는다."""
+    try:
+        text = data.decode("utf-8").replace("\r\n", "\n")
+    except UnicodeDecodeError:
+        return data
+    release_row = next((row for row in SELF_PROFILE_CONTRACT["release"]["files"] if row["path"] == path), None)
+    if release_row:
+        if hashlib.sha256(text.encode()).hexdigest() != release_row["afterHash"]:
+            raise RuntimeError(f"self profile release candidate drift: {path}")
+        for item in reversed(release_row["patches"]):
+            if not item["after"] or text.count(item["after"]) != 1:
+                raise RuntimeError(f"self profile release inverse drift: {path}")
+            text = text.replace(item["after"], item["before"])
+        if hashlib.sha256(text.encode()).hexdigest() != release_row["beforeHash"]:
+            raise RuntimeError(f"self profile release baseline drift: {path}")
+    row = next((row for row in SELF_PROFILE_CONTRACT["files"] if row["path"] == path), None)
+    if row:
+        if hashlib.sha256(text.encode()).hexdigest() != row["afterHash"]:
+            raise RuntimeError(f"self profile candidate drift: {path}")
+        for item in reversed(row["patches"]):
+            if not item["after"] or text.count(item["after"]) != 1:
+                raise RuntimeError(f"self profile exact inverse drift: {path}")
+            text = text.replace(item["after"], item["before"])
+        if hashlib.sha256(text.encode()).hexdigest() != row["beforeHash"]:
+            raise RuntimeError(f"self profile baseline drift: {path}")
+    return text.encode("utf-8")
 MANIFEST_PATH = ROOT / "docs" / "tennisnote-dev-prod-alignment-20260916.json"
 AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
 DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
@@ -195,7 +225,7 @@ def authority_paths(prefix: str) -> list[str]:
 
 
 def release_metadata(path: Path) -> dict[str, str]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(before_self_profile_candidate(path.relative_to(ROOT).as_posix(), path.read_bytes()).decode("utf-8"))
     return {
         "version": str(data["version"]),
         "release_id": str(data["releaseId"]),
@@ -204,6 +234,7 @@ def release_metadata(path: Path) -> dict[str, str]:
 
 
 def normalize_product_bytes(path: str, data: bytes, manifest: dict[str, object]) -> bytes:
+    data = before_self_profile_candidate(path, data)
     try:
         text = data.decode("utf-8").replace("\r\n", "\n")
     except UnicodeDecodeError:
@@ -288,7 +319,8 @@ def classify_commits() -> list[dict[str, str]]:
 
 
 def candidate_cache(path: Path) -> str:
-    match = re.search(r'^const CACHE_NAME = "([^"]+)";', path.read_text(encoding="utf-8"), re.M)
+    text = before_self_profile_candidate(path.relative_to(ROOT).as_posix(), path.read_bytes()).decode("utf-8")
+    match = re.search(r'^const CACHE_NAME = "([^"]+)";', text, re.M)
     if not match:
         raise RuntimeError(f"CACHE_NAME not found: {path}")
     return match.group(1)

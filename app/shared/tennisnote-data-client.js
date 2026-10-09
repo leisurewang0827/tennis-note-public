@@ -1266,6 +1266,7 @@
     if (!isOnline() && method !== "GET") throw offlineError();
     const session = options.requireCurrentSession === true ? getSession() : await ensureSession();
     if (options.requireCurrentSession === true && !session?.access_token) throw expiredRequestSessionError();
+    if (options.requireFresh === true && !isOnline()) throw offlineError("fresh_read_required");
     if (!isOnline() && method === "GET") {
       const cached = await readOfflineResponse(path, session);
       if (cached !== null) return cached;
@@ -1281,6 +1282,7 @@
     try {
       response = await fetch(apiUrl(path), {
         method,
+        ...(options.requireFresh === true ? { cache: "no-store" } : {}),
         headers: {
           ...authHeaders({}, session),
           Prefer: options.prefer || "return=representation",
@@ -1295,7 +1297,7 @@
         timeoutError.code = "server_request_timeout";
         throw timeoutError;
       }
-      if (method === "GET" && transientNetworkError(error)) {
+      if (method === "GET" && options.requireFresh !== true && transientNetworkError(error)) {
         const cached = await readOfflineResponse(path, session);
         if (cached !== null) return cached;
         throw offlineError("offline_cache_miss");
@@ -1417,7 +1419,9 @@
       }
       query.set(key, `eq.${value}`);
     });
-    return request(`${tableName}?${query.toString()}`, { prefer: "return=representation" });
+    return request(`${tableName}?${query.toString()}`, { prefer: "return=representation",
+      requireFresh: options.requireFresh === true, requireCurrentSession: options.requireCurrentSession,
+      retryAuth: options.retryAuth });
   }
 
   async function selectAllRows(tableName, options = {}) {
@@ -1828,7 +1832,7 @@
     const session = getSession();
     const user = await getAuthUser();
     if (!user?.id) return { user, profile: null };
-    const profileSelect = "id,name,nickname,phone,birth_year,neighborhood,gender,role,member_kind,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,ntrp_survey,ntrp_requested_at,profile_completed_at,privacy_consent_version,privacy_consented_at,status";
+    const profileSelect = "id,name,nickname,phone,birth_year,neighborhood,gender,role,member_kind,profile_photo_url,dominant_hand,backhand_style,tennis_started_on,self_ntrp,coach_ntrp,tennis_goal,play_style_memo,ntrp_survey,ntrp_requested_at,profile_completed_at,privacy_consent_version,privacy_consented_at,status,updated_at";
     let identityContext = null;
     const identityFailure = (code, status) => {
       emitClientError("profile_mapping", Object.assign(new Error(code), { code, status }));
@@ -1907,7 +1911,17 @@
     if (needsProfileReconciliation && session?.access_token) {
       try {
         const result = await bootstrapCurrentProfile({ providerHint: session.provider });
-        if (result?.profile?.id) rows = [result.profile];
+        if (result?.profile?.id) {
+          // Older bootstrap responses omit the optimistic revision. Read the
+          // exact mapped self row instead of inventing a timestamp or borrowing
+          // another profile's revision after an identity reconciliation.
+          rows = result.profile.updated_at ? [result.profile] : await selectRows("tn_users", {
+            select: profileSelect, filters: { id: result.profile.id }, limit: 2,
+          });
+          if (rows.length !== 1 || rows[0].id !== result.profile.id || !rows[0].updated_at) {
+            return identityFailure("profile_revision_unconfirmed", 409);
+          }
+        }
       } catch (error) {
         emitClientError("profile_bootstrap", error);
         profileBootstrapError = {
