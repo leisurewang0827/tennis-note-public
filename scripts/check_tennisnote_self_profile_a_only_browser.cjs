@@ -34,7 +34,7 @@ const identityPrivacyVersion="synthetic-privacy",hasLiveMemberSession=()=>true;
 const ntrpReferences=[],ntrpQuickLevels=[],ntrpSurveyQuestions=[];
 const syncNtrpResultFromCoach=()=>{},renderProfileAvatar=()=>{},renderDiscountCouponWallet=()=>{},renderPushNotificationSettings=()=>{},renderAccountDeletionSettings=()=>{},renderTickets=()=>{},saveSnapshot=()=>{},exportNtrpRequest=()=>{},canUseCoachMode=()=>false;
 const setNicknameStatus=(id,message)=>{const n=$("#"+id);if(n)n.textContent=message;};
-const showToast=message=>{$("#appToast").textContent=message;},closeAppSheet=id=>{$("#"+id).hidden=true;};
+const showToast=message=>{$("#appToast").textContent=message;},closeAppSheet=id=>{if(!window.TennisNoteBottomSheet.close(id,{history:false,immediate:true}))throw Error("fixture_sheet_close_failed");};
 const collectNtrpSurvey=()=>({level:"3",answers:{rally:3}});
 window.TennisNoteInputGuard={markSaved:()=>{}};
 window.TennisNoteDataClient={getSession:()=>({access_token:"synthetic-session",user:{id:"synthetic-auth"}}),rpc:async(name,p)=>{
@@ -46,7 +46,7 @@ fixtureReceipts.set(p.target_operation_key,{ok:true,profileContract:"atomic-self
 const reply=fixtureReceipts.get(p.target_operation_key);fixtureRows=[JSON.parse(JSON.stringify(reply.profile))];
 if(fixtureDefer)await new Promise(r=>{fixturePending=r;});return JSON.parse(JSON.stringify(reply));},selectRows:async(table,options)=>{
 fixtureReads.push({table,options:JSON.parse(JSON.stringify(options))});if(fixtureOffline)throw Error("fresh_read_required");return fixtureDuplicate?[...fixtureRows,...fixtureRows]:JSON.parse(JSON.stringify(fixtureRows));}};
-function fixtureEdit(){profilePhoneExpectedPhone=state.profile.phone;profilePhoneEditorOwner={...phoneVerificationOwner(),revision:state.profile.serverRevision};$("#profileEditorSheet").hidden=false;}
+function fixtureEdit(){profilePhoneExpectedPhone=state.profile.phone;profilePhoneEditorOwner={...phoneVerificationOwner(),revision:state.profile.serverRevision};if(!window.TennisNoteBottomSheet.open("profileEditorSheet",{history:false,initialFocus:false}))throw Error("fixture_sheet_open_failed");}
 `;
 const actualFunctions=[fn(read(member("domain/identity.js")),"normalizeIdentityText"),fn(read(member("domain/identity.js")),"normalizeIdentityPhone"),fn(read(member("domain/identity.js")),"formatIdentityPhone"),...(["phoneVerificationOwner","phoneVerificationOwnerCurrent","phoneVerificationRequestCurrent","phoneVerificationControls"].map(n=>fn(read(member("forms/members.js")),n))),fn(enroll,"applySavedIdentity"),candidateSignup,actions,fn(view,"renderProfile"),fn(view,"renderNtrpSurvey")];
 new vm.Script(browserSetup+"\n"+actualFunctions.join("\n"));
@@ -56,9 +56,15 @@ const sheet=await page.evaluate(html=>{const d=new DOMParser().parseFromString(h
 await page.setContent('<main class="app-shell">'+sheet+'</main><div id="appToast"></div>');
 const memberStyle=await page.addStyleTag({content:read(member("styles.css"))});for(const p of ["app/shared/tennisnote-ui-foundation.css","app/shared/tennisnote-bottom-sheet.css","app/shared/tennisnote-issue-reporter.css"])await page.addStyleTag({content:read(p)});await page.evaluate(()=>{document.documentElement.dataset.tennisnoteSurface="member";});
 await page.evaluate(t=>{document.documentElement.dataset.theme=t;},theme);
+// 실제 앱과 같은 열기/닫기 lifecycle을 사용한다. hidden 해제만으로는 닫힌 패널을 클릭하는 race가 된다.
+await page.addScriptTag({content:read("app/shared/tennisnote-bottom-sheet.js")});
 await page.addScriptTag({content:browserSetup+"\n"+actualFunctions.join("\n")});assert.deepEqual(errors,[]);await page.evaluate(()=>{fixtureEdit();$("#profileRealNameInput").value=state.profile.name;$("#profileNicknameInput").value=state.profile.nickname;$("#profileHand").value="왼손";$("#profileBackhand").value="원핸드 백핸드";$("#profileStartedAt").value=state.profile.startedAt;$("#profileSelfNtrp").value="3";$("#saveProfileInfo").addEventListener("click",saveProfileInfo);for(let i=0;i<3;i++)renderProfile();});
 assert.equal(await page.locator("#profileHand").inputValue(),"왼손");checks++;
-await page.locator("#saveProfileInfo").click();try{await page.waitForFunction(()=>fixturePending!==null);}catch(e){const diagnostic=await page.evaluate(()=>({rpcCount:fixtureCalls.length,saveLocked:profileInfoSaving,noticeCode:$("#appToast").textContent?"NOTICE_PRESENT":"NO_NOTICE"}));throw Error("fixture_save_pending_missing "+JSON.stringify({diagnostic,pageErrors:errors}));}assert.deepEqual(errors,[]);
+await page.waitForFunction(()=>$("#profileEditorSheet").dataset.tnSheetState==="open"&&$("#profileEditorSheet").dataset.tnSheetInputReady==="true");
+await page.locator("#saveProfileInfo").scrollIntoViewIfNeeded();
+const clickGeometry=await page.evaluate(()=>{const s=$("#profileEditorSheet"),b=$("#saveProfileInfo"),r=b.getBoundingClientRect(),p=s.querySelector("[data-tn-sheet-panel]"),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return {state:s.dataset.tnSheetState,ready:s.dataset.tnSheetInputReady,transform:getComputedStyle(p).transform,height:r.height,inViewport:r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth,exactHit:hit===b||b.contains(hit)};});
+assert.equal(clickGeometry.state,"open");assert.equal(clickGeometry.ready,"true");assert.equal(clickGeometry.transform,"matrix(1, 0, 0, 1, 0, 0)");assert(clickGeometry.height>=44);assert.equal(clickGeometry.inViewport,true);assert.equal(clickGeometry.exactHit,true);checks+=6;
+await page.locator("#saveProfileInfo").click();try{await page.waitForFunction(()=>fixturePending!==null);}catch(e){const diagnostic=await page.evaluate(()=>({rpcCount:fixtureCalls.length,saveLocked:profileInfoSaving,noticeCode:$("#appToast").textContent?"NOTICE_PRESENT":"NO_NOTICE"}));throw Error("fixture_save_pending_missing "+JSON.stringify({engine:name,width,theme,diagnostic,pageErrors:errors}));}assert.deepEqual(errors,[]);
 const pending=await page.evaluate(async()=>({calls:fixtureCalls.length,duplicateResult:await saveProfileInfo(),saveDisabled:$("#saveProfileInfo").disabled,ntrpDisabled:$("#requestNtrpCheck").disabled,identityReadOnly:$("#profileRealNameInput").readOnly,identityDisabled:$("#profileRealNameInput").disabled}));
 assert.equal(pending.calls,1);assert.equal(pending.duplicateResult,false);assert.equal(pending.saveDisabled,true);assert.equal(pending.ntrpDisabled,true);assert.equal(pending.identityReadOnly,true);assert.equal(pending.identityDisabled,false);checks+=6;
 await page.evaluate(()=>{fixtureDefer=false;fixturePending();fixturePending=null;});await page.waitForFunction(()=>$("#profileEditorSheet").hidden);
