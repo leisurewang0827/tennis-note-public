@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { spawnSync } from "node:child_process";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -92,4 +93,39 @@ test("alignment 검사 변경은 PR와 push 각각 한 번 경로 필터에 포�
     assert.equal((block.match(entry)||[]).length,1,`${event}: alignment 경로 exactly once`);
   }
   assert.equal((workflow.match(entry)||[]).length,2,"두 이벤트 합계 exactly two");
+});
+
+test("독립 profile 검사는 한 번 병렬 실행하고 모든 실패를 빌드 전에 전파한다", () => {
+  const verify = readFileSync(join(repoRoot,"scripts/verify.sh"),"utf8").replace(/\r\n/g,"\n");
+  const start = verify.indexOf('step "본인 번호 인증·저장');
+  const end = verify.indexOf('step "배포본 빌드"', start);
+  assert(start >= 0 && end > start);
+  const block = verify.slice(start, end);
+  assert.equal((block.match(/^node scripts\/check_tennisnote_verified_profile_phone_browser\.cjs &$/gm)||[]).length,1);
+  assert.equal((block.match(/^wait "\$profile_pid"$/gm)||[]).length,1);
+  assert(block.lastIndexOf('wait "$profile_pid"') > block.indexOf("node scripts/check_tennisnote_r3_effective_browser.cjs"));
+  const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
+  for (const failure of ["none", "profile", "alignment", "r3"]) {
+    const fake = `set -euo pipefail
+step() { :; }
+node() {
+  if [[ "$1" == *verified_profile* ]]; then
+    echo PROFILE_ONCE
+    sleep 0.1
+    [[ "${failure}" != profile ]] || return 17
+  elif [[ "$1" == *r3_effective* ]]; then
+    [[ "${failure}" != r3 ]] || return 19
+  fi
+}
+fake_python() { [[ "${failure}" != alignment ]] || return 18; }
+PYTHON_BIN=fake_python
+${block}
+echo BUILD_REACHED
+`;
+    const result=spawnSync(bash,["-c",fake],{encoding:"utf8",timeout:5000});
+    assert.ifError(result.error);
+    assert.equal(result.status,failure === "none" ? 0 : {profile:17,alignment:18,r3:19}[failure]);
+    assert.equal(result.stdout.includes("BUILD_REACHED"),failure === "none");
+    if(failure === "none" || failure === "profile") assert.equal(result.stdout.split("PROFILE_ONCE").length-1,1);
+  }
 });
