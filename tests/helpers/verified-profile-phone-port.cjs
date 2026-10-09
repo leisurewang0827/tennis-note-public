@@ -6,8 +6,22 @@ const assert = require("node:assert/strict");
 const root = path.resolve(__dirname, "../..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/verified-profile-phone-source-parity.json"), "utf8"));
 const operationStatusManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/profile-operation-status-source-parity.json"), "utf8"));
+const durableReadbackManifest = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/profile-durable-readback-source-parity.json"), "utf8"));
 const sha = text => crypto.createHash("sha256").update(text).digest("hex");
+function restoreDurableReadback(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
+  const row = durableReadbackManifest.files.find(item => item.path === file);
+  if (!row) return text;
+  text = text.replace(/\r\n/g, "\n").replaceAll(inputVersion, durableReadbackManifest.publicVersion);
+  assert.equal(sha(text), row.candidateSha256, `phone candidate drift (durable readback): ${file}`);
+  for (const hunk of [...row.hunks].reverse()) {
+    assert(hunk.after && text.split(hunk.after).length === 2, `durable readback inverse drift: ${file}`);
+    text = text.replace(hunk.after, () => hunk.before);
+  }
+  assert.equal(sha(text), row.baseSha256, `durable readback baseline drift: ${file}`);
+  return text.replaceAll(durableReadbackManifest.publicVersion, inputVersion);
+}
 function restoreOperationStatus(file, text, inputVersion = JSON.parse(fs.readFileSync(path.join(root, "app/release.json"), "utf8")).version) {
+  text = restoreDurableReadback(file, text, inputVersion);
   const row = operationStatusManifest.files.find(item => item.path === file);
   if (!row) return text;
   text = text.replaceAll(inputVersion, operationStatusManifest.publicVersion);
@@ -34,4 +48,4 @@ function restorePhone(file, text, inputVersion = JSON.parse(fs.readFileSync(path
   assert.equal(sha(text), row.baseSha256, `phone base drift: ${file}`);
   return text.replaceAll(manifest.publicVersion, inputVersion);
 }
-module.exports = { restorePhone, restoreOperationStatus, operationStatusManifest, manifest };
+module.exports = { restorePhone, restoreOperationStatus, restoreDurableReadback, durableReadbackManifest, operationStatusManifest, manifest };

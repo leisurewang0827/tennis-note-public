@@ -70,6 +70,44 @@ function removeProfilePhoto() {
   saveSnapshot();
 }
 
+async function readSavedSelfProfileExactly(client, owner, targetProfile, values, saved) {
+  const token = client?.getSession?.()?.access_token || "";
+  const contextIsCurrent = () => window.TennisNoteDataClient === client
+    && token && token === (client.getSession?.()?.access_token || "")
+    && phoneVerificationOwnerCurrent(owner);
+  if (!contextIsCurrent() || typeof client.selectRows !== "function") throw new Error("profile_durable_readback_unconfirmed");
+  const keys = Object.keys(values).filter((key) => key !== "ntrp_requested");
+  const select = [...new Set(["id", "name", "nickname", "phone", "role", "status", "updated_at",
+    "ntrp_requested_at", ...keys])].join(",");
+  const expectedRole = String(state.member?.role || "");
+  const expectedStatus = String(state.member?.status || "");
+  // RPC 반환을 저장 증거로 대체하지 않습니다. exact self 행만 새 네트워크
+  // 조회하며 오프라인 캐시/자동 Auth 재시도/다른 프로필 fallback을 금지합니다.
+  const rows = await client.selectRows("tn_users", { select, filters: { id: owner.profileId },
+    limit: 2, requireFresh: true, requireCurrentSession: true, retryAuth: false });
+  if (!contextIsCurrent() || (targetProfile && !phoneVerificationRequestCurrent(owner, targetProfile.phone, "profile")))
+    throw new Error("profile_phone_context_changed");
+  const row = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+  const revisionKey = (value) => {
+    const text = String(value || "");
+    const parts = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(?:Z|\+00:00)$/.exec(text);
+    return parts && Number.isFinite(Date.parse(text)) ? parts[1] + "." + (parts[2] || "").padEnd(6, "0") + "Z" : "";
+  };
+  const savedRevision = revisionKey(saved.profile.updated_at);
+  const rowRevision = revisionKey(row?.updated_at);
+  if (!row || row.id !== owner.profileId || !savedRevision || rowRevision !== savedRevision
+    || (expectedRole && row.role !== expectedRole) || (expectedStatus && row.status !== expectedStatus)
+    || normalizeIdentityPhone(row.phone || "") !== normalizeIdentityPhone(saved.profile.phone || "")
+    || normalizeIdentityText(row.name) !== normalizeIdentityText(saved.profile.name)
+    || normalizeIdentityText(row.nickname) !== normalizeIdentityText(saved.profile.nickname)
+    || Object.keys(values).some((key) => key === "ntrp_requested"
+      ? !row.ntrp_requested_at || row.ntrp_requested_at !== saved.profile.ntrp_requested_at
+      : key === "ntrp_survey"
+        ? JSON.stringify(Object.entries(row[key] || {}).sort()) !== JSON.stringify(Object.entries(values[key] || {}).sort())
+        : row[key] !== values[key])) throw new Error("profile_durable_readback_unconfirmed");
+  return row;
+}
+
 async function updateMemberProfileOnServer(values = {}, identity = null) {
   const client = window.TennisNoteDataClient;
   const owner = identity ? profilePhoneEditorOwner : phoneVerificationOwner();
@@ -104,6 +142,8 @@ async function updateMemberProfileOnServer(values = {}, identity = null) {
       || Object.keys(values).some((key) => key === "ntrp_requested" ? !saved.profile.ntrp_requested_at
         : key === "ntrp_survey" ? JSON.stringify(Object.entries(saved.profile[key] || {}).sort()) !== JSON.stringify(Object.entries(values[key]).sort())
           : saved.profile[key] !== values[key])) throw new Error("profile_atomic_readback_unconfirmed");
+    const durableProfile = await readSavedSelfProfileExactly(client, owner, identity ? targetProfile : null, values, saved);
+    saved.profile = { ...saved.profile, ...durableProfile };
     applySavedIdentity(saved.profile, { preserveCompletion: true });
     const profile = saved.profile;
     const savedValues = {

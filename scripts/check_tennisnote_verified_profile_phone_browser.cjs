@@ -35,8 +35,18 @@ async function profileContracts(page) {
     let sends = 0, verifies = 0, patches = 0;
     const revision = "2026-01-01T00:00:00.000Z";
     const rpcCalls = [];
+    const durableReads = [];
+    let savedProfileRow = null;
     const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
     client.getSession = () => ({ access_token: "synthetic-session", user: { id: currentAuthId } });
+    client.selectRows = async (table, options) => {
+      durableReads.push({ table, options });
+      if (table !== "tn_users" || options.filters?.id !== profileId
+        || Object.keys(options.filters || {}).length !== 1 || options.limit !== 2
+        || options.requireFresh !== true || options.requireCurrentSession !== true || options.retryAuth !== false)
+        throw new Error("unexpected_durable_read");
+      return savedProfileRow ? [structuredClone(savedProfileRow)] : [];
+    };
     client.getAuthUser = async () => authUser;
     client.getAuthSettings = async () => ({ external: { phone: true, email: true } });
     client.requestPhoneChangeVerification = async () => { sends += 1; return { ok: true }; };
@@ -45,16 +55,20 @@ async function profileContracts(page) {
       authUser = { id: authId, phone: `82${nextPhone.slice(1)}`, phone_confirmed_at: new Date().toISOString() };
       return { ok: true };
     };
-    const reply = (parameters) => ({ ok: true, phoneVerified: parameters.target_profile.phone !== oldPhone,
-      styleSaved: Boolean(parameters.target_profile.expected_revision), profileContract: "atomic-self-profile/1",
-      profile: { id: profileId, profile_photo_url: null, dominant_hand: "오른손", backhand_style: "투핸드 백핸드",
+    const reply = (parameters) => {
+      const { expected_revision, ...values } = parameters.target_profile;
+      const profile = { id: profileId, role: "member", status: "active", profile_photo_url: null, dominant_hand: "오른손", backhand_style: "투핸드 백핸드",
         tennis_started_on: null, tennis_goal: null, play_style_memo: null, self_ntrp: 2.5, ntrp_survey: {},
         ntrp_requested_at: parameters.target_profile.ntrp_requested ? revision : null,
-        ...parameters.target_profile, updated_at: revision } });
+        ...values, updated_at: revision };
+      savedProfileRow = structuredClone(profile);
+      return { ok: true, phoneVerified: parameters.target_profile.phone !== oldPhone,
+        styleSaved: Boolean(expected_revision), profileContract: "atomic-self-profile/1", profile };
+    };
     client.rpc = async (name, parameters) => { rpcCalls.push({ name, parameters }); return reply(parameters); };
     // Hosted-like failure, not the old unrestricted test double.
     client.updateRows = async () => { patches += 1; throw Object.assign(new Error("permission denied"), { code: "42501" }); };
-    state.member = { ...state.member, id: profileId, profileId, authUserId: authId };
+    state.member = { ...state.member, id: profileId, profileId, authUserId: authId, role: "member", status: "active" };
     state.liveProfileId = profileId;
     state.profile.name = "합성 회원"; state.profile.nickname = "합성별명"; state.profile.phone = oldPhone;
     state.profile.serverRevision = revision;
@@ -168,6 +182,7 @@ async function profileContracts(page) {
     };
     setPhone(nextPhone); // unchanged baseline: saving must not require another OTP.
     const beforeSave = rpcCalls.length;
+    const beforeSaveReads = durableReads.length;
     document.querySelector("#profileGoal").value = "합성 새 목표";
     const saveBackSettled = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("profile_save_back_not_settled")), 2000);
@@ -178,6 +193,8 @@ async function profileContracts(page) {
     check("save_click_lock_rpc_one", rpcCalls.length === beforeSave + 1 && !profileInfoSaving && frozenDuringSave && !input.readOnly);
     check("atomic_style_save_no_direct_patch", patches === 0 && state.profile.goal === "합성 새 목표"
       && rpcCalls.at(-1).parameters.target_profile.tennis_goal === "합성 새 목표");
+    check("atomic_save_fresh_exact_self_read", durableReads.length === beforeSaveReads + 1
+      && savedProfileRow.tennis_goal === state.profile.goal);
     openProfileEditor(); await tick();
     const savedGoal = state.profile.goal;
     document.querySelector("#profileGoal").value = "합성 보존할 초안";
@@ -230,7 +247,9 @@ async function profileContracts(page) {
     const reviewCalls = [];
     const revisedReply = (parameters, nextRevision) => {
       const result = reply(parameters);
-      return { ...result, profile: { ...result.profile, updated_at: nextRevision } };
+      result.profile.updated_at = nextRevision;
+      savedProfileRow = structuredClone(result.profile);
+      return result;
     };
     client.rpc = async (name, parameters) => { reviewCalls.push({name,parameters}); throw Object.assign(new Error("permission denied"), {code:"42501"}); };
     check("review_ntrp_failure_preserves_open_draft", await requestNtrpCheck() === false
@@ -289,6 +308,9 @@ async function profileContracts(page) {
       else { openProfileEditor(); await tick(); }
     }
     check("review_all_direct_patches_zero", patches === 0);
+    check("review_all_successes_use_fresh_self_readback", durableReads.length >= 6
+      && durableReads.every(({ table, options }) => table === "tn_users" && options.filters.id === profileId
+        && options.requireFresh === true && options.requireCurrentSession === true && options.retryAuth === false));
     openProfileEditor(); await tick(); setPhone(phone(6));
     await requestIdentityPhoneVerification("profile");
     code.focus();
@@ -357,14 +379,22 @@ async function optionalProfileContracts(page) {
     const phone = "01" + "0".repeat(7) + "81";
     const profileId = id(781), authId = id(881);
     const keys = ["rally", "forehand", "backhand", "serve", "return", "net", "game", "movement", "control", "doubles"];
-    let server = { id: profileId, name: "합성 회원", nickname: "합성테니스", phone,
+    let server = { id: profileId, role: "member", status: "active", name: "합성 회원", nickname: "합성테니스", phone,
       profile_photo_url: null, dominant_hand: "오른손", backhand_style: "투핸드 백핸드",
       tennis_started_on: null, tennis_goal: null, play_style_memo: null, self_ntrp: null,
       ntrp_survey: {}, updated_at: "2026-01-01T00:00:00.000Z" };
-    let sms = 0, patches = 0, commits = 0, calls = 0;
+    let sms = 0, patches = 0, commits = 0, calls = 0, reads = 0;
     const receipts = new Map();
     const client = window.TennisNoteDataClient;
     client.getSession = () => ({ access_token: "synthetic-only", user: { id: authId } });
+    client.selectRows = async (table, options) => {
+      reads++;
+      if (table !== "tn_users" || options.filters?.id !== profileId
+        || Object.keys(options.filters || {}).length !== 1 || options.limit !== 2
+        || options.requireFresh !== true || options.requireCurrentSession !== true || options.retryAuth !== false)
+        throw new Error("unexpected_optional_durable_read");
+      return [structuredClone(server)];
+    };
     client.getAuthUser = async () => ({ id: authId, phone: "82" + phone.slice(1), phone_confirmed_at: "2026-01-01T00:00:00Z" });
     client.getAuthSettings = async () => ({ external: { phone: true } });
     client.requestPhoneChangeVerification = async () => { sms++; throw new Error("unexpected_sms"); };
@@ -390,7 +420,7 @@ async function optionalProfileContracts(page) {
       receipts.set(parameters.target_operation_key, reply); commits++;
       return reply;
     };
-    state.member = { ...state.member, id: profileId, profileId, authUserId: authId };
+    state.member = { ...state.member, id: profileId, profileId, authUserId: authId, role: "member", status: "active" };
     state.liveProfileId = profileId;
     Object.assign(state.profile, { name: server.name, nickname: server.nickname, phone, hand: server.dominant_hand,
       backhand: server.backhand_style, goal: "", styleMemo: "", startedAt: "", photoDataUrl: "", selfNtrp: "", ntrpSurvey: {}, serverRevision: server.updated_at });
@@ -412,6 +442,7 @@ async function optionalProfileContracts(page) {
     document.getElementById("saveProfileInfo").click();
     await settled;
     check("real_bound_click_rpc_once_and_closed", calls === 1 && commits === 1 && document.getElementById("profileEditorSheet").hidden);
+    check("real_bound_click_fresh_self_read_once", reads === 1 && server.id === profileId);
     check("saved_empty_values_and_rating_not_fabricated", server.tennis_goal === null && server.play_style_memo === null
       && server.tennis_started_on === null && server.self_ntrp === null && state.profile.selfNtrp === "");
     openProfileEditor();
