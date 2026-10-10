@@ -9,6 +9,8 @@ function activateLiveCoachProfile(profileId) {
 
   state.dataMode = "live";
   state.liveProfileId = nextProfileId;
+  resetCoachSettlementHistory();
+  renderCoachSettlementHistory();
   if (!profileChanged) return;
 
   state.coach = null;
@@ -40,12 +42,17 @@ function activateLiveCoachProfile(profileId) {
 
 async function applySupabaseCoachSession(showFromLogin = false) {
   const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready) return false;
-  await client.consumeOAuthRedirect?.();
-  const session = await client.ensureSession?.() || client.getSession?.();
-  if (!session?.access_token) return false;
+  resetCoachSettlementHistory();
+  renderCoachSettlementHistory();
+  const historyRequest = coachSettlementHistory.coachSettlementReconciliationRequestId;
   try {
+    if (!client?.readiness?.().ready) { state.coach = null; renderCoachSettlementHistory(); return false; }
+    await client.consumeOAuthRedirect?.();
+    const session = await client.ensureSession?.() || client.getSession?.();
+    if (!session?.access_token) { state.coach = null; renderCoachSettlementHistory(); return false; }
     const { user, profile, coachRole } = await client.selectCurrentProfile();
+    if (window.TennisNoteDataClient !== client || historyRequest !== coachSettlementHistory.coachSettlementReconciliationRequestId
+      || session.access_token !== client.getSession?.()?.access_token) return false;
     if (!profile || !canUseCoachAppProfile(profile, coachRole)) {
       state.coach = null;
       $("#coachAppScreen").hidden = true;
@@ -86,12 +93,18 @@ async function applySupabaseCoachSession(showFromLogin = false) {
     })();
     return true;
   } catch (error) {
+    state.coach = null;
+    resetCoachSettlementHistory();
+    renderCoachSettlementHistory();
     return false;
   }
 }
 
 async function logoutCoach() {
   coachSettlementSelection = null;
+  state.coach = null;
+  resetCoachSettlementHistory();
+  renderCoachSettlementHistory();
   await disableNativeCoachPushForLogout();
   await window.TennisNoteDataClient?.signOut?.();
   returnToMemberEntry(false, false);

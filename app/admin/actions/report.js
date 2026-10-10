@@ -121,8 +121,6 @@ function startAdminImportLogin(provider) {
 async function signOutAdminImport() {
   const client = window.TennisNoteDataClient;
   cancelAdminInitialLiveSync();
-  await clearAdminOperationalCache();
-  if (client?.signOut) await client.signOut();
   clearCachedOperationsIdentity();
   Object.assign(adminImportAuthState, {
     loading: false,
@@ -131,9 +129,14 @@ async function signOutAdminImport() {
     profile: null,
     message: "로그아웃되었습니다. 서버 검증은 관리자 로그인 후 가능합니다.",
   });
+  resetAdminSettlementHistory();
+  renderAdminSettlementHistory();
   localStorage.removeItem(storageKey);
   renderOperationsLoginGate();
   renderDataTools();
+  // Clear visible history and mounted ledger/draft before any awaited cleanup/sign-out.
+  await clearAdminOperationalCache();
+  if (client?.signOut) await client.signOut();
   showToast("관리자 로그인 해제");
 }
 
