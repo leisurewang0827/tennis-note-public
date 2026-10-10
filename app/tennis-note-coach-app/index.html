@@ -10,6 +10,7 @@
     <link rel="apple-touch-icon" href="../tennis-note-member-app/assets/brand/app-icon-180.png" />
     <link rel="stylesheet" href="./styles.css?v=1.0.547" />
     <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.547" />
+    <link rel="stylesheet" href="../shared/tennisnote-manual-settlement-ledger.css?v=1.0.547" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
   </head>
   <body>
@@ -335,6 +336,36 @@
             <summary>회원별 내역 보기</summary>
             <div id="coachSettlementRows" class="coach-settlement-rows"></div>
           </details>
+          <section id="coachSettlementReconciliation" class="coach-settlement-history" aria-label="관리자 확정 정산 이력">
+            <div class="coach-settlement-history-head">
+              <strong>관리자 확정 내역</strong>
+              <span id="coachSettlementReconciliationStateBadge">확정 대기</span>
+            </div>
+            <p>현재 예상액과 별도인 확정 계산본입니다. 조건 변경은 과거 확정액을 바꾸지 않습니다.</p>
+            <p id="coachSettlementReconciliationMessage" role="status" aria-live="polite"></p>
+            <div id="coachSettlementReconciliationSummary" class="coach-settlement-history-summary" hidden></div>
+<form id="coachSettlementReconciliationForm" class="coach-settlement-reconciliation-form" hidden novalidate>
+              <fieldset>
+                <legend>확정 정산 응답</legend>
+                <label>
+                  <input type="radio" name="coachSettlementReconciliationChoice" value="acknowledged" />
+                  <span><strong>확인했습니다</strong><small>표시된 월·횟수·정산액을 확인했습니다.</small></span>
+                </label>
+                <label>
+                  <input type="radio" name="coachSettlementReconciliationChoice" value="disputed" />
+                  <span><strong>이의가 있습니다</strong><small>관리자가 확인할 짧은 사유를 남깁니다.</small></span>
+                </label>
+              </fieldset>
+              <label id="coachSettlementReconciliationReasonField" class="coach-settlement-reconciliation-reason" hidden>
+                <span>이의 사유 <small>2~240자</small></span>
+                <textarea id="coachSettlementReconciliationReason" rows="3" minlength="2" maxlength="240" placeholder="확인이 필요한 항목만 간단히 적어 주세요."></textarea>
+                <small>이름·전화번호 등 개인정보는 적지 마세요.</small>
+              </label>
+              <p id="coachSettlementReconciliationValidation" class="coach-settlement-reconciliation-validation" role="alert" hidden></p>
+              <button id="coachSettlementReconciliationSubmit" class="primary-button" type="submit" disabled>응답 저장</button>
+            </form>
+            <button id="coachSettlementReconciliationRetry" class="small-button" type="button" hidden>확정 내역 다시 확인</button>
+          </section>
         </section>
       </div>
     </section>
@@ -362,6 +393,7 @@
     <script defer src="../shared/tennisnote-runtime-environment.js?v=1.0.547"></script>
     <script defer src="../shared/tennisnote-escape-html.js?v=1.0.547"></script>
     <script defer src="../shared/tennisnote-data-client.js?v=1.0.547"></script>
+    <script defer src="../shared/tennisnote-manual-settlement-ledger.js?v=1.0.547"></script>
     <script defer src="../shared/tennisnote-schedule-revision.js?v=1.0.547"></script>
     <script defer src="../shared/tennisnote-schedule-lanes.js?v=1.0.547"></script>
     <script defer src="../shared/tennisnote-native-push.js?v=account-deletion-1"></script>

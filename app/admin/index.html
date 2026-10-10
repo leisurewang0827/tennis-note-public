@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="./styles.css?v=1.0.547" />
     <link rel="stylesheet" href="./schedule-v2-admin.css?v=schedule-v2-18" />
     <link rel="stylesheet" href="../shared/tennisnote-ui-foundation.css?v=1.0.547" />
+    <link rel="stylesheet" href="../shared/tennisnote-manual-settlement-ledger.css?v=1.0.547" />
     <link rel="stylesheet" href="../shared/tennisnote-issue-reporter.css?v=issue-reporter-4" />
   </head>
   <body>
@@ -978,6 +979,20 @@
                 <tbody id="coachSettlementPreviewRows"></tbody>
               </table>
               <nav id="coachSettlementPreviewPager" class="dashboard-pager" aria-label="코치 정산 목록 페이지" hidden></nav>
+              <section id="adminSettlementHistory" class="admin-settlement-history" aria-label="월 정산 확정 이력" aria-busy="false">
+                <h3>확정 이력 조회</h3>
+                <div class="admin-settlement-history-controls">
+                  <label for="adminSettlementHistoryCoach">대상 코치</label>
+                  <select id="adminSettlementHistoryCoach"><option value="">코치 선택</option></select>
+                  <button id="adminSettlementHistoryRead" type="button" class="ghost-button" disabled>확정 이력 조회</button>
+                </div>
+                <p id="adminSettlementHistoryMessage" role="status">코치를 선택한 뒤 확정 이력을 조회해 주세요.</p>
+                <div id="monthlySettlementSummary" class="monthly-settlement-server-summary"></div>
+                <dl id="adminSettlementHistoryDetails" hidden></dl>
+                <div class="monthly-settlement-confirmation-actions">
+                  <button id="monthlySettlementPrimaryAction" class="primary-button" type="button" disabled>정산 확인</button>
+                </div>
+              </section>
             </section>
             <section class="panel table-panel">
               <div class="panel-heading">
@@ -2189,6 +2204,7 @@
     <script src="../shared/config.local.js?v=local"></script>
     <script src="../shared/tennisnote-escape-html.js?v=1.0.547"></script>
     <script src="../shared/tennisnote-data-client.js?v=1.0.547"></script>
+    <script src="../shared/tennisnote-manual-settlement-ledger.js?v=1.0.547"></script>
     <script src="../shared/tennisnote-schedule-revision.js?v=1.0.547"></script>
     <script src="../shared/tennisnote-schedule-lanes.js?v=1.0.547"></script>
     <script src="../shared/tennisnote-curriculum-catalog.js?v=notion-catalog-3"></script>
