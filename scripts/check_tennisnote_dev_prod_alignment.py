@@ -11,12 +11,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import tennisnote_release_freeze_inverse as freeze_inverse
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "docs" / "tennisnote-dev-prod-alignment-20260916.json"
-AUTHORITY_SHA = "10489623686b29a133ed8e64e76f0587e78c9faf"
-DEV_SHA = "14c2901f8c4278810d49c222d4adc09aaaa06ae2"
-MERGE_BASE_SHA = "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
+AUTHORITY_SHA = "686cc97d9676da2d16ca3cdfbd862dc9cd19434e"
+DEV_SHA = "c0513decc36421d99fe2ed452d417572625008ac"
+MERGE_BASE_SHA = "1a9b255c26fa1ba78d1ae33a6a555985fe588248"
 
 EXPECTED_VERSION = "1.0.546"
 EXPECTED_RELEASE_ID = "2026.10.09.03"
@@ -208,7 +210,7 @@ def authority_paths(prefix: str) -> list[str]:
 
 
 def release_metadata(path: Path) -> dict[str, str]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(freeze_inverse.restore_bytes(path.relative_to(ROOT).as_posix(), path.read_bytes()))
     return {
         "version": str(data["version"]),
         "release_id": str(data["releaseId"]),
@@ -403,13 +405,15 @@ def classify_commits() -> list[dict[str, str]]:
 
 
 def candidate_cache(path: Path) -> str:
-    match = re.search(r'^const CACHE_NAME = "([^"]+)";', path.read_text(encoding="utf-8"), re.M)
+    source = freeze_inverse.restore_bytes(path.relative_to(ROOT).as_posix(), path.read_bytes()).decode("utf-8")
+    match = re.search(r'^const CACHE_NAME = "([^"]+)";', source, re.M)
     if not match:
         raise RuntimeError(f"CACHE_NAME not found: {path}")
     return match.group(1)
 
 
 def generate() -> None:
+    raise RuntimeError("integrated_manifest_regeneration_requires_review")
     authority_release = json.loads(
         authority_bytes("app/release.json").decode("utf-8")
     )
@@ -614,7 +618,38 @@ def restore_r3_effective_base(path: str, text: str) -> str | None:
 
 
 def verify() -> None:
-    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    freeze_inverse.verify_current(ROOT)
+    manifest = json.loads(freeze_inverse.restore_bytes(MANIFEST_PATH.relative_to(ROOT).as_posix(), MANIFEST_PATH.read_bytes()))
+    if manifest["authority"] != {
+        "production_sha": AUTHORITY_SHA, "development_sha": DEV_SHA,
+        "merge_base_sha": MERGE_BASE_SHA,
+    }:
+        raise RuntimeError("integrated authority source drift")
+    outer_raw = (ROOT / "tests/fixtures/integrated-feature-release-parity.json").read_text(encoding="utf-8")
+    if sha256(outer_raw.encode("utf-8")) != "a3fd09c24418cd24f4b12e11e99af0e5f561f761cfc9b7c6af21b05dbe52c6e7":
+        raise RuntimeError("integrated inverse contract hash drift")
+    outer = json.loads(outer_raw)
+    if outer["productionBase"] != AUTHORITY_SHA or outer["developmentBase"] != DEV_SHA:
+        raise RuntimeError("integrated inverse authority drift")
+    outer_by_path = {row["path"]: row for row in outer["files"]}
+    if len(outer_by_path) != len(outer["files"]):
+        raise RuntimeError("integrated inverse duplicate path")
+    def restore_integration(path: str, data: bytes) -> bytes | None:
+        data = freeze_inverse.restore_bytes(path, data)
+        row = outer_by_path.get(path)
+        if row is None:
+            return data
+        text = data.decode("utf-8").replace("\r\n", "\n")
+        if sha256(text.encode("utf-8")) != row["afterSha256"]:
+            raise RuntimeError("integrated source hash drift")
+        source = row["developmentSource"]
+        if source is None:
+            if row["developmentSha256"] is not None:
+                raise RuntimeError("integrated added-source inverse drift")
+            return None
+        if sha256(source.encode("utf-8")) != row["developmentSha256"]:
+            raise RuntimeError("integrated DEV baseline hash drift")
+        return source.encode("utf-8")
     candidate = manifest["candidate_release"]
     if candidate["version"] != EXPECTED_VERSION or candidate["release_id"] != EXPECTED_RELEASE_ID:
         raise RuntimeError("manifest candidate version/release does not match the approved release")
@@ -635,10 +670,14 @@ def verify() -> None:
         for path in (ROOT / "app").rglob("*")
         if path.is_file() and path.name != "config.local.js"
     )
+    # New outer source is verified before the unchanged historical golden chain.
+    for path in tuple(actual_paths):
+        if restore_integration(path, (ROOT / path).read_bytes()) is None:
+            actual_paths.remove(path)
     r3_port = json.loads((ROOT / "tests/fixtures/r3-effective-source-parity.json").read_text(encoding="utf-8"))
     for entry in r3_port["files"]:
         if entry["new"] and entry["path"].startswith("app/"):
-            source = (ROOT / entry["path"]).read_text(encoding="utf-8").replace("\r\n", "\n")
+            source = restore_integration(entry["path"], (ROOT / entry["path"]).read_bytes()).decode("utf-8")
             if restore_r3_effective_base(entry["path"], source) is not None:
                 raise RuntimeError("R3 new-module baseline drift")
             actual_paths.remove(entry["path"])
@@ -664,7 +703,7 @@ def verify() -> None:
         raise RuntimeError("import-only mapper hunk missing or duplicated")
     home = json.loads((ROOT / "tests/fixtures/member-home-source-parity.json").read_text(encoding="utf-8"))
     for path in actual_paths:
-        data = (ROOT / path).read_bytes()
+        data = restore_integration(path, (ROOT / path).read_bytes())
         try:
             signin_port = json.loads((ROOT / "tests/fixtures/development-signin-source-parity.json").read_text(encoding="utf-8"))
             phone_port = json.loads((ROOT / "tests/fixtures/verified-profile-phone-source-parity.json").read_text(encoding="utf-8"))
@@ -689,7 +728,8 @@ def verify() -> None:
             text = data.decode("utf-8").replace("\r\n", "\n")
             text = restore_purchase_identity_source(path, text, identity)
             data = text.encode("utf-8")
-        current_hash = sha256(normalize_product_bytes(path, data, manifest))
+        comparison_manifest = {**manifest, "authority_release": manifest["historical_normalization_release"]}
+        current_hash = sha256(normalize_product_bytes(path, data, comparison_manifest))
         if current_hash != expected_hashes[path]:
             mismatches.append(path)
     if mismatches:
