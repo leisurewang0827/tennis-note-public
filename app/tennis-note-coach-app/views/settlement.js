@@ -80,17 +80,19 @@ function renderCoachSettlement() {
   renderCoachSettlementHistory();
 }
 
-// Read-only extraction: response form and write controls intentionally not exported.
+// Existing own-scope detail; canonical32c response form, no financial writes.
 function renderCoachSettlementHistory() {
   const section = $("#coachSettlementReconciliation");
   if (!section) return;
+  if (!coachSettlementReconciliationContinuation() || (coachSettlementHistory.continuationIsCurrent && !coachSettlementHistory.continuationIsCurrent()) || $("#coachSettlementModal")?.hidden !== false) resetCoachSettlementHistory();
   const uiState = String(coachSettlementHistory.coachSettlementReconciliationUiState || "EMPTY").toUpperCase();
   const payload = coachSettlementHistory.coachSettlementReconciliation || {};
   const snapshot = payload.snapshot || null;
   const confirmation = payload.confirmation || null;
   const reconciliation = payload.reconciliation || null;
   const payloadIsExact = coachSettlementReconciliationPayloadIsExact(payload);
-  const busy = coachSettlementHistory.coachSettlementReconciliationLoading;
+  const busy = coachSettlementHistory.coachSettlementReconciliationLoading || coachSettlementHistory.coachSettlementReconciliationSubmitting;
+  bindCoachManualSettlementLedgerPublic();
   section.dataset.state = uiState;
   section.setAttribute("aria-busy", String(busy));
   const badge = $("#coachSettlementReconciliationStateBadge");
@@ -128,9 +130,73 @@ function renderCoachSettlementHistory() {
     }
   }
 
+  const form = $("#coachSettlementReconciliationForm");
+  const canRespond = uiState === "PENDING"
+    && payloadIsExact
+    && !payload.reconciliation
+    && Boolean(coachSettlementReconciliationContinuation());
+  if (form) {
+    form.hidden = !canRespond;
+    form.querySelectorAll('input[name="coachSettlementReconciliationChoice"]').forEach((input) => {
+      input.checked = input.value === coachSettlementHistory.coachSettlementReconciliationChoice;
+      input.disabled = busy;
+    });
+  }
+  const reasonField = $("#coachSettlementReconciliationReasonField");
+  if (reasonField) reasonField.hidden = !canRespond || coachSettlementHistory.coachSettlementReconciliationChoice !== "disputed";
+  const reasonInput = $("#coachSettlementReconciliationReason");
+  if (reasonInput) {
+    if (reasonInput.value !== coachSettlementHistory.coachSettlementReconciliationReason) reasonInput.value = coachSettlementHistory.coachSettlementReconciliationReason;
+    reasonInput.disabled = busy;
+  }
+  const validation = $("#coachSettlementReconciliationValidation");
+  if (validation) {
+    validation.hidden = !coachSettlementHistory.coachSettlementReconciliationValidation;
+    validation.textContent = coachSettlementHistory.coachSettlementReconciliationValidation;
+  }
+  const submit = $("#coachSettlementReconciliationSubmit");
+  if (submit) {
+    const reasonError = coachSettlementHistory.coachSettlementReconciliationChoice === "disputed"
+      ? coachSettlementReconciliationReasonError(coachSettlementHistory.coachSettlementReconciliationReason)
+      : "";
+    submit.textContent = coachSettlementHistory.coachSettlementReconciliationSubmitting ? "응답 저장 중" : "응답 저장";
+    submit.disabled = !canRespond
+      || busy
+      || !["acknowledged", "disputed"].includes(coachSettlementHistory.coachSettlementReconciliationChoice)
+      || Boolean(reasonError);
+  }
+
   const retry = $("#coachSettlementReconciliationRetry");
   if (retry) {
     retry.hidden = !["STALE", "CONFLICT", "ERROR"].includes(uiState);
     retry.disabled = busy;
   }
+}
+
+function coachManualSettlementLedgerIdentityKey() {
+  return JSON.stringify([String(state.liveProfileId || ""), String(state.coach?.authUserId || ""),
+    window.TennisNoteDataClient?.getSession?.()?.access_token || "", coachSettlementHistory.coachSettlementReconciliationRequestId,
+    coachSettlementReconciliationScopeSignature()]);
+}
+function coachManualSettlementLedgerReady() {
+  const scope = coachSettlementReconciliationScope();
+  return Boolean(coachSettlementHistory.continuationIsCurrent?.() && $("#coachSettlementModal")?.hidden === false
+    && !coachSettlementHistory.coachSettlementReconciliationLoading
+    && coachSettlementReconciliationPayloadIsExact(coachSettlementHistory.coachSettlementReconciliation, scope)
+    && coachSettlementHistory.coachSettlementReconciliation?.confirmation?.status === "confirmed");
+}
+function bindCoachManualSettlementLedgerPublic() {
+  const parent = $("#coachSettlementReconciliation"), ledger = window.TennisNoteManualSettlementLedger;
+  if (!parent || !ledger) return null;
+  const ready = coachManualSettlementLedgerReady();
+  if (!ready && !parent.querySelector('[data-manual-ledger="coach"]')) return null;
+  const controller = ledger.bindExisting(parent, {
+    role: "coach", ready: coachManualSettlementLedgerReady,
+    payload: () => coachSettlementHistory.coachSettlementReconciliation,
+    currentScope: coachSettlementReconciliationScope, identityKey: coachManualSettlementLedgerIdentityKey,
+    rpc: coachManualSettlementLedgerRpc,
+  });
+  const host = parent.querySelector('[data-manual-ledger="coach"]');
+  if (host) host.hidden = !ready;
+  return controller;
 }

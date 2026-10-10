@@ -1,0 +1,540 @@
+{
+  "contract": "public-ci-checkout-reference/1",
+  "sourceScope": "PRIVATE_PINNED_REFERENCE_NOT_REMOTE_PRIVATE_CHECKOUT",
+  "parentManifestSha256": "2661bf8b863ce5ca522e46b1628db326b76e82f0c139f23e3d0cc711db899e8e",
+  "mechanicalGoldenSha256": "7ed303e24c88c551fb399e799b80ed9dc98dce350ab80da105ed1ba7324c8bdd",
+  "privateRecipes": [
+    {
+      "path": "90-Dashboard/tennis-note-member-app/app.js",
+      "beforeSha256": "e0d2ffb90947086a09a503ca3a5173567fc27b087f69a66fc78acbc0d0270d32",
+      "afterSha256": "dee29e47ecb0d2ac51996ffd73cd45d20f6091e2220889e62ecab1ea7a08c95b",
+      "patches": [
+        {
+          "line": 3156,
+          "before": "    workerUrl: \"./service-worker.js?v=1.0.468\",",
+          "after": "    workerUrl: \"./service-worker.js?v=1.0.548\","
+        },
+        {
+          "line": 15141,
+          "before": "  const params = new URLSearchParams({ v: \"1.0.468\", view: target.view || \"todayView\" });",
+          "after": "  const params = new URLSearchParams({ v: \"1.0.548\", view: target.view || \"todayView\" });"
+        },
+        {
+          "line": 19661,
+          "before": "  window.TennisNoteModeTransition?.warm(\"../tennis-note-coach-app/index.html?v=1.0.468\");",
+          "after": "  window.TennisNoteModeTransition?.warm(\"../tennis-note-coach-app/index.html?v=1.0.548\");"
+        },
+        {
+          "line": 19746,
+          "before": "  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.468\",",
+          "after": "  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.548\","
+        }
+      ]
+    },
+    {
+      "path": "90-Dashboard/release.json",
+      "beforeSha256": "dd037c2e22c9111f86a69a384bdd23e34dd32eb0e884918679b399a611e60770",
+      "afterSha256": "59b5fe0be63681b1d1ce4d53e1d8e82b418c065c2cfbc17f2e32550c405bd3d9",
+      "patches": [
+        {
+          "line": 1,
+          "before": "  \"version\": \"1.0.468\",",
+          "after": "  \"version\": \"1.0.548\","
+        },
+        {
+          "line": 2,
+          "before": "  \"releaseId\": \"2026.09.03.04\",",
+          "after": "  \"releaseId\": \"2026.10.10.01\","
+        },
+        {
+          "line": 3,
+          "before": "  \"appSurfaceVersion\": \"1.0.468\",",
+          "after": "  \"appSurfaceVersion\": \"1.0.548\","
+        },
+        {
+          "line": 31,
+          "before": "  \"deployedAt\": \"2026-09-03T11:55:02+09:00\"",
+          "after": "  \"deployedAt\": \"2026-10-10T19:25:18+09:00\""
+        }
+      ]
+    },
+    {
+      "path": "90-Dashboard/shared/tennisnote-release.js",
+      "beforeSha256": "537fcafe660c489e3a781e10a8d455176ffeaf3daafcf8087e88bf0ffc636746",
+      "afterSha256": "8538f7e3ab5c594bf166a56f25cc62f46d86937e8bf5e75a7b8917b9f078f4eb",
+      "patches": [
+        {
+          "line": 2,
+          "before": "    version: \"1.0.468\",",
+          "after": "    version: \"1.0.548\","
+        },
+        {
+          "line": 3,
+          "before": "    releaseId: \"2026.09.03.04\",",
+          "after": "    releaseId: \"2026.10.10.01\","
+        },
+        {
+          "line": 4,
+          "before": "    appSurfaceVersion: \"1.0.468\",",
+          "after": "    appSurfaceVersion: \"1.0.548\","
+        },
+        {
+          "line": 5,
+          "before": "    deployedAt: \"2026-09-03T11:55:02+09:00\",",
+          "after": "    deployedAt: \"2026-10-10T19:25:18+09:00\","
+        }
+      ]
+    },
+    {
+      "path": "90-Dashboard/tennis-note-coach-app/app.js",
+      "beforeSha256": "920f2634ce3c4673b5413f4fc6c5f5379ddff13cdab304de917533973db2b553",
+      "afterSha256": "f5f6c5da8f519789af9dbb39440ef1492039701675a57cbad27a3cec53fe7dee",
+      "patches": [
+        {
+          "line": 2954,
+          "before": "    workerUrl: \"./service-worker.js?v=1.0.468\",",
+          "after": "    workerUrl: \"./service-worker.js?v=1.0.548\","
+        },
+        {
+          "line": 2989,
+          "before": "  const params = new URLSearchParams({ v: \"1.0.468\" });",
+          "after": "  const params = new URLSearchParams({ v: \"1.0.548\" });"
+        },
+        {
+          "line": 10671,
+          "before": "  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.468\",",
+          "after": "  version: window.TENNIS_NOTE_RELEASE?.version || \"1.0.548\","
+        }
+      ]
+    },
+    {
+      "path": "90-Dashboard/tennis-note-coach-app/index.html",
+      "beforeSha256": "6b7868903eee471cf768708ea8eedc202f41e506c61edd99baa9238bc3c5e8b3",
+      "afterSha256": "fa9e36aef23f928a35fc3c8d987578267e7122f91fdf9f5cf45788cd66e2d571",
+      "patches": [
+        {
+          "line": 10,
+          "before": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.468\" />",
+          "after": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.548\" />"
+        },
+        {
+          "line": 11,
+          "before": "    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.468\" />",
+          "after": "    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.548\" />"
+        },
+        {
+          "line": 393,
+          "before": "    <script defer src=\"../shared/tennisnote-runtime-environment.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-runtime-environment.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 394,
+          "before": "    <script defer src=\"../shared/tennisnote-data-client.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-data-client.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 395,
+          "before": "    <script defer src=\"../shared/tennisnote-schedule-revision.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-schedule-revision.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 396,
+          "before": "    <script defer src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 399,
+          "before": "    <script defer src=\"../shared/tennisnote-curriculum-search.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-curriculum-search.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 400,
+          "before": "    <script defer src=\"../shared/tennisnote-release.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-release.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 401,
+          "before": "    <script defer src=\"../shared/tennisnote-release-updater.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-release-updater.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 402,
+          "before": "    <script defer src=\"../shared/tennisnote-ui-language.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-ui-language.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 403,
+          "before": "    <script defer src=\"../shared/tennisnote-ticket-state.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-ticket-state.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 404,
+          "before": "    <script defer src=\"../shared/tennisnote-mode-transition.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-mode-transition.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 405,
+          "before": "    <script defer src=\"../shared/tennisnote-comment-draft.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-comment-draft.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 407,
+          "before": "    <script defer src=\"../shared/tennisnote-input-guard.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-input-guard.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 426,
+          "before": "          appScript.src = \"./app.js?v=1.0.468\";",
+          "after": "          appScript.src = \"./app.js?v=1.0.548\";"
+        },
+        {
+          "line": 439,
+          "before": "          appScript.src = \"./app.js?v=1.0.468\";",
+          "after": "          appScript.src = \"./app.js?v=1.0.548\";"
+        }
+      ]
+    },
+    {
+      "path": "90-Dashboard/tennis-note-coach-app/service-worker.js",
+      "beforeSha256": "d4041d46c476b551cc47d815c2049d749ddffae68aa6a151c44eed8e3a515c62",
+      "afterSha256": "6ef3aeffb1eef3cc013f50f2ab49003e93dc5930d96b812bfb93c3cbd05b99d9",
+      "patches": [
+        {
+          "line": 0,
+          "before": "const CACHE_NAME = \"tennis-note-coach-mode-v490\";",
+          "after": "const CACHE_NAME = \"tennis-note-coach-mode-v557\";"
+        },
+        {
+          "line": 5,
+          "before": "  \"./styles.css?v=1.0.468\",",
+          "after": "  \"./styles.css?v=1.0.548\","
+        },
+        {
+          "line": 6,
+          "before": "  \"./app.js?v=1.0.468\",",
+          "after": "  \"./app.js?v=1.0.548\","
+        },
+        {
+          "line": 9,
+          "before": "  \"../shared/tennisnote-runtime-environment.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-runtime-environment.js?v=1.0.548\","
+        },
+        {
+          "line": 10,
+          "before": "  \"../shared/tennisnote-data-client.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-data-client.js?v=1.0.548\","
+        },
+        {
+          "line": 11,
+          "before": "  \"../shared/tennisnote-schedule-revision.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-schedule-revision.js?v=1.0.548\","
+        },
+        {
+          "line": 12,
+          "before": "  \"../shared/tennisnote-schedule-lanes.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-schedule-lanes.js?v=1.0.548\","
+        },
+        {
+          "line": 14,
+          "before": "  \"../shared/tennisnote-curriculum-search.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-curriculum-search.js?v=1.0.548\","
+        },
+        {
+          "line": 15,
+          "before": "  \"../shared/tennisnote-release.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-release.js?v=1.0.548\","
+        },
+        {
+          "line": 16,
+          "before": "  \"../shared/tennisnote-release-updater.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-release-updater.js?v=1.0.548\","
+        },
+        {
+          "line": 19,
+          "before": "  \"../shared/tennisnote-ui-language.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-ui-language.js?v=1.0.548\","
+        },
+        {
+          "line": 20,
+          "before": "  \"../shared/tennisnote-ticket-state.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-ticket-state.js?v=1.0.548\","
+        },
+        {
+          "line": 21,
+          "before": "  \"../shared/tennisnote-mode-transition.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-mode-transition.js?v=1.0.548\","
+        },
+        {
+          "line": 22,
+          "before": "  \"../shared/tennisnote-comment-draft.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-comment-draft.js?v=1.0.548\","
+        },
+        {
+          "line": 23,
+          "before": "  \"../shared/tennisnote-input-guard.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-input-guard.js?v=1.0.548\","
+        },
+        {
+          "line": 24,
+          "before": "  \"../shared/tennisnote-ui-foundation.css?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-ui-foundation.css?v=1.0.548\","
+        }
+      ]
+    },
+    {
+      "path": "90-Dashboard/tennis-note-member-app/index.html",
+      "beforeSha256": "b90f37405880994926dc609c6c90822fb0d8bc5a07228b7e95627dc11a812b4a",
+      "afterSha256": "07005dad1a7ac9be1bca4f09a6cb531a2f5a318c68ca187c5eb816f9712284b7",
+      "patches": [
+        {
+          "line": 23,
+          "before": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.468\" />",
+          "after": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.548\" />"
+        },
+        {
+          "line": 24,
+          "before": "    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.468\" />",
+          "after": "    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.548\" />"
+        },
+        {
+          "line": 1397,
+          "before": "    <script defer src=\"../shared/tennisnote-runtime-environment.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-runtime-environment.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1398,
+          "before": "    <script defer src=\"../shared/tennisnote-data-client.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-data-client.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1399,
+          "before": "    <script defer src=\"../shared/tennisnote-mp4-faststart.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-mp4-faststart.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1400,
+          "before": "    <script defer src=\"../shared/tennisnote-personal-journal.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-personal-journal.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1401,
+          "before": "    <script defer src=\"../shared/tennisnote-schedule-revision.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-schedule-revision.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1402,
+          "before": "    <script defer src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1410,
+          "before": "    <script defer src=\"../shared/tennisnote-release.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-release.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1411,
+          "before": "    <script defer src=\"../shared/tennisnote-release-updater.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-release-updater.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1412,
+          "before": "    <script defer src=\"../shared/tennisnote-ui-language.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-ui-language.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1413,
+          "before": "    <script defer src=\"../shared/tennisnote-ticket-state.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-ticket-state.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1414,
+          "before": "    <script defer src=\"../shared/tennisnote-ticket-policy-history.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-ticket-policy-history.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1415,
+          "before": "    <script defer src=\"../shared/tennisnote-mode-transition.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-mode-transition.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1417,
+          "before": "    <script defer src=\"../shared/tennisnote-input-guard.js?v=1.0.468\"></script>",
+          "after": "    <script defer src=\"../shared/tennisnote-input-guard.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 1436,
+          "before": "          appScript.src = \"./app.js?v=1.0.468\";",
+          "after": "          appScript.src = \"./app.js?v=1.0.548\";"
+        },
+        {
+          "line": 1449,
+          "before": "          appScript.src = \"./app.js?v=1.0.468\";",
+          "after": "          appScript.src = \"./app.js?v=1.0.548\";"
+        }
+      ]
+    },
+    {
+      "path": "90-Dashboard/tennis-note-member-app/service-worker.js",
+      "beforeSha256": "093ff556651cc20a245f572e8c9ba6ba499d9f0190291ef7e1a0b16d558079b0",
+      "afterSha256": "0fd5921917c5fb37e7ed5a92a47db2ced65636c45e5680aba2c12cec0e286d0b",
+      "patches": [
+        {
+          "line": 0,
+          "before": "const CACHE_NAME = \"tennis-note-member-pwa-v517\";",
+          "after": "const CACHE_NAME = \"tennis-note-member-pwa-v584\";"
+        },
+        {
+          "line": 5,
+          "before": "  \"./styles.css?v=1.0.468\",",
+          "after": "  \"./styles.css?v=1.0.548\","
+        },
+        {
+          "line": 6,
+          "before": "  \"./app.js?v=1.0.468\",",
+          "after": "  \"./app.js?v=1.0.548\","
+        },
+        {
+          "line": 14,
+          "before": "  \"../shared/tennisnote-runtime-environment.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-runtime-environment.js?v=1.0.548\","
+        },
+        {
+          "line": 15,
+          "before": "  \"../shared/tennisnote-data-client.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-data-client.js?v=1.0.548\","
+        },
+        {
+          "line": 16,
+          "before": "  \"../shared/tennisnote-mp4-faststart.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-mp4-faststart.js?v=1.0.548\","
+        },
+        {
+          "line": 17,
+          "before": "  \"../shared/tennisnote-personal-journal.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-personal-journal.js?v=1.0.548\","
+        },
+        {
+          "line": 18,
+          "before": "  \"../shared/tennisnote-schedule-revision.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-schedule-revision.js?v=1.0.548\","
+        },
+        {
+          "line": 19,
+          "before": "  \"../shared/tennisnote-schedule-lanes.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-schedule-lanes.js?v=1.0.548\","
+        },
+        {
+          "line": 27,
+          "before": "  \"../shared/tennisnote-release.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-release.js?v=1.0.548\","
+        },
+        {
+          "line": 28,
+          "before": "  \"../shared/tennisnote-release-updater.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-release-updater.js?v=1.0.548\","
+        },
+        {
+          "line": 31,
+          "before": "  \"../shared/tennisnote-ui-language.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-ui-language.js?v=1.0.548\","
+        },
+        {
+          "line": 32,
+          "before": "  \"../shared/tennisnote-ticket-state.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-ticket-state.js?v=1.0.548\","
+        },
+        {
+          "line": 33,
+          "before": "  \"../shared/tennisnote-mode-transition.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-mode-transition.js?v=1.0.548\","
+        },
+        {
+          "line": 35,
+          "before": "  \"../shared/tennisnote-input-guard.js?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-input-guard.js?v=1.0.548\","
+        },
+        {
+          "line": 36,
+          "before": "  \"../shared/tennisnote-ui-foundation.css?v=1.0.468\",",
+          "after": "  \"../shared/tennisnote-ui-foundation.css?v=1.0.548\","
+        }
+      ]
+    },
+    {
+      "path": "90-Dashboard/tennis-note-prototype/index.html",
+      "beforeSha256": "63bf2b9740df4627532efb521f4069df797c6dda290f50615561ee05a4f2257c",
+      "afterSha256": "d2447a1842b2a0f4934ec5752ee32adff6d4d7f49af10e8b9f80d4895dc4077f",
+      "patches": [
+        {
+          "line": 19,
+          "before": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.468\" />",
+          "after": "    <link rel=\"stylesheet\" href=\"./styles.css?v=1.0.548\" />"
+        },
+        {
+          "line": 21,
+          "before": "    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.468\" />",
+          "after": "    <link rel=\"stylesheet\" href=\"../shared/tennisnote-ui-foundation.css?v=1.0.548\" />"
+        },
+        {
+          "line": 2237,
+          "before": "    <script src=\"../shared/tennisnote-data-client.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"../shared/tennisnote-data-client.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 2238,
+          "before": "    <script src=\"../shared/tennisnote-schedule-revision.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"../shared/tennisnote-schedule-revision.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 2239,
+          "before": "    <script src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"../shared/tennisnote-schedule-lanes.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 2241,
+          "before": "    <script src=\"../shared/tennisnote-curriculum-search.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"../shared/tennisnote-curriculum-search.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 2243,
+          "before": "    <script src=\"../shared/tennisnote-release.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"../shared/tennisnote-release.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 2244,
+          "before": "    <script src=\"../shared/tennisnote-release-updater.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"../shared/tennisnote-release-updater.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 2245,
+          "before": "    <script src=\"../shared/tennisnote-ui-language.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"../shared/tennisnote-ui-language.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 2246,
+          "before": "    <script src=\"../shared/tennisnote-ticket-state.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"../shared/tennisnote-ticket-state.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 2248,
+          "before": "    <script src=\"../shared/tennisnote-comment-draft.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"../shared/tennisnote-comment-draft.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 2249,
+          "before": "    <script src=\"../shared/tennisnote-input-guard.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"../shared/tennisnote-input-guard.js?v=1.0.548\"></script>"
+        },
+        {
+          "line": 2255,
+          "before": "    <script src=\"./app.js?v=1.0.468\"></script>",
+          "after": "    <script src=\"./app.js?v=1.0.548\"></script>"
+        }
+      ]
+    }
+  ],
+  "semanticBefore": {
+    "sha256": "2fcd5c933217137c333ad5e8ecaab15b62a25037cc95c7f009b26216edb24921",
+    "source": "import {test} from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nimport vm from \"node:vm\";\nimport crypto from \"node:crypto\";\nimport {execFileSync} from \"node:child_process\";\nimport integration from \"./helpers/integrated-feature-release.cjs\";\nimport r3 from \"./helpers/r3-manual-ledger-release.cjs\";\nimport aOnly from \"./helpers/self-profile-a-only.cjs\";\nconst root=path.resolve(import.meta.dirname,\"..\");\nconst publicRepo=process.env.TENNISNOTE_INTEGRATION_PUBLIC_OBJECT_REPO || root;\nconst prod=\"686cc97d9676da2d16ca3cdfbd862dc9cd19434e\",dev=\"c0513decc36421d99fe2ed452d417572625008ac\",backend=\"8e0037f9e1e0e98c459428da2a598e6d8f263fc6\";\nconst hash=s=>crypto.createHash(\"sha256\").update(s).digest(\"hex\"),norm=s=>s.replace(/\\r\\n/g,\"\\n\");\nconst get=(repo,ref,file)=>norm(execFileSync(\"git\",[\"-C\",repo,\"show\",ref+\":\"+file],{encoding:\"utf8\",maxBuffer:32e6}));\nconst read=file=>norm(fs.readFileSync(path.join(root,file),\"utf8\"));\nconst current=file=>fs.existsSync(path.join(root,file))?read(file):get(publicRepo,dev,file);\nfunction fn(s,n){const m=s.match(new RegExp(\"^(?:async )?function \"+n+\"\\\\(\",\"m\"));assert(m,n);const a=s.slice(m.index),e=a.search(/^\\}/m);assert(e>=0,\"top-level function boundary\");return a.slice(0,e+1).trim();}\nfor(const row of integration.contract.files) test(\"new outer inverse closes reviewed and DEV source: \"+row.path,()=>{\n  const text=current(row.path);assert.equal(hash(text),row.afterSha256);\n  assert.equal(integration.restore(row.path,text,\"development\"),row.developmentSource);\n  assert.equal(integration.restore(row.path,text),row.reviewedSource);\n  assert.throws(()=>integration.restore(row.path,text+\"\\n\"),/drift/);\n});\ntest(\"R3 inverse contract preserved without golden repin\",()=>{assert.equal(hash(read(\"tests/fixtures/r3-manual-ledger-release-parity.json\")),\"03f6688fc31517f55a5f999f4c1a13502876b762641b416dcdb4409068c0ac16\");assert.equal(hash(read(\"tests/fixtures/self-profile-a-only.json\")),\"b418eab72b86167c64d255ef847d344134c53b0d83ea26d60cdfcd40b3177dd8\");assert.match(read(\"tests/helpers/self-profile-a-only.cjs\"),/r3\\.restoreCandidate/);});\ntest(\"new integration still restores exact PROD A-only source before all old assertions\",()=>{\n  for(const row of aOnly.contract.files){const s=current(row.path);assert.equal(hash(aOnly.undoRelease(row.path,s)),row.afterHash);assert.equal(aOnly.restoreCandidate(row.path,s),get(publicRepo,aOnly.contract.base,row.path));}\n});\ntest(\"new integration still restores every exact reviewed R3 product before historical evidence\",()=>{\n  for(const row of r3.contract.products){const restored=r3.restoreCandidate(row.path,current(row.path));if(row.status===\"A\")assert.equal(restored,null);else assert.equal(restored,get(publicRepo,prod,row.path));}\n});\ntest(\"all unchanged profile core three are exact PROD and DEV\",()=>{for(const file of [\"actions/profile.js\",\"events/profile.js\",\"views/profile.js\"]){const p=\"app/tennis-note-member-app/\"+file;assert.equal(get(publicRepo,dev,p),get(publicRepo,prod,p));assert.equal(fs.existsSync(path.join(root,p)),false);}});\ntest(\"all DEV effective preview functions and renderer are preserved verbatim\",()=>{\n  for(const [file,names] of [[\"app/admin/data/billing.js\",[\"effectiveSettlementPreviewContext\",\"effectiveSettlementPreviewContextIsCurrent\",\"invalidateEffectiveSettlementPreview\",\"refreshEffectiveSettlementPreview\"]],[\"app/admin/views/billing.js\",[\"renderEffectiveSettlementPreview\"]]])for(const name of names)assert.equal(fn(current(file),name),fn(get(publicRepo,dev,file),name));\n  const render=fn(current(\"app/admin/views/billing.js\"),\"renderCoachSettlementPreview\");assert.match(render,/renderAdminSettlementHistory\\(\\)/);assert.match(render,/effectiveSettlementPreviewContextIsCurrent/);assert.match(render,/identityRecovered/);\n});\ntest(\"DEV curriculum/logout/email safeguards are not overwritten by PROD auth\",()=>{\n  const source=current(\"app/tennis-note-member-app/data/auth.js\"),base=get(publicRepo,dev,\"app/tennis-note-member-app/data/auth.js\");\n  for(const n of [\"activateLiveMemberProfile\",\"loginWithEmail\",\"logout\"])assert.equal(fn(source,n),fn(base,n));\n});\ntest(\"R3 writer default-OFF and missing/unknown capability return false\",()=>{\n  const scope={branchId:\"synthetic-branch\",coachRoleId:\"synthetic-coach\",settlementMonth:\"synthetic-month\"};\n  const h={continuationIsCurrent:()=>true,loadedSignature:\"scope\",writerRequest:3,request:3,status:\"READY\",scopeState:{state:\"EMPTY\"},preview:{ok:true}};\n  const c=vm.createContext({adminSettlementHistory:h,adminSettlementHistoryScope:()=>scope,adminSettlementHistoryScopeKey:()=>\"scope\",adminSettlementHistoryAccessReady:()=>true,adminSettlementHistoryPayloadIsExact:()=>true,monthlySettlementPreviewHasSources:()=>true,adminSettlementPreviewIsExact:()=>true});\n  vm.runInContext(fn(current(\"app/admin/domain/billing.js\"),\"adminSettlementWriterAllowed\")+\"\\nglobalThis.allowed=adminSettlementWriterAllowed;\",c);\n  for(const capability of [undefined,{contractVersion:\"r3_snapshot_writer_capability_v1\",writesEnabled:false},{contractVersion:\"unknown\",writesEnabled:true}]){h.scopeState.snapshotWriterCapability=capability;assert.equal(c.allowed(),false);}\n  h.scopeState.snapshotWriterCapability={contractVersion:\"r3_snapshot_writer_capability_v1\",writesEnabled:true};assert.equal(c.allowed(),true);h.continuationIsCurrent=()=>false;assert.equal(c.allowed(),false);\n});\ntest(\"R3 continuation invalidates auth/profile/token/client/role/scope changes\",()=>{\n  const scope={branchId:\"synthetic-branch\",coachRoleId:\"synthetic-coach\",settlementMonth:\"synthetic-month\"};\n  for(const changed of [\"auth\",\"profile\",\"token\",\"client\",\"role\",\"scope\"]){\n    const auth={profile:{id:\"synthetic-admin\",role:\"admin\"},user:{id:\"synthetic-auth\"}},session={access_token:\"memory-only\"},client={rpc:()=>{},getSession:()=>session};let key=\"scope\";\n    const c=vm.createContext({window:{TennisNoteDataClient:client},adminImportAuthState:auth,adminSettlementHistoryScope:()=>scope,adminSettlementHistoryScopeKey:()=>key,adminSettlementHistoryAccessReady:()=>true,adminSettlementHistoryCoaches:()=>[{serverRoleId:scope.coachRoleId}]});\n    vm.runInContext(fn(current(\"app/admin/domain/billing.js\"),\"adminSettlementHistoryContinuation\")+\"\\nglobalThis.make=adminSettlementHistoryContinuation;\",c);const continuation=c.make();assert.equal(continuation(),true);\n    if(changed===\"auth\")auth.user.id=\"other\";if(changed===\"profile\")auth.profile.id=\"other\";if(changed===\"token\")session.access_token=\"other\";if(changed===\"client\")c.window.TennisNoteDataClient={};if(changed===\"role\")auth.profile.role=\"coach\";if(changed===\"scope\")key=\"other\";\n    assert.equal(continuation(),false);\n  }\n});\ntest(\"public modular entry loads reviewed ledger once and preserves DEV adjustment\",()=>{\n  for(const role of [\"admin\",\"tennis-note-coach-app\"]){const html=current(`app/${role}/index.html`);for(const asset of [\"tennisnote-manual-settlement-ledger.js\",\"tennisnote-manual-settlement-ledger.css\",\"tennisnote-settlement-adjustment.js\"]){assert.equal(html.split(asset).length-1,1);}assert.doesNotMatch(html,/tennisnote-manual-settlement-ledger[^\\n]*1\\.0\\.547/);}\n  const sw=current(\"app/tennis-note-coach-app/service-worker.js\");assert.match(sw,/tennis-note-coach-mode-v556/);assert.equal(sw.split(\"tennisnote-manual-settlement-ledger.js\").length-1,1);\n});\ntest(\"production regression registration added without deleting DEV gates\",()=>{\n  const verify=current(\"scripts/verify.sh\"),workflow=current(\".github/workflows/tennisnote-public-ci.yml\");\n  assert.equal(verify.split(\"node scripts/check_tennisnote_self_profile_a_only_browser.cjs\").length-1,1);\n  for(const name of [\"check_tennisnote_development_signin_browser.cjs\",\"check_tennisnote_verified_profile_phone_browser.cjs\",\"check_tennisnote_r3_effective_browser.cjs\"])assert(verify.includes(name));\n  assert.equal(workflow.split('      - \"scripts/check_tennisnote_self_profile_a_only_browser.cjs\"').length-1,2);\n});\ntest(\"alignment inherits PROD547 while preserving historical golden hashes and DEV metadata\",()=>{\n  const j=JSON.parse(current(\"docs/tennisnote-dev-prod-alignment-20260916.json\")),old=JSON.parse(get(publicRepo,dev,\"docs/tennisnote-dev-prod-alignment-20260916.json\"));\n  assert.equal(j.authority.production_sha,prod);assert.equal(j.authority.development_sha,dev);assert.equal(j.authority_release.version,\"1.0.547\");assert.equal(j.candidate_release.version,\"1.0.546\");assert.deepEqual(j.product_tree,old.product_tree);assert.equal(j.required_migrations.db407_changed,false);assert.equal(j.required_migrations.profile.length,3);\n});\ntest(\"new assembled JavaScript parses and has no unresolved conflict markers\",()=>{\n  const walk=dir=>fs.readdirSync(dir,{withFileTypes:true}).flatMap(x=>x.isDirectory()?walk(path.join(dir,x.name)):[path.join(dir,x.name)]);\n  for(const file of walk(path.join(root,\"app\"))){const s=fs.readFileSync(file,\"utf8\");assert.doesNotMatch(s,/^(<<<<<<<|=======|>>>>>>>|\\|{7})/m);if(file.endsWith(\".js\"))new vm.Script(s,{filename:path.relative(root,file)});}\n});\n"
+  }
+}

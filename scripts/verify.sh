@@ -51,6 +51,7 @@ export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
 
 step "테스트"
 node --test "tests/**/*.test.js"
+node scripts/check_tennisnote_self_profile_a_only_browser.cjs
 
 step "충돌 마커 검사"
 # 병합 충돌을 9곳 세고 8곳만 푼 적이 있다. 남은 마커가 커밋까지 갔고,

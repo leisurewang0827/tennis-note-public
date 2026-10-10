@@ -85,6 +85,10 @@ async function disableNativeCoachPush() {
 }
 
 async function disableNativeCoachPushForLogout() {
+  // 모든 직접/이벤트 logout 경로에서 첫 비동기 작업 전에 정산 identity를 폐기한다.
+  state.coach = null;
+  resetCoachSettlementHistory();
+  renderCoachSettlementHistory();
   const client = window.TennisNoteDataClient;
   if (client?.getSession?.()?.access_token && client?.rpc) {
     await client.rpc("tn_disable_push_device", {

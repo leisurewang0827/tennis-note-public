@@ -7,30 +7,29 @@
     "authority_boundary": "projection equality suppresses informational interruption only; server dependency proof remains required"
   },
   "authority": {
-    "production_sha": "10489623686b29a133ed8e64e76f0587e78c9faf",
-    "development_sha": "14c2901f8c4278810d49c222d4adc09aaaa06ae2",
-    "merge_base_sha": "c7cd00d532a9edfa9bc420c631ea8547f00e84ea"
+    "production_sha": "686cc97d9676da2d16ca3cdfbd862dc9cd19434e",
+    "development_sha": "c0513decc36421d99fe2ed452d417572625008ac",
+    "merge_base_sha": "1a9b255c26fa1ba78d1ae33a6a555985fe588248"
   },
   "authority_release": {
-    "version": "1.0.500",
-    "release_id": "2026.09.15.04",
-    "deployed_at": "2026-09-15T23:44:44+09:00",
-    "member_cache": "tennis-note-member-pwa-v512",
-    "coach_cache": "tennis-note-coach-mode-v485"
+    "version": "1.0.547",
+    "release_id": "2026.10.09.04",
+    "member_cache": "tennis-note-member-pwa-v564",
+    "coach_cache": "tennis-note-coach-mode-v537",
+    "deployed_at": "2026-10-09T22:27:48+09:00"
   },
   "candidate_release": {
-    "version": "1.0.546",
-    "release_id": "2026.10.09.03",
-    "deployed_at": "2026-10-09T20:54:42+09:00",
-    "member_cache": "tennis-note-member-pwa-v583",
-    "coach_cache": "tennis-note-coach-mode-v556"
+    "version": "1.0.548",
+    "release_id": "2026.10.10.01",
+    "deployed_at": "2026-10-10T19:25:18+09:00",
+    "member_cache": "tennis-note-member-pwa-v584",
+    "coach_cache": "tennis-note-coach-mode-v557"
   },
   "allowed_differences": [
-    "app version literals",
-    "release id and deployed-at literals",
-    "member and coach service-worker cache names",
-    "generated config.local.js values",
-    "the exact four development deployment workflow lines"
+    "environment label and exact project fingerprint",
+    "runtime portal origin and OAuth callback allowlist",
+    "development payment/push safety flags",
+    "origin-scoped cache/release metadata pending the integrated release freeze"
   ],
   "production_authority_feature_ids": [
     "AUTH-PHONE-CAPABILITY-GUARD",
@@ -49,7 +48,9 @@
     "PURCHASE-LEGACY-CONFLICT-GUARD",
     "PAYMENT-METHOD-GROUPS",
     "MEMBERSHIP-WEEKLY-FREQUENCY",
-    "MEMBER-REFUND-REQUEST"
+    "MEMBER-REFUND-REQUEST",
+    "AUTH-SELF-PROFILE-A-ONLY-862A1C24",
+    "AUTH-SELF-PROFILE-A-ONLY-CI-PR200"
   ],
   "selected_net_new_dev_feature_ids": [
     "MONTH-MEDIA-LABEL-PRIVATE-060ECE0E",
@@ -72,9 +73,13 @@
     "PERSONAL-JOURNAL-MEDIA-REENTRY-PRIVATE-F408DAE5",
     "AUTH-PROFILE-COMPLETION-SERVER-AUTHORITY-PRIVATE-46CC06FF",
     "CUR02-05-BRIEFING2-LOCAL-OVERLAY",
-    "PERSONAL-JOURNAL-OS-TEXT-SHARE"
+    "PERSONAL-JOURNAL-OS-TEXT-SHARE",
+    "AUTH-SIGNUP-OWNER-BOUND-IDEMPOTENCY",
+    "R3-EFFECTIVE-PREVIEW-IDENTITY-FENCE",
+    "R3-MANUAL-LEDGER-DEFAULT-OFF",
+    "NATIVE-UPDATE-AVAILABLE-STORE-ONLY"
   ],
-  "selection_note": "Only the verified feedback fixes, native authentication session continuity, hidden email authentication entry points, push fail-closed behavior, and legacy Array compatibility plus the strictly source-verified membership effective-state change from private a7aa949c2db64edd1fbfb665b8a8cf03690e8160 are added beyond the production authority tree. The production hotfix base is 3d215f7da47fc6f002e77d420f1682c848c93e40. Development 1.0.509 adds only source-verified store availability and shared 44px contracts from private edffc240eb5123dd4a4e771986073b0255f2d142; existing hash assertions remain exact. Personal journal and curriculum changes match private 1a2019fade5048794668159957463aa4a08ad7c2; the own-profile authorization and read-preservation correction matches private d3cf3a8f64d18feb00492dd06c9aad5df1ec4368 through the separate exact-function/shared hash manifest. The phone_exists guidance matches private 92c72e4c0d7da3c7893cfa03148ceb56f1966556 and changes only client error presentation. Settlement month, legacy media guidance, and neutral product labels match private 060ece0e4aff969c1d57c4246e9785c7bd40abc5 through the exact-function/shared hash manifest month-media-label-source-parity-20260922.json. Required product-family labels and blank product-name rejection match private 6fdbacae737a7f1bfcf4fcf9e1d1168c5ed6dc4a; its additive settings validation migration is tracked in the private source and is not duplicated in this public product tree. Personal-journal video uploads up to 1 GiB, resumable transport, progress presentation, and signed private-video playback match the private c5884fab authority plus the current additive migration; database rollout remains a separate gate. The HEVC MP4 faststart preparation and signed-playback progress guidance match private 4f61594058a83f7a0be9afd5ef9163cfc486fa46; the iPhone playback still requires a separate actual-device gate. The journal reentry receipt, same-size selection isolation and media source-release correction matches private f408dae5c6918139c4d95067808b221439eb14da through the exact-function/shared hash manifest; actual iPhone decoding and audio remain a separate gate. The member profile completion decision matches the exact private main function in 46cc06ff3c97b4ec6496d890b64956ca57bc0b32 and trusts server-confirmed completion even when a synthetic QA profile has no phone. No R3 change. Local briefing-2 CUR02-05 keeps the remote reader off and actual content on hold; personal-journal OS sharing exposes only the controlled practice kind.",
+  "selection_note": "PROD547 inheritance plus existing DEV features: profile core three files unchanged; legacy v3 delegates to the same existing signup RPC. R3 source inclusion is not hosted install/activation. Outputs-only metadata is frozen at 548 before final validation; hosted publication remains unexecuted. No server/policy/permission change.",
   "dev_ahead_commits": [
     {
       "sha": "1ae65617725a7c1fe4eab6516d8785ab93708529",
@@ -1106,6 +1111,32 @@
     "public_base": "5f6ce6c45dbe31aed2555de39c8a550beaa3883a",
     "parity_fixture": "tests/fixtures/r3-effective-source-parity.json",
     "mode": "preview-only-confirmation-OFF",
-    "old_product_golden_preserved": true
-  }
+    "old_product_golden_preserved": true,
+    "private_source_sha": "8e0037f9e1e0e98c459428da2a598e6d8f263fc6",
+    "public_base_sha": "c0513decc36421d99fe2ed452d417572625008ac",
+    "writer_default": "OFF",
+    "hosted_writer_install": "NOT_VERIFIED",
+    "preserve_effective_preview": true
+  },
+  "required_migrations": {
+    "profile": [
+      "20261008001000",
+      "20261008002000",
+      "20261008003000"
+    ],
+    "r3_pending_source_only": [
+      "20261009001000",
+      "20261010001000"
+    ],
+    "db407_projection_sha256": "ab8f2159916fa5b2838f82246c510d09e2785f0433fa7e4fe6ca50ea65a6eeec",
+    "db407_changed": false
+  },
+  "historical_normalization_release": {
+    "version": "1.0.500",
+    "release_id": "2026.09.15.04",
+    "deployed_at": "2026-09-15T23:44:44+09:00",
+    "member_cache": "tennis-note-member-pwa-v512",
+    "coach_cache": "tennis-note-coach-mode-v485"
+  },
+  "integration_inverse_sha256": "a3fd09c24418cd24f4b12e11e99af0e5f561f761cfc9b7c6af21b05dbe52c6e7"
 }
