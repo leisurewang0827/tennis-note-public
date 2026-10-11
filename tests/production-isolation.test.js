@@ -6,8 +6,9 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import releaseGuard from "./helpers/production-excel-release.cjs";
 import aOnly from "./helpers/self-profile-a-only.cjs";
+import historicalGuard from "./helpers/historical-added-assets.cjs";
 const norm = s => s.replace(/\r\n/g, "\n");
-const read = p => releaseGuard.readBeforeRelease(p);
+const read = p => historicalGuard.restoreReviewedSource(p, releaseGuard.readBeforeRelease(p));
 const hash = s => crypto.createHash("sha256").update(s).digest("hex");
 const manifest = JSON.parse(read("tests/fixtures/production-isolation-source.json"));
 const refresh = JSON.parse(read("tests/fixtures/production-excel-refresh-source.json"));
@@ -65,9 +66,15 @@ for relative,row in added.items():
     assert hashlib.sha256(text.encode()).hexdigest() == row["afterSha256"]
     assert text == row["addedSource"]
 physical_rglob = Path.rglob
+historical_added = {row["path"]:row for row in payload["historicalAddedPaths"]}
+assert set(historical_added) == {"app/shared/tennisnote-curriculum-contract.js", "app/shared/tennisnote-curriculum-reader.js", "app/shared/tennisnote-curriculum-ui.js", "app/shared/tennisnote-settlement-adjustment.js"}
+for relative,row in historical_added.items():
+    assert relative not in originals
+    text = (bump.ROOT / relative).read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert hashlib.sha256(text.encode()).hexdigest() == row["afterSha256"]
 def historical_rglob(directory, pattern, *args, **kwargs):
     return (p for p in physical_rglob(directory, pattern, *args, **kwargs)
-            if p.relative_to(bump.ROOT).as_posix() not in added)
+            if p.relative_to(bump.ROOT).as_posix() not in added and p.relative_to(bump.ROOT).as_posix() not in historical_added)
 def original(path, *args, **kwargs):
     relative = path.relative_to(bump.ROOT).as_posix()
     # 배포 시 생성하는 로컬 설정은 커밋 원본도 릴리스 치환 대상도 아니다. 값은 읽지 않는다.
@@ -93,7 +100,7 @@ with patch.object(Path, "read_text", original), patch.object(Path, "rglob", hist
     absorb([(p, t, c) for p, t, c, _, _ in bump.plan_cache_names(read)])
 print(json.dumps({p.relative_to(bump.ROOT).as_posix(): hashlib.sha256(t.encode()).hexdigest()
                   for p, t in merged.items() if counts.get(p)}))
-`], { encoding: "utf8", maxBuffer: 8e6, input: JSON.stringify({ base: manifest.base, old: baseRelease.version, release, sources: Object.fromEntries(approvedSources), r3AddedPaths:releaseGuard.r3AddedPaths }) }));
+`], { encoding: "utf8", maxBuffer: 8e6, input: JSON.stringify({ base: manifest.base, old: baseRelease.version, release, sources: Object.fromEntries(approvedSources), historicalAddedPaths:releaseGuard.historicalAddedPaths, r3AddedPaths:releaseGuard.r3AddedPaths }) }));
 })();
 test("운영 분리: 정확한 13제품 경로·hunk 외 원본 보존·신규 RPC 없음", () => {
   assert.equal(manifest.base, "648ac3387f11ad65e7631ad32e4a9a06b511d49c");

@@ -77,26 +77,36 @@ async function applySupabaseCoachSession(showFromLogin = false) {
       branchId: coachRole?.branch_id || "",
     };
     state.selectedCoachName = displayName;
+    const appliedRequest = coachSettlementHistory.coachSettlementReconciliationRequestId;
+    const sessionIsCurrent = () => window.TennisNoteDataClient === client
+      && appliedRequest === coachSettlementHistory.coachSettlementReconciliationRequestId
+      && session.access_token === client.getSession?.()?.access_token
+      && state.liveProfileId === String(profile.id) && state.coach?.authUserId === user?.id;
     renderAll();
     openCoachApp(showFromLogin);
     saveSnapshot();
     void (async () => {
-      if (await syncCoachSchedulePreview().catch(() => false)) {
+      const scheduleReady = await syncCoachSchedulePreview().catch(() => false);
+      if (!sessionIsCurrent()) return;
+      if (scheduleReady) {
         renderAll();
         saveSnapshot();
       }
       await syncLiveSchedulePolicy(state.coach.branchId);
+      if (!sessionIsCurrent()) return;
       await Promise.allSettled([
         syncCoachLessonsFromServer(),
         syncCoachJournalEntriesFromServer(),
         syncCoachSettlementFromServer(),
         syncNativeCoachPushRegistration(profile),
       ]);
+      if (!sessionIsCurrent()) return;
       renderAll();
       saveSnapshot();
     })();
     return true;
   } catch (error) {
+    if (window.TennisNoteDataClient !== client || historyRequest !== coachSettlementHistory.coachSettlementReconciliationRequestId) return false;
     state.coach = null;
     resetCoachSettlementHistory();
     renderCoachSettlementHistory();
@@ -105,12 +115,36 @@ async function applySupabaseCoachSession(showFromLogin = false) {
 }
 
 async function logoutCoach() {
+  const client = window.TennisNoteDataClient;
+  const token = client?.getSession?.()?.access_token || "";
+  const deviceId = currentCoachPushDeviceId();
+  state.coach = null;
+  state.liveProfileId = "";
+  coachSettlementRequestSequence += 1;
+  state.coachSettlement = null;
+  state.coachSettlementLoading = false;
+  state.coachSettlementError = "";
   resetCoachSettlementHistory();
   renderCoachSettlementHistory();
   coachSettlementSelection = null;
-  await disableNativeCoachPushForLogout();
-  await window.TennisNoteDataClient?.signOut?.();
+  const requestId = coachSettlementHistory.coachSettlementReconciliationRequestId;
+  const identityIsCleared = () => window.TennisNoteDataClient === client
+    && requestId === coachSettlementHistory.coachSettlementReconciliationRequestId
+    && state.coach === null && state.liveProfileId === "";
+  const isCurrent = () => identityIsCleared()
+    && token === (client?.getSession?.()?.access_token || "");
+  await disableNativeCoachPushForLogout({ client, token, deviceId, isCurrent });
+  if (!isCurrent()) return false;
+  try {
+    await client?.signOut?.();
+  } catch {
+    if (identityIsCleared()) setCoachAccessMessage("로그아웃 연결을 확인한 뒤 다시 시도해 주세요.", "alert");
+    return false;
+  }
+  const nextToken = client?.getSession?.()?.access_token || "";
+  if (!identityIsCleared() || (nextToken && nextToken !== token)) return false;
   returnToMemberEntry(false, false);
+  return true;
 }
 
 async function authorizeCoachNotificationAction(data = {}) {

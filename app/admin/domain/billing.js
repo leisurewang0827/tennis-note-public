@@ -110,8 +110,12 @@ function normalizeAdminHistoryReason(value = "") {
     .trim();
 }
 
+function monthlySettlementMonthStart(value = state.billingMonth) {
+  return /^(?!0000)[0-9]{4}-(?:0[1-9]|1[0-2])$/.test(String(value || "")) ? `${value}-01` : "";
+}
+
 function adminSettlementHistoryScope() {
-  return { branchId: String(activeOperationBranchId() || ""), coachRoleId: String(adminSettlementHistory.coachRoleId || ""), settlementMonth: `${state.billingMonth}-01` };
+  return { branchId: String(activeOperationBranchId() || ""), coachRoleId: String(adminSettlementHistory.coachRoleId || ""), settlementMonth: monthlySettlementMonthStart() };
 }
 
 function adminSettlementHistoryCoaches() {
@@ -143,13 +147,16 @@ function adminSettlementHistoryContinuation(scope = adminSettlementHistoryScope(
   const key = adminSettlementHistoryScopeKey(scope);
   if (!client?.rpc || !token || !profileId || !authUserId
     || adminImportAuthState.profile?.role !== "admin" || !adminSettlementHistoryAccessReady()
-    || !scope.branchId || !scope.coachRoleId
+    || !scope.branchId || !scope.coachRoleId || !scope.settlementMonth
+    || monthlySettlementMonthStart(String(scope.settlementMonth).slice(0, 7)) !== scope.settlementMonth
+    || scope.settlementMonth !== monthlySettlementMonthStart()
     || adminSettlementHistoryCoaches().filter(c => String(c.serverRoleId) === scope.coachRoleId).length !== 1) return null;
   return () => window.TennisNoteDataClient === client
     && token === (client.getSession?.()?.access_token || "")
     && profileId === String(adminImportAuthState.profile?.id || "")
     && authUserId === String(adminImportAuthState.user?.id || "")
     && adminImportAuthState.profile?.role === "admin" && adminSettlementHistoryAccessReady()
+    && Boolean(monthlySettlementMonthStart())
     && key === adminSettlementHistoryScopeKey()
     && adminSettlementHistoryCoaches().filter(c => String(c.serverRoleId) === scope.coachRoleId).length === 1;
 }

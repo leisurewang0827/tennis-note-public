@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import legacy from "./helpers/legacy-integrated-source.cjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const identitySource = readFileSync(join(root, "app/tennis-note-member-app/domain/identity.js"), "utf8");
@@ -58,7 +59,7 @@ test("확인된 auth phone 또는 provider identity만 자동 연결 번호로 �
 test("가입 화면은 전화번호 인증 후 멱등 가입 RPC와 정확한 연결 재조회를 사용한다", () => {
   const dataClient = readFileSync(join(root, "app/shared/tennisnote-data-client.js"), "utf8");
   const identityDomain = readFileSync(join(root, "app/tennis-note-member-app/domain/identity.js"), "utf8");
-  const auth = readFileSync(join(root, "app/tennis-note-member-app/data/auth.js"), "utf8");
+  const auth = legacy.read("app/tennis-note-member-app/data/auth.js");
   const actions = readFileSync(join(root, "app/tennis-note-member-app/actions/enrollment.js"), "utf8");
   const memberForms = readFileSync(join(root, "app/tennis-note-member-app/forms/members.js"), "utf8");
   const profileEvents = readFileSync(join(root, "app/tennis-note-member-app/events/profile.js"), "utf8");

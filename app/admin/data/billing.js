@@ -556,6 +556,8 @@ function adminSettlementHistoryAccessReady() {
 }
 
 async function readMonthlySettlementConfirmation(scope, expectedSourceFingerprint = "") {
+  if (!scope?.settlementMonth || monthlySettlementMonthStart(String(scope.settlementMonth).slice(0, 7)) !== scope.settlementMonth
+    || !adminSettlementHistoryContinuation(scope)) return null;
   return window.TennisNoteDataClient.rpc("tn_admin_monthly_settlement_scope_state", {
     target_branch_id: scope.branchId,
     target_coach_role_id: scope.coachRoleId,
@@ -573,6 +575,15 @@ async function refreshAdminSettlementHistory({ force = false } = {}) {
   const profileId = String(adminImportAuthState.profile?.id || "");
   const authUserId = String(adminImportAuthState.user?.id || "");
   const continuationIsCurrent = adminSettlementHistoryContinuation(scope);
+  if (!monthlySettlementMonthStart()) {
+    resetAdminSettlementHistory();
+    current.status = "ERROR";
+    current.tone = "danger";
+    current.message = "정산 월을 올바른 연도와 월로 선택해 주세요.";
+    current.errorCode = "settlement_month_invalid";
+    renderAdminSettlementHistory();
+    return false;
+  }
   if (!scope.branchId || !scope.coachRoleId || !scope.settlementMonth) {
     current.status = "EMPTY";
     current.tone = "neutral";

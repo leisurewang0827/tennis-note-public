@@ -34,8 +34,11 @@ function restoreCandidate(file, text) {
 }
 function changedBeforeCandidate(base, paths) {
   const { execFileSync } = require("node:child_process");
+  const historical = require("./historical-added-assets.cjs");
+  const approvedAdded = historical.validateAll();
   return paths.filter(file => {
-    const current = restoreCandidate(file, fs.readFileSync(path.join(root, file), "utf8"));
+    if (approvedAdded.some(row => row.path === file)) { historical.assertAddedAbsentAt(base, file); return false; }
+    const current = historical.restoreReviewedSource(file, restoreCandidate(file, fs.readFileSync(path.join(root, file), "utf8")));
     if (current === null) { r3.assertAddedAbsentAt(base, file); return false; }
     const original = normalize(execFileSync("git", ["show", `${base}:${file}`], { cwd: root, encoding: "utf8", maxBuffer: 12e6 }));
     return current !== original;

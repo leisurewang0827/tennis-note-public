@@ -5,6 +5,7 @@ const normalize = s => s.replace(/\r\n/g, "\n");
 const aOnly = require("./self-profile-a-only.cjs");
 const r3 = require("./r3-manual-ledger-release.cjs");
 r3.validateAll();
+const historicalAddedPaths = require("./historical-added-assets.cjs").validateAll();
 const raw = p => aOnly.restoreCandidate(p, normalize(fs.readFileSync(p, "utf8")));
 const show = (sha, p) => normalize(cp.execFileSync("git", ["show", `${sha}:${p}`], {encoding:"utf8", maxBuffer:8e6}));
 const contract = JSON.parse(raw("tests/fixtures/production-excel-release.json"));
@@ -36,10 +37,16 @@ for relative,row in added.items():
     assert hashlib.sha256(text.encode()).hexdigest() == row["afterSha256"]
     assert text == row["addedSource"]
 physical_rglob = Path.rglob
+historical_added = {row["path"]:row for row in c["historicalAddedPaths"]}
+assert set(historical_added) == {"app/shared/tennisnote-curriculum-contract.js", "app/shared/tennisnote-curriculum-reader.js", "app/shared/tennisnote-curriculum-ui.js", "app/shared/tennisnote-settlement-adjustment.js"}
+for relative,row in historical_added.items():
+    assert relative not in originals
+    text = (b.ROOT / relative).read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert hashlib.sha256(text.encode()).hexdigest() == row["afterSha256"]
 def historical_rglob(directory, pattern, *args, **kwargs):
     # Only the two exact approved additions are absent historically; unknown files still fail.
     return (p for p in physical_rglob(directory, pattern, *args, **kwargs)
-            if p.relative_to(b.ROOT).as_posix() not in added)
+            if p.relative_to(b.ROOT).as_posix() not in added and p.relative_to(b.ROOT).as_posix() not in historical_added)
 def original(path, *args, **kwargs):
     p = path.relative_to(b.ROOT).as_posix()
     if p == "app/shared/config.local.js":
@@ -66,8 +73,8 @@ assert sum(counts.values()) == 371
 assert sum(bool(n) for n in counts.values()) == 13
 print(json.dumps({p.relative_to(b.ROOT).as_posix():{"before":original(p),"after":t}
                   for p,t in merged.items() if counts.get(p)}))
-`], {encoding:"utf8", input:JSON.stringify({...contract, r3AddedPaths:r3.contract.products.filter(row=>row.status==="A")}), maxBuffer:8e6}));
+`], {encoding:"utf8", input:JSON.stringify({...contract, historicalAddedPaths, r3AddedPaths:r3.contract.products.filter(row=>row.status==="A")}), maxBuffer:8e6}));
 for (const [p, plan] of Object.entries(plans)) assert.equal(raw(p), normalize(plan.after), `release drift: ${p}`);
 function readBeforeRelease(p) { return plans[p] ? normalize(plans[p].before) : raw(p); }
-module.exports = {readBeforeRelease, releasePaths:Object.keys(plans), contract, plans,
+module.exports = {readBeforeRelease, releasePaths:Object.keys(plans), contract, plans, historicalAddedPaths,
   r3AddedPaths:r3.contract.products.filter(row=>row.status==="A")};

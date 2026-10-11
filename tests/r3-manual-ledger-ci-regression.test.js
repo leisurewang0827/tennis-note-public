@@ -53,8 +53,9 @@ test("legacy .at undefined: empty, terminal, voided and mismatched leaf semantic
 
 test("all programmatic and click logout paths clear ledger before first asynchronous work", async () => {
   let resets=0,renders=0,signouts=0,returns=0,resolvePush;
-  const context=vm.createContext({state:{coach:{coachRoleId:"synthetic"}},coachSettlementSelection:{},
-    resetCoachSettlementHistory:()=>{resets++;},renderCoachSettlementHistory:()=>{renders++;},
+  const context=vm.createContext({state:{coach:{coachRoleId:"synthetic"}},coachSettlementSelection:{},coachSettlementRequestSequence:0,
+    coachSettlementHistory:{coachSettlementReconciliationRequestId:0},
+    resetCoachSettlementHistory:()=>{resets++;context.coachSettlementHistory.coachSettlementReconciliationRequestId++;},renderCoachSettlementHistory:()=>{renders++;},
     currentCoachPushDeviceId:()=>"synthetic-device",setCoachPushNotificationState:()=>{},
     returnToMemberEntry:()=>{returns++;},window:{TennisNoteDataClient:{getSession:()=>({access_token:"synthetic-memory-only"}),
       rpc:()=>new Promise(resolve=>{resolvePush=resolve;}),signOut:async()=>{signouts++;}}}});

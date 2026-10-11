@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const root = path.resolve(__dirname, '..');
-const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
+const read = p => require('./helpers/legacy-integrated-source.cjs').read(p);
 const manifest = JSON.parse(read('docs/excel-signup-source-parity-20261001.json'));
 const hash = s => createHash('sha256').update(s).digest('hex');
 const { restorePhone } = require('./helpers/verified-profile-phone-port.cjs');

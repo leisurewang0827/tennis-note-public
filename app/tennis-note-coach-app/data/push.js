@@ -84,17 +84,17 @@ async function disableNativeCoachPush() {
   return true;
 }
 
-async function disableNativeCoachPushForLogout() {
-  // 모든 직접/이벤트 logout 경로에서 첫 비동기 작업 전에 정산 identity를 폐기한다.
-  state.coach = null;
-  resetCoachSettlementHistory();
-  renderCoachSettlementHistory();
-  const client = window.TennisNoteDataClient;
-  if (client?.getSession?.()?.access_token && client?.rpc) {
+async function disableNativeCoachPushForLogout(context = null) {
+  // 권한 정리는 logoutCoach 한 곳에서 수행하고 이전 세션의 기기만 정리한다.
+  if (!context?.isCurrent?.()) return false;
+  const { client, token, deviceId } = context;
+  if (token && client?.rpc) {
     await client.rpc("tn_disable_push_device", {
-      target_device_id: currentCoachPushDeviceId(),
-    }).catch(() => null);
+      target_device_id: deviceId,
+    }, { requireCurrentSession: true, retryAuth: false }).catch(() => null);
   }
+  if (!context.isCurrent()) return false;
   coachPushProfileId = "";
   setCoachPushNotificationState("unknown", "로그인 후 알림 설정", "코치 로그인 후 기기 알림을 연결할 수 있습니다.");
+  return true;
 }

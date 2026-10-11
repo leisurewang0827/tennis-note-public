@@ -11,7 +11,7 @@ function restore(file,text,target="reviewed") {
   text=mechanical.restore(file,text).replace(/\r\n/g,"\n");
   const row=contract.files.find(x=>x.path===file);
   if(!row)return text;
-  assert.equal(hash(text),row.afterSha256,"integrated source drift: "+file);
+  assert.equal(hash(text),row.afterSha256,"integrated candidate drift: "+file);
   const value=target==="development"?row.developmentSource:row.reviewedSource;
   const pin=target==="development"?row.developmentSha256:row.reviewedSha256;
   if(value===null){assert.equal(pin,null);return null;}
