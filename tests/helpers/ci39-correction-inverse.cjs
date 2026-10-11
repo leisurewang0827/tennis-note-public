@@ -22,9 +22,12 @@ function restore(file,text,side="public") {
   assert.equal(hash(text),row.beforeSha256,"CI39 exact parent drift: "+file);
   return text;
 }
-function verifyCurrent(root,side="public") {
+function verifyCurrent(root,side="public",reader=file=>fs.readFileSync(path.join(root,file),"utf8")) {
+  assert(["public","private"].includes(side),"CI39 current source side unknown");
+  assert.equal(typeof reader,"function","CI39 current source reader missing");
   for(const row of contract.files.filter(x=>x.side===side)) {
-    const text=fs.readFileSync(path.join(root,row.path),"utf8").replace(/\r\n/g,"\n");
+    const source=reader(row.path);assert.equal(typeof source,"string","CI39 current source reader missing: "+row.path);
+    const text=source.replace(/\r\n/g,"\n");
     assert.equal(hash(text),row.afterSha256,"CI39 current source drift: "+row.path);
     restore(row.path,text,side);
   }

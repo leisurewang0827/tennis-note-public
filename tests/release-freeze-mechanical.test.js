@@ -12,12 +12,13 @@ const read=(side,file)=>checkout.read(publicRoot,side,file);
 const fn=s=>{const start=s.indexOf("async function persistIdentityProfile("),end=s.slice(start).search(/^\}/m);assert(start>=0&&end>=0);return s.slice(start,start+end+1);};
 for(const row of mechanical.contract.files)test("exact mechanical inverse and drift rejection: "+row.side+":"+row.path,()=>{
  const current=read(row.side,row.path);assert.equal(mechanical.hash(current),row.afterSha256);
- assert.equal(mechanical.restore(row.path,current,row.side),row.beforeSource);
- assert.equal(mechanical.restore(row.path,row.beforeSource,row.side),row.beforeSource);
- assert.throws(()=>mechanical.restore(row.path,current+"\n",row.side),/drift/);
+ const stage=row.side==="private"?"pinned-private-reference":"historical-integrated";
+ assert.equal(mechanical.restore(row.path,current,row.side,stage),row.beforeSource);
+ assert.equal(mechanical.restore(row.path,row.beforeSource,row.side,stage),row.beforeSource);
+ assert.throws(()=>mechanical.restore(row.path,current+"\n",row.side,stage),/drift/);
 });
 test("actual frozen public after-source is checked before inverse adapters",()=>assert.equal(mechanical.verifyCurrent(publicRoot),true));
-test("pinned private frozen reference is checked before inverse adapters; not actual private CI",()=>assert.equal(mechanical.verifyCurrent(publicRoot,"private",file=>read("private",file)),true));
+test("pinned private frozen reference is checked before inverse adapters; not actual private CI",()=>assert.equal(mechanical.verifyCurrent(publicRoot,"private",file=>read("private",file),"pinned-private-reference"),true));
 test("old semantic fixture and old golden pins remain immutable",()=>{
  const pins={"integrated-feature-release-parity.json":"a3fd09c24418cd24f4b12e11e99af0e5f561f761cfc9b7c6af21b05dbe52c6e7","self-profile-a-only.json":"b418eab72b86167c64d255ef847d344134c53b0d83ea26d60cdfcd40b3177dd8","r3-manual-ledger-release-parity.json":"03f6688fc31517f55a5f999f4c1a13502876b762641b416dcdb4409068c0ac16"};
  for(const [file,pin] of Object.entries(pins))assert.equal(mechanical.hash(read("public","tests/fixtures/"+file)),pin);

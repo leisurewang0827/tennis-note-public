@@ -19,7 +19,7 @@ test("CI layout: missing public source fails without historical or private fallb
  let calls=0;assert.throws(()=>checkout.read("synthetic-ci-root","public","app/release.json",()=>{calls++;throw Object.assign(Error("missing"),{code:"ENOENT"});}),{code:"ENOENT"});assert.equal(calls,1);
 });
 test("CI layout: injected public reader retains every frozen after hash and fails on one byte",()=>{
- const sources=new Map(mechanical.contract.files.filter(row=>row.side==="public").map(row=>[row.path,read(row.path)]));let calls=0;
+ const sources=new Map(mechanical.currentRows("public","actual-current").map(row=>[row.path,read(row.path)]));let calls=0;
  assert.equal(mechanical.verifyCurrent("synthetic-ci-root","public",file=>{calls++;return sources.get(file);}),true);assert.equal(calls,sources.size);
  const first=sources.keys().next().value;sources.set(first,sources.get(first)+"x");assert.throws(()=>mechanical.verifyCurrent("synthetic-ci-root","public",file=>sources.get(file)),/unfrozen current metadata/);
 });
@@ -64,7 +64,7 @@ test("CI layout: actual mechanical entry has no sibling-private or outputs-only 
  const source=read("tests/release-freeze-mechanical.test.js");
  assert.match(source,/import checkout from "\.\/helpers\/release-checkout-layout\.cjs"/);assert.match(source,/const read=\(side,file\)=>checkout\.read\(publicRoot,side,file\)/);
  assert.doesNotMatch(source,/candidateRoot|evidence\/before|C:[/\\]|OBJECT_REPO/);assert.match(source,/checkout\.semanticBefore\(\)/);
- assert.match(source,/mechanical\.verifyCurrent\(publicRoot,"private",file=>read\("private",file\)\)/);assert.match(source,/assert\.equal\(reverted,before\)/);
+ assert.match(source,/mechanical\.verifyCurrent\(publicRoot,"private",file=>read\("private",file\),"pinned-private-reference"\)/);assert.match(source,/assert\.equal\(reverted,before\)/);
 });
 test("CI layout: existing full checkout history and test registration are retained",()=>{
  const workflow=read(".github/workflows/tennisnote-public-ci.yml"),verify=read("scripts/verify.sh"),integrated=read("tests/integrated-feature-parity.test.js");

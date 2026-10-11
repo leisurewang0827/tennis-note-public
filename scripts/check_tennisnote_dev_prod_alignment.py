@@ -635,13 +635,14 @@ def verify() -> None:
     if len(outer_by_path) != len(outer["files"]):
         raise RuntimeError("integrated inverse duplicate path")
     def restore_integration(path: str, data: bytes) -> bytes | None:
-        data = freeze_inverse.restore_bytes(path, data)
+        data = freeze_inverse.restore_bytes(path, data, stage="historical-integrated")
         row = outer_by_path.get(path)
         if row is None:
             return data
         text = data.decode("utf-8").replace("\r\n", "\n")
         if sha256(text.encode("utf-8")) != row["afterSha256"]:
-            raise RuntimeError("integrated source hash drift")
+            raise RuntimeError("integrated source hash drift: " + path
+                + " actual=" + sha256(text.encode("utf-8")) + " expected=" + row["afterSha256"])
         source = row["developmentSource"]
         if source is None:
             if row["developmentSha256"] is not None:

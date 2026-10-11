@@ -51,10 +51,16 @@ function restoreReviewedPreview(file,text,side){
  const diff=git(["diff","--no-ext-diff","--no-textconv","--no-color","--no-renames","--diff-algorithm=myers","--no-indent-heuristic","--unified=3",previewPreimage.beforeCommit,previewPreimage.afterCommit,"--",file]);
  return reverseReviewedPreviewDiff(before,text,diff);
 }
-function restore(file,text,side="public"){
- text=restoreReviewedPreview(file,text,side);
- text=bounded.restoreShared(file,text,side);
- text=correction.restore(file,text,side);
+function restore(file,text,side="public",stage="historical-integrated"){
+ assert(["public","private"].includes(side),"mechanical source side unknown");
+ assert(["historical-integrated","pinned-private-reference"].includes(stage),"mechanical source stage unknown");
+ if(stage==="historical-integrated"){
+  text=restoreReviewedPreview(file,text,side);
+  text=bounded.restoreShared(file,text,side);
+  text=correction.restore(file,text,side);
+ }else{
+  assert(side==="private"&&contract.files.some(x=>x.side===side&&x.path===file),"private reference path/stage mismatch");
+ }
  const row=contract.files.find(x=>x.side===side&&x.path===file);if(!row)return text;
  const source=text.replace(/\r\n/g,"\n"),found=hash(source);
  assert.equal(hash(row.beforeSource),row.beforeSha256,"mechanical baseline drift: "+file);
@@ -62,9 +68,28 @@ function restore(file,text,side="public"){
  if(found===row.beforeSha256)return row.beforeSource;
  assert.equal(found,row.afterSha256,"mechanical candidate drift: "+file);return row.beforeSource;
 }
-function verifyCurrent(root,side="public",reader=file=>fs.readFileSync(path.join(root,file),"utf8")){
- correction.verifyCurrent(root,side);
- for(const row of contract.files.filter(x=>x.side===side))assert.equal(hash(reader(row.path).replace(/\r\n/g,"\n")),row.afterSha256,"unfrozen current metadata: "+row.path);
+function currentRows(side="public",stage="actual-current"){
+ assert(["public","private"].includes(side),"mechanical source side unknown");
+ assert(["actual-current","pinned-private-reference"].includes(stage),"mechanical source stage unknown");
+ if(stage==="pinned-private-reference")assert.equal(side,"private","private reference stage mismatch");
+ const rows=contract.files.filter(x=>x.side===side).map(x=>({...x,kind:"metadata"}));
+ if(stage==="actual-current")for(const row of [...correction.contract.files,...bounded.contract.shared].filter(x=>x.side===side)){
+  const existing=rows.find(x=>x.path===row.path);
+  if(existing){
+   assert.equal(existing.afterSha256,row.beforeSha256,"current correction parent/metadata stage mismatch");
+   existing.metadataAfterSha256=existing.afterSha256;existing.afterSha256=row.afterSha256;existing.kind="correction";
+  }else rows.push({...row,kind:"correction"});
+ }
+ return rows;
+}
+function verifyCurrent(root,side="public",reader=file=>fs.readFileSync(path.join(root,file),"utf8"),stage="actual-current"){
+ assert.equal(typeof reader,"function","mechanical source reader missing");
+ const sources=new Map();const memo=file=>{if(!sources.has(file)){const s=reader(file);assert.equal(typeof s,"string","mechanical source reader missing: "+file);sources.set(file,s.replace(/\r\n/g,"\n"));}return sources.get(file);};
+ for(const row of currentRows(side,stage)){
+  assert.equal(hash(memo(row.path)),row.afterSha256,(row.kind==="metadata"?"unfrozen current metadata: ":"unfrozen current correction: ")+row.path);
+  if(row.metadataAfterSha256)assert.equal(hash(correction.restore(row.path,memo(row.path),side)),row.metadataAfterSha256,"current correction metadata restoration drift: "+row.path);
+ }
+ if(stage==="actual-current")correction.verifyCurrent(root,side,memo);
  return true;
 }
-module.exports={contract,hash,restore,verifyCurrent};
+module.exports={contract,hash,restore,verifyCurrent,currentRows,restoreReviewedPreview};
