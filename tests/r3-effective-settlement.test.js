@@ -113,7 +113,8 @@ test("initial identity 없음 RPC0, 역순·다른 계정 소유권·cache 재�
   assert(!s.preview().signature.includes(s.c.token));
 });
 function context() {
-  const c = vm.createContext({window:{},state:{coach:{branchId:scope.branchId,coachRoleId:scope.coachRoleId}},Date,Intl,
+  const c = vm.createContext({window:{},state:{liveProfileId:"synthetic-profile",coach:{authUserId:"synthetic-auth",role:"coach",branchId:scope.branchId,coachRoleId:scope.coachRoleId}},Date,Intl,
+    coachSettlementHistory:{coachSettlementReconciliationRequestId:0},
     renderCoachSettlement(){},saveSnapshot(){},formatCoachWon:value=>String(value)});
   vm.runInContext(read("app/shared/tennisnote-settlement-adjustment.js"),c);
   vm.runInContext(read("app/tennis-note-coach-app/domain/settlement.js"),c);
@@ -155,4 +156,17 @@ test("실제 coach data module: 응답 역순·scope 변경·HOLD·재시도 sta
   const old=payload();old.totals.totalSettlementAmount=9;old.lines[0].settlementAmount=9;pending[0].resolve(old);assert.equal(await first,false);assert.equal(c.state.coachSettlement.estimatedSettlement,50);
   const fail=c.syncCoachSettlementFromServer();pending[2].reject(Error("settlement_hold_refund"));assert.equal(await fail,false);assert.equal(c.state.coachSettlement,null);assert.match(c.state.coachSettlementError,/확인 필요/);
   const shifted=c.syncCoachSettlementFromServer();c.state.coach.coachRoleId="other-role";pending[3].resolve(payload());assert.equal(await shifted,false);assert.equal(c.state.coachSettlement,null);
+});
+test("실제 coach owner 불완전 신원은 settlement RPC0",async()=>{
+  for(const field of ["profile","auth","roleId","branch","token","client"]){
+    const c=context();let calls=0;
+    c.window.TennisNoteDataClient={getSession:()=>({access_token:"synthetic-only"}),rpc:async()=>{calls++;return payload();}};
+    if(field==="profile")c.state.liveProfileId="";
+    if(field==="auth")c.state.coach.authUserId="";
+    if(field==="roleId")c.state.coach.coachRoleId="";
+    if(field==="branch")c.state.coach.branchId="";
+    if(field==="token")c.window.TennisNoteDataClient.getSession=()=>null;
+    if(field==="client")c.window.TennisNoteDataClient=null;
+    assert.equal(await c.syncCoachSettlementFromServer(),false,field);assert.equal(calls,0,field);
+  }
 });

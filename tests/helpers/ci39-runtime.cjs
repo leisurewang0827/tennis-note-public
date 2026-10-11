@@ -37,7 +37,7 @@ function coach(root,side) {
     $:selector=>{if(!buttons.has(selector))buttons.set(selector,{hidden:false,addEventListener:(kind,fn)=>{buttons.get(selector)[kind]=fn;}});return buttons.get(selector);}});
   vm.runInContext([source.reset,source.continuation,source.logout,source.push,source.apply,source.binding].join("\n"),c);
   const name=priv?"resetCoachSettlementReconciliation":"resetCoachSettlementHistory",actual=c[name];
-  c[name]=()=>{stats.reset++;actual();};
+  c[name]=(...args)=>{stats.reset++;return actual(...args);};
   return {c,stats,history:priv?state:history,push,profile,schedule,signout,click:()=>buttons.get("#coachLogoutButton").click(),
     holdSignout:()=>{holdSignout=true;},newIdentity:()=>{session={access_token:"synthetic-new-session"};state.coach={authUserId:"synthetic-new-auth",role:"coach"};state.liveProfileId="synthetic-new-profile";},
     profileValue:()=>({user:{id:"synthetic-auth"},profile:{id:"synthetic-profile",role:"coach",name:"합성",status:"active"},coachRole:{id:"synthetic-role",branch_id:"synthetic-branch"}})};
@@ -143,7 +143,7 @@ function coupledCoach(root,side,options={}) {
     $:selector=>{if(!buttons.has(selector))buttons.set(selector,{addEventListener:(kind,fn)=>{buttons.get(selector)[kind]=fn;}});return buttons.get(selector);}});
   vm.runInContext(options.actualSource||actualClientSource(root,side),c);
   vm.runInContext([source.reset,source.continuation,source.logout,source.push,source.binding].join("\n"),c);
-  const name=priv?"resetCoachSettlementReconciliation":"resetCoachSettlementHistory",reset=c[name];c[name]=()=>{stats.reset++;return reset();};
+  const name=priv?"resetCoachSettlementReconciliation":"resetCoachSettlementHistory",reset=c[name];c[name]=(...args)=>{stats.reset++;return reset(...args);};
   return {env,c,stats,client:c.window.TennisNoteDataClient,click:()=>buttons.get("#coachLogoutButton").click(),
     replacement(same=true,persistence="local",adopt=true){env.put(env.fresh(same),persistence);if(adopt){state.coach={role:"coach",authUserId:"synthetic-new"};state.liveProfileId="synthetic-new-profile";}}};
 }

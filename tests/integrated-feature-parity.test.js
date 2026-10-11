@@ -17,19 +17,30 @@ const hash=s=>crypto.createHash("sha256").update(s).digest("hex"),norm=s=>s.repl
 const get=(repo,ref,file)=>norm(execFileSync("git",["-C",repo,"show",ref+":"+file],{encoding:"utf8",maxBuffer:32e6}));
 const read=file=>mechanical.restore(file,norm(fs.readFileSync(path.join(root,file),"utf8")));
 const current=file=>fs.existsSync(path.join(root,file))?read(file):get(publicRepo,dev,file);
+// Inverse APIs consume current bytes themselves; never feed an already unwrapped historical stage twice.
+const rawCurrent=file=>fs.existsSync(path.join(root,file))?norm(fs.readFileSync(path.join(root,file),"utf8")):get(publicRepo,dev,file);
 function fn(s,n){const m=s.match(new RegExp("^(?:async )?function "+n+"\\(","m"));assert(m,n);const a=s.slice(m.index),e=a.search(/^\}/m);assert(e>=0,"top-level function boundary");return a.slice(0,e+1).trim();}
 for(const row of integration.contract.files) test("new outer inverse closes reviewed and DEV source: "+row.path,()=>{
   const text=current(row.path);assert.equal(hash(text),row.afterSha256);
-  assert.equal(integration.restore(row.path,text,"development"),row.developmentSource);
-  assert.equal(integration.restore(row.path,text),row.reviewedSource);
-  assert.throws(()=>integration.restore(row.path,text+"\n"),/drift/);
+  const raw=rawCurrent(row.path);assert.equal(mechanical.restore(row.path,raw),text);
+  assert.equal(integration.restore(row.path,raw,"development"),row.developmentSource);
+  assert.equal(integration.restore(row.path,raw),row.reviewedSource);
+  assert.notEqual(raw+"\n",raw);assert.throws(()=>integration.restore(row.path,raw+"\n"),/drift/);
 });
 test("R3 inverse contract preserved without golden repin",()=>{assert.equal(hash(read("tests/fixtures/r3-manual-ledger-release-parity.json")),"03f6688fc31517f55a5f999f4c1a13502876b762641b416dcdb4409068c0ac16");assert.equal(hash(read("tests/fixtures/self-profile-a-only.json")),"b418eab72b86167c64d255ef847d344134c53b0d83ea26d60cdfcd40b3177dd8");assert.match(read("tests/helpers/self-profile-a-only.cjs"),/r3\.restoreCandidate/);});
 test("new integration still restores exact PROD A-only source before all old assertions",()=>{
-  for(const row of aOnly.contract.files){const s=current(row.path);assert.equal(hash(aOnly.undoRelease(row.path,s)),row.afterHash);assert.equal(aOnly.restoreCandidate(row.path,s),get(publicRepo,aOnly.contract.base,row.path));}
+  for(const row of aOnly.contract.files){const s=rawCurrent(row.path);assert.equal(hash(aOnly.undoRelease(row.path,s)),row.afterHash);assert.equal(aOnly.restoreCandidate(row.path,s),get(publicRepo,aOnly.contract.base,row.path));}
 });
 test("new integration still restores every exact reviewed R3 product before historical evidence",()=>{
-  for(const row of r3.contract.products){const restored=r3.restoreCandidate(row.path,current(row.path));if(row.status==="A")assert.equal(restored,null);else assert.equal(restored,get(publicRepo,prod,row.path));}
+  for(const row of r3.contract.products){const raw=rawCurrent(row.path),restored=r3.restoreCandidate(row.path,raw);if(row.status==="A")assert.equal(restored,null);else assert.equal(restored,get(publicRepo,prod,row.path));assert.throws(()=>r3.restoreCandidate(row.path,raw+"\n"),/drift/);}
+});
+test("current test connector inverse retains old pins and rejects unknown/missing/duplicate bytes",()=>{
+  const source=fs.readFileSync(path.join(root,"tests/integrated-feature-parity.test.js"),"utf8");
+  const before=profileCore.restoreTestAdapter(source);assert.equal(hash(before),"eee0086fd40ae2d8f9207f37382145cfa2a1c1dac0bd8fe6e99a850b932f45cf");
+  const marker=['const','rawCurrent=file=>'].join(' ');assert.equal(source.split(marker).length,2);
+  for(const changed of [source+"x",source.replace(marker,""),source.replace(marker,()=>marker+marker)]){
+    assert.notEqual(changed,source);assert.throws(()=>profileCore.restoreTestAdapter(changed),/portable_test_adapter_source_drift/);
+  }
 });
 test("all unchanged profile core three are exact PROD and DEV",()=>{const result=profileCore.verifyProfileCore(root);assert.equal(result.ok,true);assert.equal(result.files.length,3);});
 test("all DEV effective preview functions and renderer are preserved verbatim",()=>{

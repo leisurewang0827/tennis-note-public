@@ -29,8 +29,19 @@ test("CI39 delta provenance: changed, missing and fifth assets fail closed",()=>
   assert.throws(()=>provenance.assertBoundedPaths(rows.map((r,i)=>i? r:{...r,blob:"0".repeat(40)})));
 });
 test("CI39 delta inverse: exact child->parent and byte mutation denied",()=>{
-  assert.equal(correction.verifyCurrent(root),true);
-  for(const row of correction.contract.files.filter(x=>x.side==="public")){const raw=fs.readFileSync(path.join(root,row.path),"utf8");assert.equal(correction.hash(correction.restore(row.path,raw)),row.beforeSha256);assert.throws(()=>correction.restore(row.path,raw+"\n//unknown"),/candidate drift/);}
+  const coachCurrent=require("./helpers/r3-coach-init-current-stage.cjs"),confirmation=require("./helpers/r3-confirmation-current-stage.cjs");
+  const child=(file,raw,side="public")=>confirmation.restore(file,coachCurrent.restore(file,raw,side),side);
+  assert.equal(correction.verifyCurrent(root,"public",file=>child(file,fs.readFileSync(path.join(root,file),"utf8"))),true);
+  for(const row of correction.contract.files.filter(x=>x.side==="public")){
+    const raw=fs.readFileSync(path.join(root,row.path),"utf8"),historical=child(row.path,raw);
+    assert.equal(correction.hash(correction.restore(row.path,historical)),row.beforeSha256);
+    assert.throws(()=>correction.restore(row.path,child(row.path,raw+"\n//unknown")),/drift/);
+    assert.throws(()=>child(row.path,raw,"unknown"),/side unknown/);
+    const h=row.hunks[0];assert.equal(historical.split(h.after).length,2);
+    for(const changed of [historical+"\n//unknown",historical.replace(h.after,""),historical.replace(h.after,()=>h.after+h.after)]){
+      assert.notEqual(changed,historical);assert.throws(()=>correction.restore(row.path,changed),/candidate drift/);
+    }
+  }
 });
 test("CI39 delta historical preimage: exact HOLD hunk and additions bounded at original base",()=>{
   const {snapshotDelta:s}=provenance,raw=fs.readFileSync(path.join(root,s.path),"utf8");

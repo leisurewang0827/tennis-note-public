@@ -53,11 +53,16 @@ for p in paths:
     data=(f.ROOT/p).read_bytes()
     results[p]=hashlib.sha256(f.restore_bytes(p,data,stage='historical-integrated')).hexdigest()
     rejected(lambda: f.restore_bytes(p,data+b'x',stage='historical-integrated'))
-    row=f.CURRENT_OUTER[p];h=row['hunks'][0];text=data.decode('utf-8').replace('\\r\\n','\\n')
+    historical=data
+    if p in f.COACH_CURRENT_ROWS: historical=f._reverse(p,historical,f.COACH_CURRENT_ROWS[p])
+    if p in f.CONFIRMATION_ROWS: historical=f._reverse(p,historical,f.CONFIRMATION_ROWS[p])
+    row=f.CURRENT_OUTER[p];h=row['hunks'][0];text=historical.decode('utf-8').replace('\\r\\n','\\n')
+    assert text.count(h['after']) == 1, 'historical hunk must be present exactly once'
     for bad in [text.replace(h['after'],''),text.replace(h['after'],h['after']+h['after'])]:
-        rejected(lambda: f.restore_bytes(p,bad.encode(),stage='historical-integrated'))
+        assert bad != text, 'mutation must change the historical input'
+        rejected(lambda: f._reverse(p,bad.encode(),row))
     invalid=copy.deepcopy(row);invalid['hunks'][0]['after']+='synthetic-drift'
-    rejected(lambda: f._reverse(p,data,invalid))
+    rejected(lambda: f._reverse(p,historical,invalid))
 rejected(lambda: f.restore_bytes('unknown',b'unchanged',stage='unknown'))
 rejected(lambda: f.restore_bytes('../unknown',b'unchanged'))
 rejected(lambda: f._load_reviewed('ci39-correction-parity.json','0'*64))
