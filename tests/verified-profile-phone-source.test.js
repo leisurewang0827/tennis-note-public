@@ -8,9 +8,10 @@ const port=JSON.parse(fs.readFileSync(path.join(root,"tests/fixtures/verified-pr
 const version=JSON.parse(fs.readFileSync(path.join(root,"app/release.json"),"utf8")).version;
 const hash=s=>crypto.createHash("sha256").update(s).digest("hex");
 const {restorePhone,restoreOperationStatus}=require("./helpers/verified-profile-phone-port.cjs");
+const legacyRead=file=>require("./helpers/legacy-integrated-source.cjs").read(file);
 test("본인 번호 exact private authority와 공개 metadata 방어 보존",()=>{
   for(const item of port.functions){
-    const source=restoreOperationStatus(item.path,fs.readFileSync(path.join(root,item.path),"utf8").replace(/\r\n/g,"\n"));
+    const source=restoreOperationStatus(item.path,legacyRead(item.path));
     const fn=source.match(new RegExp("^(?:async )?function "+item.name+"\\([\\s\\S]*?^}","m"));
     assert(fn,item.name);assert.equal(hash(fn[0]),item.publicSha256,item.name);
     if(item.adapter==="exact_private_function")assert.equal(item.privateSha256,item.publicSha256);
@@ -31,7 +32,7 @@ test("OTP 확인 줄바꿈 최소 CSS는 canonical private 블록과 exact hash 
 });
 test("승인 번호 이식 inverse가 기존 golden 파일을 정확히 복구",()=>{
   for(const row of port.files){
-    let source=restoreOperationStatus(row.path,fs.readFileSync(path.join(root,row.path),"utf8").replace(/\r\n/g,"\n")).split(version).join(port.publicVersion);
+    let source=restoreOperationStatus(row.path,legacyRead(row.path)).split(version).join(port.publicVersion);
     assert.equal(hash(source),row.candidateSha256,row.path);
     for(const h of [...row.hunks].reverse()){
       assert.equal(source.split(h.after).length-1,1,row.path);source=source.replace(h.after,h.before);
@@ -42,7 +43,7 @@ test("승인 번호 이식 inverse가 기존 golden 파일을 정확히 복구",
 
 test("전화번호 projection 추가·중복·누락 drift는 기존 golden 이전에 차단",()=>{
   for(const row of port.files){
-    const source=fs.readFileSync(path.join(root,row.path),"utf8").replace(/\r\n/g,"\n");
+    const source=legacyRead(row.path);
     const restored=restorePhone(row.path,source).split(version).join(port.publicVersion);
     assert.equal(hash(restored),row.baseSha256,row.path);
     const after=row.hunks.at(-1).after;

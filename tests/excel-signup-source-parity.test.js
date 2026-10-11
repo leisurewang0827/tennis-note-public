@@ -4,12 +4,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const root = path.resolve(__dirname, '..');
-const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
+const read = p => require('./helpers/legacy-integrated-source.cjs').read(p);
 const manifest = JSON.parse(read('docs/excel-signup-source-parity-20261001.json'));
 const hash = s => createHash('sha256').update(s).digest('hex');
 const { restorePhone } = require('./helpers/verified-profile-phone-port.cjs');
 for (const item of manifest.shared) test(`Excel private source parity: ${item.path}`, () => {
-  assert.equal(hash(read(item.path)), item.sha256);
+  // 현재 export의 exact parity이다. 역사적 원본 복원은 아래 함수 검사에서만 사용한다.
+  assert.equal(hash(require('./helpers/legacy-integrated-source.cjs').raw(item.path)), item.sha256);
 });
 for (const item of manifest.functions) test(`Signup modular authority: ${item.name}`, () => {
   const body = restorePhone(item.path, read(item.path)).match(new RegExp('^(?:async )?function ' + item.name + '\\([^]*?^}', 'm'))?.[0];

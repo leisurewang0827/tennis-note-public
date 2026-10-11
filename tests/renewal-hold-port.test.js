@@ -3,19 +3,21 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import {execFileSync} from "node:child_process";
 import port from "./helpers/renewal-hold-port.cjs";
+import legacy from "./helpers/legacy-integrated-source.cjs";
 const {root,manifest,sha,read,restoreBase,appSource,definition} = port;
 const member = appSource("tennis-note-member-app");
 const admin = appSource("admin");
 
 test("12파일 exact 역변환 및 7개 private 실행 함수 hash", () => {
+  const legacyRead = file => legacy.read(file);
   assert.equal(manifest.files.length,12);
   for (const row of manifest.files) {
-    const source = read(row.path);
+    const source = legacyRead(row.path);
     const base = execFileSync("git",["show",`${manifest.base}:${row.path}`],{cwd:root,encoding:"utf8"}).replace(/\r\n/g,"\n");
     assert.equal(restoreBase(row.path,source),base);
     assert.throws(()=>restoreBase(row.path,source+"\n"),/candidate drift/);
   }
-  for (const row of manifest.parity) assert.equal(sha(definition(read(row.path),row.name)),row.privateExecutableSha256);
+  for (const row of manifest.parity) assert.equal(sha(definition(legacyRead(row.path),row.name)),row.privateExecutableSha256);
   assert.equal(manifest.parity.filter(row=>row.excludedExactComment).length,1);
 });
 

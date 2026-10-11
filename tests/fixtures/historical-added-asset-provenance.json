@@ -1,0 +1,45 @@
+{
+  "version": "historical-added-assets-v1",
+  "historicalBases": [
+    "f5dbdbdecc659b98cc0b9c0b629cee28f28ea713",
+    "11e8928e369c9d9a4eedaa572102f75d1681602b"
+  ],
+  "files": [
+    {
+      "path": "app/shared/tennisnote-curriculum-contract.js",
+      "privatePath": "90-Dashboard/shared/tennisnote-curriculum-contract.js",
+      "privateReviewed": "4f5680f65f1b990ad527ff38415d7ba0029c2232",
+      "publicReviewed": "e660c8812ad0c022ba5a925543c523dfd41e8605",
+      "blob": "a232dd3a1eacbde99cb723ebe43e53f4f45c7624",
+      "privateBlob": "a232dd3a1eacbde99cb723ebe43e53f4f45c7624",
+      "afterSha256": "17b8cdfc73101370d38126d7866530ef585e32c7781d86ece5d25e520205a5ad"
+    },
+    {
+      "path": "app/shared/tennisnote-curriculum-reader.js",
+      "privatePath": "90-Dashboard/shared/tennisnote-curriculum-reader.js",
+      "privateReviewed": "4f5680f65f1b990ad527ff38415d7ba0029c2232",
+      "publicReviewed": "e660c8812ad0c022ba5a925543c523dfd41e8605",
+      "blob": "173e31d6f148e9e0f333a0d59a9b98b546468feb",
+      "privateBlob": "173e31d6f148e9e0f333a0d59a9b98b546468feb",
+      "afterSha256": "3f84d20650a1f7dfae1db89dc1144787c5431efc14d3d42d8251e5211efdd0bc"
+    },
+    {
+      "path": "app/shared/tennisnote-curriculum-ui.js",
+      "privatePath": "90-Dashboard/shared/tennisnote-curriculum-ui.js",
+      "privateReviewed": "b557bf3d91629c24a58e65567cd6245fbf77d120",
+      "publicReviewed": "ec27b039807aab61a609aaf8f114aa0223089513",
+      "blob": "f339814d4c397fe696af495c96a268e71f624c4a",
+      "privateBlob": "f339814d4c397fe696af495c96a268e71f624c4a",
+      "afterSha256": "9373dcd83841d3990116a927712552d035cea886b7f31ae2353689c572d1a434"
+    },
+    {
+      "path": "app/shared/tennisnote-settlement-adjustment.js",
+      "privatePath": "90-Dashboard/shared/tennisnote-settlement-adjustment.js",
+      "privateReviewed": "ddb549c413c5e820c974bdaed73b351d9afb6981",
+      "publicReviewed": "2f46936205e8038876af17b7d1a19c0e95bf23b4",
+      "blob": "583af7dd54752987aae932d5f1e7e6a30695b9dd",
+      "privateBlob": "583af7dd54752987aae932d5f1e7e6a30695b9dd",
+      "afterSha256": "53523a187b1148d47f0853a852247c12452694d2262e9406d786489a98778c34"
+    }
+  ]
+}

@@ -7,6 +7,7 @@
 function renderCoachSettlementPreview() {
   renderAdminSettlementHistory();
   if (!["billing", "settings"].includes(state.view)) return;
+  renderAdminSettlementHistory();
   if (!adminDemoMode) {
     const signature = effectiveSettlementPreviewSignature();
     if (effectiveSettlementPreview.context && !effectiveSettlementPreviewContextIsCurrent(effectiveSettlementPreview.context, false)) {
@@ -639,7 +640,6 @@ function memberTicketPaymentStatusMarkup(paymentGrid) {
     <small>${escapeHtml(paymentGrid.method || "미입력")}</small>
   </span>`;
 }
-
 function renderEffectiveSettlementPreview() {
   const rows = $("#coachSettlementPreviewRows");
   const summary = $("#coachSettlementSummary");
@@ -679,14 +679,16 @@ function renderEffectiveSettlementPreview() {
     }).join("") || '<tr><td colspan="6">선택한 달의 계산 근거가 없습니다.</td></tr>';
   renderDashboardPager("#coachSettlementPreviewPager", items.length, state.settlementPage, "settlement", billingPageSize);
 }
+
+
 function renderAdminSettlementHistory() {
   const section = $("#adminSettlementHistory");
   if (!section) return;
   const scope = adminSettlementHistoryScope();
   const token = window.TennisNoteDataClient?.getSession?.()?.access_token || "";
   const eligible = adminSettlementHistoryCoaches();
-  const ready = adminSettlementHistoryAccessReady() && Boolean(token) && Boolean(adminImportAuthState.profile?.id);
-  if (!ready || (adminSettlementHistory.key && (adminSettlementHistory.key !== adminSettlementHistoryScopeKey(scope) || adminSettlementHistory.sessionToken !== token || adminSettlementHistory.profileId !== String(adminImportAuthState.profile?.id || ""))) || (scope.coachRoleId && eligible.filter((coach) => String(coach.serverRoleId) === scope.coachRoleId).length !== 1)) resetAdminSettlementHistory();
+  const ready = adminSettlementHistoryAccessReady() && Boolean(token) && Boolean(adminImportAuthState.profile?.id) && Boolean(adminImportAuthState.user?.id) && adminImportAuthState.profile?.role === "admin";
+  if (!ready || (adminSettlementHistory.continuationIsCurrent && !adminSettlementHistory.continuationIsCurrent()) || (adminSettlementHistory.key && (adminSettlementHistory.key !== adminSettlementHistoryScopeKey(scope) || adminSettlementHistory.sessionToken !== token || adminSettlementHistory.profileId !== String(adminImportAuthState.profile?.id || ""))) || (scope.coachRoleId && eligible.filter((coach) => String(coach.serverRoleId) === scope.coachRoleId).length !== 1)) resetAdminSettlementHistory();
   const select = $("#adminSettlementHistoryCoach");
   const options = [{ serverRoleId: "", name: eligible.length ? "코치 선택" : "조회 가능한 코치 없음" }, ...eligible];
   const optionKey = JSON.stringify(options.map((coach) => [String(coach.serverRoleId), String(coach.name || "코치")]));
@@ -697,14 +699,21 @@ function renderAdminSettlementHistory() {
     select.dataset.options = optionKey;
   }
   select.value = scope.coachRoleId;
-  select.disabled = !ready || adminSettlementHistory.loading;
+  select.disabled = !ready || adminSettlementHistory.loading || adminSettlementHistory.submitting;
   const button = $("#adminSettlementHistoryRead");
-  button.disabled = !ready || !select.value || adminSettlementHistory.loading;
+  button.disabled = !ready || !select.value || adminSettlementHistory.loading || adminSettlementHistory.submitting;
+  const primary = $("#monthlySettlementPrimaryAction");
+  primary.disabled = adminSettlementHistory.loading || adminSettlementHistory.submitting || !adminSettlementWriterAllowed();
+  primary.textContent = adminSettlementHistory.submitting ? "확정 확인 중" : "정산 확인";
+  primary.setAttribute("aria-disabled", String(primary.disabled));
+  const previewNode = $("#monthlySettlementSummary");
+  previewNode.textContent = adminSettlementHistory.preview ? `서버 예상 정산 ${money.format(adminSettlementHistory.preview.totals.totalSettlementAmount)}원 · 확정 전 계산본` : "";
   button.textContent = adminSettlementHistory.loading ? "조회 중" : "확정 이력 조회";
   section.setAttribute("aria-busy", String(adminSettlementHistory.loading));
   $("#adminSettlementHistoryMessage").textContent = !ready ? "관리자 로그인과 잠금 해제 후 조회할 수 있습니다." : adminSettlementHistory.message;
   const details = $("#adminSettlementHistoryDetails");
   details.replaceChildren();
+  bindAdminManualSettlementLedgerPublic();
   const value = adminSettlementHistory.value;
   details.hidden = !value;
   if (!value) return;
@@ -722,4 +731,31 @@ function renderAdminSettlementHistory() {
   for (const [label, content] of rows) {
     const dt = document.createElement("dt"); const dd = document.createElement("dd"); dt.textContent = label; dd.textContent = content; details.append(dt, dd);
   }
+}
+
+function adminManualSettlementLedgerIdentityKey() {
+  return JSON.stringify([String(adminImportAuthState.profile?.id || ""), String(adminImportAuthState.user?.id || ""),
+    window.TennisNoteDataClient?.getSession?.()?.access_token || "", adminSettlementHistory.request, adminSettlementHistoryScopeKey()]);
+}
+function adminManualSettlementLedgerReady() {
+  const scope = adminSettlementHistoryScope();
+  return Boolean(adminSettlementHistory.continuationIsCurrent?.() && !adminSettlementHistory.loading
+    && adminSettlementHistory.value?.state === "CONFIRMED"
+    && adminSettlementHistory.key === adminSettlementHistoryScopeKey(scope)
+    && adminSettlementHistoryPayloadIsExact(adminSettlementHistory.value, scope));
+}
+function bindAdminManualSettlementLedgerPublic() {
+  const parent = $("#adminSettlementHistory"), ledger = window.TennisNoteManualSettlementLedger;
+  if (!parent || !ledger) return null;
+  const ready = adminManualSettlementLedgerReady();
+  if (!ready && !parent.querySelector('[data-manual-ledger="admin"]')) return null;
+  const controller = ledger.bindExisting(parent, {
+    role: "admin", ready: adminManualSettlementLedgerReady,
+    payload: () => adminSettlementHistory.value, currentScope: adminSettlementHistoryScope,
+    identityKey: adminManualSettlementLedgerIdentityKey,
+    rpc: adminManualSettlementLedgerRpc,
+  });
+  const host = parent.querySelector('[data-manual-ledger="admin"]');
+  if (host) host.hidden = !ready;
+  return controller;
 }

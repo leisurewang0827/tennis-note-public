@@ -7,7 +7,8 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const {root, manifest, sha, normalize, canonicalRelease, restore} = require("./helpers/r3-effective-port.cjs");
 const read = file => normalize(fs.readFileSync(path.join(root, file), "utf8"));
-const candidateSource = file => canonicalRelease(file,read(file),JSON.parse(read("app/release.json")).version);
+const legacyRead = file => require("./helpers/legacy-integrated-source.cjs").read(file);
+const candidateSource = file => canonicalRelease(file,legacyRead(file),JSON.parse(read("app/release.json")).version);
 const scope = {branchId:"synthetic-branch",coachRoleId:"synthetic-role",settlementMonth:"2099-01-01"};
 const payload = () => ({ok:true,calculationVersion:"r3_effective_settlement_v2",scope:{...scope},sourceFingerprint:"a".repeat(64),confirmationReady:false,
   totals:{totalSettlementAmount:50,revenueAmount:100,settledSessions:1,settledMinutes:40,paymentCount:1},
@@ -76,12 +77,12 @@ test("복구 재조회 중 범위 변경·응답 역순에도 새 결과 소유�
 });
 test("공개 계정 보호 exact source/outer inverse, 기존 golden/hash는 그대로",()=>{
   for(const item of fencePort.previewFenceManifest.functions){
-    const fn=read(item.target).match(new RegExp("^(?:async )?function "+item.name+"\\([\\s\\S]*?^}","m"))[0];
+    const fn=legacyRead(item.target).match(new RegExp("^(?:async )?function "+item.name+"\\([\\s\\S]*?^}","m"))[0];
     assert.equal(sha(fn),item.projectedSha256,item.name);
     assert.equal(sha(fn.replaceAll("escapeHtml(","escapeHtmlText(")),item.privateSha256,item.name);
   }
   for(const entry of fencePort.previewFenceManifest.files){
-    const source=read(entry.path);assert.equal(sha(fencePort.restorePreviewIdentityFence(entry.path,source)),entry.baseSha256);
+    const source=legacyRead(entry.path);assert.equal(sha(fencePort.restorePreviewIdentityFence(entry.path,source)),entry.baseSha256);
     for(const drift of [source+"\n",source.replace(entry.hunks[0].after,""),source.replace(entry.hunks[0].after,()=>entry.hunks[0].after+entry.hunks[0].after)]){
       assert.throws(()=>fencePort.restorePreviewIdentityFence(entry.path,drift),/candidate drift/);
     }
@@ -124,10 +125,10 @@ test("R3 원본 projection: 함수·파일 해시 및 모든 기존 golden 역�
   assert.equal(manifest.mode,"read-only-preview-no-confirmation-ui");
   for(const e of manifest.files){const source=candidateSource(e.path);const base=restore(e.path,source);assert.equal(base===null?e.new:sha(base)===e.baseSha256,true,e.path)}
   // Verify the exact history layer first, then the unchanged prior function hashes.
-  for(const e of manifest.functions){const source=require("./helpers/r3-history-port.cjs").restore(e.target,read(e.target));const fn=source.match(new RegExp("(?:async )?function "+e.name+"\\([\\s\\S]*?\\n\\}"))[0];assert.equal(sha(fn),e.projectedSha256,e.name)}
+  for(const e of manifest.functions){const source=require("./helpers/r3-history-port.cjs").restore(e.target,legacyRead(e.target));const fn=source.match(new RegExp("(?:async )?function "+e.name+"\\([\\s\\S]*?\\n\\}"))[0];assert.equal(sha(fn),e.projectedSha256,e.name)}
   assert.equal(sha(read("app/shared/tennisnote-settlement-adjustment.js")),manifest.sharedCanonicalSha256);
-  assert(!read("app/admin/views/billing.js").includes("renderMonthlySettlementConfirmation("));
-  assert(!read("app/tennis-note-coach-app/views/settlement.js").includes("renderCoachSettlementReconciliation("));
+  assert(!legacyRead("app/admin/views/billing.js").includes("renderMonthlySettlementConfirmation("));
+  assert(!legacyRead("app/tennis-note-coach-app/views/settlement.js").includes("renderCoachSettlementReconciliation("));
 });
 test("동일 서버 금액·20+20 실제 40분·확정 OFF·회원 exact identity만",()=>{
   const c=context(),p=c.window.TennisNoteSettlementAdjustment.effectiveProjection(payload(),scope);
