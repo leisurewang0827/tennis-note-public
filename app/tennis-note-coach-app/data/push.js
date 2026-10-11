@@ -3,21 +3,43 @@
 // 서버(Supabase)에 붙는다. 권한은 여기가 아니라 RLS 정책이 책임진다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-async function registerCoachPushToken(tokenValue, platform = nativeCoachAppPlatform()) {
-  const client = window.TennisNoteDataClient;
-  if (!tokenValue || !coachPushProfileId || !client?.rpc || !client.getSession?.()?.access_token) return false;
+let coachPushRegistrationSequence = 0;
+let coachPushPendingRegistration = null;
+let coachPushRegistrationListeners = [];
+let coachPushNotificationPlugin = null;
+let coachPushListenerInstall = Promise.resolve();
+let coachPushListenerEpoch = 0;
+let coachPushListenerBinding = null;
+
+async function registerCoachPushToken(tokenValue, platform, context) {
+  if (!tokenValue || !context?.isCurrent?.() || coachPushPendingRegistration !== context
+    || platform !== context.platform || coachPushProfileId !== context.profileId) return false;
+  const client = context.client;
+  if (!client?.rpc) return false;
+  // One event consumes this registration attempt; retries require a fresh owner context.
+  coachPushPendingRegistration = null;
   await client.rpc("tn_register_push_device", {
     target_platform: platform,
-    target_device_id: currentCoachPushDeviceId(),
+    target_device_id: context.deviceId,
     target_push_token: tokenValue,
-  });
-  return true;
+  }, { requireCurrentSession: true, retryAuth: false });
+  return context.isCurrent();
 }
 
-async function syncNativeCoachPushRegistration(profile = null, requestPermission = false) {
+async function syncNativeCoachPushRegistration(profile = null, requestPermission = false, continuation = null) {
+  const owner = captureCoachAsyncOwner(continuation);
+  if (!owner.isCurrent() || (profile?.id && profile.id !== owner.profileId)) return false;
   const plugin = nativeCoachPushPlugin();
   const platform = nativeCoachAppPlatform();
-  coachPushProfileId = profile?.id || state.liveProfileId || "";
+  const deviceId = currentCoachPushDeviceId();
+  const sequence = ++coachPushRegistrationSequence;
+  coachPushPendingRegistration = null;
+  const context = Object.freeze({ ...owner, plugin, platform, deviceId,
+    isCurrent: () => owner.isCurrent() && sequence === coachPushRegistrationSequence
+      && plugin === nativeCoachPushPlugin() && platform === nativeCoachAppPlatform()
+      && deviceId === currentCoachPushDeviceId(),
+  });
+  coachPushProfileId = owner.profileId;
   if (!plugin || !["android", "ios"].includes(platform)) {
     setCoachPushNotificationState("unavailable", "설치 앱에서 사용 가능", "휴대폰에 설치한 Tennis Note 앱에서 수업 알림을 켤 수 있습니다.");
     return false;
@@ -32,6 +54,7 @@ async function syncNativeCoachPushRegistration(profile = null, requestPermission
   }
   if (platform === "android") {
     const readiness = await window.TennisNoteNativePushReadiness?.().catch(() => null);
+    if (!context.isCurrent()) return false;
     if (readiness?.notificationsEnabled === false && readiness?.runtimePermissionRequired !== true) {
       setCoachPushNotificationState("denied", "휴대폰 알림이 꺼져 있음", "휴대폰 설정에서 Tennis Note 알림을 허용해 주세요.");
       return false;
@@ -41,7 +64,7 @@ async function syncNativeCoachPushRegistration(profile = null, requestPermission
       return false;
     }
   }
-  await bindNativeCoachPushListeners(plugin);
+  if (!(await bindNativeCoachPushListeners(plugin, context)) || !context.isCurrent()) return false;
   if (platform === "android") {
     await plugin.createChannel?.({
       id: "lesson-reminders",
@@ -51,10 +74,13 @@ async function syncNativeCoachPushRegistration(profile = null, requestPermission
       visibility: 1,
       vibration: true,
     }).catch(() => undefined);
+    if (!context.isCurrent()) return false;
   }
   let permission = await plugin.checkPermissions?.().catch(() => null);
+  if (!context.isCurrent()) return false;
   if (requestPermission && ["prompt", "prompt-with-rationale"].includes(permission?.receive)) {
     permission = await plugin.requestPermissions?.().catch(() => permission);
+    if (!context.isCurrent()) return false;
   }
   if (permission?.receive === "denied") {
     setCoachPushNotificationState("denied", "휴대폰 알림이 꺼져 있음", "휴대폰 설정에서 Tennis Note 알림을 허용해 주세요.");
@@ -66,8 +92,9 @@ async function syncNativeCoachPushRegistration(profile = null, requestPermission
     return false;
   }
   setCoachPushNotificationState("granted", "앱 알림 연결됨", "내 수업 변경과 처리할 기록을 이 기기로 알려드립니다.");
+  coachPushPendingRegistration = context;
   await plugin.register();
-  return true;
+  return context.isCurrent();
 }
 
 async function disableNativeCoachPush() {

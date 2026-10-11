@@ -235,14 +235,20 @@ function closeNotice(hideToday = false) {
   window.setTimeout(showNoticeIfNeeded, 0);
 }
 
-async function syncLiveNotices() {
+async function syncLiveNotices(isCurrent = null) {
   const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.selectRows) return false;
+  const token = client?.getSession?.()?.access_token || "";
+  const canApply = () => {
+    try { return window.TennisNoteDataClient === client && token === (client?.getSession?.()?.access_token || "") && (isCurrent === null || (typeof isCurrent === "function" && isCurrent() === true)); }
+    catch { return false; }
+  };
+  if (!client?.readiness?.().ready || !client.selectRows || !canApply()) return false;
   try {
     const rows = await client.selectRows("tn_notice_popups", {
       select: "id,title,body,audience,priority,status,starts_on,ends_on,show_once_per_day,display_order,image_url,image_alt,action_label,action_url,created_at,updated_at",
       limit: 100,
     });
+    if (!canApply()) return false;
     const notices = (rows || [])
       .map((row) => noticeRowToAppNotice(row))
       .sort((a, b) => a.displayOrder - b.displayOrder || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
@@ -262,9 +268,13 @@ async function syncLiveNotices() {
   }
 }
 
-async function syncLiveSchedulePolicy(branchId = "") {
+async function syncLiveSchedulePolicy(branchId = "", isCurrent = null) {
   const client = window.TennisNoteDataClient;
-  if (!client?.readiness?.().ready || !client.selectRows) return false;
+  const canApply = () => {
+    try { return window.TennisNoteDataClient === client && (isCurrent === null || (typeof isCurrent === "function" && isCurrent() === true)); }
+    catch { return false; }
+  };
+  if (!client?.readiness?.().ready || !client.selectRows || !canApply()) return false;
   try {
     const [rows, coachRows] = await Promise.all([
       client.selectRows("tn_admin_settings", {
@@ -277,6 +287,7 @@ async function syncLiveSchedulePolicy(branchId = "") {
         limit: 100,
       }),
     ]);
+    if (!canApply()) return false;
     return writeLiveSchedulePolicySnapshot(
       filterSchedulePolicyByLiveCoachRoles(rows?.[0]?.value, coachRows),
       branchId,

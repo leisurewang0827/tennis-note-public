@@ -7,11 +7,15 @@ import mechanical from "./helpers/release-freeze-mechanical.cjs";
 import integration from "./helpers/integrated-feature-release.cjs";
 import profileCore from "./helpers/profile-core-authority.cjs";
 import checkout from "./helpers/release-checkout-layout.cjs";
+import confirmationStage from "./helpers/r3-confirmation-current-stage.cjs";
+import coachStage from "./helpers/r3-coach-init-current-stage.cjs";
 const publicRoot=path.resolve(import.meta.dirname,"..");
 const read=(side,file)=>checkout.read(publicRoot,side,file);
 const fn=s=>{const start=s.indexOf("async function persistIdentityProfile("),end=s.slice(start).search(/^\}/m);assert(start>=0&&end>=0);return s.slice(start,start+end+1);};
 for(const row of mechanical.contract.files)test("exact mechanical inverse and drift rejection: "+row.side+":"+row.path,()=>{
- const current=read(row.side,row.path);assert.equal(mechanical.hash(current),row.afterSha256);
+ // This row describes the immutable metadata stage, not the later current wording.
+ const source=read(row.side,row.path);
+ const current=confirmationStage.restore(row.path,row.side==="public"?coachStage.restore(row.path,source,row.side):source,row.side);assert.equal(mechanical.hash(current),row.afterSha256);
  const stage=row.side==="private"?"pinned-private-reference":"historical-integrated";
  assert.equal(mechanical.restore(row.path,current,row.side,stage),row.beforeSource);
  assert.equal(mechanical.restore(row.path,row.beforeSource,row.side,stage),row.beforeSource);

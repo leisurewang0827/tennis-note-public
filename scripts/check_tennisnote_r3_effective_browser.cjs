@@ -3,14 +3,23 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const {root} = require("../tests/helpers/r3-effective-port.cjs");
+require("../tests/helpers/release-freeze-mechanical.cjs").verifyCurrent(root);
+// Historical absence and current canonical response UI are separate source stages.
+const historical = require("../tests/helpers/legacy-integrated-source.cjs");
+const historicalCoachHtml = historical.read("app/tennis-note-coach-app/index.html");
+for (const id of ["coachSettlementReconciliationForm", "coachSettlementReconciliationSubmit", "coachSettlementReconciliationReason"]) assert(!historicalCoachHtml.includes('id="'+id+'"'), "historical coach response DOM absence");
+const historicalCoachData = historical.read("app/tennis-note-coach-app/data/sync.js");
+const historicalHistory = historicalCoachData.slice(historicalCoachData.indexOf("const coachSettlementHistory ="));
+for (const name of ["tn_coach_respond_monthly_settlement_confirmation", "tn_admin_confirm_monthly_settlement_snapshot", "tn_admin_create_monthly_settlement_snapshot", "saveSnapshot("]) assert(!historicalHistory.includes(name), "historical coach financial/write absence");
 const {chromium,webkit} = require("playwright");
 const base="http://127.0.0.1:8773";
 const mime={".html":"text/html",".js":"text/javascript",".css":"text/css",".json":"application/json",".svg":"image/svg+xml",".png":"image/png"};
 function fixtureConfig(coach) {
   return `window.TennisNoteConfig={}; window.__r3Rpc=[];
+  const bootstrapReads=new Set(["tn_schedule_v2_coach_workspace","tn_visible_one_day_bookings","tn_schedule_v2_coach_member_roster","tn_schedule_v2_operation_days_between","tn_schedule_revision_snapshot"]);
   const fixtureClient={readiness:()=>({ready:${coach}}),getSession:()=>(${coach}?{access_token:"synthetic-only"}:null),ensureSession:async()=>({access_token:"synthetic-only"}),consumeOAuthRedirect:async()=>{},isOnline:()=>false,
     selectCurrentProfile:async()=>({user:{id:"synthetic-auth"},profile:{id:"synthetic-profile",name:"합성 코치",role:"coach",status:"active"},coachRole:{id:"synthetic-role",branch_id:"synthetic-branch",status:"approved"}}),
-    selectRows:async()=>[],rpc:async(name,args)=>{window.__r3Rpc.push({name,args}); if(name==="tn_coach_settlement_scope_v2")return window.__r3Payload(args);if(name==="tn_coach_monthly_settlement_reconciliation_state")return window.__r3History(args);if(name==="tn_admin_monthly_settlement_scope_state")return window.__r3AdminHistory(args);return []},
+    selectRows:async()=>[],rpc:async(name,args)=>{window.__r3Rpc.push({name,args}); if(name==="tn_coach_settlement_scope_v2"||name==="tn_admin_preview_monthly_settlement_snapshot")return window.__r3Payload(args);if(name==="tn_coach_monthly_settlement_reconciliation_state")return window.__r3History(args);if(name==="tn_admin_monthly_settlement_scope_state")return window.__r3AdminHistory(args);if(bootstrapReads.has(name)||name==="tn_admin_monthly_settlement_payment_state"||name==="tn_coach_monthly_settlement_payment_state")return [];throw Error("unapproved fixture RPC")},
     invokeFunction:async()=>{throw Error("fixture write forbidden")}};
   window.__r3Payload=args=>({ok:true,calculationVersion:"r3_effective_settlement_v2",scope:{branchId:args.target_branch_id,coachRoleId:args.target_coach_role_id,settlementMonth:args.target_month},sourceFingerprint:"a".repeat(64),confirmationReady:false,
     totals:{totalSettlementAmount:50,revenueAmount:100,settledSessions:1,settledMinutes:40,paymentCount:1},sourceManifest:{tickets:[{id:"synthetic-ticket",userId:"synthetic-user"}]},
@@ -83,7 +92,10 @@ async function assertAdminUnlockCache(page) {
       reset(); state.view = "billing"; adminLockSession.unlockedUntil = Date.now() + 600000;
       adminSettlementHistory.coachRoleId = ""; reconcileAdminBillingLockUi();
       check(!select.disabled && button.disabled && calls.length === 0, "no exact coach read remains disabled");
-      check(!document.querySelector("#monthlySettlementPrimaryAction,#monthlySettlementConfirmation"), "new write controls zero");
+      const primary = document.querySelector("#monthlySettlementPrimaryAction");
+      check(primary && primary.disabled && primary.getAttribute("aria-disabled") === "true", "current write control disabled without exact scope");
+      primary.click(); await confirmMonthlySettlementSnapshot();
+      check(calls.length === 0, "current disabled click and actual caller write RPC0");
       setView("billing", { skipLock: true });
       renderOperationsLoginGate();
       document.querySelectorAll("#billingView details").forEach(details => { details.open = true; });
@@ -93,6 +105,102 @@ async function assertAdminUnlockCache(page) {
       window.loadServerPaymentsIntoBilling = saved.payments; window.activeOperationBranchId = saved.branch;
       window.operationBranchCoaches = saved.coaches; window.setTimeout = saved.timeout;
       client.rpc = saved.rpc; client.getSession = saved.session; client.readiness = saved.readiness;
+    }
+  });
+}
+async function assertAdminConfirmation(page) {
+  return page.evaluate(async () => {
+    let checks=0,cases=0,calls=[],pending=[],mode="normal",token,role,approved,branch,ready,settled=false;
+    const check=(ok,name)=>{if(!ok)throw Error("confirmation current: "+name);checks++;};
+    const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+    const original={descriptor:Object.getOwnPropertyDescriptor(window,"TennisNoteDataClient"),branch:activeOperationBranchId,
+      coaches:operationBranchCoaches,role:operationsRole,approval:adminApprovalReady,access:operationsAccessReady,
+      locked:isAdminViewLocked,unlocked:isAdminUnlocked,pin:adminPinNeedsSetup};
+    const scope={branchId:"synthetic-branch",coachRoleId:"synthetic-role",settlementMonth:"2099-01-01"};
+    const snapshot=()=>({snapshotId:"synthetic-snapshot",scope:{...scope},revision:1,status:"calculated",calculationVersion:"r3_effective_settlement_v2",sourceFingerprint:"a".repeat(64),totals:{settledSessions:1,settledMinutes:40,totalSettlementAmount:50}});
+    const confirmed=()=>({ok:true,state:"CONFIRMED",scope:{...scope},snapshot:snapshot(),confirmation:{confirmationId:"synthetic-confirmation",status:"confirmed",confirmationVersion:"r3_monthly_settlement_confirmation_v1",confirmedAt:"2099-01-01T00:00:00Z"},reconciliation:null});
+    const writes=()=>calls.filter(c=>/tn_admin_(create|confirm)_monthly_settlement_snapshot/.test(c.name));
+    const client={readiness:()=>({ready}),getSession:()=>token?{access_token:token}:null,rpc:async(name,args)=>{
+      // Payment-ledger read is separate and never a financial/write fixture.
+      if(name==="tn_admin_monthly_settlement_payment_state")return null;
+      calls.push({name,args});
+      if(name==="tn_admin_create_monthly_settlement_snapshot"){
+        if(mode==="hold-create")return new Promise(resolve=>pending.push(resolve));return snapshot();
+      }
+      if(name==="tn_admin_confirm_monthly_settlement_snapshot"){
+        settled=true;if(mode==="lost-confirm")throw Error("synthetic response lost");return confirmed();
+      }
+      if(name==="tn_admin_monthly_settlement_scope_state")return settled?confirmed():{ok:true,state:"EMPTY",scope:{...scope},snapshot:null,confirmation:null,reconciliation:null};
+      throw Error("unapproved synthetic RPC");
+    }};
+    const primary=document.querySelector("#monthlySettlementPrimaryAction");
+    const reset=()=>{
+      calls=[];pending=[];mode="normal";settled=false;token="synthetic-session";role="admin";approved=true;branch=scope.branchId;ready=true;
+      state.view="billing";state.billingMonth="2099-01";
+      adminImportAuthState.profile={id:"synthetic-admin",role:"admin"};adminImportAuthState.user={id:"synthetic-auth"};
+      Object.defineProperty(window,"TennisNoteDataClient",{get:()=>client,configurable:true});
+      resetAdminSettlementHistory();const c=adminSettlementHistory;c.coachRoleId=scope.coachRoleId;
+      c.preview=window.__r3Payload({target_branch_id:scope.branchId,target_coach_role_id:scope.coachRoleId,target_month:scope.settlementMonth});
+      c.scopeState={ok:true,state:"EMPTY",scope:{...scope},snapshot:null,confirmation:null,reconciliation:null,snapshotWriterCapability:{contractVersion:"r3_snapshot_writer_capability_v1",writesEnabled:true}};
+      c.status="READY";c.key=c.loadedSignature=adminSettlementHistoryScopeKey();c.sessionToken=token;c.profileId="synthetic-admin";
+      c.writerRequest=c.request;c.continuationIsCurrent=adminSettlementHistoryContinuation();
+    };
+    try{
+      window.activeOperationBranchId=()=>branch;
+      window.operationBranchCoaches=()=>[{serverRoleId:scope.coachRoleId,branchId:branch,name:"합성 코치",status:"active"}];
+      window.operationsRole=()=>role;window.adminApprovalReady=()=>approved;
+      window.operationsAccessReady=()=>ready;window.isAdminViewLocked=()=>false;window.isAdminUnlocked=()=>true;window.adminPinNeedsSetup=()=>false;
+      document.querySelector("#operationsLoginGate").hidden=true;document.querySelector("#adminAppShell").hidden=false;
+      document.querySelector("#adminBrandSplash").hidden=true;document.querySelector("#billingView").hidden=false;
+      document.querySelectorAll(".view").forEach(el=>el.classList.toggle("is-active",el.id==="billingView"));
+      document.querySelector("#adminSettlementHistory").closest("details").open=true;
+      for(const denied of ["capability-off","capability-missing","capability-version","role","profile-role","approval","session","auth","profile","branch","month","coach","duplicate-coach","request","owner","scope","preview","loading","submitting","confirmed"]){
+        reset();const c=adminSettlementHistory;
+        if(denied==="capability-off")c.scopeState.snapshotWriterCapability.writesEnabled=false;
+        if(denied==="capability-missing")delete c.scopeState.snapshotWriterCapability;
+        if(denied==="capability-version")c.scopeState.snapshotWriterCapability.contractVersion="unknown";
+        if(denied==="role")role="coach";if(denied==="profile-role")adminImportAuthState.profile.role="member";
+        if(denied==="approval")approved=false;if(denied==="session")token="";
+        if(denied==="auth")adminImportAuthState.user=null;if(denied==="profile")adminImportAuthState.profile=null;
+        if(denied==="branch")branch="other";if(denied==="month")state.billingMonth="2099-13";if(denied==="coach")c.coachRoleId="";
+        if(denied==="duplicate-coach")window.operationBranchCoaches=()=>[1,2].map(()=>({serverRoleId:scope.coachRoleId,branchId:branch,status:"active"}));
+        if(denied==="request")c.request++;if(denied==="owner")adminImportAuthState.user.id="other-auth";
+        if(denied==="scope")c.loadedSignature="other";if(denied==="preview")c.preview.scope.coachRoleId="other";
+        if(denied==="loading")c.loading=true;if(denied==="submitting")c.submitting=true;
+        if(denied==="confirmed"){c.status="CONFIRMED";c.scopeState=confirmed();c.value=confirmed();}
+        renderAdminSettlementHistory();check(primary.disabled&&primary.getAttribute("aria-disabled")==="true",denied+" actual disabled/aria");
+        primary.click();await confirmMonthlySettlementSnapshot();await tick();check(writes().length===0,denied+" actual DOM/caller write RPC0");cases++;
+        window.operationBranchCoaches=()=>[{serverRoleId:scope.coachRoleId,branchId:branch,name:"합성 코치",status:"active"}];
+      }
+      for(const changed of ["owner","request","scope","capability"]){
+        reset();mode="hold-create";renderAdminSettlementHistory();primary.click();primary.click();
+        check(writes().length===1&&pending.length===1,"duplicate in-flight physical create1");
+        check(primary.disabled&&primary.textContent==="월 정산 확정 중","busy disabled wording");
+        if(changed==="owner")adminImportAuthState.user.id="other";if(changed==="request")adminSettlementHistory.request++;
+        if(changed==="scope")state.billingMonth="2099-02";if(changed==="capability")adminSettlementHistory.scopeState.snapshotWriterCapability.writesEnabled=false;
+        pending[0](snapshot());await tick();await tick();check(writes().length===1,"stale completion cannot send next confirmation "+changed);cases++;
+      }
+      for(const kind of ["normal","existing-snapshot","lost-confirm"]){
+        reset();mode=kind;if(kind==="existing-snapshot")adminSettlementHistory.scopeState={...adminSettlementHistory.scopeState,state:"CALCULATED",snapshot:snapshot()};
+        renderAdminSettlementHistory();check(!primary.disabled&&primary.getAttribute("aria-disabled")==="false"&&primary.textContent==="월 정산 확정","authorized exact current action");
+        primary.click();primary.click();await tick();await tick();
+        const c=adminSettlementHistory;check(c.status==="CONFIRMED"&&c.value.snapshot.snapshotId==="synthetic-snapshot"&&c.value.confirmation.confirmationId==="synthetic-confirmation","exact synthetic confirm/readback "+kind);
+        check(writes().filter(r=>r.name.includes("create")).length===(kind==="existing-snapshot"?0:1)&&writes().filter(r=>r.name.includes("confirm")).length===1,"logical operation physical writes1 "+kind);
+        check(calls.some(r=>r.name==="tn_admin_monthly_settlement_scope_state"),"server readback required");
+        check(primary.disabled&&primary.textContent==="월 정산 확정 완료","terminal action disabled");
+        check(document.querySelector("#adminSettlementHistoryMessage").textContent.includes("실제 송금이 아닙니다"),"confirmation is not payout");
+        const before=writes().length;primary.click();await confirmMonthlySettlementSnapshot();check(writes().length===before,"terminal duplicate write RPC0");cases++;
+      }
+      // Lost response without confirmed readback may be retried with SAME keys, not a second logical operation.
+      reset();mode="hold-create";const work=confirmMonthlySettlementSnapshot();const keys=[adminSettlementHistory.snapshotOperationKey,adminSettlementHistory.confirmationOperationKey];
+      pending[0](snapshot());await work;check(keys[0]&&keys[1]&&new Set(writes().map(r=>r.args.target_operation_key)).size===2,"create/confirm distinct stable keys");
+      check(monthlySettlementEnsureOperationKeys(scope,adminSettlementHistory.preview).snapshot===keys[0],"same source preserves operation key");cases++;
+      check(calls.every(r=>r.args.target_branch_id===scope.branchId&&r.args.target_coach_role_id===scope.coachRoleId&&r.args.target_month===scope.settlementMonth),"exact args source scope");
+      return{checks,authorityCases:cases,actualDomAndCaller:true,syntheticConfirmation:true,hostedWrites:0};
+    }finally{
+      Object.defineProperty(window,"TennisNoteDataClient",original.descriptor);
+      window.activeOperationBranchId=original.branch;window.operationBranchCoaches=original.coaches;window.operationsRole=original.role;
+      window.adminApprovalReady=original.approval;window.operationsAccessReady=original.access;window.isAdminViewLocked=original.locked;window.isAdminUnlocked=original.unlocked;window.adminPinNeedsSetup=original.pin;
     }
   });
 }
@@ -297,12 +405,14 @@ async function runFixture(page,surface){
       check(effectiveSettlementPreview.results[0].value.estimatedSettlement===50,"confirmed history never overwrites estimate");
       const adminHistory=window.__r3AdminHistory;
       window.__r3AdminHistory=args=>({...adminHistory(args),reconciliation:{reconciliationId:"synthetic-response",status:"DISPUTED",reason:"적용기간 확인 요청 ".repeat(12).trim(),responseVersion:"r3_monthly_settlement_coach_reconciliation_v1",respondedAt:"2099-01-01T00:01:00Z"}});
-      check(await refreshAdminSettlementHistory(),"prior coach dispute readback");
+      await refreshAdminSettlementHistory();
+      check(adminSettlementHistory.value?.reconciliation?.status==="DISPUTED", "current caller dispute exact readback (no boolean-return contract)");
       check(details.textContent.includes("이의 접수")&&!details.querySelector("img,script"),"read-only reason safe DOM");
       window.isAdminViewLocked=()=>true;renderAdminSettlementHistory();
       check(button.disabled&&details.hidden&&details.childElementCount===0,"PIN lock erases history and disables read");
       window.isAdminViewLocked=()=>false;renderAdminSettlementHistory();
-      check(await refreshAdminSettlementHistory(),"synthetic unlock recovery");
+      await refreshAdminSettlementHistory();
+      check(adminSettlementHistory.value?.snapshot?.snapshotId==="synthetic-snapshot", "current caller unlock exact recovery");
     }else{
       check(Boolean(window.__TENNIS_NOTE_COACH_APP_RUNTIME__),"actual coach entry boot");
       window.__r3History=args=>({scope:{branchId:args.target_branch_id,coachRoleId:args.target_coach_role_id,settlementMonth:args.target_month},state:"PENDING",
@@ -320,18 +430,46 @@ async function runFixture(page,surface){
       const summary=document.querySelector("#coachSettlementReconciliationSummary");
       check(summary.textContent.includes("37원")&&summary.textContent.includes("기존 v1"),"v1 confirmed amount separate from current preview");
       check(state.coachSettlement.estimatedSettlement===50,"history never overwrites current preview");
-      check(!document.querySelector("#coachSettlementReconciliationForm, #coachSettlementReconciliationSubmit"),"response/confirmation write controls absent");
+      const form=document.querySelector("#coachSettlementReconciliationForm"),submit=document.querySelector("#coachSettlementReconciliationSubmit");
+      check(form&&!form.hidden&&submit&&submit.disabled&&!form.querySelector('input[name="coachSettlementReconciliationChoice"]:checked'),"current exact PENDING response visible; unselected submit disabled; historical absence checked separately");
+      const writesBefore=window.__r3Rpc.length;submit.click();await new Promise(resolve=>setTimeout(resolve,0));
+      check(window.__r3Rpc.length===writesBefore,"coach disabled current write RPC0");
+      const assertResponseBlocked=async label=>{
+        check(form.hidden&&submit.disabled,label+" current response hidden/disabled");
+        const before=window.__r3Rpc.length;submit.click();await new Promise(resolve=>setTimeout(resolve,0));
+        check(window.__r3Rpc.length===before,label+" disabled click response/write RPC0");
+      };
       const history=window.__r3History;
       window.__r3History=args=>({...history(args),state:"DISPUTED",reconciliation:{reconciliationId:"synthetic-response",status:"DISPUTED",reason:"적용기간 확인 요청 ".repeat(12).trim(),responseVersion:"r3_monthly_settlement_coach_reconciliation_v1",respondedAt:"2099-01-01T00:01:00Z"}});
       check(await syncCoachSettlementHistoryFromServer(),"prior dispute read only");
       check(summary.textContent.includes("적용기간 확인 요청")&&!summary.querySelector("img,script"),"prior reason textContent safe");
+      await assertResponseBlocked("DISPUTED");
+      window.__r3History=args=>({...history(args),state:"ACKNOWLEDGED",reconciliation:{reconciliationId:"synthetic-response",status:"ACKNOWLEDGED",reason:"",responseVersion:"r3_monthly_settlement_coach_reconciliation_v1",respondedAt:"2099-01-01T00:01:00Z"}});
+      check(await syncCoachSettlementHistoryFromServer(),"acknowledged terminal read only");
+      await assertResponseBlocked("ACKNOWLEDGED");
       window.__r3History=args=>({...history(args),scope:{branchId:"other",coachRoleId:args.target_coach_role_id,settlementMonth:args.target_month}});
       check(await syncCoachSettlementHistoryFromServer()===false&&summary.hidden,"scope mismatch hides old history");
+      await assertResponseBlocked("scope mismatch");
+      window.__r3History=args=>({...history(args),snapshot:null});
+      check(await syncCoachSettlementHistoryFromServer()===false&&summary.hidden,"missing payload hides old history");
+      await assertResponseBlocked("missing payload");
+      for(const [expected,reason]of [["STALE","settlement_reconciliation_stale"],["CONFLICT","settlement_reconciliation_conflict"],["ERROR","synthetic read error"]]){
+        window.__r3History=()=>{throw Error(reason)};
+        check(await syncCoachSettlementHistoryFromServer()===false&&coachSettlementHistory.coachSettlementReconciliationUiState===expected,expected+" read error contract");
+        await assertResponseBlocked(expected);
+      }
       window.__r3History=args=>({scope:history(args).scope,state:"EMPTY",snapshot:null,confirmation:null,reconciliation:null});
       check(await syncCoachSettlementHistoryFromServer()&&summary.hidden,"empty history not fabricated zero");
       check(document.querySelector("#coachSettlementReconciliationMessage").textContent.includes("없습니다"),"empty distinct from preview");
+      await assertResponseBlocked("EMPTY");
       window.__r3History=history;
       check(await syncCoachSettlementHistoryFromServer(),"synthetic recovery only after diagnosed payload mismatch");
+      const profile=state.liveProfileId;state.liveProfileId="";renderCoachSettlementHistory();
+      check(summary.hidden,"missing continuation removes old summary");await assertResponseBlocked("missing continuation");
+      state.liveProfileId=profile;check(await syncCoachSettlementHistoryFromServer(),"fixture profile restored after missing-continuation assertion");
+      const auth=state.coach.authUserId;state.coach.authUserId="synthetic-auth-stale";renderCoachSettlementHistory();
+      check(summary.hidden,"stale continuation removes old summary");await assertResponseBlocked("stale continuation");
+      state.coach.authUserId=auth;check(await syncCoachSettlementHistoryFromServer(),"fixture owner restored after stale-continuation assertion");
       const client=window.TennisNoteDataClient,old=client.rpc;client.rpc=async()=>{throw Error("settlement_hold_refund")};
       check(await syncCoachSettlementFromServer()===false,"HOLD fail closed");
       check(document.querySelector("#coachEstimatedSettlement").textContent==="—","coach HOLD not zero");
@@ -341,7 +479,8 @@ async function runFixture(page,surface){
     }
     const scopeCalls=window.__r3Rpc.filter(row=>row.name==="tn_coach_settlement_scope_v2");
     check(scopeCalls.length>0&&scopeCalls.every(row=>row.args.target_branch_id==="synthetic-branch"&&row.args.target_coach_role_id==="synthetic-role"),"actual entry spy exact scope RPC");
-    check(!window.__r3Rpc.some(row=>/confirm|respond|payout|payment|refund|save|create|update/.test(row.name)),"write RPC zero");
+    const readOnlyRpcNames=new Set(["tn_coach_settlement_scope_v2","tn_admin_preview_monthly_settlement_snapshot","tn_admin_monthly_settlement_scope_state","tn_coach_monthly_settlement_reconciliation_state","tn_admin_monthly_settlement_payment_state","tn_coach_monthly_settlement_payment_state","tn_schedule_v2_coach_workspace","tn_visible_one_day_bookings","tn_schedule_v2_coach_member_roster","tn_schedule_v2_operation_days_between","tn_schedule_revision_snapshot"]);
+    check(window.__r3Rpc.every(row=>readOnlyRpcNames.has(row.name)),"write RPC zero; exact current read allowlist (payment-state is read, not payout)");
     return {checks,previewCalls:scopeCalls.length,hostedWrites:0};
   },surface);
 }
@@ -350,7 +489,8 @@ async function runFixture(page,surface){
   const unlockOnly = process.env.TENNISNOTE_R3_UNLOCK_FOCUSED === "1";
   const fenceOnly = process.env.TENNISNOTE_R3_IDENTITY_FOCUSED === "1";
   const recoveryOnly = process.env.TENNISNOTE_R3_RECOVERY_FOCUSED === "1";
-  let layouts=0,checks=0,identityCases=0;const widths=recoveryOnly?[[390,844],[844,390]]:fenceOnly?[[390,844],[844,390],[768,1024],[1366,900]]:unlockOnly?[[390,844],[768,1024],[1366,900]]:[[320,740],[360,800],[375,812],[390,844],[393,852],[402,874],[412,915],[430,932],[768,1024],[1366,900],[667,375],[844,390],[932,430]];
+  const confirmationOnly = process.env.TENNISNOTE_R3_CONFIRMATION_FOCUSED === "1";
+  let layouts=0,checks=0,identityCases=0;const widths=confirmationOnly?[[390,844],[844,390],[768,1024],[1366,900]]:recoveryOnly?[[390,844],[844,390]]:fenceOnly?[[390,844],[844,390],[768,1024],[1366,900]]:unlockOnly?[[390,844],[768,1024],[1366,900]]:[[320,740],[360,800],[375,812],[390,844],[393,852],[402,874],[412,915],[430,932],[768,1024],[1366,900],[667,375],[844,390],[932,430]];
   try{
     for(const [engine,type] of Object.entries({chromium,webkit})){
       const browser=await type.launch({headless:true,...(engine==="chromium"&&process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
@@ -384,6 +524,8 @@ async function runFixture(page,surface){
           }
           const unlockReceipt=surface==="admin"?await assertAdminUnlockCache(page):null;
           if(unlockReceipt) checks+=unlockReceipt.checks;
+          const confirmationReceipt=surface==="admin"?await assertAdminConfirmation(page):null;
+          if(confirmationReceipt){checks+=confirmationReceipt.checks;console.log(JSON.stringify({result:"PASS",engine,colorScheme,...confirmationReceipt}));}
           if(unlockOnly){
             for(const [width,height]of widths){
               await page.setViewportSize({width,height});
@@ -439,6 +581,6 @@ async function runFixture(page,surface){
         }finally{await context.close()}
       }}finally{await browser.close()}
     }
-    assert.equal(layouts,recoveryOnly?8:fenceOnly?16:unlockOnly?12:(process.env.TENNISNOTE_R3_HISTORY_LAYOUT_ONLY === "1"?52:104));console.log(JSON.stringify({result:"PASS",layouts,checks,identityCases,scope:recoveryOnly?"same-scope recovery focused":fenceOnly?"preview identity focused":unlockOnly?"unlock focused":"existing R3",actualRoles:"synthetic only",actualDevices:"NOT VERIFIED",themeEvidence:"OS light/dark preference; existing coach light palette unchanged",hostedRequests:0,hostedWrites:0}));
+    assert.equal(layouts,confirmationOnly?32:recoveryOnly?8:fenceOnly?16:unlockOnly?12:(process.env.TENNISNOTE_R3_HISTORY_LAYOUT_ONLY === "1"?52:104));console.log(JSON.stringify({result:"PASS",layouts,checks,identityCases,scope:confirmationOnly?"current confirmation focused":recoveryOnly?"same-scope recovery focused":fenceOnly?"preview identity focused":unlockOnly?"unlock focused":"existing R3",actualRoles:"synthetic only",actualDevices:"NOT VERIFIED",themeEvidence:"OS light/dark preference; existing coach light palette unchanged",hostedRequests:0,hostedWrites:0}));
   }finally{clearTimeout(deadline)}
 })().catch(error=>{console.error("R3 browser FAIL",error.message);process.exitCode=1});

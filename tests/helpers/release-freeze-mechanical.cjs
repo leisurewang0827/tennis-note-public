@@ -7,6 +7,8 @@ assert.equal(hash(raw),"7ed303e24c88c551fb399e799b80ed9dc98dce350ab80da105ed1ba7
 const contract=JSON.parse(raw);
 const correction=require("./ci39-correction-inverse.cjs");
 const bounded=require("./production-isolation-historical-delta.cjs");
+const confirmation=require("./r3-confirmation-current-stage.cjs");
+const coachCurrent=require("./r3-coach-init-current-stage.cjs");
 // 승인된 refresh7 hunk 이후의 frozen 미리보기 증분만 비교용 원본으로 복원한다.
 const previewPreimage=Object.freeze({
  path:"app/shared/tennisnote-single-sheet-preview-ui.js",
@@ -54,7 +56,16 @@ function restoreReviewedPreview(file,text,side){
 function restore(file,text,side="public",stage="historical-integrated"){
  assert(["public","private"].includes(side),"mechanical source side unknown");
  assert(["historical-integrated","pinned-private-reference"].includes(stage),"mechanical source stage unknown");
+ const historicalRow=contract.files.find(x=>x.side===side&&x.path===file);
+ // A nested historical adapter may already have reached THIS immutable before stage.
+ // Recognize only its exact pinned bytes, never treat unknown/current text as baseline.
+ if(stage==="historical-integrated"&&historicalRow&&typeof text==="string"&&hash(text.replace(/\r\n/g,"\n"))===historicalRow.beforeSha256){
+  assert.equal(hash(historicalRow.beforeSource),historicalRow.beforeSha256,"mechanical baseline drift: "+file);
+  return historicalRow.beforeSource;
+ }
  if(stage==="historical-integrated"){
+  text=coachCurrent.restore(file,text,side);
+  text=confirmation.restore(file,text,side);
   text=restoreReviewedPreview(file,text,side);
   text=bounded.restoreShared(file,text,side);
   text=correction.restore(file,text,side);
@@ -80,6 +91,16 @@ function currentRows(side="public",stage="actual-current"){
    existing.metadataAfterSha256=existing.afterSha256;existing.afterSha256=row.afterSha256;existing.kind="correction";
   }else rows.push({...row,kind:"correction"});
  }
+ if(stage==="actual-current")for(const row of confirmation.rows(side)){
+  const existing=rows.find(x=>x.path===row.path);
+  if(existing){assert.equal(existing.afterSha256,row.beforeSha256,"confirmation parent stage mismatch");existing.confirmationParentSha256=existing.afterSha256;existing.afterSha256=row.afterSha256;}
+  else rows.push({...row,kind:"confirmation"});
+ }
+ if(stage==="actual-current")for(const row of coachCurrent.rows(side)){
+  const existing=rows.find(x=>x.path===row.path);
+  if(existing){assert.equal(existing.afterSha256,row.beforeSha256,"coach current parent stage mismatch");existing.coachParentSha256=existing.afterSha256;existing.afterSha256=row.afterSha256;}
+  else rows.push({...row,kind:"coach-current"});
+ }
  return rows;
 }
 function verifyCurrent(root,side="public",reader=file=>fs.readFileSync(path.join(root,file),"utf8"),stage="actual-current"){
@@ -87,9 +108,9 @@ function verifyCurrent(root,side="public",reader=file=>fs.readFileSync(path.join
  const sources=new Map();const memo=file=>{if(!sources.has(file)){const s=reader(file);assert.equal(typeof s,"string","mechanical source reader missing: "+file);sources.set(file,s.replace(/\r\n/g,"\n"));}return sources.get(file);};
  for(const row of currentRows(side,stage)){
   assert.equal(hash(memo(row.path)),row.afterSha256,(row.kind==="metadata"?"unfrozen current metadata: ":"unfrozen current correction: ")+row.path);
-  if(row.metadataAfterSha256)assert.equal(hash(correction.restore(row.path,memo(row.path),side)),row.metadataAfterSha256,"current correction metadata restoration drift: "+row.path);
+  if(row.metadataAfterSha256)assert.equal(hash(correction.restore(row.path,confirmation.restore(row.path,coachCurrent.restore(row.path,memo(row.path),side),side),side)),row.metadataAfterSha256,"current correction metadata restoration drift: "+row.path);
  }
- if(stage==="actual-current")correction.verifyCurrent(root,side,memo);
+ if(stage==="actual-current")correction.verifyCurrent(root,side,file=>confirmation.restore(file,coachCurrent.restore(file,memo(file),side),side));
  return true;
 }
 module.exports={contract,hash,restore,verifyCurrent,currentRows,restoreReviewedPreview};

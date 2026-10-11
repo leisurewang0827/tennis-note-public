@@ -3,7 +3,32 @@
 // 서버(Supabase)에 붙는다. 권한은 여기가 아니라 RLS 정책이 책임진다.
 // app.js 에서 본문 그대로 옮겨왔고 전역 함수 선언이라 호출부는 예전과 같다.
 
-async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace = {}) {
+// 비동기 호출의 계정 범위를 고정한다. 다음 계정으로 이전 응답을 재해석하지 않는다.
+function captureCoachAsyncOwner(continuation = null) {
+  const client = window.TennisNoteDataClient;
+  const token = client?.getSession?.()?.access_token || "";
+  const profileId = state.liveProfileId;
+  const authUserId = state.coach?.authUserId;
+  const coachRoleId = state.coach?.coachRoleId;
+  const branchId = state.coach?.branchId;
+  const role = state.coach?.role;
+  const requestId = coachSettlementHistory.coachSettlementReconciliationRequestId;
+  const isCurrent = () => {
+    try {
+      return Boolean(token && profileId && authUserId && coachRoleId && branchId)
+        && window.TennisNoteDataClient === client
+        && token === client.getSession?.()?.access_token
+        && profileId === state.liveProfileId && authUserId === state.coach?.authUserId
+        && coachRoleId === state.coach?.coachRoleId && branchId === state.coach?.branchId
+        && role === state.coach?.role
+        && requestId === coachSettlementHistory.coachSettlementReconciliationRequestId
+        && (continuation === null || (typeof continuation === "function" && continuation() === true));
+    } catch { return false; }
+  };
+  return Object.freeze({ client, token, profileId, authUserId, coachRoleId, branchId, isCurrent });
+}
+
+async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace = {}, isCurrent = () => true) {
   const lessonIds = [...new Set((workspace.lessons || []).map((lesson) => String(lesson.id || "")).filter(Boolean))];
   if (!lessonIds.length || !client?.selectRows) return workspace;
   try {
@@ -14,6 +39,7 @@ async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace
       filters: { lesson_id: { in: ids } },
       limit: Math.max(100, ids.length * 4),
     })))).flat();
+    if (!isCurrent()) return workspace;
     const recordsByLessonAndUser = new Map(rows.map((record) => [
       `${record.lesson_id}:${record.user_id}`,
       record,
@@ -45,15 +71,18 @@ async function hydrateCoachWorkspaceParticipantProcessingState(client, workspace
 }
 
 async function syncCoachScheduleV2(options = {}) {
-  const client = window.TennisNoteDataClient;
+  const owner = captureCoachAsyncOwner(options.isCurrent || null);
+  const client = owner.client;
   const requestId = ++coachScheduleV2RequestSequence;
-  const branchId = state.coach?.branchId || "";
-  if (!client?.rpc || !client.getSession?.()?.access_token || !branchId) return false;
+  const branchId = owner.branchId || "";
+  const isCurrent = () => owner.isCurrent() && requestId === coachScheduleV2RequestSequence;
+  if (!client?.rpc || !isCurrent()) return false;
   const week = activeScheduleWeek();
   const syncRange = coachScheduleV2SyncRange(week);
   const cacheKey = `${branchId}:${syncRange.startDate}:${syncRange.endDate}`;
   const cached = coachScheduleV2WorkspaceCache;
   if (!options.force && cached?.key === cacheKey && Date.now() - cached.loadedAt < 10_000) {
+    if (!isCurrent()) return false;
     return applyScheduleV2CoachWorkspace(cached.workspace, cached.oneDayRows, cached.roster, cached.legacyChangeRequests);
   }
   try {
@@ -84,10 +113,10 @@ async function syncCoachScheduleV2(options = {}) {
         limit: 300,
       }).catch(() => [])),
     ]);
-    if (requestId !== coachScheduleV2RequestSequence) return false;
+    if (!isCurrent()) return false;
     if (!workspace?.branchId || !Array.isArray(workspace.lessons)) return false;
-    await hydrateCoachWorkspaceParticipantProcessingState(client, workspace);
-    if (requestId !== coachScheduleV2RequestSequence) return false;
+    await hydrateCoachWorkspaceParticipantProcessingState(client, workspace, isCurrent);
+    if (!isCurrent()) return false;
     workspace.operationDays = Array.isArray(operationDays) ? operationDays : [];
     coachScheduleV2WorkspaceCache = {
       key: cacheKey,
@@ -104,6 +133,7 @@ async function syncCoachScheduleV2(options = {}) {
       coachScheduleV2WorkspaceCache.legacyChangeRequests,
     );
   } catch (error) {
+    if (!isCurrent()) return false;
     const text = `${error?.payload?.message || ""} ${error?.message || ""}`;
     if (!/tn_schedule_v2_coach_workspace|PGRST202|42883|schema cache/i.test(text)) {
       console.warn("Tennis Note Schedule V2 coach feed failed; using the compatible feed.", error);
@@ -169,14 +199,17 @@ async function syncLegacyCoachSchedulePreview() {
   return true;
 }
 
-async function syncCoachLessonsFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.rpc) return false;
+async function syncCoachLessonsFromServer(continuation = null) {
+  const owner = captureCoachAsyncOwner(continuation);
+  const client = owner.client;
+  if (!client?.rpc || !owner.isCurrent()) return false;
   const activeSession = client.ensureSession
     ? await client.ensureSession().catch(() => client.getSession?.())
     : client.getSession?.();
-  if (!activeSession?.access_token || !state.coach?.branchId) return false;
-  if (await syncCoachScheduleV2({ force: true })) return true;
+  if (!activeSession?.access_token || !owner.isCurrent()) return false;
+  const ready = await syncCoachScheduleV2({ force: true, isCurrent: owner.isCurrent });
+  if (!owner.isCurrent()) return false;
+  if (ready) return true;
   // Keep the last confirmed schedule and member cache during a transient read
   // failure. The visible error and retry action explain that it may be stale.
   state.liveLessonsLoaded = true;
@@ -609,9 +642,10 @@ async function syncLegacyCoachLessonsFromServer() {
   }
 }
 
-async function syncCoachJournalEntriesFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!client?.selectRows || !client.getSession?.()?.access_token) return false;
+async function syncCoachJournalEntriesFromServer(continuation = null) {
+  const owner = captureCoachAsyncOwner(continuation);
+  const client = owner.client;
+  if (!client?.selectRows || !owner.isCurrent()) return false;
   try {
     const [journalRows, recordRows, userRows, mediaRows] = await Promise.all([
       client.selectRows("tn_journal_entries", {
@@ -631,6 +665,7 @@ async function syncCoachJournalEntriesFromServer() {
         limit: 300,
       }).catch(() => []),
     ]);
+    if (!owner.isCurrent()) return false;
     const recordsByLesson = new Map((recordRows || []).map((record) => [record.lesson_id, record]));
     const namesByUser = new Map((userRows || []).map((user) => [user.id, user.name]));
     for (const row of (journalRows || []).sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))) {
@@ -643,6 +678,7 @@ async function syncCoachJournalEntriesFromServer() {
       const mediaItems = (await Promise.all(mediaForJournal.map((media, index) => (
         downloadCoachJournalMedia(client, media, payload.mediaNames?.[index] || `첨부 ${index + 1}`).catch(() => null)
       )))).filter(Boolean);
+      if (!owner.isCurrent()) return false;
       const serverLog = {
         id: payload.clientLogId || `server-journal-${row.id}`,
         serverJournalId: row.id,
@@ -701,14 +737,15 @@ async function liveCurriculumRefId(step = {}) {
 
 let coachSettlementRequestSequence = 0;
 async function syncCoachSettlementFromServer() {
-  const client = window.TennisNoteDataClient;
-  if (!state.coach?.coachRoleId || !client?.rpc || !client.getSession?.()?.access_token) return false;
+  const owner = captureCoachAsyncOwner();
+  const client = owner.client;
+  if (!client?.rpc || !owner.isCurrent()) return false;
   const requestSequence = ++coachSettlementRequestSequence;
   state.coachSettlementLoading = true;
   state.coachSettlementError = "";
   renderCoachSettlement();
   const scope = coachSettlementReconciliationScope();
-  const stillCurrent = () => requestSequence === coachSettlementRequestSequence && coachSettlementReconciliationScopeSignature(scope)
+  const stillCurrent = () => owner.isCurrent() && requestSequence === coachSettlementRequestSequence && coachSettlementReconciliationScopeSignature(scope)
     === coachSettlementReconciliationScopeSignature();
   try {
     const result = await client.rpc("tn_coach_settlement_scope_v2", {
@@ -806,7 +843,22 @@ const coachSettlementHistory = {
 };
 let coachSettlementHistoryPending = null;
 
-function resetCoachSettlementHistory() {
+function resetCoachSettlementHistory(force = false) {
+  // A closed-modal renderer can revisit an already-cleared history. It is not
+  // a new auth/owner transition and must not cancel independent live reads.
+  // Active/pending history and explicit auth transitions still invalidate it.
+  const alreadyEmpty = !coachSettlementHistoryPending
+    && !coachSettlementHistory.continuationIsCurrent
+    && coachSettlementHistory.coachSettlementReconciliation === null
+    && coachSettlementHistory.coachSettlementReconciliationUiState === "EMPTY"
+    && !coachSettlementHistory.coachSettlementReconciliationLoading
+    && !coachSettlementHistory.coachSettlementReconciliationSubmitting
+    && !coachSettlementHistory.coachSettlementReconciliationChoice
+    && !coachSettlementHistory.coachSettlementReconciliationReason
+    && !coachSettlementHistory.coachSettlementReconciliationValidation
+    && !coachSettlementHistory.coachSettlementReconciliationOperation
+    && !coachSettlementHistory.coachSettlementReconciliationMessage;
+  if (!force && alreadyEmpty) return;
   Object.assign(coachSettlementHistory, { coachSettlementReconciliationSubmitting: false, coachSettlementReconciliationChoice: "", coachSettlementReconciliationReason: "", coachSettlementReconciliationValidation: "", coachSettlementReconciliationOperation: null });
   coachSettlementHistory.continuationIsCurrent = null;
   coachSettlementHistory.coachSettlementReconciliationRequestId += 1;

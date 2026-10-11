@@ -517,11 +517,6 @@ async function initCoachApp() {
   if (oauthReturnPending) document.body.classList.add("coach-session-restoring");
   if (hasStoredSession && state.coach) openCoachApp(false);
   hideCoachBrandSplash();
-  void (async () => {
-    await syncLiveSchedulePolicy(state.coach?.branchId || "");
-    renderAll();
-  })().catch(() => {});
-
   const coachAccessResult = await Promise.race([
     applySupabaseCoachSession(false),
     new Promise((resolve) => window.setTimeout(() => resolve("timeout"), 8_000)),

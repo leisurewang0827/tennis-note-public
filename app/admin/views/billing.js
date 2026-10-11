@@ -704,13 +704,14 @@ function renderAdminSettlementHistory() {
   button.disabled = !ready || !select.value || adminSettlementHistory.loading || adminSettlementHistory.submitting;
   const primary = $("#monthlySettlementPrimaryAction");
   primary.disabled = adminSettlementHistory.loading || adminSettlementHistory.submitting || !adminSettlementWriterAllowed();
-  primary.textContent = adminSettlementHistory.submitting ? "확정 확인 중" : "정산 확인";
+  primary.textContent = adminSettlementHistory.submitting ? "월 정산 확정 중" : adminSettlementHistory.status === "CONFIRMED" ? "월 정산 확정 완료" : "월 정산 확정";
   primary.setAttribute("aria-disabled", String(primary.disabled));
   const previewNode = $("#monthlySettlementSummary");
   previewNode.textContent = adminSettlementHistory.preview ? `서버 예상 정산 ${money.format(adminSettlementHistory.preview.totals.totalSettlementAmount)}원 · 확정 전 계산본` : "";
   button.textContent = adminSettlementHistory.loading ? "조회 중" : "확정 이력 조회";
   section.setAttribute("aria-busy", String(adminSettlementHistory.loading));
-  $("#adminSettlementHistoryMessage").textContent = !ready ? "관리자 로그인과 잠금 해제 후 조회할 수 있습니다." : adminSettlementHistory.message;
+  const message = !ready ? "관리자 로그인과 잠금 해제 후 조회할 수 있습니다." : adminSettlementHistory.message;
+  $("#adminSettlementHistoryMessage").textContent = message.includes("실제 송금이 아닙니다") ? message : `${message} 계산 내역 확정이며 실제 송금이 아닙니다.`;
   const details = $("#adminSettlementHistoryDetails");
   details.replaceChildren();
   bindAdminManualSettlementLedgerPublic();

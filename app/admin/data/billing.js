@@ -705,7 +705,7 @@ async function confirmMonthlySettlementSnapshot() {
   // action from sending its NEXT write or accepting evidence in a new scope.
   const actionIsCurrent = () => requestId === current.request && continuationIsCurrent?.() && adminSettlementWriterAllowed();
   current.submitting = true;
-  current.message = "서버 계산본을 잠그고 현재 원천을 다시 확인하는 중입니다.";
+  current.message = "월 정산을 확정하는 중입니다. 계산 내역 확정이며 실제 송금이 아닙니다.";
   renderAdminSettlementHistory();
 
   let expectedSnapshot = null;
@@ -748,7 +748,7 @@ async function confirmMonthlySettlementSnapshot() {
     current.loadedSignature = signature;
     current.status = "CONFIRMED";
     current.tone = "good";
-    current.message = "월 정산 확인이 완료됐습니다. 확인 당시 원천과 합계를 보존했습니다.";
+    current.message = "월 정산 확정이 완료됐습니다. 확정 당시 원천과 합계를 보존했으며 실제 송금이 아닙니다.";
     current.errorCode = "";
   } catch (error) {
     if (!actionIsCurrent()) return;
@@ -768,7 +768,7 @@ async function confirmMonthlySettlementSnapshot() {
       current.loadedSignature = signature;
       current.status = "CONFIRMED";
       current.tone = "good";
-      current.message = "응답이 끊겼지만 서버 확인 기록을 다시 읽어 완료 상태를 확인했습니다.";
+      current.message = "응답이 끊겼지만 서버 기록에서 월 정산 확정 완료를 확인했습니다. 실제 송금이 아닙니다.";
       current.errorCode = "";
     } else {
       Object.assign(current, monthlySettlementErrorContract(error));

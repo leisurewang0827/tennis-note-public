@@ -1,0 +1,121 @@
+{
+  "contract": "r3-confirmation-current-wording/1",
+  "parents": {
+    "private": "5cf0ff5fad1d059f01b90505c03a77a595c3ddf2",
+    "public": "db20d5c5e97d3f5cf793dca3a162a7387c19658e"
+  },
+  "files": [
+    {
+      "side": "private",
+      "path": "90-Dashboard/tennis-note-prototype/app.js",
+      "parent": "5cf0ff5fad1d059f01b90505c03a77a595c3ddf2",
+      "parentBlob": "d1bf13e0dbd1c4f442d18e28f1d78ab0275844d8",
+      "beforeSha256": "792452f599013ca243687e18d5e10fa2ae5141ca7d49ec5b549e1299c3f5fdc1",
+      "afterSha256": "f0d6a4df43c31eebf761252b2371992fd5a8960e11e121a122c473434f42b963",
+      "hunks": [
+        {
+          "before": "    message: \"월 정산 확인 상태를 불러오지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.\",\n",
+          "after": "    message: \"월 정산 확정 상태를 불러오지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.\",\n"
+        },
+        {
+          "before": "      ? \"확인 처리 중\"\n      : current.status === \"CONFIRMED\" ? \"확인 완료\" : \"정산 확인\";\n",
+          "after": "      ? \"월 정산 확정 중\"\n      : current.status === \"CONFIRMED\" ? \"월 정산 확정 완료\" : \"월 정산 확정\";\n"
+        },
+        {
+          "before": "  current.message = \"서버 계산본을 잠그고 현재 원천을 다시 확인하는 중입니다.\";\n",
+          "after": "  current.message = \"월 정산을 확정하는 중입니다. 계산 내역 확정이며 실제 송금이 아닙니다.\";\n"
+        },
+        {
+          "before": "    current.message = \"월 정산 확인이 완료됐습니다. 확인 당시 원천과 합계를 보존했습니다.\";\n",
+          "after": "    current.message = \"월 정산 확정이 완료됐습니다. 확정 당시 원천과 합계를 보존했으며 실제 송금이 아닙니다.\";\n"
+        },
+        {
+          "before": "      current.message = \"응답이 끊겼지만 서버 확인 기록을 다시 읽어 완료 상태를 확인했습니다.\";\n",
+          "after": "      current.message = \"응답이 끊겼지만 서버 기록에서 월 정산 확정 완료를 확인했습니다. 실제 송금이 아닙니다.\";\n"
+        }
+      ]
+    },
+    {
+      "side": "private",
+      "path": "90-Dashboard/tennis-note-prototype/index.html",
+      "parent": "5cf0ff5fad1d059f01b90505c03a77a595c3ddf2",
+      "parentBlob": "51fa43fceadb7f0c9570edab8633da83e71f3803",
+      "beforeSha256": "d2447a1842b2a0f4934ec5752ee32adff6d4d7f49af10e8b9f80d4895dc4077f",
+      "afterSha256": "dc23e7256f5e13e0e096ab435742bb7f2a16b38391eb564569a5f7a245b67c26",
+      "hunks": [
+        {
+          "before": "                  <button id=\"monthlySettlementPrimaryAction\" class=\"primary-button\" type=\"button\" disabled>정산 확인</button>\n",
+          "after": "                  <button id=\"monthlySettlementPrimaryAction\" class=\"primary-button\" type=\"button\" disabled>월 정산 확정</button>\n"
+        }
+      ]
+    },
+    {
+      "side": "public",
+      "path": "app/admin/index.html",
+      "parent": "db20d5c5e97d3f5cf793dca3a162a7387c19658e",
+      "parentBlob": "19fce1d478d9adfcf28d96aaacd50655b8eaabbb",
+      "beforeSha256": "f953adce7283302f758abd786592401a0ddc520973df43c47bbcf241ac314686",
+      "afterSha256": "a21c47d20c99ea6bbeb737046b6fe159914d4b9caa540262fddfbd49da634b27",
+      "hunks": [
+        {
+          "before": "                  <button id=\"monthlySettlementPrimaryAction\" class=\"primary-button\" type=\"button\" disabled>정산 확인</button>\n",
+          "after": "                  <button id=\"monthlySettlementPrimaryAction\" class=\"primary-button\" type=\"button\" disabled>월 정산 확정</button>\n"
+        }
+      ]
+    },
+    {
+      "side": "public",
+      "path": "app/admin/views/billing.js",
+      "parent": "db20d5c5e97d3f5cf793dca3a162a7387c19658e",
+      "parentBlob": "42157a3d169db237e7ff78b6b8589b1e25a08abb",
+      "beforeSha256": "33d3e1b3c1de3a168d5975dfe032aa6c1eaaf5d8895c2d96b61cb2bb6fbd4293",
+      "afterSha256": "f23ca364f96b4ad5540328cd77bc888aafdde56b3fe66fdc272fcbf66559e2d4",
+      "hunks": [
+        {
+          "before": "  primary.textContent = adminSettlementHistory.submitting ? \"확정 확인 중\" : \"정산 확인\";\n",
+          "after": "  primary.textContent = adminSettlementHistory.submitting ? \"월 정산 확정 중\" : adminSettlementHistory.status === \"CONFIRMED\" ? \"월 정산 확정 완료\" : \"월 정산 확정\";\n"
+        },
+        {
+          "before": "  $(\"#adminSettlementHistoryMessage\").textContent = !ready ? \"관리자 로그인과 잠금 해제 후 조회할 수 있습니다.\" : adminSettlementHistory.message;\n",
+          "after": "  const message = !ready ? \"관리자 로그인과 잠금 해제 후 조회할 수 있습니다.\" : adminSettlementHistory.message;\n  $(\"#adminSettlementHistoryMessage\").textContent = message.includes(\"실제 송금이 아닙니다\") ? message : `${message} 계산 내역 확정이며 실제 송금이 아닙니다.`;\n"
+        }
+      ]
+    },
+    {
+      "side": "public",
+      "path": "app/admin/domain/billing.js",
+      "parent": "db20d5c5e97d3f5cf793dca3a162a7387c19658e",
+      "parentBlob": "04ec8d9595f563f9d90bacfab525ae8ce273f1fa",
+      "beforeSha256": "a19dbfe686562dee7d45221f82c42cdc78687e88c7928cdda9d9c6f2e4d80c15",
+      "afterSha256": "8e360a333986bef4e2f2601e315e32a50a96c0dd58ab97560f52be655e24fe53",
+      "hunks": [
+        {
+          "before": "    message: \"월 정산 확인 상태를 불러오지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.\",\n",
+          "after": "    message: \"월 정산 확정 상태를 불러오지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.\",\n"
+        }
+      ]
+    },
+    {
+      "side": "public",
+      "path": "app/admin/data/billing.js",
+      "parent": "db20d5c5e97d3f5cf793dca3a162a7387c19658e",
+      "parentBlob": "17968fa0f2fa2271918feb25b4c33122272f0dc4",
+      "beforeSha256": "1b4683b0f149f8d3afa31c29e9627ae0e3f3491797ad05fc2b538841e8b58500",
+      "afterSha256": "cb5d4cca101673eaab33289be483846d56982e814e10f58ad355dd04b5f862fc",
+      "hunks": [
+        {
+          "before": "  current.message = \"서버 계산본을 잠그고 현재 원천을 다시 확인하는 중입니다.\";\n",
+          "after": "  current.message = \"월 정산을 확정하는 중입니다. 계산 내역 확정이며 실제 송금이 아닙니다.\";\n"
+        },
+        {
+          "before": "    current.message = \"월 정산 확인이 완료됐습니다. 확인 당시 원천과 합계를 보존했습니다.\";\n",
+          "after": "    current.message = \"월 정산 확정이 완료됐습니다. 확정 당시 원천과 합계를 보존했으며 실제 송금이 아닙니다.\";\n"
+        },
+        {
+          "before": "      current.message = \"응답이 끊겼지만 서버 확인 기록을 다시 읽어 완료 상태를 확인했습니다.\";\n",
+          "after": "      current.message = \"응답이 끊겼지만 서버 기록에서 월 정산 확정 완료를 확인했습니다. 실제 송금이 아닙니다.\";\n"
+        }
+      ]
+    }
+  ]
+}

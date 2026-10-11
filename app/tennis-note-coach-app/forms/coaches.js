@@ -70,38 +70,99 @@ function scheduleNativeCoachPushPrimer(delay = 1400) {
   }, delay);
 }
 
-async function bindNativeCoachPushListeners(plugin) {
-  if (coachPushListenersReady) return;
-  await plugin.addListener("registration", async (token) => {
-    await registerCoachPushToken(token?.value || "", nativeCoachAppPlatform()).catch(() => false);
+async function bindNativeCoachPushListeners(plugin, context) {
+  if (!context?.isCurrent?.()) return false;
+  const epoch = ++coachPushListenerEpoch;
+  // Invalidate synchronously, including callbacks already queued by the plugin.
+  if (coachPushListenerBinding) coachPushListenerBinding.active = false;
+  coachPushListenersReady = false;
+  const installCurrent = () => context.isCurrent() && epoch === coachPushListenerEpoch
+    && plugin === nativeCoachPushPlugin();
+  const removeHandles = async (handles) => {
+    for (const handle of handles) {
+      // A failed native remove may leave a physical callback; its binding remains inert.
+      try { await handle?.remove?.(); } catch { /* epoch/owner guard still fails closed */ }
+    }
+  };
+  const install = coachPushListenerInstall.catch(() => false).then(async () => {
+    const previous = coachPushListenerBinding;
+    coachPushListenerBinding = null;
+    coachPushRegistrationListeners = [];
+    coachPushNotificationPlugin = null;
+    if (previous) {
+      previous.active = false;
+      await removeHandles(previous.handles);
+    }
+    if (!installCurrent()) return false;
+    const binding = { plugin, epoch, active: false, handles: [] };
+    const bindingCurrent = () => binding.active && coachPushListenerBinding === binding
+      && installCurrent();
+    let published = false;
+    try {
+      for (const [name, listener] of [
+        ["registration", async (token) => {
+          if (!bindingCurrent()) return;
+          await registerCoachPushToken(token?.value || "", context.platform, context).catch(() => false);
+        }],
+        ["registrationError", () => {
+          if (!bindingCurrent() || coachPushPendingRegistration !== context) return;
+          coachPushPendingRegistration = null;
+          showToast("앱 알림 연결을 확인해 주세요.");
+        }],
+        ["pushNotificationReceived", async () => {
+          if (!bindingCurrent()) return;
+          const owner = captureCoachAsyncOwner();
+          const current = () => bindingCurrent() && owner.isCurrent();
+          if (current()) await syncLiveNotices(current).catch(() => false);
+        }],
+        ["pushNotificationActionPerformed", async (action) => {
+          if (!bindingCurrent()) return;
+          const owner = captureCoachAsyncOwner();
+          const current = () => bindingCurrent() && owner.isCurrent();
+          const data = coachNotificationData(action);
+          if (!(await authorizeCoachNotificationAction(data, current)) || !current()) return;
+          const route = coachNotificationRoute(data);
+          const viewId = route === "schedule"
+            ? "fullScheduleView"
+            : ["member", "membership"].includes(route)
+              ? "membersView"
+              : "todayView";
+          await Promise.allSettled([
+            syncLiveNotices(current),
+            ["today", "dashboard", "schedule", "feedback"].includes(route)
+              ? syncCoachLessonsFromServer(current)
+              : Promise.resolve(false),
+            route === "feedback" ? syncCoachJournalEntriesFromServer(current) : Promise.resolve(false),
+          ]);
+          if (!current()) return;
+          renderAll();
+          setView(viewId);
+          openCoachNotificationTarget(data, route);
+        }],
+      ]) {
+        const handle = await plugin.addListener(name, listener);
+        binding.handles.push(handle);
+        if (!installCurrent()) return false;
+      }
+      coachPushListenerBinding = binding;
+      binding.active = true;
+      coachPushRegistrationListeners = binding.handles;
+      coachPushNotificationPlugin = plugin;
+      coachPushListenersReady = true;
+      published = true;
+      return true;
+    } catch {
+      return false;
+    } finally {
+      if (!published) {
+        binding.active = false;
+        await removeHandles(binding.handles);
+      }
+    }
   });
-  await plugin.addListener("registrationError", () => {
-    showToast("앱 알림 연결을 확인해 주세요.");
-  });
-  await plugin.addListener("pushNotificationReceived", async () => {
-    await syncLiveNotices().catch(() => false);
-  });
-  await plugin.addListener("pushNotificationActionPerformed", async (action) => {
-    const data = coachNotificationData(action);
-    if (!(await authorizeCoachNotificationAction(data))) return;
-    const route = coachNotificationRoute(data);
-    const viewId = route === "schedule"
-      ? "fullScheduleView"
-      : ["member", "membership"].includes(route)
-        ? "membersView"
-        : "todayView";
-    await Promise.allSettled([
-      syncLiveNotices(),
-      ["today", "dashboard", "schedule", "feedback"].includes(route)
-        ? syncCoachLessonsFromServer()
-        : Promise.resolve(false),
-      route === "feedback" ? syncCoachJournalEntriesFromServer() : Promise.resolve(false),
-    ]);
-    renderAll();
-    setView(viewId);
-    openCoachNotificationTarget(data, route);
-  });
-  coachPushListenersReady = true;
+  // One queue owns all plugin installs/removals, even when plugin or owner changes.
+  coachPushListenerInstall = install;
+  return install;
 }
 
 function blurActiveCoachFormControl() {
@@ -127,6 +188,10 @@ async function installNativeCoachBackNavigation() {
       return;
     }
     if (activeCoachModalId) {
+      if (activeCoachModalId === "coachSettlementModal") {
+        resetCoachSettlementHistory();
+        renderCoachSettlementHistory();
+      }
       if (activeCoachModalId === "lessonEditModal") requestCloseLessonEditor();
       else closeCoachModal(activeCoachModalId);
       return;

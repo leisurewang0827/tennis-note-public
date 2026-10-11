@@ -247,7 +247,7 @@ function monthlySettlementErrorContract(error) {
   return {
     status: "ERROR",
     tone: "danger",
-    message: "월 정산 확인 상태를 불러오지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.",
+    message: "월 정산 확정 상태를 불러오지 못했습니다. 입력은 유지되며 다시 시도할 수 있습니다.",
     errorCode: "settlement_confirmation_error",
   };
 }
